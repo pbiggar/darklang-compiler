@@ -152,8 +152,20 @@ cover both directions, all packet-number lengths, wrapping, the 62-bit limit,
 tampering and leak accounting. These are pure helpers, not an authenticated
 QUIC connection: initial/Retry keys are public, and connection owners must
 enforce unique packet numbers, replay filtering and key/AEAD usage limits.
-TLS handshake integration, reliable UDP streams and advertised-only HTTP/3
-discovery remain implementation work.
+Raw QUIC TLS handshake processing now authenticates the certificate chain,
+hostname, CertificateVerify, Finished and `h3` ALPN before returning application
+keys. Transport parameters are parsed with RFC defaults and numeric/length
+bounds, duplicate detection, server-only restrictions and connection-ID binding
+(including Retry presence and equality). Unknown parameters are ignored.
+The profile caps the extension at 4096 bytes and 128 parameters.
+`test/fixtures/e2e/quic_parameters.e2e` and
+`python3 scripts/test_quic_parameters_peer.py` cover these checks against
+independent test-only aioquic encodings. `python3 scripts/test_quic_tls_peer.py`
+also tests live TLS flights that correctly sign wrong connection IDs, invalid
+parameters or duplicates, and checks client Finished and peer handshake
+completion. This is still a handshake helper, not an HTTP/3 connection:
+reliable UDP streams, loss/congestion handling and advertised-only discovery
+remain implementation work.
 
 `Stdlib.HttpClient.Sse.Event` and `parse` are copied from the same revision.
 The parser retains upstream's `Stream.unfold` behavior: it pulls only until the

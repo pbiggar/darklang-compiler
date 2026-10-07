@@ -12,7 +12,7 @@ from aioquic.buffer import Buffer
 from aioquic.quic.configuration import QuicConfiguration
 from aioquic.quic.connection import QuicConnection
 from aioquic.quic.events import HandshakeCompleted
-from aioquic.quic.packet import QuicPacketType, QuicTransportParameters, pull_ack_frame, pull_quic_header, push_quic_transport_parameters
+from aioquic.quic.packet import QuicPacketType, QuicTransportParameters, pull_ack_frame, pull_quic_header, pull_quic_transport_parameters, push_quic_transport_parameters
 from aioquic.tls import Epoch
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
@@ -21,6 +21,15 @@ from cryptography.x509.oid import ExtendedKeyUsageOID, NameOID
 
 ROOT = Path(__file__).resolve().parents[1]
 DESTINATION, SOURCE = bytes(range(8)), bytes(range(8, 16))
+PARAMETER_ERRORS = {
+    "parameters": "QUIC original destination connection ID mismatch",
+    "source": "QUIC initial source connection ID mismatch",
+    "retry": "Unexpected QUIC Retry source connection ID",
+    "missing": "Missing QUIC original destination connection ID",
+    "duplicate": "Duplicate QUIC transport parameter",
+    "ack-delay": "QUIC ACK delay exponent exceeds 20",
+}
+SUCCESS_MODES = ("trusted", "reordered", "unknown")
 
 DARK = """// handshake.dark - Exercise authenticated Initial/Handshake CRYPTO streams over UDP.
 type Exchange = {
@@ -56,6 +65,9 @@ let packets (state: Exchange) (bytes: Blob) : Stdlib.Result.Result<Exchange, Str
             match Stdlib.QuicCrypto.openPacket state.keys.server packet.bytes packet.numberOffset state.largestInitial with
             | Error message -> Error message
             | Ok opened ->
+              if state.largestInitial >= 0L && Stdlib.Blob.toHex packet.source != Stdlib.Blob.toHex state.destination then
+                Error "QUIC Initial source connection ID changed"
+              else
               match Stdlib.QuicFrames.parseHandshake opened.payload |> Stdlib.Result.andThen (collect state.initial) with
               | Error message -> Error message
               | Ok initial ->
@@ -114,7 +126,9 @@ let exchange (connection: Stdlib.Datagram.Socket) (peer: Stdlib.Datagram.Endpoin
           match received.tls with
           | None -> Error "Missing TLS flight"
           | Some tls ->
-            match Stdlib.QuicTls.authenticate tls host roots with
+            let ids = Stdlib.QuicParameters.ConnectionIds {
+              originalDestination = state.destination, initialSource = received.destination, retrySource = None } in
+            match Stdlib.QuicTls.authenticate tls host roots ids with
             | Error message -> Error message
             | Ok authenticated ->
               match Stdlib.QuicFrames.crypto 0L authenticated.finished, Stdlib.QuicFrames.acknowledge received.largestHandshake with
@@ -181,7 +195,7 @@ def main():
         compiled = subprocess.run([str(ROOT / "dark"), str(source), "--leak-check", "-o", str(binary)],
                                   cwd=ROOT, text=True, capture_output=True, timeout=120)
         assert compiled.returncode == 0, compiled.stdout + compiled.stderr
-        for mode in ("trusted", "reordered", "untrusted", "hostname", "finished"):
+        for mode in (*SUCCESS_MODES, *PARAMETER_ERRORS, "untrusted", "hostname", "finished"):
             failures = []
             with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as listener:
                 listener.bind(("127.0.0.1", 0))
@@ -191,6 +205,32 @@ def main():
                     try:
                         packet, address = listener.recvfrom(8192)
                         connection = QuicConnection(configuration=configuration, original_destination_connection_id=DESTINATION)
+                        if mode in PARAMETER_ERRORS or mode == "unknown":
+                            serialize = connection._serialize_transport_parameters
+
+                            def malformed_parameters():
+                                values = pull_quic_transport_parameters(Buffer(data=serialize()))
+                                if mode == "parameters":
+                                    values.original_destination_connection_id = bytes(reversed(DESTINATION))
+                                elif mode == "source":
+                                    cid = values.initial_source_connection_id
+                                    values.initial_source_connection_id = bytes([cid[0] ^ 1]) + cid[1:]
+                                elif mode == "retry":
+                                    values.retry_source_connection_id = b"\x01"
+                                elif mode == "missing":
+                                    values.original_destination_connection_id = None
+                                elif mode == "ack-delay":
+                                    values.ack_delay_exponent = 21
+                                encoded = Buffer(capacity=4096)
+                                push_quic_transport_parameters(encoded, values)
+                                if mode == "duplicate":
+                                    return encoded.data + b"\x0f\x00"
+                                if mode == "unknown":
+                                    return encoded.data + b"\x40\x63\x01\x00"
+                                return encoded.data
+
+                            # Sign a wrong connection ID in the real TLS flight.
+                            connection._serialize_transport_parameters = malformed_parameters
                         connection.receive_datagram(packet, address, now=0)
                         responses = connection.datagrams_to_send(now=0)
                         if mode == "finished":
@@ -239,7 +279,7 @@ def main():
                             responses = [responses[0], responses[0], *reversed(responses[1:])]
                         for response, target in responses:
                             listener.sendto(response, target)
-                        if mode in ("trusted", "reordered"):
+                        if mode in SUCCESS_MODES:
                             finished, _ = listener.recvfrom(8192)
                             connection.receive_datagram(finished, address, now=0.1)
                             events = []
@@ -256,12 +296,12 @@ def main():
                 thread.join(timeout=6)
                 assert not thread.is_alive() and not failures, failures
                 assert result.returncode == 0 and not result.stderr, result
-                if mode in ("trusted", "reordered"):
+                if mode in SUCCESS_MODES:
                     assert result.stdout == "AUTHENTICATED\n", result.stdout
                 else:
-                    expected = {"untrusted": "X.509 certificate chain is not trusted", "hostname": "X.509 certificate does not match hostname", "finished": "TLS Finished verification failed"}[mode]
+                    expected = {**PARAMETER_ERRORS, "untrusted": "X.509 certificate chain is not trusted", "hostname": "X.509 certificate does not match hostname", "finished": "TLS Finished verification failed"}[mode]
                     assert result.stdout == "ERROR " + expected + "\n", result.stdout
-    print("Live QUIC TLS: certificate/hostname authentication, server Finished, client Finished, handshake completion, and cleanup verified")
+    print("Live QUIC TLS: certificates, Finished, connection-ID binding, invalid transport parameters, unknown extensions, handshake completion, and cleanup verified")
 
 
 if __name__ == "__main__":

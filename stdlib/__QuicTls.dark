@@ -7,7 +7,7 @@ type Handshake = {
 }
 type Authenticated = {
   send: Stdlib.QuicCrypto.Keys, receive: Stdlib.QuicCrypto.Keys,
-  finished: Blob, parameters: Blob
+  finished: Blob, parameters: Stdlib.QuicParameters.Parameters
 }
 
 let start (privateKey: Blob) (clientHello: Blob) (serverHello: Blob)
@@ -68,9 +68,10 @@ let __fromTranscript (transcript: Blob) : Stdlib.Result.Result<Blob, String> =
         else Stdlib.QuicTls.__parameters extensions.body 2L [] None
 
 // Certificate path, hostname, CertificateVerify, and server Finished must
-// succeed before application secrets are returned. The connection must still
-// validate authenticated transport parameters against its connection IDs.
+// succeed before transport parameters are parsed and bound to the observed
+// handshake connection IDs. Return application secrets only after both checks.
 let authenticate (handshake: Stdlib.QuicTls.Handshake) (host: String) (roots: List<Blob>)
+  (ids: Stdlib.QuicParameters.ConnectionIds)
   : Stdlib.Result.Result<Stdlib.QuicTls.Authenticated, String> =
   if handshake.flight.phase != Stdlib.Tls13Handshake.FlightPhase.ServerFinished ||
      Stdlib.Blob.__byteLength handshake.flight.pending != 0L then Error "QUIC TLS server handshake is incomplete"
@@ -79,20 +80,23 @@ let authenticate (handshake: Stdlib.QuicTls.Handshake) (host: String) (roots: Li
     | Error message -> Error message
     | Ok () ->
       match Stdlib.TlsAlpn.fromTranscript ["h3"] handshake.flight.transcript, Stdlib.QuicTls.__fromTranscript handshake.flight.transcript with
-      | Ok (Some "h3"), Ok parameters ->
-        match Stdlib.Tls13Client.__masterSecret handshake.shared with
+      | Ok (Some "h3"), Ok bytes ->
+        match Stdlib.QuicParameters.parseServer bytes ids with
         | Error message -> Error message
-        | Ok master ->
-          let hash = Stdlib.Crypto.sha256 handshake.flight.transcript in
-          match Stdlib.Tls13.hkdfExpandLabel master "c ap traffic" hash 32L,
-                Stdlib.Tls13.hkdfExpandLabel master "s ap traffic" hash 32L,
-                Stdlib.Tls13Handshake.finishedVerifyData handshake.flight.clientHandshakeSecret handshake.flight.transcript with
-          | Ok client, Ok server, Ok verify ->
-            match Stdlib.QuicCrypto.derive client, Stdlib.QuicCrypto.derive server with
-            | Ok send, Ok receive -> Ok (Stdlib.QuicTls.Authenticated {
-              send = send, receive = receive, parameters = parameters,
-              finished = Stdlib.Blob.concat [Stdlib.Blob.__fromInt64List [20L, 0L, 0L, 32L], verify] })
-            | _, _ -> Error "QUIC application key derivation failed"
-          | _, _, _ -> Error "QUIC application secret derivation failed"
+        | Ok parameters ->
+          match Stdlib.Tls13Client.__masterSecret handshake.shared with
+          | Error message -> Error message
+          | Ok master ->
+            let hash = Stdlib.Crypto.sha256 handshake.flight.transcript in
+            match Stdlib.Tls13.hkdfExpandLabel master "c ap traffic" hash 32L,
+                  Stdlib.Tls13.hkdfExpandLabel master "s ap traffic" hash 32L,
+                  Stdlib.Tls13Handshake.finishedVerifyData handshake.flight.clientHandshakeSecret handshake.flight.transcript with
+            | Ok client, Ok server, Ok verify ->
+              match Stdlib.QuicCrypto.derive client, Stdlib.QuicCrypto.derive server with
+              | Ok send, Ok receive -> Ok (Stdlib.QuicTls.Authenticated {
+                send = send, receive = receive, parameters = parameters,
+                finished = Stdlib.Blob.concat [Stdlib.Blob.__fromInt64List [20L, 0L, 0L, 32L], verify] })
+              | _, _ -> Error "QUIC application key derivation failed"
+            | _, _, _ -> Error "QUIC application secret derivation failed"
       | _, Error message -> Error message
       | _, _ -> Error "QUIC TLS did not negotiate h3"
