@@ -35,10 +35,10 @@ jobs:
           opam switch create . ocaml-base-compiler.5.5.1 --yes --jobs=2
           mapfile -t packages < <(sed '/^#/d; /^$/d' dependencies.lock)
           opam install --yes --jobs=2 --no-depexts "${packages[@]}"
-      - name: Build and test the native compiler
-        run: |
-          opam exec -- ./build --ai -- -j2 --cache=disabled
-          opam exec -- ./run-tests --ai
+      - name: Build the native compiler
+        run: opam exec -- ./build --ai -- -j2 --cache=disabled
+      - name: Test the native compiler
+        run: opam exec -- ./run-tests --ai
       - name: Verify ARM64 against its existing baseline
         if: matrix.architecture == 'arm64'
         run: opam exec -- ./benchmarks/run_benchmarks.sh --verify-parent --jobs=2 full

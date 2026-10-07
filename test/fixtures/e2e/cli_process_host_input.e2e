@@ -38,7 +38,7 @@ Stdlib.Cli.Env.get "DARK_NATIVE_ENV_PROBE" = Some "value  \n" env="DARK_NATIVE_E
 
 match Stdlib.Cli.Sys.hostname () with | Ok hostname -> Stdlib.String.length hostname > 0 | Error _ -> false = true env="PATH="
 
-match Stdlib.Cli.Sys.currentUser () with | Some user -> user | None -> "missing" = "native user  " env="USER=native user  " env="PATH="
+match Stdlib.Cli.Sys.currentUser () with | Some user -> user | None -> "missing" = "native user  " env="LOGNAME=native user  " env="USER=native user  " env="PATH="
 
 // Arguments are positional (excluding the executable name) and parse failures
 // remain values at the public CLI boundary.

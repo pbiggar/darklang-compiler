@@ -42,4 +42,10 @@ Ret
 X24
 |fixture} with
  |Error msg when Text.contains msg "cannot be combined"->Ok ()|Error msg->Error ("Expected mixed-outcome validation, got: "^msg)|Ok _->Error "Expected codegen and process outcomes to be mutually exclusive"
-let tests=["LIR-execution DSL parses and runs an exit case",testParsesAndRunsExitCase;"LIR-execution DSL requires an expectation",testRequiresAnExpectation;"LIR-execution DSL parses and runs a codegen-error case",testParsesAndRunsCodegenErrorCase;"LIR-execution DSL rejects mixed outcome kinds",testRejectsMixedOutcomeKinds]
+(* This fixture executes x64 machine code; ARM64 workers cover its parser
+   checks while the native x64 worker covers execution. *)
+let nativeExecutionTests=match Platform.detectArch () with
+ | Ok Platform.X86_64 -> ["LIR-execution DSL parses and runs an exit case",testParsesAndRunsExitCase]
+ | Ok Platform.ARM64 -> []
+ | Error error -> Crash.crash error
+let tests=nativeExecutionTests@["LIR-execution DSL requires an expectation",testRequiresAnExpectation;"LIR-execution DSL parses and runs a codegen-error case",testParsesAndRunsCodegenErrorCase;"LIR-execution DSL rejects mixed outcome kinds",testRejectsMixedOutcomeKinds]

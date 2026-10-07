@@ -77,8 +77,6 @@ let testCompleteEncodingPipeline ()=
    Execute a Linux ARM64 ELF directly on Linux ARM64 and through the pinned
    QEMU build on every other supported development host.
 *)
-let unixSignalNumber signal = Option.value ~default:signal (List.assoc_opt signal [Sys.sighup,1;Sys.sigint,2;Sys.sigquit,3;Sys.sigill,4;Sys.sigabrt,6;Sys.sigfpe,8;Sys.sigkill,9;Sys.sigusr1,10;Sys.sigsegv,11;Sys.sigusr2,12;Sys.sigpipe,13;Sys.sigalrm,14;Sys.sigterm,15;Sys.sigchld,17;Sys.sigcont,18;Sys.sigstop,19;Sys.sigtstp,20;Sys.sigttin,21;Sys.sigttou,22;Sys.sigurg,23;Sys.sigxcpu,24;Sys.sigxfsz,25;Sys.sigvtalrm,26;Sys.sigprof,27])
-
 let testExecuteLinuxElf ()=
  let machineCode=List.concat_map ARM64_Encoding.encode [MOVZ (X0,42,0);MOVZ (X8,Platform.linuxARM64SyscallNumbers.Platform.exit,0);SVC 0] |> Array.of_list in
  let binary=Backend_Arm64_Binary_Generation_ELF.createExecutable machineCode in
@@ -86,18 +84,13 @@ let testExecuteLinuxElf ()=
  let outcome=try
  Out_channel.with_open_bin tempPath (fun output -> Out_channel.output_bytes output binary);
  let permissions=(Unix.stat tempPath).Unix.st_perm in Unix.chmod tempPath (permissions lor 0o100);
- let command,args=match Platform.detectOS (),Platform.detectArch () with Ok Platform.Linux,Ok Platform.ARM64 -> tempPath,[|tempPath|] | _ -> "/opt/dcb/qemu/qemu-aarch64",[|"/opt/dcb/qemu/qemu-aarch64";tempPath|] in
- let stderrRead,stderrWrite=Unix.pipe ~cloexec:true () in
- let process=try Unix.create_process command args Unix.stdin Unix.stdout stderrWrite with ex -> Unix.close stderrRead;Unix.close stderrWrite;raise ex in
- Unix.close stderrWrite;
- Fun.protect ~finally:(fun () -> Unix.close stderrRead) (fun () ->
- let deadline=Unix.gettimeofday ()+.10. in
- let rec wait ()=match Unix.waitpid [Unix.WNOHANG] process with
- | 0,_ when Unix.gettimeofday ()<deadline -> ignore (Unix.select [] [] [] 0.01);wait ()
- | 0,_ -> Unix.kill process Sys.sigkill;ignore (Unix.waitpid [] process);Error "Timed out executing Linux ARM64 ELF binary"
- | _,status ->
- let exitCode=match status with Unix.WEXITED code -> code | Unix.WSIGNALED signal | Unix.WSTOPPED signal -> 128+unixSignalNumber signal in
- if exitCode=42 then Ok () else let input=Unix.in_channel_of_descr (Unix.dup stderrRead) in let stderr=Fun.protect ~finally:(fun () -> close_in input) (fun () -> In_channel.input_all input) in Error (Printf.sprintf "Expected Linux ARM64 ELF exit code 42, got %d: %s" exitCode stderr) in wait ())
+ let command,args=match Platform.detectOS (),Platform.detectArch () with
+ | Ok Platform.Linux,Ok Platform.ARM64 -> tempPath,[]
+ | _ -> "/opt/dcb/qemu/qemu-aarch64",[tempPath] in
+ match TestProcess.capture command args 10000 with
+ | Ok (42,_,_) -> Ok ()
+ | Ok (exitCode,_,stderr) -> Error (Printf.sprintf "Expected Linux ARM64 ELF exit code 42, got %d: %s" exitCode stderr)
+ | Error error -> Error error
  with ex -> Error ("Failed to execute Linux ARM64 ELF binary: "^(match ex with Unix.Unix_error (error,_,_) -> Unix.error_message error | Sys_error message -> message | _ -> Printexc.to_string ex)) in
  (try Sys.remove tempPath with Sys_error _ -> ());outcome
 let testWriteToFileReturnsErrorForInvalidPath ()=
