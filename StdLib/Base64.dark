@@ -231,8 +231,8 @@ let __prependReversed (bytes: List<Int64>) (acc: List<Int64>) : List<Int64> =
     | [] -> acc
     | b :: rest -> Stdlib.Base64.__prependReversed rest (Stdlib.List.push acc b)
 
-// Decode base64 string to bytes
-let decode (s: String) : Stdlib.Result.Result<Blob, String> =
+// Shared decoder for the public package and interpreter builtin adapter.
+let __decode (s: String) : Stdlib.Result.Result<Blob, String> =
     let len = Stdlib.String.__byteLength s in
     let remainder = len % 4L in
     if len == 0L then
@@ -248,3 +248,6 @@ let decode (s: String) : Stdlib.Result.Result<Blob, String> =
         match Stdlib.Base64.__decodeHelper padded 0L (Stdlib.String.__byteLength padded) [] with
         | Ok byteList -> Ok (Stdlib.Blob.__fromInt64List byteList)
         | Error _ -> Error "Not a valid base64 string"
+
+let decode (s: String) : Stdlib.Result.Result<Blob, String> =
+    Stdlib.Base64.__decode s
