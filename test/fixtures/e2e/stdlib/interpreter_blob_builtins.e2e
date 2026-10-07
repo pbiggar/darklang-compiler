@@ -1,0 +1,15 @@
+// Exercise the builtin surface used by the original interpreter Blob package.
+Builtin.blobLength (Builtin.blobFromString "hé") = 3
+Builtin.blobToBytes (Builtin.blobFromBytes [0uy, 15uy, 255uy]) = [0uy, 15uy, 255uy]
+Builtin.blobLength (Builtin.blobConcat []) = 0
+Builtin.blobToBytes (Builtin.blobConcat [Builtin.blobFromBytes [1uy], Builtin.blobFromBytes [2uy, 3uy]]) = [1uy, 2uy, 3uy]
+Builtin.blobToBytes (Builtin.blobSlice (Builtin.blobFromBytes [1uy, 2uy, 3uy]) (-1) 999999999999999999999999999999999999) = [1uy, 2uy, 3uy]
+Builtin.blobLength (Builtin.blobSlice (Builtin.blobFromString "abc") 999999999999999999999999999999999999 1) = 0
+Builtin.blobToHex (Builtin.blobFromBytes [0uy, 15uy, 255uy]) = "000FFF"
+match Builtin.blobFromHex "00aF" with | Ok b -> Builtin.blobToBytes b | Error _ -> [] = [0uy, 175uy]
+Builtin.blobFromHex "0" = Error "Invalid hex string: The input is not a valid hex string as its length is not a multiple of 2."
+Builtin.blobToBase64 (Builtin.blobFromBytes [255uy]) = "/w=="
+match Builtin.blobFromBase64 "Z g==" with | Ok b -> Builtin.blobToBytes b | Error _ -> [] = [102uy]
+Builtin.blobToString (Builtin.blobFromString "hé") = Ok "hé"
+Builtin.blobToString (Builtin.blobFromBytes [192uy, 128uy]) = Error "Invalid UTF-8: Unable to translate bytes [C0] at index 0 from specified code page to Unicode."
+Builtin.blobFromString "same" != Builtin.blobFromString "same" = true

@@ -19,6 +19,7 @@ StdLib/Cli/FileSystem.dark
 StdLib/Cli/FileSystem/FileError.dark
 StdLib/Env.dark
 StdLib/Builtin.dark
+StdLib/Builtin/Blob.dark
 StdLib/Tuple2.dark
 StdLib/Tuple3.dark
 StdLib/Result.dark

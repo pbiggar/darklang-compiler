@@ -1,0 +1,59 @@
+// Blob.dark - native adapters for the interpreter Blob builtin surface.
+
+module Builtin
+
+let blobLength (blob: Blob) : Int =
+    Stdlib.Int.fromInt64 (Stdlib.Blob.__byteLength blob)
+
+let blobToBytes (blob: Blob) : List<UInt8> =
+    Stdlib.Blob.__toList blob (Stdlib.Blob.__byteLength blob - (1L)) []
+
+let blobFromBytes (bytes: List<UInt8>) : Blob =
+    Stdlib.Blob.__fromList bytes []
+
+let blobConcat (blobs: List<Blob>) : Blob =
+    Stdlib.Blob.__concat blobs []
+
+let blobSlice (blob: Blob) (start: Int) (length: Int) : Blob =
+    let zero = Stdlib.Int.fromInt64 0L in
+    let blobLength = Stdlib.Blob.length blob in
+    let safeStart = if start < zero then zero else if start > blobLength then blobLength else start in
+    let remaining = blobLength - safeStart in
+    let safeLength = if length < zero then zero else if length > remaining then remaining else length in
+    Stdlib.Blob.__fromInt64List (
+        Stdlib.List.take (Stdlib.List.drop (Stdlib.Blob.__toInt64List blob) safeStart) safeLength)
+
+let blobToHex (blob: Blob) : String =
+    Stdlib.Blob.__hexEncode blob 0L (Stdlib.Blob.__byteLength blob) ""
+
+let blobFromHex (value: String) : Stdlib.Result.Result<Blob, String> =
+    if Stdlib.String.__byteLength value % 2L != 0L then
+        Error "Invalid hex string: The input is not a valid hex string as its length is not a multiple of 2."
+    else Stdlib.Blob.__fromHex value 0L []
+
+let blobToBase64 (blob: Blob) : String =
+    Stdlib.Base64.encode blob
+
+let blobFromBase64 (value: String) : Stdlib.Result.Result<Blob, String> =
+    // Match the interpreter's ordering: normalize the URL alphabet and infer
+    // padding before Convert-style whitespace removal.
+    let alphabetNormalized =
+        Stdlib.String.replaceAll (Stdlib.String.replaceAll value "-" "+") "_" "/" in
+    let remainder = Stdlib.String.__byteLength alphabetNormalized % 4L in
+    let padded =
+        if remainder == 2L then alphabetNormalized ++ "=="
+        else if remainder == 3L then alphabetNormalized ++ "="
+        else alphabetNormalized in
+    let normalized = Stdlib.Blob.__removeBase64Whitespace padded in
+    match Stdlib.Base64.__decodeHelper normalized 0L (Stdlib.String.__byteLength normalized) [] with
+    | Ok bytes -> Ok (Stdlib.Blob.__fromInt64List bytes)
+    | Error _ ->
+        Error "Invalid base64 string: The input is not a valid Base-64 string as it contains a non-base 64 character, more than two padding characters, or an illegal character among the padding characters."
+
+let blobFromString (value: String) : Blob =
+    Stdlib.Blob.__fromInt64List (Stdlib.Blob.__stringBytes value 0L [])
+
+let blobToString (blob: Blob) : Stdlib.Result.Result<String, String> =
+    let invalidIndex = Stdlib.Blob.__validateUtf8 blob 0L (Stdlib.Blob.__byteLength blob) in
+    if invalidIndex < 0L then Ok (Stdlib.Blob.__copyToString blob)
+    else Error (Stdlib.Blob.__invalidUtf8 (Stdlib.Blob.__getByte blob invalidIndex) invalidIndex)

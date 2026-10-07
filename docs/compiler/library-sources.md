@@ -43,6 +43,7 @@ fragments use `__` even where the interpreter also has private helpers.
 | `StdLib/Cli/FileSystem/FileError.dark` | `Stdlib.Cli.FileSystem.FileError`  | `packages/darklang/stdlib/cli/fileSystem.dark` |
 | `StdLib/Env.dark` | `Stdlib.Env`  | `packages/darklang/stdlib/env.dark` |
 | `StdLib/Builtin.dark` | `Builtin`  | Portable interpreter builtin bridges plus native adapter helpers (`backend/src/Builtins/Builtins.Pure/Libs/{Base64,UInt64}.fs` and `backend/src/Builtins/Builtins.Cli/Libs/{Directory,File,Environment}.fs`) |
+| `StdLib/Builtin/Blob.dark` | `Builtin` | Native implementations of the interpreter Blob builtins (`backend/src/Builtins/Builtins.Pure/Libs/Blob.fs`) |
 | `StdLib/Tuple2.dark` | `Darklang.Stdlib.Tuple2`  | `packages/darklang/stdlib/tuple2.dark` |
 | `StdLib/Tuple3.dark` | `Darklang.Stdlib.Tuple3`  | `packages/darklang/stdlib/tuple3.dark` |
 | `StdLib/Result.dark` | `Darklang.Stdlib.Result`  | `packages/darklang/stdlib/result.dark` |
