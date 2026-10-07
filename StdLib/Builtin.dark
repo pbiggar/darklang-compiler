@@ -1,17 +1,6 @@
-// Builtin.dark - portable implementations of upstream builtin adapters.
+// Builtin.dark - portable implementations of upstream builtin comparisons.
 
 module Builtin
-
-// Original package sources call these names; use the native private helpers
-// so redefining the public Base64 wrappers cannot introduce recursion.
-let base64Encode (bytes: Blob) : String =
-    Stdlib.Base64.__encodeHelper bytes 0L (Stdlib.Blob.__byteLength bytes) false ""
-
-let base64UrlEncode (bytes: Blob) : String =
-    Stdlib.Base64.__encodeHelper bytes 0L (Stdlib.Blob.__byteLength bytes) true ""
-
-let base64Decode (s: String) : Stdlib.Result.Result<Blob, String> =
-    Stdlib.Base64.__decode s
 
 // Current interpreter integer probes call these primitive comparison names.
 // The compiler keeps their typed behavior while implementing them portably.
