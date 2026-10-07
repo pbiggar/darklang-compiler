@@ -1,0 +1,24 @@
+// Function permission ceilings constrain direct, inherited and deferred effects.
+
+let ceilingPure (x: Int64) :{} Int64 = x + 1L
+let ceilingClock () :{Clock} DateTime = Stdlib.DateTime.now ()
+let ceilingUnrestrictedClock () : DateTime = Stdlib.DateTime.now ()
+let ceilingDenyDirect () :{} DateTime = Stdlib.DateTime.now ()
+let ceilingDenyInherited () :{} DateTime = ceilingUnrestrictedClock ()
+let ceilingDenyWiderCallee () :{} DateTime = ceilingClock ()
+let ceilingDenyPrint () :{} Unit = Stdlib.printLine "must not print"
+
+ceilingPure 41L = 42L
+(let _ = ceilingClock () in true) = true
+ceilingDenyDirect () = error="permission denied: function policy forbids Clock"
+ceilingDenyInherited () = error="permission denied: function policy forbids Clock"
+ceilingDenyWiderCallee () = error="permission denied: function policy forbids Clock"
+ceilingDenyPrint () = error="permission denied: function policy forbids Stdout"
+
+let ceilingMakeRestricted () :{} (Unit -> DateTime) = fun _ -> Stdlib.DateTime.now ()
+let ceilingMakeBroad () : (Unit -> DateTime) = fun _ -> Stdlib.DateTime.now ()
+let ceilingRunRestricted (f: Unit -> DateTime) :{} DateTime = f ()
+let ceilingRunBroad (f: Unit -> DateTime) : DateTime = f ()
+
+ceilingRunBroad (ceilingMakeRestricted ()) = error="permission denied: function policy forbids Clock"
+ceilingRunRestricted (ceilingMakeBroad ()) = error="permission denied: function policy forbids Clock"
