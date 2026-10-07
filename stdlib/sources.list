@@ -142,6 +142,7 @@ HttpClientSse.dark
 HttpServerConfig.dark
 HttpServer.dark
 Network.dark
+__Datagram.dark
 HttpWire.dark
 DnsWire.dark
 HttpConnect.dark

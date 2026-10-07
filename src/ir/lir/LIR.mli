@@ -63,11 +63,14 @@ type cliOperation =    | Execute
     | SocketConnect4
     | SocketConnect6
     | SocketSend
+    | SocketSendTo
     | SocketReceive
+    | SocketReceiveFrom
     | SocketReceiveTimeout
     | SocketSendTimeout
     | SocketClose
     | SocketBind4
+    | SocketBind6
     | SocketListen
     | SocketAccept
     | SocketCloexec

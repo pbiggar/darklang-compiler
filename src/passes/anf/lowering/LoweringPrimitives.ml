@@ -227,6 +227,9 @@ let tryCliIntrinsic name args = match name, args with
     | "Darklang.Stdlib.Network.__connect4" -> Some ANF.SocketConnect4
     | "Darklang.Stdlib.Network.__connect6" -> Some ANF.SocketConnect6
     | "Darklang.Stdlib.Network.__send" -> Some ANF.SocketSend
+    | "Darklang.Stdlib.Network.__sendTo" -> Some ANF.SocketSendTo
+    | "Darklang.Stdlib.Network.__receiveFrom" -> Some ANF.SocketReceiveFrom
+    | "Darklang.Stdlib.Network.__bind6" -> Some ANF.SocketBind6
     | "Darklang.Stdlib.Network.__receive" -> Some ANF.SocketReceive
     | "Darklang.Stdlib.Network.__receiveTimeout" -> Some ANF.SocketReceiveTimeout
     | "Darklang.Stdlib.Network.__sendTimeout" -> Some ANF.SocketSendTimeout
