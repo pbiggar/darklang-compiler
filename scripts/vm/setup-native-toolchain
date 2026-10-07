@@ -1,25 +1,55 @@
 #!/usr/bin/env bash
 # Install Docker-pinned native prerequisites entirely inside a writable Work VM workspace.
-set -euo pipefail
+set -Eeuo pipefail
 repo=$(cd "$(dirname "$0")/../.." && pwd)
-root=${1:?Usage: scripts/vm/setup-native-toolchain ABSOLUTE_TOOLCHAIN_DIRECTORY}
+if [[ $# != 1 || $1 == --help || $1 == -h ]]; then
+    echo 'Usage: bash scripts/vm/setup-native-toolchain ABSOLUTE_TOOLCHAIN_DIRECTORY'
+    [[ $# == 1 ]] && exit 0 || exit 1
+fi
+root=$1
 case "$root" in /*) ;; *) echo 'Use an absolute directory' >&2; exit 1 ;; esac
 [[ $(uname -s) == Linux && $(uname -m) == x86_64 ]] || { echo 'This rootless bootstrap supports Linux x86-64; use Dockerfile on other hosts.' >&2; exit 1; }
+for tool in gcc curl make tar sha256sum python3 dpkg-deb flock grep; do
+    command -v "$tool" >/dev/null || { echo "Missing prerequisite: $tool (see scripts/vm/README.md)" >&2; exit 1; }
+done
+pin_values=$(python3 "$repo/scripts/vm/toolchain_pins.py")
+read -r version ocaml_checksum <<< "$pin_values"
 mkdir -p "$root/downloads" "$root/src" "$root/tmp" "$root/toolchain"
+root=$(cd "$root" && pwd -P)
+exec 9>"$root/setup.lock"
+flock -n 9 || { echo "Another setup is using $root; wait for it to finish." >&2; exit 1; }
+stage=preflight
+log=
+failed() {
+    local status=$?
+    trap - ERR
+    echo "VM setup failed during $stage (exit $status)." >&2
+    if [[ -n "$log" && -f "$log" ]]; then
+        tail -n 16 "$log" | cut -c1-512 >&2
+        echo "Full log: $log" >&2
+    fi
+    printf 'Retry: bash %q %q\n' "$repo/scripts/vm/setup-native-toolchain" "$root" >&2
+    exit "$status"
+}
+trap failed ERR
+progress() { stage=$1; log=; printf '[vm setup] %s\n' "$stage"; }
 export TMPDIR="$root/tmp"
 unset LD_PRELOAD
+progress 'VM adapter'
 gcc -shared -fPIC "$repo/scripts/vm/compat.c" -ldl -pthread -o "$root/vm-compat.so"
 fetch() {
     local name=$1 checksum=$2 url=$3
     if [[ -f "$root/downloads/$name" ]] && printf '%s  %s\n' "$checksum" "$root/downloads/$name" | sha256sum --check --status; then
         return
     fi
-    curl --fail --location --retry 2 --output "$root/downloads/$name.download" "$url"
+    log="$root/download-$name.log"
+    curl --silent --show-error --fail --location --retry 3 --connect-timeout 30 --max-time 600 \
+        --output "$root/downloads/$name.download" "$url" > "$log" 2>&1
     printf '%s  %s\n' "$checksum" "$root/downloads/$name.download" | sha256sum --check
     mv "$root/downloads/$name.download" "$root/downloads/$name"
 }
-version=5.5.1
 prefix="$root/toolchain/ocaml"
+progress "OCaml $version (serial build or verified reuse)"
 cat > "$root/unix-smoke.ml" <<'ML'
 let () =
   ignore (Unix.realpath ".");
@@ -29,18 +59,31 @@ let () =
   | Unix.WEXITED 0 -> ()
   | _ -> failwith "OCaml Unix process smoke check failed"
 ML
-if ! { [[ -x "$prefix/bin/ocaml" ]] && [[ $("$prefix/bin/ocamlc" -version) == "$version" ]] &&
-    "$prefix/bin/ocaml" -I +unix unix.cma "$root/unix-smoke.ml" > "$root/unix-smoke.log" 2>&1; }; then
-    fetch "ocaml-$version.tar.gz" ae47728d0a876665ccc7b745e3a8d8c9ca5ba63c4f7a11d4db6cdbd1dbeef4bb \
+compiler_works() {
+    [[ -x "$prefix/bin/ocaml" && -x "$prefix/bin/ocamlopt" ]] &&
+    [[ $("$prefix/bin/ocamlc" -version) == "$version" ]] &&
+    [[ $("$prefix/bin/ocamlopt" -version) == "$version" ]] &&
+    "$prefix/bin/ocaml" -I +unix unix.cma "$root/unix-smoke.ml" &&
+    env LD_PRELOAD="$root/vm-compat.so" PORT_VM_TMPDIR="$root/tmp" \
+        "$prefix/bin/ocamlopt" -I +unix unix.cmxa "$root/unix-smoke.ml" -o "$root/unix-smoke" &&
+    env LD_PRELOAD="$root/vm-compat.so" PORT_VM_TMPDIR="$root/tmp" "$root/unix-smoke"
+}
+if ! compiler_works > "$root/unix-smoke.log" 2>&1; then
+    fetch "ocaml-$version.tar.gz" "$ocaml_checksum" \
         "https://github.com/ocaml/ocaml/archive/refs/tags/$version.tar.gz"
+    # Failed builds can leave incompatible generated files. Rebuild only this
+    # script's source directory from the verified cached archive.
+    rm -rf "$root/src/ocaml-$version"
     tar --no-same-owner -xzf "$root/downloads/ocaml-$version.tar.gz" -C "$root/src"
     (
         cd "$root/src/ocaml-$version"
+        log="$root/ocaml-configure.log"
         bash ./configure --prefix="$prefix" > "$root/ocaml-configure.log" 2>&1
         # Native compiler processes need stack attributes even when procfs is
         # unavailable. Keep this adapter out of configure's feature probes.
         ulimit -s 65536
         export LD_PRELOAD="$root/vm-compat.so" PORT_VM_TMPDIR="$root/tmp"
+        log="$root/ocaml-build.log"
         if ! make -j1 world.opt > "$root/ocaml-build.log" 2>&1; then
             # Some restricted VM linkers leave the linked native compiler
             # without its executable bit. Repair only that observed failure.
@@ -48,13 +91,17 @@ if ! { [[ -x "$prefix/bin/ocaml" ]] && [[ $("$prefix/bin/ocamlc" -version) == "$
                 chmod u+x ocamlopt.opt
                 make -j1 world.opt >> "$root/ocaml-build.log" 2>&1
             else
-                exit 1
+                false # Trigger the bounded error report with the build log.
             fi
         fi
-        make install > "$root/ocaml-install.log" 2>&1
+        log="$root/ocaml-install.log"
+        make install > "$log" 2>&1
     )
 fi
-"$prefix/bin/ocaml" -I +unix unix.cma "$root/unix-smoke.ml"
+log="$root/unix-smoke.log"
+compiler_works > "$log" 2>&1
+progress 'Native headers and libraries'
+log="$root/native-packages.log"
 python3 "$repo/scripts/vm/setup-native-packages.py" "$root" > "$root/native-packages.log" 2>&1
 sysroot="$root/qemu-deps/sysroot"
 export PATH="$prefix/bin:$sysroot/usr/bin:$PATH"
@@ -63,22 +110,32 @@ export LIBRARY_PATH="$sysroot/usr/lib/x86_64-linux-gnu"
 export LD_LIBRARY_PATH="$sysroot/usr/lib/x86_64-linux-gnu${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 export PKG_CONFIG_LIBDIR="$sysroot/usr/lib/x86_64-linux-gnu/pkgconfig:$sysroot/usr/share/pkgconfig"
 export PKG_CONFIG_SYSROOT_DIR="$sysroot"
+progress 'opam 2.6.0'
 fetch opam a59184447f881005dae70b2ae455c3a7e9549834a41c635c49a5a28235eca758 \
     https://github.com/ocaml/opam/releases/download/2.6.0/opam-2.6.0-x86_64-linux
 chmod +x "$root/downloads/opam"
 export OPAMROOT="$root/opam"
 opam="$root/downloads/opam"
 if [[ ! -f "$OPAMROOT/config" ]]; then
+    log="$root/opam-init.log"
     "$opam" init --bare --disable-sandboxing --no-setup --yes > "$root/opam-init.log" 2>&1
 fi
-if ! "$opam" switch list --short | rg -x dark >/dev/null; then
-    "$opam" switch create dark ocaml-system.5.5.1 --yes --jobs=1 --no-depexts > "$root/opam-switch.log" 2>&1
+switches=$("$opam" switch list --short)
+if ! grep -qx dark <<< "$switches"; then
+    log="$root/opam-switch.log"
+    "$opam" switch create dark "ocaml-system.$version" --yes --jobs=1 --no-depexts > "$log" 2>&1
+elif [[ $("$opam" list --switch=dark --installed --short --columns=version ocaml-system) != "$version" ]]; then
+    echo "Existing dark switch has a different compiler; use a new toolchain directory." >&2
+    exit 1
 fi
+progress 'Locked OCaml packages (serial install or verified reuse)'
 packages=()
 while IFS= read -r package; do
     case "$package" in ''|'#'*) ;; *) packages+=("$package");; esac
 done < "$repo/dependencies.lock"
-"$opam" install --switch=dark --yes --jobs=1 --no-depexts "${packages[@]}" > "$root/opam-dependencies.log" 2>&1
+log="$root/opam-dependencies.log"
+"$opam" install --switch=dark --yes --jobs=1 --no-depexts "${packages[@]}" > "$log" 2>&1
+progress 'Activation and environment checks'
 python3 - "$root" "$prefix" <<'PY'
 from pathlib import Path
 import shlex
@@ -101,9 +158,9 @@ lines = ["# Native Work VM environment; unset LD_PRELOAD when building toolchain
 lines += [f"export {key}={shlex.quote(str(value))}" for key, value in values.items()]
 paths = [root / "opam/dark/bin", prefix / "bin", sysroot / "usr/bin"]
 lines += ['export PATH=' + ':'.join(shlex.quote(str(path)) for path in paths) + ':"$PATH"']
-(root / "activate").write_text("\n".join(lines) + "\n")
+temporary = root / "activate.new"
+temporary.write_text("\n".join(lines) + "\n")
+temporary.replace(root / "activate")
 PY
-source "$root/activate"
-ocamlc -version
-dune --version
+bash "$repo/scripts/vm/check-native-toolchain" "$root"
 printf 'Activate with: source %q/activate\n' "$root"

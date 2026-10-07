@@ -1,0 +1,82 @@
+#!/usr/bin/env bash
+# Check an activated Work VM toolchain without rebuilding the repository.
+set -euo pipefail
+repo=$(cd "$(dirname "$0")/../.." && pwd)
+if [[ $# != 1 || $1 == --help || $1 == -h ]]; then
+    echo 'Usage: bash scripts/vm/check-native-toolchain ABSOLUTE_TOOLCHAIN_DIRECTORY'
+    [[ $# == 1 ]] && exit 0 || exit 1
+fi
+root=$1
+case "$root" in /*) ;; *) echo 'Use an absolute directory' >&2; exit 1 ;; esac
+[[ -f "$root/activate" ]] || { echo "Missing $root/activate; run setup-native-toolchain first." >&2; exit 1; }
+# shellcheck disable=SC1091
+source "$root/activate"
+python3 - "$root" "$repo/scripts/vm" <<'PY'
+from pathlib import Path
+import subprocess
+import sys
+import tempfile
+
+root = Path(sys.argv[1])
+sys.path.insert(0, sys.argv[2])
+from toolchain_pins import pins
+
+
+def run(*command):
+    result = subprocess.run(command, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    if result.returncode:
+        raise RuntimeError(f"{' '.join(map(str, command))} failed:\n{result.stderr[-4000:]}")
+    return result.stdout.strip()
+
+
+try:
+    version, _, dune, packages = pins()
+    for tool, flag, expected in [("ocamlc", "-version", version),
+                                 ("ocamlopt", "-version", version),
+                                 ("dune", "--version", dune)]:
+        actual = run(tool, flag)
+        if actual != expected:
+            raise RuntimeError(f"{tool}: expected {expected}, found {actual}")
+        print(f"[vm check] {tool} {actual}", flush=True)
+    rows = run(str(root / "downloads/opam"), "list", "--switch=dark", "--installed",
+               "--short", "--columns=name,version")
+    installed = dict(row.split() for row in rows.splitlines())
+    mismatches = [package for package in packages
+                  if installed.get(package.split(".", 1)[0]) != package.split(".", 1)[1]]
+    if mismatches:
+        raise RuntimeError("Missing or mismatched locked packages: " + ", ".join(mismatches))
+    print(f"[vm check] {len(packages)} locked packages", flush=True)
+    with tempfile.TemporaryDirectory(prefix="vm-check-", dir=root / "tmp") as directory:
+        directory = Path(directory)
+        source = directory / "smoke.ml"
+        source.write_text('''let () =
+  ignore (Unix.realpath ".");
+  let child = Unix.create_process "/bin/true" [|"/bin/true"|]
+    Unix.stdin Unix.stdout Unix.stderr in
+  assert (snd (Unix.waitpid [] child) = Unix.WEXITED 0);
+  let path = Filename.temp_file "vm" ".tmp" in
+  let output = open_out path in
+  output_string output "ok"; close_out output; Sys.remove path
+''')
+        executable = directory / "smoke"
+        run("ocamlopt", "-I", "+unix", "unix.cmxa", str(source), "-o", str(executable))
+        run(str(executable))
+        source = directory / "native.c"
+        source.write_text('''#include <gmp.h>
+#include <sqlite3.h>
+int main(void) {
+  mpz_t value; mpz_init_set_ui(value, 42); mpz_clear(value);
+  sqlite3 *db = 0;
+  if (sqlite3_open(":memory:", &db) != SQLITE_OK) return 1;
+  return sqlite3_close(db);
+}
+''')
+        run("gcc", str(source), "-lgmp", "-lsqlite3", "-o", str(executable))
+        run(str(executable))
+        run("pkg-config", "--exists", "gmp", "sqlite3")
+    print("[vm check] native compilation, Unix processes, temporary files, GMP and SQLite OK")
+except (OSError, ValueError, RuntimeError) as error:
+    print(f"VM check failed: {error}", file=sys.stderr)
+    print("Rerun setup-native-toolchain; see scripts/vm/README.md for recovery.", file=sys.stderr)
+    sys.exit(1)
+PY

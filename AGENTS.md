@@ -1,13 +1,19 @@
 # Dark Compiler - AI Agent Guidelines
 
-Read [`docs/index.md`](docs/index.md) first. It owns navigation. Follow
-[`AGENTS.mergetrain.md`](AGENTS.mergetrain.md) for the generated merge-train
-contract; this file contains the additional rules specific to agents changing
-this repository and takes precedence where it is stricter.
+Read [`docs/index.md`](docs/index.md) first. It owns navigation. Select the
+execution environment below before applying checkout or Git rules. Local Codex
+uses [`AGENTS.mergetrain.md`](AGENTS.mergetrain.md), `./land`, and the integrator.
+The ChatGPT app does not use that contract or those tools. This file owns the
+environment distinction and takes precedence over conflicting handoff rules.
 
-## Primary checkout boundary
+## Execution environments and checkout boundaries
 
-### ChatGPT Work cloud VMs
+| Environment | Checkout | Durable handoff | Integration |
+| --- | --- | --- | --- |
+| Local Codex setup | Dedicated macOS task worktree | Commit, then `./land` | Merge train and integrator |
+| ChatGPT app / Work | Conversation's writable VM workspace | Commit and push task branch to GitHub | Only when separately requested |
+
+### ChatGPT app / Work cloud VMs
 
 This section takes precedence over the local checkout placement, task-start
 and merge-train handoff rules elsewhere in these guidelines for Work VMs.
@@ -21,21 +27,43 @@ and merge-train handoff rules elsewhere in these guidelines for Work VMs.
   `main`. Reuse that checkout for the rest of the task. GitHub connector reads
   can inspect the repository before cloning; a checkout is needed for edits
   and verification.
+- Treat the VM and all local files as disposable: they may disappear between
+  turns. Always preserve repository changes on a task-specific GitHub branch.
+  Creating and pushing that branch is authorized by these instructions; do not
+  wait for another user request or for validation to finish. Push an initial
+  checkpoint before a long setup/build/test operation, after meaningful progress,
+  and before ending every turn with repository changes, including unfinished or
+  failing work. Label incomplete commits as checkpoints and report remaining work.
+- Push only the task branch, never `main` or another integration ref, and never
+  force-push. Stage intended paths explicitly; exclude credentials, downloads,
+  toolchains and generated build artifacts. Use `git push -u origin HEAD`, then
+  verify that `git ls-remote origin refs/heads/<branch>` matches `git rev-parse HEAD`.
+  If Git transport is unavailable, use the GitHub connector to preserve the same
+  intended files and commit on the task branch, then verify the remote tree.
+  If neither works, report the failure prominently; a local commit alone is not
+  a durable handoff. Return the GitHub branch URL and commit in the completion report.
+- After a VM reset, recover the existing task branch from GitHub and read its
+  changes before continuing. Do not restart from `main` or redo completed work.
+  New tasks start from current remote `main`; the local no-fetch rule below does
+  not apply in Work. Branch preservation does not authorize merging or deployment.
 - Use `Dockerfile` and `dependencies.lock` as the toolchain sources of truth.
   Bootstrap a minimal native environment with
   `bash scripts/vm/setup-native-toolchain /absolute/writable/toolchains`, then
   source that directory's `activate` file. This installs the pinned OCaml,
   Dune and native prerequisites without changing system directories. The bootstrap
-  contains only the native compiler toolchain and its dependencies.
+  contains only the native compiler toolchain and its dependencies. Read
+  [`scripts/vm/README.md`](scripts/vm/README.md) for the fresh-VM and recovery
+  runbook. Keep the toolchain outside the checkout, reuse it if present, and
+  rerun the bootstrap after interruption rather than inventing setup commands.
 - Keep downloads, opam state, build logs and a writable `TMPDIR` under that
   toolchain directory. Build OCaml serially. Do not reuse incomplete downloads
   or accept the compiler version without checking its Unix operations.
 - Build with `env -u LD_PRELOAD ./build --ai` and run the already-built suite
   with `./run-tests --ai`. Run `dune runtest` for the additional regression
   checks. The activation file supplies the VM-only temporary-path adapter.
-- Commit completed changes locally. The local macOS `./land` workflow is not
-  configured in Work: report verification and handoff limitations explicitly,
-  and use a GitHub branch/PR only when the user authorizes that handoff.
+- The local macOS `./land` workflow is not configured in Work. Commit and push
+  the task branch even when a gate is blocked; report each actual validation
+  result and limitation. Do not describe a checkpoint as ready or merged.
 
 ### Local Codex checkouts
 
@@ -156,6 +184,8 @@ and merge-train handoff rules elsewhere in these guidelines for Work VMs.
 
 ## Git workflow
 
+### Both environments
+
 - Distinguish investigation output from a lasting repository change. For an
   investigation, profiling run, or exploratory experiment, report findings to
   the user and keep raw measurements and temporary patches in ignored artifacts.
@@ -165,7 +195,26 @@ and merge-train handoff rules elsewhere in these guidelines for Work VMs.
   off an investigation document only when the user explicitly requests that
   document as a repository artifact. If the investigation produces an accepted
   code, test, benchmark, or durable documentation change, apply the ordinary
-  readiness rules to that change.
+  readiness rules to that change. In the ChatGPT app, preserve any intended
+  repository edits as pushed checkpoints while investigating; this does not
+  require turning findings or raw measurements into tracked documentation.
+- When work includes an intended lasting repository change and is complete,
+  commit that change automatically. An investigation whose result is only
+  findings for the user is complete after the findings are reported; it does
+  not need a commit or merge-train handoff.
+
+### ChatGPT app / Work: GitHub branches
+
+Follow the checkpoint, push, remote-verification and recovery rules in the
+ChatGPT environment section above. Never invoke `./land`, the merge-train
+runner, or the integrator from the app. A pushed checkpoint is preservation,
+not evidence that tests passed. Report readiness separately and merge only
+when the user requests it.
+
+### Local Codex: merge train and integrator
+
+The remaining rules in this section apply only to the local Codex setup.
+
 - At the start of each new task, bring its branch up to the current local value
   of the configured integration ref (`origin/main` by default) before making
   changes. Create a dedicated branch and worktree directly under
@@ -188,10 +237,6 @@ and merge-train handoff rules elsewhere in these guidelines for Work VMs.
   wait for it to land, inspect its train status, or refresh or reuse its
   worktree. Authorized merge-conflict recovery under
   `AGENTS.mergetrain.md` is the exception. Task agents never push.
-- When work includes an intended lasting repository change and is complete,
-  commit that change automatically. An investigation whose result is only
-  findings for the user is complete after the findings are reported; it does
-  not need a commit or merge-train handoff.
 - Run `./land --task "<brief task description>"` only when the committed branch
   is ready: the requested scope is complete, the final diff has been
   substantively reviewed,
@@ -243,6 +288,13 @@ and merge-train handoff rules elsewhere in these guidelines for Work VMs.
   the point, while keeping them short and relevant to the user's question.
 
 ## Completion report
+
+For the ChatGPT app, report the changes, GitHub branch URL, pushed commit,
+remote verification, actual validation commands/results, and any remaining
+work or blocked gates. Do not include a local merge-train status. If work is
+unfinished, start with `Checkpoint pushed` rather than `Work complete`.
+
+The merge-train format below applies to local Codex only.
 
 Use this standard format when reporting completed work. Explain what changed
 and why before the commit and validation status. Describe concrete changes and

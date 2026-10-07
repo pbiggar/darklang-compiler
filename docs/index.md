@@ -19,6 +19,7 @@ grouped by purpose; each subject has one canonical source.
 - [Finding compiler slowdowns](contributing/compile-time-optimization.md)
 - [Merge-train integrator recovery](contributing/mergetrain-integrator.md)
 - [Agent operating rules](../AGENTS.md)
+- [ChatGPT app VM setup and recovery](../scripts/vm/README.md)
 
 ## Compiler implementation
 
