@@ -1,0 +1,157 @@
+// __QuicPacket.dark - Bounded QUIC v1 datagram framing and protected packet construction.
+module Darklang.Stdlib.QuicPacket
+
+type Kind = Initial | ZeroRtt | Handshake | OneRtt
+type Protected = {
+  kind: Stdlib.QuicPacket.Kind, destination: Blob, source: Blob, token: Blob,
+  numberOffset: Int64, bytes: Blob, remaining: Blob
+}
+type Negotiation = { destination: Blob, source: Blob, versions: List<Int64> }
+type RetryPacket = { destination: Blob, source: Blob, token: Blob, bytes: Blob }
+type OtherVersion = { version: Int64, destination: Blob, source: Blob }
+type Packet =
+  | Protected of Stdlib.QuicPacket.Protected
+  | VersionNegotiation of Stdlib.QuicPacket.Negotiation
+  | Retry of Stdlib.QuicPacket.RetryPacket
+  | UnsupportedVersion of Stdlib.QuicPacket.OtherVersion
+
+let __versions (data: Blob) (position: Int64) (versions: List<Int64>) : List<Int64> =
+  if position == Stdlib.Blob.__byteLength data then Stdlib.List.reverse versions
+  else Stdlib.QuicPacket.__versions data (position + 4L) (Stdlib.List.push versions (Stdlib.QuicCrypto.__numberBytes data position 4L 0L))
+
+let __protected (kind: Stdlib.QuicPacket.Kind) (destination: Blob) (source: Blob)
+  (token: Blob) (data: Blob) (lengthOffset: Int64)
+  : Stdlib.Result.Result<Stdlib.QuicPacket.Packet, String> =
+  match Stdlib.QuicWire.parseInteger data lengthOffset with
+  | Error _ -> Error "Truncated QUIC packet length"
+  | Ok length ->
+    // The header-protection sample starts four bytes after the PN offset.
+    // Do not inspect protected PN-length, key-phase, or reserved bits here.
+    if length.value < 20L || length.value > Stdlib.Blob.__byteLength data - length.next then
+      Error "Truncated QUIC protected packet"
+    else
+      let end_ = length.next + length.value in
+      Ok (Protected (Stdlib.QuicPacket.Protected {
+        kind = kind, destination = destination, source = source, token = token,
+        numberOffset = length.next, bytes = Stdlib.Http2Wire.__slice data 0L end_,
+        remaining = Stdlib.Http2Wire.__slice data end_ (Stdlib.Blob.__byteLength data - end_) }))
+
+let __long (data: Blob) (version: Int64) (destination: Blob) (source: Blob) (position: Int64)
+  : Stdlib.Result.Result<Stdlib.QuicPacket.Packet, String> =
+  let size = Stdlib.Blob.__byteLength data in
+  let first = Stdlib.Blob.__getByte data 0L in
+  if version == 0L then
+    if size == position || (size - position) % 4L != 0L then Error "Invalid QUIC version list"
+    else Ok (VersionNegotiation (Stdlib.QuicPacket.Negotiation {
+      destination = destination, source = source, versions = Stdlib.QuicPacket.__versions data position [] }))
+  else if version != 1L then Ok (UnsupportedVersion (Stdlib.QuicPacket.OtherVersion {
+    version = version, destination = destination, source = source }))
+  else if Stdlib.Int64.bitwiseAnd first 64L == 0L then Error "Invalid QUIC fixed bit"
+  else
+    let kind = (first / 16L) % 4L in
+    if kind == 3L then
+      if size - position <= 16L then Error "Invalid QUIC Retry token"
+      else Ok (Retry (Stdlib.QuicPacket.RetryPacket {
+        destination = destination, source = source,
+        token = Stdlib.Http2Wire.__slice data position (size - position - 16L), bytes = data }))
+    else if kind == 0L then
+      let result =
+        match Stdlib.QuicWire.parseInteger data position with
+        | Error _ -> Error "Truncated QUIC Initial token"
+        | Ok length ->
+          if length.value > size - length.next then Error "Truncated QUIC Initial token"
+          else Stdlib.QuicPacket.__protected Stdlib.QuicPacket.Kind.Initial destination source (Stdlib.Http2Wire.__slice data length.next length.value) data (length.next + length.value) in
+      result
+    else Stdlib.QuicPacket.__protected (if kind == 1L then Stdlib.QuicPacket.Kind.ZeroRtt else Stdlib.QuicPacket.Kind.Handshake) destination source Stdlib.Blob.empty data position
+
+// Unsupported versions use only version-invariant fields, including 8-bit
+// CID lengths. Their payload format must not be interpreted as QUIC v1.
+let parse (shortIdLength: Int64) (data: Blob)
+  : Stdlib.Result.Result<Stdlib.QuicPacket.Packet, String> =
+  let size = Stdlib.Blob.__byteLength data in
+  if size == 0L then Error "Empty QUIC datagram"
+  else if size > 4096L then Error "QUIC datagram exceeds limit"
+  else if shortIdLength < 0L || shortIdLength > 20L then Error "Invalid QUIC short connection ID length"
+  else if Stdlib.Blob.__getByte data 0L < 128L then
+    if Stdlib.Int64.bitwiseAnd (Stdlib.Blob.__getByte data 0L) 64L == 0L then Error "Invalid QUIC fixed bit"
+    else if size < 1L + shortIdLength + 20L then Error "Truncated QUIC protected packet"
+    else Ok (Protected (Stdlib.QuicPacket.Protected {
+      kind = Stdlib.QuicPacket.Kind.OneRtt,
+      destination = Stdlib.Http2Wire.__slice data 1L shortIdLength,
+      source = Stdlib.Blob.empty, token = Stdlib.Blob.empty,
+      numberOffset = 1L + shortIdLength, bytes = data, remaining = Stdlib.Blob.empty }))
+  else if size < 7L then Error "Truncated QUIC long header"
+  else
+    let version = Stdlib.QuicCrypto.__numberBytes data 1L 4L 0L in
+    let destinationSize = Stdlib.Blob.__getByte data 5L in
+    if version == 1L && destinationSize > 20L then Error "QUIC connection ID exceeds 20 bytes"
+    else if destinationSize > size - 7L then Error "Truncated QUIC connection ID"
+    else
+      let sourceOffset = 6L + destinationSize in
+      let sourceSize = Stdlib.Blob.__getByte data sourceOffset in
+      if version == 1L && sourceSize > 20L then Error "QUIC connection ID exceeds 20 bytes"
+      else if sourceSize > size - sourceOffset - 1L then Error "Truncated QUIC connection ID"
+      else Stdlib.QuicPacket.__long data version (Stdlib.Http2Wire.__slice data 6L destinationSize) (Stdlib.Http2Wire.__slice data (sourceOffset + 1L) sourceSize) (sourceOffset + 1L + sourceSize)
+
+let __longPrefix (kind: Stdlib.QuicPacket.Kind) (destination: Blob) (source: Blob) (token: Blob)
+  : Stdlib.Result.Result<Blob, String> =
+  if Stdlib.Blob.__byteLength destination > 20L || Stdlib.Blob.__byteLength source > 20L then
+    Error "QUIC connection ID exceeds 20 bytes"
+  else
+    let code = match kind with | Initial -> 0L | ZeroRtt -> 16L | Handshake -> 32L | OneRtt -> -1L in
+    if code < 0L then Error "1-RTT requires a QUIC short header"
+    else if kind != Stdlib.QuicPacket.Kind.Initial && Stdlib.Blob.__byteLength token != 0L then
+      Error "QUIC token is only valid in Initial packets"
+    else
+      let prefix = Stdlib.Blob.concat [
+        Stdlib.Blob.__fromInt64List [195L + code, 0L, 0L, 0L, 1L, Stdlib.Blob.__byteLength destination],
+        destination, Stdlib.Blob.__fromInt64List [Stdlib.Blob.__byteLength source], source ] in
+      if kind != Stdlib.QuicPacket.Kind.Initial then Ok prefix
+      else
+        match Stdlib.QuicWire.integer (Stdlib.Blob.__byteLength token) with
+        | Error message -> Error message
+        | Ok length -> Ok (Stdlib.Blob.concat [prefix, length, token])
+
+let __sealLong (keys: Stdlib.QuicCrypto.Keys) (prefix: Blob) (payload: Blob) (number: Int64)
+  : Stdlib.Result.Result<Blob, String> =
+  let size = Stdlib.Blob.__byteLength payload + 20L in
+  // Packet Length may use non-minimal varints. Fix its width at two bytes,
+  // so large Initial tokens cannot invalidate the padding calculation.
+  if size >= 16384L then Error "QUIC packet exceeds datagram limit"
+  else
+    let length = Stdlib.Blob.__fromInt64List [64L + size / 256L, size % 256L] in
+    let head = Stdlib.Blob.concat [prefix, length] in
+    let numberBytes = Stdlib.Blob.__fromInt64List (Stdlib.QuicWire.__bytes (number % 4294967296L) 4L []) in
+    Stdlib.QuicCrypto.seal keys (Stdlib.Blob.concat [head, numberBytes]) payload number (Stdlib.Blob.__byteLength head)
+
+// Four-byte PN fields keep the sample available even for an empty payload.
+// Initial packets are padded to >=1200; coalescing can relax this later.
+let sealLong (kind: Stdlib.QuicPacket.Kind) (keys: Stdlib.QuicCrypto.Keys)
+  (destination: Blob) (source: Blob) (token: Blob) (payload: Blob) (number: Int64)
+  : Stdlib.Result.Result<Blob, String> =
+  if number < 0L || number > 4611686018427387903L then Error "Invalid QUIC packet number"
+  else if Stdlib.Blob.__byteLength token > 2048L || Stdlib.Blob.__byteLength payload > 4000L then
+    Error "QUIC packet exceeds datagram limit"
+  else
+    match Stdlib.QuicPacket.__longPrefix kind destination source token with
+    | Error message -> Error message
+    | Ok prefix ->
+      // Padded Initial lengths always occupy at least two varint bytes.
+      let minimum = if kind == Stdlib.QuicPacket.Kind.Initial then 1200L - Stdlib.Blob.__byteLength prefix - 22L else 0L in
+      let padding = minimum - Stdlib.Blob.__byteLength payload in
+      let body = if padding > 0L then Stdlib.Blob.concat [
+        payload, Stdlib.Blob.__fromInt64List (Stdlib.List.repeatUnsafe (Stdlib.Int.fromInt64 padding) 0L) ] else payload in
+      match Stdlib.QuicPacket.__sealLong keys prefix body number with
+      | Error message -> Error message
+      | Ok packet -> if Stdlib.Blob.__byteLength packet > 4096L then Error "QUIC packet exceeds datagram limit" else Ok packet
+
+let sealShort (keys: Stdlib.QuicCrypto.Keys) (destination: Blob) (keyPhase: Bool) (payload: Blob) (number: Int64)
+  : Stdlib.Result.Result<Blob, String> =
+  if Stdlib.Blob.__byteLength destination > 20L then Error "QUIC connection ID exceeds 20 bytes"
+  else if Stdlib.Blob.__byteLength payload > 4000L then Error "QUIC packet exceeds datagram limit"
+  else if number < 0L || number > 4611686018427387903L then Error "Invalid QUIC packet number"
+  else
+    let header = Stdlib.Blob.concat [
+      Stdlib.Blob.__fromInt64List [if keyPhase then 71L else 67L], destination,
+      Stdlib.Blob.__fromInt64List (Stdlib.QuicWire.__bytes (number % 4294967296L) 4L []) ] in
+    Stdlib.QuicCrypto.seal keys header payload number (1L + Stdlib.Blob.__byteLength destination)
