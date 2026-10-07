@@ -1,0 +1,10 @@
+// POSIX host behavior from the upstream package: descriptors, errors, paths.
+match Stdlib.Cli.Posix.fdRead (-1) 8 with | Error e -> e.errno | Ok _ -> 0 = 9
+match Stdlib.Cli.Posix.fdRead (-1) (-1) with | Error e -> e.errno | Ok _ -> 0 = 22
+match Stdlib.Cli.Posix.fdClose (-1) with | Error e -> e.errno | Ok _ -> 0 = 9
+match Stdlib.Cli.Posix.stat "/definitely/missing/dark-posix-file" with | Error e -> e.errno | Ok _ -> 0 = 2
+Stdlib.Cli.Posix.fnmatch "[a-c]?*.dark" "b-file.dark" false = true
+Stdlib.Cli.Posix.fnmatch "*" "a/b" true = false
+Stdlib.Cli.Posix.fnmatch "[!a-c]" "z" false = true
+Stdlib.Cli.Posix.fnmatch "\\*" "*" false = true
+let temp = Stdlib.Cli.File.createTemp () in match temp with | Error _ -> false | Ok path -> let wrote = Stdlib.Cli.File.writeText path "abcdef" in let contents = Stdlib.Cli.File.readText path in let removed = Stdlib.Cli.File.delete path in (wrote, contents, removed) == (Ok (), Ok "abcdef", Ok ()) = true isolated=true
