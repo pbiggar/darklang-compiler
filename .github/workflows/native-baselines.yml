@@ -1,0 +1,60 @@
+# Measure native instruction counts where Valgrind has normal procfs access.
+name: Native benchmark baselines
+on:
+  workflow_dispatch:
+  push:
+    branches: [codex/root-dune-layout]
+    paths: [.github/workflows/native-baselines.yml]
+permissions:
+  contents: read
+jobs:
+  measure:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - architecture: arm64
+            runner: ubuntu-24.04-arm
+          - architecture: x86_64
+            runner: ubuntu-24.04
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Configure the parent reference
+        run: |
+          git switch -c benchmark-measurement
+          git branch --set-upstream-to=origin/main
+      - name: Install native dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y opam libgmp-dev libsqlite3-dev pkg-config valgrind ripgrep
+          opam init --bare --yes --disable-sandboxing --no-setup
+          opam switch create . ocaml-base-compiler.5.5.1 --yes --jobs=2
+          mapfile -t packages < <(sed '/^#/d; /^$/d' dependencies.lock)
+          opam install --yes --jobs=2 --no-depexts "${packages[@]}"
+      - name: Build and test the native compiler
+        run: |
+          opam exec -- ./build --ai -- -j2 --cache=disabled
+          opam exec -- ./run-tests --ai
+      - name: Verify ARM64 against its existing baseline
+        if: matrix.architecture == 'arm64'
+        run: opam exec -- ./benchmarks/run_benchmarks.sh --verify-parent --jobs=2 full
+      - name: Record the first native x64 baseline
+        if: matrix.architecture == 'x86_64'
+        run: opam exec -- ./benchmarks/run_benchmarks.sh --reset-dark-baseline --jobs=2 full
+      - name: Retain measurements and diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-baselines-${{ matrix.architecture }}
+          retention-days: 7
+          path: |
+            benchmarks/baselines/dark-${{ matrix.architecture }}-full-cachegrind.json
+            benchmarks/results/
+            benchmarks/RESULTS.md
+            benchmarks/BASELINES.md
+            benchmarks/reports/
+            TestResults/ai/
