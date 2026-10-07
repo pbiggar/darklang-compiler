@@ -23,6 +23,13 @@ no passing assertions) and 271 assertion-line gates across 23 mixed files.
 The 46 entries that identified no assertion have been removed. The table below
 retains the original exclusion counts to show what was tested.
 
+Verification after updating the gates: native rebuild passed; the default host
+suite passed **11,118/11,118** tests (249 more than the previous 10,869);
+`dune runtest` passed. The live gate set was checked against every measured
+failure and matches all 2,340 failing assertion identities exactly.
+The parent benchmark check was attempted but stopped before measurement because
+the baseline workload digest is incompatible; no baseline was reset.
+
 | File | Disabled tests run | Passed | Failed |
 | --- | ---: | ---: | ---: |
 | [cli/app-service-safety.dark](failures/cli/app-service-safety.md) | 9 | 0 | 9 |
