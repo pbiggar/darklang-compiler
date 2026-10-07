@@ -7,8 +7,7 @@ open Dark_compiler
 open X86_64
 open DSLPattern
 let (let*)=Result.bind
-external upperScalar : int -> int = "dark_runner_upper_scalar"
-let uppercase text=let buffer=Buffer.create (String.length text) in Uutf.String.fold_utf_8 (fun () _->function `Uchar value->Uutf.Buffer.add_utf_8 buffer (Uchar.of_int (upperScalar (Uchar.to_int value)))|`Malformed _->invalid_arg "Malformed UTF-8 host text") () text;Buffer.contents buffer
+let uppercase = String.uppercase_ascii
 let parseReg text=match uppercase (Text.trim text) with
  |"RAX"->Ok RAX|"RBX"->Ok RBX|"RCX"->Ok RCX|"RDX"->Ok RDX|"RSI"->Ok RSI|"RDI"->Ok RDI|"RBP"->Ok RBP|"RSP"->Ok RSP|"R8"->Ok R8|"R9"->Ok R9|"R10"->Ok R10|"R11"->Ok R11|"R12"->Ok R12|"R13"->Ok R13|"R14"->Ok R14|"R15"->Ok R15
  |value->Error ("Invalid x64 register '"^value^"'")

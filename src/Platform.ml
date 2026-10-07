@@ -18,20 +18,19 @@ type os = MacOS | Linux
 type arch = ARM64 | X86_64
 type arm64Target = MacOSARM64 | LinuxARM64
 type target = ARM64Backend of arm64Target | LinuxX86_64
-external hostIdentity : unit -> string * string = "dark_compiler_host_identity"
 (*
    Get the current operating system
 *)
 let detectOS () =
-  match fst (hostIdentity ()) with
-  | "Darwin" -> Ok MacOS
-  | "Linux" -> Ok Linux
+  match BuildPlatform.system with
+  | "macosx" -> Ok MacOS
+  | "linux" -> Ok Linux
   | _ -> Error "Unsupported operating system. Only macOS and Linux are supported."
 (*
    Get the current CPU architecture
 *)
 let detectArch () =
-  match snd (hostIdentity ()) with
+  match BuildPlatform.architecture with
   | "aarch64" | "arm64" -> Ok ARM64
   | "x86_64" | "amd64" -> Ok X86_64
   | arch -> Error ("Unsupported architecture: " ^ arch ^ ". Only ARM64 and x86_64 are supported.")

@@ -9,7 +9,7 @@ type locatedEntity={kind:itemKind;hash:string;location:string;json:string}
 type fetchResult=Found of string|Missing
 let (let*)=Result.bind
 let (let+) result f=Result.map f result
-let message=function Failure text|Invalid_argument text|Yojson.Json_error text->text|Unix.Unix_error (error,_,_)->Unix.error_message error|ex->Printexc.to_string ex
+let message=function Failure text|Invalid_argument text|Yojson.Json_error text|Sqlite3.SqliteError text|Sqlite3.Error text->text|Unix.Unix_error (error,_,_)->Unix.error_message error|ex->Printexc.to_string ex
 (* Package expression trees have a finite nesting bound. Raw JSON keeps
    numeric literal spellings, including integers wider than OCaml's int. *)
 let parse source =

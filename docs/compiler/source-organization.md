@@ -38,8 +38,13 @@ build graph. `dune runtest` executes the native regression checks; the complete
 production host suite runs through `./run-tests --ai` after `./build --ai`.
 
 Compiler services use OCaml libraries directly: Yojson for JSON, Digestif for
-SHA-256, Mtime for monotonic elapsed time, Uri for URL resolution, and Uuidm
-for Mach-O UUIDs. Timing fields store nanoseconds. Shared utilities retain
+SHA-256 (its OCaml backend), Mtime for monotonic elapsed time, Uri for URL
+resolution, and Uuidm for Mach-O UUIDs. Package transport uses Cohttp with
+OCaml TLS and system trust anchors; its persistent response cache uses the
+OCaml SQLite library and retains the existing `packages.sqlite3` schema.
+Signal exit codes use `Sys.signal_to_int`; test process groups use Spawn.
+Native platform metadata comes from the OCaml build configuration. The compiler
+and test runner have no repository-owned C stubs. Timing fields store nanoseconds. Shared utilities retain
 compiler policies such as Unicode segmentation, BOM decoding and exact float
 literal round trips; they do not reproduce .NET exceptions or formatting.
 AST and IR diagnostics use the standard `Format` layout engine.

@@ -8,10 +8,8 @@
 (library
  (name runner_support)
  (wrapped false)
- (foreign_stubs (language c) (names runner_process)
-  (flags (:standard (:include ../src/host_cflags.sexp))))
  (modules TestRunnerColors ProgressBar TestFramework TestCapture Common TestFileIO TestOutcome GraphColorFormat GraphColorTestRunner TestIds DSLPattern ANFParser MIRParser LIRParser IRFormatSnapshotFormat IRFormatSnapshotTestRunner ARM64Parser ARM64SymbolicParser PassTestRunner ParallelMoveFormat ParallelMoveTestRunner LIRExecutionFormat LIRExecutionTestRunner TestProcess ARM64EncodingFormat X86_64Parser X86_64EncodingFormat X86_64EncodingTestRunner ARM64EncodingTestRunner OptimizationFormat OptimizationTestRunner SyntaxFormat SyntaxTestRunner RCReleaseFormat RCReleaseTestRunner E2EFormat E2ETestRunner MemoryLayoutTestRunner)
- (libraries dark_compiler threads)
+ (libraries dark_compiler threads spawn bos)
  (flags (:standard -w @a -warn-error @a)))
 
 (library

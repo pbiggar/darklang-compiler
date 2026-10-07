@@ -112,9 +112,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
       less \
       libatomic1 \
       libglib2.0-0t64 \
-      libicu-dev \
       libgmp-dev \
-      libcurl4-openssl-dev \
       libsqlite3-dev \
       libssl3t64 \
       libstdc++6 \
@@ -123,7 +121,6 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
       python3 \
       python3-venv \
       shellcheck \
-      sqlite3 \
       sudo \
       tzdata \
       valgrind \

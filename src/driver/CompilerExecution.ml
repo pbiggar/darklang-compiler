@@ -1,8 +1,7 @@
 (* Execution.fs - Run generated binaries through the host process boundary. *)
 [@@@warning "-4"]
 module O=CompilerOptions
-external signalNumber : int -> int = "dark_execution_signal_number"
-let exitCode=function Unix.WEXITED code->code|Unix.WSIGNALED signal|Unix.WSTOPPED signal->128+signalNumber signal
+let exitCode=function Unix.WEXITED code->code|Unix.WSIGNALED signal|Unix.WSTOPPED signal->128+Sys.signal_to_int signal
 let wait pid=let rec loop ()=try snd (Unix.waitpid [] pid) with Unix.Unix_error (Unix.EINTR,_,_)->loop () in exitCode (loop ())
 let elapsed start=(Int64.to_float (Mtime_clock.elapsed_ns ()) /. 1e6)-.start
 let detail verbosity duration=if verbosity>=2 then (let scaled=duration*.10. in let lower=Float.floor scaled in let rounded=if scaled-.lower=0.5 then (if Float.rem lower 2.=0. then lower else lower+.1.) else Float.round scaled in Output.println ("      "^FloatFormat.roundTrip (rounded/.10.)^"ms"))

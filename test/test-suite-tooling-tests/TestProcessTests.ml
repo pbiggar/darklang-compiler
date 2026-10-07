@@ -1,5 +1,10 @@
 (* Protect process capture, UTF-8 output and descendant timeout behavior. *)
 let tests = [
+  "Runner reports the OS signal exit code", (fun () ->
+    match TestProcess.capture "/bin/sh" ["-c"; "kill -TERM $$"] 10000 with
+    | Ok (143,"","") -> Ok ()
+    | Ok _ -> Error "Expected SIGTERM exit code 143"
+    | Error error -> Error error);
   "Runner capture drains both large streams", (fun () ->
     match TestProcess.capture "/bin/sh"
       ["-c"; "printf '%100000s' a; printf '%100000s' b >&2; exit 17"] 10000 with

@@ -5,10 +5,18 @@ let roundTrip value =
  | FP_nan -> "NaN"
  | FP_infinite -> if value < 0. then "-Infinity" else "Infinity"
  | FP_normal | FP_subnormal ->
-   let text = Dtoa.shortest_string_of_float value in
-   if String.starts_with ~prefix:"." text then "0" ^ text
-   else if String.starts_with ~prefix:"-." text then "-0" ^ String.sub text 1 (String.length text - 1)
-   else text
+   let rec shortest precision =
+    let text = Printf.sprintf "%.*g" precision value in
+    if precision = 17 || Int64.bits_of_float (float_of_string text) = Int64.bits_of_float value then (
+     match String.index_opt text 'e' with
+     | None -> text
+     | Some index ->
+      let exponent = int_of_string (String.sub text (index + 1) (String.length text - index - 1)) in
+      if exponent < -20 || exponent > 20 then text else
+      let fixed = Printf.sprintf "%.*f" (max 0 (precision - 1 - exponent)) value in
+      if String.length fixed <= String.length text then fixed else text)
+    else shortest (precision + 1) in
+   shortest 1
 let structural value =
  match Float.classify_float value with
  | FP_nan -> "nan"

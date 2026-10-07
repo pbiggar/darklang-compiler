@@ -1,14 +1,15 @@
 ; Native equivalence and allocation regression checks.
 (include_subdirs no)
 (executables
- (names host_text_regression cache_regression component_regression literal_regression)
- (libraries dark_compiler)
+ (names host_text_regression cache_regression component_regression literal_regression package_io_regression package_http_regression)
+ (libraries dark_compiler tls-lwt x509)
  (flags (:standard -w @a -warn-error @a)))
 
 (rule
  (alias runtest)
  (action
   (progn
+   (run %{exe:package_io_regression.exe})
    (run %{exe:host_text_regression.exe})
    (run %{exe:literal_regression.exe})
    (run %{exe:cache_regression.exe})
@@ -18,3 +19,8 @@
  (alias runtest)
  (deps cli_manifest_regression.py)
  (action (run python3 %{dep:cli_manifest_regression.py} %{exe:../../bin/dark.exe})))
+
+(rule
+ (alias runtest)
+ (deps package_http_regression.py)
+ (action (run python3 %{dep:package_http_regression.py} %{exe:package_http_regression.exe})))

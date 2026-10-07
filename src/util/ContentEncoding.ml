@@ -1,5 +1,32 @@
 (* ContentEncoding.ml - BOM and HTTP charset decoding for source and response text. *)
-external decode : string -> string -> string = "dark_package_decode"
+let decode encoding bytes =
+ let buffer = Buffer.create (String.length bytes) in
+ let add value = Uutf.Buffer.add_utf_8 buffer value in
+ match encoding with
+ | "ISO-8859-1" -> String.iter (fun c -> add (Uchar.of_int (Char.code c))) bytes; Buffer.contents buffer
+ | "UTF-32LE" | "UTF-32BE" ->
+  let rec loop position =
+   let remaining = String.length bytes - position in
+   if remaining = 0 then Buffer.contents buffer
+   else if remaining < 4 then (add Uchar.rep; Buffer.contents buffer)
+   else (
+    let value = ref 0L in
+    for index = 0 to 3 do
+     let offset = if encoding = "UTF-32BE" then index else 3 - index in
+     value := Int64.logor (Int64.shift_left !value 8) (Int64.of_int (Char.code bytes.[position + offset]))
+    done;
+    add (if !value <= 0x10ffffL && Uchar.is_valid (Int64.to_int !value) then Uchar.of_int (Int64.to_int !value) else Uchar.rep);
+    loop (position + 4)) in
+  loop 0
+ | "UTF-16LE" | "UTF-16BE" ->
+  let decoder = Uutf.decoder ~encoding:(if encoding = "UTF-16LE" then `UTF_16LE else `UTF_16BE) (`String bytes) in
+  let rec loop () = match Uutf.decode decoder with
+   | `Uchar value -> add value; loop ()
+   | `Malformed _ -> add Uchar.rep; loop ()
+   | `End -> Buffer.contents buffer
+   | `Await -> Crash.crash "String decoder awaited input" in
+  loop ()
+ | _ -> invalid_arg "Unsupported text encoding"
 let encodingName name=match String.lowercase_ascii name with
  |"ansi_x3.4-1968"|"ansi_x3.4-1986"|"ascii"|"cp367"|"csascii"|"ibm367"|"iso-ir-6"|"iso646-us"|"iso_646.irv:1991"|"us"|"us-ascii"->"ASCII"
  |"cp819"|"csisolatin1"|"ibm819"|"iso-8859-1"|"iso-ir-100"|"iso8859-1"|"iso_8859-1"|"iso_8859-1:1987"|"l1"|"latin1"->"ISO-8859-1"

@@ -21,10 +21,10 @@ for filename,_,_ in indexes:
 # Minimal replacement VMs may lack the runtime libraries as well as headers.
 # Extract both from the same frozen Noble snapshot so development symlinks
 # resolve without depending on an earlier VM's base-image package selection.
-names=['libgmp-dev','libgmp10','libsqlite3-dev','libsqlite3-0','libcurl4-openssl-dev',
+names=['libgmp-dev','libgmp10','libsqlite3-dev','libsqlite3-0',
        'shellcheck','libglib2.0-dev','libglib2.0-dev-bin','libglib2.0-0t64','libffi-dev','libffi8',
        'libpcre2-dev','libpcre2-8-0','libpcre2-16-0','libpcre2-32-0','libpcre2-posix3',
-       'libmount-dev','libmount1','libblkid-dev','libblkid1','libicu-dev','libicu74',
+       'libmount-dev','libmount1','libblkid-dev','libblkid1',
        'zlib1g-dev','zlib1g','libpkgconf3','pkgconf-bin','pkgconf','pkg-config']
 def fetch(name):
  p=packages[name];archive=root/'downloads'/Path(p['Filename']).name
@@ -41,7 +41,7 @@ for name,version,archive in results:
 # Linker-name symlinks to host runtime libraries can refer to absent extracted
 # package targets. Materialize the exact host ABI files without installing them.
 lib=root/'qemu-deps/sysroot/usr/lib/x86_64-linux-gnu'
-for stem in ['gmp','sqlite3','curl','icui18n','icuuc','icudata','glib-2.0','gthread-2.0','gobject-2.0','gio-2.0','ffi','mount','blkid','pcre2-8','z']:
+for stem in ['gmp','sqlite3','glib-2.0','gthread-2.0','gobject-2.0','gio-2.0','ffi','mount','blkid','pcre2-8','z']:
  targets=sorted(Path('/usr/lib/x86_64-linux-gnu').glob('lib'+stem+'.so*'))
  valid=[p for p in targets if p.is_file()]
  if not valid:continue
