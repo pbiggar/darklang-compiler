@@ -15,7 +15,7 @@ grouped by purpose; each subject has one canonical source.
 - [Implementation workflow](contributing/workflow.md)
 - [OCaml coding guidelines](contributing/coding-guidelines.md)
 - [Test DSLs](contributing/testing.md)
-- [Differential compiler fuzzing](contributing/fuzzing.md)
+- [Differential compiler testing](contributing/differential-testing.md)
 - [Verification and performance gates](contributing/verification.md)
 - [Finding compiler slowdowns](contributing/compile-time-optimization.md)
 - [Merge-train integrator recovery](contributing/mergetrain-integrator.md)

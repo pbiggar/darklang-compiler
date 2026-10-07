@@ -46,7 +46,7 @@ let check interpreter timeout stdlib source =
               sources =
                 NonEmptyList.singleton
                   {
-                    CompilationContexts.name = "fuzz.dark";
+                    CompilationContexts.name = "differential-test.dark";
                     purpose = NameSyntax.SourceUnitPurpose.Executable;
                     source;
                   };
@@ -70,7 +70,7 @@ let check interpreter timeout stdlib source =
             match report.CompilerOptions.result with
             | Error message -> CompilerRejected (expected, message)
             | Ok binary ->
-                let path = Filename.temp_file "dark-fuzz-" "" in
+                let path = Filename.temp_file "dark-differential-test-" "" in
                 Fun.protect
                   ~finally:(fun () -> Sys.remove path)
                   (fun () ->

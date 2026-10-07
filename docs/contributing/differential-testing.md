@@ -1,9 +1,9 @@
-# Differential compiler fuzzing
+# Differential compiler testing
 
-The native OCaml fuzzer constructs typed compiler ASTs, formats them with
+The native OCaml differential testing tool constructs typed compiler ASTs, formats them with
 `ASTPrettyPrinter`, and compares generated native programs with
 `darklang-interpreter eval`. The interpreter defines the expected result;
-the fuzzer contains no evaluator.
+the differential testing tool contains no evaluator.
 
 ## Campaigns
 
@@ -12,12 +12,12 @@ Build the pinned toolchain and put `darklang-interpreter` on PATH:
 ```bash
 ./build --ai
 ./scripts/install-darklang-interpreter.sh
-./fuzz --seed 1234 --depth 6 --timeout-ms 2000
+./differential-test --seed 1234 --depth 6 --timeout-ms 2000
 ```
 
-`./fuzz` runs until interrupted. It creates a campaign worktree when launched
+`./differential-test` runs until interrupted. It creates a campaign worktree when launched
 from the primary coordination checkout. Before each compilation, it writes
-`current.dark` under its ignored `fuzz-results/` directory. A finding preserves
+`current.dark` under its ignored `differential-test-results/` directory. A finding preserves
 the original program and diagnostic, then runs deterministic syntax reduction.
 Every smaller candidate is parsed and executed through both the interpreter
 and compiler. A reduction must preserve the result type and failure category.
@@ -36,10 +36,10 @@ Unicode source ranges are converted to byte offsets before splicing.
 The executable can be used without the interactive controller:
 
 ```bash
-_build/default/tools/fuzzer/main.exe --seed 1234 --limit 100 --artifacts /tmp/fuzz
-_build/default/tools/fuzzer/main.exe --replay /tmp/fuzz/finding.dark
-_build/default/tools/fuzzer/main.exe --minimize /tmp/fuzz/finding.dark
-_build/default/tools/fuzzer/main.exe --generate 100 --seed 1234 --artifacts /tmp/generated
+_build/default/tools/differential-testing/main.exe --seed 1234 --limit 100 --artifacts /tmp/differential-test
+_build/default/tools/differential-testing/main.exe --replay /tmp/differential-test/finding.dark
+_build/default/tools/differential-testing/main.exe --minimize /tmp/differential-test/finding.dark
+_build/default/tools/differential-testing/main.exe --generate 100 --seed 1234 --artifacts /tmp/generated
 ```
 
 `--interpreter PATH` selects the oracle. `--generate` writes programs without
@@ -54,7 +54,7 @@ result. It asks before launching Codex in a separate fix worktree. Codex adds a
 failing E2E test, fixes the compiler and commits, without landing.
 
 The controller verifies the clean commit, full build, complete host suite,
-parent-relative benchmark gate and replay. It copies the native fuzzer from
+parent-relative benchmark gate and replay. It copies the native differential testing tool from
 that exact commit into an isolated runtime directory, shows the review evidence,
 and asks separately before running `./land`. Declining preserves the fix branch.
 

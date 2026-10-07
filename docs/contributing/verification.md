@@ -42,7 +42,7 @@ host suite. Full-suite timing remains useful for diagnosis, but it is not a
 blocking merge-train gate because contention can invalidate a comparison.
 
 Both CI and the merge train also run `dune runtest` for native regression and
-tooling checks, including copied-executable, package transport, cache, fuzzer
+tooling checks, including copied-executable, package transport, cache, differential testing tool
 and mutation workflows. These checks complement the full host suite.
 
 The benchmark command compares the retained measurements with the snapshot

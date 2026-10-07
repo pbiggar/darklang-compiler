@@ -7,15 +7,15 @@ import tempfile
 
 
 def main():
-    fuzzer = Path(sys.argv[1]).resolve()
-    with tempfile.TemporaryDirectory(prefix="dark-fuzzer-check-") as temporary:
+    tester = Path(sys.argv[1]).resolve()
+    with tempfile.TemporaryDirectory(prefix="dark-differential-test-check-") as temporary:
         root = Path(temporary)
         oracle = root / "oracle"
         source = root / "input.dark"
         artifacts = root / "artifacts"
 
         def run(*arguments):
-            return subprocess.run([str(fuzzer), "--interpreter", str(oracle),
+            return subprocess.run([str(tester), "--interpreter", str(oracle),
                                    "--artifacts", str(artifacts), *arguments],
                                   capture_output=True, text=True, timeout=120, check=False)
 
@@ -52,7 +52,7 @@ def main():
         source.write_text("42L\n")
         replay = run("--replay", str(source))
         assert replay.returncode != 0 and "interpreter rejected" in replay.stderr, replay
-        missing = subprocess.run([str(fuzzer), "--interpreter", str(root / "missing"),
+        missing = subprocess.run([str(tester), "--interpreter", str(root / "missing"),
                                   "--replay", str(source), "--artifacts", str(artifacts)],
                                  capture_output=True, text=True, timeout=20, check=False)
         assert missing.returncode == 2 and "not on PATH" in missing.stderr, missing
@@ -63,7 +63,7 @@ def main():
         saved = list(artifacts.glob("seed-*-case-*.dark"))
         assert len(saved) == 1 and saved[0].with_suffix(".txt").is_file(), saved
         assert (artifacts / "current.dark").is_file()
-    print("Native fuzzer replay, reduction, oracle boundaries, and artifacts passed")
+    print("Native tester replay, reduction, oracle boundaries, and artifacts passed")
 
 
 if __name__ == "__main__":

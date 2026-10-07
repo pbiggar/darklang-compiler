@@ -1,5 +1,5 @@
 #!/bin/bash
-# fuzz - Find compiler discrepancies and coordinate approved, landed fixes.
+# differential-test - Find compiler discrepancies and coordinate approved, landed fixes.
 
 set -euo pipefail
 
@@ -8,9 +8,9 @@ cd "$SCRIPT_DIR"
 ORIGINAL_ARGS=("$@")
 
 usage() {
-    echo "Usage: ./fuzz [--seed N] [--timeout-ms N] [--depth N] [--worktree-dir PATH]"
+    echo "Usage: ./differential-test [--seed N] [--timeout-ms N] [--depth N] [--worktree-dir PATH]"
     echo ""
-    echo "Continuously fuzzes the compiler and minimizes every finding."
+    echo "Continuously compares generated programs with the interpreter and minimizes every finding."
     echo "Each compiler fix and its landing require separate approval. Stop with Ctrl-C."
     echo ""
     echo "Options:"
@@ -138,9 +138,9 @@ if ! command -v darklang-interpreter >/dev/null 2>&1; then
     exit 1
 fi
 
-trap 'echo; echo "Fuzzer stopped."; exit 130' INT
+trap 'echo; echo "Differential testing stopped."; exit 130' INT
 
-FUZZER_PROJECT="tools/fuzzer/main.exe"
+DIFFERENTIAL_TEST_PROJECT="tools/differential-testing/main.exe"
 PENDING_FIX_SHA=""
 PENDING_FIX_BASE=""
 
@@ -177,12 +177,12 @@ git rev-parse --verify --quiet "$INTEGRATION_REF^{commit}" >/dev/null || {
 
 if [[ "$SCRIPT_DIR" == /Users/paulbiggar/projects/c4d-for-dcb ]]; then
     # This checkout coordinates integration and must stay read-only.
-    campaign="$WORKTREE_DIR/c4d-fuzzer-campaign-$(date -u +%Y%m%dT%H%M%S)-$$"
-    branch="fuzz/campaign-$(date -u +%Y%m%dT%H%M%S)-$$"
+    campaign="$WORKTREE_DIR/c4d-differential-test-campaign-$(date -u +%Y%m%dT%H%M%S)-$$"
+    branch="differential-test/campaign-$(date -u +%Y%m%dT%H%M%S)-$$"
     git worktree add -b "$branch" "$campaign" "$INTEGRATION_REF"
     git -C "$campaign" branch --set-upstream-to="$INTEGRATION_REF" "$branch"
-    echo "Fuzz campaign worktree: $campaign"
-    exec "$campaign/fuzz" "${ORIGINAL_ARGS[@]}"
+    echo "Differential testing campaign worktree: $campaign"
+    exec "$campaign/differential-test" "${ORIGINAL_ARGS[@]}"
 fi
 
 approve() {
@@ -245,21 +245,21 @@ ask_codex_to_fix() {
 
     local base branch worktree runtime_dir
     base="$(git rev-parse "$INTEGRATION_REF^{commit}")"
-    branch="fuzz/fix-$(date -u +%Y%m%dT%H%M%S)-$$-$CAMPAIGN"
-    worktree="$WORKTREE_DIR/c4d-fuzzer-fix-$(date -u +%Y%m%dT%H%M%S)-$$-$CAMPAIGN"
+    branch="differential-test/fix-$(date -u +%Y%m%dT%H%M%S)-$$-$CAMPAIGN"
+    worktree="$WORKTREE_DIR/c4d-differential-test-fix-$(date -u +%Y%m%dT%H%M%S)-$$-$CAMPAIGN"
     git worktree add -b "$branch" "$worktree" "$base"
     git -C "$worktree" branch --set-upstream-to="$INTEGRATION_REF" "$branch"
-    runtime_dir="$(mktemp -d "$SCRIPT_DIR/fuzz-results/codex-runtime.XXXXXX")"
+    runtime_dir="$(mktemp -d "$SCRIPT_DIR/differential-test-results/codex-runtime.XXXXXX")"
 
     local prompt
     prompt="$(printf '%s\n' \
-        'The compiler fuzzer found the discrepancy below.' \
+        'The compiler differential testing tool found the discrepancy below.' \
         'Fix the compiler bug completely. Do not merely diagnose it.' \
         'Follow AGENTS.md, including creating the focused failing E2E test before the fix.' \
         'Use the compiler AST and darklang-interpreter as the semantic oracle.' \
         'Run all required tests and the parent-relative benchmark gate.' \
         'When the fix is ready, review and commit it. Do not run ./land.' \
-        'The fuzzer controller will verify the commit and request human approval before landing.' \
+        'The differential testing tool controller will verify the commit and request human approval before landing.' \
         'Report the exact tests, benchmark result, commit, and any unresolved risk.' \
         '' \
         'Reduced Dark case:' \
@@ -296,13 +296,13 @@ ask_codex_to_fix() {
     run_gate "$worktree" "$run_dir/build.log" ./build --ai
     run_gate "$worktree" "$run_dir/tests.log" ./run-tests --ai
     run_gate "$worktree" "$run_dir/benchmarks.log" ./benchmarks/run_benchmarks.sh --verify-parent full
-    run_gate "$worktree" "$run_dir/fuzzer-build.log" ./build --ai -- "$FUZZER_PROJECT"
-    run_gate "$worktree" "$run_dir/publish.log" cp "$worktree/_build/default/$FUZZER_PROJECT" "$runtime_dir/fuzzer"
-    if [[ ! -f "$runtime_dir/fuzzer" ]]; then
-        echo "Error: fixed fuzzer runtime was not published: $runtime_dir" >&2
+    run_gate "$worktree" "$run_dir/differential-test-build.log" ./build --ai -- "$DIFFERENTIAL_TEST_PROJECT"
+    run_gate "$worktree" "$run_dir/publish.log" cp "$worktree/_build/default/$DIFFERENTIAL_TEST_PROJECT" "$runtime_dir/differential-test"
+    if [[ ! -f "$runtime_dir/differential-test" ]]; then
+        echo "Error: fixed differential testing tool runtime was not published: $runtime_dir" >&2
         return 1
     fi
-    run_gate "$worktree" "$run_dir/replay.log" "$runtime_dir/fuzzer" --timeout-ms "$TIMEOUT_MS" --replay "$minimized"
+    run_gate "$worktree" "$run_dir/replay.log" "$runtime_dir/differential-test" --timeout-ms "$TIMEOUT_MS" --replay "$minimized"
     if [[ -n "$(git -C "$worktree" status --porcelain)" || "$(git -C "$worktree" rev-parse HEAD)" != "$head" ]]; then
         echo "Error: verification changed the committed fix; worktree: $worktree" >&2
         return 1
@@ -316,11 +316,11 @@ ask_codex_to_fix() {
     rg -m 1 'current/parent geometric ratio' "$run_dir/benchmarks.log" || true
     printf 'Review full patch: git -C %q diff %q\n' "$worktree" "$base..$head"
     echo "Validation logs: $run_dir"
-    if ! approve "Land this exact fix commit and continue fuzzing?"; then
+    if ! approve "Land this exact fix commit and continue differential testing?"; then
         echo "Fix retained without landing: $worktree ($head)" >&2
         return 1
     fi
-    if ! (cd "$worktree" && ./land --task "Fix compiler discrepancy from fuzzer campaign $CAMPAIGN") >"$run_dir/land.log" 2>&1; then
+    if ! (cd "$worktree" && ./land --task "Fix compiler discrepancy from differential testing tool campaign $CAMPAIGN") >"$run_dir/land.log" 2>&1; then
         if rg --fixed-strings --quiet 'Landing handoff is pending' "$run_dir/land.log"; then
             echo 'Merge train: ⏳ handoff pending' >&2
         else
@@ -334,19 +334,19 @@ ask_codex_to_fix() {
         return 1
     fi
 
-    FUZZER_COMMAND=("$runtime_dir/fuzzer")
+    DIFFERENTIAL_TEST_COMMAND=("$runtime_dir/differential-test")
     PENDING_FIX_SHA="$head"
     PENDING_FIX_BASE="$base"
     echo "Fix queued at $head; continuing with its published compiler."
 }
 
-./build --ai -- "$FUZZER_PROJECT"
-FUZZER_COMMAND=("$SCRIPT_DIR/_build/default/$FUZZER_PROJECT")
-mkdir -p fuzz-results
+./build --ai -- "$DIFFERENTIAL_TEST_PROJECT"
+DIFFERENTIAL_TEST_COMMAND=("$SCRIPT_DIR/_build/default/$DIFFERENTIAL_TEST_PROJECT")
+mkdir -p differential-test-results
 CAMPAIGN=1
 
 while true; do
-    RUN_DIR="$(mktemp -d "$SCRIPT_DIR/fuzz-results/run.XXXXXX")"
+    RUN_DIR="$(mktemp -d "$SCRIPT_DIR/differential-test-results/run.XXXXXX")"
     CAMPAIGN_ARGS=(--timeout-ms "$TIMEOUT_MS" --max-depth "$DEPTH" --artifacts "$RUN_DIR")
     if [[ "$SEED_SET" == true ]]; then
         CAMPAIGN_ARGS+=(--seed "$NEXT_SEED")
@@ -354,27 +354,27 @@ while true; do
 
     echo "Campaign $CAMPAIGN: artifacts $RUN_DIR"
     set +e
-    "${FUZZER_COMMAND[@]}" "${CAMPAIGN_ARGS[@]}"
-    FUZZ_STATUS=$?
+    "${DIFFERENTIAL_TEST_COMMAND[@]}" "${CAMPAIGN_ARGS[@]}"
+    DIFFERENTIAL_TEST_STATUS=$?
     set -e
 
     shopt -s nullglob
     FINDINGS=("$RUN_DIR"/seed-*-case-*.dark)
     shopt -u nullglob
-    if [[ $FUZZ_STATUS -eq 0 || ${#FINDINGS[@]} -ne 1 ]]; then
-        echo "Error: unbounded fuzzer stopped without producing exactly one finding in $RUN_DIR." >&2
+    if [[ $DIFFERENTIAL_TEST_STATUS -eq 0 || ${#FINDINGS[@]} -ne 1 ]]; then
+        echo "Error: unbounded differential testing tool stopped without producing exactly one finding in $RUN_DIR." >&2
         exit 1
     fi
 
     FINDING="${FINDINGS[0]}"
-    "${FUZZER_COMMAND[@]}" --timeout-ms "$TIMEOUT_MS" --minimize "$FINDING"
+    "${DIFFERENTIAL_TEST_COMMAND[@]}" --timeout-ms "$TIMEOUT_MS" --minimize "$FINDING"
     MINIMIZED="${FINDING%.dark}.min.dark"
     SOURCE="$(<"$MINIMIZED")"
     EXPECTED="$(darklang-interpreter eval "$SOURCE")"
 
     set +e
     ACTUAL="$(
-        "${FUZZER_COMMAND[@]}" \
+        "${DIFFERENTIAL_TEST_COMMAND[@]}" \
             --timeout-ms "$TIMEOUT_MS" \
             --replay "$MINIMIZED" 2>&1
     )"

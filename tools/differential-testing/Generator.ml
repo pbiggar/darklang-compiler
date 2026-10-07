@@ -3,13 +3,13 @@ open Dark_compiler
 open! AST
 
 let choose random = function
-  | [] -> Crash.crash "Fuzzer choice set was empty"
+  | [] -> Crash.crash "Differential test generator choice set was empty"
   | items -> (
       match
         List.nth_opt items (Random.State.int random (List.length items))
       with
       | Some item -> item
-      | None -> Crash.crash "Fuzzer choice index was outside its set")
+      | None -> Crash.crash "Differential test generator choice index was outside its set")
 
 let scalarTypes =
   [
@@ -37,7 +37,7 @@ let supportedTypes =
   @ List.map (fun typ -> TDict (TString, typ)) scalarTypes
   @ [
       TTuple [ TInt64; TBool ];
-      TRecord ("FuzzBox", []);
+      TRecord ("TestBox", []);
       TBlob;
       TDateTime;
       TStream TInt64;
@@ -47,14 +47,14 @@ let nonempty head tail = { NonEmptyList.head; tail }
 
 let call name arguments =
   match arguments with
-  | [] -> Crash.crash "Fuzzer emitted a call without arguments"
+  | [] -> Crash.crash "Differential test generator emitted a call without arguments"
   | head :: tail -> Apply (Var name, [], nonempty head tail)
 
 let field = unresolvedRecordFieldReference
 
 let box value flag =
   RecordLiteral
-    ( unresolvedRecordReference "FuzzBox" [],
+    ( unresolvedRecordReference "TestBox" [],
       [ (field "value", value); (field "flag", flag) ] )
 
 let rec literal random typ =
@@ -95,7 +95,7 @@ let rec literal random typ =
             (StringLiteral "a", literal random typ);
             (StringLiteral "b", literal random typ);
           ] )
-  | TRecord ("FuzzBox", []) ->
+  | TRecord ("TestBox", []) ->
       box (literal random TInt64) (literal random TBool)
   | TBlob -> call "Stdlib.Blob.fromString" [ literal random TString ]
   | TDateTime -> call "Stdlib.DateTime.fromMilliseconds" [ literal random TInt ]
@@ -109,7 +109,7 @@ let matched ?guard pattern body =
 let generate random depth =
   let next = ref 0 in
   let fresh () =
-    let name = "fuzz" ^ string_of_int !next in
+    let name = "test" ^ string_of_int !next in
     incr next;
     name
   in
@@ -151,7 +151,7 @@ let generate random depth =
         | TList element -> ListLiteral [ child element ]
         | TDict (TString, value) ->
             DictLiteral (TString, value, [ (StringLiteral "a", child value) ])
-        | TRecord ("FuzzBox", []) -> box (child TInt64) (child TBool)
+        | TRecord ("TestBox", []) -> box (child TInt64) (child TBool)
         | _ -> leaf environment typ
       in
       let feature () =
@@ -219,7 +219,7 @@ let generate random depth =
                 RecordAccess
                   (Var name, field (if typ = TInt64 then "value" else "flag"))
               )
-        | 9, TInt64 -> call "fuzzIdentity" [ child TInt64 ]
+        | 9, TInt64 -> call "testIdentity" [ child TInt64 ]
         | 10, TInt64 ->
             Match
               ( Constructor (UnresolvedConstructor None, "Ok", [ child TInt64 ]),
@@ -269,19 +269,19 @@ let generate random depth =
                 ] )
         | 16, _ ->
             Apply
-              (Var "fuzzGeneric", [ typ ], NonEmptyList.singleton (child typ))
+              (Var "testGeneric", [ typ ], NonEmptyList.singleton (child typ))
         | 17, _ ->
             let other = choose random scalarTypes in
             Apply
-              ( Var "fuzzSelect",
+              ( Var "testSelect",
                 [ typ; other ],
                 nonempty (child typ) [ child other ] )
         | 18, TInt64 ->
-            call "fuzzRecur"
+            call "testRecur"
               [ Int64Literal (Int64.of_int (Random.State.int random 9)) ]
         | 19, TBool ->
             call
-              (choose random [ "fuzzEven"; "fuzzOdd" ])
+              (choose random [ "testEven"; "testOdd" ])
               [ Int64Literal (Int64.of_int (Random.State.int random 9)) ]
         | _ -> operation ()
       in
@@ -329,22 +329,22 @@ let generate random depth =
   Program
     [
       TypeDef
-        (RecordDef ("FuzzBox", [], [ ("value", TInt64); ("flag", TBool) ]));
-      functionDef "fuzzIdentity" [] [ ("input", TInt64) ] TInt64 (Var "input");
-      functionDef "fuzzGeneric" [ "t" ]
+        (RecordDef ("TestBox", [], [ ("value", TInt64); ("flag", TBool) ]));
+      functionDef "testIdentity" [] [ ("input", TInt64) ] TInt64 (Var "input");
+      functionDef "testGeneric" [ "t" ]
         [ ("input", TVar "t") ]
         (TVar "t") (Var "input");
-      functionDef "fuzzSelect" [ "a"; "b" ]
+      functionDef "testSelect" [ "a"; "b" ]
         [ ("selected", TVar "a"); ("other", TVar "b") ]
         (TVar "a") (Var "selected");
-      functionDef "fuzzRecur" []
+      functionDef "testRecur" []
         [ ("count", TInt64) ]
         TInt64
         (If
            ( BinOp (Lte, count, zero),
              zero,
-             BinOp (Add, one, call "fuzzRecur" [ BinOp (Sub, count, one) ]) ));
-      mutual "fuzzEven" "fuzzOdd" true;
-      mutual "fuzzOdd" "fuzzEven" false;
+             BinOp (Add, one, call "testRecur" [ BinOp (Sub, count, one) ]) ));
+      mutual "testEven" "testOdd" true;
+      mutual "testOdd" "testEven" false;
       Expression ([], result);
     ]

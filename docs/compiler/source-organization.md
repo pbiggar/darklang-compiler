@@ -24,8 +24,8 @@ matching `.ml` implementation and `.mli` interface. The Dune graph groups module
 | `src/backend/binary/` | Shared binary structures and literal pools |
 | `src/driver/` | Compilation contexts, caches, sessions and pipeline orchestration |
 | `StdLib/`, `packages/` | Dark library packages and compiler support embedded at build time |
-| `tools/fuzzer/` | Typed generation, oracle comparison and syntax reduction |
-| `tools/process/` | Captured process execution shared by tests and fuzzing |
+| `tools/differential-testing/` | Typed generation, oracle comparison and syntax reduction |
+| `tools/process/` | Captured process execution shared by tests and differential testing |
 | `test/` | Production unit checks, DSL tooling and suite runner |
 | `test/fixtures/` | Language and DSL input fixtures |
 | `test/regression/` | Native allocation, cache, graph and bitset regression checks |

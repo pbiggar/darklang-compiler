@@ -21,7 +21,7 @@ let offsets source =
   fun (position : Tokenizer.pos) ->
     match Hashtbl.find_opt positions (position.row, position.column) with
     | Some offset -> offset
-    | None -> Crash.crash "Fuzzer reduction range was outside source"
+    | None -> Crash.crash "Differential test reduction range was outside source"
 
 let children = function
   | W.EInfix (_, _, left, right) | W.EStatement (_, left, right) ->
