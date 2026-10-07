@@ -32,8 +32,8 @@ Compiler evidence is anchored in:
 - `src/AST.ml`, `src/frontend/TypeChecking.ml`, and `src/passes/anf/AST_to_ANF.ml` for the
   canonical list form, homogeneous typing, private typed equality, native
   construction, and pattern lowering;
-- `Runtime.fs`, `src/DarkStdlib.ml`, `stdlib/List.dark`, and
-  `stdlib/ListSortByComparatorHelpers.dark` for representation, `List.empty`,
+- `Runtime.fs`, `src/DarkStdlib.ml`, `StdLib/List.dark`, and
+  `StdLib/List/SortByComparatorHelpers.dark` for representation, `List.empty`,
   random selection, and the callable contract;
 - `src/frontend/ValueRendering.ml` and private `List.__toDisplayString_*` helpers
   for typed recursive rendering; and
@@ -50,7 +50,7 @@ Compiler evidence is anchored in:
 | Append | `@` associates right at interpreter precedence and normalizes to `Stdlib.List.append`. Both operands are homogeneous lists. | Canonical parser fixtures, AST-shape tests, and type/value probes in `list_language_parity.e2e`. | parity |
 | Inference | `[]` uses contextual polymorphic inference. A nonempty literal establishes one element type; heterogeneous elements and non-list cons tails are rejected. An aborting element has type `Never` and does not displace the list's concrete element type. | `src/frontend/WrittenChecking.ml`; focused positive and compile-error probes, including upstream `dlist.dark`. | parity result, intentional AOT phase difference |
 | Construction | Elements and append operands evaluate once, left to right, before native structural assembly. The skew-list builder and ownership rules remain native. | `src/passes/anf/AST_to_ANF.ml`; first-failure probes in `list_language_parity.e2e`; skew-list/refcount suites. | retained native equivalence |
-| Representation | Empty is the zero root; populated values use direct-payload skew-binary trees with persistent reference-counted edges. | `stdlib/__SkewList.dark`, `Runtime.fs`, refcount insertion, and both code generators. | intentional compiler architecture; behavior-equivalent |
+| Representation | Empty is the zero root; populated values use direct-payload skew-binary trees with persistent reference-counted edges. | `StdLib/List/__SkewList.dark`, `Runtime.fs`, refcount insertion, and both code generators. | intentional compiler architecture; behavior-equivalent |
 | Matching | Exact patterns require exact length; cons patterns require a nonempty list; nested patterns bind in source order and tails are canonical list values. | All `PList`/`PListCons` paths in `src/passes/anf/AST_to_ANF.ml`; `lists.e2e` and `pattern_matching.e2e`. | parity |
 | Match failure | Exhausted alternatives use the standard nonexhaustive-match failure and recursively render literal list/tuple values instead of a list-specific fallback. | `src/passes/anf/AST_to_ANF.ml`; exact failure probes in `pattern_matching.e2e` and `lists.e2e`. | parity text for shared representable values |
 | Equality | `==`/`!=` synthesize private typed structural equality: lengths and elements are compared recursively in order. No public `List.equals` call is generated. | `src/frontend/WrittenChecking.ml`; scalar, nested, tuple, record, enum, and list equality probes. | retained native equivalence |

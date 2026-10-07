@@ -162,7 +162,7 @@ let parsePrimary grammar state index =
       let fullRange = span (rng state index) final.WT.range in
       let finalUpper = upperName final.WT.name in
       let braceRecord =
-        finalUpper
+        NameSyntax.isUpperIdentifier final.WT.name
         && tok state next = TLBrace
         &&
         match (tok state (next + 1), tok state (next + 2)) with

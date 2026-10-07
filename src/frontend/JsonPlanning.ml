@@ -1733,17 +1733,18 @@ and decodeBody (env : env) typ source view path (state : state) =
                 [
                   makeCase
                     (constructorPattern env
-                       "Darklang.Stdlib.Json.InternalEnumObject" "EnumNoFields"
-                       [])
+                       "Darklang.Stdlib.Json.__InternalEnumObject"
+                       "EnumNoFields" [])
                     failure;
                   makeCase
                     (constructorPattern env
-                       "Darklang.Stdlib.Json.InternalEnumObject" "EnumOneField"
+                       "Darklang.Stdlib.Json.__InternalEnumObject"
+                       "EnumOneField"
                        [ PVariable caseNameId; PVariable caseRawId ])
                     checkedOneField;
                   makeCase
                     (constructorPattern env
-                       "Darklang.Stdlib.Json.InternalEnumObject"
+                       "Darklang.Stdlib.Json.__InternalEnumObject"
                        "EnumManyFields" [ PVariable caseNamesId ])
                     tooMany;
                   makeCase PWildcard failure;

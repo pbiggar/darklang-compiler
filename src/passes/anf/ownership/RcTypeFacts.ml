@@ -240,8 +240,9 @@ let inferCExprType ctx expr =
     Some
       (AST.TSum
          ( "Darklang.Stdlib.Result.Result",
-           [ payload; AST.TRecord ("Darklang.Stdlib.Cli.NativePosixError", []) ]
-         ))
+           [
+             payload; AST.TRecord ("Darklang.Stdlib.Cli.__NativePosixError", []);
+           ] ))
   in
   match expr with
   | A.Atom value -> atom value
@@ -289,9 +290,9 @@ let inferCExprType ctx expr =
   | A.CliNative (op, _) -> (
       match op with
       | A.Execute | A.ProcessIO | A.TerminateProcess ->
-          Some (AST.TRecord ("Darklang.Stdlib.Cli.NativeOutput", []))
+          Some (AST.TRecord ("Darklang.Stdlib.Cli.__NativeOutput", []))
       | A.RunProcess ->
-          Some (AST.TRecord ("Darklang.Stdlib.Cli.NativeProcessOutput", []))
+          Some (AST.TRecord ("Darklang.Stdlib.Cli.__NativeProcessOutput", []))
       | A.GetEnv | A.GetArgv ->
           Some (AST.TSum ("Darklang.Stdlib.Option.Option", [ AST.TString ]))
       | A.Kill | A.SetEnv | A.UnsetEnv -> posix AST.TUnit

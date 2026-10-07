@@ -29,7 +29,7 @@ let handler (req: Stdlib.Http.Request) : Stdlib.Http.Response =
         Stdlib.HttpServer.routeRequest
             [Stdlib.HttpServer.get "/ping" (fun _ -> Stdlib.Http.responseWithText "pong" 200)] req
 
-match Stdlib.Cli.Args.int64 0, Stdlib.Cli.Args.get 1 with
+match Stdlib.Cli.__Args.int64 0, Stdlib.Cli.__Args.get 1 with
 | Ok port, Ok mode ->
     let config = Stdlib.HttpServer.Config.Config {
         port = Stdlib.Int.fromInt64 port,

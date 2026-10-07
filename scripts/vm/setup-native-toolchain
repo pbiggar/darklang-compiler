@@ -134,7 +134,8 @@ while IFS= read -r package; do
     case "$package" in ''|'#'*) ;; *) packages+=("$package");; esac
 done < "$repo/dependencies.lock"
 log="$root/opam-dependencies.log"
-"$opam" install --switch=dark --yes --jobs=1 --no-depexts "${packages[@]}" > "$log" 2>&1
+# Retain build directories because restricted VMs can reject opam cleanup.
+"$opam" install --switch=dark --yes --jobs=1 --no-depexts --keep-build-dir "${packages[@]}" > "$log" 2>&1
 progress 'Activation and environment checks'
 python3 - "$root" "$prefix" <<'PY'
 from pathlib import Path

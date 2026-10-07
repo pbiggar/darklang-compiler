@@ -1,7 +1,7 @@
 (*
    DarkStdlib.ml - Standard Library Module Definitions
    Defines intrinsic Stdlib module signatures used directly by the compiler.
-   Non-intrinsic stdlib functions are loaded from stdlib/*.dark.
+   Non-intrinsic stdlib functions are embedded from library-sources.list.
 *)
 (* DarkStdlib.ml - Standard Library Module Definitions. *)
 open! AST
@@ -74,17 +74,18 @@ let cliIntrinsicModule : AST.moduleDef =
     functions =
       [
         fn "__execute" [] [ TString ]
-          (TRecord ("Darklang.Stdlib.Cli.NativeOutput", []));
+          (TRecord ("Darklang.Stdlib.Cli.__NativeOutput", []));
         fn "__runProcess" []
-          [ TRecord ("Darklang.Stdlib.Cli.NativeProcessRequest", []) ]
-          (TRecord ("Darklang.Stdlib.Cli.NativeProcessOutput", []));
+          [ TRecord ("Darklang.Stdlib.Cli.__NativeProcessRequest", []) ]
+          (TRecord ("Darklang.Stdlib.Cli.__NativeProcessOutput", []));
         fn "__hostOSCode" [] [] TInt64;
         fn "__hostArchitectureCode" [] [] TInt64;
         fn "__hostname" [] []
           (TSum
              ( "Darklang.Stdlib.Result.Result",
-               [ TString; TRecord ("Darklang.Stdlib.Cli.NativePosixError", []) ]
-             ));
+               [
+                 TString; TRecord ("Darklang.Stdlib.Cli.__NativePosixError", []);
+               ] ));
         fn "__getenv" [] [ TString ]
           (TSum ("Darklang.Stdlib.Option.Option", [ TString ]));
         fn "__createExclusive" [] [ TString ] TInt64;
@@ -92,17 +93,17 @@ let cliIntrinsicModule : AST.moduleDef =
         fn "__setenv" [] [ TString; TString ]
           (TSum
              ( "Darklang.Stdlib.Result.Result",
-               [ TUnit; TRecord ("Darklang.Stdlib.Cli.NativePosixError", []) ]
+               [ TUnit; TRecord ("Darklang.Stdlib.Cli.__NativePosixError", []) ]
              ));
         fn "__unsetenv" [] [ TString ]
           (TSum
              ( "Darklang.Stdlib.Result.Result",
-               [ TUnit; TRecord ("Darklang.Stdlib.Cli.NativePosixError", []) ]
+               [ TUnit; TRecord ("Darklang.Stdlib.Cli.__NativePosixError", []) ]
              ));
         fn "__kill" [] [ TInt64; TInt64 ]
           (TSum
              ( "Darklang.Stdlib.Result.Result",
-               [ TUnit; TRecord ("Darklang.Stdlib.Cli.NativePosixError", []) ]
+               [ TUnit; TRecord ("Darklang.Stdlib.Cli.__NativePosixError", []) ]
              ));
         fn "__sleep" [] [ TFloat64 ] TUnit;
         fn "__getpid" [] [] TInt64;
@@ -110,9 +111,9 @@ let cliIntrinsicModule : AST.moduleDef =
         fn "__cpuCount" [] [] TInt64;
         fn "__spawnProcess" [] [ TString ] TInt64;
         fn "__processIO" [] [ TInt64; TString ]
-          (TRecord ("Darklang.Stdlib.Cli.NativeOutput", []));
+          (TRecord ("Darklang.Stdlib.Cli.__NativeOutput", []));
         fn "__terminateProcess" [] [ TInt64 ]
-          (TRecord ("Darklang.Stdlib.Cli.NativeOutput", []));
+          (TRecord ("Darklang.Stdlib.Cli.__NativeOutput", []));
       ];
   }
 
@@ -144,7 +145,7 @@ let fileIntrinsicModule : AST.moduleDef =
 *)
 let networkIntrinsicModule : AST.moduleDef =
   {
-    AST.name = "Darklang.Stdlib.Network";
+    AST.name = "Darklang.Stdlib.__Network";
     functions =
       [ fn "__tcp4Socket" [] [] TInt64; fn "__close" [] [ TInt64 ] TInt64 ];
   }

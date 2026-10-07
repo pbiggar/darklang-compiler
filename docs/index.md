@@ -11,6 +11,7 @@ grouped by purpose; each subject has one canonical source.
 
 ## Contributing
 
+- [ChatGPT Work VM setup](contributing/work-vm-setup.md)
 - [Implementation workflow](contributing/workflow.md)
 - [OCaml coding guidelines](contributing/coding-guidelines.md)
 - [Test DSLs](contributing/testing.md)
@@ -26,6 +27,7 @@ grouped by purpose; each subject has one canonical source.
 - [Architecture overview](compiler/overview.md)
 - [Compiler pipeline](compiler/pipeline.md)
 - [Compiler source organization](compiler/source-organization.md)
+- [Complete embedded library source inventory](compiler/library-sources.md)
 - [Compiler identities](compiler/identities.md)
 - [Intermediate representations](compiler/intermediate-representations.md)
 - [End-to-end example](compiler/end-to-end-example.md)

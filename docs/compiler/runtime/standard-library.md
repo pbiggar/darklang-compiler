@@ -86,7 +86,7 @@ These generate syscalls or special code sequences.
 
 ### Dark Functions
 
-Defined in modular `stdlib/*.dark` files and compiled like
+Defined in modular Dark files under `StdLib/` and `packages/` and compiled like
 user code:
 
 ```dark
@@ -274,7 +274,7 @@ Uses platform-specific random source:
 
 1. **Compilation start**: Load intrinsic module signatures from
    `src/DarkStdlib.ml`
-   and the ordered Dark stdlib source files from `stdlib/`
+   and the embedded Dark sources in `library-sources.list` declaration order
 2. **Parse**: Parse stdlib definitions
 3. **Combine**: Merge with user program
 4. **Type check**: Stdlib + user code together
@@ -287,8 +287,10 @@ Stdlib functions are only included if called (dead code elimination).
 | File | Purpose |
 |------|---------|
 | `src/DarkStdlib.ml` | Intrinsic module definitions |
-| `stdlib/*.dark` | Dark stdlib implementations |
-| `src/CompilerLibrary.ml` | Stdlib loading logic |
+| `StdLib/`, `packages/` | Dark implementations grouped by package; see [source organization](../source-organization.md#standard-library-layout) |
+| `library-sources.list` | Source paths in declaration order |
+| `scripts/embed-stdlib.py` | Embeds the registered sources into the compiler at build time |
+| `src/driver/StdlibCompilation.ml` | Stdlib loading and compilation |
 
 ## Generic Function Monomorphization
 
@@ -302,7 +304,8 @@ Creates `Stdlib.List.map_i64_String` specialized function.
 
 ## Adding New Stdlib Functions
 
-1. **Dark function**: Add to the appropriate file in `stdlib/`
+1. **Dark function**: Add to the appropriate file under `StdLib/` or `packages/`;
+   register new files in `library-sources.list` in declaration order
 2. **Intrinsic**: Add to `src/DarkStdlib.ml` + implement in codegen
 
 See `docs/contributing/workflow.md` for details.

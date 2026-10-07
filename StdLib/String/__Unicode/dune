@@ -1,0 +1,2 @@
+; Include the private generated-data package in the embedded source tree.
+(dirs :standard __Data)

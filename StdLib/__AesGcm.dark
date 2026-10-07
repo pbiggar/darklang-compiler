@@ -1,0 +1,271 @@
+// __AesGcm.dark - AES-128/256 and GCM authenticated encryption for TLS records.
+
+module Darklang.Stdlib.__AesGcm
+
+type Bits128 = { hi: Int64, lo: Int64 }
+
+let __at (bytes: List<Int64>) (index: Int64) : Int64 =
+  match Stdlib.List.getAt bytes (Stdlib.Int.fromInt64 index) with
+  | Some value -> value
+  | None -> Builtin.testRuntimeError "Invalid AES block shape"
+
+let __xor (a: Int64) (b: Int64) : Int64 = Stdlib.Int64.bitwiseXor a b
+let __and (a: Int64) (b: Int64) : Int64 = Stdlib.Int64.bitwiseAnd a b
+
+let __xtime (value: Int64) : Int64 =
+  Stdlib.__AesGcm.__xor (Stdlib.__AesGcm.__and (value * 2L) 255L)
+    (Stdlib.__AesGcm.__and (0L - Stdlib.Int64.shiftRight value 7L) 27L)
+
+let __gmul (a: Int64) (b: Int64) (bit: Int64) (acc: Int64) : Int64 =
+  if bit == 8L then acc
+  else
+    let mask = 0L - Stdlib.__AesGcm.__and (Stdlib.Int64.shiftRight b bit) 1L in
+    Stdlib.__AesGcm.__gmul (Stdlib.__AesGcm.__xtime a) b (bit + 1L)
+      (Stdlib.__AesGcm.__xor acc (Stdlib.__AesGcm.__and a mask))
+
+let __square (x: Int64) : Int64 = Stdlib.__AesGcm.__gmul x x 0L 0L
+
+// Inversion by x^254, followed by the AES affine transform. Fixed iteration
+// counts avoid a secret-indexed S-box table.
+let __sbox (x: Int64) : Int64 =
+  let x2 = Stdlib.__AesGcm.__square x in
+  let x4 = Stdlib.__AesGcm.__square x2 in
+  let x8 = Stdlib.__AesGcm.__square x4 in
+  let x16 = Stdlib.__AesGcm.__square x8 in
+  let x32 = Stdlib.__AesGcm.__square x16 in
+  let x64 = Stdlib.__AesGcm.__square x32 in
+  let x128 = Stdlib.__AesGcm.__square x64 in
+  let a = Stdlib.__AesGcm.__gmul x128 x64 0L 0L in
+  let b = Stdlib.__AesGcm.__gmul a x32 0L 0L in
+  let c = Stdlib.__AesGcm.__gmul b x16 0L 0L in
+  let d = Stdlib.__AesGcm.__gmul c x8 0L 0L in
+  let e = Stdlib.__AesGcm.__gmul d x4 0L 0L in
+  let inverse = Stdlib.__AesGcm.__gmul e x2 0L 0L in
+  let rotate1 = Stdlib.__AesGcm.__and (inverse * 2L + Stdlib.Int64.shiftRight inverse 7L) 255L in
+  let rotate2 = Stdlib.__AesGcm.__and (inverse * 4L + Stdlib.Int64.shiftRight inverse 6L) 255L in
+  let rotate3 = Stdlib.__AesGcm.__and (inverse * 8L + Stdlib.Int64.shiftRight inverse 5L) 255L in
+  let rotate4 = Stdlib.__AesGcm.__and (inverse * 16L + Stdlib.Int64.shiftRight inverse 4L) 255L in
+  Stdlib.__AesGcm.__xor 99L
+    (Stdlib.__AesGcm.__xor inverse
+      (Stdlib.__AesGcm.__xor rotate1
+        (Stdlib.__AesGcm.__xor rotate2 (Stdlib.__AesGcm.__xor rotate3 rotate4))))
+
+let __keyWord (expanded: List<Int64>) (index: Int64) : List<Int64> =
+  [Stdlib.__AesGcm.__at expanded (index * 4L),
+   Stdlib.__AesGcm.__at expanded (index * 4L + 1L),
+   Stdlib.__AesGcm.__at expanded (index * 4L + 2L),
+   Stdlib.__AesGcm.__at expanded (index * 4L + 3L)]
+
+let __expandKey (expanded: List<Int64>) (word: Int64) (keyWords: Int64)
+  (roundConstant: Int64)
+  : List<Int64> =
+  if word == (if keyWords == 8L then 60L else 44L) then expanded
+  else
+    let previous = Stdlib.__AesGcm.__keyWord expanded (word - 1L) in
+    let temp =
+      if word % keyWords == 0L then
+        [Stdlib.__AesGcm.__xor (Stdlib.__AesGcm.__sbox (Stdlib.__AesGcm.__at previous 1L)) roundConstant,
+         Stdlib.__AesGcm.__sbox (Stdlib.__AesGcm.__at previous 2L),
+         Stdlib.__AesGcm.__sbox (Stdlib.__AesGcm.__at previous 3L),
+         Stdlib.__AesGcm.__sbox (Stdlib.__AesGcm.__at previous 0L)]
+      else if keyWords == 8L && word % 8L == 4L then
+        Stdlib.List.map previous Stdlib.__AesGcm.__sbox
+      else previous in
+    let next = Stdlib.List.map2shortest (Stdlib.__AesGcm.__keyWord expanded (word - keyWords)) temp
+                 Stdlib.__AesGcm.__xor in
+    Stdlib.__AesGcm.__expandKey (Stdlib.List.append expanded next) (word + 1L)
+      keyWords
+      (if word % keyWords == 0L then Stdlib.__AesGcm.__xtime roundConstant else roundConstant)
+
+let __addRoundKey (state: List<Int64>) (key: List<Int64>) (round: Int64)
+  (index: Int64) (acc: List<Int64>) : List<Int64> =
+  if index == 16L then Stdlib.List.reverse acc
+  else Stdlib.__AesGcm.__addRoundKey state key round (index + 1L)
+         (Stdlib.List.push acc
+           (Stdlib.__AesGcm.__xor (Stdlib.__AesGcm.__at state index)
+             (Stdlib.__AesGcm.__at key (round * 16L + index))))
+
+let __shiftRows (state: List<Int64>) (index: Int64) (acc: List<Int64>) : List<Int64> =
+  if index == 16L then Stdlib.List.reverse acc
+  else
+    let row = index % 4L in
+    let column = index / 4L in
+    Stdlib.__AesGcm.__shiftRows state (index + 1L)
+      (Stdlib.List.push acc (Stdlib.__AesGcm.__sbox
+        (Stdlib.__AesGcm.__at state (((column + row) % 4L) * 4L + row))))
+
+let __mixByte (state: List<Int64>) (index: Int64) : Int64 =
+  let base = (index / 4L) * 4L in
+  let row = index % 4L in
+  let a = Stdlib.__AesGcm.__at state (base + row) in
+  let b = Stdlib.__AesGcm.__at state (base + (row + 1L) % 4L) in
+  let c = Stdlib.__AesGcm.__at state (base + (row + 2L) % 4L) in
+  let d = Stdlib.__AesGcm.__at state (base + (row + 3L) % 4L) in
+  Stdlib.__AesGcm.__xor (Stdlib.__AesGcm.__xtime a)
+    (Stdlib.__AesGcm.__xor (Stdlib.__AesGcm.__xor (Stdlib.__AesGcm.__xtime b) b)
+      (Stdlib.__AesGcm.__xor c d))
+
+let __mixColumns (state: List<Int64>) (index: Int64) (acc: List<Int64>) : List<Int64> =
+  if index == 16L then Stdlib.List.reverse acc
+  else Stdlib.__AesGcm.__mixColumns state (index + 1L)
+         (Stdlib.List.push acc (Stdlib.__AesGcm.__mixByte state index))
+
+let __aesRound (state: List<Int64>) (key: List<Int64>) (round: Int64)
+  (rounds: Int64) : List<Int64> =
+  if round == rounds then
+    Stdlib.__AesGcm.__addRoundKey (Stdlib.__AesGcm.__shiftRows state 0L []) key round 0L []
+  else
+    let shifted = Stdlib.__AesGcm.__shiftRows state 0L [] in
+    let mixed = Stdlib.__AesGcm.__mixColumns shifted 0L [] in
+    Stdlib.__AesGcm.__aesRound
+      (Stdlib.__AesGcm.__addRoundKey mixed key round 0L []) key (round + 1L) rounds
+
+let __encryptBlock (expandedKey: List<Int64>) (block: Blob) : Blob =
+  let state = Stdlib.__AesGcm.__addRoundKey (Stdlib.Blob.__toInt64List block) expandedKey 0L 0L [] in
+  let rounds = if Stdlib.List.length expandedKey == 240 then 14L else 10L in
+  Stdlib.Blob.__fromInt64List (Stdlib.__AesGcm.__aesRound state expandedKey 1L rounds)
+
+let __bits (blob: Blob) : Stdlib.__AesGcm.Bits128 =
+  Stdlib.__AesGcm.Bits128 {
+    hi = Stdlib.Crypto.__getBE64 blob 0L,
+    lo = Stdlib.Crypto.__getBE64 blob 8L }
+
+let __bitsBlob (bits: Stdlib.__AesGcm.Bits128) : Blob =
+  Stdlib.Blob.__fromInt64List
+    (Stdlib.List.append (Stdlib.Crypto.__int64ToBE bits.hi)
+      (Stdlib.Crypto.__int64ToBE bits.lo))
+
+let __xorBits (a: Stdlib.__AesGcm.Bits128) (b: Stdlib.__AesGcm.Bits128)
+  : Stdlib.__AesGcm.Bits128 =
+  Stdlib.__AesGcm.Bits128 {
+    hi = Stdlib.__AesGcm.__xor a.hi b.hi,
+    lo = Stdlib.__AesGcm.__xor a.lo b.lo }
+
+let __ghashMultiply (x: Stdlib.__AesGcm.Bits128) (v: Stdlib.__AesGcm.Bits128)
+  (bit: Int64) (z: Stdlib.__AesGcm.Bits128) : Stdlib.__AesGcm.Bits128 =
+  if bit == 128L then z
+  else
+    let xWord = if bit < 64L then x.hi else x.lo in
+    let position = 63L - bit % 64L in
+    let selected = Stdlib.__AesGcm.__and (Stdlib.Int64.shiftRight xWord position) 1L in
+    let mask = 0L - selected in
+    let nextZ = Stdlib.__AesGcm.Bits128 {
+      hi = Stdlib.__AesGcm.__xor z.hi (Stdlib.__AesGcm.__and v.hi mask),
+      lo = Stdlib.__AesGcm.__xor z.lo (Stdlib.__AesGcm.__and v.lo mask) } in
+    let reduction = 0L - Stdlib.__AesGcm.__and v.lo 1L in
+    let nextV = Stdlib.__AesGcm.Bits128 {
+      hi = Stdlib.__AesGcm.__xor
+             (Stdlib.__AesGcm.__and (Stdlib.Int64.shiftRight v.hi 1L) 9223372036854775807L)
+             (Stdlib.__AesGcm.__and (Stdlib.Int64.shiftLeft 225L 56L) reduction),
+      lo = Stdlib.Int64.bitwiseOr
+             (Stdlib.__AesGcm.__and (Stdlib.Int64.shiftRight v.lo 1L) 9223372036854775807L)
+             (Stdlib.Int64.shiftLeft (Stdlib.__AesGcm.__and v.hi 1L) 63L) } in
+    Stdlib.__AesGcm.__ghashMultiply x nextV (bit + 1L) nextZ
+
+let __zeroBits () : Stdlib.__AesGcm.Bits128 = Stdlib.__AesGcm.Bits128 { hi = 0L, lo = 0L }
+
+let __ghashBlock (hashKey: Stdlib.__AesGcm.Bits128) (state: Stdlib.__AesGcm.Bits128)
+  (block: Blob) : Stdlib.__AesGcm.Bits128 =
+  Stdlib.__AesGcm.__ghashMultiply (Stdlib.__AesGcm.__xorBits state (Stdlib.__AesGcm.__bits block))
+    hashKey 0L (Stdlib.__AesGcm.__zeroBits ())
+
+let __paddedBlock (data: Blob) (offset: Int64) : Blob =
+  let remaining = Stdlib.Blob.__byteLength data - offset in
+  let count = if remaining < 16L then remaining else 16L in
+  let content = Stdlib.Blob.slice data (Stdlib.Int.fromInt64 offset)
+                  (Stdlib.Int.fromInt64 count) in
+  let padding = Stdlib.Blob.__fromInt64List (Stdlib.List.repeatUnsafe
+                  (Stdlib.Int.fromInt64 (16L - count)) 0L) in
+  Stdlib.Blob.concat [content, padding]
+
+let __ghashData (hashKey: Stdlib.__AesGcm.Bits128) (data: Blob) (offset: Int64)
+  (state: Stdlib.__AesGcm.Bits128) : Stdlib.__AesGcm.Bits128 =
+  if offset >= Stdlib.Blob.__byteLength data then state
+  else Stdlib.__AesGcm.__ghashData hashKey data (offset + 16L)
+         (Stdlib.__AesGcm.__ghashBlock hashKey state (Stdlib.__AesGcm.__paddedBlock data offset))
+
+let __ghash (hashKey: Stdlib.__AesGcm.Bits128) (aad: Blob) (ciphertext: Blob)
+  : Stdlib.__AesGcm.Bits128 =
+  let first = Stdlib.__AesGcm.__ghashData hashKey aad 0L (Stdlib.__AesGcm.__zeroBits ()) in
+  let second = Stdlib.__AesGcm.__ghashData hashKey ciphertext 0L first in
+  let lengths = (Stdlib.Blob.__fromInt64List
+    (Stdlib.List.append (Stdlib.Crypto.__int64ToBE (Stdlib.Blob.__byteLength aad * 8L))
+      (Stdlib.Crypto.__int64ToBE (Stdlib.Blob.__byteLength ciphertext * 8L)))) in
+  Stdlib.__AesGcm.__ghashBlock hashKey second lengths
+
+let __counterBlock (nonce: Blob) (counter: Int64) : Blob =
+  let tail = (Stdlib.Blob.__fromInt64List
+    [Stdlib.__AesGcm.__and (Stdlib.Int64.shiftRight counter 24L) 255L,
+     Stdlib.__AesGcm.__and (Stdlib.Int64.shiftRight counter 16L) 255L,
+     Stdlib.__AesGcm.__and (Stdlib.Int64.shiftRight counter 8L) 255L,
+     Stdlib.__AesGcm.__and counter 255L]) in
+  Stdlib.Blob.concat [nonce, tail]
+
+let __xorStreamBytes (data: Blob) (stream: Blob) (offset: Int64)
+  (index: Int64) (count: Int64) (acc: List<Int64>) : List<Int64> =
+  if index == count then Stdlib.List.reverse acc
+  else
+    let inputByte = Stdlib.Blob.__getByte data (offset + index) in
+    let streamByte = Stdlib.Blob.__getByte stream index in
+    let next = Stdlib.List.push acc (Stdlib.__AesGcm.__xor inputByte streamByte) in
+    Stdlib.__AesGcm.__xorStreamBytes data stream offset (index + 1L) count next
+
+let __crypt (key: List<Int64>) (nonce: Blob) (data: Blob)
+  (offset: Int64) (counter: Int64) (chunks: List<Blob>) : Blob =
+  if offset >= Stdlib.Blob.__byteLength data then Stdlib.Blob.concat (Stdlib.List.reverse chunks)
+  else
+    let remaining = Stdlib.Blob.__byteLength data - offset in
+    let count = if remaining < 16L then remaining else 16L in
+    let stream = Stdlib.__AesGcm.__encryptBlock key (Stdlib.__AesGcm.__counterBlock nonce counter) in
+    let chunk = Stdlib.Blob.__fromInt64List
+                  (Stdlib.__AesGcm.__xorStreamBytes data stream offset 0L count []) in
+    Stdlib.__AesGcm.__crypt key nonce data (offset + count) (counter + 1L)
+      (Stdlib.List.push chunks chunk)
+
+let __tag (key: List<Int64>) (nonce: Blob) (aad: Blob) (ciphertext: Blob) : Blob =
+  let hashKey = Stdlib.__AesGcm.__bits
+                  (Stdlib.__AesGcm.__encryptBlock key
+                    (Stdlib.Blob.__fromInt64List (Stdlib.List.repeatUnsafe 16 0L))) in
+  let hash = Stdlib.__AesGcm.__ghash hashKey aad ciphertext in
+  let encryptedCounter = Stdlib.__AesGcm.__bits
+                           (Stdlib.__AesGcm.__encryptBlock key
+                             (Stdlib.__AesGcm.__counterBlock nonce 1L)) in
+  Stdlib.__AesGcm.__bitsBlob (Stdlib.__AesGcm.__xorBits hash encryptedCounter)
+
+let __sameTag (expected: Blob) (actual: Blob) (index: Int64) (difference: Int64) : Bool =
+  if index == 16L then difference == 0L
+  else Stdlib.__AesGcm.__sameTag expected actual (index + 1L)
+         (Stdlib.__AesGcm.__xor difference
+           (Stdlib.__AesGcm.__xor (Stdlib.Blob.__getByte expected index)
+             (Stdlib.Blob.__getByte actual index)))
+
+let encrypt (key: Blob) (nonce: Blob) (aad: Blob) (plaintext: Blob)
+  : Stdlib.Result.Result<Blob, String> =
+  let keyLength = Stdlib.Blob.__byteLength key in
+  if (keyLength != 16L && keyLength != 32L) || Stdlib.Blob.__byteLength nonce != 12L then
+    Error "AES-GCM requires a 16- or 32-byte key and 12-byte nonce"
+  else if Stdlib.Blob.__byteLength plaintext > 16624L then
+    Error "AES-GCM plaintext exceeds TLS record size"
+  else
+    let keyWords = keyLength / 4L in
+    let expanded = Stdlib.__AesGcm.__expandKey (Stdlib.Blob.__toInt64List key) keyWords keyWords 1L in
+    let ciphertext = Stdlib.__AesGcm.__crypt expanded nonce plaintext 0L 2L [] in
+    Ok (Stdlib.Blob.concat [ciphertext, Stdlib.__AesGcm.__tag expanded nonce aad ciphertext])
+
+let decrypt (key: Blob) (nonce: Blob) (aad: Blob) (sealed: Blob)
+  : Stdlib.Result.Result<Blob, String> =
+  let length = Stdlib.Blob.__byteLength sealed in
+  let keyLength = Stdlib.Blob.__byteLength key in
+  if (keyLength != 16L && keyLength != 32L) || Stdlib.Blob.__byteLength nonce != 12L then
+    Error "AES-GCM requires a 16- or 32-byte key and 12-byte nonce"
+  else if length < 16L || length > 16640L then
+    Error "Invalid AES-GCM ciphertext length"
+  else
+    let keyWords = keyLength / 4L in
+    let expanded = Stdlib.__AesGcm.__expandKey (Stdlib.Blob.__toInt64List key) keyWords keyWords 1L in
+    let ciphertext = Stdlib.Blob.slice sealed 0 (Stdlib.Int.fromInt64 (length - 16L)) in
+    let actual = Stdlib.Blob.slice sealed (Stdlib.Int.fromInt64 (length - 16L)) 16 in
+    let expected = Stdlib.__AesGcm.__tag expanded nonce aad ciphertext in
+    if Stdlib.Bool.not (Stdlib.__AesGcm.__sameTag expected actual 0L 0L) then
+      Error "AES-GCM authentication failed"
+    else Ok (Stdlib.__AesGcm.__crypt expanded nonce ciphertext 0L 2L [])

@@ -202,6 +202,11 @@ let[@warning "-4"] resolveWrittenType allowInternal types modulePath typeParams
     typeReference (resolveCustom seen path) parameters syntax
   and resolveCustom seen path modules name args =
     match (allowInternal, modules, name, args) with
+    | false, modules, name, _
+      when restrictedIdentifier false (modules @ [ name ]) ->
+        Error
+          ("Internal identifier not allowed in user code: "
+          ^ String.concat "." (modules @ [ name ]))
     | true, [], "RawPtr", [] -> Ok AST.TInternalRawPtr
     | false, [], "RawPtr", [] ->
         Error "RawPtr is reserved for compiler-internal source"
@@ -250,17 +255,22 @@ let findNamedType globals (name : WT.qualifiedTypeIdentifier) =
          name.WT.modules
       @ [ name.WT.typ.WT.name ])
   in
-  match
-    List.find_map
-      (fun canonical ->
-        Option.map
-          (fun entry -> (canonical, entry))
-          (M.find_opt canonical globals.types))
-      (NameResolution.candidateSpellings NameResolution.Type globals.modulePath
-         spelling)
-  with
-  | Some found -> Ok found
-  | None -> Error ("Unknown type '" ^ spelling ^ "'")
+  if
+    restrictedIdentifier globals.allowInternal
+      (String.split_on_char '.' spelling)
+  then Error ("Internal identifier not allowed in user code: " ^ spelling)
+  else
+    match
+      List.find_map
+        (fun canonical ->
+          Option.map
+            (fun entry -> (canonical, entry))
+            (M.find_opt canonical globals.types))
+        (NameResolution.candidateSpellings NameResolution.Type
+           globals.modulePath spelling)
+    with
+    | Some found -> Ok found
+    | None -> Error ("Unknown type '" ^ spelling ^ "'")
 
 let[@warning "-4"] resolveNamedType globals expected
     (name : WT.qualifiedTypeIdentifier) inferredArgs =

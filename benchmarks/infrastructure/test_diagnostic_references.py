@@ -17,25 +17,25 @@ from benchmark_profiles import load_invocation, load_profile
 class DiagnosticReferenceTests(unittest.TestCase):
     def test_interpreter_arguments_replace_each_cli_lookup(self) -> None:
         source = (
-            "match (Stdlib.Cli.Args.int64 0, "
-            "Stdlib.Cli.Args.int64 1) with\n"
+            "match (Stdlib.Cli.__Args.int64 0, "
+            "Stdlib.Cli.__Args.int64 1) with\n"
             "| (Ok first, Ok second) -> first + second\n"
         )
 
         transformed = inject_interpreter_arguments(source, ("4", "7"))
 
         self.assertIn("match (Ok 4L, Ok 7L) with", transformed)
-        self.assertNotIn("Stdlib.Cli.Args.int64", transformed)
+        self.assertNotIn("Stdlib.Cli.__Args.int64", transformed)
 
     def test_interpreter_argument_injection_rejects_an_unknown_index(self) -> None:
         with self.assertRaisesRegex(ValueError, "argument index 2"):
             inject_interpreter_arguments(
-                "Stdlib.Cli.Args.int64 2", ("4", "7")
+                "Stdlib.Cli.__Args.int64 2", ("4", "7")
             )
 
     def test_interpreter_arguments_support_the_shared_index_helper(self) -> None:
         transformed = inject_interpreter_arguments(
-            "match Stdlib.Cli.Args.int64 index with | Ok value -> value",
+            "match Stdlib.Cli.__Args.int64 index with | Ok value -> value",
             ("4", "7"),
         )
 
@@ -53,7 +53,7 @@ class DiagnosticReferenceTests(unittest.TestCase):
                 invocation = load_invocation(benchmarks_dir, "full", name)
                 source = source_path(benchmarks_dir, name, "darklang-interpreter").read_text()
                 transformed = adapt_interpreter_source(source, tuple(invocation.args))
-                self.assertNotIn("Stdlib.Cli.Args.int64", transformed)
+                self.assertNotIn("Stdlib.Cli.__Args.int64", transformed)
                 self.assertNotRegex(source, r"Stdlib\.[A-Za-z0-9_.]*__")
 
     def test_float_conversion_retains_failure_on_out_of_range_values(self) -> None:
@@ -74,7 +74,7 @@ class DiagnosticReferenceTests(unittest.TestCase):
             "(closed.0.reversed) (closed.1) state.trimNext in\n"
             "            let withGoto = emit nextState (Goto (closed.2)) in\n"
             "| Ok closed -> use closed.0 closed.1\n"
-            "Stdlib.Cli.Args.int64 0\n"
+            "Stdlib.Cli.__Args.int64 0\n"
         )
 
         transformed = adapt_interpreter_source(source, ("4",))

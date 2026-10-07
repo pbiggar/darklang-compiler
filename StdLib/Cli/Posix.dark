@@ -1,0 +1,37 @@
+// Stdlib.Cli.Posix.dark - Shared POSIX value types used by portable CLI code.
+// Public shapes follow darklang/dark@04fbe9dcc995c6188757d583e273cbd30a3e2d3d.
+
+module Darklang.Stdlib.Cli.Posix
+
+type Error = { errno: Int, message: String }
+
+type StatResult = { mode: Int, size: Int, mtimeSec: Int }
+
+let __error (error: Stdlib.Cli.__NativePosixError) : Stdlib.Cli.Posix.Error =
+    let errno = Stdlib.Int.fromInt64 error.errno in
+    let message =
+        if errno == 1 then "Operation not permitted"
+        else if errno == 3 then "No such process"
+        else if errno == 22 then "Invalid argument"
+        else error.message in
+    Stdlib.Cli.Posix.Error { errno = errno, message = message }
+
+let kill (pid: Int) (signal: Int) : Stdlib.Result.Result<Unit, Stdlib.Cli.Posix.Error> =
+    match (Stdlib.Int.toInt64 pid, Stdlib.Int.toInt64 signal) with
+    | (Some pid, Some signal) ->
+        match Stdlib.Cli.__kill pid signal with
+        | Ok (()) -> Ok (())
+        | Error error -> Error (Stdlib.Cli.Posix.__error error)
+    | _ -> Error (Stdlib.Cli.Posix.Error { errno = 22, message = "Invalid argument" })
+
+val sigterm = 15
+val sigkill = 9
+val sigint = 2
+
+let sleep (delayMs: Float) : Unit =
+    Stdlib.Cli.__sleep delayMs
+
+let isProcessRunning (pid: Int) : Bool =
+    match Stdlib.Cli.Posix.kill pid 0 with
+    | Ok (()) -> true
+    | Error error -> error.errno == 1

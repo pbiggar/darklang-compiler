@@ -114,7 +114,7 @@ class NativeReferenceTests(unittest.TestCase):
             root = Path(temporary) / "root"
             fixture(root)
             source = root / "problems" / "alpha" / "dark" / "main.dark"
-            source.write_text("Stdlib.Cli.Args.int64 0")
+            source.write_text("Stdlib.Cli.__Args.int64 0")
             rundir = Path(temporary) / "runtime"
             rundir.mkdir()
             (rundir / "data.db").write_text("prepared packages")
@@ -134,7 +134,7 @@ class NativeReferenceTests(unittest.TestCase):
                 row = measure_one(root, build, "alpha", "darklang-interpreter", "full", Path("/interpreter"), rundir, 60)
             self.assertEqual(row["instructions"], 456)
             self.assertEqual((rundir / "data.db").read_text(), "prepared packages")
-            self.assertEqual(source.read_text(), "Stdlib.Cli.Args.int64 0")
+            self.assertEqual(source.read_text(), "Stdlib.Cli.__Args.int64 0")
 
     def test_all_skips_interpreter_without_context(self):
         with tempfile.TemporaryDirectory() as temporary:

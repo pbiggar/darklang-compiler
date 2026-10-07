@@ -3,7 +3,7 @@ open Dark_compiler
 
 let rec rootFrom path =
   if
-    Sys.file_exists (Filename.concat path "stdlib")
+    Sys.file_exists (Filename.concat path "library-sources.list")
     && Sys.file_exists (Filename.concat path "test/fixtures")
   then Some path
   else

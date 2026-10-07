@@ -23,7 +23,7 @@ matching `.ml` implementation and `.mli` interface. The Dune graph groups module
 | `src/backend/x64/` | Linux x64 selection, encoding and runtime |
 | `src/backend/binary/` | Shared binary structures and literal pools |
 | `src/driver/` | Compilation contexts, caches, sessions and pipeline orchestration |
-| `stdlib/` | Dark standard library sources and Unicode tables embedded at build time |
+| `StdLib/`, `packages/` | Dark library packages and compiler support embedded at build time |
 | `tools/fuzzer/` | Typed generation, oracle comparison and syntax reduction |
 | `tools/process/` | Captured process execution shared by tests and fuzzing |
 | `test/` | Production unit checks, DSL tooling and suite runner |
@@ -34,6 +34,64 @@ matching `.ml` implementation and `.mli` interface. The Dune graph groups module
 
 `dune runtest` executes additional regression checks; the complete host suite
 runs through `./run-tests --ai` after `./build --ai`.
+
+## Standard-library layout
+
+`StdLib/` implicitly represents the `Darklang.Stdlib` package prefix. For
+example, `Darklang.Stdlib.Cli.UI.Colors` lives in `StdLib/Cli/UI/Colors.dark`.
+`Builtin` is the standard-library bridge exception: it lives at
+`StdLib/Builtin.dark` and retains its interpreter `Builtin` namespace.
+Other packages keep their full names under `packages/`, such as
+`packages/Darklang/LanguageTools/ProgramTypes.dark`. The few `module Stdlib.*`
+declarations also use the implicit `Darklang` owner. Placement does not change
+language names.
+
+| Repository path | Contents |
+|---|---|
+| `StdLib/` | Darklang.Stdlib packages and their implementation helpers |
+| `StdLib/Root.dark`, `StdLib/Print.dark` | Functions directly in Darklang.Stdlib |
+| `StdLib/__Types.dark`, `StdLib/__Hash.dark` | Compiler root type representation and hashing helpers |
+| `packages/Darklang/LanguageTools/` | Program types, runtime types and package-manager APIs |
+| `packages/Darklang/PrettyPrinter/` | Runtime type and error rendering |
+| `packages/Darklang/SCM/` | Branch identity |
+| `StdLib/Builtin.dark` | Compiler bridges for interpreter builtins; retains the `Builtin` namespace |
+| `StdLib/String/__Unicode.dark`, `StdLib/String/__Unicode/` | Compiler Unicode operations and generated data |
+
+A package implemented in several files keeps its main file at the package
+path and its fragments in the matching directory. For example,
+`StdLib/List.dark` contains the public List API, while
+`StdLib/List/__SkewList.dark` and `__ListArray.dark` extend that same package.
+`StdLib/List/SortByComparatorHelpers.dark` is a genuine nested interpreter
+module, so it retains a normal filename.
+
+Use `__` at the start of a filename for compiler-only support or private
+implementation fragments, including generated tables. This is a source
+organization convention; filename prefixes do not enforce language visibility.
+Compiler-only module declarations also use `__` names, such as
+`Darklang.Stdlib.__Network` and `Darklang.Stdlib.String.__Unicode`.
+Private declarations require `--allow-internal`; public code cannot access them
+through function calls, type annotations, record literals or enum constructors.
+Fragments of a public package keep that package's declaration name.
+Keep interpreter packages and public fragments unprefixed,
+including nested modules extracted from an upstream file. The
+[complete source inventory](library-sources.md) lists all 202 files, their
+modules, and interpreter origins or compiler roles against the pinned revision.
+Update it when adding, moving, or reclassifying sources.
+
+`library-sources.list` contains repository-relative paths across both trees in
+declaration order. Preserve that order when moving files: it follows declaration
+dependencies rather than alphabetical directory order. `scripts/embed-stdlib.py`
+checks that every Dark source in both trees appears exactly once, rejects paths
+outside them, and generates immutable OCaml strings. Dune tracks the manifest
+and both complete source trees, including nested directories. The standalone
+binary does not load source files from disk or need a share installation.
+
+Regenerate the pinned Unicode tables with
+`python3 scripts/generate_unicode_tables.py`; `--check` compares generated output
+without writing it. Output paths are `StdLib/String/__Unicode/__Data.dark`,
+`StdLib/String/__Unicode/__Data/__Index*.dark`, and `__Table*.dark`.
+
+## Compiler dependencies
 
 Compiler services use OCaml libraries directly: Yojson for JSON, Digestif for
 SHA-256 (its OCaml backend), Mtime for monotonic elapsed time, Uri for URL

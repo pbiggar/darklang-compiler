@@ -57,3 +57,4 @@ val tryParseLegacySpelling : string -> qualifiedName option
 val scanOrdinary : string -> int -> identifier * int
 val scanQuoted : string -> int -> (identifier * int, string) result
 val tryExtractModuleHeader : string -> (qualifiedName * string) option
+val isUpperIdentifier : string -> bool

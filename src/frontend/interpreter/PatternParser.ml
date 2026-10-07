@@ -11,9 +11,7 @@ let last buffer =
   | Some value -> value
   | None -> Crash.crash "Empty pattern collector"
 
-let upperName name =
-  let units = Text.scalars name in
-  Array.length units > 0 && Text.isUpper units.(0)
+let upperName = NameSyntax.isUpperIdentifier
 
 (*
    or-level: `p1 | p2 | …` (stops at `->` / `when`)

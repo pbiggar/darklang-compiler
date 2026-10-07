@@ -44,7 +44,7 @@ input failures are `AltJson.ParseError.NotJson`. `format` emits compact JSON,
 preserves array/object order and duplicates, and escapes strings canonically.
 
 The portable helper and builder surface is copied into
-`stdlib/AltJson.dark`. Helpers use the first matching object
+`StdLib/AltJson.dark`. Helpers use the first matching object
 field and retain the interpreter's absent/wrong-shape `Option`, zero, and empty
 list results. Builder fields append in call order; every optional adder omits
 `None`; `Builder.empty` is a first-class empty value.
@@ -134,12 +134,12 @@ JSON extensions. There are no JSON-specific compiler-only serialized types.
 ## Implementation anchors
 
 - Public portable code and the lossless parser are in the module-scoped
-  `stdlib/AltJson*.dark`, `Json*.dark`,
+  `StdLib/AltJson.dark`, `StdLib/AltJson/`, `StdLib/Json.dark`, `StdLib/Json/`,
   `RuntimeTypes*.dark`, and `LanguageTools.dark` sources.
 - AOT plan construction and recursive record/enum substitution:
   `src/frontend/JsonPlanning.ml`.
 - The shared packed-range reader, container traversal, scalar extraction, and writer
-  primitives are in `stdlib/Json.dark`.
+  primitives are in `StdLib/Json.dark`.
 - Generic intrinsic checking and unsupported-shape diagnostics:
   `src/frontend/TypeChecking.ml`.
 - Late specialization integration and stdlib loading:

@@ -86,7 +86,7 @@ Compiler type/value registration is in `src/AST.ml` and
 `src/frontend/TypeChecking.ml`; value lowering, structural equality, and Blob
 ownership flow through `src/passes/anf/AST_to_ANF.ml`, ANF/MIR/LIR, reference-count
 insertion, and both native backends. Public implementations are
-`stdlib/Blob.dark`, `Base64.dark`, `Crypto.dark`, and `X509.dark`.
+`StdLib/Blob.dark`, `Base64.dark`, `Crypto.dark`, and `X509.dark`.
 
 The focused executable probes live in `test/fixtures/e2e/blob.e2e`, `x509.e2e`,
 the migrated local suites, and the activated pinned

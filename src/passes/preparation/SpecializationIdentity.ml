@@ -172,6 +172,13 @@ let importSpecializedFunctions targetSymbols artifacts =
 
 let mangleTypeVarName name = String.concat "$u" (String.split_on_char '_' name)
 
+(* Named types may contain __ namespace segments. Escape separators before
+   composing a specialization name so raw intrinsic recovery is lossless. *)
+let mangleNamedTypeName name =
+  String.concat "%5F"
+    (String.split_on_char '_'
+       (String.concat "%25" (String.split_on_char '%' name)))
+
 (* Convert a type to a string for name mangling *)
 let rec typeToMangledName = function
   | AST.TInt8 -> "i8"
@@ -202,9 +209,10 @@ let rec typeToMangledName = function
       ^ string_of_int (List.length types)
       ^ "_"
       ^ String.concat "_" (List.map typeToMangledName types)
-  | AST.TRecord (name, []) | AST.TSum (name, []) -> name
+  | AST.TRecord (name, []) | AST.TSum (name, []) -> mangleNamedTypeName name
   | AST.TRecord (name, args) | AST.TSum (name, args) ->
-      name ^ "_" ^ String.concat "_" (List.map typeToMangledName args)
+      mangleNamedTypeName name ^ "_"
+      ^ String.concat "_" (List.map typeToMangledName args)
   | AST.TList typ -> "list_" ^ typeToMangledName typ
   | AST.TStream typ -> "stream_" ^ typeToMangledName typ
   | AST.TDict (key, value) ->

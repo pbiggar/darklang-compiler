@@ -59,7 +59,7 @@ let spectralNorm (n: Int64) (iterations: Int64) : Float =
     Stdlib.Float.sqrt (dot 0L n u v 0.0 / dot 0L n v v 0.0)
 
 let benchmarkArg (index: Int) : Int64 =
-    match Stdlib.Cli.Args.int64 index with
+    match Stdlib.Cli.__Args.int64 index with
     | Ok value -> value
     | Error message -> Builtin.testRuntimeError message
 

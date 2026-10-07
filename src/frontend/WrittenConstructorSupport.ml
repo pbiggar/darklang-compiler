@@ -92,7 +92,11 @@ let check checkExpression literal globals locals symbols expected
       | _ -> (
           let candidates =
             List.filter
-              (fun (_, (entry : typeEntry)) ->
+              (fun (canonical, (entry : typeEntry)) ->
+                (not
+                   (restrictedIdentifier globals.allowInternal
+                      (String.split_on_char '.' canonical)))
+                &&
                 match entry.definition with
                 | WT.TDEnum cases -> Option.is_some (findCase cases)
                 | _ -> false)

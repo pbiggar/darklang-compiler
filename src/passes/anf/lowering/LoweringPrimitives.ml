@@ -442,30 +442,31 @@ let tryCliIntrinsic name args =
         | "Darklang.Stdlib.Cli.__spawnProcess" -> Some ANF.SpawnProcess
         | "Darklang.Stdlib.Cli.__processIO" -> Some ANF.ProcessIO
         | "Darklang.Stdlib.Cli.__terminateProcess" -> Some ANF.TerminateProcess
-        | "Darklang.Stdlib.Network.__tcp4Socket" -> Some ANF.SocketTcp4
-        | "Darklang.Stdlib.Network.__tcp6Socket" -> Some ANF.SocketTcp6
-        | "Darklang.Stdlib.Network.__udp4Socket" -> Some ANF.SocketUdp4
-        | "Darklang.Stdlib.Network.__udp6Socket" -> Some ANF.SocketUdp6
-        | "Darklang.Stdlib.Network.__connect4" -> Some ANF.SocketConnect4
-        | "Darklang.Stdlib.Network.__connect6" -> Some ANF.SocketConnect6
-        | "Darklang.Stdlib.Network.__send" -> Some ANF.SocketSend
-        | "Darklang.Stdlib.Network.__receive" -> Some ANF.SocketReceive
-        | "Darklang.Stdlib.Network.__receiveTimeout" ->
+        | "Darklang.Stdlib.__Network.__tcp4Socket" -> Some ANF.SocketTcp4
+        | "Darklang.Stdlib.__Network.__tcp6Socket" -> Some ANF.SocketTcp6
+        | "Darklang.Stdlib.__Network.__udp4Socket" -> Some ANF.SocketUdp4
+        | "Darklang.Stdlib.__Network.__udp6Socket" -> Some ANF.SocketUdp6
+        | "Darklang.Stdlib.__Network.__connect4" -> Some ANF.SocketConnect4
+        | "Darklang.Stdlib.__Network.__connect6" -> Some ANF.SocketConnect6
+        | "Darklang.Stdlib.__Network.__send" -> Some ANF.SocketSend
+        | "Darklang.Stdlib.__Network.__receive" -> Some ANF.SocketReceive
+        | "Darklang.Stdlib.__Network.__receiveTimeout" ->
             Some ANF.SocketReceiveTimeout
-        | "Darklang.Stdlib.Network.__sendTimeout" -> Some ANF.SocketSendTimeout
-        | "Darklang.Stdlib.Network.__close" -> Some ANF.SocketClose
-        | "Darklang.Stdlib.Network.__bind4" -> Some ANF.SocketBind4
-        | "Darklang.Stdlib.Network.__listen" -> Some ANF.SocketListen
-        | "Darklang.Stdlib.Network.__accept" -> Some ANF.SocketAccept
-        | "Darklang.Stdlib.Network.__cloexec" -> Some ANF.SocketCloexec
-        | "Darklang.Stdlib.Network.__reuseAddress" ->
+        | "Darklang.Stdlib.__Network.__sendTimeout" ->
+            Some ANF.SocketSendTimeout
+        | "Darklang.Stdlib.__Network.__close" -> Some ANF.SocketClose
+        | "Darklang.Stdlib.__Network.__bind4" -> Some ANF.SocketBind4
+        | "Darklang.Stdlib.__Network.__listen" -> Some ANF.SocketListen
+        | "Darklang.Stdlib.__Network.__accept" -> Some ANF.SocketAccept
+        | "Darklang.Stdlib.__Network.__cloexec" -> Some ANF.SocketCloexec
+        | "Darklang.Stdlib.__Network.__reuseAddress" ->
             Some ANF.SocketReuseAddress
-        | "Darklang.Stdlib.Network.__poll" -> Some ANF.SocketPoll
-        | "Darklang.Stdlib.Network.__signalBlock" -> Some ANF.SignalBlock
-        | "Darklang.Stdlib.Network.__signalRestore" -> Some ANF.SignalRestore
-        | "Darklang.Stdlib.Network.__signalPending" -> Some ANF.SignalPending
-        | "Darklang.Stdlib.Network.__signalWait" -> Some ANF.SignalWait
-        | "Darklang.Stdlib.Network.__monotonic" -> Some ANF.MonotonicTime
+        | "Darklang.Stdlib.__Network.__poll" -> Some ANF.SocketPoll
+        | "Darklang.Stdlib.__Network.__signalBlock" -> Some ANF.SignalBlock
+        | "Darklang.Stdlib.__Network.__signalRestore" -> Some ANF.SignalRestore
+        | "Darklang.Stdlib.__Network.__signalPending" -> Some ANF.SignalPending
+        | "Darklang.Stdlib.__Network.__signalWait" -> Some ANF.SignalWait
+        | "Darklang.Stdlib.__Network.__monotonic" -> Some ANF.MonotonicTime
         | "Darklang.Stdlib.Crypto.__secureRandomFill" ->
             Some ANF.SecureRandomFill
         | _ -> None
@@ -482,7 +483,8 @@ let normalizeNullaryIntrinsicArgs = function
    `TNever` is mangled as two underscore-separated tokens.
 *)
 let tryParseMangledTypeWithSumTypeNames sumNames mangled =
-  let named name args =
+  let named encoded args =
+    let name = Uri.pct_decode encoded in
     if S.mem name sumNames then AST.TSum (name, args)
     else AST.TRecord (name, args)
   in

@@ -31,7 +31,7 @@ choice, not a conversion shim. There are no array/skew conversions.
 The initial selection rule is an eligibility rule, not an interprocedural cost
 model. Operations on literal arrays of up to 28 elements are unrolled; larger
 and runtime-sized arrays use shared tail-recursive kernels in
-`stdlib/__ListArray.dark`, compiled into loops.
+`StdLib/List/__ListArray.dark`, compiled into loops.
 Literal initialization still emits work proportional to the source literal.
 Literal lengths must fit the existing signed 32-bit layout offsets. Runtime
 lengths use checked 64-bit byte arithmetic. Runtime lengths through 28 use the

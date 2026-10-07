@@ -26,6 +26,17 @@ If the execution environment is unclear, ask before changing the repository.
 
 ## Dark conventions
 
+- Keep standard-library sources in the package directories documented in
+  [source organization](docs/compiler/source-organization.md#standard-library-layout).
+  Register new or moved paths in `library-sources.list`, preserving declaration
+  order. Prefix compiler-only support files, module declarations and private
+  functions/types with `__`; private fragments of a public module retain that
+  module's name. Filename prefixes alone do not enforce visibility.
+  Update the [source inventory](docs/compiler/library-sources.md) against
+  the pinned interpreter, including nested modules. Sources are embedded at
+  build time; do not add a
+  share installation or a runtime dependency on the source tree. Update
+  generators and source-path references when moving generated files.
 - Rely on type inference for module-scoped generic function and value uses.
   Do not write explicit type arguments such as `Stdlib.List.getAt<Int64>`
   unless inference is genuinely ambiguous and the explicit arguments are

@@ -10,11 +10,13 @@ type testResult = (unit, string) result
 let ( let* ) = Result.bind
 
 let stdlibFiles () =
-  let dir = R.scriptPath "stdlib" in
-  try Ok (R.filesUnder "stdlib" ".dark")
+  try
+    Ok
+      (Array.append
+         (R.filesUnder "StdLib" ".dark")
+         (R.filesUnder "packages" ".dark"))
   with exn ->
-    Error
-      ("Failed to list stdlib files in " ^ dir ^ ": " ^ Printexc.to_string exn)
+    Error ("Failed to list embedded library files: " ^ Printexc.to_string exn)
 
 let definitionName line =
   let units = Text.scalars line in

@@ -127,8 +127,8 @@ unit character exactly:
 | --- | --- | --- | --- |
 | Distinct value/type traversal | `src/AST.ml`, `src/frontend/interpreter/Parser.ml`, `src/frontend/TypeChecking.ml`, `src/ir/anf/ANF.ml`, `src/passes/anf/AST_to_ANF.ml`, `src/passes/anf/RefCountInsertion.ml`, `src/passes/mir/MIR_to_LIR.ml`, `src/passes/lir/RegisterAllocation.ml` | `backend/src/LibExecution/RuntimeTypes.fs:133-153,948-969` | Aligned |
 | Clock and tick precision | `src/backend/arm64/instructions/ARM64EmitNativeEffects.ml`, `src/backend/x64/instructions/X64EmitNativeEffects.ml` | `Builtins.Time/Libs/DateTime.fs:14-45`, `DarkDateTime.fs` | Aligned to available host precision |
-| Public signatures and behavior | `stdlib/DateTime.dark:1-390` | `packages/darklang/stdlib/dateTime.dark:4-136`, `Builtins.Pure/Libs/DateTime.fs:13-536` | Aligned |
-| Duration grammar and errors | `stdlib/Duration.dark:1-21`, `stdlib/Int.dark:399-416` | `packages/darklang/stdlib/duration.dark:6-28`, `Builtins.Pure/Libs/Int.fs:359-379` | Aligned for the documented grammar |
+| Public signatures and behavior | `StdLib/DateTime.dark:1-390` | `packages/darklang/stdlib/dateTime.dark:4-136`, `Builtins.Pure/Libs/DateTime.fs:13-536` | Aligned |
+| Duration grammar and errors | `StdLib/Duration.dark:1-21`, `StdLib/Int.dark:399-416` | `packages/darklang/stdlib/duration.dark:6-28`, `Builtins.Pure/Libs/Int.fs:359-379` | Aligned for the documented grammar |
 | Same-source DateTime corpus | `test/fixtures/e2e/upstream/stdlib/date.dark`; no line allowlist | `backend/testfiles/execution/stdlib/date.dark` | Exact file, 222/222 compiler cases pass |
 | Same-source Duration corpus | `test/fixtures/e2e/upstream/stdlib/duration.dark`; no line allowlist | `backend/testfiles/execution/stdlib/duration.dark` | Exact file, 10/10 compiler cases pass |
 | Type, range, rounding and grammar probes | `test/fixtures/e2e/temporal-parity.e2e`, `stdlib-internal/datetime.e2e` | Focused expectations derived from the pinned builtins and NodaTime constants | 29/29 pass |

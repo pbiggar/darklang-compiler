@@ -21,8 +21,8 @@ interpreter surface is anchored at
 `backend/src/Builtins/Builtins.Pure/Libs/Math.fs:13-213`, and
 `backend/src/LibExecution/Builtin.fs:97-104`.
 
-The compiler implementation is in `stdlib/Float.dark` and
-`stdlib/Math.dark`. Public values continue to render through
+The compiler implementation is in `StdLib/Float.dark` and
+`StdLib/Math.dark`. Public values continue to render through
 `src/frontend/ValueRendering.ml` and
 `src/passes/anf/PrintInsertion.ml`, both of which call the same
 `Stdlib.Float.toString` implementation. Focused executable coverage is in

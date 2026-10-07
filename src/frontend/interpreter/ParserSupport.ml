@@ -565,8 +565,7 @@ let parseQualified state index =
         { WT.range = rng state index; name = "_" }
   in
   let rec scan reversed (current : WT.identifier) next =
-    let chars = Text.scalars current.WT.name in
-    let upper = Array.length chars > 0 && Text.isUpper chars.(0) in
+    let upper = NameSyntax.isUpperIdentifier current.WT.name in
     match (tok state next, tok state (next + 1)) with
     | TDot, TIdent name when upper ->
         scan

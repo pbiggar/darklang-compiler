@@ -61,6 +61,15 @@ let identifierText = function
 let identifierFromText text =
   if text = "" || text = "___" then BlankIdentifier else OrdinaryIdentifier text
 
+(* A private namespace retains its uppercase role after the reserved __ prefix.
+   Lowercase identifiers still leave .field to the postfix-expression parser. *)
+let isUpperIdentifier name =
+  let units = Text.scalars name in
+  let index =
+    if Array.length units >= 2 && units.(0) = 95 && units.(1) = 95 then 2 else 0
+  in
+  Array.length units > index && Text.isUpper units.(index)
+
 let keywords =
   [
     ("let", Keyword.Let);

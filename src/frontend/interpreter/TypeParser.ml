@@ -5,9 +5,7 @@ open Tokenizer
 open ParserSupport
 module WT = WrittenTypes
 
-let upperName name =
-  let units = Text.scalars name in
-  Array.length units > 0 && Text.isUpper units.(0)
+let upperName = NameSyntax.isUpperIdentifier
 
 let variable range name =
   let tick =

@@ -37,7 +37,7 @@ indices. Public table indices and cells remain `Int`; canonical `List.getAt`
 performs the checked internal conversion and returns `None` when it cannot fit
 the skew-list's machine-sized index.
 
-The copied implementation is in `stdlib/Diff.dark:3-80`.
+The copied implementation is in `StdLib/Diff.dark:3-80`.
 Exact ordered probes for identical text, additions, removals, replacements,
 repeated-line ties, empty strings, boundary empty lines, and mixed edits are in
 `test/fixtures/e2e/interpreter/diff.e2e:4-13`.
@@ -71,8 +71,8 @@ Namespace and location behavior follows the interpreter source exactly:
   the namespace filter.
 
 The Dark implementations are in
-`stdlib/PackageManager.dark:3-34` and
-`stdlib/ValueSearch.dark:3-50`. Helper probes are in
+`packages/Darklang/LanguageTools/PackageManager.dark:3-34` and
+`StdLib/ValueSearch.dark:3-50`. Helper probes are in
 `test/fixtures/e2e/interpreter/value_search_helpers.e2e:3-13`; prefix scoring,
 shortest-path selection, and stable location ties are covered at
 `test/fixtures/e2e/upstream/stdlib/language-tools/pickLocation.dark:28-159`. The

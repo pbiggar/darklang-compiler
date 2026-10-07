@@ -16,7 +16,7 @@ def main() -> int:
     artifacts = root / "TestResults/ai/compiled-leak-gate"
     binaries = artifacts / "binaries"
     binaries.mkdir(parents=True, exist_ok=True)
-    command = [str(root / "dark"), "--batch", "--leak-check", "--quiet", "--"]
+    command = [str(root / "dark"), "--batch", "--allow-internal", "--leak-check", "--quiet", "--"]
     for name in names:
         command.extend(
             [
