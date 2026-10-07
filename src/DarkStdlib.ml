@@ -1,5 +1,5 @@
 (*
-   Stdlib.fs - Standard Library Module Definitions
+   DarkStdlib.ml - Standard Library Module Definitions
    Defines intrinsic Stdlib module signatures used directly by the compiler.
    Non-intrinsic stdlib functions are loaded from stdlib/*.dark.
 *)

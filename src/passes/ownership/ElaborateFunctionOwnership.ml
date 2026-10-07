@@ -1,4 +1,4 @@
-(* ElaborateFunctionOwnership.fs - Infer conservative boundaries and place whole-function ownership steps. *)
+(* ElaborateFunctionOwnership.ml - Infer conservative boundaries and place whole-function ownership steps. *)
 [@@@warning "-4"]
 module H = HIR
 module O = OwnedIR

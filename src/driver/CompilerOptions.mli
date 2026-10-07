@@ -1,5 +1,5 @@
 (* Timing fields store signed nanoseconds; accounting differences may be negative. *)
-(*  Options.fs - Define compilation options, reports, and timing records independently of backend implementation. *)
+(*  CompilerOptions.mli - Define compilation options, reports, and timing records independently of backend implementation. *)
 type passTiming = {
     pass: string;
     elapsed: int64;

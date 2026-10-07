@@ -1,4 +1,4 @@
-(* HIR.fs - Normalized values and typed structured control flow shared by semantic dialects. *)
+(* HIR.mli - Normalized values and typed structured control flow shared by semantic dialects. *)
 type valueId = ValueId of int
 module ValueMap : Map.S with type key = valueId
 module ValueSet : Set.S with type elt = valueId

@@ -1,4 +1,4 @@
-(* Operators.fs - Lower numeric operators and structural equality into ANF. *)
+(* LoweringOperators.ml - Lower numeric operators and structural equality into ANF. *)
 [@@@warning "-4"]
 module A = ANF
 module P = LoweringPrimitives

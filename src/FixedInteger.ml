@@ -1,4 +1,4 @@
-(* FixedInteger.ml - Preserve sized F# negation, including MinValue wrapping. *)
+(* FixedInteger.ml - Fixed-width negation, including minimum-value wrapping. *)
 let wrapUnsigned bits value = Z.extract value 0 bits
 let wrapSigned bits value =
   let unsigned = wrapUnsigned bits value in

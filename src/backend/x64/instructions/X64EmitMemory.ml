@@ -1,4 +1,4 @@
-(* Memory.fs - Emit x64 instructions for memory operations. *)
+(* X64EmitMemory.ml - Emit x64 instructions for memory operations. *)
 [@@@warning "-4"]
 open X64Operands
 open X64CodeGenTypes

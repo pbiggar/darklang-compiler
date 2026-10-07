@@ -1,4 +1,4 @@
-(* SSAOptimization.fs - Simplify typed high-level SSA before specialization. *)
+(* SSAOptimization.ml - Simplify typed high-level SSA before specialization. *)
 [@@@warning "-4"]
 module A = ANF
 module S = SSAANF

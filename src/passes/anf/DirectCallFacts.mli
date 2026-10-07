@@ -1,4 +1,4 @@
-(* DirectCallFacts.fs - Value, call, and rewrite facts for SSA direct-call specialization. *)
+(* DirectCallFacts.mli - Value, call, and rewrite facts for SSA direct-call specialization. *)
 module TempMap = InliningCommon.TempMap
 module IntSet : Set.S with type elt = int
 module FunctionSet = SpecializationIdentity.FunctionSet

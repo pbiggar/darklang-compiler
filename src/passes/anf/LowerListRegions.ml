@@ -1,4 +1,4 @@
-(* LowerListRegions.fs - Lower verified owned arrays and scalar joins to native ANF operations. *)
+(* LowerListRegions.ml - Lower verified owned arrays and scalar joins to native ANF operations. *)
 [@@@warning "-4"]
 module A = ANF
 module H = HIR

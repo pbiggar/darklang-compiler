@@ -1,4 +1,4 @@
-(* TypeFactTests.fs - Verify call-result type facts used by reference counting. *)
+(* RcTypeFactTests.ml - Verify call-result type facts used by reference counting. *)
 [@@@warning "-4"]
 open Dark_compiler
 module A = ANF

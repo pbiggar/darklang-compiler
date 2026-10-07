@@ -1,5 +1,5 @@
 (*
-   InstructionContext.fs - Shared operand context for arm64 instruction-family lowering.
+   ARM64InstructionContext.ml - Shared operand context for arm64 instruction-family lowering.
 *)
 [@@@warning "-4"]
 let add a b=Int32.to_int (Int32.add (Int32.of_int a) (Int32.of_int b))
@@ -184,22 +184,6 @@ let generatePrintListInstrs (ctx: codeGenContext) (listReg: Symbolic.reg) (elemT
     ]
     in
     let commaLen = List.length printCommaSpace
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
     in
     let loopBodyLen = add (add (add (add 1 commaLen) 2) elemPrintLen) 2

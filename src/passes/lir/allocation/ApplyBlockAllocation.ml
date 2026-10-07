@@ -1,4 +1,4 @@
-(* ApplyBlocks.fs - Apply allocation and caller-save plans across CFG blocks. *)
+(* ApplyBlockAllocation.ml - Apply allocation and caller-save plans across CFG blocks. *)
 [@@@warning "-4"]
 open AllocationModel
 open RegisterFacts

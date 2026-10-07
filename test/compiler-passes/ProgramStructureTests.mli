@@ -1,5 +1,5 @@
 (*
-   ProgramStructureTests.fs - Whole-program source-unit, overlay, and entry validation probes.
+   ProgramStructureTests.mli - Whole-program source-unit, overlay, and entry validation probes.
    A library unit that declares a function the stdlib already carries under a
    non-Stdlib name (darklang/dark's LanguageTools modules are in both). The two
    lowerings differ, and the merge used to crash on the name instead of keeping

@@ -1,4 +1,4 @@
-(* SSATailCallDetection.fs - Preserve ownership-safe tail calls on SSA ANF blocks. *)
+(* SSATailCallDetection.ml - Preserve ownership-safe tail calls on SSA ANF blocks. *)
 [@@@warning "-4"]
 module A = ANF
 module S = SSAANF

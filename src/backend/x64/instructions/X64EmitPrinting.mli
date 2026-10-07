@@ -1,4 +1,4 @@
-(* Printing.fs - Emit x64 instructions for printing operations. *)
+(* X64EmitPrinting.mli - Emit x64 instructions for printing operations. *)
 val emitPrintChars : X64CodeGenTypes.funcCtx -> char list -> (X86_64.instr list,string) result
 val emitPrintInt64 : X64CodeGenTypes.funcCtx -> LIR.reg -> (X86_64.instr list,string) result
 val emitPrintUInt64 : X64CodeGenTypes.funcCtx -> LIR.reg -> (X86_64.instr list,string) result

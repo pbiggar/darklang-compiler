@@ -1,4 +1,4 @@
-(* FloatAllocation.fs - Schedule, allocate, spill, and materialize floating-point values. *)
+(* FloatAllocation.mli - Schedule, allocate, spill, and materialize floating-point values. *)
 val floatCallerSavedRegs : LIR.physFPReg list
 val floatCalleeSavedRegs : LIR.physFPReg list
 val allocatableFloatRegs : LIR.physFPReg list

@@ -1,4 +1,4 @@
-(* Program.fs - Command-line entry, batch compilation and native execution. *)
+(* Program.mli - Command-line entry, batch compilation and native execution. *)
 type verbosityLevel=Quiet|Normal|Verbose|VeryVerbose|DumpIR
 type targetSelection=HostTarget|ExplicitTarget of Platform.target
 type batchCompileItem={kind:string;name:string;sourceFile:string;outputFile:string}

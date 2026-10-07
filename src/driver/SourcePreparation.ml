@@ -1,4 +1,4 @@
-(* SourcePreparation.fs - Prepare checked declarations through specialization and closure lowering. *)
+(* SourcePreparation.ml - Prepare checked declarations through specialization and closure lowering. *)
 [@@@warning "-4"]
 module C=CheckedAST
 module X=CompilationContexts

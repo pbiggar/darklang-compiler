@@ -1,5 +1,5 @@
 (*
-   ISA.fs - ARM64 Instruction Types
+   ARM64.ml - ARM64 Instruction Types
    Defines ARM64 instruction and register types.
    ARM64 is a RISC architecture with fixed 32-bit instruction width.
    These types represent ARM64 assembly instructions that will be encoded
@@ -324,7 +324,7 @@ type instr =
 type machineCode = int32
 (*
    ARM64-specific syscall invocation details (layered on top of Platform.SyscallNumbers).
-   Platform.fs intentionally has no ARM64 dependency, so these are defined here.
+   Platform.ml intentionally has no ARM64 dependency, so these are defined here.
    SVC instruction immediate value
    Register to hold syscall number (X16 macOS, X8 Linux)
 *)

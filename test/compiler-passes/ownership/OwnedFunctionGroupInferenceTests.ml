@@ -1,4 +1,4 @@
-(* OwnedFunctionGroupInferenceTests.fs - Program-level ownership inference laws. *)
+(* OwnedFunctionGroupInferenceTests.ml - Program-level ownership inference laws. *)
 [@@@warning "-4-42"]
 open Dark_compiler
 module H = HIR

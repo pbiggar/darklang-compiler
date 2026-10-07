@@ -1,4 +1,4 @@
-(* Induction.fs - Reduce affine induction expressions in verified loop shapes. *)
+(* MIRInduction.ml - Reduce affine induction expressions in verified loop shapes. *)
 [@@@warning "-4"]
 open MIR
 module F = MIROptimizationFacts

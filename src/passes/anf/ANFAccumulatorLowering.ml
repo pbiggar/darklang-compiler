@@ -1,4 +1,4 @@
-(* ANFAccumulatorLowering.fs - Generate recursion helpers before SSA construction. *)
+(* ANFAccumulatorLowering.ml - Generate recursion helpers before SSA construction. *)
 open ANF
 module FS = SpecializationIdentity.FunctionSet
 open ANFAccumulatorOptimization

@@ -1,5 +1,5 @@
 (*
-   InlineLambdas.fs - Inline lexical lambda bindings before closure conversion.
+   InlineLambdas.ml - Inline lexical lambda bindings before closure conversion.
 *)
 [@@@warning "-4"]
 module C = CheckedAST

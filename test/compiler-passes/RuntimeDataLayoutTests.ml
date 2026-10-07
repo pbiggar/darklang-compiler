@@ -1,5 +1,5 @@
 [@@@warning "-4-42"]
-(* RuntimeDataLayoutTests.fs - ELF relocation/image agreement for writable counters. *)
+(* RuntimeDataLayoutTests.ml - ELF relocation/image agreement for writable counters. *)
 open Dark_compiler
 type testResult=(unit,string) result
 let checkCounter image offset=

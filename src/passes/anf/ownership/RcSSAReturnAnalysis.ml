@@ -1,4 +1,4 @@
-(* SSAReturnAnalysis.fs - Track values that flow to a return across SSA block edges. *)
+(* RcSSAReturnAnalysis.ml - Track values that flow to a return across SSA block edges. *)
 module A = ANF
 module S = SSAANF
 module Set = RcReturnAnalysis.TempSet

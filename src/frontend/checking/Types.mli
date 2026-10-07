@@ -43,5 +43,3 @@ val canonicalizeDeclaredTypeRefsWithSumTypeNames : 'recordInfo StringOrder.Map.t
 val indexTypeRegistry : variantLookup -> string list StringOrder.Map.t -> typeRegistry -> indexedTypeRegistry
 val typesEqual : aliasRegistry -> AST.semanticType -> AST.semanticType -> bool
 val formatLegacyRecordFieldTypeError : aliasRegistry -> string -> AST.semanticType -> AST.semanticType -> AST.expr -> string
-(* Retain the reference's complete private alias-field helper for migration. *)
-val tryResolveGenericRecordAliasFields : aliasRegistry -> indexedTypeRegistry -> string -> (string * (string * AST.semanticType) list) option

@@ -1,2 +1,2 @@
 ; Keep benchmark implementations and repository utilities outside the native build graph.
-(dirs bin src test share)
+(dirs bin src test stdlib tools scripts benchmarks)

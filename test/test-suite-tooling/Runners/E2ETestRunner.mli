@@ -1,5 +1,5 @@
 (*
-   E2ETestRunner.fs - End-to-end test runner
+   E2ETestRunner.mli - End-to-end test runner
 
    Compiles source code, executes it, and validates output/exit code.
    Internal identifiers are only allowed for stdlib-internal tests.

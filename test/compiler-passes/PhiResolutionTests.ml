@@ -10,7 +10,7 @@
    - Floating-point phi coalescing that preserves an existing return-register allocation
    - Caller-save population around allocated call and argument-move sequences
 *)
-(* PhiResolutionTests.fs - Unit tests for phi resolution in SSA-based register allocation *)
+(* PhiResolutionTests.ml - Unit tests for phi resolution in SSA-based register allocation *)
 [@@@warning "-4-42"]
 open Dark_compiler
 open LIR

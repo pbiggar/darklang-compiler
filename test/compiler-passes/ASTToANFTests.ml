@@ -1,5 +1,5 @@
 (*
-   ASTToANFTests.fs - Unit tests for AST to ANF conversion behavior
+   ASTToANFTests.ml - Unit tests for AST to ANF conversion behavior
    Covers targeted AST-to-ANF regression cases that are easier to express
    directly at the pass boundary than through end-to-end language tests.
 *)

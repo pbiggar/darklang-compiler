@@ -1,4 +1,4 @@
-(* CompilationSession.fs - Own bounded compilation caches and their explicit session lifetime. *)
+(* CompilationSession.mli - Own bounded compilation caches and their explicit session lifetime. *)
 class compilationSession : ?collectCodegenMetrics:bool -> unit -> object
  method jsonPlanning : JsonPlanning.planningSession
  (* Returned instruction templates must not be mutated. *)

@@ -1,4 +1,4 @@
-(* ClosureComparisons.fs - Plan equality for lifted closures and their captures. *)
+(* ClosureComparisons.ml - Plan equality for lifted closures and their captures. *)
 [@@@warning "-4"]
 module C = CheckedAST
 module A = ClosureAnalysis

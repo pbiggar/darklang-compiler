@@ -1,4 +1,4 @@
-(* ANFPipeline.fs - Construct and optimize SSA after ANF helper lowering. *)
+(* ANFPipeline.ml - Construct and optimize SSA after ANF helper lowering. *)
 [@@@warning "-4"]
 open CompilerOptions
 open PipelineDiagnostics

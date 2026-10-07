@@ -10,7 +10,7 @@
    Dead code elimination
    Fold constant conditions
 *)
-(* Expressions.fs - Propagate facts and common expressions through lexical ANF control flow. *)
+(* ANFExpressionOptimization.ml - Propagate facts and common expressions through lexical ANF control flow. *)
 [@@@warning "-4"]
 open ANF
 open ANFConstants

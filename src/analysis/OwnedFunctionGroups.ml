@@ -1,4 +1,4 @@
-(* OwnedFunctionGroups.fs - Discover deterministic call groups in owned HIR. *)
+(* OwnedFunctionGroups.ml - Discover deterministic call groups in owned HIR. *)
 [@@@warning "-4"]
 module O = OwnedIR
 module F = FunctionIdMap

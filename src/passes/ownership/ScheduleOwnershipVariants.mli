@@ -1,4 +1,4 @@
-(* ScheduleOwnershipVariants.fs - Drive verified ownership specialization to a bounded fixed point. *)
+(* ScheduleOwnershipVariants.mli - Drive verified ownership specialization to a bounded fixed point. *)
 type limits = {maxIterations : int; maxGeneratedGroups : int; maxRewrittenCalls : int}
 val defaultLimits : limits
 type iteration = {number : int; addedCalls : OwnedIR.callSiteIdentity list; generatedGroups : int}

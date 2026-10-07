@@ -1,4 +1,4 @@
-(* LoopInvariantMotion.fs - Build preheaders and hoist proven loop-invariant operations. *)
+(* MIRLoopInvariantMotion.ml - Build preheaders and hoist proven loop-invariant operations. *)
 [@@@warning "-4"]
 open MIR
 module S = SSA_Construction

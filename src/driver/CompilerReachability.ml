@@ -1,4 +1,4 @@
-(* Reachability.fs - Query standard-library reachability through the compilation pipeline. *)
+(* CompilerReachability.ml - Query standard-library reachability through the compilation pipeline. *)
 module X=CompilationContexts
 module M=StringOrder.Map
 module S=StringOrder.Set

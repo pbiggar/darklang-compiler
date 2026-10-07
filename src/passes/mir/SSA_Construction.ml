@@ -1,5 +1,5 @@
 (*
-   SSA_Construction.fs - SSA Construction Pass
+   SSA_Construction.ml - SSA Construction Pass
    Converts MIR to SSA (Static Single Assignment) form by:
    1. Computing dominators and dominance frontiers
    2. Inserting phi nodes at join points
@@ -7,7 +7,7 @@
    After SSA construction, every virtual register is defined exactly once.
    This enables powerful optimizations like GVN, SCCP, and easy DCE.
 *)
-(* SSA_Construction.fs - Convert typed MIR control flow to static single assignment. *)
+(* SSA_Construction.ml - Convert typed MIR control flow to static single assignment. *)
 [@@@warning "-4"]
 open MIR
 module F = MIROptimizationFacts

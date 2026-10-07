@@ -1,4 +1,4 @@
-(* ResolvedProgram.fs - Check resolved declarations and expressions against explicit environments. *)
+(* ResolvedProgram.ml - Check resolved declarations and expressions against explicit environments. *)
 open! AST
 open! Types
 open! ResolveDeclarations

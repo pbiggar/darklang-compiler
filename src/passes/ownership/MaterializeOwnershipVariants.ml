@@ -1,4 +1,4 @@
-(* MaterializeOwnershipVariants.fs - Clone verified ownership candidates and route selected calls. *)
+(* MaterializeOwnershipVariants.ml - Clone verified ownership candidates and route selected calls. *)
 [@@@warning "-4"]
 module H = HIR
 module O = OwnedIR

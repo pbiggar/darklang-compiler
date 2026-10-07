@@ -1,7 +1,7 @@
 (*
    Pools are frozen once in first-use order; reverse indexes deduplicate values.
 *)
-(* LiteralPool.fs - Dense literal storage for late constant resolution. *)
+(* LiteralPool.ml - Dense literal storage for late constant resolution. *)
 module FloatBitsMap = Map.Make (Int64)
 type stringPool = {strings : (string * int) array; stringToId : int StringOrder.Map.t}
 (*

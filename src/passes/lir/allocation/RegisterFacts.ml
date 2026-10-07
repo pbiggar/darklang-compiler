@@ -1,4 +1,4 @@
-(* RegisterFacts.fs - Classify integer and floating register definitions and uses. *)
+(* RegisterFacts.ml - Classify integer and floating register definitions and uses. *)
 [@@@warning "-4"]
 open AllocationModel
 let regToVReg = function LIR.Virtual id -> Some id | LIR.Physical _ -> None

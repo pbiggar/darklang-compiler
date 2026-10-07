@@ -1,5 +1,5 @@
 (*
-   ParallelMoveTestRunner.fs - Executes parallel-move lowering fixtures.
+   ParallelMoveTestRunner.mli - Executes parallel-move lowering fixtures.
    Lowers LIR TailArgMoves and compares the complete symbolic ARM64 sequence.
 *)
 val runParallelMoveTest : ParallelMoveFormat.parallelMoveTest -> TestOutcome.t

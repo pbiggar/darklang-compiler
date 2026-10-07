@@ -1,4 +1,4 @@
-(* Destruction.fs - Prove inert destruction locally and through function scope contracts. *)
+(* Destruction.ml - Prove inert destruction locally and through function scope contracts. *)
 [@@@warning "-4"]
 module S = SpecializationIdentity.FunctionSet
 (*

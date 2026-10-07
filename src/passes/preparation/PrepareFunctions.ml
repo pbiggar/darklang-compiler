@@ -1,4 +1,4 @@
-(* PrepareFunctions.fs - Expose whole-program generic preparation entry points. *)
+(* PrepareFunctions.ml - Expose whole-program generic preparation entry points. *)
 let monomorphize program = Monomorphization.monomorphizeWithGenericFuncDefs (SpecializationIdentity.extractGenericFuncDefs program) program
 (* Monomorphize a program with access to external generic function definitions.
    Used when user code needs to specialize stdlib generics - the stdlib generic

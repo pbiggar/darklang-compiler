@@ -1,5 +1,5 @@
 (*
-   CheckBinaryOperations.fs - Check BinOp expressions while preserving source diagnostics and order.
+   CheckBinaryOperations.ml - Check BinOp expressions while preserving source diagnostics and order.
 *)
 (* CheckBinaryOperations.ml - Check BinOp expressions while preserving source diagnostics and order. *)
 open! AST

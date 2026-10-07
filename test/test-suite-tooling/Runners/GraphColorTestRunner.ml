@@ -1,4 +1,4 @@
-(* GraphColorTestRunner.fs - Executes graph-coloring fixtures.
+(* GraphColorTestRunner.ml - Executes graph-coloring fixtures.
    Checks externally meaningful coloring, spill, preference, and MCS properties. *)
 open Dark_compiler
 open GraphColorFormat

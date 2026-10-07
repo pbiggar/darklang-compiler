@@ -20,7 +20,7 @@
    Closed regions are functions with no managed parameters and an unmanaged
    result. Keeping this as a wrapper makes the existing boundary explicit.
 *)
-(* VerifyOwnership.fs - Verify ownership and derive call facts from the same state transitions. *)
+(* VerifyOwnership.ml - Verify ownership and derive call facts from the same state transitions. *)
 [@@@warning "-4"]
 module Make (Identity : OwnedIR.Identity) = struct
  module Ownership = OwnedIR.Make (Identity)

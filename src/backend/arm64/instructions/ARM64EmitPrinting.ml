@@ -1,5 +1,5 @@
 (*
-   Printing.fs - Emit arm64 instructions for printing operations.
+   ARM64EmitPrinting.ml - Emit arm64 instructions for printing operations.
 *)
 [@@@warning "-4"]
 let add a b=Int32.to_int (Int32.add (Int32.of_int a) (Int32.of_int b))
@@ -167,9 +167,6 @@ let emitPrintList (ctx: codeGenContext) (listPtr: LIR.reg) (elemType: AST.semant
 *)
 let emitPrintSum (ctx: codeGenContext) (convertInstr: codeGenContext -> LIR.instr -> (Symbolic.instr list,string) result) (sumPtr: LIR.reg) (variants: (string * int * AST.semanticType option) list) (transparentPayload: bool) =
 
-
-
-
     lirRegToARM64Reg sumPtr
     |> Result.map (fun sumReg ->
         let syscalls = ARM64.targetSyscalls ctx.target
@@ -232,19 +229,6 @@ let emitPrintSum (ctx: codeGenContext) (convertInstr: codeGenContext -> LIR.inst
 
                 [Symbolic.MOV_reg (Symbolic.X19, sumReg); Symbolic.MOV_reg (Symbolic.X20, sumReg)]
 
-
-
-
-
-
-
-
-
-
-
-
-
-
         in
         let variantBlocks =
             variants |> List.map (fun (variantName, _tag, payloadType) ->
@@ -296,9 +280,6 @@ let emitPrintSum (ctx: codeGenContext) (convertInstr: codeGenContext -> LIR.inst
                         printOpen @ loadPayload @ printPayloadValue @ printClose
                 in
                 (printName, printPayload))
-
-
-
 
         in
         let printNewline = printLiteral "\n"
@@ -515,16 +496,6 @@ let emitPrintString (ctx: codeGenContext) (value: string) =
    X0 = stdout fd
 *)
 let emitPrintHeapString (ctx: codeGenContext) (reg: LIR.reg) =
-
-
-
-
-
-
-
-
-
-
 
     lirRegToARM64Reg reg
     |> Result.map (fun regARM64 ->

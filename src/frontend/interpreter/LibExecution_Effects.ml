@@ -44,7 +44,7 @@ let fromName wanted = List.find_opt (fun effect_ -> name effect_ = wanted) all
 let isScoped = function
   | Http | HttpServer | FileRead | FileWrite | EnvRead | EnvWrite | DbRead | DbWrite | Process -> true
   | Stdin | Stdout | Clock | Random | PackageRead | PackageWrite | TraceRead | TraceWrite | Native -> false
-(* The parser refers to F# union case spellings in declared effect_ rows. *)
+(* Declared effect rows use the canonical effect constructor names. *)
 let caseName = function
   | Http -> "Http" | HttpServer -> "HttpServer" | FileRead -> "FileRead" | FileWrite -> "FileWrite"
   | EnvRead -> "EnvRead" | EnvWrite -> "EnvWrite" | DbRead -> "DbRead" | DbWrite -> "DbWrite"

@@ -1,4 +1,4 @@
-(* SSAEscapeAnalysis.fs - Scalar replacement and unique fixed-block reuse on SSA ANF. *)
+(* SSAEscapeAnalysis.ml - Scalar replacement and unique fixed-block reuse on SSA ANF. *)
 [@@@warning "-4"]
 module A = ANF
 module S = SSAANF

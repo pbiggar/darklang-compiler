@@ -1,7 +1,7 @@
 (*
-   MIR_SSA_Verify.fs - Check the definition, dominance, and phi-edge invariants of SSA MIR.
+   MIR_SSA_Verify.ml - Check the definition, dominance, and phi-edge invariants of SSA MIR.
 *)
-(* MIR_SSA_Verify.fs - Check SSA MIR definitions, dominance and phi edges. *)
+(* MIR_SSA_Verify.ml - Check SSA MIR definitions, dominance and phi edges. *)
 [@@@warning "-4"]
 open MIR
 module S = SSA_Construction

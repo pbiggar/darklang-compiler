@@ -10,7 +10,7 @@ The compiler uses OCaml 5.5.1, Dune 3.24.2 and the exact packages in
 For a restricted Linux VM, follow [the workspace setup](../scripts/vm/README.md).
 On a normal host, create an opam switch for OCaml 5.5.1, install the locked
 packages, and activate that switch before building. The compiler also needs
-GMP, ICU, SQLite and libcurl development libraries; macOS uses Homebrew.
+GMP and SQLite development libraries; macOS uses Homebrew.
 
 ```bash
 ./build --ai                 # Bounded output for automated work
@@ -19,18 +19,15 @@ GMP, ICU, SQLite and libcurl development libraries; macOS uses Homebrew.
 ```
 
 Failed automated build logs are retained under `TestResults/ai/`.
-The compiler and test runner do not require .NET.
 
-To install the compiler and its unchanged Dark standard library:
+The compiler embeds its standard library, Unicode data, and the non-system
+dependencies of its SQLite and integer libraries. Copy the native
+executable anywhere; no data directory or installation step is needed:
 
 ```bash
-dune install --prefix /absolute/install/prefix
-/absolute/install/prefix/bin/dark --help
+cp _build/default/bin/dark.exe /absolute/path/dark
+/absolute/path/dark --help
 ```
-
-The installed executable finds its data under `share/dark_compiler/` and can
-run from outside the source checkout. Generated Dark programs remain standalone
-native executables.
 
 ## Test
 

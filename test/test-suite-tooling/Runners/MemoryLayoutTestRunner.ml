@@ -1,5 +1,5 @@
 (*
-   MemoryLayoutTestRunner.fs - Execute source fixtures and observe final native value words.
+   MemoryLayoutTestRunner.ml - Execute source fixtures and observe final native value words.
    The x64 integer printer emits a newline before the separator.
 *)
 [@@@warning "-4-42"]

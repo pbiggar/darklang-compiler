@@ -88,7 +88,7 @@ These generate syscalls or special code sequences.
 
 ### Dark Functions
 
-Defined in modular `share/stdlib/*.dark` files and compiled like
+Defined in modular `stdlib/*.dark` files and compiled like
 user code:
 
 ```dark
@@ -257,7 +257,7 @@ let Stdlib.Cli.Posix.sleep (delayMs: Float) : Unit
 
 Portable helpers are Dark source; typed CLI operations lower through
 ANF/MIR/LIR to target-native process, host, signal, and terminal primitives.
-`Platform.Target` remains an F# compiler-driver type and is not a Dark API.
+`Platform.target` is an OCaml compiler-driver type.
 `Cli.Posix.sleep` lowers through the internal compiler-only
 `Stdlib.Cli.__sleep` boundary to a blocking native millisecond delay on Linux
 ARM64, Linux x86_64, and macOS ARM64. It does not spawn a shell process.
@@ -276,7 +276,7 @@ Uses platform-specific random source:
 
 1. **Compilation start**: Load intrinsic module signatures from
    `src/DarkStdlib.ml`
-   and the ordered Dark stdlib source files from `share/stdlib/`
+   and the ordered Dark stdlib source files from `stdlib/`
 2. **Parse**: Parse stdlib definitions
 3. **Combine**: Merge with user program
 4. **Type check**: Stdlib + user code together
@@ -289,7 +289,7 @@ Stdlib functions are only included if called (dead code elimination).
 | File | Purpose |
 |------|---------|
 | `src/DarkStdlib.ml` | Intrinsic module definitions |
-| `share/stdlib/*.dark` | Dark stdlib implementations |
+| `stdlib/*.dark` | Dark stdlib implementations |
 | `src/CompilerLibrary.ml` | Stdlib loading logic |
 
 ## Generic Function Monomorphization
@@ -304,7 +304,7 @@ Creates `Stdlib.List.map_i64_String` specialized function.
 
 ## Adding New Stdlib Functions
 
-1. **Dark function**: Add to the appropriate file in `share/stdlib/`
+1. **Dark function**: Add to the appropriate file in `stdlib/`
 2. **Intrinsic**: Add to `src/DarkStdlib.ml` + implement in codegen
 
 See `docs/contributing/workflow.md` for details.

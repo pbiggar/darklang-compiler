@@ -1,4 +1,4 @@
-(* Shared type inventories and structural-record checking from WrittenChecking.fs. *)
+(* Shared type inventories and structural-record checking from WrittenTypeSupport.mli. *)
 type locals = (AST.semanticType * AST.bindingId) StringOrder.Map.t
 type checkedExpression = AST.semanticType * CheckedAST.expr * CheckedAST.symbols
 type functionSignature = {id : AST.functionId; typeParams : string list; parameters : AST.semanticType list; return : AST.semanticType}

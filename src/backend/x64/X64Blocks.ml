@@ -1,5 +1,5 @@
 [@@@warning "-4-42"]
-(*  Blocks.fs - Lower terminators and order blocks for target fallthrough. *)
+(*  X64Blocks.ml - Lower terminators and order blocks for target fallthrough. *)
 open X64Operands
 open X64InstructionContext
 open X64Instructions

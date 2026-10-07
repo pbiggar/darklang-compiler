@@ -1,5 +1,5 @@
 (*
-   ChordalGraphTests.fs - Integration tests for register-allocation graph construction.
+   ChordalGraphTests.ml - Integration tests for register-allocation graph construction.
    Table-driven graph coloring and MCS properties live in .graphcolor fixtures.
    These tests retain CFG/liveness construction assertions that require direct compiler types.
 *)

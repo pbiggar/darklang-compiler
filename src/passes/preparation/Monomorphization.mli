@@ -1,4 +1,4 @@
-(* Monomorphization.fs - Solve reachable generic instances and replace type applications. *)
+(* Monomorphization.mli - Solve reachable generic instances and replace type applications. *)
 val collectTypeApps : CheckedAST.symbols -> CheckedAST.expr -> SpecializationIdentity.SpecSet.t
 val collectTypeAppsFromFunc : CheckedAST.symbols -> CheckedAST.functionDef -> SpecializationIdentity.SpecSet.t
 val collectCalledFunctions : CheckedAST.expr -> SpecializationIdentity.FunctionSet.t

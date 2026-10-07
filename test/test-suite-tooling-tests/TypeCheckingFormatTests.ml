@@ -1,5 +1,5 @@
 (*
-   TypeCheckingFormatTests.fs - Unit tests for type checking test parsing
+   TypeCheckingFormatTests.ml - Unit tests for type checking test parsing
    Verifies parser behavior for the line-based type checking test format.
 *)
 (* Original type checking fixture parser tests. *)

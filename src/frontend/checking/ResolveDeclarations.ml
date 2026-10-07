@@ -1,5 +1,5 @@
 (*
-   ResolveDeclarations.fs - Resolve declaration identities, recursive groups, and source names.
+   ResolveDeclarations.ml - Resolve declaration identities, recursive groups, and source names.
 *)
 (* ResolveDeclarations.ml - Resolve declaration identities, recursive groups, and source names. *)
 open! AST

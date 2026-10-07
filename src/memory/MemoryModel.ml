@@ -1,5 +1,5 @@
 (*
-   MemoryModel.fs - ANF-independent memory representation and release contracts.
+   MemoryModel.ml - ANF-independent memory representation and release contracts.
 *)
 (* ANF-independent memory representation and release contracts. *)
 (*

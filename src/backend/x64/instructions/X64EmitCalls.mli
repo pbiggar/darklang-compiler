@@ -1,4 +1,4 @@
-(* Calls.fs - Emit x64 instructions for calls operations. *)
+(* X64EmitCalls.mli - Emit x64 instructions for calls operations. *)
 val emitSaveRegs : X64CodeGenTypes.funcCtx -> LIR.physReg list -> LIR.physFPReg list -> (X86_64.instr list,string) result
 val emitRestoreRegs : X64CodeGenTypes.funcCtx -> LIR.physReg list -> LIR.physFPReg list -> (X86_64.instr list,string) result
 val emitCall : X64CodeGenTypes.funcCtx -> LIR.reg -> AST.functionId -> LIR.operand list -> (X86_64.instr list,string) result

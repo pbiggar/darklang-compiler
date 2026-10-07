@@ -1,4 +1,4 @@
-(* ProgressBar.fs - Progress bar utilities for the test runner
+(* ProgressBar.ml - Progress bar utilities for the test runner
    Provides a thread-safe progress bar for long-running test suites. *)
 open Dark_compiler
 module Colors=TestRunnerColors

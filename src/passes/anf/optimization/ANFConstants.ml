@@ -1,4 +1,4 @@
-(* Constants.fs - Fold typed ANF constants and strength-reduce scalar operations. *)
+(* ANFConstants.ml - Fold typed ANF constants and strength-reduce scalar operations. *)
 [@@@warning "-4"]
 open ANF
 module TempMap = InliningCommon.TempMap
@@ -53,7 +53,7 @@ let foldBinOp op left right = match op, left, right with
  | Sub, IntLiteral (Int64 a), IntLiteral (Int64 b) -> Some (Atom (IntLiteral (Int64 (Int64.sub a b))))
  | Mul, IntLiteral (Int64 a), IntLiteral (Int64 b) -> Some (Atom (IntLiteral (Int64 (Int64.mul a b))))
  | Div, IntLiteral (Int64 a), IntLiteral (Int64 b) when b <> 0L && not (a = Int64.min_int && b = -1L) -> Some (Atom (IntLiteral (Int64 (Int64.div a b))))
- (* Skip folding INT64_MIN / -1 - F# throws but runtime handles it (returns INT64_MIN) *)
+ (* Keep INT64_MIN / -1 at runtime, where fixed-width arithmetic wraps to INT64_MIN *)
  | Div, IntLiteral (Int64 _), IntLiteral (Int64 _) -> None
  | Mod, IntLiteral (Int64 a), IntLiteral (Int64 b) when b > 0L -> Some (Atom (IntLiteral (Int64 (euclideanMod a b))))
  | Shl, IntLiteral (Int64 a), IntLiteral (Int64 b) when b >= 0L && b < 64L -> Some (Atom (IntLiteral (Int64 (Int64.shift_left a (Int64.to_int b)))))

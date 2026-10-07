@@ -1,5 +1,5 @@
 (*
-   Resolve.fs - ARM64 symbolic literal-pool collection before offset assignment.
+   ARM64_Resolve.ml - ARM64 symbolic literal-pool collection before offset assignment.
 *)
 [@@@warning "-4"]
 let collectPoolsFromLabelRefs labelRefs =

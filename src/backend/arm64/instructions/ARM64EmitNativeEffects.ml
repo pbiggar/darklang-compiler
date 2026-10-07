@@ -1,5 +1,5 @@
 (*
-   NativeEffects.fs - Emit arm64 instructions for nativeeffects operations.
+   ARM64EmitNativeEffects.ml - Emit arm64 instructions for nativeeffects operations.
 *)
 [@@@warning "-4"]
 let int16 value=let low=value land 65535 in if low>=32768 then low-65536 else low
@@ -560,7 +560,7 @@ let emitRandomInt64 (ctx: codeGenContext) (dest: LIR.reg) =
 
     lirRegToARM64Reg dest
     |> Result.map (fun destReg ->
-        runtimeInstrs (HostValues.generateRandomInt64 ctx.target destReg))
+        runtimeInstrs (ClockAndRandom.generateRandomInt64 ctx.target destReg))
 
 (*
    Generate the current UTC instant as 100ns Unix ticks.
@@ -569,7 +569,7 @@ let emitDateTimeNow (ctx: codeGenContext) (dest: LIR.reg) =
 
     lirRegToARM64Reg dest
     |> Result.map (fun destReg ->
-        runtimeInstrs (HostValues.generateDateTimeNow ctx.target destReg))
+        runtimeInstrs (ClockAndRandom.generateDateTimeNow ctx.target destReg))
 
 let emitSleep (ctx: codeGenContext) (effectId: int) (delayMs: LIR.fReg) =
     lirFRegToARM64FReg delayMs

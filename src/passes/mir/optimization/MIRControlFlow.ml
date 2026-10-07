@@ -1,4 +1,4 @@
-(* ControlFlow.fs - Simplify MIR branches, joins, and unreachable blocks. *)
+(* MIRControlFlow.ml - Simplify MIR branches, joins, and unreachable blocks. *)
 [@@@warning "-4"]
 open MIR
 module S = SSA_Construction

@@ -1,23 +1,10 @@
 (*
-   ProcessLifecycle.fs - Generate process lifecycle and argument-vector runtime helpers.
+   ProcessLifecycle.ml - Generate process lifecycle and argument-vector runtime helpers.
 *)
 open ARM64CodeGenTypes
 open HeapAllocation
 open LeakAccounting
 open ARM64Operands
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 (*
    Generate heap initialization code for _start function
@@ -90,14 +77,6 @@ let generateHeapInit (target: ARM64.targetConfig) =
         Symbolic.ADD_imm (Symbolic.X28, Symbolic.X27, freeListSize);
 
     ]
-
-
-
-
-
-
-
-
 
 (*
    Linux AArch64 shell runner. Generated binaries remain libc-free, and both

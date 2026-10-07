@@ -1,5 +1,5 @@
 (*
-   RuntimeDataLayout.fs - Shared placement rules for writable ELF instrumentation.
+   RuntimeDataLayout.ml - Shared placement rules for writable ELF instrumentation.
 *)
 (* RuntimeDataLayout.ml - Shared placement rules for writable ELF counters. *)
 (*

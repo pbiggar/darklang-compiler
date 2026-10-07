@@ -1,0 +1,8 @@
+// uuid_parse_format.dark - Targeted compiler workload.
+let benchmark (remaining: Int64) (checksum: Int64) : Int64 =
+    if remaining <= 0L then checksum
+    else
+        match Stdlib.Uuid.parse ("3700adbc-7a46-4ff4-81d3-45afb03f6e2d") with
+        | Ok (value) -> benchmark (remaining - 1L) (checksum + Stdlib.String.__byteLength (Stdlib.Uuid.toString (value)))
+        | Error (_) -> -1L
+benchmark (__ITERATIONS__L) (0L)

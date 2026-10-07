@@ -1,5 +1,5 @@
 [@@@warning "-42"]
-(* Functions.fs - Lower allocated LIR functions with target frame and return conventions. *)
+(* X64Functions.ml - Lower allocated LIR functions with target frame and return conventions. *)
 open X64Operands
 open X64Printing
 open X64Frames

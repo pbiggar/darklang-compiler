@@ -1,5 +1,5 @@
 (*
-   CleanupTests.fs - Verify alias transfers and cleanup ordering through ANF scopes.
+   CleanupTests.ml - Verify alias transfers and cleanup ordering through ANF scopes.
 *)
 [@@@warning "-4-42"]
 open Dark_compiler

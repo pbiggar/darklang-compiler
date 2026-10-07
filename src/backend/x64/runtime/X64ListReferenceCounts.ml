@@ -1,4 +1,4 @@
-(* ListReferenceCounts.fs - Generate tagged-list retain and iterative destruction helpers. *)
+(* X64ListReferenceCounts.ml - Generate tagged-list retain and iterative destruction helpers. *)
 [@@@warning "-4"]
 open X64Operands
 open X64CodeGenTypes

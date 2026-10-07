@@ -1,4 +1,4 @@
-(* WholeFunctionOwnershipTests.fs - Whole-function boundary inference and ownership placement laws. *)
+(* WholeFunctionOwnershipTests.ml - Whole-function boundary inference and ownership placement laws. *)
 [@@@warning "-4-42"]
 open Dark_compiler
 module H = HIR

@@ -1,6 +1,6 @@
 [@@@warning "-4"]
 (*
-   MemoryPlanning.fs - ANF-independent memory representation and release contracts.
+   MemoryPlanning.ml - ANF-independent memory representation and release contracts.
 *)
 open AST
 open! MemoryModel

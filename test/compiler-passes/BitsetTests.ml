@@ -1,5 +1,5 @@
 (*
-   BitsetTests.fs - Unit tests for low-level bitset utilities.
+   BitsetTests.ml - Unit tests for low-level bitset utilities.
    These tests cover invariants that compiler dataflow passes rely on when
    mapping dense labels and virtual-register ids into bitset storage.
 *)

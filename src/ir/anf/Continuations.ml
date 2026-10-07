@@ -1,4 +1,4 @@
-(* Continuations.fs - Substitute ANF return continuations without changing lexical joins. *)
+(* Continuations.ml - Substitute ANF return continuations without changing lexical joins. *)
 [@@@warning "-4"]
 let isSupportedJoinArgumentType = function
  | AST.TInt8 | AST.TInt16 | AST.TInt32 | AST.TInt64

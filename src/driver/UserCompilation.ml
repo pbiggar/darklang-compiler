@@ -1,4 +1,4 @@
-(* UserCompilation.fs - Compile a user source unit through the typed pipeline stages. *)
+(* UserCompilation.ml - Compile a user source unit through the typed pipeline stages. *)
 [@@@warning "-4"]
 module X=CompilationContexts
 module P=PackageCatalog

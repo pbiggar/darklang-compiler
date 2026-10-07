@@ -1,4 +1,4 @@
-(* SSAConstructionTests.fs - Unit tests for MIR SSA construction invariants. *)
+(* SSAConstructionTests.mli - Unit tests for MIR SSA construction invariants. *)
 type testResult = (unit, string) result
 val testGetBlockUsesCoversEveryOperandPosition : unit -> testResult
 val testComputeLivenessReportsMissingSuccessorBlock : unit -> testResult

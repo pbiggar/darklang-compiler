@@ -1,5 +1,5 @@
 (*
-   CheckMatches.fs - Check Match expressions while preserving source diagnostics and order.
+   CheckMatches.ml - Check Match expressions while preserving source diagnostics and order.
 *)
 (* CheckMatches.ml - Check Match expressions while preserving source diagnostics and order. *)
 open! AST

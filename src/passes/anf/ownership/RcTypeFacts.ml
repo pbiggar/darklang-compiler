@@ -1,4 +1,4 @@
-(* TypeFacts.fs - Track ANF value types and immutable context projections for RC insertion. *)
+(* RcTypeFacts.ml - Track ANF value types and immutable context projections for RC insertion. *)
 [@@@warning "-4"]
 module A = ANF
 module R = TypeRegistries

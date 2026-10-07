@@ -1,5 +1,5 @@
 (*
-   ControlFlowTests.fs - Verify target return transfers, print control flow, and RC instruction costs.
+   ControlFlowTests.mli - Verify target return transfers, print control flow, and RC instruction costs.
    A diamond needs one jump over the sibling branch, but neither a backward
    jump from that sibling nor a return-to-epilogue jump. Count emitted transfers
    rather than merely asserting a particular order of LIR labels.

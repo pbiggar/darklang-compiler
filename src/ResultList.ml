@@ -1,5 +1,5 @@
 (*
-   ResultList.fs - Sequential helpers for list/result transforms
+   ResultList.ml - Sequential helpers for list/result transforms
    Provides order-preserving sequential mapping helpers for compiler passes.
 *)
 (* ResultList.ml - Preserve traversal order and stop at the first error. *)

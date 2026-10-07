@@ -1,5 +1,5 @@
 (*
-   LIRExecutionFormat.fs - Parser for executable single-block LIR fixtures.
+   LIRExecutionFormat.ml - Parser for executable single-block LIR fixtures.
    Keeps successful process results and expected codegen failures typed.
 *)
 open Dark_compiler

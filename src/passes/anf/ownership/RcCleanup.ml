@@ -1,4 +1,4 @@
-(* Cleanup.fs - Plan retain/release placement and preserve cleanup across tail calls. *)
+(* RcCleanup.ml - Plan retain/release placement and preserve cleanup across tail calls. *)
 [@@@warning "-4"]
 module A = ANF
 module F = RcTypeFacts

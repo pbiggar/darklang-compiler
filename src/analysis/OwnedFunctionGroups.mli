@@ -1,4 +1,4 @@
-(* OwnedFunctionGroups.fs - Discover deterministic call groups in owned HIR. *)
+(* OwnedFunctionGroups.mli - Discover deterministic call groups in owned HIR. *)
 type ('leaf, 'id) group
 type groupingError = DuplicateFunctionName of AST.functionId
 val functions : ('leaf, 'id) group -> ('leaf, 'id) OwnedIR.functionDef list

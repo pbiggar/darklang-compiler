@@ -2,7 +2,7 @@
    Provides deterministic reachability analysis for compiler passes that prune
    functions from different intermediate representations.
 *)
-(* CallGraphReachability.fs - Shared call graph traversal helpers *)
+(* CallGraphReachability.ml - Shared call graph traversal helpers *)
 module S = SpecializationIdentity.FunctionSet
 (*
    Compute the transitive closure of reachable nodes in a call graph.

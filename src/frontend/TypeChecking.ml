@@ -1,4 +1,4 @@
-(* TypeChecking.fs - Orchestrate name resolution and checked-program construction. *)
+(* TypeChecking.ml - Orchestrate name resolution and checked-program construction. *)
 open! AST
 open! Types
 open CheckingDiagnostics

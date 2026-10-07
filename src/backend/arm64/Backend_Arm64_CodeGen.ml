@@ -1,4 +1,4 @@
-(* CodeGen.fs - Assemble planned function and runtime-helper instruction chunks. *)
+(* Backend_Arm64_CodeGen.ml - Assemble planned function and runtime-helper instruction chunks. *)
 [@@@warning "-4-30"]
 open ARM64CodeGenTypes
 open HeapAllocation

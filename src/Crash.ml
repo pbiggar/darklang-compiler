@@ -1,5 +1,5 @@
 (*
-   Crash.fs - Dependency-free crash helper
+   Crash.ml - Dependency-free crash helper
    Provides a single crash function for internal invariant violations.
    Crash to mark incomplete work that should never be hit in production.
    Use this when a developer or AI needs to flag missing logic.

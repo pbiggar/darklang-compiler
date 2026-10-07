@@ -1,4 +1,4 @@
-(* CalleeClobbers.fs - Conservatively summarize x64 caller-register writes. *)
+(* X64CalleeClobbers.ml - Conservatively summarize x64 caller-register writes. *)
 [@@@warning "-4"]
 open ARM64CalleeClobbers
 type writes = ARM64CalleeClobbers.writes

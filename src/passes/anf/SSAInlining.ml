@@ -4,7 +4,7 @@
    Multi-block callees use a typed continuation. Small scalar Option projections
    may copy that continuation at each return to expose branch-local values.
 *)
-(* SSAInlining.fs - Inline eligible typed SSA functions at direct call sites. *)
+(* SSAInlining.ml - Inline eligible typed SSA functions at direct call sites. *)
 [@@@warning "-4"]
 module A = ANF
 module S = SSAANF

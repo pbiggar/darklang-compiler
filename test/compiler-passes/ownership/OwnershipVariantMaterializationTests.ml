@@ -1,4 +1,4 @@
-(* OwnershipVariantMaterializationTests.fs - Verify atomic specialization and call-boundary laws. *)
+(* OwnershipVariantMaterializationTests.ml - Verify atomic specialization and call-boundary laws. *)
 [@@@warning "-4-42"]
 open Dark_compiler
 module H = HIR

@@ -1,4 +1,4 @@
-(* JoinTests.fs - Verify lexical join interfaces and branch cleanup. *)
+(* RcJoinTests.ml - Verify lexical join interfaces and branch cleanup. *)
 [@@@warning "-4-42"]
 open Dark_compiler
 module A = ANF

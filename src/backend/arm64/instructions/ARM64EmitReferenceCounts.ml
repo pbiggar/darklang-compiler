@@ -1,5 +1,5 @@
 (*
-   ReferenceCounts.fs - Emit arm64 instructions for referencecounts operations.
+   ARM64EmitReferenceCounts.ml - Emit arm64 instructions for referencecounts operations.
 *)
 [@@@warning "-4"]
 let isEmpty xs=xs=[]
@@ -130,25 +130,6 @@ let emitRefCountInc (_ctx: codeGenContext) (addr: LIR.reg) (payloadSize: int) (k
    unnecessary move and preserves the established instruction shape.
 *)
 let emitRefCountDec (ctx: codeGenContext) (addr: LIR.reg) (payloadSize: int) (kind: LIR.rcKind) (metadata: MemoryModel.rcMetadata option) : (Symbolic.instr list, string) result =
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
     lirRegToARM64Reg addr
     |> Result.map (fun addrReg ->
@@ -492,11 +473,6 @@ let emitRefCountDec (ctx: codeGenContext) (addr: LIR.reg) (payloadSize: int) (ki
             let fieldReleaseInstrs =
                 fixedBlockFieldReleaseInstrs
                 @ releaseSumPayloadInstrs
-
-
-
-
-
 
             in
             let stableFieldReleaseInstrs =

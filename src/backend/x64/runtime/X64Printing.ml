@@ -1,4 +1,4 @@
-(* Printing.fs - Generate x64 scalar printing and heap initialization support. *)
+(* X64Printing.ml - Generate x64 scalar printing and heap initialization support. *)
 open X64Operands
 module X=X86_64
 (*

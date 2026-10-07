@@ -1,5 +1,5 @@
 (*
-   CheckCalls.fs - Check Call expressions while preserving source diagnostics and order.
+   CheckCalls.ml - Check Call expressions while preserving source diagnostics and order.
 *)
 (* CheckCalls.ml - Check Call expressions while preserving source diagnostics and order. *)
 open! AST

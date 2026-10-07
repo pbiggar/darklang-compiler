@@ -1,5 +1,5 @@
 (*
-   CallTests.fs - Verify call-result ownership and canonical source metadata.
+   CallTests.ml - Verify call-result ownership and canonical source metadata.
 *)
 [@@@warning "-4-42"]
 open Dark_compiler

@@ -1,5 +1,5 @@
 (*
-   Integer.fs - Emit arm64 instructions for integer operations.
+   ARM64EmitInteger.ml - Emit arm64 instructions for integer operations.
 *)
 [@@@warning "-4"]
 let bind f value=Result.bind value f
@@ -460,9 +460,6 @@ let emitClosureAlloc (ctx: codeGenContext) (dest: LIR.reg) (funcId: AST.function
    Move from X16 (temp) to destination
 *)
 let emitTailArgMoves (ctx: codeGenContext) (moves: (LIR.physReg * LIR.operand) list) =
-
-
-
 
     let getSrcPhysReg (srcOp: LIR.operand) =
         match srcOp with

@@ -1,4 +1,4 @@
-(* CallGraphSchedule.fs - Order exact MIR function nodes before their callers. *)
+(* CallGraphSchedule.ml - Order exact MIR function nodes before their callers. *)
 [@@@warning "-4"]
 module Set = MIR.IntSet
 module M = ANFConstants.IntMap

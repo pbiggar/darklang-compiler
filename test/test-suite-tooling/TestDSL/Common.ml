@@ -1,5 +1,5 @@
 (*
-   Common.fs - Common utilities for parsing DSL-based test files
+   Common.ml - Common utilities for parsing DSL-based test files
    Provides section-delimited test file parsing, comment stripping,
    and other shared utilities for test DSLs.
 *)

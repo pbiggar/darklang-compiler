@@ -1,5 +1,5 @@
 (*
-   X86_64EncodingTestRunner.fs - Executes x64 encoding and label-resolution fixtures.
+   X86_64EncodingTestRunner.ml - Executes x64 encoding and label-resolution fixtures.
    Reports final byte streams and deferred fixup labels with stable diagnostics.
 *)
 [@@@warning "-42"]

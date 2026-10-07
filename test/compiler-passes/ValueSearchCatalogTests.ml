@@ -1,5 +1,5 @@
 (*
-   ValueSearchCatalogTests.fs - native integration tests for the AOT package-value catalog boundary.
+   ValueSearchCatalogTests.ml - native integration tests for the AOT package-value catalog boundary.
 
    Catalog data is compilation input rather than Dark source, so these tests
    compile and execute complete programs through CompilerLibrary instead of the

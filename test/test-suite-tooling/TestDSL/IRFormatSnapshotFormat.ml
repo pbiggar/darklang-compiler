@@ -1,5 +1,5 @@
 (*
-   IRFormatSnapshotFormat.fs - Parser for exact IR formatter snapshot fixtures.
+   IRFormatSnapshotFormat.ml - Parser for exact IR formatter snapshot fixtures.
    Parses the existing compact ANF, MIR, and LIR test syntaxes into typed formatter inputs.
 *)
 (* Preserve case grouping, ordered section validation and complete typed formatter input. *)

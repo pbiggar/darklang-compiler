@@ -1,5 +1,5 @@
 (*
-   ANF_to_MIR.fs - MIR Transformation (Pass 3)
+   ANF_to_MIR.ml - MIR Transformation (Pass 3)
    Transforms ANF into MIR with Control Flow Graph (CFG).
    Algorithm:
    - Converts ANF expressions into MIR CFG with basic blocks

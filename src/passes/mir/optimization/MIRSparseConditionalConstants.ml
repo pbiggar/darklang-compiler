@@ -1,4 +1,4 @@
-(* SparseConditionalConstants.fs - Joint SSA constant and CFG-edge analysis. *)
+(* MIRSparseConditionalConstants.ml - Joint SSA constant and CFG-edge analysis. *)
 [@@@warning "-4"]
 open MIR
 module F = MIROptimizationFacts

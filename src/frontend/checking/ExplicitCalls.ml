@@ -1,4 +1,4 @@
-(* ExplicitCalls.ml - Complete explicit type application paths from Expressions.fs. *)
+(* ExplicitCalls.ml - Complete explicit type application paths from ExplicitCalls.ml. *)
 open! AST
 open CheckingDiagnostics
 module U = Unification

@@ -1,4 +1,4 @@
-(* ListRegion.fs - Typed closed-list region stages, identities, and array layouts. *)
+(* ListRegion.mli - Typed closed-list region stages, identities, and array layouts. *)
 type listId = HIR.valueId
 type scalar = HIR.operand
 type transform = Map of scalar | Reverse

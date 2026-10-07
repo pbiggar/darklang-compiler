@@ -8,7 +8,7 @@
    - Retarget separated dead floating-point additions into their copy destinations
    These optimizations work on individual instructions or small sequences.
 *)
-(* LIR_Peephole.fs - LIR Peephole Optimizations *)
+(* LIR_Peephole.ml - LIR Peephole Optimizations *)
 [@@@warning "-4"]
 open LIR
 module RegMap=Map.Make(struct type t=reg let compare=Stdlib.compare end)

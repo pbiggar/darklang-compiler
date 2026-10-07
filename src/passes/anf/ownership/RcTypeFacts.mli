@@ -1,4 +1,4 @@
-(* TypeFacts.fs - Track ANF value types and immutable context projections for RC insertion. *)
+(* RcTypeFacts.mli - Track ANF value types and immutable context projections for RC insertion. *)
 module TempMap = InliningCommon.TempMap
 type rcTypePlanningContext = {mutable recordRegistries : ((string * AST.semanticType) list StringOrder.Map.t * string list StringOrder.Map.t) option; shapes : (AST.semanticType, MemoryModel.rcShape) Hashtbl.t; metadata : (AST.semanticType, MemoryModel.rcMetadata) Hashtbl.t}
 type typeContext = {typeReg : TypeRegistries.typeRegistry; variantLookup : LoweringPrimitives.variantLookup; sumShapeReg : MemoryModel.rcSumShapeRegistry; funcReg : TypeRegistries.functionRegistry; funcParams : (string * AST.semanticType) list StringOrder.Map.t; tempTypes : AST.semanticType TempMap.t; closureFuncs : AST.functionId TempMap.t; typePlanning : rcTypePlanningContext}

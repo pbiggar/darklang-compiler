@@ -1,4 +1,4 @@
-(* TestIds.fs - Allocate sequential function identities for isolated compiler fixtures. *)
+(* TestIds.ml - Allocate sequential function identities for isolated compiler fixtures. *)
 open Dark_compiler
 let names = [
  "Builtin.print";

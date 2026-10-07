@@ -1,5 +1,5 @@
 [@@@warning "-4-42"]
-(* StdlibOptimizationTests.fs - Check optimization in prebuilt stdlib output. *)
+(* StdlibOptimizationTests.ml - Check optimization in prebuilt stdlib output. *)
 open Dark_compiler
 type testResult=(unit,string) result
 let testStdlibPowerMask (stdlib:CompilationContexts.stdlibResult) ()=

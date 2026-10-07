@@ -3,7 +3,7 @@
    block identities local to each function and replace closure calls with direct
    calls that receive captured values as ordinary parameters.
 *)
-(* SSAHigherOrderSpecialization.fs - Specialize known callable arguments on typed SSA blocks. *)
+(* SSAHigherOrderSpecialization.ml - Specialize known callable arguments on typed SSA blocks. *)
 [@@@warning "-4-30"]
 module A = ANF
 module S = SSAANF

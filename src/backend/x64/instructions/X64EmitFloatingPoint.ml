@@ -1,4 +1,4 @@
-(* FloatingPoint.fs - Emit x64 instructions for floatingpoint operations. *)
+(* X64EmitFloatingPoint.ml - Emit x64 instructions for floatingpoint operations. *)
 [@@@warning "-4"]
 open X64Operands
 open X64CodeGenTypes

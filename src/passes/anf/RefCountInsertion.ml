@@ -1,4 +1,4 @@
-(* RefCountInsertion.fs - Orchestrate function RC elaboration and verify complete type and join interfaces. *)
+(* RefCountInsertion.ml - Orchestrate function RC elaboration and verify complete type and join interfaces. *)
 [@@@warning "-4"]
 module A = ANF
 module F = RcTypeFacts
@@ -122,7 +122,7 @@ let verifyTypeMapCompleteness (A.Program (functions, main)) typeMap = List.rev (
 let tempText (A.TempId id) = "TempId " ^ string_of_int id
 (*
    Check immediate join interfaces and lexical captures after type recovery.
-   Legacy tree-only functions are outside this verifier's migration boundary.
+   This verifier checks functions with joins; tree-only functions have no join interfaces.
 *)
 let verifyJoinInterfaces ctx (A.Program (functions, main)) =
  let rec containsJoin = function A.Join _ | A.Jump _ -> true | A.Let (_, _, body) -> containsJoin body | A.If (_, yes, no) -> containsJoin yes || containsJoin no | A.Return _ -> false in

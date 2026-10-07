@@ -1,4 +1,4 @@
-(* MaterializeOwnershipVariants.fs - Clone verified ownership candidates and route selected calls. *)
+(* MaterializeOwnershipVariants.mli - Clone verified ownership candidates and route selected calls. *)
 type 'id request = {caller : AST.functionId; call : HIR.functionCall; selection : 'id SelectOwnershipVariants.selection}
 type ('leaf, 'id) specializedFunction = {original : AST.functionId; functionDef : ('leaf, 'id) OwnedIR.functionDef}
 type ('leaf, 'id) specializedGroup = {identity : SelectOwnershipVariants.candidateIdentity; members : ('leaf, 'id) specializedFunction AST.nonEmptyList}

@@ -1,4 +1,4 @@
-(* MemoryShapeTests.fs - Verify memory shapes and stable recursive release plans. *)
+(* MemoryShapeTests.ml - Verify memory shapes and stable recursive release plans. *)
 [@@@warning "-4-42"]
 open Dark_compiler
 open MemoryModel

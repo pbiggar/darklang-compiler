@@ -2,7 +2,7 @@
    Filters out unused stdlib functions based on call graph reachability.
    This reduces CodeGen work by only processing functions that are actually used.
 *)
-(* DeadCodeElimination.fs - Dead Code Elimination (Tree Shaking). *)
+(* DeadCodeElimination.ml - Dead Code Elimination (Tree Shaking). *)
 [@@@warning "-4"]
 module FS = SpecializationIdentity.FunctionSet
 (*

@@ -1,4 +1,4 @@
-(* Coalescing.fs - Collect move preferences and coalesce compatible graph vertices. *)
+(* RegisterCoalescing.mli - Collect move preferences and coalesce compatible graph vertices. *)
 val dedupePairs : (int * int) list -> (int * int) list
 val collectMovePairs : LIR.basicBlock array -> (int * int) list
 val collectPhiPairs : LIR.basicBlock array -> (int * int) list

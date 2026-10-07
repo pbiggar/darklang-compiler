@@ -1,4 +1,4 @@
-(* SelectOwnershipVariants.fs - Choose inferred ownership variants at direct call sites. *)
+(* SelectOwnershipVariants.ml - Choose inferred ownership variants at direct call sites. *)
 [@@@warning "-4"]
 module O = OwnedIR
 module G = InferOwnedFunctionGroups

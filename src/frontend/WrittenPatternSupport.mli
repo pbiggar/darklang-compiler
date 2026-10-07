@@ -1,4 +1,4 @@
-(* Binding, match-pattern checking, and exhaustiveness from WrittenChecking.fs. *)
+(* Binding, match-pattern checking, and exhaustiveness from WrittenPatternSupport.mli. *)
 val floatLiteral : bool -> string -> string -> float option
 val checkLetPattern : WrittenTypes.letPattern -> AST.semanticType -> CheckedAST.symbols -> (CheckedAST.letPattern * WrittenTypeSupport.locals * CheckedAST.symbols, string) result
 val mergePatternBindings : WrittenTypeSupport.locals -> WrittenTypeSupport.locals -> (WrittenTypeSupport.locals, string) result

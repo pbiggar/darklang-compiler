@@ -1,9 +1,7 @@
 # Compiler Source Organization
 
 The repository root is the Dune project root. Compiler modules under `src/` have a
-matching `.ml` implementation and `.mli` interface. The Dune graph preserves the
-original pipeline responsibilities while distinguishing modules that formerly
-had the same filename in different F# namespaces.
+matching `.ml` implementation and `.mli` interface. The Dune graph groups modules by pipeline stage and responsibility.
 
 | Location | Responsibility |
 |---|---|
@@ -25,17 +23,17 @@ had the same filename in different F# namespaces.
 | `src/backend/x64/` | Linux x64 selection, encoding and runtime |
 | `src/backend/binary/` | Shared binary structures and literal pools |
 | `src/driver/` | Compilation contexts, caches, sessions and pipeline orchestration |
-| `share/` | Installed Dark standard library sources and Unicode tables |
+| `stdlib/` | Dark standard library sources and Unicode tables embedded at build time |
+| `tools/fuzzer/` | Typed generation, oracle comparison and syntax reduction |
+| `tools/process/` | Captured process execution shared by tests and fuzzing |
 | `test/` | Production unit checks, DSL tooling and suite runner |
 | `test/fixtures/` | Language and DSL input fixtures |
 | `test/regression/` | Native allocation, cache, graph and bitset regression checks |
 | `test/runtime-execution/` | Explicit native backend execution checks |
 | `test/runtime-support/` | Private test-only backend helpers |
 
-The completed F# migration's observation harness, source inventory and
-comparison scripts remain in Git history. They are no longer part of the
-build graph. `dune runtest` executes the native regression checks; the complete
-production host suite runs through `./run-tests --ai` after `./build --ai`.
+`dune runtest` executes additional regression checks; the complete host suite
+runs through `./run-tests --ai` after `./build --ai`.
 
 Compiler services use OCaml libraries directly: Yojson for JSON, Digestif for
 SHA-256 (its OCaml backend), Mtime for monotonic elapsed time, Uri for URL
@@ -46,5 +44,5 @@ Signal exit codes use `Sys.signal_to_int`; test process groups use Spawn.
 Native platform metadata comes from the OCaml build configuration. The compiler
 and test runner have no repository-owned C stubs. Timing fields store nanoseconds. Shared utilities retain
 compiler policies such as Unicode segmentation, BOM decoding and exact float
-literal round trips; they do not reproduce .NET exceptions or formatting.
+literal round trips.
 AST and IR diagnostics use the standard `Format` layout engine.

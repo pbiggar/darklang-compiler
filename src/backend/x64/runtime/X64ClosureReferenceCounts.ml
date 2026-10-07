@@ -1,4 +1,4 @@
-(* ClosureReferenceCounts.fs - Generate closure and recursive-payload lifetime helpers. *)
+(* X64ClosureReferenceCounts.ml - Generate closure and recursive-payload lifetime helpers. *)
 [@@@warning "-4"]
 open X64Operands
 open X64CodeGenTypes

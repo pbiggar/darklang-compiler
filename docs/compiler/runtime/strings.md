@@ -59,7 +59,7 @@ Unicode helpers are layered on top of the byte representation:
 
 Higher-level stdlib functions such as `repeat`, `join`, `trim`, `split`,
 `replace`, `first`, `last`, `dropFirst`, `dropLast`, `head`, `padStart`, and
-`padEnd` are implemented in `share/stdlib/String.dark`.
+`padEnd` are implemented in `stdlib/String.dark`.
 
 Public byte-oriented traversal is available for parsers that retain UTF-8 byte
 offsets: `byteLength`, `byteSlice`, `byteRangesEqual`, and `byteIndexOfFrom`.
@@ -122,4 +122,4 @@ reuse work remain:
 | `src/passes/anf/RefCountInsertion.ml` | string lifetime insertion |
 | `src/backend/arm64/Backend_Arm64_CodeGen.ml` | ARM64 string allocation and RC |
 | `src/backend/x64/CodeGen_X86_64.ml` | x64 string allocation and RC |
-| `share/stdlib/String.dark` | stdlib string functions |
+| `stdlib/String.dark` | stdlib string functions |

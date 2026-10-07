@@ -1,4 +1,4 @@
-(* FloatAllocation.fs - Schedule, allocate, spill, and materialize floating-point values. *)
+(* FloatAllocation.ml - Schedule, allocate, spill, and materialize floating-point values. *)
 [@@@warning "-4"]
 open AllocationModel
 open RegisterFacts

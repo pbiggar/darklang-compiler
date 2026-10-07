@@ -74,8 +74,8 @@
    a missing closing delimiter: point back at its opener
    --- recursion-depth guard ---
    parseExpr/parseTypeRef/parsePatternBase recurse per nesting level, so a
-   pathological `((((…` would overflow the stack — and a .NET StackOverflow is
-   UNCATCHABLE (it kills the process). At the cap we diagnose once and skip to
+   pathological `((((…` can overflow the stack before diagnostics are returned.
+   At the cap we diagnose once and skip to
    EOF. Generated E2E batches can contain several hundred nested `let`
    bindings, so the cap must permit those while still guarding against a
    runaway recursive parse.
@@ -143,7 +143,7 @@
    A `-` GLUED to a following number, with a space before it, is a negative-literal
    ARGUMENT (`f a -1`), not subtraction (`f a - 1` = `(f a) - 1`). The application
    arg loop accepts it so `Float.multiply a -1.0` / `add 5L -1L` parse correctly
-   (matches F#'s high-precedence-application rule).
+   (application binds more tightly than infix operations).
    no space after `-`
    space before `-`
    `;` used to separate list elements and list-pattern elements; `,` is the only
@@ -171,7 +171,7 @@
    operator (`match a | b with …`).
    or-level: `p1 | p2 | …` (stops at `->` / `when`)
    top level: a bare tuple `a, b` (comma-separated, no parens); else an or-pattern
-   A full match-arm pattern. Precedence, matching F#: `|` (or) is LOOSEST, then
+   A full match-arm pattern. Precedence, from lowest to highest: `|` (or) is LOOSEST, then
    `,` (tuple), then `::` (cons). So `1, 2 | 3, 4` is `(1,2) | (3,4)` — an or of
    two tuples, NOT a 3-tuple with an or in the middle. Hence `|` is the OUTER
    level here, wrapping tuples (`parsePatternTuple`).
@@ -192,7 +192,7 @@
    building a truncated pattern from just the last segment.
    `Case(p1, p2, …)` is a parenthesized arg list: commas separate FIELDS, so
    `Pair(a, b)` is two fields — NOT one tuple `Pair((a, b))`. This holds
-   whether or not there's a space before the `(` (matching F#).
+   whether or not there's a space before the `(` .
    `Case()` is one unit field (`Case` applied to unit)
    TODO: Support `...` list rest patterns once WrittenTypes and ProgramTypes
    represent their binding and matching semantics.

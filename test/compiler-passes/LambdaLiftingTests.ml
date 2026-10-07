@@ -1,5 +1,5 @@
 [@@@warning "-4-42"]
-(* LambdaLiftingTests.fs - Unit tests for lambda lifting in AST_to_ANF
+(* LambdaLiftingTests.ml - Unit tests for lambda lifting in AST_to_ANF
    Ensures lambda return types are preserved when lifting closures with let-bound bodies. *)
 open Dark_compiler
 type testResult=(unit,string) result

@@ -1,0 +1,8 @@
+// uuid_equality.dark - Targeted compiler workload.
+let benchmark (remaining: Int64) (left: Uuid) (equal: Uuid) (different: Uuid) (checksum: Int64) : Int64 =
+    if remaining <= 0L then checksum
+    else benchmark (remaining - 1L) (left) (equal) (different) (checksum + (if left == equal && left != different then 1L else 1000L))
+let left = Builtin.unwrap (Stdlib.Uuid.parse ("3700adbc-7a46-4ff4-81d3-45afb03f6e2d")) in
+let equal = Builtin.unwrap (Stdlib.Uuid.parse ("3700ADBC-7A46-4FF4-81D3-45AFB03F6E2D")) in
+let different = Builtin.unwrap (Stdlib.Uuid.parse ("3700adbc-7a46-4ff4-81d3-45afb03f6e2e")) in
+benchmark (__ITERATIONS__L) (left) (equal) (different) (0L)

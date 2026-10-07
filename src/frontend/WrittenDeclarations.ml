@@ -1,4 +1,4 @@
-(* Direct checked declarations and source-unit composition from WrittenChecking.fs. *)
+(* Direct checked declarations and source-unit composition from WrittenDeclarations.ml. *)
 open WrittenTypeSupport
 module WT = WrittenTypes
 module C = CheckedAST

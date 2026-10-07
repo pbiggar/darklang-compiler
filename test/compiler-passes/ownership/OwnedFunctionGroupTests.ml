@@ -1,4 +1,4 @@
-(* OwnedFunctionGroupTests.fs - Deterministic owned-HIR call-group laws. *)
+(* OwnedFunctionGroupTests.ml - Deterministic owned-HIR call-group laws. *)
 [@@@warning "-4-42"]
 open Dark_compiler
 module H = HIR

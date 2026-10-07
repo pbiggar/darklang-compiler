@@ -15,7 +15,7 @@ end
 let foldBlocks f initial map=LIR.LabelMap.fold (fun key value acc->f acc key value) map initial
 let defaultValue value option=Option.value option ~default:value
 let kindName=function MemoryModel.GenericHeap->"GenericHeap"|MemoryModel.TaggedList->"TaggedList"|MemoryModel.DictHeap->"DictHeap"|MemoryModel.ClosureHeap->"ClosureHeap"|MemoryModel.StreamHeap->"StreamHeap"
-(*  CodeGen.fs - Assemble planned function and runtime-helper instruction chunks. *)
+(*  CodeGen_X86_64.ml - Assemble planned function and runtime-helper instruction chunks. *)
 open X64Operands
 open X64Process
 open X64CodeGenTypes

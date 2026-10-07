@@ -1,5 +1,5 @@
 (*
-   LIRParser.fs - Parser for symbolic LIR DSL
+   LIRParser.ml - Parser for symbolic LIR DSL
    Parses human-readable LIR text into LIR.Program data structures.
    Example LIR:
    X1 <- Mov(Imm 42)

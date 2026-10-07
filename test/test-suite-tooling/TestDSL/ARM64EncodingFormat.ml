@@ -1,5 +1,5 @@
 (*
-   ARM64EncodingFormat.fs - Parser for ARM64 encoding test DSL
+   ARM64EncodingFormat.ml - Parser for ARM64 encoding test DSL
    Parses .arm64enc test files that specify ARM64 instructions and their
    expected machine code encodings.
    Example format:

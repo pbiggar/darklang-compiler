@@ -1,4 +1,4 @@
-(* FloatingPoint.fs - Emit x64 instructions for floatingpoint operations. *)
+(* X64EmitFloatingPoint.mli - Emit x64 instructions for floatingpoint operations. *)
 val emitFArgMoves : X64CodeGenTypes.funcCtx -> (LIR.physFPReg * LIR.fReg) list -> (X86_64.instr list,string) result
 val emitFPhi : X64CodeGenTypes.funcCtx -> (X86_64.instr list,string) result
 val emitFMov : X64CodeGenTypes.funcCtx -> LIR.fReg -> LIR.fReg -> (X86_64.instr list,string) result

@@ -1,4 +1,4 @@
-(* Accumulators.fs - Lower eligible recursion through scalar accumulators or constructor destinations. *)
+(* ANFAccumulatorOptimization.ml - Lower eligible recursion through scalar accumulators or constructor destinations. *)
 [@@@warning "-4-30"]
 open ANF
 module TS = ANFEffects.TempSet

@@ -1,4 +1,4 @@
-(* Binary.fs - Native executable container data structures. *)
+(* Binary.mli - Native executable container data structures. *)
 [@@@warning "-30"]
 val mh_MAGIC_64 : int32
 val cpu_TYPE_ARM64 : int32

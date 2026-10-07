@@ -1,5 +1,5 @@
 (*
-   NameSyntax.fs - Shared lexical and structural contract for source names.
+   NameSyntax.ml - Shared lexical and structural contract for source names.
    This module is the single parser-facing authority for identifier characters,
    reserved words, blank names, quoted identifiers, and qualified segments.
    Stable caller-supplied identity for an independently parsed source unit.

@@ -1,4 +1,4 @@
-(* Coloring.fs - Color interference graphs and map colors to physical registers. *)
+(* RegisterColoring.ml - Color interference graphs and map colors to physical registers. *)
 [@@@warning "-4"]
 open AllocationModel
 open RegisterCoalescing

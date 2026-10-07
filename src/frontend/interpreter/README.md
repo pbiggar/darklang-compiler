@@ -1,17 +1,13 @@
-# Translated Darklang parser
+# Darklang parser
 
-The OCaml `Tokenizer`, `Lexer`, `Parser`, `WrittenTypes`, and `Validation`
-modules faithfully translate the F# sources from darklang/dark commit
-`1cc4bb7f63acdf29dc66458f3c401ed91d444775`, under
-`backend/src/LibParser/`. `LibExecution_Effects.ml` translates that commit's
-`backend/src/LibExecution/Effects.fs`. The source is licensed under Apache-2.0;
-the upstream license is copied here as [LICENSE.md](LICENSE.md).
+The parser scans Unicode scalars, preserves source ranges and trivia, validates
+file-purpose boundaries, and checks declarations directly into `CheckedAST`
+through `frontend/WrittenChecking.ml`.
 
-`ParserDependencies.ml`, `Prelude.ml`, and `ProgramTypesShim.ml` are local
-integration definitions for the small set of interpreter modules referenced by
-the parser. The original F# compiler sources remain in Git history at
-`df9dae7e1647275f6bc9104618f20ef84a7251be`.
+The parser and effect definitions are derived from darklang/dark commit
+`1cc4bb7f63acdf29dc66458f3c401ed91d444775`, under `backend/src/LibParser/`
+and `backend/src/LibExecution/Effects.fs`. The Apache-2.0 license is included
+as [LICENSE.md](LICENSE.md).
 
-The compiler parses with this translated parser, validates its `WrittenTypes`
-output, and checks declarations directly into `CheckedAST` through
-`frontend/WrittenChecking.ml`.
+`ParserDependencies.ml`, `Prelude.ml`, and `ProgramTypesShim.ml` supply the
+interpreter definitions used by the parser.

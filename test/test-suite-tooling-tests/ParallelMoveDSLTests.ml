@@ -1,5 +1,5 @@
 (*
-   ParallelMoveDSLTests.fs - Unit tests for parallel-move fixture parsing and execution.
+   ParallelMoveDSLTests.ml - Unit tests for parallel-move fixture parsing and execution.
    Validates the DSL boundary without relying on the fixtures that it loads.
 *)
 open Dark_compiler

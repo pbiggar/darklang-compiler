@@ -1,4 +1,4 @@
-(* Constants.fs - Fold typed scalar operations with native-width arithmetic semantics. *)
+(* MIRConstants.mli - Fold typed scalar operations with native-width arithmetic semantics. *)
 val truncateToType : int64 -> AST.semanticType -> int64
 val truncateOperandToType : MIR.operand -> AST.semanticType -> MIR.operand
 val euclideanMod : int64 -> int64 -> int64

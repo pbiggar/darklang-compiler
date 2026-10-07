@@ -174,8 +174,6 @@ val freshVar : varGen -> tempId * varGen
 val initialVarGen : varGen
 type typeMap
 module TypeMap : sig
- (* Read-only full table snapshot for migration observations. *)
- val snapshot : typeMap -> int * AST.semanticType option array
  val empty : typeMap
  val tryFind : tempId -> typeMap -> AST.semanticType option
  val ofSeq : (tempId * AST.semanticType) Seq.t -> typeMap

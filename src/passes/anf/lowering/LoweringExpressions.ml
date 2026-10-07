@@ -1,4 +1,4 @@
-(* Expressions.fs - Tie recursive ANF lowering handlers and list-region selection together. *)
+(* LoweringExpressions.ml - Tie recursive ANF lowering handlers and list-region selection together. *)
 [@@@warning "-4"]
 module A = ANF
 module R = TypeRegistries

@@ -1,5 +1,5 @@
 (*
-   CheckRecordLiterals.fs - Check RecordLiteral expressions while preserving source diagnostics and order.
+   CheckRecordLiterals.ml - Check RecordLiteral expressions while preserving source diagnostics and order.
 *)
 (* CheckRecordLiterals.ml - Check RecordLiteral expressions while preserving source diagnostics and order. *)
 open! AST

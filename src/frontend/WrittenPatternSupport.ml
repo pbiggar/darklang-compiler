@@ -1,4 +1,4 @@
-(* Binding, match-pattern checking, and exhaustiveness from WrittenChecking.fs. *)
+(* Binding, match-pattern checking, and exhaustiveness from WrittenPatternSupport.ml. *)
 open WrittenTypeSupport
 module WT = WrittenTypes
 module C = CheckedAST

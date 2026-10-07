@@ -1,4 +1,4 @@
-(* SpecializationIdentity.fs - Name concrete generic instances and normalize typed parameters. *)
+(* SpecializationIdentity.mli - Name concrete generic instances and normalize typed parameters. *)
 module FunctionSet : Set.S with type elt = AST.functionId
 type genericFunctionArtifact = {symbols : CheckedAST.symbols; func : CheckedAST.functionDef; directDependencies : FunctionSet.t}
 type genericFuncDefs = genericFunctionArtifact StringOrder.Map.t

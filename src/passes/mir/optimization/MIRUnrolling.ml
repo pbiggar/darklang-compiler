@@ -1,4 +1,4 @@
-(* Unrolling.fs - Unroll bounded scalar counted-loop shapes. *)
+(* MIRUnrolling.ml - Unroll bounded scalar counted-loop shapes. *)
 [@@@warning "-4"]
 open MIR
 module F = MIROptimizationFacts

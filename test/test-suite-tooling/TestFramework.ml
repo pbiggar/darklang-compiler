@@ -1,6 +1,6 @@
 (* Timing fields store signed nanoseconds; accounting differences may be negative. *)
 [@@@warning "-42"]
-(* TestFramework.fs - Generic test runner helpers.
+(* TestFramework.ml - Generic test runner helpers.
    Provides shared types and utilities that are independent of any specific test suite. *)
 open Dark_compiler
 module Colors=TestRunnerColors

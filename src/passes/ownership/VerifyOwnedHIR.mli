@@ -1,4 +1,4 @@
-(* VerifyOwnedHIR.fs - Jointly verify typed HIR and its independent ownership boundary. *)
+(* VerifyOwnedHIR.mli - Jointly verify typed HIR and its independent ownership boundary. *)
 type 'leaf hirContracts = {leaf : 'leaf -> HIR.primitiveContract; callSignature : AST.functionId -> HIR.functionSignature option; callContract : HIR.functionCall -> HIR.primitiveContract option}
 module Make (Identity : OwnedIR.Identity) : sig
  module Ownership : module type of OwnedIR.Make (Identity)

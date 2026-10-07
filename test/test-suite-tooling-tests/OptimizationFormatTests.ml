@@ -1,5 +1,5 @@
 (*
-   OptimizationFormatTests.fs - Unit tests for optimization test parsing
+   OptimizationFormatTests.ml - Unit tests for optimization test parsing
    Verifies the optimization test file parser accepts repository test syntax
    across common line-ending formats.
 *)

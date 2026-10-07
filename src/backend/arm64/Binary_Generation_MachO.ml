@@ -1,5 +1,5 @@
 (*
-   Binary_Generation_MachO.fs - Mach-O Binary Generation (Pass 8, macOS variant)
+   Binary_Generation_MachO.ml - Mach-O Binary Generation (Pass 8, macOS variant)
    Generates a complete Mach-O executable from ARM64 machine code for macOS.
    This is a direct binary generator - no assembler or linker needed.
    File structure:

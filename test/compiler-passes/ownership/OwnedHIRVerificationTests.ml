@@ -1,4 +1,4 @@
-(* OwnedHIRVerificationTests.fs - Joint typed, effect, alias, and ownership boundary laws. *)
+(* OwnedHIRVerificationTests.ml - Joint typed, effect, alias, and ownership boundary laws. *)
 [@@@warning "-4-42"]
 open Dark_compiler
 module H = HIR

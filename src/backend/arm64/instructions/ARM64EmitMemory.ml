@@ -1,5 +1,5 @@
 (*
-   Memory.fs - Emit arm64 instructions for memory operations.
+   ARM64EmitMemory.ml - Emit arm64 instructions for memory operations.
 *)
 [@@@warning "-4"]
 let bind f value=Result.bind value f
@@ -54,31 +54,6 @@ open ARM64Operands
    B uses a current-PC-relative instruction offset, so skipping N instructions needs N + 1.
 *)
 let emitHeapAlloc (ctx: codeGenContext) (dest: LIR.reg) (sizeBytes: int) =
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
     lirRegToARM64Reg dest
     |> Result.map (fun destReg ->

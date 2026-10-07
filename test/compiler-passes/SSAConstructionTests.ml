@@ -2,7 +2,7 @@
    These tests cover internal CFG invariants that cannot be exercised cleanly
    through source-level end-to-end programs.
 *)
-(* SSAConstructionTests.fs - Unit tests for MIR SSA construction invariants. *)
+(* SSAConstructionTests.ml - Unit tests for MIR SSA construction invariants. *)
 [@@@warning "-4-42"]
 open Dark_compiler
 open MIR

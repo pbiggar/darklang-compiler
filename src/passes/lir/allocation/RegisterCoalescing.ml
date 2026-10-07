@@ -1,4 +1,4 @@
-(* Coalescing.fs - Collect move preferences and coalesce compatible graph vertices. *)
+(* RegisterCoalescing.ml - Collect move preferences and coalesce compatible graph vertices. *)
 [@@@warning "-4"]
 open AllocationModel
 module IntSet = Set.Make (Int)

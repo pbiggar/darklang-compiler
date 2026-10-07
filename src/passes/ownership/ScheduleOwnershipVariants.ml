@@ -1,4 +1,4 @@
-(* ScheduleOwnershipVariants.fs - Drive verified ownership specialization to a bounded fixed point. *)
+(* ScheduleOwnershipVariants.ml - Drive verified ownership specialization to a bounded fixed point. *)
 [@@@warning "-4"]
 module O = OwnedIR
 module H = HIR

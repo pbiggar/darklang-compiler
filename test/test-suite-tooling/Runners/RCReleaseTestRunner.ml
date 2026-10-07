@@ -1,5 +1,5 @@
 (*
-   RCReleaseTestRunner.fs - Executes semantic managed-graph release fixtures.
+   RCReleaseTestRunner.ml - Executes semantic managed-graph release fixtures.
    Builds canonical LIR heap graphs and requires final release to leave no leaks.
    The fixture constructs a boxed root. The extra payload
    case keeps String sums boxed even when nullable two-case

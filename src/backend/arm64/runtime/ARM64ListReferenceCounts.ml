@@ -1,5 +1,5 @@
 (*
-   ListReferenceCounts.fs - Generate tagged-list retain and iterative destruction helpers.
+   ARM64ListReferenceCounts.ml - Generate tagged-list retain and iterative destruction helpers.
 *)
 [@@@warning "-4"]
 let isEmpty xs=xs=[]
@@ -690,9 +690,6 @@ let generateListRefCountDecHelperWith
                 [])
             @ leakDec
             @ [Symbolic.Label leafPayloadDone]
-
-
-
 
         )
     in

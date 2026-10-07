@@ -1,10 +1,10 @@
 (*
-   TypeCheckingTests.fs - Unit tests for type checking pass
+   TypeCheckingTests.ml - Unit tests for type checking pass
    Tests the type checker for Phase 0 (integers only)
    Will be extended in future phases for booleans, variables, functions, etc.
    NOTE: All tests now return Result<> instead of using failwith
 *)
-(* TypeCheckingTests.fs - Original type-checking and declaration boundary assertions. *)
+(* TypeCheckingTests.ml - Original type-checking and declaration boundary assertions. *)
 [@@@warning "-4-42"]
 open Dark_compiler
 open! AST

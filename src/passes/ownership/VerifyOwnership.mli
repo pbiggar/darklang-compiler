@@ -1,4 +1,4 @@
-(* VerifyOwnership.fs - Verify ownership and derive call facts from the same state transitions. *)
+(* VerifyOwnership.mli - Verify ownership and derive call facts from the same state transitions. *)
 module Make (Identity : OwnedIR.Identity) : sig
  module Ownership : module type of OwnedIR.Make (Identity)
  val callSignatureOfFunction : Identity.t OwnedIR.functionSignature -> (OwnedIR.callSignature, Ownership.verificationError) result

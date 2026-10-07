@@ -1,4 +1,4 @@
-(* Model.fs - Represent register domains, liveness sets, and interference graphs. *)
+(* AllocationModel.ml - Represent register domains, liveness sets, and interference graphs. *)
 [@@@warning "-4-30"]
 type liveInterval = {vRegId : int; start : int; end_ : int}
 (*

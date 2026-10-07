@@ -1,4 +1,4 @@
-(* ExpressionLowering.fs - Lower expressions while delegating recursive children through typed callbacks. *)
+(* ExpressionLowering.ml - Lower expressions while delegating recursive children through typed callbacks. *)
 [@@@warning "-4"]
 module A = ANF
 module C = CheckedAST

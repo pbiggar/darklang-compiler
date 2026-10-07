@@ -1,4 +1,4 @@
-(* ShapePlanning.fs - Select canonical representation shapes for ANF ownership decisions. *)
+(* RcShapePlanning.ml - Select canonical representation shapes for ANF ownership decisions. *)
 [@@@warning "-4"]
 module F = RcTypeFacts
 let canonicalRcType ctx typ =

@@ -1,5 +1,5 @@
 (*
-   X86_64CodeGenTests.fs - Tests for x86-64 code generation from LIR
+   X86_64CodeGenTests.ml - Tests for x86-64 code generation from LIR
 
    Verifies that LIR programs translate to working x86-64 executables.
    Build and run a LIR program with process arguments, returning exit code,
@@ -97,7 +97,7 @@ let runLIRProgramFullWithOptionsAndArgs program leak args=
  Out_channel.with_open_bin temp (fun stream->Out_channel.output_bytes stream binary;Out_channel.flush stream;Unix.fsync (Unix.descr_of_out_channel stream));
  Unix.chmod temp ((Unix.stat temp).Unix.st_perm lor 0o100);
  let command,args=match Platform.detectArch () with Ok Platform.X86_64->temp,args|_->"/opt/dcb/qemu/qemu-x86_64",temp::args in
- TestProcess.capture command args 10000
+ ProcessCapture.capture command args 10000
  with ex->Error ("Execution failed: "^Printexc.to_string ex) in
  (try Sys.remove temp with Sys_error _->());outcome
 let runLIRProgramFullWithOptions program leak=runLIRProgramFullWithOptionsAndArgs program leak []

@@ -1,5 +1,5 @@
 (*
-   SyntaxDSLTests.fs - Unit tests for the syntax fixture parser and runner.
+   SyntaxDSLTests.ml - Unit tests for the syntax fixture parser and runner.
    Keeps the DSL implementation honest without expressing its own behavior in the DSL.
 *)
 [@@@warning "-4-42"]

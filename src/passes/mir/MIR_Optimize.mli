@@ -1,4 +1,4 @@
-(* MIR_Optimize.fs - Schedule MIR simplification and optimization to a fixed point. *)
+(* MIR_Optimize.mli - Schedule MIR simplification and optimization to a fixed point. *)
 val optimizeCFGOnce : MIROptimizationFacts.optimizeOptions -> MIR.cfg -> MIR.cfg * bool
 val optimizeCFGWithOptions : MIROptimizationFacts.optimizeOptions -> MIR.cfg -> MIR.cfg
 val optimizeCFG : MIR.cfg -> MIR.cfg

@@ -1,4 +1,4 @@
-(* InferRecursiveOwnership.fs - Solve uniqueness boundaries across visible function groups. *)
+(* InferRecursiveOwnership.mli - Solve uniqueness boundaries across visible function groups. *)
 type 'id functionBoundary = {id : AST.functionId; name : string; ownership : 'id OwnedIR.functionSignature}
 type 'id groupBoundary
 type 'id candidates

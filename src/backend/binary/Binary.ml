@@ -1,5 +1,5 @@
 (*
-   Binary.fs - Mach-O Binary Format Types
+   Binary.ml - Mach-O Binary Format Types
    Defines data structures for the Mach-O binary format used by macOS.
    Mach-O is the executable format for macOS. This module defines the types
    needed to represent Mach-O headers, load commands, segments, and sections.
@@ -19,7 +19,7 @@
    Load command types
    Virtual memory protections
 *)
-(* Binary.fs - Native executable container data structures. *)
+(* Binary.ml - Native executable container data structures. *)
 [@@@warning "-30"]
 let mh_MAGIC_64 = 0xFEEDFACFl
 let cpu_TYPE_ARM64 = 0x0100000Cl

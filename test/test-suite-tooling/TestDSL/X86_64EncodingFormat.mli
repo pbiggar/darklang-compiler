@@ -1,5 +1,5 @@
 (*
-   X86_64EncodingFormat.fs - Parser for multi-case x64 encoding and resolution fixtures.
+   X86_64EncodingFormat.mli - Parser for multi-case x64 encoding and resolution fixtures.
    A successful case can assert final bytes, deferred fixup labels, or both.
 *)
 type x64EncodingExpectation=ResolvesTo of bytes option * string list | ResolutionErrorContaining of string

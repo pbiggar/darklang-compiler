@@ -1,4 +1,4 @@
-(* DeadCode.fs - Eliminate MIR definitions unreachable from observable roots. *)
+(* MIRDeadCode.ml - Eliminate MIR definitions unreachable from observable roots. *)
 open MIR
 module F = MIROptimizationFacts
 let measure recorder name action = match recorder with None -> action () | Some record -> let started = (Int64.to_float (Mtime_clock.elapsed_ns ()) /. 1e6) in let result = action () in record name (Int64.of_float (((Int64.to_float (Mtime_clock.elapsed_ns ()) /. 1e6) -. started) *. 1000000.)); result

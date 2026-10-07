@@ -1,5 +1,5 @@
 (*
-   CheckedMaterializeHelpers.fs - Materialize comparison helpers in checked syntax.
+   CheckedMaterializeHelpers.ml - Materialize comparison helpers in checked syntax.
    Concrete generic specializations are created after source checking. This
    pass keeps that late helper discovery entirely on CheckedAST while reusing
    the canonical helper-definition generators owned by semantic checking.

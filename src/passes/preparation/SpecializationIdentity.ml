@@ -1,4 +1,4 @@
-(* SpecializationIdentity.fs - Name concrete generic instances and normalize typed parameters. *)
+(* SpecializationIdentity.ml - Name concrete generic instances and normalize typed parameters. *)
 module C = CheckedAST
 module M = StringOrder.Map
 module FunctionSet = Set.Make (struct type t = AST.functionId let compare left right = Int64.unsigned_compare (AST.functionIdValue left) (AST.functionIdValue right) end)

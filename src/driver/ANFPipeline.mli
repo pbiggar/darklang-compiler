@@ -1,4 +1,4 @@
-(* ANFPipeline.fs - Construct and optimize SSA after ANF helper lowering. *)
+(* ANFPipeline.mli - Construct and optimize SSA after ANF helper lowering. *)
 val buildConversionResult : ANF.program -> AST_to_ANF.registries -> OwnedIR.callSignature FunctionIdMap.t -> AST_to_ANF.conversionResult
 val stdlibInliningConfig : InliningCommon.inliningConfig
 (* The elapsed callback supplies the caller-owned stopwatch's milliseconds. *)

@@ -1,7 +1,7 @@
 (*
    The SSA inliner uses these source-level facts before cloning typed blocks.
 *)
-(* InliningCommon.fs - Call eligibility, external candidate analysis, and ANF renaming. *)
+(* InliningCommon.ml - Call eligibility, external candidate analysis, and ANF renaming. *)
 [@@@warning "-4-42"]
 open ANF
 module F = FunctionIdMap

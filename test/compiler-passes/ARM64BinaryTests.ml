@@ -1,5 +1,5 @@
 (*
-   ARM64BinaryTests.fs - Unit and execution tests for ARM64 Mach-O and ELF generation.
+   ARM64BinaryTests.ml - Unit and execution tests for ARM64 Mach-O and ELF generation.
 *)
 [@@@warning "-4-42"]
 open Dark_compiler
@@ -87,7 +87,7 @@ let testExecuteLinuxElf ()=
  let command,args=match Platform.detectOS (),Platform.detectArch () with
  | Ok Platform.Linux,Ok Platform.ARM64 -> tempPath,[]
  | _ -> "/opt/dcb/qemu/qemu-aarch64",[tempPath] in
- match TestProcess.capture command args 10000 with
+ match ProcessCapture.capture command args 10000 with
  | Ok (42,_,_) -> Ok ()
  | Ok (exitCode,_,stderr) -> Error (Printf.sprintf "Expected Linux ARM64 ELF exit code 42, got %d: %s" exitCode stderr)
  | Error error -> Error error

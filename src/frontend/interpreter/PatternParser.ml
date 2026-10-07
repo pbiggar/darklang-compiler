@@ -10,7 +10,7 @@ let upperName name =
 (*
    or-level: `p1 | p2 | …` (stops at `->` / `when`)
    top level: a bare tuple `a, b` (comma-separated, no parens); else an or-pattern
-   A full match-arm pattern. Precedence, matching F#: `|` (or) is LOOSEST, then
+   A full match-arm pattern. Precedence, from lowest to highest: `|` (or) is LOOSEST, then
    `,` (tuple), then `::` (cons). So `1, 2 | 3, 4` is `(1,2) | (3,4)` — an or of
    two tuples, NOT a 3-tuple with an or in the middle. Hence `|` is the OUTER
    level here, wrapping tuples (`parsePatternTuple`).
@@ -84,7 +84,7 @@ and parsePatternBase state index =
    building a truncated pattern from just the last segment.
    `Case(p1, p2, …)` is a parenthesized arg list: commas separate FIELDS, so
    `Pair(a, b)` is two fields — NOT one tuple `Pair((a, b))`. This holds
-   whether or not there's a space before the `(` (matching F#).
+   whether or not there's a space before the `(` .
    `Case()` is one unit field (`Case` applied to unit)
    TODO: Support `...` list rest patterns once WrittenTypes and ProgramTypes
    represent their binding and matching semantics.

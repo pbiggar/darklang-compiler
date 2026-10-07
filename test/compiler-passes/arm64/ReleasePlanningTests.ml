@@ -1,5 +1,5 @@
 (*
-   ReleasePlanningTests.fs - Verify planned release outlining and cache behavior.
+   ReleasePlanningTests.ml - Verify planned release outlining and cache behavior.
    Native record descriptors are compile-time metadata. This fixture locks the
    compact payload layout at ARM64 codegen: fields begin at byte zero and no
    descriptor immediate is materialized in the heap object.

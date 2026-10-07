@@ -1,4 +1,4 @@
-(* OwnershipVariantSelectionTests.fs - Deterministic call-site ownership selection laws. *)
+(* OwnershipVariantSelectionTests.ml - Deterministic call-site ownership selection laws. *)
 [@@@warning "-4-42"]
 open Dark_compiler
 module H = HIR

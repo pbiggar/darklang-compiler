@@ -1,5 +1,5 @@
 (*
-   ComparisonPlanning.fs - Plan typed equality and ordering operations.
+   ComparisonPlanning.ml - Plan typed equality and ordering operations.
 *)
 (* ComparisonPlanning.ml - Plan typed equality and ordering operations. *)
 open! AST

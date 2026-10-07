@@ -1,4 +1,4 @@
-(* IRSymbolTests.fs - Unit tests for symbolic IR pool references
+(* IRSymbolTests.ml - Unit tests for symbolic IR pool references
    Validates conversion between pooled refs and symbolic refs used for late pool resolution. *)
 [@@@warning "-4-42"]
 open Dark_compiler

@@ -1,4 +1,4 @@
-(* Constants.fs - Fold typed scalar operations with native-width arithmetic semantics. *)
+(* MIRConstants.ml - Fold typed scalar operations with native-width arithmetic semantics. *)
 [@@@warning "-4"]
 open MIR
 (*

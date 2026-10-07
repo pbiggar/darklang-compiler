@@ -1,5 +1,5 @@
 (*
-   TestRunner.fs - Test runner entrypoint and suite orchestration.
+   TestRunner.ml - Test runner entrypoint and suite orchestration.
 
    Defines Dark compiler test suites and their execution order.
    Print help message
@@ -324,7 +324,7 @@ let runTestsWithProgressReporter completedTestReporter args=
   {F.name="ARM64 Binary Tests";tests=ARM64BinaryTests.tests};
   {F.name="ARM64 CodeGen Tests";tests=ARM64CodeGenTests.tests};
   {F.name="x64 Encoding Fixture Tests";tests=X86_64EncodingTestRunner.tests x64encTestFiles};
-  {F.name="Native Unicode and Mach-O Repairs";tests=NativePortRegressionTests.textTests @ NativePortRegressionTests.machoTests};
+  {F.name="Native Unicode and Mach-O Repairs";tests=NativeRegressionTests.textTests @ NativeRegressionTests.machoTests};
   {F.name="x64 Binary Tests";tests=X86_64BinaryTests.tests};
   {F.name="x64 Resolve Tests";tests=X86_64ResolveTests.tests};
   {F.name="x64 CodeGen Tests";tests=X86_64CodeGenTests.tests};

@@ -1,4 +1,4 @@
-(* RecursiveOwnershipInferenceTests.fs - Group-wide ownership uniqueness proof laws. *)
+(* RecursiveOwnershipInferenceTests.ml - Group-wide ownership uniqueness proof laws. *)
 [@@@warning "-4-42"]
 open Dark_compiler
 module H = HIR

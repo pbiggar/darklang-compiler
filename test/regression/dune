@@ -1,4 +1,16 @@
 ; Native equivalence and allocation regression checks.
+(rule
+ (alias runtest)
+ (deps ../../fuzz ../../scripts/test_fuzz_workflow.py)
+ (action (run python3 %{dep:../../scripts/test_fuzz_workflow.py})))
+(rule
+ (alias runtest)
+ (deps fuzzer_regression.py)
+ (action (run python3 %{dep:fuzzer_regression.py} %{exe:../../tools/fuzzer/main.exe})))
+(rule
+ (alias runtest)
+ (deps standalone_compiler_regression.py)
+ (action (run python3 %{dep:standalone_compiler_regression.py} %{exe:../../bin/dark.exe})))
 (include_subdirs no)
 (executables
  (names host_text_regression cache_regression component_regression literal_regression package_io_regression package_http_regression)

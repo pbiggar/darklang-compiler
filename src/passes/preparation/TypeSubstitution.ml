@@ -1,5 +1,5 @@
 (*
-   TypeSubstitution.fs - Substitute concrete source types and instantiate generic function bodies.
+   TypeSubstitution.ml - Substitute concrete source types and instantiate generic function bodies.
 *)
 [@@@warning "-4"]
 module M = StringOrder.Map

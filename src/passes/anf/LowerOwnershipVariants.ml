@@ -1,4 +1,4 @@
-(* LowerOwnershipVariants.fs - Preserve scheduled ownership clones and call routing in ANF. *)
+(* LowerOwnershipVariants.ml - Preserve scheduled ownership clones and call routing in ANF. *)
 [@@@warning "-4-42"]
 module A = ANF
 module O = OwnedIR

@@ -8,7 +8,7 @@
    prologue and epilogue generation can consume them directly.
    LIR program (symbolic literals, no pools)
 *)
-(* LIR.fs - Symbolic Low-level Intermediate Representation. *)
+(* LIR.ml - Symbolic Low-level Intermediate Representation. *)
 [@@@warning "-4-30"]
 (*
    ARM64 general-purpose registers used in LIR.

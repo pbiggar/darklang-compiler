@@ -1,4 +1,4 @@
-(* MIR_Optimize.fs - Schedule MIR simplification and optimization to a fixed point. *)
+(* MIR_Optimize.ml - Schedule MIR simplification and optimization to a fixed point. *)
 [@@@warning "-4"]
 open MIR
 module F = MIROptimizationFacts

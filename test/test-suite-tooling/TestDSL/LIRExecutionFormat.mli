@@ -1,5 +1,5 @@
 (*
-   LIRExecutionFormat.fs - Parser for executable single-block LIR fixtures.
+   LIRExecutionFormat.mli - Parser for executable single-block LIR fixtures.
    Keeps successful process results and expected codegen failures typed.
 *)
 type leakCheckMode=LeakCheckDisabled | LeakCheckEnabled

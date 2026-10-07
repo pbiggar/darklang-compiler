@@ -1,5 +1,5 @@
 (*
-   HeapAllocation.fs - Generate checked heap allocation and fatal allocation paths.
+   HeapAllocation.ml - Generate checked heap allocation and fatal allocation paths.
 *)
 open ARM64CodeGenTypes
 let dataLabel name=Symbolic.DataLabel (Symbolic.Named name)

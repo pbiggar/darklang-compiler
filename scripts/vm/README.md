@@ -4,7 +4,7 @@ Use `Dockerfile` and root `dependencies.lock` as the pinned toolchain sources.
 The native-only bootstrap installs OCaml 5.5.1, Dune 3.24.2 and locked OCaml
 packages in the supplied writable directory. Ubuntu development prerequisites
 are checksum-verified against snapshot 20260828T000000Z and extracted locally.
-It does not install .NET or the retired F# comparison harness.
+The bootstrap contains only the native compiler toolchain and its dependencies.
 
 ```bash
 bash scripts/vm/setup-native-toolchain /absolute/writable/toolchains
@@ -25,7 +25,7 @@ The default host test suite executes generated x86-64 binaries directly.
 The additional runtime executable under `test/runtime-execution/` exercises
 both architectures and is an explicit cross-target diagnostic, not part of
 the default host suite. Its private helpers live under `test/runtime-support/`;
-there is no F# comparison library in the production build graph.
+the helpers do not enter the production build graph.
 
 For cross-target or instruction-count verification, build the Docker-pinned
 QEMU emulators and plugin separately:

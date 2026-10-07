@@ -1,4 +1,4 @@
-(* Printer.fs - Format MIR graphs and scoped or summarized dumps. *)
+(* MIRPrinter.ml - Format MIR graphs and scoped or summarized dumps. *)
 [@@@warning "-4"]
 open IRPrinting
 let functionId id = StructuralFormat.format (StructuralFormat.Union ("FunctionId", [StructuralFormat.Scalar (Printf.sprintf "%LuUL" (AST.functionIdValue id))]))

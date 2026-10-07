@@ -1,4 +1,4 @@
-(* StdlibSourceTests.fs - Source-level invariants for maintained stdlib files.
+(* StdlibSourceTests.ml - Source-level invariants for maintained stdlib files.
    These checks catch stdlib definitions that are easy to shadow accidentally
    before the compiler accepts a misleading or unreachable implementation. *)
 open Dark_compiler
@@ -6,7 +6,7 @@ module R=RepositoryTestFiles
 module M=StringOrder.Map
 type testResult=(unit,string) result
 let (let*)=Result.bind
-let stdlibFiles ()=let dir=R.scriptPath "share/stdlib" in try Ok (R.filesUnder "share/stdlib" ".dark") with exn->Error ("Failed to list stdlib files in "^dir^": "^Printexc.to_string exn)
+let stdlibFiles ()=let dir=R.scriptPath "stdlib" in try Ok (R.filesUnder "stdlib" ".dark") with exn->Error ("Failed to list stdlib files in "^dir^": "^Printexc.to_string exn)
 let definitionName line=
  let units=Text.scalars line in let count=Array.length units in
  let white c=Uchar.is_valid c && Uucp.White.is_white_space (Uchar.of_int c) in

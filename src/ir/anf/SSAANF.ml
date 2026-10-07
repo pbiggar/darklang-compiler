@@ -4,7 +4,7 @@
    freshens later definitions so each SSA value has one defining site.
    LIR uses these virtual IDs for physical spill and ABI scratch registers.
 *)
-(* SSAANF.fs - Typed control-flow form for optimized ANF operations. *)
+(* SSAANF.ml - Typed control-flow form for optimized ANF operations. *)
 [@@@warning "-4"]
 module A = ANF
 module F = RcTypeFacts

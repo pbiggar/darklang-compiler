@@ -1,4 +1,4 @@
-(* RegisterAllocation.fs - Orchestrate integer and floating allocation and phi elimination. *)
+(* RegisterAllocation.ml - Orchestrate integer and floating allocation and phi elimination. *)
 [@@@warning "-4"]
 open AllocationModel
 open RegisterFacts

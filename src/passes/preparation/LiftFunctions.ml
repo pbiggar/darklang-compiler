@@ -1,4 +1,4 @@
-(* LiftFunctions.fs - Resolve lifted function references and program-level closure wrappers. *)
+(* LiftFunctions.ml - Resolve lifted function references and program-level closure wrappers. *)
 [@@@warning "-4"]
 module C = CheckedAST
 module A = ClosureAnalysis

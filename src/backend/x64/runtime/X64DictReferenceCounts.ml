@@ -1,4 +1,4 @@
-(* DictReferenceCounts.fs - Generate HAMT root and recursive payload lifetime helpers. *)
+(* X64DictReferenceCounts.ml - Generate HAMT root and recursive payload lifetime helpers. *)
 [@@@warning "-4"]
 open X64Operands
 open X64CodeGenTypes

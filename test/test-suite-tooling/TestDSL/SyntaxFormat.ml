@@ -1,5 +1,5 @@
 (*
-   SyntaxFormat.fs - Canonical Dark syntax fixture parser.
+   SyntaxFormat.ml - Canonical Dark syntax fixture parser.
 *)
 (* SyntaxFormat.ml - Preserve section validation and syntax-case grouping. *)
 open Dark_compiler

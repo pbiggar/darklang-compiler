@@ -1,4 +1,4 @@
-(* ListDisplay.fs - Shared list display helper lookup
+(* ListDisplay.ml - Shared list display helper lookup
    Centralizes the mapping from list element types to the stdlib display
    functions that render list values for printing. *)
 let getDisplayStringFunc = function

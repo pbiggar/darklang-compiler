@@ -1,4 +1,4 @@
-(* JsonPlanning.fs - monomorphic, type-directed JSON conversion plans. *)
+(* JsonPlanning.mli - monomorphic, type-directed JSON conversion plans. *)
 class planningSession : object
   method tryFind : string -> CheckedAST.functionDef list option
   method store : string -> CheckedAST.functionDef list -> unit

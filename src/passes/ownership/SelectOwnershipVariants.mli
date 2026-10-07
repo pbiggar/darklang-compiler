@@ -1,4 +1,4 @@
-(* SelectOwnershipVariants.fs - Choose inferred ownership variants at direct call sites. *)
+(* SelectOwnershipVariants.mli - Choose inferred ownership variants at direct call sites. *)
 type candidateIdentity
 type 'id catalog
 type callSite = {target : string; established : OwnedIR.callSignature; uniqueArguments : OwnedIR.IntSet.t}

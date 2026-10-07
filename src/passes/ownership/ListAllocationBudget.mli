@@ -1,2 +1,2 @@
-(* ListAllocationBudget.fs - Piecewise allocation accounting across shared continuations. *)
+(* ListAllocationBudget.mli - Piecewise allocation accounting across shared continuations. *)
 val allocationBudget : ListRegion.ownedRegion -> ListRegion.allocationBudget

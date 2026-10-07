@@ -1,4 +1,4 @@
-(* ASTPrettyPrinter.fs - Pretty printer for canonical Dark syntax. *)
+(* ASTPrettyPrinter.ml - Pretty printer for canonical Dark syntax. *)
 [@@@warning "-4"]
 open AST
 type literalEscapeContext=StringContent|InterpolatedStringText|CharContent

@@ -1,5 +1,5 @@
 (*
-   TypeCheckingTestRunnerTests.fs - Unit tests for type checking test execution.
+   TypeCheckingTestRunnerTests.ml - Unit tests for type checking test execution.
    Covers runner behavior that determines whether parsed test definitions pass
    or fail after invoking the compiler parser and type checker.
 *)

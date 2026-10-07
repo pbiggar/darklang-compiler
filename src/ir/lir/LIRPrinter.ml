@@ -1,4 +1,4 @@
-(* Printer.fs - Format LIR instructions and scoped or summarized dumps. *)
+(* LIRPrinter.ml - Format LIR instructions and scoped or summarized dumps. *)
 [@@@warning "-4"]
 open IRPrinting
 let functionId id = StructuralFormat.format (StructuralFormat.Union ("FunctionId", [StructuralFormat.Scalar (Printf.sprintf "%LuUL" (AST.functionIdValue id))]))

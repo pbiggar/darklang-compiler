@@ -312,16 +312,8 @@ val compareTypeId : typeId -> typeId -> int
 val compareConstructorId : constructorId -> constructorId -> int
 val compareFieldId : fieldId -> fieldId -> int
 val compareSemanticType : semanticType -> semanticType -> int
-(* Temporary typed access for complete migration observations; no identity construction. *)
-module MigrationObservation : sig
-  val bindingOrdinal : bindingId -> int option
-  val typeOrdinal : typeId -> int
-  val scopeOrdinal : scopeBoundaryId -> int
-  val groupOrdinal : recursiveGroupId -> int
-  val memberOrdinal : recursiveMemberId -> int
-end
 
-(* Display descriptions retain F# diagnostic spelling without exposing constructors. *)
+(* Display descriptions preserve stable diagnostic spelling without exposing constructors. *)
 module DiagnosticFormatting : sig
  val binding : bindingId -> StructuralValue.value
  val func : functionId -> StructuralValue.value

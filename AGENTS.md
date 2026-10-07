@@ -25,8 +25,8 @@ and merge-train handoff rules elsewhere in these guidelines for Work VMs.
   Bootstrap a minimal native environment with
   `bash scripts/vm/setup-native-toolchain /absolute/writable/toolchains`, then
   source that directory's `activate` file. This installs the pinned OCaml,
-  Dune and native prerequisites without changing system directories. It does
-  not install the historical F# oracle or unrelated development services.
+  Dune and native prerequisites without changing system directories. The bootstrap
+  contains only the native compiler toolchain and its dependencies.
 - Keep downloads, opam state, build logs and a writable `TMPDIR` under that
   toolchain directory. Build OCaml serially. Do not reuse incomplete downloads
   or accept the compiler version without checking its Unix operations.

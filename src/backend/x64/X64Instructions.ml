@@ -1,4 +1,4 @@
-(* Instructions.fs - Exhaustively dispatch LIR operations to typed x64 emitters. *)
+(* X64Instructions.ml - Exhaustively dispatch LIR operations to typed x64 emitters. *)
 let translateInstr comparisonContext (ctx:X64CodeGenTypes.funcCtx) instr =
     match instr with
     | LIR.Mov (dest, src) ->

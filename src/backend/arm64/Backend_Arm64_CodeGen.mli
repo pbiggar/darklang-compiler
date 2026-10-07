@@ -1,4 +1,4 @@
-(* CodeGen.fs - Assemble planned function and runtime-helper instruction chunks. *)
+(* Backend_Arm64_CodeGen.mli - Assemble planned function and runtime-helper instruction chunks. *)
 type functionCodegenCache = LIR.functionDef -> (unit -> (Symbolic.instr list,string) result) -> (Symbolic.instr list,string) result
 type metadataGroup = {contextIdentity:Obj.t;functions:LIR.functionDef list}
 type functionGroup = {contextIdentity:Obj.t;reusableAcrossCompilations:bool;functions:LIR.functionDef list}

@@ -1,4 +1,4 @@
-(* ListHIRTests.fs - Region eligibility, ownership accounting, and storage budgets. *)
+(* ListHIRTests.ml - Region eligibility, ownership accounting, and storage budgets. *)
 [@@@warning "-4-42"]
 open Dark_compiler
 module C=CheckedAST

@@ -1,4 +1,4 @@
-(* AnalyzeFunctionOwnership.fs - Schedule verified whole-function ownership over checked HIR. *)
+(* AnalyzeFunctionOwnership.mli - Schedule verified whole-function ownership over checked HIR. *)
 type context = {typeReg : TypeRegistries.typeRegistry; typeNames : TypeRegistries.typeNameRegistry; recordFieldsReg : (string * AST.semanticType) list StringOrder.Map.t; recordTypeParamsReg : string list StringOrder.Map.t; variantLookup : LoweringPrimitives.variantLookup; sumMetadata : LoweringPrimitives.sumMetadata; rcSumShapeReg : MemoryModel.rcSumShapeRegistry; funcReg : TypeRegistries.functionRegistry; functionNames : TypeRegistries.functionNameRegistry; moduleRegistry : AST.moduleRegistry}
 module Ownership : module type of OwnedIR.Make (ListLiveness.Identity)
 module Verification : module type of VerifyOwnedHIR.Make (ListLiveness.Identity)

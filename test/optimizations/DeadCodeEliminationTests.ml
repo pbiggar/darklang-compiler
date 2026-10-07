@@ -1,4 +1,4 @@
-(* DeadCodeEliminationTests.fs - Unit tests for LIR-level function reachability
+(* DeadCodeEliminationTests.ml - Unit tests for LIR-level function reachability
    Verifies tree shaking keeps function-address references that flow through
    lower-level call setup instructions, not just direct call instructions. *)
 [@@@warning "-4-42"]

@@ -1,4 +1,4 @@
-(* Substitution.fs - Substitute ANF atoms and simplify individual expressions. *)
+(* ANFSubstitution.ml - Substitute ANF atoms and simplify individual expressions. *)
 [@@@warning "-4"]
 open ANF
 open ANFConstants

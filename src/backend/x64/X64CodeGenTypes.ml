@@ -1,5 +1,5 @@
 (*
-   CodeGenTypes.fs - Define target code generation options, contexts, and planning facts.
+   X64CodeGenTypes.ml - Define target code generation options, contexts, and planning facts.
 *)
 [@@@warning "-4"]
 open X64Operands

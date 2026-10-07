@@ -1,4 +1,4 @@
-(* Aggregates.fs - Build skew-list storage and bind typed deconstruction patterns. *)
+(* LoweringAggregates.ml - Build skew-list storage and bind typed deconstruction patterns. *)
 [@@@warning "-4"]
 module A = ANF
 module C = CheckedAST

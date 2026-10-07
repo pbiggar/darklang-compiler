@@ -1,5 +1,5 @@
 (*
-   E2EFormatTests.fs - Unit tests for E2E DSL parsing
+   E2EFormatTests.mli - Unit tests for E2E DSL parsing
 
    Verifies parser behavior for multi-line E2E test forms used by upstream .dark files.
 *)

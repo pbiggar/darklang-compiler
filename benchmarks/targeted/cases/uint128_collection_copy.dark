@@ -1,0 +1,9 @@
+// uint128_collection_copy.dark - Targeted compiler workload.
+let build (remaining: Int64) (value: UInt128) (values: List<UInt128>) : List<UInt128> =
+    if remaining <= 0L then values
+    else build (remaining - 1L) (Stdlib.UInt128.add (value) (1Z)) (Stdlib.List.push (values) (value))
+let consume (values: List<UInt128>) (checksum: Int64) : Int64 =
+    match values with
+    | [] -> checksum
+    | value :: tail -> consume (tail) (checksum + (if value == 0Z then 1L else 2L))
+let values = build (__ITERATIONS__L) (0Z) ([]) in consume (values) (0L)

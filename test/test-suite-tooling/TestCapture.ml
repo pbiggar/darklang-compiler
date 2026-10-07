@@ -1,4 +1,4 @@
-(* Capture native console output for runner assertions and migration observations. *)
+(* Capture native console output for runner assertions. *)
 let run action=
  let out=Filename.temp_file "runner-output" ".txt" in let err=Filename.temp_file "runner-error" ".txt" in
  let savedOut=Unix.dup ~cloexec:true Unix.stdout in let savedErr=Unix.dup ~cloexec:true Unix.stderr in

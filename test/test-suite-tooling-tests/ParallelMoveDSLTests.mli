@@ -1,5 +1,5 @@
 (*
-   ParallelMoveDSLTests.fs - Unit tests for parallel-move fixture parsing and execution.
+   ParallelMoveDSLTests.mli - Unit tests for parallel-move fixture parsing and execution.
    Validates the DSL boundary without relying on the fixtures that it loads.
 *)
 type testResult=(unit,string) result

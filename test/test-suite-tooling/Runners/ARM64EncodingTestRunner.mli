@@ -1,5 +1,5 @@
 (*
-   ARM64EncodingTestRunner.fs - Test runner for ARM64 encoding tests
+   ARM64EncodingTestRunner.mli - Test runner for ARM64 encoding tests
    Loads ARM64 encoding test files (.arm64enc), runs the ARM64 encoder,
    and compares the output with expected machine code hex values.
    Load ARM64 encoding test from file

@@ -1,5 +1,5 @@
 (*
-   ARM64EncodingTests.fs - Unit tests for ARM64 encoding utilities
+   ARM64EncodingTests.ml - Unit tests for ARM64 encoding utilities
    Tests utility functions like encodeReg that are used by the
    ARM64 instruction encoder.
 *)

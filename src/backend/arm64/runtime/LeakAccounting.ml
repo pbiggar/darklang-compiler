@@ -1,5 +1,5 @@
 (*
-   LeakAccounting.fs - Generate allocation accounting and leak reports.
+   LeakAccounting.ml - Generate allocation accounting and leak reports.
 *)
 open ARM64CodeGenTypes
 open HeapAllocation

@@ -1,4 +1,4 @@
-(* ProgramCliTests.fs - Compiler CLI target-selection tests. *)
+(* ProgramCliTests.ml - Compiler CLI target-selection tests. *)
 [@@@warning "-4-42"]
 open Dark_compiler
 module P=Program

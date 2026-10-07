@@ -2,7 +2,7 @@
    Ensures non-self tailcall conversion does not strand RefCountDec operations
    after TailCall (which would be unreachable).
 *)
-(* TailCallDetectionTests.fs - Unit tests for tailcall conversion and cleanup ordering. *)
+(* TailCallDetectionTests.ml - Unit tests for tailcall conversion and cleanup ordering. *)
 [@@@warning "-4-42"]
 open Dark_compiler
 open MemoryModel

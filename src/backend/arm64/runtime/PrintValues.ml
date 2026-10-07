@@ -1,10 +1,7 @@
 (*
-   PrintValues.fs - Generate ARM64 nonterminating value printers.
+   PrintValues.ml - Generate ARM64 nonterminating value printers.
 *)
 open Immediates
-
-
-
 
 (*
    Generate ARM64 instructions to print int64 in X0 to stdout with newline (NO EXIT)
@@ -479,9 +476,6 @@ let generatePrintBoolNoNewline (target: ARM64.targetConfig) =
         ARM64.ADD_imm (ARM64.SP, ARM64.SP, 16);
     ]
 
-
-
-
 (*
    Generate ARM64 instructions to print float in D0 to stdout WITHOUT newline
    For use in tuple/list element printing
@@ -619,9 +613,6 @@ let generatePrintFloatNoNewline (target: ARM64.targetConfig) =
         ARM64.B (-48);
     ]
 
-
-
-
 (*
    Generate ARM64 instructions to print heap string WITHOUT newline
    Expects: X9 = data address, X10 = length
@@ -641,16 +632,6 @@ let generatePrintStringNoNewline (target: ARM64.targetConfig) =
         ARM64.MOVZ (syscalls.ARM64.syscallRegister, syscalls.ARM64.numbers.Platform.write, 0);
         ARM64.SVC syscalls.ARM64.svcImmediate;
     ]
-
-
-
-
-
-
-
-
-
-
 
 (*
    Generate ARM64 instructions to print a sequence of literal characters
@@ -751,14 +732,6 @@ let generatePrintBlob (target: ARM64.targetConfig) =
           108;
           62;
           10 ]
-
-
-
-
-
-
-
-
 
 (*
    Generate ARM64 instructions to perform write syscall only

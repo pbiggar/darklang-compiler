@@ -1,5 +1,5 @@
 (*
-   X86_64EncodingFormat.fs - Parser for multi-case x64 encoding and resolution fixtures.
+   X86_64EncodingFormat.ml - Parser for multi-case x64 encoding and resolution fixtures.
    A successful case can assert final bytes, deferred fixup labels, or both.
 *)
 open Dark_compiler

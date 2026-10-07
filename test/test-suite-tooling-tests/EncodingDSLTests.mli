@@ -1,5 +1,5 @@
 (*
-   EncodingDSLTests.fs - Unit tests for ARM64 and x64 encoding fixture extensions.
+   EncodingDSLTests.mli - Unit tests for ARM64 and x64 encoding fixture extensions.
    Tests parser and runner behavior that cannot safely be asserted by their own DSL files.
 *)
 type testResult=(unit,string) result

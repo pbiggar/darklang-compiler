@@ -1,4 +1,4 @@
-(* ELF.fs - Native executable container data structures. *)
+(* ELF.mli - Native executable container data structures. *)
 [@@@warning "-30"]
 val ei_MAG0 : char
 val ei_MAG1 : char

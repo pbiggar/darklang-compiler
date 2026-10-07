@@ -1,4 +1,4 @@
-(* RegionContractTests.fs - Unit ownership laws independent of collection layout and codegen. *)
+(* RegionContractTests.ml - Unit ownership laws independent of collection layout and codegen. *)
 [@@@warning "-4-42"]
 open Dark_compiler
 module H=HIR

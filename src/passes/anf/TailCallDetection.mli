@@ -1,4 +1,4 @@
-(* TailCallDetection.fs - Tail Call Detection Pass *)
+(* TailCallDetection.mli - Tail Call Detection Pass *)
 module TempMap = ANFConstants.TempMap
 module TempSet = ANFEffects.TempSet
 val isRefCountDec : ANF.cExpr -> bool

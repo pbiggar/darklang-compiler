@@ -1,5 +1,5 @@
 (*
-   ELF.fs - ELF Binary Format Types
+   ELF.ml - ELF Binary Format Types
    Defines data structures for the ELF (Executable and Linkable Format)
    used by Linux and other Unix-like systems.
    ELF is the standard executable format for Linux. This module defines
@@ -31,7 +31,7 @@
    Write
    Read
 *)
-(* ELF.fs - Native executable container data structures. *)
+(* ELF.ml - Native executable container data structures. *)
 [@@@warning "-30"]
 let ei_MAG0 = Char.chr (0x7F)
 let ei_MAG1 = 'E'

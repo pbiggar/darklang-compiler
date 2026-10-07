@@ -1,4 +1,4 @@
-(* Contextual lambda inference and currying from WrittenChecking.fs. *)
+(* Contextual lambda inference and currying from WrittenLambdaSupport.ml. *)
 open WrittenTypeSupport
 module WT = WrittenTypes
 module C = CheckedAST

@@ -1,4 +1,4 @@
-(* Diagnostics.fs - Record pass timing and format scoped IR diagnostics. *)
+(* PipelineDiagnostics.ml - Record pass timing and format scoped IR diagnostics. *)
 open ANFPrinter
 open MIRPrinter
 open LIRPrinter

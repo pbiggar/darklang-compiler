@@ -1,5 +1,5 @@
 (*
-   7_X86_64_Resolve.fs - x86-64 Label Resolution and Fixup
+   X86_64_Resolve.ml - x86-64 Label Resolution and Fixup
    Resolves symbolic labels (CALL, JMP, Jcc, LEA_rip) into concrete
    relative offsets. Uses a two-pass approach:
    Pass 1: Encode all instructions to get their byte sizes, record

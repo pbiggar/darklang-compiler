@@ -1,4 +1,4 @@
-(* Functions.fs - Check function bodies and collect concrete declaration specializations. *)
+(* CheckFunctions.ml - Check function bodies and collect concrete declaration specializations. *)
 open! AST
 open CheckingDiagnostics
 open Types

@@ -1,4 +1,4 @@
-(* Blocks.fs - Lower terminators and order blocks for target fallthrough. *)
+(* ARM64Blocks.ml - Lower terminators and order blocks for target fallthrough. *)
 open ARM64CodeGenTypes
 open ARM64Operands
 open ARM64Instructions

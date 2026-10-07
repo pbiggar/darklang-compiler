@@ -1,4 +1,4 @@
-(* VerifyListOwnership.fs - Independently verify region ownership, layouts, and typed edges. *)
+(* VerifyListOwnership.ml - Independently verify region ownership, layouts, and typed edges. *)
 [@@@warning "-4"]
 module H = HIR
 module L = ListRegion

@@ -1,5 +1,5 @@
 (*
-   PlatformTests.fs - Tests for validated compiler target classification.
+   PlatformTests.ml - Tests for validated compiler target classification.
    These tests keep supported OS/architecture pairs explicit without depending
    on the host running the test suite.
 *)

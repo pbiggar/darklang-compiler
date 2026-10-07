@@ -1,4 +1,4 @@
-(* Continuation inference and local recursive bindings from WrittenChecking.fs. *)
+(* Continuation inference and local recursive bindings from WrittenLetSupport.ml. *)
 [@@@warning "-4"]
 module WT = WrittenTypes
 module C = CheckedAST

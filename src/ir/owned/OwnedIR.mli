@@ -1,4 +1,4 @@
-(* OwnedIR.fs - Structured region ownership and explicit unit-transfer contracts. *)
+(* OwnedIR.mli - Structured region ownership and explicit unit-transfer contracts. *)
 module IntSet : Set.S with type elt = int
 type callSiteIdentity = {caller : AST.functionId; result : HIR.valueId}
 type 'id input = Borrowed of 'id | Consumed of 'id

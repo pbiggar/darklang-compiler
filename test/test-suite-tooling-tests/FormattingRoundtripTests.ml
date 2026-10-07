@@ -1,5 +1,5 @@
 (*
-   FormattingRoundtripTests.fs - Focused parser/pretty roundtrip regression tests.
+   FormattingRoundtripTests.ml - Focused parser/pretty roundtrip regression tests.
    Loads minimal expressions from data files so new regression cases do not
    require recompiling tests.
 *)

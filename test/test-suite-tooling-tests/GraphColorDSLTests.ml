@@ -1,4 +1,4 @@
-(* GraphColorDSLTests.fs - Unit tests for graph-coloring fixture parsing and execution.
+(* GraphColorDSLTests.ml - Unit tests for graph-coloring fixture parsing and execution.
    Keeps format validation outside the fixture DSL being validated. *)
 open Dark_compiler
 module G=GraphColorFormat

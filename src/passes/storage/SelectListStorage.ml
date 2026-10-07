@@ -1,4 +1,4 @@
-(* SelectListStorage.fs - Choose fixed-block or mapped storage for closed list regions. *)
+(* SelectListStorage.ml - Choose fixed-block or mapped storage for closed list regions. *)
 [@@@warning "-4"]
 module H = HIR
 module L = ListRegion

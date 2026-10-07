@@ -4,10 +4,14 @@ These diagnostic suites isolate compiler/runtime subsystems. They are separate
 from the audited application workloads in `../problems`, do not participate in
 the canonical `full` profile, and never update its baselines.
 
-The optional F# benchmark driver invokes the native OCaml compiler CLI; it has
-no compiler-assembly dependency. It alone requires .NET. Schema version 2
-reports cold compiler process time, including stdlib setup, rather than the
-former warm in-process session time. Do not compare that field to schema 1.
+The Python driver invokes the native compiler CLI. Schema version 2 reports
+cold compiler process time, including stdlib setup. It requires Python 3 and
+the built compiler. The standalone driver also accepts `--samples`, `--timeout`
+and `--compiler` flags:
+
+```bash
+python3 benchmarks/targeted/measure.py all /tmp/dark-targeted-benchmarks
+```
 
 Run one suite and write its measurements to a JSON file:
 

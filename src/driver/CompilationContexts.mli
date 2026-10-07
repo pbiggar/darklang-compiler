@@ -1,4 +1,4 @@
-(* Contexts.fs - Define stdlib, preamble, and user-compilation interfaces. *)
+(* CompilationContexts.mli - Define stdlib, preamble, and user-compilation interfaces. *)
 [@@@warning "-30"]
 val buildBaseFuncNames : AST_to_ANF.registries -> StringOrder.Set.t
 val buildLambdaLiftFunctionCatalog : AST_to_ANF.registries -> StringOrder.Set.t -> (string * AST.semanticType) FunctionIdMap.t -> LiftFunctions.functionCatalog

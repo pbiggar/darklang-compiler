@@ -1,4 +1,4 @@
-(* ElaborateFunctionOwnership.fs - Infer conservative boundaries and place whole-function ownership steps. *)
+(* ElaborateFunctionOwnership.mli - Infer conservative boundaries and place whole-function ownership steps. *)
 module Ownership : module type of OwnedIR.Make (ListLiveness.Identity)
 type ('leaf, 'block) dialect = {
  body : 'block -> ('leaf, 'block) HIR.operation HIR.block;

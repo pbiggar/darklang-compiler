@@ -1,4 +1,4 @@
-(* ProgressBarTests.fs - Unit tests for the test runner progress bar
+(* ProgressBarTests.ml - Unit tests for the test runner progress bar
    Ensures the progress bar handles over-completion without crashing. *)
 open Dark_compiler
 type testResult=(unit,string) result

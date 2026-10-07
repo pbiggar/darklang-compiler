@@ -1,5 +1,5 @@
 (*
-   ClosureAnalysis.fs - Track closure environments, free variables, and inferred capture types.
+   ClosureAnalysis.ml - Track closure environments, free variables, and inferred capture types.
 *)
 [@@@warning "-4"]
 module C = CheckedAST

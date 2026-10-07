@@ -1,4 +1,4 @@
-(* TypeInference.fs - Recover checked expression types for representation-directed ANF lowering. *)
+(* LoweringTypeInference.ml - Recover checked expression types for representation-directed ANF lowering. *)
 [@@@warning "-4"]
 module C = CheckedAST
 module P = LoweringPrimitives

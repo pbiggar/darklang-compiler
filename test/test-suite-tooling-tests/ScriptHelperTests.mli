@@ -1,5 +1,5 @@
 (*
-   ScriptHelperTests.fs - Repository policy tests for compiler and shell tooling
+   ScriptHelperTests.mli - Repository policy tests for compiler and shell tooling
    Enforces selected source and script invariants that are cheap to check structurally.
 *)
 type testResult=(unit,string) result

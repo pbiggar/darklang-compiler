@@ -1,6 +1,6 @@
 [@@@warning "-42"]
 (*
-   Fixtures.fs - Build typed ARM64 code-generation test fixtures.
+   Fixtures.ml - Build typed ARM64 code-generation test fixtures.
 *)
 open Dark_compiler
 module L=LIR

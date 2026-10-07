@@ -1,4 +1,4 @@
-(* ApplyInstructions.fs - Rewrite instruction operands through the allocation and spill plan. *)
+(* ApplyRegisterAllocation.ml - Rewrite instruction operands through the allocation and spill plan. *)
 [@@@warning "-4"]
 open AllocationModel
 open SpillOperands

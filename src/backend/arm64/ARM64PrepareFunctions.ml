@@ -1,4 +1,4 @@
-(* PrepareFunctions.fs - Attach target planning facts and outline expensive release operations. *)
+(* ARM64PrepareFunctions.ml - Attach target planning facts and outline expensive release operations. *)
 open ARM64CodeGenTypes
 open ReleasePlanSummary
 let helperLabelsForRequirements (requirements:LIR.arm64RcHelperRequirements)=

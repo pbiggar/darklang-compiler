@@ -1,4 +1,4 @@
-(* ANFDeadCodeElimination.fs - ANF-level Dead Code Elimination *)
+(* ANFDeadCodeElimination.mli - ANF-level Dead Code Elimination *)
 val getCalledFunctions : ANF.functionDef -> SpecializationIdentity.FunctionSet.t
 val buildCallGraph : ANF.functionDef list -> SpecializationIdentity.FunctionSet.t FunctionIdMap.t
 val filterReachableFunctions : SpecializationIdentity.FunctionSet.t -> ANF.functionDef list -> ANF.functionDef list

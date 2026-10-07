@@ -1,5 +1,5 @@
 (*
-   RCReleaseDSLTests.fs - Tests for semantic reference-release fixture parsing.
+   RCReleaseDSLTests.ml - Tests for semantic reference-release fixture parsing.
    Covers typed shape parsing, invalid placement, and executable release behavior.
 *)
 [@@@warning "-4-42"]

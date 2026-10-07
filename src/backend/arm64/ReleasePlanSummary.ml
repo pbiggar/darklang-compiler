@@ -1,4 +1,4 @@
-(* ReleasePlanSummary.fs - Summarize recursive release plans and required runtime helpers. *)
+(* ReleasePlanSummary.ml - Summarize recursive release plans and required runtime helpers. *)
 [@@@warning "-4"]
 open ARM64CodeGenTypes
 open ARM64ClosureReferenceCounts

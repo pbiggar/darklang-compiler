@@ -1,4 +1,4 @@
-(* SSA_Construction.fs - Convert typed MIR control flow to static single assignment. *)
+(* SSA_Construction.mli - Convert typed MIR control flow to static single assignment. *)
 type predecessors = MIR.label list MIR.LabelMap.t
 type dominators = MIR.label MIR.LabelMap.t
 type dominanceFrontier = MIR.LabelSet.t MIR.LabelMap.t

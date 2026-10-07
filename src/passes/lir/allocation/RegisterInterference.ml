@@ -1,4 +1,4 @@
-(* Interference.fs - Build register-interference graphs from solved liveness. *)
+(* RegisterInterference.ml - Build register-interference graphs from solved liveness. *)
 open AllocationModel
 open RegisterFacts
 open RegisterLiveness

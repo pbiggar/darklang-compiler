@@ -226,8 +226,8 @@ let errUnclosed state index closing opening openRange =
 (*
    --- recursion-depth guard ---
    parseExpr/parseTypeRef/parsePatternBase recurse per nesting level, so a
-   pathological `((((…` would overflow the stack — and a .NET StackOverflow is
-   UNCATCHABLE (it kills the process). At the cap we diagnose once and skip to
+   pathological `((((…` can overflow the stack before diagnostics are returned.
+   At the cap we diagnose once and skip to
    EOF. Generated E2E batches can contain several hundred nested `let`
    bindings, so the cap must permit those while still guarding against a
    runaway recursive parse.
@@ -468,7 +468,7 @@ let offsideContinues state head index =
    A `-` GLUED to a following number, with a space before it, is a negative-literal
    ARGUMENT (`f a -1`), not subtraction (`f a - 1` = `(f a) - 1`). The application
    arg loop accepts it so `Float.multiply a -1.0` / `add 5L -1L` parse correctly
-   (matches F#'s high-precedence-application rule).
+   (application binds more tightly than infix operations).
    no space after `-`
    space before `-`
 *)

@@ -1,4 +1,4 @@
-(* ReturnAnalysis.fs - Analyze aliases and ownership escaping through returns and aggregates. *)
+(* RcReturnAnalysis.ml - Analyze aliases and ownership escaping through returns and aggregates. *)
 [@@@warning "-4"]
 module A = ANF
 module TempMap = InliningCommon.TempMap

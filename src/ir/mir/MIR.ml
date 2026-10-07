@@ -16,7 +16,7 @@
    VReg IDs that hold float values (for SSA phi nodes)
    MIR program (list of functions plus type/record registries)
 *)
-(* MIR.fs - Mid-level Intermediate Representation. *)
+(* MIR.ml - Mid-level Intermediate Representation. *)
 [@@@warning "-4-30"]
 (*
    Virtual register (infinite supply)

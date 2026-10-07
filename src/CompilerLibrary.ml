@@ -1,4 +1,4 @@
-(* CompilerLibrary.fs - Compile a validated request using its explicit source-context plan. *)
+(* CompilerLibrary.ml - Compile a validated request using its explicit source-context plan. *)
 module X=CompilationContexts
 module P=PackageCatalog
 module O=CompilerOptions

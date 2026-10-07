@@ -1,5 +1,5 @@
 (*
-   X86_64BinaryTests.fs - End-to-end test for x86-64 binary generation
+   X86_64BinaryTests.ml - End-to-end test for x86-64 binary generation
    Generates a minimal x86-64 ELF binary and verifies it can be executed.
    This proves the encoder + ELF generation pipeline works end-to-end.
 *)
@@ -64,4 +64,4 @@ let runElfBinary binary =
 let testExecuteElf () =
  let machineCode=exitProgram 42 in let binary=Binary_Generation_ELF_X86_64.createExecutableWithPools machineCode LiteralPool.emptyStringPool LiteralPool.emptyFloatPool false 0 in
  match runElfBinary binary with Error err -> Error err | Ok exitCode -> if exitCode=42 then Ok () else Error (Printf.sprintf "Expected exit code 42, got %d" exitCode)
-let tests=NativePortRegressionTests.printingTests @ ["ELF ident helper",testElfIdentHelper;"x64 combined instruction encodings",testCombinedInstructionEncodings;"Generate x86-64 ELF",testGenerateElf;"Execute x86-64 ELF",testExecuteElf]
+let tests=NativeRegressionTests.printingTests @ ["ELF ident helper",testElfIdentHelper;"x64 combined instruction encodings",testCombinedInstructionEncodings;"Generate x86-64 ELF",testGenerateElf;"Execute x86-64 ELF",testExecuteElf]

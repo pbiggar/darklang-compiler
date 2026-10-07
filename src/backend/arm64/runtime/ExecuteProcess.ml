@@ -1,5 +1,5 @@
 (*
-   ExecuteProcess.fs - Generate process replacement runtime support.
+   ExecuteProcess.ml - Generate process replacement runtime support.
 *)
 open HeapAllocation
 open ARM64Operands

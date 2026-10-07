@@ -1,5 +1,5 @@
 (*
-   AllocationTests.fs - Verify allocation, operand preservation, and root ownership emission.
+   AllocationTests.mli - Verify allocation, operand preservation, and root ownership emission.
    Sleep is target-native on every supported ARM64 OS. Milliseconds are first
    converted to integral nanoseconds, then split into a normalized timespec;
    EINTR resumes from the kernel-provided remainder.

@@ -1,5 +1,5 @@
 (*
-   Diagnostics.fs - Represent typing failures and render source-compatible diagnostics.
+   CheckingDiagnostics.ml - Represent typing failures and render source-compatible diagnostics.
    `crash` is the public source-level bottom operation. The older builtin is
    retained solely for the test harness.
 *)

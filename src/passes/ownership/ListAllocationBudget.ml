@@ -1,4 +1,4 @@
-(* ListAllocationBudget.fs - Piecewise allocation accounting across shared continuations. *)
+(* ListAllocationBudget.ml - Piecewise allocation accounting across shared continuations. *)
 [@@@warning "-4"]
 module H = HIR
 module L = ListRegion

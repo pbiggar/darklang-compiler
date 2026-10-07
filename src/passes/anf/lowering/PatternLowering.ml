@@ -1,4 +1,4 @@
-(* PatternLowering.fs - Lower ordered match alternatives and typed pattern projections. *)
+(* PatternLowering.ml - Lower ordered match alternatives and typed pattern projections. *)
 [@@@warning "-4"]
 module A = ANF
 module C = CheckedAST

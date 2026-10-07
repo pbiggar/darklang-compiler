@@ -1,5 +1,5 @@
 (*
-   ParallelMoveFormat.fs - Parser for parallel-move lowering fixtures.
+   ParallelMoveFormat.ml - Parser for parallel-move lowering fixtures.
    Converts compact destination/operand pairs and expected symbolic ARM64 into typed cases.
 *)
 open Dark_compiler

@@ -1,4 +1,4 @@
-(* NativePipeline.fs - Compile direct-call components callee-first. *)
+(* NativePipeline.ml - Compile direct-call components callee-first. *)
 [@@@warning "-4"]
 open CompilerOptions
 open PipelineDiagnostics

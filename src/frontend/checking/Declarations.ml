@@ -1,5 +1,5 @@
 (*
-   Declarations.fs - Validate type declarations and summarize source inventories.
+   Declarations.ml - Validate type declarations and summarize source inventories.
 *)
 (* Declarations.ml - Validate type declarations and summarize source inventories. *)
 open! AST

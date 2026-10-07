@@ -1,5 +1,5 @@
 (*
-   Buffers.fs - Emit arm64 instructions for buffers operations.
+   ARM64EmitBuffers.ml - Emit arm64 instructions for buffers operations.
 *)
 [@@@warning "-4"]
 let bind f value=Result.bind value f
@@ -45,9 +45,6 @@ let operandText operand=
  | LIR.StringSymbol text -> Union ("StringSymbol",[Text text])
  | LIR.FloatSymbol value -> Union ("FloatSymbol",[Scalar (FloatFormat.structural value)])
  | LIR.FuncAddr id -> Union ("FuncAddr",[AST.DiagnosticFormatting.func id]))
-
-
-
 
 open ARM64CodeGenTypes
 open HeapAllocation
@@ -216,27 +213,6 @@ let emitCanonicalBufferEq (ctx: codeGenContext) (kind: MemoryModel.canonicalBuff
 *)
 let emitStringConcatBinary (ctx: codeGenContext) (dest: LIR.reg) (left: LIR.operand) (right: LIR.operand) =
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     lirRegToARM64Reg dest
     |> bind (fun destReg ->
 
@@ -302,12 +278,6 @@ let emitStringConcatBinary (ctx: codeGenContext) (dest: LIR.reg) (left: LIR.oper
                     Symbolic.STR (Symbolic.X13, Symbolic.X14, 8)
                 ]
 
-
-
-
-
-
-
                 in
                 let copyLeft = [
                     Symbolic.MOV_reg (Symbolic.X15, Symbolic.X9);
@@ -322,11 +292,6 @@ let emitStringConcatBinary (ctx: codeGenContext) (dest: LIR.reg) (left: LIR.oper
                     Symbolic.SUB_imm (Symbolic.X13, Symbolic.X13, 1);
                     Symbolic.B (-6)
                 ]
-
-
-
-
-
 
                 in
                 let copyRight = [

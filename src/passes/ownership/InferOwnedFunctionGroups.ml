@@ -1,4 +1,4 @@
-(* InferOwnedFunctionGroups.fs - Infer uniqueness variants for owned-HIR call groups. *)
+(* InferOwnedFunctionGroups.ml - Infer uniqueness variants for owned-HIR call groups. *)
 [@@@warning "-4"]
 module O = OwnedIR
 module R = InferRecursiveOwnership

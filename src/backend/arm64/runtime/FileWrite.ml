@@ -1,5 +1,5 @@
 (*
-   FileWrite.fs - Generate checked file-write runtime operations.
+   FileWrite.ml - Generate checked file-write runtime operations.
    Generate ARM64 instructions to write content to a file
    pathReg: register containing pointer to heap string (path)
    contentReg: register containing pointer to heap string (content)
@@ -66,11 +66,6 @@
 let generateFileWriteBlob (target: ARM64.targetConfig) (destReg: ARM64.reg) (pathReg: ARM64.reg) (contentReg: ARM64.reg) (append: bool) =
     let os = ARM64.targetOS target in
     let syscalls = ARM64.targetSyscalls target in
-
-
-
-
-
 
     let (writeFlags, appendFlags) =
         match os with

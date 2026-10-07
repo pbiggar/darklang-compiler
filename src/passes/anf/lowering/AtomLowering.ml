@@ -1,4 +1,4 @@
-(* AtomLowering.fs - Lower atom-producing expressions and their ordered binding prefixes. *)
+(* AtomLowering.ml - Lower atom-producing expressions and their ordered binding prefixes. *)
 [@@@warning "-4"]
 module A = ANF
 module C = CheckedAST

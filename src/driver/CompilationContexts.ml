@@ -1,4 +1,4 @@
-(* Contexts.fs - Define stdlib, preamble, and user-compilation interfaces. *)
+(* CompilationContexts.ml - Define stdlib, preamble, and user-compilation interfaces. *)
 [@@@warning "-30"]
 module M=StringOrder.Map
 module S=StringOrder.Set

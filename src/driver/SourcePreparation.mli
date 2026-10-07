@@ -1,4 +1,4 @@
-(* SourcePreparation.fs - Prepare checked declarations through specialization and closure lowering. *)
+(* SourcePreparation.mli - Prepare checked declarations through specialization and closure lowering. *)
 val extractReturnTypes : TypeRegistries.functionRegistry -> (string * AST.semanticType) FunctionIdMap.t
 val emptyRegistries : AST.moduleRegistry -> AST_to_ANF.registries
 val liftLambdasWithBase : TypeRegistries.typeRegistry -> LoweringPrimitives.variantLookup -> LiftFunctions.functionCatalog -> CompilerOptions.passTimingRecorder option -> CheckedAST.program -> (CheckedAST.program,string) result

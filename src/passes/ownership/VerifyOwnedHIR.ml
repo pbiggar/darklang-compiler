@@ -4,7 +4,7 @@
    Typed identities and independent primitive contracts must verify before
    ownership facts may drive selection or identify calls for materialization.
 *)
-(* VerifyOwnedHIR.fs - Jointly verify typed HIR and its independent ownership boundary. *)
+(* VerifyOwnedHIR.ml - Jointly verify typed HIR and its independent ownership boundary. *)
 [@@@warning "-4"]
 type 'leaf hirContracts = {leaf : 'leaf -> HIR.primitiveContract; callSignature : AST.functionId -> HIR.functionSignature option; callContract : HIR.functionCall -> HIR.primitiveContract option}
 module Make (Identity : OwnedIR.Identity) = struct

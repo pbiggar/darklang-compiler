@@ -1,5 +1,5 @@
 (*
-   Calls.fs - Emit arm64 instructions for calls operations.
+   ARM64EmitCalls.ml - Emit arm64 instructions for calls operations.
 *)
 [@@@warning "-4"]
 let distinct xs=let _,ys=List.fold_left (fun (seen,ys) x -> if List.mem x seen then seen,ys else x::seen,x::ys) ([],[]) xs in List.rev ys
@@ -61,10 +61,6 @@ let emitIndirectTailCall (ctx: codeGenContext) (func: LIR.reg) (_args: LIR.opera
    Just do the BLR
 *)
 let emitClosureCall (_ctx: codeGenContext) (_dest: LIR.reg) (funcPtr: LIR.reg) (_args: LIR.operand list) =
-
-
-
-
 
     lirRegToARM64Reg funcPtr
     |> Result.map (fun funcPtrReg ->

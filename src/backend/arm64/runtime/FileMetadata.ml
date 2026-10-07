@@ -1,5 +1,5 @@
 (*
-   FileMetadata.fs - Generate file existence, removal, and permission operations.
+   FileMetadata.ml - Generate file existence, removal, and permission operations.
    Generate ARM64 instructions for Stdlib.File.exists
    Input: pathReg contains heap string pointer (format: [refcount:8][len:8][data:N])
    Output: destReg = 1 if file exists, 0 if not
@@ -66,10 +66,6 @@
 let generateFileExists (target: ARM64.targetConfig) (destReg: ARM64.reg) (pathReg: ARM64.reg) =
     let os = ARM64.targetOS target in
     let syscalls = ARM64.targetSyscalls target in
-
-
-
-
 
     match os with
     | Platform.MacOS ->
@@ -206,13 +202,6 @@ let generateFileExists (target: ARM64.targetConfig) (destReg: ARM64.reg) (pathRe
             ARM64.ADD_imm (ARM64.SP, ARM64.SP, 16);
             ARM64.MOV_reg (destReg, ARM64.X0);
         ]
-
-
-
-
-
-
-
 
 (*
    Generate ARM64 instructions to delete a file and return Result<Unit, String>
@@ -379,9 +368,6 @@ let generateFileDelete (target: ARM64.targetConfig) (destReg: ARM64.reg) (pathRe
             ARM64.STR (ARM64.X1, ARM64.X0, 16);
             ARM64.B (27);
 
-
-
-
             ARM64.MOV_reg (ARM64.X2, ARM64.X28);
             ARM64.ADD_imm (ARM64.X28, ARM64.X28, 24);
             ARM64.MOVZ (ARM64.X1, 5, 0);
@@ -547,13 +533,6 @@ let generateFileDelete (target: ARM64.targetConfig) (destReg: ARM64.reg) (pathRe
             ARM64.ADD_imm (ARM64.SP, ARM64.SP, 32);
             ARM64.MOV_reg (destReg, ARM64.X0);
         ]
-
-
-
-
-
-
-
 
 (*
    Generate ARM64 instructions to set executable permission on a file

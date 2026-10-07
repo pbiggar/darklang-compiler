@@ -4,7 +4,7 @@
    boundaries are explored lazily because recursive proof remains atomic.
    Exhausting the bounded search is an optimization miss, not a compile error.
 *)
-(* InferRecursiveOwnership.fs - Solve uniqueness boundaries across visible function groups. *)
+(* InferRecursiveOwnership.ml - Solve uniqueness boundaries across visible function groups. *)
 [@@@warning "-4"]
 module O = OwnedIR
 module U = InferOwnershipUniqueness

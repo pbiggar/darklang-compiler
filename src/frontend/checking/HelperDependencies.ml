@@ -1,5 +1,5 @@
 (*
-   HelperDependencies.fs - Solve transitive generated comparison-helper dependencies.
+   HelperDependencies.ml - Solve transitive generated comparison-helper dependencies.
 *)
 (* HelperDependencies.ml - Solve transitive generated comparison-helper dependencies. *)
 [@@@warning "-30"]

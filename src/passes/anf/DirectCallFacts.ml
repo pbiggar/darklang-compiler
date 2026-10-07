@@ -1,4 +1,4 @@
-(* DirectCallFacts.fs - Value, call, and rewrite facts for SSA direct-call specialization. *)
+(* DirectCallFacts.ml - Value, call, and rewrite facts for SSA direct-call specialization. *)
 [@@@warning "-4"]
 module A = ANF
 module TempMap = InliningCommon.TempMap

@@ -1,5 +1,5 @@
 (*
-   CheckLambdas.fs - Check Lambda expressions while preserving source diagnostics and order.
+   CheckLambdas.ml - Check Lambda expressions while preserving source diagnostics and order.
 *)
 (* CheckLambdas.ml - Check Lambda expressions while preserving source diagnostics and order. *)
 open! AST

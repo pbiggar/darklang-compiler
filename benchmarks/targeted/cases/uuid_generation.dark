@@ -1,0 +1,8 @@
+// uuid_generation.dark - Targeted compiler workload.
+let benchmark (remaining: Int64) (checksum: Int64) : Int64 =
+    if remaining <= 0L then checksum
+    else
+        let text = Stdlib.Uuid.toString (Stdlib.Uuid.generate ()) in
+        let valid = Stdlib.String.__byteAtUnchecked (text) (14L) == 52L && Stdlib.String.__byteLength (text) == 36L in
+        benchmark (remaining - 1L) (checksum + (if valid then 1L else 1000L))
+benchmark (__ITERATIONS__L) (0L)

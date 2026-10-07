@@ -1,5 +1,5 @@
 (*
-   MaterializeHelpers.fs - Insert reachable equality and ordering helper definitions.
+   MaterializeHelpers.ml - Insert reachable equality and ordering helper definitions.
 *)
 (* MaterializeHelpers.ml - Insert reachable equality and ordering helper definitions. *)
 open! AST

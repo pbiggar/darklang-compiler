@@ -2,7 +2,7 @@
    Extracts call graph from ANF functions and determines reachability.
    Used for stdlib tree-shaking and coverage without re-compiling stdlib.
 *)
-(* ANFDeadCodeElimination.fs - ANF-level Dead Code Elimination *)
+(* ANFDeadCodeElimination.ml - ANF-level Dead Code Elimination *)
 open ANF
 module FS = SpecializationIdentity.FunctionSet
 (*

@@ -1,5 +1,5 @@
 (*
-   PlanningBoundaryTests.fs - Verify code-generation planning preconditions and cost attribution.
+   PlanningBoundaryTests.ml - Verify code-generation planning preconditions and cost attribution.
 *)
 [@@@warning "-4-42"]
 open Dark_compiler

@@ -1,5 +1,5 @@
 [@@@warning "-4-42"]
-(* IRPrinterTests.fs - Unit tests for shared IR formatting
+(* IRPrinterTests.ml - Unit tests for shared IR formatting
    Ensures IRPrinter outputs match pinned formatting for MIR/LIR programs. *)
 open Dark_compiler
 module M=MIR

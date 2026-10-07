@@ -1,5 +1,5 @@
 (*
-   WrittenFormatter.fs - Conservative formatting for validated interpreter syntax.
+   WrittenFormatter.ml - Conservative formatting for validated interpreter syntax.
    A syntax fingerprint without source positions. Reparse checks use this
    instead of comparing WrittenTypes ranges, which change when text is formatted.
 *)

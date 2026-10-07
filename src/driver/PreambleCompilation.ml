@@ -1,4 +1,4 @@
-(* PreambleCompilation.fs - Compile reusable preamble contexts and their dependencies. *)
+(* PreambleCompilation.ml - Compile reusable preamble contexts and their dependencies. *)
 module X=CompilationContexts
 module P=SourcePreparation
 module M=StringOrder.Map

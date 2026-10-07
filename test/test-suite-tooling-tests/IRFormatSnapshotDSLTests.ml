@@ -1,5 +1,5 @@
 (*
-   IRFormatSnapshotDSLTests.fs - Unit tests for IR formatting snapshot fixtures.
+   IRFormatSnapshotDSLTests.ml - Unit tests for IR formatting snapshot fixtures.
    Validates multi-case parsing and exact formatter execution outside the fixture DSL.
 *)
 (* Retain the original snapshot DSL tests and their exact formatter expectations. *)

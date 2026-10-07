@@ -1,4 +1,4 @@
-(* ExtractListRegions.fs - Recognize closed list computations and prove scalar scope eligibility. *)
+(* ExtractListRegions.ml - Recognize closed list computations and prove scalar scope eligibility. *)
 [@@@warning "-4"]
 module C = CheckedAST
 module H = HIR

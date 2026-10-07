@@ -1,13 +1,7 @@
 (*
-   Coverage.fs - Generate coverage-buffer output at program termination.
+   Coverage.ml - Generate coverage-buffer output at program termination.
 *)
 open Immediates
-
-
-
-
-
-
 
 (*
    Generate ARM64 instructions to flush coverage data to file

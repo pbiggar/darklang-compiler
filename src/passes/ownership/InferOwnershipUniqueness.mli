@@ -1,4 +1,4 @@
-(* InferOwnershipUniqueness.fs - Derive verifier-proven uniqueness boundary variants. *)
+(* InferOwnershipUniqueness.mli - Derive verifier-proven uniqueness boundary variants. *)
 val maximumVariants : int
 val refinableModeCount : 'id OwnedIR.functionSignature -> int
 val withinVariantLimit : int -> bool

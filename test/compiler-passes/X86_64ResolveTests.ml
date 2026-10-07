@@ -1,5 +1,5 @@
 [@@@warning "-4-42"]
-(* X86_64ResolveTests.fs - Tests for x86-64 label resolution
+(* X86_64ResolveTests.ml - Tests for x86-64 label resolution
    Verifies that CALL/JMP/Jcc labels are resolved to correct relative offsets. *)
 open Dark_compiler
 open X86_64

@@ -1,7 +1,7 @@
 (*
-   Binary_Generation_ELF.fs - ELF Binary Generation (Pass 8, x64 backend)
+   Binary_Generation_ELF_X86_64.ml - ELF Binary Generation (Pass 8, x64 backend)
    Generates a complete ELF64 executable from x86-64 machine code for Linux.
-   Uses the shared Elf64Header / Elf64ProgramHeader types from Binary_ELF.fs.
+   Uses the shared Elf64Header / Elf64ProgramHeader types from Binary_ELF.ml.
    Machine code is passed as a byte array because x86-64 has variable-length
    instructions (1-15 bytes each).
 *)

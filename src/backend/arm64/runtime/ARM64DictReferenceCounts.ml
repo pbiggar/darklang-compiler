@@ -1,5 +1,5 @@
 (*
-   DictReferenceCounts.fs - Generate HAMT root and recursive payload lifetime helpers.
+   ARM64DictReferenceCounts.ml - Generate HAMT root and recursive payload lifetime helpers.
 *)
 [@@@warning "-4"]
 open! MemoryModel

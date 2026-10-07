@@ -1,5 +1,5 @@
 (*
-   Operands.fs - Materialize target operands, registers, and immediates.
+   X64Operands.ml - Materialize target operands, registers, and immediates.
    Resolve a LIR.FReg to x86-64 XMM register.
    Emit inline 8-byte-at-a-time copy of a UTF-8 byte array to heap memory.
    Stores bytes starting after the two-word dynamic-buffer header.

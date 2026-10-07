@@ -1,4 +1,4 @@
-(* NativeEffects.fs - Emit x64 instructions for nativeeffects operations. *)
+(* X64EmitNativeEffects.ml - Emit x64 instructions for nativeeffects operations. *)
 [@@@warning "-4"]
 open X64Operands
 open X64CodeGenTypes

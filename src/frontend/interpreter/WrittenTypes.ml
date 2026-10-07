@@ -5,7 +5,7 @@
    fine-grained keyword/symbol ranges) that the editor tooling needs: the
    semantic-token highlighter, the LSP (hover / diagnostics), and the formatter.
    The tree is converted 1:1 into the Dark `LanguageTools.WrittenTypes` (as Dvals) by
-   `WrittenTypesToDarkTypes` in `Builtins.Language/Libs/Parser.fs`.
+   `WrittenTypesToDarkTypes` in `Builtins.Language/Libs/WrittenTypes.ml`.
    Execution lowering (`WrittenTypesToProgramTypes`) consumes the same tree,
    ignoring the ranges and minting fresh node ids as it lowers to ProgramTypes.
    (Node ids are ephemeral — a `gid()` counter, not source-derived — so they are

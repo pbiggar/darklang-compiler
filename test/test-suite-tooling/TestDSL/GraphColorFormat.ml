@@ -1,4 +1,4 @@
-(* GraphColorFormat.fs - Parser for graph-coloring algorithm fixtures.
+(* GraphColorFormat.ml - Parser for graph-coloring algorithm fixtures.
    Represents graph topology, coloring preferences, and observable properties as typed data. *)
 open Dark_compiler
 module M=StringOrder.Map

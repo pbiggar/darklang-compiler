@@ -1,4 +1,4 @@
-(* Buffers.fs - Emit x64 instructions for buffers operations. *)
+(* X64EmitBuffers.ml - Emit x64 instructions for buffers operations. *)
 [@@@warning "-4"]
 open X64Operands
 open X64CodeGenTypes
@@ -45,9 +45,6 @@ let operandText operand=
  | LIR.StringSymbol text -> Union ("StringSymbol",[Text text])
  | LIR.FloatSymbol value -> Union ("FloatSymbol",[Scalar (FloatFormat.structural value)])
  | LIR.FuncAddr id -> Union ("FuncAddr",[AST.DiagnosticFormatting.func id]))
-
-
-
 
 let utf8Len = String.length
 (*

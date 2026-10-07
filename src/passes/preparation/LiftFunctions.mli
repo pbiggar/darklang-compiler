@@ -1,4 +1,4 @@
-(* LiftFunctions.fs - Resolve lifted function references and program-level closure wrappers. *)
+(* LiftFunctions.mli - Resolve lifted function references and program-level closure wrappers. *)
 type liftStateWithFuncs = { state : ClosureAnalysis.liftState; funcParams : AST.semanticType list FunctionIdMap.t; generatedWrappers : (AST.functionId * AST.functionId) FunctionIdMap.t }
 type functionCatalog = { params : AST.semanticType list FunctionIdMap.t; returnTypes : AST.semanticType FunctionIdMap.t; genericDefs : (string list * AST.semanticType) FunctionIdMap.t }
 val liftLambdasInFunc : CheckedAST.functionDef -> ClosureAnalysis.liftState -> (CheckedAST.functionDef * ClosureAnalysis.liftState, string) result

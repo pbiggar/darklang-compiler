@@ -1,4 +1,4 @@
-(* PackageManager.fs - Hosted package resolution and persistent response cache. *)
+(* PackageManager.mli - Hosted package resolution and persistent response cache. *)
 [@@@warning "-30"]
 type config={server:string;cachePath:string}
 type resolvedSource={name:string;source:string}

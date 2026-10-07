@@ -1,5 +1,5 @@
 (*
-   X86_64Parser.fs - Parser for the x64 instruction subset used by encoding fixtures.
+   X86_64Parser.ml - Parser for the x64 instruction subset used by encoding fixtures.
    Uses constructor-style syntax matching the x64 instruction discriminated union.
 *)
 [@@@warning "-4"]

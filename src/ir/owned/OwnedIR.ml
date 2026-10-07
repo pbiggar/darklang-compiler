@@ -23,7 +23,7 @@
    ownership identity to the branch target; Unmanaged means the value has no
    ownership unit.
 *)
-(* OwnedIR.fs - Structured region ownership and explicit unit-transfer contracts. *)
+(* OwnedIR.ml - Structured region ownership and explicit unit-transfer contracts. *)
 [@@@warning "-4"]
 module IntSet = Set.Make (Int)
 (*

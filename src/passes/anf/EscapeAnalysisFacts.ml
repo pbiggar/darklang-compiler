@@ -1,4 +1,4 @@
-(* EscapeAnalysisFacts.fs - Type and destruction proofs shared by SSA escape analysis. *)
+(* EscapeAnalysisFacts.ml - Type and destruction proofs shared by SSA escape analysis. *)
 [@@@warning "-4"]
 module M = StringOrder.Map
 type scalarAggregate = {fields : ANF.atom list [@warning "-69"]} [@@warning "-34"]

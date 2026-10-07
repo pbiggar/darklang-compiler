@@ -1,4 +1,4 @@
-(* ElaborateListOwnership.fs - Solve consuming uses and place branch-sensitive releases. *)
+(* ElaborateListOwnership.ml - Solve consuming uses and place branch-sensitive releases. *)
 [@@@warning "-4"]
 module H = HIR
 module O = OwnedIR

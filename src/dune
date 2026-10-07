@@ -1,5 +1,9 @@
 (include_subdirs unqualified)
 (rule
+ (target EmbeddedStdlib.ml)
+ (deps ../scripts/embed-stdlib.py (source_tree ../stdlib))
+ (action (run python3 %{dep:../scripts/embed-stdlib.py} ../stdlib %{target})))
+(rule
  (target BuildPlatform.ml)
  (action (with-stdout-to %{target}
   (echo "(* BuildPlatform.ml - Native OCaml build target. *)\nlet system = \"%{ocaml-config:system}\"\nlet architecture = \"%{ocaml-config:architecture}\""))))

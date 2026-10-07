@@ -1,4 +1,4 @@
-(* PreambleAnalysis.fs - Check reusable source preambles against explicit base environments. *)
+(* PreambleAnalysis.ml - Check reusable source preambles against explicit base environments. *)
 (* Parse and check a preamble directly from interpreter syntax. *)
 let analyzePreamble allowInternal (stdlib:CompilationContexts.stdlibResult) preamble=
  WrittenParsing.parse Validation.Script preamble

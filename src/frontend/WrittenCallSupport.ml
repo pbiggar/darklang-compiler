@@ -1,4 +1,4 @@
-(* Declared full and partial applications from WrittenChecking.fs. *)
+(* Declared full and partial applications from WrittenCallSupport.ml. *)
 open WrittenTypeSupport
 module WT = WrittenTypes
 module C = CheckedAST

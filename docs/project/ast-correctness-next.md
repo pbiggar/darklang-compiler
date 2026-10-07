@@ -123,9 +123,8 @@ split and use smaller boundary-specific types instead of a new global IR.
 
 ## Changes deliberately not kept in the record/cardinality/identity task
 
-- Struct-backed proof wrappers for checked records and tuples were tried and
-  reverted after a method-signature failure. The landed wrappers remain
-  ordinary immutable F# types. Do not count a memory saving from that attempt.
+- Checked record and tuple proof wrappers are immutable OCaml types; no
+  memory-saving claim has been established for a different representation.
 - Checked tuple-pattern cardinality was tried and reverted because of the
   internal empty-payload case above. Only tuple **expressions** gained the
   two-or-more representation.

@@ -1,6 +1,6 @@
 (*
-   TestRunnerArgsTests.fs - Unit tests for test runner CLI argument parsing.
-   Covers behavior owned by the F# test runner entrypoint rather than the shell wrapper.
+   TestRunnerArgsTests.ml - Unit tests for test runner CLI argument parsing.
+   Covers behavior owned by the native test runner entrypoint rather than the shell wrapper.
 *)
 (* TestRunnerArgsTests.ml - Retain every original runner argument test. *)
 open TestRunnerArgs

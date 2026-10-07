@@ -9,7 +9,7 @@
    - Cycles (need temp register)
    - Self-moves (eliminated as no-ops)
 *)
-(* ParallelMoves.fs - Parallel move resolution algorithm. *)
+(* ParallelMoves.ml - Parallel move resolution algorithm. *)
 [@@@warning "-4"]
 (*
    Result of parallel move resolution - actions to perform in order

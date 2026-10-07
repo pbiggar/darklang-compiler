@@ -1,4 +1,4 @@
-(* Monomorphization.fs - Solve reachable generic instances and replace type applications. *)
+(* Monomorphization.ml - Solve reachable generic instances and replace type applications. *)
 [@@@warning "-4"]
 module C = CheckedAST
 module A = ClosureAnalysis

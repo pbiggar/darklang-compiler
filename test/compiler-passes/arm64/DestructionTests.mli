@@ -1,5 +1,5 @@
 (*
-   DestructionTests.fs - Verify recursive payload destruction and helper register preservation.
+   DestructionTests.mli - Verify recursive payload destruction and helper register preservation.
    Recursive-nominal release dispatch shape is not observable in an executable
    E2E test. A variant without managed fields must not consume a tag case in
    the generated helper, while the recursive variant must remain dispatched.

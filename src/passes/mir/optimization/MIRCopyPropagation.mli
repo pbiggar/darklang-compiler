@@ -1,4 +1,4 @@
-(* CopyPropagation.fs - Resolve and propagate MIR copy equivalences. *)
+(* MIRCopyPropagation.mli - Resolve and propagate MIR copy equivalences. *)
 type copyMap = MIR.operand MIR.VRegMap.t
 val buildCopyMap : MIR.cfg -> copyMap
 val resolveCopy : copyMap -> MIR.operand -> MIR.operand

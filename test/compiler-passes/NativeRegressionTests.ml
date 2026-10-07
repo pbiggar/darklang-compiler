@@ -1,11 +1,11 @@
-(* NativePortRegressionTests.ml - Observable Unicode, Mach-O and x64 printing repairs. *)
+(* NativeRegressionTests.ml - Observable Unicode, Mach-O and x64 printing repairs. *)
 [@@@warning "-4-42"]
 open Dark_compiler
 module X=X86_64
 let ( let* )=Result.bind
 let require condition message=if condition then Ok () else Error message
 let context : X64CodeGenTypes.funcCtx =
- {X64CodeGenTypes.functionName="native-port-printing";stackSize=0;usedCalleeSaved=[];enableLeakCheck=false;
+ {X64CodeGenTypes.functionName="native-printing";stackSize=0;usedCalleeSaved=[];enableLeakCheck=false;
   recordRegistry=StringOrder.Map.empty;sumShapeRegistry=StringOrder.Map.empty;functionNames=FunctionIdMap.empty}
 let textTests=[
  "native Unicode ordering and case folding",(fun () ->
@@ -79,11 +79,11 @@ let checkOutput expected body =
    ([X.Label "_start"] @ body @ literal "|continued" @ X64Operands.loadImm64 X.RDI 0L @ X64Operands.genExitSyscall) in
  let image=Binary_Generation_ELF_X86_64.createExecutableWithPools resolved.X86_64_Resolve.machineCode
    LiteralPool.emptyStringPool LiteralPool.emptyFloatPool false 0 in
- let path=Filename.temp_file "native-port-printing-" ".elf" in
+ let path=Filename.temp_file "native-printing-" ".elf" in
  Fun.protect ~finally:(fun () -> Sys.remove path) (fun () ->
   Out_channel.with_open_bin path (fun channel -> Out_channel.output_bytes channel image);
   Unix.chmod path 0o700;
-  match TestProcess.capture path [] 10000 with
+  match ProcessCapture.capture path [] 10000 with
   | Ok (0,output,"") -> require (output=expected^"|continued") (Printf.sprintf "Expected %S, got %S" (expected^"|continued") output)
   | Ok (code,output,errors) -> Error (Printf.sprintf "Printer exited %d: %S %S" code output errors)
   | Error message -> Error message)

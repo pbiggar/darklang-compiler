@@ -1,4 +1,4 @@
-(* PrintInsertion.fs - Print Insertion Pass
+(* PrintInsertion.ml - Print Insertion Pass
    Inserts a Print instruction at the end of the main expression.
    This ensures the program's result is printed before exiting.
    This pass runs before RC insertion so generated output and its final managed

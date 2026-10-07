@@ -1,5 +1,5 @@
 (*
-   CheckedAST.fs - Phase-safe syntax accepted by compiler preparation and ANF lowering.
+   CheckedAST.ml - Phase-safe syntax accepted by compiler preparation and ANF lowering.
    The parser/checker implementation still uses AST internally while resolving
    and inferring source syntax.  Successful checking crosses this boundary once;
    downstream passes cannot represent missing lambda types, unresolved nominal

@@ -1,5 +1,5 @@
 (*
-   MIRParser.fs - Parser for MIR (Mid-level IR) DSL
+   MIRParser.ml - Parser for MIR (Mid-level IR) DSL
    Parses human-readable MIR text into MIR.Program data structures.
    Example MIR:
    v0 <- 42

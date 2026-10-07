@@ -1,4 +1,4 @@
-(* ANF_Optimize.fs - Preserve ANF rewrite checks while production optimization uses SSA. *)
+(* ANF_Optimize.ml - Preserve ANF rewrite checks while production optimization uses SSA. *)
 [@@@warning "-4"]
 open ANF
 open ANFConstants

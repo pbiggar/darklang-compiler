@@ -1,4 +1,4 @@
-(* Functions.fs - Lower allocated LIR functions with target frame and return conventions. *)
+(* ARM64Functions.ml - Lower allocated LIR functions with target frame and return conventions. *)
 [@@@warning "-4"]
 open ARM64CodeGenTypes
 open HeapAllocation

@@ -1,5 +1,5 @@
 (*
-   TypeCheckingTestRunner.fs - Runner for type checking tests
+   TypeCheckingTestRunner.ml - Runner for type checking tests
    Loads type checking test files, parses expressions, runs type checker,
    and compares results with expectations.
 *)

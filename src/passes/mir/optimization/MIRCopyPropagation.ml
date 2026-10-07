@@ -1,4 +1,4 @@
-(* CopyPropagation.fs - Resolve and propagate MIR copy equivalences. *)
+(* MIRCopyPropagation.ml - Resolve and propagate MIR copy equivalences. *)
 [@@@warning "-4"]
 open MIR
 (*

@@ -1,5 +1,5 @@
 (*
-   ISA.fs - x86-64 Instruction Types
+   X86_64.ml - x86-64 Instruction Types
    Defines x86-64 instruction and register types.
    x86-64 is a CISC architecture with variable-length instructions (1-15 bytes).
    These types represent x86-64 assembly instructions that will be encoded

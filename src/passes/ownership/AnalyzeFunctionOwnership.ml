@@ -1,4 +1,4 @@
-(* AnalyzeFunctionOwnership.fs - Schedule verified whole-function ownership over checked HIR. *)
+(* AnalyzeFunctionOwnership.ml - Schedule verified whole-function ownership over checked HIR. *)
 [@@@warning "-4-42"]
 module H = HIR
 module O = OwnedIR

@@ -1,5 +1,5 @@
 (*
-   FileRead.fs - Generate checked file-read runtime operations.
+   FileRead.ml - Generate checked file-read runtime operations.
    Generate ARM64 instructions to read file contents and return Result<Blob, String>
    destReg: destination register for the Result pointer
    pathReg: register containing heap string pointer to file path
@@ -98,14 +98,6 @@
 let generateFileReadBlob (target: ARM64.targetConfig) (destReg: ARM64.reg) (pathReg: ARM64.reg) =
     let os = ARM64.targetOS target in
     let syscalls = ARM64.targetSyscalls target in
-
-
-
-
-
-
-
-
 
     match os with
     | Platform.Linux ->
@@ -232,11 +224,6 @@ let generateFileReadBlob (target: ARM64.targetConfig) (destReg: ARM64.reg) (path
 
 
             ARM64.B 24;
-
-
-
-
-
 
             ARM64.MOV_reg (ARM64.X24, ARM64.X28);
             ARM64.ADD_imm (ARM64.X28, ARM64.X28, 32);

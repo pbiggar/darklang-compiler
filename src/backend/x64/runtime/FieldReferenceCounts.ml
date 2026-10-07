@@ -1,4 +1,4 @@
-(* FieldReferenceCounts.fs - Generate shape-directed field and fixed-block destruction. *)
+(* FieldReferenceCounts.ml - Generate shape-directed field and fixed-block destruction. *)
 [@@@warning "-4"]
 open X64Operands
 open X64CodeGenTypes

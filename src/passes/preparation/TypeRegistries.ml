@@ -1,5 +1,5 @@
 (*
-   TypeRegistries.fs - Describe source record, alias, and variable registries used during preparation.
+   TypeRegistries.ml - Describe source record, alias, and variable registries used during preparation.
 *)
 (* Source record, alias, variable, and semantic-identity preparation registries. *)
 [@@@warning "-4"]

@@ -1,5 +1,5 @@
 (*
-   MIR_to_LIR.fs - Instruction Selection (Pass 4)
+   MIR_to_LIR.ml - Instruction Selection (Pass 4)
    Transforms MIR CFG into symbolic LIR CFG (string/float constants remain symbolic).
    Instruction selection algorithm:
    - Converts MIR basic blocks to LIR basic blocks

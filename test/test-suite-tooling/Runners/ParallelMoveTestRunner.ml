@@ -1,5 +1,5 @@
 (*
-   ParallelMoveTestRunner.fs - Executes parallel-move lowering fixtures.
+   ParallelMoveTestRunner.ml - Executes parallel-move lowering fixtures.
    Lowers LIR TailArgMoves and compares the complete symbolic ARM64 sequence.
 *)
 [@@@warning "-42"]

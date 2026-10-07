@@ -1,4 +1,4 @@
-(* GenericReferenceCounts.fs - Outline reusable fixed-layout destruction helpers. *)
+(* GenericReferenceCounts.ml - Outline reusable fixed-layout destruction helpers. *)
 open ARM64CodeGenTypes
 open ARM64Instructions
 (*

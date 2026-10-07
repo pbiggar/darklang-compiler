@@ -1,5 +1,5 @@
 (*
-   WrittenSource.fs - Preserve interpreter declarations and module scopes for direct source checking.
+   WrittenSource.ml - Preserve interpreter declarations and module scopes for direct source checking.
 *)
 (* WrittenSource.ml - Flatten module-scoped declarations and retain source name references. *)
 [@@@warning "-4"]

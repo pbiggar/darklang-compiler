@@ -1,5 +1,5 @@
 (*
-   EqualityHelpers.fs - Generate structural equality source expressions.
+   EqualityHelpers.ml - Generate structural equality source expressions.
 *)
 (* EqualityHelpers.ml - Generate structural equality source expressions. *)
 open! AST

@@ -1,4 +1,4 @@
-(* SpillOperands.fs - Materialize allocated operands and spilled register values. *)
+(* SpillOperands.ml - Materialize allocated operands and spilled register values. *)
 [@@@warning "-4"]
 open AllocationModel
 open RegisterPolicy

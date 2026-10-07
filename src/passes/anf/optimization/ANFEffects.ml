@@ -1,4 +1,4 @@
-(* Effects.fs - Describe ANF evaluation effects and temporary uses. *)
+(* ANFEffects.ml - Describe ANF evaluation effects and temporary uses. *)
 [@@@warning "-4"]
 open ANF
 open ANFConstants

@@ -74,9 +74,9 @@ Source → parsed AST → checked AST → ANF → MIR → LIR → target ISA →
 - Platform detection for Mach-O vs ELF generation
 - Direct syscall interface (write, exit) - no libc dependency
 
-## Functional F# Style
+## Functional OCaml Style
 
-**Decision**: Write compiler in purely functional F# with no mutable state.
+**Decision**: Use functional OCaml algorithms with explicit interfaces and bounded mutation at I/O and cache boundaries.
 
 **Rationale**:
 - **Future Darklang self-hosting**: Code should be translatable to Darklang
@@ -86,14 +86,14 @@ Source → parsed AST → checked AST → ANF → MIR → LIR → target ISA →
 
 **Guidelines**:
 - Use `Result` types, not exceptions or `failwith`
-- Avoid mutable values completely
+- Keep mutation local to its owning module
 - Use `Option` for missing values
-- Prefer string interpolation over printf-style formatting
+- Use standard OCaml formatting and text libraries
 
 ## Compiler Pass Naming Convention
 
 **Decision**: Name pass files for their responsibility and group them by source
-stage. Express execution order in the typed pipeline driver and F# project order,
+stage. Express execution order in the typed pipeline driver,
 not in filename prefixes.
 
 **Rationale**:
@@ -198,7 +198,7 @@ Leaf Node:
 
 **Current status**: Phase 4 in progress - named bitwise functions and popcount
 implemented, raw memory intrinsics added, HAMT helper functions in
-`share/stdlib/`. Public symbolic bitwise syntax is not part of the
+`stdlib/`. Public symbolic bitwise syntax is not part of the
 language.
 
 ## Test-Driven Development

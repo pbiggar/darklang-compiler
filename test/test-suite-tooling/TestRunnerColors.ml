@@ -1,4 +1,4 @@
-(* TestRunnerColors.fs - Shared ANSI color codes for the test runner
+(* TestRunnerColors.ml - Shared ANSI color codes for the test runner
    Centralizes terminal color escape sequences used across the test runner. *)
 let reset="\027[0m"
 let green="\027[32m"

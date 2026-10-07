@@ -1,5 +1,5 @@
 (*
-   Peephole.fs - Optimize symbolic target instructions with register-lifetime checks.
+   Peephole.ml - Optimize symbolic target instructions with register-lifetime checks.
 *)
 [@@@warning "-4"]
 (*
@@ -11,9 +11,6 @@ type registerLifetimeStep =
     | Unrelated
     | Overwritten
     | ReadOrControlFlow
-
-
-
 
 let registerLifetimeStep
     (target:Symbolic.reg)
@@ -178,20 +175,6 @@ let invertCondition (condition:ARM64.condition) =
     | ARM64.HI -> ARM64.LS
     | ARM64.LS -> ARM64.HI
     | ARM64.HS -> ARM64.LO
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 (*
    Peephole optimization pass

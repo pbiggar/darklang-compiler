@@ -1,4 +1,4 @@
-(* Facts.fs - Describe MIR effects and explicit definition/use edges. *)
+(* MIROptimizationFacts.mli - Describe MIR effects and explicit definition/use edges. *)
 type optimizeOptions = {enableSCCP : bool; enableCSE : bool; enableDCE : bool; enableLICM : bool}
 val defaultOptimizeOptions : optimizeOptions
 val hasSideEffects : MIR.instr -> bool

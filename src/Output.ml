@@ -1,5 +1,5 @@
 (*
-   Output.fs - Output helper functions
+   Output.ml - Output helper functions
    Provides simple print functions for stdout and stderr.
    These functions use string interpolation and handle newlines explicitly.
 *)

@@ -1,4 +1,4 @@
-(* Emit.fs - ARM64 Emission (Encoding + Binary Generation)
+(* Emit.ml - ARM64 Emission (Encoding + Binary Generation)
    Resolves symbolic data labels into literal pools, encodes ARM64 instructions,
    and produces a platform-specific binary in a single pass. *)
 type emitResult={machineCode:ARM64.machineCode array;binary:bytes}

@@ -1,5 +1,5 @@
 (*
-   Types.fs - Define checking environments and resolve declared source types.
+   Types.ml - Define checking environments and resolve declared source types.
 *)
 (* Types.mli - Checking environments, substitutions, and nominal type resolution. *)
 (*
@@ -153,13 +153,6 @@ let rec resolveAliasTargetType aliases typ = match typ with
  | TFunction _ | TTuple _ | TList _ | TStream _ | TDict _ | TVar _ | TInferenceVar _
  | TInt8 | TInt16 | TInt32 | TInt64 | TInt128 | TInt | TUInt8 | TUInt16 | TUInt32 | TUInt64 | TUInt128
  | TBool | TFloat64 | TString | TBlob | TChar | TDateTime | TUnit | TNever | TInternalRawPtr -> mapTypeChildren (resolveAliasTargetType aliases) typ
-let tryResolveGenericRecordAliasFields aliases registry name = match resolveAliasTargetType aliases (TRecord (name, [])) with
- | TRecord (target, args) | TSum (target, args) when target <> name || args <> [] ->
-   Option.bind (M.find_opt target registry) (fun (info : recordTypeInfo) -> match buildRecordFieldSubstitutionFromParams info.typeParams args with
-   | Error _ -> None | Ok subst -> Some (target, List.map (fun (name, typ) -> name, applyTypeArguments subst typ) info.fields))
- | TRecord _ | TSum _ | TFunction _ | TTuple _ | TList _ | TStream _ | TDict _ | TVar _ | TInferenceVar _
- | TInt8 | TInt16 | TInt32 | TInt64 | TInt128 | TInt | TUInt8 | TUInt16 | TUInt32 | TUInt64 | TUInt128
- | TBool | TFloat64 | TString | TBlob | TChar | TDateTime | TUnit | TNever | TInternalRawPtr -> None
 let tryResolveRecordLiteralInfo aliases registry (reference : AST.recordReference) = match resolveAliasTargetType aliases (TRecord (reference.sourceTypeName, reference.typeArgs)) with
  | TRecord (name, args) | TSum (name, args) -> Option.map (fun info -> name, args, info) (M.find_opt name registry)
  | TFunction _ | TTuple _ | TList _ | TStream _ | TDict _ | TVar _ | TInferenceVar _

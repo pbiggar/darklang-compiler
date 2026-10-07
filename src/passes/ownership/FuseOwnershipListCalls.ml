@@ -1,4 +1,4 @@
-(* FuseOwnershipListCalls.fs - Inline selected List<Int64> boundaries before region extraction. *)
+(* FuseOwnershipListCalls.ml - Inline selected List<Int64> boundaries before region extraction. *)
 [@@@warning "-4-42"]
 module C = CheckedAST
 module O = OwnedIR

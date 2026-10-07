@@ -1,4 +1,4 @@
-(* CacheIdentity.fs - Define stable dependency and native-code cache identities. *)
+(* CompilationCacheIdentity.mli - Define stable dependency and native-code cache identities. *)
 [@@@warning "-30"]
 type 'a comparer = {equals : 'a -> 'a -> bool; getHashCode : 'a -> int}
 type functionVersion = private {unitName : string; functionId : AST.functionId; target : Platform.target; options : CompilerOptions.compilerOptions; body : LIR.functionDef}

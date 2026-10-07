@@ -1,5 +1,5 @@
 (*
-   StdlibSourceTests.fs - Source-level invariants for maintained stdlib files.
+   StdlibSourceTests.mli - Source-level invariants for maintained stdlib files.
    These checks catch stdlib definitions that are easy to shadow accidentally
    before the compiler accepts a misleading or unreachable implementation.
 *)

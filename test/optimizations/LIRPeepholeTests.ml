@@ -2,7 +2,7 @@
    These tests cover post-register-allocation cleanup that is not directly
    visible through the source-to-optimized-LIR test runner.
 *)
-(* LIRPeepholeTests.fs - Unit tests for local LIR cleanup helpers. *)
+(* LIRPeepholeTests.ml - Unit tests for local LIR cleanup helpers. *)
 [@@@warning "-4-42"]
 open Dark_compiler
 open LIR

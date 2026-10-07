@@ -1,4 +1,4 @@
-(* Destruction.fs - Prove inert destruction locally and through function scope contracts. *)
+(* Destruction.mli - Prove inert destruction locally and through function scope contracts. *)
 val hasInertDestruction : AST.semanticType -> bool
 type scopeDestruction = InertScope | UnprovenScope
 type functionScopeContract = {localDestruction : scopeDestruction; calls : SpecializationIdentity.FunctionSet.t}

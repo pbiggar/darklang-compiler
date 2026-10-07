@@ -1,5 +1,5 @@
 (*
-   IRFormatSnapshotTestRunner.fs - Executes exact IR formatter snapshot fixtures.
+   IRFormatSnapshotTestRunner.ml - Executes exact IR formatter snapshot fixtures.
    Formats typed ANF, MIR, or LIR inputs and reports stable expected/actual diagnostics.
 *)
 (* Compare full formatter output and preserve original fixture registration and diagnostics. *)

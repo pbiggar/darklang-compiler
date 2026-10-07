@@ -1,4 +1,4 @@
-(* Integer.fs - Emit x64 instructions for integer operations. *)
+(* X64EmitInteger.ml - Emit x64 instructions for integer operations. *)
 [@@@warning "-4"]
 open X64Operands
 open X64CodeGenTypes
@@ -52,9 +52,6 @@ let operandText operand=
  | LIR.StringSymbol text -> Union ("StringSymbol",[Text text])
  | LIR.FloatSymbol value -> Union ("FloatSymbol",[Scalar (FloatFormat.structural value)])
  | LIR.FuncAddr id -> Union ("FuncAddr",[AST.DiagnosticFormatting.func id]))
-
-
-
 
 let emitMov (ctx:X64CodeGenTypes.funcCtx) (dest:LIR.reg) (src:LIR.operand) =
     resolveReg dest

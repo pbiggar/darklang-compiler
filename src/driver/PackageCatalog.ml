@@ -1,4 +1,4 @@
-(* PackageCatalog.fs - Materialize reachable package values and source compilation plans. *)
+(* PackageCatalog.ml - Materialize reachable package values and source compilation plans. *)
 [@@@warning "-4"]
 module X=CompilationContexts
 module C=CheckedAST

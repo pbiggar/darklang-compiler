@@ -1,4 +1,4 @@
-(* LiftExpressions.fs - Convert expression-local lambdas into lifted function definitions. *)
+(* LiftExpressions.ml - Convert expression-local lambdas into lifted function definitions. *)
 [@@@warning "-4"]
 module C = CheckedAST
 module A = ClosureAnalysis

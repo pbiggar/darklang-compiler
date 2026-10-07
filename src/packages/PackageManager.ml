@@ -1,4 +1,4 @@
-(* PackageManager.fs - Hosted package resolution and persistent response cache.
+(* PackageManager.ml - Hosted package resolution and persistent response cache.
    Resolves the same ProgramTypes package declarations exposed by Matter's
    package-manager HTTP API and renders them as compiler package source units. *)
 [@@@warning "-4-30"]

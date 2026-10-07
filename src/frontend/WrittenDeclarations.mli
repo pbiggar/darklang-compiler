@@ -1,4 +1,4 @@
-(* Direct checked declarations and source-unit composition from WrittenChecking.fs. *)
+(* Direct checked declarations and source-unit composition from WrittenDeclarations.mli. *)
 type environment
 val includeAllocatedFunctions : CheckedAST.symbols -> environment -> environment
 val predeclareTypes : WrittenSource.item list -> (WrittenTypeSupport.typeInventory, string) result

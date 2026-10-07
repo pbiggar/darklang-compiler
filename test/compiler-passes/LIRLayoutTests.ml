@@ -1,4 +1,4 @@
-(* LIRLayoutTests.fs - Tests deterministic CFG block layout for backend fallthrough. *)
+(* LIRLayoutTests.ml - Tests deterministic CFG block layout for backend fallthrough. *)
 [@@@warning "-4-42"]
 open Dark_compiler
 open LIR

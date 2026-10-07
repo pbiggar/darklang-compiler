@@ -1,5 +1,5 @@
 (*
-   PassTestRunner.fs - Test runner for compiler pass tests
+   PassTestRunner.ml - Test runner for compiler pass tests
    Loads pass test files (e.g., MIR→LIR tests), runs the compiler pass,
    and compares the output with expected results.
    Pass tests are active; MIR pretty-printing reflects CFG structure for diagnostics.

@@ -1,5 +1,5 @@
 (*
-   TransferTests.fs - Verify recursive ownership transfers and borrowed projections.
+   TransferTests.ml - Verify recursive ownership transfers and borrowed projections.
 *)
 [@@@warning "-4-42"]
 open Dark_compiler

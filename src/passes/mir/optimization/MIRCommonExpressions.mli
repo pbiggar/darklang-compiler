@@ -1,4 +1,4 @@
-(* CommonExpressions.fs - Reuse and path-complete scalar expressions under effect constraints. *)
+(* MIRCommonExpressions.mli - Reuse and path-complete scalar expressions under effect constraints. *)
 type exprKey =
  | BinExpr of MIR.binOp * MIR.operand * MIR.operand * AST.semanticType
  | UnaryExpr of MIR.unaryOp * MIR.operand

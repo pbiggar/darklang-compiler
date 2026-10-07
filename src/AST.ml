@@ -1,5 +1,5 @@
 (*
-   AST.fs - Abstract Syntax Tree
+   AST.ml - Abstract Syntax Tree
    Defines the abstract syntax tree data structures that represent the parsed
    program structure. The AST is the output of parsing and the internal input
    to name resolution and semantic checking. Successful checking constructs the
@@ -572,7 +572,7 @@ let collidingConstructorCaseNames definitions =
         StringOrder.Map.add variant.name (StringOrder.Set.add typeName previous) owners) owners variants
     | RecordDef _ | TypeAlias _ -> owners) StringOrder.Map.empty definitions in
   StringOrder.Map.fold (fun case owners collisions -> if StringOrder.Set.cardinal owners > 1 then StringOrder.Set.add case collisions else collisions) owners StringOrder.Set.empty
-(* Preserve F# structural comparison at typed map boundaries. OCaml orders
+(* Preserve Stable structural comparison at typed map boundaries. OCaml orders
    constant and payload constructors separately, and its strings use UTF-8. *)
 let compareTypeId (TypeId left) (TypeId right) = Int.compare left right
 let compareBindingId left right = match left, right with
@@ -612,15 +612,6 @@ and compareSameSemanticType left right = (match left, right with
 and compareSemanticTypeList left right = match left, right with
   | [], [] -> 0 | [], _ :: _ -> -1 | _ :: _, [] -> 1
   | left :: leftRest, right :: rightRest -> let order = compareSemanticType left right in if order <> 0 then order else compareSemanticTypeList leftRest rightRest
-(* Temporary migration instrumentation reads opaque identity payloads without
-   exposing their constructors or allowing semantic state to be rewritten. *)
-module MigrationObservation = struct
-  let bindingOrdinal = function LocalBindingId (ordinal, _) -> Some ordinal | TopLevelValueId _ -> None
-  let typeOrdinal (TypeId ordinal) = ordinal
-  let scopeOrdinal (ScopeBoundaryId ordinal) = ordinal
-  let groupOrdinal (RecursiveGroupId ordinal) = ordinal
-  let memberOrdinal (RecursiveMemberId ordinal) = ordinal
-end
 
 module DiagnosticFormatting = struct
  open StructuralValue

@@ -2,7 +2,7 @@
    Verifies MIR optimizer transformations that depend on fixpoint iteration or
    require direct construction of CFG shapes not preserved by earlier passes.
 *)
-(* MIROptimizeTests.fs - Unit tests for MIR optimizer fixpoint behavior *)
+(* MIROptimizeTests.ml - Unit tests for MIR optimizer fixpoint behavior *)
 [@@@warning "-4-42"]
 open Dark_compiler
 open MIR

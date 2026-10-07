@@ -1,5 +1,5 @@
 (*
-   E2ETestRunner.fs - End-to-end test runner
+   E2ETestRunner.ml - End-to-end test runner
 
    Compiles source code, executes it, and validates output/exit code.
    Internal identifiers are only allowed for stdlib-internal tests.
@@ -370,7 +370,7 @@ let tryExecuteBinary target arguments environment stdin binary =
             let stat=Unix.stat path in Unix.chmod path (stat.Unix.st_perm lor 0o100);
             let start=nowTicks () in
             let bytes=match input with CompilerOptions.Closed->Bytes.empty|CompilerOptions.Bytes b->b in
-            match TestProcess.captureWithInputAndEnvironment qemu (path::arguments) environment bytes 120000 with
+            match ProcessCapture.captureWithInputAndEnvironment qemu (path::arguments) environment bytes 120000 with
             | Ok (exitCode,stdout,stderr) -> Ok {CompilerOptions.exitCode;stdout;stderr;runtimeTime=Int64.sub (nowTicks ()) start}
             | Error "Execution timed out after 120000ms" -> Error "Cross-target execution exceeded 120s"
             | Error error -> Error error

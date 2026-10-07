@@ -1,5 +1,5 @@
 (*
-   ParserTests.fs - Focused syntax and lexer checks for the copied interpreter parser.
+   ParserTests.ml - Focused syntax and lexer checks for the copied interpreter parser.
 *)
 (* ParserTests.ml - Translate every original focused parser and lexer test. *)
 [@@@warning "-4-42"]

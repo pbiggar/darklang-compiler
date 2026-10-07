@@ -1,4 +1,4 @@
-(* Shared type inventories and structural-record checking from WrittenChecking.fs. *)
+(* Shared type inventories and structural-record checking from WrittenTypeSupport.ml. *)
 module WT = WrittenTypes
 module M = StringOrder.Map
 module S = StringOrder.Set

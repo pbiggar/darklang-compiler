@@ -1,5 +1,5 @@
 (*
-   FloatFormatting.fs - Generate native floating-point formatting.
+   FloatFormatting.ml - Generate native floating-point formatting.
    Generate ARM64 instructions to convert a float to a heap string
    destReg: destination register for the heap string pointer
    valueReg: FP register containing the float value
@@ -82,18 +82,6 @@
    Restore callee-saved registers
 *)
 let generateFloatToString (destReg: ARM64.reg) (valueReg: ARM64.fReg) =
-
-
-
-
-
-
-
-
-
-
-
-
 
     [
 

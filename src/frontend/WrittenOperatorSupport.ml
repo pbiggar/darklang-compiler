@@ -1,4 +1,4 @@
-(* Source operator checking from WrittenChecking.fs, including structural equality. *)
+(* Source operator checking from WrittenOperatorSupport.ml, including structural equality. *)
 module WT = WrittenTypes
 module C = CheckedAST
 open WrittenTypeSupport

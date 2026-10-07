@@ -1,5 +1,5 @@
 (*
-   OptimizationTestRunner.fs - Test runner for optimization verification
+   OptimizationTestRunner.ml - Test runner for optimization verification
    Compiles source code, captures IR at specific stages, and compares
    against expected output to verify optimizations work correctly.
    Result of running an optimization test

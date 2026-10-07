@@ -1,5 +1,5 @@
 (*
-   Program.fs - Compiler CLI Entry Point
+   Program.ml - Compiler CLI Entry Point
    The main entry point for the Darklang compiler CLI.
    This module:
    - Parses command-line arguments using POSIX-style flags
@@ -15,7 +15,7 @@
    7. Encoding: target ISA instructions → machine code
    8. Binary generation: machine code → platform executable
 *)
-(* Program.fs - Command-line entry, batch compilation and native execution. *)
+(* Program.ml - Command-line entry, batch compilation and native execution. *)
 (*
    Output verbosity level
    0 = Quiet (no output)

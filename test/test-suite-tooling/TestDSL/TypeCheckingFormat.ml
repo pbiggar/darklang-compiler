@@ -1,5 +1,5 @@
 (*
-   TypeCheckingFormat.fs - Type checking test format parser
+   TypeCheckingFormat.ml - Type checking test format parser
    Parses type checking test files in a simple line-based format.
    Format: expression : expected_type  // optional comment
    expression : error          // type error expected

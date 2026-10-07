@@ -1,4 +1,4 @@
-(* HIRVerificationTests.fs - Normalized value identity and structured-edge verifier laws. *)
+(* HIRVerificationTests.ml - Normalized value identity and structured-edge verifier laws. *)
 [@@@warning "-4-42"]
 open Dark_compiler
 module H = HIR

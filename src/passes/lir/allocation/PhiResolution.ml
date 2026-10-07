@@ -1,4 +1,4 @@
-(* PhiResolution.fs - Lower phi edges to allocation-aware parallel moves. *)
+(* PhiResolution.ml - Lower phi edges to allocation-aware parallel moves. *)
 [@@@warning "-4"]
 open AllocationModel
 open RegisterFacts

@@ -1,5 +1,5 @@
 (*
-   OptimizationFormat.fs - Parser for optimization test files
+   OptimizationFormat.mli - Parser for optimization test files
    Parses test files that verify IR optimizations work correctly.
    Each test contains source code and expected IR output at a specific stage.
    Format:

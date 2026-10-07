@@ -1,4 +1,4 @@
-(* Instructions.fs - Exhaustively dispatch LIR operations to typed arm64 emitters. *)
+(* ARM64Instructions.ml - Exhaustively dispatch LIR operations to typed arm64 emitters. *)
 
 
 open ARM64CodeGenTypes

@@ -1,5 +1,5 @@
 (*
-   Fixtures.fs - Build typed ARM64 code-generation test fixtures.
+   Fixtures.mli - Build typed ARM64 code-generation test fixtures.
 *)
 open Dark_compiler
 type testResult=(unit,string) result

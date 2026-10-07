@@ -1,29 +1,7 @@
 (*
-   PrintAndExit.fs - Generate ARM64 output and terminating entry helpers.
+   PrintAndExit.ml - Generate ARM64 output and terminating entry helpers.
 *)
 open Immediates
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 (*
    Generate ARM64 instructions to print int64 in X0 to stdout with newline
@@ -159,21 +137,6 @@ let generatePrintInt64 (target: ARM64.targetConfig) =
         ARM64.B (-30);
     ]
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 (*
    Generate ARM64 instructions to print boolean in X0 to stdout with newline
    Then exit with code 0
@@ -274,23 +237,6 @@ let generatePrintBool (target: ARM64.targetConfig) =
         ARM64.SVC syscalls.ARM64.svcImmediate;
     ]
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 (*
    Generate ARM64 instructions to print string to stdout with newline, then exit
    Assumes:
@@ -354,25 +300,6 @@ let generatePrintString (target: ARM64.targetConfig) (stringLen: int) =
         ARM64.MOVZ (syscalls.ARM64.syscallRegister, syscalls.ARM64.numbers.Platform.exit, 0);
         ARM64.SVC syscalls.ARM64.svcImmediate;
     ]
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 (*
    Generate ARM64 instructions to print float in D0 to stdout with newline
@@ -509,11 +436,6 @@ let generatePrintFloat (target: ARM64.targetConfig) =
         ARM64.MOV_reg (ARM64.X2, ARM64.X0);
         ARM64.B (2);
         ARM64.NEG (ARM64.X2, ARM64.X0);
-
-
-
-
-
 
         ARM64.CBZ_offset (ARM64.X2, 64);
 

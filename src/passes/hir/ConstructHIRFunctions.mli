@@ -1,4 +1,4 @@
-(* ConstructFunctions.fs - Normalize checked functions into structured semantic HIR. *)
+(* ConstructHIRFunctions.mli - Normalize checked functions into structured semantic HIR. *)
 type scalarLiteral = UnitLiteral | Int8Literal of int | Int16Literal of int | Int32Literal of int32 | Int64Literal of int64 | UInt8Literal of int | UInt16Literal of int | UInt32Literal of int64 | UInt64Literal of int64 | BoolLiteral of bool | FloatLiteral of float
 type primitive = Literal of HIR.value * scalarLiteral | Unary of HIR.value * AST.unaryOp * HIR.value | Binary of HIR.value * AST.binOp * HIR.value * HIR.value | FreshManaged of HIR.value * HIR.operand | ListTransform of HIR.value * HIR.value * HIR.operand
 type block

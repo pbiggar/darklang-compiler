@@ -1,5 +1,5 @@
 (*
-   Primitives.fs - Resolve intrinsic calls and primitive source representations.
+   LoweringPrimitives.ml - Resolve intrinsic calls and primitive source representations.
 *)
 [@@@warning "-4"]
 module M = StringOrder.Map

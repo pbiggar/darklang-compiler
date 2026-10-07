@@ -1,5 +1,5 @@
 (*
-   LIRExecutionDSLTests.fs - Unit tests for executable LIR fixtures.
+   LIRExecutionDSLTests.ml - Unit tests for executable LIR fixtures.
    Validates typed parsing, expectation rules, and native x64 execution.
 *)
 open Dark_compiler

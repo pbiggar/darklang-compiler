@@ -1,4 +1,4 @@
-(* AST_to_ANF.fs - Assemble typed function conversion and declaration registries. *)
+(* AST_to_ANF.ml - Assemble typed function conversion and declaration registries. *)
 [@@@warning "-4-30"]
 (*
    Result type that includes registries needed for later passes

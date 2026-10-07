@@ -1,5 +1,5 @@
 [@@@warning "-4-42"]
-(* MonomorphizationTests.fs - Unit tests for AST monomorphization
+(* MonomorphizationTests.ml - Unit tests for AST monomorphization
    Ensures monomorphization preserves unresolved type variables in specializations. *)
 open Dark_compiler
 module C=CheckedAST

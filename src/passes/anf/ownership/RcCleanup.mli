@@ -1,4 +1,4 @@
-(* Cleanup.fs - Plan retain/release placement and preserve cleanup across tail calls. *)
+(* RcCleanup.mli - Plan retain/release placement and preserve cleanup across tail calls. *)
 type returnDec = ANF.tempId * AST.semanticType * MemoryModel.rcShape * MemoryModel.rcKind option * MemoryModel.rcMetadata option * bool
 type internalOwnedParamKind = ReturnedAccumulator | NonEscapingLoopState
 type ownedParamDec = {paramIndex : int; releaseOnTerminalReturn : bool; dec : returnDec}

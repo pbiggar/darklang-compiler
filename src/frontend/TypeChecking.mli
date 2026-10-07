@@ -1,4 +1,4 @@
-(* TypeChecking.fs - Orchestrate name resolution and checked-program construction. *)
+(* TypeChecking.mli - Orchestrate name resolution and checked-program construction. *)
 val checkProgram : AST.program -> (AST.semanticType * CheckedAST.program, CheckingDiagnostics.typeError) result
 val checkPublicProgram : AST.program -> (AST.semanticType * CheckedAST.program, CheckingDiagnostics.typeError) result
 val checkProgramWithEnv : AST.program -> (AST.semanticType * CheckedAST.program * Types.typeCheckEnv, CheckingDiagnostics.typeError) result

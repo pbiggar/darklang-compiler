@@ -6,7 +6,6 @@ ARG QEMU_COMMIT=c3d48b7d1e89604920e5b81b91140c2ad39a1943
 ARG HERDR_VERSION=0.9.0
 ARG MERGETRAIN_VERSION=3.3.0
 ARG OCAML_VERSION=5.5.1
-FROM mcr.microsoft.com/dotnet/sdk:11.0.100-rc.1 AS dotnet11
 FROM node:26-bookworm-slim AS node
 FROM rust:1.98.0-slim-bookworm AS rust
 RUN --mount=type=cache,target=/usr/local/rustup/downloads \
@@ -83,7 +82,6 @@ ARG MERGETRAIN_VERSION
 USER root
 
 # Install the .NET 11 SDK/runtime in the default host.
-COPY --from=dotnet11 /usr/share/dotnet /usr/share/dotnet
 COPY --from=ocaml-builder /opt/ocaml /opt/ocaml
 COPY --from=node /usr/local /usr/local
 COPY --from=rust /usr/local/cargo /usr/local/cargo
@@ -143,24 +141,19 @@ RUN mkdir -p /home/agent/.nuget/packages /workspace && \
 
 USER agent
 ENV HOME=/home/agent
-ENV DOTNET_ROOT=/usr/share/dotnet
-ENV DOTNET_CLI_HOME=/home/agent
-ENV DOTNET_MULTILEVEL_LOOKUP=0
 ENV CARGO_HOME=/usr/local/cargo
 ENV RUSTUP_HOME=/usr/local/rustup
-ENV PATH=/home/agent/.opam/dark/bin:/opt/ocaml/bin:/usr/share/dotnet:/home/agent/.dotnet/tools:/home/agent/.local/bin:/usr/local/cargo/bin:$PATH
+ENV PATH=/home/agent/.opam/dark/bin:/opt/ocaml/bin:/home/agent/.local/bin:/usr/local/cargo/bin:$PATH
 
-# Native compiler dependencies use a pinned switch. .NET serves unrelated
-# F# benchmark references and the historical migration oracle only.
+# Native compiler dependencies use a pinned switch.
 RUN opam init --bare --disable-sandboxing --yes && \
     opam switch create dark ocaml-system.5.5.1 --yes
 RUN --mount=type=bind,source=dependencies.lock,target=/tmp/native-dependencies.lock \
     sed '/^[[:space:]]*#/d; /^[[:space:]]*$/d' /tmp/native-dependencies.lock | \
     xargs opam install --switch=dark --yes --jobs=1 --no-depexts
 
-# Fail the image build if either compiler is unavailable or the SDK pin drifts.
-RUN dotnet --version | grep -Fx '11.0.100-rc.1.26425.128' && \
-    ocamlc -version | grep -Fx '5.5.1' && \
+# Verify the native compiler pin.
+RUN ocamlc -version | grep -Fx '5.5.1' && \
     ocamlopt -version | grep -Fx '5.5.1'
 
 RUN --mount=type=bind,source=scripts/install-herdr.sh,target=/tmp/install-herdr.sh \

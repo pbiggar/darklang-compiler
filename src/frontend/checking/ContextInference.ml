@@ -1,4 +1,4 @@
-(* ContextInference.ml - Continuation evidence from Expressions.fs, retaining lexical scope and evaluation order. *)
+(* ContextInference.ml - Continuation evidence from ContextInference.ml, retaining lexical scope and evaluation order. *)
 open! AST
 module M = StringOrder.Map
 module T = Types

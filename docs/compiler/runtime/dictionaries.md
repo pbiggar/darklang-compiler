@@ -14,7 +14,7 @@ The public contract was revalidated against these exact revisions:
   `04fbe9dcc995c6188757d583e273cbd30a3e2d3d`
 - historical compiler starting point:
   `51093e0a8e31fe45a9aa79a317fbefd6b74fbcc3`, specifically
-  `share/stdlib/Dict.dark`, `__HAMT.dark`, and
+  `stdlib/Dict.dark`, `__HAMT.dark`, and
   `src/DarkStdlib.ml:150-166`
 - DCB1 report `8a402797` was starting evidence only; retained findings were
   checked again against the current compiler and interpreter revisions above.
@@ -33,8 +33,8 @@ language-visible contract. Ahead-of-time compilation and the HAMT layout are
 compiler implementation details.
 
 Current source evidence at the compiler comparison point is
-`share/stdlib/Dict.dark:9-216` for the public wrappers and ordered
-higher-order operations, `share/stdlib/__HAMT.dark:10-60` for the
+`stdlib/Dict.dark:9-216` for the public wrappers and ordered
+higher-order operations, `stdlib/__HAMT.dark:10-60` for the
 private generic storage boundary, `src/frontend/interpreter/Parser.ml:2034-2035`
 for the empty value, `src/frontend/checking/EqualityHelpers.ml`
 for content equality, `src/frontend/ValueRendering.ml`
@@ -125,7 +125,7 @@ both native architectures.
 
 ## Private generic HAMT
 
-`share/stdlib/__HAMT.dark` remains a generic persistent Hash Array
+`stdlib/__HAMT.dark` remains a generic persistent Hash Array
 Mapped Trie. Compiler-owned consumers such as Unicode tables use private
 `Stdlib.Dict.__*` helpers for Int64 and other key types. User code cannot name
 these helpers.
@@ -162,8 +162,8 @@ The contract is anchored in:
 - `src/backend/arm64/runtime/` and `src/backend/x64/runtime/` for native
   allocation, output, and failure behavior
 - `src/frontend/TypeChecking.ml` for public typing and equality
-- `share/stdlib/Dict.dark` for the public module
-- `share/stdlib/__HAMT.dark` for private generic storage
+- `stdlib/Dict.dark` for the public module
+- `stdlib/__HAMT.dark` for private generic storage
 - `test/fixtures/e2e/dict_parity.e2e` and pinned upstream Dict/edict cases for the
   language boundary
 - `test/fixtures/e2e/stdlib-internal/dict-hamt.e2e`, refcounting tests, and

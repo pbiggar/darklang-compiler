@@ -1,4 +1,4 @@
-(** Raw 64-bit words, with the same intentional mutable operations as F#. *)
+(** Raw 64-bit words, with the explicit mutable operations. *)
 type bitset = int64 array
 val wordCount : int -> int
 val empty : int -> bitset

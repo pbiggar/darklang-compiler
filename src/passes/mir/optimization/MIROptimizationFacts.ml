@@ -1,4 +1,4 @@
-(* Facts.fs - Describe MIR effects and explicit definition/use edges. *)
+(* MIROptimizationFacts.ml - Describe MIR effects and explicit definition/use edges. *)
 [@@@warning "-4"]
 open MIR
 module Functions = SpecializationIdentity.FunctionSet

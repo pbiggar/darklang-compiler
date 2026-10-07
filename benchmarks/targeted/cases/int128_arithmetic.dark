@@ -1,0 +1,5 @@
+// int128_arithmetic.dark - Targeted compiler workload.
+let benchmark (remaining: Int64) (value: Int128) : Int128 =
+    if remaining <= 0L then value
+    else benchmark (remaining - 1L) (Stdlib.Int128.subtract (Stdlib.Int128.add (value) (3Q)) (2Q))
+benchmark (__ITERATIONS__L) (170141183460469231731687303715884100727Q)

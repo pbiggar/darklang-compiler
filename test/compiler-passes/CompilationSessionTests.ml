@@ -1,4 +1,4 @@
-(* CompilationSessionTests.fs - Cache-contract tests for bounded compiler reuse. *)
+(* CompilationSessionTests.ml - Cache-contract tests for bounded compiler reuse. *)
 [@@@warning "-4-42"]
 open Dark_compiler
 module C=CompilationContexts

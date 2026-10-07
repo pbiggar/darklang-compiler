@@ -1,4 +1,4 @@
-(* JsonPlanning.fs - monomorphic, type-directed JSON conversion plans.
+(* JsonPlanning.ml - monomorphic, type-directed JSON conversion plans.
 
    Json.serialize and Json.parse are public generic intrinsics. This pass runs
    after type checking, when every explicit type argument is concrete, and
@@ -50,8 +50,7 @@ let listPush (env:env) elementType list value=TypeApp (resolveFunction env "Dark
 let stableHash value=String.fold_left (fun hash byte->Int64.mul (Int64.logxor hash (Int64.of_int (Char.code byte))) 1099511628211L) 0xcbf29ce484222325L value
 (* Generated plan names must distinguish structurally different types whose
    public spelling is intentionally flattened (notably nested tuples). Encode
-   the union directly: F#'s default union formatting uses reflection, which is
-   disproportionately expensive when the same primitive codecs are requested
+   the union directly to avoid generic formatting overhead when primitive codecs are requested
    by many separate compilations. *)
 let textLength value=String.length value
 let rec structuralTypeKey typ=

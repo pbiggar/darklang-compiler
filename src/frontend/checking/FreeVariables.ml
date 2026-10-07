@@ -1,5 +1,5 @@
 (*
-   FreeVariables.fs - Collect expression and pattern binding dependencies.
+   FreeVariables.ml - Collect expression and pattern binding dependencies.
 *)
 (* FreeVariables.ml - Preserve lexical closure dependencies and direct-call handling. *)
 open! AST

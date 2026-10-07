@@ -1,4 +1,4 @@
-(* ProgramCliTests.fs - Compiler CLI target-selection tests. *)
+(* ProgramCliTests.mli - Compiler CLI target-selection tests. *)
 type testResult=(unit,string) result
 val testExplicitLinuxX86_64Target : unit -> testResult
 val testUnknownTargetRejected : unit -> testResult

@@ -1,4 +1,4 @@
-(* ConstructFunctions.fs - Normalize checked functions into structured semantic HIR. *)
+(* ConstructHIRFunctions.ml - Normalize checked functions into structured semantic HIR. *)
 [@@@warning "-4-42"]
 module H = HIR
 module C = CheckedAST

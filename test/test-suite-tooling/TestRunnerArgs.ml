@@ -1,5 +1,5 @@
 (*
-   TestRunnerArgs.fs - Helper functions for test runner CLI arguments
+   TestRunnerArgs.ml - Helper functions for test runner CLI arguments
    Provides parsing helpers shared by the test runner and its unit tests.
 *)
 (* TestRunnerArgs.ml - Parse unchanged runner flags and Unicode name filters. *)

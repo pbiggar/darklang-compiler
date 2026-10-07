@@ -1,4 +1,4 @@
-(* BinaryOutput.fs - Select a validated target backend and assemble executable output. *)
+(* BinaryOutput.ml - Select a validated target backend and assemble executable output. *)
 [@@@warning "-4"]
 module G=Backend_Arm64_CodeGen
 module M=StringOrder.Map

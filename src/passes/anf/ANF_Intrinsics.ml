@@ -1,4 +1,4 @@
-(* ANF_Intrinsics.fs - Give named fixed-width arithmetic and operators one ANF operation. *)
+(* ANF_Intrinsics.ml - Give named fixed-width arithmetic and operators one ANF operation. *)
 [@@@warning "-4"]
 open ANF
 type arithmeticIntrinsic = {operandType : AST.semanticType; operation : binOp}

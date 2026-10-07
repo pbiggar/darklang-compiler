@@ -1,4 +1,4 @@
-(* OwnershipUniquenessInferenceTests.fs - Proven function-boundary refinement laws. *)
+(* OwnershipUniquenessInferenceTests.ml - Proven function-boundary refinement laws. *)
 [@@@warning "-4-42"]
 open Dark_compiler
 module H = HIR

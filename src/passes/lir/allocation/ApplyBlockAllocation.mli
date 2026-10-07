@@ -1,4 +1,4 @@
-(* ApplyBlocks.fs - Apply allocation and caller-save plans across CFG blocks. *)
+(* ApplyBlockAllocation.mli - Apply allocation and caller-save plans across CFG blocks. *)
 val applyToTerminator : AllocationModel.allocationResult -> LIR.terminator -> LIR.instr list * LIR.terminator
 type blockAllocationPreparation = {saveRegsLiveness : (AllocationModel.bitSet * AllocationModel.bitSet) list}
 val applyToBlockWithLiveness : Platform.arch -> AllocationModel.allocationResult -> FloatAllocation.fAllocationResult -> AllocationModel.bitSet -> AllocationModel.bitSet -> LIR.basicBlock -> LIR.basicBlock

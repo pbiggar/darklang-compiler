@@ -2,7 +2,7 @@
    These tests cover optimizer decisions that must agree with the RcShape
    metadata used by ownership insertion and backend helper selection.
 *)
-(* ANFOptimizeTests.fs - Unit tests for ANF optimizer ownership-sensitive DCE. *)
+(* ANFOptimizeTests.ml - Unit tests for ANF optimizer ownership-sensitive DCE. *)
 [@@@warning "-4-42"]
 open Dark_compiler
 open MemoryModel

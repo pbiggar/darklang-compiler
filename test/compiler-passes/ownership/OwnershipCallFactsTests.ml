@@ -1,4 +1,4 @@
-(* OwnershipCallFactsTests.fs - Call-point uniqueness laws and specialization handoff. *)
+(* OwnershipCallFactsTests.ml - Call-point uniqueness laws and specialization handoff. *)
 [@@@warning "-4-42"]
 open Dark_compiler
 module H=HIR

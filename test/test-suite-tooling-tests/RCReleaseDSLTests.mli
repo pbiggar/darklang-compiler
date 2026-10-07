@@ -1,5 +1,5 @@
 (*
-   RCReleaseDSLTests.fs - Tests for semantic reference-release fixture parsing.
+   RCReleaseDSLTests.mli - Tests for semantic reference-release fixture parsing.
    Covers typed shape parsing, invalid placement, and executable release behavior.
 *)
 open Dark_compiler

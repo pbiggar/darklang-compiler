@@ -2,7 +2,7 @@
    Text fixtures for the production SSA inliner. Each function body is parsed
    once and lowered to the ANF analysis input and the SSA transformation input.
 *)
-(* SSAInliningFormat.fs - Text fixtures for the production SSA inliner. *)
+(* SSAInliningFormat.ml - Text fixtures for the production SSA inliner. *)
 [@@@warning "-4-42"]
 open Dark_compiler
 module A = ANF

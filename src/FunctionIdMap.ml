@@ -1,5 +1,5 @@
 (*
-   FunctionIdMap.fs - Keep sparse function tables typed while comparing scalar ordinals.
+   FunctionIdMap.ml - Keep sparse function tables typed while comparing scalar ordinals.
 *)
 (* FunctionIdMap.ml - Keep sparse function tables typed while comparing scalar ordinals. *)
 (* The representation is private: compiler passes supply semantic identities,

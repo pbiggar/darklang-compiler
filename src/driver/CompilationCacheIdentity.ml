@@ -1,4 +1,4 @@
-(* CacheIdentity.fs - Define stable dependency and native-code cache identities. *)
+(* CompilationCacheIdentity.ml - Define stable dependency and native-code cache identities. *)
 [@@@warning "-30"]
 type 'a comparer = {equals : 'a -> 'a -> bool; getHashCode : 'a -> int}
 
@@ -36,7 +36,7 @@ let canonicalFunctionMap entries = FunctionIdMap.ofSeq (FunctionIdMap.toSeq entr
 module Functions = SpecializationIdentity.FunctionSet
 
 (* Normalize ordered containers before structural equality. Their balancing
-   history is invisible to F# Map/Set equality. No producer object is replaced
+   history is irrelevant to structural map/set equality. No producer object is replaced
    at the reference-identity comparison boundaries below. *)
 let canonicalReleaseSummary (value:LIR.arm64ReleasePlanSummary) =
   {value with LIR.listDecHelperLabels=StringOrder.Set.of_seq (StringOrder.Set.to_seq value.LIR.listDecHelperLabels);

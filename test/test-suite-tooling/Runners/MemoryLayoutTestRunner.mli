@@ -1,5 +1,5 @@
 (*
-   MemoryLayoutTestRunner.fs - Execute source fixtures and observe final native value words.
+   MemoryLayoutTestRunner.mli - Execute source fixtures and observe final native value words.
    The x64 integer printer emits a newline before the separator.
 *)
 open Dark_compiler

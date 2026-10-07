@@ -1,4 +1,4 @@
-(* SSAANF.fs - Typed control-flow form for optimized ANF operations. *)
+(* SSAANF.mli - Typed control-flow form for optimized ANF operations. *)
 type label = Label of int
 module LabelMap : Map.S with type key = label
 type terminator = Return of ANF.atom | Jump of label * ANF.atom list | Branch of ANF.atom * label * label

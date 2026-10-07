@@ -1,5 +1,5 @@
 (*
-   PassTestRunnerTests.fs - Unit tests for pass test runner diagnostics
+   PassTestRunnerTests.ml - Unit tests for pass test runner diagnostics
    Verifies MIR pretty-printing renders CFG structure for troubleshooting.
 *)
 (* Retain every original parser and formatter assertion at the pass-runner boundary. *)

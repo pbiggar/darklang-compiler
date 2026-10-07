@@ -1,4 +1,4 @@
-(* LoopTopology.fs - Compute dominators and natural-loop interfaces. *)
+(* MIRLoopTopology.mli - Compute dominators and natural-loop interfaces. *)
 [@@@warning "-30"]
 val getSuccessors : MIR.basicBlock -> MIR.label list
 val buildSuccessors : MIR.cfg -> MIR.label list MIR.LabelMap.t

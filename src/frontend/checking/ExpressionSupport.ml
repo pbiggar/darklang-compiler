@@ -1,5 +1,5 @@
 (*
-   ExpressionSupport.fs - Typed recursive checking interface and call-argument diagnostics.
+   ExpressionSupport.ml - Typed recursive checking interface and call-argument diagnostics.
 *)
 (* ExpressionSupport.ml - Typed recursive checking interface and call-argument diagnostics. *)
 type expressionChecker = AST.expr -> Types.typeEnv -> Types.indexedTypeRegistry -> Types.variantLookup -> Types.genericFuncRegistry -> AST.warningSettings -> AST.moduleRegistry -> Types.aliasRegistry -> AST.semanticType option -> (AST.semanticType * AST.expr, CheckingDiagnostics.typeError) result

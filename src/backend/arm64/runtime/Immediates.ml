@@ -1,5 +1,5 @@
 (*
-   Immediates.fs - Materialize integer constants for ARM64 runtime instruction generators.
+   Immediates.ml - Materialize integer constants for ARM64 runtime instruction generators.
 *)
 let generateLoadUInt64Immediate (dest:ARM64.reg) value =
  let chunk shift=Int64.to_int (Int64.logand (Int64.shift_right_logical value shift) 0xffffL) in

@@ -29,7 +29,7 @@ For a new operator, update both the implementation and its `.mli` interface:
    dispatcher rather than adding a catch-all default.
 
 For a standard-library feature, add its Dark implementation to
-`share/stdlib/`, add the ordered source registration in
+`stdlib/`, add the ordered source registration in
 `src/driver/StdlibCompilation.ml`, and register the file in the share
 installation stanza. Public generic uses should rely on inference unless
 explicit type arguments are necessary.
@@ -43,5 +43,3 @@ only when the task explicitly includes it. Keep verbose artifacts under
 
 Compiler source is in `src/`, translated unit tests and tooling are in
 `test/`, and unchanged language/DSL fixtures remain in `test/fixtures/`.
-The retired F# compiler and its completed migration comparison harness are
-available in Git history. Native regression checks now run with `dune runtest`.

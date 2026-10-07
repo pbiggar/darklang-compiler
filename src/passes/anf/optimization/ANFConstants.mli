@@ -1,4 +1,4 @@
-(* Constants.fs - Fold typed ANF constants and strength-reduce scalar operations. *)
+(* ANFConstants.mli - Fold typed ANF constants and strength-reduce scalar operations. *)
 module TempMap = InliningCommon.TempMap
 module IntMap : Map.S with type key = int
 type constEnv = ANF.atom TempMap.t

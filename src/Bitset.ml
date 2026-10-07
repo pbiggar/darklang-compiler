@@ -1,5 +1,5 @@
 (*
-   Bitset.fs - Low-level bitset utilities for compiler passes
+   Bitset.ml - Low-level bitset utilities for compiler passes
    Provides allocation-friendly bitset operations used by register allocation
    and dominance analysis. The representation is a raw uint64 array.
 *)
@@ -108,7 +108,7 @@ let intersects left right =
   requireMatchingWordCount "intersection" left right;
   Array.exists2 (fun a b -> Int64.logand a b <> 0L) left right
 
-(* OCaml 5.5 supplies the same intrinsic as .NET BitOperations. Scanning by
+(* Use the OCaml integer bit-count intrinsic. Scanning by
    recursive boxed shifts allocated for every zero bit in allocation graphs. *)
 let trailingZeroCount = Int64.trailing_zeros
 

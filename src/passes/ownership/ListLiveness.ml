@@ -1,4 +1,4 @@
-(* ListLiveness.fs - Representation-independent collection liveness and entry verification. *)
+(* ListLiveness.ml - Representation-independent collection liveness and entry verification. *)
 [@@@warning "-4"]
 module H = HIR
 module L = ListRegion

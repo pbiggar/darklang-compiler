@@ -1,4 +1,4 @@
-(* MIR.fs - Mid-level Intermediate Representation. *)
+(* MIR.mli - Mid-level Intermediate Representation. *)
 [@@@warning "-4-30"]
 type vReg = VReg of int
 module VRegMap : Map.S with type key = vReg

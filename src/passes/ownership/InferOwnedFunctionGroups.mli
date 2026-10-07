@@ -1,4 +1,4 @@
-(* InferOwnedFunctionGroups.fs - Infer uniqueness variants for owned-HIR call groups. *)
+(* InferOwnedFunctionGroups.mli - Infer uniqueness variants for owned-HIR call groups. *)
 type 'id functionBoundary = 'id InferRecursiveOwnership.functionBoundary
 type 'id candidate
 type 'id group

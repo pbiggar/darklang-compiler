@@ -1,4 +1,4 @@
-(* ReleaseSelection.fs - Select backend helpers from explicit representation release plans. *)
+(* X64ReleaseSelection.ml - Select backend helpers from explicit representation release plans. *)
 [@@@warning "-4"]
 open X64Operands
 open X64CodeGenTypes

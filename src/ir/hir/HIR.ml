@@ -7,7 +7,7 @@
    A normalized function owns one ordered entry block. Its typed signature is
    derived from the parameter and result values rather than duplicated here.
 *)
-(* HIR.fs - Normalized values and typed structured control flow shared by semantic dialects. *)
+(* HIR.ml - Normalized values and typed structured control flow shared by semantic dialects. *)
 [@@@warning "-4"]
 type valueId = ValueId of int
 module ValueIdentity = struct type t = valueId let compare (ValueId left) (ValueId right) = Int.compare left right end

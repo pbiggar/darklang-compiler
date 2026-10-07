@@ -1,4 +1,4 @@
-(* RefCountInsertionTests.fs - Register memory and ANF ownership test groups. *)
+(* RefCountInsertionTests.ml - Register memory and ANF ownership test groups. *)
 [@@@warning "-42"]
 open Dark_compiler
 open ANF

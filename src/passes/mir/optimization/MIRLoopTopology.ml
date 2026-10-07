@@ -1,4 +1,4 @@
-(* LoopTopology.fs - Compute dominators and natural-loop interfaces. *)
+(* MIRLoopTopology.ml - Compute dominators and natural-loop interfaces. *)
 [@@@warning "-4-30"]
 open MIR
 module S = SSA_Construction

@@ -1,5 +1,5 @@
 (*
-   NameResolution.fs - Canonical semantic name resolution
+   NameResolution.ml - Canonical semantic name resolution
    Builds an immutable inventory of compiler-visible symbols and resolves parsed
    qualified names according to the interpreter's context-specific precedence.
    No spelling recovery is performed here: every accepted spelling must be an

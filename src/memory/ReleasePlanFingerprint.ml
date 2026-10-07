@@ -1,4 +1,4 @@
-(* ReleasePlanFingerprint.fs - ANF-independent memory representation and release contracts. *)
+(* ReleasePlanFingerprint.ml - ANF-independent memory representation and release contracts. *)
 open MemoryModel
 type rcReleasePlanFingerprintState = {mutable hash : int64}
 let newRcReleasePlanFingerprintState () = {hash=0xcbf29ce484222325L}

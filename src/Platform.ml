@@ -1,5 +1,5 @@
 (*
-   Platform.fs - Platform Detection and Configuration
+   Platform.ml - Platform Detection and Configuration
    Defines OS and CPU architecture types, detection helpers, and
    per-(OS, Arch) syscall number tables.
    Supports:

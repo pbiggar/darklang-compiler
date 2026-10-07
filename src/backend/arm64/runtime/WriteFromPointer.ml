@@ -1,5 +1,5 @@
 (*
-   WriteFromPointer.fs - Generate checked writes from native pointer ranges.
+   WriteFromPointer.ml - Generate checked writes from native pointer ranges.
    Generate code for FileWriteFromPtr: write raw bytes to a file
    pathReg: register containing heap string pointer to file path
    ptrReg: register containing raw pointer to bytes

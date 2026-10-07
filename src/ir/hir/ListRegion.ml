@@ -3,7 +3,7 @@
    Each runtime buffer costs 256 bytes for n <= 28, otherwise 40 + 8*n.
    Terms count physical buffers with the same validated construction extent.
 *)
-(* ListRegion.fs - Typed closed-list region stages, identities, and array layouts. *)
+(* ListRegion.ml - Typed closed-list region stages, identities, and array layouts. *)
 [@@@warning "-4"]
 module H = HIR
 module M = H.ValueMap

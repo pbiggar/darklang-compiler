@@ -1,4 +1,4 @@
-(* CommonExpressions.fs - Reuse and path-complete scalar expressions under effect constraints. *)
+(* MIRCommonExpressions.ml - Reuse and path-complete scalar expressions under effect constraints. *)
 [@@@warning "-4"]
 open MIR
 module S = SSA_Construction

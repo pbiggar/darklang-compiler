@@ -1,4 +1,4 @@
-(* SSADirectCallSpecialization.fs - Specialize direct calls on typed SSA blocks. *)
+(* SSADirectCallSpecialization.ml - Specialize direct calls on typed SSA blocks. *)
 [@@@warning "-4"]
 module A = ANF
 module S = SSAANF

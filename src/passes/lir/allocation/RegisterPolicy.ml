@@ -1,4 +1,4 @@
-(* RegisterPolicy.fs - Select allocatable and preserved registers for the target. *)
+(* RegisterPolicy.ml - Select allocatable and preserved registers for the target. *)
 [@@@warning "-4"]
 (*
    Register Definitions

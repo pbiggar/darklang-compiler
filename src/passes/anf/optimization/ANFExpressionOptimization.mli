@@ -1,4 +1,4 @@
-(* Expressions.fs - Propagate facts and common expressions through lexical ANF control flow. *)
+(* ANFExpressionOptimization.mli - Propagate facts and common expressions through lexical ANF control flow. *)
 type optimizeAExprResult = {expr : ANF.aExpr; changed : bool; uses : ANFEffects.TempSet.t}
 type scalarUnaryCSEOp = PrimitiveUnary of ANF.unaryOp | FloatSqrtOp | FloatAbsOp | FloatNegOp | Int64ToFloatOp | FloatToInt64Op | FloatToBitsOp
 type cSEKey = BinaryValue of ANF.binOp * ANF.atom * ANF.atom | UnaryValue of scalarUnaryCSEOp * ANF.atom | ConditionalValue of ANF.atom * ANF.atom * ANF.atom | TupleProjection of ANF.atom * int | RecordProjection of ANF.recordDescriptor * ANF.atom * int

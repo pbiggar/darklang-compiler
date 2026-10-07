@@ -1,5 +1,5 @@
 (*
-E2EFormat.fs - End-to-end test format parser
+E2EFormat.ml - End-to-end test format parser
 
 Parses E2E test files in a simple line-based format.
 

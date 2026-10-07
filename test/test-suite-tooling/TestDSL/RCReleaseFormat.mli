@@ -1,5 +1,5 @@
 (*
-   RCReleaseFormat.fs - Parser for semantic reference-release fixtures.
+   RCReleaseFormat.mli - Parser for semantic reference-release fixtures.
    Describes canonical managed object graphs without exposing their LIR layout.
 *)
 open Dark_compiler

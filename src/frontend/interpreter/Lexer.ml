@@ -238,7 +238,7 @@ let letterOrDigit value = letter value || digit value
    scanning so an unterminated block comment can report its own range.
    `/// …` is a doc comment for the next declaration. `////` and plain
    `//` are ordinary comments.
-   F#-style nestable block comment. `( * )` and `( ** )` are the multiply
+   Nestable block comment. `( * )` and `( ** )` are the multiply
    and exponentiation operator sections, so they are excluded here.
    longest-match operators (order matters)
    `val x = e` is a value declaration. `let` is reserved for functions and

@@ -16,7 +16,7 @@
    identities regardless of source order. The nominal registry will replace
    the restricted resolver as type declarations are brought into this path.
 *)
-(* WrittenChecking.fs - Construct checked source from validated interpreter syntax. *)
+(* WrittenChecking.ml - Construct checked source from validated interpreter syntax. *)
 (* Declarations retained by a checked source batch for separately checked
    source units. The representation stays inside this direct checker. *)
 [@@@warning "-4"]

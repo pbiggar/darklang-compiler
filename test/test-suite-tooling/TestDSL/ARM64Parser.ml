@@ -1,5 +1,5 @@
 (*
-   ARM64Parser.fs - Parser for ARM64 instruction DSL
+   ARM64Parser.ml - Parser for ARM64 instruction DSL
    Parses human-readable ARM64 text into ARM64.Instr data structures.
    Example ARM64:
    MOVZ(X1, 10, 0)

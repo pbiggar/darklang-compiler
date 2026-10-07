@@ -1,5 +1,5 @@
 (*
-   ARM64CodeGenTests.fs - Register ARM64 lowering and runtime contract tests.
+   ARM64CodeGenTests.ml - Register ARM64 lowering and runtime contract tests.
 *)
 let tests=[
  "LIR ARM64 codegen reports missing entry block",ControlFlowTests.testReportsMissingEntryBlock;

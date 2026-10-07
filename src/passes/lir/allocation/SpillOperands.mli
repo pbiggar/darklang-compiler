@@ -1,4 +1,4 @@
-(* SpillOperands.fs - Materialize allocated operands and spilled register values. *)
+(* SpillOperands.mli - Materialize allocated operands and spilled register values. *)
 val tryAllocation : AllocationModel.allocationResult -> int -> AllocationModel.allocation option
 val getLiveCallerSavedRegs : AllocationModel.allocationResult -> AllocationModel.bitSet -> LIR.physReg list
 val getLiveCallerSavedFloatRegs : Platform.arch -> AllocationModel.bitSet -> FloatAllocation.fAllocationResult -> LIR.physFPReg list

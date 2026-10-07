@@ -1,4 +1,4 @@
-(* ClosureComparisons.fs - Plan equality for lifted closures and their captures. *)
+(* ClosureComparisons.mli - Plan equality for lifted closures and their captures. *)
 type lambdaComparisonPlan = {
  identity : AST.functionId option; captureNames : AST.bindingId list;
  captureTypes : AST.semanticType list; captureExprs : CheckedAST.expr list;

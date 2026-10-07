@@ -1,5 +1,5 @@
 (*
-   LIRExecutionTestRunner.fs - Compiles and executes single-block LIR programs.
+   LIRExecutionTestRunner.ml - Compiles and executes single-block LIR programs.
    Checks typed x64 failures and provides shared backend executable support.
 *)
 [@@@warning "-4-42"]
@@ -31,7 +31,7 @@ let writeAndRun target binary=
  |Platform.LinuxX86_64,Ok Platform.X86_64|Platform.ARM64Backend _,Ok Platform.ARM64->path,[]
  |Platform.LinuxX86_64,_->"/opt/dcb/qemu/qemu-x86_64",[path]
  |Platform.ARM64Backend _,_->"/opt/dcb/qemu/qemu-aarch64",[path] in
- TestProcess.capture file args 10000
+ ProcessCapture.capture file args 10000
  with exn->Error ("Execution failed: "^Printexc.to_string exn))
 let translate program leakCheck=let* executable=executableProgram program in CodeGen_X86_64.translateProgram executable (leakCheck=LeakCheckEnabled)
 let executeX64Program program leakCheck=

@@ -1,0 +1,5 @@
+(library
+ (name process_capture)
+ (wrapped false)
+ (libraries dark_compiler spawn bos mtime.clock.os)
+ (flags (:standard -w @a-42 -warn-error +a-42)))

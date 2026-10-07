@@ -13,11 +13,11 @@
    intermediate cons cells to be freed prematurely (leading to corrupted results
    when the free list reuses those cells for subsequent allocations).
    CURRENT STATUS: TCO is ENABLED. The DCE bug that caused 197 test failures
-   has been fixed (DeadCodeElimination.fs was not recognizing TailCall as a
+   has been fixed (TailCallDetection.ml was not recognizing TailCall as a
    function call, causing stdlib functions called via tail call to be removed).
    See docs/compiler/optimizations/tail-calls.md for detailed documentation.
 *)
-(* TailCallDetection.fs - Tail Call Detection Pass *)
+(* TailCallDetection.ml - Tail Call Detection Pass *)
 [@@@warning "-4"]
 open ANF
 module TempMap = ANFConstants.TempMap
@@ -224,7 +224,7 @@ let detectTailCallsInFunction func = detectTailCallsInFunctionWithRegistry Funct
 (*
    Detect tail calls in a program
    TCO is ENABLED - the DCE bug that caused 197 test failures has been fixed
-   (DeadCodeElimination.fs was not recognizing TailCall as a function call)
+   (DeadCodeElimination.ml was not recognizing TailCall as a function call)
 *)
 let detectTailCallsInProgram (Program (functions,main)) = Program (List.map detectTailCallsInFunction functions,main)
 let detectTailCallsInProgramWithRecursion recursiveMembers (Program (functions,main)) = Program (List.map (detectTailCallsInFunctionWithRegistry recursiveMembers) functions,main)

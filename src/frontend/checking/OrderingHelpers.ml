@@ -1,5 +1,5 @@
 (*
-   OrderingHelpers.fs - Generate structural ordering source expressions.
+   OrderingHelpers.ml - Generate structural ordering source expressions.
 *)
 (* OrderingHelpers.ml - Generate structural ordering source expressions. *)
 open! AST

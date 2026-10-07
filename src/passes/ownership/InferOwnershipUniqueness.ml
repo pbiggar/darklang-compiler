@@ -3,7 +3,7 @@
    lazy and bounded: inability to prove an optimization retains the established
    boundary instead of rejecting an otherwise valid program.
 *)
-(* InferOwnershipUniqueness.fs - Derive verifier-proven uniqueness boundary variants. *)
+(* InferOwnershipUniqueness.ml - Derive verifier-proven uniqueness boundary variants. *)
 [@@@warning "-4"]
 module O = OwnedIR
 let maximumVariants = 256

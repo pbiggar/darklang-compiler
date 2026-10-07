@@ -1,4 +1,4 @@
-(* Printer.fs - Format ANF functions and scoped or summarized dumps. *)
+(* ANFPrinter.ml - Format ANF functions and scoped or summarized dumps. *)
 [@@@warning "-4"]
 open IRPrinting
 let functionId id = StructuralFormat.format (StructuralFormat.Union ("FunctionId", [StructuralFormat.Scalar (Printf.sprintf "%LuUL" (AST.functionIdValue id))]))

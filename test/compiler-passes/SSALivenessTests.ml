@@ -1,5 +1,5 @@
 (*
-   SSALivenessTests.fs - Unit tests for SSA liveness analysis
+   SSALivenessTests.ml - Unit tests for SSA liveness analysis
    Tests the liveness analysis with phi nodes in SSA form.
    Key insights for SSA liveness:
    - Phi dests are defined at block entry

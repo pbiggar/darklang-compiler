@@ -1,4 +1,4 @@
-(* ReturnAnalysis.fs - Analyze aliases and ownership escaping through returns and aggregates. *)
+(* RcReturnAnalysis.mli - Analyze aliases and ownership escaping through returns and aggregates. *)
 module TempMap = InliningCommon.TempMap
 module TempSet = ANFEffects.TempSet
 type returnAnnotatedExpr = RReturn of ANF.atom * TempSet.t | RLet of ANF.tempId * ANF.cExpr * returnAnnotatedExpr * TempSet.t | RIf of ANF.atom * returnAnnotatedExpr * returnAnnotatedExpr * TempSet.t | RJoin of ANF.typedParam * returnAnnotatedExpr * returnAnnotatedExpr * TempSet.t | RJump of ANF.tempId * ANF.atom * TempSet.t

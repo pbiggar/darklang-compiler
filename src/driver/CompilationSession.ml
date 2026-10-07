@@ -1,4 +1,4 @@
-(* CompilationSession.fs - Own bounded compilation caches and their explicit session lifetime. *)
+(* CompilationSession.ml - Own bounded compilation caches and their explicit session lifetime. *)
 module C=CompilationCacheIdentity
 module F=SpecializationIdentity.FunctionSet
 (* Dictionary keys retain the source's equality contracts. Hashes only narrow

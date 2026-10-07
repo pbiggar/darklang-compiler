@@ -1,5 +1,5 @@
 (*
-   ANFToMIRTests.fs - Unit tests for ANF to MIR lowering behavior.
+   ANFToMIRTests.ml - Unit tests for ANF to MIR lowering behavior.
    Covers pass-local edge cases that are not reachable from public E2E programs.
 *)
 (* Unit tests for ANF to MIR lowering behavior. *)

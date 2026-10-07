@@ -1,4 +1,4 @@
-(* MemoryShapeTests.fs - Verify memory shapes and stable recursive release plans. *)
+(* MemoryShapeTests.mli - Verify memory shapes and stable recursive release plans. *)
 type testResult = (unit, string) result
 val testRcShapeConstructionAndEquality : unit -> testResult
 val testRcShapeClassifiesPrimitivesAsImmediate : unit -> testResult

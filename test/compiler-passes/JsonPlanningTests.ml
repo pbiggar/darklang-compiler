@@ -1,5 +1,5 @@
 [@@@warning "-4-42"]
-(* JsonPlanningTests.fs - Check that JSON planning preserves unrelated programs. *)
+(* JsonPlanningTests.ml - Check that JSON planning preserves unrelated programs. *)
 open Dark_compiler
 type testResult=(unit,string) result
 let (let*)=Result.bind

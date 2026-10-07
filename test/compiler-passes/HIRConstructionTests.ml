@@ -1,4 +1,4 @@
-(* HIRConstructionTests.fs - Checked-function normalization and structured-edge laws. *)
+(* HIRConstructionTests.ml - Checked-function normalization and structured-edge laws. *)
 [@@@warning "-4-42"]
 open Dark_compiler
 module H = HIR

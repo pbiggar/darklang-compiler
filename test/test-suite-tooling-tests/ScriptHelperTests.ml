@@ -1,4 +1,4 @@
-(* ScriptHelperTests.fs - Repository policy tests for compiler and shell tooling
+(* ScriptHelperTests.ml - Repository policy tests for compiler and shell tooling
    Enforces selected source and script invariants that are cheap to check structurally. *)
 open Dark_compiler
 module R=RepositoryTestFiles

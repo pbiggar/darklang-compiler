@@ -1,5 +1,5 @@
 (*
-   ANFParser.fs - Parser for ANF (A-Normal Form) DSL
+   ANFParser.ml - Parser for ANF (A-Normal Form) DSL
    Parses human-readable ANF text into ANF.Program data structures.
    Example ANF:
    let t0 = 3 * 4

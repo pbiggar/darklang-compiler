@@ -2,7 +2,7 @@
    Prunes unused user and stdlib functions by walking call graphs.
    This keeps code generation and binary size focused on reachable functions.
 *)
-(* FunctionTreeShaking.fs - Function Tree Shaking Pass. *)
+(* FunctionTreeShaking.ml - Function Tree Shaking Pass. *)
 module FS = SpecializationIdentity.FunctionSet
 (*
    Build root set for user reachability (explicit entry when provided)

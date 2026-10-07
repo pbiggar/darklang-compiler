@@ -1,0 +1,63 @@
+# Verify native compiler behavior and instruction counts on both architectures.
+name: Native cleanup verification
+on:
+  workflow_dispatch:
+  push:
+    branches: [codex/root-dune-layout]
+    paths: [.github/workflows/native-cleanup.yml]
+permissions:
+  contents: read
+jobs:
+  verify:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - architecture: arm64
+            runner: ubuntu-24.04-arm
+          - architecture: x86_64
+            runner: ubuntu-24.04
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Configure the cleanup parent
+        run: |
+          git switch -c cleanup-verification
+          git branch cleanup-parent b4c866366055621a4cb43cc5f4e90d148c1d66c3
+          git branch --set-upstream-to=cleanup-parent
+      - name: Install native dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y opam libgmp-dev libsqlite3-dev pkg-config valgrind ripgrep jq
+          opam init --bare --yes --disable-sandboxing --no-setup
+          opam switch create . ocaml-base-compiler.5.5.1 --yes --jobs=2
+          mapfile -t packages < <(sed '/^#/d; /^$/d' dependencies.lock)
+          opam install --yes --jobs=2 --no-depexts "${packages[@]}"
+      - name: Build
+        run: opam exec -- ./build --ai -- -j2 --cache=disabled
+      - name: Complete host suite
+        run: opam exec -- ./run-tests --ai
+      - name: Regression checks
+        run: opam exec -- dune runtest --cache=disabled -j2
+      - name: Targeted Python benchmarks
+        run: python3 benchmarks/targeted/measure.py all TestResults/ai/targeted --samples 7
+      - name: Parent-relative native performance
+        run: opam exec -- ./benchmarks/run_benchmarks.sh --verify-parent --jobs=2 full
+      - name: Install interpreter oracle
+        run: bash scripts/install-darklang-interpreter.sh > TestResults/ai/interpreter-setup.log 2>&1
+      - name: Bounded differential fuzzing
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          opam exec -- _build/default/tools/fuzzer/main.exe --seed 1234 --depth 4 --limit 100 --timeout-ms 5000 --artifacts TestResults/ai/fuzz
+      - name: Retain verification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-cleanup-${{ matrix.architecture }}
+          retention-days: 7
+          path: |
+            benchmarks/results/
+            TestResults/ai/

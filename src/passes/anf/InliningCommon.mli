@@ -1,4 +1,4 @@
-(* InliningCommon.fs - Call eligibility, external candidate analysis, and ANF renaming. *)
+(* InliningCommon.mli - Call eligibility, external candidate analysis, and ANF renaming. *)
 type inliningConfig = {maxFunctionSize : int; maxInlineDepth : int; maxExternalInlineSites : int; maxBoundedLoopIterations : int; maxBoundedLoopExpansion : int; maxProjectedTupleInlineSize : int; maxProjectedTupleInlineSites : int}
 val defaultConfig : inliningConfig
 type functionInfo = {func : ANF.functionDef; calls : SpecializationIdentity.FunctionSet.t; size : int; isRecursive : bool; hasClosures : bool; hasTailCalls : bool; isExternal : bool}

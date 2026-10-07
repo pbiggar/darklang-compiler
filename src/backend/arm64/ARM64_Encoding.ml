@@ -1,5 +1,5 @@
 (*
-   7_ARM64_Encoding.fs - ARM64 Machine Code Encoding (Pass 7)
+   ARM64_Encoding.ml - ARM64 Machine Code Encoding (Pass 7)
    Encodes ARM64 instructions to 32-bit machine code per ARMv8 specification.
    Encoding algorithm:
    - Two-pass encoding for label-based branches:
@@ -1354,7 +1354,7 @@ let getStringPoolSize (stringPool:LiteralPool.stringPool)=Array.fold_left (fun s
    Compute the platform-specific code file offset for encoding
    ELF: header (64) + 1 program header (56) = 120
    Mach-O: header (32) + load commands + padding
-   Must match Binary_Generation_MachO.fs calculation
+   Must match Binary_Generation_MachO.ml calculation
 *)
 let computeCodeFileOffset os (stringPool:LiteralPool.stringPool) (floatPool:LiteralPool.floatPool) enableLeakCheck =
  match os with
