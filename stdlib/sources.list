@@ -156,7 +156,10 @@ __QuicWire.dark
 __QuicCrypto.dark
 __QuicPacket.dark
 __QuicFrames.dark
+__QuicApplication.dark
 __QuicReassembly.dark
+__QuicStreams.dark
+__QuicRecovery.dark
 __QuicParameters.dark
 __QuicTls.dark
 __Qpack.dark

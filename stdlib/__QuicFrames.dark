@@ -71,7 +71,8 @@ let __ack (data: Blob) (position: Int64) (withEcn: Bool) : Stdlib.Result.Result<
                   result
 
 let __paddingEnd (data: Blob) (position: Int64) : Int64 =
-  if position < Stdlib.Blob.__byteLength data && Stdlib.Blob.__getByte data position == 0L then
+  if position >= Stdlib.Blob.__byteLength data then position
+  else if Stdlib.Blob.__getByte data position == 0L then
     Stdlib.QuicFrames.__paddingEnd data (position + 1L)
   else position
 

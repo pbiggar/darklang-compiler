@@ -163,9 +163,17 @@ The profile caps the extension at 4096 bytes and 128 parameters.
 independent test-only aioquic encodings. `python3 scripts/test_quic_tls_peer.py`
 also tests live TLS flights that correctly sign wrong connection IDs, invalid
 parameters or duplicates, and checks client Finished and peer handshake
-completion. This is still a handshake helper, not an HTTP/3 connection:
-reliable UDP streams, loss/congestion handling and advertised-only discovery
-remain implementation work.
+completion. Application-frame codecs now cover STREAM, flow control, reset,
+connection-ID, path-validation and close frames, with direction and range
+validation. Bounded stream state validates reordered FINs, conflicting final
+sizes, receive credit and resets. Packet recovery tracks fresh packet numbers,
+ACK ranges, RTT, NewReno congestion, loss, PTO probes, retransmission identity
+and pacing decisions. `quic_application.e2e`, `quic_recovery.e2e` and the
+independent `scripts/test_quic_application_peer.py` and
+`scripts/test_quic_recovery_peer.py` exercise these pure helpers, including
+reordering and duplicate data. They are not yet connected to a production
+UDP connection owner: live reliable streams and advertised-only discovery
+remain implementation work, as do the public HTTP/3 client/server APIs.
 
 `Stdlib.HttpClient.Sse.Event` and `parse` are copied from the same revision.
 The parser retains upstream's `Stream.unfold` behavior: it pulls only until the

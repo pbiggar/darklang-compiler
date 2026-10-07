@@ -1,0 +1,88 @@
+// __QuicStreams.dark - Immutable QUIC stream flow credit, ordered bytes and final-size invariants.
+module Darklang.Stdlib.QuicStreams
+
+type Receive = {
+  buffer: Stdlib.QuicReassembly.State, credit: Int64, highest: Int64,
+  finalSize: Stdlib.Option.Option<Int64>, resetCode: Stdlib.Option.Option<Int64>
+}
+type Send = { id: Int64, credit: Int64, offset: Int64, finished: Bool }
+type Outgoing = { state: Stdlib.QuicStreams.Send, bytes: Blob }
+
+let receiver (window: Int64) : Stdlib.Result.Result<Stdlib.QuicStreams.Receive, String> =
+  Stdlib.QuicReassembly.create window |> Stdlib.Result.map (fun buffer ->
+    Stdlib.QuicStreams.Receive { buffer = buffer, credit = window, highest = 0L, finalSize = None, resetCode = None })
+
+let __final (state: Stdlib.QuicStreams.Receive) (end_: Int64) (fin: Bool)
+  : Stdlib.Result.Result<Stdlib.Option.Option<Int64>, String> =
+  match state.finalSize with
+  | Some size ->
+    if end_ > size || (fin && end_ != size) then Error "QUIC stream final size changed"
+    else Ok state.finalSize
+  | None ->
+    if fin && end_ < state.highest then Error "QUIC stream final size is below received data"
+    else Ok (if fin then Some end_ else None)
+
+let insert (state: Stdlib.QuicStreams.Receive) (offset: Int64) (bytes: Blob) (fin: Bool)
+  : Stdlib.Result.Result<Stdlib.QuicStreams.Receive, String> =
+  let size = Stdlib.Blob.__byteLength bytes in
+  if offset < 0L || offset > 4611686018427387903L - size then Error "Invalid QUIC STREAM range"
+  else
+    let end_ = offset + size in
+    if end_ > state.credit then Error "QUIC stream flow control exceeded"
+    else
+      match Stdlib.QuicStreams.__final state end_ fin with
+      | Error message -> Error message
+      | Ok finalSize ->
+        let buffer = if Stdlib.Option.isSome state.resetCode then Ok state.buffer
+                     else Stdlib.QuicReassembly.insert state.buffer offset bytes in
+        buffer |> Stdlib.Result.map (fun next -> Stdlib.QuicStreams.Receive {
+          buffer = next, credit = state.credit, highest = if end_ > state.highest then end_ else state.highest,
+          finalSize = finalSize, resetCode = state.resetCode })
+
+let reset (state: Stdlib.QuicStreams.Receive) (finalSize: Int64) (code: Int64)
+  : Stdlib.Result.Result<Stdlib.QuicStreams.Receive, String> =
+  if finalSize < 0L || code < 0L || code > 4611686018427387903L then Error "Invalid QUIC stream reset"
+  else if finalSize > state.credit then Error "QUIC stream flow control exceeded"
+  else Stdlib.QuicStreams.__final state finalSize true |> Stdlib.Result.map (fun final ->
+    Stdlib.QuicStreams.Receive { buffer = Stdlib.QuicReassembly.State {
+      maximum = state.buffer.maximum, consumed = state.buffer.consumed, segments = [] },
+      credit = state.credit, highest = finalSize, finalSize = final, resetCode = Some code })
+
+let available (state: Stdlib.QuicStreams.Receive) : Blob =
+  if Stdlib.Option.isSome state.resetCode then Stdlib.Blob.empty
+  else Stdlib.QuicReassembly.available state.buffer
+
+// Sliding credit increases only after the application takes contiguous bytes.
+// Highest offsets (including RESET_STREAM final sizes) account for connection
+// flow control; retransmitted or overlapping bytes do not consume new credit.
+let drain (state: Stdlib.QuicStreams.Receive) : Stdlib.QuicStreams.Receive =
+  let buffer = Stdlib.QuicReassembly.drain state.buffer in
+  let credit = if buffer.consumed > 4611686018427387903L - buffer.maximum then 4611686018427387903L
+               else buffer.consumed + buffer.maximum in
+  Stdlib.QuicStreams.Receive { buffer = buffer, credit = if credit > state.credit then credit else state.credit,
+    highest = state.highest, finalSize = state.finalSize, resetCode = state.resetCode }
+
+let complete (state: Stdlib.QuicStreams.Receive) : Bool =
+  match state.finalSize with
+  | None -> false
+  | Some size -> Stdlib.Option.isSome state.resetCode || state.buffer.consumed == size
+
+let sender (id: Int64) (credit: Int64) : Stdlib.Result.Result<Stdlib.QuicStreams.Send, String> =
+  if id < 0L || id > 4611686018427387903L || credit < 0L || credit > 4611686018427387903L then
+    Error "Invalid QUIC send stream"
+  else Ok (Stdlib.QuicStreams.Send { id = id, credit = credit, offset = 0L, finished = false })
+
+let updateCredit (state: Stdlib.QuicStreams.Send) (credit: Int64)
+  : Stdlib.Result.Result<Stdlib.QuicStreams.Send, String> =
+  if credit < 0L || credit > 4611686018427387903L then Error "Invalid QUIC stream credit"
+  else Ok (Stdlib.QuicStreams.Send { id = state.id, offset = state.offset, finished = state.finished,
+    credit = if credit > state.credit then credit else state.credit })
+
+let send (state: Stdlib.QuicStreams.Send) (bytes: Blob) (fin: Bool)
+  : Stdlib.Result.Result<Stdlib.QuicStreams.Outgoing, String> =
+  let size = Stdlib.Blob.__byteLength bytes in
+  if state.finished then Error "QUIC send stream is finished"
+  else if size > state.credit - state.offset then Error "QUIC send stream is blocked"
+  else Stdlib.QuicApplication.stream state.id state.offset bytes fin |> Stdlib.Result.map (fun encoded ->
+    Stdlib.QuicStreams.Outgoing { bytes = encoded,
+      state = Stdlib.QuicStreams.Send { id = state.id, credit = state.credit, offset = state.offset + size, finished = fin } })
