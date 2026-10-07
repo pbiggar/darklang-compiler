@@ -1,175 +1,128 @@
-# Current compatibility audit
+# Compatibility test failure ledger
 
-Reviewed 2026-10-07 against compiler main
-`7154b0ea9c1a3f53d30984ed17b9e0cc5d8f0dce`, after the OCaml port and the
-StdLib source reorganization. This page owns the current review scope and
-validation status; [remaining differences](remaining-differences.md) owns the
-open-gap summary and [upstream inventory](upstream-test-inventory.md) owns
-file/line enablement. Every detailed ledger links here.
+Run on 2026-10-08 (Europe/Rome), against compiler and fixture revision
+`7154b0ea9c1a3f53d30984ed17b9e0cc5d8f0dce` on Linux x86-64.
 
-## Baselines and evidence rules
+**Every disabled test was run: 2,589 assertions across 68 files.**
+**249 passed; 2,340 failed.** The file links below list each failing test
+by its original source line and observed diagnostic.
 
-The embedded public-library inventory targets darklang/dark `v0.0.35`,
-`0b3888d8e4f30d48ecd738f5cbe5cc2b8d958460`. The copied parser and effect
-syntax instead derive from `1cc4bb7f63acdf29dc66458f3c401ed91d444775`, as
-recorded in `src/frontend/interpreter/README.md`. Older per-surface comparisons
-also name `04fbe9dcc995c6188757d583e273cbd30a3e2d3d`. These are distinct
-baselines: accepting newer syntax does not prove parity with every old package
-or fixture. Historical performance ratios and test totals are not current
-compatibility measurements.
+The runner has 44 whole-file gates and 260 line entries in 24 other files.
+The fixture parser matched 214 of those line entries to assertions; the other
+**46 entries identify no assertion** and are listed separately below.
 
-Current production source parsing goes through `WrittenParsing` and the copied
-interpreter parser. `WrittenSource` retains module paths;
-`WrittenChecking`/`WrittenDeclarations` produce `CheckedAST` directly. The old
-parsed-AST normalization, resolver, and type-checker line references in detailed
-implementation histories do not describe this production boundary. Consult
-[the current type-checking architecture](../compiler/frontend/type-checking.md)
-and [library inventory](../compiler/library-sources.md) for current structure
-and embedded-source ordering.
+All assertions in affected files were run, including enabled neighbours:
+4,406 executed, 2,066 passed, 2,340 failed.
+All failures were among the previously excluded tests.
 
-The tables below record **source implementations and existing test evidence**.
-“Enabled” describes the default runner gate, not an execution result.
-“Focused” means a compiler-authored fixture exists; it does not mean every
-unchanged upstream case passed. Previously diagnosed failures whose code path
-was replaced are recorded as needing revalidation rather than repeated as
-verified current bugs. No test gates or compiler behavior were changed here.
+## Test files
 
-## Imported-corpus provenance
+| File | Disabled tests run | Passed | Failed |
+| --- | ---: | ---: | ---: |
+| [cli/app-service-safety.dark](failures/cli/app-service-safety.md) | 9 | 0 | 9 |
+| [cli/command-completions.dark](failures/cli/command-completions.md) | 10 | 0 | 10 |
+| [cli/deprecation-kinds.dark](failures/cli/deprecation-kinds.md) | 8 | 0 | 8 |
+| [cli/include-parsing.dark](failures/cli/include-parsing.md) | 8 | 0 | 8 |
+| [cli/outliner.dark](failures/cli/outliner.md) | 70 | 0 | 70 |
+| [cli/permissions-display.dark](failures/cli/permissions-display.md) | 2 | 0 | 2 |
+| [cli/permissions-grammar.dark](failures/cli/permissions-grammar.md) | 53 | 0 | 53 |
+| [cli/tailscale.dark](failures/cli/tailscale.md) | 5 | 0 | 5 |
+| [cli/workbench-repl.dark](failures/cli/workbench-repl.md) | 36 | 0 | 36 |
+| [cloud/db.dark](failures/cloud/db.md) | 151 | 0 | 151 |
+| [language/apply/eapply.dark](../../test/fixtures/e2e/upstream/language/apply/eapply.dark) | 0 | 0 | 0 |
+| [language/basic/eand.dark](../../test/fixtures/e2e/upstream/language/basic/eand.dark) | 2 | 2 | 0 |
+| [language/basic/elet.dark](../../test/fixtures/e2e/upstream/language/basic/elet.dark) | 0 | 0 | 0 |
+| [language/basic/eor.dark](failures/language/basic/eor.md) | 1 | 0 | 1 |
+| [language/basic/estring.dark](../../test/fixtures/e2e/upstream/language/basic/estring.dark) | 2 | 2 | 0 |
+| [language/basic/evariable.dark](failures/language/basic/evariable.md) | 1 | 0 | 1 |
+| [language/big.dark](../../test/fixtures/e2e/upstream/language/big.dark) | 1 | 1 | 0 |
+| [language/builtin-introspection.dark](failures/language/builtin-introspection.md) | 2 | 0 | 2 |
+| [language/custom-data/aliases.dark](../../test/fixtures/e2e/upstream/language/custom-data/aliases.dark) | 1 | 1 | 0 |
+| [language/custom-data/enums.dark](failures/language/custom-data/enums.md) | 18 | 2 | 16 |
+| [language/custom-data/values.dark](failures/language/custom-data/values.md) | 72 | 19 | 53 |
+| [language/derror.dark](failures/language/derror.md) | 10 | 5 | 5 |
+| [language/effect-ceiling.dark](failures/language/effect-ceiling.md) | 6 | 0 | 6 |
+| [language/error-type-names.dark](failures/language/error-type-names.md) | 13 | 0 | 13 |
+| [language/flow-control/eif.dark](failures/language/flow-control/eif.md) | 4 | 2 | 2 |
+| [language/nested-fns.dark](failures/language/nested-fns.md) | 2 | 0 | 2 |
+| [language/runtime-to-programtypes.dark](failures/language/runtime-to-programtypes.md) | 19 | 0 | 19 |
+| [scm/branch-identity.dark](failures/scm/branch-identity.md) | 8 | 2 | 6 |
+| [scm/commit-hash.dark](failures/scm/commit-hash.md) | 9 | 0 | 9 |
+| [scm/conflicts.dark](failures/scm/conflicts.md) | 40 | 3 | 37 |
+| [scm/constraint-kinds.dark](failures/scm/constraint-kinds.md) | 10 | 0 | 10 |
+| [scm/lww.dark](failures/scm/lww.md) | 9 | 0 | 9 |
+| [scm/matter-routes.dark](failures/scm/matter-routes.md) | 35 | 0 | 35 |
+| [scm/propagation-policy.dark](failures/scm/propagation-policy.md) | 19 | 0 | 19 |
+| [scm/removal-conflicts.dark](failures/scm/removal-conflicts.md) | 5 | 0 | 5 |
+| [scm/sync-seen-everything.dark](failures/scm/sync-seen-everything.md) | 6 | 0 | 6 |
+| [scm/sync-wire.dark](failures/scm/sync-wire.md) | 19 | 0 | 19 |
+| [stachu/darklangParser.dark](failures/stachu/darklangParser.md) | 31 | 0 | 31 |
+| [stachu/parser.dark](failures/stachu/parser.md) | 56 | 0 | 56 |
+| [stachu/tinyLang.dark](failures/stachu/tinyLang.md) | 34 | 0 | 34 |
+| [stdlib/base64.dark](failures/stdlib/base64.md) | 26 | 0 | 26 |
+| [stdlib/crypto.dark](../../test/fixtures/e2e/upstream/stdlib/crypto.dark) | 9 | 9 | 0 |
+| [stdlib/dict.dark](failures/stdlib/dict.md) | 16 | 15 | 1 |
+| [stdlib/earg.dark](failures/stdlib/earg.md) | 15 | 0 | 15 |
+| [stdlib/eself.dark](failures/stdlib/eself.md) | 39 | 0 | 39 |
+| [stdlib/float.dark](failures/stdlib/float.md) | 34 | 12 | 22 |
+| [stdlib/html.dark](failures/stdlib/html.md) | 7 | 0 | 7 |
+| [stdlib/http.dark](failures/stdlib/http.md) | 47 | 21 | 26 |
+| [stdlib/httpclient.dark](failures/stdlib/httpclient.md) | 61 | 54 | 7 |
+| [stdlib/httpserver.dark](failures/stdlib/httpserver.md) | 3 | 0 | 3 |
+| [stdlib/ints/int32.dark](../../test/fixtures/e2e/upstream/stdlib/ints/int32.dark) | 1 | 1 | 0 |
+| [stdlib/ints/int64.dark](failures/stdlib/ints/int64.md) | 5 | 3 | 2 |
+| [stdlib/ints/int8.dark](failures/stdlib/ints/int8.md) | 1 | 0 | 1 |
+| [stdlib/json.dark](failures/stdlib/json.md) | 540 | 0 | 540 |
+| [stdlib/language-tools/parsedFileShape.dark](failures/stdlib/language-tools/parsedFileShape.md) | 13 | 0 | 13 |
+| [stdlib/language-tools/pickLocation.dark](failures/stdlib/language-tools/pickLocation.md) | 30 | 0 | 30 |
+| [stdlib/language-tools/semanticTokenization.dark](failures/stdlib/language-tools/semanticTokenization.md) | 102 | 0 | 102 |
+| [stdlib/list.dark](failures/stdlib/list.md) | 35 | 5 | 30 |
+| [stdlib/math.dark](failures/stdlib/math.md) | 2 | 0 | 2 |
+| [stdlib/nomodule.dark](../../test/fixtures/e2e/upstream/stdlib/nomodule.dark) | 8 | 8 | 0 |
+| [stdlib/option.dark](failures/stdlib/option.md) | 16 | 4 | 12 |
+| [stdlib/pretty.dark](failures/stdlib/pretty.md) | 35 | 34 | 1 |
+| [stdlib/prettyPrinter.dark](failures/stdlib/prettyPrinter.md) | 57 | 0 | 57 |
+| [stdlib/result.dark](failures/stdlib/result.md) | 19 | 11 | 8 |
+| [stdlib/sqlite.dark](failures/stdlib/sqlite.md) | 8 | 0 | 8 |
+| [stdlib/sse.dark](../../test/fixtures/e2e/upstream/stdlib/sse.dark) | 8 | 8 | 0 |
+| [stdlib/stream.dark](../../test/fixtures/e2e/upstream/stdlib/stream.dark) | 25 | 25 | 0 |
+| [stdlib/string.dark](failures/stdlib/string.md) | 640 | 0 | 640 |
 
-The full imported execution directory was compared with darklang/dark
-`1cc4bb7f63acdf29dc66458f3c401ed91d444775` using:
+## Stale individual gate entries
 
-```bash
-python3 scripts/diff-upstream-execution-tests.py --upstream-dir /workspace/scratch/b5eb11cc95e0/darklang-interpreter/backend/testfiles/execution --ignore-expected-diff --output /workspace/scratch/b5eb11cc95e0/upstream-diff.md
-```
+These line entries do not correspond to a parsed assertion. They are neither
+passing nor failing tests. The fixture parser, rather than a text heuristic,
+was used to check assertion identities.
 
-That diagnostic comparison found no upstream-only or local-only files, and
-**eight files with normalized content differences**. The comparator strips
-local `#compileerror` metadata and treats the supported test-error spelling
-adaptations as equivalent. Its “meaningful” category can still contain a
-trailing blank line. The corpus is therefore **imported with adaptations**,
-not universally unchanged. This is a source comparison, not a parity run.
-
-| Imported file | Remaining source adaptation |
+| File | Entries with no assertion |
 | --- | --- |
-| `language/apply/eapply.dark` | An invalid return declaration is scoped into its own assertion; trailing blank line differs |
-| `language/basic/elet.dark` | Exhaustive fallback match arms added for AOT checking |
-| `language/custom-data/enums.dark` | Exhaustive fallback match arms added |
-| `language/flow-control/ematch.dark` | Exhaustive arms added; one guarded Result test is expressed through an annotated function |
-| `stdlib/dict.dark` | NaN/infinity key ordering checked through integer classifications, avoiding NaN equality in the oracle |
-| `stdlib/html.dark` | Multiline application/list layout compacted, with explicit list separators |
-| `stdlib/list.dark` | Explicit Int64 type arguments added to empty tail/splitLast calls |
-| `stdlib/option.dark` | Explicit Int64 type argument added to combine an all-None list |
+| [language/apply/eapply.dark](../../test/fixtures/e2e/upstream/language/apply/eapply.dark) | L120 |
+| [language/basic/eand.dark](../../test/fixtures/e2e/upstream/language/basic/eand.dark) | L11 |
+| [language/basic/elet.dark](../../test/fixtures/e2e/upstream/language/basic/elet.dark) | L67 |
+| [language/basic/eor.dark](../../test/fixtures/e2e/upstream/language/basic/eor.dark) | L16, L17 |
+| [language/basic/estring.dark](../../test/fixtures/e2e/upstream/language/basic/estring.dark) | L11, L17 |
+| [language/custom-data/aliases.dark](../../test/fixtures/e2e/upstream/language/custom-data/aliases.dark) | L39, L148, L149, L159, L175, L177 |
+| [language/custom-data/enums.dark](../../test/fixtures/e2e/upstream/language/custom-data/enums.dark) | L109 |
+| [language/flow-control/eif.dark](../../test/fixtures/e2e/upstream/language/flow-control/eif.dark) | L20 |
+| [stdlib/dict.dark](../../test/fixtures/e2e/upstream/stdlib/dict.dark) | L61, L74, L144, L145, L146, L227, L237, L242, L245, L273, L311, L315, L327, L332, L387, L389, L391, L394, L398, L400, L402, L406, L408 |
+| [stdlib/nomodule.dark](../../test/fixtures/e2e/upstream/stdlib/nomodule.dark) | L302, L304, L370, L372, L373, L374, L418, L419 |
 
-These adaptations can hide unsupported original source shapes. Restoring or
-retesting those original shapes belongs in the enablement queue; adapted
-fixture success must not be reported as unchanged-source success. The current
-comparison revision is the parser pin, not an assertion that every fixture
-matches the older public-library release.
+## Run conditions
 
-## Language ledgers
+Fixtures were copied byte-for-byte to temporary paths within the upstream
+fixture directory, bypassing the runner’s exact-path whole-file and line
+gates. Each file ran separately with `--ai --e2e-batch-size=1` and a filter
+for its copied path. Original fixture contents and committed gates were not
+changed. Assertion names and line numbers were read with the runner’s own
+`E2EFormat` parser. Every reported failure was extracted from complete
+per-test runner output and checked against file totals.
 
-| Ledger | Current source/test evidence | Current qualification |
-| --- | --- | --- |
-| [Bindings](language/bindings.md) | `WrittenLetSupport.ml`, `WrittenLambdaSupport.ml`; `interpreter/bindings.e2e`, `closures.e2e` | Lexical scope and captures exist; binding diagnostics occur before code generation. Historical AST node descriptions are superseded by direct checking |
-| [Conditionals and sequences](language/conditionals-and-sequences.md) | `WrittenExpressions.ml`, checked If/Sequence, ANF control flow; `conditional_sequence_parity.e2e` | Bool conditions, unified arm types, and Unit sequence heads remain static requirements |
-| [Identifiers](language/identifiers.md) | Copied `Lexer.ml`, `NameSyntax.ml`; `syntax/names.syntax`, `ParserTests.ml` | Unicode/quoted qualification exists; general module-open environments remain absent; hosted compile-time package lookup exists |
-| [Name resolution](language/name-resolution.md) | `WrittenTypeSupport.ml`, `WrittenExpressions.ml`, `WrittenDeclarations.ml`; `name-resolution.e2e`, `first_class_values.e2e`, `package_manager.e2e` | Qualified values have support. Duplicate function/type declarations now fail rather than overlay. Full upstream values coverage remains gated |
-| [Primitive literals](language/primitive-literals.md) | Copied Lexer and expression parser; `literal_parity.e2e`, `syntax/literals.syntax` | Arbitrary Int and sized literals exist; Int128/UInt128 use fixed limb blocks. Apostrophe graphemes in package sources were repaired at the audited main revision |
-| [Program structure](language/program-structure.md) | `WrittenSource.validateSourceUnits`, `WrittenDeclarations.checkItems`; `ProgramStructureTests.ml` | One entry across executable units; dependency units are declarations only. Functions/types predeclare; values check sequentially. Optional hosted packages join compilation before checking |
-| [Records](language/records.md) | `WrittenRecordSupport.ml`, `WrittenTypeSupport.structuralEqualityCompatible`; `records.e2e`, `record_alias_construction.e2e`, upstream record files | Assignment remains nominal; equality additionally accepts separately named compatible record layouts |
-| [Recursion](language/recursion.md) | `WrittenDeclarations.attachRecursiveGroups`, `WrittenLetSupport.ml`, specialization; `interpreter/recursion_parity.e2e`, `tailcall.e2e` | Self/mutual recursion and lexical closures exist; top-level values are a supported facility, checked sequentially |
-| [Tuples](language/tuples.md) | Copied parser, `WrittenCollectionSupport.ml`, ANF aggregate lowering; `tuple-parity.e2e` | Ordered heterogeneous tuples, destructuring, and structural equality exist; internal projection is not public syntax |
+A shared-preamble failure is a failed test invocation, not a measurement
+of that test’s public semantics. Missing interpreter test-package names,
+test-only builtins, network services, and genuine compiler failures remain
+visible as observed failures; no source-level support claim replaces a
+test result. This run used the repository’s imported/adapted fixtures and
+the compiler’s existing default package configuration.
 
-Effect-ceiling parsing is separately implemented in the copied declarations
-parser; source ceiling enforcement is absent in the direct checker. Operator
-syntax now uses `**` for exponentiation, `^` for XOR, `&`/`|` for bitwise
-and/or, `<<`/`>>` for shifts, `~` for integer complement, and `!` for Boolean
-negation. `ParserTests.ml` and `operator_parity.e2e` record the changed power/XOR
-contract. The old reserved-but-unsupported bitwise claim has been removed.
-
-## Standard-library ledgers
-
-| Ledger | Current implementation and focused evidence | Default upstream enablement and limits |
-| --- | --- | --- |
-| [Binary and Crypto](stdlib/binary-and-crypto.md) | `StdLib/{Blob,Base64,Crypto,X509}.dark`; `blob.e2e`, `x509.e2e`, local stdlib fixtures | Bytes and X509 enabled; Base64 partially enabled; Crypto whole-file gated, but fresh probe passes 9/9. Blob equality is handle identity |
-| [Comparison](stdlib/comparison.md) | `WrittenOperatorSupport.ml`, comparison planning/helpers; `comparison-parity.e2e`, `dval_recursive_equality.e2e` | Nomodule partially enabled. Streams support identity equality; compatible records support field equality. Database-reference host semantics are not claimed |
-| [Dict](stdlib/dicts.md) | `StdLib/Dict.dark`, HAMT, `WrittenCollectionSupport.ml`; `dict_parity.e2e`, `dval_dict_lookup.e2e` | Dict partially enabled; edict enabled. Two-argument Dict types and structural keys exist. Public numeric ordering operators do not accept Dict |
-| [Diff/ValueSearch](stdlib/diff-and-value-search.md) | `StdLib/{Diff,ValueSearch}.dark`, `PackageCatalog.ml`; `interpreter/diff.e2e`, `ValueSearchCatalogTests.ml` | PickLocation remains whole-file gated. ValueSearch is catalog-backed; optional hosted source loading does not supply live runtime queries |
-| [Float/Math](stdlib/floats-and-math.md) | `StdLib/{Float,Math}.dark`; `stdlib/{float,math}.e2e` | Both upstream files partially enabled. Shortest-roundtrip presentation intentionally differs from the old release, agrees with the newer named interpreter source |
-| [Html/HTTP](stdlib/html-and-http.md) | `StdLib/Html.dark`, Http modules and native transport; `html_http.e2e`, `http_client_wrappers.e2e`, `stdlib-internal/http_server.e2e` | Html and HTTP server partially enabled; Http and HttpClient whole-file gated. HTTP/1.1 client/server support exists with the documented platform/TLS limits |
-| [Integers](stdlib/integers.md) | All eleven integer modules; `integer-family.e2e`, `int128-wrapping.e2e` | All eleven upstream files enabled; three have individual line gates. Arbitrary Int and fixed limb Int128/UInt128 are distinct managed representations |
-| [JSON](stdlib/json.md) | `StdLib/{AltJson,Json}.dark`, `JsonPlanning.ml`; `json-parity.e2e` | AltJson enabled, typed Json whole-file gated. Native typed codecs exist; unsupported runtime shapes fail at compile time |
-| [Lists](stdlib/lists.md) | `StdLib/List.dark`, private list support, typed lowering; `list_parity.e2e`, `list_language_parity.e2e` | List partially enabled; dlist enabled. Generic callbacks, skew-list representation, typed equality and rendering exist |
-| [Option/Result/Retry](stdlib/option-result-retry.md) | `StdLib/{Option,Result,Retry}.dark`; `control_combinators_retry.e2e` | Option and Result partially enabled. Retry delay blocks; no transparent async claim |
-| [Pretty](stdlib/pretty.md) | `StdLib/Pretty.dark`; `stdlib/copied_pure_surfaces.e2e` | Pretty whole-file gated; fresh probe passes 34 cases and fails one multiline application at L186 |
-| [Streams](stdlib/streams.md) | `StdLib/Stream.dark`, native handle lifecycle; `stream.e2e`, `stdlib-internal/stream.e2e` | Stream whole-file gated, but fresh probe passes 25/25. Lazy pulls and deterministic close exist; public streaming is not transparent async scheduling |
-| [Temporal](stdlib/temporal.md) | `StdLib/{DateTime,Duration}.dark`, native clock; `temporal-parity.e2e` | Date and Duration enabled without line gates; historical pass totals are retained as historical results |
-| [Text](stdlib/text.md) | `StdLib/{Char,String,Regex}.dark`, Unicode runtime data; `stdlib/text_parity.e2e` | Char, Regex, and terminal text enabled; String whole-file gated. Compiler Unicode library and generated runtime Unicode version are separate pins |
-
-SSE also exists at `StdLib/HttpClient/Sse.dark`, with focused cases in
-`stdlib/copied_pure_surfaces.e2e`; its upstream file is whole-file gated, but the fresh probe passes 8/8.
-`packages/Darklang/LanguageTools/RuntimeTypes/` contains public Dval/type trees.
-`packages/Darklang/PrettyPrinter/RuntimeTypes.dark` and its RuntimeError module
-implement rendering; `dval_recursive_equality.e2e`, `dval_dict_lookup.e2e`, and
-`runtime_error_segments.e2e` provide focused evidence. Missing reflection,
-builtin enumeration, parser builtin access, and Dval-to-expression promotion
-must be distinguished from those existing types and renderers.
-
-## CLI ledgers
-
-| Ledger | Current implementation/test evidence | Current boundary |
-| --- | --- | --- |
-| [CLI](cli.md) | `StdLib/Cli/Path.dark`, File and FileSystem, Env; `cli_filesystem.e2e`, `filesystem_env_parity.e2e` | Path/glob, process, and color upstream fixtures enabled; broad CLI/service fixtures remain gated |
-| [Presentation](cli-presentation.md) | `StdLib/Print.dark`, `StdLib/Cli/Log.dark`, `StdLib/Cli/UI/`; `interpreter/cli_presentation.e2e` | Print/input/log/color/progress/prompt/spinner/table exist; old source paths and numbered registry anchors are historical |
-| [Process/host/input](cli-process-host-input.md) | `StdLib/Cli.dark`, `StdLib/Cli/{Process,Host,Stdin,Sys,Env,Posix}.dark`; `cli_process_host_input.e2e` | Documented host subset implemented; larger descriptor/watch/lock/daemon APIs have no blanket parity claim |
-
-## Fresh probes of whole-file gates
-
-On 2026-10-07, fifteen gated files were copied without source edits to a
-temporary directory under the imported corpus and run individually with
-`./run-tests --ai --filter=__audit_20261007/<copied-name> --e2e-batch-size=1`.
-The alternate paths bypass the exact whole-file denyset. All temporary copies
-were removed; the runner and committed gates remain unchanged. Counts below
-are parsed assertions, including repeated preamble failures, not independent
-missing features. Imported package-dependent fixtures were not supplied their
-interpreter test package server; these failures do not establish a hosted-loader
-defect or absence.
-
-| Fixture | Passed / failed | Observed boundary |
-| --- | --- | --- |
-| `language/custom-data/values.dark` | 19 / 53 | Missing `UserDefined.*` test-package declarations, including `stringValue`; source support for qualified values exists |
-| `language/effect-ceiling.dark` | 0 / 6 | Missing `Ceiling.*` declarations in this invocation; source inspection separately confirms absent ceiling enforcement |
-| `stdlib/crypto.dark` | 9 / 0 | All parsed cases pass; whole-file gate is stale for this host/run |
-| `stdlib/http.dark` | 21 / 26 | Response/query value mismatches and missing `Stdlib.Http.urlDecode`; needs case-level diagnosis |
-| `stdlib/json.dark` | 0 / 540 | Shared preamble needs `UserDefinedEnums.PrettyLikely`; typed codec parity was not exercised |
-| `stdlib/pretty.dark` | 34 / 1 | L186 multiline nested `concat` produces “Expected TUnit, got TFunction”; application-layout failure remains in this source shape |
-| `stdlib/sse.dark` | 8 / 0 | All parsed cases pass; whole-file gate is stale for this host/run |
-| `stdlib/stream.dark` | 25 / 0 | All parsed cases pass; whole-file gate is stale for this host/run |
-| `stdlib/string.dark` | 0 / 640 | Shared preamble uses missing test-only `Builtin.testToChar`; public String parity was not exercised |
-| `stdlib/prettyPrinter.dark` | 0 / 57 | Shared preamble uses missing `Builtin.reflect` |
-| `stdlib/language-tools/pickLocation.dark` | 0 / 30 | Shared preamble expects absent `PickContext.preferredLocation` field |
-| `language/builtin-introspection.dark` | 0 / 2 | Missing `Builtin.getAllBuiltinFns` |
-| `language/runtime-to-programtypes.dark` | 0 / 19 | Shared preamble needs absent `ProgramTypes.Expr` |
-| `stdlib/language-tools/parsedFileShape.dark` | 0 / 13 | Shared preamble uses missing `Builtin.parserParseToWrittenTypes` |
-| `stdlib/language-tools/semanticTokenization.dark` | 0 / 102 | Shared preamble needs absent `SemanticTokens.TokenType` |
-
-Crypto, SSE, and Stream are concrete gate-removal candidates. Pretty has a
-single reproduced failure rather than a whole API absence. Dependency and
-shared-preamble failures require narrower probes before assigning public
-semantic gaps. These results cover only the listed fixtures on this host.
-
-## Validation for this audit
-
-- The pinned native toolchain environment check passed.
-- `env -u LD_PRELOAD ./build --ai` passed.
-- `./run-tests --ai` passed **10,869 / 10,869** assertions (82.8 seconds).
-- `dune runtest` passed, including package cache and HTTP/TLS regressions.
-- `python3 scripts/audit-upstream-gates.py --check` verifies the inventory against
-  every imported file, both runner denysets, duplicate paths/lines, and bounds.
-- Python compilation, local document links, and `git diff --check` passed.
-- `./benchmarks/run_benchmarks.sh --verify-parent full` was attempted and blocked
-  before measurement: “snapshot workload contract digest is incompatible”. No
-  baseline was reset and no performance result is claimed.
-- No compiler behavior or committed test gate changed. Full disabled-corpus
-  execution and cross-platform parity are not implied by this audit.
+No compiler fixes or test enablement changes are included in this ledger.
+Results describe this host and configuration.
