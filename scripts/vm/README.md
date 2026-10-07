@@ -19,6 +19,14 @@ workspace directory. The bootstrap checks archive hashes before reuse and
 checks both the OCaml version and Unix child-process operations. Configure
 probes run without a preload. The VM adapter supplies missing procfs stack
 attributes and redirects `/tmp` paths to the writable temporary directory.
+Activation also sets `PORT_VM_DUNE_TEST_STAMPS=1`: the adapter keeps empty
+`runtest-<32 hex digits>` files beneath the current checkout's `_build/.actions/`
+owner-writable. In this VM, old read-only stamps can remain visible after a
+successful unlink, preventing Dune from recording a completed test action.
+If a legacy stamp reappears read-only, the adapter makes that empty stamp
+owner-writable and retries Dune's failed create/truncate open once.
+The workaround excludes nonempty files, symlinks, other build outputs and
+source files. Bootstrap tests both the enabled behavior and these exclusions.
 Do not apply that adapter on a normal host.
 
 The default host test suite executes generated x86-64 binaries directly.

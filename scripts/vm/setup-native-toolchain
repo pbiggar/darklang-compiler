@@ -9,6 +9,7 @@ mkdir -p "$root/downloads" "$root/src" "$root/tmp" "$root/toolchain"
 export TMPDIR="$root/tmp"
 unset LD_PRELOAD
 gcc -shared -fPIC "$repo/scripts/vm/compat.c" -ldl -pthread -o "$root/vm-compat.so"
+python3 "$repo/scripts/vm/test-compat.py" "$root/vm-compat.so"
 fetch() {
     local name=$1 checksum=$2 url=$3
     if [[ -f "$root/downloads/$name" ]] && printf '%s  %s\n' "$checksum" "$root/downloads/$name" | sha256sum --check --status; then
@@ -79,6 +80,7 @@ sysroot = root / "qemu-deps/sysroot"
 values = {
     "TMPDIR": root / "tmp",
     "PORT_VM_TMPDIR": root / "tmp",
+    "PORT_VM_DUNE_TEST_STAMPS": "1",
     "OPAMROOT": root / "opam",
     "OCAMLPATH": root / "opam/dark/lib",
     "C_INCLUDE_PATH": f"{sysroot}/usr/include:{sysroot}/usr/include/x86_64-linux-gnu",

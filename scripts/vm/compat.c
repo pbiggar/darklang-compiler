@@ -1,4 +1,4 @@
-/* Adapt stack discovery and temporary paths to the restricted OCaml port VM. */
+/* Adapt stack discovery, temporary paths and Dune stamps to the OCaml port VM. */
 #define _GNU_SOURCE
 #include <dlfcn.h>
 #include <stdio.h>
@@ -32,6 +32,33 @@ int pthread_getattr_np(pthread_t t,pthread_attr_t*a){
 #include <stdarg.h>
 #include <sys/stat.h>
 #include <limits.h>
+#include <errno.h>
+/* Some Work VM filesystem views retain an old alias stamp after Dune unlinks
+   it. Keep only empty runtest stamps writable so the final stamp write works.
+   Resolve the path to exclude symlinks outside this checkout's build directory. */
+static int dune_test_stamp(const char*p){
+    const char*enabled=getenv("PORT_VM_DUNE_TEST_STAMPS");
+    if(!enabled||strcmp(enabled,"1")!=0)return 0;
+    char cwd[PATH_MAX],resolved[PATH_MAX],prefix[PATH_MAX];
+    if(!getcwd(cwd,sizeof(cwd))||!realpath(p,resolved))return 0;
+    int n=snprintf(prefix,sizeof(prefix),"%s/_build/.actions/",cwd);
+    if(n<0||(size_t)n>=sizeof(prefix)||strncmp(resolved,prefix,n)!=0)return 0;
+    const char*name=strrchr(resolved,'/')+1;
+    if(strncmp(name,"runtest-",8)!=0||strlen(name)!=40)return 0;
+    for(const char*c=name+8;*c;c++)
+        if(!((*c>='0'&&*c<='9')||(*c>='a'&&*c<='f')))return 0;
+    static int(*real_lstat)(const char*,struct stat*);
+    if(!real_lstat)real_lstat=dlsym(RTLD_NEXT,"lstat");
+    struct stat s;
+    return real_lstat(p,&s)==0&&S_ISREG(s.st_mode)&&s.st_size==0&&s.st_uid==geteuid();
+}
+static int retry_dune_stamp(const char*p,int flags){
+    if((flags&(O_ACCMODE|O_CREAT|O_TRUNC|O_APPEND|O_EXCL))!=(O_WRONLY|O_CREAT|O_TRUNC)
+       ||!dune_test_stamp(p))return 0;
+    static int(*real_chmod)(const char*,mode_t);
+    if(!real_chmod)real_chmod=dlsym(RTLD_NEXT,"chmod");
+    return real_chmod(p,0644)==0;
+}
 static const char*temp_path(const char*p,char*b){
     if(p&&strncmp(p,"/tmp",4)==0&&(p[4]=='/'||p[4]==0)){
         const char*root=getenv("PORT_VM_TMPDIR");
@@ -49,7 +76,11 @@ int open(const char*p,int f,...){
     int m=(f&O_CREAT)?va_arg(v,int):0;
     va_end(v);
     char b[PATH_MAX];
-    return real(temp_path(p,b),f,m);
+    p=temp_path(p,b);
+    int r=real(p,f,m),e=errno;
+    if(r<0&&e==EACCES&&retry_dune_stamp(p,f))return real(p,f,m);
+    errno=e;
+    return r;
 }
 int open64(const char*p,int f,...){
     static int(*real)(const char*,int,...);
@@ -59,7 +90,11 @@ int open64(const char*p,int f,...){
     int m=(f&O_CREAT)?va_arg(v,int):0;
     va_end(v);
     char b[PATH_MAX];
-    return real(temp_path(p,b),f,m);
+    p=temp_path(p,b);
+    int r=real(p,f,m),e=errno;
+    if(r<0&&e==EACCES&&retry_dune_stamp(p,f))return real(p,f,m);
+    errno=e;
+    return r;
 }
 int mkdir(const char*p,mode_t m){
     static int(*real)(const char*,mode_t);
@@ -145,7 +180,9 @@ int chmod(const char*p,mode_t m){
     static int(*real)(const char*,mode_t);
     if(!real)real=dlsym(RTLD_NEXT,"chmod");
     char b[PATH_MAX];
-    return real(temp_path(p,b),m);
+    p=temp_path(p,b);
+    if(m==0444&&dune_test_stamp(p))m|=S_IWUSR;
+    return real(p,m);
 }
 int rename(const char*p,const char*q){
     static int(*real)(const char*,const char*);
