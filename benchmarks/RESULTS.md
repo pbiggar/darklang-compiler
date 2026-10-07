@@ -8,6 +8,7 @@ Reference upgrades do not change Darklang's regression baselines.
 
 - [arm64-full-cachegrind](reports/arm64-full-cachegrind.md)
 - [arm64-quick-cachegrind](reports/arm64-quick-cachegrind.md)
+- [x86_64-full-cachegrind](reports/x86_64-full-cachegrind.md)
 - [x86_64-quick-qemu](reports/x86_64-quick-qemu.md)
 
 Run `./benchmarks/bench status` for coverage and stale measurements.
