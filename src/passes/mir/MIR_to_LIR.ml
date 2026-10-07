@@ -495,7 +495,9 @@ let selectBinOp dest op left right typ state =
             | M.Gte -> [ L.FCmp (leftReg, rightReg); L.Cset (lirDest, L.GE) ]
             | M.Mod | M.And | M.Or | M.Shl | M.Shr | M.BitAnd | M.BitOr
             | M.BitXor ->
-                assert false
+                Crash.crash
+                  "MIR_to_LIR: non-floating operator entered floating \
+                   arithmetic lowering"
           in
           Ok (leftInstrs @ rightInstrs @ instrs, next))
   | _ -> (

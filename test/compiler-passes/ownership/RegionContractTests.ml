@@ -217,28 +217,77 @@ let call target arguments result =
 let duplicate value = [ Dup value ]
 let dropOne value = [ Drop value ]
 
-let unitResultName =
-  "Microsoft.FSharp.Core.FSharpResult`2[Microsoft.FSharp.Core.Unit,OwnedIR+VerificationError`1[System.String]]"
+let showResult encode result =
+  let open StructuralValue in
+  let value =
+    match result with
+    | Ok value -> Union ("Ok", [ encode value ])
+    | Error error -> Union ("Error", [ C.errorValue (fun id -> Text id) error ])
+  in
+  StructuralFormat.format value
 
-let signatureResultName =
-  "Microsoft.FSharp.Core.FSharpResult`2[OwnedIR+CallSignature,OwnedIR+VerificationError`1[System.String]]"
+let mismatch encode expected actual =
+  Error
+    ("Expected: " ^ showResult encode expected ^ "\nActual:   "
+   ^ showResult encode actual)
 
-let mismatch name = Error ("Expected " ^ name ^ ", got " ^ name)
+let unitResultValue () = StructuralValue.Scalar "()"
 
 let check expected region () =
   let actual = V.verifyClosed semantics region in
-  if actual = expected then Ok () else mismatch unitResultName
+  if actual = expected then Ok () else mismatch unitResultValue expected actual
 
 let checkFunction expected signature body () =
   let actual = V.verifyFunction semantics signature body in
-  if actual = expected then Ok () else mismatch unitResultName
+  if actual = expected then Ok () else mismatch unitResultValue expected actual
 
 let checkCallSignature expected signature () =
   let actual = V.callSignatureOfFunction signature in
-  if actual = expected then Ok () else mismatch signatureResultName
+  if actual = expected then Ok ()
+  else mismatch OwnershipTestFormatting.callSignature expected actual
 
 let tests =
   [
+    ( "Ownership mismatch diagnostics retain expected errors and actual success",
+      fun () ->
+        match
+          check
+            (Error (UndroppedValues (Identity.Set.singleton "a")))
+            (block [] []) ()
+        with
+        | Error
+            "Expected: Error (UndroppedValues (set [\"a\"]))\nActual:   Ok ()"
+          ->
+            Ok ()
+        | Error message -> Error ("Unexpected mismatch diagnostic: " ^ message)
+        | Ok () -> Error "Expected an ownership mismatch diagnostic" );
+    ( "Ownership mismatch diagnostics retain both distinct errors",
+      fun () ->
+        match check (Error (InvalidDrop "b")) (block [ "a" ] []) () with
+        | Error
+            "Expected: Error (InvalidDrop \"b\")\n\
+             Actual:   Error (InvalidDrop \"a\")" ->
+            Ok ()
+        | Error message -> Error ("Unexpected mismatch diagnostic: " ^ message)
+        | Ok () -> Error "Expected an ownership mismatch diagnostic" );
+    ( "Call signature mismatch diagnostics retain parameters and result \
+       positions",
+      fun () ->
+        match
+          checkCallSignature (Error InconsistentFunctionParameters)
+            {
+              O.parameters = [ BorrowedParameter "a" ];
+              result = BorrowedResult "a";
+            }
+            ()
+        with
+        | Error
+            "Expected: Error InconsistentFunctionParameters\n\
+             Actual:   Ok {Parameters = [BorrowedCallParameter]; Result = \
+             BorrowedCallResult 0}" ->
+            Ok ()
+        | Error message -> Error ("Unexpected mismatch diagnostic: " ^ message)
+        | Ok () -> Error "Expected a call signature mismatch diagnostic" );
     ( "Function ownership signatures permit borrowed results from borrowed \
        parameters",
       checkFunction (Ok ())

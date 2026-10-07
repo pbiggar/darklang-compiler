@@ -139,7 +139,13 @@ let compileMirToLir arch knownEffectFree knownRemovable knownTypedConstants
         (fun recorder ->
           List.iter
             (fun name ->
-              let value = Hashtbl.find ticks name in
+              let value =
+                match Hashtbl.find_opt ticks name with
+                | Some value -> value
+                | None ->
+                    Crash.crash
+                      ("NativePipeline: recorded MIR timing missing for " ^ name)
+              in
               recorder { pass = name; elapsed = value })
             (List.rev !order))
         passTimingRecorder;
