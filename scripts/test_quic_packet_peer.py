@@ -7,7 +7,7 @@ from pathlib import Path
 
 from aioquic.buffer import Buffer
 from aioquic.quic.crypto import CryptoContext, derive_key_iv_hp
-from aioquic.quic.packet import (QuicPacketType, encode_long_header_first_byte,
+from aioquic.quic.packet import (QuicPacketType,
                                  encode_quic_retry, encode_quic_version_negotiation,
                                  pull_quic_header)
 from aioquic.tls import CipherSuite
