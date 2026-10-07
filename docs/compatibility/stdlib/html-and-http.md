@@ -130,8 +130,10 @@ server-side TLS negotiation remains follow-up work. The HTTP/2 E2E fixtures
 cover wire and field boundaries. `python3 scripts/test_http2_peer.py` uses the
 test-only `h2==4.3.0` Python package as an independent peer and checks TLS client
 negotiation, 70-KiB uploads/responses across flow-control windows, buffering,
-streaming, trailers, HEAD, early stream close, truncation, cleartext server
-dispatch, body limits, shutdown and compiled leak accounting.
+streaming, trailers, HEAD, early stream close, early upload rejection (including
+informational replies and retained HPACK state), truncation, cleartext server
+dispatch, body limits, bounded draining after early replies, shutdown during
+stalled HTTP/2 reads and compiled leak accounting.
 
 HTTP/3 is not yet available through the client/server APIs. Its initial pure
 wire layer provides bounded QUIC variable-length integers and HTTP/3 frame

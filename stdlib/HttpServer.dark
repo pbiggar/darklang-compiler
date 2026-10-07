@@ -1,4 +1,4 @@
-// HttpServer.dark - Upstream routing and bounded sequential native HTTP/1.1 serving.
+// HttpServer.dark - Routing and bounded sequential native HTTP/1.1 and HTTP/2 serving.
 
 module Darklang.Stdlib.HttpServer
 
@@ -284,6 +284,28 @@ let __handleHttp1 (config: Stdlib.HttpServer.Config.Config) (handler: Stdlib.Htt
                 else () in
             Ok false
 
+// A response can finish before the request upload. Bounded draining avoids
+// closing TCP with queued unread DATA, which can reset the delivered response.
+// Accepted sockets have a short receive timeout; do not wait indefinitely for
+// a peer that retains the connection after receiving GOAWAY.
+let __drainHttp2 (connection: Stdlib.Network.TcpConnection) (signals: Stdlib.Network.ShutdownSignals)
+    (deadline: Int64) (remaining: Int64) : Bool =
+    if remaining <= 0L then false
+    else
+        match Stdlib.Network.shutdownRequested signals, Stdlib.Network.monotonicMillis () with
+        | Ok true, _ -> true
+        | Ok false, Ok now ->
+            if now >= deadline then false
+            else
+                match Stdlib.Network.readTcp connection 4096L with
+                | Error code ->
+                    if code == 4L then Stdlib.HttpServer.__drainHttp2 connection signals deadline remaining else false
+                | Ok bytes ->
+                    let size = Stdlib.Blob.__byteLength bytes in
+                    if size == 0L then false
+                    else Stdlib.HttpServer.__drainHttp2 connection signals deadline (remaining - size)
+        | _, _ -> false
+
 let __dispatchPrelude (config: Stdlib.HttpServer.Config.Config) (handler: Stdlib.Http.Request -> Stdlib.Http.Response)
     (signals: Stdlib.Network.ShutdownSignals) (connection: Stdlib.Network.TcpConnection)
     (limit: Int64) (deadline: Int64) (pending: Blob) : Stdlib.Result.Result<Bool, String> =
@@ -292,10 +314,14 @@ let __dispatchPrelude (config: Stdlib.HttpServer.Config.Config) (handler: Stdlib
     else if Stdlib.Blob.__byteLength pending >= 24L then
         let transport = Stdlib.HttpTransport.plainWithShutdown connection signals in
         let served = Stdlib.Http2.serve transport pending config (fun request -> Stdlib.HttpServer.__http2Handler config handler request) in
+        let stopped =
+            match served, Stdlib.Network.monotonicMillis () with
+            | Ok (), Ok now -> Stdlib.HttpServer.__drainHttp2 connection signals (now + 250L) 131072L
+            | _, _ -> false in
         let _ = Stdlib.HttpTransport.close transport in
         match served with
-        | Ok () -> Ok false
-        | Error _ -> Ok false
+        | Ok () -> Ok stopped
+        | Error message -> Ok (message == "HTTP server shutting down")
     else
         match Stdlib.Network.shutdownRequested signals, Stdlib.Network.monotonicMillis () with
         | Ok true, _ -> Ok true
@@ -344,7 +370,7 @@ let __serveLoop (config: Stdlib.HttpServer.Config.Config) (handler: Stdlib.Http.
                 | Ok true -> Ok ()
                 | Ok false -> Stdlib.HttpServer.__serveLoop config handler signals listener limit
 
-/// Bind before announcing, serve one bounded HTTP/1.1 request per connection,
+/// Bind before announcing, serve one bounded HTTP/1.1 or HTTP/2 request per connection,
 /// and return normally after SIGINT or SIGTERM. Routing remains ordinary Dark.
 let serve (config: Stdlib.HttpServer.Config.Config) (handler: Stdlib.Http.Request -> Stdlib.Http.Response)
     (onListening: Unit -> Unit) : Stdlib.Result.Result<Unit, String> =

@@ -4,6 +4,7 @@
 Test-only dependency: h2==4.3.0. Guest protocols remain entirely Dark.
 """
 
+import argparse
 import select
 import signal
 import socket
@@ -31,7 +32,7 @@ match Stdlib.Cli.Args.get 0, Stdlib.Cli.Args.get 1, Stdlib.Cli.Args.get 2 with
       let url = "https://localhost:" ++ port ++ "/" ++ mode in
       let method = if mode == "head" then "HEAD" else "POST" in
       let requestBody = Stdlib.String.toBlob (Stdlib.String.join (Stdlib.List.repeatUnsafe 70 (Stdlib.String.repeat "x" 1000)) "") in
-      if mode == "buffered" then
+      if mode == "buffered" || mode == "early-buffered" then
         match Stdlib.HttpClient.requestTrustedWithRoots roots method url [] requestBody with
         | Error _ -> Stdlib.printLine "REQUEST ERROR"
         | Ok response -> Stdlib.printLine (Stdlib.Int.toString response.statusCode ++ "|" ++ Stdlib.Int.toString (Stdlib.Blob.length response.body) ++ "|" ++ Stdlib.Int.toString (Stdlib.List.length response.headers))
@@ -103,6 +104,18 @@ def tls_peer(listener, context, mode, failures):
                     if isinstance(event, RequestReceived):
                         stream_id = event.stream_id
                         assert dict(event.headers)[":path"] == "/" + mode
+                        if mode in ("early-buffered", "early-stream"):
+                            # Deliberately withhold upload credit. The guest
+                            # must return this final response before finishing
+                            # its upload, not wait for another WINDOW_UPDATE.
+                            h2.send_headers(stream_id, [(":status", "103"), ("x-early-context", "preserved")])
+                            h2.send_headers(stream_id, [(":status", "413"), ("content-length", "5"),
+                                                        ("x-early-context", "preserved")])
+                            h2.send_data(stream_id, b"early", end_stream=True)
+                            peer.sendall(h2.data_to_send())
+                            while peer.recv(65536):
+                                pass
+                            return
                     elif isinstance(event, DataReceived):
                         request_bytes += len(event.data)
                         h2.acknowledge_received_data(event.flow_controlled_length, event.stream_id)
@@ -144,14 +157,14 @@ def tls_peer(listener, context, mode, failures):
         failures.append(error)
 
 
-def client_checks(directory):
+def client_checks(directory, modes=("buffered", "stream", "head", "abandon", "truncated", "early-buffered", "early-stream")):
     binary = compile_source(directory, "client", CLIENT)
     key, cert, ca = certificates(directory)
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     context.minimum_version = ssl.TLSVersion.TLSv1_3
     context.load_cert_chain(cert, key)
     context.set_alpn_protocols(["h2", "http/1.1"])
-    for mode in ("buffered", "stream", "head", "abandon", "truncated"):
+    for mode in modes:
         with socket.socket() as listener:
             listener.bind(("127.0.0.1", 0))
             listener.listen(1)
@@ -167,7 +180,8 @@ def client_checks(directory):
                 assert result.returncode != 0 and any(message in result.stderr for message in
                     ("TLS peer closed during record", "TLS application write failed", "TLS socket read failed")), result
             else:
-                expected = "200|0|3\n" if mode in ("head", "abandon") else "200|70000|3\n"
+                expected = "413|5|2\n" if mode.startswith("early-") else (
+                    "200|0|3\n" if mode in ("head", "abandon") else "200|70000|3\n")
                 assert result.returncode == 0 and result.stdout == expected and not result.stderr, result
 
 
@@ -199,7 +213,10 @@ def server_checks(directory):
                             offset += size
                     output = h2.data_to_send()
                     if output:
-                        peer.sendall(output)
+                        try:
+                            peer.sendall(output)
+                        except ConnectionResetError as error:
+                            raise AssertionError((method, total, offset, status, bytes(response))) from error
                     data = peer.recv(65536)
                     assert data, "Server truncated response"
                     for event in h2.receive_data(data):
@@ -215,8 +232,17 @@ def server_checks(directory):
                 if total <= 80000:
                     assert bytes(response) == b"x" * total
                     assert headers.count(("set-cookie", "a=1")) == 1 and headers.count(("set-cookie", "b=2")) == 1
-        process.send_signal(signal.SIGTERM)
-        stdout, stderr = process.communicate(timeout=12)
+        # Signal during a stalled HTTP/2 body read, not just an idle listener.
+        # Consumed shutdown signals must propagate to the serving loop.
+        with socket.create_connection(("127.0.0.1", port), timeout=15) as stalled:
+            h2 = H2Connection(H2Configuration(client_side=True))
+            h2.initiate_connection()
+            h2.send_headers(1, [(b":method", b"POST"), (b":scheme", b"http"),
+                                (b":authority", b"localhost"), (b":path", b"/stalled"), (b"content-length", b"1")])
+            stalled.sendall(h2.data_to_send())
+            assert stalled.recv(65536), "Server did not establish HTTP/2"
+            process.send_signal(signal.SIGTERM)
+            stdout, stderr = process.communicate(timeout=12)
         assert process.returncode == 0 and stdout == b"STOPPED\n" and not stderr, (stdout, stderr)
     finally:
         if process.poll() is None:
@@ -225,11 +251,19 @@ def server_checks(directory):
 
 
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--client-mode", choices=("buffered", "stream", "head", "abandon", "truncated", "early-buffered", "early-stream"),
+                        help="Run one client case, without the server checks")
+    args = parser.parse_args()
     with tempfile.TemporaryDirectory(prefix="dark-http2-") as temporary:
         directory = Path(temporary)
-        client_checks(directory)
-        server_checks(directory)
-    print("HTTP/2 TLS client and cleartext server verified: flow control, streaming, trailers, HEAD, truncation and cleanup")
+        if args.client_mode:
+            client_checks(directory, (args.client_mode,))
+            print("HTTP/2 client case verified:", args.client_mode)
+        else:
+            client_checks(directory)
+            server_checks(directory)
+            print("HTTP/2 TLS client and cleartext server verified: flow control, streaming, trailers, HEAD, early rejection, truncation and cleanup")
 
 
 if __name__ == "__main__":
