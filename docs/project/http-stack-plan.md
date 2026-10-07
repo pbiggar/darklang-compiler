@@ -95,7 +95,8 @@ performance measurements for buffered and streaming bodies. HTTP/1.1 is the
 first interoperability target; HTTP/2 and HTTP/3 require separate protocol
 work. HTTP/2 now has a single-exchange HTTPS client (authenticated ALPN with
 HTTP/1.1 fallback) and a prior-knowledge cleartext server. HTTP/3 currently has
-integer/frame/SETTINGS codecs and static/literal QPACK, not a working QUIC
+integer/frame/SETTINGS codecs, static/literal QPACK and AES-128 packet
+protection helpers, not a working QUIC
 transport; see the compatibility ledger for exact profile boundaries. For
 each implementation branch, run `./build --ai`, the already-built
 `./run-tests --ai`, and

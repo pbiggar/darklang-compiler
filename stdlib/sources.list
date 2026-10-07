@@ -152,6 +152,7 @@ __HttpTransport.dark
 __Http2Fields.dark
 __Http2.dark
 __QuicWire.dark
+__QuicCrypto.dark
 __Qpack.dark
 __Http3Wire.dark
 Pretty.dark

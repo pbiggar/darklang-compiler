@@ -143,8 +143,15 @@ checks the RFC example, malformed references, table boundaries and list limits;
 `pylsqpack==0.3.23`, including duplicate fields and compiled leak accounting.
 `test/fixtures/e2e/http3_wire.e2e` checks encoding bounds,
 fragmentation, forbidden HTTP/2 frame/settings identifiers and duplicates.
-QUIC packet protection, TLS handshake integration, reliable UDP streams,
-and advertised-only HTTP/3 discovery remain implementation work.
+The QUIC v1 AES-128 protection layer derives initial keys, reconstructs packet
+numbers, masks headers, seals/opens packets and verifies Retry integrity tags.
+RFC 9001 Appendix A vectors and `python3 scripts/test_quic_crypto_peer.py`
+cover both directions, all packet-number lengths, wrapping, the 62-bit limit,
+tampering and leak accounting. These are pure helpers, not an authenticated
+QUIC connection: initial/Retry keys are public, and connection owners must
+enforce unique packet numbers, replay filtering and key/AEAD usage limits.
+TLS handshake integration, reliable UDP streams and advertised-only HTTP/3
+discovery remain implementation work.
 
 `Stdlib.HttpClient.Sse.Event` and `parse` are copied from the same revision.
 The parser retains upstream's `Stream.unfold` behavior: it pulls only until the
