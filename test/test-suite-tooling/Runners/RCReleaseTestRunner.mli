@@ -6,7 +6,18 @@
    String sums use the payload pointer directly.
 *)
 open Dark_compiler
-val buildProgram : RCReleaseFormat.rCReleaseTest -> (LIR.program * RCReleaseFormat.preservedRegister list,string) result
-val runRCReleaseTest : Platform.target -> RCReleaseFormat.rCReleaseTest -> (unit,string) result
-val loadRCReleaseTests : string -> (RCReleaseFormat.rCReleaseTest list,string) result
-val tests : Platform.target -> string array -> (string * (unit -> (unit,string) result)) list
+
+val buildProgram :
+  RCReleaseFormat.rCReleaseTest ->
+  (LIR.program * RCReleaseFormat.preservedRegister list, string) result
+
+val runRCReleaseTest :
+  Platform.target -> RCReleaseFormat.rCReleaseTest -> (unit, string) result
+
+val loadRCReleaseTests :
+  string -> (RCReleaseFormat.rCReleaseTest list, string) result
+
+val tests :
+  Platform.target ->
+  string array ->
+  (string * (unit -> (unit, string) result)) list

@@ -116,7 +116,7 @@ let finishedVerifyData384 (trafficSecret: Blob) (transcript: Blob)
     match Stdlib.__Tls13.hkdfExpandLabel384 trafficSecret "finished" Stdlib.Blob.empty 48L with
     | Error message -> Error message
     | Ok key ->
-        Ok (Stdlib.Crypto.sha384hmac key (Stdlib.Crypto.sha384 transcript))
+        Ok (Stdlib.Crypto.__sha384hmac key (Stdlib.Crypto.sha384 transcript))
 
 let __sameBytes (a: Blob) (b: Blob) (index: Int64) (difference: Int64) : Bool =
   if index == Stdlib.Blob.__byteLength a then difference == 0L

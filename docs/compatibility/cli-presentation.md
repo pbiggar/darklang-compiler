@@ -68,21 +68,21 @@ functions do not add runtime type dispatch to imitate it.
 The typed intrinsic registry is
 `src/DarkStdlib.ml:101-113`. Effect nodes begin at
 the ANF, MIR, and LIR definitions; intrinsic lowering lives in
-`passes/anf/lowering/Primitives.fs`. Both native implementations are under
+`src/passes/anf/lowering/LoweringPrimitives.ml`. Both native implementations are under
 `backend/{arm64,x64}/instructions/`. They are separate from the final-result
 print instructions and participate in optimization, liveness, allocation, and
 IR printing as ordered effects.
 
 The root presentation source is `StdLib/Print.dark:3-15`, loaded immediately
-after List by `driver/StdlibCompilation.fs`. Its `printLines` composition uses
+after List by `src/driver/StdlibCompilation.ml`. Its `printLines` composition uses
 the portable ordered recursion at `StdLib/List.dark:441-446`; no native list
-traversal was added. The package load order is recorded in `CompilerLibrary.fs` and the
-adapted sources are `StdLib/Cli/UI/Colors.dark`, `StdLib/Cli/Log.dark`, `StdLib/Cli/UI/Progress.dark`,
-`StdLib/Cli/UI/Prompt.dark`, `StdLib/Cli/UI/Spinner.dark`, and `StdLib/Cli/UI/Table.dark`. EGC measurement is
+traversal was added. The package load order is recorded in `src/CompilerLibrary.ml` and the
+adapted sources are `StdLib/Cli/UI/Colors.dark`, `CliLog.dark`, `CliProgress.dark`,
+`CliPrompt.dark`, `CliSpinner.dark`, and `CliTable.dark`. EGC measurement is
 routed through `StdLib/String.dark:419`; signed selection parsing is aligned at
 `StdLib/Int.dark:405`. Unit suppression is in
-`passes/anf/PrintInsertion.fs`, and CLI execution is coordinated by
-`driver/Execution.fs` and `Program.fs`.
+`src/passes/anf/PrintInsertion.ml`, and CLI execution is coordinated by
+`src/driver/CompilerExecution.ml` and `src/Program.ml`.
 
 ## Revision-stamped probes
 
@@ -92,9 +92,9 @@ lines 9-20 cover empty and Unicode strings, embedded/trailing newlines, empty
 and multi-element lists, mixed ordered writes, optimized and unoptimized
 execution, zero stderr, and final Unit suppression. The fixture uses the explicit
 closed-or-bytes stdin model and exact-byte output mode defined in
-`TestDSL/E2EFormat.fs:18-27`; comparison occurs without trimming in
-`Runners/E2ETestRunner.fs:992-1004`. The 18 pinned upstream color cases are
-enabled at `TestRunner.fs:493`.
+`test/test-suite-tooling/TestDSL/E2EFormat.ml:18-27`; comparison occurs without trimming in
+`test/test-suite-tooling/Runners/E2ETestRunner.ml:992-1004`. The 18 pinned upstream color cases are
+enabled at `test/test-suite-tooling/TestRunner.ml:493`.
 
 At the revision pair named above, a redirected same-source ask probe with input
 `Ada\n` produced stdout hex

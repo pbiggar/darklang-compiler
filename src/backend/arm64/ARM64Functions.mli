@@ -1,1 +1,5 @@
-val convertFunction : Symbolic.instr list -> ARM64CodeGenTypes.codeGenContext -> LIR.functionDef -> (Symbolic.instr list,string) result
+val convertFunction :
+  Symbolic.instr list ->
+  ARM64CodeGenTypes.codeGenContext ->
+  LIR.functionDef ->
+  (Symbolic.instr list, string) result

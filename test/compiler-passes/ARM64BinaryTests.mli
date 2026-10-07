@@ -1,4 +1,5 @@
-type testResult=(unit,string) result
+type testResult = (unit, string) result
+
 val testLiteralFirstUseLayout : unit -> testResult
 val testUint32ToBytes : unit -> testResult
 val testUint64ToBytes : unit -> testResult

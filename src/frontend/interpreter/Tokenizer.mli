@@ -1,6 +1,7 @@
 (* Tokenizer.mli - Complete range and literal token domain. *)
 type pos = { row : int; column : int }
 type tokenRange = { start : pos; end_ : pos }
+
 type token =
   | TInt of Z.t
   | TInt64 of int64

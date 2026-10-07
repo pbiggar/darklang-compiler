@@ -144,14 +144,14 @@ let __responseBytes (method: String) (config: Stdlib.HttpServer.Config.Config) (
                 | Ok head -> Ok (Stdlib.Blob.slice bytes 0
                     (Stdlib.Int.fromInt64 (Stdlib.Blob.__byteLength bytes - Stdlib.Blob.__byteLength head.remaining)))
 
-type ReadError =
+type __ReadError =
     | Status of (Int * Stdlib.Option.Option<String>)
     | Shutdown
     | Transport of Int64
 
 // A valid start line can precede an invalid or oversized body. Keep its method
 // so HEAD suppresses bodies even when request decoding cannot finish.
-let __statusError (status: Int) (buffer: Blob) : Stdlib.HttpServer.ReadError =
+let __statusError (status: Int) (buffer: Blob) : Stdlib.HttpServer.__ReadError =
     let method =
         match Stdlib.__HttpWire.__line buffer 0L with
         | Error _ -> None
@@ -159,7 +159,7 @@ let __statusError (status: Int) (buffer: Blob) : Stdlib.HttpServer.ReadError =
             match Stdlib.__HttpWire.__requestLine line with
             | Error _ -> None
             | Ok ((method, _, _)) -> Some method in
-    Stdlib.HttpServer.ReadError.Status ((status, method))
+    Stdlib.HttpServer.__ReadError.Status ((status, method))
 
 let __expectContinue (buffer: Blob) : Stdlib.Result.Result<Bool, String> =
     match Stdlib.__HttpWire.__line buffer 0L with
@@ -175,13 +175,13 @@ let __expectContinue (buffer: Blob) : Stdlib.Result.Result<Bool, String> =
             else Ok (Stdlib.List.length expectations > 0)
 
 let __readRequest (connection: Stdlib.__Network.TcpConnection) (signals: Stdlib.__Network.ShutdownSignals)
-    (limit: Int64) (deadline: Int64) (continued: Bool) (buffer: Blob) : Stdlib.Result.Result<Stdlib.__HttpWire.ParsedRequest, Stdlib.HttpServer.ReadError> =
+    (limit: Int64) (deadline: Int64) (continued: Bool) (buffer: Blob) : Stdlib.Result.Result<Stdlib.__HttpWire.ParsedRequest, Stdlib.HttpServer.__ReadError> =
     match Stdlib.__Network.shutdownRequested signals with
-    | Error code -> Error (Stdlib.HttpServer.ReadError.Transport code)
-    | Ok true -> Error Stdlib.HttpServer.ReadError.Shutdown
+    | Error code -> Error (Stdlib.HttpServer.__ReadError.Transport code)
+    | Ok true -> Error Stdlib.HttpServer.__ReadError.Shutdown
     | Ok false ->
         match Stdlib.__Network.monotonicMillis () with
-        | Error code -> Error (Stdlib.HttpServer.ReadError.Transport code)
+        | Error code -> Error (Stdlib.HttpServer.__ReadError.Transport code)
         | Ok now ->
             if now >= deadline then Error (Stdlib.HttpServer.__statusError 408 buffer)
             else if Stdlib.Blob.__byteLength buffer > limit + 1048576L then Error (Stdlib.HttpServer.__statusError 413 buffer)
@@ -200,13 +200,13 @@ let __readRequest (connection: Stdlib.__Network.TcpConnection) (signals: Stdlib.
                                 Stdlib.__Network.writeTcp connection (Stdlib.String.toBlob "HTTP/1.1 100 Continue\r\n\r\n")
                             else Ok () in
                         match acknowledged with
-                        | Error code -> Error (Stdlib.HttpServer.ReadError.Transport code)
+                        | Error code -> Error (Stdlib.HttpServer.__ReadError.Transport code)
                         | Ok () ->
                             match Stdlib.__Network.readTcp connection 4096L with
                             | Error code ->
                                 if code == 4L || code == 11L || code == 35L then
                                     Stdlib.HttpServer.__readRequest connection signals limit deadline (continued || expect) buffer
-                                else Error (Stdlib.HttpServer.ReadError.Transport code)
+                                else Error (Stdlib.HttpServer.__ReadError.Transport code)
                             | Ok chunk ->
                                 if Stdlib.Blob.__byteLength chunk == 0L then Error (Stdlib.HttpServer.__statusError 400 buffer)
                                 else Stdlib.HttpServer.__readRequest connection signals limit deadline (continued || expect) (Stdlib.Blob.concat [buffer, chunk])

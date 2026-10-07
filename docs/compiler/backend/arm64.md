@@ -11,27 +11,28 @@ Two passes handle code generation:
 
 ## ARM64 Instruction Types
 
-Defined in `backend/arm64/ISA.fs`:
+Defined in `src/backend/arm64/ARM64.ml`:
 
-```fsharp
-type Instr =
-    | MOVZ of dest * imm * shift      // Move with zero
-    | MOVK of dest * imm * shift      // Move with keep
-    | ADD_imm of dest * src * imm     // Add immediate
-    | ADD_reg of dest * src1 * src2   // Add register
-    | SUB_imm / SUB_reg               // Subtract
-    | MUL / SDIV / MSUB               // Multiply, divide, mod
-    | CMP / CSET / CSEL               // Compare, set, and branchless select
-    | B / BL                          // Branch, branch-link
-    | BR / BLR                        // Branch register
-    | CBZ / CBNZ                      // Compare and branch
-    | LDR / STR / LDRB / STRB         // Load/store
-    | SVC                             // System call
-    // Floating-point
-    | FADD / FSUB / FMUL / FMADD / FDIV
-    | FSQRT / FABS / FNEG
-    | FCMP / SCVTF / FCVTZS
-    // ...
+```ocaml
+(* Selected constructors of ARM64.instr. *)
+type instr =
+ | MOVZ of reg * int * int
+ | MOVN of reg * int * int
+ | MOVK of reg * int * int
+ | ADD_imm of reg * reg * int
+ | ADD_reg of reg * reg * reg
+ | ADD_shifted of reg * reg * reg * int
+ | ADD_extended of reg * reg * reg * extend
+ | SUB_imm of reg * reg * int
+ | SUB_imm12 of reg * reg * int
+ | SUB_reg of reg * reg * reg
+ | SUB_shifted of reg * reg * reg * int
+ | SUB_extended of reg * reg * reg * extend
+ | SUBS_imm of reg * reg * int
+ | MUL of reg * reg * reg
+ | SDIV of reg * reg * reg
+ | UDIV of reg * reg * reg
+ | MSUB of reg * reg * reg * reg
 ```
 
 ## Two-Pass Encoding
@@ -40,16 +41,16 @@ type Instr =
 
 First pass computes byte offsets for all labels:
 
-```fsharp
-let computeLabelPositions (instrs: Instr list) : Map<string, int>
+```ocaml
+val computeLabelPositions : ARM64.instr list -> int StringOrder.Map.t
 ```
 
 ### Pass 2: Encoding
 
 Second pass encodes instructions with resolved branch offsets:
 
-```fsharp
-let encode (instr: Instr) : uint32 list
+```ocaml
+val encode : ARM64.instr -> ARM64.machineCode list
 ```
 
 ## Instruction Encoding
@@ -148,8 +149,8 @@ SUB X0, X0, #N             // Return original pointer
 ## Code Generation Examples
 
 ### Function Call
-```fsharp
-Call (dest, "add", [Reg X1, Imm 5L])
+```text
+Call(dest, add-function-id, [Reg X1, Imm 5])
 ```
 
 Generates:
@@ -161,8 +162,8 @@ MOV dest, X0      // Copy result
 ```
 
 ### Heap Allocation
-```fsharp
-HeapAlloc (dest, 24)
+```text
+HeapAlloc(dest, 24)
 ```
 
 Generates:
@@ -173,8 +174,8 @@ SUB dest, X0, #24  // Return start address
 ```
 
 ### Conditional Branch
-```fsharp
-Branch (cond, thenLabel, elseLabel)
+```text
+Branch(cond, thenLabel, elseLabel)
 ```
 
 Generates:
@@ -199,12 +200,12 @@ FCVTZS X0, D0      // X0 = (int)D0
 
 | File | Purpose |
 |------|---------|
-| `backend/arm64/Instructions.fs`, `backend/arm64/instructions/` | LIR → symbolic ARM64 |
-| `backend/arm64/CodeGen.fs` | Assemble planned functions and runtime helpers |
-| `backend/arm64/Resolve.fs` | Symbolic data-label pool resolution |
-| `backend/arm64/Encoding.fs` | ARM64 → bytes |
-| `backend/arm64/ISA.fs` | Concrete ARM64 instruction types |
-| `backend/arm64/Symbolic.fs` | ARM64 instruction types with symbolic data references |
+| `src/backend/arm64/ARM64Instructions.ml`, `backend/arm64/instructions/` | LIR → symbolic ARM64 |
+| `src/backend/arm64/Backend_Arm64_CodeGen.ml` | Assemble planned functions and runtime helpers |
+| `src/backend/arm64/ARM64_Resolve.ml` | Symbolic data-label pool resolution |
+| `src/backend/arm64/ARM64_Encoding.ml` | ARM64 → bytes |
+| `src/backend/arm64/ARM64.ml` | Concrete ARM64 instruction types |
+| `src/backend/arm64/Symbolic.ml` | ARM64 instruction types with symbolic data references |
 | `backend/arm64/runtime/` | Target-specific runtime instruction generators |
 
 ## Key Functions

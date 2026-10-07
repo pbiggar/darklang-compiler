@@ -5,25 +5,25 @@ module Darklang.Stdlib.Json
 // A view packs 31-bit source offsets plus single-field-object and duplicate
 // hints into an Int64. Generated codecs pass the source separately, so
 // ordinary nested views and object-field index entries remain allocation-free.
-type InternalValueView = Int64
+type __InternalValueView = Int64
 
-type InternalEnumObject = EnumNotObject | EnumNoFields | EnumOneField of String * Stdlib.Json.InternalValueView | EnumManyFields of List<String>
+type __InternalEnumObject = EnumNotObject | EnumNoFields | EnumOneField of String * Stdlib.Json.__InternalValueView | EnumManyFields of List<String>
 
-let __makeView (start: Int64) (endIndex: Int64) : Stdlib.Json.InternalValueView =
+let __makeView (start: Int64) (endIndex: Int64) : Stdlib.Json.__InternalValueView =
     Stdlib.Int64.bitwiseOr (Stdlib.Int64.shiftLeft start 32L) endIndex
 
-let __viewStart (view: Stdlib.Json.InternalValueView) : Int64 =
+let __viewStart (view: Stdlib.Json.__InternalValueView) : Int64 =
     Stdlib.Int64.bitwiseAnd (Stdlib.Int64.shiftRight view 32L) 2147483647L
 
-let __viewEnd (view: Stdlib.Json.InternalValueView) : Int64 =
+let __viewEnd (view: Stdlib.Json.__InternalValueView) : Int64 =
     Stdlib.Int64.bitwiseAnd view 2147483647L
 
-let __viewHasSingleField (view: Stdlib.Json.InternalValueView) : Bool = view < 0L
+let __viewHasSingleField (view: Stdlib.Json.__InternalValueView) : Bool = view < 0L
 
-let __viewIsDuplicate (view: Stdlib.Json.InternalValueView) : Bool =
+let __viewIsDuplicate (view: Stdlib.Json.__InternalValueView) : Bool =
     (Stdlib.Int64.bitwiseAnd view 2147483648L) != 0L
 
-let __markDuplicate (view: Stdlib.Json.InternalValueView) : Stdlib.Json.InternalValueView =
+let __markDuplicate (view: Stdlib.Json.__InternalValueView) : Stdlib.Json.__InternalValueView =
     Stdlib.Int64.bitwiseOr view 2147483648L
 
 let __scanStringChars (source: String) (index: Int64) (length: Int64) : Int64 =
@@ -151,7 +151,7 @@ let __skipTriviaBackward (source: String) (endIndex: Int64) : Int64 =
             Stdlib.Json.__skipTriviaBackward source (endIndex - 1L)
         else endIndex
 
-let __parseRoot (source: String) : Stdlib.Result.Result<Stdlib.Json.InternalValueView, Stdlib.Json.ParseError.ParseError> =
+let __parseRoot (source: String) : Stdlib.Result.Result<Stdlib.Json.__InternalValueView, Stdlib.Json.ParseError.ParseError> =
     let length = Stdlib.String.__byteLength source in
     let start = Stdlib.AltJson.__skipTrivia source 0L length in
     if start < 0L then Stdlib.Result.Result.Error Stdlib.Json.ParseError.ParseError.NotJson
@@ -170,45 +170,45 @@ let __parseRoot (source: String) : Stdlib.Result.Result<Stdlib.Json.InternalValu
 
 // Concrete return types at these boundaries keep list projections unambiguous
 // for ownership lowering.
-let __viewListHead (items: List<Stdlib.Json.InternalValueView>) : Stdlib.Json.InternalValueView =
+let __viewListHead (items: List<Stdlib.Json.__InternalValueView>) : Stdlib.Json.__InternalValueView =
     Stdlib.List.__headUnsafe items
 
-let __viewFieldListHead (items: List<(String * Stdlib.Json.InternalValueView)>) : (String * Stdlib.Json.InternalValueView) =
+let __viewFieldListHead (items: List<(String * Stdlib.Json.__InternalValueView)>) : (String * Stdlib.Json.__InternalValueView) =
     Stdlib.List.__headUnsafe items
 
-let __viewFieldName (field: (String * Stdlib.Json.InternalValueView)) : String =
+let __viewFieldName (field: (String * Stdlib.Json.__InternalValueView)) : String =
     Stdlib.Tuple2.first field
 
-let __viewFieldValue (field: (String * Stdlib.Json.InternalValueView)) : Stdlib.Json.InternalValueView =
+let __viewFieldValue (field: (String * Stdlib.Json.__InternalValueView)) : Stdlib.Json.__InternalValueView =
     Stdlib.Tuple2.second field
 
-let __viewListTail (items: List<Stdlib.Json.InternalValueView>) : List<Stdlib.Json.InternalValueView> =
+let __viewListTail (items: List<Stdlib.Json.__InternalValueView>) : List<Stdlib.Json.__InternalValueView> =
     Stdlib.List.__tail items
 
-let __viewListIsEmpty (items: List<Stdlib.Json.InternalValueView>) : Bool =
+let __viewListIsEmpty (items: List<Stdlib.Json.__InternalValueView>) : Bool =
     Stdlib.List.isEmpty items
 
-let __viewText (source: String) (view: Stdlib.Json.InternalValueView) : String =
+let __viewText (source: String) (view: Stdlib.Json.__InternalValueView) : String =
     Stdlib.String.__byteSlice source (Stdlib.Json.__viewStart view) (Stdlib.Json.__viewEnd view)
 
-let __copyRaw (source: String) (view: Stdlib.Json.InternalValueView) : String =
+let __copyRaw (source: String) (view: Stdlib.Json.__InternalValueView) : String =
     Stdlib.Json.__viewText source view
 
-let __viewByte (source: String) (view: Stdlib.Json.InternalValueView) : Int64 =
+let __viewByte (source: String) (view: Stdlib.Json.__InternalValueView) : Int64 =
     Stdlib.String.__byteAtUnchecked source (Stdlib.Json.__viewStart view)
 
-let __isNull (source: String) (view: Stdlib.Json.InternalValueView) : Bool =
+let __isNull (source: String) (view: Stdlib.Json.__InternalValueView) : Bool =
     Stdlib.Json.__viewEnd view - Stdlib.Json.__viewStart view == 4L
     && Stdlib.String.__byteSlice source (Stdlib.Json.__viewStart view) (Stdlib.Json.__viewEnd view) == "null"
 
-let __boolValue (source: String) (view: Stdlib.Json.InternalValueView) : Stdlib.Option.Option<Bool> =
+let __boolValue (source: String) (view: Stdlib.Json.__InternalValueView) : Stdlib.Option.Option<Bool> =
     let byte = Stdlib.Json.__viewByte source view in
     let text = Stdlib.Json.__viewText source view in
     if byte == 116L && text == "true" then Stdlib.Option.Option.Some true
     else if byte == 102L && text == "false" then Stdlib.Option.Option.Some false
     else Stdlib.Option.Option.None
 
-let __stringValue (source: String) (view: Stdlib.Json.InternalValueView) : Stdlib.Option.Option<String> =
+let __stringValue (source: String) (view: Stdlib.Json.__InternalValueView) : Stdlib.Option.Option<String> =
     if Stdlib.String.__byteAtUnchecked source (Stdlib.Json.__viewStart view) != 34L then Stdlib.Option.Option.None
     else
         match Stdlib.AltJson.__parseString source (Stdlib.Json.__viewStart view) (Stdlib.Json.__viewEnd view) with
@@ -217,11 +217,11 @@ let __stringValue (source: String) (view: Stdlib.Json.InternalValueView) : Stdli
             else Stdlib.Option.Option.None
         | InvalidString -> Stdlib.Option.Option.None
 
-let __isNumber (source: String) (view: Stdlib.Json.InternalValueView) : Bool =
+let __isNumber (source: String) (view: Stdlib.Json.__InternalValueView) : Bool =
     let byte = Stdlib.Json.__viewByte source view in
     byte == 45L || (byte >= 48L && byte <= 57L)
 
-let __collectArrayItems (source: String) (index: Int64) (limit: Int64) : Stdlib.Option.Option<List<Stdlib.Json.InternalValueView>> =
+let __collectArrayItems (source: String) (index: Int64) (limit: Int64) : Stdlib.Option.Option<List<Stdlib.Json.__InternalValueView>> =
     let current = Stdlib.AltJson.__skipTrivia source index limit in
     if current < 0L || current >= limit then Stdlib.Option.Option.None
     else if Stdlib.String.__byteAtUnchecked source current == 93L then
@@ -251,17 +251,17 @@ let __collectArrayItems (source: String) (index: Int64) (limit: Int64) : Stdlib.
                     | None -> Stdlib.Option.Option.None
                 else Stdlib.Option.Option.None
 
-let __arrayItems (source: String) (view: Stdlib.Json.InternalValueView) : Stdlib.Option.Option<List<Stdlib.Json.InternalValueView>> =
+let __arrayItems (source: String) (view: Stdlib.Json.__InternalValueView) : Stdlib.Option.Option<List<Stdlib.Json.__InternalValueView>> =
     if Stdlib.Json.__viewByte source view != 91L then Stdlib.Option.Option.None
     else Stdlib.Json.__collectArrayItems source (Stdlib.Json.__viewStart view + 1L) (Stdlib.Json.__viewEnd view)
 
-let __arrayStart (source: String) (view: Stdlib.Json.InternalValueView) : Int64 =
+let __arrayStart (source: String) (view: Stdlib.Json.__InternalValueView) : Int64 =
     if Stdlib.Json.__viewByte source view != 91L then -1L
     else Stdlib.Json.__viewStart view + 1L
 
 // Streaming list traversal. Results other than -1 and -2 are packed item
 // views; flagged single-field objects intentionally have a negative value.
-let __arrayNext (source: String) (arrayView: Stdlib.Json.InternalValueView) (nextIndex: Int64) : Stdlib.Json.InternalValueView =
+let __arrayNext (source: String) (arrayView: Stdlib.Json.__InternalValueView) (nextIndex: Int64) : Stdlib.Json.__InternalValueView =
     let limit = Stdlib.Json.__viewEnd arrayView in
     let current = Stdlib.AltJson.__skipTrivia source nextIndex limit in
     if current < 0L || current >= limit then -2L
@@ -276,7 +276,7 @@ let __arrayNext (source: String) (arrayView: Stdlib.Json.InternalValueView) (nex
                 Stdlib.Int64.bitwiseOr plainView -9223372036854775808L
             else plainView
 
-let __arrayAfter (source: String) (arrayView: Stdlib.Json.InternalValueView) (itemView: Stdlib.Json.InternalValueView) : Int64 =
+let __arrayAfter (source: String) (arrayView: Stdlib.Json.__InternalValueView) (itemView: Stdlib.Json.__InternalValueView) : Int64 =
     let limit = Stdlib.Json.__viewEnd arrayView in
     let afterTrivia = Stdlib.AltJson.__skipTrivia source (Stdlib.Json.__viewEnd itemView) limit in
     if afterTrivia < 0L || afterTrivia >= limit then -2L
@@ -286,7 +286,7 @@ let __arrayAfter (source: String) (arrayView: Stdlib.Json.InternalValueView) (it
         else if separator == 44L then afterTrivia + 1L
         else -2L
 
-let __collectObjectFields (source: String) (index: Int64) (limit: Int64) : Stdlib.Option.Option<List<(String * Stdlib.Json.InternalValueView)>> =
+let __collectObjectFields (source: String) (index: Int64) (limit: Int64) : Stdlib.Option.Option<List<(String * Stdlib.Json.__InternalValueView)>> =
     let current = Stdlib.AltJson.__skipTrivia source index limit in
     if current < 0L || current >= limit then Stdlib.Option.Option.None
     else if Stdlib.String.__byteAtUnchecked source current == 125L then
@@ -326,11 +326,11 @@ let __collectObjectFields (source: String) (index: Int64) (limit: Int64) : Stdli
                             | None -> Stdlib.Option.Option.None
                         else Stdlib.Option.Option.None
 
-let __objectFields (source: String) (view: Stdlib.Json.InternalValueView) : Stdlib.Option.Option<List<(String * Stdlib.Json.InternalValueView)>> =
+let __objectFields (source: String) (view: Stdlib.Json.__InternalValueView) : Stdlib.Option.Option<List<(String * Stdlib.Json.__InternalValueView)>> =
     if Stdlib.Json.__viewByte source view != 123L then Stdlib.Option.Option.None
     else Stdlib.Json.__collectObjectFields source (Stdlib.Json.__viewStart view + 1L) (Stdlib.Json.__viewEnd view)
 
-let __collectObjectFieldMap (source: String) (index: Int64) (limit: Int64) (acc: Dict<String, Stdlib.Json.InternalValueView>) : Stdlib.Option.Option<Dict<String, Stdlib.Json.InternalValueView>> =
+let __collectObjectFieldMap (source: String) (index: Int64) (limit: Int64) (acc: Dict<String, Stdlib.Json.__InternalValueView>) : Stdlib.Option.Option<Dict<String, Stdlib.Json.__InternalValueView>> =
     let current = Stdlib.AltJson.__skipTrivia source index limit in
     if current < 0L || current >= limit then Stdlib.Option.Option.None
     else if Stdlib.String.__byteAtUnchecked source current == 125L then
@@ -369,12 +369,12 @@ let __collectObjectFieldMap (source: String) (index: Int64) (limit: Int64) (acc:
                             Stdlib.Json.__collectObjectFieldMap source (afterTrivia + 1L) limit nextAcc
                         else Stdlib.Option.Option.None
 
-let __objectFieldMap (source: String) (view: Stdlib.Json.InternalValueView) : Stdlib.Option.Option<Dict<String, Stdlib.Json.InternalValueView>> =
+let __objectFieldMap (source: String) (view: Stdlib.Json.__InternalValueView) : Stdlib.Option.Option<Dict<String, Stdlib.Json.__InternalValueView>> =
     if Stdlib.Json.__viewByte source view != 123L then Stdlib.Option.Option.None
     else
         Stdlib.Json.__collectObjectFieldMap source (Stdlib.Json.__viewStart view + 1L) (Stdlib.Json.__viewEnd view) (Dict { })
 
-let __fieldNames (fields: List<(String * Stdlib.Json.InternalValueView)>) : List<String> =
+let __fieldNames (fields: List<(String * Stdlib.Json.__InternalValueView)>) : List<String> =
     if Stdlib.List.isEmpty fields then []
     else
         let head = Stdlib.List.__headUnsafe fields in
@@ -385,7 +385,7 @@ let __fieldNames (fields: List<(String * Stdlib.Json.InternalValueView)>) : List
 // therefore borrow the bytes between the first colon and the final brace
 // without rescanning the complete payload. If decoding fails, generated code
 // falls back to __enumObject to recover the exact public error classification.
-let __enumCandidate (source: String) (view: Stdlib.Json.InternalValueView) : Stdlib.Json.InternalEnumObject =
+let __enumCandidate (source: String) (view: Stdlib.Json.__InternalValueView) : Stdlib.Json.__InternalEnumObject =
     let start = Stdlib.Json.__viewStart view in
     let endIndex = Stdlib.Json.__viewEnd view in
     if Stdlib.Bool.not (Stdlib.Json.__viewHasSingleField view) then
@@ -393,41 +393,41 @@ let __enumCandidate (source: String) (view: Stdlib.Json.InternalValueView) : Std
     else if Stdlib.Json.__viewByte source view != 123L
        || endIndex <= start + 1L
        || Stdlib.String.__byteAtUnchecked source (endIndex - 1L) != 125L then
-        Stdlib.Json.InternalEnumObject.EnumNotObject
+        Stdlib.Json.__InternalEnumObject.EnumNotObject
     else
         let current = Stdlib.AltJson.__skipTrivia source (start + 1L) (endIndex - 1L) in
         if current < 0L || current >= endIndex - 1L then
-            Stdlib.Json.InternalEnumObject.EnumNoFields
+            Stdlib.Json.__InternalEnumObject.EnumNoFields
         else
             match Stdlib.AltJson.__parseString source current (endIndex - 1L) with
-            | InvalidString -> Stdlib.Json.InternalEnumObject.EnumNotObject
+            | InvalidString -> Stdlib.Json.__InternalEnumObject.EnumNotObject
             | ParsedString (key, afterKey) ->
                 let colon = Stdlib.AltJson.__skipTrivia source afterKey (endIndex - 1L) in
                 if colon < 0L || colon >= endIndex - 1L
                    || Stdlib.String.__byteAtUnchecked source colon != 58L then
-                    Stdlib.Json.InternalEnumObject.EnumNotObject
+                    Stdlib.Json.__InternalEnumObject.EnumNotObject
                 else
                     let valueStart = Stdlib.AltJson.__skipTrivia source (colon + 1L) (endIndex - 1L) in
                     let valueEnd = Stdlib.Json.__skipTriviaBackward source (endIndex - 1L) in
                     if valueStart < 0L || valueStart >= valueEnd then
-                        Stdlib.Json.InternalEnumObject.EnumNotObject
+                        Stdlib.Json.__InternalEnumObject.EnumNotObject
                     else
-                        Stdlib.Json.InternalEnumObject.EnumOneField(
+                        Stdlib.Json.__InternalEnumObject.EnumOneField(
                             key,
                             Stdlib.Json.__makeView valueStart valueEnd)
 
-let __enumObject (source: String) (view: Stdlib.Json.InternalValueView) : Stdlib.Json.InternalEnumObject =
+let __enumObject (source: String) (view: Stdlib.Json.__InternalValueView) : Stdlib.Json.__InternalEnumObject =
     match Stdlib.Json.__objectFields source view with
-    | None -> Stdlib.Json.InternalEnumObject.EnumNotObject
+    | None -> Stdlib.Json.__InternalEnumObject.EnumNotObject
     | Some fields ->
         match fields with
-        | [] -> Stdlib.Json.InternalEnumObject.EnumNoFields
+        | [] -> Stdlib.Json.__InternalEnumObject.EnumNoFields
         | [field] ->
-            Stdlib.Json.InternalEnumObject.EnumOneField(
+            Stdlib.Json.__InternalEnumObject.EnumOneField(
                 Stdlib.Tuple2.first field,
                 Stdlib.Tuple2.second field)
         | _ ->
-            Stdlib.Json.InternalEnumObject.EnumManyFields (
+            Stdlib.Json.__InternalEnumObject.EnumManyFields (
                 Stdlib.Json.__fieldNames fields)
 
 // Encoders append fragments through a shared writer. Generated codecs only
@@ -703,7 +703,7 @@ let __integerLexeme (text: String) : Stdlib.Option.Option<String> =
         | None -> Stdlib.Option.Option.None
         | Some value -> Stdlib.Option.Option.Some (Stdlib.Json.__normalizeIntegerMagnitude value))
 
-let __viewInt (source: String) (value: Stdlib.Json.InternalValueView) : Stdlib.Option.Option<Int> =
+let __viewInt (source: String) (value: Stdlib.Json.__InternalValueView) : Stdlib.Option.Option<Int> =
     if Stdlib.Json.__isNumber source value then
         let text = Stdlib.Json.__viewText source value in
         match Stdlib.Int.parse text with
@@ -717,55 +717,55 @@ let __viewInt (source: String) (value: Stdlib.Json.InternalValueView) : Stdlib.O
                 | Error _ -> Stdlib.Option.Option.None
     else Stdlib.Option.Option.None
 
-let __viewInt8 (source: String) (value: Stdlib.Json.InternalValueView) : Stdlib.Option.Option<Int8> =
+let __viewInt8 (source: String) (value: Stdlib.Json.__InternalValueView) : Stdlib.Option.Option<Int8> =
     match Stdlib.Json.__viewInt source value with
     | Some integer -> Stdlib.Int.toInt8 integer
     | None -> Stdlib.Option.Option.None
 
-let __viewInt16 (source: String) (value: Stdlib.Json.InternalValueView) : Stdlib.Option.Option<Int16> =
+let __viewInt16 (source: String) (value: Stdlib.Json.__InternalValueView) : Stdlib.Option.Option<Int16> =
     match Stdlib.Json.__viewInt source value with
     | Some integer -> Stdlib.Int.toInt16 integer
     | None -> Stdlib.Option.Option.None
 
-let __viewInt32 (source: String) (value: Stdlib.Json.InternalValueView) : Stdlib.Option.Option<Int32> =
+let __viewInt32 (source: String) (value: Stdlib.Json.__InternalValueView) : Stdlib.Option.Option<Int32> =
     match Stdlib.Json.__viewInt source value with
     | Some integer -> Stdlib.Int.toInt32 integer
     | None -> Stdlib.Option.Option.None
 
-let __viewInt64 (source: String) (value: Stdlib.Json.InternalValueView) : Stdlib.Option.Option<Int64> =
+let __viewInt64 (source: String) (value: Stdlib.Json.__InternalValueView) : Stdlib.Option.Option<Int64> =
     match Stdlib.Json.__viewInt source value with
     | Some integer -> Stdlib.Int.toInt64 integer
     | None -> Stdlib.Option.Option.None
 
-let __viewInt128 (source: String) (value: Stdlib.Json.InternalValueView) : Stdlib.Option.Option<Int128> =
+let __viewInt128 (source: String) (value: Stdlib.Json.__InternalValueView) : Stdlib.Option.Option<Int128> =
     if Stdlib.Json.__isNumber source value then Stdlib.Json.__numberToInt128 (Stdlib.Json.__viewText source value)
     else Stdlib.Option.Option.None
 
-let __viewUInt8 (source: String) (value: Stdlib.Json.InternalValueView) : Stdlib.Option.Option<UInt8> =
+let __viewUInt8 (source: String) (value: Stdlib.Json.__InternalValueView) : Stdlib.Option.Option<UInt8> =
     match Stdlib.Json.__viewInt source value with
     | Some integer -> Stdlib.Int.toUInt8 integer
     | None -> Stdlib.Option.Option.None
 
-let __viewUInt16 (source: String) (value: Stdlib.Json.InternalValueView) : Stdlib.Option.Option<UInt16> =
+let __viewUInt16 (source: String) (value: Stdlib.Json.__InternalValueView) : Stdlib.Option.Option<UInt16> =
     match Stdlib.Json.__viewInt source value with
     | Some integer -> Stdlib.Int.toUInt16 integer
     | None -> Stdlib.Option.Option.None
 
-let __viewUInt32 (source: String) (value: Stdlib.Json.InternalValueView) : Stdlib.Option.Option<UInt32> =
+let __viewUInt32 (source: String) (value: Stdlib.Json.__InternalValueView) : Stdlib.Option.Option<UInt32> =
     match Stdlib.Json.__viewInt source value with
     | Some integer -> Stdlib.Int.toUInt32 integer
     | None -> Stdlib.Option.Option.None
 
-let __viewUInt64 (source: String) (value: Stdlib.Json.InternalValueView) : Stdlib.Option.Option<UInt64> =
+let __viewUInt64 (source: String) (value: Stdlib.Json.__InternalValueView) : Stdlib.Option.Option<UInt64> =
     match Stdlib.Json.__viewInt source value with
     | Some integer -> Stdlib.Int.toUInt64 integer
     | None -> Stdlib.Option.Option.None
 
-let __viewUInt128 (source: String) (value: Stdlib.Json.InternalValueView) : Stdlib.Option.Option<UInt128> =
+let __viewUInt128 (source: String) (value: Stdlib.Json.__InternalValueView) : Stdlib.Option.Option<UInt128> =
     if Stdlib.Json.__isNumber source value then Stdlib.Json.__numberToUInt128 (Stdlib.Json.__viewText source value)
     else Stdlib.Option.Option.None
 
-let __viewFloat (source: String) (value: Stdlib.Json.InternalValueView) : Stdlib.Option.Option<Float> =
+let __viewFloat (source: String) (value: Stdlib.Json.__InternalValueView) : Stdlib.Option.Option<Float> =
     if Stdlib.Json.__isNumber source value then Stdlib.AltJson.__numberToFloat (Stdlib.Json.__viewText source value)
     else
         match Stdlib.Json.__stringValue source value with
@@ -776,7 +776,7 @@ let __viewFloat (source: String) (value: Stdlib.Json.InternalValueView) : Stdlib
             else Stdlib.Option.Option.None
         | None -> Stdlib.Option.Option.None
 
-let __viewChar (source: String) (value: Stdlib.Json.InternalValueView) : Stdlib.Option.Option<Char> =
+let __viewChar (source: String) (value: Stdlib.Json.__InternalValueView) : Stdlib.Option.Option<Char> =
     match Stdlib.Json.__stringValue source value with
     | Some text ->
         if Stdlib.String.length text == 1 then
@@ -784,7 +784,7 @@ let __viewChar (source: String) (value: Stdlib.Json.InternalValueView) : Stdlib.
         else Stdlib.Option.Option.None
     | None -> Stdlib.Option.Option.None
 
-let __viewUuid (source: String) (value: Stdlib.Json.InternalValueView) : Stdlib.Option.Option<Uuid> =
+let __viewUuid (source: String) (value: Stdlib.Json.__InternalValueView) : Stdlib.Option.Option<Uuid> =
     match Stdlib.Json.__stringValue source value with
     | Some text ->
         match Stdlib.Uuid.parse text with
@@ -792,7 +792,7 @@ let __viewUuid (source: String) (value: Stdlib.Json.InternalValueView) : Stdlib.
         | Error _ -> Stdlib.Option.Option.None
     | None -> Stdlib.Option.Option.None
 
-let __viewDateTime (source: String) (value: Stdlib.Json.InternalValueView) : Stdlib.Option.Option<DateTime> =
+let __viewDateTime (source: String) (value: Stdlib.Json.__InternalValueView) : Stdlib.Option.Option<DateTime> =
     match Stdlib.Json.__stringValue source value with
     | Some text ->
         match Stdlib.DateTime.parse text with

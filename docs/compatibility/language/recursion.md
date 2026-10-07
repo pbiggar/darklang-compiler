@@ -44,7 +44,7 @@ compatibility fixtures.
 
 ## Representation and algorithm
 
-`AST.fs` defines opaque `BindingId`, `ScopeBoundaryId`, `RecursiveGroupId`, and
+`src/AST.ml` defines opaque `BindingId`, `ScopeBoundaryId`, `RecursiveGroupId`, and
 `RecursiveMemberId` values. Parsed, resolved, typed, and lowered groups are
 nonempty records. `RecursiveMemberKind`, `RecursiveAvailability`, and
 `RecursiveDependencyKind` prevent ordinary bindings, self members, mutual
@@ -86,15 +86,15 @@ not public recursion syntax.
 
 ## Source anchors
 
-- Parsing: `frontend/interpreter/Parser.fs`
-- Stable parsed identities: `NameSyntax.fs`
+- Parsing: `src/frontend/interpreter/Parser.ml`
+- Stable parsed identities: `src/NameSyntax.ml`
 - Resolution, SCCs, monomorphic checking, and diagnostics:
-  `frontend/TypeChecking.fs`
-- Closure identity and lowered group layout: `passes/anf/AST_to_ANF.fs`
-- Identity-safe self-tail ownership: `passes/anf/TailCallDetection.fs`
+  `src/frontend/TypeChecking.ml`
+- Closure identity and lowered group layout: `src/passes/anf/AST_to_ANF.ml`
+- Identity-safe self-tail ownership: `src/passes/anf/TailCallDetection.ml`
 - Existing behavioral coverage: `functions.e2e`, `tailcall.e2e`,
   `tuple-recursion.e2e`, closure tests, and
-  `compiler-passes/TailCallDetectionTests.fs`
+  `test/compiler-passes/TailCallDetectionTests.ml`
 
 ## Verification
 

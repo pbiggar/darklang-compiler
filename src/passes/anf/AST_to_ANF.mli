@@ -1,27 +1,197 @@
 (* AST_to_ANF.mli - Assemble typed function conversion and declaration registries. *)
 [@@@warning "-30"]
-type conversionResult = {program : ANF.program; ownershipContracts : OwnedIR.callSignature FunctionIdMap.t; recursiveMembers : AST.loweredRecursiveMember FunctionIdMap.t; typeReg : TypeRegistries.typeRegistry; recordFieldsReg : (string * AST.semanticType) list StringOrder.Map.t; recordTypeParamsReg : string list StringOrder.Map.t; variantLookup : LoweringPrimitives.variantLookup; rcSumShapeReg : MemoryModel.rcSumShapeRegistry; funcReg : TypeRegistries.functionRegistry; funcParams : (string * AST.semanticType) list StringOrder.Map.t; moduleRegistry : AST.moduleRegistry}
-type userOnlyResult = {symbols : CheckedAST.symbols; scopeContracts : Destruction.functionScopeContract FunctionIdMap.t; inertFunctionScopes : SpecializationIdentity.FunctionSet.t; userFunctions : ANF.functionDef list; ownershipContracts : OwnedIR.callSignature FunctionIdMap.t; nonInlineableFunctionNames : SpecializationIdentity.FunctionSet.t; mainExpr : ANF.aExpr; typeReg : TypeRegistries.typeRegistry; typeNames : TypeRegistries.typeNameRegistry; recordFieldsReg : (string * AST.semanticType) list StringOrder.Map.t; recordTypeParamsReg : string list StringOrder.Map.t; variantLookup : LoweringPrimitives.variantLookup; sumMetadata : LoweringPrimitives.sumMetadata; localRecordFieldsReg : (string * AST.semanticType) list StringOrder.Map.t; localVariantLookup : LoweringPrimitives.variantLookup; rcSumShapeReg : MemoryModel.rcSumShapeRegistry; funcReg : TypeRegistries.functionRegistry; functionIds : TypeRegistries.functionIdRegistry; functionNames : TypeRegistries.functionNameRegistry; localReturnTypes : (string * AST.semanticType) FunctionIdMap.t; funcParams : (string * AST.semanticType) list StringOrder.Map.t; moduleRegistry : AST.moduleRegistry; recursiveMembers : AST.loweredRecursiveMember FunctionIdMap.t}
-type registries = {scopeContracts : Destruction.functionScopeContract FunctionIdMap.t; inertFunctionScopes : SpecializationIdentity.FunctionSet.t; typeReg : TypeRegistries.typeRegistry; typeNames : TypeRegistries.typeNameRegistry; recordFieldsReg : (string * AST.semanticType) list StringOrder.Map.t; recordTypeParamsReg : string list StringOrder.Map.t; variantLookup : LoweringPrimitives.variantLookup; sumMetadata : LoweringPrimitives.sumMetadata; rcSumShapeReg : MemoryModel.rcSumShapeRegistry; funcReg : TypeRegistries.functionRegistry; functionIds : TypeRegistries.functionIdRegistry; functionNames : TypeRegistries.functionNameRegistry; funcParams : (string * AST.semanticType) list StringOrder.Map.t; moduleRegistry : AST.moduleRegistry; recursiveMembers : AST.loweredRecursiveMember FunctionIdMap.t}
-type functionConversion = {functions : ANF.functionDef list; varGen : ANF.varGen; ownershipContracts : OwnedIR.callSignature FunctionIdMap.t}
-val toANFWithMetadata : TypeRegistries.typeNameRegistry -> CheckedAST.expr -> ANF.varGen -> TypeRegistries.varEnv -> TypeRegistries.typeRegistry -> LoweringPrimitives.variantLookup -> TypeRegistries.functionRegistry -> AST.moduleRegistry -> (ANF.aExpr * ANF.varGen, string) result
-val toANF : CheckedAST.expr -> ANF.varGen -> TypeRegistries.varEnv -> TypeRegistries.typeRegistry -> LoweringPrimitives.variantLookup -> TypeRegistries.functionRegistry -> AST.moduleRegistry -> (ANF.aExpr * ANF.varGen, string) result
-val allocateTypedParams : (AST.bindingId * AST.semanticType) list -> ANF.varGen -> ANF.typedParam list * ANF.varGen
-val convertFunction : CheckedAST.symbols -> CheckedAST.functionDef -> ANF.varGen -> TypeRegistries.typeRegistry -> LoweringPrimitives.variantLookup -> TypeRegistries.functionRegistry -> AST.moduleRegistry -> (ANF.functionDef * ANF.varGen, string) result
-val loweredRecursiveMemberRegistry : CheckedAST.functionDef list -> AST.loweredRecursiveMember FunctionIdMap.t
-val splitDeclarations : CheckedAST.program -> (AST.typeDef list * CheckedAST.functionDef list, string) result
-val splitTopLevels : CheckedAST.program -> (AST.typeDef list * CheckedAST.functionDef list * CheckedAST.expr, string) result
+
+type conversionResult = {
+  program : ANF.program;
+  ownershipContracts : OwnedIR.callSignature FunctionIdMap.t;
+  recursiveMembers : AST.loweredRecursiveMember FunctionIdMap.t;
+  typeReg : TypeRegistries.typeRegistry;
+  recordFieldsReg : (string * AST.semanticType) list StringOrder.Map.t;
+  recordTypeParamsReg : string list StringOrder.Map.t;
+  variantLookup : LoweringPrimitives.variantLookup;
+  rcSumShapeReg : MemoryModel.rcSumShapeRegistry;
+  funcReg : TypeRegistries.functionRegistry;
+  funcParams : (string * AST.semanticType) list StringOrder.Map.t;
+  moduleRegistry : AST.moduleRegistry;
+}
+
+type userOnlyResult = {
+  symbols : CheckedAST.symbols;
+  scopeContracts : Destruction.functionScopeContract FunctionIdMap.t;
+  inertFunctionScopes : SpecializationIdentity.FunctionSet.t;
+  userFunctions : ANF.functionDef list;
+  ownershipContracts : OwnedIR.callSignature FunctionIdMap.t;
+  nonInlineableFunctionNames : SpecializationIdentity.FunctionSet.t;
+  mainExpr : ANF.aExpr;
+  typeReg : TypeRegistries.typeRegistry;
+  typeNames : TypeRegistries.typeNameRegistry;
+  recordFieldsReg : (string * AST.semanticType) list StringOrder.Map.t;
+  recordTypeParamsReg : string list StringOrder.Map.t;
+  variantLookup : LoweringPrimitives.variantLookup;
+  sumMetadata : LoweringPrimitives.sumMetadata;
+  localRecordFieldsReg : (string * AST.semanticType) list StringOrder.Map.t;
+  localVariantLookup : LoweringPrimitives.variantLookup;
+  rcSumShapeReg : MemoryModel.rcSumShapeRegistry;
+  funcReg : TypeRegistries.functionRegistry;
+  functionIds : TypeRegistries.functionIdRegistry;
+  functionNames : TypeRegistries.functionNameRegistry;
+  localReturnTypes : (string * AST.semanticType) FunctionIdMap.t;
+  funcParams : (string * AST.semanticType) list StringOrder.Map.t;
+  moduleRegistry : AST.moduleRegistry;
+  recursiveMembers : AST.loweredRecursiveMember FunctionIdMap.t;
+}
+
+type registries = {
+  scopeContracts : Destruction.functionScopeContract FunctionIdMap.t;
+  inertFunctionScopes : SpecializationIdentity.FunctionSet.t;
+  typeReg : TypeRegistries.typeRegistry;
+  typeNames : TypeRegistries.typeNameRegistry;
+  recordFieldsReg : (string * AST.semanticType) list StringOrder.Map.t;
+  recordTypeParamsReg : string list StringOrder.Map.t;
+  variantLookup : LoweringPrimitives.variantLookup;
+  sumMetadata : LoweringPrimitives.sumMetadata;
+  rcSumShapeReg : MemoryModel.rcSumShapeRegistry;
+  funcReg : TypeRegistries.functionRegistry;
+  functionIds : TypeRegistries.functionIdRegistry;
+  functionNames : TypeRegistries.functionNameRegistry;
+  funcParams : (string * AST.semanticType) list StringOrder.Map.t;
+  moduleRegistry : AST.moduleRegistry;
+  recursiveMembers : AST.loweredRecursiveMember FunctionIdMap.t;
+}
+
+type functionConversion = {
+  functions : ANF.functionDef list;
+  varGen : ANF.varGen;
+  ownershipContracts : OwnedIR.callSignature FunctionIdMap.t;
+}
+
+val toANFWithMetadata :
+  TypeRegistries.typeNameRegistry ->
+  CheckedAST.expr ->
+  ANF.varGen ->
+  TypeRegistries.varEnv ->
+  TypeRegistries.typeRegistry ->
+  LoweringPrimitives.variantLookup ->
+  TypeRegistries.functionRegistry ->
+  AST.moduleRegistry ->
+  (ANF.aExpr * ANF.varGen, string) result
+
+val toANF :
+  CheckedAST.expr ->
+  ANF.varGen ->
+  TypeRegistries.varEnv ->
+  TypeRegistries.typeRegistry ->
+  LoweringPrimitives.variantLookup ->
+  TypeRegistries.functionRegistry ->
+  AST.moduleRegistry ->
+  (ANF.aExpr * ANF.varGen, string) result
+
+val allocateTypedParams :
+  (AST.bindingId * AST.semanticType) list ->
+  ANF.varGen ->
+  ANF.typedParam list * ANF.varGen
+
+val convertFunction :
+  CheckedAST.symbols ->
+  CheckedAST.functionDef ->
+  ANF.varGen ->
+  TypeRegistries.typeRegistry ->
+  LoweringPrimitives.variantLookup ->
+  TypeRegistries.functionRegistry ->
+  AST.moduleRegistry ->
+  (ANF.functionDef * ANF.varGen, string) result
+
+val loweredRecursiveMemberRegistry :
+  CheckedAST.functionDef list -> AST.loweredRecursiveMember FunctionIdMap.t
+
+val splitDeclarations :
+  CheckedAST.program ->
+  (AST.typeDef list * CheckedAST.functionDef list, string) result
+
+val splitTopLevels :
+  CheckedAST.program ->
+  ( AST.typeDef list * CheckedAST.functionDef list * CheckedAST.expr,
+    string )
+  result
+
 val buildAliasRegistry : AST.typeDef list -> TypeRegistries.aliasRegistry
-val resolveAliasesInFunctions : TypeRegistries.aliasRegistry -> CheckedAST.functionDef list -> CheckedAST.functionDef list
-val buildRegistriesWithTrace : (string -> float -> unit) option -> CheckedAST.symbols -> AST.moduleRegistry -> AST.typeDef list -> TypeRegistries.aliasRegistry -> CheckedAST.functionDef list -> registries
-val buildRegistries : CheckedAST.symbols -> AST.moduleRegistry -> AST.typeDef list -> TypeRegistries.aliasRegistry -> CheckedAST.functionDef list -> registries
-val buildOverlayRegistriesWithTrace : (string -> float -> unit) option -> CheckedAST.symbols -> AST.moduleRegistry -> AST.typeDef list -> TypeRegistries.aliasRegistry -> CheckedAST.functionDef list -> registries
-val buildOverlayRegistries : CheckedAST.symbols -> AST.moduleRegistry -> AST.typeDef list -> TypeRegistries.aliasRegistry -> CheckedAST.functionDef list -> registries
-val mergeRegistriesWithTrace : (string -> float -> unit) option -> registries -> registries -> registries
+
+val resolveAliasesInFunctions :
+  TypeRegistries.aliasRegistry ->
+  CheckedAST.functionDef list ->
+  CheckedAST.functionDef list
+
+val buildRegistriesWithTrace :
+  (string -> float -> unit) option ->
+  CheckedAST.symbols ->
+  AST.moduleRegistry ->
+  AST.typeDef list ->
+  TypeRegistries.aliasRegistry ->
+  CheckedAST.functionDef list ->
+  registries
+
+val buildRegistries :
+  CheckedAST.symbols ->
+  AST.moduleRegistry ->
+  AST.typeDef list ->
+  TypeRegistries.aliasRegistry ->
+  CheckedAST.functionDef list ->
+  registries
+
+val buildOverlayRegistriesWithTrace :
+  (string -> float -> unit) option ->
+  CheckedAST.symbols ->
+  AST.moduleRegistry ->
+  AST.typeDef list ->
+  TypeRegistries.aliasRegistry ->
+  CheckedAST.functionDef list ->
+  registries
+
+val buildOverlayRegistries :
+  CheckedAST.symbols ->
+  AST.moduleRegistry ->
+  AST.typeDef list ->
+  TypeRegistries.aliasRegistry ->
+  CheckedAST.functionDef list ->
+  registries
+
+val mergeRegistriesWithTrace :
+  (string -> float -> unit) option -> registries -> registries -> registries
+
 val mergeRegistries : registries -> registries -> registries
-val extendFunctionRegistryWithConverted : TypeRegistries.functionRegistry -> ANF.functionDef list -> TypeRegistries.functionRegistry
-val convertFunctionsWithOwnershipWithTrace : (string -> float -> unit) option -> CheckedAST.symbols -> registries -> ANF.varGen -> CheckedAST.functionDef list -> (functionConversion, string) result
-val convertFunctionsWithOwnership : CheckedAST.symbols -> registries -> ANF.varGen -> CheckedAST.functionDef list -> (functionConversion, string) result
-val convertFunctions : CheckedAST.symbols -> registries -> ANF.varGen -> CheckedAST.functionDef list -> (ANF.functionDef list * ANF.varGen, string) result
-val convertExprToAnf : registries -> ANF.varGen -> CheckedAST.expr -> (ANF.aExpr * ANF.varGen, string) result
-val synthesizeEntryFunction : AST.functionId -> string -> AST.semanticType -> ANF.aExpr -> ANF.functionDef
+
+val extendFunctionRegistryWithConverted :
+  TypeRegistries.functionRegistry ->
+  ANF.functionDef list ->
+  TypeRegistries.functionRegistry
+
+val convertFunctionsWithOwnershipWithTrace :
+  (string -> float -> unit) option ->
+  CheckedAST.symbols ->
+  registries ->
+  ANF.varGen ->
+  CheckedAST.functionDef list ->
+  (functionConversion, string) result
+
+val convertFunctionsWithOwnership :
+  CheckedAST.symbols ->
+  registries ->
+  ANF.varGen ->
+  CheckedAST.functionDef list ->
+  (functionConversion, string) result
+
+val convertFunctions :
+  CheckedAST.symbols ->
+  registries ->
+  ANF.varGen ->
+  CheckedAST.functionDef list ->
+  (ANF.functionDef list * ANF.varGen, string) result
+
+val convertExprToAnf :
+  registries ->
+  ANF.varGen ->
+  CheckedAST.expr ->
+  (ANF.aExpr * ANF.varGen, string) result
+
+val synthesizeEntryFunction :
+  AST.functionId -> string -> AST.semanticType -> ANF.aExpr -> ANF.functionDef

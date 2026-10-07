@@ -5,6 +5,7 @@
 *)
 (* Bitset.ml - Allocation-conscious bitsets for allocation and dominance. *)
 type bitset = int64 array
+
 let wordCount bitCount = (bitCount + 63) / 64
 let empty words = Array.make words 0L
 
@@ -12,8 +13,8 @@ let requireIndexInRange operation words idx =
   let capacity = words * 64 in
   if idx < 0 || idx >= capacity then
     Crash.crash
-      (Printf.sprintf "%s index %d is outside bitset capacity %d"
-         operation idx capacity)
+      (Printf.sprintf "%s index %d is outside bitset capacity %d" operation idx
+         capacity)
 
 let requireMatchingWordCount operation left right =
   if Array.length left <> Array.length right then
@@ -28,7 +29,8 @@ let all bitCount =
       if extraBits = 0 then Int64.minus_one
       else Int64.sub (Int64.shift_left 1L extraBits) 1L
     in
-    Array.init words (fun i -> if i = words - 1 then lastMask else Int64.minus_one)
+    Array.init words (fun i ->
+        if i = words - 1 then lastMask else Int64.minus_one)
 
 let singleton words idx =
   requireIndexInRange "Bitset.singleton" words idx;
@@ -40,6 +42,7 @@ let singleton words idx =
 
 let clone = Array.copy
 let isEmpty bits = Array.for_all (( = ) 0L) bits
+
 let equal left right =
   requireMatchingWordCount "equality" left right;
   Array.for_all2 Int64.equal left right
@@ -53,17 +56,20 @@ let union left right =
 let diff left right =
   requireMatchingWordCount "difference" left right;
   if isEmpty right then left
-  else Array.init (Array.length left) (fun i -> Int64.logand left.(i) (Int64.lognot right.(i)))
+  else
+    Array.init (Array.length left) (fun i ->
+        Int64.logand left.(i) (Int64.lognot right.(i)))
 
 let intersectMany first rest =
   List.iter (requireMatchingWordCount "intersection" first) rest;
-  Array.init (Array.length first)
-    (fun i -> List.fold_left (fun acc bits -> Int64.logand acc bits.(i)) first.(i) rest)
+  Array.init (Array.length first) (fun i ->
+      List.fold_left (fun acc bits -> Int64.logand acc bits.(i)) first.(i) rest)
 
 let containsIndex idx bits =
   let wordIdx = idx lsr 6 in
   let bitIdx = idx land 63 in
-  idx >= 0 && wordIdx < Array.length bits
+  idx >= 0
+  && wordIdx < Array.length bits
   && Int64.logand bits.(wordIdx) (Int64.shift_left 1L bitIdx) <> 0L
 
 let addIndexInPlace idx bits =
@@ -84,7 +90,8 @@ let removeIndexInPlace idx bits =
   let wordIdx = idx lsr 6 in
   let bitIdx = idx land 63 in
   if wordIdx < Array.length bits then
-    bits.(wordIdx) <- Int64.logand bits.(wordIdx) (Int64.lognot (Int64.shift_left 1L bitIdx))
+    bits.(wordIdx) <-
+      Int64.logand bits.(wordIdx) (Int64.lognot (Int64.shift_left 1L bitIdx))
 
 let unionInPlace left right =
   requireMatchingWordCount "union" left right;
@@ -123,7 +130,8 @@ let iterIndices bits f =
       done)
     bits
 
-let count bits = Array.fold_left (fun total word->total+Int64.popcount word) 0 bits
+let count bits =
+  Array.fold_left (fun total word -> total + Int64.popcount word) 0 bits
 
 let indicesToList bits =
   let acc = ref [] in

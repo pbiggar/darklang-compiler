@@ -1,6 +1,17 @@
 (* Typed matching of the frozen fixture regex alphabet, with UTF-16 captures. *)
-type characterClass=Dot | Digit | Space | Characters of string | Except of string
-type token=Literal of string | Repeat of characterClass * int * bool | Capture of token list | Alternatives of token list list
+type characterClass =
+  | Dot
+  | Digit
+  | Space
+  | Characters of string
+  | Except of string
+
+type token =
+  | Literal of string
+  | Repeat of characterClass * int * bool
+  | Capture of token list
+  | Alternatives of token list list
+
 val matched : token list -> string -> string array option
 val literal : string -> token
 val space : token

@@ -100,13 +100,13 @@ Native interpreter behavior is in
 The compiler public wrappers are in `StdLib/Cli.dark` and `StdLib/Cli/`
 module files.
 The registry is `src/DarkStdlib.ml`; typed lowering starts in
-`passes/anf/AST_to_ANF.fs`, passes through `ir/anf/ANF.fs`, `ir/mir/MIR.fs`, and `ir/lir/LIR.fs`, and
+`src/passes/anf/AST_to_ANF.ml`, passes through `src/ir/anf/ANF.ml`, `src/ir/mir/MIR.ml`, and `src/ir/lir/LIR.ml`, and
 ends in both architecture code generators. Focused native evidence is
 `test/fixtures/e2e/cli_process_host_input.e2e`,
 `test/fixtures/e2e/filesystem_env_parity.e2e`, plus the enabled pinned
 `test/fixtures/e2e/upstream/stdlib/cli-process.dark` corpus. Target-ABI coverage is
-in `ARM64CodeGenTests.fs`, and executable Linux x86_64 coverage runs the native
-operations under QEMU in `X86_64CodeGenTests.fs`.
+in `test/compiler-passes/ARM64CodeGenTests.ml`, and executable Linux x86_64 coverage runs the native
+operations under QEMU in `test/compiler-passes/X86_64CodeGenTests.ml`.
 
 ## Verification record
 

@@ -39,6 +39,8 @@ runs through `./run-tests --ai` after `./build --ai`.
 
 `StdLib/` implicitly represents the `Darklang.Stdlib` package prefix. For
 example, `Darklang.Stdlib.Cli.UI.Colors` lives in `StdLib/Cli/UI/Colors.dark`.
+`Builtin` is the standard-library bridge exception: it lives at
+`StdLib/Builtin.dark` and retains its interpreter `Builtin` namespace.
 Other packages keep their full names under `packages/`, such as
 `packages/Darklang/LanguageTools/ProgramTypes.dark`. The few `module Stdlib.*`
 declarations also use the implicit `Darklang` owner. Placement does not change
@@ -64,8 +66,13 @@ module, so it retains a normal filename.
 
 Use `__` at the start of a filename for compiler-only support or private
 implementation fragments, including generated tables. This is a source
-organization convention; filename prefixes do not enforce language visibility
-or rename modules. Keep interpreter packages and public fragments unprefixed,
+organization convention; filename prefixes do not enforce language visibility.
+Compiler-only module declarations also use `__` names, such as
+`Darklang.Stdlib.__Network` and `Darklang.Stdlib.String.__Unicode`.
+Private declarations require `--allow-internal`; public code cannot access them
+through function calls, type annotations, record literals or enum constructors.
+Fragments of a public package keep that package's declaration name.
+Keep interpreter packages and public fragments unprefixed,
 including nested modules extracted from an upstream file. The
 [complete source inventory](library-sources.md) lists all 202 files, their
 modules, and interpreter origins or compiler roles against the pinned revision.

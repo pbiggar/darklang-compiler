@@ -1,2 +1,3 @@
 ; Keep benchmark implementations and repository utilities outside the native build graph.
-(dirs bin src test StdLib packages tools scripts benchmarks)
+(dirs bin src test StdLib packages tools scripts benchmarks mutation)
+(data_only_dirs mutation)

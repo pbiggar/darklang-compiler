@@ -11,14 +11,14 @@ let __replaceQuotes (s: String) : String =
 let shellQuote (s: String) : String =
     $"'{Stdlib.Cli.Process.__replaceQuotes s}'"
 
-let __output (result: Stdlib.Cli.NativeOutput) : Stdlib.Cli.Process.Output =
+let __output (result: Stdlib.Cli.__NativeOutput) : Stdlib.Cli.Process.Output =
     Stdlib.Cli.Process.Output {
         exitCode = Stdlib.Int.fromInt64 result.exitCode,
         stdout = result.stdout,
         stderr = result.stderr
     }
 
-let __nativeOutput (result: Stdlib.Cli.NativeProcessOutput) : Stdlib.Cli.Process.Output =
+let __nativeOutput (result: Stdlib.Cli.__NativeProcessOutput) : Stdlib.Cli.Process.Output =
     Stdlib.Cli.Process.Output {
         exitCode = Stdlib.Int.fromInt64 result.exitCode,
         stdout = result.stdout,
@@ -68,11 +68,11 @@ let __runCandidates
     (directory: String)
     (environment: List<(String * String)>)
     (timeoutMs: Int64)
-    : Stdlib.Result.Result<Stdlib.Cli.NativeProcessOutput, Stdlib.Cli.Posix.Error> =
+    : Stdlib.Result.Result<Stdlib.Cli.__NativeProcessOutput, Stdlib.Cli.Posix.Error> =
     match programs with
     | [] -> Error (Stdlib.Cli.Posix.Error { errno = 2, message = "No such file or directory" })
     | program :: rest ->
-        let request = Stdlib.Cli.NativeProcessRequest {
+        let request = Stdlib.Cli.__NativeProcessRequest {
             mode = mode,
             argv = Stdlib.Cli.Process.__packedArgv program args,
             cwd = directory,
@@ -85,7 +85,7 @@ let __runCandidates
         else if result.errno == 2L then
             Stdlib.Cli.Process.__runCandidates mode rest args directory environment timeoutMs
         else
-            Error (Stdlib.Cli.Posix.__error (Stdlib.Cli.NativePosixError {
+            Error (Stdlib.Cli.Posix.__error (Stdlib.Cli.__NativePosixError {
                 errno = result.errno,
                 message = result.stderr
             }))
@@ -97,7 +97,7 @@ let __runNative
     (directory: String)
     (environment: List<(String * String)>)
     (timeoutMs: Int64)
-    : Stdlib.Result.Result<Stdlib.Cli.NativeProcessOutput, Stdlib.Cli.Posix.Error> =
+    : Stdlib.Result.Result<Stdlib.Cli.__NativeProcessOutput, Stdlib.Cli.Posix.Error> =
     Stdlib.Cli.Process.__runCandidates
         mode
         (Stdlib.Cli.Process.__candidatePrograms program environment)
@@ -182,8 +182,8 @@ let __runPipeline
     (args1: List<String>)
     (program2: String)
     (args2: List<String>)
-    : Stdlib.Cli.NativeProcessOutput =
-    Stdlib.Cli.__runProcess (Stdlib.Cli.NativeProcessRequest {
+    : Stdlib.Cli.__NativeProcessOutput =
+    Stdlib.Cli.__runProcess (Stdlib.Cli.__NativeProcessRequest {
         mode = 4L,
         argv = Stdlib.Cli.Process.__packedArgv program1 args1,
         cwd = "",
@@ -197,7 +197,7 @@ let __tryPipelineConsumers
     (args1: List<String>)
     (args2: List<String>)
     (programs2: List<String>)
-    : Stdlib.Result.Result<Stdlib.Cli.NativeProcessOutput, Stdlib.Cli.Posix.Error> =
+    : Stdlib.Result.Result<Stdlib.Cli.__NativeProcessOutput, Stdlib.Cli.Posix.Error> =
     match programs2 with
     | [] -> Error (Stdlib.Cli.Posix.Error { errno = 2, message = "No such file or directory" })
     | program2 :: rest ->
@@ -206,7 +206,7 @@ let __tryPipelineConsumers
         else if result.errno == 2L then
             Stdlib.Cli.Process.__tryPipelineConsumers program1 args1 args2 rest
         else
-            Error (Stdlib.Cli.Posix.__error (Stdlib.Cli.NativePosixError {
+            Error (Stdlib.Cli.Posix.__error (Stdlib.Cli.__NativePosixError {
                 errno = result.errno,
                 message = result.stderr
             }))
@@ -216,7 +216,7 @@ let __tryPipelineProducers
     (program2: String)
     (args2: List<String>)
     (programs1: List<String>)
-    : Stdlib.Result.Result<Stdlib.Cli.NativeProcessOutput, Stdlib.Cli.Posix.Error> =
+    : Stdlib.Result.Result<Stdlib.Cli.__NativeProcessOutput, Stdlib.Cli.Posix.Error> =
     match programs1 with
     | [] -> Error (Stdlib.Cli.Posix.Error { errno = 2, message = "No such file or directory" })
     | program1 :: rest ->

@@ -240,7 +240,7 @@ let sharedSecret (privateScalar: Blob) (peerPublicKey: Blob)
     else Ok shared
 
 let generateKeyPair () : Stdlib.Result.Result<Stdlib.__X25519.KeyPair, String> =
-  match Stdlib.Crypto.secureRandomBytes 32L with
+  match Stdlib.Crypto.__secureRandomBytes 32L with
   | Error message -> Error message
   | Ok privateKey ->
       match Stdlib.__X25519.publicKey privateKey with

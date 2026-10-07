@@ -80,4 +80,3 @@ match Stdlib.Cli.Host.getRuntimeHost () with | Ok _ -> true | Error _ -> false =
 match (Stdlib.Cli.Sys.hostname (), Stdlib.Cli.Sys.os (), Stdlib.Cli.Sys.arch ()) with | (Ok hostname, Ok os, Ok arch) -> Stdlib.String.length hostname > 0 && Stdlib.String.length os > 0 && Stdlib.String.length arch > 0 | _ -> false = true
 
 match Stdlib.Cli.Sys.currentUser () with | Some user -> Stdlib.String.length user > 0 | None -> false = true
-

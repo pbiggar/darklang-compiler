@@ -3,90 +3,84 @@
 
 module Darklang.Stdlib.String.__Unicode.__Data
 
-let contextualCasing () : List<(Int64 * List<Int64> * List<Int64> * List<Int64> * String)> =
-    [
-        (931L, [962L], [931L], [931L], "Final_Sigma"),
-        (775L, [775L], [], [], "lt After_Soft_Dotted"),
-        (73L, [105L, 775L], [73L], [73L], "lt More_Above"),
-        (74L, [106L, 775L], [74L], [74L], "lt More_Above"),
-        (302L, [303L, 775L], [302L], [302L], "lt More_Above"),
-        (204L, [105L, 775L, 768L], [204L], [204L], "lt"),
-        (205L, [105L, 775L, 769L], [205L], [205L], "lt"),
-        (296L, [105L, 775L, 771L], [296L], [296L], "lt"),
-        (304L, [105L], [304L], [304L], "tr"),
-        (304L, [105L], [304L], [304L], "az"),
-        (775L, [], [775L], [775L], "tr After_I"),
-        (775L, [], [775L], [775L], "az After_I"),
-        (73L, [305L], [73L], [73L], "tr Not_Before_Dot"),
-        (73L, [305L], [73L], [73L], "az Not_Before_Dot"),
-        (105L, [105L], [304L], [304L], "tr"),
-        (105L, [105L], [304L], [304L], "az")
-    ]
-
-let __canonicalCompositionLookupGroup0 (key: Int64) (valueIndex: Int64) : Stdlib.Option.Option<Int64> =
-    match Stdlib.String.__Unicode.__Data.__lookupMappingValueIn (Stdlib.String.__Unicode.__Data.__Table17.__canonicalCompositionChunk0 ()) 0L key 12L 19L valueIndex with
+let __canonicalDecompositionLookupGroup0 (key: Int64) (valueIndex: Int64) : Stdlib.Option.Option<Int64> =
+    match Stdlib.String.__Unicode.__Data.__lookupMappingValueIn (Stdlib.String.__Unicode.__Data.__Table00.__canonicalDecompositionChunk0 ()) 0L key 6L 19L valueIndex with
     | Some value -> Some value
     | None ->
-        match Stdlib.String.__Unicode.__Data.__lookupMappingValueIn (Stdlib.String.__Unicode.__Data.__Table18.__canonicalCompositionChunk1 ()) 0L key 12L 19L valueIndex with
+        match Stdlib.String.__Unicode.__Data.__lookupMappingValueIn (Stdlib.String.__Unicode.__Data.__Table01.__canonicalDecompositionChunk1 ()) 0L key 6L 19L valueIndex with
         | Some value -> Some value
         | None ->
-            match Stdlib.String.__Unicode.__Data.__lookupMappingValueIn (Stdlib.String.__Unicode.__Data.__Table19.__canonicalCompositionChunk2 ()) 0L key 12L 19L valueIndex with
+            match Stdlib.String.__Unicode.__Data.__lookupMappingValueIn (Stdlib.String.__Unicode.__Data.__Table02.__canonicalDecompositionChunk2 ()) 0L key 6L 19L valueIndex with
             | Some value -> Some value
             | None ->
-                match Stdlib.String.__Unicode.__Data.__lookupMappingValueIn (Stdlib.String.__Unicode.__Data.__Table20.__canonicalCompositionChunk3 ()) 0L key 12L 19L valueIndex with
+                match Stdlib.String.__Unicode.__Data.__lookupMappingValueIn (Stdlib.String.__Unicode.__Data.__Table03.__canonicalDecompositionChunk3 ()) 0L key 6L 19L valueIndex with
                 | Some value -> Some value
                 | None ->
                     None
 
-let __generalCategoryLookupGroup3 (codepoint: Int64) : Stdlib.Option.Option<Int64> =
-    match Stdlib.String.__Unicode.__Data.__lookupRangeIn (Stdlib.String.__Unicode.__Data.__Table27.__generalCategoryChunk12 ()) 0L codepoint 14L with
+let __uppercaseLookupGroup2 (key: Int64) (valueIndex: Int64) : Stdlib.Option.Option<Int64> =
+    match Stdlib.String.__Unicode.__Data.__lookupMappingValueIn (Stdlib.String.__Unicode.__Data.__Table62.__uppercaseChunk8 ()) 0L key 6L 25L valueIndex with
     | Some value -> Some value
     | None ->
-        match Stdlib.String.__Unicode.__Data.__lookupRangeIn (Stdlib.String.__Unicode.__Data.__Table28.__generalCategoryChunk13 ()) 0L codepoint 14L with
+        match Stdlib.String.__Unicode.__Data.__lookupMappingValueIn (Stdlib.String.__Unicode.__Data.__Table63.__uppercaseChunk9 ()) 0L key 6L 25L valueIndex with
         | Some value -> Some value
         | None ->
-            match Stdlib.String.__Unicode.__Data.__lookupRangeIn (Stdlib.String.__Unicode.__Data.__Table29.__generalCategoryChunk14 ()) 0L codepoint 14L with
+            match Stdlib.String.__Unicode.__Data.__lookupMappingValueIn (Stdlib.String.__Unicode.__Data.__Table00.__uppercaseChunk10 ()) 0L key 6L 25L valueIndex with
             | Some value -> Some value
             | None ->
-                match Stdlib.String.__Unicode.__Data.__lookupRangeIn (Stdlib.String.__Unicode.__Data.__Table30.__generalCategoryChunk15 ()) 0L codepoint 14L with
+                match Stdlib.String.__Unicode.__Data.__lookupMappingValueIn (Stdlib.String.__Unicode.__Data.__Table01.__uppercaseChunk11 ()) 0L key 6L 25L valueIndex with
                 | Some value -> Some value
                 | None ->
                     None
 
-let __graphemeBreakLookupGroup1 (codepoint: Int64) : Stdlib.Option.Option<Int64> =
-    match Stdlib.String.__Unicode.__Data.__lookupRangeIn (Stdlib.String.__Unicode.__Data.__Table33.__graphemeBreakChunk4 ()) 0L codepoint 14L with
+let __indicConjunctBreakLookupGroup0 (codepoint: Int64) : Stdlib.Option.Option<Int64> =
+    match Stdlib.String.__Unicode.__Data.__lookupRangeIn (Stdlib.String.__Unicode.__Data.__Table44.__indicConjunctBreakChunk0 ()) 0L codepoint 14L with
     | Some value -> Some value
     | None ->
-        match Stdlib.String.__Unicode.__Data.__lookupRangeIn (Stdlib.String.__Unicode.__Data.__Table34.__graphemeBreakChunk5 ()) 0L codepoint 14L with
+        match Stdlib.String.__Unicode.__Data.__lookupRangeIn (Stdlib.String.__Unicode.__Data.__Table45.__indicConjunctBreakChunk1 ()) 0L codepoint 14L with
         | Some value -> Some value
         | None ->
-            match Stdlib.String.__Unicode.__Data.__lookupRangeIn (Stdlib.String.__Unicode.__Data.__Table35.__graphemeBreakChunk6 ()) 0L codepoint 14L with
+            match Stdlib.String.__Unicode.__Data.__lookupRangeIn (Stdlib.String.__Unicode.__Data.__Table46.__indicConjunctBreakChunk2 ()) 0L codepoint 14L with
             | Some value -> Some value
             | None ->
-                match Stdlib.String.__Unicode.__Data.__lookupRangeIn (Stdlib.String.__Unicode.__Data.__Table36.__graphemeBreakChunk7 ()) 0L codepoint 14L with
+                match Stdlib.String.__Unicode.__Data.__lookupRangeIn (Stdlib.String.__Unicode.__Data.__Table47.__indicConjunctBreakChunk3 ()) 0L codepoint 14L with
                 | Some value -> Some value
                 | None ->
                     None
 
-let __lookupRangeIn (data: String) (index: Int64) (codepoint: Int64) (recordWidth: Int64) : Stdlib.Option.Option<Int64> =
-    if index >= Stdlib.String.__byteLength data then None
-    else
-        let start_ = Stdlib.String.__Unicode.__Data.__hex data index 6L 0L in
-        let end_ = Stdlib.String.__Unicode.__Data.__hex data (index + 6L) 6L 0L in
-        if codepoint < start_ then None
-        else if codepoint <= end_ then Some (Stdlib.String.__Unicode.__Data.__hex data (index + 12L) 2L 0L)
-        else Stdlib.String.__Unicode.__Data.__lookupRangeIn data (index + recordWidth) codepoint recordWidth
+let __graphemeBreakLookupGroup0 (codepoint: Int64) : Stdlib.Option.Option<Int64> =
+    match Stdlib.String.__Unicode.__Data.__lookupRangeIn (Stdlib.String.__Unicode.__Data.__Table29.__graphemeBreakChunk0 ()) 0L codepoint 14L with
+    | Some value -> Some value
+    | None ->
+        match Stdlib.String.__Unicode.__Data.__lookupRangeIn (Stdlib.String.__Unicode.__Data.__Table30.__graphemeBreakChunk1 ()) 0L codepoint 14L with
+        | Some value -> Some value
+        | None ->
+            match Stdlib.String.__Unicode.__Data.__lookupRangeIn (Stdlib.String.__Unicode.__Data.__Table31.__graphemeBreakChunk2 ()) 0L codepoint 14L with
+            | Some value -> Some value
+            | None ->
+                match Stdlib.String.__Unicode.__Data.__lookupRangeIn (Stdlib.String.__Unicode.__Data.__Table32.__graphemeBreakChunk3 ()) 0L codepoint 14L with
+                | Some value -> Some value
+                | None ->
+                    None
 
-let __hex (data: String) (index: Int64) (remaining: Int64) (acc: Int64) : Int64 =
-    if remaining == 0L then acc
-    else
-        let byte = Stdlib.String.__byteAtUnchecked data index in
-        Stdlib.String.__Unicode.__Data.__hex data (index + 1L) (remaining - 1L) (acc * 16L + Stdlib.String.__Unicode.__Data.__hexDigit byte)
+let __generalCategoryLookupGroup6 (codepoint: Int64) : Stdlib.Option.Option<Int64> =
+    match Stdlib.String.__Unicode.__Data.__lookupRangeIn (Stdlib.String.__Unicode.__Data.__Table39.__generalCategoryChunk24 ()) 0L codepoint 14L with
+    | Some value -> Some value
+    | None ->
+        match Stdlib.String.__Unicode.__Data.__lookupRangeIn (Stdlib.String.__Unicode.__Data.__Table40.__generalCategoryChunk25 ()) 0L codepoint 14L with
+        | Some value -> Some value
+        | None ->
+            match Stdlib.String.__Unicode.__Data.__lookupRangeIn (Stdlib.String.__Unicode.__Data.__Table41.__generalCategoryChunk26 ()) 0L codepoint 14L with
+            | Some value -> Some value
+            | None ->
+                None
 
-let __whiteSpaceLookup (codepoint: Int64) : Stdlib.Option.Option<Int64> =
-    match Stdlib.String.__Unicode.__Data.__whiteSpaceLookupGroup0 codepoint with
+let lookupGeneralCategory (codepoint: Int64) : Stdlib.String.__Unicode.__Data.GeneralCategory = Stdlib.String.__Unicode.__Data.__categoryFromCode (Stdlib.Option.withDefault (Stdlib.String.__Unicode.__Data.__generalCategoryLookup codepoint) 29L)
+let __caseIgnorableLookup (codepoint: Int64) : Stdlib.Option.Option<Int64> =
+    match Stdlib.String.__Unicode.__Data.__caseIgnorableLookupGroup0 codepoint with
     | Some value -> Some value
     | None ->
         None
 
-let lookupCanonicalDecompositionAt (codepoint: Int64) (index: Int64) : Stdlib.Option.Option<Int64> = Stdlib.String.__Unicode.__Data.__canonicalDecompositionLookup codepoint index
+let lookupUppercaseAt (codepoint: Int64) (index: Int64) : Stdlib.Option.Option<Int64> = Stdlib.String.__Unicode.__Data.__uppercaseLookup codepoint index
+let isCaseIgnorable (codepoint: Int64) : Bool = Stdlib.Option.isSome (Stdlib.String.__Unicode.__Data.__caseIgnorableLookup codepoint)

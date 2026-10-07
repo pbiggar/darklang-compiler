@@ -21,6 +21,7 @@ commands are:
 ```bash
 ./build --ai
 ./run-tests --ai
+dune runtest
 python3 scripts/check_compiled_leaks.py
 ./benchmarks/run_benchmarks.sh --verify-parent full
 ```
@@ -39,6 +40,10 @@ the exact candidate.
 The merge train runs `./run-tests --ai` to check the complete already-built
 host suite. Full-suite timing remains useful for diagnosis, but it is not a
 blocking merge-train gate because contention can invalidate a comparison.
+
+Both CI and the merge train also run `dune runtest` for native regression and
+tooling checks, including copied-executable, package transport, cache, fuzzer
+and mutation workflows. These checks complement the full host suite.
 
 The benchmark command compares the retained measurements with the snapshot
 stored by the task branch's upstream merge-base and reports the aggregate

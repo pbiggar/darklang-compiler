@@ -18,7 +18,7 @@ let hkdfExtract (salt: Blob) (inputKeyMaterial: Blob) : Blob =
   Stdlib.Crypto.sha256hmac salt inputKeyMaterial
 
 let hkdfExtract384 (salt: Blob) (inputKeyMaterial: Blob) : Blob =
-  Stdlib.Crypto.sha384hmac salt inputKeyMaterial
+  Stdlib.Crypto.__sha384hmac salt inputKeyMaterial
 
 let __expandNext (key: Blob) (info: Blob) (blocksRemaining: Int64)
   (previous: Blob) (blocks: List<Blob>) (counter: Int64) : Blob =
@@ -47,7 +47,7 @@ let __expandNext384 (key: Blob) (info: Blob) (blocksRemaining: Int64)
   else
     let input = Stdlib.Blob.concat
                   [previous, info, Stdlib.Blob.__fromInt64List [counter]] in
-    let block = Stdlib.Crypto.sha384hmac key input in
+    let block = Stdlib.Crypto.__sha384hmac key input in
     Stdlib.__Tls13.__expandNext384 key info (blocksRemaining - 1L) block
       (Stdlib.List.push blocks block) (counter + 1L)
 

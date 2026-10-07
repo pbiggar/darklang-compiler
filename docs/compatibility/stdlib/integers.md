@@ -47,10 +47,10 @@ The arbitrary-width implementation is in
 eight fixed-width module files, `Int128.dark`, and `UInt128.dark`. The 128-bit
 modules perform limb arithmetic directly and use arbitrary-width values only
 at operations and conversions that require them. Typed representation views
-are ownership-neutral, while newly computed fixed blocks are owned. `ir/anf/ANF.fs`
+are ownership-neutral, while newly computed fixed blocks are owned. `src/ir/anf/ANF.ml`
 classifies `Int` as a managed dynamic value and both 128-bit types as managed
 16-byte fixed blocks, including when nested in closures and heap shapes. Fixed-width
-shifts and arithmetic lower in `MIR_to_LIR.fs`; signed right shift is
+shifts and arithmetic lower in `src/passes/mir/MIR_to_LIR.ml`; signed right shift is
 arithmetic, unsigned right shift is logical, and counts use the interpreter's
 machine-width masks on both ARM64 and x86-64.
 
@@ -73,7 +73,7 @@ live package lookup. Its compile request receives the immutable
 `Darklang.Test.Values.int8Value` location, concrete `Int8` result type, and
 the available evaluator expression `5y`. Materialization generates the typed
 `Builtin.pmEvaluateValue<Int8>` case from that entry. The focused parity test
-in `ValueSearchCatalogTests.fs` calls that generated evaluator and supplies its
+in `test/compiler-passes/ValueSearchCatalogTests.ml` calls that generated evaluator and supplies its
 returned `5y` to `Stdlib.Int8.add(value, 5y)`, asserting the same `10y` result.
 
 The executable parity corpus is the eleven files under

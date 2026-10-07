@@ -63,7 +63,7 @@ Candidates at the same winning precedence are sorted by rendered identity.
 
 ## Identity and boundary
 
-`NameResolution.fs` represents qualified names, reference context, module,
+`src/NameResolution.ml` represents qualified names, reference context, module,
 package and builtin namespaces, local/module/package/builtin values and
 functions, constructors, user and builtin types, candidate provenance,
 successful resolution, and structured errors as discriminated unions. A pure

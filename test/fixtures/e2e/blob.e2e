@@ -32,3 +32,10 @@ Stdlib.Blob.fromBase64 "Z g" = Error "Invalid base64 string: The input is not a 
 
 Stdlib.Blob.fromBase64 "Z===" = Error "Invalid base64 string: The input is not a valid Base-64 string as it contains a non-base 64 character, more than two padding characters, or an illegal character among the padding characters."
 
+Stdlib.Blob.toString (Stdlib.Blob.fromList ([192uy, 128uy])) = Error "Invalid UTF-8: Unable to translate bytes [C0] at index 0 from specified code page to Unicode."
+
+Stdlib.Blob.toString (Stdlib.Blob.fromList ([226uy])) = Error "Invalid UTF-8: Unable to translate bytes [E2] at index 0 from specified code page to Unicode."
+
+Stdlib.Blob.toString (Stdlib.Blob.fromList ([237uy, 160uy, 128uy])) = Error "Invalid UTF-8: Unable to translate bytes [ED] at index 0 from specified code page to Unicode."
+
+Stdlib.Blob.toString (Stdlib.Blob.fromList ([244uy, 144uy, 128uy, 128uy])) = Error "Invalid UTF-8: Unable to translate bytes [F4] at index 0 from specified code page to Unicode."

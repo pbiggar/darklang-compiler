@@ -21,26 +21,41 @@ Source type syntax is defined in
 `src/frontend/interpreter/WrittenTypes.ml`. Resolved semantic
 types are defined in `src/AST.ml`:
 
-```fsharp
-type SemanticType =
-    | TInt8 | TInt16 | TInt32 | TInt64 | TInt128
-    | TUInt8 | TUInt16 | TUInt32 | TUInt64 | TUInt128
-    | TBool | TFloat64 | TString | TBlob | TChar | TUnit
-    | TNever
-    | TFunction of SemanticType list * SemanticType
-    | TTuple of SemanticType list
-    | TRecord of string * SemanticType list
-    | TSum of string * SemanticType list
-    | TList of SemanticType
-    | TStream of SemanticType
-    | TVar of string
-    | TInferenceVar of displayName:string * identity:string
-    | TInternalRawPtr
-    | TDict of keyType:SemanticType * valueType:SemanticType
+```ocaml
+type semanticType =
+  | TInt8
+  | TInt16
+  | TInt32
+  | TInt64
+  | TInt128
+  | TInt
+  | TUInt8
+  | TUInt16
+  | TUInt32
+  | TUInt64
+  | TUInt128
+  | TBool
+  | TFloat64
+  | TString
+  | TBlob
+  | TChar
+  | TDateTime
+  | TUnit
+  | TNever
+  | TFunction of semanticType list * semanticType
+  | TTuple of semanticType list
+  | TRecord of string * semanticType list
+  | TSum of string * semanticType list
+  | TList of semanticType
+  | TStream of semanticType
+  | TVar of string
+  | TInferenceVar of string * string
+  | TInternalRawPtr
+  | TDict of semanticType * semanticType
 ```
 
 The interpreter parser returns `WrittenTypes`; `WrittenChecking` resolves
-source annotations and names directly into `CheckedAST.Program`. `TNever` is
+source annotations and names directly into `CheckedAST.program`. `TNever` is
 a semantic bottom type and cannot occur in written source. `TInternalRawPtr` is an
 internal-signature capability: public parsing rejects `RawPtr`, while
 privileged compiler sources use it for the unsafe runtime-support layer.
@@ -58,29 +73,26 @@ The type checker maintains several registries:
 
 ### TypeEnv
 Maps variable names to types:
-```fsharp
-type TypeEnv = Map<string, SemanticType>
+```ocaml
+type typeEnv = AST.semanticType StringOrder.Map.t
 ```
 
 ### TypeRegistry
 Maps record type names to field definitions:
-```fsharp
-type TypeRegistry = Map<string, (string * SemanticType) list>
-// "Point" -> [("x", TInt64); ("y", TInt64)]
+```ocaml
+type typeRegistry = (string * AST.semanticType) list StringOrder.Map.t
 ```
 
 ### SumTypeRegistry
 Maps sum type names to variants:
-```fsharp
-type SumTypeRegistry = Map<string, (string * int * SemanticType option) list>
-// "Option" -> [("Some", 0, Some TVar "t"); ("None", 1, None)]
+```ocaml
+type sumTypeRegistry = (string * int * AST.semanticType list) list StringOrder.Map.t
 ```
 
 ### VariantLookup
 Maps variant names to their containing type:
-```fsharp
-type VariantLookup = Map<string, (string * string list * int * SemanticType option)>
-// "Some" -> ("Option", ["t"], 0, Some TVar "t")
+```ocaml
+type variantLookup = (string * string list * int * AST.semanticType list) StringOrder.Map.t
 ```
 
 ## Type Checking Algorithm
@@ -160,8 +172,8 @@ identity 42         // Inferred from argument
 
 When instantiating generic functions, type parameters are freshened to avoid
 capture:
-```fsharp
-let freshenTypeParams (typeParams: string list) : string list * Map<string, string>
+```ocaml
+val freshenTypeParams : string option -> string list -> string list * string StringOrder.Map.t
 ```
 
 ### Local Unification
@@ -169,10 +181,10 @@ let freshenTypeParams (typeParams: string list) : string list * Map<string, stri
 Generic calls use local unification to match parameter and return type patterns
 against concrete call-site types:
 
-```fsharp
-type Substitution = Map<string, Type>
-let unifyTypes (pattern: Type) (actual: Type) : Result<Substitution, string>
-let applySubst (subst: Substitution) (typ: Type) : Type
+```ocaml
+type substitution = AST.semanticType StringOrder.Map.t
+val unifyTypes : AST.semanticType -> AST.semanticType -> (Types.substitution, string) result
+val applySubst : substitution -> AST.semanticType -> AST.semanticType
 ```
 
 This supports generic type argument inference without introducing whole-program
@@ -180,15 +192,15 @@ constraint solving.
 
 ## Error Types
 
-```fsharp
-type TypeError =
-    | TypeMismatch of expected:Type * actual:Type * context:string
-    | IfBranchTypeMismatch of expected:Type * actual:Type
-    | UndefinedVariable of name:string
-    | UndefinedCallTarget of name:string
-    | MissingTypeAnnotation of context:string
-    | InvalidOperation of op:string * types:Type list
-    | GenericError of string
+```ocaml
+type typeError =
+  | TypeMismatch of AST.semanticType * AST.semanticType * string
+  | IfBranchTypeMismatch of AST.semanticType * AST.semanticType
+  | UndefinedVariable of string | UndefinedCallTarget of string | MissingTypeAnnotation of string
+  | InvalidOperation of string * AST.semanticType list
+  | IncompatibleEqualityOperands of AST.semanticType * AST.semanticType
+  | IncompatibleOrderingOperands of AST.semanticType * AST.semanticType
+  | PolymorphicRecursion of string | ResolutionFailure of NameResolution.resolutionError | GenericError of string
 ```
 
 ## Type Inference for Expressions

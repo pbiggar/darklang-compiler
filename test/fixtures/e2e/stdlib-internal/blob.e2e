@@ -1,9 +1,0 @@
-// Compiler-only implementation coverage; internal mode is restricted to this directory.
-
-Stdlib.Blob.toString (Stdlib.Blob.fromList ([192uy, 128uy])) = Error "Invalid UTF-8: Unable to translate bytes [C0] at index 0 from specified code page to Stdlib.String.__Unicode."
-
-Stdlib.Blob.toString (Stdlib.Blob.fromList ([226uy])) = Error "Invalid UTF-8: Unable to translate bytes [E2] at index 0 from specified code page to Stdlib.String.__Unicode."
-
-Stdlib.Blob.toString (Stdlib.Blob.fromList ([237uy, 160uy, 128uy])) = Error "Invalid UTF-8: Unable to translate bytes [ED] at index 0 from specified code page to Stdlib.String.__Unicode."
-
-Stdlib.Blob.toString (Stdlib.Blob.fromList ([244uy, 144uy, 128uy, 128uy])) = Error "Invalid UTF-8: Unable to translate bytes [F4] at index 0 from specified code page to Stdlib.String.__Unicode."

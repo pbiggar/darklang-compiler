@@ -57,6 +57,10 @@ and merge-train handoff rules elsewhere in these guidelines for Work VMs.
 
 ## OCaml conventions
 
+- The root `.ocamlformat` pins the standard default profile used for the
+  post-port cleanup. To repeat that formatting pass, run
+  `python3 scripts/format-ocaml.py`; use `--check` to inspect without editing.
+
 - Preserve functional compiler algorithms and explicit interfaces. Localized
   parser, cache and host-I/O mutation is permitted. Do not use partial
   lookup helpers; host adapters may preserve caught host-API exceptions.
@@ -71,10 +75,12 @@ and merge-train handoff rules elsewhere in these guidelines for Work VMs.
 - Keep standard-library sources in the package directories documented in
   [source organization](docs/compiler/source-organization.md#standard-library-layout).
   Register new or moved paths in `library-sources.list`, preserving declaration
-  order. Prefix compiler-only support files and private fragments with `__`,
+  order. Prefix compiler-only support files, module declarations and private
+  functions/types with `__`; private fragments of a public module retain that
+  module's name. Filename prefixes alone do not enforce visibility.
   and update the [source inventory](docs/compiler/library-sources.md) against
-  the pinned interpreter, including nested modules. Filename prefixes do not
-  change language visibility. Sources are embedded at build time; do not add a
+  the pinned interpreter, including nested modules. Sources are embedded at
+  build time; do not add a
   share installation or a runtime dependency on the source tree. Update
   generators and source-path references when moving generated files.
 - Rely on type inference for module-scoped generic function and value uses.
@@ -113,6 +119,8 @@ and merge-train handoff rules elsewhere in these guidelines for Work VMs.
 - Do not run x64 tests on an ARM64 host unless explicitly testing x64 work.
   Likewise, do not run ARM64 tests on an x64 host unless explicitly testing
   ARM64 work.
+- Run `dune runtest` for native regression and tooling checks as well; the
+  complete host suite does not execute these aliases.
 - Fix compiler warnings and errors before committing.
 - Validate performance against the task branch's parent with
   `./benchmarks/run_benchmarks.sh --verify-parent full`. This performs the full

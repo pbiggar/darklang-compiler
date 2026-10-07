@@ -39,9 +39,9 @@ and releases after SSA construction and escape analysis.
 
 The `passes/anf/ownership/` modules separate type facts, return/alias analysis,
 shape planning, cleanup placement, and expression insertion. Shared shapes and
-release plans live in `memory/MemoryModel.fs`; classification and plan building
-live in `memory/MemoryPlanning.fs`, and stable keys in
-`memory/ReleasePlanFingerprint.fs`. None of these memory modules depends on ANF.
+release plans live in `src/memory/MemoryModel.ml`; classification and plan building
+live in `src/memory/MemoryPlanning.ml`, and stable keys in
+`src/memory/ReleasePlanFingerprint.ml`. None of these memory modules depends on ANF.
 
 Important current rules:
 

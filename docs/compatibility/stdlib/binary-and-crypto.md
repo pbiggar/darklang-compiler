@@ -57,7 +57,7 @@ process-local address.
 | `Blob.toHex` | Uppercase hexadecimal. |
 | `Blob.fromHex` odd length | `Invalid hex string: The input is not a valid hex string as its length is not a multiple of 2.` |
 | `Blob.fromHex` non-hex | `Invalid hex string: The input is not a valid hex string as it contains a non-hex character.` |
-| `Blob.toString` | Strict UTF-8; reject overlong, surrogate, truncated, bad-continuation, and out-of-range sequences before allocating a String. The error is `Invalid UTF-8: Unable to translate bytes [XX] at index N from specified code page to Stdlib.String.__Unicode.` for the first invalid sequence. |
+| `Blob.toString` | Strict UTF-8; reject overlong, surrogate, truncated, bad-continuation, and out-of-range sequences before allocating a String. The error is `Invalid UTF-8: Unable to translate bytes [XX] at index N from specified code page to Unicode.` for the first invalid sequence. |
 | `Blob.fromBase64` | Replace URL alphabet and infer padding before applying .NET-compatible whitespace handling. Errors retain the detailed `Invalid base64 string: ` prefix and pinned `FormatException` text. |
 | `Base64.decode` | Accept standard/URL alphabets, padding, unpadded 2/3-character tails, and permissive unused bits. Reject all whitespace, illegal characters, length 1 modulo 4, excessive/nonterminal padding, and return only `Not a valid base64 string`. |
 | `Base64.encode`, `urlEncode` | Always padded; URL encoding substitutes `-` and `_`. |
@@ -82,9 +82,9 @@ and `X509.fs`; identity and rendering come from
 are `packages/darklang/stdlib/*` plus `backend/tests/Tests/Blob.Tests.fs`.
 
 Compiler type/value registration is in `src/AST.ml` and
-`Stdlib.fs`. Name resolution and equality admission are in
-`frontend/TypeChecking.fs`; value lowering, structural equality, and Blob
-ownership flow through `passes/anf/AST_to_ANF.fs`, ANF/MIR/LIR, reference-count
+`src/DarkStdlib.ml`. Name resolution and equality admission are in
+`src/frontend/TypeChecking.ml`; value lowering, structural equality, and Blob
+ownership flow through `src/passes/anf/AST_to_ANF.ml`, ANF/MIR/LIR, reference-count
 insertion, and both native backends. Public implementations are
 `StdLib/Blob.dark`, `Base64.dark`, `Crypto.dark`, and `X509.dark`.
 

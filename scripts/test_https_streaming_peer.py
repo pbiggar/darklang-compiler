@@ -77,7 +77,7 @@ match Stdlib.Cli.FileSystem.readFile "{ca_cert}" with
   match Stdlib.__Tls13Client.parsePemBundle pem with
   | Error message -> Stdlib.printLine message
   | Ok roots ->
-    match Stdlib.HttpClient.streamTrustedWithRoots roots "GET" "https://localhost:{port}/" [] Stdlib.Blob.empty with
+    match Stdlib.HttpClient.__streamTrustedWithRoots roots "GET" "https://localhost:{port}/" [] Stdlib.Blob.empty with
     | Error _ -> Stdlib.printLine "Stream request failed"
     | Ok response ->
       let bytes = Stdlib.Stream.toBlob response.body in

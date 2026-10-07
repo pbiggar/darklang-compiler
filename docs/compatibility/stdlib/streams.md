@@ -14,7 +14,7 @@ Interpreter anchors are `packages/darklang/stdlib/stream.dark`,
 are `StdLib/Stream.dark`, `src/AST.ml`,
 `src/frontend/TypeChecking.ml`,
 `src/passes/anf/RefCountInsertion.ml`, and both
-`backend/{arm64,x64}/CodeGen.fs`.
+`src/backend/arm64/Backend_Arm64_CodeGen.ml` and `src/backend/x64/CodeGen_X86_64.ml`.
 
 ## Public operations
 

@@ -28,47 +28,116 @@
    RawAlloc should branch to a shared overflow label, rather than inlining
    the full overflow trap sequence at each allocation site.
 *)
-val testGeneratedCodeEliminatesSelfMoves : unit -> (unit,string) result
-val testSleepUsesNormalizedInterruptSafeNanosleep : unit -> (unit,string) result
-val testCliHostOperationsUseTargetKernelABIs : unit -> (unit,string) result
-val testListRetainHelperClearsTagWithImmediateMask : unit -> (unit,string) result
-val testDictRetainHelperClearsTagWithImmediateMask : unit -> (unit,string) result
-val testDictReleaseHelperClearsTagWithImmediateMask : unit -> (unit,string) result
-val testDictReleaseHelperClearsChildTagWithImmediateMask : unit -> (unit,string) result
-val testDictHelpersUseConstantTimeBitmapPopcount : unit -> (unit,string) result
-val testListReleaseHelperClearsTagWithImmediateMask : unit -> (unit,string) result
-val testListReleaseHelperClearsChildTagWithImmediateMask : unit -> (unit,string) result
-val testPeepholeFusesBitClearSequence : unit -> (unit,string) result
-val testPeepholeFallsThroughToTrueTarget : unit -> (unit,string) result
-val testPeepholeCombinesOperandsAndMemoryPairs : unit -> (unit,string) result
-val testPeepholeCombinesEveryExtensionAndFloatStorePairs : unit -> (unit,string) result
-val testPeepholeCombinesShiftedSubtraction : unit -> (unit,string) result
-val testPeepholePreservesSharedSourceShiftFusionAcrossBranch : unit -> (unit,string) result
-val testArm64FLoadEncodableConstantsUseImmediate : unit -> (unit,string) result
-val testRawAllocUsesSharedHeapOverflowPath : unit -> (unit,string) result
-val testRuntimePrintStringLengthUsesFullImmediate : unit -> (unit,string) result
-val testRawSlotInitPureEnumDoesNotEmitGenericRetain : unit -> (unit,string) result
-val testListTuple3BytesListDictListValueUsesTypedDictHelper : unit -> (unit,string) result
-val testListTuple3StringListDictListValueUsesTypedDictHelper : unit -> (unit,string) result
-val testListTuple3ClosureListDictListValueUsesTypedDictHelper : unit -> (unit,string) result
-val testListTuple4StringBytesListDictListValueUsesTypedDictHelper : unit -> (unit,string) result
-val testListTuple4ClosureStringListDictListValueUsesTypedDictHelper : unit -> (unit,string) result
-val testListTuple4ClosureBytesListDictListValueUsesTypedDictHelper : unit -> (unit,string) result
-val testListDictListValueUsesTypedDictHelper : unit -> (unit,string) result
-val testListDictStringPayloadUsesPlannedDictHelper : unit -> (unit,string) result
-val testListNestedTupleDictListValueUsesTypedDictHelper : unit -> (unit,string) result
-val testListTuple2NestedTupleDictListValueUsesTypedDictHelper : unit -> (unit,string) result
-val testListTuple4NestedTupleDynamicDictListValueUsesTypedDictHelper : unit -> (unit,string) result
-val testListTuple4NestedRecordMiddleDictListValueUsesTypedDictHelper : unit -> (unit,string) result
-val testListTuple4NestedTupleClosureDictListValueUsesTypedDictHelper : unit -> (unit,string) result
-val testListSumTuple3DictListValueUsesTypedDictHelper : unit -> (unit,string) result
-val testListSumTuple4DictListValueUsesTypedDictHelper : unit -> (unit,string) result
-val testListSumTuple3ClosureDictListValueUsesTypedDictHelper : unit -> (unit,string) result
-val testListSumTuple4ClosureDictListValueUsesTypedDictHelper : unit -> (unit,string) result
-val testListSumTuple4ClosureStringDictListValueUsesTypedDictHelper : unit -> (unit,string) result
-val testDictDictListValueUsesPlannedDictHelper : unit -> (unit,string) result
-val testDictStringKeyUsesPlannedDictHelper : unit -> (unit,string) result
-val testDictStringValueUsesPlannedDictHelper : unit -> (unit,string) result
-val testDictStringKeyListValueUsesPlannedDictHelper : unit -> (unit,string) result
-val testDictStringKeyTupleValueUsesPlannedDictHelper : unit -> (unit,string) result
-val testDictStringKeyValuePlannedHelperReleasesCollisionPayloads : unit -> (unit,string) result
+val testGeneratedCodeEliminatesSelfMoves : unit -> (unit, string) result
+
+val testSleepUsesNormalizedInterruptSafeNanosleep :
+  unit -> (unit, string) result
+
+val testCliHostOperationsUseTargetKernelABIs : unit -> (unit, string) result
+
+val testListRetainHelperClearsTagWithImmediateMask :
+  unit -> (unit, string) result
+
+val testDictRetainHelperClearsTagWithImmediateMask :
+  unit -> (unit, string) result
+
+val testDictReleaseHelperClearsTagWithImmediateMask :
+  unit -> (unit, string) result
+
+val testDictReleaseHelperClearsChildTagWithImmediateMask :
+  unit -> (unit, string) result
+
+val testDictHelpersUseConstantTimeBitmapPopcount : unit -> (unit, string) result
+
+val testListReleaseHelperClearsTagWithImmediateMask :
+  unit -> (unit, string) result
+
+val testListReleaseHelperClearsChildTagWithImmediateMask :
+  unit -> (unit, string) result
+
+val testPeepholeFusesBitClearSequence : unit -> (unit, string) result
+val testPeepholeFallsThroughToTrueTarget : unit -> (unit, string) result
+val testPeepholeCombinesOperandsAndMemoryPairs : unit -> (unit, string) result
+
+val testPeepholeCombinesEveryExtensionAndFloatStorePairs :
+  unit -> (unit, string) result
+
+val testPeepholeCombinesShiftedSubtraction : unit -> (unit, string) result
+
+val testPeepholePreservesSharedSourceShiftFusionAcrossBranch :
+  unit -> (unit, string) result
+
+val testArm64FLoadEncodableConstantsUseImmediate : unit -> (unit, string) result
+val testRawAllocUsesSharedHeapOverflowPath : unit -> (unit, string) result
+
+val testRuntimePrintStringLengthUsesFullImmediate :
+  unit -> (unit, string) result
+
+val testRawSlotInitPureEnumDoesNotEmitGenericRetain :
+  unit -> (unit, string) result
+
+val testListTuple3BytesListDictListValueUsesTypedDictHelper :
+  unit -> (unit, string) result
+
+val testListTuple3StringListDictListValueUsesTypedDictHelper :
+  unit -> (unit, string) result
+
+val testListTuple3ClosureListDictListValueUsesTypedDictHelper :
+  unit -> (unit, string) result
+
+val testListTuple4StringBytesListDictListValueUsesTypedDictHelper :
+  unit -> (unit, string) result
+
+val testListTuple4ClosureStringListDictListValueUsesTypedDictHelper :
+  unit -> (unit, string) result
+
+val testListTuple4ClosureBytesListDictListValueUsesTypedDictHelper :
+  unit -> (unit, string) result
+
+val testListDictListValueUsesTypedDictHelper : unit -> (unit, string) result
+
+val testListDictStringPayloadUsesPlannedDictHelper :
+  unit -> (unit, string) result
+
+val testListNestedTupleDictListValueUsesTypedDictHelper :
+  unit -> (unit, string) result
+
+val testListTuple2NestedTupleDictListValueUsesTypedDictHelper :
+  unit -> (unit, string) result
+
+val testListTuple4NestedTupleDynamicDictListValueUsesTypedDictHelper :
+  unit -> (unit, string) result
+
+val testListTuple4NestedRecordMiddleDictListValueUsesTypedDictHelper :
+  unit -> (unit, string) result
+
+val testListTuple4NestedTupleClosureDictListValueUsesTypedDictHelper :
+  unit -> (unit, string) result
+
+val testListSumTuple3DictListValueUsesTypedDictHelper :
+  unit -> (unit, string) result
+
+val testListSumTuple4DictListValueUsesTypedDictHelper :
+  unit -> (unit, string) result
+
+val testListSumTuple3ClosureDictListValueUsesTypedDictHelper :
+  unit -> (unit, string) result
+
+val testListSumTuple4ClosureDictListValueUsesTypedDictHelper :
+  unit -> (unit, string) result
+
+val testListSumTuple4ClosureStringDictListValueUsesTypedDictHelper :
+  unit -> (unit, string) result
+
+val testDictDictListValueUsesPlannedDictHelper : unit -> (unit, string) result
+val testDictStringKeyUsesPlannedDictHelper : unit -> (unit, string) result
+val testDictStringValueUsesPlannedDictHelper : unit -> (unit, string) result
+
+val testDictStringKeyListValueUsesPlannedDictHelper :
+  unit -> (unit, string) result
+
+val testDictStringKeyTupleValueUsesPlannedDictHelper :
+  unit -> (unit, string) result
+
+val testDictStringKeyValuePlannedHelperReleasesCollisionPayloads :
+  unit -> (unit, string) result

@@ -3,4 +3,9 @@ type grammar = {
   parseExpr : ParserSupport.parserState -> int -> WrittenTypes.expr * int;
   parseBlock : ParserSupport.parserState -> int -> WrittenTypes.expr * int;
 }
-val parseFile : grammar -> ParserSupport.ItemScope.t -> ParserSupport.parserState -> ParserSupport.parseResult
+
+val parseFile :
+  grammar ->
+  ParserSupport.ItemScope.t ->
+  ParserSupport.parserState ->
+  ParserSupport.parseResult

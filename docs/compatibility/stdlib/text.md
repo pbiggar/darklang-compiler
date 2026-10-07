@@ -122,7 +122,7 @@ not source-resolvable; public text behavior is provided only by the parity API.
   EGC, scalar construction, UTF-16 versus EGC indexes, and regex match/split
   behavior.
 - The pinned upstream `char.dark`, `string.dark`, and `regex.dark` files are
-  registered in `TestRunner.fs`. The String fixture has only harness adaptations:
+  registered in `test/test-suite-tooling/TestRunner.ml`. The String fixture has only harness adaptations:
   its interpreter side-effect callback assertion is omitted, `newline()` uses
   the compiler's existing spelling, and the unrelated, unavailable `Slugify`
   module cases remain outside this approved text-parity scope. Focused results

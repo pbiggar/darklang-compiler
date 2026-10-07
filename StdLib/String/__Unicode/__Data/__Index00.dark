@@ -27,17 +27,17 @@ let __generalCategoryLookup (codepoint: Int64) : Stdlib.Option.Option<Int64> =
                             | None ->
                                 None
 
-let __uppercaseLookupGroup1 (key: Int64) (valueIndex: Int64) : Stdlib.Option.Option<Int64> =
-    match Stdlib.String.__Unicode.__Data.__lookupMappingValueIn (Stdlib.String.__Unicode.__Data.__Table58.__uppercaseChunk4 ()) 0L key 6L 25L valueIndex with
+let __lowercaseLookupGroup1 (key: Int64) (valueIndex: Int64) : Stdlib.Option.Option<Int64> =
+    match Stdlib.String.__Unicode.__Data.__lookupMappingValueIn (Stdlib.String.__Unicode.__Data.__Table07.__lowercaseChunk4 ()) 0L key 6L 19L valueIndex with
     | Some value -> Some value
     | None ->
-        match Stdlib.String.__Unicode.__Data.__lookupMappingValueIn (Stdlib.String.__Unicode.__Data.__Table59.__uppercaseChunk5 ()) 0L key 6L 25L valueIndex with
+        match Stdlib.String.__Unicode.__Data.__lookupMappingValueIn (Stdlib.String.__Unicode.__Data.__Table08.__lowercaseChunk5 ()) 0L key 6L 19L valueIndex with
         | Some value -> Some value
         | None ->
-            match Stdlib.String.__Unicode.__Data.__lookupMappingValueIn (Stdlib.String.__Unicode.__Data.__Table60.__uppercaseChunk6 ()) 0L key 6L 25L valueIndex with
+            match Stdlib.String.__Unicode.__Data.__lookupMappingValueIn (Stdlib.String.__Unicode.__Data.__Table09.__lowercaseChunk6 ()) 0L key 6L 19L valueIndex with
             | Some value -> Some value
             | None ->
-                match Stdlib.String.__Unicode.__Data.__lookupMappingValueIn (Stdlib.String.__Unicode.__Data.__Table61.__uppercaseChunk7 ()) 0L key 6L 25L valueIndex with
+                match Stdlib.String.__Unicode.__Data.__lookupMappingValueIn (Stdlib.String.__Unicode.__Data.__Table10.__lowercaseChunk7 ()) 0L key 6L 19L valueIndex with
                 | Some value -> Some value
                 | None ->
                     None
@@ -57,39 +57,39 @@ let __generalCategoryLookupGroup2 (codepoint: Int64) : Stdlib.Option.Option<Int6
                 | None ->
                     None
 
-let __lookupMappingValueIn (data: String) (index: Int64) (key: Int64) (keyWidth: Int64) (recordWidth: Int64) (valueIndex: Int64) : Stdlib.Option.Option<Int64> =
-    if index >= Stdlib.String.__byteLength data then None
-    else
-        let found = Stdlib.String.__Unicode.__Data.__hex data index keyWidth 0L in
-        if found == key then
-            let length = Stdlib.String.__Unicode.__Data.__hex data (index + keyWidth) 1L 0L in
-            if valueIndex < length then Some (Stdlib.String.__Unicode.__Data.__hex data (index + keyWidth + 1L + valueIndex * 6L) 6L 0L) else None
-        else if found > key then None
-        else Stdlib.String.__Unicode.__Data.__lookupMappingValueIn data (index + recordWidth) key keyWidth recordWidth valueIndex
+let sourceHashes () : List<(String * String)> =
+    [
+        ("CompositionExclusions.txt", "2f239196ef3b5b61db5cc476e9bd80f534d15aa1b74e1be1dea5d042a344c85f"),
+        ("DerivedCoreProperties.txt", "24c7fed1195c482faaefd5c1e7eb821c5ee1fb6de07ecdbaa64b56a99da22c08"),
+        ("GraphemeBreakProperty.txt", "d6b51d1d2ae5c33b451b7ed994b48f1f4dc62b2272a5831e7fd418514a6bae89"),
+        ("PropList.txt", "130dcddcaadaf071008bdfce1e7743e04fdfbc910886f017d9f9ac931d8c64dd"),
+        ("SpecialCasing.txt", "efc25faf19de21b92c1194c111c932e03d2a5eaf18194e33f1156e96de4c9588"),
+        ("UnicodeData.txt", "2e1efc1dcb59c575eedf5ccae60f95229f706ee6d031835247d843c11d96470c"),
+        ("emoji-data.txt", "2cb2bb9455cda83e8481541ecf5b6dfda66a3bb89efa3fa7c5297eccf607b72b")
+    ]
 
-let __casedLookupGroup0 (codepoint: Int64) : Stdlib.Option.Option<Int64> =
-    match Stdlib.String.__Unicode.__Data.__lookupRangeIn (Stdlib.String.__Unicode.__Data.__Table48.__casedChunk0 ()) 0L codepoint 14L with
+let __lowercaseLookup (key: Int64) (valueIndex: Int64) : Stdlib.Option.Option<Int64> =
+    match Stdlib.String.__Unicode.__Data.__lowercaseLookupGroup0 key valueIndex with
     | Some value -> Some value
     | None ->
-        match Stdlib.String.__Unicode.__Data.__lookupRangeIn (Stdlib.String.__Unicode.__Data.__Table49.__casedChunk1 ()) 0L codepoint 14L with
+        match Stdlib.String.__Unicode.__Data.__lowercaseLookupGroup1 key valueIndex with
         | Some value -> Some value
         | None ->
-            None
+            match Stdlib.String.__Unicode.__Data.__lowercaseLookupGroup2 key valueIndex with
+            | Some value -> Some value
+            | None ->
+                None
 
-let __canonicalCompositionLookup (key: Int64) (valueIndex: Int64) : Stdlib.Option.Option<Int64> =
-    match Stdlib.String.__Unicode.__Data.__canonicalCompositionLookupGroup0 key valueIndex with
-    | Some value -> Some value
-    | None ->
-        match Stdlib.String.__Unicode.__Data.__canonicalCompositionLookupGroup1 key valueIndex with
-        | Some value -> Some value
-        | None ->
-            None
+let __indicFromCode (value: Int64) : Stdlib.String.__Unicode.__Data.IndicConjunctBreak =
+    if value == 1L then Stdlib.String.__Unicode.__Data.IndicConjunctBreak.InCBConsonant
+    else if value == 2L then Stdlib.String.__Unicode.__Data.IndicConjunctBreak.InCBExtend
+    else if value == 3L then Stdlib.String.__Unicode.__Data.IndicConjunctBreak.InCBLinker
+    else Stdlib.String.__Unicode.__Data.IndicConjunctBreak.InCBNone
 
-let __casedLookup (codepoint: Int64) : Stdlib.Option.Option<Int64> =
-    match Stdlib.String.__Unicode.__Data.__casedLookupGroup0 codepoint with
-    | Some value -> Some value
-    | None ->
-        None
+let __hexDigit (byte: Int64) : Int64 =
+    if byte >= 48L && byte <= 57L then byte - 48L
+    else if byte >= 65L && byte <= 70L then byte - 55L
+    else Builtin.testRuntimeError "Invalid generated Unicode data"
 
 let isExtendedPictographic (codepoint: Int64) : Bool = Stdlib.Option.isSome (Stdlib.String.__Unicode.__Data.__extendedPictographicLookup codepoint)
-let isCased (codepoint: Int64) : Bool = Stdlib.Option.isSome (Stdlib.String.__Unicode.__Data.__casedLookup codepoint)
+let unicodeVersion () : String = "17.0.0"

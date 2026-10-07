@@ -6,6 +6,7 @@
 (* Tokenizer.ml - Complete range and literal token domain. *)
 type pos = { row : int; column : int }
 type tokenRange = { start : pos; end_ : pos }
+
 (*
    Token types for the lexer.
    Default integer — arbitrary-precision `Int` (bare `1`)

@@ -69,8 +69,9 @@ temporary suffix strings.
 
 String equality is a representation-level compiler operation:
 
-```fsharp
-| CanonicalBufferEq of dest:Reg * kind:CanonicalBufferKind * left:Operand * right:Operand
+```ocaml
+(* Excerpt of LIR.instr. *)
+| CanonicalBufferEq of reg * MemoryModel.canonicalBufferKind * operand * operand
 ```
 
 Equality first checks pointer identity and byte length, then compares full
@@ -93,9 +94,10 @@ Dynamic strings are now part of the compiler-managed RC model:
 
 The IR operations are:
 
-```fsharp
-| RefCountIncString of str:Operand
-| RefCountDecString of str:Operand
+```ocaml
+(* Excerpt of LIR.instr. *)
+| RefCountIncString of operand
+| RefCountDecString of operand
 ```
 
 Both operations access the refcount directly at the value pointer.

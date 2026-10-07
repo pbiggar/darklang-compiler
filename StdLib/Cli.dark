@@ -3,36 +3,36 @@
 module Darklang.Stdlib.Cli
 
 type ExecutionOutcome = { exitCode: Int, stdout: String, stderr: String }
-type NativeOutput = { exitCode: Int64, stdout: String, stderr: String }
-type NativePosixError = { errno: Int64, message: String }
-type NativeProcessRequest = { mode: Int64, argv: String, cwd: String, environment: String, timeoutMs: Int64, pipelineArgv: String }
-type NativeProcessOutput = { errno: Int64, exitCode: Int64, stdout: String, stderr: String, timedOut: Bool }
+type __NativeOutput = { exitCode: Int64, stdout: String, stderr: String }
+type __NativePosixError = { errno: Int64, message: String }
+type __NativeProcessRequest = { mode: Int64, argv: String, cwd: String, environment: String, timeoutMs: Int64, pipelineArgv: String }
+type __NativeProcessOutput = { errno: Int64, exitCode: Int64, stdout: String, stderr: String, timedOut: Bool }
 
 // Replaced by the native CLI effect during AST-to-ANF conversion.
-let __execute (command: String) : Stdlib.Cli.NativeOutput =
-    Stdlib.Cli.NativeOutput { exitCode = -1L, stdout = "", stderr = "native CLI execution unavailable" }
-let __runProcess (request: Stdlib.Cli.NativeProcessRequest) : Stdlib.Cli.NativeProcessOutput =
-    Stdlib.Cli.NativeProcessOutput { errno = 38L, exitCode = -1L, stdout = "", stderr = "native process execution unavailable", timedOut = false }
+let __execute (command: String) : Stdlib.Cli.__NativeOutput =
+    Stdlib.Cli.__NativeOutput { exitCode = -1L, stdout = "", stderr = "native CLI execution unavailable" }
+let __runProcess (request: Stdlib.Cli.__NativeProcessRequest) : Stdlib.Cli.__NativeProcessOutput =
+    Stdlib.Cli.__NativeProcessOutput { errno = 38L, exitCode = -1L, stdout = "", stderr = "native process execution unavailable", timedOut = false }
 
 let __hostOSCode () : Int64 = -1L
 let __hostArchitectureCode () : Int64 = -1L
-let __hostname () : Stdlib.Result.Result<String, Stdlib.Cli.NativePosixError> = Error (Stdlib.Cli.NativePosixError { errno = -1L, message = "native hostname unavailable" })
+let __hostname () : Stdlib.Result.Result<String, Stdlib.Cli.__NativePosixError> = Error (Stdlib.Cli.__NativePosixError { errno = -1L, message = "native hostname unavailable" })
 let __getenv (name: String) : Stdlib.Option.Option<String> = Stdlib.Option.Option.None
 let __createExclusive (path: String) : Int64 = 38L
 let __environmentPacked () : String = ""
-let __setenv (name: String) (value: String) : Stdlib.Result.Result<Unit, Stdlib.Cli.NativePosixError> = Ok (())
-let __unsetenv (name: String) : Stdlib.Result.Result<Unit, Stdlib.Cli.NativePosixError> = Ok (())
+let __setenv (name: String) (value: String) : Stdlib.Result.Result<Unit, Stdlib.Cli.__NativePosixError> = Ok (())
+let __unsetenv (name: String) : Stdlib.Result.Result<Unit, Stdlib.Cli.__NativePosixError> = Ok (())
 // Returns a positional argument, excluding the executable name. The compiler
 // replaces this declaration with a native argv lookup for compiled programs.
 let __argv (index: Int64) : Stdlib.Option.Option<String> = Stdlib.Option.Option.None
-let __kill (pid: Int64) (signal: Int64) : Stdlib.Result.Result<Unit, Stdlib.Cli.NativePosixError> = Ok (())
+let __kill (pid: Int64) (signal: Int64) : Stdlib.Result.Result<Unit, Stdlib.Cli.__NativePosixError> = Ok (())
 let __sleep (delayMs: Float) : Unit = ()
 let __getpid () : Int64 = 0L
 let __getuid () : Int64 = 0L
 let __cpuCount () : Int64 = 1L
 let __spawnProcess (command: String) : Int64 = -1L
-let __processIO (handle: Int64) (input: String) : Stdlib.Cli.NativeOutput = Stdlib.Cli.NativeOutput { exitCode = -1L, stdout = "", stderr = "Invalid process handle" }
-let __terminateProcess (handle: Int64) : Stdlib.Cli.NativeOutput = Stdlib.Cli.NativeOutput { exitCode = -1L, stdout = "", stderr = "Invalid process handle" }
+let __processIO (handle: Int64) (input: String) : Stdlib.Cli.__NativeOutput = Stdlib.Cli.__NativeOutput { exitCode = -1L, stdout = "", stderr = "Invalid process handle" }
+let __terminateProcess (handle: Int64) : Stdlib.Cli.__NativeOutput = Stdlib.Cli.__NativeOutput { exitCode = -1L, stdout = "", stderr = "Invalid process handle" }
 
 let execute (command: String) : Stdlib.Cli.ExecutionOutcome =
     let result = Stdlib.Cli.__execute command in

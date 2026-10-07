@@ -71,17 +71,15 @@ The revision-pinned Stream API and lifecycle contract is documented in
 
 ### Intrinsic Functions
 
-Defined in `Stdlib.fs`, implemented in the compiler:
+Defined in `src/DarkStdlib.ml`, implemented in the compiler:
 
-```fsharp
-let fileModule : ModuleDef = {
-    Name = "Darklang.Stdlib.File"
-    Functions = [
-        { Name = "readText"; ParamTypes = [TString]; ReturnType = resultType TString }
-        { Name = "writeText"; ParamTypes = [TString; TString]; ReturnType = resultType TUnit }
-        // ...
-    ]
-}
+```ocaml
+(* Excerpt of DarkStdlib.fileIntrinsicModule, using its fn signature helper. *)
+let fileIntrinsicModule : AST.moduleDef =
+  { name = "Darklang.Stdlib.File";
+    functions =
+      [ fn "readBlob" [] [TString] (resultType TBlob);
+        fn "writeBlob" [] [TString; TBlob] (resultType TUnit) ] }
 ```
 
 These generate syscalls or special code sequences.

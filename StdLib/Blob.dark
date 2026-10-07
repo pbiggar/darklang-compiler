@@ -193,7 +193,7 @@ let __invalidUtf8 (byte: Int64) (index: Int64) : String =
     Stdlib.Blob.__byteToHex byte ++
     "] at index " ++
     Stdlib.Int64.toString index ++
-    " from specified code page to Stdlib.String.__Unicode."
+    " from specified code page to Unicode."
 
 // Returns the first invalid byte index, or -1 when the complete Blob is valid UTF-8.
 let __validateUtf8 (blob: Blob) (index: Int64) (length: Int64) : Int64 =

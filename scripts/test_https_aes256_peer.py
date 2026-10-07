@@ -76,7 +76,7 @@ def main() -> None:
         source = directory / "client.dark"
         if response_mode == "stream":
             operation = f'''    let authorities = if host == "badroot" then [] else roots in
-    match Stdlib.HttpClient.streamTrustedWithRoots authorities "GET" "https://localhost:{port}/" [] Stdlib.Blob.empty with
+    match Stdlib.HttpClient.__streamTrustedWithRoots authorities "GET" "https://localhost:{port}/" [] Stdlib.Blob.empty with
     | Error _ -> Stdlib.printLine "TLS failed: stream request"
     | Ok response ->
       let bytes = Stdlib.Stream.toBlob response.body in

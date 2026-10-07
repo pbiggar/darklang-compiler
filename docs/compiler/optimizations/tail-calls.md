@@ -7,11 +7,11 @@ recursive ownership are recorded in the
 
 ## Detection
 
-Pass `TailCallDetection.fs` recognizes direct, indirect, and closure calls
+Pass `src/passes/anf/TailCallDetection.ml` recognizes direct, indirect, and closure calls
 whose result is returned without further computation:
 
-```fsharp
-Let (resultId, Call(target, args), Return (Var resultId))
+```text
+Let(resultId, Call(target, args), Return(Var resultId))
 ```
 
 The pass runs after reference-count insertion. It may move cleanup before the

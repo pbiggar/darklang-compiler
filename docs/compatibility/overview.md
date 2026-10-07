@@ -80,7 +80,8 @@ internal compilation mode. Compiler support source files use `__` filenames;
 these filenames do not enforce language visibility. The
 [complete source inventory](../compiler/library-sources.md) distinguishes
 interpreter packages, private fragments, native implementation modules, and
-existing compiler extensions such as `Cli.Args`. Source placement alone does
+private compiler extensions such as `Cli.__Args`. Compiler-only module
+declarations use `__` names and require internal compilation mode. Source placement alone does
 not establish interpreter API parity.
 
 ## Intentional AOT differences

@@ -1,5 +1,6 @@
 (* Original ANF-to-MIR lowering tests. *)
-type testResult=(unit,string) result
+type testResult = (unit, string) result
+
 val testRawGetIntrinsicReturnTypeDoesNotDefaultToInt64 : unit -> testResult
 val testBuildVariantRegistryRejectsInconsistentTypeParams : unit -> testResult
 val testRecordAllocationStartsFieldsAtOffsetZero : unit -> testResult

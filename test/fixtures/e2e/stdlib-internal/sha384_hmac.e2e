@@ -2,7 +2,7 @@
 
 (let key = Stdlib.Blob.fromHex "0B0B0B0B0B0B0B0B0B0B0B0B0B0B0B0B0B0B0B0B" in
  match key with
- | Ok k -> Stdlib.Crypto.sha384hmac k (Stdlib.String.toBlob "Hi There")
+ | Ok k -> Stdlib.Crypto.__sha384hmac k (Stdlib.String.toBlob "Hi There")
            |> Stdlib.Blob.toHex
  | Error _ -> "bad fixture")
   = "AFD03944D84895626B0825F4AB46907F15F9DADBE4101EC682AA034C7CEBC59CFAEA9EA9076EDE7F4AF152E8B2FA9CB6"

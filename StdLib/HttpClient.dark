@@ -259,12 +259,12 @@ let request (method: String) (url: String) (headers: List<(String * String)>) (b
   : Stdlib.Result.Result<Stdlib.HttpClient.Response, Stdlib.HttpClient.RequestError> =
   Stdlib.HttpClient.__request false None method url headers body
 
-let requestTrusted (method: String) (url: String) (headers: List<(String * String)>) (body: Blob)
+let __requestTrusted (method: String) (url: String) (headers: List<(String * String)>) (body: Blob)
   : Stdlib.Result.Result<Stdlib.HttpClient.Response, Stdlib.HttpClient.RequestError> =
   Stdlib.HttpClient.__request true None method url headers body
 
 // Explicit trust roots are useful for a private HTTPS service and local TLS peers.
-let requestTrustedWithRoots (roots: List<Blob>) (method: String) (url: String)
+let __requestTrustedWithRoots (roots: List<Blob>) (method: String) (url: String)
   (headers: List<(String * String)>) (body: Blob)
   : Stdlib.Result.Result<Stdlib.HttpClient.Response, Stdlib.HttpClient.RequestError> =
   Stdlib.HttpClient.__request true (Some roots) method url headers body
@@ -293,11 +293,11 @@ let head (url: String)
   : Stdlib.Result.Result<Stdlib.HttpClient.Response, Stdlib.HttpClient.RequestError> =
   Stdlib.HttpClient.request "HEAD" url [] Stdlib.Blob.empty
 
-type StreamTransport =
+type __StreamTransport =
   | Plain
   | Secure of Stdlib.__Tls13Client.ApplicationState
 
-type StreamPhase =
+type __StreamPhase =
   | Finished
   | FixedBytes of Int64
   | UntilEof
@@ -306,53 +306,53 @@ type StreamPhase =
   | ChunkTail
   | Trailers
 
-type StreamBodyState = {
+type __StreamBodyState = {
   connection: Stdlib.__Network.TcpConnection,
-  transport: Stdlib.HttpClient.StreamTransport,
+  transport: Stdlib.HttpClient.__StreamTransport,
   buffer: Blob,
   offset: Int64,
-  phase: Stdlib.HttpClient.StreamPhase,
+  phase: Stdlib.HttpClient.__StreamPhase,
   total: Int64,
   chunks: Int64
 }
 
-type StreamRead = {
+type __StreamRead = {
   bytes: Blob,
-  transport: Stdlib.HttpClient.StreamTransport
+  transport: Stdlib.HttpClient.__StreamTransport
 }
 
 let __plainStreamRead (connection: Stdlib.__Network.TcpConnection)
-  : Stdlib.Result.Result<Stdlib.Option.Option<Stdlib.HttpClient.StreamRead>, Stdlib.HttpClient.RequestError> =
+  : Stdlib.Result.Result<Stdlib.Option.Option<Stdlib.HttpClient.__StreamRead>, Stdlib.HttpClient.RequestError> =
   match Stdlib.__Network.readTcp connection 4096L with
   | Error code -> Error (Stdlib.HttpClient.__transportError code)
   | Ok bytes ->
     if Stdlib.Blob.__byteLength bytes == 0L then Ok None
-    else Ok (Some (Stdlib.HttpClient.StreamRead {
-      bytes = bytes, transport = Stdlib.HttpClient.StreamTransport.Plain }))
+    else Ok (Some (Stdlib.HttpClient.__StreamRead {
+      bytes = bytes, transport = Stdlib.HttpClient.__StreamTransport.Plain }))
 
 let __secureStreamRead (connection: Stdlib.__Network.TcpConnection)
   (secure: Stdlib.__Tls13Client.ApplicationState)
-  : Stdlib.Result.Result<Stdlib.Option.Option<Stdlib.HttpClient.StreamRead>, Stdlib.HttpClient.RequestError> =
+  : Stdlib.Result.Result<Stdlib.Option.Option<Stdlib.HttpClient.__StreamRead>, Stdlib.HttpClient.RequestError> =
   match Stdlib.__Tls13Client.readApplicationChunk connection secure with
   | Error _ -> Error Stdlib.HttpClient.RequestError.NetworkError
   | Ok result ->
     match result with
     | None -> Ok None
     | Some ((bytes, next)) ->
-      Ok (Some (Stdlib.HttpClient.StreamRead {
-        bytes = bytes, transport = Stdlib.HttpClient.StreamTransport.Secure next }))
+      Ok (Some (Stdlib.HttpClient.__StreamRead {
+        bytes = bytes, transport = Stdlib.HttpClient.__StreamTransport.Secure next }))
 
 let __streamRead (connection: Stdlib.__Network.TcpConnection)
-  (transport: Stdlib.HttpClient.StreamTransport)
-  : Stdlib.Result.Result<Stdlib.Option.Option<Stdlib.HttpClient.StreamRead>, Stdlib.HttpClient.RequestError> =
+  (transport: Stdlib.HttpClient.__StreamTransport)
+  : Stdlib.Result.Result<Stdlib.Option.Option<Stdlib.HttpClient.__StreamRead>, Stdlib.HttpClient.RequestError> =
   match transport with
   | Plain -> Stdlib.HttpClient.__plainStreamRead connection
   | Secure secure -> Stdlib.HttpClient.__secureStreamRead connection secure
 
 let __streamHead (connection: Stdlib.__Network.TcpConnection)
-  (transport: Stdlib.HttpClient.StreamTransport) (method: String)
+  (transport: Stdlib.HttpClient.__StreamTransport) (method: String)
   (buffer: Blob) (informational: Int64)
-  : Stdlib.Result.Result<(Stdlib.__HttpWire.ParsedResponseHead * Stdlib.HttpClient.StreamTransport),
+  : Stdlib.Result.Result<(Stdlib.__HttpWire.ParsedResponseHead * Stdlib.HttpClient.__StreamTransport),
                          Stdlib.HttpClient.RequestError> =
   if Stdlib.Blob.__byteLength buffer > 65536L || informational > 8L then
     Error Stdlib.HttpClient.RequestError.NetworkError
@@ -373,23 +373,23 @@ let __streamHead (connection: Stdlib.__Network.TcpConnection)
         Stdlib.HttpClient.__streamHead connection read.transport method
           (Stdlib.Blob.concat [buffer, read.bytes]) informational
 
-let __streamState (previous: Stdlib.HttpClient.StreamBodyState)
-  (transport: Stdlib.HttpClient.StreamTransport) (buffer: Blob)
-  (offset: Int64) (phase: Stdlib.HttpClient.StreamPhase)
-  (total: Int64) (chunks: Int64) : Stdlib.HttpClient.StreamBodyState =
-  Stdlib.HttpClient.StreamBodyState {
+let __streamState (previous: Stdlib.HttpClient.__StreamBodyState)
+  (transport: Stdlib.HttpClient.__StreamTransport) (buffer: Blob)
+  (offset: Int64) (phase: Stdlib.HttpClient.__StreamPhase)
+  (total: Int64) (chunks: Int64) : Stdlib.HttpClient.__StreamBodyState =
+  Stdlib.HttpClient.__StreamBodyState {
     connection = previous.connection, transport = transport, buffer = buffer,
     offset = offset, phase = phase, total = total, chunks = chunks }
 
-let __streamAvailable (state: Stdlib.HttpClient.StreamBodyState) : Int64 =
+let __streamAvailable (state: Stdlib.HttpClient.__StreamBodyState) : Int64 =
   Stdlib.Blob.__byteLength state.buffer - state.offset
 
-let __streamRemaining (state: Stdlib.HttpClient.StreamBodyState) : Blob =
+let __streamRemaining (state: Stdlib.HttpClient.__StreamBodyState) : Blob =
   Stdlib.Blob.slice state.buffer (Stdlib.Int.fromInt64 state.offset)
     (Stdlib.Int.fromInt64 (Stdlib.HttpClient.__streamAvailable state))
 
-let __streamFetch (state: Stdlib.HttpClient.StreamBodyState)
-  : Stdlib.Result.Result<Stdlib.Option.Option<Stdlib.HttpClient.StreamBodyState>, String> =
+let __streamFetch (state: Stdlib.HttpClient.__StreamBodyState)
+  : Stdlib.Result.Result<Stdlib.Option.Option<Stdlib.HttpClient.__StreamBodyState>, String> =
   match Stdlib.HttpClient.__streamRead state.connection state.transport with
   | Error _ -> Error "HTTP response stream read failed"
   | Ok None -> Ok None
@@ -398,13 +398,13 @@ let __streamFetch (state: Stdlib.HttpClient.StreamBodyState)
       (Stdlib.Blob.concat [Stdlib.HttpClient.__streamRemaining state, read.bytes])
       0L state.phase state.total state.chunks))
 
-let __streamByte (state: Stdlib.HttpClient.StreamBodyState) : UInt8 =
+let __streamByte (state: Stdlib.HttpClient.__StreamBodyState) : UInt8 =
   match Stdlib.UInt8.fromInt64 (Stdlib.Blob.__getByte state.buffer state.offset) with
   | Some value -> value
   | None -> Builtin.testRuntimeError "Invalid HTTP response byte"
 
-let __streamStep (state: Stdlib.HttpClient.StreamBodyState)
-  : Stdlib.Option.Option<(UInt8 * Stdlib.HttpClient.StreamBodyState)> =
+let __streamStep (state: Stdlib.HttpClient.__StreamBodyState)
+  : Stdlib.Option.Option<(UInt8 * Stdlib.HttpClient.__StreamBodyState)> =
   match state.phase with
   | Finished -> None
   | FixedBytes remaining ->
@@ -499,7 +499,7 @@ let __streamStep (state: Stdlib.HttpClient.StreamBodyState)
         | Ok None -> Builtin.testRuntimeError "HTTP trailers were truncated"
         | Ok (Some next) -> Stdlib.HttpClient.__streamStep next
 
-let __streamDispose (state: Stdlib.HttpClient.StreamBodyState) : Unit =
+let __streamDispose (state: Stdlib.HttpClient.__StreamBodyState) : Unit =
   Stdlib.__Network.closeTcp state.connection
 
 let __stream (trusted: Bool) (roots: Stdlib.Option.Option<List<Blob>>)
@@ -539,11 +539,11 @@ let __stream (trusted: Bool) (roots: Stdlib.Option.Option<List<Blob>>)
               | Ok authorities ->
                 match Stdlib.__Tls13Client.beginExchange connection url.host authorities requestBytes with
                 | Error _ -> Error Stdlib.HttpClient.RequestError.NetworkError
-                | Ok secure -> Ok (Stdlib.HttpClient.StreamTransport.Secure secure)
+                | Ok secure -> Ok (Stdlib.HttpClient.__StreamTransport.Secure secure)
             else if url.scheme == "http" then
               match Stdlib.__Network.writeTcp connection requestBytes with
               | Error code -> Error (Stdlib.HttpClient.__transportError code)
-              | Ok () -> Ok Stdlib.HttpClient.StreamTransport.Plain
+              | Ok () -> Ok Stdlib.HttpClient.__StreamTransport.Plain
             else Error (Stdlib.HttpClient.RequestError.BadUrl Stdlib.HttpClient.BadUrlDetails.UnsupportedProtocol) in
           match opened with
           | Error error ->
@@ -557,11 +557,11 @@ let __stream (trusted: Bool) (roots: Stdlib.Option.Option<List<Blob>>)
               Error error
             | Ok ((head, nextTransport)) ->
               let phase = match head.mode with
-                          | NoBody -> Stdlib.HttpClient.StreamPhase.Finished
-                          | Fixed length -> Stdlib.HttpClient.StreamPhase.FixedBytes length
-                          | Chunked -> Stdlib.HttpClient.StreamPhase.ChunkHeader
-                          | UntilClose -> Stdlib.HttpClient.StreamPhase.UntilEof in
-              let initial = Stdlib.HttpClient.StreamBodyState {
+                          | NoBody -> Stdlib.HttpClient.__StreamPhase.Finished
+                          | Fixed length -> Stdlib.HttpClient.__StreamPhase.FixedBytes length
+                          | Chunked -> Stdlib.HttpClient.__StreamPhase.ChunkHeader
+                          | UntilClose -> Stdlib.HttpClient.__StreamPhase.UntilEof in
+              let initial = Stdlib.HttpClient.__StreamBodyState {
                 connection = connection, transport = nextTransport,
                 buffer = head.remaining, offset = 0L,
                 phase = phase, total = 0L, chunks = 0L } in
@@ -576,11 +576,11 @@ let stream (method: String) (url: String) (headers: List<(String * String)>) (bo
   : Stdlib.Result.Result<Stdlib.HttpClient.StreamResponse, Stdlib.HttpClient.RequestError> =
   Stdlib.HttpClient.__stream false None method url headers body
 
-let streamTrusted (method: String) (url: String) (headers: List<(String * String)>) (body: Blob)
+let __streamTrusted (method: String) (url: String) (headers: List<(String * String)>) (body: Blob)
   : Stdlib.Result.Result<Stdlib.HttpClient.StreamResponse, Stdlib.HttpClient.RequestError> =
   Stdlib.HttpClient.__stream true None method url headers body
 
-let streamTrustedWithRoots (roots: List<Blob>) (method: String) (url: String)
+let __streamTrustedWithRoots (roots: List<Blob>) (method: String) (url: String)
   (headers: List<(String * String)>) (body: Blob)
   : Stdlib.Result.Result<Stdlib.HttpClient.StreamResponse, Stdlib.HttpClient.RequestError> =
   Stdlib.HttpClient.__stream true (Some roots) method url headers body
