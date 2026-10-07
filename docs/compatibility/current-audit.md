@@ -7,7 +7,7 @@ Run on 2026-10-08 (Europe/Rome), against compiler and fixture revision
 **249 passed; 2,340 failed.** The file links below list each failing test
 by its original source line and observed diagnostic.
 
-The runner has 44 whole-file gates and 260 line entries in 24 other files.
+Before this audit the runner had 44 whole-file gates and 260 line entries in 24 other files.
 The fixture parser matched 214 of those line entries to assertions; the other
 **46 entries identify no assertion** and are listed separately below.
 
@@ -16,6 +16,12 @@ All assertions in affected files were run, including enabled neighbours:
 All failures were among the previously excluded tests.
 
 ## Test files
+
+Enablement now matches these results: all 249 passing exclusions are enabled.
+The 2,340 failing tests remain excluded through 34 whole-file gates (files with
+no passing assertions) and 271 assertion-line gates across 23 mixed files.
+The 46 entries that identified no assertion have been removed. The table below
+retains the original exclusion counts to show what was tested.
 
 | File | Disabled tests run | Passed | Failed |
 | --- | ---: | ---: | ---: |
@@ -124,5 +130,5 @@ visible as observed failures; no source-level support claim replaces a
 test result. This run used the repository’s imported/adapted fixtures and
 the compiler’s existing default package configuration.
 
-No compiler fixes or test enablement changes are included in this ledger.
+No compiler fixes are included. Test enablement was updated to these results.
 Results describe this host and configuration.

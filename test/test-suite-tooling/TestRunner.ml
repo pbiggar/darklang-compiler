@@ -1031,6 +1031,7 @@ let runTestsWithProgressReporter completedTestReporter args =
       in
       not (List.mem name (if isArm then x64 else arm64))
     in
+    (* Exclusions match the exhaustive 2026-10-08 compatibility test audit. *)
     let disabledUpstreamFiles =
       [
         "test/fixtures/e2e/upstream/cli/app-service-safety.dark";
@@ -1043,15 +1044,11 @@ let runTestsWithProgressReporter completedTestReporter args =
         "test/fixtures/e2e/upstream/cli/tailscale.dark";
         "test/fixtures/e2e/upstream/cli/workbench-repl.dark";
         "test/fixtures/e2e/upstream/cloud/db.dark";
-        "test/fixtures/e2e/upstream/language/big.dark";
         "test/fixtures/e2e/upstream/language/builtin-introspection.dark";
-        "test/fixtures/e2e/upstream/language/custom-data/values.dark";
         "test/fixtures/e2e/upstream/language/effect-ceiling.dark";
         "test/fixtures/e2e/upstream/language/error-type-names.dark";
         "test/fixtures/e2e/upstream/language/runtime-to-programtypes.dark";
-        "test/fixtures/e2e/upstream/scm/branch-identity.dark";
         "test/fixtures/e2e/upstream/scm/commit-hash.dark";
-        "test/fixtures/e2e/upstream/scm/conflicts.dark";
         "test/fixtures/e2e/upstream/scm/constraint-kinds.dark";
         "test/fixtures/e2e/upstream/scm/lww.dark";
         "test/fixtures/e2e/upstream/scm/matter-routes.dark";
@@ -1062,61 +1059,125 @@ let runTestsWithProgressReporter completedTestReporter args =
         "test/fixtures/e2e/upstream/stachu/darklangParser.dark";
         "test/fixtures/e2e/upstream/stachu/parser.dark";
         "test/fixtures/e2e/upstream/stachu/tinyLang.dark";
-        "test/fixtures/e2e/upstream/stdlib/crypto.dark";
         "test/fixtures/e2e/upstream/stdlib/earg.dark";
         "test/fixtures/e2e/upstream/stdlib/eself.dark";
-        "test/fixtures/e2e/upstream/stdlib/http.dark";
-        "test/fixtures/e2e/upstream/stdlib/httpclient.dark";
         "test/fixtures/e2e/upstream/stdlib/json.dark";
         "test/fixtures/e2e/upstream/stdlib/language-tools/parsedFileShape.dark";
         "test/fixtures/e2e/upstream/stdlib/language-tools/pickLocation.dark";
         "test/fixtures/e2e/upstream/stdlib/language-tools/semanticTokenization.dark";
-        "test/fixtures/e2e/upstream/stdlib/pretty.dark";
         "test/fixtures/e2e/upstream/stdlib/prettyPrinter.dark";
         "test/fixtures/e2e/upstream/stdlib/sqlite.dark";
-        "test/fixtures/e2e/upstream/stdlib/sse.dark";
-        "test/fixtures/e2e/upstream/stdlib/stream.dark";
         "test/fixtures/e2e/upstream/stdlib/string.dark";
       ]
     in
     let disabledUpstreamLines =
       [
-        ( "test/fixtures/e2e/upstream/language/custom-data/aliases.dark",
-          [ 39; 148; 149; 157; 159; 175; 177 ] );
-        ( "test/fixtures/e2e/upstream/language/custom-data/enums.dark",
-          [
-            7;
-            11;
-            15;
-            17;
-            22;
-            23;
-            24;
-            26;
-            27;
-            28;
-            30;
-            45;
-            65;
-            67;
-            69;
-            74;
-            101;
-            104;
-            109;
-          ] );
-        ("test/fixtures/e2e/upstream/language/apply/eapply.dark", [ 120 ]);
-        ("test/fixtures/e2e/upstream/language/basic/eand.dark", [ 5; 7; 11 ]);
-        ("test/fixtures/e2e/upstream/language/basic/elet.dark", [ 67 ]);
-        ("test/fixtures/e2e/upstream/language/basic/eor.dark", [ 6; 16; 17 ]);
-        ( "test/fixtures/e2e/upstream/language/basic/estring.dark",
-          [ 11; 17; 21; 28 ] );
+        ("test/fixtures/e2e/upstream/language/basic/eor.dark", [ 6 ]);
         ("test/fixtures/e2e/upstream/language/basic/evariable.dark", [ 3 ]);
+        ( "test/fixtures/e2e/upstream/language/custom-data/enums.dark",
+          [ 7; 11; 15; 17; 22; 23; 24; 26; 27; 28; 30; 65; 67; 69; 101; 104 ] );
+        ( "test/fixtures/e2e/upstream/language/custom-data/values.dark",
+          [
+            5;
+            9;
+            13;
+            17;
+            21;
+            25;
+            29;
+            33;
+            37;
+            41;
+            45;
+            49;
+            53;
+            57;
+            61;
+            65;
+            76;
+            77;
+            78;
+            80;
+            81;
+            83;
+            84;
+            86;
+            87;
+            89;
+            90;
+            92;
+            93;
+            95;
+            96;
+            98;
+            99;
+            101;
+            102;
+            104;
+            105;
+            107;
+            108;
+            110;
+            111;
+            113;
+            114;
+            116;
+            117;
+            119;
+            120;
+            122;
+            123;
+            125;
+            126;
+            128;
+            129;
+          ] );
         ( "test/fixtures/e2e/upstream/language/derror.dark",
-          [ 2; 10; 13; 15; 16; 18; 19; 22; 23; 32 ] );
-        ( "test/fixtures/e2e/upstream/language/flow-control/eif.dark",
-          [ 1; 12; 13; 14; 20 ] );
+          [ 2; 10; 15; 22; 23 ] );
+        ("test/fixtures/e2e/upstream/language/flow-control/eif.dark", [ 1; 14 ]);
         ("test/fixtures/e2e/upstream/language/nested-fns.dark", [ 55; 60 ]);
+        ( "test/fixtures/e2e/upstream/scm/branch-identity.dark",
+          [ 9; 20; 23; 27; 31; 32 ] );
+        ( "test/fixtures/e2e/upstream/scm/conflicts.dark",
+          [
+            51;
+            58;
+            64;
+            70;
+            79;
+            86;
+            92;
+            99;
+            105;
+            111;
+            129;
+            136;
+            144;
+            155;
+            161;
+            169;
+            175;
+            184;
+            194;
+            204;
+            220;
+            224;
+            228;
+            232;
+            233;
+            234;
+            236;
+            242;
+            243;
+            246;
+            251;
+            257;
+            258;
+            259;
+            263;
+            265;
+            266;
+          ] );
         ( "test/fixtures/e2e/upstream/stdlib/base64.dark",
           [
             7;
@@ -1146,91 +1207,67 @@ let runTestsWithProgressReporter completedTestReporter args =
             46;
             47;
           ] );
-        ( "test/fixtures/e2e/upstream/stdlib/dict.dark",
-          [
-            21;
-            30;
-            32;
-            59;
-            61;
-            74;
-            144;
-            145;
-            146;
-            147;
-            159;
-            227;
-            237;
-            242;
-            245;
-            251;
-            273;
-            279;
-            282;
-            311;
-            315;
-            322;
-            327;
-            332;
-            334;
-            351;
-            353;
-            357;
-            387;
-            389;
-            391;
-            394;
-            396;
-            398;
-            400;
-            402;
-            404;
-            406;
-            408;
-          ] );
+        ("test/fixtures/e2e/upstream/stdlib/dict.dark", [ 21 ]);
         ( "test/fixtures/e2e/upstream/stdlib/float.dark",
           [
-            45;
             47;
-            51;
             55;
             58;
             59;
             64;
             65;
-            71;
             73;
             76;
-            79;
             81;
-            87;
             89;
-            106;
             107;
             110;
             111;
-            113;
-            124;
             125;
             127;
-            133;
             134;
             136;
             160;
             173;
             176;
-            179;
-            242;
             244;
-            253;
             255;
           ] );
         ( "test/fixtures/e2e/upstream/stdlib/html.dark",
           [ 42; 44; 66; 69; 72; 75; 83 ] );
+        ( "test/fixtures/e2e/upstream/stdlib/http.dark",
+          [
+            21;
+            27;
+            33;
+            48;
+            51;
+            57;
+            63;
+            102;
+            108;
+            110;
+            111;
+            114;
+            117;
+            122;
+            123;
+            124;
+            128;
+            129;
+            130;
+            131;
+            133;
+            137;
+            144;
+            149;
+            155;
+            161;
+          ] );
+        ( "test/fixtures/e2e/upstream/stdlib/httpclient.dark",
+          [ 71; 108; 111; 131; 132; 133; 134 ] );
         ("test/fixtures/e2e/upstream/stdlib/httpserver.dark", [ 29; 33; 37 ]);
-        ("test/fixtures/e2e/upstream/stdlib/ints/int32.dark", [ 126 ]);
-        ( "test/fixtures/e2e/upstream/stdlib/ints/int64.dark",
-          [ 45; 60; 90; 210; 368 ] );
+        ("test/fixtures/e2e/upstream/stdlib/ints/int64.dark", [ 90; 368 ]);
         ("test/fixtures/e2e/upstream/stdlib/ints/int8.dark", [ 47 ]);
         ( "test/fixtures/e2e/upstream/stdlib/list.dark",
           [
@@ -1251,86 +1288,26 @@ let runTestsWithProgressReporter completedTestReporter args =
             129;
             130;
             136;
-            140;
             161;
             162;
             174;
             180;
             201;
-            206;
             216;
             218;
             223;
             224;
-            250;
             264;
             269;
             302;
             314;
-            346;
-            354;
           ] );
         ("test/fixtures/e2e/upstream/stdlib/math.dark", [ 27; 30 ]);
-        ( "test/fixtures/e2e/upstream/stdlib/nomodule.dark",
-          [
-            302;
-            304;
-            365;
-            366;
-            367;
-            368;
-            369;
-            370;
-            371;
-            372;
-            373;
-            374;
-            375;
-            377;
-            418;
-            419;
-          ] );
         ( "test/fixtures/e2e/upstream/stdlib/option.dark",
-          [
-            44;
-            75;
-            119;
-            138;
-            148;
-            158;
-            170;
-            176;
-            190;
-            204;
-            211;
-            218;
-            234;
-            242;
-            255;
-            260;
-          ] );
+          [ 44; 75; 119; 148; 170; 176; 204; 211; 218; 242; 255; 260 ] );
+        ("test/fixtures/e2e/upstream/stdlib/pretty.dark", [ 186 ]);
         ( "test/fixtures/e2e/upstream/stdlib/result.dark",
-          [
-            19;
-            24;
-            57;
-            67;
-            79;
-            85;
-            91;
-            97;
-            110;
-            117;
-            124;
-            139;
-            147;
-            155;
-            178;
-            185;
-            188;
-            277;
-            294;
-          ] );
+          [ 57; 79; 85; 110; 117; 139; 147; 178 ] );
       ]
     in
     let normalizePath path =
