@@ -1,0 +1,14 @@
+// http2_protocol.e2e - RFC 9113 framing and RFC 7541 compression behavior.
+
+Stdlib.Http2Wire.serialize 4L 0L 0L Stdlib.Blob.empty |> Stdlib.Result.map Stdlib.Blob.toHex = Ok "000000040000000000"
+Stdlib.Http2Wire.serialize 6L 0L 0L (Stdlib.String.toBlob "12345678") |> Stdlib.Result.map Stdlib.Blob.toHex = Ok "0000080600000000003132333435363738"
+Stdlib.Http2Wire.serialize 0L 1L 0L Stdlib.Blob.empty = Error "HTTP/2 frame requires a stream"
+Stdlib.Http2Wire.serialize 6L 0L 1L (Stdlib.String.toBlob "12345678") = Error "HTTP/2 frame requires stream zero"
+Stdlib.Http2Wire.parse 16384L Stdlib.Blob.empty = Error Stdlib.Http2Wire.ParseError.Incomplete
+let wire = Stdlib.Blob.fromHex "000000040000000000" |> Stdlib.Result.withDefault Stdlib.Blob.empty in match Stdlib.Http2Wire.parse 16384L wire with | Ok parsed -> (parsed.frame.kind, parsed.frame.streamId, Stdlib.Blob.toHex parsed.remaining) | Error _ -> (-1L, -1L, "bad") = (4L, 0L, "")
+let wire = Stdlib.Blob.fromHex "00000408000000000000000000" |> Stdlib.Result.withDefault Stdlib.Blob.empty in Stdlib.Http2Wire.parse 16384L wire = Error (Stdlib.Http2Wire.ParseError.Invalid "Zero HTTP/2 window increment")
+let block = Stdlib.Blob.fromHex "828684410f7777772e6578616d706c652e636f6d" |> Stdlib.Result.withDefault Stdlib.Blob.empty in Stdlib.Hpack.decode (Stdlib.Hpack.initial ()) block |> Stdlib.Result.map (fun decoded -> decoded.headers) = Ok [(":method", "GET"), (":scheme", "http"), (":path", "/"), (":authority", "www.example.com")]
+let block = Stdlib.Blob.fromHex "828684418cf1e3c2e5f23a6ba0ab90f4ff" |> Stdlib.Result.withDefault Stdlib.Blob.empty in Stdlib.Hpack.decode (Stdlib.Hpack.initial ()) block |> Stdlib.Result.map (fun decoded -> decoded.headers) = Ok [(":method", "GET"), (":scheme", "http"), (":path", "/"), (":authority", "www.example.com")]
+let block = Stdlib.Blob.fromHex "80" |> Stdlib.Result.withDefault Stdlib.Blob.empty in Stdlib.Hpack.decode (Stdlib.Hpack.initial ()) block |> Stdlib.Result.map (fun decoded -> decoded.headers) = Error "Invalid HPACK index"
+let block = Stdlib.Blob.fromHex "0081ff00" |> Stdlib.Result.withDefault Stdlib.Blob.empty in Stdlib.Hpack.decode (Stdlib.Hpack.initial ()) block |> Stdlib.Result.map (fun decoded -> decoded.headers) = Error "Invalid HPACK Huffman padding"
+let headers = [(":method", "POST"), (":path", "/test"), ("x-test", "a"), ("x-test", "b")] in match Stdlib.Hpack.encode headers with | Error _ -> [] | Ok bytes -> match Stdlib.Hpack.decode (Stdlib.Hpack.initial ()) bytes with | Error _ -> [] | Ok decoded -> decoded.headers = [(":method", "POST"), (":path", "/test"), ("x-test", "a"), ("x-test", "b")]

@@ -77,6 +77,15 @@ and send empty headers and bodies, matching the upstream signatures. Focused
 `test/fixtures/e2e/http_client_wrappers.e2e` cases cover the wrapper signatures,
 invalid URLs, forwarded header errors, and guest private-address restrictions.
 
+HTTPS requests offer `h2` and `http/1.1` using TLS ALPN. An authenticated `h2`
+selection uses the Dark HTTP/2 implementation; absent ALPN and `http/1.1`
+retain the existing HTTP/1.1 path. Buffered and lazy streaming responses share
+frame validation, HPACK static/dynamic tables and Huffman decoding, SETTINGS,
+PING, flow-control windows, fragmented headers, informational responses and
+trailers. Duplicate response headers remain ordered. Each exchange owns one
+stream and connection; pooling, multiplexing, server push, CONNECT tunnels,
+and OPTIONS asterisk-form are not implemented in this profile.
+
 `Stdlib.Http.Request.header` performs the upstream case-insensitive lookup.
 `Stdlib.HttpServer.get` and `post` construct handler records and `getMethod`
 reads that header with the upstream GET default. The remaining pure routing
@@ -113,6 +122,23 @@ the compiled server against local TCP clients, including fragmented and binary
 bodies, 413/400/408/417/500 responses, HEAD, duplicate headers, bind failure,
 reset clients, signal shutdown during a stalled request, rebinding, and
 compiled leak accounting. Its artifacts remain in `TestResults/ai/`.
+
+The IPv4 server also detects the HTTP/2 prior-knowledge connection preface,
+including fragmented arrivals, and dispatches through the same Dark handlers.
+It sends GOAWAY after one exchange. This profile is verified on Linux x86_64;
+server-side TLS negotiation remains follow-up work. The HTTP/2 E2E fixtures
+cover wire and field boundaries. `python3 scripts/test_http2_peer.py` uses the
+test-only `h2==4.3.0` Python package as an independent peer and checks TLS client
+negotiation, 70-KiB uploads/responses across flow-control windows, buffering,
+streaming, trailers, HEAD, early stream close, truncation, cleartext server
+dispatch, body limits, shutdown and compiled leak accounting.
+
+HTTP/3 is not yet available through the client/server APIs. Its initial pure
+wire layer provides bounded QUIC variable-length integers and HTTP/3 frame
+and SETTINGS parsing. `test/fixtures/e2e/http3_wire.e2e` checks encoding bounds,
+fragmentation, forbidden HTTP/2 frame/settings identifiers and duplicates.
+QUIC packet protection, TLS handshake integration, reliable UDP streams,
+QPACK and advertised-only HTTP/3 discovery remain implementation work.
 
 `Stdlib.HttpClient.Sse.Event` and `parse` are copied from the same revision.
 The parser retains upstream's `Stream.unfold` behavior: it pulls only until the

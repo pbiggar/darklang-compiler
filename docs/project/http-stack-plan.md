@@ -93,7 +93,10 @@ Compare observable results with the interpreter's HTTP fixtures using local
 servers, plus malformed-wire and resource-lifecycle tests. Add stress and
 performance measurements for buffered and streaming bodies. HTTP/1.1 is the
 first interoperability target; HTTP/2 and HTTP/3 require separate protocol
-work. For each implementation branch, run `./build --ai`, the already-built
+work. HTTP/2 now has a single-exchange HTTPS client (authenticated ALPN with
+HTTP/1.1 fallback) and a prior-knowledge cleartext server. HTTP/3 currently has
+only integer/frame/SETTINGS wire codecs, not a working QUIC transport; see the
+compatibility ledger for exact profile boundaries. For each implementation branch, run `./build --ai`, the already-built
 `./run-tests --ai`, and
 `./benchmarks/run_benchmarks.sh --verify-parent full` before merge-train
 handoff.

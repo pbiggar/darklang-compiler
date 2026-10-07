@@ -144,6 +144,30 @@ let __responseBytes (method: String) (config: Stdlib.HttpServer.Config.Config) (
                 | Ok head -> Ok (Stdlib.Blob.slice bytes 0
                     (Stdlib.Int.fromInt64 (Stdlib.Blob.__byteLength bytes - Stdlib.Blob.__byteLength head.remaining)))
 
+let __http2Handler (config: Stdlib.HttpServer.Config.Config)
+    (handler: Stdlib.Http.Request -> Stdlib.Http.Response) (request: Stdlib.Http.Request) : Stdlib.Http.Response =
+    match Stdlib.HttpWire.parseUrl request.url with
+    | Error _ -> Stdlib.Http.badRequest "Invalid HTTP request URL"
+    | Ok url ->
+        let headers = if Stdlib.HttpServer.__hasHeader request.headers "host" then request.headers
+                      else Stdlib.List.append request.headers [("host", url.authority)] in
+        let forwarded = config.canonicalizeFromForwardedProto &&
+            Stdlib.List.any headers (fun pair -> let (key, value) = pair in
+                key == "x-forwarded-proto" && Stdlib.String.toLowercase value == "https") in
+        let host = if Stdlib.String.contains url.host ":" then "[" ++ url.host ++ "]" else url.host in
+        let requestUrl = if forwarded then "https://" ++ host ++ url.target else request.url in
+        let req = Stdlib.Http.Request { url = requestUrl, headers = headers, body = request.body } in
+        let started = Stdlib.Network.monotonicMillis () in
+        let response = handler req in
+        let _ =
+            if config.logRequests then
+                match started, Stdlib.Network.monotonicMillis () with
+                | Ok begin_, Ok end_ -> Stdlib.printLine ("[HttpServer] " ++ Stdlib.HttpServer.getMethod req ++ " " ++ url.target ++ " " ++
+                    Stdlib.Int.toString response.statusCode ++ " " ++ Stdlib.Int64.toString (end_ - begin_) ++ "ms")
+                | _, _ -> ()
+            else () in
+        response
+
 type ReadError =
     | Status of (Int * Stdlib.Option.Option<String>)
     | Shutdown
@@ -211,13 +235,14 @@ let __readRequest (connection: Stdlib.Network.TcpConnection) (signals: Stdlib.Ne
                                 if Stdlib.Blob.__byteLength chunk == 0L then Error (Stdlib.HttpServer.__statusError 400 buffer)
                                 else Stdlib.HttpServer.__readRequest connection signals limit deadline (continued || expect) (Stdlib.Blob.concat [buffer, chunk])
 
-let __handleConnection (config: Stdlib.HttpServer.Config.Config) (handler: Stdlib.Http.Request -> Stdlib.Http.Response)
+let __handleHttp1 (config: Stdlib.HttpServer.Config.Config) (handler: Stdlib.Http.Request -> Stdlib.Http.Response)
     (signals: Stdlib.Network.ShutdownSignals) (connection: Stdlib.Network.TcpConnection) (limit: Int64)
+    (pending: Blob)
     : Stdlib.Result.Result<Bool, String> =
     match Stdlib.Network.monotonicMillis () with
     | Error code -> Error ("Monotonic clock failed: " ++ Stdlib.Int64.toString code)
     | Ok started ->
-        let parsed = Stdlib.HttpServer.__readRequest connection signals limit (started + 10000L) false Stdlib.Blob.empty in
+        let parsed = Stdlib.HttpServer.__readRequest connection signals limit (started + 10000L) false pending in
         match parsed with
         | Error Shutdown -> Ok true
         | Error (Transport _) -> Ok false
@@ -258,6 +283,41 @@ let __handleConnection (config: Stdlib.HttpServer.Config.Config) (handler: Stdli
                         Stdlib.Int.toString status ++ " " ++ Stdlib.Int64.toString (finished - started) ++ "ms")
                 else () in
             Ok false
+
+let __dispatchPrelude (config: Stdlib.HttpServer.Config.Config) (handler: Stdlib.Http.Request -> Stdlib.Http.Response)
+    (signals: Stdlib.Network.ShutdownSignals) (connection: Stdlib.Network.TcpConnection)
+    (limit: Int64) (deadline: Int64) (pending: Blob) : Stdlib.Result.Result<Bool, String> =
+    if Stdlib.Bool.not (Stdlib.Http2Wire.isPrefacePrefix pending 0L) then
+        Stdlib.HttpServer.__handleHttp1 config handler signals connection limit pending
+    else if Stdlib.Blob.__byteLength pending >= 24L then
+        let transport = Stdlib.HttpTransport.plainWithShutdown connection signals in
+        let served = Stdlib.Http2.serve transport pending config (fun request -> Stdlib.HttpServer.__http2Handler config handler request) in
+        let _ = Stdlib.HttpTransport.close transport in
+        match served with
+        | Ok () -> Ok false
+        | Error _ -> Ok false
+    else
+        match Stdlib.Network.shutdownRequested signals, Stdlib.Network.monotonicMillis () with
+        | Ok true, _ -> Ok true
+        | Ok false, Ok now ->
+            if now >= deadline then Ok false
+            else
+                match Stdlib.Network.readTcp connection 4096L with
+                | Error code ->
+                    if code == 4L || code == 11L || code == 35L then
+                        Stdlib.HttpServer.__dispatchPrelude config handler signals connection limit deadline pending
+                    else Ok false
+                | Ok bytes ->
+                    if Stdlib.Blob.__byteLength bytes == 0L then Ok false
+                    else Stdlib.HttpServer.__dispatchPrelude config handler signals connection limit deadline (Stdlib.Blob.concat [pending, bytes])
+        | _, _ -> Error "HTTP server clock or shutdown check failed"
+
+let __handleConnection (config: Stdlib.HttpServer.Config.Config) (handler: Stdlib.Http.Request -> Stdlib.Http.Response)
+    (signals: Stdlib.Network.ShutdownSignals) (connection: Stdlib.Network.TcpConnection) (limit: Int64)
+    : Stdlib.Result.Result<Bool, String> =
+    match Stdlib.Network.monotonicMillis () with
+    | Error _ -> Error "HTTP server clock failed"
+    | Ok now -> Stdlib.HttpServer.__dispatchPrelude config handler signals connection limit (now + 10000L) Stdlib.Blob.empty
 
 let __serveLoop (config: Stdlib.HttpServer.Config.Config) (handler: Stdlib.Http.Request -> Stdlib.Http.Response)
     (signals: Stdlib.Network.ShutdownSignals) (listener: Stdlib.Network.TcpListener) (limit: Int64)

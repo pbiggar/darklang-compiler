@@ -123,7 +123,7 @@ let __allZero (bytes: Blob) (index: Int64) : Bool =
   else Stdlib.Tls13.__allZero bytes (index + 1L)
 
 // The caller supplies fresh cryptographic random bytes and an X25519 public key.
-let clientHello (host: String) (random: Blob) (keyShare: Blob)
+let clientHelloWithProtocols (host: String) (random: Blob) (keyShare: Blob) (protocols: List<String>)
   : Stdlib.Result.Result<Blob, String> =
   let hostLength = Stdlib.String.__byteLength host in
   if Stdlib.Blob.__byteLength random != 32L || Stdlib.Blob.__byteLength keyShare != 32L then
@@ -153,18 +153,26 @@ let clientHello (host: String) (random: Blob) (keyShare: Blob)
                                         Stdlib.Tls13.__u16 32L, keyShare] in
     let shares = Stdlib.Tls13.__extension 51L
                    (Stdlib.Blob.concat [Stdlib.Tls13.__u16 36L, shareEntry]) in
-    let extensions = Stdlib.Blob.concat
-                       [sni, versions, groups, signatures, certificateSignatures, shares] in
-    let body = Stdlib.Blob.concat [
-      Stdlib.Blob.__fromInt64List [3L, 3L], random,
-      Stdlib.Blob.__fromInt64List [0L, 0L, 6L, 19L, 2L, 19L, 1L, 19L, 3L, 1L, 0L],
-      Stdlib.Tls13.__u16 (Stdlib.Blob.__byteLength extensions), extensions ] in
-    let bodyLength = Stdlib.Blob.__byteLength body in
-    let handshake = Stdlib.Blob.concat [
-      Stdlib.Blob.__fromInt64List [1L, bodyLength / 65536L,
-                                     (bodyLength / 256L) % 256L, bodyLength % 256L],
-      body ] in
-    Stdlib.Tls13.serializePlaintext 22L handshake
+    let baseExtensions = Stdlib.Blob.concat [sni, versions, groups, signatures, certificateSignatures, shares] in
+    match Stdlib.TlsAlpn.offer protocols with
+    | Error message -> Error message
+    | Ok alpn ->
+      let extensions = if protocols == [] then baseExtensions
+                       else Stdlib.Blob.concat [baseExtensions, Stdlib.Tls13.__extension 16L alpn] in
+      let body = Stdlib.Blob.concat [
+        Stdlib.Blob.__fromInt64List [3L, 3L], random,
+        Stdlib.Blob.__fromInt64List [0L, 0L, 6L, 19L, 2L, 19L, 1L, 19L, 3L, 1L, 0L],
+        Stdlib.Tls13.__u16 (Stdlib.Blob.__byteLength extensions), extensions ] in
+      let bodyLength = Stdlib.Blob.__byteLength body in
+      let handshake = Stdlib.Blob.concat [
+        Stdlib.Blob.__fromInt64List [1L, bodyLength / 65536L,
+                                       (bodyLength / 256L) % 256L, bodyLength % 256L],
+        body ] in
+      Stdlib.Tls13.serializePlaintext 22L handshake
+
+let clientHello (host: String) (random: Blob) (keyShare: Blob)
+  : Stdlib.Result.Result<Blob, String> =
+  Stdlib.Tls13.clientHelloWithProtocols host random keyShare []
 
 let __parseServerExtensions (data: Blob) (position: Int64) (end_: Int64)
   (versionSeen: Bool) (keyShare: Stdlib.Option.Option<Blob>)

@@ -203,6 +203,30 @@ let __parseSecureResponse (method: String) (buffer: Blob) (informational: Int64)
         statusCode = Stdlib.Int.fromInt64 parsed.statusCode,
         headers = parsed.headers, body = parsed.body })
 
+let __secureRequest (connection: Stdlib.Network.TcpConnection) (url: Stdlib.HttpWire.Url)
+  (method: String) (roots: List<Blob>) (headers: List<(String * String)>)
+  (body: Blob) (requestBytes: Blob)
+  : Stdlib.Result.Result<Stdlib.HttpClient.Response, Stdlib.HttpClient.RequestError> =
+  match Stdlib.Tls13Client.handshakeWithProtocols connection url.host roots ["h2", "http/1.1"] with
+  | Error _ -> Error Stdlib.HttpClient.RequestError.NetworkError
+  | Ok negotiated ->
+    let secure = negotiated.keys in
+    if negotiated.protocol == "h2" then
+      let transport = Stdlib.HttpTransport.secure connection secure.server secure.client secure.pending in
+      let response = Stdlib.Http2.request transport method url headers body in
+      let _ = Stdlib.HttpTransport.close transport in
+      match response with
+      | Error _ -> Error Stdlib.HttpClient.RequestError.NetworkError
+      | Ok value -> Ok value
+    else
+      match Stdlib.Tls13Client.__sendApplication connection secure.client requestBytes 0L with
+      | Error _ -> Error Stdlib.HttpClient.RequestError.NetworkError
+      | Ok () ->
+        match Stdlib.Tls13Client.__readApplication connection method secure.server
+                secure.pending Stdlib.Blob.empty 0L with
+        | Error _ -> Error Stdlib.HttpClient.RequestError.NetworkError
+        | Ok response -> Stdlib.HttpClient.__parseSecureResponse method response 0L
+
 let __request (trusted: Bool) (roots: Stdlib.Option.Option<List<Blob>>)
   (method: String) (urlText: String)
   (headers: List<(String * String)>) (body: Blob)
@@ -243,11 +267,8 @@ let __request (trusted: Bool) (roots: Stdlib.Option.Option<List<Blob>>)
                         match trust with
                         | Error _ -> Error Stdlib.HttpClient.RequestError.NetworkError
                         | Ok authorities ->
-                          match Stdlib.Tls13Client.exchange connection url.host normalizedMethod
-                                  authorities requestBytes with
-                          | Error _ -> Error Stdlib.HttpClient.RequestError.NetworkError
-                          | Ok response -> Stdlib.HttpClient.__parseSecureResponse
-                                             normalizedMethod response 0L
+                          Stdlib.HttpClient.__secureRequest connection url normalizedMethod
+                            authorities headers body requestBytes
                       else
                         match Stdlib.Network.writeTcp connection requestBytes with
                         | Error code -> Error (Stdlib.HttpClient.__transportError code)
@@ -502,6 +523,29 @@ let __streamStep (state: Stdlib.HttpClient.StreamBodyState)
 let __streamDispose (state: Stdlib.HttpClient.StreamBodyState) : Unit =
   Stdlib.Network.closeTcp state.connection
 
+type StreamStart = Legacy of Stdlib.HttpClient.StreamTransport | Modern of Stdlib.HttpClient.StreamResponse
+
+let __secureStream (connection: Stdlib.Network.TcpConnection) (url: Stdlib.HttpWire.Url)
+  (method: String) (roots: List<Blob>) (headers: List<(String * String)>)
+  (body: Blob) (requestBytes: Blob)
+  : Stdlib.Result.Result<Stdlib.HttpClient.StreamStart, Stdlib.HttpClient.RequestError> =
+  match Stdlib.Tls13Client.handshakeWithProtocols connection url.host roots ["h2", "http/1.1"] with
+  | Error _ -> Error Stdlib.HttpClient.RequestError.NetworkError
+  | Ok negotiated ->
+    let secure = negotiated.keys in
+    if negotiated.protocol == "h2" then
+      let transport = Stdlib.HttpTransport.secure connection secure.server secure.client secure.pending in
+      match Stdlib.Http2.stream transport method url headers body with
+      | Error _ ->
+        let _ = Stdlib.HttpTransport.close transport in
+        Error Stdlib.HttpClient.RequestError.NetworkError
+      | Ok response -> Ok (Stdlib.HttpClient.StreamStart.Modern response)
+    else
+      match Stdlib.Tls13Client.__sendApplication connection secure.client requestBytes 0L with
+      | Error _ -> Error Stdlib.HttpClient.RequestError.NetworkError
+      | Ok () -> Ok (Stdlib.HttpClient.StreamStart.Legacy (Stdlib.HttpClient.StreamTransport.Secure
+        (Stdlib.Tls13Client.ApplicationState { keys = secure.server, pending = secure.pending, records = 0L })))
+
 let __stream (trusted: Bool) (roots: Stdlib.Option.Option<List<Blob>>)
   (method: String) (urlText: String)
   (headers: List<(String * String)>) (body: Blob)
@@ -537,19 +581,18 @@ let __stream (trusted: Bool) (roots: Stdlib.Option.Option<List<Blob>>)
               match trust with
               | Error _ -> Error Stdlib.HttpClient.RequestError.NetworkError
               | Ok authorities ->
-                match Stdlib.Tls13Client.beginExchange connection url.host authorities requestBytes with
-                | Error _ -> Error Stdlib.HttpClient.RequestError.NetworkError
-                | Ok secure -> Ok (Stdlib.HttpClient.StreamTransport.Secure secure)
+                Stdlib.HttpClient.__secureStream connection url normalizedMethod authorities headers body requestBytes
             else if url.scheme == "http" then
               match Stdlib.Network.writeTcp connection requestBytes with
               | Error code -> Error (Stdlib.HttpClient.__transportError code)
-              | Ok () -> Ok Stdlib.HttpClient.StreamTransport.Plain
+              | Ok () -> Ok (Stdlib.HttpClient.StreamStart.Legacy Stdlib.HttpClient.StreamTransport.Plain)
             else Error (Stdlib.HttpClient.RequestError.BadUrl Stdlib.HttpClient.BadUrlDetails.UnsupportedProtocol) in
           match opened with
           | Error error ->
             let _ = Stdlib.Network.closeTcp connection in
             Error error
-          | Ok transport ->
+          | Ok (Modern response) -> Ok response
+          | Ok (Legacy transport) ->
             match Stdlib.HttpClient.__streamHead connection transport normalizedMethod
                     Stdlib.Blob.empty 0L with
             | Error error ->

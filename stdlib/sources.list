@@ -145,6 +145,14 @@ Network.dark
 HttpWire.dark
 DnsWire.dark
 HttpConnect.dark
+__Http2Wire.dark
+__Hpack.dark
+__TlsAlpn.dark
+__HttpTransport.dark
+__Http2Fields.dark
+__Http2.dark
+__QuicWire.dark
+__Http3Wire.dark
 Pretty.dark
 Char.dark
 Regex.dark
