@@ -2,16 +2,15 @@
 
 module Darklang.Stdlib.Char
 
-let toString (char: Char) : String =
-    Builtin.charToString char
+let toString (char: Char) : String = char
 
 let __asChar (value: String) : Char = value
 
 let toUppercase (char: Char) : Char =
-    Builtin.charToUppercase char
+    Stdlib.Char.__asChar (Stdlib.String.__Unicode.uppercase (Stdlib.Char.toString char))
 
 let toLowercase (char: Char) : Char =
-    Builtin.charToLowercase char
+    Stdlib.Char.__asChar (Stdlib.String.__Unicode.lowercase (Stdlib.Char.toString char))
 
 let isLowercase (char: Char) : Bool =
     Stdlib.Char.toLowercase char == char && Stdlib.Char.toUppercase char != char
@@ -33,19 +32,30 @@ let isASCIILetter (char: Char) : Bool =
     | None -> false
 
 let isLetter (char: Char) : Bool =
-    Builtin.charIsLetter char
+    match Stdlib.Char.__firstCodepoint char with
+    | Some codepoint -> Stdlib.String.__Unicode.isLetter codepoint
+    | None -> false
 
 let isAlphanumeric (char: Char) : Bool =
-    Builtin.charIsAlphanumeric char
+    match Stdlib.Char.__firstCodepoint char with
+    | Some codepoint -> Stdlib.String.__Unicode.isLetter codepoint || Stdlib.String.__Unicode.isNumber codepoint
+    | None -> false
 
 let isWhitespace (char: Char) : Bool =
-    Builtin.charIsWhitespace char
+    match Stdlib.Char.__firstCodepoint char with
+    | Some codepoint -> Stdlib.String.__Unicode.isWhitespace codepoint
+    | None -> false
 
 let toCodepoint (char: Char) : Stdlib.Option.Option<Int> =
-    Builtin.charToCodepoint char
+    match Stdlib.String.__toCodepoints (Stdlib.Char.toString char) with
+    | [codepoint] -> Some (Stdlib.Int.fromInt64 codepoint)
+    | _ -> None
 
 let toAsciiCode (char: Char) : Stdlib.Option.Option<Int> =
-    Builtin.charToAsciiCode char
+    match Stdlib.Char.__firstCodepoint char with
+    | Some codepoint ->
+        if codepoint >= 0L && codepoint <= 255L then Some (Stdlib.Int.fromInt64 codepoint) else None
+    | None -> None
 
 let isASCII (char: Char) : Bool =
     match Stdlib.Char.toAsciiCode char with
@@ -76,17 +86,14 @@ let __compareUnits (left: List<Int64>) (right: List<Int64>) : Int64 =
 let __compare (left: Char) (right: Char) : Int64 =
     Stdlib.Char.__compareUnits (Stdlib.Char.__utf16Units (Stdlib.String.__toCodepoints (Stdlib.Char.toString left)) []) (Stdlib.Char.__utf16Units (Stdlib.String.__toCodepoints (Stdlib.Char.toString right)) [])
 
-let isLessThan (left: Char) (right: Char) : Bool =
-    Builtin.charIsLessThan left right
-
-let isLessThanOrEqualTo (left: Char) (right: Char) : Bool =
-    Builtin.charIsLessThanOrEqualTo left right
-
-let isGreaterThan (left: Char) (right: Char) : Bool =
-    Builtin.charIsGreaterThan left right
-
-let isGreaterThanOrEqualTo (left: Char) (right: Char) : Bool =
-    Builtin.charIsGreaterThanOrEqualTo left right
+let isLessThan (left: Char) (right: Char) : Bool = Stdlib.Char.__compare left right < 0L
+let isLessThanOrEqualTo (left: Char) (right: Char) : Bool = Stdlib.Char.__compare left right <= 0L
+let isGreaterThan (left: Char) (right: Char) : Bool = Stdlib.Char.__compare left right > 0L
+let isGreaterThanOrEqualTo (left: Char) (right: Char) : Bool = Stdlib.Char.__compare left right >= 0L
 
 let fromCodepoint (codepoint: Int) : Stdlib.Option.Option<Char> =
-    Builtin.charFromCodepoint codepoint
+    match Stdlib.Int.toInt64 codepoint with
+    | None -> None
+    | Some value ->
+        if Stdlib.String.__Unicode.isScalar value then Some (Stdlib.Char.__asChar (Stdlib.String.__fromCodepoints ([value])))
+        else None
