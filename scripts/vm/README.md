@@ -2,9 +2,7 @@
 
 ChatGPT app / Work VMs are disposable. GitHub is the recovery source for work;
 local commits, toolchains, logs and build outputs can disappear between turns.
-The local Codex setup uses macOS worktrees, `./land`, mergetrain and the
-integrator. None of those handoff tools apply in the app. Root
-[`AGENTS.md`](../../AGENTS.md) owns the rules for both environments.
+[`AGENTS.chatgpt.md`](../../AGENTS.chatgpt.md) owns the agent operating rules.
 
 ## Start or recover a checkout
 
@@ -38,7 +36,7 @@ git diff --stat origin/main...HEAD
 
 If the checkout survived, inspect its branch and working tree first. Preserve
 uncommitted work; do not reset or recreate it. Read the existing task changes
-and continue from them. Read `docs/index.md` and `AGENTS.md` before editing.
+and continue from them. Read `docs/index.md` and `AGENTS.chatgpt.md` before editing.
 
 ## Preserve progress before setup and between turns
 
@@ -48,7 +46,7 @@ A checkpoint may contain unfinished work; its message and report must say so.
 Do not include credentials, toolchains, downloads or generated results.
 
 ```bash
-git add AGENTS.md scripts/vm/README.md # Replace with the intended changed paths.
+git add AGENTS.chatgpt.md scripts/vm/README.md # Replace with the intended changed paths.
 git commit -m 'Checkpoint: describe progress and remaining work'
 git push -u origin HEAD
 branch=$(git branch --show-current)
