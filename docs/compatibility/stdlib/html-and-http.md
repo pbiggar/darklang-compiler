@@ -135,10 +135,16 @@ dispatch, body limits, shutdown and compiled leak accounting.
 
 HTTP/3 is not yet available through the client/server APIs. Its initial pure
 wire layer provides bounded QUIC variable-length integers and HTTP/3 frame
-and SETTINGS parsing. `test/fixtures/e2e/http3_wire.e2e` checks encoding bounds,
+and SETTINGS parsing. QPACK supports the RFC 9204 static table, static-name
+references, literal names/values and shared Huffman decoding, advertising zero
+dynamic capacity and no blocked streams. `test/fixtures/e2e/http3_qpack.e2e`
+checks the RFC example, malformed references, table boundaries and list limits;
+`python3 scripts/test_qpack_peer.py` verifies both directions against test-only
+`pylsqpack==0.3.23`, including duplicate fields and compiled leak accounting.
+`test/fixtures/e2e/http3_wire.e2e` checks encoding bounds,
 fragmentation, forbidden HTTP/2 frame/settings identifiers and duplicates.
 QUIC packet protection, TLS handshake integration, reliable UDP streams,
-QPACK and advertised-only HTTP/3 discovery remain implementation work.
+and advertised-only HTTP/3 discovery remain implementation work.
 
 `Stdlib.HttpClient.Sse.Event` and `parse` are copied from the same revision.
 The parser retains upstream's `Stream.unfold` behavior: it pulls only until the
