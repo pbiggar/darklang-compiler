@@ -123,3 +123,8 @@ Stdlib.Cli.Posix.fnmatch "\\?" "]" false = false
 Stdlib.Cli.Posix.fnmatch "[[.a.]]" "a" false = true
 Stdlib.Cli.Posix.fnmatch "[[=a=]]" "a" false = true
 Stdlib.Cli.Posix.fnmatch "[a-[.c.]]" "b" false = true
+
+Stdlib.Cli.Posix.fnmatch "[![:bogus:]]" "a" false = false
+Stdlib.Cli.Posix.fnmatch "[[:bogus:]]" "[[:bogus:]]" false = false
+Stdlib.Cli.Posix.fnmatch "a\0b" "a" false = true
+Stdlib.Cli.Posix.fnmatch "?" "\0a" false = false

@@ -33,18 +33,18 @@ let posixFdRead (fd: Int) (count: Int) : Stdlib.Result.Result<Blob, Stdlib.Cli.P
     let count = Builtin.__posixInt32 count in
     if count < 0L then Error (Stdlib.Cli.__Posix.__error 22L)
     else
-        let ptr = __raw_alloc (if count == 0L then 1L else count) in
+        let ptr = __mapped_alloc (if count == 0L then 1L else count) in
         let rc = Stdlib.Cli.__Posix.__read fd ptr count in
         let result = if rc < 0L then Error (Stdlib.Cli.__Posix.__error (0L - rc)) else Ok (Stdlib.Cli.__Posix.__bufferBytes ptr 0L rc []) in
-        let _ = __raw_free ptr in
+        let _ = __mapped_free ptr in
         result
 
 let posixFdWrite (fd: Int) (blob: Blob) : Stdlib.Result.Result<Int, Stdlib.Cli.Posix.Error> =
     let fd = Builtin.__posixInt32 fd in
     let length = Stdlib.Blob.__byteLength blob in
-    let ptr = __raw_alloc (if length == 0L then 1L else length) in
+    let ptr = __mapped_alloc (if length == 0L then 1L else length) in
     let result = Stdlib.Cli.__Posix.__writeFully fd ptr blob 0L in
-    let _ = __raw_free ptr in
+    let _ = __mapped_free ptr in
     result
 
 let posixFdSeek (fd: Int) (offset: Int) (whence: Int) : Stdlib.Result.Result<Int, Stdlib.Cli.Posix.Error> =
@@ -91,11 +91,11 @@ let posixUtimesNow (path: String) : Stdlib.Result.Result<Unit, Stdlib.Cli.Posix.
         Stdlib.Cli.__Posix.__withEntry path (fun fd name ->
             // Darwin's libc utimensat uses setattrlistat. Build its attrlist
             // and modification/access times explicitly for the kernel ABI.
-            let attrs = __raw_alloc 24L in
+            let attrs = __mapped_alloc 24L in
             let _ = __raw_write_word attrs 0L 21990232555525L in
             let _ = __raw_write_word attrs 8L 0L in
             let _ = __raw_write_word attrs 16L 0L in
-            let times = __raw_alloc 32L in
+            let times = __mapped_alloc 32L in
             let ticks = Stdlib.DateTime.__toUnixTimeTicks (Stdlib.DateTime.now ()) in
             let seconds = ticks / 10000000L in
             let nanos = (ticks % 10000000L) * 100L in
@@ -104,11 +104,11 @@ let posixUtimesNow (path: String) : Stdlib.Result.Result<Unit, Stdlib.Cli.Posix.
             let _ = __raw_write_word times 16L seconds in
             let _ = __raw_write_word times 24L nanos in
             let result = Stdlib.Cli.__Posix.__unitResult (Stdlib.Cli.__Posix.__setAttributesAt fd name attrs times 32L 1L) in
-            let _ = __raw_free attrs in
-            let _ = __raw_free times in
+            let _ = __mapped_free attrs in
+            let _ = __mapped_free times in
             result)
     else Stdlib.Cli.__Posix.__metadataPath path (fun heldFd held ->
-        let times = __raw_alloc 32L in
+        let times = __mapped_alloc 32L in
         let _ = __raw_write_word times 0L 0L in
         let _ = __raw_write_word times 8L 1073741823L in
         let _ = __raw_write_word times 16L 0L in
@@ -117,7 +117,7 @@ let posixUtimesNow (path: String) : Stdlib.Result.Result<Unit, Stdlib.Cli.Posix.
         let result =
             if rc == -22L then Stdlib.Cli.__Posix.__withCString held (fun ptr -> Stdlib.Cli.__Posix.__unitResult (Stdlib.Cli.__Posix.__utimesAt (Stdlib.Cli.__Posix.__cwdFd ()) ptr times 0L))
             else Stdlib.Cli.__Posix.__unitResult rc in
-        let _ = __raw_free times in
+        let _ = __mapped_free times in
         result)
 
 let posixSymlink (target: String) (linkpath: String) : Stdlib.Result.Result<Unit, Stdlib.Cli.Posix.Error> =
@@ -126,10 +126,10 @@ let posixSymlink (target: String) (linkpath: String) : Stdlib.Result.Result<Unit
 
 let posixReadlink (path: String) : Stdlib.Result.Result<String, Stdlib.Cli.Posix.Error> =
     Stdlib.Cli.__Posix.__withEntry path (fun fd name ->
-        let buffer = __raw_alloc 4096L in
+        let buffer = __mapped_alloc 4096L in
         let rc = Stdlib.Cli.__Posix.__readlinkAt fd name buffer 4096L in
         let result = if rc < 0L then Error (Stdlib.Cli.__Posix.__error (0L - rc)) else Ok (Stdlib.Cli.__Posix.__bufferString buffer 0L rc) in
-        let _ = __raw_free buffer in
+        let _ = __mapped_free buffer in
         result)
 
 let posixMkstemp (prefix: String) : Stdlib.Result.Result<(Int * String), Stdlib.Cli.Posix.Error> = Stdlib.Cli.__Posix.__createUnique prefix 100L false
@@ -138,12 +138,12 @@ let posixMkdtemp (prefix: String) : Stdlib.Result.Result<String, Stdlib.Cli.Posi
 
 let posixListDir (path: String) : Stdlib.Result.Result<List<String>, Stdlib.Cli.Posix.Error> =
     Stdlib.Cli.__Posix.__withDirectory path (fun fd ->
-        let buffer = __raw_alloc 32768L in
-        let position = __raw_alloc 8L in
+        let buffer = __mapped_alloc 32768L in
+        let position = __mapped_alloc 8L in
         let _ = __raw_write_word position 0L 0L in
         let result = Stdlib.Cli.__Posix.__listEntries fd buffer position [] in
-        let _ = __raw_free buffer in
-        let _ = __raw_free position in
+        let _ = __mapped_free buffer in
+        let _ = __mapped_free position in
         result)
 
 let posixFlock (fd: Int) (exclusive: Bool) : Stdlib.Result.Result<Unit, Stdlib.Cli.Posix.Error> =

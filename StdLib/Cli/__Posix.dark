@@ -35,10 +35,10 @@ let __copyString (text: String) (ptr: RawPtr) (offset: Int64) : Unit =
         Stdlib.Cli.__Posix.__copyString text ptr (offset + 1L)
 
 let __withCString (text: String) (fn: RawPtr -> 'a) : 'a =
-    let ptr = __raw_alloc (Stdlib.String.__byteLength text + 1L) in
+    let ptr = __mapped_alloc (Stdlib.String.__byteLength text + 1L) in
     let _ = Stdlib.Cli.__Posix.__copyString text ptr 0L in
     let result = fn ptr in
-    let _ = __raw_free ptr in
+    let _ = __mapped_free ptr in
     result
 
 let __bufferBytes (ptr: RawPtr) (offset: Int64) (end_: Int64) (bytes: List<Int64>) : Blob =
@@ -312,12 +312,12 @@ let __intResult (rc: Int64) : Stdlib.Result.Result<Int, Stdlib.Cli.Posix.Error> 
     if rc < 0L then Error (Stdlib.Cli.__Posix.__error (0L - rc)) else Ok (Stdlib.Int.fromInt64 rc)
 
 let __getCurrentDirectory () : Stdlib.Result.Result<String, Stdlib.Cli.Posix.Error> =
-    let ptr = __raw_alloc 4096L in
+    let ptr = __mapped_alloc 4096L in
     let rc = Stdlib.Cli.__Posix.__getCwd ptr 4096L in
     let result =
         if rc < 0L then Error (Stdlib.Cli.__Posix.__error (0L - rc))
         else Ok (Stdlib.Cli.__Posix.__bufferString ptr 0L (Stdlib.Cli.__Posix.__nullEnd ptr 0L 4096L)) in
-    let _ = __raw_free ptr in
+    let _ = __mapped_free ptr in
     result
 
 let __absolute (path: String) : Stdlib.Result.Result<String, Stdlib.Cli.Posix.Error> =
@@ -374,10 +374,10 @@ let __withDirectory (path: String) (fn: Int64 -> Stdlib.Result.Result<'a, Stdlib
 
 let __withStat (path: String) (fn: RawPtr -> 'a) : Stdlib.Result.Result<'a, Stdlib.Cli.Posix.Error> =
     let statEntry = fun fd name ->
-        let ptr = __raw_alloc 256L in
+        let ptr = __mapped_alloc 256L in
         let rc = Stdlib.Cli.__Posix.__statAt fd name ptr (Stdlib.Cli.__Posix.__nofollowAt ()) in
         let result = if rc < 0L then Error (Stdlib.Cli.__Posix.__error (0L - rc)) else Ok (fn ptr) in
-        let _ = __raw_free ptr in
+        let _ = __mapped_free ptr in
         result in
     if path != "" && Stdlib.String.replaceAll path "/" "" == "" then
         Stdlib.Cli.__Posix.__withCString "/" (fun ptr -> statEntry (Stdlib.Cli.__Posix.__cwdFd ()) ptr)
@@ -458,12 +458,12 @@ let __metadataPath (path: String) (fn: Int64 -> String -> Stdlib.Result.Result<U
         let fd = Stdlib.Cli.__Posix.__openAt parent name (2097152L + Stdlib.Cli.__Posix.__nofollow ()) 0L in
         if fd < 0L then Error (Stdlib.Cli.__Posix.__error (0L - fd))
         else
-            let ptr = __raw_alloc 256L in
+            let ptr = __mapped_alloc 256L in
             let rc = Stdlib.Cli.__Posix.__withCString "" (fun empty -> Stdlib.Cli.__Posix.__statAt fd empty ptr 4096L) in
             let result =
                 if rc < 0L then Error (Stdlib.Cli.__Posix.__error (0L - rc))
                 else if Stdlib.Int64.bitwiseAnd (Stdlib.Cli.__Posix.__statMode ptr) 61440L == 40960L then Error (Stdlib.Cli.__Posix.__error 40L)
                 else fn fd ("/proc/self/fd/" ++ Stdlib.Int64.toString fd) in
-            let _ = __raw_free ptr in
+            let _ = __mapped_free ptr in
             let _ = Stdlib.Cli.__Posix.__close fd in
             result)

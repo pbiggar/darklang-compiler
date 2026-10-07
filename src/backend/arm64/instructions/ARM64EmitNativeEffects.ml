@@ -713,7 +713,11 @@ let emitCliNative (ctx : codeGenContext) (dest : LIR.reg)
                   | Platform.Linux -> Some 38
                   | Platform.MacOS -> Some 465),
                   4 )
-            | LIR.PosixChmodAt2 -> (Some 452, 4)
+            | LIR.PosixChmodAt2 ->
+                ( (match ARM64.targetOS ctx.target with
+                  | Platform.Linux -> Some 452
+                  | Platform.MacOS -> None),
+                  4 )
             | LIR.PosixChmodAt ->
                 ( (match ARM64.targetOS ctx.target with
                   | Platform.Linux -> Some 53

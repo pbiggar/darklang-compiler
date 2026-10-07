@@ -4,7 +4,14 @@ module Darklang.Stdlib.Cli.__Fnmatch
 let __byte (s: String) (i: Int64) : Int64 =
     if i < 0L || i >= Stdlib.String.__byteLength s then -1L
     else Stdlib.String.__byteAtUnchecked s i
-let __length (s: String) : Int64 = Stdlib.String.__byteLength s
+let __cstringLength (s: String) (i: Int64) : Int64 =
+    if i >= Stdlib.String.__byteLength s then i
+    else if Stdlib.String.__byteAtUnchecked s i == 0L then i
+    else Stdlib.Cli.__Fnmatch.__cstringLength s (i + 1L)
+let __length (s: String) : Int64 = Stdlib.Cli.__Fnmatch.__cstringLength s 0L
+
+let __knownClass (name: String) : Bool =
+    name == "alnum" || name == "alpha" || name == "blank" || name == "cntrl" || name == "digit" || name == "graph" || name == "lower" || name == "print" || name == "punct" || name == "space" || name == "upper" || name == "xdigit"
 
 let __namedClass (name: String) (c: Int64) : Bool =
     let upper = c >= 65L && c <= 90L in
@@ -38,22 +45,22 @@ let __classChar (pattern: String) (i: Int64) : (Int64 * Int64) =
         (Stdlib.Cli.__Fnmatch.__byte pattern (i + 2L), i + 5L)
     else (Stdlib.Cli.__Fnmatch.__byte pattern i, i + 1L)
 
-let __classItems (pattern: String) (i: Int64) (c: Int64) (first: Bool) (matched: Bool) : Stdlib.Option.Option<(Int64 * Bool)> =
+let __classItems (pattern: String) (i: Int64) (c: Int64) (first: Bool) (matched: Bool) (valid: Bool) : Stdlib.Option.Option<(Int64 * Bool * Bool)> =
     let length = Stdlib.Cli.__Fnmatch.__length pattern in
     if i >= length then None
-    else if Stdlib.Cli.__Fnmatch.__byte pattern i == 93L && Stdlib.Bool.not first then Some ((i + 1L, matched))
+    else if Stdlib.Cli.__Fnmatch.__byte pattern i == 93L && Stdlib.Bool.not first then Some ((i + 1L, matched, valid))
     else if i + 1L < length && Stdlib.Cli.__Fnmatch.__byte pattern i == 91L && Stdlib.Cli.__Fnmatch.__byte pattern (i + 1L) == 58L then
         let end_ = Stdlib.Cli.__Fnmatch.__classEnd pattern (i + 2L) in
         if end_ < 0L then None
         else
             let name = Stdlib.String.__byteSlice pattern (i + 2L) end_ in
-            Stdlib.Cli.__Fnmatch.__classItems pattern (end_ + 2L) c false (matched || Stdlib.Cli.__Fnmatch.__namedClass name c)
+            Stdlib.Cli.__Fnmatch.__classItems pattern (end_ + 2L) c false (matched || Stdlib.Cli.__Fnmatch.__namedClass name c) (valid && Stdlib.Cli.__Fnmatch.__knownClass name)
     else
         let (low, next) = Stdlib.Cli.__Fnmatch.__classChar pattern i in
         if next + 1L < length && Stdlib.Cli.__Fnmatch.__byte pattern next == 45L && Stdlib.Cli.__Fnmatch.__byte pattern (next + 1L) != 93L then
             let (high, after) = Stdlib.Cli.__Fnmatch.__classChar pattern (next + 1L) in
-            Stdlib.Cli.__Fnmatch.__classItems pattern after c false (matched || (c >= low && c <= high))
-        else Stdlib.Cli.__Fnmatch.__classItems pattern next c false (matched || c == low)
+            Stdlib.Cli.__Fnmatch.__classItems pattern after c false (matched || (c >= low && c <= high)) valid
+        else Stdlib.Cli.__Fnmatch.__classItems pattern next c false (matched || c == low) valid
 
 let __class (pattern: String) (i: Int64) (c: Int64) : Stdlib.Option.Option<(Int64 * Bool)> =
     if i + 1L >= Stdlib.Cli.__Fnmatch.__length pattern then None
@@ -61,9 +68,9 @@ let __class (pattern: String) (i: Int64) (c: Int64) : Stdlib.Option.Option<(Int6
         let first = Stdlib.Cli.__Fnmatch.__byte pattern (i + 1L) in
         let inverted = first == 33L || first == 94L in
         let start = i + (if inverted then 2L else 1L) in
-        match Stdlib.Cli.__Fnmatch.__classItems pattern start c true false with
+        match Stdlib.Cli.__Fnmatch.__classItems pattern start c true false true with
         | None -> None
-        | Some ((next, matched)) -> Some ((next, if inverted then Stdlib.Bool.not matched else matched))
+        | Some ((next, matched, valid)) -> Some ((next, if Stdlib.Bool.not valid then false else if inverted then Stdlib.Bool.not matched else matched))
 
 let __matches (pattern: String) (text: String) (pathname: Bool) (pi: Int64) (si: Int64) : Bool =
     let plen = Stdlib.Cli.__Fnmatch.__length pattern in
