@@ -289,6 +289,7 @@ let convertCliOperation (operation : ANF.cliOperation) =
   | ANF.PosixUnlinkAt -> MIR.PosixUnlinkAt
   | ANF.PosixRenameAt -> MIR.PosixRenameAt
   | ANF.PosixChmodAt -> MIR.PosixChmodAt
+  | ANF.PosixChmodAt2 -> MIR.PosixChmodAt2
   | ANF.PosixUtimesAt -> MIR.PosixUtimesAt
   | ANF.PosixSetAttributesAt -> MIR.PosixSetAttributesAt
   | ANF.PosixSymlinkAt -> MIR.PosixSymlinkAt
@@ -865,6 +866,7 @@ let cliOperationName = function
   | ANF.PosixUnlinkAt -> "PosixUnlinkAt"
   | ANF.PosixRenameAt -> "PosixRenameAt"
   | ANF.PosixChmodAt -> "PosixChmodAt"
+  | ANF.PosixChmodAt2 -> "PosixChmodAt2"
   | ANF.PosixUtimesAt -> "PosixUtimesAt"
   | ANF.PosixSetAttributesAt -> "PosixSetAttributesAt"
   | ANF.PosixSymlinkAt -> "PosixSymlinkAt"

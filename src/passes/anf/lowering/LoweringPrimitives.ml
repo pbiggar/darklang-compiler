@@ -479,8 +479,10 @@ let tryCliIntrinsic name args =
         | "Darklang.Stdlib.Cli.__Posix.__unlinkAt" -> Some ANF.PosixUnlinkAt
         | "Darklang.Stdlib.Cli.__Posix.__renameAt" -> Some ANF.PosixRenameAt
         | "Darklang.Stdlib.Cli.__Posix.__chmodAt" -> Some ANF.PosixChmodAt
+        | "Darklang.Stdlib.Cli.__Posix.__chmodAt2" -> Some ANF.PosixChmodAt2
         | "Darklang.Stdlib.Cli.__Posix.__utimesAt" -> Some ANF.PosixUtimesAt
-        | "Darklang.Stdlib.Cli.__Posix.__setAttributesAt" -> Some ANF.PosixSetAttributesAt
+        | "Darklang.Stdlib.Cli.__Posix.__setAttributesAt" ->
+            Some ANF.PosixSetAttributesAt
         | "Darklang.Stdlib.Cli.__Posix.__symlinkAt" -> Some ANF.PosixSymlinkAt
         | "Darklang.Stdlib.Cli.__Posix.__readlinkAt" -> Some ANF.PosixReadlinkAt
         | "Darklang.Stdlib.Cli.__Posix.__flock" -> Some ANF.PosixFlock

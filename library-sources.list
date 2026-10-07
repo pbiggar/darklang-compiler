@@ -15,6 +15,9 @@ StdLib/UInt32.dark
 StdLib/UInt64.dark
 StdLib/UInt128.dark
 StdLib/Bool.dark
+StdLib/Cli/Posix/Modes.dark
+StdLib/Cli/Posix/Errno.dark
+StdLib/Cli/Posix/StatMode.dark
 StdLib/Cli/FileSystem.dark
 StdLib/Cli/FileSystem/FileError.dark
 StdLib/Cli/FileSystem/__Packed.dark
@@ -34,10 +37,7 @@ StdLib/Cli/__Posix.dark
 StdLib/Cli/__Fnmatch.dark
 StdLib/Cli/Posix.dark
 StdLib/Cli/Posix/__Error.dark
-StdLib/Cli/Posix/Modes.dark
 StdLib/Cli/Posix/OpenFlags.dark
-StdLib/Cli/Posix/Errno.dark
-StdLib/Cli/Posix/StatMode.dark
 StdLib/Retry.dark
 StdLib/Cli/Path.dark
 StdLib/Cli/File.dark

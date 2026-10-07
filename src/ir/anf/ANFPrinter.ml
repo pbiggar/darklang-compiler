@@ -139,6 +139,7 @@ let cliOperation = function
   | ANF.PosixUnlinkAt -> "PosixUnlinkAt"
   | ANF.PosixRenameAt -> "PosixRenameAt"
   | ANF.PosixChmodAt -> "PosixChmodAt"
+  | ANF.PosixChmodAt2 -> "PosixChmodAt2"
   | ANF.PosixUtimesAt -> "PosixUtimesAt"
   | ANF.PosixSetAttributesAt -> "PosixSetAttributesAt"
   | ANF.PosixSymlinkAt -> "PosixSymlinkAt"

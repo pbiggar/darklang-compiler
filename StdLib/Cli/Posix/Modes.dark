@@ -6,5 +6,3 @@ val defaultDir = 493
 
 /// 0644 — owner rw, group r, others r
 val defaultFile = 420
-
-

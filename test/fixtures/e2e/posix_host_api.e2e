@@ -12,7 +12,7 @@ let temp = Stdlib.Cli.File.createTemp () in match temp with | Error _ -> false |
 // Public upstream algorithms exercise the builtin boundary without a shell.
 match Stdlib.Cli.Posix.stat "/" with | Ok s -> Stdlib.Int.bitwiseAnd s.mode 61440 == 16384 | Error _ -> false = true
 match Stdlib.Cli.Posix.getCwd () with | Ok path -> Stdlib.String.startsWith path "/" | Error _ -> false = true
-match Stdlib.Cli.Posix.uname () with | Ok (os, host, machine) -> os != "" && host != "" && machine != "" | Error _ -> false = true
+match Stdlib.Cli.Posix.uname () with | Ok ((os, host, machine)) -> os != "" && host != "" && machine != "" | Error _ -> false = true
 Stdlib.Cli.Posix.getenv "DARK_POSIX_ENV" = Some "value\n " env="DARK_POSIX_ENV=value\n "
 let set = Stdlib.Cli.Posix.setenv "DARK_POSIX_MUTABLE" "exact\n " in let value = Stdlib.Cli.Posix.getenv "DARK_POSIX_MUTABLE" in let unset = Stdlib.Cli.Posix.unsetenv "DARK_POSIX_MUTABLE" in (set, value, unset, Stdlib.Cli.Posix.getenv "DARK_POSIX_MUTABLE") = (Ok (), Some "exact\n ", Ok (), None) isolated=true
 match Stdlib.Cli.Posix.setenv "bad=name" "x" with | Error e -> e.errno | Ok _ -> 0 = 22

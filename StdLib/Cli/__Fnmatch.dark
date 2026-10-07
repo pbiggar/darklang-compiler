@@ -1,7 +1,9 @@
 // __Fnmatch.dark - POSIX glob matching for the interpreter's builtin bridge.
 module Darklang.Stdlib.Cli.__Fnmatch
 
-let __byte (s: String) (i: Int64) : Int64 = Stdlib.String.__byteAtUnchecked s i
+let __byte (s: String) (i: Int64) : Int64 =
+    if i < 0L || i >= Stdlib.String.__byteLength s then -1L
+    else Stdlib.String.__byteAtUnchecked s i
 let __length (s: String) : Int64 = Stdlib.String.__byteLength s
 
 let __namedClass (name: String) (c: Int64) : Bool =
@@ -39,7 +41,7 @@ let __classChar (pattern: String) (i: Int64) : (Int64 * Int64) =
 let __classItems (pattern: String) (i: Int64) (c: Int64) (first: Bool) (matched: Bool) : Stdlib.Option.Option<(Int64 * Bool)> =
     let length = Stdlib.Cli.__Fnmatch.__length pattern in
     if i >= length then None
-    else if Stdlib.Cli.__Fnmatch.__byte pattern i == 93L && Stdlib.Bool.not first then Some (i + 1L, matched)
+    else if Stdlib.Cli.__Fnmatch.__byte pattern i == 93L && Stdlib.Bool.not first then Some ((i + 1L, matched))
     else if i + 1L < length && Stdlib.Cli.__Fnmatch.__byte pattern i == 91L && Stdlib.Cli.__Fnmatch.__byte pattern (i + 1L) == 58L then
         let end_ = Stdlib.Cli.__Fnmatch.__classEnd pattern (i + 2L) in
         if end_ < 0L then None
@@ -61,7 +63,7 @@ let __class (pattern: String) (i: Int64) (c: Int64) : Stdlib.Option.Option<(Int6
         let start = i + (if inverted then 2L else 1L) in
         match Stdlib.Cli.__Fnmatch.__classItems pattern start c true false with
         | None -> None
-        | Some (next, matched) -> Some (next, if inverted then Stdlib.Bool.not matched else matched)
+        | Some ((next, matched)) -> Some ((next, if inverted then Stdlib.Bool.not matched else matched))
 
 let __matches (pattern: String) (text: String) (pathname: Bool) (pi: Int64) (si: Int64) : Bool =
     let plen = Stdlib.Cli.__Fnmatch.__length pattern in
@@ -71,16 +73,17 @@ let __matches (pattern: String) (text: String) (pathname: Bool) (pi: Int64) (si:
         let p = Stdlib.Cli.__Fnmatch.__byte pattern pi in
         if p == 42L then
             if Stdlib.Cli.__Fnmatch.__matches pattern text pathname (pi + 1L) si then true
-            else si < slen && (Stdlib.Bool.not pathname || Stdlib.Cli.__Fnmatch.__byte text si != 47L) && Stdlib.Cli.__Fnmatch.__matches pattern text pathname pi (si + 1L)
+            else if si < slen && (Stdlib.Bool.not pathname || Stdlib.Cli.__Fnmatch.__byte text si != 47L) then Stdlib.Cli.__Fnmatch.__matches pattern text pathname pi (si + 1L)
+            else false
         else if si >= slen then false
         else
             let c = Stdlib.Cli.__Fnmatch.__byte text si in
             if p == 63L then
-                (Stdlib.Bool.not pathname || c != 47L) && Stdlib.Cli.__Fnmatch.__matches pattern text pathname (pi + 1L) (si + 1L)
+                if Stdlib.Bool.not pathname || c != 47L then Stdlib.Cli.__Fnmatch.__matches pattern text pathname (pi + 1L) (si + 1L) else false
             else if p == 92L then
-                pi + 1L < plen && Stdlib.Cli.__Fnmatch.__byte pattern (pi + 1L) == c && Stdlib.Cli.__Fnmatch.__matches pattern text pathname (pi + 2L) (si + 1L)
+                if pi + 1L < plen && Stdlib.Cli.__Fnmatch.__byte pattern (pi + 1L) == c then Stdlib.Cli.__Fnmatch.__matches pattern text pathname (pi + 2L) (si + 1L) else false
             else if p == 91L then
                 match Stdlib.Cli.__Fnmatch.__class pattern pi c with
-                | Some (next, matched) -> matched && (Stdlib.Bool.not pathname || c != 47L) && Stdlib.Cli.__Fnmatch.__matches pattern text pathname next (si + 1L)
-                | None -> p == c && Stdlib.Cli.__Fnmatch.__matches pattern text pathname (pi + 1L) (si + 1L)
-            else p == c && Stdlib.Cli.__Fnmatch.__matches pattern text pathname (pi + 1L) (si + 1L)
+                | Some ((next, matched)) -> if matched && (Stdlib.Bool.not pathname || c != 47L) then Stdlib.Cli.__Fnmatch.__matches pattern text pathname next (si + 1L) else false
+                | None -> if p == c then Stdlib.Cli.__Fnmatch.__matches pattern text pathname (pi + 1L) (si + 1L) else false
+            else if p == c then Stdlib.Cli.__Fnmatch.__matches pattern text pathname (pi + 1L) (si + 1L) else false

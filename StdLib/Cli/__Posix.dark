@@ -13,6 +13,7 @@ let __mkdirAt (a0: Int64) (a1: RawPtr) (a2: Int64) : Int64 = -38L
 let __unlinkAt (a0: Int64) (a1: RawPtr) (a2: Int64) : Int64 = -38L
 let __renameAt (a0: Int64) (a1: RawPtr) (a2: Int64) (a3: RawPtr) : Int64 = -38L
 let __chmodAt (a0: Int64) (a1: RawPtr) (a2: Int64) (a3: Int64) : Int64 = -38L
+let __chmodAt2 (a0: Int64) (a1: RawPtr) (a2: Int64) (a3: Int64) : Int64 = -38L
 let __utimesAt (a0: Int64) (a1: RawPtr) (a2: RawPtr) (a3: Int64) : Int64 = -38L
 let __setAttributesAt (a0: Int64) (a1: RawPtr) (a2: RawPtr) (a3: RawPtr) (a4: Int64) (a5: Int64) : Int64 = -38L
 let __symlinkAt (a0: RawPtr) (a1: Int64) (a2: RawPtr) : Int64 = -38L
@@ -387,8 +388,8 @@ let __statMode (ptr: RawPtr) : Int64 =
     else Stdlib.Cli.__Posix.__unsigned ptr (if Stdlib.Cli.__Posix.__x64 () then 24L else 16L) 4L
 
 let __statValues (ptr: RawPtr) : (Int * Int * Int) =
-    let size: Int64 = __raw_get ptr (if Stdlib.Cli.__Posix.__mac () then 96L else 48L) in
-    let mtime: Int64 = __raw_get ptr (if Stdlib.Cli.__Posix.__mac () then 48L else 88L) in
+    let size = __raw_get<Int64> ptr (if Stdlib.Cli.__Posix.__mac () then 96L else 48L) in
+    let mtime = __raw_get<Int64> ptr (if Stdlib.Cli.__Posix.__mac () then 48L else 88L) in
     (Stdlib.Int.fromInt64 (Stdlib.Cli.__Posix.__statMode ptr), Stdlib.Int.fromInt64 size, Stdlib.Int.fromInt64 mtime)
 
 let __writeBytes (blob: Blob) (ptr: RawPtr) (index: Int64) : Unit =
@@ -438,7 +439,7 @@ let __createUnique (prefix: String) (remaining: Int64) (directory: Bool) : Stdli
         let rc = if directory then Stdlib.Cli.__Posix.__mkdirAt parent name 448L
                  else Stdlib.Cli.__Posix.__openAt parent name ((if Stdlib.Cli.__Posix.__mac () then 2562L else 194L) + Stdlib.Cli.__Posix.__nofollow ()) 384L in
         if rc < 0L then Error (Stdlib.Cli.__Posix.__error (0L - rc))
-        else Ok (Stdlib.Int.fromInt64 rc, path)) in
+        else Ok ((Stdlib.Int.fromInt64 rc, path))) in
     match result with
     | Error e -> if e.errno == 17 && remaining > 0L then Stdlib.Cli.__Posix.__createUnique prefix (remaining - 1L) directory else Error e
     | Ok value -> Ok value
@@ -452,7 +453,7 @@ let __owner (lines: List<String>) (uid: String) : String =
         | (Some name, Some ownerUid) -> if ownerUid == uid then name else Stdlib.Cli.__Posix.__owner rest uid
         | _ -> Stdlib.Cli.__Posix.__owner rest uid
 
-let __metadataPath (path: String) (fn: String -> Stdlib.Result.Result<Unit, Stdlib.Cli.Posix.Error>) : Stdlib.Result.Result<Unit, Stdlib.Cli.Posix.Error> =
+let __metadataPath (path: String) (fn: Int64 -> String -> Stdlib.Result.Result<Unit, Stdlib.Cli.Posix.Error>) : Stdlib.Result.Result<Unit, Stdlib.Cli.Posix.Error> =
     Stdlib.Cli.__Posix.__withEntry path (fun parent name ->
         let fd = Stdlib.Cli.__Posix.__openAt parent name (2097152L + Stdlib.Cli.__Posix.__nofollow ()) 0L in
         if fd < 0L then Error (Stdlib.Cli.__Posix.__error (0L - fd))
@@ -462,7 +463,7 @@ let __metadataPath (path: String) (fn: String -> Stdlib.Result.Result<Unit, Stdl
             let result =
                 if rc < 0L then Error (Stdlib.Cli.__Posix.__error (0L - rc))
                 else if Stdlib.Int64.bitwiseAnd (Stdlib.Cli.__Posix.__statMode ptr) 61440L == 40960L then Error (Stdlib.Cli.__Posix.__error 40L)
-                else fn ("/proc/self/fd/" ++ Stdlib.Int64.toString fd) in
+                else fn fd ("/proc/self/fd/" ++ Stdlib.Int64.toString fd) in
             let _ = __raw_free ptr in
             let _ = Stdlib.Cli.__Posix.__close fd in
             result)

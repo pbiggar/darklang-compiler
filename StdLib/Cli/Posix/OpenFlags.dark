@@ -11,5 +11,3 @@ let rdwr () : Int = flag "rdwr"
 let creat () : Int = flag "creat"
 let trunc () : Int = flag "trunc"
 let append () : Int = flag "append"
-
-

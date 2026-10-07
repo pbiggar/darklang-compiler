@@ -107,6 +107,7 @@ type cliOperation =
   | PosixUnlinkAt
   | PosixRenameAt
   | PosixChmodAt
+  | PosixChmodAt2
   | PosixUtimesAt
   | PosixSetAttributesAt
   | PosixSymlinkAt

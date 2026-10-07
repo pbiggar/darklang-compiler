@@ -69,6 +69,7 @@ let convertCliOperation operation =
   | MIR.PosixUnlinkAt -> LIR.PosixUnlinkAt
   | MIR.PosixRenameAt -> LIR.PosixRenameAt
   | MIR.PosixChmodAt -> LIR.PosixChmodAt
+  | MIR.PosixChmodAt2 -> LIR.PosixChmodAt2
   | MIR.PosixUtimesAt -> LIR.PosixUtimesAt
   | MIR.PosixSetAttributesAt -> LIR.PosixSetAttributesAt
   | MIR.PosixSymlinkAt -> LIR.PosixSymlinkAt

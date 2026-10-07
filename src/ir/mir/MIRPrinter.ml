@@ -137,6 +137,7 @@ let cliOperation = function
   | MIR.PosixUnlinkAt -> "PosixUnlinkAt"
   | MIR.PosixRenameAt -> "PosixRenameAt"
   | MIR.PosixChmodAt -> "PosixChmodAt"
+  | MIR.PosixChmodAt2 -> "PosixChmodAt2"
   | MIR.PosixUtimesAt -> "PosixUtimesAt"
   | MIR.PosixSetAttributesAt -> "PosixSetAttributesAt"
   | MIR.PosixSymlinkAt -> "PosixSymlinkAt"

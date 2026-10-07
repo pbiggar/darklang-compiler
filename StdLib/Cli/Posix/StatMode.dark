@@ -6,5 +6,3 @@ val ifmt = 61440
 
 /// S_IFDIR — directory
 val ifdir = 16384
-
-

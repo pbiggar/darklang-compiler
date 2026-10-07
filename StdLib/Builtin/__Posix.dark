@@ -80,7 +80,11 @@ let posixChmod (path: String) (mode: Int) : Stdlib.Result.Result<Unit, Stdlib.Cl
     let mode = Builtin.__posixInt32 mode in
     if Stdlib.Cli.__Posix.__mac () then
         Stdlib.Cli.__Posix.__withEntry path (fun fd name -> Stdlib.Cli.__Posix.__unitResult (Stdlib.Cli.__Posix.__chmodAt fd name mode 32L))
-    else Stdlib.Cli.__Posix.__metadataPath path (fun held -> Stdlib.Cli.__Posix.__withCString held (fun ptr -> Stdlib.Cli.__Posix.__unitResult (Stdlib.Cli.__Posix.__chmodAt (Stdlib.Cli.__Posix.__cwdFd ()) ptr mode 0L)))
+    else Stdlib.Cli.__Posix.__metadataPath path (fun heldFd held ->
+        let rc = Stdlib.Cli.__Posix.__withCString "" (fun ptr -> Stdlib.Cli.__Posix.__chmodAt2 heldFd ptr mode 4096L) in
+        if rc == -38L || rc == -22L then
+            Stdlib.Cli.__Posix.__withCString held (fun ptr -> Stdlib.Cli.__Posix.__unitResult (Stdlib.Cli.__Posix.__chmodAt (Stdlib.Cli.__Posix.__cwdFd ()) ptr mode 0L))
+        else Stdlib.Cli.__Posix.__unitResult rc)
 
 let posixUtimesNow (path: String) : Stdlib.Result.Result<Unit, Stdlib.Cli.Posix.Error> =
     if Stdlib.Cli.__Posix.__mac () then
@@ -103,15 +107,18 @@ let posixUtimesNow (path: String) : Stdlib.Result.Result<Unit, Stdlib.Cli.Posix.
             let _ = __raw_free attrs in
             let _ = __raw_free times in
             result)
-    else Stdlib.Cli.__Posix.__metadataPath path (fun held -> Stdlib.Cli.__Posix.__withCString held (fun ptr ->
+    else Stdlib.Cli.__Posix.__metadataPath path (fun heldFd held ->
         let times = __raw_alloc 32L in
         let _ = __raw_write_word times 0L 0L in
         let _ = __raw_write_word times 8L 1073741823L in
         let _ = __raw_write_word times 16L 0L in
         let _ = __raw_write_word times 24L 1073741823L in
-        let result = Stdlib.Cli.__Posix.__unitResult (Stdlib.Cli.__Posix.__utimesAt (Stdlib.Cli.__Posix.__cwdFd ()) ptr times 0L) in
+        let rc = Stdlib.Cli.__Posix.__withCString "" (fun ptr -> Stdlib.Cli.__Posix.__utimesAt heldFd ptr times 4096L) in
+        let result =
+            if rc == -22L then Stdlib.Cli.__Posix.__withCString held (fun ptr -> Stdlib.Cli.__Posix.__unitResult (Stdlib.Cli.__Posix.__utimesAt (Stdlib.Cli.__Posix.__cwdFd ()) ptr times 0L))
+            else Stdlib.Cli.__Posix.__unitResult rc in
         let _ = __raw_free times in
-        result))
+        result)
 
 let posixSymlink (target: String) (linkpath: String) : Stdlib.Result.Result<Unit, Stdlib.Cli.Posix.Error> =
     Stdlib.Cli.__Posix.__withCString target (fun targetPtr ->
@@ -158,7 +165,7 @@ let posixKill (pid: Int) (signal: Int) : Stdlib.Result.Result<Unit, Stdlib.Cli.P
 let timeSleep (delayMs: Float) : Unit = Stdlib.Cli.__sleep delayMs
 let posixUname () : Stdlib.Result.Result<(String * String * String), Stdlib.Cli.Posix.Error> =
     match (Stdlib.Cli.Sys.os (), Stdlib.Cli.Sys.hostname (), Stdlib.Cli.Sys.arch ()) with
-    | (Ok os, Ok hostname, Ok arch) -> Ok (os, hostname, if Stdlib.Cli.__Posix.__mac () then "arm64" else arch)
+    | (Ok os, Ok hostname, Ok arch) -> Ok ((os, hostname, if Stdlib.Cli.__Posix.__mac () then "arm64" else arch))
     | (Error e, _, _) -> Error e
     | (_, Error e, _) -> Error e
     | (_, _, Error e) -> Error e

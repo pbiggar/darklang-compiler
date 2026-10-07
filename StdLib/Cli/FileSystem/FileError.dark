@@ -8,5 +8,3 @@ let toString (err: FileError) : String =
   | NotFound -> "File not found"
   | OsAccessDenied -> "Permission denied"
   | Other msg -> msg
-
-

@@ -173,6 +173,7 @@ let prettyPrintCliOperation = function
   | LIR.PosixUnlinkAt -> "PosixUnlinkAt"
   | LIR.PosixRenameAt -> "PosixRenameAt"
   | LIR.PosixChmodAt -> "PosixChmodAt"
+  | LIR.PosixChmodAt2 -> "PosixChmodAt2"
   | LIR.PosixUtimesAt -> "PosixUtimesAt"
   | LIR.PosixSetAttributesAt -> "PosixSetAttributesAt"
   | LIR.PosixSymlinkAt -> "PosixSymlinkAt"
