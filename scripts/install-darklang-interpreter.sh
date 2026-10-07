@@ -3,10 +3,15 @@
 
 set -euo pipefail
 
-if [[ $# -ne 0 ]]; then
-  echo "Error: install-darklang-interpreter.sh accepts no arguments." >&2
-  exit 1
-fi
+output_path="$HOME/.local/bin/darklang-interpreter"
+case "$#" in
+  0) ;;
+  2)
+    [[ "$1" == --output && -n "$2" ]] || { echo "Usage: $0 [--output PATH]" >&2; exit 1; }
+    output_path=$2
+    ;;
+  *) echo "Usage: $0 [--output PATH]" >&2; exit 1 ;;
+esac
 
 command -v jq >/dev/null 2>&1 || { echo "Error: jq is required" >&2; exit 1; }
 command -v curl >/dev/null 2>&1 || { echo "Error: curl is required" >&2; exit 1; }
@@ -16,7 +21,7 @@ arch="$(uname -m)"
 asset_regex="$(
   case "$arch" in
     aarch64 | arm64)
-      echo 'darklang-alpha-.*-linux-(arm|arm64|aarch64)\.gz$'
+      echo 'darklang-alpha-.*-linux-(arm64|aarch64)\.gz$'
       ;;
     x86_64 | amd64)
       echo 'darklang-alpha-.*-linux-(amd64|x64|x86_64)\.gz$'
@@ -27,7 +32,6 @@ asset_regex="$(
       ;;
   esac
 )"
-output_path="$HOME/.local/bin/darklang-interpreter"
 release_json="$(curl -fsSL \
   -H "Accept: application/vnd.github+json" \
   -H "X-GitHub-Api-Version: 2022-11-28" \

@@ -1,6 +1,10 @@
 ; Native equivalence and allocation regression checks.
 (rule
  (alias runtest)
+ (deps ../../scripts/install-darklang-interpreter.sh ../../scripts/test_install_interpreter.py)
+ (action (run python3 %{dep:../../scripts/test_install_interpreter.py})))
+(rule
+ (alias runtest)
  (deps ../../fuzz ../../scripts/test_fuzz_workflow.py)
  (action (run python3 %{dep:../../scripts/test_fuzz_workflow.py})))
 (rule
