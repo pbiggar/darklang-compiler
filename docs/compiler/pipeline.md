@@ -100,7 +100,7 @@ Output: Let("x", BinOp(Add, IntLiteral(1), IntLiteral(2)),
 **Output**: Checked AST with phase invariants represented by node shape
 
 Source entry points resolve written type annotations and names directly into
-`CheckedAST.Program`. Runtime failure expressions have semantic type `TNever`;
+`CheckedAST.program`. Runtime failure expressions have semantic type `TNever`;
 privileged compiler sources alone may introduce `TInternalRawPtr` signatures.
 
 ### Responsibilities
@@ -117,7 +117,7 @@ privileged compiler sources alone may introduce `TInternalRawPtr` signatures.
 - **Control-flow checking**: Require Boolean conditions, unify conditional arms, and use a sequence's Unit head and final-result type
 - **Phase boundary construction**: Require inferred lambda parameter types,
   typed recursive identities, resolved nominal references, and checked value
-  bodies before producing `CheckedAST.Program`
+  bodies before producing `CheckedAST.program`
 
 ### Example Error
 ```

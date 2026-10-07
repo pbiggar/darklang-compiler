@@ -28,11 +28,11 @@ For a new operator, update both the implementation and its `.mli` interface:
    observable. Let exhaustive-match compiler warnings identify every affected
    dispatcher rather than adding a catch-all default.
 
-For a standard-library feature, add its Dark implementation to
-`stdlib/`, add the ordered source registration in
-`src/driver/StdlibCompilation.ml`, and regenerate the embedded source registry with
-`scripts/embed-stdlib.py`. Public generic uses should rely on inference unless
-explicit type arguments are necessary.
+For a standard-library feature, add its Dark implementation to `stdlib/` and
+add its relative path to `stdlib/sources.list`. Dune invokes
+`scripts/embed-stdlib.py` to embed the registered sources into the compiler.
+Public generic uses should rely on inference unless explicit type arguments
+are necessary.
 
 ## Validate the final change
 

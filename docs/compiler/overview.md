@@ -39,12 +39,12 @@ Each IR is designed to make specific transformations easier:
 
 - The copied interpreter parser produces `WrittenTypes`. Validation runs on
   that source representation before `src/frontend/WrittenChecking.ml` resolves names and
-  types directly into `CheckedAST.Program`.
+  types directly into `CheckedAST.program`.
 - Successful checking constructs the distinct recursive nodes in
   `src/CheckedAST.ml`. Required lambda types, typed recursion evidence, canonical
   nominal references, and checked value definitions are structural there,
   rather than optional phase flags.
-- Compiler preparation and ANF lowering accept only `CheckedAST.Program`.
+- Compiler preparation and ANF lowering accept only `CheckedAST.program`.
 
 ### ANF (A-Normal Form)
 

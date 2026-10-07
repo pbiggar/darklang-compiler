@@ -17,9 +17,9 @@ ANF → high-level SSA → SSA MIR → LIR → target ISA → Binary
 
 Before ANF, the interpreter parser produces source-only `WrittenTypes`.
 Validation and `WrittenChecking` resolve names and source type annotations
-directly into `CheckedAST.Program`; semantic-only `TNever` and the privileged
+directly into `CheckedAST.program`; semantic-only `TNever` and the privileged
 `TInternalRawPtr` signature type cannot occur in public written source.
-Successful checking creates the private `CheckedAST.Program` consumed by
+Successful checking creates the private `CheckedAST.program` consumed by
 preparation and lowering. Compiler-internal transformations rebuild that
 program without reopening the public parsed boundary.
 Checked function and lambda signatures, value definition types, dictionary
@@ -409,7 +409,7 @@ type floatPool = {floats : float array; floatBitsToId : int FloatBitsMap.t}
 `src/ir/anf/SSAANF.ml` converts final optimized ANF into explicit blocks. Repeated ANF
 temporaries receive fresh value IDs, and joins carry typed block arguments.
 `src/passes/anf/ANF_to_MIR.ml` lowers those arguments directly to MIR phis. Frozen program-wide
-`ANF.TypeMap` metadata uses a dense array with an ID offset and absent slots for
+`ANF.typeMap` metadata uses a dense array with an ID offset and absent slots for
 gaps. MIR lowering shares this table directly. Branch-local type recovery keeps
 persistent environments so independently traversed branches retain their types.
 

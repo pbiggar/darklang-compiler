@@ -55,7 +55,7 @@ type semanticType =
 ```
 
 The interpreter parser returns `WrittenTypes`; `WrittenChecking` resolves
-source annotations and names directly into `CheckedAST.Program`. `TNever` is
+source annotations and names directly into `CheckedAST.program`. `TNever` is
 a semantic bottom type and cannot occur in written source. `TInternalRawPtr` is an
 internal-signature capability: public parsing rejects `RawPtr`, while
 privileged compiler sources use it for the unsafe runtime-support layer.
