@@ -509,8 +509,7 @@ let rec inferTypeCore sums names expr environment registry variants functions
               "Match cases have incompatible types: " ^ P.typeToString left
               ^ " vs " ^ P.typeToString right)
             previous next)
-        (Ok first)
-        (List.tl (NonEmptyList.toList cases))
+        (Ok first) cases.NonEmptyList.tail
   | C.Call (id, args) -> (
       let args = NonEmptyList.toList args in
       let name =

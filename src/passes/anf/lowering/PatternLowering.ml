@@ -742,37 +742,38 @@ let lowerMatch (toANFCore : LoweringCallbacks.expressionLowerer)
     (A.Var typed, typed, bindings @ [ (typed, A.TypedAtom (value, elem)) ], gen)
   in
   let tupleVariables pats source typ env bindings gen =
-    let rec loop pats index env bindings gen =
-      let* types =
-        match typ with
-        | AST.TTuple types when List.length types >= List.length pats ->
-            Ok types
-        | AST.TTuple types ->
-            Error
-              (Printf.sprintf "Tuple pattern expects %d elements but got %d"
-                 (List.length pats) (List.length types))
-        | _ ->
-            Error
-              ("Tuple pattern expects tuple elements, got " ^ P.typeToString typ)
-      in
-      match pats with
-      | [] -> Ok (env, bindings, gen)
-      | pat :: rest -> (
+    let* types =
+      match typ with
+      | AST.TTuple types when List.length types >= List.length pats -> Ok types
+      | AST.TTuple types ->
+          Error
+            (Printf.sprintf "Tuple pattern expects %d elements but got %d"
+               (List.length pats) (List.length types))
+      | _ ->
+          Error
+            ("Tuple pattern expects tuple elements, got " ^ P.typeToString typ)
+    in
+    let rec loop pats types index env bindings gen =
+      match (pats, types) with
+      | [], _ -> Ok (env, bindings, gen)
+      | pat :: rest, typ :: remainingTypes -> (
           let id, gen = A.freshVar gen in
           let binding = (id, A.TupleGet (source, index)) in
-          let typ = List.nth types index in
           match pat with
           | C.PVariable name ->
-              loop rest (index + 1)
+              loop rest remainingTypes (index + 1)
                 (R.BindingMap.add name (id, typ) env)
                 (bindings @ [ binding ]) gen
-          | C.PWildcard -> loop rest (index + 1) env bindings gen
+          | C.PWildcard -> loop rest remainingTypes (index + 1) env bindings gen
           | _ ->
               Error
                 ("Nested pattern in tuple element not yet supported: " ^ fmt pat)
           )
+      | _ :: _, [] ->
+          Crash.crash
+            "PatternLowering: validated tuple pattern ran out of element types"
     in
-    loop pats 0 env bindings gen
+    loop pats types 0 env bindings gen
   in
   let rec extractAndCompileBody pat body source typ env gen =
     match pat with
@@ -1231,7 +1232,8 @@ let lowerMatch (toANFCore : LoweringCallbacks.expressionLowerer)
     | C.PInt64 _ | C.PInt128Literal _ | C.PInt8Literal _ | C.PInt16Literal _
     | C.PInt32Literal _ | C.PUInt8Literal _ | C.PUInt16Literal _
     | C.PUInt32Literal _ | C.PUInt64Literal _ | C.PUInt128Literal _ ->
-        assert false
+        Crash.crash
+          "PatternLowering: numeric pattern bypassed literal comparison"
   in
   let comparisonParts gen = function
     | None -> (None, [], gen)
@@ -1827,7 +1829,9 @@ let lowerMatch (toANFCore : LoweringCallbacks.expressionLowerer)
           match pat with
           | C.PList pats -> (pats, None, true)
           | C.PListCons (pats, tail) -> (pats, Some tail, false)
-          | _ -> assert false
+          | _ ->
+              Crash.crash
+                "PatternLowering: list staging received a non-list pattern"
         in
         let elem =
           match typ with

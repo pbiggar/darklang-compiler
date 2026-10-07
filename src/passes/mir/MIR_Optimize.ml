@@ -313,8 +313,14 @@ let optimizeProgramWithOptionsAndTrace recorder (options : F.optimizeOptions)
       in
       List.iter
         (fun name ->
-          record name
-            (Int64.to_float (Hashtbl.find ticks name) *. 1000. /. 1000000000.))
+          let value =
+            match Hashtbl.find_opt ticks name with
+            | Some value -> value
+            | None ->
+                Crash.crash
+                  ("MIR_Optimize: recorded pass timing missing for " ^ name)
+          in
+          record name (Int64.to_float value *. 1000. /. 1000000000.))
         (List.rev !order);
       Program (functions, variants, records)
 
