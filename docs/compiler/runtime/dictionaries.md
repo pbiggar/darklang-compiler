@@ -21,7 +21,7 @@ The public contract was revalidated against these exact revisions:
 
 The historical and current compiler source blobs are not identical, so the
 historical revision was not treated as proof of current behavior. The relevant
-`Dict.dark`, `__HAMT.dark`, and `Stdlib.fs` blobs at the current compiler point
+`Dict.dark`, `__HAMT.dark`, and `src/DarkStdlib.ml` blobs at the current compiler point
 are identical to the earlier pre-rebase repair point
 `6366204f670c906bbf4cd6b22b53786098c92a03`. The rebased candidate changes
 only parity documentation, focused E2E coverage, and append-only benchmark

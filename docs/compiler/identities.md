@@ -18,7 +18,7 @@ locals, module/package/builtin values and functions, constructors, and types.
 It deliberately retains names and namespace information: candidate selection,
 ambiguity reporting, and diagnostics are still source-facing operations.
 
-Successful checking constructs a `CheckedAST.Program` with a private `Symbols`
+Successful checking constructs a `CheckedAST.program` with a private `Symbols`
 table. The table owns the mapping between the IDs below and the names retained
 for diagnostics, generated symbols, and boundaries that still consume names.
 
@@ -94,10 +94,10 @@ uses are rewritten consistently.
 | --- | --- |
 | `HIR.ValueId` | A typed normalized value within a HIR function. HIR contracts, aliases, ownership steps, branch results, and list-region storage plans use it to describe data flow. `ListRegion.ListId` is an alias for the same identity because a list region tracks those HIR values. |
 | `ANF.TempId` | A function-local ANF value or continuation target. Explicit evaluation order, substitutions, liveness, reference counting, inlining, and specialization use it instead of source variables. Cloning passes freshen it. |
-| `ANF.ExprId` | A compact coverage-instrumentation site number used to connect emitted `CoverageHit` operations to coverage descriptions. It is currently an `int` alias rather than an opaque type. |
+| `ANF.exprId` | A compact coverage-instrumentation site number used to connect emitted `CoverageHit` operations to coverage descriptions. It is currently an `int` alias rather than an opaque type. |
 | `MIR.VReg` | A virtual register in the target-independent CFG. SSA and MIR optimization use it as the definition/use identity. |
 | `MIR.Label` | A basic-block identity. It is a wrapper around a generated string because labels are also rendered in dumps and carried toward symbolic code generation. |
-| `LIR.Reg.Virtual` / `LIR.FReg.FVirtual` | Integer and floating-point virtual registers immediately before register allocation. Allocation maps them to physical registers or stack slots. |
+| `LIR.Virtual` / `LIR.FVirtual` | Integer and floating-point virtual registers immediately before register allocation. Allocation maps them to physical registers or stack slots. |
 | `LIR.Label` and backend label references | Symbolic control-flow and data addresses retained until layout/encoding resolves them to offsets. These are intentionally symbol-like rather than source declaration identities. |
 
 `LiteralPool` also assigns compact integer indices to distinct string values
@@ -119,7 +119,7 @@ where that ID model exists.
 
 ### Nominal types and type variables
 
-`AST.SemanticType` still represents `TRecord`, `TSum`, and declared `TVar`
+`AST.semanticType` still represents `TRecord`, `TSum`, and declared `TVar`
 with strings. Call-local generic inference variables use the distinct
 `TInferenceVar` case with an opaque fresh identity, so instantiation does not
 scan the caller's type environment for available names. Type, alias,

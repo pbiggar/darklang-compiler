@@ -1,5 +1,6 @@
 (* ProgramCliTests.mli - Compiler CLI target-selection tests. *)
-type testResult=(unit,string) result
+type testResult = (unit, string) result
+
 val testExplicitLinuxX86_64Target : unit -> testResult
 val testUnknownTargetRejected : unit -> testResult
 val testCrossTargetRunRejected : unit -> testResult

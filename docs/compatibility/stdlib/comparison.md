@@ -151,8 +151,8 @@ is in `test/fixtures/e2e/comparison-parity.e2e`, alongside the existing
 `equality.e2e` and `interpreter_behavior_parity.e2e` suites.
 
 The root wrappers are `stdlib/NoModule.dark`, loaded by
-`driver/StdlibCompilation.fs`. Separate stdlib specialization merges user
+`src/driver/StdlibCompilation.ml`. Separate stdlib specialization merges user
 record/sum metadata before materializing structural helpers in
-`driver/StdlibCompilation.fs`; the indexed record view is built in
-`frontend/checking/Types.fs`. Public probes are at
+`src/driver/StdlibCompilation.ml`; the indexed record view is built in
+`src/frontend/checking/Types.ml`. Public probes are at
 `comparison-parity.e2e:35-110,148-156`.

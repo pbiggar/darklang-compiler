@@ -1,5 +1,6 @@
 (* Complete typed LIR values in original test failure diagnostics. *)
 open Dark_compiler
+
 val physReg : LIR.physReg -> StructuralValue.value
 val physFPReg : LIR.physFPReg -> StructuralValue.value
 val reg : LIR.reg -> StructuralValue.value
@@ -15,10 +16,19 @@ val terminator : LIR.terminator -> StructuralValue.value
 val basicBlock : LIR.basicBlock -> StructuralValue.value
 val cfg : LIR.cfg -> StructuralValue.value
 val rcReleasePlanMemoKey : LIR.rcReleasePlanMemoKey -> StructuralValue.value
-val arm64ReleasePlanSummary : LIR.arm64ReleasePlanSummary -> StructuralValue.value
-val arm64PlannedGenericDecHelper : LIR.arm64PlannedGenericDecHelper -> StructuralValue.value
-val arm64RcHelperRequirements : LIR.arm64RcHelperRequirements -> StructuralValue.value
-val arm64SlotInitRootRetainTarget : LIR.arm64SlotInitRootRetainTarget -> StructuralValue.value
+
+val arm64ReleasePlanSummary :
+  LIR.arm64ReleasePlanSummary -> StructuralValue.value
+
+val arm64PlannedGenericDecHelper :
+  LIR.arm64PlannedGenericDecHelper -> StructuralValue.value
+
+val arm64RcHelperRequirements :
+  LIR.arm64RcHelperRequirements -> StructuralValue.value
+
+val arm64SlotInitRootRetainTarget :
+  LIR.arm64SlotInitRootRetainTarget -> StructuralValue.value
+
 val functionCodegenFacts : LIR.functionCodegenFacts -> StructuralValue.value
 val functionDef : LIR.functionDef -> StructuralValue.value
 val recordRegistry : LIR.recordRegistry -> StructuralValue.value

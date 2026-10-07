@@ -1,6 +1,9 @@
 (* ANFEffects.mli - Describe ANF evaluation effects and temporary uses. *)
 module TempSet : Set.S with type elt = ANF.tempId
-val canForwardTupleElement : ANFConstants.optimizeContext -> ANFConstants.typeEnv -> ANF.atom -> bool
+
+val canForwardTupleElement :
+  ANFConstants.optimizeContext -> ANFConstants.typeEnv -> ANF.atom -> bool
+
 val mustPreserveEvaluation : ANFConstants.optimizeContext -> ANF.cExpr -> bool
 val foldAtomTempIds : (ANF.tempId -> 'a -> 'a) -> ANF.atom -> 'a -> 'a
 val addAtomUse : ANF.atom -> TempSet.t -> TempSet.t

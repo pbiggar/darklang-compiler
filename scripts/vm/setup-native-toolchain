@@ -36,12 +36,21 @@ if ! { [[ -x "$prefix/bin/ocaml" ]] && [[ $("$prefix/bin/ocamlc" -version) == "$
     tar --no-same-owner -xzf "$root/downloads/ocaml-$version.tar.gz" -C "$root/src"
     (
         cd "$root/src/ocaml-$version"
-        ./configure --prefix="$prefix" > "$root/ocaml-configure.log" 2>&1
+        bash ./configure --prefix="$prefix" > "$root/ocaml-configure.log" 2>&1
         # Native compiler processes need stack attributes even when procfs is
         # unavailable. Keep this adapter out of configure's feature probes.
         ulimit -s 65536
         export LD_PRELOAD="$root/vm-compat.so" PORT_VM_TMPDIR="$root/tmp"
-        make -j1 world.opt > "$root/ocaml-build.log" 2>&1
+        if ! make -j1 world.opt > "$root/ocaml-build.log" 2>&1; then
+            # Some restricted VM linkers leave the linked native compiler
+            # without its executable bit. Repair only that observed failure.
+            if [[ -s ocamlopt.opt && ! -x ocamlopt.opt ]]; then
+                chmod u+x ocamlopt.opt
+                make -j1 world.opt >> "$root/ocaml-build.log" 2>&1
+            else
+                exit 1
+            fi
+        fi
         make install > "$root/ocaml-install.log" 2>&1
     )
 fi

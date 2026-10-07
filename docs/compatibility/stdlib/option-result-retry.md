@@ -18,7 +18,7 @@ comparison unless it changes an observable result.
 | Argument evaluation | Function and argument expressions are evaluated eagerly and arguments are evaluated left to right before the combinator selects a value. | Same-source print probes at `control_combinators_retry.e2e:22-26` require the exact byte sequence `12` before the enclosing result. | Public parity |
 | `Retry.withBackoffLoop` / `withBackoff` | Run the callback before testing the limit. Stop on the first `Ok` or when `attempt >= maxAttempts`; return that callback result unchanged. Sleep only after an eligible `Error`, then increment the attempt and double the delay. The wrapper starts at attempt 1 and 100.0 ms. | Portable source at `stdlib/Retry.dark:5-16`; deterministic callbacks cover immediate success, nonpositive maximum, terminal failure, explicit starting attempts, eventual success, counts, and final payloads at `control_combinators_retry.e2e:28-43`. | Public parity |
 | `Retry.withFixedDelayLoop` / `withFixedDelay` | The same termination and propagation rules apply, but the delay is unchanged. The wrapper starts at attempt 1. | Portable source at `stdlib/Retry.dark:18-29`; deterministic focused cases cover both entry points and a real 1 ms inter-attempt delay at `control_combinators_retry.e2e:32-42`. | Public parity |
-| Retry delay | Milliseconds are passed to a blocking delay between callback attempts only. | `Cli.Posix.sleep` delegates at `stdlib/CliPosix.dark:29-30`; the typed effect is introduced in `passes/anf/lowering/Primitives.fs` and retained as a Float through ANF/MIR/LIR. Code generation normalizes total nanoseconds into native seconds/nanoseconds and retries the remaining timeout on `EINTR` for Linux ARM64, Linux x86_64, and macOS ARM64. Backend assertions pin conversion, syscall numbers, target conventions, and interruption loops. | Behavior parity through an internal AOT boundary |
+| Retry delay | Milliseconds are passed to a blocking delay between callback attempts only. | `Cli.Posix.sleep` delegates at `stdlib/CliPosix.dark:29-30`; the typed effect is introduced in `src/passes/anf/lowering/LoweringPrimitives.ml` and retained as a Float through ANF/MIR/LIR. Code generation normalizes total nanoseconds into native seconds/nanoseconds and retries the remaining timeout on `EINTR` for Linux ARM64, Linux x86_64, and macOS ARM64. Backend assertions pin conversion, syscall numbers, target conventions, and interruption loops. | Behavior parity through an internal AOT boundary |
 
 The enabled interpreter truth tables are
 `test/fixtures/e2e/upstream/stdlib/option.dark:288,291,294,297` and
@@ -56,9 +56,10 @@ At compiler baseline HEAD, `stdlib/Option.dark:34-50` and
 `stdlib/Result.dark:52-70` had no requested combinators, the stdlib source tree
 had no `Retry.dark`, and `stdlib/CliPosix.dark:29-30` implemented sleep by
 spawning the shell command `sleep`. The implementation now loads
-`stdlib/Retry.dark` in `driver/StdlibCompilation.fs`; represents delay in the
-ANF, MIR, and LIR definitions; assigns target syscall numbers in `Platform.fs`;
-and lowers the operation in each backend's `instructions/NativeEffects.fs`.
+`stdlib/Retry.dark` in `src/driver/StdlibCompilation.ml`; represents delay in the
+ANF, MIR, and LIR definitions; assigns target syscall numbers in `src/Platform.ml`;
+and lowers the operation in `src/backend/arm64/instructions/ARM64EmitNativeEffects.ml` and
+`src/backend/x64/instructions/X64EmitNativeEffects.ml`.
 
 ## Extensions and intentional divergences
 

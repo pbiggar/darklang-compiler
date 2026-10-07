@@ -16,43 +16,45 @@
    - Invoked via SYSCALL instruction
    x86-64 general-purpose registers (64-bit)
 *)
-type reg = 
- | RAX
- | RBX
- | RCX
- | RDX
- | RSI
- | RDI
- | RBP
- | RSP
- | R8
- | R9
- | R10
- | R11
- | R12
- | R13
- | R14
- | R15
+type reg =
+  | RAX
+  | RBX
+  | RCX
+  | RDX
+  | RSI
+  | RDI
+  | RBP
+  | RSP
+  | R8
+  | R9
+  | R10
+  | R11
+  | R12
+  | R13
+  | R14
+  | R15
+
 (*
    x86-64 SSE/AVX floating-point registers (128-bit, used as 64-bit double)
 *)
-type fReg = 
- | XMM0
- | XMM1
- | XMM2
- | XMM3
- | XMM4
- | XMM5
- | XMM6
- | XMM7
- | XMM8
- | XMM9
- | XMM10
- | XMM11
- | XMM12
- | XMM13
- | XMM14
- | XMM15
+type fReg =
+  | XMM0
+  | XMM1
+  | XMM2
+  | XMM3
+  | XMM4
+  | XMM5
+  | XMM6
+  | XMM7
+  | XMM8
+  | XMM9
+  | XMM10
+  | XMM11
+  | XMM12
+  | XMM13
+  | XMM14
+  | XMM15
+
 (*
    Comparison conditions (for SETcc/Jcc)
    Equal (ZF=1)
@@ -69,19 +71,8 @@ type fReg =
    Parity set (PF=1) — unordered (NaN)
    Parity not set (PF=0) — ordered (not NaN)
 *)
-type condition = 
- | EQ
- | NE
- | LT
- | GT
- | LE
- | GE
- | B
- | A
- | BE
- | AE
- | P
- | NP
+type condition = EQ | NE | LT | GT | LE | GE | B | A | BE | AE | P | NP
+
 (*
    Operand size for instructions that need explicit sizing
    8-bit
@@ -89,11 +80,8 @@ type condition =
    32-bit
    64-bit
 *)
-type size = 
- | Byte
- | Word
- | DWord
- | QWord
+type size = Byte | Word | DWord | QWord
+
 (*
    x86-64 instruction types
    Data movement
@@ -158,84 +146,93 @@ type size =
    Move 64 bits from XMM to GP
    Move 64 bits from GP to XMM
 *)
-type instr = 
- | MOV_imm of reg * int64
- | MOV_imm32 of reg * int32
- | MOV_reg of reg * reg
- | MOV_load of reg * reg * int32
- | MOV_store of reg * int32 * reg
- | MOV_reg32 of reg * reg
- | MOVZX_byte of reg * reg
- | MOVZX_word of reg * reg
- | MOVSX_byte of reg * reg
- | MOVSX_word of reg * reg
- | MOVSXD of reg * reg
- | LEA of reg * reg * int32
- | LEA_index of reg * reg * reg * int * int32
- | LEA_rip of reg * string
- | PUSH of reg
- | POP of reg
- | ADD_imm of reg * int32
- | ADD_reg of reg * reg
- | ADD_load of reg * reg * int32
- | SUB_imm of reg * int32
- | SUB_reg of reg * reg
- | SUB_load of reg * reg * int32
- | IMUL_reg of reg * reg
- | IMUL_imm of reg * reg * int32
- | IDIV of reg
- | DIV of reg
- | NEG of reg
- | NOT of reg
- | CQO
- | XOR_reg of reg * reg
- | CMP_imm of reg * int32
- | CMP_reg of reg * reg
- | TEST_reg of reg * reg
- | SETcc of condition * reg
- | CMOVcc of condition * reg * reg
- | AND_imm of reg * int32
- | AND_reg of reg * reg
- | OR_reg of reg * reg
- | SHL_imm of reg * int
- | SHR_imm of reg * int
- | SAR_imm of reg * int
- | SHL_cl of reg
- | SHR_cl of reg
- | SAR_cl of reg
- | MOV_store_byte of reg * int32 * reg
- | MOV_load_byte of reg * reg * int32
- | CALL of string
- | CALL_reg of reg
- | JMP of string
- | JMP_reg of reg
- | Jcc of condition * string
- | RET
- | SYSCALL
- | Label of string
- | MOVSD_load of fReg * reg * int32
- | MOVSD_store of reg * int32 * fReg
- | MOVSD_reg of fReg * fReg
- | ADDSD of fReg * fReg
- | SUBSD of fReg * fReg
- | MULSD of fReg * fReg
- | DIVSD of fReg * fReg
- | XORPD of fReg * fReg
- | SQRTSD of fReg * fReg
- | UCOMISD of fReg * fReg
- | CVTSI2SD of fReg * reg
- | CVTTSD2SI of reg * fReg
- | MOVQ_to_gp of reg * fReg
- | MOVQ_from_gp of fReg * reg
+type instr =
+  | MOV_imm of reg * int64
+  | MOV_imm32 of reg * int32
+  | MOV_reg of reg * reg
+  | MOV_load of reg * reg * int32
+  | MOV_store of reg * int32 * reg
+  | MOV_reg32 of reg * reg
+  | MOVZX_byte of reg * reg
+  | MOVZX_word of reg * reg
+  | MOVSX_byte of reg * reg
+  | MOVSX_word of reg * reg
+  | MOVSXD of reg * reg
+  | LEA of reg * reg * int32
+  | LEA_index of reg * reg * reg * int * int32
+  | LEA_rip of reg * string
+  | PUSH of reg
+  | POP of reg
+  | ADD_imm of reg * int32
+  | ADD_reg of reg * reg
+  | ADD_load of reg * reg * int32
+  | SUB_imm of reg * int32
+  | SUB_reg of reg * reg
+  | SUB_load of reg * reg * int32
+  | IMUL_reg of reg * reg
+  | IMUL_imm of reg * reg * int32
+  | IDIV of reg
+  | DIV of reg
+  | NEG of reg
+  | NOT of reg
+  | CQO
+  | XOR_reg of reg * reg
+  | CMP_imm of reg * int32
+  | CMP_reg of reg * reg
+  | TEST_reg of reg * reg
+  | SETcc of condition * reg
+  | CMOVcc of condition * reg * reg
+  | AND_imm of reg * int32
+  | AND_reg of reg * reg
+  | OR_reg of reg * reg
+  | SHL_imm of reg * int
+  | SHR_imm of reg * int
+  | SAR_imm of reg * int
+  | SHL_cl of reg
+  | SHR_cl of reg
+  | SAR_cl of reg
+  | MOV_store_byte of reg * int32 * reg
+  | MOV_load_byte of reg * reg * int32
+  | CALL of string
+  | CALL_reg of reg
+  | JMP of string
+  | JMP_reg of reg
+  | Jcc of condition * string
+  | RET
+  | SYSCALL
+  | Label of string
+  | MOVSD_load of fReg * reg * int32
+  | MOVSD_store of reg * int32 * fReg
+  | MOVSD_reg of fReg * fReg
+  | ADDSD of fReg * fReg
+  | SUBSD of fReg * fReg
+  | MULSD of fReg * fReg
+  | DIVSD of fReg * fReg
+  | XORPD of fReg * fReg
+  | SQRTSD of fReg * fReg
+  | UCOMISD of fReg * fReg
+  | CVTSI2SD of fReg * reg
+  | CVTTSD2SI of reg * fReg
+  | MOVQ_to_gp of reg * fReg
+  | MOVQ_from_gp of fReg * reg
+
 (*
    Machine code (variable-length byte sequence for one instruction)
 *)
 type machineCode = bytes
+
 (*
    Literal values are carried in symbolic RIP-relative labels until ELF layout.
    The payload is kept verbatim: these labels are internal map keys, not names
    passed through an assembler.
 *)
-let stringLiteralLabelPrefix="__dark_string_literal_data:"
-let stringLiteralLabel value=stringLiteralLabelPrefix^value
-let tryStringLiteralValue label=if String.starts_with ~prefix:stringLiteralLabelPrefix label then Some (String.sub label (String.length stringLiteralLabelPrefix) (String.length label-String.length stringLiteralLabelPrefix)) else None
+let stringLiteralLabelPrefix = "__dark_string_literal_data:"
+let stringLiteralLabel value = stringLiteralLabelPrefix ^ value
+
+let tryStringLiteralValue label =
+  if String.starts_with ~prefix:stringLiteralLabelPrefix label then
+    Some
+      (String.sub label
+         (String.length stringLiteralLabelPrefix)
+         (String.length label - String.length stringLiteralLabelPrefix))
+  else None

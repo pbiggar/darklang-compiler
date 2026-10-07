@@ -1,6 +1,7 @@
 (* Common.mli - Shared section-delimited test DSL parsing and text escapes. *)
 type section = string * string
-type testFile = {sections : string Dark_compiler.StringOrder.Map.t}
+type testFile = { sections : string Dark_compiler.StringOrder.Map.t }
+
 val parseSections : string -> section list
 val parseTestFile : string -> testFile
 val getRequiredSection : string -> testFile -> (string, string) result

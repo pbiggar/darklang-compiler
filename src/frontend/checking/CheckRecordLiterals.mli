@@ -1,2 +1,14 @@
 (* CheckRecordLiterals.mli - Check record creation in source evaluation order. *)
-val check : ExpressionSupport.expressionChecker -> Types.typeEnv -> Types.indexedTypeRegistry -> Types.variantLookup -> Types.genericFuncRegistry -> AST.warningSettings -> AST.moduleRegistry -> Types.aliasRegistry -> AST.semanticType option -> AST.recordReference -> (AST.recordFieldReference * AST.expr) list -> (AST.semanticType * AST.expr, CheckingDiagnostics.typeError) result
+val check :
+  ExpressionSupport.expressionChecker ->
+  Types.typeEnv ->
+  Types.indexedTypeRegistry ->
+  Types.variantLookup ->
+  Types.genericFuncRegistry ->
+  AST.warningSettings ->
+  AST.moduleRegistry ->
+  Types.aliasRegistry ->
+  AST.semanticType option ->
+  AST.recordReference ->
+  (AST.recordFieldReference * AST.expr) list ->
+  (AST.semanticType * AST.expr, CheckingDiagnostics.typeError) result

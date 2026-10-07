@@ -21,6 +21,8 @@ gates:
     run: ./benchmarks/bench report --check
   - name: build
     run: ./build --ai
+  - name: native-regressions
+    run: dune runtest
   - name: tests
     run: ./run-tests --ai
   - name: leaks

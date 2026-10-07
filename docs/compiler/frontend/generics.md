@@ -28,7 +28,7 @@ swap<String, Bool> ("hello", true)
 
 ### 3. Monomorphization Process
 
-The compiler performs monomorphization in `passes/preparation/Monomorphization.fs`,
+The compiler performs monomorphization in `src/passes/preparation/Monomorphization.ml`,
 with identity, substitution, and program entry points in neighboring modules:
 
 1. **Collect generic definitions**: Find all functions with type parameters

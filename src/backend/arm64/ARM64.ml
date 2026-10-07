@@ -24,39 +24,40 @@
    Reserved for free list base pointer
    Reserved for heap bump pointer
 *)
-type reg = 
- | X0
- | X1
- | X2
- | X3
- | X4
- | X5
- | X6
- | X7
- | X8
- | X9
- | X10
- | X11
- | X12
- | X13
- | X14
- | X15
- | X16
- | X17
- | X18
- | X19
- | X20
- | X21
- | X22
- | X23
- | X24
- | X25
- | X26
- | X27
- | X28
- | X29
- | X30
- | SP
+type reg =
+  | X0
+  | X1
+  | X2
+  | X3
+  | X4
+  | X5
+  | X6
+  | X7
+  | X8
+  | X9
+  | X10
+  | X11
+  | X12
+  | X13
+  | X14
+  | X15
+  | X16
+  | X17
+  | X18
+  | X19
+  | X20
+  | X21
+  | X22
+  | X23
+  | X24
+  | X25
+  | X26
+  | X27
+  | X28
+  | X29
+  | X30
+  | SP
+
 (*
    ARM64 floating-point registers (D0-D31 for double precision)
    D0-D7: Argument/result registers (caller-saved)
@@ -68,39 +69,40 @@ type reg =
    Used for float call arg temps
    Additional SSA temp registers
 *)
-type fReg = 
- | D0
- | D1
- | D2
- | D3
- | D4
- | D5
- | D6
- | D7
- | D8
- | D9
- | D10
- | D11
- | D12
- | D13
- | D14
- | D15
- | D16
- | D17
- | D18
- | D19
- | D20
- | D21
- | D22
- | D23
- | D24
- | D25
- | D26
- | D27
- | D28
- | D29
- | D30
- | D31
+type fReg =
+  | D0
+  | D1
+  | D2
+  | D3
+  | D4
+  | D5
+  | D6
+  | D7
+  | D8
+  | D9
+  | D10
+  | D11
+  | D12
+  | D13
+  | D14
+  | D15
+  | D16
+  | D17
+  | D18
+  | D19
+  | D20
+  | D21
+  | D22
+  | D23
+  | D24
+  | D25
+  | D26
+  | D27
+  | D28
+  | D29
+  | D30
+  | D31
+
 (*
    Comparison conditions (for CSET)
    Equal (Z set)
@@ -114,24 +116,16 @@ type fReg =
    Lower than or same (unsigned)
    Higher than or same (unsigned)
 *)
-type condition = 
- | EQ
- | NE
- | LT
- | GT
- | LE
- | GE
- | LO
- | HI
- | LS
- | HS
-type extend = 
- | ExtendUXTB
- | ExtendUXTH
- | ExtendUXTW
- | ExtendSXTB
- | ExtendSXTH
- | ExtendSXTW
+type condition = EQ | NE | LT | GT | LE | GE | LO | HI | LS | HS
+
+type extend =
+  | ExtendUXTB
+  | ExtendUXTH
+  | ExtendUXTW
+  | ExtendSXTB
+  | ExtendSXTH
+  | ExtendSXTW
+
 (*
    ARM64 instruction types
    Move with zero
@@ -223,137 +217,183 @@ type extend =
    Zero-extend halfword: dest = zero_extend(src[15:0])
    Zero-extend word: dest = zero_extend(src[31:0])
 *)
-type instr = 
- | MOVZ of reg * int * int
- | MOVN of reg * int * int
- | MOVK of reg * int * int
- | ADD_imm of reg * reg * int
- | ADD_reg of reg * reg * reg
- | ADD_shifted of reg * reg * reg * int
- | ADD_extended of reg * reg * reg * extend
- | SUB_imm of reg * reg * int
- | SUB_imm12 of reg * reg * int
- | SUB_reg of reg * reg * reg
- | SUB_shifted of reg * reg * reg * int
- | SUB_extended of reg * reg * reg * extend
- | SUBS_imm of reg * reg * int
- | MUL of reg * reg * reg
- | SDIV of reg * reg * reg
- | UDIV of reg * reg * reg
- | MSUB of reg * reg * reg * reg
- | MADD of reg * reg * reg * reg
- | CMP_imm of reg * int
- | CMP_reg of reg * reg
- | CSET of reg * condition
- | CSEL of reg * reg * reg * condition
- | AND_reg of reg * reg * reg
- | BIC_reg of reg * reg * reg
- | AND_imm of reg * reg * int64
- | ORR_reg of reg * reg * reg
- | EOR_reg of reg * reg * reg
- | LSL_reg of reg * reg * reg
- | LSR_reg of reg * reg * reg
- | ASR_reg of reg * reg * reg
- | LSL_imm of reg * reg * int
- | LSR_imm of reg * reg * int
- | ASR_imm of reg * reg * int
- | MVN of reg * reg
- | MOV_reg of reg * reg
- | STRB of reg * reg * int
- | LDRB of reg * reg * reg
- | LDRB_imm of reg * reg * int
- | STRB_reg of reg * reg
- | STP of reg * reg * reg * int
- | STP_pre of reg * reg * reg * int
- | LDP of reg * reg * reg * int
- | LDP_post of reg * reg * reg * int
- | STR of reg * reg * int
- | LDR of reg * reg * int
- | STUR of reg * reg * int
- | LDUR of reg * reg * int
- | BL of string
- | BLR of reg
- | BR of reg
- | CBZ of reg * string
- | CBNZ of reg * string
- | B_label of string
- | B_cond_label of condition * string
- | CBZ_offset of reg * int
- | CBNZ_offset of reg * int
- | TBZ of reg * int * int
- | TBNZ of reg * int * int
- | TBZ_label of reg * int * string
- | TBNZ_label of reg * int * string
- | B of int
- | B_cond of condition * int
- | NEG of reg * reg
- | RET
- | SVC of int
- | Label of string
- | ADRP of reg * string
- | ADD_label of reg * reg * string
- | ADR of reg * string
- | LDR_fp of fReg * reg * int
- | STR_fp of fReg * reg * int
- | STP_fp of fReg * fReg * reg * int
- | LDP_fp of fReg * fReg * reg * int
- | FADD of fReg * fReg * fReg
- | FSUB of fReg * fReg * fReg
- | FMUL of fReg * fReg * fReg
- | FMADD of fReg * fReg * fReg * fReg
- | FDIV of fReg * fReg * fReg
- | FNEG of fReg * fReg
- | FABS of fReg * fReg
- | FSQRT of fReg * fReg
- | FCMP of fReg * fReg
- | FMOV_reg of fReg * fReg
- | FMOV_imm of fReg * float
- | FMOV_to_gp of reg * fReg
- | FMOV_from_gp of fReg * reg
- | SCVTF of fReg * reg
- | FCVTZS of reg * fReg
- | SXTB of reg * reg
- | SXTH of reg * reg
- | SXTW of reg * reg
- | UXTB of reg * reg
- | UXTH of reg * reg
- | UXTW of reg * reg
+type instr =
+  | MOVZ of reg * int * int
+  | MOVN of reg * int * int
+  | MOVK of reg * int * int
+  | ADD_imm of reg * reg * int
+  | ADD_reg of reg * reg * reg
+  | ADD_shifted of reg * reg * reg * int
+  | ADD_extended of reg * reg * reg * extend
+  | SUB_imm of reg * reg * int
+  | SUB_imm12 of reg * reg * int
+  | SUB_reg of reg * reg * reg
+  | SUB_shifted of reg * reg * reg * int
+  | SUB_extended of reg * reg * reg * extend
+  | SUBS_imm of reg * reg * int
+  | MUL of reg * reg * reg
+  | SDIV of reg * reg * reg
+  | UDIV of reg * reg * reg
+  | MSUB of reg * reg * reg * reg
+  | MADD of reg * reg * reg * reg
+  | CMP_imm of reg * int
+  | CMP_reg of reg * reg
+  | CSET of reg * condition
+  | CSEL of reg * reg * reg * condition
+  | AND_reg of reg * reg * reg
+  | BIC_reg of reg * reg * reg
+  | AND_imm of reg * reg * int64
+  | ORR_reg of reg * reg * reg
+  | EOR_reg of reg * reg * reg
+  | LSL_reg of reg * reg * reg
+  | LSR_reg of reg * reg * reg
+  | ASR_reg of reg * reg * reg
+  | LSL_imm of reg * reg * int
+  | LSR_imm of reg * reg * int
+  | ASR_imm of reg * reg * int
+  | MVN of reg * reg
+  | MOV_reg of reg * reg
+  | STRB of reg * reg * int
+  | LDRB of reg * reg * reg
+  | LDRB_imm of reg * reg * int
+  | STRB_reg of reg * reg
+  | STP of reg * reg * reg * int
+  | STP_pre of reg * reg * reg * int
+  | LDP of reg * reg * reg * int
+  | LDP_post of reg * reg * reg * int
+  | STR of reg * reg * int
+  | LDR of reg * reg * int
+  | STUR of reg * reg * int
+  | LDUR of reg * reg * int
+  | BL of string
+  | BLR of reg
+  | BR of reg
+  | CBZ of reg * string
+  | CBNZ of reg * string
+  | B_label of string
+  | B_cond_label of condition * string
+  | CBZ_offset of reg * int
+  | CBNZ_offset of reg * int
+  | TBZ of reg * int * int
+  | TBNZ of reg * int * int
+  | TBZ_label of reg * int * string
+  | TBNZ_label of reg * int * string
+  | B of int
+  | B_cond of condition * int
+  | NEG of reg * reg
+  | RET
+  | SVC of int
+  | Label of string
+  | ADRP of reg * string
+  | ADD_label of reg * reg * string
+  | ADR of reg * string
+  | LDR_fp of fReg * reg * int
+  | STR_fp of fReg * reg * int
+  | STP_fp of fReg * fReg * reg * int
+  | LDP_fp of fReg * fReg * reg * int
+  | FADD of fReg * fReg * fReg
+  | FSUB of fReg * fReg * fReg
+  | FMUL of fReg * fReg * fReg
+  | FMADD of fReg * fReg * fReg * fReg
+  | FDIV of fReg * fReg * fReg
+  | FNEG of fReg * fReg
+  | FABS of fReg * fReg
+  | FSQRT of fReg * fReg
+  | FCMP of fReg * fReg
+  | FMOV_reg of fReg * fReg
+  | FMOV_imm of fReg * float
+  | FMOV_to_gp of reg * fReg
+  | FMOV_from_gp of fReg * reg
+  | SCVTF of fReg * reg
+  | FCVTZS of reg * fReg
+  | SXTB of reg * reg
+  | SXTH of reg * reg
+  | SXTW of reg * reg
+  | UXTB of reg * reg
+  | UXTH of reg * reg
+  | UXTW of reg * reg
+
 (*
    Machine code (32-bit instruction)
 *)
 type machineCode = int32
+
 (*
    ARM64-specific syscall invocation details (layered on top of Platform.SyscallNumbers).
    Platform.ml intentionally has no ARM64 dependency, so these are defined here.
    SVC instruction immediate value
    Register to hold syscall number (X16 macOS, X8 Linux)
 *)
-type syscallConfig = {numbers:Platform.syscallNumbers;svcImmediate:int;syscallRegister:reg}
+type syscallConfig = {
+  numbers : Platform.syscallNumbers;
+  svcImmediate : int;
+  syscallRegister : reg;
+}
+
 (*
    Return the ARM64 modified-immediate byte for an encodable double-precision
    `FMOV` scalar immediate.
 *)
 let tryEncodeFmovFloatImmediate value =
- let candidates=List.concat_map (fun signBit -> List.concat_map (fun exponentBits -> List.init 16 (fun fractionBits ->
- let sign=if signBit=0 then 1. else -1. in
- let exponent=if exponentBits>=4 then exponentBits-7 else exponentBits+1 in
- let significand=1.+.(float_of_int fractionBits/.16.) in
- let candidate=sign*.significand*.Float.ldexp 1. exponent in
- let encoded=Int32.of_int ((signBit lsl 7) lor (exponentBits lsl 4) lor fractionBits) in
- candidate,encoded)) (List.init 8 Fun.id)) [0;1] in
- List.find_map (fun (candidate,encoded) -> if candidate=value then Some encoded else None) candidates
+  let candidates =
+    List.concat_map
+      (fun signBit ->
+        List.concat_map
+          (fun exponentBits ->
+            List.init 16 (fun fractionBits ->
+                let sign = if signBit = 0 then 1. else -1. in
+                let exponent =
+                  if exponentBits >= 4 then exponentBits - 7
+                  else exponentBits + 1
+                in
+                let significand = 1. +. (float_of_int fractionBits /. 16.) in
+                let candidate =
+                  sign *. significand *. Float.ldexp 1. exponent
+                in
+                let encoded =
+                  Int32.of_int
+                    ((signBit lsl 7) lor (exponentBits lsl 4) lor fractionBits)
+                in
+                (candidate, encoded)))
+          (List.init 8 Fun.id))
+      [ 0; 1 ]
+  in
+  List.find_map
+    (fun (candidate, encoded) ->
+      if candidate = value then Some encoded else None)
+    candidates
+
 (*
    Build the ARM64-specific syscall config for the given OS.
 *)
 let syscallConfigFor = function
- | Platform.MacOS -> {numbers=Platform.syscallNumbersFor (Platform.ARM64Backend Platform.MacOSARM64);svcImmediate=0x80;syscallRegister=X16}
- | Platform.Linux -> {numbers=Platform.syscallNumbersFor (Platform.ARM64Backend Platform.LinuxARM64);svcImmediate=0;syscallRegister=X8}
+  | Platform.MacOS ->
+      {
+        numbers =
+          Platform.syscallNumbersFor (Platform.ARM64Backend Platform.MacOSARM64);
+        svcImmediate = 0x80;
+        syscallRegister = X16;
+      }
+  | Platform.Linux ->
+      {
+        numbers =
+          Platform.syscallNumbersFor (Platform.ARM64Backend Platform.LinuxARM64);
+        svcImmediate = 0;
+        syscallRegister = X8;
+      }
+
 (*
    Validated platform configuration threaded through ARM64 code generation.
 *)
-type targetConfig = {os:Platform.os;syscalls:syscallConfig}
+type targetConfig = { os : Platform.os; syscalls : syscallConfig }
+
 let targetConfigFor target =
- let os=match target with Platform.MacOSARM64 -> Platform.MacOS | Platform.LinuxARM64 -> Platform.Linux in
- {os;syscalls=syscallConfigFor os}
-let targetOS config=config.os
-let targetSyscalls config=config.syscalls
+  let os =
+    match target with
+    | Platform.MacOSARM64 -> Platform.MacOS
+    | Platform.LinuxARM64 -> Platform.Linux
+  in
+  { os; syscalls = syscallConfigFor os }
+
+let targetOS config = config.os
+let targetSyscalls config = config.syscalls

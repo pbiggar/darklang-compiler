@@ -1,5 +1,6 @@
 (* Original compiler-pass diagnostics and parser boundary assertions. *)
-type testResult=(unit,string) result
+type testResult = (unit, string) result
+
 val testPrettyPrintMirCfg : unit -> testResult
 val testParseLIRRejectsNonFinalTerminator : unit -> testResult
 val testParseLIRRejectsMissingTerminator : unit -> testResult

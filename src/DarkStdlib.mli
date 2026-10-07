@@ -13,5 +13,8 @@ val packageCatalogModule : AST.moduleDef
 val rawMemoryIntrinsics : AST.moduleFunc list
 val allModules : AST.moduleDef list
 val buildModuleRegistry : unit -> AST.moduleRegistry
-val tryGetFunction : AST.moduleRegistry -> string -> (AST.moduleFunc * string) option
+
+val tryGetFunction :
+  AST.moduleRegistry -> string -> (AST.moduleFunc * string) option
+
 val getFunctionType : AST.moduleFunc -> AST.semanticType

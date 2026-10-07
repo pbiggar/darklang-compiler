@@ -12,7 +12,7 @@
 # Get script directory
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
-COMPILER_DIR="${REPO_ROOT}/lib"
+SITE_HELPER="${SCRIPT_DIR}/ocaml_sites.py"
 RESULTS_DIR="${SCRIPT_DIR}/results"
 CHECKPOINT_FILE="${RESULTS_DIR}/checkpoint.txt"
 SITES_FILE="${RESULTS_DIR}/mutation_sites.txt"
@@ -69,164 +69,52 @@ for arg in "$@"; do
             head -12 "$0" | tail -10
             exit 0
             ;;
+        *) echo "Unknown option: $arg" >&2; exit 1 ;;
     esac
 done
 
-# Check if file should be skipped
-should_skip_file() {
-    local basename
-    basename=$(basename "$1")
-    case "$basename" in
-        *Test*.ml|IRPrinter.fs|Binary.fs|Binary_ELF.fs|Binary_MachO.fs|Output.fs|Platform.fs)
-            return 0 ;;
-    esac
-    return 1
-}
+case "$MUTATION_TYPE" in arith|cmp|logic|all) ;; *) echo "Invalid mutation type: $MUTATION_TYPE" >&2; exit 1 ;; esac
+[[ "$LIMIT" =~ ^[0-9]+$ ]] || { echo "--limit must be a nonnegative integer" >&2; exit 1; }
 
-# Check if line should be skipped
-should_skip_line() {
-    local line="$1"
-    # Skip comments
-    [[ "$line" =~ ^[[:space:]]*// ]] && return 0
-    # Skip module/open declarations
-    [[ "$line" =~ ^[[:space:]]*(module|open)[[:space:]] ]] && return 0
-    # Skip type/let declarations (lines starting with type, let, |, etc.)
-    [[ "$line" =~ ^[[:space:]]*(type|let|\|)[[:space:]] ]] && return 0
-    # Skip lines that are just pattern match arms
-    [[ "$line" =~ ^[[:space:]]*\| ]] && return 0
-    # Skip lines that are primarily string output (println, printf, etc.)
-    [[ "$line" =~ (println|printf|print)[[:space:]] ]] && return 0
-    # Skip generic type constraints and signatures (lines with 'a 'b etc.)
-    [[ "$line" =~ \'[a-z][[:space:]]*\* ]] && return 0
-    return 1
-}
-
-# Find mutation sites
+# Discovery and application share an OCaml lexical scanner. Empty selections
+# must fail rather than report a successful mutation run.
 find_mutation_sites() {
-    log_info "Discovering mutation sites..."
+    log_info "Discovering OCaml mutation sites..."
     mkdir -p "$RESULTS_DIR"
-    : > "$SITES_FILE"
-
-    # Get list of files
-    local files
-    mapfile -t files < <(find "$COMPILER_DIR" -name "*.ml" 2>/dev/null)
-    local file_count=0
-
-    for file in "${files[@]}"; do
-        # Apply file pattern filter
-        [[ -n "$FILE_PATTERN" && "$file" != *"$FILE_PATTERN"* ]] && continue
-        should_skip_file "$file" && continue
-        ((file_count++))
-
-        # Process each mutation type with its grep pattern
-        local types=() grep_patterns=()
-
-        if [[ "$MUTATION_TYPE" == "all" || "$MUTATION_TYPE" == "arith" ]]; then
-            types+=("ARITH_ADD" "ARITH_SUB" "ARITH_MUL" "ARITH_DIV")
-            grep_patterns+=(" + " " - " " \* " " / ")
-        fi
-        if [[ "$MUTATION_TYPE" == "all" || "$MUTATION_TYPE" == "cmp" ]]; then
-            types+=("CMP_LT" "CMP_GT" "CMP_LTE" "CMP_GTE" "CMP_NEQ")
-            grep_patterns+=(" < " " > " " <= " " >= " " <> ")
-        fi
-        if [[ "$MUTATION_TYPE" == "all" || "$MUTATION_TYPE" == "logic" ]]; then
-            types+=("LOGIC_AND" "LOGIC_OR")
-            grep_patterns+=(" && " " || ")
-        fi
-
-        for i in "${!types[@]}"; do
-            local type="${types[$i]}"
-            local grep_pattern="${grep_patterns[$i]}"
-
-            grep -n -- "$grep_pattern" "$file" 2>/dev/null | while IFS=: read -r linenum line_content; do
-                [[ -z "$linenum" ]] && continue
-                should_skip_line "$line_content" && continue
-
-                # Pattern-specific filters
-                # Skip lines where the operator only appears in comments
-                local code_part="${line_content%%//*}"
-
-                case "$type" in
-                    ARITH_ADD)
-                        # Skip if + only in comment
-                        [[ "$code_part" != *" + "* ]] && continue
-                        ;;
-                    ARITH_SUB)
-                        # Skip -> arrows and string interpolation
-                        [[ "$line_content" == *"->"* ]] && continue
-                        [[ "$line_content" == *'$"'* ]] && continue
-                        # Skip if - only in comment
-                        [[ "$code_part" != *" - "* ]] && continue
-                        ;;
-                    ARITH_DIV)
-                        # Skip // comments (entire line is a comment-like pattern)
-                        [[ "$line_content" == *"//"* ]] && continue
-                        ;;
-                    ARITH_MUL)
-                        # Skip tuple types like (Type1 * Type2) and type annotations
-                        [[ "$line_content" =~ [A-Z][a-zA-Z0-9_]*[[:space:]]\*[[:space:]][A-Z] ]] && continue
-                        # Skip lines with 'of' keyword (variant type definitions)
-                        [[ "$line_content" == *" of "* ]] && continue
-                        # Skip if * only in comment
-                        [[ "$code_part" != *" * "* ]] && continue
-                        ;;
-                    CMP_LT|CMP_GT)
-                        # Skip generic type params like <T> or List<int>
-                        [[ "$line_content" =~ \<[A-Za-z] ]] && continue
-                        [[ "$line_content" =~ [A-Za-z]\> ]] && continue
-                        ;;
-                esac
-
-                local display_file="${file#${REPO_ROOT}/}"
-                echo "${type}:${display_file}:${linenum}"
-            done
-        done
-    done >> "$SITES_FILE"
-
-    local site_count
-    site_count=$(wc -l < "$SITES_FILE" | tr -d ' ')
-    log_info "Found ${site_count} mutation sites in ${file_count} files"
+    if ! python3 "$SITE_HELPER" discover "$REPO_ROOT" \
+        --file "$FILE_PATTERN" --type "$MUTATION_TYPE" > "$SITES_FILE"; then
+        rm -f "$SITES_FILE"
+        exit 1
+    fi
+    log_info "Found $(wc -l < "$SITES_FILE") mutation sites"
 }
 
-# Apply a mutation using portable sed
-apply_sed() {
-    local linenum="$1" pattern="$2" replacement="$3" file="$4"
-    local tmp="${file}.sedtmp"
-    sed "${linenum}s/${pattern}/${replacement}/" "$file" > "$tmp" && mv "$tmp" "$file"
-}
-
-# Apply a mutation
+ACTIVE_FILE=""
 apply_mutation() {
     local type="$1" file="$2" linenum="$3"
-    local source_file
+    local source_file backup
     source_file=$(resolve_source_file "$file")
-    local backup="${source_file}.mutation_backup"
-
-    cp "$source_file" "$backup"
-
-    case "$type" in
-        ARITH_ADD) apply_sed "$linenum" " + " " - " "$source_file" ;;
-        ARITH_SUB) apply_sed "$linenum" " - " " + " "$source_file" ;;
-        ARITH_MUL) apply_sed "$linenum" " \* " " \/ " "$source_file" ;;
-        ARITH_DIV) apply_sed "$linenum" " \/ " " * " "$source_file" ;;
-        CMP_LT)    apply_sed "$linenum" " < " " > " "$source_file" ;;
-        CMP_GT)    apply_sed "$linenum" " > " " < " "$source_file" ;;
-        CMP_LTE)   apply_sed "$linenum" " <= " " >= " "$source_file" ;;
-        CMP_GTE)   apply_sed "$linenum" " >= " " <= " "$source_file" ;;
-        CMP_NEQ)   apply_sed "$linenum" " <> " " = " "$source_file" ;;
-        LOGIC_AND) apply_sed "$linenum" " && " " || " "$source_file" ;;
-        LOGIC_OR)  apply_sed "$linenum" " || " " \\&\\& " "$source_file" ;;
-    esac
+    backup="${source_file}.mutation_backup"
+    if [[ -e "$backup" ]]; then
+        echo "Refusing to overwrite existing mutation backup: $backup" >&2
+        return 1
+    fi
+    cp "$source_file" "$backup" || return 1
+    ACTIVE_FILE="$file"
+    python3 "$SITE_HELPER" apply "$type" "$source_file" "$linenum"
 }
 
-# Restore from backup
 restore_file() {
-    local file="$1"
-    local source_file
-    source_file=$(resolve_source_file "$file")
-    local backup="${source_file}.mutation_backup"
+    local source_file backup
+    source_file=$(resolve_source_file "$1")
+    backup="${source_file}.mutation_backup"
     [[ -f "$backup" ]] && mv "$backup" "$source_file"
 }
+
+# Restore source when a mutation or its verification is interrupted.
+trap '[[ -z "$ACTIVE_FILE" ]] || restore_file "$ACTIVE_FILE"' EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 # Run tests for a mutation
 run_mutation_test() {
@@ -312,6 +200,10 @@ main() {
 
     local total_sites
     total_sites=$(wc -l < "$SITES_FILE" | tr -d ' ')
+    if [[ "$total_sites" -eq 0 ]]; then
+        echo "No mutation sites selected; rediscover without --resume." >&2
+        exit 1
+    fi
     log_info "Total sites: ${total_sites}"
 
     # Dry run
@@ -350,7 +242,7 @@ main() {
         echo "$mutation_id" > "$CHECKPOINT_FILE"
         echo -n "[${mutation_id}/${total_sites}] ${type} $(basename "$file"):${linenum} ... "
 
-        apply_mutation "$type" "$file" "$linenum"
+        apply_mutation "$type" "$file" "$linenum" || exit 1
 
         local start_ms=$(date +%s%3N 2>/dev/null || date +%s)
         local result=$(run_mutation_test)
@@ -358,6 +250,7 @@ main() {
         local elapsed=$((end_ms - start_ms))
 
         restore_file "$file"
+        ACTIVE_FILE=""
 
         echo "${mutation_id},${type},${file},${linenum},${result},${elapsed}" >> "$RESULTS_CSV"
 

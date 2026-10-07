@@ -1,6 +1,9 @@
 (* Original type-checker unit assertions and recursive traversal helper. *)
-type testResult=(unit,string) result
-val expectType : Dark_compiler.AST.expr -> Dark_compiler.AST.semanticType -> testResult
+type testResult = (unit, string) result
+
+val expectType :
+  Dark_compiler.AST.expr -> Dark_compiler.AST.semanticType -> testResult
+
 val countMatches : Dark_compiler.CheckedAST.expr -> int
 val testInt64Literal : unit -> testResult
 val testInt128Literal : unit -> testResult

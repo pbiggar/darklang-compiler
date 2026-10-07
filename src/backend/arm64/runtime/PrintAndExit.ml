@@ -72,70 +72,51 @@ open Immediates
    37: X6 = 1 (negative flag)
    38: Branch back (-30) to inst 8 (CBZ zero check)
 *)
-let generatePrintInt64 (target: ARM64.targetConfig) =
-
-    let syscalls = ARM64.targetSyscalls target in
-    [
-
-        ARM64.SUB_imm (ARM64.SP, ARM64.SP, 32);
-
-
-
-        ARM64.ADD_imm (ARM64.X1, ARM64.SP, 31);
-        ARM64.MOV_reg (ARM64.X2, ARM64.X0);
-
-
-        ARM64.MOVZ (ARM64.X3, 10, 0);
-        ARM64.STRB (ARM64.X3, ARM64.X1, 0);
-        ARM64.SUB_imm (ARM64.X1, ARM64.X1, 1);
-
-
-        ARM64.MOVZ (ARM64.X6, 0, 0);
-        ARM64.TBNZ (ARM64.X2, 63, 29);
-
-
-        ARM64.CBZ_offset (ARM64.X2, 24);
-
-
-        ARM64.MOVZ (ARM64.X3, 10, 0);
-        ARM64.UDIV (ARM64.X4, ARM64.X2, ARM64.X3);
-        ARM64.MSUB (ARM64.X5, ARM64.X4, ARM64.X3, ARM64.X2);
-        ARM64.ADD_imm (ARM64.X5, ARM64.X5, 48);
-        ARM64.STRB (ARM64.X5, ARM64.X1, 0);
-        ARM64.SUB_imm (ARM64.X1, ARM64.X1, 1);
-        ARM64.MOV_reg (ARM64.X2, ARM64.X4);
-        ARM64.CBZ_offset (ARM64.X2, 2);
-        ARM64.B (-8);
-
-
-        ARM64.CBZ_offset (ARM64.X6, 4);
-        ARM64.MOVZ (ARM64.X3, 45, 0);
-        ARM64.STRB (ARM64.X3, ARM64.X1, 0);
-        ARM64.SUB_imm (ARM64.X1, ARM64.X1, 1);
-
-
-        ARM64.ADD_imm (ARM64.X1, ARM64.X1, 1);
-        ARM64.ADD_imm (ARM64.X2, ARM64.SP, 32);
-        ARM64.SUB_reg (ARM64.X2, ARM64.X2, ARM64.X1);
-        ARM64.MOVZ (ARM64.X0, 1, 0);
-        ARM64.MOVZ (syscalls.ARM64.syscallRegister, syscalls.ARM64.numbers.Platform.write, 0);
-        ARM64.SVC syscalls.ARM64.svcImmediate;
-        ARM64.ADD_imm (ARM64.SP, ARM64.SP, 32);
-        ARM64.MOVZ (ARM64.X0, 0, 0);
-        ARM64.MOVZ (syscalls.ARM64.syscallRegister, syscalls.ARM64.numbers.Platform.exit, 0);
-        ARM64.SVC syscalls.ARM64.svcImmediate;
-
-
-        ARM64.MOVZ (ARM64.X2, 48, 0);
-        ARM64.STRB (ARM64.X2, ARM64.X1, 0);
-        ARM64.SUB_imm (ARM64.X1, ARM64.X1, 1);
-        ARM64.B (-13);
-
-
-        ARM64.NEG (ARM64.X2, ARM64.X2);
-        ARM64.MOVZ (ARM64.X6, 1, 0);
-        ARM64.B (-30);
-    ]
+let generatePrintInt64 (target : ARM64.targetConfig) =
+  let syscalls = ARM64.targetSyscalls target in
+  [
+    ARM64.SUB_imm (ARM64.SP, ARM64.SP, 32);
+    ARM64.ADD_imm (ARM64.X1, ARM64.SP, 31);
+    ARM64.MOV_reg (ARM64.X2, ARM64.X0);
+    ARM64.MOVZ (ARM64.X3, 10, 0);
+    ARM64.STRB (ARM64.X3, ARM64.X1, 0);
+    ARM64.SUB_imm (ARM64.X1, ARM64.X1, 1);
+    ARM64.MOVZ (ARM64.X6, 0, 0);
+    ARM64.TBNZ (ARM64.X2, 63, 29);
+    ARM64.CBZ_offset (ARM64.X2, 24);
+    ARM64.MOVZ (ARM64.X3, 10, 0);
+    ARM64.UDIV (ARM64.X4, ARM64.X2, ARM64.X3);
+    ARM64.MSUB (ARM64.X5, ARM64.X4, ARM64.X3, ARM64.X2);
+    ARM64.ADD_imm (ARM64.X5, ARM64.X5, 48);
+    ARM64.STRB (ARM64.X5, ARM64.X1, 0);
+    ARM64.SUB_imm (ARM64.X1, ARM64.X1, 1);
+    ARM64.MOV_reg (ARM64.X2, ARM64.X4);
+    ARM64.CBZ_offset (ARM64.X2, 2);
+    ARM64.B (-8);
+    ARM64.CBZ_offset (ARM64.X6, 4);
+    ARM64.MOVZ (ARM64.X3, 45, 0);
+    ARM64.STRB (ARM64.X3, ARM64.X1, 0);
+    ARM64.SUB_imm (ARM64.X1, ARM64.X1, 1);
+    ARM64.ADD_imm (ARM64.X1, ARM64.X1, 1);
+    ARM64.ADD_imm (ARM64.X2, ARM64.SP, 32);
+    ARM64.SUB_reg (ARM64.X2, ARM64.X2, ARM64.X1);
+    ARM64.MOVZ (ARM64.X0, 1, 0);
+    ARM64.MOVZ
+      (syscalls.ARM64.syscallRegister, syscalls.ARM64.numbers.Platform.write, 0);
+    ARM64.SVC syscalls.ARM64.svcImmediate;
+    ARM64.ADD_imm (ARM64.SP, ARM64.SP, 32);
+    ARM64.MOVZ (ARM64.X0, 0, 0);
+    ARM64.MOVZ
+      (syscalls.ARM64.syscallRegister, syscalls.ARM64.numbers.Platform.exit, 0);
+    ARM64.SVC syscalls.ARM64.svcImmediate;
+    ARM64.MOVZ (ARM64.X2, 48, 0);
+    ARM64.STRB (ARM64.X2, ARM64.X1, 0);
+    ARM64.SUB_imm (ARM64.X1, ARM64.X1, 1);
+    ARM64.B (-13);
+    ARM64.NEG (ARM64.X2, ARM64.X2);
+    ARM64.MOVZ (ARM64.X6, 1, 0);
+    ARM64.B (-30);
+  ]
 
 (*
    Generate ARM64 instructions to print boolean in X0 to stdout with newline
@@ -178,64 +159,52 @@ let generatePrintInt64 (target: ARM64.targetConfig) =
    Deallocate stack
    exit code = 0
 *)
-let generatePrintBool (target: ARM64.targetConfig) =
-    let syscalls = ARM64.targetSyscalls target in
-    [
-
-        ARM64.SUB_imm (ARM64.SP, ARM64.SP, 16);
-
-
-        ARM64.CBZ_offset (ARM64.X0, 17);
-
-
-
-        ARM64.MOVZ (ARM64.X3, 116, 0);
-        ARM64.STRB (ARM64.X3, ARM64.SP, 0);
-        ARM64.MOVZ (ARM64.X3, 114, 0);
-        ARM64.STRB (ARM64.X3, ARM64.SP, 1);
-        ARM64.MOVZ (ARM64.X3, 117, 0);
-        ARM64.STRB (ARM64.X3, ARM64.SP, 2);
-        ARM64.MOVZ (ARM64.X3, 101, 0);
-        ARM64.STRB (ARM64.X3, ARM64.SP, 3);
-        ARM64.MOVZ (ARM64.X3, 10, 0);
-        ARM64.STRB (ARM64.X3, ARM64.SP, 4);
-        ARM64.MOVZ (ARM64.X2, 5, 0);
-
-
-        ARM64.MOV_reg (ARM64.X1, ARM64.SP);
-        ARM64.MOVZ (ARM64.X0, 1, 0);
-        ARM64.MOVZ (syscalls.ARM64.syscallRegister, syscalls.ARM64.numbers.Platform.write, 0);
-        ARM64.SVC syscalls.ARM64.svcImmediate;
-        ARM64.B (16);
-
-
-
-        ARM64.MOVZ (ARM64.X3, 102, 0);
-        ARM64.STRB (ARM64.X3, ARM64.SP, 0);
-        ARM64.MOVZ (ARM64.X3, 97, 0);
-        ARM64.STRB (ARM64.X3, ARM64.SP, 1);
-        ARM64.MOVZ (ARM64.X3, 108, 0);
-        ARM64.STRB (ARM64.X3, ARM64.SP, 2);
-        ARM64.MOVZ (ARM64.X3, 115, 0);
-        ARM64.STRB (ARM64.X3, ARM64.SP, 3);
-        ARM64.MOVZ (ARM64.X3, 101, 0);
-        ARM64.STRB (ARM64.X3, ARM64.SP, 4);
-        ARM64.MOVZ (ARM64.X3, 10, 0);
-        ARM64.STRB (ARM64.X3, ARM64.SP, 5);
-        ARM64.MOVZ (ARM64.X2, 6, 0);
-
-
-        ARM64.MOV_reg (ARM64.X1, ARM64.SP);
-        ARM64.MOVZ (ARM64.X0, 1, 0);
-        ARM64.MOVZ (syscalls.ARM64.syscallRegister, syscalls.ARM64.numbers.Platform.write, 0);
-        ARM64.SVC syscalls.ARM64.svcImmediate;
-
-
-        ARM64.ADD_imm (ARM64.SP, ARM64.SP, 16);
-        ARM64.MOVZ (ARM64.X0, 0, 0);
-        ARM64.MOVZ (syscalls.ARM64.syscallRegister, syscalls.ARM64.numbers.Platform.exit, 0);
-        ARM64.SVC syscalls.ARM64.svcImmediate;
-    ]
+let generatePrintBool (target : ARM64.targetConfig) =
+  let syscalls = ARM64.targetSyscalls target in
+  [
+    ARM64.SUB_imm (ARM64.SP, ARM64.SP, 16);
+    ARM64.CBZ_offset (ARM64.X0, 17);
+    ARM64.MOVZ (ARM64.X3, 116, 0);
+    ARM64.STRB (ARM64.X3, ARM64.SP, 0);
+    ARM64.MOVZ (ARM64.X3, 114, 0);
+    ARM64.STRB (ARM64.X3, ARM64.SP, 1);
+    ARM64.MOVZ (ARM64.X3, 117, 0);
+    ARM64.STRB (ARM64.X3, ARM64.SP, 2);
+    ARM64.MOVZ (ARM64.X3, 101, 0);
+    ARM64.STRB (ARM64.X3, ARM64.SP, 3);
+    ARM64.MOVZ (ARM64.X3, 10, 0);
+    ARM64.STRB (ARM64.X3, ARM64.SP, 4);
+    ARM64.MOVZ (ARM64.X2, 5, 0);
+    ARM64.MOV_reg (ARM64.X1, ARM64.SP);
+    ARM64.MOVZ (ARM64.X0, 1, 0);
+    ARM64.MOVZ
+      (syscalls.ARM64.syscallRegister, syscalls.ARM64.numbers.Platform.write, 0);
+    ARM64.SVC syscalls.ARM64.svcImmediate;
+    ARM64.B 16;
+    ARM64.MOVZ (ARM64.X3, 102, 0);
+    ARM64.STRB (ARM64.X3, ARM64.SP, 0);
+    ARM64.MOVZ (ARM64.X3, 97, 0);
+    ARM64.STRB (ARM64.X3, ARM64.SP, 1);
+    ARM64.MOVZ (ARM64.X3, 108, 0);
+    ARM64.STRB (ARM64.X3, ARM64.SP, 2);
+    ARM64.MOVZ (ARM64.X3, 115, 0);
+    ARM64.STRB (ARM64.X3, ARM64.SP, 3);
+    ARM64.MOVZ (ARM64.X3, 101, 0);
+    ARM64.STRB (ARM64.X3, ARM64.SP, 4);
+    ARM64.MOVZ (ARM64.X3, 10, 0);
+    ARM64.STRB (ARM64.X3, ARM64.SP, 5);
+    ARM64.MOVZ (ARM64.X2, 6, 0);
+    ARM64.MOV_reg (ARM64.X1, ARM64.SP);
+    ARM64.MOVZ (ARM64.X0, 1, 0);
+    ARM64.MOVZ
+      (syscalls.ARM64.syscallRegister, syscalls.ARM64.numbers.Platform.write, 0);
+    ARM64.SVC syscalls.ARM64.svcImmediate;
+    ARM64.ADD_imm (ARM64.SP, ARM64.SP, 16);
+    ARM64.MOVZ (ARM64.X0, 0, 0);
+    ARM64.MOVZ
+      (syscalls.ARM64.syscallRegister, syscalls.ARM64.numbers.Platform.exit, 0);
+    ARM64.SVC syscalls.ARM64.svcImmediate;
+  ]
 
 (*
    Generate ARM64 instructions to print string to stdout with newline, then exit
@@ -266,39 +235,32 @@ let generatePrintBool (target: ARM64.targetConfig) =
    Cleanup stack
    Exit with code 0
 *)
-let generatePrintString (target: ARM64.targetConfig) (stringLen: int) =
-    let syscalls = ARM64.targetSyscalls target in
-    [
-
-        ARM64.ADD_imm (ARM64.X1, ARM64.X0, 16);
-        ARM64.MOVZ (ARM64.X0, 1, 0);
-
-
-    ] @
-    generateLoadNonNegativeIntImmediate ARM64.X2 stringLen @
-    [
-        ARM64.MOVZ (syscalls.ARM64.syscallRegister, syscalls.ARM64.numbers.Platform.write, 0);
-        ARM64.SVC syscalls.ARM64.svcImmediate;
-
-
-        ARM64.SUB_imm (ARM64.SP, ARM64.SP, 16);
-        ARM64.MOVZ (ARM64.X3, 10, 0);
-        ARM64.STRB (ARM64.X3, ARM64.SP, 0);
-
-
-        ARM64.MOVZ (ARM64.X0, 1, 0);
-        ARM64.MOV_reg (ARM64.X1, ARM64.SP);
-        ARM64.MOVZ (ARM64.X2, 1, 0);
-        ARM64.MOVZ (syscalls.ARM64.syscallRegister, syscalls.ARM64.numbers.Platform.write, 0);
-        ARM64.SVC syscalls.ARM64.svcImmediate;
-
-
-        ARM64.ADD_imm (ARM64.SP, ARM64.SP, 16);
-
-
-        ARM64.MOVZ (ARM64.X0, 0, 0);
-        ARM64.MOVZ (syscalls.ARM64.syscallRegister, syscalls.ARM64.numbers.Platform.exit, 0);
-        ARM64.SVC syscalls.ARM64.svcImmediate;
+let generatePrintString (target : ARM64.targetConfig) (stringLen : int) =
+  let syscalls = ARM64.targetSyscalls target in
+  [ ARM64.ADD_imm (ARM64.X1, ARM64.X0, 16); ARM64.MOVZ (ARM64.X0, 1, 0) ]
+  @ generateLoadNonNegativeIntImmediate ARM64.X2 stringLen
+  @ [
+      ARM64.MOVZ
+        ( syscalls.ARM64.syscallRegister,
+          syscalls.ARM64.numbers.Platform.write,
+          0 );
+      ARM64.SVC syscalls.ARM64.svcImmediate;
+      ARM64.SUB_imm (ARM64.SP, ARM64.SP, 16);
+      ARM64.MOVZ (ARM64.X3, 10, 0);
+      ARM64.STRB (ARM64.X3, ARM64.SP, 0);
+      ARM64.MOVZ (ARM64.X0, 1, 0);
+      ARM64.MOV_reg (ARM64.X1, ARM64.SP);
+      ARM64.MOVZ (ARM64.X2, 1, 0);
+      ARM64.MOVZ
+        ( syscalls.ARM64.syscallRegister,
+          syscalls.ARM64.numbers.Platform.write,
+          0 );
+      ARM64.SVC syscalls.ARM64.svcImmediate;
+      ARM64.ADD_imm (ARM64.SP, ARM64.SP, 16);
+      ARM64.MOVZ (ARM64.X0, 0, 0);
+      ARM64.MOVZ
+        (syscalls.ARM64.syscallRegister, syscalls.ARM64.numbers.Platform.exit, 0);
+      ARM64.SVC syscalls.ARM64.svcImmediate;
     ]
 
 (*
@@ -408,143 +370,106 @@ let generatePrintString (target: ARM64.targetConfig) (stringLen: int) =
    Store '0'
    Branch back to store_minus_if_needed (inst 23)
 *)
-let generatePrintFloat (target: ARM64.targetConfig) =
-    let syscalls = ARM64.targetSyscalls target in
-    [
-
-        ARM64.SUB_imm (ARM64.SP, ARM64.SP, 48);
-
-
-
-        ARM64.STR_fp (ARM64.D0, ARM64.SP, 32);
-
-
-        ARM64.MOVZ (ARM64.X6, 0, 0);
-        ARM64.FMOV_to_gp (ARM64.X0, ARM64.D0);
-        ARM64.TBNZ (ARM64.X0, 63, 2);
-        ARM64.B (2);
-        ARM64.MOVZ (ARM64.X6, 1, 0);
-
-
-
-        ARM64.ADD_imm (ARM64.X1, ARM64.SP, 31);
-
-
-        ARM64.FCVTZS (ARM64.X0, ARM64.D0);
-
-        ARM64.TBNZ (ARM64.X0, 63, 3);
-        ARM64.MOV_reg (ARM64.X2, ARM64.X0);
-        ARM64.B (2);
-        ARM64.NEG (ARM64.X2, ARM64.X0);
-
-        ARM64.CBZ_offset (ARM64.X2, 64);
-
-
-        ARM64.MOVZ (ARM64.X3, 10, 0);
-        ARM64.UDIV (ARM64.X4, ARM64.X2, ARM64.X3);
-        ARM64.MSUB (ARM64.X5, ARM64.X4, ARM64.X3, ARM64.X2);
-        ARM64.ADD_imm (ARM64.X5, ARM64.X5, 48);
-        ARM64.STRB (ARM64.X5, ARM64.X1, 0);
-        ARM64.SUB_imm (ARM64.X1, ARM64.X1, 1);
-        ARM64.MOV_reg (ARM64.X2, ARM64.X4);
-        ARM64.CBZ_offset (ARM64.X2, 2);
-        ARM64.B (-8);
-
-
-        ARM64.CBZ_offset (ARM64.X6, 4);
-        ARM64.MOVZ (ARM64.X3, 45, 0);
-        ARM64.STRB (ARM64.X3, ARM64.X1, 0);
-        ARM64.SUB_imm (ARM64.X1, ARM64.X1, 1);
-
-
-        ARM64.ADD_imm (ARM64.X1, ARM64.X1, 1);
-        ARM64.ADD_imm (ARM64.X2, ARM64.SP, 32);
-        ARM64.SUB_reg (ARM64.X2, ARM64.X2, ARM64.X1);
-
-        ARM64.STR (ARM64.X6, ARM64.SP, 40);
-        ARM64.MOVZ (ARM64.X0, 1, 0);
-        ARM64.MOVZ (syscalls.ARM64.syscallRegister, syscalls.ARM64.numbers.Platform.write, 0);
-        ARM64.SVC syscalls.ARM64.svcImmediate;
-
-
-        ARM64.MOVZ (ARM64.X3, 46, 0);
-        ARM64.STRB (ARM64.X3, ARM64.SP, 0);
-        ARM64.MOVZ (ARM64.X0, 1, 0);
-        ARM64.MOV_reg (ARM64.X1, ARM64.SP);
-        ARM64.MOVZ (ARM64.X2, 1, 0);
-        ARM64.MOVZ (syscalls.ARM64.syscallRegister, syscalls.ARM64.numbers.Platform.write, 0);
-        ARM64.SVC syscalls.ARM64.svcImmediate;
-
-
-
-        ARM64.LDR_fp (ARM64.D0, ARM64.SP, 32);
-
-
-        ARM64.FCVTZS (ARM64.X0, ARM64.D0);
-        ARM64.SCVTF (ARM64.D1, ARM64.X0);
-        ARM64.FSUB (ARM64.D0, ARM64.D0, ARM64.D1);
-
-
-        ARM64.MOVZ (ARM64.X0, 100, 0);
-        ARM64.SCVTF (ARM64.D1, ARM64.X0);
-        ARM64.FMUL (ARM64.D0, ARM64.D0, ARM64.D1);
-        ARM64.FCVTZS (ARM64.X7, ARM64.D0);
-
-
-        ARM64.TBNZ (ARM64.X7, 63, 2);
-        ARM64.B (2);
-        ARM64.NEG (ARM64.X7, ARM64.X7);
-
-
-        ARM64.MOVZ (ARM64.X3, 10, 0);
-        ARM64.UDIV (ARM64.X4, ARM64.X7, ARM64.X3);
-        ARM64.MSUB (ARM64.X5, ARM64.X4, ARM64.X3, ARM64.X7);
-
-        ARM64.ADD_imm (ARM64.X4, ARM64.X4, 48);
-        ARM64.STRB (ARM64.X4, ARM64.SP, 1);
-        ARM64.ADD_imm (ARM64.X5, ARM64.X5, 48);
-        ARM64.STRB (ARM64.X5, ARM64.SP, 2);
-
-
-        ARM64.MOVZ (ARM64.X0, 1, 0);
-        ARM64.ADD_imm (ARM64.X1, ARM64.SP, 1);
-        ARM64.SUBS_imm (ARM64.X5, ARM64.X5, 48);
-        ARM64.CSET (ARM64.X2, ARM64.NE);
-        ARM64.ADD_imm (ARM64.X2, ARM64.X2, 1);
-        ARM64.MOVZ (syscalls.ARM64.syscallRegister, syscalls.ARM64.numbers.Platform.write, 0);
-        ARM64.SVC syscalls.ARM64.svcImmediate;
-
-
-        ARM64.MOVZ (ARM64.X3, 10, 0);
-        ARM64.STRB (ARM64.X3, ARM64.SP, 0);
-        ARM64.MOVZ (ARM64.X0, 1, 0);
-        ARM64.MOV_reg (ARM64.X1, ARM64.SP);
-        ARM64.MOVZ (ARM64.X2, 1, 0);
-        ARM64.MOVZ (syscalls.ARM64.syscallRegister, syscalls.ARM64.numbers.Platform.write, 0);
-        ARM64.SVC syscalls.ARM64.svcImmediate;
-
-
-        ARM64.ADD_imm (ARM64.SP, ARM64.SP, 48);
-        ARM64.MOVZ (ARM64.X0, 0, 0);
-        ARM64.MOVZ (syscalls.ARM64.syscallRegister, syscalls.ARM64.numbers.Platform.exit, 0);
-        ARM64.SVC syscalls.ARM64.svcImmediate;
-
-
-        ARM64.MOVZ (ARM64.X2, 48, 0);
-        ARM64.STRB (ARM64.X2, ARM64.X1, 0);
-        ARM64.SUB_imm (ARM64.X1, ARM64.X1, 1);
-        ARM64.B (-57);
-    ]
-
+let generatePrintFloat (target : ARM64.targetConfig) =
+  let syscalls = ARM64.targetSyscalls target in
+  [
+    ARM64.SUB_imm (ARM64.SP, ARM64.SP, 48);
+    ARM64.STR_fp (ARM64.D0, ARM64.SP, 32);
+    ARM64.MOVZ (ARM64.X6, 0, 0);
+    ARM64.FMOV_to_gp (ARM64.X0, ARM64.D0);
+    ARM64.TBNZ (ARM64.X0, 63, 2);
+    ARM64.B 2;
+    ARM64.MOVZ (ARM64.X6, 1, 0);
+    ARM64.ADD_imm (ARM64.X1, ARM64.SP, 31);
+    ARM64.FCVTZS (ARM64.X0, ARM64.D0);
+    ARM64.TBNZ (ARM64.X0, 63, 3);
+    ARM64.MOV_reg (ARM64.X2, ARM64.X0);
+    ARM64.B 2;
+    ARM64.NEG (ARM64.X2, ARM64.X0);
+    ARM64.CBZ_offset (ARM64.X2, 64);
+    ARM64.MOVZ (ARM64.X3, 10, 0);
+    ARM64.UDIV (ARM64.X4, ARM64.X2, ARM64.X3);
+    ARM64.MSUB (ARM64.X5, ARM64.X4, ARM64.X3, ARM64.X2);
+    ARM64.ADD_imm (ARM64.X5, ARM64.X5, 48);
+    ARM64.STRB (ARM64.X5, ARM64.X1, 0);
+    ARM64.SUB_imm (ARM64.X1, ARM64.X1, 1);
+    ARM64.MOV_reg (ARM64.X2, ARM64.X4);
+    ARM64.CBZ_offset (ARM64.X2, 2);
+    ARM64.B (-8);
+    ARM64.CBZ_offset (ARM64.X6, 4);
+    ARM64.MOVZ (ARM64.X3, 45, 0);
+    ARM64.STRB (ARM64.X3, ARM64.X1, 0);
+    ARM64.SUB_imm (ARM64.X1, ARM64.X1, 1);
+    ARM64.ADD_imm (ARM64.X1, ARM64.X1, 1);
+    ARM64.ADD_imm (ARM64.X2, ARM64.SP, 32);
+    ARM64.SUB_reg (ARM64.X2, ARM64.X2, ARM64.X1);
+    ARM64.STR (ARM64.X6, ARM64.SP, 40);
+    ARM64.MOVZ (ARM64.X0, 1, 0);
+    ARM64.MOVZ
+      (syscalls.ARM64.syscallRegister, syscalls.ARM64.numbers.Platform.write, 0);
+    ARM64.SVC syscalls.ARM64.svcImmediate;
+    ARM64.MOVZ (ARM64.X3, 46, 0);
+    ARM64.STRB (ARM64.X3, ARM64.SP, 0);
+    ARM64.MOVZ (ARM64.X0, 1, 0);
+    ARM64.MOV_reg (ARM64.X1, ARM64.SP);
+    ARM64.MOVZ (ARM64.X2, 1, 0);
+    ARM64.MOVZ
+      (syscalls.ARM64.syscallRegister, syscalls.ARM64.numbers.Platform.write, 0);
+    ARM64.SVC syscalls.ARM64.svcImmediate;
+    ARM64.LDR_fp (ARM64.D0, ARM64.SP, 32);
+    ARM64.FCVTZS (ARM64.X0, ARM64.D0);
+    ARM64.SCVTF (ARM64.D1, ARM64.X0);
+    ARM64.FSUB (ARM64.D0, ARM64.D0, ARM64.D1);
+    ARM64.MOVZ (ARM64.X0, 100, 0);
+    ARM64.SCVTF (ARM64.D1, ARM64.X0);
+    ARM64.FMUL (ARM64.D0, ARM64.D0, ARM64.D1);
+    ARM64.FCVTZS (ARM64.X7, ARM64.D0);
+    ARM64.TBNZ (ARM64.X7, 63, 2);
+    ARM64.B 2;
+    ARM64.NEG (ARM64.X7, ARM64.X7);
+    ARM64.MOVZ (ARM64.X3, 10, 0);
+    ARM64.UDIV (ARM64.X4, ARM64.X7, ARM64.X3);
+    ARM64.MSUB (ARM64.X5, ARM64.X4, ARM64.X3, ARM64.X7);
+    ARM64.ADD_imm (ARM64.X4, ARM64.X4, 48);
+    ARM64.STRB (ARM64.X4, ARM64.SP, 1);
+    ARM64.ADD_imm (ARM64.X5, ARM64.X5, 48);
+    ARM64.STRB (ARM64.X5, ARM64.SP, 2);
+    ARM64.MOVZ (ARM64.X0, 1, 0);
+    ARM64.ADD_imm (ARM64.X1, ARM64.SP, 1);
+    ARM64.SUBS_imm (ARM64.X5, ARM64.X5, 48);
+    ARM64.CSET (ARM64.X2, ARM64.NE);
+    ARM64.ADD_imm (ARM64.X2, ARM64.X2, 1);
+    ARM64.MOVZ
+      (syscalls.ARM64.syscallRegister, syscalls.ARM64.numbers.Platform.write, 0);
+    ARM64.SVC syscalls.ARM64.svcImmediate;
+    ARM64.MOVZ (ARM64.X3, 10, 0);
+    ARM64.STRB (ARM64.X3, ARM64.SP, 0);
+    ARM64.MOVZ (ARM64.X0, 1, 0);
+    ARM64.MOV_reg (ARM64.X1, ARM64.SP);
+    ARM64.MOVZ (ARM64.X2, 1, 0);
+    ARM64.MOVZ
+      (syscalls.ARM64.syscallRegister, syscalls.ARM64.numbers.Platform.write, 0);
+    ARM64.SVC syscalls.ARM64.svcImmediate;
+    ARM64.ADD_imm (ARM64.SP, ARM64.SP, 48);
+    ARM64.MOVZ (ARM64.X0, 0, 0);
+    ARM64.MOVZ
+      (syscalls.ARM64.syscallRegister, syscalls.ARM64.numbers.Platform.exit, 0);
+    ARM64.SVC syscalls.ARM64.svcImmediate;
+    ARM64.MOVZ (ARM64.X2, 48, 0);
+    ARM64.STRB (ARM64.X2, ARM64.X1, 0);
+    ARM64.SUB_imm (ARM64.X1, ARM64.X1, 1);
+    ARM64.B (-57);
+  ]
 
 (*
    Generate ARM64 instructions to exit with code 0
    exit code = 0
 *)
-let generateExit (target: ARM64.targetConfig) =
-    let syscalls = ARM64.targetSyscalls target in
-    [
-        ARM64.MOVZ (ARM64.X0, 0, 0);
-        ARM64.MOVZ (syscalls.ARM64.syscallRegister, syscalls.ARM64.numbers.Platform.exit, 0);
-        ARM64.SVC syscalls.ARM64.svcImmediate;
-    ]
+let generateExit (target : ARM64.targetConfig) =
+  let syscalls = ARM64.targetSyscalls target in
+  [
+    ARM64.MOVZ (ARM64.X0, 0, 0);
+    ARM64.MOVZ
+      (syscalls.ARM64.syscallRegister, syscalls.ARM64.numbers.Platform.exit, 0);
+    ARM64.SVC syscalls.ARM64.svcImmediate;
+  ]

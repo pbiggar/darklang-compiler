@@ -81,7 +81,7 @@ ARG MERGETRAIN_VERSION
 
 USER root
 
-# Install the .NET 11 SDK/runtime in the default host.
+# Install the native compiler and reference benchmark toolchains.
 COPY --from=ocaml-builder /opt/ocaml /opt/ocaml
 COPY --from=node /usr/local /usr/local
 COPY --from=rust /usr/local/cargo /usr/local/cargo
@@ -136,7 +136,7 @@ RUN python3 -m venv /opt/mergetrain && \
     ln -s /opt/mergetrain/bin/mergetrain /usr/local/bin/mergetrain && \
     mergetrain --version
 
-RUN mkdir -p /home/agent/.nuget/packages /workspace && \
+RUN mkdir -p /workspace && \
     chown -R agent:agent /home/agent /workspace
 
 USER agent

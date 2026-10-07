@@ -1,1 +1,1 @@
-val tests : (string * (unit -> (unit,string) result)) list
+val tests : (string * (unit -> (unit, string) result)) list

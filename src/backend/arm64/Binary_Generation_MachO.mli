@@ -15,8 +15,23 @@ val calculateCommandsSize : Binary.machOBinary -> int32
 val serializeMachO : Binary.machOBinary -> bytes
 val createFloatData : LiteralPool.floatPool -> bytes
 val createStringData : LiteralPool.stringPool -> bytes * int StringOrder.Map.t
-val createExecutableWithPools : int32 array -> LiteralPool.stringPool -> LiteralPool.floatPool -> bool -> bytes
+
+val createExecutableWithPools :
+  int32 array ->
+  LiteralPool.stringPool ->
+  LiteralPool.floatPool ->
+  bool ->
+  bytes
+
 val createExecutableWithStrings : int32 array -> LiteralPool.stringPool -> bytes
 val createExecutable : int32 array -> bytes
-val createExecutableWithCoverage : int32 array -> LiteralPool.stringPool -> LiteralPool.floatPool -> int -> bool -> bytes
-val writeToFile : string -> bytes -> (unit,string) result
+
+val createExecutableWithCoverage :
+  int32 array ->
+  LiteralPool.stringPool ->
+  LiteralPool.floatPool ->
+  int ->
+  bool ->
+  bytes
+
+val writeToFile : string -> bytes -> (unit, string) result

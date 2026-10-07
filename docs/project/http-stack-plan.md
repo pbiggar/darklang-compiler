@@ -33,7 +33,7 @@ operation in this boundary.
 Implement and test this incrementally: start with socket creation/close,
 then a loopback TCP round trip, then UDP, IPv6, deadlines, and cleanup. Each
 behavior starts with a focused failing E2E test. Keep target-specific syscall
-numbers and socket constants in `Platform.fs`; exercise each target on its
+numbers and socket constants in `src/Platform.ml`; exercise each target on its
 matching host architecture.
 
 ## 2. DNS and HTTP/1.1 in Dark

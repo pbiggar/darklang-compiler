@@ -11,9 +11,9 @@ The interpreter evidence was rechecked in `LibParser/Parser.fs`,
 `LibParser/SourceFile.fs`, `LibParser/NameResolver.fs`,
 `LibParser/WrittenTypesToProgramTypes.fs`, `LibDB/NameLookup.fs`,
 `LibExecution/ProgramTypes.fs`, and `Builtins.CliHost/Libs/Cli.fs` at the pinned
-revision. Compiler evidence was rechecked in `AST.fs`, `NameSyntax.fs`, both
-parser passes, the whole-program section of `TypeChecking.fs`,
-`AST_to_ANF.fs`, `CompilerLibrary.fs`, `Program.fs`, and the e2e runner.
+revision. Compiler evidence was rechecked in `src/AST.ml`, `src/NameSyntax.ml`, both
+parser passes, the whole-program section of `src/frontend/TypeChecking.ml`,
+`src/passes/anf/AST_to_ANF.ml`, `src/CompilerLibrary.ml`, `src/Program.ml`, and the e2e runner.
 
 ## Rule matrix
 
@@ -44,7 +44,7 @@ module values.
 
 ## Focused probes
 
-`ProgramStructureTests.fs` covers ordered multi-unit composition, dependency
+`test/compiler-passes/ProgramStructureTests.ml` covers ordered multi-unit composition, dependency
 entry rejection, zero/multiple entry cardinality, last-wins function overlays,
 and file-result validation. Canonical syntax fixtures cover retained module
 shape and declaration boundaries. `name-resolution.e2e` covers contextual

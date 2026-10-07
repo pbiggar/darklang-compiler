@@ -1,5 +1,6 @@
 (* FunctionIdMap.mli - Sparse function tables with unsigned scalar ordinal keys. *)
 type 'a t
+
 val empty : 'a t
 val isEmpty : 'a t -> bool
 val count : 'a t -> int
@@ -16,7 +17,10 @@ val toSeq : 'a t -> (AST.functionId * 'a) Seq.t
 val toList : 'a t -> (AST.functionId * 'a) list
 val keys : 'a t -> AST.functionId Seq.t
 val values : 'a t -> 'a Seq.t
-val fold : ('state -> AST.functionId -> 'a -> 'state) -> 'state -> 'a t -> 'state
+
+val fold :
+  ('state -> AST.functionId -> 'a -> 'state) -> 'state -> 'a t -> 'state
+
 val iter : (AST.functionId -> 'a -> unit) -> 'a t -> unit
 val map : (AST.functionId -> 'a -> 'b) -> 'a t -> 'b t
 val filter : (AST.functionId -> 'a -> bool) -> 'a t -> 'a t

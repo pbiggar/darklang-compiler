@@ -6,7 +6,7 @@ ownership annotation, public list type, or external calling convention changes.
 
 ## Implemented boundary
 
-`passes/hir/ExtractListRegions.fs` recognizes structured regions beginning with a list literal or
+`src/passes/hir/ExtractListRegions.ml` recognizes structured regions beginning with a list literal or
 a supported list operation after monomorphization and lambda lifting, before
 AST-to-ANF lowering destroys collection semantics. Supported operations are
 `List.map<Int64, Int64>`, `List.reverse<Int64>`, and
@@ -42,7 +42,7 @@ builders and pooled large buffers are not implemented.
 
 The region IR has three stage-specific program types.
 
-Their compact shared model lives in `ir/hir/ListRegion.fs`. Constructors are
+Their compact shared model lives in `src/ir/hir/ListRegion.ml`. Constructors are
 internal to the compiler; extraction, storage selection, ownership solving,
 independent verification, budget analysis, and ANF lowering have separate modules.
 
@@ -53,13 +53,13 @@ FunctionalRegion: typed blocks + semantic collection edges + scalar joins
   -> existing ANF primitives -> MIR -> existing native backends
 ```
 
-`ir/hir/HIR.fs` defines shared typed value identities, operands, scalar
+`src/ir/hir/HIR.ml` defines shared typed value identities, operands, scalar
 bindings, resolved direct calls, branches, and blocks independent of array
 layouts and ANF.
 Opaque scalar expressions retain their checked AST evaluation payload while
-their local inputs use normalized identities. `passes/hir/VerifyHIR.fs` checks
+their local inputs use normalized identities. `src/passes/hir/VerifyHIR.ml` checks
 definitions, uses, types, and structured branch results independently.
-`ir/owned/OwnedIR.fs` defines ownership-bearing blocks with ordered
+`src/ir/owned/OwnedIR.ml` defines ownership-bearing blocks with ordered
 `Evaluate`, `Dup`, and `Drop` steps plus explicit unit-transfer contracts. Value-edge
 liveness and destruction proofs live separately in `analysis/`. These interfaces
 are used by the list dialect, not yet a whole-program semantic IR

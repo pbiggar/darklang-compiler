@@ -54,7 +54,7 @@ the allocatable subset onto x86_64 registers during code generation.
 
 ## Algorithm
 
-Implemented in `RegisterAllocation.fs`:
+Implemented in `src/passes/lir/RegisterAllocation.ml`:
 
 ### Phase 1: Liveness Analysis
 
@@ -149,8 +149,8 @@ Stack is 16-byte aligned as required by the target ABI.
 
 Around function calls, only live caller-saved registers are saved/restored:
 
-```fsharp
-let getLiveCallerSavedRegs (liveVRegs: Set<int>) (mapping: Map<int, Allocation>)
+```ocaml
+val getLiveCallerSavedRegs : AllocationModel.allocationResult -> AllocationModel.bitSet -> LIR.physReg list
 ```
 
 This generates `SaveRegs`/`RestoreRegs` instructions that save only the
@@ -176,41 +176,25 @@ The allocator prefers to eliminate redundant moves:
 
 ## Key Data Structures
 
-```fsharp
-type VRegDomain = {
-    Ids: int array                    // Dense VReg id domain
-    IndexOf: int array                // Dense lookup table for VReg id -> domain index
-    IndexOffset: int                  // Offset applied to IndexOf lookups
-    WordCount: int                    // Bitset word count for this domain
-}
+```ocaml
+type vRegDomain = {ids : int array; indexOf : int array; indexOffset : int; wordCount : int}
 
-type AllocationResult = {
-    Domain: VRegDomain                // Dense domain shared by allocation arrays
-    Allocations: Allocation option array // Domain index -> register or stack slot
-    StackSize: int                     // Total stack frame size
-    UsedCalleeSaved: LIR.PhysReg list  // Callee-saved regs to save/restore
-}
+type allocationResult = {domain : vRegDomain; allocations : allocation option array; stackSize : int; usedCalleeSaved : LIR.physReg list}
 
-type Allocation =
-    | PhysReg of LIR.PhysReg
-    | StackSlot of int                 // Negative offset from frame pointer
+type allocation = PhysReg of LIR.physReg | StackSlot of int
 
-type LiveInterval = {
-    VRegId: int
-    Start: int
-    End: int
-}
+type liveInterval = {vRegId : int; start : int; end_ : int}
 ```
 
 ## Implementation Files
 
 | File | Purpose |
 |------|---------|
-| `RegisterAllocation.fs` | Liveness analysis |
-| `RegisterAllocation.fs` | Interference graph construction |
-| `RegisterAllocation.fs` | Maximum Cardinality Search (PEO) |
-| `RegisterAllocation.fs` | Greedy coloring with coalescing preferences |
-| `RegisterAllocation.fs` | Main chordal allocation entry points |
+| `src/passes/lir/RegisterAllocation.ml` | Liveness analysis |
+| `src/passes/lir/RegisterAllocation.ml` | Interference graph construction |
+| `src/passes/lir/RegisterAllocation.ml` | Maximum Cardinality Search (PEO) |
+| `src/passes/lir/RegisterAllocation.ml` | Greedy coloring with coalescing preferences |
+| `src/passes/lir/RegisterAllocation.ml` | Main chordal allocation entry points |
 
 ## Tests
 

@@ -1,8 +1,10 @@
 (** Validated native targets, host detection, and exact syscall tables. *)
 type os = MacOS | Linux
+
 type arch = ARM64 | X86_64
 type arm64Target = MacOSARM64 | LinuxARM64
 type target = ARM64Backend of arm64Target | LinuxX86_64
+
 type syscallNumbers = {
   write : int;
   exit : int;
@@ -31,6 +33,7 @@ type syscallNumbers = {
   signalWait : int;
   sendTo : int;
 }
+
 type socketConstants = {
   addressFamily4 : int;
   addressFamily6 : int;
@@ -44,6 +47,7 @@ type socketConstants = {
   blockSignal : int;
   restoreSignal : int;
 }
+
 val detectOS : unit -> (os, string) result
 val detectArch : unit -> (arch, string) result
 val targetFor : os -> arch -> (target, string) result
