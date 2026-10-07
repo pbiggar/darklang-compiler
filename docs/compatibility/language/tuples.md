@@ -1,5 +1,10 @@
 # Tuple parity
 
+Current compiler source review: 2026-10-07 at `7154b0ea9c1a3f53d30984ed17b9e0cc5d8f0dce`.
+See the [current audit](../current-audit.md) for post-port status and validation.
+Older revision pairs and executed counts below are historical evidence, not
+a fresh test result for this revision.
+
 This parity repair revalidated compiler worktree baseline
 `87ebadfc66e6e807c35c99988f35e0733c4b9ced`, approved compiler evidence
 `b2e1f3d1e4ce0338d4c4662db9a1326f2e2cb899`, and darklang/dark revision
@@ -18,7 +23,7 @@ access, destructuring, matching, equality, and evaluation-order probes.
 
 Compiler evidence is `src/frontend/TypeChecking.ml` for ordered positional types and
 exact bounds, `src/passes/anf/AST_to_ANF.ml` for ordered allocation, recursive patterns,
-and structural equality, `Runtime.fs` and `src/frontend/ValueRendering.ml` for
+and structural equality, `src/memory/RuntimeDataLayout.ml` and `src/frontend/ValueRendering.ml` for
 rendering, and `tuples.e2e` together with `tuple-parity.e2e` for executable
 coverage.
 

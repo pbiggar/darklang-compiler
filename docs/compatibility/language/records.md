@@ -1,5 +1,10 @@
 # Record parity evidence
 
+Current compiler source review: 2026-10-07 at `7154b0ea9c1a3f53d30984ed17b9e0cc5d8f0dce`.
+See the [current audit](../current-audit.md) for post-port status and validation.
+Older revision pairs and executed counts below are historical evidence, not
+a fresh test result for this revision.
+
 This implementation was revalidated against these exact revisions:
 
 - comparison compiler: `b2e1f3d1e4ce0338d4c4662db9a1326f2e2cb899`;
@@ -30,7 +35,7 @@ record, tuple, list, and sum aliases, including nested aliases imported from
 sibling modules. The pinned aliases corpus is enabled except for seven
 individually catalogued diagnostic and unrelated string-codegen cases.
 
-Focused same-source evidence remains unchanged in
+Focused imported evidence is in
 `test/fixtures/e2e/upstream/language/custom-data/records.dark` and
 `record-field-acess.dark`. Their supported success, evaluation-order, and
 update lines are selected directly by the test runner; compiler regressions in

@@ -1,5 +1,10 @@
 # CLI presentation parity
 
+Current compiler source review: 2026-10-07 at `7154b0ea9c1a3f53d30984ed17b9e0cc5d8f0dce`.
+See the [current audit](current-audit.md) for post-port status and validation.
+Older revision pairs and executed counts below are historical evidence, not
+a fresh test result for this revision.
+
 The explicit printing prelude was revalidated between compiler starting HEAD
 `c609b56ce1ec488afc3146c585b6f45a2fcf22a8` and darklang/dark
 `04fbe9dcc995c6188757d583e273cbd30a3e2d3d`. Implementation comparison commit
@@ -16,8 +21,8 @@ The pinned interpreter sources are
 The runtime primitives are in
 `backend/src/Builtins/Builtins.Cli/Libs/Output.fs:18-50` and
 `Stdin.fs:394-408`. The starting compiler revision had no corresponding
-modules; that absent public surface is classified as a parity gap, not an
-intentional divergence.
+modules. They are implemented in current main; the initial absence was a
+closed implementation gap, not an intentional divergence.
 
 ## Presentation contract
 
@@ -66,21 +71,22 @@ functions do not add runtime type dispatch to imitate it.
 ## Native implementation anchors
 
 The typed intrinsic registry is
-`src/DarkStdlib.ml:101-113`. Effect nodes begin at
+`src/DarkStdlib.ml`. Effect nodes begin at
 the ANF, MIR, and LIR definitions; intrinsic lowering lives in
 `src/passes/anf/lowering/LoweringPrimitives.ml`. Both native implementations are under
 `backend/{arm64,x64}/instructions/`. They are separate from the final-result
 print instructions and participate in optimization, liveness, allocation, and
 IR printing as ordered effects.
 
-The root presentation source is `StdLib/Print.dark:3-15`, loaded immediately
+The root presentation source is `StdLib/Print.dark`, loaded immediately
 after List by `src/driver/StdlibCompilation.ml`. Its `printLines` composition uses
-the portable ordered recursion at `StdLib/List.dark:441-446`; no native list
+the portable ordered recursion at `StdLib/List.dark`; no native list
 traversal was added. The package load order is recorded in `src/CompilerLibrary.ml` and the
-adapted sources are `StdLib/Cli/UI/Colors.dark`, `CliLog.dark`, `CliProgress.dark`,
-`CliPrompt.dark`, `CliSpinner.dark`, and `CliTable.dark`. EGC measurement is
-routed through `StdLib/String.dark:419`; signed selection parsing is aligned at
-`StdLib/Int.dark:405`. Unit suppression is in
+adapted sources are `StdLib/Cli/UI/Color.dark`, `StdLib/Cli/Log.dark`, and the
+`Progress.dark`, `Prompt.dark`, `Spinner.dark`, and `Table.dark` files in
+`StdLib/Cli/UI/`. EGC measurement is
+routed through `StdLib/String.dark`; signed selection parsing is aligned at
+`StdLib/Int.dark`. Unit suppression is in
 `src/passes/anf/PrintInsertion.ml`, and CLI execution is coordinated by
 `src/driver/CompilerExecution.ml` and `src/Program.ml`.
 

@@ -1,5 +1,10 @@
 # CLI, process, host, and input parity
 
+Current compiler source review: 2026-10-07 at `7154b0ea9c1a3f53d30984ed17b9e0cc5d8f0dce`.
+See the [current audit](current-audit.md) for post-port status and validation.
+Older revision pairs and executed counts below are historical evidence, not
+a fresh test result for this revision.
+
 This contract was revalidated against compiler HEAD
 `cce6860f02b13d416295ff342341eeeae997f49f` and darklang/dark
 `04fbe9dcc995c6188757d583e273cbd30a3e2d3d`. DCB1 report commit
@@ -76,7 +81,7 @@ carried by a typed ANF/MIR/LIR sleep operation and lowered to blocking
 `nanosleep` on Linux ARM64, Linux x86_64, and macOS ARM64. The native timeout is
 normalized into seconds and nanoseconds, and interruption resumes with the
 remaining timeout. This replaces the compiler baseline's observable shell
-execution at `StdLib/Cli/Posix.dark:29-30`; it does not add a
+execution at `StdLib/Cli/Posix.dark`; it does not add a
 public compiler extension. The full revision-pinned comparison is in
 [Option, Result, and Retry compatibility](stdlib/option-result-retry.md).
 
@@ -108,7 +113,7 @@ ends in both architecture code generators. Focused native evidence is
 in `test/compiler-passes/ARM64CodeGenTests.ml`, and executable Linux x86_64 coverage runs the native
 operations under QEMU in `test/compiler-passes/X86_64CodeGenTests.ml`.
 
-## Verification record
+## Historical verification record
 
 The implementation was rebased onto compiler commit
 `fb61d714723f34d6c43e9bdc03dd96fb46f0c4ea`. Compiler commit

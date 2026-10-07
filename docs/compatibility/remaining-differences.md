@@ -1,76 +1,100 @@
 # Remaining non-AOT compatibility differences
 
-This ledger records observable language and standard-library differences from
-darklang/dark release `v0.0.35`, revision
-`0b3888d8e4f30d48ecd738f5cbe5cc2b8d958460`. The compiler audit revision is
-`19d53b29db939f2404669e5cd29347857f5ad93d`.
+Source audit: 2026-10-07, compiler
+`7154b0ea9c1a3f53d30984ed17b9e0cc5d8f0dce`. Public-library baseline remains
+darklang/dark `v0.0.35`, revision
+`0b3888d8e4f30d48ecd738f5cbe5cc2b8d958460`; older per-surface interpreter
+comparisons retain their own explicitly named revision. The compiler now uses
+the copied interpreter parser and checks `WrittenTypes` directly.
+[Current audit](current-audit.md) distinguishes source evidence from execution
+results; [upstream inventory](upstream-test-inventory.md) records live gates.
 
-This ledger deliberately excludes differences that follow from ahead-of-time
-compilation: earlier type and name errors, rejection of underconstrained dead
-code, whole-program entry selection, concrete monomorphization, and native
-resource representation. It also excludes performance and diagnostic wording.
+This ledger excludes earlier AOT diagnostics, underconstrained dead-code
+rejection, single executable entry selection, monomorphization, native
+representations, performance, and diagnostic wording. An implemented API with
+focused tests is not automatically proven equivalent across the full corpus.
 
 ## Language differences
 
-| Area | Interpreter behavior | Current compiler boundary | Evidence |
-| --- | --- | --- | --- |
-| Effect ceilings | Function return annotations may contain permission ceilings such as `:{}` and `:{Clock}` | Effect-row syntax and permission-ceiling enforcement are absent | `upstream/language/effect-ceiling.dark` fails while parsing the return annotation |
-| Qualified user values | A `val` declared in a module is available both bare inside the module and by its qualified module name | Unqualified top-level values work, but the imported nested-module value corpus cannot resolve names such as `UserDefined.stringValue`; package values exist only when explicitly catalogued | `upstream/language/custom-data/values.dark`: 19/72 cases pass when enabled, with qualified user and package values accounting for the failures |
-| Application grouping | Space application remains left-associative when a bare value argument is followed by a parenthesized argument: `f value (g x)` | Some such calls are grouped as though `value` were applied to the parenthesized expression | The unchanged Crypto AWS chain reports `signing is not a function`; Stream transforms report `s is not a function` |
-| Module environments | Opened modules and content-addressed packages participate in interpreter name resolution | Module-open environments and live content-addressed package loading are absent; compilation uses explicit units and snapshots | The identifier and name-resolution ledgers document this boundary |
-| Runtime reflection | Interpreter runtime values, builtin metadata, parser services, and runtime-value-to-expression conversion are available to language tooling | `Builtin.getAllBuiltinFns`, `Builtin.parserParseToWrittenTypes`, `RuntimeTypes.Dval`, and `RuntimeTypesToProgramTypes.dvalToExpr` are absent | The builtin-introspection, parsed-file-shape, semantic-tokenization, and runtime-to-program-types upstream files fail on those names or types |
+| Area | Current compiler boundary | Evidence and validation limit |
+| --- | --- | --- |
+| Effect ceilings | `:{}` and `:{Clock}` parse into `WrittenTypes.fnDecl.effects`; the direct checker does not enforce the ceiling or propagate source effect rows through calls and callbacks | `Parser.ml`, `DeclarationSupport.ml`, `WrittenTypes.ml`, `WrittenDeclarations.checkFunction`; upstream `effect-ceiling.dark` remains gated. Syntax is implemented; enforcement is the gap |
+| Declaration overlays | Duplicate functions and types within one source batch are rejected; values enter the inventory sequentially and can overwrite the same qualified value name | `WrittenDeclarations.predeclareTypes`, `predeclareFunctions`, and `checkItems`. The old blanket last-declaration-wins claim is no longer accurate |
+| Module-open environments | Modules retain scope during checking, but no general module-open environment is implemented | `WrittenSource.ml`, `WrittenTypeSupport.ml`; distinguish this from explicit qualification and package loading |
+| Runtime reflection and language tooling | No registered `Builtin.reflect`, `getAllBuiltinFns`, or `parserParseToWrittenTypes`; no embedded `RuntimeTypesToProgramTypes.dvalToExpr` implementation | The public runtime `Dval` and related type declarations, runtime pretty-printer, and error-segment renderer **do** exist in `packages/Darklang/`. Native values are not automatically promoted into Dval; compiler use of the copied parser does not expose a Dark parser builtin |
+| Transparent async | Native I/O and sleep block; generated programs have no transparent yield-at-use suspension/resumption machinery | Native HTTP and sleep implementations; compile-time OCaml Lwt package transport is separate from the generated program runtime |
 
-The application-grouping row is a frontend gap, not a Crypto or Stream
-algorithm difference. Focused compiler-authored tests that use unambiguous
-parentheses exercise those implementations successfully.
+Qualified module values are supported by the direct checker:
+`WrittenDeclarations` registers `path @ [valueName]`, and
+`WrittenTypeSupport.resolveValue` searches scoped qualified candidates. The
+upstream values fixture remains gated; its old `19/72` result is historical,
+not a current limitation count. The fresh probe passed 19 cases and failed 53 with missing interpreter
+test-package values such as `UserDefined.stringValue`; that invocation did not
+supply the upstream package server. It does not disprove qualified-value or
+optional hosted-loader support.
 
-## Standard-library differences
+Fresh unchanged-source probes passed Crypto 9/9, Stream 25/25, and SSE 8/8,
+making their whole-file gates removal candidates. Pretty passed 34/35; L186's
+multiline nested application still fails with “Expected TUnit, got TFunction”.
+See the [probe results](current-audit.md#fresh-probes-of-whole-file-gates) for
+other dependency, preamble, and API failures. No gate was changed here.
 
-| Surface | Remaining difference |
+Hosted package loading is implemented **at compile time**, enabled explicitly
+with `--package-server URL`. `UserCompilation.compileUserWithPlan` calls
+`PackageManager.resolveWritten`; the loader resolves names/hashes, traverses
+dependencies, caches responses through SQLite, and adds fetched declarations
+as package source units before checking. `package_manager.e2e` covers cached
+declaration resolution/compilation;
+`test/regression/package_io_regression.ml` covers cache/encoding and
+`test/regression/package_http_regression.ml` covers HTTP/TLS transport against
+a local server. This does not claim the whole upstream package tree compiles,
+automatic loading without the flag, or a live runtime package-manager service. `ValueSearch` continues to use its explicit
+compile-time value catalog.
+
+## Standard-library and host differences
+
+| Surface | Current support and remaining boundary |
 | --- | --- |
-| HTTP client | Buffered HTTP/HTTPS `request`, `get`, `post`, `put`, `options`, `delete`, and `head`, plus response-body `stream`, are implemented in Dark. The [HTTP ledger](stdlib/html-and-http.md#additional-pure-http-surfaces) records the supported transport and TLS profile; the upstream external-network fixture remains disabled. |
-| HTTP server | `serve`, configuration, and the pure routing helpers are implemented with bounded sequential native IPv4 HTTP/1.1 service on Linux ARM64. The [HTTP ledger](stdlib/html-and-http.md#additional-pure-http-surfaces) records lifecycle behavior and remaining platform, concurrency, compression, and TLS work. |
-| SQLite | The upstream `Stdlib.Sqlite` value, query, execution, column, and conversion API is absent. |
-| Language tooling | Parsed-file shape, semantic tokenization, builtin introspection, runtime-value pretty printing, and runtime-value promotion are incomplete or absent. The snapshot-backed `ValueSearch` subset does not provide the interpreter's live package service. |
-| Host APIs | The documented CLI filesystem/environment and POSIX subsets are implemented. Broader descriptor, download, watch, lock, and daemon surfaces have no parity claim. |
-| Float presentation | Finite `Float.toString` intentionally emits the shortest round-tripping decimal, while the pinned interpreter uses lossy `G12` formatting. This is a deliberate observable improvement, not an AOT requirement. |
+| HTTP client | Buffered HTTP/HTTPS requests, verb wrappers, and pull-based response streaming exist. External-network upstream cases remain whole-file gated. Transport/TLS profile and restrictions are in the [HTTP ledger](stdlib/html-and-http.md) |
+| HTTP server | Sequential IPv4 HTTP/1.1 serving, routing, configuration, body/framing limits, deadlines, signals, and resource cleanup exist. Concurrency, IPv6 listeners, persistent connections, compression, server TLS, and broader platform validation remain follow-up work. Current main has no HTTP/2 or HTTP/3 implementation claim |
+| SQLite | No embedded public `Stdlib.Sqlite` query/execution/conversion API. Compiler package-cache use of SQLite does not supply that API to Dark programs |
+| Host APIs | Filesystem, environment, process, presentation, input, and documented POSIX subsets exist. Broader descriptor, download, watch, lock, daemon, cloud database, SCM service, and application-service surfaces need individual implementation/dependency/host audits |
+| Float presentation | Shortest-roundtrip finite formatting intentionally differs from the pinned release's lossy G12 formatting. The newer interpreter revision named in the [float ledger](stdlib/floats-and-math.md) uses the same shortest-roundtrip notation boundary |
+| Runtime package queries | `ValueSearch` operates on an explicit catalog snapshot with frozen branch visibility and supplied ordering; compile-time hosted declaration loading does not make those queries live |
 
-Pretty layout/rendering, SGR-aware CLI text measurement and marked clipping,
-lazy SSE parsing, pure HTTP construction helpers, HTTP response helpers, JSON,
-Option, Result, Base64, Crypto, Streams, and String have focused parity
-coverage. Their disabled upstream files or lines do not by themselves
-establish an API difference: several depend on interpreter test-only values,
-dynamic error propagation, Blob-handle expectations, an unavailable host, or a
-shared frontend gap listed above.
+Pretty, terminal text, SSE, pure HTTP helpers, JSON, Option, Result, Base64,
+Crypto, Streams, and String have source implementations and focused coverage.
+A disabled upstream fixture may expose a real parser/checker/runtime defect,
+a dependency, a test-only builtin, a host requirement, or an oracle difference;
+its whole public API must not be labelled absent solely because of that gate.
 
 ## Upstream-test audit
 
-The imported corpus matches the pinned upstream sources except for local
-`#compileerror` metadata and insignificant trailing-newline differences. At the
-compiler revision above it contains 105 files. The default runner disables 44
-whole files and individual cases in 24 more files (261 source lines). Those
-denysets are an enablement queue, not a count of independent semantic gaps.
+At the audited compiler revision, the repository imports **105 `.dark` files**.
+The runner has **44 whole-file exclusions** and **260 line-number entries in
+24 files**. These are exclusion entries, not skipped-test or missing-feature
+counts. Blank/comment/declaration lines can occur in the line lists, and E2E
+assertion locations are assigned by the fixture parser. See the complete
+[inventory](upstream-test-inventory.md) before interpreting a line entry.
 
-A diagnostic run removed only the individual-line denyset and used
-`--e2e-batch-size=1` so one compile error could not invalidate neighboring
-cases:
+Aliases, enums, bytes, Char, Dict, Dict literals, and terminal text are enabled
+with any individual exclusions recorded in that inventory. HTTP server is
+partially enabled. Crypto, Http, HttpClient, Json, Pretty, runtime PrettyPrinter,
+SSE, Stream, and String remain whole-file gated despite existing implementations.
+The HttpClient gate includes local `NoInternet` assertions as well as external
+network calls.
 
-- language: 432 passed and 29 failed among the normally enabled files;
-- stdlib: 3,136 passed and 137 failed among the normally enabled files.
+The imported directory matches the newer parser-pin file inventory, but eight
+files have source adaptations beyond local metadata/error spelling. See the
+[current provenance audit](current-audit.md#imported-corpus-provenance). Do not
+call every imported fixture unchanged-source evidence.
 
-The remaining failures in those runs were classified into the gaps above,
-intentional AOT boundaries, interpreter-only test infrastructure, or expected
-presentation differences. Whole disabled files were then enabled one at a time
-to avoid cross-file preamble failures. The aliases, enums, bytes, Char, Dict,
-Dict-literal smoke, and CLI TUI text files are now enabled. The pure
-HTTP-server cases are enabled while three fixture expressions whose response
-literals use the interpreter's former `Int64` status-code shape remain
-line-gated. Pretty and SSE remain whole-file gated because their shared fixture
-preambles trigger the application-grouping frontend gap; focused tests exercise
-the copied implementations. The HTTP-client fixture includes external-network
-calls and remains disabled; focused local tests cover the native client. A disabled file
-must not be treated as proof that its entire feature is missing.
+The previous compiler audit at `19d53b29db939f2404669e5cd29347857f5ad93d`
+recorded 432 language passes/29 failures and 3,136 stdlib passes/137 failures
+with individual gates removed. Those pre-port results are historical and are
+not used as current failure counts or current causes. Gate changes and source
+implementation changes must be audited independently.
 
-The authoritative live denysets remain in
-`test/test-suite-tooling/TestRunner.ml`. When a gap closes, enable its
-unchanged upstream case before removing it from this ledger.
+To close a coverage gap, execute the unchanged upstream fixture, classify each
+failure, and enable the passing cases. Do not change a gate or compiler behavior
+as part of this documentation audit merely to obtain a parity claim.

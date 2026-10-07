@@ -1,17 +1,22 @@
 # Darklang Compatibility
 
-The compiler's public parser and standard-library surface follow darklang/dark
-release `v0.0.35`, revision
-`0b3888d8e4f30d48ecd738f5cbe5cc2b8d958460`. Repository Dark source is
-validated directly against that interpreter; there is no
+The embedded public standard-library inventory follows darklang/dark release
+`v0.0.35`, revision `0b3888d8e4f30d48ecd738f5cbe5cc2b8d958460`.
+The copied interpreter parser and effect syntax derive from the newer revision
+`1cc4bb7f63acdf29dc66458f3c401ed91d444775`; these baseline pins are distinct.
+Repository Dark source can be validated directly against the configured interpreter; there is no
 compiler-to-interpreter syntax conversion layer. Compiler source and E2E tests
 are authoritative for implemented behavior, and the revision-pinned ledgers in
 this directory record AOT compatibility boundaries and intentional runtime or
 standard-library extensions.
 
 The consolidated [remaining non-AOT differences](remaining-differences.md)
-ledger records verified language and standard-library gaps without conflating
-them with earlier AOT diagnostics or test-harness limitations.
+ledger records current language and standard-library boundaries without
+conflating them with earlier AOT diagnostics or test-harness limitations. The
+[current audit](current-audit.md) records the compiler revision, source evidence,
+validation limits, and status of every detailed ledger. The
+[upstream inventory](upstream-test-inventory.md) enumerates every imported file
+and the exact live exclusion entries.
 
 Run the compatibility validator with:
 
@@ -29,10 +34,10 @@ Lists accept comma, semicolon, or layout-separated elements, sized integer
 suffixes and generic angle syntax are shared, and strings support interpolation
 and the full scalar-aware escape alphabet.
 
-`^` is right-associative exponentiation. Symbolic `<<`, `>>`, `&`, `|||`,
-`~~~`, and `!` are reserved but unsupported in expressions; source uses named
-functions such as `Stdlib.Int64.shiftLeft`, `Stdlib.Int64.bitwiseAnd`, and
-`Stdlib.Bool.not`. Backend bitwise primitives remain internal compiler IR.
+`**` is exponentiation; `^` is bitwise XOR. The copied interpreter parser
+and direct checker support `<<`, `>>`, `&`, `|`, unary `~`, and unary `!`,
+with integer or Boolean operand checking as appropriate. Named standard-library
+operations remain available. See `operator_parity.e2e` and `ParserTests.ml`.
 
 Compiler-generated AST may contain `TupleAccess`, `RawPtr`, and internal
 bitwise nodes. None has an

@@ -1,5 +1,10 @@
 # Float and Math compatibility
 
+Current compiler source review: 2026-10-07 at `7154b0ea9c1a3f53d30984ed17b9e0cc5d8f0dce`.
+See the [current audit](../current-audit.md) for post-port status and validation.
+Older revision pairs and executed counts below are historical evidence, not
+a fresh test result for this revision.
+
 This document records the observable Float/Math contract implemented by the
 native compiler. It is a behavior comparison, not a performance comparison.
 

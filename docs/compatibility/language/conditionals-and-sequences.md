@@ -1,5 +1,10 @@
 # Conditional and Sequence Parity
 
+Current compiler source review: 2026-10-07 at `7154b0ea9c1a3f53d30984ed17b9e0cc5d8f0dce`.
+See the [current audit](../current-audit.md) for post-port status and validation.
+Older revision pairs and executed counts below are historical evidence, not
+a fresh test result for this revision.
+
 This matrix records the behavior of conditional and sequential expressions.
 
 ## Evidence revisions

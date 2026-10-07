@@ -40,7 +40,9 @@ grouped by purpose; each subject has one canonical source.
 ## Compatibility and project status
 
 - [Darklang compatibility overview](compatibility/overview.md)
+- [Current compatibility audit and evidence](compatibility/current-audit.md)
 - [Remaining non-AOT differences](compatibility/remaining-differences.md)
+- [Complete imported upstream test inventory](compatibility/upstream-test-inventory.md)
 - [Language compatibility ledgers](compatibility/language/)
 - [Standard-library compatibility ledgers](compatibility/stdlib/)
 - [CLI compatibility](compatibility/cli.md)

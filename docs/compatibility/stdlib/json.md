@@ -1,5 +1,10 @@
 # AltJson and Json parity
 
+Current compiler source review: 2026-10-07 at `7154b0ea9c1a3f53d30984ed17b9e0cc5d8f0dce`.
+See the [current audit](../current-audit.md) for post-port status and validation.
+Older revision pairs and executed counts below are historical evidence, not
+a fresh test result for this revision.
+
 ## Revision baseline
 
 This contract was revalidated from compiler implementation commit
@@ -15,7 +20,8 @@ changes an observable value or failure.
 The same-source interpreter fixtures are
 `test/fixtures/e2e/upstream/stdlib/alt-json.dark` and
 `test/fixtures/e2e/upstream/stdlib/json.dark`. The compact native regression matrix
-is `test/fixtures/e2e/json-parity.e2e`. All three are in normal E2E discovery.
+is `test/fixtures/e2e/json-parity.e2e`. AltJson and the focused matrix are
+enabled; the upstream `json.dark` file is currently whole-file gated.
 
 ## Structural JSON
 

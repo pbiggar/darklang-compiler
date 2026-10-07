@@ -1,5 +1,10 @@
 # CLI parity ledger
 
+Current compiler source review: 2026-10-07 at `7154b0ea9c1a3f53d30984ed17b9e0cc5d8f0dce`.
+See the [current audit](current-audit.md) for post-port status and validation.
+Older revision pairs and executed counts below are historical evidence, not
+a fresh test result for this revision.
+
 This ledger records reproducible comparisons with the current interpreter CLI
 surface. Historical inventories, including DCB1 report commit `8a402797`, are
 starting evidence only and are not treated as current results.
@@ -24,7 +29,7 @@ same-source probes at
 `backend/testfiles/execution/stdlib/cli-glob.dark`, copied in this repository
 under `test/fixtures/e2e/upstream/stdlib/`.
 
-## Executed comparisons
+## Historical executed comparisons
 
 | Surface | Probe and command | Returned values/errors | Side effects and lifecycle | Result/classification |
 | --- | --- | --- | --- | --- |
@@ -36,7 +41,7 @@ under `test/fixtures/e2e/upstream/stdlib/`.
 Both files are in the default executable upstream set, so these comparisons no
 longer depend on a test filter.
 
-## Repository verification
+## Historical repository verification
 
 - `./run-tests --ai`: 6,057/6,057 tests passed in 33.7 seconds.
 - `./benchmarks/run_benchmarks.sh --verify full`: all 19 parity contracts
@@ -50,7 +55,7 @@ above. The benchmark's pinned Dark baseline is
 `aa0c36de548eaaddd363b6497ac249ed9c2e3134` with workload contract
 `6dbb096b37aaf32192bf960168fde271a2595f94f83653b43b94ec5b2e104758`.
 
-## Platform coverage
+## Historical platform coverage
 
 | Target | Probe availability | Classification |
 | --- | --- | --- |
@@ -61,9 +66,10 @@ above. The benchmark's pinned Dark baseline is
 
 ## Boundaries and non-claims
 
-`Stdlib.Path.tempDir` is an ordinary portable Dark definition. `Stdlib.File`
-is a private typed intrinsic boundary used by the public
-`Stdlib.Cli.FileSystem` wrappers. `Stdlib.Cli.Path.resolve` can use the native
+The public filesystem surface is `Stdlib.Cli.FileSystem`; its native operation
+boundaries are private compiler intrinsics registered in `src/DarkStdlib.ml`.
+The former top-level `Stdlib.Path` and `Stdlib.File` descriptions are superseded
+by the current module layout in `library-sources.list`. `Stdlib.Cli.Path.resolve` can use the native
 current-directory operation for relative inputs.
 The loaded `Stdlib.Cli.Posix.Error` and `StatResult` declarations establish the
 canonical public shapes but do not stand in for native POSIX operations.
