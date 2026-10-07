@@ -9,7 +9,7 @@ Implementation started from compiler HEAD
 without a current source probe.
 
 The focused executable corpus is
-`src/Tests/e2e/interpreter/recursion_parity.e2e`. Local-declaration cases are
+`test/fixtures/e2e/interpreter/recursion_parity.e2e`. Local-declaration cases are
 copied from `backend/testfiles/execution/language/nested-fns.dark` where the
 syntax can remain identical. Parser-only rejection cases live beside the
 binding syntax corpus, and native completion cases remain in `tailcall.e2e`.

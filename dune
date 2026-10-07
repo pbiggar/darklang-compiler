@@ -1,0 +1,2 @@
+; Keep benchmark implementations and repository utilities outside the native build graph.
+(dirs bin lib test share)

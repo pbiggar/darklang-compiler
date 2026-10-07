@@ -47,7 +47,7 @@ let compile enableLeakCheck (name: string) (source: string) =
             File.WriteAllText(input, source)
             let arguments = ["-q"; "--emit-result"; "--allow-internal"; input; "-o"; output]
             let arguments = if enableLeakCheck then "--leak-check" :: arguments else arguments
-            let execution = capture "./ocaml/_build/default/bin/dark.exe" arguments
+            let execution = capture "./_build/default/bin/dark.exe" arguments
             if execution.ExitCode <> 0 then Error (execution.Stdout + execution.Stderr)
             else Ok ({ CompileTime = execution.RuntimeTime; Target = target }, File.ReadAllBytes(output))))
 

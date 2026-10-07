@@ -109,12 +109,12 @@ ownership planning do not add record syntax.
 
 | File | Purpose |
 | --- | --- |
-| `ocaml/lib/AST.ml` | nominal record references and public expressions |
-| `ocaml/lib/frontend/interpreter/Parser.ml` | canonical interpreter-compatible grammar |
-| `ocaml/lib/frontend/TypeChecking.ml` | metadata, substitution, validation |
-| `ocaml/lib/frontend/ValueRendering.ml` | record rendering |
-| `ocaml/lib/passes/anf/AST_to_ANF.ml` | record allocation, clone, and projection |
-| `ocaml/lib/ir/anf/ANF.ml` | descriptors and ownership shapes |
-| `src/Tests/e2e/records.e2e` | public behavior regressions |
+| `lib/AST.ml` | nominal record references and public expressions |
+| `lib/frontend/interpreter/Parser.ml` | canonical interpreter-compatible grammar |
+| `lib/frontend/TypeChecking.ml` | metadata, substitution, validation |
+| `lib/frontend/ValueRendering.ml` | record rendering |
+| `lib/passes/anf/AST_to_ANF.ml` | record allocation, clone, and projection |
+| `lib/ir/anf/ANF.ml` | descriptors and ownership shapes |
+| `test/fixtures/e2e/records.e2e` | public behavior regressions |
 
 See [record parity](../../compatibility/language/records.md) for revision-stamped evidence.

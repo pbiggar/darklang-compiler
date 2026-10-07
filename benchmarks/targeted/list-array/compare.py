@@ -24,7 +24,7 @@ CASES = {
 
 
 def compiler_artifact(repository):
-    native = repository / "ocaml/_build/default/bin/dark.exe"
+    native = repository / "_build/default/bin/dark.exe"
     if native.is_file():
         return native
     # An explicitly supplied historical checkout may contain the old compiler.

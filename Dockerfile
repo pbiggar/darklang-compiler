@@ -157,7 +157,7 @@ ENV PATH=/home/agent/.opam/dark/bin:/opt/ocaml/bin:/usr/share/dotnet:/home/agent
 # F# benchmark references and the historical migration oracle only.
 RUN opam init --bare --disable-sandboxing --yes && \
     opam switch create dark ocaml-system.5.5.1 --yes
-RUN --mount=type=bind,source=ocaml/dependencies.lock,target=/tmp/native-dependencies.lock \
+RUN --mount=type=bind,source=dependencies.lock,target=/tmp/native-dependencies.lock \
     sed '/^[[:space:]]*#/d; /^[[:space:]]*$/d' /tmp/native-dependencies.lock | \
     xargs opam install --switch=dark --yes --jobs=1 --no-depexts
 

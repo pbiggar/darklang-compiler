@@ -22,7 +22,7 @@ portable implementations are derived from
 same-source probes at
 `backend/testfiles/execution/stdlib/cli-path.dark` and
 `backend/testfiles/execution/stdlib/cli-glob.dark`, copied in this repository
-under `src/Tests/e2e/upstream/stdlib/`.
+under `test/fixtures/e2e/upstream/stdlib/`.
 
 ## Executed comparisons
 

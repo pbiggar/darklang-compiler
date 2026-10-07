@@ -6,7 +6,7 @@ document is the short CLI reference.
 ## Build
 
 The compiler uses OCaml 5.5.1, Dune 3.24.2 and the exact packages in
-`ocaml/dependencies.lock`. The development image provisions this toolchain.
+`dependencies.lock`. The development image provisions this toolchain.
 For a restricted Linux VM, follow [the workspace setup](../scripts/vm/README.md).
 On a normal host, create an opam switch for OCaml 5.5.1, install the locked
 packages, and activate that switch before building. The compiler also needs
@@ -24,7 +24,7 @@ The compiler and test runner do not require .NET.
 To install the compiler and its unchanged Dark standard library:
 
 ```bash
-dune install --root ocaml --prefix /absolute/install/prefix
+dune install --prefix /absolute/install/prefix
 /absolute/install/prefix/bin/dark --help
 ```
 
@@ -45,6 +45,7 @@ current.
 ./run-tests --ai --filter=tuple    # Filter by case-insensitive substring
 ./run-tests --ai --filter=List.map # Filter by test name fragment
 ./run-tests --help               # All options
+dune runtest                    # Native text, cache and component regression checks
 ```
 
 Tests follow the selected development target. With no `--target`, the suite
@@ -140,7 +141,7 @@ require `--dump-anf`, `--dump-mir`, `--dump-lir`, or `-vvv`.
 ## Clean
 
 ```bash
-dune clean --root ocaml
+dune clean
 ```
 
 ## Inspecting produced binaries

@@ -1,75 +1,46 @@
-# OCaml port VM toolchains
+# ChatGPT Work VM setup
 
-This setup is for the restricted Linux x86-64 VM used to restart the OCaml
-port. It installs the exact .NET SDK pinned in `global.json` (including F#)
-and OCaml 5.5.1, with its source and compiler libraries. This is the upstream stable version selected for the accepted migration plan.
-Build OCaml and its C dependencies without the .NET compatibility preload;
-apply the VM compatibility preload when executing the oracle or native tests.
+Use `Dockerfile` and root `dependencies.lock` as the pinned toolchain sources.
+The native-only bootstrap installs OCaml 5.5.1, Dune 3.24.2 and locked OCaml
+packages in the supplied writable directory. Ubuntu development prerequisites
+are checksum-verified against snapshot 20260828T000000Z and extracted locally.
+It does not install .NET or the retired F# comparison harness.
 
 ```bash
-bash scripts/vm/setup-port-toolchains /absolute/writable/toolchains
+bash scripts/vm/setup-native-toolchain /absolute/writable/toolchains
 source /absolute/writable/toolchains/activate
-./build --ai
+env -u LD_PRELOAD ./build --ai
+./run-tests --ai
+dune runtest
 ```
 
-The installer checks `Unix.realpath` and child-process creation/waiting before
-reusing OCaml. If a previous configure run omitted these Unix operations, it
-rebuilds the toolchain instead of accepting its version number alone.
+Downloads, opam state, temporary files and full setup logs remain inside that
+workspace directory. The bootstrap checks archive hashes before reuse and
+checks both the OCaml version and Unix child-process operations. Configure
+probes run without a preload. The VM adapter supplies missing procfs stack
+attributes and redirects `/tmp` paths to the writable temporary directory.
+Do not apply that adapter on a normal host.
 
-Restore the pinned native dependencies and emulators with:
+The default host test suite executes generated x86-64 binaries directly.
+The additional runtime executable under `test/runtime-execution/` exercises
+both architectures and is an explicit cross-target diagnostic, not part of
+the default host suite. Its private helpers live under `test/runtime-support/`;
+there is no F# comparison library in the production build graph.
+
+For cross-target or instruction-count verification, build the Docker-pinned
+QEMU emulators and plugin separately:
 
 ```bash
-bash scripts/vm/setup-ocaml-dependencies /absolute/writable/toolchains
 bash scripts/vm/setup-qemu /absolute/writable/toolchains
-export OCAMLPATH=/absolute/writable/toolchains/opam/port-5.5.1/lib
-export C_INCLUDE_PATH=/absolute/writable/toolchains/qemu-deps/sysroot/usr/include
-export LIBRARY_PATH=/absolute/writable/toolchains/qemu-deps/sysroot/usr/lib/x86_64-linux-gnu
-env -u LD_PRELOAD /absolute/writable/toolchains/opam/port-5.5.1/bin/dune build --root ocaml -j1
 ```
 
-QEMU uses the exact Docker-pinned revision, Meson 1.11.1, Ninja 1.13.2 and
-Ubuntu snapshot 20260828T000000Z development packages. Package downloads are
-checked against the snapshot index SHA256 values and extracted locally. Both
-Linux-user targets and the instruction-count plugin are built. Before native
-execution tests, source `/absolute/writable/toolchains/activate-native`. This
-maps the existing `/opt/dcb/qemu/` executable paths into the workspace and
-retains the `/tmp` adapter for fixture subprocesses. Replacing the compatibility
-preload with the QEMU adapter alone leaves hardcoded `/tmp` fixtures unable to
-create their files. Both adapters are VM-only; native builds still unset them.
+QEMU uses the Docker-pinned revision, Meson 1.11.1, Ninja 1.13.2 and the same
+Ubuntu snapshot. The generated execution adapter maps the conventional
+`/opt/dcb/qemu/` paths to those workspace binaries; set
+`PORT_QEMU_DIRECTORY=/absolute/writable/toolchains/qemu/build` and preload its
+`qemu-deps/exec-path.so` before `vm-compat.so` when explicitly running those
+checks. Native toolchain configure/build commands must unset the QEMU adapter.
 
-Run the already-built native production suite through the repository launcher:
-
-```bash
-source /absolute/writable/toolchains/activate-native
-./run-tests --ocaml --ai --target=linux-x86_64
-```
-
-For an independently built Dune graph, add
-`--ocaml-build-dir=/absolute/path/to/build-directory`. The launcher never builds
-either runner. Omitting `--ocaml` continues to select the temporary F# oracle
-until replacement acceptance is complete.
-
-The same Dune build also produces the standalone native compiler at
-`ocaml/_build/default/bin/dark.exe`. It passes command-line arguments to
-the ported `Program.main` directly and requires no .NET runtime. Run it after
-activating the native VM environment, for example:
-
-```bash
-ocaml/_build/default/bin/dark.exe -r -e '1L + 2L'
-```
-
-The setup needs Bash, Python 3, curl, tar, GCC, and make. All installations,
-caches, temporary files, and full OCaml build logs stay in the supplied
-directory. OCaml is built serially. The script materializes .NET SDK archive
-links as regular files because the VM does not reliably preserve them.
-
-The native compatibility library is scoped to processes using `activate`:
-
-- Recover initial thread stack attributes from mapped stack pages and the
-  configured stack resource limit when glibc's procfs lookup fails.
-- Redirect hardcoded `/tmp` paths to `PORT_VM_TMPDIR` inside the workspace.
-
-It does not change the SDK, compiler sources, or host filesystem configuration.
-`DOTNET_PROCESSOR_COUNT=1` keeps MSBuild from creating additional build nodes
-that stall in this VM. Diagnostics are disabled because procfs is unavailable.
-These settings are for this VM and should not be applied to a normal host.
+A Work VM uses its writable workspace for a checkout and task branch. The
+macOS coordination checkout and local merge train are not available there;
+see the Work-specific instructions in root `AGENTS.md`.

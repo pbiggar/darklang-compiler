@@ -81,16 +81,16 @@ and `X509.fs`; identity and rendering come from
 `packages/darklang/prettyPrinter/runtimeTypes.dark`. Pinned behavior fixtures
 are `packages/darklang/stdlib/*` plus `backend/tests/Tests/Blob.Tests.fs`.
 
-Compiler type/value registration is in `ocaml/lib/AST.ml` and
+Compiler type/value registration is in `lib/AST.ml` and
 `Stdlib.fs`. Name resolution and equality admission are in
 `frontend/TypeChecking.fs`; value lowering, structural equality, and Blob
 ownership flow through `passes/anf/AST_to_ANF.fs`, ANF/MIR/LIR, reference-count
 insertion, and both native backends. Public implementations are
 `stdlib/Blob.dark`, `Base64.dark`, `Crypto.dark`, and `X509.dark`.
 
-The focused executable probes live in `src/Tests/e2e/blob.e2e`, `x509.e2e`,
+The focused executable probes live in `test/fixtures/e2e/blob.e2e`, `x509.e2e`,
 the migrated local suites, and the activated pinned
-`src/Tests/e2e/upstream/stdlib/{bytes,base64,crypto,x509}.dark` sources. During
+`test/fixtures/e2e/upstream/stdlib/{bytes,base64,crypto,x509}.dark` sources. During
 implementation the focused filters passed: Blob 37/37, Base64 70/70, Crypto
 125/125, and X509 20/20. The complete native suite passed 5961/5961 after the
 focused work. Full benchmark and integration verification remain the

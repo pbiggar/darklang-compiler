@@ -599,7 +599,7 @@ def main():
     parser.add_argument(
         'paths',
         nargs='*',
-        default=['src/Tests/e2e'],
+        default=['test/fixtures/e2e'],
         help='Files or directories to validate'
     )
     parser.add_argument(

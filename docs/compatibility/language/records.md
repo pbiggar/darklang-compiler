@@ -31,7 +31,7 @@ sibling modules. The pinned aliases corpus is enabled except for seven
 individually catalogued diagnostic and unrelated string-codegen cases.
 
 Focused same-source evidence remains unchanged in
-`src/Tests/e2e/upstream/language/custom-data/records.dark` and
+`test/fixtures/e2e/upstream/language/custom-data/records.dark` and
 `record-field-acess.dark`. Their supported success, evaluation-order, and
 update lines are selected directly by the test runner; compiler regressions in
 `records.e2e` and `syntax/records.syntax` make AOT diagnostic phases explicit.

@@ -7,7 +7,7 @@ every input.
 
 ## Optimization fixtures
 
-Place before/after compiler fixtures in `src/Tests/optimization/`. The file
+Place before/after compiler fixtures in `test/fixtures/optimization/`. The file
 name selects ANF, MIR, or LIR, and each case compiles `INPUT` before pinning the
 complete optimized IR in `EXPECTED`:
 
@@ -21,7 +21,7 @@ return 3
 ```
 
 The production high-level optimizer runs on SSA. Its focused cases live in
-`src/Tests/ssa-optimization/ssa.opt` and use typed functions with operation
+`test/fixtures/ssa-optimization/ssa.opt` and use typed functions with operation
 counts instead of exact ANF snapshots:
 
 ```text
@@ -48,7 +48,7 @@ runner then compiles and executes that check separately.
 
 ## Native memory-layout fixtures
 
-Place `.memlayout` fixtures in `src/Tests/runtime-layout/`. Each `NAME`,
+Place `.memlayout` fixtures in `test/fixtures/runtime-layout/`. Each `NAME`,
 `INPUT`, and `EXPECTED` case compiles and executes an ordinary test expression;
 the test-only root-word probe prints the source result as a signed 64-bit word
 before its normal value renderer runs. For example, `root = word(42)` verifies
@@ -75,7 +75,7 @@ may override either an upstream success or error expectation.
 
 ## Syntax fixtures
 
-Place `.syntax` files under `src/Tests/syntax/`. A file can contain multiple
+Place `.syntax` files under `test/fixtures/syntax/`. A file can contain multiple
 cases, each beginning with `NAME`:
 
 ```text
@@ -97,7 +97,7 @@ test-runner behavior rather than syntax acceptance, formatting, or roundtrips.
 
 ## x64 encoding and resolution fixtures
 
-Place multi-case `.x64enc` files under `src/Tests/passes/x64enc/`. Instructions
+Place multi-case `.x64enc` files under `test/fixtures/passes/x64enc/`. Instructions
 use constructor-style syntax matching the x64 instruction union:
 
 ```text
@@ -116,7 +116,7 @@ A successful case uses `OUTPUT-HEX`, `EXPECT-FIXUPS`, or both. A failing
 resolution case uses `EXPECT-ERROR`. `EXPECT-FIXUPS` contains one unresolved
 label per line, in emitted order.
 
-ARM64 `.arm64enc` fixtures under `src/Tests/passes/arm64enc/` continue to map
+ARM64 `.arm64enc` fixtures under `test/fixtures/passes/arm64enc/` continue to map
 one instruction per output word. They also support `EXPECT-ERROR`, which checks
 that every listed instruction is rejected by the encoder with the requested
 diagnostic substring.
@@ -127,7 +127,7 @@ binary layout or execution setup. Run all fixtures and unit tests with
 
 ## Optimization fixtures
 
-Source-based `.opt` files under `src/Tests/optimization/` compile Dark source
+Source-based `.opt` files under `test/fixtures/optimization/` compile Dark source
 through the stage named by the filename (`anf`, `mir`, or `lir`) and compare
 the complete optimized IR. Use them when a source construct and the normal
 pipeline are important parts of the proof.
@@ -164,7 +164,7 @@ are part of the transformation's correctness.
 ## Graph-coloring fixtures
 
 Place multi-case `.graphcolor` files under
-`src/Tests/algorithms/graph-color/`. Each case describes a non-negative vertex
+`test/fixtures/algorithms/graph-color/`. Each case describes a non-negative vertex
 set, optional edges and coloring preferences, and at least one observable
 property:
 
@@ -197,7 +197,7 @@ and collection of preferences from compiler instructions.
 ## Parallel-move fixtures
 
 Place multi-case `.parallelmoves` files under
-`src/Tests/algorithms/parallel-moves/`. Inputs use LIR physical-register
+`test/fixtures/algorithms/parallel-moves/`. Inputs use LIR physical-register
 destinations and operands; outputs pin the complete symbolic ARM64 sequence:
 
 ```text
@@ -218,7 +218,7 @@ shared parallel-move resolver through ARM64 `TailArgMoves` lowering.
 
 ## IR-format snapshot fixtures
 
-Place multi-case `.irformat` files under `src/Tests/formatting/ir/`. Select the
+Place multi-case `.irformat` files under `test/fixtures/formatting/ir/`. Select the
 compact input parser with `IR`, then pin the complete pretty-printed result:
 
 ```text
@@ -240,7 +240,7 @@ not model.
 
 ## Executable LIR fixtures
 
-Place multi-case `.lirexec` files under `src/Tests/backend/x64/`. Each case is
+Place multi-case `.lirexec` files under `test/fixtures/backend/x64/`. Each case is
 a compact, single-block LIR program with a typed expected outcome:
 
 ```text
@@ -275,7 +275,7 @@ rich nested runtime shapes.
 ## Reference-release fixtures
 
 Place multi-case `.rcrelease` files under
-`src/Tests/backend/reference-release/`. Each case describes a canonical
+`test/fixtures/backend/reference-release/`. Each case describes a canonical
 managed object graph whose final root reference is released on the active
 ARM64 or x64 backend:
 

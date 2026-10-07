@@ -1,5 +1,10 @@
 # Temporary semantic comparison protocol
 
+This is a historical record of the completed F# to OCaml migration. The
+comparison harness was retired during the root Dune layout cleanup; its last
+complete version is available at commit `c74e21253c864e656b06f7f09736f5f1b874a178`.
+The paths and commands below describe that historical checkout.
+
 Migration observations use UTF-8 JSON Lines. Each request contains `stage` and
 `source`. Each response has `schema: 1`, the stage, and one complete semantic
 `value`. Requests and both responses are retained on a mismatch. This protocol

@@ -14,11 +14,11 @@ Integration was revalidated after rebasing at exact compiler revision
 interpreter revision `I@04fbe9dcc995c6188757d583e273cbd30a3e2d3d`.
 The comparison used a fresh checkout of the interpreter revision, not the DCB1
 report or only the copied fixtures. At that compiler revision, the public
-implementations are `ocaml/share/stdlib/Int.dark`, `Int8.dark` through
+implementations are `share/stdlib/Int.dark`, `Int8.dark` through
 `UInt64.dark`, `Int128.dark`, and `UInt128.dark`; shared arbitrary-width
-primitives and checked conversions are in `ocaml/share/stdlib/__Integer.dark`.
+primitives and checked conversions are in `share/stdlib/__Integer.dark`.
 The matching behavioral probes are the eleven files under
-`src/Tests/e2e/upstream/stdlib/ints` and `src/Tests/e2e/int128-wrapping.e2e`.
+`test/fixtures/e2e/upstream/stdlib/ints` and `test/fixtures/e2e/int128-wrapping.e2e`.
 
 ## Parity surface
 
@@ -43,7 +43,7 @@ zero. Their public modules intentionally have no random function, matching the
 pinned interpreter.
 
 The arbitrary-width implementation is in
-`ocaml/share/stdlib/__Integer.dark`; public wrappers are in `Int.dark`, the
+`share/stdlib/__Integer.dark`; public wrappers are in `Int.dark`, the
 eight fixed-width module files, `Int128.dark`, and `UInt128.dark`. The 128-bit
 modules perform limb arithmetic directly and use arbitrary-width values only
 at operations and conversions that require them. Typed representation views
@@ -77,7 +77,7 @@ in `ValueSearchCatalogTests.fs` calls that generated evaluator and supplies its
 returned `5y` to `Stdlib.Int8.add(value, 5y)`, asserting the same `10y` result.
 
 The executable parity corpus is the eleven files under
-`src/Tests/e2e/upstream/stdlib/ints`, plus `integer-family.e2e`. Fixed Int
+`test/fixtures/e2e/upstream/stdlib/ints`, plus `integer-family.e2e`. Fixed Int
 power and closure modulus probes use the declared named functions, and two
 aggregate expectations express equality explicitly so the native runner
 evaluates the same lists inside the compiled program.

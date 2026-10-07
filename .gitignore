@@ -4,6 +4,7 @@
 /x64/
 /x86/
 [Bb]in/
+!/bin/
 [Oo]bj/
 [Ll]og/
 
@@ -74,6 +75,6 @@ scripts/.unicode_cache/
 # Local merge-train state and integration worktrees
 .mergetrain/
 
-# OCaml migration local build and switch
-/ocaml/_build/
-/ocaml/_opam/
+# Native Dune build and local opam switch
+/_build/
+/_opam/

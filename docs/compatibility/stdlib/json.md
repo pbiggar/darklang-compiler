@@ -13,9 +13,9 @@ sources and execution fixtures. Performance is outside this contract unless it
 changes an observable value or failure.
 
 The same-source interpreter fixtures are
-`src/Tests/e2e/upstream/stdlib/alt-json.dark` and
-`src/Tests/e2e/upstream/stdlib/json.dark`. The compact native regression matrix
-is `src/Tests/e2e/json-parity.e2e`. All three are in normal E2E discovery.
+`test/fixtures/e2e/upstream/stdlib/alt-json.dark` and
+`test/fixtures/e2e/upstream/stdlib/json.dark`. The compact native regression matrix
+is `test/fixtures/e2e/json-parity.e2e`. All three are in normal E2E discovery.
 
 ## Structural JSON
 
@@ -44,7 +44,7 @@ input failures are `AltJson.ParseError.NotJson`. `format` emits compact JSON,
 preserves array/object order and duplicates, and escapes strings canonically.
 
 The portable helper and builder surface is copied into
-`ocaml/share/stdlib/AltJson.dark`. Helpers use the first matching object
+`share/stdlib/AltJson.dark`. Helpers use the first matching object
 field and retain the interpreter's absent/wrong-shape `Option`, zero, and empty
 list results. Builder fields append in call order; every optional adder omits
 `None`; `Builder.empty` is a first-class empty value.
@@ -134,19 +134,19 @@ JSON extensions. There are no JSON-specific compiler-only serialized types.
 ## Implementation anchors
 
 - Public portable code and the lossless parser are in the module-scoped
-  `ocaml/share/stdlib/AltJson*.dark`, `Json*.dark`,
+  `share/stdlib/AltJson*.dark`, `Json*.dark`,
   `RuntimeTypes*.dark`, and `LanguageTools.dark` sources.
 - AOT plan construction and recursive record/enum substitution:
-  `ocaml/lib/frontend/JsonPlanning.ml`.
+  `lib/frontend/JsonPlanning.ml`.
 - The shared packed-range reader, container traversal, scalar extraction, and writer
-  primitives are in `ocaml/share/stdlib/Json.dark`.
+  primitives are in `share/stdlib/Json.dark`.
 - Generic intrinsic checking and unsupported-shape diagnostics:
-  `ocaml/lib/frontend/TypeChecking.ml`.
+  `lib/frontend/TypeChecking.ml`.
 - Late specialization integration and stdlib loading:
-  `ocaml/lib/CompilerLibrary.ml`.
+  `lib/CompilerLibrary.ml`.
 - Recursive ownership shapes and native release helpers:
-  `ocaml/lib/ir/anf/ANF.ml`,
-  `ocaml/lib/passes/anf/RefCountInsertion.ml`, and the architecture
+  `lib/ir/anf/ANF.ml`,
+  `lib/passes/anf/RefCountInsertion.ml`, and the architecture
   backends.
 
 The interpreter sources revalidated for this work are

@@ -9,7 +9,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parent.parent
-E2E_ROOT = ROOT / "src" / "Tests" / "e2e"
+E2E_ROOT = ROOT / "test" / "fixtures" / "e2e"
 WRITES_TEMP = re.compile(
     r"(?:let\s+\w+\s*=\s*|overwriteFile\s+|appendToFile\s+|writeFile\s+|deleteFile\s+)"
     r'"/tmp/[^"$]*"'

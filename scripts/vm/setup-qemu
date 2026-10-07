@@ -29,7 +29,7 @@ if [[ ! -f build.ninja ]]; then
     > "$root/qemu-configure.log" 2>&1
 fi
 ninja -j2 qemu-aarch64 qemu-x86_64 tests/tcg/plugins/libinsn.so > "$root/qemu-build.log" 2>&1
-cc -shared -fPIC "$repo/scripts/ocaml/vm_qemu_exec.c" -ldl -o "$qemu_root/exec-path.so"
+cc -shared -fPIC "$repo/scripts/vm/qemu-exec.c" -ldl -o "$qemu_root/exec-path.so"
 ./qemu-aarch64 --version
 ./qemu-x86_64 --version
 test -s tests/tcg/plugins/libinsn.so

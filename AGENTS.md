@@ -7,6 +7,38 @@ this repository and takes precedence where it is stricter.
 
 ## Primary checkout boundary
 
+### ChatGPT Work cloud VMs
+
+This section takes precedence over the local checkout placement, task-start
+and merge-train handoff rules elsewhere in these guidelines for Work VMs.
+
+- The macOS checkout and merge-train paths below apply to the local Codex
+  setup, not to ChatGPT Work's Linux VM. In Work, use the conversation's
+  writable workspace for an isolated checkout and a task-specific branch.
+  Do not stop solely because `/Users/paulbiggar/projects/` is unavailable.
+- If no checkout is attached, clone `https://github.com/pbiggar/darklang-compiler.git`
+  into the writable workspace and create the task branch from its current
+  `main`. Reuse that checkout for the rest of the task. GitHub connector reads
+  can inspect the repository before cloning; a checkout is needed for edits
+  and verification.
+- Use `Dockerfile` and `dependencies.lock` as the toolchain sources of truth.
+  Bootstrap a minimal native environment with
+  `bash scripts/vm/setup-native-toolchain /absolute/writable/toolchains`, then
+  source that directory's `activate` file. This installs the pinned OCaml,
+  Dune and native prerequisites without changing system directories. It does
+  not install the historical F# oracle or unrelated development services.
+- Keep downloads, opam state, build logs and a writable `TMPDIR` under that
+  toolchain directory. Build OCaml serially. Do not reuse incomplete downloads
+  or accept the compiler version without checking its Unix operations.
+- Build with `env -u LD_PRELOAD ./build --ai` and run the already-built suite
+  with `./run-tests --ai`. Run `dune runtest` for the additional regression
+  checks. The activation file supplies the VM-only temporary-path adapter.
+- Commit completed changes locally. The local macOS `./land` workflow is not
+  configured in Work: report verification and handoff limitations explicitly,
+  and use a GitHub branch/PR only when the user authorizes that handoff.
+
+### Local Codex checkouts
+
 - `/Users/paulbiggar/projects/c4d-for-dcb` is the primary coordination checkout.
   Coding and task agents must treat it as read-only: do not edit or generate
   files, build, test, format, commit, switch branches, or run any other command

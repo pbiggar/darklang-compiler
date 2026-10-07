@@ -58,7 +58,7 @@ so it remains linear-time without depending on the skew-list representation.
 The transformation requires every self call to have an eligible constructor
 boundary and does not move effectful field evaluation across recursion.
 
-Focused behavior is covered by `src/Tests/e2e/tailcall.e2e`,
-`src/Tests/e2e/tco-refcounting.e2e`,
-`src/Tests/e2e/tail-recursion-modulo-constructor.e2e`, and the optimization
-fixtures under `src/Tests/optimization/`.
+Focused behavior is covered by `test/fixtures/e2e/tailcall.e2e`,
+`test/fixtures/e2e/tco-refcounting.e2e`,
+`test/fixtures/e2e/tail-recursion-modulo-constructor.e2e`, and the optimization
+fixtures under `test/fixtures/optimization/`.

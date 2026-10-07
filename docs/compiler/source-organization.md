@@ -1,33 +1,36 @@
 # Compiler Source Organization
 
-The production implementation is under `ocaml/`. Each compiler module has a
+The repository root is the Dune project root. Compiler modules under `lib/` have a
 matching `.ml` implementation and `.mli` interface. The Dune graph preserves the
 original pipeline responsibilities while distinguishing modules that formerly
 had the same filename in different F# namespaces.
 
 | Location | Responsibility |
 |---|---|
-| `ocaml/bin/dark.ml` | Native command-line entry point |
-| `ocaml/lib/Program.ml` | CLI commands, options and presentation |
-| `ocaml/lib/frontend/interpreter/` | Written syntax, lexer, parser and validation |
-| `ocaml/lib/frontend/checking/` | Checked expressions, inference, declarations and diagnostics |
-| `ocaml/lib/frontend/` | Written/checked integration and JSON planning |
-| `ocaml/lib/passes/preparation/` | Specialization, lifting and preparation |
-| `ocaml/lib/passes/hir/` | HIR construction and verification |
-| `ocaml/lib/passes/ownership/` | Ownership inference and elaboration |
-| `ocaml/lib/passes/anf/` | ANF lowering, SSA transforms and reference counts |
-| `ocaml/lib/passes/mir/` | MIR lowering and optimization |
-| `ocaml/lib/passes/lir/` | LIR lowering, liveness and register allocation |
-| `ocaml/lib/ir/` | IR definitions and printers |
-| `ocaml/lib/backend/arm64/` | ARM64 selection, encoding, runtime and ELF/Mach-O output |
-| `ocaml/lib/backend/x64/` | Linux x64 selection, encoding and runtime |
-| `ocaml/lib/backend/binary/` | Shared binary structures and literal pools |
-| `ocaml/lib/driver/` | Compilation contexts, caches, sessions and pipeline orchestration |
-| `ocaml/share/` | Unchanged Dark standard library and Unicode tables |
-| `ocaml/tests/` | Production unit checks, DSL tooling and suite runner |
-| `src/Tests/` | Language and DSL input fixtures |
-| `ocaml/validation/` | Additional port equivalence and allocation checks |
+| `bin/dark.ml` | Native command-line entry point |
+| `lib/Program.ml` | CLI commands, options and presentation |
+| `lib/frontend/interpreter/` | Written syntax, lexer, parser and validation |
+| `lib/frontend/checking/` | Checked expressions, inference, declarations and diagnostics |
+| `lib/frontend/` | Written/checked integration and JSON planning |
+| `lib/passes/preparation/` | Specialization, lifting and preparation |
+| `lib/passes/hir/` | HIR construction and verification |
+| `lib/passes/ownership/` | Ownership inference and elaboration |
+| `lib/passes/anf/` | ANF lowering, SSA transforms and reference counts |
+| `lib/passes/mir/` | MIR lowering and optimization |
+| `lib/passes/lir/` | LIR lowering, liveness and register allocation |
+| `lib/ir/` | IR definitions and printers |
+| `lib/backend/arm64/` | ARM64 selection, encoding, runtime and ELF/Mach-O output |
+| `lib/backend/x64/` | Linux x64 selection, encoding and runtime |
+| `lib/backend/binary/` | Shared binary structures and literal pools |
+| `lib/driver/` | Compilation contexts, caches, sessions and pipeline orchestration |
+| `share/` | Installed Dark standard library sources and Unicode tables |
+| `test/` | Production unit checks, DSL tooling and suite runner |
+| `test/fixtures/` | Language and DSL input fixtures |
+| `test/regression/` | Native allocation, cache, graph and bitset regression checks |
+| `test/runtime-execution/` | Explicit native backend execution checks |
+| `test/runtime-support/` | Private test-only backend helpers |
 
-`ocaml/inventory.json` records the frozen F# source-to-native-owner mapping.
-The reference revision remains in Git history. Migration-only observation
-adapters do not form a public compiler API or a runtime bridge.
+The completed F# migration's observation harness, source inventory and
+comparison scripts remain in Git history. They are no longer part of the
+build graph. `dune runtest` executes the native regression checks; the complete
+production host suite runs through `./run-tests --ai` after `./build --ai`.

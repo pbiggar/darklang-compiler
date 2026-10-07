@@ -37,10 +37,10 @@ indices. Public table indices and cells remain `Int`; canonical `List.getAt`
 performs the checked internal conversion and returns `None` when it cannot fit
 the skew-list's machine-sized index.
 
-The copied implementation is in `ocaml/share/stdlib/Diff.dark:3-80`.
+The copied implementation is in `share/stdlib/Diff.dark:3-80`.
 Exact ordered probes for identical text, additions, removals, replacements,
 repeated-line ties, empty strings, boundary empty lines, and mixed edits are in
-`src/Tests/e2e/interpreter/diff.e2e:4-13`.
+`test/fixtures/e2e/interpreter/diff.e2e:4-13`.
 
 ## ValueSearch contract
 
@@ -71,13 +71,13 @@ Namespace and location behavior follows the interpreter source exactly:
   the namespace filter.
 
 The Dark implementations are in
-`ocaml/share/stdlib/PackageManager.dark:3-34` and
-`ocaml/share/stdlib/ValueSearch.dark:3-50`. Helper probes are in
-`src/Tests/e2e/interpreter/value_search_helpers.e2e:3-13`; prefix scoring,
+`share/stdlib/PackageManager.dark:3-34` and
+`share/stdlib/ValueSearch.dark:3-50`. Helper probes are in
+`test/fixtures/e2e/interpreter/value_search_helpers.e2e:3-13`; prefix scoring,
 shortest-path selection, and stable location ties are covered at
-`src/Tests/e2e/upstream/stdlib/language-tools/pickLocation.dark:28-159`. The
+`test/fixtures/e2e/upstream/stdlib/language-tools/pickLocation.dark:28-159`. The
 catalog-backed native test at
-`ocaml/tests/compiler-passes/ValueSearchCatalogTests.ml:51-180` covers type
+`test/compiler-passes/ValueSearchCatalogTests.ml:51-180` covers type
 identity, namespace filtering, location choice, branch visibility,
 lookup/evaluation failures, static result validation, and result order.
 
@@ -88,7 +88,7 @@ database. The compiler intentionally does not acquire that service: it has no
 content-addressed package traversal or ordinary top-level value initialization,
 as documented in `name-resolution.md:81-101`. Instead, each `CompileRequest`
 contains an explicit immutable `PackageValueCatalog` snapshot
-(`ocaml/lib/driver/CompilationContexts.ml`). This catalog is compiler-only
+(`lib/driver/CompilationContexts.ml`). This catalog is compiler-only
 machinery, not a new Dark-visible package model.
 
 The snapshot records value hash, recursive custom-type identity, branch-visible

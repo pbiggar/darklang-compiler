@@ -6,7 +6,7 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR"
 
-OCAML_BUILD_DIR="$SCRIPT_DIR/ocaml/_build"
+OCAML_BUILD_DIR="$SCRIPT_DIR/_build"
 TEST_ARGS=()
 for ARG in "$@"; do
     case "$ARG" in
@@ -29,7 +29,7 @@ done
 # Expected-error cases can terminate either the test host or generated native
 # programs abnormally. Keep OS crash dumps from dirtying the worktree.
 ulimit -c 0
-TEST_EXE="$OCAML_BUILD_DIR/default/tests/tests_main.exe"
+TEST_EXE="$OCAML_BUILD_DIR/default/test/tests_main.exe"
 if [[ ! -x "$TEST_EXE" ]]; then
     echo "Error: Native test executable not found at $TEST_EXE" >&2
     echo "Run './build --ai' first."

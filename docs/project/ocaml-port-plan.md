@@ -6,6 +6,15 @@ delivery sequence, and task-specific workflow.
 Status: native OCaml replacement completed locally, 2026-10-05. See the final
 local acceptance checkpoint and the explicit macOS host coverage limit below.
 
+## Completed migration infrastructure
+
+The F# observation adapters, frozen source inventory, comparison scripts and
+pre-integration runner have been retired after acceptance. Their files and
+original paths remain available at commit `c74e21253c864e656b06f7f09736f5f1b874a178`.
+The compiler now uses a repository-root Dune project. Useful native regression
+and runtime execution checks remain under `test/`. Checkpoints below are
+historical records and retain the paths used during the port.
+
 ## Scope and baseline
 
 Replace the F# compiler with OCaml in the same repository. Keep F# beside the

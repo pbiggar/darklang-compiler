@@ -40,7 +40,7 @@ binding consistency, guards and arm result types must fail during compilation.
 ## Checks
 
 Build with `./build --ai`; warnings are errors. Run the already-built host suite
-with `./run-tests --ai`. `dune runtest --root ocaml` runs the additional port
+with `./run-tests --ai`. `dune runtest` runs the additional port
 regression checks and does not replace the original production suite.
 
 Create a focused failing E2E before changing observable compiler behavior.

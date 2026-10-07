@@ -214,5 +214,5 @@ type LiveInterval = {
 
 ## Tests
 
-See `src/Tests/e2e/register_allocation.e2e` (112 lines) for tests that stress
+See `test/fixtures/e2e/register_allocation.e2e` (112 lines) for tests that stress
 register pressure and spilling.

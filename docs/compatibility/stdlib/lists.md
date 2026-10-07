@@ -27,7 +27,7 @@ and `backend/testfiles/execution/stdlib/list.dark` at the stamped revision.
 
 Compiler evidence is anchored in:
 
-- `ocaml/lib/frontend/interpreter/Parser.ml` for canonical source parsing
+- `lib/frontend/interpreter/Parser.ml` for canonical source parsing
   and AST normalization;
 - `AST.fs`, `frontend/TypeChecking.fs`, and `passes/anf/AST_to_ANF.fs` for the
   canonical list form, homogeneous typing, private typed equality, native
@@ -37,7 +37,7 @@ Compiler evidence is anchored in:
   random selection, and the callable contract;
 - `frontend/ValueRendering.fs` and private `List.__toDisplayString_*` helpers
   for typed recursive rendering; and
-- `src/Tests/e2e/list_language_parity.e2e`, `list_parity.e2e`, `lists.e2e`,
+- `test/fixtures/e2e/list_language_parity.e2e`, `list_parity.e2e`, `lists.e2e`,
   `stdlib/list.e2e`, `pattern_matching.e2e`, and syntax fixtures for focused
   parser probes.
 

@@ -72,5 +72,5 @@ calls and remains disabled; focused local tests cover the native client. A disab
 must not be treated as proof that its entire feature is missing.
 
 The authoritative live denysets remain in
-`ocaml/tests/test-suite-tooling/TestRunner.ml`. When a gap closes, enable its
+`test/test-suite-tooling/TestRunner.ml`. When a gap closes, enable its
 unchanged upstream case before removing it from this ledger.

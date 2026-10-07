@@ -21,9 +21,9 @@ comparison unless it changes an observable result.
 | Retry delay | Milliseconds are passed to a blocking delay between callback attempts only. | `Cli.Posix.sleep` delegates at `stdlib/CliPosix.dark:29-30`; the typed effect is introduced in `passes/anf/lowering/Primitives.fs` and retained as a Float through ANF/MIR/LIR. Code generation normalizes total nanoseconds into native seconds/nanoseconds and retries the remaining timeout on `EINTR` for Linux ARM64, Linux x86_64, and macOS ARM64. Backend assertions pin conversion, syscall numbers, target conventions, and interruption loops. | Behavior parity through an internal AOT boundary |
 
 The enabled interpreter truth tables are
-`src/Tests/e2e/upstream/stdlib/option.dark:288,291,294,297` and
+`test/fixtures/e2e/upstream/stdlib/option.dark:288,291,294,297` and
 `result.dark:223,227,231,235,240,244,248,252`. They are gated in
-`ocaml/tests/test-suite-tooling/TestRunner.ml:513-514`. The additional focused
+`test/test-suite-tooling/TestRunner.ml:513-514`. The additional focused
 file is deliberately source-compatible with both implementations so argument
 order, distinct payloads, callback counts, termination, and result propagation
 can be compared without separate fixtures.

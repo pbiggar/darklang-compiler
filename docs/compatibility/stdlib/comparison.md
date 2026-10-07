@@ -16,7 +16,7 @@ At the implementation comparison commit the focused matrix passed 140/140
 cases. Performance is outside this contract unless it changes observable
 behavior.
 
-The executable matrix is `src/Tests/e2e/comparison-parity.e2e`. It covers the
+The executable matrix is `test/fixtures/e2e/comparison-parity.e2e`. It covers the
 operators `==`, `!=`, `<`, `>`, `<=`, and `>=` plus the unversioned public
 `Stdlib.equals` and `Stdlib.notEquals` functions.
 
@@ -108,11 +108,11 @@ darklang/dark revision. At the interpreter revision,
 `backend/src/Builtins/Builtins.Pure/Libs/Uuid.fs:43-47` delegates validation to
 `System.Guid.TryParse`. A focused probe of that same call established the
 observable X-format rules retained in compiler source
-`ocaml/share/stdlib/Uuid.dark:50-143`: Unicode whitespace is ignored,
+`share/stdlib/Uuid.dark:50-143`: Unicode whitespace is ignored,
 leading zeroes and short fields are accepted, the second and third UInt32
 components contribute their low 16 bits, and overflowing UInt32 or byte fields
 return `BadFormat`. Focused same-source cases are in
-`src/Tests/e2e/stdlib/uuid.e2e:7-23`.
+`test/fixtures/e2e/stdlib/uuid.e2e:7-23`.
 
 Ahead-of-time rejection and the absent interpreter-only value categories are
 the intentional public boundary retained here.
@@ -133,24 +133,24 @@ identity data in `backend/src/LibExecution/RuntimeTypes.fs` around lines
 `packages/darklang/prettyPrinter/runtimeError.dark` around lines 232-242.
 
 Compiler enforcement and typed comparison plans live in
-`ocaml/lib/frontend/TypeChecking.ml` (type errors at 47-121,
+`lib/frontend/TypeChecking.ml` (type errors at 47-121,
 classification at 1172-1345, helper construction at 5231-5552, and helper
 materialization at 5553-5777). Specialization and structural lowering live in
-`ocaml/lib/passes/anf/AST_to_ANF.ml` (plan materialization at 26-69 and
+`lib/passes/anf/AST_to_ANF.ml` (plan materialization at 26-69 and
 closure identity and AOT layout selection at 2516-3204), with
-post-specialization orchestration in `ocaml/lib/CompilerLibrary.ml` at
+post-specialization orchestration in `lib/CompilerLibrary.ml` at
 832-920. Closure layout reaches
-native code through `ocaml/lib/passes/mir/MIR_to_LIR.ml`.
+native code through `lib/passes/mir/MIR_to_LIR.ml`.
 Semantic Dict equality is lowered in the type checker through the public
 String-keyed `Dict.toList` mapping view at
-`ocaml/share/stdlib/Dict.dark:111-113`,
-using the layout and key helpers exposed from `ocaml/lib/DarkStdlib.ml`.
+`share/stdlib/Dict.dark:111-113`,
+using the layout and key helpers exposed from `lib/DarkStdlib.ml`.
 Float conditions and architecture-specific integer conditions remain in the
 shared MIR-to-LIR pass and the ARM64/x64 backends. Focused executable evidence
-is in `src/Tests/e2e/comparison-parity.e2e`, alongside the existing
+is in `test/fixtures/e2e/comparison-parity.e2e`, alongside the existing
 `equality.e2e` and `interpreter_behavior_parity.e2e` suites.
 
-The root wrappers are `ocaml/share/stdlib/NoModule.dark`, loaded by
+The root wrappers are `share/stdlib/NoModule.dark`, loaded by
 `driver/StdlibCompilation.fs`. Separate stdlib specialization merges user
 record/sum metadata before materializing structural helpers in
 `driver/StdlibCompilation.fs`; the indexed record view is built in

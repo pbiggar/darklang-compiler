@@ -33,8 +33,8 @@ non-retaining `RawWriteWord` and removes the producer's pending release.
 
 ## Ownership Insertion
 
-`ocaml/lib/passes/anf/RefCountInsertion.ml` verifies ownership contracts;
-`ocaml/lib/passes/anf/ownership/RcSSARefCountInsertion.ml` inserts retains
+`lib/passes/anf/RefCountInsertion.ml` verifies ownership contracts;
+`lib/passes/anf/ownership/RcSSARefCountInsertion.ml` inserts retains
 and releases after SSA construction and escape analysis.
 
 The `passes/anf/ownership/` modules separate type facts, return/alias analysis,

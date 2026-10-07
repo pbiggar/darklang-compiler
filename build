@@ -27,7 +27,7 @@ run_build() {
         echo "Toolchain differs from the pinned OCaml 5.5.1 / Dune 3.24.2 versions." >&2
         return 1
     fi
-    dune build --root "$SCRIPT_DIR/ocaml" "${BUILD_ARGS[@]}"
+    dune build --root "$SCRIPT_DIR" "${BUILD_ARGS[@]}"
 }
 if [[ "$MODE" == normal ]]; then
     run_build
