@@ -10,11 +10,27 @@ type fetchResult=Found of string|Missing
 let (let*)=Result.bind
 let (let+) result f=Result.map f result
 let message=function Failure text|Invalid_argument text|Yojson.Json_error text->text|Unix.Unix_error (error,_,_)->Unix.error_message error|ex->Printexc.to_string ex
-(* ProgramTypes encodes expression trees as nested tagged arrays. Real package
-   functions exceed System.Text.Json's conservative default depth of 64, while
-   retaining a finite bound protects the compiler from unbounded payloads. *)
-let packageJsonOptions=512
-let parse json=HostJson.parse ~maxDepth:packageJsonOptions json
+(* Package expression trees have a finite nesting bound. Raw JSON keeps
+   numeric literal spellings, including integers wider than OCaml's int. *)
+let parse source =
+ let depth = ref 0 and quoted = ref false and escaped = ref false in
+ String.iter (fun c ->
+  if !quoted then (
+   if !escaped then escaped := false else if c = '\\' then escaped := true
+   else if c = '"' then quoted := false)
+  else match c with
+   | '"' -> quoted := true
+   | '[' | '{' -> incr depth; if !depth > 512 then raise (Yojson.Json_error "Package JSON exceeds nesting depth 512")
+   | ']' | '}' -> decr depth
+   | _ -> ()) source;
+ let json = Yojson.Raw.from_string source in
+ let rec validate = function
+  | `Assoc fields -> List.iter (fun (_, value) -> validate value) fields
+  | `List values -> List.iter validate values
+  | `Floatlit ("NaN" | "Infinity" | "-Infinity") -> raise (Yojson.Json_error "Package JSON contains a non-finite number")
+  | `Null | `Bool _ | `Intlit _ | `Floatlit _ | `Stringlit _ -> () in
+ validate json;
+ json
 let defaultServer="https://matter.darklang.com/"
 let defaultCachePath ()=
  let directory=match Sys.getenv_opt "XDG_DATA_HOME" with Some path when path<>"" && not (Filename.is_relative path)->path|_->(match Sys.getenv_opt "HOME" with Some path when path<>""->Filename.concat path ".local/share"|_->"") in
@@ -25,32 +41,45 @@ let kindPath=function PackageType->"type"|PackageValue->"value"|PackageFunction-
 let allKinds=[PackageType;PackageValue;PackageFunction]
 let rec createDirectory path=if path<>"" && not (Sys.file_exists path) then (let parent=Filename.dirname path in if parent<>path then createDirectory parent;try Unix.mkdir path 0o777 with Unix.Unix_error (Unix.EEXIST,_,_) when Sys.is_directory path->())
 let withCache (config:config) action=try let directory=Filename.dirname config.cachePath in if directory<>"" then createDirectory directory;action () with ex->Error ("Package cache '"^config.cachePath^"' failed: "^message ex)
-let cacheRead config key=withCache config (fun ()->match HostPackageIO.cacheRead config.cachePath key with None->Ok None|Some (200,body)->Ok (Some (Found body))|Some (404,_)->Ok (Some Missing)|Some (status,_)->Error ("Package cache contains unsupported HTTP status "^string_of_int status^" for "^key))
-let cacheWrite config key result=withCache config (fun ()->let status,body=match result with Found body->200,body|Missing->404,"" in HostPackageIO.cacheWrite config.cachePath key status body;Ok ())
+let cacheRead config key=withCache config (fun ()->match PackageIO.cacheRead config.cachePath key with None->Ok None|Some (200,body)->Ok (Some (Found body))|Some (404,_)->Ok (Some Missing)|Some (status,_)->Error ("Package cache contains unsupported HTTP status "^string_of_int status^" for "^key))
+let cacheWrite config key result=withCache config (fun ()->let status,body=match result with Found body->200,body|Missing->404,"" in PackageIO.cacheWrite config.cachePath key status body;Ok ())
 let requestNetwork client config path=
- let uri=HostPackageIO.resolveUrl config.server path in
- try let status,body=HostPackageIO.get client uri in if status>=200 && status<=299 then Ok (Found body) else if status=404 then Ok Missing else Error ("Package server GET "^uri^" returned "^string_of_int status^": "^body)
+ let uri=Uri.to_string (Uri.resolve "http" (Uri.of_string config.server) (Uri.of_string path)) in
+ try let status,body=PackageIO.get client uri in if status>=200 && status<=299 then Ok (Found body) else if status=404 then Ok Missing else Error ("Package server GET "^uri^" returned "^string_of_int status^": "^body)
  with ex->Error ("Package server GET "^uri^" failed: "^message ex)
 let cacheKey config path=let rec trim index=if index>0 && config.server.[index-1]='/' then trim (index-1) else index in String.sub config.server 0 (trim (String.length config.server))^path
 let fetchByHash client config path=let key=cacheKey config path in let* cached=cacheRead config key in match cached with Some result->Ok result|None->let* result=requestNetwork client config path in let+ ()=cacheWrite config key result in result
 let findByName client config path=let key=cacheKey config path in match requestNetwork client config path with Ok result->let+ ()=cacheWrite config key result in result|Error networkError->(match cacheRead config key with Ok (Some result)->Ok result|Ok None->Error networkError|Error cacheError->Error (networkError^"; "^cacheError))
-let objectFields=HostJson.fields
-let tryField name element=List.find_map (fun (field,value)->if field=name then Some value else None) (objectFields element)
-let arrayItems=HostJson.items
-let enumCase element=match objectFields element with [(name,fields)] when HostJson.kind fields=HostJson.Array->Ok (name,arrayItems fields)|_->Error ("Expected a package enum, got "^HostJson.rawText element)
-let stringValue element=if HostJson.kind element=HostJson.String then Ok (HostJson.string element) else Error ("Expected a string, got "^HostJson.rawText element)
-let numberText element=if HostJson.kind element=HostJson.Number then Ok (HostJson.rawText element) else Error ("Expected a number, got "^HostJson.rawText element)
+let objectFields = function `Assoc fields -> fields | _ -> []
+let tryField name element = List.assoc_opt name (objectFields element)
+let arrayItems = function `List values -> values | _ -> []
+let enumCase = function
+ | `Assoc [(name, `List fields)] -> Ok (name, fields)
+ | element -> Error ("Expected a package enum, got " ^ Yojson.Raw.to_string element)
+let stringValue = function
+ | `Stringlit literal ->
+   (match Yojson.Basic.from_string literal with `String value -> Ok value | _ -> Crash.crash "JSON string literal decoded as another kind")
+ | element -> Error ("Expected a string, got " ^ Yojson.Raw.to_string element)
+let booleanValue = function
+ | `Bool value -> Ok value
+ | element -> Error ("Expected a boolean, got " ^ Yojson.Raw.to_string element)
+let numberText = function
+ | `Intlit text | `Floatlit text -> Ok text
+ | element -> Error ("Expected a number, got " ^ Yojson.Raw.to_string element)
+let argumentIndex = function
+ | `Intlit text -> Option.map Int32.to_int (Int32.of_string_opt text)
+ | _ -> None
 let replace oldText newText text=let output=Buffer.create (String.length text) in let rec loop index=if index<String.length text then if index+String.length oldText<=String.length text && String.sub text index (String.length oldText)=oldText then (Buffer.add_string output newText;loop (index+String.length oldText)) else (Buffer.add_char output text.[index];loop (index+1)) in loop 0;Buffer.contents output
 let escapedStringContents text=text |> replace "\\" "\\\\" |> replace "\"" "\\\"" |> replace "\n" "\\n" |> replace "\r" "\\r" |> replace "\t" "\\t"
 let quoted text="\""^escapedStringContents text^"\""
 let parseHashJson json=try let* name,fields=enumCase (parse json) in match name,fields with "Hash",[value]->stringValue value|_->Error ("Package find returned an invalid hash: "^json) with ex->Error ("Package find returned invalid JSON: "^message ex)
-let locationName element=match tryField "owner" element,tryField "modules" element,tryField "name" element with Some owner,Some modules,Some name->let* owner=stringValue owner in let* modules=ResultList.mapResults stringValue (arrayItems modules) in let+ leaf=stringValue name in String.concat "." (owner::modules@[leaf])|_->Error ("Invalid package location: "^HostJson.rawText element)
+let locationName element=match tryField "owner" element,tryField "modules" element,tryField "name" element with Some owner,Some modules,Some name->let* owner=stringValue owner in let* modules=ResultList.mapResults stringValue (arrayItems modules) in let+ leaf=stringValue name in String.concat "." (owner::modules@[leaf])|_->Error ("Invalid package location: "^Yojson.Raw.to_string element)
 let resolvedName element=match tryField "resolved" element,tryField "originalName" element with
  |Some resolved,Some originalName->let* name,fields=enumCase resolved in (match name,fields with
-  |"Ok",[value]->(match tryField "location" value with Some location->let* name,fields=enumCase location in (match name,fields with "Some",[value]->locationName value|"None",[]->let+ names=ResultList.mapResults stringValue (arrayItems originalName) in String.concat "." names|_->Error ("Invalid resolved package location: "^HostJson.rawText location))|None->Error ("Invalid resolved package name: "^HostJson.rawText value))
+  |"Ok",[value]->(match tryField "location" value with Some location->let* name,fields=enumCase location in (match name,fields with "Some",[value]->locationName value|"None",[]->let+ names=ResultList.mapResults stringValue (arrayItems originalName) in String.concat "." names|_->Error ("Invalid resolved package location: "^Yojson.Raw.to_string location))|None->Error ("Invalid resolved package name: "^Yojson.Raw.to_string value))
   |"Error",_->let+ names=ResultList.mapResults stringValue (arrayItems originalName) in String.concat "." names
-  |_->Error ("Invalid package resolution: "^HostJson.rawText resolved))
- |_->Error ("Invalid package name resolution: "^HostJson.rawText element)
+  |_->Error ("Invalid package resolution: "^Yojson.Raw.to_string resolved))
+ |_->Error ("Invalid package name resolution: "^Yojson.Raw.to_string element)
 let rec renderType element=
  let* name,fields=enumCase element in
  let unary label=match fields with [inner]->let+ typ=renderType inner in label^"<"^typ^">"|_->Error ("Invalid "^name^" type") in
@@ -68,7 +97,7 @@ let rec renderLetPattern element=let* name,fields=enumCase element in match name
 let scalar suffix value=let+ number=numberText value in number^suffix
 let rec renderMatchPattern element=
  let* name,fields=enumCase element in match name,fields with
- |"MPVariable",[_;name]->stringValue name|"MPUnit",[_]->Ok "()"|"MPBool",[_;value]->Ok (string_of_bool (HostJson.boolean value))
+ |"MPVariable",[_;name]->stringValue name|"MPUnit",[_]->Ok "()"|"MPBool",[_;value]->let+ value=booleanValue value in string_of_bool value
  |"MPInt8",[_;value]->scalar "y" value|"MPUInt8",[_;value]->scalar "uy" value|"MPInt16",[_;value]->scalar "s" value|"MPUInt16",[_;value]->scalar "us" value|"MPInt32",[_;value]->scalar "l" value|"MPUInt32",[_;value]->scalar "ul" value|"MPInt64",[_;value]->scalar "L" value|"MPUInt64",[_;value]->scalar "UL" value|"MPInt128",[_;value]->scalar "Q" value|"MPUInt128",[_;value]->scalar "Z" value|"MPInt",[_;value]->numberText value
  |"MPString",[_;value]->let+ text=stringValue value in quoted text|"MPChar",[_;value]->let+ text=stringValue value in "'"^replace "'" "\\'" text^"'"
  |"MPList",[_;values]->let+ values=ResultList.mapResults renderMatchPattern (arrayItems values) in "["^String.concat ", " values^"]"
@@ -86,13 +115,13 @@ let rec renderExpr parameters selfName element=
  let renderMany=ResultList.mapResults recurse in
  let application name typeArgs args=let* types=ResultList.mapResults renderType (arrayItems typeArgs) in let+ args=renderMany (arrayItems args) in let applied=if types=[] then name else name^"<"^String.concat ", " types^">" in applied^" ("^String.concat ") (" args^")" in
  let* name,fields=enumCase element in match name,fields with
- |"EUnit",[_]->Ok "()"|"EBool",[_;value]->Ok (string_of_bool (HostJson.boolean value))
+ |"EUnit",[_]->Ok "()"|"EBool",[_;value]->let+ value=booleanValue value in string_of_bool value
  |"EInt8",[_;value]->scalar "y" value|"EUInt8",[_;value]->scalar "uy" value|"EInt16",[_;value]->scalar "s" value|"EUInt16",[_;value]->scalar "us" value|"EInt32",[_;value]->scalar "l" value|"EUInt32",[_;value]->scalar "ul" value|"EInt64",[_;value]->scalar "L" value|"EUInt64",[_;value]->scalar "UL" value|"EInt128",[_;value]->scalar "Q" value|"EUInt128",[_;value]->scalar "Z" value|"EInt",[_;value]->numberText value
  |"EFloat",[_;sign;whole;part]->let* sign,_=enumCase sign in let* whole=stringValue whole in let+ part=stringValue part in (if sign="Negative" then "-" else "")^whole^"."^part
  |"EChar",[_;value]->let+ text=stringValue value in "'"^replace "'" "\\'" text^"'"
  |"EString",[_;segments]->let segment element=let* name,fields=enumCase element in match name,fields with "StringText",[text]->let+ text=stringValue text in escapedStringContents text|"StringInterpolation",[expr]->let+ text=recurse expr in "{"^text^"}"|_->Error ("Unsupported string segment "^name) in let+ segments=ResultList.mapResults segment (arrayItems segments) in "$\""^String.concat "" segments^"\""
  |"EVariable",[_;name]->stringValue name
- |"EArg",[_;index]->(match HostJson.tryInt32 index with Some index->if index>=0 && index<List.length parameters then Ok (List.nth parameters index) else Error ("Invalid package argument index "^string_of_int index)|None->Error "Invalid package argument index")
+ |"EArg",[_;index]->(match argumentIndex index with Some index->if index>=0 && index<List.length parameters then Ok (List.nth parameters index) else Error ("Invalid package argument index "^string_of_int index)|None->Error "Invalid package argument index")
  |"ESelf",[_]->Ok selfName|"EFnName",[_;name]|"EValue",[_;name]->resolvedName name
  |"EList",[_;values]->let+ values=renderMany (arrayItems values) in "["^String.concat ", " values^"]"
  |"ETuple",[_;first;second;rest]->let+ values=renderMany (first::second::arrayItems rest) in "("^String.concat ", " values^")"
@@ -125,7 +154,7 @@ let rec renderExpr parameters selfName element=
 let parseLocatedEntity kind hash json=try let root=parse json in match tryField "entity" root,tryField "location" root with Some _,Some location->let+ location=locationName location in {kind;hash;location;json}|_->Error ("Package server returned an invalid located entity for "^hash) with ex->Error ("Package server returned invalid JSON for "^hash^": "^message ex)
 let tryPackageHash element=match tryField "name" element,tryField "location" element with Some name,Some location->(match enumCase name,enumCase location with Ok ("Package",[hash]),Ok ("Some",[location])->(match enumCase hash,locationName location with Ok ("Hash",[hash]),Ok name->Option.map (fun hash->hash,name) (Result.to_option (stringValue hash))|_->None)|_->None)|_->None
 let distinct values=let rec loop found=function []->List.rev found|value::rest->if List.mem value found then loop found rest else loop (value::found) rest in loop [] values
-let dependencyRefs json=try let rec collect element=let own=Option.to_list (tryPackageHash element) in match HostJson.kind element with HostJson.Object->own@List.concat_map (fun (_,value)->collect value) (objectFields element)|HostJson.Array->own@List.concat_map collect (arrayItems element)|_->own in Ok (distinct (collect (parse json))) with ex->Error ("Could not inspect package dependencies: "^message ex)
+let dependencyRefs json=try let rec collect element=let own=Option.to_list (tryPackageHash element) in match element with `Assoc fields->own@List.concat_map (fun (_,value)->collect value) fields|`List values->own@List.concat_map collect values|_->own in Ok (distinct (collect (parse json))) with ex->Error ("Could not inspect package dependencies: "^message ex)
 let renderEntity entity=
  try let root=parse entity.json in match tryField "entity" root with
  |None->Error ("Missing package entity "^entity.hash)
@@ -156,8 +185,8 @@ let escapeDataString text=
  String.iter (fun c->match c with 'A'..'Z'|'a'..'z'|'0'..'9'|'-'|'_'|'.'|'~'->Buffer.add_char escaped c|_->Buffer.add_string escaped (Printf.sprintf "%%%02X" (Char.code c))) text;
  Buffer.contents escaped
 let resolveNames config resolutionEnv names=
- let client=HostPackageIO.create () in
- Fun.protect ~finally:(fun ()->HostPackageIO.dispose client) (fun ()->
+ let client=PackageIO.create () in
+ Fun.protect ~finally:(fun ()->PackageIO.dispose client) (fun ()->
  let isKnownName name=List.exists (fun context->Result.is_ok (NameResolution.resolve context name resolutionEnv)) [NameResolution.Type;NameResolution.Callable;NameResolution.Value] in
  let fetchLocated kind hash=let path="/"^kindPath kind^"/get/with-location/"^escapeDataString hash in let* result=fetchByHash client config path in match result with Missing->Ok None|Found json->let+ entity=parseLocatedEntity kind hash json in Some entity in
  let findRoots ()=let* roots=ResultList.collectResults (fun name->ResultList.collectResults (fun kind->let path="/"^kindPath kind^"/find/"^escapeDataString name in let* result=findByName client config path in match result with Missing->Ok []|Found json->let+ hash=parseHashJson json in [kind,hash]) allKinds) (List.filter (fun name->not (isKnownName name)) (candidatePrefixes isKnownName names)) in Ok (distinct roots) in

@@ -12,7 +12,7 @@ module I = Map.Make (Int)
 let ( let* ) = Result.bind
 let merge base overlay = M.fold M.add overlay base
 let mergeBindings base overlay = B.fold B.add overlay base
-let display = HostStructuralFormat.semanticType
+let display = StructuralFormat.semanticType
 let rec substituteType subst typ = match typ with
  | AST.TVar name -> Option.value (M.find_opt name subst) ~default:typ
  | AST.TTuple elements -> AST.TTuple (List.map (substituteType subst) elements)

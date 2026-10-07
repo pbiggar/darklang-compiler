@@ -19,7 +19,7 @@ let fid = TestIds.functionIdForName
 let singleOptimizedFunction name = function [func] -> Ok func | [] -> Error (name ^ ": optimizer returned no functions") | _ -> Error (name ^ ": optimizer returned multiple functions")
 let program functions = Program (functions, StringOrder.Map.empty, StringOrder.Map.empty)
 let actual func = formatMIR (program [func])
-let optimizedBlockForLabel name label (func : functionDef) = match LabelMap.find_opt label func.cfg.blocks with Some block -> Ok block | None -> Error (name ^ ": optimizer removed expected block " ^ HostStructuralFormat.format (HostStructuralFormat.Union ("Label", [HostStructuralFormat.Text (let Label text = label in text)])) ^ ".\nActual:\n" ^ actual func)
+let optimizedBlockForLabel name label (func : functionDef) = match LabelMap.find_opt label func.cfg.blocks with Some block -> Ok block | None -> Error (name ^ ": optimizer removed expected block " ^ StructuralFormat.format (StructuralFormat.Union ("Label", [StructuralFormat.Text (let Label text = label in text)])) ^ ".\nActual:\n" ^ actual func)
 let directCallCount name (func : functionDef) = LabelMap.bindings func.cfg.blocks |> List.concat_map (fun (_, block) -> block.instrs) |> List.filter (function Call (_, called, _, _, _) -> called = fid name | _ -> false) |> List.length
 let v n = Register (VReg n)
 let r n = VReg n
@@ -157,7 +157,7 @@ let testSccpPhiIgnoresNonExecutableIncomingEdge () =
  let entry = label "entry" and live = label "live" and dead = label "dead" and join = label "join" in
  let cfg, changed = applySparseConditionalConstantPropagation (graph entry [basicBlock entry [Mov (r 0, BoolConst true, Some AST.TBool)] (Branch (v 0, live, dead));basicBlock live [Mov (r 1, Int64Const 5L, Some AST.TInt64)] (Jump join);basicBlock dead [Mov (r 2, Int64Const 99L, Some AST.TInt64)] (Jump join);basicBlock join [Phi (r 3, [v 1, live;v 2, dead], Some AST.TInt64)] (Ret (v 3))]) in
  check ((match find join cfg with Some block -> changed && block.instrs = [Mov (r 3, Int64Const 5L, Some AST.TInt64)] && block.terminator = Ret (v 3) && not (LabelMap.mem dead cfg.blocks) | None -> false)) "Expected SCCP phi evaluation to ignore the non-executable incoming edge"
-let structuralCFG cfg = HostStructuralFormat.format (MIRTestFormatting.cfg cfg)
+let structuralCFG cfg = StructuralFormat.format (MIRTestFormatting.cfg cfg)
 let testSccpCombinesCopyFoldingAndDeadEdgePruning () =
  let entry = label "entry" and live = label "live" and dead = label "dead" and join = label "join" in
  let cfg, changed = applySparseConditionalSimplification (graph entry [basicBlock entry [Mov (r 1, Int64Const 20L, Some AST.TInt64);Mov (r 2, v 1, Some AST.TInt64);BinOp (r 3, Add, v 2, Int64Const 22L, AST.TInt64);BinOp (r 4, Eq, v 3, Int64Const 42L, AST.TInt64);BinOp (r 6, Add, v 2, v 0, AST.TInt64)] (Branch (v 4, live, dead));basicBlock live [] (Jump join);basicBlock dead [] (Jump join);basicBlock join [Phi (r 5, [v 6, live;Int64Const 99L, dead], Some AST.TInt64)] (Ret (v 5))]) in
@@ -197,8 +197,8 @@ let testPartialRedundancyEliminationSupportsFloatAndNarrowValues () =
  checkCases (fun typ -> let entry = label "typed_pre_entry" and left = label "typed_pre_left" and right = label "typed_pre_right" and join = label "typed_pre_join" in
  let expression dest = BinOp (dest, Add, v 0, v 1, typ) in
  let cfg, changed = applyCSE (graph entry [basicBlock entry [] (Branch (v 2, left, right));basicBlock left [expression (r 3)] (Jump join);basicBlock right [] (Jump join);basicBlock join [expression (r 4)] (Ret (v 4))]) in
- check ((match find right cfg, find join cfg with Some rightBlock, Some joinBlock -> changed && rightBlock.instrs = [expression (r 5)] && joinBlock.instrs = [Phi (r 4, [v 5, right;v 3, left], Some typ)] | _ -> false)) ("Expected PRE to complete a partially redundant " ^ HostStructuralFormat.semanticType typ ^ " addition")) [AST.TFloat64;AST.TInt8]
-let operandText operand = HostStructuralFormat.format (MIRTestFormatting.operand operand)
+ check ((match find right cfg, find join cfg with Some rightBlock, Some joinBlock -> changed && rightBlock.instrs = [expression (r 5)] && joinBlock.instrs = [Phi (r 4, [v 5, right;v 3, left], Some typ)] | _ -> false)) ("Expected PRE to complete a partially redundant " ^ StructuralFormat.semanticType typ ^ " addition")) [AST.TFloat64;AST.TInt8]
+let operandText operand = StructuralFormat.format (MIRTestFormatting.operand operand)
 let testSelfComparisonFoldingRequiresConcreteSafeType () =
  let operand = v 0 in let cases = ["generic equality", Eq, AST.TVar "a";"float equality", Eq, AST.TFloat64;"string equality", Eq, AST.TString;"generic less-than", Lt, AST.TVar "a";"float less-than", Lt, AST.TFloat64;"generic greater-or-equal", Gte, AST.TVar "a";"float greater-or-equal", Gte, AST.TFloat64] in
  let folded = List.filter_map (fun (name, op, typ) -> Option.map (fun result -> name ^ " folded to " ^ operandText result) (tryFoldBinOp op operand operand typ)) cases in match folded with [] -> Ok () | first :: _ -> Error ("Expected self-comparison with non-concrete-safe type to stay unfolded, but " ^ first)
@@ -232,7 +232,7 @@ let testCountedLoopUnrollingSupportsNarrowSignedAndUnsignedValues () =
  checkCases (fun typ -> let preheader = label "narrow_preheader" and header = label "narrow_header" and latch = label "narrow_latch" and exit = label "narrow_exit" in
  let cfg, changed = applyCountedLoopUnrolling (graph preheader [basicBlock preheader [] (Jump header);basicBlock header [Phi (r 0, [Int64Const 0L, preheader;v 3, latch], Some AST.TInt64);Phi (r 1, [Int64Const 1L, preheader;v 4, latch], Some typ);BinOp (r 2, Gte, v 0, Int64Const 4L, AST.TInt64)] (Branch (v 2, exit, latch));basicBlock latch [BinOp (r 4, Add, v 1, Int64Const 1L, typ);BinOp (r 3, Add, v 0, Int64Const 1L, AST.TInt64)] (Jump header);basicBlock exit [] (Ret (v 1))]) in
  let second = LabelMap.exists (fun (Label name) block -> String.starts_with ~prefix:"narrow_latch_unroll_second" name && List.exists (function BinOp (_, Add, _, _, valueType) when valueType = typ -> true | _ -> false) block.instrs) cfg.blocks in
- check (changed && second) ("Expected counted-loop unrolling to clone " ^ HostStructuralFormat.semanticType typ ^ " scalar work")) [AST.TInt8;AST.TUInt8]
+ check (changed && second) ("Expected counted-loop unrolling to clone " ^ StructuralFormat.semanticType typ ^ " scalar work")) [AST.TInt8;AST.TUInt8]
 let tests = [
  "MIR CSE reuses effect-free direct scalar calls", testCseReusesEffectFreeDirectScalarCalls;
  "MIR CSE reuses dominating effect-free direct scalar calls", testCseReusesDominatingEffectFreeDirectScalarCalls;

@@ -14,15 +14,15 @@ open DSLPattern
 type instructionOrTerminator=Instruction of instr | Terminator of terminator
 let (let*)=Result.bind
 let parseInt32Field description text=
- let trimmed=HostText.trim text in match HostText.tryParseInt32 trimmed with
+ let trimmed=Text.trim text in match Text.tryParseInt32 trimmed with
  |Some value->Ok (Int32.to_int value)|None->Error ("Invalid "^description^" '"^trimmed^"' (expected 32-bit integer)")
 let parseInt64Field description text=
- let trimmed=HostText.trim text in match int64 trimmed with
+ let trimmed=Text.trim text in match int64 trimmed with
  |Some value->Ok value|None->Error ("Invalid "^description^" '"^trimmed^"' (expected 64-bit integer)")
 (*
    Parse physical register from text like "X0", "X1", etc.
 *)
-let parsePhysReg text=match HostText.trim text with
+let parsePhysReg text=match Text.trim text with
  |"X0"->Ok X0|"X1"->Ok X1|"X2"->Ok X2|"X3"->Ok X3|"X4"->Ok X4|"X5"->Ok X5|"X6"->Ok X6|"X7"->Ok X7
  |"X8"->Ok X8|"X9"->Ok X9|"X10"->Ok X10|"X11"->Ok X11|"X12"->Ok X12|"X13"->Ok X13|"X14"->Ok X14|"X15"->Ok X15
  |"X16"->Ok X16|"X17"->Ok X17|"X19"->Ok X19|"X20"->Ok X20|"X21"->Ok X21|"X22"->Ok X22|"X23"->Ok X23|"X24"->Ok X24
@@ -32,8 +32,8 @@ let parsePhysReg text=match HostText.trim text with
    Parse register (physical or virtual) from text
 *)
 let parseRegister text=
- let text=HostText.trim text in
- if HostText.startsWith text "v" then
+ let text=Text.trim text in
+ if Text.startsWith text "v" then
  match matched [literal "v";Capture [digits]] text with
  |Some groups->Result.map (fun id->Virtual id) (parseInt32Field "virtual register" groups.(1))
  |None->Error ("Invalid virtual register '"^text^"' (expected 'v0', 'v1', etc.)")
@@ -46,7 +46,7 @@ let signedDigits=Alternatives [[literal "-";digits];[digits]]
    Try stack slot: "Stack 0"
 *)
 let parseOperand text=
- let text=HostText.trim text in
+ let text=Text.trim text in
  match matched [literal "str[";Capture [Repeat (Dot,0,true)];literal "]"] text with
  |Some groups->Result.map (fun value->StringSymbol value) (Common.parseEscapedText groups.(1))
  |None->match matched [literal "Imm";spaces;Capture [signedDigits]] text with
@@ -56,7 +56,7 @@ let parseOperand text=
  |None->match matched [literal "Stack";spaces;Capture [signedDigits]] text with
  |Some groups->Result.map (fun offset->StackSlot offset) (parseInt32Field "stack slot" groups.(1))
  |None->Error ("Invalid operand '"^text^"' (expected 'Imm N', 'Reg X', 'Stack N', or 'str[...]')")
-let parseRcKind text=match HostText.lowerInvariant (HostText.trim text) with
+let parseRcKind text=match Text.lowerInvariant (Text.trim text) with
  |"generic"->Ok GenericHeap|"list"->Ok TaggedList|"dict"->Ok DictHeap|"closure"->Ok ClosureHeap
  |value->Error ("Invalid reference-count kind '"^value^"' (expected generic, list, dict, or closure)")
 let lazyText=Repeat (Dot,1,false)
@@ -93,7 +93,7 @@ let assignment name fields=Capture [lazyText]::space::literal "<-"::space::argum
    Try Madd/Msub: "X0 <- Madd(X1, X2, X3)"
 *)
 let parseInstructionOrTerminator lineNum line=
- let line=HostText.trim line in
+ let line=Text.trim line in
  let prefix error=Printf.sprintf "Line %d: %s" lineNum error in
  if line="Ret" then Ok (Terminator Ret) else if line="Exit" then Ok (Instruction Exit) else
  let unary name construct=arguments name [[any]],(fun groups->Result.map construct (parseRegister groups.(1))) in
@@ -130,7 +130,7 @@ let parseInstructionOrTerminator lineNum line=
    Build single-block CFG
 *)
 let parseLIR text=
- let lines=String.split_on_char '\n' text |> List.mapi (fun index line->index+1,HostText.trim line) |> List.filter (fun (_,line)->line<>"" && not (String.starts_with ~prefix:"//" line)) in
+ let lines=String.split_on_char '\n' text |> List.mapi (fun index line->index+1,Text.trim line) |> List.filter (fun (_,line)->line<>"" && not (String.starts_with ~prefix:"//" line)) in
  let rec parseLines acc=function []->Ok (List.rev acc)|(number,line)::rest->let* result=parseInstructionOrTerminator number line in parseLines (result::acc) rest in
  let* parsed=parseLines [] lines in
  let rec splitInstructions=function

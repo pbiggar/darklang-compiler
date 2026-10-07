@@ -13,7 +13,7 @@ open ARM64
 (*
    Parse ARM64 register from text like "X0", "X1", etc.
 *)
-let parseReg text=match HostText.trim text with
+let parseReg text=match Text.trim text with
  | "X0" -> Ok X0
  | "X1" -> Ok X1
  | "X2" -> Ok X2
@@ -49,23 +49,23 @@ let parseReg text=match HostText.trim text with
 (*
    Parse ARM64 condition from text like "EQ", "NE", etc.
 *)
-let parseCond text=match HostText.trim text with
+let parseCond text=match Text.trim text with
  | "EQ" -> Ok EQ | "NE" -> Ok NE | "LT" -> Ok LT | "GT" -> Ok GT | "LE" -> Ok LE | "GE" -> Ok GE
  | cond -> Error ("Invalid ARM64 condition '"^cond^"'")
 let invalid lineNum fieldName text=Error (Printf.sprintf "Line %d: Invalid %s '%s'" lineNum fieldName text)
-let parseUInt16Operand lineNum fieldName text=match HostText.tryParseInt32 (HostText.trim text) with Some value when Int32.compare value 0l>=0 && Int32.compare value 65535l<=0 -> Ok (Int32.to_int value) | _ -> invalid lineNum fieldName text
+let parseUInt16Operand lineNum fieldName text=match Text.tryParseInt32 (Text.trim text) with Some value when Int32.compare value 0l>=0 && Int32.compare value 65535l<=0 -> Ok (Int32.to_int value) | _ -> invalid lineNum fieldName text
 let parseUInt12Operand lineNum fieldName text=match parseUInt16Operand lineNum fieldName text with Ok value when value<=4095 -> Ok value | Ok _ -> invalid lineNum fieldName text | Error e -> Error e
-let parseInt16Operand lineNum fieldName text=match HostText.tryParseInt32 (HostText.trim text) with Some value when Int32.compare value (-32768l)>=0 && Int32.compare value 32767l<=0 -> Ok (Int32.to_int value) | _ -> invalid lineNum fieldName text
-let parseIntOperand lineNum fieldName text=match HostText.tryParseInt32 (HostText.trim text) with Some value -> Ok (Int32.to_int value) | None -> invalid lineNum fieldName text
+let parseInt16Operand lineNum fieldName text=match Text.tryParseInt32 (Text.trim text) with Some value when Int32.compare value (-32768l)>=0 && Int32.compare value 32767l<=0 -> Ok (Int32.to_int value) | _ -> invalid lineNum fieldName text
+let parseIntOperand lineNum fieldName text=match Text.tryParseInt32 (Text.trim text) with Some value -> Ok (Int32.to_int value) | None -> invalid lineNum fieldName text
 (* Interpret the reference's anchored instruction regexes with their original
    lazy dot captures, Unicode digit/space classes and greedy whitespace. *)
 type capture = Any | Digits | SignedDigits
 type patternToken = Literal of int | Space | Capture of capture
 let isSpace unit=Uchar.is_valid unit && Uucp.White.is_white_space (Uchar.of_int unit)
-let isDigit=HostText.isDigit
+let isDigit=Text.isDigit
 let matched prefix fields line =
- let text=HostText.scalars line in let length=Array.length text in
- let prefix=Array.to_list (HostText.scalars (prefix^"(")) |> List.map (fun c -> Literal c) in
+ let text=Text.scalars line in let length=Array.length text in
+ let prefix=Array.to_list (Text.scalars (prefix^"(")) |> List.map (fun c -> Literal c) in
  let rec operands=function [] -> [Literal 41] | [kind] -> [Capture kind;Literal 41] | kind::rest -> Capture kind::Literal 44::Space::operands rest in
  let tokens=prefix@operands fields in
  let rec matchTokens tokens at captures = match tokens with
@@ -77,7 +77,7 @@ let matched prefix fields line =
  | Capture kind::rest ->
  let start=if kind=SignedDigits && at<length && text.(at)=45 then at+1 else at in
  let finish=ref start in while !finish<length && (match kind with Any -> text.(!finish)<>10 | Digits | SignedDigits -> isDigit text.(!finish)) do incr finish done;
- let captureUntil n=HostText.ofScalars (Array.sub text at (n-at)) in
+ let captureUntil n=Text.ofScalars (Array.sub text at (n-at)) in
  let rec tryLazy n=if n> !finish then None else match matchTokens rest n (captureUntil n::captures) with Some _ as found -> found | None -> tryLazy (n+1) in
  let rec tryGreedy n=if n<=start then None else match matchTokens rest n (captureUntil n::captures) with Some _ as found -> found | None -> tryGreedy (n-1) in
  (match kind with Any -> tryLazy (at+1) | Digits | SignedDigits -> tryGreedy !finish) in
@@ -282,7 +282,7 @@ Ok (BL label)
    Try BL: "BL(label)"
 *)
 let parseInstructionWithMode allowInvalidEncodingValues lineNum line =
- let line=HostText.trim line in if line="RET" then Ok RET else
+ let line=Text.trim line in if line="RET" then Ok RET else
  let rec first=function [] -> Error (Printf.sprintf "Line %d: Invalid ARM64 instruction format '%s'" lineNum line) | matcher::rest -> match matcher () with None -> first rest | Some value -> value in
  first [(fun () -> match matched "MOVZ" [Any;Digits;Digits] line with None -> None | Some groups -> Some (movzMatch allowInvalidEncodingValues lineNum groups));
 (fun () -> match matched "MOVN" [Any;Digits;Digits] line with None -> None | Some groups -> Some (movnMatch allowInvalidEncodingValues lineNum groups));

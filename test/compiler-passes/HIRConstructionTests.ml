@@ -7,7 +7,7 @@ module N = ConstructHIRFunctions
 module B = C.BindingIdMap
 module BS = ClosureAnalysis.BindingSet
 let ( let* ) = Result.bind
-let binding name = Array.fold_left (fun hash ch -> Int32.add (Int32.mul hash 31l) (Int32.of_int ch)) 17l (HostText.scalars name) |> Int32.to_int |> AST.bindingId
+let binding name = Array.fold_left (fun hash ch -> Int32.add (Int32.mul hash 31l) (Int32.of_int ch)) 17l (Text.scalars name) |> Int32.to_int |> AST.bindingId
 let local name = C.Local (binding name)
 let variable name = C.LPVariable (binding name)
 let parameter name typ = binding name, typ
@@ -24,7 +24,7 @@ let rec infer types = function
  | C.UnitLiteral -> Ok AST.TUnit | C.Int8Literal _ -> Ok AST.TInt8 | C.Int16Literal _ -> Ok AST.TInt16 | C.Int32Literal _ -> Ok AST.TInt32 | C.Int64Literal _ -> Ok AST.TInt64
  | C.UInt8Literal _ -> Ok AST.TUInt8 | C.UInt16Literal _ -> Ok AST.TUInt16 | C.UInt32Literal _ -> Ok AST.TUInt32 | C.UInt64Literal _ -> Ok AST.TUInt64
  | C.BoolLiteral _ -> Ok AST.TBool | C.FloatLiteral _ -> Ok AST.TFloat64 | C.StringLiteral _ -> Ok AST.TString | C.BigIntLiteral _ -> Ok AST.TInt
- | C.Local id -> (match B.find_opt id types with Some typ -> Ok typ | None -> Error ("unknown value " ^ HostStructuralFormat.format (AST.DiagnosticFormatting.binding id)))
+ | C.Local id -> (match B.find_opt id types with Some typ -> Ok typ | None -> Error ("unknown value " ^ StructuralFormat.format (AST.DiagnosticFormatting.binding id)))
  | C.If (_, yes, _) -> infer types yes
  | C.Let (C.LPVariable id, value, body) -> let* valueType = infer types value in infer (B.add id valueType types) body
  | C.Let (_, _, body) -> infer types body
@@ -33,7 +33,7 @@ let rec infer types = function
  | expression -> Error ("unsupported test expression " ^ CheckedStructuralFormat.toString expression)
 let functionDefinition body : C.functionDef = {C.id = TestIds.functionIdForName "choose"; name = "choose"; typeParams = []; params = C.checkedParams {NonEmptyList.head = parameter "flag" AST.TBool; tail = [parameter "first" AST.TInt64; parameter "second" AST.TInt64]}; returnType = C.checkedType AST.TInt64; body; recursion = None}
 let noCalls : N.callContracts = {N.externalSignature = (fun _ -> None); contract = (fun _ -> None)}
-let showError = function N.CannotInferExpression (name, message) -> HostStructuralFormat.format (StructuralValue.Union ("CannotInferExpression", [StructuralValue.Text name; StructuralValue.Text message])) | N.InconsistentCallSignature (name, target) -> HostStructuralFormat.format (StructuralValue.Union ("InconsistentCallSignature", [StructuralValue.Text name; AST.DiagnosticFormatting.func target]))
+let showError = function N.CannotInferExpression (name, message) -> StructuralFormat.format (StructuralValue.Union ("CannotInferExpression", [StructuralValue.Text name; StructuralValue.Text message])) | N.InconsistentCallSignature (name, target) -> StructuralFormat.format (StructuralValue.Union ("InconsistentCallSignature", [StructuralValue.Text name; AST.DiagnosticFormatting.func target]))
 let construct definition = N.constructFunction infer dependencies noCalls definition |> Result.map_error (fun error -> "Unexpected HIR construction failure: " ^ showError error)
 let testConstructsOrderedStructuredFunction () =
  let definition = functionDefinition (C.Let (variable "selected", C.If (local "flag", local "first", local "second"), C.Sequence (C.UnitLiteral, local "selected"))) in

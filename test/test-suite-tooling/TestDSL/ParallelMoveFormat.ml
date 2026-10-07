@@ -20,12 +20,12 @@ let toSectionMap sections=
  |Some (name,_)->Error ("Duplicate parallel-move section: "^name)
  |None->Ok (M.of_list sections)
 let required name sections=match M.find_opt name sections with
- |Some value when HostText.trim value<>""->Ok (HostText.trim value)
+ |Some value when Text.trim value<>""->Ok (Text.trim value)
  |Some _->Error ("Parallel-move section "^name^" cannot be empty")
  |None->Error ("Missing required parallel-move section: "^name)
 let parseMove lineNumber line=
  let open DSLPattern in
- match matched [Capture [Repeat(Dot,1,false)];space;Literal "<-";space;Capture [Repeat(Dot,1,true)]] (HostText.trim line) with
+ match matched [Capture [Repeat(Dot,1,false)];space;Literal "<-";space;Capture [Repeat(Dot,1,true)]] (Text.trim line) with
  |None->Error (Printf.sprintf "Line %d: invalid move '%s' (expected DEST <- OPERAND)" lineNumber line)
  |Some groups->let* destination=Result.map_error (fun msg->Printf.sprintf "Line %d: %s" lineNumber msg) (LIRParser.parsePhysReg groups.(1)) in
  let* operand=Result.map_error (fun msg->Printf.sprintf "Line %d: %s" lineNumber msg) (LIRParser.parseOperand groups.(2)) in Ok (destination,operand)

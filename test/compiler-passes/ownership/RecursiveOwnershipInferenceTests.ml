@@ -12,7 +12,7 @@ module S = Identity.Set
 type testLeaf = Reuse of string * string
 let value id : H.value = {H.id = H.ValueId id; typ = AST.TList AST.TInt64}
 let unitValue : H.value = {H.id = H.ValueId 100; typ = AST.TUnit}
-let binding name = AST.bindingId (Int32.to_int (List.fold_left (fun hash ch -> Int32.add (Int32.mul hash 31l) (Int32.of_int ch)) 17l (Array.to_list (HostText.scalars name))))
+let binding name = AST.bindingId (Int32.to_int (List.fold_left (fun hash ch -> Int32.add (Int32.mul hash 31l) (Int32.of_int ch)) 17l (Array.to_list (Text.scalars name))))
 let semantics mappings : testLeaf V.semantics =
  let ownershipByValue = H.ValueMap.of_list (List.map (fun ((value : H.value), ownership) -> value.H.id, ownership) mappings) in
  {V.leaf = (fun (Reuse (input, output)) -> {O.inputs = [O.Consumed input]; outputs = [output]});
@@ -34,11 +34,11 @@ let svSignature (signature : string O.functionSignature) =
  let result = match signature.O.result with O.UnmanagedResult -> Union ("UnmanagedResult", []) | O.BorrowedResult value -> id "BorrowedResult" value | O.ProducedResult value -> id "ProducedResult" value | O.UniqueProducedResult value -> id "UniqueProducedResult" value in
  Record ["Parameters", Sequence (List.map parameter signature.O.parameters); "Result", result]
 let svBoundary values = StructuralValue.Sequence (List.map (fun (name, signature) -> StructuralValue.Tuple [StructuralValue.Text name; svSignature signature]) values)
-let showGroups groups = HostStructuralFormat.format (StructuralValue.Sequence (List.map svBoundary groups))
-let showOptional = function None -> "None" | Some boundary -> "Some " ^ HostStructuralFormat.format (svBoundary boundary)
+let showGroups groups = StructuralFormat.format (StructuralValue.Sequence (List.map svBoundary groups))
+let showOptional = function None -> "None" | Some boundary -> "Some " ^ StructuralFormat.format (svBoundary boundary)
 let showError = function
  | U.VariantLimitExceeded (count, maximum) -> Printf.sprintf "VariantLimitExceeded (%d, %d)" count maximum
- | U.RecursiveFunctionRequiresGroupInference id -> "RecursiveFunctionRequiresGroupInference " ^ HostStructuralFormat.format (AST.DiagnosticFormatting.func id)
+ | U.RecursiveFunctionRequiresGroupInference id -> "RecursiveFunctionRequiresGroupInference " ^ StructuralFormat.format (AST.DiagnosticFormatting.func id)
  | U.NoVerifiedBoundary error -> "NoVerifiedBoundary (" ^ V.errorToString (fun id -> StructuralValue.Text id) error ^ ")"
  | U.NoVerifiedFunctionGroup error -> "NoVerifiedFunctionGroup (" ^ V.errorToString (fun id -> StructuralValue.Text id) error ^ ")"
 let showResult show = function Ok result -> "Ok " ^ show result | Error error -> "Error (" ^ showError error ^ ")"

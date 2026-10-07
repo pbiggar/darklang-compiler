@@ -17,7 +17,7 @@ let integerLiteral typ value = match typ with
  | AST.TInt16 -> IntLiteral (Int16 (let bits=value land 65535 in if bits >= 32768 then bits-65536 else bits))
  | AST.TInt32 -> IntLiteral (Int32 (Int32.of_int value)) | AST.TInt64 -> IntLiteral (Int64 (Int64.of_int value))
  | AST.TUInt8 -> IntLiteral (UInt8 (value land 255)) | AST.TUInt16 -> IntLiteral (UInt16 (value land 65535)) | AST.TUInt32 -> IntLiteral (UInt32 (Int64.logand (Int64.of_int value) 0xffffffffL)) | AST.TUInt64 -> IntLiteral (UInt64 (Int64.of_int value))
- | _ -> Crash.crash ("Tail-recursion accumulator requested a non-native integer literal for " ^ HostStructuralFormat.semanticType typ)
+ | _ -> Crash.crash ("Tail-recursion accumulator requested a non-native integer literal for " ^ StructuralFormat.semanticType typ)
 let isIntegerBinary primitive = function Prim (op,left,right) when op=primitive -> Some (left,right) | _ -> None
 (*
    A recursive list result immediately prepended with one already-evaluated

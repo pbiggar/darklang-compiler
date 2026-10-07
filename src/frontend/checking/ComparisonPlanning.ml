@@ -77,14 +77,14 @@ let needsEqHelperForResolvedType lookup typ = match canonicalEqualityType lookup
  | TInt8 | TInt16 | TInt32 | TInt64 | TInt128 | TInt | TUInt8 | TUInt16 | TUInt32 | TUInt64 | TUInt128
  | TBool | TFloat64 | TString | TBlob | TChar | TDateTime | TUnit | TNever | TInternalRawPtr | TVar _ | TInferenceVar _ | TStream _ -> false
 let sanitizeHelperNamePrefix text =
- let units = HostText.scalars text in
+ let units = Text.scalars text in
  let length = min 48 (Array.length units) in
- if length = 0 then "type" else HostText.ofScalars (Array.init length (fun index -> let unit = units.(index) in if HostText.isLetter unit || HostText.isDigit unit then unit else 95))
+ if length = 0 then "type" else Text.ofScalars (Array.init length (fun index -> let unit = units.(index) in if Text.isLetter unit || Text.isDigit unit then unit else 95))
 (*
    Stable, deterministic hash used for generated helper function names.
 *)
 let stableHelperNameHash text = String.fold_left (fun acc byte -> Int64.mul (Int64.logxor acc (Int64.of_int (Char.code byte))) 1099511628211L) 0xcbf29ce484222325L text
-let helperName prefix typ = let name = sanitizeHelperNamePrefix (CheckingDiagnostics.typeToHelperIdentityString typ) in let hash = stableHelperNameHash (HostStructuralFormat.semanticType typ) in Printf.sprintf "%s%s_%016Lx" prefix name hash
+let helperName prefix typ = let name = sanitizeHelperNamePrefix (CheckingDiagnostics.typeToHelperIdentityString typ) in let hash = stableHelperNameHash (StructuralFormat.semanticType typ) in Printf.sprintf "%s%s_%016Lx" prefix name hash
 (*
    Name for a concrete structural equality helper.
    Helper identities encode both dictionary types and complete type structure,
@@ -199,10 +199,10 @@ let classifyComparison aliases registry _lookup sums op left right =
    | Some _ | None -> Error (CheckingDiagnostics.IncompatibleEqualityOperands (left, right)))
  | Lt | Gt | Lte | Gte -> (match reconcileComparisonTypes aliases left right with Some typ when comparisonNumericType typ -> Ok (OrderingComparison typ)
    | Some _ | None -> Error (CheckingDiagnostics.IncompatibleOrderingOperands (left, right)))
- | Add | Sub | Mul | Div | Mod | Pow | Shl | Shr | BitAnd | BitOr | BitXor | StringConcat | And | Or -> Crash.crash ("Non-comparison operator reached comparison classification: " ^ HostStructuralFormat.binOp op)
+ | Add | Sub | Mul | Div | Mod | Pow | Shl | Shr | BitAnd | BitOr | BitXor | StringConcat | And | Or -> Crash.crash ("Non-comparison operator reached comparison classification: " ^ StructuralFormat.binOp op)
 let orderingFunctionName = function
  | Lt -> "Darklang.Stdlib.Int.lessThan" | Gt -> "Darklang.Stdlib.Int.greaterThan" | Lte -> "Darklang.Stdlib.Int.lessThanOrEqualTo" | Gte -> "Darklang.Stdlib.Int.greaterThanOrEqualTo"
- | (Add | Sub | Mul | Div | Mod | Pow | Shl | Shr | BitAnd | BitOr | BitXor | StringConcat | Eq | Neq | And | Or) as op -> Crash.crash ("Non-ordering operator has no Int comparison helper: " ^ HostStructuralFormat.binOp op)
+ | (Add | Sub | Mul | Div | Mod | Pow | Shl | Shr | BitAnd | BitOr | BitXor | StringConcat | Eq | Neq | And | Or) as op -> Crash.crash ("Non-ordering operator has no Int comparison helper: " ^ StructuralFormat.binOp op)
 let buildOrderingExprForType op typ left right = match typ with
  | TInt128 | TUInt128 -> let name = if typ = TInt128 then "__int128_to_int" else "__uint128_to_int" in
    let convert value = Apply (Var name, [], NonEmptyList.singleton value) in Apply (Var (orderingFunctionName op), [], NonEmptyList.fromList [convert left; convert right])

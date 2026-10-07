@@ -88,7 +88,7 @@ let testRecordAccessRejectsInvalidRecordArity ()=
  let funcDef=FunctionDef {AST.name="main";typeParams=[];params=NonEmptyList.singleton ("box",TRecord ("ArityBoxTc",[TInt64;TBool]));returnType=TInt64;body=RecordAccess (Var "box",unresolvedRecordFieldReference "value");recursion=None} in
  match TypeChecking.checkProgram (Program [recordDef;funcDef]) with
  |Ok _->Error "Expected invalid record type argument arity to fail type checking"
- |Error (D.GenericError message) when HostText.contains message "Record type argument arity mismatch"->Ok ()
+ |Error (D.GenericError message) when Text.contains message "Record type argument arity mismatch"->Ok ()
  |Error error->Error ("Expected record arity mismatch, got: "^D.typeErrorToString error)
 (*
    Test that addition of integers has type TInt64
@@ -153,11 +153,11 @@ let testRecursiveGroupsReceiveStableTypedIdentities ()=
  let recursionByName=List.filter_map (function C.FunctionDef func->Option.map (fun typed->func.C.name,typed.C.resolved) func.C.recursion|_->None) topLevels |> StringOrder.Map.of_list in
  let actual=StringOrder.Map.find_opt "groupEven" recursionByName,StringOrder.Map.find_opt "groupOdd" recursionByName,StringOrder.Map.find_opt "completed" recursionByName in
  match actual with Some evenMember,Some oddMember,Some completedMember when evenMember.AST.group=oddMember.AST.group && evenMember.AST.group<>completedMember.AST.group && evenMember.AST.availability=MutualRecursiveMember && oddMember.AST.availability=MutualRecursiveMember && completedMember.AST.availability=CompletedGroupMember && [evenMember.AST.groupIndex;oddMember.AST.groupIndex]=[0;1]->Ok ()
- |left,middle,right->let optional=function None->StructuralValue.Union ("None",[])|Some value->StructuralValue.Union ("Some",[ResolutionTestFormatting.resolvedRecursiveMember value]) in Error ("Unexpected recursive group identities: "^HostStructuralFormat.format (StructuralValue.Tuple [optional left;optional middle;optional right]))
+ |left,middle,right->let optional=function None->StructuralValue.Union ("None",[])|Some value->StructuralValue.Union ("Some",[ResolutionTestFormatting.resolvedRecursiveMember value]) in Error ("Unexpected recursive group identities: "^StructuralFormat.format (StructuralValue.Tuple [optional left;optional middle;optional right]))
 let testWrittenRecordRejectsRepeatedField ()=
  let source="type DuplicateDeclarationField = { value: Int64; value: String }\n1L" in
  match WrittenParsing.parse Validation.Script source with Error error->Error ("Expected valid syntax, got: "^error)|Ok program->match WrittenChecking.checkSourceUnits false true [program] with
- |Error error when HostText.contains error "Duplicate field 'value' in record type DuplicateDeclarationField"->Ok ()
+ |Error error when Text.contains error "Duplicate field 'value' in record type DuplicateDeclarationField"->Ok ()
  |Error error->Error ("Expected duplicate record field error, got: "^error)
  |Ok _->Error "Expected duplicate record field to fail type checking"
 (*
@@ -187,7 +187,7 @@ let testFilteredResolutionCandidates ()=
  let removal=NameResolution.resolve NameResolution.Constructor "SharedCase" removed in
  match before,after,importResult,removal with
  |Error (NameResolution.AmbiguousReference _),Ok local,Ok imported,Error (NameResolution.UnresolvedName _) when local.NameResolution.identity=first.NameResolution.identity && local.NameResolution.provenance=first.NameResolution.provenance && imported.NameResolution.identity=first.NameResolution.identity && imported.NameResolution.provenance=NameResolution.PackageDeclaration "First"->Ok ()
- |_->let result=function Ok value->StructuralValue.Union ("Ok",[ResolutionTestFormatting.successfulResolution value])|Error error->StructuralValue.Union ("Error",[ResolutionTestFormatting.resolutionError error]) in Error ("Filtered/imported candidate resolution changed: "^HostStructuralFormat.format (StructuralValue.Tuple [result before;result after;result importResult;result removal]))
+ |_->let result=function Ok value->StructuralValue.Union ("Ok",[ResolutionTestFormatting.successfulResolution value])|Error error->StructuralValue.Union ("Error",[ResolutionTestFormatting.resolutionError error]) in Error ("Filtered/imported candidate resolution changed: "^StructuralFormat.format (StructuralValue.Tuple [result before;result after;result importResult;result removal]))
 let tests=["Filtered name-resolution candidates preserve survivors and imports",testFilteredResolutionCandidates;"Integer literal",testInt64Literal;"Int128 literal",testInt128Literal;"UInt128 literal",testUInt128Literal;"Sum equality uses single pair match",testSumEqualityUsesSinglePairMatch;"Record access rejects invalid record arity",testRecordAccessRejectsInvalidRecordArity;"Addition",testAddition;"Subtraction",testSubtraction;"Multiplication",testMultiplication;"Division",testDivision;"Negation",testNegation;"Nested operations",testNestedOperations;"Complex expression",testComplexExpression;"Duplicate nominal type declaration uses last overlay",testDuplicateNominalTypeDeclarationUsesLastOverlay;"Duplicate constructor declaration rejected",testDuplicateConstructorDeclarationRejected;"Duplicate and undeclared type parameters rejected",testDuplicateAndUndeclaredTypeParametersRejected;"Empty nominal declarations rejected",testEmptyNominalDeclarationsRejected;"Invalid declaration type references rejected",testInvalidDeclarationTypeReferencesRejected;"Constructor identity collision rejected",testConstructorIdentityCollisionRejected;"Recursive groups receive stable typed identities",testRecursiveGroupsReceiveStableTypedIdentities;"Written record rejects repeated field",testWrittenRecordRejectsRepeatedField;"Many top-level functions and lets are stack-safe",testManyTopLevelFunctionsAndLetsAreStackSafe]
 (*
    Run all type checking unit tests

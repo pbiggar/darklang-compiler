@@ -9,18 +9,18 @@ let spaces=Repeat (Space,1,true)
 let digits=Repeat (Digit,1,true)
 let any=Repeat (Dot,1,true)
 let matched tokens source=
- let units=HostText.scalars source in
+ let units=Text.scalars source in
  let length=Array.length units in
- let substring first ending=HostText.ofScalars (Array.sub units first (ending-first)) in
+ let substring first ending=Text.ofScalars (Array.sub units first (ending-first)) in
  let classMatches kind value=match kind with
- |Dot->value<>10|Digit->HostText.isDigit value
+ |Dot->value<>10|Digit->Text.isDigit value
  |Space->Uchar.is_valid value && Uucp.White.is_white_space (Uchar.of_int value)
- |Characters chars->Array.exists ((=) value) (HostText.scalars chars)
- |Except chars->not (Array.exists ((=) value) (HostText.scalars chars)) in
+ |Characters chars->Array.exists ((=) value) (Text.scalars chars)
+ |Except chars->not (Array.exists ((=) value) (Text.scalars chars)) in
  let rec run tokens at captures continuation=match tokens with
  |[]->continuation at captures
  |Literal text::rest->
-  let expected=HostText.scalars text in
+  let expected=Text.scalars text in
   let count=Array.length expected in
   if at+count<=length && Array.for_all (fun i->units.(at+i)=expected.(i)) (Array.init count Fun.id) then run rest (at+count) captures continuation else None
  |Repeat (kind,minimum,greedy)::rest->

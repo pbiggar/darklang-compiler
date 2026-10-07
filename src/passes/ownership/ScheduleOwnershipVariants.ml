@@ -60,7 +60,7 @@ module Make (Identity : O.Identity) = struct
    roots; recursive edges remain atomic inside their selected SCC clone.
 *)
  let scheduleWithTrace recordTiming limits hir semantics reservedFunctions definitions =
-  let measure name operation = let start = HostClock.milliseconds () in let result = operation () in let elapsed = HostClock.milliseconds () -. start in Option.iter (fun record -> record name elapsed) recordTiming; result in
+  let measure name operation = let start = (Int64.to_float (Mtime_clock.elapsed_ns ()) /. 1e6) in let result = operation () in let elapsed = (Int64.to_float (Mtime_clock.elapsed_ns ()) /. 1e6) -. start in Option.iter (fun record -> record name elapsed) recordTiming; result in
   let* () = validateLimits limits in
   let* programSemantics = measure "Ownership detail: Scheduling registry construction" (fun () -> withInternalOwnership semantics definitions) in
   let* program = Inference.prepareWithTrace recordTiming definitions |> Result.map_error (fun error -> InferenceFailed error) in

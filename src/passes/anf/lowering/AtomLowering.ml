@@ -13,7 +13,7 @@ module M = StringOrder.Map
 module Indices = Map.Make (Int)
 let ( let* ) = Result.bind
 let int value = A.IntLiteral (A.Int64 value)
-let displayId describe id = HostStructuralFormat.format (describe id)
+let displayId describe id = StructuralFormat.format (describe id)
 let add left right = Int32.to_int (Int32.add (Int32.of_int left) (Int32.of_int right))
 (* Retain the source's local tree builders, superseded at its final call by
    buildSkewListLiteral. They do not participate in the current list path. *)
@@ -226,7 +226,7 @@ let lowerAtom (toANFCore : LoweringCallbacks.expressionLowerer) (toAtomCore : Lo
  | C.UInt32Literal n -> Ok (A.IntLiteral (A.UInt32 n), [], gen)
  | C.UInt64Literal n -> Ok (A.IntLiteral (A.UInt64 n), [], gen)
  | C.BoolLiteral value -> Ok (A.BoolLiteral value, [], gen)
- | C.StringLiteral value | C.CharLiteral value -> Ok (A.StringLiteral (HostText.normalize value), [], gen)
+ | C.StringLiteral value | C.CharLiteral value -> Ok (A.StringLiteral (Text.normalize value), [], gen)
  | C.BlobLiteral value -> Ok (A.StringLiteral value, [], gen)
  | C.FloatLiteral value -> Ok (A.FloatLiteral value, [], gen)
  | C.Local id -> (match R.BindingMap.find_opt id env with Some (id, _) -> Ok (A.Var id, [], gen) | None -> Error "Undefined local binding identity")
@@ -254,7 +254,7 @@ let lowerAtom (toANFCore : LoweringCallbacks.expressionLowerer) (toAtomCore : Lo
    | AST.TUInt16 -> atom (C.BinOp (AST.Sub, C.UInt16Literal 0, inner)) gen
    | AST.TUInt8 -> atom (C.BinOp (AST.Sub, C.UInt8Literal 0, inner)) gen
    | AST.TUInt128 -> atom (C.BinOp (AST.Sub, C.UInt128Literal Z.zero, inner)) gen
-   | _ -> Error ("Negation requires numeric operand, got " ^ HostStructuralFormat.semanticType typ))
+   | _ -> Error ("Negation requires numeric operand, got " ^ StructuralFormat.semanticType typ))
  | C.UnaryOp (AST.Not, inner) -> let* value, bindings, gen = atom inner gen in bind (fun id -> A.Var id) bindings gen (A.UnaryPrim (A.Not, value))
  | C.UnaryOp (AST.BitNot, inner) -> let* typ = infer inner in let* value, bindings, gen = atom inner gen in let id, gen = A.freshVar gen in
    let expression = match typ with AST.TInt -> A.Call (functionId "Darklang.Stdlib.Int.bitwiseNot", [value]) | AST.TInt128 -> A.Call (functionId "Darklang.Stdlib.Int128.bitwiseNot", [value]) | AST.TUInt128 -> A.Call (functionId "Darklang.Stdlib.UInt128.bitwiseNot", [value]) | _ -> A.UnaryPrim (A.BitNot, value) in Ok (A.Var id, bindings @ [id, expression], gen)
@@ -276,7 +276,7 @@ let lowerAtom (toANFCore : LoweringCallbacks.expressionLowerer) (toAtomCore : Lo
        Ok (result, leftBindings @ rightBindings @ bindings, gen)
      | Ok AST.TInt -> equalityResult leftBindings rightBindings gen (A.Call (functionId "Darklang.Stdlib.Int.__equals", [leftAtom;rightAtom]))
      | Ok typ when Option.is_some (P.canonicalBufferKindForType typ) ->
-       let kind = match P.canonicalBufferKindForType typ with Some kind -> kind | None -> Crash.crash ("Expected canonical buffer type, got " ^ HostStructuralFormat.semanticType typ) in
+       let kind = match P.canonicalBufferKindForType typ with Some kind -> kind | None -> Crash.crash ("Expected canonical buffer type, got " ^ StructuralFormat.semanticType typ) in
        equalityResult leftBindings rightBindings gen (A.CanonicalBufferEq (kind, leftAtom, rightAtom))
      | Ok (AST.TInt128 | AST.TUInt128 as typ) -> equalityResult leftBindings rightBindings gen (A.Call (functionId (if typ = AST.TInt128 then "Darklang.Stdlib.Int128.__equals" else "Darklang.Stdlib.UInt128.__equals"), [leftAtom;rightAtom]))
      | _ -> bind (fun id -> A.Var id) (leftBindings @ rightBindings) gen (A.Prim (O.convertBinOp op, leftAtom, rightAtom)))
@@ -343,7 +343,7 @@ let lowerAtom (toANFCore : LoweringCallbacks.expressionLowerer) (toAtomCore : Lo
        let args = C.semanticTypeArgs reference.C.typeArgs in let nullable = Option.is_some (P.nullablePointerSumPayloadType name args sums.P.cases) in
        let spare = P.spareImmediateSumSentinel name args sums.P.cases in
        let payloadVariants = M.exists (fun _ (owner, _, _, fields) -> owner = name && fields <> []) variants in
-       let descriptor () = let* typ = infer expr in match typ with AST.TSum (inferred, args) when inferred = name -> T.boxedSumDescriptor name params args variantFields | typ -> Error ("Constructor '" ^ name ^ "' inferred unexpected type '" ^ HostStructuralFormat.semanticType typ ^ "'") in
+       let descriptor () = let* typ = infer expr in match typ with AST.TSum (inferred, args) when inferred = name -> T.boxedSumDescriptor name params args variantFields | typ -> Error ("Constructor '" ^ name ^ "' inferred unexpected type '" ^ StructuralFormat.semanticType typ ^ "'") in
        (match fields with
        | [value] when Option.is_some (P.transparentSumPayloadType name args sums.P.cases) || nullable || Option.is_some spare -> let* value, bindings, gen = atom value gen in bind (fun id -> A.Var id) bindings gen (A.TypedAtom (value, AST.TSum (name, args)))
        | [] when nullable || Option.is_some spare -> bind (fun id -> A.Var id) [] gen (A.TypedAtom (int (Option.value spare ~default:0L), AST.TSum (name, args)))

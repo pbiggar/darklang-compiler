@@ -185,14 +185,14 @@ class compilationSession ?(collectCodegenMetrics=false) () =
   | None->match find structuralEntries key with
    | Some result->hit result
    | None->
-    let timer=if collectCodegenMetrics then Some (HostClock.ticks ()) else None in
+    let timer=if collectCodegenMetrics then Some (Mtime_clock.elapsed_ns ()) else None in
     let result=generate () in
     (match timer with
     | Some timer->
-     let elapsed=Int64.sub (HostClock.ticks ()) timer in
+     let elapsed=Int64.sub (Mtime_clock.elapsed_ns ()) timer in
      let lirInstructionCount=LIR.LabelMap.fold (fun _ (block:LIR.basicBlock) count->addCount count (List.length block.LIR.instrs+1)) func.LIR.cfg.LIR.blocks 0 in
      let symbolicInstructionCount=match result with Ok instructions->List.length instructions|Error _->0 in
-     let metric={CompilerOptions.functionName=func.LIR.name;elapsed=HostTimeSpan.fromSeconds (Int64.to_float elapsed/.1000000000.);lirInstructionCount;symbolicInstructionCount} in
+     let metric={CompilerOptions.functionName=func.LIR.name;elapsed;lirInstructionCount;symbolicInstructionCount} in
      arm64CodegenMetrics:=metric:: !arm64CodegenMetrics
     | None->());
     store structuralEntries key result;
@@ -250,7 +250,7 @@ class compilationSession ?(collectCodegenMetrics=false) () =
  method arm64ReleasePlanSummaryMissCount= !arm64ReleasePlanSummaryMissCount
  method arm64CodegenMetrics=List.rev !arm64CodegenMetrics
  method arm64LirOpMetrics=List.map (fun ((functionName,opcode,detail),value)->let occurrences,symbolicInstructionCount,ticks= !value in
-  {CompilerOptions.functionName;opcode;detail;occurrences;symbolicInstructionCount;elapsed=HostTimeSpan.fromSeconds (Int64.to_float ticks/.1000000000.)}) (List.rev arm64LirOpMetrics.entries)
+  {CompilerOptions.functionName;opcode;detail;occurrences;symbolicInstructionCount;elapsed=ticks}) (List.rev arm64LirOpMetrics.entries)
  method dispose=
   jsonPlanning#dispose;
   clear anfDependenciesByContext;

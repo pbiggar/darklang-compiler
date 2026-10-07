@@ -21,7 +21,7 @@ missing expectation
 ---INPUT-LIR---
 Ret
 |fixture} with
- |Error msg when HostText.contains msg "expectation"->Ok ()|Error msg->Error ("Expected missing-expectation validation, got: "^msg)|Ok _->Error "Expected executable LIR case without an expectation to be rejected"
+ |Error msg when Text.contains msg "expectation"->Ok ()|Error msg->Error ("Expected missing-expectation validation, got: "^msg)|Ok _->Error "Expected executable LIR case without an expectation to be rejected"
 let testParsesAndRunsCodegenErrorCase ()=match parseLIRExecutionFileContent "error.lirexec" {fixture|---NAME---
 unsupported register
 ---INPUT-LIR---
@@ -41,5 +41,5 @@ Ret
 ---EXPECT-CODEGEN-ERROR---
 X24
 |fixture} with
- |Error msg when HostText.contains msg "cannot be combined"->Ok ()|Error msg->Error ("Expected mixed-outcome validation, got: "^msg)|Ok _->Error "Expected codegen and process outcomes to be mutually exclusive"
+ |Error msg when Text.contains msg "cannot be combined"->Ok ()|Error msg->Error ("Expected mixed-outcome validation, got: "^msg)|Ok _->Error "Expected codegen and process outcomes to be mutually exclusive"
 let tests=["LIR-execution DSL parses and runs an exit case",testParsesAndRunsExitCase;"LIR-execution DSL requires an expectation",testRequiresAnExpectation;"LIR-execution DSL parses and runs a codegen-error case",testParsesAndRunsCodegenErrorCase;"LIR-execution DSL rejects mixed outcome kinds",testRejectsMixedOutcomeKinds]

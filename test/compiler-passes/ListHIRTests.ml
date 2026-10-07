@@ -13,7 +13,7 @@ module M=StringOrder.Map
 module V=StructuralValue
 let (let*)=Result.bind
 let call name args=C.Call (TestIds.functionIdForName name,NonEmptyList.fromList args)
-let binding name=HostText.scalars name |> Array.fold_left (fun hash ch->Int32.add (Int32.mul hash 31l) (Int32.of_int ch)) 17l |> Int32.to_int |> AST.bindingId
+let binding name=Text.scalars name |> Array.fold_left (fun hash ch->Int32.add (Int32.mul hash 31l) (Int32.of_int ch)) 17l |> Int32.to_int |> AST.bindingId
 let local name=C.Local (binding name)
 let bind name value body=C.Let (C.LPVariable (binding name),value,body)
 let values count=C.ListLiteral (List.init (max 0 count) (fun index->C.Int64Literal (Int64.of_int (index+1))))
@@ -45,7 +45,7 @@ let equalSummary (a:L.allocationSummary) (b:L.allocationSummary)=a.L.allocations
 let rec equalBudget a b=match a,b with L.Complete a,L.Complete b->equalSummary a b|L.Conditional (s,a,b,c),L.Conditional (t,x,y,z)|L.RuntimeConditional (s,a,b,c),L.RuntimeConditional (t,x,y,z)->equalSummary s t && equalBudget a x && equalBudget b y && equalBudget c z|_->false
 let checkBudget expression expected ()=match extract expression with None->Error "Expected a closed List<Int64> region"|Some region->
  let* ()=ListLiveness.verifyFunctional region in let owned=region |> SelectListStorage.selectStorage |> ElaborateListOwnership.elaborateOwnership in
- let* ()=VerifyListOwnership.verify owned in let actual=ListAllocationBudget.allocationBudget owned in if equalBudget actual expected then Ok () else Error ("Storage budget: expected "^HostStructuralFormat.format (budget expected)^", got "^HostStructuralFormat.format (budget actual))
+ let* ()=VerifyListOwnership.verify owned in let actual=ListAllocationBudget.allocationBudget owned in if equalBudget actual expected then Ok () else Error ("Storage budget: expected "^StructuralFormat.format (budget expected)^", got "^StructuralFormat.format (budget actual))
 let checkSummary expression expected=checkBudget expression (L.Complete expected)
 let unique=bind "xs" (values 3) (bind "ys" (map (local "xs")) (fold (reverse (local "ys"))))
 let shared=bind "xs" (values 3) (bind "ys" (map (local "xs")) (bind "old" (fold (local "xs")) (fold (local "ys"))))
@@ -77,8 +77,8 @@ let runtimeSharedBlock ():L.ownedBlock=
  let element value:H.operand={H.expression=C.Int64Literal value;typ=AST.TInt64;inputs=B.empty} in
  let operations:L.ownedOperation list=[O.Evaluate (H.Leaf (L.Construct (rootValue,L.Literal [element 1L;element 2L;element 3L])));O.Dup root;O.Evaluate (H.Leaf (L.Transform (output,rootValue,(L.Reverse,L.ConsumeOrCopy))));O.Drop root;O.Drop output.H.id] in {O.body={H.parameters=[];operations;result}}
 let testRuntimeSharedOwnership ()=runtimeSharedBlock () |> VerifyListOwnership.verifyBlockOwnership
-let formatValue (v:H.value)=V.Record ["Id",valueId v.H.id;"Type",HostStructuralFormat.semanticValue v.H.typ]
-let formatOperand (v:H.operand)=V.Record ["Expression",CheckedStructuralFormat.value v.H.expression;"Type",HostStructuralFormat.semanticValue v.H.typ;"Inputs",V.Union ("map",[V.Sequence (B.bindings v.H.inputs |> List.map (fun (id,v)->V.Tuple [AST.DiagnosticFormatting.binding id;formatValue v]))])]
+let formatValue (v:H.value)=V.Record ["Id",valueId v.H.id;"Type",StructuralFormat.semanticValue v.H.typ]
+let formatOperand (v:H.operand)=V.Record ["Expression",CheckedStructuralFormat.value v.H.expression;"Type",StructuralFormat.semanticValue v.H.typ;"Inputs",V.Union ("map",[V.Sequence (B.bindings v.H.inputs |> List.map (fun (id,v)->V.Tuple [AST.DiagnosticFormatting.binding id;formatValue v]))])]
 let formatContract (c:H.primitiveContract)=
  let alias=function H.NoManagedAlias->V.Union ("NoManagedAlias",[])|H.UnknownManagedAlias->V.Union ("UnknownManagedAlias",[])|H.FreshManaged->V.Union ("FreshManaged",[])|H.MayReuseInput v->V.Union ("MayReuseInput",[formatValue v])|H.MayAliasInputs (v,vs)->V.Union ("MayAliasInputs",[formatValue v;V.Sequence (List.map formatValue vs)]) in
  let formatEffect value=V.Union ((match value with H.MayEvaluateOpaqueSource->"MayEvaluateOpaqueSource"|H.MayAllocate->"MayAllocate"|H.MayFail->"MayFail"|H.MayInvokeUserCode->"MayInvokeUserCode"|H.ReadsOwnedStorage->"ReadsOwnedStorage"|H.WritesOwnedStorage->"WritesOwnedStorage"),[]) in
@@ -89,15 +89,15 @@ let testPrimitiveContracts ()=
  let construct=L.primitiveContract (L.Construct (output,L.Literal [scalar])) in let transform=L.primitiveContract (L.Transform (output,input,(L.Map callback,L.StaticReuse))) in let fold=L.primitiveContract (L.Fold (scalarValue,input,scalar,callback)) in
  let alias (c:H.primitiveContract)=List.map (fun (o:H.outputContract)->o.H.alias) c.H.outputs in
  let effects c xs=H.EffectSet.equal c.H.effects (H.EffectSet.of_list xs) in
- if alias construct<>[H.FreshManaged] || not (effects construct [H.MayEvaluateOpaqueSource;H.MayAllocate]) then Error ("Unexpected construction contract: "^HostStructuralFormat.format (formatContract construct))
- else if alias transform<>[H.MayReuseInput input] || not (effects transform [H.MayEvaluateOpaqueSource;H.MayAllocate;H.MayInvokeUserCode;H.ReadsOwnedStorage;H.WritesOwnedStorage]) then Error ("Unexpected transformation contract: "^HostStructuralFormat.format (formatContract transform))
- else if alias fold<>[H.NoManagedAlias] || not (effects fold [H.MayEvaluateOpaqueSource;H.MayInvokeUserCode;H.ReadsOwnedStorage]) then Error ("Unexpected fold contract: "^HostStructuralFormat.format (formatContract fold)) else Ok ()
+ if alias construct<>[H.FreshManaged] || not (effects construct [H.MayEvaluateOpaqueSource;H.MayAllocate]) then Error ("Unexpected construction contract: "^StructuralFormat.format (formatContract construct))
+ else if alias transform<>[H.MayReuseInput input] || not (effects transform [H.MayEvaluateOpaqueSource;H.MayAllocate;H.MayInvokeUserCode;H.ReadsOwnedStorage;H.WritesOwnedStorage]) then Error ("Unexpected transformation contract: "^StructuralFormat.format (formatContract transform))
+ else if alias fold<>[H.NoManagedAlias] || not (effects fold [H.MayEvaluateOpaqueSource;H.MayInvokeUserCode;H.ReadsOwnedStorage]) then Error ("Unexpected fold contract: "^StructuralFormat.format (formatContract fold)) else Ok ()
 let testScopeTransitive ()=
  let fid=TestIds.functionIdForName in let contract local calls:D.functionScopeContract={D.localDestruction=local;calls=List.map fid calls |> S.of_list} in
  let contracts=["resource",contract D.UnprovenScope [];"indirect",contract D.InertScope ["resource"];"caller",contract D.InertScope ["indirect"];"unknown",contract D.InertScope ["external"];"left",contract D.InertScope ["right"];"right",contract D.InertScope ["left";"Builtin.printLine"]] |> List.map (fun (name,value)->fid name,value) |> FunctionIdMap.ofList in
  let ids=["resource";"indirect";"caller";"unknown";"external";"left";"right";"Builtin.print";"Builtin.printLine"] |> List.map (fun name->name,fid name) |> M.of_list in
  let actual=D.inertFunctionScopes ids contracts in let expected=List.map fid ["left";"right";"Builtin.print";"Builtin.printLine"] |> S.of_list in
- if S.equal actual expected then Ok () else Error ("Unexpected inert scopes: "^HostStructuralFormat.format (V.Union ("set",[V.Sequence (List.map AST.DiagnosticFormatting.func (S.elements actual))])))
+ if S.equal actual expected then Ok () else Error ("Unexpected inert scopes: "^StructuralFormat.format (V.Union ("set",[V.Sequence (List.map AST.DiagnosticFormatting.func (S.elements actual))])))
 let testScopeRevoke ()=
  let fid=TestIds.functionIdForName in let safe:D.functionScopeContract={D.localDestruction=D.InertScope;calls=S.empty} in
  let contracts=FunctionIdMap.ofList [fid "callee",safe;fid "caller",{safe with D.calls=S.singleton (fid "callee")}] in let replaced=FunctionIdMap.add (fid "callee") {safe with D.localDestruction=D.UnprovenScope} contracts in

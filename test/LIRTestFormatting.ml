@@ -11,7 +11,7 @@ let option encode=function None->Union ("None",[])|Some value->Union ("Some",[en
 let boolean value=Scalar (string_of_bool value)
 let int32 value=Scalar (string_of_int value)
 let int64 value=Scalar (Int64.to_string value^"L")
-let float64 value=Scalar (HostFloat.structural value)
+let float64 value=Scalar (FloatFormat.structural value)
 let functionId=AST.DiagnosticFormatting.func
 let rec physReg (value : LIR.physReg) = match value with
  | LIR.X0 -> union "PhysReg" "X0" []
@@ -67,7 +67,7 @@ and reg (value : LIR.reg) = match value with
 and fReg (value : LIR.fReg) = match value with
  | LIR.FPhysical (field0) -> union "FReg" "FPhysical" [physFPReg field0]
  | LIR.FVirtual (field0) -> union "FReg" "FVirtual" [int32 field0]
-and typedLIRParam (value : LIR.typedLIRParam) = record "TypedLIRParam" ["Reg", reg value.LIR.reg; "Type", HostStructuralFormat.semanticValue value.LIR.typ]
+and typedLIRParam (value : LIR.typedLIRParam) = record "TypedLIRParam" ["Reg", reg value.LIR.reg; "Type", StructuralFormat.semanticValue value.LIR.typ]
 and operand (value : LIR.operand) = match value with
  | LIR.Imm (field0) -> union "Operand" "Imm" [int64 field0]
  | LIR.FloatImm (field0) -> union "Operand" "FloatImm" [float64 field0]
@@ -142,7 +142,7 @@ and label (value : LIR.label) = match value with
  | LIR.Label (field0) -> union "Label" "Label" [text field0]
 and instr (value : LIR.instr) = match value with
  | LIR.Mov (field0, field1) -> union "Instr" "Mov" [reg field0; operand field1]
- | LIR.Phi (field0, field1, field2) -> union "Instr" "Phi" [reg field0; list (fun item -> (let part0, part1 = item in tuple [operand part0; label part1])) field1; option (fun item -> HostStructuralFormat.semanticValue item) field2]
+ | LIR.Phi (field0, field1, field2) -> union "Instr" "Phi" [reg field0; list (fun item -> (let part0, part1 = item in tuple [operand part0; label part1])) field1; option (fun item -> StructuralFormat.semanticValue item) field2]
  | LIR.Store (field0, field1) -> union "Instr" "Store" [int32 field0; reg field1]
  | LIR.Add (field0, field1, field2) -> union "Instr" "Add" [reg field0; reg field1; operand field2]
  | LIR.Sub (field0, field1, field2) -> union "Instr" "Sub" [reg field0; reg field1; operand field2]
@@ -200,9 +200,9 @@ and instr (value : LIR.instr) = match value with
  | LIR.PrintHeapStringNoNewline (field0) -> union "Instr" "PrintHeapStringNoNewline" [reg field0]
  | LIR.PrintChars (field0) -> union "Instr" "PrintChars" [list (fun value -> Scalar (string_of_int value^"uy")) field0]
  | LIR.PrintBlob (field0) -> union "Instr" "PrintBlob" [reg field0]
- | LIR.PrintList (field0, field1) -> union "Instr" "PrintList" [reg field0; HostStructuralFormat.semanticValue field1]
- | LIR.PrintSum (field0, field1, field2) -> union "Instr" "PrintSum" [reg field0; list (fun item -> (let part0, part1, part2 = item in tuple [text part0; int32 part1; option (fun item -> HostStructuralFormat.semanticValue item) part2])) field1; boolean field2]
- | LIR.PrintRecord (field0, field1, field2) -> union "Instr" "PrintRecord" [reg field0; text field1; list (fun item -> (let part0, part1 = item in tuple [text part0; HostStructuralFormat.semanticValue part1])) field2]
+ | LIR.PrintList (field0, field1) -> union "Instr" "PrintList" [reg field0; StructuralFormat.semanticValue field1]
+ | LIR.PrintSum (field0, field1, field2) -> union "Instr" "PrintSum" [reg field0; list (fun item -> (let part0, part1, part2 = item in tuple [text part0; int32 part1; option (fun item -> StructuralFormat.semanticValue item) part2])) field1; boolean field2]
+ | LIR.PrintRecord (field0, field1, field2) -> union "Instr" "PrintRecord" [reg field0; text field1; list (fun item -> (let part0, part1 = item in tuple [text part0; StructuralFormat.semanticValue part1])) field2]
  | LIR.Exit -> union "Instr" "Exit" []
  | LIR.FPhi (field0, field1) -> union "Instr" "FPhi" [fReg field0; list (fun item -> (let part0, part1 = item in tuple [fReg part0; label part1])) field1]
  | LIR.FMov (field0, field1) -> union "Instr" "FMov" [fReg field0; fReg field1]
@@ -224,7 +224,7 @@ and instr (value : LIR.instr) = match value with
  | LIR.GpToFp (field0, field1) -> union "Instr" "GpToFp" [fReg field0; reg field1]
  | LIR.FpToGp (field0, field1) -> union "Instr" "FpToGp" [reg field0; fReg field1]
  | LIR.HeapAlloc (field0, field1) -> union "Instr" "HeapAlloc" [reg field0; int32 field1]
- | LIR.HeapStore (field0, field1, field2, field3) -> union "Instr" "HeapStore" [reg field0; int32 field1; operand field2; option (fun item -> HostStructuralFormat.semanticValue item) field3]
+ | LIR.HeapStore (field0, field1, field2, field3) -> union "Instr" "HeapStore" [reg field0; int32 field1; operand field2; option (fun item -> StructuralFormat.semanticValue item) field3]
  | LIR.HeapLoad (field0, field1, field2) -> union "Instr" "HeapLoad" [reg field0; reg field1; int32 field2]
  | LIR.RefCountInc (field0, field1, field2, field3) -> union "Instr" "RefCountInc" [reg field0; int32 field1; rcKind field2; option (fun item -> ANFTestFormatting.memoryModel_rcMetadata item) field3]
  | LIR.RefCountDec (field0, field1, field2, field3) -> union "Instr" "RefCountDec" [reg field0; int32 field1; rcKind field2; option (fun item -> ANFTestFormatting.memoryModel_rcMetadata item) field3]
@@ -248,7 +248,7 @@ and instr (value : LIR.instr) = match value with
  | LIR.RawGetByte (field0, field1, field2) -> union "Instr" "RawGetByte" [reg field0; reg field1; reg field2]
  | LIR.RawWriteWord (field0, field1, field2) -> union "Instr" "RawWriteWord" [reg field0; reg field1; reg field2]
  | LIR.RawWriteByte (field0, field1, field2) -> union "Instr" "RawWriteByte" [reg field0; reg field1; reg field2]
- | LIR.RawSlotInit (field0, field1, field2, field3) -> union "Instr" "RawSlotInit" [reg field0; reg field1; reg field2; HostStructuralFormat.semanticValue field3]
+ | LIR.RawSlotInit (field0, field1, field2, field3) -> union "Instr" "RawSlotInit" [reg field0; reg field1; reg field2; StructuralFormat.semanticValue field3]
  | LIR.RefCountIncString (field0) -> union "Instr" "RefCountIncString" [operand field0]
  | LIR.RefCountDecString (field0) -> union "Instr" "RefCountDecString" [operand field0]
  | LIR.RefCountIncBlob (field0) -> union "Instr" "RefCountIncBlob" [operand field0]
@@ -283,10 +283,10 @@ and arm64SlotInitRootRetainTarget (value : LIR.arm64SlotInitRootRetainTarget) = 
  | LIR.SlotInitDynamicBufferRetain -> union "Arm64SlotInitRootRetainTarget" "SlotInitDynamicBufferRetain" []
  | LIR.SlotInitClosureRootRetain -> union "Arm64SlotInitRootRetainTarget" "SlotInitClosureRootRetain" []
  | LIR.SlotInitGenericRootRetain (field0) -> union "Arm64SlotInitRootRetainTarget" "SlotInitGenericRootRetain" [int32 field0]
-and functionCodegenFacts (value : LIR.functionCodegenFacts) = record "FunctionCodegenFacts" ["Arm64UsedCalleeSavedF", list (fun item -> physFPReg item) value.LIR.arm64UsedCalleeSavedF; "ClosurePayloadSizeFromParams", option (fun item -> int32 item) value.LIR.closurePayloadSizeFromParams; "ClosureCaptureTypes", option (fun item -> list (fun item -> HostStructuralFormat.semanticValue item) item) value.LIR.closureCaptureTypes; "ClosurePayloadSizesFromAllocs", list (fun item -> (let part0, part1 = item in tuple [functionId part0; int32 part1])) value.LIR.closurePayloadSizesFromAllocs; "RecursiveReleaseTypes", Union ("set", [list HostStructuralFormat.semanticValue (MemoryPlanning.SemanticTypeSet.elements value.LIR.recursiveReleaseTypes)]); "RefCountDecRequirements", Union ("map", [list (fun (key, item) -> tuple [((fun (kind, key) -> tuple [rcKind kind; rcReleasePlanMemoKey key])) key; option (fun item -> ANFTestFormatting.memoryModel_rcMetadata item) item]) (LIR.RefCountDecRequirementMap.bindings value.LIR.refCountDecRequirements)]); "RefCountIncRequirements", Union ("set", [list rcKind (LIR.RcKindSet.elements value.LIR.refCountIncRequirements)]); "RawSlotInitTypes", Union ("set", [list HostStructuralFormat.semanticValue (MemoryPlanning.SemanticTypeSet.elements value.LIR.rawSlotInitTypes)]); "Arm64RawSlotInitRetainTargets", option (fun item -> Union ("map", [list (fun (key, item) -> tuple [(HostStructuralFormat.semanticValue) key; option (fun item -> arm64SlotInitRootRetainTarget item) item]) (LIR.SemanticTypeMap.bindings item)])) value.LIR.arm64RawSlotInitRetainTargets; "NeedsCliRuntimeState", boolean value.LIR.needsCliRuntimeState; "NeedsCliArgvHelper", boolean value.LIR.needsCliArgvHelper; "NeedsCliExecuteHelper", boolean value.LIR.needsCliExecuteHelper; "NeedsCliRunProcessHelper", boolean value.LIR.needsCliRunProcessHelper; "NeedsCliProcessLifecycleHelpers", boolean value.LIR.needsCliProcessLifecycleHelpers; "NeedsRuntimeErrorHelper", boolean value.LIR.needsRuntimeErrorHelper; "Arm64RcHelperRequirements", option (fun item -> arm64RcHelperRequirements item) value.LIR.arm64RcHelperRequirements; "Arm64GenericHelperIds", Union ("map", [list (fun (key, item) -> tuple [(text) key; functionId item]) (StringOrder.Map.bindings value.LIR.arm64GenericHelperIds)])]
+and functionCodegenFacts (value : LIR.functionCodegenFacts) = record "FunctionCodegenFacts" ["Arm64UsedCalleeSavedF", list (fun item -> physFPReg item) value.LIR.arm64UsedCalleeSavedF; "ClosurePayloadSizeFromParams", option (fun item -> int32 item) value.LIR.closurePayloadSizeFromParams; "ClosureCaptureTypes", option (fun item -> list (fun item -> StructuralFormat.semanticValue item) item) value.LIR.closureCaptureTypes; "ClosurePayloadSizesFromAllocs", list (fun item -> (let part0, part1 = item in tuple [functionId part0; int32 part1])) value.LIR.closurePayloadSizesFromAllocs; "RecursiveReleaseTypes", Union ("set", [list StructuralFormat.semanticValue (MemoryPlanning.SemanticTypeSet.elements value.LIR.recursiveReleaseTypes)]); "RefCountDecRequirements", Union ("map", [list (fun (key, item) -> tuple [((fun (kind, key) -> tuple [rcKind kind; rcReleasePlanMemoKey key])) key; option (fun item -> ANFTestFormatting.memoryModel_rcMetadata item) item]) (LIR.RefCountDecRequirementMap.bindings value.LIR.refCountDecRequirements)]); "RefCountIncRequirements", Union ("set", [list rcKind (LIR.RcKindSet.elements value.LIR.refCountIncRequirements)]); "RawSlotInitTypes", Union ("set", [list StructuralFormat.semanticValue (MemoryPlanning.SemanticTypeSet.elements value.LIR.rawSlotInitTypes)]); "Arm64RawSlotInitRetainTargets", option (fun item -> Union ("map", [list (fun (key, item) -> tuple [(StructuralFormat.semanticValue) key; option (fun item -> arm64SlotInitRootRetainTarget item) item]) (LIR.SemanticTypeMap.bindings item)])) value.LIR.arm64RawSlotInitRetainTargets; "NeedsCliRuntimeState", boolean value.LIR.needsCliRuntimeState; "NeedsCliArgvHelper", boolean value.LIR.needsCliArgvHelper; "NeedsCliExecuteHelper", boolean value.LIR.needsCliExecuteHelper; "NeedsCliRunProcessHelper", boolean value.LIR.needsCliRunProcessHelper; "NeedsCliProcessLifecycleHelpers", boolean value.LIR.needsCliProcessLifecycleHelpers; "NeedsRuntimeErrorHelper", boolean value.LIR.needsRuntimeErrorHelper; "Arm64RcHelperRequirements", option (fun item -> arm64RcHelperRequirements item) value.LIR.arm64RcHelperRequirements; "Arm64GenericHelperIds", Union ("map", [list (fun (key, item) -> tuple [(text) key; functionId item]) (StringOrder.Map.bindings value.LIR.arm64GenericHelperIds)])]
 and functionDef (value : LIR.functionDef) = record "Function" ["Id", functionId value.LIR.id; "Name", text value.LIR.name; "TypedParams", list (fun item -> typedLIRParam item) value.LIR.typedParams; "CFG", cfg value.LIR.cfg; "StackSize", int32 value.LIR.stackSize; "UsedCalleeSaved", list (fun item -> physReg item) value.LIR.usedCalleeSaved; "CodegenFacts", option (fun item -> functionCodegenFacts item) value.LIR.codegenFacts]
-and recordRegistry (value : LIR.recordRegistry) = Union ("map", [list (fun (key, item) -> tuple [(text) key; list (fun item -> (let part0, part1 = item in tuple [text part0; HostStructuralFormat.semanticValue part1])) item]) (StringOrder.Map.bindings value)])
-and variantInfo (value : LIR.variantInfo) = record "VariantInfo" ["Name", text value.LIR.name; "Tag", int32 value.LIR.tag; "Payload", option (fun item -> HostStructuralFormat.semanticValue item) value.LIR.payload; "FieldCount", int32 value.LIR.fieldCount]
+and recordRegistry (value : LIR.recordRegistry) = Union ("map", [list (fun (key, item) -> tuple [(text) key; list (fun item -> (let part0, part1 = item in tuple [text part0; StructuralFormat.semanticValue part1])) item]) (StringOrder.Map.bindings value)])
+and variantInfo (value : LIR.variantInfo) = record "VariantInfo" ["Name", text value.LIR.name; "Tag", int32 value.LIR.tag; "Payload", option (fun item -> StructuralFormat.semanticValue item) value.LIR.payload; "FieldCount", int32 value.LIR.fieldCount]
 and typeVariants (value : LIR.typeVariants) = record "TypeVariants" ["TypeParams", list (fun item -> text item) value.LIR.typeParams; "Variants", list (fun item -> variantInfo item) value.LIR.variants]
 and variantRegistry (value : LIR.variantRegistry) = Union ("map", [list (fun (key, item) -> tuple [(text) key; typeVariants item]) (StringOrder.Map.bindings value)])
 and program (value : LIR.program) = match value with

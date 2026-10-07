@@ -22,17 +22,17 @@ let parseReg=ARM64Parser.parseReg
 *)
 let parseCond=ARM64Parser.parseCond
 let invalid lineNum fieldName text=Error (Printf.sprintf "Line %d: Invalid %s '%s'" lineNum fieldName text)
-let parseUInt16Operand lineNum fieldName text=match integer 16 false (HostText.trim text) with Some value->Ok (Z.to_int value)|None->invalid lineNum fieldName text
+let parseUInt16Operand lineNum fieldName text=match integer 16 false (Text.trim text) with Some value->Ok (Z.to_int value)|None->invalid lineNum fieldName text
 let parseUInt12Operand lineNum fieldName text=let* value=parseUInt16Operand lineNum fieldName text in if value<=4095 then Ok value else invalid lineNum fieldName text
-let parseInt16Operand lineNum fieldName text=match integer 16 true (HostText.trim text) with Some value->Ok (Z.to_int value)|None->invalid lineNum fieldName text
-let parseIntOperand lineNum fieldName text=match HostText.tryParseInt32 (HostText.trim text) with Some value->Ok (Int32.to_int value)|None->invalid lineNum fieldName text
+let parseInt16Operand lineNum fieldName text=match integer 16 true (Text.trim text) with Some value->Ok (Z.to_int value)|None->invalid lineNum fieldName text
+let parseIntOperand lineNum fieldName text=match Text.tryParseInt32 (Text.trim text) with Some value->Ok (Int32.to_int value)|None->invalid lineNum fieldName text
 let replace old replacement text=
  let size=String.length old in let length=String.length text in let buffer=Buffer.create length in
  let rec loop index=if index<length then
  if index+size<=length && String.sub text index size=old then (Buffer.add_string buffer replacement;loop (index+size))
  else (Buffer.add_char buffer text.[index];loop (index+1)) in loop 0;Buffer.contents buffer
 let parseFloat text=
- let special=HostText.lowerInvariant (HostText.trim text) in
+ let special=Text.lowerInvariant (Text.trim text) in
  match special with
  |"nan"|"+nan"|"-nan"->Some (Int64.float_of_bits 0xfff8000000000000L)
  |"infinity"|"+infinity"->Some infinity|"-infinity"->Some neg_infinity
@@ -54,11 +54,11 @@ let parseFloat text=
    Parse symbolic label reference
 *)
 let parseLabelRef text=
- let trimmed=HostText.trim text in
- if HostText.startsWith trimmed "data:" then Ok (DataLabel (Named (String.sub trimmed 5 (String.length trimmed-5))))
- else if HostText.startsWith trimmed "str:\"" && String.ends_with ~suffix:"\"" trimmed then
+ let trimmed=Text.trim text in
+ if Text.startsWith trimmed "data:" then Ok (DataLabel (Named (String.sub trimmed 5 (String.length trimmed-5))))
+ else if Text.startsWith trimmed "str:\"" && String.ends_with ~suffix:"\"" trimmed then
  let inner=String.sub trimmed 5 (String.length trimmed-6) in Ok (DataLabel (StringLiteral (replace "\\\"" "\"" (replace "\\\\" "\\" inner))))
- else if HostText.startsWith trimmed "float:" then
+ else if Text.startsWith trimmed "float:" then
  let valueText=String.sub trimmed 6 (String.length trimmed-6) in
  (match parseFloat valueText with Some value->Ok (DataLabel (FloatLiteral value))|None->Error ("Invalid float literal '"^valueText^"'"))
  else Ok (CodeLabel trimmed)
@@ -105,7 +105,7 @@ let signedDigits=Alternatives [[literal "-";digits];[digits]]
    Try B_cond: "B_cond(NE, -4)"
 *)
 let parseInstruction lineNum line=
- let line=HostText.trim line in
+ let line=Text.trim line in
  let prefix error=Printf.sprintf "Line %d: %s" lineNum error in
  let reg text=Result.map_error prefix (parseReg text) in
  let cond text=Result.map_error prefix (parseCond text) in
@@ -148,5 +148,5 @@ let parseInstruction lineNum line=
    Parse ARM64 program from text
 *)
 let parseARM64Symbolic text=
- let lines=String.split_on_char '\n' text |> List.mapi (fun i line->i+1,HostText.trim line) |> List.filter (fun (_,line)->line<>"" && not (String.starts_with ~prefix:"//" line)) in
+ let lines=String.split_on_char '\n' text |> List.mapi (fun i line->i+1,Text.trim line) |> List.filter (fun (_,line)->line<>"" && not (String.starts_with ~prefix:"//" line)) in
  let rec parseLines acc=function []->Ok (List.rev acc)|(lineNum,line)::rest->let* instr=parseInstruction lineNum line in parseLines (instr::acc) rest in parseLines [] lines

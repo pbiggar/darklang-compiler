@@ -103,4 +103,4 @@ let tests target stdlib=
  "compilation session composes cached dependency metadata",testDependencyMetadataIsReusedCompositionally stdlib;
  "compilation session reuses stdlib reachability",testStdlibReachabilityIsReused stdlib;
  "compilation session reuses identical ARM64 helper programs",testArm64HelpersAreReused stdlib] in
- match target with Platform.ARM64Backend _->allTests|Platform.LinuxX86_64->let exclusions=StringOrder.Set.of_list ["compilation session isolates and disposes registries";"compilation session reuses the stable start trampoline";"compilation session composes cached dependency metadata"] in List.filter (fun (name,_)->not (HostText.contains name "ARM64") && not (StringOrder.Set.mem name exclusions)) allTests
+ match target with Platform.ARM64Backend _->allTests|Platform.LinuxX86_64->let exclusions=StringOrder.Set.of_list ["compilation session isolates and disposes registries";"compilation session reuses the stable start trampoline";"compilation session composes cached dependency metadata"] in List.filter (fun (name,_)->not (Text.contains name "ARM64") && not (StringOrder.Set.mem name exclusions)) allTests

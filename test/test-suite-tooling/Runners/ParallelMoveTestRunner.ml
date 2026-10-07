@@ -13,7 +13,7 @@ let runParallelMoveTest (test:parallelMoveTest)=match ARM64Instructions.convertI
  |Ok actual->{TestOutcome.success=false;message="Parallel-move ARM64 output did not match";expected=Some (render test.expected);actual=Some (render actual)}
 let loadParallelMoveTests path=
  if not (TestFileIO.exists path) then Error ("Parallel-move test file not found: "^path) else
- try parseParallelMoveFileContent path (HostFile.readText path) with exn->Error ("Failed to read parallel-move test file "^path^": "^HostFile.errorMessage path exn)
+ try parseParallelMoveFileContent path (FileIO.readText path) with exn->Error ("Failed to read parallel-move test file "^path^": "^Printexc.to_string exn)
 let tests testFiles=
  let testsForFile path=match loadParallelMoveTests path with
  |Error msg->["parse "^Filename.basename path,(fun ()->Error msg)]

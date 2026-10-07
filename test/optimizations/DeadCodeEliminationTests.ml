@@ -4,7 +4,7 @@
 [@@@warning "-4-42"]
 open Dark_compiler
 module L=LIR
-module F=HostStructuralFormat
+module F=StructuralFormat
 type testResult=(unit,string) result
 let blockWith instrs={L.label=L.Label "entry";instrs;terminator=L.Ret}
 let namedFunctionWith name instrs={L.id=TestIds.functionIdForName name;name;typedParams=[];cfg={L.entry=L.Label "entry";blocks=L.LabelMap.singleton (L.Label "entry") (blockWith instrs)};stackSize=0;usedCalleeSaved=[];codegenFacts=None}

@@ -19,18 +19,18 @@ let toSectionMap sections=
  |Some (name,_)->Error ("Duplicate graph-color section: "^name)
  |None->Ok (List.fold_left (fun map (key,value)->M.add key value map) M.empty sections)
 let required name values=match M.find_opt name values with
- |Some value when HostText.trim value<>""->Ok (HostText.trim value)
+ |Some value when Text.trim value<>""->Ok (Text.trim value)
  |Some _->Error ("Graph-color section "^name^" cannot be empty")
  |None->Error ("Missing required graph-color section: "^name)
-let optional name values=Option.map HostText.trim (M.find_opt name values)
-let parseInt description text=match HostText.tryParseInt32 (HostText.trim text) with
+let optional name values=Option.map Text.trim (M.find_opt name values)
+let parseInt description text=match Text.tryParseInt32 (Text.trim text) with
  |Some value when value>=0l->Ok (Int32.to_int value)
- |Some _|None->Error ("Invalid "^description^" '"^HostText.trim text^"' (expected non-negative integer)")
+ |Some _|None->Error ("Invalid "^description^" '"^Text.trim text^"' (expected non-negative integer)")
 let tokens text=
  let buffer=Buffer.create (String.length text) in String.iter (fun c->Buffer.add_char buffer (if String.contains " \t\n\r," c then ' ' else c)) text;
  String.split_on_char ' ' (Buffer.contents buffer) |> List.filter (fun token->token<>"")
 let parseVertices text=
- if HostText.lowerInvariant (HostText.trim text)="none" then Ok [] else
+ if Text.lowerInvariant (Text.trim text)="none" then Ok [] else
  let* vertices=ResultList.traverse (parseInt "vertex") (tokens text) in
  if List.length (List.sort_uniq Int.compare vertices)=List.length vertices then Ok vertices else Error "VERTICES contains a duplicate vertex"
 let parsePair separator description token=
@@ -39,12 +39,12 @@ let parsePair separator description token=
  |[left;right]->let* left=parseInt (description^" left value") left in let* right=parseInt (description^" right value") right in Ok (left,right)
  |[]|[_]|_::_::_->Error ("Invalid "^description^" '"^token^"' (expected A"^String.make 1 separator^"B)")
 let parsePairs separator description text=
- if HostText.lowerInvariant (HostText.trim text)="none" then Ok [] else
+ if Text.lowerInvariant (Text.trim text)="none" then Ok [] else
  let* pairs=ResultList.traverse (parsePair separator description) (tokens text) in
  if List.length (List.sort_uniq Stdlib.compare pairs)=List.length pairs then Ok pairs else Error (description^" contains a duplicate pair")
 let parseOptionalPairs separator description section values=match optional section values with None->Ok []|Some text->parsePairs separator description text
 let parseCount description text=
- let text=HostText.trim text in
+ let text=Text.trim text in
  let constructor,value=if String.starts_with ~prefix:"<=" text then (fun x->AtMost x),String.sub text 2 (String.length text-2) else if String.starts_with ~prefix:">=" text then (fun x->AtLeast x),String.sub text 2 (String.length text-2) else (fun x->Exactly x),text in
  Result.map constructor (parseInt description value)
 let parseOptionalCount description section values=match optional section values with None->Ok None|Some text->Result.map Option.some (parseCount description text)
@@ -68,7 +68,7 @@ let parseCase path sections=
  let* expectedSpills=parseOptionalCount "spill expectation" "EXPECT-SPILLS" values in
  let* expectedColored=parseOptionalCount "colored expectation" "EXPECT-COLORED" values in
  let* expectedSelectionChecks=match optional "EXPECT-SELECTION-CHECKS" values with None->Ok None|Some text->Result.map Option.some (parseInt "selection check expectation" text) in
- let* expectMcsCoversAll=match optional "EXPECT-MCS-ORDERING" values with None->Ok false|Some text when HostText.lowerInvariant text="all"->Ok true|Some text->Error ("Invalid EXPECT-MCS-ORDERING '"^text^"' (expected 'all')") in
+ let* expectMcsCoversAll=match optional "EXPECT-MCS-ORDERING" values with None->Ok false|Some text when Text.lowerInvariant text="all"->Ok true|Some text->Error ("Invalid EXPECT-MCS-ORDERING '"^text^"' (expected 'all')") in
  let* _=ResultList.traverse (fun (description,pairs)->validateKnownVertices vertices description pairs) ["EDGES",edges;"PREFER",preferencePairs;"MOVE-PREFER",movePairs;"EXPECT-SAME",expectedSame;"EXPECT-DIFFERENT",expectedDifferent] in
  let* _=ResultList.traverse (fun (description,pairs)->validateKnownFirstVertices vertices description pairs) ["PRECOLORED",precolored;"EXPECT-COLORS",expectedColors] in
  let hasExpectation=Option.is_some expectedChromatic || Option.is_some expectedSpills || Option.is_some expectedColored || expectedColors<>[] || expectedSame<>[] || expectedDifferent<>[] || expectMcsCoversAll || Option.is_some expectedSelectionChecks in

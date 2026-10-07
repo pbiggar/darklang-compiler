@@ -101,5 +101,5 @@ let lower resolve (lowerScalar : lowerScalar) env gen (L.OwnedRegion (block, lay
      let id, gen = A.freshVar gen in let* body, gen = lowerRest (M.add result.H.id (id, AST.TInt64) values) buffers gen in
      Ok (bindReturns initialExpr (fun _ -> bindReturns callbackExpr (fun _ -> wrap (List.concat bindings) (A.Let (id, A.TypedAtom (value, AST.TInt64), body)))), gen)) in
  let initialValues = List.fold_left (fun values (param : H.parameter) ->
-  let value = match R.BindingMap.find_opt param.H.binding env with Some value -> value | None -> Crash.crash ("List HIR: missing root parameter for " ^ HostStructuralFormat.format (AST.DiagnosticFormatting.binding param.H.binding)) in M.add param.H.value.H.id value values) M.empty block.O.body.H.parameters in
+  let value = match R.BindingMap.find_opt param.H.binding env with Some value -> value | None -> Crash.crash ("List HIR: missing root parameter for " ^ StructuralFormat.format (AST.DiagnosticFormatting.binding param.H.binding)) in M.add param.H.value.H.id value values) M.empty block.O.body.H.parameters in
  let* () = VerifyListOwnership.verify region in lowerBlock initialValues M.empty gen block

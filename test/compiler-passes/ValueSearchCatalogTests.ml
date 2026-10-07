@@ -86,7 +86,7 @@ let testCatalogRejectsIllTypedAvailableValue stdlib ()=
  let catalog=C.PackageValueCatalog [entry "bad-value" (customType "type-error" []) [location mainBranch "Owner" [] "bad"] (C.Available (AST.StringLiteral "not an Error"))] in
  let source="let ignored = Darklang.Stdlib.ValueSearch.findByType<Stdlib.Cli.Posix.Error> \"branch-main\" \"\" (Darklang.LanguageTools.ProgramTypes.Hash.Hash \"type-error\") in ()" in
  let report=compile stdlib catalog source in match report.O.result with
- |Error error when HostText.contains error "Package value catalog validation failed"->Ok ()|Error error->Error ("Expected catalog validation failure, got: "^error)|Ok _->Error "Expected an ill-typed available package value to fail compilation"
+ |Error error when Text.contains error "Package value catalog validation failed"->Ok ()|Error error->Error ("Expected catalog validation failure, got: "^error)|Ok _->Error "Expected an ill-typed available package value to fail compilation"
 let testInt8PackageProbeParity stdlib ()=compile stdlib int8ProbeCatalog int8Source |> expectExecution "Int8 package probe"
 let tests stdlib=[
  "catalog-backed ValueSearch preserves interpreter lookup order and filtering",testCatalogParity stdlib;

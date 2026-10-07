@@ -17,7 +17,7 @@ let ( let* ) = Result.bind
 type leaf = Fresh of H.value [@@warning "-37"]
 let value id : H.value = {H.id = H.ValueId id; typ = AST.TList AST.TInt64}
 let functionId name = TestIds.functionIdForName name
-let binding name = AST.bindingId (Int32.to_int (Array.fold_left (fun hash ch -> Int32.add (Int32.mul hash 31l) (Int32.of_int ch)) 17l (HostText.scalars name)))
+let binding name = AST.bindingId (Int32.to_int (Array.fold_left (fun hash ch -> Int32.add (Int32.mul hash 31l) (Int32.of_int ch)) 17l (Text.scalars name)))
 let signature parameters result : H.valueId O.functionSignature = {O.parameters; result}
 let block parameters operations result : (leaf, H.valueId) O.block = {O.body = {H.parameters; operations; result}}
 let parameter value : H.parameter = {H.binding = binding "input"; value}
@@ -49,7 +49,7 @@ let svError = function
  | Materialize.DuplicateCallSite site -> StructuralValue.Union ("DuplicateCallSite", [svSite site])
  | Materialize.StaleCallSite site -> StructuralValue.Union ("StaleCallSite", [svSite site])
  | Materialize.MixedRecursiveCandidate site -> StructuralValue.Union ("MixedRecursiveCandidate", [svSite site])
-let report result = Result.map_error (fun error -> HostStructuralFormat.format (svError error)) result
+let report result = Result.map_error (fun error -> StructuralFormat.format (svError error)) result
 let svCall (call : H.functionCall) = StructuralValue.Record ["Target", AST.DiagnosticFormatting.func call.H.target; "Arguments", StructuralValue.Sequence (List.map F.value call.H.arguments); "Result", F.value call.H.result]
 let svIdentity identity =
  let pairs = List.map (fun (name, signature) -> StructuralValue.Tuple [StructuralValue.Text name; F.callSignature signature]) (S.identityBoundaries identity) in
@@ -59,13 +59,13 @@ let svGroup group = StructuralValue.Record ["Identity", svIdentity group.M.ident
 let svRewrite (rewrite : M.callRewrite) = StructuralValue.Record ["Site", svSite rewrite.M.site; "Original", svCall rewrite.M.original; "Specialized", svCall rewrite.M.specialized; "Ownership", F.callSignature rewrite.M.ownership]
 let svPlan plan = StructuralValue.Record ["Originals", StructuralValue.Sequence (List.map (F.functionDef (fun (Fresh output) -> StructuralValue.Union ("Fresh", [F.value output])) svId) (M.originals plan)); "Groups", StructuralValue.Sequence (List.map svGroup (M.groups plan)); "Rewrites", StructuralValue.Sequence (List.map svRewrite (M.rewrites plan))]
 let svResult result = match result with Ok plan -> StructuralValue.Union ("Ok", [svPlan plan]) | Error error -> StructuralValue.Union ("Error", [svError error])
-let show result = HostStructuralFormat.format (svResult result)
-let showPair (first, second) = HostStructuralFormat.format (StructuralValue.Tuple [svResult first; svResult second])
+let show result = StructuralFormat.format (svResult result)
+let showPair (first, second) = StructuralFormat.format (StructuralValue.Tuple [svResult first; svResult second])
 let inferenceError = function
- | Inference.FunctionGroupingFailed (OwnedFunctionGroups.DuplicateFunctionName id) -> "FunctionGroupingFailed (DuplicateFunctionName " ^ HostStructuralFormat.format (AST.DiagnosticFormatting.func id) ^ ")"
- | Inference.DemandTargetMissing id -> "DemandTargetMissing " ^ HostStructuralFormat.format (AST.DiagnosticFormatting.func id)
+ | Inference.FunctionGroupingFailed (OwnedFunctionGroups.DuplicateFunctionName id) -> "FunctionGroupingFailed (DuplicateFunctionName " ^ StructuralFormat.format (AST.DiagnosticFormatting.func id) ^ ")"
+ | Inference.DemandTargetMissing id -> "DemandTargetMissing " ^ StructuralFormat.format (AST.DiagnosticFormatting.func id)
  | Inference.GroupInferenceFailed (names, cause) ->
-   let cause = match cause with Inference.Uniqueness.VariantLimitExceeded (count, maximum) -> Printf.sprintf "VariantLimitExceeded (%d, %d)" count maximum | Inference.Uniqueness.RecursiveFunctionRequiresGroupInference id -> "RecursiveFunctionRequiresGroupInference " ^ HostStructuralFormat.format (AST.DiagnosticFormatting.func id) | Inference.Uniqueness.NoVerifiedBoundary error -> "NoVerifiedBoundary (" ^ Ownership.errorToString svId error ^ ")" | Inference.Uniqueness.NoVerifiedFunctionGroup error -> "NoVerifiedFunctionGroup (" ^ Ownership.errorToString svId error ^ ")" in
+   let cause = match cause with Inference.Uniqueness.VariantLimitExceeded (count, maximum) -> Printf.sprintf "VariantLimitExceeded (%d, %d)" count maximum | Inference.Uniqueness.RecursiveFunctionRequiresGroupInference id -> "RecursiveFunctionRequiresGroupInference " ^ StructuralFormat.format (AST.DiagnosticFormatting.func id) | Inference.Uniqueness.NoVerifiedBoundary error -> "NoVerifiedBoundary (" ^ Ownership.errorToString svId error ^ ")" | Inference.Uniqueness.NoVerifiedFunctionGroup error -> "NoVerifiedFunctionGroup (" ^ Ownership.errorToString svId error ^ ")" in
    "GroupInferenceFailed (" ^ String.concat ", " (NonEmptyList.toList names) ^ ", " ^ cause ^ ")"
 let selectionError = function S.DuplicateFunctionName name -> "DuplicateFunctionName " ^ name | S.UnknownFunction name -> "UnknownFunction " ^ name | S.InvalidUniqueArgumentIndex (name, index) -> Printf.sprintf "InvalidUniqueArgumentIndex (%s, %d)" name index | S.MissingEstablishedUniqueArgument (name, index) -> Printf.sprintf "MissingEstablishedUniqueArgument (%s, %d)" name index | S.InconsistentEstablishedBoundary name -> "InconsistentEstablishedBoundary " ^ name
 let select definitions target uniqueArguments =
@@ -85,7 +85,7 @@ let testDeduplicatesAndVerifies () =
  let cloneCount = List.fold_left (fun count group -> count + NonEmptyList.length group.M.members) 0 (M.groups plan) in
  match M.rewrites plan with
  | [first; second] when cloneCount = 1 && first.M.specialized.H.target = second.M.specialized.H.target && first.M.ownership = unique && second.M.ownership = unique ->
-   V.verifyFunctions (M.hirContracts plan (contracts definitions)) (Materialize.ownershipSemantics plan semantics) (M.functions plan) |> Result.map_error (fun error -> HostStructuralFormat.format (svVerification error))
+   V.verifyFunctions (M.hirContracts plan (contracts definitions)) (Materialize.ownershipSemantics plan semantics) (M.functions plan) |> Result.map_error (fun error -> StructuralFormat.format (svVerification error))
  | _ -> Error ("Expected one verified clone shared by both call sites, got " ^ string_of_int cloneCount ^ " clones")
 let testPreservesEstablishedCalls () =
  let callee, definitions, firstCall, secondCall = singleFixture () in let* chosen = select [callee] "identity" (O.IntSet.singleton 0) in
@@ -119,7 +119,7 @@ let testRecursiveAtomicity self () =
  | _ -> Error "Expected one materialized recursive group"
 let testDeterministicRecursiveSymbols () = let first = recursivePlan false false in let second = recursivePlan false true in
  let format = function Ok plan -> StructuralValue.Union ("Ok", [svPlan plan]) | Error error -> StructuralValue.Union ("Error", [StructuralValue.Text error]) in
- match first, second with Ok first, Ok second when M.groups first = M.groups second && M.rewrites first = M.rewrites second -> Ok () | actual -> Error ("Expected identical recursive materialization independent of discovery order, got " ^ HostStructuralFormat.format (StructuralValue.Tuple [format (fst actual); format (snd actual)]))
+ match first, second with Ok first, Ok second when M.groups first = M.groups second && M.rewrites first = M.rewrites second -> Ok () | actual -> Error ("Expected identical recursive materialization independent of discovery order, got " ^ StructuralFormat.format (StructuralValue.Tuple [format (fst actual); format (snd actual)]))
 let testMissingRecursiveMember () = let targets, definitions, _, invocation = recursiveFixture false in let* chosen = select targets "first" (O.IntSet.singleton 0) in
  let incomplete = List.filter (fun (definition : (leaf, H.valueId) O.functionDef) -> definition.O.definition.H.name <> "second") definitions in
  match run incomplete [request "entry" invocation chosen] with Error (Materialize.MissingGroupMember "second") -> Ok () | actual -> Error ("Expected a missing recursive member error, got " ^ show actual)
@@ -134,7 +134,7 @@ let testRejectsChangedBoundary () = let callee, definitions, firstCall, _ = sing
 let testRejectsCallSiteErrors () = let callee, definitions, firstCall, _ = singleFixture () in let* chosen = select [callee] "identity" (O.IntSet.singleton 0) in
  let valid = request "first" firstCall chosen in let missing = {valid with M.caller = functionId "missing"} in let stale = {valid with M.call = {firstCall with H.arguments = []}} in
  let first = run definitions [missing] in let second = run definitions [stale] in let third = run definitions [valid; valid] in
- match first, second, third with Error (Materialize.MissingCallSite _), Error (Materialize.StaleCallSite _), Error (Materialize.DuplicateCallSite _) -> Ok () | actual -> Error ("Expected missing, stale and duplicate call sites to fail, got " ^ HostStructuralFormat.format (StructuralValue.Tuple [svResult (let first, _, _ = actual in first); svResult (let _, second, _ = actual in second); svResult (let _, _, third = actual in third)]))
+ match first, second, third with Error (Materialize.MissingCallSite _), Error (Materialize.StaleCallSite _), Error (Materialize.DuplicateCallSite _) -> Ok () | actual -> Error ("Expected missing, stale and duplicate call sites to fail, got " ^ StructuralFormat.format (StructuralValue.Tuple [svResult (let first, _, _ = actual in first); svResult (let _, second, _ = actual in second); svResult (let _, _, third = actual in third)]))
 let testRejectsCollisions () = let callee, definitions, firstCall, _ = singleFixture () in let* chosen = select [callee] "identity" (O.IntSet.singleton 0) in let requests = [request "first" firstCall chosen] in
  let* plan = run definitions requests |> report in match M.rewrites plan with
  | [rewrite] -> let symbol = rewrite.M.specialized.H.target in let symbolName = (List.find (fun (definition : (leaf, H.valueId) O.functionDef) -> definition.O.definition.H.id = symbol) (M.functions plan)).O.definition.H.name in
@@ -180,7 +180,7 @@ let testRejectsRegisteredCollisions () = let callee, definitions, firstCall, _ =
  | _ -> Error "Expected one rewrite"
 let testRejectsMismatchedRequests () = let callee, definitions, firstCall, _ = singleFixture () in let other = {callee with O.definition = {callee.O.definition with H.id = functionId "other"; name = "other"}} in
  let* chosen = select [other] "other" (O.IntSet.singleton 0) in let first = run (definitions @ [other]) [request "first" firstCall chosen] in let second = run definitions [request "first" firstCall (S.EstablishedBoundary unique)] in let third = run (callee :: definitions) [] in
- match first, second, third with Error (Materialize.BoundaryMismatch "identity"), Error (Materialize.BoundaryMismatch "identity"), Error (Materialize.GroupingFailed (OwnedFunctionGroups.DuplicateFunctionName id)) when id = functionId "identity" -> Ok () | actual -> Error ("Expected wrong target, established boundary and duplicate definition errors, got " ^ HostStructuralFormat.format (StructuralValue.Tuple [svResult (let first, _, _ = actual in first); svResult (let _, second, _ = actual in second); svResult (let _, _, third = actual in third)]))
+ match first, second, third with Error (Materialize.BoundaryMismatch "identity"), Error (Materialize.BoundaryMismatch "identity"), Error (Materialize.GroupingFailed (OwnedFunctionGroups.DuplicateFunctionName id)) when id = functionId "identity" -> Ok () | actual -> Error ("Expected wrong target, established boundary and duplicate definition errors, got " ^ StructuralFormat.format (StructuralValue.Tuple [svResult (let first, _, _ = actual in first); svResult (let _, second, _ = actual in second); svResult (let _, _, third = actual in third)]))
 let tests = [
  "Materialization deduplicates candidates and verifies all rewritten callers", testDeduplicatesAndVerifies;
  "Materialization preserves established calls", testPreservesEstablishedCalls;

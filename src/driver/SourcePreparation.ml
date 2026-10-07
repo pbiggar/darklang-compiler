@@ -15,9 +15,9 @@ let (let*)=Result.bind
    This is needed because buildReturnTypeReg only includes functions in the current program,
    but we need return types for all callable functions (including stdlib)
 *)
-let extractReturnTypes funcReg=FunctionIdMap.toList funcReg |> List.map (fun (id,(name,typ))->match typ with AST.TFunction (_,returnType)->id,(name,returnType)|other->Crash.crash ("extractReturnTypes: Non-function type '"^HostStructuralFormat.semanticType other^"' found in FuncReg for '"^name^"'")) |> FunctionIdMap.ofList
+let extractReturnTypes funcReg=FunctionIdMap.toList funcReg |> List.map (fun (id,(name,typ))->match typ with AST.TFunction (_,returnType)->id,(name,returnType)|other->Crash.crash ("extractReturnTypes: Non-function type '"^StructuralFormat.semanticType other^"' found in FuncReg for '"^name^"'")) |> FunctionIdMap.ofList
 let emptyRegistries moduleRegistry={AST_to_ANF.scopeContracts=FunctionIdMap.empty;inertFunctionScopes=F.empty;typeReg=M.empty;typeNames=TypeRegistries.emptyTypeNames;recordFieldsReg=M.empty;recordTypeParamsReg=M.empty;variantLookup=M.empty;sumMetadata={LoweringPrimitives.names=S.empty;cases=M.empty};rcSumShapeReg=M.empty;funcReg=FunctionIdMap.empty;functionIds=M.empty;functionNames=FunctionIdMap.empty;funcParams=M.empty;moduleRegistry;recursiveMembers=FunctionIdMap.empty}
-let measure recorder name operation=let start=HostClock.milliseconds () in let result=operation () in PipelineDiagnostics.recordPassTiming recorder name (HostClock.milliseconds ()-.start);result
+let measure recorder name operation=let start=(Int64.to_float (Mtime_clock.elapsed_ns ()) /. 1e6) in let result=operation () in PipelineDiagnostics.recordPassTiming recorder name ((Int64.to_float (Mtime_clock.elapsed_ns ()) /. 1e6)-.start);result
 let liftLambdasWithBase baseTypeReg baseVariantLookup baseFunctions recorder program=measure recorder "AST -> ANF Preparation: Lambda Lifting" (fun ()->LiftFunctions.liftLambdasInProgram baseTypeReg baseVariantLookup baseFunctions program)
 let mergeSpecRegistries base overlay=SpecializationIdentity.SpecMap.fold SpecializationIdentity.SpecMap.add overlay base
 let collectLocalSpecs genericDefs program=
@@ -31,14 +31,14 @@ let importInheritedValues recorder inheritedValues program=
  let currentNames=List.filter_map (function C.ValueDef value->Some value.C.name|_->None) topLevels |> S.of_list in
  let inheritedEntries=M.bindings inheritedValues |> List.filter (fun (name,_)->not (S.mem name currentNames)) in
  let inherited,symbols,compositionTicks,definitionTicks=List.fold_left (fun (collected,symbols,compositionTicks,definitionTicks) (name,(artifact:X.checkedValueArtifact))->
-  let compositionStart=if Option.is_some recorder then HostClock.ticks () else 0L in
+  let compositionStart=if Option.is_some recorder then Mtime_clock.elapsed_ns () else 0L in
   (* Checked value bodies carry canonical IDs. Their reusable
      artifacts retain only the cursor needed for later fresh binders. *)
   let symbols=C.includeBindingCursor artifact.X.bindingCursor symbols in
-  let compositionTicks=if Option.is_some recorder then Int64.add compositionTicks (Int64.sub (HostClock.ticks ()) compositionStart) else compositionTicks in
-  let definitionStart=if Option.is_some recorder then HostClock.ticks () else 0L in
+  let compositionTicks=if Option.is_some recorder then Int64.add compositionTicks (Int64.sub (Mtime_clock.elapsed_ns ()) compositionStart) else compositionTicks in
+  let definitionStart=if Option.is_some recorder then Mtime_clock.elapsed_ns () else 0L in
   let id,symbols=C.internValue name symbols in let definition=C.ValueDef {C.id;name;typ=C.checkedType artifact.X.typ;body=artifact.X.body} in
-  let definitionTicks=if Option.is_some recorder then Int64.add definitionTicks (Int64.sub (HostClock.ticks ()) definitionStart) else definitionTicks in definition::collected,symbols,compositionTicks,definitionTicks) ([],symbols,0L,0L) inheritedEntries in
+  let definitionTicks=if Option.is_some recorder then Int64.add definitionTicks (Int64.sub (Mtime_clock.elapsed_ns ()) definitionStart) else definitionTicks in definition::collected,symbols,compositionTicks,definitionTicks) ([],symbols,0L,0L) inheritedEntries in
  let milliseconds ticks=Int64.to_float ticks*.1000./.1000000000. in
  PipelineDiagnostics.recordPassTiming recorder "AST -> ANF Value Import: Binding Cursor Composition" (milliseconds compositionTicks);
  PipelineDiagnostics.recordPassTiming recorder "AST -> ANF Value Import: Definition Construction" (milliseconds definitionTicks);
@@ -103,7 +103,7 @@ let prepareProgramForAnf mode baseTypeReg baseVariantLookup baseFuncNames baseFu
 let buildRegistriesForProgram recorder existingFunctionOrdinal symbols baseProvidesModuleFunctionParams moduleRegistry baseRegistries typeDefs functions=
  let measure name operation=match recorder with None->operation ()|Some _->measure recorder name operation in
  let aliasReg,resolvedFunctions=measure "AST -> ANF Registry: Alias Resolution" (fun ()->let aliasReg=AST_to_ANF.buildAliasRegistry typeDefs in aliasReg,AST_to_ANF.resolveAliasesInFunctions aliasReg functions) in
- let phaseRecorder=Option.map (fun recorder->fun name elapsed->recorder {CompilerOptions.pass=name;elapsed=HostTimeSpan.fromMilliseconds elapsed}) recorder in
+ let phaseRecorder=Option.map (fun recorder->fun name elapsed->recorder {CompilerOptions.pass=name;elapsed=(Int64.of_float (elapsed *. 1e6))}) recorder in
  let localRegistries=measure "AST -> ANF Registry: Local Construction" (fun ()->if baseProvidesModuleFunctionParams then AST_to_ANF.buildOverlayRegistriesWithTrace phaseRecorder symbols moduleRegistry typeDefs aliasReg resolvedFunctions else AST_to_ANF.buildRegistriesWithTrace phaseRecorder symbols moduleRegistry typeDefs aliasReg resolvedFunctions) in
  let merged=measure "AST -> ANF Registry: Base Overlay Merge" (fun ()->AST_to_ANF.mergeRegistriesWithTrace phaseRecorder baseRegistries localRegistries) in
  let merged=List.fold_left (fun (registries:AST_to_ANF.registries) (id,name)->{registries with AST_to_ANF.functionIds=M.add name id registries.AST_to_ANF.functionIds;functionNames=FunctionIdMap.add id name registries.AST_to_ANF.functionNames}) merged (C.allocatedFunctionNamesSince existingFunctionOrdinal symbols) in merged,localRegistries,resolvedFunctions

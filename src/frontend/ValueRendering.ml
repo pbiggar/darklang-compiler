@@ -124,7 +124,7 @@ and renderBody env typ value state=match typ with
   C.StringLiteral "<Blob: ephemeral>",state
  |TInternalRawPtr->call state.symbols "Darklang.Stdlib.Int64.toString" [value],state|TNever->C.StringLiteral "()",state
  |TVar name->Crash.crash ("Unresolved type variable in value renderer: "^name)|TInferenceVar (displayName,_)->Crash.crash ("Unresolved inference variable in value renderer: "^displayName)
-let starts name prefix=HostText.startsWith name prefix
+let starts name prefix=Text.startsWith name prefix
 let includeRuntimeFunctions symbols=List.fold_left (fun symbols name->snd (C.internFunction name symbols)) symbols runtimeFunctionNames
 let existingRenderers topLevels=List.filter_map (function C.FunctionDef definition when starts definition.C.name "__dark_render_"->Some (definition.C.name,definition)|_->None) topLevels |> M.of_list
 let rewriteProgram recordMetadata sumMetadata programType program=

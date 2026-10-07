@@ -1,7 +1,7 @@
 (* DeadCode.fs - Eliminate MIR definitions unreachable from observable roots. *)
 open MIR
 module F = MIROptimizationFacts
-let measure recorder name action = match recorder with None -> action () | Some record -> let started = HostClock.milliseconds () in let result = action () in record name (Int64.of_float ((HostClock.milliseconds () -. started) *. 1000000.)); result
+let measure recorder name action = match recorder with None -> action () | Some record -> let started = (Int64.to_float (Mtime_clock.elapsed_ns ()) /. 1e6) in let result = action () in record name (Int64.of_float (((Int64.to_float (Mtime_clock.elapsed_ns ()) /. 1e6) -. started) *. 1000000.)); result
 let buildDefUseMap (cfg : cfg) = LabelMap.fold (fun _ block defs -> List.fold_left (fun defs instruction -> match F.getInstrDest instruction with Some dest -> VRegMap.add dest (F.foldInstrUses (fun uses reg -> reg :: uses) [] instruction) defs | None -> defs) defs block.instrs) cfg.blocks VRegMap.empty
 (*
    Collect registers that are directly required by side effects and control flow.

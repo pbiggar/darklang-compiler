@@ -8,7 +8,7 @@ module U = InferOwnershipUniqueness.Make (Identity)
 module V = U.Ownership
 module S = Identity.Set
 type testLeaf = Reuse of string * string
-let binding name = AST.bindingId (Int32.to_int (List.fold_left (fun hash ch -> Int32.add (Int32.mul hash 31l) (Int32.of_int ch)) 17l (Array.to_list (HostText.scalars name))))
+let binding name = AST.bindingId (Int32.to_int (List.fold_left (fun hash ch -> Int32.add (Int32.mul hash 31l) (Int32.of_int ch)) 17l (Array.to_list (Text.scalars name))))
 let inputValue : H.value = {H.id = H.ValueId 0; typ = AST.TList AST.TInt64}
 let outputValue : H.value = {H.id = H.ValueId 1; typ = AST.TList AST.TInt64}
 let unitValue : H.value = {H.id = H.ValueId 100; typ = AST.TUnit}
@@ -32,14 +32,14 @@ let svSignature (signature : string O.functionSignature) =
  let parameter = function O.UnmanagedParameter -> Union ("UnmanagedParameter", []) | O.BorrowedParameter value -> id "BorrowedParameter" value | O.ConsumedParameter value -> id "ConsumedParameter" value | O.UniqueParameter value -> id "UniqueParameter" value in
  let result = match signature.O.result with O.UnmanagedResult -> Union ("UnmanagedResult", []) | O.BorrowedResult value -> id "BorrowedResult" value | O.ProducedResult value -> id "ProducedResult" value | O.UniqueProducedResult value -> id "UniqueProducedResult" value in
  Record ["Parameters", Sequence (List.map parameter signature.O.parameters); "Result", result]
-let showSignatures values = HostStructuralFormat.format (StructuralValue.Sequence (List.map svSignature values))
+let showSignatures values = StructuralFormat.format (StructuralValue.Sequence (List.map svSignature values))
 let showError = function
  | U.VariantLimitExceeded (count, maximum) -> Printf.sprintf "VariantLimitExceeded (%d, %d)" count maximum
- | U.RecursiveFunctionRequiresGroupInference id -> "RecursiveFunctionRequiresGroupInference " ^ HostStructuralFormat.format (AST.DiagnosticFormatting.func id)
+ | U.RecursiveFunctionRequiresGroupInference id -> "RecursiveFunctionRequiresGroupInference " ^ StructuralFormat.format (AST.DiagnosticFormatting.func id)
  | U.NoVerifiedBoundary error -> "NoVerifiedBoundary (" ^ V.errorToString (fun id -> StructuralValue.Text id) error ^ ")"
  | U.NoVerifiedFunctionGroup error -> "NoVerifiedFunctionGroup (" ^ V.errorToString (fun id -> StructuralValue.Text id) error ^ ")"
 let showResult show = function Ok result -> "Ok " ^ show result | Error error -> "Error (" ^ showError error ^ ")"
-let showOptional = function None -> "None" | Some value -> "Some " ^ HostStructuralFormat.format (svSignature value)
+let showOptional = function None -> "None" | Some value -> "Some " ^ StructuralFormat.format (svSignature value)
 let testRequiresAndReturnsUniqueReuse () =
  let semantics = semantics [inputValue, "input"; outputValue, "output"] in
  let body = block [parameter "input" inputValue] [O.Evaluate (H.Leaf (Reuse ("input", "output")))] outputValue in

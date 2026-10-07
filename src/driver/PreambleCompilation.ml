@@ -5,13 +5,13 @@ module M=StringOrder.Map
 module S=StringOrder.Set
 module K=SpecializationIdentity.SpecMap
 let (let*)=Result.bind
-let preambleError error=let prefix="Reference count insertion error: " in if HostText.startsWith error prefix then "Preamble RC insertion error: "^String.sub error (String.length prefix) (String.length error-String.length prefix) else "Preamble "^error
+let preambleError error=let prefix="Reference count insertion error: " in if Text.startsWith error prefix then "Preamble RC insertion error: "^String.sub error (String.length prefix) (String.length error-String.length prefix) else "Preamble "^error
 (* Build preamble with stdlib as base, returning extended context for test compilation.
    Preamble functions go through the full pipeline (parse → typecheck → mono → inline → lift → ANF → RC → TCO).
    The result is built once per file and reused for all tests in that file. *)
 let buildPreambleContext allowInternal (stdlib:X.stdlibResult) preamble _sourceFile _funcLineMap recorder=
  (* Handle empty preamble - return a context that just wraps stdlib. *)
- if HostText.trim preamble="" then Ok (stdlib,{X.context=stdlib.X.context;anfFunctions=[];typeMap=stdlib.X.stdlibTypeMap;symbolicFunctions=[];callGraphSummaries=FunctionIdMap.empty;symbolicCallGraph=FunctionIdMap.empty}) else
+ if Text.trim preamble="" then Ok (stdlib,{X.context=stdlib.X.context;anfFunctions=[];typeMap=stdlib.X.stdlibTypeMap;symbolicFunctions=[];callGraphSummaries=FunctionIdMap.empty;symbolicCallGraph=FunctionIdMap.empty}) else
  let* analysis=PreambleAnalysis.analyzePreamble allowInternal stdlib preamble in
  let typed=analysis.X.typedAST in let env=analysis.X.typeCheckEnv in
  (* Extract generic function definitions from preamble. *)
@@ -20,7 +20,7 @@ let buildPreambleContext allowInternal (stdlib:X.stdlibResult) preamble _sourceF
  let merged=M.fold M.add generic stdlib.X.context.X.genericFuncDefs in
  (* Convert preamble to ANF (mono → inline → lift → ANF). *)
  let* conversion=P.convertTypedDeclarationsWithTrace recorder (Some stdlib.X.context) (P.Monomorphize (Some stdlib.X.context.X.genericFuncDefs)) typed |> Result.map_error (fun error->"Preamble ANF conversion error: "^error) in
- let registries=conversion.P.registries in let options=CompilerOptions.defaultOptions in let start=HostClock.milliseconds () in let elapsed ()=HostClock.milliseconds ()-.start in
+ let registries=conversion.P.registries in let options=CompilerOptions.defaultOptions in let start=(Int64.to_float (Mtime_clock.elapsed_ns ()) /. 1e6) in let elapsed ()=(Int64.to_float (Mtime_clock.elapsed_ns ()) /. 1e6)-.start in
  let returns=X.mergeReturnTypes stdlib.X.context.X.returnTypes conversion.P.localReturnTypes in
  let names=List.fold_left (fun names (func:ANF.functionDef)->S.add func.ANF.name names) stdlib.X.context.X.baseFuncNames conversion.P.functions in
  let values=M.fold M.add (X.checkedValueArtifacts typed) stdlib.X.context.X.checkedValues in
@@ -44,7 +44,7 @@ let buildPreambleContextFromAnalysis (stdlib:X.stdlibResult) (analysis:X.preambl
  let symbols,tops=CheckedMaterializeHelpers.materializeEqHelpersInTopLevelsWithIndexedSums symbols analysis.X.typeCheckEnv.Types.aliasReg analysis.X.typeCheckEnv.Types.indexedTypeReg analysis.X.typeCheckEnv.Types.variantLookup analysis.X.typeCheckEnv.Types.indexedSumTypeReg tops in
  let program=CheckedAST.programFromCheckedParts (symbols,tops) in
  let* conversion=P.convertTypedDeclarationsWithTrace recorder (Some stdlib.X.context) (P.ReplaceTypeApps specs) program in
- let registries=conversion.P.registries in let options=CompilerOptions.defaultOptions in let start=HostClock.milliseconds () in let elapsed ()=HostClock.milliseconds ()-.start in
+ let registries=conversion.P.registries in let options=CompilerOptions.defaultOptions in let start=(Int64.to_float (Mtime_clock.elapsed_ns ()) /. 1e6) in let elapsed ()=(Int64.to_float (Mtime_clock.elapsed_ns ()) /. 1e6)-.start in
  let returns=X.mergeReturnTypes stdlib.X.context.X.returnTypes conversion.P.localReturnTypes in
  let names=List.fold_left (fun names (func:ANF.functionDef)->S.add func.ANF.name names) stdlib.X.context.X.baseFuncNames conversion.P.functions in
  let values=M.fold M.add (X.checkedValueArtifacts analysis.X.typedAST) stdlib.X.context.X.checkedValues in

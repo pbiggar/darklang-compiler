@@ -92,8 +92,8 @@ let checkedAdd left right=let result=Int64.add left right in if Int64.compare (I
 let runRCReleaseTest target test=
  let* program,preserved=buildProgram test in let* exitCode,stdout,stderr=LIRExecutionTestRunner.executeProgram target program LIRExecutionFormat.LeakCheckEnabled in
  let expected=if preserved=[] then "" else List.fold_left (fun sum value->checkedAdd sum value.value) 0L preserved |> Int64.to_string in
- if exitCode<>0 then Error (Printf.sprintf "Expected release fixture to exit 0, got %d: %s" exitCode (HostText.trim stderr))
- else if HostText.trim stdout<>expected then Error ("Preserved registers produced '"^HostText.trim stdout^"', expected '"^expected^"'")
- else if HostText.trim stderr<>"" then Error ("Release fixture leaked memory: "^HostText.trim stderr) else Ok ()
-let loadRCReleaseTests path=if not (TestFileIO.exists path) then Error ("Reference-release fixture not found: "^path) else try RCReleaseFormat.parseRCReleaseFileContent path (HostFile.readText path) with exn->Error ("Failed to read reference-release fixture "^path^": "^HostFile.errorMessage path exn)
+ if exitCode<>0 then Error (Printf.sprintf "Expected release fixture to exit 0, got %d: %s" exitCode (Text.trim stderr))
+ else if Text.trim stdout<>expected then Error ("Preserved registers produced '"^Text.trim stdout^"', expected '"^expected^"'")
+ else if Text.trim stderr<>"" then Error ("Release fixture leaked memory: "^Text.trim stderr) else Ok ()
+let loadRCReleaseTests path=if not (TestFileIO.exists path) then Error ("Reference-release fixture not found: "^path) else try RCReleaseFormat.parseRCReleaseFileContent path (FileIO.readText path) with exn->Error ("Failed to read reference-release fixture "^path^": "^Printexc.to_string exn)
 let tests target files=Array.to_list files |> List.sort StringOrder.compare |> List.concat_map (fun path->match loadRCReleaseTests path with Error msg->["parse "^Filename.basename path,(fun ()->Error msg)]|Ok cases->List.map (fun test->test.name,(fun ()->runRCReleaseTest target test)) cases)

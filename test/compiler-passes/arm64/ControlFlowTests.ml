@@ -58,7 +58,7 @@ let testPrimitiveListPayloadPreservationCost ()=
  let* instrs=generatePreparedARM64 target program in
  let rec after=function []->[]|instr::rest->if instr=S.Label helper then instr::rest else after rest in
  match after instrs with []->Error "Primitive list release code was not emitted"|_::rest->
- let rec body=function (S.Label name)::_ when not (HostText.startsWith name (helper^"_"))->[]|instr::rest->instr::body rest|[]->[] in
+ let rec body=function (S.Label name)::_ when not (Text.startsWith name (helper^"_"))->[]|instr::rest->instr::body rest|[]->[] in
  let preservation=body rest |> List.filter (function S.STP_pre (S.X19,S.X20,S.SP,_)|S.LDP_post (S.X19,S.X20,S.SP,_)|S.STR (S.X21,S.SP,_)|S.LDR (S.X21,S.SP,_)|S.MOV_reg ((S.X19|S.X20|S.X21),_)|S.MOV_reg (_,(S.X19|S.X20|S.X21))->true|_->false) in
  if preservation=[] then Ok () else Error (Printf.sprintf "Primitive list release needs no payload preservation instructions, got %d" (List.length preservation))
 let makeEmptyFunction name typedParams=let label=L.Label (name^"_entry") in functionWithBlocks name typedParams label [label,block label [] L.Ret] 0
@@ -80,4 +80,4 @@ let testReportsMissingEntryBlock ()=
  let entry=L.Label "_start_entry" and body=L.Label "_start_body" in
  let func=functionWithBlocks "_start" [] entry [body,block body [] L.Ret] 0 in
  match generatePreparedARM64 target (L.Program ([func],M.empty,M.empty)) with
- |Error e when HostText.contains e "missing entry block"->Ok ()|Error e->Error ("Expected missing entry block error, got '"^e^"'")|Ok _->Error "Expected ARM64 codegen to reject a CFG whose entry block is absent"
+ |Error e when Text.contains e "missing entry block"->Ok ()|Error e->Error ("Expected missing entry block error, got '"^e^"'")|Ok _->Error "Expected ARM64 codegen to reject a CFG whose entry block is absent"

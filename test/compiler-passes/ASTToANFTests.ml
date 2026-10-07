@@ -24,18 +24,18 @@ let testMissingVariantPayloadTypeErrors ()=
  let matchCase:C.matchCase={C.patterns;guard=None;body=C.Local payloadId} in
  let expr=C.Match (C.Local xId,NonEmptyList.singleton matchCase) in
  match AST_to_ANF.toANFWithMetadata (TypeRegistries.typeNamesFromSymbols symbols) expr ANF.initialVarGen env emptyTypeReg emptyVariantLookup emptyFuncReg emptyModuleRegistry with
- |Ok _->Error "Expected error when constructor payload type is missing from variant lookup"|Error msg->if HostText.contains msg "Constructor tag" then Ok () else Error ("Unexpected error message: "^msg)
+ |Ok _->Error "Expected error when constructor payload type is missing from variant lookup"|Error msg->if Text.contains msg "Constructor tag" then Ok () else Error ("Unexpected error message: "^msg)
 let testNeedsLambdaLoweringIgnoresShadowedFunc ()=let* program=checkedProgram "let f = 1L in f" in if Monomorphization.programNeedsLambdaLowering (StringOrder.Set.of_list ["f"]) program then Error "Expected shadowed function name to not trigger lambda lowering" else Ok ()
 let testNeedsLambdaLoweringDetectsFuncValue ()=let* program=checkedProgram "let f (x: Int64) : Int64 = x\nf" in if Monomorphization.programNeedsLambdaLowering (StringOrder.Set.of_list ["f"]) program then Ok () else Error "Expected function value usage to trigger lambda lowering"
 let testNeedsLambdaLoweringDetectsLambda ()=let* program=checkedProgram "let apply (f: Int64 -> Int64) : Int64 = f 1L\napply (fun x -> x)" in if Monomorphization.programNeedsLambdaLowering StringOrder.Set.empty program then Ok () else Error "Expected lambda to trigger lambda lowering"
 let testMangledTypePreservesFreshenedTypeVariables ()=match LoweringPrimitives.tryParseMangledType M.empty "k$0" with
- |Ok (AST.TVar "k$0")->Ok ()|Ok other->Error ("Expected freshened type variable to remain TVar, got "^HostStructuralFormat.semanticType other)|Error err->Error ("Expected freshened type variable to parse, got error: "^err)
+ |Ok (AST.TVar "k$0")->Ok ()|Ok other->Error ("Expected freshened type variable to remain TVar, got "^StructuralFormat.semanticType other)|Error err->Error ("Expected freshened type variable to parse, got error: "^err)
 let testMangledFunctionTypePreservesSyntheticTypeVariables ()=
  let typ=AST.TFunction ([AST.TVar "__synthetic_lambda_0_1_y"],AST.TInt64) in
  let mangled=SpecializationIdentity.typeToMangledName typ in
  match LoweringPrimitives.tryParseMangledType M.empty mangled with
  |Ok (AST.TFunction ([AST.TVar "$u$usynthetic$ulambda$u0$u1$uy"],AST.TInt64))->Ok ()
- |Ok other->Error ("Expected synthetic type variable to parse inside function type, got "^HostStructuralFormat.semanticType other^" from "^mangled)
+ |Ok other->Error ("Expected synthetic type variable to parse inside function type, got "^StructuralFormat.semanticType other^" from "^mangled)
  |Error err->Error ("Expected synthetic type variable function type to parse from "^mangled^", got error: "^err)
 let rec findCallArgs funcName=function
  |ANF.Let (_,ANF.Call (name,args),_) when name=TestIds.functionIdForName funcName->Some args
@@ -81,7 +81,7 @@ let testTypedParamAllocationPreservesOrder ()=
  let typedParams,nextVarGen=AST_to_ANF.allocateTypedParams loweredParams ANF.initialVarGen in
  match typedParams,nextVarGen with
  |[{ANF.id=ANF.TempId 0;typ=AST.TInt64};{ANF.id=ANF.TempId 1;typ=AST.TBool};{ANF.id=ANF.TempId 2;typ=AST.TString}],ANF.VarGen 3->Ok ()
- |_->Error ("Expected ordered typed params t0, t1, t2 and next VarGen 3, got "^displayList (fun value->HostStructuralFormat.format (ANFTestFormatting.aNF_typedParam value)) typedParams^" and "^HostStructuralFormat.format (ANFTestFormatting.aNF_varGen nextVarGen))
+ |_->Error ("Expected ordered typed params t0, t1, t2 and next VarGen 3, got "^displayList (fun value->StructuralFormat.format (ANFTestFormatting.aNF_typedParam value)) typedParams^" and "^StructuralFormat.format (ANFTestFormatting.aNF_varGen nextVarGen))
 let testOverlayFunctionIdsContainOnlyLocalDefinitions ()=
  let baseId,symbols=C.internFunction "Test.baseFunction" (C.emptySymbols ()) in
  let baseParam,baseSymbols=C.allocateBinding "baseParam" symbols in
@@ -93,7 +93,7 @@ let testOverlayFunctionIdsContainOnlyLocalDefinitions ()=
  let overlay=AST_to_ANF.buildOverlayRegistries overlaySymbols emptyModuleRegistry [] M.empty [localFunction] in
  let merged=AST_to_ANF.mergeRegistries base overlay in
  if not (M.equal (=) overlay.AST_to_ANF.functionIds (M.of_list ["Test.localFunction",localId])) then
- Error ("Expected the overlay function index to contain only its local definition, got "^HostStructuralFormat.format (StructuralValue.Union ("map",[StructuralValue.Sequence (M.bindings overlay.AST_to_ANF.functionIds |> List.map (fun (name,id)->StructuralValue.Tuple [StructuralValue.Text name;AST.DiagnosticFormatting.func id]))])))
+ Error ("Expected the overlay function index to contain only its local definition, got "^StructuralFormat.format (StructuralValue.Union ("map",[StructuralValue.Sequence (M.bindings overlay.AST_to_ANF.functionIds |> List.map (fun (name,id)->StructuralValue.Tuple [StructuralValue.Text name;AST.DiagnosticFormatting.func id]))])))
  else if M.find_opt "Test.baseFunction" merged.AST_to_ANF.functionIds<>Some baseId then Error "Merged function index lost the base definition"
  else if M.find_opt "Test.localFunction" merged.AST_to_ANF.functionIds<>Some localId then Error "Merged function index lost the local definition" else Ok ()
 let tests=["Missing constructor payload type errors",testMissingVariantPayloadTypeErrors;"Lambda lowering ignores shadowed functions",testNeedsLambdaLoweringIgnoresShadowedFunc;"Lambda lowering detects function value",testNeedsLambdaLoweringDetectsFuncValue;"Lambda lowering detects lambda",testNeedsLambdaLoweringDetectsLambda;"Mangled type preserves freshened type variables",testMangledTypePreservesFreshenedTypeVariables;"Mangled function type preserves synthetic type variables",testMangledFunctionTypePreservesSyntheticTypeVariables;"Synthetic nullary call lowers to zero args",testSyntheticNullaryCallLowersToZeroArgs;"Synthetic unit param lowers function to zero params",testSyntheticUnitParamLowersFunctionToZeroParams;"Erased list-head pattern lowers to borrowed call",testErasedListHeadPatternLowersToBorrowedCall;"Typed list-head pattern remains owned call",testTypedListHeadPatternRemainsOwnedCall;"Typed parameter allocation preserves order",testTypedParamAllocationPreservesOrder;"Overlay function IDs contain only local definitions",testOverlayFunctionIdsContainOnlyLocalDefinitions]

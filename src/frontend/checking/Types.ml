@@ -273,7 +273,7 @@ let indexTypeRegistry lookup params registry =
    This allows "Vec" and "Point" to be considered equal when Vec aliases Point
 *)
 let typesEqual aliases first second = AST.compareSemanticType (resolveType aliases first) (resolveType aliases second) = 0
-let truncateLegacyRecordValueText text = let units = HostText.scalars text in if Array.length units > 10 then HostText.ofScalars (Array.sub units 0 10) ^ "..." else text
+let truncateLegacyRecordValueText text = let units = Text.scalars text in if Array.length units > 10 then Text.ofScalars (Array.sub units 0 10) ^ "..." else text
 let formatLegacyRecordFieldTypeError aliases name expected actual expr =
  let expectedText = CheckingDiagnostics.typeToString (resolveType aliases expected) in
  let actualText = CheckingDiagnostics.typeToString (resolveType aliases actual) in

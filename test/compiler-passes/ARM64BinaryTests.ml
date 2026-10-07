@@ -33,7 +33,7 @@ let testMachOConstSectionOffsetPointsToAlignedData ()=
  let expectedRefcount=Bytes.of_string "\xff\xff\xff\xff\xff\xff\xff\x7f" in let actualRefcount=Bytes.sub binary constFileOffset 8 in
  if constFileOffset mod 8<>0 then Error (Printf.sprintf "Expected __const section file offset to be 8-byte aligned, got %d" constFileOffset)
  else if actualRefcount<>expectedRefcount then Error "Expected __const section offset to point at the string refcount sentinel" else Ok ()
-let missingPath prefix=Filename.concat (Filename.concat (Filename.get_temp_dir_name ()) (prefix^HostGuid.newGuidN ())) "out"
+let missingPath prefix=let path=Filename.temp_file prefix "" in Sys.remove path; Filename.concat path "out"
 let testElfWriteToFileReturnsErrorForInvalidPath ()=
  match Backend_Arm64_Binary_Generation_ELF.writeToFile (missingPath "dark-elf-missing-") (Bytes.make 1 '\000') with
  | Ok () -> Error "Expected invalid output path to return Error" | Error "" -> Error "Expected writeToFile error message to describe failure" | Error _ -> Ok ()
@@ -82,7 +82,7 @@ let unixSignalNumber signal = Option.value ~default:signal (List.assoc_opt signa
 let testExecuteLinuxElf ()=
  let machineCode=List.concat_map ARM64_Encoding.encode [MOVZ (X0,42,0);MOVZ (X8,Platform.linuxARM64SyscallNumbers.Platform.exit,0);SVC 0] |> Array.of_list in
  let binary=Backend_Arm64_Binary_Generation_ELF.createExecutable machineCode in
- let tempPath=Filename.concat (Filename.get_temp_dir_name ()) (HostGuid.newGuidN ()) in
+ let tempPath=Filename.temp_file "dark-" "" in
  let outcome=try
  Out_channel.with_open_bin tempPath (fun output -> Out_channel.output_bytes output binary);
  let permissions=(Unix.stat tempPath).Unix.st_perm in Unix.chmod tempPath (permissions lor 0o100);

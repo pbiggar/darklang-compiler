@@ -15,16 +15,16 @@ let (let*)=Result.bind
    Parse temp ID from text like "t0", "t1", etc.
 *)
 let parseTempId text=
- let trimmed=HostText.trim text in
+ let trimmed=Text.trim text in
  let invalid ()=Error ("Invalid temp id '"^trimmed^"' (expected 't0', 't1', etc.)") in
  match matched [literal "t";Capture [digits]] trimmed with
- |Some groups->(match HostText.tryParseInt32 groups.(1) with Some id->Ok (TempId (Int32.to_int id))|None->invalid ())
+ |Some groups->(match Text.tryParseInt32 groups.(1) with Some id->Ok (TempId (Int32.to_int id))|None->invalid ())
  |None->invalid ()
 (*
    Parse atom (literal or temp variable)
 *)
 let parseAtom text=
- let text=HostText.trim text in
+ let text=Text.trim text in
  match matched [literal "u64[";Capture [digits];literal "]"] text with
  |Some groups->(match integer 64 false groups.(1) with Some value->Ok (IntLiteral (UInt64 (Z.to_int64 (if Z.testbit value 63 then Z.sub value (Z.shift_left Z.one 64) else value))))|None->Error ("Invalid UInt64 literal '"^text^"'"))
  |None->match matched [literal "str[";Capture [Repeat (Dot,0,true)];literal "]"] text with
@@ -34,7 +34,7 @@ let parseAtom text=
 (*
    Parse binary operator
 *)
-let parseOp text=match HostText.trim text with
+let parseOp text=match Text.trim text with
  |"+"->Ok Add|"-"->Ok Sub|"*"->Ok Mul|"/"->Ok Div|op->Error ("Invalid operator '"^op^"' (expected +, -, *, or /)")
 (*
    Parse complex expression (right side of let binding)
@@ -42,7 +42,7 @@ let parseOp text=match HostText.trim text with
    Just an atom
 *)
 let parseCExpr text=
- let text=HostText.trim text in
+ let text=Text.trim text in
  match matched [Capture [Repeat (Dot,1,false)];space;Capture [Alternatives (List.map (fun op->[literal op]) ["+";"-";"*";"/"])];space;Capture [any]] text with
  |Some groups->let* left=parseAtom groups.(1) in let* op=parseOp groups.(2) in let* right=parseAtom groups.(3) in Ok (Prim (op,left,right))
  |None->Result.map (fun atom->Atom atom) (parseAtom text)
@@ -53,7 +53,7 @@ let parseCExpr text=
 *)
 let rec parseAExpr lineNum=function
  |[]->Error "Unexpected end of input (expected 'return')"
- |line::rest->let line=HostText.trim line in
+ |line::rest->let line=Text.trim line in
  match matched [literal "return";spaces;Capture [any]] line with
  |Some groups->(match rest with _::_->Error (Printf.sprintf "Line %d: Unexpected line after return" (lineNum+1))|[]->Result.map_error (fun e->Printf.sprintf "Line %d: %s" lineNum e) (Result.map (fun atom->Return atom) (parseAtom groups.(1))))
  |None->match matched [literal "let";spaces;Capture [literal "t";digits];space;literal "=";space;Capture [any]] line with

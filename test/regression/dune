@@ -1,7 +1,7 @@
 ; Native equivalence and allocation regression checks.
 (include_subdirs no)
 (executables
- (names host_text_regression cache_regression component_regression)
+ (names host_text_regression cache_regression component_regression literal_regression)
  (libraries dark_compiler)
  (flags (:standard -w @a -warn-error @a)))
 
@@ -10,5 +10,11 @@
  (action
   (progn
    (run %{exe:host_text_regression.exe})
+   (run %{exe:literal_regression.exe})
    (run %{exe:cache_regression.exe})
    (run %{exe:component_regression.exe}))))
+
+(rule
+ (alias runtest)
+ (deps cli_manifest_regression.py)
+ (action (run python3 %{dep:cli_manifest_regression.py} %{exe:../../bin/dark.exe})))

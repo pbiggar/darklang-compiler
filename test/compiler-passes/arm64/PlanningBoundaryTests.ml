@@ -8,7 +8,7 @@ let testRejectsUnpreparedCodegenFacts ()=
  let unprepared=makeSimpleProgramWithVariants [LIR.Mov (LIR.Physical LIR.X0,LIR.Imm 1L)] StringOrder.Map.empty in
  let commonFactsOnly=LIR.attachCodegenFacts unprepared in
  match Backend_Arm64_CodeGen.generateARM64 target unprepared,Backend_Arm64_CodeGen.generateARM64 target commonFactsOnly with
- |Error missingFacts,Error missingPlan when HostText.contains missingFacts "has no codegen facts" && HostText.contains missingPlan "has no ARM64 helper plan"->Ok ()
+ |Error missingFacts,Error missingPlan when Text.contains missingFacts "has no codegen facts" && Text.contains missingPlan "has no ARM64 helper plan"->Ok ()
  |_->Error "Expected unprepared ARM64 LIR to be rejected"
 let testLirOpExpansionRecorderAttributesGeneratedInstructions ()=
  let observations=Queue.create () in

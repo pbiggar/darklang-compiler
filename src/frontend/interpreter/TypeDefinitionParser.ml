@@ -3,7 +3,7 @@
 open Tokenizer
 open ParserSupport
 module WT = WrittenTypes
-let upperName name = let units = HostText.scalars name in Array.length units > 0 && HostText.isUpper units.(0)
+let upperName name = let units = Text.scalars name in Array.length units > 0 && Text.isUpper units.(0)
 (*
    `type Name [<'a>] = Definition`
 *)

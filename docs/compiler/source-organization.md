@@ -9,6 +9,8 @@ had the same filename in different F# namespaces.
 |---|---|
 | `bin/dark.ml` | Native command-line entry point |
 | `src/Program.ml` | CLI commands, options and presentation |
+| `src/util/` | Shared Unicode operations, text decoding, file input and float literal formatting |
+| `src/packages/` | Package schema decoding, resolution, fetching and response cache |
 | `src/frontend/interpreter/` | Written syntax, lexer, parser and validation |
 | `src/frontend/checking/` | Checked expressions, inference, declarations and diagnostics |
 | `src/frontend/` | Written/checked integration and JSON planning |
@@ -34,3 +36,10 @@ The completed F# migration's observation harness, source inventory and
 comparison scripts remain in Git history. They are no longer part of the
 build graph. `dune runtest` executes the native regression checks; the complete
 production host suite runs through `./run-tests --ai` after `./build --ai`.
+
+Compiler services use OCaml libraries directly: Yojson for JSON, Digestif for
+SHA-256, Mtime for monotonic elapsed time, Uri for URL resolution, and Uuidm
+for Mach-O UUIDs. Timing fields store nanoseconds. Shared utilities retain
+compiler policies such as Unicode segmentation, BOM decoding and exact float
+literal round trips; they do not reproduce .NET exceptions or formatting.
+AST and IR diagnostics use the standard `Format` layout engine.

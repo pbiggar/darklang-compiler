@@ -17,7 +17,7 @@ let buildAnf verbosity (options:compilerOptions) elapsed (registries:AST_to_ANF.
  let elapsedDetail enabled duration=if verbosity>=2 && enabled then (
   let scaled=duration*.10. in let lower=Float.floor scaled in
   let rounded=if scaled-.lower=0.5 then (if Float.rem lower 2.=0. then lower else lower+.1.) else Float.round scaled in
-  Output.println ("        "^HostFloat.roundTrip (rounded/.10.)^"ms")) in
+  Output.println ("        "^FloatFormat.roundTrip (rounded/.10.)^"ms")) in
  let anfOptions=buildANFOptimizeOptions options in
  let ssaPassLabel=formatPassGroup "SSA Optimizations" ["const_folding",anfOptions.ANFConstants.enableConstFolding;"const_prop",anfOptions.ANFConstants.enableConstProp;"copy_prop",anfOptions.ANFConstants.enableCopyProp;"dce",anfOptions.ANFConstants.enableDCE;"cse",anfOptions.ANFConstants.enableCSE;"strength_reduction",anfOptions.ANFConstants.enableStrengthReduction] in
  if verbosity>=1 && anfOptions.ANFConstants.enableTailRecursionModuloOperation then Output.println "  [anf.accumulators] ANF Accumulator Lowering...";

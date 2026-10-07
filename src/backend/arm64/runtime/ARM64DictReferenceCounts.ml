@@ -6,7 +6,7 @@ open! MemoryModel
 let isEmpty xs=xs=[]
 let int16 value=let low=value land 65535 in if low>=32768 then low-65536 else low
 let uint16 value=value land 65535
-module F=HostStructuralFormat
+module F=StructuralFormat
 let number n=F.Scalar (string_of_int n)
 let kindValue kind=F.Union ((match kind with MemoryModel.GenericHeap->"GenericHeap"|StreamHeap->"StreamHeap"|TaggedList->"TaggedList"|DictHeap->"DictHeap"|ClosureHeap->"ClosureHeap"),[])
 let operationValue = function

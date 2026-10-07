@@ -25,4 +25,4 @@ let plannedGenericRefCountDecHelperCacheKey helperId helperLabel : LIR.functionD
  let block={LIR.label=entry;instrs=[];terminator=LIR.Ret} in
  {LIR.id=helperId;name=helperLabel;typedParams=[];cfg={LIR.entry;blocks=LIR.LabelMap.singleton entry block};stackSize=0;usedCalleeSaved=[];codegenFacts=None}
 let isPlannedGenericRefCountDecHelperCacheKey (func:LIR.functionDef)=
- Option.is_none func.LIR.codegenFacts && HostText.startsWith func.LIR.name plannedGenericRefCountDecHelperLabelPrefix
+ Option.is_none func.LIR.codegenFacts && Text.startsWith func.LIR.name plannedGenericRefCountDecHelperLabelPrefix

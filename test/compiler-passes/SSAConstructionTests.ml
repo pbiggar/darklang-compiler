@@ -11,7 +11,7 @@ type testResult = (unit, string) result
 let label name = Label name
 let vreg id = VReg id
 let makeBlock label instrs terminator : basicBlock = {label; instrs; terminator}
-let format value = HostStructuralFormat.format value
+let format value = StructuralFormat.format value
 let uses values = format (StructuralValue.Union ("set", [StructuralValue.Sequence (List.map MIRTestFormatting.vReg (VRegSet.elements values))]))
 let instructions values = format (StructuralValue.Sequence (List.map MIRTestFormatting.instr values))
 let labels values = format (StructuralValue.Union ("map", [StructuralValue.Sequence (List.map (fun (left, right) -> StructuralValue.Tuple [MIRTestFormatting.label left; MIRTestFormatting.label right]) (LabelMap.bindings values))]))
@@ -74,7 +74,7 @@ let testGetBlockUsesCoversEveryOperandPosition () =
  match List.find_map (fun (name, instr, expected) -> check name (makeBlock (label name) [instr] (Jump target)) expected) instructionCases with Some error -> Error error | None -> (match List.find_map (fun (name, term, expected) -> check name (makeBlock (label name) [] term) expected) terminators with Some error -> Error error | None -> Ok ())
 let testComputeLivenessReportsMissingSuccessorBlock () =
  let entry = label "entry" and missing = label "missing" in let cfg = {entry; blocks = LabelMap.singleton entry (makeBlock entry [Mov (vreg 0, Int64Const 1L, Some AST.TInt64)] (Jump missing))} in
- try ignore (computeLiveness cfg); Error "Expected computeLiveness to report the missing successor block" with Failure message -> if HostText.contains "SSA: Missing CFG block missing while computing liveness successor" message then Ok () else Error ("Expected contextual SSA missing-block message, got: " ^ message)
+ try ignore (computeLiveness cfg); Error "Expected computeLiveness to report the missing successor block" with Failure message -> if Text.contains "SSA: Missing CFG block missing while computing liveness successor" message then Ok () else Error ("Expected contextual SSA missing-block message, got: " ^ message)
 let testComputeDominatorsHandlesJoinLoopAndUnreachableBlock () =
  let entry = label "entry" and left = label "left" and right = label "right" and join = label "join" and header = label "header" and body = label "body" and exit = label "exit" and unreachable = label "unreachable" in
  let blocks = [makeBlock entry [] (Branch (Register (vreg 0), left, right)); makeBlock left [] (Jump join); makeBlock right [] (Jump join); makeBlock join [] (Jump header); makeBlock header [] (Branch (Register (vreg 1), body, exit)); makeBlock body [] (Jump header); makeBlock exit [] (Ret (Int64Const 0L)); makeBlock unreachable [] (Ret (Int64Const 1L))] in

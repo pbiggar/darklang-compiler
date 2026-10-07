@@ -49,22 +49,22 @@ module SS=StringOrder.Set
 module SI=SpecializationIdentity
 module CC=CompilationContexts
 let (let*)=Result.bind
-let nowTicks ()=Int64.div (HostClock.ticks ()) 100L
+let nowTicks ()=Mtime_clock.elapsed_ns ()
 let replace old replacement source =
   let n=String.length source and m=String.length old in
   let b=Buffer.create n in
   let rec loop i = if i<n then
     if i+m<=n && String.sub source i m=old then (Buffer.add_string b replacement;loop (i+m))
     else (Buffer.add_char b source.[i];loop (i+1)) in loop 0;Buffer.contents b
-let length s=Array.length (HostText.scalars s)
-let slice s first count=HostText.ofScalars (Array.sub (HostText.scalars s) first count)
+let length s=Array.length (Text.scalars s)
+let slice s first count=Text.ofScalars (Array.sub (Text.scalars s) first count)
 let tail s first=slice s first (length s-first)
 let trimEnd s=
-  let us=HostText.scalars s in
+  let us=Text.scalars s in
   let rec last i=if i>=0 && Uchar.is_valid us.(i) && Uucp.White.is_white_space (Uchar.of_int us.(i)) then last (i-1) else i in
-  HostText.ofScalars (Array.sub us 0 (last (Array.length us-1)+1))
+  Text.ofScalars (Array.sub us 0 (last (Array.length us-1)+1))
 let isInternalTestFile path =
-  let path=replace "\\" "/" path in HostText.contains path "/stdlib-internal/" || HostText.contains path "/verification/"
+  let path=replace "\\" "/" path in Text.contains path "/stdlib-internal/" || Text.contains path "/verification/"
 let sourceOffset source (position:Tokenizer.pos)=
   let lines=String.split_on_char '\n' source in
   List.fold_left (fun sum line -> sum+length line+1) 0 (List.take position.Tokenizer.row lines)+position.Tokenizer.column
@@ -81,9 +81,9 @@ let normalizeInlineEntry source =
 let asSingleWrittenExpression (p:WT.sourceFile)=match p.WT.declarations,p.WT.exprsToEval with [],[e] -> Some e | _ -> None
 let isFloatExpectedExpr = function WT.EFloat _ -> true | WT.EApply (_,WT.EFnName (_,name),_,_) when name.WT.fn.WT.name="negate" -> true | _ -> false
 let rewriteParenthesizedStatements source =
-  let us=HostText.scalars source in let n=Array.length us in
-  let character u=HostText.ofScalars [|u|] in
-  let concat xs=HostText.ofScalars (HostText.scalars (String.concat "" xs)) in
+  let us=Text.scalars source in let n=Array.length us in
+  let character u=Text.ofScalars [|u|] in
+  let concat xs=Text.ofScalars (Text.scalars (String.concat "" xs)) in
   let rec quoted i escaped rev = if i>=n then concat (List.rev rev),i else
     let c=us.(i) in let rev=character c::rev in
     if escaped then quoted (i+1) false rev
@@ -109,7 +109,7 @@ let trySynthesizeValueEqualitySource _allowInternal source rhsExpr =
       (match List.rev left.WT.exprsToEval,asSingleWrittenExpression right with
       | left::_,Some right ->
           let range=WT.exprRange left in let offset=sourceOffset normalized range.Tokenizer.start in
-          let prefix=slice normalized 0 offset in let lhs=HostText.trim (tail normalized offset) and rhs=HostText.trim rhsExpr in
+          let prefix=slice normalized 0 offset in let lhs=Text.trim (tail normalized offset) and rhs=Text.trim rhsExpr in
           let comparison=if isFloatExpectedExpr right then "Stdlib.Float.absoluteValue (("^lhs^") - ("^rhs^")) < 0.00000000001" else "("^lhs^") == ("^rhs^")" in
           let candidate=prefix^comparison in (match parseWritten candidate with Ok _ -> Some candidate | Error _ -> None)
       | _ -> None)
@@ -122,7 +122,7 @@ let sourceToExecute allowInternal (test:e2eTest) = match test.expectedValueExpr 
         match parseWritten fallback with
         | Ok _ -> Ok fallback
         | Error _ -> Error ("Failed to synthesize expected-value source for test '"^test.name^"' in "^test.sourceFile^".\nExpected-value tests must parse as a program whose last top-level is an expression,\nand RHS must parse as a single expression.")
-type e2eRun = CompileFailed of int*string*HostTimeSpan.t | Ran of int*string*string*HostTimeSpan.t*HostTimeSpan.t
+type e2eRun = CompileFailed of int*string*int64 | Ran of int*string*string*int64*int64
 type e2eFailure={run:e2eRun;message:string}
 type e2eTestResult=(e2eRun,e2eFailure) result
 type preparedE2EBatchTest={test:e2eTest;equalitySource:string}
@@ -166,7 +166,7 @@ let collectTypeAppsFromProgram program =
     | CheckedAST.ValueDef v -> Monomorphization.collectTypeApps symbols v.CheckedAST.body
     | CheckedAST.Expression e -> Monomorphization.collectTypeApps symbols e | _ -> SI.SpecSet.empty)) SI.SpecSet.empty tops
 let filterSpecsByDefs defs specs=SI.SpecSet.filter (fun (name,_) -> SM.mem name defs) specs
-let isUpstreamDarkTestFile file = let file=replace "\\" "/" file in HostText.contains file "/e2e/upstream/" && String.ends_with ~suffix:".dark" (String.lowercase_ascii file)
+let isUpstreamDarkTestFile file = let file=replace "\\" "/" file in Text.contains file "/e2e/upstream/" && String.ends_with ~suffix:".dark" (String.lowercase_ascii file)
 let parsePreambleAsProgram _allowInternal preamble=parseWritten preamble
 let preambleFunctionDefs (p:WT.sourceFile)=List.filter_map (function WT.DFunction d -> Some d | _ -> None) p.WT.declarations
 let referencedPreambleFunctions known expr=SS.inter known (SS.of_list (WrittenSource.expressionNames expr))
@@ -191,11 +191,11 @@ let reducePreambleSource required source (p:WT.sourceFile) =
         let finish=min (length normalized) (List.fold_left (fun sum line->sum+length line+1) 0 (List.take (last+1) lines)) in
         if finish>start then Some (trimEnd (slice normalized start (finish-start))) else None) p.WT.declarations |> String.concat "\n\n"
 let countLeadingSpaces line=let rec loop i=if i<String.length line && line.[i]=' ' then loop (i+1) else i in loop 0
-let isTopLevelPreambleDefinitionStart s=List.exists (HostText.startsWith s) ["let ";"val ";"type ";"def "]
+let isTopLevelPreambleDefinitionStart s=List.exists (Text.startsWith s) ["let ";"val ";"type ";"def "]
 let sanitizePreambleForReducedFallback preamble =
   let rec loop active rev = function
     | [] -> List.rev rev
-    | line::rest -> let trimmed=HostText.trim line and indent=countLeadingSpaces line in
+    | line::rest -> let trimmed=Text.trim line and indent=countLeadingSpaces line in
         match active with
         | Some _ when trimmed="" -> loop active (line::rev) rest
         | Some n when indent>n -> loop active (line::rev) rest
@@ -220,7 +220,7 @@ let analyzePreambleWithReducedFunctionSet stdlib (spec:preambleBuildSpec) tests 
   let required=SS.filter (fun name->SS.mem name names) seeds |> expandRequiredPreambleFunctions dependencies in
   PreambleAnalysis.analyzePreamble spec.allowInternal stdlib (reducePreambleSource required spec.preamble program)
 let analyzePreambleForPlan stdlib (spec:preambleBuildSpec) tests =
-  if HostText.trim spec.preamble="" then Ok None else
+  if Text.trim spec.preamble="" then Ok None else
   match PreambleAnalysis.analyzePreamble spec.allowInternal stdlib spec.preamble with
   | Ok analysis -> Ok (Some analysis)
   | Error primary when isUpstreamDarkTestFile spec.sourceFile ->
@@ -252,14 +252,14 @@ let buildSuiteContexts stdlib tests passTimingRecorder =
   let recordTiming name elapsed=Option.iter (fun record->record {CompilerOptions.pass=name;elapsed}) passTimingRecorder in
   let overlapping=SS.of_list ["Start Function Compilation";"JSON Planning";"ARM64 Codegen Metadata";"ARM64 Codegen Functions";"ARM64 Codegen Helpers";"ARM64 Codegen Assembly";"ARM64 Codegen Peephole"] in
   let measure name operation =
-    let nested=ref HostTimeSpan.zero in
+    let nested=ref 0L in
     let recorder=Option.map (fun outer (timing:CompilerOptions.passTiming)->
-      if not (SS.mem timing.CompilerOptions.pass overlapping) && not (List.exists (HostText.startsWith timing.CompilerOptions.pass)
+      if not (SS.mem timing.CompilerOptions.pass overlapping) && not (List.exists (Text.startsWith timing.CompilerOptions.pass)
         ["TypeCheck: ";"AST -> ANF Preparation: ";"SSA: ";"RegAlloc: "]) then nested:=Int64.add !nested timing.CompilerOptions.elapsed;
       outer timing) passTimingRecorder in
     let start=nowTicks () in let result=operation recorder in
     let overhead=Int64.sub (Int64.sub (nowTicks ()) start) !nested in
-    if overhead>HostTimeSpan.zero then recordTiming name overhead;result in
+    if overhead>0L then recordTiming name overhead;result in
   let start=nowTicks () in
   let groups=Array.fold_left (fun groups test ->
     let key=preambleContextKeyForTest test in
@@ -302,12 +302,12 @@ let didValueEqualityPass run =
   exitCodeFromRun run=0 &&
     (match String.split_on_char '\n' (stdoutFromRun run) |> List.filter (fun s->s<>"") |> List.rev with "true"::_ -> true | _ -> false)
 let isRenderedResultError expected run =
-  exitCodeFromRun run=0 && HostText.contains (stdoutFromRun run) ".Error(" &&
-    (match expected with None->true|Some message->HostText.contains (stdoutFromRun run) message)
+  exitCodeFromRun run=0 && Text.contains (stdoutFromRun run) ".Error(" &&
+    (match expected with None->true|Some message->Text.contains (stdoutFromRun run) message)
 let evaluateExpectations (test:e2eTest) run =
   let unexpectedLeak=match run with
     | Ran (_,_,stderr,_,_) when not test.disableLeakCheck ->
-        let expected=Option.fold ~none:false ~some:(fun e->HostText.contains e "leaks:") test.expectedStderr in
+        let expected=Option.fold ~none:false ~some:(fun e->Text.contains e "leaks:") test.expectedStderr in
         if expected then None else
         List.find_map (fun line->
           if not (String.starts_with ~prefix:"leaks: " line) then None else
@@ -321,7 +321,7 @@ let evaluateExpectations (test:e2eTest) run =
       (match run with
       | Ran _ -> failRun run "Expected compilation error but compilation succeeded"
       | CompileFailed (_,error,_) -> match test.expectedErrorMessage with
-        | Some expected when not (HostText.contains error expected) -> failRun run ("Expected compile error message '"^expected^"' not found in stderr. Actual stderr: "^error)
+        | Some expected when not (Text.contains error expected) -> failRun run ("Expected compile error message '"^expected^"' not found in stderr. Actual stderr: "^error)
         | _ -> Ok run)
     else if test.errorExpectation=Some AnyError then
       (match run with
@@ -330,13 +330,13 @@ let evaluateExpectations (test:e2eTest) run =
       | _ -> match test.expectedErrorMessage with
         | None -> Ok run
         | Some expected -> let output=if exitCodeFromRun run=0 then stdoutFromRun run else stderrFromRun run in
-            if HostText.contains output expected then Ok run else failRun run ("Expected error message '"^expected^"' not found in stderr. Actual stderr: "^output))
+            if Text.contains output expected then Ok run else failRun run ("Expected error message '"^expected^"' not found in stderr. Actual stderr: "^output))
     else if Option.is_some test.expectedValueExpr then
       if didValueEqualityPass run then Ok run else
-      let stderr=HostText.trim (stderrFromRun run) in failRun run ("Value mismatch"^(if stderr="" then "" else "\n"^stderr))
+      let stderr=Text.trim (stderrFromRun run) in failRun run ("Value mismatch"^(if stderr="" then "" else "\n"^stderr))
     else
       let matches expected actual=match expected with None->true|Some expected->match test.outputMatch with
-        | ExactBytes -> actual=expected | NormalizedText -> HostText.trim actual=HostText.trim expected in
+        | ExactBytes -> actual=expected | NormalizedText -> Text.trim actual=Text.trim expected in
       if matches test.expectedStdout (stdoutFromRun run) && matches test.expectedStderr (stderrFromRun run) && exitCodeFromRun run=test.expectedExitCode then Ok run
       else failRun run ("Output mismatch. stdout expected '"^visibleOutput (Option.value ~default:"<not asserted>" test.expectedStdout)^"', actual '"^visibleOutput (stdoutFromRun run)^"'; stderr expected '"^visibleOutput (Option.value ~default:"<not asserted>" test.expectedStderr)^"', actual '"^visibleOutput (stderrFromRun run)^"'")
 let buildCompilerOptions (test:e2eTest) =
@@ -348,7 +348,7 @@ let buildCompilerOptions (test:e2eTest) =
     disableMIRLICM=test.disableMIRLICM;disableLIROpt=test.disableLIROpt;disableLIRPeephole=test.disableLIRPeephole;disableFunctionTreeShaking=test.disableFunctionTreeShaking;
     enableCoverage=false;enableLeakCheck=not test.disableLeakCheck;nativeLayoutProbe=CompilerOptions.NoNativeLayoutProbe;
     warnings=CompilerOptions.defaultWarningSettings;dumpANF=false;dumpMIR=false;dumpLIR=false}
-let stdinBytes s = Bytes.of_string (HostEncoding.utf8 s)
+let stdinBytes s = Bytes.of_string (Utf8.utf8 s)
 let tryExecuteBinary target arguments environment stdin binary =
   let input=match stdin with Closed->CompilerOptions.Closed|Bytes s->CompilerOptions.Bytes (stdinBytes s) in
   match Platform.detectHostTarget () with
@@ -360,7 +360,7 @@ let tryExecuteBinary target arguments environment stdin binary =
     | Platform.ARM64Backend arm -> Error ("Cross-target execution is unavailable for ARM64Backend "^(match arm with Platform.LinuxARM64->"LinuxARM64"|Platform.MacOSARM64->"MacOSARM64"))
     | Platform.LinuxX86_64 ->
         let qemu="/opt/dcb/qemu/qemu-x86_64" in
-        if not (HostFile.exists qemu) then Error ("Pinned x86_64 QEMU is unavailable at "^qemu) else
+        if not (FileIO.exists qemu) then Error ("Pinned x86_64 QEMU is unavailable at "^qemu) else
         let path=Filename.temp_file "dark-e2e-cross-" ".elf" in
         Fun.protect ~finally:(fun ()->SourcePreparation.tryDeleteFile path) (fun ()->
           try
@@ -382,7 +382,7 @@ let compileAndRun arguments environment stdin request =
   | Error error -> CompileFailed (1,error,report.CompilerOptions.compileTime)
   | Ok binary -> match tryExecuteBinary report.CompilerOptions.target arguments environment stdin binary with
     | Ok output -> Ran (output.CompilerOptions.exitCode,output.CompilerOptions.stdout,output.CompilerOptions.stderr,report.CompilerOptions.compileTime,output.CompilerOptions.runtimeTime)
-    | Error error -> Ran (-1,"","Execution failed: "^error,report.CompilerOptions.compileTime,HostTimeSpan.zero)
+    | Error error -> Ran (-1,"","Execution failed: "^error,report.CompilerOptions.compileTime,0L)
 let canBatchTogether left right =
   comparePreambleContextKey (preambleContextKeyForTest left.test) (preambleContextKeyForTest right.test)=0 &&
   isInternalTestFile left.test.sourceFile=isInternalTestFile right.test.sourceFile && buildCompilerOptions left.test=buildCompilerOptions right.test
@@ -392,7 +392,7 @@ let batchBindingPrefix tests =
   let parts=List.concat_map (fun prepared->[prepared.test.sourceFile;prepared.test.name;prepared.equalitySource]) tests in
   let hash=List.fold_left (fun hash part ->
     Array.fold_left (fun current unit->Int64.mul (Int64.logxor current (Int64.of_int unit)) 1099511628211L)
-      (Int64.mul (Int64.logxor hash 255L) 1099511628211L) (HostText.scalars part)) (Int64.of_string "0xcbf29ce484222325") parts in
+      (Int64.mul (Int64.logxor hash 255L) 1099511628211L) (Text.scalars part)) (Int64.of_string "0xcbf29ce484222325") parts in
   let existing=List.concat_map (fun prepared->StringMap.bindings prepared.test.functionLineMap |> List.map fst) tests |> SS.of_list in
   let rec pick attempt=
     let prefix="e2eBatch"^Printf.sprintf "%016Lx" hash^"_"^(if attempt=0 then "" else string_of_int attempt^"_") in
@@ -423,9 +423,9 @@ let tryParseBatchBoolResults expectedCount stdout =
   let expectedChunks=(expectedCount+batchResultChunkSize-1)/batchResultChunkSize in
   match last with
   | raw::_ when expectedCount>0 && expectedCount<=maxSupportedBatchSize ->
-      let line=HostText.trim raw in
+      let line=Text.trim raw in
       let parts=if expectedChunks=1 then [line] else
-        if HostText.startsWith line "(" && HostText.endsWith line ")" then slice line 1 (length line-2) |> String.split_on_char ',' |> List.map HostText.trim else [] in
+        if Text.startsWith line "(" && Text.endsWith line ")" then slice line 1 (length line-2) |> String.split_on_char ',' |> List.map Text.trim else [] in
       let parsed=List.map tryParseInteger64 parts in
       if List.length parsed<>expectedChunks || List.exists Option.is_none parsed then None else
       let masks=List.filter_map Fun.id parsed in
@@ -437,8 +437,8 @@ let tryParseBatchBoolResults expectedCount stdout =
   | _ -> None
 let splitDuration count index duration =
   let count=Int64.of_int count in
-  let quotient=Int64.div (HostTimeSpan.ticks duration) count and remainder=Int64.rem (HostTimeSpan.ticks duration) count in
-  HostTimeSpan.fromTicks (Int64.add quotient (if Int64.of_int index<remainder then 1L else 0L))
+  let quotient=Int64.div (duration) count and remainder=Int64.rem (duration) count in
+  (Int64.add quotient (if Int64.of_int index<remainder then 1L else 0L))
 let splitRun count index stdout = function
   | CompileFailed (code,error,compile)->CompileFailed (code,error,splitDuration count index compile)
   | Ran (code,_,stderr,compile,runtime)->Ran (code,stdout,stderr,splitDuration count index compile,splitDuration count index runtime)
@@ -451,12 +451,12 @@ let packageManagerFixture = lazy (
     "function/get/with-location/0f116690f2572bcfff9e18effd2589ad4fc7672fc46088c219229a7821a122f4",200,{|{"entity":{"body":{"EInt":[5376903518395640452,5]},"description":"","hash":{"Hash":["0f116690f2572bcfff9e18effd2589ad4fc7672fc46088c219229a7821a122f4"]},"parameters":[{"description":"","name":"_","typ":{"TUnit":[]}}],"permissionCeiling":{"None":[]},"returnType":{"TInt":[]},"typeParams":[]},"location":{"modules":["Test"],"name":"returnsInt","owner":"Darklang"}}|};
     "type/find/Darklang.Test",404,"";"type/find/Darklang.Test.returnsInt",404,"";
     "value/find/Darklang.Test",404,"";"value/find/Darklang.Test.returnsInt",404,""] in
-  List.iter (fun (path,status,body)->HostPackageIO.cacheWrite cachePath (server^path) status body) responses;
+  List.iter (fun (path,status,body)->PackageIO.cacheWrite cachePath (server^path) status body) responses;
   {PackageManager.server;cachePath})
 let packageManagerForFile path=if String.ends_with ~suffix:"/package_manager.e2e" path then Some (Lazy.force packageManagerFixture) else None
 let runE2ETestBatchWithPreambleContext stdlib preambleCtx session tests passTimingRecorder =
   match tests with
-  | [] -> {aggregateRun=CompileFailed (1,"Cannot execute an empty E2E batch",HostTimeSpan.zero);results=[]}
+  | [] -> {aggregateRun=CompileFailed (1,"Cannot execute an empty E2E batch",0L);results=[]}
   | first::_ ->
       let count=List.length tests in
       let source=buildBatchSource tests in
@@ -474,7 +474,7 @@ let runE2ETestBatchWithPreambleContext stdlib preambleCtx session tests passTimi
         | _ ->
             let message=match aggregateRun with
               | CompileFailed (_,error,_)->"Batch compilation failed: "^error
-              | Ran (code,_,stderr,_,_) -> let detail=HostText.trim stderr in "Batch execution failed with exit code "^string_of_int code^(if detail="" then "" else ": "^detail) in
+              | Ran (code,_,stderr,_,_) -> let detail=Text.trim stderr in "Batch execution failed with exit code "^string_of_int code^(if detail="" then "" else ": "^detail) in
             List.mapi (fun i prepared->let run=splitRun count i "" aggregateRun in prepared.test,failRun run message) tests in
       {aggregateRun;results}
 
@@ -511,7 +511,7 @@ let runE2ETestSourceWithPreambleContext stdlib preambleCtx session (test:e2eTest
 let runE2ETestWithPreambleContext stdlib preambleCtx session (test:e2eTest) passTimingRecorder =
   let allowInternal=isInternalTestFile test.sourceFile in
   match sourceToExecute allowInternal test with
-  | Error message->let run=CompileFailed (1,message,HostTimeSpan.zero) in failRun run message
+  | Error message->let run=CompileFailed (1,message,0L) in failRun run message
   | Ok source->runE2ETestSourceWithPreambleContext stdlib preambleCtx session test source passTimingRecorder
 let runPreparedE2ETestWithPreambleContext stdlib preambleCtx session prepared passTimingRecorder =
   runE2ETestSourceWithPreambleContext stdlib preambleCtx session prepared.test prepared.equalitySource passTimingRecorder

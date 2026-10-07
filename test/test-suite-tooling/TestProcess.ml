@@ -5,7 +5,7 @@ external spawn : string * string array * string array * Unix.file_descr * Unix.f
 external signalNumber : int -> int = "dark_execution_signal_number"
 exception TimedOut
 let exitCode=function Unix.WEXITED code->code|Unix.WSIGNALED signal|Unix.WSTOPPED signal->128+signalNumber signal
-let decode text=HostPackageIO.decodeContent (if String.starts_with ~prefix:"\000\000\254\255" text then Some "text/plain; charset=utf-32be" else None) text
+let decode text=ContentEncoding.decodeContent (if String.starts_with ~prefix:"\000\000\254\255" text then Some "text/plain; charset=utf-32be" else None) text
 (* A descriptor number may be reused by a concurrent suite immediately after
    close. Retire it before closing so final cleanup only owns live descriptors. *)
 let own descriptors=
@@ -23,12 +23,12 @@ let capture file arguments timeout=
  if pid<0 then Error ("Execution failed: An error occurred trying to start process '"^file^"' with working directory '"^Sys.getcwd ()^"'. "^error) else (
  child:=Some pid;close stdoutWrite;close stderrWrite;List.iter Unix.set_nonblock [stdoutRead;stderrRead];
  let readers=ref [stdoutRead;stderrRead] in let stdout=Buffer.create 4096 and stderr=Buffer.create 4096 in let scratch=Bytes.create 16384 in
- let deadline=HostClock.milliseconds ()+.float_of_int timeout in
+ let deadline=(Int64.to_float (Mtime_clock.elapsed_ns ()) /. 1e6)+.float_of_int timeout in
  let rec pump status=
   let status=match status with Some _->status|None->let waited,status=Unix.waitpid [Unix.WNOHANG] pid in if waited=0 then None else (child:=None;Some status) in
   match status,!readers with Some status,[]->Ok (exitCode status,decode (Buffer.contents stdout),decode (Buffer.contents stderr))|_->
-  if status=None && HostClock.milliseconds ()>=deadline then raise TimedOut;
-  let delay=if status=None then min 0.05 (max 0. ((deadline-.HostClock.milliseconds ())/.1000.)) else -1. in
+  if status=None && (Int64.to_float (Mtime_clock.elapsed_ns ()) /. 1e6)>=deadline then raise TimedOut;
+  let delay=if status=None then min 0.05 (max 0. ((deadline-.(Int64.to_float (Mtime_clock.elapsed_ns ()) /. 1e6))/.1000.)) else -1. in
   let ready,_,_=try Unix.select !readers [] [] delay with Unix.Unix_error (Unix.EINTR,_,_)->[],[],[] in
   List.iter (fun fd->try let count=Unix.read fd scratch 0 (Bytes.length scratch) in if count=0 then (close fd;readers:=List.filter ((<>) fd) !readers) else Buffer.add_subbytes (if fd=stdoutRead then stdout else stderr) scratch 0 count with Unix.Unix_error ((Unix.EINTR|Unix.EAGAIN|Unix.EWOULDBLOCK),_,_)->()) ready;
   pump status in
@@ -51,12 +51,12 @@ let captureWithInputAndEnvironment file arguments overrides input timeout=
  List.iter Unix.set_nonblock [stdoutRead;stderrRead];Unix.set_nonblock stdinWrite;
  let position=ref 0 and writable=ref (Bytes.length input>0) in if not !writable then close stdinWrite;
  let readers=ref [stdoutRead;stderrRead] in let stdout=Buffer.create 4096 and stderr=Buffer.create 4096 in let scratch=Bytes.create 16384 in
- let deadline=HostClock.milliseconds ()+.float_of_int timeout in
+ let deadline=(Int64.to_float (Mtime_clock.elapsed_ns ()) /. 1e6)+.float_of_int timeout in
  let rec pump status=
   let status=match status with Some _->status|None->let waited,status=Unix.waitpid [Unix.WNOHANG] pid in if waited=0 then None else (child:=None;Some status) in
   match status,!readers,!writable with Some status,[],false->Ok (exitCode status,decode (Buffer.contents stdout),decode (Buffer.contents stderr))|_->
-  if status=None && HostClock.milliseconds ()>=deadline then raise TimedOut;
-  let delay=if status=None then min 0.05 (max 0. ((deadline-.HostClock.milliseconds ())/.1000.)) else -1. in
+  if status=None && (Int64.to_float (Mtime_clock.elapsed_ns ()) /. 1e6)>=deadline then raise TimedOut;
+  let delay=if status=None then min 0.05 (max 0. ((deadline-.(Int64.to_float (Mtime_clock.elapsed_ns ()) /. 1e6))/.1000.)) else -1. in
   let ready,writing,_=try Unix.select !readers (if !writable then [stdinWrite] else []) [] delay with Unix.Unix_error (Unix.EINTR,_,_)->[],[],[] in
   List.iter (fun fd->try let count=Unix.read fd scratch 0 (Bytes.length scratch) in if count=0 then (close fd;readers:=List.filter ((<>) fd) !readers) else Buffer.add_subbytes (if fd=stdoutRead then stdout else stderr) scratch 0 count with Unix.Unix_error ((Unix.EINTR|Unix.EAGAIN|Unix.EWOULDBLOCK),_,_)->()) ready;
   List.iter (fun fd->try let count=Unix.write fd input !position (Bytes.length input- !position) in position:= !position+count;if !position=Bytes.length input then (writable:=false;close fd)

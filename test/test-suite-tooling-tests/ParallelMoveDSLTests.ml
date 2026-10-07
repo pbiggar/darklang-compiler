@@ -37,7 +37,7 @@ v0 <- Reg X1
 MOV_reg(X0, X1)
 |fixture} in
  match parseParallelMoveFileContent "bad.parallelmoves" content with
- |Error msg when HostText.contains msg "physical register"->Ok ()
+ |Error msg when Text.contains msg "physical register"->Ok ()
  |Error msg->Error ("Expected physical-register validation, got: "^msg)
  |Ok _->Error "Expected a virtual move destination to be rejected"
 let tests=["parallel-move DSL parses and runs multiple cases",testParsesAndRunsMultipleMoveCases;"parallel-move DSL rejects virtual destinations",testRejectsVirtualDestination]

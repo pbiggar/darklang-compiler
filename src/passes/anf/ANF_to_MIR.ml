@@ -40,8 +40,8 @@ let mulInt a b = Int32.to_int (Int32.mul (Int32.of_int a) (Int32.of_int b))
 let ( let* ) = Result.bind
 let ( let+ ) value action = Result.map action value
 let tempText (ANF.TempId id) = "TempId " ^ string_of_int id
-let labelText (MIR.Label name) = "Label " ^ HostStructuralFormat.format (HostStructuralFormat.Text name)
-let functionText id = HostStructuralFormat.format (AST.DiagnosticFormatting.func id)
+let labelText (MIR.Label name) = "Label " ^ StructuralFormat.format (StructuralFormat.Text name)
+let functionText id = StructuralFormat.format (AST.DiagnosticFormatting.func id)
 let tryItem index values = if index < 0 then None else List.nth_opt values index
 let item index values = match tryItem index values with Some value -> value | None -> invalid_arg "The index was outside the range of elements in the list. (Parameter 'index')"
 let zip3 a b c = List.map2 (fun (x,y) z -> x,y,z) (List.combine a b) c
@@ -425,7 +425,7 @@ let inferSimpleCExprDestType builder tempId aliasType = function
  | ANF.CanonicalBufferEq _ -> Some AST.TBool
  | ANF.UnaryPrim (ANF.Not,_) -> Some AST.TBool | ANF.UnaryPrim (_,atom) -> Some (atomType builder atom)
  | ANF.Call (name,_) | ANF.BorrowedCall (name,_) -> Some (directCallReturnType builder name)
- | ANF.IndirectCall (func,_) -> (match atomType builder func with AST.TFunction (_,ret) -> Some ret | AST.TInternalRawPtr | AST.TInt64 -> Some AST.TBool | typ -> Crash.crash ("IndirectCall: Expected TFunction type for func, got "^HostStructuralFormat.semanticType typ))
+ | ANF.IndirectCall (func,_) -> (match atomType builder func with AST.TFunction (_,ret) -> Some ret | AST.TInternalRawPtr | AST.TInt64 -> Some AST.TBool | typ -> Crash.crash ("IndirectCall: Expected TFunction type for func, got "^StructuralFormat.semanticType typ))
  | ANF.ClosureCall (closure,_) -> Some (closureCallReturnType builder tempId closure)
  | ANF.TupleGet (ANF.Var tuple,index) -> tupleGetDestType builder tempId aliasType tuple index
  | ANF.RecordAlloc (desc,_) | ANF.RecordClone (desc,_,_) | ANF.RecordReuse (_,desc,_,_) -> Some desc.ANF.valueType
@@ -595,14 +595,14 @@ let simpleCExprInstrs builder tempId destReg destType cexpr =
  | ANF.Prim (op,left,right) -> let typ=binOpType builder left right in binary (fun l r -> MIR.BinOp (destReg,convertBinOp op,l,r,typ)) left right
  | ANF.UnaryPrim (op,atom) -> let typ=atomType builder atom in unary (fun operand -> match op with ANF.Not -> MIR.UnaryOp (destReg,convertUnaryOp op,operand) | ANF.Neg -> MIR.BinOp (destReg,MIR.Sub,MIR.Int64Const 0L,operand,typ) | ANF.BitNot -> MIR.BinOp (destReg,MIR.BitXor,operand,MIR.Int64Const (-1L),typ)) atom
  | ANF.Call (name,args) | ANF.BorrowedCall (name,args) -> let types=List.map (atomType builder) args in let typ=directCallReturnType builder name in let+ ops=arguments args in [MIR.Call (destReg,name,ops,types,typ)]
- | ANF.IndirectCall (func,args) -> let types=List.map (atomType builder) args in let typ=match atomType builder func with AST.TFunction (_,typ) -> typ | AST.TInternalRawPtr | AST.TInt64 -> AST.TBool | other -> Crash.crash ("IndirectCall: Expected TFunction type for func, got "^HostStructuralFormat.semanticType other) in let* funcOp=operand func in let+ ops=arguments args in [MIR.IndirectCall (destReg,funcOp,ops,types,typ)]
+ | ANF.IndirectCall (func,args) -> let types=List.map (atomType builder) args in let typ=match atomType builder func with AST.TFunction (_,typ) -> typ | AST.TInternalRawPtr | AST.TInt64 -> AST.TBool | other -> Crash.crash ("IndirectCall: Expected TFunction type for func, got "^StructuralFormat.semanticType other) in let* funcOp=operand func in let+ ops=arguments args in [MIR.IndirectCall (destReg,funcOp,ops,types,typ)]
  | ANF.ClosureAlloc (name,captures) ->
  let size=mulInt (addInt 1 (List.length captures)) 8 in
  let alloc=MIR.HeapAlloc (destReg,size) in let storeFunc=MIR.HeapStore (destReg,0,MIR.FuncAddr name,None) in
  let+ stores=ResultList.sequenceResults (List.mapi (fun index cap -> let typ=atomType builder cap in let valueType=if typ=AST.TFloat64 then Some AST.TFloat64 else None in let+ op=operand cap in MIR.HeapStore (destReg,mulInt (addInt index 1) 8,op,valueType)) captures) in alloc::storeFunc::stores
  | ANF.ClosureCall (closure,args) -> let types=List.map (atomType builder) args in let typ=closureCallReturnType builder tempId closure in let* closureOp=operand closure in let+ ops=arguments args in [MIR.ClosureCall (destReg,closureOp,ops,types,typ)]
  | ANF.TailCall (name,args) -> let types=List.map (atomType builder) args in let typ=directCallReturnType builder name in let+ ops=arguments args in [MIR.TailCall (name,ops,types,typ)]
- | ANF.IndirectTailCall (func,args) -> let types=List.map (atomType builder) args in let typ=match atomType builder func with AST.TFunction (_,typ) -> typ | AST.TInternalRawPtr | AST.TInt64 -> AST.TBool | other -> Crash.crash ("IndirectTailCall: Expected TFunction type for func, got "^HostStructuralFormat.semanticType other) in let* funcOp=operand func in let+ ops=arguments args in [MIR.IndirectTailCall (funcOp,ops,types,typ)]
+ | ANF.IndirectTailCall (func,args) -> let types=List.map (atomType builder) args in let typ=match atomType builder func with AST.TFunction (_,typ) -> typ | AST.TInternalRawPtr | AST.TInt64 -> AST.TBool | other -> Crash.crash ("IndirectTailCall: Expected TFunction type for func, got "^StructuralFormat.semanticType other) in let* funcOp=operand func in let+ ops=arguments args in [MIR.IndirectTailCall (funcOp,ops,types,typ)]
  | ANF.ClosureTailCall (closure,args) -> let types=List.map (atomType builder) args in let* closureOp=operand closure in let+ ops=arguments args in [MIR.ClosureTailCall (closureOp,ops,types)]
  | ANF.TupleAlloc elems -> let alloc=MIR.HeapAlloc (destReg,mulInt (List.length elems) 8) in let+ stores=storeFields elems in alloc::stores
  | ANF.TupleGet (tuple,index) -> (match tuple with ANF.Var tid -> let typ=match destType with Some AST.TFloat64 -> Some AST.TFloat64 | _ -> None in Ok [MIR.HeapLoad (destReg,tempToVReg tid,mulInt index 8,typ)] | _ -> Error "Internal error: Tuple access on non-variable (ANF invariant violated)")
@@ -918,8 +918,8 @@ let toMIR (ANF.Program (functions,mainExpr)) typeMap typeReg mainExprType varian
    Each function gets its own RegGen for deterministic VReg assignment.
 *)
 let toMIRFunctionsOnlyInternal phaseRecorder projectedRegistries tailCallConfig (ANF.Program (functions,_)) typeMap typeReg variantLookup typeRegForRecords enableCoverage returnTypeReg functionNames =
- let startPhase ()=Option.map (fun _ -> HostClock.milliseconds ()) phaseRecorder in
- let recordPhase name timer=match phaseRecorder,timer with Some record,Some start -> let elapsed=HostClock.milliseconds ()-.start in record name elapsed | _ -> () in
+ let startPhase ()=Option.map (fun _ -> (Int64.to_float (Mtime_clock.elapsed_ns ()) /. 1e6)) phaseRecorder in
+ let recordPhase name timer=match phaseRecorder,timer with Some record,Some start -> let elapsed=(Int64.to_float (Mtime_clock.elapsed_ns ()) /. 1e6)-.start in record name elapsed | _ -> () in
  let members,enabled=Option.value ~default:(FunctionIdMap.empty,true) tailCallConfig in
  let ssaTimer=startPhase () in
  let ssaResult=ResultList.mapResults (fun func -> SSAANF.convertFunction (maxTempIdInFunction func) typeMap func) functions in

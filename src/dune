@@ -5,7 +5,7 @@
  (action (run python3 %{dep:native_flags.py})))
 (library
  (name dark_compiler)
- (libraries unix uutf uucp uunf uuseg zarith yojson)
+ (libraries unix uutf uucp uunf uuseg zarith yojson digestif mtime.clock.os uri uuidm dtoa)
  (foreign_stubs
   (language c)
   (names host_identity host_package_io host_execution)

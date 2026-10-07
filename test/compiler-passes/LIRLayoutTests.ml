@@ -3,7 +3,7 @@
 open Dark_compiler
 open LIR
 type testResult = (unit, string) result
-let labelsText labels = HostStructuralFormat.format (HostStructuralFormat.Sequence (List.map (fun (LIR.Label name) -> HostStructuralFormat.Union ("Label",[HostStructuralFormat.Text name])) labels))
+let labelsText labels = StructuralFormat.format (StructuralFormat.Sequence (List.map (fun (LIR.Label name) -> StructuralFormat.Union ("Label",[StructuralFormat.Text name])) labels))
 let branchFixture () : LIR.cfg =
  let entry = LIR.Label "entry" in
  let trueBlock = LIR.Label "a_true" in
@@ -55,7 +55,7 @@ let testLayoutReportsMissingEntryBlock () =
  let entry = LIR.Label "entry" in
  let cfg : LIR.cfg = {entry;blocks=LIR.LabelMap.empty} in
  match LIR.layoutBlocks cfg with
- | Error e when HostText.contains e "missing entry block" -> Ok ()
+ | Error e when Text.contains e "missing entry block" -> Ok ()
  | Error e -> Error ("Expected missing entry block error, got '" ^ e ^ "'")
  | Ok _ -> Error "Expected layout to reject a missing entry block"
 let tests = [

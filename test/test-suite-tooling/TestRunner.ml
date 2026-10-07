@@ -42,12 +42,12 @@ module R=E2ETestRunner
 module O=CompilerOptions
 let println=Output.println
 let get=function Ok x->x|Error error->Crash.crash error
-let now ()=Int64.div (HostClock.ticks ()) 100L
+let now ()=Mtime_clock.elapsed_ns ()
 let elapsed start=Int64.sub (now ()) start
 let arrayFilter predicate values=Array.to_list values |> List.filter predicate |> Array.of_list
 let queueList queue=Queue.to_seq queue |> List.of_seq
-let textLength text=Array.length (HostText.scalars text)
-let substring text start count=HostText.ofScalars (Array.sub (HostText.scalars text) start count)
+let textLength text=Array.length (Text.scalars text)
+let substring text start count=Text.ofScalars (Array.sub (Text.scalars text) start count)
 let truncateName maximum retained text=if textLength text>maximum then substring text 0 retained^"..." else text
 let padRight text width=text^String.make (max 0 (width-textLength text)) ' '
 let padLeft text width=String.make (max 0 (width-textLength text)) ' '^text
@@ -59,7 +59,7 @@ let replace text pattern replacement=
 let aiFailureLimit=5
 let aiMessageCharacterLimit=1200
 let aiDetailsCharacterLimit=2400
-let utf8Replacement = HostEncoding.utf8
+let utf8Replacement = Utf8.utf8
 let truncateDiagnostic maximum text=
  let text=utf8Replacement text in let maximum=max 0 maximum in let length=textLength text in
  if length<=maximum then text else if maximum=0 then "" else
@@ -98,7 +98,7 @@ let printHelp ()=List.iter println [
  "  Tests --target=linux-x86_64  Run x64 backend and E2E tests (QEMU when cross-target)";
  "  Tests --timings-json=/tmp/timings.json  Write timing data as JSON";
 ]
-type testRunResult={exitCode:int;state:F.testRunState;totalTime:HostTimeSpan.t;unaccountedBreakdown:F.unaccountedTimeBreakdown}
+type testRunResult={exitCode:int;state:F.testRunState;totalTime:int64;unaccountedBreakdown:F.unaccountedTimeBreakdown}
 let aiProgressTestInterval=250
 let emptyRunResult exitCode={exitCode;state=F.createState ();totalTime=0L;unaccountedBreakdown={F.unaccounted=0L;runtime=0L;overhead=0L}}
 type timingJsonSummary={passed:int;failed:int;total:int;total_ms:float;unaccounted_ms:float;runtime_unaccounted_ms:float;overhead_unaccounted_ms:float;e2e_batch_size:int;e2e_logical_tests:int;e2e_batch_eligible_tests:int;e2e_physical_executions:int;e2e_batch_executions:int;e2e_batched_logical_tests:int;e2e_largest_batch:int}
@@ -113,19 +113,19 @@ type codegenProfileLirOpFunction={function_name:string;category:string;opcode:st
 type codegenProfileSummary={codegen_ms:float;attributed_function_ms:float;program_overhead_ms:float;cache_hits:int;cache_misses:int;release_plan_summary_cache_hits:int;release_plan_summary_cache_misses:int;json_plan_cache_hits:int;json_plan_cache_misses:int;anf_dependency_cache_hits:int;anf_dependency_cache_misses:int;compiled_dependency_cache_hits:int;compiled_dependency_cache_misses:int;mir_optimization_cache_hits:int;mir_optimization_cache_misses:int;allocated_lir_function_cache_hits:int;allocated_lir_function_cache_misses:int;stdlib_reachability_cache_hits:int;stdlib_reachability_cache_misses:int;metadata_group_cache_hits:int;metadata_group_cache_misses:int;helper_cache_hits:int;helper_cache_misses:int;start_codegen_cache_hits:int}
 type codegenProfilePayload={schema_version:int;summary:codegenProfileSummary;phases:codegenProfilePhase array;categories:codegenProfileCategory array;functions:codegenProfileFunction array;lir_ops:codegenProfileLirOp array;lir_op_functions:codegenProfileLirOpFunction array}
 let roundedMilliseconds value=let scaled=value*.1000. in let lower=Float.floor scaled in let fraction=scaled-.lower in (if fraction>0.5 || (fraction=0.5 && mod_float lower 2.<>0.) then lower+.1. else lower) /.1000.
-let milliseconds elapsed=roundedMilliseconds (HostTimeSpan.totalMilliseconds elapsed)
+let milliseconds elapsed=roundedMilliseconds ((Int64.to_float elapsed /. 1e6))
 let optionalMilliseconds value=Option.map milliseconds value
 let jsonString value=
  let buffer=Buffer.create (String.length value+2) in Buffer.add_char buffer '"';
  Array.iter (fun code->match code with
  |8->Buffer.add_string buffer "\\b"|9->Buffer.add_string buffer "\\t"|10->Buffer.add_string buffer "\\n"|12->Buffer.add_string buffer "\\f"|13->Buffer.add_string buffer "\\r"|92->Buffer.add_string buffer "\\\\"
  |code when code<32 || code>126 || List.mem code [34;38;39;43;60;62;96]->Buffer.add_string buffer (Printf.sprintf "\\u%04X" code)
- |code->Buffer.add_char buffer (Char.chr code)) (HostText.scalars value);
+ |code->Buffer.add_char buffer (Char.chr code)) (Text.scalars value);
  Buffer.add_char buffer '"';Buffer.contents buffer
 type json=JString of string|JInt of int|JFloat of float|JArray of json list|JObject of (string*json) list
 let rec serializeJson indent depth value=
  let pad n=String.make (n*2) ' ' in let sequence left right values=if values=[] then left^right else if not indent then left^String.concat "," values^right else left^"\n"^String.concat ",\n" (List.map (fun s->pad (depth+1)^s) values)^"\n"^pad depth^right in
- match value with JString s->jsonString s|JInt n->string_of_int n|JFloat f->HostFloat.roundTrip f|JArray xs->sequence "[" "]" (List.map (serializeJson indent (depth+1)) xs)|JObject xs->sequence "{" "}" (List.map (fun (k,v)->jsonString k^(if indent then ": " else ":")^serializeJson indent (depth+1) v) xs)
+ match value with JString s->jsonString s|JInt n->string_of_int n|JFloat f->FloatFormat.roundTrip f|JArray xs->sequence "[" "]" (List.map (serializeJson indent (depth+1)) xs)|JObject xs->sequence "{" "}" (List.map (fun (k,v)->jsonString k^(if indent then ": " else ":")^serializeJson indent (depth+1) v) xs)
 let rec createDirectory path=if path<>"" && path<>"." && not (Sys.file_exists path) then (createDirectory (Filename.dirname path);Unix.mkdir path 0o777)
 let writeJson indent path value=createDirectory (Filename.dirname path);Out_channel.with_open_bin path (fun channel->Out_channel.output_string channel (serializeJson indent 0 value))
 let json_timingJsonSummary (value:timingJsonSummary)=JObject (List.filter_map Fun.id [
@@ -254,7 +254,7 @@ let runTestsWithProgressReporter completedTestReporter args=
  Option.iter (fun path->println (C.gray^"  Codegen profile JSON output: "^path^C.reset)) codegenProfileJsonPath;println "";
  let getTestFiles dir suffix=RepositoryTestFiles.filesUnder ("test/fixtures/"^dir) ("."^suffix) in
  let allUpstreamDarkPaths=getTestFiles "e2e/upstream" "dark" in Array.sort StringOrder.compare allUpstreamDarkPaths;
- let filterUpstreamDarkPaths paths=match filter with None->paths|Some pattern->let pattern=HostText.lowerInvariant (HostText.trim pattern) in arrayFilter (fun path->HostText.contains (HostText.lowerInvariant path) pattern) paths in
+ let filterUpstreamDarkPaths paths=match filter with None->paths|Some pattern->let pattern=Text.lowerInvariant (Text.trim pattern) in arrayFilter (fun path->Text.contains (Text.lowerInvariant path) pattern) paths in
  let includeUpstreamDarkPathsForE2E=match filter with None->allUpstreamDarkPaths|Some _->let paths=filterUpstreamDarkPaths allUpstreamDarkPaths in if Array.length paths=0 then allUpstreamDarkPaths else paths in
  let includeUpstreamDarkPathsForRoundtrip=if roundtripAllDark then filterUpstreamDarkPaths allUpstreamDarkPaths else includeUpstreamDarkPathsForE2E in
  let e2eFiles=getTestFiles "e2e" "e2e" in
@@ -371,7 +371,7 @@ let runTestsWithProgressReporter completedTestReporter args=
  let recordNonPassTiming name elapsed=if elapsed>0L then recordPassTiming {O.pass=name;elapsed} in
  let recordPhaseOverhead name elapsed before after=
   let delta=Int64.sub after before in
-  if delta<0L then Crash.crash (Printf.sprintf "recordPhaseOverhead: pass timing delta (%s) is negative for %s" (HostStructuralFormat.format (HostStructuralFormat.Scalar (F.formatTime delta))) name);
+  if delta<0L then Crash.crash (Printf.sprintf "recordPhaseOverhead: pass timing delta (%s) is negative for %s" (StructuralFormat.format (StructuralFormat.Scalar (F.formatTime delta))) name);
   recordNonPassTiming name (Int64.sub elapsed delta) in
  let runSuiteWithExecutionTiming name run=
   let before=passTimingTotal () and start=now () in run ();recordPhaseOverhead name (elapsed start) before (passTimingTotal ()) in
@@ -386,10 +386,10 @@ let runTestsWithProgressReporter completedTestReporter args=
  let disabledUpstreamFiles=["test/fixtures/e2e/upstream/cli/app-service-safety.dark";"test/fixtures/e2e/upstream/cli/command-completions.dark";"test/fixtures/e2e/upstream/cli/deprecation-kinds.dark";"test/fixtures/e2e/upstream/cli/include-parsing.dark";"test/fixtures/e2e/upstream/cli/outliner.dark";"test/fixtures/e2e/upstream/cli/permissions-display.dark";"test/fixtures/e2e/upstream/cli/permissions-grammar.dark";"test/fixtures/e2e/upstream/cli/tailscale.dark";"test/fixtures/e2e/upstream/cli/workbench-repl.dark";"test/fixtures/e2e/upstream/cloud/db.dark";"test/fixtures/e2e/upstream/language/big.dark";"test/fixtures/e2e/upstream/language/builtin-introspection.dark";"test/fixtures/e2e/upstream/language/custom-data/values.dark";"test/fixtures/e2e/upstream/language/effect-ceiling.dark";"test/fixtures/e2e/upstream/language/error-type-names.dark";"test/fixtures/e2e/upstream/language/runtime-to-programtypes.dark";"test/fixtures/e2e/upstream/scm/branch-identity.dark";"test/fixtures/e2e/upstream/scm/commit-hash.dark";"test/fixtures/e2e/upstream/scm/conflicts.dark";"test/fixtures/e2e/upstream/scm/constraint-kinds.dark";"test/fixtures/e2e/upstream/scm/lww.dark";"test/fixtures/e2e/upstream/scm/matter-routes.dark";"test/fixtures/e2e/upstream/scm/propagation-policy.dark";"test/fixtures/e2e/upstream/scm/removal-conflicts.dark";"test/fixtures/e2e/upstream/scm/sync-seen-everything.dark";"test/fixtures/e2e/upstream/scm/sync-wire.dark";"test/fixtures/e2e/upstream/stachu/darklangParser.dark";"test/fixtures/e2e/upstream/stachu/parser.dark";"test/fixtures/e2e/upstream/stachu/tinyLang.dark";"test/fixtures/e2e/upstream/stdlib/crypto.dark";"test/fixtures/e2e/upstream/stdlib/earg.dark";"test/fixtures/e2e/upstream/stdlib/eself.dark";"test/fixtures/e2e/upstream/stdlib/http.dark";"test/fixtures/e2e/upstream/stdlib/httpclient.dark";"test/fixtures/e2e/upstream/stdlib/json.dark";"test/fixtures/e2e/upstream/stdlib/language-tools/parsedFileShape.dark";"test/fixtures/e2e/upstream/stdlib/language-tools/pickLocation.dark";"test/fixtures/e2e/upstream/stdlib/language-tools/semanticTokenization.dark";"test/fixtures/e2e/upstream/stdlib/pretty.dark";"test/fixtures/e2e/upstream/stdlib/prettyPrinter.dark";"test/fixtures/e2e/upstream/stdlib/sqlite.dark";"test/fixtures/e2e/upstream/stdlib/sse.dark";"test/fixtures/e2e/upstream/stdlib/stream.dark";"test/fixtures/e2e/upstream/stdlib/string.dark"] in
  let disabledUpstreamLines=["test/fixtures/e2e/upstream/language/custom-data/aliases.dark",[39;148;149;157;159;175;177];"test/fixtures/e2e/upstream/language/custom-data/enums.dark",[7;11;15;17;22;23;24;26;27;28;30;45;65;67;69;74;101;104;109];"test/fixtures/e2e/upstream/language/apply/eapply.dark",[120];"test/fixtures/e2e/upstream/language/basic/eand.dark",[5;7;11];"test/fixtures/e2e/upstream/language/basic/elet.dark",[67];"test/fixtures/e2e/upstream/language/basic/eor.dark",[6;16;17];"test/fixtures/e2e/upstream/language/basic/estring.dark",[11;17;21;28];"test/fixtures/e2e/upstream/language/basic/evariable.dark",[3];"test/fixtures/e2e/upstream/language/derror.dark",[2;10;13;15;16;18;19;22;23;32];"test/fixtures/e2e/upstream/language/flow-control/eif.dark",[1;12;13;14;20];"test/fixtures/e2e/upstream/language/nested-fns.dark",[55;60];"test/fixtures/e2e/upstream/stdlib/base64.dark",[7;9;10;11;12;20;21;22;23;24;25;26;27;28;29;33;34;35;36;39;40;43;44;45;46;47];"test/fixtures/e2e/upstream/stdlib/dict.dark",[21;30;32;59;61;74;144;145;146;147;159;227;237;242;245;251;273;279;282;311;315;322;327;332;334;351;353;357;387;389;391;394;396;398;400;402;404;406;408];"test/fixtures/e2e/upstream/stdlib/float.dark",[45;47;51;55;58;59;64;65;71;73;76;79;81;87;89;106;107;110;111;113;124;125;127;133;134;136;160;173;176;179;242;244;253;255];"test/fixtures/e2e/upstream/stdlib/html.dark",[42;44;66;69;72;75;83];"test/fixtures/e2e/upstream/stdlib/httpserver.dark",[29;33;37];"test/fixtures/e2e/upstream/stdlib/ints/int32.dark",[126];"test/fixtures/e2e/upstream/stdlib/ints/int64.dark",[45;60;90;210;368];"test/fixtures/e2e/upstream/stdlib/ints/int8.dark",[47];"test/fixtures/e2e/upstream/stdlib/list.dark",[22;23;24;53;61;65;71;75;81;87;92;93;101;109;129;130;136;140;161;162;174;180;201;206;216;218;223;224;250;264;269;302;314;346;354];"test/fixtures/e2e/upstream/stdlib/math.dark",[27;30];"test/fixtures/e2e/upstream/stdlib/nomodule.dark",[302;304;365;366;367;368;369;370;371;372;373;374;375;377;418;419];"test/fixtures/e2e/upstream/stdlib/option.dark",[44;75;119;138;148;158;170;176;190;204;211;218;234;242;255;260];"test/fixtures/e2e/upstream/stdlib/result.dark",[19;24;57;67;79;85;91;97;110;117;124;139;147;155;178;185;188;277;294]] in
  let normalizePath path=String.map (fun c->if c='\\' then '/' else c) path in
- let pathMatchesSourceFile source suffix=HostText.endsWith (normalizePath source) suffix in
+ let pathMatchesSourceFile source suffix=Text.endsWith (normalizePath source) suffix in
  let isDisabledUpstreamFile source=List.exists (pathMatchesSourceFile source) disabledUpstreamFiles in
  let disabledLinesForSourceFile source=List.find_map (fun (suffix,lines)->if pathMatchesSourceFile source suffix then Some lines else None) disabledUpstreamLines in
- let tryParseTestLineNumber name=if HostText.startsWith name "L" then match String.index_opt name ':' with Some colon when colon>1->Option.map Int32.to_int (HostText.tryParseInt32 (String.sub name 1 (colon-1)))|_->None else None in
+ let tryParseTestLineNumber name=if Text.startsWith name "L" then match String.index_opt name ':' with Some colon when colon>1->Option.map Int32.to_int (Text.tryParseInt32 (String.sub name 1 (colon-1)))|_->None else None in
  let applyUpstreamEnablementGate (test:E.e2eTest)=if Option.is_some test.E.skipReason then test else if isDisabledUpstreamFile test.E.sourceFile then {test with E.skipReason=Some "pending upstream support"} else match disabledLinesForSourceFile test.E.sourceFile,tryParseTestLineNumber test.E.name with Some lines,Some line when List.mem line lines->{test with E.skipReason=Some "pending upstream support"}|_->test in
  let loadE2ETests files=
   let tests,errors=Array.fold_left (fun (tests,errors) file->match E.parseE2ETestFile file with Ok parsed->List.rev_append (List.map applyUpstreamEnablementGate parsed) tests,errors|Error msg->tests,(file,msg)::errors) ([],[]) files in Array.of_list (List.rev tests),List.rev errors in
@@ -412,7 +412,7 @@ let runTestsWithProgressReporter completedTestReporter args=
    let _,stdout,stderr,compile,runtime=unpack failure.R.run in let cleanName=replace test.E.name "Darklang.Stdlib." "" in
    println ("  "^truncateName 60 57 cleanName^"... "^C.red^"✗ FAIL"^C.reset^" "^C.gray^"(compile: "^F.formatTime compile^", run: "^F.formatTime runtime^")"^C.reset);
    println ("    "^failure.R.message);let details=collectExitCodeDetails test failure.R.run in List.iter (fun detail->println ("    "^detail)) details;
-   List.iter (fun (channel,expected,actual)->match expected with Some text when HostText.trim actual<>HostText.trim text->println ("    Expected "^channel^": "^replace text "\n" "\\n");println ("    Actual "^channel^": "^replace actual "\n" "\\n")|_->()) ["stdout",test.E.expectedStdout,stdout;"stderr",test.E.expectedStderr,stderr];details in
+   List.iter (fun (channel,expected,actual)->match expected with Some text when Text.trim actual<>Text.trim text->println ("    Expected "^channel^": "^replace text "\n" "\\n");println ("    Actual "^channel^": "^replace actual "\n" "\\n")|_->()) ["stdout",test.E.expectedStdout,stdout;"stderr",test.E.expectedStderr,stderr];details in
   let preparedTests=Array.map R.tryPrepareBatchTest testsArray in
   let rec collectBatch first next remaining acc=if next>=numTests || remaining=0 then List.rev acc else match preparedTests.(next) with Some prepared when R.canBatchTogether first prepared->collectBatch first (next+1) (remaining-1) ((next,prepared)::acc)|_->List.rev acc in
   let rec build index acc=if index>=numTests then List.rev acc else match preparedTests.(index) with
@@ -507,8 +507,8 @@ let runTestsWithProgressReporter completedTestReporter args=
  runSuiteWithExecutionTiming "Type Checking Test Suite Execution" (fun ()->F.runFileSuite runState symbols "📋 Type Checking Tests" "TypeCheck" typecheckTests stem (fun name->"TypeCheck: "^name) TypeCheckingTestRunner.runTypeCheckingTestFile handleTypecheckSuccess (handleFileParseError "Type Checking"));
  if Array.length optTestFiles>0 then begin
   let runOptimizationFile path=
-   let lower=HostText.lowerInvariant (stem path) in
-   let stage=match Filename.extension path with ".liropt"->OptimizationFormat.DirectLIR|".arm64opt"->OptimizationFormat.DirectARM64|".lir2x64"->OptimizationFormat.DirectLIR2X64|_->if HostText.contains lower "anf" then OptimizationFormat.ANF else if HostText.contains lower "mir" then OptimizationFormat.MIR else if HostText.contains lower "lir" then OptimizationFormat.LIR else OptimizationFormat.ANF in
+   let lower=Text.lowerInvariant (stem path) in
+   let stage=match Filename.extension path with ".liropt"->OptimizationFormat.DirectLIR|".arm64opt"->OptimizationFormat.DirectARM64|".lir2x64"->OptimizationFormat.DirectLIR2X64|_->if Text.contains lower "anf" then OptimizationFormat.ANF else if Text.contains lower "mir" then OptimizationFormat.MIR else if Text.contains lower "lir" then OptimizationFormat.LIR else OptimizationFormat.ANF in
    OptimizationTestRunner.runTestFile stdlib (Some recordPassTiming) (fun test->TestRunnerArgs.matchesFilter filter test.OptimizationFormat.name) stage path in
   let handleOptimizationSuccess progress path _ _ results:F.fileSuiteSummary=
    let filtered=List.filter (fun (test,_)->TestRunnerArgs.matchesFilter filter test.OptimizationFormat.name) results in
@@ -570,21 +570,21 @@ let runTestsWithProgressReporter completedTestReporter args=
   writeJson false path (json_timingJsonPayload {summary;tests;passes}) in
  Option.iter (fun path->writeTimingsJson path;println ("  "^C.gray^"⏱  Wrote timing JSON: "^path^C.reset)) timingsJsonPath;
  let writeCodegenProfileJson path=
-  let categoryForFunction name=if String.starts_with ~prefix:"Darklang.Stdlib.Json." name || String.starts_with ~prefix:"Darklang.Stdlib.AltJson." name then "shared_json_runtime" else if String.starts_with ~prefix:"__dark_json_" name then "generated_json_codec" else if String.starts_with ~prefix:"__dark_eq_" name && (HostText.contains name "Json" || HostText.contains name "TypeReferenc") then "generated_json_equality" else "other" in
+  let categoryForFunction name=if String.starts_with ~prefix:"Darklang.Stdlib.Json." name || String.starts_with ~prefix:"Darklang.Stdlib.AltJson." name then "shared_json_runtime" else if String.starts_with ~prefix:"__dark_json_" name then "generated_json_codec" else if String.starts_with ~prefix:"__dark_eq_" name && (Text.contains name "Json" || Text.contains name "TypeReferenc") then "generated_json_equality" else "other" in
   let groupBy key values=
    let add groups value=let selected=key value in
     let rec update=function []->[selected,[value]]|(k,xs)::rest when k=selected->(k,xs @ [value])::rest|first::rest->first::update rest in update groups in
    List.fold_left add [] values in
   let sumInt select values=List.fold_left (fun total value->total+select value) 0 values in
   let sumFloat select values=List.fold_left (fun total value->total+.select value) 0. values in
-  let functions=groupBy (fun (m:O.codegenFunctionMetric)->m.O.functionName) !codegenMetrics |> List.map (fun (name,metrics)->({name;category=categoryForFunction name;generations=List.length metrics;elapsed_ms=roundedMilliseconds (sumFloat (fun (m:O.codegenFunctionMetric)->HostTimeSpan.totalMilliseconds m.O.elapsed) metrics);lir_instructions=sumInt (fun (m:O.codegenFunctionMetric)->m.O.lirInstructionCount) metrics;symbolic_instructions=sumInt (fun (m:O.codegenFunctionMetric)->m.O.symbolicInstructionCount) metrics}:codegenProfileFunction)) |> List.stable_sort (fun (a:codegenProfileFunction) (b:codegenProfileFunction)->Float.compare b.elapsed_ms a.elapsed_ms) |> Array.of_list in
+  let functions=groupBy (fun (m:O.codegenFunctionMetric)->m.O.functionName) !codegenMetrics |> List.map (fun (name,metrics)->({name;category=categoryForFunction name;generations=List.length metrics;elapsed_ms=roundedMilliseconds (sumFloat (fun (m:O.codegenFunctionMetric)->(Int64.to_float m.O.elapsed /. 1e6)) metrics);lir_instructions=sumInt (fun (m:O.codegenFunctionMetric)->m.O.lirInstructionCount) metrics;symbolic_instructions=sumInt (fun (m:O.codegenFunctionMetric)->m.O.symbolicInstructionCount) metrics}:codegenProfileFunction)) |> List.stable_sort (fun (a:codegenProfileFunction) (b:codegenProfileFunction)->Float.compare b.elapsed_ms a.elapsed_ms) |> Array.of_list in
   let codegenMs=milliseconds (Option.value ~default:0L (M.find_opt "Code Generation" runState.F.passTimings)) in
   let attributedMs=sumFloat (fun (entry:codegenProfileFunction)->entry.elapsed_ms) (Array.to_list functions) in
   let percentage ms=if codegenMs<=0. then 0. else roundedMilliseconds (ms*.100./.codegenMs) in
   let phases=["ARM64 Codegen Metadata";"ARM64 Codegen Functions";"ARM64 Codegen Helpers";"ARM64 Codegen Assembly";"ARM64 Codegen Peephole"] |> List.filter_map (fun name->Option.map (fun duration->let ms=milliseconds duration in ({name;elapsed_ms=ms;percentage_of_codegen=percentage ms}:codegenProfilePhase)) (M.find_opt name runState.F.passTimings)) |> Array.of_list in
   let categories=groupBy (fun (entry:codegenProfileFunction)->entry.category) (Array.to_list functions) |> List.map (fun (name,entries)->let ms=sumFloat (fun (entry:codegenProfileFunction)->entry.elapsed_ms) entries in ({name;elapsed_ms=roundedMilliseconds ms;percentage_of_codegen=percentage ms;functions=List.length entries;generations=sumInt (fun (entry:codegenProfileFunction)->entry.generations) entries}:codegenProfileCategory)) |> List.stable_sort (fun (a:codegenProfileCategory) (b:codegenProfileCategory)->Float.compare b.elapsed_ms a.elapsed_ms) |> Array.of_list in
-  let lir_ops=groupBy (fun (m:O.codegenLirOpMetric)->m.O.opcode) !codegenLirOpMetrics |> List.map (fun (name,metrics)->let occurrences=sumInt (fun (m:O.codegenLirOpMetric)->m.O.occurrences) metrics in let symbolic=sumInt (fun (m:O.codegenLirOpMetric)->m.O.symbolicInstructionCount) metrics in ({name;occurrences;elapsed_ms=roundedMilliseconds (sumFloat (fun (m:O.codegenLirOpMetric)->HostTimeSpan.totalMilliseconds m.O.elapsed) metrics);symbolic_instructions_before_peephole=symbolic;average_symbolic_instructions_before_peephole=(if occurrences=0 then 0. else roundedMilliseconds (float_of_int symbolic/.float_of_int occurrences))}:codegenProfileLirOp)) |> List.stable_sort (fun (a:codegenProfileLirOp) (b:codegenProfileLirOp)->Int.compare b.symbolic_instructions_before_peephole a.symbolic_instructions_before_peephole) |> Array.of_list in
-  let lir_op_functions=groupBy (fun (m:O.codegenLirOpMetric)->m.O.functionName,m.O.opcode,m.O.detail) !codegenLirOpMetrics |> List.map (fun ((function_name,opcode,detail),metrics)->({function_name;category=categoryForFunction function_name;opcode;detail;occurrences=sumInt (fun (m:O.codegenLirOpMetric)->m.O.occurrences) metrics;elapsed_ms=roundedMilliseconds (sumFloat (fun (m:O.codegenLirOpMetric)->HostTimeSpan.totalMilliseconds m.O.elapsed) metrics);symbolic_instructions_before_peephole=sumInt (fun (m:O.codegenLirOpMetric)->m.O.symbolicInstructionCount) metrics}:codegenProfileLirOpFunction)) |> List.stable_sort (fun (a:codegenProfileLirOpFunction) (b:codegenProfileLirOpFunction)->Int.compare b.symbolic_instructions_before_peephole a.symbolic_instructions_before_peephole) |> Array.of_list in
+  let lir_ops=groupBy (fun (m:O.codegenLirOpMetric)->m.O.opcode) !codegenLirOpMetrics |> List.map (fun (name,metrics)->let occurrences=sumInt (fun (m:O.codegenLirOpMetric)->m.O.occurrences) metrics in let symbolic=sumInt (fun (m:O.codegenLirOpMetric)->m.O.symbolicInstructionCount) metrics in ({name;occurrences;elapsed_ms=roundedMilliseconds (sumFloat (fun (m:O.codegenLirOpMetric)->(Int64.to_float m.O.elapsed /. 1e6)) metrics);symbolic_instructions_before_peephole=symbolic;average_symbolic_instructions_before_peephole=(if occurrences=0 then 0. else roundedMilliseconds (float_of_int symbolic/.float_of_int occurrences))}:codegenProfileLirOp)) |> List.stable_sort (fun (a:codegenProfileLirOp) (b:codegenProfileLirOp)->Int.compare b.symbolic_instructions_before_peephole a.symbolic_instructions_before_peephole) |> Array.of_list in
+  let lir_op_functions=groupBy (fun (m:O.codegenLirOpMetric)->m.O.functionName,m.O.opcode,m.O.detail) !codegenLirOpMetrics |> List.map (fun ((function_name,opcode,detail),metrics)->({function_name;category=categoryForFunction function_name;opcode;detail;occurrences=sumInt (fun (m:O.codegenLirOpMetric)->m.O.occurrences) metrics;elapsed_ms=roundedMilliseconds (sumFloat (fun (m:O.codegenLirOpMetric)->(Int64.to_float m.O.elapsed /. 1e6)) metrics);symbolic_instructions_before_peephole=sumInt (fun (m:O.codegenLirOpMetric)->m.O.symbolicInstructionCount) metrics}:codegenProfileLirOpFunction)) |> List.stable_sort (fun (a:codegenProfileLirOpFunction) (b:codegenProfileLirOpFunction)->Int.compare b.symbolic_instructions_before_peephole a.symbolic_instructions_before_peephole) |> Array.of_list in
   let summary:codegenProfileSummary={codegen_ms=codegenMs;attributed_function_ms=roundedMilliseconds attributedMs;program_overhead_ms=roundedMilliseconds (max 0. (codegenMs-.attributedMs));cache_hits=count "cache_hits";cache_misses=count "cache_misses";release_plan_summary_cache_hits=count "release_plan_summary_cache_hits";release_plan_summary_cache_misses=count "release_plan_summary_cache_misses";json_plan_cache_hits=count "json_plan_cache_hits";json_plan_cache_misses=count "json_plan_cache_misses";anf_dependency_cache_hits=count "anf_dependency_cache_hits";anf_dependency_cache_misses=count "anf_dependency_cache_misses";compiled_dependency_cache_hits=count "compiled_dependency_cache_hits";compiled_dependency_cache_misses=count "compiled_dependency_cache_misses";mir_optimization_cache_hits=count "mir_optimization_cache_hits";mir_optimization_cache_misses=count "mir_optimization_cache_misses";allocated_lir_function_cache_hits=count "allocated_lir_function_cache_hits";allocated_lir_function_cache_misses=count "allocated_lir_function_cache_misses";stdlib_reachability_cache_hits=count "stdlib_reachability_cache_hits";stdlib_reachability_cache_misses=count "stdlib_reachability_cache_misses";metadata_group_cache_hits=count "metadata_group_cache_hits";metadata_group_cache_misses=count "metadata_group_cache_misses";helper_cache_hits=count "helper_cache_hits";helper_cache_misses=count "helper_cache_misses";start_codegen_cache_hits=count "start_codegen_cache_hits"} in
   writeJson true path (json_codegenProfilePayload {schema_version=10;summary;phases;categories;functions;lir_ops;lir_op_functions}) in
  Option.iter (fun path->writeCodegenProfileJson path;println ("  "^C.gray^"⏱  Wrote codegen profile JSON: "^path^C.reset)) codegenProfileJsonPath;
@@ -603,7 +603,7 @@ let runTestsWithProgressReporter completedTestReporter args=
  let columns=F.buildPassTimingColumns runState.F.passTimings (queueList runState.F.passTimingOrder) unaccountedBreakdown.F.unaccounted in
  let formatColumn (sections:F.passTimingSection list)=
   let entries=List.concat_map (fun section->section.F.entries) sections in
-  let formatSeconds duration=if HostTimeSpan.totalMilliseconds duration<100. then ">0.1s" else Printf.sprintf "%.1fs" (HostTimeSpan.totalSeconds duration) in
+  let formatSeconds duration=if (Int64.to_float duration /. 1e6)<100. then ">0.1s" else Printf.sprintf "%.1fs" ((Int64.to_float duration /. 1e9)) in
   let numberText (entry:F.passTimingEntry)=Option.value ~default:"" entry.F.number in
   let numberWidth=List.fold_left (fun width entry->max width (textLength (numberText entry))) 0 entries in
   let numberPadWidth=if numberWidth>0 then numberWidth+2 else 0 in
@@ -611,7 +611,7 @@ let runTestsWithProgressReporter completedTestReporter args=
   let labelWidth=List.fold_left (fun width entry->max width (textLength (labelFor entry))) 0 entries in
   let timeWidth=List.fold_left (fun width entry->max width (textLength (formatSeconds entry.F.elapsed))) 0 entries in
   let formatEntry entry=
-   let time=padLeft (formatSeconds entry.F.elapsed) timeWidth in let seconds=HostTimeSpan.totalSeconds entry.F.elapsed in
+   let time=padLeft (formatSeconds entry.F.elapsed) timeWidth in let seconds=(Int64.to_float entry.F.elapsed /. 1e9) in
    let colored=if seconds>3. then C.red^time^C.gray else if seconds>2. then C.yellow^time^C.gray else if seconds>1. then C.white^time^C.gray else time in
    "  "^padRight (labelFor entry) labelWidth^"  "^colored in
   List.mapi (fun i section->let lines=section.F.title::(if section.F.entries=[] then ["  (none)"] else List.map formatEntry section.F.entries) in if i<List.length sections-1 then lines@[""] else lines) sections |> List.concat in
@@ -635,7 +635,7 @@ let runTestsWithProgressReporter completedTestReporter args=
   println (C.bold^C.red^(if more>0 then Printf.sprintf "❌ First %d Failing Tests (of %d total)" displayed (Array.length failures) else Printf.sprintf "❌ Failing Tests (%d)" (Array.length failures))^C.reset);divider C.red;println "";
   for i=0 to displayed-1 do
    let test=failures.(i) in let fileName=if test.F.file="" then "" else Filename.basename test.F.file in
-   let displayName=if fileName<>"" && HostText.startsWith test.F.name "E2E: L" then "E2E: "^C.cyan^fileName^":"^substring test.F.name 5 (textLength test.F.name-5)^C.reset else if fileName<>"" then C.cyan^fileName^": "^C.reset^C.red^test.F.name else test.F.name in
+   let displayName=if fileName<>"" && Text.startsWith test.F.name "E2E: L" then "E2E: "^C.cyan^fileName^":"^substring test.F.name 5 (textLength test.F.name-5)^C.reset else if fileName<>"" then C.cyan^fileName^": "^C.reset^C.red^test.F.name else test.F.name in
    println (C.red^string_of_int (i+1)^". "^displayName^C.reset);println ("   "^C.gray^test.F.message^C.reset);List.iter (fun detail->println ("   "^C.gray^detail^C.reset)) test.F.details;println ""
   done;
   if more>0 then (println (C.gray^Printf.sprintf "... and %d more failing test(s)" more^C.reset);println "")
@@ -645,7 +645,7 @@ let runTests args=runTestsWithProgressReporter None args
 let captureOutput run=let result,_,_=TestCapture.run run in result
 let formatFailureDisplayName (test:F.failedTestInfo)=
  let file=if test.F.file="" then "" else Filename.basename test.F.file in
- if file<>"" && HostText.startsWith test.F.name "E2E: L" then "E2E: "^file^":"^substring test.F.name 5 (textLength test.F.name-5) else if file<>"" then file^": "^test.F.name else test.F.name
+ if file<>"" && Text.startsWith test.F.name "E2E: L" then "E2E: "^file^":"^substring test.F.name 5 (textLength test.F.name-5) else if file<>"" then file^": "^test.F.name else test.F.name
 let printFailures (state:F.testRunState) limit bounded=
  let failures=Array.of_list (queueList state.F.failedTests) in let display=min limit (Array.length failures) in
  for i=0 to display-1 do let test=failures.(i) in println (Printf.sprintf "%d. %s" (i+1) (formatFailureDisplayName test));
@@ -673,7 +673,7 @@ let runAiMode args=
   let report completed=if completed mod aiProgressTestInterval=0 then writeOriginal "." in
   runTestsWithProgressReporter (Some report) args) in
  let total=result.state.F.passed+result.state.F.failed in if total>=aiProgressTestInterval then println "";
- let seconds=Printf.sprintf "%.1f" (HostTimeSpan.totalSeconds result.totalTime) in
+ let seconds=Printf.sprintf "%.1f" ((Int64.to_float result.totalTime /. 1e9)) in
  if result.exitCode=0 then (Sys.remove path;println (Printf.sprintf "success: %d/%d passed in %ss" result.state.F.passed total seconds)) else begin
   println "failed";println (Printf.sprintf "summary: %d passed, %d failed, %ss" result.state.F.passed result.state.F.failed seconds);printBoundedStructuredFailures result.state;
   println ("full output: "^RepositoryTestFiles.relativePath path)

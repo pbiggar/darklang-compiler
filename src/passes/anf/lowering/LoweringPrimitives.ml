@@ -276,7 +276,7 @@ let tryParseMangledTypeWithSumTypeNames sumNames mangled =
   | "rawptr" -> Some AST.TInternalRawPtr
   | _ -> None
  in
- let firstIsLower text = match HostText.first text with
+ let firstIsLower text = match Text.first text with
   | None -> false | Some character -> Uucp.Gc.general_category character = `Ll in
  let rec parseType = function
  | [] -> []
@@ -286,7 +286,7 @@ let tryParseMangledTypeWithSumTypeNames sumNames mangled =
    | "stream" -> List.map (fun (value, rest) -> AST.TStream value, rest) (parseType rest)
    | "dict" -> List.concat_map (fun (key, rest) -> List.map (fun (value, rest) -> AST.TDict (key, value), rest) (parseType rest)) (parseType rest)
    | token when String.starts_with ~prefix:"tup" token && String.length token > 3 ->
-     (match HostText.tryParseInt32 (String.sub token 3 (String.length token - 3)) with
+     (match Text.tryParseInt32 (String.sub token 3 (String.length token - 3)) with
       | Some count when count >= 0l -> List.map (fun (values, rest) -> AST.TTuple values, rest) (parseExactly (Int32.to_int count) rest)
       | _ -> [])
    | "tup" -> List.map (fun (values, rest) -> AST.TTuple values, rest) (parseTupleElems rest)
@@ -455,5 +455,5 @@ let unwrapErrorPayloadToString = function
  | C.Int32Literal value -> Some (Int32.to_string value)
  | C.UInt32Literal value -> Some (Int64.to_string value)
  | C.UInt64Literal value -> Some (Z.to_string (if value < 0L then Z.add (Z.of_int64 value) (Z.shift_left Z.one 64) else Z.of_int64 value))
- | C.BoolLiteral value -> Some (if value then "true" else "false") | C.FloatLiteral value -> Some (HostFloat.roundTrip value)
+ | C.BoolLiteral value -> Some (if value then "true" else "false") | C.FloatLiteral value -> Some (FloatFormat.roundTrip value)
  | C.StringLiteral value | C.CharLiteral value -> Some value | _ -> None

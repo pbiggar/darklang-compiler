@@ -24,7 +24,7 @@ let finalizeArm64GenericHelperIds (LIR.Program (functions,variants,records)) fun
 let formatLabel text name=
  let token="{format}" in let output=Buffer.create (String.length text) in
  let rec loop index=if index<String.length text then if index+String.length token<=String.length text && String.sub text index (String.length token)=token then (Buffer.add_string output name;loop (index+String.length token)) else (Buffer.add_char output text.[index];loop (index+1)) in loop 0;Buffer.contents output
-let elapsedDetail verbosity duration=if verbosity>=2 then (let scaled=duration*.10. in let lower=Float.floor scaled in let rounded=if scaled-.lower=0.5 then (if Float.rem lower 2.=0. then lower else lower+.1.) else Float.round scaled in Output.println ("        "^HostFloat.roundTrip (rounded/.10.)^"ms"))
+let elapsedDetail verbosity duration=if verbosity>=2 then (let scaled=duration*.10. in let lower=Float.floor scaled in let rounded=if scaled-.lower=0.5 then (if Float.rem lower 2.=0. then lower else lower+.1.) else Float.round scaled in Output.println ("        "^FloatFormat.roundTrip (rounded/.10.)^"ms"))
 (* Run codegen, encoding, and binary generation. *)
 let generateBinary target verbosity (options:CompilerOptions.compilerOptions) elapsed recorder codegenLabel emitLabel dumpAsm dumpMachineCode session programContextIdentity functionGroups metadataGroups sumShapes knownWrites allocatedProgram=
  let record name duration=PipelineDiagnostics.recordPassTiming recorder name duration in
@@ -58,7 +58,7 @@ let generateBinary target verbosity (options:CompilerOptions.compilerOptions) el
   let functionGroupCache=Option.map (fun (current:CompilationSession.compilationSession) identity functions generate->current#codegenFunctionGroup identity arm64Target codegenOptions functions generate) reusableSession in
   let refinementCache=Option.map (fun (current:CompilationSession.compilationSession) func callees refine->current#refineArm64LirFunction func callees refine) reusableSession in
   let helperCache=Option.map (fun (current:CompilationSession.compilationSession) key generate->current#arm64Helpers programContextIdentity arm64Target codegenOptions key generate) reusableSession in
-  let phaseRecorder=Option.map (fun record name elapsed->record {CompilerOptions.pass=name;elapsed=HostTimeSpan.fromMilliseconds elapsed}) recorder in
+  let phaseRecorder=Option.map (fun record name elapsed->record {CompilerOptions.pass=name;elapsed=(Int64.of_float (elapsed *. 1e6))}) recorder in
   let opRecorder=Option.bind session (fun (current:CompilationSession.compilationSession)->current#arm64LirOpExpansionRecorder) in
   let* program=G.generateARM64WithOptionsAndCaches arm64Target codegenOptions (Some sumShapes) (Some knownWrites) functionCache refinementCache functionGroupCache functionGroups metadataGroupCache helperCache metadataGroups opRecorder phaseRecorder allocatedProgram |> Result.map_error (fun error->"Code generation error: "^error) in
   let duration=elapsed ()-.start in record "Code Generation" duration;elapsedDetail verbosity duration;

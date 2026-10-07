@@ -10,8 +10,8 @@ module R=AST_to_ANF
 module I=Set.Make(Int)
 module Visits=Set.Make(struct type t=int*string let compare (a,x) (b,y)=let c=Int.compare a b in if c=0 then StringOrder.compare x y else c end)
 let (let*)=Result.bind
-let timingRecorder recorder=Option.map (fun recorder name elapsed->recorder {pass=name;elapsed=HostTimeSpan.fromMilliseconds elapsed}) recorder
-let elapsedDetail verbosity duration=if verbosity>=2 then (let scaled=duration*.10. in let lower=Float.floor scaled in let rounded=if scaled-.lower=0.5 then (if Float.rem lower 2.=0. then lower else lower+.1.) else Float.round scaled in Output.println ("        "^HostFloat.roundTrip (rounded/.10.)^"ms"))
+let timingRecorder recorder=Option.map (fun recorder name elapsed->recorder {pass=name;elapsed=(Int64.of_float (elapsed *. 1e6))}) recorder
+let elapsedDetail verbosity duration=if verbosity>=2 then (let scaled=duration*.10. in let lower=Float.floor scaled in let rounded=if scaled-.lower=0.5 then (if Float.rem lower 2.=0. then lower else lower+.1.) else Float.round scaled in Output.println ("        "^FloatFormat.roundTrip (rounded/.10.)^"ms"))
 (* Run MIR/LIR optimizations on SSA MIR, returning an optimized LIR program. *)
 (*
    functions through allocation and tree shaking, so each executable
@@ -26,10 +26,10 @@ let compileMirToLir arch knownEffectFree knownRemovable knownTypedConstants verb
  let optimizedProgram=if shouldRunMIROptimize mirOptions then (
   let ticks=Hashtbl.create 8 in let order=ref [] in let addTicks name value=match Hashtbl.find_opt ticks name with Some existing->Hashtbl.replace ticks name (Int64.add existing value)|None->order:=name:: !order;Hashtbl.add ticks name value in
   let tickRecorder=Option.map (fun _->addTicks) passTimingRecorder in
-  let start=HostClock.ticks () in let effectFree=if mirOptions.MIROptimizationFacts.enableLICM || mirOptions.MIROptimizationFacts.enableCSE then knownEffectFree else F.empty in addTicks "MIR Effect Analysis" (Int64.sub (HostClock.ticks ()) start);
+  let start=Mtime_clock.elapsed_ns () in let effectFree=if mirOptions.MIROptimizationFacts.enableLICM || mirOptions.MIROptimizationFacts.enableCSE then knownEffectFree else F.empty in addTicks "MIR Effect Analysis" (Int64.sub (Mtime_clock.elapsed_ns ()) start);
   let optimizeFunction func=let optimize ()=MIR_Optimize.optimizeFunctionWithEffectFreeCallsAndTickTrace tickRecorder effectFree mirOptions func in let key={C.func;options=mirOptions;effectFreeCalls=MIROptimizationFacts.effectFreeCallsForFunction effectFree func} in match functionCaches with Some (caches:C.functionCompilationCaches)->caches.C.optimizeMir key optimize|None->optimize () in
   let MIR.Program (functions,variants,records)=ssaProgram in let optimized=MIR.Program (List.map optimizeFunction functions,variants,records) in
-  Option.iter (fun recorder->List.iter (fun name->let value=Hashtbl.find ticks name in recorder {pass=name;elapsed=HostTimeSpan.fromMilliseconds (Int64.to_float value*.1000./.1000000000.)}) (List.rev !order)) passTimingRecorder;optimized) else ssaProgram in
+  Option.iter (fun recorder->List.iter (fun name->let value=Hashtbl.find ticks name in recorder {pass=name;elapsed=value}) (List.rev !order)) passTimingRecorder;optimized) else ssaProgram in
  let optimizedProgram=if mirOptions.MIROptimizationFacts.enableSCCP && not (FunctionIdMap.isEmpty knownTypedConstants) then (
   let MIR.Program (functions,variants,records)=optimizedProgram in let callResult id=Option.map snd (FunctionIdMap.tryFind id knownTypedConstants) in
   let functions=List.map (fun (func:MIR.functionDef)->let cfg,changed=MIRSparseConditionalConstants.applySparseConditionalConstantPropagationWithCallResults callResult func.MIR.cfg in if changed then {func with MIR.cfg} else func) functions in MIR.Program (functions,variants,records)) else optimizedProgram in
@@ -47,7 +47,7 @@ let compileMirToLir arch knownEffectFree knownRemovable knownTypedConstants verb
  (* Summarize finalized symbolic LIR once. The facts remain attached to functions through allocation and tree shaking. *)
  Ok (List.map LIR.attachFunctionCodegenFacts optimized,typedConstants)
 (* Allocate registers for one symbolic LIR function. *)
-let allocateRegistersForFunction arch recorder func=let allocated=match recorder with None->RegisterAllocation.allocateRegisters arch func|Some record->let allocated,timings=RegisterAllocation.allocateRegistersWithTiming arch func in List.iter (fun (timing:AllocationModel.registerAllocationTiming)->record {pass=timing.AllocationModel.phase;elapsed=HostTimeSpan.fromMilliseconds timing.AllocationModel.elapsedMs}) timings;allocated in LIR_Peephole.removeSelfMovesFromFunction allocated
+let allocateRegistersForFunction arch recorder func=let allocated=match recorder with None->RegisterAllocation.allocateRegisters arch func|Some record->let allocated,timings=RegisterAllocation.allocateRegistersWithTiming arch func in List.iter (fun (timing:AllocationModel.registerAllocationTiming)->record {pass=timing.AllocationModel.phase;elapsed=(Int64.of_float (timing.AllocationModel.elapsedMs *. 1e6))}) timings;allocated in LIR_Peephole.removeSelfMovesFromFunction allocated
 let countIds key values=List.fold_left (fun counts value->let id=key value in FunctionIdMap.change id (fun count->Some (1+Option.value ~default:0 count)) counts) FunctionIdMap.empty values
 let functionIdString id="FunctionId "^(let value=AST.functionIdValue id in Z.to_string (if value<0L then Z.add (Z.of_int64 value) (Z.shift_left Z.one 64) else Z.of_int64 value))
 (* Run MIR+LIR passes (including register allocation) from SSA ANF functions. *)

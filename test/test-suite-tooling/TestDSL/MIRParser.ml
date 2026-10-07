@@ -18,21 +18,21 @@ let (let*)=Result.bind
 *)
 let parseVReg text=
  let invalid ()=Error ("Invalid register format '"^text^"' (expected 'v0', 'v1', etc.)") in
- match matched [literal "v";Capture [digits]] (HostText.trim text) with
- |Some groups->(match HostText.tryParseInt32 groups.(1) with Some id->Ok (VReg (Int32.to_int id))|None->invalid ())|None->invalid ()
+ match matched [literal "v";Capture [digits]] (Text.trim text) with
+ |Some groups->(match Text.tryParseInt32 groups.(1) with Some id->Ok (VReg (Int32.to_int id))|None->invalid ())|None->invalid ()
 (*
    Parse operand (either a number or a register)
    Try parsing as register first
    Try parsing as integer
 *)
 let parseOperand text=
- let text=HostText.trim text in
+ let text=Text.trim text in
  match parseVReg text with Ok reg->Ok (Register reg)|Error _->
  match int64 text with Some n->Ok (Int64Const n)|None->Error ("Invalid operand '"^text^"' (expected number or register)")
 (*
    Parse binary operator
 *)
-let parseOp text=match HostText.trim text with
+let parseOp text=match Text.trim text with
  |"+"->Ok Add|"-"->Ok Sub|"*"->Ok Mul|"/"->Ok Div|"=="->Ok Eq|"!="->Ok Neq|"<"->Ok Lt|">"->Ok Gt|"<="->Ok Lte|">="->Ok Gte|"&&"->Ok And|"||"->Ok Or|op->Error ("Unknown operator '"^op^"'")
 (*
    Parse a single MIR instruction or terminator
@@ -42,7 +42,7 @@ let parseOp text=match HostText.trim text with
    Try move pattern: "v0 <- 42" or "v0 <- v1"
 *)
 let parseInstructionOrTerminator lineNum line=
- let line=HostText.trim line in
+ let line=Text.trim line in
  let prefix e=Printf.sprintf "Line %d: %s" lineNum e in
  let operand=Alternatives [[literal "v";digits];[literal "-";digits];[digits]] in
  match matched [literal "ret";spaces;Capture [any]] line with
@@ -63,7 +63,7 @@ let parseInstructionOrTerminator lineNum line=
    Build single-block CFG
 *)
 let parseMIRWithEntryLabel entryLabelName text=
- let lines=String.split_on_char '\n' text |> List.map HostText.trim |> List.filter (fun line->line<>"" && not (String.starts_with ~prefix:"//" line)) in
+ let lines=String.split_on_char '\n' text |> List.map Text.trim |> List.filter (fun line->line<>"" && not (String.starts_with ~prefix:"//" line)) in
  let rec parseLines lineNum acc=function []->Ok (List.rev acc)|line::rest->let* result=parseInstructionOrTerminator lineNum line in parseLines (lineNum+1) (result::acc) rest in
  let* parsed=parseLines 1 [] lines in
  match List.rev parsed with

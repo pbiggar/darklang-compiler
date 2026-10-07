@@ -21,8 +21,8 @@ let svGroup group = match G.functions group with
  | [] -> failwith "Owned function SCC partition produced an empty component"
 let svError (G.DuplicateFunctionName name) = StructuralValue.Union ("DuplicateFunctionName", [AST.DiagnosticFormatting.func name])
 let svResult encode = function Ok value -> StructuralValue.Union ("Ok", [encode value]) | Error error -> StructuralValue.Union ("Error", [svError error])
-let showSummaries result = HostStructuralFormat.format (svResult (fun values -> StructuralValue.Sequence (List.map svSummary values)) result)
-let showGroups result = HostStructuralFormat.format (svResult (fun groups -> StructuralValue.Sequence (List.map svGroup groups)) result)
+let showSummaries result = StructuralFormat.format (svResult (fun values -> StructuralValue.Sequence (List.map svSummary values)) result)
+let showGroups result = StructuralFormat.format (svResult (fun groups -> StructuralValue.Sequence (List.map svGroup groups)) result)
 let testDiscoversCalleeFirstRecursiveGroups () =
  let entry = definition "entry" [branch [call "mutualA"] [call "external"]] in
  let mutualA = definition "mutualA" [call "mutualB"] in

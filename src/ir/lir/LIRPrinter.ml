@@ -1,16 +1,16 @@
 (* Printer.fs - Format LIR instructions and scoped or summarized dumps. *)
 [@@@warning "-4"]
 open IRPrinting
-let functionId id = HostStructuralFormat.format (HostStructuralFormat.Union ("FunctionId", [HostStructuralFormat.Scalar (Printf.sprintf "%LuUL" (AST.functionIdValue id))]))
-let labelText (LIR.Label text) = HostStructuralFormat.format (HostStructuralFormat.Union ("Label", [HostStructuralFormat.Text text]))
+let functionId id = StructuralFormat.format (StructuralFormat.Union ("FunctionId", [StructuralFormat.Scalar (Printf.sprintf "%LuUL" (AST.functionIdValue id))]))
+let labelText (LIR.Label text) = StructuralFormat.format (StructuralFormat.Union ("Label", [StructuralFormat.Text text]))
 let prettyPrintFunctionName names id = match FunctionIdMap.tryFind id names with Some name -> name | None -> functionId id
 let runtimeList format values =
  let rec first remaining = function [] -> [], false | _ :: _ when remaining = 0 -> [], true | value :: rest -> let values, truncated = first (remaining - 1) rest in format value :: values, truncated in
  let values, truncated = first 3 values in
  "[" ^ String.concat "; " values ^ (if truncated then "; ... " else "") ^ "]"
-let optionType = function None -> "" | Some typ -> "Some(" ^ HostStructuralFormat.semanticType typ ^ ")"
+let optionType = function None -> "" | Some typ -> "Some(" ^ StructuralFormat.semanticType typ ^ ")"
 let formatVariants variants = runtimeList (fun (name, tag, typ) -> "(" ^ name ^ ", " ^ string_of_int tag ^ ", " ^ optionType typ ^ ")") variants
-let formatFields fields = runtimeList (fun (name, typ) -> "(" ^ name ^ ", " ^ HostStructuralFormat.semanticType typ ^ ")") fields
+let formatFields fields = runtimeList (fun (name, typ) -> "(" ^ name ^ ", " ^ StructuralFormat.semanticType typ ^ ")") fields
 (*
    Pretty-print LIR physical register
 *)
@@ -134,11 +134,11 @@ let prettyPrintLIRFReg = function LIR.FPhysical reg -> prettyPrintLIRPhysFPReg r
 *)
 let prettyPrintLIROperand = function
  | LIR.Imm n -> "Imm " ^ Int64.to_string n
- | LIR.FloatImm f -> "FloatImm " ^ HostFloat.roundTrip f
+ | LIR.FloatImm f -> "FloatImm " ^ FloatFormat.roundTrip f
  | LIR.Reg reg -> "Reg " ^ prettyPrintLIRReg reg
  | LIR.StackSlot n -> "Stack " ^ string_of_int n
  | LIR.StringSymbol value -> "str[" ^ escapeStringContent value ^ "]"
- | LIR.FloatSymbol value -> "float[" ^ HostFloat.roundTrip value ^ "]"
+ | LIR.FloatSymbol value -> "float[" ^ FloatFormat.roundTrip value ^ "]"
  | LIR.FuncAddr name -> "&" ^ functionId name
 let prettyPrintLIROperandWithNames names = function LIR.FuncAddr id -> "&" ^ prettyPrintFunctionName names id | operand -> prettyPrintLIROperand operand
 let prettyPrintLIRRcKind = function LIR.GenericHeap -> "generic" | LIR.StreamHeap -> "stream" | LIR.TaggedList -> "list" | LIR.DictHeap -> "dict" | LIR.ClosureHeap -> "closure"
@@ -197,24 +197,24 @@ let prettyPrintLIRInstr functionNames instr =
  | LIR.PrintUInt64 reg -> "PrintUInt64(" ^ (prettyPrintLIRReg reg) ^ ")"
  | LIR.PrintBool reg -> "PrintBool(" ^ (prettyPrintLIRReg reg) ^ ")"
  | LIR.PrintFloat freg -> "PrintFloat(" ^ (prettyPrintLIRFReg freg) ^ ")"
- | LIR.PrintString value -> "PrintString(str[" ^ (escapeStringContent value) ^ "], len=" ^ (string_of_int (Array.length (HostText.scalars value))) ^ ")"
+ | LIR.PrintString value -> "PrintString(str[" ^ (escapeStringContent value) ^ "], len=" ^ (string_of_int (Array.length (Text.scalars value))) ^ ")"
  | LIR.StdoutWrite (_, value, appendNewline) -> "StdoutWrite(" ^ (prettyPrintLIROperand value) ^ ", newline=" ^ (if appendNewline then "True" else "False") ^ ")"
  | LIR.StdinReadLine (_, dest) -> (prettyPrintLIRReg dest) ^ " <- StdinReadLine()"
  | LIR.RuntimeError message -> "RuntimeError(\"" ^ (escapeStringContent message) ^ "\")"
  | LIR.RuntimeErrorString reg -> "RuntimeErrorString(" ^ (prettyPrintLIRReg reg) ^ ")"
- | LIR.PrintChars chars -> let s = HostText.ofScalars (Array.of_list chars) in "PrintChars(\"" ^ escapeStringContent s ^ "\")"
+ | LIR.PrintChars chars -> let s = Text.ofScalars (Array.of_list chars) in "PrintChars(\"" ^ escapeStringContent s ^ "\")"
  | LIR.PrintBlob reg -> "PrintBlob(" ^ (prettyPrintLIRReg reg) ^ ")"
  | LIR.PrintInt64NoNewline reg -> "PrintIntNoNewline(" ^ (prettyPrintLIRReg reg) ^ ")"
  | LIR.PrintUInt64NoNewline reg -> "PrintUInt64NoNewline(" ^ (prettyPrintLIRReg reg) ^ ")"
  | LIR.PrintBoolNoNewline reg -> "PrintBoolNoNewline(" ^ (prettyPrintLIRReg reg) ^ ")"
  | LIR.PrintFloatNoNewline freg -> "PrintFloatNoNewline(" ^ (prettyPrintLIRFReg freg) ^ ")"
  | LIR.PrintHeapStringNoNewline reg -> "PrintHeapStringNoNewline(" ^ (prettyPrintLIRReg reg) ^ ")"
- | LIR.PrintList (listPtr, elemType) -> "PrintList(" ^ (prettyPrintLIRReg listPtr) ^ ", " ^ (HostStructuralFormat.semanticType elemType) ^ ")"
+ | LIR.PrintList (listPtr, elemType) -> "PrintList(" ^ (prettyPrintLIRReg listPtr) ^ ", " ^ (StructuralFormat.semanticType elemType) ^ ")"
  | LIR.PrintSum (sumPtr, variants, transparentPayload) -> "PrintSum(" ^ (prettyPrintLIRReg sumPtr) ^ ", " ^ (formatVariants variants) ^ ", transparentPayload=" ^ (if transparentPayload then "True" else "False") ^ ")"
  | LIR.PrintRecord (recordPtr, typeName, fields) -> "PrintRecord(" ^ (prettyPrintLIRReg recordPtr) ^ ", " ^ (typeName) ^ ", " ^ (formatFields fields) ^ ")"
  | LIR.Exit -> "Exit"
  | LIR.FMov (dest, src) -> (prettyPrintLIRFReg dest) ^ " <- FMov(" ^ (prettyPrintLIRFReg src) ^ ")"
- | LIR.FLoad (dest, value) -> (prettyPrintLIRFReg dest) ^ " <- FLoad(float[" ^ (HostFloat.roundTrip value) ^ "])"
+ | LIR.FLoad (dest, value) -> (prettyPrintLIRFReg dest) ^ " <- FLoad(float[" ^ (FloatFormat.roundTrip value) ^ "])"
  | LIR.FSpillLoad (dest, stackSlot) -> (prettyPrintLIRFReg dest) ^ " <- FSpillLoad(Stack " ^ (string_of_int stackSlot) ^ ")"
  | LIR.FSpillStore (stackSlot, src) -> "FSpillStore(Stack " ^ (string_of_int stackSlot) ^ ", " ^ (prettyPrintLIRFReg src) ^ ")"
  | LIR.FAdd (dest, left, right) -> (prettyPrintLIRFReg dest) ^ " <- FAdd(" ^ (prettyPrintLIRFReg left) ^ ", " ^ (prettyPrintLIRFReg right) ^ ")"
@@ -256,7 +256,7 @@ let prettyPrintLIRInstr functionNames instr =
  | LIR.RawGetByte (dest, ptr, byteOffset) -> (prettyPrintLIRReg dest) ^ " <- RawGetByte(" ^ (prettyPrintLIRReg ptr) ^ ", " ^ (prettyPrintLIRReg byteOffset) ^ ")"
  | LIR.RawWriteWord (ptr, byteOffset, value) -> "RawWriteWord(" ^ (prettyPrintLIRReg ptr) ^ ", " ^ (prettyPrintLIRReg byteOffset) ^ ", " ^ (prettyPrintLIRReg value) ^ ")"
  | LIR.RawWriteByte (ptr, byteOffset, value) -> "RawWriteByte(" ^ (prettyPrintLIRReg ptr) ^ ", " ^ (prettyPrintLIRReg byteOffset) ^ ", " ^ (prettyPrintLIRReg value) ^ ")"
- | LIR.RawSlotInit (ptr, byteOffset, value, valueType) -> "RawSlotInit(" ^ (prettyPrintLIRReg ptr) ^ ", " ^ (prettyPrintLIRReg byteOffset) ^ ", " ^ (prettyPrintLIRReg value) ^ ") : " ^ (HostStructuralFormat.semanticType valueType)
+ | LIR.RawSlotInit (ptr, byteOffset, value, valueType) -> "RawSlotInit(" ^ (prettyPrintLIRReg ptr) ^ ", " ^ (prettyPrintLIRReg byteOffset) ^ ", " ^ (prettyPrintLIRReg value) ^ ") : " ^ (StructuralFormat.semanticType valueType)
  | LIR.RefCountIncString str -> "RefCountIncString(" ^ (prettyPrintLIROperand str) ^ ")"
  | LIR.RefCountDecString str -> "RefCountDecString(" ^ (prettyPrintLIROperand str) ^ ")"
  | LIR.RefCountIncInt value -> "RefCountIncInt(" ^ (prettyPrintLIROperand value) ^ ")"

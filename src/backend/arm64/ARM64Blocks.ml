@@ -175,9 +175,9 @@ let convertBlock (ctx:codeGenContext) epilogueLabel nextBlock (block:LIR.basicBl
   match ctx.recordLirOpExpansion with
   | None -> convertInstr instructionCtx instruction
   | Some record ->
-   let started=HostClock.ticks () in
+   let started=Mtime_clock.elapsed_ns () in
    convertInstr instructionCtx instruction |> Result.map (fun instructions ->
-    let elapsedTicks=Int64.sub (HostClock.ticks ()) started in
+    let elapsedTicks=Int64.sub (Mtime_clock.elapsed_ns ()) started in
     record ctx.functionName (lirInstructionOpcode instruction) (lirInstructionProfileDetail instruction) (List.length instructions) elapsedTicks;instructions)) block.LIR.instrs in
  match ResultList.collectResults Fun.id results with
  | Error error -> Error error

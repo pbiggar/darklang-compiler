@@ -74,8 +74,8 @@ let emitHeapStore ctx addr offset src =
     let adjOff=Int32.of_int (X64InstructionContext.adjustStackOffset ctx stackOffset) in
     Ok (if addrReg=scratch then [X.PUSH X.RCX;X.MOV_load (X.RCX,X.RBP,adjOff);X.MOV_store (addrReg,offset,X.RCX);X.POP X.RCX]
      else [X.MOV_load (scratch,X.RBP,adjOff);X.MOV_store (addrReg,offset,scratch)])
-  | LIR.FloatImm value -> Error ("Unsupported HeapStore source: "^HostStructuralFormat.format
-    (HostStructuralFormat.Union ("FloatImm",[HostStructuralFormat.Scalar (HostFloat.structural value)]))))
+  | LIR.FloatImm value -> Error ("Unsupported HeapStore source: "^StructuralFormat.format
+    (StructuralFormat.Union ("FloatImm",[StructuralFormat.Scalar (FloatFormat.structural value)]))))
 let emitHeapLoad (_ctx:funcCtx) dest addr offset =
  Result.bind (resolveReg dest) (fun destReg->Result.map (fun addrReg->
   [X.MOV_load (destReg,addrReg,Int32.of_int offset)]) (resolveReg addr))

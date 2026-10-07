@@ -12,7 +12,7 @@ let recordPassTiming
     match recorder with
     | None -> ()
     | Some record ->
-        record { pass = pass; elapsed = HostTimeSpan.fromMilliseconds(elapsedMs) }
+        record { pass = pass; elapsed = (Int64.of_float ((elapsedMs) *. 1e6)) }
 (*  Determine whether to dump a specific IR, based on verbosity or explicit option *)
 let shouldDumpIR (verbosity: int) (enabled: bool) : bool =
     verbosity >= 3 || enabled

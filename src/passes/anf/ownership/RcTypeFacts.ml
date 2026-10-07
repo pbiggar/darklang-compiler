@@ -197,7 +197,7 @@ let inferCExprType ctx expr =
  | A.IndirectCall (value, _) | A.IndirectTailCall (value, _) -> indirect value
  | A.ClosureAlloc (func, _) -> (match FunctionIdMap.tryFind func ctx.funcReg with
    | Some (_, (AST.TFunction _ as typ)) -> Some typ
-   | Some (name, typ) -> Crash.crash ("RefCountInsertion: ClosureAlloc target '" ^ name ^ "' has non-function type " ^ HostStructuralFormat.semanticType typ)
+   | Some (name, typ) -> Crash.crash ("RefCountInsertion: ClosureAlloc target '" ^ name ^ "' has non-function type " ^ StructuralFormat.semanticType typ)
    | None -> let ordinal = AST.functionIdValue func in
      let ordinal = Z.to_string (if ordinal < 0L then Z.add (Z.of_int64 ordinal) (Z.shift_left Z.one 64) else Z.of_int64 ordinal) in
      Crash.crash ("RefCountInsertion: ClosureAlloc target '" ^ ordinal ^ "' not found in function registry"))
@@ -205,7 +205,7 @@ let inferCExprType ctx expr =
  | A.TupleAlloc values ->
    Some (AST.TTuple (List.map (fun value -> match atom value with Some typ -> typ | None ->
     match value with A.Var (A.TempId id) -> Crash.crash ("RefCountInsertion: type not found for temp TempId " ^ string_of_int id ^ " in TupleAlloc")
-    | A.FuncRef id -> Crash.crash ("RefCountInsertion: type not found for function " ^ HostStructuralFormat.format (AST.DiagnosticFormatting.func id) ^ " in TupleAlloc")
+    | A.FuncRef id -> Crash.crash ("RefCountInsertion: type not found for function " ^ StructuralFormat.format (AST.DiagnosticFormatting.func id) ^ " in TupleAlloc")
     | A.UnitLiteral | A.IntLiteral _ | A.BoolLiteral _ | A.StringLiteral _ | A.FloatLiteral _ -> assert false) values))
  | A.RecordAlloc (descriptor, _) | A.RecordClone (descriptor, _, _) | A.RecordReuse (_, descriptor, _, _) -> Some (fixedBlockType descriptor)
  | A.RecordGet (descriptor, _, index) -> Option.map snd (tryItem index descriptor.A.fields)

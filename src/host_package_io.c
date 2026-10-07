@@ -81,21 +81,6 @@ CAMLprim value dark_package_cache_write(value path, value key, value status, val
   sqlite3_close(db);
   CAMLreturn(Val_unit);
 }
-CAMLprim value dark_package_resolve_url(value server, value path) {
-  CAMLparam2(server, path);
-  CAMLlocal1(result);
-  CURLU *url = curl_url();
-  if (!url) caml_raise_out_of_memory();
-  CURLUcode code = curl_url_set(url, CURLUPART_URL, String_val(server), 0);
-  if (code == CURLUE_OK) code = curl_url_set(url, CURLUPART_URL, String_val(path), 0);
-  char *text = NULL;
-  if (code == CURLUE_OK) code = curl_url_get(url, CURLUPART_URL, &text, 0);
-  if (code != CURLUE_OK) { curl_url_cleanup(url); caml_invalid_argument(curl_url_strerror(code)); }
-  result = caml_copy_string(text);
-  curl_free(text);
-  curl_url_cleanup(url);
-  CAMLreturn(result);
-}
 struct response_body { char *data; size_t length; };
 static size_t collect_body(char *bytes, size_t size, size_t count, void *context) {
   struct response_body *body = context;

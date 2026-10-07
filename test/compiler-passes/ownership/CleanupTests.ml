@@ -73,7 +73,7 @@ let testBranchLocalTempReuseUsesCurrentTypeContext ()=
  let branch value=Let (payload,value,Let (wrapper,TupleAlloc [int 0L;Var payload],Return (int 0L))) in
  let func=functionWith "branchLocalTypeContext" [param condition AST.TBool] AST.TInt64 (If (Var condition,branch (Atom (int 1L)),branch (TypedAtom (int 0L,listType)))) in
  match transform (context FunctionIdMap.empty) func with
- |If (_,_,other)->(match tryRefCountDecSourceTypeForTemp wrapper other with Some actual when actual=expected->Ok ()|Some actual->Error ("Expected branch-local wrapper type "^HostStructuralFormat.semanticType expected^", got "^HostStructuralFormat.semanticType actual)|None->Error "Expected branch-local wrapper to receive an automatic RefCountDec")
+ |If (_,_,other)->(match tryRefCountDecSourceTypeForTemp wrapper other with Some actual when actual=expected->Ok ()|Some actual->Error ("Expected branch-local wrapper type "^StructuralFormat.semanticType expected^", got "^StructuralFormat.semanticType actual)|None->Error "Expected branch-local wrapper to receive an automatic RefCountDec")
  |_->Error "Expected branch-local type fixture to retain its conditional body"
 let childType=AST.TTuple [AST.TInt64]
 let aggregateContext name params result=context (functionRegistry ["makeChild",AST.TFunction ([],childType);name,AST.TFunction (params,result)])

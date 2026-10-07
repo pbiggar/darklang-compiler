@@ -414,7 +414,7 @@ type typeVariants = {typeParams : string list; variants : variantInfo list}
 *)
 type variantRegistry = typeVariants StringOrder.Map.t
 type program = Program of functionDef list * variantRegistry * recordRegistry
-let labelText (Label value) = HostStructuralFormat.format (HostStructuralFormat.Union ("Label", [HostStructuralFormat.Text value]))
+let labelText (Label value) = StructuralFormat.format (StructuralFormat.Union ("Label", [StructuralFormat.Text value]))
 (*
    Arrange blocks into deterministic successor chains so the backends can use
    the lexical successor as a fallthrough edge. Entry remains first; each

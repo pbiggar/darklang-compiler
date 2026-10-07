@@ -1,4 +1,4 @@
-(* HostText.ml - UTF-8 text, Unicode scalar properties and standard segmentation. *)
+(* Text.ml - UTF-8 text, Unicode scalar properties and standard segmentation. *)
 let fold f initial text =
   Uutf.String.fold_utf_8 (fun state _ -> function
     | `Uchar character -> f state character

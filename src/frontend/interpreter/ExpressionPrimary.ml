@@ -11,7 +11,7 @@ type grammar = {
   parseInterpString : parserState -> int -> WT.expr * int;
 }
 let upperName name =
-  let units = HostText.scalars name in Array.length units > 0 && HostText.isUpper units.(0)
+  let units = Text.scalars name in Array.length units > 0 && Text.isUpper units.(0)
 let parsePrefix grammar state index builtinName =
   let operand, after = grammar.parseApp state (index + 1) in
   let range = rng state index in

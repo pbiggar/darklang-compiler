@@ -18,12 +18,12 @@ let runGraphColorTest (test:graphColorTest)=
  let explicitColorFailure=List.find_map (fun (vertex,expected)->match A.colorOf result vertex with Some actual when actual=expected->None|actual->Some (failure "Vertex color did not match" (Printf.sprintf "%d=%d" vertex expected) (string_of_int vertex^"="^formatOption actual))) test.expectedColors in
  let mcsFailure=if test.expectMcsCoversAll then let ordering=RegisterCoalescing.maximumCardinalitySearch graph in
  if List.sort Int.compare ordering=List.sort Int.compare test.vertices && List.length ordering=List.length test.vertices then None else
- let render values=HostStructuralFormat.format (HostStructuralFormat.Sequence (List.map (fun value->HostStructuralFormat.Scalar (string_of_int value)) values)) in
+ let render values=StructuralFormat.format (StructuralFormat.Sequence (List.map (fun value->StructuralFormat.Scalar (string_of_int value)) values)) in
  Some (failure "MCS ordering did not cover every vertex exactly once" (render (List.sort Int.compare test.vertices)) (render ordering)) else None in
  let selectionFailure=match test.expectedSelectionChecks with None->None|Some expected->let _,profile=RegisterCoalescing.maximumCardinalitySearchWithProfile graph in if profile.A.selectionChecks=expected then None else Some (failure "MCS selection checks did not match" (string_of_int expected) (string_of_int profile.A.selectionChecks)) in
  [checkCount "Chromatic number" test.expectedChromatic result.A.chromaticNumber;checkCount "Spill count" test.expectedSpills (A.spillCount result);checkCount "Colored count" test.expectedColored (A.coloredCount result);explicitColorFailure;checkColors test.expectedSame (=) "Expected vertices to have the same color";checkColors test.expectedDifferent (<>) "Expected vertices to have different colors";mcsFailure;selectionFailure] |> List.find_map Fun.id |> Option.value ~default:success
 let loadGraphColorTests path=
- if not (TestFileIO.exists path) then Error ("Graph-color test file not found: "^path) else try GraphColorFormat.parseGraphColorFileContent path (HostFile.readText path) with exn->Error ("Failed to read graph-color test file "^path^": "^HostFile.errorMessage path exn)
+ if not (TestFileIO.exists path) then Error ("Graph-color test file not found: "^path) else try GraphColorFormat.parseGraphColorFileContent path (FileIO.readText path) with exn->Error ("Failed to read graph-color test file "^path^": "^Printexc.to_string exn)
 let tests testFiles=
  let testsForFile path=match loadGraphColorTests path with
  |Error message->["parse "^Filename.basename path,(fun ()->Error message)]

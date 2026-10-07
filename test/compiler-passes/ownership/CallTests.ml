@@ -62,7 +62,7 @@ let testProgramRcFreshTempsFollowExistingProgramTemps ()=
  |Ok (Program ([transformed],_),_)->
   let definitions=definedTemps transformed.ANF.body in let distinct=TS.of_list definitions in
   let greatest=List.fold_left (fun a (TempId n)->max a n) min_int definitions in
-  if TS.cardinal distinct<>List.length definitions then Error ("RC insertion reused an existing TempId: "^HostStructuralFormat.format (HostStructuralFormat.Sequence (List.map ANFTestFormatting.aNF_tempId definitions)))
+  if TS.cardinal distinct<>List.length definitions then Error ("RC insertion reused an existing TempId: "^StructuralFormat.format (StructuralFormat.Sequence (List.map ANFTestFormatting.aNF_tempId definitions)))
   else if greatest<=6000 then Error (Printf.sprintf "Expected an RC temporary after t6000, greatest was t%d" greatest) else Ok ()
  |Ok _->Error "Expected the transformed program to contain one function"
 let testProgramRcRejectsDriftedOwnershipContract ()=
@@ -71,7 +71,7 @@ let testProgramRcRejectsDriftedOwnershipContract ()=
  let signature:OwnedIR.callSignature={OwnedIR.parameters=[OwnedIR.UniqueCallParameter];result=OwnedIR.UnmanagedCallResult} in
  let input={input with AST_to_ANF.ownershipContracts=FunctionIdMap.ofList [func.ANF.id,signature]} in
  match RefCountInsertion.insertRCInProgram input with
- |Error message when HostText.contains message "Ownership contract parameter representation changed"->Ok ()
+ |Error message when Text.contains message "Ownership contract parameter representation changed"->Ok ()
  |Error message->Error ("Expected RC insertion to reject ownership-contract drift, got Error "^message)
  |Ok _->Error "Expected RC insertion to reject ownership-contract drift, got Ok"
 let testBareSumTypeRefsAreCanonicalizedForRcSourceTypes ()=
@@ -81,5 +81,5 @@ let testBareSumTypeRefsAreCanonicalizedForRcSourceTypes ()=
  let dict=TempId 0 and result=TempId 1 in let body=Let (dict,call "mkDict" [],Let (result,Atom (int 1L),Return (Var result))) in
  match CleanupTests.tryRefCountDecSourceTypeForTemp dict (transform ctx (functionWith "canonicalBareSum" [] AST.TInt64 body)) with
  |Some (AST.TDict (AST.TInt64,AST.TSum ("Payload",[])))->Ok ()
- |Some other->Error ("Expected dict dec source type to canonicalize Payload as a sum, got "^HostStructuralFormat.semanticType other)
+ |Some other->Error ("Expected dict dec source type to canonicalize Payload as a sum, got "^StructuralFormat.semanticType other)
  |None->Error "Expected dict binding to receive automatic RefCountDec"

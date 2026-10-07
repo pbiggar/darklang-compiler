@@ -98,14 +98,14 @@ let runLIRProgramFullWithOptionsAndArgs program leak args=
  Unix.chmod temp ((Unix.stat temp).Unix.st_perm lor 0o100);
  let command,args=match Platform.detectArch () with Ok Platform.X86_64->temp,args|_->"/opt/dcb/qemu/qemu-x86_64",temp::args in
  TestProcess.capture command args 10000
- with ex->Error ("Execution failed: "^HostFile.errorMessage temp ex) in
+ with ex->Error ("Execution failed: "^Printexc.to_string ex) in
  (try Sys.remove temp with Sys_error _->());outcome
 let runLIRProgramFullWithOptions program leak=runLIRProgramFullWithOptionsAndArgs program leak []
 let runLIRProgram program=Result.bind (binaryFor program false true) X86_64BinaryTests.runElfBinary
 let generatedCallLabels program=Result.map (List.filter_map (function X.CALL label->Some label|_->None)) (Result.map_error (fun error->"Codegen error: "^error) (translate program false))
 let assertCallsHelper prefix context program=
  let* labels=generatedCallLabels program in
- require (List.exists (fun label->HostText.startsWith label prefix) labels) (context^" did not call a planned "^(if prefix="__dark_list_rc_dec_plan_" then "list" else "dict")^" helper; calls were "^HostStructuralFormat.format (HostStructuralFormat.Sequence (List.map (fun s->HostStructuralFormat.Text s) labels)))
+ require (List.exists (fun label->Text.startsWith label prefix) labels) (context^" did not call a planned "^(if prefix="__dark_list_rc_dec_plan_" then "list" else "dict")^" helper; calls were "^StructuralFormat.format (StructuralFormat.Sequence (List.map (fun s->StructuralFormat.Text s) labels)))
 let assertCallsPlannedListHelper=assertCallsHelper "__dark_list_rc_dec_plan_"
 let assertCallsPlannedDictHelper=assertCallsHelper "__dark_dict_rc_dec_plan_"
 let rcMetadata typ:MemoryModel.rcMetadata={MemoryModel.releasePlanCacheKey=None;releasePlan=None;sourceType=Some typ}
@@ -125,15 +125,15 @@ let runInNamedFunction name instrs term=match makeSimpleProgram [Call (Physical 
  |Program ([entry],variants,records)->let label=Label (name^"_entry") in let callee=functionWith name [] label [label,block label (List.map (completeRcInstrMetadata records) instrs) term] in Program ([entry;callee],variants,records)
  |_->Crash.crash "Test fixture expected a single entry function"
 let makeEmptyFunction name typedParams=let label=Label (name^"_entry") in functionWith name typedParams label [label,block label [] Ret]
-let xInstructions instructions=HostStructuralFormat.format (HostStructuralFormat.Sequence (List.map MachineDiagnostic.x64Instr instructions))
+let xInstructions instructions=StructuralFormat.format (StructuralFormat.Sequence (List.map MachineDiagnostic.x64Instr instructions))
 
 let testStringLiteralUsesStaticStorage ()=
  let program=makeSimpleProgram [ Mov (Physical X1, StringSymbol "pooled") ] Ret in
  let* instrs=CodeGen_X86_64.translateProgram program false in
- require (List.exists (function X.LEA_rip (_,label) when HostText.startsWith label "__dark_string_literal_"->true|_->false) instrs) "Expected x86 string literal to be loaded from static storage"
+ require (List.exists (function X.LEA_rip (_,label) when Text.startsWith label "__dark_string_literal_"->true|_->false) instrs) "Expected x86 string literal to be loaded from static storage"
 let testStringLiteralHeapStorePreservesX3 ()=
  let program=makeSimpleProgram [ Mov (Physical X3, Imm 123L); HeapAlloc (Physical X4, 8); HeapStore (Physical X4, 0, StringSymbol "field", Some AST.TString); Mov (Physical X0, Reg (Physical X3)); PrintInt64 (Physical X0) ] Ret in
- let* _,stdout,stderr=runLIRProgramFullWithOptions program false in let output=HostText.trim stdout in
+ let* _,stdout,stderr=runLIRProgramFullWithOptions program false in let output=Text.trim stdout in
  require (output="123" && stderr="") (Printf.sprintf "Expected string field initialization to preserve X3=123, got stdout '%s' and stderr '%s'" output stderr)
 let testRawSlotInitRetainsX12Value ()=
  let tupleType=AST.TTuple [AST.TString] in
@@ -162,7 +162,7 @@ let testCliHostOperationsExecute ()=
  let* exitCode,stdout,stderr=runLIRProgramFullWithOptions program false in
  let error prefix=Printf.sprintf "%s x64 CLI host output: exit=%d, stdout='%s', stderr='%s'" prefix exitCode stdout stderr in
  match String.split_on_char '\n' stdout with
- |cpu::hostname::path::errno::_->(match Int64.of_string_opt (HostText.trim cpu),Int64.of_string_opt (HostText.trim errno) with Some count,Some 22L when exitCode=0 && count>0L && hostname<>"" && path<>"" && stderr=""->Ok ()|_->Error (error "Unexpected"))
+ |cpu::hostname::path::errno::_->(match Int64.of_string_opt (Text.trim cpu),Int64.of_string_opt (Text.trim errno) with Some count,Some 22L when exitCode=0 && count>0L && hostname<>"" && path<>"" && stderr=""->Ok ()|_->Error (error "Unexpected"))
  |_->Error (error "Incomplete")
 let testCliNativePreservesLiveCallerRegister ()=
  let program=makeSimpleProgram [ Mov (Physical X3, Imm 42L); SaveRegs ([X3], []); CliNative (Physical X0, CpuCount, []); RestoreRegs ([X3], []); Mov (Physical X0, Reg (Physical X3)); PrintInt64 (Physical X0) ] Ret in
@@ -186,15 +186,15 @@ let testSleepLowersToNormalizedInterruptSafeNanosleep ()=
  require (normalization && syscall instrs && retry) ("Sleep did not lower to normalized interrupt-safe x64 nanosleep: "^xInstructions instrs)
 let testFloatArgumentMovesResolveCycles ()=
  let program=makeSimpleProgram [ FLoad (FPhysical D1, 1.0); FLoad (FPhysical D2, 2.0); FArgMoves [ (D1, FPhysical D2); (D2, FPhysical D1) ]; FloatToInt64 (Physical X1, FPhysical D1); FloatToInt64 (Physical X2, FPhysical D2); Mov (Physical X3, Imm 10L); Mul (Physical X0, Physical X1, Physical X3); Add (Physical X0, Physical X0, Reg (Physical X2)); PrintInt64 (Physical X0) ] Ret in
- let* _,stdout,stderr=runLIRProgramFullWithOptions program false in let output=HostText.trim stdout in
+ let* _,stdout,stderr=runLIRProgramFullWithOptions program false in let output=Text.trim stdout in
  require (output="21" && stderr="") (Printf.sprintf "Expected swapped float arguments to print 21, got stdout '%s' and stderr '%s'" output stderr)
 let testHighFloatRegistersExecute ()=
  let program=makeSimpleProgram [ FLoad (FPhysical D0, 0.01); FMov (FPhysical D15, FPhysical D0); FLoad (FPhysical D2, 2000.0); FMul (FPhysical D15, FPhysical D15, FPhysical D2); FloatToInt64 (Physical X0, FPhysical D15); PrintInt64 (Physical X0) ] Ret in
- let* _,stdout,stderr=runLIRProgramFullWithOptions program false in let output=HostText.trim stdout in
+ let* _,stdout,stderr=runLIRProgramFullWithOptions program false in let output=Text.trim stdout in
  require (output="20" && stderr="") (Printf.sprintf "Expected high x64 float registers to print 20, got stdout '%s' and stderr '%s'" output stderr)
 let testNonCommutativeFloatAliasesPreserveScratch ()=
  let program=makeSimpleProgram [ FLoad (FPhysical D0, 7.0); FLoad (FPhysical D1, 10.0); FLoad (FPhysical D2, 2.0); FSub (FPhysical D2, FPhysical D1, FPhysical D2); FloatToInt64 (Physical X1, FPhysical D2); FLoad (FPhysical D2, 2.0); FDiv (FPhysical D2, FPhysical D1, FPhysical D2); FloatToInt64 (Physical X2, FPhysical D2); FloatToInt64 (Physical X3, FPhysical D0); Mov (Physical X4, Imm 100L); Mul (Physical X1, Physical X1, Physical X4); Mov (Physical X4, Imm 10L); Mul (Physical X2, Physical X2, Physical X4); Add (Physical X0, Physical X1, Reg (Physical X2)); Add (Physical X0, Physical X0, Reg (Physical X3)); PrintInt64 (Physical X0) ] Ret in
- let* _,stdout,stderr=runLIRProgramFullWithOptions program false in let output=HostText.trim stdout in
+ let* _,stdout,stderr=runLIRProgramFullWithOptions program false in let output=Text.trim stdout in
  require (output="857" && stderr="") (Printf.sprintf "Expected aliased x64 float operations to print 857, got stdout '%s' and stderr '%s'" output stderr)
 
 let testBranchFalseEdgeFallsThrough ()=
@@ -208,7 +208,7 @@ let testReportsMissingEntryBlock ()=
  let entry=Label "_start_entry" and body=Label "_start_body" in
  let func=functionWith "_start" [] entry [body,block body [] Ret] in
  match translate (Program ([func],M.empty,M.empty)) false with
- |Error e when HostText.contains e "missing entry block"->Ok ()
+ |Error e when Text.contains e "missing entry block"->Ok ()
  |Error e->Error (Printf.sprintf "Expected missing entry block error, got '%s'" e)
  |Ok _->Error "Expected x64 codegen to reject a CFG whose entry block is absent"
 let testRejectsConditionsWithoutBlockComparison ()=
@@ -218,7 +218,7 @@ let testRejectsConditionsWithoutBlockComparison ()=
  let rec runCases=function
  |[]->Ok ()
  |(name,instrs,term)::rest->match translate instrs term with
-  |Error e when HostText.contains e "without a preceding comparison in the same block"->runCases rest
+  |Error e when Text.contains e "without a preceding comparison in the same block"->runCases rest
   |Error e->Error (Printf.sprintf "Expected %s comparison-context error, got '%s'" name e)
   |Ok _->Error (Printf.sprintf "Expected x64 codegen to reject %s without a block-local comparison" name) in
  runCases ["Cset",[Cset (Physical X0,EQ)],Ret;"CondBranch",[],CondBranch (EQ,target,target)]
@@ -246,8 +246,8 @@ let testDictRefCountDecDictListValueUsesPlannedHelper ()=
  let typ=AST.TDict (AST.TInt64,AST.TDict (AST.TInt64,AST.TList AST.TInt64)) in
  let program=makeSimpleProgram [RefCountDec (Physical X0,0,DictHeap,Some (rcMetadata typ))] Ret in
  let* labels=generatedCallLabels program in
- let display=HostStructuralFormat.format (HostStructuralFormat.Sequence (List.map (fun s->HostStructuralFormat.Text s) labels)) in
- let* ()=require (List.exists (fun label->HostText.startsWith label "__dark_dict_rc_dec_plan_") labels) ("Nested dict/list RefCountDec did not call a planned dict helper; calls were "^display) in
+ let display=StructuralFormat.format (StructuralFormat.Sequence (List.map (fun s->StructuralFormat.Text s) labels)) in
+ let* ()=require (List.exists (fun label->Text.startsWith label "__dark_dict_rc_dec_plan_") labels) ("Nested dict/list RefCountDec did not call a planned dict helper; calls were "^display) in
  require (not (List.mem "__dark_dict_rc_dec_dict_list_value_helper" labels)) ("Nested dict/list RefCountDec still called the dict-list matrix helper; calls were "^display)
 let plannedTuple typ context=makeSimpleProgram [RefCountDec (Physical X0,0,TaggedList,Some (rcMetadata (AST.TList typ)))] Ret |> assertCallsPlannedListHelper context
 let testTaggedListTuplePayloadUsesPlannedHelper ()=plannedTuple (AST.TTuple [AST.TString;AST.TList AST.TInt64;AST.TDict (AST.TInt64,AST.TInt64)]) "Tuple list payload"
@@ -264,17 +264,17 @@ let testDictRefCountDecStringKeyTupleValueUsesPlannedHelper ()=
 let testDictRefCountDecStringCollisionKeysAndValues ()=
  let dictType=AST.TDict (AST.TString,AST.TString) in
  let program=makeSimpleProgram [ StringConcat (Physical X2, StringSymbol "key", StringSymbol "1", []); StringConcat (Physical X3, StringSymbol "value", StringSymbol "1", []); StringConcat (Physical X4, StringSymbol "key", StringSymbol "2", []); StringConcat (Physical X5, StringSymbol "value", StringSymbol "2", []); HeapAlloc (Physical X6, 40); HeapStore (Physical X6, 0, Imm 2L, None); HeapStore (Physical X6, 8, Reg (Physical X2), Some AST.TString); HeapStore (Physical X6, 16, Reg (Physical X3), Some AST.TString); HeapStore (Physical X6, 24, Reg (Physical X4), Some AST.TString); HeapStore (Physical X6, 32, Reg (Physical X5), Some AST.TString); Mov (Physical X7, Imm 3L); Orr (Physical X7, Physical X6, Physical X7); RefCountDec (Physical X7, 0, DictHeap, Some (rcMetadata dictType)) ] Ret in
- let* _,_,stderr=runLIRProgramFullWithOptions program true in let leaks=HostText.trim stderr in
+ let* _,_,stderr=runLIRProgramFullWithOptions program true in let leaks=Text.trim stderr in
  require (leaks="") (Printf.sprintf "Expected dict collision string keys and values to be released, got stderr '%s'" leaks)
 let testDictRefCountDecStringCollisionKeysAndTupleListValues ()=
  let listType=AST.TList AST.TInt64 in let tupleType=AST.TTuple [AST.TString;listType] in let dictType=AST.TDict (AST.TString,tupleType) in
  let program=makeSimpleProgram [ StringConcat (Physical X2, StringSymbol "key", StringSymbol "1", []); StringConcat (Physical X3, StringSymbol "value", StringSymbol "1", []); HeapAlloc (Physical X4, 8); HeapStore (Physical X4, 0, Imm 42L, None); Mov (Physical X5, Imm 2L); Orr (Physical X5, Physical X4, Physical X5); HeapAlloc (Physical X6, 16); HeapStore (Physical X6, 0, Reg (Physical X3), Some AST.TString); HeapStore (Physical X6, 8, Reg (Physical X5), Some listType); Mov (Physical X19, Reg (Physical X6)); Mov (Physical X20, Reg (Physical X2)); StringConcat (Physical X2, StringSymbol "key", StringSymbol "2", []); StringConcat (Physical X3, StringSymbol "value", StringSymbol "2", []); HeapAlloc (Physical X4, 8); HeapStore (Physical X4, 0, Imm 99L, None); Mov (Physical X5, Imm 2L); Orr (Physical X5, Physical X4, Physical X5); HeapAlloc (Physical X6, 16); HeapStore (Physical X6, 0, Reg (Physical X3), Some AST.TString); HeapStore (Physical X6, 8, Reg (Physical X5), Some listType); HeapAlloc (Physical X7, 40); HeapStore (Physical X7, 0, Imm 2L, None); HeapStore (Physical X7, 8, Reg (Physical X20), Some AST.TString); HeapStore (Physical X7, 16, Reg (Physical X19), Some tupleType); HeapStore (Physical X7, 24, Reg (Physical X2), Some AST.TString); HeapStore (Physical X7, 32, Reg (Physical X6), Some tupleType); Mov (Physical X21, Imm 3L); Orr (Physical X21, Physical X7, Physical X21); RefCountDec (Physical X21, 0, DictHeap, Some (rcMetadata dictType)) ] Ret in
- let* _,_,stderr=runLIRProgramFullWithOptions program true in let leaks=HostText.trim stderr in
+ let* _,_,stderr=runLIRProgramFullWithOptions program true in let leaks=Text.trim stderr in
  require (leaks="") (Printf.sprintf "Expected dict collision string keys and tuple/list values to be released, got stderr '%s'" leaks)
 let testTaggedListRefCountDecClosurePayloadInStdlibFunction ()=
  let closureType=AST.TFunction ([AST.TInt64],AST.TInt64) in
  let program=runInNamedFunction "Darklang.Stdlib.List.__mapHelper_i64_fn_i64_acc_fn_i64" [ ClosureAlloc (Physical X2, TestIds.functionIdForName "Darklang.Stdlib.List.__mapHelper_i64_fn_i64_acc_fn_i64", []); HeapAlloc (Physical X3, 8); HeapStore (Physical X3, 0, Reg (Physical X2), Some closureType); Mov (Physical X4, Imm 2L); Orr (Physical X4, Physical X3, Physical X4); RefCountDec (Physical X4, 0, TaggedList, Some (rcMetadata ((AST.TList closureType)))) ] Ret in
- let* exitCode,_,stderr=runLIRProgramFullWithOptions program true in let leaks=HostText.trim stderr in
+ let* exitCode,_,stderr=runLIRProgramFullWithOptions program true in let leaks=Text.trim stderr in
  let* ()=require (exitCode=0) (Printf.sprintf "Expected stdlib list closure payload release to exit 0, got %d, stderr '%s'" exitCode leaks) in
  require (leaks="") (Printf.sprintf "Expected stdlib list closure payload release to balance leak counter, got stderr '%s'" leaks)
 let testClosureRefCountDecPreservesLiveArgumentClosures ()=
@@ -283,7 +283,7 @@ let testClosureRefCountDecPreservesLiveArgumentClosures ()=
  let first=capturedFunction "x64_preserved_closure_first" and second=capturedFunction "x64_preserved_closure_second" in
  let main=makeSimpleProgram [ClosureAlloc (Physical X5,first.LIR.id,[Imm 11L]);ClosureAlloc (Physical X7,second.LIR.id,[Imm 22L]);RefCountDec (Physical X7,16,ClosureHeap,Some (rcMetadata closureType));RefCountDec (Physical X5,16,ClosureHeap,Some (rcMetadata closureType))] Ret in
  let main=match main with Program ([func],variants,records)->Program ([func;first;second],variants,records)|other->other in
- let* exitCode,_,stderr=runLIRProgramFullWithOptions main true in let leaks=HostText.trim stderr in
+ let* exitCode,_,stderr=runLIRProgramFullWithOptions main true in let leaks=Text.trim stderr in
  require (exitCode=0 && leaks="") (Printf.sprintf "Expected both live closures to release cleanly, got exit %d and stderr '%s'" exitCode leaks)
 let testClosureRefCountDecMixedSumCaptureUsesVariantDispatch ()=
  let name="X64ClosureMixedSumCaptureDispatch" in let sumType=AST.TSum (name,[]) in let tupleType=AST.TTuple [AST.TInt64;sumType] in
@@ -317,7 +317,7 @@ let runThreeFieldCase fixture (name,fields)=
  let stores=List.mapi (fun i typ->if dynamicField typ then HeapStore (Physical X5,i*8,Reg (Physical (dynamicReg context i)),Some typ) else HeapStore (Physical X5,i*8,Imm (Int64.of_int (i+1)),None)) fields in
  let suffix=if isSum then [HeapAlloc (Physical X6,16);HeapStore (Physical X6,0,Imm 0L,None);HeapStore (Physical X6,8,Reg (Physical X5),Some payloadType);HeapAlloc (Physical X7,8);HeapStore (Physical X7,0,Reg (Physical X6),Some valueType);Mov (Physical X8,Imm 2L);Orr (Physical X8,Physical X7,Physical X8);RefCountDec (Physical X8,0,TaggedList,Some (rcMetadata (AST.TList valueType)))] else [HeapAlloc (Physical X6,8);HeapStore (Physical X6,0,Reg (Physical X5),Some payloadType);Mov (Physical X7,Imm 2L);Orr (Physical X7,Physical X6,Physical X7);RefCountDec (Physical X7,0,TaggedList,Some (rcMetadata (AST.TList payloadType)))] in
  let program=makeSimpleProgramWithRecords (allocs @ [HeapAlloc (Physical X5,24)] @ stores @ suffix) Ret records in
- let* _,_,stderr=runLIRProgramFullWithOptions program true in let leaks=HostText.trim stderr in
+ let* _,_,stderr=runLIRProgramFullWithOptions program true in let leaks=Text.trim stderr in
  let dynamic=if fixture=SumTuple3 then "" else "dynamic " in
  require (leaks="") (Printf.sprintf "Expected list %s %s %spayload release to balance leak counter, got stderr '%s'" context name dynamic leaks)
 let runTuple2Case sum (name,nestedType,setup,stores)=
@@ -325,7 +325,7 @@ let runTuple2Case sum (name,nestedType,setup,stores)=
  let first=HeapStore (Physical X5,0,Imm (if sum then 0L else 42L),None) in
  let suffix=[HeapAlloc (Physical X5,16);first;HeapStore (Physical X5,8,Reg (Physical X4),Some nestedType);HeapAlloc (Physical X6,8);HeapStore (Physical X6,0,Reg (Physical X5),Some valueType);Mov (Physical X7,Imm 2L);Orr (Physical X7,Physical X6,Physical X7);RefCountDec (Physical X7,0,TaggedList,Some (rcMetadata (AST.TList valueType)))] in
  let program=makeSimpleProgram (setup @ [HeapAlloc (Physical X4,16)] @ stores @ suffix) Ret in
- let* _,_,stderr=runLIRProgramFullWithOptions program true in let leaks=HostText.trim stderr in
+ let* _,_,stderr=runLIRProgramFullWithOptions program true in let leaks=Text.trim stderr in
  let context=if sum then "sum tuple2" else "tuple2 nested tuple" in let dynamic=if sum then "" else "dynamic " in
  require (leaks="") (Printf.sprintf "Expected list %s %s %spayload release to balance leak counter, got stderr '%s'" context name dynamic leaks)
 let testTaggedListRefCountDecTuple3DynamicPayloadCombinations ()=runCases (runThreeFieldCase Tuple3) [ ("first", [AST.TString; AST.TInt64; AST.TInt64]); ("third", [AST.TInt64; AST.TInt64; AST.TString]); ("first-second", [AST.TString; AST.TBlob; AST.TInt64]); ("second-third", [AST.TInt64; AST.TString; AST.TBlob]); ("all", [AST.TString; AST.TBlob; AST.TString]) ]

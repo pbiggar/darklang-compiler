@@ -16,7 +16,7 @@ module F = OwnershipTestFormatting
 let ( let* ) = Result.bind
 type testLeaf = Reuse of string * string
 let value id : H.value = {H.id = H.ValueId id; typ = AST.TList AST.TInt64}
-let binding name = AST.bindingId (Int32.to_int (Array.fold_left (fun hash ch -> Int32.add (Int32.mul hash 31l) (Int32.of_int ch)) 17l (HostText.scalars name)))
+let binding name = AST.bindingId (Int32.to_int (Array.fold_left (fun hash ch -> Int32.add (Int32.mul hash 31l) (Int32.of_int ch)) 17l (Text.scalars name)))
 let parameter name value : H.parameter = {H.binding = binding name; value}
 let signature parameters result : string O.functionSignature = {O.parameters; result}
 let block parameters operations result : (testLeaf, string) O.block = {O.body = {H.parameters; operations; result}}
@@ -37,16 +37,16 @@ let svSelectionError = function
  | Selection.InvalidUniqueArgumentIndex (name, index) -> StructuralValue.Union ("InvalidUniqueArgumentIndex", [StructuralValue.Text name; StructuralValue.Scalar (string_of_int index)])
  | Selection.MissingEstablishedUniqueArgument (name, index) -> StructuralValue.Union ("MissingEstablishedUniqueArgument", [StructuralValue.Text name; StructuralValue.Scalar (string_of_int index)])
  | Selection.InconsistentEstablishedBoundary name -> StructuralValue.Union ("InconsistentEstablishedBoundary", [StructuralValue.Text name])
-let showSelectionError error = HostStructuralFormat.format (svSelectionError error)
+let showSelectionError error = StructuralFormat.format (svSelectionError error)
 let showInferenceError = function
- | Inference.FunctionGroupingFailed (OwnedFunctionGroups.DuplicateFunctionName id) -> "FunctionGroupingFailed (DuplicateFunctionName " ^ HostStructuralFormat.format (AST.DiagnosticFormatting.func id) ^ ")"
- | Inference.DemandTargetMissing id -> "DemandTargetMissing " ^ HostStructuralFormat.format (AST.DiagnosticFormatting.func id)
+ | Inference.FunctionGroupingFailed (OwnedFunctionGroups.DuplicateFunctionName id) -> "FunctionGroupingFailed (DuplicateFunctionName " ^ StructuralFormat.format (AST.DiagnosticFormatting.func id) ^ ")"
+ | Inference.DemandTargetMissing id -> "DemandTargetMissing " ^ StructuralFormat.format (AST.DiagnosticFormatting.func id)
  | Inference.GroupInferenceFailed (names, cause) ->
    let cause = match cause with U.VariantLimitExceeded (count, maximum) -> Printf.sprintf "VariantLimitExceeded (%d, %d)" count maximum
-    | U.RecursiveFunctionRequiresGroupInference id -> "RecursiveFunctionRequiresGroupInference " ^ HostStructuralFormat.format (AST.DiagnosticFormatting.func id)
+    | U.RecursiveFunctionRequiresGroupInference id -> "RecursiveFunctionRequiresGroupInference " ^ StructuralFormat.format (AST.DiagnosticFormatting.func id)
     | U.NoVerifiedBoundary error -> "NoVerifiedBoundary (" ^ V.errorToString (fun id -> StructuralValue.Text id) error ^ ")"
     | U.NoVerifiedFunctionGroup error -> "NoVerifiedFunctionGroup (" ^ V.errorToString (fun id -> StructuralValue.Text id) error ^ ")" in
-   "GroupInferenceFailed (" ^ HostStructuralFormat.format (StructuralValue.Record ["Head", StructuralValue.Text names.NonEmptyList.head; "Tail", StructuralValue.Sequence (List.map (fun name -> StructuralValue.Text name) names.NonEmptyList.tail)]) ^ ", " ^ cause ^ ")"
+   "GroupInferenceFailed (" ^ StructuralFormat.format (StructuralValue.Record ["Head", StructuralValue.Text names.NonEmptyList.head; "Tail", StructuralValue.Sequence (List.map (fun name -> StructuralValue.Text name) names.NonEmptyList.tail)]) ^ ", " ^ cause ^ ")"
 let catalog semantics definitions =
  let* groups = Inference.infer semantics definitions |> Result.map_error (fun error -> "Inference failed: " ^ showInferenceError error) in
  Selection.create groups |> Result.map_error (fun error -> "Catalog creation failed: " ^ showSelectionError error)
@@ -62,7 +62,7 @@ let svSelection = function
  | Selection.EstablishedBoundary boundary -> StructuralValue.Union ("EstablishedBoundary", [F.callSignature boundary])
  | Selection.InferredVariant selected -> StructuralValue.Union ("InferredVariant", [StructuralValue.Record ["Identity", svIdentity (Selection.selectedIdentity selected); "Candidate", svCandidate (Selection.selectedCandidate selected); "TargetBoundary", svBoundary (Selection.selectedTargetBoundary selected); "CallSignature", F.callSignature (Selection.selectedCallSignature selected)]])
 let svResult encode encodeError = function Ok value -> StructuralValue.Union ("Ok", [encode value]) | Error error -> StructuralValue.Union ("Error", [encodeError error])
-let showActual actual = HostStructuralFormat.format (svResult svSelection svSelectionError actual)
+let showActual actual = StructuralFormat.format (svResult svSelection svSelectionError actual)
 let svPairs values = StructuralValue.Sequence (List.map (fun (name, signature) -> StructuralValue.Tuple [StructuralValue.Text name; F.signature (fun id -> StructuralValue.Text id) signature]) values)
 let testSelectsByAvailableUniqueness () =
  let input = value 0 in let boundary = signature [O.ConsumedParameter "input"] (O.ProducedResult "input") in
@@ -76,7 +76,7 @@ let testSelectsByAvailableUniqueness () =
  let candidatesDiffer = Selection.selectedIdentity ordinary <> Selection.selectedIdentity unique in
  let expectedUnique : O.callSignature = {O.parameters = [O.UniqueCallParameter]; result = O.UniqueProducedCallResult} in
  if ordinarySignature = transferredCall && uniqueSignature = expectedUnique && identityIsStable && candidatesDiffer then Ok ()
- else Error ("Expected stable capability-aware selection, got ordinary=" ^ HostStructuralFormat.format (F.callSignature ordinarySignature) ^ ", unique=" ^ HostStructuralFormat.format (F.callSignature uniqueSignature) ^ ", stable=" ^ string_of_bool identityIsStable ^ ", distinct=" ^ string_of_bool candidatesDiffer)
+ else Error ("Expected stable capability-aware selection, got ordinary=" ^ StructuralFormat.format (F.callSignature ordinarySignature) ^ ", unique=" ^ StructuralFormat.format (F.callSignature uniqueSignature) ^ ", stable=" ^ string_of_bool identityIsStable ^ ", distinct=" ^ string_of_bool candidatesDiffer)
 let testFallsBackToEstablishedBoundary () =
  let input = value 10 in let output = value 11 in
  let reuse = definition "reuse" (signature [O.ConsumedParameter "input"] (O.ProducedResult "output")) (block [parameter "input" input] [O.Evaluate (H.Leaf (Reuse ("input", "output")))] output) in
@@ -84,7 +84,7 @@ let testFallsBackToEstablishedBoundary () =
  let* unavailable = select variants (site "reuse" IS.empty) in let* available = select variants (site "reuse" (IS.singleton 0)) in
  match unavailable, available with
  | Selection.EstablishedBoundary boundary, Selection.InferredVariant selected when boundary = transferredCall && Selection.selectedCallSignature selected = ({O.parameters = [O.UniqueCallParameter]; result = O.UniqueProducedCallResult} : O.callSignature) -> Ok ()
- | actual -> Error ("Expected established fallback followed by inferred reuse, got " ^ HostStructuralFormat.format (StructuralValue.Tuple [svSelection (fst actual); svSelection (snd actual)]))
+ | actual -> Error ("Expected established fallback followed by inferred reuse, got " ^ StructuralFormat.format (StructuralValue.Tuple [svSelection (fst actual); svSelection (snd actual)]))
 let recursiveFixture () =
  let firstInput = value 20 in let firstRecursive = value 21 in let firstResult = value 22 in
  let secondInput = value 30 in let secondRecursive = value 31 in let secondResult = value 32 in
@@ -99,7 +99,7 @@ let testSelectsRecursiveGroupsAtomically () =
  let boundaries = List.map (fun (boundary : string G.functionBoundary) -> boundary.InferRecursiveOwnership.name, boundary.InferRecursiveOwnership.ownership) (G.candidateBoundaries (Selection.selectedCandidate selection)) in
  let expected = ["first", signature [O.UniqueParameter "firstInput"] (O.UniqueProducedResult "firstResult"); "second", signature [O.UniqueParameter "secondInput"] (O.UniqueProducedResult "secondResult")] in
  let identityNames = List.map fst (Selection.identityBoundaries (Selection.selectedIdentity selection)) in
- if boundaries = expected && identityNames = ["first"; "second"] then Ok () else Error ("Expected one atomic recursive candidate " ^ HostStructuralFormat.format (svPairs expected) ^ ", got " ^ HostStructuralFormat.format (svPairs boundaries))
+ if boundaries = expected && identityNames = ["first"; "second"] then Ok () else Error ("Expected one atomic recursive candidate " ^ StructuralFormat.format (svPairs expected) ^ ", got " ^ StructuralFormat.format (svPairs boundaries))
 let testRejectsInvalidCatalogAndCalls () =
  let input = value 40 in let boundary = signature [O.ConsumedParameter "input"] (O.ProducedResult "input") in let identity = definition "identity" boundary (block [parameter "input" input] [] input) in
  let* groups = Inference.infer (semantics [input, "input"]) [identity] |> Result.map_error (fun error -> "Inference failed: " ^ showInferenceError error) in
@@ -120,7 +120,7 @@ let testRejectsInvalidCatalogAndCalls () =
  | Error error -> Error ("Expected duplicate catalog entries to fail, got Error (" ^ showSelectionError error ^ ")")
  | Ok _ -> Error "Expected duplicate catalog entries to fail"
 let selectIn definitions semantics site = let* variants = catalog semantics definitions in select variants site
-let showIdentityResults (first, second) = HostStructuralFormat.format (StructuralValue.Tuple [svResult svIdentity (fun error -> StructuralValue.Text error) first; svResult svIdentity (fun error -> StructuralValue.Text error) second])
+let showIdentityResults (first, second) = StructuralFormat.format (StructuralValue.Tuple [svResult svIdentity (fun error -> StructuralValue.Text error) first; svResult svIdentity (fun error -> StructuralValue.Text error) second])
 let testCanonicalRecursiveIdentity () =
  let semantics, definitions = recursiveFixture () in
  let identity definitions target = let* selection = selectIn definitions semantics (site target (IS.singleton 0)) in let* selection = selected selection in Ok (Selection.selectedIdentity selection) in
@@ -138,24 +138,24 @@ let testPreservesPositionalTransfers () =
  let select unique = let* selection = selectIn [mixed] (semantics [borrowed, "borrowed"; consumed, "consumed"]) (siteWithBoundary "mixed" established unique) in let* selection = selected selection in Ok (Selection.selectedCallSignature selection) in
  let expectedUnique : O.callSignature = {O.parameters = [O.UnmanagedCallParameter; O.BorrowedCallParameter; O.UniqueCallParameter]; result = O.UniqueProducedCallResult} in
  let first = select (IS.singleton 1) in let second = select (IS.singleton 2) in
- match first, second with Ok ordinary, Ok unique when ordinary = established && unique = expectedUnique -> Ok () | actual -> Error ("Expected uniqueness at the consumed argument's original position only, got " ^ HostStructuralFormat.format (StructuralValue.Tuple [svResult F.callSignature (fun error -> StructuralValue.Text error) (fst actual); svResult F.callSignature (fun error -> StructuralValue.Text error) (snd actual)]))
+ match first, second with Ok ordinary, Ok unique when ordinary = established && unique = expectedUnique -> Ok () | actual -> Error ("Expected uniqueness at the consumed argument's original position only, got " ^ StructuralFormat.format (StructuralValue.Tuple [svResult F.callSignature (fun error -> StructuralValue.Text error) (fst actual); svResult F.callSignature (fun error -> StructuralValue.Text error) (snd actual)]))
 let testPreservesBorrowedResultSource () =
  let first = value 70 in let second = value 71 in let borrowSecond = definition "borrowSecond" (signature [O.BorrowedParameter "first"; O.BorrowedParameter "second"] (O.BorrowedResult "second")) (block [parameter "first" first; parameter "second" second] [] second) in
  let established : O.callSignature = {O.parameters = [O.BorrowedCallParameter; O.BorrowedCallParameter]; result = O.BorrowedCallResult 1} in
  let* variants = catalog (semantics [first, "first"; second, "second"]) [borrowSecond] in
  let valid = Selector.select variants (siteWithBoundary "borrowSecond" established (IS.of_list [0; 1])) in
  let invalid = Selector.select variants (siteWithBoundary "borrowSecond" {established with O.result = O.BorrowedCallResult 0} IS.empty) in
- match valid, invalid with Ok (Selection.InferredVariant chosen), Error (Selection.InconsistentEstablishedBoundary "borrowSecond") when Selection.selectedCallSignature chosen = established -> Ok () | actual -> Error ("Expected a borrowed result to keep its exact source parameter, got " ^ HostStructuralFormat.format (StructuralValue.Tuple [svResult svSelection svSelectionError (fst actual); svResult svSelection svSelectionError (snd actual)]))
+ match valid, invalid with Ok (Selection.InferredVariant chosen), Error (Selection.InconsistentEstablishedBoundary "borrowSecond") when Selection.selectedCallSignature chosen = established -> Ok () | actual -> Error ("Expected a borrowed result to keep its exact source parameter, got " ^ StructuralFormat.format (StructuralValue.Tuple [svResult svSelection svSelectionError (fst actual); svResult svSelection svSelectionError (snd actual)]))
 let testDoesNotWeakenEstablishedUniqueResult () =
  let input = value 80 in let identity = definition "identity" (signature [O.ConsumedParameter "input"] (O.ProducedResult "input")) (block [parameter "input" input] [] input) in
  let established = {transferredCall with O.result = O.UniqueProducedCallResult} in
  let actual = selectIn [identity] (semantics [input, "input"]) (siteWithBoundary "identity" established IS.empty) in
- match actual with Ok (Selection.EstablishedBoundary retained) when retained = established -> Ok () | actual -> Error ("Expected fallback rather than weakening an established result guarantee, got " ^ HostStructuralFormat.format (svResult svSelection (fun error -> StructuralValue.Text error) actual))
+ match actual with Ok (Selection.EstablishedBoundary retained) when retained = established -> Ok () | actual -> Error ("Expected fallback rather than weakening an established result guarantee, got " ^ StructuralFormat.format (svResult svSelection (fun error -> StructuralValue.Text error) actual))
 let testRejectsTransferShapeMismatches () =
  let input = value 90 in let identity = definition "identity" (signature [O.ConsumedParameter "input"] (O.ProducedResult "input")) (block [parameter "input" input] [] input) in
  let invalidBoundaries : O.callSignature list = [{transferredCall with O.parameters = []}; {transferredCall with O.parameters = [O.UnmanagedCallParameter]}; {transferredCall with O.parameters = [O.BorrowedCallParameter]}; {transferredCall with O.result = O.UnmanagedCallResult}; {transferredCall with O.result = O.BorrowedCallResult 0}] in
  let* variants = catalog (semantics [input, "input"]) [identity] in
- List.fold_left (fun result boundary -> let* () = result in match Selector.select variants (siteWithBoundary "identity" boundary IS.empty) with Error (Selection.InconsistentEstablishedBoundary "identity") -> Ok () | actual -> Error ("Expected rejection of transfer shape " ^ HostStructuralFormat.format (F.callSignature boundary) ^ ", got " ^ showActual actual)) (Ok ()) invalidBoundaries
+ List.fold_left (fun result boundary -> let* () = result in match Selector.select variants (siteWithBoundary "identity" boundary IS.empty) with Error (Selection.InconsistentEstablishedBoundary "identity") -> Ok () | actual -> Error ("Expected rejection of transfer shape " ^ StructuralFormat.format (F.callSignature boundary) ^ ", got " ^ showActual actual)) (Ok ()) invalidBoundaries
 let testRejectsNegativeUniquePosition () =
  let input = value 100 in let identity = definition "identity" (signature [O.ConsumedParameter "input"] (O.ProducedResult "input")) (block [parameter "input" input] [] input) in
  let* variants = catalog (semantics [input, "input"]) [identity] in

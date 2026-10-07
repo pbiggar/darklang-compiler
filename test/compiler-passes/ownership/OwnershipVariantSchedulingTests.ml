@@ -45,7 +45,7 @@ let errorLabel = function
 let run definitions = Scheduler.schedule S.defaultLimits contracts semantics FunctionIdMap.empty definitions |> Result.map_error errorLabel
 let testPropagatesUniquenessToFixedPoint () = let definitions, first, second = fixture () in let* plan = run definitions in
  let sites = M.rewrites (S.materialization plan) |> List.map (fun rewrite -> rewrite.M.site.O.result) |> H.ValueSet.of_list in
- if H.ValueSet.equal sites (H.ValueSet.of_list [first.H.result.H.id; second.H.result.H.id]) && List.length (S.iterations plan) >= 2 then Ok () else Error ("Expected both calls to specialize across iterations, got set " ^ HostStructuralFormat.format (StructuralValue.Sequence (List.map svId (H.ValueSet.elements sites))))
+ if H.ValueSet.equal sites (H.ValueSet.of_list [first.H.result.H.id; second.H.result.H.id]) && List.length (S.iterations plan) >= 2 then Ok () else Error ("Expected both calls to specialize across iterations, got set " ^ StructuralFormat.format (StructuralValue.Sequence (List.map svId (H.ValueSet.elements sites))))
 let testBoundsConvergence () = let definitions, _, _ = fixture () in let limits = {S.defaultLimits with S.maxIterations = 1} in
  match Scheduler.schedule limits contracts semantics FunctionIdMap.empty definitions with Error (Scheduler.IterationLimitExceeded 1) -> Ok () | Error error -> Error ("Expected the scheduler iteration bound, got " ^ errorLabel error) | Ok _ -> Error "Expected the scheduler iteration bound, got Ok"
 let testSkipsUnusedWideVariantSearch () =

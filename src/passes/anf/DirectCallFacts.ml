@@ -82,7 +82,7 @@ let rewriteAtom substitutions = function A.Var id as atom -> Option.value ~defau
 let rewriteCallArgs rewrites name args = match FunctionIdMap.tryFind name rewrites with
  | None -> args
  | Some rewrites ->
-   let rec loop rewrites args reversed = match rewrites, args with [], [] -> List.rev reversed | rewrite :: rs, arg :: args -> (match rewrite with KeepParameter -> loop rs args (arg :: reversed) | ReplaceParameterWith _ -> loop rs args reversed) | _ -> Crash.crash ("Direct-call argument count mismatch for '" ^ HostStructuralFormat.format (AST.DiagnosticFormatting.func name) ^ "'") in loop rewrites args []
+   let rec loop rewrites args reversed = match rewrites, args with [], [] -> List.rev reversed | rewrite :: rs, arg :: args -> (match rewrite with KeepParameter -> loop rs args (arg :: reversed) | ReplaceParameterWith _ -> loop rs args reversed) | _ -> Crash.crash ("Direct-call argument count mismatch for '" ^ StructuralFormat.format (AST.DiagnosticFormatting.func name) ^ "'") in loop rewrites args []
 let rewriteCExpr rewrites substitutions operation =
  match operation with
  | A.Call (name, args) -> A.Call (name, rewriteCallArgs rewrites name (List.map (rewriteAtom substitutions) args))

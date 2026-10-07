@@ -1,4 +1,4 @@
-(* HostText.mli - UTF-8 host text and Unicode scalar operations. *)
+(* Text.mli - UTF-8 host text and Unicode scalar operations. *)
 val scalars : string -> int array
 val ofScalars : int array -> string
 val length : string -> int

@@ -14,7 +14,7 @@ module F = OwnershipTestFormatting
 type testLeaf = TestLeaf [@@warning "-37"]
 let value id : H.value = {H.id = H.ValueId id; typ = AST.TList AST.TInt64}
 let unitValue id : H.value = {H.id = H.ValueId id; typ = AST.TUnit}
-let binding name = AST.bindingId (Int32.to_int (Array.fold_left (fun hash ch -> Int32.add (Int32.mul hash 31l) (Int32.of_int ch)) 17l (HostText.scalars name)))
+let binding name = AST.bindingId (Int32.to_int (Array.fold_left (fun hash ch -> Int32.add (Int32.mul hash 31l) (Int32.of_int ch)) 17l (Text.scalars name)))
 let parameter name value : H.parameter = {H.binding = binding name; value}
 let signature parameters result : string O.functionSignature = {O.parameters; result}
 let block parameters operations result : (testLeaf, string) O.block = {O.body = {H.parameters; operations; result}}
@@ -40,7 +40,7 @@ let svError = function
  | Inference.FunctionGroupingFailed (OwnedFunctionGroups.DuplicateFunctionName id) -> StructuralValue.Union ("FunctionGroupingFailed", [StructuralValue.Union ("DuplicateFunctionName", [AST.DiagnosticFormatting.func id])])
  | Inference.DemandTargetMissing id -> StructuralValue.Union ("DemandTargetMissing", [AST.DiagnosticFormatting.func id])
  | Inference.GroupInferenceFailed (names, cause) -> StructuralValue.Union ("GroupInferenceFailed", [StructuralValue.Record ["Head", StructuralValue.Text names.NonEmptyList.head; "Tail", StructuralValue.Sequence (List.map (fun name -> StructuralValue.Text name) names.NonEmptyList.tail)]; svInferenceError cause])
-let showSummaries = function Ok values -> HostStructuralFormat.format (StructuralValue.Union ("Ok", [StructuralValue.Sequence (List.map svSummary values)])) | Error error -> HostStructuralFormat.format (StructuralValue.Union ("Error", [svError error]))
+let showSummaries = function Ok values -> StructuralFormat.format (StructuralValue.Union ("Ok", [StructuralValue.Sequence (List.map svSummary values)])) | Error error -> StructuralFormat.format (StructuralValue.Union ("Error", [svError error]))
 let showGroups actual = showSummaries (Result.map (List.map groupSummary) actual)
 let testInfersAcyclicGroupsCalleeFirst () =
  let leafInput = value 0 in let leafBoundary = signature [O.ConsumedParameter "leafInput"] (O.ProducedResult "leafInput") in

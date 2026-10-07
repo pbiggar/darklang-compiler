@@ -10,29 +10,29 @@ let context : X64CodeGenTypes.funcCtx =
 let textTests=[
  "native Unicode ordering and case folding",(fun () ->
   require (StringOrder.Set.elements (StringOrder.Set.of_list ["𐀀";"a";"\238\128\128"])
-    =["a";"\238\128\128";"𐀀"] && HostText.caseFold "StraßeΣς"="strasseσσ")
+    =["a";"\238\128\128";"𐀀"] && Text.caseFold "StraßeΣς"="strasseσσ")
     "Compiler text did not use native ordering or Unicode case folding");
  "native Unicode grapheme consistency",(fun () ->
-  require (HostText.graphemeClusters "क्ष😀👩‍💻"=["क्ष";"😀";"👩‍💻"])
+  require (Text.graphemeClusters "क्ष😀👩‍💻"=["क्ष";"😀";"👩‍💻"])
     "Indic conjunct or emoji segmentation differs from extended graphemes");
  "native Unicode first grapheme",(fun () ->
-  require (List.for_all (fun text -> HostText.firstGrapheme text =
-    List.nth_opt (HostText.graphemeClusters text) 0)
+  require (List.for_all (fun text -> Text.firstGrapheme text =
+    List.nth_opt (Text.graphemeClusters text) 0)
     ["";"a";"érest";"क्षrest";"😀rest";"👩‍💻rest";"🇮🇪rest";"\r\nrest"])
     "First grapheme differs from standard extended grapheme segmentation");
  "native Unicode scalars and normalization",(fun () ->
-  require (HostText.scalars "𐐨😀"=[|0x10428;0x1f600|] && HostText.normalize "é"="é"
-    && HostText.normalize (HostText.ofScalars [|0xfffe|])=HostText.ofScalars [|0xfffe|]
-    && HostText.lowerInvariant "𐐀"="𐐨") "Native Unicode text differs");
+  require (Text.scalars "𐐨😀"=[|0x10428;0x1f600|] && Text.normalize "é"="é"
+    && Text.normalize (Text.ofScalars [|0xfffe|])=Text.ofScalars [|0xfffe|]
+    && Text.lowerInvariant "𐐀"="𐐨") "Native Unicode text differs");
  "native Unicode malformed text rejection",(fun () ->
-  let rejects text=try ignore (HostText.scalars text);false with Invalid_argument _ -> true in
+  let rejects text=try ignore (Text.scalars text);false with Invalid_argument _ -> true in
   require (List.for_all rejects ["\237\160\128";"\192\128";"\244\144\128\128"])
     "Invalid UTF-8 was accepted as source text");
  "native Unicode ordinal helper prefixes",(fun () ->
-  require (HostText.startsWith "Darklang.Stdlib.Dict.get" "Darklang.Stdlib."
-    && not (HostText.startsWith "Darklang.Std\226\128\141lib.Dict.get" "Darklang.Stdlib.")
-    && not (HostText.startsWith "Darklang.Std\000lib.Dict.get" "Darklang.Stdlib.")
-    && not (HostText.endsWith "x\226\128\141json" "xjson")
+  require (Text.startsWith "Darklang.Stdlib.Dict.get" "Darklang.Stdlib."
+    && not (Text.startsWith "Darklang.Std\226\128\141lib.Dict.get" "Darklang.Stdlib.")
+    && not (Text.startsWith "Darklang.Std\000lib.Dict.get" "Darklang.Stdlib.")
+    && not (Text.endsWith "x\226\128\141json" "xjson")
     && not (ARM64CodeGenTypes.callerOwnsSinglePayloadSum "Darklang.Stdlib.String.test")
     && ARM64CodeGenTypes.callerOwnsSinglePayloadSum "Darklang.Std\226\128\141lib.String.test")
     "Compiler helper classification used linguistic collation");

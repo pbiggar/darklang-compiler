@@ -8,14 +8,14 @@ let parse source = Result.map Validation.ValidatedSourceFile.toWrittenTypes (Wri
 let result success message expected actual = {TestOutcome.success; message; expected; actual}
 let runSyntaxTest (test : SyntaxFormat.syntaxTest) =
   match parse test.SyntaxFormat.source, test.SyntaxFormat.expectedError with
-  | Error error, Some expected when HostText.contains error expected -> result true "Test passed" None None
+  | Error error, Some expected when Text.contains error expected -> result true "Test passed" None None
   | Error error, Some expected -> result false "Parse error did not contain expected text" (Some expected) (Some error)
   | Ok _, Some expected -> result false "Expected syntax parsing to fail" (Some expected) (Some "Parsing succeeded")
   | Error error, None -> result false ("Syntax parsing failed: " ^ error) None None
   | Ok ast, None ->
       let formatted = WrittenFormatter.format test.SyntaxFormat.source ast in
       (match test.SyntaxFormat.expectedFormat with
-      | Some expected when normalizeLineEndings (HostText.trim formatted) <> normalizeLineEndings (HostText.trim expected) -> result false "Formatted syntax did not match" (Some expected) (Some formatted)
+      | Some expected when normalizeLineEndings (Text.trim formatted) <> normalizeLineEndings (Text.trim expected) -> result false "Formatted syntax did not match" (Some expected) (Some formatted)
       | _ when not test.SyntaxFormat.roundtrip -> result true "Test passed" None None
       | _ -> match parse formatted with
           | Error error -> result false ("Roundtrip reparse failed: " ^ error) (Some formatted) None

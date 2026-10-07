@@ -40,7 +40,6 @@ type batchInput=CommandLineItems of batchCompileItem * batchCompileItem list|Man
    compilation request and executable for every source.
 *)
 type batchCliOptions={target:targetSelection;verbosity:verbosityLevel;leakCheck:bool;allowInternal:bool;packageServer:string option;input:batchInput;keepGoing:bool;reportPath:string option}
-type batchManifestItem={kind:string;name:string;source:string;output:string}
 type batchReportItem={kind:string;name:string;source:string;output:string;status:string;error:string;milliseconds:float}
 (*
    Parsed CLI options
@@ -74,8 +73,20 @@ let increment=function Quiet->Normal|Normal->Verbose|Verbose->VeryVerbose|VeryVe
    Default empty options
 *)
 let defaultOptions:cliOptions={run=false;isExpression=false;outputFile=None;verbosity=Normal;help=false;version=false;argument=None;leakCheck=false;target=HostTarget;emitResult=false;packageServer=None;allowInternal=false;disableFreeList=false;disableANFOpt=false;disableANFConstFolding=false;disableANFConstProp=false;disableANFCopyProp=false;disableANFDCE=false;disableANFStrengthReduction=false;disableInlining=false;disableTCO=false;disableMIROpt=false;disableMIRSCCP=false;disableMIRCSE=false;disableMIRDCE=false;disableMIRLICM=false;disableLIROpt=false;disableLIRPeephole=false;disableFunctionTreeShaking=false;dumpANF=false;dumpMIR=false;dumpLIR=false;dumpFunction=None;dumpIRSummary=false;dumpIROutput=None}
-let parseTargetValue value=if HostText.lowerInvariant (HostText.trim value)="linux-x86_64" then Ok (ExplicitTarget Platform.LinuxX86_64) else Error ("Invalid target '"^value^"' (expected 'linux-x86_64')")
-let parsePackageServerValue value=match HostUri.absoluteHttp value with Some server->Ok server|None->Error ("Invalid package server '"^value^"' (expected an absolute HTTP(S) URL)")
+let parseTargetValue value=if Text.lowerInvariant (Text.trim value)="linux-x86_64" then Ok (ExplicitTarget Platform.LinuxX86_64) else Error ("Invalid target '"^value^"' (expected 'linux-x86_64')")
+let parsePackageServerValue value =
+ let invalid () = Error ("Invalid package server '" ^ value ^ "' (expected an absolute HTTP(S) URL)") in
+ try
+  let uri = Uri.of_string (String.trim value) in
+  match Uri.scheme uri, Uri.host uri, Uri.port uri with
+  | Some ("http" | "https"), Some host, port when host <> "" &&
+      not (String.exists (fun c -> Char.code c <= 32 || c = '\\') host) &&
+      (* Uri's parser can reinterpret a malformed port as a relative path. *)
+      (Uri.path uri = "" || String.starts_with ~prefix:"/" (Uri.path uri)) &&
+      (match port with None -> true | Some port -> port >= 0 && port <= 65535) ->
+    Ok (Uri.to_string (Uri.canonicalize uri))
+  | _ -> invalid ()
+ with Invalid_argument _ | Failure _ -> invalid ()
 (*
    Build compiler options from CLI options
 *)
@@ -102,7 +113,7 @@ let parseArgs argv=
   let server value rest=if Option.is_some options.packageServer then Error "Package server specified multiple times" else let* server=parsePackageServerValue value in resume rest {options with packageServer=Some server} in
   let dump field value rest=
    let existing,duplicate,empty=match field with `Function->options.dumpFunction,"Dump function filter specified multiple times","--dump-function requires a non-empty value"|`Output->options.dumpIROutput,"IR dump output specified multiple times","--dump-ir-output requires a non-empty value" in
-   if Option.is_some existing then Error duplicate else if HostText.trim value="" then Error empty else resume rest (match field with `Function->{options with dumpFunction=Some value}|`Output->{options with dumpIROutput=Some value}) in
+   if Option.is_some existing then Error duplicate else if Text.trim value="" then Error empty else resume rest (match field with `Function->{options with dumpFunction=Some value}|`Output->{options with dumpIROutput=Some value}) in
   match args with
   |[]->Ok {options with verbosity}
   |("-r"|"--run")::rest->if options.run then Error "Run flag specified multiple times" else resume rest {options with run=true}
@@ -153,12 +164,12 @@ let parseArgs argv=
   |("--disable-opt-dce")::rest->resume rest {options with disableFunctionTreeShaking=true}
   |"-"::rest->if Option.is_some options.argument then Error "Cannot specify multiple input sources" else resume rest {options with argument=Some "-"}
   |flag::rest when String.starts_with ~prefix:"-" flag && not (String.starts_with ~prefix:"--" flag) && String.length flag>2->
-   let units=HostText.scalars (String.sub flag 1 (String.length flag-1)) |> Array.to_list in
+   let units=Text.scalars (String.sub flag 1 (String.length flag-1)) |> Array.to_list in
    let rec expand units reversed=match units with
     |[]->List.rev reversed
-    |(114|101|113|118|104 as code)::rest->expand rest (("-"^HostText.ofScalars [|code|])::reversed)
-    |111::(_::_ as value)->List.rev (("-o"^HostText.ofScalars (Array.of_list value))::reversed)
-    |code::_->List.rev (("-"^HostText.ofScalars [|code|])::reversed) in
+    |(114|101|113|118|104 as code)::rest->expand rest (("-"^Text.ofScalars [|code|])::reversed)
+    |111::(_::_ as value)->List.rev (("-o"^Text.ofScalars (Array.of_list value))::reversed)
+    |code::_->List.rev (("-"^Text.ofScalars [|code|])::reversed) in
    flags (expand units []@rest) options verbosity
   |argument::rest when not (String.starts_with ~prefix:"-" argument)->if Option.is_some options.argument then Error ("Unexpected argument: "^argument) else resume rest {options with argument=Some argument}
   |flag::_->Error ("Unknown flag: "^flag)
@@ -182,14 +193,14 @@ let parseBatchArgs argv=
   let rec loop reversed=function
    |[]->(match List.rev reversed with []->Error "Batch compilation requires at least one SOURCE OUTPUT pair"|first::rest->Ok (first,rest))
    |[_]->Error "Batch compilation requires an output path after every source path"
-   |source::output::rest->if HostText.trim source="" || HostText.trim output="" then Error "Batch source and output paths must be non-empty" else loop ({kind="source";name=source;sourceFile=source;outputFile=output}::reversed) rest in loop [] args in
+   |source::output::rest->if Text.trim source="" || Text.trim output="" then Error "Batch source and output paths must be non-empty" else loop ({kind="source";name=source;sourceFile=source;outputFile=output}::reversed) rest in loop [] args in
  let rec flags target verbosity allowInternal packageServer manifestPath keepGoing reportPath args=
   let resume target packageServer manifestPath keepGoing reportPath rest=flags target verbosity allowInternal packageServer manifestPath keepGoing reportPath rest in
   let targetValue value rest=match target with ExplicitTarget _->Error "Target specified multiple times"|HostTarget->let* target=parseTargetValue value in resume target packageServer manifestPath keepGoing reportPath rest in
   let serverValue value rest=if Option.is_some packageServer then Error "Package server specified multiple times" else let* server=parsePackageServerValue value in resume target (Some server) manifestPath keepGoing reportPath rest in
   let pathValue manifest value rest=
    let previous,duplicate,empty=if manifest then manifestPath,"Batch manifest specified multiple times","--manifest requires a non-empty path" else reportPath,"Batch report specified multiple times","--report requires a non-empty path" in
-   if Option.is_some previous then Error duplicate else if HostText.trim value="" then Error empty else resume target packageServer (if manifest then Some value else manifestPath) keepGoing (if manifest then reportPath else Some value) rest in
+   if Option.is_some previous then Error duplicate else if Text.trim value="" then Error empty else resume target packageServer (if manifest then Some value else manifestPath) keepGoing (if manifest then reportPath else Some value) rest in
   let finish input=Ok {target;verbosity;leakCheck;allowInternal;packageServer;input;keepGoing;reportPath} in
   match args with
   |"--"::rest->if Option.is_some manifestPath then Error "Batch compilation cannot combine --manifest with SOURCE OUTPUT pairs" else let* first,rest=items rest in finish (CommandLineItems (first,rest))
@@ -221,12 +232,12 @@ let sourceDescription (options:cliOptions)=if options.isExpression then "<expres
 *)
 let withIRDumpOutput (options:cliOptions) compile=
  match options.dumpIROutput with None->Ok (compile ())|Some path->
- let writer=try Ok (Unix.openfile path [Unix.O_WRONLY;Unix.O_CLOEXEC;Unix.O_CREAT;Unix.O_TRUNC] 0o666) with exn->Error ("Failed to open IR dump '"^path^"': "^HostFile.errorMessage path exn) in
+ let writer=try Ok (Unix.openfile path [Unix.O_WRONLY;Unix.O_CLOEXEC;Unix.O_CREAT;Unix.O_TRUNC] 0o666) with exn->Error ("Failed to open IR dump '"^path^"': "^Printexc.to_string exn) in
  let* writer=writer in
  Fun.protect ~finally:(fun ()->Unix.close writer) (fun ()->
  flush stdout;let original=Unix.dup ~cloexec:true Unix.stdout in
  let result=Fun.protect ~finally:(fun ()->flush stdout;Unix.dup2 original Unix.stdout;Unix.close original) (fun ()->Unix.dup2 writer Unix.stdout;compile ()) in
- try flush stdout;Ok result with exn->Error ("Failed to write IR dump to '"^path^"': "^HostFile.errorMessage path exn))
+ try flush stdout;Ok result with exn->Error ("Failed to write IR dump to '"^path^"': "^Printexc.to_string exn))
 let selectedTarget=function HostTarget->Platform.detectHostTarget ()|ExplicitTarget target->Ok target
 let request stdlib source verbosity (options:cliOptions):X.compileRequest={X.context=X.StdlibOnly stdlib;mode=(if options.isExpression || options.emitResult then CompilerOptions.TestExpression else CompilerOptions.FullProgram);sources=NonEmptyList.singleton {X.name=sourceFileForDiagnostics options;purpose=NameSyntax.SourceUnitPurpose.Executable;source};allowInternal=options.allowInternal;verbosity=verbosityToInt verbosity;options=buildCompilerOptions options;packageValues=X.emptyPackageValueCatalog;packageManager=Option.map (fun server->{(PackageManager.defaultConfig ()) with PackageManager.server}) options.packageServer;passTimingRecorder=None;session=None}
 let compileWithStdlib stdlib source outputPath verbosity (options:cliOptions)=
@@ -243,27 +254,41 @@ let compile source outputPath verbosity (options:cliOptions)=
  let result=let* target=Result.map_error (fun message->"Target detection failed: "^message) (selectedTarget options.target) in
  let* stdlib=Result.map_error (fun message->"Compilation failed: "^message) (StdlibCompilation.buildStdlib target) in compileWithStdlib stdlib source outputPath verbosity options in
  match result with Ok ()->0|Error message->prerr_endline message;1
-let fileExists=HostFile.exists
-let readText=HostFile.readText
-let readSourceFile path=if not (fileExists path) then Error ("File not found: "^path) else try Ok (readText path) with exn->Error ("Failed to read file '"^path^"': "^HostFile.errorMessage path exn)
-let readBatchManifest path=
- let* text=readSourceFile path in
- try match HostBatchJson.parse text with
- |None->Error ("Batch manifest '"^path^"' must contain a JSON array")
- |Some entries->
- let* items=ResultList.traverse (function None->Error ("Failed to parse batch manifest '"^path^"': Object reference not set to an instance of an object.")|Some (entry:HostBatchJson.item)->
- if List.exists (fun value->HostText.trim value="") [entry.HostBatchJson.kind;entry.HostBatchJson.name;entry.HostBatchJson.source;entry.HostBatchJson.output] then Error ("Batch manifest '"^path^"' contains an empty kind, name, source, or output") else Ok {kind=entry.HostBatchJson.kind;name=entry.HostBatchJson.name;sourceFile=entry.HostBatchJson.source;outputFile=entry.HostBatchJson.output}) entries in
- (match items with []->Error ("Batch manifest '"^path^"' must contain at least one item")|first::rest->Ok (first,rest))
- with exn->let message=match exn with Failure message|Invalid_argument message->message|_->Printexc.to_string exn in Error ("Failed to parse batch manifest '"^path^"': "^message)
+let fileExists=FileIO.exists
+let readText=FileIO.readText
+let readSourceFile path=if not (fileExists path) then Error ("File not found: "^path) else try Ok (readText path) with exn->Error ("Failed to read file '"^path^"': "^Printexc.to_string exn)
+let readBatchManifest path =
+ let* text = readSourceFile path in
+ let decode index = function
+  | `Assoc fields ->
+    let field name =
+     (* Manifest fields are case-sensitive; the last duplicate wins. *)
+     let value = List.fold_left (fun found (key, value) -> if key = name then Some value else found) None fields in
+     match value with
+     | Some (`String value) when Text.trim value <> "" -> Ok value
+     | _ -> Error (Printf.sprintf "Batch manifest '%s' item %d: %s must be a non-empty string" path (index + 1) name) in
+    let* kind = field "kind" in
+    let* name = field "name" in
+    let* sourceFile = field "source" in
+    let* outputFile = field "output" in
+    Ok {kind; name; sourceFile; outputFile}
+  | _ -> Error (Printf.sprintf "Batch manifest '%s' item %d must be an object" path (index + 1)) in
+ try match Yojson.Safe.from_string ~fname:path text with
+ | `List [] -> Error ("Batch manifest '" ^ path ^ "' must contain at least one item")
+ | `List entries ->
+   let* items = ResultList.traverse Fun.id (List.mapi decode entries) in
+   (match items with first :: rest -> Ok (first, rest) | [] -> Crash.crash "Non-empty manifest decoded to no items")
+ | _ -> Error ("Batch manifest '" ^ path ^ "' must contain a JSON array")
+ with Yojson.Json_error message -> Error ("Failed to parse batch manifest '" ^ path ^ "': " ^ message)
 let jsonString value=Yojson.Basic.to_string (`String value)
 let roundMilliseconds value=
  let scaled=value*.1000. in let lower=Float.floor scaled in let fraction=scaled-.lower in
  (if fraction>0.5 || (fraction=0.5 && mod_float lower 2.<>0.) then lower+.1. else lower) /.1000.
 let reportJson (value:batchReportItem)=
- let fields=["kind",jsonString value.kind;"name",jsonString value.name;"source",jsonString value.source;"output",jsonString value.output;"status",jsonString value.status;"error",jsonString value.error;"milliseconds",HostFloat.roundTrip value.milliseconds] in
+ let fields=["kind",jsonString value.kind;"name",jsonString value.name;"source",jsonString value.source;"output",jsonString value.output;"status",jsonString value.status;"error",jsonString value.error;"milliseconds",FloatFormat.roundTrip value.milliseconds] in
  "{"^String.concat "," (List.map (fun (key,value)->jsonString key^":"^value) fields)^"}"
 let rec createDirectory path=if path<>"" && path<>"." && not (Sys.file_exists path) then (createDirectory (Filename.dirname path);Unix.mkdir path 0o777)
-let writeBatchReport path reports=try createDirectory (Filename.dirname path);Out_channel.with_open_bin path (fun channel->List.iter (fun value->output_string channel (reportJson value);output_char channel '\n') reports);Ok () with exn->Error ("Failed to write batch report '"^path^"': "^HostFile.errorMessage path exn)
+let writeBatchReport path reports=try createDirectory (Filename.dirname path);Out_channel.with_open_bin path (fun channel->List.iter (fun value->output_string channel (reportJson value);output_char channel '\n') reports);Ok () with exn->Error ("Failed to write batch report '"^path^"': "^Printexc.to_string exn)
 let compileBatch (options:batchCliOptions)=
  let sources=let* first,rest=match options.input with CommandLineItems (first,rest)->Ok (first,rest)|ManifestFile path->readBatchManifest path in
  ResultList.traverse (fun (item:batchCompileItem)->Result.map (fun source->item,source) (readSourceFile item.sourceFile)) (first::rest) in
@@ -274,10 +299,10 @@ let compileBatch (options:batchCliOptions)=
  let rec loop failed reports=function
  |[]->failed,List.rev reports
  |((item:batchCompileItem),source)::rest->
-  let start=HostClock.milliseconds () in
+  let start=(Int64.to_float (Mtime_clock.elapsed_ns ()) /. 1e6) in
   let cli={defaultOptions with argument=Some item.sourceFile;outputFile=Some item.outputFile;verbosity=options.verbosity;leakCheck=options.leakCheck;target=options.target;allowInternal=options.allowInternal;packageServer=options.packageServer} in
   let compiled=compileWithStdlib stdlib source item.outputFile options.verbosity cli in
-  let milliseconds=roundMilliseconds (HostClock.milliseconds ()-.start) in
+  let milliseconds=roundMilliseconds ((Int64.to_float (Mtime_clock.elapsed_ns ()) /. 1e6)-.start) in
   let report status error={kind=item.kind;name=item.name;source=item.sourceFile;output=item.outputFile;status;error;milliseconds} in
   match compiled with Ok ()->loop failed (report "compiled" ""::reports) rest|Error error->
   prerr_endline ("Compilation failed for "^item.kind^" "^item.name^": "^error);
@@ -389,9 +414,9 @@ let main argv=
  |Ok (BatchCommand options)->compileBatch options
  |Ok (SingleCommand options)->
   let source=match options.argument with
-  |Some "-"->(try let source=HostEncoding.utf8 (In_channel.input_all stdin) in if HostText.trim source="" then Error "No input provided on stdin" else Ok source with exn->Error ("Failed to read from stdin: "^Printexc.to_string exn))
+  |Some "-"->(try let source=Utf8.utf8 (In_channel.input_all stdin) in if Text.trim source="" then Error "No input provided on stdin" else Ok source with exn->Error ("Failed to read from stdin: "^Printexc.to_string exn))
   |Some value when options.isExpression->Ok value
-  |Some path->if not (fileExists path) then Error ("File not found: "^path) else (try Ok (readText path) with exn->Error ("Failed to read file: "^HostFile.errorMessage path exn))
+  |Some path->if not (fileExists path) then Error ("File not found: "^path) else (try Ok (readText path) with exn->Error ("Failed to read file: "^Printexc.to_string exn))
   |None->Error "No source provided" in
   match source with Error message->print_endline ("Error: "^message);1|Ok source->if options.run then run source options.verbosity options else compile source (Option.value ~default:"dark.out" options.outputFile) options.verbosity options
  with exn->print_endline ("Error: "^Printexc.to_string exn);print_endline (Printexc.get_backtrace ());1

@@ -24,7 +24,7 @@ let callContract isManaged (call : H.functionCall) : H.primitiveContract = {H.in
    types repeatedly. Keep their representation decisions in this analysis.
 *)
 let analyzeWithTrace recordTiming context functions =
- let measure name operation = let start = HostClock.milliseconds () in let result = operation () in let elapsed = HostClock.milliseconds () -. start in Option.iter (fun record -> record name elapsed) recordTiming; result in
+ let measure name operation = let start = (Int64.to_float (Mtime_clock.elapsed_ns ()) /. 1e6) in let result = operation () in let elapsed = (Int64.to_float (Mtime_clock.elapsed_ns ()) /. 1e6) -. start in Option.iter (fun record -> record name elapsed) recordTiming; result in
  let managedTypes = Hashtbl.create 32 in
  let isManaged (value : H.value) = match Hashtbl.find_opt managedTypes value.H.typ with Some managed -> managed | None ->
   let managed = MemoryPlanning.rcShapeOfTypeWithSums context.recordFieldsReg context.recordTypeParamsReg context.rcSumShapeReg value.H.typ |> MemoryPlanning.rcShapeNeedsOwnedScopeRelease in Hashtbl.replace managedTypes value.H.typ managed; managed in

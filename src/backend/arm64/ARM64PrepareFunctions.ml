@@ -46,11 +46,11 @@ let outlineExpensiveGenericReleasesInFunction helperIds (func:LIR.functionDef)=
    generic releases as ordinary calls before register allocation. Attached
    facts still describe the original release effects and survive allocation. *)
 let prepareARM64FunctionsForAllocationWithCache summaryCache phaseRecorder recordRegistry sumShapeRegistry highestReservedId knownHelperIds functions=
- let recordPhase name started=match phaseRecorder with Some record->record name (HostClock.milliseconds () -. started)|None->() in
- let factsTimer=HostClock.milliseconds () in
+ let recordPhase name started=match phaseRecorder with Some record->record name ((Int64.to_float (Mtime_clock.elapsed_ns ()) /. 1e6) -. started)|None->() in
+ let factsTimer=(Int64.to_float (Mtime_clock.elapsed_ns ()) /. 1e6) in
  let functionsWithFacts=attachARM64CodegenFactsToFunctionsWithCache summaryCache recordRegistry sumShapeRegistry functions in
  recordPhase "ARM64 Function Facts Planning" factsTimer;
- let outliningTimer=HostClock.milliseconds () in
+ let outliningTimer=(Int64.to_float (Mtime_clock.elapsed_ns ()) /. 1e6) in
  let newHelperLabels=helperLabelsForFunctions functionsWithFacts |> StringOrder.Set.filter (fun label -> not (StringOrder.Map.mem label knownHelperIds)) in
  let newHelperIds=AST.allocateFunctionIds (Seq.append (List.to_seq [highestReservedId]) (StringOrder.Map.to_seq knownHelperIds |> Seq.map snd)) (StringOrder.Set.to_seq newHelperLabels) in
  let helperIds=StringOrder.Map.fold StringOrder.Map.add newHelperIds knownHelperIds in

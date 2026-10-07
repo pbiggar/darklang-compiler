@@ -51,7 +51,7 @@ bad edge
 1
 |fixture} in
  match G.parseGraphColorFileContent "bad.graphcolor" content with
- |Error message when HostText.contains message "vertex 1"->Ok ()
+ |Error message when Text.contains message "vertex 1"->Ok ()
  |Error message->Error ("Expected unknown-vertex validation, got: "^message)
  |Ok _->Error "Expected an edge with an unknown vertex to be rejected"
 let tests=["graph-color DSL parses and runs multiple cases",testParsesAndRunsMultipleGraphCases;"graph-color DSL rejects unknown edge vertices",testRejectsUnknownVerticesInEdges]

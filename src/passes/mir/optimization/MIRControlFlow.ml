@@ -4,7 +4,7 @@ open MIR
 module S = SSA_Construction
 module F = MIROptimizationFacts
 module C = MIRCopyPropagation
-let labelText (Label name) = HostStructuralFormat.format (HostStructuralFormat.Union ("Label", [HostStructuralFormat.Text name]))
+let labelText (Label name) = StructuralFormat.format (StructuralFormat.Union ("Label", [StructuralFormat.Text name]))
 (*
    Merge a block ending in an unconditional jump with its sole-predecessor
    successor. Successor phis become copies, while phi edges leaving the merged

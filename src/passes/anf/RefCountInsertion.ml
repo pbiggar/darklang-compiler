@@ -42,7 +42,7 @@ let ownedDictionaryFrontierParams (func : A.functionDef) =
 type functionPhaseTimings = {returnAnalysisMs : float; parameterAnalysisMs : float; bodyInsertionMs : float; accumulatorCleanupMs : float; cleanupPlanningMs : float; cleanupRewriteMs : float}
 let emptyFunctionPhaseTimings = {returnAnalysisMs = 0.; parameterAnalysisMs = 0.; bodyInsertionMs = 0.; accumulatorCleanupMs = 0.; cleanupPlanningMs = 0.; cleanupRewriteMs = 0.}
 let addFunctionPhaseTimings left right = {returnAnalysisMs = left.returnAnalysisMs +. right.returnAnalysisMs; parameterAnalysisMs = left.parameterAnalysisMs +. right.parameterAnalysisMs; bodyInsertionMs = left.bodyInsertionMs +. right.bodyInsertionMs; accumulatorCleanupMs = left.accumulatorCleanupMs +. right.accumulatorCleanupMs; cleanupPlanningMs = left.cleanupPlanningMs +. right.cleanupPlanningMs; cleanupRewriteMs = left.cleanupRewriteMs +. right.cleanupRewriteMs}
-let measureFunctionPhase enabled work = if enabled then let started = HostClock.milliseconds () in let result = work () in result, HostClock.milliseconds () -. started else work (), 0.
+let measureFunctionPhase enabled work = if enabled then let started = (Int64.to_float (Mtime_clock.elapsed_ns ()) /. 1e6) in let result = work () in result, (Int64.to_float (Mtime_clock.elapsed_ns ()) /. 1e6) -. started else work (), 0.
 (*
    Insert RC operations into a function
    Returns (transformed function, varGen, accumulated TempTypes)
@@ -129,9 +129,9 @@ let verifyJoinInterfaces ctx (A.Program (functions, main)) =
  let atomUses = function A.Var id -> Set.singleton id | _ -> Set.empty in
  let checkUses visible uses =
   let missing = Set.diff uses visible in
-  if Set.is_empty missing then Ok () else Error ("ANF join interface: operands outside lexical scope: " ^ HostStructuralFormat.format (HostStructuralFormat.Union ("set", [HostStructuralFormat.Sequence (List.map (fun (A.TempId id) -> HostStructuralFormat.Union ("TempId", [HostStructuralFormat.Scalar (string_of_int id)])) (Set.elements missing))]))) in
- let typeText = HostStructuralFormat.semanticType in
- let optionType = function None -> "None" | Some typ -> HostStructuralFormat.format (HostStructuralFormat.Union ("Some", [HostStructuralFormat.semanticValue typ])) in
+  if Set.is_empty missing then Ok () else Error ("ANF join interface: operands outside lexical scope: " ^ StructuralFormat.format (StructuralFormat.Union ("set", [StructuralFormat.Sequence (List.map (fun (A.TempId id) -> StructuralFormat.Union ("TempId", [StructuralFormat.Scalar (string_of_int id)])) (Set.elements missing))]))) in
+ let typeText = StructuralFormat.semanticType in
+ let optionType = function None -> "None" | Some typ -> StructuralFormat.format (StructuralFormat.Union ("Some", [StructuralFormat.semanticValue typ])) in
  let rec check visible joins canReturn = function
   | A.Return atom -> if canReturn then checkUses visible (atomUses atom) else Error "ANF join interface: entry returns a value instead of transferring control"
   | A.Jump (target, atom) -> let* () = checkUses visible (atomUses atom) in
@@ -154,8 +154,8 @@ let verifyJoinInterfaces ctx (A.Program (functions, main)) =
    Verify TypeMap completeness - all defined TempIds should have types
 *)
 let insertRCInProgramInternal recorder (result : AST_to_ANF.conversionResult) =
- let start () = Option.map (fun _ -> HostClock.milliseconds ()) recorder in
- let record name timer = match recorder, timer with Some record, Some started -> record name (HostClock.milliseconds () -. started) | _ -> () in
+ let start () = Option.map (fun _ -> (Int64.to_float (Mtime_clock.elapsed_ns ()) /. 1e6)) recorder in
+ let record name timer = match recorder, timer with Some record, Some started -> record name ((Int64.to_float (Mtime_clock.elapsed_ns ()) /. 1e6) -. started) | _ -> () in
  let timer = start () in let ctx = F.createContext result in record "Reference Count Context" timer;
  let A.Program (functions, main) = result.AST_to_ANF.program in
  let ownershipVerification = verifyOwnershipContracts ctx result.AST_to_ANF.ownershipContracts result.AST_to_ANF.program in

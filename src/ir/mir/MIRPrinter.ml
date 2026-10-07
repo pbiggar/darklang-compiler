@@ -1,7 +1,7 @@
 (* Printer.fs - Format MIR graphs and scoped or summarized dumps. *)
 [@@@warning "-4"]
 open IRPrinting
-let functionId id = HostStructuralFormat.format (HostStructuralFormat.Union ("FunctionId", [HostStructuralFormat.Scalar (Printf.sprintf "%LuUL" (AST.functionIdValue id))]))
+let functionId id = StructuralFormat.format (StructuralFormat.Union ("FunctionId", [StructuralFormat.Scalar (Printf.sprintf "%LuUL" (AST.functionIdValue id))]))
 let prettyPrintFunctionName names id = match FunctionIdMap.tryFind id names with Some name -> name | None -> functionId id
 (*
    Pretty-print MIR operand
@@ -9,7 +9,7 @@ let prettyPrintFunctionName names id = match FunctionIdMap.tryFind id names with
 let prettyPrintMIROperand = function
  | MIR.Int64Const n -> Int64.to_string n
  | MIR.BoolConst b -> if b then "true" else "false"
- | MIR.FloatSymbol value -> "float[" ^ HostFloat.roundTrip value ^ "]"
+ | MIR.FloatSymbol value -> "float[" ^ FloatFormat.roundTrip value ^ "]"
  | MIR.StringSymbol value -> "str[" ^ escapeStringContent value ^ "]"
  | MIR.Register (MIR.VReg n) -> "v" ^ string_of_int n
  | MIR.FuncAddr id -> "&" ^ functionId id
@@ -110,7 +110,7 @@ let prettyPrintMIRInstr functionNames instr =
  let prettyPrintMIROperand = prettyPrintMIROperandWithNames functionNames in
  match instr with
  | MIR.Mov (dest, src, valueType) -> let baseText = (prettyPrintMIRVReg dest) ^ " <- " ^ (prettyPrintMIROperand src) in appendTypeSuffix valueType baseText
- | MIR.BinOp (dest, op, left, right, operandType) -> (prettyPrintMIRVReg dest) ^ " <- " ^ (prettyPrintMIROperand left) ^ " " ^ (prettyPrintMIROp op) ^ " " ^ (prettyPrintMIROperand right) ^ " : " ^ (HostStructuralFormat.semanticType operandType)
+ | MIR.BinOp (dest, op, left, right, operandType) -> (prettyPrintMIRVReg dest) ^ " <- " ^ (prettyPrintMIROperand left) ^ " " ^ (prettyPrintMIROp op) ^ " " ^ (prettyPrintMIROperand right) ^ " : " ^ (StructuralFormat.semanticType operandType)
  | MIR.UnaryOp (dest, op, src) -> (prettyPrintMIRVReg dest) ^ " <- " ^ (prettyPrintMIRUnaryOp op) ^ (prettyPrintMIROperand src)
  | MIR.Call (dest, funcName, args, _, _) -> let argStr = args |> commaSeparated prettyPrintMIROperand in (prettyPrintMIRVReg dest) ^ " <- Call(" ^ (prettyPrintFunctionName functionNames funcName) ^ ", [" ^ (argStr) ^ "])"
  | MIR.CanonicalBufferEq (dest, kind, left, right) -> (prettyPrintMIRVReg dest) ^ " <- CanonicalBufferEq[" ^ (prettyPrintCanonicalBufferKind kind) ^ "](" ^ (prettyPrintMIROperand left) ^ ", " ^ (prettyPrintMIROperand right) ^ ")"
@@ -126,7 +126,7 @@ let prettyPrintMIRInstr functionNames instr =
  | MIR.StringConcat (dest, first, second, remaining) -> let operands = first :: second :: remaining |> commaSeparated prettyPrintMIROperand in (prettyPrintMIRVReg dest) ^ " <- StringConcat(" ^ (operands) ^ ")"
  | MIR.RefCountInc (addr, payloadSize, kind, _) -> "RefCountInc(" ^ (prettyPrintMIRVReg addr) ^ ", size=" ^ (string_of_int payloadSize) ^ ", kind=" ^ (prettyPrintMIRRcKind kind) ^ ")"
  | MIR.RefCountDec (addr, payloadSize, kind, _) -> "RefCountDec(" ^ (prettyPrintMIRVReg addr) ^ ", size=" ^ (string_of_int payloadSize) ^ ", kind=" ^ (prettyPrintMIRRcKind kind) ^ ")"
- | MIR.Print (src, valueType) -> "Print(" ^ (prettyPrintMIROperand src) ^ ", type=" ^ (HostStructuralFormat.semanticType valueType) ^ ")"
+ | MIR.Print (src, valueType) -> "Print(" ^ (prettyPrintMIROperand src) ^ ", type=" ^ (StructuralFormat.semanticType valueType) ^ ")"
  | MIR.StdoutWrite (_, src, appendNewline) -> "StdoutWrite(" ^ (prettyPrintMIROperand src) ^ ", newline=" ^ (if appendNewline then "True" else "False") ^ ")"
  | MIR.StdinReadLine dest -> (prettyPrintMIRVReg dest) ^ " <- StdinReadLine()"
  | MIR.RuntimeError message -> "RuntimeError(\"" ^ (escapeStringContent message) ^ "\")"

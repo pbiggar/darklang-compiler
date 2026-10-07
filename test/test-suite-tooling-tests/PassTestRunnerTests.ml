@@ -18,16 +18,16 @@ let testPrettyPrintMirCfg ()=
  let expected="Function cfg_pretty:\n  entry:\n    v0 <- 1 : TInt64\n    jump exit\n  exit:\n    v1 <- v0 : TInt64\n    ret v1" in
  let actual=PassTestRunner.prettyPrintMIR program in if actual=expected then Ok () else Error ("Pretty-printed MIR did not match.\nExpected:\n"^expected^"\nActual:\n"^actual)
 let testParseLIRRejectsNonFinalTerminator ()=match LIRParser.parseLIR "Ret\nv0 <- Mov(Imm 1)" with
- |Error msg when HostText.contains msg "terminator"->Ok ()|Error msg->Error ("Expected non-final terminator error, got: "^msg)|Ok _->Error "Expected parseLIR to reject a terminator before the final line"
+ |Error msg when Text.contains msg "terminator"->Ok ()|Error msg->Error ("Expected non-final terminator error, got: "^msg)|Ok _->Error "Expected parseLIR to reject a terminator before the final line"
 let testParseLIRRejectsMissingTerminator ()=match LIRParser.parseLIR "v0 <- Mov(Imm 1)" with
- |Error msg when HostText.contains msg "terminator"->Ok ()|Error msg->Error ("Expected missing terminator error, got: "^msg)|Ok _->Error "Expected parseLIR to reject LIR without an explicit terminator"
+ |Error msg when Text.contains msg "terminator"->Ok ()|Error msg->Error ("Expected missing terminator error, got: "^msg)|Ok _->Error "Expected parseLIR to reject LIR without an explicit terminator"
 let testMIRParserRejectsOutOfRangeVirtualRegister ()=match MIRParser.parseVReg "v999999999999999999999999999999999999999" with
- |Error msg when HostText.contains msg "Invalid register format"->Ok ()|Error msg->Error ("Expected invalid register format error, got: "^msg)|Ok (MIR.VReg id)->Error (Printf.sprintf "Expected parseVReg to reject out-of-range register, got: VReg %d" id)
+ |Error msg when Text.contains msg "Invalid register format"->Ok ()|Error msg->Error ("Expected invalid register format error, got: "^msg)|Ok (MIR.VReg id)->Error (Printf.sprintf "Expected parseVReg to reject out-of-range register, got: VReg %d" id)
 let testMIRParserAcceptsNegativeMoveLiteral ()=match MIRParser.parseMIR "v0 <- -1\nret v0" with Ok _->Ok ()|Error msg->Error ("Expected parseMIR to accept a negative move literal, got: "^msg)
 let testANFParserRejectsOutOfRangeTempId ()=match ANFParser.parseTempId "t999999999999999999999999999999999999999" with
- |Error msg when HostText.contains msg "Invalid temp id"->Ok ()|Error msg->Error ("Expected invalid temp id error, got: "^msg)|Ok (ANF.TempId id)->Error (Printf.sprintf "Expected parseTempId to reject out-of-range temp id, got: TempId %d" id)
+ |Error msg when Text.contains msg "Invalid temp id"->Ok ()|Error msg->Error ("Expected invalid temp id error, got: "^msg)|Ok (ANF.TempId id)->Error (Printf.sprintf "Expected parseTempId to reject out-of-range temp id, got: TempId %d" id)
 let testANFParserRejectsTrailingLinesAfterReturn ()=match ANFParser.parseANF "return 1\nlet t0 = 2 + 3" with
- |Error msg when HostText.contains msg "after return"->Ok ()|Error msg->Error ("Expected trailing line error after return, got: "^msg)|Ok _->Error "Expected parseANF to reject trailing lines after return"
+ |Error msg when Text.contains msg "after return"->Ok ()|Error msg->Error ("Expected trailing line error after return, got: "^msg)|Ok _->Error "Expected parseANF to reject trailing lines after return"
 let checkErrors cases=List.fold_left (fun state (description,result)->let* ()=state in expectParserError description result) (Ok ()) cases
 let testLIRParserRejectsOutOfRangeNumericFields ()=checkErrors ["virtual register",LIRParser.parseLIR "v999999999999999999999 <- Mov(Imm 1)";"immediate",LIRParser.parseLIR "v0 <- Mov(Imm 999999999999999999999)";"stack slot",LIRParser.parseLIR "Store(Stack 999999999999999999999, v0)"]
 let testARM64ParserRejectsOutOfRangeNumericFields ()=
@@ -45,9 +45,9 @@ let testLIRParserAcceptsAllPhysicalRegisters ()=
  let names=List.filter ((<>) "X28") registerNames in
  List.fold_left (fun state reg->let* ()=state in match LIRParser.parseLIR (reg^" <- Mov(Reg X0)\nRet") with Ok _->Ok ()|Error msg->Error ("Expected LIR parser success for "^reg^", got: "^msg)) (Ok ()) names
 let testARM64SymbolicParserReportsOriginalLineNumber ()=match ARM64SymbolicParser.parseARM64Symbolic "// generated setup\n\nMOV_reg(X0, X1)\nMOV_reg(NOPE, X0)" with
- |Error msg when HostText.contains msg "Line 4:"->Ok ()|Error msg->Error ("Expected original source line 4 in parser error, got: "^msg)|Ok _->Error "Expected parser error for invalid symbolic ARM64 register"
+ |Error msg when Text.contains msg "Line 4:"->Ok ()|Error msg->Error ("Expected original source line 4 in parser error, got: "^msg)|Ok _->Error "Expected parser error for invalid symbolic ARM64 register"
 let testLIRParserReportsOriginalLineNumber ()=match LIRParser.parseLIR "// generated setup\n\nv0 <- Mov(Imm 1)\nv1 <- Mov(Reg NOPE)" with
- |Error msg when HostText.contains msg "Line 4:"->Ok ()|Error msg->Error ("Expected original source line 4 in parser error, got: "^msg)|Ok _->Error "Expected parser error for invalid LIR register"
+ |Error msg when Text.contains msg "Line 4:"->Ok ()|Error msg->Error ("Expected original source line 4 in parser error, got: "^msg)|Ok _->Error "Expected parser error for invalid LIR register"
 let testARM64SymbolicParserAcceptsBranchInstructions ()=
  let text="CBZ(X0, zero_label)\nCBNZ(X1, nonzero_label)\nB_label(done)\nB_cond_label(EQ, equal_label)\nB(12)\nB_cond(NE, -4)" in
  match ARM64SymbolicParser.parseARM64Symbolic text with

@@ -37,13 +37,13 @@ let physicalName = function
 let operandText operand=
  let open StructuralValue in
  let reg=function LIR.Physical p -> Union ("Physical",[Scalar (physicalName p)]) | LIR.Virtual n -> Union ("Virtual",[Scalar (string_of_int n)]) in
- HostStructuralFormat.format (match operand with
+ StructuralFormat.format (match operand with
  | LIR.Imm n -> Union ("Imm",[Scalar (Int64.to_string n ^ "L")])
- | LIR.FloatImm value -> Union ("FloatImm",[Scalar (HostFloat.structural value)])
+ | LIR.FloatImm value -> Union ("FloatImm",[Scalar (FloatFormat.structural value)])
  | LIR.Reg r -> Union ("Reg",[reg r])
  | LIR.StackSlot n -> Union ("StackSlot",[Scalar (string_of_int n)])
  | LIR.StringSymbol text -> Union ("StringSymbol",[Text text])
- | LIR.FloatSymbol value -> Union ("FloatSymbol",[Scalar (HostFloat.structural value)])
+ | LIR.FloatSymbol value -> Union ("FloatSymbol",[Scalar (FloatFormat.structural value)])
  | LIR.FuncAddr id -> Union ("FuncAddr",[AST.DiagnosticFormatting.func id]))
 
 

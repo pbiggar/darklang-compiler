@@ -5,7 +5,7 @@ let hostString value=Text value
 let int32 value=Scalar (Int32.to_string value)
 let int64 value=Scalar (Int64.to_string value^"L")
 let uint64 value=Scalar (Printf.sprintf "%LuUL" value)
-let float64 value=Scalar (HostFloat.structural value)
+let float64 value=Scalar (FloatFormat.structural value)
 let uint16 value=Scalar (string_of_int value^"us")
 let int16 value=Scalar (string_of_int value^"s")
 let union _ name fields=Union (name,fields)
@@ -413,6 +413,6 @@ let symInstr (value:Symbolic.instr) = match value with
  | Symbolic.UXTB (v0,v1) -> union "Instr" "UXTB" [symReg v0;symReg v1]
  | Symbolic.UXTH (v0,v1) -> union "Instr" "UXTH" [symReg v0;symReg v1]
  | Symbolic.UXTW (v0,v1) -> union "Instr" "UXTW" [symReg v0;symReg v1]
-let x64 value=HostStructuralFormat.format (x64Instr value)
-let arm64 value=HostStructuralFormat.format (armInstr value)
-let symbolic value=HostStructuralFormat.format (symInstr value)
+let x64 value=StructuralFormat.format (x64Instr value)
+let arm64 value=StructuralFormat.format (armInstr value)
+let symbolic value=StructuralFormat.format (symInstr value)

@@ -8,7 +8,7 @@ module S = SSA_Construction
 module F = MIROptimizationFacts
 type definition = {block : label; position : int}
 let regText (VReg value) = "VReg " ^ string_of_int value
-let labelText (Label value) = HostStructuralFormat.format (HostStructuralFormat.Union ("Label", [HostStructuralFormat.Text value]))
+let labelText (Label value) = StructuralFormat.format (StructuralFormat.Union ("Label", [StructuralFormat.Text value]))
 let reachableLabels (cfg : cfg) = let rec visit pending seen = match pending with [] -> seen | label :: rest when LabelSet.mem label seen -> visit rest seen | label :: rest -> match LabelMap.find_opt label cfg.blocks with None -> visit rest seen | Some block -> visit (S.getSuccessors block @ rest) (LabelSet.add label seen) in visit [cfg.entry] LabelSet.empty
 let dominates dominators entry source target = let rec ascend seen current = if current = source then true else if current = entry || LabelSet.mem current seen then false else match LabelMap.find_opt current dominators with Some parent -> ascend (LabelSet.add current seen) parent | None -> false in ascend LabelSet.empty target
 let firstError checks = match List.find_map (function Error error -> Some error | Ok () -> None) checks with Some error -> Error error | None -> Ok ()

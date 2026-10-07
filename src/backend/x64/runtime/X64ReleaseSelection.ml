@@ -146,7 +146,7 @@ let listDecHelperForType
     (fieldType: AST.semanticType) : string =
     match tryRcReleasePlanOfType recordRegistry sumShapeRegistry fieldType with
     | Some releasePlan -> listDecHelperForReleasePlan releasePlan
-    | None -> Crash.crash ("listDecHelperForType: missing RC metadata for list element type " ^ HostStructuralFormat.semanticType fieldType)
+    | None -> Crash.crash ("listDecHelperForType: missing RC metadata for list element type " ^ StructuralFormat.semanticType fieldType)
 
 let dictPayloadReleaseNeedsPlannedHelper (keyRelease: MemoryModel.rcReleasePlan) (valueRelease: MemoryModel.rcReleasePlan) : bool =
     match (keyRelease, valueRelease) with

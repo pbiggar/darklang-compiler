@@ -13,7 +13,7 @@ module M = StringOrder.Map
 module Indices = Map.Make (Int)
 let ( let* ) = Result.bind
 let int value = A.IntLiteral (A.Int64 value)
-let displayId describe id = HostStructuralFormat.format (describe id)
+let displayId describe id = StructuralFormat.format (describe id)
 let add left right = Int32.to_int (Int32.add (Int32.of_int left) (Int32.of_int right))
 let _legacyListTreeHelpers () =
  let _listNode = AST.TList (AST.TVar "a") in
@@ -270,7 +270,7 @@ let lowerExpression (toANFCore : LoweringCallbacks.expressionLowerer)
  | C.UInt64Literal n -> Ok (A.Return (A.IntLiteral (A.UInt64 n)), gen)
  | C.UInt128Literal n -> Ok (finish gen (P.uint128Construction functionId n))
  | C.BoolLiteral value -> Ok (A.Return (A.BoolLiteral value), gen)
- | C.StringLiteral value | C.CharLiteral value -> Ok (A.Return (A.StringLiteral (HostText.normalize value)), gen)
+ | C.StringLiteral value | C.CharLiteral value -> Ok (A.Return (A.StringLiteral (Text.normalize value)), gen)
  | C.BlobLiteral value -> Ok (A.Return (A.StringLiteral value), gen)
  | C.FloatLiteral value -> Ok (A.Return (A.FloatLiteral value), gen)
  | C.Local name -> (match R.BindingMap.find_opt name env with
@@ -332,7 +332,7 @@ let lowerExpression (toANFCore : LoweringCallbacks.expressionLowerer)
      | AST.TUInt16 -> Some (C.UInt16Literal 0) | AST.TUInt8 -> Some (C.UInt8Literal 0)
      | AST.TUInt128 -> Some (C.UInt128Literal Z.zero) | _ -> None in
      match zero with Some zero -> anf (C.BinOp (AST.Sub, zero, inner)) gen
-     | None -> Error ("Negation requires numeric operand, got " ^ HostStructuralFormat.semanticType typ))
+     | None -> Error ("Negation requires numeric operand, got " ^ StructuralFormat.semanticType typ))
  | C.UnaryOp (AST.Not, inner) ->
    let* setup, value, gen = bound inner gen in let body, gen = finish gen (A.UnaryPrim (A.Not, value)) in
    Ok (K.bindReturns setup (fun _ -> body), gen)
@@ -381,7 +381,7 @@ let lowerExpression (toANFCore : LoweringCallbacks.expressionLowerer)
        Ok (K.wrapBindings bindings (A.Return value), gen)
      | Ok AST.TInt -> Ok (equality (A.Call (functionId "Darklang.Stdlib.Int.__equals", [leftAtom;rightAtom])) gen)
      | Ok typ when Option.is_some (P.canonicalBufferKindForType typ) ->
-       let kind = match P.canonicalBufferKindForType typ with Some kind -> kind | None -> Crash.crash ("Expected canonical buffer type, got " ^ HostStructuralFormat.semanticType typ) in
+       let kind = match P.canonicalBufferKindForType typ with Some kind -> kind | None -> Crash.crash ("Expected canonical buffer type, got " ^ StructuralFormat.semanticType typ) in
        Ok (equality (A.CanonicalBufferEq (kind, leftAtom, rightAtom)) gen)
      | Ok AST.TInt128 -> Ok (equality (A.Call (functionId "Darklang.Stdlib.Int128.__equals", [leftAtom;rightAtom])) gen)
      | Ok AST.TUInt128 -> Ok (equality (A.Call (functionId "Darklang.Stdlib.UInt128.__equals", [leftAtom;rightAtom])) gen)
@@ -558,7 +558,7 @@ let lowerExpression (toANFCore : LoweringCallbacks.expressionLowerer)
        let hasPayload = M.exists (fun _ (owner, _, _, fields) -> owner = name && fields <> []) variants in
        let descriptor () = let* typ = infer expr in match typ with
          AST.TSum (owner, args) when owner = name -> T.boxedSumDescriptor name params args variantFields
-         | typ -> Error ("Constructor '" ^ name ^ "' inferred unexpected type '" ^ HostStructuralFormat.semanticType typ ^ "'") in
+         | typ -> Error ("Constructor '" ^ name ^ "' inferred unexpected type '" ^ StructuralFormat.semanticType typ ^ "'") in
        match fields with
        | [field] when Option.is_some (P.transparentSumPayloadType name args sums.P.cases) || nullable || Option.is_some spare ->
          let* setup, value, gen = bound field gen in let body, gen = finish gen (A.TypedAtom (value, AST.TSum (name, args))) in

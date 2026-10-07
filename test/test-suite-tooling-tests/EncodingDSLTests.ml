@@ -17,7 +17,7 @@ let displayCase (test:X86_64EncodingFormat.x64EncodingTest)=
  let open StructuralValue in
  let byteArray value=Array (Bytes.to_seq value |> List.of_seq |> List.map (fun value->Scalar (string_of_int (Char.code value)^"uy"))) in
  let expectation=match test.X86_64EncodingFormat.expectation with X86_64EncodingFormat.ResolutionErrorContaining value->Union ("ResolutionErrorContaining",[Text value])|X86_64EncodingFormat.ResolvesTo (bytes,fixups)->Union ("ResolvesTo",[Tuple [ (match bytes with None->Union ("None",[])|Some value->Union ("Some",[byteArray value]));Sequence (List.map (fun value->Text value) fixups)]]) in
- HostStructuralFormat.format (Record ["Name",Text test.X86_64EncodingFormat.name;"Instructions",Sequence (List.map MachineDiagnostic.x64Instr test.X86_64EncodingFormat.instructions);"Expectation",expectation;"SourceFile",Text test.X86_64EncodingFormat.sourceFile])
+ StructuralFormat.format (Record ["Name",Text test.X86_64EncodingFormat.name;"Instructions",Sequence (List.map MachineDiagnostic.x64Instr test.X86_64EncodingFormat.instructions);"Expectation",expectation;"SourceFile",Text test.X86_64EncodingFormat.sourceFile])
 let displayCases cases=
  let rec first count=function []->[]|_ when count=0->["... "]|value::rest->displayCase value::first (count-1) rest in
  "["^String.concat "; " (first 3 cases)^"]"

@@ -42,7 +42,7 @@
 *)
 open Dark_compiler
 open E2EFormat
-type e2eRun = CompileFailed of int * string * HostTimeSpan.t | Ran of int * string * string * HostTimeSpan.t * HostTimeSpan.t
+type e2eRun = CompileFailed of int * string * int64 | Ran of int * string * string * int64 * int64
 type e2eFailure = {run:e2eRun;message:string}
 type e2eTestResult = (e2eRun,e2eFailure) result
 type preparedE2EBatchTest = {test:e2eTest;equalitySource:string}

@@ -288,8 +288,8 @@ let emitPrintSum (ctx: codeGenContext) (convertInstr: codeGenContext -> LIR.inst
                                     in
                                     callToDisplay @ saveDisplayString @ printString @ releaseDisplayString
                                 | None ->
-                                    Crash.crash ("Unsupported list element type in sum variant: " ^ HostStructuralFormat.semanticType elemType))
-                            | t -> Crash.crash ("Unsupported payload type in sum variant: " ^ HostStructuralFormat.semanticType t)
+                                    Crash.crash ("Unsupported list element type in sum variant: " ^ StructuralFormat.semanticType elemType))
+                            | t -> Crash.crash ("Unsupported payload type in sum variant: " ^ StructuralFormat.semanticType t)
                         in
                         let printClose = printLiteral ")"
                         in
@@ -421,7 +421,7 @@ let emitPrintRecord (ctx: codeGenContext) (recordPtr: LIR.reg) (typeName: string
 
                         [Symbolic.LDR (Symbolic.X10, Symbolic.X0, 8); Symbolic.ADD_imm (Symbolic.X9, Symbolic.X0, 16)] @
                         runtimeInstrs (PrintValues.generatePrintStringNoNewline ctx.target)
-                    | t -> Crash.crash ("Unsupported field type in record: " ^ HostStructuralFormat.semanticType t)
+                    | t -> Crash.crash ("Unsupported field type in record: " ^ StructuralFormat.semanticType t)
                 in
                 let separator =
                     if i < sub (List.length fields) 1 then printLiteral ", "

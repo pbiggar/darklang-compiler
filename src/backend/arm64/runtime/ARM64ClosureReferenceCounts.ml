@@ -8,7 +8,7 @@ let mul a b=Int32.to_int (Int32.mul (Int32.of_int a) (Int32.of_int b))
 let int16 value=let low=value land 65535 in if low>=32768 then low-65536 else low
 let uint16 value=value land 65535
 open! MemoryModel
-module F=HostStructuralFormat
+module F=StructuralFormat
 let number n=F.Scalar (string_of_int n)
 let kindValue kind=F.Union ((match kind with MemoryModel.GenericHeap->"GenericHeap"|StreamHeap->"StreamHeap"|TaggedList->"TaggedList"|DictHeap->"DictHeap"|ClosureHeap->"ClosureHeap"),[])
 let operationValue = function

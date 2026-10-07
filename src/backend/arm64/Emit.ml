@@ -4,8 +4,8 @@
 type emitResult={machineCode:ARM64.machineCode array;binary:bytes}
 (* Resolve label refs, encode machine code, and generate a binary for the target OS *)
 let emitBinary program os enableLeakCheck prepareCachedChunk prepareCachedChunkGroup phaseRecorder=
- let startPhase ()=Option.map (fun _ -> HostClock.milliseconds ()) phaseRecorder in
- let recordPhase name timer=match phaseRecorder,timer with Some record,Some started->record name (HostClock.milliseconds () -. started)|_->() in
+ let startPhase ()=Option.map (fun _ -> (Int64.to_float (Mtime_clock.elapsed_ns ()) /. 1e6)) phaseRecorder in
+ let recordPhase name timer=match phaseRecorder,timer with Some record,Some started->record name ((Int64.to_float (Mtime_clock.elapsed_ns ()) /. 1e6) -. started)|_->() in
  let prepareTimer=startPhase () in
  let preparedChunks=Backend_Arm64_CodeGen.generatedProgramChunks program |> List.map (fun (chunk:Backend_Arm64_CodeGen.generatedChunk) ->
   let preparePart instructions=

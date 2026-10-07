@@ -12,17 +12,17 @@ val kindPath : itemKind -> string
 val allKinds : itemKind list
 val cacheRead : config -> string -> (fetchResult option,string) result
 val cacheWrite : config -> string -> fetchResult -> (unit,string) result
-val requestNetwork : HostPackageIO.client -> config -> string -> (fetchResult,string) result
-val fetchByHash : HostPackageIO.client -> config -> string -> (fetchResult,string) result
-val findByName : HostPackageIO.client -> config -> string -> (fetchResult,string) result
+val requestNetwork : PackageIO.client -> config -> string -> (fetchResult,string) result
+val fetchByHash : PackageIO.client -> config -> string -> (fetchResult,string) result
+val findByName : PackageIO.client -> config -> string -> (fetchResult,string) result
 val parseHashJson : string -> (string,string) result
-val locationName : HostJson.t -> (string,string) result
-val resolvedName : HostJson.t -> (string,string) result
-val renderType : HostJson.t -> (string,string) result
-val renderLetPattern : HostJson.t -> (string,string) result
-val renderMatchPattern : HostJson.t -> (string,string) result
-val infixText : HostJson.t -> (string,string) result
-val renderExpr : string list -> string -> HostJson.t -> (string,string) result
+val locationName : Yojson.Raw.t -> (string,string) result
+val resolvedName : Yojson.Raw.t -> (string,string) result
+val renderType : Yojson.Raw.t -> (string,string) result
+val renderLetPattern : Yojson.Raw.t -> (string,string) result
+val renderMatchPattern : Yojson.Raw.t -> (string,string) result
+val infixText : Yojson.Raw.t -> (string,string) result
+val renderExpr : string list -> string -> Yojson.Raw.t -> (string,string) result
 val parseLocatedEntity : itemKind -> string -> string -> (locatedEntity,string) result
 val dependencyRefs : string -> ((string*string) list,string) result
 val renderEntity : locatedEntity -> (resolvedSource,string) result

@@ -81,7 +81,7 @@ let replaceInstrWithPhi candidate sources block =
  let remaining = List.filter (function BinOp (dest, _, _, _, _) | UnaryOp (dest, _, _) -> dest <> candidate.dest | _ -> true) remaining in
  {block with instrs = phis @ [Phi (candidate.dest, sources, candidate.valueType)] @ remaining}
 let withDest dest = function BinOp (_, op, a, b, typ) -> BinOp (dest, op, a, b, typ) | UnaryOp (_, op, a) -> UnaryOp (dest, op, a) | _ -> Crash.crash "MIR PRE: candidate is not an arithmetic expression"
-let labelText (Label name) = HostStructuralFormat.format (HostStructuralFormat.Union ("Label", [HostStructuralFormat.Text name]))
+let labelText (Label name) = StructuralFormat.format (StructuralFormat.Union ("Label", [StructuralFormat.Text name]))
 let nextInt value = Int32.to_int (Int32.add (Int32.of_int value) 1l)
 (*
    Complete expressions that are available on only some incoming paths. The

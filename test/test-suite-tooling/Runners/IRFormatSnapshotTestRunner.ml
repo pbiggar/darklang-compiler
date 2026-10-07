@@ -11,7 +11,7 @@ let runIRFormatSnapshotTest (test:irFormatSnapshotTest)=
  else {TestOutcome.success=false;message="Formatted IR did not match";expected=Some test.expected;actual=Some actual}
 let loadIRFormatSnapshotTests path=
  if not (TestFileIO.exists path) then Error ("IR-format test file not found: "^path) else
- try parseIRFormatSnapshotFileContent path (HostFile.readText path) with exn->Error ("Failed to read IR-format test file "^path^": "^HostFile.errorMessage path exn)
+ try parseIRFormatSnapshotFileContent path (FileIO.readText path) with exn->Error ("Failed to read IR-format test file "^path^": "^Printexc.to_string exn)
 let tests testFiles=
  let optional=function None->""|Some value->"Some("^value^")" in
  let testsForFile path=match loadIRFormatSnapshotTests path with

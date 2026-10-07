@@ -9,16 +9,16 @@ open DSLPattern
 let (let*)=Result.bind
 external upperScalar : int -> int = "dark_runner_upper_scalar"
 let uppercase text=let buffer=Buffer.create (String.length text) in Uutf.String.fold_utf_8 (fun () _->function `Uchar value->Uutf.Buffer.add_utf_8 buffer (Uchar.of_int (upperScalar (Uchar.to_int value)))|`Malformed _->invalid_arg "Malformed UTF-8 host text") () text;Buffer.contents buffer
-let parseReg text=match uppercase (HostText.trim text) with
+let parseReg text=match uppercase (Text.trim text) with
  |"RAX"->Ok RAX|"RBX"->Ok RBX|"RCX"->Ok RCX|"RDX"->Ok RDX|"RSI"->Ok RSI|"RDI"->Ok RDI|"RBP"->Ok RBP|"RSP"->Ok RSP|"R8"->Ok R8|"R9"->Ok R9|"R10"->Ok R10|"R11"->Ok R11|"R12"->Ok R12|"R13"->Ok R13|"R14"->Ok R14|"R15"->Ok R15
  |value->Error ("Invalid x64 register '"^value^"'")
-let parseFReg text=match uppercase (HostText.trim text) with
+let parseFReg text=match uppercase (Text.trim text) with
  |"XMM0"->Ok XMM0|"XMM1"->Ok XMM1|"XMM2"->Ok XMM2|"XMM3"->Ok XMM3|"XMM4"->Ok XMM4|"XMM5"->Ok XMM5|"XMM6"->Ok XMM6|"XMM7"->Ok XMM7|"XMM8"->Ok XMM8|"XMM9"->Ok XMM9|"XMM10"->Ok XMM10|"XMM11"->Ok XMM11|"XMM12"->Ok XMM12|"XMM13"->Ok XMM13|"XMM14"->Ok XMM14|"XMM15"->Ok XMM15
  |value->Error ("Invalid x64 floating-point register '"^value^"'")
-let parseCondition text=match uppercase (HostText.trim text) with
+let parseCondition text=match uppercase (Text.trim text) with
  |"EQ"->Ok EQ|"NE"->Ok NE|"LT"->Ok LT|"GT"->Ok GT|"LE"->Ok LE|"GE"->Ok GE|"B"->Ok B|"A"->Ok A|"BE"->Ok BE|"AE"->Ok AE|"P"->Ok P|"NP"->Ok NP|value->Error ("Invalid x64 condition '"^value^"'")
-let parseInt32 description text=let text=HostText.trim text in match HostText.tryParseInt32 text with Some value->Ok value|None->Error ("Invalid "^description^" '"^text^"' (expected 32-bit integer)")
-let parseShift text=let text=HostText.trim text in match HostText.tryParseInt32 text with Some value->Ok (Int32.to_int value)|None->Error ("Invalid shift '"^text^"' (expected integer)")
+let parseInt32 description text=let text=Text.trim text in match Text.tryParseInt32 text with Some value->Ok value|None->Error ("Invalid "^description^" '"^text^"' (expected 32-bit integer)")
+let parseShift text=let text=Text.trim text in match Text.tryParseInt32 text with Some value->Ok (Int32.to_int value)|None->Error ("Invalid shift '"^text^"' (expected integer)")
 let arguments name fields line=
  let rec join=function []->[]|[field]->[Capture field]|field::rest->Capture field::Literal ","::space::join rest in
  matched (Literal (name^"(")::join fields@[Literal ")"]) line
@@ -30,15 +30,15 @@ let threeArgs name=arguments name [middle;middle;last]
 let parseRegReg constructor name line=match twoArgs name line with None->Ok None|Some groups->let* a=parseReg groups.(1) in let* b=parseReg groups.(2) in Ok (Some (constructor (a,b)))
 let parseRegImmediate constructor name line=match twoArgs name line with None->Ok None|Some groups->let* reg=parseReg groups.(1) in let* imm=parseInt32 "immediate" groups.(2) in Ok (Some (constructor (reg,imm)))
 let parseLine lineNumber source=
- let line=HostText.trim source in let withLine=Result.map_error (fun msg->Printf.sprintf "Line %d: %s" lineNumber msg) in
- let labelLike name constructor=Option.map (fun groups->constructor (HostText.trim groups.(1))) (oneArg name line) in
+ let line=Text.trim source in let withLine=Result.map_error (fun msg->Printf.sprintf "Line %d: %s" lineNumber msg) in
+ let labelLike name constructor=Option.map (fun groups->constructor (Text.trim groups.(1))) (oneArg name line) in
  match line with "RET"->Ok RET|"SYSCALL"->Ok SYSCALL|"CQO"->Ok CQO|_->
  match labelLike "Label" (fun s->Label s) with Some instruction->Ok instruction|None->
  match labelLike "JMP" (fun s->JMP s) with Some instruction->Ok instruction|None->
  match labelLike "CALL" (fun s->CALL s) with Some instruction->Ok instruction|None->
  let unaryReg name constructor ()=match oneArg name line with None->Ok None|Some groups->Result.map (fun reg->Some (constructor reg)) (parseReg groups.(1)) in
  match twoArgs "Jcc" line with
- |Some groups->withLine (let* condition=parseCondition groups.(1) in Ok (Jcc (condition,HostText.trim groups.(2))))
+ |Some groups->withLine (let* condition=parseCondition groups.(1) in Ok (Jcc (condition,Text.trim groups.(2))))
  |None->
  let memory name constructor ()=match threeArgs name line with None->Ok None|Some groups->let* a=parseReg groups.(1) in let* b=parseReg groups.(2) in let* offset=parseInt32 "memory offset" groups.(3) in Ok (Some (constructor (a,b,offset))) in
  let store name constructor ()=match threeArgs name line with None->Ok None|Some groups->let* base=parseReg groups.(1) in let* offset=parseInt32 "memory offset" groups.(2) in let* src=parseReg groups.(3) in Ok (Some (constructor (base,offset,src))) in
@@ -55,5 +55,5 @@ let parseLine lineNumber source=
  unaryReg "PUSH" (fun reg->PUSH reg);unaryReg "POP" (fun reg->POP reg);unaryReg "NEG" (fun reg->NEG reg)] in
  let rec choose=function []->Error ("Invalid x64 instruction '"^line^"'")|parser::rest->match parser () with Error msg->Error msg|Ok (Some instruction)->Ok instruction|Ok None->choose rest in withLine (choose parsers)
 let parseX64 text=
- let lines=Common.normalizeLineEndings text |> String.split_on_char '\n' |> List.mapi (fun index line->index+1,HostText.trim line) |> List.filter (fun (_,line)->line<>"" && not (HostText.startsWith line "//")) in
+ let lines=Common.normalizeLineEndings text |> String.split_on_char '\n' |> List.mapi (fun index line->index+1,Text.trim line) |> List.filter (fun (_,line)->line<>"" && not (Text.startsWith line "//")) in
  if lines=[] then Error "INPUT-X64 contains no instructions" else ResultList.traverse (fun (number,line)->parseLine number line) lines

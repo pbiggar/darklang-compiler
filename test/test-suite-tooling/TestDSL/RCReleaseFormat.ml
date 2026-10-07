@@ -11,21 +11,21 @@ type rCReleaseTest={name:string;root:managedShape;placement:rootPlacement;source
 type shapeToken=Identifier of string|LeftParen|RightParen|Comma
 let knownSections=StringOrder.Set.of_list ["NAME";"ROOT";"ROOT-REGISTER";"PRESERVE"]
 let tokenizeShape source=
- let units=HostText.scalars source in let count=Array.length units in
- let identifierChar c=HostText.isLetter c || HostText.isDigit c || c=45 || c=95 in
+ let units=Text.scalars source in let count=Array.length units in
+ let identifierChar c=Text.isLetter c || Text.isDigit c || c=45 || c=95 in
  let whitespace c=Uchar.is_valid c && Uucp.White.is_white_space (Uchar.of_int c) in
  let rec loop offset tokens=if offset=count then Ok (List.rev tokens) else
  let c=units.(offset) in if whitespace c then loop (offset+1) tokens else
  match c with 40->loop (offset+1) (LeftParen::tokens)|41->loop (offset+1) (RightParen::tokens)|44->loop (offset+1) (Comma::tokens)|_ when identifierChar c->
  let ending=ref offset in while !ending<count && identifierChar units.(!ending) do incr ending done;
- let text=HostText.ofScalars (Array.sub units offset (!ending-offset)) in loop !ending (Identifier text::tokens)
- |_->Error ("Invalid ROOT character '"^HostText.ofScalars [|c|]^"' at offset "^string_of_int offset) in loop 0 []
+ let text=Text.ofScalars (Array.sub units offset (!ending-offset)) in loop !ending (Identifier text::tokens)
+ |_->Error ("Invalid ROOT character '"^Text.ofScalars [|c|]^"' at offset "^string_of_int offset) in loop 0 []
 let parseShape source=
  let rec parseOne tokens=
  let parseArguments allowEmpty remaining=
   let rec loop parsed rest=match rest with RightParen::tail when allowEmpty || parsed<>[]->Ok (List.rev parsed,tail)|RightParen::_->Error "Managed shape requires at least one argument"|_->
    let* value,after=parseOne rest in match after with Comma::tail->loop (value::parsed) tail|RightParen::tail->Ok (List.rev (value::parsed),tail)|_->Error "Expected ',' or ')' in managed shape" in loop [] remaining in
- match tokens with Identifier name::rest->(match HostText.lowerInvariant name,rest with
+ match tokens with Identifier name::rest->(match Text.lowerInvariant name,rest with
  |"i64",tail->Ok (Int64Value,tail)|"enum",tail->Ok (EnumValue,tail)|"string",tail->Ok (DynamicString,tail)|"literal-string",tail->Ok (LiteralString,tail)|"blob",tail->Ok (DynamicBlob,tail)
  |"list",LeftParen::tail->let* shapes,remaining=parseArguments false tail in (match shapes with [shape]->Ok (ListValue shape,remaining)|_->Error "list requires exactly one argument")
  |"dict",LeftParen::tail->let* shapes,remaining=parseArguments false tail in (match shapes with [key;value]->Ok (DictValue (key,value),remaining)|_->Error "dict requires exactly two arguments")
@@ -40,13 +40,13 @@ let toSectionMap sections=
  match List.find_opt (fun (name,_)->not (StringOrder.Set.mem name knownSections)) sections with Some (name,_)->Error ("Unknown reference-release section: "^name)|None->
  let rec duplicate seen=function []->None|(name,_)::tail->if List.length (List.filter (fun (other,_)->other=name) sections)>1 && not (StringOrder.Set.mem name seen) then Some name else duplicate (StringOrder.Set.add name seen) tail in
  match duplicate StringOrder.Set.empty sections with Some name->Error ("Duplicate reference-release section: "^name)|None->Ok (M.of_list sections)
-let required name sections=match M.find_opt name sections with Some value when HostText.trim value<>""->Ok (HostText.trim value)|Some _->Error ("Reference-release section "^name^" cannot be empty")|None->Error ("Missing required reference-release section: "^name)
+let required name sections=match M.find_opt name sections with Some value when Text.trim value<>""->Ok (Text.trim value)|Some _->Error ("Reference-release section "^name^" cannot be empty")|None->Error ("Missing required reference-release section: "^name)
 let parsePreservedRegisters source=
- let parseLine (lineNumber,line)=match String.split_on_char '=' line |> List.map HostText.trim with
+ let parseLine (lineNumber,line)=match String.split_on_char '=' line |> List.map Text.trim with
  |[register;value]->let parsedReg=LIRParser.parsePhysReg register in let parsedVal=DSLPattern.int64 value in
    (match parsedReg,parsedVal with Ok register,Some value->Ok {register;value}|Error msg,_->Error (Printf.sprintf "PRESERVE line %d: %s" lineNumber msg)|_,_->Error (Printf.sprintf "PRESERVE line %d: invalid Int64 value '%s'" lineNumber value))
  |_->Error (Printf.sprintf "PRESERVE line %d: expected REGISTER = VALUE" lineNumber) in
- let lines=String.split_on_char '\n' source |> List.mapi (fun index line->index+1,HostText.trim line) |> List.filter (fun (_,line)->line<>"") in
+ let lines=String.split_on_char '\n' source |> List.mapi (fun index line->index+1,Text.trim line) |> List.filter (fun (_,line)->line<>"") in
  let* reversed=List.fold_left (fun result line->let* parsed=result in Result.map (fun value->value::parsed) (parseLine line)) (Ok []) lines in Ok (List.rev reversed)
 let parsePlacement sections=match M.find_opt "ROOT-REGISTER" sections,M.find_opt "PRESERVE" sections with
  |None,None->Ok CanonicalRoot|None,Some _->Error "PRESERVE requires ROOT-REGISTER"|Some register,preserved->

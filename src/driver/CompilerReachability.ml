@@ -20,7 +20,7 @@ let getReachableStdlibFunctionsFromStdlib (stdlib:X.stdlibResult) source=
  (* Convert to ANF. *)
  let* user=SourcePreparation.convertTypedProgramToUserOnly stdlib.X.context rendered |> Result.map_error (fun error->"ANF conversion error: "^error) in
  let options={CompilerOptions.defaultOptions with CompilerOptions.disableANFOpt=true;disableInlining=true} in
- let start=HostClock.milliseconds () in let elapsed ()=HostClock.milliseconds ()-.start in
+ let start=(Int64.to_float (Mtime_clock.elapsed_ns ()) /. 1e6) in let elapsed ()=(Int64.to_float (Mtime_clock.elapsed_ns ()) /. 1e6)-.start in
  let entryId,symbols=CheckedAST.internFunction "_start" user.R.symbols in
  let entry=R.synthesizeEntryFunction entryId "_start" boundary user.R.mainExpr in
  let registries={R.scopeContracts=user.R.scopeContracts;inertFunctionScopes=user.R.inertFunctionScopes;typeReg=user.R.typeReg;typeNames=user.R.typeNames;recordFieldsReg=user.R.recordFieldsReg;recordTypeParamsReg=user.R.recordTypeParamsReg;variantLookup=user.R.variantLookup;sumMetadata=user.R.sumMetadata;rcSumShapeReg=user.R.rcSumShapeReg;funcReg=user.R.funcReg;functionIds=user.R.functionIds;functionNames=user.R.functionNames;funcParams=user.R.funcParams;moduleRegistry=user.R.moduleRegistry;recursiveMembers=user.R.recursiveMembers} in

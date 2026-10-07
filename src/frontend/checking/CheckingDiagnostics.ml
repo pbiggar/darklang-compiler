@@ -68,7 +68,7 @@ let typeErrorToString = function
   | ResolutionFailure error -> NameResolution.errorToString error | GenericError msg -> msg
 let withIndefiniteArticle s =
   if s = "" then s else
-  let lower = HostText.lowerInvariant s in
+  let lower = Text.lowerInvariant s in
   (if List.mem lower.[0] ['a'; 'e'; 'i'; 'o'; 'u'] then "an " else "a ") ^ s
 let unsigned64 value = Z.to_string (if value < 0L then Z.add (Z.of_int64 value) (Z.shift_left Z.one 64) else Z.of_int64 value)
 let describeIfConditionActual expr actualType = match expr with
@@ -79,12 +79,12 @@ let describeIfConditionActual expr actualType = match expr with
   | UInt16Literal i -> "UInt16 (" ^ string_of_int i ^ ")" | UInt32Literal i -> "UInt32 (" ^ Int64.to_string i ^ ")"
   | UInt64Literal i -> "UInt64 (" ^ unsigned64 i ^ ")" | UInt128Literal i -> "UInt128 (" ^ Z.to_string i ^ ")"
   | StringLiteral s -> "String (\"" ^ s ^ "\")" | CharLiteral s -> "Char (\"" ^ s ^ "\")"
-  | FloatLiteral f -> "Float (" ^ HostFloat.roundTrip f ^ ")" | BoolLiteral b -> "Bool (" ^ string_of_bool b ^ ")"
+  | FloatLiteral f -> "Float (" ^ FloatFormat.roundTrip f ^ ")" | BoolLiteral b -> "Bool (" ^ string_of_bool b ^ ")"
   | _ -> typeToString actualType
 let ifConditionTypeMismatchMessage expr actualType = "Encountered a condition that must be a Bool, but got " ^ withIndefiniteArticle (describeIfConditionActual expr actualType)
 let formatFloatLiteralForPatternMismatch f =
-  let formatted = HostFloat.roundTrip f in
-  if HostText.contains formatted "." || HostText.contains formatted "e" || HostText.contains formatted "E" then formatted else formatted ^ ".0"
+  let formatted = FloatFormat.roundTrip f in
+  if Text.contains formatted "." || Text.contains formatted "e" || Text.contains formatted "E" then formatted else formatted ^ ".0"
 let describeInterpolationActual expr actualType = match expr with
   | FloatLiteral f -> "a Float (" ^ formatFloatLiteralForPatternMismatch f ^ ")"
   | Int64Literal i -> "an Int64 (" ^ Int64.to_string i ^ ")" | _ -> withIndefiniteArticle (typeToString actualType)
@@ -180,7 +180,7 @@ let rec tryFormatLiteralValue = function
   | Int8Literal i | Int16Literal i | UInt8Literal i | UInt16Literal i -> Some (string_of_int i)
   | Int32Literal i -> Some (Int32.to_string i) | UInt32Literal i -> Some (Int64.to_string i) | UInt64Literal i -> Some (unsigned64 i)
   | BoolLiteral b -> Some (string_of_bool b) | StringLiteral s -> Some ("\"" ^ s ^ "\"") | CharLiteral c -> Some ("'" ^ c ^ "'")
-  | FloatLiteral f -> Some (HostFloat.roundTrip f)
+  | FloatLiteral f -> Some (FloatFormat.roundTrip f)
   | TupleLiteral elems -> List.fold_left (fun acc elem -> match acc, tryFormatLiteralValue elem with Some texts, Some text -> Some (texts @ [text]) | _ -> None) (Some []) elems |> Option.map (fun items -> "(" ^ String.concat ", " items ^ ")")
   | _ -> None
 let rec formatDeconstructionPattern = function
@@ -237,10 +237,11 @@ let inferenceVarForKey key =
     let last = String.rindex key ':' in
     if last < 7 then Crash.crash "Malformed inference-variable identity" else TInferenceVar (String.sub key 7 (last - 7), key)
   else TVar key
+let inferenceIdentity = Atomic.make 0
 let freshenTypeParams scopeName typeParams =
   let freshParams = List.mapi (fun index base ->
     let displayName = base ^ "$" ^ Option.fold ~none:"" ~some:(fun scope -> scope ^ "$") scopeName ^ string_of_int index in
-    "#infer:" ^ displayName ^ ":" ^ HostGuid.newGuidN ()) typeParams in
+    "#infer:" ^ displayName ^ ":" ^ string_of_int (Atomic.fetch_and_add inferenceIdentity 1)) typeParams in
   freshParams, List.fold_left2 (fun subst name fresh -> StringOrder.Map.add name fresh subst) StringOrder.Map.empty typeParams freshParams
 (*
    Apply type variable renaming to a type

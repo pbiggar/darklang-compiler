@@ -93,7 +93,7 @@ let tryLabelIndex labels label =
   let compare = StringOrder.compare actual wanted in
   if compare = 0 then Some mid else if compare < 0 then search (add mid 1) high else search low (sub mid 1) in
  search 0 (sub (Array.length labels) 1)
-let labelText (LIR.Label name) = HostStructuralFormat.format (HostStructuralFormat.Union ("Label",[HostStructuralFormat.Text name]))
+let labelText (LIR.Label name) = StructuralFormat.format (StructuralFormat.Union ("Label",[StructuralFormat.Text name]))
 let buildBlockIndex (cfg : LIR.cfg) =
  let entries = Array.of_list (LIR.LabelMap.bindings cfg.LIR.blocks) in
  let labels = Array.map fst entries in

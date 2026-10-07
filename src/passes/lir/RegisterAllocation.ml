@@ -216,4 +216,4 @@ let allocateRegistersWithCallSummaries arch callees func=fst (allocateRegistersI
 (*
    Allocate registers for a function and collect phase timings
 *)
-let allocateRegistersWithTiming arch func=allocateRegistersInternal arch None (Some HostClock.milliseconds) func
+let allocateRegistersWithTiming arch func=allocateRegistersInternal arch None (Some (fun () -> Int64.to_float (Mtime_clock.elapsed_ns ()) /. 1e6)) func

@@ -70,13 +70,13 @@ let elaboration = function
  | E.UnknownCallOwnership value -> unary "UnknownCallOwnership" (func value)
  | E.InconsistentCallParameters value -> unary "InconsistentCallParameters" (func value)
  | E.InvalidFunctionBoundary (value, cause) -> two "InvalidFunctionBoundary" (func value) (E.Ownership.errorValue id cause)
-let analysisError error = HostStructuralFormat.format (match error with
+let analysisError error = StructuralFormat.format (match error with
  | A.HIRConstructionFailed cause -> unary "HIRConstructionFailed" (construction cause)
  | A.OwnershipElaborationFailed cause -> unary "OwnershipElaborationFailed" (elaboration cause)
  | A.OwnedHIRVerificationFailed cause -> unary "OwnedHIRVerificationFailed" (verification cause)
  | A.FunctionOwnershipVerificationFailed (value, cause) -> two "FunctionOwnershipVerificationFailed" (func value) (A.Ownership.errorValue id cause)
  | A.SpecializationSchedulingFailed cause -> unary "SpecializationSchedulingFailed" (scheduling cause))
-let loweringError error = HostStructuralFormat.format (match error with
+let loweringError error = StructuralFormat.format (match error with
  | LowerOwnershipVariants.MissingSourceFunction value -> unary "MissingSourceFunction" (func value)
  | LowerOwnershipVariants.MissingSourceCalls (value, sites) -> two "MissingSourceCalls" (func value) (Sequence (List.map site sites))
  | LowerOwnershipVariants.InvalidOwnershipBoundary value -> unary "InvalidOwnershipBoundary" (func value))

@@ -15,7 +15,7 @@ let require condition error=if condition then Ok () else Error error
 let releaseInstr size kind metadata=L.RefCountDec (L.Physical L.X0,size,kind,Some metadata)
 let release size kind typ=releaseInstr size kind (rcMetadata typ)
 let generate instr variants=makeSimpleProgramWithVariants [instr] variants |> generatePreparedARM64 target
-let hasLabel fragment instrs=List.exists (function S.Label label->HostText.contains label fragment|_->false) instrs
+let hasLabel fragment instrs=List.exists (function S.Label label->Text.contains label fragment|_->false) instrs
 let collision typ label error=let* instrs=generate (release 0 L.DictHeap typ) M.empty in require (hasLabel label instrs) error
 let testDictListValuePlannedHelperReleasesCollisionPayloads ()=collision (AST.TDict (AST.TInt64,AST.TList AST.TInt64)) "collision_root_payload_loop" "Dict<int, list<int>> planned helper did not emit a collision root payload release loop"
 let testDictTupleValuePlannedHelperReleasesCollisionPayloads ()=collision (AST.TDict (AST.TInt64,AST.TTuple [AST.TString;AST.TList AST.TInt64])) "collision_generic_payload_loop" "Dict<int, tuple<string, list<int>>> planned helper did not emit a collision generic payload release loop"
@@ -38,7 +38,7 @@ let testPlannedListRecordPayloadUsesPlannedHelper ()=
 let testPlannedListRecordNestedStringDictUsesPlannedListHelper ()=
  let* instrs=recordList "ARM64PlannedListRecordNestedStringDict" ["items",AST.TList (AST.TDict (AST.TString,AST.TString))] in
  if List.mem (S.BL "__dark_list_refcount_dec_dict_helper") instrs then Error "Nested List<Dict<String, String>> called the unplanned legacy list/dict helper" else
- let count=List.filter_map (function S.Label label when HostText.startsWith label "__dark_list_refcount_dec_plan_"->Some label|_->None) instrs |> StringOrder.Set.of_list |> StringOrder.Set.cardinal in
+ let count=List.filter_map (function S.Label label when Text.startsWith label "__dark_list_refcount_dec_plan_"->Some label|_->None) instrs |> StringOrder.Set.of_list |> StringOrder.Set.cardinal in
  if count<2 then Error (Printf.sprintf "Expected outer-record and inner-dict planned list helpers, found %d" count) else Ok ()
 let testPlannedListTuple5PayloadUsesPlannedHelper ()=plannedTuple (AST.TTuple [AST.TString;AST.TBlob;AST.TList AST.TInt64;AST.TDict (AST.TInt64,AST.TList AST.TInt64);AST.TFunction ([AST.TInt64],AST.TInt64)]) "ARM64 tuple5 list payload did not emit a planned list helper"
 let testPlannedListRecord5PayloadUsesPlannedHelper ()=
@@ -65,9 +65,9 @@ let testRecursiveSumReleaseSkipsVariantWithoutManagedFields ()=
  let registry=variants name [variant "Arm64RecursiveReleaseLeaf" 0 (Some AST.TInt64) 1;variant "Arm64RecursiveReleaseNode" 1 (Some (AST.TTuple [typ;typ])) 2] in
  let* instrs=generate (releaseInstr 16 L.GenericHeap (sumMetadata registry typ)) registry in
  let rec takeUntilRet=function S.RET::_->[]|i::rest->i::takeUntilRet rest|[]->[] in
- let rec helper=function S.Label label::rest when HostText.startsWith label "__dark_recursive_nominal_rc_dec_"->Some (takeUntilRet rest)|_::rest->helper rest|[]->None in
+ let rec helper=function S.Label label::rest when Text.startsWith label "__dark_recursive_nominal_rc_dec_"->Some (takeUntilRet rest)|_::rest->helper rest|[]->None in
  match helper instrs with None->Error "Recursive-nominal release helper was not generated"|Some body->
- if List.exists (function S.CBNZ (S.X1,label) when HostText.contains label "_variant_0_next"->true|_->false) body then Error "Recursive-nominal release helper dispatched a variant without managed fields"
+ if List.exists (function S.CBNZ (S.X1,label) when Text.contains label "_variant_0_next"->true|_->false) body then Error "Recursive-nominal release helper dispatched a variant without managed fields"
  else if not (List.mem (S.CMP_imm (S.X1,1)) body) then Error "Recursive-nominal release helper omitted the recursive variant" else Ok ()
 let closure name captureType registry=
  let captured=ControlFlowTests.makeEmptyFunction name [{L.reg=L.Physical L.X0;typ=AST.TTuple [AST.TInt64;captureType]}] in

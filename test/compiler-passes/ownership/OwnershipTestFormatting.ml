@@ -5,8 +5,8 @@ open StructuralValue
 module H = HIR
 module O = OwnedIR
 let valueId (H.ValueId id) = Union ("ValueId", [Scalar (string_of_int id)])
-let value (value : H.value) = Record ["Id", valueId value.H.id; "Type", HostStructuralFormat.semanticValue value.H.typ]
-let operand (operand : H.operand) = Record ["Expression", CheckedStructuralFormat.value operand.H.expression; "Type", HostStructuralFormat.semanticValue operand.H.typ; "Inputs", Union ("map", [Sequence (List.map (fun (id, input) -> Tuple [AST.DiagnosticFormatting.binding id; value input]) (CheckedAST.BindingIdMap.bindings operand.H.inputs))])]
+let value (value : H.value) = Record ["Id", valueId value.H.id; "Type", StructuralFormat.semanticValue value.H.typ]
+let operand (operand : H.operand) = Record ["Expression", CheckedStructuralFormat.value operand.H.expression; "Type", StructuralFormat.semanticValue operand.H.typ; "Inputs", Union ("map", [Sequence (List.map (fun (id, input) -> Tuple [AST.DiagnosticFormatting.binding id; value input]) (CheckedAST.BindingIdMap.bindings operand.H.inputs))])]
 let parameter (parameter : H.parameter) = Record ["Binding", AST.DiagnosticFormatting.binding parameter.H.binding; "Value", value parameter.H.value]
 let signature id (signature : 'id O.functionSignature) =
  let one name value = Union (name, [id value]) in

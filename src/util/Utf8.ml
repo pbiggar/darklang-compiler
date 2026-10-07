@@ -1,4 +1,4 @@
-(* HostEncoding.ml - Decode host UTF-8 with the library's malformed-input replacement. *)
+(* Utf8.ml - Decode host UTF-8 with the library's malformed-input replacement. *)
 let utf8 text =
   if String.is_valid_utf_8 text then text else
   let output=Buffer.create (String.length text) in

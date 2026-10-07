@@ -6,7 +6,7 @@ open X86_64
 type testResult=(unit,string) result
 (* Test: entry labels should be required explicitly, not replaced with offset 0. *)
 let testRequireLabelPositionRejectsMissingStart ()=match X86_64_Resolve.requireLabelPosition "_start" StringOrder.Map.empty with
- |Error message when HostText.contains message "Missing required label: _start"->Ok ()
+ |Error message when Text.contains message "Missing required label: _start"->Ok ()
  |Error message->Error ("Expected missing _start label error, got: "^message)
  |Ok offset->Error (Printf.sprintf "Expected missing _start label to fail, got offset %d" offset)
 (* Test: generate and execute a program with a forward call *)

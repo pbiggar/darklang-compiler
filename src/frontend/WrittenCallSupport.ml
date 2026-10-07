@@ -82,7 +82,7 @@ let[@warning "-4"] checkNamed checkExpression checkedLiteral globals locals symb
          let pairs = List.mapi (fun index pair -> index, pair) (List.combine checkedArgs parameterTypes) in
          let mismatch = List.find_opt (fun (index, ((typ, _), parameterType)) -> not (((isStdlibEquality && index = 1) || (isDictKeyOperation && index = 1)) && structuralEqualityCompatible globals parameterType typ) && Option.is_none (Unification.reconcileTypes None parameterType typ)) pairs in
          match mismatch with
-         | Some (_, ((actual, _), wanted)) -> Error ("Function argument type mismatch: expected " ^ HostStructuralFormat.semanticType wanted ^ ", got " ^ HostStructuralFormat.semanticType actual)
+         | Some (_, ((actual, _), wanted)) -> Error ("Function argument type mismatch: expected " ^ StructuralFormat.semanticType wanted ^ ", got " ^ StructuralFormat.semanticType actual)
          | None ->
            let converted = List.fold_left (fun state (index, ((actualType, value), targetType)) -> bind state (fun (reversed, symbols) -> if index = 1 && (isStdlibEquality || isDictKeyOperation) && Option.is_none (Unification.reconcileTypes None targetType actualType) && structuralEqualityCompatible globals targetType actualType then map (fun (value, symbols) -> value :: reversed, symbols) (convertStructuralRecord globals targetType actualType value symbols) else Ok (value :: reversed, symbols))) (Ok ([], symbols)) pairs in
            bind converted (fun (reversed, symbols) -> let args = match List.rev reversed with [] -> NonEmptyList.singleton C.UnitLiteral | args -> NonEmptyList.fromList args in

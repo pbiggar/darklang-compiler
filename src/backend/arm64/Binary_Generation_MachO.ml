@@ -142,10 +142,8 @@ let createStringData (stringPool:LiteralPool.stringPool)=
  let utf8=utf8Bytes str in Bytes.blit utf8 0 bytes (add offset 16) (Bytes.length utf8);
  let label="str_"^string_of_int idx in add (add offset 16) alignedLen,StringOrder.Map.add label offset labels)
  (0,StringOrder.Map.empty) (Array.mapi (fun idx value -> idx,value) stringPool.LiteralPool.strings) in bytes,labelMap
-let newUuidBytes () =
- let hex=HostGuid.newGuidN () in
- let network=Bytes.init 16 (fun i -> Char.chr (int_of_string ("0x"^String.sub hex (i*2) 2))) in
- let order=[|3;2;1;0;5;4;7;6;8;9;10;11;12;13;14;15|] in Bytes.init 16 (fun i -> Bytes.get network order.(i))
+let newUuid = Uuidm.v4_gen (Random.State.make_self_init ())
+let newUuidBytes () = Bytes.of_string (Uuidm.to_binary_string (newUuid ()))
 (*
    Create a Mach-O executable with already-laid-out constant data.
    VM addresses - load at typical location
@@ -257,10 +255,10 @@ let createExecutableWithCoverage machineCode stringPool floatPool coverageExprCo
 let ioMessage = function Unix.Unix_error (error,_,_) -> Unix.error_message error | Sys_error message -> message | ex -> Printexc.to_string ex
 let tryWriteAllBytes path bytes =
  try Out_channel.with_open_bin path (fun output -> Out_channel.output_bytes output bytes);Ok ()
- with ex -> Error (Printf.sprintf "Failed to write Mach-O executable to %s: %s" path (HostFile.errorMessage path ex))
+ with ex -> Error (Printf.sprintf "Failed to write Mach-O executable to %s: %s" path (Printexc.to_string ex))
 let tryAddUserExecute path =
  try let permissions=(Unix.stat path).Unix.st_perm in Unix.chmod path (permissions lor 0o100);Ok ()
- with ex -> Error (Printf.sprintf "Failed to make Mach-O executable %s: %s" path (HostFile.errorMessage path ex))
+ with ex -> Error (Printf.sprintf "Failed to make Mach-O executable %s: %s" path (Printexc.to_string ex))
 let tryStartCodesign path =
  let stdoutRead,stdoutWrite=Unix.pipe ~cloexec:true () in let stderrRead,stderrWrite=Unix.pipe ~cloexec:true () in
  try let process=Unix.create_process "codesign" [|"codesign";"-s";"-";path|] Unix.stdin stdoutWrite stderrWrite in

@@ -20,7 +20,7 @@ let emptyMIRFunction name=
 let testFormatMIRDumpFiltersBeforeFormatting ()=
  let program=M.Program ([emptyMIRFunction "Darklang.Stdlib.List.map";emptyMIRFunction "Darklang.Stdlib.List.filter"],StringOrder.Map.empty,StringOrder.Map.empty) in
  let actual=MIRPrinter.formatMIRDump (Some "MAP") false program in
- if HostText.contains actual "Darklang.Stdlib.List.map" && not (HostText.contains actual "Darklang.Stdlib.List.filter") then Ok () else Error ("Expected case-insensitive function-scoped MIR output, got:\n"^actual)
+ if Text.contains actual "Darklang.Stdlib.List.map" && not (Text.contains actual "Darklang.Stdlib.List.filter") then Ok () else Error ("Expected case-insensitive function-scoped MIR output, got:\n"^actual)
 let testFormatMIRDumpSummary ()=
  let program=M.Program ([emptyMIRFunction "Darklang.Stdlib.List.map";emptyMIRFunction "Darklang.Stdlib.List.filter"],StringOrder.Map.empty,StringOrder.Map.empty) in
  expectFormatted "formatMIRDump summary" "Functions: 1\nDarklang.Stdlib.List.map: 1 blocks, 0 instructions" (MIRPrinter.formatMIRDump (Some "map") true program)

@@ -41,11 +41,11 @@ let parseTestFile content = {sections = List.fold_left (fun sections (name, valu
 (*
    Get required section or return error
 *)
-let getRequiredSection name file = match StringOrder.Map.find_opt name file.sections with Some value -> Ok (HostText.trim value) | None -> Error ("Missing required section: " ^ name)
+let getRequiredSection name file = match StringOrder.Map.find_opt name file.sections with Some value -> Ok (Text.trim value) | None -> Error ("Missing required section: " ^ name)
 (*
    Get optional section
 *)
-let getOptionalSection name file = Option.map HostText.trim (StringOrder.Map.find_opt name file.sections)
+let getOptionalSection name file = Option.map Text.trim (StringOrder.Map.find_opt name file.sections)
 (*
    Strip comments (starting with //) and empty lines from text
    Remove comments starting with //
@@ -54,7 +54,7 @@ let stripCommentsAndEmpty text =
   String.split_on_char '\n' text |> List.concat_map (String.split_on_char '\r')
   |> List.map (fun line ->
     let rec comment index = if index + 1 >= String.length line then None else if line.[index] = '/' && line.[index + 1] = '/' then Some index else comment (index + 1) in
-    HostText.trim (match comment 0 with None -> line | Some index -> String.sub line 0 index))
+    Text.trim (match comment 0 with None -> line | Some index -> String.sub line 0 index))
   |> List.filter (fun line -> line <> "")
 (*
    Normalize line endings for comparison
@@ -69,13 +69,13 @@ let normalizeLineEndings text =
    Decode the small, explicit escape alphabet used by text-bearing test DSLs.
 *)
 let parseEscapedText text =
-  let units = HostText.scalars text in
+  let units = Text.scalars text in
   let rec loop index reversed =
-    if index >= Array.length units then Ok (HostText.ofScalars (Array.of_list (List.rev reversed)))
+    if index >= Array.length units then Ok (Text.ofScalars (Array.of_list (List.rev reversed)))
     else if units.(index) <> 92 then loop (index + 1) (units.(index) :: reversed)
     else if index + 1 >= Array.length units then Error "Escaped text cannot end with a backslash"
     else
       let decoded = match units.(index + 1) with 92 -> Some 92 | 34 -> Some 34 | 110 -> Some 10 | 114 -> Some 13 | 116 -> Some 9 | _ -> None in
       match decoded with Some value -> loop (index + 2) (value :: reversed)
-      | None -> Error ("Unsupported escape sequence '\\" ^ HostText.ofScalars [|units.(index + 1)|] ^ "'") in
+      | None -> Error ("Unsupported escape sequence '\\" ^ Text.ofScalars [|units.(index + 1)|] ^ "'") in
   loop 0 []

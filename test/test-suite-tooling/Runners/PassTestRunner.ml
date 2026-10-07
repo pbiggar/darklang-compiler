@@ -37,7 +37,7 @@ let equalLIR (LIR.Program (left,lv,lr)) (LIR.Program (right,rv,rr))=
  listEqual equalFunction left right && StringOrder.Map.equal (=) lv rv && StringOrder.Map.equal (=) lr rr
 let loadPair path inputSection parseInput outputSection parseOutput=
  if not (TestFileIO.exists path) then Error ("Test file not found: "^path) else
- let file=Common.parseTestFile (HostFile.readText path) in
+ let file=Common.parseTestFile (FileIO.readText path) in
  let* inputText=Common.getRequiredSection inputSection file in
  let* input=Result.map_error (fun e->"Failed to parse "^inputSection^": "^e) (parseInput inputText) in
  let* outputText=Common.getRequiredSection outputSection file in
@@ -163,7 +163,7 @@ let prettyPrintLabelRef=function
  |Symbolic.CodeLabel name->name
  |Symbolic.DataLabel (Symbolic.Named name)->"data:"^name
  |Symbolic.DataLabel (Symbolic.StringLiteral value)->"str:\""^escapeLabel value^"\""
- |Symbolic.DataLabel (Symbolic.FloatLiteral value)->"float:"^HostFloat.roundTrip value
+ |Symbolic.DataLabel (Symbolic.FloatLiteral value)->"float:"^FloatFormat.roundTrip value
 (*
    Pretty-print ARM64 instruction
    Floating-point instructions
@@ -256,7 +256,7 @@ let prettyPrintARM64Instr=function
  |Symbolic.FABS (dest, src)->String.concat "" ["FABS(";prettyPrintFReg dest;", ";prettyPrintFReg src;")"]
  |Symbolic.FCMP (src1, src2)->String.concat "" ["FCMP(";prettyPrintFReg src1;", ";prettyPrintFReg src2;")"]
  |Symbolic.FMOV_reg (dest, src)->String.concat "" ["FMOV_reg(";prettyPrintFReg dest;", ";prettyPrintFReg src;")"]
- |Symbolic.FMOV_imm (dest, value)->String.concat "" ["FMOV_imm(";prettyPrintFReg dest;", ";HostFloat.roundTrip value;")"]
+ |Symbolic.FMOV_imm (dest, value)->String.concat "" ["FMOV_imm(";prettyPrintFReg dest;", ";FloatFormat.roundTrip value;")"]
  |Symbolic.FMOV_zero dest->String.concat "" ["FMOV_zero(";prettyPrintFReg dest;")"]
  |Symbolic.FMOV_to_gp (dest, src)->String.concat "" ["FMOV_to_gp(";prettyPrintARM64Reg dest;", ";prettyPrintFReg src;")"]
  |Symbolic.FMOV_from_gp (dest, src)->String.concat "" ["FMOV_from_gp(";prettyPrintFReg dest;", ";prettyPrintARM64Reg src;")"]

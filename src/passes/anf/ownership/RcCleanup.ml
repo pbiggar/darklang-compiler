@@ -34,7 +34,7 @@ let retainExprForShape ctx id typ shape = match P.rcShapeRetainOperation shape w
  | Some MemoryModel.DynamicIntBuffer -> A.RefCountIncInt (A.Var id)
  | Some MemoryModel.DynamicBlobBuffer -> A.RefCountIncBlob (A.Var id)
  | Some (MemoryModel.FixedSizeRoot (size, kind)) -> A.RefCountInc (A.Var id, size, kind, Some (S.rcMetadataForTypeAndShape ctx typ shape))
- | None -> Crash.crash ("retainExprForShape: type '" ^ HostStructuralFormat.semanticType typ ^ "' does not have an RC retain operation")
+ | None -> Crash.crash ("retainExprForShape: type '" ^ StructuralFormat.semanticType typ ^ "' does not have an RC retain operation")
 (*
    Nullable sums use the zero-safe dynamic-buffer operation.
 *)
@@ -43,9 +43,9 @@ let releaseExprForShape id typ shape kind metadata nullable = match P.rcShapeRel
  | Some MemoryModel.DynamicIntBuffer -> A.RefCountDecInt (A.Var id)
  | Some MemoryModel.DynamicBlobBuffer -> A.RefCountDecBlob (A.Var id)
  | Some (MemoryModel.FixedSizeRoot (size, defaultKind)) ->
-   let metadata = match metadata with Some metadata -> metadata | None -> Crash.crash ("releaseExprForShape: fixed-size type '" ^ HostStructuralFormat.semanticType typ ^ "' is missing RC metadata") in
+   let metadata = match metadata with Some metadata -> metadata | None -> Crash.crash ("releaseExprForShape: fixed-size type '" ^ StructuralFormat.semanticType typ ^ "' is missing RC metadata") in
    A.RefCountDec (A.Var id, size, Option.value ~default:defaultKind kind, Some metadata)
- | None -> Crash.crash ("releaseExprForShape: type '" ^ HostStructuralFormat.semanticType typ ^ "' does not have an RC release operation")
+ | None -> Crash.crash ("releaseExprForShape: type '" ^ StructuralFormat.semanticType typ ^ "' does not have an RC release operation")
 let isMapHelper name = name = "Darklang.Stdlib.List.__mapHelper" || String.starts_with ~prefix:"Darklang.Stdlib.List.__mapHelper_" name
 let functionParamReturnTransfersOwnedAccumulator ctx func index typ =
  let name = Option.fold ~none:"" ~some:fst (FunctionIdMap.tryFind func ctx.F.funcReg) in

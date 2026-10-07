@@ -163,8 +163,8 @@ let optimizeCExpr (context : optimizeContext) (options : optimizeOptions) env ty
   if List.for_all (function StringLiteral _ -> true | _ -> false) parts then
    Some (Atom (StringLiteral (String.concat "" (List.filter_map (function StringLiteral value -> Some value | _ -> None) parts))))
   else (match List.filter (function StringLiteral "" -> false | _ -> true) parts with [single] -> Some (Atom single) | _ -> None)
- | Call (id, [StringLiteral left; StringLiteral right]) when hasName id "Darklang.Stdlib.String.__appendNormalized" -> Some (Atom (StringLiteral (HostText.normalize (left ^ right))))
- | Call (id, [StringLiteral value]) when hasName id "Darklang.Stdlib.String.__normalizeAfterConcat" -> Some (Atom (StringLiteral (HostText.normalize value)))
+ | Call (id, [StringLiteral left; StringLiteral right]) when hasName id "Darklang.Stdlib.String.__appendNormalized" -> Some (Atom (StringLiteral (Text.normalize (left ^ right))))
+ | Call (id, [StringLiteral value]) when hasName id "Darklang.Stdlib.String.__normalizeAfterConcat" -> Some (Atom (StringLiteral (Text.normalize value)))
  | Call (id, [left; StringLiteral ""]) when hasName id "Darklang.Stdlib.String.__appendNormalized" -> Some (Atom left)
  | Call (id, [StringLiteral ""; right]) when hasName id "Darklang.Stdlib.String.__appendNormalized" -> Some (Atom right)
  | TupleGet (Var tupleTid, index) -> Option.bind (TempMap.find_opt tupleTid tupleEnv) (fun entries -> Option.map (fun atom -> Atom atom) (IntMap.find_opt index entries))

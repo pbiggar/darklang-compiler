@@ -83,7 +83,7 @@ let emptyListElementVar = "t$empty"
    (an untyped lambda binding, a call result through a variable, a pattern's
    element). A declared type parameter is not one.
 *)
-let isInferenceVar name = String.starts_with ~prefix:"#infer:" name || HostText.contains name "$" || String.starts_with ~prefix:"binding_" name || String.starts_with ~prefix:"__" name || String.starts_with ~prefix:"recursiveParameter" name
+let isInferenceVar name = String.starts_with ~prefix:"#infer:" name || Text.contains name "$" || String.starts_with ~prefix:"binding_" name || String.starts_with ~prefix:"__" name || String.starts_with ~prefix:"recursiveParameter" name
 let rec containsTVar = function
  | TVar _ | TInferenceVar _ -> true
  | TList inner | TStream inner -> containsTVar inner

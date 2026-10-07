@@ -12,7 +12,7 @@ type testResult=(unit,string) result
 let colorOf=AllocationModel.colorOf
 let graphNeighbors graph id=Set.of_list (AllocationModel.graphNeighbors graph id)
 let graphHasVertex=AllocationModel.graphHasVertex
-let showSet values=HostStructuralFormat.format (StructuralValue.Union ("set",[StructuralValue.Sequence (List.map (fun n->StructuralValue.Scalar (string_of_int n)) (Set.elements values))]))
+let showSet values=StructuralFormat.format (StructuralValue.Union ("set",[StructuralValue.Sequence (List.map (fun n->StructuralValue.Scalar (string_of_int n)) (Set.elements values))]))
 let cfg entry blocks={entry;blocks=LabelMap.of_list (List.map (fun (block:basicBlock)->block.label,block) blocks)}
 (*
    Test 16: Build interference graph from real LIR CFG
@@ -118,6 +118,6 @@ let testMoveCoalescingPreference ()=
  let normalize (a,b)=if a<b then a,b else b,a in
  if List.mem (0,1) (List.map normalize pairs) then Ok () else
  let formatPair (a,b)=StructuralValue.Tuple [StructuralValue.Scalar (string_of_int a);StructuralValue.Scalar (string_of_int b)] in
- Error ("Expected move pair (0, 1), got "^HostStructuralFormat.format (StructuralValue.Sequence (List.map formatPair pairs)))
+ Error ("Expected move pair (0, 1), got "^StructuralFormat.format (StructuralValue.Sequence (List.map formatPair pairs)))
 let tests=["Build from real CFG",testBuildFromCFG;"Bitset graph matches",testBuildFromCFGBitsetMatches;"Full chordal pipeline",testFullChordalPipeline;"Apply2 pattern",testApply2Pattern;"Move coalescing pairs",testMoveCoalescingPreference]
 let runAllTests ()=List.map (fun (name,run)->name,run ()) tests

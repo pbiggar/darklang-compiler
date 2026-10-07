@@ -10,7 +10,7 @@ module Tags = Set.Make (Int)
 let ( let* ) = Result.bind
 let int value = A.IntLiteral (A.Int64 value)
 let fmt = CheckedStructuralFormat.pattern
-let showType = HostStructuralFormat.semanticType
+let showType = StructuralFormat.semanticType
 let unknownTuple prefix patterns = List.mapi (fun index _ -> AST.TVar (prefix ^ string_of_int index)) patterns
 let rec substituteTypeParams ?(records=true) subst typ =
  let sub = substituteTypeParams ~records subst in match typ with
@@ -476,7 +476,7 @@ let lowerMatch (toANFCore : LoweringCallbacks.expressionLowerer)
   | C.PVariable name -> let id, gen = A.freshVar gen in
     let* body, gen = anf body gen (R.BindingMap.add name (id, typ) env) in Ok (A.Let (id, A.Atom source, body), gen)
   | C.PConstructor (id, pats) -> (match pats with [] -> anf body gen env | _ ->
-    match variant id typ with None -> Error ("Constructor tag '" ^ string_of_int (constructorTag id) ^ "' not found in variant lookup for scrutinee type '" ^ showType typ ^ "' and constructor '" ^ HostStructuralFormat.format (AST.DiagnosticFormatting.constructor id) ^ "'")
+    match variant id typ with None -> Error ("Constructor tag '" ^ string_of_int (constructorTag id) ^ "' not found in variant lookup for scrutinee type '" ^ showType typ ^ "' and constructor '" ^ StructuralFormat.format (AST.DiagnosticFormatting.constructor id) ^ "'")
     | Some _ ->
       let raw, gen = A.freshVar gen in let typed, gen = A.freshVar gen in
       let* fields = resolveFields ~records:false id typ in let inner, ptype = payload pats fields in
@@ -549,8 +549,8 @@ let lowerMatch (toANFCore : LoweringCallbacks.expressionLowerer)
     let compare, gen = A.freshVar gen in
     Ok (Some (A.Var compare, [literal, expression; compare, A.Call (functionId "Darklang.Stdlib.Int.__equals", [source; A.Var literal])], gen))
   | C.PBool value -> single (A.Prim (A.Eq, source, A.BoolLiteral value)) gen
-  | C.PString value -> single (A.CanonicalBufferEq (MemoryModel.Utf8String, source, A.StringLiteral (HostText.normalize value))) gen
-  | C.PChar value -> single (A.CanonicalBufferEq (MemoryModel.GraphemeCluster, source, A.StringLiteral (HostText.normalize value))) gen
+  | C.PString value -> single (A.CanonicalBufferEq (MemoryModel.Utf8String, source, A.StringLiteral (Text.normalize value))) gen
+  | C.PChar value -> single (A.CanonicalBufferEq (MemoryModel.GraphemeCluster, source, A.StringLiteral (Text.normalize value))) gen
   | C.PFloat value when value = 0. ->
     let zero, gen = A.freshVar gen in let reciprocal, gen = A.freshVar gen in let sign, gen = A.freshVar gen in let combined, gen = A.freshVar gen in
     let target = if Int64.bits_of_float value < 0L then neg_infinity else infinity in
@@ -831,7 +831,7 @@ let lowerMatch (toANFCore : LoweringCallbacks.expressionLowerer)
   | C.UInt64Literal n -> Some (unsigned n)
   | C.UInt128Literal n -> Some (P.uint128ToCanonicalString n)
   | C.BoolLiteral n -> Some (if n then "true" else "false")
-  | C.FloatLiteral n -> Some (HostFloat.roundTrip n)
+  | C.FloatLiteral n -> Some (FloatFormat.roundTrip n)
   | C.UnitLiteral -> Some "()"
   | C.StringLiteral value -> Some ("\"" ^ escapeForRuntimeError value ^ "\"")
   | C.CharLiteral value -> Some ("'" ^ escapeForRuntimeError value ^ "'")

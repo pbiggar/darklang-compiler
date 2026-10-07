@@ -1,9 +1,9 @@
 (* Printer.fs - Format ANF functions and scoped or summarized dumps. *)
 [@@@warning "-4"]
 open IRPrinting
-let functionId id = HostStructuralFormat.format (HostStructuralFormat.Union ("FunctionId", [HostStructuralFormat.Scalar (Printf.sprintf "%LuUL" (AST.functionIdValue id))]))
+let functionId id = StructuralFormat.format (StructuralFormat.Union ("FunctionId", [StructuralFormat.Scalar (Printf.sprintf "%LuUL" (AST.functionIdValue id))]))
 let prettyPrintFunctionName names id = match FunctionIdMap.tryFind id names with Some name -> name | None -> functionId id
-let tempId (ANF.TempId id) = HostStructuralFormat.format (HostStructuralFormat.Union ("TempId", [HostStructuralFormat.Scalar (string_of_int id)]))
+let tempId (ANF.TempId id) = StructuralFormat.format (StructuralFormat.Union ("TempId", [StructuralFormat.Scalar (string_of_int id)]))
 (*
    Pretty-print ANF atom
 *)
@@ -12,7 +12,7 @@ let prettyPrintANFAtom = function
  | ANF.IntLiteral n -> ANF.sizedIntToString n
  | ANF.BoolLiteral b -> if b then "true" else "false"
  | ANF.StringLiteral s -> "\"" ^ escapeStringContent s ^ "\""
- | ANF.FloatLiteral f -> HostFloat.roundTrip f
+ | ANF.FloatLiteral f -> FloatFormat.roundTrip f
  | ANF.Var (ANF.TempId n) -> "t" ^ string_of_int n
  | ANF.FuncRef id -> "&" ^ functionId id
 let prettyPrintANFAtomWithNames names = function ANF.FuncRef id -> "&" ^ prettyPrintFunctionName names id | atom -> prettyPrintANFAtom atom
@@ -108,7 +108,7 @@ let prettyPrintANFCExpr functionNames expression =
  let prettyPrintANFAtom = prettyPrintANFAtomWithNames functionNames in
  match expression with
  | ANF.Atom atom -> prettyPrintANFAtom atom
- | ANF.TypedAtom (atom, typ) -> (prettyPrintANFAtom atom) ^ " : " ^ (HostStructuralFormat.semanticType typ)
+ | ANF.TypedAtom (atom, typ) -> (prettyPrintANFAtom atom) ^ " : " ^ (StructuralFormat.semanticType typ)
  | ANF.Prim (op, left, right) -> (prettyPrintANFAtom left) ^ " " ^ (prettyPrintANFOp op) ^ " " ^ (prettyPrintANFAtom right)
  | ANF.UnaryPrim (op, operand) -> (prettyPrintANFUnaryOp op) ^ (prettyPrintANFAtom operand)
  | ANF.Call (funcName, args) -> let argStr = args |> commaSeparated prettyPrintANFAtom in (prettyPrintFunctionName functionNames funcName) ^ "(" ^ (argStr) ^ ")"
@@ -127,7 +127,7 @@ let prettyPrintANFCExpr functionNames expression =
  | ANF.RefCountInc (atom, payloadSize, kind, _) -> "rc_inc(" ^ (prettyPrintANFAtom atom) ^ ", size=" ^ (string_of_int payloadSize) ^ ", kind=" ^ (prettyPrintANFRcKind kind) ^ ")"
  | ANF.RefCountDec (atom, payloadSize, kind, _) -> "rc_dec(" ^ (prettyPrintANFAtom atom) ^ ", size=" ^ (string_of_int payloadSize) ^ ", kind=" ^ (prettyPrintANFRcKind kind) ^ ")"
  | ANF.StringConcat (first, second, remaining) -> String.concat " ++ " (List.map prettyPrintANFAtom (first :: second :: remaining))
- | ANF.Print (atom, valueType) -> "print(" ^ (prettyPrintANFAtom atom) ^ ", type=" ^ (HostStructuralFormat.semanticType valueType) ^ ")"
+ | ANF.Print (atom, valueType) -> "print(" ^ (prettyPrintANFAtom atom) ^ ", type=" ^ (StructuralFormat.semanticType valueType) ^ ")"
  | ANF.StdoutWrite (atom, appendNewline) -> "stdout_write(" ^ (prettyPrintANFAtom atom) ^ ", newline=" ^ (if appendNewline then "True" else "False") ^ ")"
  | ANF.StdinReadLine -> "stdin_read_line()"
  | ANF.RuntimeError message -> "runtime_error(\"" ^ (escapeStringContent message) ^ "\")"
@@ -157,10 +157,10 @@ let prettyPrintANFCExpr functionNames expression =
  | ANF.RawPtrToInt128 ptr -> "RawPtrToInt128(" ^ (prettyPrintANFAtom ptr) ^ ")"
  | ANF.RawPtrToUInt128 ptr -> "RawPtrToUInt128(" ^ (prettyPrintANFAtom ptr) ^ ")"
  | ANF.DictToRawPtr dict -> "DictToRawPtr(" ^ (prettyPrintANFAtom dict) ^ ")"
- | ANF.RawPtrToDict (ptr, tag, dictType) -> "RawPtrToDict(" ^ (prettyPrintANFAtom ptr) ^ ", " ^ (prettyPrintANFAtom tag) ^ ") : " ^ (HostStructuralFormat.semanticType dictType)
+ | ANF.RawPtrToDict (ptr, tag, dictType) -> "RawPtrToDict(" ^ (prettyPrintANFAtom ptr) ^ ", " ^ (prettyPrintANFAtom tag) ^ ") : " ^ (StructuralFormat.semanticType dictType)
  | ANF.ListToRawPtr list -> "ListToRawPtr(" ^ (prettyPrintANFAtom list) ^ ")"
  | ANF.FixedBlockToRawPtr value -> "FixedBlockToRawPtr(" ^ (prettyPrintANFAtom value) ^ ")"
- | ANF.RawPtrToList (ptr, tag, listType) -> "RawPtrToList(" ^ (prettyPrintANFAtom ptr) ^ ", " ^ (prettyPrintANFAtom tag) ^ ") : " ^ (HostStructuralFormat.semanticType listType)
+ | ANF.RawPtrToList (ptr, tag, listType) -> "RawPtrToList(" ^ (prettyPrintANFAtom ptr) ^ ", " ^ (prettyPrintANFAtom tag) ^ ") : " ^ (StructuralFormat.semanticType listType)
  | ANF.FloatSqrt atom -> "FloatSqrt(" ^ (prettyPrintANFAtom atom) ^ ")"
  | ANF.FloatAbs atom -> "FloatAbs(" ^ (prettyPrintANFAtom atom) ^ ")"
  | ANF.FloatNeg atom -> "FloatNeg(" ^ (prettyPrintANFAtom atom) ^ ")"
@@ -190,7 +190,7 @@ let rec prettyPrintANFExpr functionNames expression =
  match expression with
  | ANF.Return atom -> "return " ^ (prettyPrintANFAtom atom)
  | ANF.Jump (target, atom) -> "jump " ^ (tempId target) ^ "(" ^ (prettyPrintANFAtom atom) ^ ")"
- | ANF.Join (parameter, continuation, entry) -> "join " ^ (tempId parameter.ANF.id) ^ ": " ^ (HostStructuralFormat.semanticType parameter.ANF.typ) ^ " =\n" ^ (recurse continuation) ^ "\nin\n" ^ (recurse entry)
+ | ANF.Join (parameter, continuation, entry) -> "join " ^ (tempId parameter.ANF.id) ^ ": " ^ (StructuralFormat.semanticType parameter.ANF.typ) ^ " =\n" ^ (recurse continuation) ^ "\nin\n" ^ (recurse entry)
  | ANF.Let (var, cexpr, body) -> let cexprStr = prettyPrintANFCExpr functionNames cexpr in let bodyStr = recurse body in "let " ^ (tempId var) ^ " = " ^ (cexprStr) ^ "\n" ^ (bodyStr)
  | ANF.If (cond, thenBranch, elseBranch) -> let condStr = prettyPrintANFAtom cond in let thenStr = recurse thenBranch in let elseStr = recurse elseBranch in "if " ^ (condStr) ^ " then\n" ^ (thenStr) ^ "\nelse\n" ^ (elseStr)
 (*

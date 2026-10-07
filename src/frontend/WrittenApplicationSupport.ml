@@ -5,7 +5,7 @@ module C = CheckedAST
 open! C
 let bind = Result.bind
 let map = Result.map
-let format = HostStructuralFormat.semanticType
+let format = StructuralFormat.semanticType
 let integers = [AST.TInt; AST.TInt8; AST.TInt16; AST.TInt32; AST.TInt64; AST.TInt128; AST.TUInt8; AST.TUInt16; AST.TUInt32; AST.TUInt64; AST.TUInt128]
 let builtin checkExpression literal globals locals symbols expected name typeArgs args =
  let check = checkExpression globals locals in

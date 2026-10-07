@@ -286,7 +286,7 @@ let generateDictRefCountDecHelper helperLabel keyReleasePlan releaseLeafDynamicV
        X86_64.RET]
 
 open! MemoryModel
-module F=HostStructuralFormat
+module F=StructuralFormat
 let number n=F.Scalar (string_of_int n)
 let kindValue kind=F.Union ((match kind with MemoryModel.GenericHeap->"GenericHeap"|StreamHeap->"StreamHeap"|TaggedList->"TaggedList"|DictHeap->"DictHeap"|ClosureHeap->"ClosureHeap"),[])
 let operationValue = function

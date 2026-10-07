@@ -61,7 +61,7 @@ let hasAiArg = has "--ai"
 let parsePath flag args =
   match parsePrefixedArg (flag ^ "=") args with
   | None -> Ok None
-  | Some path when HostText.trim path = "" -> Error (flag ^ " requires a non-empty path")
+  | Some path when Text.trim path = "" -> Error (flag ^ " requires a non-empty path")
   | Some path -> Ok (Some path)
 (*
    Parse --timings-json=PATH option
@@ -86,7 +86,7 @@ let defaultE2EBatchSize = 8192
 let parseE2EBatchSizeArg args =
   match parsePrefixedArg "--e2e-batch-size=" args with
   | None -> Ok defaultE2EBatchSize
-  | Some value -> match HostText.tryParseInt32 value with
+  | Some value -> match Text.tryParseInt32 value with
       | Some size when size >= 1l && size <= 8192l -> Ok (Int32.to_int size)
       | _ -> Error "--e2e-batch-size requires an integer from 1 through 8192"
 (*
@@ -95,7 +95,7 @@ let parseE2EBatchSizeArg args =
 let matchesFilter filter testName =
   match filter with
   | None -> true
-  | Some pattern -> HostText.contains (HostText.lowerInvariant testName) (HostText.lowerInvariant pattern)
+  | Some pattern -> Text.contains (Text.lowerInvariant testName) (Text.lowerInvariant pattern)
 (*
    Check if --help flag is present
 *)

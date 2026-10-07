@@ -150,8 +150,8 @@ let createExecutableWithCoverage machineCode stringPool floatPool coverageExprCo
  let leakStart=sub (RuntimeDataLayout.elfCounterOffset (add dataStart afterCoverage)) dataStart in let leakPadding=Bytes.make (sub leakStart afterCoverage) '\000' in
  Bytes.concat Bytes.empty [floatAndStringBytes;coveragePadding;coverageBytes;leakPadding;leakBytes] else Bytes.concat Bytes.empty [floatAndStringBytes;coveragePadding;coverageBytes] in
  serializeElf (createBinary codeBytes dataBytes (Int32.logor (Int32.logor ELF.pf_R ELF.pf_W) ELF.pf_X))
-let tryWriteAllBytes path bytes=Result.map_error (fun message->"Failed to write ELF executable to "^path^": "^message) (HostFile.writeBytes path bytes)
-let tryAddUserExecute path=try let permissions=(Unix.stat path).Unix.st_perm in Unix.chmod path (permissions lor 0o100);Ok () with exn->Error ("Failed to make ELF executable "^path^": "^HostFile.errorMessage path exn)
+let tryWriteAllBytes path bytes=Result.map_error (fun message->"Failed to write ELF executable to "^path^": "^message) (try Out_channel.with_open_bin path (fun channel -> Out_channel.output_bytes channel bytes); Ok () with exn -> Error (Printexc.to_string exn))
+let tryAddUserExecute path=try let permissions=(Unix.stat path).Unix.st_perm in Unix.chmod path (permissions lor 0o100);Ok () with exn->Error ("Failed to make ELF executable "^path^": "^Printexc.to_string exn)
 (*
    Write bytes to file (Linux - no code signing needed)
 *)

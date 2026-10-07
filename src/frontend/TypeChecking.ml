@@ -5,7 +5,7 @@ open CheckingDiagnostics
 module M = StringOrder.Map
 module S = StringOrder.Set
 let[@warning "-4"] checkProgramInternalWithTrace phaseRecorder baseEnv hideCompilerImplementationNames requireExplicitTypeArgsForBareCalls validateDeclarations requireEntry warningSettings (Program topLevels as program) =
- let measure phase operation = match phaseRecorder with None -> operation () | Some record -> let start = HostClock.milliseconds () in let result = operation () in record phase (HostClock.milliseconds () -. start); result in
+ let measure phase operation = match phaseRecorder with None -> operation () | Some record -> let start = (Int64.to_float (Mtime_clock.elapsed_ns ()) /. 1e6) in let result = operation () in record phase ((Int64.to_float (Mtime_clock.elapsed_ns ()) /. 1e6) -. start); result in
  (* These declarations exist only to implement retained portable stdlib APIs.
     They are checked while the stdlib is built in isolation, but must never
     become candidates while resolving a separately compiled source program. *)
@@ -67,7 +67,7 @@ let checkDeclarationProgramWithBaseEnv baseEnv program = Result.bind (checkProgr
 let checkProgramWithBaseEnvAndSettings baseEnv explicit warnings program = Result.bind (checkProgramInternal (Some baseEnv) false explicit true true warnings program) constructCheckedProgram
 let checkProgramWithBaseEnvAndSettingsWithTrace phaseRecorder baseEnv explicit warnings program =
  Result.bind (checkProgramInternalWithTrace (Some phaseRecorder) (Some baseEnv) false explicit true true warnings program) (fun checkedResult ->
-  let start = HostClock.milliseconds () in let result = constructCheckedProgram checkedResult in phaseRecorder "TypeCheck: Checked AST Construction" (HostClock.milliseconds () -. start); result)
+  let start = (Int64.to_float (Mtime_clock.elapsed_ns ()) /. 1e6) in let result = constructCheckedProgram checkedResult in phaseRecorder "TypeCheck: Checked AST Construction" ((Int64.to_float (Mtime_clock.elapsed_ns ()) /. 1e6) -. start); result)
 let checkDeclarationProgramWithBaseEnvAndSettings baseEnv explicit warnings program = Result.bind (checkProgramInternal (Some baseEnv) false explicit true false warnings program) constructCheckedProgram
 (* Analyze a synthetic preamble assembled from otherwise independent tests.
    Such preambles can repeat declarations that never coexist in a source

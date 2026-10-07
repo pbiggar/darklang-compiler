@@ -22,7 +22,7 @@ let patchDeferredLabels stringPool (resolved:X86_64_Resolve.resolveResult)=
  let codeFileOffset=64+56 in let codeSize=Bytes.length resolved.X86_64_Resolve.machineCode in
  X86_64_Resolve.patchDataLabels resolved (X86_64_Resolve.dataLabelOffsets codeFileOffset codeSize stringPool) codeFileOffset
 let writeAndRun target binary=
- let path=Filename.concat (Filename.get_temp_dir_name ()) (HostGuid.newGuidN ()) in
+ let path=Filename.temp_file "dark-" "" in
  Fun.protect ~finally:(fun ()->SourcePreparation.tryDeleteFile path) (fun ()->try
  let fd=Unix.openfile path [Unix.O_WRONLY;Unix.O_CLOEXEC;Unix.O_CREAT;Unix.O_TRUNC] 0o666 in
  Fun.protect ~finally:(fun ()->Unix.close fd) (fun ()->let rec write offset=if offset<Bytes.length binary then let count=Unix.write fd binary offset (Bytes.length binary-offset) in write (offset+count) in write 0;Unix.fsync fd);
@@ -32,7 +32,7 @@ let writeAndRun target binary=
  |Platform.LinuxX86_64,_->"/opt/dcb/qemu/qemu-x86_64",[path]
  |Platform.ARM64Backend _,_->"/opt/dcb/qemu/qemu-aarch64",[path] in
  TestProcess.capture file args 10000
- with exn->Error ("Execution failed: "^HostFile.errorMessage path exn))
+ with exn->Error ("Execution failed: "^Printexc.to_string exn))
 let translate program leakCheck=let* executable=executableProgram program in CodeGen_X86_64.translateProgram executable (leakCheck=LeakCheckEnabled)
 let executeX64Program program leakCheck=
  let enableLeakCheck=leakCheck=LeakCheckEnabled in
@@ -52,10 +52,10 @@ let executeARM64Program armTarget program leakCheck=
 let executeProgram target program leakCheck=match target with Platform.LinuxX86_64->executeX64Program program leakCheck|Platform.ARM64Backend armTarget->executeARM64Program armTarget program leakCheck
 let checkExpectation (exitCode,stdout,stderr)=function
  |ExpectedExitCode expected->if exitCode=expected then Ok () else Error (Printf.sprintf "Expected exit code %d, got %d" expected exitCode)
- |ExpectedStdout expected->let actual=HostText.trim stdout in if actual=expected then Ok () else Error ("Expected stdout '"^expected^"', got '"^actual^"'")
- |ExpectedStderr expected->let actual=HostText.trim stderr in if actual=expected then Ok () else Error ("Expected stderr '"^expected^"', got '"^actual^"'")
+ |ExpectedStdout expected->let actual=Text.trim stdout in if actual=expected then Ok () else Error ("Expected stdout '"^expected^"', got '"^actual^"'")
+ |ExpectedStderr expected->let actual=Text.trim stderr in if actual=expected then Ok () else Error ("Expected stderr '"^expected^"', got '"^actual^"'")
 let checkProcessExpectations test expectations=let* actual=executeProgram Platform.LinuxX86_64 test.program test.leakCheck in let* _=ResultList.traverse (checkExpectation actual) expectations in Ok ()
-let checkCodegenError test expected=match translate test.program test.leakCheck with Error msg when HostText.contains msg expected->Ok ()|Error msg->Error ("Expected codegen error containing '"^expected^"', got '"^msg^"'")|Ok _->Error ("Expected codegen error containing '"^expected^"', but translation succeeded")
+let checkCodegenError test expected=match translate test.program test.leakCheck with Error msg when Text.contains msg expected->Ok ()|Error msg->Error ("Expected codegen error containing '"^expected^"', got '"^msg^"'")|Ok _->Error ("Expected codegen error containing '"^expected^"', but translation succeeded")
 let runLIRExecutionTest test=match test.expectation with ExpectedProcessResult expectations->checkProcessExpectations test expectations|ExpectedCodegenError expected->checkCodegenError test expected
-let loadLIRExecutionTests path=if not (TestFileIO.exists path) then Error ("LIR-execution test file not found: "^path) else try parseLIRExecutionFileContent path (HostFile.readText path) with exn->Error ("Failed to read LIR-execution test file "^path^": "^HostFile.errorMessage path exn)
+let loadLIRExecutionTests path=if not (TestFileIO.exists path) then Error ("LIR-execution test file not found: "^path) else try parseLIRExecutionFileContent path (FileIO.readText path) with exn->Error ("Failed to read LIR-execution test file "^path^": "^Printexc.to_string exn)
 let tests testFiles=let testsForFile path=match loadLIRExecutionTests path with Error msg->["parse "^Filename.basename path,(fun ()->Error msg)]|Ok cases->List.map (fun test->test.name,(fun ()->runLIRExecutionTest test)) cases in Array.to_list testFiles |> List.sort StringOrder.compare |> List.concat_map testsForFile

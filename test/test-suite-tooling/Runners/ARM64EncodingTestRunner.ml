@@ -13,7 +13,7 @@
 [@@@warning "-4-42"]
 open Dark_compiler
 open ARM64EncodingFormat
-let loadARM64EncodingTest path=if not (TestFileIO.exists path) then Error ("Test file not found: "^path) else parseARM64EncodingTest (HostFile.readText path)
+let loadARM64EncodingTest path=if not (TestFileIO.exists path) then Error ("Test file not found: "^path) else parseARM64EncodingTest (FileIO.readText path)
 let hasAllDifferent values=List.length (List.sort_uniq Int32.compare values)=List.length values
 let formatMismatches mismatches=if mismatches=[] then "All encodings matched" else
  List.map (fun (i,instr,expected,actual)->Printf.sprintf "Instruction %d: %s\n      Expected: 0x%08lX, Got: 0x%08lX" i (PassTestRunner.prettyPrintARM64Instr (Symbolic.ofARM64 instr)) expected actual) mismatches |> String.concat "\n    "
@@ -23,7 +23,7 @@ let runARM64EncodingTest (test:arm64EncodingTest)=
  let failure message expected={TestOutcome.success=false;message;expected;actual=None} in
  let rec encodeInstructions index=function []->Ok []|instr::rest->match encodeInstruction instr with Error msg->Error msg|Ok [code]->Result.map (fun codes->code::codes) (encodeInstructions (index+1) rest)|Ok codes->Error (Printf.sprintf "Instruction %d: Expected single machine code word per instruction, got %d" index (List.length codes)) in
  let rec checkExpectedErrors index instructions expected=match instructions with []->Ok ()|instr::rest->match encodeInstruction instr with
- |Error msg when HostText.contains msg expected->checkExpectedErrors (index+1) rest expected
+ |Error msg when Text.contains msg expected->checkExpectedErrors (index+1) rest expected
  |Error msg->Error (Printf.sprintf "Instruction %d: encoding error did not contain expected text\nExpected: %s\nActual: %s" index expected msg)
  |Ok _->Error (Printf.sprintf "Instruction %d unexpectedly encoded: %s" index (PassTestRunner.prettyPrintARM64Instr (Symbolic.ofARM64 instr))) in
  match test.expectation with

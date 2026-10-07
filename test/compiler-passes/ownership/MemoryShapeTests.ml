@@ -6,10 +6,10 @@ open MemoryPlanning
 open ReleasePlanFingerprint
 type testResult = (unit,string) result
 module F = ANFTestFormatting
-let format = HostStructuralFormat.format
+let format = StructuralFormat.format
 let shape x=format (F.memoryModel_rcShape x)
 let plan x=format (F.memoryModel_rcReleasePlan x)
-let typ = HostStructuralFormat.semanticType
+let typ = StructuralFormat.semanticType
 let option enc value=format (match value with None -> StructuralValue.Union ("None",[]) | Some value -> StructuralValue.Union ("Some",[enc value]))
 let testRcShapeConstructionAndEquality () =
  let tupleShape=FixedBlock (16,[Immediate;DynamicString]) in let dictShape=DictRoot (DynamicString,TaggedListShape Immediate) in
@@ -70,7 +70,7 @@ let testRcSourceTypeFingerprintIsStructuralAndStable () =
  let samples=[AST.TInt64;AST.TString;AST.TList AST.TString;AST.TTuple [AST.TString;AST.TInt64];AST.TTuple [AST.TInt64;AST.TString];AST.TRecord ("Pair",[AST.TString;AST.TInt64]);AST.TSum ("Pair",[AST.TString;AST.TInt64]);AST.TDict (AST.TString,AST.TList AST.TBlob)] in
  let fingerprints=List.map rcSourceTypeFingerprint samples in
  if fingerprints<>List.map rcSourceTypeFingerprint samples then Error "RC source-type fingerprints were not deterministic"
- else if List.length (List.sort_uniq StringOrder.compare fingerprints)<>List.length samples then Error ("Distinct RC source types produced duplicate fingerprints: " ^ format (StructuralValue.Sequence (List.map2 (fun t hash -> StructuralValue.Tuple [HostStructuralFormat.semanticValue t;StructuralValue.Text hash]) samples fingerprints))) else Ok ()
+ else if List.length (List.sort_uniq StringOrder.compare fingerprints)<>List.length samples then Error ("Distinct RC source types produced duplicate fingerprints: " ^ format (StructuralValue.Sequence (List.map2 (fun t hash -> StructuralValue.Tuple [StructuralFormat.semanticValue t;StructuralValue.Text hash]) samples fingerprints))) else Ok ()
 let testRcReleasePlanFingerprintIsCompositionalAndStable () =
  let nestedList=RootRelease (24,TaggedList,TaggedListPayloadRelease (DynamicBufferRelease DynamicStringBuffer)) in
  let samples=[NoReleasePlan;DynamicBufferRelease DynamicBlobBuffer;RecursiveRelease (AST.TSum ("Tree",[AST.TString]));nestedList;RootRelease (16,DictHeap,DictPayloadRelease (DynamicBufferRelease DynamicStringBuffer,nestedList));RootRelease (24,GenericHeap,BoxedSumPayloadRelease (24,[FieldRelease (8,nestedList)],[{tag=0;fieldReleases=[]};{tag=1;fieldReleases=[FieldRelease (16,DynamicBufferRelease DynamicBlobBuffer)]}]))] in

@@ -10,11 +10,11 @@ let list encode values = Sequence (List.map encode values)
 let option encode = function None -> Union ("None", []) | Some value -> Union ("Some", [encode value])
 let int32 value = Scalar (string_of_int value)
 let int64 value = Scalar (Int64.to_string value ^ "L")
-let float64 value = Scalar (HostFloat.structural value)
+let float64 value = Scalar (FloatFormat.structural value)
 let functionId = AST.DiagnosticFormatting.func
 let rec vReg (value : MIR.vReg) = match value with
  | MIR.VReg (field0) -> union "VReg" "VReg" [int32 field0]
-and typedMIRParam (value : MIR.typedMIRParam) = record "TypedMIRParam" ["Reg", vReg value.MIR.reg; "Type", HostStructuralFormat.semanticValue value.MIR.typ]
+and typedMIRParam (value : MIR.typedMIRParam) = record "TypedMIRParam" ["Reg", vReg value.MIR.reg; "Type", StructuralFormat.semanticValue value.MIR.typ]
 and operand (value : MIR.operand) = match value with
  | MIR.Int64Const (field0) -> union "Operand" "Int64Const" [int64 field0]
  | MIR.BoolConst (field0) -> union "Operand" "BoolConst" [(fun value -> Scalar (string_of_bool value)) field0]
@@ -99,24 +99,24 @@ and cliOperation (value : MIR.cliOperation) = match value with
 and label (value : MIR.label) = match value with
  | MIR.Label (field0) -> union "Label" "Label" [text field0]
 and instr (value : MIR.instr) = match value with
- | MIR.Mov (field0, field1, field2) -> union "Instr" "Mov" [vReg field0; operand field1; option (fun value -> HostStructuralFormat.semanticValue value) field2]
- | MIR.BinOp (field0, field1, field2, field3, field4) -> union "Instr" "BinOp" [vReg field0; binOp field1; operand field2; operand field3; HostStructuralFormat.semanticValue field4]
+ | MIR.Mov (field0, field1, field2) -> union "Instr" "Mov" [vReg field0; operand field1; option (fun value -> StructuralFormat.semanticValue value) field2]
+ | MIR.BinOp (field0, field1, field2, field3, field4) -> union "Instr" "BinOp" [vReg field0; binOp field1; operand field2; operand field3; StructuralFormat.semanticValue field4]
  | MIR.UnaryOp (field0, field1, field2) -> union "Instr" "UnaryOp" [vReg field0; unaryOp field1; operand field2]
- | MIR.Call (field0, field1, field2, field3, field4) -> union "Instr" "Call" [vReg field0; functionId field1; list (fun value -> operand value) field2; list (fun value -> HostStructuralFormat.semanticValue value) field3; HostStructuralFormat.semanticValue field4]
- | MIR.TailCall (field0, field1, field2, field3) -> union "Instr" "TailCall" [functionId field0; list (fun value -> operand value) field1; list (fun value -> HostStructuralFormat.semanticValue value) field2; HostStructuralFormat.semanticValue field3]
- | MIR.IndirectCall (field0, field1, field2, field3, field4) -> union "Instr" "IndirectCall" [vReg field0; operand field1; list (fun value -> operand value) field2; list (fun value -> HostStructuralFormat.semanticValue value) field3; HostStructuralFormat.semanticValue field4]
- | MIR.IndirectTailCall (field0, field1, field2, field3) -> union "Instr" "IndirectTailCall" [operand field0; list (fun value -> operand value) field1; list (fun value -> HostStructuralFormat.semanticValue value) field2; HostStructuralFormat.semanticValue field3]
+ | MIR.Call (field0, field1, field2, field3, field4) -> union "Instr" "Call" [vReg field0; functionId field1; list (fun value -> operand value) field2; list (fun value -> StructuralFormat.semanticValue value) field3; StructuralFormat.semanticValue field4]
+ | MIR.TailCall (field0, field1, field2, field3) -> union "Instr" "TailCall" [functionId field0; list (fun value -> operand value) field1; list (fun value -> StructuralFormat.semanticValue value) field2; StructuralFormat.semanticValue field3]
+ | MIR.IndirectCall (field0, field1, field2, field3, field4) -> union "Instr" "IndirectCall" [vReg field0; operand field1; list (fun value -> operand value) field2; list (fun value -> StructuralFormat.semanticValue value) field3; StructuralFormat.semanticValue field4]
+ | MIR.IndirectTailCall (field0, field1, field2, field3) -> union "Instr" "IndirectTailCall" [operand field0; list (fun value -> operand value) field1; list (fun value -> StructuralFormat.semanticValue value) field2; StructuralFormat.semanticValue field3]
  | MIR.ClosureAlloc (field0, field1, field2) -> union "Instr" "ClosureAlloc" [vReg field0; functionId field1; list (fun value -> operand value) field2]
- | MIR.ClosureCall (field0, field1, field2, field3, field4) -> union "Instr" "ClosureCall" [vReg field0; operand field1; list (fun value -> operand value) field2; list (fun value -> HostStructuralFormat.semanticValue value) field3; HostStructuralFormat.semanticValue field4]
- | MIR.ClosureTailCall (field0, field1, field2) -> union "Instr" "ClosureTailCall" [operand field0; list (fun value -> operand value) field1; list (fun value -> HostStructuralFormat.semanticValue value) field2]
+ | MIR.ClosureCall (field0, field1, field2, field3, field4) -> union "Instr" "ClosureCall" [vReg field0; operand field1; list (fun value -> operand value) field2; list (fun value -> StructuralFormat.semanticValue value) field3; StructuralFormat.semanticValue field4]
+ | MIR.ClosureTailCall (field0, field1, field2) -> union "Instr" "ClosureTailCall" [operand field0; list (fun value -> operand value) field1; list (fun value -> StructuralFormat.semanticValue value) field2]
  | MIR.HeapAlloc (field0, field1) -> union "Instr" "HeapAlloc" [vReg field0; int32 field1]
- | MIR.HeapStore (field0, field1, field2, field3) -> union "Instr" "HeapStore" [vReg field0; int32 field1; operand field2; option (fun value -> HostStructuralFormat.semanticValue value) field3]
- | MIR.HeapLoad (field0, field1, field2, field3) -> union "Instr" "HeapLoad" [vReg field0; vReg field1; int32 field2; option (fun value -> HostStructuralFormat.semanticValue value) field3]
+ | MIR.HeapStore (field0, field1, field2, field3) -> union "Instr" "HeapStore" [vReg field0; int32 field1; operand field2; option (fun value -> StructuralFormat.semanticValue value) field3]
+ | MIR.HeapLoad (field0, field1, field2, field3) -> union "Instr" "HeapLoad" [vReg field0; vReg field1; int32 field2; option (fun value -> StructuralFormat.semanticValue value) field3]
  | MIR.StringConcat (field0, field1, field2, field3) -> union "Instr" "StringConcat" [vReg field0; operand field1; operand field2; list (fun value -> operand value) field3]
  | MIR.CanonicalBufferEq (field0, field1, field2, field3) -> union "Instr" "CanonicalBufferEq" [vReg field0; ANFTestFormatting.memoryModel_canonicalBufferKind field1; operand field2; operand field3]
  | MIR.RefCountInc (field0, field1, field2, field3) -> union "Instr" "RefCountInc" [vReg field0; int32 field1; rcKind field2; option (fun value -> ANFTestFormatting.memoryModel_rcMetadata value) field3]
  | MIR.RefCountDec (field0, field1, field2, field3) -> union "Instr" "RefCountDec" [vReg field0; int32 field1; rcKind field2; option (fun value -> ANFTestFormatting.memoryModel_rcMetadata value) field3]
- | MIR.Print (field0, field1) -> union "Instr" "Print" [operand field0; HostStructuralFormat.semanticValue field1]
+ | MIR.Print (field0, field1) -> union "Instr" "Print" [operand field0; StructuralFormat.semanticValue field1]
  | MIR.StdoutWrite (field0, field1, field2) -> union "Instr" "StdoutWrite" [int32 field0; operand field1; (fun value -> Scalar (string_of_bool value)) field2]
  | MIR.StdinReadLine (field0) -> union "Instr" "StdinReadLine" [vReg field0]
  | MIR.RuntimeError (field0) -> union "Instr" "RuntimeError" [text field0]
@@ -139,11 +139,11 @@ and instr (value : MIR.instr) = match value with
  | MIR.MappedAlloc (field0, field1) -> union "Instr" "MappedAlloc" [vReg field0; operand field1]
  | MIR.RawFree (field0) -> union "Instr" "RawFree" [operand field0]
  | MIR.MappedFree (field0) -> union "Instr" "MappedFree" [operand field0]
- | MIR.RawGet (field0, field1, field2, field3) -> union "Instr" "RawGet" [vReg field0; operand field1; operand field2; option (fun value -> HostStructuralFormat.semanticValue value) field3]
+ | MIR.RawGet (field0, field1, field2, field3) -> union "Instr" "RawGet" [vReg field0; operand field1; operand field2; option (fun value -> StructuralFormat.semanticValue value) field3]
  | MIR.RawGetByte (field0, field1, field2) -> union "Instr" "RawGetByte" [vReg field0; operand field1; operand field2]
  | MIR.RawWriteWord (field0, field1, field2) -> union "Instr" "RawWriteWord" [operand field0; operand field1; operand field2]
  | MIR.RawWriteByte (field0, field1, field2) -> union "Instr" "RawWriteByte" [operand field0; operand field1; operand field2]
- | MIR.RawSlotInit (field0, field1, field2, field3) -> union "Instr" "RawSlotInit" [operand field0; operand field1; operand field2; HostStructuralFormat.semanticValue field3]
+ | MIR.RawSlotInit (field0, field1, field2, field3) -> union "Instr" "RawSlotInit" [operand field0; operand field1; operand field2; StructuralFormat.semanticValue field3]
  | MIR.StringToRawPtr (field0, field1) -> union "Instr" "StringToRawPtr" [vReg field0; operand field1]
  | MIR.RawPtrToString (field0, field1) -> union "Instr" "RawPtrToString" [vReg field0; operand field1]
  | MIR.BlobToRawPtr (field0, field1) -> union "Instr" "BlobToRawPtr" [vReg field0; operand field1]
@@ -163,7 +163,7 @@ and instr (value : MIR.instr) = match value with
  | MIR.Sleep (field0, field1, field2) -> union "Instr" "Sleep" [int32 field0; vReg field1; operand field2]
  | MIR.CliNative (field0, field1, field2) -> union "Instr" "CliNative" [vReg field0; cliOperation field1; list (fun value -> operand value) field2]
  | MIR.FloatToString (field0, field1) -> union "Instr" "FloatToString" [vReg field0; operand field1]
- | MIR.Phi (field0, field1, field2) -> union "Instr" "Phi" [vReg field0; list (fun value -> (let part0, part1 = value in tuple [operand part0; label part1])) field1; option (fun value -> HostStructuralFormat.semanticValue value) field2]
+ | MIR.Phi (field0, field1, field2) -> union "Instr" "Phi" [vReg field0; list (fun value -> (let part0, part1 = value in tuple [operand part0; label part1])) field1; option (fun value -> StructuralFormat.semanticValue value) field2]
  | MIR.CoverageHit (field0) -> union "Instr" "CoverageHit" [int32 field0]
 and terminator (value : MIR.terminator) = match value with
  | MIR.Ret (field0) -> union "Terminator" "Ret" [operand field0]
@@ -171,10 +171,10 @@ and terminator (value : MIR.terminator) = match value with
  | MIR.Jump (field0) -> union "Terminator" "Jump" [label field0]
 and basicBlock (value : MIR.basicBlock) = record "BasicBlock" ["Label", label value.MIR.label; "Instrs", list (fun value -> instr value) value.MIR.instrs; "Terminator", terminator value.MIR.terminator]
 and cfg (value : MIR.cfg) = record "CFG" ["Entry", label value.MIR.entry; "Blocks", Union ("map", [list (fun (key, value) -> tuple [label key; basicBlock value]) (MIR.LabelMap.bindings value.MIR.blocks)])]
-and functionDef (value : MIR.functionDef) = record "Function" ["Id", functionId value.MIR.id; "Name", text value.MIR.name; "TypedParams", list (fun value -> typedMIRParam value) value.MIR.typedParams; "ReturnType", HostStructuralFormat.semanticValue value.MIR.returnType; "CFG", cfg value.MIR.cfg; "FloatRegs", Union ("set", [list int32 (MIR.IntSet.elements value.MIR.floatRegs)])]
-and variantInfo (value : MIR.variantInfo) = record "VariantInfo" ["Name", text value.MIR.name; "Tag", int32 value.MIR.tag; "Payload", option (fun value -> HostStructuralFormat.semanticValue value) value.MIR.payload; "FieldCount", int32 value.MIR.fieldCount]
+and functionDef (value : MIR.functionDef) = record "Function" ["Id", functionId value.MIR.id; "Name", text value.MIR.name; "TypedParams", list (fun value -> typedMIRParam value) value.MIR.typedParams; "ReturnType", StructuralFormat.semanticValue value.MIR.returnType; "CFG", cfg value.MIR.cfg; "FloatRegs", Union ("set", [list int32 (MIR.IntSet.elements value.MIR.floatRegs)])]
+and variantInfo (value : MIR.variantInfo) = record "VariantInfo" ["Name", text value.MIR.name; "Tag", int32 value.MIR.tag; "Payload", option (fun value -> StructuralFormat.semanticValue value) value.MIR.payload; "FieldCount", int32 value.MIR.fieldCount]
 and typeVariants (value : MIR.typeVariants) = record "TypeVariants" ["TypeParams", list (fun value -> text value) value.MIR.typeParams; "Variants", list (fun value -> variantInfo value) value.MIR.variants]
-and recordField (value : MIR.recordField) = record "RecordField" ["Name", text value.MIR.name; "Type", HostStructuralFormat.semanticValue value.MIR.typ]
+and recordField (value : MIR.recordField) = record "RecordField" ["Name", text value.MIR.name; "Type", StructuralFormat.semanticValue value.MIR.typ]
 and variantRegistry (value : MIR.variantRegistry) = Union ("map", [list (fun (key, value) -> tuple [text key; typeVariants value]) (StringOrder.Map.bindings value)])
 and recordRegistry (value : MIR.recordRegistry) = Union ("map", [list (fun (key, value) -> tuple [text key; list recordField value]) (StringOrder.Map.bindings value)])
 and program (value : MIR.program) = match value with

@@ -32,9 +32,9 @@ type dominators = label LM.t
 type dominanceFrontier = LS.t LM.t
 type ssaConstructionTiming = {phase : string; elapsedMs : float}
 let add left right = Int32.to_int (Int32.add (Int32.of_int left) (Int32.of_int right))
-let timePhase enabled phase reversed action = if not enabled then action (), reversed else let started = HostClock.milliseconds () in let result = action () in result, {phase; elapsedMs = HostClock.milliseconds () -. started} :: reversed
+let timePhase enabled phase reversed action = if not enabled then action (), reversed else let started = (Int64.to_float (Mtime_clock.elapsed_ns ()) /. 1e6) in let result = action () in result, {phase; elapsedMs = (Int64.to_float (Mtime_clock.elapsed_ns ()) /. 1e6) -. started} :: reversed
 let labelName (Label value) = value
-let structuralLabel (Label value) = HostStructuralFormat.format (HostStructuralFormat.Union ("Label", [HostStructuralFormat.Text value]))
+let structuralLabel (Label value) = StructuralFormat.format (StructuralFormat.Union ("Label", [StructuralFormat.Text value]))
 let structuralReg (VReg value) = "VReg " ^ string_of_int value
 let requiredBlock context blocks label = match LM.find_opt label blocks with Some block -> block | None -> Crash.crash ("SSA: Missing CFG block " ^ labelName label ^ " while " ^ context)
 (*

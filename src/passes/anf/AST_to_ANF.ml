@@ -33,7 +33,7 @@ module LowerOwnership = LowerOwnershipVariants.Make (ListLiveness.Identity)
 let ( let* ) = Result.bind
 let emptyScopes () = Destruction.inertFunctionScopes M.empty FunctionIdMap.empty
 let measure recorder name operation =
- let start = HostClock.milliseconds () in let result = operation () in let elapsed = HostClock.milliseconds () -. start in
+ let start = (Int64.to_float (Mtime_clock.elapsed_ns ()) /. 1e6) in let result = operation () in let elapsed = (Int64.to_float (Mtime_clock.elapsed_ns ()) /. 1e6) -. start in
  Option.iter (fun record -> record name elapsed) recorder; result
 let toANFWithMetadata types expr gen env registry variants functions modules =
  let names = FunctionIdMap.map (fun _ (name, _) -> name) functions in
@@ -61,9 +61,9 @@ let convertFunctionWithSumTypeNames recordTiming symbols sums inert (func : C.fu
  let unbound = measure recordTiming "AST -> ANF detail: Function free-variable analysis" (fun () -> ClosureAnalysis.freeVars func.C.body (ClosureAnalysis.BindingSet.of_list (List.map fst params))) in
  let* body, gen = if ClosureAnalysis.BindingSet.is_empty unbound then
   let types = measure recordTiming "AST -> ANF detail: Function type-name projection" (fun () -> R.typeNamesFromSymbols symbols) in
-  let start = HostClock.milliseconds () in
+  let start = (Int64.to_float (Mtime_clock.elapsed_ns ()) /. 1e6) in
   let result = LoweringExpressions.toANFCore ids sums types inert func.C.body gen env registry variants functions names modules in
-  let elapsed = HostClock.milliseconds () -. start in
+  let elapsed = (Int64.to_float (Mtime_clock.elapsed_ns ()) /. 1e6) -. start in
   Option.iter (fun record -> record "AST -> ANF detail: Function expression lowering" elapsed; record ("AST -> ANF function: " ^ func.C.name) elapsed) recordTiming;
   result
  else let names = ClosureAnalysis.BindingSet.elements unbound |> List.map (fun id -> Option.value ~default:"<unknown-binding>" (C.bindingName id symbols)) |> String.concat ", " in

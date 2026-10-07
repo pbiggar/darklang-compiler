@@ -4,7 +4,7 @@ open MIR
 module F = MIROptimizationFacts
 module T = MIRLoopTopology
 module Functions = SpecializationIdentity.FunctionSet
-let timestamp () = Int64.of_float (HostClock.milliseconds () *. 1000000.)
+let timestamp () = Int64.of_float ((Int64.to_float (Mtime_clock.elapsed_ns ()) /. 1e6) *. 1000000.)
 (*
    Run all optimizations in a single pass (returns whether anything changed).
 *)

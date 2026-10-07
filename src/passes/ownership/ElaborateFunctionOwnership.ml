@@ -153,7 +153,7 @@ let elaborateFunction dialect ownership (boundary : H.valueId O.functionSignatur
  let body = {O.body = {body.O.body with H.operations = unusedParameters @ body.O.body.H.operations}} in
  Ok {O.definition = {H.id = definition.H.id; name = definition.H.name; body}; ownership = boundary}
 let elaborateFunctionsWithTrace recordTiming dialect definitions =
- let measure name operation = let start = HostClock.milliseconds () in let result = operation () in let elapsed = HostClock.milliseconds () -. start in Option.iter (fun record -> record name elapsed) recordTiming; result in
+ let measure name operation = let start = (Int64.to_float (Mtime_clock.elapsed_ns ()) /. 1e6) in let result = operation () in let elapsed = (Int64.to_float (Mtime_clock.elapsed_ns ()) /. 1e6) -. start in Option.iter (fun record -> record name elapsed) recordTiming; result in
  let* boundaries, ownership = measure "Ownership detail: Boundary inference" (fun () -> convergeBoundaries dialect definitions) in
  let* functions = measure "Ownership detail: Ownership elaboration" (fun () -> List.fold_left (fun result (definition : 'block H.functionDef) ->
   let* functions = result in match F.tryFind definition.H.id boundaries with

@@ -261,5 +261,5 @@ let format source parsed =
   let accept candidate fallback = match WrittenParsing.parse Validation.Script candidate with
     | Ok validated when syntaxKey (Validation.ValidatedSourceFile.toWrittenTypes validated) = originalKey -> candidate
     | Ok _ | Error _ -> fallback in
-  let normalized = accept (HostText.normalize source) source in
+  let normalized = accept (Text.normalize source) source in
   accept (stripAtomicParens normalized) normalized

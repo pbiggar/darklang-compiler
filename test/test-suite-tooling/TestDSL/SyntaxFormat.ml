@@ -9,11 +9,11 @@ let caseFromSections path sections =
   let values = List.fold_left (fun values (name, value) -> StringOrder.Map.add name value values) StringOrder.Map.empty sections in
   let allowed = ["NAME"; "SOURCE"; "EXPECT-ERROR"; "EXPECTED"; "ROUNDTRIP"] in
   let unknown = List.find_opt (fun (name, _) -> not (List.mem name allowed)) sections in
-  let required name = match StringOrder.Map.find_opt name values with Some value -> Ok (HostText.trim value) | None -> Error ("Missing required syntax section: " ^ name) in
+  let required name = match StringOrder.Map.find_opt name values with Some value -> Ok (Text.trim value) | None -> Error ("Missing required syntax section: " ^ name) in
   match unknown, required "NAME", required "SOURCE" with
   | Some (name, _), _, _ -> Error ("Unknown syntax section: " ^ name)
   | None, Ok name, Ok source ->
-      let expectedError = Option.map HostText.trim (StringOrder.Map.find_opt "EXPECT-ERROR" values) in
+      let expectedError = Option.map Text.trim (StringOrder.Map.find_opt "EXPECT-ERROR" values) in
       let expectedFormat = Option.map normalizeLineEndings (StringOrder.Map.find_opt "EXPECTED" values) in
       let roundtrip = StringOrder.Map.mem "ROUNDTRIP" values in
       if Option.is_some expectedError && (Option.is_some expectedFormat || roundtrip) then Error "EXPECT-ERROR cannot be combined with formatting or roundtrip"

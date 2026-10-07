@@ -17,7 +17,7 @@ let testCompactRecordFieldsStartAtOffsetZero ()=
  match generatePreparedARM64 target program with Error error->Error ("Compact record ARM64 lowering failed: "^error)|Ok instructions->
  let offsets=List.filter_map (function S.STR (S.X9,S.X1,offset)->Some offset|_->None) instructions in
  if offsets=[0;8] then Ok () else Error "Expected compact record field stores at offsets 0 and 8 only"
-let emitsPlannedListHelperLabel instrs=List.exists (function S.Label label|S.BL label->HostText.startsWith label "__dark_list_refcount_dec_plan_"|_->false) instrs
+let emitsPlannedListHelperLabel instrs=List.exists (function S.Label label|S.BL label->Text.startsWith label "__dark_list_refcount_dec_plan_"|_->false) instrs
 let testSmallGenericReleasePlanRemainsInline ()=
  let valueType=AST.TTuple [AST.TString] in
  let program=makeSimpleProgramWithVariants [L.RefCountDec (L.Physical L.X0,8,L.GenericHeap,Some (rcMetadata valueType))] M.empty |> ARM64PrepareFunctions.prepareARM64Program in
@@ -45,11 +45,11 @@ let testGenericReleaseHelperPreservesCachedInstructions ()=
  |Error error,_|_,Error error->Error ("Generic release helper lowering failed: "^error)
  |Ok uncachedProgram,Ok cachedProgram->
  let uncached=G.generatedProgramInstructions uncachedProgram and cached=G.generatedProgramInstructions cachedProgram in
- let calls=List.filter_map (function S.BL label when HostText.startsWith label "__dark_generic_refcount_dec_plan_"->Some label|_->None) cached in
- let labels=List.filter_map (function S.Label label when HostText.startsWith label "__dark_generic_refcount_dec_plan_"->Some label|_->None) cached in
+ let calls=List.filter_map (function S.BL label when Text.startsWith label "__dark_generic_refcount_dec_plan_"->Some label|_->None) cached in
+ let labels=List.filter_map (function S.Label label when Text.startsWith label "__dark_generic_refcount_dec_plan_"->Some label|_->None) cached in
  if cached<>uncached then Error "Caching changed outlined generic release instructions" else
  match List.of_seq (Queue.to_seq generated) with
- |["_start";helper] when HostText.startsWith helper "__dark_generic_refcount_dec_plan_"->
+ |["_start";helper] when Text.startsWith helper "__dark_generic_refcount_dec_plan_"->
    (match calls,labels with [first;second],[helper] when first=helper && second=helper->Ok ()|_->Error "Expected two calls to one generic release helper")
  |_->Error "Expected the caller and one generic helper in the function cache"
 let testOutlinedGenericReleaseUsesAllocatorLiveness ()=
@@ -74,5 +74,5 @@ let testGenericReleaseHelpersPreserveOwnershipPolicy ()=
   let label=instructions [func] |> List.find_map (function L.Call (_,id,_)->FunctionIdMap.tryFind id namesById|_->None) in
   let specs=requirements func |> Option.map (fun r->M.bindings r.L.plannedGenericDecHelpers |> List.map snd) |> Option.value ~default:[] in label,specs in
  match List.map helperInfo functions with
- |[Some owned,[ownedSpec];Some borrowed,[borrowedSpec]] when HostText.endsWith owned "_owned" && HostText.endsWith borrowed "_borrowed" && ownedSpec.L.ownsSinglePayloadSum && not borrowedSpec.L.ownsSinglePayloadSum->Ok ()
+ |[Some owned,[ownedSpec];Some borrowed,[borrowedSpec]] when Text.endsWith owned "_owned" && Text.endsWith borrowed "_borrowed" && ownedSpec.L.ownsSinglePayloadSum && not borrowedSpec.L.ownsSinglePayloadSum->Ok ()
  |_->Error "Expected distinct owned and borrowed generic release helpers"

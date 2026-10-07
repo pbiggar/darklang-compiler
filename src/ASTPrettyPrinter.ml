@@ -3,13 +3,13 @@
 open AST
 type literalEscapeContext=StringContent|InterpolatedStringText|CharContent
 let escapeLiteralContent context input=
- let units=HostText.scalars input in
+ let units=Text.scalars input in
  let output=Buffer.create (String.length input) in
  Array.iter (fun c->Buffer.add_string output (match c,context with
- |92,_->"\\\\"|34,(StringContent|InterpolatedStringText)->"\\\""|39,CharContent->"\\'"|10,_->"\\n"|13,_->"\\r"|9,_->"\\t"|0,_->"\\0"|123,InterpolatedStringText->"\\{"|125,InterpolatedStringText->"\\}"|_->HostText.ofScalars [|c|])) units;
+ |92,_->"\\\\"|34,(StringContent|InterpolatedStringText)->"\\\""|39,CharContent->"\\'"|10,_->"\\n"|13,_->"\\r"|9,_->"\\t"|0,_->"\\0"|123,InterpolatedStringText->"\\{"|125,InterpolatedStringText->"\\}"|_->Text.ofScalars [|c|])) units;
  Buffer.contents output
 let formatFloatLiteral value=
- let raw=HostFloat.roundTrip value in
+ let raw=FloatFormat.roundTrip value in
  if String.exists (fun c -> c = 'N' || c = 'I') raw || String.contains raw '.' || String.contains raw 'E' || String.contains raw 'e' then raw else raw^".0"
 let formatIdentifierSegment name=NameSyntax.formatIdentifier (NameSyntax.identifierFromText name)
 let formatIdentifierPath name=match NameSyntax.tryParseLegacySpelling name with Some parsed->NameSyntax.formatQualifiedName parsed|None->formatIdentifierSegment name

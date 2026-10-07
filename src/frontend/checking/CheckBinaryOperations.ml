@@ -40,7 +40,7 @@ let check checkExpr sums env registry lookup generic warnings modules aliases ex
  let runtime value = tryExtractKnownTestRuntimeErrorMessage M.empty value in
  let numeric typ = match Types.resolveType aliases typ with TInt8 | TInt16 | TInt32 | TInt64 | TInt128 | TInt | TUInt8 | TUInt16 | TUInt32 | TUInt64 | TUInt128 | TFloat64 as numeric -> Some numeric | _ -> None in
  let integer = function TInt8 | TInt16 | TInt32 | TInt64 | TInt | TUInt8 | TUInt16 | TUInt32 | TUInt64 -> true | _ -> false in
- let invariant kind = Crash.crash ("Non-" ^ kind ^ " operator reached " ^ kind ^ " type-checking path: " ^ HostStructuralFormat.binOp op) in
+ let invariant kind = Crash.crash ("Non-" ^ kind ^ " operator reached " ^ kind ^ " type-checking path: " ^ StructuralFormat.binOp op) in
  match op with
  | Add | Sub | Mul | Div | Mod ->
    let name = match op with Add -> "+" | Sub -> "-" | Mul -> "*" | Div -> "/" | Mod -> "%" | _ -> invariant "arithmetic" in

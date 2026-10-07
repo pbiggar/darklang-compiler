@@ -313,11 +313,11 @@ let selectClosureTailCall closure args argTypes state=
 let operandValue=function
  | M.Int64Const n -> StructuralValue.Union ("Int64Const",[StructuralValue.Scalar (Int64.to_string n^"L")])
  | M.BoolConst b -> StructuralValue.Union ("BoolConst",[StructuralValue.Scalar (string_of_bool b)])
- | M.FloatSymbol value -> StructuralValue.Union ("FloatSymbol",[StructuralValue.Scalar (HostFloat.structural value)])
+ | M.FloatSymbol value -> StructuralValue.Union ("FloatSymbol",[StructuralValue.Scalar (FloatFormat.structural value)])
  | M.StringSymbol value -> StructuralValue.Union ("StringSymbol",[StructuralValue.Text value])
  | M.Register (M.VReg id) -> StructuralValue.Union ("Register",[StructuralValue.Union ("VReg",[StructuralValue.Scalar (string_of_int id)])])
  | M.FuncAddr name -> StructuralValue.Union ("FuncAddr",[AST.DiagnosticFormatting.func name])
-let operandText operand=HostStructuralFormat.format (operandValue operand)
+let operandText operand=StructuralFormat.format (operandValue operand)
 let selectPrint src typ variants records ctx state=
  let finish instrs=Ok ([L.SaveRegs ([],[])]@instrs@[L.RestoreRegs ([],[])]@releasePrintedValue ctx src typ,state) in
  let finishReg reg instrs=Ok ([L.SaveRegs ([],[])]@instrs@[L.RestoreRegs ([],[])]@releasePrintedValueFromReg ctx reg typ,state) in
@@ -342,10 +342,10 @@ let selectPrint src typ variants records ctx state=
  | AST.TBool -> [L.PrintBoolNoNewline x0]
  | AST.TFloat64 -> [L.GpToFp (L.FPhysical L.D0,x0);L.PrintFloatNoNewline (L.FPhysical L.D0)]
  | AST.TString | AST.TChar | AST.TInt128 | AST.TUInt128 -> [L.PrintHeapStringNoNewline x0]
- | AST.TList _ -> Crash.crash ("Unsupported nested list tuple element type for printing: "^HostStructuralFormat.semanticType elemType)
- | other -> Crash.crash ("Unsupported tuple element type for printing: "^HostStructuralFormat.semanticType other) in separator@[load]@print) elems) in
+ | AST.TList _ -> Crash.crash ("Unsupported nested list tuple element type for printing: "^StructuralFormat.semanticType elemType)
+ | other -> Crash.crash ("Unsupported tuple element type for printing: "^StructuralFormat.semanticType other) in separator@[load]@print) elems) in
  finishReg x19 (saveAddr@[L.PrintChars [40]]@elemInstrs@[L.PrintChars [41;10]])
- | AST.TList elem when elem=AST.TInt128 || elem=AST.TUInt128 -> Crash.crash ("Unsupported Int128/UInt128 list element type for printing: "^HostStructuralFormat.semanticType elem)
+ | AST.TList elem when elem=AST.TInt128 || elem=AST.TUInt128 -> Crash.crash ("Unsupported Int128/UInt128 list element type for printing: "^StructuralFormat.semanticType elem)
  | AST.TList elem -> finishReg x19 (moveTo x19@[L.PrintList (x19,elem)])
  | AST.TSum (name,args) -> (match SM.find_opt name variants with
  | None -> Crash.crash ("Missing sum variant metadata for printing sum type '"^name^"'")
@@ -726,7 +726,7 @@ let selectBlocksWithModuloChecks arch (_functionName:string) (block:M.basicBlock
 let selectCFG arch functionName (cfg:M.cfg) variants records ctx returnType floatRegs errorLabels state=
  let entry=convertLabel cfg.M.entry in
  match M.LabelMap.find_opt cfg.M.entry cfg.M.blocks with
- | None -> let M.Label label=cfg.M.entry in Error ("MIR to LIR: missing entry block "^HostStructuralFormat.format (StructuralValue.Union ("Label",[StructuralValue.Text label])))
+ | None -> let M.Label label=cfg.M.entry in Error ("MIR to LIR: missing entry block "^StructuralFormat.format (StructuralValue.Union ("Label",[StructuralValue.Text label])))
  | Some _ ->
  let rec build remaining currentState blocksAcc labelsAcc=match remaining with
  | [] -> Ok (List.concat (List.rev blocksAcc),L.LabelMap.of_list labelsAcc,currentState)
@@ -772,8 +772,8 @@ let checkCallArgLimits functions=
    Will be determined by register allocation
 *)
 let convertFunctionsForWithTrace phaseRecorder arch functions variants records ctx=
- let startPhase ()=Option.map (fun _ -> HostClock.milliseconds ()) phaseRecorder in
- let recordPhase name timer=match phaseRecorder,timer with Some record,Some start -> let elapsed=HostClock.milliseconds ()-.start in record name elapsed | _ -> () in
+ let startPhase ()=Option.map (fun _ -> (Int64.to_float (Mtime_clock.elapsed_ns ()) /. 1e6)) phaseRecorder in
+ let recordPhase name timer=match phaseRecorder,timer with Some record,Some start -> let elapsed=(Int64.to_float (Mtime_clock.elapsed_ns ()) /. 1e6)-.start in record name elapsed | _ -> () in
  let parameterTimer=startPhase () in let parameterCheck=checkParameterLimits functions in recordPhase "MIR -> LIR Parameter Limit Check" parameterTimer;
  let* ()=parameterCheck in
  let callTimer=startPhase () in let callCheck=checkCallArgLimits functions in recordPhase "MIR -> LIR Call Argument Limit Check" callTimer;
@@ -803,8 +803,8 @@ let toLIRFunctionsForWithTraceAndRcRegistries phaseRecorder arch recordFields re
    Convert a MIR program to LIR for a concrete target architecture.
 *)
 let toLIRForWithTrace phaseRecorder arch ((M.Program (_,variants,records)) as program)=
- let startPhase ()=Option.map (fun _ -> HostClock.milliseconds ()) phaseRecorder in
- let recordPhase name timer=match phaseRecorder,timer with Some record,Some start -> let elapsed=HostClock.milliseconds ()-.start in record name elapsed | _ -> () in
+ let startPhase ()=Option.map (fun _ -> (Int64.to_float (Mtime_clock.elapsed_ns ()) /. 1e6)) phaseRecorder in
+ let recordPhase name timer=match phaseRecorder,timer with Some record,Some start -> let elapsed=(Int64.to_float (Mtime_clock.elapsed_ns ()) /. 1e6)-.start in record name elapsed | _ -> () in
  let+ functions=toLIRFunctionsForWithTrace phaseRecorder arch program in
  let timer=startPhase () in
  let variants=SM.map (fun (variants:M.typeVariants) -> let values=List.map (fun (variant:M.variantInfo) -> ({L.name=variant.M.name;tag=variant.M.tag;payload=variant.M.payload;fieldCount=variant.M.fieldCount} : L.variantInfo)) variants.M.variants in ({L.typeParams=variants.M.typeParams;variants=values} : L.typeVariants)) variants in

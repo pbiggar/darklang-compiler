@@ -1,7 +1,8 @@
+(* Timing fields store signed nanoseconds; accounting differences may be negative. *)
 (*  Options.fs - Define compilation options, reports, and timing records independently of backend implementation. *)
 type passTiming = {
     pass: string;
-    elapsed: HostTimeSpan.t;
+    elapsed: int64;
 }
 (*  Recorder for compiler pass timings *)
 type passTimingRecorder = passTiming -> unit
@@ -10,7 +11,7 @@ type executionOutput = {
     exitCode: int;
     stdout: string;
     stderr: string;
-    runtimeTime: HostTimeSpan.t;
+    runtimeTime: int64;
 }
 (*  Finite stdin supplied to a captured native execution. *)
 type executionInput =
@@ -30,7 +31,7 @@ let defaultWarningSettings : AST.warningSettings = AST.defaultWarningSettings
 type compileReport = {
     target: Platform.target;
     result: (bytes,string) result;
-    compileTime: HostTimeSpan.t;
+    compileTime: int64;
 }
 (*  Compiler options for controlling optimization behavior *)
 type compilerOptions = {
@@ -120,7 +121,7 @@ let defaultOptions : compilerOptions = {
 (*  runner owns one per suite). No compiler-global cache is retained. *)
 type codegenFunctionMetric = {
     functionName: string;
-    elapsed: HostTimeSpan.t;
+    elapsed: int64;
     lirInstructionCount: int;
     symbolicInstructionCount: int;
 }
@@ -132,5 +133,5 @@ type codegenLirOpMetric = {
     detail: string;
     occurrences: int;
     symbolicInstructionCount: int;
-    elapsed: HostTimeSpan.t;
+    elapsed: int64;
 }

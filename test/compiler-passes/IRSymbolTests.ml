@@ -18,7 +18,7 @@ let testFunctionIdentitiesComposeAcrossUnits ()=
  let second,symbols=CheckedAST.internFunction name symbols in let next,_=CheckedAST.internFunction "User.Module.next" symbols in
  if first=second && AST.functionIdValue next=Int64.add (AST.functionIdValue first) 1L then Ok () else Error "Threaded function allocation did not preserve and advance identities"
 let instructions func=L.LabelMap.bindings func.L.cfg.L.blocks |> List.concat_map (fun (_,block)->block.L.instrs)
-let formatInstructions values=HostStructuralFormat.format (StructuralValue.Sequence (List.map LIRTestFormatting.instr values))
+let formatInstructions values=StructuralFormat.format (StructuralValue.Sequence (List.map LIRTestFormatting.instr values))
 let testMirToLirSymbolicOperands ()=
  let label=M.Label "entry" in
  let instrs=[M.Mov (M.VReg 0,M.StringSymbol "mir_symbolic",Some AST.TString);M.Mov (M.VReg 1,M.FloatSymbol 4.5,Some AST.TFloat64)] in
@@ -36,7 +36,7 @@ let testMirToLirReportsMissingEntryBlock ()=
  let cfg:M.cfg={M.entry;blocks=M.LabelMap.singleton actual block} in
  let func:M.functionDef={M.id=TestIds.functionIdForName "missing_entry";name="missing_entry";typedParams=[];returnType=AST.TInt64;cfg;floatRegs=M.IntSet.empty} in
  match MIR_to_LIR.toLIR (M.Program ([func],StringOrder.Map.empty,StringOrder.Map.empty)) with
- |Error error when HostText.contains error "missing entry block"->Ok ()
+ |Error error when Text.contains error "missing entry block"->Ok ()
  |Error error->Error ("Expected missing entry block error, got '"^error^"'")
  |Ok _->Error "Expected MIR→LIR to reject a CFG whose entry block is absent"
 (* Native 64-bit variable shifts already mask their count in both supported

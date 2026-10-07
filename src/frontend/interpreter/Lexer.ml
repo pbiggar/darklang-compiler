@@ -29,8 +29,8 @@ type spannedToken = {
   token : token; text : string; range : tokenRange;
   docComment : string option; leadingTrivia : trivia list;
 }
-let units = HostText.scalars
-let substring source start length = HostText.ofScalars (Array.sub source start length)
+let units = Text.scalars
+let substring source start length = Text.ofScalars (Array.sub source start length)
 let is source index character = source.(index) = Char.code character
 (*
    Decode the escape starting at `source[escapeStartIndex]`, which must be `\`.
@@ -101,7 +101,7 @@ let unescape text =
       | Some (count, decoded) -> Buffer.add_string buffer decoded; append (index + count)
       | None ->
           Buffer.add_string buffer (substring source index 1); append (index + 1)
-  in append 0; HostText.normalize (Buffer.contents buffer)
+  in append 0; Text.normalize (Buffer.contents buffer)
 (*
    Does the raw inner text of a regular string/char contain an invalid escape?
 *)
@@ -226,8 +226,8 @@ let keyword = function
   | "match" -> TMatch | "with" -> TWith | "fun" -> TFun | "when" -> TWhen
   | "true" -> TTrue | "false" -> TFalse | "_" -> TUnderscore | "___" -> TIdent ""
   | text -> TIdent text
-let letter = HostText.isLetter
-let digit = HostText.isDigit
+let letter = Text.isLetter
+let digit = Text.isDigit
 let letterOrDigit value = letter value || digit value
 (*
    `///` doc comments lex as trivia, but their text also lands on the next
@@ -309,7 +309,7 @@ let tokenize text =
       let stop = skipLineComment source length index in
       let doc = index + 2 < length && is source (index + 2) '/' && (index + 3 >= length || not (is source (index + 3) '/')) in
       if doc then begin
-        let docText = HostText.trim (substring source (index + 3) (stop - index - 3)) in
+        let docText = Text.trim (substring source (index + 3) (stop - index - 3)) in
         pendingDocComment := Some (match !pendingDocComment with None -> docText | Some previous -> previous ^ " " ^ docText)
       end;
       let endPosition = advance position index stop in
@@ -432,8 +432,8 @@ let tokenize text =
         | Error message -> let count = Option.fold ~none:0 ~some:String.length (suffixAt digitEnd) in push (TInt64 0L) (digitEnd + count) (Some message)
     end else if matchesAt "\"\"\"" index then begin
       let close = scanWhile (fun scan -> not (matchesAt "\"\"\"" scan)) (index + 3) in
-      if close < length then push (TStringLit (HostText.normalize (substring source (index + 3) (close - index - 3)))) (close + 3) None
-      else push (TStringLit (HostText.normalize (substring source (index + 3) (length - index - 3)))) length (Some "unterminated triple-quoted string literal")
+      if close < length then push (TStringLit (Text.normalize (substring source (index + 3) (close - index - 3)))) (close + 3) None
+      else push (TStringLit (Text.normalize (substring source (index + 3) (length - index - 3)))) length (Some "unterminated triple-quoted string literal")
     end else if is source index '"' then begin
       match scanString (index + 1) '"' with
       | Ok stop -> push (TStringLit (unescape (substring source (index + 1) (stop - index - 2)))) stop None
@@ -448,8 +448,8 @@ let tokenize text =
       let contentEnd =
         if index + 1 >= length then index + 1 else
         let remaining = substring source (index + 1) (length - index - 1) in
-        let first = HostText.firstGrapheme remaining in
-        index + 1 + Option.fold ~none:0 ~some:HostText.length first in
+        let first = Text.firstGrapheme remaining in
+        index + 1 + Option.fold ~none:0 ~some:Text.length first in
       if contentEnd < length && is source contentEnd '\'' then quotedChar ()
       else if typeContext && index + 1 < length && (letter source.(index + 1) || is source (index + 1) '_') then
         let stop = scanWhile (fun scan -> letterOrDigit source.(scan) || is source scan '_') (index + 1) in

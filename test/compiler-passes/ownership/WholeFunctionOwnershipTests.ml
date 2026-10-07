@@ -11,7 +11,7 @@ type testBlock = TestBlock of (testLeaf, testBlock) H.operation H.block
 let body (TestBlock block) = block
 let managed id : H.value = {H.id = H.ValueId id; typ = AST.TList AST.TInt64}
 let unitValue id : H.value = {H.id = H.ValueId id; typ = AST.TUnit}
-let binding name = AST.bindingId (Int32.to_int (Array.fold_left (fun hash ch -> Int32.add (Int32.mul hash 31l) (Int32.of_int ch)) 17l (HostText.scalars name)))
+let binding name = AST.bindingId (Int32.to_int (Array.fold_left (fun hash ch -> Int32.add (Int32.mul hash 31l) (Int32.of_int ch)) 17l (Text.scalars name)))
 let parameter name value : H.parameter = {H.binding = binding name; value}
 let block parameters operations result = TestBlock {H.parameters; operations; result}
 let definition name parameters operations result : testBlock H.functionDef = {H.id = TestIds.functionIdForName name; name; body = block parameters operations result}
@@ -23,7 +23,7 @@ let leafOwnership leaf : H.valueId O.contract = {O.inputs = List.filter_map (fun
 let dialect : (testLeaf, testBlock) E.dialect = {E.body; leafOwnership; leafUniqueness = (fun leaf -> {E.Ownership.requiredInputs = H.ValueSet.empty; uniqueOutputs = H.ValueSet.of_list (List.filter_map (fun (value : H.value) -> if isManaged value then Some value.H.id else None) leaf.outputs)}); isManaged; externalCallOwnership = (fun _ -> None)}
 let primitiveContract leaf : H.primitiveContract = {H.inputs = List.map fst leaf.inputs; operands = []; outputs = List.map (fun value -> {H.value; alias = if isManaged value then H.FreshManaged else H.NoManagedAlias}) leaf.outputs; effects = H.EffectSet.empty}
 let callContract (call : H.functionCall) : H.primitiveContract = {H.inputs = call.H.arguments; operands = []; outputs = [{H.value = call.H.result; alias = if isManaged call.H.result then H.UnknownManagedAlias else H.NoManagedAlias}]; effects = H.EffectSet.singleton H.MayInvokeUserCode}
-let errorToString = function E.UnknownCallOwnership target -> HostStructuralFormat.format (StructuralValue.Union ("UnknownCallOwnership", [AST.DiagnosticFormatting.func target])) | E.InconsistentCallParameters target -> HostStructuralFormat.format (StructuralValue.Union ("InconsistentCallParameters", [AST.DiagnosticFormatting.func target])) | E.InvalidFunctionBoundary (target, error) -> "InvalidFunctionBoundary (" ^ HostStructuralFormat.format (AST.DiagnosticFormatting.func target) ^ ", " ^ E.Ownership.errorToString (fun (H.ValueId id) -> StructuralValue.Union ("ValueId", [StructuralValue.Scalar (string_of_int id)])) error ^ ")"
+let errorToString = function E.UnknownCallOwnership target -> StructuralFormat.format (StructuralValue.Union ("UnknownCallOwnership", [AST.DiagnosticFormatting.func target])) | E.InconsistentCallParameters target -> StructuralFormat.format (StructuralValue.Union ("InconsistentCallParameters", [AST.DiagnosticFormatting.func target])) | E.InvalidFunctionBoundary (target, error) -> "InvalidFunctionBoundary (" ^ StructuralFormat.format (AST.DiagnosticFormatting.func target) ^ ", " ^ E.Ownership.errorToString (fun (H.ValueId id) -> StructuralValue.Union ("ValueId", [StructuralValue.Scalar (string_of_int id)])) error ^ ")"
 let elaborate definitions = match E.elaborateFunctions dialect definitions with
  | Error error -> Error ("Ownership elaboration failed: " ^ errorToString error)
  | Ok analysis -> let contracts : testLeaf VerifyOwnedHIR.hirContracts = {VerifyOwnedHIR.leaf = primitiveContract; callSignature = (fun _ -> None); callContract = (fun call -> Some (callContract call))} in
@@ -33,8 +33,8 @@ let elaborate definitions = match E.elaborateFunctions dialect definitions with
 let findFunction name analysis = List.find_opt (fun (definition : (testLeaf, H.valueId) O.functionDef) -> definition.O.definition.H.name = name) (E.functions analysis)
 let svId (H.ValueId id) = StructuralValue.Union ("ValueId", [StructuralValue.Scalar (string_of_int id)])
 let svLeaf leaf = StructuralValue.Record ["Inputs", StructuralValue.Sequence (List.map (fun (value, consumed) -> StructuralValue.Tuple [F.value value; StructuralValue.Scalar (string_of_bool consumed)]) leaf.inputs); "Outputs", StructuralValue.Sequence (List.map F.value leaf.outputs)]
-let showOwned actual = HostStructuralFormat.format (F.option (F.functionDef svLeaf svId) actual)
-let showSteps actual = HostStructuralFormat.format (F.steps svLeaf svId actual)
+let showOwned actual = StructuralFormat.format (F.option (F.functionDef svLeaf svId) actual)
+let showSteps actual = StructuralFormat.format (F.steps svLeaf svId actual)
 let boundary parameters result : H.valueId O.functionSignature = {O.parameters; result}
 let testInfersBorrowedOpaqueInput () =
  let input = managed 0 in let result = unitValue 1 in let source = definition "borrow" [parameter "input" input] [scalar result ["input", input]] result in
@@ -82,7 +82,7 @@ let testCleansUnusedManagedResults () =
  match elaborate [callee; caller; scalarDiscard] with Error error -> Error error | Ok analysis -> match findFunction "discard" analysis, findFunction "discardScalar" analysis with
  | Some callOwned, Some scalarOwned -> (match callOwned.O.definition.H.body.O.body.H.operations, scalarOwned.O.definition.H.body.O.body.H.operations with
    | [O.Evaluate (H.Call _); O.Drop callId; O.Evaluate (H.Leaf _)], [O.Evaluate (H.ScalarBinding _); O.Drop scalarId; O.Evaluate (H.Leaf _)] when callId = unused.H.id && scalarId = unusedScalar.H.id -> Ok ()
-   | actual -> Error ("Expected immediate cleanup of unused call and scalar results, got " ^ HostStructuralFormat.format (StructuralValue.Tuple [F.steps svLeaf svId (fst actual); F.steps svLeaf svId (snd actual)])))
+   | actual -> Error ("Expected immediate cleanup of unused call and scalar results, got " ^ StructuralFormat.format (StructuralValue.Tuple [F.steps svLeaf svId (fst actual); F.steps svLeaf svId (snd actual)])))
  | _ -> Error "Elaboration omitted a discard function"
 let testStabilizesRecursiveBoundaries () =
  let input = managed 0 in let recursiveResult = managed 1 in let loop = definition "loop" [parameter "input" input] [call "loop" [input] recursiveResult] recursiveResult in
@@ -106,14 +106,14 @@ let testRejectsMissingCallOwnership () =
  let input = managed 0 in let result = managed 1 in let source = definition "caller" [parameter "input" input] [call "missing" [input] result] result in
  match E.elaborateFunctions dialect [source] with
  | Error (E.UnknownCallOwnership target) when target = TestIds.functionIdForName "missing" -> Ok ()
- | actual -> Error ("Expected explicit rejection of missing call ownership, got " ^ (match actual with Error error -> "Error (" ^ errorToString error ^ ")" | Ok analysis -> "Ok " ^ HostStructuralFormat.format (StructuralValue.Record ["Functions", StructuralValue.Sequence (List.map (F.functionDef svLeaf svId) (E.functions analysis)); "Semantics", StructuralValue.Scalar "<fun>"])))
+ | actual -> Error ("Expected explicit rejection of missing call ownership, got " ^ (match actual with Error error -> "Error (" ^ errorToString error ^ ")" | Ok analysis -> "Ok " ^ StructuralFormat.format (StructuralValue.Record ["Functions", StructuralValue.Sequence (List.map (F.functionDef svLeaf svId) (E.functions analysis)); "Semantics", StructuralValue.Scalar "<fun>"])))
 let testRejectsMismatchedCallOwnership () =
  let input = managed 0 in let result = unitValue 1 in let target = TestIds.functionIdForName "external" in
  let source = definition "caller" [parameter "input" input] [call "external" [input] result] result in
  let mismatchedDialect = {dialect with E.externalCallOwnership = (fun call -> if call.H.target = target then Some ({O.parameters = [O.UnmanagedCallParameter]; result = O.UnmanagedCallResult} : O.callSignature) else None)} in
  match E.elaborateFunctions mismatchedDialect [source] with
  | Error (E.InconsistentCallParameters actual) when actual = target -> Ok ()
- | actual -> Error ("Expected explicit rejection of mismatched call ownership, got " ^ (match actual with Error error -> "Error (" ^ errorToString error ^ ")" | Ok analysis -> "Ok " ^ HostStructuralFormat.format (StructuralValue.Record ["Functions", StructuralValue.Sequence (List.map (F.functionDef svLeaf svId) (E.functions analysis)); "Semantics", StructuralValue.Scalar "<fun>"])))
+ | actual -> Error ("Expected explicit rejection of mismatched call ownership, got " ^ (match actual with Error error -> "Error (" ^ errorToString error ^ ")" | Ok analysis -> "Ok " ^ StructuralFormat.format (StructuralValue.Record ["Functions", StructuralValue.Sequence (List.map (F.functionDef svLeaf svId) (E.functions analysis)); "Semantics", StructuralValue.Scalar "<fun>"])))
 let tests = [
  "Whole-function ownership infers borrowed opaque inputs", testInfersBorrowedOpaqueInput;
  "Whole-function ownership infers consumed inputs", testInfersConsumedInput;

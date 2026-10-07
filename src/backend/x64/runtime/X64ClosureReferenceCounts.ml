@@ -74,7 +74,7 @@ let generateClosureRefCountDecHelper enableLeakCheck recordRegistry sumShapeRegi
    | AST.TList _ -> releaseHeapRootCapture fieldOffset (listDecHelperForType recordRegistry sumShapeRegistry captureType) (suffix^"_list")
    | AST.TDict _ -> (match tryRcReleasePlanOfType recordRegistry sumShapeRegistry captureType with
       | Some releasePlan -> releaseHeapRootCapture fieldOffset (dictDecHelperForReleasePlan releasePlan) (suffix^"_dict")
-      | None -> Crash.crash ("generateClosureRefCountDecHelper: missing RC metadata for dict capture type "^HostStructuralFormat.semanticType captureType))
+      | None -> Crash.crash ("generateClosureRefCountDecHelper: missing RC metadata for dict capture type "^StructuralFormat.semanticType captureType))
    | AST.TFunction _ -> releaseHeapRootCapture fieldOffset closureRefCountDecHelperLabel (suffix^"_closure")
    | AST.TStream _ -> releaseHeapRootCapture fieldOffset streamRefCountDecHelperLabel (suffix^"_stream")
    | AST.TTuple _ | AST.TRecord _ | AST.TSum _ -> releaseFixedBlockCapture fieldOffset captureType

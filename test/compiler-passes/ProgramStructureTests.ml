@@ -19,7 +19,7 @@ let source name purpose text:C.sourceUnit={C.name;purpose;source=text}
 let compile stdlib mode sources=CompilerLibrary.compile {C.context=C.StdlibOnly stdlib;mode;sources=AST.NonEmptyList.fromList sources;allowInternal=false;verbosity=0;options=O.defaultOptions;packageValues=C.emptyPackageValueCatalog;packageManager=None;passTimingRecorder=None;session=None}
 let execute (report:O.compileReport) binary=E2ETestRunner.executeBinaryForTarget report.O.target binary
 let expectCompileError expected (report:O.compileReport)=match report.O.result with
- |Error error when HostText.contains error expected->Ok ()
+ |Error error when Text.contains error expected->Ok ()
  |Error error->Error ("Expected compile error containing '"^expected^"', got: "^error)
  |Ok _->Error ("Expected compile error containing '"^expected^"', but compilation succeeded")
 let expectExecution description outputDescription expected report=match report.O.result with

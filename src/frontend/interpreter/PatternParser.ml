@@ -6,7 +6,7 @@ open ParserSupport
 module WT = WrittenTypes
 let last buffer = match RevBuffer.last buffer with Some value -> value | None -> Crash.crash "Empty pattern collector"
 let upperName name =
-  let units = HostText.scalars name in Array.length units > 0 && HostText.isUpper units.(0)
+  let units = Text.scalars name in Array.length units > 0 && Text.isUpper units.(0)
 (*
    or-level: `p1 | p2 | …` (stops at `->` / `when`)
    top level: a bare tuple `a, b` (comma-separated, no parens); else an or-pattern

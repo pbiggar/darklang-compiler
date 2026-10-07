@@ -58,7 +58,7 @@ type allocationSummary = {allocations : int; allocatedBytes : allocationBytes; c
    adding mutually exclusive costs. Callback/scalar allocations are excluded.
 *)
 type allocationBudget = Complete of allocationSummary | Conditional of allocationSummary * allocationBudget * allocationBudget * allocationBudget | RuntimeConditional of allocationSummary * allocationBudget * allocationBudget * allocationBudget
-let lookup name key map = match M.find_opt key map with Some value -> value | None -> let H.ValueId id = key in Crash.crash ("List HIR: missing " ^ name ^ " for " ^ HostStructuralFormat.format (StructuralValue.Union ("ValueId", [StructuralValue.Scalar (string_of_int id)])))
+let lookup name key map = match M.find_opt key map with Some value -> value | None -> let H.ValueId id = key in Crash.crash ("List HIR: missing " ^ name ^ " for " ^ StructuralFormat.format (StructuralValue.Union ("ValueId", [StructuralValue.Scalar (string_of_int id)])))
 let primitiveContract (operation : (transform * reuseSelection) operation) : H.primitiveContract =
  let output value alias : H.outputContract = {H.value = value; alias} in
  let effects values = H.EffectSet.of_list values in

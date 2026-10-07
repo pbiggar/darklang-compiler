@@ -2,7 +2,7 @@
 [@@@warning "-4-42"]
 open Dark_compiler
 module P=Program
-module V=HostStructuralFormat
+module V=StructuralFormat
 type testResult=(unit,string) result
 let boolean value=V.Scalar (if value then "true" else "false")
 let optional f=function None->V.Union ("None",[])|Some value->V.Union ("Some",[f value])
@@ -55,11 +55,11 @@ let testExplicitLinuxX86_64Target ()=match P.parseArgs [|"--target=linux-x86_64"
  |Ok options->Error ("Expected explicit Linux x86_64 target, got "^formatTarget options.P.target)
  |Error error->Error ("Expected target parsing to succeed, got: "^error)
 let testUnknownTargetRejected ()=match P.parseArgs [|"--target=windows-x86_64";"program.dark"|] with
- |Error error when HostText.contains error "linux-x86_64"->Ok ()
+ |Error error when Text.contains error "linux-x86_64"->Ok ()
  |Error error->Error ("Expected supported-target guidance, got: "^error)
  |Ok _->Error "Expected unknown target to be rejected"
 let testCrossTargetRunRejected ()=match Result.bind (P.parseArgs [|"--run";"--target=linux-x86_64";"program.dark"|]) P.validateOptions with
- |Error error when HostText.contains error "compile-only"->Ok ()
+ |Error error when Text.contains error "compile-only"->Ok ()
  |Error error->Error ("Expected compile-only guidance, got: "^error)
  |Ok _->Error "Expected cross-target run mode to be rejected"
 let testEmitResultModeIsExplicit ()=match P.parseArgs [|"--emit-result";"program.dark"|] with
@@ -70,7 +70,7 @@ let testPackageServerIsExplicit ()=match P.parseArgs [|"--package-server=http://
  |Ok options->Error ("Unexpected package server options: "^formatOptions options)
  |Error error->Error ("Expected package server parsing to succeed, got: "^error)
 let testPackageServerRejectsNonHttpUrl ()=match P.parseArgs [|"--package-server=file:///tmp/packages";"program.dark"|] with
- |Error error when HostText.contains error "HTTP(S)"->Ok ()
+ |Error error when Text.contains error "HTTP(S)"->Ok ()
  |Error error->Error ("Expected HTTP(S) package server guidance, got: "^error)
  |Ok _->Error "Expected a non-HTTP package server URL to be rejected"
 let testScopedIRDumpOptions ()=match Result.bind (P.parseArgs [|"--dump-anf";"--dump-function=map";"--dump-ir-summary";"--dump-ir-output=artifacts/map.ir";"program.dark"|]) P.validateOptions with
@@ -78,11 +78,11 @@ let testScopedIRDumpOptions ()=match Result.bind (P.parseArgs [|"--dump-anf";"--
  |Ok options->Error ("Unexpected scoped IR dump options: "^formatOptions options)
  |Error error->Error ("Expected scoped IR dump options to parse, got: "^error)
 let testIRDumpModifiersRequireDumpSelection ()=match Result.bind (P.parseArgs [|"--dump-function=map";"program.dark"|]) P.validateOptions with
- |Error error when HostText.contains error "require an IR dump"->Ok ()
+ |Error error when Text.contains error "require an IR dump"->Ok ()
  |Error error->Error ("Expected IR dump selection guidance, got: "^error)
  |Ok _->Error "Expected a dump function filter without an IR selection to fail"
 let testEmptyIRDumpValuesRejected ()=match P.parseArgs [|"--dump-anf";"--dump-function=";"program.dark"|] with
- |Error error when HostText.contains error "non-empty"->Ok ()
+ |Error error when Text.contains error "non-empty"->Ok ()
  |Error error->Error ("Expected non-empty dump filter guidance, got: "^error)
  |Ok _->Error "Expected an empty dump function filter to fail"
 let testBatchCompileParsesIndependentOutputs ()=match P.parseCommand [|"--batch";"--quiet";"--package-server=http://127.0.0.1:9090";"--";"first.dark";"first.out";"second.dark";"second.out"|] with
@@ -94,7 +94,7 @@ let testBatchCompileParsesIndependentOutputs ()=match P.parseCommand [|"--batch"
  |Ok command->Error ("Expected batch command, got: "^formatCommand command)
  |Error error->Error ("Expected batch command to parse, got: "^error)
 let testBatchCompileRejectsMissingOutput ()=match P.parseCommand [|"--batch";"--";"only-source.dark"|] with
- |Error error when HostText.contains error "output path"->Ok ()
+ |Error error when Text.contains error "output path"->Ok ()
  |Error error->Error ("Expected missing-output guidance, got: "^error)
  |Ok _->Error "Expected an unmatched batch source to be rejected"
 let testBatchManifestKeepGoingParses ()=match P.parseCommand [|"--batch";"--package-server=http://127.0.0.1:9090";"--manifest";"package-probes.json";"--keep-going";"--report";"package-report.jsonl"|] with

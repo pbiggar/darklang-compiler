@@ -23,18 +23,18 @@ let toSectionMap sections=
  |Some (name,_)->Error ("Duplicate LIR-execution section: "^name)
  |None->Ok (M.of_list sections)
 let required name sections=match M.find_opt name sections with
- |Some value when HostText.trim value<>""->Ok (HostText.trim value)
+ |Some value when Text.trim value<>""->Ok (Text.trim value)
  |Some _->Error ("LIR-execution section "^name^" cannot be empty")
  |None->Error ("Missing required LIR-execution section: "^name)
-let parseLeakCheck sections=match Option.map (fun value->HostText.lowerInvariant (HostText.trim value)) (M.find_opt "LEAK-CHECK" sections) with
+let parseLeakCheck sections=match Option.map (fun value->Text.lowerInvariant (Text.trim value)) (M.find_opt "LEAK-CHECK" sections) with
  |None|Some "false"->Ok LeakCheckDisabled|Some "true"->Ok LeakCheckEnabled|Some value->Error ("Invalid LEAK-CHECK value '"^value^"' (expected true or false)")
 let parseExitExpectation sections=match M.find_opt "EXPECT-EXIT" sections with
- |None->Ok None|Some value->let trimmed=HostText.trim value in match HostText.tryParseInt32 trimmed with Some exitCode->Ok (Some (ExpectedExitCode (Int32.to_int exitCode)))|None->Error ("Invalid EXPECT-EXIT value '"^trimmed^"' (expected 32-bit integer)")
-let outputExpectation section constructor sections=Option.map (fun value->constructor (Common.normalizeLineEndings (HostText.trim value))) (M.find_opt section sections)
+ |None->Ok None|Some value->let trimmed=Text.trim value in match Text.tryParseInt32 trimmed with Some exitCode->Ok (Some (ExpectedExitCode (Int32.to_int exitCode)))|None->Error ("Invalid EXPECT-EXIT value '"^trimmed^"' (expected 32-bit integer)")
+let outputExpectation section constructor sections=Option.map (fun value->constructor (Common.normalizeLineEndings (Text.trim value))) (M.find_opt section sections)
 let parseCase path sections=
  let* values=toSectionMap sections in let* name=required "NAME" values in let* source=required "INPUT-LIR" values in let* leakCheck=parseLeakCheck values in let* exitExpectation=parseExitExpectation values in
  let processExpectations=List.filter_map Fun.id [exitExpectation;outputExpectation "EXPECT-STDOUT" (fun value->ExpectedStdout value) values;outputExpectation "EXPECT-STDERR" (fun value->ExpectedStderr value) values] in
- let codegenError=Option.map HostText.trim (M.find_opt "EXPECT-CODEGEN-ERROR" values) in
+ let codegenError=Option.map Text.trim (M.find_opt "EXPECT-CODEGEN-ERROR" values) in
  let* expectation=match codegenError,processExpectations with
  |Some "",_->Error "EXPECT-CODEGEN-ERROR cannot be empty"
  |Some _,_::_->Error "EXPECT-CODEGEN-ERROR cannot be combined with process expectations"

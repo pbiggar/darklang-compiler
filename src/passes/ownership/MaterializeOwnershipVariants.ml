@@ -44,7 +44,7 @@ let symbolSuffix identity =
  let result = function O.UnmanagedCallResult -> "u" | O.BorrowedCallResult index -> "b" ^ string_of_int index | O.ProducedCallResult -> "p" | O.UniqueProducedCallResult -> "q" in
  let encoded = S.identityBoundaries identity |> List.map (fun (name, (signature : O.callSignature)) ->
   let parameters = String.concat "" (List.map parameter signature.O.parameters) in field (field name ^ field parameters ^ field (result signature.O.result))) |> String.concat "" in
- "__ownership_" ^ HostHash.sha256Utf8 ("ownership-v1:" ^ encoded)
+ "__ownership_" ^ Digestif.SHA256.(to_hex (digest_string (Utf8.utf8 ("ownership-v1:" ^ encoded))))
 let rec calls (block : ('leaf, 'id) O.block) = List.concat_map (function
  | O.Evaluate (H.Call call) -> [call]
  | O.Evaluate (H.Branch (_, _, yes, no)) -> let yes = calls yes in let no = calls no in yes @ no

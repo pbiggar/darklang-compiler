@@ -74,7 +74,7 @@ let errorValue error =
  | DuplicateFunctionName id -> unary "DuplicateFunctionName" (func id)
  | InconsistentValueType id -> unary "InconsistentValueType" (value id)
  | BindingTypeMismatch id -> unary "BindingTypeMismatch" (value id)
- | InvalidBranchCondition typ -> unary "InvalidBranchCondition" (HostStructuralFormat.semanticValue typ)
+ | InvalidBranchCondition typ -> unary "InvalidBranchCondition" (StructuralFormat.semanticValue typ)
  | InconsistentBranchResult id -> unary "InconsistentBranchResult" (value id)
  | InvalidAliasSource (result, source) -> two "InvalidAliasSource" (value result) (value source)
  | IncompatibleAliasTypes (result, source) -> two "IncompatibleAliasTypes" (value result) (value source)
@@ -88,4 +88,4 @@ let errorValue error =
  | InconsistentCallContract id -> unary "InconsistentCallContract" (func id)
  | InconsistentRegisteredFunctionSignature id -> unary "InconsistentRegisteredFunctionSignature" (func id) in
  description
-let errorToString error = HostStructuralFormat.format (errorValue error)
+let errorToString error = StructuralFormat.format (errorValue error)

@@ -83,7 +83,7 @@ let releaseOperationDescription=function
 let rec releasePlanDescription=function
  | MemoryModel.NoReleasePlan->StructuralValue.Union ("NoReleasePlan",[])
  | MemoryModel.DynamicBufferRelease operation->StructuralValue.Union ("DynamicBufferRelease",[releaseOperationDescription operation])
- | MemoryModel.RecursiveRelease typ->StructuralValue.Union ("RecursiveRelease",[HostStructuralFormat.semanticValue typ])
+ | MemoryModel.RecursiveRelease typ->StructuralValue.Union ("RecursiveRelease",[StructuralFormat.semanticValue typ])
  | MemoryModel.RootRelease (size,kind,payload)->StructuralValue.Union ("RootRelease",[StructuralValue.Scalar (string_of_int size);releaseKindDescription kind;releasePayloadDescription payload])
 and releasePayloadDescription=function
  | MemoryModel.NoPayloadRelease->StructuralValue.Union ("NoPayloadRelease",[])
@@ -94,8 +94,8 @@ and releasePayloadDescription=function
  | MemoryModel.ClosurePayloadRelease fields->StructuralValue.Union ("ClosurePayloadRelease",[StructuralValue.Sequence (List.map releaseFieldDescription fields)])
 and releaseFieldDescription (MemoryModel.FieldRelease (offset,plan))=StructuralValue.Union ("FieldRelease",[StructuralValue.Scalar (string_of_int offset);releasePlanDescription plan])
 let generatePreparedARM64WithOptionsAndCache target options preparedSumShapeRegistry functionCache functionGroupCache (functionGroups:functionGroup list) metadataGroupCache helperCache (metadataGroups:metadataGroup list) lirOpExpansionRecorder phaseRecorder (LIR.Program (functions,variantRegistry,recordRegistry))=
- let startPhase ()=Option.map (fun _ -> HostClock.milliseconds ()) phaseRecorder in
- let recordPhase name timer=match phaseRecorder,timer with Some record,Some started->record name (HostClock.milliseconds () -. started)|_->() in
+ let startPhase ()=Option.map (fun _ -> (Int64.to_float (Mtime_clock.elapsed_ns ()) /. 1e6)) phaseRecorder in
+ let recordPhase name timer=match phaseRecorder,timer with Some record,Some started->record name ((Int64.to_float (Mtime_clock.elapsed_ns ()) /. 1e6) -. started)|_->() in
  let metadataTimer=startPhase () in
  let registrySetupTimer=startPhase () in
  let heapOverflowTrapBody=preparedHeapOverflowTrapBody target in
@@ -219,7 +219,7 @@ let generatePreparedARM64WithOptionsAndCache target options preparedSumShapeRegi
      | MemoryModel.RootRelease (_,MemoryModel.DictHeap,_)->StringOrder.Set.singleton (dictDecHelperForReleasePlan valueRelease)
      | MemoryModel.RootRelease (_,MemoryModel.GenericHeap,_)->let lists=(summarizeReleasePlan false valueRelease).LIR.listDecHelperLabels in let dicts=(summarizeReleasePlan true valueRelease).LIR.dictDecHelperLabels in StringOrder.Set.union lists dicts
      | _->StringOrder.Set.empty)
-    | Some other->Crash.crash ("ARM64 planned dict dependency labels require a DictHeap release plan, got "^HostStructuralFormat.format (releasePlanDescription other))
+    | Some other->Crash.crash ("ARM64 planned dict dependency labels require a DictHeap release plan, got "^StructuralFormat.format (releasePlanDescription other))
     | None->if helperLabel=dictRefCountDecListValueHelperLabel then StringOrder.Set.singleton listRefCountDecHelperLabel else if helperLabel=dictRefCountDecDictValueHelperLabel then StringOrder.Set.singleton dictRefCountDecHelperLabel else if helperLabel=dictRefCountDecDictListValueHelperLabel then StringOrder.Set.singleton dictRefCountDecListValueHelperLabel else if helperLabel=dictRefCountDecTupleStringListValueHelperLabel then StringOrder.Set.singleton listRefCountDecHelperLabel else if helperLabel=dictRefCountDecTupleStringListDictValueHelperLabel then StringOrder.Set.of_list [listRefCountDecHelperLabel;dictRefCountDecHelperLabel] else StringOrder.Set.empty in
    let neededDictRcDecHelperLabels=
     let listHelperDictLabels=StringOrder.Set.elements neededListRcDecHelperLabels |> List.map (fun helperLabel ->

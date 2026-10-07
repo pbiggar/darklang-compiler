@@ -98,12 +98,12 @@ let encodeFReg = function
 let regName reg=if reg=ARM64.SP then "SP" else "X"^Int32.to_string (encodeReg reg)
 let conditionName = function ARM64.EQ -> "EQ" | ARM64.NE -> "NE" | ARM64.LT -> "LT" | ARM64.GT -> "GT" | ARM64.LE -> "LE" | ARM64.GE -> "GE" | ARM64.LO -> "LO" | ARM64.HI -> "HI" | ARM64.LS -> "LS" | ARM64.HS -> "HS"
 let dataRefValue = function
- | Symbolic.StringLiteral value -> HostStructuralFormat.Union ("StringLiteral",[HostStructuralFormat.Text value])
- | Symbolic.FloatLiteral value -> HostStructuralFormat.Union ("FloatLiteral",[HostStructuralFormat.Scalar (HostFloat.structural value)])
- | Symbolic.Named value -> HostStructuralFormat.Union ("Named",[HostStructuralFormat.Text value])
-let labelRefName value=HostStructuralFormat.format (match value with
- | Symbolic.CodeLabel name -> HostStructuralFormat.Union ("CodeLabel",[HostStructuralFormat.Text name])
- | Symbolic.DataLabel data -> HostStructuralFormat.Union ("DataLabel",[dataRefValue data]))
+ | Symbolic.StringLiteral value -> StructuralFormat.Union ("StringLiteral",[StructuralFormat.Text value])
+ | Symbolic.FloatLiteral value -> StructuralFormat.Union ("FloatLiteral",[StructuralFormat.Scalar (FloatFormat.structural value)])
+ | Symbolic.Named value -> StructuralFormat.Union ("Named",[StructuralFormat.Text value])
+let labelRefName value=StructuralFormat.format (match value with
+ | Symbolic.CodeLabel name -> StructuralFormat.Union ("CodeLabel",[StructuralFormat.Text name])
+ | Symbolic.DataLabel data -> StructuralFormat.Union ("DataLabel",[dataRefValue data]))
 let encodeUnsignedScaled12Offset instructionName offset =
  if offset>32760 || offset mod 8<>0 then Crash.crash (Printf.sprintf "%s: unsigned scaled offset must be 0..32760 and 8-byte aligned, got %d" instructionName offset);
  uint32 (offset/8) lsl 10
@@ -962,7 +962,7 @@ let rd = (encodeFReg dest) in
 fixedBits lor rm lor opcode lor rn lor rd)
 | Symbolic.FMOV_imm (dest, value) -> ((match ARM64.tryEncodeFmovFloatImmediate value with
 | Some imm8 -> (0x1E601000l lor (imm8 lsl 13) lor encodeFReg dest)
-| None -> (Crash.crash (Printf.sprintf "FMOV immediate does not support %s" (HostFloat.roundTrip value)))))
+| None -> (Crash.crash (Printf.sprintf "FMOV immediate does not support %s" (FloatFormat.roundTrip value)))))
 | Symbolic.FMOV_zero dest -> (0x9E6703E0l lor encodeFReg dest)
 | Symbolic.FMOV_to_gp (dest, src) -> (let sf = (1l lsl 31) in
 let fixedBits = (0b0011110011l lsl 21) in
@@ -1086,7 +1086,7 @@ let tryFindDataOffset labelRef offsets namedOffsets=match labelRef with
 let labelRefDescription = function
  | Symbolic.CodeLabel name | Symbolic.DataLabel (Symbolic.Named name) -> name
  | Symbolic.DataLabel (Symbolic.StringLiteral value) -> value
- | Symbolic.DataLabel (Symbolic.FloatLiteral value) -> HostFloat.roundTrip value
+ | Symbolic.DataLabel (Symbolic.FloatLiteral value) -> FloatFormat.roundTrip value
 (*
    Encode an instruction with label resolution
    currentOffset: byte offset of current instruction

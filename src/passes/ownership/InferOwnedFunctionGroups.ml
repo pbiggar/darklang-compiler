@@ -9,7 +9,7 @@ type 'id functionBoundary = 'id R.functionBoundary
 type 'id candidate = Candidate of 'id functionBoundary * 'id functionBoundary list
 type 'id group = Group of 'id candidate * 'id candidate list * bool * S.t * S.t
 type ('leaf, 'id) program = Program of ('leaf, 'id) G.group F.t
-let measure recordTiming name operation = let start = HostClock.milliseconds () in let result = operation () in let elapsed = HostClock.milliseconds () -. start in Option.iter (fun record -> record name elapsed) recordTiming; result
+let measure recordTiming name operation = let start = (Int64.to_float (Mtime_clock.elapsed_ns ()) /. 1e6) in let result = operation () in let elapsed = (Int64.to_float (Mtime_clock.elapsed_ns ()) /. 1e6) -. start in Option.iter (fun record -> record name elapsed) recordTiming; result
 let inferenceLabel discovered =
  let refinableModes = List.fold_left (fun count (definition : ('leaf, 'id) O.functionDef) -> count + InferOwnershipUniqueness.refinableModeCount definition.O.ownership) 0 (G.functions discovered) in
  let variants = if InferOwnershipUniqueness.withinVariantLimit refinableModes then string_of_int (1 lsl refinableModes) else ">" ^ string_of_int InferOwnershipUniqueness.maximumVariants in

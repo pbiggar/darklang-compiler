@@ -18,7 +18,7 @@ let testParsesSlashSlashInsideStringLiteral () =
  | Ok tests -> Error ("Expected one parsed type checking test, got " ^ string_of_int (List.length tests))
  | Error message -> Error ("Expected type checking test with // inside string literal to parse, got: " ^ message))
 let testParsesTypeKeywordsWithCultureInvariantCasing () =
- (* HostText invariant casing does not depend on the process locale. *)
+ (* Text invariant casing does not depend on the process locale. *)
  withTempFile "1 : INT" (fun path -> match parseTypeCheckingTestFile path with
  | Ok [{expectation = ExpectType AST.TInt64; _}] -> Ok ()
  | Ok [_] -> Error "Expected INT to parse as int64"

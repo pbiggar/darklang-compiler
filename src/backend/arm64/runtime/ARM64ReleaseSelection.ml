@@ -196,7 +196,7 @@ let listDecHelperForReleasePlan (releasePlan: MemoryModel.rcReleasePlan) : strin
 let listDecHelperForType (ctx: codeGenContext) (sourceType: AST.semanticType) : string =
     (match tryRcReleasePlanOfType ctx.recordRegistry ctx.sumShapeRegistry sourceType with
     | Some releasePlan -> listDecHelperForReleasePlan releasePlan
-    | None -> Crash.crash ("listDecHelperForType: missing RC metadata for list element type " ^ HostStructuralFormat.semanticType sourceType ^ "")
+    | None -> Crash.crash ("listDecHelperForType: missing RC metadata for list element type " ^ StructuralFormat.semanticType sourceType ^ "")
 
     )
 [@@warning "-32"]

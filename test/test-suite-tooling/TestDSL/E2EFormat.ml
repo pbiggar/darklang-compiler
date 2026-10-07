@@ -231,14 +231,14 @@ let defaultOptFlags : optFlags = {
   isolated = false;
 }
 
-let units = HostText.scalars
-let text = HostText.ofScalars
+let units = Text.scalars
+let text = Text.ofScalars
 let length s = Array.length (units s)
 let slice s start count = text (Array.sub (units s) start count)
 let tail s start = slice s start (length s - start)
-let starts = HostText.startsWith
-let ends = HostText.endsWith
-let trim = HostText.trim
+let starts = Text.startsWith
+let ends = Text.endsWith
+let trim = Text.trim
 let white u = Uchar.is_valid u && Uucp.White.is_white_space (Uchar.of_int u)
 let trimStart s =
   let us = units s in
@@ -319,7 +319,7 @@ let findCommentStartOutsideQuotes line =
 let expectationPrefixes = ["exit";"stdout";"stderr";"skip";"no_free_list";"disable_leak_check";"stdin";"exact_bytes";"error";"disable_opt_"]
 let isExpectationStart rest =
   let s=trimStart rest in let us=units s in
-  Array.length us>0 && (HostText.isDigit us.(0) || List.mem us.(0) [45;34;39;40;91] || HostText.isLetter us.(0) || List.exists (starts s) expectationPrefixes)
+  Array.length us>0 && (Text.isDigit us.(0) || List.mem us.(0) [45;34;39;40;91] || Text.isLetter us.(0) || List.exists (starts s) expectationPrefixes)
 let stripQuotedContent s =
   let us=units s in
   let rec loop i quoted rev = if i>=Array.length us then text (Array.of_list (List.rev rev))
@@ -330,8 +330,8 @@ let isExpectationCandidate rest =
   let s=trimStart rest in
   if not (isExpectationStart s) then false
   else if List.exists (starts s) (["\"";"'";"compileerror"]@expectationPrefixes) then true
-  else let lowered=HostText.lowerInvariant (stripQuotedContent s) in
-    not (List.exists (fun k -> starts lowered (k^" ") || HostText.contains lowered (" "^k^" ")) ["let";"val";"if";"match";"then";"else";"type";"def"] || HostText.contains lowered " in ")
+  else let lowered=Text.lowerInvariant (stripQuotedContent s) in
+    not (List.exists (fun k -> starts lowered (k^" ") || Text.contains lowered (" "^k^" ")) ["let";"val";"if";"match";"then";"else";"type";"def"] || Text.contains lowered " in ")
 let isAttributeKey = function
   | "exit" | "stdout" | "stderr" | "arg" | "env" | "skip" | "no_free_list" | "disable_leak_check" | "stdin" | "exact_bytes" | "isolated"
   | "disable_opt_freelist" | "disable_opt_anf" | "disable_opt_anf_const_folding" | "disable_opt_anf_const_prop" | "disable_opt_anf_copy_prop"
@@ -357,7 +357,7 @@ let isIdentifierPathHead s =
   let s=trim s in if length s=0 then false else
   let us=units s in
   let rec finish i=if i=Array.length us || List.mem us.(i) [32;9;13;10] then i else finish (i+1) in
-  Array.for_all (fun u -> HostText.isLetter u || HostText.isDigit u || u=95 || u=46) (Array.sub us 0 (finish 0))
+  Array.for_all (fun u -> Text.isLetter u || Text.isDigit u || u=95 || u=46) (Array.sub us 0 (finish 0))
 let hasClosingParenTest s =
   let us=units s in
   let rec loop i quoted p b c = if i>=Array.length us then false
@@ -424,8 +424,8 @@ let parseExpectations exp =
       Result.map_error (fun e -> "Invalid sqlerror message: "^e)
         (Result.map (fun msg -> (None,1,Some "",Some msg,defaultOptFlags,None,None,None)) (parseStringLiteral (tail first 9)))
   | _ ->
-    if HostText.lowerInvariant trimmed="skip" then Ok (None,0,None,None,defaultOptFlags,None,None,Some "Skipped by test")
-    else if starts (HostText.lowerInvariant trimmed) "skip=" then
+    if Text.lowerInvariant trimmed="skip" then Ok (None,0,None,None,defaultOptFlags,None,None,Some "Skipped by test")
+    else if starts (Text.lowerInvariant trimmed) "skip=" then
       Result.map_error (fun e -> "Invalid skip reason: "^e)
         (Result.map (fun reason -> (None,0,None,None,defaultOptFlags,None,None,Some reason)) (parseStringLiteral (tail trimmed 5)))
     else match tryParseBuiltinErrorExpectation trimmed with
@@ -434,7 +434,7 @@ let parseExpectations exp =
     | None ->
       let exitCode=ref 0 and stdout=ref None and stderr=ref None and flags=ref defaultOptFlags and skipReason=ref None and errors=ref [] in
       let error e=errors:=e::!errors in
-      let parseBool value name = match HostText.lowerInvariant value with
+      let parseBool value name = match Text.lowerInvariant value with
         | "true" | "1" -> Some true | "false" | "0" -> Some false
         | _ -> error ("Invalid "^name^" value: "^value^" (expected true/false)");None in
       let rec attrStart i = function [] -> None | token::rest ->
@@ -452,7 +452,7 @@ let parseExpectations exp =
             let stringValue prefix update = match parseStringLiteral value with Ok s -> update s | Error e -> error (prefix^e) in
             let boolean update = match parseBool value key with Some b -> flags:=update !flags b | None -> () in
             match key with
-            | "exit" -> runtime:=true; (match HostText.tryParseInt32 value with Some v -> exitCode:=Int32.to_int v | None -> error ("Invalid exit code: "^value))
+            | "exit" -> runtime:=true; (match Text.tryParseInt32 value with Some v -> exitCode:=Int32.to_int v | None -> error ("Invalid exit code: "^value))
             | "stdout" -> runtime:=true;stringValue "" (fun s -> stdout:=Some s)
             | "stderr" -> runtime:=true;stringValue "" (fun s -> stderr:=Some s)
             | "arg" -> stringValue "Invalid argument: " (fun s -> flags:={!flags with arguments=(!flags).arguments@[s]})
@@ -562,7 +562,7 @@ let collectCompileErrorOverrides lines =
     else Result.bind (parseCompileErrorDirective (i+1) s) (fun msg -> loop (i+1) (IntMap.add (i+2) msg overrides) (IntSet.add (i+1) directives)) in
   loop 0 IntMap.empty IntSet.empty
 let readLines path =
-  let s=HostFile.readText path in let n=String.length s in
+  let s=FileIO.readText path in let n=String.length s in
   let rec loop start i rev =
     if i>=n then Array.of_list (List.rev (if start<n then String.sub s start (n-start)::rev else rev))
     else if s.[i]='\r' || s.[i]='\n' then
@@ -574,7 +574,7 @@ let countLeadingSpaces s = let us=units s in
 let trimLeadingSpaces n s = if n<=0 then s else tail s (min n (countLeadingSpaces s))
 let definitionStart s = List.exists (starts s) ["def ";"type ";"let ";"val ";"module ";"[<"]
 let parseE2ETestFile path =
-  if not (HostFile.exists path) then Error ("Test file not found: "^path) else
+  if not (FileIO.exists path) then Error ("Test file not found: "^path) else
   let raw=readLines path in
   let allowIndented=String.ends_with ~suffix:".dark" (lowerAscii path) in
   let overrides,directives,directiveErrors = match collectCompileErrorOverrides raw with
@@ -652,7 +652,7 @@ let parseE2ETestFile path =
   if !errors<>[] then Error (String.concat "\n" (List.rev !errors)) else
   let preamble=String.concat "\n" (List.rev !preambleLines) in
   let normalizedPath=String.map (fun c -> if c='\\' then '/' else c) path in
-  let keepPerTest=allowIndented && HostText.contains normalizedPath "/e2e/upstream/" in
+  let keepPerTest=allowIndented && Text.contains normalizedPath "/e2e/upstream/" in
   let parsed=List.rev !tests in
   let parsedLines=List.fold_left (fun set (t:e2eTest) -> IntSet.add t.sourceLine set) IntSet.empty parsed in
   let orphaned=IntMap.bindings overrides |> List.filter_map (fun (line,_) -> if IntSet.mem line parsedLines then None else Some line) in

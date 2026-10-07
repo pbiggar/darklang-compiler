@@ -8,7 +8,7 @@ open SyntaxFormat
 type testResult=(unit,string) result
 let display cases=
  let option=function None->StructuralValue.Union ("None",[])|Some s->StructuralValue.Union ("Some",[StructuralValue.Text s]) in
- let format (test:syntaxTest)=HostStructuralFormat.format (StructuralValue.Record ["Name",StructuralValue.Text test.name;"Source",StructuralValue.Text test.source;"ExpectedError",option test.expectedError;"ExpectedFormat",option test.expectedFormat;"Roundtrip",StructuralValue.Scalar (string_of_bool test.roundtrip);"SourceFile",StructuralValue.Text test.sourceFile]) in
+ let format (test:syntaxTest)=StructuralFormat.format (StructuralValue.Record ["Name",StructuralValue.Text test.name;"Source",StructuralValue.Text test.source;"ExpectedError",option test.expectedError;"ExpectedFormat",option test.expectedFormat;"Roundtrip",StructuralValue.Scalar (string_of_bool test.roundtrip);"SourceFile",StructuralValue.Text test.sourceFile]) in
  let first=List.filteri (fun index _->index<3) cases |> List.map format in "["^String.concat "; " first^(if List.length cases>3 then "; ... " else "")^"]"
 let testParsesMultipleSyntaxCases ()=
  let content="---NAME---\ncanonical formatting\n---SOURCE---\nlet x = 5 in x\n---EXPECTED---\nlet x = 5 in x\n---ROUNDTRIP---\n\n---NAME---\nreject fat-arrow lambda\n---SOURCE---\nlet inc = (x: Int64) => x + 1\n---EXPECT-ERROR---\ndoes not use\n" in
@@ -19,7 +19,7 @@ let testParsesMultipleSyntaxCases ()=
 let testRejectsLegacySyntaxSelector ()=
  let content="---NAME---\nlegacy selector\n---PARSE-AS---\ncompiler\n---SOURCE---\n1\n" in
  match parseSyntaxFileContent "invalid.syntax" content with
- |Error msg when HostText.contains msg "Unknown syntax section: PARSE-AS"->Ok ()
+ |Error msg when Text.contains msg "Unknown syntax section: PARSE-AS"->Ok ()
  |Error msg->Error ("Expected legacy selector validation error, got: "^msg)
  |Ok _->Error "Expected the legacy parser selector to be rejected"
 let testRunsFormattingAndRoundtripChecks ()=

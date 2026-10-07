@@ -19,12 +19,12 @@ let loadStdlib ()=
   match List.find_opt Sys.file_exists candidates with
   |None->Error ("Could not find "^filename^" in any of: "^String.concat ", " candidates)
   |Some path->let text=In_channel.with_open_bin path In_channel.input_all in
-   WrittenParsing.parse Validation.Script (HostPackageIO.decodeContent None text) |> Result.map_error (fun error->"Error parsing "^filename^": "^error) in
+   WrittenParsing.parse Validation.Script (ContentEncoding.decodeContent None text) |> Result.map_error (fun error->"Error parsing "^filename^": "^error) in
  ResultList.traverse load files
 (* Build stdlib in isolation, returning reusable result.
    This can be called once and the result reused for multiple user program compilations. *)
 let buildStdlibWithTrace target recorder=
- let measure name operation=let start=HostClock.milliseconds () in let result=operation () in PipelineDiagnostics.recordPassTiming recorder name (HostClock.milliseconds ()-.start);result in
+ let measure name operation=let start=(Int64.to_float (Mtime_clock.elapsed_ns ()) /. 1e6) in let result=operation () in PipelineDiagnostics.recordPassTiming recorder name ((Int64.to_float (Mtime_clock.elapsed_ns ()) /. 1e6)-.start);result in
  let* sources=measure "Stdlib detail: Source loading and parsing" loadStdlib in
  let* _,checked,written=measure "Stdlib detail: Type checking" (fun ()->WrittenChecking.checkSourceUnitsWithBase None true false sources) in
  let env=WrittenChecking.typeCheckEnvironment checked in let symbols,tops=CheckedAST.viewProgram checked in
@@ -35,7 +35,7 @@ let buildStdlibWithTrace target recorder=
  (* Build module registry once (reused across all compilations). *)
  let _moduleRegistry=DarkStdlib.buildModuleRegistry () in
  let* conversion=measure "Stdlib detail: Declaration conversion" (fun ()->P.convertTypedDeclarationsWithTrace recorder None (P.Monomorphize None) typed) in
- let start=HostClock.milliseconds () in let elapsed ()=HostClock.milliseconds ()-.start in
+ let start=(Int64.to_float (Mtime_clock.elapsed_ns ()) /. 1e6) in let elapsed ()=(Int64.to_float (Mtime_clock.elapsed_ns ()) /. 1e6)-.start in
  let registries=conversion.P.registries in let returns=P.extractReturnTypes registries.AST_to_ANF.funcReg in let names=X.buildBaseFuncNames registries in
  let context=X.buildContext target conversion.P.symbols env (X.checkedValueArtifacts typed) generic K.empty registries names returns in
  let context={context with X.writtenEnvironment=Some (WrittenChecking.includeAllocatedFunctions conversion.P.symbols written)} in
@@ -81,7 +81,7 @@ let buildStdlibSpecializations (stdlib:X.stdlibResult) specs externalTypes exter
  let registries={registries with AST_to_ANF.functionIds=M.fold M.add (CheckedAST.functionIds symbols) registries.AST_to_ANF.functionIds;functionNames=FunctionIdMap.fold (fun values id name->FunctionIdMap.add id name values) registries.AST_to_ANF.functionNames (CheckedAST.functionNames symbols);typeReg=M.fold M.add externalTypes registries.AST_to_ANF.typeReg;recordFieldsReg=M.fold M.add (TypeRegistries.recordFieldsRegistry externalTypes) registries.AST_to_ANF.recordFieldsReg;recordTypeParamsReg=M.fold M.add (TypeRegistries.recordTypeParamsRegistry externalTypes) registries.AST_to_ANF.recordTypeParamsReg;variantLookup=M.fold M.add externalVariants registries.AST_to_ANF.variantLookup;sumMetadata=LoweringPrimitives.mergeSumMetadata registries.AST_to_ANF.sumMetadata (LoweringPrimitives.sumMetadataFromVariantLookup externalVariants);rcSumShapeReg=M.fold M.add (TypeRegistries.rcSumShapeRegistryFromVariantLookup externalVariants) registries.AST_to_ANF.rcSumShapeReg} in
  let localReturns=P.extractReturnTypes local.AST_to_ANF.funcReg in
  let* anf,_=AST_to_ANF.convertFunctions symbols registries (ANF.VarGen 0) functions in
- let options=CompilerOptions.defaultOptions in let start=HostClock.milliseconds () in let elapsed ()=HostClock.milliseconds ()-.start in
+ let options=CompilerOptions.defaultOptions in let start=(Int64.to_float (Mtime_clock.elapsed_ns ()) /. 1e6) in let elapsed ()=(Int64.to_float (Mtime_clock.elapsed_ns ()) /. 1e6)-.start in
  let* optimized,ssa,typeMap=ANFPipeline.buildAnf 0 options elapsed registries (CheckedAST.nextFunctionOrdinal symbols) ANFPipeline.stdlibInliningConfig FunctionIdMap.empty M.empty F.empty anf FunctionIdMap.empty false recorder in
  let newMap=List.map (fun (func:ANF.functionDef)->func.ANF.name,func) optimized |> M.of_list in
  let returns=X.mergeReturnTypes base.X.returnTypes localReturns in

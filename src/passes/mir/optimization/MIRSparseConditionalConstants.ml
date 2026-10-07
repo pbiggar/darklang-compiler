@@ -159,7 +159,7 @@ let distinctLabels values = let _, reversed = List.fold_left (fun (seen, result)
 let refreshBlockFacts (cfg : cfg) target state = if target = cfg.entry then state else
  let incoming = Option.value ~default:[] (LabelMap.find_opt target state.predecessors) |> distinctLabels |> List.filter_map (fun predecessor -> let edge = predecessor, target in if EdgeSet.mem edge state.executableEdges then Some (Option.value ~default:emptyPathFacts (EdgeMap.find_opt edge state.edgeFacts)) else None) in
  match incoming with [] -> state | first :: rest -> let merged = List.fold_left mergePathFacts first rest in if sameOptionalFacts (LabelMap.find_opt target state.blockFacts) merged then state else enqueueBlock target {state with blockFacts = LabelMap.add target merged state.blockFacts}
-let labelText (Label text) = HostStructuralFormat.format (HostStructuralFormat.Union ("Label", [HostStructuralFormat.Text text]))
+let labelText (Label text) = StructuralFormat.format (StructuralFormat.Union ("Label", [StructuralFormat.Text text]))
 let activateEdge (cfg : cfg) source target state =
  let edge = source, target in let facts = factsOnEdge cfg source target state in
  if EdgeSet.mem edge state.executableEdges && sameOptionalFacts (EdgeMap.find_opt edge state.edgeFacts) facts then state else

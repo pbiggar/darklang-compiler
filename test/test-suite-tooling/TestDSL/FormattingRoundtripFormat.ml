@@ -8,7 +8,7 @@
 open Dark_compiler
 type formattingRoundtripCase = {name : string; source : string; sourceFile : string}
 let splitLineComment line =
-  let units = HostText.scalars line in
+  let units = Text.scalars line in
   let rec comment index inString escaped =
     if index >= Array.length units - 1 then None else
     match units.(index), inString, escaped with
@@ -20,14 +20,14 @@ let splitLineComment line =
     | _ -> comment (index + 1) inString false in
   match comment 0 false false with
   | Some index ->
-      let source = HostText.trim (HostText.ofScalars (Array.sub units 0 index)) in
-      let name = HostText.trim (HostText.ofScalars (Array.sub units (index + 2) (Array.length units - index - 2))) in
+      let source = Text.trim (Text.ofScalars (Array.sub units 0 index)) in
+      let name = Text.trim (Text.ofScalars (Array.sub units (index + 2) (Array.length units - index - 2))) in
       source, (if name = "" then None else Some name)
-  | None -> HostText.trim line, None
+  | None -> Text.trim line, None
 let parseFormattingRoundtripFile path =
   if not (TestFileIO.exists path) then Error ("Formatting roundtrip file not found: " ^ path) else
   let tests, errors = Array.fold_left (fun (tests, errors) (index, line) ->
-    let number = index + 1 and trimmed = HostText.trim line in
+    let number = index + 1 and trimmed = Text.trim line in
     if trimmed <> "" && not (String.starts_with ~prefix:"//" trimmed) then
       let source, display = splitLineComment line in
       if source = "" then tests, Printf.sprintf "Line %d: missing expression before comment" number :: errors

@@ -17,7 +17,7 @@ let testParsesAndRunsMultipleIRKinds ()=
 let testRejectsUnknownIRKind ()=
  let content="---NAME---\nunknown\n---IR---\nssa\n---INPUT---\nreturn 1\n---EXPECTED---\nreturn 1\n" in
  match IRFormatSnapshotFormat.parseIRFormatSnapshotFileContent "bad.irformat" content with
- |Error msg when HostText.contains msg "ssa"->Ok ()
+ |Error msg when Text.contains msg "ssa"->Ok ()
  |Error msg->Error ("Expected unknown IR validation, got: "^msg)
  |Ok _->Error "Expected unknown IR kind to be rejected"
 let tests=["IR-format DSL parses and runs multiple IR kinds",testParsesAndRunsMultipleIRKinds;"IR-format DSL rejects unknown IR kind",testRejectsUnknownIRKind]

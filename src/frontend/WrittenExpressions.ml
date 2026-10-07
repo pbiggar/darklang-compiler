@@ -40,7 +40,7 @@ let rec checkExpression (globals : globals) locals symbols expected expression =
  | WT.EString (_, _, segments, _, _) ->
   let result = List.fold_left (fun result segment -> bind result (fun (reversed, symbols) -> match segment with
    | WT.StringText (_, value) -> Ok (C.StringText value :: reversed, symbols)
-   | WT.StringInterpolation (_, expr, _, _) -> bind (check symbols None expr) (fun (typ, expr, symbols) -> if Option.is_some (Unification.reconcileTypes None AST.TString typ) then Ok (C.StringExpr expr :: reversed, symbols) else Error ("Expected String in string interpolation, got " ^ HostStructuralFormat.semanticType typ)))) (Ok ([], symbols)) segments in
+   | WT.StringInterpolation (_, expr, _, _) -> bind (check symbols None expr) (fun (typ, expr, symbols) -> if Option.is_some (Unification.reconcileTypes None AST.TString typ) then Ok (C.StringExpr expr :: reversed, symbols) else Error ("Expected String in string interpolation, got " ^ StructuralFormat.semanticType typ)))) (Ok ([], symbols)) segments in
   bind result (fun (reversed, symbols) -> let expr = match List.rev reversed with [] -> C.StringLiteral "" | [C.StringText text] -> C.StringLiteral text | parts -> C.InterpolatedString parts in checkedLiteral expected symbols AST.TString expr)
  | WT.EVariable (_, name) ->
   let value = match M.find_opt name locals with Some _ as found -> found | None -> resolveValue globals [name] in
@@ -84,7 +84,7 @@ let rec checkExpression (globals : globals) locals symbols expected expression =
     | result, _, _ -> result in
    bind thenResult (fun (thenType, yes, symbols) ->
     let elseResult = match no with Some no -> check symbols (if thenType = AST.TNever then expected else Some thenType) no | None -> checkedLiteral (Some thenType) symbols AST.TUnit C.UnitLiteral in
-    bind elseResult (fun (elseType, no, symbols) -> match Unification.reconcileTypes None thenType elseType with Some typ -> checkedLiteral expected symbols typ (C.If (condition, yes, no)) | None -> Error ("Conditional branches have incompatible types: " ^ HostStructuralFormat.semanticType thenType ^ " and " ^ HostStructuralFormat.semanticType elseType))))
+    bind elseResult (fun (elseType, no, symbols) -> match Unification.reconcileTypes None thenType elseType with Some typ -> checkedLiteral expected symbols typ (C.If (condition, yes, no)) | None -> Error ("Conditional branches have incompatible types: " ^ StructuralFormat.semanticType thenType ^ " and " ^ StructuralFormat.semanticType elseType))))
  | WT.ELet (range, pattern, value, body, _, _) -> WrittenLetSupport.check checkExpression globals locals symbols expected range pattern value body
  | WT.EStatement (_, first, next) -> bind (check symbols (Some AST.TUnit) first) (fun (_, first, symbols) -> map (fun (typ, next, symbols) -> typ, C.Sequence (first, next), symbols) (check symbols expected next))
  | WT.EInfix (_, (_, infix), left, right) -> WrittenOperatorSupport.check checkExpression checkedLiteral globals locals symbols expected infix left right

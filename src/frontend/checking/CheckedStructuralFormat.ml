@@ -6,7 +6,7 @@ open! StructuralValue
 let unsigned value = Z.to_string (if value < 0L then Z.add (Z.of_int64 value) (Z.shift_left Z.one 64) else Z.of_int64 value)
 let observationScalar kind text =
  let suffix = match kind with "int8" -> "y" | "uint8" -> "uy" | "int16" -> "s" | "uint16" -> "us" | "int64" -> "L" | "uint64" -> "UL" | "uint32" -> "u" | _ -> "" in
- if kind = "float64" then Scalar (HostFloat.structural (Int64.float_of_bits (Int64.of_string ("0x" ^ text))))
+ if kind = "float64" then Scalar (FloatFormat.structural (Int64.float_of_bits (Int64.of_string ("0x" ^ text))))
  else Scalar (text ^ suffix)
 let observationUnion _ case fields = Union (case, fields)
 let observationTuple fields = Tuple fields
@@ -14,7 +14,7 @@ let observationRecord _ fields = Record fields
 let observationString value = Text value
 let observationInt value = Scalar (string_of_int value)
 let observationOption encode = function None -> Union ("None", []) | Some value -> Union ("Some", [encode value])
-let opaque encode value = Scalar (HostStructuralFormat.format (encode value))
+let opaque encode value = Scalar (StructuralFormat.format (encode value))
 let observationBinding = opaque AST.DiagnosticFormatting.binding
 let observationFunction = opaque AST.DiagnosticFormatting.func
 let observationTypeId = opaque AST.DiagnosticFormatting.typ
@@ -275,7 +275,7 @@ and observationTupleElements : 'a. ('a -> StructuralValue.value) -> 'a tupleElem
   "Second", encodeA value.second;
   "Rest", Sequence (List.map (fun item -> encodeA item) value.rest);
 ]
-and observationCheckedType value = Scalar (HostStructuralFormat.format (privateCheckedType value))
+and observationCheckedType value = Scalar (StructuralFormat.format (privateCheckedType value))
 and observationRecursiveMember (value : recursiveMember) = observationRecord "RecursiveMember" [
   "Resolved", observationResolvedRecursiveMember value.resolved;
   "MonomorphicType", observationCheckedType value.monomorphicType;
@@ -317,7 +317,7 @@ and observationConstructorReference (value : constructorReference) = observation
   "ConstructorId", observationConstructorId value.constructorId;
   "TypeArgs", Sequence (List.map (fun item -> observationCheckedType item) value.typeArgs);
 ]
-and observationRecordFields _encode value = Scalar (HostStructuralFormat.format (privateRecordFields privateExpr value))
+and observationRecordFields _encode value = Scalar (StructuralFormat.format (privateRecordFields privateExpr value))
 and observationStringPart (value : stringPart) = match value with
   | StringText field0 -> observationUnion "StringPart" "StringText" [observationString field0]
   | StringExpr field0 -> observationUnion "StringPart" "StringExpr" [observationExpr field0]
@@ -371,6 +371,6 @@ and observationMatchCase (value : matchCase) = observationRecord "MatchCase" [
   "Body", observationExpr value.body;
 ]
 let value = observationExpr
-let expr expression = HostStructuralFormat.format (value expression)
-let toString expression = HostStructuralFormat.format (privateExpr expression)
-let pattern value = HostStructuralFormat.format (privatePattern value)
+let expr expression = StructuralFormat.format (value expression)
+let toString expression = StructuralFormat.format (privateExpr expression)
+let pattern value = StructuralFormat.format (privatePattern value)

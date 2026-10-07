@@ -86,6 +86,6 @@ module Make (Identity : Identity) = struct
   | InconsistentBlockArgument -> Union ("InconsistentBlockArgument", [])
   | UndroppedValues ids -> unary "UndroppedValues" (Union ("set", [Sequence (List.map identity (Identity.Set.elements ids))])) in
   description
- let errorToString identity error = HostStructuralFormat.format (errorValue identity error)
+ let errorToString identity error = StructuralFormat.format (errorValue identity error)
 
 end

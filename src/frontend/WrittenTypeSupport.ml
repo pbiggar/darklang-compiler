@@ -22,7 +22,7 @@ let qualifiedFnName (name : WT.qualifiedFnIdentifier) = List.map (fun ((identifi
 let restrictedIdentifier allowInternal segments = not allowInternal && List.exists (fun segment -> String.length segment >= 2 && String.sub segment 0 2 = "__") segments
 let resolveFunction globals segments = List.find_map (fun candidate -> M.find_opt candidate globals.functions) (NameResolution.candidateSpellings NameResolution.Callable globals.modulePath (String.concat "." segments))
 let resolveValue globals segments = List.find_map (fun candidate -> M.find_opt candidate globals.values) (NameResolution.candidateSpellings NameResolution.Value globals.modulePath (String.concat "." segments))
-let requireType expected actual = match expected with Some typ when Option.is_none (Unification.reconcileTypes None typ actual) -> Error ("Expected " ^ HostStructuralFormat.semanticType typ ^ ", got " ^ HostStructuralFormat.semanticType actual) | _ -> Ok ()
+let requireType expected actual = match expected with Some typ when Option.is_none (Unification.reconcileTypes None typ actual) -> Error ("Expected " ^ StructuralFormat.semanticType typ ^ ", got " ^ StructuralFormat.semanticType actual) | _ -> Ok ()
 let checkedLiteral expected symbols typ expression = map (fun () -> let resolved = if typ = AST.TNever then AST.TNever else Option.value (Option.bind expected (fun wanted -> Unification.reconcileTypes None wanted typ)) ~default:typ in resolved, expression, symbols) (requireType expected typ)
 (* Resolve the type syntax while retaining the compiler's nominal registry as
    the authority for custom names. No source AST type is constructed here. *)
@@ -126,5 +126,5 @@ let[@warning "-4"] convertStructuralRecord globals targetType actualType express
        let reference : CheckedAST.recordReference = {CheckedAST.typeId; typeArgs = List.map CheckedAST.checkedType targetArgs} in
        CheckedAST.Let (CheckedAST.LPVariable binding, value, CheckedAST.RecordLiteral (reference, fields)), finalSymbols) (CheckedAST.completeRecordFields typeId (List.length targetFields) (List.rev reversed)))))
     | _ -> Error "Unknown structural record type")
-  | _ -> Error ("Cannot structurally convert " ^ HostStructuralFormat.semanticType actual ^ " to " ^ HostStructuralFormat.semanticType target)
+  | _ -> Error ("Cannot structurally convert " ^ StructuralFormat.semanticType actual ^ " to " ^ StructuralFormat.semanticType target)
  in convert targetType actualType expression symbols

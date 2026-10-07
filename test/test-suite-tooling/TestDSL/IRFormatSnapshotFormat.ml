@@ -22,10 +22,10 @@ let toSectionMap sections=
  |Some (name,_)->Error ("Duplicate IR-format section: "^name)
  |None->Ok (M.of_list sections)
 let required name sections=match M.find_opt name sections with
- |Some value when HostText.trim value<>""->Ok (HostText.trim value)
+ |Some value when Text.trim value<>""->Ok (Text.trim value)
  |Some _->Error ("IR-format section "^name^" cannot be empty")
  |None->Error ("Missing required IR-format section: "^name)
-let parseInput kind source=match HostText.lowerInvariant (HostText.trim kind) with
+let parseInput kind source=match Text.lowerInvariant (Text.trim kind) with
  |"anf"->Result.map (fun value->ANFInput value) (ANFParser.parseANF source)
  |"mir"->Result.map (fun value->MIRInput value) (MIRParser.parseMIR source)
  |"lir"->Result.map (fun value->LIRInput value) (LIRParser.parseLIR source)
@@ -33,7 +33,7 @@ let parseInput kind source=match HostText.lowerInvariant (HostText.trim kind) wi
 let parseCase path sections=
  let* values=toSectionMap sections in
  let* name=required "NAME" values in let* kind=required "IR" values in let* source=required "INPUT" values in let* expected=required "EXPECTED" values in
- let* input=Result.map_error (fun msg->"Failed to parse "^HostText.trim kind^" INPUT: "^msg) (parseInput kind source) in
+ let* input=Result.map_error (fun msg->"Failed to parse "^Text.trim kind^" INPUT: "^msg) (parseInput kind source) in
  Ok {name;input;expected=Common.normalizeLineEndings expected;sourceFile=path}
 let parseIRFormatSnapshotFileContent path content=
  let sections=Common.parseSections (Common.normalizeLineEndings content) in

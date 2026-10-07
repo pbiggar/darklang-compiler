@@ -38,16 +38,16 @@ let matched pattern text =
  let regex = Str.regexp (Buffer.contents output) in
  if Str.string_match regex text 0 then Some (Array.of_list (text :: List.map (fun index -> try Str.matched_group index text with Not_found -> "") captures)) else None
 let group values index = values.(index)
-let parse32 text = match HostText.tryParseInt32 text with Some value -> Int32.to_int value | None -> raise (Failure "Value was either too large or too small for an Int32.")
+let parse32 text = match Text.tryParseInt32 text with Some value -> Int32.to_int value | None -> raise (Failure "Value was either too large or too small for an Int32.")
 let add left right = Int32.to_int (Int32.add (Int32.of_int left) (Int32.of_int right))
 let mul left right = Int32.to_int (Int32.mul (Int32.of_int left) (Int32.of_int right))
-let temp text = match matched {|^t(\d+)$|} (HostText.trim text) with Some values -> A.TempId (parse32 (group values 1)) | None -> problem ("expected a temp ID, got '" ^ text ^ "'")
+let temp text = match matched {|^t(\d+)$|} (Text.trim text) with Some values -> A.TempId (parse32 (group values 1)) | None -> problem ("expected a temp ID, got '" ^ text ^ "'")
 let atom text =
- let text = HostText.trim text in
+ let text = Text.trim text in
  if text = "true" then A.BoolLiteral true else if text = "false" then A.BoolLiteral false else if Option.is_some (matched {|^t\d+$|} text) then A.Var (temp text) else
  let number = try if Option.is_some (matched {|^[+-]?\d+$|} text) then Some (Int64.of_string text) else None with Failure _ -> None in
  match number with Some value -> A.IntLiteral (A.Int64 value) | None when Option.is_some (matched {|^-?\d+\.\d+$|} text) -> A.FloatLiteral (float_of_string text) | None -> problem ("expected a literal or temp ID, got '" ^ text ^ "'")
-let rec typ text = match HostText.trim text with
+let rec typ text = match Text.trim text with
  | "Int64" -> AST.TInt64 | "Float" -> AST.TFloat64 | "Bool" -> AST.TBool | "Unit" -> AST.TUnit
  | "FnInt64" -> AST.TFunction ([AST.TInt64], AST.TInt64) | "Body" -> AST.TRecord ("Body", [])
  | "Option<Int64>" -> AST.TSum ("Darklang.Stdlib.Option.Option", [AST.TInt64]) | "Option<Float>" -> AST.TSum ("Darklang.Stdlib.Option.Option", [AST.TFloat64])
@@ -56,7 +56,7 @@ let rec typ text = match HostText.trim text with
 let optionDescriptor : A.recordDescriptor = {A.sourceTypeName = "Darklang.Stdlib.Option.Option"; runtimeTypeName = "Darklang.Stdlib.Option.Option"; typeArgs = [AST.TInt64]; fields = ["tag", AST.TInt64; "payload", AST.TInt64]; valueType = typ "Option<Int64>"}
 let floatOptionDescriptor = {optionDescriptor with A.typeArgs = [AST.TFloat64]; fields = ["tag", AST.TInt64; "payload", AST.TFloat64]; valueType = typ "Option<Float>"}
 let bodyDescriptor : A.recordDescriptor = {A.sourceTypeName = "Body"; runtimeTypeName = "Body"; typeArgs = []; fields = ["x", AST.TInt64; "y", AST.TInt64]; valueType = typ "Body"}
-let operands text = if HostText.trim text = "" then [] else List.map atom (String.split_on_char ',' text)
+let operands text = if Text.trim text = "" then [] else List.map atom (String.split_on_char ',' text)
 let operation valueType text =
  match matched {|^closure\s+([A-Za-z_][A-Za-z_0-9.]*)$|} text, matched {|^call\s+([A-Za-z_][A-Za-z_0-9.]*)\((.*)\)$|} text with
  | Some values, _ -> A.ClosureAlloc (TestIds.functionIdForName (group values 1), [])
@@ -141,8 +141,8 @@ let parseFunction isExternal = function
  | header :: bodyLines ->
   let values = match matched {|^([A-Za-z_][A-Za-z_0-9.]*)\((.*)\)\s*->\s*(\S+)$|} header with Some values -> values | None -> problem ("invalid function header '" ^ header ^ "'") in
   let name = group values 1 in
-  let parameters = if HostText.trim (group values 2) = "" then [] else List.map (fun text ->
-   let values = match matched {|^(t\d+)\s*:\s*(\S+)$|} (HostText.trim text) with Some values -> values | None -> problem ("invalid parameter '" ^ text ^ "'") in {A.id = temp (group values 1); typ = typ (group values 2)}) (String.split_on_char ',' (group values 2)) in
+  let parameters = if Text.trim (group values 2) = "" then [] else List.map (fun text ->
+   let values = match matched {|^(t\d+)\s*:\s*(\S+)$|} (Text.trim text) with Some values -> values | None -> problem ("invalid parameter '" ^ text ^ "'") in {A.id = temp (group values 1); typ = typ (group values 2)}) (String.split_on_char ',' (group values 2)) in
   let returnType = typ (group values 3) and body = parseBody bodyLines in
   let id = TestIds.functionIdForName name in
   let source : A.functionDef = {A.id; name; typedParams = parameters; returnType; returnOwnership = A.OwnedReturn; body = toANF body} in
@@ -177,7 +177,7 @@ let parseSections content =
   if current.rawFunctions = [] || current.expected = [] then problem ("case '" ^ current.rawName ^ "' requires FUNCTION and EXPECT sections");
   emptyCase, {current with rawFunctions = List.rev current.rawFunctions; externals = List.rev current.externals} :: cases) in
  let section, lines, current, cases = List.fold_left (fun (section, lines, current, cases) raw ->
-  let line = HostText.trim raw in if line = "" || String.starts_with ~prefix:"#" line then section, lines, current, cases else
+  let line = Text.trim raw in if line = "" || String.starts_with ~prefix:"#" line then section, lines, current, cases else
   match matched {|^---(NAME|FUNCTION|EXTERNAL-FUNCTION|EXPECT|OPTIMIZE-SSA|NO-INLINE)---$|} line with
   | Some values ->
     let current = flushSection section lines current in let marker = group values 1 in

@@ -28,7 +28,7 @@ let rewriteInvertedBoolLiteralBranchesInProgram (Program (functions,main) as pro
    the ordered passes instead of rescanning every intermediate program.
 *)
 let optimizeProgramWithOptionsAndExternalFunctionsWithTrace recordTiming context options eligibleTailRecursionNames externalFunctions program =
- let measure name operation = match recordTiming with None -> operation () | Some record -> let started=HostClock.milliseconds () in let result=operation () in record name ((HostClock.milliseconds () -. started));result in
+ let measure name operation = match recordTiming with None -> operation () | Some record -> let started=(Int64.to_float (Mtime_clock.elapsed_ns ()) /. 1e6) in let result=operation () in record name (((Int64.to_float (Mtime_clock.elapsed_ns ()) /. 1e6) -. started));result in
  let program'=if options.enableConstFolding then measure "ANF Optimize detail: Boolean branch rewrite" (fun () -> rewriteInvertedBoolLiteralBranchesInProgram program) else program in
  let Program (functions,main)=program' in
  let functions'=measure "ANF Optimize detail: Function fixed points" (fun () -> List.map (fun func -> let optimized=optimizeToFixedPoint context options func 10 in {optimized with body=devirtualizeCaptureFreeClosures optimized.body}) functions) in
