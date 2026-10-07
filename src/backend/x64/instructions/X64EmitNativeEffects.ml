@@ -148,146 +148,54 @@ let emitCliNative (ctx : X64CodeGenTypes.funcCtx) (dest : LIR.reg)
             code @ (targets |> List.rev |> List.map (fun r -> X.POP r)))
       in
       match operation with
-      | LIR.PosixOpenAt ->
-          if List.length args <> 4 then Error "PosixOpenAt: invalid argument count"
-          else
-            loadSocketArgs args [ X.RDI; X.RSI; X.RDX; X.R10 ]
-            |> Result.map (fun loads -> loads
-              @ loadImm64 X.RAX 257L
-              @ [X.SYSCALL]
-              @ (if destReg = X.RAX then [] else [X.MOV_reg (destReg, X.RAX)]))
-      | LIR.PosixRead ->
-          if List.length args <> 3 then Error "PosixRead: invalid argument count"
-          else
-            loadSocketArgs args [ X.RDI; X.RSI; X.RDX ]
-            |> Result.map (fun loads -> loads
-              @ loadImm64 X.RAX 0L
-              @ [X.SYSCALL]
-              @ (if destReg = X.RAX then [] else [X.MOV_reg (destReg, X.RAX)]))
-      | LIR.PosixWrite ->
-          if List.length args <> 3 then Error "PosixWrite: invalid argument count"
-          else
-            loadSocketArgs args [ X.RDI; X.RSI; X.RDX ]
-            |> Result.map (fun loads -> loads
-              @ loadImm64 X.RAX 1L
-              @ [X.SYSCALL]
-              @ (if destReg = X.RAX then [] else [X.MOV_reg (destReg, X.RAX)]))
-      | LIR.PosixClose ->
-          if List.length args <> 1 then Error "PosixClose: invalid argument count"
-          else
-            loadSocketArgs args [ X.RDI ]
-            |> Result.map (fun loads -> loads
-              @ loadImm64 X.RAX 3L
-              @ [X.SYSCALL]
-              @ (if destReg = X.RAX then [] else [X.MOV_reg (destReg, X.RAX)]))
-      | LIR.PosixSeek ->
-          if List.length args <> 3 then Error "PosixSeek: invalid argument count"
-          else
-            loadSocketArgs args [ X.RDI; X.RSI; X.RDX ]
-            |> Result.map (fun loads -> loads
-              @ loadImm64 X.RAX 8L
-              @ [X.SYSCALL]
-              @ (if destReg = X.RAX then [] else [X.MOV_reg (destReg, X.RAX)]))
-      | LIR.PosixStatAt ->
-          if List.length args <> 4 then Error "PosixStatAt: invalid argument count"
-          else
-            loadSocketArgs args [ X.RDI; X.RSI; X.RDX; X.R10 ]
-            |> Result.map (fun loads -> loads
-              @ loadImm64 X.RAX 262L
-              @ [X.SYSCALL]
-              @ (if destReg = X.RAX then [] else [X.MOV_reg (destReg, X.RAX)]))
-      | LIR.PosixGetCwd ->
-          if List.length args <> 2 then Error "PosixGetCwd: invalid argument count"
-          else
-            loadSocketArgs args [ X.RDI; X.RSI ]
-            |> Result.map (fun loads -> loads
-              @ loadImm64 X.RAX 79L
-              @ [X.SYSCALL]
-              @ (if destReg = X.RAX then [] else [X.MOV_reg (destReg, X.RAX)]))
-      | LIR.PosixChdir ->
-          if List.length args <> 1 then Error "PosixChdir: invalid argument count"
-          else
-            loadSocketArgs args [ X.RDI ]
-            |> Result.map (fun loads -> loads
-              @ loadImm64 X.RAX 81L
-              @ [X.SYSCALL]
-              @ (if destReg = X.RAX then [] else [X.MOV_reg (destReg, X.RAX)]))
-      | LIR.PosixMkdirAt ->
-          if List.length args <> 3 then Error "PosixMkdirAt: invalid argument count"
-          else
-            loadSocketArgs args [ X.RDI; X.RSI; X.RDX ]
-            |> Result.map (fun loads -> loads
-              @ loadImm64 X.RAX 258L
-              @ [X.SYSCALL]
-              @ (if destReg = X.RAX then [] else [X.MOV_reg (destReg, X.RAX)]))
-      | LIR.PosixUnlinkAt ->
-          if List.length args <> 3 then Error "PosixUnlinkAt: invalid argument count"
-          else
-            loadSocketArgs args [ X.RDI; X.RSI; X.RDX ]
-            |> Result.map (fun loads -> loads
-              @ loadImm64 X.RAX 263L
-              @ [X.SYSCALL]
-              @ (if destReg = X.RAX then [] else [X.MOV_reg (destReg, X.RAX)]))
-      | LIR.PosixRenameAt ->
-          if List.length args <> 4 then Error "PosixRenameAt: invalid argument count"
-          else
-            loadSocketArgs args [ X.RDI; X.RSI; X.RDX; X.R10 ]
-            |> Result.map (fun loads -> loads
-              @ loadImm64 X.RAX 264L
-              @ [X.SYSCALL]
-              @ (if destReg = X.RAX then [] else [X.MOV_reg (destReg, X.RAX)]))
-      | LIR.PosixChmodAt ->
-          if List.length args <> 4 then Error "PosixChmodAt: invalid argument count"
-          else
-            loadSocketArgs args [ X.RDI; X.RSI; X.RDX; X.R10 ]
-            |> Result.map (fun loads -> loads
-              @ loadImm64 X.RAX 268L
-              @ [X.SYSCALL]
-              @ (if destReg = X.RAX then [] else [X.MOV_reg (destReg, X.RAX)]))
-      | LIR.PosixUtimesAt ->
-          if List.length args <> 4 then Error "PosixUtimesAt: invalid argument count"
-          else
-            loadSocketArgs args [ X.RDI; X.RSI; X.RDX; X.R10 ]
-            |> Result.map (fun loads -> loads
-              @ loadImm64 X.RAX 280L
-              @ [X.SYSCALL]
-              @ (if destReg = X.RAX then [] else [X.MOV_reg (destReg, X.RAX)]))
-      | LIR.PosixSetAttributesAt ->
-          if List.length args <> 6 then Error "PosixSetAttributesAt: invalid argument count"
-          else
-            Ok (loadImm64 destReg (-38L))
-      | LIR.PosixSymlinkAt ->
-          if List.length args <> 3 then Error "PosixSymlinkAt: invalid argument count"
-          else
-            loadSocketArgs args [ X.RDI; X.RSI; X.RDX ]
-            |> Result.map (fun loads -> loads
-              @ loadImm64 X.RAX 266L
-              @ [X.SYSCALL]
-              @ (if destReg = X.RAX then [] else [X.MOV_reg (destReg, X.RAX)]))
-      | LIR.PosixReadlinkAt ->
-          if List.length args <> 4 then Error "PosixReadlinkAt: invalid argument count"
-          else
-            loadSocketArgs args [ X.RDI; X.RSI; X.RDX; X.R10 ]
-            |> Result.map (fun loads -> loads
-              @ loadImm64 X.RAX 267L
-              @ [X.SYSCALL]
-              @ (if destReg = X.RAX then [] else [X.MOV_reg (destReg, X.RAX)]))
-      | LIR.PosixFlock ->
-          if List.length args <> 2 then Error "PosixFlock: invalid argument count"
-          else
-            loadSocketArgs args [ X.RDI; X.RSI ]
-            |> Result.map (fun loads -> loads
-              @ loadImm64 X.RAX 73L
-              @ [X.SYSCALL]
-              @ (if destReg = X.RAX then [] else [X.MOV_reg (destReg, X.RAX)]))
+      | LIR.PosixOpenAt
+      | LIR.PosixRead
+      | LIR.PosixWrite
+      | LIR.PosixClose
+      | LIR.PosixSeek
+      | LIR.PosixStatAt
+      | LIR.PosixGetCwd
+      | LIR.PosixChdir
+      | LIR.PosixMkdirAt
+      | LIR.PosixUnlinkAt
+      | LIR.PosixRenameAt
+      | LIR.PosixChmodAt
+      | LIR.PosixUtimesAt
+      | LIR.PosixSetAttributesAt
+      | LIR.PosixSymlinkAt
+      | LIR.PosixReadlinkAt
+      | LIR.PosixFlock
       | LIR.PosixGetDents ->
-          if List.length args <> 4 then Error "PosixGetDents: invalid argument count"
-          else
-            loadSocketArgs args [ X.RDI; X.RSI; X.RDX; X.R10 ]
-            |> Result.map (fun loads -> loads
-              @ loadImm64 X.RAX 217L
-              @ [X.SYSCALL]
-              @ (if destReg = X.RAX then [] else [X.MOV_reg (destReg, X.RAX)]))
+          let number, arity = match operation with
+            | LIR.PosixOpenAt -> Some 257, 4
+            | LIR.PosixRead -> Some 0, 3
+            | LIR.PosixWrite -> Some 1, 3
+            | LIR.PosixClose -> Some 3, 1
+            | LIR.PosixSeek -> Some 8, 3
+            | LIR.PosixStatAt -> Some 262, 4
+            | LIR.PosixGetCwd -> Some 79, 2
+            | LIR.PosixChdir -> Some 81, 1
+            | LIR.PosixMkdirAt -> Some 258, 3
+            | LIR.PosixUnlinkAt -> Some 263, 3
+            | LIR.PosixRenameAt -> Some 264, 4
+            | LIR.PosixChmodAt -> Some 268, 4
+            | LIR.PosixUtimesAt -> Some 280, 4
+            | LIR.PosixSetAttributesAt -> None, 6
+            | LIR.PosixSymlinkAt -> Some 266, 3
+            | LIR.PosixReadlinkAt -> Some 267, 4
+            | LIR.PosixFlock -> Some 73, 2
+            | LIR.PosixGetDents -> Some 217, 4
+            | _ -> Crash.crash "Non-POSIX operation in POSIX lowering" in
+          if List.length args <> arity then Error "POSIX primitive: invalid argument count"
+          else (match number with
+          | None -> Ok (loadImm64 destReg (-38L))
+          | Some number ->
+              let targets = [X.RDI; X.RSI; X.RDX; X.R10; X.R8; X.R9] |> List.filteri (fun i _ -> i < arity) in
+              loadSocketArgs args targets
+              |> Result.map (fun loads -> loads
+                @ loadImm64 X.RAX (Int64.of_int number)
+                @ [X.SYSCALL]
+                @ (if destReg = X.RAX then [] else [X.MOV_reg (destReg, X.RAX)])))
       | LIR.HostOS -> Ok (loadImm64 destReg 1L)
       | LIR.HostArchitecture -> Ok (loadImm64 destReg 1L)
       | LIR.Hostname ->

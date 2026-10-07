@@ -29,8 +29,11 @@ let __classEnd (pattern: String) (i: Int64) : Int64 =
     else Stdlib.Cli.__Fnmatch.__classEnd pattern (i + 1L)
 
 let __classChar (pattern: String) (i: Int64) : (Int64 * Int64) =
-    if Stdlib.Cli.__Fnmatch.__byte pattern i == 92L && i + 1L < Stdlib.Cli.__Fnmatch.__length pattern then
+    let length = Stdlib.Cli.__Fnmatch.__length pattern in
+    if Stdlib.Cli.__Fnmatch.__byte pattern i == 92L && i + 1L < length then
         (Stdlib.Cli.__Fnmatch.__byte pattern (i + 1L), i + 2L)
+    else if i + 4L < length && Stdlib.Cli.__Fnmatch.__byte pattern i == 91L && (Stdlib.Cli.__Fnmatch.__byte pattern (i + 1L) == 46L || Stdlib.Cli.__Fnmatch.__byte pattern (i + 1L) == 61L) && Stdlib.Cli.__Fnmatch.__byte pattern (i + 3L) == Stdlib.Cli.__Fnmatch.__byte pattern (i + 1L) && Stdlib.Cli.__Fnmatch.__byte pattern (i + 4L) == 93L then
+        (Stdlib.Cli.__Fnmatch.__byte pattern (i + 2L), i + 5L)
     else (Stdlib.Cli.__Fnmatch.__byte pattern i, i + 1L)
 
 let __classItems (pattern: String) (i: Int64) (c: Int64) (first: Bool) (matched: Bool) : Stdlib.Option.Option<(Int64 * Bool)> =

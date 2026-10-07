@@ -56,9 +56,121 @@ let __unsigned (ptr: RawPtr) (offset: Int64) (width: Int64) : Int64 =
     if width == 0L then 0L
     else __raw_get_byte ptr offset + 256L * Stdlib.Cli.__Posix.__unsigned ptr (offset + 1L) (width - 1L)
 
+let __macError (errno: Int64) : String =
+    if errno == 1L then "Operation not permitted"
+    else if errno == 2L then "No such file or directory"
+    else if errno == 3L then "No such process"
+    else if errno == 4L then "Interrupted system call"
+    else if errno == 5L then "Input/output error"
+    else if errno == 6L then "Device not configured"
+    else if errno == 7L then "Argument list too long"
+    else if errno == 8L then "Exec format error"
+    else if errno == 9L then "Bad file descriptor"
+    else if errno == 10L then "No child processes"
+    else if errno == 11L then "Resource deadlock avoided"
+    else if errno == 12L then "Cannot allocate memory"
+    else if errno == 13L then "Permission denied"
+    else if errno == 14L then "Bad address"
+    else if errno == 15L then "Block device required"
+    else if errno == 16L then "Device / Resource busy"
+    else if errno == 17L then "File exists"
+    else if errno == 18L then "Cross-device link"
+    else if errno == 19L then "Operation not supported by device"
+    else if errno == 20L then "Not a directory"
+    else if errno == 21L then "Is a directory"
+    else if errno == 22L then "Invalid argument"
+    else if errno == 23L then "Too many open files in system"
+    else if errno == 24L then "Too many open files"
+    else if errno == 25L then "Inappropriate ioctl for device"
+    else if errno == 26L then "Text file busy"
+    else if errno == 27L then "File too large"
+    else if errno == 28L then "No space left on device"
+    else if errno == 29L then "Illegal seek"
+    else if errno == 30L then "Read-only file system"
+    else if errno == 31L then "Too many links"
+    else if errno == 32L then "Broken pipe"
+    else if errno == 33L then "Numerical argument out of domain"
+    else if errno == 34L then "Result too large"
+    else if errno == 35L then "Resource temporarily unavailable"
+    else if errno == 36L then "Operation now in progress"
+    else if errno == 37L then "Operation already in progress"
+    else if errno == 38L then "Socket operation on non-socket"
+    else if errno == 39L then "Destination address required"
+    else if errno == 40L then "Message too long"
+    else if errno == 41L then "Protocol wrong type for socket"
+    else if errno == 42L then "Protocol not available"
+    else if errno == 43L then "Protocol not supported"
+    else if errno == 44L then "Socket type not supported"
+    else if errno == 45L then "Operation not supported"
+    else if errno == 46L then "Protocol family not supported"
+    else if errno == 47L then "Address family not supported by protocol family"
+    else if errno == 48L then "Address already in use"
+    else if errno == 49L then "Can't assign requested address"
+    else if errno == 50L then "Network is down"
+    else if errno == 51L then "Network is unreachable"
+    else if errno == 52L then "Network dropped connection on reset"
+    else if errno == 53L then "Software caused connection abort"
+    else if errno == 54L then "Connection reset by peer"
+    else if errno == 55L then "No buffer space available"
+    else if errno == 56L then "Socket is already connected"
+    else if errno == 57L then "Socket is not connected"
+    else if errno == 58L then "Can't send after socket shutdown"
+    else if errno == 59L then "Too many references: can't splice"
+    else if errno == 60L then "Operation timed out"
+    else if errno == 61L then "Connection refused"
+    else if errno == 62L then "Too many levels of symbolic links"
+    else if errno == 63L then "File name too long"
+    else if errno == 64L then "Host is down"
+    else if errno == 65L then "No route to host"
+    else if errno == 66L then "Directory not empty"
+    else if errno == 67L then "Too many processes"
+    else if errno == 68L then "Too many users"
+    else if errno == 69L then "Disc quota exceeded"
+    else if errno == 70L then "Stale NFS file handle"
+    else if errno == 71L then "Too many levels of remote in path"
+    else if errno == 72L then "RPC struct is bad"
+    else if errno == 73L then "RPC version wrong"
+    else if errno == 74L then "RPC prog. not avail"
+    else if errno == 75L then "Program version wrong"
+    else if errno == 76L then "Bad procedure for program"
+    else if errno == 77L then "No locks available"
+    else if errno == 78L then "Function not implemented"
+    else if errno == 79L then "Inappropriate file type or format"
+    else if errno == 80L then "Authentication error"
+    else if errno == 81L then "Need authenticator"
+    else if errno == 82L then "Device power is off"
+    else if errno == 83L then "Device error, e.g. paper out"
+    else if errno == 84L then "Value too large to be stored in data type"
+    else if errno == 85L then "Bad executable"
+    else if errno == 86L then "Bad CPU type in executable"
+    else if errno == 87L then "Shared library version mismatch"
+    else if errno == 88L then "Malformed Macho file"
+    else if errno == 89L then "Operation canceled"
+    else if errno == 90L then "Identifier removed"
+    else if errno == 91L then "No message of desired type"
+    else if errno == 92L then "Illegal byte sequence"
+    else if errno == 93L then "Attribute not found"
+    else if errno == 94L then "Bad message"
+    else if errno == 95L then "Reserved"
+    else if errno == 96L then "No message available on STREAM"
+    else if errno == 97L then "Reserved"
+    else if errno == 98L then "No STREAM resources"
+    else if errno == 99L then "Not a STREAM"
+    else if errno == 100L then "Protocol error"
+    else if errno == 101L then "STREAM ioctl timeout"
+    else if errno == 102L then "Operation not supported on socket"
+    else if errno == 103L then "No such policy registered"
+    else if errno == 104L then "State not recoverable"
+    else if errno == 105L then "Previous owner died"
+    else if errno == 106L then "Interface output queue is full"
+    else if errno == 107L then "Capabilities insufficient"
+    else if errno == 107L then "Must be equal largest errno"
+    else "Unknown error: " ++ Stdlib.Int64.toString errno
+
 let __error (errno: Int64) : Stdlib.Cli.Posix.Error =
     let message =
-        if errno == 1L then "Operation not permitted"
+        if Stdlib.Cli.__Posix.__mac () then Stdlib.Cli.__Posix.__macError errno
+        else if errno == 1L then "Operation not permitted"
         else if errno == 2L then "No such file or directory"
         else if errno == 3L then "No such process"
         else if errno == 4L then "Interrupted system call"
@@ -215,18 +327,22 @@ let __absolute (path: String) : Stdlib.Result.Result<String, Stdlib.Cli.Posix.Er
         | Error e -> Error e
         | Ok cwd -> Ok (cwd ++ "/" ++ path)
 
+// The walk owns its descriptor and closes each ancestor before continuing.
 let __walkParent (fd: Int64) (parts: List<String>) (fn: Int64 -> String -> Stdlib.Result.Result<'a, Stdlib.Cli.Posix.Error>) : Stdlib.Result.Result<'a, Stdlib.Cli.Posix.Error> =
     match parts with
-    | [] -> Error (Stdlib.Cli.Posix.Error { errno = 22, message = "path has no final component" })
+    | [] ->
+        let _ = Stdlib.Cli.__Posix.__close fd in
+        Error (Stdlib.Cli.Posix.Error { errno = 22, message = "path has no final component" })
     | name :: rest ->
-        if Stdlib.List.length rest == 0 then fn fd name
+        if Stdlib.List.length rest == 0 then
+            let result = fn fd name in
+            let _ = Stdlib.Cli.__Posix.__close fd in
+            result
         else
             let next = Stdlib.Cli.__Posix.__withCString name (fun ptr -> Stdlib.Cli.__Posix.__openAt fd ptr (Stdlib.Cli.__Posix.__directory () + Stdlib.Cli.__Posix.__nofollow ()) 0L) in
+            let _ = Stdlib.Cli.__Posix.__close fd in
             if next < 0L then Error (Stdlib.Cli.__Posix.__error (0L - next))
-            else
-                let result = Stdlib.Cli.__Posix.__walkParent next rest fn in
-                let _ = Stdlib.Cli.__Posix.__close next in
-                result
+            else Stdlib.Cli.__Posix.__walkParent next rest fn
 
 let __withParent (path: String) (fn: Int64 -> String -> Stdlib.Result.Result<'a, Stdlib.Cli.Posix.Error>) : Stdlib.Result.Result<'a, Stdlib.Cli.Posix.Error> =
     if path == "" then Error (Stdlib.Cli.__Posix.__error 2L)
@@ -238,9 +354,7 @@ let __withParent (path: String) (fn: Int64 -> String -> Stdlib.Result.Result<'a,
             let root = Stdlib.Cli.__Posix.__withCString "/" (fun ptr -> Stdlib.Cli.__Posix.__openAt (Stdlib.Cli.__Posix.__cwdFd ()) ptr (Stdlib.Cli.__Posix.__directory ()) 0L) in
             if root < 0L then Error (Stdlib.Cli.__Posix.__error (0L - root))
             else
-                let result = Stdlib.Cli.__Posix.__walkParent root parts fn in
-                let _ = Stdlib.Cli.__Posix.__close root in
-                result
+                Stdlib.Cli.__Posix.__walkParent root parts fn
 
 let __withEntry (path: String) (fn: Int64 -> RawPtr -> Stdlib.Result.Result<'a, Stdlib.Cli.Posix.Error>) : Stdlib.Result.Result<'a, Stdlib.Cli.Posix.Error> =
     Stdlib.Cli.__Posix.__withParent path (fun fd name -> Stdlib.Cli.__Posix.__withCString name (fun ptr -> fn fd ptr))

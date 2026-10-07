@@ -1,9 +1,12 @@
-// CliFileError.dark - render upstream-compatible filesystem errors.
+// Imported upstream FileError nested module.
+module Darklang.Stdlib.Cli.FileSystem.FileError
 
-module Stdlib.Cli.FileSystem.FileError
+/// Render a FileError for display or for callers that haven't migrated to
+/// pattern-matching on the enum yet.
+let toString (err: FileError) : String =
+  match err with
+  | NotFound -> "File not found"
+  | OsAccessDenied -> "Permission denied"
+  | Other msg -> msg
 
-let toString (error: Stdlib.Cli.FileSystem.FileError) : String =
-    match error with
-    | NotFound -> "File not found"
-    | OsAccessDenied -> "Permission denied"
-    | Other message -> message
+

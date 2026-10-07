@@ -17,6 +17,7 @@ StdLib/UInt128.dark
 StdLib/Bool.dark
 StdLib/Cli/FileSystem.dark
 StdLib/Cli/FileSystem/FileError.dark
+StdLib/Cli/FileSystem/__Packed.dark
 StdLib/Env.dark
 StdLib/Builtin.dark
 StdLib/Builtin/__Posix.dark

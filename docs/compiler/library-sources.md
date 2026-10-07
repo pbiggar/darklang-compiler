@@ -41,8 +41,10 @@ fragments use `__` even where the interpreter also has private helpers.
 | `StdLib/Bool.dark` | `Darklang.Stdlib.Bool`  | `packages/darklang/stdlib/bool.dark` |
 | `StdLib/Cli/FileSystem.dark` | `Stdlib.Cli.FileSystem`  | `packages/darklang/stdlib/cli/fileSystem.dark` |
 | `StdLib/Cli/FileSystem/FileError.dark` | `Stdlib.Cli.FileSystem.FileError`  | `packages/darklang/stdlib/cli/fileSystem.dark` |
+| `StdLib/Cli/FileSystem/__Packed.dark` | `Darklang.Stdlib.Cli.FileSystem` | Private decoder for native directory adapter |
 | `StdLib/Env.dark` | `Stdlib.Env`  | `packages/darklang/stdlib/env.dark` |
 | `StdLib/Builtin.dark` | `Builtin`  | Portable interpreter builtin bridges plus native adapter helpers (`backend/src/Builtins/Builtins.Pure/Libs/UInt64.fs` and `backend/src/Builtins/Builtins.Cli/Libs/{Directory,File,Environment}.fs`) |
+| `StdLib/Builtin/__Posix.dark` | `Builtin` | Interpreter POSIX builtin bridge (`backend/src/Builtins/Builtins.Cli/Libs/Posix.fs`) |
 | `StdLib/Tuple2.dark` | `Darklang.Stdlib.Tuple2`  | `packages/darklang/stdlib/tuple2.dark` |
 | `StdLib/Tuple3.dark` | `Darklang.Stdlib.Tuple3`  | `packages/darklang/stdlib/tuple3.dark` |
 | `StdLib/Result.dark` | `Darklang.Stdlib.Result`  | `packages/darklang/stdlib/result.dark` |
@@ -52,13 +54,18 @@ fragments use `__` even where the interpreter also has private helpers.
 | `StdLib/Print.dark` | `Darklang.Stdlib`  | `packages/darklang/stdlib/print.dark` |
 | `StdLib/Fun.dark` | `Darklang.Stdlib.Fun`  | `packages/darklang/stdlib/fun.dark` |
 | `StdLib/Float.dark` | `Darklang.Stdlib.Float`  | `packages/darklang/stdlib/float.dark` |
+| `StdLib/Cli/__Posix.dark` | `Darklang.Stdlib.Cli.__Posix` | Private native syscall boundary for interpreter POSIX operations |
+| `StdLib/Cli/__Fnmatch.dark` | `Darklang.Stdlib.Cli.__Fnmatch` | Private POSIX pattern matching implementation |
 | `StdLib/Cli/Posix.dark` | `Darklang.Stdlib.Cli.Posix`  | `packages/darklang/stdlib/cli/posix.dark` |
+| `StdLib/Cli/Posix/__Error.dark` | `Darklang.Stdlib.Cli.Posix` | Private conversion from the existing native CLI error record |
 | `StdLib/Cli/Posix/Modes.dark` | `Darklang.Stdlib.Cli.Posix.Modes`  | `packages/darklang/stdlib/cli/posix.dark` |
+| `StdLib/Cli/Posix/OpenFlags.dark` | `Darklang.Stdlib.Cli.Posix.OpenFlags` | `packages/darklang/stdlib/cli/posix.dark` |
 | `StdLib/Cli/Posix/Errno.dark` | `Darklang.Stdlib.Cli.Posix.Errno`  | `packages/darklang/stdlib/cli/posix.dark` |
 | `StdLib/Cli/Posix/StatMode.dark` | `Darklang.Stdlib.Cli.Posix.StatMode`  | `packages/darklang/stdlib/cli/posix.dark` |
 | `StdLib/Retry.dark` | `Darklang.Stdlib.Retry`  | `packages/darklang/stdlib/retry.dark` |
 | `StdLib/Cli/Path.dark` | `Darklang.Stdlib.Cli.Path`  | `packages/darklang/stdlib/cli/path.dark` |
 | `StdLib/Cli/File.dark` | `Darklang.Stdlib.Cli.File`  | `packages/darklang/stdlib/cli/file.dark` |
+| `StdLib/Cli/Dir.dark` | `Darklang.Stdlib.Cli.Dir` | `packages/darklang/stdlib/cli/dir.dark` |
 | `StdLib/String/__Unicode/__Data.dark` | `Darklang.Stdlib.String.__Unicode.__Data`  | Generated compiler Unicode lookup data |
 | `StdLib/String/__Unicode/__Data/__Index00.dark` | `Darklang.Stdlib.String.__Unicode.__Data`  | Generated compiler Unicode lookup data |
 | `StdLib/String/__Unicode/__Data/__Index01.dark` | `Darklang.Stdlib.String.__Unicode.__Data`  | Generated compiler Unicode lookup data |
