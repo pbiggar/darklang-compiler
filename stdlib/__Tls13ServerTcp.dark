@@ -24,7 +24,7 @@ let __receive (connection: Stdlib.Network.TcpConnection) (signals: Stdlib.Networ
         else Stdlib.Tls13ServerTcp.__receive connection signals deadline (Stdlib.Blob.concat [pending, bytes]) initial)
   | _, _ -> Error "TLS server clock or shutdown check failed"
 
-let __hello (connection: Stdlib.Network.TcpConnection) (signals: Stdlib.Network.ShutdownSignals) (deadline: Int64) (pending: Blob) (handshake: Blob) (records: Int64) : Stdlib.Result.Result<(Blob * Blob), String> =
+let __hello (connection: Stdlib.Network.TcpConnection) (signals: Stdlib.Network.ShutdownSignals) (deadline: Int64) (pending: Blob) (handshake: Blob) (records: Int64) (initial: Bool) : Stdlib.Result.Result<(Blob * Blob), String> =
   if records > 64L || Stdlib.Blob.__byteLength handshake > 32768L then Error "TLS ClientHello exceeds limit"
   else match Stdlib.Tls13Handshake.parseHandshakeFrame handshake with
   | Ok frame ->
@@ -32,9 +32,10 @@ let __hello (connection: Stdlib.Network.TcpConnection) (signals: Stdlib.Network.
     else Ok ((frame.raw, pending))
   | Error (Invalid message) -> Error message
   | Error Incomplete ->
-    Stdlib.Tls13ServerTcp.__receive connection signals deadline pending true |> Stdlib.Result.andThen (fun received ->
-      if received.record.contentType != 22L || Stdlib.Blob.__byteLength received.record.payload > 16384L then Error "Expected plaintext TLS handshake"
-      else Stdlib.Tls13ServerTcp.__hello connection signals deadline received.pending (Stdlib.Blob.concat [handshake, received.record.payload]) (records + 1L))
+    Stdlib.Tls13ServerTcp.__receive connection signals deadline pending (initial && records == 0L) |> Stdlib.Result.andThen (fun received ->
+      if Stdlib.Bool.not initial && received.record.contentType == 20L && Stdlib.Blob.toHex received.record.payload == "01" then Stdlib.Tls13ServerTcp.__hello connection signals deadline received.pending handshake (records + 1L) initial
+      else if received.record.contentType != 22L || Stdlib.Blob.__byteLength received.record.payload > 16384L then Error "Expected plaintext TLS handshake"
+      else Stdlib.Tls13ServerTcp.__hello connection signals deadline received.pending (Stdlib.Blob.concat [handshake, received.record.payload]) (records + 1L) initial)
 
 let __sendFlight (connection: Stdlib.Network.TcpConnection) (keys: Stdlib.Tls13.TrafficKeys) (data: Blob) (offset: Int64) : Stdlib.Result.Result<Unit, String> =
   let remaining = Stdlib.Blob.__byteLength data - offset in
@@ -57,14 +58,26 @@ let __finished (connection: Stdlib.Network.TcpConnection) (signals: Stdlib.Netwo
       if opened.contentType != 22L then Error "Expected TLS client Finished"
       else Stdlib.Tls13ServerTcp.__finished connection signals deadline flight opened.nextKeys received.pending (Stdlib.Blob.concat [message, opened.content]) (records + 1L)))
 
+let __negotiate (connection: Stdlib.Network.TcpConnection) (signals: Stdlib.Network.ShutdownSignals) (identity: Stdlib.TlsServerIdentity.Identity) (deadline: Int64) (hello: Blob) (pending: Blob) : Stdlib.Result.Result<(Stdlib.Tls13ServerHandshake.Flight * Blob), String> =
+  match Stdlib.Tls13ServerHandshake.start identity hello ["h2", "http/1.1"] None with
+  | Ok flight -> Ok ((flight, pending))
+  | Error "TLS ClientHello requires HelloRetryRequest" ->
+    Stdlib.Tls13ServerHello.parse hello |> Stdlib.Result.andThen Stdlib.Tls13ServerRetry.create |> Stdlib.Result.andThen (fun retry ->
+      Stdlib.Tls13.serializePlaintext 22L retry.hello |> Stdlib.Result.andThen (Stdlib.Tls13Client.__send connection) |> Stdlib.Result.andThen (fun _unit ->
+        Stdlib.Tls13ServerTcp.__hello connection signals deadline pending Stdlib.Blob.empty 0L false |> Stdlib.Result.andThen (fun second ->
+          let (hello, pending) = second in
+          Stdlib.Tls13ServerHandshake.startAfterRetry identity retry hello ["h2", "http/1.1"] None |> Stdlib.Result.map (fun flight -> ((flight, pending))))))
+  | Error message -> Error message
+
 let accept (connection: Stdlib.Network.TcpConnection) (signals: Stdlib.Network.ShutdownSignals) (identity: Stdlib.TlsServerIdentity.Identity) : Stdlib.Result.Result<Stdlib.Tls13ServerTcp.Accepted, String> =
   match Stdlib.Network.monotonicMillis () with
   | Error _ -> Error "TLS server clock failed"
   | Ok now ->
     let deadline = now + 10000L in
-    Stdlib.Tls13ServerTcp.__hello connection signals deadline Stdlib.Blob.empty Stdlib.Blob.empty 0L |> Stdlib.Result.andThen (fun pair ->
+    Stdlib.Tls13ServerTcp.__hello connection signals deadline Stdlib.Blob.empty Stdlib.Blob.empty 0L true |> Stdlib.Result.andThen (fun pair ->
       let (hello, pending) = pair in
-      Stdlib.Tls13ServerHandshake.start identity hello ["h2", "http/1.1"] None |> Stdlib.Result.andThen (fun flight ->
+      Stdlib.Tls13ServerTcp.__negotiate connection signals identity deadline hello pending |> Stdlib.Result.andThen (fun negotiated ->
+        let (flight, pending) = negotiated in
         Stdlib.Tls13.serializePlaintext 22L flight.hello |> Stdlib.Result.andThen (fun wire ->
           Stdlib.Tls13Client.__send connection wire |> Stdlib.Result.andThen (fun _ ->
             Stdlib.Tls13ServerTcp.__sendFlight connection flight.handshakeSend flight.encrypted 0L |> Stdlib.Result.andThen (fun _ ->

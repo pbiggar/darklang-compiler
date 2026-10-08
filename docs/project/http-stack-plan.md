@@ -111,7 +111,12 @@ and returns normally on shutdown during an incomplete body. Its bounded
 Retry CID history suppresses replay of both completed and aborted handshakes.
 Independent aioquic checks cover 70 KiB echo, HEAD representation lengths,
 early 413, unsupported ALPN, replay suppression, rebind and zero leaks.
-HelloRetryRequest and TLS KeyUpdate remain unfinished.
+TCP TLS now supports one X25519 HelloRetryRequest, the message_hash transcript
+replacement, compatibility CCS, immutable second ClientHello fields, permitted
+padding/early-data changes and PSK age/binder updates or incompatible-identity
+removal. OpenSSL verifies retried HTTP/1.1 and h2 certificate/Finished flights;
+25 independent offer/transcript vectors cover positive and negative changes.
+QUIC CRYPTO retry integration and TLS KeyUpdate remain unfinished.
 The Retry foundation authenticates bounded address/CID-bound HMAC tokens with
 a 30-second lifetime and serializes QUIC v1 Retry packets. Independent Python
 and aioquic checks cover token tampering, expiry, IPv4/IPv6 binding and packet

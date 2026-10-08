@@ -42,13 +42,13 @@ let __finishFlight (hello: Blob) (encrypted: Blob) (transcript: Blob) (secrets: 
                 Stdlib.Tls13.trafficKeys server |> Stdlib.Result.map (fun applicationSend ->
                   Stdlib.Tls13ServerHandshake.Flight { hello = hello, encrypted = encrypted, transcript = transcript, handshakeReceive = handshakeReceive, handshakeSend = handshakeSend, clientFinished = clientFinished, applicationReceive = applicationReceive, applicationSend = applicationSend, protocol = protocol, secrets = Stdlib.Tls13ServerHandshake.Secrets { handshakeClient = secrets.client, handshakeServer = secrets.server, applicationClient = client, applicationServer = server } }))))))))
 
-let __flight (identity: Stdlib.TlsServerIdentity.Identity) (offer: Stdlib.Tls13ServerHello.Hello) (protocol: String) (parameters: Stdlib.Option.Option<Blob>) (share: Blob) : Stdlib.Result.Result<Stdlib.Tls13ServerHandshake.Flight, String> =
+let __flight (identity: Stdlib.TlsServerIdentity.Identity) (offer: Stdlib.Tls13ServerHello.Hello) (protocol: String) (parameters: Stdlib.Option.Option<Blob>) (share: Blob) (prefix: Blob) : Stdlib.Result.Result<Stdlib.Tls13ServerHandshake.Flight, String> =
   Stdlib.X25519.generateKeyPair () |> Stdlib.Result.andThen (fun pair ->
     Stdlib.X25519.sharedSecret pair.privateKey share |> Stdlib.Result.andThen (fun shared ->
       Stdlib.Crypto.secureRandomBytes 32L |> Stdlib.Result.andThen (fun random ->
         let extensions = Stdlib.Tls13ServerHandshake.__extensions [Stdlib.Tls13.__extension 43L (Stdlib.Blob.__fromInt64List [3L, 4L]), Stdlib.Tls13.__extension 51L (Stdlib.Blob.concat [Stdlib.Tls13.__u16 29L, Stdlib.Tls13.__u16 32L, pair.publicKey])] in
         let hello = Stdlib.Tls13ServerHandshake.__message 2L (Stdlib.Blob.concat [Stdlib.Blob.__fromInt64List [3L, 3L], random, Stdlib.Blob.__fromInt64List [Stdlib.Blob.__byteLength offer.session], offer.session, Stdlib.Blob.__fromInt64List [19L, 1L, 0L], extensions]) in
-        Stdlib.Tls13Handshake.deriveHandshakeSecrets shared offer.raw hello |> Stdlib.Result.andThen (fun secrets ->
+        Stdlib.Tls13Handshake.__deriveHandshakeSecretsTranscript shared (Stdlib.Blob.concat [prefix, offer.raw, hello]) |> Stdlib.Result.andThen (fun secrets ->
           Stdlib.TlsAlpn.offer (if protocol == "" then [] else [protocol]) |> Stdlib.Result.andThen (fun alpn ->
             let extensions = if protocol == "" then [] else [Stdlib.Tls13.__extension 16L alpn] in
             let extensions = match parameters with | None -> extensions | Some data -> Stdlib.List.push extensions (Stdlib.Tls13.__extension 57L data) in
@@ -68,7 +68,18 @@ let start (identity: Stdlib.TlsServerIdentity.Identity) (clientHello: Blob) (pro
       Stdlib.Tls13ServerHandshake.__identityAlgorithms identity hello |> Stdlib.Result.andThen (fun _ ->
         match hello.keyShare with
         | None -> Error "TLS ClientHello requires HelloRetryRequest"
-        | Some share -> Stdlib.Tls13ServerHandshake.__flight identity hello protocol parameters share)))
+        | Some share -> Stdlib.Tls13ServerHandshake.__flight identity hello protocol parameters share Stdlib.Blob.empty)))
+
+let startAfterRetry (identity: Stdlib.TlsServerIdentity.Identity) (retry: Stdlib.Tls13ServerRetry.State) (clientHello: Blob) (protocols: List<String>) (parameters: Stdlib.Option.Option<Blob>) : Stdlib.Result.Result<Stdlib.Tls13ServerHandshake.Flight, String> =
+  Stdlib.Tls13ServerRetry.validate retry clientHello |> Stdlib.Result.andThen (fun checked ->
+    let (hello, transcript) = checked in
+    Stdlib.Tls13ServerHello.selectProtocol hello protocols |> Stdlib.Result.andThen (fun protocol ->
+      Stdlib.Tls13ServerHandshake.__identityAlgorithms identity hello |> Stdlib.Result.andThen (fun _unit ->
+        match hello.keyShare with
+        | None -> Error "TLS retry did not provide X25519"
+        | Some share ->
+          let prefix = Stdlib.Http2Wire.__slice transcript 0L (Stdlib.Blob.__byteLength transcript - Stdlib.Blob.__byteLength hello.raw) in
+          Stdlib.Tls13ServerHandshake.__flight identity hello protocol parameters share prefix)))
 
 let finish (flight: Stdlib.Tls13ServerHandshake.Flight) (message: Blob) : Stdlib.Result.Result<Stdlib.Tls13ServerHandshake.Ready, String> =
   if Stdlib.Blob.__byteLength flight.clientFinished != 32L then Error "Invalid TLS server Finished state"

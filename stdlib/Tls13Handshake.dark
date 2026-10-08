@@ -42,15 +42,14 @@ let __or32 (bytes: Blob) (index: Int64) (acc: Int64) : Int64 =
          (Stdlib.Int64.bitwiseOr acc (Stdlib.Blob.__getByte bytes index))
 
 // RFC 8446, §7.1: early_secret -> derived -> handshake_secret.
-let deriveHandshakeSecrets (sharedSecret: Blob) (clientHello: Blob) (serverHello: Blob)
+let __deriveHandshakeSecretsTranscript (sharedSecret: Blob) (transcript: Blob)
   : Stdlib.Result.Result<Stdlib.Tls13Handshake.HandshakeSecrets, String> =
   if Stdlib.Blob.__byteLength sharedSecret != 32L then
     Error "TLS X25519 shared secret must be 32 bytes"
   else if Stdlib.Tls13Handshake.__or32 sharedSecret 0L 0L == 0L then
     Error "TLS X25519 shared secret is zero"
-  else if Stdlib.Bool.not (Stdlib.Tls13Handshake.__wholeHandshake clientHello 1L) ||
-          Stdlib.Bool.not (Stdlib.Tls13Handshake.__wholeHandshake serverHello 2L) then
-    Error "TLS handshake transcript requires complete ClientHello and ServerHello"
+  else if Stdlib.Blob.__byteLength transcript == 0L || Stdlib.Blob.__byteLength transcript > 66560L then
+    Error "Invalid TLS handshake transcript size"
   else
     let zero = Stdlib.Blob.__fromInt64List (Stdlib.List.repeatUnsafe 32 0L) in
     let emptyHash = Stdlib.Crypto.sha256 Stdlib.Blob.empty in
@@ -59,7 +58,6 @@ let deriveHandshakeSecrets (sharedSecret: Blob) (clientHello: Blob) (serverHello
     | Error message -> Error message
     | Ok derived ->
         let handshake = Stdlib.Tls13.hkdfExtract derived sharedSecret in
-        let transcript = Stdlib.Blob.concat [clientHello, serverHello] in
         let transcriptHash = Stdlib.Crypto.sha256 transcript in
         match Stdlib.Tls13.hkdfExpandLabel handshake "c hs traffic" transcriptHash 32L with
         | Error message -> Error message
@@ -69,6 +67,13 @@ let deriveHandshakeSecrets (sharedSecret: Blob) (clientHello: Blob) (serverHello
             | Ok server ->
                 Ok (Stdlib.Tls13Handshake.HandshakeSecrets {
                   client = client, server = server, transcript = transcript })
+
+let deriveHandshakeSecrets (sharedSecret: Blob) (clientHello: Blob) (serverHello: Blob)
+  : Stdlib.Result.Result<Stdlib.Tls13Handshake.HandshakeSecrets, String> =
+  if Stdlib.Blob.__byteLength sharedSecret != 32L then Error "TLS X25519 shared secret must be 32 bytes"
+  else if Stdlib.Tls13Handshake.__or32 sharedSecret 0L 0L == 0L then Error "TLS X25519 shared secret is zero"
+  else if Stdlib.Bool.not (Stdlib.Tls13Handshake.__wholeHandshake clientHello 1L) || Stdlib.Bool.not (Stdlib.Tls13Handshake.__wholeHandshake serverHello 2L) then Error "TLS handshake transcript requires complete ClientHello and ServerHello"
+  else Stdlib.Tls13Handshake.__deriveHandshakeSecretsTranscript sharedSecret (Stdlib.Blob.concat [clientHello, serverHello])
 
 let deriveHandshakeSecrets384 (sharedSecret: Blob) (clientHello: Blob) (serverHello: Blob)
   : Stdlib.Result.Result<Stdlib.Tls13Handshake.HandshakeSecrets, String> =

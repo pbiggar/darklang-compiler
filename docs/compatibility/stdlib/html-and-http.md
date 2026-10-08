@@ -271,7 +271,13 @@ signature offers are checked, with the trust-anchor exception. The independent
 `python3 scripts/test_tls_server_hello.py` and
 `python3 scripts/test_tls_server_handshake.py` exercise OpenSSL negotiation,
 both application directions, invalid Finished and zero-leak cleanup. This
-engine currently requires an initial X25519 share. `HttpServer.Tls.serve`
+engine negotiates X25519 directly or through one HelloRetryRequest. It uses
+the RFC 8446 message_hash transcript replacement and checks the second offer's
+unchanged parameters, single requested share, early-data removal, padding and
+permitted PSK age/binder or incompatible-identity changes. The independent
+`python3 scripts/test_tls_server_retry.py` checks 25 offer/transcript cases and
+real OpenSSL HTTP/1.1/h2 authentication and application traffic after retry.
+`HttpServer.Tls.serve`
 connects it to shutdown-aware TCP records and the shared HTTP/1.1 and HTTP/2
 handlers. Handshake and HTTP/1.1 reads have fixed ten-second deadlines;
 HTTP/2 reads use ten-second idle deadlines and a bounded record count. Record
@@ -280,8 +286,8 @@ and close sends close_notify with the next nonce before releasing the socket.
 The independent `python3 scripts/test_http2_server_tls_peer.py` covers 70 KiB
 uploads/responses, HEAD, early body-limit rejection, Expect, ALPN fallback and
 rejection, fragmented ClientHello, forged Finished, shutdown during handshake
-and application reads, and cleanup. HelloRetryRequest, post-handshake TLS
-KeyUpdate remain pending. The pure
+and application reads, and cleanup. QUIC CRYPTO HelloRetryRequest integration
+and post-handshake TLS KeyUpdate remain pending. The pure
 `QuicServerTls` adapter now requires h3 ALPN and client transport parameters,
 binds the client's initial source connection ID, derives QUIC handshake packet
 keys, and releases application secrets and packet keys only after verifying

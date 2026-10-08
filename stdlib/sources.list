@@ -199,6 +199,7 @@ __RsaPrivate.dark
 __RsaSigning.dark
 TlsServerIdentity.dark
 __Tls13ServerHello.dark
+__Tls13ServerRetry.dark
 Tls13ServerHandshake.dark
 __Tls13ServerTcp.dark
 __QuicServerTls.dark
