@@ -6,69 +6,57 @@ type Transport = {
   read: Unit -> Stdlib.Result.Result<Blob, String>,
   write: Blob -> Stdlib.Result.Result<Unit, String>
 }
-type SecureState = {
-  receive: Stdlib.Tls13Client.ApplicationState,
-  send: Stdlib.Tls13.TrafficKeys
-}
-
-let __send (connection: Stdlib.Network.TcpConnection) (keys: Stdlib.Tls13.TrafficKeys)
-  (bytes: Blob) (offset: Int64) : Stdlib.Result.Result<Stdlib.Tls13.TrafficKeys, String> =
-  let remaining = Stdlib.Blob.__byteLength bytes - offset in
-  if remaining == 0L then Ok keys
-  else
-    let size = if remaining > 2048L then 2048L else remaining in
-    match Stdlib.Tls13.sealRecord keys 23L (Stdlib.Http2Wire.__slice bytes offset size) with
-    | Error message -> Error message
-    | Ok sealed ->
-      match Stdlib.Network.writeTcp connection sealed.bytes with
-      | Error _ -> Error "TLS application write failed"
-      | Ok () -> Stdlib.HttpTransport.__send connection sealed.nextKeys bytes (offset + size)
-
 let __readSecure (connection: Stdlib.Network.TcpConnection) (cell: RawPtr)
   (lifecycle: Stream<Unit>) : Stdlib.Result.Result<Blob, String> =
   match Stdlib.Stream.next lifecycle with
   | None -> Error "HTTP transport is closed"
   | Some _ ->
-    let state = Stdlib.Stream.__cellGet<Stdlib.HttpTransport.SecureState> cell in
-    match Stdlib.Tls13Client.readApplicationChunk connection state.receive with
-    | Error message -> Error message
-    | Ok None -> Ok Stdlib.Blob.empty
+    let state = Stdlib.Stream.__cellGet<Stdlib.Tls13Client.ApplicationState> cell in
+    match Stdlib.Tls13Client.readApplicationChunk connection state with
+    | Error message ->
+      Stdlib.Stream.close lifecycle
+      Error message
+    | Ok None ->
+      Stdlib.Stream.close lifecycle
+      Ok Stdlib.Blob.empty
     | Ok (Some pair) ->
-      let (bytes, receive) = pair in
-      let next = Stdlib.HttpTransport.SecureState { receive = receive, send = state.send } in
+      let (bytes, next) = pair in
       let _ = Stdlib.Stream.__cellSet cell next in
       Ok bytes
 
 let __writeSecure (connection: Stdlib.Network.TcpConnection) (cell: RawPtr)
-  (lifecycle: Stream<Unit>) (bytes: Blob) : Stdlib.Result.Result<Unit, String> =
+  (lifecycle: Stream<Unit>) (bytes: Blob) (offset: Int64) : Stdlib.Result.Result<Unit, String> =
   match Stdlib.Stream.next lifecycle with
   | None -> Error "HTTP transport is closed"
   | Some _ ->
-    let state = Stdlib.Stream.__cellGet<Stdlib.HttpTransport.SecureState> cell in
-    match Stdlib.HttpTransport.__send connection state.send bytes 0L with
-    | Error message -> Error message
-    | Ok send ->
-      let next = Stdlib.HttpTransport.SecureState { receive = state.receive, send = send } in
-      let _ = Stdlib.Stream.__cellSet cell next in
-      Ok ()
+    let remaining = Stdlib.Blob.__byteLength bytes - offset in
+    if remaining == 0L then Ok ()
+    else
+      let size = if remaining > 2048L then 2048L else remaining in
+      let state = Stdlib.Stream.__cellGet<Stdlib.Tls13Client.ApplicationState> cell in
+      Stdlib.Tls13.sealRecord state.updates.send 23L (Stdlib.Http2Wire.__slice bytes offset size) |> Stdlib.Result.andThen (fun sealed ->
+        let updates = { state.updates with send = sealed.nextKeys } in
+        let _ = Stdlib.Stream.__cellSet cell { state with updates = updates } in
+        match Stdlib.Network.writeTcp connection sealed.bytes with
+        | Error _ ->
+          Stdlib.Stream.close lifecycle
+          Error "TLS application write failed"
+        | Ok () -> Stdlib.HttpTransport.__writeSecure connection cell lifecycle bytes (offset + size))
 
 let __disposeSecure (connection: Stdlib.Network.TcpConnection) (cell: RawPtr) : Unit =
   let _ = Stdlib.Network.closeTcp connection in
-  Stdlib.Stream.__cellDispose<Stdlib.HttpTransport.SecureState> cell
+  Stdlib.Stream.__cellDispose<Stdlib.Tls13Client.ApplicationState> cell
 
 // Each closure retains the lifecycle. Once closed, none may touch the freed cell.
-let secure (connection: Stdlib.Network.TcpConnection) (receive: Stdlib.Tls13.TrafficKeys)
-  (send: Stdlib.Tls13.TrafficKeys) (pending: Blob) : Stdlib.HttpTransport.Transport =
-  let initial = Stdlib.HttpTransport.SecureState {
-    receive = Stdlib.Tls13Client.ApplicationState { keys = receive, pending = pending, records = 0L },
-    send = send } in
+let secure (connection: Stdlib.Network.TcpConnection) (keys: Stdlib.Tls13Client.SecureKeys) : Stdlib.HttpTransport.Transport =
+  let initial = Stdlib.Tls13Client.applicationState keys in
   let cell = Stdlib.Stream.__cellNew initial in
   let dispose = fun _unit -> Stdlib.HttpTransport.__disposeSecure connection cell in
   let lifecycle = Stdlib.Stream.__new (fun _unit -> Some ()) dispose in
   Stdlib.HttpTransport.Transport {
     lifecycle = lifecycle,
     read = fun _unit -> Stdlib.HttpTransport.__readSecure connection cell lifecycle,
-    write = fun bytes -> Stdlib.HttpTransport.__writeSecure connection cell lifecycle bytes }
+    write = fun bytes -> Stdlib.HttpTransport.__writeSecure connection cell lifecycle bytes 0L }
 
 let __readPlain (connection: Stdlib.Network.TcpConnection)
   (signals: Stdlib.Option.Option<Stdlib.Network.ShutdownSignals>) (deadline: Int64)

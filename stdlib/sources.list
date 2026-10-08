@@ -201,6 +201,7 @@ TlsServerIdentity.dark
 __Tls13ServerHello.dark
 __Tls13ServerRetry.dark
 Tls13ServerHandshake.dark
+__Tls13KeyUpdate.dark
 __Tls13ServerTcp.dark
 __QuicServerTls.dark
 __QuicServerRetry.dark

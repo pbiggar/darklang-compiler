@@ -1,0 +1,73 @@
+// __Tls13KeyUpdate.dark - Pure bounded post-handshake TLS messages and directional traffic-secret updates.
+module Darklang.Stdlib.Tls13KeyUpdate
+
+type State = { receiveSecret: Blob, sendSecret: Blob, send: Stdlib.Tls13.TrafficKeys, pending: Blob, fromServer: Bool, tickets: Int64, ticketBytes: Int64, updates: Int64 }
+type Processed = { state: Stdlib.Tls13KeyUpdate.State, receive: Stdlib.Tls13.TrafficKeys, data: Stdlib.Option.Option<Blob>, closed: Bool, reply: Stdlib.Option.Option<Blob> }
+
+let create (receive: Blob) (send: Blob) (keys: Stdlib.Tls13.TrafficKeys) (fromServer: Bool) : Stdlib.Tls13KeyUpdate.State =
+  Stdlib.Tls13KeyUpdate.State { receiveSecret = receive, sendSecret = send, send = keys, pending = Stdlib.Blob.empty, fromServer = fromServer, tickets = 0L, ticketBytes = 0L, updates = 0L }
+
+let __next (secret: Blob) (suite: Int64) : Stdlib.Result.Result<(Blob * Stdlib.Tls13.TrafficKeys), String> =
+  let expand = if suite == 4866L then Stdlib.Tls13.hkdfExpandLabel384 else Stdlib.Tls13.hkdfExpandLabel in
+  let traffic = if suite == 4866L then Stdlib.Tls13.trafficKeys384 else if suite == 4867L then Stdlib.Tls13.trafficKeysChaCha else Stdlib.Tls13.trafficKeys in
+  if (suite != 4865L && suite != 4866L && suite != 4867L) || Stdlib.Blob.__byteLength secret != (if suite == 4866L then 48L else 32L) then Error "Invalid TLS update secret or cipher suite"
+  else expand secret "traffic upd" Stdlib.Blob.empty (if suite == 4866L then 48L else 32L) |> Stdlib.Result.andThen (fun secret -> traffic secret |> Stdlib.Result.map (fun keys -> ((secret, keys))))
+
+let __updated (state: Stdlib.Tls13KeyUpdate.State) (keys: Stdlib.Tls13.TrafficKeys) (request: Int64) : Stdlib.Result.Result<Stdlib.Tls13KeyUpdate.Processed, String> =
+  if state.updates >= 64L || request > 1L || request < 0L || state.send.cipherSuite != keys.cipherSuite then Error "Invalid or excessive TLS KeyUpdate"
+  else Stdlib.Tls13KeyUpdate.__next state.receiveSecret keys.cipherSuite |> Stdlib.Result.andThen (fun received ->
+    let (secret, receive) = received in
+    let next = { state with receiveSecret = secret, pending = Stdlib.Blob.empty, updates = state.updates + 1L } in
+    if request == 0L then Ok (Stdlib.Tls13KeyUpdate.Processed { state = next, receive = receive, data = None, closed = false, reply = None })
+    else Stdlib.Tls13.sealRecord state.send 22L (Stdlib.Blob.__fromInt64List [24L,0L,0L,1L,0L]) |> Stdlib.Result.andThen (fun sealed ->
+      Stdlib.Tls13KeyUpdate.__next state.sendSecret state.send.cipherSuite |> Stdlib.Result.map (fun sending ->
+        let (secret, send) = sending in
+        Stdlib.Tls13KeyUpdate.Processed { state = { next with sendSecret = secret, send = send }, receive = receive, data = None, closed = false, reply = Some sealed.bytes })))
+
+let __extensions (data: Blob) (position: Int64) (seen: List<Int64>) : Bool =
+  let length = Stdlib.Blob.__byteLength data in
+  if position == length then true
+  else if position + 4L > length || Stdlib.List.length seen >= 64 then false
+  else
+    let kind = Stdlib.Tls13.__read16 data position in
+    let size = Stdlib.Tls13.__read16 data (position + 2L) in
+    if position + 4L + size > length || Stdlib.List.member seen kind || (kind == 42L && size != 4L) then false
+    else Stdlib.Tls13KeyUpdate.__extensions data (position + 4L + size) (Stdlib.List.push seen kind)
+
+let __ticket (body: Blob) : Bool =
+  let length = Stdlib.Blob.__byteLength body in
+  if length < 13L then false
+  else
+    let ticketOffset = 9L + Stdlib.Blob.__getByte body 8L in
+    if ticketOffset + 2L > length then false
+    else
+      let size = Stdlib.Tls13.__read16 body ticketOffset in
+      let extensionOffset = ticketOffset + 2L + size in
+      if size == 0L || extensionOffset + 2L > length || Stdlib.Tls13.__read16 body extensionOffset != length - extensionOffset - 2L then false
+      else Stdlib.Tls13KeyUpdate.__extensions (Stdlib.Http2Wire.__slice body (extensionOffset + 2L) (length - extensionOffset - 2L)) 0L []
+
+let __messages (state: Stdlib.Tls13KeyUpdate.State) (keys: Stdlib.Tls13.TrafficKeys) (bytes: Blob) : Stdlib.Result.Result<Stdlib.Tls13KeyUpdate.Processed, String> =
+  if Stdlib.Blob.__byteLength bytes == 0L then Ok (Stdlib.Tls13KeyUpdate.Processed { state = { state with pending = bytes }, receive = keys, data = None, closed = false, reply = None })
+  else if Stdlib.Blob.__byteLength bytes > 1048576L then Error "TLS post-handshake buffer exhausted"
+  else match Stdlib.Tls13Handshake.parseHandshakeFrame bytes with
+  | Error Incomplete -> Ok (Stdlib.Tls13KeyUpdate.Processed { state = { state with pending = bytes }, receive = keys, data = None, closed = false, reply = None })
+  | Error _ -> Error "Invalid TLS post-handshake framing"
+  | Ok frame ->
+    if frame.kind == 24L then
+      if Stdlib.Blob.__byteLength frame.body != 1L || Stdlib.Blob.__byteLength frame.remaining != 0L then Error "Invalid TLS KeyUpdate boundary"
+      else Stdlib.Tls13KeyUpdate.__updated state keys (Stdlib.Blob.__getByte frame.body 0L)
+    else if frame.kind == 4L && state.fromServer then
+      if state.tickets >= 64L || state.ticketBytes + Stdlib.Blob.__byteLength frame.raw > 1048576L || Stdlib.Bool.not (Stdlib.Tls13KeyUpdate.__ticket frame.body) then Error "Invalid or excessive TLS session ticket"
+      else Stdlib.Tls13KeyUpdate.__messages { state with tickets = state.tickets + 1L, ticketBytes = state.ticketBytes + Stdlib.Blob.__byteLength frame.raw } keys frame.remaining
+    else Error "Forbidden TLS post-handshake message"
+
+let process (state: Stdlib.Tls13KeyUpdate.State) (keys: Stdlib.Tls13.TrafficKeys) (record: Stdlib.Tls13.Record) : Stdlib.Result.Result<Stdlib.Tls13KeyUpdate.Processed, String> =
+  if record.contentType != 23L then Error "Expected encrypted TLS application record"
+  else Stdlib.Tls13.openRecord keys record |> Stdlib.Result.andThen (fun opened ->
+    if opened.contentType == 22L then
+      if Stdlib.Blob.__byteLength opened.content == 0L then Error "Empty TLS handshake record"
+      else Stdlib.Tls13KeyUpdate.__messages state opened.nextKeys (Stdlib.Blob.concat [state.pending, opened.content])
+    else if Stdlib.Blob.__byteLength state.pending != 0L then Error "TLS application data interleaved with a handshake message"
+    else if opened.contentType == 23L then Ok (Stdlib.Tls13KeyUpdate.Processed { state = state, receive = opened.nextKeys, data = Some opened.content, closed = false, reply = None })
+    else if opened.contentType == 21L && Stdlib.Blob.__byteLength opened.content == 2L && Stdlib.Blob.__getByte opened.content 1L == 0L then Ok (Stdlib.Tls13KeyUpdate.Processed { state = state, receive = opened.nextKeys, data = None, closed = true, reply = None })
+    else Error "Unexpected TLS post-handshake record")

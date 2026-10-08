@@ -6,12 +6,15 @@ type Received = { record: Stdlib.Tls13.Record, pending: Blob }
 type SecureKeys = {
   client: Stdlib.Tls13.TrafficKeys,
   server: Stdlib.Tls13.TrafficKeys,
+  clientSecret: Blob,
+  serverSecret: Blob,
   pending: Blob
 }
 type ApplicationState = {
   keys: Stdlib.Tls13.TrafficKeys,
   pending: Blob,
-  records: Int64
+  records: Int64,
+  updates: Stdlib.Tls13KeyUpdate.State
 }
 type Negotiated = { keys: Stdlib.Tls13Client.SecureKeys, protocol: String }
 type PemState = {
@@ -309,7 +312,7 @@ let __finish (connection: Stdlib.Network.TcpConnection)
                   match Stdlib.Tls13Client.__send connection sealed.bytes with
                   | Error message -> Error message
                   | Ok () -> Ok (Stdlib.Tls13Client.SecureKeys {
-                      client = clientKeys, server = serverKeys, pending = pending })
+                      client = clientKeys, server = serverKeys, clientSecret = clientSecret, serverSecret = serverSecret, pending = pending })
 
 let handshakeWithProtocols (connection: Stdlib.Network.TcpConnection) (host: String)
   (roots: List<Blob>) (protocols: List<String>)
@@ -352,31 +355,23 @@ let __framedComplete (method: String) (response: Blob) (informational: Int64) : 
         Stdlib.Tls13Client.__framedComplete method parsed.remaining (informational + 1L)
       else true
 
+let applicationState (secure: Stdlib.Tls13Client.SecureKeys) : Stdlib.Tls13Client.ApplicationState =
+  Stdlib.Tls13Client.ApplicationState { keys = secure.server, pending = secure.pending, records = 0L,
+    updates = Stdlib.Tls13KeyUpdate.create secure.serverSecret secure.clientSecret secure.client true }
+
 let __readApplication (connection: Stdlib.Network.TcpConnection)
-  (method: String) (keys: Stdlib.Tls13.TrafficKeys) (pending: Blob) (response: Blob)
-  (records: Int64) : Stdlib.Result.Result<Blob, String> =
-  if records > 8192L || Stdlib.Blob.__byteLength response > 104923136L then
+  (method: String) (state: Stdlib.Tls13Client.ApplicationState) (response: Blob) : Stdlib.Result.Result<Blob, String> =
+  if state.records > 8192L || Stdlib.Blob.__byteLength response > 104923136L then
     Error "TLS HTTP response limit exceeded"
   else
-    match Stdlib.Tls13Client.__receiveRecord connection pending with
+    match Stdlib.Tls13Client.readApplicationChunk connection state with
     | Error message -> Error message
-    | Ok received ->
-      if received.record.contentType != 23L then Error "Unexpected TLS application record"
-      else
-        match Stdlib.Tls13.openRecord keys received.record with
-        | Error message -> Error message
-        | Ok opened ->
-          if opened.contentType == 23L then
-            let updated = Stdlib.Blob.concat [response, opened.content] in
-            if Stdlib.Tls13Client.__framedComplete method updated 0L then Ok updated
-            else Stdlib.Tls13Client.__readApplication connection method opened.nextKeys
-                   received.pending updated (records + 1L)
-          else if opened.contentType == 22L then
-            // NewSessionTicket is post-handshake metadata; this client never resumes.
-            Stdlib.Tls13Client.__readApplication connection method opened.nextKeys
-              received.pending response (records + 1L)
-          else if Stdlib.Blob.toHex opened.content == "0100" then Ok response
-          else Error "TLS peer sent an alert"
+    | Ok None -> Ok response
+    | Ok (Some pair) ->
+      let (bytes, next) = pair in
+      let updated = Stdlib.Blob.concat [response, bytes] in
+      if Stdlib.Tls13Client.__framedComplete method updated 0L then Ok updated
+      else Stdlib.Tls13Client.__readApplication connection method next updated
 
 let __copyBytes (source: Blob) (index: Int64) (end_: Int64)
   (bytes: List<Int64>) : Blob =
@@ -386,9 +381,9 @@ let __copyBytes (source: Blob) (index: Int64) (end_: Int64)
 
 let __sendApplication (connection: Stdlib.Network.TcpConnection)
   (keys: Stdlib.Tls13.TrafficKeys) (request: Blob) (offset: Int64)
-  : Stdlib.Result.Result<Unit, String> =
+  : Stdlib.Result.Result<Stdlib.Tls13.TrafficKeys, String> =
   let remaining = Stdlib.Blob.__byteLength request - offset in
-  if remaining == 0L then Ok ()
+  if remaining == 0L then Ok keys
   else
     let chunkLength = if remaining > 2048L then 2048L else remaining in
     let chunk = Stdlib.Tls13Client.__copyBytes request offset
@@ -408,8 +403,7 @@ let exchange (connection: Stdlib.Network.TcpConnection) (host: String) (method: 
   | Ok secure ->
     match Stdlib.Tls13Client.__sendApplication connection secure.client request 0L with
     | Error message -> Error message
-    | Ok () -> Stdlib.Tls13Client.__readApplication connection method secure.server
-                 secure.pending Stdlib.Blob.empty 0L
+    | Ok send -> Stdlib.Tls13Client.__readApplication connection method (Stdlib.Tls13Client.applicationState { secure with client = send }) Stdlib.Blob.empty
 
 let beginExchange (connection: Stdlib.Network.TcpConnection) (host: String)
   (roots: List<Blob>) (request: Blob)
@@ -419,8 +413,7 @@ let beginExchange (connection: Stdlib.Network.TcpConnection) (host: String)
   | Ok secure ->
     match Stdlib.Tls13Client.__sendApplication connection secure.client request 0L with
     | Error message -> Error message
-    | Ok () -> Ok (Stdlib.Tls13Client.ApplicationState {
-                 keys = secure.server, pending = secure.pending, records = 0L })
+    | Ok send -> Ok (Stdlib.Tls13Client.applicationState { secure with client = send })
 
 let readApplicationChunk (connection: Stdlib.Network.TcpConnection)
   (state: Stdlib.Tls13Client.ApplicationState)
@@ -430,19 +423,11 @@ let readApplicationChunk (connection: Stdlib.Network.TcpConnection)
     match Stdlib.Tls13Client.__receiveRecord connection state.pending with
     | Error message -> Error message
     | Ok received ->
-      if received.record.contentType != 23L then Error "Unexpected TLS application record"
-      else
-        match Stdlib.Tls13.openRecord state.keys received.record with
-        | Error message -> Error message
-        | Ok opened ->
-          let next = Stdlib.Tls13Client.ApplicationState {
-            keys = opened.nextKeys, pending = received.pending,
-            records = state.records + 1L } in
-          if opened.contentType == 23L then
-            if Stdlib.Blob.__byteLength opened.content == 0L then
-              Stdlib.Tls13Client.readApplicationChunk connection next
-            else Ok (Some ((opened.content, next)))
-          else if opened.contentType == 22L then
-            Stdlib.Tls13Client.readApplicationChunk connection next
-          else if Stdlib.Blob.toHex opened.content == "0100" then Ok None
-          else Error "TLS peer sent an alert"
+      Stdlib.Tls13KeyUpdate.process state.updates state.keys received.record |> Stdlib.Result.andThen (fun processed ->
+        let next = Stdlib.Tls13Client.ApplicationState { keys = processed.receive, pending = received.pending, records = state.records + 1L, updates = processed.state } in
+        let replied = match processed.reply with | None -> Ok () | Some bytes -> Stdlib.Tls13Client.__send connection bytes in
+        replied |> Stdlib.Result.andThen (fun _unit ->
+          if processed.closed then Ok None
+          else match processed.data with
+          | Some bytes -> if Stdlib.Blob.__byteLength bytes != 0L then Ok (Some ((bytes, next))) else Stdlib.Tls13Client.readApplicationChunk connection next
+          | None -> Stdlib.Tls13Client.readApplicationChunk connection next))

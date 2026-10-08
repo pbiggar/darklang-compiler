@@ -241,7 +241,7 @@ let __secureRequest (connection: Stdlib.Network.TcpConnection) (url: Stdlib.Http
   | Ok negotiated ->
     let secure = negotiated.keys in
     if negotiated.protocol == "h2" then
-      let transport = Stdlib.HttpTransport.secure connection secure.server secure.client secure.pending in
+      let transport = Stdlib.HttpTransport.secure connection secure in
       let response = Stdlib.Http2.request transport method url headers body in
       let _ = Stdlib.HttpTransport.close transport in
       match response with
@@ -250,9 +250,8 @@ let __secureRequest (connection: Stdlib.Network.TcpConnection) (url: Stdlib.Http
     else
       match Stdlib.Tls13Client.__sendApplication connection secure.client requestBytes 0L with
       | Error _ -> Error Stdlib.HttpClient.RequestError.NetworkError
-      | Ok () ->
-        match Stdlib.Tls13Client.__readApplication connection method secure.server
-                secure.pending Stdlib.Blob.empty 0L with
+      | Ok send ->
+        match Stdlib.Tls13Client.__readApplication connection method (Stdlib.Tls13Client.applicationState { secure with client = send }) Stdlib.Blob.empty with
         | Error _ -> Error Stdlib.HttpClient.RequestError.NetworkError
         | Ok response -> Stdlib.HttpClient.__parseSecureResponse method response 0L
 
@@ -566,7 +565,7 @@ let __secureStream (connection: Stdlib.Network.TcpConnection) (url: Stdlib.HttpW
   | Ok negotiated ->
     let secure = negotiated.keys in
     if negotiated.protocol == "h2" then
-      let transport = Stdlib.HttpTransport.secure connection secure.server secure.client secure.pending in
+      let transport = Stdlib.HttpTransport.secure connection secure in
       match Stdlib.Http2.stream transport method url headers body with
       | Error _ ->
         let _ = Stdlib.HttpTransport.close transport in
@@ -575,8 +574,8 @@ let __secureStream (connection: Stdlib.Network.TcpConnection) (url: Stdlib.HttpW
     else
       match Stdlib.Tls13Client.__sendApplication connection secure.client requestBytes 0L with
       | Error _ -> Error Stdlib.HttpClient.RequestError.NetworkError
-      | Ok () -> Ok (Stdlib.HttpClient.StreamStart.Legacy (Stdlib.HttpClient.StreamTransport.Secure
-        (Stdlib.Tls13Client.ApplicationState { keys = secure.server, pending = secure.pending, records = 0L })))
+      | Ok send -> Ok (Stdlib.HttpClient.StreamStart.Legacy (Stdlib.HttpClient.StreamTransport.Secure
+        (Stdlib.Tls13Client.applicationState { secure with client = send })))
 
 let __streamWithAlternatives (trusted: Bool) (roots: Stdlib.Option.Option<List<Blob>>) (alternatives: List<Stdlib.HttpsService.Service>)
   (method: String) (urlText: String)

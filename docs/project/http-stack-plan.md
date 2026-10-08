@@ -120,7 +120,12 @@ QUIC uses the same authenticated retry flow while preserving cumulative
 Initial CRYPTO offsets and packet numbers across both hellos. An independent
 aioquic packet-crypto peer verifies Initial retransmission numbers, handshake
 encryption, ECDH/HKDF, the trusted RSA-PSS certificate flight, both Finished
-messages and gated application secrets. TLS KeyUpdate remains unfinished.
+messages and gated application secrets. TCP TLS clients and servers now process
+bounded post-handshake KeyUpdate messages, including fragmented updates and
+requested replies. Directional secrets and record sequences advance together;
+reply failures close ownership before later writes can reuse a nonce.
+Independent AEAD/HKDF checks cover all three client cipher suites, and live
+authenticated peers exercise HTTP/1.1 and h2 updates after 70 KiB uploads.
 The Retry foundation authenticates bounded address/CID-bound HMAC tokens with
 a 30-second lifetime and serializes QUIC v1 Retry packets. Independent Python
 and aioquic checks cover token tampering, expiry, IPv4/IPv6 binding and packet
@@ -142,8 +147,8 @@ certificate-authenticated QUIC client, loss recovery, stream flow control,
 key updates, static/literal QPACK, critical-stream/message validation and
 buffered or lazy public client responses selected through HTTPS DNS or an
 owned `HttpClientSession` Alt-Svc cache.
-Server TLS/HTTP/3 remains work; see the compatibility
-ledger for exact profile boundaries. For
+TLS and QUIC servers now share the HTTP handler through separate TCP and UDP
+listeners; see the compatibility ledger for exact profile boundaries. For
 each implementation branch, run `./build --ai`, the already-built
 `./run-tests --ai`, and
 `./benchmarks/run_benchmarks.sh --verify-parent full` before merge-train

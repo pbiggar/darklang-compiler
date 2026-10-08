@@ -137,7 +137,7 @@ dispatch, body limits, bounded draining after early replies, shutdown during
 stalled HTTP/2 reads and compiled leak accounting.
 
 HTTPS clients now select HTTP/3 from compatible HTTPS DNS advertisements;
-HTTP/3 server integration remains unfinished. The pure
+HTTP/3 also has an authenticated UDP server listener described below. The pure
 wire layer provides bounded QUIC variable-length integers and HTTP/3 frame
 and SETTINGS parsing. QPACK supports the RFC 9204 static table, static-name
 references, literal names/values and shared Huffman decoding, advertising zero
@@ -242,8 +242,7 @@ the native heap during that fallback check. `rsa_montgomery.e2e` and
 `python3 scripts/test_rsa_montgomery.py` check malformed inputs, carry boundaries
 and 48 independent Python `pow` vectors through 8192-bit moduli. This public
 exponent operation is not a private-key signing implementation.
-Multiplexing, pooling, graceful QUIC wire closure and TLS/HTTP/3 server
-integration remain work.
+Multiplexing, pooling and graceful client QUIC wire closure remain work.
 
 The server identity foundation exposes `TlsServerIdentity.create` for a PEM
 certificate chain and an unencrypted PKCS#1 or PKCS#8 RSA private key. The
@@ -292,7 +291,20 @@ packet numbers. `python3 scripts/test_quic_server_tls_retry_peer.py` verifies
 encrypted retry/ServerHello offsets, Initial retransmission numbers, independent
 ECDH/HKDF, a trusted certificate and RSA-PSS signature, both Finished messages,
 application-key gating and zero leaks through the real server packet spaces.
-Post-handshake TLS KeyUpdate remains pending. The pure
+TCP TLS application transports retain both traffic secrets and process bounded
+post-handshake KeyUpdate messages. Receive updates reset the receive sequence;
+requested replies use the next unused old send nonce before switching the send
+secret and resetting its sequence. Updates can span records, but application
+data cannot interrupt a partial handshake message, and bytes after a complete
+update must arrive under the new key. Clients validate and discard bounded
+NewSessionTicket metadata without enabling resumption or 0-RTT; servers reject
+client tickets. Connections accept at most 64 received updates and 64 tickets.
+`python3 scripts/test_tls_key_update_peer.py` checks all three cipher suites
+against independent AEAD/HKDF, live authenticated server updates, failed reply
+writes, EOF, idempotent closure and zero leaks.
+`python3 scripts/test_tls_key_update_client_peer.py` checks requested updates
+after 70 KiB uploads through buffered and streaming HTTP/1.1 and h2 clients,
+including the exact old-key reply sequence and zero leaks. The pure
 `QuicServerTls` adapter now requires h3 ALPN and client transport parameters,
 binds the client's initial source connection ID, derives QUIC handshake packet
 keys, and releases application secrets and packet keys only after verifying
