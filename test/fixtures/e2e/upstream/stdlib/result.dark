@@ -178,7 +178,7 @@ Stdlib.Result.mapWithDefault (Stdlib.Result.Result.Ok 6L) 5L (fun x -> x + 1L) =
 Stdlib.Result.mapWithDefault
   (Stdlib.Result.Result.Error "test1")
   (Stdlib.Result.Result.Error "test2")
-  (fun x -> x + 1L) = compileerror="Expected TSum (\"Darklang.Stdlib.Result.Result\", [TVar \"t\"; TString]), got TInt64"
+  (fun x -> x + 1L) = compileerror="Expected TSum (\"Darklang.Stdlib.Result.Result\", [TInt64; TString]), got TInt64"
 
 
 

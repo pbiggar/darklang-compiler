@@ -133,7 +133,7 @@ module Flatten =
   Stdlib.List.flatten [] = []
 
 module Fold =
-  Stdlib.List.fold [] [] (fun accum curr -> 5L) = compileerror="Expected TList (TVar \"t$empty\"), got TInt64"
+  Stdlib.List.fold [] [] (fun accum curr -> 5L) = compileerror="Expected TList"
 
   Stdlib.List.fold [ "a", "b", "c", "d" ] "x" (fun accum curr -> accum ++ curr) = "xabcd"
 

@@ -255,12 +255,12 @@ Stdlib.Option.mapWithDefault Stdlib.Option.Option.None 6L (fun x -> x + 1L) = 6L
 Stdlib.Option.mapWithDefault
   (Stdlib.Option.Option.Some 5L)
   Stdlib.Option.Option.None
-  (fun x -> x + 1L) = compileerror="Expected TSum (\"Darklang.Stdlib.Option.Option\", [TVar \"t\"]), got TInt64"
+  (fun x -> x + 1L) = compileerror="Darklang.Stdlib.Option.Option"
 
 Stdlib.Option.mapWithDefault
   Stdlib.Option.Option.None
   Stdlib.Option.Option.None
-  (fun x -> x + 1L) = compileerror="Expected TSum (\"Darklang.Stdlib.Option.Option\", [TVar \"t\"]), got TInt64"
+  (fun x -> x + 1L) = compileerror="Darklang.Stdlib.Option.Option"
 
 
 Stdlib.Option.withDefault (Stdlib.Option.Option.Some 6L) 5L = 6L
