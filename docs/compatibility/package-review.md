@@ -172,6 +172,19 @@ remain unchanged and leak checks are clean. Full host suite: 11441/11441 passed.
 workloads passed. Runtime validation is Linux x86-64; ARM64 Linux/macOS syscall
 lowering is implemented but was not executed in this review.
 
+## Deferred: terminal emergency restoration
+
+Per user direction, defer the emergency restore guard in
+`packages/darklang/stdlib/cli/tui/terminalSession.dark`.
+`Darklang.Stdlib.Cli.Tui.TerminalSession.armRestoreGuard` fails compilation with
+`Unknown function or value 'Builtin.cliTerminalRestoreArm'`. The interpreter
+stores an escape sequence and writes it on process exit, unhandled exceptions,
+or Ctrl-C. The compiled runtime has no corresponding shutdown/signal guard.
+No implementation was added. The companion `disarmRestoreGuard`, which calls
+`Builtin.cliTerminalRestoreDisarm`, belongs to the same deferred feature;
+it has not been validated separately. Other TerminalSession helpers remain
+in scope. Retain these guard functions in the final unresolved list.
+
 ## Completion rule
 
 At the end of the package review, enumerate every skipped package and unresolved
