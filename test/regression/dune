@@ -24,6 +24,10 @@
  (alias runtest)
  (deps terminal_session_regression.py)
  (action (run python3 %{dep:terminal_session_regression.py} %{exe:../../bin/dark.exe})))
+(rule
+ (alias runtest)
+ (deps terminal_size_regression.py)
+ (action (run python3 %{dep:terminal_size_regression.py} %{exe:../../bin/dark.exe})))
 (executables
  (names host_text_regression cache_regression component_regression literal_regression package_io_regression package_http_regression)
  (libraries dark_compiler tls-lwt x509)

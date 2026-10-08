@@ -185,6 +185,33 @@ No implementation was added. The companion `disarmRestoreGuard`, which calls
 it has not been validated separately. Other TerminalSession helpers remain
 in scope. Retain these guard functions in the final unresolved list.
 
+## Terminal viewport size
+
+`Darklang.Stdlib.Cli.Tui.TerminalSession.currentSize` failed because
+`Darklang.Cli.Terminal.getSize` was absent. Its original wrapper in
+`packages/darklang/cli/utils/terminal.dark` called missing
+`Builtin.cliTerminalSize`. Both failures were reproduced before implementing
+the builtin and embedding the unchanged public `getSize` fragment.
+
+The native implementation queries window size with direct ioctl syscalls,
+trying stdout, stdin and stderr in that order, rejecting zero dimensions and
+decoding the unsigned 16-bit rows/columns. Without a usable terminal it accepts
+positive Int32 `COLUMNS`/`LINES` values, defaulting independently to 80/24.
+The interpreter's console-dimension fallback is covered by the native kernel
+queries; no libc, shell command or executable is used. On macOS the interpreter
+disables its unsafe variadic libc ioctl bridge, whereas native syscall querying
+is supported here. Runtime validation is Linux x86-64 only.
+
+Seven E2E cases pass, including public getSize and environment mutation. Native
+regressions cover every terminal descriptor combination, descriptor precedence,
+kernel dimensions over environment values, zero and unsigned high dimensions,
+unset/invalid/overflow/partial environment values, and unchanged terminal
+attributes. The unchanged original currentSize function compiles and prints
+`132|43` with corresponding environment values, without leaks. Full host suite:
+11448/11448 passed; native `dune runtest --cache=disabled` passes after clearing
+stale read-only action stamps. All 58 benchmark compile/run workloads pass with
+clean leak checks. Cachegrind comparison remains waived by the user. Fix: PR #33.
+
 ## Completion rule
 
 At the end of the package review, enumerate every skipped package and unresolved
