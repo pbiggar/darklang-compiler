@@ -3,7 +3,6 @@
 *)
 [@@@warning "-4"]
 
-        | "Darklang.Stdlib.Cli.__Posix.__ioctl" -> Some ANF.PosixIoctl
 module M = StringOrder.Map
 module S = StringOrder.Set
 module C = CheckedAST
@@ -488,6 +487,7 @@ let tryCliIntrinsic name args =
         | "Darklang.Stdlib.Cli.__Posix.__readlinkAt" -> Some ANF.PosixReadlinkAt
         | "Darklang.Stdlib.Cli.__Posix.__flock" -> Some ANF.PosixFlock
         | "Darklang.Stdlib.Cli.__Posix.__getDents" -> Some ANF.PosixGetDents
+        | "Darklang.Stdlib.Cli.__Posix.__ioctl" -> Some ANF.PosixIoctl
         | "Darklang.Stdlib.Crypto.__secureRandomFill" ->
             Some ANF.SecureRandomFill
         | _ -> None

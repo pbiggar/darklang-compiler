@@ -19,7 +19,6 @@
 (* MIR.ml - Mid-level Intermediate Representation. *)
 [@@@warning "-4-30"]
 
-  | PosixIoctl
 (*
    Virtual register (infinite supply)
 *)
@@ -163,6 +162,7 @@ type cliOperation =
   | PosixReadlinkAt
   | PosixFlock
   | PosixGetDents
+  | PosixIoctl
 
 (*
    Basic block label (defined early for use in Phi nodes)

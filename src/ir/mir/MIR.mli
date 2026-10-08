@@ -1,7 +1,6 @@
 (* MIR.mli - Mid-level Intermediate Representation. *)
 [@@@warning "-4-30"]
 
-  | PosixIoctl
 type vReg = VReg of int
 
 module VRegMap : Map.S with type key = vReg
@@ -105,6 +104,7 @@ type cliOperation =
   | PosixReadlinkAt
   | PosixFlock
   | PosixGetDents
+  | PosixIoctl
 
 type label = Label of string
 

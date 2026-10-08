@@ -1,7 +1,6 @@
 (* MIRPrinter.ml - Format MIR graphs and scoped or summarized dumps. *)
 [@@@warning "-4"]
 
-  | MIR.PosixIoctl -> "PosixIoctl"
 open IRPrinting
 
 let functionId id =
@@ -145,6 +144,7 @@ let cliOperation = function
   | MIR.PosixReadlinkAt -> "PosixReadlinkAt"
   | MIR.PosixFlock -> "PosixFlock"
   | MIR.PosixGetDents -> "PosixGetDents"
+  | MIR.PosixIoctl -> "PosixIoctl"
 
 let prettyPrintCanonicalBufferKind = ANFPrinter.prettyPrintCanonicalBufferKind
 

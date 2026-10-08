@@ -1,7 +1,6 @@
 (* ANFPrinter.ml - Format ANF functions and scoped or summarized dumps. *)
 [@@@warning "-4"]
 
-  | ANF.PosixIoctl -> "PosixIoctl"
 open IRPrinting
 
 let functionId id =
@@ -147,6 +146,7 @@ let cliOperation = function
   | ANF.PosixReadlinkAt -> "PosixReadlinkAt"
   | ANF.PosixFlock -> "PosixFlock"
   | ANF.PosixGetDents -> "PosixGetDents"
+  | ANF.PosixIoctl -> "PosixIoctl"
 
 (*
    Pretty-print ANF complex expression

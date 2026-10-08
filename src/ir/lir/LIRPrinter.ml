@@ -1,7 +1,6 @@
 (* LIRPrinter.ml - Format LIR instructions and scoped or summarized dumps. *)
 [@@@warning "-4"]
 
-  | LIR.PosixIoctl -> "PosixIoctl"
 open IRPrinting
 
 let functionId id =
@@ -181,6 +180,7 @@ let prettyPrintCliOperation = function
   | LIR.PosixReadlinkAt -> "PosixReadlinkAt"
   | LIR.PosixFlock -> "PosixFlock"
   | LIR.PosixGetDents -> "PosixGetDents"
+  | LIR.PosixIoctl -> "PosixIoctl"
 
 (*
    Pretty-print LIR register

@@ -20,7 +20,6 @@
 (* Complete A-normal form data, frozen type tables, and coverage identities. *)
 [@@@warning "-30"]
 
-  | PosixIoctl
 (*
    Unique identifier for temporary variables
 *)
@@ -169,6 +168,7 @@ type cliOperation =
   | PosixReadlinkAt
   | PosixFlock
   | PosixGetDents
+  | PosixIoctl
 
 (*
    Immutable nominal metadata carried through fixed-block lowering for field

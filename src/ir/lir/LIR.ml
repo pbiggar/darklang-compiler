@@ -11,7 +11,6 @@
 (* LIR.ml - Symbolic Low-level Intermediate Representation. *)
 [@@@warning "-4-30"]
 
-  | PosixIoctl
 (*
    ARM64 general-purpose registers used in LIR.
    X16/X17 are IP0/IP1 scratch registers, X27 is reserved for free-list state,
@@ -174,6 +173,7 @@ type cliOperation =
   | PosixReadlinkAt
   | PosixFlock
   | PosixGetDents
+  | PosixIoctl
 
 (*
    Basic block label (wrapper type for type safety)
