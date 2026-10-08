@@ -365,3 +365,11 @@ let finishServer (state: Stdlib.QuicConnection.State) : Bool =
   | _, _ ->
     Stdlib.QuicConnection.close state
     false
+
+// A client may cancel an incomplete upload or response. Abandon queued stream
+// data and close from the latest returned packet-number/key state, retaining
+// closing keys for the same bounded three-PTO interval as the server.
+let finishClient (state: Stdlib.QuicConnection.State) : Unit =
+  match Stdlib.Stream.next state.transport.socket.lifecycle, Stdlib.Network.monotonicMillis () with
+  | Some (), Ok now -> let _ = Stdlib.QuicConnection.__finishDrain state now 0L in ()
+  | _, _ -> Stdlib.QuicConnection.close state

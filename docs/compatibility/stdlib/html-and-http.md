@@ -242,7 +242,15 @@ the native heap during that fallback check. `rsa_montgomery.e2e` and
 `python3 scripts/test_rsa_montgomery.py` check malformed inputs, carry boundaries
 and 48 independent Python `pow` vectors through 8192-bit moduli. This public
 exponent operation is not a private-key signing implementation.
-Multiplexing, pooling and graceful client QUIC wire closure remain work.
+Multiplexing and connection pooling remain outside the single-exchange profile.
+Buffered and lazy HTTP/3 clients retain the latest packet-number/key state
+through terminal events and send encrypted H3_NO_ERROR on completion or early
+body closure. Closing keys stay available for three PTOs, capped at thirty
+seconds, and repeated closes use fresh packet numbers. A failed transport
+operation aborts the socket without encrypting from potentially stale state.
+`python3 scripts/test_quic_stream_peer.py --http-client` and its `--buffered`,
+`--close-early` and `--body-size=0` variants check peer-authenticated closure,
+large bidirectional bodies, loss, reordering, trailers, key updates and cleanup.
 
 The server identity foundation exposes `TlsServerIdentity.create` for a PEM
 certificate chain and an unencrypted PKCS#1 or PKCS#8 RSA private key. The

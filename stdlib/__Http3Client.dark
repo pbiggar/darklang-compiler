@@ -48,21 +48,40 @@ let __upload (state: Stdlib.Http3.State) (body: Blob) (position: Int64)
         if uploaded.finished || Stdlib.Http3Client.__final uploaded.events then Stdlib.Http3Client.__head uploaded.state uploaded.events uploaded.finished
         else Stdlib.Http3Client.__upload uploaded.state body (position + size))
 
-let __bodyStep (body: Stdlib.Http3Client.Body) : Stdlib.Option.Option<(UInt8 * Stdlib.Http3Client.Body)> =
+// Publish every receive transition, including a terminal response with no body
+// bytes. Producer disposal must never encrypt a close from an older nonce.
+let __bodyNext (cell: RawPtr) : Stdlib.Option.Option<UInt8> =
+  let body = Stdlib.Stream.__cellGet<Stdlib.Http3Client.Body> cell in
   if body.position < Stdlib.Blob.__byteLength body.bytes then
     match Stdlib.UInt8.fromInt64 (Stdlib.Blob.__getByte body.bytes body.position) with
     | None -> Builtin.crash "Invalid HTTP/3 body byte"
-    | Some byte -> Some ((byte, { body with position = body.position + 1L }))
+    | Some byte ->
+      let _ = Stdlib.Stream.__cellSet cell { body with position = body.position + 1L } in
+      Some byte
   else
     match body.events with
-    | BodyChunk bytes :: rest -> Stdlib.Http3Client.__bodyStep { body with events = rest, bytes = bytes, position = 0L }
-    | _ :: rest -> Stdlib.Http3Client.__bodyStep { body with events = rest }
+    | BodyChunk bytes :: rest ->
+      let _ = Stdlib.Stream.__cellSet cell { body with events = rest, bytes = bytes, position = 0L } in
+      Stdlib.Http3Client.__bodyNext cell
+    | _ :: rest ->
+      let _ = Stdlib.Stream.__cellSet cell { body with events = rest } in
+      Stdlib.Http3Client.__bodyNext cell
     | [] ->
       if body.finished then None
       else match Stdlib.Http3.receive body.state with
-      | Error message -> Builtin.testRuntimeError message
-      | Ok received -> Stdlib.Http3Client.__bodyStep (Stdlib.Http3Client.Body { state = received.state,
-          events = received.events, bytes = Stdlib.Blob.empty, position = 0L, finished = received.finished })
+      | Error message ->
+        // The failed operation may already have reserved a send nonce.
+        let _ = Stdlib.Http3.close body.state in
+        Builtin.testRuntimeError message
+      | Ok received ->
+        let _ = Stdlib.Stream.__cellSet cell (Stdlib.Http3Client.Body { state = received.state,
+          events = received.events, bytes = Stdlib.Blob.empty, position = 0L, finished = received.finished }) in
+        Stdlib.Http3Client.__bodyNext cell
+
+let __bodyClose (cell: RawPtr) : Unit =
+  let body = Stdlib.Stream.__cellGet<Stdlib.Http3Client.Body> cell in
+  let _ = Stdlib.QuicConnection.finishClient body.state.connection in
+  Stdlib.Stream.__cellDispose<Stdlib.Http3Client.Body> cell
 
 let __start (ready: Stdlib.QuicClient.Ready) (method: String) (url: Stdlib.HttpWire.Url)
   (headers: List<(String * String)>) (body: Blob) (timeout: Int64)
@@ -83,13 +102,14 @@ let stream (ready: Stdlib.QuicClient.Ready) (method: String) (url: Stdlib.HttpWi
   | Ok reply ->
     let initial = Stdlib.Http3Client.Body { state = reply.state, events = reply.events,
       bytes = Stdlib.Blob.empty, position = 0L, finished = reply.finished } in
-    let body = Stdlib.Stream.__fromProducer initial Stdlib.Http3Client.__bodyStep (fun current -> Stdlib.Http3.close current.state) in
+    let cell = Stdlib.Stream.__cellNew initial in
+    let body = Stdlib.Stream.__new (fun _unit -> Stdlib.Http3Client.__bodyNext cell) (fun _unit -> Stdlib.Http3Client.__bodyClose cell) in
     Ok (Stdlib.HttpClient.StreamResponse { statusCode = Stdlib.Int.fromInt64 reply.head.status, headers = reply.head.headers, body = body })
 
 let __buffer (state: Stdlib.Http3.State) (events: List<Stdlib.Http3Message.Event>) (finished: Bool) (pieces: List<Blob>)
-  : Stdlib.Result.Result<Blob, String> =
+  : Stdlib.Result.Result<(Blob * Stdlib.Http3.State), String> =
   let collected = Stdlib.List.fold events pieces (fun pieces event -> match event with | BodyChunk bytes -> Stdlib.List.push pieces bytes | _ -> pieces) in
-  if finished then Ok (Stdlib.Blob.concat (Stdlib.List.reverse collected))
+  if finished then Ok ((Stdlib.Blob.concat (Stdlib.List.reverse collected), state))
   else Stdlib.Http3.receive state |> Stdlib.Result.andThen (fun received ->
     Stdlib.Http3Client.__buffer received.state received.events received.finished collected)
 
@@ -97,7 +117,9 @@ let request (ready: Stdlib.QuicClient.Ready) (method: String) (url: Stdlib.HttpW
   (headers: List<(String * String)>) (body: Blob) (timeout: Int64)
   : Stdlib.Result.Result<Stdlib.HttpClient.Response, String> =
   let result = Stdlib.Http3Client.__start ready method url headers body timeout |> Stdlib.Result.andThen (fun reply ->
-    Stdlib.Http3Client.__buffer reply.state reply.events reply.finished [] |> Stdlib.Result.map (fun bytes ->
+    Stdlib.Http3Client.__buffer reply.state reply.events reply.finished [] |> Stdlib.Result.map (fun pair ->
+      let (bytes, final) = pair in
+      let _ = Stdlib.QuicConnection.finishClient final.connection in
       Stdlib.HttpClient.Response { statusCode = Stdlib.Int.fromInt64 reply.head.status, headers = reply.head.headers, body = bytes })) in
   let _ = Stdlib.QuicClient.close ready in
   result

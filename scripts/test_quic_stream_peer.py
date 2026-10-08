@@ -209,7 +209,7 @@ def main():
             text=True, capture_output=True, timeout=120)
         assert result.returncode == 0, result.stdout + result.stderr
         for mode in ([options.mode] if options.mode else ("trusted", "drop-request", "drop-response", "reorder", "trailers", "key-update")):
-            failures, requested, credits, uploaded = [], [], [], bytearray()
+            failures, requested, credits, uploaded, closes = [], [], [], bytearray(), []
             stopped = threading.Event()
             with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as listener:
                 listener.bind(("127.0.0.1", 0))
@@ -238,6 +238,8 @@ def main():
                                 connection = QuicConnection(configuration=config, original_destination_connection_id=header.destination_cid)
                                 http = H3Connection(connection)
                             connection.receive_datagram(packet, address, now)
+                            if connection._close_event is not None and not closes:
+                                closes.append(connection._close_event)
                             while (event := connection.next_event()) is not None:
                                 for message in http.handle_event(event):
                                     if isinstance(message, HeadersReceived) and message.stream_id == 0:
@@ -284,11 +286,13 @@ def main():
                 thread.start()
                 try:
                     result = subprocess.run([str(binary), str(listener.getsockname()[1])], cwd=ROOT,
-                        text=True, capture_output=True, timeout=20)
+                        text=True, capture_output=True, timeout=60)
                 finally:
                     stopped.set()
                     thread.join(timeout=2)
                 assert not thread.is_alive() and not failures, (mode, failures)
+                if options.http_client:
+                    assert closes and closes[0].error_code == 256, (mode, closes)
                 assert result.returncode == 0 and not result.stderr, (mode, result.returncode, result.stderr, result.stdout[-1000:])
                 lines = result.stdout.splitlines()
                 assert lines and lines[-1] == "DONE", (mode, lines[-3:])

@@ -147,6 +147,9 @@ certificate-authenticated QUIC client, loss recovery, stream flow control,
 key updates, static/literal QPACK, critical-stream/message validation and
 buffered or lazy public client responses selected through HTTPS DNS or an
 owned `HttpClientSession` Alt-Svc cache.
+Buffered and lazy clients close QUIC with authenticated H3_NO_ERROR from the
+latest application state, including empty final events and early cancellation.
+Transport errors abort without sealing a close from stale packet-number state.
 TLS and QUIC servers now share the HTTP handler through separate TCP and UDP
 listeners; see the compatibility ledger for exact profile boundaries. For
 each implementation branch, run `./build --ai`, the already-built
