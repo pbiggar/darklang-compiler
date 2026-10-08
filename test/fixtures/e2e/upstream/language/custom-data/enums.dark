@@ -19,15 +19,15 @@ module Errors =
   module User =
     type MyEnum = | A | B | C of String
 
-    MyEnum.D = error="There is no case named `D` in Errors.User.MyEnum"
-    MyEnum.C = error="Expected 1 fields in Errors.User.MyEnum.`C`, but got 0"
-    MyEnum.B 5L = error="Expected 0 fields in Errors.User.MyEnum.`B`, but got 1"
+    MyEnum.D = compileerror="Unknown constructor 'MyEnum.D'"
+    MyEnum.C = compileerror="Constructor 'MyEnum.C' expects 1 fields"
+    MyEnum.B 5L = compileerror="Constructor 'MyEnum.B' expects 0 fields"
     (match MyEnum.C "test" with | C v -> v | _ -> "unmatched") = "test"
-    (match MyEnum.C "test" with | 5 -> "unmatched because it's not an int" | C v -> v) = "test"
-    (match MyEnum.C "test" with | C -> "unmatched because we didn't provide a space for the field") = error="No matching case found for value Errors.User.MyEnum.C(\"test\") in match expression"
-    (match MyEnum.C "test" with | D -> "unmatched because case name does not exist" | C _ -> 2) = 2
+    (match MyEnum.C "test" with | 5 -> "unmatched because it's not an int" | C v -> v) = compileerror="Expected TInt, got TSum (\"MyEnum\", [])"
+    (match MyEnum.C "test" with | C -> "unmatched because we didn't provide a space for the field") = compileerror="Constructor pattern 'MyEnum.C' has wrong field count"
+    (match MyEnum.C "test" with | D -> "unmatched because case name does not exist" | C _ -> 2) = compileerror="Unknown constructor 'MyEnum.D' in pattern"
 
-    (MyEnum.C 5L) = error="Failed to create enum. Expected String for field 0 in `C`, but got Int64 (5)"
+    (MyEnum.C 5L) = compileerror="Expected TString, got TInt64"
 module Simple =
   type AorB = | A | B
 
@@ -62,11 +62,11 @@ module MixedCases =
   (EnumOfMixedCases.W == (EnumOfMixedCases.Y 1L)) = false
   (EnumOfMixedCases.Y 1L == EnumOfMixedCases.Y 1L) = true
 
-  EnumOfMixedCases.X 1L = error="Failed to create enum. Expected String for field 0 in `X`, but got Int64 (1)"
+  EnumOfMixedCases.X 1L = compileerror="Expected TString, got TInt64"
 
-  EnumOfMixedCases.Y "test" = error="Failed to create enum. Expected Int64 for field 0 in `Y`, but got String (\"test\")"
+  EnumOfMixedCases.Y "test" = compileerror="Expected TInt64, got TString"
 
-  EnumOfMixedCases.Z 1L = error="Expected 2 fields in MixedCases.EnumOfMixedCases.`Z`, but got 1"
+  EnumOfMixedCases.Z 1L = compileerror="Constructor 'EnumOfMixedCases.Z' expects 2 fields"
 
   // Test ordering of evaluation
   EnumOfMixedCases.Z(Builtin.testRuntimeError "1", Builtin.testRuntimeError "2") = error="Uncaught exception: 1"
@@ -99,7 +99,7 @@ module TuplesVsNonTuples =
     | Tuple of (String * Int64)
 
   (match Tuples.NotTuple("printer broke", 7L) with
-   | NotTuple(reason, 7L) -> reason) = "printer broke"
+   | NotTuple(reason, 7L) -> reason) = compileerror="Non-exhaustive match expression"
 
   (Tuples.NotTuple(("printer broke", 7L))) = error="Expected 2 fields in TuplesVsNonTuples.Tuples.`NotTuple`, but got 1"
 

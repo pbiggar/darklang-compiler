@@ -88,7 +88,7 @@ Stdlib.List.filter [ 1L, 2L, 3L ] (fun item ->
   match item with
   | 1L -> Stdlib.Option.Option.None
   | 2L -> false
-  | 3L -> true) = error="Encountered a condition that must be a Bool, but got a Darklang.Stdlib.Option.Option<_> (None)"
+  | 3L -> true) = compileerror="Expected TBool, got TSum (\"Darklang.Stdlib.Option.Option\", [TVar \"t\"])"
 Stdlib.List.filter [ true, false, true ] (fun item -> "a") = compileerror="Expected TBool, got TString"
 Stdlib.List.filter [ 1L, 2L, 3L ] (fun item ->
   match item with
@@ -98,7 +98,7 @@ Stdlib.List.filter [ 1L, 2L, 3L ] (fun item ->
 
 Stdlib.List.filter [] (fun item -> true) = []
 Stdlib.List.filter [ -20L, 5L, 9L ] (fun x -> x > 20L) = []
-Stdlib.List.filter [] (fun item -> "a") = []
+Stdlib.List.filter [] (fun item -> "a") = compileerror="Expected TBool, got TString"
 
 Stdlib.List.filterMap [ 1L, 2L, 3L ] (fun item ->
   if item == 2L then
@@ -106,7 +106,7 @@ Stdlib.List.filterMap [ 1L, 2L, 3L ] (fun item ->
   else
     (Stdlib.Option.Option.Some(item * 2L))) = [ 2L, 6L ]
 
-Stdlib.List.filterMap [] (fun item -> 0L) = []
+Stdlib.List.filterMap [] (fun item -> 0L) = compileerror="Expected TSum"
 
 Stdlib.List.findFirst [ 1L, 2L, 3L ] (fun x -> x > 5L) = Stdlib.Option.Option.None
 Stdlib.List.findFirst [] (fun x -> x) = Stdlib.Option.Option.None
@@ -126,14 +126,14 @@ module FindFirstIndex =
 module Flatten =
   Stdlib.List.flatten [ [ 1L ], [ 2L ], [ 3L ] ] = [ 1L, 2L, 3L ]
 
-  Stdlib.List.flatten [ 1l, 2l, 3l ] = error="Darklang.Stdlib.List.flatten's 1st parameter `list` expects List<List<_>>, but got List<Int32> ([1, 2, 3])"
-  Stdlib.List.flatten [ [ 1L ], [ [ 2L, 3L ] ] ] = error="Cannot add a List<List<Int64>> ([[2, 3]]) to a list of List<Int64>. Failed at index 1."
+  Stdlib.List.flatten [ 1l, 2l, 3l ] = compileerror="Expected TList"
+  Stdlib.List.flatten [ [ 1L ], [ [ 2L, 3L ] ] ] = compileerror="Expected TInt64, got TList TInt64"
   Stdlib.List.flatten [ [ [] ] ] = [ [] ]
   Stdlib.List.flatten [ [] ] = []
   Stdlib.List.flatten [] = []
 
 module Fold =
-  Stdlib.List.fold [] [] (fun accum curr -> 5L) = []
+  Stdlib.List.fold [] [] (fun accum curr -> 5L) = compileerror="Expected TList (TVar \"t$empty\"), got TInt64"
 
   Stdlib.List.fold [ "a", "b", "c", "d" ] "x" (fun accum curr -> accum ++ curr) = "xabcd"
 
@@ -171,13 +171,13 @@ module Interleave =
   Stdlib.List.interleave [] [ 4L, 5L, 6L ] = [ 4L, 5L, 6L ]
   Stdlib.List.interleave [] [] = []
 
-  Stdlib.List.interleave [ "a", "b", "c" ] [ 0L ] = error="Darklang.Stdlib.List.interleave's 2nd parameter `lB` expects List<String>, but got List<Int64> ([0])"
+  Stdlib.List.interleave [ "a", "b", "c" ] [ 0L ] = compileerror="Expected TString, got TInt64"
 module Interpose =
   Stdlib.List.interpose [ 1L, 2L, 3L ] 5L = [ 1L, 5L, 2L, 5L, 3L ]
   Stdlib.List.interpose [ 1L ] 5L = [ 1L ]
   Stdlib.List.interpose [] 5L = []
 
-  Stdlib.List.interpose [ "a", "b", "c" ] 0L = error="Darklang.Stdlib.List.interpose's 2nd parameter `sep` expects String, but got Int64 (0)"
+  Stdlib.List.interpose [ "a", "b", "c" ] 0L = compileerror="Expected TString, got TInt64"
 module Last =
   Stdlib.List.last [ 1L, 2L, 3L ] = Stdlib.Option.Option.Some 3L
 
@@ -213,7 +213,7 @@ module Partition =
   Stdlib.List.partition [ -20L, 5L, 9L ] (fun x -> x > 0L) = ([ 5L, 9L ], [ -20L ])
 
   Stdlib.List.partition [] (fun item -> true) = ([], [])
-  Stdlib.List.partition [] (fun item -> "a") = ([], [])
+  Stdlib.List.partition [] (fun item -> "a") = compileerror="Expected TBool, got TString"
 
   Stdlib.List.partition [ 1L, 2L, 3L ] (fun item ->
     match item with
@@ -225,7 +225,7 @@ module Partition =
     match item with
     | 1L -> Stdlib.Option.Option.None
     | 2L -> false
-    | 3L -> true) = error="Encountered a condition that must be a Bool, but got a Darklang.Stdlib.Option.Option<_> (None)"
+    | 3L -> true) = compileerror="Expected TBool, got TSum (\"Darklang.Stdlib.Option.Option\", [TVar \"t\"])"
 Stdlib.List.pushBack [ 2L, 3L ] 1L = [ 2L, 3L, 1L ]
 Stdlib.List.pushBack [] 1L = [ 1L ]
 
@@ -261,12 +261,12 @@ Stdlib.List.sort [ 6L, 2L, 8L, 3L ] = [ 2L, 3L, 6L, 8L ]
 Stdlib.List.sort [] = []
 
 // CLEANUP: it should be a type error on the function not returning an Int64
-Stdlib.List.sortByComparator [ 3L, 1L, 2L ] (fun a b -> 0.1) = error="Cannot perform equality check on Float and Int"
+Stdlib.List.sortByComparator [ 3L, 1L, 2L ] (fun a b -> 0.1) = compileerror="Expected TInt, got TFloat64"
 Stdlib.List.sortByComparator [ 3L, 1L, 2L ] (fun a b -> 3) =
   Stdlib.Result.Result.Error "Expected comparator function to return -1, 0, or 1, but it returned 3"
 
 // CLEANUP: it should be a type error on the function not returning an Int64
-Stdlib.List.sortByComparator [ 1L, 2L, 3L ] (fun a b -> "㧑༷釺") = error="Cannot perform equality check on String and Int"
+Stdlib.List.sortByComparator [ 1L, 2L, 3L ] (fun a b -> "㧑༷釺") = compileerror="Expected TInt, got TString"
 Stdlib.List.sortByComparator [ 3L, 1L, 2L ] (fun a b ->
   if Stdlib.Int64.lessThan a b then -1 else 1) = Stdlib.Result.Result.Ok
   [ 1L, 2L, 3L ]
@@ -311,7 +311,7 @@ Stdlib.List.uniqueBy [ 1L, 2L, 3L, 4L ] (fun x -> x) = [ 1L, 2L, 3L, 4L ]
 Stdlib.List.uniqueBy [ 1L, 1L, 1L, 1L ] (fun x -> x) = [ 1L ]
 Stdlib.List.uniqueBy [ 7L, 42L, 7L, 2L, 10L ] (fun x -> x) = [ 2L, 7L, 10L, 42L ]
 Stdlib.List.uniqueBy [] (fun x -> x) = []
-Stdlib.List.uniqueBy [ 6L, 2.0 ] (fun x -> x) = error="Cannot add a Float (2.0) to a list of Int64. Failed at index 1."
+Stdlib.List.uniqueBy [ 6L, 2.0 ] (fun x -> x) = compileerror="Expected TInt64, got TFloat64"
 Stdlib.List.unique [ 1L, 2L, 3L, 4L ] = [ 1L, 2L, 3L, 4L ]
 Stdlib.List.unique [ 1L, 1L, 1L, 1L ] = [ 1L ]
 Stdlib.List.unique [ 7L, 42L, 7L, 2L, 10L ] = [ 2L, 7L, 10L, 42L ]
