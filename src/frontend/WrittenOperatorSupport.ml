@@ -26,6 +26,8 @@ let[@warning "-4"] check checkExpression checkedLiteral globals locals symbols
       in
       bind (check afterLeft rightExpected right)
         (fun (rightType, checkedRight, finalSymbols) ->
+          let leftType = WrittenCheckingState.resolve finalSymbols leftType in
+          let rightType = WrittenCheckingState.resolve finalSymbols rightType in
           let integer =
             List.mem leftType
               [
@@ -121,7 +123,9 @@ let[@warning "-4"] check checkExpression checkedLiteral globals locals symbols
                     ComparisonPlanning.internalTypeAppMarkerName
                       ComparisonPlanning.EqHelperDispatch
                   in
-                  let id, symbols = C.internFunction marker symbols in
+                  let id, symbols =
+                    WrittenCheckingState.internFunction marker symbols
+                  in
                   let equality =
                     C.TypeApp
                       ( id,

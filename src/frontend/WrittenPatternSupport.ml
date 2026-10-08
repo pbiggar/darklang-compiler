@@ -60,7 +60,7 @@ let rec checkLetPattern pattern typ symbols =
         (requireType (Some AST.TUnit) typ)
   | WT.LPWildcard _ -> Ok (C.LPWildcard, M.empty, symbols)
   | WT.LPVariable (_, name) ->
-      let id, symbols = C.allocateBinding name symbols in
+      let id, symbols = WrittenCheckingState.allocateBinding name symbols in
       Ok (C.LPVariable id, M.singleton name (typ, id), symbols)
   | WT.LPTuple (_, first, _, second, rest, _, _) -> (
       let patterns = first :: second :: List.map snd rest in
@@ -138,7 +138,7 @@ let[@warning "-4"] rec checkMatchPattern globals symbols prebound expected
                 Error
                   ("Or-pattern binding '" ^ name
                  ^ "' is missing in another branch"))
-        | None -> Ok (C.allocateBinding name symbols)
+        | None -> Ok (WrittenCheckingState.allocateBinding name symbols)
       in
       map
         (fun (id, symbols) ->
@@ -293,8 +293,8 @@ let[@warning "-4"] rec checkMatchPattern globals symbols prebound expected
                                   caseName ordinal
                               in
                               let id, symbols =
-                                C.internConstructor canonical caseName tag
-                                  symbols
+                                WrittenCheckingState.internConstructor canonical
+                                  caseName tag symbols
                               in
                               (C.PConstructor (id, fields), bindings, symbols))
                             (children symbols M.empty []
@@ -428,7 +428,8 @@ let[@warning "-4"] matchIsExhaustive globals symbols scrutineeType scrutinee
                       caseTag globals.collidingCases canonical name ordinal
                     in
                     let id, _ =
-                      C.internConstructor canonical name tag symbols
+                      WrittenCheckingState.internConstructor canonical name tag
+                        symbols
                     in
                     C.PConstructor
                       ( id,
@@ -532,7 +533,8 @@ let[@warning "-4"] matchIsExhaustive globals symbols scrutineeType scrutinee
                             contains (function
                               | C.PConstructor (id, patterns)
                                 when List.length patterns = List.length fields
-                                     && C.constructorInfo id symbols
+                                     && WrittenCheckingState.constructorInfo id
+                                          symbols
                                         = Some (canonical, name) ->
                                   List.for_all2 coversWitness patterns fields
                               | _ -> false))

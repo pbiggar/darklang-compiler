@@ -95,7 +95,9 @@ let builtin checkExpression literal globals locals symbols expected name
                      ^ format typ)
               in
               bind output (fun typ ->
-                  let id, symbols = C.internFunction "Builtin.unwrap" symbols in
+                  let id, symbols =
+                    WrittenCheckingState.internFunction "Builtin.unwrap" symbols
+                  in
                   literal expected symbols typ
                     (C.Call (id, NonEmptyList.singleton argument)))))
   | "unwrap", [], _ ->
@@ -165,13 +167,14 @@ let indirect checkExpression literal globals locals symbols expected range
                    (List.map Option.some (take (List.length args) parameters)))
                 (fun (arguments, symbols) ->
                   let targetId, symbols =
-                    C.allocateBinding "__partial_target" symbols
+                    WrittenCheckingState.allocateBinding "__partial_target"
+                      symbols
                   in
                   let captures, symbols =
                     List.fold_left
                       (fun (reversed, symbols) (index, (_, argument)) ->
                         let id, symbols =
-                          C.allocateBinding
+                          WrittenCheckingState.allocateBinding
                             ("__partial_capture_" ^ string_of_int index)
                             symbols
                         in
@@ -185,7 +188,7 @@ let indirect checkExpression literal globals locals symbols expected range
                     List.fold_left
                       (fun (reversed, symbols) (index, typ) ->
                         let id, symbols =
-                          C.allocateBinding
+                          WrittenCheckingState.allocateBinding
                             ("__partial_arg_" ^ string_of_int index)
                             symbols
                         in

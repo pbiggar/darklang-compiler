@@ -4,7 +4,7 @@ val check :
   WrittenCallSupport.literalChecker ->
   WrittenTypeSupport.globals ->
   WrittenTypeSupport.locals ->
-  CheckedAST.symbols ->
+  WrittenCheckingState.t ->
   AST.semanticType option ->
   WrittenTypes.infix ->
   WrittenTypes.expr ->

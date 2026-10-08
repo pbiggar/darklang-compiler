@@ -1,7 +1,7 @@
 (* Declared full and partial applications from WrittenCallSupport.mli. *)
 type literalChecker =
   AST.semanticType option ->
-  CheckedAST.symbols ->
+  WrittenCheckingState.t ->
   AST.semanticType ->
   CheckedAST.expr ->
   (WrittenTypeSupport.checkedExpression, string) result
@@ -11,7 +11,7 @@ val checkNamed :
   literalChecker ->
   WrittenTypeSupport.globals ->
   WrittenTypeSupport.locals ->
-  CheckedAST.symbols ->
+  WrittenCheckingState.t ->
   AST.semanticType option ->
   WrittenTypes.range ->
   WrittenTypes.qualifiedFnIdentifier ->

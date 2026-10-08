@@ -4,7 +4,7 @@ val record :
   WrittenCallSupport.literalChecker ->
   WrittenTypeSupport.globals ->
   WrittenTypeSupport.locals ->
-  CheckedAST.symbols ->
+  WrittenCheckingState.t ->
   AST.semanticType option ->
   WrittenTypes.qualifiedTypeIdentifier ->
   (WrittenTypes.range * (WrittenTypes.range * string) * WrittenTypes.expr) list ->
@@ -15,7 +15,7 @@ val access :
   WrittenCallSupport.literalChecker ->
   WrittenTypeSupport.globals ->
   WrittenTypeSupport.locals ->
-  CheckedAST.symbols ->
+  WrittenCheckingState.t ->
   AST.semanticType option ->
   WrittenTypes.expr ->
   string ->
@@ -26,7 +26,7 @@ val update :
   WrittenCallSupport.literalChecker ->
   WrittenTypeSupport.globals ->
   WrittenTypeSupport.locals ->
-  CheckedAST.symbols ->
+  WrittenCheckingState.t ->
   AST.semanticType option ->
   WrittenTypes.expr ->
   ((WrittenTypes.range * string) * WrittenTypes.range * WrittenTypes.expr) list ->

@@ -246,7 +246,9 @@ let check checkExpression globals locals symbols expected (range : WT.range)
             let result = "t$recursive_return_" ^ prefix in
             AST.TFunction (types, AST.TInferenceVar (result, result))
       in
-      let binding, withBinding = C.allocateBinding name symbols in
+      let binding, withBinding =
+        WrittenCheckingState.allocateBinding name symbols
+      in
       bind
         (checkExpression globals
            (M.add name (provisional, binding) locals)
@@ -262,7 +264,9 @@ let check checkExpression globals locals symbols expected (range : WT.range)
             (fun (valueType, checkedValue, afterValue) ->
               map
                 (fun (bodyType, checkedBody, finalSymbols) ->
-                  let ordinal = C.nextBindingOrdinal symbols in
+                  let ordinal =
+                    WrittenCheckingState.nextBindingOrdinal symbols
+                  in
                   let member = AST.recursiveMemberId ordinal in
                   let kind =
                     if keywordFun.start = keywordFun.end_ then

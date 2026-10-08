@@ -52,7 +52,8 @@ let checkFields check globals locals symbols canonical declared fields =
                 map
                   (fun (_, value, symbols) ->
                     let id, symbols =
-                      C.internField canonical fieldName index symbols
+                      WrittenCheckingState.internField canonical fieldName index
+                        symbols
                     in
                     ((id, value) :: reversed, S.add fieldName seen, symbols))
                   (check globals locals symbols (Some typ) value)))
@@ -111,7 +112,9 @@ let record check literal globals locals symbols expected
                      (fun index (name, typ) -> (name, (index, typ)))
                      declarations)
               in
-              let typeId, symbols = C.internType canonical symbols in
+              let typeId, symbols =
+                WrittenCheckingState.internType canonical symbols
+              in
               bind
                 (checkFields check globals locals symbols canonical declared
                    (List.map
@@ -147,7 +150,8 @@ let access check literal globals locals symbols expected record fieldName =
                       Error ("Unknown field '" ^ fieldName ^ "' on " ^ canonical)
                   | Some (index, (_, typ)) ->
                       let id, symbols =
-                        C.internField canonical fieldName index symbols
+                        WrittenCheckingState.internField canonical fieldName
+                          index symbols
                       in
                       literal expected symbols typ (C.RecordAccess (record, id)))
           )

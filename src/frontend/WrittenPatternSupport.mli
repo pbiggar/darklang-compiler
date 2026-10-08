@@ -4,8 +4,8 @@ val floatLiteral : bool -> string -> string -> float option
 val checkLetPattern :
   WrittenTypes.letPattern ->
   AST.semanticType ->
-  CheckedAST.symbols ->
-  ( CheckedAST.letPattern * WrittenTypeSupport.locals * CheckedAST.symbols,
+  WrittenCheckingState.t ->
+  ( CheckedAST.letPattern * WrittenTypeSupport.locals * WrittenCheckingState.t,
     string )
   result
 
@@ -16,11 +16,11 @@ val mergePatternBindings :
 
 val checkMatchPattern :
   WrittenTypeSupport.globals ->
-  CheckedAST.symbols ->
+  WrittenCheckingState.t ->
   WrittenTypeSupport.locals option ->
   AST.semanticType ->
   WrittenTypes.matchPattern ->
-  ( CheckedAST.pattern * WrittenTypeSupport.locals * CheckedAST.symbols,
+  ( CheckedAST.pattern * WrittenTypeSupport.locals * WrittenCheckingState.t,
     string )
   result
 
@@ -30,7 +30,7 @@ val patternCoversLiteral : CheckedAST.expr -> CheckedAST.pattern -> bool
 
 val matchIsExhaustive :
   WrittenTypeSupport.globals ->
-  CheckedAST.symbols ->
+  WrittenCheckingState.t ->
   AST.semanticType ->
   CheckedAST.expr ->
   CheckedAST.matchCase list ->

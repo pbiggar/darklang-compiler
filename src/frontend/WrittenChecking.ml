@@ -25,6 +25,16 @@ type environment = WrittenDeclarations.environment
 
 let includeAllocatedFunctions = WrittenDeclarations.includeAllocatedFunctions
 
+let checkExpression globals locals symbols expected expression =
+  Result.map
+    (fun (typ, expression, state) ->
+      ( WrittenCheckingState.resolve state typ,
+        WrittenCheckingState.resolveExpression state expression,
+        WrittenCheckingState.symbols state ))
+    (WrittenExpressions.checkExpression globals locals
+       (WrittenCheckingState.create symbols)
+       expected expression)
+
 (* This first checking slice accepts one closed entry expression. It provides
    a direct WrittenTypes-to-CheckedAST path while declaration checking grows. *)
 let checkClosedProgram validated =
@@ -35,8 +45,7 @@ let checkClosedProgram validated =
             ( typ,
               CheckedAST.programFromCheckedParts
                 (symbols, [ CheckedAST.Expression expression ]) ))
-          (WrittenExpressions.checkExpression WrittenTypeSupport.emptyGlobals
-             StringOrder.Map.empty
+          (checkExpression WrittenTypeSupport.emptyGlobals StringOrder.Map.empty
              (CheckedAST.emptySymbols ())
              None expression)
     | _ -> Error "Closed checking requires a single unscoped entry expression")
@@ -46,14 +55,13 @@ let checkSimpleProgram requireEntry validated =
     (fun (typ, program, _) -> (typ, program))
     (Result.bind
        (WrittenSource.items validated)
-       (WrittenDeclarations.checkItems WrittenExpressions.checkExpression None
-          false requireEntry))
+       (WrittenDeclarations.checkItems checkExpression None false requireEntry))
 
 let checkSourceUnitsWithBase base allowInternal requireEntry units =
   Result.bind
     (Result.map List.concat (ResultList.traverse WrittenSource.items units))
-    (WrittenDeclarations.checkItems WrittenExpressions.checkExpression base
-       allowInternal requireEntry)
+    (WrittenDeclarations.checkItems checkExpression base allowInternal
+       requireEntry)
 
 let checkSourceUnits allowInternal requireEntry units =
   Result.map

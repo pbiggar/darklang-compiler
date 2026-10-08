@@ -7,13 +7,13 @@ module M = StringOrder.Map
 type expressionChecker =
   globals ->
   locals ->
-  C.symbols ->
+  WrittenCheckingState.t ->
   AST.semanticType option ->
   WT.expr ->
   (checkedExpression, string) result
 
-let[@warning "-4"] check checkExpression globals locals symbols expected
-    (range : WT.range) patterns body keywordFun symbolArrow =
+let[@warning "-4"] check checkExpression (globals : globals) locals symbols
+    expected (range : WT.range) patterns body keywordFun symbolArrow =
   let check symbols expected expr =
     checkExpression globals locals symbols expected expr
   in
@@ -52,144 +52,39 @@ let[@warning "-4"] check checkExpression globals locals symbols expected
                keywordFun,
                symbolArrow ))
     | _ -> (
-        let knownParameterTypes =
-          match expected with
-          | Some (AST.TFunction (argumentTypes, _))
-            when List.length argumentTypes = List.length patterns ->
-              M.of_list
-                (List.filter_map
-                   (fun (pattern, typ) ->
-                     match pattern with
-                     | WT.LPVariable (_, name)
-                       when not (Unification.containsTVar typ) ->
-                         Some (name, typ)
-                     | _ -> None)
-                   (List.combine patterns argumentTypes))
-          | _ -> M.empty
-        in
-        let numericOperandType = function
-          | WT.EInt _ -> Some AST.TInt
-          | WT.EInt8 _ -> Some AST.TInt8
-          | WT.EInt16 _ -> Some AST.TInt16
-          | WT.EInt32 _ -> Some AST.TInt32
-          | WT.EInt64 _ -> Some AST.TInt64
-          | WT.EInt128 _ -> Some AST.TInt128
-          | WT.EUInt8 _ -> Some AST.TUInt8
-          | WT.EUInt16 _ -> Some AST.TUInt16
-          | WT.EUInt32 _ -> Some AST.TUInt32
-          | WT.EUInt64 _ -> Some AST.TUInt64
-          | WT.EUInt128 _ -> Some AST.TUInt128
-          | WT.EFloat _ -> Some AST.TFloat64
-          | WT.EVariable (_, name) -> (
-              match M.find_opt name knownParameterTypes with
-              | Some typ -> Some typ
-              | None -> Option.map fst (M.find_opt name locals))
-          | _ -> None
-        in
-        let isNumericOperator = function
-          | WT.InfixFnCall
-              ( WT.ArithmeticPlus | WT.ArithmeticMinus | WT.ArithmeticMultiply
-              | WT.ArithmeticDivide | WT.ArithmeticModulo | WT.ArithmeticPower
-              | WT.ComparisonGreaterThan | WT.ComparisonGreaterThanOrEqual
-              | WT.ComparisonLessThan | WT.ComparisonLessThanOrEqual ) ->
-              true
-          | _ -> false
-        in
-        let orElseWith next value =
-          match value with Some _ -> value | None -> next ()
-        in
-        let rec inferParameterType name expression =
-          match expression with
-          | WT.EInfix (_, (_, op), WT.EVariable (_, leftName), right)
-            when leftName = name && isNumericOperator op ->
-              numericOperandType right
-          | WT.EInfix (_, (_, op), left, WT.EVariable (_, rightName))
-            when rightName = name && isNumericOperator op ->
-              numericOperandType left
-          | WT.EInfix (_, _, left, right) ->
-              inferParameterType name left
-              |> orElseWith (fun () -> inferParameterType name right)
-          | WT.EEnum (_, _, _, fields, _) ->
-              List.find_map (inferParameterType name) fields
-          | WT.EApply (_, WT.EFnName (_, functionName), _, args) -> (
-              match resolveFunction globals (qualifiedFnName functionName) with
-              | Some signature
-                when List.length args = List.length signature.parameters ->
-                  List.find_map
-                    (fun (argument, typ) ->
-                      match argument with
-                      | WT.EVariable (_, argName)
-                        when argName = name
-                             && not (Unification.containsTVar typ) ->
-                          Some typ
-                      | _ -> inferParameterType name argument)
-                    (List.combine args signature.parameters)
-              | _ -> List.find_map (inferParameterType name) args)
-          | WT.ELet (_, _, value, next, _, _) | WT.EStatement (_, value, next)
-            ->
-              inferParameterType name value
-              |> orElseWith (fun () -> inferParameterType name next)
-          | WT.EIf (_, condition, thenBranch, elseBranch, _, _, _) ->
-              inferParameterType name condition
-              |> orElseWith (fun () -> inferParameterType name thenBranch)
-              |> orElseWith (fun () ->
-                  Option.bind elseBranch (inferParameterType name))
-          | _ -> None
-        in
         let lambdaExpected =
           match expected with
-          | Some (AST.TFunction (argumentTypes, returnType))
-            when List.length argumentTypes = List.length patterns ->
-              Some
-                (AST.TFunction
-                   ( List.map2
-                       (fun pattern typ ->
-                         match pattern with
-                         | WT.LPVariable (_, name)
-                           when Unification.containsTVar typ ->
-                             Option.value
-                               (inferParameterType name body)
-                               ~default:typ
-                         | _ -> typ)
-                       patterns argumentTypes,
-                     returnType ))
-          | Some (AST.TFunction _ as typ) -> Some typ
           | Some (AST.TVar _ | AST.TInferenceVar _) -> None
-          | Some other -> Some other
-          | None -> None
+          | other -> other
         in
         let lambdaExpected =
           match lambdaExpected with
           | Some _ -> lambdaExpected
           | None ->
-              let moduleKey = String.concat "_" globals.modulePath in
-              let position =
-                string_of_int range.Tokenizer.start.Tokenizer.row
-                ^ "_"
-                ^ string_of_int range.Tokenizer.start.Tokenizer.column
-              in
               let args =
                 List.mapi
-                  (fun index pattern ->
-                    match
-                      match pattern with
-                      | WT.LPVariable (_, name) -> inferParameterType name body
-                      | _ -> None
-                    with
-                    | Some typ -> typ
-                    | None ->
-                        let name =
-                          "t$lambda_" ^ moduleKey ^ "_" ^ position ^ "_"
-                          ^ string_of_int index
-                        in
-                        AST.TInferenceVar (name, name))
+                  (fun index _ ->
+                    let name = "t$anonymous_argument_" ^ string_of_int index in
+                    AST.TInferenceVar (name, name))
                   patterns
               in
-              let returnName =
-                "t$lambda_return_" ^ moduleKey ^ "_" ^ position
-              in
               Some
-                (AST.TFunction (args, AST.TInferenceVar (returnName, returnName)))
+                (AST.TFunction
+                   ( args,
+                     AST.TInferenceVar
+                       ("t$anonymous_return", "t$anonymous_return") ))
+        in
+        let lambdaExpected, symbols =
+          match lambdaExpected with
+          | Some typ -> (
+              let types, symbols =
+                WrittenCheckingState.freshenTypes globals.typeParams [ typ ]
+                  symbols
+              in
+              match types with
+              | [ typ ] -> (Some typ, symbols)
+              | _ -> Crash.crash "Lambda freshening must preserve one type")
+          | None -> (None, symbols)
         in
         match lambdaExpected with
         | Some (AST.TFunction (argumentTypes, returnType))
@@ -227,6 +122,32 @@ let[@warning "-4"] check checkExpression globals locals symbols expected
                     in
                     Result.map
                       (fun (bodyType, body, symbols) ->
+                        let argumentTypes =
+                          List.map
+                            (WrittenCheckingState.resolve symbols)
+                            argumentTypes
+                        in
+                        let parametersChecked =
+                          NonEmptyList.map
+                            (fun (parameter : C.lambdaParameter) ->
+                              {
+                                parameter with
+                                C.typ =
+                                  C.checkedType
+                                    (WrittenCheckingState.resolve symbols
+                                       (C.semanticType parameter.C.typ));
+                              })
+                            parametersChecked
+                        in
+                        let body =
+                          WrittenCheckingState.resolveExpression symbols body
+                        in
+                        let bodyType =
+                          WrittenCheckingState.resolve symbols bodyType
+                        in
+                        let returnType =
+                          WrittenCheckingState.resolve symbols returnType
+                        in
                         let inferredReturn =
                           if Unification.containsTVar returnType then bodyType
                           else returnType
