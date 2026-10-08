@@ -6,6 +6,7 @@ import pty
 import subprocess
 import sys
 import tempfile
+import termios
 
 
 def main():
@@ -21,6 +22,7 @@ let expected = Stdlib.Cli.Env.getOr "DARK_TEST_EXPECTED_TERM" "" in
         subprocess.run([compiler, "-q", str(source), "-o", str(binary)], check=True, timeout=120)
         master, slave = pty.openpty()
         try:
+            original_attributes = termios.tcgetattr(slave)
             for terminal_in, terminal_out in [(False, False), (True, False), (False, True), (True, True)]:
                 for term in [None, "", "xterm-256color", "term-λ"]:
                     environment = os.environ.copy()
@@ -35,6 +37,7 @@ let expected = Stdlib.Cli.Env.getOr "DARK_TEST_EXPECTED_TERM" "" in
                     expected = int(terminal_in) + 2 * int(terminal_out)
                     assert result.returncode == expected, (terminal_in, terminal_out, term, result)
                     assert result.stderr == b"", result.stderr
+            assert termios.tcgetattr(slave) == original_attributes, "terminal settings changed"
             # A regular file, a pipe and closed descriptors must never count as terminals.
             environment = dict(os.environ, TERM="dumb", DARK_TEST_EXPECTED_TERM="dumb")
             with (root / "regular").open("w+b") as regular:

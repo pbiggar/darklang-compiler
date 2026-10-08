@@ -179,6 +179,7 @@ StdLib/List/__ListArray.dark
 StdLib/Cli/UI/Colors.dark
 StdLib/Cli/UI/TextField.dark
 StdLib/Cli/Tui/TerminalSession/Ansi.dark
+StdLib/Cli/Tui/TerminalSupport.dark
 StdLib/Cli/Tui/Text/__Escape.dark
 StdLib/Cli/Tui/Text/__Width.dark
 StdLib/Cli/Tui/Text/__Clip.dark

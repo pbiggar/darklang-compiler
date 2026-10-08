@@ -203,6 +203,7 @@ fragments use `__` even where the interpreter also has private helpers.
 | `StdLib/Cli/UI/Colors.dark` | `Darklang.Stdlib.Cli.UI.Colors`  | `packages/darklang/stdlib/cli/ui/colors.dark` |
 | `StdLib/Cli/UI/TextField.dark` | `Darklang.Stdlib.Cli.UI.TextField`  | `packages/darklang/stdlib/cli/ui/textfield.dark` |
 | `StdLib/Cli/Tui/TerminalSession/Ansi.dark` | `Darklang.Stdlib.Cli.Tui.TerminalSession.Ansi`  | `packages/darklang/stdlib/cli/tui/terminalSession.dark` |
+| `StdLib/Cli/Tui/TerminalSupport.dark` | `Darklang.Stdlib.Cli.Tui.TerminalSupport` | `packages/darklang/stdlib/cli/tui/terminalSupport.dark` |
 | `StdLib/Cli/Tui/Text/__Escape.dark` | `Darklang.Stdlib.Cli.Tui.Text`  | Private escape-scanning fragment of Cli.Tui.Text; package defined in `packages/darklang/stdlib/cli/tui/text.dark` |
 | `StdLib/Cli/Tui/Text/__Width.dark` | `Darklang.Stdlib.Cli.Tui.Text`  | Private width fragment of Cli.Tui.Text; package defined in `packages/darklang/stdlib/cli/tui/text.dark` |
 | `StdLib/Cli/Tui/Text/__Clip.dark` | `Darklang.Stdlib.Cli.Tui.Text`  | Private clipping fragment of Cli.Tui.Text; package defined in `packages/darklang/stdlib/cli/tui/text.dark` |
