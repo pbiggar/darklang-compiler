@@ -123,6 +123,20 @@ generic calls is already present. No compiler or package changes were made
 during that initial coverage investigation; the subsequent fix above resolves
 the 17 generic function-value probes and bare explicit specialization.
 
+## Deferred category: package-manager lookups
+
+Per user direction, skip functions that look up items, names, locations or
+other information through the package manager. This is not a blanket deferral
+of pure helpers in the same package, nor permission to skip unrelated compiler
+failures. Retain skipped lookup items in the final unresolved list.
+
+Confirmed item: `packages/darklang/languageTools/packageManager.dark`,
+`Darklang.LanguageTools.PackageManager.Type.find`. With its type dependencies
+included, compilation fails with `Unknown function or value 'Builtin.pmFindType'`.
+The interpreter delegates to its branch-aware package manager; main-store
+lookup uses `LibDB.ProgramTypes.Type.find` backed by SQLite. Item skipped,
+not fixed. Other lookup functions remain individually unreviewed.
+
 ## Completion rule
 
 At the end of the package review, enumerate every skipped package and unresolved
