@@ -291,7 +291,7 @@ let rec rewriteRecursiveSelfReferences self closure expr =
   | C.UInt16Literal _ | C.UInt32Literal _ | C.UInt64Literal _
   | C.UInt128Literal _ | C.BoolLiteral _ | C.StringLiteral _ | C.BlobLiteral _
   | C.CharLiteral _ | C.FloatLiteral _ | C.RuntimeError _ | C.Local _
-  | C.FuncRef _ ->
+  | C.FuncRef _ | C.GenericFuncRef _ ->
       expr
 
 (* Once the lifted member has a code identity, recursive closure calls become
@@ -370,6 +370,6 @@ let rec rewriteLiftedSelfCalls lifted closure captures expr =
   | C.UInt16Literal _ | C.UInt32Literal _ | C.UInt64Literal _
   | C.UInt128Literal _ | C.BoolLiteral _ | C.StringLiteral _ | C.BlobLiteral _
   | C.CharLiteral _ | C.FloatLiteral _ | C.RuntimeError _ | C.Local _
-  | C.FuncRef _ ->
+  | C.FuncRef _ | C.GenericFuncRef _ ->
       expr
 (* Lift lambdas in an expression, returning (transformed expr, new state) *)

@@ -149,6 +149,7 @@ and expr =
   | Apply of expr * expr NonEmptyList.t
   | IndirectApply of expr * expr NonEmptyList.t
   | FuncRef of AST.functionId
+  | GenericFuncRef of AST.functionId * checkedType list * checkedType
   | Closure of AST.functionId * expr list
   | RuntimeError of string
   | BoundaryRender of AST.functionId * expr

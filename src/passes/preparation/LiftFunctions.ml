@@ -140,7 +140,7 @@ let rec containsIndirectApply expr =
   | C.Int8Literal _ | C.Int16Literal _ | C.Int32Literal _ | C.UInt8Literal _
   | C.UInt16Literal _ | C.UInt32Literal _ | C.UInt64Literal _
   | C.UInt128Literal _ | C.BoolLiteral _ | C.StringLiteral _ | C.BlobLiteral _
-  | C.CharLiteral _ | C.FloatLiteral _ | C.RuntimeError _ | C.FuncRef _ ->
+  | C.CharLiteral _ | C.FloatLiteral _ | C.RuntimeError _ | C.FuncRef _ | C.GenericFuncRef _ ->
       false
   | C.Local _ -> false
   | C.BoundaryRender (_, value)

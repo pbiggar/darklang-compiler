@@ -38,6 +38,22 @@ let[@warning "-4"] checkNamed checkExpression checkedLiteral globals locals
       Error
         ("Unknown function '" ^ String.concat "." (qualifiedFnName name) ^ "'")
   | Some signature
+    when args = [] && typeArgs <> [] && signature.parameters <> [] ->
+      bind
+        (ResultList.traverse
+           (resolveWrittenType globals.allowInternal globals.types
+              globals.modulePath globals.typeParams)
+           typeArgs)
+        (fun types ->
+          if List.length types <> List.length signature.typeParams then
+            Error "Function value type argument count mismatch"
+          else
+            let subst = M.of_list (List.combine signature.typeParams types) in
+            let typ = Types.applySubst subst
+                (AST.TFunction (signature.parameters, signature.return)) in
+            checkedLiteral expected symbols typ
+              (C.GenericFuncRef (signature.id, C.checkedTypeArgs types, C.checkedType typ)))
+  | Some signature
     when args <> [] && List.length args < List.length signature.parameters ->
       bind
         (ResultList.traverse
@@ -411,7 +427,10 @@ let[@warning "-4"] checkNamed checkExpression checkedLiteral globals locals
                                             (convertStructuralRecord globals
                                                targetType actualType value
                                                symbols)
-                                        else Ok (value :: reversed, symbols)))
+                                        else
+                                          map
+                                            (fun symbols -> (value :: reversed, symbols))
+                                            (WrittenCheckingState.constrain targetType actualType symbols)))
                                   (Ok ([], symbols))
                                   pairs
                               in

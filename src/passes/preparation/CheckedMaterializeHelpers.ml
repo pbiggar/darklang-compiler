@@ -29,7 +29,7 @@ let rec collectHelperTypes symbols aliases expr =
   | C.Int8Literal _ | C.Int16Literal _ | C.Int32Literal _ | C.UInt8Literal _
   | C.UInt16Literal _ | C.UInt32Literal _ | C.UInt64Literal _
   | C.UInt128Literal _ | C.BoolLiteral _ | C.StringLiteral _ | C.BlobLiteral _
-  | C.CharLiteral _ | C.FloatLiteral _ | C.Local _ | C.FuncRef _
+  | C.CharLiteral _ | C.FloatLiteral _ | C.Local _ | C.FuncRef _ | C.GenericFuncRef _
   | C.RuntimeError _ ->
       empty
   | C.BoundaryRender (_, value)
@@ -129,7 +129,7 @@ let rec rewriteHelperCalls symbols aliases variants expr =
   | C.Int8Literal _ | C.Int16Literal _ | C.Int32Literal _ | C.UInt8Literal _
   | C.UInt16Literal _ | C.UInt32Literal _ | C.UInt64Literal _
   | C.UInt128Literal _ | C.BoolLiteral _ | C.StringLiteral _ | C.BlobLiteral _
-  | C.CharLiteral _ | C.FloatLiteral _ | C.Local _ | C.FuncRef _
+  | C.CharLiteral _ | C.FloatLiteral _ | C.Local _ | C.FuncRef _ | C.GenericFuncRef _
   | C.RuntimeError _ ->
       expr
   | C.BoundaryRender (renderer, value) ->

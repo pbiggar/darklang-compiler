@@ -515,6 +515,9 @@ and privateExpr (value : expr) =
         ]
   | FuncRef field0 ->
       observationUnion "Expr" "FuncRef" [ privateFunction field0 ]
+  | GenericFuncRef (id, args, typ) ->
+      observationUnion "Expr" "GenericFuncRef"
+        [privateFunction id; Sequence (List.map privateCheckedType args); privateCheckedType typ]
   | Closure (field0, field1) ->
       observationUnion "Expr" "Closure"
         [
@@ -945,6 +948,9 @@ and observationExpr (value : expr) =
         ]
   | FuncRef field0 ->
       observationUnion "Expr" "FuncRef" [ observationFunction field0 ]
+  | GenericFuncRef (id, args, typ) ->
+      observationUnion "Expr" "GenericFuncRef"
+        [observationFunction id; Sequence (List.map observationCheckedType args); observationCheckedType typ]
   | Closure (field0, field1) ->
       observationUnion "Expr" "Closure"
         [

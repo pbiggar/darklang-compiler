@@ -643,6 +643,7 @@ let rec inferTypeCore sums names expr environment registry variants functions
       match typ with
       | AST.TFunction (_, result) -> Ok result
       | _ -> Error "Indirect apply requires a function type")
+  | C.GenericFuncRef (_, _, typ) -> Ok (C.semanticType typ)
   | C.FuncRef id -> (
       match FunctionIdMap.tryFind id functions with
       | Some (_, typ) -> Ok typ
