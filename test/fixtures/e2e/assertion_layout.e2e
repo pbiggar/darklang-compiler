@@ -1,0 +1,18 @@
+// Assertions preserve the parsed layout and literal contents when compared or batched.
+let t (s: String) : Stdlib.Pretty.Doc = Stdlib.Pretty.text s
+let r (width: Int) (d: Stdlib.Pretty.Doc) : String = Stdlib.Pretty.render width d
+let g (d: Stdlib.Pretty.Doc) : Stdlib.Pretty.Doc = Stdlib.Pretty.group d
+
+r 80 (g (Stdlib.Pretty.concat
+          (t "a")
+          (Stdlib.Pretty.concat Stdlib.Pretty.hardLine (t "b")))) = "a\nb"
+
+r 80 (g (Stdlib.Pretty.concat
+          (t "x")
+          (t "y"))) = "xy"
+
+Stdlib.Float.absoluteValue
+  (-1.25) = 1.25
+
+"first
+  second" = "first\n  second"
