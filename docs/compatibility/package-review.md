@@ -29,6 +29,8 @@ Entries using the same builtin in both implementations are not in this category.
 | `packages/darklang/stdlib/cli/bash.dark` | `Darklang.Stdlib.Cli.Bash.overwriteBashrc` | Fixed and merged | Canonicalized Env and Cli.FileSystem module names, including FileError, and added qualified Option.Option/Result.Result type fallbacks. Original Bash package compiles. PR #14 merged to main at `aeef8bc93a4ff7f21c157625186283301ef7adef`. |
 | `packages/darklang/stdlib/localStore.dark` | `Darklang.Stdlib.LocalStore.path` | Package skipped; missing SQLite support | Calls unavailable `Builtin.localDbPath`, which the interpreter implements using `LibDB.Sqlite.currentDbPath`. User classified this as missing SQLite support and directed deferral. Other LocalStore items remain unreviewed individually. |
 
+| `packages/darklang/languageTools/interpreterStats.dark` | `Darklang.LanguageTools.InterpreterStats.reset` | Package skipped; missing interpreter instrumentation support | Original package compilation fails with `Unknown function or value 'Builtin.interpreterStatsReset'`. Interpreter implementation resets `vm.stats` and enables counting; compiler has no corresponding builtin or interpreter VM counters. User directed recording and skipping this package. Other items remain unreviewed individually. |
+
 The Base64 package also contains `encode` and `urlEncode`, which call
 `Builtin.base64Encode` and `Builtin.base64UrlEncode`; compiler implementations
 already exist. These remain unreviewed individually because the package is
