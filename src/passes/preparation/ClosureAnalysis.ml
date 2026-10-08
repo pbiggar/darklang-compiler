@@ -139,6 +139,7 @@ let rec simpleInferType expr typeEnv funcParams funcReturns genericDefs typeReg 
  | C.BoolLiteral _ -> Some AST.TBool | C.StringLiteral _ | C.InterpolatedString _ -> Some AST.TString | C.BlobLiteral _ -> Some AST.TBlob
  | C.CharLiteral _ -> Some AST.TChar | C.FloatLiteral _ -> Some AST.TFloat64 | C.UnitLiteral -> Some AST.TUnit
  | C.Local id -> B.find_opt id typeEnv
+ | C.RecordUpdate (record, _) -> infer record
  | C.FuncRef id -> (match FunctionIdMap.tryFind id funcParams, FunctionIdMap.tryFind id funcReturns with Some parameters, Some result -> Some (AST.TFunction (parameters, result)) | _ -> None)
  | C.Let (pattern, value, body) ->
    let environment = match infer value with Some typ -> List.fold_left (fun current (name, typ) -> B.add name typ current) typeEnv (S.letPatternBindingTypes pattern typ) | None -> typeEnv in inferWith environment body
@@ -216,7 +217,7 @@ let rec simpleInferType expr typeEnv funcParams funcReturns genericDefs typeReg 
      let rec skip count values = if count = 0 then values else match values with [] -> [] | _ :: rest -> skip (count - 1) rest in Some (AST.TFunction (skip count parameters, result)) else None
    | _ -> None)
  | C.IndirectApply _ -> Some AST.TBool
- | C.RecordUpdate _ | C.Closure _ | C.RuntimeError _ | C.BoundaryRender _ -> None
+ | C.Closure _ | C.RuntimeError _ | C.BoundaryRender _ -> None
 let inferLambdaReturnType body state =
  match simpleInferType body state.typeEnv state.funcParams state.funcReturnTypes state.genericFuncDefs state.typeReg state.variantLookup (R.typeNamesFromSymbols state.symbols) with
  | Some AST.TNever -> Ok AST.TUnit | Some result -> Ok result

@@ -1,0 +1,8 @@
+// record_update_capture.e2e - Record updates preserve checked types for closure captures and returns.
+type CaptureRecord = { text: String, count: Int64 }
+let original = CaptureRecord { text = "kept", count = 1L } in let updated = { original with count = 2L } in let read = fun () -> updated.text in read () = "kept"
+let original = CaptureRecord { text = "kept", count = 1L } in let updated = { original with count = 2L } in Stdlib.List.map [1L, 2L] (fun number -> updated.count + number) = [3L, 4L]
+let original = CaptureRecord { text = "kept", count = 1L } in let update = fun number -> { original with count = number } in (update 7L).count = 7L
+type CaptureBox<'a> = { value: a, count: Int64 }
+let original = CaptureBox { value = "generic", count = 1L } in let updated = { original with count = 2L } in let read = fun () -> updated.value in read () = "generic"
+let original = CaptureBox { value = 41L, count = 1L } in let update = fun count -> { original with count = count } in (update 2L).value + (update 2L).count = 43L
