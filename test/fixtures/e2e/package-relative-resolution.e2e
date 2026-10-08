@@ -1,0 +1,22 @@
+// Canonical stdlib module declarations support package-relative sibling names.
+
+module Darklang.Stdlib.Cli.PackageResolutionProbe =
+  let renderNotFound () : String = FileSystem.FileError.toString FileSystem.FileError.NotFound
+  let renderOther () : String = FileSystem.FileError.toString (FileSystem.FileError.Other "detail")
+  let overwriteBashrc (content: String) : Result.Result<Unit, String> =
+    FileSystem.overwriteFile "$HOME/.bashrc" (Stdlib.String.toBlob content)
+    |> Result.mapError FileSystem.FileError.toString
+
+module Darklang.Stdlib.PackageResolutionProbe =
+  let environmentAbsent () : Stdlib.Option.Option<String> = Env.get "DARKLANG_PACKAGE_RESOLUTION_MISSING_4B365"
+
+Darklang.Stdlib.Cli.PackageResolutionProbe.renderNotFound () = "File not found"
+Darklang.Stdlib.Cli.PackageResolutionProbe.renderOther () = "detail"
+// Take the function as a value to check its body without modifying .bashrc.
+let overwrite = Darklang.Stdlib.Cli.PackageResolutionProbe.overwriteBashrc in 0L = 0L
+Darklang.Stdlib.PackageResolutionProbe.environmentAbsent () = None
+
+Darklang.Stdlib.Cli.FileSystem.FileError.toString Darklang.Stdlib.Cli.FileSystem.FileError.OsAccessDenied = "Permission denied"
+Stdlib.Cli.FileSystem.FileError.toString Stdlib.Cli.FileSystem.FileError.NotFound = "File not found"
+Darklang.Stdlib.Env.get "DARKLANG_PACKAGE_RESOLUTION_MISSING_4B365" = None
+Stdlib.Env.get "DARKLANG_PACKAGE_RESOLUTION_MISSING_4B365" = None
