@@ -1,0 +1,2 @@
+// rsa_signing.e2e - Signing rejects unsupported key widths before reading or allocating private arithmetic buffers.
+Stdlib.RsaSigning.signSha256 (Stdlib.RsaPrivate.Key { modulus = Stdlib.Blob.empty, exponent = Stdlib.Blob.empty, privateExponent = Stdlib.Blob.empty }) Stdlib.Blob.empty = Error "Invalid RSA signing key"

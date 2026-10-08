@@ -84,8 +84,10 @@ P-256 ECDSA server authentication, RSA or P-256 ECDSA signed X.509 chains, hostn
 and system CA bundles. Unsupported cipher, key, certificate, and protocol
 choices fail closed. Local TLS peers and protocol vectors exercise the profile;
 streamed HTTPS responses use the same authenticated TLS record path and close
-their connection when drained or explicitly closed. Server-side TLS can follow
-the client.
+their connection when drained or explicitly closed. Server identities now import
+bounded PEM certificate chains and unencrypted RSA-2048 private keys, verify
+their binding and sign with blinded, fixed-work RSA-PSS/SHA-256. The server
+handshake and listener integration remain to be connected to this foundation.
 
 ## 5. Compatibility and readiness
 

@@ -192,6 +192,9 @@ RsaSpki.dark
 Crypto.dark
 RsaPss.dark
 __RsaMontgomery.dark
+__RsaPrivate.dark
+__RsaSigning.dark
+TlsServerIdentity.dark
 P256.dark
 RsaPkcs1.dark
 X509Chain.dark

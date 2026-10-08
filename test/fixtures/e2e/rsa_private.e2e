@@ -1,0 +1,9 @@
+// rsa_private.e2e - Private key import rejects malformed DER, unsupported versions and misleading PEM labels.
+Stdlib.RsaPrivate.parsePkcs1 Stdlib.Blob.empty = Error "Invalid RSA private key"
+Stdlib.Blob.fromHex "3003020101" |> Stdlib.Result.andThen Stdlib.RsaPrivate.parsePkcs1 = Error "Unsupported RSA private key version"
+Stdlib.Blob.fromHex "3003020100" |> Stdlib.Result.andThen Stdlib.RsaPrivate.parsePkcs1 = Error "Invalid RSA private key"
+Stdlib.Blob.fromHex "300402020000" |> Stdlib.Result.andThen Stdlib.RsaPrivate.parsePkcs1 = Error "Unsupported RSA private key version"
+Stdlib.Blob.fromHex "300302010000" |> Stdlib.Result.andThen Stdlib.RsaPrivate.parsePkcs1 = Error "Invalid RSA private key"
+Stdlib.Blob.fromHex "3003020101" |> Stdlib.Result.andThen Stdlib.RsaPrivate.parsePkcs8 = Error "Unsupported PKCS8 private key version"
+Stdlib.RsaPrivate.parsePem (Stdlib.String.toBlob "-----BEGIN ENCRYPTED PRIVATE KEY-----\nAAAA\n-----END ENCRYPTED PRIVATE KEY-----") = Error "Unsupported PEM private key type"
+Stdlib.RsaPrivate.parsePem (Stdlib.String.toBlob "-----BEGIN PRIVATE KEY-----\n?\n-----END PRIVATE KEY-----") = Error "Invalid PEM private key"

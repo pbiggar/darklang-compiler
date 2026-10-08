@@ -244,6 +244,25 @@ exponent operation is not a private-key signing implementation.
 Multiplexing, pooling, graceful QUIC wire closure and TLS/HTTP/3 server
 integration remain work.
 
+The server identity foundation exposes `TlsServerIdentity.create` for a PEM
+certificate chain and an unencrypted PKCS#1 or PKCS#8 RSA private key. The
+initial signing profile accepts two-prime RSA-2048 with a public exponent of at
+most 32 bits. Import checks canonical DER, component consistency, leaf signing
+authorization and equality of the certificate's public key with the private
+key's public components. Chains are capped at eight certificates and 64 KiB of
+DER. `RsaSigning.signSha256` uses a fresh 32-byte salt and blinding factor,
+performs both modular products for all 2048 private-exponent bits, wipes raw
+scratch buffers and verifies the result before releasing a signature. The x64
+probe's emitted loop and limb selection were inspected for branches and
+addresses controlled by secret bits; this is not an independent cryptographic
+audit or an ARM64 instruction-inspection claim. `rsa_private.e2e`,
+`rsa_signing.e2e`, `tls_server_identity.e2e`,
+`python3 scripts/test_rsa_private.py` and
+`python3 scripts/test_rsa_signing.py` cover generated key formats, inconsistent
+components, certificate/key mismatch, independent PSS verification, salt
+diversity, fault rejection and cleanup. TLS server handshake and listener
+integration are still pending.
+
 `Stdlib.HttpClient.Sse.Event` and `parse` are copied from the same revision.
 The parser retains upstream's `Stream.unfold` behavior: it pulls only until the
 next complete event, preserves `id` across blocks, joins repeated `data`

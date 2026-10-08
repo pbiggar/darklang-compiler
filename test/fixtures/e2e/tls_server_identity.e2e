@@ -1,0 +1,2 @@
+// tls_server_identity.e2e - Server identity import reports missing certificates before creating signing state.
+Stdlib.TlsServerIdentity.create Stdlib.Blob.empty Stdlib.Blob.empty = Error "X.509 trust bundle contains no certificates"
