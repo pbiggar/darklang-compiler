@@ -1,4 +1,4 @@
-(if true then "correct" else 0L) = "correct"
+(if true then "correct" else 0L) = compileerror="Expected TString, got TInt64"
 
 (if true then Builtin.testRuntimeError "a" else 0L) = error="Uncaught exception: a"
 (if false then 0L else Builtin.testRuntimeError "a") = error="Uncaught exception: a"
@@ -11,7 +11,7 @@
 #compileerror="Expected TBool, got TInt64"
 (if 5L then "" else "") = error="Encountered a condition that must be a Bool, but got an Int64 (5)"
 (if true then ()) = ()
-(if 1L > 3L then 4L) = ()
+(if 1L > 3L then 4L) = compileerror="Expected TInt64, got TUnit"
 #compileerror="Expected TInt64, got TUnit"
 (if 1L < 3L then 4L) = 4L
 #compileerror="Expected TString, got TUnit"

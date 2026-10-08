@@ -2,7 +2,7 @@
 
 [Source fixture](../../../../test/fixtures/e2e/upstream/stdlib/option.dark) · [File list](../../current-audit.md)
 
-Executed 73 assertions: **61 passed, 12 failed**.
+Executed 73 assertions: **63 passed, 10 failed**.
 
 | Test | Observed failure |
 | --- | --- |
@@ -16,5 +16,3 @@ Executed 73 assertions: **61 passed, 12 failed**.
 | [L211](../../../../test/fixtures/e2e/upstream/stdlib/option.dark#L211) — Stdlib.Option.map4 Stdlib.Option.Option.None Stdlib.Option.Option.None Stdlib.Option.Option.None (Stdlib.Op... | Operator is unavailable for this type |
 | [L218](../../../../test/fixtures/e2e/upstream/stdlib/option.dark#L218) — Stdlib.Option.map4 Stdlib.Option.Option.None Stdlib.Option.Option.None Stdlib.Option.Option.None Stdlib.Opt... | Operator is unavailable for this type |
 | [L242](../../../../test/fixtures/e2e/upstream/stdlib/option.dark#L242) — Stdlib.Option.map5 Stdlib.Option.Option.None Stdlib.Option.Option.None Stdlib.Option.Option.None Stdlib.Opt... | Operator is unavailable for this type |
-| [L255](../../../../test/fixtures/e2e/upstream/stdlib/option.dark#L255) — Stdlib.Option.mapWithDefault (Stdlib.Option.Option.Some 5L) Stdlib.Option.Option.None (fun x -> x + 1L) | Expected TSum ("Darklang.Stdlib.Option.Option", [TVar "t"]), got TInt64 |
-| [L260](../../../../test/fixtures/e2e/upstream/stdlib/option.dark#L260) — Stdlib.Option.mapWithDefault Stdlib.Option.Option.None Stdlib.Option.Option.None (fun x -> x + 1L) | Expected TSum ("Darklang.Stdlib.Option.Option", [TVar "t"]), got TInt64 |

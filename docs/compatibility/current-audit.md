@@ -2,11 +2,11 @@
 
 Audited on 2026-10-08 (UTC), against compiler revision `4a61318019fb8dea7f34a0bfec4df33f1fa18f5c` on Linux x86-64.
 
-**Every currently excluded assertion was rerun: 2,325 assertions across 55 files.**
-**15 assertions have been enabled since the initial audit; 2,325 still fail.**
+**Every currently excluded assertion was rerun: 2,291 assertions across 52 files.**
+**49 assertions have been enabled since the initial audit; 2,291 still fail.**
 
-Latest results for the audited files, including enabled neighbours: 3,599 assertions, 1,274 passed and 2,325 failed.
-The remaining gates cover these exact failures: 34 whole files and 256 assertion lines across 21 mixed files.
+Latest results for the audited files, including enabled neighbours: 3,599 assertions, 1,308 passed and 2,291 failed.
+The remaining gates cover these exact failures: 34 whole files and 222 assertion lines across 18 mixed files.
 
 The assertion harness now compares original parsed expressions. Multiline applications and literal contents are preserved in individual runs and batches. A follow-up retest of `stdlib/dict.dark` passed all 140 assertions after L21 was changed to expect its existing compile-time key type error.
 
@@ -27,6 +27,10 @@ String predicate follow-up: List L92 and L223 now require `compileerror="Expecte
 Verification including the String predicate follow-up on main `dd91bfa7ec01607d5408cfd3b58e55e1f3747847`: native build passed; the host suite passed **11,396/11,396** tests; `dune runtest` passed; the canonical compiled leak gate passed **58/58** workloads. The preceding compiler regressions passed individually and batched. The parent benchmark check stopped before measurement because the stored workload digest is incompatible; no baseline was reset.
 
 
+Compile-error sweep: 34 assertions across eight fixtures now require compile-time diagnostics for invalid types, names, constructor fields, patterns, and non-exhaustive matches. Their expressions remain unchanged; compiler behavior is unchanged. These assertions are enabled and removed from the failure ledger. The three basic variable, Boolean-or, and if-expression fixtures have no remaining disabled assertions.
+
+Verification of the sweep based on main `5497ec091927098f88c6d0195fe2b0e7d2382385`: native build passed; the complete host suite passed **11,430/11,430** tests; `dune runtest` passed; compiled leaks passed **58/58** workloads. Parent benchmark verification stopped before measurement because the stored workload digest is incompatible; no baseline was reset.
+
 ## Failing test files
 
 Each file links to the individual failing assertions and their observed diagnostics.
@@ -43,15 +47,12 @@ Each file links to the individual failing assertions and their observed diagnost
 | [cli/tailscale.dark](failures/cli/tailscale.md) | 5 | 0 | 5 |
 | [cli/workbench-repl.dark](failures/cli/workbench-repl.md) | 36 | 0 | 36 |
 | [cloud/db.dark](failures/cloud/db.md) | 151 | 0 | 151 |
-| [language/basic/eor.dark](failures/language/basic/eor.md) | 13 | 12 | 1 |
-| [language/basic/evariable.dark](failures/language/basic/evariable.md) | 2 | 1 | 1 |
 | [language/builtin-introspection.dark](failures/language/builtin-introspection.md) | 2 | 0 | 2 |
-| [language/custom-data/enums.dark](failures/language/custom-data/enums.md) | 38 | 22 | 16 |
+| [language/custom-data/enums.dark](failures/language/custom-data/enums.md) | 38 | 33 | 5 |
 | [language/custom-data/values.dark](failures/language/custom-data/values.md) | 72 | 19 | 53 |
-| [language/derror.dark](failures/language/derror.md) | 15 | 10 | 5 |
+| [language/derror.dark](failures/language/derror.md) | 15 | 13 | 2 |
 | [language/effect-ceiling.dark](failures/language/effect-ceiling.md) | 6 | 0 | 6 |
 | [language/error-type-names.dark](failures/language/error-type-names.md) | 13 | 0 | 13 |
-| [language/flow-control/eif.dark](failures/language/flow-control/eif.md) | 16 | 14 | 2 |
 | [language/nested-fns.dark](failures/language/nested-fns.md) | 12 | 10 | 2 |
 | [language/runtime-to-programtypes.dark](failures/language/runtime-to-programtypes.md) | 19 | 0 | 19 |
 | [scm/branch-identity.dark](failures/scm/branch-identity.md) | 8 | 2 | 6 |
@@ -81,11 +82,11 @@ Each file links to the individual failing assertions and their observed diagnost
 | [stdlib/language-tools/parsedFileShape.dark](failures/stdlib/language-tools/parsedFileShape.md) | 13 | 0 | 13 |
 | [stdlib/language-tools/pickLocation.dark](failures/stdlib/language-tools/pickLocation.md) | 30 | 0 | 30 |
 | [stdlib/language-tools/semanticTokenization.dark](failures/stdlib/language-tools/semanticTokenization.md) | 102 | 0 | 102 |
-| [stdlib/list.dark](failures/stdlib/list.md) | 220 | 202 | 18 |
+| [stdlib/list.dark](failures/stdlib/list.md) | 220 | 215 | 5 |
 | [stdlib/math.dark](failures/stdlib/math.md) | 32 | 30 | 2 |
-| [stdlib/option.dark](failures/stdlib/option.md) | 73 | 61 | 12 |
+| [stdlib/option.dark](failures/stdlib/option.md) | 73 | 63 | 10 |
 | [stdlib/prettyPrinter.dark](failures/stdlib/prettyPrinter.md) | 57 | 0 | 57 |
-| [stdlib/result.dark](failures/stdlib/result.md) | 67 | 59 | 8 |
+| [stdlib/result.dark](failures/stdlib/result.md) | 67 | 60 | 7 |
 | [stdlib/sqlite.dark](failures/stdlib/sqlite.md) | 8 | 0 | 8 |
 | [stdlib/string.dark](failures/stdlib/string.md) | 640 | 0 | 640 |
 
