@@ -221,11 +221,14 @@ let liftLambdasInProgram baseRegistry baseVariants baseFunctions program =
  | C.ValueDef value :: rest -> let* body, state = L.liftLambdasInExpr value.C.body state in process rest state (C.ValueDef {value with C.body} :: acc)
  | (C.TypeDef _ as value) :: rest -> process rest state (value :: acc) in
  let* tops, next = process tops initial [] in
- let used = List.concat_map (function C.FunctionDef func -> collectFuncRefsInExpr func.C.body params | C.Expression expr -> collectFuncRefsInExpr expr params | _ -> []) tops in
+ (* Lifting moves callback expressions into generated functions. Named function
+    values in those bodies still need the closure calling-convention wrapper. *)
+ let used = List.concat_map (function C.FunctionDef func -> collectFuncRefsInExpr func.C.body params | C.Expression expr -> collectFuncRefsInExpr expr params | C.ValueDef value -> collectFuncRefsInExpr value.C.body params | _ -> []) tops @
+   List.concat_map (fun (func : C.functionDef) -> collectFuncRefsInExpr func.C.body params) next.A.liftedFunctions in
  let _, used = List.fold_left (fun (seen, acc) id -> if S.FunctionSet.mem id seen then seen, acc else S.FunctionSet.add id seen, id :: acc) (S.FunctionSet.empty, []) used in let used = List.rev used in
  let withFuncs = {state = next; funcParams = params; generatedWrappers = FunctionIdMap.empty} in
  let rec generate remaining state acc = match remaining with [] -> Ok (acc, state) | id :: rest -> let* func, state = generateFuncWrapper id params returns state in generate rest state (func :: acc) in
  let* wrappers, final = generate used withFuncs [] in
  let tops = List.map (replaceFuncRefsWithWrappers final.generatedWrappers) tops in
- let lifted = List.rev (wrappers @ final.state.A.liftedFunctions) |> List.map (fun func -> C.FunctionDef func) in
+ let lifted = List.rev (wrappers @ final.state.A.liftedFunctions) |> List.map (fun func -> replaceFuncRefsWithWrappers final.generatedWrappers (C.FunctionDef func)) in
  Ok (C.programFromCheckedParts (final.state.A.symbols, lifted @ tops))
