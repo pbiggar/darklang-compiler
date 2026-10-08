@@ -11,7 +11,7 @@ from pathlib import Path
 
 from aioquic.buffer import Buffer
 from aioquic.h3.connection import H3Connection
-from aioquic.h3.events import HeadersReceived
+from aioquic.h3.events import DataReceived, HeadersReceived
 from aioquic.quic.configuration import QuicConfiguration
 from aioquic.quic.connection import QuicConnection
 from aioquic.quic.packet import QuicPacketType, pull_quic_header
@@ -85,6 +85,44 @@ let run () : Unit =
 run ()
 """
 
+
+HTTP_CLIENT_DARK = """// client.dark - Exercise lazy HTTP/3 response ownership and early close.
+let output (kind: Int64) (bytes: Blob) : Unit =
+  match Stdlib.Http3Wire.serialize kind bytes with
+  | Error message -> Stdlib.printLine ("ERROR " ++ message)
+  | Ok wire -> Stdlib.printLine (Stdlib.Blob.toHex wire)
+let consume (body: Stream<UInt8>) (bytes: List<UInt8>) (count: Int) : Unit =
+  if count == 512 then
+    let _ = output 0L (Stdlib.Blob.fromList (Stdlib.List.reverse bytes)) in
+    consume body [] 0
+  else match Stdlib.Stream.next body with
+  | Some byte -> consume body (Stdlib.List.push bytes byte) (count + 1)
+  | None -> if count == 0 then () else output 0L (Stdlib.Blob.fromList (Stdlib.List.reverse bytes))
+let emitBlob (body: Blob) (position: Int) : Unit =
+  if position >= Stdlib.Blob.length body then ()
+  else
+    let _ = output 0L (Stdlib.Blob.slice body position 512) in
+    emitBlob body (position + 512)
+let run () : Unit =
+  match Stdlib.Blob.fromHex "@ROOT@", Stdlib.HttpWire.parseUrl "https://localhost/streams", Stdlib.Blob.fromHex "@BODY@",
+    Stdlib.Cli.Args.get 0 |> Stdlib.Result.andThen (fun value -> Stdlib.Int64.parse value |> Stdlib.Result.mapError (fun _error -> "port")) with
+  | Ok root, Ok url, Ok upload, Ok port ->
+    match Stdlib.QuicClient.connect (Stdlib.Datagram.Endpoint { address = [127L,0L,0L,1L], port = port }) "localhost" [root] 8000L with
+    | Error message -> Stdlib.printLine ("ERROR " ++ message)
+    | Ok ready ->
+      match Stdlib.Http3Client.stream ready (if Stdlib.Blob.length upload == 0 then "GET" else "POST") url [] upload 10000L with
+      | Error message -> Stdlib.printLine ("ERROR " ++ message)
+      | Ok response ->
+        let _ = match Stdlib.Qpack.encode ([(":status", Stdlib.Int.toString response.statusCode)] @ response.headers) with
+          | Error message -> Stdlib.printLine ("ERROR " ++ message)
+          | Ok wire -> output 1L wire in
+        let _ = consume response.body [] 0 in
+        let _ = Stdlib.Stream.close response.body in
+        Stdlib.printLine "DONE"
+  | _ -> Stdlib.printLine "Bad arguments"
+run ()
+"""
+
 HTTP_OWNER_DARK = """// owner.dark - Exercise the production HTTP/3 connection owner and event parser.
 let emit (bytes: Blob) (offset: Int) : Unit =
   if offset >= Stdlib.Blob.length bytes then ()
@@ -130,22 +168,36 @@ run ()
 def main():
     arguments = argparse.ArgumentParser()
     arguments.add_argument("--body-size", type=int, default=len(BODY))
+    arguments.add_argument("--request-size", type=int, default=0, help="Upload this many bytes through the HTTP client adapter")
     arguments.add_argument("--compiler", type=Path, default=ROOT / "dark", help="Compiler executable to verify")
     arguments.add_argument("--http-owner", action="store_true", help="Use the production HTTP/3 owner instead of the transport-only driver")
-    arguments.add_argument("--mode", choices=("trusted", "drop-request", "drop-response", "reorder", "trailers", "key-update"))
+    arguments.add_argument("--http-client", action="store_true", help="Use the production HTTP/3 lazy response adapter")
+    arguments.add_argument("--buffered", action="store_true", help="Use the buffered client response adapter")
+    arguments.add_argument("--close-early", action="store_true", help="Close the lazy response after its headers")
+    arguments.add_argument("--mode", choices=("trusted", "drop-request", "drop-response", "reorder", "trailers", "key-update", "early-response"))
     options = arguments.parse_args()
+    assert options.request_size >= 0 and options.body_size >= 0
+    assert not options.request_size or options.http_client, "Uploads require --http-client"
+    assert not options.buffered or options.http_client and not options.close_early
+    assert not options.close_early or options.http_client
     body_bytes = (BODY * ((options.body_size + len(BODY) - 1) // len(BODY)))[:options.body_size]
+    upload_bytes = (BODY * ((options.request_size + len(BODY) - 1) // len(BODY)))[:options.request_size]
     key, leaf, ca = certificates()
     config = QuicConfiguration(is_client=False, alpn_protocols=["h3"])
     config.certificate, config.private_key = leaf, key
     with tempfile.TemporaryDirectory(prefix="dark-quic-streams-") as temporary:
         source, binary = Path(temporary) / "streams.dark", Path(temporary) / "streams"
-        source.write_text((HTTP_OWNER_DARK if options.http_owner else DARK).replace("@ROOT@", ca.public_bytes(serialization.Encoding.DER).hex()))
+        program = HTTP_CLIENT_DARK if options.http_client else HTTP_OWNER_DARK if options.http_owner else DARK
+        if options.buffered:
+            program = program.replace("Stdlib.Http3Client.stream", "Stdlib.Http3Client.request").replace("consume response.body [] 0", "emitBlob response.body 0").replace("Stdlib.Stream.close response.body", "()")
+        elif options.close_early:
+            program = program.replace("consume response.body [] 0", "()")
+        source.write_text(program.replace("@ROOT@", ca.public_bytes(serialization.Encoding.DER).hex()).replace("@BODY@", upload_bytes.hex()))
         result = subprocess.run([str(options.compiler), str(source), "--leak-check", "-o", str(binary)], cwd=ROOT,
             text=True, capture_output=True, timeout=120)
         assert result.returncode == 0, result.stdout + result.stderr
         for mode in ([options.mode] if options.mode else ("trusted", "drop-request", "drop-response", "reorder", "trailers", "key-update")):
-            failures, requested, credits = [], [], []
+            failures, requested, credits, uploaded = [], [], [], bytearray()
             stopped = threading.Event()
             with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as listener:
                 listener.bind(("127.0.0.1", 0))
@@ -177,8 +229,17 @@ def main():
                             while (event := connection.next_event()) is not None:
                                 for message in http.handle_event(event):
                                     if isinstance(message, HeadersReceived) and message.stream_id == 0:
-                                        assert message.stream_ended and (b":path", b"/streams") in message.headers, message
+                                        assert message.stream_ended == (not upload_bytes) and (b":path", b"/streams") in message.headers, message
+                                        if options.http_client:
+                                            assert (b"content-length", str(len(upload_bytes)).encode()) in message.headers, message
                                         requested.append(message)
+                                    elif isinstance(message, DataReceived) and message.stream_id == 0:
+                                        uploaded.extend(message.data)
+                                    else:
+                                        continue
+                                    if message.stream_ended or mode == "early-response" and isinstance(message, HeadersReceived):
+                                        if mode != "early-response":
+                                            assert uploaded == upload_bytes, (len(uploaded), len(upload_bytes))
                                         http.send_headers(0, [(b":status", b"200"), (b"content-length", str(len(body_bytes)).encode())])
                                         if mode == "key-update":
                                             pending_body = True
@@ -230,10 +291,14 @@ def main():
                     elif kind == 1:
                         _, values = decoder.feed_header(0, data)
                         headers.append(values)
-                assert requested and body == body_bytes and (b":status", b"200") in headers[0], (mode, len(body), headers)
-                if len(body_bytes) > 65536:
+                assert requested and body == (b"" if options.close_early else body_bytes) and (b":status", b"200") in headers[0], (mode, len(body), headers)
+                if mode == "early-response":
+                    assert upload_bytes and len(uploaded) < len(upload_bytes), (mode, len(uploaded))
+                else:
+                    assert uploaded == upload_bytes, (mode, len(uploaded), len(upload_bytes))
+                if len(body_bytes) > 65536 and not options.close_early:
                     assert credits and max(credits) > 65536, (mode, credits)
-                if mode == "trailers":
+                if mode == "trailers" and not options.http_client:
                     assert headers[-1] == [(b"x-trailer", b"done")], headers
     print(f"Production QUIC streams: live HTTP/3 request, {len(body_bytes)}-byte response, {options.mode or 'all loss/reordering/trailer modes'} and cleanup passed")
 
