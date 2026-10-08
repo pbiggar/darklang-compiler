@@ -35,13 +35,18 @@ int pthread_getattr_np(pthread_t t,pthread_attr_t*a){
 #include <errno.h>
 /* Some Work VM filesystem views retain an old alias stamp after Dune unlinks
    it. Keep only empty runtest stamps writable so the final stamp write works.
-   Resolve the path to exclude symlinks outside this checkout's build directory. */
+   Resolve the path to exclude symlinks outside the selected build directory. */
 static int dune_test_stamp(const char*p){
     const char*enabled=getenv("PORT_VM_DUNE_TEST_STAMPS");
     if(!enabled||strcmp(enabled,"1")!=0)return 0;
-    char cwd[PATH_MAX],resolved[PATH_MAX],prefix[PATH_MAX];
+    char cwd[PATH_MAX],resolved[PATH_MAX],prefix[PATH_MAX],build_root[PATH_MAX];
     if(!getcwd(cwd,sizeof(cwd))||!realpath(p,resolved))return 0;
-    int n=snprintf(prefix,sizeof(prefix),"%s/_build/.actions/",cwd);
+    const char*configured=getenv("PORT_VM_DUNE_BUILD_DIR");
+    int n;
+    if(configured&&*configured){
+        if(!realpath(configured,build_root))return 0;
+        n=snprintf(prefix,sizeof(prefix),"%s/.actions/",build_root);
+    }else n=snprintf(prefix,sizeof(prefix),"%s/_build/.actions/",cwd);
     if(n<0||(size_t)n>=sizeof(prefix)||strncmp(resolved,prefix,n)!=0)return 0;
     const char*name=strrchr(resolved,'/')+1;
     if(strncmp(name,"runtest-",8)!=0||strlen(name)!=40)return 0;

@@ -10,7 +10,7 @@ import tempfile
 CHECK = '''
 from pathlib import Path
 import os
-root = Path("_build/.actions/default/test/regression")
+root = Path(os.environ.get("PORT_VM_DUNE_BUILD_DIR", "_build")) / ".actions/default/test/regression"
 root.mkdir(parents=True)
 stamp = root / ("runtest-" + "a" * 32)
 stamp.touch()
@@ -46,6 +46,12 @@ outside = Path("runtest-" + "c" * 32)
 outside.touch()
 outside.chmod(0o444)
 assert outside.stat().st_mode & 0o777 == 0o444
+other = Path("unselected-build/.actions/default/test/regression")
+other.mkdir(parents=True)
+other_stamp = other / ("runtest-" + "e" * 32)
+other_stamp.touch()
+other_stamp.chmod(0o444)
+assert other_stamp.stat().st_mode & 0o777 == 0o444
 link = root / ("runtest-" + "d" * 32)
 link.symlink_to(outside.resolve())
 link.chmod(0o444)
@@ -59,10 +65,13 @@ assert outside.stat().st_mode & 0o777 == 0o444
 
 def main():
     adapter = Path(sys.argv[1]).resolve()
-    for enabled in ("0", "1"):
+    for enabled, build_dir in (("0", None), ("1", None), ("0", "fresh-build"), ("1", "fresh-build")):
         with tempfile.TemporaryDirectory(prefix="dark-vm-compat-") as temporary:
             environment = dict(os.environ, LD_PRELOAD=str(adapter),
                                PORT_VM_DUNE_TEST_STAMPS=enabled)
+            environment.pop("PORT_VM_DUNE_BUILD_DIR", None)
+            if build_dir:
+                environment["PORT_VM_DUNE_BUILD_DIR"] = str(Path(temporary) / build_dir)
             subprocess.run([sys.executable, "-c", CHECK], cwd=temporary,
                            env=environment, check=True, timeout=30)
     print("VM Dune stamp permissions and exclusions passed")

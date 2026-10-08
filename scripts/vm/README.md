@@ -31,6 +31,12 @@ The workaround excludes nonempty files, symlinks, other build outputs and
 source files. Bootstrap tests both the enabled behavior and these exclusions.
 Do not apply that adapter on a normal host.
 
+For a fresh verification directory, pass its absolute path to Dune's
+`--build-dir` and to `./run-tests --build-dir=PATH`. Set
+`PORT_VM_DUNE_BUILD_DIR=PATH` when running Dune tests so the same narrowly
+scoped empty-stamp workaround covers that directory. Nonempty files,
+unselected build directories, source files and symlinks remain excluded.
+
 Cachegrind is an optional benchmark prerequisite, restored from the same
 checksum-verified snapshot:
 
