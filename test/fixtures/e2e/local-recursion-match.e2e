@@ -1,0 +1,11 @@
+// Local self-recursion is visible in match subjects, guards, and branch bodies.
+(let walk (n: Int64) : Int64 = match n with | 0L -> 0L | _ -> 1L + walk (n - 1L) in walk 4L) = 4L
+
+(let reverse (items: List<Int64>) (acc: List<Int64>) : List<Int64> = match items with | [] -> acc | head :: tail -> reverse tail (Stdlib.List.push acc head) in reverse [1L, 2L, 3L] []) = [3L, 2L, 1L]
+
+(let walk (n: Int64) : Int64 = if n == 0L then 0L else match walk (n - 1L) with | 0L -> 1L | _ -> 0L in walk 4L) = 0L
+
+(let walk (n: Int64) : Int64 = match n with | 0L -> 0L | _ when walk (n - 1L) == 0L -> 0L | _ -> 1L in walk 4L) = 0L
+
+// A pattern-bound function with the same name is not a recursive reference.
+(let walk (n: Int64) : Int64 = match (fun value -> value + 1L) with | walk -> walk n in walk 4L) = 5L

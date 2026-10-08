@@ -115,6 +115,18 @@ let check checkExpression globals locals symbols expected (range : WT.range)
         inferredUsageType name body
     | _ -> None
   in
+  let rec matchBinds name = function
+    | WT.MPVariable (_, bound) -> name = bound
+    | WT.MPEnum (_, _, fields) | WT.MPOr (_, fields) ->
+        List.exists (matchBinds name) fields
+    | WT.MPTuple (_, first, _, second, rest, _, _) ->
+        List.exists (matchBinds name) (first :: second :: List.map snd rest)
+    | WT.MPList (_, elements, _, _) ->
+        List.exists (fun (pattern, _) -> matchBinds name pattern) elements
+    | WT.MPListCons (_, head, tail, _) ->
+        matchBinds name head || matchBinds name tail
+    | _ -> false
+  in
   let rec referencesSelf name = function
     | WT.EApply (_, target, _, arguments) ->
         callsBinding name target || referencesSelf name target
@@ -125,6 +137,18 @@ let check checkExpression globals locals symbols expected (range : WT.range)
         referencesSelf name condition
         || referencesSelf name yes
         || Option.fold ~none:false ~some:(referencesSelf name) no
+    | WT.EMatch (_, scrutinee, cases, _, _) ->
+        referencesSelf name scrutinee
+        || List.exists
+             (fun arm ->
+               (* Pattern bindings shadow the local function in both the guard
+                  and branch body, but not in the scrutinee. *)
+               (not (matchBinds name arm.WT.pat))
+               && (Option.fold ~none:false
+                     ~some:(fun (_, guard) -> referencesSelf name guard)
+                     arm.WT.whenCondition
+                  || referencesSelf name arm.WT.rhs))
+             cases
     | WT.ELet (_, pattern, bound, next, _, _) -> (
         referencesSelf name bound
         ||
