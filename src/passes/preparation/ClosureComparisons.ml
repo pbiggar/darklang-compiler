@@ -296,13 +296,18 @@ let rec rewriteRecursiveSelfReferences self closure expr =
 
 (* Once the lifted member has a code identity, recursive closure calls become
    direct calls with the existing group environment as their first argument. *)
-let rec rewriteLiftedSelfCalls lifted closure expr =
-  let recurse = rewriteLiftedSelfCalls lifted closure in
+let rec rewriteLiftedSelfCalls lifted closure captures expr =
+  let recurse = rewriteLiftedSelfCalls lifted closure captures in
   match expr with
   | C.Apply (C.Local id, args) when AST.compareBindingId id closure = 0 ->
       C.Call
         ( lifted,
           NonEmptyList.cons (C.Local closure) (NonEmptyList.map recurse args) )
+  | C.Local id when AST.compareBindingId id closure = 0 ->
+      (* The operational parameter has a tuple layout type. A source-level
+         function value needs a closure with its semantic function type so
+         containers and ownership use the function's release descriptor. *)
+      C.Closure (lifted, captures)
   | C.Let (pattern, value, body) -> C.Let (pattern, recurse value, recurse body)
   | C.RecursiveLet (recursion, value, body) ->
       C.RecursiveLet (recursion, recurse value, recurse body)

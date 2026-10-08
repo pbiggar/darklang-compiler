@@ -244,11 +244,19 @@ and liftLambda argument parameters annotation body state =
   let loweredParameters, loweredBody, symbols =
     S.lowerLambdaParameters symbols parameters plan.P.body
   in
+  let captures, symbols =
+    match comparison with
+    | None -> (plan.P.captureExprs, symbols)
+    | Some (name, _, _) ->
+        let id, symbols = C.internFunction name symbols in
+        (C.FuncRef id :: plan.P.captureExprs, symbols)
+  in
   let loweredBody =
     if argument then loweredBody
     else
       match (state.A.recursiveSelf, id) with
-      | Some _, Some id -> P.rewriteLiftedSelfCalls id closure loweredBody
+      | Some _, Some id ->
+          P.rewriteLiftedSelfCalls id closure captures loweredBody
       | _ -> loweredBody
   in
   let offset = if Option.is_some comparison then 2 else 1 in
@@ -327,17 +335,6 @@ and liftLambda argument parameters annotation body state =
       variantLookup = state1.A.variantLookup;
       recursiveSelf = state.A.recursiveSelf;
     }
-  in
-  let captures =
-    match comparison with
-    | None -> plan.P.captureExprs
-    | Some (name, _, _) ->
-        let id =
-          match C.tryFindFunctionId name symbols with
-          | Some id -> id
-          | None -> Crash.crash "Closure comparison is absent from symbols"
-        in
-        C.FuncRef id :: plan.P.captureExprs
   in
   Ok (C.Closure (id, captures), next)
 

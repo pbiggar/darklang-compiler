@@ -32,4 +32,8 @@ val rewriteRecursiveSelfReferences :
   AST.bindingId -> AST.bindingId -> CheckedAST.expr -> CheckedAST.expr
 
 val rewriteLiftedSelfCalls :
-  AST.functionId -> AST.bindingId -> CheckedAST.expr -> CheckedAST.expr
+  AST.functionId ->
+  AST.bindingId ->
+  CheckedAST.expr list ->
+  CheckedAST.expr ->
+  CheckedAST.expr

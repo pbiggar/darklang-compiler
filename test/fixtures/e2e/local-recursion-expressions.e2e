@@ -27,6 +27,11 @@ type RecPair = RecPair of Int64 * Int64
 (let step = 1L in let recur (n: Int64) : Int64 = if n == 0L then 0L else step + (fun fn -> fn (n - step)) recur in recur 3L) = 3L
 (let recur (n: Int64) : Int64 = if n == 0L then 0L else let callback = Builtin.unwrap (Stdlib.List.head [recur]) in callback (n - 1L) in recur 3L) = 0L
 
+(let step = 1L in let recur (n: Int64) : Int64 = if n == 0L then 0L else let callback = Builtin.unwrap (Stdlib.List.head [recur]) in step + callback (n - step) in recur 3L) = 3L
+
 // Shadowed names belong to parameters and destructured bindings, not recursion.
 (let recur (n: Int64) : Int64 = (fun recur -> recur n) (fun value -> value + 1L) in recur 3L) = 4L
 (let recur (n: Int64) : Int64 = let (recur, other) = ((fun value -> value + 1L), 0L) in recur n + other in recur 3L) = 4L
+
+// A list projection returns owned function values, including captured callbacks.
+(let step = 2L in let callback = Builtin.unwrap (Stdlib.List.head [(fun n -> n + step)]) in callback 3L) = 5L
