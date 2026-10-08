@@ -127,9 +127,19 @@ let check checkExpression globals locals symbols expected (range : WT.range)
         matchBinds name head || matchBinds name tail
     | _ -> false
   in
+  let rec letBinds name = function
+    | WT.LPVariable (_, bound) -> name = bound
+    | WT.LPTuple (_, first, _, second, rest, _, _) ->
+        List.exists (letBinds name) (first :: second :: List.map snd rest)
+    | WT.LPUnit _ | WT.LPWildcard _ -> false
+  in
+  (* Visit every expression container so a recursive reference is registered
+     before checking the lambda body. Bindings only shadow their own scope. *)
   let rec referencesSelf name = function
+    | (WT.EVariable _ | WT.EFnName _) as reference ->
+        callsBinding name reference
     | WT.EApply (_, target, _, arguments) ->
-        callsBinding name target || referencesSelf name target
+        referencesSelf name target
         || List.exists (referencesSelf name) arguments
     | WT.EInfix (_, _, left, right) | WT.EStatement (_, left, right) ->
         referencesSelf name left || referencesSelf name right
@@ -149,25 +159,71 @@ let check checkExpression globals locals symbols expected (range : WT.range)
                      arm.WT.whenCondition
                   || referencesSelf name arm.WT.rhs))
              cases
-    | WT.ELet (_, pattern, bound, next, _, _) -> (
+    | WT.ELet (_, pattern, bound, next, _, _) ->
         referencesSelf name bound
-        ||
-        match pattern with
-        | WT.LPVariable (_, boundName) when name = boundName -> false
-        | _ -> referencesSelf name next)
-    | WT.ELambda (_, _, body, _, _) -> referencesSelf name body
-    | _ -> false
+        || ((not (letBinds name pattern)) && referencesSelf name next)
+    | WT.ELambda (_, parameters, body, _, _) ->
+        (not (List.exists (letBinds name) parameters))
+        && referencesSelf name body
+    | WT.EList (_, elements, _, _) ->
+        List.exists (fun (element, _) -> referencesSelf name element) elements
+    | WT.ETuple (_, first, _, second, rest, _, _) ->
+        List.exists (referencesSelf name) (first :: second :: List.map snd rest)
+    | WT.ERecordFieldAccess (_, record, _, _) -> referencesSelf name record
+    | WT.ERecord (_, _, fields, _, _) ->
+        List.exists (fun (_, _, value) -> referencesSelf name value) fields
+    | WT.EDict (_, entries, _, _, _) ->
+        List.exists
+          (fun (_, key, _, value) ->
+            referencesSelf name key || referencesSelf name value)
+          entries
+    | WT.ERecordUpdate (_, record, updates, _, _, _) ->
+        referencesSelf name record
+        || List.exists (fun (_, _, value) -> referencesSelf name value) updates
+    | WT.EEnum (_, _, _, fields, _) -> List.exists (referencesSelf name) fields
+    | WT.EString (_, _, segments, _, _) ->
+        List.exists
+          (function
+            | WT.StringText _ -> false
+            | WT.StringInterpolation (_, value, _, _) ->
+                referencesSelf name value)
+          segments
+    | WT.EPipe (_, source, segments) ->
+        referencesSelf name source
+        || List.exists
+             (fun (_, segment) ->
+               match segment with
+               | WT.EPipeInfix (_, _, value) -> referencesSelf name value
+               | WT.EPipeLambda (_, parameters, body, _, _) ->
+                   (not (List.exists (letBinds name) parameters))
+                   && referencesSelf name body
+               | WT.EPipeEnum (_, _, _, fields, _) ->
+                   List.exists (referencesSelf name) fields
+               | WT.EPipeFnCall (_, called, _, arguments) ->
+                   qualifiedFnName called = [ name ]
+                   || List.exists (referencesSelf name) arguments
+               | WT.EPipeVariableOrFnCall (_, called) -> called = name)
+             segments
+    | WT.EUnit _ | WT.EBool _ | WT.EInt _ | WT.EInt64 _ | WT.EInt8 _
+    | WT.EUInt8 _ | WT.EInt16 _ | WT.EUInt16 _ | WT.EInt32 _ | WT.EUInt32 _
+    | WT.EUInt64 _ | WT.EInt128 _ | WT.EUInt128 _ | WT.EFloat _ | WT.EChar _
+    | WT.EError _ ->
+        false
   in
   match (pattern, value) with
-  | WT.LPVariable (_, name), WT.ELambda (_, _, lambdaBody, keywordFun, _)
+  | ( WT.LPVariable (_, name),
+      WT.ELambda (_, parameters, lambdaBody, keywordFun, _) )
     when (not (M.mem name locals))
+         && (not (List.exists (letBinds name) parameters))
          && keywordFun.start = keywordFun.end_
          && referencesSelf name lambdaBody
          && Option.is_some (resolveFunction globals [ name ]) ->
       Error ("Nested function name '" ^ name ^ "' is ambiguous")
   | ( WT.LPVariable (_, name),
       WT.ELambda (_, parameters, lambdaBody, keywordFun, _) )
-    when (not (M.mem name locals)) && referencesSelf name lambdaBody ->
+    when (not (M.mem name locals))
+         && (not (List.exists (letBinds name) parameters))
+         && referencesSelf name lambdaBody ->
       let provisional =
         match valueExpected with
         | Some typ -> typ
