@@ -154,6 +154,24 @@ API for this work and interpreter-based daemon launching; no fix made.
 Other daemon helpers remain individually unreviewed, not blanket-deferred.
 Retain these items in the final unresolved list.
 
+## Terminal-support facts
+
+`packages/darklang/stdlib/cli/tui/terminalSupport.dark`:
+`Darklang.Stdlib.Cli.Tui.TerminalSupport.currentFacts` failed because
+`Builtin.cliTerminalSessionInfo` was missing. Implemented in PR #31 with direct
+terminal-attributes `ioctl` syscalls and the existing native environment-vector
+lookup for `TERM`, without libc terminal calls or shell commands. The public
+package source is embedded unchanged.
+
+Validation: the baseline reproduces the missing builtin; 11 focused E2E cases
+pass, including environment mutation and public package behavior. Native checks
+cover all four stdin/stdout terminal combinations with unset, empty, normal,
+and Unicode `TERM`, plus files, pipes, and closed descriptors; terminal settings
+remain unchanged and leak checks are clean. Full host suite: 11441/11441 passed.
+`dune runtest`, changed-file formatting checks, and all 58 benchmark compile/run
+workloads passed. Runtime validation is Linux x86-64; ARM64 Linux/macOS syscall
+lowering is implemented but was not executed in this review.
+
 ## Completion rule
 
 At the end of the package review, enumerate every skipped package and unresolved

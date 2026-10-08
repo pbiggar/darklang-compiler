@@ -385,6 +385,7 @@ and aNF_cliOperation (value : ANF.cliOperation) =
   | ANF.PosixReadlinkAt -> union "CliOperation" "PosixReadlinkAt" []
   | ANF.PosixFlock -> union "CliOperation" "PosixFlock" []
   | ANF.PosixGetDents -> union "CliOperation" "PosixGetDents" []
+  | ANF.PosixIoctl -> union "CliOperation" "PosixIoctl" []
 
 and aNF_recordDescriptor (value : ANF.recordDescriptor) =
   record "RecordDescriptor"

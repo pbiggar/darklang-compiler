@@ -140,6 +140,7 @@ and cliOperation (value : MIR.cliOperation) =
   | MIR.PosixReadlinkAt -> union "CliOperation" "PosixReadlinkAt" []
   | MIR.PosixFlock -> union "CliOperation" "PosixFlock" []
   | MIR.PosixGetDents -> union "CliOperation" "PosixGetDents" []
+  | MIR.PosixIoctl -> union "CliOperation" "PosixIoctl" []
 
 and label (value : MIR.label) =
   match value with MIR.Label field0 -> union "Label" "Label" [ text field0 ]
