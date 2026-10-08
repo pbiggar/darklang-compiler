@@ -57,8 +57,20 @@ let generateClosureRefCountDecHelper enableLeakCheck recordRegistry sumShapeRegi
   let restores=List.map (fun reg->X.POP reg) (List.rev saveRegs) in
   [X.MOV_load (X.R9,X.RAX,Int32.of_int fieldOffset);X.TEST_reg (X.R9,X.R9);X.Jcc (X.EQ,doneLabel)]@saves@
   [X.MOV_reg (X.RAX,X.R9);X.CALL helperLabel]@restores@[X.Label doneLabel] in
- let releaseFixedBlockCapture fieldOffset captureType =
+ (* Sum representations can share a list/dict/stream root directly. Dispatch
+    by the release plan so a captured Option<List<_>> releases its list edge. *)
+ let releaseAggregateCapture fieldOffset captureType suffix =
   match tryRcReleasePlanOfType recordRegistry sumShapeRegistry captureType with
+  | Some (MemoryModel.RootRelease (_,MemoryModel.TaggedList,_) as releasePlan) ->
+    releaseHeapRootCapture fieldOffset (listDecHelperForReleasePlan releasePlan) (suffix^"_list")
+  | Some (MemoryModel.RootRelease (_,MemoryModel.DictHeap,_) as releasePlan) ->
+    releaseHeapRootCapture fieldOffset (dictDecHelperForReleasePlan releasePlan) (suffix^"_dict")
+  | Some (MemoryModel.RootRelease (_,MemoryModel.StreamHeap,_)) ->
+    releaseHeapRootCapture fieldOffset streamRefCountDecHelperLabel (suffix^"_stream")
+  | Some (MemoryModel.RootRelease (_,MemoryModel.ClosureHeap,_)) ->
+    releaseHeapRootCapture fieldOffset closureRefCountDecHelperLabel (suffix^"_closure")
+  | Some (MemoryModel.DynamicBufferRelease operation) ->
+    releaseDynamicBufferCapture (operation=MemoryModel.DynamicIntBuffer) fieldOffset suffix
   | Some (MemoryModel.RootRelease (payloadSize,MemoryModel.GenericHeap,(MemoryModel.FixedBlockPayloadRelease _ | MemoryModel.BoxedSumPayloadRelease _)) as releasePlan) ->
     let release=genRefCountDecGenericWithPlan helperCtx X.R9 payloadSize (Some releasePlan) in
     [X.MOV_load (X.R9,X.RAX,Int32.of_int fieldOffset);X.PUSH X.RAX]@release@[X.POP X.RAX]
@@ -77,7 +89,7 @@ let generateClosureRefCountDecHelper enableLeakCheck recordRegistry sumShapeRegi
       | None -> Crash.crash ("generateClosureRefCountDecHelper: missing RC metadata for dict capture type "^StructuralFormat.semanticType captureType))
    | AST.TFunction _ -> releaseHeapRootCapture fieldOffset closureRefCountDecHelperLabel (suffix^"_closure")
    | AST.TStream _ -> releaseHeapRootCapture fieldOffset streamRefCountDecHelperLabel (suffix^"_stream")
-   | AST.TTuple _ | AST.TRecord _ | AST.TSum _ -> releaseFixedBlockCapture fieldOffset captureType
+   | AST.TTuple _ | AST.TRecord _ | AST.TSum _ -> releaseAggregateCapture fieldOffset captureType suffix
    | _ -> []) captureTypes |> List.concat in
   [X.LEA_rip (X.R9,funcName);X.CMP_reg (X.R8,X.R9);X.Jcc (X.NE,nextCase)]@releases@[X.JMP capturesReleased;X.Label nextCase]) |> List.concat in
  [X.Label closureRefCountDecHelperLabel;X.TEST_reg (X.RAX,X.RAX);X.Jcc (X.EQ,helperRet);
