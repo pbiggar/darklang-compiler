@@ -208,8 +208,9 @@ kernel dimensions over environment values, zero and unsigned high dimensions,
 unset/invalid/overflow/partial environment values, and unchanged terminal
 attributes. The unchanged original currentSize function compiles and prints
 `132|43` with corresponding environment values, without leaks. Full host suite:
-11448/11448 passed; all 58 benchmark compile/run workloads pass with clean leak
-checks. Cachegrind comparison remains waived by the user.
+11448/11448 passed; native `dune runtest --cache=disabled` passes after clearing
+stale read-only action stamps. All 58 benchmark compile/run workloads pass with
+clean leak checks. Cachegrind comparison remains waived by the user. Fix: PR #33.
 
 ## Completion rule
 
