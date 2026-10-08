@@ -85,10 +85,53 @@ let run () : Unit =
 run ()
 """
 
+HTTP_OWNER_DARK = """// owner.dark - Exercise the production HTTP/3 connection owner and event parser.
+let emit (bytes: Blob) (offset: Int) : Unit =
+  if offset >= Stdlib.Blob.length bytes then ()
+  else
+    let _ = Stdlib.printLine (Stdlib.Blob.toHex (Stdlib.Blob.slice bytes offset 512)) in
+    emit bytes (offset + 512)
+let frame (kind: Int64) (bytes: Blob) : Unit =
+  match Stdlib.Http3Wire.serialize kind bytes with
+  | Error message -> Stdlib.printLine ("ERROR " ++ message)
+  | Ok bytes -> emit bytes 0
+let fields (values: List<(String * String)>) : Unit =
+  match Stdlib.Qpack.encode values with
+  | Error message -> Stdlib.printLine ("ERROR " ++ message)
+  | Ok bytes -> frame 1L bytes
+let event (value: Stdlib.Http3Message.Event) : Unit =
+  match value with
+  | BodyChunk bytes -> frame 0L bytes
+  | ResponseHead head -> fields ([(":status", Stdlib.Int64.toString head.status)] @ head.headers)
+  | TrailerFields trailers -> fields trailers
+  | RequestHead _ -> Stdlib.printLine "ERROR request event"
+let receive (state: Stdlib.Http3.State) : Stdlib.Result.Result<Unit, String> =
+  Stdlib.Http3.receive state |> Stdlib.Result.andThen (fun received ->
+    let _ = Stdlib.List.iter received.events event in
+    if received.finished then Ok () else receive received.state)
+let run () : Unit =
+  match Stdlib.Blob.fromHex "@ROOT@", Stdlib.Cli.Args.get 0 |> Stdlib.Result.andThen (fun value -> Stdlib.Int64.parse value |> Stdlib.Result.mapError (fun _error -> "port")) with
+  | Ok root, Ok port ->
+    match Stdlib.QuicClient.connect (Stdlib.Datagram.Endpoint { address = [127L,0L,0L,1L], port = port }) "localhost" [root] 8000L with
+    | Error message -> Stdlib.printLine ("ERROR " ++ message)
+    | Ok ready ->
+      let result = Stdlib.Http3.initialize ready false 10000L |> Stdlib.Result.andThen (fun state ->
+        Stdlib.Qpack.encode [(":method", "GET"), (":scheme", "https"), (":authority", "localhost"), (":path", "/streams")]
+          |> Stdlib.Result.andThen (Stdlib.Http3Wire.serialize 1L)
+          |> Stdlib.Result.andThen (fun request -> Stdlib.Http3.write state request true)
+          |> Stdlib.Result.andThen receive) in
+      let _ = Stdlib.QuicClient.close ready in
+      match result with | Error message -> Stdlib.printLine ("ERROR " ++ message) | Ok () -> Stdlib.printLine "DONE"
+  | _ -> Stdlib.printLine "Bad arguments"
+run ()
+"""
+
 
 def main():
     arguments = argparse.ArgumentParser()
     arguments.add_argument("--body-size", type=int, default=len(BODY))
+    arguments.add_argument("--compiler", type=Path, default=ROOT / "dark", help="Compiler executable to verify")
+    arguments.add_argument("--http-owner", action="store_true", help="Use the production HTTP/3 owner instead of the transport-only driver")
     arguments.add_argument("--mode", choices=("trusted", "drop-request", "drop-response", "reorder", "trailers", "key-update"))
     options = arguments.parse_args()
     body_bytes = (BODY * ((options.body_size + len(BODY) - 1) // len(BODY)))[:options.body_size]
@@ -97,8 +140,8 @@ def main():
     config.certificate, config.private_key = leaf, key
     with tempfile.TemporaryDirectory(prefix="dark-quic-streams-") as temporary:
         source, binary = Path(temporary) / "streams.dark", Path(temporary) / "streams"
-        source.write_text(DARK.replace("@ROOT@", ca.public_bytes(serialization.Encoding.DER).hex()))
-        result = subprocess.run([str(ROOT / "dark"), str(source), "--leak-check", "-o", str(binary)], cwd=ROOT,
+        source.write_text((HTTP_OWNER_DARK if options.http_owner else DARK).replace("@ROOT@", ca.public_bytes(serialization.Encoding.DER).hex()))
+        result = subprocess.run([str(options.compiler), str(source), "--leak-check", "-o", str(binary)], cwd=ROOT,
             text=True, capture_output=True, timeout=120)
         assert result.returncode == 0, result.stdout + result.stderr
         for mode in ([options.mode] if options.mode else ("trusted", "drop-request", "drop-response", "reorder", "trailers", "key-update")):
@@ -143,7 +186,11 @@ def main():
                                             http.send_data(0, body_bytes, end_stream=mode != "trailers")
                                         if mode == "trailers":
                                             http.send_headers(0, [(b"x-trailer", b"done")], end_stream=True)
-                            if pending_body and len(requested) == 1 and not connection._spaces[Epoch.ONE_RTT].sent_packets:
+                            # ACK-only packets do not elicit ACKs. Waiting for their
+                            # removal deadlocks when the client flushes promptly.
+                            if pending_body and len(requested) == 1 and not any(
+                                packet.is_ack_eliciting for packet in connection._spaces[Epoch.ONE_RTT].sent_packets.values()
+                            ):
                                 connection.request_key_update()
                                 http.send_data(0, body_bytes, end_stream=True)
                                 pending_body = False
@@ -169,9 +216,10 @@ def main():
                     stopped.set()
                     thread.join(timeout=2)
                 assert not thread.is_alive() and not failures, (mode, failures)
-                assert result.returncode == 0 and not result.stderr, (mode, result.returncode, result.stderr)
+                assert result.returncode == 0 and not result.stderr, (mode, result.returncode, result.stderr, result.stdout[-1000:])
                 lines = result.stdout.splitlines()
                 assert lines and lines[-1] == "DONE", (mode, lines[-3:])
+                assert all(line and all(character in "0123456789ABCDEFabcdef" for character in line) for line in lines[:-1]), (mode, [line for line in lines[:-1] if not all(character in "0123456789ABCDEFabcdef" for character in line)][:10])
                 frames, body, headers = Buffer(data=bytes.fromhex("".join(lines[:-1]))), b"", []
                 decoder = pylsqpack.Decoder(0, 0)
                 while not frames.eof():

@@ -174,6 +174,7 @@ __Http3Stream.dark
 __Http3Message.dark
 __Http3Control.dark
 __Http3Uni.dark
+__Http3.dark
 __HttpsService.dark
 __HttpsDns.dark
 Pretty.dark
