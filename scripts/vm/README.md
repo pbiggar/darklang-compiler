@@ -16,7 +16,9 @@ dune runtest
 
 Downloads, opam state, temporary files and full setup logs remain inside that
 workspace directory. The bootstrap checks archive hashes before reuse and
-checks both the OCaml version and Unix child-process operations. Configure
+checks both OCaml compiler versions and bytecode/native Unix child-process
+operations. Empty compiler outputs left by interrupted links are preserved
+under `tmp/ocaml-interrupted.*` before rebuilding them. Configure
 probes run without a preload. The VM adapter supplies missing procfs stack
 attributes and redirects `/tmp` paths to the writable temporary directory.
 Activation also sets `PORT_VM_DUNE_TEST_STAMPS=1`: the adapter keeps empty
