@@ -1,0 +1,6 @@
+// Public terminal-size fragment from packages/darklang/cli/utils/terminal.dark.
+module Darklang.Cli.Terminal
+
+/// Samples terminal width and height in one native call.
+let getSize () : (Int * Int) =
+  Builtin.cliTerminalSize ()

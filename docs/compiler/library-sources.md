@@ -154,28 +154,7 @@ fragments use `__` even where the interpreter also has private helpers.
 | `packages/Darklang/LanguageTools/RuntimeTypes/FQValueName.dark` | `Darklang.LanguageTools.RuntimeTypes.FQValueName`  | `packages/darklang/languageTools/runtimeTypes.dark` |
 | `packages/Darklang/LanguageTools/RuntimeTypes/TypeReference.dark` | `Darklang.LanguageTools.RuntimeTypes`  | `packages/darklang/languageTools/runtimeTypes.dark` |
 | `packages/Darklang/PrettyPrinter/RuntimeTypes.dark` | `Darklang.PrettyPrinter.RuntimeTypes`, `Dval`  | `packages/darklang/prettyPrinter/runtimeError.dark`, `packages/darklang/prettyPrinter/runtimeTypes.dark` |
-| `packages/Darklang/LanguageTools/RuntimeTypes/ValueType.dark` | `Darklang.LanguageTools.RuntimeTypes`  | `packages/darklang/languageTools/runtimeTypes.dark` |
-| `packages/Darklang/LanguageTools/RuntimeTypes/Dval.dark` | `Darklang.LanguageTools.RuntimeTypes`  | `packages/darklang/languageTools/runtimeTypes.dark` |
-| `packages/Darklang/PrettyPrinter/RuntimeTypes/RuntimeError.dark` | `Darklang.PrettyPrinter.RuntimeTypes.RuntimeError`  | `packages/darklang/prettyPrinter/runtimeError.dark` |
-| `packages/Darklang/LanguageTools/RuntimeTypes/__ValueTypeSupport.dark` | `Darklang.LanguageTools.RuntimeTypes`  | Compiler custom-type catalog matching helper; package defined in `packages/darklang/languageTools/runtimeTypes.dark` |
-| `packages/Darklang/LanguageTools/PackageManager.dark` | `Darklang.LanguageTools.PackageManager`  | `packages/darklang/languageTools/packageManager.dark` |
-| `packages/Darklang/LanguageTools/PackageManager/PickContext.dark` | `Darklang.LanguageTools.PackageManager.PickContext`  | `packages/darklang/languageTools/packageManager.dark` |
-| `packages/Darklang/SCM/Branch.dark` | `Darklang.SCM.Branch`  | `packages/darklang/scm/branch.dark` |
-| `StdLib/ValueSearch.dark` | `Darklang.Stdlib.ValueSearch`  | `packages/darklang/stdlib/valueSearch.dark` |
-| `StdLib/DateTime.dark` | `Darklang.Stdlib.DateTime`  | `packages/darklang/stdlib/dateTime.dark` |
-| `StdLib/Duration.dark` | `Darklang.Stdlib.Duration`  | `packages/darklang/stdlib/duration.dark` |
-| `StdLib/Blob.dark` | `Darklang.Stdlib.Blob`  | `packages/darklang/stdlib/blob.dark` |
-| `StdLib/Stream.dark` | `Darklang.Stdlib.Stream`  | `packages/darklang/stdlib/stream.dark` |
-| `StdLib/Html.dark` | `Darklang.Stdlib.Html`  | `packages/darklang/stdlib/html.dark` |
-| `StdLib/Http.dark` | `Darklang.Stdlib.Http`  | `packages/darklang/stdlib/http.dark` |
-| `StdLib/Http/Request.dark` | `Darklang.Stdlib.Http.Request`  | `packages/darklang/stdlib/http.dark` |
-| `StdLib/HttpClient.dark` | `Darklang.Stdlib.HttpClient`  | `packages/darklang/stdlib/httpclient.dark` |
-| `StdLib/HttpClient/ContentType.dark` | `Darklang.Stdlib.HttpClient.ContentType`  | `packages/darklang/stdlib/httpclient.dark` |
-| `StdLib/HttpClient/Sse.dark` | `Darklang.Stdlib.HttpClient.Sse`  | `packages/darklang/stdlib/httpclient.dark` |
-| `StdLib/HttpServer/Config.dark` | `Darklang.Stdlib.HttpServer.Config`  | `packages/darklang/stdlib/httpserver.dark` |
-| `StdLib/HttpServer.dark` | `Darklang.Stdlib.HttpServer`  | `packages/darklang/stdlib/httpserver.dark` |
-| `StdLib/__Network.dark` | `Darklang.Stdlib.__Network`  | Compiler support: Owned native TCP/UDP sockets, listeners, deadlines, and scoped shutdown signals |
-| `StdLib/__HttpWire.dark` | `Darklang.Stdlib.__HttpWire`  | Compiler support: Byte-bounded HTTP/1.1 and URL primitives written in Dark |
+| `packages/Darklang/LanguageTools/RuntimeTypes/ValueType.dark` | `Darklang.LanguageTools.RuntimeT…668 tokens truncated…pport: Byte-bounded HTTP/1.1 and URL primitives written in Dark |
 | `StdLib/__DnsWire.dark` | `Darklang.Stdlib.__DnsWire`  | Compiler support: Bounded DNS query and answer wire format implemented in Dark |
 | `StdLib/__HttpConnect.dark` | `Darklang.Stdlib.__HttpConnect`  | Compiler support: Check resolved IP bytes before opening HTTP transport |
 | `StdLib/Pretty.dark` | `Darklang.Stdlib.Pretty`  | `packages/darklang/stdlib/pretty.dark` |
@@ -204,6 +183,7 @@ fragments use `__` even where the interpreter also has private helpers.
 | `StdLib/Cli/UI/TextField.dark` | `Darklang.Stdlib.Cli.UI.TextField`  | `packages/darklang/stdlib/cli/ui/textfield.dark` |
 | `StdLib/Cli/Tui/TerminalSession/Ansi.dark` | `Darklang.Stdlib.Cli.Tui.TerminalSession.Ansi`  | `packages/darklang/stdlib/cli/tui/terminalSession.dark` |
 | `StdLib/Cli/Tui/TerminalSupport.dark` | `Darklang.Stdlib.Cli.Tui.TerminalSupport` | `packages/darklang/stdlib/cli/tui/terminalSupport.dark` |
+| `StdLib/Cli/Terminal/Size.dark` | `Darklang.Cli.Terminal` | Public getSize fragment of `packages/darklang/cli/utils/terminal.dark` |
 | `StdLib/Cli/Tui/Text/__Escape.dark` | `Darklang.Stdlib.Cli.Tui.Text`  | Private escape-scanning fragment of Cli.Tui.Text; package defined in `packages/darklang/stdlib/cli/tui/text.dark` |
 | `StdLib/Cli/Tui/Text/__Width.dark` | `Darklang.Stdlib.Cli.Tui.Text`  | Private width fragment of Cli.Tui.Text; package defined in `packages/darklang/stdlib/cli/tui/text.dark` |
 | `StdLib/Cli/Tui/Text/__Clip.dark` | `Darklang.Stdlib.Cli.Tui.Text`  | Private clipping fragment of Cli.Tui.Text; package defined in `packages/darklang/stdlib/cli/tui/text.dark` |

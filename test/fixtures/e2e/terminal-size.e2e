@@ -1,0 +1,5 @@
+// Window-size fallbacks when E2E descriptors are redirected.
+Builtin.cliTerminalSize () = (132, 43) env="COLUMNS=132,LINES=43"
+Builtin.cliTerminalSize () = (80, 24) env="COLUMNS=0,LINES=-1"
+Builtin.cliTerminalSize () = (80, 24) env="COLUMNS=invalid,LINES=2147483648"
+Builtin.cliTerminalSize () = (81, 25) env="COLUMNS=+81,LINES=25"
