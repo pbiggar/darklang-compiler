@@ -207,6 +207,7 @@ __QuicServerTls.dark
 __QuicServerRetry.dark
 HttpServerTls.dark
 HttpServerQuic.dark
+HttpServerSecure.dark
 P256.dark
 RsaPkcs1.dark
 X509Chain.dark

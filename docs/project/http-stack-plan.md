@@ -111,6 +111,12 @@ and returns normally on shutdown during an incomplete body. Its bounded
 Retry CID history suppresses replay of both completed and aborted handshakes.
 Independent aioquic checks cover 70 KiB echo, HEAD representation lengths,
 early 413, unsupported ALPN, replay suppression, rebind and zero leaks.
+Minimal closing-key metadata is retained in the bounded listener history,
+allowing later admissions without waiting for each connection's three-PTO
+closing interval. Failed sends abandon the keys rather than reuse a nonce.
+HTTP/2 delivery drains retry short socket timeouts within a shutdown-aware
+ten-second/128-KiB bound, allowing a native client to consume encrypted response
+frames and send late flow-control credits before TCP closes.
 TCP TLS now supports one X25519 HelloRetryRequest, the message_hash transcript
 replacement, compatibility CCS, immutable second ClientHello fields, permitted
 padding/early-data changes and PSK age/binder updates or incompatible-identity
@@ -150,8 +156,11 @@ owned `HttpClientSession` Alt-Svc cache.
 Buffered and lazy clients close QUIC with authenticated H3_NO_ERROR from the
 latest application state, including empty final events and early cancellation.
 Transport errors abort without sealing a close from stale packet-number state.
-TLS and QUIC servers now share the HTTP handler through separate TCP and UDP
-listeners; see the compatibility ledger for exact profile boundaries. For
+`HttpServer.Secure.serve` binds same-port TCP/UDP listeners with one identity,
+handler, shutdown owner and automatic same-origin Alt-Svc advertising. It
+preserves application advertisements and 421 responses, and releases both
+transports when either bind fails. The separate TLS and QUIC entry points
+remain available; see the compatibility ledger for exact profile boundaries. For
 each implementation branch, run `./build --ai`, the already-built
 `./run-tests --ai`, and
 `./benchmarks/run_benchmarks.sh --verify-parent full` before merge-train

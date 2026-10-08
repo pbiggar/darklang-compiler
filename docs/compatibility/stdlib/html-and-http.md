@@ -135,6 +135,20 @@ streaming, trailers, HEAD, early stream close, early upload rejection (including
 informational replies and retained HPACK state), truncation, cleartext server
 dispatch, body limits, bounded draining after early replies, shutdown during
 stalled HTTP/2 reads and compiled leak accounting.
+After the response, HTTP/2 listeners accept late upload data and flow-control
+credits until peer EOF, shutdown, 128 KiB, or ten seconds. Short accepted-socket
+timeouts only poll this deadline; they do not prematurely close a slow reader.
+
+`HttpServer.Secure.serve config identity handler onListening` binds TCP and UDP
+on the same IPv4 port, announcing only after both binds succeed. It shares the
+TLS HTTP/1.1/h2 and QUIC HTTP/3 handlers and adds a same-port `Alt-Svc` advertisement
+unless the application already supplied one or returned 421. Application
+`Alt-Svc: clear` is preserved. Accepted requests remain sequential; a handshake
+or response-delivery drain can delay another admission. Both transports and
+the shutdown owner are released on bind failure or normal shutdown.
+`python3 scripts/test_http_secure_server_peer.py` checks independent TLS/QUIC
+peers, repeated large requests, the owned client session, lazy body lifetime,
+occupied-port cleanup, same-port rebind and stalled TCP/QUIC shutdown.
 
 HTTPS clients now select HTTP/3 from compatible HTTPS DNS advertisements;
 HTTP/3 also has an authenticated UDP server listener described below. The pure
@@ -337,7 +351,11 @@ Application state is disposed through a child socket while the listener stays
 open. Successful responses get a bounded ten-second delivery drain before an
 encrypted H3_NO_ERROR close; closing keys are retained for three PTOs, capped
 at thirty seconds, with fresh packet numbers for repeated close frames.
-Shutdown interrupts handshake, request and closing waits. The independent
+The listener retains only peer/CID/key/packet-number closing metadata, not
+response buffers, and can admit another connection during that interval.
+Closing replies are rate-limited and failed sends discard the closing keys
+instead of risking a stale nonce. Shutdown interrupts handshake and request
+waits and disposes the cache. The independent
 `python3 scripts/test_http3_server_peer.py` checks routing, 70 KiB flow, HEAD,
 early 413, encrypted closure, token replay suppression, unsupported ALPN,
 same-port rebind, incomplete-body shutdown and zero leaks. Its aioquic client
@@ -351,7 +369,8 @@ older-than-30-second tokens, and emits the QUIC v1 Retry integrity tag.
 `quic_server_retry.e2e` and `python3 scripts/test_quic_server_retry.py` cover
 invalid local inputs, 31 independent HMAC/expiry/address/CID/tamper cases and
 aioquic packet integrity, with cleanup accounting. The UDP listener retains
-up to 256 consumed CIDs for thirty seconds, including failed handshakes,
+up to 256 consumed CIDs for at least thirty seconds, including failed handshakes
+and any longer closing deadline,
 and refuses admission when the live replay history is full.
 
 `Stdlib.HttpClient.Sse.Event` and `parse` are copied from the same revision.
