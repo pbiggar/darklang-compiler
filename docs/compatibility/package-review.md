@@ -61,7 +61,8 @@ allocate a closure; direct recursive calls retain their existing environment.
 `Darklang.LanguageTools.Permissions.parseRule` failed when its HTTP branches
 passed generic `Stdlib.List.singleton` directly to `Stdlib.Option.map`.
 Fixed on branch `chatgpt/generic-function-values`, commit
-`f7db8bb3bee2c455e3c60debd7f6bc8dc50cfc44`, PR #20; not merged.
+`f7db8bb3bee2c455e3c60debd7f6bc8dc50cfc44`, PR #20 merged to main at
+`21c0ec108d32cf019e2f4eb1e86cf98ec4d9d4a6`.
 
 Checked function values now retain their type arguments and function type.
 Per-reference fresh variables collect contextual and later-use constraints;
