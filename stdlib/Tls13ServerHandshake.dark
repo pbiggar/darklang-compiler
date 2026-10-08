@@ -3,8 +3,9 @@ module Darklang.Stdlib.Tls13ServerHandshake
 
 // Pending application keys are not released until the client's Finished proves
 // possession of the handshake secret. TCP records and QUIC CRYPTO share this state.
-type Flight = { hello: Blob, encrypted: Blob, transcript: Blob, handshakeReceive: Stdlib.Tls13.TrafficKeys, handshakeSend: Stdlib.Tls13.TrafficKeys, clientFinished: Blob, applicationReceive: Stdlib.Tls13.TrafficKeys, applicationSend: Stdlib.Tls13.TrafficKeys, protocol: String }
-type Ready = { receive: Stdlib.Tls13.TrafficKeys, send: Stdlib.Tls13.TrafficKeys, protocol: String }
+type Secrets = { handshakeClient: Blob, handshakeServer: Blob, applicationClient: Blob, applicationServer: Blob }
+type Flight = { hello: Blob, encrypted: Blob, transcript: Blob, handshakeReceive: Stdlib.Tls13.TrafficKeys, handshakeSend: Stdlib.Tls13.TrafficKeys, clientFinished: Blob, applicationReceive: Stdlib.Tls13.TrafficKeys, applicationSend: Stdlib.Tls13.TrafficKeys, protocol: String, secrets: Stdlib.Tls13ServerHandshake.Secrets }
+type Ready = { receive: Stdlib.Tls13.TrafficKeys, send: Stdlib.Tls13.TrafficKeys, protocol: String, receiveSecret: Blob, sendSecret: Blob }
 
 let __u24 (value: Int64) : Blob = Stdlib.Blob.__fromInt64List [value / 65536L, value / 256L % 256L, value % 256L]
 let __message (kind: Int64) (body: Blob) : Blob = Stdlib.Blob.concat [Stdlib.Blob.__fromInt64List [kind], Stdlib.Tls13ServerHandshake.__u24 (Stdlib.Blob.__byteLength body), body]
@@ -39,7 +40,7 @@ let __finishFlight (hello: Blob) (encrypted: Blob) (transcript: Blob) (secrets: 
             Stdlib.Tls13.hkdfExpandLabel master "s ap traffic" hash 32L |> Stdlib.Result.andThen (fun server ->
               Stdlib.Tls13.trafficKeys client |> Stdlib.Result.andThen (fun applicationReceive ->
                 Stdlib.Tls13.trafficKeys server |> Stdlib.Result.map (fun applicationSend ->
-                  Stdlib.Tls13ServerHandshake.Flight { hello = hello, encrypted = encrypted, transcript = transcript, handshakeReceive = handshakeReceive, handshakeSend = handshakeSend, clientFinished = clientFinished, applicationReceive = applicationReceive, applicationSend = applicationSend, protocol = protocol }))))))))
+                  Stdlib.Tls13ServerHandshake.Flight { hello = hello, encrypted = encrypted, transcript = transcript, handshakeReceive = handshakeReceive, handshakeSend = handshakeSend, clientFinished = clientFinished, applicationReceive = applicationReceive, applicationSend = applicationSend, protocol = protocol, secrets = Stdlib.Tls13ServerHandshake.Secrets { handshakeClient = secrets.client, handshakeServer = secrets.server, applicationClient = client, applicationServer = server } }))))))))
 
 let __flight (identity: Stdlib.TlsServerIdentity.Identity) (offer: Stdlib.Tls13ServerHello.Hello) (protocol: String) (parameters: Stdlib.Option.Option<Blob>) (share: Blob) : Stdlib.Result.Result<Stdlib.Tls13ServerHandshake.Flight, String> =
   Stdlib.X25519.generateKeyPair () |> Stdlib.Result.andThen (fun pair ->
@@ -73,4 +74,4 @@ let finish (flight: Stdlib.Tls13ServerHandshake.Flight) (message: Blob) : Stdlib
   if Stdlib.Blob.__byteLength flight.clientFinished != 32L then Error "Invalid TLS server Finished state"
   else if Stdlib.Blob.__byteLength message != 36L || Stdlib.Bool.not (Stdlib.Tls13Handshake.__wholeHandshake message 20L) then Error "Expected TLS client Finished"
   else if Stdlib.Bool.not (Stdlib.Tls13Handshake.__sameBytes (Stdlib.Blob.slice message 4 32) flight.clientFinished 0L 0L) then Error "TLS client Finished verification failed"
-  else Ok (Stdlib.Tls13ServerHandshake.Ready { receive = flight.applicationReceive, send = flight.applicationSend, protocol = flight.protocol })
+  else Ok (Stdlib.Tls13ServerHandshake.Ready { receive = flight.applicationReceive, send = flight.applicationSend, protocol = flight.protocol, receiveSecret = flight.secrets.applicationClient, sendSecret = flight.secrets.applicationServer })

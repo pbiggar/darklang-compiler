@@ -38,7 +38,8 @@ let start () : Stdlib.Result.Result<Unit, String> =
 let verify () : Stdlib.Result.Result<Unit, String> =
   let receive = keys 1L in
   let application = keys 4L in
-  let flight = Stdlib.Tls13ServerHandshake.Flight { hello = Stdlib.Blob.empty, encrypted = Stdlib.Blob.empty, transcript = Stdlib.Blob.empty, handshakeReceive = receive, handshakeSend = receive, clientFinished = bytes 3L, applicationReceive = application, applicationSend = application, protocol = "h2" } in
+  let secrets = Stdlib.Tls13ServerHandshake.Secrets { handshakeClient = Stdlib.Blob.empty, handshakeServer = Stdlib.Blob.empty, applicationClient = Stdlib.Blob.empty, applicationServer = Stdlib.Blob.empty } in
+  let flight = Stdlib.Tls13ServerHandshake.Flight { hello = Stdlib.Blob.empty, encrypted = Stdlib.Blob.empty, transcript = Stdlib.Blob.empty, handshakeReceive = receive, handshakeSend = receive, clientFinished = bytes 3L, applicationReceive = application, applicationSend = application, protocol = "h2", secrets = secrets } in
   match Stdlib.Tls13.parseRecord (bytes 6L) with
   | Error _ -> Error "Invalid client record"
   | Ok record -> Stdlib.Tls13.openRecord receive record |> Stdlib.Result.andThen (fun opened ->

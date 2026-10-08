@@ -96,7 +96,11 @@ with the existing HTTP/1.1 and HTTP/2 implementations. Accepted sockets retry
 short read timeouts under shutdown-aware deadlines, and transport closure
 sends close_notify and releases retained state. Independent OpenSSL/hyper-h2
 checks exercise 70 KiB flow control, fallback, rejection and stalled shutdown.
-QUIC server integration, HelloRetryRequest and TLS KeyUpdate remain unfinished.
+The pure QUIC server TLS adapter also derives packet-protection keys, requires
+h3 and binds client transport parameters before verifying client Finished.
+An independent aioquic client agrees on all handshake/application traffic
+secrets and completes the certificate flight. QUIC server packet ownership
+and HTTP/3 dispatch, HelloRetryRequest and TLS KeyUpdate remain unfinished.
 
 ## 5. Compatibility and readiness
 

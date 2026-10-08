@@ -281,7 +281,15 @@ The independent `python3 scripts/test_http2_server_tls_peer.py` covers 70 KiB
 uploads/responses, HEAD, early body-limit rejection, Expect, ALPN fallback and
 rejection, fragmented ClientHello, forged Finished, shutdown during handshake
 and application reads, and cleanup. HelloRetryRequest, post-handshake TLS
-KeyUpdate and QUIC server listener integration remain pending.
+KeyUpdate and QUIC server listener integration remain pending. The pure
+`QuicServerTls` adapter now requires h3 ALPN and client transport parameters,
+binds the client's initial source connection ID, derives QUIC handshake packet
+keys, and releases application secrets and packet keys only after verifying
+client Finished. `python3 scripts/test_quic_server_tls_peer.py` checks these
+secrets against an independent aioquic client, verifies packet keys using a
+separate HKDF implementation, and covers malformed parameters, source mismatch,
+ALPN rejection, invalid Finished and cleanup. It does not yet own UDP packets
+or dispatch HTTP/3 server requests.
 
 `Stdlib.HttpClient.Sse.Event` and `parse` are copied from the same revision.
 The parser retains upstream's `Stream.unfold` behavior: it pulls only until the

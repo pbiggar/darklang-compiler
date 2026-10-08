@@ -198,6 +198,7 @@ TlsServerIdentity.dark
 __Tls13ServerHello.dark
 Tls13ServerHandshake.dark
 __Tls13ServerTcp.dark
+__QuicServerTls.dark
 HttpServerTls.dark
 P256.dark
 RsaPkcs1.dark
