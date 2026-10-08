@@ -162,8 +162,7 @@ let buildAnf verbosity (options : compilerOptions) elapsed
   in
   let ssaBeforeSpecialization =
     if runSSAOptimize then
-      List.map
-        (SSAOptimization.optimizeFunction anfOptimizeContext anfOptions)
+      SSAOptimization.optimizeFunctions anfOptimizeContext anfOptions
         ssaBeforeSpecialization
     else ssaBeforeSpecialization
   in

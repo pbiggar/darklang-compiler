@@ -218,8 +218,9 @@ let[@warning "-4"] check checkExpression globals locals symbols expected
                 | Some parametersChecked ->
                     let bodyLocals = M.fold M.add parameters locals in
                     let bodyExpected =
-                      match body with
-                      | WT.EIf (_, _, _, Some _, _, _, _)
+                      match (returnType, body) with
+                      | AST.TInferenceVar _, _ -> Some returnType
+                      | _, WT.EIf (_, _, _, Some _, _, _, _)
                         when Unification.containsTVar returnType ->
                           None
                       | _ -> Some returnType

@@ -511,13 +511,15 @@ let simplifyBooleanReturnBranches (func : S.functionDef) =
   in
   { func with S.blocks; freshValueTypes = types }
 
-let devirtualizeCaptureFreeClosures (func : S.functionDef) =
+let devirtualizeCaptureFreeClosures environmentUnused (func : S.functionDef) =
   let allocations =
     S.LabelMap.bindings func.S.blocks
     |> List.concat_map (fun (_, block) ->
         List.filter_map
           (function
-            | id, A.ClosureAlloc (target, []) -> Some (id, target) | _ -> None)
+            | id, A.ClosureAlloc (target, []) when environmentUnused target ->
+                Some (id, target)
+            | _ -> None)
           block.S.operations)
   in
   if allocations = [] then func
@@ -682,7 +684,7 @@ let equalFunction (left : S.functionDef) (right : S.functionDef) =
   && S.LabelMap.equal ( = ) left.S.blocks right.S.blocks
   && M.equal ( = ) left.S.freshValueTypes right.S.freshValueTypes
 
-let optimizeFunction context options func =
+let optimizeFunction environmentUnused context options func =
   let compact (func : S.functionDef) =
     let labels =
       S.LabelMap.bindings func.S.blocks
@@ -717,4 +719,23 @@ let optimizeFunction context options func =
       if equalFunction next current then current
       else iterate (remaining - 1) next
   in
-  compact (devirtualizeCaptureFreeClosures (iterate 10 func))
+  compact (devirtualizeCaptureFreeClosures environmentUnused (iterate 10 func))
+
+(* Capture-free recursive closures may still pass their environment as a
+   function value. Only discard it when the lifted target never reads it. *)
+let optimizeFunctions context options functions =
+  let unused =
+    List.filter_map
+      (fun (func : S.functionDef) ->
+        match func.S.typedParams with
+        | parameter :: _ when not (M.mem parameter.A.id (useCounts func)) ->
+            Some (func.S.id, ())
+        | _ -> None)
+      functions
+    |> FunctionIdMap.ofList
+  in
+  List.map
+    (optimizeFunction
+       (fun target -> FunctionIdMap.containsKey target unused)
+       context options)
+    functions

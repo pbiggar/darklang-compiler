@@ -1115,26 +1115,40 @@ let rec rewriteKnownCaptureFreeCalls closureId funcName expr =
    Eliminate only capture-free closure allocations whose complete lexical use
    set consists of one or more known calls.
 *)
-let rec devirtualizeCaptureFreeClosures = function
+let unusedClosureEnvironments functions =
+  let unused =
+    List.filter_map
+      (fun (func : functionDef) ->
+        match func.typedParams with
+        | parameter :: _
+          when countKnownClosureCalls parameter.id func.body = Some 0 ->
+            Some (func.id, ())
+        | _ -> None)
+      functions
+    |> FunctionIdMap.ofList
+  in
+  fun target -> FunctionIdMap.containsKey target unused
+
+let rec devirtualizeCaptureFreeClosures environmentUnused = function
   | (Jump _ | Return _) as expr -> expr
   | Let (closureId, ClosureAlloc (funcName, []), body) -> (
-      let body' = devirtualizeCaptureFreeClosures body in
+      let body' = devirtualizeCaptureFreeClosures environmentUnused body in
       match countKnownClosureCalls closureId body' with
-      | Some count when count > 0 ->
+      | Some count when count > 0 && environmentUnused funcName ->
           rewriteKnownCaptureFreeCalls closureId funcName body'
       | _ -> Let (closureId, ClosureAlloc (funcName, []), body'))
   | Let (tid, cexpr, body) ->
-      Let (tid, cexpr, devirtualizeCaptureFreeClosures body)
+      Let (tid, cexpr, devirtualizeCaptureFreeClosures environmentUnused body)
   | Join (parameter, continuation, entry) ->
       Join
         ( parameter,
-          devirtualizeCaptureFreeClosures continuation,
-          devirtualizeCaptureFreeClosures entry )
+          devirtualizeCaptureFreeClosures environmentUnused continuation,
+          devirtualizeCaptureFreeClosures environmentUnused entry )
   | If (condition, yes, no) ->
       If
         ( condition,
-          devirtualizeCaptureFreeClosures yes,
-          devirtualizeCaptureFreeClosures no )
+          devirtualizeCaptureFreeClosures environmentUnused yes,
+          devirtualizeCaptureFreeClosures environmentUnused no )
 
 let freshVarGenForProgram (Program (functions, main)) =
   let greatest =

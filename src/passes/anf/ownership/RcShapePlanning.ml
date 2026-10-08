@@ -73,24 +73,15 @@ let shapeNeedsManagedAliasRootPreservation ctx typ =
     (rcShapeForType ctx typ)
 
 (*
-   Raw list reads retain their result before returning it. A caller
-   that consumes the closure must release that returned ownership.
+   Calls return owned function values. Standard-library wrappers preserve that
+   obligation just like user functions; only projections and aliases borrow it.
 *)
-let bindingNeedsShapeAutomaticDec ctx expr typ shape =
+let bindingNeedsShapeAutomaticDec _ctx expr typ shape =
   MemoryPlanning.rcShapeNeedsAutomaticBindingDec shape
   ||
   match (typ, expr) with
-  | AST.TFunction _, ANF.ClosureAlloc _ -> true
-  | AST.TFunction _, ANF.Call (func, _) -> (
-      match FunctionIdMap.tryFind func ctx.F.funcReg with
-      | Some (name, _)
-        when String.starts_with ~prefix:"Darklang.Stdlib.List.__treeValue" name
-        ->
-          true
-      | Some (name, _) ->
-          not (String.starts_with ~prefix:"Darklang.Stdlib." name)
-      | None -> true)
-  | AST.TFunction _, ANF.ClosureCall _ -> true
+  | AST.TFunction _, (ANF.ClosureAlloc _ | ANF.Call _ | ANF.ClosureCall _) ->
+      true
   | _ -> false
 
 (*

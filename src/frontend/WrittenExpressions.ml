@@ -239,7 +239,18 @@ let rec checkExpression (globals : globals) locals symbols expected expression =
               let elseResult =
                 match no with
                 | Some no ->
-                    check symbols
+                    let branchLocals =
+                      match expected with
+                      | Some (AST.TInferenceVar (_, name))
+                        when thenType <> AST.TNever ->
+                          let substitution = M.singleton name thenType in
+                          M.map
+                            (fun (typ, binding) ->
+                              (Types.applySubst substitution typ, binding))
+                            locals
+                      | _ -> locals
+                    in
+                    checkExpression globals branchLocals symbols
                       (if thenType = AST.TNever then expected else Some thenType)
                       no
                 | None ->
