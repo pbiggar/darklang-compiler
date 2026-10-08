@@ -900,7 +900,9 @@ let parseTestLineWithPreamble line lineNumber filePath preamble funcLineMap =
           let display = Option.value ~default:source comment in
           let expectedValueExpr =
             let raw = tail without (i + 1) in
-            if Text.contains raw "\n" then
+            (* List continuations retain element columns. A hanging expected
+               function head is parsed as its own expression by the fixture DSL. *)
+            if Text.contains raw "\n" && starts (trimStart raw) "[" then
               let column =
                 match
                   List.rev (String.split_on_char '\n' (slice without 0 (i + 1)))
