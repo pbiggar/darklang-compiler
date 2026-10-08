@@ -1,6 +1,7 @@
 (* MIRPrinter.ml - Format MIR graphs and scoped or summarized dumps. *)
 [@@@warning "-4"]
 
+  | MIR.PosixIoctl -> "PosixIoctl"
 open IRPrinting
 
 let functionId id =

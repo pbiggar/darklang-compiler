@@ -77,6 +77,7 @@ let convertCliOperation operation =
   | MIR.PosixFlock -> LIR.PosixFlock
   | MIR.PosixGetDents -> LIR.PosixGetDents
 
+  | MIR.PosixIoctl -> LIR.PosixIoctl
 [@@@warning "-4"]
 
 module M = MIR

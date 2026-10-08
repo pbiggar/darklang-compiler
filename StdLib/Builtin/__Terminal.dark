@@ -1,0 +1,17 @@
+// Native terminal facts for interpreter package APIs, without libc calls.
+module Builtin
+
+let __isTerminal (fd: Int64) : Bool =
+    // TCGETS on Linux; TIOCGETA on Darwin. Only success matters, so the
+    // scratch buffer covers both kernel layouts without decoding termios.
+    let request = if Stdlib.Cli.__Posix.__mac () then 1078481939L else 21505L in
+    let buffer = __mapped_alloc 128L in
+    let result = Stdlib.Cli.__Posix.__ioctl fd request buffer == 0L in
+    let _ = __mapped_free buffer in
+    result
+
+let cliTerminalSessionInfo () : (Bool * Bool * String) =
+    let input = Builtin.__isTerminal 0L in
+    let output = Builtin.__isTerminal 1L in
+    let name = Stdlib.Option.withDefault (Stdlib.Cli.__getenv "TERM") "" in
+    (input, output, name)

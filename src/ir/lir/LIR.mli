@@ -1,6 +1,7 @@
 (* LIR.mli - Symbolic Low-level Intermediate Representation. *)
 [@@@warning "-4-30"]
 
+  | PosixIoctl
 type physReg =
   | X0
   | X1

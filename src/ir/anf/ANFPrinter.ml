@@ -1,6 +1,7 @@
 (* ANFPrinter.ml - Format ANF functions and scoped or summarized dumps. *)
 [@@@warning "-4"]
 
+  | ANF.PosixIoctl -> "PosixIoctl"
 open IRPrinting
 
 let functionId id =

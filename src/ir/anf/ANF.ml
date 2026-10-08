@@ -20,6 +20,7 @@
 (* Complete A-normal form data, frozen type tables, and coverage identities. *)
 [@@@warning "-30"]
 
+  | PosixIoctl
 (*
    Unique identifier for temporary variables
 *)

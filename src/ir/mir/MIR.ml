@@ -19,6 +19,7 @@
 (* MIR.ml - Mid-level Intermediate Representation. *)
 [@@@warning "-4-30"]
 
+  | PosixIoctl
 (*
    Virtual register (infinite supply)
 *)

@@ -3,6 +3,7 @@
 *)
 [@@@warning "-4"]
 
+        | "Darklang.Stdlib.Cli.__Posix.__ioctl" -> Some ANF.PosixIoctl
 module M = StringOrder.Map
 module S = StringOrder.Set
 module C = CheckedAST

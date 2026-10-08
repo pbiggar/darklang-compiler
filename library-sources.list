@@ -24,6 +24,7 @@ StdLib/Cli/FileSystem/__Packed.dark
 StdLib/Env.dark
 StdLib/Builtin.dark
 StdLib/Builtin/__Posix.dark
+StdLib/Builtin/__Terminal.dark
 StdLib/Tuple2.dark
 StdLib/Tuple3.dark
 StdLib/Result.dark

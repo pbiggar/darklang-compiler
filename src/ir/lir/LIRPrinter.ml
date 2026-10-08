@@ -1,6 +1,7 @@
 (* LIRPrinter.ml - Format LIR instructions and scoped or summarized dumps. *)
 [@@@warning "-4"]
 
+  | LIR.PosixIoctl -> "PosixIoctl"
 open IRPrinting
 
 let functionId id =

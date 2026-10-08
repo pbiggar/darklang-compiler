@@ -1,6 +1,7 @@
 (* Complete A-normal form data, frozen type tables, and coverage identities. *)
 [@@@warning "-30"]
 
+  | PosixIoctl
 type tempId = TempId of int
 type typedParam = { id : tempId; typ : AST.semanticType }
 
