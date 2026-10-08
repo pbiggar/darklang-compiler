@@ -12,7 +12,7 @@ The assertion harness now compares original parsed expressions. Multiline applic
 
 A follow-up against `36002414730437e871b7d457e76b79f859935fb1` recovered `Builtin.unwrap` payload types during lambda lifting. Individual ungated runs passed 191/220 List assertions and 263/264 Int64 assertions. List L161 and Int64 L90 are now enabled; List L162 still fails before lambda lifting on an empty list.
 
-Verification of the previous revision: fresh native build passed; the complete host suite passed **11,316/11,316** tests; `dune runtest` passed; the canonical compiled leak gate passed **58/58** workloads. Verification of the unwrap follow-up is pending. The gates and individual ledger rows match all 2,336 measured failing assertion identities exactly. The parent benchmark check stopped before measurement because the stored workload digest is incompatible; no baseline was reset.
+Verification of the unwrap follow-up: fresh native build passed; the complete host suite passed **11,324/11,324** tests; `dune runtest` passed; the canonical compiled leak gate passed **58/58** workloads. The six new Option/Result callback regressions passed individually and batched. The gates and individual ledger rows match all 2,336 measured failing assertion identities exactly. The parent benchmark check stopped before measurement because the stored workload digest is incompatible; no baseline was reset.
 
 ## Failing test files
 
