@@ -1,0 +1,7 @@
+// Lambda return inference preserves Option and Result unwrap payload types.
+Stdlib.List.indexedMap [3L, 2L, 1L] (fun i v -> v - Builtin.unwrap (Stdlib.Int.toInt64 i)) = [3L, 1L, -1L]
+Stdlib.List.map [Some 3L, Some 7L] (fun value -> Builtin.unwrap value) = [3L, 7L]
+Stdlib.List.map [Ok 3L, Error "bad"] (fun value -> if value == Error "bad" then 0L else Builtin.unwrap value) = [3L, 0L]
+Stdlib.List.map [3L, 7L] (fun value -> Builtin.unwrap (Ok (value + 1L))) = [4L, 8L]
+Stdlib.List.map [Some 3L, None] (fun value -> Builtin.unwrap value) = exit=1 stderr="Cannot unwrap None" stdout=""
+Stdlib.List.map [Ok 3L, Error "bad"] (fun value -> Builtin.unwrap value) = exit=1 stderr="Cannot unwrap Error" stdout=""

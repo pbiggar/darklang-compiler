@@ -1266,7 +1266,7 @@ let runTestsWithProgressReporter completedTestReporter args =
         ( "test/fixtures/e2e/upstream/stdlib/httpclient.dark",
           [ 71; 108; 111; 131; 132; 133; 134 ] );
         ("test/fixtures/e2e/upstream/stdlib/httpserver.dark", [ 29; 33; 37 ]);
-        ("test/fixtures/e2e/upstream/stdlib/ints/int64.dark", [ 90; 368 ]);
+        ("test/fixtures/e2e/upstream/stdlib/ints/int64.dark", [ 368 ]);
         ("test/fixtures/e2e/upstream/stdlib/ints/int8.dark", [ 47 ]);
         ( "test/fixtures/e2e/upstream/stdlib/list.dark",
           [
@@ -1287,7 +1287,6 @@ let runTestsWithProgressReporter completedTestReporter args =
             129;
             130;
             136;
-            161;
             162;
             174;
             180;
