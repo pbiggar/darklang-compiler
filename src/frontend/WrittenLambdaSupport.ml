@@ -30,6 +30,15 @@ let[@warning "-4"] check checkExpression globals locals symbols expected (range 
    | WT.EInfix (_, (_, op), left, WT.EVariable (_, rightName)) when rightName = name && isNumericOperator op -> numericOperandType left
    | WT.EInfix (_, _, left, right) -> inferParameterType name left |> orElseWith (fun () -> inferParameterType name right)
    | WT.EEnum (_, _, _, fields, _) -> List.find_map (inferParameterType name) fields
+   | WT.ERecord (_, recordName, fields, _, _) ->
+     (* Concrete fields constrain initializer parameters before closure
+        conversion chooses their ownership representation. *)
+     let declared = Result.bind (resolveNamedType globals None recordName None) (fun (_, entry, args) -> recordFields globals.allowInternal globals.types entry args) |> Result.to_option in
+     List.find_map (fun (_, (_, fieldName), value) ->
+       let typ = Option.bind declared (List.assoc_opt fieldName) in
+       match value, typ with
+       | WT.EVariable (_, argName), Some typ when argName = name && not (Unification.containsTVar typ) -> Some typ
+       | _ -> inferParameterType name value) fields
    | WT.EApply (_, WT.EFnName (_, functionName), _, args) -> (match resolveFunction globals (qualifiedFnName functionName) with
      | Some signature when List.length args = List.length signature.parameters -> List.find_map (fun (argument, typ) -> match argument with WT.EVariable (_, argName) when argName = name && not (Unification.containsTVar typ) -> Some typ | _ -> inferParameterType name argument) (List.combine args signature.parameters)
      | _ -> List.find_map (inferParameterType name) args)
