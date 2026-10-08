@@ -198,7 +198,7 @@ module Map =
 
 Stdlib.List.map2 [ 10L, 20L, 30L ] [ 1L, 2L, 3L ] (fun a b -> a - b) = Stdlib.Option.Option.Some [ 9L, 18L, 27L ]
 Stdlib.List.map2 [ 10L, 20L ] [ 1L, 2L, 3L ] (fun a b -> a - b) = Stdlib.Option.Option.None
-Stdlib.List.map2 [] [] (fun a b -> a - b) = Stdlib.Option.Option.Some []
+Stdlib.List.map2<Int64, Int64, Int64> [] [] (fun a b -> a - b) = Stdlib.Option.Option.Some []
 
 Stdlib.List.map2shortest [ 10L, 20L, 30L ] [ 1L, 2L, 3L ] (fun a b -> a - b) = [ 9L, 18L, 27L ]
 Stdlib.List.map2shortest [ 10L, 20L ] [ 1L, 2L, 3L ] (fun a b -> a - b) = [ 9L, 18L ]
