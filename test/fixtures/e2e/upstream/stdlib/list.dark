@@ -50,7 +50,7 @@ Stdlib.List.drop [ 5L, 4L, 3L, 2L, 1L ] 5 = []
 Stdlib.List.drop [ 5L ] 4 = []
 Stdlib.List.drop [] 4 = []
 
-Stdlib.List.dropWhile [ 1L, 2L, 3L, 4L ] (fun item -> 0L - 1L) = error="Encountered a condition that must be a Bool, but got an Int64 (-1)"
+Stdlib.List.dropWhile [ 1L, 2L, 3L, 4L ] (fun item -> 0L - 1L) = compileerror="Expected TBool, got TInt64"
 Stdlib.List.dropWhile [ 1L, 2L, 3L, 4L ] (fun item -> item < 3L) = [ 3L, 4L ]
 Stdlib.List.dropWhile [ 1L, 2L, 3L, 4L ] (fun item -> item >= 1L) = []
 Stdlib.List.dropWhile [ 1L, 5L, 2L, 2L ] (fun item -> item < 3L) = [ 5L, 2L, 2L ]
@@ -298,8 +298,8 @@ Stdlib.List.take [ 5L, 4L, 3L, 2L, 1L ] 5 = [ 5L, 4L, 3L, 2L, 1L ]
 Stdlib.List.take [ 5L ] 4 = [ 5L ]
 Stdlib.List.take [] 4 = []
 
-//TODO: better error message
-Stdlib.List.takeWhile [ 1L, 2L, 3L, 4L ] (fun item -> 0L - 1L) = error="Encountered a condition that must be a Bool, but got an Int64 (-1)"
+// Invalid predicates are rejected during compilation.
+Stdlib.List.takeWhile [ 1L, 2L, 3L, 4L ] (fun item -> 0L - 1L) = compileerror="Expected TBool, got TInt64"
 Stdlib.List.takeWhile [ 1L, 2L, 3L, 4L ] (fun item -> item < 1L) = []
 Stdlib.List.takeWhile [ 1L, 2L, 3L, 4L ] (fun item -> item < 3L) = [ 1L, 2L ]
 Stdlib.List.takeWhile [ 1L, 5L, 2L, 2L ] (fun item -> item < 3L) = [ 1L ]

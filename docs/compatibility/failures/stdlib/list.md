@@ -2,7 +2,7 @@
 
 [Source fixture](../../../../test/fixtures/e2e/upstream/stdlib/list.dark) · [File list](../../current-audit.md)
 
-Executed 220 assertions: **198 passed, 22 failed**.
+Executed 220 assertions: **200 passed, 20 failed**.
 
 ## Deferred test-only builtins
 
@@ -18,7 +18,6 @@ tests at present. This is missing test instrumentation, not evidence that
 
 | Test | Observed failure |
 | --- | --- |
-| [L53](../../../../test/fixtures/e2e/upstream/stdlib/list.dark#L53) — Stdlib.List.dropWhile [ 1L, 2L, 3L, 4L ] (fun item -> 0L - 1L) | Expected error message 'Encountered a condition that must be a Bool, but got an Int64 (-1)' not found in stderr. Actual stderr: <entry>: Expected TBool, got TInt64 |
 | [L61](../../../../test/fixtures/e2e/upstream/stdlib/list.dark#L61) — Stdlib.List.iter [ 1L, 2L, 3L ] (fun x -> Builtin.testIncrementSideEffectCounter ()) Builtin.testSideEffect... | Unknown function or value 'Builtin.testIncrementSideEffectCounter' |
 | [L65](../../../../test/fixtures/e2e/upstream/stdlib/list.dark#L65) — Stdlib.List.iter [ 1L, 2L, 3L, 4L, 5L ] (fun x -> if x % 2L == 0L then Builtin.testIncrementSideEffectCount... | Unknown function or value 'Builtin.testIncrementSideEffectCounter' |
 | [L71](../../../../test/fixtures/e2e/upstream/stdlib/list.dark#L71) — Stdlib.List.iter [] (fun x -> Builtin.testIncrementSideEffectCounter ()) Builtin.testSideEffectCount () | Unknown function or value 'Builtin.testIncrementSideEffectCounter' |
@@ -38,5 +37,4 @@ tests at present. This is missing test instrumentation, not evidence that
 | [L224](../../../../test/fixtures/e2e/upstream/stdlib/list.dark#L224) — Stdlib.List.partition [ 1L, 2L, 3L ] (fun item -> match item with \| 1L -> Stdlib.Option.Option.None \| 2L ->... | Expected error message 'Encountered a condition that must be a Bool, but got a Darklang.Stdlib.Option.Option<_> (None)' not found in stderr. Actual stderr: <entry>: Expected TBool, got TSum ("Darklang.Stdlib.Option.Option", [TVar "t"]) |
 | [L264](../../../../test/fixtures/e2e/upstream/stdlib/list.dark#L264) — Stdlib.List.sortByComparator [ 3L, 1L, 2L ] (fun a b -> 0.1) | Expected error message 'Cannot perform equality check on Float and Int' not found in stderr. Actual stderr: <entry>: Expected TInt, got TFloat64 |
 | [L269](../../../../test/fixtures/e2e/upstream/stdlib/list.dark#L269) — Stdlib.List.sortByComparator [ 1L, 2L, 3L ] (fun a b -> "㧑༷釺") | Expected error message 'Cannot perform equality check on String and Int' not found in stderr. Actual stderr: <entry>: Expected TInt, got TString |
-| [L302](../../../../test/fixtures/e2e/upstream/stdlib/list.dark#L302) — Stdlib.List.takeWhile [ 1L, 2L, 3L, 4L ] (fun item -> 0L - 1L) | Expected error message 'Encountered a condition that must be a Bool, but got an Int64 (-1)' not found in stderr. Actual stderr: <entry>: Expected TBool, got TInt64 |
 | [L314](../../../../test/fixtures/e2e/upstream/stdlib/list.dark#L314) — Stdlib.List.uniqueBy [ 6L, 2.0 ] (fun x -> x) | Unknown function or value 'Builtin.testIncrementSideEffectCounter' |
