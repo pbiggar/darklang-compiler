@@ -55,29 +55,38 @@ and run with leak checks clean. Cachegrind equivalence was waived by the user.
 Changed OCaml files pass formatting checks. Recursive function values can
 allocate a closure; direct recursive calls retain their existing environment.
 
-## Remaining package blocker
+## Generic function-value fix
 
-`Darklang.LanguageTools.Permissions.parseRule` is the first declaration that
-introduces the remaining failure. Its two HTTP branches pass the generic
-`Stdlib.List.singleton` function directly to `Stdlib.Option.map`.
+`Darklang.LanguageTools.Permissions.parseRule` failed when its HTTP branches
+passed generic `Stdlib.List.singleton` directly to `Stdlib.Option.map`.
+Fixed on branch `chatgpt/generic-function-values`, commit
+`f7db8bb3bee2c455e3c60debd7f6bc8dc50cfc44`, PR #20; not merged.
 
-Minimal reproduction:
-`Some 1L |> Stdlib.Option.map Stdlib.List.singleton` fails with
-`RefCountInsertion: ClosureAlloc target '825' not found in function registry`.
-The ordinal depends on the compilation context (the whole package reported
-`776`). Passing a non-generic named callback compiles and runs cleanly, as does
-`Some 1L |> Stdlib.Option.map (fun value -> Stdlib.List.singleton value)`.
-Replacing only the two callback references with lambdas in an ignored probe
-also lets the source prefix through parseRule compile.
+Checked function values now retain their type arguments and function type.
+Per-reference fresh variables collect contextual and later-use constraints;
+type substitution and monomorphization materialize the concrete callback.
+Pure generic module function aliases retain the original identity and
+specialize at each use. Explicit type arguments without value arguments form
+specialized function values.
 
-The frontend stores a generic function value as `CheckedAST.FuncRef` with its
-original identity, while specialization discovery skips FuncRef nodes. The
-concrete callback specialization is missing when closure ownership requests its
-function type. This is a compiler bug in generic function values, independent
-of the local-recursion fix or SQLite support. No fix or package source change
-for this item has been approved; bring the item to the user for a decision.
+All 24 focused regressions pass, covering the 17 failing audit probes below,
+explicit function-value specialization, ordinary-call controls, alias use at
+two types, specialization identity equality, and wrong-argument rejection.
+Full host suite: 11386/11386 passed. Native `dune runtest` and changed-file
+formatting checks passed. All 58 canonical quick/full benchmark workloads
+compile and run with leak checks clean; Cachegrind equivalence remains waived.
 
-## Generic function-value coverage for the parseRule fix
+The whole unchanged original Permissions package compiles. An entry calling
+`Permissions.parseRule ["http", "GET"]` runs with exit 0 and no leaks.
+The missing closure-target blocker is resolved; other package declarations
+have not been reviewed individually at runtime.
+
+Local value annotations remain rejected, as in the pinned interpreter
+v0.0.35: its parser explicitly rejects them and WrittenTypes.ELet has no
+annotation field. This is a separate language syntax restriction, not a
+remaining generic function-value compilation failure.
+
+## Pre-fix generic function-value audit
 
 Checked 22 focused probes against compiler main `df5fbb9079df2415c31ec9704faa792b66b8cbe5`.
 Seventeen generic function-value probes failed compilation:
@@ -109,7 +118,8 @@ substitute them inside generic bodies, and materialize the concrete targets.
 Aliases also need inference from subsequent uses; expected callback types alone
 do not cover the tested scope. Expression-container traversal for ordinary
 generic calls is already present. No compiler or package changes were made
-during this coverage investigation.
+during that initial coverage investigation; the subsequent fix above resolves
+the 17 generic function-value probes and bare explicit specialization.
 
 ## Completion rule
 
