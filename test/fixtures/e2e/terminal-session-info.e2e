@@ -1,0 +1,3 @@
+// Terminal facts for redirected E2E streams, with exact environment values.
+Builtin.cliTerminalSessionInfo () = (false, false, "xterm-256color") env="TERM=xterm-256color"
+Builtin.cliTerminalSessionInfo () = (false, false, "") env="TERM="
