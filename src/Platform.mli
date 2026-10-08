@@ -37,8 +37,8 @@ type syscallNumbers = {
 type socketConstants = {
   addressFamily4 : int;
   addressFamily6 : int;
-  streamCloexec : int64;
-  datagramCloexec : int64;
+  streamType : int64;
+  datagramType : int64;
   socketLevel : int;
   receiveTimeout : int;
   sendTimeout : int;
@@ -58,5 +58,6 @@ val macOSARM64SyscallNumbers : syscallNumbers
 val linuxARM64SyscallNumbers : syscallNumbers
 val linuxX86_64SyscallNumbers : syscallNumbers
 val syscallNumbersFor : target -> syscallNumbers
+val macOSMachTimebaseInfoTrap : int64
 val socketConstantsFor : os -> socketConstants
 val requiresCodeSigning : os -> bool

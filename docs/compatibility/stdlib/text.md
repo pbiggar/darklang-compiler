@@ -1,5 +1,10 @@
 # Char, String, and Regex parity contract
 
+Current compiler source review: 2026-10-07 at `7154b0ea9c1a3f53d30984ed17b9e0cc5d8f0dce`.
+See the [current audit](../current-audit.md) for post-port status and validation.
+Older revision pairs and executed counts below are historical evidence, not
+a fresh test result for this revision.
+
 This contract was revalidated against compiler baseline
 `C@2ac3d8a0385e6002f604412e2296662dda6bb000` and interpreter revision
 `I@04fbe9dcc995c6188757d583e273cbd30a3e2d3d`. The implementation is the tree
@@ -11,9 +16,9 @@ The canonical interpreter declarations are
 `packages/darklang/stdlib/{char,string,regex}.dark`; their managed behavior is
 implemented by `backend/src/Builtins/Builtins.Pure/Libs/{Char,String,Regex}.fs`.
 The compiler surface is implemented in
-`stdlib/{Char,String,Regex}.dark`, with shared semantics in
-`Stdlib.String.__Unicode.dark` and generated data in `unicode_data.dark`,
-`unicode_data_index/`, and `unicode_data/`. The generated source is split only
+`StdLib/{Char,String,Regex}.dark`, with shared semantics in
+`StdLib/String/__Unicode.dark` and generated data under
+`StdLib/String/__Unicode/`. The generated source is split only
 to bound the recursive Dark lexer's stack use; the generator treats the shards
 as one versioned table set.
 
@@ -122,13 +127,12 @@ not source-resolvable; public text behavior is provided only by the parity API.
   EGC, scalar construction, UTF-16 versus EGC indexes, and regex match/split
   behavior.
 - The pinned upstream `char.dark`, `string.dark`, and `regex.dark` files are
-  registered in `test/test-suite-tooling/TestRunner.ml`. The String fixture has only harness adaptations:
-  its interpreter side-effect callback assertion is omitted, `newline()` uses
-  the compiler's existing spelling, and the unrelated, unavailable `Slugify`
-  module cases remain outside this approved text-parity scope. Focused results
-  are recorded in the implementing commit message.
+  imported. Char and Regex are enabled; String is currently whole-file gated.
+  The upstream String source uses bare `newline`, and contains test-only callbacks
+  and Slugify dependencies. The focused text matrix supplies coverage; the gate
+  does not establish that String is unimplemented.
 
-## Integration verification
+## Historical integration verification
 
 The completed implementation was rebased onto `main@9b6c27d0a52c313774ef5a05b78447cf0015c353`.
 Its final source commit is

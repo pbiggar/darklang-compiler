@@ -1,5 +1,10 @@
 # Identifier and qualified-name parity
 
+Current compiler source review: 2026-10-07 at `7154b0ea9c1a3f53d30984ed17b9e0cc5d8f0dce`.
+See the [current audit](../current-audit.md) for post-port status and validation.
+Older revision pairs and executed counts below are historical evidence, not
+a fresh test result for this revision.
+
 This lexical comparison is pinned to compiler evidence revision
 `b2e1f3d1e4ce0338d4c4662db9a1326f2e2cb899` and darklang/dark interpreter
 revision `04fbe9dcc995c6188757d583e273cbd30a3e2d3d`. Implementation started from
@@ -64,15 +69,19 @@ boundary.
 - `val` declarations are first-class values and are not function declarations
   or a spelling alias for `let`. Required values materialize as lexical bindings
   before ANF.
-- Content-addressed package loading is absent. Package lookup-name validation
-  remains resolver behavior, matching interpreter `NameResolver.fs:12-29`.
+- Hosted content-addressed package loading is available when `--package-server`
+  is supplied. `src/packages/PackageManager.ml` resolves names and hashes,
+  traverses dependencies, and caches responses; imported sources are checked
+  with the requesting program. This is compile-time loading, not a runtime
+  package-manager service. Package lookup-name validation remains resolver-owned.
 - AOT unresolved/ambiguous diagnostics occur before execution.
 - Runtime helpers use `__` names and are rejected by the post-parse visibility
   check.
 - Explicit compiler intrinsic candidates remain classified in
   [name-resolution.md](name-resolution.md). Performance is outside this matrix.
 
-Imported `test/fixtures/e2e/upstream/` fixtures remain unchanged as same-source
-evidence. Repository-authored stdlib, E2E, optimization, benchmark, roundtrip,
+Imported `test/fixtures/e2e/upstream/` fixtures provide interpreter evidence
+with the [source adaptations](../current-audit.md#imported-corpus-provenance)
+recorded by the current corpus comparison. Repository-authored stdlib, E2E, optimization, benchmark, roundtrip,
 and documentation sources use `let`, modules, and apostrophe-prefixed
 declaration parameters.

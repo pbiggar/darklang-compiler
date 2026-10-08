@@ -1,0 +1,41 @@
+# stdlib/list.dark
+
+[Source fixture](../../../../test/fixtures/e2e/upstream/stdlib/list.dark) · [File list](../../current-audit.md)
+
+Executed 220 assertions: **190 passed, 30 failed**.
+Of 35 previously disabled assertions, **5 passed and 30 failed**.
+
+| Test | Observed failure |
+| --- | --- |
+| [L22](../../../../test/fixtures/e2e/upstream/stdlib/list.dark#L22) — [1l, 2.3] | Expected error message 'Cannot add a Float (2.3) to a list of Int32. Failed at index 1.' not found in stderr. Actual stderr: <entry>: Expected TInt32, got TFloat64 |
+| [L23](../../../../test/fixtures/e2e/upstream/stdlib/list.dark#L23) — [(1l,10l), 10l, (3l,30l)] | Expected error message 'Cannot add an Int32 (10) to a list of (Int32 * Int32). Failed at index 1.' not found in stderr. Actual stderr: <entry>: Expected TTuple [TInt32; TInt32], got TInt32 |
+| [L24](../../../../test/fixtures/e2e/upstream/stdlib/list.dark#L24) — [(1l,10l), (2l,20l), (3l,30l,40l)] | Expected error message 'Cannot add an (Int32 * Int32 * Int32) ((3, 30, 40)) to a list of (Int32 * Int32). Failed at index 2.' not found in stderr. Actual stderr: <entry>: Expected TTuple [TInt32; TInt32], got TTuple [TInt32; TInt32; TInt32] |
+| [L53](../../../../test/fixtures/e2e/upstream/stdlib/list.dark#L53) — Stdlib.List.dropWhile [ 1L, 2L, 3L, 4L ] (fun item -> 0L - 1L) | Expected error message 'Encountered a condition that must be a Bool, but got an Int64 (-1)' not found in stderr. Actual stderr: <entry>: Expected TBool, got TInt64 |
+| [L61](../../../../test/fixtures/e2e/upstream/stdlib/list.dark#L61) — Stdlib.List.iter [ 1L, 2L, 3L ] (fun x -> Builtin.testIncrementSideEffectCounter ()) Builtin.testSideEffect... | Unknown function or value 'Builtin.testIncrementSideEffectCounter' |
+| [L65](../../../../test/fixtures/e2e/upstream/stdlib/list.dark#L65) — Stdlib.List.iter [ 1L, 2L, 3L, 4L, 5L ] (fun x -> if x % 2L == 0L then Builtin.testIncrementSideEffectCount... | Unknown function or value 'Builtin.testIncrementSideEffectCounter' |
+| [L71](../../../../test/fixtures/e2e/upstream/stdlib/list.dark#L71) — Stdlib.List.iter [] (fun x -> Builtin.testIncrementSideEffectCounter ()) Builtin.testSideEffectCount () | Unknown function or value 'Builtin.testIncrementSideEffectCounter' |
+| [L75](../../../../test/fixtures/e2e/upstream/stdlib/list.dark#L75) — Stdlib.List.iter [ 10L, 20L, 30L ] (fun x -> Builtin.testIncrementSideEffectCounter () Builtin.testIncremen... | Unknown function or value 'Builtin.testIncrementSideEffectCounter' |
+| [L81](../../../../test/fixtures/e2e/upstream/stdlib/list.dark#L81) — Stdlib.List.iter [ 1L, 2L, 3L ] (fun x -> if x > 2L then Builtin.testIncrementSideEffectCounter ()) Builtin... | Unknown function or value 'Builtin.testIncrementSideEffectCounter' |
+| [L87](../../../../test/fixtures/e2e/upstream/stdlib/list.dark#L87) — Stdlib.List.filter [ 1L, 2L, 3L ] (fun item -> match item with \| 1L -> Stdlib.Option.Option.None \| 2L -> fa... | Expected error message 'Encountered a condition that must be a Bool, but got a Darklang.Stdlib.Option.Option<_> (None)' not found in stderr. Actual stderr: <entry>: Expected TBool, got TSum ("Darklang.Stdlib.Option.Option", [TVar "t"]) |
+| [L92](../../../../test/fixtures/e2e/upstream/stdlib/list.dark#L92) — Stdlib.List.filter [ true, false, true ] (fun item -> "a") | Expected error message 'Encountered a condition that must be a Bool, but got a String ("a")' not found in stderr. Actual stderr: <entry>: Expected TBool, got TString |
+| [L93](../../../../test/fixtures/e2e/upstream/stdlib/list.dark#L93) — Stdlib.List.filter [ 1L, 2L, 3L ] (fun item -> match item with \| 1L -> true \| 2L -> false \| 3L -> true) | Non-exhaustive match expression |
+| [L101](../../../../test/fixtures/e2e/upstream/stdlib/list.dark#L101) — Stdlib.List.filter [] (fun item -> "a") | Expected TBool, got TString |
+| [L109](../../../../test/fixtures/e2e/upstream/stdlib/list.dark#L109) — Stdlib.List.filterMap [] (fun item -> 0L) | Expected TSum |
+| [L129](../../../../test/fixtures/e2e/upstream/stdlib/list.dark#L129) — Stdlib.List.flatten [ 1l, 2l, 3l ] | Expected error message 'Darklang.Stdlib.List.flatten's 1st parameter 'list' expects List<List<_>>, but got List<Int32> ([1, 2, 3])' not found in stderr. Actual stderr: <entry>: Expected TList |
+| [L130](../../../../test/fixtures/e2e/upstream/stdlib/list.dark#L130) — Stdlib.List.flatten [ [ 1L ], [ [ 2L, 3L ] ] ] | Expected error message 'Cannot add a List<List<Int64>> ([[2, 3]]) to a list of List<Int64>. Failed at index 1.' not found in stderr. Actual stderr: <entry>: Expected TInt64, got TList TInt64 |
+| [L136](../../../../test/fixtures/e2e/upstream/stdlib/list.dark#L136) — Stdlib.List.fold [] [] (fun accum curr -> 5L) | Expected TList (TVar "t$empty"), got TInt64 |
+| [L161](../../../../test/fixtures/e2e/upstream/stdlib/list.dark#L161) — Stdlib.List.indexedMap [ 3L, 2L, 1L ] (fun i v -> v - (Builtin.unwrap (Stdlib.Int.toInt64 i))) | Value mismatch |
+| [L162](../../../../test/fixtures/e2e/upstream/stdlib/list.dark#L162) — Stdlib.List.indexedMap [] (fun i v -> v - (Builtin.unwrap (Stdlib.Int.toInt64 i))) | Operator is unavailable for this type |
+| [L174](../../../../test/fixtures/e2e/upstream/stdlib/list.dark#L174) — Stdlib.List.interleave [ "a", "b", "c" ] [ 0L ] | Expected error message 'Darklang.Stdlib.List.interleave's 2nd parameter 'lB' expects List<String>, but got List<Int64> ([0])' not found in stderr. Actual stderr: <entry>: Expected TString, got TInt64 |
+| [L180](../../../../test/fixtures/e2e/upstream/stdlib/list.dark#L180) — Stdlib.List.interpose [ "a", "b", "c" ] 0L | Expected error message 'Darklang.Stdlib.List.interpose's 2nd parameter 'sep' expects String, but got Int64 (0)' not found in stderr. Actual stderr: <entry>: Expected TString, got TInt64 |
+| [L201](../../../../test/fixtures/e2e/upstream/stdlib/list.dark#L201) — Stdlib.List.map2 [] [] (fun a b -> a - b) | Operator is unavailable for this type |
+| [L216](../../../../test/fixtures/e2e/upstream/stdlib/list.dark#L216) — Stdlib.List.partition [] (fun item -> "a") | Expected TBool, got TString |
+| [L218](../../../../test/fixtures/e2e/upstream/stdlib/list.dark#L218) — Stdlib.List.partition [ 1L, 2L, 3L ] (fun item -> match item with \| 1L \| 3L -> true \| 2L -> false) | Non-exhaustive match expression |
+| [L223](../../../../test/fixtures/e2e/upstream/stdlib/list.dark#L223) — Stdlib.List.partition [ true, false, true ] (fun item -> "a") | Expected error message 'Encountered a condition that must be a Bool, but got a String ("a")' not found in stderr. Actual stderr: <entry>: Expected TBool, got TString |
+| [L224](../../../../test/fixtures/e2e/upstream/stdlib/list.dark#L224) — Stdlib.List.partition [ 1L, 2L, 3L ] (fun item -> match item with \| 1L -> Stdlib.Option.Option.None \| 2L ->... | Expected error message 'Encountered a condition that must be a Bool, but got a Darklang.Stdlib.Option.Option<_> (None)' not found in stderr. Actual stderr: <entry>: Expected TBool, got TSum ("Darklang.Stdlib.Option.Option", [TVar "t"]) |
+| [L264](../../../../test/fixtures/e2e/upstream/stdlib/list.dark#L264) — Stdlib.List.sortByComparator [ 3L, 1L, 2L ] (fun a b -> 0.1) | Expected error message 'Cannot perform equality check on Float and Int' not found in stderr. Actual stderr: <entry>: Expected TInt, got TFloat64 |
+| [L269](../../../../test/fixtures/e2e/upstream/stdlib/list.dark#L269) — Stdlib.List.sortByComparator [ 1L, 2L, 3L ] (fun a b -> "㧑༷釺") | Expected error message 'Cannot perform equality check on String and Int' not found in stderr. Actual stderr: <entry>: Expected TInt, got TString |
+| [L302](../../../../test/fixtures/e2e/upstream/stdlib/list.dark#L302) — Stdlib.List.takeWhile [ 1L, 2L, 3L, 4L ] (fun item -> 0L - 1L) | Expected error message 'Encountered a condition that must be a Bool, but got an Int64 (-1)' not found in stderr. Actual stderr: <entry>: Expected TBool, got TInt64 |
+| [L314](../../../../test/fixtures/e2e/upstream/stdlib/list.dark#L314) — Stdlib.List.uniqueBy [ 6L, 2.0 ] (fun x -> x) | Unknown function or value 'Builtin.testIncrementSideEffectCounter' |
+
+Previously disabled tests that passed: L140, L206, L250, L346, L354.

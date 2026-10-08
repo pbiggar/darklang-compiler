@@ -1,5 +1,10 @@
 # Integer parity
 
+Current compiler source review: 2026-10-07 at `7154b0ea9c1a3f53d30984ed17b9e0cc5d8f0dce`.
+See the [current audit](../current-audit.md) for post-port status and validation.
+Older revision pairs and executed counts below are historical evidence, not
+a fresh test result for this revision.
+
 This implementation was revalidated from compiler baseline
 `C@a78567efd773de86265e55a54445ddf5a5a8911c` and interpreter baseline
 `I@04fbe9dcc995c6188757d583e273cbd30a3e2d3d`. The historical DCB1 report at
@@ -67,8 +72,8 @@ errors for source that can be rejected during type checking.
 The upstream expression `Stdlib.Int8.add Darklang.Test.Values.int8Value 5y`
 obtains the package value `Darklang.Test.Values.int8Value`, whose evaluated
 value is `5y`; the interpreter resolves that global through its package-value
-environment before calling `Int8.add`, producing `10y`. AOT never performs a
-live package lookup. Its compile request receives the immutable
+environment before calling `Int8.add`, producing `10y`. Without an explicit hosted package server, this focused probe uses an immutable
+catalog rather than a live lookup. Its compile request receives the immutable
 `PackageValueCatalog` entry with hash `darklang-test-values-int8Value`, the
 `Darklang.Test.Values.int8Value` location, concrete `Int8` result type, and
 the available evaluator expression `5y`. Materialization generates the typed

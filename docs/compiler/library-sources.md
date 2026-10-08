@@ -39,10 +39,10 @@ fragments use `__` even where the interpreter also has private helpers.
 | `StdLib/UInt64.dark` | `Darklang.Stdlib.UInt64`  | `packages/darklang/stdlib/uint64.dark` |
 | `StdLib/UInt128.dark` | `Darklang.Stdlib.UInt128`  | `packages/darklang/stdlib/uint128.dark` |
 | `StdLib/Bool.dark` | `Darklang.Stdlib.Bool`  | `packages/darklang/stdlib/bool.dark` |
-| `StdLib/Cli/FileSystem.dark` | `Stdlib.Cli.FileSystem`  | `packages/darklang/stdlib/cli/fileSystem.dark` |
-| `StdLib/Cli/FileSystem/FileError.dark` | `Stdlib.Cli.FileSystem.FileError`  | `packages/darklang/stdlib/cli/fileSystem.dark` |
+| `StdLib/Cli/FileSystem.dark` | `Darklang.Stdlib.Cli.FileSystem`  | `packages/darklang/stdlib/cli/fileSystem.dark` |
+| `StdLib/Cli/FileSystem/FileError.dark` | `Darklang.Stdlib.Cli.FileSystem.FileError`  | `packages/darklang/stdlib/cli/fileSystem.dark` |
 | `StdLib/Cli/FileSystem/__Packed.dark` | `Darklang.Stdlib.Cli.FileSystem` | Private decoder for native directory adapter |
-| `StdLib/Env.dark` | `Stdlib.Env`  | `packages/darklang/stdlib/env.dark` |
+| `StdLib/Env.dark` | `Darklang.Stdlib.Env`  | `packages/darklang/stdlib/env.dark` |
 | `StdLib/Builtin.dark` | `Builtin`  | Portable interpreter builtin bridges plus native adapter helpers (`backend/src/Builtins/Builtins.Pure/Libs/UInt64.fs` and `backend/src/Builtins/Builtins.Cli/Libs/{Directory,File,Environment}.fs`) |
 | `StdLib/Builtin/__Posix.dark` | `Builtin` | Interpreter POSIX builtin bridge (`backend/src/Builtins/Builtins.Cli/Libs/Posix.fs`) |
 | `StdLib/Tuple2.dark` | `Darklang.Stdlib.Tuple2`  | `packages/darklang/stdlib/tuple2.dark` |

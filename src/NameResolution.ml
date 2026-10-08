@@ -390,9 +390,9 @@ let namesToTry context currentModule given =
     match (context, givenSegments) with
     | _, "Stdlib" :: rest ->
         [ qualifiedNameFromList ("Darklang" :: "Stdlib" :: rest) ]
-    | Type, [ "Option" ] ->
+    | Type, ([ "Option" ] | [ "Option"; "Option" ]) ->
         [ qualifiedNameFromList [ "Darklang"; "Stdlib"; "Option"; "Option" ] ]
-    | Type, [ "Result" ] ->
+    | Type, ([ "Result" ] | [ "Result"; "Result" ]) ->
         [ qualifiedNameFromList [ "Darklang"; "Stdlib"; "Result"; "Result" ] ]
     | Constructor, [ "Option"; (("Some" | "None") as caseName) ] ->
         [

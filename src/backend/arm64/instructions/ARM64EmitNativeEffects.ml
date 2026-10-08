@@ -15,6 +15,74 @@ open HeapAllocation
 open LeakAccounting
 open ARM64Operands
 
+(* Darwin exposes absolute ticks through gettimeofday's third argument. Query
+   the Mach timebase rather than assuming the ARM timer frequency. Keep all
+   values across traps on the stack, and divide before multiplying to avoid
+   overflowing the intermediate tick/timebase product. *)
+let emitMacOSMonotonicTime (ctx : codeGenContext) destReg time =
+  let prefix =
+    Printf.sprintf "__monotonic_%s_%s" ctx.functionName ctx.instructionSite
+  in
+  let failure = prefix ^ "_failure" in
+  let timebaseFailure = prefix ^ "_timebase_failure" in
+  let doneLabel = prefix ^ "_done" in
+  let syscall = ARM64.targetSyscalls ctx.target in
+  loadCliOperand Symbolic.X0 time
+  |> Result.map (fun loads ->
+      loads
+      @ [
+          Symbolic.SUB_imm (Symbolic.SP, Symbolic.SP, 32);
+          Symbolic.STR (Symbolic.X0, Symbolic.SP, 0);
+          Symbolic.ADD_imm (Symbolic.X2, Symbolic.SP, 8);
+          Symbolic.MOVZ (Symbolic.X0, 0, 0);
+          Symbolic.MOVZ (Symbolic.X1, 0, 0);
+          Symbolic.MOVZ
+            ( syscall.ARM64.syscallRegister,
+              syscall.ARM64.numbers.Platform.gettimeofday,
+              0 );
+          Symbolic.SVC syscall.ARM64.svcImmediate;
+          Symbolic.B_cond_label (Symbolic.HS, failure);
+          Symbolic.ADD_imm (Symbolic.X0, Symbolic.SP, 16);
+        ]
+      @ loadImmediate syscall.ARM64.syscallRegister
+          Platform.macOSMachTimebaseInfoTrap
+      @ [
+          Symbolic.SVC syscall.ARM64.svcImmediate;
+          Symbolic.CBNZ (Symbolic.X0, timebaseFailure);
+          Symbolic.LDR (Symbolic.X9, Symbolic.SP, 16);
+          Symbolic.LSR_imm (Symbolic.X10, Symbolic.X9, 32);
+        ]
+      @ loadImmediate Symbolic.X11 4294967295L
+      @ [
+          Symbolic.AND_reg (Symbolic.X9, Symbolic.X9, Symbolic.X11);
+          Symbolic.CBZ (Symbolic.X10, timebaseFailure);
+          Symbolic.LDR (Symbolic.X11, Symbolic.SP, 8);
+          Symbolic.UDIV (Symbolic.X12, Symbolic.X11, Symbolic.X10);
+          Symbolic.MSUB (Symbolic.X11, Symbolic.X12, Symbolic.X10, Symbolic.X11);
+          Symbolic.MUL (Symbolic.X12, Symbolic.X12, Symbolic.X9);
+          Symbolic.MUL (Symbolic.X11, Symbolic.X11, Symbolic.X9);
+          Symbolic.UDIV (Symbolic.X11, Symbolic.X11, Symbolic.X10);
+          Symbolic.ADD_reg (Symbolic.X11, Symbolic.X12, Symbolic.X11);
+        ]
+      @ loadImmediate Symbolic.X10 1000000000L
+      @ [
+          Symbolic.UDIV (Symbolic.X12, Symbolic.X11, Symbolic.X10);
+          Symbolic.MSUB (Symbolic.X11, Symbolic.X12, Symbolic.X10, Symbolic.X11);
+          Symbolic.LDR (Symbolic.X9, Symbolic.SP, 0);
+          Symbolic.STR (Symbolic.X12, Symbolic.X9, 0);
+          Symbolic.STR (Symbolic.X11, Symbolic.X9, 8);
+          Symbolic.MOVZ (Symbolic.X0, 0, 0);
+          Symbolic.B_label doneLabel;
+          Symbolic.Label timebaseFailure;
+          (* Mach return codes are not errno values; expose a failed query as EIO. *)
+          Symbolic.MOVZ (Symbolic.X0, 5, 0);
+          Symbolic.Label failure;
+          Symbolic.NEG (Symbolic.X0, Symbolic.X0);
+          Symbolic.Label doneLabel;
+          Symbolic.ADD_imm (Symbolic.SP, Symbolic.SP, 32);
+          Symbolic.MOV_reg (destReg, Symbolic.X0);
+        ])
+
 let emitManagedStringFromStack (ctx : codeGenContext) (labelPrefix : string)
     (destReg : Symbolic.reg) (stackOffset : int)
     (releaseStack : Symbolic.instr list) =
@@ -1018,8 +1086,8 @@ let emitCliNative (ctx : codeGenContext) (dest : LIR.reg)
             operation = LIR.SocketUdp4 || operation = LIR.SocketUdp6
           in
           let socketType =
-            if isUdp then constants.Platform.datagramCloexec
-            else constants.Platform.streamCloexec
+            if isUdp then constants.Platform.datagramType
+            else constants.Platform.streamType
           in
           let protocol = if isUdp then 17 else 6 in
           let family =
@@ -1031,12 +1099,41 @@ let emitCliNative (ctx : codeGenContext) (dest : LIR.reg)
             match ARM64.targetOS ctx.target with
             | Platform.Linux -> []
             | Platform.MacOS ->
-                let doneLabel =
-                  Printf.sprintf "__socket_open_%s_%s_done" ctx.functionName
+                let prefix =
+                  Printf.sprintf "__socket_open_%s_%s" ctx.functionName
                     ctx.instructionSite
                 in
+                let openFailed = prefix ^ "_open_failed" in
+                let flagsFailed = prefix ^ "_flags_failed" in
+                let doneLabel = prefix ^ "_done" in
                 [
-                  Symbolic.B_cond_label (Symbolic.LO, doneLabel);
+                  Symbolic.B_cond_label (Symbolic.HS, openFailed);
+                  Symbolic.SUB_imm (Symbolic.SP, Symbolic.SP, 16);
+                  Symbolic.STR (Symbolic.X0, Symbolic.SP, 0);
+                  Symbolic.MOVZ (Symbolic.X1, 2, 0);
+                  Symbolic.MOVZ (Symbolic.X2, 1, 0);
+                  Symbolic.MOVZ
+                    ( syscalls.ARM64.syscallRegister,
+                      syscalls.ARM64.numbers.Platform.fcntl,
+                      0 );
+                  Symbolic.SVC syscalls.ARM64.svcImmediate;
+                  Symbolic.B_cond_label (Symbolic.HS, flagsFailed);
+                  Symbolic.LDR (Symbolic.X0, Symbolic.SP, 0);
+                  Symbolic.ADD_imm (Symbolic.SP, Symbolic.SP, 16);
+                  Symbolic.B_label doneLabel;
+                  Symbolic.Label flagsFailed;
+                  Symbolic.NEG (Symbolic.X0, Symbolic.X0);
+                  Symbolic.STR (Symbolic.X0, Symbolic.SP, 8);
+                  Symbolic.LDR (Symbolic.X0, Symbolic.SP, 0);
+                  Symbolic.MOVZ
+                    ( syscalls.ARM64.syscallRegister,
+                      syscalls.ARM64.numbers.Platform.close,
+                      0 );
+                  Symbolic.SVC syscalls.ARM64.svcImmediate;
+                  Symbolic.LDR (Symbolic.X0, Symbolic.SP, 8);
+                  Symbolic.ADD_imm (Symbolic.SP, Symbolic.SP, 16);
+                  Symbolic.B_label doneLabel;
+                  Symbolic.Label openFailed;
                   Symbolic.NEG (Symbolic.X0, Symbolic.X0);
                   Symbolic.Label doneLabel;
                 ]
@@ -1231,7 +1328,30 @@ let emitCliNative (ctx : codeGenContext) (dest : LIR.reg)
           | LIR.SocketPoll, [ pollfd; timeout ] ->
               let timeoutLoads =
                 if os = Platform.Linux then loadCliOperand Symbolic.X2 timeout
-                else Ok (loadImmediate Symbolic.X2 100L)
+                else
+                  loadCliOperand Symbolic.X2 timeout
+                  |> Result.map (fun loads ->
+                      loads
+                      @ [
+                          Symbolic.LDR (Symbolic.X9, Symbolic.X2, 0);
+                          Symbolic.LDR (Symbolic.X10, Symbolic.X2, 8);
+                        ]
+                      @ loadImmediate Symbolic.X11 1000L
+                      @ [
+                          Symbolic.MUL (Symbolic.X9, Symbolic.X9, Symbolic.X11);
+                        ]
+                      @ loadImmediate Symbolic.X11 999999L
+                      @ [
+                          Symbolic.ADD_reg
+                            (Symbolic.X10, Symbolic.X10, Symbolic.X11);
+                        ]
+                      @ loadImmediate Symbolic.X11 1000000L
+                      @ [
+                          Symbolic.UDIV
+                            (Symbolic.X10, Symbolic.X10, Symbolic.X11);
+                          Symbolic.ADD_reg
+                            (Symbolic.X2, Symbolic.X9, Symbolic.X10);
+                        ])
               in
               timeoutLoads
               |> bind (fun loads ->
@@ -1265,7 +1385,8 @@ let emitCliNative (ctx : codeGenContext) (dest : LIR.reg)
                 (loadImmediate Symbolic.X2 0L @ loadImmediate Symbolic.X3 8L)
                 syscall.ARM64.numbers.Platform.signalWait
           | LIR.MonotonicTime, [ time ] ->
-              if os = Platform.MacOS then Ok (loadImmediate destReg (-38L))
+              if os = Platform.MacOS then
+                emitMacOSMonotonicTime ctx destReg time
               else
                 emit [ time ] [ Symbolic.X1 ]
                   (loadImmediate Symbolic.X0 1L)
