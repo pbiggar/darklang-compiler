@@ -16,6 +16,10 @@ let cliTerminalSessionInfo () : (Bool * Bool * String) =
     let name = Stdlib.Option.withDefault (Stdlib.Cli.__getenv "TERM") "" in
     (input, output, name)
 
+let cliTerminalColorEnabled () : Bool =
+    let noColor = Stdlib.Option.withDefault (Stdlib.Cli.__getenv "NO_COLOR") "" in
+    noColor == "" && Builtin.__isTerminal 1L
+
 let __terminalSize (fd: Int64) : Stdlib.Option.Option<(Int * Int)> =
     // TIOCGWINSZ: two unsigned 16-bit dimensions, then two pixel dimensions.
     let request = if Stdlib.Cli.__Posix.__mac () then 1074295912L else 21523L in

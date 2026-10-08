@@ -21,6 +21,20 @@ let _ = Stdlib.Cli.Posix.fdWrite 2 (Stdlib.String.toBlob report) in
 0L
 ''', encoding="utf-8")
         subprocess.run([compiler, "-q", "--leak-check", str(source), "-o", str(binary)], check=True, timeout=120)
+        color_source = root / "color.dark"
+        color_binary = root / "color"
+        color_source.write_text('''let initial = Darklang.Cli.Terminal.colorEnabled () in
+let _ = Stdlib.Cli.Env.set "NO_COLOR" "1" in
+let blocked = Darklang.Cli.Terminal.colorEnabled () in
+let _ = Stdlib.Cli.Env.set "NO_COLOR" "" in
+let empty = Darklang.Cli.Terminal.colorEnabled () in
+let _ = Stdlib.Cli.Env.unset "NO_COLOR" in
+let unset = Darklang.Cli.Terminal.colorEnabled () in
+let report = $"{Stdlib.Bool.toString initial}|{Stdlib.Bool.toString blocked}|{Stdlib.Bool.toString empty}|{Stdlib.Bool.toString unset}" in
+let _ = Stdlib.Cli.Posix.fdWrite 2 (Stdlib.String.toBlob report) in
+0L
+''', encoding="utf-8")
+        subprocess.run([compiler, "-q", "--leak-check", str(color_source), "-o", str(color_binary)], check=True, timeout=120)
         master, slave = pty.openpty()
         try:
             original_attributes = termios.tcgetattr(slave)
@@ -36,6 +50,18 @@ let _ = Stdlib.Cli.Posix.fdWrite 2 (Stdlib.String.toBlob report) in
                         env=environment, timeout=15, check=False)
                     expected = f"{str(terminal_in).lower()}|{str(terminal_out).lower()}|{term or ''}".encode()
                     assert result.returncode == 0 and result.stderr == expected, (terminal_in, terminal_out, term, result)
+                for no_color in [None, "", "0", " ", "λ"]:
+                    environment = dict(os.environ, TERM="dumb")
+                    environment.pop("NO_COLOR", None)
+                    if no_color is not None:
+                        environment["NO_COLOR"] = no_color
+                    result = subprocess.run(
+                        [str(color_binary)], stdin=slave if terminal_in else subprocess.DEVNULL,
+                        stdout=slave if terminal_out else subprocess.PIPE, stderr=subprocess.PIPE,
+                        env=environment, timeout=15)
+                    initial = terminal_out and not no_color
+                    expected = f"{str(initial).lower()}|false|{str(terminal_out).lower()}|{str(terminal_out).lower()}".encode()
+                    assert result.returncode == 0 and result.stderr == expected, (terminal_in, terminal_out, no_color, result)
             assert termios.tcgetattr(slave) == original_attributes, "terminal settings changed"
             # A regular file, a pipe and closed descriptors must never count as terminals.
             environment = dict(os.environ, TERM="dumb")
@@ -43,12 +69,18 @@ let _ = Stdlib.Cli.Posix.fdWrite 2 (Stdlib.String.toBlob report) in
                 result = subprocess.run([str(binary)], stdin=regular, stdout=regular,
                                         stderr=subprocess.PIPE, env=environment, timeout=15)
                 assert result.returncode == 0 and result.stderr == b"false|false|dumb", result
+                result = subprocess.run([str(color_binary)], stdin=regular, stdout=regular,
+                                        stderr=subprocess.PIPE, env=environment, timeout=15)
+                assert result.returncode == 0 and result.stderr == b"false|false|false|false", result
             result = subprocess.run([str(binary)], input=b"", capture_output=True,
                                     env=environment, timeout=15)
             assert result.returncode == 0 and result.stderr == b"false|false|dumb", result
             def close_streams():
                 os.close(0)
                 os.close(1)
+            result = subprocess.run([str(color_binary)], preexec_fn=close_streams,
+                                    stderr=subprocess.PIPE, env=environment, timeout=15)
+            assert result.returncode == 0 and result.stderr == b"false|false|false|false", result
             result = subprocess.run([str(binary)], preexec_fn=close_streams,
                                     stderr=subprocess.PIPE, env=environment, timeout=15)
             assert result.returncode == 0 and result.stderr == b"false|false|dumb", result

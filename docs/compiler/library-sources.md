@@ -45,7 +45,7 @@ fragments use `__` even where the interpreter also has private helpers.
 | `StdLib/Env.dark` | `Darklang.Stdlib.Env`  | `packages/darklang/stdlib/env.dark` |
 | `StdLib/Builtin.dark` | `Builtin`  | Portable interpreter builtin bridges plus native adapter helpers (`backend/src/Builtins/Builtins.Pure/Libs/UInt64.fs` and `backend/src/Builtins/Builtins.Cli/Libs/{Directory,File,Environment}.fs`) |
 | `StdLib/Builtin/__Posix.dark` | `Builtin` | Interpreter POSIX builtin bridge (`backend/src/Builtins/Builtins.Cli/Libs/Posix.fs`) |
-| `StdLib/Builtin/__Terminal.dark` | `Builtin` | Native implementations of `cliTerminalSessionInfo` and `cliTerminalSize` (`backend/src/Builtins/Builtins.Cli/Libs/Terminal.fs`) |
+| `StdLib/Builtin/__Terminal.dark` | `Builtin` | Native terminal facts, size and color policy (`backend/src/Builtins/Builtins.Cli/Libs/Terminal.fs`) |
 | `StdLib/Tuple2.dark` | `Darklang.Stdlib.Tuple2`  | `packages/darklang/stdlib/tuple2.dark` |
 | `StdLib/Tuple3.dark` | `Darklang.Stdlib.Tuple3`  | `packages/darklang/stdlib/tuple3.dark` |
 | `StdLib/Result.dark` | `Darklang.Stdlib.Result`  | `packages/darklang/stdlib/result.dark` |
@@ -205,6 +205,7 @@ fragments use `__` even where the interpreter also has private helpers.
 | `StdLib/Cli/Tui/TerminalSession/Ansi.dark` | `Darklang.Stdlib.Cli.Tui.TerminalSession.Ansi`  | `packages/darklang/stdlib/cli/tui/terminalSession.dark` |
 | `StdLib/Cli/Tui/TerminalSupport.dark` | `Darklang.Stdlib.Cli.Tui.TerminalSupport` | `packages/darklang/stdlib/cli/tui/terminalSupport.dark` |
 | `packages/Darklang/Cli/Terminal/Size.dark` | `Darklang.Cli.Terminal` | Public getSize fragment of `packages/darklang/cli/utils/terminal.dark` |
+| `packages/Darklang/Cli/Terminal/Color.dark` | `Darklang.Cli.Terminal` | Public colorEnabled fragment of `packages/darklang/cli/utils/terminal.dark` |
 | `StdLib/Cli/Tui/Text/__Escape.dark` | `Darklang.Stdlib.Cli.Tui.Text`  | Private escape-scanning fragment of Cli.Tui.Text; package defined in `packages/darklang/stdlib/cli/tui/text.dark` |
 | `StdLib/Cli/Tui/Text/__Width.dark` | `Darklang.Stdlib.Cli.Tui.Text`  | Private width fragment of Cli.Tui.Text; package defined in `packages/darklang/stdlib/cli/tui/text.dark` |
 | `StdLib/Cli/Tui/Text/__Clip.dark` | `Darklang.Stdlib.Cli.Tui.Text`  | Private clipping fragment of Cli.Tui.Text; package defined in `packages/darklang/stdlib/cli/tui/text.dark` |
