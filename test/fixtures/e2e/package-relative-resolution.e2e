@@ -1,28 +1,23 @@
-// Package-relative stdlib names and Option/Result fallbacks retain local precedence.
+// Canonical stdlib module declarations support package-relative sibling names.
 
 module Darklang.Stdlib.Cli.PackageResolutionProbe =
-  FileSystem.FileError.toString FileSystem.FileError.NotFound = "File not found"
-  FileSystem.FileError.toString (FileSystem.FileError.Other "detail") = "detail"
-  let overwriteBashrc (content: String) : Result.Result<Unit, String> = FileSystem.overwriteFile "$HOME/.bashrc" (Stdlib.String.toBlob content) |> Result.mapError FileSystem.FileError.toString in 0L = 0L
+  let renderNotFound () : String = FileSystem.FileError.toString FileSystem.FileError.NotFound
+  let renderOther () : String = FileSystem.FileError.toString (FileSystem.FileError.Other "detail")
+  let overwriteBashrc (content: String) : Result.Result<Unit, String> =
+    FileSystem.overwriteFile "$HOME/.bashrc" (Stdlib.String.toBlob content)
+    |> Result.mapError FileSystem.FileError.toString
 
 module Darklang.Stdlib.PackageResolutionProbe =
-  Env.get "DARKLANG_PACKAGE_RESOLUTION_MISSING_4B365" = None
+  let environmentAbsent () : Stdlib.Option.Option<String> = Env.get "DARKLANG_PACKAGE_RESOLUTION_MISSING_4B365"
+
+Darklang.Stdlib.Cli.PackageResolutionProbe.renderNotFound () = "File not found"
+Darklang.Stdlib.Cli.PackageResolutionProbe.renderOther () = "detail"
+// Take the function as a value to check its body without modifying .bashrc.
+let overwrite = Darklang.Stdlib.Cli.PackageResolutionProbe.overwriteBashrc in 0L = 0L
+Darklang.Stdlib.PackageResolutionProbe.environmentAbsent () = None
 
 Darklang.Stdlib.Cli.FileSystem.FileError.toString Darklang.Stdlib.Cli.FileSystem.FileError.OsAccessDenied = "Permission denied"
 Stdlib.Cli.FileSystem.FileError.toString Stdlib.Cli.FileSystem.FileError.NotFound = "File not found"
 Darklang.Stdlib.Env.get "DARKLANG_PACKAGE_RESOLUTION_MISSING_4B365" = None
 Stdlib.Env.get "DARKLANG_PACKAGE_RESOLUTION_MISSING_4B365" = None
 
-module Acme.PackageResolutionProbe =
-  let identity (value: Option.Option<Int64>) : Option.Option<Int64> = value in identity (Some 3L) = Some 3L
-  let identity (value: Result.Result<Int64, String>) : Result.Result<Int64, String> = value in identity (Ok 4L) = Ok 4L
-  let identity (value: Option<Int64>) : Option<Int64> = value in identity (Some 5L) = Some 5L
-  let identity (value: Result<Int64, String>) : Result<Int64, String> = value in identity (Error "detail") = Error "detail"
-
-module Acme.LocalResolutionProbe =
-  module Option =
-    type Option<'a> = Present of 'a
-  module Result =
-    type Result<'a, 'b> = Success of 'a | Failure of 'b
-  let identity (value: Option.Option<Int64>) : Option.Option<Int64> = value in identity (Option.Option.Present 6L) = Option.Option.Present 6L
-  let identity (value: Result.Result<Int64, String>) : Result.Result<Int64, String> = value in identity (Result.Result.Failure "local") = Result.Result.Failure "local"

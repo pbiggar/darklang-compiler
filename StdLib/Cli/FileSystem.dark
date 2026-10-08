@@ -1,6 +1,6 @@
 // CliFileSystem.dark - upstream-compatible filesystem values and wrappers.
 
-module Stdlib.Cli.FileSystem
+module Darklang.Stdlib.Cli.FileSystem
 
 type FileError =
   | NotFound
