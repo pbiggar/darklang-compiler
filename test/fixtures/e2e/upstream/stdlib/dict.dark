@@ -18,7 +18,7 @@ val valDict = Dict { 1L: "a"; 2L: "b" }
 module ValDict =
   Stdlib.Dict.keys valDict = [ 1L, 2L ]
 
-  Stdlib.Dict.set valDict "notAnInt" "c" = error="Darklang.Stdlib.Dict.set's 2nd parameter `key` expects Int64, but got String (\"notAnInt\")"
+  Stdlib.Dict.set valDict "notAnInt" "c" = compileerror="Expected TInt64, got TString"
 
 
 module Empty =

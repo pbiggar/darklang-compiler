@@ -3,7 +3,6 @@
 [Source fixture](../../../../test/fixtures/e2e/upstream/stdlib/httpserver.dark) · [File list](../../current-audit.md)
 
 Executed 7 assertions: **4 passed, 3 failed**.
-Of 3 previously disabled assertions, **0 passed and 3 failed**.
 
 | Test | Observed failure |
 | --- | --- |

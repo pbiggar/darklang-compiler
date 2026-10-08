@@ -3,7 +3,6 @@
 [Source fixture](../../../../test/fixtures/e2e/upstream/scm/sync-seen-everything.dark) · [File list](../../current-audit.md)
 
 Executed 6 assertions: **0 passed, 6 failed**.
-Of 6 previously disabled assertions, **0 passed and 6 failed**.
 
 | Test | Observed failure |
 | --- | --- |

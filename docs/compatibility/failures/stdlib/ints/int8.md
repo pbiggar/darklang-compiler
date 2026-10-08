@@ -3,7 +3,6 @@
 [Source fixture](../../../../../test/fixtures/e2e/upstream/stdlib/ints/int8.dark) · [File list](../../../current-audit.md)
 
 Executed 236 assertions: **235 passed, 1 failed**.
-Of 1 previously disabled assertions, **0 passed and 1 failed**.
 
 | Test | Observed failure |
 | --- | --- |

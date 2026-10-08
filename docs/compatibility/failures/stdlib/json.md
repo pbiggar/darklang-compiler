@@ -3,7 +3,6 @@
 [Source fixture](../../../../test/fixtures/e2e/upstream/stdlib/json.dark) · [File list](../../current-audit.md)
 
 Executed 540 assertions: **0 passed, 540 failed**.
-Of 540 previously disabled assertions, **0 passed and 540 failed**.
 
 | Test | Observed failure |
 | --- | --- |

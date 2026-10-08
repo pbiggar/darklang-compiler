@@ -3,7 +3,6 @@
 [Source fixture](../../../../test/fixtures/e2e/upstream/stachu/parser.dark) · [File list](../../current-audit.md)
 
 Executed 56 assertions: **0 passed, 56 failed**.
-Of 56 previously disabled assertions, **0 passed and 56 failed**.
 
 | Test | Observed failure |
 | --- | --- |

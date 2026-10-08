@@ -3,7 +3,6 @@
 [Source fixture](../../../../../test/fixtures/e2e/upstream/language/basic/evariable.dark) · [File list](../../../current-audit.md)
 
 Executed 2 assertions: **1 passed, 1 failed**.
-Of 1 previously disabled assertions, **0 passed and 1 failed**.
 
 | Test | Observed failure |
 | --- | --- |

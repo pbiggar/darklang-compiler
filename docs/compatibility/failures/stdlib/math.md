@@ -3,7 +3,6 @@
 [Source fixture](../../../../test/fixtures/e2e/upstream/stdlib/math.dark) · [File list](../../current-audit.md)
 
 Executed 32 assertions: **30 passed, 2 failed**.
-Of 2 previously disabled assertions, **0 passed and 2 failed**.
 
 | Test | Observed failure |
 | --- | --- |

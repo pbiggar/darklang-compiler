@@ -3,7 +3,6 @@
 [Source fixture](../../../../../test/fixtures/e2e/upstream/stdlib/language-tools/pickLocation.dark) · [File list](../../../current-audit.md)
 
 Executed 30 assertions: **0 passed, 30 failed**.
-Of 30 previously disabled assertions, **0 passed and 30 failed**.
 
 | Test | Observed failure |
 | --- | --- |

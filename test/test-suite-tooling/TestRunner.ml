@@ -1207,7 +1207,6 @@ let runTestsWithProgressReporter completedTestReporter args =
             46;
             47;
           ] );
-        ("test/fixtures/e2e/upstream/stdlib/dict.dark", [ 21 ]);
         ( "test/fixtures/e2e/upstream/stdlib/float.dark",
           [
             47;
@@ -1305,7 +1304,6 @@ let runTestsWithProgressReporter completedTestReporter args =
         ("test/fixtures/e2e/upstream/stdlib/math.dark", [ 27; 30 ]);
         ( "test/fixtures/e2e/upstream/stdlib/option.dark",
           [ 44; 75; 119; 148; 170; 176; 204; 211; 218; 242; 255; 260 ] );
-        ("test/fixtures/e2e/upstream/stdlib/pretty.dark", [ 186 ]);
         ( "test/fixtures/e2e/upstream/stdlib/result.dark",
           [ 57; 79; 85; 110; 117; 139; 147; 178 ] );
       ]

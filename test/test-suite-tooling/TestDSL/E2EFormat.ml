@@ -898,6 +898,24 @@ let parseTestLineWithPreamble line lineNumber filePath preamble funcLineMap =
             expectedErrorMessage,
             skipReason ) ->
           let display = Option.value ~default:source comment in
+          let expectedValueExpr =
+            let raw = tail without (i + 1) in
+            (* List continuations retain element columns. A hanging expected
+               function head is parsed as its own expression by the fixture DSL. *)
+            if Text.contains raw "\n" && starts (trimStart raw) "[" then
+              let column =
+                match
+                  List.rev (String.split_on_char '\n' (slice without 0 (i + 1)))
+                with
+                | last :: _ -> length last
+                | [] ->
+                    Crash.crash "Splitting a source prefix must produce a line"
+              in
+              Option.map
+                (fun _ -> String.make column ' ' ^ raw)
+                expectedValueExpr
+            else expectedValueExpr
+          in
           Ok
             {
               name = "L" ^ string_of_int lineNumber ^ ": " ^ display;
@@ -985,14 +1003,15 @@ let parseMultilineTest fullText startLineNumber filePath preamble funcLineMap =
               ^ string_of_int startLineNumber
               ^ ": Multi-line expression missing opening '('")
         | Some first ->
-            let expr = trim (slice fullText (first + 1) (close - first - 1)) in
-            let after = trimStart (tail fullText (close + 1)) in
-            let expectation =
-              if starts after "=" then trim (tail after 1) else after
+            let inner = slice fullText (first + 1) (close - first - 1) in
+            (* Legacy let fixtures delimit a source program with parentheses.
+               Keep their opening column without turning declarations local.
+               Other expressions retain their grouping, including tuples. *)
+            let source =
+              if starts (trimStart inner) "let " then " " ^ inner
+              else slice fullText first (close - first + 1)
             in
-            parseTestLineWithPreamble
-              (expr ^ " = " ^ expectation)
-              startLineNumber filePath preamble funcLineMap)
+            direct () |> Result.map (fun test -> { test with source }))
     | _ -> direct ()
 
 let stripComment line =

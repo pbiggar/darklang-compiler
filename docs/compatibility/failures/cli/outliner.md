@@ -3,7 +3,6 @@
 [Source fixture](../../../../test/fixtures/e2e/upstream/cli/outliner.dark) · [File list](../../current-audit.md)
 
 Executed 70 assertions: **0 passed, 70 failed**.
-Of 70 previously disabled assertions, **0 passed and 70 failed**.
 
 | Test | Observed failure |
 | --- | --- |

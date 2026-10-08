@@ -3,8 +3,7 @@
 
    Compiles source code, executes it, and validates output/exit code.
    Internal identifiers are only allowed for stdlib-internal tests.
-   Build the source expression to execute for a test.
-   For `lhs = rhs` value tests, run a synthesized equality assertion.
+   Retain parsed actual and expected expressions inside a checked assertion.
    Older E2E lines place an entry after a function declaration's semicolon.
    The interpreter parser treats that semicolon as part of the function body.
    Preserve evaluation order for legacy parenthesized `;` sequences that the
@@ -37,8 +36,7 @@
    tests use the same explicit QEMU boundary as E2E tests when the target does
    not match the development host.
    Run E2E test using a prebuilt preamble context.
-   Run a prepared equality test singularly without reparsing its synthesized
-   source. This keeps batch-size comparisons from charging preparation twice.
+   Individual runs and batches compile the same comparison expression tree.
 *)
 [@@@warning "-4-42"]
 
@@ -73,8 +71,6 @@ let length s = Array.length (Text.scalars s)
 let slice s first count =
   Text.ofScalars (Array.sub (Text.scalars s) first count)
 
-let tail s first = slice s first (length s - first)
-
 let trimEnd s =
   let us = Text.scalars s in
   let rec last i =
@@ -102,6 +98,31 @@ let sourceOffset source (position : Tokenizer.pos) =
 let parseWritten source =
   Result.map Validation.ValidatedSourceFile.toWrittenTypes
     (WrittenParsing.parse Validation.Script source)
+
+(* A fixture may be one local let-expression rather than a source declaration.
+   Parse that grammar directly without adding layout-changing parentheses. *)
+let tryParseWrittenExpression source =
+  match Lexer.tokenize source with
+  | Ok (tokens, []) -> (
+      let state = ParserSupport.makeState 0 (Array.of_list tokens) in
+      let expression, next = Parser.parseExpr state 0 in
+      if
+        !(state.ParserSupport.diagnostics) <> []
+        || ParserSupport.tok state next <> Tokenizer.TEOF
+      then None
+      else
+        let program =
+          {
+            WT.range = WT.exprRange expression;
+            declarations = [];
+            exprsToEval = [ expression ];
+          }
+        in
+        match Validation.validate Validation.Script program with
+        | Ok validated ->
+            Some (Validation.ValidatedSourceFile.toWrittenTypes validated)
+        | Error _ -> None)
+  | _ -> None
 
 let normalizeInlineEntry source =
   let normalized = replace "\r\n" "\n" source in
@@ -179,53 +200,63 @@ let rewriteParenthesizedStatements source =
   in
   fst (group None 0)
 
-let trySynthesizeValueEqualitySource _allowInternal source rhsExpr =
-  let normalized = normalizeInlineEntry source in
-  let normalized =
-    match parseWritten normalized with
-    | Ok _ -> normalized
-    | Error _ -> normalizeInlineEntry (rewriteParenthesizedStatements source)
+(* Build comparisons from the original trees: adding source parentheses would
+   move only the first line and change indentation-sensitive applications. *)
+let sourceToExecute _allowInternal (test : e2eTest) =
+  let parsed =
+    match parseWritten test.source with
+    | Ok program when program.WT.exprsToEval <> [] -> Ok program
+    | Ok _ -> parseWritten (normalizeInlineEntry test.source)
+    | Error _ -> (
+        let normalized = normalizeInlineEntry test.source in
+        match parseWritten normalized with
+        | Ok program -> Ok program
+        | Error _ as original -> (
+            match tryParseWrittenExpression normalized with
+            | Some program -> Ok program
+            | None when test.expectedValueExpr = None -> original
+            | None ->
+                parseWritten
+                  (normalizeInlineEntry
+                     (rewriteParenthesizedStatements test.source))))
   in
-  match (parseWritten normalized, parseWritten rhsExpr) with
-  | Ok left, Ok right -> (
-      match (List.rev left.WT.exprsToEval, asSingleWrittenExpression right) with
-      | left :: _, Some right -> (
-          let range = WT.exprRange left in
-          let offset = sourceOffset normalized range.Tokenizer.start in
-          let prefix = slice normalized 0 offset in
-          let lhs = Text.trim (tail normalized offset)
-          and rhs = Text.trim rhsExpr in
-          let comparison =
-            if isFloatExpectedExpr right then
-              "Stdlib.Float.absoluteValue ((" ^ lhs ^ ") - (" ^ rhs
-              ^ ")) < 0.00000000001"
-            else "(" ^ lhs ^ ") == (" ^ rhs ^ ")"
-          in
-          let candidate = prefix ^ comparison in
-          match parseWritten candidate with
-          | Ok _ -> Some candidate
-          | Error _ -> None)
-      | _ -> None)
-  | _ -> None
-
-let sourceToExecute allowInternal (test : e2eTest) =
+  let* left = parsed in
   match test.expectedValueExpr with
-  | None -> Ok (normalizeInlineEntry test.source)
+  | None -> Ok left
   | Some rhs -> (
-      match trySynthesizeValueEqualitySource allowInternal test.source rhs with
-      | Some rewritten -> Ok rewritten
-      | None -> (
-          let fallback = "(" ^ test.source ^ ") == (" ^ rhs ^ ")" in
-          match parseWritten fallback with
-          | Ok _ -> Ok fallback
-          | Error _ ->
-              Error
-                ("Failed to synthesize expected-value source for test '"
-               ^ test.name ^ "' in " ^ test.sourceFile
-               ^ ".\n\
-                  Expected-value tests must parse as a program whose last \
-                  top-level is an expression,\n\
-                  and RHS must parse as a single expression.")))
+      let* right = parseWritten rhs in
+      match (List.rev left.WT.exprsToEval, asSingleWrittenExpression right) with
+      | actual :: earlier, Some expected ->
+          let range = WT.exprRange actual in
+          let infix op a b =
+            WT.EInfix (range, (range, WT.InfixFnCall op), a, b)
+          in
+          let comparison =
+            if isFloatExpectedExpr expected then
+              let name =
+                {
+                  WT.range;
+                  modules =
+                    [
+                      ({ WT.range; name = "Stdlib" }, range);
+                      ({ WT.range; name = "Float" }, range);
+                    ];
+                  fn = { WT.range; name = "absoluteValue" };
+                }
+              in
+              let difference = infix WT.ArithmeticMinus actual expected in
+              let absolute =
+                WT.EApply (range, WT.EFnName (range, name), [], [ difference ])
+              in
+              infix WT.ComparisonLessThan absolute
+                (WT.EFloat (range, false, "0", "00000000001"))
+            else infix WT.ComparisonEquals actual expected
+          in
+          Ok { left with WT.exprsToEval = List.rev earlier @ [ comparison ] }
+      | _ ->
+          Error
+            ("Expected-value test must have an entry expression and a single \
+              expected expression: " ^ test.name))
 
 type e2eRun =
   | CompileFailed of int * string * int64
@@ -233,7 +264,7 @@ type e2eRun =
 
 type e2eFailure = { run : e2eRun; message : string }
 type e2eTestResult = (e2eRun, e2eFailure) result
-type preparedE2EBatchTest = { test : e2eTest; equalitySource : string }
+type preparedE2EBatchTest = { test : e2eTest; equalityProgram : WT.sourceFile }
 
 type e2eBatchExecution = {
   aggregateRun : e2eRun;
@@ -242,23 +273,6 @@ type e2eBatchExecution = {
 
 let maxSupportedBatchSize = 8192
 let batchResultChunkSize = 32
-
-let canEmbedBatchEqualitySource _allowInternal source =
-  let body =
-    replace "\r\n" "\n" source |> String.split_on_char '\n'
-    |> List.map (fun line -> "    " ^ line)
-    |> String.concat "\n"
-  in
-  let probe =
-    "let e2eBatchEligibilityCheck (seed: Int64) : Bool =\n\
-    \  let e2eBatchEligibilityResult =\n" ^ body
-    ^ " in\n\
-      \  let e2eBatchEligibilityFence = fun value -> if seed == 0L then value \
-       else false in\n\
-      \  e2eBatchEligibilityFence (e2eBatchEligibilityResult)\n\n\
-       e2eBatchEligibilityCheck (0L)"
-  in
-  Result.is_ok (WrittenParsing.parse Validation.Script probe)
 
 let tryPrepareBatchTest (test : e2eTest) =
   let eligible =
@@ -275,14 +289,11 @@ let tryPrepareBatchTest (test : e2eTest) =
     let allowInternal = isInternalTestFile test.sourceFile in
     match sourceToExecute allowInternal test with
     | Error _ -> None
-    | Ok equalitySource -> (
-        match parseWritten equalitySource with
-        | Ok p
-          when p.WT.declarations = []
-               && List.length p.WT.exprsToEval = 1
-               && canEmbedBatchEqualitySource allowInternal equalitySource ->
-            Some { test; equalitySource }
-        | _ -> None)
+    | Ok equalityProgram
+      when equalityProgram.WT.declarations = []
+           && List.length equalityProgram.WT.exprsToEval = 1 ->
+        Some { test; equalityProgram }
+    | Ok _ -> None
 
 type preambleContextKey = string * string
 
@@ -496,9 +507,7 @@ let analyzePreambleWithReducedFunctionSet stdlib (spec : preambleBuildSpec)
         t.errorExpectation <> Some CompileError && Option.is_none t.skipReason)
       tests
   in
-  let testProgram t =
-    Result.bind (sourceToExecute spec.allowInternal t) parseWritten
-  in
+  let testProgram t = sourceToExecute spec.allowInternal t in
   let unparsable =
     List.exists (fun t -> Result.is_error (testProgram t)) runnable
   in
@@ -1000,8 +1009,12 @@ let tryExecuteBinary target arguments environment stdin binary =
 let executeBinaryForTarget target binary =
   tryExecuteBinary target [] [] Closed binary
 
-let compileAndRun arguments environment stdin request =
-  let report = CompilerLibrary.compile request in
+let compileAndRun ?writtenSources arguments environment stdin request =
+  let report =
+    match writtenSources with
+    | None -> CompilerLibrary.compile request
+    | Some sources -> CompilerLibrary.compileWritten request sources
+  in
   match report.CompilerOptions.result with
   | Error error -> CompileFailed (1, error, report.CompilerOptions.compileTime)
   | Ok binary -> (
@@ -1033,17 +1046,15 @@ let canBatchTogether left right =
      = isInternalTestFile right.test.sourceFile
   && buildCompilerOptions left.test = buildCompilerOptions right.test
 
-let indentBatchBody source =
-  replace "\r\n" "\n" source |> String.split_on_char '\n'
-  |> List.map (fun line -> "  " ^ line)
-  |> String.concat "\n"
-
 let batchBindingPrefix tests =
   let parts =
     List.concat_map
       (fun prepared ->
         [
-          prepared.test.sourceFile; prepared.test.name; prepared.equalitySource;
+          prepared.test.sourceFile;
+          prepared.test.name;
+          prepared.test.source;
+          Option.value ~default:"" prepared.test.expectedValueExpr;
         ])
       tests
   in
@@ -1081,16 +1092,17 @@ let batchBindingPrefix tests =
   in
   pick 0
 
+(* Only fixed harness scaffolding is generated as text. User comparison trees
+   are inserted by buildBatchProgram after this scaffolding is parsed. *)
 let buildBatchSource tests =
   let prefix = batchBindingPrefix tests in
   let checkFunctions =
     List.mapi
-      (fun i prepared ->
+      (fun i _prepared ->
         let index = string_of_int i in
         "let " ^ prefix ^ "Check" ^ index ^ " (seed: Int64) : Bool =\n  let "
-        ^ prefix ^ "CheckResult" ^ index ^ " =\n"
-        ^ indentBatchBody (indentBatchBody prepared.equalitySource)
-        ^ " in\n  let " ^ prefix ^ "Fence" ^ index
+        ^ prefix ^ "CheckResult" ^ index ^ " =\n" ^ "    false" ^ " in\n  let "
+        ^ prefix ^ "Fence" ^ index
         ^ " = fun value -> if seed == 0L then value else false in\n  " ^ prefix
         ^ "Fence" ^ index ^ " (" ^ prefix ^ "CheckResult" ^ index ^ ")")
       tests
@@ -1132,6 +1144,37 @@ let buildBatchSource tests =
         ^ ")"
   in
   checkFunctions ^ "\n\n" ^ resultBindings ^ "\n" ^ vector
+
+(* Parse the harness-only scaffolding, then insert each comparison tree into its
+   result binding. User expressions and literal contents are never reprinted. *)
+let buildBatchProgram tests =
+  let* scaffold = parseWritten (buildBatchSource tests) in
+  let comparisons =
+    List.map
+      (fun prepared ->
+        match prepared.equalityProgram.WT.exprsToEval with
+        | [ expression ] -> expression
+        | _ -> Crash.crash "Prepared assertion must have one expression")
+      tests
+  in
+  let rec replace declarations comparisons =
+    match (declarations, comparisons) with
+    | WT.DFunction fn :: rest, comparison :: remaining ->
+        let body =
+          match fn.WT.body with
+          | WT.ELet (range, pattern, _, body, keyword, equals) ->
+              WT.ELet (range, pattern, comparison, body, keyword, equals)
+          | _ -> Crash.crash "Batch scaffold must start with a result binding"
+        in
+        WT.DFunction { fn with WT.body } :: replace rest remaining
+    | rest, [] -> rest
+    | _ -> Crash.crash "Batch scaffold and assertion counts differ"
+  in
+  Ok
+    {
+      scaffold with
+      WT.declarations = replace scaffold.WT.declarations comparisons;
+    }
 
 let tryParseInteger64 source =
   let n = String.length source in
@@ -1300,7 +1343,12 @@ let runE2ETestBatchWithPreambleContext stdlib preambleCtx session tests
           session;
         }
       in
-      let aggregateRun = compileAndRun [] [] Closed request in
+      let aggregateRun =
+        match buildBatchProgram tests with
+        | Error error -> CompileFailed (1, error, 0L)
+        | Ok program ->
+            compileAndRun ~writtenSources:[ program ] [] [] Closed request
+      in
       let results =
         match aggregateRun with
         | Ran (0, stdout, _, _, _) -> (
@@ -1342,10 +1390,9 @@ let runE2ETestBatchWithPreambleContext stdlib preambleCtx session tests
       { aggregateRun; results }
 
 let tryBuildReducedPreambleForTest allowInternal preamble testSource =
-  match
-    (parsePreambleAsProgram allowInternal preamble, parseWritten testSource)
-  with
-  | Ok preambleProgram, Ok testProgram ->
+  match parsePreambleAsProgram allowInternal preamble with
+  | Ok preambleProgram ->
+      let testProgram = testSource in
       let defs = preambleFunctionDefs preambleProgram in
       let names =
         SS.of_list (List.map (fun (d : WT.fnDecl) -> d.WT.name.WT.name) defs)
@@ -1360,7 +1407,8 @@ let tryBuildReducedPreambleForTest allowInternal preamble testSource =
   | _ -> None
 
 let runE2ETestSourceWithPreambleContext stdlib preambleCtx session
-    (test : e2eTest) source passTimingRecorder =
+    (test : e2eTest) program passTimingRecorder =
+  let source = test.source in
   let allowInternal = isInternalTestFile test.sourceFile in
   let options = buildCompilerOptions test in
   let request =
@@ -1383,7 +1431,10 @@ let runE2ETestSourceWithPreambleContext stdlib preambleCtx session
       session;
     }
   in
-  let run = compileAndRun test.arguments test.environment test.stdin request in
+  let run =
+    compileAndRun ~writtenSources:[ program ] test.arguments test.environment
+      test.stdin request
+  in
   let primary = evaluateExpectations test run in
   let fallback =
     match primary with
@@ -1398,7 +1449,7 @@ let runE2ETestSourceWithPreambleContext stdlib preambleCtx session
   else
     let fallbackPreamble =
       Option.value ~default:test.preamble
-        (tryBuildReducedPreambleForTest allowInternal test.preamble source)
+        (tryBuildReducedPreambleForTest allowInternal test.preamble program)
     in
     let request =
       {
@@ -1428,7 +1479,11 @@ let runE2ETestSourceWithPreambleContext stdlib preambleCtx session
       }
     in
     let run =
-      compileAndRun test.arguments test.environment test.stdin request
+      match parsePreambleAsProgram allowInternal fallbackPreamble with
+      | Error error -> CompileFailed (1, error, 0L)
+      | Ok preamble ->
+          compileAndRun ~writtenSources:[ preamble; program ] test.arguments
+            test.environment test.stdin request
     in
     match evaluateExpectations test run with
     | Ok _ as success -> success
@@ -1440,7 +1495,7 @@ let runE2ETestWithPreambleContext stdlib preambleCtx session (test : e2eTest)
   match sourceToExecute allowInternal test with
   | Error message ->
       let run = CompileFailed (1, message, 0L) in
-      failRun run message
+      evaluateExpectations test run
   | Ok source ->
       runE2ETestSourceWithPreambleContext stdlib preambleCtx session test source
         passTimingRecorder
@@ -1448,4 +1503,4 @@ let runE2ETestWithPreambleContext stdlib preambleCtx session (test : e2eTest)
 let runPreparedE2ETestWithPreambleContext stdlib preambleCtx session prepared
     passTimingRecorder =
   runE2ETestSourceWithPreambleContext stdlib preambleCtx session prepared.test
-    prepared.equalitySource passTimingRecorder
+    prepared.equalityProgram passTimingRecorder

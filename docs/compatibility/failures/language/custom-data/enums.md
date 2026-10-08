@@ -3,7 +3,6 @@
 [Source fixture](../../../../../test/fixtures/e2e/upstream/language/custom-data/enums.dark) · [File list](../../../current-audit.md)
 
 Executed 38 assertions: **22 passed, 16 failed**.
-Of 18 previously disabled assertions, **2 passed and 16 failed**.
 
 | Test | Observed failure |
 | --- | --- |
@@ -23,7 +22,3 @@ Of 18 previously disabled assertions, **2 passed and 16 failed**.
 | [L69](../../../../../test/fixtures/e2e/upstream/language/custom-data/enums.dark#L69) — EnumOfMixedCases.Z 1L | Expected error message 'Expected 2 fields in MixedCases.EnumOfMixedCases.'Z', but got 1' not found in stderr. Actual stderr: <entry>: Constructor 'EnumOfMixedCases.Z' expects 2 fields |
 | [L101](../../../../../test/fixtures/e2e/upstream/language/custom-data/enums.dark#L101) — match Tuples.NotTuple("printer broke", 7L) with \| NotTuple(reason, 7L) -> reason | Non-exhaustive match expression |
 | [L104](../../../../../test/fixtures/e2e/upstream/language/custom-data/enums.dark#L104) — (Tuples.NotTuple(("printer broke", 7L))) | Expected TInt, got TSum ("MyEnum", []) |
-
-Previously disabled tests that passed: L45, L74.
-
-Gate entries without an assertion at that line: L109.

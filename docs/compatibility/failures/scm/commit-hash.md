@@ -3,7 +3,6 @@
 [Source fixture](../../../../test/fixtures/e2e/upstream/scm/commit-hash.dark) · [File list](../../current-audit.md)
 
 Executed 9 assertions: **0 passed, 9 failed**.
-Of 9 previously disabled assertions, **0 passed and 9 failed**.
 
 | Test | Observed failure |
 | --- | --- |

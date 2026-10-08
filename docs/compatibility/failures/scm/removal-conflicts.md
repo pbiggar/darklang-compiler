@@ -3,7 +3,6 @@
 [Source fixture](../../../../test/fixtures/e2e/upstream/scm/removal-conflicts.dark) · [File list](../../current-audit.md)
 
 Executed 5 assertions: **0 passed, 5 failed**.
-Of 5 previously disabled assertions, **0 passed and 5 failed**.
 
 | Test | Observed failure |
 | --- | --- |

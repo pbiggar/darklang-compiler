@@ -55,7 +55,7 @@ let registries (user : R.userOnlyResult) =
    user unit that declares a function the stdlib carries under a
    non-Stdlib name (Darklang.LanguageTools.* is in both).
 *)
-let compileUserWithPlan (plan : P.userCompilePlan) =
+let compileUserWithPlan ?writtenSources (plan : P.userCompilePlan) =
   let start = Int64.to_float (Mtime_clock.elapsed_ns ()) /. 1e6 in
   let elapsed () =
     (Int64.to_float (Mtime_clock.elapsed_ns ()) /. 1e6) -. start
@@ -66,7 +66,8 @@ let compileUserWithPlan (plan : P.userCompilePlan) =
       (* Pass 1: Parse user code. *)
       log plan.P.verbosity 1 plan.P.labels.P.parse;
       let parseResult =
-        P.parseWrittenSourceProgram plan.P.allowInternal true plan.P.sources
+        P.parseWrittenSourceProgram ?writtenSources plan.P.allowInternal true
+          plan.P.sources
         |> fun original ->
         Result.bind original (fun parsed ->
             match plan.P.packageManager with
@@ -91,8 +92,14 @@ let compileUserWithPlan (plan : P.userCompilePlan) =
                     (packages @ NonEmptyList.toList plan.P.sources)
                 with
                 | Some sources ->
-                    P.parseWrittenSourceProgram plan.P.allowInternal true
-                      sources
+                    let writtenSources =
+                      Option.map
+                        (fun originals ->
+                          List.map (fun _ -> None) packages @ originals)
+                        writtenSources
+                    in
+                    P.parseWrittenSourceProgram ?writtenSources
+                      plan.P.allowInternal true sources
                 | None ->
                     Error "Package resolution produced an empty source program"))
       in

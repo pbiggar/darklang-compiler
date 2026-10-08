@@ -3,7 +3,6 @@
 [Source fixture](../../../../../test/fixtures/e2e/upstream/stdlib/language-tools/semanticTokenization.dark) · [File list](../../../current-audit.md)
 
 Executed 102 assertions: **0 passed, 102 failed**.
-Of 102 previously disabled assertions, **0 passed and 102 failed**.
 
 | Test | Observed failure |
 | --- | --- |

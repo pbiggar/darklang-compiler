@@ -3,7 +3,6 @@
 [Source fixture](../../../../test/fixtures/e2e/upstream/stdlib/float.dark) · [File list](../../current-audit.md)
 
 Executed 167 assertions: **145 passed, 22 failed**.
-Of 34 previously disabled assertions, **12 passed and 22 failed**.
 
 | Test | Observed failure |
 | --- | --- |
@@ -29,5 +28,3 @@ Of 34 previously disabled assertions, **12 passed and 22 failed**.
 | [L176](../../../../test/fixtures/e2e/upstream/stdlib/float.dark#L176) — Stdlib.Float.parse "-1.8E+308" | Unknown function or value 'Builtin.testNegativeInfinity' |
 | [L244](../../../../test/fixtures/e2e/upstream/stdlib/float.dark#L244) — Stdlib.Float.toInt Builtin.testNegativeInfinity | Expected error message 'Encountered out-of-range value for type of Int' not found in stderr. Actual stderr: <entry>: Unknown function or value 'Builtin.testNegativeInfinity' |
 | [L255](../../../../test/fixtures/e2e/upstream/stdlib/float.dark#L255) — Stdlib.Float.toBits -0.0 | Unknown function or value 'Builtin.testNegativeInfinity' |
-
-Previously disabled tests that passed: L45, L51, L71, L79, L87, L106, L113, L124, L133, L179, L242, L253.

@@ -3,7 +3,6 @@
 [Source fixture](../../../../test/fixtures/e2e/upstream/stdlib/option.dark) · [File list](../../current-audit.md)
 
 Executed 73 assertions: **61 passed, 12 failed**.
-Of 16 previously disabled assertions, **4 passed and 12 failed**.
 
 | Test | Observed failure |
 | --- | --- |
@@ -19,5 +18,3 @@ Of 16 previously disabled assertions, **4 passed and 12 failed**.
 | [L242](../../../../test/fixtures/e2e/upstream/stdlib/option.dark#L242) — Stdlib.Option.map5 Stdlib.Option.Option.None Stdlib.Option.Option.None Stdlib.Option.Option.None Stdlib.Opt... | Operator is unavailable for this type |
 | [L255](../../../../test/fixtures/e2e/upstream/stdlib/option.dark#L255) — Stdlib.Option.mapWithDefault (Stdlib.Option.Option.Some 5L) Stdlib.Option.Option.None (fun x -> x + 1L) | Expected TSum ("Darklang.Stdlib.Option.Option", [TVar "t"]), got TInt64 |
 | [L260](../../../../test/fixtures/e2e/upstream/stdlib/option.dark#L260) — Stdlib.Option.mapWithDefault Stdlib.Option.Option.None Stdlib.Option.Option.None (fun x -> x + 1L) | Expected TSum ("Darklang.Stdlib.Option.Option", [TVar "t"]), got TInt64 |
-
-Previously disabled tests that passed: L138, L158, L190, L234.

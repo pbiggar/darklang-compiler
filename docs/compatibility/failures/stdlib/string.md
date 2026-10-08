@@ -3,7 +3,6 @@
 [Source fixture](../../../../test/fixtures/e2e/upstream/stdlib/string.dark) · [File list](../../current-audit.md)
 
 Executed 640 assertions: **0 passed, 640 failed**.
-Of 640 previously disabled assertions, **0 passed and 640 failed**.
 
 | Test | Observed failure |
 | --- | --- |

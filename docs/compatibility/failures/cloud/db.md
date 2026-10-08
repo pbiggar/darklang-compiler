@@ -3,7 +3,6 @@
 [Source fixture](../../../../test/fixtures/e2e/upstream/cloud/db.dark) · [File list](../../current-audit.md)
 
 Executed 151 assertions: **0 passed, 151 failed**.
-Of 151 previously disabled assertions, **0 passed and 151 failed**.
 
 | Test | Observed failure |
 | --- | --- |
