@@ -985,16 +985,17 @@ let parseMultilineTest fullText startLineNumber filePath preamble funcLineMap =
               ^ string_of_int startLineNumber
               ^ ": Multi-line expression missing opening '('")
         | Some first ->
-            (* Keep the original opening column and grouping: stripping these
-               parentheses changes indentation-sensitive applications. *)
-            let expr = trim (slice fullText first (close - first + 1)) in
+            (* These parentheses delimit a fixture program, including top-level
+               declarations. Keep their width without introducing a local scope. *)
+            let expr = " " ^ slice fullText (first + 1) (close - first - 1) in
             let after = trimStart (tail fullText (close + 1)) in
             let expectation =
               if starts after "=" then trim (tail after 1) else after
             in
             parseTestLineWithPreamble
               (expr ^ " = " ^ expectation)
-              startLineNumber filePath preamble funcLineMap)
+              startLineNumber filePath preamble funcLineMap
+            |> Result.map (fun test -> { test with source = expr }))
     | _ -> direct ()
 
 let stripComment line =

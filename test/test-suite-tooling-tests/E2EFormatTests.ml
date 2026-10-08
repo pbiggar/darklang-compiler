@@ -117,7 +117,7 @@ let testParsesIndentedMultilineDarkTestsInsideModule () =
     "Expected indented .dark multiline test to parse" (fun test ->
       let* () =
         require
-          (test.source = "(match 6L with\n | 6L -> \"pass\"\n | _ -> \"fail\")")
+          (test.source = " match 6L with\n | 6L -> \"pass\"\n | _ -> \"fail\"")
           ("Unexpected parsed source: " ^ test.source)
       in
       let* () = value "\"pass\"" test in
@@ -149,7 +149,7 @@ let testParsesMultilineWithInnerLetBinding () =
     "Expected multiline let-binding test to parse" (fun test ->
       let* () =
         require
-          (Text.startsWith test.source "(let x = 4L")
+          (Text.startsWith test.source " let x = 4L")
           ("Unexpected parsed source: " ^ test.source)
       in
       let* () = value "\"pass\"" test in
@@ -165,7 +165,7 @@ let testParsesIndentedMultilineLetWithoutModuleIndentLeak () =
       let* () =
         require
           (test.source
-         = "(let segments =\n  [ \"a\"; \"b\" ]\nString.join \"\" segments)")
+         = " let segments =\n  [ \"a\"; \"b\" ]\nString.join \"\" segments")
           ("Unexpected parsed source: " ^ test.source)
       in
       let* () = value "\"ab\"" test in

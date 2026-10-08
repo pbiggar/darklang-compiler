@@ -99,6 +99,31 @@ let parseWritten source =
   Result.map Validation.ValidatedSourceFile.toWrittenTypes
     (WrittenParsing.parse Validation.Script source)
 
+(* A fixture may be one local let-expression rather than a source declaration.
+   Parse that grammar directly without adding layout-changing parentheses. *)
+let tryParseWrittenExpression source =
+  match Lexer.tokenize source with
+  | Ok (tokens, []) -> (
+      let state = ParserSupport.makeState 0 (Array.of_list tokens) in
+      let expression, next = Parser.parseExpr state 0 in
+      if
+        !(state.ParserSupport.diagnostics) <> []
+        || ParserSupport.tok state next <> Tokenizer.TEOF
+      then None
+      else
+        let program =
+          {
+            WT.range = WT.exprRange expression;
+            declarations = [];
+            exprsToEval = [ expression ];
+          }
+        in
+        match Validation.validate Validation.Script program with
+        | Ok validated ->
+            Some (Validation.ValidatedSourceFile.toWrittenTypes validated)
+        | Error _ -> None)
+  | _ -> None
+
 let normalizeInlineEntry source =
   let normalized = replace "\r\n" "\n" source in
   let hasEntry =
@@ -182,9 +207,14 @@ let sourceToExecute _allowInternal (test : e2eTest) =
     match parseWritten test.source with
     | Ok program when program.WT.exprsToEval <> [] -> Ok program
     | Ok _ -> parseWritten (normalizeInlineEntry test.source)
-    | Error _ ->
-        parseWritten
-          (normalizeInlineEntry (rewriteParenthesizedStatements test.source))
+    | Error _ as original -> (
+        match tryParseWrittenExpression test.source with
+        | Some program -> Ok program
+        | None when test.expectedValueExpr = None -> original
+        | None ->
+            parseWritten
+              (normalizeInlineEntry
+                 (rewriteParenthesizedStatements test.source)))
   in
   let* left = parsed in
   match test.expectedValueExpr with
@@ -1461,7 +1491,7 @@ let runE2ETestWithPreambleContext stdlib preambleCtx session (test : e2eTest)
   match sourceToExecute allowInternal test with
   | Error message ->
       let run = CompileFailed (1, message, 0L) in
-      failRun run message
+      evaluateExpectations test run
   | Ok source ->
       runE2ETestSourceWithPreambleContext stdlib preambleCtx session test source
         passTimingRecorder
