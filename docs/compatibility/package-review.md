@@ -77,6 +77,40 @@ function type. This is a compiler bug in generic function values, independent
 of the local-recursion fix or SQLite support. No fix or package source change
 for this item has been approved; bring the item to the user for a decision.
 
+## Generic function-value coverage for the parseRule fix
+
+Checked 22 focused probes against compiler main `df5fbb9079df2415c31ec9704faa792b66b8cbe5`.
+Seventeen generic function-value probes failed compilation:
+
+| Context | Observed result |
+|---|---|
+| User, qualified user, and library generic callbacks | Missing closure target |
+| Callback passed to a user higher-order function | Missing closure target |
+| Local alias; alias captured by a local function | Undefined function identity or lambda return inference failure |
+| Module value; returned function value | Missing closure target |
+| Lists, tuples, and record function fields | Undefined function identity |
+| Option and dictionary payloads | Missing closure target |
+| Conditional function value | Undefined function identity |
+| Same generic callback at Int64 and String | Missing closure target |
+| Generic callback inside another generic function body | Missing closure target |
+| Callback after an earlier direct call already instantiated the generic | Missing closure target |
+
+Direct generic calls, direct pipe calls, and lambda wrappers compiled and ran
+with exit 0 and no leak diagnostics. Two additional probes were rejected for
+separate reasons: local value annotations are unsupported; a bare
+`identity<Int64>` is treated as a call with missing arguments rather than a
+specialized function value. These two are not counted as confirmed instances
+of the missing-specialization failure.
+
+The checked function-reference node carries only a function identity.
+Specialization discovery, specialization replacement and type substitution all
+leave it untouched. The fix must preserve type arguments on function values,
+substitute them inside generic bodies, and materialize the concrete targets.
+Aliases also need inference from subsequent uses; expected callback types alone
+do not cover the tested scope. Expression-container traversal for ordinary
+generic calls is already present. No compiler or package changes were made
+during this coverage investigation.
+
 ## Completion rule
 
 At the end of the package review, enumerate every skipped package and unresolved
