@@ -22,7 +22,7 @@ let __connection (config: Stdlib.HttpServer.Config.Config) (handler: Stdlib.Http
         else Stdlib.HttpServer.__handleHttp1Transport config handler signals transport limit Stdlib.Blob.empty in
       let stopped =
         match served, Stdlib.Network.monotonicMillis () with
-        | Ok false, Ok finished -> Stdlib.HttpServer.__drainHttp2 connection signals (finished + 250L) 131072L
+        | Ok false, Ok finished -> Stdlib.HttpServer.__drainHttp2 connection signals (finished + 10000L) 131072L
         | _, _ -> false in
       let _ = Stdlib.HttpTransport.close transport in
       match served with | Ok wasStopped -> Ok (wasStopped || stopped) | Error message -> Error message

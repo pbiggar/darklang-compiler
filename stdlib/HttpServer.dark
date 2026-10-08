@@ -296,8 +296,8 @@ let __handleHttp1 (config: Stdlib.HttpServer.Config.Config) (handler: Stdlib.Htt
 
 // A response can finish before the request upload. Bounded draining avoids
 // closing TCP with queued unread DATA, which can reset the delivered response.
-// Accepted sockets have a short receive timeout; do not wait indefinitely for
-// a peer that retains the connection after receiving GOAWAY.
+// Short accepted-socket timeouts are polling intervals, not delivery deadlines.
+// Keep accepting late flow-control credits until EOF or the bounded deadline.
 let __drainHttp2 (connection: Stdlib.Network.TcpConnection) (signals: Stdlib.Network.ShutdownSignals)
     (deadline: Int64) (remaining: Int64) : Bool =
     if remaining <= 0L then false
@@ -309,7 +309,7 @@ let __drainHttp2 (connection: Stdlib.Network.TcpConnection) (signals: Stdlib.Net
             else
                 match Stdlib.Network.readTcp connection 4096L with
                 | Error code ->
-                    if code == 4L then Stdlib.HttpServer.__drainHttp2 connection signals deadline remaining else false
+                    if code == 4L || code == 11L || code == 35L then Stdlib.HttpServer.__drainHttp2 connection signals deadline remaining else false
                 | Ok bytes ->
                     let size = Stdlib.Blob.__byteLength bytes in
                     if size == 0L then false
@@ -326,7 +326,7 @@ let __dispatchPrelude (config: Stdlib.HttpServer.Config.Config) (handler: Stdlib
         let served = Stdlib.Http2.serve transport pending config (fun request -> Stdlib.HttpServer.__http2Handler config handler request) in
         let stopped =
             match served, Stdlib.Network.monotonicMillis () with
-            | Ok (), Ok now -> Stdlib.HttpServer.__drainHttp2 connection signals (now + 250L) 131072L
+            | Ok (), Ok now -> Stdlib.HttpServer.__drainHttp2 connection signals (now + 10000L) 131072L
             | _, _ -> false in
         let _ = Stdlib.HttpTransport.close transport in
         match served with

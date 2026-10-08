@@ -1,0 +1,19 @@
+// http2_server_drain.e2e - Retry short socket timeouts until the bounded HTTP/2 drain ends.
+let drainAfter (code: Int64) : Bool =
+  match Stdlib.Network.shutdownSignals (), Stdlib.Network.monotonicMillis () with
+  | Ok signals, Ok now ->
+    let incoming = Stdlib.Stream.fromList [code, 0L] in
+    let owner = Stdlib.Stream.__new (fun _unit -> Some ()) (fun _unit -> ()) in
+    let connection = Stdlib.Network.TcpConnection { lifecycle = owner,
+      read = fun _length -> match Stdlib.Stream.next incoming with | Some 0L -> Ok Stdlib.Blob.empty | Some error -> Error error | None -> Error 9L, write = fun _bytes -> Ok () } in
+    let stopped = Stdlib.HttpServer.__drainHttp2 connection signals (now + 1000L) 131072L in
+    let consumed = Stdlib.Option.isNone (Stdlib.Stream.next incoming) in
+    Stdlib.Network.closeTcp connection
+    Stdlib.Stream.close incoming
+    Stdlib.Network.closeShutdownSignals signals
+    Stdlib.Bool.not stopped && consumed
+  | _, _ -> false
+drainAfter 4L = true
+drainAfter 11L = true
+drainAfter 35L = true
+drainAfter 22L = false

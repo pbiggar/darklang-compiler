@@ -1,0 +1,31 @@
+// tls_server_coalesced_records.e2e - Preserve application records coalesced with client Finished.
+let coalescedRecords (split: Bool) : Bool =
+  let secret = Stdlib.String.toBlob "01234567890123456789012345678901" in
+  match Stdlib.Tls13.trafficKeys secret, Stdlib.Network.monotonicMillis (), Stdlib.Network.shutdownSignals () with
+  | Ok keys, Ok now, Ok signals ->
+    let finished = Stdlib.Blob.concat [Stdlib.Blob.__fromInt64List [20L,0L,0L,32L], secret] in
+    let data = Stdlib.String.toBlob (Stdlib.Http2Wire.preface ()) in
+    let result = Stdlib.Tls13.sealRecord keys 22L finished |> Stdlib.Result.andThen (fun handshake ->
+      Stdlib.Tls13.sealRecord keys 23L data |> Stdlib.Result.andThen (fun application ->
+        let chunks = if split then [handshake.bytes, application.bytes] else [Stdlib.Blob.concat [handshake.bytes, application.bytes]] in
+        let incoming = Stdlib.Stream.fromList chunks in
+        let owner = Stdlib.Stream.__new (fun _unit -> Some ()) (fun _unit -> ()) in
+        let connection = Stdlib.Network.TcpConnection { lifecycle = owner,
+          read = fun _length -> Ok (Stdlib.Stream.next incoming |> Stdlib.Option.withDefault Stdlib.Blob.empty),
+          write = fun _bytes -> Ok () } in
+        let secrets = Stdlib.Tls13ServerHandshake.Secrets { handshakeClient = secret, handshakeServer = secret, applicationClient = secret, applicationServer = secret } in
+        let flight = Stdlib.Tls13ServerHandshake.Flight { hello = Stdlib.Blob.empty, encrypted = Stdlib.Blob.empty, transcript = Stdlib.Blob.empty,
+          handshakeReceive = keys, handshakeSend = keys, clientFinished = secret, applicationReceive = keys, applicationSend = keys, protocol = "h2", secrets = secrets } in
+        let result = Stdlib.Tls13ServerTcp.__finished connection signals (now + 10000L) flight keys Stdlib.Blob.empty Stdlib.Blob.empty 0L |> Stdlib.Result.andThen (fun accepted ->
+          let transport = Stdlib.Tls13ServerTcp.transport connection signals None accepted in
+          let received = transport.read () in
+          Stdlib.HttpTransport.close transport
+          received |> Stdlib.Result.map (fun bytes -> Stdlib.Blob.toList bytes == Stdlib.Blob.toList data)) in
+        Stdlib.Network.closeTcp connection
+        Stdlib.Stream.close incoming
+        result)) in
+    Stdlib.Network.closeShutdownSignals signals
+    Stdlib.Result.withDefault result false
+  | _, _, _ -> false
+coalescedRecords false = true
+coalescedRecords true = true
