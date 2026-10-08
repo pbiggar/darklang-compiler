@@ -11,7 +11,7 @@ type Received = { state: Stdlib.Http3.State, events: List<Stdlib.Http3Message.Ev
 
 let __capacity (connection: Stdlib.QuicConnection.State) (deadline: Int64)
   : Stdlib.Result.Result<Stdlib.QuicConnection.State, String> =
-  if connection.flow.peer.streamsUni >= 3L && connection.flow.peer.streamsBidi >= 1L &&
+  if connection.flow.peer.streamsUni >= 3L && (connection.flow.role == Stdlib.QuicFlow.Role.Server || connection.flow.peer.streamsBidi >= 1L) &&
     connection.flow.peer.uni >= 12L && connection.flow.peer.data >= 14L then Ok connection
   else match Stdlib.Network.monotonicMillis () with
   | Error _ -> Error "HTTP/3 clock failed"
@@ -39,9 +39,27 @@ let initialize (ready: Stdlib.QuicClient.Ready) (headOnly: Bool) (timeout: Int64
             |> Stdlib.Result.map (fun connection -> Stdlib.Http3.State { connection = connection,
               uni = Stdlib.Http3Uni.create true, message = Stdlib.Http3Message.create (Response headOnly), deadline = deadline }))))))))
 
+let initializeServer (ready: Stdlib.QuicServer.Ready) (signals: Stdlib.Network.ShutdownSignals) (timeout: Int64) : Stdlib.Result.Result<Stdlib.Http3.State, String> =
+  if timeout < 1L || timeout > 60000L then Error "Invalid HTTP/3 exchange timeout"
+  else match Stdlib.Network.monotonicMillis () with
+  | Error _ -> Error "HTTP/3 clock failed"
+  | Ok now ->
+    let deadline = now + timeout in
+    Stdlib.QuicConnection.fromServer ready signals |> Stdlib.Result.andThen (fun connection ->
+      Stdlib.Http3.__capacity connection deadline |> Stdlib.Result.andThen (fun connection ->
+      Stdlib.QuicConnection.openStream connection 3L |> Stdlib.Result.andThen (fun connection ->
+      Stdlib.QuicConnection.openStream connection 7L |> Stdlib.Result.andThen (fun connection ->
+      Stdlib.QuicConnection.openStream connection 11L |> Stdlib.Result.andThen (fun connection ->
+        Stdlib.Http3Wire.serialize 4L (Stdlib.Http3Wire.settings ()) |> Stdlib.Result.andThen (fun settings ->
+          Stdlib.QuicConnection.write connection 3L (Stdlib.Blob.concat [Stdlib.Blob.__fromInt64List [0L], settings]) false
+            |> Stdlib.Result.andThen (fun connection -> Stdlib.QuicConnection.write connection 7L (Stdlib.Blob.__fromInt64List [2L]) false)
+            |> Stdlib.Result.andThen (fun connection -> Stdlib.QuicConnection.write connection 11L (Stdlib.Blob.__fromInt64List [3L]) false)
+            |> Stdlib.Result.map (fun connection -> Stdlib.Http3.State { connection = connection, uni = Stdlib.Http3Uni.create false,
+              message = Stdlib.Http3Message.create Request, deadline = deadline })))))))
+
 let __controls (state: Stdlib.Http3.State) : Stdlib.Result.Result<Stdlib.Http3.State, String> =
   Stdlib.List.fold state.connection.flow.channels (Ok state) (fun result channel ->
-    if channel.id % 4L != 3L then result
+    if channel.id % 4L != (if state.connection.flow.role == Stdlib.QuicFlow.Role.Client then 3L else 2L) then result
     else result |> Stdlib.Result.andThen (fun current ->
       Stdlib.QuicConnection.read current.connection channel.id |> Stdlib.Result.andThen (fun read ->
         Stdlib.Http3Uni.receive current.uni channel.id read.bytes read.finished (Stdlib.Option.isSome read.reset)
@@ -50,7 +68,9 @@ let __controls (state: Stdlib.Http3.State) : Stdlib.Result.Result<Stdlib.Http3.S
 // Drain before polling so response data and control credit already received cannot starve.
 let __drain (state: Stdlib.Http3.State) : Stdlib.Result.Result<Stdlib.Http3.Received, String> =
   Stdlib.Http3.__controls state |> Stdlib.Result.andThen (fun current ->
-    Stdlib.QuicConnection.read current.connection 0L |> Stdlib.Result.andThen (fun read ->
+    if Stdlib.Option.isNone (Stdlib.QuicFlow.channel current.connection.flow 0L) then
+      Stdlib.QuicConnection.flush current.connection |> Stdlib.Result.map (fun connection -> Stdlib.Http3.Received { state = { current with connection = connection }, events = [], finished = false })
+    else Stdlib.QuicConnection.read current.connection 0L |> Stdlib.Result.andThen (fun read ->
       if Stdlib.Option.isSome read.reset then Error "HTTP/3 response stream reset"
       else Stdlib.Http3Message.feed current.message read.bytes |> Stdlib.Result.andThen (fun received ->
         let next = { current with connection = read.state, message = received.state } in
@@ -69,10 +89,15 @@ let poll (state: Stdlib.Http3.State) : Stdlib.Result.Result<Stdlib.Http3.Receive
       Stdlib.Http3.__drain { state with connection = connection })
 
 let receive (state: Stdlib.Http3.State) : Stdlib.Result.Result<Stdlib.Http3.Received, String> =
-  Stdlib.Http3.__drain state |> Stdlib.Result.andThen (fun received ->
-    if received.finished || received.events != [] then Ok received
-    else Stdlib.Http3.poll received.state |> Stdlib.Result.andThen (fun polled ->
-      if polled.finished || polled.events != [] then Ok polled else Stdlib.Http3.receive polled.state))
+  Stdlib.QuicConnection.__shutdown state.connection |> Stdlib.Result.andThen (fun _unit ->
+  match Stdlib.Network.monotonicMillis () with
+  | Error _ -> Error "HTTP/3 clock failed"
+  | Ok now ->
+    if now >= state.deadline then Error "HTTP/3 exchange timed out"
+    else Stdlib.Http3.__drain state |> Stdlib.Result.andThen (fun received ->
+      if received.finished || received.events != [] then Ok received
+      else Stdlib.Http3.poll received.state |> Stdlib.Result.andThen (fun polled ->
+        if polled.finished || polled.events != [] then Ok polled else Stdlib.Http3.receive polled.state)))
 
 // The caller retains unsent bytes when credit is unavailable and drains the response.
 let sendCredit (state: Stdlib.Http3.State) : Int64 =
@@ -92,7 +117,7 @@ let sendCredit (state: Stdlib.Http3.State) : Int64 =
 
 let write (state: Stdlib.Http3.State) (bytes: Blob) (finished: Bool)
   : Stdlib.Result.Result<Stdlib.Http3.State, String> =
-  if state.uni.control.goAway == Some 0L then Error "HTTP/3 request rejected by GOAWAY"
+  if state.connection.flow.role == Stdlib.QuicFlow.Role.Client && state.uni.control.goAway == Some 0L then Error "HTTP/3 request rejected by GOAWAY"
   else Stdlib.QuicConnection.write state.connection 0L bytes finished
     |> Stdlib.Result.andThen (fun connection -> Stdlib.QuicConnection.flush connection)
     |> Stdlib.Result.map (fun connection -> { state with connection = connection })

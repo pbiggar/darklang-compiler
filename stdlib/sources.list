@@ -163,10 +163,12 @@ __QuicStreams.dark
 __QuicFlow.dark
 __QuicRecovery.dark
 __QuicSpace.dark
+__QuicHandshakePacket.dark
 __QuicParameters.dark
 __QuicTls.dark
 __QuicKeys.dark
 __QuicClient.dark
+__QuicServer.dark
 __QuicConnection.dark
 __Qpack.dark
 __Http3Wire.dark

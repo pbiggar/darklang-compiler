@@ -99,13 +99,20 @@ checks exercise 70 KiB flow control, fallback, rejection and stalled shutdown.
 The pure QUIC server TLS adapter also derives packet-protection keys, requires
 h3 and binds client transport parameters before verifying client Finished.
 An independent aioquic client agrees on all handshake/application traffic
-secrets and completes the certificate flight. QUIC server packet ownership
-and HTTP/3 dispatch, HelloRetryRequest and TLS KeyUpdate remain unfinished.
+secrets and completes the certificate flight. The server packet-space owner
+now validates returned Retry tokens before signing, bounds ClientHello and
+Finished CRYPTO, retransmits with fresh packet numbers, and releases a
+role-aware HTTP/3 application owner only after Finished. Independent UDP
+aioquic checks cover 70 KiB bidirectional flow, loss, duplicates, corrupted
+packets, zero server bidirectional-stream credit and leak-free disposal.
+The public UDP listener and shared HTTP routing, HelloRetryRequest and TLS
+KeyUpdate remain unfinished.
 The Retry foundation authenticates bounded address/CID-bound HMAC tokens with
 a 30-second lifetime and serializes QUIC v1 Retry packets. Independent Python
 and aioquic checks cover token tampering, expiry, IPv4/IPv6 binding and packet
-integrity. The UDP owner must still enforce Initial size, use these challenges
-before certificate flights, and suppress completed-connection token replay.
+integrity. The handshake owner enforces the first Initial datagram's minimum
+size and requires a validated challenge before certificate flights. The UDP
+listener must still suppress completed and aborted connection-token replay.
 
 ## 5. Compatibility and readiness
 

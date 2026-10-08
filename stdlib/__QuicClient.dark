@@ -132,34 +132,19 @@ let __packets (state: Stdlib.QuicClient.Flight) (bytes: Blob) (now: Int64)
       else Error "Peer does not support QUIC v1"
     | Ok (UnsupportedVersion _) -> Ok state
 
-let __send (socket: Stdlib.Datagram.Socket) (peer: Stdlib.Datagram.Endpoint) (identity: Stdlib.QuicClient.Identity)
-  (space: Stdlib.QuicSpace.State) (keys: Stdlib.QuicCrypto.Keys) (kind: Stdlib.QuicPacket.Kind) (now: Int64) (budget: (Int64 * Int64))
-  : Stdlib.Result.Result<Stdlib.QuicSpace.State, String> =
-  let padded = kind == Stdlib.QuicPacket.Kind.Initial in
-  let token = if padded then identity.token else Stdlib.Blob.empty in
-  let overhead = 29L + Stdlib.Blob.__byteLength identity.source + Stdlib.Blob.__byteLength identity.destination +
-    (if padded then 2L + Stdlib.Blob.__byteLength token else 0L) in
-  Stdlib.QuicSpace.prepareShared space now overhead padded budget |> Stdlib.Result.andThen (fun plan ->
-    match plan with
-    | None -> Ok space
-    | Some plan ->
-      Stdlib.QuicPacket.sealLong kind keys identity.destination identity.source token plan.payload (space.recovery.largestSent + 1L)
-        |> Stdlib.Result.andThen (fun packet ->
-          // Reserve before the OS send; on failure the connection is aborted,
-          // so neither retrying a nonce nor forgetting a sent packet is possible.
-          Stdlib.QuicSpace.sent space plan (Stdlib.Blob.__byteLength packet) now |> Stdlib.Result.andThen (fun next ->
-            match Stdlib.Datagram.send socket peer packet 1000L with | Error _ -> Error "QUIC datagram send failed" | Ok () -> Ok next)))
+let __route (identity: Stdlib.QuicClient.Identity) : Stdlib.QuicHandshakePacket.Routing =
+  Stdlib.QuicHandshakePacket.Routing { source = identity.source, destination = identity.destination, token = identity.token }
 
 let __flush (socket: Stdlib.Datagram.Socket) (peer: Stdlib.Datagram.Endpoint) (state: Stdlib.QuicClient.Flight) (now: Int64)
   : Stdlib.Result.Result<Stdlib.QuicClient.Flight, String> =
   // Initial and Handshake flights are deliberately bounded below the initial
   // congestion window. Application data gets a single shared recovery owner.
-  let initial = if state.handshake.recovery.largestSent >= 0L then Ok state.initial else Stdlib.QuicClient.__send socket peer state.identity state.initial state.identity.keys.client Stdlib.QuicPacket.Kind.Initial now (state.handshake.recovery.congestion.window, state.handshake.recovery.congestion.inFlight) in
+  let initial = if state.handshake.recovery.largestSent >= 0L then Ok state.initial else Stdlib.QuicHandshakePacket.send socket peer (Stdlib.QuicClient.__route state.identity) state.initial state.identity.keys.client Stdlib.QuicPacket.Kind.Initial now (state.handshake.recovery.congestion.window, state.handshake.recovery.congestion.inFlight) in
   initial
     |> Stdlib.Result.andThen (fun initial ->
       match state.tls with
       | None -> Ok (Stdlib.QuicClient.__flight state state.identity initial state.handshake state.tls state.pending)
-      | Some tls -> Stdlib.QuicClient.__send socket peer state.identity state.handshake tls.send Stdlib.QuicPacket.Kind.Handshake now (initial.recovery.congestion.window, initial.recovery.congestion.inFlight)
+      | Some tls -> Stdlib.QuicHandshakePacket.send socket peer (Stdlib.QuicClient.__route state.identity) state.handshake tls.send Stdlib.QuicPacket.Kind.Handshake now (initial.recovery.congestion.window, initial.recovery.congestion.inFlight)
           |> Stdlib.Result.andThen (fun handshake ->
             // Sending the first Handshake packet discards Initial receive,
             // recovery and CRYPTO state. Subsequent Initial packets are ignored.
@@ -223,7 +208,7 @@ let __exchange (socket: Stdlib.Datagram.Socket) (peer: Stdlib.Datagram.Endpoint)
                   |> Stdlib.Result.andThen (fun handshake ->
                     match Stdlib.Network.monotonicMillis () with
                     | Error _ -> Error "QUIC monotonic clock failed"
-                    | Ok at -> Stdlib.QuicClient.__send socket peer received.identity handshake tls.send Stdlib.QuicPacket.Kind.Handshake at (received.initial.recovery.congestion.window, received.initial.recovery.congestion.inFlight)
+                    | Ok at -> Stdlib.QuicHandshakePacket.send socket peer (Stdlib.QuicClient.__route received.identity) handshake tls.send Stdlib.QuicPacket.Kind.Handshake at (received.initial.recovery.congestion.window, received.initial.recovery.congestion.inFlight)
                         |> Stdlib.Result.map (fun handshake -> Stdlib.QuicClient.Ready { socket = socket, peer = peer,
                           identity = received.identity, handshake = handshake, tls = tls, authenticated = authenticated, pending = received.pending }))))))
     | _, _ -> Error "QUIC handshake initialization failed"

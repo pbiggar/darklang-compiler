@@ -1,0 +1,23 @@
+// __QuicHandshakePacket.dark - Shared client/server packet-space transmission with reserved packet numbers.
+module Darklang.Stdlib.QuicHandshakePacket
+
+type Routing = { source: Blob, destination: Blob, token: Blob }
+
+let send (socket: Stdlib.Datagram.Socket) (peer: Stdlib.Datagram.Endpoint) (identity: Stdlib.QuicHandshakePacket.Routing)
+  (space: Stdlib.QuicSpace.State) (keys: Stdlib.QuicCrypto.Keys) (kind: Stdlib.QuicPacket.Kind) (now: Int64) (budget: (Int64 * Int64))
+  : Stdlib.Result.Result<Stdlib.QuicSpace.State, String> =
+  let padded = kind == Stdlib.QuicPacket.Kind.Initial in
+  let token = if padded then identity.token else Stdlib.Blob.empty in
+  let overhead = 29L + Stdlib.Blob.__byteLength identity.source + Stdlib.Blob.__byteLength identity.destination +
+    (if padded then 2L + Stdlib.Blob.__byteLength token else 0L) in
+  Stdlib.QuicSpace.prepareShared space now overhead padded budget |> Stdlib.Result.andThen (fun plan ->
+    match plan with
+    | None -> Ok space
+    | Some plan ->
+      Stdlib.QuicPacket.sealLong kind keys identity.destination identity.source token plan.payload (space.recovery.largestSent + 1L)
+        |> Stdlib.Result.andThen (fun packet ->
+          // Reserve before the OS send; on failure the connection is aborted,
+          // so neither retrying a nonce nor forgetting a sent packet is possible.
+          Stdlib.QuicSpace.sent space plan (Stdlib.Blob.__byteLength packet) now |> Stdlib.Result.andThen (fun next ->
+            match Stdlib.Datagram.send socket peer packet 1000L with | Error _ -> Error "QUIC datagram send failed" | Ok () -> Ok next)))
+

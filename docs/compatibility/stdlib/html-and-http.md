@@ -288,8 +288,16 @@ keys, and releases application secrets and packet keys only after verifying
 client Finished. `python3 scripts/test_quic_server_tls_peer.py` checks these
 secrets against an independent aioquic client, verifies packet keys using a
 separate HKDF implementation, and covers malformed parameters, source mismatch,
-ALPN rejection, invalid Finished and cleanup. It does not yet own UDP packets
-or dispatch HTTP/3 server requests.
+ALPN rejection, invalid Finished and cleanup. `QuicServer` now owns bounded
+Initial/Handshake packet spaces after address validation, discards Initial
+only on an authenticated Handshake packet, and gates application ownership
+on client Finished. The client and server share packet-number reservation,
+recovery and congestion budgeting. `Http3.initializeServer` owns server
+critical streams and request parsing, including peers that grant no server
+bidirectional streams. `python3 scripts/test_quic_server_peer.py` checks live
+Retry, authenticated HTTP/3 echoes through 70 KiB, dropped flights, duplicates,
+corrupted ciphertext, zero server-bidi credit and zero leaks. Public UDP
+listener routing and replay suppression remain pending.
 
 `QuicServerRetry` provides listener-key HMAC tokens bound to the peer's address
 and port, original destination CID, client source CID and Retry source CID.
