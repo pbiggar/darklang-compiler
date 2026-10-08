@@ -1,6 +1,8 @@
 (* Shared type inventories and structural-record checking from WrittenTypeSupport.mli. *)
 type locals = (AST.semanticType * AST.bindingId) StringOrder.Map.t
-type checkedExpression = AST.semanticType * CheckedAST.expr * CheckedAST.symbols
+
+type checkedExpression =
+  AST.semanticType * CheckedAST.expr * WrittenCheckingState.t
 
 type functionSignature = {
   id : AST.functionId;
@@ -46,7 +48,7 @@ val requireType :
 
 val checkedLiteral :
   AST.semanticType option ->
-  CheckedAST.symbols ->
+  WrittenCheckingState.t ->
   AST.semanticType ->
   CheckedAST.expr ->
   (checkedExpression, string) result
@@ -98,5 +100,5 @@ val convertStructuralRecord :
   AST.semanticType ->
   AST.semanticType ->
   CheckedAST.expr ->
-  CheckedAST.symbols ->
-  (CheckedAST.expr * CheckedAST.symbols, string) result
+  WrittenCheckingState.t ->
+  (CheckedAST.expr * WrittenCheckingState.t, string) result

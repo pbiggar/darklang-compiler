@@ -173,13 +173,14 @@ let check checkExpression literal globals locals symbols expected
                       bind inference (fun subst ->
                           let args = List.map (Types.applySubst subst) args in
                           let constructorId, symbols =
-                            C.internConstructor canonical caseName
+                            WrittenCheckingState.internConstructor canonical
+                              caseName
                               (caseTag globals.collidingCases canonical caseName
                                  ordinal)
                               symbols
                           in
                           let typeId, symbols =
-                            C.internType canonical symbols
+                            WrittenCheckingState.internType canonical symbols
                           in
                           let reference : C.constructorReference =
                             {

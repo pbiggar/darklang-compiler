@@ -3,7 +3,7 @@ val check :
   WrittenLambdaSupport.expressionChecker ->
   WrittenTypeSupport.globals ->
   WrittenTypeSupport.locals ->
-  CheckedAST.symbols ->
+  WrittenCheckingState.t ->
   AST.semanticType option ->
   WrittenTypes.range ->
   WrittenTypes.letPattern ->

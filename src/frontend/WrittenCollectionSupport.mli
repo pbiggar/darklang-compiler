@@ -4,7 +4,7 @@ val tuple :
   WrittenCallSupport.literalChecker ->
   WrittenTypeSupport.globals ->
   WrittenTypeSupport.locals ->
-  CheckedAST.symbols ->
+  WrittenCheckingState.t ->
   AST.semanticType option ->
   WrittenTypes.expr list ->
   (WrittenTypeSupport.checkedExpression, string) result
@@ -14,7 +14,7 @@ val list :
   WrittenCallSupport.literalChecker ->
   WrittenTypeSupport.globals ->
   WrittenTypeSupport.locals ->
-  CheckedAST.symbols ->
+  WrittenCheckingState.t ->
   AST.semanticType option ->
   (WrittenTypes.expr * WrittenTypes.range option) list ->
   (WrittenTypeSupport.checkedExpression, string) result
@@ -24,7 +24,7 @@ val dict :
   WrittenCallSupport.literalChecker ->
   WrittenTypeSupport.globals ->
   WrittenTypeSupport.locals ->
-  CheckedAST.symbols ->
+  WrittenCheckingState.t ->
   AST.semanticType option ->
   (WrittenTypes.range
   * WrittenTypes.expr
@@ -38,7 +38,7 @@ val matchExpression :
   WrittenCallSupport.literalChecker ->
   WrittenTypeSupport.globals ->
   WrittenTypeSupport.locals ->
-  CheckedAST.symbols ->
+  WrittenCheckingState.t ->
   AST.semanticType option ->
   WrittenTypes.expr ->
   WrittenTypes.matchCase list ->

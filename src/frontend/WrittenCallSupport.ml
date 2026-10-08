@@ -6,7 +6,7 @@ module M = StringOrder.Map
 
 type literalChecker =
   AST.semanticType option ->
-  C.symbols ->
+  WrittenCheckingState.t ->
   AST.semanticType ->
   C.expr ->
   (checkedExpression, string) result
@@ -73,7 +73,7 @@ let[@warning "-4"] checkNamed checkExpression checkedLiteral globals locals
                   List.fold_left
                     (fun (reversed, symbols) (index, argument) ->
                       let id, symbols =
-                        C.allocateBinding
+                        WrittenCheckingState.allocateBinding
                           ("__partial_capture_" ^ string_of_int index)
                           symbols
                       in
@@ -91,7 +91,7 @@ let[@warning "-4"] checkNamed checkExpression checkedLiteral globals locals
                   List.fold_left
                     (fun (reversed, symbols) (index, typ) ->
                       let id, symbols =
-                        C.allocateBinding
+                        WrittenCheckingState.allocateBinding
                           ("__partial_arg_" ^ string_of_int index)
                           symbols
                       in

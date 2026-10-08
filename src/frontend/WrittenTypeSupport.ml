@@ -7,7 +7,9 @@ let bind = Result.bind
 let map = Result.map
 
 type locals = (AST.semanticType * AST.bindingId) M.t
-type checkedExpression = AST.semanticType * CheckedAST.expr * CheckedAST.symbols
+
+type checkedExpression =
+  AST.semanticType * CheckedAST.expr * WrittenCheckingState.t
 
 type functionSignature = {
   id : AST.functionId;
@@ -112,18 +114,29 @@ let requireType expected actual =
   | _ -> Ok ()
 
 let checkedLiteral expected symbols typ expression =
-  map
-    (fun () ->
-      let resolved =
-        if typ = AST.TNever then AST.TNever
-        else
-          Option.value
-            (Option.bind expected (fun wanted ->
-                 Unification.reconcileTypes None wanted typ))
-            ~default:typ
+  let typ = WrittenCheckingState.resolve symbols typ in
+  let expected = Option.map (WrittenCheckingState.resolve symbols) expected in
+  Result.bind (requireType expected typ) (fun () ->
+      let constrained =
+        match expected with
+        | None -> Ok symbols
+        | Some wanted -> WrittenCheckingState.constrain wanted typ symbols
       in
-      (resolved, expression, symbols))
-    (requireType expected typ)
+      Result.map
+        (fun symbols ->
+          let typ = WrittenCheckingState.resolve symbols typ in
+          let resolved =
+            if typ = AST.TNever then AST.TNever
+            else
+              Option.value
+                (Option.bind expected (fun wanted ->
+                     Unification.reconcileTypes None
+                       (WrittenCheckingState.resolve symbols wanted)
+                       typ))
+                ~default:typ
+          in
+          (resolved, expression, symbols))
+        constrained)
 
 (* Resolve the type syntax while retaining the compiler's nominal registry as
    the authority for custom names. No source AST type is constructed here. *)
@@ -400,10 +413,11 @@ let[@warning "-4"] convertStructuralRecord globals targetType actualType
                              actualFields)
                       in
                       let binding, afterBinding =
-                        CheckedAST.allocateBinding "__structural_record" symbols
+                        WrittenCheckingState.allocateBinding
+                          "__structural_record" symbols
                       in
                       let typeId, afterType =
-                        CheckedAST.internType targetName afterBinding
+                        WrittenCheckingState.internType targetName afterBinding
                       in
                       let result =
                         List.fold_left
@@ -416,8 +430,9 @@ let[@warning "-4"] convertStructuralRecord globals targetType actualType
                                      ^ "' is missing")
                                 | Some (actualIndex, actualFieldType) ->
                                     let sourceField, afterSource =
-                                      CheckedAST.internField actualName
-                                        fieldName actualIndex currentSymbols
+                                      WrittenCheckingState.internField
+                                        actualName fieldName actualIndex
+                                        currentSymbols
                                     in
                                     bind
                                       (convert fieldType actualFieldType
@@ -427,8 +442,9 @@ let[@warning "-4"] convertStructuralRecord globals targetType actualType
                                          afterSource)
                                       (fun (converted, afterValue) ->
                                         let targetField, afterTarget =
-                                          CheckedAST.internField targetName
-                                            fieldName targetIndex afterValue
+                                          WrittenCheckingState.internField
+                                            targetName fieldName targetIndex
+                                            afterValue
                                         in
                                         Ok
                                           ( (targetField, converted) :: reversed,

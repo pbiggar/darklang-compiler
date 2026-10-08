@@ -400,20 +400,20 @@ module NonStringKeys =
       [ [ [ 1L ], [ 3L ] ], [ [ 2L ] ] ]
 
   module RecursiveAdmissibility =
-#compileerror="Compilation failed: Could not recover List type from intrinsic '__rawptr_to_list_tup2_list_fn_t$lambda$u$u0$u10$u0_to_t$lambda$u$u0$u10$u0_i64'"
+#compileerror="Compilation failed: Could not recover List type from intrinsic"
     Dict { [ (fun x -> x) ]: 1L } = error="Cannot use [(lambda)] as a dict key. Functions, streams, database references, blobs, and values containing them cannot be keys."
 
-#compileerror="Compilation failed: Could not recover List type from intrinsic '__rawptr_to_list_tup2_tup2_i64_fn_t$lambda$u$u0$u13$u0_to_t$lambda$u$u0$u13$u0_i64'"
+#compileerror="Compilation failed: Could not recover List type from intrinsic"
     Dict { (1L, (fun x -> x)): 1L } = error="Cannot use (1, (lambda)) as a dict key. Functions, streams, database references, blobs, and values containing them cannot be keys."
 
-#compileerror="Compilation failed: Could not recover List type from intrinsic '__rawptr_to_list_tup2_Darklang.Stdlib.Option.Option_fn_t$lambda$u$u0$u35$u0_to_t$lambda$u$u0$u35$u0_i64'"
+#compileerror="Compilation failed: Could not recover List type from intrinsic"
     Dict { (Stdlib.Option.Option.Some (fun x -> x)): 1L } = error="Cannot use Some((lambda)) as a dict key. Functions, streams, database references, blobs, and values containing them cannot be keys."
 
   module Errors =
 #compileerror="Expected TInt64, got TString"
     Dict { 1L: "a"; "b": "c" } = error="This dict uses keys of type Int64, but \"b\" has type String."
 
-#compileerror="Compilation failed: Could not recover List type from intrinsic '__rawptr_to_list_tup2_fn_t$lambda$u$u0$u9$u0_to_t$lambda$u$u0$u9$u0_i64'"
+#compileerror="Compilation failed: Could not recover List type from intrinsic"
     (Dict { (fun x -> x): 1L }) = error="Cannot use (lambda) as a dict key. Functions, streams, database references, blobs, and values containing them cannot be keys."
 
 #compileerror="Lambda requires an expected function type"

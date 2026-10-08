@@ -4,7 +4,7 @@ val builtin :
   WrittenCallSupport.literalChecker ->
   WrittenTypeSupport.globals ->
   WrittenTypeSupport.locals ->
-  CheckedAST.symbols ->
+  WrittenCheckingState.t ->
   AST.semanticType option ->
   string ->
   WrittenTypes.typeReference list ->
@@ -16,7 +16,7 @@ val indirect :
   WrittenCallSupport.literalChecker ->
   WrittenTypeSupport.globals ->
   WrittenTypeSupport.locals ->
-  CheckedAST.symbols ->
+  WrittenCheckingState.t ->
   AST.semanticType option ->
   WrittenTypes.range ->
   WrittenTypes.expr ->

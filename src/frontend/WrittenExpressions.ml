@@ -16,6 +16,12 @@ let map = Result.map
    TNever keeps the type precise while the runtime reports the failed unwrap.
 *)
 let rec checkExpression (globals : globals) locals symbols expected expression =
+  let locals =
+    M.map
+      (fun (typ, id) -> (WrittenCheckingState.resolve symbols typ, id))
+      locals
+  in
+  let expected = Option.map (WrittenCheckingState.resolve symbols) expected in
   let checkedLiteral expected symbols typ expr =
     match (expected, typ) with
     | Some (AST.TVar wanted), AST.TVar actual

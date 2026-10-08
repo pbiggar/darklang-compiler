@@ -13,6 +13,14 @@ let map = Result.map
    source units. The representation stays inside this direct checker. *)
 type environment = Environment of globals * C.symbols
 
+type expressionChecker =
+  WrittenTypeSupport.globals ->
+  WrittenTypeSupport.locals ->
+  CheckedAST.symbols ->
+  AST.semanticType option ->
+  WrittenTypes.expr ->
+  (AST.semanticType * CheckedAST.expr * CheckedAST.symbols, string) result
+
 let includeAllocatedFunctions allocated (Environment (globals, symbols)) =
   Environment (globals, C.includeAllocatedFunctionNames allocated symbols)
 
@@ -209,7 +217,8 @@ let[@warning "-4"] predeclareFunctions allowInternal types items symbols =
       (M.fold M.add functions intrinsicFunctions, symbols))
     result
 
-let checkFunction checkExpression globals symbols path (fn : WT.fnDecl) =
+let checkFunction (checkExpression : expressionChecker) globals symbols path
+    (fn : WT.fnDecl) =
   let name = String.concat "." (path @ [ fn.WT.name.WT.name ]) in
   match M.find_opt name globals.functions with
   | None -> Error ("Function '" ^ name ^ "' was not predeclared")
@@ -415,8 +424,8 @@ let[@warning "-4"] attachRecursiveGroups program =
 (* Check annotated, nongeneric functions and sequential values directly from
    WrittenTypes. The production entry point is switched only after declaration
    catalogs, recursion, matches, and generic checking are included. *)
-let checkItems checkExpression baseEnvironment allowInternal requireEntry items
-    =
+let checkItems (checkExpression : expressionChecker) baseEnvironment
+    allowInternal requireEntry items =
   bind (predeclareTypes items) (fun localTypes ->
       let baseGlobals, baseSymbols =
         match baseEnvironment with

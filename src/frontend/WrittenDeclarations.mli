@@ -1,6 +1,14 @@
 (* Direct checked declarations and source-unit composition from WrittenDeclarations.mli. *)
 type environment
 
+type expressionChecker =
+  WrittenTypeSupport.globals ->
+  WrittenTypeSupport.locals ->
+  CheckedAST.symbols ->
+  AST.semanticType option ->
+  WrittenTypes.expr ->
+  (AST.semanticType * CheckedAST.expr * CheckedAST.symbols, string) result
+
 val includeAllocatedFunctions : CheckedAST.symbols -> environment -> environment
 
 val predeclareTypes :
@@ -25,7 +33,7 @@ val predeclareFunctions :
   result
 
 val checkFunction :
-  WrittenLambdaSupport.expressionChecker ->
+  expressionChecker ->
   WrittenTypeSupport.globals ->
   CheckedAST.symbols ->
   string list ->
@@ -35,7 +43,7 @@ val checkFunction :
 val attachRecursiveGroups : CheckedAST.program -> CheckedAST.program
 
 val checkItems :
-  WrittenLambdaSupport.expressionChecker ->
+  expressionChecker ->
   environment option ->
   bool ->
   bool ->

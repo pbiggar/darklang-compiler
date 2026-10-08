@@ -15,8 +15,8 @@ let map = Result.map
 let orElse first fallback =
   match first with Some _ -> first | None -> fallback ()
 
-let check checkExpression globals locals symbols expected (range : WT.range)
-    pattern value body =
+let check checkExpression (globals : globals) locals symbols expected
+    (range : WT.range) pattern value body =
   let check = checkExpression globals locals in
   let callsBinding name = function
     | WT.EVariable (_, called) -> called = name
@@ -246,7 +246,12 @@ let check checkExpression globals locals symbols expected (range : WT.range)
             let result = "t$recursive_return_" ^ prefix in
             AST.TFunction (types, AST.TInferenceVar (result, result))
       in
-      let binding, withBinding = C.allocateBinding name symbols in
+      let provisional, symbols =
+        WrittenCheckingState.freshenType globals.typeParams provisional symbols
+      in
+      let binding, withBinding =
+        WrittenCheckingState.allocateBinding name symbols
+      in
       bind
         (checkExpression globals
            (M.add name (provisional, binding) locals)
@@ -262,7 +267,9 @@ let check checkExpression globals locals symbols expected (range : WT.range)
             (fun (valueType, checkedValue, afterValue) ->
               map
                 (fun (bodyType, checkedBody, finalSymbols) ->
-                  let ordinal = C.nextBindingOrdinal symbols in
+                  let ordinal =
+                    WrittenCheckingState.nextBindingOrdinal symbols
+                  in
                   let member = AST.recursiveMemberId ordinal in
                   let kind =
                     if keywordFun.start = keywordFun.end_ then
