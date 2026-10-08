@@ -110,5 +110,10 @@ let plain (connection: Stdlib.Network.TcpConnection) : Stdlib.HttpTransport.Tran
 let plainWithShutdown (connection: Stdlib.Network.TcpConnection) (signals: Stdlib.Network.ShutdownSignals)
   : Stdlib.HttpTransport.Transport = Stdlib.HttpTransport.__plain connection (Some signals)
 
+let plainWithDeadline (connection: Stdlib.Network.TcpConnection) (signals: Stdlib.Network.ShutdownSignals) (deadline: Int64) : Stdlib.HttpTransport.Transport =
+  Stdlib.HttpTransport.Transport { lifecycle = connection.lifecycle,
+    read = fun _unit -> Stdlib.HttpTransport.__readPlain connection (Some signals) deadline,
+    write = fun bytes -> match Stdlib.Network.writeTcp connection bytes with | Ok () -> Ok () | Error _ -> Error "HTTP application write failed" }
+
 let close (transport: Stdlib.HttpTransport.Transport) : Unit =
   Stdlib.Stream.close transport.lifecycle

@@ -90,8 +90,13 @@ their binding and sign with blinded, fixed-work RSA-PSS/SHA-256. The pure server
 handshake now negotiates TLS 1.3 AES-128-GCM/X25519 and RSA-PSS/SHA-256,
 serializes the certificate flight, and releases application keys only after
 verifying client Finished. OpenSSL checks exercise h2, HTTP/1.1 and no ALPN,
-both application directions, malformed offers and invalid Finished. TCP listener
-and QUIC integration, plus HelloRetryRequest, remain unfinished.
+both application directions, malformed offers and invalid Finished. The
+`HttpServer.Tls.serve` listener now shares routing, body limits and responses
+with the existing HTTP/1.1 and HTTP/2 implementations. Accepted sockets retry
+short read timeouts under shutdown-aware deadlines, and transport closure
+sends close_notify and releases retained state. Independent OpenSSL/hyper-h2
+checks exercise 70 KiB flow control, fallback, rejection and stalled shutdown.
+QUIC server integration, HelloRetryRequest and TLS KeyUpdate remain unfinished.
 
 ## 5. Compatibility and readiness
 

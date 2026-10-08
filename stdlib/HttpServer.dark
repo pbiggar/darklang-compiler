@@ -171,7 +171,7 @@ let __http2Handler (config: Stdlib.HttpServer.Config.Config)
 type ReadError =
     | Status of (Int * Stdlib.Option.Option<String>)
     | Shutdown
-    | Transport of Int64
+    | Transport of String
 
 // A valid start line can precede an invalid or oversized body. Keep its method
 // so HEAD suppresses bodies even when request decoding cannot finish.
@@ -198,14 +198,14 @@ let __expectContinue (buffer: Blob) : Stdlib.Result.Result<Bool, String> =
                 Stdlib.String.toLowercase value != "100-continue") then Error "Unsupported expectation"
             else Ok (Stdlib.List.length expectations > 0)
 
-let __readRequest (connection: Stdlib.Network.TcpConnection) (signals: Stdlib.Network.ShutdownSignals)
+let __readRequest (transport: Stdlib.HttpTransport.Transport) (signals: Stdlib.Network.ShutdownSignals)
     (limit: Int64) (deadline: Int64) (continued: Bool) (buffer: Blob) : Stdlib.Result.Result<Stdlib.HttpWire.ParsedRequest, Stdlib.HttpServer.ReadError> =
     match Stdlib.Network.shutdownRequested signals with
-    | Error code -> Error (Stdlib.HttpServer.ReadError.Transport code)
+    | Error code -> Error (Stdlib.HttpServer.ReadError.Transport ("Shutdown check failed: " ++ Stdlib.Int64.toString code))
     | Ok true -> Error Stdlib.HttpServer.ReadError.Shutdown
     | Ok false ->
         match Stdlib.Network.monotonicMillis () with
-        | Error code -> Error (Stdlib.HttpServer.ReadError.Transport code)
+        | Error code -> Error (Stdlib.HttpServer.ReadError.Transport ("Monotonic clock failed: " ++ Stdlib.Int64.toString code))
         | Ok now ->
             if now >= deadline then Error (Stdlib.HttpServer.__statusError 408 buffer)
             else if Stdlib.Blob.__byteLength buffer > limit + 1048576L then Error (Stdlib.HttpServer.__statusError 413 buffer)
@@ -221,28 +221,32 @@ let __readRequest (connection: Stdlib.Network.TcpConnection) (signals: Stdlib.Ne
                     | Ok expect ->
                         let acknowledged =
                             if expect && Stdlib.Bool.not continued then
-                                Stdlib.Network.writeTcp connection (Stdlib.String.toBlob "HTTP/1.1 100 Continue\r\n\r\n")
+                                transport.write (Stdlib.String.toBlob "HTTP/1.1 100 Continue\r\n\r\n")
                             else Ok () in
                         match acknowledged with
-                        | Error code -> Error (Stdlib.HttpServer.ReadError.Transport code)
+                        | Error message -> Error (Stdlib.HttpServer.ReadError.Transport message)
                         | Ok () ->
-                            match Stdlib.Network.readTcp connection 4096L with
-                            | Error code ->
-                                if code == 4L || code == 11L || code == 35L then
-                                    Stdlib.HttpServer.__readRequest connection signals limit deadline (continued || expect) buffer
-                                else Error (Stdlib.HttpServer.ReadError.Transport code)
+                            match transport.read () with
+                            | Error message ->
+                                if message == "HTTP server shutting down" then Error Stdlib.HttpServer.ReadError.Shutdown
+                                else (match Stdlib.Network.shutdownRequested signals, Stdlib.Network.monotonicMillis () with
+                                | Ok true, _ -> Error Stdlib.HttpServer.ReadError.Shutdown
+                                | Ok false, Ok now ->
+                                    if now >= deadline then Error (Stdlib.HttpServer.__statusError 408 buffer)
+                                    else Error (Stdlib.HttpServer.ReadError.Transport message)
+                                | _, _ -> Error (Stdlib.HttpServer.ReadError.Transport "HTTP server clock or shutdown check failed"))
                             | Ok chunk ->
                                 if Stdlib.Blob.__byteLength chunk == 0L then Error (Stdlib.HttpServer.__statusError 400 buffer)
-                                else Stdlib.HttpServer.__readRequest connection signals limit deadline (continued || expect) (Stdlib.Blob.concat [buffer, chunk])
+                                else Stdlib.HttpServer.__readRequest transport signals limit deadline (continued || expect) (Stdlib.Blob.concat [buffer, chunk])
 
-let __handleHttp1 (config: Stdlib.HttpServer.Config.Config) (handler: Stdlib.Http.Request -> Stdlib.Http.Response)
-    (signals: Stdlib.Network.ShutdownSignals) (connection: Stdlib.Network.TcpConnection) (limit: Int64)
+let __handleHttp1Transport (config: Stdlib.HttpServer.Config.Config) (handler: Stdlib.Http.Request -> Stdlib.Http.Response)
+    (signals: Stdlib.Network.ShutdownSignals) (transport: Stdlib.HttpTransport.Transport) (limit: Int64)
     (pending: Blob)
     : Stdlib.Result.Result<Bool, String> =
     match Stdlib.Network.monotonicMillis () with
     | Error code -> Error ("Monotonic clock failed: " ++ Stdlib.Int64.toString code)
     | Ok started ->
-        let parsed = Stdlib.HttpServer.__readRequest connection signals limit (started + 10000L) false pending in
+        let parsed = Stdlib.HttpServer.__readRequest transport signals limit (started + 10000L) false pending in
         match parsed with
         | Error Shutdown -> Ok true
         | Error (Transport _) -> Ok false
@@ -274,7 +278,7 @@ let __handleHttp1 (config: Stdlib.HttpServer.Config.Config) (handler: Stdlib.Htt
                     let head = "HTTP/1.1 500 Internal Server Error\r\nConnection: close\r\nContent-Length: 21\r\n\r\n" in
                     let message = if method == "HEAD" then head else head ++ "Internal server error" in
                     (Stdlib.String.toBlob message, 500) in
-            let _ = Stdlib.Network.writeTcp connection bytes in
+            let _ = transport.write bytes in
             let _ =
                 if config.logRequests then
                     match Stdlib.Network.monotonicMillis () with
@@ -283,6 +287,12 @@ let __handleHttp1 (config: Stdlib.HttpServer.Config.Config) (handler: Stdlib.Htt
                         Stdlib.Int.toString status ++ " " ++ Stdlib.Int64.toString (finished - started) ++ "ms")
                 else () in
             Ok false
+
+let __handleHttp1 (config: Stdlib.HttpServer.Config.Config) (handler: Stdlib.Http.Request -> Stdlib.Http.Response)
+    (signals: Stdlib.Network.ShutdownSignals) (connection: Stdlib.Network.TcpConnection) (limit: Int64) (pending: Blob) : Stdlib.Result.Result<Bool, String> =
+    match Stdlib.Network.monotonicMillis () with
+    | Error _ -> Error "HTTP server clock failed"
+    | Ok now -> Stdlib.HttpServer.__handleHttp1Transport config handler signals (Stdlib.HttpTransport.plainWithDeadline connection signals (now + 10000L)) limit pending
 
 // A response can finish before the request upload. Bounded draining avoids
 // closing TCP with queued unread DATA, which can reset the delivered response.

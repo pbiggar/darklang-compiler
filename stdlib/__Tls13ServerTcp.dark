@@ -1,0 +1,120 @@
+// __Tls13ServerTcp.dark - Shutdown-aware TLS server records and owned application transport.
+module Darklang.Stdlib.Tls13ServerTcp
+
+type Accepted = { ready: Stdlib.Tls13ServerHandshake.Ready, pending: Blob }
+
+// RFC 8446 permits 0x0301 on the initial ClientHello's plaintext record.
+// Normalize only that record header, never encrypted records or transcript bytes.
+let __receive (connection: Stdlib.Network.TcpConnection) (signals: Stdlib.Network.ShutdownSignals) (deadline: Int64) (pending: Blob) (initial: Bool) : Stdlib.Result.Result<Stdlib.Tls13Client.Received, String> =
+  let pending =
+    if initial && Stdlib.Blob.__byteLength pending >= 5L && Stdlib.Blob.__getByte pending 0L == 22L && Stdlib.Tls13.__read16 pending 1L == 769L then
+      Stdlib.Blob.concat [Stdlib.Blob.slice pending 0 1, Stdlib.Blob.__fromInt64List [3L, 3L], Stdlib.Blob.slice pending 3 (Stdlib.Int.fromInt64 (Stdlib.Blob.__byteLength pending - 3L))]
+    else pending in
+  match Stdlib.Network.shutdownRequested signals, Stdlib.Network.monotonicMillis () with
+  | Ok true, _ -> Error "HTTP server shutting down"
+  | Ok false, Ok now ->
+    if now >= deadline then Error "TLS server read timed out"
+    else match Stdlib.Tls13.parseRecord pending with
+    | Ok record -> Ok (Stdlib.Tls13Client.Received { record = record, pending = record.remaining })
+    | Error (Invalid message) -> Error message
+    | Error Incomplete ->
+      if Stdlib.Blob.__byteLength pending > 16645L then Error "TLS server record buffer exceeds limit"
+      else Stdlib.HttpTransport.__readPlain connection (Some signals) deadline |> Stdlib.Result.andThen (fun bytes ->
+        if Stdlib.Blob.__byteLength bytes == 0L then Error "TLS peer closed during record"
+        else Stdlib.Tls13ServerTcp.__receive connection signals deadline (Stdlib.Blob.concat [pending, bytes]) initial)
+  | _, _ -> Error "TLS server clock or shutdown check failed"
+
+let __hello (connection: Stdlib.Network.TcpConnection) (signals: Stdlib.Network.ShutdownSignals) (deadline: Int64) (pending: Blob) (handshake: Blob) (records: Int64) : Stdlib.Result.Result<(Blob * Blob), String> =
+  if records > 64L || Stdlib.Blob.__byteLength handshake > 32768L then Error "TLS ClientHello exceeds limit"
+  else match Stdlib.Tls13Handshake.parseHandshakeFrame handshake with
+  | Ok frame ->
+    if frame.kind != 1L || Stdlib.Blob.__byteLength frame.remaining != 0L then Error "Expected TLS ClientHello"
+    else Ok ((frame.raw, pending))
+  | Error (Invalid message) -> Error message
+  | Error Incomplete ->
+    Stdlib.Tls13ServerTcp.__receive connection signals deadline pending true |> Stdlib.Result.andThen (fun received ->
+      if received.record.contentType != 22L || Stdlib.Blob.__byteLength received.record.payload > 16384L then Error "Expected plaintext TLS handshake"
+      else Stdlib.Tls13ServerTcp.__hello connection signals deadline received.pending (Stdlib.Blob.concat [handshake, received.record.payload]) (records + 1L))
+
+let __sendFlight (connection: Stdlib.Network.TcpConnection) (keys: Stdlib.Tls13.TrafficKeys) (data: Blob) (offset: Int64) : Stdlib.Result.Result<Unit, String> =
+  let remaining = Stdlib.Blob.__byteLength data - offset in
+  if remaining == 0L then Ok ()
+  else
+    let size = if remaining > 16384L then 16384L else remaining in
+    Stdlib.Tls13.sealRecord keys 22L (Stdlib.Http2Wire.__slice data offset size) |> Stdlib.Result.andThen (fun sealed ->
+      Stdlib.Tls13Client.__send connection sealed.bytes |> Stdlib.Result.andThen (fun _ ->
+        Stdlib.Tls13ServerTcp.__sendFlight connection sealed.nextKeys data (offset + size)))
+
+let __finished (connection: Stdlib.Network.TcpConnection) (signals: Stdlib.Network.ShutdownSignals) (deadline: Int64) (flight: Stdlib.Tls13ServerHandshake.Flight) (keys: Stdlib.Tls13.TrafficKeys) (pending: Blob) (message: Blob) (records: Int64) : Stdlib.Result.Result<Stdlib.Tls13ServerTcp.Accepted, String> =
+  if records > 64L || Stdlib.Blob.__byteLength message > 36L then Error "TLS client Finished exceeds limit"
+  else if Stdlib.Blob.__byteLength message == 36L then
+    Stdlib.Tls13ServerHandshake.finish flight message |> Stdlib.Result.map (fun ready -> Stdlib.Tls13ServerTcp.Accepted { ready = ready, pending = pending })
+  else Stdlib.Tls13ServerTcp.__receive connection signals deadline pending false |> Stdlib.Result.andThen (fun received ->
+    if received.record.contentType == 20L && Stdlib.Blob.toHex received.record.payload == "01" then
+      Stdlib.Tls13ServerTcp.__finished connection signals deadline flight keys received.pending message (records + 1L)
+    else if received.record.contentType != 23L then Error "Expected encrypted TLS client Finished"
+    else Stdlib.Tls13.openRecord keys received.record |> Stdlib.Result.andThen (fun opened ->
+      if opened.contentType != 22L then Error "Expected TLS client Finished"
+      else Stdlib.Tls13ServerTcp.__finished connection signals deadline flight opened.nextKeys received.pending (Stdlib.Blob.concat [message, opened.content]) (records + 1L)))
+
+let accept (connection: Stdlib.Network.TcpConnection) (signals: Stdlib.Network.ShutdownSignals) (identity: Stdlib.TlsServerIdentity.Identity) : Stdlib.Result.Result<Stdlib.Tls13ServerTcp.Accepted, String> =
+  match Stdlib.Network.monotonicMillis () with
+  | Error _ -> Error "TLS server clock failed"
+  | Ok now ->
+    let deadline = now + 10000L in
+    Stdlib.Tls13ServerTcp.__hello connection signals deadline Stdlib.Blob.empty Stdlib.Blob.empty 0L |> Stdlib.Result.andThen (fun pair ->
+      let (hello, pending) = pair in
+      Stdlib.Tls13ServerHandshake.start identity hello ["h2", "http/1.1"] None |> Stdlib.Result.andThen (fun flight ->
+        Stdlib.Tls13.serializePlaintext 22L flight.hello |> Stdlib.Result.andThen (fun wire ->
+          Stdlib.Tls13Client.__send connection wire |> Stdlib.Result.andThen (fun _ ->
+            Stdlib.Tls13ServerTcp.__sendFlight connection flight.handshakeSend flight.encrypted 0L |> Stdlib.Result.andThen (fun _ ->
+              Stdlib.Tls13ServerTcp.__finished connection signals deadline flight flight.handshakeReceive pending Stdlib.Blob.empty 0L)))))
+
+let __application (connection: Stdlib.Network.TcpConnection) (signals: Stdlib.Network.ShutdownSignals) (deadline: Int64) (state: Stdlib.Tls13Client.ApplicationState) : Stdlib.Result.Result<(Blob * Stdlib.Tls13Client.ApplicationState), String> =
+  if state.records >= 8192L then Error "TLS server application record limit exceeded"
+  else Stdlib.Tls13ServerTcp.__receive connection signals deadline state.pending false |> Stdlib.Result.andThen (fun received ->
+    if received.record.contentType != 23L then Error "Expected TLS application record"
+    else Stdlib.Tls13.openRecord state.keys received.record |> Stdlib.Result.andThen (fun opened ->
+      let next = Stdlib.Tls13Client.ApplicationState { keys = opened.nextKeys, pending = received.pending, records = state.records + 1L } in
+      if opened.contentType == 23L then
+        if Stdlib.Blob.__byteLength opened.content == 0L then Stdlib.Tls13ServerTcp.__application connection signals deadline next else Ok ((opened.content, next))
+      else if opened.contentType == 21L && Stdlib.Blob.toHex opened.content == "0100" then Ok ((Stdlib.Blob.empty, next))
+      else Error "Unexpected TLS post-handshake message"))
+
+let __read (connection: Stdlib.Network.TcpConnection) (signals: Stdlib.Network.ShutdownSignals) (deadline: Stdlib.Option.Option<Int64>) (cell: RawPtr) (lifecycle: Stream<Unit>) : Stdlib.Result.Result<Blob, String> =
+  match Stdlib.Stream.next lifecycle with
+  | None -> Error "HTTP transport is closed"
+  | Some _ ->
+    let state = Stdlib.Stream.__cellGet<Stdlib.HttpTransport.SecureState> cell in
+    let deadline = match deadline with | Some value -> Ok value | None -> Stdlib.Network.monotonicMillis () |> Stdlib.Result.map (fun now -> now + 10000L) |> Stdlib.Result.mapError (fun _ -> "TLS server clock failed") in
+    deadline |> Stdlib.Result.andThen (fun deadline -> Stdlib.Tls13ServerTcp.__application connection signals deadline state.receive) |> Stdlib.Result.map (fun pair ->
+      let (data, receive) = pair in
+      let _ = Stdlib.Stream.__cellSet cell (Stdlib.HttpTransport.SecureState { receive = receive, send = state.send }) in
+      data)
+
+// Publish the advanced sequence before writing, including a partial or failed
+// write. The close alert must never reuse an application record's nonce.
+let __write (connection: Stdlib.Network.TcpConnection) (cell: RawPtr) (lifecycle: Stream<Unit>) (bytes: Blob) (offset: Int64) : Stdlib.Result.Result<Unit, String> =
+  match Stdlib.Stream.next lifecycle with
+  | None -> Error "HTTP transport is closed"
+  | Some _ ->
+    let remaining = Stdlib.Blob.__byteLength bytes - offset in
+    if remaining == 0L then Ok ()
+    else
+      let size = if remaining > 2048L then 2048L else remaining in
+      let state = Stdlib.Stream.__cellGet<Stdlib.HttpTransport.SecureState> cell in
+      Stdlib.Tls13.sealRecord state.send 23L (Stdlib.Http2Wire.__slice bytes offset size) |> Stdlib.Result.andThen (fun sealed ->
+        let _ = Stdlib.Stream.__cellSet cell (Stdlib.HttpTransport.SecureState { receive = state.receive, send = sealed.nextKeys }) in
+        Stdlib.Tls13Client.__send connection sealed.bytes |> Stdlib.Result.andThen (fun _ -> Stdlib.Tls13ServerTcp.__write connection cell lifecycle bytes (offset + size)))
+
+let __dispose (connection: Stdlib.Network.TcpConnection) (cell: RawPtr) : Unit =
+  let state = Stdlib.Stream.__cellGet<Stdlib.HttpTransport.SecureState> cell in
+  let _ = match Stdlib.Tls13.sealRecord state.send 21L (Stdlib.Blob.__fromInt64List [1L, 0L]) with | Error _ -> () | Ok sealed -> let _ = Stdlib.Tls13Client.__send connection sealed.bytes in () in
+  let _ = Stdlib.Network.closeTcp connection in
+  Stdlib.Stream.__cellDispose<Stdlib.HttpTransport.SecureState> cell
+
+let transport (connection: Stdlib.Network.TcpConnection) (signals: Stdlib.Network.ShutdownSignals) (deadline: Stdlib.Option.Option<Int64>) (accepted: Stdlib.Tls13ServerTcp.Accepted) : Stdlib.HttpTransport.Transport =
+  let state = Stdlib.HttpTransport.SecureState { receive = Stdlib.Tls13Client.ApplicationState { keys = accepted.ready.receive, pending = accepted.pending, records = 0L }, send = accepted.ready.send } in
+  let cell = Stdlib.Stream.__cellNew state in
+  let lifecycle = Stdlib.Stream.__new (fun _unit -> Some ()) (fun _unit -> Stdlib.Tls13ServerTcp.__dispose connection cell) in
+  Stdlib.HttpTransport.Transport { lifecycle = lifecycle, read = fun _unit -> Stdlib.Tls13ServerTcp.__read connection signals deadline cell lifecycle, write = fun bytes -> Stdlib.Tls13ServerTcp.__write connection cell lifecycle bytes 0L }

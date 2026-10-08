@@ -1,0 +1,70 @@
+// HttpServerTls.dark - Sequential authenticated TLS serving with ALPN HTTP/2 and HTTP/1.1.
+module Darklang.Stdlib.HttpServer.Tls
+
+let __handler (handler: Stdlib.Http.Request -> Stdlib.Http.Response) (request: Stdlib.Http.Request) : Stdlib.Http.Response =
+  let url = if Stdlib.String.startsWith request.url "http://" then "https://" ++ Stdlib.String.dropFirst request.url 7 else request.url in
+  handler (Stdlib.Http.Request { url = url, headers = request.headers, body = request.body })
+
+let __connection (config: Stdlib.HttpServer.Config.Config) (handler: Stdlib.Http.Request -> Stdlib.Http.Response) (signals: Stdlib.Network.ShutdownSignals) (identity: Stdlib.TlsServerIdentity.Identity) (connection: Stdlib.Network.TcpConnection) (limit: Int64) : Stdlib.Result.Result<Bool, String> =
+  match Stdlib.Tls13ServerTcp.accept connection signals identity with
+  | Error message -> Ok (message == "HTTP server shutting down")
+  | Ok accepted ->
+    match Stdlib.Network.monotonicMillis () with
+    | Error _ -> Error "TLS HTTP server clock failed"
+    | Ok now ->
+      let deadline = if accepted.ready.protocol == "h2" then None else Some (now + 10000L) in
+      let transport = Stdlib.Tls13ServerTcp.transport connection signals deadline accepted in
+      let handler = fun request -> Stdlib.HttpServer.Tls.__handler handler request in
+      let served =
+        if accepted.ready.protocol == "h2" then
+          let result = Stdlib.Http2.serve transport Stdlib.Blob.empty config (fun request -> Stdlib.HttpServer.__http2Handler config handler request) in
+          match result with | Error message -> Ok (message == "HTTP server shutting down") | Ok () -> Ok false
+        else Stdlib.HttpServer.__handleHttp1Transport config handler signals transport limit Stdlib.Blob.empty in
+      let stopped =
+        match served, Stdlib.Network.monotonicMillis () with
+        | Ok false, Ok finished -> Stdlib.HttpServer.__drainHttp2 connection signals (finished + 250L) 131072L
+        | _, _ -> false in
+      let _ = Stdlib.HttpTransport.close transport in
+      match served with | Ok wasStopped -> Ok (wasStopped || stopped) | Error message -> Error message
+
+let __loop (config: Stdlib.HttpServer.Config.Config) (identity: Stdlib.TlsServerIdentity.Identity) (handler: Stdlib.Http.Request -> Stdlib.Http.Response) (signals: Stdlib.Network.ShutdownSignals) (listener: Stdlib.Network.TcpListener) (limit: Int64) : Stdlib.Result.Result<Unit, String> =
+  match Stdlib.Network.shutdownRequested signals with
+  | Error _ -> Error "TLS HTTP server shutdown check failed"
+  | Ok true -> Ok ()
+  | Ok false ->
+    match Stdlib.Network.waitListener listener with
+    | Error code ->
+      if code == 4L then Stdlib.HttpServer.Tls.__loop config identity handler signals listener limit else Error "TLS HTTP listener failed"
+    | Ok false -> Stdlib.HttpServer.Tls.__loop config identity handler signals listener limit
+    | Ok true ->
+      match Stdlib.Network.acceptTcp listener 100L with
+      | Error code ->
+        if code == 4L || code == 11L || code == 35L then Stdlib.HttpServer.Tls.__loop config identity handler signals listener limit else Error "TLS HTTP accept failed"
+      | Ok connection ->
+        let result = Stdlib.HttpServer.Tls.__connection config handler signals identity connection limit in
+        let _ = Stdlib.Network.closeTcp connection in
+        match result with
+        | Error message -> Error message
+        | Ok true -> Ok ()
+        | Ok false -> Stdlib.HttpServer.Tls.__loop config identity handler signals listener limit
+
+/// Import the certificate and key with TlsServerIdentity.create before serving.
+/// Bind before announcing and return normally on SIGINT or SIGTERM, including
+/// while a peer holds an incomplete TLS handshake or HTTP request open.
+let serve (config: Stdlib.HttpServer.Config.Config) (identity: Stdlib.TlsServerIdentity.Identity) (handler: Stdlib.Http.Request -> Stdlib.Http.Response) (onListening: Unit -> Unit) : Stdlib.Result.Result<Unit, String> =
+  match Stdlib.Int.toInt64 config.port, Stdlib.Int.toInt64 config.maxBodyBytes with
+  | Some port, Some limit ->
+    if port <= 0L || port > 65535L || limit < 0L || limit > 104857600L then Error "Invalid TLS HTTP server configuration"
+    else match Stdlib.Network.shutdownSignals () with
+    | Error _ -> Error "TLS HTTP shutdown setup failed"
+    | Ok signals ->
+      let result = match Stdlib.Network.listenTcp4 [0L, 0L, 0L, 0L] port with
+                   | Error _ -> Error "Cannot bind TLS HTTP server"
+                   | Ok listener ->
+                     let _ = onListening () in
+                     let result = Stdlib.HttpServer.Tls.__loop config identity handler signals listener limit in
+                     let _ = Stdlib.Network.closeListener listener in
+                     result in
+      let _ = Stdlib.Network.closeShutdownSignals signals in
+      result
+  | _, _ -> Error "Invalid TLS HTTP server configuration"

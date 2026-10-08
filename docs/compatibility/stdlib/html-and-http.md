@@ -126,7 +126,8 @@ compiled leak accounting. Its artifacts remain in `TestResults/ai/`.
 The IPv4 server also detects the HTTP/2 prior-knowledge connection preface,
 including fragmented arrivals, and dispatches through the same Dark handlers.
 It sends GOAWAY after one exchange. This profile is verified on Linux x86_64;
-server-side TLS negotiation remains follow-up work. The HTTP/2 E2E fixtures
+`HttpServer.Tls.serve` adds an IPv4 TLS listener using a configured
+`TlsServerIdentity`, with h2 ALPN and HTTP/1.1/no-ALPN fallback. The HTTP/2 E2E fixtures
 cover wire and field boundaries. `python3 scripts/test_http2_peer.py` uses the
 test-only `h2==4.3.0` Python package as an independent peer and checks TLS client
 negotiation, 70-KiB uploads/responses across flow-control windows, buffering,
@@ -270,8 +271,17 @@ signature offers are checked, with the trust-anchor exception. The independent
 `python3 scripts/test_tls_server_hello.py` and
 `python3 scripts/test_tls_server_handshake.py` exercise OpenSSL negotiation,
 both application directions, invalid Finished and zero-leak cleanup. This
-engine currently requires an initial X25519 share; HelloRetryRequest and TCP
-and QUIC server listener integration are still pending.
+engine currently requires an initial X25519 share. `HttpServer.Tls.serve`
+connects it to shutdown-aware TCP records and the shared HTTP/1.1 and HTTP/2
+handlers. Handshake and HTTP/1.1 reads have fixed ten-second deadlines;
+HTTP/2 reads use ten-second idle deadlines and a bounded record count. Record
+sequence state advances before each application write, including failures,
+and close sends close_notify with the next nonce before releasing the socket.
+The independent `python3 scripts/test_http2_server_tls_peer.py` covers 70 KiB
+uploads/responses, HEAD, early body-limit rejection, Expect, ALPN fallback and
+rejection, fragmented ClientHello, forged Finished, shutdown during handshake
+and application reads, and cleanup. HelloRetryRequest, post-handshake TLS
+KeyUpdate and QUIC server listener integration remain pending.
 
 `Stdlib.HttpClient.Sse.Event` and `parse` are copied from the same revision.
 The parser retains upstream's `Stream.unfold` behavior: it pulls only until the
