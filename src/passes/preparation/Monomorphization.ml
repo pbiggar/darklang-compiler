@@ -304,7 +304,7 @@ let replaceTypeAppsCore symbols registry expr =
               Error ("Invalid generic key intrinsic application: " ^ name))
     in
     match expr with
-    | C.GenericFuncRef (id, args, _) ->
+    | C.GenericFuncRef (id, args, _) -> (
         let name =
           match C.functionName id symbols with
           | Some name -> name
@@ -315,12 +315,12 @@ let replaceTypeAppsCore symbols registry expr =
         if List.exists S.containsTypeVar types then
           Error ("Cannot infer specialization for function value '" ^ name ^ "'")
         else
-          (match registry with
+          match registry with
           | None -> Ok (C.FuncRef (resolved specialized))
-          | Some registry ->
+          | Some registry -> (
               match SM.find_opt (name, types) registry with
               | Some name -> Ok (C.FuncRef (resolved name))
-              | None -> Error (missingSpecMessage name types))
+              | None -> Error (missingSpecMessage name types)))
     | C.UnitLiteral | C.Int64Literal _ | C.Int128Literal _ | C.BigIntLiteral _
     | C.Int8Literal _ | C.Int16Literal _ | C.Int32Literal _ | C.UInt8Literal _
     | C.UInt16Literal _ | C.UInt32Literal _ | C.UInt64Literal _
@@ -862,7 +862,8 @@ let programNeedsLambdaLowering _knownNames program =
     let child = needs bound in
     let many values = List.exists child values in
     match expr with
-    | C.Lambda _ | C.Apply _ | C.IndirectApply _ | C.FuncRef _ | C.GenericFuncRef _ | C.Closure _ ->
+    | C.Lambda _ | C.Apply _ | C.IndirectApply _ | C.FuncRef _
+    | C.GenericFuncRef _ | C.Closure _ ->
         true
     | C.Local _ -> false
     | C.BoundaryRender (_, value)

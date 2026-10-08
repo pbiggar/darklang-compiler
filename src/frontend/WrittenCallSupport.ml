@@ -49,10 +49,13 @@ let[@warning "-4"] checkNamed checkExpression checkedLiteral globals locals
             Error "Function value type argument count mismatch"
           else
             let subst = M.of_list (List.combine signature.typeParams types) in
-            let typ = Types.applySubst subst
-                (AST.TFunction (signature.parameters, signature.return)) in
+            let typ =
+              Types.applySubst subst
+                (AST.TFunction (signature.parameters, signature.return))
+            in
             checkedLiteral expected symbols typ
-              (C.GenericFuncRef (signature.id, C.checkedTypeArgs types, C.checkedType typ)))
+              (C.GenericFuncRef
+                 (signature.id, C.checkedTypeArgs types, C.checkedType typ)))
   | Some signature
     when args <> [] && List.length args < List.length signature.parameters ->
       bind
@@ -429,8 +432,10 @@ let[@warning "-4"] checkNamed checkExpression checkedLiteral globals locals
                                                symbols)
                                         else
                                           map
-                                            (fun symbols -> (value :: reversed, symbols))
-                                            (WrittenCheckingState.constrain targetType actualType symbols)))
+                                            (fun symbols ->
+                                              (value :: reversed, symbols))
+                                            (WrittenCheckingState.constrain
+                                               targetType actualType symbols)))
                                   (Ok ([], symbols))
                                   pairs
                               in

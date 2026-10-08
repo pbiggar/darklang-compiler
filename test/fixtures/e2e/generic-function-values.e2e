@@ -9,7 +9,7 @@ let valueGenericBody<'a> (value: a) : Stdlib.Option.Option<a> = Some value |> St
 (Some 1L |> Stdlib.Option.map Stdlib.List.singleton) = Some [1L]
 valueApply valueIdentity = 1L
 (let f = valueIdentity in f 1L) = 1L
-valueReturn () 1L = 1L
+(valueReturn ()) 1L = 1L
 (let f = Builtin.unwrap (Stdlib.List.head [valueIdentity]) in f 1L) = 1L
 (let (f, n) = (valueIdentity, 1L) in f n) = 1L
 (let h = ValueHolder { callback = valueIdentity } in h.callback 1L) = 1L

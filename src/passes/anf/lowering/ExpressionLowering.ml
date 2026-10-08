@@ -478,7 +478,8 @@ let lowerExpression (toANFCore : LoweringCallbacks.expressionLowerer)
       match R.BindingMap.find_opt name env with
       | Some (id, _) -> Ok (A.Return (A.Var id), gen)
       | None -> Error "Undefined local binding identity")
-  | C.GenericFuncRef _ -> Crash.crash "Unspecialized function value reached ANF lowering"
+  | C.GenericFuncRef _ ->
+      Crash.crash "Unspecialized function value reached ANF lowering"
   | C.FuncRef id -> Ok (finish gen (A.ClosureAlloc (id, [])))
   | C.Closure (id, values) ->
       let* results, gen = captures values gen [] in
