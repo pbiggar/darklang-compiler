@@ -10,7 +10,7 @@ The remaining gates cover these exact failures: 34 whole files and 270 assertion
 
 The assertion harness now compares original parsed expressions. Multiline applications and literal contents are preserved in individual runs and batches.
 
-Verification: fresh native build passed; the full host suite and `dune runtest` results are recorded after the gate update. The parent benchmark check stopped before measurement because the stored workload digest is incompatible; no baseline was reset.
+Verification: fresh native build passed; the complete host suite passed **11,141/11,141** tests; `dune runtest` passed. The gates and individual ledger rows match all 2,339 measured failing assertion identities exactly. The parent benchmark check stopped before measurement because the stored workload digest is incompatible; no baseline was reset.
 
 ## Failing test files
 
