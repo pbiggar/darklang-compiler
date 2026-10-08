@@ -22,20 +22,28 @@ let resolveExpression state =
 
 let constrain first second state =
   let first = resolve state first and second = resolve state second in
-  let matched =
-    if first = AST.TNever || second = AST.TNever then Ok []
-    else Unification.matchTypes first second
-  in
-  Result.bind matched (fun bindings ->
-      let bindings =
-        List.filter (fun (name, _) -> S.mem name state.flexible) bindings
-      in
-      Result.map
-        (fun substitution -> { state with substitution })
-        (Unification.consolidateBindings
-           (M.bindings state.substitution @ bindings)))
+  match Unification.reconcileTypes None first second with
+  | None ->
+      Error
+        ("Expected "
+        ^ StructuralFormat.semanticType first
+        ^ ", got "
+        ^ StructuralFormat.semanticType second)
+  | Some unified ->
+      Result.bind (Unification.matchTypes first unified) (fun firstBindings ->
+          Result.bind (Unification.matchTypes second unified)
+            (fun secondBindings ->
+              let bindings =
+                List.filter
+                  (fun (name, _) -> S.mem name state.flexible)
+                  (firstBindings @ secondBindings)
+              in
+              Result.map
+                (fun substitution -> { state with substitution })
+                (Unification.consolidateBindings
+                   (M.bindings state.substitution @ bindings))))
 
-let freshenTypes rigid types state =
+let freshenType rigid typ state =
   let rec freshen mapping state typ =
     let many mapping state types =
       let reversed, mapping, state =
@@ -99,14 +107,8 @@ let freshenTypes rigid types state =
         (AST.TDict (key, value), mapping, state)
     | _ -> (typ, mapping, state)
   in
-  let reversed, _, state =
-    List.fold_left
-      (fun (reversed, mapping, state) typ ->
-        let typ, mapping, state = freshen mapping state (resolve state typ) in
-        (typ :: reversed, mapping, state))
-      ([], M.empty, state) types
-  in
-  (List.rev reversed, state)
+  let typ, _, state = freshen M.empty state (resolve state typ) in
+  (typ, state)
 
 let update operation state =
   let value, symbols = operation state.symbols in

@@ -76,14 +76,11 @@ let[@warning "-4"] check checkExpression (globals : globals) locals symbols
         in
         let lambdaExpected, symbols =
           match lambdaExpected with
-          | Some typ -> (
-              let types, symbols =
-                WrittenCheckingState.freshenTypes globals.typeParams [ typ ]
-                  symbols
+          | Some typ ->
+              let typ, symbols =
+                WrittenCheckingState.freshenType globals.typeParams typ symbols
               in
-              match types with
-              | [ typ ] -> (Some typ, symbols)
-              | _ -> Crash.crash "Lambda freshening must preserve one type")
+              (Some typ, symbols)
           | None -> (None, symbols)
         in
         match lambdaExpected with

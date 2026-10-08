@@ -7,8 +7,8 @@ val resolve : t -> AST.semanticType -> AST.semanticType
 val resolveExpression : t -> CheckedAST.expr -> CheckedAST.expr
 val constrain : AST.semanticType -> AST.semanticType -> t -> (t, string) result
 
-val freshenTypes :
-  StringOrder.Set.t -> AST.semanticType list -> t -> AST.semanticType list * t
+val freshenType :
+  StringOrder.Set.t -> AST.semanticType -> t -> AST.semanticType * t
 
 val allocateBinding : string -> t -> AST.bindingId * t
 val internFunction : string -> t -> AST.functionId * t
