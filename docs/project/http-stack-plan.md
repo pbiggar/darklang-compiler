@@ -116,7 +116,11 @@ replacement, compatibility CCS, immutable second ClientHello fields, permitted
 padding/early-data changes and PSK age/binder updates or incompatible-identity
 removal. OpenSSL verifies retried HTTP/1.1 and h2 certificate/Finished flights;
 25 independent offer/transcript vectors cover positive and negative changes.
-QUIC CRYPTO retry integration and TLS KeyUpdate remain unfinished.
+QUIC uses the same authenticated retry flow while preserving cumulative
+Initial CRYPTO offsets and packet numbers across both hellos. An independent
+aioquic packet-crypto peer verifies Initial retransmission numbers, handshake
+encryption, ECDH/HKDF, the trusted RSA-PSS certificate flight, both Finished
+messages and gated application secrets. TLS KeyUpdate remains unfinished.
 The Retry foundation authenticates bounded address/CID-bound HMAC tokens with
 a 30-second lifetime and serializes QUIC v1 Retry packets. Independent Python
 and aioquic checks cover token tampering, expiry, IPv4/IPv6 binding and packet

@@ -8,6 +8,7 @@ type Flight = {
   token: Blob, parameters: Blob, keys: Stdlib.QuicCrypto.Initial,
   initial: Stdlib.QuicSpace.State, handshake: Stdlib.QuicSpace.State,
   tls: Stdlib.Option.Option<Stdlib.QuicServerTls.Handshake>,
+  retry: Stdlib.Option.Option<Stdlib.Tls13ServerRetry.State>,
   authenticated: Stdlib.Option.Option<Stdlib.QuicServerTls.Ready>,
   initialDiscarded: Bool, pending: List<Blob>, invalid: Int64
 }
@@ -24,13 +25,13 @@ let __parameters (source: Blob) (original: Blob) : Stdlib.Result.Result<Blob, St
       | Ok original, Ok source, Ok retry, Ok migration -> Ok (Stdlib.Blob.concat (Stdlib.List.append (Stdlib.List.reverse chunks) [original, source, retry, migration]))
       | _, _, _, _ -> Error "QUIC server transport parameter encoding failed")
 
-let __queueCrypto (space: Stdlib.QuicSpace.State) (bytes: Blob) (offset: Int64) : Stdlib.Result.Result<Stdlib.QuicSpace.State, String> =
+let __queueCrypto (space: Stdlib.QuicSpace.State) (bytes: Blob) (base: Int64) (offset: Int64) : Stdlib.Result.Result<Stdlib.QuicSpace.State, String> =
   let length = Stdlib.Blob.__byteLength bytes in
   if offset == length then Ok space
   else
     let size = if length - offset > 900L then 900L else length - offset in
-    Stdlib.QuicFrames.crypto offset (Stdlib.Http2Wire.__slice bytes offset size) |> Stdlib.Result.andThen (Stdlib.QuicSpace.queue space)
-      |> Stdlib.Result.andThen (fun next -> Stdlib.QuicServer.__queueCrypto next bytes (offset + size))
+    Stdlib.QuicFrames.crypto (base + offset) (Stdlib.Http2Wire.__slice bytes offset size) |> Stdlib.Result.andThen (Stdlib.QuicSpace.queue space)
+      |> Stdlib.Result.andThen (fun next -> Stdlib.QuicServer.__queueCrypto next bytes base (offset + size))
 
 let __bounded (space: Stdlib.QuicSpace.State) (opened: Stdlib.QuicCrypto.Opened) (now: Int64) (limit: Int64) : Stdlib.Result.Result<Stdlib.QuicSpace.State, String> =
   Stdlib.QuicFrames.parseHandshake opened.payload |> Stdlib.Result.andThen (fun frames ->
@@ -43,9 +44,10 @@ let __initial (state: Stdlib.QuicServer.Flight) (packet: Stdlib.QuicPacket.Prote
   else match Stdlib.QuicCrypto.openPacket state.keys.client packet.bytes packet.numberOffset state.initial.received.largest with
   | Error "Invalid QUIC reserved bits" -> Error "Invalid QUIC reserved bits"
   | Error _ -> if state.invalid >= 4096L then Error "QUIC server invalid packet limit exceeded" else Ok { state with invalid = state.invalid + 1L }
-  | Ok opened -> Stdlib.QuicServer.__bounded state.initial opened now 32768L |> Stdlib.Result.andThen (fun initial ->
+  | Ok opened -> Stdlib.QuicServer.__bounded state.initial opened now 65536L |> Stdlib.Result.andThen (fun initial ->
       let available = Stdlib.QuicReassembly.available initial.crypto in
-      match state.tls with
+      if Stdlib.Blob.__byteLength available > 32768L || (Stdlib.Blob.__byteLength available >= 4L && Stdlib.Tls13.__read24 available 1L > 32764L) then Error "QUIC ClientHello exceeds limit"
+      else match state.tls with
       | Some _ -> if Stdlib.Blob.__byteLength available != 0L then Error "Extra QUIC client Initial CRYPTO bytes" else Ok { state with initial = initial }
       | None ->
         match Stdlib.Tls13Handshake.parseHandshakeFrame available with
@@ -53,10 +55,21 @@ let __initial (state: Stdlib.QuicServer.Flight) (packet: Stdlib.QuicPacket.Prote
         | Error _ -> Error "Invalid QUIC client TLS framing"
         | Ok frame ->
           if frame.kind != 1L || Stdlib.Blob.__byteLength frame.remaining != 0L then Error "QUIC Initial must contain one ClientHello"
-          else Stdlib.QuicServerTls.start state.identity available state.parameters state.routing.destination |> Stdlib.Result.andThen (fun tls ->
-            match Stdlib.QuicServer.__queueCrypto (Stdlib.QuicSpace.drainCrypto initial) tls.flight.hello 0L, Stdlib.QuicServer.__queueCrypto state.handshake tls.flight.encrypted 0L with
-            | Ok initial, Ok handshake -> Ok { state with initial = initial, handshake = handshake, tls = Some tls }
-            | _, _ -> Error "QUIC server flight queue failed"))
+          else
+            let offer = match state.retry with
+              | None -> Stdlib.QuicServerTls.start state.identity available state.parameters state.routing.destination
+              | Some retry -> Stdlib.QuicServerTls.startAfterRetry state.identity retry available state.parameters state.routing.destination in
+            (match offer with
+            | Error "TLS ClientHello requires HelloRetryRequest" ->
+              if Stdlib.Option.isSome state.retry then Error "Repeated QUIC TLS retry"
+              else Stdlib.Tls13ServerHello.parse available |> Stdlib.Result.andThen Stdlib.Tls13ServerRetry.create |> Stdlib.Result.andThen (fun retry ->
+                Stdlib.QuicServer.__queueCrypto (Stdlib.QuicSpace.drainCrypto initial) retry.hello 0L 0L |> Stdlib.Result.map (fun initial -> { state with initial = initial, retry = Some retry }))
+            | Error message -> Error message
+            | Ok tls ->
+              let base = match state.retry with | None -> 0L | Some retry -> Stdlib.Blob.__byteLength retry.hello in
+              match Stdlib.QuicServer.__queueCrypto (Stdlib.QuicSpace.drainCrypto initial) tls.flight.hello base 0L, Stdlib.QuicServer.__queueCrypto state.handshake tls.flight.encrypted 0L 0L with
+              | Ok initial, Ok handshake -> Ok { state with initial = initial, handshake = handshake, tls = Some tls }
+              | _, _ -> Error "QUIC server flight queue failed"))
 
 let __handshake (state: Stdlib.QuicServer.Flight) (packet: Stdlib.QuicPacket.Protected) (now: Int64) : Stdlib.Result.Result<Stdlib.QuicServer.Flight, String> =
   match state.tls with
@@ -97,7 +110,7 @@ let start (identity: Stdlib.TlsServerIdentity.Identity) (secret: Blob) (datagram
       match Stdlib.QuicCrypto.initial packet.destination, Stdlib.QuicSpace.create (), Stdlib.QuicSpace.create (), Stdlib.QuicServer.__parameters packet.destination original with
       | Ok keys, Ok initial, Ok handshake, Ok parameters ->
         let state = Stdlib.QuicServer.Flight { identity = identity, routing = Stdlib.QuicHandshakePacket.Routing { source = packet.destination, destination = packet.source, token = Stdlib.Blob.empty },
-          token = packet.token, parameters = parameters, keys = keys, initial = initial, handshake = handshake, tls = None, authenticated = None, initialDiscarded = false, pending = [], invalid = 0L } in
+          token = packet.token, parameters = parameters, keys = keys, initial = initial, handshake = handshake, tls = None, retry = None, authenticated = None, initialDiscarded = false, pending = [], invalid = 0L } in
         Stdlib.QuicServer.packets state datagram.payload now
       | _, _, _, _ -> Error "QUIC server handshake initialization failed")
   | _ -> Error "QUIC server requires a validated Initial"

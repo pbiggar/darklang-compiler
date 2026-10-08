@@ -4,7 +4,7 @@ module Darklang.Stdlib.QuicServerTls
 type Handshake = { flight: Stdlib.Tls13ServerHandshake.Flight, send: Stdlib.QuicCrypto.Keys, receive: Stdlib.QuicCrypto.Keys, parameters: Stdlib.QuicParameters.Parameters }
 type Ready = { send: Stdlib.QuicCrypto.Keys, receive: Stdlib.QuicCrypto.Keys, sendSecret: Blob, receiveSecret: Blob, parameters: Stdlib.QuicParameters.Parameters }
 
-let start (identity: Stdlib.TlsServerIdentity.Identity) (clientHello: Blob) (parameters: Blob) (clientSource: Blob) : Stdlib.Result.Result<Stdlib.QuicServerTls.Handshake, String> =
+let __start (identity: Stdlib.TlsServerIdentity.Identity) (clientHello: Blob) (parameters: Blob) (clientSource: Blob) (retry: Stdlib.Option.Option<Stdlib.Tls13ServerRetry.State>) : Stdlib.Result.Result<Stdlib.QuicServerTls.Handshake, String> =
   Stdlib.Tls13ServerHello.parse clientHello |> Stdlib.Result.andThen (fun hello ->
     Stdlib.Tls13ServerHello.selectProtocol hello ["h3"] |> Stdlib.Result.andThen (fun protocol ->
       if protocol != "h3" then Error "QUIC TLS requires h3 ALPN"
@@ -13,10 +13,19 @@ let start (identity: Stdlib.TlsServerIdentity.Identity) (clientHello: Blob) (par
       | Some client ->
         Stdlib.QuicParameters.parseClient client clientSource |> Stdlib.Result.andThen (fun clientParameters ->
           Stdlib.QuicParameters.parse Stdlib.QuicParameters.Sender.Server parameters |> Stdlib.Result.andThen (fun _ ->
-            Stdlib.Tls13ServerHandshake.start identity clientHello ["h3"] (Some parameters) |> Stdlib.Result.andThen (fun flight ->
+            let flight = match retry with
+              | None -> Stdlib.Tls13ServerHandshake.start identity clientHello ["h3"] (Some parameters)
+              | Some retry -> Stdlib.Tls13ServerHandshake.startAfterRetry identity retry clientHello ["h3"] (Some parameters) in
+            flight |> Stdlib.Result.andThen (fun flight ->
               match Stdlib.QuicCrypto.derive flight.secrets.handshakeServer, Stdlib.QuicCrypto.derive flight.secrets.handshakeClient with
               | Ok send, Ok receive -> Ok (Stdlib.QuicServerTls.Handshake { flight = flight, send = send, receive = receive, parameters = clientParameters })
               | _, _ -> Error "QUIC server handshake key derivation failed")))))
+
+let start (identity: Stdlib.TlsServerIdentity.Identity) (clientHello: Blob) (parameters: Blob) (clientSource: Blob) : Stdlib.Result.Result<Stdlib.QuicServerTls.Handshake, String> =
+  Stdlib.QuicServerTls.__start identity clientHello parameters clientSource None
+
+let startAfterRetry (identity: Stdlib.TlsServerIdentity.Identity) (retry: Stdlib.Tls13ServerRetry.State) (clientHello: Blob) (parameters: Blob) (clientSource: Blob) : Stdlib.Result.Result<Stdlib.QuicServerTls.Handshake, String> =
+  Stdlib.QuicServerTls.__start identity clientHello parameters clientSource (Some retry)
 
 let finish (handshake: Stdlib.QuicServerTls.Handshake) (clientFinished: Blob) : Stdlib.Result.Result<Stdlib.QuicServerTls.Ready, String> =
   Stdlib.Tls13ServerHandshake.finish handshake.flight clientFinished |> Stdlib.Result.andThen (fun ready ->

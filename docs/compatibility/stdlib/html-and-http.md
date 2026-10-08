@@ -286,8 +286,13 @@ and close sends close_notify with the next nonce before releasing the socket.
 The independent `python3 scripts/test_http2_server_tls_peer.py` covers 70 KiB
 uploads/responses, HEAD, early body-limit rejection, Expect, ALPN fallback and
 rejection, fragmented ClientHello, forged Finished, shutdown during handshake
-and application reads, and cleanup. QUIC CRYPTO HelloRetryRequest integration
-and post-handshake TLS KeyUpdate remain pending. The pure
+and application reads, and cleanup. QUIC uses the same HelloRetryRequest
+transcript and offer checks with continuous Initial CRYPTO offsets and fresh
+packet numbers. `python3 scripts/test_quic_server_tls_retry_peer.py` verifies
+encrypted retry/ServerHello offsets, Initial retransmission numbers, independent
+ECDH/HKDF, a trusted certificate and RSA-PSS signature, both Finished messages,
+application-key gating and zero leaks through the real server packet spaces.
+Post-handshake TLS KeyUpdate remains pending. The pure
 `QuicServerTls` adapter now requires h3 ALPN and client transport parameters,
 binds the client's initial source connection ID, derives QUIC handshake packet
 keys, and releases application secrets and packet keys only after verifying
