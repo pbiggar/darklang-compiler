@@ -52,6 +52,7 @@ val simpleInferType :
   TypeRegistries.typeRegistry ->
   LoweringPrimitives.variantLookup ->
   TypeRegistries.typeNameRegistry ->
+  CheckedAST.symbols ->
   AST.semanticType option
 
 val inferLambdaReturnType :

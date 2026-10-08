@@ -15,6 +15,7 @@ let infer expr state =
     state.A.funcReturnTypes state.A.genericFuncDefs state.A.typeReg
     state.A.variantLookup
     (R.typeNamesFromSymbols state.A.symbols)
+    state.A.symbols
 
 let merge environment bindings = B.fold B.add bindings environment
 

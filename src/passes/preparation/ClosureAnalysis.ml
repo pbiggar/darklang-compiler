@@ -309,14 +309,14 @@ let rec reconcileBranchTypes left right =
    Complex expressions require full type inference
 *)
 let rec simpleInferType expr typeEnv funcParams funcReturns genericDefs typeReg
-    variants names =
+    variants names symbols =
   let infer expr =
     simpleInferType expr typeEnv funcParams funcReturns genericDefs typeReg
-      variants names
+      variants names symbols
   in
   let inferWith environment expr =
     simpleInferType expr environment funcParams funcReturns genericDefs typeReg
-      variants names
+      variants names symbols
   in
   let fieldIndex id =
     match R.tryFindFieldIndex id names with
@@ -521,7 +521,17 @@ let rec simpleInferType expr typeEnv funcParams funcReturns genericDefs typeReg
       | AST.StringConcat -> Some AST.TString)
   | C.UnaryOp (AST.Not, _) -> Some AST.TBool
   | C.UnaryOp ((AST.Neg | AST.BitNot), value) -> infer value
-  | C.Call (id, _) -> FunctionIdMap.tryFind id funcReturns
+  | C.Call (id, arguments) ->
+      if C.functionName id symbols = Some "Builtin.unwrap" then
+        match NonEmptyList.toList arguments with
+        | [ argument ] -> (
+            match infer argument with
+            | Some (AST.TSum ("Darklang.Stdlib.Option.Option", [ value ]))
+            | Some (AST.TSum ("Darklang.Stdlib.Result.Result", [ value; _ ])) ->
+                Some value
+            | _ -> None)
+        | _ -> None
+      else FunctionIdMap.tryFind id funcReturns
   | C.TypeApp (id, args, _) -> (
       match FunctionIdMap.tryFind id genericDefs with
       | Some (parameters, result) when List.length parameters = List.length args
@@ -606,6 +616,7 @@ let inferLambdaReturnType body state =
     simpleInferType body state.typeEnv state.funcParams state.funcReturnTypes
       state.genericFuncDefs state.typeReg state.variantLookup
       (R.typeNamesFromSymbols state.symbols)
+      state.symbols
   with
   | Some AST.TNever -> Ok AST.TUnit
   | Some result -> Ok result
