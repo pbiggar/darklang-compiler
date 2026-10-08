@@ -137,6 +137,23 @@ The interpreter delegates to its branch-aware package manager; main-store
 lookup uses `LibDB.ProgramTypes.Type.find` backed by SQLite. Item skipped,
 not fixed. Other lookup functions remain individually unreviewed.
 
+## Deferred: interpreter-based daemon launching
+
+Per user direction, do not implement `Darklang.Stdlib.Cli.Daemon.launcher`
+or `launchDetached` yet (`packages/darklang/stdlib/cli/daemon.dark`).
+Original package compilation fails at `launcher` with
+`Unknown function or value 'Stdlib.Cli.Sys.currentExecutablePath'`.
+The compiler's `Cli.Sys` lacks this API; the interpreter implements it through
+`Builtin.getCurrentExecutablePath`.
+
+`launchDetached` assumes that executable is the interpreter CLI and invokes
+`nohup <executable> eval '<expression>' >> <log> 2>&1 &`. A compiled application's
+executable does not provide Dark source evaluation through `eval`, so adding
+the path API alone would not make this launcher work. Defer both the missing
+API for this work and interpreter-based daemon launching; no fix made.
+Other daemon helpers remain individually unreviewed, not blanket-deferred.
+Retain these items in the final unresolved list.
+
 ## Completion rule
 
 At the end of the package review, enumerate every skipped package and unresolved
