@@ -25,7 +25,9 @@ fi
 PROBLEM_DIR="$BENCHMARKS_DIR/problems/$BENCHMARK"
 DARK_BINARY="${DARK_BINARY:-$PROBLEM_DIR/dark/main}"
 EXPECTED=$(python3 "$SCRIPT_DIR/benchmark_profiles.py" expected "$PROFILE" "$BENCHMARK")
-mapfile -t BENCHMARK_ARGUMENTS < <(python3 "$SCRIPT_DIR/benchmark_profiles.py" arguments "$PROFILE" "$BENCHMARK")
+# Regular files also work in minimal VMs without /dev/fd process substitution.
+python3 "$SCRIPT_DIR/benchmark_profiles.py" arguments "$PROFILE" "$BENCHMARK" > "$OUTPUT_DIR/${BENCHMARK}_arguments.txt"
+mapfile -t BENCHMARK_ARGUMENTS < "$OUTPUT_DIR/${BENCHMARK}_arguments.txt"
 
 # Check for valgrind
 if ! command -v valgrind &> /dev/null; then

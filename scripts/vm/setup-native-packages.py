@@ -1,8 +1,12 @@
 #!/usr/bin/env python3
 # Restore pinned Ubuntu native headers without installing outside the workspace.
 from pathlib import Path
-import hashlib,lzma,subprocess,urllib.request,concurrent.futures,sys
-root=Path(sys.argv[1])
+import argparse,hashlib,lzma,subprocess,urllib.request,concurrent.futures
+parser=argparse.ArgumentParser(description=__doc__)
+parser.add_argument('root',type=Path)
+parser.add_argument('--cachegrind',action='store_true',help='also restore the pinned Valgrind benchmark tools')
+options=parser.parse_args()
+root=options.root
 (root/"downloads").mkdir(parents=True,exist_ok=True)
 (root/"qemu-deps/sysroot").mkdir(parents=True,exist_ok=True)
 base='https://snapshot.ubuntu.com/ubuntu/20260828T000000Z/'
@@ -26,6 +30,7 @@ names=['libgmp-dev','libgmp10','libsqlite3-dev','libsqlite3-0',
        'libpcre2-dev','libpcre2-8-0','libpcre2-16-0','libpcre2-32-0','libpcre2-posix3',
        'libmount-dev','libmount1','libblkid-dev','libblkid1',
        'zlib1g-dev','zlib1g','libpkgconf3','pkgconf-bin','pkgconf','pkg-config']
+if options.cachegrind:names.append('valgrind')
 def fetch(name):
  p=packages[name];archive=root/'downloads'/Path(p['Filename']).name
  if not archive.exists() or hashlib.sha256(archive.read_bytes()).hexdigest()!=p['SHA256']:

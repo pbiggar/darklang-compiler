@@ -31,6 +31,18 @@ The workaround excludes nonempty files, symlinks, other build outputs and
 source files. Bootstrap tests both the enabled behavior and these exclusions.
 Do not apply that adapter on a normal host.
 
+Cachegrind is an optional benchmark prerequisite, restored from the same
+checksum-verified snapshot:
+
+```bash
+python3 scripts/vm/setup-native-packages.py /absolute/writable/toolchains --cachegrind
+export VALGRIND_LIB=/absolute/writable/toolchains/qemu-deps/sysroot/usr/libexec/valgrind
+```
+
+Valgrind requires a VM with `/proc/self/maps`; installing its package cannot
+supply that kernel interface. Benchmark argument loading uses regular files
+so the smoke gate can also run on VMs without `/dev/fd`.
+
 The default host test suite executes generated x86-64 binaries directly.
 The additional runtime executable under `test/runtime-execution/` exercises
 both architectures and is an explicit cross-target diagnostic, not part of
