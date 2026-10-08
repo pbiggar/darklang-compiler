@@ -985,7 +985,9 @@ let parseMultilineTest fullText startLineNumber filePath preamble funcLineMap =
               ^ string_of_int startLineNumber
               ^ ": Multi-line expression missing opening '('")
         | Some first ->
-            let expr = trim (slice fullText (first + 1) (close - first - 1)) in
+            (* Keep the original opening column and grouping: stripping these
+               parentheses changes indentation-sensitive applications. *)
+            let expr = trim (slice fullText first (close - first + 1)) in
             let after = trimStart (tail fullText (close + 1)) in
             let expectation =
               if starts after "=" then trim (tail after 1) else after

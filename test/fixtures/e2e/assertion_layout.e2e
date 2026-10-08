@@ -16,3 +16,6 @@ Stdlib.Float.absoluteValue
 
 "first
   second" = "first\n  second"
+
+([ Stdlib.Option.Option.None
+   Stdlib.Option.Option.Some 5 ]) = [ Stdlib.Option.Option.None, Stdlib.Option.Option.Some 5 ]
