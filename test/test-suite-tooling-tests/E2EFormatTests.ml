@@ -117,7 +117,7 @@ let testParsesIndentedMultilineDarkTestsInsideModule () =
     "Expected indented .dark multiline test to parse" (fun test ->
       let* () =
         require
-          (test.source = " match 6L with\n | 6L -> \"pass\"\n | _ -> \"fail\"")
+          (test.source = "(match 6L with\n | 6L -> \"pass\"\n | _ -> \"fail\")")
           ("Unexpected parsed source: " ^ test.source)
       in
       let* () = value "\"pass\"" test in

@@ -1001,17 +1001,15 @@ let parseMultilineTest fullText startLineNumber filePath preamble funcLineMap =
               ^ string_of_int startLineNumber
               ^ ": Multi-line expression missing opening '('")
         | Some first ->
-            (* These parentheses delimit a fixture program, including top-level
-               declarations. Keep their width without introducing a local scope. *)
-            let expr = " " ^ slice fullText (first + 1) (close - first - 1) in
-            let after = trimStart (tail fullText (close + 1)) in
-            let expectation =
-              if starts after "=" then trim (tail after 1) else after
+            let inner = slice fullText (first + 1) (close - first - 1) in
+            (* Legacy let fixtures delimit a source program with parentheses.
+               Keep their opening column without turning declarations local.
+               Other expressions retain their grouping, including tuples. *)
+            let source =
+              if starts (trimStart inner) "let " then " " ^ inner
+              else slice fullText first (close - first + 1)
             in
-            parseTestLineWithPreamble
-              (expr ^ " = " ^ expectation)
-              startLineNumber filePath preamble funcLineMap
-            |> Result.map (fun test -> { test with source = expr }))
+            direct () |> Result.map (fun test -> { test with source }))
     | _ -> direct ()
 
 let stripComment line =
