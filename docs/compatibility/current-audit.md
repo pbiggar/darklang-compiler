@@ -3,14 +3,14 @@
 Audited on 2026-10-08 (UTC), against compiler revision `f0857f5686f5959cd05dad921238193850a708a9` on Linux x86-64.
 
 **Every assertion excluded by the ledger gates was run: 2,340 assertions across 57 files.**
-**1 previously disabled assertion now passes and is enabled; 2,339 still fail.**
+**2 previously disabled assertions are now enabled; 2,338 still fail.**
 
-Including enabled neighbours, 3,774 assertions executed: 1,435 passed and 2,339 failed.
-The remaining gates cover these exact failures: 34 whole files and 270 assertion lines across 22 mixed files.
+Latest results for the audited files, including enabled neighbours: 3,774 assertions, 1,436 passed and 2,338 failed.
+The remaining gates cover these exact failures: 34 whole files and 269 assertion lines across 21 mixed files.
 
-The assertion harness now compares original parsed expressions. Multiline applications and literal contents are preserved in individual runs and batches.
+The assertion harness now compares original parsed expressions. Multiline applications and literal contents are preserved in individual runs and batches. A follow-up retest of `stdlib/dict.dark` passed all 140 assertions after L21 was changed to expect its existing compile-time key type error.
 
-Verification: fresh native build passed; the complete host suite passed **11,141/11,141** tests; `dune runtest` passed. The gates and individual ledger rows match all 2,339 measured failing assertion identities exactly. The parent benchmark check stopped before measurement because the stored workload digest is incompatible; no baseline was reset.
+Verification: fresh native build passed; the complete host suite passed **11,316/11,316** tests; `dune runtest` passed; the canonical compiled leak gate passed **58/58** workloads. The gates and individual ledger rows match all 2,338 measured failing assertion identities exactly. The parent benchmark check stopped before measurement because the stored workload digest is incompatible; no baseline was reset.
 
 ## Failing test files
 
@@ -53,7 +53,6 @@ Each file links to the individual failing assertions and their observed diagnost
 | [stachu/parser.dark](failures/stachu/parser.md) | 56 | 0 | 56 |
 | [stachu/tinyLang.dark](failures/stachu/tinyLang.md) | 34 | 0 | 34 |
 | [stdlib/base64.dark](failures/stdlib/base64.md) | 41 | 15 | 26 |
-| [stdlib/dict.dark](failures/stdlib/dict.md) | 140 | 139 | 1 |
 | [stdlib/earg.dark](failures/stdlib/earg.md) | 15 | 0 | 15 |
 | [stdlib/eself.dark](failures/stdlib/eself.md) | 39 | 0 | 39 |
 | [stdlib/float.dark](failures/stdlib/float.md) | 167 | 145 | 22 |
@@ -75,9 +74,10 @@ Each file links to the individual failing assertions and their observed diagnost
 | [stdlib/sqlite.dark](failures/stdlib/sqlite.md) | 8 | 0 | 8 |
 | [stdlib/string.dark](failures/stdlib/string.md) | 640 | 0 | 640 |
 
-## Assertions enabled by this fix
+## Assertions enabled
 
 - [stdlib/pretty.dark:L186](../../test/fixtures/e2e/upstream/stdlib/pretty.dark#L186)
+- [stdlib/dict.dark:L21](../../test/fixtures/e2e/upstream/stdlib/dict.dark#L21) — expects a compile-time type error
 
 ## Run conditions
 

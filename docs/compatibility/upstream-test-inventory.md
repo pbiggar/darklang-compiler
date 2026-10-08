@@ -4,8 +4,8 @@ Generated from `test/test-suite-tooling/TestRunner.ml` and the imported
 `test/fixtures/e2e/upstream/**/*.dark` files. Regenerate with
 `python3 scripts/audit-upstream-gates.py`; verify with `--check`.
 
-**105 files; 34 whole-file exclusions; 270 line-number entries
-across 22 files.** A line entry is not a skipped-test count.
+**105 files; 34 whole-file exclusions; 269 line-number entries
+across 21 files.** A line entry is not a skipped-test count.
 The runner matches the `L<number>:` assertion name produced by the fixture
 parser. Declarations and multiline assertions require parser inspection;
 the source line alone does not establish whether a gate suppresses a test.
@@ -78,7 +78,7 @@ Other skip metadata and runtime filters are outside this inventory.
 | [stdlib/cli-tui-text.dark](../../test/fixtures/e2e/upstream/stdlib/cli-tui-text.dark) | enabled | — |
 | [stdlib/crypto.dark](../../test/fixtures/e2e/upstream/stdlib/crypto.dark) | enabled | — |
 | [stdlib/date.dark](../../test/fixtures/e2e/upstream/stdlib/date.dark) | enabled | — |
-| [stdlib/dict.dark](../../test/fixtures/e2e/upstream/stdlib/dict.dark) | enabled | 21 |
+| [stdlib/dict.dark](../../test/fixtures/e2e/upstream/stdlib/dict.dark) | enabled | — |
 | [stdlib/discovery.dark](../../test/fixtures/e2e/upstream/stdlib/discovery.dark) | enabled | — |
 | [stdlib/duration.dark](../../test/fixtures/e2e/upstream/stdlib/duration.dark) | enabled | — |
 | [stdlib/earg.dark](../../test/fixtures/e2e/upstream/stdlib/earg.dark) | disabled | — |
@@ -127,4 +127,4 @@ editing the runner. They must not be counted as unsupported expressions.
 | File | Line | Source line |
 | --- | --- | --- |
 
-0 of the 270 entries point to blank or comment lines.
+0 of the 269 entries point to blank or comment lines.
