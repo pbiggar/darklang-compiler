@@ -898,6 +898,22 @@ let parseTestLineWithPreamble line lineNumber filePath preamble funcLineMap =
             expectedErrorMessage,
             skipReason ) ->
           let display = Option.value ~default:source comment in
+          let expectedValueExpr =
+            let raw = tail without (i + 1) in
+            if Text.contains raw "\n" then
+              let column =
+                match
+                  List.rev (String.split_on_char '\n' (slice without 0 (i + 1)))
+                with
+                | last :: _ -> length last
+                | [] ->
+                    Crash.crash "Splitting a source prefix must produce a line"
+              in
+              Option.map
+                (fun _ -> String.make column ' ' ^ raw)
+                expectedValueExpr
+            else expectedValueExpr
+          in
           Ok
             {
               name = "L" ^ string_of_int lineNumber ^ ": " ^ display;

@@ -207,14 +207,18 @@ let sourceToExecute _allowInternal (test : e2eTest) =
     match parseWritten test.source with
     | Ok program when program.WT.exprsToEval <> [] -> Ok program
     | Ok _ -> parseWritten (normalizeInlineEntry test.source)
-    | Error _ as original -> (
-        match tryParseWrittenExpression test.source with
-        | Some program -> Ok program
-        | None when test.expectedValueExpr = None -> original
-        | None ->
-            parseWritten
-              (normalizeInlineEntry
-                 (rewriteParenthesizedStatements test.source)))
+    | Error _ -> (
+        let normalized = normalizeInlineEntry test.source in
+        match parseWritten normalized with
+        | Ok program -> Ok program
+        | Error _ as original -> (
+            match tryParseWrittenExpression normalized with
+            | Some program -> Ok program
+            | None when test.expectedValueExpr = None -> original
+            | None ->
+                parseWritten
+                  (normalizeInlineEntry
+                     (rewriteParenthesizedStatements test.source))))
   in
   let* left = parsed in
   match test.expectedValueExpr with

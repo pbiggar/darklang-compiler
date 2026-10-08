@@ -58,7 +58,7 @@ let two source expectation check =
 
 let value expected test =
   require
-    (test.expectedValueExpr = Some expected)
+    (Option.map Text.trim test.expectedValueExpr = Some expected)
     ("Unexpected RHS parse: "
     ^ Option.value ~default:"None" test.expectedValueExpr)
 
