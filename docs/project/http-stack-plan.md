@@ -94,11 +94,12 @@ servers, plus malformed-wire and resource-lifecycle tests. Add stress and
 performance measurements for buffered and streaming bodies. HTTP/1.1 is the
 first interoperability target; HTTP/2 and HTTP/3 require separate protocol
 work. HTTP/2 now has a single-exchange HTTPS client (authenticated ALPN with
-HTTP/1.1 fallback) and a prior-knowledge cleartext server. HTTP/3 currently has
-integer/frame/SETTINGS codecs, static/literal QPACK, AES-128 packet protection,
-bounded CRYPTO reassembly and a certificate-authenticated TLS handshake with
-transport-parameter/connection-ID validation, not a working QUIC
-transport; see the compatibility ledger for exact profile boundaries. For
+HTTP/1.1 fallback) and a prior-knowledge cleartext server. HTTP/3 now has a
+certificate-authenticated QUIC client, loss recovery, stream flow control,
+key updates, static/literal QPACK, critical-stream/message validation and
+buffered or lazy public client responses selected through HTTPS DNS.
+Server TLS/HTTP/3 and learned Alt-Svc caching remain work; see the compatibility
+ledger for exact profile boundaries. For
 each implementation branch, run `./build --ai`, the already-built
 `./run-tests --ai`, and
 `./benchmarks/run_benchmarks.sh --verify-parent full` before merge-train

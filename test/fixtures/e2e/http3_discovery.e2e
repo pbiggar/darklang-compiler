@@ -1,0 +1,16 @@
+// http3_discovery.e2e - Advertisement selection preserves guest hostname and resolved-IP policy.
+Stdlib.Http3Discovery.allowedHost false "localhost" = false
+Stdlib.Http3Discovery.allowedHost false "metadata.google.internal" = false
+Stdlib.Http3Discovery.allowedHost false "example.com" = true
+Stdlib.Http3Discovery.allowedHost true "localhost" = true
+Stdlib.Http3Discovery.allowedAddress false [127L,0L,0L,1L] = false
+Stdlib.Http3Discovery.allowedAddress true [127L,0L,0L,1L] = true
+Stdlib.Http3Discovery.allowedAddress false [169L,254L,169L,254L] = false
+Stdlib.Http3Discovery.allowedAddress false [8L,8L,8L,8L] = true
+Stdlib.Http3Discovery.allowedAddress false [0L,0L,0L,0L,0L,0L,0L,0L,0L,0L,0L,0L,0L,0L,0L,1L] = false
+Stdlib.Http3Discovery.allowedAddress false [0L,0L,0L,0L,0L,0L,0L,0L,0L,0L,255L,255L,127L,0L,0L,1L] = false
+Stdlib.Http3Discovery.allowedAddress true [127L] = false
+Stdlib.Http3Discovery.connect [] "example.com" [] false |> Stdlib.Option.isNone = true
+Stdlib.DnsWire.query 1L "_8443._https.example.com" 1L |> Stdlib.Result.map Stdlib.Blob.toHex = Ok "000101000001000000000000055F38343433065F6874747073076578616D706C6503636F6D0000010001"
+Stdlib.Blob.fromHex "000181800001000100000000055F38343433065F6874747073076578616D706C6503636F6D0000010001C00C000100010000001E000401020304" |> Stdlib.Result.andThen (fun wire -> Stdlib.DnsWire.answers wire 1L "_8443._https.example.com" 1L) = Ok [[1L,2L,3L,4L]]
+Stdlib.HttpClient.request "GET" "https://127.0.0.1/" [] Stdlib.Blob.empty = Error (Stdlib.HttpClient.RequestError.BadUrl Stdlib.HttpClient.BadUrlDetails.InvalidHost)

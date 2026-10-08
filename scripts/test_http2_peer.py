@@ -62,10 +62,10 @@ match Stdlib.Cli.Args.int64 0 with
 '''
 
 
-def compile_source(directory, name, source):
+def compile_source(directory, name, source, compiler):
     path, binary = directory / f"{name}.dark", directory / name
     path.write_text(source)
-    result = subprocess.run([str(ROOT / "dark"), str(path), "--leak-check", "-o", str(binary)],
+    result = subprocess.run([str(compiler), str(path), "--leak-check", "-o", str(binary)],
                             cwd=ROOT, text=True, capture_output=True, timeout=120)
     assert result.returncode == 0, result.stdout + result.stderr
     return binary
@@ -157,8 +157,8 @@ def tls_peer(listener, context, mode, failures):
         failures.append(error)
 
 
-def client_checks(directory, modes=("buffered", "stream", "head", "abandon", "truncated", "early-buffered", "early-stream")):
-    binary = compile_source(directory, "client", CLIENT)
+def client_checks(directory, modes=("buffered", "stream", "head", "abandon", "truncated", "early-buffered", "early-stream"), compiler=ROOT / "dark"):
+    binary = compile_source(directory, "client", CLIENT, compiler)
     key, cert, ca = certificates(directory)
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     context.minimum_version = ssl.TLSVersion.TLSv1_3
@@ -185,8 +185,8 @@ def client_checks(directory, modes=("buffered", "stream", "head", "abandon", "tr
                 assert result.returncode == 0 and result.stdout == expected and not result.stderr, result
 
 
-def server_checks(directory):
-    binary = compile_source(directory, "server", SERVER)
+def server_checks(directory, compiler=ROOT / "dark"):
+    binary = compile_source(directory, "server", SERVER, compiler)
     with socket.socket() as reservation:
         reservation.bind(("127.0.0.1", 0))
         port = reservation.getsockname()[1]
@@ -252,17 +252,18 @@ def server_checks(directory):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--compiler", type=Path, default=ROOT / "dark", help="Compiler executable to verify")
     parser.add_argument("--client-mode", choices=("buffered", "stream", "head", "abandon", "truncated", "early-buffered", "early-stream"),
                         help="Run one client case, without the server checks")
     args = parser.parse_args()
     with tempfile.TemporaryDirectory(prefix="dark-http2-") as temporary:
         directory = Path(temporary)
         if args.client_mode:
-            client_checks(directory, (args.client_mode,))
+            client_checks(directory, (args.client_mode,), args.compiler)
             print("HTTP/2 client case verified:", args.client_mode)
         else:
-            client_checks(directory)
-            server_checks(directory)
+            client_checks(directory, compiler=args.compiler)
+            server_checks(directory, args.compiler)
             print("HTTP/2 TLS client and cleartext server verified: flow control, streaming, trailers, HEAD, early rejection, truncation and cleanup")
 
 

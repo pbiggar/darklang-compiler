@@ -135,7 +135,8 @@ informational replies and retained HPACK state), truncation, cleartext server
 dispatch, body limits, bounded draining after early replies, shutdown during
 stalled HTTP/2 reads and compiled leak accounting.
 
-HTTP/3 is not yet available through the client/server APIs. Its initial pure
+HTTPS clients now select HTTP/3 from compatible HTTPS DNS advertisements;
+HTTP/3 server integration remains unfinished. The pure
 wire layer provides bounded QUIC variable-length integers and HTTP/3 frame
 and SETTINGS parsing. QPACK supports the RFC 9204 static table, static-name
 references, literal names/values and shared Huffman decoding, advertising zero
@@ -201,7 +202,24 @@ parameter ordering, lengths, target compression and mandatory-key lists;
 unknown mandatory parameters make an endpoint incompatible. Missing ALPN or
 an advertisement limited to HTTP/1.1 or HTTP/2 does not select QUIC.
 `https_service.e2e` covers these admission and malformed-record boundaries.
-Advertised-only discovery and public client/server integration remain work.
+`HttpsDns` binds type-65 replies to their question and random transaction ID,
+checks the UDP source endpoint, follows bounded aliases with a shared deadline,
+and orders compatible service records by priority. It queries up to three
+configured resolvers; truncation, malformed replies and discovery failure
+fall back to ordinary TCP connection establishment. `https_dns.e2e` and
+`python3 scripts/test_https_dns_peer.py` cover parsing, alias cycles, forged
+source/transaction replies, timeouts and owned socket cleanup.
+The public buffered and streaming clients authenticate the original URL host
+when an advertisement changes the target or port, and apply the same guest IP
+checks to QUIC as to TCP. Connection-establishment failures permit TCP fallback;
+an HTTP/3 request failure is returned without replaying the request on TCP.
+The request owner uploads bounded chunks while processing flow credit and early
+responses. Lazy response bodies own their connection and release it on EOF or
+explicit close. The live stream peer's `--http-client`, `--request-size=71680`,
+`--buffered`, `--close-early` and `--discovery` options verify these paths,
+including alternate-target authentication and both directions crossing 64 KiB.
+Learned Alt-Svc caching, multiplexing, pooling, graceful QUIC wire closure and
+TLS/HTTP/3 server integration remain work.
 
 `Stdlib.HttpClient.Sse.Event` and `parse` are copied from the same revision.
 The parser retains upstream's `Stream.unfold` behavior: it pulls only until the

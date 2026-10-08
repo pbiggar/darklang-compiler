@@ -172,6 +172,7 @@ def main():
     arguments.add_argument("--compiler", type=Path, default=ROOT / "dark", help="Compiler executable to verify")
     arguments.add_argument("--http-owner", action="store_true", help="Use the production HTTP/3 owner instead of the transport-only driver")
     arguments.add_argument("--http-client", action="store_true", help="Use the production HTTP/3 lazy response adapter")
+    arguments.add_argument("--discovery", action="store_true", help="Authenticate the original host through an advertised alternate target")
     arguments.add_argument("--buffered", action="store_true", help="Use the buffered client response adapter")
     arguments.add_argument("--close-early", action="store_true", help="Close the lazy response after its headers")
     arguments.add_argument("--mode", choices=("trusted", "drop-request", "drop-response", "reorder", "trailers", "key-update", "early-response"))
@@ -180,6 +181,7 @@ def main():
     assert not options.request_size or options.http_client, "Uploads require --http-client"
     assert not options.buffered or options.http_client and not options.close_early
     assert not options.close_early or options.http_client
+    assert not options.discovery or options.http_client
     body_bytes = (BODY * ((options.body_size + len(BODY) - 1) // len(BODY)))[:options.body_size]
     upload_bytes = (BODY * ((options.request_size + len(BODY) - 1) // len(BODY)))[:options.request_size]
     key, leaf, ca = certificates()
@@ -188,6 +190,16 @@ def main():
     with tempfile.TemporaryDirectory(prefix="dark-quic-streams-") as temporary:
         source, binary = Path(temporary) / "streams.dark", Path(temporary) / "streams"
         program = HTTP_CLIENT_DARK if options.http_client else HTTP_OWNER_DARK if options.http_owner else DARK
+        if options.discovery:
+            helper = '''let advertised (root: Blob) (port: Int64) : Stdlib.Result.Result<Stdlib.QuicClient.Ready, String> =
+  Stdlib.Blob.fromHex "000103616C74076578616D706C6507696E76616C69640000010003026833000400047F000001"
+    |> Stdlib.Result.andThen (fun wire -> Stdlib.HttpsService.parse "localhost" port wire)
+    |> Stdlib.Result.andThen (fun record -> match record with
+      | Some (Service service) -> Stdlib.Http3Discovery.connect [service] "localhost" [root] true |> Stdlib.Result.fromOption "Advertised connection failed"
+      | _ -> Error "Invalid advertisement")
+'''
+            program = program.replace("let run () : Unit =", helper + "let run () : Unit =")
+            program = program.replace('Stdlib.QuicClient.connect (Stdlib.Datagram.Endpoint { address = [127L,0L,0L,1L], port = port }) "localhost" [root] 8000L', "advertised root port")
         if options.buffered:
             program = program.replace("Stdlib.Http3Client.stream", "Stdlib.Http3Client.request").replace("consume response.body [] 0", "emitBlob response.body 0").replace("Stdlib.Stream.close response.body", "()")
         elif options.close_early:
