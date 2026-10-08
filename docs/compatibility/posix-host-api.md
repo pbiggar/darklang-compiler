@@ -78,5 +78,8 @@ Directory Services. Fnmatch uses C-locale byte semantics rather than a runtime
 locale database. Darwin errno text comes from target definitions and has not
 been compared on a macOS host.
 
-The canonical benchmark leak gate was launched separately. Its result is not
-included in the pass claims above.
+The canonical benchmark leak gate (`python3 scripts/check_compiled_leaks.py`)
+timed out in its batch-compilation phase after 600 seconds, before workload
+execution. No leak-gate pass is claimed. The subsequent attempt to remove
+reproducible scratch diagnostics could not launch: sandbox initialization
+itself failed with `No space left on device`.
