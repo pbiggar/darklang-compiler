@@ -74,7 +74,7 @@ through function calls, type annotations, record literals or enum constructors.
 Fragments of a public package keep that package's declaration name.
 Keep interpreter packages and public fragments unprefixed,
 including nested modules extracted from an upstream file. The
-[complete source inventory](library-sources.md) lists all 209 files, their
+[complete source inventory](library-sources.md) lists all 214 files, their
 modules, and interpreter origins or compiler roles against the pinned revision.
 Update it when adding, moving, or reclassifying sources.
 
