@@ -25,7 +25,8 @@ let __terminalSize (fd: Int64) : Stdlib.Option.Option<(Int * Int)> =
             let rows = Stdlib.Cli.__Posix.__unsigned buffer 0L 2L in
             let columns = Stdlib.Cli.__Posix.__unsigned buffer 2L 2L in
             if rows > 0L && columns > 0L then
-                Stdlib.Option.Option.Some (Stdlib.Int.fromInt64 columns, Stdlib.Int.fromInt64 rows)
+                let dimensions = (Stdlib.Int.fromInt64 columns, Stdlib.Int.fromInt64 rows) in
+                Stdlib.Option.Option.Some dimensions
             else Stdlib.Option.Option.None
         else Stdlib.Option.Option.None
     let _ = __mapped_free buffer in

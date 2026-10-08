@@ -1,5 +1,8 @@
 // Window-size fallbacks when E2E descriptors are redirected.
-Builtin.cliTerminalSize () = (132, 43) env="COLUMNS=132,LINES=43"
-Builtin.cliTerminalSize () = (80, 24) env="COLUMNS=0,LINES=-1"
-Builtin.cliTerminalSize () = (80, 24) env="COLUMNS=invalid,LINES=2147483648"
-Builtin.cliTerminalSize () = (81, 25) env="COLUMNS=+81,LINES=25"
+Builtin.cliTerminalSize () = (132, 43) env="COLUMNS=132" env="LINES=43"
+Builtin.cliTerminalSize () = (80, 24) env="COLUMNS=0" env="LINES=-1"
+Builtin.cliTerminalSize () = (80, 24) env="COLUMNS=invalid" env="LINES=2147483648"
+Builtin.cliTerminalSize () = (81, 25) env="COLUMNS=+81" env="LINES=25"
+Darklang.Cli.Terminal.getSize () = (91, 32) env="COLUMNS=91" env="LINES=32"
+let _ = Stdlib.Cli.Env.set "COLUMNS" "95" in let _ = Stdlib.Cli.Env.set "LINES" "35" in Builtin.cliTerminalSize () = (95, 35) isolated=true
+let _ = Stdlib.Cli.Env.unset "COLUMNS" in let _ = Stdlib.Cli.Env.unset "LINES" in Builtin.cliTerminalSize () = (80, 24) isolated=true
