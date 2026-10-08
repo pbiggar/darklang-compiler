@@ -1154,6 +1154,7 @@ let runTestsWithProgressReporter completedTestReporter args =
             136;
             144;
             155;
+            161;
             169;
             175;
             184;
@@ -1260,6 +1261,7 @@ let runTestsWithProgressReporter completedTestReporter args =
             144;
             149;
             155;
+            161;
           ] );
         ( "test/fixtures/e2e/upstream/stdlib/httpclient.dark",
           [ 71; 108; 111; 131; 132; 133; 134 ] );
