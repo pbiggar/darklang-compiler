@@ -212,6 +212,25 @@ attributes. The unchanged original currentSize function compiles and prints
 stale read-only action stamps. All 58 benchmark compile/run workloads pass with
 clean leak checks. Cachegrind comparison remains waived by the user. Fix: PR #33.
 
+## Terminal color policy
+
+`Darklang.Cli.Terminal.colorEnabled` in
+`packages/darklang/cli/utils/terminal.dark` failed compilation because
+`Builtin.cliTerminalColorEnabled` was missing. PR #34 implements the builtin
+using the existing native stdout terminal probe and environment-vector lookup,
+and embeds the unchanged public wrapper. Color is enabled only when stdout is
+a terminal and `NO_COLOR` is unset or empty; every non-empty value disables it,
+including `0`, whitespace and Unicode. `TERM` and stdin do not affect this API.
+
+Five focused E2E cases reproduce the baseline failures and pass after the fix.
+Native regressions exercise all stdin/stdout terminal combinations, unset,
+empty and non-empty NO_COLOR values, environment mutation after startup, file
+and closed stdout, unchanged terminal attributes, and clean leak diagnostics.
+Full host suite: 11453/11453 passed. Native `dune runtest --cache=disabled` passed
+after correcting stale read-only generated action stamps. All 58 benchmark
+compile/run workloads passed with clean leak checks. Runtime validation is
+Linux x86-64; no new syscall lowering, libc or shell calls were added.
+
 ## Completion rule
 
 At the end of the package review, enumerate every skipped package and unresolved
