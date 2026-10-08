@@ -1,0 +1,55 @@
+// __QuicServerRetry.dark - Expiring address-bound Retry tokens and QUIC v1 integrity tags.
+module Darklang.Stdlib.QuicServerRetry
+
+let __endpoint (peer: Stdlib.Datagram.Endpoint) : Stdlib.Result.Result<Blob, String> =
+  let length = Stdlib.List.length peer.address in
+  if (length != 4 && length != 16) || peer.port < 1L || peer.port > 65535L || Stdlib.Bool.not (Stdlib.Network.__validAddress (length == 16) peer.address) then Error "Invalid QUIC Retry peer"
+  else Ok (Stdlib.Blob.concat [Stdlib.Blob.__fromInt64List [if length == 4 then 4L else 16L], Stdlib.Blob.__fromInt64List peer.address, Stdlib.Tls13.__u16 peer.port])
+
+let __id (data: Blob) (position: Int64) : Stdlib.Result.Result<(Blob * Int64), String> =
+  let length = Stdlib.Blob.__byteLength data in
+  if position >= length then Error "Invalid QUIC Retry token"
+  else
+    let size = Stdlib.Blob.__getByte data position in
+    if size > 20L || position + 1L + size > length then Error "Invalid QUIC Retry token"
+    else Ok ((Stdlib.Http2Wire.__slice data (position + 1L) size, position + 1L + size))
+
+let token (secret: Blob) (peer: Stdlib.Datagram.Endpoint) (original: Blob) (client: Blob) (retry: Blob) (now: Int64) : Stdlib.Result.Result<Blob, String> =
+  let originalLength = Stdlib.Blob.__byteLength original in
+  let clientLength = Stdlib.Blob.__byteLength client in
+  let retryLength = Stdlib.Blob.__byteLength retry in
+  if Stdlib.Blob.__byteLength secret != 32L || now < 0L || originalLength < 8L || originalLength > 20L || clientLength > 20L || retryLength < 1L || retryLength > 20L then Error "Invalid QUIC Retry identity"
+  else Stdlib.QuicServerRetry.__endpoint peer |> Stdlib.Result.map (fun endpoint ->
+    let material = Stdlib.Blob.concat [Stdlib.Blob.__fromInt64List [1L], Stdlib.Blob.__fromInt64List (Stdlib.QuicWire.__bytes now 8L []), Stdlib.Blob.__fromInt64List [originalLength], original, Stdlib.Blob.__fromInt64List [clientLength], client, Stdlib.Blob.__fromInt64List [retryLength], retry, endpoint] in
+    Stdlib.Blob.concat [material, Stdlib.Blob.slice (Stdlib.Crypto.sha256hmac secret material) 0 16])
+
+// The authenticator is checked before interpreting any token-controlled fields.
+// CID and endpoint binding prevents moving a returned token to another path or
+// connection. The listener owns a fresh key; tokens expire after 30 seconds.
+let validate (secret: Blob) (peer: Stdlib.Datagram.Endpoint) (packet: Stdlib.QuicPacket.Protected) (now: Int64) : Stdlib.Result.Result<Blob, String> =
+  let length = Stdlib.Blob.__byteLength packet.token in
+  if Stdlib.Blob.__byteLength secret != 32L || now < 0L || packet.kind != Stdlib.QuicPacket.Kind.Initial || length < 42L || length > 107L then Error "Invalid QUIC Retry token"
+  else
+    let material = Stdlib.Http2Wire.__slice packet.token 0L (length - 16L) in
+    let mac = Stdlib.Http2Wire.__slice packet.token (length - 16L) 16L in
+    let expected = Stdlib.Blob.slice (Stdlib.Crypto.sha256hmac secret material) 0 16 in
+    if Stdlib.Bool.not (Stdlib.AesGcm.__sameTag mac expected 0L 0L) then Error "Invalid QUIC Retry token"
+    else if Stdlib.Blob.__getByte material 0L != 1L || Stdlib.Blob.__getByte material 1L >= 128L then Error "Invalid QUIC Retry token"
+    else
+      let issued = Stdlib.QuicCrypto.__numberBytes material 1L 8L 0L in
+      if issued > now || now - issued > 30000L then Error "Expired QUIC Retry token"
+      else Stdlib.QuicServerRetry.__id material 9L |> Stdlib.Result.andThen (fun parsed ->
+        let (original, position) = parsed in
+        Stdlib.QuicServerRetry.__id material position |> Stdlib.Result.andThen (fun parsed ->
+          let (client, position) = parsed in
+          Stdlib.QuicServerRetry.__id material position |> Stdlib.Result.andThen (fun parsed ->
+            let (retry, position) = parsed in
+            Stdlib.QuicServerRetry.__endpoint peer |> Stdlib.Result.andThen (fun endpoint ->
+              if Stdlib.Blob.__byteLength original < 8L || Stdlib.Blob.__byteLength retry == 0L || Stdlib.Bool.not (Stdlib.QuicClient.__same client packet.source) || Stdlib.Bool.not (Stdlib.QuicClient.__same retry packet.destination) || Stdlib.Bool.not (Stdlib.QuicClient.__same endpoint (Stdlib.Http2Wire.__slice material position (Stdlib.Blob.__byteLength material - position))) then Error "QUIC Retry token identity mismatch"
+              else Ok original))))
+
+let create (secret: Blob) (peer: Stdlib.Datagram.Endpoint) (original: Blob) (client: Blob) (retry: Blob) (now: Int64) : Stdlib.Result.Result<Blob, String> =
+  Stdlib.QuicServerRetry.token secret peer original client retry now |> Stdlib.Result.andThen (fun token ->
+    Stdlib.Crypto.secureRandomBytes 1L |> Stdlib.Result.andThen (fun random ->
+      let header = Stdlib.Blob.concat [Stdlib.Blob.__fromInt64List [240L + Stdlib.Blob.__getByte random 0L % 16L, 0L, 0L, 0L, 1L, Stdlib.Blob.__byteLength client], client, Stdlib.Blob.__fromInt64List [Stdlib.Blob.__byteLength retry], retry, token] in
+      Stdlib.QuicCrypto.retryTag original header |> Stdlib.Result.map (fun tag -> Stdlib.Blob.concat [header, tag])))

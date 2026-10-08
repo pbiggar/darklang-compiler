@@ -101,6 +101,11 @@ h3 and binds client transport parameters before verifying client Finished.
 An independent aioquic client agrees on all handshake/application traffic
 secrets and completes the certificate flight. QUIC server packet ownership
 and HTTP/3 dispatch, HelloRetryRequest and TLS KeyUpdate remain unfinished.
+The Retry foundation authenticates bounded address/CID-bound HMAC tokens with
+a 30-second lifetime and serializes QUIC v1 Retry packets. Independent Python
+and aioquic checks cover token tampering, expiry, IPv4/IPv6 binding and packet
+integrity. The UDP owner must still enforce Initial size, use these challenges
+before certificate flights, and suppress completed-connection token replay.
 
 ## 5. Compatibility and readiness
 

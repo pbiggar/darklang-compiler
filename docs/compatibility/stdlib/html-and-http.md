@@ -291,6 +291,15 @@ separate HKDF implementation, and covers malformed parameters, source mismatch,
 ALPN rejection, invalid Finished and cleanup. It does not yet own UDP packets
 or dispatch HTTP/3 server requests.
 
+`QuicServerRetry` provides listener-key HMAC tokens bound to the peer's address
+and port, original destination CID, client source CID and Retry source CID.
+It authenticates the token before interpreting its fields, rejects future or
+older-than-30-second tokens, and emits the QUIC v1 Retry integrity tag.
+`quic_server_retry.e2e` and `python3 scripts/test_quic_server_retry.py` cover
+invalid local inputs, 31 independent HMAC/expiry/address/CID/tamper cases and
+aioquic packet integrity, with cleanup accounting. UDP listener integration
+and replay suppression after a completed connection remain pending.
+
 `Stdlib.HttpClient.Sse.Event` and `parse` are copied from the same revision.
 The parser retains upstream's `Stream.unfold` behavior: it pulls only until the
 next complete event, preserves `id` across blocks, joins repeated `data`
