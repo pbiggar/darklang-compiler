@@ -4,6 +4,18 @@
 
 Executed 220 assertions: **196 passed, 24 failed**.
 
+## Deferred test-only builtins
+
+`Builtin.testIncrementSideEffectCounter : a -> a` and
+`Builtin.testSideEffectCount : Unit -> Int64` remain unsupported. List L61,
+L65, L71, L75, and L81 use them to count callback executions and stay disabled.
+A dev-only implementation is deferred: counter state, per-assertion isolation
+in batched runs, and optimization safeguards are too much machinery for these
+tests at present. This is missing test instrumentation, not evidence that
+`List.iter` itself is broken. No counter implementation or test-gate change was made.
+
+## Failing assertions
+
 | Test | Observed failure |
 | --- | --- |
 | [L53](../../../../test/fixtures/e2e/upstream/stdlib/list.dark#L53) — Stdlib.List.dropWhile [ 1L, 2L, 3L, 4L ] (fun item -> 0L - 1L) | Expected error message 'Encountered a condition that must be a Bool, but got an Int64 (-1)' not found in stderr. Actual stderr: <entry>: Expected TBool, got TInt64 |
