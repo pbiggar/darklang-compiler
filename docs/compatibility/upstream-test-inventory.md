@@ -4,7 +4,7 @@ Generated from `test/test-suite-tooling/TestRunner.ml` and the imported
 `test/fixtures/e2e/upstream/**/*.dark` files. Regenerate with
 `python3 scripts/audit-upstream-gates.py`; verify with `--check`.
 
-**105 files; 34 whole-file exclusions; 267 line-number entries
+**105 files; 34 whole-file exclusions; 266 line-number entries
 across 21 files.** A line entry is not a skipped-test count.
 The runner matches the `L<number>:` assertion name produced by the fixture
 parser. Declarations and multiline assertions require parser inspection;
@@ -103,7 +103,7 @@ Other skip metadata and runtime filters are outside this inventory.
 | [stdlib/language-tools/parsedFileShape.dark](../../test/fixtures/e2e/upstream/stdlib/language-tools/parsedFileShape.dark) | disabled | — |
 | [stdlib/language-tools/pickLocation.dark](../../test/fixtures/e2e/upstream/stdlib/language-tools/pickLocation.dark) | disabled | — |
 | [stdlib/language-tools/semanticTokenization.dark](../../test/fixtures/e2e/upstream/stdlib/language-tools/semanticTokenization.dark) | disabled | — |
-| [stdlib/list.dark](../../test/fixtures/e2e/upstream/stdlib/list.dark) | enabled | 22, 23, 24, 53, 61, 65, 71, 75, 81, 87, 92, 93, 101, 109, 129, 130, 136, 162, 174, 180, 201, 216, 218, 223, 224, 264, 269, 302, 314 |
+| [stdlib/list.dark](../../test/fixtures/e2e/upstream/stdlib/list.dark) | enabled | 22, 23, 24, 53, 61, 65, 71, 75, 81, 87, 92, 93, 101, 109, 129, 130, 136, 174, 180, 201, 216, 218, 223, 224, 264, 269, 302, 314 |
 | [stdlib/math.dark](../../test/fixtures/e2e/upstream/stdlib/math.dark) | enabled | 27, 30 |
 | [stdlib/nomodule.dark](../../test/fixtures/e2e/upstream/stdlib/nomodule.dark) | enabled | — |
 | [stdlib/option.dark](../../test/fixtures/e2e/upstream/stdlib/option.dark) | enabled | 44, 75, 119, 148, 170, 176, 204, 211, 218, 242, 255, 260 |
@@ -127,4 +127,4 @@ editing the runner. They must not be counted as unsupported expressions.
 | File | Line | Source line |
 | --- | --- | --- |
 
-0 of the 267 entries point to blank or comment lines.
+0 of the 266 entries point to blank or comment lines.

@@ -3,16 +3,17 @@
 Audited on 2026-10-08 (UTC), against compiler revision `f0857f5686f5959cd05dad921238193850a708a9` on Linux x86-64.
 
 **Every assertion excluded by the ledger gates was run: 2,340 assertions across 57 files.**
-**4 previously disabled assertions are now enabled; 2,336 still fail.**
+**5 previously disabled assertions are now enabled; 2,335 still fail.**
 
-Latest results for the audited files, including enabled neighbours: 3,774 assertions, 1,438 passed and 2,336 failed.
-The remaining gates cover these exact failures: 34 whole files and 267 assertion lines across 21 mixed files.
+Latest results for the audited files, including enabled neighbours: 3,774 assertions, 1,439 passed and 2,335 failed.
+The remaining gates cover these exact failures: 34 whole files and 266 assertion lines across 21 mixed files.
 
 The assertion harness now compares original parsed expressions. Multiline applications and literal contents are preserved in individual runs and batches. A follow-up retest of `stdlib/dict.dark` passed all 140 assertions after L21 was changed to expect its existing compile-time key type error.
 
-A follow-up against `36002414730437e871b7d457e76b79f859935fb1` recovered `Builtin.unwrap` payload types during lambda lifting. Individual ungated runs passed 191/220 List assertions and 263/264 Int64 assertions. List L161 and Int64 L90 are now enabled; List L162 still fails before lambda lifting on an empty list.
+A follow-up against `36002414730437e871b7d457e76b79f859935fb1` recovered `Builtin.unwrap` payload types during lambda lifting. Individual ungated runs passed 191/220 List assertions and 263/264 Int64 assertions. List L161 and Int64 L90 are now enabled; List L162 initially still failed before lambda lifting on an empty list.
 
-Verification of the unwrap follow-up: fresh native build passed; the complete host suite passed **11,324/11,324** tests; `dune runtest` passed; the canonical compiled leak gate passed **58/58** workloads. The six new Option/Result callback regressions passed individually and batched. The gates and individual ledger rows match all 2,336 measured failing assertion identities exactly. The parent benchmark check stopped before measurement because the stored workload digest is incompatible; no baseline was reset.
+Numeric inference follow-up: checking now carries immutable constraints into lambda parameter and body types. The ungated List file passed 192/220 assertions, so L162 is now enabled. Nine focused regressions cover operand order, compound expressions, comparisons, let-bound offsets, and conflicting types. Verification and the complete disabled-fixture retest are pending.
+
 
 ## Failing test files
 
@@ -68,7 +69,7 @@ Each file links to the individual failing assertions and their observed diagnost
 | [stdlib/language-tools/parsedFileShape.dark](failures/stdlib/language-tools/parsedFileShape.md) | 13 | 0 | 13 |
 | [stdlib/language-tools/pickLocation.dark](failures/stdlib/language-tools/pickLocation.md) | 30 | 0 | 30 |
 | [stdlib/language-tools/semanticTokenization.dark](failures/stdlib/language-tools/semanticTokenization.md) | 102 | 0 | 102 |
-| [stdlib/list.dark](failures/stdlib/list.md) | 220 | 191 | 29 |
+| [stdlib/list.dark](failures/stdlib/list.md) | 220 | 192 | 28 |
 | [stdlib/math.dark](failures/stdlib/math.md) | 32 | 30 | 2 |
 | [stdlib/option.dark](failures/stdlib/option.md) | 73 | 61 | 12 |
 | [stdlib/prettyPrinter.dark](failures/stdlib/prettyPrinter.md) | 57 | 0 | 57 |
