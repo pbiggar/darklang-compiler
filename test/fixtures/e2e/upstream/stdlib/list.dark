@@ -18,10 +18,10 @@ Stdlib.List.append [ 1L ] [ 2L ] = [ 1L, 2L ]
 Stdlib.List.append [] [] = []
 
 
-// CLEANUP the following tests should fail on having mixed types
-[1l, 2.3] = error="Cannot add a Float (2.3) to a list of Int32. Failed at index 1."
-[(1l,10l), 10l, (3l,30l)] = error="Cannot add an Int32 (10) to a list of (Int32 * Int32). Failed at index 1."
-[(1l,10l), (2l,20l), (3l,30l,40l)] = error="Cannot add an (Int32 * Int32 * Int32) ((3, 30, 40)) to a list of (Int32 * Int32). Failed at index 2."
+// Mixed-type lists are rejected during compilation.
+[1l, 2.3] = compileerror="Expected TInt32, got TFloat64"
+[(1l,10l), 10l, (3l,30l)] = compileerror="Expected TTuple [TInt32; TInt32], got TInt32"
+[(1l,10l), (2l,20l), (3l,30l,40l)] = compileerror="Expected TTuple [TInt32; TInt32], got TTuple [TInt32; TInt32; TInt32]"
 Stdlib.List.all [] (fun item -> item < 3L) = true
 Stdlib.List.all [ 2L ] (fun item -> item < 3L) = true
 Stdlib.List.all [ 1L, 2L ] (fun item -> item < 3L) = true

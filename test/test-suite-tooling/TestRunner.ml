@@ -1270,9 +1270,6 @@ let runTestsWithProgressReporter completedTestReporter args =
         ("test/fixtures/e2e/upstream/stdlib/ints/int8.dark", [ 47 ]);
         ( "test/fixtures/e2e/upstream/stdlib/list.dark",
           [
-            22;
-            23;
-            24;
             53;
             61;
             65;
