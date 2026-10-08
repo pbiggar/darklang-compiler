@@ -26,7 +26,6 @@ Entries using the same builtin in both implementations are not in this category.
 | Package file | Item | Status | Reason and evidence |
 |---|---|---|---|
 | `packages/darklang/stdlib/base64.dark` | `Darklang.Stdlib.Base64.decode` | Package skipped; unresolved | Original body calls missing `Builtin.base64Decode`. Direct builtin probe fails with `Unknown function or value 'Builtin.base64Decode'`; compiler `Stdlib.Base64.decode "SGVsbG8="` compiles and runs. User deferred this category. |
-
 | `packages/darklang/stdlib/cli/bash.dark` | `Darklang.Stdlib.Cli.Bash.overwriteBashrc` | Fixed and merged | Canonicalized Env and Cli.FileSystem module names, including FileError, and added qualified Option.Option/Result.Result type fallbacks. Original Bash package compiles. PR #14 merged to main at `aeef8bc93a4ff7f21c157625186283301ef7adef`. |
 | `packages/darklang/stdlib/localStore.dark` | `Darklang.Stdlib.LocalStore.path` | Package skipped; missing SQLite support | Calls unavailable `Builtin.localDbPath`, which the interpreter implements using `LibDB.Sqlite.currentDbPath`. User classified this as missing SQLite support and directed deferral. Other LocalStore items remain unreviewed individually. |
 
@@ -35,18 +34,26 @@ The Base64 package also contains `encode` and `urlEncode`, which call
 already exist. These remain unreviewed individually because the package is
 skipped as a whole. Nothing in this package is marked fixed.
 
-## Current review item
+## Most recent fix
 
 `packages/darklang/languageTools/permissions.dark`:
-`Darklang.LanguageTools.Permissions.tokens` fails with
-`Unknown function or value 'walk'`. Its local function `walk` is recursive
-inside match branches. In `src/frontend/WrittenLetSupport.ml`,
-`referencesSelf` does not traverse `WT.EMatch`, so the binding is checked as
-nonrecursive and is unavailable in its own body.
+`Darklang.LanguageTools.Permissions.tokens` previously failed with
+`Unknown function or value 'walk'`. Fixed local self-recursion detection to
+traverse match scrutinees, guards, and branch bodies, respecting pattern-bound
+names. Branch `chatgpt/local-recursion-match`, commit
+`14babff8cfe81c96a6e6fd3d28a54f6b32a1ca0d`; not merged.
 
-A minimal local recursive function whose body is a match reproduces the same
-error. An equivalent if-expression version compiles and runs with exit code 0.
-No compiler fix has been implemented; awaiting the user's direction.
+Five focused E2E regressions pass. The unchanged tokens function and its
+TokenMode type compile and run in isolation. Full host suite: 11140/11140
+passed. All 58 quick/full benchmark workloads compile and run cleanly.
+
+## Remaining package blocker
+
+Compiling the whole original Permissions package, with either a trivial entry
+or a call to tokens, now reaches a later backend failure:
+`RefCountInsertion: ClosureAlloc target '776' not found in function registry`.
+This does not occur with tokens and TokenMode alone. The failing declaration
+has not yet been isolated; no fix for this separate failure is approved.
 
 ## Completion rule
 
