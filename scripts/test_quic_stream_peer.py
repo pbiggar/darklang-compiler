@@ -44,16 +44,32 @@ let initialize (ready: Stdlib.QuicClient.Ready) : Stdlib.Result.Result<Stdlib.Qu
         Stdlib.Blob.fromHex "03" |> Stdlib.Result.andThen (fun marker -> Stdlib.QuicConnection.write state 10L marker false) |> Stdlib.Result.andThen (fun state ->
         Stdlib.QuicConnection.write state 0L request true)))
       | _, _ -> Error "HTTP/3 encoding failed")))))
+let controls (state: Stdlib.QuicConnection.State) (uni: Stdlib.Http3Uni.State)
+  : Stdlib.Result.Result<(Stdlib.QuicConnection.State * Stdlib.Http3Uni.State), String> =
+  Stdlib.List.fold state.flow.channels (Ok ((state, uni))) (fun result channel ->
+    if channel.id % 4L != 3L then result
+    else result |> Stdlib.Result.andThen (fun pair ->
+      let (connection, streams) = pair in
+      Stdlib.QuicConnection.read connection channel.id |> Stdlib.Result.andThen (fun read ->
+        Stdlib.Http3Uni.receive streams channel.id read.bytes read.finished (Stdlib.Option.isSome read.reset)
+          |> Stdlib.Result.map (fun received -> (read.state, received.state)))))
 let receive (state: Stdlib.QuicConnection.State) (deadline: Int64)
+  (message: Stdlib.Http3Message.State) (uni: Stdlib.Http3Uni.State)
   : Stdlib.Result.Result<Unit, String> =
-  Stdlib.QuicConnection.read state 0L |> Stdlib.Result.andThen (fun read ->
+  controls state uni |> Stdlib.Result.andThen (fun pair ->
+  let (connection, streams) = pair in
+  Stdlib.QuicConnection.read connection 0L |> Stdlib.Result.andThen (fun read ->
     let _ = emit read.bytes 0L in
     if Stdlib.Option.isSome read.reset then Error "Response reset"
-    else if read.finished then Stdlib.QuicConnection.flush read.state |> Stdlib.Result.map (fun _state -> ())
-    else match Stdlib.Network.monotonicMillis () with
-    | Error _ -> Error "Clock failed"
-    | Ok now -> if now >= deadline then Error "Response timed out"
-                else Stdlib.QuicConnection.poll read.state 10L |> Stdlib.Result.andThen (fun next -> receive next deadline))
+    else Stdlib.Http3Message.feed message read.bytes |> Stdlib.Result.andThen (fun received ->
+      if read.finished then
+        Stdlib.Http3Message.finish received.state |> Stdlib.Result.andThen (fun _unit ->
+          Stdlib.QuicConnection.flush read.state |> Stdlib.Result.map (fun _state -> ()))
+      else match Stdlib.Network.monotonicMillis () with
+      | Error _ -> Error "Clock failed"
+      | Ok now -> if now >= deadline then Error "Response timed out"
+                  else Stdlib.QuicConnection.poll read.state 10L |> Stdlib.Result.andThen (fun next ->
+                    receive next deadline received.state streams))))
 let run () : Unit =
   match Stdlib.Blob.fromHex "@ROOT@", Stdlib.Cli.Args.get 0 |> Stdlib.Result.andThen (fun value -> Stdlib.Int64.parse value |> Stdlib.Result.mapError (fun _error -> "port")) with
   | Ok root, Ok port ->
@@ -61,7 +77,8 @@ let run () : Unit =
     | Error message -> Stdlib.printLine ("ERROR " ++ message)
     | Ok ready ->
       let result = initialize ready |> Stdlib.Result.andThen (fun state ->
-        match Stdlib.Network.monotonicMillis () with | Error _ -> Error "Clock failed" | Ok now -> receive state (now + 10000L)) in
+        match Stdlib.Network.monotonicMillis () with | Error _ -> Error "Clock failed" | Ok now ->
+          receive state (now + 10000L) (Stdlib.Http3Message.create (Response false)) (Stdlib.Http3Uni.create true)) in
       let _ = Stdlib.QuicClient.close ready in
       match result with | Error message -> Stdlib.printLine ("ERROR " ++ message) | Ok () -> Stdlib.printLine "DONE"
   | _ -> Stdlib.printLine "Bad arguments"

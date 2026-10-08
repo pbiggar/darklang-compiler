@@ -170,6 +170,10 @@ __QuicClient.dark
 __QuicConnection.dark
 __Qpack.dark
 __Http3Wire.dark
+__Http3Stream.dark
+__Http3Message.dark
+__Http3Control.dark
+__Http3Uni.dark
 Pretty.dark
 Char.dark
 Regex.dark

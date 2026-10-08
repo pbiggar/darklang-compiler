@@ -1,0 +1,141 @@
+// __Http3Message.dark - Single HTTP/3 message grammar, streamed bodies, and exact FIN validation.
+module Darklang.Stdlib.Http3Message
+
+type Mode = Request | Response of Bool
+type Phase = AwaitHead | Body | Trailers
+type State = {
+  framing: Stdlib.Http3Stream.State,
+  mode: Stdlib.Http3Message.Mode,
+  phase: Stdlib.Http3Message.Phase,
+  expected: Stdlib.Option.Option<Int64>,
+  received: Int64,
+  noBody: Bool,
+  informational: Int64,
+  headers: List<Blob>,
+  parts: Int64
+}
+type Event =
+  | RequestHead of Stdlib.Http2Fields.RequestHead
+  | ResponseHead of Stdlib.Http2Fields.ResponseHead
+  | BodyChunk of Blob
+  | TrailerFields of List<(String * String)>
+type Received = { state: Stdlib.Http3Message.State, events: List<Stdlib.Http3Message.Event> }
+
+let create (mode: Stdlib.Http3Message.Mode) : Stdlib.Http3Message.State =
+  Stdlib.Http3Message.State { framing = Stdlib.Http3Stream.empty, mode = mode, phase = AwaitHead,
+    expected = None, received = 0L, noBody = false, informational = 0L, headers = [], parts = 0L }
+
+let __fields (fields: List<(String * String)>) (request: Bool) : Stdlib.Result.Result<Unit, String> =
+  match fields with
+  | [] -> Ok ()
+  | (name, value) :: rest ->
+    let length = Stdlib.String.__byteLength value in
+    let whitespace =
+      if length == 0L then false
+      else
+        let first = Stdlib.String.__byteAtUnchecked value 0L in
+        let last = Stdlib.String.__byteAtUnchecked value (length - 1L) in
+        first == 32L || first == 9L || last == 32L || last == 9L in
+    if whitespace then Error "Whitespace at HTTP/3 field value boundary"
+    else if name == "te" && request == false then Error "TE outside HTTP/3 request headers"
+    else Stdlib.Http3Message.__fields rest request
+
+let __begin (state: Stdlib.Http3Message.State) (kind: Int64) (size: Int64)
+  : Stdlib.Result.Result<Stdlib.Http3Message.State, String> =
+  if kind == 4L || kind == 7L || kind == 3L || kind == 5L || kind == 13L then
+    Error "Unexpected HTTP/3 frame on message stream"
+  else if kind == 1L then
+    if size > 65536L then Error "HTTP/3 header block exceeds limit"
+    else if state.phase == Trailers then Error "HEADERS after HTTP/3 trailers"
+    else Ok { state with headers = [], parts = 0L }
+  else if kind == 0L then
+    if state.phase != Body then Error "HTTP/3 DATA outside message body"
+    else if state.noBody then Error "HTTP/3 DATA forbidden for this response"
+    else if size > 104857600L - state.received then Error "HTTP/3 body exceeds limit"
+    else
+      match state.expected with
+      | Some length -> if size > length - state.received then Error "HTTP/3 Content-Length exceeded" else Ok state
+      | None -> Ok state
+  else Ok state
+
+let __head (state: Stdlib.Http3Message.State) (fields: List<(String * String)>)
+  : Stdlib.Result.Result<(Stdlib.Http3Message.State * Stdlib.Http3Message.Event), String> =
+  match state.mode with
+  | Request ->
+    (match Stdlib.Http2Fields.request fields with
+    | Error message -> Error message
+    | Ok head ->
+      match Stdlib.Http2Fields.length head.headers with
+      | Error message -> Error message
+      | Ok length -> Ok (({ state with phase = Body, expected = length }, RequestHead head)))
+  | Response headOnly ->
+    match Stdlib.Http2Fields.response fields with
+    | Error message -> Error message
+    | Ok head ->
+      match Stdlib.Http2Fields.length head.headers with
+      | Error message -> Error message
+      | Ok length ->
+        if head.status < 200L then
+          if state.informational >= 8L then Error "Too many informational HTTP/3 responses"
+          else if Stdlib.Option.isSome length then Error "Content-Length on informational HTTP/3 response"
+          else Ok (({ state with informational = state.informational + 1L }, ResponseHead head))
+        else if head.status == 204L && Stdlib.Option.isSome length then Error "Content-Length on HTTP/3 204 response"
+        else
+          let noBody = headOnly || head.status == 204L || head.status == 304L in
+          let expected = if noBody then None else length in
+          Ok (({ state with phase = Body, expected = expected, noBody = noBody }, ResponseHead head))
+
+let __endHeaders (state: Stdlib.Http3Message.State)
+  : Stdlib.Result.Result<(Stdlib.Http3Message.State * Stdlib.Http3Message.Event), String> =
+  match Stdlib.Qpack.decode (Stdlib.Blob.concat (Stdlib.List.reverse state.headers)) with
+  | Error message -> Error message
+  | Ok fields ->
+    let cleared = { state with headers = [], parts = 0L } in
+    let request = state.mode == Request && state.phase == AwaitHead in
+    Stdlib.Http3Message.__fields fields request |> Stdlib.Result.andThen (fun _unit ->
+      if state.phase == AwaitHead then Stdlib.Http3Message.__head cleared fields
+      else
+        match Stdlib.Http2Fields.trailers fields with
+        | Error message -> Error message
+        | Ok _ -> Ok (({ cleared with phase = Trailers }, TrailerFields fields)))
+
+let __events (state: Stdlib.Http3Message.State) (input: List<Stdlib.Http3Stream.Event>)
+  (events: List<Stdlib.Http3Message.Event>) : Stdlib.Result.Result<Stdlib.Http3Message.Received, String> =
+  match input with
+  | [] -> Ok (Stdlib.Http3Message.Received { state = state, events = Stdlib.List.reverse events })
+  | event :: rest ->
+    match event with
+    | Begin ((kind, size)) ->
+      (match Stdlib.Http3Message.__begin state kind size with
+      | Error message -> Error message
+      | Ok next -> Stdlib.Http3Message.__events next rest events)
+    | Chunk ((kind, data)) ->
+      if kind == 1L then
+        if state.parts >= 1024L then Error "Too many HTTP/3 header fragments"
+        else Stdlib.Http3Message.__events { state with headers = Stdlib.List.push state.headers data, parts = state.parts + 1L } rest events
+      else if kind == 0L then
+        Stdlib.Http3Message.__events { state with received = state.received + Stdlib.Blob.__byteLength data }
+          rest (Stdlib.List.push events (BodyChunk data))
+      else Stdlib.Http3Message.__events state rest events
+    | End kind ->
+      if kind != 1L then Stdlib.Http3Message.__events state rest events
+      else
+        match Stdlib.Http3Message.__endHeaders state with
+        | Error message -> Error message
+        | Ok ((next, head)) -> Stdlib.Http3Message.__events next rest (Stdlib.List.push events head)
+
+let feed (state: Stdlib.Http3Message.State) (data: Blob)
+  : Stdlib.Result.Result<Stdlib.Http3Message.Received, String> =
+  match Stdlib.Http3Stream.feed state.framing data with
+  | Error message -> Error message
+  | Ok received -> Stdlib.Http3Message.__events { state with framing = received.state } received.events []
+
+let finish (state: Stdlib.Http3Message.State) : Stdlib.Result.Result<Unit, String> =
+  match Stdlib.Http3Stream.finish state.framing with
+  | Error message -> Error message
+  | Ok _ ->
+    if state.phase == AwaitHead then Error "HTTP/3 stream ended before final HEADERS"
+    else
+      match state.expected with
+      | Some length -> if length != state.received then Error "HTTP/3 Content-Length mismatch" else Ok ()
+      | None -> Ok ()

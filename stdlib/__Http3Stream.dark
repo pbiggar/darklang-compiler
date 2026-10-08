@@ -1,0 +1,66 @@
+// __Http3Stream.dark - Incremental HTTP/3 framing without buffering DATA or unknown payloads.
+module Darklang.Stdlib.Http3Stream
+
+type Cursor =
+  | Header of Blob
+  | Payload of (Int64 * Int64)
+type State = { cursor: Stdlib.Http3Stream.Cursor, frames: Int64 }
+type Event =
+  | Begin of (Int64 * Int64)
+  | Chunk of (Int64 * Blob)
+  | End of Int64
+type Received = { state: Stdlib.Http3Stream.State, events: List<Stdlib.Http3Stream.Event> }
+
+val empty = Stdlib.Http3Stream.State { cursor = Header (Stdlib.Blob.__fromInt64List []), frames = 0L }
+
+// Only the two varints are retained between network reads (at most sixteen bytes).
+let __header (data: Blob) : Stdlib.Result.Result<(Int64 * Int64), Stdlib.QuicWire.ParseError> =
+  match Stdlib.QuicWire.parseInteger data 0L with
+  | Error error -> Error error
+  | Ok kind ->
+    if Stdlib.Http3Wire.__forbidden kind.value then Error (Invalid "Forbidden HTTP/3 frame type")
+    else
+      match Stdlib.QuicWire.parseInteger data kind.next with
+      | Error error -> Error error
+      | Ok size -> Ok ((kind.value, size.value))
+
+let __feed (state: Stdlib.Http3Stream.State) (data: Blob) (position: Int64)
+  (events: List<Stdlib.Http3Stream.Event>) : Stdlib.Result.Result<Stdlib.Http3Stream.Received, String> =
+  if position == Stdlib.Blob.__byteLength data then
+    Ok (Stdlib.Http3Stream.Received { state = state, events = Stdlib.List.reverse events })
+  else
+    match state.cursor with
+    | Header prefix ->
+      let header = Stdlib.Blob.concat [prefix, Stdlib.Http2Wire.__slice data position 1L] in
+      (match Stdlib.Http3Stream.__header header with
+      | Error Incomplete ->
+        Stdlib.Http3Stream.__feed (Stdlib.Http3Stream.State { cursor = Header header, frames = state.frames })
+          data (position + 1L) events
+      | Error (Invalid message) -> Error message
+      | Ok ((kind, size)) ->
+        if state.frames >= 16384L then Error "Too many HTTP/3 frames"
+        else
+          let started = Stdlib.List.push events (Begin ((kind, size))) in
+          let cursor = if size == 0L then Header (Stdlib.Blob.__fromInt64List []) else Payload ((kind, size)) in
+          let nextEvents = if size == 0L then Stdlib.List.push started (End kind) else started in
+          Stdlib.Http3Stream.__feed (Stdlib.Http3Stream.State { cursor = cursor, frames = state.frames + 1L })
+            data (position + 1L) nextEvents)
+    | Payload ((kind, remaining)) ->
+      let available = Stdlib.Blob.__byteLength data - position in
+      let count = if remaining < available then remaining else available in
+      let chunk = Stdlib.Http2Wire.__slice data position count in
+      let received = Stdlib.List.push events (Chunk ((kind, chunk))) in
+      let cursor = if remaining == count then Header (Stdlib.Blob.__fromInt64List []) else Payload ((kind, remaining - count)) in
+      let nextEvents = if remaining == count then Stdlib.List.push received (End kind) else received in
+      Stdlib.Http3Stream.__feed (Stdlib.Http3Stream.State { cursor = cursor, frames = state.frames })
+        data (position + count) nextEvents
+
+// Bound work and event ownership per read; frame sizes themselves remain RFC varints.
+let feed (state: Stdlib.Http3Stream.State) (data: Blob) : Stdlib.Result.Result<Stdlib.Http3Stream.Received, String> =
+  if Stdlib.Blob.__byteLength data > 65536L then Error "HTTP/3 read exceeds limit"
+  else Stdlib.Http3Stream.__feed state data 0L []
+
+let finish (state: Stdlib.Http3Stream.State) : Stdlib.Result.Result<Unit, String> =
+  match state.cursor with
+  | Header prefix -> if Stdlib.Blob.__byteLength prefix == 0L then Ok () else Error "Truncated HTTP/3 frame header"
+  | Payload _ -> Error "Truncated HTTP/3 frame payload"

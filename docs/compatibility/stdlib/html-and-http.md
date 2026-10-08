@@ -187,9 +187,15 @@ updates. `python3 scripts/test_quic_stream_peer.py` drives these production
 streams through an aioquic HTTP/3 request, a 70-KiB response across the initial
 stream-credit window, trailers, a live application key update and
 request/response loss and reordering, with
-compiled cleanup accounting. This is a QUIC connection layer, not the completed
-HTTP/3 message/API implementation: control-stream and response validation,
-advertised-only discovery and public client/server integration remain work.
+compiled cleanup accounting. The bounded HTTP/3 message layer now consumes
+fragmented frame headers, streams DATA, discards unknown frame payloads without
+buffering them, and validates informational/final headers, trailers and
+Content-Length at FIN. The control layer requires initial SETTINGS, checks
+GOAWAY identifiers and identifies unique control/QPACK streams by stream type;
+closing a critical stream fails the exchange. `http3_stream.e2e`,
+`http3_message.e2e`, `http3_control.e2e` and `http3_uni.e2e` cover these rules,
+and the live stream peer also feeds response/control bytes through this layer.
+Advertised-only discovery and public client/server integration remain work.
 
 `Stdlib.HttpClient.Sse.Event` and `parse` are copied from the same revision.
 The parser retains upstream's `Stream.unfold` behavior: it pulls only until the
