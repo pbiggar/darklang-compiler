@@ -86,8 +86,12 @@ choices fail closed. Local TLS peers and protocol vectors exercise the profile;
 streamed HTTPS responses use the same authenticated TLS record path and close
 their connection when drained or explicitly closed. Server identities now import
 bounded PEM certificate chains and unencrypted RSA-2048 private keys, verify
-their binding and sign with blinded, fixed-work RSA-PSS/SHA-256. The server
-handshake and listener integration remain to be connected to this foundation.
+their binding and sign with blinded, fixed-work RSA-PSS/SHA-256. The pure server
+handshake now negotiates TLS 1.3 AES-128-GCM/X25519 and RSA-PSS/SHA-256,
+serializes the certificate flight, and releases application keys only after
+verifying client Finished. OpenSSL checks exercise h2, HTTP/1.1 and no ALPN,
+both application directions, malformed offers and invalid Finished. TCP listener
+and QUIC integration, plus HelloRetryRequest, remain unfinished.
 
 ## 5. Compatibility and readiness
 

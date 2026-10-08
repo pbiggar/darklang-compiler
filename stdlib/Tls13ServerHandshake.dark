@@ -1,0 +1,76 @@
+// Tls13ServerHandshake.dark - Pure TLS 1.3 server flight and authenticated client Finished.
+module Darklang.Stdlib.Tls13ServerHandshake
+
+// Pending application keys are not released until the client's Finished proves
+// possession of the handshake secret. TCP records and QUIC CRYPTO share this state.
+type Flight = { hello: Blob, encrypted: Blob, transcript: Blob, handshakeReceive: Stdlib.Tls13.TrafficKeys, handshakeSend: Stdlib.Tls13.TrafficKeys, clientFinished: Blob, applicationReceive: Stdlib.Tls13.TrafficKeys, applicationSend: Stdlib.Tls13.TrafficKeys, protocol: String }
+type Ready = { receive: Stdlib.Tls13.TrafficKeys, send: Stdlib.Tls13.TrafficKeys, protocol: String }
+
+let __u24 (value: Int64) : Blob = Stdlib.Blob.__fromInt64List [value / 65536L, value / 256L % 256L, value % 256L]
+let __message (kind: Int64) (body: Blob) : Blob = Stdlib.Blob.concat [Stdlib.Blob.__fromInt64List [kind], Stdlib.Tls13ServerHandshake.__u24 (Stdlib.Blob.__byteLength body), body]
+let __extensions (extensions: List<Blob>) : Blob =
+  let data = Stdlib.Blob.concat extensions in
+  Stdlib.Blob.concat [Stdlib.Tls13.__u16 (Stdlib.Blob.__byteLength data), data]
+
+let __certificate (certificates: List<Blob>) : Blob =
+  let entries = Stdlib.Blob.concat (Stdlib.List.map certificates (fun certificate -> Stdlib.Blob.concat [Stdlib.Tls13ServerHandshake.__u24 (Stdlib.Blob.__byteLength certificate), certificate, Stdlib.Blob.__fromInt64List [0L, 0L]])) in
+  Stdlib.Tls13ServerHandshake.__message 11L (Stdlib.Blob.concat [Stdlib.Blob.__fromInt64List [0L], Stdlib.Tls13ServerHandshake.__u24 (Stdlib.Blob.__byteLength entries), entries])
+
+let __certificateAlgorithms (certificates: List<Blob>) (algorithms: List<Int64>) : Stdlib.Result.Result<Unit, String> =
+  match certificates with
+  | [] -> Ok ()
+  | raw :: rest -> Stdlib.X509Chain.parse raw |> Stdlib.Result.andThen (fun certificate ->
+    let algorithm = if certificate.signatureHash == 256L then 1025L else if certificate.signatureHash == 384L then 1281L else 1027L in
+    // Self-signed trust anchors do not authenticate another certificate.
+    if Stdlib.List.member algorithms algorithm || Stdlib.X509Chain.__signedBy certificate certificate then Stdlib.Tls13ServerHandshake.__certificateAlgorithms rest algorithms
+    else Error "TLS certificate signature algorithm not offered")
+
+let __identityAlgorithms (identity: Stdlib.TlsServerIdentity.Identity) (hello: Stdlib.Tls13ServerHello.Hello) : Stdlib.Result.Result<Unit, String> =
+  let kind = match Stdlib.Tls13ServerHello.__find hello.extensions 50L with | None -> 13L | Some _ -> 50L in
+  Stdlib.Tls13ServerHello.__required hello.extensions kind 2L |> Stdlib.Result.andThen (fun algorithms -> Stdlib.Tls13ServerHandshake.__certificateAlgorithms identity.certificates algorithms)
+
+let __finishFlight (hello: Blob) (encrypted: Blob) (transcript: Blob) (secrets: Stdlib.Tls13Handshake.HandshakeSecrets) (shared: Blob) (protocol: String) : Stdlib.Result.Result<Stdlib.Tls13ServerHandshake.Flight, String> =
+  Stdlib.Tls13.trafficKeys secrets.client |> Stdlib.Result.andThen (fun handshakeReceive ->
+    Stdlib.Tls13.trafficKeys secrets.server |> Stdlib.Result.andThen (fun handshakeSend ->
+      Stdlib.Tls13Handshake.finishedVerifyData secrets.client transcript |> Stdlib.Result.andThen (fun clientFinished ->
+        Stdlib.Tls13Client.__masterSecret shared |> Stdlib.Result.andThen (fun master ->
+          let hash = Stdlib.Crypto.sha256 transcript in
+          Stdlib.Tls13.hkdfExpandLabel master "c ap traffic" hash 32L |> Stdlib.Result.andThen (fun client ->
+            Stdlib.Tls13.hkdfExpandLabel master "s ap traffic" hash 32L |> Stdlib.Result.andThen (fun server ->
+              Stdlib.Tls13.trafficKeys client |> Stdlib.Result.andThen (fun applicationReceive ->
+                Stdlib.Tls13.trafficKeys server |> Stdlib.Result.map (fun applicationSend ->
+                  Stdlib.Tls13ServerHandshake.Flight { hello = hello, encrypted = encrypted, transcript = transcript, handshakeReceive = handshakeReceive, handshakeSend = handshakeSend, clientFinished = clientFinished, applicationReceive = applicationReceive, applicationSend = applicationSend, protocol = protocol }))))))))
+
+let __flight (identity: Stdlib.TlsServerIdentity.Identity) (offer: Stdlib.Tls13ServerHello.Hello) (protocol: String) (parameters: Stdlib.Option.Option<Blob>) (share: Blob) : Stdlib.Result.Result<Stdlib.Tls13ServerHandshake.Flight, String> =
+  Stdlib.X25519.generateKeyPair () |> Stdlib.Result.andThen (fun pair ->
+    Stdlib.X25519.sharedSecret pair.privateKey share |> Stdlib.Result.andThen (fun shared ->
+      Stdlib.Crypto.secureRandomBytes 32L |> Stdlib.Result.andThen (fun random ->
+        let extensions = Stdlib.Tls13ServerHandshake.__extensions [Stdlib.Tls13.__extension 43L (Stdlib.Blob.__fromInt64List [3L, 4L]), Stdlib.Tls13.__extension 51L (Stdlib.Blob.concat [Stdlib.Tls13.__u16 29L, Stdlib.Tls13.__u16 32L, pair.publicKey])] in
+        let hello = Stdlib.Tls13ServerHandshake.__message 2L (Stdlib.Blob.concat [Stdlib.Blob.__fromInt64List [3L, 3L], random, Stdlib.Blob.__fromInt64List [Stdlib.Blob.__byteLength offer.session], offer.session, Stdlib.Blob.__fromInt64List [19L, 1L, 0L], extensions]) in
+        Stdlib.Tls13Handshake.deriveHandshakeSecrets shared offer.raw hello |> Stdlib.Result.andThen (fun secrets ->
+          Stdlib.TlsAlpn.offer (if protocol == "" then [] else [protocol]) |> Stdlib.Result.andThen (fun alpn ->
+            let extensions = if protocol == "" then [] else [Stdlib.Tls13.__extension 16L alpn] in
+            let extensions = match parameters with | None -> extensions | Some data -> Stdlib.List.push extensions (Stdlib.Tls13.__extension 57L data) in
+            let extensions = Stdlib.Tls13ServerHandshake.__message 8L (Stdlib.Tls13ServerHandshake.__extensions extensions) in
+            let certificate = Stdlib.Tls13ServerHandshake.__certificate identity.certificates in
+            let transcript = Stdlib.Blob.concat [secrets.transcript, extensions, certificate] in
+            Stdlib.RsaSigning.signSha256 identity.key (Stdlib.Tls13Certificate.certificateVerifyInput transcript) |> Stdlib.Result.andThen (fun signature ->
+              let verify = Stdlib.Tls13ServerHandshake.__message 15L (Stdlib.Blob.concat [Stdlib.Tls13.__u16 2052L, Stdlib.Tls13.__u16 (Stdlib.Blob.__byteLength signature), signature]) in
+              let transcript = Stdlib.Blob.concat [transcript, verify] in
+              Stdlib.Tls13Handshake.finishedVerifyData secrets.server transcript |> Stdlib.Result.andThen (fun finished ->
+                let finished = Stdlib.Tls13ServerHandshake.__message 20L finished in
+                Stdlib.Tls13ServerHandshake.__finishFlight hello (Stdlib.Blob.concat [extensions, certificate, verify, finished]) (Stdlib.Blob.concat [transcript, finished]) secrets shared protocol)))))))
+
+let start (identity: Stdlib.TlsServerIdentity.Identity) (clientHello: Blob) (protocols: List<String>) (parameters: Stdlib.Option.Option<Blob>) : Stdlib.Result.Result<Stdlib.Tls13ServerHandshake.Flight, String> =
+  Stdlib.Tls13ServerHello.parse clientHello |> Stdlib.Result.andThen (fun hello ->
+    Stdlib.Tls13ServerHello.selectProtocol hello protocols |> Stdlib.Result.andThen (fun protocol ->
+      Stdlib.Tls13ServerHandshake.__identityAlgorithms identity hello |> Stdlib.Result.andThen (fun _ ->
+        match hello.keyShare with
+        | None -> Error "TLS ClientHello requires HelloRetryRequest"
+        | Some share -> Stdlib.Tls13ServerHandshake.__flight identity hello protocol parameters share)))
+
+let finish (flight: Stdlib.Tls13ServerHandshake.Flight) (message: Blob) : Stdlib.Result.Result<Stdlib.Tls13ServerHandshake.Ready, String> =
+  if Stdlib.Blob.__byteLength flight.clientFinished != 32L then Error "Invalid TLS server Finished state"
+  else if Stdlib.Blob.__byteLength message != 36L || Stdlib.Bool.not (Stdlib.Tls13Handshake.__wholeHandshake message 20L) then Error "Expected TLS client Finished"
+  else if Stdlib.Bool.not (Stdlib.Tls13Handshake.__sameBytes (Stdlib.Blob.slice message 4 32) flight.clientFinished 0L 0L) then Error "TLS client Finished verification failed"
+  else Ok (Stdlib.Tls13ServerHandshake.Ready { receive = flight.applicationReceive, send = flight.applicationSend, protocol = flight.protocol })

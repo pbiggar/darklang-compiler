@@ -195,6 +195,8 @@ __RsaMontgomery.dark
 __RsaPrivate.dark
 __RsaSigning.dark
 TlsServerIdentity.dark
+__Tls13ServerHello.dark
+Tls13ServerHandshake.dark
 P256.dark
 RsaPkcs1.dark
 X509Chain.dark

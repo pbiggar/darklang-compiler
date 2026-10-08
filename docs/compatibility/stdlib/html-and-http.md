@@ -260,8 +260,18 @@ audit or an ARM64 instruction-inspection claim. `rsa_private.e2e`,
 `python3 scripts/test_rsa_private.py` and
 `python3 scripts/test_rsa_signing.py` cover generated key formats, inconsistent
 components, certificate/key mismatch, independent PSS verification, salt
-diversity, fault rejection and cleanup. TLS server handshake and listener
-integration are still pending.
+diversity, fault rejection and cleanup. `Tls13ServerHandshake.start` builds a
+pure TLS 1.3 AES-128-GCM/X25519 certificate flight with RSA-PSS/SHA-256;
+`finish` authenticates client Finished before returning application keys.
+Bounded ClientHello parsing rejects duplicate extensions, malformed algorithm
+and key-share vectors, invalid compression and trailing bytes. Unknown ALPN
+names remain opaque bytes; selection uses server preference. Certificate
+signature offers are checked, with the trust-anchor exception. The independent
+`python3 scripts/test_tls_server_hello.py` and
+`python3 scripts/test_tls_server_handshake.py` exercise OpenSSL negotiation,
+both application directions, invalid Finished and zero-leak cleanup. This
+engine currently requires an initial X25519 share; HelloRetryRequest and TCP
+and QUIC server listener integration are still pending.
 
 `Stdlib.HttpClient.Sse.Event` and `parse` are copied from the same revision.
 The parser retains upstream's `Stream.unfold` behavior: it pulls only until the
