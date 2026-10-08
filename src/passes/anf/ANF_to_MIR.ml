@@ -277,6 +277,25 @@ let convertCliOperation (operation : ANF.cliOperation) =
   | ANF.SignalWait -> MIR.SignalWait
   | ANF.MonotonicTime -> MIR.MonotonicTime
   | ANF.SecureRandomFill -> MIR.SecureRandomFill
+  | ANF.PosixOpenAt -> MIR.PosixOpenAt
+  | ANF.PosixRead -> MIR.PosixRead
+  | ANF.PosixWrite -> MIR.PosixWrite
+  | ANF.PosixClose -> MIR.PosixClose
+  | ANF.PosixSeek -> MIR.PosixSeek
+  | ANF.PosixStatAt -> MIR.PosixStatAt
+  | ANF.PosixGetCwd -> MIR.PosixGetCwd
+  | ANF.PosixChdir -> MIR.PosixChdir
+  | ANF.PosixMkdirAt -> MIR.PosixMkdirAt
+  | ANF.PosixUnlinkAt -> MIR.PosixUnlinkAt
+  | ANF.PosixRenameAt -> MIR.PosixRenameAt
+  | ANF.PosixChmodAt -> MIR.PosixChmodAt
+  | ANF.PosixChmodAt2 -> MIR.PosixChmodAt2
+  | ANF.PosixUtimesAt -> MIR.PosixUtimesAt
+  | ANF.PosixSetAttributesAt -> MIR.PosixSetAttributesAt
+  | ANF.PosixSymlinkAt -> MIR.PosixSymlinkAt
+  | ANF.PosixReadlinkAt -> MIR.PosixReadlinkAt
+  | ANF.PosixFlock -> MIR.PosixFlock
+  | ANF.PosixGetDents -> MIR.PosixGetDents
 
 (*
    Precomputed descriptions for primitive ops (avoids formatting on hot path)
@@ -835,6 +854,25 @@ let cliOperationName = function
   | ANF.SignalWait -> "SignalWait"
   | ANF.MonotonicTime -> "MonotonicTime"
   | ANF.SecureRandomFill -> "SecureRandomFill"
+  | ANF.PosixOpenAt -> "PosixOpenAt"
+  | ANF.PosixRead -> "PosixRead"
+  | ANF.PosixWrite -> "PosixWrite"
+  | ANF.PosixClose -> "PosixClose"
+  | ANF.PosixSeek -> "PosixSeek"
+  | ANF.PosixStatAt -> "PosixStatAt"
+  | ANF.PosixGetCwd -> "PosixGetCwd"
+  | ANF.PosixChdir -> "PosixChdir"
+  | ANF.PosixMkdirAt -> "PosixMkdirAt"
+  | ANF.PosixUnlinkAt -> "PosixUnlinkAt"
+  | ANF.PosixRenameAt -> "PosixRenameAt"
+  | ANF.PosixChmodAt -> "PosixChmodAt"
+  | ANF.PosixChmodAt2 -> "PosixChmodAt2"
+  | ANF.PosixUtimesAt -> "PosixUtimesAt"
+  | ANF.PosixSetAttributesAt -> "PosixSetAttributesAt"
+  | ANF.PosixSymlinkAt -> "PosixSymlinkAt"
+  | ANF.PosixReadlinkAt -> "PosixReadlinkAt"
+  | ANF.PosixFlock -> "PosixFlock"
+  | ANF.PosixGetDents -> "PosixGetDents"
 
 (*
    Generate description for a CExpr (for coverage mapping)

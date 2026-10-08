@@ -1,9 +1,17 @@
-// CliPosixError.dark - upstream POSIX errno values.
-
+// Upstream POSIX Errno declarations (v0.0.35).
 module Darklang.Stdlib.Cli.Posix.Errno
 
+/// Invalid argument
 val einval = 22
+
+/// No such process
 val esrch = 3
+
+/// Operation not permitted
 val eperm = 1
+
+/// No such file or directory: a parent component is missing
 val enoent = 2
+
+/// File exists
 val eexist = 17

@@ -629,7 +629,11 @@ let liftLambdasInProgram baseRegistry baseVariants baseFunctions program =
         | C.FunctionDef func -> collectFuncRefsInExpr func.C.body params
         | C.Expression expr -> collectFuncRefsInExpr expr params
         | _ -> [])
-      tops
+      (* Named references also occur in bodies moved into lifted functions.
+         Those bodies need the same hidden-environment adapter as the original
+         declarations; collecting only tops leaves direct-call code addresses
+         in closure slots. *)
+      (tops @ List.map (fun func -> C.FunctionDef func) next.A.liftedFunctions)
   in
   let _, used =
     List.fold_left
@@ -659,6 +663,7 @@ let liftLambdasInProgram baseRegistry baseVariants baseFunctions program =
   in
   let lifted =
     List.rev (wrappers @ final.state.A.liftedFunctions)
-    |> List.map (fun func -> C.FunctionDef func)
+    |> List.map (fun func ->
+        replaceFuncRefsWithWrappers final.generatedWrappers (C.FunctionDef func))
   in
   Ok (C.programFromCheckedParts (final.state.A.symbols, lifted @ tops))

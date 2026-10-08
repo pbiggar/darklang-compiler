@@ -1207,7 +1207,6 @@ let runTestsWithProgressReporter completedTestReporter args =
             46;
             47;
           ] );
-        ("test/fixtures/e2e/upstream/stdlib/dict.dark", [ 21 ]);
         ( "test/fixtures/e2e/upstream/stdlib/float.dark",
           [
             47;

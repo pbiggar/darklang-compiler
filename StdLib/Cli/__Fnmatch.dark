@@ -1,0 +1,96 @@
+// __Fnmatch.dark - POSIX glob matching for the interpreter's builtin bridge.
+module Darklang.Stdlib.Cli.__Fnmatch
+
+let __byte (s: String) (i: Int64) : Int64 =
+    if i < 0L || i >= Stdlib.String.__byteLength s then -1L
+    else Stdlib.String.__byteAtUnchecked s i
+let __cstringLength (s: String) (i: Int64) : Int64 =
+    if i >= Stdlib.String.__byteLength s then i
+    else if Stdlib.String.__byteAtUnchecked s i == 0L then i
+    else Stdlib.Cli.__Fnmatch.__cstringLength s (i + 1L)
+let __length (s: String) : Int64 = Stdlib.Cli.__Fnmatch.__cstringLength s 0L
+
+let __knownClass (name: String) : Bool =
+    name == "alnum" || name == "alpha" || name == "blank" || name == "cntrl" || name == "digit" || name == "graph" || name == "lower" || name == "print" || name == "punct" || name == "space" || name == "upper" || name == "xdigit"
+
+let __namedClass (name: String) (c: Int64) : Bool =
+    let upper = c >= 65L && c <= 90L in
+    let lower = c >= 97L && c <= 122L in
+    let digit = c >= 48L && c <= 57L in
+    let space = c == 32L || (c >= 9L && c <= 13L) in
+    if name == "alnum" then upper || lower || digit
+    else if name == "alpha" then upper || lower
+    else if name == "blank" then c == 32L || c == 9L
+    else if name == "cntrl" then c < 32L || c == 127L
+    else if name == "digit" then digit
+    else if name == "graph" then c >= 33L && c <= 126L
+    else if name == "lower" then lower
+    else if name == "print" then c >= 32L && c <= 126L
+    else if name == "punct" then c >= 33L && c <= 126L && Stdlib.Bool.not (upper || lower || digit)
+    else if name == "space" then space
+    else if name == "upper" then upper
+    else if name == "xdigit" then digit || (c >= 65L && c <= 70L) || (c >= 97L && c <= 102L)
+    else false
+
+let __classEnd (pattern: String) (i: Int64) : Int64 =
+    if i + 1L >= Stdlib.Cli.__Fnmatch.__length pattern then -1L
+    else if Stdlib.Cli.__Fnmatch.__byte pattern i == 58L && Stdlib.Cli.__Fnmatch.__byte pattern (i + 1L) == 93L then i
+    else Stdlib.Cli.__Fnmatch.__classEnd pattern (i + 1L)
+
+let __classChar (pattern: String) (i: Int64) : (Int64 * Int64) =
+    let length = Stdlib.Cli.__Fnmatch.__length pattern in
+    if Stdlib.Cli.__Fnmatch.__byte pattern i == 92L && i + 1L < length then
+        (Stdlib.Cli.__Fnmatch.__byte pattern (i + 1L), i + 2L)
+    else if i + 4L < length && Stdlib.Cli.__Fnmatch.__byte pattern i == 91L && (Stdlib.Cli.__Fnmatch.__byte pattern (i + 1L) == 46L || Stdlib.Cli.__Fnmatch.__byte pattern (i + 1L) == 61L) && Stdlib.Cli.__Fnmatch.__byte pattern (i + 3L) == Stdlib.Cli.__Fnmatch.__byte pattern (i + 1L) && Stdlib.Cli.__Fnmatch.__byte pattern (i + 4L) == 93L then
+        (Stdlib.Cli.__Fnmatch.__byte pattern (i + 2L), i + 5L)
+    else (Stdlib.Cli.__Fnmatch.__byte pattern i, i + 1L)
+
+let __classItems (pattern: String) (i: Int64) (c: Int64) (first: Bool) (matched: Bool) (valid: Bool) : Stdlib.Option.Option<(Int64 * Bool * Bool)> =
+    let length = Stdlib.Cli.__Fnmatch.__length pattern in
+    if i >= length then None
+    else if Stdlib.Cli.__Fnmatch.__byte pattern i == 93L && Stdlib.Bool.not first then Some ((i + 1L, matched, valid))
+    else if i + 1L < length && Stdlib.Cli.__Fnmatch.__byte pattern i == 91L && Stdlib.Cli.__Fnmatch.__byte pattern (i + 1L) == 58L then
+        let end_ = Stdlib.Cli.__Fnmatch.__classEnd pattern (i + 2L) in
+        if end_ < 0L then None
+        else
+            let name = Stdlib.String.__byteSlice pattern (i + 2L) end_ in
+            Stdlib.Cli.__Fnmatch.__classItems pattern (end_ + 2L) c false (matched || Stdlib.Cli.__Fnmatch.__namedClass name c) (valid && Stdlib.Cli.__Fnmatch.__knownClass name)
+    else
+        let (low, next) = Stdlib.Cli.__Fnmatch.__classChar pattern i in
+        if next + 1L < length && Stdlib.Cli.__Fnmatch.__byte pattern next == 45L && Stdlib.Cli.__Fnmatch.__byte pattern (next + 1L) != 93L then
+            let (high, after) = Stdlib.Cli.__Fnmatch.__classChar pattern (next + 1L) in
+            Stdlib.Cli.__Fnmatch.__classItems pattern after c false (matched || (c >= low && c <= high)) valid
+        else Stdlib.Cli.__Fnmatch.__classItems pattern next c false (matched || c == low) valid
+
+let __class (pattern: String) (i: Int64) (c: Int64) : Stdlib.Option.Option<(Int64 * Bool)> =
+    if i + 1L >= Stdlib.Cli.__Fnmatch.__length pattern then None
+    else
+        let first = Stdlib.Cli.__Fnmatch.__byte pattern (i + 1L) in
+        let inverted = first == 33L || first == 94L in
+        let start = i + (if inverted then 2L else 1L) in
+        match Stdlib.Cli.__Fnmatch.__classItems pattern start c true false true with
+        | None -> None
+        | Some ((next, matched, valid)) -> Some ((next, if Stdlib.Bool.not valid then false else if inverted then Stdlib.Bool.not matched else matched))
+
+let __matches (pattern: String) (text: String) (pathname: Bool) (pi: Int64) (si: Int64) : Bool =
+    let plen = Stdlib.Cli.__Fnmatch.__length pattern in
+    let slen = Stdlib.Cli.__Fnmatch.__length text in
+    if pi == plen then si == slen
+    else
+        let p = Stdlib.Cli.__Fnmatch.__byte pattern pi in
+        if p == 42L then
+            if Stdlib.Cli.__Fnmatch.__matches pattern text pathname (pi + 1L) si then true
+            else if si < slen && (Stdlib.Bool.not pathname || Stdlib.Cli.__Fnmatch.__byte text si != 47L) then Stdlib.Cli.__Fnmatch.__matches pattern text pathname pi (si + 1L)
+            else false
+        else if si >= slen then false
+        else
+            let c = Stdlib.Cli.__Fnmatch.__byte text si in
+            if p == 63L then
+                if Stdlib.Bool.not pathname || c != 47L then Stdlib.Cli.__Fnmatch.__matches pattern text pathname (pi + 1L) (si + 1L) else false
+            else if p == 92L then
+                if pi + 1L < plen && Stdlib.Cli.__Fnmatch.__byte pattern (pi + 1L) == c then Stdlib.Cli.__Fnmatch.__matches pattern text pathname (pi + 2L) (si + 1L) else false
+            else if p == 91L then
+                match Stdlib.Cli.__Fnmatch.__class pattern pi c with
+                | Some ((next, matched)) -> if matched && (Stdlib.Bool.not pathname || c != 47L) then Stdlib.Cli.__Fnmatch.__matches pattern text pathname next (si + 1L) else false
+                | None -> if p == c then Stdlib.Cli.__Fnmatch.__matches pattern text pathname (pi + 1L) (si + 1L) else false
+            else if p == c then Stdlib.Cli.__Fnmatch.__matches pattern text pathname (pi + 1L) (si + 1L) else false

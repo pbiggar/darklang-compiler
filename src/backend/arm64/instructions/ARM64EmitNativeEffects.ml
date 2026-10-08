@@ -718,6 +718,171 @@ let emitCliNative (ctx : codeGenContext) (dest : LIR.reg)
   lirRegToARM64Reg dest
   |> bind (fun destReg ->
       match operation with
+      | LIR.PosixOpenAt | LIR.PosixRead | LIR.PosixWrite | LIR.PosixClose
+      | LIR.PosixSeek | LIR.PosixStatAt | LIR.PosixGetCwd | LIR.PosixChdir
+      | LIR.PosixMkdirAt | LIR.PosixUnlinkAt | LIR.PosixRenameAt
+      | LIR.PosixChmodAt | LIR.PosixChmodAt2 | LIR.PosixUtimesAt
+      | LIR.PosixSetAttributesAt | LIR.PosixSymlinkAt | LIR.PosixReadlinkAt
+      | LIR.PosixFlock | LIR.PosixGetDents -> (
+          let number, arity =
+            match operation with
+            | LIR.PosixOpenAt ->
+                ( (match ARM64.targetOS ctx.target with
+                  | Platform.Linux -> Some 56
+                  | Platform.MacOS -> Some 463),
+                  4 )
+            | LIR.PosixRead ->
+                ( (match ARM64.targetOS ctx.target with
+                  | Platform.Linux -> Some 63
+                  | Platform.MacOS -> Some 3),
+                  3 )
+            | LIR.PosixWrite ->
+                ( (match ARM64.targetOS ctx.target with
+                  | Platform.Linux -> Some 64
+                  | Platform.MacOS -> Some 4),
+                  3 )
+            | LIR.PosixClose ->
+                ( (match ARM64.targetOS ctx.target with
+                  | Platform.Linux -> Some 57
+                  | Platform.MacOS -> Some 6),
+                  1 )
+            | LIR.PosixSeek ->
+                ( (match ARM64.targetOS ctx.target with
+                  | Platform.Linux -> Some 62
+                  | Platform.MacOS -> Some 199),
+                  3 )
+            | LIR.PosixStatAt ->
+                ( (match ARM64.targetOS ctx.target with
+                  | Platform.Linux -> Some 79
+                  | Platform.MacOS -> Some 470),
+                  4 )
+            | LIR.PosixGetCwd ->
+                ( (match ARM64.targetOS ctx.target with
+                  | Platform.Linux -> Some 17
+                  | Platform.MacOS -> Some 326),
+                  2 )
+            | LIR.PosixChdir ->
+                ( (match ARM64.targetOS ctx.target with
+                  | Platform.Linux -> Some 50
+                  | Platform.MacOS -> Some 13),
+                  1 )
+            | LIR.PosixMkdirAt ->
+                ( (match ARM64.targetOS ctx.target with
+                  | Platform.Linux -> Some 34
+                  | Platform.MacOS -> Some 475),
+                  3 )
+            | LIR.PosixUnlinkAt ->
+                ( (match ARM64.targetOS ctx.target with
+                  | Platform.Linux -> Some 35
+                  | Platform.MacOS -> Some 472),
+                  3 )
+            | LIR.PosixRenameAt ->
+                ( (match ARM64.targetOS ctx.target with
+                  | Platform.Linux -> Some 38
+                  | Platform.MacOS -> Some 465),
+                  4 )
+            | LIR.PosixChmodAt2 ->
+                ( (match ARM64.targetOS ctx.target with
+                  | Platform.Linux -> Some 452
+                  | Platform.MacOS -> None),
+                  4 )
+            | LIR.PosixChmodAt ->
+                ( (match ARM64.targetOS ctx.target with
+                  | Platform.Linux -> Some 53
+                  | Platform.MacOS -> Some 467),
+                  4 )
+            | LIR.PosixUtimesAt ->
+                ( (match ARM64.targetOS ctx.target with
+                  | Platform.Linux -> Some 88
+                  | Platform.MacOS -> None),
+                  4 )
+            | LIR.PosixSetAttributesAt ->
+                ( (match ARM64.targetOS ctx.target with
+                  | Platform.Linux -> None
+                  | Platform.MacOS -> Some 524),
+                  6 )
+            | LIR.PosixSymlinkAt ->
+                ( (match ARM64.targetOS ctx.target with
+                  | Platform.Linux -> Some 36
+                  | Platform.MacOS -> Some 474),
+                  3 )
+            | LIR.PosixReadlinkAt ->
+                ( (match ARM64.targetOS ctx.target with
+                  | Platform.Linux -> Some 78
+                  | Platform.MacOS -> Some 473),
+                  4 )
+            | LIR.PosixFlock ->
+                ( (match ARM64.targetOS ctx.target with
+                  | Platform.Linux -> Some 32
+                  | Platform.MacOS -> Some 131),
+                  2 )
+            | LIR.PosixGetDents ->
+                ( (match ARM64.targetOS ctx.target with
+                  | Platform.Linux -> Some 61
+                  | Platform.MacOS -> Some 344),
+                  4 )
+            | _ -> Crash.crash "Non-POSIX operation in POSIX lowering"
+          in
+          if List.length args <> arity then
+            Error "POSIX primitive: invalid argument count"
+          else
+            match number with
+            | None -> Ok (loadImmediate destReg (-38L))
+            | Some number ->
+                args
+                |> List.fold_left
+                     (fun result operand ->
+                       result
+                       |> bind (fun code ->
+                           loadCliOperand Symbolic.X9 operand
+                           |> Result.map (fun next ->
+                               code @ next
+                               @ [
+                                   Symbolic.SUB_imm
+                                     (Symbolic.SP, Symbolic.SP, 16);
+                                   Symbolic.STR (Symbolic.X9, Symbolic.SP, 0);
+                                 ])))
+                     (Ok [])
+                |> Result.map (fun loads ->
+                    let targets =
+                      [
+                        Symbolic.X0;
+                        Symbolic.X1;
+                        Symbolic.X2;
+                        Symbolic.X3;
+                        Symbolic.X4;
+                        Symbolic.X5;
+                      ]
+                      |> List.filteri (fun i _ -> i < arity)
+                    in
+                    let syscall = ARM64.targetSyscalls ctx.target in
+                    let doneLabel =
+                      Printf.sprintf "__posix_%s_%s_done" ctx.functionName
+                        ctx.instructionSite
+                    in
+                    let normalize =
+                      match ARM64.targetOS ctx.target with
+                      | Platform.Linux -> []
+                      | Platform.MacOS ->
+                          [
+                            Symbolic.B_cond_label (Symbolic.LO, doneLabel);
+                            Symbolic.NEG (Symbolic.X0, Symbolic.X0);
+                            Symbolic.Label doneLabel;
+                          ]
+                    in
+                    loads
+                    @ (List.rev targets
+                      |> List.concat_map (fun reg ->
+                          [
+                            Symbolic.LDR (reg, Symbolic.SP, 0);
+                            Symbolic.ADD_imm (Symbolic.SP, Symbolic.SP, 16);
+                          ]))
+                    @ [
+                        Symbolic.MOVZ (syscall.ARM64.syscallRegister, number, 0);
+                        Symbolic.SVC syscall.ARM64.svcImmediate;
+                      ]
+                    @ normalize
+                    @ [ Symbolic.MOV_reg (destReg, Symbolic.X0) ]))
       | LIR.HostOS ->
           Ok
             [

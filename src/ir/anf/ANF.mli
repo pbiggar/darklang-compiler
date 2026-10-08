@@ -95,6 +95,25 @@ type cliOperation =
   | SignalWait
   | MonotonicTime
   | SecureRandomFill
+  | PosixOpenAt
+  | PosixRead
+  | PosixWrite
+  | PosixClose
+  | PosixSeek
+  | PosixStatAt
+  | PosixGetCwd
+  | PosixChdir
+  | PosixMkdirAt
+  | PosixUnlinkAt
+  | PosixRenameAt
+  | PosixChmodAt
+  | PosixChmodAt2
+  | PosixUtimesAt
+  | PosixSetAttributesAt
+  | PosixSymlinkAt
+  | PosixReadlinkAt
+  | PosixFlock
+  | PosixGetDents
 
 type recordDescriptor = {
   sourceTypeName : string;

@@ -307,7 +307,12 @@ let inferCExprType ctx expr =
       | A.SocketSendTimeout | A.SocketClose | A.SocketBind4 | A.SocketListen
       | A.SocketAccept | A.SocketCloexec | A.SocketReuseAddress | A.SocketPoll
       | A.SignalBlock | A.SignalRestore | A.SignalPending | A.SignalWait
-      | A.MonotonicTime | A.SecureRandomFill ->
+      | A.MonotonicTime | A.SecureRandomFill | A.PosixOpenAt | A.PosixRead
+      | A.PosixWrite | A.PosixClose | A.PosixSeek | A.PosixStatAt
+      | A.PosixGetCwd | A.PosixChdir | A.PosixMkdirAt | A.PosixUnlinkAt
+      | A.PosixRenameAt | A.PosixChmodAt | A.PosixChmodAt2 | A.PosixUtimesAt
+      | A.PosixSetAttributesAt | A.PosixSymlinkAt | A.PosixReadlinkAt
+      | A.PosixFlock | A.PosixGetDents ->
           Some AST.TInt64)
   | A.IfValue (_, yes, _) -> atom yes
   | A.BorrowedCall (func, [ value ])

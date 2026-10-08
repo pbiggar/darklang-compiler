@@ -467,6 +467,26 @@ let tryCliIntrinsic name args =
         | "Darklang.Stdlib.__Network.__signalPending" -> Some ANF.SignalPending
         | "Darklang.Stdlib.__Network.__signalWait" -> Some ANF.SignalWait
         | "Darklang.Stdlib.__Network.__monotonic" -> Some ANF.MonotonicTime
+        | "Darklang.Stdlib.Cli.__Posix.__openAt" -> Some ANF.PosixOpenAt
+        | "Darklang.Stdlib.Cli.__Posix.__read" -> Some ANF.PosixRead
+        | "Darklang.Stdlib.Cli.__Posix.__write" -> Some ANF.PosixWrite
+        | "Darklang.Stdlib.Cli.__Posix.__close" -> Some ANF.PosixClose
+        | "Darklang.Stdlib.Cli.__Posix.__seek" -> Some ANF.PosixSeek
+        | "Darklang.Stdlib.Cli.__Posix.__statAt" -> Some ANF.PosixStatAt
+        | "Darklang.Stdlib.Cli.__Posix.__getCwd" -> Some ANF.PosixGetCwd
+        | "Darklang.Stdlib.Cli.__Posix.__chdir" -> Some ANF.PosixChdir
+        | "Darklang.Stdlib.Cli.__Posix.__mkdirAt" -> Some ANF.PosixMkdirAt
+        | "Darklang.Stdlib.Cli.__Posix.__unlinkAt" -> Some ANF.PosixUnlinkAt
+        | "Darklang.Stdlib.Cli.__Posix.__renameAt" -> Some ANF.PosixRenameAt
+        | "Darklang.Stdlib.Cli.__Posix.__chmodAt" -> Some ANF.PosixChmodAt
+        | "Darklang.Stdlib.Cli.__Posix.__chmodAt2" -> Some ANF.PosixChmodAt2
+        | "Darklang.Stdlib.Cli.__Posix.__utimesAt" -> Some ANF.PosixUtimesAt
+        | "Darklang.Stdlib.Cli.__Posix.__setAttributesAt" ->
+            Some ANF.PosixSetAttributesAt
+        | "Darklang.Stdlib.Cli.__Posix.__symlinkAt" -> Some ANF.PosixSymlinkAt
+        | "Darklang.Stdlib.Cli.__Posix.__readlinkAt" -> Some ANF.PosixReadlinkAt
+        | "Darklang.Stdlib.Cli.__Posix.__flock" -> Some ANF.PosixFlock
+        | "Darklang.Stdlib.Cli.__Posix.__getDents" -> Some ANF.PosixGetDents
         | "Darklang.Stdlib.Crypto.__secureRandomFill" ->
             Some ANF.SecureRandomFill
         | _ -> None
