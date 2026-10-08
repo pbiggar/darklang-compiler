@@ -1,0 +1,28 @@
+// Package-relative stdlib names and Option/Result fallbacks retain local precedence.
+
+module Darklang.Stdlib.Cli.PackageResolutionProbe =
+  FileSystem.FileError.toString FileSystem.FileError.NotFound = "File not found"
+  FileSystem.FileError.toString (FileSystem.FileError.Other "detail") = "detail"
+  let overwriteBashrc (content: String) : Result.Result<Unit, String> = FileSystem.overwriteFile "$HOME/.bashrc" (Stdlib.String.toBlob content) |> Result.mapError FileSystem.FileError.toString in 0L = 0L
+
+module Darklang.Stdlib.PackageResolutionProbe =
+  Env.get "DARKLANG_PACKAGE_RESOLUTION_MISSING_4B365" = None
+
+Darklang.Stdlib.Cli.FileSystem.FileError.toString Darklang.Stdlib.Cli.FileSystem.FileError.OsAccessDenied = "Permission denied"
+Stdlib.Cli.FileSystem.FileError.toString Stdlib.Cli.FileSystem.FileError.NotFound = "File not found"
+Darklang.Stdlib.Env.get "DARKLANG_PACKAGE_RESOLUTION_MISSING_4B365" = None
+Stdlib.Env.get "DARKLANG_PACKAGE_RESOLUTION_MISSING_4B365" = None
+
+module Acme.PackageResolutionProbe =
+  let identity (value: Option.Option<Int64>) : Option.Option<Int64> = value in identity (Some 3L) = Some 3L
+  let identity (value: Result.Result<Int64, String>) : Result.Result<Int64, String> = value in identity (Ok 4L) = Ok 4L
+  let identity (value: Option<Int64>) : Option<Int64> = value in identity (Some 5L) = Some 5L
+  let identity (value: Result<Int64, String>) : Result<Int64, String> = value in identity (Error "detail") = Error "detail"
+
+module Acme.LocalResolutionProbe =
+  module Option =
+    type Option<'a> = Present of 'a
+  module Result =
+    type Result<'a, 'b> = Success of 'a | Failure of 'b
+  let identity (value: Option.Option<Int64>) : Option.Option<Int64> = value in identity (Option.Option.Present 6L) = Option.Option.Present 6L
+  let identity (value: Result.Result<Int64, String>) : Result.Result<Int64, String> = value in identity (Result.Result.Failure "local") = Result.Result.Failure "local"
