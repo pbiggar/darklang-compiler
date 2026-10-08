@@ -181,6 +181,7 @@ StdLib/Cli/UI/TextField.dark
 StdLib/Cli/Tui/TerminalSession/Ansi.dark
 StdLib/Cli/Tui/TerminalSupport.dark
 packages/Darklang/Cli/Terminal/Size.dark
+packages/Darklang/Cli/Terminal/Color.dark
 StdLib/Cli/Tui/Text/__Escape.dark
 StdLib/Cli/Tui/Text/__Width.dark
 StdLib/Cli/Tui/Text/__Clip.dark
