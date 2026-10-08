@@ -195,6 +195,12 @@ GOAWAY identifiers and identifies unique control/QPACK streams by stream type;
 closing a critical stream fails the exchange. `http3_stream.e2e`,
 `http3_message.e2e`, `http3_control.e2e` and `http3_uni.e2e` cover these rules,
 and the live stream peer also feeds response/control bytes through this layer.
+`HttpsService` parses bounded HTTPS RDATA into aliases or endpoints advertising
+`h3`, including alternate ports and IPv4/IPv6 hints. It rejects malformed
+parameter ordering, lengths, target compression and mandatory-key lists;
+unknown mandatory parameters make an endpoint incompatible. Missing ALPN or
+an advertisement limited to HTTP/1.1 or HTTP/2 does not select QUIC.
+`https_service.e2e` covers these admission and malformed-record boundaries.
 Advertised-only discovery and public client/server integration remain work.
 
 `Stdlib.HttpClient.Sse.Event` and `parse` are copied from the same revision.

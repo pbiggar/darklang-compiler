@@ -1,0 +1,22 @@
+// https_service.e2e - Advertised h3, mandatory compatibility, target bounds, and service parameter ordering.
+Stdlib.HttpsService.parse "example.com" 443L (Stdlib.Blob.fromHex "00010000010003026833" |> Stdlib.Result.withDefault Stdlib.Blob.empty) |> Stdlib.Result.map (fun record -> match record with | Some (Service service) -> (service.host, service.port) | _ -> ("", 0L)) = Ok (("example.com", 443L))
+Stdlib.HttpsService.parse "example.com" 443L (Stdlib.Blob.fromHex "000100" |> Stdlib.Result.withDefault Stdlib.Blob.empty) = Ok None
+Stdlib.HttpsService.parse "example.com" 443L (Stdlib.Blob.fromHex "00010000010003026832" |> Stdlib.Result.withDefault Stdlib.Blob.empty) = Ok None
+Stdlib.HttpsService.parse "example.com" 443L (Stdlib.Blob.fromHex "000100000100030268330003000220FB" |> Stdlib.Result.withDefault Stdlib.Blob.empty) |> Stdlib.Result.map (fun record -> match record with | Some (Service service) -> service.port | _ -> 0L) = Ok 8443L
+Stdlib.HttpsService.parse "example.com" 443L (Stdlib.Blob.fromHex "0001000001000302683300020000" |> Stdlib.Result.withDefault Stdlib.Blob.empty) |> Stdlib.Result.map (fun record -> Stdlib.Option.isSome record) = Ok true
+Stdlib.HttpsService.parse "example.com" 443L (Stdlib.Blob.fromHex "00010000020000" |> Stdlib.Result.withDefault Stdlib.Blob.empty) = Error "HTTPS no-default-alpn without ALPN"
+Stdlib.HttpsService.parse "example.com" 443L (Stdlib.Blob.fromHex "0001000000000200630001000302683300630000" |> Stdlib.Result.withDefault Stdlib.Blob.empty) = Ok None
+Stdlib.HttpsService.parse "example.com" 443L (Stdlib.Blob.fromHex "00010000000002006300010003026833" |> Stdlib.Result.withDefault Stdlib.Blob.empty) = Error "Missing mandatory HTTPS service parameter"
+Stdlib.HttpsService.parse "example.com" 443L (Stdlib.Blob.fromHex "0001000001000302683300010000" |> Stdlib.Result.withDefault Stdlib.Blob.empty) = Error "Unordered HTTPS service parameters"
+Stdlib.HttpsService.parse "example.com" 443L (Stdlib.Blob.fromHex "00010000010004026833" |> Stdlib.Result.withDefault Stdlib.Blob.empty) = Error "Truncated HTTPS service parameter"
+Stdlib.HttpsService.parse "example.com" 443L (Stdlib.Blob.fromHex "00010000010003036833" |> Stdlib.Result.withDefault Stdlib.Blob.empty) = Error "Invalid HTTPS ALPN list"
+Stdlib.HttpsService.parse "example.com" 443L (Stdlib.Blob.fromHex "0001C000" |> Stdlib.Result.withDefault Stdlib.Blob.empty) = Error "Invalid HTTPS target name"
+Stdlib.HttpsService.parse "example.com" 443L (Stdlib.Blob.fromHex "000000" |> Stdlib.Result.withDefault Stdlib.Blob.empty) = Ok None
+Stdlib.HttpsService.parse "example.com" 443L (Stdlib.Blob.fromHex "000003737663076578616D706C6503636F6D00FFFF" |> Stdlib.Result.withDefault Stdlib.Blob.empty) = Ok (Some (Alias "svc.example.com"))
+Stdlib.HttpsService.parse "example.com" 443L (Stdlib.Blob.fromHex "00010000010003026833000400047F000001" |> Stdlib.Result.withDefault Stdlib.Blob.empty) |> Stdlib.Result.map (fun record -> match record with | Some (Service service) -> service.ipv4 | _ -> []) = Ok [[127L, 0L, 0L, 1L]]
+Stdlib.HttpsService.parse "example.com" 443L (Stdlib.Blob.fromHex "000100000100030268330006001000000000000000000000000000000001" |> Stdlib.Result.withDefault Stdlib.Blob.empty) |> Stdlib.Result.map (fun record -> match record with | Some (Service service) -> service.ipv6 |> Stdlib.List.length | _ -> 0) = Ok 1
+Stdlib.HttpsService.parse "example.com" 443L (Stdlib.Blob.fromHex "000103737663076578616D706C6503636F6D0000010003026833" |> Stdlib.Result.withDefault Stdlib.Blob.empty) |> Stdlib.Result.map (fun record -> match record with | Some (Service service) -> service.host | _ -> "") = Ok "svc.example.com"
+Stdlib.HttpsService.parse "example.com" 443L (Stdlib.Blob.fromHex "00010000000002000100010003026833" |> Stdlib.Result.withDefault Stdlib.Blob.empty) |> Stdlib.Result.map (fun record -> Stdlib.Option.isSome record) = Ok true
+Stdlib.HttpsService.parse "example.com" 443L (Stdlib.Blob.fromHex "00010000000002000000010003026833" |> Stdlib.Result.withDefault Stdlib.Blob.empty) = Error "Invalid HTTPS mandatory keys"
+Stdlib.HttpsService.parse "example.com" 443L (Stdlib.Blob.fromHex "00010000010003026833000300020000" |> Stdlib.Result.withDefault Stdlib.Blob.empty) = Ok None
+Stdlib.HttpsService.parse "example.com" 443L (Stdlib.Blob.fromHex "000100000100030268330006000100" |> Stdlib.Result.withDefault Stdlib.Blob.empty) = Error "Invalid HTTPS address hints"
