@@ -147,7 +147,7 @@ let __connectHost (host: String) (port: Int64) (trusted: Bool)
                 Stdlib.HttpClient.__connectDns6 host port trusted (Stdlib.HttpClient.__dnsError error)
 
 // Fallback is confined to connection establishment, before any request bytes.
-let __connectAutomatic (url: Stdlib.HttpWire.Url) (trusted: Bool) (roots: Stdlib.Option.Option<List<Blob>>)
+let __connectAlternatives (url: Stdlib.HttpWire.Url) (trusted: Bool) (roots: Stdlib.Option.Option<List<Blob>>) (alternatives: List<Stdlib.HttpsService.Service>)
   : Stdlib.Result.Result<Stdlib.HttpClient.Connection, Stdlib.HttpClient.RequestError> =
   let literal = match Stdlib.DnsWire.ipv4 url.host with | Some address -> Some address | None -> Stdlib.DnsWire.ipv6 url.host in
   let addressAllowed = match literal with | None -> true | Some address -> Stdlib.Http3Discovery.allowedAddress trusted address in
@@ -161,9 +161,15 @@ let __connectAutomatic (url: Stdlib.HttpWire.Url) (trusted: Bool) (roots: Stdlib
     match trust with
     | Error _ -> Error Stdlib.HttpClient.RequestError.NetworkError
     | Ok authorities ->
-      match Stdlib.Http3Discovery.discover url authorities trusted with
+      let cached = if alternatives == [] then None else Stdlib.Http3Discovery.connect alternatives url.host authorities trusted in
+      let negotiated = match cached with | Some ready -> Some ready | None -> Stdlib.Http3Discovery.discover url authorities trusted in
+      match negotiated with
       | Some ready -> Ok (Quic ready)
       | None -> Stdlib.HttpClient.__connectHost url.host url.port trusted |> Stdlib.Result.map (fun connection -> Tcp ((connection, Some authorities)))
+
+let __connectAutomatic (url: Stdlib.HttpWire.Url) (trusted: Bool) (roots: Stdlib.Option.Option<List<Blob>>)
+  : Stdlib.Result.Result<Stdlib.HttpClient.Connection, Stdlib.HttpClient.RequestError> =
+  Stdlib.HttpClient.__connectAlternatives url trusted roots []
 
 let __emptyHeader (headers: List<(String * String)>) : Bool =
   match headers with
@@ -250,7 +256,7 @@ let __secureRequest (connection: Stdlib.Network.TcpConnection) (url: Stdlib.Http
         | Error _ -> Error Stdlib.HttpClient.RequestError.NetworkError
         | Ok response -> Stdlib.HttpClient.__parseSecureResponse method response 0L
 
-let __request (trusted: Bool) (roots: Stdlib.Option.Option<List<Blob>>)
+let __requestWithAlternatives (trusted: Bool) (roots: Stdlib.Option.Option<List<Blob>>) (alternatives: List<Stdlib.HttpsService.Service>)
   (method: String) (urlText: String)
   (headers: List<(String * String)>) (body: Blob)
   : Stdlib.Result.Result<Stdlib.HttpClient.Response, Stdlib.HttpClient.RequestError> =
@@ -278,7 +284,7 @@ let __request (trusted: Bool) (roots: Stdlib.Option.Option<List<Blob>>)
                     (headers @ [("Connection", "close")]) body with
             | Error _ -> Error (Stdlib.HttpClient.RequestError.BadUrl Stdlib.HttpClient.BadUrlDetails.InvalidRequest)
             | Ok requestBytes ->
-                match Stdlib.HttpClient.__connectAutomatic url trusted roots with
+                match Stdlib.HttpClient.__connectAlternatives url trusted roots alternatives with
                 | Error error -> Error error
                 | Ok connected ->
                   match connected with
@@ -297,6 +303,10 @@ let __request (trusted: Bool) (roots: Stdlib.Option.Option<List<Blob>>)
                         | Ok () -> Stdlib.HttpClient.__readResponse connection normalizedMethod Stdlib.Blob.empty 0L in
                     let _ = Stdlib.Network.closeTcp connection in
                     result
+
+let __request (trusted: Bool) (roots: Stdlib.Option.Option<List<Blob>>) (method: String) (url: String)
+  (headers: List<(String * String)>) (body: Blob) : Stdlib.Result.Result<Stdlib.HttpClient.Response, Stdlib.HttpClient.RequestError> =
+  Stdlib.HttpClient.__requestWithAlternatives trusted roots [] method url headers body
 
 let request (method: String) (url: String) (headers: List<(String * String)>) (body: Blob)
   : Stdlib.Result.Result<Stdlib.HttpClient.Response, Stdlib.HttpClient.RequestError> =
@@ -568,7 +578,7 @@ let __secureStream (connection: Stdlib.Network.TcpConnection) (url: Stdlib.HttpW
       | Ok () -> Ok (Stdlib.HttpClient.StreamStart.Legacy (Stdlib.HttpClient.StreamTransport.Secure
         (Stdlib.Tls13Client.ApplicationState { keys = secure.server, pending = secure.pending, records = 0L })))
 
-let __stream (trusted: Bool) (roots: Stdlib.Option.Option<List<Blob>>)
+let __streamWithAlternatives (trusted: Bool) (roots: Stdlib.Option.Option<List<Blob>>) (alternatives: List<Stdlib.HttpsService.Service>)
   (method: String) (urlText: String)
   (headers: List<(String * String)>) (body: Blob)
   : Stdlib.Result.Result<Stdlib.HttpClient.StreamResponse, Stdlib.HttpClient.RequestError> =
@@ -592,7 +602,7 @@ let __stream (trusted: Bool) (roots: Stdlib.Option.Option<List<Blob>>)
               (headers @ [("Connection", "close")]) body with
       | Error _ -> Error (Stdlib.HttpClient.RequestError.BadUrl Stdlib.HttpClient.BadUrlDetails.InvalidRequest)
       | Ok requestBytes ->
-        match Stdlib.HttpClient.__connectAutomatic url trusted roots with
+        match Stdlib.HttpClient.__connectAlternatives url trusted roots alternatives with
         | Error error -> Error error
         | Ok connected ->
           match connected with
@@ -635,6 +645,10 @@ let __stream (trusted: Bool) (roots: Stdlib.Option.Option<List<Blob>>)
               Ok (Stdlib.HttpClient.StreamResponse {
                 statusCode = Stdlib.Int.fromInt64 head.statusCode,
                 headers = head.headers, body = stream })
+
+let __stream (trusted: Bool) (roots: Stdlib.Option.Option<List<Blob>>) (method: String) (url: String)
+  (headers: List<(String * String)>) (body: Blob) : Stdlib.Result.Result<Stdlib.HttpClient.StreamResponse, Stdlib.HttpClient.RequestError> =
+  Stdlib.HttpClient.__streamWithAlternatives trusted roots [] method url headers body
 
 let stream (method: String) (url: String) (headers: List<(String * String)>) (body: Blob)
   : Stdlib.Result.Result<Stdlib.HttpClient.StreamResponse, Stdlib.HttpClient.RequestError> =

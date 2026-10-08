@@ -97,8 +97,9 @@ work. HTTP/2 now has a single-exchange HTTPS client (authenticated ALPN with
 HTTP/1.1 fallback) and a prior-knowledge cleartext server. HTTP/3 now has a
 certificate-authenticated QUIC client, loss recovery, stream flow control,
 key updates, static/literal QPACK, critical-stream/message validation and
-buffered or lazy public client responses selected through HTTPS DNS.
-Server TLS/HTTP/3 and learned Alt-Svc caching remain work; see the compatibility
+buffered or lazy public client responses selected through HTTPS DNS or an
+owned `HttpClientSession` Alt-Svc cache.
+Server TLS/HTTP/3 remains work; see the compatibility
 ledger for exact profile boundaries. For
 each implementation branch, run `./build --ai`, the already-built
 `./run-tests --ai`, and

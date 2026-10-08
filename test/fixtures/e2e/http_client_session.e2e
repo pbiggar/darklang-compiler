@@ -1,0 +1,4 @@
+// http_client_session.e2e - Session disposal is idempotent and rejects further buffered or lazy exchanges.
+let roots = [Stdlib.String.toBlob (Stdlib.String.repeat "certificate" 100)] in let session = Stdlib.HttpClientSession.createTrustedWithRoots roots in let _ = session.close () in true = true
+let session = Stdlib.HttpClientSession.create () in let _ = session.clear () in let _ = session.close () in let _ = session.close () in let _ = session.clear () in match session.request "GET" "https://example.com/" [] Stdlib.Blob.empty with | Error NetworkError -> true | _ -> false = true
+let session = Stdlib.HttpClientSession.createTrustedWithRoots [] in let _ = session.close () in match session.stream "GET" "https://example.com/" [] Stdlib.Blob.empty with | Error NetworkError -> true | _ -> false = true

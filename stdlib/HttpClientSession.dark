@@ -1,0 +1,65 @@
+// HttpClientSession.dark - Owned alternative-service cache without sharing or pooling response connections.
+module Darklang.Stdlib.HttpClientSession
+
+type Session = {
+  request: String -> String -> List<(String * String)> -> Blob -> Stdlib.Result.Result<Stdlib.HttpClient.Response, Stdlib.HttpClient.RequestError>,
+  stream: String -> String -> List<(String * String)> -> Blob -> Stdlib.Result.Result<Stdlib.HttpClient.StreamResponse, Stdlib.HttpClient.RequestError>,
+  clear: Unit -> Unit,
+  close: Unit -> Unit
+}
+
+let __lookup (cell: RawPtr) (url: String) (now: Int64) : List<Stdlib.HttpsService.Service> =
+  match Stdlib.HttpWire.parseUrl url with
+  | Error _ -> []
+  | Ok parsed ->
+    let state = Stdlib.Stream.__cellGet<Stdlib.AltSvcCache.State> cell in
+    let found = Stdlib.AltSvcCache.lookup state parsed now in
+    let _ = Stdlib.Stream.__cellSet cell found.state in
+    found.services
+
+let __learn (cell: RawPtr) (url: String) (status: Int) (headers: List<(String * String)>) (started: Int64) : Unit =
+  match Stdlib.HttpWire.parseUrl url, Stdlib.Network.monotonicMillis (), Stdlib.Int.toInt64 (Stdlib.DateTime.toSeconds (Stdlib.DateTime.now ())) with
+  | Ok parsed, Ok now, Some utc ->
+    let state = Stdlib.Stream.__cellGet<Stdlib.AltSvcCache.State> cell in
+    Stdlib.Stream.__cellSet cell (Stdlib.AltSvcCache.learn state parsed status headers started now utc)
+  | _, _, _ -> ()
+
+let __request (cell: RawPtr) (lifecycle: Stream<Unit>) (trusted: Bool) (roots: Stdlib.Option.Option<List<Blob>>)
+  (method: String) (url: String) (headers: List<(String * String)>) (body: Blob)
+  : Stdlib.Result.Result<Stdlib.HttpClient.Response, Stdlib.HttpClient.RequestError> =
+  match Stdlib.Stream.next lifecycle with
+  | None -> Error Stdlib.HttpClient.RequestError.NetworkError
+  | Some _ ->
+    match Stdlib.Network.monotonicMillis () with
+    | Error _ -> Error Stdlib.HttpClient.RequestError.NetworkError
+    | Ok started ->
+      Stdlib.HttpClient.__requestWithAlternatives trusted roots (Stdlib.HttpClientSession.__lookup cell url started) method url headers body
+        |> Stdlib.Result.map (fun response -> let _ = Stdlib.HttpClientSession.__learn cell url response.statusCode response.headers started in response)
+
+let __stream (cell: RawPtr) (lifecycle: Stream<Unit>) (trusted: Bool) (roots: Stdlib.Option.Option<List<Blob>>)
+  (method: String) (url: String) (headers: List<(String * String)>) (body: Blob)
+  : Stdlib.Result.Result<Stdlib.HttpClient.StreamResponse, Stdlib.HttpClient.RequestError> =
+  match Stdlib.Stream.next lifecycle with
+  | None -> Error Stdlib.HttpClient.RequestError.NetworkError
+  | Some _ ->
+    match Stdlib.Network.monotonicMillis () with
+    | Error _ -> Error Stdlib.HttpClient.RequestError.NetworkError
+    | Ok started ->
+      Stdlib.HttpClient.__streamWithAlternatives trusted roots (Stdlib.HttpClientSession.__lookup cell url started) method url headers body
+        |> Stdlib.Result.map (fun response -> let _ = Stdlib.HttpClientSession.__learn cell url response.statusCode response.headers started in response)
+
+let __clear (cell: RawPtr) (lifecycle: Stream<Unit>) : Unit =
+  match Stdlib.Stream.next lifecycle with | None -> () | Some _ -> Stdlib.Stream.__cellSet cell Stdlib.AltSvcCache.empty
+
+let __create (trusted: Bool) (roots: Stdlib.Option.Option<List<Blob>>) : Stdlib.HttpClientSession.Session =
+  let cell = Stdlib.Stream.__cellNew Stdlib.AltSvcCache.empty in
+  let lifecycle = Stdlib.Stream.__new (fun _unit -> Some ()) (fun _unit -> Stdlib.Stream.__cellDispose<Stdlib.AltSvcCache.State> cell) in
+  Stdlib.HttpClientSession.Session {
+    request = fun method url headers body -> Stdlib.HttpClientSession.__request cell lifecycle trusted roots method url headers body,
+    stream = fun method url headers body -> Stdlib.HttpClientSession.__stream cell lifecycle trusted roots method url headers body,
+    clear = fun _unit -> Stdlib.HttpClientSession.__clear cell lifecycle,
+    close = fun _unit -> Stdlib.Stream.close lifecycle }
+
+let create () : Stdlib.HttpClientSession.Session = Stdlib.HttpClientSession.__create false None
+let createTrusted () : Stdlib.HttpClientSession.Session = Stdlib.HttpClientSession.__create true None
+let createTrustedWithRoots (roots: List<Blob>) : Stdlib.HttpClientSession.Session = Stdlib.HttpClientSession.__create true (Some roots)

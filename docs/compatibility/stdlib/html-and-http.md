@@ -218,8 +218,31 @@ responses. Lazy response bodies own their connection and release it on EOF or
 explicit close. The live stream peer's `--http-client`, `--request-size=71680`,
 `--buffered`, `--close-early` and `--discovery` options verify these paths,
 including alternate-target authentication and both directions crossing 64 KiB.
-Learned Alt-Svc caching, multiplexing, pooling, graceful QUIC wire closure and
-TLS/HTTP/3 server integration remain work.
+`HttpClientSession.create`, `createTrusted` and `createTrustedWithRoots` expose
+owned `request`, `stream`, `clear` and `close` functions. Each session learns
+`h3` Alt-Svc alternatives from authenticated HTTPS response headers, binds them
+to the original scheme/host/port and replaces that origin's advertisements on
+each new field. Its cache holds at most 32 alternatives, caps freshness at one
+day and conservatively subtracts response age and request duration. `clear`,
+expired advertisements and status 421 invalidate alternatives; callers should
+clear the session after a network change. Session close releases only the
+cache; a returned lazy body keeps owning its connection until consumed or
+closed. Calls after session close return `NetworkError`. Existing stateless
+client entry points retain HTTPS DNS discovery without persistent Alt-Svc state.
+`alt_svc.e2e`, `alt_svc_cache.e2e`, `http_client_session.e2e` and
+`python3 scripts/test_alt_svc_peer.py` cover parsing, bounded cache eviction,
+origin separation, lifetime reduction, disposal and HTTPS-to-HTTP/3 negotiation
+with both buffered and lazy responses. The live session peer also checks
+misdirected responses and repeated TCP fallback after certificate rejection.
+RSA-PSS and PKCS#1 certificate verification use a pure Dark Montgomery public
+modular-power implementation with scratch storage bounded by the modulus width.
+This removes the repeated large-integer intermediate allocations that exhausted
+the native heap during that fallback check. `rsa_montgomery.e2e` and
+`python3 scripts/test_rsa_montgomery.py` check malformed inputs, carry boundaries
+and 48 independent Python `pow` vectors through 8192-bit moduli. This public
+exponent operation is not a private-key signing implementation.
+Multiplexing, pooling, graceful QUIC wire closure and TLS/HTTP/3 server
+integration remain work.
 
 `Stdlib.HttpClient.Sse.Event` and `parse` are copied from the same revision.
 The parser retains upstream's `Stream.unfold` behavior: it pulls only until the

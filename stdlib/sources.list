@@ -177,6 +177,9 @@ __Http3Uni.dark
 __Http3.dark
 __Http3Client.dark
 __Http3Discovery.dark
+__AltSvc.dark
+__AltSvcCache.dark
+HttpClientSession.dark
 __HttpsService.dark
 __HttpsDns.dark
 Pretty.dark
@@ -188,6 +191,7 @@ X509Identity.dark
 RsaSpki.dark
 Crypto.dark
 RsaPss.dark
+__RsaMontgomery.dark
 P256.dark
 RsaPkcs1.dark
 X509Chain.dark
