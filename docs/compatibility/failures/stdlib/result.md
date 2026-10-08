@@ -3,7 +3,6 @@
 [Source fixture](../../../../test/fixtures/e2e/upstream/stdlib/result.dark) · [File list](../../current-audit.md)
 
 Executed 67 assertions: **59 passed, 8 failed**.
-Of 19 previously disabled assertions, **11 passed and 8 failed**.
 
 | Test | Observed failure |
 | --- | --- |
@@ -15,5 +14,3 @@ Of 19 previously disabled assertions, **11 passed and 8 failed**.
 | [L139](../../../../test/fixtures/e2e/upstream/stdlib/result.dark#L139) — Stdlib.Result.map5 (Stdlib.Result.Result.Error "error1") (Stdlib.Result.Result.Error "error2") (Stdlib.Resu... | Operator is unavailable for this type |
 | [L147](../../../../test/fixtures/e2e/upstream/stdlib/result.dark#L147) — Stdlib.Result.map5 (Stdlib.Result.Result.Error "error1") (Stdlib.Result.Result.Error "error2") (Stdlib.Resu... | Operator is unavailable for this type |
 | [L178](../../../../test/fixtures/e2e/upstream/stdlib/result.dark#L178) — Stdlib.Result.mapWithDefault (Stdlib.Result.Result.Error "test1") (Stdlib.Result.Result.Error "test2") (fun... | Expected TSum ("Darklang.Stdlib.Result.Result", [TVar "t"; TString]), got TInt64 |
-
-Previously disabled tests that passed: L19, L24, L67, L91, L97, L124, L155, L185, L188, L277, L294.

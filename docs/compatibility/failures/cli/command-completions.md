@@ -3,7 +3,6 @@
 [Source fixture](../../../../test/fixtures/e2e/upstream/cli/command-completions.dark) · [File list](../../current-audit.md)
 
 Executed 10 assertions: **0 passed, 10 failed**.
-Of 10 previously disabled assertions, **0 passed and 10 failed**.
 
 | Test | Observed failure |
 | --- | --- |

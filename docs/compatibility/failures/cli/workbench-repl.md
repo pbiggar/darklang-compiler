@@ -3,7 +3,6 @@
 [Source fixture](../../../../test/fixtures/e2e/upstream/cli/workbench-repl.dark) · [File list](../../current-audit.md)
 
 Executed 36 assertions: **0 passed, 36 failed**.
-Of 36 previously disabled assertions, **0 passed and 36 failed**.
 
 | Test | Observed failure |
 | --- | --- |

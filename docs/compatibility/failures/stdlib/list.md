@@ -3,7 +3,6 @@
 [Source fixture](../../../../test/fixtures/e2e/upstream/stdlib/list.dark) · [File list](../../current-audit.md)
 
 Executed 220 assertions: **190 passed, 30 failed**.
-Of 35 previously disabled assertions, **5 passed and 30 failed**.
 
 | Test | Observed failure |
 | --- | --- |
@@ -37,5 +36,3 @@ Of 35 previously disabled assertions, **5 passed and 30 failed**.
 | [L269](../../../../test/fixtures/e2e/upstream/stdlib/list.dark#L269) — Stdlib.List.sortByComparator [ 1L, 2L, 3L ] (fun a b -> "㧑༷釺") | Expected error message 'Cannot perform equality check on String and Int' not found in stderr. Actual stderr: <entry>: Expected TInt, got TString |
 | [L302](../../../../test/fixtures/e2e/upstream/stdlib/list.dark#L302) — Stdlib.List.takeWhile [ 1L, 2L, 3L, 4L ] (fun item -> 0L - 1L) | Expected error message 'Encountered a condition that must be a Bool, but got an Int64 (-1)' not found in stderr. Actual stderr: <entry>: Expected TBool, got TInt64 |
 | [L314](../../../../test/fixtures/e2e/upstream/stdlib/list.dark#L314) — Stdlib.List.uniqueBy [ 6L, 2.0 ] (fun x -> x) | Unknown function or value 'Builtin.testIncrementSideEffectCounter' |
-
-Previously disabled tests that passed: L140, L206, L250, L346, L354.

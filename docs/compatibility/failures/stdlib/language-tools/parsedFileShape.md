@@ -3,7 +3,6 @@
 [Source fixture](../../../../../test/fixtures/e2e/upstream/stdlib/language-tools/parsedFileShape.dark) · [File list](../../../current-audit.md)
 
 Executed 13 assertions: **0 passed, 13 failed**.
-Of 13 previously disabled assertions, **0 passed and 13 failed**.
 
 | Test | Observed failure |
 | --- | --- |

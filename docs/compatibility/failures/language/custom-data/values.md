@@ -3,7 +3,6 @@
 [Source fixture](../../../../../test/fixtures/e2e/upstream/language/custom-data/values.dark) · [File list](../../../current-audit.md)
 
 Executed 72 assertions: **19 passed, 53 failed**.
-Of 72 previously disabled assertions, **19 passed and 53 failed**.
 
 | Test | Observed failure |
 | --- | --- |

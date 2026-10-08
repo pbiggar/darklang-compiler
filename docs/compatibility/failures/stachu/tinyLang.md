@@ -3,7 +3,6 @@
 [Source fixture](../../../../test/fixtures/e2e/upstream/stachu/tinyLang.dark) · [File list](../../current-audit.md)
 
 Executed 34 assertions: **0 passed, 34 failed**.
-Of 34 previously disabled assertions, **0 passed and 34 failed**.
 
 | Test | Observed failure |
 | --- | --- |

@@ -1305,7 +1305,6 @@ let runTestsWithProgressReporter completedTestReporter args =
         ("test/fixtures/e2e/upstream/stdlib/math.dark", [ 27; 30 ]);
         ( "test/fixtures/e2e/upstream/stdlib/option.dark",
           [ 44; 75; 119; 148; 170; 176; 204; 211; 218; 242; 255; 260 ] );
-        ("test/fixtures/e2e/upstream/stdlib/pretty.dark", [ 186 ]);
         ( "test/fixtures/e2e/upstream/stdlib/result.dark",
           [ 57; 79; 85; 110; 117; 139; 147; 178 ] );
       ]

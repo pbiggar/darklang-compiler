@@ -4,8 +4,8 @@ Generated from `test/test-suite-tooling/TestRunner.ml` and the imported
 `test/fixtures/e2e/upstream/**/*.dark` files. Regenerate with
 `python3 scripts/audit-upstream-gates.py`; verify with `--check`.
 
-**105 files; 34 whole-file exclusions; 271 line-number entries
-across 23 files.** A line entry is not a skipped-test count.
+**105 files; 34 whole-file exclusions; 270 line-number entries
+across 22 files.** A line entry is not a skipped-test count.
 The runner matches the `L<number>:` assertion name produced by the fixture
 parser. Declarations and multiline assertions require parser inspection;
 the source line alone does not establish whether a gate suppresses a test.
@@ -107,7 +107,7 @@ Other skip metadata and runtime filters are outside this inventory.
 | [stdlib/math.dark](../../test/fixtures/e2e/upstream/stdlib/math.dark) | enabled | 27, 30 |
 | [stdlib/nomodule.dark](../../test/fixtures/e2e/upstream/stdlib/nomodule.dark) | enabled | — |
 | [stdlib/option.dark](../../test/fixtures/e2e/upstream/stdlib/option.dark) | enabled | 44, 75, 119, 148, 170, 176, 204, 211, 218, 242, 255, 260 |
-| [stdlib/pretty.dark](../../test/fixtures/e2e/upstream/stdlib/pretty.dark) | enabled | 186 |
+| [stdlib/pretty.dark](../../test/fixtures/e2e/upstream/stdlib/pretty.dark) | enabled | — |
 | [stdlib/prettyPrinter.dark](../../test/fixtures/e2e/upstream/stdlib/prettyPrinter.dark) | disabled | — |
 | [stdlib/regex.dark](../../test/fixtures/e2e/upstream/stdlib/regex.dark) | enabled | — |
 | [stdlib/result.dark](../../test/fixtures/e2e/upstream/stdlib/result.dark) | enabled | 57, 79, 85, 110, 117, 139, 147, 178 |
@@ -127,4 +127,4 @@ editing the runner. They must not be counted as unsupported expressions.
 | File | Line | Source line |
 | --- | --- | --- |
 
-0 of the 271 entries point to blank or comment lines.
+0 of the 270 entries point to blank or comment lines.

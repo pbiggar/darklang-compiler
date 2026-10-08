@@ -3,7 +3,6 @@
 [Source fixture](../../../../test/fixtures/e2e/upstream/cli/permissions-grammar.dark) · [File list](../../current-audit.md)
 
 Executed 53 assertions: **0 passed, 53 failed**.
-Of 53 previously disabled assertions, **0 passed and 53 failed**.
 
 | Test | Observed failure |
 | --- | --- |

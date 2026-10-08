@@ -3,7 +3,6 @@
 [Source fixture](../../../../test/fixtures/e2e/upstream/stdlib/eself.dark) · [File list](../../current-audit.md)
 
 Executed 39 assertions: **0 passed, 39 failed**.
-Of 39 previously disabled assertions, **0 passed and 39 failed**.
 
 | Test | Observed failure |
 | --- | --- |

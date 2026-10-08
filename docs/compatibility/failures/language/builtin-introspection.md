@@ -3,7 +3,6 @@
 [Source fixture](../../../../test/fixtures/e2e/upstream/language/builtin-introspection.dark) · [File list](../../current-audit.md)
 
 Executed 2 assertions: **0 passed, 2 failed**.
-Of 2 previously disabled assertions, **0 passed and 2 failed**.
 
 | Test | Observed failure |
 | --- | --- |

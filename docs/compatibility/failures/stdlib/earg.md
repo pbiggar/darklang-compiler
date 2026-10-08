@@ -3,7 +3,6 @@
 [Source fixture](../../../../test/fixtures/e2e/upstream/stdlib/earg.dark) · [File list](../../current-audit.md)
 
 Executed 15 assertions: **0 passed, 15 failed**.
-Of 15 previously disabled assertions, **0 passed and 15 failed**.
 
 | Test | Observed failure |
 | --- | --- |

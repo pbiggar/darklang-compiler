@@ -3,7 +3,6 @@
 [Source fixture](../../../../test/fixtures/e2e/upstream/scm/conflicts.dark) · [File list](../../current-audit.md)
 
 Executed 40 assertions: **3 passed, 37 failed**.
-Of 40 previously disabled assertions, **3 passed and 37 failed**.
 
 | Test | Observed failure |
 | --- | --- |

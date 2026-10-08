@@ -3,7 +3,6 @@
 [Source fixture](../../../../test/fixtures/e2e/upstream/stdlib/sqlite.dark) · [File list](../../current-audit.md)
 
 Executed 8 assertions: **0 passed, 8 failed**.
-Of 8 previously disabled assertions, **0 passed and 8 failed**.
 
 | Test | Observed failure |
 | --- | --- |

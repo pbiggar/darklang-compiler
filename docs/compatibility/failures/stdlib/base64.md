@@ -3,7 +3,6 @@
 [Source fixture](../../../../test/fixtures/e2e/upstream/stdlib/base64.dark) · [File list](../../current-audit.md)
 
 Executed 41 assertions: **15 passed, 26 failed**.
-Of 26 previously disabled assertions, **0 passed and 26 failed**.
 
 | Test | Observed failure |
 | --- | --- |

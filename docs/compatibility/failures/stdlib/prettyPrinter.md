@@ -3,7 +3,6 @@
 [Source fixture](../../../../test/fixtures/e2e/upstream/stdlib/prettyPrinter.dark) · [File list](../../current-audit.md)
 
 Executed 57 assertions: **0 passed, 57 failed**.
-Of 57 previously disabled assertions, **0 passed and 57 failed**.
 
 | Test | Observed failure |
 | --- | --- |

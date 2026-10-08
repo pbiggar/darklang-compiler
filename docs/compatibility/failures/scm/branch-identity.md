@@ -3,7 +3,6 @@
 [Source fixture](../../../../test/fixtures/e2e/upstream/scm/branch-identity.dark) · [File list](../../current-audit.md)
 
 Executed 8 assertions: **2 passed, 6 failed**.
-Of 8 previously disabled assertions, **2 passed and 6 failed**.
 
 | Test | Observed failure |
 | --- | --- |

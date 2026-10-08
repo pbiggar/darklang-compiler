@@ -3,7 +3,6 @@
 [Source fixture](../../../../test/fixtures/e2e/upstream/language/runtime-to-programtypes.dark) · [File list](../../current-audit.md)
 
 Executed 19 assertions: **0 passed, 19 failed**.
-Of 19 previously disabled assertions, **0 passed and 19 failed**.
 
 | Test | Observed failure |
 | --- | --- |
