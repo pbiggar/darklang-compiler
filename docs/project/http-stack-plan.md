@@ -105,14 +105,21 @@ Finished CRYPTO, retransmits with fresh packet numbers, and releases a
 role-aware HTTP/3 application owner only after Finished. Independent UDP
 aioquic checks cover 70 KiB bidirectional flow, loss, duplicates, corrupted
 packets, zero server bidirectional-stream credit and leak-free disposal.
-The public UDP listener and shared HTTP routing, HelloRetryRequest and TLS
-KeyUpdate remain unfinished.
+`HttpServer.Quic.serve` now binds an owned sequential IPv4 UDP listener,
+shares HTTP routing/headers/body limits, emits encrypted HTTP/3 closure,
+and returns normally on shutdown during an incomplete body. Its bounded
+Retry CID history suppresses replay of both completed and aborted handshakes.
+Independent aioquic checks cover 70 KiB echo, HEAD representation lengths,
+early 413, unsupported ALPN, replay suppression, rebind and zero leaks.
+HelloRetryRequest and TLS KeyUpdate remain unfinished.
 The Retry foundation authenticates bounded address/CID-bound HMAC tokens with
 a 30-second lifetime and serializes QUIC v1 Retry packets. Independent Python
 and aioquic checks cover token tampering, expiry, IPv4/IPv6 binding and packet
 integrity. The handshake owner enforces the first Initial datagram's minimum
 size and requires a validated challenge before certificate flights. The UDP
-listener must still suppress completed and aborted connection-token replay.
+listener consumes every authenticated Retry CID before starting TLS and
+retains it for thirty seconds, refusing new admissions rather than evicting
+a live entry when its 256-entry bound is full.
 
 ## 5. Compatibility and readiness
 

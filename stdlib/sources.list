@@ -178,6 +178,7 @@ __Http3Control.dark
 __Http3Uni.dark
 __Http3.dark
 __Http3Client.dark
+__Http3Server.dark
 __Http3Discovery.dark
 __AltSvc.dark
 __AltSvcCache.dark
@@ -203,6 +204,7 @@ __Tls13ServerTcp.dark
 __QuicServerTls.dark
 __QuicServerRetry.dark
 HttpServerTls.dark
+HttpServerQuic.dark
 P256.dark
 RsaPkcs1.dark
 X509Chain.dark

@@ -1,0 +1,88 @@
+// HttpServerQuic.dark - Sequential HTTP/3 UDP listener with Retry, replay suppression and shutdown ownership.
+module Darklang.Stdlib.HttpServer.Quic
+
+type Recent = { source: Blob, expires: Int64 }
+
+let __socket (parent: Stdlib.Datagram.Socket) : Stdlib.Datagram.Socket =
+  let lifecycle = Stdlib.Stream.__new (fun _unit -> Some ()) (fun _unit -> ()) in
+  Stdlib.Datagram.Socket { lifecycle = lifecycle,
+    send = fun peer bytes timeout -> match Stdlib.Stream.next lifecycle with | None -> Error 9L | Some () -> Stdlib.Datagram.send parent peer bytes timeout,
+    receive = fun timeout -> match Stdlib.Stream.next lifecycle with | None -> Error 9L | Some () -> Stdlib.Datagram.receive parent timeout }
+
+let __connection (config: Stdlib.HttpServer.Config.Config) (identity: Stdlib.TlsServerIdentity.Identity) (handler: Stdlib.Http.Request -> Stdlib.Http.Response) (signals: Stdlib.Network.ShutdownSignals) (socket: Stdlib.Datagram.Socket) (flight: Stdlib.QuicServer.Flight) (peer: Stdlib.Datagram.Endpoint) (limit: Int64) : Bool =
+  let child = Stdlib.HttpServer.Quic.__socket socket in
+  let result = match Stdlib.Network.monotonicMillis () with
+    | Error _ -> Error "HTTP/3 server clock failed"
+    | Ok now -> Stdlib.QuicServer.accept child peer signals flight (now + 10000L) 4096L |> Stdlib.Result.andThen (fun ready ->
+        Stdlib.Http3Server.serve ready signals config (fun request -> Stdlib.HttpServer.__http2Handler config handler request) limit) in
+  let stopped = match result with
+    | Error message -> message == "HTTP server shutting down"
+    | Ok state -> Stdlib.QuicConnection.finishServer state.connection in
+  Stdlib.Datagram.close child
+  stopped
+
+let __retry (socket: Stdlib.Datagram.Socket) (secret: Blob) (peer: Stdlib.Datagram.Endpoint) (packet: Stdlib.QuicPacket.Protected) (now: Int64) : Unit =
+  if Stdlib.Blob.__byteLength packet.destination < 8L then ()
+  else match Stdlib.Crypto.secureRandomBytes 8L with
+  | Error _ -> ()
+  | Ok source -> match Stdlib.QuicServerRetry.create secret peer packet.destination packet.source source now with
+    | Error _ -> ()
+    | Ok retry -> let _ = Stdlib.Datagram.send socket peer retry 1000L in ()
+
+let __loop (config: Stdlib.HttpServer.Config.Config) (identity: Stdlib.TlsServerIdentity.Identity) (handler: Stdlib.Http.Request -> Stdlib.Http.Response) (signals: Stdlib.Network.ShutdownSignals) (socket: Stdlib.Datagram.Socket) (secret: Blob) (recent: List<Stdlib.HttpServer.Quic.Recent>) (limit: Int64) : Stdlib.Result.Result<Unit, String> =
+  match Stdlib.Network.shutdownRequested signals with
+  | Error _ -> Error "HTTP/3 server shutdown check failed"
+  | Ok true -> Ok ()
+  | Ok false ->
+    match Stdlib.Datagram.receive socket 100L with
+    | Error code -> if code == 4L || code == 11L || code == 35L || code == 90L then Stdlib.HttpServer.Quic.__loop config identity handler signals socket secret recent limit else Error "HTTP/3 listener receive failed"
+    | Ok datagram ->
+      match Stdlib.Network.monotonicMillis () with
+      | Error _ -> Error "HTTP/3 server clock failed"
+      | Ok now ->
+        let recent = Stdlib.List.filter recent (fun entry -> entry.expires > now) in
+        let again = fun recent -> Stdlib.HttpServer.Quic.__loop config identity handler signals socket secret recent limit in
+        match Stdlib.QuicPacket.parse 8L datagram.payload with
+        | Ok (Protected packet) ->
+          if packet.kind != Stdlib.QuicPacket.Kind.Initial || Stdlib.Blob.__byteLength datagram.payload < 1200L ||
+             Stdlib.List.any recent (fun entry -> Stdlib.QuicClient.__same entry.source packet.destination) then again recent
+          else if Stdlib.Blob.__byteLength packet.token == 0L then
+            Stdlib.HttpServer.Quic.__retry socket secret datagram.peer packet now
+            again recent
+          else if Stdlib.List.length recent >= 256 then again recent
+          else
+            (match Stdlib.QuicServerRetry.validate secret datagram.peer packet now with
+            | Error _ -> again recent
+            | Ok _ ->
+              // Consume a validated CID before any flight is emitted. Failed
+              // handshakes must not reuse Initial key/packet-number pairs either.
+              // Never evict a live entry merely to admit another connection.
+              let recent = Stdlib.List.push recent (Stdlib.HttpServer.Quic.Recent { source = packet.destination, expires = now + 30000L }) in
+              match Stdlib.QuicServer.start identity secret datagram now with
+              | Error _ -> again recent
+              | Ok flight -> if Stdlib.HttpServer.Quic.__connection config identity handler signals socket flight datagram.peer limit then Ok () else again recent)
+        | _ -> again recent
+
+/// Serve one HTTPS request per authenticated QUIC v1 connection. Import the
+/// certificate chain and private key with TlsServerIdentity.create. Every new
+/// connection proves its source address with Retry before a certificate flight.
+/// The shared UDP listener returns normally on SIGINT or SIGTERM.
+let serve (config: Stdlib.HttpServer.Config.Config) (identity: Stdlib.TlsServerIdentity.Identity) (handler: Stdlib.Http.Request -> Stdlib.Http.Response) (onListening: Unit -> Unit) : Stdlib.Result.Result<Unit, String> =
+  match Stdlib.Int.toInt64 config.port, Stdlib.Int.toInt64 config.maxBodyBytes with
+  | Some port, Some limit ->
+    if port <= 0L || port > 65535L || limit < 0L || limit > 104857600L then Error "Invalid HTTP/3 server configuration"
+    else match Stdlib.Network.shutdownSignals () with
+    | Error _ -> Error "HTTP/3 shutdown setup failed"
+    | Ok signals ->
+      let result = match Stdlib.Crypto.secureRandomBytes 32L with
+        | Error _ -> Error "HTTP/3 Retry key generation failed"
+        | Ok secret -> match Stdlib.Datagram.bind4 [0L,0L,0L,0L] port with
+          | Error _ -> Error "Cannot bind HTTP/3 server"
+          | Ok socket ->
+            onListening ()
+            let result = Stdlib.HttpServer.Quic.__loop config identity handler signals socket secret [] limit in
+            Stdlib.Datagram.close socket
+            result in
+      Stdlib.Network.closeShutdownSignals signals
+      result
+  | _, _ -> Error "Invalid HTTP/3 server configuration"

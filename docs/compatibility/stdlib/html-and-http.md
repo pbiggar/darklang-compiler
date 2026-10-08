@@ -281,7 +281,7 @@ The independent `python3 scripts/test_http2_server_tls_peer.py` covers 70 KiB
 uploads/responses, HEAD, early body-limit rejection, Expect, ALPN fallback and
 rejection, fragmented ClientHello, forged Finished, shutdown during handshake
 and application reads, and cleanup. HelloRetryRequest, post-handshake TLS
-KeyUpdate and QUIC server listener integration remain pending. The pure
+KeyUpdate remain pending. The pure
 `QuicServerTls` adapter now requires h3 ALPN and client transport parameters,
 binds the client's initial source connection ID, derives QUIC handshake packet
 keys, and releases application secrets and packet keys only after verifying
@@ -296,8 +296,22 @@ recovery and congestion budgeting. `Http3.initializeServer` owns server
 critical streams and request parsing, including peers that grant no server
 bidirectional streams. `python3 scripts/test_quic_server_peer.py` checks live
 Retry, authenticated HTTP/3 echoes through 70 KiB, dropped flights, duplicates,
-corrupted ciphertext, zero server-bidi credit and zero leaks. Public UDP
-listener routing and replay suppression remain pending.
+corrupted ciphertext, zero server-bidi credit and zero leaks.
+
+`HttpServer.Quic.serve` provides sequential IPv4 UDP serving using the same
+configuration, imported identity and HTTP handler as the TLS listener. It
+shares method/URL/header handling, optional standard headers and logging,
+configured body limits, HEAD representation lengths and early 413 rejection.
+Application state is disposed through a child socket while the listener stays
+open. Successful responses get a bounded ten-second delivery drain before an
+encrypted H3_NO_ERROR close; closing keys are retained for three PTOs, capped
+at thirty seconds, with fresh packet numbers for repeated close frames.
+Shutdown interrupts handshake, request and closing waits. The independent
+`python3 scripts/test_http3_server_peer.py` checks routing, 70 KiB flow, HEAD,
+early 413, encrypted closure, token replay suppression, unsupported ALPN,
+same-port rebind, incomplete-body shutdown and zero leaks. Its aioquic client
+supplies HEAD method semantics because that library's raw H3 layer does not
+retain the originating request method.
 
 `QuicServerRetry` provides listener-key HMAC tokens bound to the peer's address
 and port, original destination CID, client source CID and Retry source CID.
@@ -305,8 +319,9 @@ It authenticates the token before interpreting its fields, rejects future or
 older-than-30-second tokens, and emits the QUIC v1 Retry integrity tag.
 `quic_server_retry.e2e` and `python3 scripts/test_quic_server_retry.py` cover
 invalid local inputs, 31 independent HMAC/expiry/address/CID/tamper cases and
-aioquic packet integrity, with cleanup accounting. UDP listener integration
-and replay suppression after a completed connection remain pending.
+aioquic packet integrity, with cleanup accounting. The UDP listener retains
+up to 256 consumed CIDs for thirty seconds, including failed handshakes,
+and refuses admission when the live replay history is full.
 
 `Stdlib.HttpClient.Sse.Event` and `parse` are copied from the same revision.
 The parser retains upstream's `Stream.unfold` behavior: it pulls only until the

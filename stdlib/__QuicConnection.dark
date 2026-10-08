@@ -290,3 +290,78 @@ let flush (state: Stdlib.QuicConnection.State) : Stdlib.Result.Result<Stdlib.Qui
   match Stdlib.Network.monotonicMillis () with | Error _ -> Error "QUIC monotonic clock failed" | Ok now -> Stdlib.QuicConnection.__tick state now
 
 let close (state: Stdlib.QuicConnection.State) : Unit = Stdlib.Datagram.close state.transport.socket
+
+let __closing (state: Stdlib.QuicConnection.State) (deadline: Int64) (number: Int64) (lastSent: Int64) (remaining: Int64) : Bool =
+  match Stdlib.QuicConnection.__shutdown state, Stdlib.Network.monotonicMillis () with
+  | Ok (), Ok now ->
+    if now >= deadline || remaining == 0L then
+      Stdlib.QuicConnection.close state
+      false
+    else
+      match Stdlib.Datagram.receive state.transport.socket 10L with
+      | Error code ->
+        if code == 11L || code == 35L || code == 4L || code == 90L then Stdlib.QuicConnection.__closing state deadline number lastSent remaining
+        else
+          Stdlib.QuicConnection.close state
+          false
+      | Ok datagram ->
+        if datagram.peer.address != state.transport.peer.address || datagram.peer.port != state.transport.peer.port || now - lastSent < 100L then Stdlib.QuicConnection.__closing state deadline number lastSent (remaining - 1L)
+        else
+          match Stdlib.QuicApplication.close 256L Stdlib.Blob.empty |> Stdlib.Result.andThen (fun bytes -> Stdlib.QuicPacket.sealShort state.sending.generation.keys state.ids.destination state.sending.generation.phase bytes number) with
+          | Error _ ->
+            Stdlib.QuicConnection.close state
+            false
+          | Ok packet ->
+            match Stdlib.Datagram.send state.transport.socket state.transport.peer packet 1000L with
+            | Error _ ->
+              Stdlib.QuicConnection.close state
+              false
+            | Ok () -> Stdlib.QuicConnection.__closing state deadline (number + 1L) now (remaining - 1L)
+  | result, _ ->
+    Stdlib.QuicConnection.close state
+    match result with | Error "HTTP server shutting down" -> true | _ -> false
+
+let __finishDrain (state: Stdlib.QuicConnection.State) (deadline: Int64) (remaining: Int64) : Bool =
+  match Stdlib.Network.monotonicMillis () with
+  | Error _ ->
+    Stdlib.QuicConnection.close state
+    false
+  | Ok now ->
+    if Stdlib.Option.isSome state.meta.closed then
+      Stdlib.QuicConnection.close state
+      false
+    else if now < deadline && remaining > 0L && (state.space.queued != [] || state.space.recovery.congestion.inFlight > 0L) then
+      match Stdlib.QuicConnection.poll state 10L with
+      | Ok next -> Stdlib.QuicConnection.__finishDrain next deadline (remaining - 1L)
+      | Error message ->
+        // A failed send may have reserved a nonce in state that cannot be
+        // returned with the error. Abort without encrypting from stale state.
+        Stdlib.QuicConnection.close state
+        message == "HTTP server shutting down"
+    else
+      match Stdlib.QuicRecovery.pto state.space.recovery state.transport.parameters.maxAckDelay with
+      | Error _ ->
+        Stdlib.QuicConnection.close state
+        false
+      | Ok pto ->
+        let number = state.space.recovery.largestSent + 1L in
+        match Stdlib.QuicApplication.close 256L Stdlib.Blob.empty |> Stdlib.Result.andThen (fun bytes -> Stdlib.QuicPacket.sealShort state.sending.generation.keys state.ids.destination state.sending.generation.phase bytes number) with
+        | Error _ ->
+          Stdlib.QuicConnection.close state
+          false
+        | Ok packet ->
+          match Stdlib.Datagram.send state.transport.socket state.transport.peer packet 1000L with
+          | Error _ ->
+            Stdlib.QuicConnection.close state
+            false
+          | Ok () -> Stdlib.QuicConnection.__closing state (now + (if pto > 10000L then 30000L else pto * 3L)) (number + 1L) now 256L
+
+// Complete queued responses under a bounded drain, then retain closing keys
+// for three PTOs (at most thirty seconds). Every repeated close uses a fresh
+// packet number; disposing a child socket leaves its listener alive.
+let finishServer (state: Stdlib.QuicConnection.State) : Bool =
+  match Stdlib.Stream.next state.transport.socket.lifecycle, Stdlib.Network.monotonicMillis () with
+  | Some (), Ok now -> Stdlib.QuicConnection.__finishDrain state (now + 10000L) 4096L
+  | _, _ ->
+    Stdlib.QuicConnection.close state
+    false

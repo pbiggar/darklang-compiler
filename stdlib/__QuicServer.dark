@@ -41,6 +41,7 @@ let __initial (state: Stdlib.QuicServer.Flight) (packet: Stdlib.QuicPacket.Prote
   if state.initialDiscarded then Ok state
   else if Stdlib.Bool.not (Stdlib.QuicClient.__same packet.token state.token) then Ok state
   else match Stdlib.QuicCrypto.openPacket state.keys.client packet.bytes packet.numberOffset state.initial.received.largest with
+  | Error "Invalid QUIC reserved bits" -> Error "Invalid QUIC reserved bits"
   | Error _ -> if state.invalid >= 4096L then Error "QUIC server invalid packet limit exceeded" else Ok { state with invalid = state.invalid + 1L }
   | Ok opened -> Stdlib.QuicServer.__bounded state.initial opened now 32768L |> Stdlib.Result.andThen (fun initial ->
       let available = Stdlib.QuicReassembly.available initial.crypto in
@@ -62,6 +63,7 @@ let __handshake (state: Stdlib.QuicServer.Flight) (packet: Stdlib.QuicPacket.Pro
   | None -> Ok state
   | Some tls ->
     match Stdlib.QuicCrypto.openPacket tls.receive packet.bytes packet.numberOffset state.handshake.received.largest with
+    | Error "Invalid QUIC reserved bits" -> Error "Invalid QUIC reserved bits"
     | Error _ -> if state.invalid >= 4096L then Error "QUIC server invalid packet limit exceeded" else Ok { state with invalid = state.invalid + 1L }
     | Ok opened -> Stdlib.QuicServer.__bounded state.handshake opened now 36L |> Stdlib.Result.andThen (fun handshake ->
         // A server discards Initial only after authenticating a Handshake packet.
@@ -123,6 +125,7 @@ let accept (socket: Stdlib.Datagram.Socket) (peer: Stdlib.Datagram.Endpoint) (si
         | Error code -> if code == 11L || code == 35L || code == 4L || code == 90L then Stdlib.QuicServer.accept socket peer signals next deadline (remaining - 1L) else Error "QUIC server handshake receive failed"
         | Ok datagram ->
           if datagram.peer.address != peer.address || datagram.peer.port != peer.port then Stdlib.QuicServer.accept socket peer signals next deadline (remaining - 1L)
+          else if Stdlib.Blob.__byteLength datagram.payload < 1200L && (match Stdlib.QuicPacket.parse (Stdlib.Blob.__byteLength next.routing.source) datagram.payload with | Ok (Protected packet) -> packet.kind == Stdlib.QuicPacket.Kind.Initial | _ -> false) then Stdlib.QuicServer.accept socket peer signals next deadline (remaining - 1L)
           else match Stdlib.Network.monotonicMillis () with
           | Error _ -> Error "QUIC server clock failed"
           | Ok at -> Stdlib.QuicServer.packets next datagram.payload at |> Stdlib.Result.andThen (fun received -> Stdlib.QuicServer.accept socket peer signals received deadline (remaining - 1L)))
