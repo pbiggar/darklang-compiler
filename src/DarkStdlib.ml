@@ -183,6 +183,7 @@ let posixIntrinsicModule : AST.moduleDef =
           [ TInt64; TInternalRawPtr; TInternalRawPtr; TInt64 ]
           TInt64;
         fn "__flock" [] [ TInt64; TInt64 ] TInt64;
+        fn "__ioctl" [] [ TInt64; TInt64; TInternalRawPtr ] TInt64;
         fn "__getDents" []
           [ TInt64; TInternalRawPtr; TInt64; TInternalRawPtr ]
           TInt64;

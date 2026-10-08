@@ -5,6 +5,7 @@ let __openAt (a0: Int64) (a1: RawPtr) (a2: Int64) (a3: Int64) : Int64 = -38L
 let __read (a0: Int64) (a1: RawPtr) (a2: Int64) : Int64 = -38L
 let __write (a0: Int64) (a1: RawPtr) (a2: Int64) : Int64 = -38L
 let __close (a0: Int64) : Int64 = -38L
+let __ioctl (fd: Int64) (request: Int64) (buffer: RawPtr) : Int64 = -38L
 let __seek (a0: Int64) (a1: Int64) (a2: Int64) : Int64 = -38L
 let __statAt (a0: Int64) (a1: RawPtr) (a2: RawPtr) (a3: Int64) : Int64 = -38L
 let __getCwd (a0: RawPtr) (a1: Int64) : Int64 = -38L

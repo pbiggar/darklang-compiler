@@ -723,7 +723,7 @@ let emitCliNative (ctx : codeGenContext) (dest : LIR.reg)
       | LIR.PosixMkdirAt | LIR.PosixUnlinkAt | LIR.PosixRenameAt
       | LIR.PosixChmodAt | LIR.PosixChmodAt2 | LIR.PosixUtimesAt
       | LIR.PosixSetAttributesAt | LIR.PosixSymlinkAt | LIR.PosixReadlinkAt
-      | LIR.PosixFlock | LIR.PosixGetDents -> (
+      | LIR.PosixFlock | LIR.PosixGetDents | LIR.PosixIoctl -> (
           let number, arity =
             match operation with
             | LIR.PosixOpenAt ->
@@ -816,6 +816,11 @@ let emitCliNative (ctx : codeGenContext) (dest : LIR.reg)
                   | Platform.Linux -> Some 32
                   | Platform.MacOS -> Some 131),
                   2 )
+            | LIR.PosixIoctl ->
+                ( (match ARM64.targetOS ctx.target with
+                  | Platform.Linux -> Some 29
+                  | Platform.MacOS -> Some 54),
+                  3 )
             | LIR.PosixGetDents ->
                 ( (match ARM64.targetOS ctx.target with
                   | Platform.Linux -> Some 61

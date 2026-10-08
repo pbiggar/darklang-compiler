@@ -1,0 +1,12 @@
+// Terminal facts for redirected E2E streams, with exact environment values.
+Builtin.cliTerminalSessionInfo () = (false, false, "xterm-256color") env="TERM=xterm-256color"
+Builtin.cliTerminalSessionInfo () = (false, false, "") env="TERM="
+let facts = Stdlib.Cli.Tui.TerminalSupport.currentFacts () in (facts.inputIsTerminal, facts.outputIsTerminal, facts.terminalName) = (false, false, "dumb") env="TERM=dumb"
+let _ = Stdlib.Cli.Env.set "TERM" "changed" in let (_, _, term) = Builtin.cliTerminalSessionInfo () in term = "changed" isolated=true
+let _ = Stdlib.Cli.Env.unset "TERM" in let (_, _, term) = Builtin.cliTerminalSessionInfo () in term = "" isolated=true
+Stdlib.Cli.Tui.TerminalSupport.evaluate (Stdlib.Cli.Tui.TerminalSupport.Facts { inputIsTerminal = true, outputIsTerminal = true, terminalName = " xterm-256color " }) = Available
+Stdlib.Cli.Tui.TerminalSupport.evaluate (Stdlib.Cli.Tui.TerminalSupport.Facts { inputIsTerminal = false, outputIsTerminal = true, terminalName = "xterm" }) = Unavailable "standard input is not a terminal"
+Stdlib.Cli.Tui.TerminalSupport.evaluate (Stdlib.Cli.Tui.TerminalSupport.Facts { inputIsTerminal = true, outputIsTerminal = false, terminalName = "xterm" }) = Unavailable "standard output is not a terminal"
+Stdlib.Cli.Tui.TerminalSupport.evaluate (Stdlib.Cli.Tui.TerminalSupport.Facts { inputIsTerminal = true, outputIsTerminal = true, terminalName = "" }) = Unavailable "TERM is not set"
+Stdlib.Cli.Tui.TerminalSupport.evaluate (Stdlib.Cli.Tui.TerminalSupport.Facts { inputIsTerminal = true, outputIsTerminal = true, terminalName = "DUMB" }) = Unavailable "TERM=DUMB does not support an interactive terminal UI"
+Stdlib.Cli.Tui.TerminalSupport.evaluate (Stdlib.Cli.Tui.TerminalSupport.Facts { inputIsTerminal = true, outputIsTerminal = true, terminalName = "unknown" }) = Unavailable "TERM=unknown does not support an interactive terminal UI"

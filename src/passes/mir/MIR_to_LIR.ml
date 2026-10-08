@@ -76,6 +76,7 @@ let convertCliOperation operation =
   | MIR.PosixReadlinkAt -> LIR.PosixReadlinkAt
   | MIR.PosixFlock -> LIR.PosixFlock
   | MIR.PosixGetDents -> LIR.PosixGetDents
+  | MIR.PosixIoctl -> LIR.PosixIoctl
 
 [@@@warning "-4"]
 

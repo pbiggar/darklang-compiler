@@ -173,6 +173,7 @@ type cliOperation =
   | PosixReadlinkAt
   | PosixFlock
   | PosixGetDents
+  | PosixIoctl
 
 (*
    Basic block label (wrapper type for type safety)

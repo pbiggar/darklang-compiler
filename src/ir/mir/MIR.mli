@@ -104,6 +104,7 @@ type cliOperation =
   | PosixReadlinkAt
   | PosixFlock
   | PosixGetDents
+  | PosixIoctl
 
 type label = Label of string
 

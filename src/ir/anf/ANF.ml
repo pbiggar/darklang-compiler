@@ -168,6 +168,7 @@ type cliOperation =
   | PosixReadlinkAt
   | PosixFlock
   | PosixGetDents
+  | PosixIoctl
 
 (*
    Immutable nominal metadata carried through fixed-block lowering for field

@@ -20,6 +20,10 @@
  (deps standalone_compiler_regression.py)
  (action (run python3 %{dep:standalone_compiler_regression.py} %{exe:../../bin/dark.exe})))
 (include_subdirs no)
+(rule
+ (alias runtest)
+ (deps terminal_session_regression.py)
+ (action (run python3 %{dep:terminal_session_regression.py} %{exe:../../bin/dark.exe})))
 (executables
  (names host_text_regression cache_regression component_regression literal_regression package_io_regression package_http_regression)
  (libraries dark_compiler tls-lwt x509)

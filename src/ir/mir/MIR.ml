@@ -162,6 +162,7 @@ type cliOperation =
   | PosixReadlinkAt
   | PosixFlock
   | PosixGetDents
+  | PosixIoctl
 
 (*
    Basic block label (defined early for use in Phi nodes)

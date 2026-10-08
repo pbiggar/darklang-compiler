@@ -296,6 +296,7 @@ let convertCliOperation (operation : ANF.cliOperation) =
   | ANF.PosixReadlinkAt -> MIR.PosixReadlinkAt
   | ANF.PosixFlock -> MIR.PosixFlock
   | ANF.PosixGetDents -> MIR.PosixGetDents
+  | ANF.PosixIoctl -> MIR.PosixIoctl
 
 (*
    Precomputed descriptions for primitive ops (avoids formatting on hot path)
@@ -873,6 +874,7 @@ let cliOperationName = function
   | ANF.PosixReadlinkAt -> "PosixReadlinkAt"
   | ANF.PosixFlock -> "PosixFlock"
   | ANF.PosixGetDents -> "PosixGetDents"
+  | ANF.PosixIoctl -> "PosixIoctl"
 
 (*
    Generate description for a CExpr (for coverage mapping)

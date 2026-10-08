@@ -146,6 +146,7 @@ let cliOperation = function
   | ANF.PosixReadlinkAt -> "PosixReadlinkAt"
   | ANF.PosixFlock -> "PosixFlock"
   | ANF.PosixGetDents -> "PosixGetDents"
+  | ANF.PosixIoctl -> "PosixIoctl"
 
 (*
    Pretty-print ANF complex expression
