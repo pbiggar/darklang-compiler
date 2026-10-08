@@ -2,13 +2,10 @@
 
 [Source fixture](../../../../test/fixtures/e2e/upstream/stdlib/list.dark) · [File list](../../current-audit.md)
 
-Executed 220 assertions: **193 passed, 27 failed**.
+Executed 220 assertions: **196 passed, 24 failed**.
 
 | Test | Observed failure |
 | --- | --- |
-| [L22](../../../../test/fixtures/e2e/upstream/stdlib/list.dark#L22) — [1l, 2.3] | Expected error message 'Cannot add a Float (2.3) to a list of Int32. Failed at index 1.' not found in stderr. Actual stderr: <entry>: Expected TInt32, got TFloat64 |
-| [L23](../../../../test/fixtures/e2e/upstream/stdlib/list.dark#L23) — [(1l,10l), 10l, (3l,30l)] | Expected error message 'Cannot add an Int32 (10) to a list of (Int32 * Int32). Failed at index 1.' not found in stderr. Actual stderr: <entry>: Expected TTuple [TInt32; TInt32], got TInt32 |
-| [L24](../../../../test/fixtures/e2e/upstream/stdlib/list.dark#L24) — [(1l,10l), (2l,20l), (3l,30l,40l)] | Expected error message 'Cannot add an (Int32 * Int32 * Int32) ((3, 30, 40)) to a list of (Int32 * Int32). Failed at index 2.' not found in stderr. Actual stderr: <entry>: Expected TTuple [TInt32; TInt32], got TTuple [TInt32; TInt32; TInt32] |
 | [L53](../../../../test/fixtures/e2e/upstream/stdlib/list.dark#L53) — Stdlib.List.dropWhile [ 1L, 2L, 3L, 4L ] (fun item -> 0L - 1L) | Expected error message 'Encountered a condition that must be a Bool, but got an Int64 (-1)' not found in stderr. Actual stderr: <entry>: Expected TBool, got TInt64 |
 | [L61](../../../../test/fixtures/e2e/upstream/stdlib/list.dark#L61) — Stdlib.List.iter [ 1L, 2L, 3L ] (fun x -> Builtin.testIncrementSideEffectCounter ()) Builtin.testSideEffect... | Unknown function or value 'Builtin.testIncrementSideEffectCounter' |
 | [L65](../../../../test/fixtures/e2e/upstream/stdlib/list.dark#L65) — Stdlib.List.iter [ 1L, 2L, 3L, 4L, 5L ] (fun x -> if x % 2L == 0L then Builtin.testIncrementSideEffectCount... | Unknown function or value 'Builtin.testIncrementSideEffectCounter' |
