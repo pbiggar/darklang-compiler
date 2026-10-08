@@ -45,7 +45,8 @@ lowering also support those forms, including callbacks stored in lists.
 Standard-library wrappers now release owned function results.
 
 Branch `chatgpt/local-recursion-match`, commit
-`5db9fdf8cd52e3e453ebb3f10817ef2c0dd65244`; PR #16; not merged.
+`5db9fdf8cd52e3e453ebb3f10817ef2c0dd65244`; PR #16 merged to main at
+`df5fbb9079df2415c31ec9704faa792b66b8cbe5`.
 Five match regressions and 23 expression/value/ownership regressions pass.
 The unchanged tokens function and TokenMode type compile and run in isolation.
 Full host suite: 11163/11163 passed. Native `dune runtest` passed after removing
@@ -56,11 +57,25 @@ allocate a closure; direct recursive calls retain their existing environment.
 
 ## Remaining package blocker
 
-Compiling the whole original Permissions package, with either a trivial entry
-or a call to tokens, now reaches a later backend failure:
-`RefCountInsertion: ClosureAlloc target '776' not found in function registry`.
-This does not occur with tokens and TokenMode alone. The failing declaration
-has not yet been isolated; no fix for this separate failure is approved.
+`Darklang.LanguageTools.Permissions.parseRule` is the first declaration that
+introduces the remaining failure. Its two HTTP branches pass the generic
+`Stdlib.List.singleton` function directly to `Stdlib.Option.map`.
+
+Minimal reproduction:
+`Some 1L |> Stdlib.Option.map Stdlib.List.singleton` fails with
+`RefCountInsertion: ClosureAlloc target '825' not found in function registry`.
+The ordinal depends on the compilation context (the whole package reported
+`776`). Passing a non-generic named callback compiles and runs cleanly, as does
+`Some 1L |> Stdlib.Option.map (fun value -> Stdlib.List.singleton value)`.
+Replacing only the two callback references with lambdas in an ignored probe
+also lets the source prefix through parseRule compile.
+
+The frontend stores a generic function value as `CheckedAST.FuncRef` with its
+original identity, while specialization discovery skips FuncRef nodes. The
+concrete callback specialization is missing when closure ownership requests its
+function type. This is a compiler bug in generic function values, independent
+of the local-recursion fix or SQLite support. No fix or package source change
+for this item has been approved; bring the item to the user for a decision.
 
 ## Completion rule
 
