@@ -1,0 +1,37 @@
+// Generic functions retain specialization information in every value context.
+let valueIdentity<'a> (value: a) : a = value
+let valueApply (fn: Int64 -> Int64) : Int64 = fn 1L
+type ValueHolder = { callback: Int64 -> Int64 }
+let valueReturn () : (Int64 -> Int64) = valueIdentity
+let valueGenericBody<'a> (value: a) : Stdlib.Option.Option<a> = Some value |> Stdlib.Option.map valueIdentity
+
+(Some 1L |> Stdlib.Option.map valueIdentity) = Some 1L
+(Some 1L |> Stdlib.Option.map Stdlib.List.singleton) = Some [1L]
+valueApply valueIdentity = 1L
+(let f = valueIdentity in f 1L) = 1L
+(valueReturn ()) 1L = 1L
+(let f = Builtin.unwrap (Stdlib.List.head [valueIdentity]) in f 1L) = 1L
+(let (f, n) = (valueIdentity, 1L) in f n) = 1L
+(let h = ValueHolder { callback = valueIdentity } in h.callback 1L) = 1L
+(match Some valueIdentity with | Some f -> f 1L | None -> 0L) = 1L
+(let f = Builtin.unwrap (Stdlib.Dict.get (Dict { "x": valueIdentity }) "x") in f 1L) = 1L
+(let f = if true then valueIdentity else valueIdentity in f 1L) = 1L
+(let f = valueIdentity in let g (n: Int64) : Int64 = f n in g 1L) = 1L
+(let a = Some 1L |> Stdlib.Option.map valueIdentity in let b = Some "x" |> Stdlib.Option.map valueIdentity in (a, b)) = (Some 1L, Some "x")
+valueGenericBody 1L = Some 1L
+(let n = valueIdentity 1L in Some n |> Stdlib.Option.map valueIdentity) = Some 1L
+valueIdentity<Int64> 1L = 1L
+(Some 1L |> Stdlib.Option.map (fun value -> valueIdentity value)) = Some 1L
+(1L |> valueIdentity) = 1L
+
+module GenericValueQualified
+let identity<'a> (value: a) : a = value
+val alias = identity
+(Some 1L |> Stdlib.Option.map GenericValueQualified.identity) = Some 1L
+GenericValueQualified.alias 1L = 1L
+(GenericValueQualified.alias 1L, GenericValueQualified.alias "x") = (1L, "x")
+
+// Explicit arguments may specialize a function value without calling it.
+(let f = valueIdentity<Int64> in f 1L) = 1L
+(let a = valueIdentity<Int64> in let b = valueIdentity<Int64> in a == b) = true
+(let f = valueIdentity<Int64> in f "wrong") = compileerror="Expected TInt64, got TString"

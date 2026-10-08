@@ -160,7 +160,8 @@ let rec freeVars expr bound =
   | C.Int8Literal _ | C.Int16Literal _ | C.Int32Literal _ | C.UInt8Literal _
   | C.UInt16Literal _ | C.UInt32Literal _ | C.UInt64Literal _
   | C.UInt128Literal _ | C.BoolLiteral _ | C.StringLiteral _ | C.BlobLiteral _
-  | C.CharLiteral _ | C.FloatLiteral _ | C.RuntimeError _ | C.FuncRef _ ->
+  | C.CharLiteral _ | C.FloatLiteral _ | C.RuntimeError _ | C.FuncRef _
+  | C.GenericFuncRef _ ->
       BindingSet.empty
   | C.Local id ->
       if BindingSet.mem id bound then BindingSet.empty
@@ -357,6 +358,7 @@ let rec simpleInferType expr typeEnv funcParams funcReturns genericDefs typeReg
   | C.FloatLiteral _ -> Some AST.TFloat64
   | C.UnitLiteral -> Some AST.TUnit
   | C.Local id -> B.find_opt id typeEnv
+  | C.GenericFuncRef (_, _, typ) -> Some (C.semanticType typ)
   | C.FuncRef id -> (
       match
         ( FunctionIdMap.tryFind id funcParams,

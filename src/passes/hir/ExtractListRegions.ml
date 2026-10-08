@@ -58,7 +58,7 @@ let inertExpression infer callIsInert =
     in
     let recur = check types in
     match expr with
-    | C.FuncRef _ -> true
+    | C.FuncRef _ | C.GenericFuncRef _ -> true
     | C.Closure (_, captures) -> List.for_all recur captures
     | C.Let (C.LPVariable name, value, body) -> (
         if not (recur value) then false
@@ -188,10 +188,10 @@ let tryExtract inertScopes functionNames parameterTypes infer freeVariables
       | C.Closure (_, captures) ->
           List.for_all
             (function
-              | C.FuncRef _ -> true
+              | C.FuncRef _ | C.GenericFuncRef _ -> true
               | capture -> Option.is_some (scalar state capture))
             captures
-      | C.FuncRef _ -> true
+      | C.FuncRef _ | C.GenericFuncRef _ -> true
       | _ -> false
     in
     if (not immediateCaptures) || not scopeInert then None

@@ -74,7 +74,7 @@ let rec directDependencies expr =
   in
   let args values = combine (NonEmptyList.toList values) in
   match expr with
-  | C.FuncRef id -> FunctionSet.singleton id
+  | C.FuncRef id | C.GenericFuncRef (id, _, _) -> FunctionSet.singleton id
   | C.BoundaryRender (id, value) ->
       FunctionSet.add id (directDependencies value)
   | C.Call (id, values) | C.TypeApp (id, _, values) ->

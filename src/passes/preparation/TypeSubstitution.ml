@@ -208,6 +208,8 @@ let rec applySubstToExpr subst expr =
       (List.map (applySubstToType subst) (C.semanticTypeArgs values))
   in
   match expr with
+  | C.GenericFuncRef (id, args, typ) ->
+      C.GenericFuncRef (id, types args, checked typ)
   | C.UnitLiteral | C.Int64Literal _ | C.Int128Literal _ | C.BigIntLiteral _
   | C.Int8Literal _ | C.Int16Literal _ | C.Int32Literal _ | C.UInt8Literal _
   | C.UInt16Literal _ | C.UInt32Literal _ | C.UInt64Literal _

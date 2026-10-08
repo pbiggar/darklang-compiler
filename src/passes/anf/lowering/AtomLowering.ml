@@ -447,6 +447,8 @@ let lowerAtom (toANFCore : LoweringCallbacks.expressionLowerer)
       match R.BindingMap.find_opt id env with
       | Some (id, _) -> Ok (A.Var id, [], gen)
       | None -> Error "Undefined local binding identity")
+  | C.GenericFuncRef _ ->
+      Crash.crash "Unspecialized function value reached ANF lowering"
   | C.FuncRef id -> bind (fun id -> A.Var id) [] gen (A.ClosureAlloc (id, []))
   | C.Closure (id, values) ->
       let* results, gen = captures values gen [] in

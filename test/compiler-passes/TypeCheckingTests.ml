@@ -58,7 +58,7 @@ let rec countMatches expr =
     | C.UInt16Literal _ | C.UInt32Literal _ | C.UInt64Literal _
     | C.UInt128Literal _ | C.BoolLiteral _ | C.StringLiteral _ | C.BlobLiteral _
     | C.CharLiteral _ | C.FloatLiteral _ | C.Local _ | C.FuncRef _
-    | C.RuntimeError _ ->
+    | C.GenericFuncRef _ | C.RuntimeError _ ->
         []
     | C.InterpolatedString parts ->
         List.filter_map

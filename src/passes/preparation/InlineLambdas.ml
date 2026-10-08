@@ -25,7 +25,8 @@ let rec varOccursInExpr name expr =
   | C.Int8Literal _ | C.Int16Literal _ | C.Int32Literal _ | C.UInt8Literal _
   | C.UInt16Literal _ | C.UInt32Literal _ | C.UInt64Literal _
   | C.UInt128Literal _ | C.BoolLiteral _ | C.StringLiteral _ | C.BlobLiteral _
-  | C.CharLiteral _ | C.FloatLiteral _ | C.RuntimeError _ | C.FuncRef _ ->
+  | C.CharLiteral _ | C.FloatLiteral _ | C.RuntimeError _ | C.FuncRef _
+  | C.GenericFuncRef _ ->
       false
   | C.Local id -> same id name
   | C.BoundaryRender (_, value)
@@ -100,7 +101,7 @@ let rec inlineLambdas expr environment =
   | C.UInt16Literal _ | C.UInt32Literal _ | C.UInt64Literal _
   | C.UInt128Literal _ | C.BoolLiteral _ | C.StringLiteral _ | C.BlobLiteral _
   | C.CharLiteral _ | C.FloatLiteral _ | C.RuntimeError _ | C.Local _
-  | C.FuncRef _ ->
+  | C.FuncRef _ | C.GenericFuncRef _ ->
       expr
   | C.BoundaryRender (renderer, value) ->
       C.BoundaryRender (renderer, recurse value)

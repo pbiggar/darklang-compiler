@@ -56,7 +56,7 @@ let rec mapExpr rewrite state expr =
     | C.UInt16Literal _ | C.UInt32Literal _ | C.UInt64Literal _
     | C.UInt128Literal _ | C.BoolLiteral _ | C.StringLiteral _ | C.CharLiteral _
     | C.FloatLiteral _ | C.BlobLiteral _ | C.Local _ | C.FuncRef _
-    | C.RuntimeError _ ->
+    | C.GenericFuncRef _ | C.RuntimeError _ ->
         (expr, state)
     | C.InterpolatedString parts ->
         let parts, next =
@@ -209,7 +209,7 @@ let isSafeArgument = function
   | C.Local _ | C.UnitLiteral | C.Int64Literal _ | C.Int8Literal _
   | C.Int16Literal _ | C.Int32Literal _ | C.UInt8Literal _ | C.UInt16Literal _
   | C.UInt32Literal _ | C.UInt64Literal _ | C.BoolLiteral _ | C.FloatLiteral _
-  | C.FuncRef _ ->
+  | C.FuncRef _ | C.GenericFuncRef _ ->
       true
   | _ -> false
 

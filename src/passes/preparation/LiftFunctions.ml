@@ -140,7 +140,8 @@ let rec containsIndirectApply expr =
   | C.Int8Literal _ | C.Int16Literal _ | C.Int32Literal _ | C.UInt8Literal _
   | C.UInt16Literal _ | C.UInt32Literal _ | C.UInt64Literal _
   | C.UInt128Literal _ | C.BoolLiteral _ | C.StringLiteral _ | C.BlobLiteral _
-  | C.CharLiteral _ | C.FloatLiteral _ | C.RuntimeError _ | C.FuncRef _ ->
+  | C.CharLiteral _ | C.FloatLiteral _ | C.RuntimeError _ | C.FuncRef _
+  | C.GenericFuncRef _ ->
       false
   | C.Local _ -> false
   | C.BoundaryRender (_, value)
@@ -291,6 +292,8 @@ let collectFuncRefsInExpr expr known =
     let args values = many (NonEmptyList.toList values) in
     match expr with
     | C.BoundaryRender (_, value) -> child value
+    | C.GenericFuncRef _ ->
+        Crash.crash "Unspecialized function value reached lambda lifting"
     | C.FuncRef id -> if FunctionIdMap.containsKey id known then [ id ] else []
     | C.Call (_, values) | C.TypeApp (_, _, values) -> args values
     | C.Let (pattern, value, body) ->
@@ -351,6 +354,8 @@ let replaceInExpr wrappers expr =
   let rec replace bound expr =
     let recurse = replace bound in
     match expr with
+    | C.GenericFuncRef _ ->
+        Crash.crash "Unspecialized function value reached wrapper lowering"
     | C.FuncRef id -> (
         match FunctionIdMap.tryFind id wrappers with
         | Some (wrapper, comparison) ->

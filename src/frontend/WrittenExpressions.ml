@@ -22,6 +22,22 @@ let rec checkExpression (globals : globals) locals symbols expected expression =
       locals
   in
   let expected = Option.map (WrittenCheckingState.resolve symbols) expected in
+  let functionValue (signature : functionSignature) symbols =
+    let typ = AST.TFunction (signature.parameters, signature.return) in
+    if signature.typeParams = [] then
+      WrittenTypeSupport.checkedLiteral expected symbols typ
+        (C.FuncRef signature.id)
+    else
+      let fresh, symbols =
+        WrittenCheckingState.freshenType S.empty typ symbols
+      in
+      bind
+        (Unification.inferTypeArgs signature.typeParams [ typ ] [ fresh ] None
+           None) (fun args ->
+          WrittenTypeSupport.checkedLiteral expected symbols fresh
+            (C.GenericFuncRef
+               (signature.id, C.checkedTypeArgs args, C.checkedType fresh)))
+  in
   let checkedLiteral expected symbols typ expr =
     match (expected, typ) with
     | Some (AST.TVar wanted), AST.TVar actual
@@ -106,10 +122,7 @@ let rec checkExpression (globals : globals) locals symbols expected expression =
       | Some (typ, id) -> checkedLiteral expected symbols typ (C.Local id)
       | None -> (
           match resolveFunction globals [ name ] with
-          | Some signature ->
-              checkedLiteral expected symbols
-                (AST.TFunction (signature.parameters, signature.return))
-                (C.FuncRef signature.id)
+          | Some signature -> functionValue signature symbols
           | None -> Error ("Unbound local variable '" ^ name ^ "'")))
   | WT.ELambda (range, patterns, body, keyword, arrow) ->
       WrittenLambdaSupport.check checkExpression globals locals symbols expected
@@ -128,10 +141,7 @@ let rec checkExpression (globals : globals) locals symbols expected expression =
           | "Builtin.blobEmpty" -> literal AST.TBlob (C.BlobLiteral "")
           | _ -> (
               match resolveFunction globals (qualifiedFnName name) with
-              | Some signature ->
-                  checkedLiteral expected symbols
-                    (AST.TFunction (signature.parameters, signature.return))
-                    (C.FuncRef signature.id)
+              | Some signature -> functionValue signature symbols
               | None -> (
                   match resolveValue globals (qualifiedFnName name) with
                   | Some (typ, id) ->

@@ -1777,7 +1777,8 @@ let rec mapExpr rewrite symbols expr =
     | Int8Literal _ | Int16Literal _ | Int32Literal _ | UInt8Literal _
     | UInt16Literal _ | UInt32Literal _ | UInt64Literal _ | UInt128Literal _
     | BoolLiteral _ | StringLiteral _ | BlobLiteral _ | CharLiteral _
-    | FloatLiteral _ | Local _ | FuncRef _ | RuntimeError _ ->
+    | FloatLiteral _ | Local _ | FuncRef _ | GenericFuncRef _ | RuntimeError _
+      ->
         (expr, symbols)
     | InterpolatedString parts ->
         let parts, next =
@@ -1975,7 +1976,8 @@ let rewriteProgramWithSession (session : planningSession option)
       | Int8Literal _ | Int16Literal _ | Int32Literal _ | UInt8Literal _
       | UInt16Literal _ | UInt32Literal _ | UInt64Literal _ | UInt128Literal _
       | BoolLiteral _ | StringLiteral _ | BlobLiteral _ | CharLiteral _
-      | FloatLiteral _ | Local _ | FuncRef _ | RuntimeError _ ->
+      | FloatLiteral _ | Local _ | FuncRef _ | GenericFuncRef _ | RuntimeError _
+        ->
           collected
     in
     walk expr initialResult
