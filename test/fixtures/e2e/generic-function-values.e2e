@@ -29,6 +29,9 @@ let identity<'a> (value: a) : a = value
 val alias = identity
 (Some 1L |> Stdlib.Option.map GenericValueQualified.identity) = Some 1L
 GenericValueQualified.alias 1L = 1L
+(GenericValueQualified.alias 1L, GenericValueQualified.alias "x") = (1L, "x")
 
 // Explicit arguments may specialize a function value without calling it.
 (let f = valueIdentity<Int64> in f 1L) = 1L
+(let a = valueIdentity<Int64> in let b = valueIdentity<Int64> in a == b) = true
+(let f = valueIdentity<Int64> in f "wrong") = compileerror="Expected TInt64, got TString"

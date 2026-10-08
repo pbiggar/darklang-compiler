@@ -291,6 +291,7 @@ let collectFuncRefsInExpr expr known =
     let args values = many (NonEmptyList.toList values) in
     match expr with
     | C.BoundaryRender (_, value) -> child value
+    | C.GenericFuncRef _ -> Crash.crash "Unspecialized function value reached lambda lifting"
     | C.FuncRef id -> if FunctionIdMap.containsKey id known then [ id ] else []
     | C.Call (_, values) | C.TypeApp (_, _, values) -> args values
     | C.Let (pattern, value, body) ->
@@ -351,6 +352,7 @@ let replaceInExpr wrappers expr =
   let rec replace bound expr =
     let recurse = replace bound in
     match expr with
+    | C.GenericFuncRef _ -> Crash.crash "Unspecialized function value reached wrapper lowering"
     | C.FuncRef id -> (
         match FunctionIdMap.tryFind id wrappers with
         | Some (wrapper, comparison) ->
