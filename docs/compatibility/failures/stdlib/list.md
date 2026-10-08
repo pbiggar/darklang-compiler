@@ -2,7 +2,7 @@
 
 [Source fixture](../../../../test/fixtures/e2e/upstream/stdlib/list.dark) · [File list](../../current-audit.md)
 
-Executed 220 assertions: **192 passed, 28 failed**.
+Executed 220 assertions: **193 passed, 27 failed**.
 
 | Test | Observed failure |
 | --- | --- |
@@ -25,7 +25,6 @@ Executed 220 assertions: **192 passed, 28 failed**.
 | [L136](../../../../test/fixtures/e2e/upstream/stdlib/list.dark#L136) — Stdlib.List.fold [] [] (fun accum curr -> 5L) | Expected TList (TVar "t$empty"), got TInt64 |
 | [L174](../../../../test/fixtures/e2e/upstream/stdlib/list.dark#L174) — Stdlib.List.interleave [ "a", "b", "c" ] [ 0L ] | Expected error message 'Darklang.Stdlib.List.interleave's 2nd parameter 'lB' expects List<String>, but got List<Int64> ([0])' not found in stderr. Actual stderr: <entry>: Expected TString, got TInt64 |
 | [L180](../../../../test/fixtures/e2e/upstream/stdlib/list.dark#L180) — Stdlib.List.interpose [ "a", "b", "c" ] 0L | Expected error message 'Darklang.Stdlib.List.interpose's 2nd parameter 'sep' expects String, but got Int64 (0)' not found in stderr. Actual stderr: <entry>: Expected TString, got TInt64 |
-| [L201](../../../../test/fixtures/e2e/upstream/stdlib/list.dark#L201) — Stdlib.List.map2 [] [] (fun a b -> a - b) | Operator is unavailable for this type |
 | [L216](../../../../test/fixtures/e2e/upstream/stdlib/list.dark#L216) — Stdlib.List.partition [] (fun item -> "a") | Expected TBool, got TString |
 | [L218](../../../../test/fixtures/e2e/upstream/stdlib/list.dark#L218) — Stdlib.List.partition [ 1L, 2L, 3L ] (fun item -> match item with \| 1L \| 3L -> true \| 2L -> false) | Non-exhaustive match expression |
 | [L223](../../../../test/fixtures/e2e/upstream/stdlib/list.dark#L223) — Stdlib.List.partition [ true, false, true ] (fun item -> "a") | Expected error message 'Encountered a condition that must be a Bool, but got a String ("a")' not found in stderr. Actual stderr: <entry>: Expected TBool, got TString |

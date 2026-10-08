@@ -2,11 +2,11 @@
 
 Audited on 2026-10-08 (UTC), against compiler revision `4a61318019fb8dea7f34a0bfec4df33f1fa18f5c` on Linux x86-64.
 
-**Every currently excluded assertion was rerun: 2,335 assertions across 55 files.**
-**5 assertions have been enabled since the initial audit; 2,335 still fail.**
+**Every currently excluded assertion was rerun: 2,334 assertions across 55 files.**
+**6 assertions have been enabled since the initial audit; 2,334 still fail.**
 
-Latest results for the audited files, including enabled neighbours: 3,599 assertions, 1,264 passed and 2,335 failed.
-The remaining gates cover these exact failures: 34 whole files and 266 assertion lines across 21 mixed files.
+Latest results for the audited files, including enabled neighbours: 3,599 assertions, 1,265 passed and 2,334 failed.
+The remaining gates cover these exact failures: 34 whole files and 265 assertion lines across 21 mixed files.
 
 The assertion harness now compares original parsed expressions. Multiline applications and literal contents are preserved in individual runs and batches. A follow-up retest of `stdlib/dict.dark` passed all 140 assertions after L21 was changed to expect its existing compile-time key type error.
 
@@ -14,7 +14,9 @@ A follow-up against `36002414730437e871b7d457e76b79f859935fb1` recovered `Builti
 
 Numeric inference follow-up: checking now carries immutable constraints into lambda parameter and body types. The ungated List file passed 192/220 assertions, so L162 is now enabled. Nine focused regressions cover operand order, compound expressions, comparisons, let-bound offsets, and conflicting types. All 55 disabled fixtures were rerun individually against the final compiler; every failing assertion identity matches the updated ledger. The separately retested Dict file passed all 140 assertions.
 
-Verification: fresh native build passed; the clean-checkout host suite passed **11,362/11,362** tests; `dune runtest` passed; the canonical compiled leak gate passed **58/58** workloads. Focused regressions passed individually and batched. The parent benchmark check stopped before measurement because the stored workload digest is incompatible; no baseline was reset.
+Explicit numeric types follow-up: List L201 now uses `map2<Int64, Int64, Int64>` because both input lists are empty and subtraction has no numeric type evidence. The explicit Int64 form passed in the preceding investigation and is now enabled. No unused-callback elimination or numeric defaulting was added. Validation of this test-only change is pending toolchain recovery.
+
+Verification of the preceding compiler revision: fresh native build passed; the clean-checkout host suite passed **11,362/11,362** tests; `dune runtest` passed; the canonical compiled leak gate passed **58/58** workloads. Focused regressions passed individually and batched. The parent benchmark check stopped before measurement because the stored workload digest is incompatible; no baseline was reset.
 
 
 ## Failing test files
@@ -71,7 +73,7 @@ Each file links to the individual failing assertions and their observed diagnost
 | [stdlib/language-tools/parsedFileShape.dark](failures/stdlib/language-tools/parsedFileShape.md) | 13 | 0 | 13 |
 | [stdlib/language-tools/pickLocation.dark](failures/stdlib/language-tools/pickLocation.md) | 30 | 0 | 30 |
 | [stdlib/language-tools/semanticTokenization.dark](failures/stdlib/language-tools/semanticTokenization.md) | 102 | 0 | 102 |
-| [stdlib/list.dark](failures/stdlib/list.md) | 220 | 192 | 28 |
+| [stdlib/list.dark](failures/stdlib/list.md) | 220 | 193 | 27 |
 | [stdlib/math.dark](failures/stdlib/math.md) | 32 | 30 | 2 |
 | [stdlib/option.dark](failures/stdlib/option.md) | 73 | 61 | 12 |
 | [stdlib/prettyPrinter.dark](failures/stdlib/prettyPrinter.md) | 57 | 0 | 57 |
