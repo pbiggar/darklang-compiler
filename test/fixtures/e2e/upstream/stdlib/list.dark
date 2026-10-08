@@ -89,7 +89,7 @@ Stdlib.List.filter [ 1L, 2L, 3L ] (fun item ->
   | 1L -> Stdlib.Option.Option.None
   | 2L -> false
   | 3L -> true) = error="Encountered a condition that must be a Bool, but got a Darklang.Stdlib.Option.Option<_> (None)"
-Stdlib.List.filter [ true, false, true ] (fun item -> "a") = error="Encountered a condition that must be a Bool, but got a String (\"a\")"
+Stdlib.List.filter [ true, false, true ] (fun item -> "a") = compileerror="Expected TBool, got TString"
 Stdlib.List.filter [ 1L, 2L, 3L ] (fun item ->
   match item with
   | 1L -> true
@@ -220,7 +220,7 @@ module Partition =
     | 1L | 3L -> true
     | 2L -> false) = compileerror="Non-exhaustive match expression"
 
-  Stdlib.List.partition [ true, false, true ] (fun item -> "a") = error="Encountered a condition that must be a Bool, but got a String (\"a\")"
+  Stdlib.List.partition [ true, false, true ] (fun item -> "a") = compileerror="Expected TBool, got TString"
   Stdlib.List.partition [ 1L, 2L, 3L ] (fun item ->
     match item with
     | 1L -> Stdlib.Option.Option.None
