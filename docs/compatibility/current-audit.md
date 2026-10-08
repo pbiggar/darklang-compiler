@@ -3,14 +3,16 @@
 Audited on 2026-10-08 (UTC), against compiler revision `f0857f5686f5959cd05dad921238193850a708a9` on Linux x86-64.
 
 **Every assertion excluded by the ledger gates was run: 2,340 assertions across 57 files.**
-**2 previously disabled assertions are now enabled; 2,338 still fail.**
+**4 previously disabled assertions are now enabled; 2,336 still fail.**
 
-Latest results for the audited files, including enabled neighbours: 3,774 assertions, 1,436 passed and 2,338 failed.
-The remaining gates cover these exact failures: 34 whole files and 269 assertion lines across 21 mixed files.
+Latest results for the audited files, including enabled neighbours: 3,774 assertions, 1,438 passed and 2,336 failed.
+The remaining gates cover these exact failures: 34 whole files and 267 assertion lines across 21 mixed files.
 
 The assertion harness now compares original parsed expressions. Multiline applications and literal contents are preserved in individual runs and batches. A follow-up retest of `stdlib/dict.dark` passed all 140 assertions after L21 was changed to expect its existing compile-time key type error.
 
-Verification: fresh native build passed; the complete host suite passed **11,316/11,316** tests; `dune runtest` passed; the canonical compiled leak gate passed **58/58** workloads. The gates and individual ledger rows match all 2,338 measured failing assertion identities exactly. The parent benchmark check stopped before measurement because the stored workload digest is incompatible; no baseline was reset.
+A follow-up against `36002414730437e871b7d457e76b79f859935fb1` recovered `Builtin.unwrap` payload types during lambda lifting. Individual ungated runs passed 191/220 List assertions and 263/264 Int64 assertions. List L161 and Int64 L90 are now enabled; List L162 still fails before lambda lifting on an empty list.
+
+Verification of the previous revision: fresh native build passed; the complete host suite passed **11,316/11,316** tests; `dune runtest` passed; the canonical compiled leak gate passed **58/58** workloads. Verification of the unwrap follow-up is pending. The gates and individual ledger rows match all 2,336 measured failing assertion identities exactly. The parent benchmark check stopped before measurement because the stored workload digest is incompatible; no baseline was reset.
 
 ## Failing test files
 
@@ -60,13 +62,13 @@ Each file links to the individual failing assertions and their observed diagnost
 | [stdlib/http.dark](failures/stdlib/http.md) | 47 | 21 | 26 |
 | [stdlib/httpclient.dark](failures/stdlib/httpclient.md) | 61 | 54 | 7 |
 | [stdlib/httpserver.dark](failures/stdlib/httpserver.md) | 7 | 4 | 3 |
-| [stdlib/ints/int64.dark](failures/stdlib/ints/int64.md) | 264 | 262 | 2 |
+| [stdlib/ints/int64.dark](failures/stdlib/ints/int64.md) | 264 | 263 | 1 |
 | [stdlib/ints/int8.dark](failures/stdlib/ints/int8.md) | 236 | 235 | 1 |
 | [stdlib/json.dark](failures/stdlib/json.md) | 540 | 0 | 540 |
 | [stdlib/language-tools/parsedFileShape.dark](failures/stdlib/language-tools/parsedFileShape.md) | 13 | 0 | 13 |
 | [stdlib/language-tools/pickLocation.dark](failures/stdlib/language-tools/pickLocation.md) | 30 | 0 | 30 |
 | [stdlib/language-tools/semanticTokenization.dark](failures/stdlib/language-tools/semanticTokenization.md) | 102 | 0 | 102 |
-| [stdlib/list.dark](failures/stdlib/list.md) | 220 | 190 | 30 |
+| [stdlib/list.dark](failures/stdlib/list.md) | 220 | 191 | 29 |
 | [stdlib/math.dark](failures/stdlib/math.md) | 32 | 30 | 2 |
 | [stdlib/option.dark](failures/stdlib/option.md) | 73 | 61 | 12 |
 | [stdlib/prettyPrinter.dark](failures/stdlib/prettyPrinter.md) | 57 | 0 | 57 |

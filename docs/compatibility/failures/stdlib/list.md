@@ -2,7 +2,7 @@
 
 [Source fixture](../../../../test/fixtures/e2e/upstream/stdlib/list.dark) · [File list](../../current-audit.md)
 
-Executed 220 assertions: **190 passed, 30 failed**.
+Executed 220 assertions: **191 passed, 29 failed**.
 
 | Test | Observed failure |
 | --- | --- |
@@ -23,7 +23,6 @@ Executed 220 assertions: **190 passed, 30 failed**.
 | [L129](../../../../test/fixtures/e2e/upstream/stdlib/list.dark#L129) — Stdlib.List.flatten [ 1l, 2l, 3l ] | Expected error message 'Darklang.Stdlib.List.flatten's 1st parameter 'list' expects List<List<_>>, but got List<Int32> ([1, 2, 3])' not found in stderr. Actual stderr: <entry>: Expected TList |
 | [L130](../../../../test/fixtures/e2e/upstream/stdlib/list.dark#L130) — Stdlib.List.flatten [ [ 1L ], [ [ 2L, 3L ] ] ] | Expected error message 'Cannot add a List<List<Int64>> ([[2, 3]]) to a list of List<Int64>. Failed at index 1.' not found in stderr. Actual stderr: <entry>: Expected TInt64, got TList TInt64 |
 | [L136](../../../../test/fixtures/e2e/upstream/stdlib/list.dark#L136) — Stdlib.List.fold [] [] (fun accum curr -> 5L) | Expected TList (TVar "t$empty"), got TInt64 |
-| [L161](../../../../test/fixtures/e2e/upstream/stdlib/list.dark#L161) — Stdlib.List.indexedMap [ 3L, 2L, 1L ] (fun i v -> v - (Builtin.unwrap (Stdlib.Int.toInt64 i))) | Value mismatch |
 | [L162](../../../../test/fixtures/e2e/upstream/stdlib/list.dark#L162) — Stdlib.List.indexedMap [] (fun i v -> v - (Builtin.unwrap (Stdlib.Int.toInt64 i))) | Operator is unavailable for this type |
 | [L174](../../../../test/fixtures/e2e/upstream/stdlib/list.dark#L174) — Stdlib.List.interleave [ "a", "b", "c" ] [ 0L ] | Expected error message 'Darklang.Stdlib.List.interleave's 2nd parameter 'lB' expects List<String>, but got List<Int64> ([0])' not found in stderr. Actual stderr: <entry>: Expected TString, got TInt64 |
 | [L180](../../../../test/fixtures/e2e/upstream/stdlib/list.dark#L180) — Stdlib.List.interpose [ "a", "b", "c" ] 0L | Expected error message 'Darklang.Stdlib.List.interpose's 2nd parameter 'sep' expects String, but got Int64 (0)' not found in stderr. Actual stderr: <entry>: Expected TString, got TInt64 |
