@@ -2,7 +2,7 @@
 
 [Source fixture](../../../../test/fixtures/e2e/upstream/stdlib/list.dark) · [File list](../../current-audit.md)
 
-Executed 220 assertions: **196 passed, 24 failed**.
+Executed 220 assertions: **198 passed, 22 failed**.
 
 | Test | Observed failure |
 | --- | --- |
@@ -14,7 +14,6 @@ Executed 220 assertions: **196 passed, 24 failed**.
 | [L81](../../../../test/fixtures/e2e/upstream/stdlib/list.dark#L81) — Stdlib.List.iter [ 1L, 2L, 3L ] (fun x -> if x > 2L then Builtin.testIncrementSideEffectCounter ()) Builtin... | Unknown function or value 'Builtin.testIncrementSideEffectCounter' |
 | [L87](../../../../test/fixtures/e2e/upstream/stdlib/list.dark#L87) — Stdlib.List.filter [ 1L, 2L, 3L ] (fun item -> match item with \| 1L -> Stdlib.Option.Option.None \| 2L -> fa... | Expected error message 'Encountered a condition that must be a Bool, but got a Darklang.Stdlib.Option.Option<_> (None)' not found in stderr. Actual stderr: <entry>: Expected TBool, got TSum ("Darklang.Stdlib.Option.Option", [TVar "t"]) |
 | [L92](../../../../test/fixtures/e2e/upstream/stdlib/list.dark#L92) — Stdlib.List.filter [ true, false, true ] (fun item -> "a") | Expected error message 'Encountered a condition that must be a Bool, but got a String ("a")' not found in stderr. Actual stderr: <entry>: Expected TBool, got TString |
-| [L93](../../../../test/fixtures/e2e/upstream/stdlib/list.dark#L93) — Stdlib.List.filter [ 1L, 2L, 3L ] (fun item -> match item with \| 1L -> true \| 2L -> false \| 3L -> true) | Non-exhaustive match expression |
 | [L101](../../../../test/fixtures/e2e/upstream/stdlib/list.dark#L101) — Stdlib.List.filter [] (fun item -> "a") | Expected TBool, got TString |
 | [L109](../../../../test/fixtures/e2e/upstream/stdlib/list.dark#L109) — Stdlib.List.filterMap [] (fun item -> 0L) | Expected TSum |
 | [L129](../../../../test/fixtures/e2e/upstream/stdlib/list.dark#L129) — Stdlib.List.flatten [ 1l, 2l, 3l ] | Expected error message 'Darklang.Stdlib.List.flatten's 1st parameter 'list' expects List<List<_>>, but got List<Int32> ([1, 2, 3])' not found in stderr. Actual stderr: <entry>: Expected TList |
@@ -23,7 +22,6 @@ Executed 220 assertions: **196 passed, 24 failed**.
 | [L174](../../../../test/fixtures/e2e/upstream/stdlib/list.dark#L174) — Stdlib.List.interleave [ "a", "b", "c" ] [ 0L ] | Expected error message 'Darklang.Stdlib.List.interleave's 2nd parameter 'lB' expects List<String>, but got List<Int64> ([0])' not found in stderr. Actual stderr: <entry>: Expected TString, got TInt64 |
 | [L180](../../../../test/fixtures/e2e/upstream/stdlib/list.dark#L180) — Stdlib.List.interpose [ "a", "b", "c" ] 0L | Expected error message 'Darklang.Stdlib.List.interpose's 2nd parameter 'sep' expects String, but got Int64 (0)' not found in stderr. Actual stderr: <entry>: Expected TString, got TInt64 |
 | [L216](../../../../test/fixtures/e2e/upstream/stdlib/list.dark#L216) — Stdlib.List.partition [] (fun item -> "a") | Expected TBool, got TString |
-| [L218](../../../../test/fixtures/e2e/upstream/stdlib/list.dark#L218) — Stdlib.List.partition [ 1L, 2L, 3L ] (fun item -> match item with \| 1L \| 3L -> true \| 2L -> false) | Non-exhaustive match expression |
 | [L223](../../../../test/fixtures/e2e/upstream/stdlib/list.dark#L223) — Stdlib.List.partition [ true, false, true ] (fun item -> "a") | Expected error message 'Encountered a condition that must be a Bool, but got a String ("a")' not found in stderr. Actual stderr: <entry>: Expected TBool, got TString |
 | [L224](../../../../test/fixtures/e2e/upstream/stdlib/list.dark#L224) — Stdlib.List.partition [ 1L, 2L, 3L ] (fun item -> match item with \| 1L -> Stdlib.Option.Option.None \| 2L ->... | Expected error message 'Encountered a condition that must be a Bool, but got a Darklang.Stdlib.Option.Option<_> (None)' not found in stderr. Actual stderr: <entry>: Expected TBool, got TSum ("Darklang.Stdlib.Option.Option", [TVar "t"]) |
 | [L264](../../../../test/fixtures/e2e/upstream/stdlib/list.dark#L264) — Stdlib.List.sortByComparator [ 3L, 1L, 2L ] (fun a b -> 0.1) | Expected error message 'Cannot perform equality check on Float and Int' not found in stderr. Actual stderr: <entry>: Expected TInt, got TFloat64 |

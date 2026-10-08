@@ -2,11 +2,11 @@
 
 Audited on 2026-10-08 (UTC), against compiler revision `4a61318019fb8dea7f34a0bfec4df33f1fa18f5c` on Linux x86-64.
 
-**Every currently excluded assertion was rerun: 2,331 assertions across 55 files.**
-**9 assertions have been enabled since the initial audit; 2,331 still fail.**
+**Every currently excluded assertion was rerun: 2,329 assertions across 55 files.**
+**11 assertions have been enabled since the initial audit; 2,329 still fail.**
 
-Latest results for the audited files, including enabled neighbours: 3,599 assertions, 1,268 passed and 2,331 failed.
-The remaining gates cover these exact failures: 34 whole files and 262 assertion lines across 21 mixed files.
+Latest results for the audited files, including enabled neighbours: 3,599 assertions, 1,270 passed and 2,329 failed.
+The remaining gates cover these exact failures: 34 whole files and 260 assertion lines across 21 mixed files.
 
 The assertion harness now compares original parsed expressions. Multiline applications and literal contents are preserved in individual runs and batches. A follow-up retest of `stdlib/dict.dark` passed all 140 assertions after L21 was changed to expect its existing compile-time key type error.
 
@@ -18,7 +18,9 @@ Explicit numeric types follow-up: List L201 now uses `map2<Int64, Int64, Int64>`
 
 Mixed-list type errors follow-up: List L22–L24 now expect their existing compile-time type errors instead of the interpreter's runtime messages. All three are enabled, and the individual List run passed **196/196** enabled assertions. Compiler behavior is unchanged.
 
-Verification including the mixed-list type errors follow-up: native build passed; the host suite passed **11,366/11,366** tests after excluding the temporary investigation probe; `dune runtest` passed; the canonical compiled leak gate passed **58/58** workloads. The preceding compiler regressions passed individually and batched. The parent benchmark check stopped before measurement because the stored workload digest is incompatible; no baseline was reset.
+Non-exhaustive callback follow-up: List L93 and L218 retain their original callbacks and now expect `compileerror="Non-exhaustive match expression"`. Both are enabled, and the individual List run passed **198/198** enabled assertions. No fallback match arms or compiler changes were added.
+
+Verification including the non-exhaustive callback follow-up on main `74c7198aa48e04b30239ce81abd240843bf70ae2`: fresh native build passed; the host suite passed **11,392/11,392** tests; `dune runtest` passed; the canonical compiled leak gate passed **58/58** workloads. The preceding compiler regressions passed individually and batched. The parent benchmark check stopped before measurement because the stored workload digest is incompatible; no baseline was reset.
 
 
 ## Failing test files
@@ -75,7 +77,7 @@ Each file links to the individual failing assertions and their observed diagnost
 | [stdlib/language-tools/parsedFileShape.dark](failures/stdlib/language-tools/parsedFileShape.md) | 13 | 0 | 13 |
 | [stdlib/language-tools/pickLocation.dark](failures/stdlib/language-tools/pickLocation.md) | 30 | 0 | 30 |
 | [stdlib/language-tools/semanticTokenization.dark](failures/stdlib/language-tools/semanticTokenization.md) | 102 | 0 | 102 |
-| [stdlib/list.dark](failures/stdlib/list.md) | 220 | 196 | 24 |
+| [stdlib/list.dark](failures/stdlib/list.md) | 220 | 198 | 22 |
 | [stdlib/math.dark](failures/stdlib/math.md) | 32 | 30 | 2 |
 | [stdlib/option.dark](failures/stdlib/option.md) | 73 | 61 | 12 |
 | [stdlib/prettyPrinter.dark](failures/stdlib/prettyPrinter.md) | 57 | 0 | 57 |
