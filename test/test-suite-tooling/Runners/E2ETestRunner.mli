@@ -3,8 +3,7 @@
 
    Compiles source code, executes it, and validates output/exit code.
    Internal identifiers are only allowed for stdlib-internal tests.
-   Build the source expression to execute for a test.
-   For `lhs = rhs` value tests, run a synthesized equality assertion.
+   Retain parsed actual and expected expressions inside a checked assertion.
    Older E2E lines place an entry after a function declaration's semicolon.
    The interpreter parser treats that semicolon as part of the function body.
    Preserve evaluation order for legacy parenthesized `;` sequences that the
@@ -37,8 +36,7 @@
    tests use the same explicit QEMU boundary as E2E tests when the target does
    not match the development host.
    Run E2E test using a prebuilt preamble context.
-   Run a prepared equality test singularly without reparsing its synthesized
-   source. This keeps batch-size comparisons from charging preparation twice.
+   Individual runs and batches compile the same comparison expression tree.
 *)
 open Dark_compiler
 open E2EFormat
@@ -49,7 +47,11 @@ type e2eRun =
 
 type e2eFailure = { run : e2eRun; message : string }
 type e2eTestResult = (e2eRun, e2eFailure) result
-type preparedE2EBatchTest = { test : e2eTest; equalityProgram : WrittenTypes.sourceFile }
+
+type preparedE2EBatchTest = {
+  test : e2eTest;
+  equalityProgram : WrittenTypes.sourceFile;
+}
 
 type e2eBatchExecution = {
   aggregateRun : e2eRun;
@@ -107,5 +109,7 @@ val runPreparedE2ETestWithPreambleContext :
   e2eTestResult
 
 val evaluateExpectations : e2eTest -> e2eRun -> e2eTestResult
+
+(* Diagnostic scaffolding only; executable assertions are inserted as trees. *)
 val buildBatchSource : preparedE2EBatchTest list -> string
 val tryParseBatchBoolResults : int -> string -> bool list option

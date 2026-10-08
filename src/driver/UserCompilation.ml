@@ -66,7 +66,8 @@ let compileUserWithPlan ?writtenSources (plan : P.userCompilePlan) =
       (* Pass 1: Parse user code. *)
       log plan.P.verbosity 1 plan.P.labels.P.parse;
       let parseResult =
-        P.parseWrittenSourceProgram ?writtenSources plan.P.allowInternal true plan.P.sources
+        P.parseWrittenSourceProgram ?writtenSources plan.P.allowInternal true
+          plan.P.sources
         |> fun original ->
         Result.bind original (fun parsed ->
             match plan.P.packageManager with
@@ -93,11 +94,12 @@ let compileUserWithPlan ?writtenSources (plan : P.userCompilePlan) =
                 | Some sources ->
                     let writtenSources =
                       Option.map
-                        (fun originals -> List.map (fun _ -> None) packages @ originals)
+                        (fun originals ->
+                          List.map (fun _ -> None) packages @ originals)
                         writtenSources
                     in
-                    P.parseWrittenSourceProgram ?writtenSources plan.P.allowInternal true
-                      sources
+                    P.parseWrittenSourceProgram ?writtenSources
+                      plan.P.allowInternal true sources
                 | None ->
                     Error "Package resolution produced an empty source program"))
       in

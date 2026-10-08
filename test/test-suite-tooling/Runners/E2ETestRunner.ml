@@ -3,8 +3,7 @@
 
    Compiles source code, executes it, and validates output/exit code.
    Internal identifiers are only allowed for stdlib-internal tests.
-   Build the source expression to execute for a test.
-   For `lhs = rhs` value tests, run a synthesized equality assertion.
+   Retain parsed actual and expected expressions inside a checked assertion.
    Older E2E lines place an entry after a function declaration's semicolon.
    The interpreter parser treats that semicolon as part of the function body.
    Preserve evaluation order for legacy parenthesized `;` sequences that the
@@ -37,8 +36,7 @@
    tests use the same explicit QEMU boundary as E2E tests when the target does
    not match the development host.
    Run E2E test using a prebuilt preamble context.
-   Run a prepared equality test singularly without reparsing its synthesized
-   source. This keeps batch-size comparisons from charging preparation twice.
+   Individual runs and batches compile the same comparison expression tree.
 *)
 [@@@warning "-4-42"]
 
@@ -191,27 +189,40 @@ let sourceToExecute _allowInternal (test : e2eTest) =
   let* left = parsed in
   match test.expectedValueExpr with
   | None -> Ok left
-  | Some rhs ->
+  | Some rhs -> (
       let* right = parseWritten rhs in
       match (List.rev left.WT.exprsToEval, asSingleWrittenExpression right) with
       | actual :: earlier, Some expected ->
           let range = WT.exprRange actual in
-          let infix op a b = WT.EInfix (range, (range, WT.InfixFnCall op), a, b) in
+          let infix op a b =
+            WT.EInfix (range, (range, WT.InfixFnCall op), a, b)
+          in
           let comparison =
             if isFloatExpectedExpr expected then
               let name =
-                { WT.range;
-                  modules = [({ WT.range; name = "Stdlib" }, range);
-                             ({ WT.range; name = "Float" }, range)];
-                  fn = { WT.range; name = "absoluteValue" } }
+                {
+                  WT.range;
+                  modules =
+                    [
+                      ({ WT.range; name = "Stdlib" }, range);
+                      ({ WT.range; name = "Float" }, range);
+                    ];
+                  fn = { WT.range; name = "absoluteValue" };
+                }
               in
               let difference = infix WT.ArithmeticMinus actual expected in
-              let absolute = WT.EApply (range, WT.EFnName (range, name), [], [difference]) in
-              infix WT.ComparisonLessThan absolute (WT.EFloat (range, false, "0", "00000000001"))
+              let absolute =
+                WT.EApply (range, WT.EFnName (range, name), [], [ difference ])
+              in
+              infix WT.ComparisonLessThan absolute
+                (WT.EFloat (range, false, "0", "00000000001"))
             else infix WT.ComparisonEquals actual expected
           in
-          Ok { left with WT.exprsToEval = List.rev earlier @ [comparison] }
-      | _ -> Error ("Expected-value test must have an entry expression and a single expected expression: " ^ test.name)
+          Ok { left with WT.exprsToEval = List.rev earlier @ [ comparison ] }
+      | _ ->
+          Error
+            ("Expected-value test must have an entry expression and a single \
+              expected expression: " ^ test.name))
 
 type e2eRun =
   | CompileFailed of int * string * int64
@@ -228,7 +239,6 @@ type e2eBatchExecution = {
 
 let maxSupportedBatchSize = 8192
 let batchResultChunkSize = 32
-
 
 let tryPrepareBatchTest (test : e2eTest) =
   let eligible =
@@ -463,9 +473,7 @@ let analyzePreambleWithReducedFunctionSet stdlib (spec : preambleBuildSpec)
         t.errorExpectation <> Some CompileError && Option.is_none t.skipReason)
       tests
   in
-  let testProgram t =
-    sourceToExecute spec.allowInternal t
-  in
+  let testProgram t = sourceToExecute spec.allowInternal t in
   let unparsable =
     List.exists (fun t -> Result.is_error (testProgram t)) runnable
   in
@@ -1004,13 +1012,14 @@ let canBatchTogether left right =
      = isInternalTestFile right.test.sourceFile
   && buildCompilerOptions left.test = buildCompilerOptions right.test
 
-
 let batchBindingPrefix tests =
   let parts =
     List.concat_map
       (fun prepared ->
         [
-          prepared.test.sourceFile; prepared.test.name; prepared.test.source;
+          prepared.test.sourceFile;
+          prepared.test.name;
+          prepared.test.source;
           Option.value ~default:"" prepared.test.expectedValueExpr;
         ])
       tests
@@ -1049,6 +1058,8 @@ let batchBindingPrefix tests =
   in
   pick 0
 
+(* Only fixed harness scaffolding is generated as text. User comparison trees
+   are inserted by buildBatchProgram after this scaffolding is parsed. *)
 let buildBatchSource tests =
   let prefix = batchBindingPrefix tests in
   let checkFunctions =
@@ -1056,9 +1067,8 @@ let buildBatchSource tests =
       (fun i _prepared ->
         let index = string_of_int i in
         "let " ^ prefix ^ "Check" ^ index ^ " (seed: Int64) : Bool =\n  let "
-        ^ prefix ^ "CheckResult" ^ index ^ " =\n"
-        ^ "    false"
-        ^ " in\n  let " ^ prefix ^ "Fence" ^ index
+        ^ prefix ^ "CheckResult" ^ index ^ " =\n" ^ "    false" ^ " in\n  let "
+        ^ prefix ^ "Fence" ^ index
         ^ " = fun value -> if seed == 0L then value else false in\n  " ^ prefix
         ^ "Fence" ^ index ^ " (" ^ prefix ^ "CheckResult" ^ index ^ ")")
       tests
@@ -1105,14 +1115,19 @@ let buildBatchSource tests =
    result binding. User expressions and literal contents are never reprinted. *)
 let buildBatchProgram tests =
   let* scaffold = parseWritten (buildBatchSource tests) in
-  let comparisons = List.map (fun prepared ->
-      match prepared.equalityProgram.WT.exprsToEval with
-      | [expression] -> expression
-      | _ -> Crash.crash "Prepared assertion must have one expression") tests in
+  let comparisons =
+    List.map
+      (fun prepared ->
+        match prepared.equalityProgram.WT.exprsToEval with
+        | [ expression ] -> expression
+        | _ -> Crash.crash "Prepared assertion must have one expression")
+      tests
+  in
   let rec replace declarations comparisons =
-    match declarations, comparisons with
+    match (declarations, comparisons) with
     | WT.DFunction fn :: rest, comparison :: remaining ->
-        let body = match fn.WT.body with
+        let body =
+          match fn.WT.body with
           | WT.ELet (range, pattern, _, body, keyword, equals) ->
               WT.ELet (range, pattern, comparison, body, keyword, equals)
           | _ -> Crash.crash "Batch scaffold must start with a result binding"
@@ -1121,7 +1136,11 @@ let buildBatchProgram tests =
     | rest, [] -> rest
     | _ -> Crash.crash "Batch scaffold and assertion counts differ"
   in
-  Ok { scaffold with WT.declarations = replace scaffold.WT.declarations comparisons }
+  Ok
+    {
+      scaffold with
+      WT.declarations = replace scaffold.WT.declarations comparisons;
+    }
 
 let tryParseInteger64 source =
   let n = String.length source in
@@ -1293,7 +1312,8 @@ let runE2ETestBatchWithPreambleContext stdlib preambleCtx session tests
       let aggregateRun =
         match buildBatchProgram tests with
         | Error error -> CompileFailed (1, error, 0L)
-        | Ok program -> compileAndRun ~writtenSources:[program] [] [] Closed request
+        | Ok program ->
+            compileAndRun ~writtenSources:[ program ] [] [] Closed request
       in
       let results =
         match aggregateRun with
@@ -1336,9 +1356,7 @@ let runE2ETestBatchWithPreambleContext stdlib preambleCtx session tests
       { aggregateRun; results }
 
 let tryBuildReducedPreambleForTest allowInternal preamble testSource =
-  match
-    parsePreambleAsProgram allowInternal preamble
-  with
+  match parsePreambleAsProgram allowInternal preamble with
   | Ok preambleProgram ->
       let testProgram = testSource in
       let defs = preambleFunctionDefs preambleProgram in
@@ -1379,7 +1397,10 @@ let runE2ETestSourceWithPreambleContext stdlib preambleCtx session
       session;
     }
   in
-  let run = compileAndRun ~writtenSources:[program] test.arguments test.environment test.stdin request in
+  let run =
+    compileAndRun ~writtenSources:[ program ] test.arguments test.environment
+      test.stdin request
+  in
   let primary = evaluateExpectations test run in
   let fallback =
     match primary with
@@ -1426,8 +1447,9 @@ let runE2ETestSourceWithPreambleContext stdlib preambleCtx session
     let run =
       match parsePreambleAsProgram allowInternal fallbackPreamble with
       | Error error -> CompileFailed (1, error, 0L)
-      | Ok preamble -> compileAndRun ~writtenSources:[preamble; program]
-          test.arguments test.environment test.stdin request
+      | Ok preamble ->
+          compileAndRun ~writtenSources:[ preamble; program ] test.arguments
+            test.environment test.stdin request
     in
     match evaluateExpectations test run with
     | Ok _ as success -> success

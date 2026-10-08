@@ -5,4 +5,5 @@ val compile :
 (* Source trees correspond one-for-one to the request's named source units. *)
 val compileWritten :
   CompilationContexts.compileRequest ->
-  WrittenTypes.sourceFile list -> CompilerOptions.compileReport
+  WrittenTypes.sourceFile list ->
+  CompilerOptions.compileReport

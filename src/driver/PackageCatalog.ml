@@ -47,7 +47,8 @@ type userCompilePlan = {
 }
 
 (* Parse each source unit with the copied interpreter parser and enforce entry ownership. *)
-let parseWrittenSourceProgram ?writtenSources _allowInternal requireEntry sources =
+let parseWrittenSourceProgram ?writtenSources _allowInternal requireEntry
+    sources =
   let sources = NonEmptyList.toList sources in
   let* inputs =
     match writtenSources with
@@ -67,7 +68,9 @@ let parseWrittenSourceProgram ?writtenSources _allowInternal requireEntry source
               Validation.validate Validation.Script program
               |> Result.map_error (fun issues ->
                   String.concat "\n"
-                    (List.map (fun (issue : Validation.issue) -> issue.message)
+                    (List.map
+                       (fun (issue : Validation.issue) ->
+                         issue.Validation.message)
                        (NonEmptyList.toList issues)))
         in
         Result.map
