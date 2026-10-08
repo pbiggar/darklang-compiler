@@ -57,6 +57,25 @@ let convertCliOperation operation =
   | MIR.SignalWait -> LIR.SignalWait
   | MIR.MonotonicTime -> LIR.MonotonicTime
   | MIR.SecureRandomFill -> LIR.SecureRandomFill
+  | MIR.PosixOpenAt -> LIR.PosixOpenAt
+  | MIR.PosixRead -> LIR.PosixRead
+  | MIR.PosixWrite -> LIR.PosixWrite
+  | MIR.PosixClose -> LIR.PosixClose
+  | MIR.PosixSeek -> LIR.PosixSeek
+  | MIR.PosixStatAt -> LIR.PosixStatAt
+  | MIR.PosixGetCwd -> LIR.PosixGetCwd
+  | MIR.PosixChdir -> LIR.PosixChdir
+  | MIR.PosixMkdirAt -> LIR.PosixMkdirAt
+  | MIR.PosixUnlinkAt -> LIR.PosixUnlinkAt
+  | MIR.PosixRenameAt -> LIR.PosixRenameAt
+  | MIR.PosixChmodAt -> LIR.PosixChmodAt
+  | MIR.PosixChmodAt2 -> LIR.PosixChmodAt2
+  | MIR.PosixUtimesAt -> LIR.PosixUtimesAt
+  | MIR.PosixSetAttributesAt -> LIR.PosixSetAttributesAt
+  | MIR.PosixSymlinkAt -> LIR.PosixSymlinkAt
+  | MIR.PosixReadlinkAt -> LIR.PosixReadlinkAt
+  | MIR.PosixFlock -> LIR.PosixFlock
+  | MIR.PosixGetDents -> LIR.PosixGetDents
 
 [@@@warning "-4"]
 

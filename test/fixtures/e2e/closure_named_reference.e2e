@@ -1,0 +1,4 @@
+// Named functions inside lifted lambdas must use the closure calling convention.
+let invoke (fn: Unit -> Stdlib.Result.Result<String, String>) : Stdlib.Result.Result<String, String> = fn () in invoke (fun () -> Stdlib.Result.map (Ok (Stdlib.Blob.fromString "a\0b")) Stdlib.Blob.toHex) = Ok "610062"
+let invoke (fn: Unit -> Stdlib.Result.Result<Int, String>) : Stdlib.Result.Result<Int, String> = fn () in invoke (fun () -> Stdlib.Result.map (Ok (Stdlib.Blob.fromString "abc")) Stdlib.Blob.length) = Ok 3
+let invoke (fn: Unit -> List<String>) : List<String> = fn () in invoke (fun () -> Stdlib.List.map [1, 2, 3] Stdlib.Int.toString) = ["1", "2", "3"]

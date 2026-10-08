@@ -1,6 +1,8 @@
-// CliPosixMode.dark - upstream POSIX default permission values.
-
+// Upstream POSIX Modes declarations (v0.0.35).
 module Darklang.Stdlib.Cli.Posix.Modes
 
+/// 0755 — owner rwx, group rx, others rx
 val defaultDir = 493
+
+/// 0644 — owner rw, group r, others r
 val defaultFile = 420

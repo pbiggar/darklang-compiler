@@ -18,7 +18,7 @@ All same-source comparisons in this work use those exact revisions.
 | --- | --- | --- |
 | Shell execution | `ExecutionOutcome`, `execute`, the two Result helpers | `$HOME` expansion, `$SHELL` with `/bin/bash` fallback, inherited stdin, independent complete stdout/stderr, untrimmed outcome text |
 | Host | `OS`, `Architecture`, `Shell`, `Host` and discovery functions | Interpreter variants, normalized `uname`, shell recognition, and error precedence |
-| System | `Env.get`, `Env.getAll`, `Cli.Env` lookup/default/home/mutation, the Posix support subset, `Sys.*` | Exact environment values, child inheritance, passwd fallback, LOGNAME/USER/account precedence, uname values, PID/UID, online CPUs, EPERM-as-running |
+| System | `Env.get`, `Env.getAll`, `Cli.Env` lookup/default/home/mutation, the Posix API, `Sys.*` | Exact environment values, child inheritance, passwd fallback, LOGNAME/USER/account precedence, uname values, PID/UID, online CPUs, EPERM-as-running |
 | Filesystem | `Cli.FileSystem.currentDirectory`, `listDirectory`, `pathExists`, `isDirectory`, `readFile`, `readFileAsString`, `overwriteFile`, `appendToFile`, and `deleteFile` | Blob I/O, full paths in directory listings, structured file errors, and observable file mutation |
 | Processes | `ProcessHandle`, `Output`, `spawn`, `communicate`, `terminate`, and portable helpers | PATH-aware argv execution, inherited environment/stdin, normalized signal exits, timeouts, pipelines, and PID lifecycle |
 | Input | `Key`, `Modifiers`, `KeyRead`, helpers, and `readKey` | Portable key names, ALT+CTRL+SHIFT display order, UTF-8/ANSI decoding, repeat coalescing, resize events, and terminal restoration |
@@ -35,12 +35,13 @@ interpreter source omits that match arm, while the AOT compiler requires the
 branch to make the result total. Ahead-of-time type errors remain the normal
 compiler timing divergence.
 
-Only `Posix.Error`, `kill`, `sigterm`, `sigkill`, `sleep`, and
-`isProcessRunning` are claimed from the larger interpreter Posix API. The
-filesystem and environment functions listed above are additionally claimed
-against darklang/dark `v0.0.35` revision
-`0b3888d8e4f30d48ecd738f5cbe5cc2b8d958460`. `Platform.target` and
-`CompilerExecution.execute` belong to the compiler driver.
+The complete interpreter Posix boundary is now implemented: all 29 Builtin
+dependencies of the pinned package, with `Cli.File`, `Cli.Dir`, and
+`Cli.FileSystem` reimported over it. This extension is pinned to darklang/dark
+`v0.0.35` revision `0b3888d8e4f30d48ecd738f5cbe5cc2b8d958460`.
+Daemon is excluded. Coverage, imported behavior, native target details and
+validation limits are recorded in [POSIX host API coverage](posix-host-api.md).
+`Platform.target` and `CompilerExecution.execute` belong to the compiler driver.
 
 ## Native boundary
 

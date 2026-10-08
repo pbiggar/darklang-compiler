@@ -1,6 +1,8 @@
-// CliPosixStat.dark - upstream POSIX stat-mode values.
-
+// Upstream POSIX StatMode declarations (v0.0.35).
 module Darklang.Stdlib.Cli.Posix.StatMode
 
+/// S_IFMT — bitmask for the file type fields
 val ifmt = 61440
+
+/// S_IFDIR — directory
 val ifdir = 16384
