@@ -321,55 +321,61 @@ let __closing (state: Stdlib.QuicConnection.State) (deadline: Int64) (number: In
     Stdlib.QuicConnection.close state
     match result with | Error "HTTP server shutting down" -> true | _ -> false
 
-let __finishDrain (state: Stdlib.QuicConnection.State) (deadline: Int64) (remaining: Int64) : Bool =
+type Closing = { peer: Stdlib.Datagram.Endpoint, source: Blob, destination: Blob, keys: Stdlib.QuicCrypto.Keys, phase: Bool, deadline: Int64, number: Int64, lastSent: Int64 }
+type Finished = { closing: Option<Stdlib.QuicConnection.Closing>, stopped: Bool }
+
+// Listener-owned closing state contains no stream payloads or transport owner.
+let __beginClose (state: Stdlib.QuicConnection.State) (now: Int64) : Stdlib.Result.Result<Stdlib.QuicConnection.Closing, String> =
+  Stdlib.QuicRecovery.pto state.space.recovery state.transport.parameters.maxAckDelay |> Stdlib.Result.andThen (fun pto ->
+    let number = state.space.recovery.largestSent + 1L in
+    Stdlib.QuicApplication.close 256L Stdlib.Blob.empty
+    |> Stdlib.Result.andThen (fun bytes -> Stdlib.QuicPacket.sealShort state.sending.generation.keys state.ids.destination state.sending.generation.phase bytes number)
+    |> Stdlib.Result.andThen (fun packet -> Stdlib.Datagram.send state.transport.socket state.transport.peer packet 1000L |> Stdlib.Result.mapError (fun _code -> "QUIC close send failed"))
+    |> Stdlib.Result.map (fun _unit -> Stdlib.QuicConnection.Closing { peer = state.transport.peer, source = state.transport.source, destination = state.ids.destination, keys = state.sending.generation.keys, phase = state.sending.generation.phase, deadline = now + (if pto > 10000L then 30000L else pto * 3L), number = number + 1L, lastSent = now }))
+
+let repeatClose (socket: Stdlib.Datagram.Socket) (closing: Stdlib.QuicConnection.Closing) (now: Int64) : Stdlib.Result.Result<Stdlib.QuicConnection.Closing, String> =
+  if now >= closing.deadline || now - closing.lastSent < 100L then Ok closing
+  else Stdlib.QuicApplication.close 256L Stdlib.Blob.empty
+    |> Stdlib.Result.andThen (fun bytes -> Stdlib.QuicPacket.sealShort closing.keys closing.destination closing.phase bytes closing.number)
+    |> Stdlib.Result.andThen (fun packet -> Stdlib.Datagram.send socket closing.peer packet 1000L |> Stdlib.Result.mapError (fun _code -> "QUIC repeated close send failed"))
+    |> Stdlib.Result.map (fun _unit -> { closing with number = closing.number + 1L, lastSent = now })
+
+let __finishDrain (state: Stdlib.QuicConnection.State) (deadline: Int64) (remaining: Int64) : Stdlib.Result.Result<Option<Stdlib.QuicConnection.Closing>, String> =
   match Stdlib.Network.monotonicMillis () with
   | Error _ ->
-    Stdlib.QuicConnection.close state
-    false
+    Error "QUIC closing clock failed"
   | Ok now ->
     if Stdlib.Option.isSome state.meta.closed then
-      Stdlib.QuicConnection.close state
-      false
+      Ok None
     else if now < deadline && remaining > 0L && (state.space.queued != [] || state.space.recovery.congestion.inFlight > 0L) then
       match Stdlib.QuicConnection.poll state 10L with
       | Ok next -> Stdlib.QuicConnection.__finishDrain next deadline (remaining - 1L)
       | Error message ->
         // A failed send may have reserved a nonce in state that cannot be
         // returned with the error. Abort without encrypting from stale state.
-        Stdlib.QuicConnection.close state
-        message == "HTTP server shutting down"
+        Error message
     else
-      match Stdlib.QuicRecovery.pto state.space.recovery state.transport.parameters.maxAckDelay with
-      | Error _ ->
-        Stdlib.QuicConnection.close state
-        false
-      | Ok pto ->
-        let number = state.space.recovery.largestSent + 1L in
-        match Stdlib.QuicApplication.close 256L Stdlib.Blob.empty |> Stdlib.Result.andThen (fun bytes -> Stdlib.QuicPacket.sealShort state.sending.generation.keys state.ids.destination state.sending.generation.phase bytes number) with
-        | Error _ ->
-          Stdlib.QuicConnection.close state
-          false
-        | Ok packet ->
-          match Stdlib.Datagram.send state.transport.socket state.transport.peer packet 1000L with
-          | Error _ ->
-            Stdlib.QuicConnection.close state
-            false
-          | Ok () -> Stdlib.QuicConnection.__closing state (now + (if pto > 10000L then 30000L else pto * 3L)) (number + 1L) now 256L
+      Stdlib.QuicConnection.__beginClose state now |> Stdlib.Result.map (fun closing -> Some closing)
 
 // Complete queued responses under a bounded drain, then retain closing keys
 // for three PTOs (at most thirty seconds). Every repeated close uses a fresh
 // packet number; disposing a child socket leaves its listener alive.
-let finishServer (state: Stdlib.QuicConnection.State) : Bool =
-  match Stdlib.Stream.next state.transport.socket.lifecycle, Stdlib.Network.monotonicMillis () with
+let finishServer (state: Stdlib.QuicConnection.State) : Stdlib.QuicConnection.Finished =
+  let result = match Stdlib.Stream.next state.transport.socket.lifecycle, Stdlib.Network.monotonicMillis () with
   | Some (), Ok now -> Stdlib.QuicConnection.__finishDrain state (now + 10000L) 4096L
-  | _, _ ->
-    Stdlib.QuicConnection.close state
-    false
+  | _, _ -> Ok None in
+  Stdlib.QuicConnection.close state
+  match result with
+  | Ok closing -> Stdlib.QuicConnection.Finished { closing = closing, stopped = false }
+  | Error message -> Stdlib.QuicConnection.Finished { closing = None, stopped = message == "HTTP server shutting down" }
 
 // A client may cancel an incomplete upload or response. Abandon queued stream
 // data and close from the latest returned packet-number/key state, retaining
 // closing keys for the same bounded three-PTO interval as the server.
 let finishClient (state: Stdlib.QuicConnection.State) : Unit =
   match Stdlib.Stream.next state.transport.socket.lifecycle, Stdlib.Network.monotonicMillis () with
-  | Some (), Ok now -> let _ = Stdlib.QuicConnection.__finishDrain state now 0L in ()
+  | Some (), Ok now ->
+    match Stdlib.QuicConnection.__finishDrain state now 0L with
+    | Ok (Some closing) -> let _ = Stdlib.QuicConnection.__closing state closing.deadline closing.number closing.lastSent 256L in ()
+    | _ -> Stdlib.QuicConnection.close state
   | _, _ -> Stdlib.QuicConnection.close state

@@ -1,7 +1,9 @@
 // HttpServerQuic.dark - Sequential HTTP/3 UDP listener with Retry, replay suppression and shutdown ownership.
 module Darklang.Stdlib.HttpServer.Quic
 
-type Recent = { source: Blob, expires: Int64 }
+type Recent = { source: Blob, expires: Int64, closing: Option<Stdlib.QuicConnection.Closing> }
+type Context = { config: Stdlib.HttpServer.Config.Config, identity: Stdlib.TlsServerIdentity.Identity, signals: Stdlib.Network.ShutdownSignals, socket: Stdlib.Datagram.Socket, secret: Blob, limit: Int64 }
+type Step = { recent: List<Stdlib.HttpServer.Quic.Recent>, stopped: Bool }
 
 let __socket (parent: Stdlib.Datagram.Socket) : Stdlib.Datagram.Socket =
   let lifecycle = Stdlib.Stream.__new (fun _unit -> Some ()) (fun _unit -> ()) in
@@ -9,17 +11,17 @@ let __socket (parent: Stdlib.Datagram.Socket) : Stdlib.Datagram.Socket =
     send = fun peer bytes timeout -> match Stdlib.Stream.next lifecycle with | None -> Error 9L | Some () -> Stdlib.Datagram.send parent peer bytes timeout,
     receive = fun timeout -> match Stdlib.Stream.next lifecycle with | None -> Error 9L | Some () -> Stdlib.Datagram.receive parent timeout }
 
-let __connection (config: Stdlib.HttpServer.Config.Config) (identity: Stdlib.TlsServerIdentity.Identity) (handler: Stdlib.Http.Request -> Stdlib.Http.Response) (signals: Stdlib.Network.ShutdownSignals) (socket: Stdlib.Datagram.Socket) (flight: Stdlib.QuicServer.Flight) (peer: Stdlib.Datagram.Endpoint) (limit: Int64) : Bool =
+let __connection (config: Stdlib.HttpServer.Config.Config) (identity: Stdlib.TlsServerIdentity.Identity) (handler: Stdlib.Http.Request -> Stdlib.Http.Response) (signals: Stdlib.Network.ShutdownSignals) (socket: Stdlib.Datagram.Socket) (flight: Stdlib.QuicServer.Flight) (peer: Stdlib.Datagram.Endpoint) (limit: Int64) : Stdlib.QuicConnection.Finished =
   let child = Stdlib.HttpServer.Quic.__socket socket in
   let result = match Stdlib.Network.monotonicMillis () with
     | Error _ -> Error "HTTP/3 server clock failed"
     | Ok now -> Stdlib.QuicServer.accept child peer signals flight (now + 10000L) 4096L |> Stdlib.Result.andThen (fun ready ->
         Stdlib.Http3Server.serve ready signals config (fun request -> Stdlib.HttpServer.__http2Handler config handler request) limit) in
-  let stopped = match result with
-    | Error message -> message == "HTTP server shutting down"
+  let finished = match result with
+    | Error message -> Stdlib.QuicConnection.Finished { closing = None, stopped = message == "HTTP server shutting down" }
     | Ok state -> Stdlib.QuicConnection.finishServer state.connection in
   Stdlib.Datagram.close child
-  stopped
+  finished
 
 let __retry (socket: Stdlib.Datagram.Socket) (secret: Blob) (peer: Stdlib.Datagram.Endpoint) (packet: Stdlib.QuicPacket.Protected) (now: Int64) : Unit =
   if Stdlib.Blob.__byteLength packet.destination < 8L then ()
@@ -29,39 +31,73 @@ let __retry (socket: Stdlib.Datagram.Socket) (secret: Blob) (peer: Stdlib.Datagr
     | Error _ -> ()
     | Ok retry -> let _ = Stdlib.Datagram.send socket peer retry 1000L in ()
 
-let __loop (config: Stdlib.HttpServer.Config.Config) (identity: Stdlib.TlsServerIdentity.Identity) (handler: Stdlib.Http.Request -> Stdlib.Http.Response) (signals: Stdlib.Network.ShutdownSignals) (socket: Stdlib.Datagram.Socket) (secret: Blob) (recent: List<Stdlib.HttpServer.Quic.Recent>) (limit: Int64) : Stdlib.Result.Result<Unit, String> =
-  match Stdlib.Network.shutdownRequested signals with
+let __admit (context: Stdlib.HttpServer.Quic.Context) (handler: Stdlib.Http.Request -> Stdlib.Http.Response) (recent: List<Stdlib.HttpServer.Quic.Recent>) (timeout: Int64) : Stdlib.Result.Result<Stdlib.HttpServer.Quic.Step, String> =
+  match Stdlib.Network.shutdownRequested context.signals with
   | Error _ -> Error "HTTP/3 server shutdown check failed"
-  | Ok true -> Ok ()
+  | Ok true -> Ok (Stdlib.HttpServer.Quic.Step { recent = recent, stopped = true })
   | Ok false ->
-    match Stdlib.Datagram.receive socket 100L with
-    | Error code -> if code == 4L || code == 11L || code == 35L || code == 90L then Stdlib.HttpServer.Quic.__loop config identity handler signals socket secret recent limit else Error "HTTP/3 listener receive failed"
+    match Stdlib.Datagram.receive context.socket timeout with
+    | Error code -> if code == 4L || code == 11L || code == 35L || code == 90L then Ok (Stdlib.HttpServer.Quic.Step { recent = recent, stopped = false }) else Error "HTTP/3 listener receive failed"
     | Ok datagram ->
       match Stdlib.Network.monotonicMillis () with
       | Error _ -> Error "HTTP/3 server clock failed"
       | Ok now ->
         let recent = Stdlib.List.filter recent (fun entry -> entry.expires > now) in
-        let again = fun recent -> Stdlib.HttpServer.Quic.__loop config identity handler signals socket secret recent limit in
+        let again = fun recent -> Ok (Stdlib.HttpServer.Quic.Step { recent = recent, stopped = false }) in
         match Stdlib.QuicPacket.parse 8L datagram.payload with
         | Ok (Protected packet) ->
-          if packet.kind != Stdlib.QuicPacket.Kind.Initial || Stdlib.Blob.__byteLength datagram.payload < 1200L ||
+          if Stdlib.List.any recent (fun entry -> Stdlib.QuicClient.__same entry.source packet.destination && Stdlib.Option.isSome entry.closing) then
+            let recent = Stdlib.List.map recent (fun entry ->
+              match entry.closing with
+              | Some closing ->
+                if Stdlib.QuicClient.__same closing.source packet.destination && closing.peer == datagram.peer then
+                  (match Stdlib.QuicConnection.repeatClose context.socket closing now with
+                  | Ok next -> { entry with closing = Some next }
+                  | Error _ -> { entry with closing = None })
+                else entry
+              | None -> entry) in
+            again recent
+          else if packet.kind != Stdlib.QuicPacket.Kind.Initial || Stdlib.Blob.__byteLength datagram.payload < 1200L ||
              Stdlib.List.any recent (fun entry -> Stdlib.QuicClient.__same entry.source packet.destination) then again recent
           else if Stdlib.Blob.__byteLength packet.token == 0L then
-            Stdlib.HttpServer.Quic.__retry socket secret datagram.peer packet now
+            Stdlib.HttpServer.Quic.__retry context.socket context.secret datagram.peer packet now
             again recent
           else if Stdlib.List.length recent >= 256 then again recent
           else
-            (match Stdlib.QuicServerRetry.validate secret datagram.peer packet now with
+            (match Stdlib.QuicServerRetry.validate context.secret datagram.peer packet now with
             | Error _ -> again recent
             | Ok _ ->
               // Consume a validated CID before any flight is emitted. Failed
               // handshakes must not reuse Initial key/packet-number pairs either.
               // Never evict a live entry merely to admit another connection.
-              let recent = Stdlib.List.push recent (Stdlib.HttpServer.Quic.Recent { source = packet.destination, expires = now + 30000L }) in
-              match Stdlib.QuicServer.start identity secret datagram now with
+              let recent = Stdlib.List.push recent (Stdlib.HttpServer.Quic.Recent { source = packet.destination, expires = now + 30000L, closing = None }) in
+              match Stdlib.QuicServer.start context.identity context.secret datagram now with
               | Error _ -> again recent
-              | Ok flight -> if Stdlib.HttpServer.Quic.__connection config identity handler signals socket flight datagram.peer limit then Ok () else again recent)
+              | Ok flight ->
+                let finished = Stdlib.HttpServer.Quic.__connection context.config context.identity handler context.signals context.socket flight datagram.peer context.limit in
+                let recent = Stdlib.List.map recent (fun entry ->
+                  if Stdlib.QuicClient.__same entry.source packet.destination then
+                    let expires = match finished.closing with | Some closing -> if closing.deadline > entry.expires then closing.deadline else entry.expires | None -> entry.expires in
+                    { entry with expires = expires, closing = finished.closing }
+                  else entry) in
+                Ok (Stdlib.HttpServer.Quic.Step { recent = recent, stopped = finished.stopped }))
         | _ -> again recent
+
+// Prune closing keys even while idle. Retain consumed CIDs through both the
+// Retry-token lifetime and any longer closing interval, without body buffers.
+let __step (context: Stdlib.HttpServer.Quic.Context) (handler: Stdlib.Http.Request -> Stdlib.Http.Response) (recent: List<Stdlib.HttpServer.Quic.Recent>) (timeout: Int64) : Stdlib.Result.Result<Stdlib.HttpServer.Quic.Step, String> =
+  match Stdlib.Network.monotonicMillis () with
+  | Error _ -> Error "HTTP/3 server clock failed"
+  | Ok now ->
+    let recent = Stdlib.List.filter recent (fun entry -> entry.expires > now) |> Stdlib.List.map (fun entry ->
+      match entry.closing with | Some closing -> if closing.deadline <= now then { entry with closing = None } else entry | None -> entry) in
+    Stdlib.HttpServer.Quic.__admit context handler recent timeout
+
+
+let __loop (context: Stdlib.HttpServer.Quic.Context) (handler: Stdlib.Http.Request -> Stdlib.Http.Response) (recent: List<Stdlib.HttpServer.Quic.Recent>) : Stdlib.Result.Result<Unit, String> =
+  match Stdlib.HttpServer.Quic.__step context handler recent 100L with
+  | Error message -> Error message
+  | Ok step -> if step.stopped then Ok () else Stdlib.HttpServer.Quic.__loop context handler step.recent
 
 /// Serve one HTTPS request per authenticated QUIC v1 connection. Import the
 /// certificate chain and private key with TlsServerIdentity.create. Every new
@@ -80,7 +116,8 @@ let serve (config: Stdlib.HttpServer.Config.Config) (identity: Stdlib.TlsServerI
           | Error _ -> Error "Cannot bind HTTP/3 server"
           | Ok socket ->
             onListening ()
-            let result = Stdlib.HttpServer.Quic.__loop config identity handler signals socket secret [] limit in
+            let context = Stdlib.HttpServer.Quic.Context { config = config, identity = identity, signals = signals, socket = socket, secret = secret, limit = limit } in
+            let result = Stdlib.HttpServer.Quic.__loop context handler [] in
             Stdlib.Datagram.close socket
             result in
       Stdlib.Network.closeShutdownSignals signals

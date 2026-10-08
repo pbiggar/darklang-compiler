@@ -191,6 +191,9 @@ def main():
                 stdout, stderr = process.communicate()
                 if stdout or stderr:
                     print("Listener diagnostics:", stdout, stderr, flush=True)
+            elif process.returncode:
+                stdout, stderr = process.communicate()
+                print("Listener diagnostics:", process.returncode, stdout, stderr, flush=True)
 
 
 if __name__ == "__main__":
