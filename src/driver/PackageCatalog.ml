@@ -47,16 +47,34 @@ type userCompilePlan = {
 }
 
 (* Parse each source unit with the copied interpreter parser and enforce entry ownership. *)
-let parseWrittenSourceProgram _allowInternal requireEntry sources =
+let parseWrittenSourceProgram ?writtenSources _allowInternal requireEntry sources =
+  let sources = NonEmptyList.toList sources in
+  let* inputs =
+    match writtenSources with
+    | None -> Ok (List.map (fun source -> (source, None)) sources)
+    | Some written when List.length written = List.length sources ->
+        Ok (List.combine sources written)
+    | Some _ -> Error "Written source count does not match source units"
+  in
   let* parsed =
     ResultList.traverse
-      (fun (source : X.sourceUnit) ->
+      (fun ((source : X.sourceUnit), written) ->
         let* name = NameSyntax.sourceUnitName source.X.name in
+        let validated =
+          match written with
+          | None -> WrittenParsing.parse Validation.Script source.X.source
+          | Some program ->
+              Validation.validate Validation.Script program
+              |> Result.map_error (fun issues ->
+                  String.concat "\n"
+                    (List.map (fun (issue : Validation.issue) -> issue.message)
+                       (NonEmptyList.toList issues)))
+        in
         Result.map
           (fun parsed ->
             (NameSyntax.sourceUnitNameText name, source.X.purpose, parsed))
-          (WrittenParsing.parse Validation.Script source.X.source))
-      (NonEmptyList.toList sources)
+          validated)
+      inputs
   in
   WrittenSource.validateSourceUnits requireEntry parsed
 

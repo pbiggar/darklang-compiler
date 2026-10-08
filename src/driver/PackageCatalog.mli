@@ -31,6 +31,7 @@ type userCompilePlan = {
 }
 
 val parseWrittenSourceProgram :
+  ?writtenSources:WrittenTypes.sourceFile option list ->
   bool ->
   bool ->
   CompilationContexts.sourceUnit AST.nonEmptyList ->

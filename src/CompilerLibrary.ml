@@ -83,3 +83,10 @@ let buildCompilePlan (request : X.compileRequest) =
 (* Compile source code to binary (in-memory, no file I/O). *)
 let compile request =
   UserCompilation.compileUserWithPlan (buildCompilePlan request)
+
+(* Generated callers retain parsed expression trees and still cross the
+   structural validation, source ownership, and normal checking boundaries. *)
+let compileWritten request sources =
+  UserCompilation.compileUserWithPlan
+    ~writtenSources:(List.map (fun source -> Some source) sources)
+    (buildCompilePlan request)

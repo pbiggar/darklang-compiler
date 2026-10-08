@@ -49,7 +49,7 @@ type e2eRun =
 
 type e2eFailure = { run : e2eRun; message : string }
 type e2eTestResult = (e2eRun, e2eFailure) result
-type preparedE2EBatchTest = { test : e2eTest; equalitySource : string }
+type preparedE2EBatchTest = { test : e2eTest; equalityProgram : WrittenTypes.sourceFile }
 
 type e2eBatchExecution = {
   aggregateRun : e2eRun;
