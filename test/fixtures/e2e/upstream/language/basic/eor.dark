@@ -3,7 +3,7 @@
 (false || true) = true
 (false || false) = false
 
-(true || 5L) = true
+(true || 5L) = compileerror="Expected TBool, got TInt64"
 #compileerror="Expected TBool, got TInt64"
 (false || 5L) = error="|| only supports Booleans"
 #compileerror="Expected TInt64, got TBool"
