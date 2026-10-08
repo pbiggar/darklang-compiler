@@ -38,14 +38,21 @@ skipped as a whole. Nothing in this package is marked fixed.
 
 `packages/darklang/languageTools/permissions.dark`:
 `Darklang.LanguageTools.Permissions.tokens` previously failed with
-`Unknown function or value 'walk'`. Fixed local self-recursion detection to
-traverse match scrutinees, guards, and branch bodies, respecting pattern-bound
-names. Branch `chatgpt/local-recursion-match`, commit
-`14babff8cfe81c96a6e6fd3d28a54f6b32a1ca0d`; not merged.
+`Unknown function or value 'walk'`. Local self-recursion detection now traverses
+all written expression containers and recognizes function values, respecting
+match, lambda and destructured-let shadowing. Recursive inference and closure
+lowering also support those forms, including callbacks stored in lists.
+Standard-library wrappers now release owned function results.
 
-Five focused E2E regressions pass. The unchanged tokens function and its
-TokenMode type compile and run in isolation. Full host suite: 11140/11140
-passed. All 58 quick/full benchmark workloads compile and run cleanly.
+Branch `chatgpt/local-recursion-match`, commit
+`5db9fdf8cd52e3e453ebb3f10817ef2c0dd65244`; PR #16; not merged.
+Five match regressions and 23 expression/value/ownership regressions pass.
+The unchanged tokens function and TokenMode type compile and run in isolation.
+Full host suite: 11163/11163 passed. Native `dune runtest` passed after removing
+generated read-only action stamps. All 58 quick/full benchmark workloads compile
+and run with leak checks clean. Cachegrind equivalence was waived by the user.
+Changed OCaml files pass formatting checks. Recursive function values can
+allocate a closure; direct recursive calls retain their existing environment.
 
 ## Remaining package blocker
 
