@@ -1,0 +1,13 @@
+// partial_function_capture.e2e - Returned named partials compare the identity of their applied callbacks.
+let increment (value: Int64) : Int64 = value + 1L
+let decrement (value: Int64) : Int64 = value - 1L
+let offset (base: Int64) (value: Int64) : Int64 = base + value
+let applyCallback (callback: Int64 -> Int64) (value: Int64) : Int64 = callback value
+let wrapCallback (callback: Int64 -> Int64) : Int64 -> Int64 = applyCallback callback
+(wrapCallback increment) 41L = 42L
+let first = wrapCallback increment in let second = wrapCallback increment in first == second = true
+let first = wrapCallback increment in let second = wrapCallback decrement in first == second = false
+Stdlib.List.member [wrapCallback increment] (wrapCallback decrement) = false
+Stdlib.List.member [wrapCallback increment] (wrapCallback increment) = true
+let first = wrapCallback (offset 1L) in let second = wrapCallback (offset 1L) in first == second = true
+let first = wrapCallback (offset 1L) in let second = wrapCallback (offset 2L) in first == second = false

@@ -45,9 +45,17 @@ let planLambdaComparison parameters body state =
  let rec collect remaining acc = match remaining with [] -> Ok (List.rev acc) | name :: rest -> (match B.find_opt name state.A.typeEnv with Some typ -> collect rest (typ :: acc) | None -> Error "Missing type for captured variable identity") in
  Result.map (fun types -> {identity = None; captureNames = captures; captureTypes = types; captureExprs = List.map (fun id -> C.Local id) captures; body; compareCaptures = false}, state) (collect captures [])
 let comparisonForCapturedValue symbols _variants typ left right =
- let structural = match typ with AST.TFunction _ | AST.TList _ | AST.TDict _ | AST.TTuple _ | AST.TRecord _ | AST.TSum _ -> true | _ -> false in
+ let structural = match typ with AST.TList _ | AST.TDict _ | AST.TTuple _ | AST.TRecord _ | AST.TSum _ -> true | _ -> false in
  let resolved name = match C.tryFindFunctionId name symbols with Some id -> id | None -> Crash.crash ("Closure comparison function '" ^ name ^ "' is absent from symbols") in
- if structural then C.Call (resolved (ComparisonPlanning.eqHelperName typ), S.exprArgsFromList [left; right])
+ (* Named partials can capture callbacks whose equality was never requested
+    before lambda lifting. Their operands here are pure closure-slot reads.
+    Use the same comparator-identity guard as EqualityHelpers, so a late
+    callback capture does not require a missing global helper definition. *)
+ if (match typ with AST.TFunction _ -> true | _ -> false) then
+  let comparator value = C.TupleAccess (value, 1) in
+  C.If (C.BinOp (AST.Eq, comparator left, comparator right),
+    C.IndirectApply (comparator left, S.exprArgsFromList [left; right]), C.BoolLiteral false)
+ else if structural then C.Call (resolved (ComparisonPlanning.eqHelperName typ), S.exprArgsFromList [left; right])
  else if typ = AST.TString then C.BinOp (AST.Eq, left, right)
  else if typ = AST.TInt then C.Call (resolved "Darklang.Stdlib.Int.__equals", S.exprArgsFromList [left; right])
  else C.BinOp (AST.Eq, left, right)
