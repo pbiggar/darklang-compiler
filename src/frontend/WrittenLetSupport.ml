@@ -107,6 +107,7 @@ let check checkExpression globals locals symbols expected (range : WT.range)
           (orElse (inferredUsageType name condition) (fun () ->
                inferredUsageType name yes))
           (fun () -> Option.bind no (inferredUsageType name))
+    | WT.ERecordFieldAccess (_, record, _, _) -> inferredUsageType name record
     | _ -> None
   in
   let valueExpected =
@@ -250,42 +251,50 @@ let check checkExpression globals locals symbols expected (range : WT.range)
         (checkExpression globals
            (M.add name (provisional, binding) locals)
            withBinding (Some provisional) value)
-        (fun (valueType, checkedValue, afterValue) ->
-          map
-            (fun (bodyType, checkedBody, finalSymbols) ->
-              let ordinal = C.nextBindingOrdinal symbols in
-              let member = AST.recursiveMemberId ordinal in
-              let kind =
-                if keywordFun.start = keywordFun.end_ then
-                  AST.NamedLocalFunctionMember
-                else AST.DirectLambdaValueMember
-              in
-              let parsed : AST.parsedRecursiveMember =
-                {
-                  binding;
-                  boundary = AST.scopeBoundaryId ordinal;
-                  member;
-                  sourceName = name;
-                  kind;
-                }
-              in
-              let resolved : AST.resolvedRecursiveMember =
-                {
-                  parsed;
-                  group = AST.singletonRecursiveGroupId member;
-                  groupIndex = 0;
-                  availability = AST.SelfRecursiveMember;
-                }
-              in
-              let typed : C.recursiveMember =
-                { resolved; monomorphicType = C.checkedType valueType }
-              in
-              ( bodyType,
-                C.RecursiveLet (typed, checkedValue, checkedBody),
-                finalSymbols ))
+        (fun (valueType, _, _) ->
+          (* Recursive calls initially use inference variables. Recheck with
+             the inferred signature so nested generic calls retain concrete
+             type arguments before specialization. *)
+          bind
             (checkExpression globals
                (M.add name (valueType, binding) locals)
-               afterValue expected body))
+               withBinding (Some valueType) value)
+            (fun (valueType, checkedValue, afterValue) ->
+              map
+                (fun (bodyType, checkedBody, finalSymbols) ->
+                  let ordinal = C.nextBindingOrdinal symbols in
+                  let member = AST.recursiveMemberId ordinal in
+                  let kind =
+                    if keywordFun.start = keywordFun.end_ then
+                      AST.NamedLocalFunctionMember
+                    else AST.DirectLambdaValueMember
+                  in
+                  let parsed : AST.parsedRecursiveMember =
+                    {
+                      binding;
+                      boundary = AST.scopeBoundaryId ordinal;
+                      member;
+                      sourceName = name;
+                      kind;
+                    }
+                  in
+                  let resolved : AST.resolvedRecursiveMember =
+                    {
+                      parsed;
+                      group = AST.singletonRecursiveGroupId member;
+                      groupIndex = 0;
+                      availability = AST.SelfRecursiveMember;
+                    }
+                  in
+                  let typed : C.recursiveMember =
+                    { resolved; monomorphicType = C.checkedType valueType }
+                  in
+                  ( bodyType,
+                    C.RecursiveLet (typed, checkedValue, checkedBody),
+                    finalSymbols ))
+                (checkExpression globals
+                   (M.add name (valueType, binding) locals)
+                   afterValue expected body)))
   | _ ->
       bind (check symbols valueExpected value)
         (fun (valueType, checkedValue, afterValue) ->

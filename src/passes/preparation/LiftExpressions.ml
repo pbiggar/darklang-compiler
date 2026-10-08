@@ -171,7 +171,8 @@ let rec liftLambdasInExpr expr state =
         liftLambdasInCases (NonEmptyList.toList cases) typ state
       in
       Ok (C.Match (scrutinee, NonEmptyList.fromList cases), state)
-  | C.Lambda (parameters, _, body) -> liftLambda false parameters body state
+  | C.Lambda (parameters, annotation, body) ->
+      liftLambda false parameters annotation body state
   | C.Apply (target, args) ->
       let* target, state = liftLambdasInExpr target state in
       let* args, state = liftLambdasInArgs args state in
@@ -192,7 +193,7 @@ let rec liftLambdasInExpr expr state =
       let* parts, state = loop parts state [] in
       Ok (C.InterpolatedString parts, state)
 
-and liftLambda argument parameters body state =
+and liftLambda argument parameters annotation body state =
   let bindings =
     NonEmptyList.toList parameters
     |> List.concat_map S.lambdaParameterBindings
@@ -270,7 +271,11 @@ and liftLambda argument parameters body state =
       genericFuncDefs = state1.A.genericFuncDefs;
     }
   in
-  let* returnType = A.inferLambdaReturnType body forReturn in
+  let* returnType =
+    match annotation with
+    | Some typ -> Ok (C.semanticType typ)
+    | None -> A.inferLambdaReturnType body forReturn
+  in
   let id, symbols =
     match id with
     | Some id -> (id, symbols)
@@ -357,8 +362,8 @@ and liftLambdasInArgs args state =
     | arg :: rest ->
         let* arg, state =
           match arg with
-          | C.Lambda (parameters, _, body) ->
-              liftLambda true parameters body state
+          | C.Lambda (parameters, annotation, body) ->
+              liftLambda true parameters annotation body state
           | _ -> liftLambdasInExpr arg state
         in
         loop rest state (arg :: acc)

@@ -673,12 +673,11 @@ let runCase case =
     }
   in
   let localSSA =
-    List.map (fun fixture -> fixture.ssa) locals
-    |> List.map (fun body ->
-        if case.optimizeSSA then
-          SSAOptimization.optimizeFunction context
-            ANFConstants.defaultOptimizeOptions body
-        else body)
+    let functions = List.map (fun fixture -> fixture.ssa) locals in
+    if case.optimizeSSA then
+      SSAOptimization.optimizeFunctions context
+        ANFConstants.defaultOptimizeOptions functions
+    else functions
   in
   let last values = List.hd (List.rev values) in
   let result =

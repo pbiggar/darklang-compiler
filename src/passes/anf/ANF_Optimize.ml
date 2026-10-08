@@ -69,6 +69,7 @@ let optimizeProgramWithOptionsAndExternalFunctionsWithTrace recordTiming context
     else program
   in
   let (Program (functions, main)) = program' in
+  let environmentUnused = unusedClosureEnvironments functions in
   let functions' =
     measure "ANF Optimize detail: Function fixed points" (fun () ->
         List.map
@@ -76,7 +77,8 @@ let optimizeProgramWithOptionsAndExternalFunctionsWithTrace recordTiming context
             let optimized = optimizeToFixedPoint context options func 10 in
             {
               optimized with
-              body = devirtualizeCaptureFreeClosures optimized.body;
+              body =
+                devirtualizeCaptureFreeClosures environmentUnused optimized.body;
             })
           functions)
   in
@@ -105,7 +107,9 @@ let optimizeProgramWithOptionsAndExternalFunctionsWithTrace recordTiming context
         optimizeToFixedPoint context options mainFunc 10)
   in
   let optimizedProgram =
-    Program (functions', devirtualizeCaptureFreeClosures mainOptimized.body)
+    Program
+      ( functions',
+        devirtualizeCaptureFreeClosures environmentUnused mainOptimized.body )
   in
   if options.enableTailRecursionModuloOperation then
     let programIds =

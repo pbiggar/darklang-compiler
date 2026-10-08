@@ -1,6 +1,6 @@
 (* SSAOptimization.mli - Simplify typed high-level SSA before specialization. *)
-val optimizeFunction :
+val optimizeFunctions :
   ANFConstants.optimizeContext ->
   ANFConstants.optimizeOptions ->
-  SSAANF.functionDef ->
-  SSAANF.functionDef
+  SSAANF.functionDef list ->
+  SSAANF.functionDef list

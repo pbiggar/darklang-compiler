@@ -217,13 +217,7 @@ let[@warning "-4"] check checkExpression globals locals symbols expected
                 | None -> Error "Lambda requires at least one parameter"
                 | Some parametersChecked ->
                     let bodyLocals = M.fold M.add parameters locals in
-                    let bodyExpected =
-                      match body with
-                      | WT.EIf (_, _, _, Some _, _, _, _)
-                        when Unification.containsTVar returnType ->
-                          None
-                      | _ -> Some returnType
-                    in
+                    let bodyExpected = Some returnType in
                     Result.map
                       (fun (bodyType, body, symbols) ->
                         let inferredReturn =

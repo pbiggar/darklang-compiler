@@ -6,7 +6,7 @@ type RecCase = RecCase of Int64
 (let recur (n: Int64) : Int64 = if n == 0L then 0L else Stdlib.Tuple2.first (recur (n - 1L), 1L) in recur 3L) = 0L
 (let recur (n: Int64) : Int64 = if n == 0L then 0L else (RecBox { value = recur (n - 1L) }).value in recur 3L) = 0L
 (let recur (n: Int64) : Int64 = if n == 0L then 0L else Builtin.unwrap (Stdlib.Dict.get (Dict { "x": recur (n - 1L) }) "x") in recur 3L) = 0L
-(let recur (n: Int64) : Int64 = if n == 0L then 0L else Stdlib.Dict.size (Dict { recur (n - 1L): 1L }) |> Stdlib.Int.toInt64 in recur 3L) = 1L
+(let recur (n: Int64) : Int = if n == 0L then 0 else Stdlib.Dict.size (Dict { recur (n - 1L): 1L }) in recur 3L) = 1
 (let recur (n: Int64) : Int64 = if n == 0L then 0L else { RecBox { value = 1L } with value = recur (n - 1L) }.value in recur 3L) = 0L
 (let recur (n: Int64) : RecBox = if n == 0L then RecBox { value = 0L } else { recur (n - 1L) with value = 1L } in (recur 3L).value) = 1L
 (let recur (n: Int64) : Int64 = if n == 0L then 0L else match RecCase (recur (n - 1L)) with | RecCase value -> value in recur 3L) = 0L

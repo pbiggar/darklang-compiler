@@ -47,5 +47,9 @@ val optimizeToFixedPoint :
   int ->
   ANF.functionDef
 
-val devirtualizeCaptureFreeClosures : ANF.aExpr -> ANF.aExpr
+val unusedClosureEnvironments : ANF.functionDef list -> AST.functionId -> bool
+
+val devirtualizeCaptureFreeClosures :
+  (AST.functionId -> bool) -> ANF.aExpr -> ANF.aExpr
+
 val freshVarGenForProgram : ANF.program -> ANF.varGen
