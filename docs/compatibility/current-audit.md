@@ -14,9 +14,9 @@ A follow-up against `36002414730437e871b7d457e76b79f859935fb1` recovered `Builti
 
 Numeric inference follow-up: checking now carries immutable constraints into lambda parameter and body types. The ungated List file passed 192/220 assertions, so L162 is now enabled. Nine focused regressions cover operand order, compound expressions, comparisons, let-bound offsets, and conflicting types. All 55 disabled fixtures were rerun individually against the final compiler; every failing assertion identity matches the updated ledger. The separately retested Dict file passed all 140 assertions.
 
-Explicit numeric types follow-up: List L201 now uses `map2<Int64, Int64, Int64>` because both input lists are empty and subtraction has no numeric type evidence. The explicit Int64 form passed in the preceding investigation and is now enabled. No unused-callback elimination or numeric defaulting was added. Validation of this test-only change is pending toolchain recovery.
+Explicit numeric types follow-up: List L201 now uses `map2<Int64, Int64, Int64>` because both input lists are empty and subtraction has no numeric type evidence. The explicit Int64 form is now enabled, and the fresh individual List run passed **193/193** enabled assertions. No unused-callback elimination or numeric defaulting was added.
 
-Verification of the preceding compiler revision: fresh native build passed; the clean-checkout host suite passed **11,362/11,362** tests; `dune runtest` passed; the canonical compiled leak gate passed **58/58** workloads. Focused regressions passed individually and batched. The parent benchmark check stopped before measurement because the stored workload digest is incompatible; no baseline was reset.
+Verification including the explicit numeric types follow-up: fresh native build passed; the clean-checkout host suite passed **11,363/11,363** tests; `dune runtest` passed; the canonical compiled leak gate passed **58/58** workloads. The preceding compiler regressions passed individually and batched. The parent benchmark check stopped before measurement because the stored workload digest is incompatible; no baseline was reset.
 
 
 ## Failing test files
