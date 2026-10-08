@@ -273,8 +273,9 @@ and liftLambda argument parameters annotation body state =
   in
   let* returnType =
     match annotation with
-    | Some typ -> Ok (C.semanticType typ)
-    | None -> A.inferLambdaReturnType body forReturn
+    | Some typ when not (Unification.containsTVar (C.semanticType typ)) ->
+        Ok (C.semanticType typ)
+    | Some _ | None -> A.inferLambdaReturnType body forReturn
   in
   let id, symbols =
     match id with

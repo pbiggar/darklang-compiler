@@ -1,6 +1,7 @@
 // Recursive local functions work through every expression container and as values.
 type RecBox = { value: Int64 }
 type RecCase = RecCase of Int64
+type RecPair = RecPair of Int64 * Int64
 
 (let recur (n: Int64) : Int64 = if n == 0L then 0L else Builtin.unwrap (Stdlib.List.head [recur (n - 1L)]) in recur 3L) = 0L
 (let recur (n: Int64) : Int64 = if n == 0L then 0L else Stdlib.Tuple2.first (recur (n - 1L), 1L) in recur 3L) = 0L
@@ -18,9 +19,13 @@ type RecCase = RecCase of Int64
 (let recur (n: Int64) : Int64 = if n == 0L then 0L else 1L |> (fun value -> value + recur (n - 1L)) in recur 3L) = 3L
 (let recur (n: Int64) : Int64 = if n == 0L then 0L else 1L |> (+) (recur (n - 1L)) in recur 3L) = 3L
 (let recur (n: Int64) : Int64 = if n == 0L then 0L else match recur (n - 1L) |> RecCase with | RecCase value -> value in recur 3L) = 0L
+(let recur (n: Int64) : Int64 = if n == 0L then 0L else 1L |> Stdlib.Int64.add (recur (n - 1L)) in recur 3L) = 3L
+(let recur (n: Int64) : Int64 = if n == 0L then 0L else match 1L |> RecPair (recur (n - 1L)) with | RecPair(left, right) -> left + right in recur 3L) = 3L
 
 // Passing the function itself is a recursive reference, not only direct calls.
 (let recur (n: Int64) : Int64 = if n == 0L then 0L else (fun fn -> fn (n - 1L)) recur in recur 3L) = 0L
+(let step = 1L in let recur (n: Int64) : Int64 = if n == 0L then 0L else step + (fun fn -> fn (n - step)) recur in recur 3L) = 3L
+(let recur (n: Int64) : Int64 = if n == 0L then 0L else let callback = Builtin.unwrap (Stdlib.List.head [recur]) in callback (n - 1L) in recur 3L) = 0L
 
 // Shadowed names belong to parameters and destructured bindings, not recursion.
 (let recur (n: Int64) : Int64 = (fun recur -> recur n) (fun value -> value + 1L) in recur 3L) = 4L
