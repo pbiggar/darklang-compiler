@@ -185,6 +185,7 @@ let prettyPrintCliOperation = function
   | LIR.PosixFlock -> "PosixFlock"
   | LIR.PosixGetDents -> "PosixGetDents"
   | LIR.PosixIoctl -> "PosixIoctl"
+  | LIR.PosixProcInfo -> "PosixProcInfo"
 
 (*
    Pretty-print LIR register

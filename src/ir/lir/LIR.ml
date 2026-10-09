@@ -178,6 +178,7 @@ type cliOperation =
   | PosixFlock
   | PosixGetDents
   | PosixIoctl
+  | PosixProcInfo
 
 (*
    Basic block label (wrapper type for type safety)
