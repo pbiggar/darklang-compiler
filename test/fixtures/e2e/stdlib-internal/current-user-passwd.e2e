@@ -1,0 +1,3 @@
+// UID matching skips malformed and unrelated passwd entries.
+Stdlib.Cli.Sys.__currentUserFromPasswd ["malformed", "other:x:20:20::/home/other:/bin/sh", "match:x:42:42::/home/match:/bin/sh"] "42" = Some "match"
+Stdlib.Cli.Sys.__currentUserFromPasswd ["other:x:20:20::/home/other:/bin/sh", "malformed"] "42" = None

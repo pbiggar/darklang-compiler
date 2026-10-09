@@ -1,0 +1,5 @@
+// Current-user builtin ignores environment overrides; the public wrapper preserves them.
+let before = Builtin.posixGetCurrentUserName () in let _ = Stdlib.Cli.Env.set "LOGNAME" "dark-test-logname" in let _ = Stdlib.Cli.Env.set "USER" "dark-test-user" in Builtin.posixGetCurrentUserName () == before = true isolated=true
+let _ = Stdlib.Cli.Env.set "LOGNAME" "dark-test-logname" in let _ = Stdlib.Cli.Env.set "USER" "dark-test-user" in Stdlib.Cli.Sys.currentUser () = Some "dark-test-logname" isolated=true
+let _ = Stdlib.Cli.Env.unset "LOGNAME" in let _ = Stdlib.Cli.Env.set "USER" "dark-test-user" in Stdlib.Cli.Sys.currentUser () = Some "dark-test-user" isolated=true
+let _ = Stdlib.Cli.Env.unset "LOGNAME" in let _ = Stdlib.Cli.Env.unset "USER" in Stdlib.Cli.Sys.currentUser () == Builtin.posixGetCurrentUserName () = true isolated=true
