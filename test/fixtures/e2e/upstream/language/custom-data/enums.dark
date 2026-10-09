@@ -103,6 +103,7 @@ module TuplesVsNonTuples =
   (match Tuples.NotTuple("printer broke", 7L) with
    | NotTuple(reason, 7L) -> reason) = compileerror="Non-exhaustive match expression"
 
+  #compileerror="Constructor 'Tuples.NotTuple' expects 2 fields"
   (Tuples.NotTuple(("printer broke", 7L))) = error="Expected 2 fields in TuplesVsNonTuples.Tuples.`NotTuple`, but got 1"
 
   (match Tuples.Tuple(("printer broke", 7L)) with
