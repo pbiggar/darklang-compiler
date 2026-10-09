@@ -1,0 +1,135 @@
+// __RsaMontgomery.dark - Bounded scratch storage for RSA public modular exponentiation.
+// Public exponents may control branches. This entry point is not a private-key signer.
+module Darklang.Stdlib.__RsaMontgomery
+
+type Modulus = { words: RawPtr, count: Int64, inverse: Int64 }
+
+let __zero (words: RawPtr) (position: Int64) (count: Int64) : Unit =
+  if position == count then ()
+  else let _ = __raw_write_word words (position * 8L) 0L in Stdlib.__RsaMontgomery.__zero words (position + 1L) count
+
+let __load (words: RawPtr) (bytes: Blob) (position: Int64) (count: Int64) : Unit =
+  if position == count then ()
+  else
+    let low = Stdlib.Blob.__byteLength bytes - position * 2L - 1L in
+    let value = if low < 0L then 0L else Stdlib.Blob.__getByte bytes low + (if low == 0L then 0L else Stdlib.Blob.__getByte bytes (low - 1L) * 256L) in
+    let _ = __raw_write_word words (position * 8L) value in
+    Stdlib.__RsaMontgomery.__load words bytes (position + 1L) count
+
+// Six fixed Newton steps provide the inverse of an odd low limb modulo 2^16.
+let __inverse (low: Int64) (value: Int64) (remaining: Int64) : Int64 =
+  if remaining == 0L then Stdlib.Int64.bitwiseAnd (0L - value) 65535L
+  else Stdlib.__RsaMontgomery.__inverse low (Stdlib.Int64.bitwiseAnd (value * (2L - low * value)) 65535L) (remaining - 1L)
+
+// A limb product plus accumulator and carry fits in 33 bits.
+let __row (target: RawPtr) (words: RawPtr) (factor: Int64) (position: Int64) (count: Int64) (carry: Int64) : Unit =
+  if position == count then
+    let value = __raw_get<Int64> target (count * 8L) + carry in
+    let _ = __raw_write_word target (count * 8L) (Stdlib.Int64.bitwiseAnd value 65535L) in
+    __raw_write_word target ((count + 1L) * 8L) (__raw_get<Int64> target ((count + 1L) * 8L) + Stdlib.Int64.shiftRight value 16L)
+  else
+    let offset = position * 8L in
+    let value = __raw_get<Int64> target offset + __raw_get<Int64> words offset * factor + carry in
+    let _ = __raw_write_word target offset (Stdlib.Int64.bitwiseAnd value 65535L) in
+    Stdlib.__RsaMontgomery.__row target words factor (position + 1L) count (Stdlib.Int64.shiftRight value 16L)
+
+let __shift (words: RawPtr) (position: Int64) (count: Int64) : Unit =
+  if position == count + 1L then __raw_write_word words (position * 8L) 0L
+  else
+    let _ = __raw_write_word words (position * 8L) (__raw_get<Int64> words ((position + 1L) * 8L)) in
+    Stdlib.__RsaMontgomery.__shift words (position + 1L) count
+
+let __rounds (modulus: Stdlib.__RsaMontgomery.Modulus) (a: RawPtr) (b: RawPtr) (temporary: RawPtr) (position: Int64) : Unit =
+  if position == modulus.count then ()
+  else
+    let _ = Stdlib.__RsaMontgomery.__row temporary a (__raw_get<Int64> b (position * 8L)) 0L modulus.count 0L in
+    let factor = Stdlib.Int64.bitwiseAnd (__raw_get<Int64> temporary 0L * modulus.inverse) 65535L in
+    let _ = Stdlib.__RsaMontgomery.__row temporary modulus.words factor 0L modulus.count 0L in
+    let _ = Stdlib.__RsaMontgomery.__shift temporary 0L modulus.count in
+    Stdlib.__RsaMontgomery.__rounds modulus a b temporary (position + 1L)
+
+let __subtract (modulus: Stdlib.__RsaMontgomery.Modulus) (temporary: RawPtr) (output: RawPtr) (position: Int64) (borrow: Int64) : Int64 =
+  if position == modulus.count then Stdlib.Int64.shiftRight (__raw_get<Int64> temporary (position * 8L) - borrow) 63L
+  else
+    let offset = position * 8L in
+    let difference = __raw_get<Int64> temporary offset - __raw_get<Int64> modulus.words offset - borrow in
+    let _ = __raw_write_word output offset (Stdlib.Int64.bitwiseAnd difference 65535L) in
+    Stdlib.__RsaMontgomery.__subtract modulus temporary output (position + 1L) (Stdlib.Int64.bitwiseAnd (Stdlib.Int64.shiftRight difference 63L) 1L)
+
+let __select (temporary: RawPtr) (output: RawPtr) (mask: Int64) (position: Int64) (count: Int64) : Unit =
+  if position == count then ()
+  else
+    let offset = position * 8L in
+    let value = Stdlib.Int64.bitwiseOr (Stdlib.Int64.bitwiseAnd (__raw_get<Int64> temporary offset) mask) (Stdlib.Int64.bitwiseAnd (__raw_get<Int64> output offset) (Stdlib.Int64.bitwiseXor mask (0L - 1L))) in
+    let _ = __raw_write_word output offset value in
+    Stdlib.__RsaMontgomery.__select temporary output mask (position + 1L) count
+
+// CIOS multiplication consumes both inputs before writing output, permitting aliases.
+// See HAC 14.36, https://cacr.uwaterloo.ca/hac/about/chap14.pdf.
+let __multiply (modulus: Stdlib.__RsaMontgomery.Modulus) (a: RawPtr) (b: RawPtr) (output: RawPtr) (temporary: RawPtr) : Unit =
+  let _ = Stdlib.__RsaMontgomery.__zero temporary 0L (modulus.count + 2L) in
+  let _ = Stdlib.__RsaMontgomery.__rounds modulus a b temporary 0L in
+  let mask = Stdlib.__RsaMontgomery.__subtract modulus temporary output 0L 0L in
+  Stdlib.__RsaMontgomery.__select temporary output mask 0L modulus.count
+
+let __power (modulus: Stdlib.__RsaMontgomery.Modulus) (base: RawPtr) (accumulator: RawPtr) (temporary: RawPtr) (exponent: Int64) : Unit =
+  if exponent == 0L then ()
+  else
+    let _ = if Stdlib.Int64.bitwiseAnd exponent 1L == 0L then () else Stdlib.__RsaMontgomery.__multiply modulus accumulator base accumulator temporary in
+    let _ = Stdlib.__RsaMontgomery.__multiply modulus base base base temporary in
+    Stdlib.__RsaMontgomery.__power modulus base accumulator temporary (Stdlib.Int64.shiftRight exponent 1L)
+
+let __output (words: RawPtr) (position: Int64) (bytes: List<Int64>) : Blob =
+  if position < 0L then Stdlib.Blob.__fromInt64List (Stdlib.List.reverse bytes)
+  else
+    let word = __raw_get<Int64> words ((position / 2L) * 8L) in
+    let byte = Stdlib.Int64.bitwiseAnd (Stdlib.Int64.shiftRight word ((position % 2L) * 8L)) 255L in
+    Stdlib.__RsaMontgomery.__output words (position - 1L) (Stdlib.List.push bytes byte)
+
+let __dispose (words: RawPtr) (count: Int64) : Unit =
+  let _ = Stdlib.__RsaMontgomery.__zero words 0L count in __raw_free words
+
+// Bound all allocations by the public modulus width, not intermediate products.
+// Callers validate RSA signature range and encoding before this operation.
+let publicPow (baseBytes: Blob) (exponentBytes: Blob) (modulusBytes: Blob) : Stdlib.Result.Result<Blob, String> =
+  let length = Stdlib.Blob.__byteLength modulusBytes in
+  let exponentLength = Stdlib.Blob.__byteLength exponentBytes in
+  if length < 1L || length > 1024L || Stdlib.Blob.__getByte modulusBytes 0L == 0L ||
+    Stdlib.Blob.__getByte modulusBytes (length - 1L) % 2L == 0L ||
+    Stdlib.Blob.__byteLength baseBytes > length || exponentLength < 1L || exponentLength > 4L then Error "Invalid public modular exponentiation input"
+  else
+    let n = Stdlib.__RsaPss.__fromBytes modulusBytes 0L 0 in
+    let base = Stdlib.__RsaPss.__fromBytes baseBytes 0L 0 in
+    let exponent = Stdlib.__RsaPss.__fromBytes exponentBytes 0L 0 |> Stdlib.Int.toInt64 in
+    if n <= 1 || base >= n then Error "Invalid public modular exponentiation input"
+    else match exponent with
+    | None -> Error "Invalid public exponent"
+    | Some exponent ->
+      let count = (length + 1L) / 2L in
+      let width = count * 8L in
+      let words = __raw_alloc width in
+      let _ = Stdlib.__RsaMontgomery.__load words modulusBytes 0L count in
+      let modulus = Stdlib.__RsaMontgomery.Modulus { words = words, count = count,
+        inverse = Stdlib.__RsaMontgomery.__inverse (__raw_get<Int64> words 0L) 1L 6L } in
+      let baseWords = __raw_alloc width in
+      let accumulator = __raw_alloc width in
+      let one = __raw_alloc width in
+      let squaredRadix = __raw_alloc width in
+      let temporary = __raw_alloc (width + 16L) in
+      let _ = Stdlib.__RsaMontgomery.__load baseWords baseBytes 0L count in
+      let _ = Stdlib.__RsaMontgomery.__zero one 0L count in
+      let _ = __raw_write_word one 0L 1L in
+      let radix = Stdlib.Int.mod (Stdlib.Int.shiftLeft 1 (Stdlib.Int.fromInt64 (count * 32L))) n in
+      let _ = Stdlib.__RsaMontgomery.__load squaredRadix (Stdlib.__RsaPss.__toBytes radix length []) 0L count in
+      let _ = Stdlib.__RsaMontgomery.__multiply modulus baseWords squaredRadix baseWords temporary in
+      let _ = Stdlib.__RsaMontgomery.__multiply modulus one squaredRadix accumulator temporary in
+      let _ = Stdlib.__RsaMontgomery.__power modulus baseWords accumulator temporary exponent in
+      let _ = Stdlib.__RsaMontgomery.__multiply modulus accumulator one accumulator temporary in
+      let result = Stdlib.__RsaMontgomery.__output accumulator (length - 1L) [] in
+      let _ = Stdlib.__RsaMontgomery.__dispose words count in
+      let _ = Stdlib.__RsaMontgomery.__dispose baseWords count in
+      let _ = Stdlib.__RsaMontgomery.__dispose accumulator count in
+      let _ = Stdlib.__RsaMontgomery.__dispose one count in
+      let _ = Stdlib.__RsaMontgomery.__dispose squaredRadix count in
+      let _ = Stdlib.__RsaMontgomery.__dispose temporary (count + 2L) in
+      Ok result

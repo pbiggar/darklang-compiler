@@ -1,0 +1,195 @@
+// __QuicApplication.dark - Bounded QUIC 1-RTT frame codecs and stream-control fields.
+module Darklang.Stdlib.__QuicApplication
+
+type StreamData = { id: Int64, offset: Int64, bytes: Blob, fin: Bool }
+type Reset = { id: Int64, code: Int64, finalSize: Int64 }
+type StreamLimit = { id: Int64, value: Int64 }
+type ConnectionId = { sequence: Int64, retirePriorTo: Int64, id: Blob, resetToken: Blob }
+type Frame =
+  Handshake of Stdlib.__QuicFrames.Frame | Stream of Stdlib.__QuicApplication.StreamData
+  | ResetStream of Stdlib.__QuicApplication.Reset | StopSending of Stdlib.__QuicApplication.StreamLimit
+  | NewToken of Blob | MaxData of Int64 | MaxStreamData of Stdlib.__QuicApplication.StreamLimit
+  | MaxStreamsBidi of Int64 | MaxStreamsUni of Int64 | DataBlocked of Int64
+  | StreamDataBlocked of Stdlib.__QuicApplication.StreamLimit | StreamsBlockedBidi of Int64 | StreamsBlockedUni of Int64
+  | NewConnectionId of Stdlib.__QuicApplication.ConnectionId | RetireConnectionId of Int64
+  | PathChallenge of Blob | PathResponse of Blob | ApplicationClose of Stdlib.__QuicFrames.Close | HandshakeDone
+type Parsed = { frame: Stdlib.__QuicApplication.Frame, next: Int64 }
+
+let __stream (data: Blob) (kind: Int64) (position: Int64)
+  : Stdlib.Result.Result<Stdlib.__QuicApplication.Parsed, String> =
+  match Stdlib.__QuicFrames.__integer data position with
+  | Error message -> Error message
+  | Ok id ->
+    let offset = if kind / 4L % 2L == 1L then Stdlib.__QuicFrames.__integer data id.next
+                 else Ok (Stdlib.__QuicWire.Number { value = 0L, next = id.next }) in
+    match offset with
+    | Error message -> Error message
+    | Ok offset ->
+      let length = if kind / 2L % 2L == 1L then Stdlib.__QuicFrames.__integer data offset.next
+                   else Ok (Stdlib.__QuicWire.Number { value = Stdlib.Blob.__byteLength data - offset.next, next = offset.next }) in
+      match length with
+      | Error message -> Error message
+      | Ok length ->
+        if length.value > Stdlib.Blob.__byteLength data - length.next then Error "Truncated QUIC STREAM frame"
+        else if offset.value > 4611686018427387903L - length.value then Error "Invalid QUIC STREAM range"
+        else Ok (Stdlib.__QuicApplication.Parsed { next = length.next + length.value,
+          frame = Stream (Stdlib.__QuicApplication.StreamData { id = id.value, offset = offset.value,
+            fin = kind % 2L == 1L, bytes = Stdlib.__Http2Wire.__slice data length.next length.value }) })
+
+let __limit (data: Blob) (kind: Int64) (position: Int64)
+  : Stdlib.Result.Result<Stdlib.__QuicApplication.Parsed, String> =
+  match Stdlib.__QuicFrames.__integer data position with
+  | Error message -> Error message
+  | Ok value ->
+    if (kind == 18L || kind == 19L || kind == 22L || kind == 23L) && value.value > 1152921504606846976L then
+      Error "QUIC stream count exceeds 2^60"
+    else
+      let frame = if kind == 16L then MaxData value.value
+                  else if kind == 18L then MaxStreamsBidi value.value
+                  else if kind == 19L then MaxStreamsUni value.value
+                  else if kind == 20L then DataBlocked value.value
+                  else if kind == 22L then StreamsBlockedBidi value.value
+                  else if kind == 23L then StreamsBlockedUni value.value
+                  else RetireConnectionId value.value in
+      Ok (Stdlib.__QuicApplication.Parsed { frame = frame, next = value.next })
+
+let __streamLimit (data: Blob) (kind: Int64) (position: Int64)
+  : Stdlib.Result.Result<Stdlib.__QuicApplication.Parsed, String> =
+  match Stdlib.__QuicFrames.__integer data position with
+  | Error message -> Error message
+  | Ok id ->
+    match Stdlib.__QuicFrames.__integer data id.next with
+    | Error message -> Error message
+    | Ok value ->
+      let limit = Stdlib.__QuicApplication.StreamLimit { id = id.value, value = value.value } in
+      let frame = if kind == 5L then StopSending limit else if kind == 17L then MaxStreamData limit else StreamDataBlocked limit in
+      Ok (Stdlib.__QuicApplication.Parsed { frame = frame, next = value.next })
+
+let __newId (data: Blob) (position: Int64) : Stdlib.Result.Result<Stdlib.__QuicApplication.Parsed, String> =
+  match Stdlib.__QuicFrames.__integer data position with
+  | Error message -> Error message
+  | Ok sequence ->
+    match Stdlib.__QuicFrames.__integer data sequence.next with
+    | Error message -> Error message
+    | Ok retire ->
+      if retire.value > sequence.value then Error "Invalid QUIC retire-prior-to"
+      else if retire.next >= Stdlib.Blob.__byteLength data then Error "Truncated QUIC connection ID"
+      else
+        let size = Stdlib.Blob.__getByte data retire.next in
+        if size == 0L || size > 20L then Error "Invalid QUIC new connection ID length"
+        else if size + 17L > Stdlib.Blob.__byteLength data - retire.next then Error "Truncated QUIC connection ID"
+        else Ok (Stdlib.__QuicApplication.Parsed { next = retire.next + size + 17L,
+          frame = NewConnectionId (Stdlib.__QuicApplication.ConnectionId {
+            sequence = sequence.value, retirePriorTo = retire.value,
+            id = Stdlib.__Http2Wire.__slice data (retire.next + 1L) size,
+            resetToken = Stdlib.__Http2Wire.__slice data (retire.next + 1L + size) 16L }) })
+
+let __frame (fromServer: Bool) (data: Blob) (position: Int64)
+  : Stdlib.Result.Result<Stdlib.__QuicApplication.Parsed, String> =
+  match Stdlib.__QuicFrames.__integer data position with
+  | Error message -> Error message
+  | Ok kind ->
+    if kind.next != position + 1L then Error "Non-minimal QUIC frame type"
+    else if kind.value <= 3L || kind.value == 6L || kind.value == 28L then
+      Stdlib.__QuicFrames.__frame data position |> Stdlib.Result.map (fun parsed ->
+        Stdlib.__QuicApplication.Parsed { frame = Handshake parsed.frame, next = parsed.next })
+    else if kind.value >= 8L && kind.value <= 15L then Stdlib.__QuicApplication.__stream data kind.value kind.next
+    else if kind.value == 16L || kind.value == 18L || kind.value == 19L || kind.value == 20L ||
+            kind.value == 22L || kind.value == 23L || kind.value == 25L then
+      Stdlib.__QuicApplication.__limit data kind.value kind.next
+    else if kind.value == 5L || kind.value == 17L || kind.value == 21L then
+      Stdlib.__QuicApplication.__streamLimit data kind.value kind.next
+    else if kind.value == 24L then Stdlib.__QuicApplication.__newId data kind.next
+    else if kind.value == 30L then
+      if fromServer then Ok (Stdlib.__QuicApplication.Parsed { frame = HandshakeDone, next = kind.next })
+      else Error "Client sent QUIC HANDSHAKE_DONE"
+    else if kind.value == 26L || kind.value == 27L then
+      if Stdlib.Blob.__byteLength data - kind.next < 8L then Error "Truncated QUIC path validation data"
+      else
+        let bytes = Stdlib.__Http2Wire.__slice data kind.next 8L in
+        Ok (Stdlib.__QuicApplication.Parsed { frame = if kind.value == 26L then PathChallenge bytes else PathResponse bytes, next = kind.next + 8L })
+    else if kind.value == 4L then
+      let result =
+        match Stdlib.__QuicFrames.__integer data kind.next with
+        | Error message -> Error message
+        | Ok id ->
+          match Stdlib.__QuicFrames.__integer data id.next with
+          | Error message -> Error message
+          | Ok code ->
+            Stdlib.__QuicFrames.__integer data code.next |> Stdlib.Result.map (fun size ->
+              Stdlib.__QuicApplication.Parsed { frame = ResetStream (Stdlib.__QuicApplication.Reset {
+                id = id.value, code = code.value, finalSize = size.value }), next = size.next }) in
+      result
+    else if kind.value == 7L then
+      if Stdlib.Bool.not fromServer then Error "Client sent QUIC NEW_TOKEN"
+      else
+        let result =
+          match Stdlib.__QuicFrames.__integer data kind.next with
+          | Error message -> Error message
+          | Ok size ->
+            if size.value == 0L then Error "Empty QUIC NEW_TOKEN"
+            else if size.value > Stdlib.Blob.__byteLength data - size.next then Error "Truncated QUIC NEW_TOKEN"
+            else Ok (Stdlib.__QuicApplication.Parsed { frame = NewToken (Stdlib.__Http2Wire.__slice data size.next size.value), next = size.next + size.value }) in
+        result
+    else if kind.value == 29L then
+      let result =
+        match Stdlib.__QuicFrames.__integer data kind.next with
+        | Error message -> Error message
+        | Ok code ->
+          match Stdlib.__QuicFrames.__integer data code.next with
+          | Error message -> Error message
+          | Ok size ->
+            if size.value > Stdlib.Blob.__byteLength data - size.next then Error "Truncated QUIC close reason"
+            else Ok (Stdlib.__QuicApplication.Parsed { frame = ApplicationClose (Stdlib.__QuicFrames.Close {
+              code = code.value, kind = 0L, reason = Stdlib.__Http2Wire.__slice data size.next size.value }), next = size.next + size.value }) in
+      result
+    else Error "Unknown QUIC frame type"
+
+let __scan (fromServer: Bool) (data: Blob) (position: Int64) (frames: List<Stdlib.__QuicApplication.Frame>)
+  : Stdlib.Result.Result<List<Stdlib.__QuicApplication.Frame>, String> =
+  if position == Stdlib.Blob.__byteLength data then Ok (Stdlib.List.reverse frames)
+  else if Stdlib.List.length frames >= 1024 then Error "Too many QUIC application frames"
+  else Stdlib.__QuicApplication.__frame fromServer data position |> Stdlib.Result.andThen (fun parsed ->
+    Stdlib.__QuicApplication.__scan fromServer data parsed.next (Stdlib.List.push frames parsed.frame))
+
+let parse (fromServer: Bool) (data: Blob) : Stdlib.Result.Result<List<Stdlib.__QuicApplication.Frame>, String> =
+  if Stdlib.Blob.__byteLength data == 0L || Stdlib.Blob.__byteLength data > 4096L then Error "Invalid QUIC application payload length"
+  else Stdlib.__QuicApplication.__scan fromServer data 0L []
+
+let stream (id: Int64) (offset: Int64) (bytes: Blob) (fin: Bool) : Stdlib.Result.Result<Blob, String> =
+  let size = Stdlib.Blob.__byteLength bytes in
+  if id < 0L || id > 4611686018427387903L || offset < 0L || size > 4096L || offset > 4611686018427387903L - size then
+    Error "Invalid QUIC STREAM range"
+  else
+    match Stdlib.__QuicWire.integer id, Stdlib.__QuicWire.integer offset, Stdlib.__QuicWire.integer size with
+    | Ok encodedId, Ok encodedOffset, Ok encodedSize ->
+      Ok (Stdlib.Blob.concat [Stdlib.Blob.__fromInt64List [if fin then 15L else 14L], encodedId, encodedOffset, encodedSize, bytes])
+    | _, _, _ -> Error "Invalid QUIC STREAM range"
+
+let limit (kind: Int64) (value: Int64) : Stdlib.Result.Result<Blob, String> =
+  if kind != 16L && kind != 18L && kind != 19L && kind != 20L && kind != 22L && kind != 23L && kind != 25L then
+    Error "Invalid QUIC limit frame type"
+  else if (kind == 18L || kind == 19L || kind == 22L || kind == 23L) && value > 1152921504606846976L then
+    Error "QUIC stream count exceeds 2^60"
+  else Stdlib.__QuicWire.integer value |> Stdlib.Result.map (fun bytes -> Stdlib.Blob.concat [Stdlib.Blob.__fromInt64List [kind], bytes])
+
+let streamLimit (kind: Int64) (id: Int64) (value: Int64) : Stdlib.Result.Result<Blob, String> =
+  if kind != 5L && kind != 17L && kind != 21L then Error "Invalid QUIC stream limit frame type"
+  else match Stdlib.__QuicWire.integer id, Stdlib.__QuicWire.integer value with
+    | Ok stream, Ok limit -> Ok (Stdlib.Blob.concat [Stdlib.Blob.__fromInt64List [kind], stream, limit])
+    | _, _ -> Error "Invalid QUIC stream limit"
+
+let reset (id: Int64) (code: Int64) (finalSize: Int64) : Stdlib.Result.Result<Blob, String> =
+  match Stdlib.__QuicWire.integer id, Stdlib.__QuicWire.integer code, Stdlib.__QuicWire.integer finalSize with
+  | Ok stream, Ok error, Ok size -> Ok (Stdlib.Blob.concat [Stdlib.Blob.__fromInt64List [4L], stream, error, size])
+  | _, _, _ -> Error "Invalid QUIC RESET_STREAM"
+
+let pathResponse (bytes: Blob) : Stdlib.Result.Result<Blob, String> =
+  if Stdlib.Blob.__byteLength bytes != 8L then Error "Invalid QUIC path validation data"
+  else Ok (Stdlib.Blob.concat [Stdlib.Blob.__fromInt64List [27L], bytes])
+
+let close (code: Int64) (reason: Blob) : Stdlib.Result.Result<Blob, String> =
+  if Stdlib.Blob.__byteLength reason > 1024L then Error "QUIC close reason exceeds limit"
+  else match Stdlib.__QuicWire.integer code, Stdlib.__QuicWire.integer (Stdlib.Blob.__byteLength reason) with
+    | Ok error, Ok size -> Ok (Stdlib.Blob.concat [Stdlib.Blob.__fromInt64List [29L], error, size, reason])
+    | _, _ -> Error "Invalid QUIC application close code"

@@ -1,0 +1,26 @@
+// TlsServerIdentity.dark - Bind a bounded PEM certificate chain to its imported server signing key.
+module Darklang.Stdlib.TlsServerIdentity
+
+type Identity = { certificates: List<Blob>, key: Stdlib.__RsaPrivate.Key }
+
+let __certificates (certificates: List<Blob>) (remaining: Int64) (bytes: Int64) : Stdlib.Result.Result<Unit, String> =
+  match certificates with
+  | [] -> Ok ()
+  | certificate :: rest ->
+    let total = bytes + Stdlib.Blob.__byteLength certificate in
+    if remaining == 0L || total > 65536L then Error "TLS server certificate chain exceeds size limit"
+    else Stdlib.__X509Chain.parse certificate |> Stdlib.Result.andThen (fun _parsed -> Stdlib.TlsServerIdentity.__certificates rest (remaining - 1L) total)
+
+let create (certificatePem: Blob) (privateKeyPem: Blob) : Stdlib.Result.Result<Stdlib.TlsServerIdentity.Identity, String> =
+  Stdlib.__Tls13Client.parsePemBundle certificatePem |> Stdlib.Result.andThen (fun certificates ->
+    Stdlib.TlsServerIdentity.__certificates certificates 8L 0L |> Stdlib.Result.andThen (fun _unit ->
+      Stdlib.__RsaPrivate.parsePem privateKeyPem |> Stdlib.Result.andThen (fun key ->
+        match certificates with
+        | [] -> Error "TLS server certificate chain is empty"
+        | leaf :: _ -> Stdlib.__X509Chain.parse leaf |> Stdlib.Result.andThen (fun parsed ->
+          let digital = match parsed.extensions.keyUsage with | None -> true | Some ((digital, _certificate)) -> digital in
+          let serverAuth = match parsed.extensions.serverAuth with | None -> true | Some allowed -> allowed in
+          if parsed.extensions.isCA || Stdlib.Bool.not digital || Stdlib.Bool.not serverAuth then Error "TLS server certificate is not authorized for signing"
+          else Stdlib.__RsaSpki.parse parsed.spki |> Stdlib.Result.andThen (fun public ->
+            if Stdlib.Bool.not (Stdlib.__X509Chain.__same public.modulus key.modulus) || Stdlib.Bool.not (Stdlib.__X509Chain.__same public.exponent key.exponent) then Error "TLS server certificate and private key do not match"
+            else Ok (Stdlib.TlsServerIdentity.Identity { certificates = certificates, key = key }))))))

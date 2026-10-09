@@ -1157,8 +1157,8 @@ let emitCliNative (ctx : codeGenContext) (dest : LIR.reg)
             @ normalize
             @ [ Symbolic.MOV_reg (destReg, Symbolic.X0) ])
       | LIR.SocketConnect4 | LIR.SocketConnect6 | LIR.SocketSend
-      | LIR.SocketReceive | LIR.SocketReceiveTimeout | LIR.SocketSendTimeout
-        -> (
+      | LIR.SocketSendTo | LIR.SocketReceive | LIR.SocketReceiveFrom
+      | LIR.SocketReceiveTimeout | LIR.SocketSendTimeout -> (
           let syscall = ARM64.targetSyscalls ctx.target in
           let os = ARM64.targetOS ctx.target in
           let normalize =
@@ -1173,6 +1173,16 @@ let emitCliNative (ctx : codeGenContext) (dest : LIR.reg)
                 Symbolic.NEG (Symbolic.X0, Symbolic.X0);
                 Symbolic.Label doneLabel;
               ]
+          in
+          let rec loadArguments operands registers =
+            match (operands, registers) with
+            | [], [] -> Ok []
+            | operand :: remaining, register :: destinations ->
+                loadCliOperand register operand
+                |> bind (fun loads ->
+                    loadArguments remaining destinations
+                    |> Result.map (fun tail -> loads @ tail))
+            | _ -> Error "Invalid socket argument registers"
           in
           match (operation, args) with
           | (LIR.SocketConnect4 | LIR.SocketConnect6), [ descriptor; address ]
@@ -1218,6 +1228,45 @@ let emitCliNative (ctx : codeGenContext) (dest : LIR.reg)
                         ]
                       @ normalize
                       @ [ Symbolic.MOV_reg (destReg, Symbolic.X0) ]))
+          | LIR.SocketSendTo, [ descriptor; blob; address; length ] ->
+              loadArguments
+                [ descriptor; blob; address; length ]
+                [ Symbolic.X0; Symbolic.X1; Symbolic.X4; Symbolic.X5 ]
+              |> Result.map (fun loads ->
+                  loads
+                  @ [
+                      Symbolic.LDR (Symbolic.X2, Symbolic.X1, 8);
+                      Symbolic.ADD_imm (Symbolic.X1, Symbolic.X1, 16);
+                    ]
+                  @ loadImmediate Symbolic.X3
+                      (Platform.socketConstantsFor os).Platform.noSignal
+                  @ [
+                      Symbolic.MOVZ
+                        ( syscall.ARM64.syscallRegister,
+                          syscall.ARM64.numbers.Platform.sendTo,
+                          0 );
+                      Symbolic.SVC syscall.ARM64.svcImmediate;
+                    ]
+                  @ normalize
+                  @ [ Symbolic.MOV_reg (destReg, Symbolic.X0) ])
+          | LIR.SocketReceiveFrom, [ descriptor; buffer; length; peer ] ->
+              loadArguments
+                [ descriptor; buffer; length; peer ]
+                [ Symbolic.X0; Symbolic.X1; Symbolic.X2; Symbolic.X4 ]
+              |> Result.map (fun loads ->
+                  loads
+                  @ [
+                      Symbolic.MOV_reg (Symbolic.X5, Symbolic.X4);
+                      Symbolic.ADD_imm (Symbolic.X4, Symbolic.X4, 8);
+                      Symbolic.MOVZ (Symbolic.X3, 0, 0);
+                      Symbolic.MOVZ
+                        ( syscall.ARM64.syscallRegister,
+                          syscall.ARM64.numbers.Platform.recvFrom,
+                          0 );
+                      Symbolic.SVC syscall.ARM64.svcImmediate;
+                    ]
+                  @ normalize
+                  @ [ Symbolic.MOV_reg (destReg, Symbolic.X0) ])
           | LIR.SocketReceive, [ descriptor; buffer; length ] ->
               loadCliOperand Symbolic.X0 descriptor
               |> bind (fun fdLoads ->
@@ -1262,7 +1311,7 @@ let emitCliNative (ctx : codeGenContext) (dest : LIR.reg)
                       @ normalize
                       @ [ Symbolic.MOV_reg (destReg, Symbolic.X0) ]))
           | _ -> Error "Invalid socket operation arguments")
-      | LIR.SocketBind4 | LIR.SocketListen | LIR.SocketAccept
+      | LIR.SocketBind4 | LIR.SocketBind6 | LIR.SocketListen | LIR.SocketAccept
       | LIR.SocketCloexec | LIR.SocketReuseAddress | LIR.SocketPoll
       | LIR.SignalBlock | LIR.SignalRestore | LIR.SignalPending | LIR.SignalWait
       | LIR.MonotonicTime -> (
@@ -1304,10 +1353,11 @@ let emitCliNative (ctx : codeGenContext) (dest : LIR.reg)
                 @ [ Symbolic.MOV_reg (destReg, Symbolic.X0) ])
           in
           match (operation, args) with
-          | LIR.SocketBind4, [ descriptor; address ] ->
+          | (LIR.SocketBind4 | LIR.SocketBind6), [ descriptor; address ] ->
               emit [ descriptor; address ]
                 [ Symbolic.X0; Symbolic.X1 ]
-                (loadImmediate Symbolic.X2 16L)
+                (loadImmediate Symbolic.X2
+                   (if operation = LIR.SocketBind6 then 28L else 16L))
                 syscall.ARM64.numbers.Platform.bind
           | LIR.SocketListen, [ descriptor ] ->
               emit [ descriptor ] [ Symbolic.X0 ]

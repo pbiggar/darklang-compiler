@@ -1,0 +1,7 @@
+// recursive_result_function_value.e2e - Recursive functions as Result callbacks preserve record arguments.
+type CallbackRecord = { text: String, count: Int64 }
+type CallbackOwner = { record: CallbackRecord, values: List<String> }
+let consume (owner: CallbackOwner) : Stdlib.Result.Result<String, String> = if owner.record.count == 0L then Ok owner.record.text else consume { owner with record = { owner.record with count = owner.record.count - 1L } }; Stdlib.Result.andThen (Ok (CallbackOwner { record = CallbackRecord { text = "done", count = 0L }, values = ["kept"] })) consume = Ok "done"
+let consume (owner: CallbackOwner) : Stdlib.Result.Result<String, String> = if owner.record.count == 0L then Ok owner.record.text else consume { owner with record = { owner.record with count = owner.record.count - 1L } }; Stdlib.Result.andThen (Ok (CallbackOwner { record = CallbackRecord { text = "done", count = 3L }, values = ["kept"] })) consume = Ok "done"
+let consume (owner: CallbackOwner) : Stdlib.Result.Result<String, String> = if owner.record.count == 0L then Ok owner.record.text else consume { owner with record = { owner.record with count = owner.record.count - 1L } }; Stdlib.Result.andThen (Ok ()) (fun _unit -> Stdlib.Result.andThen (Ok (CallbackOwner { record = CallbackRecord { text = "done", count = 3L }, values = ["kept"] })) consume) = Ok "done"
+let score (record: CallbackRecord) : Int64 = record.count; Stdlib.List.map [1L, 2L] (fun count -> Stdlib.List.map [CallbackRecord { text = "kept", count = count }] score) = [[1L], [2L]]

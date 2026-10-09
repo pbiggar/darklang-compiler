@@ -1,0 +1,84 @@
+// __Http3Uni.dark - Peer unidirectional stream types, critical ownership, and static QPACK instructions.
+module Darklang.Stdlib.__Http3Uni
+
+type Stream = { id: Int64, prefix: Blob, kind: Stdlib.Option.Option<Int64>, finished: Bool }
+type State = {
+  fromServer: Bool,
+  streams: List<Stdlib.__Http3Uni.Stream>,
+  controlId: Stdlib.Option.Option<Int64>,
+  encoderId: Stdlib.Option.Option<Int64>,
+  decoderId: Stdlib.Option.Option<Int64>,
+  control: Stdlib.__Http3Control.State
+}
+type Received = { state: Stdlib.__Http3Uni.State, events: List<Stdlib.__Http3Control.Event> }
+
+let create (fromServer: Bool) : Stdlib.__Http3Uni.State =
+  Stdlib.__Http3Uni.State { fromServer = fromServer, streams = [], controlId = None,
+    encoderId = None, decoderId = None, control = Stdlib.__Http3Control.create fromServer }
+
+let __claim (state: Stdlib.__Http3Uni.State) (id: Int64) (kind: Int64)
+  : Stdlib.Result.Result<Stdlib.__Http3Uni.State, String> =
+  if kind == 1L then Error "Unpermitted HTTP/3 push stream"
+  else if kind == 0L then
+    if Stdlib.Option.isSome state.controlId then Error "Duplicate HTTP/3 control stream"
+    else Ok { state with controlId = Some id }
+  else if kind == 2L then
+    if Stdlib.Option.isSome state.encoderId then Error "Duplicate QPACK encoder stream"
+    else Ok { state with encoderId = Some id }
+  else if kind == 3L then
+    if Stdlib.Option.isSome state.decoderId then Error "Duplicate QPACK decoder stream"
+    else Ok { state with decoderId = Some id }
+  else Ok state
+
+let __replace (state: Stdlib.__Http3Uni.State) (stream: Stdlib.__Http3Uni.Stream) : Stdlib.__Http3Uni.State =
+  let streams =
+    if Stdlib.List.any state.streams (fun previous -> previous.id == stream.id) then
+      Stdlib.List.map state.streams (fun previous -> if previous.id == stream.id then stream else previous)
+    else Stdlib.List.append state.streams [stream] in
+  { state with streams = streams }
+
+let __payload (state: Stdlib.__Http3Uni.State) (stream: Stdlib.__Http3Uni.Stream)
+  (kind: Int64) (data: Blob) (finished: Bool) (reset: Bool)
+  : Stdlib.Result.Result<Stdlib.__Http3Uni.Received, String> =
+  if (kind == 0L || kind == 2L || kind == 3L) && (finished || reset) then
+    Error "Closed critical HTTP/3 stream"
+  else
+    let next = Stdlib.__Http3Uni.__replace state { stream with prefix = Stdlib.Blob.empty, kind = Some kind, finished = finished || reset } in
+    if kind == 0L then
+      Stdlib.__Http3Control.feed next.control data |> Stdlib.Result.map (fun received ->
+        Stdlib.__Http3Uni.Received { state = { next with control = received.state }, events = received.events })
+    else if kind == 2L then
+      Stdlib.__Qpack.encoderInstructions data 0L |> Stdlib.Result.map (fun _offset ->
+        Stdlib.__Http3Uni.Received { state = next, events = [] })
+    else if kind == 3L && Stdlib.Blob.__byteLength data != 0L then
+      Error "Unexpected QPACK decoder feedback"
+    else Ok (Stdlib.__Http3Uni.Received { state = next, events = [] })
+
+let receive (state: Stdlib.__Http3Uni.State) (id: Int64) (data: Blob) (finished: Bool) (reset: Bool)
+  : Stdlib.Result.Result<Stdlib.__Http3Uni.Received, String> =
+  if id < 0L || id > 4611686018427387903L || id % 4L != (if state.fromServer then 3L else 2L) then
+    Error "Invalid peer HTTP/3 unidirectional stream"
+  else if Stdlib.Blob.__byteLength data > 65536L then Error "HTTP/3 read exceeds limit"
+  else
+    let known = Stdlib.List.findFirst state.streams (fun stream -> stream.id == id) in
+    let stream = match known with | Some stream -> stream | None ->
+      Stdlib.__Http3Uni.Stream { id = id, prefix = Stdlib.Blob.empty, kind = None, finished = false } in
+    if Stdlib.Option.isNone known && Stdlib.List.length state.streams >= 16 then Error "HTTP/3 stream profile exhausted"
+    else if stream.finished then
+      if Stdlib.Blob.__byteLength data == 0L then Ok (Stdlib.__Http3Uni.Received { state = state, events = [] })
+      else Error "Data after HTTP/3 unidirectional stream end"
+    else
+      match stream.kind with
+      | Some kind -> Stdlib.__Http3Uni.__payload state stream kind data finished reset
+      | None ->
+        let bytes = Stdlib.Blob.concat [stream.prefix, data] in
+        match Stdlib.__QuicWire.parseInteger bytes 0L with
+        | Error Incomplete ->
+          if finished || reset then
+            Ok (Stdlib.__Http3Uni.Received { state = Stdlib.__Http3Uni.__replace state { stream with prefix = Stdlib.Blob.empty, finished = true }, events = [] })
+          else Ok (Stdlib.__Http3Uni.Received { state = Stdlib.__Http3Uni.__replace state { stream with prefix = bytes }, events = [] })
+        | Error (Invalid message) -> Error message
+        | Ok kind ->
+          Stdlib.__Http3Uni.__claim state id kind.value |> Stdlib.Result.andThen (fun next ->
+            Stdlib.__Http3Uni.__payload next stream kind.value
+              (Stdlib.__Http2Wire.__slice bytes kind.next (Stdlib.Blob.__byteLength bytes - kind.next)) finished reset)

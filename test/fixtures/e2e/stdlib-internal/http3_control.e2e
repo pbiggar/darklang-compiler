@@ -1,0 +1,14 @@
+// http3_control.e2e - Initial SETTINGS, critical-stream closure, and control identifier monotonicity.
+Stdlib.__Http3Control.finish (Stdlib.__Http3Control.create true) = Error "Closed critical HTTP/3 control stream"
+Stdlib.__Http3Control.feed (Stdlib.__Http3Control.create true) (Stdlib.Blob.fromHex "2100" |> Stdlib.Result.withDefault Stdlib.Blob.empty) = Error "Missing initial HTTP/3 SETTINGS"
+Stdlib.__Http3Control.feed (Stdlib.__Http3Control.create true) (Stdlib.Blob.fromHex "0400" |> Stdlib.Result.withDefault Stdlib.Blob.empty) |> Stdlib.Result.map (fun received -> received.events) = Ok [Settings []]
+Stdlib.__Http3Control.feed (Stdlib.__Http3Control.create true) (Stdlib.Blob.fromHex "04000400" |> Stdlib.Result.withDefault Stdlib.Blob.empty) = Error "Duplicate HTTP/3 SETTINGS frame"
+Stdlib.__Http3Control.feed (Stdlib.__Http3Control.create true) (Stdlib.Blob.fromHex "0400070104" |> Stdlib.Result.withDefault Stdlib.Blob.empty) |> Stdlib.Result.map (fun received -> received.state.goAway) = Ok (Some 4L)
+Stdlib.__Http3Control.feed (Stdlib.__Http3Control.create true) (Stdlib.Blob.fromHex "0400070101" |> Stdlib.Result.withDefault Stdlib.Blob.empty) = Error "Invalid HTTP/3 server GOAWAY identifier"
+Stdlib.__Http3Control.feed (Stdlib.__Http3Control.create true) (Stdlib.Blob.fromHex "0400070104070108" |> Stdlib.Result.withDefault Stdlib.Blob.empty) = Error "HTTP/3 GOAWAY identifier increased"
+Stdlib.__Http3Control.feed (Stdlib.__Http3Control.create true) (Stdlib.Blob.fromHex "0400070108070104" |> Stdlib.Result.withDefault Stdlib.Blob.empty) |> Stdlib.Result.map (fun received -> received.state.goAway) = Ok (Some 4L)
+Stdlib.__Http3Control.feed (Stdlib.__Http3Control.create true) (Stdlib.Blob.fromHex "04000D0100" |> Stdlib.Result.withDefault Stdlib.Blob.empty) = Error "Server sent HTTP/3 MAX_PUSH_ID"
+Stdlib.__Http3Control.feed (Stdlib.__Http3Control.create false) (Stdlib.Blob.fromHex "04000D01010D0100" |> Stdlib.Result.withDefault Stdlib.Blob.empty) = Error "HTTP/3 MAX_PUSH_ID decreased"
+Stdlib.__Http3Control.feed (Stdlib.__Http3Control.create true) (Stdlib.Blob.fromHex "0400030100" |> Stdlib.Result.withDefault Stdlib.Blob.empty) = Error "HTTP/3 CANCEL_PUSH for unpromised push"
+Stdlib.__Http3Control.feed (Stdlib.__Http3Control.create true) (Stdlib.Blob.fromHex "04000000" |> Stdlib.Result.withDefault Stdlib.Blob.empty) = Error "Unexpected HTTP/3 frame on control stream"
+Stdlib.__Http3Control.feed (Stdlib.__Http3Control.create true) (Stdlib.Blob.fromHex "040007020000" |> Stdlib.Result.withDefault Stdlib.Blob.empty) = Error "Trailing HTTP/3 control integer bytes"

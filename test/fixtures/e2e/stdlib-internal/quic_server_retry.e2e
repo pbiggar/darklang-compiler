@@ -1,0 +1,3 @@
+// quic_server_retry.e2e - Retry refuses missing keys and invalid original IDs before issuing challenges.
+Stdlib.__QuicServerRetry.token Stdlib.Blob.empty (Stdlib.__Datagram.Endpoint { address = [127L,0L,0L,1L], port = 443L }) (Stdlib.String.toBlob "original") (Stdlib.String.toBlob "clientID") (Stdlib.String.toBlob "retryCID") 0L = Error "Invalid QUIC Retry identity"
+Stdlib.__QuicServerRetry.token (Stdlib.String.toBlob (Stdlib.String.repeat "a" 32)) (Stdlib.__Datagram.Endpoint { address = [127L,0L,0L,1L], port = 0L }) (Stdlib.String.toBlob "original") (Stdlib.String.toBlob "clientID") (Stdlib.String.toBlob "retryCID") 0L = Error "Invalid QUIC Retry peer"

@@ -146,6 +146,7 @@ sysroot = root / "qemu-deps/sysroot"
 values = {
     "TMPDIR": root / "tmp",
     "PORT_VM_TMPDIR": root / "tmp",
+    "PORT_VM_DUNE_TEST_STAMPS": "1",
     "OPAMROOT": root / "opam",
     "OCAMLPATH": root / "opam/dark/lib",
     "C_INCLUDE_PATH": f"{sysroot}/usr/include:{sysroot}/usr/include/x86_64-linux-gnu",

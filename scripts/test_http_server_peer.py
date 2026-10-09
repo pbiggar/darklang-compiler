@@ -96,7 +96,7 @@ def main() -> None:
     directory.mkdir(parents=True, exist_ok=True)
     source, binary = directory / "server.dark", directory / "server"
     source.write_text(SOURCE)
-    compiled = subprocess.run([str(ROOT / "dark"), str(source), "--leak-check", "-o", str(binary)],
+    compiled = subprocess.run([str(ROOT / "dark"), str(source), "--allow-internal", "--leak-check", "-o", str(binary)],
                               cwd=ROOT, capture_output=True, text=True, timeout=120)
     assert compiled.returncode == 0, compiled.stdout + compiled.stderr
     port = free_port()

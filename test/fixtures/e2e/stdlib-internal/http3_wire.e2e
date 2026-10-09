@@ -1,0 +1,17 @@
+// http3_wire.e2e - QUIC integer and HTTP/3 frame boundaries, independent of transport.
+Stdlib.__QuicWire.integer 63L |> Stdlib.Result.map Stdlib.Blob.toHex = Ok "3F"
+Stdlib.__QuicWire.integer 64L |> Stdlib.Result.map Stdlib.Blob.toHex = Ok "4040"
+Stdlib.__QuicWire.integer 16383L |> Stdlib.Result.map Stdlib.Blob.toHex = Ok "7FFF"
+Stdlib.__QuicWire.integer 16384L |> Stdlib.Result.map Stdlib.Blob.toHex = Ok "80004000"
+Stdlib.__QuicWire.integer 1073741824L |> Stdlib.Result.map Stdlib.Blob.toHex = Ok "C000000040000000"
+Stdlib.__QuicWire.integer 4611686018427387903L |> Stdlib.Result.map Stdlib.Blob.toHex = Ok "FFFFFFFFFFFFFFFF"
+Stdlib.__QuicWire.integer -1L = Error "QUIC integer out of range"
+Stdlib.__QuicWire.integer 4611686018427387904L = Error "QUIC integer out of range"
+let data = Stdlib.Blob.fromHex "C000000040000000" |> Stdlib.Result.withDefault Stdlib.Blob.empty in Stdlib.__QuicWire.parseInteger data 0L |> Stdlib.Result.map (fun number -> (number.value, number.next)) = Ok ((1073741824L, 8L))
+let data = Stdlib.Blob.fromHex "80000001" |> Stdlib.Result.withDefault Stdlib.Blob.empty in Stdlib.__QuicWire.parseInteger data 0L |> Stdlib.Result.map (fun number -> number.value) = Ok 1L
+let data = Stdlib.Blob.fromHex "40" |> Stdlib.Result.withDefault Stdlib.Blob.empty in Stdlib.__QuicWire.parseInteger data 0L = Error Stdlib.__QuicWire.ParseError.Incomplete
+Stdlib.__Http3Wire.serialize 0L (Stdlib.String.toBlob "abc") |> Stdlib.Result.map Stdlib.Blob.toHex = Ok "0003616263"
+Stdlib.__Http3Wire.serialize 2L Stdlib.Blob.empty = Error "Forbidden HTTP/3 frame type"
+let data = Stdlib.Blob.fromHex "01036162630000" |> Stdlib.Result.withDefault Stdlib.Blob.empty in Stdlib.__Http3Wire.parse 65536L data |> Stdlib.Result.map (fun parsed -> (parsed.kind, Stdlib.Blob.toHex parsed.payload, Stdlib.Blob.toHex parsed.remaining)) = Ok ((1L, "616263", "0000"))
+let data = Stdlib.Blob.fromHex "01000100" |> Stdlib.Result.withDefault Stdlib.Blob.empty in Stdlib.__Http3Wire.parseSettings data = Error "Duplicate HTTP/3 setting"
+let data = Stdlib.Blob.fromHex "0200" |> Stdlib.Result.withDefault Stdlib.Blob.empty in Stdlib.__Http3Wire.parseSettings data = Error "Forbidden HTTP/3 setting"

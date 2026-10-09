@@ -41,11 +41,14 @@ let convertCliOperation operation =
   | MIR.SocketConnect4 -> LIR.SocketConnect4
   | MIR.SocketConnect6 -> LIR.SocketConnect6
   | MIR.SocketSend -> LIR.SocketSend
+  | MIR.SocketSendTo -> LIR.SocketSendTo
   | MIR.SocketReceive -> LIR.SocketReceive
+  | MIR.SocketReceiveFrom -> LIR.SocketReceiveFrom
   | MIR.SocketReceiveTimeout -> LIR.SocketReceiveTimeout
   | MIR.SocketSendTimeout -> LIR.SocketSendTimeout
   | MIR.SocketClose -> LIR.SocketClose
   | MIR.SocketBind4 -> LIR.SocketBind4
+  | MIR.SocketBind6 -> LIR.SocketBind6
   | MIR.SocketListen -> LIR.SocketListen
   | MIR.SocketAccept -> LIR.SocketAccept
   | MIR.SocketCloexec -> LIR.SocketCloexec

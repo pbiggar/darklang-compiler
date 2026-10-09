@@ -1,0 +1,22 @@
+// lambda_record_field_ownership.e2e - Infer concrete record-field constraints on callback parameters before ownership lowering.
+type WrappedWords = { words: List<String>, stopped: Bool }
+type WrappedBytes = { bytes: Blob, stopped: Bool }
+type GenericWords<'a> = { words: List<a> }
+type ConcreteWords = GenericWords<String>
+let wrapFreshWords (choose: Bool) : Stdlib.Result.Result<WrappedWords, String> =
+  let again = fun words -> Ok (WrappedWords { words = words, stopped = false }) in
+  let words = Stdlib.String.split "fresh retained words" " " in
+  if choose then again words else again []
+let wrapFreshBytes (choose: Bool) : WrappedBytes =
+  let again = fun bytes -> WrappedBytes { bytes = bytes, stopped = false } in
+  let bytes = Stdlib.String.toBlob "fresh retained bytes" in
+  if choose then again bytes else again Stdlib.Blob.empty
+let wrapAliasWords (choose: Bool) : ConcreteWords =
+  let again = fun words -> ConcreteWords { words = words } in
+  let words = Stdlib.String.split "fresh retained words" " " in
+  if choose then again words else again []
+match wrapFreshWords true with | Ok value -> value.words | Error _ -> [] = ["fresh", "retained", "words"]
+match wrapFreshWords false with | Ok value -> value.words | Error _ -> ["error"] = []
+Stdlib.Blob.toList (wrapFreshBytes true).bytes = Stdlib.Blob.toList (Stdlib.String.toBlob "fresh retained bytes")
+Stdlib.Blob.length (wrapFreshBytes false).bytes = 0
+(wrapAliasWords true).words = ["fresh", "retained", "words"]

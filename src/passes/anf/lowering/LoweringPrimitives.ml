@@ -449,6 +449,10 @@ let tryCliIntrinsic name args =
         | "Darklang.Stdlib.__Network.__connect4" -> Some ANF.SocketConnect4
         | "Darklang.Stdlib.__Network.__connect6" -> Some ANF.SocketConnect6
         | "Darklang.Stdlib.__Network.__send" -> Some ANF.SocketSend
+        | "Darklang.Stdlib.__Network.__sendTo" -> Some ANF.SocketSendTo
+        | "Darklang.Stdlib.__Network.__receiveFrom" ->
+            Some ANF.SocketReceiveFrom
+        | "Darklang.Stdlib.__Network.__bind6" -> Some ANF.SocketBind6
         | "Darklang.Stdlib.__Network.__receive" -> Some ANF.SocketReceive
         | "Darklang.Stdlib.__Network.__receiveTimeout" ->
             Some ANF.SocketReceiveTimeout

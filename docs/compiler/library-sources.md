@@ -39,6 +39,9 @@ fragments use `__` even where the interpreter also has private helpers.
 | `StdLib/UInt64.dark` | `Darklang.Stdlib.UInt64`  | `packages/darklang/stdlib/uint64.dark` |
 | `StdLib/UInt128.dark` | `Darklang.Stdlib.UInt128`  | `packages/darklang/stdlib/uint128.dark` |
 | `StdLib/Bool.dark` | `Darklang.Stdlib.Bool`  | `packages/darklang/stdlib/bool.dark` |
+| `StdLib/Cli/Posix/Modes.dark` | `Darklang.Stdlib.Cli.Posix.Modes`  | `packages/darklang/stdlib/cli/posix.dark` |
+| `StdLib/Cli/Posix/Errno.dark` | `Darklang.Stdlib.Cli.Posix.Errno`  | `packages/darklang/stdlib/cli/posix.dark` |
+| `StdLib/Cli/Posix/StatMode.dark` | `Darklang.Stdlib.Cli.Posix.StatMode`  | `packages/darklang/stdlib/cli/posix.dark` |
 | `StdLib/Cli/FileSystem.dark` | `Darklang.Stdlib.Cli.FileSystem`  | `packages/darklang/stdlib/cli/fileSystem.dark` |
 | `StdLib/Cli/FileSystem/FileError.dark` | `Darklang.Stdlib.Cli.FileSystem.FileError`  | `packages/darklang/stdlib/cli/fileSystem.dark` |
 | `StdLib/Cli/FileSystem/__Packed.dark` | `Darklang.Stdlib.Cli.FileSystem` | Private decoder for native directory adapter |
@@ -59,10 +62,7 @@ fragments use `__` even where the interpreter also has private helpers.
 | `StdLib/Cli/__Fnmatch.dark` | `Darklang.Stdlib.Cli.__Fnmatch` | Private POSIX pattern matching implementation |
 | `StdLib/Cli/Posix.dark` | `Darklang.Stdlib.Cli.Posix`  | `packages/darklang/stdlib/cli/posix.dark` |
 | `StdLib/Cli/Posix/__Error.dark` | `Darklang.Stdlib.Cli.Posix` | Private conversion from the existing native CLI error record |
-| `StdLib/Cli/Posix/Modes.dark` | `Darklang.Stdlib.Cli.Posix.Modes`  | `packages/darklang/stdlib/cli/posix.dark` |
 | `StdLib/Cli/Posix/OpenFlags.dark` | `Darklang.Stdlib.Cli.Posix.OpenFlags` | `packages/darklang/stdlib/cli/posix.dark` |
-| `StdLib/Cli/Posix/Errno.dark` | `Darklang.Stdlib.Cli.Posix.Errno`  | `packages/darklang/stdlib/cli/posix.dark` |
-| `StdLib/Cli/Posix/StatMode.dark` | `Darklang.Stdlib.Cli.Posix.StatMode`  | `packages/darklang/stdlib/cli/posix.dark` |
 | `StdLib/Retry.dark` | `Darklang.Stdlib.Retry`  | `packages/darklang/stdlib/retry.dark` |
 | `StdLib/Cli/Path.dark` | `Darklang.Stdlib.Cli.Path`  | `packages/darklang/stdlib/cli/path.dark` |
 | `StdLib/Cli/File.dark` | `Darklang.Stdlib.Cli.File`  | `packages/darklang/stdlib/cli/file.dark` |
@@ -175,9 +175,49 @@ fragments use `__` even where the interpreter also has private helpers.
 | `StdLib/HttpServer/Config.dark` | `Darklang.Stdlib.HttpServer.Config`  | `packages/darklang/stdlib/httpserver.dark` |
 | `StdLib/HttpServer.dark` | `Darklang.Stdlib.HttpServer`  | `packages/darklang/stdlib/httpserver.dark` |
 | `StdLib/__Network.dark` | `Darklang.Stdlib.__Network`  | Compiler support: Owned native TCP/UDP sockets, listeners, deadlines, and scoped shutdown signals |
+| `StdLib/__Datagram.dark` | `Darklang.Stdlib.__Datagram` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
 | `StdLib/__HttpWire.dark` | `Darklang.Stdlib.__HttpWire`  | Compiler support: Byte-bounded HTTP/1.1 and URL primitives written in Dark |
 | `StdLib/__DnsWire.dark` | `Darklang.Stdlib.__DnsWire`  | Compiler support: Bounded DNS query and answer wire format implemented in Dark |
 | `StdLib/__HttpConnect.dark` | `Darklang.Stdlib.__HttpConnect`  | Compiler support: Check resolved IP bytes before opening HTTP transport |
+| `StdLib/__Http2Wire.dark` | `Darklang.Stdlib.__Http2Wire` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
+| `StdLib/__Hpack.dark` | `Darklang.Stdlib.__Hpack` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
+| `StdLib/__TlsAlpn.dark` | `Darklang.Stdlib.__TlsAlpn` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
+| `StdLib/__HttpTransport.dark` | `Darklang.Stdlib.__HttpTransport` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
+| `StdLib/__Http2Fields.dark` | `Darklang.Stdlib.__Http2Fields` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
+| `StdLib/__Http2.dark` | `Darklang.Stdlib.__Http2` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
+| `StdLib/__QuicWire.dark` | `Darklang.Stdlib.__QuicWire` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
+| `StdLib/__QuicCrypto.dark` | `Darklang.Stdlib.__QuicCrypto` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
+| `StdLib/__QuicPacket.dark` | `Darklang.Stdlib.__QuicPacket` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
+| `StdLib/__QuicFrames.dark` | `Darklang.Stdlib.__QuicFrames` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
+| `StdLib/__QuicAck.dark` | `Darklang.Stdlib.__QuicAck` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
+| `StdLib/__QuicApplication.dark` | `Darklang.Stdlib.__QuicApplication` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
+| `StdLib/__QuicReassembly.dark` | `Darklang.Stdlib.__QuicReassembly` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
+| `StdLib/__QuicStreams.dark` | `Darklang.Stdlib.__QuicStreams` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
+| `StdLib/__QuicFlow.dark` | `Darklang.Stdlib.__QuicFlow` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
+| `StdLib/__QuicRecovery.dark` | `Darklang.Stdlib.__QuicRecovery` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
+| `StdLib/__QuicSpace.dark` | `Darklang.Stdlib.__QuicSpace` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
+| `StdLib/__QuicHandshakePacket.dark` | `Darklang.Stdlib.__QuicHandshakePacket` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
+| `StdLib/__QuicParameters.dark` | `Darklang.Stdlib.__QuicParameters` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
+| `StdLib/__QuicTls.dark` | `Darklang.Stdlib.__QuicTls` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
+| `StdLib/__QuicKeys.dark` | `Darklang.Stdlib.__QuicKeys` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
+| `StdLib/__QuicClient.dark` | `Darklang.Stdlib.__QuicClient` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
+| `StdLib/__QuicServer.dark` | `Darklang.Stdlib.__QuicServer` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
+| `StdLib/__QuicConnection.dark` | `Darklang.Stdlib.__QuicConnection` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
+| `StdLib/__Qpack.dark` | `Darklang.Stdlib.__Qpack` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
+| `StdLib/__Http3Wire.dark` | `Darklang.Stdlib.__Http3Wire` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
+| `StdLib/__Http3Stream.dark` | `Darklang.Stdlib.__Http3Stream` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
+| `StdLib/__Http3Message.dark` | `Darklang.Stdlib.__Http3Message` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
+| `StdLib/__Http3Control.dark` | `Darklang.Stdlib.__Http3Control` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
+| `StdLib/__Http3Uni.dark` | `Darklang.Stdlib.__Http3Uni` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
+| `StdLib/__Http3.dark` | `Darklang.Stdlib.__Http3` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
+| `StdLib/__Http3Client.dark` | `Darklang.Stdlib.__Http3Client` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
+| `StdLib/__Http3Server.dark` | `Darklang.Stdlib.__Http3Server` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
+| `StdLib/__Http3Discovery.dark` | `Darklang.Stdlib.__Http3Discovery` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
+| `StdLib/__AltSvc.dark` | `Darklang.Stdlib.__AltSvc` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
+| `StdLib/__AltSvcCache.dark` | `Darklang.Stdlib.__AltSvcCache` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
+| `StdLib/HttpClientSession.dark` | `Darklang.Stdlib.HttpClientSession` | Compiler extension: HTTP transport and secure server support |
+| `StdLib/__HttpsService.dark` | `Darklang.Stdlib.__HttpsService` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
+| `StdLib/__HttpsDns.dark` | `Darklang.Stdlib.__HttpsDns` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
 | `StdLib/Pretty.dark` | `Darklang.Stdlib.Pretty`  | `packages/darklang/stdlib/pretty.dark` |
 | `StdLib/Char.dark` | `Darklang.Stdlib.Char`  | `packages/darklang/stdlib/char.dark` |
 | `StdLib/Regex.dark` | `Darklang.Stdlib.Regex`  | `packages/darklang/stdlib/regex.dark` |
@@ -187,6 +227,20 @@ fragments use `__` even where the interpreter also has private helpers.
 | `StdLib/__RsaSpki.dark` | `Darklang.Stdlib.__RsaSpki`  | Compiler support: strict DER rsaEncryption SubjectPublicKeyInfo parsing |
 | `StdLib/Crypto.dark` | `Darklang.Stdlib.Crypto`  | `packages/darklang/stdlib/crypto.dark` |
 | `StdLib/__RsaPss.dark` | `Darklang.Stdlib.__RsaPss`  | Compiler support: RSA-PSS/SHA-256 public signature verification for TLS 1.3 |
+| `StdLib/__RsaMontgomery.dark` | `Darklang.Stdlib.__RsaMontgomery` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
+| `StdLib/__RsaPrivate.dark` | `Darklang.Stdlib.__RsaPrivate` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
+| `StdLib/__RsaSigning.dark` | `Darklang.Stdlib.__RsaSigning` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
+| `StdLib/TlsServerIdentity.dark` | `Darklang.Stdlib.TlsServerIdentity` | Compiler extension: HTTP transport and secure server support |
+| `StdLib/__Tls13ServerHello.dark` | `Darklang.Stdlib.__Tls13ServerHello` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
+| `StdLib/__Tls13ServerRetry.dark` | `Darklang.Stdlib.__Tls13ServerRetry` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
+| `StdLib/__Tls13ServerHandshake.dark` | `Darklang.Stdlib.__Tls13ServerHandshake` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
+| `StdLib/__Tls13KeyUpdate.dark` | `Darklang.Stdlib.__Tls13KeyUpdate` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
+| `StdLib/__Tls13ServerTcp.dark` | `Darklang.Stdlib.__Tls13ServerTcp` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
+| `StdLib/__QuicServerTls.dark` | `Darklang.Stdlib.__QuicServerTls` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
+| `StdLib/__QuicServerRetry.dark` | `Darklang.Stdlib.__QuicServerRetry` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
+| `StdLib/HttpServer/Tls.dark` | `Darklang.Stdlib.HttpServer.Tls` | Compiler extension: HTTP transport and secure server support |
+| `StdLib/HttpServer/Quic.dark` | `Darklang.Stdlib.HttpServer.Quic` | Compiler extension: HTTP transport and secure server support |
+| `StdLib/HttpServer/Secure.dark` | `Darklang.Stdlib.HttpServer.Secure` | Compiler extension: HTTP transport and secure server support |
 | `StdLib/__P256.dark` | `Darklang.Stdlib.__P256`  | Compiler support: bounded P-256 ECDSA/SHA-256 verification for TLS signatures |
 | `StdLib/__RsaPkcs1.dark` | `Darklang.Stdlib.__RsaPkcs1`  | Compiler support: RSA PKCS#1 v1.5 SHA-256/384 certificate signature checks |
 | `StdLib/__X509Chain.dark` | `Darklang.Stdlib.__X509Chain`  | Compiler support: bounded X.509 path checks before HTTPS identity is trusted |

@@ -255,7 +255,8 @@ if [ "$SMOKE_MODE" = true ]; then
             fi
         fi
         EXPECTED_OUTPUT=$(python3 "$SCRIPT_DIR/infrastructure/benchmark_profiles.py" expected "$PROFILE" "$bench")
-        mapfile -t MAIN_ARGUMENTS < <(python3 "$SCRIPT_DIR/infrastructure/benchmark_profiles.py" arguments "$PROFILE" "$bench")
+        python3 "$SCRIPT_DIR/infrastructure/benchmark_profiles.py" arguments "$PROFILE" "$bench" > "$TEMP_DIR/arguments.txt"
+        mapfile -t MAIN_ARGUMENTS < "$TEMP_DIR/arguments.txt"
         set +e
         MAIN_OUTPUT=$(timeout 120 "$MAIN_BINARY" "${MAIN_ARGUMENTS[@]}" 2>&1)
         MAIN_EXIT=$?
@@ -342,7 +343,8 @@ for bench in $BENCHMARKS; do
     fi
 
     EXPECTED_OUTPUT=$(python3 "$SCRIPT_DIR/infrastructure/benchmark_profiles.py" expected "$PROFILE" "$bench")
-    mapfile -t QUICK_ARGUMENTS < <(python3 "$SCRIPT_DIR/infrastructure/benchmark_profiles.py" arguments "$PROFILE" "$bench")
+    python3 "$SCRIPT_DIR/infrastructure/benchmark_profiles.py" arguments "$PROFILE" "$bench" > "$TEMP_DIR/arguments.txt"
+    mapfile -t QUICK_ARGUMENTS < "$TEMP_DIR/arguments.txt"
     if ! DARK_OUTPUT=$("$QUICK_BIN" "${QUICK_ARGUMENTS[@]}"); then
         FAILURES+=("$bench: Dark quick execution failed")
         continue

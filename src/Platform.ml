@@ -115,6 +115,7 @@ type syscallNumbers = {
   signalPending : int;
   signalWait : int;
   sendTo : int;
+  recvFrom : int;
 }
 
 let macOSARM64SyscallNumbers : syscallNumbers =
@@ -145,6 +146,7 @@ let macOSARM64SyscallNumbers : syscallNumbers =
     signalPending = 52;
     signalWait = 330;
     sendTo = 133;
+    recvFrom = 29;
   }
 
 let linuxARM64SyscallNumbers : syscallNumbers =
@@ -175,6 +177,7 @@ let linuxARM64SyscallNumbers : syscallNumbers =
     signalPending = 136;
     signalWait = 137;
     sendTo = 206;
+    recvFrom = 207;
   }
 
 (*
@@ -209,6 +212,7 @@ let linuxX86_64SyscallNumbers : syscallNumbers =
     signalPending = 127;
     signalWait = 128;
     sendTo = 44;
+    recvFrom = 45;
   }
 
 (*

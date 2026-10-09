@@ -261,11 +261,14 @@ let convertCliOperation (operation : ANF.cliOperation) =
   | ANF.SocketConnect4 -> MIR.SocketConnect4
   | ANF.SocketConnect6 -> MIR.SocketConnect6
   | ANF.SocketSend -> MIR.SocketSend
+  | ANF.SocketSendTo -> MIR.SocketSendTo
   | ANF.SocketReceive -> MIR.SocketReceive
+  | ANF.SocketReceiveFrom -> MIR.SocketReceiveFrom
   | ANF.SocketReceiveTimeout -> MIR.SocketReceiveTimeout
   | ANF.SocketSendTimeout -> MIR.SocketSendTimeout
   | ANF.SocketClose -> MIR.SocketClose
   | ANF.SocketBind4 -> MIR.SocketBind4
+  | ANF.SocketBind6 -> MIR.SocketBind6
   | ANF.SocketListen -> MIR.SocketListen
   | ANF.SocketAccept -> MIR.SocketAccept
   | ANF.SocketCloexec -> MIR.SocketCloexec
@@ -839,11 +842,14 @@ let cliOperationName = function
   | ANF.SocketConnect4 -> "SocketConnect4"
   | ANF.SocketConnect6 -> "SocketConnect6"
   | ANF.SocketSend -> "SocketSend"
+  | ANF.SocketSendTo -> "SocketSendTo"
   | ANF.SocketReceive -> "SocketReceive"
+  | ANF.SocketReceiveFrom -> "SocketReceiveFrom"
   | ANF.SocketReceiveTimeout -> "SocketReceiveTimeout"
   | ANF.SocketSendTimeout -> "SocketSendTimeout"
   | ANF.SocketClose -> "SocketClose"
   | ANF.SocketBind4 -> "SocketBind4"
+  | ANF.SocketBind6 -> "SocketBind6"
   | ANF.SocketListen -> "SocketListen"
   | ANF.SocketAccept -> "SocketAccept"
   | ANF.SocketCloexec -> "SocketCloexec"

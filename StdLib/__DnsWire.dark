@@ -9,7 +9,7 @@ type Record =
 let __labelByte (byte: Int64) : Bool =
     (byte >= 48L && byte <= 57L) ||
     (byte >= 65L && byte <= 90L) ||
-    (byte >= 97L && byte <= 122L) || byte == 45L
+    (byte >= 97L && byte <= 122L) || byte == 45L || byte == 95L
 
 let __validLabel (value: String) (index: Int64) (length: Int64) : Bool =
     if index >= length then true

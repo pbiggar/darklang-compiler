@@ -633,6 +633,7 @@ let liftLambdasInProgram baseRegistry baseVariants baseFunctions program =
       (function
         | C.FunctionDef func -> collectFuncRefsInExpr func.C.body params
         | C.Expression expr -> collectFuncRefsInExpr expr params
+        | C.ValueDef value -> collectFuncRefsInExpr value.C.body params
         | _ -> [])
       (* Named references also occur in bodies moved into lifted functions.
          Those bodies need the same hidden-environment adapter as the original

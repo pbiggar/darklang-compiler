@@ -1,0 +1,22 @@
+// http3_qpack.e2e - RFC 9204 static/literal field sections with zero dynamic capacity.
+let data = Stdlib.Blob.fromHex "0000510B2F696E6465782E68746D6C" |> Stdlib.Result.withDefault Stdlib.Blob.empty in Stdlib.__Qpack.decode data = Ok [(":path", "/index.html")]
+let data = Stdlib.Blob.fromHex "0000D1D7C1" |> Stdlib.Result.withDefault Stdlib.Blob.empty in Stdlib.__Qpack.decode data = Ok [(":method", "GET"), (":scheme", "https"), (":path", "/")]
+let data = Stdlib.Blob.fromHex "00005F0E8CF1E3C2E5F23A6BA0AB90F4FF" |> Stdlib.Result.withDefault Stdlib.Blob.empty in Stdlib.__Qpack.decode data = Ok [("accept", "www.example.com")]
+let data = Stdlib.Blob.fromHex "0000391F8CF1E3C2E5F23A6BA0AB90F4FF" |> Stdlib.Result.withDefault Stdlib.Blob.empty in Stdlib.__Qpack.decode data = Ok [("a", "www.example.com")]
+Stdlib.__Qpack.encode [(":status", "200"), ("set-cookie", "a=1"), ("set-cookie", "b=2")] |> Stdlib.Result.andThen Stdlib.__Qpack.decode = Ok [(":status", "200"), ("set-cookie", "a=1"), ("set-cookie", "b=2")]
+Stdlib.__Qpack.encode [] |> Stdlib.Result.map Stdlib.Blob.toHex = Ok "0000"
+let data = Stdlib.Blob.fromHex "0000FF24" |> Stdlib.Result.withDefault Stdlib.Blob.empty in Stdlib.__Qpack.decode data = Error "Invalid QPACK static index"
+let data = Stdlib.Blob.fromHex "0100" |> Stdlib.Result.withDefault Stdlib.Blob.empty in Stdlib.__Qpack.decode data = Error "Dynamic QPACK references are disabled"
+let data = Stdlib.Blob.fromHex "0001D1" |> Stdlib.Result.withDefault Stdlib.Blob.empty in Stdlib.__Qpack.decode data = Ok [(":method", "GET")]
+let data = Stdlib.Blob.fromHex "0080" |> Stdlib.Result.withDefault Stdlib.Blob.empty in Stdlib.__Qpack.decode data = Error "Invalid QPACK base"
+let data = Stdlib.Blob.fromHex "000080" |> Stdlib.Result.withDefault Stdlib.Blob.empty in Stdlib.__Qpack.decode data = Error "Dynamic QPACK references are disabled"
+let data = Stdlib.Blob.fromHex "000010" |> Stdlib.Result.withDefault Stdlib.Blob.empty in Stdlib.__Qpack.decode data = Error "Dynamic QPACK references are disabled"
+let data = Stdlib.Blob.fromHex "00" |> Stdlib.Result.withDefault Stdlib.Blob.empty in Stdlib.__Qpack.decode data |> Stdlib.Result.isError = true
+let data = Stdlib.Blob.fromHex "00005104FF" |> Stdlib.Result.withDefault Stdlib.Blob.empty in Stdlib.__Qpack.decode data |> Stdlib.Result.isError = true
+let data = Stdlib.Blob.fromHex "00002000" |> Stdlib.Result.withDefault Stdlib.Blob.empty in Stdlib.__Qpack.decode data = Error "Empty HTTP header name"
+let data = Stdlib.Blob.fromHex "0000FF23" |> Stdlib.Result.withDefault Stdlib.Blob.empty in Stdlib.__Qpack.decode data = Ok [("x-frame-options", "sameorigin")]
+Stdlib.__Qpack.encode (Stdlib.List.repeatUnsafe 257 ("a", "b")) = Error "QPACK header list too large"
+let data = Stdlib.Blob.fromHex "2020" |> Stdlib.Result.withDefault Stdlib.Blob.empty in Stdlib.__Qpack.encoderInstructions data 0L = Ok 2L
+let data = Stdlib.Blob.fromHex "3F" |> Stdlib.Result.withDefault Stdlib.Blob.empty in Stdlib.__Qpack.encoderInstructions data 0L = Error "QPACK capacity exceeds advertised limit"
+let data = Stdlib.Blob.fromHex "21" |> Stdlib.Result.withDefault Stdlib.Blob.empty in Stdlib.__Qpack.encoderInstructions data 0L = Error "QPACK capacity exceeds advertised limit"
+let data = Stdlib.Blob.fromHex "C0" |> Stdlib.Result.withDefault Stdlib.Blob.empty in Stdlib.__Qpack.encoderInstructions data 0L = Error "Dynamic QPACK instructions are disabled"

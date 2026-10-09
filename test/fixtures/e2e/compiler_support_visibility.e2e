@@ -13,3 +13,6 @@ Stdlib.Crypto.__secureRandomBytes 0L = compileerror="Internal identifier not all
 let inspect (output: Stdlib.Cli.NativeOutput) : Int64 = output.exitCode; 1L = compileerror="Unknown type"
 let inspect (output: Stdlib.Cli.__NativeOutput) : Int64 = output.exitCode; 1L = compileerror="Internal identifier not allowed in user code"
 Stdlib.HttpClient.__requestTrusted "GET" "http://localhost/" [] Stdlib.Blob.empty = compileerror="Internal identifier not allowed in user code"
+
+Stdlib.__Http3Client.request = compileerror="Internal identifier not allowed in user code"
+Stdlib.__QuicServerTls.listen = compileerror="Internal identifier not allowed in user code"

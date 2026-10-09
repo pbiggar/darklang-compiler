@@ -2,11 +2,11 @@
 """Restore snapshot-pinned Ubuntu native prerequisites inside a writable workspace."""
 
 from concurrent.futures import ThreadPoolExecutor
+import argparse
 import hashlib
 import lzma
 from pathlib import Path
 import subprocess
-import sys
 import time
 import urllib.error
 import urllib.request
@@ -88,6 +88,12 @@ def restore(root):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 2 or not Path(sys.argv[1]).is_absolute():
-        sys.exit("Usage: python3 scripts/vm/setup-native-packages.py ABSOLUTE_TOOLCHAIN_DIRECTORY")
-    restore(Path(sys.argv[1]))
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("root", type=Path)
+    parser.add_argument("--cachegrind", action="store_true", help="restore pinned Valgrind benchmark tools")
+    options = parser.parse_args()
+    if not options.root.is_absolute():
+        parser.error("root must be absolute")
+    if options.cachegrind:
+        NAMES.append("valgrind")
+    restore(options.root)

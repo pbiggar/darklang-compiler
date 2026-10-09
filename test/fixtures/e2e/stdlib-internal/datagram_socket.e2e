@@ -1,0 +1,14 @@
+// datagram_socket.e2e - Persistent UDP ownership and boundary validation.
+Stdlib.__Datagram.bind4 [127L, 0L, 0L] 0L = Error 22L
+Stdlib.__Datagram.bind4 [127L, 0L, 0L, 1L] -1L = Error 22L
+Stdlib.__Datagram.bind6 [0L] 0L = Error 22L
+Stdlib.__Datagram.bind4 [256L, 0L, 0L, 1L] 0L = Error 22L
+Stdlib.__Datagram.bind4 [127L, 0L, 0L, 1L] 65536L = Error 22L
+Stdlib.__Datagram.bind4 [127L, 0L, 0L, 1L] 0L |> Stdlib.Result.map Stdlib.__Datagram.close = stdout="Darklang.Stdlib.Result.Result<Unit, Int64>.Ok(())\n" stderr=""
+Stdlib.__Datagram.bind4 [127L, 0L, 0L, 1L] 0L |> Stdlib.Result.andThen (fun socket -> let _ = Stdlib.__Datagram.close socket in Stdlib.__Datagram.receive socket 100L) = Error 9L
+Stdlib.__Datagram.bind4 [127L, 0L, 0L, 1L] 0L |> Stdlib.Result.andThen (fun socket -> let _ = Stdlib.__Datagram.close socket in Stdlib.__Datagram.send socket (Stdlib.__Datagram.Endpoint { address = [127L, 0L, 0L, 1L], port = 12345L }) Stdlib.Blob.empty 100L) = Error 9L
+Stdlib.__Datagram.bind4 [127L, 0L, 0L, 1L] 0L |> Stdlib.Result.andThen (fun socket -> let result = Stdlib.__Datagram.receive socket 0L in let _ = Stdlib.__Datagram.close socket in result) = Error 22L
+Stdlib.__Datagram.bind4 [127L, 0L, 0L, 1L] 0L |> Stdlib.Result.andThen (fun socket -> let result = Stdlib.__Datagram.send socket (Stdlib.__Datagram.Endpoint { address = [127L, 0L, 0L, 1L], port = 0L }) Stdlib.Blob.empty 100L in let _ = Stdlib.__Datagram.close socket in result) = Error 22L
+Stdlib.__Datagram.bind4 [127L, 0L, 0L, 1L] 0L |> Stdlib.Result.andThen (fun socket -> let result = Stdlib.__Datagram.send socket (Stdlib.__Datagram.Endpoint { address = [127L, 0L, 0L], port = 12345L }) Stdlib.Blob.empty 100L in let _ = Stdlib.__Datagram.close socket in result) = Error 22L
+Stdlib.__Datagram.bind4 [127L, 0L, 0L, 1L] 0L |> Stdlib.Result.andThen (fun socket -> let result = Stdlib.__Datagram.send socket (Stdlib.__Datagram.Endpoint { address = [127L, 0L, 0L, 1L], port = 12345L }) Stdlib.Blob.empty 10001L in let _ = Stdlib.__Datagram.close socket in result) = Error 22L
+Stdlib.__Datagram.bind4 [127L, 0L, 0L, 1L] 0L |> Stdlib.Result.andThen (fun socket -> let result = Stdlib.__Datagram.send socket (Stdlib.__Datagram.Endpoint { address = [127L, 0L, 0L, 1L], port = 12345L }) (Stdlib.Blob.fromString (Stdlib.String.repeat "x" 4097)) 100L in let _ = Stdlib.__Datagram.close socket in result) = Error 90L

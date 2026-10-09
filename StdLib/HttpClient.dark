@@ -44,6 +44,10 @@ type StreamResponse =
     headers: List<(String * String)>
     body: Stream<UInt8> }
 
+type Connection =
+  | Tcp of (Stdlib.__Network.TcpConnection * Stdlib.Option.Option<List<Blob>>)
+  | Quic of Stdlib.__QuicClient.Ready
+
 /// Returns an authorization header created using HTTP basic auth.
 let basicAuth
   (username: String)
@@ -142,6 +146,31 @@ let __connectHost (host: String) (port: Int64) (trusted: Bool)
             | Error error ->
                 Stdlib.HttpClient.__connectDns6 host port trusted (Stdlib.HttpClient.__dnsError error)
 
+// Fallback is confined to connection establishment, before any request bytes.
+let __connectAlternatives (url: Stdlib.__HttpWire.Url) (trusted: Bool) (roots: Stdlib.Option.Option<List<Blob>>) (alternatives: List<Stdlib.__HttpsService.Service>)
+  : Stdlib.Result.Result<Stdlib.HttpClient.Connection, Stdlib.HttpClient.RequestError> =
+  let literal = match Stdlib.__DnsWire.ipv4 url.host with | Some address -> Some address | None -> Stdlib.__DnsWire.ipv6 url.host in
+  let addressAllowed = match literal with | None -> true | Some address -> Stdlib.__Http3Discovery.allowedAddress trusted address in
+  if Stdlib.Bool.not (Stdlib.__Http3Discovery.allowedHost trusted url.host && addressAllowed) then
+    Error (Stdlib.HttpClient.RequestError.BadUrl Stdlib.HttpClient.BadUrlDetails.InvalidHost)
+  else if url.scheme == "http" then
+    Stdlib.HttpClient.__connectHost url.host url.port trusted |> Stdlib.Result.map (fun connection -> Tcp ((connection, None)))
+  else if url.scheme != "https" then Error (Stdlib.HttpClient.RequestError.BadUrl Stdlib.HttpClient.BadUrlDetails.UnsupportedProtocol)
+  else
+    let trust = match roots with | Some provided -> Ok provided | None -> Stdlib.__Tls13Client.loadSystemRoots () in
+    match trust with
+    | Error _ -> Error Stdlib.HttpClient.RequestError.NetworkError
+    | Ok authorities ->
+      let cached = if alternatives == [] then None else Stdlib.__Http3Discovery.connect alternatives url.host authorities trusted in
+      let negotiated = match cached with | Some ready -> Some ready | None -> Stdlib.__Http3Discovery.discover url authorities trusted in
+      match negotiated with
+      | Some ready -> Ok (Quic ready)
+      | None -> Stdlib.HttpClient.__connectHost url.host url.port trusted |> Stdlib.Result.map (fun connection -> Tcp ((connection, Some authorities)))
+
+let __connectAutomatic (url: Stdlib.__HttpWire.Url) (trusted: Bool) (roots: Stdlib.Option.Option<List<Blob>>)
+  : Stdlib.Result.Result<Stdlib.HttpClient.Connection, Stdlib.HttpClient.RequestError> =
+  Stdlib.HttpClient.__connectAlternatives url trusted roots []
+
 let __emptyHeader (headers: List<(String * String)>) : Bool =
   match headers with
   | [] -> false
@@ -203,7 +232,30 @@ let __parseSecureResponse (method: String) (buffer: Blob) (informational: Int64)
         statusCode = Stdlib.Int.fromInt64 parsed.statusCode,
         headers = parsed.headers, body = parsed.body })
 
-let __request (trusted: Bool) (roots: Stdlib.Option.Option<List<Blob>>)
+let __secureRequest (connection: Stdlib.__Network.TcpConnection) (url: Stdlib.__HttpWire.Url)
+  (method: String) (roots: List<Blob>) (headers: List<(String * String)>)
+  (body: Blob) (requestBytes: Blob)
+  : Stdlib.Result.Result<Stdlib.HttpClient.Response, Stdlib.HttpClient.RequestError> =
+  match Stdlib.__Tls13Client.handshakeWithProtocols connection url.host roots ["h2", "http/1.1"] with
+  | Error _ -> Error Stdlib.HttpClient.RequestError.NetworkError
+  | Ok negotiated ->
+    let secure = negotiated.keys in
+    if negotiated.protocol == "h2" then
+      let transport = Stdlib.__HttpTransport.secure connection secure in
+      let response = Stdlib.__Http2.request transport method url headers body in
+      let _ = Stdlib.__HttpTransport.close transport in
+      match response with
+      | Error _ -> Error Stdlib.HttpClient.RequestError.NetworkError
+      | Ok value -> Ok value
+    else
+      match Stdlib.__Tls13Client.__sendApplication connection secure.client requestBytes 0L with
+      | Error _ -> Error Stdlib.HttpClient.RequestError.NetworkError
+      | Ok send ->
+        match Stdlib.__Tls13Client.__readApplication connection method (Stdlib.__Tls13Client.applicationState { secure with client = send }) Stdlib.Blob.empty with
+        | Error _ -> Error Stdlib.HttpClient.RequestError.NetworkError
+        | Ok response -> Stdlib.HttpClient.__parseSecureResponse method response 0L
+
+let __requestWithAlternatives (trusted: Bool) (roots: Stdlib.Option.Option<List<Blob>>) (alternatives: List<Stdlib.__HttpsService.Service>)
   (method: String) (urlText: String)
   (headers: List<(String * String)>) (body: Blob)
   : Stdlib.Result.Result<Stdlib.HttpClient.Response, Stdlib.HttpClient.RequestError> =
@@ -231,29 +283,29 @@ let __request (trusted: Bool) (roots: Stdlib.Option.Option<List<Blob>>)
                     (headers @ [("Connection", "close")]) body with
             | Error _ -> Error (Stdlib.HttpClient.RequestError.BadUrl Stdlib.HttpClient.BadUrlDetails.InvalidRequest)
             | Ok requestBytes ->
-                match Stdlib.HttpClient.__connectHost url.host url.port trusted with
+                match Stdlib.HttpClient.__connectAlternatives url trusted roots alternatives with
                 | Error error -> Error error
-                | Ok connection ->
+                | Ok connected ->
+                  match connected with
+                  | Quic ready ->
+                    Stdlib.__Http3Client.request ready normalizedMethod url headers body 10000L |> Stdlib.Result.mapError (fun _message -> Stdlib.HttpClient.RequestError.NetworkError)
+                  | Tcp pair ->
+                    let (connection, authorities) = pair in
                     let result =
-                      if url.scheme == "https" then
-                        let trust =
-                          match roots with
-                          | None -> Stdlib.__Tls13Client.loadSystemRoots ()
-                          | Some provided -> Ok provided in
-                        match trust with
-                        | Error _ -> Error Stdlib.HttpClient.RequestError.NetworkError
-                        | Ok authorities ->
-                          match Stdlib.__Tls13Client.exchange connection url.host normalizedMethod
-                                  authorities requestBytes with
-                          | Error _ -> Error Stdlib.HttpClient.RequestError.NetworkError
-                          | Ok response -> Stdlib.HttpClient.__parseSecureResponse
-                                             normalizedMethod response 0L
-                      else
+                      match authorities with
+                      | Some authorities ->
+                          Stdlib.HttpClient.__secureRequest connection url normalizedMethod
+                            authorities headers body requestBytes
+                      | None ->
                         match Stdlib.__Network.writeTcp connection requestBytes with
                         | Error code -> Error (Stdlib.HttpClient.__transportError code)
                         | Ok () -> Stdlib.HttpClient.__readResponse connection normalizedMethod Stdlib.Blob.empty 0L in
                     let _ = Stdlib.__Network.closeTcp connection in
                     result
+
+let __request (trusted: Bool) (roots: Stdlib.Option.Option<List<Blob>>) (method: String) (url: String)
+  (headers: List<(String * String)>) (body: Blob) : Stdlib.Result.Result<Stdlib.HttpClient.Response, Stdlib.HttpClient.RequestError> =
+  Stdlib.HttpClient.__requestWithAlternatives trusted roots [] method url headers body
 
 let request (method: String) (url: String) (headers: List<(String * String)>) (body: Blob)
   : Stdlib.Result.Result<Stdlib.HttpClient.Response, Stdlib.HttpClient.RequestError> =
@@ -502,7 +554,30 @@ let __streamStep (state: Stdlib.HttpClient.__StreamBodyState)
 let __streamDispose (state: Stdlib.HttpClient.__StreamBodyState) : Unit =
   Stdlib.__Network.closeTcp state.connection
 
-let __stream (trusted: Bool) (roots: Stdlib.Option.Option<List<Blob>>)
+type StreamStart = Legacy of Stdlib.HttpClient.__StreamTransport | Modern of Stdlib.HttpClient.StreamResponse
+
+let __secureStream (connection: Stdlib.__Network.TcpConnection) (url: Stdlib.__HttpWire.Url)
+  (method: String) (roots: List<Blob>) (headers: List<(String * String)>)
+  (body: Blob) (requestBytes: Blob)
+  : Stdlib.Result.Result<Stdlib.HttpClient.StreamStart, Stdlib.HttpClient.RequestError> =
+  match Stdlib.__Tls13Client.handshakeWithProtocols connection url.host roots ["h2", "http/1.1"] with
+  | Error _ -> Error Stdlib.HttpClient.RequestError.NetworkError
+  | Ok negotiated ->
+    let secure = negotiated.keys in
+    if negotiated.protocol == "h2" then
+      let transport = Stdlib.__HttpTransport.secure connection secure in
+      match Stdlib.__Http2.stream transport method url headers body with
+      | Error _ ->
+        let _ = Stdlib.__HttpTransport.close transport in
+        Error Stdlib.HttpClient.RequestError.NetworkError
+      | Ok response -> Ok (Stdlib.HttpClient.StreamStart.Modern response)
+    else
+      match Stdlib.__Tls13Client.__sendApplication connection secure.client requestBytes 0L with
+      | Error _ -> Error Stdlib.HttpClient.RequestError.NetworkError
+      | Ok send -> Ok (Stdlib.HttpClient.StreamStart.Legacy (Stdlib.HttpClient.__StreamTransport.Secure
+        (Stdlib.__Tls13Client.applicationState { secure with client = send })))
+
+let __streamWithAlternatives (trusted: Bool) (roots: Stdlib.Option.Option<List<Blob>>) (alternatives: List<Stdlib.__HttpsService.Service>)
   (method: String) (urlText: String)
   (headers: List<(String * String)>) (body: Blob)
   : Stdlib.Result.Result<Stdlib.HttpClient.StreamResponse, Stdlib.HttpClient.RequestError> =
@@ -526,30 +601,28 @@ let __stream (trusted: Bool) (roots: Stdlib.Option.Option<List<Blob>>)
               (headers @ [("Connection", "close")]) body with
       | Error _ -> Error (Stdlib.HttpClient.RequestError.BadUrl Stdlib.HttpClient.BadUrlDetails.InvalidRequest)
       | Ok requestBytes ->
-        match Stdlib.HttpClient.__connectHost url.host url.port trusted with
+        match Stdlib.HttpClient.__connectAlternatives url trusted roots alternatives with
         | Error error -> Error error
-        | Ok connection ->
+        | Ok connected ->
+          match connected with
+          | Quic ready ->
+            Stdlib.__Http3Client.stream ready normalizedMethod url headers body 10000L |> Stdlib.Result.mapError (fun _message -> Stdlib.HttpClient.RequestError.NetworkError)
+          | Tcp pair ->
+          let (connection, authorities) = pair in
           let opened =
-            if url.scheme == "https" then
-              let trust = match roots with
-                          | Some provided -> Ok provided
-                          | None -> Stdlib.__Tls13Client.loadSystemRoots () in
-              match trust with
-              | Error _ -> Error Stdlib.HttpClient.RequestError.NetworkError
-              | Ok authorities ->
-                match Stdlib.__Tls13Client.beginExchange connection url.host authorities requestBytes with
-                | Error _ -> Error Stdlib.HttpClient.RequestError.NetworkError
-                | Ok secure -> Ok (Stdlib.HttpClient.__StreamTransport.Secure secure)
-            else if url.scheme == "http" then
+            match authorities with
+            | Some authorities ->
+                Stdlib.HttpClient.__secureStream connection url normalizedMethod authorities headers body requestBytes
+            | None ->
               match Stdlib.__Network.writeTcp connection requestBytes with
               | Error code -> Error (Stdlib.HttpClient.__transportError code)
-              | Ok () -> Ok Stdlib.HttpClient.__StreamTransport.Plain
-            else Error (Stdlib.HttpClient.RequestError.BadUrl Stdlib.HttpClient.BadUrlDetails.UnsupportedProtocol) in
+              | Ok () -> Ok (Stdlib.HttpClient.StreamStart.Legacy Stdlib.HttpClient.__StreamTransport.Plain) in
           match opened with
           | Error error ->
             let _ = Stdlib.__Network.closeTcp connection in
             Error error
-          | Ok transport ->
+          | Ok (Modern response) -> Ok response
+          | Ok (Legacy transport) ->
             match Stdlib.HttpClient.__streamHead connection transport normalizedMethod
                     Stdlib.Blob.empty 0L with
             | Error error ->
@@ -571,6 +644,10 @@ let __stream (trusted: Bool) (roots: Stdlib.Option.Option<List<Blob>>)
               Ok (Stdlib.HttpClient.StreamResponse {
                 statusCode = Stdlib.Int.fromInt64 head.statusCode,
                 headers = head.headers, body = stream })
+
+let __stream (trusted: Bool) (roots: Stdlib.Option.Option<List<Blob>>) (method: String) (url: String)
+  (headers: List<(String * String)>) (body: Blob) : Stdlib.Result.Result<Stdlib.HttpClient.StreamResponse, Stdlib.HttpClient.RequestError> =
+  Stdlib.HttpClient.__streamWithAlternatives trusted roots [] method url headers body
 
 let stream (method: String) (url: String) (headers: List<(String * String)>) (body: Blob)
   : Stdlib.Result.Result<Stdlib.HttpClient.StreamResponse, Stdlib.HttpClient.RequestError> =

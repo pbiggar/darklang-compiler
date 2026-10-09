@@ -1,0 +1,128 @@
+// __Http2Wire.dark - Bounded RFC 9113 frame encoding and incremental decoding.
+module Darklang.Stdlib.__Http2Wire
+
+type Frame = { kind: Int64, flags: Int64, streamId: Int64, payload: Blob }
+type Parsed = { frame: Stdlib.__Http2Wire.Frame, remaining: Blob }
+type ParseError = Incomplete | Invalid of String
+
+let preface () : String = "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n"
+
+let isPrefacePrefix (pending: Blob) (offset: Int64) : Bool =
+  if offset < 0L || offset > 24L || offset > Stdlib.Blob.__byteLength pending then false
+  else if offset == 24L || offset == Stdlib.Blob.__byteLength pending then true
+  else if Stdlib.Blob.__getByte pending offset != Stdlib.String.__byteAtUnchecked (Stdlib.__Http2Wire.preface ()) offset then false
+  else Stdlib.__Http2Wire.isPrefacePrefix pending (offset + 1L)
+
+let __slice (data: Blob) (start: Int64) (length: Int64) : Blob =
+  Stdlib.Blob.slice data (Stdlib.Int.fromInt64 start) (Stdlib.Int.fromInt64 length)
+
+let __read32 (data: Blob) (start: Int64) : Int64 =
+  Stdlib.Blob.__getByte data start * 16777216L +
+  Stdlib.Blob.__getByte data (start + 1L) * 65536L +
+  Stdlib.Blob.__getByte data (start + 2L) * 256L +
+  Stdlib.Blob.__getByte data (start + 3L)
+
+let __u32 (value: Int64) : Blob =
+  Stdlib.Blob.__fromInt64List [value / 16777216L, (value / 65536L) % 256L,
+                            (value / 256L) % 256L, value % 256L]
+
+let __settingsValid (payload: Blob) (position: Int64) : Bool =
+  if position == Stdlib.Blob.__byteLength payload then true
+  else
+    let id = Stdlib.Blob.__getByte payload position * 256L +
+             Stdlib.Blob.__getByte payload (position + 1L) in
+    let value = Stdlib.__Http2Wire.__read32 payload (position + 2L) in
+    (id != 2L || value <= 1L) &&
+    (id != 4L || value <= 2147483647L) &&
+    (id != 5L || (value >= 16384L && value <= 16777215L)) &&
+    Stdlib.__Http2Wire.__settingsValid payload (position + 6L)
+
+let validate (frame: Stdlib.__Http2Wire.Frame) : Stdlib.Result.Result<Unit, String> =
+  let size = Stdlib.Blob.__byteLength frame.payload in
+  if frame.streamId < 0L || frame.streamId > 2147483647L ||
+     frame.kind < 0L || frame.kind > 255L || frame.flags < 0L || frame.flags > 255L then
+    Error "Invalid HTTP/2 frame header"
+  else if (frame.kind == 0L || frame.kind == 1L || frame.kind == 2L ||
+           frame.kind == 3L || frame.kind == 5L || frame.kind == 9L) && frame.streamId == 0L then
+    Error "HTTP/2 frame requires a stream"
+  else if (frame.kind == 4L || frame.kind == 6L || frame.kind == 7L) && frame.streamId != 0L then
+    Error "HTTP/2 frame requires stream zero"
+  else if (frame.kind == 2L && size != 5L) ||
+          (frame.kind == 3L && size != 4L) ||
+          (frame.kind == 6L && size != 8L) ||
+          (frame.kind == 7L && size < 8L) ||
+          (frame.kind == 8L && size != 4L) then
+    Error "Invalid HTTP/2 frame length"
+  else if frame.kind == 4L then
+    if Stdlib.Int64.bitwiseAnd frame.flags 1L != 0L && size != 0L then
+      Error "HTTP/2 SETTINGS acknowledgement has a payload"
+    else if size % 6L != 0L || Stdlib.Bool.not (Stdlib.__Http2Wire.__settingsValid frame.payload 0L) then
+      Error "Invalid HTTP/2 SETTINGS"
+    else Ok ()
+  else if frame.kind == 8L &&
+          Stdlib.Int64.bitwiseAnd (Stdlib.__Http2Wire.__read32 frame.payload 0L) 2147483647L == 0L then
+    Error "Zero HTTP/2 window increment"
+  else if (frame.kind == 0L || frame.kind == 1L || frame.kind == 5L) &&
+          Stdlib.Int64.bitwiseAnd frame.flags 8L != 0L &&
+          (size == 0L || Stdlib.Blob.__getByte frame.payload 0L >= size) then
+    Error "Invalid HTTP/2 padding"
+  else if frame.kind == 1L && Stdlib.Int64.bitwiseAnd frame.flags 32L != 0L then
+    let offset = if Stdlib.Int64.bitwiseAnd frame.flags 8L != 0L then 1L else 0L in
+    let padding = if offset == 1L then Stdlib.Blob.__getByte frame.payload 0L else 0L in
+    if size - padding - offset < 5L then Error "Invalid HTTP/2 HEADERS priority"
+    else if Stdlib.Int64.bitwiseAnd (Stdlib.__Http2Wire.__read32 frame.payload offset) 2147483647L == frame.streamId then
+      Error "HTTP/2 stream depends on itself"
+    else Ok ()
+  else if frame.kind == 2L &&
+          Stdlib.Int64.bitwiseAnd (Stdlib.__Http2Wire.__read32 frame.payload 0L) 2147483647L == frame.streamId then
+    Error "HTTP/2 stream depends on itself"
+  else if frame.kind == 5L then
+    let offset = if Stdlib.Int64.bitwiseAnd frame.flags 8L != 0L then 1L else 0L in
+    let padding = if offset == 1L then Stdlib.Blob.__getByte frame.payload 0L else 0L in
+    if size - padding - offset < 4L then Error "Invalid HTTP/2 PUSH_PROMISE"
+    else Ok ()
+  else Ok ()
+
+let serialize (kind: Int64) (flags: Int64) (streamId: Int64) (payload: Blob)
+  : Stdlib.Result.Result<Blob, String> =
+  let length = Stdlib.Blob.__byteLength payload in
+  if length > 16777215L then Error "HTTP/2 frame too large"
+  else
+    let frame = Stdlib.__Http2Wire.Frame { kind = kind, flags = flags,
+                                        streamId = streamId, payload = payload } in
+    match Stdlib.__Http2Wire.validate frame with
+    | Error message -> Error message
+    | Ok () ->
+      Ok (Stdlib.Blob.concat [Stdlib.Blob.__fromInt64List [length / 65536L, (length / 256L) % 256L, length % 256L, kind, flags],
+        Stdlib.__Http2Wire.__u32 streamId, payload])
+
+let parse (maximum: Int64) (data: Blob)
+  : Stdlib.Result.Result<Stdlib.__Http2Wire.Parsed, Stdlib.__Http2Wire.ParseError> =
+  if maximum < 16384L || maximum > 16777215L then
+    Error (Invalid "Invalid HTTP/2 frame limit")
+  else if Stdlib.Blob.__byteLength data < 9L then Error Incomplete
+  else
+    let length = Stdlib.Blob.__getByte data 0L * 65536L +
+                 Stdlib.Blob.__getByte data 1L * 256L + Stdlib.Blob.__getByte data 2L in
+    if length > maximum then Error (Invalid "HTTP/2 frame exceeds limit")
+    else if Stdlib.Blob.__byteLength data < length + 9L then Error Incomplete
+    else
+      let frame = Stdlib.__Http2Wire.Frame {
+        kind = Stdlib.Blob.__getByte data 3L, flags = Stdlib.Blob.__getByte data 4L,
+        streamId = Stdlib.Int64.bitwiseAnd (Stdlib.__Http2Wire.__read32 data 5L) 2147483647L,
+        payload = Stdlib.__Http2Wire.__slice data 9L length } in
+      match Stdlib.__Http2Wire.validate frame with
+      | Error message -> Error (Invalid message)
+      | Ok () -> Ok (Stdlib.__Http2Wire.Parsed { frame = frame,
+          remaining = Stdlib.__Http2Wire.__slice data (length + 9L)
+                        (Stdlib.Blob.__byteLength data - length - 9L) })
+
+let content (frame: Stdlib.__Http2Wire.Frame) : Blob =
+  let padded = (frame.kind == 0L || frame.kind == 1L || frame.kind == 5L) &&
+               Stdlib.Int64.bitwiseAnd frame.flags 8L != 0L in
+  let offset = if padded then 1L else 0L in
+  let padding = if padded then Stdlib.Blob.__getByte frame.payload 0L else 0L in
+  let prefix = if frame.kind == 1L && Stdlib.Int64.bitwiseAnd frame.flags 32L != 0L then 5L
+               else if frame.kind == 5L then 4L else 0L in
+  Stdlib.__Http2Wire.__slice frame.payload (offset + prefix)
+    (Stdlib.Blob.__byteLength frame.payload - offset - prefix - padding)

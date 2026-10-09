@@ -1,0 +1,107 @@
+// __HttpTransport.dark - Owned bidirectional plaintext/TLS application transport.
+module Darklang.Stdlib.__HttpTransport
+
+type Transport = {
+  lifecycle: Stream<Unit>,
+  read: Unit -> Stdlib.Result.Result<Blob, String>,
+  write: Blob -> Stdlib.Result.Result<Unit, String>
+}
+let __readSecure (connection: Stdlib.__Network.TcpConnection) (cell: RawPtr)
+  (lifecycle: Stream<Unit>) : Stdlib.Result.Result<Blob, String> =
+  match Stdlib.Stream.next lifecycle with
+  | None -> Error "HTTP transport is closed"
+  | Some _ ->
+    let state = Stdlib.Stream.__cellGet<Stdlib.__Tls13Client.ApplicationState> cell in
+    match Stdlib.__Tls13Client.readApplicationChunk connection state with
+    | Error message ->
+      Stdlib.Stream.close lifecycle
+      Error message
+    | Ok None ->
+      Stdlib.Stream.close lifecycle
+      Ok Stdlib.Blob.empty
+    | Ok (Some pair) ->
+      let (bytes, next) = pair in
+      let _ = Stdlib.Stream.__cellSet cell next in
+      Ok bytes
+
+let __writeSecure (connection: Stdlib.__Network.TcpConnection) (cell: RawPtr)
+  (lifecycle: Stream<Unit>) (bytes: Blob) (offset: Int64) : Stdlib.Result.Result<Unit, String> =
+  match Stdlib.Stream.next lifecycle with
+  | None -> Error "HTTP transport is closed"
+  | Some _ ->
+    let remaining = Stdlib.Blob.__byteLength bytes - offset in
+    if remaining == 0L then Ok ()
+    else
+      let size = if remaining > 2048L then 2048L else remaining in
+      let state = Stdlib.Stream.__cellGet<Stdlib.__Tls13Client.ApplicationState> cell in
+      Stdlib.__Tls13.sealRecord state.updates.send 23L (Stdlib.__Http2Wire.__slice bytes offset size) |> Stdlib.Result.andThen (fun sealed ->
+        let updates = { state.updates with send = sealed.nextKeys } in
+        let _ = Stdlib.Stream.__cellSet cell { state with updates = updates } in
+        match Stdlib.__Network.writeTcp connection sealed.bytes with
+        | Error _ ->
+          Stdlib.Stream.close lifecycle
+          Error "TLS application write failed"
+        | Ok () -> Stdlib.__HttpTransport.__writeSecure connection cell lifecycle bytes (offset + size))
+
+let __disposeSecure (connection: Stdlib.__Network.TcpConnection) (cell: RawPtr) : Unit =
+  let _ = Stdlib.__Network.closeTcp connection in
+  Stdlib.Stream.__cellDispose<Stdlib.__Tls13Client.ApplicationState> cell
+
+// Each closure retains the lifecycle. Once closed, none may touch the freed cell.
+let secure (connection: Stdlib.__Network.TcpConnection) (keys: Stdlib.__Tls13Client.SecureKeys) : Stdlib.__HttpTransport.Transport =
+  let initial = Stdlib.__Tls13Client.applicationState keys in
+  let cell = Stdlib.Stream.__cellNew initial in
+  let dispose = fun _unit -> Stdlib.__HttpTransport.__disposeSecure connection cell in
+  let lifecycle = Stdlib.Stream.__new (fun _unit -> Some ()) dispose in
+  Stdlib.__HttpTransport.Transport {
+    lifecycle = lifecycle,
+    read = fun _unit -> Stdlib.__HttpTransport.__readSecure connection cell lifecycle,
+    write = fun bytes -> Stdlib.__HttpTransport.__writeSecure connection cell lifecycle bytes 0L }
+
+let __readPlain (connection: Stdlib.__Network.TcpConnection)
+  (signals: Stdlib.Option.Option<Stdlib.__Network.ShutdownSignals>) (deadline: Int64)
+  : Stdlib.Result.Result<Blob, String> =
+  let shutdown = match signals with
+                 | None -> Ok false
+                 | Some value -> Stdlib.__Network.shutdownRequested value in
+  match shutdown, Stdlib.__Network.monotonicMillis () with
+  | Ok true, _ -> Error "HTTP server shutting down"
+  | Ok false, Ok now ->
+    if now >= deadline then Error "HTTP application read timed out"
+    else
+      match Stdlib.__Network.readTcp connection 4096L with
+      | Error code ->
+        if code == 4L || code == 11L || code == 35L then Stdlib.__HttpTransport.__readPlain connection signals deadline
+        else Error "HTTP application read failed"
+      | Ok bytes -> Ok bytes
+  | _, _ -> Error "HTTP clock or shutdown check failed"
+
+let __plainRead (connection: Stdlib.__Network.TcpConnection)
+  (signals: Stdlib.Option.Option<Stdlib.__Network.ShutdownSignals>) : Stdlib.Result.Result<Blob, String> =
+  match Stdlib.__Network.monotonicMillis () with
+  | Error _ -> Error "HTTP clock failed"
+  | Ok now -> Stdlib.__HttpTransport.__readPlain connection signals (now + 10000L)
+
+let __plain (connection: Stdlib.__Network.TcpConnection)
+  (signals: Stdlib.Option.Option<Stdlib.__Network.ShutdownSignals>) : Stdlib.__HttpTransport.Transport =
+  Stdlib.__HttpTransport.Transport {
+    lifecycle = connection.lifecycle,
+    read = fun _unit -> Stdlib.__HttpTransport.__plainRead connection signals,
+    write = fun bytes ->
+      match Stdlib.__Network.writeTcp connection bytes with
+      | Error _ -> Error "HTTP application write failed"
+      | Ok () -> Ok () }
+
+let plain (connection: Stdlib.__Network.TcpConnection) : Stdlib.__HttpTransport.Transport =
+  Stdlib.__HttpTransport.__plain connection None
+
+let plainWithShutdown (connection: Stdlib.__Network.TcpConnection) (signals: Stdlib.__Network.ShutdownSignals)
+  : Stdlib.__HttpTransport.Transport = Stdlib.__HttpTransport.__plain connection (Some signals)
+
+let plainWithDeadline (connection: Stdlib.__Network.TcpConnection) (signals: Stdlib.__Network.ShutdownSignals) (deadline: Int64) : Stdlib.__HttpTransport.Transport =
+  Stdlib.__HttpTransport.Transport { lifecycle = connection.lifecycle,
+    read = fun _unit -> Stdlib.__HttpTransport.__readPlain connection (Some signals) deadline,
+    write = fun bytes -> match Stdlib.__Network.writeTcp connection bytes with | Ok () -> Ok () | Error _ -> Error "HTTP application write failed" }
+
+let close (transport: Stdlib.__HttpTransport.Transport) : Unit =
+  Stdlib.Stream.close transport.lifecycle

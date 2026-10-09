@@ -32,6 +32,7 @@ type syscallNumbers = {
   signalPending : int;
   signalWait : int;
   sendTo : int;
+  recvFrom : int;
 }
 
 type socketConstants = {

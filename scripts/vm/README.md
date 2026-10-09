@@ -165,3 +165,12 @@ Ubuntu snapshot. The generated execution adapter maps conventional
 `qemu-deps/exec-path.so` before `vm-compat.so` when running those checks.
 Native toolchain configure/build commands must unset the QEMU adapter.
 Do not spend fresh-VM setup time building QEMU for ordinary host tests.
+
+The activation scopes `PORT_VM_DUNE_TEST_STAMPS=1` to the VM adapter. Dune's
+empty test stamps need this handling on the VM filesystem. The adapter does
+not alter test results or apply outside activation.
+
+To restore the pinned benchmark tool, run
+`python3 scripts/vm/setup-native-packages.py /absolute/toolchain --cachegrind`.
+Cachegrind still requires real `/proc/self/maps` and `/proc/self/exe`; when the
+host does not provide these, report the benchmark gate as blocked.

@@ -1,0 +1,74 @@
+// __QuicReassembly.dark - Immutable, bounded CRYPTO stream reassembly.
+module Darklang.Stdlib.__QuicReassembly
+
+type Segment = { offset: Int64, bytes: Blob }
+type State = { maximum: Int64, consumed: Int64, segments: List<Stdlib.__QuicReassembly.Segment> }
+
+let create (maximum: Int64) : Stdlib.Result.Result<Stdlib.__QuicReassembly.State, String> =
+  if maximum < 1L || maximum > 1048576L then Error "Invalid QUIC CRYPTO buffer limit"
+  else Ok (Stdlib.__QuicReassembly.State { maximum = maximum, consumed = 0L, segments = [] })
+
+let __end (segment: Stdlib.__QuicReassembly.Segment) : Int64 =
+  segment.offset + Stdlib.Blob.__byteLength segment.bytes
+
+let __same (a: Blob) (aOffset: Int64) (b: Blob) (bOffset: Int64) (remaining: Int64) : Bool =
+  if remaining == 0L then true
+  else if Stdlib.Blob.__getByte a aOffset != Stdlib.Blob.__getByte b bOffset then false
+  else Stdlib.__QuicReassembly.__same a (aOffset + 1L) b (bOffset + 1L) (remaining - 1L)
+
+// Sorted segments never overlap or touch. Insertion coalesces adjacent
+// fragments; retransmissions contribute no additional buffered bytes.
+let __merge (incoming: Stdlib.__QuicReassembly.Segment) (segments: List<Stdlib.__QuicReassembly.Segment>)
+  : Stdlib.Result.Result<List<Stdlib.__QuicReassembly.Segment>, String> =
+  match segments with
+  | [] -> Ok [incoming]
+  | head :: tail ->
+    if Stdlib.__QuicReassembly.__end incoming < head.offset then Ok (Stdlib.List.push segments incoming)
+    else if Stdlib.__QuicReassembly.__end head < incoming.offset then
+      Stdlib.__QuicReassembly.__merge incoming tail |> Stdlib.Result.map (fun merged -> Stdlib.List.push merged head)
+    else
+      let first = if incoming.offset < head.offset then incoming else head in
+      let second = if incoming.offset < head.offset then head else incoming in
+      let firstEnd = Stdlib.__QuicReassembly.__end first in
+      let secondEnd = Stdlib.__QuicReassembly.__end second in
+      let overlapEnd = if firstEnd < secondEnd then firstEnd else secondEnd in
+      if Stdlib.Bool.not (Stdlib.__QuicReassembly.__same first.bytes (second.offset - first.offset) second.bytes 0L (overlapEnd - second.offset)) then
+        Error "Conflicting QUIC CRYPTO bytes"
+      else
+        let bytes = if firstEnd >= secondEnd then first.bytes else Stdlib.Blob.concat [
+          first.bytes, Stdlib.__Http2Wire.__slice second.bytes (firstEnd - second.offset) (secondEnd - firstEnd) ] in
+        Stdlib.__QuicReassembly.__merge (Stdlib.__QuicReassembly.Segment { offset = first.offset, bytes = bytes }) tail
+
+let insert (state: Stdlib.__QuicReassembly.State) (offset: Int64) (bytes: Blob)
+  : Stdlib.Result.Result<Stdlib.__QuicReassembly.State, String> =
+  let size = Stdlib.Blob.__byteLength bytes in
+  if offset < 0L || offset > 4611686018427387903L - size then Error "Invalid QUIC CRYPTO range"
+  else if size == 0L then Ok state
+  else if offset + size <= state.consumed then Ok state
+  else if offset + size - state.consumed > state.maximum then Error "QUIC CRYPTO buffer exceeds limit"
+  else
+    let trim = if offset < state.consumed then state.consumed - offset else 0L in
+    let incoming = Stdlib.__QuicReassembly.Segment {
+      offset = offset + trim, bytes = Stdlib.__Http2Wire.__slice bytes trim (size - trim) } in
+    if size == trim then Ok state
+    else
+      match Stdlib.__QuicReassembly.__merge incoming state.segments with
+      | Error message -> Error message
+      | Ok segments ->
+        if Stdlib.List.length segments > 256 then Error "Too many QUIC CRYPTO fragments"
+        else Ok (Stdlib.__QuicReassembly.State { maximum = state.maximum, consumed = state.consumed, segments = segments })
+
+let available (state: Stdlib.__QuicReassembly.State) : Blob =
+  match state.segments with
+  | head :: _ -> if head.offset == state.consumed then head.bytes else Stdlib.Blob.empty
+  | [] -> Stdlib.Blob.empty
+
+// Drain only contiguous bytes. Each TLS encryption level owns a separate
+// State, so CRYPTO offsets never cross Initial/Handshake/1-RTT boundaries.
+let drain (state: Stdlib.__QuicReassembly.State) : Stdlib.__QuicReassembly.State =
+  match state.segments with
+  | head :: tail ->
+    if head.offset != state.consumed then state
+    else Stdlib.__QuicReassembly.State { maximum = state.maximum,
+      consumed = Stdlib.__QuicReassembly.__end head, segments = tail }
+  | [] -> state

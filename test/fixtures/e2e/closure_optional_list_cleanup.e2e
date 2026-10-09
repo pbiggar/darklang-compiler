@@ -1,0 +1,4 @@
+// closure_optional_list_cleanup.e2e - Captured optional lists release their concrete list and element ownership.
+let make (values: Stdlib.Option.Option<List<Blob>>) : Unit -> Int = fun _unit -> match values with | None -> 0 | Some values -> Stdlib.List.length values
+let values = [Stdlib.String.toBlob (Stdlib.String.repeat "blob" 100)] in let callback = make (Some values) in callback () = 1
+let callback = make None in callback () = 0

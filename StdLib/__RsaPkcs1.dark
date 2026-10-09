@@ -1,4 +1,4 @@
-// __RsaPkcs1.dark - RSA PKCS#1 v1.5 SHA-256/384 certificate signature checks.
+// RsaPkcs1.dark - RSA PKCS#1 v1.5 SHA-256/384 certificate signature checks.
 
 module Darklang.Stdlib.__RsaPkcs1
 
@@ -39,19 +39,17 @@ let verify (algorithm: Int64) (modulus: Blob) (exponent: Blob)
     | Error error -> Error error
     | Ok digestInfo ->
       let n = Stdlib.__RsaPss.__fromBytes modulus 0L (Stdlib.Int.fromInt64 0L) in
-      let e = Stdlib.__RsaPss.__fromBytes exponent 0L (Stdlib.Int.fromInt64 0L) in
       let s = Stdlib.__RsaPss.__fromBytes signature 0L (Stdlib.Int.fromInt64 0L) in
       if Stdlib.Int.greaterThanOrEqualTo s n then Ok false
       else
-        let decoded = Stdlib.__RsaPss.__powMod s e n (Stdlib.Int.fromInt64 1L) in
-        let em = Stdlib.__RsaPss.__toBytes decoded length [] in
+        Stdlib.__RsaMontgomery.publicPow signature exponent modulus |> Stdlib.Result.map (fun em ->
         let digestLength = Stdlib.Blob.__byteLength digestInfo in
         let delimiter = length - digestLength - 1L in
         let actual = Stdlib.Blob.slice em (Stdlib.Int.fromInt64 (delimiter + 1L))
                        (Stdlib.Int.fromInt64 digestLength) in
-        Ok (delimiter >= 10L &&
+        (delimiter >= 10L &&
             Stdlib.Blob.__getByte em 0L == 0L &&
             Stdlib.Blob.__getByte em 1L == 1L &&
             Stdlib.__RsaPkcs1.__padding em 2L delimiter &&
             Stdlib.Blob.__getByte em delimiter == 0L &&
-            Stdlib.__RsaPkcs1.__same actual digestInfo 0L 0L)
+            Stdlib.__RsaPkcs1.__same actual digestInfo 0L 0L))

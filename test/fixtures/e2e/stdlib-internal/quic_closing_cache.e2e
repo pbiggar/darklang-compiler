@@ -1,0 +1,35 @@
+// quic_closing_cache.e2e - Retain minimal closing keys across listener steps; discard a failed send's nonce state.
+let checkClosingCache (mode: Int64) : Bool =
+  match Stdlib.__Network.monotonicMillis (), Stdlib.__Network.shutdownSignals (), Stdlib.__QuicCrypto.derive (Stdlib.String.toBlob "01234567890123456789012345678901") with
+  | Ok now, Ok signals, Ok keys ->
+    let source = Stdlib.String.toBlob "serverid" in
+    let peer = Stdlib.__Datagram.Endpoint { address = [127L,0L,0L,1L], port = 12345L } in
+    let destination = if mode == 5L then Stdlib.String.toBlob "othercid" else source in
+    let sender = if mode == 4L then { peer with port = 12346L } else peer in
+    let result = Stdlib.__QuicPacket.sealShort keys destination false (Stdlib.Blob.__fromInt64List [1L]) 1L |> Stdlib.Result.map (fun wire ->
+      let lifecycle = Stdlib.Stream.__new (fun _unit -> Some ()) (fun _unit -> ()) in
+      let socket = Stdlib.__Datagram.Socket { lifecycle = lifecycle, send = fun _peer _bytes _timeout -> if mode == 1L then Error 5L else Ok (), receive = fun _timeout -> Ok (Stdlib.__Datagram.Message { peer = sender, payload = wire }) } in
+      let closing = Stdlib.__QuicConnection.Closing { peer = peer, source = source, destination = Stdlib.String.toBlob "clientid", keys = keys, phase = false, deadline = if mode == 3L then now - 1000L else now + 30000L, number = 10L, lastSent = if mode == 2L then now else now - 1000L } in
+      let recent = [Stdlib.HttpServer.Quic.Recent { source = source, expires = if mode == 6L then now - 1000L else now + 30000L, closing = Some closing }] in
+      let identity = Stdlib.TlsServerIdentity.Identity { certificates = [], key = Stdlib.__RsaPrivate.Key { modulus = Stdlib.Blob.empty, exponent = Stdlib.Blob.empty, privateExponent = Stdlib.Blob.empty } } in
+      let config = Stdlib.HttpServer.Config.Config { port = 1000, maxBodyBytes = 1024, injectStandardHeaders = false, canonicalizeFromForwardedProto = false, logRequests = false } in
+      let context = Stdlib.HttpServer.Quic.Context { config = config, identity = identity, signals = signals, socket = socket, secret = Stdlib.String.toBlob "01234567890123456789012345678901", limit = 1024L } in
+      let result = Stdlib.HttpServer.Quic.__step context (fun _request -> Stdlib.Http.responseWithText "unused" 200) recent 1L in
+      Stdlib.__Datagram.close socket
+      match result with
+      | Error _ -> false
+      | Ok step ->
+        match step.recent with
+        | [] -> mode == 6L && Stdlib.Bool.not step.stopped
+        | [entry] -> Stdlib.Bool.not step.stopped && (match entry.closing with | Some next -> next.number == (if mode == 0L then 11L else 10L) && mode != 1L && mode != 3L | None -> mode == 1L || mode == 3L)
+        | _ -> false) in
+    Stdlib.__Network.closeShutdownSignals signals
+    Stdlib.Result.withDefault result false
+  | _, _, _ -> false
+checkClosingCache 0L = true
+checkClosingCache 1L = true
+checkClosingCache 2L = true
+checkClosingCache 3L = true
+checkClosingCache 4L = true
+checkClosingCache 5L = true
+checkClosingCache 6L = true

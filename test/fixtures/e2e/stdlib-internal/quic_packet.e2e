@@ -1,0 +1,19 @@
+// quic_packet.e2e - QUIC datagram framing before header protection is removed.
+Stdlib.__QuicPacket.parse 8L Stdlib.Blob.empty = Error "Empty QUIC datagram"
+Stdlib.Blob.fromHex "400000000000000000" |> Stdlib.Result.andThen (Stdlib.__QuicPacket.parse 8L) = Error "Truncated QUIC protected packet"
+Stdlib.Blob.fromHex "C0000000011500" |> Stdlib.Result.andThen (Stdlib.__QuicPacket.parse 8L) = Error "QUIC connection ID exceeds 20 bytes"
+Stdlib.Blob.fromHex "C00000000100000014" |> Stdlib.Result.andThen (Stdlib.__QuicPacket.parse 8L) = Error "Truncated QUIC protected packet"
+Stdlib.Blob.fromHex "8000000000000000000001" |> Stdlib.Result.andThen (Stdlib.__QuicPacket.parse 8L) |> Stdlib.Result.map (fun packet -> match packet with | VersionNegotiation value -> value.versions | _ -> []) = Ok [1L]
+Stdlib.Blob.fromHex "80000000000000" |> Stdlib.Result.andThen (Stdlib.__QuicPacket.parse 8L) = Error "Invalid QUIC version list"
+Stdlib.Blob.fromHex "8000000000000000" |> Stdlib.Result.andThen (Stdlib.__QuicPacket.parse 8L) = Error "Invalid QUIC version list"
+Stdlib.Blob.fromHex "C0000000010015" |> Stdlib.Result.andThen (Stdlib.__QuicPacket.parse 8L) = Error "QUIC connection ID exceeds 20 bytes"
+Stdlib.Blob.fromHex "C0000000010100" |> Stdlib.Result.andThen (Stdlib.__QuicPacket.parse 8L) = Error "Truncated QUIC connection ID"
+Stdlib.Blob.fromHex "C00000000100000013" |> Stdlib.Result.andThen (Stdlib.__QuicPacket.parse 8L) = Error "Truncated QUIC protected packet"
+Stdlib.Blob.fromHex "C00000000100000040" |> Stdlib.Result.andThen (Stdlib.__QuicPacket.parse 8L) = Error "Truncated QUIC packet length"
+Stdlib.Blob.fromHex "80000000010000" |> Stdlib.Result.andThen (Stdlib.__QuicPacket.parse 8L) = Error "Invalid QUIC fixed bit"
+Stdlib.Blob.fromHex "0000000000000000000000000000000000000000000000000000000000" |> Stdlib.Result.andThen (Stdlib.__QuicPacket.parse 8L) = Error "Invalid QUIC fixed bit"
+Stdlib.Blob.fromHex "80000000020000" |> Stdlib.Result.andThen (Stdlib.__QuicPacket.parse 8L) |> Stdlib.Result.map (fun packet -> match packet with | UnsupportedVersion value -> value.version | _ -> -1L) = Ok 2L
+Stdlib.Blob.fromHex "CF00000001000000140000000000000000000000000000000000000000" |> Stdlib.Result.andThen (Stdlib.__QuicPacket.parse 8L) |> Stdlib.Result.map (fun packet -> match packet with | Protected value -> (value.numberOffset, Stdlib.Blob.length value.bytes, Stdlib.Blob.length value.remaining) | _ -> (0L, 0, 0)) = Ok ((9L, 29, 0))
+Stdlib.Blob.fromHex "E00000000100001400000000000000000000000000000000000000000102" |> Stdlib.Result.andThen (Stdlib.__QuicPacket.parse 8L) |> Stdlib.Result.map (fun packet -> match packet with | Protected value -> (value.numberOffset, Stdlib.Blob.toHex value.remaining) | _ -> (0L, "")) = Ok ((8L, "0102"))
+Stdlib.Blob.fromHex "F0000000010000AA00000000000000000000000000000000" |> Stdlib.Result.andThen (Stdlib.__QuicPacket.parse 8L) |> Stdlib.Result.map (fun packet -> match packet with | Retry value -> Stdlib.Blob.toHex value.token | _ -> "") = Ok "AA"
+Stdlib.Blob.fromHex "F000000001000000000000000000000000000000000000" |> Stdlib.Result.andThen (Stdlib.__QuicPacket.parse 8L) = Error "Invalid QUIC Retry token"

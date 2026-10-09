@@ -1,0 +1,202 @@
+// __HttpsDns.dark - Type-65 DNS question/answer binding and bounded HTTPS alias resolution.
+module Darklang.Stdlib.__HttpsDns
+
+type Entry = Cname of String | Advertisement of Stdlib.__HttpsService.Record | Unavailable
+type Record = { owner: String, ttl: Int64, entry: Stdlib.__HttpsDns.Entry }
+type Records = { next: Int64, records: List<Stdlib.__HttpsDns.Record> }
+type Answer = { services: List<Stdlib.__HttpsService.Service>, alias: Stdlib.Option.Option<String>, ttl: Int64 }
+
+let __label (label: String) (position: Int64) : Bool =
+  if position == Stdlib.String.__byteLength label then true
+  else
+    let byte = Stdlib.String.__byteAtUnchecked label position in
+    (byte == 95L || Stdlib.__DnsWire.__labelByte byte) && Stdlib.__HttpsDns.__label label (position + 1L)
+
+let __name (data: Blob) (position: Int64) (returnPosition: Int64) (depth: Int64)
+  (parts: List<String>) (size: Int64) : Stdlib.Result.Result<(String * Int64), String> =
+  if position >= Stdlib.Blob.__byteLength data || depth > 16L || size > 253L then Error "Invalid HTTPS DNS name"
+  else
+    let tag = Stdlib.Blob.__getByte data position in
+    if tag == 0L then Ok ((Stdlib.String.join (Stdlib.List.reverse parts) ".", if returnPosition < 0L then position + 1L else returnPosition))
+    else if tag >= 192L then
+      if position + 1L >= Stdlib.Blob.__byteLength data then Error "Truncated HTTPS DNS name"
+      else
+        let target = (tag - 192L) * 256L + Stdlib.Blob.__getByte data (position + 1L) in
+        if target >= position then Error "Invalid HTTPS DNS compression"
+        else Stdlib.__HttpsDns.__name data target (if returnPosition < 0L then position + 2L else returnPosition) (depth + 1L) parts size
+    else if tag > 63L || tag > Stdlib.Blob.__byteLength data - position - 1L then Error "Invalid HTTPS DNS name"
+    else
+      match Stdlib.Blob.toString (Stdlib.__Http2Wire.__slice data (position + 1L) tag) with
+      | Error _ -> Error "Invalid HTTPS DNS name"
+      | Ok label ->
+        if Stdlib.Bool.not (Stdlib.__HttpsDns.__label label 0L) then Error "Invalid HTTPS DNS name"
+        else Stdlib.__HttpsDns.__name data (position + 1L + tag) returnPosition depth (Stdlib.List.push parts (Stdlib.String.toLowercase label)) (size + tag + (if parts == [] then 0L else 1L))
+
+let originName (host: String) (port: Int64) : Stdlib.Result.Result<String, String> =
+  if port < 1L || port > 65535L then Error "Invalid HTTPS DNS port"
+  else Stdlib.__DnsWire.query 0L host 1L |> Stdlib.Result.andThen (fun _question ->
+    let canonical = Stdlib.String.toLowercase (if Stdlib.String.endsWith host "." then Stdlib.String.__byteSlice host 0L (Stdlib.String.__byteLength host - 1L) else host) in
+    let name = if port == 443L then canonical else "_" ++ Stdlib.Int64.toString port ++ "._https." ++ canonical in
+    if Stdlib.String.__byteLength name > 253L then Error "HTTPS DNS question name too long" else Ok name)
+
+let __labels (labels: List<String>) (pieces: List<Blob>) : Stdlib.Result.Result<Blob, String> =
+  match labels with
+  | [] -> Ok (Stdlib.Blob.concat (Stdlib.List.reverse (Stdlib.List.push pieces (Stdlib.Blob.__fromInt64List [0L]))))
+  | label :: rest ->
+    let size = Stdlib.String.__byteLength label in
+    if size < 1L || size > 63L || Stdlib.Bool.not (Stdlib.__HttpsDns.__label label 0L) then Error "Invalid HTTPS DNS question name"
+    else Stdlib.__HttpsDns.__labels rest (Stdlib.List.push pieces (Stdlib.Blob.concat [Stdlib.Blob.__fromInt64List [size], Stdlib.String.toBlob label]))
+
+let query (identifier: Int64) (name: String) : Stdlib.Result.Result<Blob, String> =
+  if identifier < 0L || identifier > 65535L || name == "" || Stdlib.String.__byteLength name > 253L then Error "Invalid HTTPS DNS question"
+  else Stdlib.__HttpsDns.__labels (Stdlib.String.split name ".") [] |> Stdlib.Result.map (fun encoded ->
+    Stdlib.Blob.concat [Stdlib.Blob.__fromInt64List [identifier / 256L, identifier % 256L, 1L, 0L, 0L, 1L, 0L, 0L, 0L, 0L, 0L, 0L],
+      encoded, Stdlib.Blob.__fromInt64List [0L, 65L, 0L, 1L]])
+
+let __records (data: Blob) (position: Int64) (count: Int64) (port: Int64) (accept: Bool)
+  (records: List<Stdlib.__HttpsDns.Record>) : Stdlib.Result.Result<Stdlib.__HttpsDns.Records, String> =
+  if count == 0L then Ok (Stdlib.__HttpsDns.Records { next = position, records = Stdlib.List.reverse records })
+  else Stdlib.__HttpsDns.__name data position -1L 0L [] 0L |> Stdlib.Result.andThen (fun name ->
+    let (owner, start) = name in
+    if Stdlib.Blob.__byteLength data - start < 10L then Error "Truncated HTTPS DNS record"
+    else
+      let kind = Stdlib.__DnsWire.__u16 data start in
+      let class_ = Stdlib.__DnsWire.__u16 data (start + 2L) in
+      let ttl = Stdlib.__DnsWire.__u32 data (start + 4L) in
+      let size = Stdlib.__DnsWire.__u16 data (start + 8L) in
+      let payload = start + 10L in
+      let next = payload + size in
+      if size > Stdlib.Blob.__byteLength data - payload then Error "Truncated HTTPS DNS record"
+      else
+        let entry =
+          if accept == false || class_ != 1L then Ok None
+          else if kind == 65L then Stdlib.__HttpsService.parse owner port (Stdlib.__Http2Wire.__slice data payload size)
+            |> Stdlib.Result.map (fun advertisement -> match advertisement with
+              | Some record -> Some (Advertisement record)
+              | None -> if Stdlib.__DnsWire.__u16 data payload == 0L then Some Unavailable else None)
+          else if kind == 5L then Stdlib.__HttpsDns.__name data payload -1L 0L [] 0L |> Stdlib.Result.andThen (fun alias ->
+            let (canonical, after) = alias in
+            if after != next || canonical == "" then Error "Invalid HTTPS DNS CNAME" else Ok (Some (Cname canonical)))
+          else Ok None in
+        entry |> Stdlib.Result.andThen (fun entry ->
+          let collected = match entry with | None -> records | Some entry -> Stdlib.List.push records (Stdlib.__HttpsDns.Record { owner = owner, ttl = ttl, entry = entry }) in
+          Stdlib.__HttpsDns.__records data next (count - 1L) port accept collected))
+
+let __resolve (records: List<Stdlib.__HttpsDns.Record>) (name: String) (hops: Int64) (ttl: Int64)
+  : Stdlib.Result.Result<Stdlib.__HttpsDns.Answer, String> =
+  if hops > 8L then Error "HTTPS DNS alias chain too long"
+  else
+    let matching = Stdlib.List.filter records (fun record -> record.owner == name) in
+    let lifetime = Stdlib.List.fold matching ttl (fun previous record -> if record.ttl < previous then record.ttl else previous) in
+    let aliases = Stdlib.List.filterMap matching (fun record -> match record.entry with
+      | Cname canonical -> Some canonical | Advertisement (Alias canonical) -> Some canonical | _ -> None) in
+    match aliases with
+    | canonical :: rest ->
+      if Stdlib.List.any rest (fun other -> other != canonical) then Error "Conflicting HTTPS DNS aliases"
+      else if Stdlib.List.any records (fun record -> record.owner == canonical) then Stdlib.__HttpsDns.__resolve records canonical (hops + 1L) lifetime
+      else Ok (Stdlib.__HttpsDns.Answer { services = [], alias = Some canonical, ttl = lifetime })
+    | [] ->
+      let available = Stdlib.List.filterMap matching (fun record -> match record.entry with
+        | Advertisement (Service service) -> Some service | _ -> None) in
+      let services = if Stdlib.List.any matching (fun record -> record.entry == Unavailable) then [] else Stdlib.List.sortBy available (fun service -> service.priority) in
+      Ok (Stdlib.__HttpsDns.Answer { services = services, alias = None, ttl = lifetime })
+
+let answers (data: Blob) (identifier: Int64) (name: String) (port: Int64)
+  : Stdlib.Result.Result<Stdlib.__HttpsDns.Answer, String> =
+  if port < 1L || port > 65535L then Error "Invalid HTTPS DNS port"
+  else if Stdlib.Blob.__byteLength data < 12L || Stdlib.Blob.__byteLength data > 4096L then Error "Invalid HTTPS DNS packet size"
+  else if identifier < 0L || identifier > 65535L || Stdlib.__DnsWire.__u16 data 0L != identifier then Error "HTTPS DNS transaction mismatch"
+  else
+    let flags = Stdlib.__DnsWire.__u16 data 2L in
+    let count = Stdlib.__DnsWire.__u16 data 6L in
+    let extra = Stdlib.__DnsWire.__u16 data 8L + Stdlib.__DnsWire.__u16 data 10L in
+    if Stdlib.Int64.bitwiseAnd flags 32768L == 0L || Stdlib.Int64.bitwiseAnd flags 30720L != 0L ||
+      Stdlib.Int64.bitwiseAnd flags 512L != 0L || Stdlib.__DnsWire.__u16 data 4L != 1L || count + extra > 128L then Error "Invalid HTTPS DNS response header"
+    else Stdlib.__HttpsDns.__name data 12L -1L 0L [] 0L |> Stdlib.Result.andThen (fun question ->
+      let (queried, after) = question in
+      if Stdlib.Blob.__byteLength data - after < 4L || queried != Stdlib.String.toLowercase name then Error "HTTPS DNS question mismatch"
+      else if Stdlib.__DnsWire.__u16 data after != 65L || Stdlib.__DnsWire.__u16 data (after + 2L) != 1L then Error "HTTPS DNS question mismatch"
+      else if flags % 16L == 3L then Ok (Stdlib.__HttpsDns.Answer { services = [], alias = None, ttl = 0L })
+      else if flags % 16L != 0L then Error "HTTPS DNS query failed"
+      else Stdlib.__HttpsDns.__records data (after + 4L) count port true [] |> Stdlib.Result.andThen (fun records ->
+        Stdlib.__HttpsDns.__records data records.next extra port false [] |> Stdlib.Result.andThen (fun extras ->
+          if extras.next != Stdlib.Blob.__byteLength data then Error "Trailing HTTPS DNS packet bytes"
+          else Stdlib.__HttpsDns.__resolve records.records (Stdlib.String.toLowercase name) 0L 86400L)))
+
+// A single absolute deadline bounds stray packets and every alias query together.
+let __receive (socket: Stdlib.__Datagram.Socket) (peer: Stdlib.__Datagram.Endpoint)
+  (identifier: Int64) (name: String) (port: Int64) (deadline: Int64) (remaining: Int64)
+  : Stdlib.Result.Result<Stdlib.__HttpsDns.Answer, String> =
+  match Stdlib.__Network.monotonicMillis () with
+  | Error _ -> Error "HTTPS DNS clock failed"
+  | Ok now ->
+    if now >= deadline || remaining == 0L then Error "HTTPS DNS timeout"
+    else
+      let timeout = if deadline - now > 10000L then 10000L else deadline - now in
+      match Stdlib.__Datagram.receive socket timeout with
+      | Error code ->
+        if code == 4L || code == 11L || code == 35L || code == 90L then
+          Stdlib.__HttpsDns.__receive socket peer identifier name port deadline (remaining - 1L)
+        else Error "HTTPS DNS receive failed"
+      | Ok message ->
+        if message.peer.address != peer.address || message.peer.port != peer.port ||
+          Stdlib.Blob.__byteLength message.payload < 2L || Stdlib.__DnsWire.__u16 message.payload 0L != identifier then
+          Stdlib.__HttpsDns.__receive socket peer identifier name port deadline (remaining - 1L)
+        else Stdlib.__HttpsDns.answers message.payload identifier name port
+
+let __lookup (socket: Stdlib.__Datagram.Socket) (peer: Stdlib.__Datagram.Endpoint) (name: String)
+  (port: Int64) (deadline: Int64) (visited: List<String>) (ttl: Int64)
+  : Stdlib.Result.Result<Stdlib.__HttpsDns.Answer, String> =
+  if Stdlib.List.length visited >= 8 || Stdlib.List.member visited name then Error "HTTPS DNS alias chain too long"
+  else
+    match Stdlib.Crypto.__secureRandomBytes 2L, Stdlib.__Network.monotonicMillis () with
+    | Ok random, Ok now ->
+      if now >= deadline then Error "HTTPS DNS timeout"
+      else
+        let identifier = Stdlib.__DnsWire.__u16 random 0L in
+        Stdlib.__HttpsDns.query identifier name |> Stdlib.Result.andThen (fun packet ->
+          let timeout = if deadline - now > 10000L then 10000L else deadline - now in
+          Stdlib.__Datagram.send socket peer packet timeout |> Stdlib.Result.mapError (fun _code -> "HTTPS DNS send failed")
+            |> Stdlib.Result.andThen (fun _unit -> Stdlib.__HttpsDns.__receive socket peer identifier name port deadline 128L)
+            |> Stdlib.Result.andThen (fun answer ->
+              let lifetime = if answer.ttl < ttl then answer.ttl else ttl in
+              match answer.alias with
+              | None -> Ok { answer with ttl = lifetime }
+              | Some canonical -> Stdlib.__HttpsDns.__lookup socket peer canonical port deadline (Stdlib.List.push visited name) lifetime))
+    | _, _ -> Error "HTTPS DNS entropy or clock failed"
+
+let lookup (peer: Stdlib.__Datagram.Endpoint) (host: String) (port: Int64) (timeout: Int64)
+  : Stdlib.Result.Result<Stdlib.__HttpsDns.Answer, String> =
+  if timeout < 1L || timeout > 10000L || peer.port < 1L || peer.port > 65535L ||
+    Stdlib.Bool.not (Stdlib.__Network.__validAddress (Stdlib.List.length peer.address == 16) peer.address) then Error "Invalid HTTPS DNS lookup"
+  else Stdlib.__HttpsDns.originName host port |> Stdlib.Result.andThen (fun name ->
+    match Stdlib.__Network.monotonicMillis () with
+    | Error _ -> Error "HTTPS DNS clock failed"
+    | Ok now ->
+      let bound = if Stdlib.List.length peer.address == 16 then Stdlib.__Datagram.bind6 [0L,0L,0L,0L,0L,0L,0L,0L,0L,0L,0L,0L,0L,0L,0L,0L] 0L else Stdlib.__Datagram.bind4 [0L,0L,0L,0L] 0L in
+      match bound with
+      | Error _ -> Error "HTTPS DNS socket creation failed"
+      | Ok socket ->
+        let result = Stdlib.__HttpsDns.__lookup socket peer name port (now + timeout) [] 86400L in
+        let _ = Stdlib.__Datagram.close socket in
+        result)
+
+let __servers (servers: List<String>) (host: String) (port: Int64) (remaining: Int64)
+  : Stdlib.Result.Result<Stdlib.__HttpsDns.Answer, String> =
+  match servers with
+  | [] -> Error "No usable HTTPS DNS nameserver"
+  | server :: rest ->
+    if remaining == 0L then Error "HTTPS DNS nameserver limit"
+    else
+      let address = match Stdlib.__DnsWire.ipv4 server with | Some address -> Some address | None -> Stdlib.__DnsWire.ipv6 server in
+      match address with
+      | None -> Stdlib.__HttpsDns.__servers rest host port (remaining - 1L)
+      | Some address ->
+        match Stdlib.__HttpsDns.lookup (Stdlib.__Datagram.Endpoint { address = address, port = 53L }) host port 1000L with
+        | Ok answer -> Ok answer
+        | Error _ -> Stdlib.__HttpsDns.__servers rest host port (remaining - 1L)
+
+let discover (host: String) (port: Int64) : Stdlib.Result.Result<Stdlib.__HttpsDns.Answer, String> =
+  Stdlib.__HttpsDns.originName host port |> Stdlib.Result.andThen (fun _name ->
+    Stdlib.__DnsWire.systemNameservers () |> Stdlib.Result.mapError (fun _error -> "Cannot read HTTPS DNS resolver configuration")
+      |> Stdlib.Result.andThen (fun servers -> Stdlib.__HttpsDns.__servers servers host port 3L))

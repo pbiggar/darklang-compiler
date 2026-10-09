@@ -1,0 +1,10 @@
+// rsa_montgomery.e2e - Public modular powers cover carry, zero, odd width and malformed inputs.
+let power (base: String) (exponent: String) (modulus: String) : Stdlib.Result.Result<String, String> = Stdlib.Blob.fromHex base |> Stdlib.Result.andThen (fun base -> Stdlib.Blob.fromHex exponent |> Stdlib.Result.andThen (fun exponent -> Stdlib.Blob.fromHex modulus |> Stdlib.Result.andThen (fun modulus -> Stdlib.__RsaMontgomery.publicPow base exponent modulus |> Stdlib.Result.map Stdlib.Blob.toHex)))
+power "02" "0A" "11" = Ok "04"
+power "0000" "010001" "FFFF" = Ok "0000"
+power "FFFE" "FFFFFFFF" "FFFF" = Ok "FFFE"
+power "FFFE" "00" "FFFF" = Ok "0001"
+power "03" "02" "03" = Error "Invalid public modular exponentiation input"
+power "02" "02" "10" = Error "Invalid public modular exponentiation input"
+power "02" "02" "0011" = Error "Invalid public modular exponentiation input"
+power "02" "0100000000" "11" = Error "Invalid public modular exponentiation input"

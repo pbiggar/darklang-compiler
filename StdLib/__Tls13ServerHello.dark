@@ -1,0 +1,158 @@
+// __Tls13ServerHello.dark - Bounded TLS 1.3 client offers shared by TCP and QUIC servers.
+module Darklang.Stdlib.__Tls13ServerHello
+
+type Extension = { kind: Int64, data: Blob }
+type Hello = { raw: Blob, session: Blob, keyShare: Stdlib.Option.Option<Blob>, protocols: List<Blob>, extensions: List<Stdlib.__Tls13ServerHello.Extension> }
+
+let __slice (data: Blob) (start: Int64) (length: Int64) : Blob = Stdlib.Blob.slice data (Stdlib.Int.fromInt64 start) (Stdlib.Int.fromInt64 length)
+
+let __find (extensions: List<Stdlib.__Tls13ServerHello.Extension>) (kind: Int64) : Stdlib.Option.Option<Blob> =
+  match extensions with
+  | [] -> None
+  | extension :: rest -> if extension.kind == kind then Some extension.data else Stdlib.__Tls13ServerHello.__find rest kind
+
+// Unknown extensions remain opaque, but duplicate types and trailing bytes are
+// rejected before cryptography or identity-dependent work begins.
+let __extensions (data: Blob) (position: Int64) (seen: List<Int64>) (acc: List<Stdlib.__Tls13ServerHello.Extension>) : Stdlib.Result.Result<List<Stdlib.__Tls13ServerHello.Extension>, String> =
+  let length = Stdlib.Blob.__byteLength data in
+  if position == length then Ok (Stdlib.List.reverse acc)
+  else if position + 4L > length || Stdlib.List.length seen >= 64 then Error "Invalid TLS client extensions"
+  else
+    let kind = Stdlib.__Tls13.__read16 data position in
+    let size = Stdlib.__Tls13.__read16 data (position + 2L) in
+    if position + 4L + size > length || Stdlib.List.member seen kind then Error "Invalid TLS client extensions"
+    else if kind == 41L && position + 4L + size != length then Error "TLS pre_shared_key must be last"
+    else Stdlib.__Tls13ServerHello.__extensions data (position + 4L + size) (Stdlib.List.push seen kind) (Stdlib.List.push acc (Stdlib.__Tls13ServerHello.Extension { kind = kind, data = Stdlib.__Tls13ServerHello.__slice data (position + 4L) size }))
+
+let __words (data: Blob) (position: Int64) (acc: List<Int64>) : List<Int64> =
+  if position == Stdlib.Blob.__byteLength data then Stdlib.List.reverse acc
+  else Stdlib.__Tls13ServerHello.__words data (position + 2L) (Stdlib.List.push acc (Stdlib.__Tls13.__read16 data position))
+
+let __vector (data: Blob) (prefix: Int64) : Stdlib.Result.Result<List<Int64>, String> =
+  let length = Stdlib.Blob.__byteLength data in
+  if length < prefix + 2L || (length - prefix) % 2L != 0L then Error "Invalid TLS client algorithm vector"
+  else
+    let size = if prefix == 1L then Stdlib.Blob.__getByte data 0L else Stdlib.__Tls13.__read16 data 0L in
+    if size != length - prefix then Error "Invalid TLS client algorithm vector"
+    else Ok (Stdlib.__Tls13ServerHello.__words data prefix [])
+
+let __required (extensions: List<Stdlib.__Tls13ServerHello.Extension>) (kind: Int64) (prefix: Int64) : Stdlib.Result.Result<List<Int64>, String> =
+  match Stdlib.__Tls13ServerHello.__find extensions kind with
+  | None -> Error "Missing TLS client negotiation extension"
+  | Some data -> Stdlib.__Tls13ServerHello.__vector data prefix
+
+// ALPN names are opaque byte strings. Unknown names need not be UTF-8.
+let __protocols (data: Blob) (position: Int64) (count: Int64) (acc: List<Blob>) : Stdlib.Result.Result<List<Blob>, String> =
+  let length = Stdlib.Blob.__byteLength data in
+  if position == length then Ok (Stdlib.List.reverse acc)
+  else if count >= 64L then Error "TLS ALPN offer exceeds limit"
+  else
+    let size = Stdlib.Blob.__getByte data position in
+    if size == 0L || position + 1L + size > length then Error "Invalid TLS ALPN offer"
+    else Stdlib.__Tls13ServerHello.__protocols data (position + 1L + size) (count + 1L) (Stdlib.List.push acc (Stdlib.__Tls13ServerHello.__slice data (position + 1L) size))
+
+let __alpn (extensions: List<Stdlib.__Tls13ServerHello.Extension>) : Stdlib.Result.Result<List<Blob>, String> =
+  match Stdlib.__Tls13ServerHello.__find extensions 16L with
+  | None -> Ok []
+  | Some data ->
+    let length = Stdlib.Blob.__byteLength data in
+    if length < 4L || length > 4096L || Stdlib.__Tls13.__read16 data 0L != length - 2L then Error "Invalid TLS ALPN offer"
+    else Stdlib.__Tls13ServerHello.__protocols data 2L 0L []
+
+let __shares (data: Blob) (position: Int64) (groups: List<Int64>) (seen: List<Int64>) (selected: Stdlib.Option.Option<Blob>) : Stdlib.Result.Result<Stdlib.Option.Option<Blob>, String> =
+  let length = Stdlib.Blob.__byteLength data in
+  if position == length then Ok selected
+  else if position + 4L > length || Stdlib.List.length seen >= 64 then Error "Invalid TLS client key shares"
+  else
+    let group = Stdlib.__Tls13.__read16 data position in
+    let size = Stdlib.__Tls13.__read16 data (position + 2L) in
+    if size == 0L || position + 4L + size > length || Stdlib.List.member seen group || Stdlib.Bool.not (Stdlib.List.member groups group) then Error "Invalid TLS client key shares"
+    else if group == 29L && size != 32L then Error "Invalid TLS X25519 key share"
+    else
+      let selected = if group == 29L then Some (Stdlib.__Tls13ServerHello.__slice data (position + 4L) size) else selected in
+      Stdlib.__Tls13ServerHello.__shares data (position + 4L + size) groups (Stdlib.List.push seen group) selected
+
+let __key (extensions: List<Stdlib.__Tls13ServerHello.Extension>) (groups: List<Int64>) : Stdlib.Result.Result<Stdlib.Option.Option<Blob>, String> =
+  match Stdlib.__Tls13ServerHello.__find extensions 51L with
+  | None -> Error "Missing TLS client key shares"
+  | Some data ->
+    let length = Stdlib.Blob.__byteLength data in
+    if length < 2L || Stdlib.__Tls13.__read16 data 0L != length - 2L then Error "Invalid TLS client key shares"
+    else Stdlib.__Tls13ServerHello.__shares data 2L groups [] None
+
+let __names (data: Blob) (position: Int64) (seen: List<Int64>) : Stdlib.Result.Result<Unit, String> =
+  let length = Stdlib.Blob.__byteLength data in
+  if position == length then Ok ()
+  else if position + 3L > length then Error "Invalid TLS server_name offer"
+  else
+    let kind = Stdlib.Blob.__getByte data position in
+    let size = Stdlib.__Tls13.__read16 data (position + 1L) in
+    if size == 0L || position + 3L + size > length || Stdlib.List.member seen kind then Error "Invalid TLS server_name offer"
+    else if kind == 0L && size > 253L then Error "Invalid TLS server_name offer"
+    else if kind == 0L then
+      match Stdlib.Blob.toString (Stdlib.__Tls13ServerHello.__slice data (position + 3L) size) with
+      | Error _ -> Error "Invalid TLS server_name offer"
+      | Ok name ->
+        if Stdlib.Bool.not (Stdlib.__Tls13.__hostValid name 0L) then Error "Invalid TLS server_name offer"
+        else Stdlib.__Tls13ServerHello.__names data (position + 3L + size) (Stdlib.List.push seen kind)
+    else Stdlib.__Tls13ServerHello.__names data (position + 3L + size) (Stdlib.List.push seen kind)
+
+let __name (extensions: List<Stdlib.__Tls13ServerHello.Extension>) : Stdlib.Result.Result<Unit, String> =
+  match Stdlib.__Tls13ServerHello.__find extensions 0L with
+  | None -> Ok ()
+  | Some data ->
+    let length = Stdlib.Blob.__byteLength data in
+    if length < 6L || Stdlib.__Tls13.__read16 data 0L != length - 2L then Error "Invalid TLS server_name offer"
+    else Stdlib.__Tls13ServerHello.__names data 2L []
+
+let __negotiate (raw: Blob) (session: Blob) (extensions: List<Stdlib.__Tls13ServerHello.Extension>) : Stdlib.Result.Result<Stdlib.__Tls13ServerHello.Hello, String> =
+  Stdlib.__Tls13ServerHello.__name extensions |> Stdlib.Result.andThen (fun _ ->
+  Stdlib.__Tls13ServerHello.__required extensions 43L 1L |> Stdlib.Result.andThen (fun versions ->
+    if Stdlib.Bool.not (Stdlib.List.member versions 772L) then Error "TLS 1.3 not offered"
+    else Stdlib.__Tls13ServerHello.__required extensions 10L 2L |> Stdlib.Result.andThen (fun groups ->
+      if Stdlib.Bool.not (Stdlib.List.member groups 29L) then Error "TLS X25519 not offered"
+      else Stdlib.__Tls13ServerHello.__required extensions 13L 2L |> Stdlib.Result.andThen (fun signatures ->
+        if Stdlib.Bool.not (Stdlib.List.member signatures 2052L) then Error "TLS RSA-PSS SHA-256 not offered"
+        else Stdlib.__Tls13ServerHello.__key extensions groups |> Stdlib.Result.andThen (fun share ->
+          Stdlib.__Tls13ServerHello.__alpn extensions |> Stdlib.Result.map (fun protocols ->
+            Stdlib.__Tls13ServerHello.Hello { raw = raw, session = session, keyShare = share, protocols = protocols, extensions = extensions }))))))
+
+let __body (raw: Blob) (body: Blob) : Stdlib.Result.Result<Stdlib.__Tls13ServerHello.Hello, String> =
+  let length = Stdlib.Blob.__byteLength body in
+  if length < 41L || Stdlib.__Tls13.__read16 body 0L != 771L then Error "Invalid TLS ClientHello"
+  else
+    let sessionLength = Stdlib.Blob.__getByte body 34L in
+    let cipherStart = 35L + sessionLength in
+    if sessionLength > 32L || cipherStart + 2L > length then Error "Invalid TLS client session"
+    else
+      let cipherLength = Stdlib.__Tls13.__read16 body cipherStart in
+      let compressionStart = cipherStart + 2L + cipherLength in
+      if cipherLength < 2L || cipherLength % 2L != 0L || compressionStart + 4L > length then Error "Invalid TLS client cipher vector"
+      else if Stdlib.Blob.__getByte body compressionStart != 1L || Stdlib.Blob.__getByte body (compressionStart + 1L) != 0L then Error "Invalid TLS client compression"
+      else
+        let ciphers = Stdlib.__Tls13ServerHello.__words (Stdlib.__Tls13ServerHello.__slice body (cipherStart + 2L) cipherLength) 0L [] in
+        let extensionStart = compressionStart + 4L in
+        if Stdlib.Bool.not (Stdlib.List.member ciphers 4865L) then Error "TLS AES-128-GCM not offered"
+        else if Stdlib.__Tls13.__read16 body (compressionStart + 2L) != length - extensionStart then Error "Invalid TLS client extension vector"
+        else Stdlib.__Tls13ServerHello.__extensions (Stdlib.__Tls13ServerHello.__slice body extensionStart (length - extensionStart)) 0L [] [] |> Stdlib.Result.andThen (fun extensions ->
+          Stdlib.__Tls13ServerHello.__negotiate raw (Stdlib.__Tls13ServerHello.__slice body 35L sessionLength) extensions)
+
+let parse (raw: Blob) : Stdlib.Result.Result<Stdlib.__Tls13ServerHello.Hello, String> =
+  if Stdlib.Blob.__byteLength raw > 32768L then Error "TLS ClientHello exceeds limit"
+  else match Stdlib.__Tls13Handshake.parseHandshakeFrame raw with
+  | Error _ -> Error "Incomplete TLS ClientHello"
+  | Ok frame ->
+    if frame.kind != 1L || Stdlib.Blob.__byteLength frame.remaining != 0L then Error "Invalid TLS ClientHello framing"
+    else Stdlib.__Tls13ServerHello.__body raw frame.body
+
+let __containsProtocol (protocols: List<Blob>) (protocol: Blob) : Bool =
+  match protocols with
+  | [] -> false
+  | head :: rest -> Stdlib.__X509Chain.__same head protocol || Stdlib.__Tls13ServerHello.__containsProtocol rest protocol
+
+let selectProtocol (hello: Stdlib.__Tls13ServerHello.Hello) (preferred: List<String>) : Stdlib.Result.Result<String, String> =
+  match preferred with
+  | [] -> if Stdlib.List.length hello.protocols == 0 then Ok "" else Error "No common TLS ALPN protocol"
+  | protocol :: rest ->
+    if Stdlib.__Tls13ServerHello.__containsProtocol hello.protocols (Stdlib.String.toBlob protocol) then Ok protocol
+    else Stdlib.__Tls13ServerHello.selectProtocol hello rest

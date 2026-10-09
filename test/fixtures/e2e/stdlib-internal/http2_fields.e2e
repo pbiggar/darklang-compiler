@@ -1,0 +1,9 @@
+// http2_fields.e2e - Observable HTTP/2/HTTP/3 message validation boundaries.
+Stdlib.__Http2Fields.response [(":status", "200"), ("x-test", "a"), ("x-test", "b")] |> Stdlib.Result.map (fun head -> (head.status, head.headers)) = Ok ((200L, [("x-test", "a"), ("x-test", "b")]))
+Stdlib.__Http2Fields.response [("x-test", "a"), (":status", "200")] |> Stdlib.Result.map (fun head -> head.status) = Error "Invalid HTTP/2 pseudo-header"
+Stdlib.__Http2Fields.response [(":status", "200"), (":status", "200")] |> Stdlib.Result.map (fun head -> head.status) = Error "Invalid HTTP/2 pseudo-header"
+Stdlib.__Http2Fields.response [(":status", "200"), ("Connection", "close")] |> Stdlib.Result.map (fun head -> head.status) = Error "Invalid HTTP/2 header field"
+Stdlib.__Http2Fields.response [(":status", "200"), ("connection", "close")] |> Stdlib.Result.map (fun head -> head.status) = Error "Forbidden HTTP/2 header field"
+Stdlib.__Http2Fields.response [(":status", "101")] |> Stdlib.Result.map (fun head -> head.status) = Error "Invalid HTTP/2 status"
+Stdlib.__Http2Fields.trailers [("x-trailer", "yes")] = Ok ()
+Stdlib.__Http2Fields.trailers [(":status", "200")] = Error "Invalid HTTP/2 pseudo-header"

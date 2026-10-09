@@ -1,0 +1,3 @@
+// tls_server_hello.e2e - TLS server offers fail before identity or private-key work.
+Stdlib.__Tls13ServerHello.parse Stdlib.Blob.empty = Error "Incomplete TLS ClientHello"
+Stdlib.__Tls13ServerHello.parse (Stdlib.Blob.fromHex "02000000" |> Stdlib.Result.withDefault Stdlib.Blob.empty) = Error "Invalid TLS ClientHello framing"

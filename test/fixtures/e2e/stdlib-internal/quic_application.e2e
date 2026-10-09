@@ -1,0 +1,24 @@
+// quic_application.e2e - Application STREAM/control framing and final-size/flow-credit invariants.
+Stdlib.Blob.fromHex "0F0000036162631E" |> Stdlib.Result.andThen (Stdlib.__QuicApplication.parse true) |> Stdlib.Result.map (fun frames -> Stdlib.List.length frames) = Ok 2
+Stdlib.Blob.fromHex "0800616263" |> Stdlib.Result.andThen (Stdlib.__QuicApplication.parse true) |> Stdlib.Result.map (fun frames -> match frames with | Stream value :: _ -> (value.id, value.offset, value.fin, Stdlib.Blob.toHex value.bytes) | _ -> (-1L, -1L, false, "")) = Ok ((0L, 0L, false, "616263"))
+Stdlib.Blob.fromHex "0F0000036162" |> Stdlib.Result.andThen (Stdlib.__QuicApplication.parse true) = Error "Truncated QUIC STREAM frame"
+Stdlib.Blob.fromHex "0F00FFFFFFFFFFFFFFFF0161" |> Stdlib.Result.andThen (Stdlib.__QuicApplication.parse true) = Error "Invalid QUIC STREAM range"
+Stdlib.Blob.fromHex "1E" |> Stdlib.Result.andThen (Stdlib.__QuicApplication.parse false) = Error "Client sent QUIC HANDSHAKE_DONE"
+Stdlib.Blob.fromHex "070161" |> Stdlib.Result.andThen (Stdlib.__QuicApplication.parse false) = Error "Client sent QUIC NEW_TOKEN"
+Stdlib.Blob.fromHex "0700" |> Stdlib.Result.andThen (Stdlib.__QuicApplication.parse true) = Error "Empty QUIC NEW_TOKEN"
+Stdlib.Blob.fromHex "1A00010203040506" |> Stdlib.Result.andThen (Stdlib.__QuicApplication.parse true) = Error "Truncated QUIC path validation data"
+Stdlib.Blob.fromHex "180001" |> Stdlib.Result.andThen (Stdlib.__QuicApplication.parse true) = Error "Invalid QUIC retire-prior-to"
+Stdlib.Blob.fromHex "18000000" |> Stdlib.Result.andThen (Stdlib.__QuicApplication.parse true) = Error "Invalid QUIC new connection ID length"
+Stdlib.Blob.fromHex "4001" |> Stdlib.Result.andThen (Stdlib.__QuicApplication.parse true) = Error "Non-minimal QUIC frame type"
+Stdlib.Blob.fromHex "1F" |> Stdlib.Result.andThen (Stdlib.__QuicApplication.parse true) = Error "Unknown QUIC frame type"
+Stdlib.__QuicApplication.stream 4L 3L (Stdlib.String.toBlob "abc") true |> Stdlib.Result.map Stdlib.Blob.toHex = Ok "0F040303616263"
+Stdlib.__QuicApplication.limit 18L 1152921504606846977L = Error "QUIC stream count exceeds 2^60"
+Stdlib.__QuicStreams.receiver 8L |> Stdlib.Result.andThen (fun state -> Stdlib.__QuicStreams.insert state 3L (Stdlib.String.toBlob "def") true) |> Stdlib.Result.andThen (fun state -> Stdlib.__QuicStreams.insert state 0L (Stdlib.String.toBlob "abc") false) |> Stdlib.Result.map (fun state -> (Stdlib.Blob.toHex (Stdlib.__QuicStreams.available state), Stdlib.__QuicStreams.complete state, Stdlib.__QuicStreams.complete (Stdlib.__QuicStreams.drain state))) = Ok (("616263646566", false, true))
+Stdlib.__QuicStreams.receiver 8L |> Stdlib.Result.andThen (fun state -> Stdlib.__QuicStreams.insert state 3L (Stdlib.String.toBlob "def") true) |> Stdlib.Result.andThen (fun state -> Stdlib.__QuicStreams.insert state 0L (Stdlib.String.toBlob "abc") true) = Error "QUIC stream final size changed"
+Stdlib.__QuicStreams.receiver 8L |> Stdlib.Result.andThen (fun state -> Stdlib.__QuicStreams.insert state 3L (Stdlib.String.toBlob "def") false) |> Stdlib.Result.andThen (fun state -> Stdlib.__QuicStreams.insert state 0L (Stdlib.String.toBlob "abc") true) = Error "QUIC stream final size is below received data"
+Stdlib.__QuicStreams.receiver 8L |> Stdlib.Result.andThen (fun state -> Stdlib.__QuicStreams.insert state 6L (Stdlib.String.toBlob "abc") false) = Error "QUIC stream flow control exceeded"
+Stdlib.__QuicStreams.receiver 8L |> Stdlib.Result.andThen (fun state -> Stdlib.__QuicStreams.insert state 0L (Stdlib.String.toBlob "abcdefgh") false) |> Stdlib.Result.map Stdlib.__QuicStreams.drain |> Stdlib.Result.andThen (fun state -> Stdlib.__QuicStreams.insert state 8L (Stdlib.String.toBlob "ijk") true) |> Stdlib.Result.map (fun state -> (state.credit, state.highest, Stdlib.Blob.toHex (Stdlib.__QuicStreams.available state))) = Ok ((16L, 11L, "696A6B"))
+Stdlib.__QuicStreams.receiver 8L |> Stdlib.Result.andThen (fun state -> Stdlib.__QuicStreams.reset state 9L 1L) = Error "QUIC stream flow control exceeded"
+Stdlib.__QuicStreams.receiver 8L |> Stdlib.Result.andThen (fun state -> Stdlib.__QuicStreams.reset state 4L 1L) |> Stdlib.Result.map (fun state -> (state.highest, Stdlib.__QuicStreams.complete state)) = Ok ((4L, true))
+Stdlib.__QuicStreams.sender 0L 2L |> Stdlib.Result.andThen (fun state -> Stdlib.__QuicStreams.send state (Stdlib.String.toBlob "abc") false) = Error "QUIC send stream is blocked"
+Stdlib.__QuicStreams.sender 0L 2L |> Stdlib.Result.andThen (fun state -> Stdlib.__QuicStreams.updateCredit state 5L) |> Stdlib.Result.andThen (fun state -> Stdlib.__QuicStreams.send state (Stdlib.String.toBlob "abc") true) |> Stdlib.Result.andThen (fun outgoing -> Stdlib.__QuicStreams.send outgoing.state Stdlib.Blob.empty false) = Error "QUIC send stream is finished"

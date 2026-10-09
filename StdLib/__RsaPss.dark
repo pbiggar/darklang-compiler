@@ -22,17 +22,6 @@ let __toBytes (value: Int) (remaining: Int64) (acc: List<Int64>) : Blob =
                  | None -> Builtin.testRuntimeError "RSA byte conversion failed" in
     Stdlib.__RsaPss.__toBytes value (remaining - 1L) (Stdlib.List.push acc byte64)
 
-let __powMod (base: Int) (exponent: Int) (modulus: Int) (acc: Int) : Int =
-  if exponent == Stdlib.Int.fromInt64 0L then acc
-  else
-    let nextAcc =
-      if Stdlib.Int.mod exponent (Stdlib.Int.fromInt64 2L) == Stdlib.Int.fromInt64 1L
-      then Stdlib.Int.mod (Stdlib.Int.multiply acc base) modulus
-      else acc in
-    Stdlib.__RsaPss.__powMod
-      (Stdlib.Int.mod (Stdlib.Int.multiply base base) modulus)
-      (Stdlib.Int.divide exponent (Stdlib.Int.fromInt64 2L)) modulus nextAcc
-
 let __mgf1 (seed: Blob) (length: Int64) (counter: Int64) (acc: List<Blob>) : Blob =
   if counter * 32L >= length then
     Stdlib.Blob.slice (Stdlib.Blob.concat (Stdlib.List.reverse acc))
@@ -91,8 +80,7 @@ let verifySha256 (modulusBytes: Blob) (exponentBytes: Blob)
       let s = Stdlib.__RsaPss.__fromBytes signature 0L (Stdlib.Int.fromInt64 0L) in
       if Stdlib.Int.greaterThanOrEqualTo s modulus then Ok false
       else
-        let emInt = Stdlib.__RsaPss.__powMod s exponent modulus (Stdlib.Int.fromInt64 1L) in
-        let em = Stdlib.__RsaPss.__toBytes emInt keyLength [] in
+        Stdlib.__RsaMontgomery.publicPow signature exponentBytes modulusBytes |> Stdlib.Result.map (fun em ->
         let dbLength = keyLength - 33L in
         let masked = Stdlib.Blob.slice em (Stdlib.Int.fromInt64 0L)
                        (Stdlib.Int.fromInt64 dbLength) in
@@ -106,9 +94,9 @@ let verifySha256 (modulusBytes: Blob) (exponentBytes: Blob)
         let mPrime = Stdlib.Blob.concat
                        [Stdlib.Blob.__fromInt64List [0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L],
                         Stdlib.Crypto.sha256 message, salt] in
-        Ok (Stdlib.Blob.__getByte em (keyLength - 1L) == 188L
+        (Stdlib.Blob.__getByte em (keyLength - 1L) == 188L
             && Stdlib.Blob.__getByte masked 0L < 128L
             && Stdlib.Int64.bitwiseAnd first 127L == 0L
             && Stdlib.__RsaPss.__zeroPrefix db 1L (dbLength - 33L)
             && Stdlib.Blob.__getByte db (dbLength - 33L) == 1L
-            && Stdlib.__RsaPss.__equalBytes h (Stdlib.Crypto.sha256 mPrime) 0L 0L)
+            && Stdlib.__RsaPss.__equalBytes h (Stdlib.Crypto.sha256 mPrime) 0L 0L))

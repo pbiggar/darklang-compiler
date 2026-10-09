@@ -1,4 +1,4 @@
-// __Tls13Handshake.dark - TLS 1.3 handshake secrets, server Finished, and bounded reassembly.
+// Tls13Handshake.dark - TLS 1.3 handshake secrets, server Finished, and bounded reassembly.
 
 module Darklang.Stdlib.__Tls13Handshake
 
@@ -42,15 +42,14 @@ let __or32 (bytes: Blob) (index: Int64) (acc: Int64) : Int64 =
          (Stdlib.Int64.bitwiseOr acc (Stdlib.Blob.__getByte bytes index))
 
 // RFC 8446, §7.1: early_secret -> derived -> handshake_secret.
-let deriveHandshakeSecrets (sharedSecret: Blob) (clientHello: Blob) (serverHello: Blob)
+let __deriveHandshakeSecretsTranscript (sharedSecret: Blob) (transcript: Blob)
   : Stdlib.Result.Result<Stdlib.__Tls13Handshake.HandshakeSecrets, String> =
   if Stdlib.Blob.__byteLength sharedSecret != 32L then
     Error "TLS X25519 shared secret must be 32 bytes"
   else if Stdlib.__Tls13Handshake.__or32 sharedSecret 0L 0L == 0L then
     Error "TLS X25519 shared secret is zero"
-  else if Stdlib.Bool.not (Stdlib.__Tls13Handshake.__wholeHandshake clientHello 1L) ||
-          Stdlib.Bool.not (Stdlib.__Tls13Handshake.__wholeHandshake serverHello 2L) then
-    Error "TLS handshake transcript requires complete ClientHello and ServerHello"
+  else if Stdlib.Blob.__byteLength transcript == 0L || Stdlib.Blob.__byteLength transcript > 66560L then
+    Error "Invalid TLS handshake transcript size"
   else
     let zero = Stdlib.Blob.__fromInt64List (Stdlib.List.repeatUnsafe 32 0L) in
     let emptyHash = Stdlib.Crypto.sha256 Stdlib.Blob.empty in
@@ -59,7 +58,6 @@ let deriveHandshakeSecrets (sharedSecret: Blob) (clientHello: Blob) (serverHello
     | Error message -> Error message
     | Ok derived ->
         let handshake = Stdlib.__Tls13.hkdfExtract derived sharedSecret in
-        let transcript = Stdlib.Blob.concat [clientHello, serverHello] in
         let transcriptHash = Stdlib.Crypto.sha256 transcript in
         match Stdlib.__Tls13.hkdfExpandLabel handshake "c hs traffic" transcriptHash 32L with
         | Error message -> Error message
@@ -69,6 +67,13 @@ let deriveHandshakeSecrets (sharedSecret: Blob) (clientHello: Blob) (serverHello
             | Ok server ->
                 Ok (Stdlib.__Tls13Handshake.HandshakeSecrets {
                   client = client, server = server, transcript = transcript })
+
+let deriveHandshakeSecrets (sharedSecret: Blob) (clientHello: Blob) (serverHello: Blob)
+  : Stdlib.Result.Result<Stdlib.__Tls13Handshake.HandshakeSecrets, String> =
+  if Stdlib.Blob.__byteLength sharedSecret != 32L then Error "TLS X25519 shared secret must be 32 bytes"
+  else if Stdlib.__Tls13Handshake.__or32 sharedSecret 0L 0L == 0L then Error "TLS X25519 shared secret is zero"
+  else if Stdlib.Bool.not (Stdlib.__Tls13Handshake.__wholeHandshake clientHello 1L) || Stdlib.Bool.not (Stdlib.__Tls13Handshake.__wholeHandshake serverHello 2L) then Error "TLS handshake transcript requires complete ClientHello and ServerHello"
+  else Stdlib.__Tls13Handshake.__deriveHandshakeSecretsTranscript sharedSecret (Stdlib.Blob.concat [clientHello, serverHello])
 
 let deriveHandshakeSecrets384 (sharedSecret: Blob) (clientHello: Blob) (serverHello: Blob)
   : Stdlib.Result.Result<Stdlib.__Tls13Handshake.HandshakeSecrets, String> =
@@ -284,6 +289,16 @@ let __consumeFrames (state: Stdlib.__Tls13Handshake.ServerFlight) (buffer: Blob)
                Stdlib.Blob.__byteLength frame.remaining != 0L then
               Error "Unexpected TLS handshake bytes after Finished"
             else Stdlib.__Tls13Handshake.__consumeFrames next frame.remaining
+
+// QUIC supplies CRYPTO bytes after packet authentication and stream ordering.
+// It has no TLS record encryption or record sequence counters.
+let consumeServerHandshake (state: Stdlib.__Tls13Handshake.ServerFlight) (bytes: Blob)
+  : Stdlib.Result.Result<Stdlib.__Tls13Handshake.ServerFlight, String> =
+  if state.phase == Stdlib.__Tls13Handshake.FlightPhase.ServerFinished then
+    Error "TLS server handshake already finished"
+  else
+    let buffered = Stdlib.Blob.concat [state.pending, bytes] in
+    Stdlib.__Tls13Handshake.__consumeFrames (Stdlib.__Tls13Handshake.__withPending state Stdlib.Blob.empty) buffered
 
 let consumeServerRecord (state: Stdlib.__Tls13Handshake.ServerFlight)
   (record: Stdlib.__Tls13.Record)
