@@ -1676,6 +1676,7 @@ let emitCliNative (ctx : codeGenContext) (dest : LIR.reg)
                       Symbolic.Label complete;
                     ])
           | _ -> Error "CLI getenv expects exactly one name")
+      | LIR.StdinState -> Ok [ Symbolic.ADD_imm (destReg, Symbolic.X27, 256) ]
       | LIR.GetEnvironmentPacked -> Ok (emitEnvironmentPacked ctx destReg)
       | LIR.DirectoryCurrent -> Ok (emitDirectoryCurrent ctx destReg)
       | LIR.DirectoryListPacked -> (

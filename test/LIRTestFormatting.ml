@@ -129,6 +129,7 @@ and cliOperation (value : LIR.cliOperation) =
   | LIR.Hostname -> union "CliOperation" "Hostname" []
   | LIR.GetEnv -> union "CliOperation" "GetEnv" []
   | LIR.GetEnvironmentPacked -> union "CliOperation" "GetEnvironmentPacked" []
+  | LIR.StdinState -> union "CliOperation" "StdinState" []
   | LIR.SetEnv -> union "CliOperation" "SetEnv" []
   | LIR.UnsetEnv -> union "CliOperation" "UnsetEnv" []
   | LIR.DirectoryCurrent -> union "CliOperation" "DirectoryCurrent" []

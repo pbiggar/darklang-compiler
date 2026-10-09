@@ -231,7 +231,7 @@ let builtinPresentationModule : AST.moduleDef =
       [
         fn "print" [] [ TString ] TUnit;
         fn "printLine" [] [ TString ] TUnit;
-        fn "stdinReadLine" [] [ TUnit ] TString;
+        fn "__stdinState" [] [ TUnit ] TInternalRawPtr;
       ];
   }
 

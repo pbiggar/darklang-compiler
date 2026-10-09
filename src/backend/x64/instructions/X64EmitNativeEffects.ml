@@ -601,6 +601,8 @@ let emitCliNative (ctx : X64CodeGenTypes.funcCtx) (dest : LIR.reg)
             (loadName
             @ [ X.CALL "__dark_cli_getenv" ]
             @ if destReg = X.RAX then [] else [ X.MOV_reg (destReg, X.RAX) ])
+      | LIR.StdinState ->
+          Ok [ X.LEA (destReg, freeListBase, Int32.of_int (freeListSize + processTableSize)) ]
       | LIR.GetEnvironmentPacked ->
           Ok
             ([ X.CALL "__dark_cli_environment_packed" ]

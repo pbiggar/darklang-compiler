@@ -329,6 +329,7 @@ and aNF_cliOperation (value : ANF.cliOperation) =
   | ANF.Hostname -> union "CliOperation" "Hostname" []
   | ANF.GetEnv -> union "CliOperation" "GetEnv" []
   | ANF.GetEnvironmentPacked -> union "CliOperation" "GetEnvironmentPacked" []
+  | ANF.StdinState -> union "CliOperation" "StdinState" []
   | ANF.SetEnv -> union "CliOperation" "SetEnv" []
   | ANF.UnsetEnv -> union "CliOperation" "UnsetEnv" []
   | ANF.DirectoryCurrent -> union "CliOperation" "DirectoryCurrent" []
