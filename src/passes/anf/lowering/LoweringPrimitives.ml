@@ -885,7 +885,6 @@ let isBuiltinUnwrapName name = name = "Builtin.unwrap"
 
 (* Builtin.crash is the public source-level bottom operation. *)
 let isSourceCrashName name = name = "Builtin.crash"
-
 let isRuntimeFailureName name = isSourceCrashName name
 
 (*

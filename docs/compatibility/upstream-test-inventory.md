@@ -4,7 +4,7 @@ Generated from `test/test-suite-tooling/TestRunner.ml` and the imported
 `test/fixtures/e2e/upstream/**/*.dark` files. Regenerate with
 `python3 scripts/audit-upstream-gates.py`; verify with `--check`.
 
-**105 files; 34 whole-file exclusions; 271 line-number entries
+**105 files; 35 whole-file exclusions; 270 line-number entries
 across 32 files.** A line entry is not a skipped-test count.
 The runner matches the `L<number>:` assertion name produced by the fixture
 parser. Declarations and multiline assertions require parser inspection;
@@ -24,7 +24,7 @@ Other skip metadata and runtime filters are outside this inventory.
 | [cli/tailscale.dark](../../test/fixtures/e2e/upstream/cli/tailscale.dark) | disabled | — |
 | [cli/workbench-repl.dark](../../test/fixtures/e2e/upstream/cli/workbench-repl.dark) | disabled | — |
 | [cloud/db.dark](../../test/fixtures/e2e/upstream/cloud/db.dark) | disabled | — |
-| [language/apply/eapply.dark](../../test/fixtures/e2e/upstream/language/apply/eapply.dark) | enabled | 118 |
+| [language/apply/eapply.dark](../../test/fixtures/e2e/upstream/language/apply/eapply.dark) | disabled | 118 |
 | [language/apply/einfix.dark](../../test/fixtures/e2e/upstream/language/apply/einfix.dark) | enabled | 57, 58, 59 |
 | [language/basic/dfloat.dark](../../test/fixtures/e2e/upstream/language/basic/dfloat.dark) | enabled | — |
 | [language/basic/eand.dark](../../test/fixtures/e2e/upstream/language/basic/eand.dark) | enabled | 5, 13 |
@@ -42,7 +42,7 @@ Other skip metadata and runtime filters are outside this inventory.
 | [language/custom-data/record-field-acess.dark](../../test/fixtures/e2e/upstream/language/custom-data/record-field-acess.dark) | enabled | 13 |
 | [language/custom-data/records.dark](../../test/fixtures/e2e/upstream/language/custom-data/records.dark) | enabled | 8 |
 | [language/custom-data/values.dark](../../test/fixtures/e2e/upstream/language/custom-data/values.dark) | enabled | 5, 9, 13, 17, 21, 25, 29, 33, 37, 41, 45, 49, 53, 57, 61, 65, 76, 77, 78, 80, 81, 83, 84, 86, 87, 89, 90, 92, 93, 95, 96, 98, 99, 101, 102, 104, 105, 107, 108, 110, 111, 113, 114, 116, 117, 119, 120, 122, 123, 125, 126, 128, 129 |
-| [language/derror.dark](../../test/fixtures/e2e/upstream/language/derror.dark) | enabled | 10, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 25, 32 |
+| [language/derror.dark](../../test/fixtures/e2e/upstream/language/derror.dark) | enabled | 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 25, 32 |
 | [language/effect-ceiling.dark](../../test/fixtures/e2e/upstream/language/effect-ceiling.dark) | disabled | — |
 | [language/elambda.dark](../../test/fixtures/e2e/upstream/language/elambda.dark) | enabled | 13, 18, 21, 33, 35 |
 | [language/error-syntax.dark](../../test/fixtures/e2e/upstream/language/error-syntax.dark) | enabled | 1 |
@@ -127,4 +127,4 @@ editing the runner. They must not be counted as unsupported expressions.
 | File | Line | Source line |
 | --- | --- | --- |
 
-0 of the 271 entries point to blank or comment lines.
+0 of the 270 entries point to blank or comment lines.

@@ -294,9 +294,7 @@ let isBuiltinUnwrapName name = name = "Builtin.unwrap"
 
 (* Builtin.crash is the public source-level bottom operation. *)
 let isSourceCrashName name = name = "Builtin.crash"
-
 let isRuntimeFailureName name = isSourceCrashName name
-
 let isBuiltinTestNanName name = name = "Builtin.testNan"
 let isBuiltinTestInfinityName name = name = "Builtin.testInfinity"
 let isBuiltinBlobEmptyName name = name = "Builtin.blobEmpty"
@@ -347,9 +345,7 @@ let rec isKnownCrashExpr boundExprs = function
     when isRuntimeFailureName funcName ->
       true
   | Let (LPVariable name, value, body) ->
-      isKnownCrashExpr
-        (StringOrder.Map.add name value boundExprs)
-        body
+      isKnownCrashExpr (StringOrder.Map.add name value boundExprs) body
   | Let (_, _, body) -> isKnownCrashExpr boundExprs body
   | Var name ->
       Option.fold ~none:false

@@ -864,8 +864,7 @@ let lowerExpression (toANFCore : LoweringCallbacks.expressionLowerer)
             ("Internal error: Builtin.unwrap should have exactly 1 argument, \
               got "
             ^ string_of_int (List.length values)))
-  | C.Call (callee, args)
-    when functionNameIs callee "Builtin.crash" -> (
+  | C.Call (callee, args) when functionNameIs callee "Builtin.crash" -> (
       match NonEmptyList.toList args with
       | [ message ] -> (
           match P.unwrapErrorPayloadToString message with

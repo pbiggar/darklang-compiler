@@ -1044,6 +1044,7 @@ let runTestsWithProgressReporter completedTestReporter args =
         "test/fixtures/e2e/upstream/cli/tailscale.dark";
         "test/fixtures/e2e/upstream/cli/workbench-repl.dark";
         "test/fixtures/e2e/upstream/cloud/db.dark";
+        "test/fixtures/e2e/upstream/language/apply/eapply.dark";
         "test/fixtures/e2e/upstream/language/builtin-introspection.dark";
         "test/fixtures/e2e/upstream/language/effect-ceiling.dark";
         "test/fixtures/e2e/upstream/language/error-type-names.dark";
@@ -1072,70 +1073,224 @@ let runTestsWithProgressReporter completedTestReporter args =
     in
     let disabledUpstreamLines =
       [
-        ( "test/fixtures/e2e/upstream/language/apply/eapply.dark",
-          [ 118 ] );
-        ( "test/fixtures/e2e/upstream/language/apply/einfix.dark",
-          [ 57; 58; 59 ] );
-        ( "test/fixtures/e2e/upstream/language/basic/eand.dark",
-          [ 5; 13 ] );
+        ("test/fixtures/e2e/upstream/language/apply/eapply.dark", [ 118 ]);
+        ("test/fixtures/e2e/upstream/language/apply/einfix.dark", [ 57; 58; 59 ]);
+        ("test/fixtures/e2e/upstream/language/basic/eand.dark", [ 5; 13 ]);
         ( "test/fixtures/e2e/upstream/language/basic/elet.dark",
           [ 1; 2; 19; 20; 45; 54; 60; 66; 71; 82 ] );
-        ( "test/fixtures/e2e/upstream/language/basic/eor.dark",
-          [ 18; 19 ] );
-        ( "test/fixtures/e2e/upstream/language/collections/dlist.dark",
-          [ 9; 10 ] );
+        ("test/fixtures/e2e/upstream/language/basic/eor.dark", [ 18; 19 ]);
+        ("test/fixtures/e2e/upstream/language/collections/dlist.dark", [ 9; 10 ]);
         ( "test/fixtures/e2e/upstream/language/collections/dtuple.dark",
           [ 9; 11 ] );
         ( "test/fixtures/e2e/upstream/language/custom-data/enums.dark",
           [ 7; 9; 11; 15; 17; 72; 104 ] );
         ( "test/fixtures/e2e/upstream/language/custom-data/record-field-acess.dark",
           [ 13 ] );
-        ( "test/fixtures/e2e/upstream/language/custom-data/records.dark",
-          [ 8 ] );
+        ("test/fixtures/e2e/upstream/language/custom-data/records.dark", [ 8 ]);
         ( "test/fixtures/e2e/upstream/language/custom-data/values.dark",
-          [ 5; 9; 13; 17; 21; 25; 29; 33; 37; 41; 45; 49; 53; 57; 61; 65; 76; 77; 78; 80; 81; 83; 84; 86; 87; 89; 90; 92; 93; 95; 96; 98; 99; 101; 102; 104; 105; 107; 108; 110; 111; 113; 114; 116; 117; 119; 120; 122; 123; 125; 126; 128; 129 ] );
+          [
+            5;
+            9;
+            13;
+            17;
+            21;
+            25;
+            29;
+            33;
+            37;
+            41;
+            45;
+            49;
+            53;
+            57;
+            61;
+            65;
+            76;
+            77;
+            78;
+            80;
+            81;
+            83;
+            84;
+            86;
+            87;
+            89;
+            90;
+            92;
+            93;
+            95;
+            96;
+            98;
+            99;
+            101;
+            102;
+            104;
+            105;
+            107;
+            108;
+            110;
+            111;
+            113;
+            114;
+            116;
+            117;
+            119;
+            120;
+            122;
+            123;
+            125;
+            126;
+            128;
+            129;
+          ] );
         ( "test/fixtures/e2e/upstream/language/derror.dark",
-          [ 10; 13; 14; 15; 16; 17; 18; 19; 20; 21; 22; 23; 25; 32 ] );
+          [ 13; 14; 15; 16; 17; 18; 19; 20; 21; 22; 23; 25; 32 ] );
         ( "test/fixtures/e2e/upstream/language/elambda.dark",
           [ 13; 18; 21; 33; 35 ] );
-        ( "test/fixtures/e2e/upstream/language/error-syntax.dark",
-          [ 1 ] );
+        ("test/fixtures/e2e/upstream/language/error-syntax.dark", [ 1 ]);
         ( "test/fixtures/e2e/upstream/language/flow-control/eif.dark",
           [ 3; 4; 5; 6; 10; 23; 26 ] );
         ( "test/fixtures/e2e/upstream/language/flow-control/ematch.dark",
           [ 656; 660; 663; 667; 672; 677; 681 ] );
-        ( "test/fixtures/e2e/upstream/language/flow-control/epipe.dark",
-          [ 11 ] );
-        ( "test/fixtures/e2e/upstream/language/nested-fns.dark",
-          [ 55; 60 ] );
+        ("test/fixtures/e2e/upstream/language/flow-control/epipe.dark", [ 11 ]);
+        ("test/fixtures/e2e/upstream/language/nested-fns.dark", [ 55; 60 ]);
         ( "test/fixtures/e2e/upstream/scm/branch-identity.dark",
           [ 9; 20; 23; 27; 31; 32 ] );
         ( "test/fixtures/e2e/upstream/scm/conflicts.dark",
-          [ 51; 58; 64; 70; 79; 86; 92; 99; 105; 111; 129; 136; 144; 155; 161; 169; 175; 184; 194; 204; 220; 224; 228; 232; 233; 234; 236; 242; 243; 246; 251; 257; 258; 259; 263; 265; 266 ] );
+          [
+            51;
+            58;
+            64;
+            70;
+            79;
+            86;
+            92;
+            99;
+            105;
+            111;
+            129;
+            136;
+            144;
+            155;
+            161;
+            169;
+            175;
+            184;
+            194;
+            204;
+            220;
+            224;
+            228;
+            232;
+            233;
+            234;
+            236;
+            242;
+            243;
+            246;
+            251;
+            257;
+            258;
+            259;
+            263;
+            265;
+            266;
+          ] );
         ( "test/fixtures/e2e/upstream/stdlib/base64.dark",
-          [ 7; 9; 10; 11; 12; 20; 21; 22; 23; 24; 25; 26; 27; 28; 29; 33; 34; 35; 36; 39; 40; 43; 44; 45; 46; 47 ] );
-        ( "test/fixtures/e2e/upstream/stdlib/dict.dark",
-          [ 76; 93 ] );
+          [
+            7;
+            9;
+            10;
+            11;
+            12;
+            20;
+            21;
+            22;
+            23;
+            24;
+            25;
+            26;
+            27;
+            28;
+            29;
+            33;
+            34;
+            35;
+            36;
+            39;
+            40;
+            43;
+            44;
+            45;
+            46;
+            47;
+          ] );
+        ("test/fixtures/e2e/upstream/stdlib/dict.dark", [ 76; 93 ]);
         ( "test/fixtures/e2e/upstream/stdlib/float.dark",
-          [ 47; 55; 58; 59; 64; 65; 73; 76; 81; 89; 107; 110; 111; 125; 127; 134; 136; 160; 173; 176; 244; 255 ] );
+          [
+            47;
+            55;
+            58;
+            59;
+            64;
+            65;
+            73;
+            76;
+            81;
+            89;
+            107;
+            110;
+            111;
+            125;
+            127;
+            134;
+            136;
+            160;
+            173;
+            176;
+            244;
+            255;
+          ] );
         ( "test/fixtures/e2e/upstream/stdlib/html.dark",
           [ 42; 44; 66; 69; 72; 75; 83 ] );
         ( "test/fixtures/e2e/upstream/stdlib/http.dark",
-          [ 21; 27; 33; 48; 51; 57; 63; 102; 108; 110; 111; 114; 117; 122; 123; 124; 128; 129; 130; 131; 133; 137; 144; 149; 155; 161 ] );
+          [
+            21;
+            27;
+            33;
+            48;
+            51;
+            57;
+            63;
+            102;
+            108;
+            110;
+            111;
+            114;
+            117;
+            122;
+            123;
+            124;
+            128;
+            129;
+            130;
+            131;
+            133;
+            137;
+            144;
+            149;
+            155;
+            161;
+          ] );
         ( "test/fixtures/e2e/upstream/stdlib/httpclient.dark",
           [ 71; 108; 111; 131; 132; 133; 134 ] );
-        ( "test/fixtures/e2e/upstream/stdlib/httpserver.dark",
-          [ 29; 33; 37 ] );
-        ( "test/fixtures/e2e/upstream/stdlib/ints/int64.dark",
-          [ 368 ] );
-        ( "test/fixtures/e2e/upstream/stdlib/ints/int8.dark",
-          [ 47 ] );
+        ("test/fixtures/e2e/upstream/stdlib/httpserver.dark", [ 29; 33; 37 ]);
+        ("test/fixtures/e2e/upstream/stdlib/ints/int64.dark", [ 368 ]);
+        ("test/fixtures/e2e/upstream/stdlib/ints/int8.dark", [ 47 ]);
         ( "test/fixtures/e2e/upstream/stdlib/list.dark",
           [ 61; 65; 71; 75; 81; 157; 184; 238; 346 ] );
-        ( "test/fixtures/e2e/upstream/stdlib/math.dark",
-          [ 27; 30 ] );
-        ( "test/fixtures/e2e/upstream/stdlib/nomodule.dark",
-          [ 308 ] );
+        ("test/fixtures/e2e/upstream/stdlib/math.dark", [ 27; 30 ]);
+        ("test/fixtures/e2e/upstream/stdlib/nomodule.dark", [ 308 ]);
       ]
     in
     let normalizePath path =
@@ -1163,8 +1318,16 @@ let runTestsWithProgressReporter completedTestReporter args =
       else None
     in
     let upstreamSkipReason (test : E.e2eTest) =
-      if Text.contains test.E.source "Builtin.testRuntimeError"
-         || Text.contains test.E.preamble "Builtin.testRuntimeError" then
+      if
+        pathMatchesSourceFile test.E.sourceFile
+          "test/fixtures/e2e/upstream/language/apply/eapply.dark"
+      then
+        "unsupported interpreter test infrastructure: shared preamble uses \
+         Builtin.testRuntimeError"
+      else if
+        Text.contains test.E.source "Builtin.testRuntimeError"
+        || Text.contains test.E.preamble "Builtin.testRuntimeError"
+      then
         "unsupported interpreter test infrastructure: Builtin.testRuntimeError"
       else "pending upstream support"
     in

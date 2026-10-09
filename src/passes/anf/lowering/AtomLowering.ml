@@ -640,9 +640,7 @@ let lowerAtom (toANFCore : LoweringCallbacks.expressionLowerer)
         Error
           "Internal error: Builtin.unwrap should be lowered via toANF, not \
            toAtom"
-      else if
-        functionNameIs id "Builtin.crash"
-      then
+      else if functionNameIs id "Builtin.crash" then
         match S.exprArgsToList args with
         | [ message ] -> (
             match P.unwrapErrorPayloadToString message with

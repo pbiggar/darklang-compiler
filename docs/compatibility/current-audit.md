@@ -8,10 +8,12 @@ Audited on 2026-10-08 (UTC), against compiler revision `4a61318019fb8dea7f34a0bf
 Results from that complete audit, including enabled neighbours: 3,599 assertions, 1,325 passed and 2,274 failed.
 That audit used 34 whole-file gates and 205 assertion lines across 16 mixed files.
 
-Current configured exclusions: **2,340 assertions across 66 files**, including
-**70 unsupported interpreter runtime-error assertions**. There are 34 whole-file
-gates and 271 assertion lines across 32 mixed files. The new exclusions await
-the focused native rerun below.
+Current configured exclusions: **2,372 assertions across 66 files**, including
+**102 unsupported interpreter runtime-error assertions**. There are 35 whole-file
+gates and 269 assertion lines across 31 mixed files. The 19 affected files were rerun individually without gates: **1,006 passed
+and 110 failed out of 1,116 assertions**. Their failures match the configured
+exclusions exactly; eight are existing compiler failures and 102 are interpreter
+test infrastructure. `derror.dark:L10` passes and remains enabled.
 
 The assertion harness now compares original parsed expressions. Multiline applications and literal contents are preserved in individual runs and batches. A follow-up retest of `stdlib/dict.dark` passed all 140 assertions after L21 was changed to expect its existing compile-time key type error.
 
@@ -44,9 +46,9 @@ Verification with current main `a2771f0cbe82d728de618e3eacd7a1c870e1d330`: nativ
 
 The compiler no longer exposes `Builtin.testRuntimeError`. Its compiler-owned
 uses have migrated to `Builtin.crash : String -> Never`. The
-[exact 70 assertions in 19 upstream files](failures/interpreter-test-runtime-error.md)
+[exact 102 assertions in 19 upstream files](failures/interpreter-test-runtime-error.md)
 remain unchanged and are disabled as unsupported interpreter infrastructure.
-Four overlap the previous failure list; this adds 66 exclusions.
+Four overlap the previous failure list; this adds 98 exclusions.
 
 ## Failing test files
 
@@ -65,9 +67,9 @@ Each file links to the individual failing assertions and their observed diagnost
 | [cli/workbench-repl.dark](failures/cli/workbench-repl.md) | 36 | 0 | 36 |
 | [cloud/db.dark](failures/cloud/db.md) | 151 | 0 | 151 |
 | [language/builtin-introspection.dark](failures/language/builtin-introspection.md) | 2 | 0 | 2 |
-| [language/custom-data/enums.dark](failures/language/custom-data/enums.md) | 38 | 33 | 5 |
+| [language/custom-data/enums.dark](failures/language/custom-data/enums.md) | 38 | 31 | 7 |
 | [language/custom-data/values.dark](failures/language/custom-data/values.md) | 72 | 19 | 53 |
-| [language/derror.dark](failures/language/derror.md) | 15 | 13 | 2 |
+| [language/derror.dark](failures/language/derror.md) | 15 | 2 | 13 |
 | [language/effect-ceiling.dark](failures/language/effect-ceiling.md) | 6 | 0 | 6 |
 | [language/error-type-names.dark](failures/language/error-type-names.md) | 13 | 0 | 13 |
 | [language/nested-fns.dark](failures/language/nested-fns.md) | 12 | 10 | 2 |
@@ -99,11 +101,27 @@ Each file links to the individual failing assertions and their observed diagnost
 | [stdlib/language-tools/parsedFileShape.dark](failures/stdlib/language-tools/parsedFileShape.md) | 13 | 0 | 13 |
 | [stdlib/language-tools/pickLocation.dark](failures/stdlib/language-tools/pickLocation.md) | 30 | 0 | 30 |
 | [stdlib/language-tools/semanticTokenization.dark](failures/stdlib/language-tools/semanticTokenization.md) | 102 | 0 | 102 |
-| [stdlib/list.dark](failures/stdlib/list.md) | 220 | 215 | 5 |
+| [stdlib/list.dark](failures/stdlib/list.md) | 220 | 211 | 9 |
 | [stdlib/math.dark](failures/stdlib/math.md) | 32 | 30 | 2 |
 | [stdlib/prettyPrinter.dark](failures/stdlib/prettyPrinter.md) | 57 | 0 | 57 |
 | [stdlib/sqlite.dark](failures/stdlib/sqlite.md) | 8 | 0 | 8 |
 | [stdlib/string.dark](failures/stdlib/string.md) | 640 | 0 | 640 |
+| [language/apply/eapply.dark](failures/interpreter-test-runtime-error.md) | 34 | 0 | 34 |
+| [language/apply/einfix.dark](failures/interpreter-test-runtime-error.md) | 104 | 101 | 3 |
+| [language/basic/eand.dark](failures/interpreter-test-runtime-error.md) | 13 | 11 | 2 |
+| [language/basic/elet.dark](failures/interpreter-test-runtime-error.md) | 38 | 28 | 10 |
+| [language/basic/eor.dark](failures/interpreter-test-runtime-error.md) | 13 | 11 | 2 |
+| [language/collections/dlist.dark](failures/interpreter-test-runtime-error.md) | 6 | 4 | 2 |
+| [language/collections/dtuple.dark](failures/interpreter-test-runtime-error.md) | 6 | 4 | 2 |
+| [language/custom-data/record-field-acess.dark](failures/interpreter-test-runtime-error.md) | 5 | 4 | 1 |
+| [language/custom-data/records.dark](failures/interpreter-test-runtime-error.md) | 24 | 23 | 1 |
+| [language/elambda.dark](failures/interpreter-test-runtime-error.md) | 23 | 18 | 5 |
+| [language/error-syntax.dark](failures/interpreter-test-runtime-error.md) | 2 | 1 | 1 |
+| [language/flow-control/eif.dark](failures/interpreter-test-runtime-error.md) | 16 | 9 | 7 |
+| [language/flow-control/ematch.dark](failures/interpreter-test-runtime-error.md) | 161 | 154 | 7 |
+| [language/flow-control/epipe.dark](failures/interpreter-test-runtime-error.md) | 30 | 29 | 1 |
+| [stdlib/dict.dark](failures/interpreter-test-runtime-error.md) | 140 | 138 | 2 |
+| [stdlib/nomodule.dark](failures/interpreter-test-runtime-error.md) | 228 | 227 | 1 |
 
 ## Assertions enabled
 
