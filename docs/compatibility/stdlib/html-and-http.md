@@ -186,6 +186,13 @@ checks wire vectors and duplicate/Unicode fields; the independent
 `scripts/test_http_header_compression_peer.py` checks all 256 Huffman symbols,
 padding, a near-limit input, HPACK/QPACK round trips and sensitive-field flags.
 Dynamic QPACK capacity and blocked-stream support remain disabled.
+HTTP/2 outgoing blocks now share a separate bounded dynamic HPACK table across
+connection state transitions. Peer table-capacity changes evict entries and
+emit ordered size updates before the next block; credentials and cookies stay
+never-indexed. Peer HTTP/2 and HTTP/3 decoded field-section limits are checked
+before outgoing headers when the setting is known. Focused encoder/limit
+fixtures and seven consecutive blocks decoded by the independent `hpack`
+implementation cover reuse, eviction and intermediate capacity changes.
 `test/fixtures/e2e/http3_wire.e2e` checks encoding bounds,
 fragmentation, forbidden HTTP/2 frame/settings identifiers and duplicates.
 The QUIC v1 AES-128 protection layer derives initial keys, reconstructs packet
@@ -238,6 +245,12 @@ GOAWAY identifiers and identifies unique control/QPACK streams by stream type;
 closing a critical stream fails the exchange. `http3_stream.e2e`,
 `http3_message.e2e`, `http3_control.e2e` and `http3_uni.e2e` cover these rules,
 and the live stream peer also feeds response/control bytes through this layer.
+Authenticated QUIC application owners enforce the negotiated nonzero idle
+limit with an RTT-derived three-PTO floor, independently of HTTP exchange
+deadlines. Receives and the first ack-eliciting send after a receive restart
+the timer. The idle fixture and an aioquic upload stalled beyond a short peer
+limit check expiry and subsequent listener availability. Handshake owners
+retain their separate bounded deadlines.
 `HttpsService` parses bounded HTTPS RDATA into aliases or endpoints advertising
 `h3`, including alternate ports and IPv4/IPv6 hints. It rejects malformed
 parameter ordering, lengths, target compression and mandatory-key lists;
