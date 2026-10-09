@@ -295,8 +295,7 @@ let isBuiltinUnwrapName name = name = "Builtin.unwrap"
 (* Builtin.crash is the public source-level bottom operation. *)
 let isSourceCrashName name = name = "Builtin.crash"
 
-let isRuntimeFailureName name =
-  isSourceCrashName name
+let isRuntimeFailureName name = isSourceCrashName name
 
 let isBuiltinTestNanName name = name = "Builtin.testNan"
 let isBuiltinTestInfinityName name = name = "Builtin.testInfinity"
