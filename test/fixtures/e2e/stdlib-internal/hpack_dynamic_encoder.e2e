@@ -1,0 +1,9 @@
+// hpack_dynamic_encoder.e2e - Connection-owned compression, resize ordering and eviction.
+Stdlib.__Hpack.encodeDynamic (Stdlib.__Hpack.encoder ()) [("x", "y"), ("x", "y")] |> Stdlib.Result.map (fun encoded -> Stdlib.Blob.toHex encoded.bytes) = Ok "4001780179BE"
+Stdlib.__Hpack.encodeDynamic (Stdlib.__Hpack.encoder ()) [("x", "y")] |> Stdlib.Result.andThen (fun first -> Stdlib.__Hpack.encodeDynamic first.state [("x", "y")]) |> Stdlib.Result.map (fun encoded -> Stdlib.Blob.toHex encoded.bytes) = Ok "BE"
+Stdlib.__Hpack.encodeDynamic (Stdlib.__Hpack.encoder ()) [("authorization", "secret"), ("cookie", "a=1"), ("set-cookie", "b=2")] |> Stdlib.Result.map (fun encoded -> encoded.state.table.entries) = Ok []
+Stdlib.__Hpack.resizeEncoder (Stdlib.__Hpack.encoder ()) 0L |> Stdlib.Result.andThen (fun state -> Stdlib.__Hpack.encodeDynamic state [("x", "y")]) |> Stdlib.Result.map (fun encoded -> (Stdlib.Blob.toHex encoded.bytes, encoded.state.table.entries)) = Ok (("201001780179", []))
+Stdlib.__Hpack.resizeEncoder (Stdlib.__Hpack.encoder ()) 34L |> Stdlib.Result.andThen (fun state -> Stdlib.__Hpack.encodeDynamic state [("x", "y"), ("a", "b")]) |> Stdlib.Result.map (fun encoded -> encoded.state.table.entries) = Ok [("a", "b")]
+Stdlib.__Hpack.resizeEncoder (Stdlib.__Hpack.encoder ()) 0L |> Stdlib.Result.andThen (fun state -> Stdlib.__Hpack.resizeEncoder state 4096L) |> Stdlib.Result.andThen (fun state -> Stdlib.__Hpack.encodeDynamic state []) |> Stdlib.Result.map (fun encoded -> Stdlib.Blob.toHex encoded.bytes) = Ok "203FE11F"
+Stdlib.__Hpack.resizeEncoder (Stdlib.__Hpack.encoder ()) -1L |> Stdlib.Result.map (fun state -> state.table.limit) = Error "Invalid HPACK encoder capacity"
+Stdlib.__Hpack.resizeEncoder (Stdlib.__Hpack.encoder ()) 4294967295L |> Stdlib.Result.map (fun state -> state.table.limit) = Ok 4096L

@@ -6,6 +6,8 @@ type State = { entries: List<(String * String)>, limit: Int64 }
 type Decoded = { headers: List<(String * String)>, state: Stdlib.__Hpack.State }
 type Number = { value: Int64, next: Int64 }
 type Text = { value: String, next: Int64 }
+type Encoder = { table: Stdlib.__Hpack.State, minimum: Stdlib.Option.Option<Int64> }
+type Encoded = { bytes: Blob, state: Stdlib.__Hpack.Encoder }
 
 let initial () : Stdlib.__Hpack.State = Stdlib.__Hpack.State { entries = [], limit = 4096L }
 
@@ -472,6 +474,14 @@ let __entrySize (entry: (String * String)) : Int64 =
   let (name, value) = entry in
   32L + Stdlib.String.__byteLength name + Stdlib.String.__byteLength value
 
+let checkFieldBudget (fields: List<(String * String)>) (remaining: Int64) : Stdlib.Result.Result<Unit, String> =
+  match fields with
+  | [] -> Ok ()
+  | field :: rest ->
+    let size = Stdlib.__Hpack.__entrySize field in
+    if size > remaining then Error "Header field-section limit exceeded"
+    else Stdlib.__Hpack.checkFieldBudget rest (remaining - size)
+
 let __retain (entries: List<(String * String)>) (remaining: Int64) : List<(String * String)> =
   match entries with
   | [] -> []
@@ -872,4 +882,63 @@ let __encode (headers: List<(String * String)>) (size: Int64) (count: Int64)
 
 let encode (headers: List<(String * String)>) : Stdlib.Result.Result<Blob, String> =
   Stdlib.__Hpack.__encode headers 0L 0L []
+
+let encoder () : Stdlib.__Hpack.Encoder =
+  Stdlib.__Hpack.Encoder { table = Stdlib.__Hpack.initial (), minimum = None }
+
+// A bounded encoder may choose less capacity than the peer permits. Preserve
+// the smallest intermediate capacity so a shrink/grow cannot hide evictions.
+let resizeEncoder (state: Stdlib.__Hpack.Encoder) (maximum: Int64) : Stdlib.Result.Result<Stdlib.__Hpack.Encoder, String> =
+  if maximum < 0L || maximum > 4294967295L then Error "Invalid HPACK encoder capacity"
+  else
+    let limit = if maximum > 4096L then 4096L else maximum in
+    if limit == state.table.limit then Ok state
+    else
+      let minimum = match state.minimum with | Some value -> if value < limit then value else limit | None -> limit in
+      Ok (Stdlib.__Hpack.Encoder { table = Stdlib.__Hpack.State { entries = Stdlib.__Hpack.__retain state.table.entries limit, limit = limit }, minimum = Some minimum })
+
+let __dynamicIndex (entries: List<(String * String)>) (name: String) (value: String) (exact: Bool) (index: Int64) : Stdlib.Option.Option<Int64> =
+  match entries with
+  | [] -> None
+  | entry :: rest ->
+    let (entryName, entryValue) = entry in
+    if entryName == name && (Stdlib.Bool.not exact || entryValue == value) then Some index
+    else Stdlib.__Hpack.__dynamicIndex rest name value exact (index + 1L)
+
+let __encoderIndex (table: Stdlib.__Hpack.State) (name: String) (value: String) (exact: Bool) : Stdlib.Option.Option<Int64> =
+  match Stdlib.__Hpack.__staticIndex name value exact 1L with
+  | Some index -> Some index
+  | None -> Stdlib.__Hpack.__dynamicIndex table.entries name value exact 62L
+
+let __encodeDynamic (state: Stdlib.__Hpack.Encoder) (headers: List<(String * String)>) (size: Int64) (count: Int64) (blocks: List<Blob>) : Stdlib.Result.Result<Stdlib.__Hpack.Encoded, String> =
+  match headers with
+  | [] -> Ok (Stdlib.__Hpack.Encoded { bytes = Stdlib.Blob.concat (Stdlib.List.reverse blocks), state = state })
+  | entry :: rest ->
+    let (name, value) = entry in
+    let nextSize = size + Stdlib.__Hpack.__entrySize entry in
+    if name == "" then Error "Empty HTTP header name"
+    else if count >= 256L || nextSize > 65536L then Error "HPACK header list too large"
+    else
+      let sensitive = Stdlib.__Hpack.__sensitive name in
+      let exact = if sensitive then None else Stdlib.__Hpack.__encoderIndex state.table name value true in
+      let indexed = Stdlib.Bool.not sensitive && Stdlib.__Hpack.__entrySize entry <= state.table.limit in
+      let bytes = match exact with
+      | Some index -> Stdlib.__Hpack.encodeInteger 7L 128L index
+      | None ->
+        let prefix = if indexed then 6L else 4L in
+        let flags = if indexed then 64L else 16L in
+        let reference = match Stdlib.__Hpack.__encoderIndex state.table name value false with
+        | Some index -> Stdlib.__Hpack.encodeInteger prefix flags index
+        | None -> Stdlib.Blob.concat [Stdlib.__Hpack.encodeInteger prefix flags 0L, Stdlib.__Hpack.encodeText name] in
+        Stdlib.Blob.concat [reference, Stdlib.__Hpack.encodeText value] in
+      let table = if indexed && Stdlib.Option.isNone exact then Stdlib.__Hpack.__add state.table entry else state.table in
+      Stdlib.__Hpack.__encodeDynamic { state with table = table } rest nextSize (count + 1L) (Stdlib.List.push blocks bytes)
+
+let encodeDynamic (state: Stdlib.__Hpack.Encoder) (headers: List<(String * String)>) : Stdlib.Result.Result<Stdlib.__Hpack.Encoded, String> =
+  let updates = match state.minimum with
+  | None -> []
+  | Some minimum ->
+    if minimum == state.table.limit then [Stdlib.__Hpack.encodeInteger 5L 32L minimum]
+    else [Stdlib.__Hpack.encodeInteger 5L 32L state.table.limit, Stdlib.__Hpack.encodeInteger 5L 32L minimum] in
+  Stdlib.__Hpack.__encodeDynamic { state with minimum = None } headers 0L 0L updates
 

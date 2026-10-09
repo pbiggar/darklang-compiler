@@ -2,7 +2,7 @@
 module Darklang.Stdlib.__Http2
 
 type State = {
-  pending: Blob, deferred: List<Stdlib.__Http2Wire.Frame>, decoder: Stdlib.__Hpack.State,
+  pending: Blob, deferred: List<Stdlib.__Http2Wire.Frame>, decoder: Stdlib.__Hpack.State, encoder: Stdlib.__Hpack.Encoder, fieldLimit: Stdlib.Option.Option<Int64>,
   sendConnection: Int64, sendStream: Int64, initialWindow: Int64,
   maximum: Int64, settingsSeen: Bool, frames: Int64, streamId: Int64
 }
@@ -19,13 +19,13 @@ type Body = {
 
 let initial (streamId: Int64) : Stdlib.__Http2.State =
   Stdlib.__Http2.State { pending = Stdlib.Blob.empty, deferred = [],
-    decoder = Stdlib.__Hpack.initial (), sendConnection = 65535L, sendStream = 65535L,
+    decoder = Stdlib.__Hpack.initial (), encoder = Stdlib.__Hpack.encoder (), fieldLimit = None, sendConnection = 65535L, sendStream = 65535L,
     initialWindow = 65535L, maximum = 16384L, settingsSeen = false, frames = 0L, streamId = streamId }
 
-let __copy (pending: Blob) (deferred: List<Stdlib.__Http2Wire.Frame>) (decoder: Stdlib.__Hpack.State)
+let __copy (state: Stdlib.__Http2.State) (pending: Blob) (deferred: List<Stdlib.__Http2Wire.Frame>) (decoder: Stdlib.__Hpack.State)
   (flow: (Int64 * Int64 * Int64 * Int64 * Bool * Int64 * Int64)) : Stdlib.__Http2.State =
   let (connection, stream, initial, maximum, seen, frames, streamId) = flow in
-  Stdlib.__Http2.State { pending = pending, deferred = deferred, decoder = decoder,
+  { state with pending = pending, deferred = deferred, decoder = decoder,
     sendConnection = connection, sendStream = stream, initialWindow = initial,
     maximum = maximum, settingsSeen = seen, frames = frames, streamId = streamId }
 
@@ -41,14 +41,14 @@ let __wireNext (transport: Stdlib.__HttpTransport.Transport) (state: Stdlib.__Ht
       | Ok bytes ->
         if Stdlib.Blob.__byteLength bytes == 0L then Error "Truncated HTTP/2 connection"
         else
-          let next = Stdlib.__Http2.__copy (Stdlib.Blob.concat [state.pending, bytes]) state.deferred state.decoder (state.sendConnection, state.sendStream, state.initialWindow, state.maximum, state.settingsSeen, state.frames, state.streamId) in
+          let next = Stdlib.__Http2.__copy state (Stdlib.Blob.concat [state.pending, bytes]) state.deferred state.decoder (state.sendConnection, state.sendStream, state.initialWindow, state.maximum, state.settingsSeen, state.frames, state.streamId) in
           Stdlib.__Http2.__wireNext transport next
     | Ok parsed ->
       if Stdlib.Bool.not state.settingsSeen &&
          (parsed.frame.kind != 4L || Stdlib.Int64.bitwiseAnd parsed.frame.flags 1L != 0L) then
         Error "HTTP/2 peer must start with SETTINGS"
       else
-        let next = Stdlib.__Http2.__copy parsed.remaining state.deferred state.decoder (state.sendConnection, state.sendStream, state.initialWindow, state.maximum, state.settingsSeen, state.frames + 1L, state.streamId) in
+        let next = Stdlib.__Http2.__copy state parsed.remaining state.deferred state.decoder (state.sendConnection, state.sendStream, state.initialWindow, state.maximum, state.settingsSeen, state.frames + 1L, state.streamId) in
         Ok (Stdlib.__Http2.Next { frame = parsed.frame, state = next })
 
 let __next (transport: Stdlib.__HttpTransport.Transport) (state: Stdlib.__Http2.State)
@@ -56,7 +56,7 @@ let __next (transport: Stdlib.__HttpTransport.Transport) (state: Stdlib.__Http2.
   match state.deferred with
   | [] -> Stdlib.__Http2.__wireNext transport state
   | frame :: rest ->
-    let next = Stdlib.__Http2.__copy state.pending rest state.decoder (state.sendConnection, state.sendStream, state.initialWindow, state.maximum, state.settingsSeen, state.frames, state.streamId) in
+    let next = Stdlib.__Http2.__copy state state.pending rest state.decoder (state.sendConnection, state.sendStream, state.initialWindow, state.maximum, state.settingsSeen, state.frames, state.streamId) in
     Ok (Stdlib.__Http2.Next { frame = frame, state = next })
 
 let __writeFrame (transport: Stdlib.__HttpTransport.Transport) (kind: Int64) (flags: Int64)
@@ -74,8 +74,11 @@ let __settings (state: Stdlib.__Http2.State) (payload: Blob) (position: Int64)
     let stream = if id == 4L then state.sendStream + value - state.initialWindow else state.sendStream in
     if stream > 2147483647L then Error "HTTP/2 stream window overflow"
     else
-      let next = Stdlib.__Http2.__copy state.pending state.deferred state.decoder (state.sendConnection, stream, (if id == 4L then value else state.initialWindow), (if id == 5L then value else state.maximum), true, state.frames, state.streamId) in
-      Stdlib.__Http2.__settings next payload (position + 6L)
+      let next = Stdlib.__Http2.__copy state state.pending state.deferred state.decoder (state.sendConnection, stream, (if id == 4L then value else state.initialWindow), (if id == 5L then value else state.maximum), true, state.frames, state.streamId) in
+      let updated =
+        if id == 1L then Stdlib.__Hpack.resizeEncoder next.encoder value |> Stdlib.Result.map (fun encoder -> { next with encoder = encoder })
+        else Ok { next with fieldLimit = if id == 6L then Some value else next.fieldLimit } in
+      updated |> Stdlib.Result.andThen (fun next -> Stdlib.__Http2.__settings next payload (position + 6L))
 
 let __control (transport: Stdlib.__HttpTransport.Transport) (state: Stdlib.__Http2.State)
   (frame: Stdlib.__Http2Wire.Frame) : Stdlib.Result.Result<Stdlib.__Http2.State, String> =
@@ -86,7 +89,7 @@ let __control (transport: Stdlib.__HttpTransport.Transport) (state: Stdlib.__Htt
       | Error message -> Error message
       | Ok next ->
         // An empty SETTINGS still completes establishment.
-        let updated = Stdlib.__Http2.__copy next.pending next.deferred next.decoder (next.sendConnection, next.sendStream, next.initialWindow, next.maximum, true, next.frames, next.streamId) in
+        let updated = Stdlib.__Http2.__copy next next.pending next.deferred next.decoder (next.sendConnection, next.sendStream, next.initialWindow, next.maximum, true, next.frames, next.streamId) in
         match Stdlib.__Http2.__writeFrame transport 4L 1L 0L Stdlib.Blob.empty with
         | Error message -> Error message
         | Ok () -> Ok updated
@@ -102,7 +105,7 @@ let __control (transport: Stdlib.__HttpTransport.Transport) (state: Stdlib.__Htt
     let stream = if frame.streamId == state.streamId && state.streamId != 0L then
                    state.sendStream + increment else state.sendStream in
     if connection > 2147483647L || stream > 2147483647L then Error "HTTP/2 window overflow"
-    else Ok (Stdlib.__Http2.__copy state.pending state.deferred state.decoder (connection, stream, state.initialWindow, state.maximum, state.settingsSeen, state.frames, state.streamId))
+    else Ok (Stdlib.__Http2.__copy state state.pending state.deferred state.decoder (connection, stream, state.initialWindow, state.maximum, state.settingsSeen, state.frames, state.streamId))
   else if frame.kind == 7L then
     let last = Stdlib.Int64.bitwiseAnd (Stdlib.__Http2Wire.__read32 frame.payload 0L) 2147483647L in
     if state.streamId > last then Error "HTTP/2 stream refused by GOAWAY" else Ok state
@@ -156,7 +159,7 @@ let openServer (transport: Stdlib.__HttpTransport.Transport) (pending: Blob)
     | Error message -> Error message
     | Ok () ->
       let state = Stdlib.__Http2.initial 0L in
-      let next = Stdlib.__Http2.__copy remaining [] state.decoder (65535L, 65535L, 65535L, 16384L, false, 0L, 0L) in
+      let next = Stdlib.__Http2.__copy state remaining [] state.decoder (65535L, 65535L, 65535L, 16384L, false, 0L, 0L) in
       Stdlib.__Http2.__awaitSettings transport next
 
 let __headerFragments (transport: Stdlib.__HttpTransport.Transport) (state: Stdlib.__Http2.State)
@@ -172,10 +175,13 @@ let __headerFragments (transport: Stdlib.__HttpTransport.Transport) (state: Stdl
   | Ok () -> if final then Ok () else Stdlib.__Http2.__headerFragments transport state block (offset + length) endStream
 
 let sendHeaders (transport: Stdlib.__HttpTransport.Transport) (state: Stdlib.__Http2.State)
-  (fields: List<(String * String)>) (ended: Bool) : Stdlib.Result.Result<Unit, String> =
-  match Stdlib.__Hpack.encode fields with
+  (fields: List<(String * String)>) (ended: Bool) : Stdlib.Result.Result<Stdlib.__Http2.State, String> =
+  let withinLimit = match state.fieldLimit with
+  | None -> Ok ()
+  | Some limit -> Stdlib.__Hpack.checkFieldBudget fields limit |> Stdlib.Result.mapError (fun _message -> "Peer HTTP/2 field-section limit exceeded") in
+  match withinLimit |> Stdlib.Result.andThen (fun _unit -> Stdlib.__Hpack.encodeDynamic state.encoder fields) with
   | Error message -> Error message
-  | Ok block -> Stdlib.__Http2.__headerFragments transport state block 0L ended
+  | Ok block -> Stdlib.__Http2.__headerFragments transport state block.bytes 0L ended |> Stdlib.Result.map (fun _unit -> { state with encoder = block.state })
 
 let __sendBody (transport: Stdlib.__HttpTransport.Transport) (state: Stdlib.__Http2.State)
   (body: Blob) (offset: Int64) : Stdlib.Result.Result<Stdlib.__Http2.State, String> =
@@ -192,7 +198,7 @@ let __sendBody (transport: Stdlib.__HttpTransport.Transport) (state: Stdlib.__Ht
       else if received.frame.kind == 5L || Stdlib.List.length state.deferred >= 256 then
         Error "Unexpected HTTP/2 frame during upload"
       else
-        let next = Stdlib.__Http2.__copy received.state.pending (received.state.deferred @ [received.frame]) received.state.decoder (received.state.sendConnection, received.state.sendStream, received.state.initialWindow, received.state.maximum, received.state.settingsSeen, received.state.frames, received.state.streamId) in
+        let next = Stdlib.__Http2.__copy received.state received.state.pending (received.state.deferred @ [received.frame]) received.state.decoder (received.state.sendConnection, received.state.sendStream, received.state.initialWindow, received.state.maximum, received.state.settingsSeen, received.state.frames, received.state.streamId) in
         Stdlib.__Http2.__sendBody transport next body offset
   else
     let frameSize = if remaining < state.maximum then remaining else state.maximum in
@@ -202,7 +208,7 @@ let __sendBody (transport: Stdlib.__HttpTransport.Transport) (state: Stdlib.__Ht
       (Stdlib.__Http2Wire.__slice body offset size) with
     | Error message -> Error message
     | Ok () ->
-      let next = Stdlib.__Http2.__copy state.pending state.deferred state.decoder (state.sendConnection - size, state.sendStream - size, state.initialWindow, state.maximum, state.settingsSeen, state.frames, state.streamId) in
+      let next = Stdlib.__Http2.__copy state state.pending state.deferred state.decoder (state.sendConnection - size, state.sendStream - size, state.initialWindow, state.maximum, state.settingsSeen, state.frames, state.streamId) in
       Stdlib.__Http2.__sendBody transport next body (offset + size)
 
 let sendMessage (transport: Stdlib.__HttpTransport.Transport) (state: Stdlib.__Http2.State)
@@ -211,7 +217,7 @@ let sendMessage (transport: Stdlib.__HttpTransport.Transport) (state: Stdlib.__H
   else
     match Stdlib.__Http2.sendHeaders transport state fields (Stdlib.Blob.__byteLength body == 0L) with
     | Error message -> Error message
-    | Ok () -> Stdlib.__Http2.__sendBody transport state body 0L
+    | Ok next -> Stdlib.__Http2.__sendBody transport next body 0L
 
 let __continuations (transport: Stdlib.__HttpTransport.Transport) (state: Stdlib.__Http2.State)
   (bytes: Blob) : Stdlib.Result.Result<Stdlib.__Http2.Block, String> =
@@ -241,7 +247,7 @@ let __headBlock (transport: Stdlib.__HttpTransport.Transport) (received: Stdlib.
     match Stdlib.__Hpack.decode block.state.decoder block.bytes with
     | Error message -> Error message
     | Ok decoded ->
-      let next = Stdlib.__Http2.__copy block.state.pending block.state.deferred decoded.state (block.state.sendConnection, block.state.sendStream, block.state.initialWindow, block.state.maximum, block.state.settingsSeen, block.state.frames, block.state.streamId) in
+      let next = Stdlib.__Http2.__copy block.state block.state.pending block.state.deferred decoded.state (block.state.sendConnection, block.state.sendStream, block.state.initialWindow, block.state.maximum, block.state.settingsSeen, block.state.frames, block.state.streamId) in
       Ok (Stdlib.__Http2.Head { fields = decoded.headers,
         ended = Stdlib.Int64.bitwiseAnd received.frame.flags 1L != 0L, state = next })
 
@@ -259,7 +265,7 @@ let receiveHead (transport: Stdlib.__HttpTransport.Transport) (state: Stdlib.__H
     else if state.streamId == 0L then
       if received.frame.streamId % 2L != 1L then Error "Invalid HTTP/2 request stream"
       else
-        let next = Stdlib.__Http2.__copy received.state.pending received.state.deferred received.state.decoder (received.state.sendConnection, received.state.initialWindow, received.state.initialWindow, received.state.maximum, received.state.settingsSeen, received.state.frames, received.frame.streamId) in
+        let next = Stdlib.__Http2.__copy received.state received.state.pending received.state.deferred received.state.decoder (received.state.sendConnection, received.state.initialWindow, received.state.initialWindow, received.state.maximum, received.state.settingsSeen, received.state.frames, received.frame.streamId) in
         Stdlib.__Http2.__headBlock transport (Stdlib.__Http2.Next { frame = received.frame, state = next })
     else if received.frame.streamId != state.streamId then Error "Unexpected HTTP/2 stream"
     else Stdlib.__Http2.__headBlock transport received
@@ -376,7 +382,7 @@ let __uploadBody (transport: Stdlib.__HttpTransport.Transport) (state: Stdlib.__
       (Stdlib.__Http2Wire.__slice body offset size) with
     | Error message -> Error message
     | Ok () ->
-      let next = Stdlib.__Http2.__copy state.pending state.deferred state.decoder (state.sendConnection - size, state.sendStream - size, state.initialWindow, state.maximum, state.settingsSeen, state.frames, state.streamId) in
+      let next = Stdlib.__Http2.__copy state state.pending state.deferred state.decoder (state.sendConnection - size, state.sendStream - size, state.initialWindow, state.maximum, state.settingsSeen, state.frames, state.streamId) in
       Stdlib.__Http2.__uploadBody transport next body (offset + size) informational
 
 let sendRequest (transport: Stdlib.__HttpTransport.Transport) (state: Stdlib.__Http2.State)
@@ -385,7 +391,7 @@ let sendRequest (transport: Stdlib.__HttpTransport.Transport) (state: Stdlib.__H
   else
     match Stdlib.__Http2.sendHeaders transport state fields (Stdlib.Blob.__byteLength body == 0L) with
     | Error message -> Error message
-    | Ok () -> Stdlib.__Http2.__uploadBody transport state body 0L 0L
+    | Ok next -> Stdlib.__Http2.__uploadBody transport next body 0L 0L
 
 let __responseHead (transport: Stdlib.__HttpTransport.Transport) (reply: Stdlib.__Http2.Reply)
   (method: String) : Stdlib.Result.Result<Stdlib.HttpClient.StreamResponse, String> =

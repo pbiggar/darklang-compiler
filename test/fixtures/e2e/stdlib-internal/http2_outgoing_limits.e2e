@@ -1,0 +1,14 @@
+// http2_outgoing_limits.e2e - SETTINGS change encoder capacity and decoded header budgets.
+Stdlib.__Http2.__settings (Stdlib.__Http2.initial 1L) (Stdlib.Blob.fromHex "000100000000000600000021" |> Stdlib.Result.withDefault Stdlib.Blob.empty) 0L |> Stdlib.Result.map (fun state -> (state.encoder.table.limit, state.fieldLimit)) = Ok ((0L, Some 33L))
+Stdlib.__Http2.__settings (Stdlib.__Http2.initial 1L) (Stdlib.Blob.fromHex "000100000000000100001000" |> Stdlib.Result.withDefault Stdlib.Blob.empty) 0L |> Stdlib.Result.andThen (fun state -> Stdlib.__Hpack.encodeDynamic state.encoder []) |> Stdlib.Result.map (fun encoded -> Stdlib.Blob.toHex encoded.bytes) = Ok "203FE11F"
+let transmit (limit: Int64) (fields: List<(String * String)>) : Stdlib.Result.Result<Int64, String> =
+  let owner = Stdlib.Stream.__new (fun _unit -> Some ()) (fun _unit -> ()) in
+  let transport = Stdlib.__HttpTransport.Transport { lifecycle = owner, read = fun _unit -> Error "Unexpected read", write = fun _bytes -> Ok () } in
+  let state = { Stdlib.__Http2.initial 1L with fieldLimit = Some limit } in
+  let result = Stdlib.__Http2.sendHeaders transport state fields true |> Stdlib.Result.map (fun next -> Stdlib.Int.toInt64 (Stdlib.List.length next.encoder.table.entries) |> Stdlib.Option.withDefault -1L) in
+  Stdlib.__HttpTransport.close transport
+  result
+transmit 33L [("x", "")] = Ok 1L
+transmit 33L [("x", "y")] = Error "Peer HTTP/2 field-section limit exceeded"
+transmit 66L [("x", ""), ("x", "")] = Ok 1L
+transmit 65L [("x", ""), ("x", "")] = Error "Peer HTTP/2 field-section limit exceeded"

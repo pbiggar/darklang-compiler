@@ -40,6 +40,24 @@ match Stdlib.__Hpack.encode fields, Stdlib.__Qpack.encode fields with
 | _, _ -> Stdlib.printLine "ERROR"
 '''
 
+DYNAMIC = '''// dynamic.dark - Consecutive blocks share one connection-owned table.
+let step (state: Stdlib.__Hpack.Encoder) (updates: List<Int64>) (fields: List<(String * String)>) : Stdlib.__Hpack.Encoder =
+  let resized = Stdlib.List.fold updates (Ok state) (fun result maximum -> result |> Stdlib.Result.andThen (fun current -> Stdlib.__Hpack.resizeEncoder current maximum)) in
+  match resized |> Stdlib.Result.andThen (fun current -> Stdlib.__Hpack.encodeDynamic current fields) with
+  | Error message -> Builtin.crash message
+  | Ok encoded ->
+    Stdlib.printLine (Stdlib.Blob.toHex encoded.bytes)
+    encoded.state
+let state = step (Stdlib.__Hpack.encoder ()) [] [(":method", "GET"), ("x-name", "café ☃"), ("x-name", "café ☃")] in
+let state = step state [] [("x-name", "café ☃"), ("x-name", "changed"), ("authorization", "secret"), ("cookie", "a=1")] in
+let state = step state [34L] [("x", "y"), ("a", "b"), ("x", "y")] in
+let state = step state [0L, 4096L] [("x-name", "restored"), ("set-cookie", "a=1")] in
+let state = step state [] [("x-name", "restored"), ("set-cookie", "a=1")] in
+let state = step state [0L] [("x", "y")] in
+let _ = step state [128L] [("x", "y"), ("x", "z"), ("x", "y")] in
+()
+'''
+
 
 def compile_probe(directory, name, source, compiler):
     path, binary = directory / (name + ".dark"), directory / name
@@ -88,7 +106,24 @@ def main():
                 assert not field.indexable, field
         feedback, decoded = pylsqpack.Decoder(0, 0).feed_header(0, qp)
         assert not feedback and decoded == expected, decoded
-    print("262 independent Huffman vectors, HPACK/QPACK field round trips and sensitive-field indexing verified")
+        dynamic = compile_probe(directory, "dynamic", DYNAMIC, args.compiler)
+        blocks = [bytes.fromhex(line) for line in execute(dynamic)]
+        expected_blocks = [[(b":method", b"GET"), (b"x-name", "café ☃".encode())] + [(b"x-name", "café ☃".encode())],
+                           [(b"x-name", "café ☃".encode()), (b"x-name", b"changed"), (b"authorization", b"secret"), (b"cookie", b"a=1")],
+                           [(b"x", b"y"), (b"a", b"b"), (b"x", b"y")],
+                           [(b"x-name", b"restored"), (b"set-cookie", b"a=1")],
+                           [(b"x-name", b"restored"), (b"set-cookie", b"a=1")],
+                           [(b"x", b"y")], [(b"x", b"y"), (b"x", b"z"), (b"x", b"y")]]
+        decoder = hpack.Decoder()
+        assert len(blocks) == len(expected_blocks)
+        for block, fields in zip(blocks, expected_blocks):
+            decoded = decoder.decode(block, raw=True)
+            assert decoded == fields, (block.hex(), decoded, fields)
+            for field in decoded:
+                if field[0] in (b"authorization", b"cookie", b"set-cookie"):
+                    assert not field.indexable, field
+        assert blocks[4][0] == 0xBE and blocks[3].startswith(bytes.fromhex("203fe11f")), [b.hex() for b in blocks]
+    print("262 independent Huffman vectors, HPACK/QPACK fields, seven stateful HPACK blocks, eviction, resize ordering and sensitive literals verified")
 
 
 if __name__ == "__main__":

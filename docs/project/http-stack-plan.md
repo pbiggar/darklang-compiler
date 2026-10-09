@@ -183,8 +183,10 @@ mean the entire branch has passed its integration or performance gates.
   including per-connection timers and fair TCP/UDP admission.
 - [ ] Persistent HTTP/1.1 connections and HTTP/2–3 connection reuse/pooling.
 - [ ] HTTP/2 and HTTP/3 request multiplexing, stream allocation and scheduling.
-- [ ] Dynamic HPACK encoding and complete dynamic QPACK tables, instruction
-  streams, blocked sections, feedback and eviction.
+- [x] Connection-owned dynamic HPACK encoding, bounded eviction, sensitive
+  literals, and peer table-capacity shrink/grow updates.
+- [ ] Complete dynamic QPACK tables, instruction streams, blocked sections,
+  feedback and eviction.
 - [ ] Streaming client uploads, server requests and server responses.
 - [ ] Public received/sent trailer APIs.
 - [ ] Content-encoding negotiation, decompression and server compression.
@@ -210,6 +212,16 @@ exact boundaries, duplicate names, absent limits and zero limits. The aioquic
 server peer checks zero-limit refusal and subsequent listener availability.
 Other peer SETTINGS still need their respective engine features, so the full
 SETTINGS item remains unchecked.
+
+HTTP/2 now retains an outgoing HPACK table separately from its decoder. Every
+state transition preserves that owner and the peer's decoded field budget;
+successful header writes return the updated table. Peer table-capacity changes
+evict immediately and the next block signals the smallest intervening size
+before the final size. `hpack_dynamic_encoder.e2e` and
+`http2_outgoing_limits.e2e` exercise reuse, eviction, never-indexed sensitive
+fields, disabled tables, duplicate-field accounting and resize ordering. The
+independent `hpack` decoder checks seven consecutive blocks, and the existing
+TLS/hyper-h2 server peer validates routing, flow control and owned shutdown.
 
 Focused additions use `network_poll.e2e`, `http_header_compression.e2e` and
 `http_server_ipv6.e2e`; independent readiness, header-compression and IPv6 peer

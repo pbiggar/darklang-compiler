@@ -98,17 +98,9 @@ let feed (state: Stdlib.__Http3Control.State) (data: Blob)
 let finish (state: Stdlib.__Http3Control.State) : Stdlib.Result.Result<Unit, String> =
   Error "Closed critical HTTP/3 control stream"
 
-let __fieldBudget (fields: List<(String * String)>) (remaining: Int64) : Stdlib.Result.Result<Unit, String> =
-  match fields with
-  | [] -> Ok ()
-  | field :: rest ->
-    let size = Stdlib.__Hpack.__entrySize field in
-    if size > remaining then Error "Peer HTTP/3 field-section limit exceeded"
-    else Stdlib.__Http3Control.__fieldBudget rest (remaining - size)
-
 // Field-section limits count uncompressed name/value bytes plus 32 per field,
 // regardless of QPACK indexing, Huffman compression, or duplicate names.
 let checkFields (state: Stdlib.__Http3Control.State) (fields: List<(String * String)>) : Stdlib.Result.Result<Unit, String> =
   match Stdlib.List.findFirst state.parameters (fun setting -> let (id, _value) = setting in id == 6L) with
   | None -> Ok ()
-  | Some setting -> let (_id, limit) = setting in Stdlib.__Http3Control.__fieldBudget fields limit
+  | Some setting -> let (_id, limit) = setting in Stdlib.__Hpack.checkFieldBudget fields limit |> Stdlib.Result.mapError (fun _message -> "Peer HTTP/3 field-section limit exceeded")
