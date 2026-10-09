@@ -35,10 +35,25 @@ let _ = Stdlib.Cli.Posix.fdWrite 2 (Stdlib.String.toBlob report) in
 0L
 ''', encoding="utf-8")
         subprocess.run([compiler, "-q", "--leak-check", str(color_source), "-o", str(color_binary)], check=True, timeout=120)
+        interactive_source = root / "interactive.dark"
+        interactive_binary = root / "interactive"
+        interactive_source.write_text('''let raw = Builtin.stdinIsInteractive () in
+let public = Stdlib.Cli.Stdin.isInteractive () in
+let report = $"{Stdlib.Bool.toString raw}|{Stdlib.Bool.toString public}" in
+let _ = Stdlib.Cli.Posix.fdWrite 2 (Stdlib.String.toBlob report) in
+0L
+''', encoding="utf-8")
+        subprocess.run([compiler, "-q", "--leak-check", str(interactive_source), "-o", str(interactive_binary)], check=True, timeout=120)
         master, slave = pty.openpty()
         try:
             original_attributes = termios.tcgetattr(slave)
             for terminal_in, terminal_out in [(False, False), (True, False), (False, True), (True, True)]:
+                result = subprocess.run(
+                    [str(interactive_binary)], stdin=slave if terminal_in else subprocess.DEVNULL,
+                    stdout=slave if terminal_out else subprocess.PIPE, stderr=subprocess.PIPE,
+                    env=dict(os.environ, TERM="", NO_COLOR="1"), timeout=15)
+                expected = b"true|true" if terminal_in or terminal_out else b"false|false"
+                assert result.returncode == 0 and result.stderr == expected, (terminal_in, terminal_out, result)
                 for term in [None, "", "xterm-256color", "term-λ"]:
                     environment = os.environ.copy()
                     environment.pop("TERM", None)
@@ -72,12 +87,20 @@ let _ = Stdlib.Cli.Posix.fdWrite 2 (Stdlib.String.toBlob report) in
                 result = subprocess.run([str(color_binary)], stdin=regular, stdout=regular,
                                         stderr=subprocess.PIPE, env=environment, timeout=15)
                 assert result.returncode == 0 and result.stderr == b"false|false|false|false", result
+                result = subprocess.run([str(interactive_binary)], stdin=regular, stdout=regular,
+                                        stderr=subprocess.PIPE, timeout=15)
+                assert result.returncode == 0 and result.stderr == b"false|false", result
             result = subprocess.run([str(binary)], input=b"", capture_output=True,
                                     env=environment, timeout=15)
             assert result.returncode == 0 and result.stderr == b"false|false|dumb", result
+            result = subprocess.run([str(interactive_binary)], input=b"", capture_output=True, timeout=15)
+            assert result.returncode == 0 and result.stderr == b"false|false", result
             def close_streams():
                 os.close(0)
                 os.close(1)
+            result = subprocess.run([str(interactive_binary)], preexec_fn=close_streams,
+                                    stderr=subprocess.PIPE, timeout=15)
+            assert result.returncode == 0 and result.stderr == b"false|false", result
             result = subprocess.run([str(color_binary)], preexec_fn=close_streams,
                                     stderr=subprocess.PIPE, env=environment, timeout=15)
             assert result.returncode == 0 and result.stderr == b"false|false|false|false", result
