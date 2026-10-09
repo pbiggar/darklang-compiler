@@ -188,7 +188,7 @@ let validateDistinctCatalogHashes entries =
        (Ok S.empty) entries)
 
 let materializeReachablePackageValueCatalog (baseContext : X.pipelineContext)
-    warningSettings (X.PackageValueCatalog entries) typedProgram =
+    _warningSettings (X.PackageValueCatalog entries) typedProgram =
   let* () = validateDistinctCatalogHashes entries in
   let localGenericDefs =
     SpecializationIdentity.extractGenericFuncDefs typedProgram
@@ -357,17 +357,19 @@ let materializeReachablePackageValueCatalog (baseContext : X.pipelineContext)
       AST.Program
         (List.map (fun func -> AST.FunctionDef func) generatedFunctions)
     in
+    let* source =
+      WrittenParsing.parse Validation.Script
+        (ASTPrettyPrinter.formatProgram syntheticProgram)
+    in
+    let environment =
+      Option.map
+        (WrittenChecking.includeAllocatedFunctions (C.programSymbols typedProgram))
+        baseContext.X.writtenEnvironment
+    in
     let* _, generated, _ =
-      TypeChecking.checkDeclarationProgramWithBaseEnvAndSettings
-        {
-          baseContext.X.typeCheckEnv with
-          Types.functionCatalog =
-            C.functionCatalog (C.programSymbols typedProgram);
-        }
-        false warningSettings syntheticProgram
+      WrittenChecking.checkSourceUnitsWithBase environment true false [source]
       |> Result.map_error (fun error ->
-          "Package value catalog validation failed: "
-          ^ CheckingDiagnostics.typeErrorToString error)
+          "Package value catalog validation failed: " ^ error)
     in
     let generatedSymbols, generatedTops = C.viewProgram generated in
     let userSymbols, userTops = C.viewProgram typedProgram in

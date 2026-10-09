@@ -44,7 +44,11 @@ let[@warning "-4"] check checkExpression checkedLiteral globals locals symbols
                 AST.TUInt128;
               ]
           in
-          let numeric = integer || leftType = AST.TFloat64 in
+          let unresolved = match leftType with
+            | AST.TVar _ | AST.TInferenceVar _ -> true
+            | _ -> false
+          in
+          let numeric = integer || leftType = AST.TFloat64 || unresolved in
           let mixed =
             (leftType = AST.TChar && rightType = AST.TString)
             || (leftType = AST.TString && rightType = AST.TChar)
@@ -61,11 +65,11 @@ let[@warning "-4"] check checkExpression checkedLiteral globals locals symbols
                 | WT.ArithmeticDivide -> (AST.Div, numeric, leftType)
                 | WT.ArithmeticModulo -> (AST.Mod, numeric, leftType)
                 | WT.ArithmeticPower -> (AST.Pow, numeric, leftType)
-                | WT.BitwiseAnd -> (AST.BitAnd, integer, leftType)
-                | WT.BitwiseOr -> (AST.BitOr, integer, leftType)
-                | WT.BitwiseXor -> (AST.BitXor, integer, leftType)
-                | WT.ShiftLeft -> (AST.Shl, integer, leftType)
-                | WT.ShiftRight -> (AST.Shr, integer, leftType)
+                | WT.BitwiseAnd -> (AST.BitAnd, integer || unresolved, leftType)
+                | WT.BitwiseOr -> (AST.BitOr, integer || unresolved, leftType)
+                | WT.BitwiseXor -> (AST.BitXor, integer || unresolved, leftType)
+                | WT.ShiftLeft -> (AST.Shl, integer || unresolved, leftType)
+                | WT.ShiftRight -> (AST.Shr, integer || unresolved, leftType)
                 | WT.ComparisonEquals ->
                     ( AST.Eq,
                       structuralEqualityCompatible globals leftType rightType
@@ -136,8 +140,16 @@ let[@warning "-4"] check checkExpression checkedLiteral globals locals symbols
                     (if op = AST.Neq then C.UnaryOp (AST.Not, equality)
                      else equality))
           | op, true, resultType ->
-              checkedLiteral expected finalSymbols resultType
-                (C.BinOp (op, checkedLeft, checkedRight))
+              let required = match op with
+                | AST.Add | AST.Sub | AST.Mul | AST.Div | AST.Mod | AST.Pow
+                | AST.Shl | AST.Shr | AST.BitAnd | AST.BitOr | AST.BitXor
+                | AST.Lt | AST.Gt | AST.Lte | AST.Gte ->
+                    WrittenCheckingState.requireOperator op leftType finalSymbols
+                | _ -> Ok finalSymbols
+              in
+              bind required (fun symbols ->
+                checkedLiteral expected symbols resultType
+                  (C.BinOp (op, checkedLeft, checkedRight)))
           | (AST.Eq | AST.Neq), false, _ when mixed ->
               Error "Cannot compare Char and String"
           | _ -> Error "Operator is unavailable for this type"))

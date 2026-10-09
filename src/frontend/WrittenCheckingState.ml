@@ -9,16 +9,51 @@ type t = {
   substitution : Types.substitution;
   flexible : S.t;
   nextVariable : int;
+  operators : (AST.binOp * AST.semanticType) list;
 }
 
 let create symbols =
-  { symbols; substitution = M.empty; flexible = S.empty; nextVariable = 0 }
+  { symbols; substitution = M.empty; flexible = S.empty; nextVariable = 0;
+    operators = [] }
 
 let symbols state = state.symbols
 let resolve state = Types.applySubst state.substitution
 
 let resolveExpression state =
   TypeSubstitution.applySubstToExpr (M.map (resolve state) state.substitution)
+
+(* Unknown operands carry an operator requirement, rather than choosing a
+   numeric representation. Later unification must satisfy that requirement. *)
+let validateOperator operation = function
+  | AST.TVar _ | AST.TInferenceVar _ | AST.TNever -> Ok ()
+  | typ ->
+      let integer =
+        List.mem typ [AST.TInt; AST.TInt8; AST.TInt16; AST.TInt32;
+          AST.TInt64; AST.TInt128; AST.TUInt8; AST.TUInt16; AST.TUInt32;
+          AST.TUInt64; AST.TUInt128]
+      in
+      let valid = match operation with
+        | AST.Shl | AST.Shr | AST.BitAnd | AST.BitOr | AST.BitXor -> integer
+        | AST.Pow -> (integer || typ = AST.TFloat64)
+            && typ <> AST.TInt128 && typ <> AST.TUInt128
+        | _ -> integer || typ = AST.TFloat64
+      in
+      if valid then Ok () else Error "Operator is unavailable for this type"
+
+let requireOperator operation typ state =
+  let typ = resolve state typ in
+  Result.map
+    (fun () -> match typ with
+      | AST.TVar _ | AST.TInferenceVar _ ->
+          {state with operators = (operation, typ) :: state.operators}
+      | _ -> state)
+    (validateOperator operation typ)
+
+let validateOperators state =
+  List.fold_left
+    (fun result (operation, typ) ->
+      Result.bind result (fun () -> validateOperator operation (resolve state typ)))
+    (Ok ()) state.operators
 
 let constrain first second state =
   let first = resolve state first and second = resolve state second in
@@ -38,10 +73,12 @@ let constrain first second state =
                   (fun (name, _) -> S.mem name state.flexible)
                   (firstBindings @ secondBindings)
               in
-              Result.map
-                (fun substitution -> { state with substitution })
+              Result.bind
                 (Unification.consolidateBindings
-                   (M.bindings state.substitution @ bindings))))
+                   (M.bindings state.substitution @ bindings))
+                (fun substitution ->
+                  let state = {state with substitution} in
+                  Result.map (fun () -> state) (validateOperators state))))
 
 let freshenType rigid typ state =
   let rec freshen mapping state typ =

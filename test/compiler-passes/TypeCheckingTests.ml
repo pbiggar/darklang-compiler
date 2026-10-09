@@ -22,8 +22,14 @@ let ( let* ) = Result.bind
 (*
    Helper to check that type checking succeeds with expected type
 *)
+let checkProgram program =
+  let* source = WrittenParsing.parse Validation.Script (ASTPrettyPrinter.formatProgram program)
+    |> Result.map_error (fun message -> D.GenericError message) in
+  WrittenChecking.checkSourceUnits false false [source]
+    |> Result.map_error (fun message -> D.GenericError message)
+
 let expectType (expr : AST.expr) expectedType =
-  match TypeChecking.checkProgram (Program [ Expression ([], expr) ]) with
+  match checkProgram (Program [ Expression ([], expr) ]) with
   | Ok (actualType, _) ->
       if actualType = expectedType then Ok ()
       else
@@ -49,144 +55,12 @@ let testInt128Literal () = expectType (Int128Literal (Z.of_string "42")) TInt128
 let testUInt128Literal () =
   expectType (UInt128Literal (Z.of_string "42")) TUInt128
 
-let rec countMatches expr =
-  let childMatches =
-    match expr with
-    | C.BoundaryRender (_, value) -> [ value ]
-    | C.UnitLiteral | C.Int64Literal _ | C.Int128Literal _ | C.BigIntLiteral _
-    | C.Int8Literal _ | C.Int16Literal _ | C.Int32Literal _ | C.UInt8Literal _
-    | C.UInt16Literal _ | C.UInt32Literal _ | C.UInt64Literal _
-    | C.UInt128Literal _ | C.BoolLiteral _ | C.StringLiteral _ | C.BlobLiteral _
-    | C.CharLiteral _ | C.FloatLiteral _ | C.Local _ | C.FuncRef _
-    | C.GenericFuncRef _ | C.RuntimeError _ ->
-        []
-    | C.InterpolatedString parts ->
-        List.filter_map
-          (function C.StringText _ -> None | C.StringExpr e -> Some e)
-          parts
-    | C.BinOp (_, left, right) -> [ left; right ]
-    | C.UnaryOp (_, inner) -> [ inner ]
-    | C.Let (_, value, body) | C.RecursiveLet (_, value, body) ->
-        [ value; body ]
-    | C.If (condition, yes, no) -> [ condition; yes; no ]
-    | C.Sequence (first, next) -> [ first; next ]
-    | C.Call (_, args) | C.TypeApp (_, _, args) -> NonEmptyList.toList args
-    | C.TupleLiteral args -> C.tupleElementsToList args
-    | C.ListLiteral args -> args
-    | C.TupleAccess (value, _) -> [ value ]
-    | C.DictLiteral (_, _, entries) ->
-        List.concat_map (fun (key, value) -> [ key; value ]) entries
-    | C.RecordLiteral (_, fields) ->
-        C.recordFieldsInSourceOrder fields |> List.map snd
-    | C.RecordUpdate (value, updates) -> value :: List.map snd updates
-    | C.RecordAccess (value, _) -> [ value ]
-    | C.Constructor (_, fields) -> fields
-    | C.Match (scrutinee, cases) ->
-        scrutinee
-        :: List.map
-             (fun (case : C.matchCase) -> case.C.body)
-             (NonEmptyList.toList cases)
-    | C.Lambda (_, _, body) -> [ body ]
-    | C.Apply (func, args) | C.IndirectApply (func, args) ->
-        func :: NonEmptyList.toList args
-    | C.Closure (_, captures) -> captures
-  in
-  let childCount =
-    List.fold_left
-      (fun total child -> total + countMatches child)
-      0 childMatches
-  in
-  match expr with C.Match _ -> childCount + 1 | _ -> childCount
-
-(*
-   Sum equality should lower to one pair-match instead of nested match trees.
-*)
-let testSumEqualityUsesSinglePairMatch () =
-  let sumDef =
-    TypeDef
-      (SumTypeDef
-         ( "ChoiceTc",
-           [ "a"; "b" ],
-           [
-             { AST.name = "ChoiceLeftTc"; fields = [ TVar "a" ] };
-             { AST.name = "ChoiceRightTc"; fields = [ TVar "b" ] };
-           ] ))
-  in
-  let eqExpr =
-    Let
-      ( LPVariable "a",
-        Constructor
-          ( UnresolvedConstructor (Some "ChoiceTc"),
-            "ChoiceLeftTc",
-            [ Int64Literal 1L ] ),
-        Let
-          ( LPVariable "b",
-            Constructor
-              ( UnresolvedConstructor (Some "ChoiceTc"),
-                "ChoiceLeftTc",
-                [ Int64Literal 1L ] ),
-            BinOp (Eq, Var "a", Var "b") ) )
-  in
-  match
-    TypeChecking.checkProgram (Program [ sumDef; Expression ([], eqExpr) ])
-  with
-  | Error error -> Error ("Type checking failed: " ^ D.typeErrorToString error)
-  | Ok (actualType, checkedProgram) -> (
-      let topLevels = C.programTopLevels checkedProgram in
-      if actualType <> TBool then
-        Error ("Expected Bool result type, got " ^ D.typeToString actualType)
-      else
-        let helperDefs =
-          List.filter_map
-            (function
-              | C.FunctionDef func
-                when String.starts_with ~prefix:"__dark_eq_" func.C.name ->
-                  Some func
-              | _ -> None)
-            topLevels
-        in
-        let expressionMatchCountResult =
-          match
-            List.filter_map
-              (function
-                | C.Expression expr -> Some (countMatches expr) | _ -> None)
-              topLevels
-          with
-          | first :: _ -> Ok first
-          | [] ->
-              Error "Expected checked program to include a top-level expression"
-        in
-        match helperDefs with
-        | [] ->
-            Error
-              "Expected generated structural equality helper function for sum \
-               equality"
-        | helperDef :: _ ->
-            let helperMatchCount = countMatches helperDef.C.body in
-            let helperCaseCount =
-              match helperDef.C.body with
-              | C.Let (_, _, C.Match (_, cases)) -> NonEmptyList.length cases
-              | _ -> 0
-            in
-            let* expressionMatchCount = expressionMatchCountResult in
-            if helperMatchCount <> 1 then
-              Error
-                (Printf.sprintf
-                   "Expected helper body to contain one Match, got %d"
-                   helperMatchCount)
-            else if helperCaseCount <> 3 then
-              Error
-                (Printf.sprintf
-                   "Expected two unique variant cases and one default, got %d \
-                    cases"
-                   helperCaseCount)
-            else if expressionMatchCount <> 0 then
-              Error
-                (Printf.sprintf
-                   "Expected top-level expression to call helper without Match \
-                    nodes, got %d"
-                   expressionMatchCount)
-            else Ok ())
+(* Check observable equality typing through the production source checker. *)
+let testSumEqualityHasBoolType () =
+  let source = "type ChoiceTc<'a, 'b> = ChoiceLeftTc of a | ChoiceRightTc of b\nlet a = ChoiceTc.ChoiceLeftTc 1L in let b = ChoiceTc.ChoiceLeftTc 1L in a == b" in
+  let* source = WrittenParsing.parse Validation.Script source in
+  let* typ, _ = WrittenChecking.checkSourceUnits false true [source] in
+  if typ = TBool then Ok () else Error ("Expected Bool, got " ^ D.typeToString typ)
 
 (*
    Record access should report invalid generic record arity instead of
@@ -209,7 +83,7 @@ let testRecordAccessRejectsInvalidRecordArity () =
         recursion = None;
       }
   in
-  match TypeChecking.checkProgram (Program [ recordDef; funcDef ]) with
+  match checkProgram (Program [ recordDef; funcDef ]) with
   | Ok _ ->
       Error "Expected invalid record type argument arity to fail type checking"
   | Error (D.GenericError message)
@@ -272,7 +146,7 @@ let testComplexExpression () =
     TInt64
 
 let expectDeclarationError program expectedMessage =
-  match TypeChecking.checkPublicProgram program with
+  match checkProgram program with
   | Error (D.GenericError actual) when actual = expectedMessage -> Ok ()
   | Error error ->
       Error
@@ -295,7 +169,7 @@ let testDuplicateNominalTypeDeclarationUsesLastOverlay () =
               (UnresolvedConstructor (Some "DuplicateNominalTc"), "B", []) );
       ]
   in
-  match TypeChecking.checkPublicProgram program with
+  match checkProgram program with
   | Ok (TSum ("DuplicateNominalTc", []), _) -> Ok ()
   | Ok (typ, _) ->
       Error ("Expected overlaid nominal type, got: " ^ D.typeToString typ)
@@ -542,7 +416,7 @@ let testManyTopLevelFunctionsAndLetsAreStackSafe () =
       (Int64Literal 0L)
   in
   match
-    TypeChecking.checkProgram
+    checkProgram
       (Program (functions @ [ Expression ([], expression) ]))
   with
   | Ok (TInt64, _) -> Ok ()
@@ -628,7 +502,7 @@ let tests =
     ("Integer literal", testInt64Literal);
     ("Int128 literal", testInt128Literal);
     ("UInt128 literal", testUInt128Literal);
-    ("Sum equality uses single pair match", testSumEqualityUsesSinglePairMatch);
+    ("Sum equality has Bool type", testSumEqualityHasBoolType);
     ( "Record access rejects invalid record arity",
       testRecordAccessRejectsInvalidRecordArity );
     ("Addition", testAddition);

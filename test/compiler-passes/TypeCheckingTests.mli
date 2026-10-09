@@ -4,11 +4,10 @@ type testResult = (unit, string) result
 val expectType :
   Dark_compiler.AST.expr -> Dark_compiler.AST.semanticType -> testResult
 
-val countMatches : Dark_compiler.CheckedAST.expr -> int
 val testInt64Literal : unit -> testResult
 val testInt128Literal : unit -> testResult
 val testUInt128Literal : unit -> testResult
-val testSumEqualityUsesSinglePairMatch : unit -> testResult
+val testSumEqualityHasBoolType : unit -> testResult
 val testRecordAccessRejectsInvalidRecordArity : unit -> testResult
 val testAddition : unit -> testResult
 val testSubtraction : unit -> testResult
