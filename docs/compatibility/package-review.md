@@ -335,6 +335,19 @@ underflowed its reference count on repeated separate key reads. Standalone
 chunks to avoid that failure; the original loop's ownership bug remains to
 investigate and is not claimed fixed generally.
 
+## Monotonic milliseconds
+
+`Darklang.Cli.Telemetry.now` in `packages/darklang/cli/telemetry.dark` failed
+with `Unknown function or value 'Builtin.timeNowMs'`. Per user direction,
+`Builtin.timeNowMs` now calls the existing syscall-backed
+`Stdlib.__Network.monotonicMillis`, converts successful `Int64` milliseconds
+to `Int`, and crashes with the errno if the clock cannot be read. It does not
+add a syscall or use wall-clock time; only elapsed differences are meaningful.
+
+Validation is pending on task branch `chatgpt/time-now-ms`. The deferred
+`Telemetry.logFilePath` value still prevents compiling the unchanged whole
+Telemetry package; this fix covers its clock function only.
+
 ## Completion rule
 
 At the end of the package review, enumerate every skipped package and unresolved
