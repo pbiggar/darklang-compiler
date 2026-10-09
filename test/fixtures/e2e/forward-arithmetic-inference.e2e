@@ -1,0 +1,14 @@
+// Arithmetic requirements resolve during forward checking and specialization.
+Stdlib.Option.map3 Stdlib.Option.Option.None Stdlib.Option.Option.None (Stdlib.Option.Option.Some 2L) (fun a b c -> a - b - c) = Stdlib.Option.Option.None
+Stdlib.Option.map3 (Stdlib.Option.Option.Some 9L) (Stdlib.Option.Option.Some 3L) (Stdlib.Option.Option.Some 2L) (fun a b c -> a - b - c) = Stdlib.Option.Option.Some 4L
+Stdlib.Option.map3 Stdlib.Option.Option.None Stdlib.Option.Option.None (Stdlib.Option.Option.Some 2.0) (fun a b c -> a - b - c) = Stdlib.Option.Option.None
+Stdlib.Option.map2 Stdlib.Option.Option.None Stdlib.Option.Option.None (fun a b -> a - b) = Stdlib.Option.Option.None
+Stdlib.Result.map2 (Stdlib.Result.Result.Error "a") (Stdlib.Result.Result.Error "b") (fun a b -> a - b) = Stdlib.Result.Result.Error "a"
+Stdlib.List.map2 [] [] (fun a b -> a - b) = []
+Stdlib.Option.map3 Stdlib.Option.Option.None Stdlib.Option.Option.None (Stdlib.Option.Option.Some 2L) (fun a b c -> let difference = a - b in difference - c) = Stdlib.Option.Option.None
+Stdlib.Option.map3 Stdlib.Option.Option.None Stdlib.Option.Option.None (Stdlib.Option.Option.Some 2L) (fun a b c -> a - b < c) = Stdlib.Option.Option.None
+Stdlib.Option.map3 Stdlib.Option.Option.None Stdlib.Option.Option.None (Stdlib.Option.Option.Some "bad") (fun a b c -> a - b - c) = compileerror="Operator is unavailable for this type"
+Stdlib.Option.map3 Stdlib.Option.Option.None Stdlib.Option.Option.None (Stdlib.Option.Option.Some 2L) (fun a b c -> (a - b - c, a - 1l)) = compileerror="Expected TInt64, got TInt32"
+let subtract = fun a b -> a - b in subtract 9L 4L = 5L
+let subtract = fun a b -> a - b in subtract 9.0 4.0 = 5.0
+let subtract = fun a b -> a - b in subtract "a" "b" = compileerror="Operator is unavailable for this type"
