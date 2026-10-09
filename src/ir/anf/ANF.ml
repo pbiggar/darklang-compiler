@@ -112,6 +112,7 @@ type cliOperation =
   | Hostname
   | GetEnv
   | GetEnvironmentPacked
+  | StdinState
   | SetEnv
   | UnsetEnv
   | DirectoryCurrent

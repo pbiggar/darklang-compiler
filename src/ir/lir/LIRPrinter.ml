@@ -124,6 +124,7 @@ let prettyPrintCliOperation = function
   | LIR.Hostname -> "Hostname"
   | LIR.GetEnv -> "GetEnv"
   | LIR.GetEnvironmentPacked -> "GetEnvironmentPacked"
+  | LIR.StdinState -> "StdinState"
   | LIR.SetEnv -> "SetEnv"
   | LIR.UnsetEnv -> "UnsetEnv"
   | LIR.DirectoryCurrent -> "DirectoryCurrent"

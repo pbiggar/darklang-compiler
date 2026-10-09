@@ -49,6 +49,7 @@ fragments use `__` even where the interpreter also has private helpers.
 | `StdLib/Builtin.dark` | `Builtin`  | Portable interpreter builtin bridges plus native adapter helpers (`backend/src/Builtins/Builtins.Pure/Libs/UInt64.fs` and `backend/src/Builtins/Builtins.Cli/Libs/{Directory,File,Environment}.fs`) |
 | `StdLib/Builtin/__Posix.dark` | `Builtin` | Interpreter POSIX builtin bridge (`backend/src/Builtins/Builtins.Cli/Libs/Posix.fs`) |
 | `StdLib/Builtin/__Terminal.dark` | `Builtin` | Native terminal facts, size, color policy, text inspection and stdin interactivity (`backend/src/Builtins/Builtins.Cli/Libs/{Terminal,Stdin}.fs`) |
+| `StdLib/Builtin/__Stdin.dark` | `Builtin` | Interpreter stdin builtin wrappers (`backend/src/Builtins/Builtins.Cli/Libs/Stdin.fs`) |
 | `StdLib/Tuple2.dark` | `Darklang.Stdlib.Tuple2`  | `packages/darklang/stdlib/tuple2.dark` |
 | `StdLib/Tuple3.dark` | `Darklang.Stdlib.Tuple3`  | `packages/darklang/stdlib/tuple3.dark` |
 | `StdLib/Result.dark` | `Darklang.Stdlib.Result`  | `packages/darklang/stdlib/result.dark` |
@@ -281,6 +282,7 @@ fragments use `__` even where the interpreter also has private helpers.
 | `StdLib/Cli/Stdin/Key.dark` | `Darklang.Stdlib.Cli.Stdin.Key`  | `packages/darklang/stdlib/cli/stdin.dark` |
 | `StdLib/Cli/Stdin/Modifiers.dark` | `Darklang.Stdlib.Cli.Stdin.Modifiers`  | `packages/darklang/stdlib/cli/stdin.dark` |
 | `StdLib/Cli/Stdin/KeyRead.dark` | `Darklang.Stdlib.Cli.Stdin.KeyRead`  | `packages/darklang/stdlib/cli/stdin.dark` |
+| `StdLib/Cli/__Stdin.dark` | `Darklang.Stdlib.Cli.__Stdin` | Native shared stdin decoding and terminal key events (`backend/src/Builtins/Builtins.Cli/Libs/Stdin.fs`) |
 | `StdLib/Cli/Stdin.dark` | `Darklang.Stdlib.Cli.Stdin`  | `packages/darklang/stdlib/cli/stdin.dark` |
 | `StdLib/AltJson/ParseError.dark` | `Darklang.Stdlib.AltJson.ParseError`  | `packages/darklang/stdlib/alt-json.dark` |
 | `StdLib/AltJson.dark` | `Darklang.Stdlib.AltJson`  | `packages/darklang/stdlib/alt-json.dark` |

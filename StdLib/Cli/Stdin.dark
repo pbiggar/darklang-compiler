@@ -5,8 +5,23 @@ module Darklang.Stdlib.Cli.Stdin
 /// Whether stdin or stdout is a terminal, matching the interpreter builtin.
 let isInteractive () : Bool = Builtin.stdinIsInteractive ()
 
-// Replaced by the target terminal decoder during lowering.
-let __readKey () : Stdlib.Cli.Stdin.KeyRead.KeyRead =
-    Stdlib.Cli.Stdin.KeyRead.KeyRead { key = Stdlib.Cli.Stdin.Key.Key.Escape, modifiers = Stdlib.Cli.Stdin.Modifiers.Modifiers { alt = false, ctrl = false, shift = false }, keyChar = "", repeat = 1 }
+let readLine () : String = Builtin.stdinReadLine ()
 
-let readKey () : Stdlib.Cli.Stdin.KeyRead.KeyRead = Stdlib.Cli.Stdin.__readKey ()
+let readAll () : String = Builtin.stdinReadAll ()
+
+let readKey () : Stdlib.Cli.Stdin.KeyRead.KeyRead = Builtin.stdinReadKey ()
+
+/// Read one line WITHOUT echoing it, for a secret typed at a prompt.
+///
+/// Taking a secret this way rather than as an argument keeps it out of the terminal scrollback and out of
+/// shell history. Redirected input reads as a plain line, since a piped secret was never on screen.
+///
+/// Pure Dark over `readKey`: Enter finishes, Backspace edits, control keys are not secret material,
+/// and a coalesced burst (a held key, or a paste delivering one character many times) appends
+/// `keyChar` `repeat` times so a pasted secret arrives whole.
+let readSecret () : String =
+  // Secret key input requires a terminal on stdin, even if stdout is a tty.
+  if Stdlib.Bool.not (Builtin.__isTerminal 0L) then
+    readLine ()
+  else
+    Stdlib.Cli.__Stdin.__secretLoop []

@@ -37,7 +37,10 @@ alternate screen, cursor cleanup, or terminal-width calculation.
 | `Stdlib.print(String): Unit` | forwards the supplied UTF-8 bytes to `Builtin.print` | none | `Unit`; ordered effect | Shared |
 | `Stdlib.printLine(String): Unit` | forwards the supplied UTF-8 bytes to `Builtin.printLine` | exactly one LF | `Unit`; ordered effect | Shared |
 | `Stdlib.printLines(List<String>): Unit` | invokes `Stdlib.printLine` once per element, head to tail | one LF per element | empty list has no effect; `Unit` | Shared |
-| `Builtin.stdinReadLine(Unit): String` | reads fd 0; accepts LF or CRLF and omits the terminator | none added | preserves unread bytes, returns a partial final line, and returns `""` at immediate EOF | Shared |
+| `Builtin.stdinReadLine(Unit): String` | reads fd 0; accepts LF, CRLF or CR and omits the terminator | none added | preserves unread bytes, returns a partial final line, and returns `""` at immediate EOF | Shared |
+| `Builtin.stdinReadAll(Unit): String` | shared stdin reader, UTF-8 decoding | preserves all newlines | reads to EOF, preserving buffered input | Shared |
+| `Builtin.stdinReadExactly(Int): String` | shared reader, UTF-16 unit count | preserves newlines | short result at EOF; invalid counts fail; split surrogates render as replacement | Shared |
+| `Builtin.stdinReadKey(Unit): KeyRead` | native terminal events; direct syscalls | no input echo | redirected input yields Escape; terminal state is restored | Shared |
 | `UI.Color.esc(String, String): String` | `1b 5b`, code, `6d`, text, `1b 5b 30 6d` | none | wraps empty text too; an inner reset remains observable | Shared |
 | Color helpers | `red=31`, `green=32`, `yellow=33`, `blue=34`, `magenta=35`, `cyan=36`, `white=37`, `gray=90`, `bold=1`, `dim=2`, `italic=3`, `underline=4`, `strikethrough=9`, `bgRed=41`, `bgGreen=42`, `bgYellow=43`, `bgBlue=44` | none | return the wrapped string | Shared |
 | `Log.info/warn/error/debug/success(String): Unit` | stdout only; colored `[INFO]`, `[WARN]`, `[ERROR]`, `[DEBUG]`, or `[OK]`, one space, then the original message | exactly one LF | `Unit`; stderr is untouched | Shared |
@@ -56,7 +59,7 @@ suppressed. Explicit output bytes are not re-rendered or followed by implicit
 Unit text.
 
 Writes use fd 1 and reads use fd 0. Native writes retry `EINTR` and continue
-after partial writes. Line reads are UTF-8 byte preserving, retain bytes after a
+after partial writes. Text reads decode UTF-8 with replacement for malformed input, retain bytes after a
 terminator for the next call, and deterministically map EOF to the behaviors in
 the table. Default OS signal termination is retained: bytes already written
 remain observable, while no synthetic completion or cleanup sequence is added.
