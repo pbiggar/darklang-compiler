@@ -32,7 +32,7 @@ type __Found = {
     captures: List<String>
 }
 
-let __invalid<'a> () : 'a = Builtin.testRuntimeError "Invalid regex pattern"
+let __invalid<'a> () : 'a = Builtin.crash "Invalid regex pattern"
 
 let __takeDelimited (chars: List<Char>) (open_: Char) (close_: Char) (depth: Int64) (escaped: Bool) (acc: List<Char>) : Stdlib.Result.Result<(String * List<Char>), String> =
     match chars with

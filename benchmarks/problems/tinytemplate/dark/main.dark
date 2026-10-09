@@ -76,7 +76,7 @@ type RenderEnvironment = {
 let byteAt (value: String) (index: Int64) : Int64 =
     match Stdlib.String.getByteAt value (Stdlib.Int.fromInt64 index) with
     | Some byte -> Stdlib.Int64.fromUInt8 byte
-    | None -> Builtin.testRuntimeError "Template byte index is out of range"
+    | None -> Builtin.crash "Template byte index is out of range"
 
 let byteLengthFrom (value: String) (index: Int64) : Int64 =
     match Stdlib.String.getByteAt value (Stdlib.Int.fromInt64 index) with
@@ -90,7 +90,7 @@ let sliceFrom (value: String) (index: Int64) (end_: Int64) (reversed: List<Char>
     else
         match Stdlib.Char.fromCodepoint (Stdlib.Int.fromInt64 (byteAt value index)) with
         | Some char -> sliceFrom value (index + 1L) end_ (Stdlib.List.push reversed char)
-        | None -> Builtin.testRuntimeError "Template source is not ASCII"
+        | None -> Builtin.crash "Template source is not ASCII"
 
 let slice (value: String) (start_: Int64) (end_: Int64) : String =
     sliceFrom value start_ end_ []
@@ -764,20 +764,20 @@ let rowTemplate = "<article class=\"{{ if featured }}featured{{ else }}standard{
 let footerTemplate = "<footer>{ @root }</footer>" in
 let configured = addFormatter (newTinyTemplate ()) "currency" CurrencyFormatter in
 match (Stdlib.Cli.__Args.int64 0, Stdlib.Cli.__Args.int64 1) with
-| (Error message, _) -> Builtin.testRuntimeError message
-| (_, Error message) -> Builtin.testRuntimeError message
+| (Error message, _) -> Builtin.crash message
+| (_, Error message) -> Builtin.crash message
 | (Ok rowCount, Ok runs) ->
     match compile pageTemplate with
-    | Error error -> Builtin.testRuntimeError (errorMessage error)
+    | Error error -> Builtin.crash (errorMessage error)
     | Ok page ->
         match compile rowTemplate with
-        | Error error -> Builtin.testRuntimeError (errorMessage error)
+        | Error error -> Builtin.crash (errorMessage error)
         | Ok row ->
             match compile footerTemplate with
-            | Error error -> Builtin.testRuntimeError (errorMessage error)
+            | Error error -> Builtin.crash (errorMessage error)
             | Ok footer ->
                 let templates = [("footer", footer), ("row", row), ("page", page)] in
                 let engine = TinyTemplate { templates = templates, formatters = configured.formatters, defaultFormatter = configured.defaultFormatter } in
                 match benchmark engine (makeReport rowCount) runs 0L with
-                | Error error -> Builtin.testRuntimeError (errorMessage error)
+                | Error error -> Builtin.crash (errorMessage error)
                 | Ok total -> Builtin.printLine (Stdlib.Int64.toString total)

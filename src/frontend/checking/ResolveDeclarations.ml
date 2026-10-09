@@ -153,7 +153,7 @@ let declarationResolutionEnvironment topLevels moduleRegistry
   let builtins =
     List.map
       (fun name -> builtin name (N.BuiltinFunction (name, 0)) name)
-      [ "unwrap"; "testRuntimeError"; "crash" ]
+      [ "unwrap"; "crash" ]
     @ List.concat_map
         (fun name ->
           [

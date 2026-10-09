@@ -4,7 +4,7 @@
 let byteAt (value: String) (index: Int64) : Int64 =
     match Stdlib.String.getByteAt value (Stdlib.Int.fromInt64 index) with
     | Some byte -> Stdlib.Int64.fromUInt8 byte
-    | None -> Builtin.testRuntimeError "Warden byte index is out of range"
+    | None -> Builtin.crash "Warden byte index is out of range"
 
 let stringLengthFrom (value: String) (index: Int64) : Int64 =
     match Stdlib.String.getByteAt value (Stdlib.Int.fromInt64 index) with
@@ -18,7 +18,7 @@ let sliceFrom (value: String) (index: Int64) (end_: Int64) (reversed: List<Char>
     else
         match Stdlib.Char.fromCodepoint (Stdlib.Int.fromInt64 (byteAt value index)) with
         | Some char -> sliceFrom value (index + 1L) end_ (Stdlib.List.push reversed char)
-        | None -> Builtin.testRuntimeError "Warden source is not ASCII"
+        | None -> Builtin.crash "Warden source is not ASCII"
 
 let slice (value: String) (start_: Int64) (end_: Int64) : String =
     sliceFrom value start_ end_ []
@@ -32,7 +32,7 @@ let tokenKey (index: Int64) : String = Stdlib.Int64.toString index
 let tokenAt (tokens: Dict<String, Int64>) (index: Int64) : Int64 =
     match Stdlib.Dict.get tokens (tokenKey index) with
     | Some token -> token
-    | None -> Builtin.testRuntimeError "missing token in Warden token arena"
+    | None -> Builtin.crash "missing token in Warden token arena"
 
 let scanNumber (source: String) (index: Int64) (length: Int64) (value: Int64) : (Int64 * Int64) =
     if index < length then
@@ -52,7 +52,7 @@ let wordToken (word: String) : Int64 =
     match word with
     | "x" -> 10L
     | "y" -> 11L
-    | _ -> Builtin.testRuntimeError "unknown identifier in Warden program"
+    | _ -> Builtin.crash "unknown identifier in Warden program"
 
 let lex (source: String) (index: Int64) (length: Int64) (tokenIndex: Int64) (tokens: Dict<String, Int64>) : Lexed =
     if index >= length then Lexed { tokens = tokens, count = tokenIndex }
@@ -79,7 +79,7 @@ let lex (source: String) (index: Int64) (length: Int64) (tokenIndex: Int64) (tok
                 | 40L -> 7L
                 | 41L -> 8L
                 | 59L -> 9L
-                | _ -> Builtin.testRuntimeError "unknown character in Warden program" in
+                | _ -> Builtin.crash "unknown character in Warden program" in
             let next = Stdlib.Dict.setOverridingDuplicates tokens (tokenKey tokenIndex) token in
             lex source (index + 1L) length (tokenIndex + 1L) next
 
@@ -93,7 +93,7 @@ let infix (token: Int64) : Stdlib.Option.Option<(Int64 * Int64)> =
     | _ -> None
 
 let parsePrimary (tokens: Dict<String, Int64>) (count: Int64) (index: Int64) (x: Int64) (y: Int64) : (Int64 * Int64) =
-    if index >= count then Builtin.testRuntimeError "expected expression in Warden program"
+    if index >= count then Builtin.crash "expected expression in Warden program"
     else
         let token = tokenAt tokens index in
         if token >= 1000L then (token - 1000L, index + 1L)
@@ -102,8 +102,8 @@ let parsePrimary (tokens: Dict<String, Int64>) (count: Int64) (index: Int64) (x:
         else if token == 7L then
             let (value, nextIndex) = parseExpression tokens count (index + 1L) 0L x y in
             if nextIndex < count && tokenAt tokens nextIndex == 8L then (value, nextIndex + 1L)
-            else Builtin.testRuntimeError "expected ')' in Warden program"
-        else Builtin.testRuntimeError "expected expression in Warden program"
+            else Builtin.crash "expected ')' in Warden program"
+        else Builtin.crash "expected expression in Warden program"
 
 let parseInfix (tokens: Dict<String, Int64>) (count: Int64) (left: Int64) (index: Int64) (minimumPrecedence: Int64) (x: Int64) (y: Int64) : (Int64 * Int64) =
     if index >= count then (left, index)
@@ -125,7 +125,7 @@ let applyOperator (operator: Int64) (leftValue: Int64) (rightValue: Int64) : Int
     | 2L -> leftValue * rightValue
     | 3L -> leftValue / rightValue
     | 4L -> if leftValue < rightValue then 1L else 0L
-    | _ -> Builtin.testRuntimeError "unknown Warden operator"
+    | _ -> Builtin.crash "unknown Warden operator"
 
 let parseAndEvaluate (tokens: Dict<String, Int64>) (count: Int64) (index: Int64) (iteration: Int64) (expressionIndex: Int64) (result: Int64) : Int64 =
     if index >= count then result
@@ -133,7 +133,7 @@ let parseAndEvaluate (tokens: Dict<String, Int64>) (count: Int64) (index: Int64)
         let x = (iteration * 17L + expressionIndex * 13L) % 97L + 3L in
         let y = (iteration * 29L + expressionIndex * 7L) % 89L + 5L in
         let (value, nextIndex) = parseExpression tokens count index 0L x y in
-        if nextIndex >= count || tokenAt tokens nextIndex != 9L then Builtin.testRuntimeError "expected ';' after Warden expression"
+        if nextIndex >= count || tokenAt tokens nextIndex != 9L then Builtin.crash "expected ';' after Warden expression"
         else parseAndEvaluate tokens count (nextIndex + 1L) iteration (expressionIndex + 1L) ((result + value * (expressionIndex + 1L)) % 1000000007L)
 
 let run (remaining: Int64) (iteration: Int64) (tokens: Dict<String, Int64>) (count: Int64) (result: Int64) : Int64 =
@@ -143,11 +143,11 @@ let run (remaining: Int64) (iteration: Int64) (tokens: Dict<String, Int64>) (cou
 let benchmarkArg (index: Int) : Int64 =
     match Stdlib.Cli.__Args.int64 index with
     | Ok value -> value
-    | Error message -> Builtin.testRuntimeError message
+    | Error message -> Builtin.crash message
 
 let expressionCount = benchmarkArg 0 in
 let repetitions = benchmarkArg 1 in
-if expressionCount <= 0L || repetitions <= 0L then Builtin.testRuntimeError "Warden workload arguments must be positive"
+if expressionCount <= 0L || repetitions <= 0L then Builtin.crash "Warden workload arguments must be positive"
 else
     let statement = "x * x + y * 3 + (x + y) * (x - y) + x / 2;\n" in
     let source = Stdlib.String.repeat statement (Stdlib.Int.fromInt64 expressionCount) in

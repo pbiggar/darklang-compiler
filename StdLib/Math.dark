@@ -55,12 +55,12 @@ let __quadrantRemainder (value: Float) (quadrant: Int) : Float =
 
 let __quadrantIndex (quadrant: Int) : Int64 =
     match Stdlib.Int.remainder quadrant (Stdlib.Int.fromInt64 4L) with
-    | Error message -> Builtin.testRuntimeError message
+    | Error message -> Builtin.crash message
     | Ok remainder ->
         let normalized = if Stdlib.Int.lessThan remainder (Stdlib.Int.fromInt64 0L) then Stdlib.Int.add remainder (Stdlib.Int.fromInt64 4L) else remainder in
         match Stdlib.Int.toInt64 normalized with
         | Some value -> value
-        | None -> Builtin.testRuntimeError "Math quadrant was not representable as Int64"
+        | None -> Builtin.crash "Math quadrant was not representable as Int64"
 
 let sin (value: Float) : Float =
     if value == 0.0 then value

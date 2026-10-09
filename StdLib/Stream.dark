@@ -85,7 +85,7 @@ let next<'a> (stream: Stream<a>) : Stdlib.Option.Option<a> =
                 let _ = __raw_write_word ptr (Stdlib.Stream.__STATE_OFFSET ()) (Stdlib.Stream.__STATE_READY ()) in
                 Some value
     else if state == Stdlib.Stream.__STATE_ADVANCING () || state == Stdlib.Stream.__STATE_CLOSE_REQUESTED () then
-        Builtin.testRuntimeError "Stream.next cannot overlap or reenter an active pull"
+        Builtin.crash "Stream.next cannot overlap or reenter an active pull"
     else None
 
 let __producerNext<'producerState, 'output> (cell: RawPtr) (step: producerState -> Stdlib.Option.Option<(output * producerState)>) : Stdlib.Option.Option<output> =

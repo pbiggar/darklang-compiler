@@ -5,7 +5,7 @@
 let byteAt (value: String) (index: Int64) : Int64 =
     match Stdlib.String.getByteAt value (Stdlib.Int.fromInt64 index) with
     | Some byte -> Stdlib.Int64.fromUInt8 byte
-    | None -> Builtin.testRuntimeError "Myers byte index is out of range"
+    | None -> Builtin.crash "Myers byte index is out of range"
 
 let stringLengthFrom (value: String) (index: Int64) : Int64 =
     match Stdlib.String.getByteAt value (Stdlib.Int.fromInt64 index) with
@@ -21,7 +21,7 @@ let diagonalKey (value: Int64) : String = Stdlib.Int64.toString value
 let frontierGet (frontier: Dict<String, Int64>) (diagonal: Int64) : Int64 =
     match Stdlib.Dict.get frontier (diagonalKey diagonal) with
     | Some value -> value
-    | None -> Builtin.testRuntimeError ("missing Myers frontier diagonal " ++ diagonalKey diagonal)
+    | None -> Builtin.crash ("missing Myers frontier diagonal " ++ diagonalKey diagonal)
 
 let snake (left: String) (right: String) (leftLength: Int64) (rightLength: Int64) (x: Int64) (y: Int64) : (Int64 * Int64) =
     if x >= leftLength || y >= rightLength then (x, y)
@@ -33,7 +33,7 @@ let search (leftText: String) (rightText: String) (d: Int64) (k: Int64) (previou
     if k > d then
         if found then DiffResult { distance = d, work = work }
         else if d >= stringLength leftText + stringLength rightText then
-            Builtin.testRuntimeError "Myers search exceeded maximum edit distance"
+            Builtin.crash "Myers search exceeded maximum edit distance"
         else search leftText rightText (d + 1L) (-(d + 1L)) current Stdlib.Dict.empty ((false, work))
     else
         let leftLength = stringLength leftText in
@@ -69,12 +69,12 @@ let run (remaining: Int64) (leftText: String) (rightText: String) (result: Int64
 let benchmarkArg (index: Int) : Int64 =
     match Stdlib.Cli.__Args.int64 index with
     | Ok value -> value
-    | Error message -> Builtin.testRuntimeError message
+    | Error message -> Builtin.crash message
 
 let blocks = benchmarkArg 0 in
 let insertions = benchmarkArg 1 in
 let repetitions = benchmarkArg 2 in
-if blocks <= 0L || insertions <= 0L || repetitions <= 0L then Builtin.testRuntimeError "Myers workload arguments must be positive"
+if blocks <= 0L || insertions <= 0L || repetitions <= 0L then Builtin.crash "Myers workload arguments must be positive"
 else
     let unit = "darklang compiler benchmark: persistent values and recursive paths.\n" in
     let prefix = Stdlib.String.repeat unit (Stdlib.Int.fromInt64 blocks) in

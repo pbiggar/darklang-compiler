@@ -426,12 +426,12 @@ let __groupByWithKeyHelper<'a, 'b> (remaining: List<a>) (fn: a -> b) (groups: Li
             match (retainedGroups, retainedKey, retainedElement) with
             | ([rootedGroups], [rootedKey], [rootedElement]) ->
                 Stdlib.List.__groupByWithKeyHelper<a, b> tail fn (Stdlib.List.__appendToGroup<a, b> rootedGroups rootedKey rootedElement)
-            | _ -> Builtin.testRuntimeError "groupByWithKey retained state was empty"
+            | _ -> Builtin.crash "groupByWithKey retained state was empty"
         else
             match (retainedGroups, retainedKey, retainedElement) with
             | ([rootedGroups], [rootedKey], [rootedElement]) ->
                 Stdlib.List.__groupByWithKeyHelper<a, b> tail fn (Stdlib.List.pushBack<(b * List<a>)> rootedGroups ((rootedKey, [rootedElement])))
-            | _ -> Builtin.testRuntimeError "groupByWithKey retained state was empty"
+            | _ -> Builtin.crash "groupByWithKey retained state was empty"
 
 let iter<'a> (list: List<a>) (fn: (a) -> Unit) : Unit =
     match list with

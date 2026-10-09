@@ -311,15 +311,15 @@ let __bodyStep (body: Stdlib.__Http2.Body) : Stdlib.Option.Option<(UInt8 * Stdli
     match body.expected with
     | Some expected ->
       if Stdlib.Bool.not body.noBody && expected != body.total then
-        Builtin.testRuntimeError "HTTP/2 Content-Length mismatch" else None
+        Builtin.crash "HTTP/2 Content-Length mismatch" else None
     | None -> None
   else
     match Stdlib.__Http2.receivePart body.transport body.state with
-    | Error message -> Builtin.testRuntimeError message
+    | Error message -> Builtin.crash message
     | Ok part ->
       let total = body.total + Stdlib.Blob.__byteLength part.bytes in
-      if total > 104857600L then Builtin.testRuntimeError "HTTP body too large"
-      else if body.noBody && total != 0L then Builtin.testRuntimeError "Unexpected HTTP/2 response body"
+      if total > 104857600L then Builtin.crash "HTTP body too large"
+      else if body.noBody && total != 0L then Builtin.crash "Unexpected HTTP/2 response body"
       else
         let next = Stdlib.__Http2.Body { transport = body.transport, state = part.state, bytes = part.bytes, position = 0L, total = total, ended = part.ended, expected = body.expected, noBody = body.noBody } in
         Stdlib.__Http2.__bodyStep next

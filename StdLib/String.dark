@@ -18,7 +18,7 @@ let __byteAtUnchecked (value: String) (index: Int64) : Int64 =
 let __decodeUtf8At (value: String) (index: Int64) : (Int64 * Int64) =
     match Stdlib.String.__Unicode.decodeAt value index with
     | Ok decoded -> decoded
-    | Error _ -> Builtin.testRuntimeError "Invalid UTF-8 string"
+    | Error _ -> Builtin.crash "Invalid UTF-8 string"
 
 let __copyBytesToPtr (source: String) (sourceStart: Int64) (destination: RawPtr) (destinationStart: Int64) (count: Int64) : Unit =
     if count <= 0L then ()
@@ -59,7 +59,7 @@ let __substring (value: String) (start_: Int64) (end_: Int64) : String =
     let actualEnd = if end_ < actualStart then actualStart else if end_ > length then length else end_ in
     if Stdlib.String.__isUtf8Boundary value actualStart && Stdlib.String.__isUtf8Boundary value actualEnd then
         Stdlib.String.__Unicode.normalizeValid (Stdlib.String.__byteSlice value actualStart actualEnd)
-    else Builtin.testRuntimeError "String byte index is not a UTF-8 scalar boundary"
+    else Builtin.crash "String byte index is not a UTF-8 scalar boundary"
 
 let __compareBytes (left: String) (leftStart: Int64) (right: String) (rightStart: Int64) (count: Int64) : Bool =
     if count <= 0L then true
@@ -147,12 +147,12 @@ let __allScalars (codepoints: List<Int64>) : Bool =
 
 let __fromCodepoints (codepoints: List<Int64>) : String =
     if Stdlib.String.__allScalars codepoints then Stdlib.String.__Unicode.normalizeValid (Stdlib.String.__fromCodepointsRaw codepoints)
-    else Builtin.testRuntimeError "Invalid Unicode scalar"
+    else Builtin.crash "Invalid Unicode scalar"
 
 let __toCodepoints (value: String) : List<Int64> =
     match Stdlib.String.__Unicode.decode value with
     | Ok codepoints -> codepoints
-    | Error _ -> Builtin.testRuntimeError "Invalid UTF-8 string"
+    | Error _ -> Builtin.crash "Invalid UTF-8 string"
 
 let __codepointLength (value: String) : Int64 =
     Stdlib.List.__length (Stdlib.String.__toCodepoints value)
@@ -252,7 +252,7 @@ let isEmpty (value: String) : Bool = Stdlib.String.__byteLength value == 0L
 let __intToInt64 (value: Int) : Int64 =
     match Stdlib.Int.toInt64 value with
     | Some converted -> converted
-    | None -> Builtin.testRuntimeError "String index did not fit Int64"
+    | None -> Builtin.crash "String index did not fit Int64"
 
 let __asChar (value: String) : Char = value
 
@@ -312,7 +312,7 @@ let byteSlice (value: String) (start_: Int64) (end_: Int64) : String =
     let actualEnd = if end_ < actualStart then actualStart else if end_ > length then length else end_ in
     if Stdlib.String.__isUtf8Boundary value actualStart && Stdlib.String.__isUtf8Boundary value actualEnd then
         Stdlib.String.__normalizeAfterConcat (Stdlib.String.__byteSlice value actualStart actualEnd)
-    else Builtin.testRuntimeError "String byte index is not a UTF-8 scalar boundary"
+    else Builtin.crash "String byte index is not a UTF-8 scalar boundary"
 
 /// Compare equal-length byte ranges without allocating either range.
 let byteRangesEqual (left: String) (leftStart: Int64) (right: String) (rightStart: Int64) (count: Int64) : Bool =

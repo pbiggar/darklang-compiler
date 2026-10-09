@@ -6,7 +6,7 @@
 let byteAt (value: String) (index: Int64) : Int64 =
     match Stdlib.String.getByteAt value (Stdlib.Int.fromInt64 index) with
     | Some byte -> Stdlib.Int64.fromUInt8 byte
-    | None -> Builtin.testRuntimeError "Warden byte index is out of range"
+    | None -> Builtin.crash "Warden byte index is out of range"
 
 let stringLengthFrom (value: String) (index: Int64) : Int64 =
     match Stdlib.String.getByteAt value (Stdlib.Int.fromInt64 index) with
@@ -20,7 +20,7 @@ let sliceFrom (value: String) (index: Int64) (end_: Int64) (reversed: List<Char>
     else
         match Stdlib.Char.fromCodepoint (Stdlib.Int.fromInt64 (byteAt value index)) with
         | Some char -> sliceFrom value (index + 1L) end_ (Stdlib.List.push reversed char)
-        | None -> Builtin.testRuntimeError "Warden source is not ASCII"
+        | None -> Builtin.crash "Warden source is not ASCII"
 
 let slice (value: String) (start_: Int64) (end_: Int64) : String =
     sliceFrom value start_ end_ []
@@ -34,7 +34,7 @@ let tokenKey (index: Int64) : String = Stdlib.Int64.toString index
 let tokenAt (tokens: Dict<String, Int64>) (index: Int64) : Int64 =
     match Stdlib.Dict.get tokens (tokenKey index) with
     | Some token -> token
-    | None -> Builtin.testRuntimeError "missing token in Warden token arena"
+    | None -> Builtin.crash "missing token in Warden token arena"
 
 let scanNumber (source: String) (index: Int64) (length: Int64) (value: Int64) : (Int64 * Int64) =
     if index < length then
@@ -54,7 +54,7 @@ let wordToken (word: String) : Int64 =
     match word with
     | "x" -> 10L
     | "y" -> 11L
-    | _ -> Builtin.testRuntimeError "unknown identifier in Warden program"
+    | _ -> Builtin.crash "unknown identifier in Warden program"
 
 let lex (source: String) (index: Int64) (length: Int64) (tokenIndex: Int64) (tokens: Dict<String, Int64>) : Lexed =
     if index >= length then Lexed { tokens = tokens, count = tokenIndex }
@@ -81,7 +81,7 @@ let lex (source: String) (index: Int64) (length: Int64) (tokenIndex: Int64) (tok
                 | 40L -> 7L
                 | 41L -> 8L
                 | 59L -> 9L
-                | _ -> Builtin.testRuntimeError "unknown character in Warden program" in
+                | _ -> Builtin.crash "unknown character in Warden program" in
             let next = Stdlib.Dict.setOverridingDuplicates tokens (tokenKey tokenIndex) token in
             lex source (index + 1L) length (tokenIndex + 1L) next
 

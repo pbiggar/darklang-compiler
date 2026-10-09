@@ -14,6 +14,6 @@ let ackermann (m: Int64) (n: Int64) : Int64 =
 let benchmarkArg (index: Int) : Int64 =
     match Stdlib.Cli.__Args.int64 index with
     | Ok value -> value
-    | Error message -> Builtin.testRuntimeError message
+    | Error message -> Builtin.crash message
 
 Builtin.printLine (Stdlib.Int64.toString (ackermann (benchmarkArg 0) (benchmarkArg 1)))

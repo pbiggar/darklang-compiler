@@ -55,6 +55,6 @@ let benchmark (depth: Int64) (iterations: Int64) (i: Int64) (checksum: Int64) : 
 let benchmarkArg (index: Int) : Int64 =
     match Stdlib.Cli.__Args.int64 index with
     | Ok value -> value
-    | Error message -> Builtin.testRuntimeError message
+    | Error message -> Builtin.crash message
 
 Builtin.printLine (Stdlib.Int64.toString (benchmark (benchmarkArg 0) (benchmarkArg 1) 0L 0L))

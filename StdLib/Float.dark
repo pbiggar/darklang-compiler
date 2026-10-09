@@ -75,7 +75,7 @@ let mod (value: Float) (modulus: Float) : Float =
 
 let __isOdd (value: Int) : Bool =
     match Stdlib.Int.remainder value (Stdlib.Int.fromInt64 2L) with
-    | Error message -> Builtin.testRuntimeError message
+    | Error message -> Builtin.crash message
     | Ok remainder -> Stdlib.Bool.not (remainder == Stdlib.Int.fromInt64 0L)
 
 let round (value: Float) : Int =
@@ -164,7 +164,7 @@ let __binaryExponent (numerator: Int) (denominator: Int) (candidate: Int64) : In
 let __roundedQuotient (numerator: Int) (denominator: Int) : Int =
     let quotient = Stdlib.Int.divide numerator denominator in
     match Stdlib.Int.remainder numerator denominator with
-    | Error message -> Builtin.testRuntimeError message
+    | Error message -> Builtin.crash message
     | Ok remainder ->
         let doubled = Stdlib.Int.multiply remainder (Stdlib.Int.fromInt64 2L) in
         let comparison = if doubled < denominator then -1L else if doubled > denominator then 1L else 0L in
@@ -326,7 +326,7 @@ let __shortestCandidate (originalBits: UInt64) (exactText: String) (scale: Int64
             Stdlib.Float.__toBits parsed == originalBits in
     if roundTrips then
         Stdlib.Float.__renderDecimalCandidate digits exponent negative
-    else if precision >= 17L then Builtin.testRuntimeError "Float.toString failed to find a round-trip decimal"
+    else if precision >= 17L then Builtin.crash "Float.toString failed to find a round-trip decimal"
     else Stdlib.Float.__shortestCandidate originalBits exactText scale halfUlp negative (precision + 1L)
 
 let __decimalProductCarry (value: String) (index: Int64) (digit: Int64) (carry: Int64) : Int64 =

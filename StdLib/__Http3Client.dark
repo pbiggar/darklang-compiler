@@ -72,7 +72,7 @@ let __bodyNext (cell: RawPtr) : Stdlib.Option.Option<UInt8> =
       | Error message ->
         // The failed operation may already have reserved a send nonce.
         let _ = Stdlib.__Http3.close body.state in
-        Builtin.testRuntimeError message
+        Builtin.crash message
       | Ok received ->
         let _ = Stdlib.Stream.__cellSet cell (Stdlib.__Http3Client.Body { state = received.state,
           events = received.events, bytes = Stdlib.Blob.empty, position = 0L, finished = received.finished }) in

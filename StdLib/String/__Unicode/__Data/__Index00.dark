@@ -89,7 +89,7 @@ let __indicFromCode (value: Int64) : Stdlib.String.__Unicode.__Data.IndicConjunc
 let __hexDigit (byte: Int64) : Int64 =
     if byte >= 48L && byte <= 57L then byte - 48L
     else if byte >= 65L && byte <= 70L then byte - 55L
-    else Builtin.testRuntimeError "Invalid generated Unicode data"
+    else Builtin.crash "Invalid generated Unicode data"
 
 let isExtendedPictographic (codepoint: Int64) : Bool = Stdlib.Option.isSome (Stdlib.String.__Unicode.__Data.__extendedPictographicLookup codepoint)
 let unicodeVersion () : String = "17.0.0"

@@ -42,7 +42,7 @@ Source → parsed AST → checked AST → ANF → MIR → LIR → target ISA →
 
 **Trade-off**: Binary size increases with more specializations. Acceptable for current use case.
 
-**Policy**: The compiler does not default unresolved type parameters to arbitrary concrete types. If monomorphization needs hashing or equality on an unresolved type, lowering emits an explicit runtime error expression (`Builtin.testRuntimeError`), making unreachable paths explicit instead of silently picking a type.
+**Policy**: The compiler does not default unresolved type parameters to arbitrary concrete types. If monomorphization needs hashing or equality on an unresolved type, lowering emits an explicit runtime error expression (`Builtin.crash`), making unreachable paths explicit instead of silently picking a type.
 
 ## Reference Counting for Memory Management
 

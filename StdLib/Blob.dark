@@ -78,17 +78,17 @@ let __hexEncode (blob: Blob) (index: Int64) (length: Int64) (acc: String) : Stri
 let __int64ToUInt8 (value: Int64) : UInt8 =
     match Stdlib.Int.toUInt8 (Stdlib.Int.fromInt64 value) with
     | Some converted -> converted
-    | None -> Builtin.testRuntimeError "Blob byte did not fit UInt8"
+    | None -> Builtin.crash "Blob byte did not fit UInt8"
 
 let __uint8ToInt64 (value: UInt8) : Int64 =
     match Stdlib.Int.toInt64 (Stdlib.Int.fromUInt8 value) with
     | Some converted -> converted
-    | None -> Builtin.testRuntimeError "UInt8 did not fit Int64"
+    | None -> Builtin.crash "UInt8 did not fit Int64"
 
 let __intToInt64 (value: Int) : Int64 =
     match Stdlib.Int.toInt64 value with
     | Some converted -> converted
-    | None -> Builtin.testRuntimeError "Clamped Blob index did not fit Int64"
+    | None -> Builtin.crash "Clamped Blob index did not fit Int64"
 
 let length (blob: Blob) : Int =
     Stdlib.Int.fromInt64 (Stdlib.Blob.__byteLength blob)

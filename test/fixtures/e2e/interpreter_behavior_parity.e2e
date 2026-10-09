@@ -6,14 +6,14 @@
 
 // Record expressions are evaluated once in written order, independently of layout.
 type OrderedLiteral = { a: Int64, b: Int64 }
-let orderedLiteralFailureB (): Int64 = Builtin.testRuntimeError "record literal b"
-let orderedLiteralFailureA (): Int64 = Builtin.testRuntimeError "record literal a"
+let orderedLiteralFailureB (): Int64 = Builtin.crash "record literal b"
+let orderedLiteralFailureA (): Int64 = Builtin.crash "record literal a"
 OrderedLiteral { b = orderedLiteralFailureB (), a = orderedLiteralFailureA () } = error="record literal b"
 
 type OrderedUpdate = { a: Int64, b: Int64, c: Int64 }
 let orderedUpdateBase (): OrderedUpdate = OrderedUpdate { a = 1L, b = 2L, c = 3L }
-let orderedUpdateFailureC (): Int64 = Builtin.testRuntimeError "record update c"
-let orderedUpdateFailureA (): Int64 = Builtin.testRuntimeError "record update a"
+let orderedUpdateFailureC (): Int64 = Builtin.crash "record update c"
+let orderedUpdateFailureA (): Int64 = Builtin.crash "record update a"
 { orderedUpdateBase () with c = orderedUpdateFailureC (), a = orderedUpdateFailureA () } = error="record update c"
 
 // Function equality uses source identity, including inside compound values.
