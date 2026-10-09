@@ -50,6 +50,7 @@ fragments use `__` even where the interpreter also has private helpers.
 | `StdLib/Builtin/__Posix.dark` | `Builtin` | Interpreter POSIX builtin bridge (`backend/src/Builtins/Builtins.Cli/Libs/Posix.fs`) |
 | `StdLib/Builtin/__Terminal.dark` | `Builtin` | Native terminal facts, size, color policy, text inspection and stdin interactivity (`backend/src/Builtins/Builtins.Cli/Libs/{Terminal,Stdin}.fs`) |
 | `StdLib/Builtin/__Stdin.dark` | `Builtin` | Interpreter stdin builtin wrappers (`backend/src/Builtins/Builtins.Cli/Libs/Stdin.fs`) |
+| `StdLib/Builtin/__Time.dark` | `Builtin` | Interpreter monotonic milliseconds backed by the existing native clock helper (`backend/src/Builtins/Builtins.Time/Libs/Time.fs`) |
 | `StdLib/Tuple2.dark` | `Darklang.Stdlib.Tuple2`  | `packages/darklang/stdlib/tuple2.dark` |
 | `StdLib/Tuple3.dark` | `Darklang.Stdlib.Tuple3`  | `packages/darklang/stdlib/tuple3.dark` |
 | `StdLib/Result.dark` | `Darklang.Stdlib.Result`  | `packages/darklang/stdlib/result.dark` |

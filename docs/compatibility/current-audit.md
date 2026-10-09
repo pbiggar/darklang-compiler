@@ -17,7 +17,7 @@ disabling only its dependent L118 assertion lets the existing fallback prune the
 helper, and **33/33** remaining assertions pass. The other failures comprise
 69 dependent assertions and eight existing exclusions. `derror.dark:L10` passes and remains enabled.
 
-Constructor arity follow-up: named enum cases and payload counts are validated before generic argument inference, including aliases and explicit arguments. Option `None 5` and `Some(5, 6)` now report field-count compile errors; upstream enum L16 and L19 are enabled with phase-specific overrides. The focused regression passed **8/8** (the original checker failed four); the enum fixture passed **33/33** enabled assertions individually.
+Constructor arity follow-up: named enum cases and payload counts are validated before generic argument inference, including aliases and explicit arguments. Option `None 5` and `Some(5, 6)` now report field-count compile errors; upstream enum L16 and L19 are enabled with phase-specific overrides. The focused regression passed **8/8** (the original checker failed four); the enum fixture passed **33/33** enabled assertions individually. Native build, the full host suite (**11,905/11,905**), `dune runtest`, and **58/58** leak workloads passed. Parent benchmark verification stopped before measurement because the stored workload digest is incompatible; no baseline was reset.
 
 The assertion harness now compares original parsed expressions. Multiline applications and literal contents are preserved in individual runs and batches. A follow-up retest of `stdlib/dict.dark` passed all 140 assertions after L21 was changed to expect its existing compile-time key type error.
 

@@ -1,0 +1,8 @@
+// Interpreter monotonic-clock API backed by the existing native clock helper.
+module Builtin
+
+let timeNowMs () : Int =
+    match Stdlib.__Network.monotonicMillis () with
+    | Ok milliseconds -> Stdlib.Int.fromInt64 milliseconds
+    | Error code ->
+        Builtin.crash ("Unable to read monotonic clock (errno " ++ Stdlib.Int64.toString code ++ ")")
