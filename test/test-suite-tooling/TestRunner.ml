@@ -1082,7 +1082,7 @@ let runTestsWithProgressReporter completedTestReporter args =
         ( "test/fixtures/e2e/upstream/language/collections/dtuple.dark",
           [ 9; 11 ] );
         ( "test/fixtures/e2e/upstream/language/custom-data/enums.dark",
-          [ 7; 9; 11; 15; 17; 72; 104 ] );
+          [ 7; 9; 11; 74; 106 ] );
         ( "test/fixtures/e2e/upstream/language/custom-data/record-field-acess.dark",
           [ 13 ] );
         ("test/fixtures/e2e/upstream/language/custom-data/records.dark", [ 8 ]);
