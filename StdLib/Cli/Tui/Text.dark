@@ -2,6 +2,11 @@
 
 module Darklang.Stdlib.Cli.Tui.Text
 
+/// Measure a row and report whether it holds control characters. The width is only meaningful when
+/// the flag is false, and the two come back together because the frame fast path wants both.
+let inspect (text: String) : (Int * Bool) =
+  Builtin.cliTerminalInspectRow text
+
 /// Clip a row to a column width without splitting a grapheme cluster.
 let clipToWidth (text: String) (maxWidth: Int) : String =
     if maxWidth <= 0 then ""

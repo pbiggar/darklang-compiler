@@ -231,6 +231,26 @@ after correcting stale read-only generated action stamps. All 58 benchmark
 compile/run workloads passed with clean leak checks. Runtime validation is
 Linux x86-64; no new syscall lowering, libc or shell calls were added.
 
+## Terminal row inspection
+
+`Darklang.Stdlib.Cli.Tui.Text.inspect` in
+`packages/darklang/stdlib/cli/tui/text.dark` failed compilation because
+`Builtin.cliTerminalInspectRow` was missing. PR #35 adds the unchanged public
+wrapper and implements the builtin with existing String.displayWidth and
+grapheme-aware control detection, including CRLF. The returned width is plain
+text width: escape payloads are counted, and the control flag tells callers
+to use the sanitizing path. This does not add a new width algorithm.
+
+All 13 focused E2E cases reproduce the missing API on the baseline and pass
+after the fix, covering ASCII, CJK, combining marks, emoji/flags/VS16, zero-width
+text, C0/C1 controls, CRLF, escapes and non-control format characters. A repeated
+Unicode/control row prints `30|true` with clean leak checks. Full host suite:
+11466/11466 passed. Native `dune runtest --cache=disabled` passes using a fresh
+build directory after stale read-only action stamps blocked the existing one.
+All 58 benchmark compile/run workloads passed with clean leak checks;
+Cachegrind comparison remains waived. Runtime validation is Linux x86-64.
+Other declarations in this package remain individually unreviewed.
+
 ## Completion rule
 
 At the end of the package review, enumerate every skipped package and unresolved
