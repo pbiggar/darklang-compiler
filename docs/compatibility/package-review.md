@@ -422,6 +422,29 @@ All 58 quick/full benchmark workloads pass natively on Linux x86-64, and all
 pass formatting. Native `dune runtest --cache=disabled -j1` passed with the
 same temporary VM adapter. Cachegrind equivalence remains waived.
 
+## Current-user builtin fallback
+
+The original `Darklang.Stdlib.Cli.Sys.currentUser` body failed to compile because
+`Builtin.posixGetCurrentUserName` was absent. The user explicitly approved
+implementing this item despite the general deferred-builtin category.
+The builtin now reuses the compiler's native UID and `/etc/passwd` lookup;
+the public wrapper preserves LOGNAME, then USER, then builtin precedence.
+No environment override affects the builtin itself. Missing or unreadable
+passwd data and an unmatched UID return None. This retains the compiler's
+existing account-lookup limitation: NSS-only and macOS Directory Services
+accounts are not resolved, unlike the interpreter's getpwuid-based lookup.
+
+Six focused E2E tests cover builtin independence from environment overrides,
+public precedence, fallback with both variables absent, and malformed or
+unmatched passwd entries. Before the fix, the two builtin cases failed with
+an unknown-function diagnostic. After the fix all six pass. The unchanged
+upstream currentUser body compiles and runs with LOGNAME and USER removed,
+returning Some("root") on this host with clean leak accounting.
+Full host suite: 12449/12449 passed. Native Dune regressions passed, and
+all 58 benchmark workloads compiled and ran with clean leak accounting.
+The prior executable-path VM adapter was used for host/native checks;
+benchmark workloads ran natively. Cachegrind equivalence remains waived.
+
 ## Completion rule
 
 At the end of the package review, enumerate every skipped package and unresolved

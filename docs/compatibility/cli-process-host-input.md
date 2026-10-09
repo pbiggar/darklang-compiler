@@ -63,7 +63,8 @@ Architecture and operating-system values are fixed by the compile
 target. Hostname, PID, UID, signals, and online CPU count use the target kernel
 ABI directly: Linux counts the `sched_getaffinity` mask, while macOS reads
 `HW_AVAILCPU` through `sysctl`. `Sys.currentUser` preserves LOGNAME/USER
-precedence and otherwise matches the native UID in `/etc/passwd`;
+precedence and otherwise calls `Builtin.posixGetCurrentUserName`, which matches
+the native UID in `/etc/passwd`;
 `Cli.Env.home` similarly prefers HOME and then the passwd home field. These
 paths therefore do not depend on
 `PATH`, a configured shell, utility output wording, or text trimming.
