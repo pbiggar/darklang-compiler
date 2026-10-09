@@ -20,6 +20,10 @@ let cliTerminalColorEnabled () : Bool =
     let noColor = Stdlib.Option.withDefault (Stdlib.Cli.__getenv "NO_COLOR") "" in
     noColor == "" && Builtin.__isTerminal 1L
 
+let stdinIsInteractive () : Bool =
+    // Match the interpreter: output alone being a terminal also counts.
+    Builtin.__isTerminal 0L || Builtin.__isTerminal 1L
+
 let cliTerminalInspectRow (text: String) : (Int * Bool) =
     // This measures plain text: escape payloads are not stripped. Control
     // detection also recognizes the single CRLF grapheme cluster.
