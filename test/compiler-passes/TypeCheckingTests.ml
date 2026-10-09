@@ -87,7 +87,7 @@ let testRecordAccessRejectsInvalidRecordArity () =
   | Ok _ ->
       Error "Expected invalid record type argument arity to fail type checking"
   | Error (D.GenericError message)
-    when Text.contains message "Record type argument arity mismatch" ->
+    when Text.contains message "expects 1 arguments, got 2" ->
       Ok ()
   | Error error ->
       Error ("Expected record arity mismatch, got: " ^ D.typeErrorToString error)
@@ -153,7 +153,7 @@ let expectDeclarationError program expectedMessage =
         ("Expected '" ^ expectedMessage ^ "', got: " ^ D.typeErrorToString error)
   | Ok _ -> Error ("Expected declaration error: " ^ expectedMessage)
 
-let testDuplicateNominalTypeDeclarationUsesLastOverlay () =
+let testDuplicateNominalTypeDeclarationRejected () =
   let program =
     Program
       [
@@ -170,13 +170,9 @@ let testDuplicateNominalTypeDeclarationUsesLastOverlay () =
       ]
   in
   match checkProgram program with
-  | Ok (TSum ("DuplicateNominalTc", []), _) -> Ok ()
-  | Ok (typ, _) ->
-      Error ("Expected overlaid nominal type, got: " ^ D.typeToString typ)
-  | Error error ->
-      Error
-        ("Expected last nominal declaration to win, got: "
-       ^ D.typeErrorToString error)
+  | Error (D.GenericError "Duplicate type 'DuplicateNominalTc'") -> Ok ()
+  | Error error -> Error (D.typeErrorToString error)
+  | Ok _ -> Error "Expected duplicate nominal declaration to fail"
 
 let testDuplicateConstructorDeclarationRejected () =
   expectDeclarationError
@@ -222,7 +218,7 @@ let testDuplicateAndUndeclaredTypeParametersRejected () =
       "Duplicate type parameter: a in DuplicateParamTc"
   in
   expectDeclarationError undeclaredProgram
-    "Undeclared type parameter: 'b in UndeclaredParamTc"
+    "Undeclared type parameter 'b'"
 
 let testEmptyNominalDeclarationsRejected () =
   let emptySum =
@@ -285,11 +281,10 @@ let testInvalidDeclarationTypeReferencesRejected () =
   in
   let* () =
     expectDeclarationError unknownType
-      "Unknown type reference: MissingTypeTc in UnknownPayloadTc"
+    "Unknown type 'MissingTypeTc'"
   in
   expectDeclarationError wrongArity
-    "Type argument arity mismatch: GenericTargetTc expects 1, got 0 in \
-     WrongArityTc"
+    "Type 'GenericTargetTc' expects 1 arguments, got 0"
 
 let testConstructorIdentityCollisionRejected () =
   expectDeclarationError
@@ -512,8 +507,8 @@ let tests =
     ("Negation", testNegation);
     ("Nested operations", testNestedOperations);
     ("Complex expression", testComplexExpression);
-    ( "Duplicate nominal type declaration uses last overlay",
-      testDuplicateNominalTypeDeclarationUsesLastOverlay );
+    ( "Duplicate nominal type declaration rejected",
+      testDuplicateNominalTypeDeclarationRejected );
     ( "Duplicate constructor declaration rejected",
       testDuplicateConstructorDeclarationRejected );
     ( "Duplicate and undeclared type parameters rejected",

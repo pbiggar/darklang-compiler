@@ -24,8 +24,47 @@ type expressionChecker =
 let includeAllocatedFunctions allocated (Environment (globals, symbols)) =
   Environment (globals, C.includeAllocatedFunctionNames allocated symbols)
 
+let duplicate names =
+  let rec loop seen = function
+    | [] -> None
+    | name :: rest ->
+        if S.mem name seen then Some name else loop (S.add name seen) rest
+  in
+  loop S.empty names
+
+(* Declaration validity belongs to the same source checker as body validity.
+   Preserve rejection of malformed declarations after removing the AST checker. *)
+let validateTypes types =
+  let colliding = collidingCaseNames types in
+  let checked = M.fold (fun owner entry result ->
+    bind result (fun tags ->
+      match duplicate entry.params with
+      | Some name -> Error ("Duplicate type parameter: " ^ name ^ " in " ^ owner)
+      | None -> match entry.definition with
+        | WT.TDRecord [] -> Error ("Record declaration must contain at least one field: " ^ owner)
+        | WT.TDEnum [] -> Error ("Enum declaration must contain at least one case: " ^ owner)
+        | WT.TDEnum cases ->
+            let names = List.map (fun (_, (case : WT.enumCaseSyntax)) -> snd case.WT.name) cases in
+            (match duplicate names with
+            | Some name -> Error ("Duplicate constructor declaration: " ^ owner ^ "." ^ name)
+            | None ->
+                List.fold_left (fun result (index, name) ->
+                  bind result (fun tags ->
+                    let tag = caseTag colliding owner name index in
+                    let identity = owner ^ "." ^ name in
+                    let key = string_of_int tag in
+                    if not (S.mem name colliding) then Ok tags else
+                    match M.find_opt key tags with
+                    | Some existing when existing <> identity && S.mem name colliding ->
+                        Error ("Constructor identity collision " ^ key ^ ": " ^ existing ^ ", " ^ identity)
+                    | _ -> Ok (M.add key identity tags)))
+                  (Ok tags) (List.mapi (fun index name -> (index, name)) names))
+        | _ -> Ok tags))
+    types (Ok M.empty) in
+  map (fun _ -> types) checked
+
 let[@warning "-4"] predeclareTypes items =
-  List.fold_left
+  bind (List.fold_left
     (fun result item ->
       bind result (fun types ->
           match item with
@@ -51,7 +90,7 @@ let[@warning "-4"] predeclareTypes items =
                      }
                      types)
           | _ -> Ok types))
-    (Ok M.empty) items
+    (Ok M.empty) items) validateTypes
 
 let checkTypeDeclaration allowInternal types colliding symbols path
     (declaration : WT.typeDecl) =

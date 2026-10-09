@@ -94,7 +94,12 @@ let reduce definitions program =
                     let bindings = List.fold_left
                       (fun env ((id, _), argument) -> B.add id argument env)
                       B.empty (List.combine (NonEmptyList.toList func.C.params) args) in
-                    expression (S.add name active) bindings importedSymbols func.C.body
+                    let reduced, reducedSymbols =
+                      expression (S.add name active) bindings importedSymbols func.C.body in
+                    (* A known return value proves that no callback invocation
+                       survives. Unknown control flow keeps the original call. *)
+                    if value reduced then (reduced, reducedSymbols)
+                    else (original, symbols)
                 | _ -> Crash.crash "Static call import changed declaration shape")
             | _ -> (original, symbols))
         | _ -> (original, symbols))

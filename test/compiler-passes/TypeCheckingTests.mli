@@ -16,7 +16,7 @@ val testDivision : unit -> testResult
 val testNegation : unit -> testResult
 val testNestedOperations : unit -> testResult
 val testComplexExpression : unit -> testResult
-val testDuplicateNominalTypeDeclarationUsesLastOverlay : unit -> testResult
+val testDuplicateNominalTypeDeclarationRejected : unit -> testResult
 val testDuplicateConstructorDeclarationRejected : unit -> testResult
 val testDuplicateAndUndeclaredTypeParametersRejected : unit -> testResult
 val testEmptyNominalDeclarationsRejected : unit -> testResult
