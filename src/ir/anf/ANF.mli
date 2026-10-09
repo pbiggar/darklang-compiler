@@ -119,6 +119,7 @@ type cliOperation =
   | PosixFlock
   | PosixGetDents
   | PosixIoctl
+  | PosixProcInfo
 
 type recordDescriptor = {
   sourceTypeName : string;

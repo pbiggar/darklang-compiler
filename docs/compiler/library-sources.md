@@ -52,6 +52,7 @@ fragments use `__` even where the interpreter also has private helpers.
 | `StdLib/Builtin/__Stdin.dark` | `Builtin` | Interpreter stdin builtin wrappers (`backend/src/Builtins/Builtins.Cli/Libs/Stdin.fs`) |
 | `StdLib/Builtin/__Time.dark` | `Builtin` | Interpreter monotonic milliseconds backed by the existing native clock helper (`backend/src/Builtins/Builtins.Time/Libs/Time.fs`) |
 | `StdLib/Builtin/__BuildInfo.dark` | `Builtin` | Compiler revision substituted at build time, corresponding to interpreter `getBuildHash` (`backend/src/Builtins/Builtins.Cli/Libs/Environment.fs`) |
+| `StdLib/Builtin/__Executable.dark` | `Builtin` | Runtime executable path via Linux readlinkat or Darwin proc_info (`backend/src/Builtins/Builtins.Cli/Libs/Directory.fs`) |
 | `StdLib/Tuple2.dark` | `Darklang.Stdlib.Tuple2`  | `packages/darklang/stdlib/tuple2.dark` |
 | `StdLib/Tuple3.dark` | `Darklang.Stdlib.Tuple3`  | `packages/darklang/stdlib/tuple3.dark` |
 | `StdLib/Result.dark` | `Darklang.Stdlib.Result`  | `packages/darklang/stdlib/result.dark` |

@@ -1,0 +1,36 @@
+// __Executable.dark - Runtime executable identity from Linux and Darwin syscalls.
+module Builtin
+
+let __executablePathError (errno: Int64) : String =
+    let error = Stdlib.Cli.__Posix.__error errno in
+    Builtin.crash ("current executable path failed: " ++ error.message)
+
+let __linuxExecutablePath (capacity: Int64) : String =
+    let buffer = __mapped_alloc capacity in
+    let rc = Stdlib.Cli.__Posix.__withCString "/proc/self/exe" (fun path -> Stdlib.Cli.__Posix.__readlinkAt (Stdlib.Cli.__Posix.__cwdFd ()) path buffer capacity) in
+    if rc == capacity || rc == -4L then
+        let _ = __mapped_free buffer in
+        Builtin.__linuxExecutablePath (if rc == -4L then capacity else capacity * 2L)
+    else
+        let result = if rc < 0L then "" else Stdlib.Cli.__Posix.__bufferString buffer 0L rc in
+        let _ = __mapped_free buffer in
+        if rc < 0L then Builtin.__executablePathError (0L - rc)
+        else if rc == 0L then Builtin.__executablePathError 5L
+        else result
+
+let __macExecutablePath () : String =
+    // PROC_INFO_CALL_PIDINFO=2, PROC_PIDPATHINFO=11, maximum buffer=4096.
+    let buffer = __mapped_alloc 4096L in
+    let rc = Stdlib.Cli.__Posix.__procInfo 2L (Stdlib.Cli.__getpid ()) 11L 0L buffer 4096L in
+    let length = if rc < 0L then 0L else Stdlib.Cli.__Posix.__nullEnd buffer 0L 4096L in
+    let result = if length == 4096L then "" else Stdlib.Cli.__Posix.__bufferString buffer 0L length in
+    let _ = __mapped_free buffer in
+    if rc == -4L then Builtin.__macExecutablePath ()
+    else if rc < 0L then Builtin.__executablePathError (0L - rc)
+    else if length == 4096L then Builtin.__executablePathError 63L
+    else if length == 0L then Builtin.__executablePathError 5L
+    else result
+
+let getCurrentExecutablePath () : String =
+    if Stdlib.Cli.__Posix.__mac () then Builtin.__macExecutablePath ()
+    else Builtin.__linuxExecutablePath 256L

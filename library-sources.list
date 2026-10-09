@@ -28,6 +28,7 @@ StdLib/Builtin/__Terminal.dark
 StdLib/Builtin/__Stdin.dark
 StdLib/Builtin/__Time.dark
 StdLib/Builtin/__BuildInfo.dark
+StdLib/Builtin/__Executable.dark
 StdLib/Tuple2.dark
 StdLib/Tuple3.dark
 StdLib/Result.dark

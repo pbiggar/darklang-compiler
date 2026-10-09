@@ -26,6 +26,10 @@
 (include_subdirs no)
 (rule
  (alias runtest)
+ (deps executable_path_regression.py)
+ (action (run python3 %{dep:executable_path_regression.py} %{exe:executable_path_compile.exe})))
+(rule
+ (alias runtest)
  (deps terminal_session_regression.py)
  (action (run python3 %{dep:terminal_session_regression.py} %{exe:../../bin/dark.exe})))
 (rule
@@ -33,7 +37,7 @@
  (deps terminal_size_regression.py)
  (action (run python3 %{dep:terminal_size_regression.py} %{exe:../../bin/dark.exe})))
 (executables
- (names host_text_regression cache_regression component_regression literal_regression package_io_regression package_http_regression)
+ (names host_text_regression cache_regression component_regression literal_regression package_io_regression package_http_regression executable_path_compile)
  (libraries dark_compiler tls-lwt x509)
  (flags (:standard -w @a -warn-error @a)))
 

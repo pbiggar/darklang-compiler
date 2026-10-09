@@ -81,6 +81,7 @@ let convertCliOperation operation =
   | MIR.PosixFlock -> LIR.PosixFlock
   | MIR.PosixGetDents -> LIR.PosixGetDents
   | MIR.PosixIoctl -> LIR.PosixIoctl
+  | MIR.PosixProcInfo -> LIR.PosixProcInfo
 
 [@@@warning "-4"]
 
