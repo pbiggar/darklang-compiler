@@ -1046,7 +1046,6 @@ let runTestsWithProgressReporter completedTestReporter args =
         "test/fixtures/e2e/upstream/cloud/db.dark";
         "test/fixtures/e2e/upstream/language/builtin-introspection.dark";
         "test/fixtures/e2e/upstream/language/effect-ceiling.dark";
-        "test/fixtures/e2e/upstream/language/error-type-names.dark";
         "test/fixtures/e2e/upstream/language/runtime-to-programtypes.dark";
         "test/fixtures/e2e/upstream/scm/commit-hash.dark";
         "test/fixtures/e2e/upstream/scm/constraint-kinds.dark";
@@ -1061,7 +1060,6 @@ let runTestsWithProgressReporter completedTestReporter args =
         "test/fixtures/e2e/upstream/stachu/tinyLang.dark";
         "test/fixtures/e2e/upstream/stdlib/earg.dark";
         "test/fixtures/e2e/upstream/stdlib/eself.dark";
-        "test/fixtures/e2e/upstream/stdlib/json.dark";
         "test/fixtures/e2e/upstream/stdlib/language-tools/parsedFileShape.dark";
         "test/fixtures/e2e/upstream/stdlib/language-tools/pickLocation.dark";
         "test/fixtures/e2e/upstream/stdlib/language-tools/semanticTokenization.dark";
@@ -1082,7 +1080,7 @@ let runTestsWithProgressReporter completedTestReporter args =
         ( "test/fixtures/e2e/upstream/language/collections/dtuple.dark",
           [ 9; 11 ] );
         ( "test/fixtures/e2e/upstream/language/custom-data/enums.dark",
-          [ 7; 9; 11; 74; 106 ] );
+          [ 7; 9; 11; 74 ] );
         ( "test/fixtures/e2e/upstream/language/custom-data/record-field-acess.dark",
           [ 13 ] );
         ("test/fixtures/e2e/upstream/language/custom-data/records.dark", [ 8 ]);
@@ -1286,6 +1284,36 @@ let runTestsWithProgressReporter completedTestReporter args =
         ("test/fixtures/e2e/upstream/stdlib/httpserver.dark", [ 29; 33; 37 ]);
         ("test/fixtures/e2e/upstream/stdlib/ints/int64.dark", [ 368 ]);
         ("test/fixtures/e2e/upstream/stdlib/ints/int8.dark", [ 47 ]);
+        ( "test/fixtures/e2e/upstream/stdlib/json.dark",
+          [
+            722;
+            726;
+            728;
+            750;
+            751;
+            755;
+            932;
+            1071;
+            1076;
+            1136;
+            1152;
+            1159;
+            1178;
+            1180;
+            1236;
+            1239;
+            1243;
+            1248;
+            1268;
+            1330;
+            1388;
+            1392;
+            1402;
+            1406;
+            1408;
+            1411;
+            1423;
+          ] );
         ( "test/fixtures/e2e/upstream/stdlib/list.dark",
           [ 61; 65; 71; 75; 81; 157; 184; 238; 346 ] );
         ("test/fixtures/e2e/upstream/stdlib/math.dark", [ 27; 30 ]);

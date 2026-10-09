@@ -4,8 +4,8 @@ Generated from `test/test-suite-tooling/TestRunner.ml` and the imported
 `test/fixtures/e2e/upstream/**/*.dark` files. Regenerate with
 `python3 scripts/audit-upstream-gates.py`; verify with `--check`.
 
-**105 files; 34 whole-file exclusions; 268 line-number entries
-across 32 files.** A line entry is not a skipped-test count.
+**105 files; 32 whole-file exclusions; 294 line-number entries
+across 33 files.** A line entry is not a skipped-test count.
 The runner matches the `L<number>:` assertion name produced by the fixture
 parser. Declarations and multiline assertions require parser inspection;
 the source line alone does not establish whether a gate suppresses a test.
@@ -38,7 +38,7 @@ Other skip metadata and runtime filters are outside this inventory.
 | [language/collections/dtuple.dark](../../test/fixtures/e2e/upstream/language/collections/dtuple.dark) | enabled | 9, 11 |
 | [language/collections/edict.dark](../../test/fixtures/e2e/upstream/language/collections/edict.dark) | enabled | — |
 | [language/custom-data/aliases.dark](../../test/fixtures/e2e/upstream/language/custom-data/aliases.dark) | enabled | — |
-| [language/custom-data/enums.dark](../../test/fixtures/e2e/upstream/language/custom-data/enums.dark) | enabled | 7, 9, 11, 74, 106 |
+| [language/custom-data/enums.dark](../../test/fixtures/e2e/upstream/language/custom-data/enums.dark) | enabled | 7, 9, 11, 74 |
 | [language/custom-data/record-field-acess.dark](../../test/fixtures/e2e/upstream/language/custom-data/record-field-acess.dark) | enabled | 13 |
 | [language/custom-data/records.dark](../../test/fixtures/e2e/upstream/language/custom-data/records.dark) | enabled | 8 |
 | [language/custom-data/values.dark](../../test/fixtures/e2e/upstream/language/custom-data/values.dark) | enabled | 5, 9, 13, 17, 21, 25, 29, 33, 37, 41, 45, 49, 53, 57, 61, 65, 76, 77, 78, 80, 81, 83, 84, 86, 87, 89, 90, 92, 93, 95, 96, 98, 99, 101, 102, 104, 105, 107, 108, 110, 111, 113, 114, 116, 117, 119, 120, 122, 123, 125, 126, 128, 129 |
@@ -46,7 +46,7 @@ Other skip metadata and runtime filters are outside this inventory.
 | [language/effect-ceiling.dark](../../test/fixtures/e2e/upstream/language/effect-ceiling.dark) | disabled | — |
 | [language/elambda.dark](../../test/fixtures/e2e/upstream/language/elambda.dark) | enabled | 13, 18, 21, 33, 35 |
 | [language/error-syntax.dark](../../test/fixtures/e2e/upstream/language/error-syntax.dark) | enabled | 1 |
-| [language/error-type-names.dark](../../test/fixtures/e2e/upstream/language/error-type-names.dark) | disabled | — |
+| [language/error-type-names.dark](../../test/fixtures/e2e/upstream/language/error-type-names.dark) | enabled | — |
 | [language/flow-control/eif.dark](../../test/fixtures/e2e/upstream/language/flow-control/eif.dark) | enabled | 3, 4, 5, 6, 10, 23, 26 |
 | [language/flow-control/ematch.dark](../../test/fixtures/e2e/upstream/language/flow-control/ematch.dark) | enabled | 656, 660, 663, 667, 672, 677, 681 |
 | [language/flow-control/epipe.dark](../../test/fixtures/e2e/upstream/language/flow-control/epipe.dark) | enabled | 11 |
@@ -99,7 +99,7 @@ Other skip metadata and runtime filters are outside this inventory.
 | [stdlib/ints/uint32.dark](../../test/fixtures/e2e/upstream/stdlib/ints/uint32.dark) | enabled | — |
 | [stdlib/ints/uint64.dark](../../test/fixtures/e2e/upstream/stdlib/ints/uint64.dark) | enabled | — |
 | [stdlib/ints/uint8.dark](../../test/fixtures/e2e/upstream/stdlib/ints/uint8.dark) | enabled | — |
-| [stdlib/json.dark](../../test/fixtures/e2e/upstream/stdlib/json.dark) | disabled | — |
+| [stdlib/json.dark](../../test/fixtures/e2e/upstream/stdlib/json.dark) | enabled | 722, 726, 728, 750, 751, 755, 932, 1071, 1076, 1136, 1152, 1159, 1178, 1180, 1236, 1239, 1243, 1248, 1268, 1330, 1388, 1392, 1402, 1406, 1408, 1411, 1423 |
 | [stdlib/language-tools/parsedFileShape.dark](../../test/fixtures/e2e/upstream/stdlib/language-tools/parsedFileShape.dark) | disabled | — |
 | [stdlib/language-tools/pickLocation.dark](../../test/fixtures/e2e/upstream/stdlib/language-tools/pickLocation.dark) | disabled | — |
 | [stdlib/language-tools/semanticTokenization.dark](../../test/fixtures/e2e/upstream/stdlib/language-tools/semanticTokenization.dark) | disabled | — |
@@ -127,4 +127,4 @@ editing the runner. They must not be counted as unsupported expressions.
 | File | Line | Source line |
 | --- | --- | --- |
 
-0 of the 268 entries point to blank or comment lines.
+0 of the 294 entries point to blank or comment lines.
