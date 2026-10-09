@@ -200,7 +200,8 @@ mean the entire branch has passed its integration or performance gates.
 - [ ] Server push and priority scheduling.
 - [ ] Client redirect, cookie-jar and proxy configuration.
 - [ ] Apply peer HTTP/3 SETTINGS and field-section limits.
-- [ ] Negotiated QUIC idle timers.
+- [x] Negotiated QUIC application idle timers, authenticated activity resets,
+  first ack-eliciting-send restart and the RTT-derived three-PTO floor.
 - [ ] Typed protocol failures with correct stream and connection wire errors,
   retaining the current packet-number/key state across recoverable failures.
 
@@ -222,6 +223,17 @@ before the final size. `hpack_dynamic_encoder.e2e` and
 fields, disabled tables, duplicate-field accounting and resize ordering. The
 independent `hpack` decoder checks seven consecutive blocks, and the existing
 TLS/hyper-h2 server peer validates routing, flow control and owned shutdown.
+
+QUIC application owners now enforce the minimum nonzero local/peer idle limit
+before sending or processing packets, independently of the HTTP deadline.
+Valid authenticated receives restart the timer; unauthenticated traffic and
+ACK-only sends do not. Only the first ack-eliciting send after a receive
+restarts it, including retransmitted Handshake packets. Retry backoff does not
+inflate the RTT-derived three-PTO floor. `quic_idle.e2e` covers negotiation,
+timer boundaries and restart rules. The aioquic server peer advertises a short
+limit, stalls an upload and verifies that completing it after expiry produces
+no response; normal requests afterward still succeed. Handshake deadlines
+remain bounded separately by the existing handshake owner.
 
 Focused additions use `network_poll.e2e`, `http_header_compression.e2e` and
 `http_server_ipv6.e2e`; independent readiness, header-compression and IPv6 peer

@@ -5,7 +5,7 @@ type Transport = { socket: Stdlib.__Datagram.Socket, peer: Stdlib.__Datagram.End
 type Handshake = { identity: Stdlib.__QuicClient.Identity, send: Stdlib.__QuicCrypto.Keys, receive: Stdlib.__QuicCrypto.Keys, space: Stdlib.__QuicSpace.State }
 type Sending = { generation: Stdlib.__QuicKeys.Generation, first: Int64, count: Int64, acked: Bool }
 type Ids = { sequence: Int64, destination: Blob, retiredBefore: Int64, history: List<Stdlib.__QuicApplication.ConnectionId> }
-type Meta = { handshake: Stdlib.Option.Option<Stdlib.__QuicConnection.Handshake>, ticketBytes: Blob, tickets: Int64, invalid: Int64, closed: Stdlib.Option.Option<Int64> }
+type Meta = { idle: Stdlib.__QuicIdle.State, handshake: Stdlib.Option.Option<Stdlib.__QuicConnection.Handshake>, ticketBytes: Blob, tickets: Int64, invalid: Int64, closed: Stdlib.Option.Option<Int64> }
 type State = {
   transport: Stdlib.__QuicConnection.Transport, space: Stdlib.__QuicSpace.State, flow: Stdlib.__QuicFlow.State,
   receiveKeys: Stdlib.__QuicKeys.State, sending: Stdlib.__QuicConnection.Sending, ids: Stdlib.__QuicConnection.Ids, meta: Stdlib.__QuicConnection.Meta
@@ -56,7 +56,7 @@ let __crypto (state: Stdlib.__QuicConnection.State) (frame: Stdlib.__QuicFrames.
     else Stdlib.__QuicConnection.__tickets bytes state.meta.tickets |> Stdlib.Result.map (fun parsed ->
       let (pending, tickets) = parsed in
       let space = Stdlib.__QuicSpace.__state state.space state.space.received state.space.recovery (Stdlib.__QuicReassembly.drain crypto) state.space.queued state.space.nextToken state.space.ackPending in
-      let meta = Stdlib.__QuicConnection.Meta { handshake = state.meta.handshake, ticketBytes = pending, tickets = tickets, invalid = state.meta.invalid, closed = state.meta.closed } in
+      let meta = { state.meta with ticketBytes = pending, tickets = tickets } in
       Stdlib.__QuicConnection.__copy state space state.flow state.receiveKeys state.sending state.ids meta))
 
 let __newId (state: Stdlib.__QuicConnection.State) (id: Stdlib.__QuicApplication.ConnectionId)
@@ -103,11 +103,11 @@ let __frame (state: Stdlib.__QuicConnection.State) (frame: Stdlib.__QuicApplicat
   | Handshake (Close close) ->
     if close.code != 0L then Error "Peer closed QUIC with a transport error"
     else Ok (Stdlib.__QuicConnection.__copy state state.space state.flow state.receiveKeys state.sending state.ids
-      (Stdlib.__QuicConnection.Meta { handshake = None, ticketBytes = state.meta.ticketBytes, tickets = state.meta.tickets, invalid = state.meta.invalid, closed = Some close.code }))
+      ({ state.meta with handshake = None, closed = Some close.code }))
   | ApplicationClose close ->
     if close.code != 256L then Error "Peer closed HTTP/3 with an application error"
     else Ok (Stdlib.__QuicConnection.__copy state state.space state.flow state.receiveKeys state.sending state.ids
-      (Stdlib.__QuicConnection.Meta { handshake = None, ticketBytes = state.meta.ticketBytes, tickets = state.meta.tickets, invalid = state.meta.invalid, closed = Some close.code }))
+      ({ state.meta with handshake = None, closed = Some close.code }))
   | Stream stream -> Stdlib.__QuicFlow.receive state.flow stream |> Stdlib.Result.map (Stdlib.__QuicConnection.__flow state)
   | ResetStream reset -> Stdlib.__QuicFlow.reset state.flow reset |> Stdlib.Result.map (Stdlib.__QuicConnection.__flow state)
   | StopSending stop -> Stdlib.__QuicFlow.stop state.flow stop |> Stdlib.Result.andThen (fun stopped -> Stdlib.__QuicConnection.__queue (Stdlib.__QuicConnection.__flow state stopped.state) stopped.frames)
@@ -120,7 +120,7 @@ let __frame (state: Stdlib.__QuicConnection.State) (frame: Stdlib.__QuicApplicat
   | PathChallenge challenge -> Stdlib.__QuicApplication.pathResponse challenge |> Stdlib.Result.andThen (Stdlib.__QuicConnection.__queue state)
   | HandshakeDone ->
     Ok (Stdlib.__QuicConnection.__copy state state.space state.flow state.receiveKeys state.sending state.ids
-      (Stdlib.__QuicConnection.Meta { handshake = None, ticketBytes = state.meta.ticketBytes, tickets = state.meta.tickets, invalid = state.meta.invalid, closed = state.meta.closed }))
+      ({ state.meta with handshake = None }))
   | StreamDataBlocked blocked ->
     Stdlib.__QuicFlow.__incoming state.flow blocked.id |> Stdlib.Result.andThen (fun channel ->
       if Stdlib.Option.isNone channel.receive then Error "Peer blocked a send-only QUIC stream" else Ok state)
@@ -140,7 +140,7 @@ let __application (state: Stdlib.__QuicConnection.State) (packet: Stdlib.__QuicP
     | Error "QUIC application authentication failed" ->
       if state.meta.invalid >= 4096L then Error "QUIC invalid packet limit exceeded"
       else Stdlib.__QuicConnection.__discard (Stdlib.__QuicConnection.__copy state state.space state.flow state.receiveKeys state.sending state.ids
-        (Stdlib.__QuicConnection.Meta { handshake = state.meta.handshake, ticketBytes = state.meta.ticketBytes, tickets = state.meta.tickets, invalid = state.meta.invalid + 1L, closed = state.meta.closed })) packet.bytes
+        ({ state.meta with invalid = state.meta.invalid + 1L })) packet.bytes
     | Error message -> Error message
     | Ok opened ->
       Stdlib.__QuicApplication.parse (state.flow.role == Stdlib.__QuicFlow.Role.Client) opened.packet.payload |> Stdlib.Result.andThen (fun frames ->
@@ -152,7 +152,7 @@ let __application (state: Stdlib.__QuicConnection.State) (packet: Stdlib.__QuicP
                 generation = generation, first = state.space.recovery.largestSent + 1L, count = 0L, acked = false })
             else Ok state.sending in
           sending |> Stdlib.Result.andThen (fun sending ->
-            let next = Stdlib.__QuicConnection.__copy state receipt.state state.flow opened.state sending state.ids state.meta in
+            let next = Stdlib.__QuicConnection.__copy state receipt.state state.flow opened.state sending state.ids { state.meta with idle = Stdlib.__QuicIdle.received state.meta.idle now } in
             if receipt.fresh then Stdlib.__QuicConnection.__frames next frames now else Ok next))))
 
 let __packets (state: Stdlib.__QuicConnection.State) (bytes: Blob) (now: Int64)
@@ -177,7 +177,7 @@ let __packets (state: Stdlib.__QuicConnection.State) (bytes: Blob) (now: Int64)
                 else
                   let handshake = Stdlib.__QuicConnection.Handshake { identity = handshake.identity, send = handshake.send, receive = handshake.receive, space = space } in
                   Ok (Stdlib.__QuicConnection.__copy state state.space state.flow state.receiveKeys state.sending state.ids
-                    (Stdlib.__QuicConnection.Meta { handshake = Some handshake, ticketBytes = state.meta.ticketBytes, tickets = state.meta.tickets, invalid = state.meta.invalid, closed = state.meta.closed }))))
+                    ({ state.meta with handshake = Some handshake, idle = Stdlib.__QuicIdle.received state.meta.idle now }))))
         | _ -> Ok state in
       next |> Stdlib.Result.andThen (fun next -> Stdlib.__QuicConnection.__packets next packet.remaining now)
   | Ok _ -> Ok state
@@ -194,7 +194,7 @@ let fromClient (ready: Stdlib.__QuicClient.Ready) : Stdlib.Result.Result<Stdlib.
       space = space, flow = flow, receiveKeys = receive,
       sending = Stdlib.__QuicConnection.Sending { generation = send.current, first = 0L, count = 0L, acked = true },
       ids = Stdlib.__QuicConnection.Ids { sequence = 0L, destination = id.id, retiredBefore = 0L, history = [id] },
-      meta = Stdlib.__QuicConnection.Meta { ticketBytes = Stdlib.Blob.empty, tickets = 0L, invalid = 0L, closed = None,
+      meta = Stdlib.__QuicConnection.Meta { idle = Stdlib.__QuicIdle.State { timeout = Stdlib.__QuicIdle.negotiated 30000L ready.authenticated.parameters.idleTimeout, started = now, sentSinceReceive = false }, ticketBytes = Stdlib.Blob.empty, tickets = 0L, invalid = 0L, closed = None,
         handshake = Some (Stdlib.__QuicConnection.Handshake { identity = ready.identity, send = ready.tls.send, receive = ready.tls.receive, space = ready.handshake }) } } in
     Stdlib.List.fold ready.pending (Ok state) (fun result bytes -> result |> Stdlib.Result.andThen (fun state -> Stdlib.__QuicConnection.__packets state bytes now))
   | _, _, _, _, _ -> Error "QUIC application state initialization failed"
@@ -209,7 +209,7 @@ let fromServer (ready: Stdlib.__QuicServer.Ready) (signals: Stdlib.__Network.Shu
       space = space, flow = flow, receiveKeys = receive,
       sending = Stdlib.__QuicConnection.Sending { generation = send.current, first = 0L, count = 0L, acked = true },
       ids = Stdlib.__QuicConnection.Ids { sequence = 0L, destination = id.id, retiredBefore = 0L, history = [id] },
-      meta = Stdlib.__QuicConnection.Meta { ticketBytes = Stdlib.Blob.empty, tickets = 0L, invalid = 0L, closed = None, handshake = None } } in
+      meta = Stdlib.__QuicConnection.Meta { idle = Stdlib.__QuicIdle.State { timeout = Stdlib.__QuicIdle.negotiated 30000L ready.authenticated.parameters.idleTimeout, started = now, sentSinceReceive = false }, ticketBytes = Stdlib.Blob.empty, tickets = 0L, invalid = 0L, closed = None, handshake = None } } in
     // HANDSHAKE_DONE is reliable application data; it confirms the handshake
     // to the client only after its Finished has authenticated this state.
     Stdlib.__QuicConnection.__queue state (Stdlib.Blob.__fromInt64List [30L]) |> Stdlib.Result.andThen (fun state ->
@@ -257,9 +257,17 @@ let __send (state: Stdlib.__QuicConnection.State) (now: Int64) : Stdlib.Result.R
               | Ok () ->
                 let receive = if state.space.ackPending then Stdlib.__QuicKeys.acknowledged state.receiveKeys else state.receiveKeys in
                 let sending = Stdlib.__QuicConnection.Sending { generation = sending.generation, first = sending.first, count = sending.count + 1L, acked = sending.acked } in
-                Ok (Stdlib.__QuicConnection.__copy state space state.flow receive sending state.ids state.meta)))))
+                Ok (Stdlib.__QuicConnection.__copy state space state.flow receive sending state.ids { state.meta with idle = Stdlib.__QuicIdle.sent state.meta.idle plan.ackEliciting now })))))
+
+let __idle (state: Stdlib.__QuicConnection.State) (now: Int64) : Stdlib.Result.Result<Unit, String> =
+  // The three-PTO floor uses the RTT-derived period, excluding retry backoff.
+  // Otherwise each lost probe could double the idle lifetime indefinitely.
+  Stdlib.__QuicRecovery.pto { state.space.recovery with ptoCount = 0L } state.transport.parameters.maxAckDelay |> Stdlib.Result.andThen (fun pto ->
+    Stdlib.__QuicIdle.expired state.meta.idle now pto |> Stdlib.Result.andThen (fun expired ->
+      if expired then Error "QUIC idle timeout" else Ok ()))
 
 let __tick (state: Stdlib.__QuicConnection.State) (now: Int64) : Stdlib.Result.Result<Stdlib.__QuicConnection.State, String> =
+  Stdlib.__QuicConnection.__idle state now |> Stdlib.Result.andThen (fun _unit ->
   let state = Stdlib.__QuicConnection.__copy state state.space state.flow (Stdlib.__QuicKeys.expire state.receiveKeys now) state.sending state.ids state.meta in
   Stdlib.__QuicSpace.timeout state.space now state.transport.parameters.maxAckDelay |> Stdlib.Result.andThen (fun space ->
     let handshake = match state.meta.handshake with
@@ -269,8 +277,11 @@ let __tick (state: Stdlib.__QuicConnection.State) (now: Int64) : Stdlib.Result.R
           Stdlib.__QuicHandshakePacket.send state.transport.socket state.transport.peer (Stdlib.__QuicClient.__route handshake.identity) space handshake.send Stdlib.__QuicPacket.Kind.Handshake now (state.space.recovery.congestion.window, state.space.recovery.congestion.inFlight)
             |> Stdlib.Result.map (fun space -> Some (Stdlib.__QuicConnection.Handshake { identity = handshake.identity, send = handshake.send, receive = handshake.receive, space = space }))) in
     handshake |> Stdlib.Result.andThen (fun handshake ->
-      let meta = Stdlib.__QuicConnection.Meta { handshake = handshake, ticketBytes = state.meta.ticketBytes, tickets = state.meta.tickets, invalid = state.meta.invalid, closed = state.meta.closed } in
-      Stdlib.__QuicConnection.__send (Stdlib.__QuicConnection.__copy state space state.flow state.receiveKeys state.sending state.ids meta) now))
+      let eliciting = match state.meta.handshake, handshake with
+      | Some previous, Some next -> Stdlib.List.any next.space.recovery.packets (fun packet -> packet.number > previous.space.recovery.largestSent && packet.at == now)
+      | _, _ -> false in
+      let meta = { state.meta with handshake = handshake, idle = Stdlib.__QuicIdle.sent state.meta.idle eliciting now } in
+      Stdlib.__QuicConnection.__send (Stdlib.__QuicConnection.__copy state space state.flow state.receiveKeys state.sending state.ids meta) now)))
 
 let poll (state: Stdlib.__QuicConnection.State) (timeout: Int64) : Stdlib.Result.Result<Stdlib.__QuicConnection.State, String> =
   if timeout < 1L || timeout > 10000L then Error "Invalid QUIC application receive timeout"
@@ -284,7 +295,7 @@ let poll (state: Stdlib.__QuicConnection.State) (timeout: Int64) : Stdlib.Result
         if datagram.peer.address != state.transport.peer.address || datagram.peer.port != state.transport.peer.port then Ok next
         else match Stdlib.__Network.monotonicMillis () with
         | Error _ -> Error "QUIC monotonic clock failed"
-        | Ok at -> Stdlib.__QuicConnection.__packets next datagram.payload at))
+        | Ok at -> Stdlib.__QuicConnection.__idle next at |> Stdlib.Result.andThen (fun _unit -> Stdlib.__QuicConnection.__packets next datagram.payload at)))
 
 let flush (state: Stdlib.__QuicConnection.State) : Stdlib.Result.Result<Stdlib.__QuicConnection.State, String> =
   match Stdlib.__Network.monotonicMillis () with | Error _ -> Error "QUIC monotonic clock failed" | Ok now -> Stdlib.__QuicConnection.__tick state now

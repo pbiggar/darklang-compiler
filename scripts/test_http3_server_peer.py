@@ -58,10 +58,23 @@ def stop(process):
     assert process.returncode == 0 and stdout == b"STOPPED\n" and not stderr, (process.returncode, stdout, stderr)
 
 
-def exchange(peer, port, ca, method=b"POST", body=b"HTTP/3 routing", declared=None, stalled=False, protocols=None, host="127.0.0.1", field_limit=None):
+def exchange(peer, port, ca, method=b"POST", body=b"HTTP/3 routing", declared=None, stalled=False, protocols=None, host="127.0.0.1", field_limit=None, idle_timeout=60):
     config = QuicConfiguration(is_client=True, alpn_protocols=["h3"] if protocols is None else protocols,
                               server_name="localhost", cadata=ca.public_bytes(serialization.Encoding.PEM))
-    client = QuicConnection(configuration=config)
+    class AdvertisedIdleQuic(QuicConnection):
+        def _serialize_transport_parameters(self):
+            # Advertise a short peer limit while retaining the harness's
+            # longer local timer through the expensive certificate flight.
+            # The idle test deliberately sends after this advertised limit
+            # to check the server, without its own timer closing first.
+            previous = self._configuration.idle_timeout
+            self._configuration.idle_timeout = idle_timeout
+            try:
+                return super()._serialize_transport_parameters()
+            finally:
+                self._configuration.idle_timeout = previous
+
+    client = AdvertisedIdleQuic(configuration=config)
     class MethodAwareH3(H3Connection):
         def _get_local_settings(self):
             settings = super()._get_local_settings()
@@ -158,6 +171,46 @@ def main():
         assert result.returncode == 0, result.stdout + result.stderr
         process, port = start(binary)
         try:
+            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as peer:
+                peer.bind(("127.0.0.1", 0))
+                peer.settimeout(0.01)
+                client, http, _replay = exchange(peer, port, ca, body=b"partial", declared=100, stalled=True, idle_timeout=0.5)
+                # Let the handshake/control ACKs settle, then deliberately
+                # stop driving the peer's own timers. Completing the upload
+                # after silence distinguishes the server idle timer from
+                # its longer HTTP exchange deadline.
+                until = time.monotonic() + 0.3
+                while time.monotonic() < until:
+                    try:
+                        data, address = peer.recvfrom(8192)
+                        client.receive_datagram(data, address, time.monotonic())
+                    except socket.timeout:
+                        pass
+                    while (event := client.next_event()) is not None:
+                        http.handle_event(event)
+                    for data, address in client.datagrams_to_send(time.monotonic()):
+                        peer.sendto(data, address)
+                # Allow the initial three-PTO floor as well, even if control
+                # ACK timing has not supplied an application RTT sample.
+                until = time.monotonic() + 4
+                while time.monotonic() < until:
+                    try:
+                        peer.recvfrom(8192)
+                    except socket.timeout:
+                        pass
+                http.send_data(0, b"x" * 93, end_stream=True)
+                for data, address in client.datagrams_to_send(time.monotonic()):
+                    peer.sendto(data, address)
+                until = time.monotonic() + 1
+                while time.monotonic() < until:
+                    try:
+                        data, address = peer.recvfrom(8192)
+                    except socket.timeout:
+                        continue
+                    client.receive_datagram(data, address, time.monotonic())
+                    while (event := client.next_event()) is not None:
+                        assert not http.handle_event(event), "server accepted upload after negotiated idle expiration"
+            print("Negotiated idle timeout discards stalled upload before the HTTP deadline", flush=True)
             # Every nonempty field section exceeds a decoded limit of zero,
             # including indexed :status. The next ordinary exchange also
             # checks that rejecting this response leaves the listener usable.
