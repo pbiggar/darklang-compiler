@@ -251,6 +251,24 @@ All 58 benchmark compile/run workloads passed with clean leak checks;
 Cachegrind comparison remains waived. Runtime validation is Linux x86-64.
 Other declarations in this package remain individually unreviewed.
 
+## Stdin interactivity
+
+`Stdlib.Cli.Stdin.isInteractive` in
+`packages/darklang/stdlib/cli/stdin.dark` failed compilation because
+`Builtin.stdinIsInteractive` was missing. PR #38 implements the builtin with
+the existing direct syscall terminal probe and adds the public wrapper.
+It matches the interpreter: either stdin or stdout being a terminal makes the
+process interactive. `TERM` and `NO_COLOR` do not affect this API.
+
+Both focused E2E cases reproduce the missing builtin on the baseline and pass
+after the fix. Native regressions check all four stdin/stdout terminal
+combinations, files, pipes, both descriptors closed, and each closed descriptor
+paired with a terminal; both builtin and public API are checked, with clean
+leak diagnostics and unchanged terminal attributes. Full host suite:
+11943/11943 passed. `dune runtest` and all 58 benchmark compile/run workloads
+passed. Cachegrind comparison remains waived. Runtime validation is Linux
+x86-64; no new syscall lowering was required.
+
 ## Completion rule
 
 At the end of the package review, enumerate every skipped package and unresolved
