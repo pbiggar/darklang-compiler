@@ -4,15 +4,16 @@
 unsupported by the compiler. Compiler-owned programs use `Builtin.crash`.
 These imported assertions remain unchanged and are excluded individually.
 
-The exclusions cover **102 assertions in 19 files**. Four were already excluded
-for other diagnostics; retiring this builtin adds 98 exclusions. The imported
+The exclusions cover **69 assertions in 19 files**. Four were already excluded
+for other diagnostics; retiring this builtin adds 65 exclusions. The imported
 application fixture uses it through the shared `derrorFn` helper at L48; that
-preamble is compiled for every assertion, so all 34 assertions are excluded.
-Its individual ungated run failed all 34 during preamble compilation.
+ungated fixture run failed all 34 during preamble compilation. Disabling only
+L118 lets the existing fallback prune that helper, and all other 33 assertions
+pass and remain enabled.
 
 | File | Individual tests |
 | --- | --- |
-| [language/apply/eapply.dark](../../../test/fixtures/e2e/upstream/language/apply/eapply.dark) | [L1](../../../test/fixtures/e2e/upstream/language/apply/eapply.dark#L1), [L4](../../../test/fixtures/e2e/upstream/language/apply/eapply.dark#L4), [L7](../../../test/fixtures/e2e/upstream/language/apply/eapply.dark#L7), [L10](../../../test/fixtures/e2e/upstream/language/apply/eapply.dark#L10), [L62](../../../test/fixtures/e2e/upstream/language/apply/eapply.dark#L62), [L63](../../../test/fixtures/e2e/upstream/language/apply/eapply.dark#L63), [L64](../../../test/fixtures/e2e/upstream/language/apply/eapply.dark#L64), [L65](../../../test/fixtures/e2e/upstream/language/apply/eapply.dark#L65), [L66](../../../test/fixtures/e2e/upstream/language/apply/eapply.dark#L66), [L67](../../../test/fixtures/e2e/upstream/language/apply/eapply.dark#L67), [L68](../../../test/fixtures/e2e/upstream/language/apply/eapply.dark#L68), [L69](../../../test/fixtures/e2e/upstream/language/apply/eapply.dark#L69), [L70](../../../test/fixtures/e2e/upstream/language/apply/eapply.dark#L70), [L71](../../../test/fixtures/e2e/upstream/language/apply/eapply.dark#L71), [L72](../../../test/fixtures/e2e/upstream/language/apply/eapply.dark#L72), [L73](../../../test/fixtures/e2e/upstream/language/apply/eapply.dark#L73), [L75](../../../test/fixtures/e2e/upstream/language/apply/eapply.dark#L75), [L76](../../../test/fixtures/e2e/upstream/language/apply/eapply.dark#L76), [L78](../../../test/fixtures/e2e/upstream/language/apply/eapply.dark#L78), [L79](../../../test/fixtures/e2e/upstream/language/apply/eapply.dark#L79), [L89](../../../test/fixtures/e2e/upstream/language/apply/eapply.dark#L89), [L94](../../../test/fixtures/e2e/upstream/language/apply/eapply.dark#L94), [L96](../../../test/fixtures/e2e/upstream/language/apply/eapply.dark#L96), [L99](../../../test/fixtures/e2e/upstream/language/apply/eapply.dark#L99), [L101](../../../test/fixtures/e2e/upstream/language/apply/eapply.dark#L101), [L104](../../../test/fixtures/e2e/upstream/language/apply/eapply.dark#L104), [L107](../../../test/fixtures/e2e/upstream/language/apply/eapply.dark#L107), [L116](../../../test/fixtures/e2e/upstream/language/apply/eapply.dark#L116), [L118](../../../test/fixtures/e2e/upstream/language/apply/eapply.dark#L118), [L127](../../../test/fixtures/e2e/upstream/language/apply/eapply.dark#L127), [L143](../../../test/fixtures/e2e/upstream/language/apply/eapply.dark#L143), [L144](../../../test/fixtures/e2e/upstream/language/apply/eapply.dark#L144), [L146](../../../test/fixtures/e2e/upstream/language/apply/eapply.dark#L146), [L149](../../../test/fixtures/e2e/upstream/language/apply/eapply.dark#L149) |
+| [language/apply/eapply.dark](../../../test/fixtures/e2e/upstream/language/apply/eapply.dark) | [L118](../../../test/fixtures/e2e/upstream/language/apply/eapply.dark#L118) |
 | [language/apply/einfix.dark](../../../test/fixtures/e2e/upstream/language/apply/einfix.dark) | [L57](../../../test/fixtures/e2e/upstream/language/apply/einfix.dark#L57), [L58](../../../test/fixtures/e2e/upstream/language/apply/einfix.dark#L58), [L59](../../../test/fixtures/e2e/upstream/language/apply/einfix.dark#L59) |
 | [language/basic/eand.dark](../../../test/fixtures/e2e/upstream/language/basic/eand.dark) | [L5](../../../test/fixtures/e2e/upstream/language/basic/eand.dark#L5), [L13](../../../test/fixtures/e2e/upstream/language/basic/eand.dark#L13) |
 | [language/basic/elet.dark](../../../test/fixtures/e2e/upstream/language/basic/elet.dark) | [L1](../../../test/fixtures/e2e/upstream/language/basic/elet.dark#L1), [L2](../../../test/fixtures/e2e/upstream/language/basic/elet.dark#L2), [L19](../../../test/fixtures/e2e/upstream/language/basic/elet.dark#L19), [L20](../../../test/fixtures/e2e/upstream/language/basic/elet.dark#L20), [L45](../../../test/fixtures/e2e/upstream/language/basic/elet.dark#L45), [L54](../../../test/fixtures/e2e/upstream/language/basic/elet.dark#L54), [L60](../../../test/fixtures/e2e/upstream/language/basic/elet.dark#L60), [L66](../../../test/fixtures/e2e/upstream/language/basic/elet.dark#L66), [L71](../../../test/fixtures/e2e/upstream/language/basic/elet.dark#L71), [L82](../../../test/fixtures/e2e/upstream/language/basic/elet.dark#L82) |
@@ -38,7 +39,7 @@ semantics to the compiler. Runtime failure behavior is covered by
 [`crash-builtin.e2e`](../../../test/fixtures/e2e/crash-builtin.e2e).
 
 An individual ungated rerun of all 19 files executed 1,116 assertions:
-**1,006 passed and 110 failed**. The failures were the 102 infrastructure
-assertions listed above and eight existing exclusions
+**1,006 passed and 110 failed**. The failures comprised 69 infrastructure
+assertions listed above, 33 cascading preamble failures, and eight existing exclusions
 (three constructor-error assertions and five counter-instrumentation assertions). `derror.dark:L10` still
 passes its expected unknown-function compile error and remains enabled.

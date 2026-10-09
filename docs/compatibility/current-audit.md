@@ -8,13 +8,14 @@ Audited on 2026-10-08 (UTC), against compiler revision `4a61318019fb8dea7f34a0bf
 Results from that complete audit, including enabled neighbours: 3,599 assertions, 1,325 passed and 2,274 failed.
 That audit used 34 whole-file gates and 205 assertion lines across 16 mixed files.
 
-Current configured exclusions: **2,372 assertions across 66 files**, including
-**102 unsupported interpreter runtime-error assertions**. There are 35 whole-file
-gates and 269 assertion lines across 31 mixed files. The 19 affected files were
+Current configured exclusions: **2,339 assertions across 66 files**, including
+**69 unsupported interpreter runtime-error assertions**. There are 34 whole-file
+gates and 270 assertion lines across 32 mixed files. The 19 affected files were
 rerun individually without gates: **1,006 passed
-and 110 failed out of 1,116 assertions**. Their failures match the configured
-exclusions exactly; eight are existing exclusions and 102 depend on the retired
-interpreter builtin. `derror.dark:L10` passes and remains enabled.
+and 110 failed out of 1,116 assertions**. The ungated application fixture contributes 33 cascading preamble failures;
+disabling only its dependent L118 assertion lets the existing fallback prune the
+helper, and **33/33** remaining assertions pass. The other failures comprise
+69 dependent assertions and eight existing exclusions. `derror.dark:L10` passes and remains enabled.
 
 The assertion harness now compares original parsed expressions. Multiline applications and literal contents are preserved in individual runs and batches. A follow-up retest of `stdlib/dict.dark` passed all 140 assertions after L21 was changed to expect its existing compile-time key type error.
 
@@ -43,15 +44,15 @@ Forward arithmetic follow-up (2026-10-09): the checker retains unresolved operat
 
 Verification with current main `a2771f0cbe82d728de618e3eacd7a1c870e1d330`: native build passed; the complete host suite passed **11,501/11,501** tests; `dune runtest --build-dir _build-forward-verification` passed after avoiding stale action-cache files; compiled leaks passed **58/58** workloads. Parent benchmark verification stopped before measurement because the stored workload digest is incompatible; no baseline was reset.
 
-Runtime failure builtin follow-up (2026-10-09), based on main `2fad7ee2655fecabfa2ef6b199fe2a4fca548e6d`: compiler-owned uses now call `Builtin.crash`, and the compiler no longer registers `Builtin.testRuntimeError`. The public crash regression passed **5/5**; its rejection case fails on the parent compiler because the retired builtin still compiles. The complete host suite passed **11,862/11,862**, `dune runtest` passed, and compiled leaks passed **58/58**. Individual ungated runs of the 19 affected upstream files verified all new exclusion identities. The 29 benchmark source edits are exact builtin-name substitutions; their parity hashes are refreshed and the parity check passes. Parent benchmark verification stopped before measurement because the stored workload contract digest is incompatible; no baseline was reset.
+Runtime failure builtin follow-up (2026-10-09), based on main `2fad7ee2655fecabfa2ef6b199fe2a4fca548e6d`: compiler-owned uses now call `Builtin.crash`, and the compiler no longer registers `Builtin.testRuntimeError`. The public crash regression passed **5/5**; its rejection case fails on the parent compiler because the retired builtin still compiles. The complete host suite passed **11,862/11,862**, `dune runtest` passed, and compiled leaks passed **58/58**. Individual ungated runs of the 19 affected upstream files identified dependencies; the application fixture was subsequently checked with only L118 gated, recovering all 33 neighbours. The 29 benchmark source edits are exact builtin-name substitutions; their parity hashes are refreshed and the parity check passes. Parent benchmark verification stopped before measurement because the stored workload contract digest is incompatible; no baseline was reset.
 
 ## Unsupported interpreter test infrastructure
 
 The compiler no longer exposes `Builtin.testRuntimeError`. Its compiler-owned
 uses have migrated to `Builtin.crash : String -> Never`. The
-[exact 102 assertions in 19 upstream files](failures/interpreter-test-runtime-error.md)
+[exact 69 assertions in 19 upstream files](failures/interpreter-test-runtime-error.md)
 remain unchanged and are disabled as unsupported interpreter infrastructure.
-Four overlap the previous failure list; this adds 98 exclusions.
+Four overlap the previous failure list; this adds 65 exclusions.
 
 ## Failing test files
 
@@ -69,7 +70,7 @@ Each file links to the individual failing assertions and their observed diagnost
 | [cli/tailscale.dark](failures/cli/tailscale.md) | 5 | 0 | 5 |
 | [cli/workbench-repl.dark](failures/cli/workbench-repl.md) | 36 | 0 | 36 |
 | [cloud/db.dark](failures/cloud/db.md) | 151 | 0 | 151 |
-| [language/apply/eapply.dark](failures/interpreter-test-runtime-error.md) | 34 | 0 | 34 |
+| [language/apply/eapply.dark](failures/interpreter-test-runtime-error.md) | 34 | 33 | 1 |
 | [language/apply/einfix.dark](failures/interpreter-test-runtime-error.md) | 104 | 101 | 3 |
 | [language/basic/eand.dark](failures/interpreter-test-runtime-error.md) | 13 | 11 | 2 |
 | [language/basic/elet.dark](failures/interpreter-test-runtime-error.md) | 38 | 28 | 10 |

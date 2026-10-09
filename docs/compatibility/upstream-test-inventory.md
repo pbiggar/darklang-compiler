@@ -4,7 +4,7 @@ Generated from `test/test-suite-tooling/TestRunner.ml` and the imported
 `test/fixtures/e2e/upstream/**/*.dark` files. Regenerate with
 `python3 scripts/audit-upstream-gates.py`; verify with `--check`.
 
-**105 files; 35 whole-file exclusions; 270 line-number entries
+**105 files; 34 whole-file exclusions; 270 line-number entries
 across 32 files.** A line entry is not a skipped-test count.
 The runner matches the `L<number>:` assertion name produced by the fixture
 parser. Declarations and multiline assertions require parser inspection;
@@ -24,7 +24,7 @@ Other skip metadata and runtime filters are outside this inventory.
 | [cli/tailscale.dark](../../test/fixtures/e2e/upstream/cli/tailscale.dark) | disabled | — |
 | [cli/workbench-repl.dark](../../test/fixtures/e2e/upstream/cli/workbench-repl.dark) | disabled | — |
 | [cloud/db.dark](../../test/fixtures/e2e/upstream/cloud/db.dark) | disabled | — |
-| [language/apply/eapply.dark](../../test/fixtures/e2e/upstream/language/apply/eapply.dark) | disabled | 118 |
+| [language/apply/eapply.dark](../../test/fixtures/e2e/upstream/language/apply/eapply.dark) | enabled | 118 |
 | [language/apply/einfix.dark](../../test/fixtures/e2e/upstream/language/apply/einfix.dark) | enabled | 57, 58, 59 |
 | [language/basic/dfloat.dark](../../test/fixtures/e2e/upstream/language/basic/dfloat.dark) | enabled | — |
 | [language/basic/eand.dark](../../test/fixtures/e2e/upstream/language/basic/eand.dark) | enabled | 5, 13 |
