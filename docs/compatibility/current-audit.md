@@ -8,9 +8,9 @@ Audited on 2026-10-08 (UTC), against compiler revision `4a61318019fb8dea7f34a0bf
 Results from that complete audit, including enabled neighbours: 3,599 assertions, 1,325 passed and 2,274 failed.
 That audit used 34 whole-file gates and 205 assertion lines across 16 mixed files.
 
-Current configured exclusions: **2,337 assertions across 66 files**, including
-**69 unsupported interpreter runtime-error assertions**. There are 34 whole-file
-gates and 268 assertion lines across 32 mixed files. The 19 affected files were
+Current configured exclusions: **1,810 assertions across 65 files**, including
+**69 unsupported interpreter runtime-error assertions**. There are 32 whole-file
+gates and 294 assertion lines across 33 mixed files. The 19 affected files were
 rerun individually without gates: **1,006 passed
 and 110 failed out of 1,116 assertions**. The ungated application fixture contributes 33 cascading preamble failures;
 disabling only its dependent L118 assertion lets the existing fallback prune the
@@ -50,6 +50,10 @@ Runtime failure builtin follow-up (2026-10-09), based on main `2fad7ee2655fecabf
 
 Application preamble gate correction (2026-10-09), after merge `2021f6b74`: only `eapply.dark:L118` depends on the retired helper. Disabling it lets the existing reduced-preamble fallback omit that helper. All **33/33** neighbours remain enabled and pass; the complete host suite passes **11,895/11,895**, the native build passes, and `dune runtest` passes. No compiler or benchmark source changes are involved in this correction.
 
+Compile-error expectation follow-up (2026-10-09), based on main `bf9cd3ad4`: 16 assertions now require their correct compile-time diagnostics: enum L107, all 13 type-name assertions, and JSON L934/L983. Expressions and interpreter expectations remain unchanged. The upstream reduced-declaration retry now handles phase-specific compile-error messages as well as legacy error messages, preserving the ahead-of-time requirement. Before that retry change, seven type-name cases failed on pruned helper names; the complete type-name fixture now passes **13/13**, and enums passes **34/34** enabled assertions.
+
+The real parser enumerated all 6,734 imported assertions; all 127 remaining legacy error expectations were probed individually before the JSON changes. Missing interpreter helpers and unrelated preamble errors are not accepted as replacement diagnostics. JSON was additionally run in full individually: **511/540** passed before expectation updates; the two genuine static type errors bring it to **513/540**. All **513/513** enabled JSON assertions then passed through the normal runner individually. The whole-file JSON gate is replaced with exact gates for its 27 remaining failures, recovering 511 passing neighbours. In total, **527 assertions** are enabled and removed from the failure ledger.
+
 ## Unsupported interpreter test infrastructure
 
 The compiler no longer exposes `Builtin.testRuntimeError`. Its compiler-owned
@@ -82,7 +86,7 @@ Each file links to the individual failing assertions and their observed diagnost
 | [language/builtin-introspection.dark](failures/language/builtin-introspection.md) | 2 | 0 | 2 |
 | [language/collections/dlist.dark](failures/interpreter-test-runtime-error.md) | 6 | 4 | 2 |
 | [language/collections/dtuple.dark](failures/interpreter-test-runtime-error.md) | 6 | 4 | 2 |
-| [language/custom-data/enums.dark](failures/language/custom-data/enums.md) | 38 | 33 | 5 |
+| [language/custom-data/enums.dark](failures/language/custom-data/enums.md) | 38 | 34 | 4 |
 | [language/custom-data/record-field-acess.dark](failures/interpreter-test-runtime-error.md) | 5 | 4 | 1 |
 | [language/custom-data/records.dark](failures/interpreter-test-runtime-error.md) | 24 | 23 | 1 |
 | [language/custom-data/values.dark](failures/language/custom-data/values.md) | 72 | 19 | 53 |
@@ -90,7 +94,6 @@ Each file links to the individual failing assertions and their observed diagnost
 | [language/effect-ceiling.dark](failures/language/effect-ceiling.md) | 6 | 0 | 6 |
 | [language/elambda.dark](failures/interpreter-test-runtime-error.md) | 23 | 18 | 5 |
 | [language/error-syntax.dark](failures/interpreter-test-runtime-error.md) | 2 | 1 | 1 |
-| [language/error-type-names.dark](failures/language/error-type-names.md) | 13 | 0 | 13 |
 | [language/flow-control/eif.dark](failures/interpreter-test-runtime-error.md) | 16 | 9 | 7 |
 | [language/flow-control/ematch.dark](failures/interpreter-test-runtime-error.md) | 161 | 154 | 7 |
 | [language/flow-control/epipe.dark](failures/interpreter-test-runtime-error.md) | 30 | 29 | 1 |
@@ -120,7 +123,7 @@ Each file links to the individual failing assertions and their observed diagnost
 | [stdlib/httpserver.dark](failures/stdlib/httpserver.md) | 7 | 4 | 3 |
 | [stdlib/ints/int64.dark](failures/stdlib/ints/int64.md) | 264 | 263 | 1 |
 | [stdlib/ints/int8.dark](failures/stdlib/ints/int8.md) | 236 | 235 | 1 |
-| [stdlib/json.dark](failures/stdlib/json.md) | 540 | 0 | 540 |
+| [stdlib/json.dark](failures/stdlib/json.md) | 540 | 513 | 27 |
 | [stdlib/language-tools/parsedFileShape.dark](failures/stdlib/language-tools/parsedFileShape.md) | 13 | 0 | 13 |
 | [stdlib/language-tools/pickLocation.dark](failures/stdlib/language-tools/pickLocation.md) | 30 | 0 | 30 |
 | [stdlib/language-tools/semanticTokenization.dark](failures/stdlib/language-tools/semanticTokenization.md) | 102 | 0 | 102 |
