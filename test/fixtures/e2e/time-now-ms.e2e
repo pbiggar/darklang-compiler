@@ -1,0 +1,5 @@
+// Monotonic milliseconds: nonnegative Int values, ordered calls and real elapsed time.
+Builtin.timeNowMs () >= 0 = true
+(let first = Builtin.timeNowMs () in let second = Builtin.timeNowMs () in second >= first) = true
+(let first = Builtin.timeNowMs () in let _ = Stdlib.Cli.Posix.sleep 25.0 in Builtin.timeNowMs () - first >= 20) = true
+(let now () : Int = Builtin.timeNowMs () in let elapsedMs (startMs: Int) : Int = now () - startMs in let start = now () in elapsedMs start >= 0) = true
