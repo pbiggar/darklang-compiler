@@ -344,9 +344,19 @@ with `Unknown function or value 'Builtin.timeNowMs'`. Per user direction,
 to `Int`, and crashes with the errno if the clock cannot be read. It does not
 add a syscall or use wall-clock time; only elapsed differences are meaningful.
 
-Validation is pending on task branch `chatgpt/time-now-ms`. The deferred
-`Telemetry.logFilePath` value still prevents compiling the unchanged whole
-Telemetry package; this fix covers its clock function only.
+All five focused E2E cases fail with the missing builtin when the adapter is
+disabled and pass with it enabled: nonnegative Int results, ordered calls,
+elapsed time across sleep, the original package signatures, and repeated reads.
+The unchanged original `now` and `elapsedMs` bodies compile and run in isolation
+with clean leak checks. Full Linux x86-64 host suite: 11900/11900 passed.
+Native `dune runtest --cache=disabled -j 1` passed, and all 58 benchmark
+compile/run workloads passed with clean leak checks. Cachegrind equivalence
+remains waived. A fresh `_build-time-validated` directory was used for the host
+suite and native checks after stale VM build artifacts retained an old test
+runner. No backend changes were required; other targets were not executed.
+
+The deferred `Telemetry.logFilePath` value still prevents compiling the
+unchanged whole Telemetry package; this fix covers its clock function only.
 
 ## Completion rule
 
