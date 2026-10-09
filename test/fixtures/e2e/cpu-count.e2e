@@ -1,0 +1,3 @@
+// CPU count is a positive Int shared by the upstream builtin and public wrapper.
+Builtin.posixCpuCount () > 0 = true
+Builtin.posixCpuCount () == Stdlib.Cli.Sys.cpuCount () = true
