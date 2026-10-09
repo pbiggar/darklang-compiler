@@ -459,6 +459,12 @@ hosts can still report a different count between implementations.
 
 Two focused E2E tests failed with the missing-builtin diagnostic before the
 fix and pass afterward: a positive Int result and equality with the public API.
+The unchanged upstream body compiles and runs, returning 9 on this host with
+clean leak accounting. Full host suite: 12451/12451 passed. Native Dune
+regressions passed; all 58 benchmark workloads compiled and ran with clean
+leak accounting. The existing executable-path VM adapter was used for the
+host/native gates; benchmark workloads ran natively. Cachegrind equivalence
+remains waived. Other target runtimes were not executed for this change.
 
 ## Completion rule
 
