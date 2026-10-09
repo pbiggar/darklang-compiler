@@ -180,7 +180,9 @@ let genHeapInit () =
       X.Label okLabel;
       X.MOV_reg (freeListBase, X.RAX);
       X.LEA
-        (heapPtr, freeListBase, Int32.of_int (freeListSize + processTableSize + 512));
+        ( heapPtr,
+          freeListBase,
+          Int32.of_int (freeListSize + processTableSize + 512) );
     ]
 
 (*

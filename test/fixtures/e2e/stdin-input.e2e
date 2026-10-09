@@ -1,11 +1,13 @@
 // Stdin input boundaries: EOF, line endings, Unicode and shared stream position.
 Stdlib.Cli.Stdin.readLine () = stdout="\"one\"\n" stderr="" stdin="one\r\ntwo\n" exact_bytes=true
-Stdlib.Cli.Stdin.readAll () = stdout="\"one\n二😀\"\n" stderr="" stdin="one\n二😀" exact_bytes=true
+Stdlib.Cli.Stdin.readAll () = stdout="\"one\\n二😀\"\n" stderr="" stdin="one\n二😀" exact_bytes=true
 Builtin.stdinReadAll () = stdout="\"\"\n" stderr="" stdin="" exact_bytes=true
 Builtin.stdinReadExactly 3 = stdout="\"abc\"\n" stderr="" stdin="abcdef" exact_bytes=true
 Builtin.stdinReadExactly 8 = stdout="\"abc\"\n" stderr="" stdin="abc" exact_bytes=true
 (let first = Builtin.stdinReadExactly 0 in first ++ Builtin.stdinReadAll ()) = stdout="\"abc\"\n" stderr="" stdin="abc" exact_bytes=true
 (let first = Builtin.stdinReadExactly 3 in first ++ "|" ++ Builtin.stdinReadAll ()) = stdout="\"二😀|tail\"\n" stderr="" stdin="二😀tail" exact_bytes=true
-(let first = Stdlib.Cli.Stdin.readLine () in first ++ "|" ++ Stdlib.Cli.Stdin.readAll ()) = stdout="\"one|two\n\"\n" stderr="" stdin="one\r\ntwo\n" exact_bytes=true
+(let first = Stdlib.Cli.Stdin.readLine () in first ++ "|" ++ Stdlib.Cli.Stdin.readAll ()) = stdout="\"one|two\\n\"\n" stderr="" stdin="one\r\ntwo\n" exact_bytes=true
 Stdlib.Cli.Stdin.readSecret () = stdout="\"secret\"\n" stderr="" stdin="secret\n" exact_bytes=true
 Stdlib.Cli.Stdin.KeyRead.toString (Builtin.stdinReadKey ()) = "Escape"
+(let a = Stdlib.Cli.Stdin.readLine () in let b = Stdlib.Cli.Stdin.readLine () in a ++ "|" ++ b) = stdout="\"one|two\"\n" stderr="" stdin="one\rtwo\n" exact_bytes=true
+Builtin.stdinReadExactly 1 = stdout="\"�\"\n" stderr="" stdin="😀" exact_bytes=true

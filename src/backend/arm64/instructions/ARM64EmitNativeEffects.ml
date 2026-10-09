@@ -1676,7 +1676,16 @@ let emitCliNative (ctx : codeGenContext) (dest : LIR.reg)
                       Symbolic.Label complete;
                     ])
           | _ -> Error "CLI getenv expects exactly one name")
-      | LIR.StdinState -> Ok [ Symbolic.ADD_imm (destReg, Symbolic.X27, 256) ]
+      | LIR.StdinState -> (
+          match args with
+          | [ LIR.Imm offset ] when offset = 0L || offset = 128L ->
+              Ok
+                [
+                  Symbolic.ADD_imm
+                    (destReg, Symbolic.X27, 256 + Int64.to_int offset);
+                ]
+          | _ -> Error "StdinState expects a fixed state or input-buffer offset"
+          )
       | LIR.GetEnvironmentPacked -> Ok (emitEnvironmentPacked ctx destReg)
       | LIR.DirectoryCurrent -> Ok (emitDirectoryCurrent ctx destReg)
       | LIR.DirectoryListPacked -> (
