@@ -39,6 +39,6 @@ semantics to the compiler. Runtime failure behavior is covered by
 
 An individual ungated rerun of all 19 files executed 1,116 assertions:
 **1,006 passed and 110 failed**. The failures were the 102 infrastructure
-assertions listed above and eight existing compiler compatibility failures
-(three enum assertions and five List assertions). `derror.dark:L10` still
+assertions listed above and eight existing exclusions
+(three constructor-error assertions and five counter-instrumentation assertions). `derror.dark:L10` still
 passes its expected unknown-function compile error and remains enabled.
