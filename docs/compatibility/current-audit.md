@@ -2,11 +2,16 @@
 
 Audited on 2026-10-08 (UTC), against compiler revision `4a61318019fb8dea7f34a0bfec4df33f1fa18f5c` on Linux x86-64.
 
-**Every currently excluded assertion was rerun: 2,274 assertions across 50 files.**
-**66 assertions have been enabled since the initial audit; 2,274 still fail.**
+**The previous complete exclusion audit reran 2,274 assertions across 50 files.**
+**66 assertions were enabled between the initial audit and the forward arithmetic follow-up.**
 
-Latest results for the audited files, including enabled neighbours: 3,599 assertions, 1,325 passed and 2,274 failed.
-The remaining gates cover these exact failures: 34 whole files and 205 assertion lines across 16 mixed files.
+Results from that complete audit, including enabled neighbours: 3,599 assertions, 1,325 passed and 2,274 failed.
+That audit used 34 whole-file gates and 205 assertion lines across 16 mixed files.
+
+Current configured exclusions: **2,340 assertions across 66 files**, including
+**70 unsupported interpreter runtime-error assertions**. There are 34 whole-file
+gates and 271 assertion lines across 32 mixed files. The new exclusions await
+the focused native rerun below.
 
 The assertion harness now compares original parsed expressions. Multiline applications and literal contents are preserved in individual runs and batches. A follow-up retest of `stdlib/dict.dark` passed all 140 assertions after L21 was changed to expect its existing compile-time key type error.
 
@@ -34,6 +39,14 @@ Verification of the sweep based on main `5497ec091927098f88c6d0195fe2b0e7d238238
 Forward arithmetic follow-up (2026-10-09): the checker retains unresolved operator requirements until later arguments or specialization supply types. Provably unused callbacks are removed before representation selection. Ungated individual runs passed **73/73 Option** and **67/67 Result** assertions; all 17 remaining gates in those files are removed. No numeric default is chosen. The retired AST checker and its support modules are removed, and package catalog validation uses the current Written checker.
 
 Verification with current main `a2771f0cbe82d728de618e3eacd7a1c870e1d330`: native build passed; the complete host suite passed **11,501/11,501** tests; `dune runtest --build-dir _build-forward-verification` passed after avoiding stale action-cache files; compiled leaks passed **58/58** workloads. Parent benchmark verification stopped before measurement because the stored workload digest is incompatible; no baseline was reset.
+
+## Unsupported interpreter test infrastructure
+
+The compiler no longer exposes `Builtin.testRuntimeError`. Its compiler-owned
+uses have migrated to `Builtin.crash : String -> Never`. The
+[exact 70 assertions in 19 upstream files](failures/interpreter-test-runtime-error.md)
+remain unchanged and are disabled as unsupported interpreter infrastructure.
+Four overlap the previous failure list; this adds 66 exclusions.
 
 ## Failing test files
 

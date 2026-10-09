@@ -4,6 +4,9 @@
 
 Executed 38 assertions: **33 passed, 5 failed**.
 
+The `Builtin.testRuntimeError` rows below are historical diagnostics. They are
+now classified as [unsupported interpreter test infrastructure](../../interpreter-test-runtime-error.md).
+
 | Test | Observed failure |
 | --- | --- |
 | [L7](../../../../../test/fixtures/e2e/upstream/language/custom-data/enums.dark#L7) — Stdlib.Result.Result.Ok(Builtin.testRuntimeError "err") | Expected error message 'Uncaught exception: err' not found in stderr. Actual stderr: Compilation failed: Unresolved type variable in value renderer: e |
