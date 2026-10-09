@@ -101,6 +101,15 @@ let _ = Stdlib.Cli.Posix.fdWrite 2 (Stdlib.String.toBlob report) in
             result = subprocess.run([str(interactive_binary)], preexec_fn=close_streams,
                                     stderr=subprocess.PIPE, timeout=15)
             assert result.returncode == 0 and result.stderr == b"false|false", result
+            for closed_fd in [0, 1]:
+                def close_one(fd=closed_fd):
+                    os.close(fd)
+                result = subprocess.run(
+                    [str(interactive_binary)], preexec_fn=close_one,
+                    stdin=slave if closed_fd == 1 else subprocess.DEVNULL,
+                    stdout=slave if closed_fd == 0 else subprocess.DEVNULL,
+                    stderr=subprocess.PIPE, timeout=15)
+                assert result.returncode == 0 and result.stderr == b"true|true", (closed_fd, result)
             result = subprocess.run([str(color_binary)], preexec_fn=close_streams,
                                     stderr=subprocess.PIPE, env=environment, timeout=15)
             assert result.returncode == 0 and result.stderr == b"false|false|false|false", result
