@@ -445,6 +445,21 @@ all 58 benchmark workloads compiled and ran with clean leak accounting.
 The prior executable-path VM adapter was used for host/native checks;
 benchmark workloads ran natively. Cachegrind equivalence remains waived.
 
+## CPU-count builtin
+
+The original `Darklang.Stdlib.Cli.Sys.cpuCount` body failed to compile because
+`Builtin.posixCpuCount` was absent. The user explicitly approved this item
+rather than deferring the existing-implementation builtin mismatch.
+The builtin now converts the existing native CPU-count primitive's Int64
+result to Int, and the public wrapper calls it. Linux counts the process CPU
+affinity mask; macOS queries HW_AVAILCPU. This preserves existing compiler
+behavior, including its minimum-one fallback, without libc or shell commands.
+The interpreter uses sysconf's online CPU count, so affinity-restricted Linux
+hosts can still report a different count between implementations.
+
+Two focused E2E tests failed with the missing-builtin diagnostic before the
+fix and pass afterward: a positive Int result and equality with the public API.
+
 ## Completion rule
 
 At the end of the package review, enumerate every skipped package and unresolved
