@@ -46,6 +46,8 @@ Verification with current main `a2771f0cbe82d728de618e3eacd7a1c870e1d330`: nativ
 
 Runtime failure builtin follow-up (2026-10-09), based on main `2fad7ee2655fecabfa2ef6b199fe2a4fca548e6d`: compiler-owned uses now call `Builtin.crash`, and the compiler no longer registers `Builtin.testRuntimeError`. The public crash regression passed **5/5**; its rejection case fails on the parent compiler because the retired builtin still compiles. The complete host suite passed **11,862/11,862**, `dune runtest` passed, and compiled leaks passed **58/58**. Individual ungated runs of the 19 affected upstream files identified dependencies; the application fixture was subsequently checked with only L118 gated, recovering all 33 neighbours. The 29 benchmark source edits are exact builtin-name substitutions; their parity hashes are refreshed and the parity check passes. Parent benchmark verification stopped before measurement because the stored workload contract digest is incompatible; no baseline was reset.
 
+Application preamble gate correction (2026-10-09), after merge `2021f6b74`: only `eapply.dark:L118` depends on the retired helper. Disabling it lets the existing reduced-preamble fallback omit that helper. All **33/33** neighbours remain enabled and pass; the complete host suite passes **11,895/11,895**, the native build passes, and `dune runtest` passes. No compiler or benchmark source changes are involved in this correction.
+
 ## Unsupported interpreter test infrastructure
 
 The compiler no longer exposes `Builtin.testRuntimeError`. Its compiler-owned
