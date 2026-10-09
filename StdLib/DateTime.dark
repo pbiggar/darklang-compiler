@@ -19,12 +19,12 @@ let __maximumDeltaMilliseconds () : Int64 = 631075881599999L
 let __maximumDeltaSeconds () : Int64 = 631075881599L
 
 let __outOfRange () : DateTime =
-    Builtin.testRuntimeError "Encountered out-of-range value for type of Int"
+    Builtin.crash "Encountered out-of-range value for type of Int"
 
 let __intToInt64 (value: Int) : Int64 =
     match Stdlib.Int.toInt64 value with
     | Some converted -> converted
-    | None -> Builtin.testRuntimeError "Encountered out-of-range value for type of Int"
+    | None -> Builtin.crash "Encountered out-of-range value for type of Int"
 
 let __int64ToInt (value: Int64) : Int = Stdlib.Int.fromInt64 value
 

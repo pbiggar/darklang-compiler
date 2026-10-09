@@ -165,7 +165,7 @@ def adapt_interpreter_source(source: str, arguments: tuple[str, ...]) -> str:
             "let interpreterInt64FromFloat (value: Float) : Int64 =\n"
             "    match Stdlib.Int64.fromFloat value with\n"
             "    | Some number -> number\n"
-            "    | None -> Builtin.testRuntimeError \"float is outside Int64 range\"\n\n"
+            "    | None -> Builtin.crash \"float is outside Int64 range\"\n\n"
             + transformed
         )
     needs_grapheme_adapter = "Stdlib.String.toGraphemes" in transformed

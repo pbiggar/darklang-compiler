@@ -450,7 +450,7 @@ let __hexDigit (value: Int64) : String =
     | 13L -> "D"
     | 14L -> "E"
     | 15L -> "F"
-    | _ -> Builtin.testRuntimeError "JSON hex digit out of range"
+    | _ -> Builtin.crash "JSON hex digit out of range"
 
 let __escapeControl (byte: Int64) : String =
     "\\u00" ++ Stdlib.AltJson.__hexDigit (byte / 16L) ++ Stdlib.AltJson.__hexDigit (byte % 16L)

@@ -31,7 +31,7 @@ ParityTree.ParityNode (ParityTree.ParityLeaf 1L) (ParityTree.ParityLeaf 2L) = st
 
 // Constructor arguments are evaluated once, from left to right.
 type ParityOrder = | ParityOrder of first: Int64 * second: Int64
-ParityOrder.ParityOrder (Builtin.testRuntimeError "first") (Builtin.testRuntimeError "second") = error="first"
+ParityOrder.ParityOrder (Builtin.crash "first") (Builtin.crash "second") = error="first"
 
 // Exact field arity is checked before construction.
 type ParityArityFew = | ParityArityFew of Int64 * String

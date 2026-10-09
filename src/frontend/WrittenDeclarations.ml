@@ -216,7 +216,7 @@ let[@warning "-4"] predeclareFunctions allowInternal types items symbols =
             functions,
           symbols ))
       (M.empty, symbols)
-      [ "Builtin.testRuntimeError"; "Builtin.crash" ]
+      [ "Builtin.crash" ]
   in
   let intrinsicFunctions, intrinsicSymbols =
     M.fold

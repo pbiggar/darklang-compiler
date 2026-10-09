@@ -13,10 +13,10 @@
 (let x = x + 1L in x) = compileerror="Unbound local variable 'x'"
 
 // Values run left-to-right and failure prevents the continuation.
-(let (_, _) = (Builtin.testRuntimeError "first", Builtin.testRuntimeError "second")
+(let (_, _) = (Builtin.crash "first", Builtin.crash "second")
  0L) = error="Uncaught exception: first"
 (let (a, b) = (1L, 2L, 3L)
- Builtin.testRuntimeError "continuation") = compileerror="Tuple pattern does not match the value type"
+ Builtin.crash "continuation") = compileerror="Tuple pattern does not match the value type"
 
 // Wildcards may repeat and nested binders shadow outer bindings.
 (let (_, _) = (1L, 2L) in 3L) = 3L

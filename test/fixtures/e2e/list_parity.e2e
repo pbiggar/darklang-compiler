@@ -23,7 +23,7 @@ Stdlib.List.map2shortest ([1L, 2L]) ([10L, 20L, 30L]) (fun a b -> a + b) = [11L,
 Stdlib.List.groupByWithKey ([1L, 2L, 3L, 4L, 5L]) (fun x -> x % 2L) = [(1L, [1L, 3L, 5L]), (0L, [2L, 4L])]
 Stdlib.List.groupByWithKey (["apple", "ant", "bee"]) (fun value -> Stdlib.String.first value 1) = [("a", ["apple", "ant"]), ("b", ["bee"])]
 
-Stdlib.List.iter ([1L, 2L, 3L]) (fun x -> let ignored = if x == 2L then Builtin.testRuntimeError "iter-second" else () in ()) = error="Uncaught exception: iter-second"
+Stdlib.List.iter ([1L, 2L, 3L]) (fun x -> let ignored = if x == 2L then Builtin.crash "iter-second" else () in ()) = error="Uncaught exception: iter-second"
 Stdlib.List.iter [] (fun _ -> ()) = ()
 Stdlib.List.randomElement [] = None
 Stdlib.List.randomElement ([42L]) = Some 42L

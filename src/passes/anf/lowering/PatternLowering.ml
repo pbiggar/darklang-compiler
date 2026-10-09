@@ -69,7 +69,7 @@ type collectionMode = General | TupleBody | Guard | Nested
    Infer scrutinee type to pass to pattern extraction for correct typing
    Compile match to if-else chain
    First convert scrutinee to a bound atom. This supports effectful/complex
-   scrutinees such as Builtin.testRuntimeError(...) that cannot be lowered via toAtom.
+   scrutinees such as Builtin.crash(...) that cannot be lowered via toAtom.
    Check if any pattern needs to access list structure
    If so, we must ensure scrutinee is a variable (can't TupleGet on literal)
    h :: t also needs list access

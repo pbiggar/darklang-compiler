@@ -291,14 +291,12 @@ let rec substituteInterpolationLiteral name literal expr =
       expr
 
 let isBuiltinUnwrapName name = name = "Builtin.unwrap"
-let isBuiltinTestRuntimeErrorName name = name = "Builtin.testRuntimeError"
 
-(* `crash` is the public source-level bottom operation. The older builtin is
-   retained solely for the test harness. *)
+(* Builtin.crash is the public source-level bottom operation. *)
 let isSourceCrashName name = name = "Builtin.crash"
 
 let isRuntimeFailureName name =
-  isBuiltinTestRuntimeErrorName name || isSourceCrashName name
+  isSourceCrashName name
 
 let isBuiltinTestNanName name = name = "Builtin.testNan"
 let isBuiltinTestInfinityName name = name = "Builtin.testInfinity"
@@ -343,26 +341,26 @@ let rec isKnownUnwrapFailureExpr boundExprs expr =
   | _ -> false
 
 (*
-   Detect known runtime-failing testRuntimeError expressions, including let-bound forms.
+   Detect known runtime-failing crash expressions, including let-bound forms.
 *)
-let rec isKnownTestRuntimeErrorExpr boundExprs = function
+let rec isKnownCrashExpr boundExprs = function
   | Apply (Var funcName, [], { NonEmptyList.head = _; tail = [] })
     when isRuntimeFailureName funcName ->
       true
   | Let (LPVariable name, value, body) ->
-      isKnownTestRuntimeErrorExpr
+      isKnownCrashExpr
         (StringOrder.Map.add name value boundExprs)
         body
-  | Let (_, _, body) -> isKnownTestRuntimeErrorExpr boundExprs body
+  | Let (_, _, body) -> isKnownCrashExpr boundExprs body
   | Var name ->
       Option.fold ~none:false
-        ~some:(isKnownTestRuntimeErrorExpr boundExprs)
+        ~some:(isKnownCrashExpr boundExprs)
         (StringOrder.Map.find_opt name boundExprs)
   | _ -> false
 
 (*
    Keep a stable diagnostic when the value is only known at runtime
-   (for example a function parameter passed into Builtin.testRuntimeError).
+   (for example a function parameter passed into Builtin.crash).
 *)
 let rec tryExtractStringLiteral boundExprs = function
   | StringLiteral s -> Some s
@@ -376,21 +374,21 @@ let rec tryExtractStringLiteral boundExprs = function
   | _ -> None
 
 (*
-   Extract the error message from a known Builtin.testRuntimeError expression, if statically available.
+   Extract the error message from a known Builtin.crash expression, if statically available.
 *)
-let rec tryExtractKnownTestRuntimeErrorMessage boundExprs = function
+let rec tryExtractKnownCrashMessage boundExprs = function
   | Apply (Var funcName, [], { NonEmptyList.head = arg; tail = [] })
     when isRuntimeFailureName funcName ->
       tryExtractStringLiteral boundExprs arg
   | Let (LPVariable name, value, body) ->
-      tryExtractKnownTestRuntimeErrorMessage
+      tryExtractKnownCrashMessage
         (StringOrder.Map.add name value boundExprs)
         body
-  | Let (_, _, body) -> tryExtractKnownTestRuntimeErrorMessage boundExprs body
+  | Let (_, _, body) -> tryExtractKnownCrashMessage boundExprs body
   | Var name ->
       Option.bind
         (StringOrder.Map.find_opt name boundExprs)
-        (tryExtractKnownTestRuntimeErrorMessage boundExprs)
+        (tryExtractKnownCrashMessage boundExprs)
   | _ -> None
 
 let rec tryFormatLiteralValue = function

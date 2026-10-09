@@ -882,15 +882,12 @@ let tryDateTimeIntrinsic name args =
   | _ -> None
 
 let isBuiltinUnwrapName name = name = "Builtin.unwrap"
-let isBuiltinTestRuntimeErrorName name = name = "Builtin.testRuntimeError"
 
-(*
-   Source programs use `crash`; the older builtin is retained for tests only.
-*)
+(* Builtin.crash is the public source-level bottom operation. *)
 let isSourceCrashName name = name = "Builtin.crash"
 
 let isRuntimeFailureName name =
-  isBuiltinTestRuntimeErrorName name || isSourceCrashName name
+  isSourceCrashName name
 
 (*
    Record metadata retained through lowering. Declared parameter order cannot

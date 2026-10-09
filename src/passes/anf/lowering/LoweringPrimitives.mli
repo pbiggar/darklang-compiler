@@ -129,7 +129,6 @@ val tryRawMemoryIntrinsic :
 val tryRandomIntrinsic : string -> ANF.atom list -> ANF.cExpr option
 val tryDateTimeIntrinsic : string -> ANF.atom list -> ANF.cExpr option
 val isBuiltinUnwrapName : string -> bool
-val isBuiltinTestRuntimeErrorName : string -> bool
 val isSourceCrashName : string -> bool
 val isRuntimeFailureName : string -> bool
 val unwrapErrorPayloadToString : CheckedAST.expr -> string option

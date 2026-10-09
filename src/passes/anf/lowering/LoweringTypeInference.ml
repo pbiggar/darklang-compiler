@@ -550,7 +550,7 @@ let rec inferTypeCore sums names expr environment registry variants functions
               ("Internal error: Builtin.unwrap expects 1 argument, got "
               ^ string_of_int (List.length args))
       else if
-        name = Some "Builtin.testRuntimeError" || name = Some "Builtin.crash"
+        name = Some "Builtin.crash"
       then
         match args with
         | [ _ ] -> Ok AST.TNever

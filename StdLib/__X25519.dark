@@ -17,7 +17,7 @@ type LadderState = {
 let __at (limbs: List<Int64>) (index: Int64) : Int64 =
   match Stdlib.List.getAt limbs (Stdlib.Int.fromInt64 index) with
   | Some limb -> limb
-  | None -> Builtin.testRuntimeError "Invalid X25519 field shape"
+  | None -> Builtin.crash "Invalid X25519 field shape"
 
 let __field (limbs: List<Int64>) : Stdlib.__X25519.Field =
   Stdlib.__X25519.Field { limbs = limbs }
@@ -65,7 +65,7 @@ let __carryLimbs (source: List<Int64>) (incoming: Int64)
   match source with
   | [] ->
       match Stdlib.List.reverse acc with
-      | [] -> Builtin.testRuntimeError "Invalid X25519 field shape"
+      | [] -> Builtin.crash "Invalid X25519 field shape"
       | head :: tail -> Stdlib.List.push tail (head + 38L * incoming)
   | limb :: rest ->
       let value = limb + incoming + 65536L in
@@ -96,7 +96,7 @@ let __swapLimbs (left: List<Int64>) (right: List<Int64>)
       Stdlib.__X25519.__swapLimbs restA restB bit
         (Stdlib.List.push leftAcc (Stdlib.Int64.bitwiseXor a difference))
         (Stdlib.List.push rightAcc (Stdlib.Int64.bitwiseXor b difference))
-  | _ -> Builtin.testRuntimeError "Invalid X25519 field shape"
+  | _ -> Builtin.crash "Invalid X25519 field shape"
 
 let __swap (left: Stdlib.__X25519.Field) (right: Stdlib.__X25519.Field)
   (bit: Int64) : (Stdlib.__X25519.Field * Stdlib.__X25519.Field) =

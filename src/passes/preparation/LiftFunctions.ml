@@ -595,7 +595,7 @@ let liftLambdasInProgram baseRegistry baseVariants baseFunctions program =
             Crash.crash
               ("Builtin function '" ^ name ^ "' has no allocated identity"))
       returns
-      [ "Builtin.testRuntimeError"; "Builtin.crash" ]
+      [ "Builtin.crash" ]
   in
   let initial =
     {

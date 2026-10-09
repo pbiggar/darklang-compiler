@@ -10,11 +10,11 @@ type Codec = { tree: HuffmanTree, codes: Dict<String, Int64> }
 
 let symbolKey (symbol: Int64) : String =
     match Stdlib.String.getByteAt "abcdefghijklmnopqrstuvwxyzABCDEF" (Stdlib.Int.fromInt64 symbol) with
-    | None -> Builtin.testRuntimeError "Huffman symbol is out of range"
+    | None -> Builtin.crash "Huffman symbol is out of range"
     | Some byte ->
         match Stdlib.Char.fromCodepoint (Stdlib.Int.fromUInt8 byte) with
         | Some char -> Stdlib.Char.toString char
-        | None -> Builtin.testRuntimeError "Huffman symbol is not ASCII"
+        | None -> Builtin.crash "Huffman symbol is not ASCII"
 
 let treeWeight (tree: HuffmanTree) : Int64 =
     match tree with
@@ -153,15 +153,15 @@ let runIterations (remaining: Int64) (data: List<Int64>) (codec: Codec) (expecte
     if remaining <= 0L then result
     else
         match encode data codec with
-        | Error message -> Builtin.testRuntimeError message
+        | Error message -> Builtin.crash message
         | Ok bits ->
             match decode bits codec with
-            | Error message -> Builtin.testRuntimeError message
+            | Error message -> Builtin.crash message
             | Ok decoded ->
                 let (bitCount, bitChecksum) = checksum bits 0L 0L in
                 let (_, decodedChecksum) = checksum decoded 0L 0L in
                 if decodedChecksum != expectedChecksum then
-                    Builtin.testRuntimeError "Huffman round trip changed the input"
+                    Builtin.crash "Huffman round trip changed the input"
                 else
                     let contribution = (bitCount * 17L + bitChecksum + decodedChecksum) % 1000000007L in
                     runIterations (remaining - 1L) data codec expectedChecksum ((result + contribution) % 1000000007L)
@@ -169,17 +169,17 @@ let runIterations (remaining: Int64) (data: List<Int64>) (codec: Codec) (expecte
 let benchmarkArg (index: Int) : Int64 =
     match Stdlib.Cli.__Args.int64 index with
     | Ok value -> value
-    | Error message -> Builtin.testRuntimeError message
+    | Error message -> Builtin.crash message
 
 let size = benchmarkArg 0 in
 let seed = benchmarkArg 1 in
 let repetitions = benchmarkArg 2 in
 if size <= 0L || repetitions <= 0L then
-    Builtin.testRuntimeError "Huffman size and repetitions must be positive"
+    Builtin.crash "Huffman size and repetitions must be positive"
 else
     let data = generateData size seed [] in
     let (_, expectedChecksum) = checksum data 0L 0L in
     match buildCodec data with
-    | None -> Builtin.testRuntimeError "Huffman codec requires non-empty input"
+    | None -> Builtin.crash "Huffman codec requires non-empty input"
     | Some codec ->
         Builtin.printLine (Stdlib.Int64.toString (runIterations repetitions data codec expectedChecksum 0L))

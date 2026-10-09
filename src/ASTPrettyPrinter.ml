@@ -283,7 +283,7 @@ let rec formatExpr (expr : expr) =
   in
   match expr with
   | BoundaryRender (_, value) -> formatExpr value
-  | RuntimeError message -> "Builtin.testRuntimeError " ^ quoted message
+  | RuntimeError message -> "Builtin.crash " ^ quoted message
   | UnitLiteral -> "()"
   | Int64Literal n -> Int64.to_string n ^ "L"
   | Int128Literal n -> Z.to_string n ^ "Q"

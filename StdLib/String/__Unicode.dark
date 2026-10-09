@@ -247,7 +247,7 @@ let normalize (value: String) : Stdlib.Result.Result<String, Stdlib.String.__Uni
 let normalizeValid (value: String) : String =
     match Stdlib.String.__Unicode.normalize value with
     | Ok normalized -> normalized
-    | Error _ -> Builtin.testRuntimeError "Invalid UTF-8 string"
+    | Error _ -> Builtin.crash "Invalid UTF-8 string"
 
 let __isControlProperty (property: Stdlib.String.__Unicode.__Data.GraphemeBreak) : Bool =
     property == Stdlib.String.__Unicode.__Data.GraphemeBreak.GBCR ||
@@ -323,7 +323,7 @@ let segmentUtf8 (value: String) (index: Int64) (previous: List<Int64>) (current:
         else Stdlib.List.reverse (Stdlib.List.push result current)
     else
         match Stdlib.String.__Unicode.decodeAt value index with
-        | Error _ -> Builtin.testRuntimeError "Invalid UTF-8 string"
+        | Error _ -> Builtin.crash "Invalid UTF-8 string"
         | Ok decoded ->
             let codepoint = Stdlib.Tuple2.first decoded in
             let width = Stdlib.Tuple2.second decoded in
@@ -337,7 +337,7 @@ let graphemeCountUtf8 (value: String) (index: Int64) (previous: List<Int64>) (co
     if index == Stdlib.String.__byteLength value then count
     else
         match Stdlib.String.__Unicode.decodeAt value index with
-        | Error _ -> Builtin.testRuntimeError "Invalid UTF-8 string"
+        | Error _ -> Builtin.crash "Invalid UTF-8 string"
         | Ok decoded ->
             let codepoint = Stdlib.Tuple2.first decoded in
             let width = Stdlib.Tuple2.second decoded in
@@ -391,7 +391,7 @@ let __hasFollowingCased (value: String) (index: Int64) : Bool =
     if index == Stdlib.String.__byteLength value then false
     else
         match Stdlib.String.__Unicode.decodeAt value index with
-        | Error _ -> Builtin.testRuntimeError "Invalid UTF-8 string"
+        | Error _ -> Builtin.crash "Invalid UTF-8 string"
         | Ok decoded ->
             let codepoint = Stdlib.Tuple2.first decoded in
             let width = Stdlib.Tuple2.second decoded in
@@ -403,7 +403,7 @@ let __mapCaseUtf8 (value: String) (index: Int64) (uppercase: Bool) (full: Bool) 
     if index == Stdlib.String.__byteLength value then Stdlib.List.reverse acc
     else
         match Stdlib.String.__Unicode.decodeAt value index with
-        | Error _ -> Builtin.testRuntimeError "Invalid UTF-8 string"
+        | Error _ -> Builtin.crash "Invalid UTF-8 string"
         | Ok decoded ->
             let codepoint = Stdlib.Tuple2.first decoded in
             let width = Stdlib.Tuple2.second decoded in

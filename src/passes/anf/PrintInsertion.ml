@@ -21,7 +21,7 @@ let unsupportedListDisplay elemType =
 let rec wrapReturnWithPrint resolveFunction programType gen expr =
   let defaultPrintType =
     match programType with
-    (* Builtin.testRuntimeError has a bottom-like compile-time type.
+    (* Builtin.crash has a bottom-like compile-time type.
     Printing should stay concrete so downstream passes never see it. *)
     | AST.TNever -> AST.TUnit
     | _ -> programType
@@ -29,7 +29,7 @@ let rec wrapReturnWithPrint resolveFunction programType gen expr =
   match expr with
   | Return atom -> (
       (* Dead-code elimination can reduce a typed expression branch to `()`
-      (for example, `Builtin.testRuntimeError` in a selected match arm).
+      (for example, `Builtin.crash` in a selected match arm).
       Printing must follow the runtime atom shape, not only the original program type. *)
       let printType =
         match atom with UnitLiteral -> AST.TUnit | _ -> defaultPrintType

@@ -453,7 +453,7 @@ let __streamFetch (state: Stdlib.HttpClient.__StreamBodyState)
 let __streamByte (state: Stdlib.HttpClient.__StreamBodyState) : UInt8 =
   match Stdlib.UInt8.fromInt64 (Stdlib.Blob.__getByte state.buffer state.offset) with
   | Some value -> value
-  | None -> Builtin.testRuntimeError "Invalid HTTP response byte"
+  | None -> Builtin.crash "Invalid HTTP response byte"
 
 let __streamStep (state: Stdlib.HttpClient.__StreamBodyState)
   : Stdlib.Option.Option<(UInt8 * Stdlib.HttpClient.__StreamBodyState)> =
@@ -463,8 +463,8 @@ let __streamStep (state: Stdlib.HttpClient.__StreamBodyState)
     if remaining == 0L then None
     else if Stdlib.HttpClient.__streamAvailable state == 0L then
       match Stdlib.HttpClient.__streamFetch state with
-      | Error message -> Builtin.testRuntimeError message
-      | Ok None -> Builtin.testRuntimeError "HTTP fixed-length response was truncated"
+      | Error message -> Builtin.crash message
+      | Ok None -> Builtin.crash "HTTP fixed-length response was truncated"
       | Ok (Some next) -> Stdlib.HttpClient.__streamStep next
     else
       let byte = Stdlib.HttpClient.__streamByte state in
@@ -475,35 +475,35 @@ let __streamStep (state: Stdlib.HttpClient.__StreamBodyState)
   | UntilEof ->
     if Stdlib.HttpClient.__streamAvailable state == 0L then
       match Stdlib.HttpClient.__streamFetch state with
-      | Error message -> Builtin.testRuntimeError message
+      | Error message -> Builtin.crash message
       | Ok None -> None
       | Ok (Some next) -> Stdlib.HttpClient.__streamStep next
     else if state.total >= 104857600L then
-      Builtin.testRuntimeError "HTTP body too large"
+      Builtin.crash "HTTP body too large"
     else
       let byte = Stdlib.HttpClient.__streamByte state in
       let next = Stdlib.HttpClient.__streamState state state.transport state.buffer
                    (state.offset + 1L) UntilEof (state.total + 1L) state.chunks in
       Some ((byte, next))
   | ChunkHeader ->
-    if state.chunks >= 100000L then Builtin.testRuntimeError "Too many HTTP chunks"
+    if state.chunks >= 100000L then Builtin.crash "Too many HTTP chunks"
     else
       match Stdlib.__HttpWire.__line (Stdlib.HttpClient.__streamRemaining state) 0L with
-      | Error (Invalid message) -> Builtin.testRuntimeError message
+      | Error (Invalid message) -> Builtin.crash message
       | Error Incomplete ->
         if Stdlib.HttpClient.__streamAvailable state > 8192L then
-          Builtin.testRuntimeError "HTTP chunk header too long"
+          Builtin.crash "HTTP chunk header too long"
         else
           match Stdlib.HttpClient.__streamFetch state with
-          | Error message -> Builtin.testRuntimeError message
-          | Ok None -> Builtin.testRuntimeError "HTTP chunk header was truncated"
+          | Error message -> Builtin.crash message
+          | Ok None -> Builtin.crash "HTTP chunk header was truncated"
           | Ok (Some next) -> Stdlib.HttpClient.__streamStep next
       | Ok ((line, afterLine)) ->
         match Stdlib.__HttpWire.__chunkSize line with
-        | Error (Invalid message) -> Builtin.testRuntimeError message
-        | Error Incomplete -> Builtin.testRuntimeError "Invalid HTTP chunk size"
+        | Error (Invalid message) -> Builtin.crash message
+        | Error Incomplete -> Builtin.crash "Invalid HTTP chunk size"
         | Ok size ->
-          if size + state.total > 104857600L then Builtin.testRuntimeError "HTTP body too large"
+          if size + state.total > 104857600L then Builtin.crash "HTTP body too large"
           else
             let phase = if size == 0L then Trailers else ChunkBytes size in
             Stdlib.HttpClient.__streamStep
@@ -516,8 +516,8 @@ let __streamStep (state: Stdlib.HttpClient.__StreamBodyState)
           state.offset ChunkTail state.total state.chunks)
     else if Stdlib.HttpClient.__streamAvailable state == 0L then
       match Stdlib.HttpClient.__streamFetch state with
-      | Error message -> Builtin.testRuntimeError message
-      | Ok None -> Builtin.testRuntimeError "HTTP chunk data was truncated"
+      | Error message -> Builtin.crash message
+      | Ok None -> Builtin.crash "HTTP chunk data was truncated"
       | Ok (Some next) -> Stdlib.HttpClient.__streamStep next
     else
       let byte = Stdlib.HttpClient.__streamByte state in
@@ -528,12 +528,12 @@ let __streamStep (state: Stdlib.HttpClient.__StreamBodyState)
   | ChunkTail ->
     if Stdlib.HttpClient.__streamAvailable state < 2L then
       match Stdlib.HttpClient.__streamFetch state with
-      | Error message -> Builtin.testRuntimeError message
-      | Ok None -> Builtin.testRuntimeError "HTTP chunk delimiter was truncated"
+      | Error message -> Builtin.crash message
+      | Ok None -> Builtin.crash "HTTP chunk delimiter was truncated"
       | Ok (Some next) -> Stdlib.HttpClient.__streamStep next
     else if Stdlib.Blob.__getByte state.buffer state.offset != 13L ||
             Stdlib.Blob.__getByte state.buffer (state.offset + 1L) != 10L then
-      Builtin.testRuntimeError "Malformed HTTP chunk"
+      Builtin.crash "Malformed HTTP chunk"
     else
       Stdlib.HttpClient.__streamStep
         (Stdlib.HttpClient.__streamState state state.transport state.buffer
@@ -541,14 +541,14 @@ let __streamStep (state: Stdlib.HttpClient.__StreamBodyState)
   | Trailers ->
     match Stdlib.__HttpWire.__headers (Stdlib.HttpClient.__streamRemaining state) 0L 0L 0L [] with
     | Ok _ -> None
-    | Error (Invalid message) -> Builtin.testRuntimeError message
+    | Error (Invalid message) -> Builtin.crash message
     | Error Incomplete ->
       if Stdlib.HttpClient.__streamAvailable state > 65536L then
-        Builtin.testRuntimeError "HTTP trailers too large"
+        Builtin.crash "HTTP trailers too large"
       else
         match Stdlib.HttpClient.__streamFetch state with
-        | Error message -> Builtin.testRuntimeError message
-        | Ok None -> Builtin.testRuntimeError "HTTP trailers were truncated"
+        | Error message -> Builtin.crash message
+        | Ok None -> Builtin.crash "HTTP trailers were truncated"
         | Ok (Some next) -> Stdlib.HttpClient.__streamStep next
 
 let __streamDispose (state: Stdlib.HttpClient.__StreamBodyState) : Unit =

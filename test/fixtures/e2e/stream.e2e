@@ -2,7 +2,7 @@
 // draining behavior, callback errors, and AOT rejection of ordering.
 
 let unfoldStep (value: Int64): Option<(Int64 * Int64)> = Some ((value, value + 1L))
-let streamFail (_value: Int64): Int64 = Builtin.testRuntimeError "stream callback failed"
+let streamFail (_value: Int64): Int64 = Builtin.crash "stream callback failed"
 
 let stream = Stdlib.Stream.unfold 0L unfoldStep in Stdlib.Stream.toList (Stdlib.Stream.take stream 5) = [0L, 1L, 2L, 3L, 4L] // unfold remains lazy over an infinite producer
 let stream = Stdlib.Stream.fromList ([1L, 2L]) in let first = Stdlib.Stream.toList stream in let second = Stdlib.Stream.toList stream in (first, second) = ([1L, 2L], []) // draining is single-consumer and exhaustion is stable

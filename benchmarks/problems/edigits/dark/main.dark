@@ -5,7 +5,7 @@
 let repeat (value: Int64) (count: Int64) : List<Int64> =
     match Stdlib.List.repeat (Stdlib.Int.fromInt64 count) value with
     | Ok values -> values
-    | Error message -> Builtin.testRuntimeError message
+    | Error message -> Builtin.crash message
 
 // Divide the fixed-point digit vector by n in one left-to-right traversal.
 let divideByN (digits: List<Int64>) (n: Int64) (carry: Int64) (reversed: List<Int64>) : List<Int64> =
@@ -62,6 +62,6 @@ let runIterations (remaining: Int64) (numDigits: Int64) : Int64 =
 let benchmarkArg (index: Int) : Int64 =
     match Stdlib.Cli.__Args.int64 index with
     | Ok value -> value
-    | Error message -> Builtin.testRuntimeError message
+    | Error message -> Builtin.crash message
 
 Builtin.printLine (Stdlib.Int64.toString (runIterations (benchmarkArg 0) (benchmarkArg 1)))

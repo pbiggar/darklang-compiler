@@ -86,7 +86,7 @@ COMPACT_LOOKUP_SOURCE = [
     "let __hexDigit (byte: Int64) : Int64 =",
     "    if byte >= 48 && byte <= 57 then byte - 48",
     "    else if byte >= 65 && byte <= 70 then byte - 55",
-    '    else Builtin.testRuntimeError "Invalid generated Unicode data"',
+    '    else Builtin.crash "Invalid generated Unicode data"',
     "",
     "let __hex (data: String) (index: Int64) (remaining: Int64) (acc: Int64) : Int64 =",
     "    if remaining == 0 then acc",

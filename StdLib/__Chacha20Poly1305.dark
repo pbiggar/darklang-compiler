@@ -21,7 +21,7 @@ let __wordBytes (word: Int64) : Blob =
 let __at (words: List<Int64>) (index: Int64) : Int64 =
   match Stdlib.List.getAt words (Stdlib.Int.fromInt64 index) with
   | Some word -> word
-  | None -> Builtin.testRuntimeError "Invalid ChaCha20 state"
+  | None -> Builtin.crash "Invalid ChaCha20 state"
 
 let __replace (words: List<Int64>) (index: Int64) (value: Int64) : List<Int64> =
   Stdlib.List.indexedMap words
@@ -144,7 +144,7 @@ let __intBytes (value: Int) (remaining: Int64) (acc: List<Int64>) : Blob =
   else
     let byte = Stdlib.Int.mod value 256 in
     match Stdlib.Int.toInt64 byte with
-    | None -> Builtin.testRuntimeError "Poly1305 byte is out of range"
+    | None -> Builtin.crash "Poly1305 byte is out of range"
     | Some next -> Stdlib.__Chacha20Poly1305.__intBytes
                      (Stdlib.Int.divide value 256) (remaining - 1L)
                      (Stdlib.List.push acc next)

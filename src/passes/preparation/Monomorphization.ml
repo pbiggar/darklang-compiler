@@ -368,7 +368,7 @@ let replaceTypeAppsCore symbols registry expr =
         let unresolvedKey args =
           wrap args
             (S.unresolvedKeyIntrinsicTypeArgErrorExpr
-               (resolved "Builtin.testRuntimeError")
+               (resolved "Builtin.crash")
                name)
         in
         let polymorphicComparison args =

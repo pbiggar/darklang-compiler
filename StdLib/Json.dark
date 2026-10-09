@@ -464,7 +464,7 @@ let __writerFinish (writer: String) : String = writer
 let __padNumber (value: String) (goalLength: Int64) : String =
     match Stdlib.String.padStart value "0" (Stdlib.Int.fromInt64 goalLength) with
     | Ok padded -> padded
-    | Error _ -> Builtin.testRuntimeError "JSON numeric padding failed"
+    | Error _ -> Builtin.crash "JSON numeric padding failed"
 
 let __floatRatio (value: Float) : (Int * Int) =
     let bits = Stdlib.Float.__toBits value in
@@ -804,7 +804,7 @@ let __viewDateTime (source: String) (value: Stdlib.Json.__InternalValueView) : S
 // replaces every concrete use before ANF lowering; reaching either body means
 // specialization failed and is therefore a compiler defect.
 let serialize<'a> (value: a) : String =
-    Builtin.testRuntimeError "Json.serialize was not specialized"
+    Builtin.crash "Json.serialize was not specialized"
 
 let parse<'a> (json: String) : Stdlib.Result.Result<a, Stdlib.Json.ParseError.ParseError> =
-    Builtin.testRuntimeError "Json.parse was not specialized"
+    Builtin.crash "Json.parse was not specialized"

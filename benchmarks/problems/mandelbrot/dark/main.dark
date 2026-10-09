@@ -49,7 +49,7 @@ let countAll (startY: Int64) (endY: Int64) (size: Int64) (maxIter: Int64) (count
 let benchmarkArg (index: Int) : Int64 =
     match Stdlib.Cli.__Args.int64 index with
     | Ok value -> value
-    | Error message -> Builtin.testRuntimeError message
+    | Error message -> Builtin.crash message
 
 let size = benchmarkArg 0 in
 Builtin.printLine (Stdlib.Int64.toString (countAll 0L size size (benchmarkArg 1) 0L))

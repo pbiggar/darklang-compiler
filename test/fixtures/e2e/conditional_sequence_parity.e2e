@@ -16,8 +16,8 @@ if false then () = ()
 
 // Untaken branches remain lazy, including primitive work in atom position
 (if true then 5L else 1L / 0L) + 1L = 6L
-if false then Builtin.testRuntimeError "skipped" else 7L = 7L
-if true then Builtin.testRuntimeError "selected" else 7L = exit=1 stderr="Uncaught exception: selected"
+if false then Builtin.crash "skipped" else 7L = 7L
+if true then Builtin.crash "selected" else 7L = exit=1 stderr="Uncaught exception: selected"
 
 // A parenthesized statement sequence evaluates strictly to its final expression
 (() ; 42L) = 42L
@@ -25,4 +25,4 @@ let _ = paritySequenceHead () in paritySequenceTail () = 43L
 (let _ = () in let _ = () in "done") = "done"
 if true then (let _ = () in 7L) else (let _ = () in 9L) = 7L
 (1L ; "done") = compileerror="Expected TUnit, got TInt64"
-(Builtin.testRuntimeError "first"; Builtin.testRuntimeError "second") = exit=1 stderr="Uncaught exception: first"
+(Builtin.crash "first"; Builtin.crash "second") = exit=1 stderr="Uncaught exception: first"

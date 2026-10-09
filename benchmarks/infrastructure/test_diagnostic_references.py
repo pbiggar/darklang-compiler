@@ -61,7 +61,7 @@ class DiagnosticReferenceTests(unittest.TestCase):
             "Stdlib.Int64.fromFloat (1.5)\nStdlib.Cli.Args.int64 0", ("4",))
         self.assertIn("interpreterInt64FromFloat (1.5)", transformed)
         self.assertIn("| Some number -> number", transformed)
-        self.assertIn('| None -> Builtin.testRuntimeError "float is outside Int64 range"', transformed)
+        self.assertIn('| None -> Builtin.crash "float is outside Int64 range"', transformed)
 
     def test_interpreter_adapter_translates_compatibility_only_syntax(self) -> None:
         source = (
