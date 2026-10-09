@@ -37,7 +37,7 @@ let assemble (state: Stdlib.__QuicReassembly.State) (frames: List<Stdlib.__QuicF
       assemble (Stdlib.__QuicReassembly.drain next) rest (Stdlib.List.push chunks bytes)
   | _ :: rest -> assemble state rest chunks
 let checkFrames () : Unit =
-  match Stdlib.Cli.Args.get 0, Stdlib.Cli.Args.get 1 |> Stdlib.Result.andThen Stdlib.Blob.fromHex with
+  match Stdlib.Cli.__Args.get 0, Stdlib.Cli.__Args.get 1 |> Stdlib.Result.andThen Stdlib.Blob.fromHex with
   | Ok mode, Ok data ->
     if mode == "ack" then
       let result =
@@ -73,7 +73,7 @@ def main():
     with tempfile.TemporaryDirectory(prefix="dark-quic-frames-") as temporary:
         source, binary = Path(temporary) / "frames.dark", Path(temporary) / "frames"
         source.write_text(DARK)
-        compiled = subprocess.run([str(ROOT / "dark"), str(source), "--leak-check", "-o", str(binary)],
+        compiled = subprocess.run([str(ROOT / "dark"), str(source), "--allow-internal", "--leak-check", "-o", str(binary)],
                                   cwd=ROOT, text=True, capture_output=True, timeout=120)
         assert compiled.returncode == 0, compiled.stdout + compiled.stderr
 

@@ -93,7 +93,7 @@ def main():
         listener.settimeout(10)
         source, binary = Path(temporary) / "initial.dark", Path(temporary) / "initial"
         source.write_text(dark_source(listener.getsockname()[1], parameters.data))
-        compiled = subprocess.run([str(ROOT / "dark"), str(source), "--leak-check", "-o", str(binary)],
+        compiled = subprocess.run([str(ROOT / "dark"), str(source), "--allow-internal", "--leak-check", "-o", str(binary)],
                                   cwd=ROOT, text=True, capture_output=True, timeout=120)
         assert compiled.returncode == 0, compiled.stdout + compiled.stderr
 

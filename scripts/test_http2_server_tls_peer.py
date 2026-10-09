@@ -25,7 +25,7 @@ let handler (request: Stdlib.Http.Request) : Stdlib.Http.Response =
   if Stdlib.Bool.not (Stdlib.String.startsWith request.url "https://localhost") then Stdlib.Http.responseWithText "wrong scheme" 500
   else Stdlib.Http.Response { statusCode = 200, headers = [("set-cookie", "a=1"), ("set-cookie", "b=2")], body = request.body }
 let run () : Unit =
-  let port = Stdlib.Cli.Args.get 0 |> Stdlib.Result.withDefault "0" |> Stdlib.Int.parse |> Stdlib.Result.withDefault 0 in
+  let port = Stdlib.Cli.__Args.get 0 |> Stdlib.Result.withDefault "0" |> Stdlib.Int.parse |> Stdlib.Result.withDefault 0 in
   let imported = Stdlib.Blob.fromHex "@CERT@" |> Stdlib.Result.andThen (fun certificate ->
     Stdlib.Blob.fromHex "@KEY@" |> Stdlib.Result.andThen (fun key -> Stdlib.TlsServerIdentity.create certificate key)) in
   match imported with
@@ -146,7 +146,7 @@ def main():
     with tempfile.TemporaryDirectory(prefix="dark-server-tls-") as temporary:
         source, binary = Path(temporary) / "server.dark", Path(temporary) / "server"
         source.write_text(SERVER.replace("@CERT@", certificate.hex()).replace("@KEY@", pem.hex()))
-        compiled = subprocess.run([str(args.compiler), str(source), "--leak-check", "-o", str(binary)], cwd=ROOT,
+        compiled = subprocess.run([str(args.compiler), str(source), "--allow-internal", "--leak-check", "-o", str(binary)], cwd=ROOT,
                                   text=True, capture_output=True, timeout=120)
         assert compiled.returncode == 0, compiled.stdout + compiled.stderr
         process, port = start(binary)

@@ -221,15 +221,31 @@ type typeError =
 
 | File | Purpose |
 |------|---------|
-| `src/frontend/TypeChecking.ml` | Main type checker |
+| `src/frontend/WrittenChecking.ml` | Source-checking entry points |
+| `src/frontend/WrittenExpressions.ml` | Forward expression checking |
+| `src/frontend/WrittenCheckingState.ml` | Immutable unification state and deferred operator requirements |
+| `src/frontend/WrittenDeclarations.ml` | Declaration validation and function checking |
 | `src/AST.ml` | Type definitions |
 
 ## Key Functions
 
 | Function | Purpose |
 |----------|---------|
-| `checkExpr` | Type check an expression |
-| `checkFunctionDef` | Type check a function definition |
+| `WrittenExpressions.checkExpression` | Check an expression directly into CheckedAST |
+| `WrittenDeclarations.checkItems` | Check declarations and entry expressions |
 | `unifyTypes` | Check type compatibility and collect substitutions |
 | `applySubst` | Apply type variable substitution |
 | `freshenTypeParams` | Give each generic-call instantiation distinct inference identities without scanning the caller environment |
+
+Arithmetic with unresolved operands records an operator requirement in the
+forward checking state. Both operands and the result share a type; later
+evidence resolves that type without a preliminary lambda-body scan. Concrete
+types must support the recorded operator. For example, `(a - b) - c` can begin
+with unknown `a` and `b` and resolve both to Int64 when `c` is Int64.
+
+Specialization removes provably unused callbacks in calls with known value
+arguments before closure conversion. An unresolved operation that remains
+executable must fail during ANF lowering; lowering never guesses an integer
+representation. Package-catalog generated declarations use the same source
+checker. The former AST-program checker and its private checking modules have
+been removed.

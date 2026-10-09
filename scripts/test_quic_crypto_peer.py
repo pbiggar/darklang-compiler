@@ -17,8 +17,8 @@ ROOT = Path(__file__).resolve().parents[1]
 CID = bytes.fromhex("8394c8f03e515708")
 
 SOURCE = '''// quicCrypto.dark - Pure packet protection with native ownership accounting.
-match Stdlib.Cli.Args.get 0, Stdlib.Cli.Args.int64 1, Stdlib.Cli.Args.int64 2,
-      Stdlib.Cli.Args.get 3, Stdlib.Cli.Args.get 4 with
+match Stdlib.Cli.__Args.get 0, Stdlib.Cli.__Args.int64 1, Stdlib.Cli.__Args.int64 2,
+      Stdlib.Cli.__Args.get 3, Stdlib.Cli.__Args.get 4 with
 | Ok mode, Ok number, Ok offset, Ok a, Ok b ->
   let cid = Stdlib.Blob.fromHex "8394C8F03E515708" |> Stdlib.Result.withDefault Stdlib.Blob.empty in
   match Stdlib.__QuicCrypto.initial cid, Stdlib.Blob.fromHex a, Stdlib.Blob.fromHex b with
@@ -67,7 +67,7 @@ def main():
         directory = Path(temporary)
         source, binary = directory / "quicCrypto.dark", directory / "quicCrypto"
         source.write_text(SOURCE)
-        compiled = subprocess.run([str(ROOT / "dark"), str(source), "--leak-check", "-o", str(binary)],
+        compiled = subprocess.run([str(ROOT / "dark"), str(source), "--allow-internal", "--leak-check", "-o", str(binary)],
                                   cwd=ROOT, text=True, capture_output=True, timeout=120)
         assert compiled.returncode == 0, compiled.stdout + compiled.stderr
 

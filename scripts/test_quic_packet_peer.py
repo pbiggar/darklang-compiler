@@ -42,7 +42,7 @@ let inspect (keys: Stdlib.__QuicCrypto.Keys) (data: Blob) : Unit =
 let checkPackets () : Unit =
   match Stdlib.Blob.fromHex "000102030405060708090A0B0C0D0E0F101112131415161718191A1B1C1D1E1F" |> Stdlib.Result.andThen Stdlib.__QuicCrypto.derive,
         Stdlib.Blob.fromHex "0001020304050607", Stdlib.Blob.fromHex "08090A",
-        Stdlib.Cli.Args.get 0, Stdlib.Cli.Args.get 1, Stdlib.Cli.Args.get 2 with
+        Stdlib.Cli.__Args.get 0, Stdlib.Cli.__Args.get 1, Stdlib.Cli.__Args.get 2 with
   | Ok keys, Ok destination, Ok source, Ok mode, Ok code, Ok hex ->
     match Stdlib.Blob.fromHex hex with
     | Error message -> Stdlib.printLine message
@@ -68,7 +68,7 @@ def main():
     with tempfile.TemporaryDirectory(prefix="dark-quic-packet-") as temporary:
         source, binary = Path(temporary) / "packets.dark", Path(temporary) / "packets"
         source.write_text(DARK)
-        compiled = subprocess.run([str(ROOT / "dark"), str(source), "--leak-check", "-o", str(binary)],
+        compiled = subprocess.run([str(ROOT / "dark"), str(source), "--allow-internal", "--leak-check", "-o", str(binary)],
                                   cwd=ROOT, text=True, capture_output=True, timeout=120)
         assert compiled.returncode == 0, compiled.stdout + compiled.stderr
 

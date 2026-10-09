@@ -62,7 +62,7 @@ match Stdlib.__Datagram.{bind} {address} {port}L with
   | Error 9L -> Stdlib.printLine "CLOSED"
   | _ -> Stdlib.printLine "BAD CLOSED"
 """)
-    compiled = subprocess.run([str(ROOT / "dark"), str(source), "--leak-check", "-o", str(binary)],
+    compiled = subprocess.run([str(ROOT / "dark"), str(source), "--allow-internal", "--leak-check", "-o", str(binary)],
                               cwd=ROOT, text=True, capture_output=True, timeout=120)
     assert compiled.returncode == 0, compiled.stdout + compiled.stderr
     process = subprocess.Popen([str(binary)], cwd=ROOT,

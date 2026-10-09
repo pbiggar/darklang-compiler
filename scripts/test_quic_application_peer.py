@@ -46,7 +46,7 @@ let assemble (state: Stdlib.__QuicStreams.Receive) (frames: List<Stdlib.__QuicAp
     | Ok next -> assemble (Stdlib.__QuicStreams.drain next) rest (Stdlib.List.push chunks (Stdlib.__QuicStreams.available next))
   | _ :: rest -> assemble state rest chunks
 let runCheck () : Unit =
-  match Stdlib.Cli.Args.get 0, Stdlib.Cli.Args.get 1 |> Stdlib.Result.andThen Stdlib.Blob.fromHex with
+  match Stdlib.Cli.__Args.get 0, Stdlib.Cli.__Args.get 1 |> Stdlib.Result.andThen Stdlib.Blob.fromHex with
   | Ok mode, Ok bytes ->
     match Stdlib.__QuicApplication.parse (mode != "client") bytes with
     | Error message -> Stdlib.printLine ("ERROR " ++ message)
@@ -83,7 +83,7 @@ def main():
     with tempfile.TemporaryDirectory(prefix="dark-quic-application-") as temporary:
         source, binary = Path(temporary) / "application.dark", Path(temporary) / "application"
         source.write_text(DARK)
-        compiled = subprocess.run([str(ROOT / "dark"), str(source), "--leak-check", "-o", str(binary)],
+        compiled = subprocess.run([str(ROOT / "dark"), str(source), "--allow-internal", "--leak-check", "-o", str(binary)],
                                   cwd=ROOT, text=True, capture_output=True, timeout=120)
         assert compiled.returncode == 0, compiled.stdout + compiled.stderr
 

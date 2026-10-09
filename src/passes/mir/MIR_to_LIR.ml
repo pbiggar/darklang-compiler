@@ -49,7 +49,7 @@ let convertCliOperation operation =
   | MIR.SocketClose -> LIR.SocketClose
   | MIR.SocketBind4 -> LIR.SocketBind4
   | MIR.SocketBind6 -> LIR.SocketBind6
-| MIR.SocketListen -> LIR.SocketListen
+  | MIR.SocketListen -> LIR.SocketListen
   | MIR.SocketAccept -> LIR.SocketAccept
   | MIR.SocketCloexec -> LIR.SocketCloexec
   | MIR.SocketReuseAddress -> LIR.SocketReuseAddress

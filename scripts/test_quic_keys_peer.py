@@ -78,7 +78,7 @@ def main():
     with tempfile.TemporaryDirectory(prefix="dark-quic-keys-") as temporary:
         source, binary = Path(temporary) / "keys.dark", Path(temporary) / "keys"
         source.write_text(code)
-        built = subprocess.run([str(ROOT / "dark"), str(source), "--leak-check", "-o", str(binary)], cwd=ROOT,
+        built = subprocess.run([str(ROOT / "dark"), str(source), "--allow-internal", "--leak-check", "-o", str(binary)], cwd=ROOT,
             capture_output=True, text=True, timeout=120)
         assert built.returncode == 0, built.stdout + built.stderr
         result = subprocess.run([str(binary)], cwd=ROOT, capture_output=True, text=True, timeout=30)

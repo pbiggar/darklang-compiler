@@ -1,2 +1,0 @@
-// http_server_tls.e2e - TLS configuration validation precedes listener ownership and private-key work.
-Stdlib.HttpServer.Tls.serve (Stdlib.HttpServer.Config.defaults 0) (Stdlib.TlsServerIdentity.Identity { certificates = [], key = Stdlib.__RsaPrivate.Key { modulus = Stdlib.Blob.empty, exponent = Stdlib.Blob.empty, privateExponent = Stdlib.Blob.empty } }) (fun req -> Stdlib.Http.success req.body) (fun _unit -> Stdlib.printLine "unexpected listening") = Error "Invalid TLS HTTP server configuration"

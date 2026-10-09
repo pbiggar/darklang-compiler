@@ -269,7 +269,7 @@ let convertCliOperation (operation : ANF.cliOperation) =
   | ANF.SocketClose -> MIR.SocketClose
   | ANF.SocketBind4 -> MIR.SocketBind4
   | ANF.SocketBind6 -> MIR.SocketBind6
-| ANF.SocketListen -> MIR.SocketListen
+  | ANF.SocketListen -> MIR.SocketListen
   | ANF.SocketAccept -> MIR.SocketAccept
   | ANF.SocketCloexec -> MIR.SocketCloexec
   | ANF.SocketReuseAddress -> MIR.SocketReuseAddress

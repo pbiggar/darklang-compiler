@@ -154,8 +154,7 @@ let planLambdaComparison parameters body state =
 let comparisonForCapturedValue symbols _variants typ left right =
   let structural =
     match typ with
-    | AST.TList _ | AST.TDict _ | AST.TTuple _ | AST.TRecord _
-    | AST.TSum _ ->
+    | AST.TList _ | AST.TDict _ | AST.TTuple _ | AST.TRecord _ | AST.TSum _ ->
         true
     | _ -> false
   in
@@ -166,15 +165,20 @@ let comparisonForCapturedValue symbols _variants typ left right =
         Crash.crash
           ("Closure comparison function '" ^ name ^ "' is absent from symbols")
   in
-   (* Named partials can capture callbacks whose equality was never requested
+  (* Named partials can capture callbacks whose equality was never requested
     before lambda lifting. Their operands here are pure closure-slot reads.
     Use the same comparator-identity guard as EqualityHelpers, so a late
     callback capture does not require a missing global helper definition. *)
- if (match typ with AST.TFunction _ -> true | _ -> false) then
-  let comparator value = C.TupleAccess (value, 1) in
-  C.If (C.BinOp (AST.Eq, comparator left, comparator right),
-    C.IndirectApply (comparator left, S.exprArgsFromList [left; right]), C.BoolLiteral false)
- else if structural then C.Call (resolved (ComparisonPlanning.eqHelperName typ), S.exprArgsFromList [left; right])
+  if match typ with AST.TFunction _ -> true | _ -> false then
+    let comparator value = C.TupleAccess (value, 1) in
+    C.If
+      ( C.BinOp (AST.Eq, comparator left, comparator right),
+        C.IndirectApply (comparator left, S.exprArgsFromList [ left; right ]),
+        C.BoolLiteral false )
+  else if structural then
+    C.Call
+      ( resolved (ComparisonPlanning.eqHelperName typ),
+        S.exprArgsFromList [ left; right ] )
   else if typ = AST.TString then C.BinOp (AST.Eq, left, right)
   else if typ = AST.TInt then
     C.Call

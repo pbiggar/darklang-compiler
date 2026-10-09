@@ -171,7 +171,7 @@ operands once, and produces `false` for `==` (`true` for `!=`).
 |---|---|
 | `src/frontend/interpreter/Parser.ml` | Canonical Dark declaration grammar, field shape, constructor reference syntax |
 | `src/AST.ml` | Enum field shape, unresolved/resolved references, canonical runtime identity |
-| `src/frontend/TypeChecking.ml` | Pure declaration validation, nominal resolution, generic/recursive typing, arity, equality |
+| `src/frontend/WrittenChecking.ml` | Pure declaration validation, nominal resolution, generic/recursive typing, arity, equality |
 | `src/frontend/ValueRendering.ml` | Public enum rendering |
 | `src/passes/anf/AST_to_ANF.ml` | Resolved construction and once-only ordered payload evaluation |
 | `src/backend/arm64/runtime/PrintValues.ml`, `src/backend/x64/runtime/X64Printing.ml` | Native generated rendering support |

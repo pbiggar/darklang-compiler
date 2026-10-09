@@ -18,7 +18,7 @@ from cryptography.x509.oid import ExtendedKeyUsageOID, NameOID
 
 ROOT = Path(__file__).resolve().parents[1]
 DARK = '''// server-tls.dark - Live raw QUIC TLS flight and authenticated application-key release.
-let arg (index: Int) : Blob = Stdlib.Cli.Args.get index |> Stdlib.Result.andThen Stdlib.Blob.fromHex |> Stdlib.Result.withDefault Stdlib.Blob.empty
+let arg (index: Int) : Blob = Stdlib.Cli.__Args.get index |> Stdlib.Result.andThen Stdlib.Blob.fromHex |> Stdlib.Result.withDefault Stdlib.Blob.empty
 let print (data: Blob) : Unit = Stdlib.printLine (Stdlib.Blob.toHex data)
 let finish (handshake: Stdlib.__QuicServerTls.Handshake) : Stdlib.Result.Result<Unit, String> =
   Stdlib.Blob.fromHex (Builtin.stdinReadLine (())) |> Stdlib.Result.andThen (fun message ->

@@ -112,7 +112,7 @@ let check (bytes: String) (sender: Stdlib.__QuicParameters.Sender) : Unit =
     with tempfile.TemporaryDirectory(prefix="dark-quic-parameters-") as temporary:
         source, binary = Path(temporary) / "parameters.dark", Path(temporary) / "parameters"
         source.write_text(program)
-        compiled = subprocess.run([str(ROOT / "dark"), str(source), "--leak-check", "-o", str(binary)],
+        compiled = subprocess.run([str(ROOT / "dark"), str(source), "--allow-internal", "--leak-check", "-o", str(binary)],
                                   cwd=ROOT, capture_output=True, text=True, timeout=120)
         assert compiled.returncode == 0, compiled.stdout + compiled.stderr
         result = subprocess.run([str(binary)], cwd=ROOT, capture_output=True, text=True, timeout=30)

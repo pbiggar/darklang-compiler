@@ -21,7 +21,7 @@ from h2.events import DataReceived, RequestReceived, ResponseReceived, StreamEnd
 ROOT = Path(__file__).resolve().parents[1]
 
 CLIENT = '''// client.dark - Authenticated HTTP/2 buffering, streaming and ownership probe.
-match Stdlib.Cli.Args.get 0, Stdlib.Cli.Args.get 1, Stdlib.Cli.Args.get 2 with
+match Stdlib.Cli.__Args.get 0, Stdlib.Cli.__Args.get 1, Stdlib.Cli.__Args.get 2 with
 | Ok port, Ok ca, Ok mode ->
   match Stdlib.Cli.FileSystem.readFile ca with
   | Error _ -> Stdlib.printLine "CA read failed"
@@ -50,7 +50,7 @@ SERVER = '''// server.dark - HTTP/1.1 and prior-knowledge HTTP/2 share routing a
 let handler (req: Stdlib.Http.Request) : Stdlib.Http.Response =
   Stdlib.Http.responseWithHeaders req.body [("set-cookie", "a=1"), ("set-cookie", "b=2")] 200
 
-match Stdlib.Cli.Args.int64 0 with
+match Stdlib.Cli.__Args.int64 0 with
 | Error _ -> Stdlib.printLine "Invalid port"
 | Ok port ->
   let config = Stdlib.HttpServer.Config.Config { port = Stdlib.Int.fromInt64 port,
@@ -65,7 +65,7 @@ match Stdlib.Cli.Args.int64 0 with
 def compile_source(directory, name, source, compiler):
     path, binary = directory / f"{name}.dark", directory / name
     path.write_text(source)
-    result = subprocess.run([str(compiler), str(path), "--leak-check", "-o", str(binary)],
+    result = subprocess.run([str(compiler), str(path), "--allow-internal", "--leak-check", "-o", str(binary)],
                             cwd=ROOT, text=True, capture_output=True, timeout=120)
     assert result.returncode == 0, result.stdout + result.stderr
     return binary

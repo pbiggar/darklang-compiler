@@ -144,7 +144,7 @@ let runExchange () : Unit =
   match Stdlib.Blob.fromHex "@PARAMETERS@", Stdlib.Blob.fromHex "@ROOT@",
         Stdlib.Blob.fromHex "0001020304050607", Stdlib.Blob.fromHex "08090A0B0C0D0E0F",
         Stdlib.__X25519.generateKeyPair (), Stdlib.Crypto.__secureRandomBytes 32L,
-        Stdlib.Cli.Args.get 0, Stdlib.Cli.Args.get 1 |> Stdlib.Result.andThen (fun value -> Stdlib.Int64.parse value |> Stdlib.Result.mapError (fun _error -> "Invalid port")) with
+        Stdlib.Cli.__Args.get 0, Stdlib.Cli.__Args.get 1 |> Stdlib.Result.andThen (fun value -> Stdlib.Int64.parse value |> Stdlib.Result.mapError (fun _error -> "Invalid port")) with
   | Ok parameters, Ok root, Ok destination, Ok source, Ok pair, Ok random, Ok mode, Ok port ->
     match Stdlib.__Tls13.quicClientHello "localhost" random pair.publicKey parameters, Stdlib.__QuicCrypto.initial destination, Stdlib.__QuicReassembly.create 1048576L, Stdlib.__Datagram.bind4 [127L, 0L, 0L, 1L] 0L with
     | Ok hello, Ok keys, Ok initial, Ok connection ->
@@ -192,7 +192,7 @@ def main():
     with tempfile.TemporaryDirectory(prefix="dark-quic-tls-") as temporary:
         source, binary = Path(temporary) / "handshake.dark", Path(temporary) / "handshake"
         source.write_text(DARK.replace("@PARAMETERS@", parameters.data.hex()).replace("@ROOT@", ca.public_bytes(serialization.Encoding.DER).hex()))
-        compiled = subprocess.run([str(ROOT / "dark"), str(source), "--leak-check", "-o", str(binary)],
+        compiled = subprocess.run([str(ROOT / "dark"), str(source), "--allow-internal", "--leak-check", "-o", str(binary)],
                                   cwd=ROOT, text=True, capture_output=True, timeout=120)
         assert compiled.returncode == 0, compiled.stdout + compiled.stderr
         for mode in (*SUCCESS_MODES, *PARAMETER_ERRORS, "untrusted", "hostname", "finished"):

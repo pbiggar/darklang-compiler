@@ -20,13 +20,13 @@ from test_quic_tls_peer import certificates
 ROOT = Path(__file__).resolve().parents[1]
 PROBE = '''// probe.dark - Authenticated post-handshake traffic state and response nonce accounting.
 type Report = { current: Stdlib.__Tls13KeyUpdate.Processed, replies: List<Blob> }
-let arg (index: Int) : Blob = Stdlib.Cli.Args.get index |> Stdlib.Result.andThen Stdlib.Blob.fromHex |> Stdlib.Result.withDefault Stdlib.Blob.empty
+let arg (index: Int) : Blob = Stdlib.Cli.__Args.get index |> Stdlib.Result.andThen Stdlib.Blob.fromHex |> Stdlib.Result.withDefault Stdlib.Blob.empty
 let run () : Stdlib.Result.Result<Unit, String> =
-  let suite = Stdlib.Cli.Args.get 0 |> Stdlib.Result.withDefault "4865" |> Stdlib.Int64.parse |> Stdlib.Result.withDefault 4865L in
+  let suite = Stdlib.Cli.__Args.get 0 |> Stdlib.Result.withDefault "4865" |> Stdlib.Int64.parse |> Stdlib.Result.withDefault 4865L in
   let traffic = if suite == 4866L then Stdlib.__Tls13.trafficKeys384 else if suite == 4867L then Stdlib.__Tls13.trafficKeysChaCha else Stdlib.__Tls13.trafficKeys in
   match traffic (arg 2), traffic (arg 3) with
   | Ok receive, Ok send ->
-    let fromServer = (Stdlib.Cli.Args.get 1 |> Stdlib.Result.withDefault "server") == "client" in
+    let fromServer = (Stdlib.Cli.__Args.get 1 |> Stdlib.Result.withDefault "server") == "client" in
     let state = Stdlib.__Tls13KeyUpdate.create (arg 2) (arg 3) { send with sequence = 3L } fromServer in
     let initial = Report { current = Stdlib.__Tls13KeyUpdate.Processed { state = state, receive = receive, data = None, closed = false, reply = None }, replies = [] } in
     Stdlib.List.fold [arg 4, arg 5, arg 6] (Ok initial) (fun result bytes ->
@@ -49,7 +49,7 @@ let run () : Stdlib.Result.Result<Unit, String> =
 match run () with | Ok () -> () | Error _ -> Stdlib.printLine "ERROR"
 '''
 FAULT = '''// fault.dark - Failed server replies and client EOF cannot reuse an application send nonce.
-let arg (index: Int) : Blob = Stdlib.Cli.Args.get index |> Stdlib.Result.andThen Stdlib.Blob.fromHex |> Stdlib.Result.withDefault Stdlib.Blob.empty
+let arg (index: Int) : Blob = Stdlib.Cli.__Args.get index |> Stdlib.Result.andThen Stdlib.Blob.fromHex |> Stdlib.Result.withDefault Stdlib.Blob.empty
 let write (lifecycle: Stream<Unit>) (cell: RawPtr) (fail: Bool) (bytes: Blob) : Stdlib.Result.Result<Unit, Int64> =
   match Stdlib.Stream.next lifecycle with
   | None -> Error 9L
@@ -59,7 +59,7 @@ let write (lifecycle: Stream<Unit>) (cell: RawPtr) (fail: Bool) (bytes: Blob) : 
     Stdlib.printLine ("WRITE " ++ Stdlib.Blob.toHex bytes)
     if fail && count == 0L then Error 5L else Ok ()
 let run () : Unit =
-  let fail = (Stdlib.Cli.Args.get 0 |> Stdlib.Result.withDefault "") == "serverfail" in
+  let fail = (Stdlib.Cli.__Args.get 0 |> Stdlib.Result.withDefault "") == "serverfail" in
   match Stdlib.__Tls13.trafficKeys (arg 1), Stdlib.__Tls13.trafficKeys (arg 2), Stdlib.__Network.shutdownSignals () with
   | Ok receive, Ok send, Ok signals ->
     let counter = Stdlib.Stream.__cellNew 0L in
@@ -208,7 +208,7 @@ def main():
         print("TLS ownership faults: reply-send failure closes with fresh-key nonce; EOF aborts later writes; double close and zero leaks", flush=True)
         source, binary = directory / "server.dark", directory / "server"
         source.write_text(SERVER.replace("@CERT@", leaf.public_bytes(serialization.Encoding.PEM).hex()).replace("@KEY@", key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption()).hex()))
-        result = subprocess.run([str(args.compiler), str(source), "--leak-check", "-o", str(binary)], cwd=ROOT, capture_output=True, text=True, timeout=180)
+        result = subprocess.run([str(args.compiler), str(source), "--allow-internal", "--leak-check", "-o", str(binary)], cwd=ROOT, capture_output=True, text=True, timeout=180)
         assert result.returncode == 0, result.stdout + result.stderr
         process, port = start(binary)
         try:

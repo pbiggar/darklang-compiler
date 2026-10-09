@@ -28,7 +28,7 @@ let handler (request: Stdlib.Http.Request) : Stdlib.Http.Response =
   else if Stdlib.HttpServer.getMethod request == "HEAD" then Stdlib.Http.responseWithText "representation" 200
   else Stdlib.Http.Response { statusCode = 200, headers = [("set-cookie", "a=1"), ("set-cookie", "b=2")], body = request.body }
 let run () : Unit =
-  let port = Stdlib.Cli.Args.get 0 |> Stdlib.Result.withDefault "0" |> Stdlib.Int.parse |> Stdlib.Result.withDefault 0 in
+  let port = Stdlib.Cli.__Args.get 0 |> Stdlib.Result.withDefault "0" |> Stdlib.Int.parse |> Stdlib.Result.withDefault 0 in
   let identity = Stdlib.Blob.fromHex "@CERT@" |> Stdlib.Result.andThen (fun certificate -> Stdlib.Blob.fromHex "@KEY@" |> Stdlib.Result.andThen (fun key -> Stdlib.TlsServerIdentity.create certificate key)) in
   match identity with
   | Error message -> Stdlib.printLine message
@@ -142,7 +142,7 @@ def main():
         pem = leaf.public_bytes(serialization.Encoding.PEM)
         private = key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption())
         source.write_text(SERVER.replace("@CERT@", pem.hex()).replace("@KEY@", private.hex()))
-        result = subprocess.run([str(args.compiler), str(source), "--leak-check", "-o", str(binary)], cwd=ROOT, capture_output=True, text=True, timeout=180)
+        result = subprocess.run([str(args.compiler), str(source), "--allow-internal", "--leak-check", "-o", str(binary)], cwd=ROOT, capture_output=True, text=True, timeout=180)
         assert result.returncode == 0, result.stdout + result.stderr
         process, port = start(binary)
         try:

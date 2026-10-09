@@ -66,7 +66,7 @@ def main():
     with tempfile.TemporaryDirectory(prefix="dark-quic-recovery-") as temporary:
         source, binary = Path(temporary) / "recovery.dark", Path(temporary) / "recovery"
         source.write_text(program)
-        compiled = subprocess.run([str(ROOT / "dark"), str(source), "--leak-check", "-o", str(binary)],
+        compiled = subprocess.run([str(ROOT / "dark"), str(source), "--allow-internal", "--leak-check", "-o", str(binary)],
                                   cwd=ROOT, capture_output=True, text=True, timeout=120)
         assert compiled.returncode == 0, compiled.stdout + compiled.stderr
         result = subprocess.run([str(binary)], cwd=ROOT, capture_output=True, text=True, timeout=30)

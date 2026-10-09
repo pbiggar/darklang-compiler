@@ -71,7 +71,7 @@ let receive (state: Stdlib.__QuicConnection.State) (deadline: Int64)
                   else Stdlib.__QuicConnection.poll read.state 10L |> Stdlib.Result.andThen (fun next ->
                     receive next deadline received.state streams))))
 let run () : Unit =
-  match Stdlib.Blob.fromHex "@ROOT@", Stdlib.Cli.Args.get 0 |> Stdlib.Result.andThen (fun value -> Stdlib.Int64.parse value |> Stdlib.Result.mapError (fun _error -> "port")) with
+  match Stdlib.Blob.fromHex "@ROOT@", Stdlib.Cli.__Args.get 0 |> Stdlib.Result.andThen (fun value -> Stdlib.Int64.parse value |> Stdlib.Result.mapError (fun _error -> "port")) with
   | Ok root, Ok port ->
     match Stdlib.__QuicClient.connect (Stdlib.__Datagram.Endpoint { address = [127L,0L,0L,1L], port = port }) "localhost" [root] 8000L with
     | Error message -> Stdlib.printLine ("ERROR " ++ message)
@@ -105,7 +105,7 @@ let emitBlob (body: Blob) (position: Int) : Unit =
     emitBlob body (position + 512)
 let run () : Unit =
   match Stdlib.Blob.fromHex "@ROOT@", Stdlib.__HttpWire.parseUrl "https://localhost/streams", Stdlib.Blob.fromHex "@BODY@",
-    Stdlib.Cli.Args.get 0 |> Stdlib.Result.andThen (fun value -> Stdlib.Int64.parse value |> Stdlib.Result.mapError (fun _error -> "port")) with
+    Stdlib.Cli.__Args.get 0 |> Stdlib.Result.andThen (fun value -> Stdlib.Int64.parse value |> Stdlib.Result.mapError (fun _error -> "port")) with
   | Ok root, Ok url, Ok upload, Ok port ->
     match Stdlib.__QuicClient.connect (Stdlib.__Datagram.Endpoint { address = [127L,0L,0L,1L], port = port }) "localhost" [root] 8000L with
     | Error message -> Stdlib.printLine ("ERROR " ++ message)
@@ -148,7 +148,7 @@ let receive (state: Stdlib.__Http3.State) : Stdlib.Result.Result<Unit, String> =
     let _ = Stdlib.List.iter received.events event in
     if received.finished then Ok () else receive received.state)
 let run () : Unit =
-  match Stdlib.Blob.fromHex "@ROOT@", Stdlib.Cli.Args.get 0 |> Stdlib.Result.andThen (fun value -> Stdlib.Int64.parse value |> Stdlib.Result.mapError (fun _error -> "port")) with
+  match Stdlib.Blob.fromHex "@ROOT@", Stdlib.Cli.__Args.get 0 |> Stdlib.Result.andThen (fun value -> Stdlib.Int64.parse value |> Stdlib.Result.mapError (fun _error -> "port")) with
   | Ok root, Ok port ->
     match Stdlib.__QuicClient.connect (Stdlib.__Datagram.Endpoint { address = [127L,0L,0L,1L], port = port }) "localhost" [root] 8000L with
     | Error message -> Stdlib.printLine ("ERROR " ++ message)
@@ -205,18 +205,20 @@ def main():
         elif options.close_early:
             program = program.replace("consume response.body [] 0", "()")
         source.write_text(program.replace("@ROOT@", ca.public_bytes(serialization.Encoding.DER).hex()).replace("@BODY@", upload_bytes.hex()))
-        result = subprocess.run([str(options.compiler), str(source), "--leak-check", "-o", str(binary)], cwd=ROOT,
+        result = subprocess.run([str(options.compiler), str(source), "--allow-internal", "--leak-check", "-o", str(binary)], cwd=ROOT,
             text=True, capture_output=True, timeout=120)
         assert result.returncode == 0, result.stdout + result.stderr
         for mode in ([options.mode] if options.mode else ("trusted", "drop-request", "drop-response", "reorder", "trailers", "key-update")):
             failures, requested, credits, uploaded, closes = [], [], [], bytearray(), []
             stopped = threading.Event()
+            close_seen = threading.Event()
             with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as listener:
                 listener.bind(("127.0.0.1", 0))
                 listener.settimeout(0.01)
 
                 def peer():
                     connection, http, dropped, pending_body = None, None, False, False
+                    response_sent = False
                     try:
                         while not stopped.is_set():
                             now = time.monotonic()
@@ -240,6 +242,7 @@ def main():
                             connection.receive_datagram(packet, address, now)
                             if connection._close_event is not None and not closes:
                                 closes.append(connection._close_event)
+                                close_seen.set()
                             while (event := connection.next_event()) is not None:
                                 for message in http.handle_event(event):
                                     if isinstance(message, HeadersReceived) and message.stream_id == 0:
@@ -251,9 +254,18 @@ def main():
                                         uploaded.extend(message.data)
                                     else:
                                         continue
-                                    if message.stream_ended or mode == "early-response" and isinstance(message, HeadersReceived):
+                                    # A retransmitted empty FIN can surface another completion
+                                    # event; this peer serves exactly one response per request.
+                                    if not response_sent and (message.stream_ended or mode == "early-response" and isinstance(message, HeadersReceived)):
+                                        response_sent = True
                                         if mode != "early-response":
                                             assert uploaded == upload_bytes, (len(uploaded), len(upload_bytes))
+                                        # Early disposal must observe the new phase in HEADERS.
+                                        # aioquic retires its receive phase when it initiates an
+                                        # update, so updating only a later body loses a valid
+                                        # close sent before the client has seen that update.
+                                        if mode == "key-update" and options.close_early:
+                                            connection.request_key_update()
                                         http.send_headers(0, [(b":status", b"200"), (b"content-length", str(len(body_bytes)).encode())])
                                         if mode == "key-update":
                                             pending_body = True
@@ -266,7 +278,8 @@ def main():
                             if pending_body and len(requested) == 1 and not any(
                                 packet.is_ack_eliciting for packet in connection._spaces[Epoch.ONE_RTT].sent_packets.values()
                             ):
-                                connection.request_key_update()
+                                if not options.close_early:
+                                    connection.request_key_update()
                                 http.send_data(0, body_bytes, end_stream=True)
                                 pending_body = False
                             responses = connection.datagrams_to_send(now)
@@ -288,6 +301,8 @@ def main():
                     result = subprocess.run([str(binary), str(listener.getsockname()[1])], cwd=ROOT,
                         text=True, capture_output=True, timeout=60)
                 finally:
+                    if options.http_client:
+                        close_seen.wait(timeout=1)
                     stopped.set()
                     thread.join(timeout=2)
                 assert not thread.is_alive() and not failures, (mode, failures)

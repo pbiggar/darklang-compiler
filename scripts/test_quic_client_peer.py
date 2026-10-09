@@ -20,8 +20,8 @@ from test_quic_tls_peer import certificates
 ROOT = Path(__file__).resolve().parents[1]
 DARK = """// client.dark - Exercise the production QUIC client handshake and owned socket cleanup.
 let run () : Unit =
-  match Stdlib.Blob.fromHex "@ROOT@", Stdlib.Cli.Args.get 0,
-    Stdlib.Cli.Args.get 1 |> Stdlib.Result.andThen (fun text -> Stdlib.Int64.parse text |> Stdlib.Result.mapError (fun _error -> "port")) with
+  match Stdlib.Blob.fromHex "@ROOT@", Stdlib.Cli.__Args.get 0,
+    Stdlib.Cli.__Args.get 1 |> Stdlib.Result.andThen (fun text -> Stdlib.Int64.parse text |> Stdlib.Result.mapError (fun _error -> "port")) with
   | Ok root, Ok mode, Ok port ->
     let peer = Stdlib.__Datagram.Endpoint { address = [127L,0L,0L,1L], port = port } in
     match Stdlib.__QuicClient.connect peer (if mode == "hostname" then "wrong.example.com" else "localhost")
@@ -41,7 +41,7 @@ def main():
     with tempfile.TemporaryDirectory(prefix="dark-quic-client-") as temporary:
         source, binary = Path(temporary) / "client.dark", Path(temporary) / "client"
         source.write_text(DARK.replace("@ROOT@", ca.public_bytes(serialization.Encoding.DER).hex()))
-        result = subprocess.run([str(ROOT / "dark"), str(source), "--leak-check", "-o", str(binary)], cwd=ROOT,
+        result = subprocess.run([str(ROOT / "dark"), str(source), "--allow-internal", "--leak-check", "-o", str(binary)], cwd=ROOT,
                                 capture_output=True, text=True, timeout=120)
         assert result.returncode == 0, result.stdout + result.stderr
         for mode in modes:

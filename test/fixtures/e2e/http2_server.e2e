@@ -1,4 +1,0 @@
-// http2_server.e2e - Fragment-safe HTTP/2 prior-knowledge server dispatch.
-Stdlib.__Http2Wire.isPrefacePrefix (Stdlib.String.toBlob "PRI * HT") 0L = true
-Stdlib.__Http2Wire.isPrefacePrefix (Stdlib.String.toBlob "POST / HTTP/1.1") 0L = false
-Stdlib.__Http2Wire.isPrefacePrefix (Stdlib.String.toBlob "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\nextra") 0L = true

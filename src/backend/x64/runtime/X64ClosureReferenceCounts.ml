@@ -169,23 +169,34 @@ let generateClosureRefCountDecHelper enableLeakCheck recordRegistry
     @ [ X.MOV_reg (X.RAX, X.R9); X.CALL helperLabel ]
     @ restores @ [ X.Label doneLabel ]
   in
-   (* Sum representations can share a list/dict/stream root directly. Dispatch
+  (* Sum representations can share a list/dict/stream root directly. Dispatch
     by the release plan so a captured Option<List<_>> releases its list edge. *)
- let releaseAggregateCapture fieldOffset captureType suffix =
+  let releaseAggregateCapture fieldOffset captureType suffix =
     match
       tryRcReleasePlanOfType recordRegistry sumShapeRegistry captureType
     with
-      | Some (MemoryModel.RootRelease (_,MemoryModel.TaggedList,_) as releasePlan) ->
-    releaseHeapRootCapture fieldOffset (listDecHelperForReleasePlan releasePlan) (suffix^"_list")
-  | Some (MemoryModel.RootRelease (_,MemoryModel.DictHeap,_) as releasePlan) ->
-    releaseHeapRootCapture fieldOffset (dictDecHelperForReleasePlan releasePlan) (suffix^"_dict")
-  | Some (MemoryModel.RootRelease (_,MemoryModel.StreamHeap,_)) ->
-    releaseHeapRootCapture fieldOffset streamRefCountDecHelperLabel (suffix^"_stream")
-  | Some (MemoryModel.RootRelease (_,MemoryModel.ClosureHeap,_)) ->
-    releaseHeapRootCapture fieldOffset closureRefCountDecHelperLabel (suffix^"_closure")
-  | Some (MemoryModel.DynamicBufferRelease operation) ->
-    releaseDynamicBufferCapture (operation=MemoryModel.DynamicIntBuffer) fieldOffset suffix
-| Some
+    | Some
+        (MemoryModel.RootRelease (_, MemoryModel.TaggedList, _) as releasePlan)
+      ->
+        releaseHeapRootCapture fieldOffset
+          (listDecHelperForReleasePlan releasePlan)
+          (suffix ^ "_list")
+    | Some (MemoryModel.RootRelease (_, MemoryModel.DictHeap, _) as releasePlan)
+      ->
+        releaseHeapRootCapture fieldOffset
+          (dictDecHelperForReleasePlan releasePlan)
+          (suffix ^ "_dict")
+    | Some (MemoryModel.RootRelease (_, MemoryModel.StreamHeap, _)) ->
+        releaseHeapRootCapture fieldOffset streamRefCountDecHelperLabel
+          (suffix ^ "_stream")
+    | Some (MemoryModel.RootRelease (_, MemoryModel.ClosureHeap, _)) ->
+        releaseHeapRootCapture fieldOffset closureRefCountDecHelperLabel
+          (suffix ^ "_closure")
+    | Some (MemoryModel.DynamicBufferRelease operation) ->
+        releaseDynamicBufferCapture
+          (operation = MemoryModel.DynamicIntBuffer)
+          fieldOffset suffix
+    | Some
         (MemoryModel.RootRelease
            ( payloadSize,
              MemoryModel.GenericHeap,
@@ -239,7 +250,8 @@ let generateClosureRefCountDecHelper enableLeakCheck recordRegistry
               | AST.TStream _ ->
                   releaseHeapRootCapture fieldOffset
                     streamRefCountDecHelperLabel (suffix ^ "_stream")
-                 | AST.TTuple _ | AST.TRecord _ | AST.TSum _ -> releaseAggregateCapture fieldOffset captureType suffix
+              | AST.TTuple _ | AST.TRecord _ | AST.TSum _ ->
+                  releaseAggregateCapture fieldOffset captureType suffix
               | _ -> [])
             captureTypes
           |> List.concat

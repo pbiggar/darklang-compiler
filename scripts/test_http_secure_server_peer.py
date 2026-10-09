@@ -20,7 +20,7 @@ let run () : Unit =
   | Ok root ->
     let session = Stdlib.HttpClientSession.createTrustedWithRoots [root] in
     let body = Stdlib.String.join (Stdlib.List.repeatUnsafe 70 (Stdlib.String.repeat "x" 1000)) "" |> Stdlib.String.toBlob in
-    let url = "https://localhost:" ++ (Stdlib.Cli.Args.get 0 |> Stdlib.Result.withDefault "0") ++ "/echo" in
+    let url = "https://localhost:" ++ (Stdlib.Cli.__Args.get 0 |> Stdlib.Result.withDefault "0") ++ "/echo" in
     let result = session.request "POST" url [] body |> Stdlib.Result.andThen (fun first ->
       if first.statusCode != 200 || Stdlib.Blob.toList first.body != Stdlib.Blob.toList body then Error Stdlib.HttpClient.RequestError.NetworkError
       else session.request "POST" url [] body |> Stdlib.Result.andThen (fun second ->
@@ -51,7 +51,7 @@ def main():
     with tempfile.TemporaryDirectory(prefix="dark-http-secure-", dir=ROOT.parent) as temporary:
         source, binary = Path(temporary) / "server.dark", Path(temporary) / "server"
         source.write_text(server.replace("@CERT@", pem.hex()).replace("@KEY@", private.hex()))
-        result = subprocess.run([str(args.compiler), str(source), "--leak-check", "-o", str(binary)], cwd=ROOT, capture_output=True, text=True, timeout=180)
+        result = subprocess.run([str(args.compiler), str(source), "--allow-internal", "--leak-check", "-o", str(binary)], cwd=ROOT, capture_output=True, text=True, timeout=180)
         assert result.returncode == 0, result.stdout + result.stderr
         process, port = start(binary)
         try:
@@ -86,7 +86,7 @@ def main():
                     peer.sendto(replay, ("127.0.0.1", port))
             client_source, client_binary = Path(temporary) / "client.dark", Path(temporary) / "client"
             client_source.write_text(CLIENT.replace("@ROOT@", ca.public_bytes(serialization.Encoding.DER).hex()))
-            result = subprocess.run([str(args.compiler), str(client_source), "--leak-check", "-o", str(client_binary)], cwd=ROOT, capture_output=True, text=True, timeout=180)
+            result = subprocess.run([str(args.compiler), str(client_source), "--allow-internal", "--leak-check", "-o", str(client_binary)], cwd=ROOT, capture_output=True, text=True, timeout=180)
             assert result.returncode == 0, result.stdout + result.stderr
             result = subprocess.run([str(client_binary), str(port)], cwd=ROOT, capture_output=True, text=True, timeout=90)
             assert result.returncode == 0 and result.stdout == "DONE\n" and not result.stderr, result

@@ -26,7 +26,7 @@ paths use the same category order. Package and builtin lookup is in
 function/value dictionaries by `backend/src/LibExecution/Builtin.fs`.
 
 The revalidated compiler gaps were the fallback functions in
-`src/DarkStdlib.ml`, `src/frontend/TypeChecking.ml`, and
+`src/DarkStdlib.ml`, `src/frontend/WrittenChecking.ml`, and
 `src/passes/anf/AST_to_ANF.ml`, plus order-dependent constructor and
 declaration maps. Focused probes retained in `test/fixtures/e2e/name-resolution.e2e`
 cover implicit qualification, lexical shadowing, duplicate declarations,

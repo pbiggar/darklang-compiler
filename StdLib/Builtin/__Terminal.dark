@@ -1,4 +1,4 @@
-// Native terminal facts for interpreter package APIs, without libc calls.
+// Terminal facts and text inspection for interpreter package APIs.
 module Builtin
 
 let __isTerminal (fd: Int64) : Bool =
@@ -19,6 +19,13 @@ let cliTerminalSessionInfo () : (Bool * Bool * String) =
 let cliTerminalColorEnabled () : Bool =
     let noColor = Stdlib.Option.withDefault (Stdlib.Cli.__getenv "NO_COLOR") "" in
     noColor == "" && Builtin.__isTerminal 1L
+
+let cliTerminalInspectRow (text: String) : (Int * Bool) =
+    // This measures plain text: escape payloads are not stripped. Control
+    // detection also recognizes the single CRLF grapheme cluster.
+    let width = Stdlib.String.displayWidth text in
+    let controls = Stdlib.List.any (Stdlib.String.toList text) Stdlib.Cli.Tui.Text.__isControl in
+    (width, controls)
 
 let __terminalSize (fd: Int64) : Stdlib.Option.Option<(Int * Int)> =
     // TIOCGWINSZ: two unsigned 16-bit dimensions, then two pixel dimensions.

@@ -161,7 +161,7 @@ The contract is anchored in:
 - `src/DarkStdlib.ml` for native intrinsic registration
 - `src/backend/arm64/runtime/` and `src/backend/x64/runtime/` for native
   allocation, output, and failure behavior
-- `src/frontend/TypeChecking.ml` for public typing and equality
+- `src/frontend/WrittenChecking.ml` for public typing and equality
 - `StdLib/Dict.dark` for the public module
 - `StdLib/Dict/__HAMT.dark` for private generic storage
 - `test/fixtures/e2e/dict_parity.e2e` and pinned upstream Dict/edict cases for the

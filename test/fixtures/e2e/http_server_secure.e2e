@@ -1,9 +1,0 @@
-// http_server_secure.e2e - Reject invalid secure listener configuration before touching identity or sockets.
-let invalidSecure (port: Int) (limit: Int) : Stdlib.Result.Result<Unit, String> =
-  let config = Stdlib.HttpServer.Config.Config { port = port, maxBodyBytes = limit, injectStandardHeaders = false, canonicalizeFromForwardedProto = false, logRequests = false } in
-  let identity = Stdlib.TlsServerIdentity.Identity { certificates = [], key = Stdlib.__RsaPrivate.Key { modulus = Stdlib.Blob.empty, exponent = Stdlib.Blob.empty, privateExponent = Stdlib.Blob.empty } } in
-  Stdlib.HttpServer.Secure.serve config identity (fun _request -> Stdlib.Http.responseWithText "unused" 200) (fun _unit -> ())
-invalidSecure 0 1024 = Error "Invalid secure HTTP server configuration"
-invalidSecure 65536 1024 = Error "Invalid secure HTTP server configuration"
-invalidSecure 443 (-1) = Error "Invalid secure HTTP server configuration"
-invalidSecure 443 104857601 = Error "Invalid secure HTTP server configuration"

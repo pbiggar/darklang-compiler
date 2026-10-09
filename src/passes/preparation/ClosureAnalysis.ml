@@ -611,7 +611,7 @@ let rec simpleInferType expr typeEnv funcParams funcReturns genericDefs typeReg
           else None
       | _ -> None)
   | C.IndirectApply _ -> Some AST.TBool
-   | C.Closure _ | C.RuntimeError _ | C.BoundaryRender _ -> None
+  | C.Closure _ | C.RuntimeError _ | C.BoundaryRender _ -> None
 
 let inferLambdaReturnType body state =
   match

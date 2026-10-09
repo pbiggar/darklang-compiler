@@ -710,6 +710,11 @@ let convertTypedProgramToUserOnlyWithMode (baseContext : X.pipelineContext) mode
       topLevels
   in
   let typedProgram = C.programFromCheckedParts (symbols, topLevels) in
+  let typedProgram =
+    let local = SpecializationIdentity.extractGenericFuncDefs typedProgram in
+    let definitions = M.fold M.add local baseContext.X.genericFuncDefs in
+    StaticCallReduction.reduce definitions typedProgram
+  in
   (* Late AOT plans (notably Json) may introduce concrete calls to generic
     stdlib functions after the suite preamble registry was built. Materialize
     just those missing specializations into the user compilation unit. *)

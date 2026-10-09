@@ -63,7 +63,7 @@ let exchange (ready: Stdlib.__QuicServer.Ready) (signals: Stdlib.__Network.Shutd
         |> Stdlib.Result.andThen (fun state -> write state body 0L)
         |> Stdlib.Result.map (fun state -> drain state.connection 100L)))
 let run () : Unit =
-  let port = Stdlib.Cli.Args.get 0 |> Stdlib.Result.andThen (fun value -> Stdlib.Int64.parse value |> Stdlib.Result.mapError (fun _ -> "port")) |> Stdlib.Result.withDefault 0L in
+  let port = Stdlib.Cli.__Args.get 0 |> Stdlib.Result.andThen (fun value -> Stdlib.Int64.parse value |> Stdlib.Result.mapError (fun _ -> "port")) |> Stdlib.Result.withDefault 0L in
   match Stdlib.Blob.fromHex "@CERT@", Stdlib.Blob.fromHex "@KEY@", Stdlib.__Datagram.bind4 [127L,0L,0L,1L] port, Stdlib.__Network.shutdownSignals (), Stdlib.Crypto.__secureRandomBytes 32L with
   | Ok certificate, Ok key, Ok socket, Ok signals, Ok secret ->
     let result = Stdlib.TlsServerIdentity.create certificate key |> Stdlib.Result.andThen (fun identity ->

@@ -13,7 +13,7 @@ import pylsqpack
 ROOT = Path(__file__).resolve().parents[1]
 
 SOURCE = '''// qpack.dark - Decode independent field sections and re-encode with ownership checks.
-match Stdlib.Cli.Args.get 0 with
+match Stdlib.Cli.__Args.get 0 with
 | Error _ -> Stdlib.printLine "Missing block"
 | Ok hex ->
   match Stdlib.Blob.fromHex hex |> Stdlib.Result.andThen Stdlib.__Qpack.decode |> Stdlib.Result.andThen Stdlib.__Qpack.encode with
@@ -39,7 +39,7 @@ def main():
         directory = Path(temporary)
         source, binary = directory / "qpack.dark", directory / "qpack"
         source.write_text(SOURCE)
-        compiled = subprocess.run([str(ROOT / "dark"), str(source), "--leak-check", "-o", str(binary)],
+        compiled = subprocess.run([str(ROOT / "dark"), str(source), "--allow-internal", "--leak-check", "-o", str(binary)],
                                   cwd=ROOT, text=True, capture_output=True, timeout=120)
         assert compiled.returncode == 0, compiled.stdout + compiled.stderr
         for fields in cases:

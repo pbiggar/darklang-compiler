@@ -147,7 +147,7 @@ JSON extensions. There are no JSON-specific compiler-only serialized types.
 - The shared packed-range reader, container traversal, scalar extraction, and writer
   primitives are in `StdLib/Json.dark`.
 - Generic intrinsic checking and unsupported-shape diagnostics:
-  `src/frontend/TypeChecking.ml`.
+  `src/frontend/WrittenChecking.ml`.
 - Late specialization integration and stdlib loading:
   `src/CompilerLibrary.ml`.
 - Recursive ownership shapes and native release helpers:

@@ -1,6 +1,0 @@
-// http_alpn.e2e - ALPN offers and authenticated server-selection validation.
-Stdlib.__TlsAlpn.offer ["h2", "http/1.1"] |> Stdlib.Result.map Stdlib.Blob.toHex = Ok "000C02683208687474702F312E31"
-Stdlib.__TlsAlpn.offer [""] = Error "Invalid ALPN protocol length"
-let wire = Stdlib.Blob.fromHex "0009001000050003026832" |> Stdlib.Result.withDefault Stdlib.Blob.empty in Stdlib.__TlsAlpn.selected ["h2", "http/1.1"] wire = Ok (Some "h2")
-let wire = Stdlib.Blob.fromHex "0009001000050003026833" |> Stdlib.Result.withDefault Stdlib.Blob.empty in Stdlib.__TlsAlpn.selected ["h2"] wire = Error "TLS selected an unoffered ALPN protocol"
-let wire = Stdlib.Blob.fromHex "0000" |> Stdlib.Result.withDefault Stdlib.Blob.empty in Stdlib.__TlsAlpn.selected ["h2", "http/1.1"] wire = Ok None

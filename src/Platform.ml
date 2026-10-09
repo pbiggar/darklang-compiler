@@ -112,13 +112,15 @@ type syscallNumbers = {
   fcntl : int;
   poll : int;
   signalMask : int;
-    signalPending : int;
+  signalPending : int;
   signalWait : int;
   sendTo : int;
   recvFrom : int;
 }
-let macOSARM64SyscallNumbers : syscallNumbers = {
-  write = 4;
+
+let macOSARM64SyscallNumbers : syscallNumbers =
+  {
+    write = 4;
     exit = 1;
     mmap = 197;
     munmap = 73;
@@ -141,13 +143,15 @@ let macOSARM64SyscallNumbers : syscallNumbers = {
     fcntl = 92;
     poll = 230;
     signalMask = 48;
-      signalPending = 52;
-  signalWait = 330;
-  sendTo = 133;
-  recvFrom = 29;
-}
-let linuxARM64SyscallNumbers : syscallNumbers = {
-  write = 64;
+    signalPending = 52;
+    signalWait = 330;
+    sendTo = 133;
+    recvFrom = 29;
+  }
+
+let linuxARM64SyscallNumbers : syscallNumbers =
+  {
+    write = 64;
     exit = 93;
     mmap = 222;
     munmap = 215;
@@ -170,11 +174,12 @@ let linuxARM64SyscallNumbers : syscallNumbers = {
     fcntl = 25;
     poll = 73;
     signalMask = 135;
-      signalPending = 136;
-  signalWait = 137;
-  sendTo = 206;
-  recvFrom = 207;
-}
+    signalPending = 136;
+    signalWait = 137;
+    sendTo = 206;
+    recvFrom = 207;
+  }
+
 (*
    open (not openat)
    clock_gettime
@@ -204,11 +209,12 @@ let linuxX86_64SyscallNumbers : syscallNumbers =
     fcntl = 72;
     poll = 271;
     signalMask = 14;
-      signalPending = 127;
-  signalWait = 128;
-  sendTo = 44;
-  recvFrom = 45;
-}
+    signalPending = 127;
+    signalWait = 128;
+    sendTo = 44;
+    recvFrom = 45;
+  }
+
 (*
    Get syscall numbers for the given (OS, Arch) pair.
 *)

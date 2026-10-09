@@ -12,7 +12,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 DARK = '''// dns.dark - Exercise owned HTTPS DNS discovery and cleanup.
 let run () : Unit =
-  match Stdlib.Cli.Args.get 0 |> Stdlib.Result.andThen (fun text -> Stdlib.Int64.parse text |> Stdlib.Result.mapError (fun _error -> "port")) with
+  match Stdlib.Cli.__Args.get 0 |> Stdlib.Result.andThen (fun text -> Stdlib.Int64.parse text |> Stdlib.Result.mapError (fun _error -> "port")) with
   | Error message -> Stdlib.printLine message
   | Ok port ->
     let peer = Stdlib.__Datagram.Endpoint { address = [127L,0L,0L,1L], port = port } in
@@ -36,7 +36,7 @@ def main():
     with tempfile.TemporaryDirectory(prefix="dark-https-dns-") as directory:
         source, binary = Path(directory) / "dns.dark", Path(directory) / "dns"
         source.write_text(DARK)
-        result = subprocess.run([str(ROOT / "dark"), str(source), "--leak-check", "-o", str(binary)],
+        result = subprocess.run([str(ROOT / "dark"), str(source), "--allow-internal", "--leak-check", "-o", str(binary)],
                                 cwd=ROOT, capture_output=True, text=True, timeout=120)
         assert result.returncode == 0, result.stdout + result.stderr
         for mode in ("advertisement", "alias", "cycle", "wrong-source", "wrong-id", "truncated", "timeout"):

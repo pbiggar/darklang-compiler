@@ -27,32 +27,37 @@ let emitRandomInt64 (_ctx : X64CodeGenTypes.funcCtx) (dest : LIR.reg) =
       @ [ X.SYSCALL; X.MOV_load (destReg, X.RSP, 0l); X.ADD_imm (X.RSP, 8l) ]
       @ restores)
 
-let emitDateTimeNow (_ctx:X64CodeGenTypes.funcCtx) (dest:LIR.reg) =
-(*  clock_gettime(CLOCK_REALTIME=0, &ts), converted to 100ns Unix ticks. *)
-    resolveReg dest
-    |> Result.map (fun destReg ->
-        (* DateTimeNow is not a call barrier in register allocation. Preserve
+let emitDateTimeNow (_ctx : X64CodeGenTypes.funcCtx) (dest : LIR.reg) =
+  (*  clock_gettime(CLOCK_REALTIME=0, &ts), converted to 100ns Unix ticks. *)
+  resolveReg dest
+  |> Result.map (fun destReg ->
+      (* DateTimeNow is not a call barrier in register allocation. Preserve
            syscall and division registers just as RandomInt64 does. *)
-        let preserved =
-            List.filter ((<>) destReg)
-                [X.RAX; X.RDI; X.RSI; X.RDX; X.RCX; scratch]
-        in
-        List.map (fun reg -> X.PUSH reg) preserved
-        @ [X.SUB_imm (X.RSP, 16l)]   (*  timespec: tv_sec(8) + tv_nsec(8) *)
-        @ loadImm64 X.RDI 0L            (*  CLOCK_REALTIME *)
-        @ [X.MOV_reg (X.RSI, X.RSP)]
-        @ loadImm64 X.RAX (Int64.of_int syscalls.Platform.gettimeofday)
-        @ [X.SYSCALL;
-           X.MOV_load (scratch, X.RSP, 0l);
-           X.IMUL_imm (scratch, scratch, 10000000l);
-           X.MOV_load (X.RAX, X.RSP, 8l);
-           X.CQO]
-        @ loadImm64 X.RDI 100L
-        @ [X.IDIV X.RDI;
-           X.ADD_reg (scratch, X.RAX);
-           X.MOV_reg (destReg, scratch);
-           X.ADD_imm (X.RSP, 16l)]
-        @ List.map (fun reg -> X.POP reg) (List.rev preserved))
+      let preserved =
+        List.filter (( <> ) destReg)
+          [ X.RAX; X.RDI; X.RSI; X.RDX; X.RCX; scratch ]
+      in
+      List.map (fun reg -> X.PUSH reg) preserved
+      @ [ X.SUB_imm (X.RSP, 16l) ] (*  timespec: tv_sec(8) + tv_nsec(8) *)
+      @ loadImm64 X.RDI 0L (*  CLOCK_REALTIME *)
+      @ [ X.MOV_reg (X.RSI, X.RSP) ]
+      @ loadImm64 X.RAX (Int64.of_int syscalls.Platform.gettimeofday)
+      @ [
+          X.SYSCALL;
+          X.MOV_load (scratch, X.RSP, 0l);
+          X.IMUL_imm (scratch, scratch, 10000000l);
+          X.MOV_load (X.RAX, X.RSP, 8l);
+          X.CQO;
+        ]
+      @ loadImm64 X.RDI 100L
+      @ [
+          X.IDIV X.RDI;
+          X.ADD_reg (scratch, X.RAX);
+          X.MOV_reg (destReg, scratch);
+          X.ADD_imm (X.RSP, 16l);
+        ]
+      @ List.map (fun reg -> X.POP reg) (List.rev preserved))
+
 let emitSleep (ctx : X64CodeGenTypes.funcCtx) (effectId : int)
     (delayMs : LIR.fReg) =
   match delayMs with
@@ -344,9 +349,9 @@ let emitCliNative (ctx : X64CodeGenTypes.funcCtx) (dest : LIR.reg)
             @ loadImm64 X.RAX (Int64.of_int syscalls.Platform.socket)
             @ [ X.SYSCALL ]
             @ if destReg = X.RAX then [] else [ X.MOV_reg (destReg, X.RAX) ])
-      | LIR.SocketConnect4 | LIR.SocketConnect6 | LIR.SocketSend | LIR.SocketSendTo
-      | LIR.SocketReceive | LIR.SocketReceiveFrom | LIR.SocketReceiveTimeout | LIR.SocketSendTimeout
-        -> (
+      | LIR.SocketConnect4 | LIR.SocketConnect6 | LIR.SocketSend
+      | LIR.SocketSendTo | LIR.SocketReceive | LIR.SocketReceiveFrom
+      | LIR.SocketReceiveTimeout | LIR.SocketSendTimeout -> (
           let finish =
             if destReg = X.RAX then [] else [ X.MOV_reg (destReg, X.RAX) ]
           in
@@ -371,18 +376,28 @@ let emitCliNative (ctx : X64CodeGenTypes.funcCtx) (dest : LIR.reg)
                   @ loadImm64 X.R8 0L @ loadImm64 X.R9 0L
                   @ loadImm64 X.RAX (Int64.of_int syscalls.Platform.sendTo)
                   @ [ X.SYSCALL ] @ finish)
-            | LIR.SocketSendTo, [descriptor; blob; address; length] ->
-                loadSocketArgs [descriptor; blob; address; length] [X.RDI; X.RSI; X.R8; X.R9]
-                |> Result.map (fun loads ->
-                        loads @ [X.MOV_load (X.RDX, X.RSI, 8l); X.ADD_imm (X.RSI, 16l)] @
-                        loadImm64 X.R10 (Platform.socketConstantsFor Platform.Linux).Platform.noSignal @
-                        loadImm64 X.RAX (Int64.of_int syscalls.Platform.sendTo) @ [X.SYSCALL] @ finish)
-            | LIR.SocketReceiveFrom, [descriptor; buffer; length; peer] ->
-                loadSocketArgs [descriptor; buffer; length; peer] [X.RDI; X.RSI; X.RDX; X.R8]
-                |> Result.map (fun loads ->
-                        loads @ [X.MOV_reg (X.R9, X.R8); X.ADD_imm (X.R8, 8l)] @
-                        loadImm64 X.R10 0L @
-                        loadImm64 X.RAX (Int64.of_int syscalls.Platform.recvFrom) @ [X.SYSCALL] @ finish)
+          | LIR.SocketSendTo, [ descriptor; blob; address; length ] ->
+              loadSocketArgs
+                [ descriptor; blob; address; length ]
+                [ X.RDI; X.RSI; X.R8; X.R9 ]
+              |> Result.map (fun loads ->
+                  loads
+                  @ [ X.MOV_load (X.RDX, X.RSI, 8l); X.ADD_imm (X.RSI, 16l) ]
+                  @ loadImm64 X.R10
+                      (Platform.socketConstantsFor Platform.Linux)
+                        .Platform.noSignal
+                  @ loadImm64 X.RAX (Int64.of_int syscalls.Platform.sendTo)
+                  @ [ X.SYSCALL ] @ finish)
+          | LIR.SocketReceiveFrom, [ descriptor; buffer; length; peer ] ->
+              loadSocketArgs
+                [ descriptor; buffer; length; peer ]
+                [ X.RDI; X.RSI; X.RDX; X.R8 ]
+              |> Result.map (fun loads ->
+                  loads
+                  @ [ X.MOV_reg (X.R9, X.R8); X.ADD_imm (X.R8, 8l) ]
+                  @ loadImm64 X.R10 0L
+                  @ loadImm64 X.RAX (Int64.of_int syscalls.Platform.recvFrom)
+                  @ [ X.SYSCALL ] @ finish)
           | LIR.SocketReceive, [ descriptor; buffer; length ] ->
               loadSocketArgs
                 [ descriptor; buffer; length ]
@@ -427,7 +442,9 @@ let emitCliNative (ctx : X64CodeGenTypes.funcCtx) (dest : LIR.reg)
           match (operation, args) with
           | (LIR.SocketBind4 | LIR.SocketBind6), [ descriptor; address ] ->
               emit [ descriptor; address ] [ X.RDI; X.RSI ]
-                (loadImm64 X.RDX (if operation = LIR.SocketBind6 then 28L else 16L)) syscalls.Platform.bind
+                (loadImm64 X.RDX
+                   (if operation = LIR.SocketBind6 then 28L else 16L))
+                syscalls.Platform.bind
           | LIR.SocketListen, [ descriptor ] ->
               emit [ descriptor ] [ X.RDI ] (loadImm64 X.RSI 128L)
                 syscalls.Platform.listen

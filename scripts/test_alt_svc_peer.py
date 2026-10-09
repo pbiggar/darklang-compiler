@@ -26,7 +26,7 @@ ROOT = Path(__file__).resolve().parents[1]
 BODY = b"alternative" * 7000
 DARK = '''// session.dark - Learn, use, invalidate and relearn an authenticated alternative.
 let run () : Unit =
-  match Stdlib.Cli.Args.get 0, Stdlib.Cli.Args.get 1 with
+  match Stdlib.Cli.__Args.get 0, Stdlib.Cli.__Args.get 1 with
   | Ok port, Ok ca ->
     match Stdlib.Cli.FileSystem.readFile ca |> Stdlib.Result.mapError (fun _error -> "CA read failed") |> Stdlib.Result.andThen Stdlib.__Tls13Client.parsePemBundle with
     | Error message -> Stdlib.printLine message
