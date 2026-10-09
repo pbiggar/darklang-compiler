@@ -1072,7 +1072,8 @@ let runTestsWithProgressReporter completedTestReporter args =
     in
     let disabledUpstreamLines =
       [
-        ( "test/fixtures/e2e/upstream/language/custom-data/enums.dark", [ 7; 11; 15; 17; 104 ] );
+        ( "test/fixtures/e2e/upstream/language/custom-data/enums.dark",
+          [ 7; 11; 15; 17; 104 ] );
         ( "test/fixtures/e2e/upstream/language/custom-data/values.dark",
           [
             5;
@@ -1129,7 +1130,7 @@ let runTestsWithProgressReporter completedTestReporter args =
             128;
             129;
           ] );
-        ( "test/fixtures/e2e/upstream/language/derror.dark", [ 22; 23 ] );
+        ("test/fixtures/e2e/upstream/language/derror.dark", [ 22; 23 ]);
         ("test/fixtures/e2e/upstream/language/nested-fns.dark", [ 55; 60 ]);
         ( "test/fixtures/e2e/upstream/scm/branch-identity.dark",
           [ 9; 20; 23; 27; 31; 32 ] );
@@ -1263,10 +1264,8 @@ let runTestsWithProgressReporter completedTestReporter args =
         ("test/fixtures/e2e/upstream/stdlib/httpserver.dark", [ 29; 33; 37 ]);
         ("test/fixtures/e2e/upstream/stdlib/ints/int64.dark", [ 368 ]);
         ("test/fixtures/e2e/upstream/stdlib/ints/int8.dark", [ 47 ]);
-        ( "test/fixtures/e2e/upstream/stdlib/list.dark", [ 61; 65; 71; 75; 81 ] );
+        ("test/fixtures/e2e/upstream/stdlib/list.dark", [ 61; 65; 71; 75; 81 ]);
         ("test/fixtures/e2e/upstream/stdlib/math.dark", [ 27; 30 ]);
-        ( "test/fixtures/e2e/upstream/stdlib/option.dark", [ 44; 75; 119; 148; 170; 176; 204; 211; 218; 242 ] );
-        ( "test/fixtures/e2e/upstream/stdlib/result.dark", [ 57; 79; 85; 110; 117; 139; 147 ] );
       ]
     in
     let normalizePath path =

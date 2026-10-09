@@ -245,8 +245,7 @@ let testEmptyNominalDeclarationsRejected () =
   let* () =
     expectDeclarationError emptySum "an enum type needs at least one case"
   in
-  expectDeclarationError emptyRecord
-    "Record declaration must contain at least one field: EmptyRecordTc"
+  expectDeclarationError emptyRecord "a record type needs at least one field"
 
 let testInvalidDeclarationTypeReferencesRejected () =
   let unknownType =

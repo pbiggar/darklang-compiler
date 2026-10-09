@@ -2,11 +2,11 @@
 
 Audited on 2026-10-08 (UTC), against compiler revision `4a61318019fb8dea7f34a0bfec4df33f1fa18f5c` on Linux x86-64.
 
-**Every currently excluded assertion was rerun: 2,291 assertions across 52 files.**
-**49 assertions have been enabled since the initial audit; 2,291 still fail.**
+**Every currently excluded assertion was rerun: 2,274 assertions across 50 files.**
+**66 assertions have been enabled since the initial audit; 2,274 still fail.**
 
-Latest results for the audited files, including enabled neighbours: 3,599 assertions, 1,308 passed and 2,291 failed.
-The remaining gates cover these exact failures: 34 whole files and 222 assertion lines across 18 mixed files.
+Latest results for the audited files, including enabled neighbours: 3,599 assertions, 1,325 passed and 2,274 failed.
+The remaining gates cover these exact failures: 34 whole files and 205 assertion lines across 16 mixed files.
 
 The assertion harness now compares original parsed expressions. Multiline applications and literal contents are preserved in individual runs and batches. A follow-up retest of `stdlib/dict.dark` passed all 140 assertions after L21 was changed to expect its existing compile-time key type error.
 
@@ -30,6 +30,8 @@ Verification including the String predicate follow-up on main `dd91bfa7ec01607d5
 Compile-error sweep: 34 assertions across eight fixtures now require compile-time diagnostics for invalid types, names, constructor fields, patterns, and non-exhaustive matches. Their expressions remain unchanged; compiler behavior is unchanged. These assertions are enabled and removed from the failure ledger. The three basic variable, Boolean-or, and if-expression fixtures have no remaining disabled assertions.
 
 Verification of the sweep based on main `5497ec091927098f88c6d0195fe2b0e7d2382385`: native build passed; the complete host suite passed **11,430/11,430** tests; `dune runtest` passed; compiled leaks passed **58/58** workloads. Parent benchmark verification stopped before measurement because the stored workload digest is incompatible; no baseline was reset.
+
+Forward arithmetic follow-up (2026-10-09): the checker retains unresolved operator requirements until later arguments or specialization supply types. Provably unused callbacks are removed before representation selection. Ungated individual runs passed **73/73 Option** and **67/67 Result** assertions; all 17 remaining gates in those files are removed. No numeric default is chosen. The retired AST checker and its support modules are removed, and package catalog validation uses the current Written checker.
 
 ## Failing test files
 
@@ -84,9 +86,7 @@ Each file links to the individual failing assertions and their observed diagnost
 | [stdlib/language-tools/semanticTokenization.dark](failures/stdlib/language-tools/semanticTokenization.md) | 102 | 0 | 102 |
 | [stdlib/list.dark](failures/stdlib/list.md) | 220 | 215 | 5 |
 | [stdlib/math.dark](failures/stdlib/math.md) | 32 | 30 | 2 |
-| [stdlib/option.dark](failures/stdlib/option.md) | 73 | 63 | 10 |
 | [stdlib/prettyPrinter.dark](failures/stdlib/prettyPrinter.md) | 57 | 0 | 57 |
-| [stdlib/result.dark](failures/stdlib/result.md) | 67 | 60 | 7 |
 | [stdlib/sqlite.dark](failures/stdlib/sqlite.md) | 8 | 0 | 8 |
 | [stdlib/string.dark](failures/stdlib/string.md) | 640 | 0 | 640 |
 

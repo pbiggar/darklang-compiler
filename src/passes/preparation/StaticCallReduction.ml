@@ -72,15 +72,32 @@ let reduce definitions program =
       (build left right, symbols)
     in
     match expr with
-    | C.Local id -> (Option.value (B.find_opt id env) ~default:expr, symbols)
+    | C.Local id when not (S.is_empty active) ->
+        (Option.value (B.find_opt id env) ~default:expr, symbols)
     | C.Let (C.LPVariable id, bound, body) ->
         let bound, symbols = expression active env symbols bound in
         let child =
           if value bound then B.add id bound env else B.remove id env
         in
         let body, symbols = expression active child symbols body in
-        if value bound && not (InlineLambdas.varOccursInExpr id body) then
-          (body, symbols)
+        let removable =
+          match bound with
+          | C.Lambda (parameters, annotation, _) ->
+              List.exists
+                (fun (parameter : C.lambdaParameter) ->
+                  Unification.containsTVar (C.semanticType parameter.C.typ))
+                (NonEmptyList.toList parameters)
+              || Option.fold ~none:false
+                   ~some:(fun typ ->
+                     Unification.containsTVar (C.semanticType typ))
+                   annotation
+          | _ -> false
+        in
+        if
+          value bound
+          && (removable || not (S.is_empty active))
+          && not (InlineLambdas.varOccursInExpr id body)
+        then (body, symbols)
         else (C.Let (C.LPVariable id, bound, body), symbols)
     | C.TypeApp (id, types, arguments) -> (
         let args, symbols = many symbols (NonEmptyList.toList arguments) in
@@ -147,7 +164,8 @@ let reduce definitions program =
               | _ -> None)
         in
         match select (NonEmptyList.toList cases) with
-        | Some (bindings, body) when value scrutinee ->
+        | Some (bindings, body) when value scrutinee && not (S.is_empty active)
+          ->
             expression active bindings symbols body
         | _ ->
             let reversed, symbols =
@@ -174,8 +192,10 @@ let reduce definitions program =
     | C.If (condition, yes, no) -> (
         let condition, symbols = expression active env symbols condition in
         match condition with
-        | C.BoolLiteral true -> expression active env symbols yes
-        | C.BoolLiteral false -> expression active env symbols no
+        | C.BoolLiteral true when not (S.is_empty active) ->
+            expression active env symbols yes
+        | C.BoolLiteral false when not (S.is_empty active) ->
+            expression active env symbols no
         | _ ->
             let yes, symbols = expression active env symbols yes in
             let no, symbols = expression active env symbols no in
