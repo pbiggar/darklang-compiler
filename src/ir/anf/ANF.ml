@@ -173,6 +173,7 @@ type cliOperation =
   | PosixFlock
   | PosixGetDents
   | PosixIoctl
+  | PosixProcInfo
 
 (*
    Immutable nominal metadata carried through fixed-block lowering for field

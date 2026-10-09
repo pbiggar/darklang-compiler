@@ -149,6 +149,7 @@ let cliOperation = function
   | MIR.PosixFlock -> "PosixFlock"
   | MIR.PosixGetDents -> "PosixGetDents"
   | MIR.PosixIoctl -> "PosixIoctl"
+  | MIR.PosixProcInfo -> "PosixProcInfo"
 
 let prettyPrintCanonicalBufferKind = ANFPrinter.prettyPrintCanonicalBufferKind
 

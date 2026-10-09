@@ -190,6 +190,7 @@ and cliOperation (value : LIR.cliOperation) =
   | LIR.PosixFlock -> union "CliOperation" "PosixFlock" []
   | LIR.PosixGetDents -> union "CliOperation" "PosixGetDents" []
   | LIR.PosixIoctl -> union "CliOperation" "PosixIoctl" []
+  | LIR.PosixProcInfo -> union "CliOperation" "PosixProcInfo" []
 
 and label (value : LIR.label) =
   match value with LIR.Label field0 -> union "Label" "Label" [ text field0 ]

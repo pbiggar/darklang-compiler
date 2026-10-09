@@ -45,3 +45,6 @@ let arch () : Stdlib.Result.Result<String, Stdlib.Cli.Posix.Error> =
 let cpuCount () : Int = Stdlib.Int.fromInt64 (Stdlib.Cli.__cpuCount ())
 let currentPid () : Int = Stdlib.Int.fromInt64 (Stdlib.Cli.__getpid ())
 let isRoot () : Bool = Stdlib.Cli.__getuid () == 0L
+
+/// The full path of the running executable, discovered by the operating system.
+let currentExecutablePath () : String = Builtin.getCurrentExecutablePath ()
