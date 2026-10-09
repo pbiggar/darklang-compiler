@@ -33,6 +33,8 @@ Verification of the sweep based on main `5497ec091927098f88c6d0195fe2b0e7d238238
 
 Forward arithmetic follow-up (2026-10-09): the checker retains unresolved operator requirements until later arguments or specialization supply types. Provably unused callbacks are removed before representation selection. Ungated individual runs passed **73/73 Option** and **67/67 Result** assertions; all 17 remaining gates in those files are removed. No numeric default is chosen. The retired AST checker and its support modules are removed, and package catalog validation uses the current Written checker.
 
+Verification with current main `a2771f0cbe82d728de618e3eacd7a1c870e1d330`: native build passed; the complete host suite passed **11,501/11,501** tests; `dune runtest --build-dir _build-forward-verification` passed after avoiding stale action-cache files; compiled leaks passed **58/58** workloads. Parent benchmark verification stopped before measurement because the stored workload digest is incompatible; no baseline was reset.
+
 ## Failing test files
 
 Each file links to the individual failing assertions and their observed diagnostics.
