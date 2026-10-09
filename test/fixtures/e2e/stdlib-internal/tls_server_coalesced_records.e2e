@@ -10,7 +10,7 @@ let coalescedRecords (split: Bool) : Bool =
         let chunks = if split then [handshake.bytes, application.bytes] else [Stdlib.Blob.concat [handshake.bytes, application.bytes]] in
         let incoming = Stdlib.Stream.fromList chunks in
         let owner = Stdlib.Stream.__new (fun _unit -> Some ()) (fun _unit -> ()) in
-        let connection = Stdlib.__Network.TcpConnection { lifecycle = owner,
+        let connection = Stdlib.__Network.TcpConnection { lifecycle = owner, watch = None,
           read = fun _length -> Ok (Stdlib.Stream.next incoming |> Stdlib.Option.withDefault Stdlib.Blob.empty),
           write = fun _bytes -> Ok () } in
         let secrets = Stdlib.__Tls13ServerHandshake.Secrets { handshakeClient = secret, handshakeServer = secret, applicationClient = secret, applicationServer = secret } in

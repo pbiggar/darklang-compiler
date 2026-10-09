@@ -466,6 +466,10 @@ let emitCliNative (ctx : X64CodeGenTypes.funcCtx) (dest : LIR.reg)
               emit [ pollfd; timeout ] [ X.RDI; X.RDX ]
                 (loadImm64 X.RSI 1L @ loadImm64 X.R10 0L @ loadImm64 X.R8 8L)
                 syscalls.Platform.poll
+          | LIR.SocketPoll, [ pollfds; count; timeout ] ->
+              emit [ pollfds; count; timeout ] [ X.RDI; X.RSI; X.RDX ]
+                (loadImm64 X.R10 0L @ loadImm64 X.R8 8L)
+                syscalls.Platform.poll
           | LIR.SignalBlock, [ mask; previous ] ->
               emit [ mask; previous ] [ X.RSI; X.RDX ]
                 (loadImm64 X.RDI (Int64.of_int constants.Platform.blockSignal)

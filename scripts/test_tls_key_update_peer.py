@@ -64,7 +64,7 @@ let run () : Unit =
   | Ok receive, Ok send, Ok signals ->
     let counter = Stdlib.Stream.__cellNew 0L in
     let lifecycle = Stdlib.Stream.__new (fun _unit -> Some ()) (fun _unit -> Stdlib.Stream.__cellDispose<Int64> counter) in
-    let connection = Stdlib.__Network.TcpConnection { lifecycle = lifecycle, read = fun _size -> Error 11L, write = fun bytes -> write lifecycle counter fail bytes } in
+    let connection = Stdlib.__Network.TcpConnection { lifecycle = lifecycle, watch = None, read = fun _size -> Error 11L, write = fun bytes -> write lifecycle counter fail bytes } in
     let send = { send with sequence = 3L } in
     let transport =
       if fail then Stdlib.__Tls13ServerTcp.transport connection signals None (Stdlib.__Tls13ServerTcp.Accepted { pending = arg 3, ready = Stdlib.__Tls13ServerHandshake.Ready { receive = receive, send = send, protocol = "http/1.1", receiveSecret = arg 1, sendSecret = arg 2 } })

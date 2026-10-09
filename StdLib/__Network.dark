@@ -15,8 +15,15 @@ type Udp6Socket = {
     exchange6: List<Int64> -> Int64 -> Blob -> Int64 -> Stdlib.Result.Result<Blob, Int64>
 }
 
+// A readiness registration retains the descriptor owner. Virtual transports
+// have no native watch; native callers never poll a released descriptor.
+type Watch = { descriptor: Int64, lifecycle: Stream<Unit> }
+type Interest = { watch: Stdlib.__Network.Watch, readable: Bool, writable: Bool }
+type Ready = { index: Int64, readable: Bool, writable: Bool, closed: Bool, failed: Bool }
+
 type TcpConnection = {
     lifecycle: Stream<Unit>,
+    watch: Option<Stdlib.__Network.Watch>,
     read: Int64 -> Stdlib.Result.Result<Blob, Int64>,
     write: Blob -> Stdlib.Result.Result<Unit, Int64>
 }
@@ -44,6 +51,7 @@ let __accept (descriptor: Int64) : Int64 = -38L
 let __cloexec (descriptor: Int64) : Int64 = -38L
 let __reuseAddress (descriptor: Int64) (enabled: RawPtr) : Int64 = -38L
 let __poll (pollfd: RawPtr) (timeout: RawPtr) : Int64 = -38L
+let __pollMany (pollfds: RawPtr) (count: Int64) (timeout: RawPtr) : Int64 = -38L
 let __signalBlock (mask: RawPtr) (previous: RawPtr) : Int64 = -38L
 let __signalRestore (previous: RawPtr) : Int64 = -38L
 let __signalPending (mask: RawPtr) : Int64 = -38L
@@ -171,7 +179,9 @@ let __connectTcp (ipv6: Bool) (address: List<Int64>) (port: Int64) (timeoutMs: I
                 else
                     let read = Stdlib.__Network.__readChunk descriptor lifecycle in
                     let write = Stdlib.__Network.__writeAll descriptor lifecycle in
-                    Ok (Stdlib.__Network.TcpConnection { lifecycle = lifecycle, read = read, write = write })
+                    Ok (Stdlib.__Network.TcpConnection { lifecycle = lifecycle,
+                        watch = Some (Stdlib.__Network.Watch { descriptor = descriptor, lifecycle = lifecycle }),
+                        read = read, write = write })
 
 let connectTcp4 (address: List<Int64>) (port: Int64) (timeoutMs: Int64) : Stdlib.Result.Result<Stdlib.__Network.TcpConnection, Int64> =
     Stdlib.__Network.__connectTcp false address port timeoutMs
@@ -250,6 +260,7 @@ let closeShutdownSignals (signals: Stdlib.__Network.ShutdownSignals) : Unit =
 
 type TcpListener = {
     lifecycle: Stream<Unit>,
+    watch: Stdlib.__Network.Watch,
     accept: Int64 -> Stdlib.Result.Result<Stdlib.__Network.TcpConnection, Int64>,
     wait: Unit -> Stdlib.Result.Result<Bool, Int64>
 }
@@ -321,6 +332,7 @@ let __acceptTcp (descriptor: Int64) (lifecycle: Stream<Unit>) (timeoutMs: Int64)
                     | Error code -> let _ = Stdlib.Stream.close owner in Error code
                     | Ok () -> Ok (Stdlib.__Network.TcpConnection {
                         lifecycle = owner,
+                        watch = Some (Stdlib.__Network.Watch { descriptor = accepted, lifecycle = owner }),
                         read = Stdlib.__Network.__readChunk accepted owner,
                         write = Stdlib.__Network.__writeAccepted accepted owner
                     })
@@ -345,6 +357,7 @@ let listenTcp4 (address: List<Int64>) (port: Int64) : Stdlib.Result.Result<Stdli
                 Error (0L - listening)
             else Ok (Stdlib.__Network.TcpListener {
                 lifecycle = lifecycle,
+                watch = Stdlib.__Network.Watch { descriptor = descriptor, lifecycle = lifecycle },
                 accept = Stdlib.__Network.__acceptTcp descriptor lifecycle,
                 wait = fun _ -> Stdlib.__Network.__waitReadable descriptor lifecycle
             })
@@ -355,6 +368,59 @@ let acceptTcp (listener: Stdlib.__Network.TcpListener) (timeoutMs: Int64)
 let waitListener (listener: Stdlib.__Network.TcpListener) : Stdlib.Result.Result<Bool, Int64> = listener.wait ()
 
 let closeListener (listener: Stdlib.__Network.TcpListener) : Unit = Stdlib.Stream.close listener.lifecycle
+
+let __pollEntries (entries: List<Stdlib.__Network.Interest>) (buffer: RawPtr)
+    (index: Int64) (closed: List<Stdlib.__Network.Ready>) : List<Stdlib.__Network.Ready> =
+    match entries with
+    | [] -> Stdlib.List.reverse closed
+    | entry :: rest ->
+        match Stdlib.Stream.next entry.watch.lifecycle with
+        | None ->
+            let _ = __raw_write_word buffer (index * 8L) 4294967295L in
+            Stdlib.__Network.__pollEntries rest buffer (index + 1L)
+                (Stdlib.List.push closed (Stdlib.__Network.Ready {
+                    index = index, readable = false, writable = false, closed = true, failed = false }))
+        | Some _ ->
+            let events = (if entry.readable then 1L else 0L) + (if entry.writable then 4L else 0L) in
+            let _ = __raw_write_word buffer (index * 8L) (entry.watch.descriptor + events * 4294967296L) in
+            Stdlib.__Network.__pollEntries rest buffer (index + 1L) closed
+
+let __pollResults (buffer: RawPtr) (count: Int64) (index: Int64)
+    (ready: List<Stdlib.__Network.Ready>) : List<Stdlib.__Network.Ready> =
+    if index == count then Stdlib.List.reverse ready
+    else
+        let word = Stdlib.__Network.__word buffer (index * 8L) in
+        let events = Stdlib.Int64.bitwiseAnd (Stdlib.Int64.shiftRight word 48L) 65535L in
+        let readable = Stdlib.Int64.bitwiseAnd events 1L != 0L in
+        let writable = Stdlib.Int64.bitwiseAnd events 4L != 0L in
+        let closed = Stdlib.Int64.bitwiseAnd events 16L != 0L in
+        let failed = Stdlib.Int64.bitwiseAnd events 40L != 0L in
+        let ready = if events == 0L then ready else Stdlib.List.push ready
+            (Stdlib.__Network.Ready { index = index, readable = readable, writable = writable,
+                closed = closed, failed = failed }) in
+        Stdlib.__Network.__pollResults buffer count (index + 1L) ready
+
+// One kernel wait covers TCP listeners, accepted sockets and UDP together.
+// Closed owners wake immediately; empty sets still support timer deadlines.
+let waitSockets (entries: List<Stdlib.__Network.Interest>) (milliseconds: Int64)
+    : Stdlib.Result.Result<List<Stdlib.__Network.Ready>, Int64> =
+    let count = Stdlib.List.length entries in
+    if milliseconds < 0L || milliseconds > 60000L || count > 1024 ||
+        Stdlib.List.any entries (fun entry -> entry.watch.descriptor < 0L || entry.watch.descriptor > 2147483647L) then Error 22L
+    else
+        let length = Stdlib.Int64.__fromIntUnchecked count in
+        let buffer = __raw_alloc (if length == 0L then 8L else length * 8L) in
+        let timeout = __raw_alloc 16L in
+        let closed = Stdlib.__Network.__pollEntries entries buffer 0L [] in
+        let duration = if closed == [] then milliseconds else 0L in
+        let _ = __raw_write_word timeout 0L (duration / 1000L) in
+        let _ = __raw_write_word timeout 8L ((duration % 1000L) * 1000000L) in
+        let code = Stdlib.__Network.__pollMany buffer length timeout in
+        let ready = if code < 0L then Error (0L - code)
+            else Ok (Stdlib.List.sortBy (closed @ Stdlib.__Network.__pollResults buffer length 0L []) (fun event -> event.index)) in
+        let _ = __raw_free timeout in
+        let _ = __raw_free buffer in
+        ready
 
 let __udpExchange (descriptor: Int64) (lifecycle: Stream<Unit>) (ipv6: Bool)
     (address: List<Int64>) (port: Int64) (payload: Blob) (timeoutMs: Int64)

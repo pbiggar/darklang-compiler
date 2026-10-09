@@ -1380,7 +1380,8 @@ let emitCliNative (ctx : codeGenContext) (dest : LIR.reg)
                     (Int64.of_int constants.Platform.reuseAddress)
                 @ loadImmediate Symbolic.X4 4L)
                 syscall.ARM64.numbers.Platform.setSockOpt
-          | LIR.SocketPoll, [ pollfd; timeout ] ->
+          | LIR.SocketPoll,
+            (([ pollfd; timeout ] | [ pollfd; _; timeout ]) as arguments) ->
               let timeoutLoads =
                 if os = Platform.Linux then loadCliOperand Symbolic.X2 timeout
                 else
@@ -1410,9 +1411,16 @@ let emitCliNative (ctx : codeGenContext) (dest : LIR.reg)
               in
               timeoutLoads
               |> bind (fun loads ->
-                  emit [ pollfd ] [ Symbolic.X0 ]
+                  let operands, registers, countLoads =
+                    match arguments with
+                    | [ _; count; _ ] ->
+                        ([ pollfd; count ], [ Symbolic.X0; Symbolic.X1 ], [])
+                    | _ ->
+                        ([ pollfd ], [ Symbolic.X0 ], loadImmediate Symbolic.X1 1L)
+                  in
+                  emit operands registers
                     (loads
-                    @ loadImmediate Symbolic.X1 1L
+                    @ countLoads
                     @ loadImmediate Symbolic.X3 0L
                     @ loadImmediate Symbolic.X4 8L)
                     syscall.ARM64.numbers.Platform.poll)

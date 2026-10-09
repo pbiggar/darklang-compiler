@@ -465,7 +465,8 @@ let tryCliIntrinsic name args =
         | "Darklang.Stdlib.__Network.__cloexec" -> Some ANF.SocketCloexec
         | "Darklang.Stdlib.__Network.__reuseAddress" ->
             Some ANF.SocketReuseAddress
-        | "Darklang.Stdlib.__Network.__poll" -> Some ANF.SocketPoll
+        | "Darklang.Stdlib.__Network.__poll"
+        | "Darklang.Stdlib.__Network.__pollMany" -> Some ANF.SocketPoll
         | "Darklang.Stdlib.__Network.__signalBlock" -> Some ANF.SignalBlock
         | "Darklang.Stdlib.__Network.__signalRestore" -> Some ANF.SignalRestore
         | "Darklang.Stdlib.__Network.__signalPending" -> Some ANF.SignalPending

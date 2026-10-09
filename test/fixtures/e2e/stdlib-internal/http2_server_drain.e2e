@@ -4,7 +4,7 @@ let drainAfter (code: Int64) : Bool =
   | Ok signals, Ok now ->
     let incoming = Stdlib.Stream.fromList [code, 0L] in
     let owner = Stdlib.Stream.__new (fun _unit -> Some ()) (fun _unit -> ()) in
-    let connection = Stdlib.__Network.TcpConnection { lifecycle = owner,
+    let connection = Stdlib.__Network.TcpConnection { lifecycle = owner, watch = None,
       read = fun _length -> match Stdlib.Stream.next incoming with | Some 0L -> Ok Stdlib.Blob.empty | Some error -> Error error | None -> Error 9L, write = fun _bytes -> Ok () } in
     let stopped = Stdlib.HttpServer.__drainHttp2 connection signals (now + 1000L) 131072L in
     let consumed = Stdlib.Option.isNone (Stdlib.Stream.next incoming) in

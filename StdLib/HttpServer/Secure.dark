@@ -7,30 +7,41 @@ let __advertise (port: Int64) (handler: Stdlib.Http.Request -> Stdlib.Http.Respo
   else { response with headers = Stdlib.List.push response.headers ("alt-svc", "h3=\":" ++ Stdlib.Int64.toString port ++ "\"; ma=3600") }
 
 let __tcp (context: Stdlib.HttpServer.Quic.Context) (handler: Stdlib.Http.Request -> Stdlib.Http.Response) (listener: Stdlib.__Network.TcpListener) : Stdlib.Result.Result<Bool, String> =
-  match Stdlib.__Network.waitListener listener with
-  | Error code -> if code == 4L then Ok false else Error "Secure HTTP listener failed"
-  | Ok false -> Ok false
-  | Ok true ->
-    match Stdlib.__Network.acceptTcp listener 100L with
-    | Error code -> if code == 4L || code == 11L || code == 35L then Ok false else Error "Secure HTTP accept failed"
-    | Ok connection ->
-      let result = Stdlib.HttpServer.Tls.__connection context.config handler context.signals context.identity connection context.limit in
-      let _ = Stdlib.__Network.closeTcp connection in
-      result
+  match Stdlib.__Network.acceptTcp listener 100L with
+  | Error code -> if code == 4L || code == 11L || code == 35L then Ok false else Error "Secure HTTP accept failed"
+  | Ok connection ->
+    let result = Stdlib.HttpServer.Tls.__connection context.config handler context.signals context.identity connection context.limit in
+    let _ = Stdlib.__Network.closeTcp connection in
+    result
 
 let __loop (context: Stdlib.HttpServer.Quic.Context) (handler: Stdlib.Http.Request -> Stdlib.Http.Response) (listener: Stdlib.__Network.TcpListener) (recent: List<Stdlib.HttpServer.Quic.Recent>) : Stdlib.Result.Result<Unit, String> =
   match Stdlib.__Network.shutdownRequested context.signals with
   | Error _ -> Error "Secure HTTP shutdown check failed"
   | Ok true -> Ok ()
   | Ok false ->
-    match Stdlib.HttpServer.Quic.__step context handler recent 1L with
-    | Error message -> Error message
-    | Ok step ->
-      if step.stopped then Ok ()
-      else match Stdlib.HttpServer.Secure.__tcp context handler listener with
-      | Error message -> Error message
-      | Ok true -> Ok ()
-      | Ok false -> Stdlib.HttpServer.Secure.__loop context handler listener step.recent
+    match context.socket.watch with
+    | None -> Error "Secure HTTP listener has no native readiness watch"
+    | Some udp ->
+      let interests = [Stdlib.__Network.Interest { watch = listener.watch, readable = true, writable = false },
+        Stdlib.__Network.Interest { watch = udp, readable = true, writable = false }] in
+      match Stdlib.__Network.waitSockets interests 100L with
+      | Error 4L -> Stdlib.HttpServer.Secure.__loop context handler listener recent
+      | Error _ -> Error "Secure HTTP readiness wait failed"
+      | Ok events ->
+        if Stdlib.List.any events (fun event -> event.closed || event.failed) then Error "Secure HTTP listener closed"
+        else
+          // Even an idle wake prunes closing keys; a zero-data step is bounded
+          // to one millisecond and cannot impose the old TCP polling delay.
+          match Stdlib.HttpServer.Quic.__step context handler recent 1L with
+          | Error message -> Error message
+          | Ok step ->
+            if step.stopped then Ok ()
+            else if Stdlib.List.any events (fun event -> event.index == 0L && event.readable) then
+              match Stdlib.HttpServer.Secure.__tcp context handler listener with
+              | Error message -> Error message
+              | Ok true -> Ok ()
+              | Ok false -> Stdlib.HttpServer.Secure.__loop context handler listener step.recent
+            else Stdlib.HttpServer.Secure.__loop context handler listener step.recent
 
 let __bind (config: Stdlib.HttpServer.Config.Config) (identity: Stdlib.TlsServerIdentity.Identity) (handler: Stdlib.Http.Request -> Stdlib.Http.Response) (onListening: Unit -> Unit) (signals: Stdlib.__Network.ShutdownSignals) (port: Int64) (limit: Int64) : Stdlib.Result.Result<Unit, String> =
   match Stdlib.Crypto.__secureRandomBytes 32L with

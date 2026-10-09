@@ -8,6 +8,7 @@ type Step = { recent: List<Stdlib.HttpServer.Quic.Recent>, stopped: Bool }
 let __socket (parent: Stdlib.__Datagram.Socket) : Stdlib.__Datagram.Socket =
   let lifecycle = Stdlib.Stream.__new (fun _unit -> Some ()) (fun _unit -> ()) in
   Stdlib.__Datagram.Socket { lifecycle = lifecycle,
+    watch = Stdlib.Option.map parent.watch (fun watch -> { watch with lifecycle = lifecycle }),
     send = fun peer bytes timeout -> match Stdlib.Stream.next lifecycle with | None -> Error 9L | Some () -> Stdlib.__Datagram.send parent peer bytes timeout,
     receive = fun timeout -> match Stdlib.Stream.next lifecycle with | None -> Error 9L | Some () -> Stdlib.__Datagram.receive parent timeout }
 

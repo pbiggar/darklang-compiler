@@ -5,6 +5,7 @@ type Endpoint = { address: List<Int64>, port: Int64 }
 type Message = { peer: Stdlib.__Datagram.Endpoint, payload: Blob }
 type Socket = {
   lifecycle: Stream<Unit>,
+  watch: Option<Stdlib.__Network.Watch>,
   send: Stdlib.__Datagram.Endpoint -> Blob -> Int64 -> Stdlib.Result.Result<Unit, Int64>,
   receive: Int64 -> Stdlib.Result.Result<Stdlib.__Datagram.Message, Int64>
 }
@@ -88,6 +89,7 @@ let __bind (ipv6: Bool) (address: List<Int64>) (port: Int64)
         Error (0L - bound)
       else Ok (Stdlib.__Datagram.Socket {
         lifecycle = lifecycle,
+        watch = Some (Stdlib.__Network.Watch { descriptor = fd, lifecycle = lifecycle }),
         send = fun peer payload timeoutMs -> Stdlib.__Datagram.__send fd ipv6 lifecycle peer payload timeoutMs,
         receive = fun timeoutMs -> Stdlib.__Datagram.__receive fd ipv6 lifecycle timeoutMs })
 
