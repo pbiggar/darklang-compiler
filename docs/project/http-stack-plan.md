@@ -202,6 +202,15 @@ mean the entire branch has passed its integration or performance gates.
 - [ ] Typed protocol failures with correct stream and connection wire errors,
   retaining the current packet-number/key state across recoverable failures.
 
+HTTP/3 control owners now retain peer parameters and enforce
+`SETTINGS_MAX_FIELD_SECTION_SIZE` against decoded name/value byte lengths,
+including each field's 32-byte overhead, before sending request or response
+headers when the peer setting has arrived. `http3_peer_settings.e2e` covers
+exact boundaries, duplicate names, absent limits and zero limits. The aioquic
+server peer checks zero-limit refusal and subsequent listener availability.
+Other peer SETTINGS still need their respective engine features, so the full
+SETTINGS item remains unchecked.
+
 Focused additions use `network_poll.e2e`, `http_header_compression.e2e` and
 `http_server_ipv6.e2e`; independent readiness, header-compression and IPv6 peer
 scripts exercise production code and compiled leak accounting. The readiness

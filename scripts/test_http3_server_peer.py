@@ -11,7 +11,7 @@ import time
 from pathlib import Path
 
 from aioquic.buffer import Buffer
-from aioquic.h3.connection import H3Connection
+from aioquic.h3.connection import H3Connection, Setting
 from aioquic.h3.events import DataReceived, HeadersReceived
 from aioquic.quic.configuration import QuicConfiguration
 from aioquic.quic.connection import QuicConnection
@@ -58,11 +58,17 @@ def stop(process):
     assert process.returncode == 0 and stdout == b"STOPPED\n" and not stderr, (process.returncode, stdout, stderr)
 
 
-def exchange(peer, port, ca, method=b"POST", body=b"HTTP/3 routing", declared=None, stalled=False, protocols=None, host="127.0.0.1"):
+def exchange(peer, port, ca, method=b"POST", body=b"HTTP/3 routing", declared=None, stalled=False, protocols=None, host="127.0.0.1", field_limit=None):
     config = QuicConfiguration(is_client=True, alpn_protocols=["h3"] if protocols is None else protocols,
                               server_name="localhost", cadata=ca.public_bytes(serialization.Encoding.PEM))
     client = QuicConnection(configuration=config)
     class MethodAwareH3(H3Connection):
+        def _get_local_settings(self):
+            settings = super()._get_local_settings()
+            if field_limit is not None:
+                settings[Setting.MAX_FIELD_SECTION_SIZE] = field_limit
+            return settings
+
         def _check_content_length(self, stream):
             # aioquic's H3 layer does not retain the request method. HEAD's
             # Content-Length describes the representation, not DATA bytes.
@@ -74,7 +80,7 @@ def exchange(peer, port, ca, method=b"POST", body=b"HTTP/3 routing", declared=No
     client.connect((host, port), time.monotonic())
     response, headers, finished, sent, replay, retry = bytearray(), [], False, False, None, False
     close = None
-    deadline = time.monotonic() + (1 if protocols is not None else 12)
+    deadline = time.monotonic() + (2 if field_limit == 0 else 1 if protocols is not None else 12)
     while time.monotonic() < deadline:
         now = time.monotonic()
         timer = client.get_timer()
@@ -123,11 +129,17 @@ def exchange(peer, port, ca, method=b"POST", body=b"HTTP/3 routing", declared=No
         if close is None:
             close = client._close_event
         if close:
+            if field_limit == 0:
+                assert sent and not headers and not response, (sent, headers, response)
+                return None
             assert finished and close.error_code == 256, (finished, close, headers)
             assert retry and replay is not None
             return headers, bytes(response), replay
     if protocols is not None:
         assert not sent and not headers, "unsupported ALPN was accepted"
+        return None
+    if field_limit == 0:
+        assert sent and not headers and not response, (sent, headers, response)
         return None
     raise AssertionError(("exchange timed out", sent, finished, len(response), headers, close))
 
@@ -146,6 +158,14 @@ def main():
         assert result.returncode == 0, result.stdout + result.stderr
         process, port = start(binary)
         try:
+            # Every nonempty field section exceeds a decoded limit of zero,
+            # including indexed :status. The next ordinary exchange also
+            # checks that rejecting this response leaves the listener usable.
+            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as peer:
+                peer.bind(("127.0.0.1", 0))
+                peer.settimeout(0.01)
+                exchange(peer, port, ca, body=b"", field_limit=0)
+            print("Peer SETTINGS_MAX_FIELD_SECTION_SIZE=0 prevents response HEADERS", flush=True)
             for method, body, declared, status in ((b"POST", bytes(range(251)) * 279, None, b"200"),
                                                    (b"HEAD", b"", None, b"200"),
                                                    (b"POST", b"", 80001, b"413")):

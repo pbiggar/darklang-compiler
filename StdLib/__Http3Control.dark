@@ -5,6 +5,7 @@ type State = {
   framing: Stdlib.__Http3Stream.State,
   fromServer: Bool,
   settings: Bool,
+  parameters: List<(Int64 * Int64)>,
   goAway: Stdlib.Option.Option<Int64>,
   pushLimit: Stdlib.Option.Option<Int64>,
   pieces: List<Blob>,
@@ -18,7 +19,7 @@ type Received = { state: Stdlib.__Http3Control.State, events: List<Stdlib.__Http
 
 let create (fromServer: Bool) : Stdlib.__Http3Control.State =
   Stdlib.__Http3Control.State { framing = Stdlib.__Http3Stream.empty, fromServer = fromServer,
-    settings = false, goAway = None, pushLimit = None, pieces = [], parts = 0L }
+    settings = false, parameters = [], goAway = None, pushLimit = None, pieces = [], parts = 0L }
 
 let __begin (state: Stdlib.__Http3Control.State) (kind: Int64) (size: Int64)
   : Stdlib.Result.Result<Stdlib.__Http3Control.State, String> =
@@ -51,7 +52,7 @@ let __end (state: Stdlib.__Http3Control.State) (kind: Int64)
     if kind == 4L then
       match Stdlib.__Http3Wire.parseSettings data with
       | Error message -> Error message
-      | Ok settings -> Ok (({ cleared with settings = true }, Some (Settings settings)))
+      | Ok settings -> Ok (({ cleared with settings = true, parameters = settings }, Some (Settings settings)))
     else
       match Stdlib.__Http3Control.__integer data with
       | Error message -> Error message
@@ -96,3 +97,18 @@ let feed (state: Stdlib.__Http3Control.State) (data: Blob)
 // FIN or RESET of this stream is always fatal, even at a complete frame boundary.
 let finish (state: Stdlib.__Http3Control.State) : Stdlib.Result.Result<Unit, String> =
   Error "Closed critical HTTP/3 control stream"
+
+let __fieldBudget (fields: List<(String * String)>) (remaining: Int64) : Stdlib.Result.Result<Unit, String> =
+  match fields with
+  | [] -> Ok ()
+  | field :: rest ->
+    let size = Stdlib.__Hpack.__entrySize field in
+    if size > remaining then Error "Peer HTTP/3 field-section limit exceeded"
+    else Stdlib.__Http3Control.__fieldBudget rest (remaining - size)
+
+// Field-section limits count uncompressed name/value bytes plus 32 per field,
+// regardless of QPACK indexing, Huffman compression, or duplicate names.
+let checkFields (state: Stdlib.__Http3Control.State) (fields: List<(String * String)>) : Stdlib.Result.Result<Unit, String> =
+  match Stdlib.List.findFirst state.parameters (fun setting -> let (id, _value) = setting in id == 6L) with
+  | None -> Ok ()
+  | Some setting -> let (_id, limit) = setting in Stdlib.__Http3Control.__fieldBudget fields limit

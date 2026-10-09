@@ -87,12 +87,14 @@ let __start (ready: Stdlib.__QuicClient.Ready) (method: String) (url: Stdlib.__H
   (headers: List<(String * String)>) (body: Blob) (timeout: Int64)
   : Stdlib.Result.Result<Stdlib.__Http3Client.Reply, String> =
   if Stdlib.Blob.__byteLength body > 104857600L then Error "HTTP/3 request body exceeds limit"
-  else Stdlib.__Http2Fields.requestFields method url headers body |> Stdlib.Result.andThen Stdlib.__Qpack.encode
-    |> Stdlib.Result.andThen (Stdlib.__Http3Wire.serialize 1L) |> Stdlib.Result.andThen (fun wire ->
+  else Stdlib.__Http2Fields.requestFields method url headers body |> Stdlib.Result.andThen (fun fields ->
+    Stdlib.__Qpack.encode fields |> Stdlib.Result.andThen (Stdlib.__Http3Wire.serialize 1L) |> Stdlib.Result.andThen (fun wire ->
       Stdlib.__Http3.initialize ready (method == "HEAD") timeout |> Stdlib.Result.andThen (fun state ->
+        Stdlib.__Http3.__controls state |> Stdlib.Result.andThen (fun state ->
+        Stdlib.__Http3Control.checkFields state.uni.control fields |> Stdlib.Result.andThen (fun _unit ->
         Stdlib.__Http3Client.__send state wire 0L (Stdlib.Blob.__byteLength body == 0L) |> Stdlib.Result.andThen (fun uploaded ->
           if uploaded.finished || Stdlib.__Http3Client.__final uploaded.events then Stdlib.__Http3Client.__head uploaded.state uploaded.events uploaded.finished
-          else Stdlib.__Http3Client.__upload uploaded.state body 0L)))
+          else Stdlib.__Http3Client.__upload uploaded.state body 0L))))))
 
 let stream (ready: Stdlib.__QuicClient.Ready) (method: String) (url: Stdlib.__HttpWire.Url)
   (headers: List<(String * String)>) (body: Blob) (timeout: Int64)
