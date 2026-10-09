@@ -53,7 +53,7 @@ from Git history.
 
 ## High-level SSA simplification
 
-`passes/anf/SSAOptimization.fs` runs the production fixed point. It uses the
+`src/passes/anf/SSAOptimization.ml` runs the production fixed point. It uses the
 scalar rewrite and effect facts in `passes/anf/optimization/` and has focused
 plain-text cases in `test/fixtures/ssa-optimization/ssa.opt`. These cover:
 
@@ -78,7 +78,7 @@ plain-text cases in `test/fixtures/ssa-optimization/ssa.opt`. These cover:
 
 The older structured ANF optimizer remains a test oracle for shared scalar
 rewrites. Accumulator helper generation is a separate pre-SSA lowering step
-in `passes/anf/ANFAccumulatorLowering.fs`.
+in `src/passes/anf/ANFAccumulatorLowering.ml`.
 
 Floating-point rewrites retain NaN, signed-zero, rounding, overflow, and
 evaluation-order restrictions. Managed-value forwarding retains ownership
@@ -88,7 +88,7 @@ negative fixtures are part of each transformation's contract.
 
 ## Direct-call specialization
 
-`passes/anf/SSADirectCallSpecialization.fs` specializes internal calls when
+`src/passes/anf/SSADirectCallSpecialization.ml` specializes internal calls when
 the callee identity and argument values are statically known. Uniform
 parameters are removed, while differing values create bounded clones selected
 by estimated argument-setup savings. Facts cover scalar and text literals,
@@ -105,7 +105,7 @@ cover recursive signatures, managed literals, and aggregate arguments.
 
 ## Higher-order specialization
 
-`passes/anf/SSAHigherOrderSpecialization.fs` propagates statically known
+`src/passes/anf/SSAHigherOrderSpecialization.ml` propagates statically known
 callable identities through local aliases, equal branch values and joins, and
 function returns. At a direct helper call, one clone specializes every eligible
 known functional argument together. Captured fields become ordinary parameters;
@@ -121,7 +121,7 @@ left on the generic closure path.
 
 ## Escape analysis and scalar replacement
 
-`passes/anf/SSAEscapeAnalysis.fs` removes fixed-layout tuple, record, and boxed
+`src/passes/anf/SSAEscapeAnalysis.ml` removes fixed-layout tuple, record, and boxed
 sum allocations whose fields are immediate scalar values, including Float64,
 and whose complete SSA use set consists only of projections, local aliases,
 and representation-only constructor sources. Escaping constructors retain
@@ -148,7 +148,7 @@ branch shapes plus the conservative call and observable-field boundaries.
 
 ## MIR optimization
 
-`passes/mir/MIR_Optimize.fs` and `test/fixtures/optimization/mir.opt` own:
+`src/passes/mir/MIR_Optimize.ml` and `test/fixtures/optimization/mir.opt` own:
 
 - sparse conditional constant propagation over exact integer, Boolean, Float,
   String, Char, DateTime, Unit, and function-symbol values; bounded native
@@ -192,7 +192,7 @@ reordering and reuse passes; no optimizer treats opaque AST operands as pure.
 
 ## LIR, allocation, and backend optimization
 
-`passes/lir/LIR_Peephole.fs`, `passes/lir/RegisterAllocation.fs`, and the native
+`src/passes/lir/LIR_Peephole.ml`, `src/passes/lir/RegisterAllocation.ml`, and the native
 backends own:
 
 - floating constant-load motion;

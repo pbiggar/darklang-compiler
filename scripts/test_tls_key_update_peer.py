@@ -19,21 +19,21 @@ from test_quic_tls_peer import certificates
 
 ROOT = Path(__file__).resolve().parents[1]
 PROBE = '''// probe.dark - Authenticated post-handshake traffic state and response nonce accounting.
-type Report = { current: Stdlib.Tls13KeyUpdate.Processed, replies: List<Blob> }
+type Report = { current: Stdlib.__Tls13KeyUpdate.Processed, replies: List<Blob> }
 let arg (index: Int) : Blob = Stdlib.Cli.Args.get index |> Stdlib.Result.andThen Stdlib.Blob.fromHex |> Stdlib.Result.withDefault Stdlib.Blob.empty
 let run () : Stdlib.Result.Result<Unit, String> =
   let suite = Stdlib.Cli.Args.get 0 |> Stdlib.Result.withDefault "4865" |> Stdlib.Int64.parse |> Stdlib.Result.withDefault 4865L in
-  let traffic = if suite == 4866L then Stdlib.Tls13.trafficKeys384 else if suite == 4867L then Stdlib.Tls13.trafficKeysChaCha else Stdlib.Tls13.trafficKeys in
+  let traffic = if suite == 4866L then Stdlib.__Tls13.trafficKeys384 else if suite == 4867L then Stdlib.__Tls13.trafficKeysChaCha else Stdlib.__Tls13.trafficKeys in
   match traffic (arg 2), traffic (arg 3) with
   | Ok receive, Ok send ->
     let fromServer = (Stdlib.Cli.Args.get 1 |> Stdlib.Result.withDefault "server") == "client" in
-    let state = Stdlib.Tls13KeyUpdate.create (arg 2) (arg 3) { send with sequence = 3L } fromServer in
-    let initial = Report { current = Stdlib.Tls13KeyUpdate.Processed { state = state, receive = receive, data = None, closed = false, reply = None }, replies = [] } in
+    let state = Stdlib.__Tls13KeyUpdate.create (arg 2) (arg 3) { send with sequence = 3L } fromServer in
+    let initial = Report { current = Stdlib.__Tls13KeyUpdate.Processed { state = state, receive = receive, data = None, closed = false, reply = None }, replies = [] } in
     Stdlib.List.fold [arg 4, arg 5, arg 6] (Ok initial) (fun result bytes ->
       if Stdlib.Blob.__byteLength bytes == 0L then result
       else result |> Stdlib.Result.andThen (fun report ->
-        Stdlib.Tls13.parseRecord bytes |> Stdlib.Result.mapError (fun _error -> "record") |> Stdlib.Result.andThen (fun record ->
-          Stdlib.Tls13KeyUpdate.process report.current.state report.current.receive record |> Stdlib.Result.map (fun current ->
+        Stdlib.__Tls13.parseRecord bytes |> Stdlib.Result.mapError (fun _error -> "record") |> Stdlib.Result.andThen (fun record ->
+          Stdlib.__Tls13KeyUpdate.process report.current.state report.current.receive record |> Stdlib.Result.map (fun current ->
             let replies = match current.reply with | None -> report.replies | Some bytes -> Stdlib.List.append report.replies [bytes] in
             Report { current = current, replies = replies })))) |> Stdlib.Result.map (fun report ->
       let state = report.current.state in
@@ -60,21 +60,21 @@ let write (lifecycle: Stream<Unit>) (cell: RawPtr) (fail: Bool) (bytes: Blob) : 
     if fail && count == 0L then Error 5L else Ok ()
 let run () : Unit =
   let fail = (Stdlib.Cli.Args.get 0 |> Stdlib.Result.withDefault "") == "serverfail" in
-  match Stdlib.Tls13.trafficKeys (arg 1), Stdlib.Tls13.trafficKeys (arg 2), Stdlib.Network.shutdownSignals () with
+  match Stdlib.__Tls13.trafficKeys (arg 1), Stdlib.__Tls13.trafficKeys (arg 2), Stdlib.__Network.shutdownSignals () with
   | Ok receive, Ok send, Ok signals ->
     let counter = Stdlib.Stream.__cellNew 0L in
     let lifecycle = Stdlib.Stream.__new (fun _unit -> Some ()) (fun _unit -> Stdlib.Stream.__cellDispose<Int64> counter) in
-    let connection = Stdlib.Network.TcpConnection { lifecycle = lifecycle, read = fun _size -> Error 11L, write = fun bytes -> write lifecycle counter fail bytes } in
+    let connection = Stdlib.__Network.TcpConnection { lifecycle = lifecycle, read = fun _size -> Error 11L, write = fun bytes -> write lifecycle counter fail bytes } in
     let send = { send with sequence = 3L } in
     let transport =
-      if fail then Stdlib.Tls13ServerTcp.transport connection signals None (Stdlib.Tls13ServerTcp.Accepted { pending = arg 3, ready = Stdlib.Tls13ServerHandshake.Ready { receive = receive, send = send, protocol = "http/1.1", receiveSecret = arg 1, sendSecret = arg 2 } })
-      else Stdlib.HttpTransport.secure connection (Stdlib.Tls13Client.SecureKeys { client = send, server = receive, clientSecret = arg 2, serverSecret = arg 1, pending = arg 3 }) in
+      if fail then Stdlib.__Tls13ServerTcp.transport connection signals None (Stdlib.__Tls13ServerTcp.Accepted { pending = arg 3, ready = Stdlib.__Tls13ServerHandshake.Ready { receive = receive, send = send, protocol = "http/1.1", receiveSecret = arg 1, sendSecret = arg 2 } })
+      else Stdlib.__HttpTransport.secure connection (Stdlib.__Tls13Client.SecureKeys { client = send, server = receive, clientSecret = arg 2, serverSecret = arg 1, pending = arg 3 }) in
     let read = transport.read () in
     Stdlib.printLine (match read with | Error _ -> "READ ERROR" | Ok bytes -> if Stdlib.Blob.__byteLength bytes == 0L then "READ EMPTY" else "READ DATA")
-    Stdlib.HttpTransport.close transport
-    Stdlib.HttpTransport.close transport
+    Stdlib.__HttpTransport.close transport
+    Stdlib.__HttpTransport.close transport
     Stdlib.printLine (match transport.write (Stdlib.String.toBlob "unused") with | Error _ -> "WRITE CLOSED" | Ok () -> "WRITE OPEN")
-    Stdlib.Network.closeShutdownSignals signals
+    Stdlib.__Network.closeShutdownSignals signals
   | _, _, _ -> Stdlib.printLine "initialization failed"
 run ()
 '''

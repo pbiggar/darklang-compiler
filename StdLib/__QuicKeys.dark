@@ -1,0 +1,83 @@
+// __QuicKeys.dark - QUIC application traffic-secret rotation and authenticated key-phase selection.
+module Darklang.Stdlib.__QuicKeys
+
+type Generation = { secret: Blob, keys: Stdlib.__QuicCrypto.Keys, phase: Bool }
+type Previous = { generation: Stdlib.__QuicKeys.Generation, boundary: Int64, largest: Int64, until: Int64 }
+type State = {
+  current: Stdlib.__QuicKeys.Generation, next: Stdlib.__QuicKeys.Generation,
+  previous: Stdlib.Option.Option<Stdlib.__QuicKeys.Previous>, first: Int64, largest: Int64, count: Int64, acked: Bool
+}
+type Opened = { state: Stdlib.__QuicKeys.State, packet: Stdlib.__QuicCrypto.Opened, updated: Bool }
+
+let __next (generation: Stdlib.__QuicKeys.Generation) : Stdlib.Result.Result<Stdlib.__QuicKeys.Generation, String> =
+  Stdlib.__Tls13.hkdfExpandLabel generation.secret "quic ku" Stdlib.Blob.empty 32L |> Stdlib.Result.andThen (fun secret ->
+    Stdlib.__QuicCrypto.derive secret |> Stdlib.Result.map (fun keys -> Stdlib.__QuicKeys.Generation {
+      secret = secret, keys = Stdlib.__QuicCrypto.Keys { key = keys.key, iv = keys.iv, hp = generation.keys.hp },
+      phase = Stdlib.Bool.not generation.phase }))
+
+let create (secret: Blob) : Stdlib.Result.Result<Stdlib.__QuicKeys.State, String> =
+  Stdlib.__QuicCrypto.derive secret |> Stdlib.Result.andThen (fun keys ->
+    let current = Stdlib.__QuicKeys.Generation { secret = secret, keys = keys, phase = false } in
+    Stdlib.__QuicKeys.__next current |> Stdlib.Result.map (fun next -> Stdlib.__QuicKeys.State {
+      current = current, next = next, previous = None, first = -1L, largest = -1L, count = 0L, acked = true }))
+
+let acknowledged (state: Stdlib.__QuicKeys.State) : Stdlib.__QuicKeys.State =
+  Stdlib.__QuicKeys.State { current = state.current, next = state.next, previous = state.previous,
+    first = state.first, largest = state.largest, count = state.count, acked = true }
+
+let expire (state: Stdlib.__QuicKeys.State) (now: Int64) : Stdlib.__QuicKeys.State =
+  let previous = match state.previous with | Some old when now >= old.until -> None | _ -> state.previous in
+  Stdlib.__QuicKeys.State { current = state.current, next = state.next, previous = previous,
+    first = state.first, largest = state.largest, count = state.count, acked = state.acked }
+
+let __phase (packet: Stdlib.__QuicCrypto.Opened) : Bool = Stdlib.Int64.bitwiseAnd (Stdlib.Blob.__getByte packet.header 0L) 4L != 0L
+
+let __old (state: Stdlib.__QuicKeys.State) (data: Blob) (offset: Int64) (now: Int64)
+  : Stdlib.Result.Result<Stdlib.__QuicKeys.Opened, String> =
+  match state.previous with
+  | None -> Error "QUIC application authentication failed"
+  | Some previous ->
+    if now > previous.until then Error "QUIC application authentication failed"
+    else
+      let opened = match Stdlib.__QuicCrypto.openPacket previous.generation.keys data offset state.largest with
+        | Error "Invalid QUIC reserved bits" -> Error "Invalid QUIC reserved bits"
+        | Error _ -> Error "QUIC application authentication failed"
+        | Ok packet -> Ok packet in
+      opened |> Stdlib.Result.andThen (fun packet ->
+      if packet.number >= previous.boundary || Stdlib.__QuicKeys.__phase packet != previous.generation.phase then Error "Invalid previous QUIC key phase"
+      else Ok (Stdlib.__QuicKeys.Opened { packet = packet, updated = false, state = Stdlib.__QuicKeys.State {
+        current = state.current, next = state.next, first = state.first, largest = state.largest, count = state.count, acked = state.acked,
+        previous = Some (Stdlib.__QuicKeys.Previous { generation = previous.generation, boundary = previous.boundary,
+          largest = if packet.number > previous.largest then packet.number else previous.largest, until = previous.until }) } }))
+
+// Header protection retains the original key across updates (RFC 9001).
+// AEAD attempts use the same header key and only commit after authentication.
+let openPacket (state: Stdlib.__QuicKeys.State) (data: Blob) (offset: Int64) (now: Int64) (pto: Int64) (confirmed: Bool)
+  : Stdlib.Result.Result<Stdlib.__QuicKeys.Opened, String> =
+  if now < 0L || now > 4611686018427387903L || pto < 1L || pto > 60000L then Error "Invalid QUIC key timing"
+  else
+    match Stdlib.__QuicCrypto.openPacket state.current.keys data offset state.largest with
+    | Ok packet ->
+      if Stdlib.__QuicKeys.__phase packet != state.current.phase then Error "Invalid QUIC current key phase"
+      else if state.count >= 8388608L then Error "QUIC AEAD key usage limit exceeded"
+      else if (match state.previous with | None -> false | Some previous -> packet.number <= previous.largest) then Error "QUIC key update packet numbers overlap"
+      else
+        let first = if state.first < 0L || packet.number < state.first then packet.number else state.first in
+        let previous = match state.previous with | None -> None | Some previous -> Some (Stdlib.__QuicKeys.Previous {
+          generation = previous.generation, boundary = first, largest = previous.largest, until = previous.until }) in
+        Ok (Stdlib.__QuicKeys.Opened { packet = packet, updated = false, state = Stdlib.__QuicKeys.State {
+        current = state.current, next = state.next,
+        first = first, previous = previous,
+        largest = if packet.number > state.largest then packet.number else state.largest, count = state.count + 1L, acked = state.acked } })
+    | Error "Invalid QUIC reserved bits" -> Error "Invalid QUIC reserved bits"
+    | Error _ ->
+      match Stdlib.__QuicCrypto.openPacket state.next.keys data offset state.largest with
+      | Error "Invalid QUIC reserved bits" -> Error "Invalid QUIC reserved bits"
+      | Error _ -> Stdlib.__QuicKeys.__old state data offset now
+      | Ok packet ->
+        if Stdlib.Bool.not confirmed || Stdlib.Bool.not state.acked || Stdlib.__QuicKeys.__phase packet != state.next.phase || packet.number <= state.largest then Error "Invalid QUIC key update"
+        else
+          Stdlib.__QuicKeys.__next state.next |> Stdlib.Result.map (fun next -> Stdlib.__QuicKeys.Opened {
+            packet = packet, updated = true, state = Stdlib.__QuicKeys.State {
+              current = state.next, next = next, first = packet.number, largest = packet.number, count = 1L, acked = false,
+              previous = Some (Stdlib.__QuicKeys.Previous { generation = state.current, boundary = packet.number, largest = state.largest, until = now + 3L * pto }) } })

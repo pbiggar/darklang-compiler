@@ -763,7 +763,7 @@ let pageTemplate = "{# TinyTemplate application benchmark #}<main>\n<h1>{ title 
 let rowTemplate = "<article class=\"{{ if featured }}featured{{ else }}standard{{ endif }}\">\n<h2>{ name }</h2>\n{{ with details as detail }}<p>{ detail.category }: { detail.price | currency }</p>{{ endwith }}\n<ul>{{ for tag in tags }}<li data-first=\"{ @first }\" data-last=\"{ @last }\">{ @index }:{ tag }</li>{{ endfor }}</ul>\n<div>{ raw_html | unescaped }</div>\n</article>" in
 let footerTemplate = "<footer>{ @root }</footer>" in
 let configured = addFormatter (newTinyTemplate ()) "currency" CurrencyFormatter in
-match (Stdlib.Cli.Args.int64 0, Stdlib.Cli.Args.int64 1) with
+match (Stdlib.Cli.__Args.int64 0, Stdlib.Cli.__Args.int64 1) with
 | (Error message, _) -> Builtin.testRuntimeError message
 | (_, Error message) -> Builtin.testRuntimeError message
 | (Ok rowCount, Ok runs) ->

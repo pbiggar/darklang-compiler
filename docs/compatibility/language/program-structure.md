@@ -1,5 +1,10 @@
 # Program structure parity
 
+Current compiler source review: 2026-10-07 at `7154b0ea9c1a3f53d30984ed17b9e0cc5d8f0dce`.
+See the [current audit](../current-audit.md) for post-port status and validation.
+Older revision pairs and executed counts below are historical evidence, not
+a fresh test result for this revision.
+
 This ledger records the program-level comparison against compiler evidence
 revision `b2e1f3d1e4ce0338d4c4662db9a1326f2e2cb899` and darklang/dark release
 `v0.0.35`, revision `0b3888d8e4f30d48ecd738f5cbe5cc2b8d958460`. Implementation and source
@@ -11,9 +16,9 @@ The interpreter evidence was rechecked in `LibParser/Parser.fs`,
 `LibParser/SourceFile.fs`, `LibParser/NameResolver.fs`,
 `LibParser/WrittenTypesToProgramTypes.fs`, `LibDB/NameLookup.fs`,
 `LibExecution/ProgramTypes.fs`, and `Builtins.CliHost/Libs/Cli.fs` at the pinned
-revision. Compiler evidence was rechecked in `AST.fs`, `NameSyntax.fs`, both
-parser passes, the whole-program section of `TypeChecking.fs`,
-`AST_to_ANF.fs`, `CompilerLibrary.fs`, `Program.fs`, and the e2e runner.
+revision. Compiler evidence was rechecked in `src/AST.ml`, `src/NameSyntax.ml`, both
+parser passes, the whole-program section of `src/frontend/TypeChecking.ml`,
+`src/passes/anf/AST_to_ANF.ml`, `src/CompilerLibrary.ml`, `src/Program.ml`, and the e2e runner.
 
 ## Rule matrix
 
@@ -24,7 +29,7 @@ parser passes, the whole-program section of `TypeChecking.fs`,
 | declarations | `let` declares functions, `val` declares first-class values, and `type` declares types | parity at the source boundary |
 | modules | file modules and nested source modules retain typed paths until validated composition; lowering uses deterministic qualified native symbols | parity with an internal AOT symbol boundary |
 | ordering | all declarations are inventoried before bodies are checked, so supported sibling function and type references are order-independent | parity |
-| duplicates | the last declaration at the same category and qualified location wins; type, value, and function categories are distinct | parity |
+| duplicates | functions and types repeated in one source batch are rejected by the direct declaration prepass; sequential values overwrite the value inventory | compiler difference; categories remain distinct |
 | contextual lookup | lexical bindings win; bare references prefer values, applications prefer functions, and types use a separate namespace | parity |
 | constructors | constructor identity includes its declaring type; unqualified equal case names remain contextual/ambiguous | parity |
 | validation | declaration shape, name resolution, typing, constructor checks, specialization, and entry checks run before ANF | intentional AOT divergence: unused declarations are checked |
@@ -32,7 +37,7 @@ parser passes, the whole-program section of `TypeChecking.fs`,
 | entry selection | exactly one expression is required across executable units; `main()` is never an implicit entry | intentional divergence: the interpreter executes several expressions |
 | file completion | file entries accept only `Unit`, `Int`, or `Int64`; other statically known results are rejected | parity |
 | eval completion | explicit eval mode renders non-`Unit` values and does not alter file entry selection | compiler interface behavior |
-| packages | package inputs are immutable compile-request snapshots rather than live package-manager queries | AOT extension |
+| packages | explicit source units and value catalogs are supported; optional `--package-server` resolves hosted declarations and dependencies before checking | compile-time package support; no runtime service claim |
 
 Top-level value declarations are represented explicitly by `SourceValue`,
 `AST.ValueDef`, and checked value definitions. They participate in source-tree,
@@ -44,7 +49,7 @@ module values.
 
 ## Focused probes
 
-`ProgramStructureTests.fs` covers ordered multi-unit composition, dependency
+`test/compiler-passes/ProgramStructureTests.ml` covers ordered multi-unit composition, dependency
 entry rejection, zero/multiple entry cardinality, last-wins function overlays,
 and file-result validation. Canonical syntax fixtures cover retained module
 shape and declaration boundaries. `name-resolution.e2e` covers contextual

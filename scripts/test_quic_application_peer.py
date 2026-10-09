@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 DARK = '''// application.dark - Independent application frame fields and stream delivery.
 let number (value: Int64) : String = Stdlib.Int64.toString value
 let boolean (value: Bool) : String = if value then "true" else "false"
-let printFrame (frame: Stdlib.QuicApplication.Frame) : Unit =
+let printFrame (frame: Stdlib.__QuicApplication.Frame) : Unit =
   match frame with
   | Stream value -> Stdlib.printLine ("STREAM " ++ number value.id ++ " " ++ number value.offset ++ " " ++ boolean value.fin ++ " " ++ Stdlib.Blob.toHex value.bytes)
   | ResetStream value -> Stdlib.printLine ("RESET " ++ number value.id ++ " " ++ number value.code ++ " " ++ number value.finalSize)
@@ -34,31 +34,31 @@ let printFrame (frame: Stdlib.QuicApplication.Frame) : Unit =
   | HandshakeDone -> Stdlib.printLine "DONE"
   | ApplicationClose value -> Stdlib.printLine ("CLOSE " ++ number value.code ++ " " ++ Stdlib.Blob.toHex value.reason)
   | Handshake _ -> Stdlib.printLine "HANDSHAKE"
-let printFrames (frames: List<Stdlib.QuicApplication.Frame>) : Unit =
+let printFrames (frames: List<Stdlib.__QuicApplication.Frame>) : Unit =
   match frames with | [] -> () | frame :: rest -> let _ = printFrame frame in printFrames rest
-let assemble (state: Stdlib.QuicStreams.Receive) (frames: List<Stdlib.QuicApplication.Frame>) (chunks: List<Blob>)
+let assemble (state: Stdlib.__QuicStreams.Receive) (frames: List<Stdlib.__QuicApplication.Frame>) (chunks: List<Blob>)
   : Stdlib.Result.Result<String, String> =
   match frames with
-  | [] -> Ok (Stdlib.Blob.toHex (Stdlib.Blob.concat (Stdlib.List.reverse chunks)) ++ " " ++ boolean (Stdlib.QuicStreams.complete state) ++ " " ++ number state.highest)
+  | [] -> Ok (Stdlib.Blob.toHex (Stdlib.Blob.concat (Stdlib.List.reverse chunks)) ++ " " ++ boolean (Stdlib.__QuicStreams.complete state) ++ " " ++ number state.highest)
   | Stream value :: rest ->
-    match Stdlib.QuicStreams.insert state value.offset value.bytes value.fin with
+    match Stdlib.__QuicStreams.insert state value.offset value.bytes value.fin with
     | Error message -> Error message
-    | Ok next -> assemble (Stdlib.QuicStreams.drain next) rest (Stdlib.List.push chunks (Stdlib.QuicStreams.available next))
+    | Ok next -> assemble (Stdlib.__QuicStreams.drain next) rest (Stdlib.List.push chunks (Stdlib.__QuicStreams.available next))
   | _ :: rest -> assemble state rest chunks
 let runCheck () : Unit =
   match Stdlib.Cli.Args.get 0, Stdlib.Cli.Args.get 1 |> Stdlib.Result.andThen Stdlib.Blob.fromHex with
   | Ok mode, Ok bytes ->
-    match Stdlib.QuicApplication.parse (mode != "client") bytes with
+    match Stdlib.__QuicApplication.parse (mode != "client") bytes with
     | Error message -> Stdlib.printLine ("ERROR " ++ message)
     | Ok frames ->
       if mode == "assemble" then
-        match Stdlib.QuicStreams.receiver 4096L |> Stdlib.Result.andThen (fun state -> assemble state frames []) with
+        match Stdlib.__QuicStreams.receiver 4096L |> Stdlib.Result.andThen (fun state -> assemble state frames []) with
         | Error message -> Stdlib.printLine ("ERROR " ++ message)
         | Ok value -> Stdlib.printLine value
       else if mode == "encode" then
         match frames with
         | Stream value :: _ ->
-          match Stdlib.QuicApplication.stream value.id value.offset value.bytes value.fin with
+          match Stdlib.__QuicApplication.stream value.id value.offset value.bytes value.fin with
           | Error message -> Stdlib.printLine ("ERROR " ++ message)
           | Ok wire -> Stdlib.printLine (Stdlib.Blob.toHex wire)
         | _ -> Stdlib.printLine "ERROR No stream frame"

@@ -10,14 +10,35 @@
    Stdlib.List.flatten<str>').
 *)
 open Dark_compiler
-type testResult=(unit,string) result
-val testOrderedSourceComposition : CompilationContexts.stdlibResult -> unit -> testResult
-val testDuplicateFunctionAcrossSourceUnitsRejected : CompilationContexts.stdlibResult -> unit -> testResult
-val testNestedModuleUsesInterpreterRelativeCandidates : CompilationContexts.stdlibResult -> unit -> testResult
-val testDependencyEntryRejected : CompilationContexts.stdlibResult -> unit -> testResult
-val testMissingEntryRejected : CompilationContexts.stdlibResult -> unit -> testResult
-val testMultipleEntriesRejected : CompilationContexts.stdlibResult -> unit -> testResult
-val testFileEntryTypeRejected : CompilationContexts.stdlibResult -> unit -> testResult
-val testLibraryRedeclaresStdlibCarriedFunction : CompilationContexts.stdlibResult -> unit -> testResult
-val testLibraryGenericReachesStdlibSpecialization : CompilationContexts.stdlibResult -> unit -> testResult
-val tests : CompilationContexts.stdlibResult -> (string * (unit -> testResult)) list
+
+type testResult = (unit, string) result
+
+val testOrderedSourceComposition :
+  CompilationContexts.stdlibResult -> unit -> testResult
+
+val testDuplicateFunctionAcrossSourceUnitsRejected :
+  CompilationContexts.stdlibResult -> unit -> testResult
+
+val testNestedModuleUsesInterpreterRelativeCandidates :
+  CompilationContexts.stdlibResult -> unit -> testResult
+
+val testDependencyEntryRejected :
+  CompilationContexts.stdlibResult -> unit -> testResult
+
+val testMissingEntryRejected :
+  CompilationContexts.stdlibResult -> unit -> testResult
+
+val testMultipleEntriesRejected :
+  CompilationContexts.stdlibResult -> unit -> testResult
+
+val testFileEntryTypeRejected :
+  CompilationContexts.stdlibResult -> unit -> testResult
+
+val testLibraryRedeclaresStdlibCarriedFunction :
+  CompilationContexts.stdlibResult -> unit -> testResult
+
+val testLibraryGenericReachesStdlibSpecialization :
+  CompilationContexts.stdlibResult -> unit -> testResult
+
+val tests :
+  CompilationContexts.stdlibResult -> (string * (unit -> testResult)) list

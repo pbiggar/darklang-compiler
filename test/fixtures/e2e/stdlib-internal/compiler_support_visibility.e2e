@@ -1,0 +1,15 @@
+// Compiler support must not remain accessible through public module names.
+
+Stdlib.__Network.openTcp4 () = compileerror="Unknown function"
+Stdlib.Cli.Args.get 0 = compileerror="Unknown function"
+Stdlib.__AesGcm.encrypt Stdlib.Blob.empty Stdlib.Blob.empty Stdlib.Blob.empty Stdlib.Blob.empty = compileerror="Unknown function"
+Stdlib.__Network.openTcp4 () = compileerror="Internal identifier not allowed in user code"
+Stdlib.String.__Unicode.normalize "text" = compileerror="Internal identifier not allowed in user code"
+let inspect (keys: Stdlib.__Tls13.TrafficKeys) : Int64 = keys.sequence; inspect (Stdlib.__Tls13.TrafficKeys { key = Stdlib.Blob.empty, iv = Stdlib.Blob.empty, sequence = 7L, cipherSuite = 0L }) = compileerror="Internal identifier not allowed in user code"
+Stdlib.__Tls13.RecordError.Invalid "hidden" = compileerror="Internal identifier not allowed in user code"
+AwaitCertificateVerify = compileerror="Unknown constructor"
+Stdlib.Crypto.__secureRandomBytes 0L = compileerror="Unknown function"
+Stdlib.Crypto.__secureRandomBytes 0L = compileerror="Internal identifier not allowed in user code"
+let inspect (output: Stdlib.Cli.NativeOutput) : Int64 = output.exitCode; 1L = compileerror="Unknown type"
+let inspect (output: Stdlib.Cli.__NativeOutput) : Int64 = output.exitCode; 1L = compileerror="Internal identifier not allowed in user code"
+Stdlib.HttpClient.__requestTrusted "GET" "http://localhost/" [] Stdlib.Blob.empty = compileerror="Internal identifier not allowed in user code"

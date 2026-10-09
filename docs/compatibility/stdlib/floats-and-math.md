@@ -1,5 +1,10 @@
 # Float and Math compatibility
 
+Current compiler source review: 2026-10-07 at `7154b0ea9c1a3f53d30984ed17b9e0cc5d8f0dce`.
+See the [current audit](../current-audit.md) for post-port status and validation.
+Older revision pairs and executed counts below are historical evidence, not
+a fresh test result for this revision.
+
 This document records the observable Float/Math contract implemented by the
 native compiler. It is a behavior comparison, not a performance comparison.
 
@@ -21,8 +26,8 @@ interpreter surface is anchored at
 `backend/src/Builtins/Builtins.Pure/Libs/Math.fs:13-213`, and
 `backend/src/LibExecution/Builtin.fs:97-104`.
 
-The compiler implementation is in `stdlib/Float.dark` and
-`stdlib/Math.dark`. Public values continue to render through
+The compiler implementation is in `StdLib/Float.dark` and
+`StdLib/Math.dark`. Public values continue to render through
 `src/frontend/ValueRendering.ml` and
 `src/passes/anf/PrintInsertion.ml`, both of which call the same
 `Stdlib.Float.toString` implementation. Focused executable coverage is in

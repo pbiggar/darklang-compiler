@@ -21,7 +21,7 @@ class BuildDarkBatchTests(unittest.TestCase):
             compiler.write_text(
                 "#!/bin/bash\n"
                 f"printf 'called\\n' >> {quoted_log}\n"
-                "if [[ \" $* \" == *\" --allow-internal \"* ]]; then exit 42; fi\n"
+                "if [[ \" $* \" != *\" --allow-internal \"* ]]; then exit 42; fi\n"
                 "while [[ $# -gt 0 && \"$1\" != -- ]]; do shift; done\n"
                 "shift\n"
                 "while [[ $# -gt 0 ]]; do\n"

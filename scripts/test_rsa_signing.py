@@ -29,10 +29,10 @@ let run () : Unit =
     | Ok identity ->
       let key = identity.key in
       let selected = if mode == "fault" then { key with privateExponent = Stdlib.String.toBlob (Stdlib.String.repeat "\\u0000" 256) } else key in
-      match Stdlib.RsaSigning.signSha256 selected (Stdlib.String.toBlob "TLS server certificate transcript") with
+      match Stdlib.__RsaSigning.signSha256 selected (Stdlib.String.toBlob "TLS server certificate transcript") with
       | Error message -> Stdlib.printLine message
       | Ok first ->
-        match Stdlib.RsaSigning.signSha256 key (Stdlib.String.toBlob "TLS server certificate transcript") with
+        match Stdlib.__RsaSigning.signSha256 key (Stdlib.String.toBlob "TLS server certificate transcript") with
         | Error message -> Stdlib.printLine message
         | Ok second ->
           Stdlib.printLine (Stdlib.Blob.toHex first)

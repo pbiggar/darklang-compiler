@@ -30,39 +30,39 @@ DESTINATION, SOURCE = bytes(range(8)), bytes(range(8, 16))
 def dark_source(port, parameters):
     return f"""// initial.dark - Fresh X25519 ClientHello and live UDP server Initial, with owned cleanup.
 match Stdlib.Blob.fromHex "{parameters.hex()}", Stdlib.Blob.fromHex "{DESTINATION.hex()}", Stdlib.Blob.fromHex "{SOURCE.hex()}",
-      Stdlib.X25519.generateKeyPair (), Stdlib.Crypto.secureRandomBytes 32L with
+      Stdlib.__X25519.generateKeyPair (), Stdlib.Crypto.__secureRandomBytes 32L with
 | Ok parameters, Ok destination, Ok source, Ok pair, Ok random ->
-  match Stdlib.Tls13.quicClientHello "localhost" random pair.publicKey parameters, Stdlib.QuicCrypto.initial destination with
+  match Stdlib.__Tls13.quicClientHello "localhost" random pair.publicKey parameters, Stdlib.__QuicCrypto.initial destination with
   | Ok hello, Ok keys ->
     let _ = Stdlib.printLine ("HELLO " ++ Stdlib.Blob.toHex hello) in
-    match Stdlib.QuicWire.integer (match Stdlib.Int.toInt64 (Stdlib.Blob.length hello) with | Some size -> size | None -> 0L), Stdlib.Blob.fromHex "0600" with
+    match Stdlib.__QuicWire.integer (match Stdlib.Int.toInt64 (Stdlib.Blob.length hello) with | Some size -> size | None -> 0L), Stdlib.Blob.fromHex "0600" with
     | Error message, _ -> Stdlib.printLine message
     | _, Error message -> Stdlib.printLine message
     | Ok length, Ok prefix ->
       let frame = Stdlib.Blob.concat [prefix, length, hello] in
-      match Stdlib.QuicPacket.sealLong Stdlib.QuicPacket.Kind.Initial keys.client destination source Stdlib.Blob.empty frame 0L,
-            Stdlib.Datagram.bind4 [127L, 0L, 0L, 1L] 0L with
+      match Stdlib.__QuicPacket.sealLong Stdlib.__QuicPacket.Kind.Initial keys.client destination source Stdlib.Blob.empty frame 0L,
+            Stdlib.__Datagram.bind4 [127L, 0L, 0L, 1L] 0L with
       | Ok packet, Ok connection ->
         let result =
-          match Stdlib.Datagram.send connection (Stdlib.Datagram.Endpoint {{ address = [127L, 0L, 0L, 1L], port = {port}L }}) packet 1000L with
+          match Stdlib.__Datagram.send connection (Stdlib.__Datagram.Endpoint {{ address = [127L, 0L, 0L, 1L], port = {port}L }}) packet 1000L with
           | Error _ -> Error "UDP send failed"
           | Ok () ->
-            match Stdlib.Datagram.receive connection 1000L with
+            match Stdlib.__Datagram.receive connection 1000L with
             | Error _ -> Error "UDP receive failed"
             | Ok datagram ->
               if datagram.peer.address != [127L, 0L, 0L, 1L] || datagram.peer.port != {port}L then Error "Wrong QUIC peer"
               else
-                match Stdlib.QuicPacket.parse 8L datagram.payload with
+                match Stdlib.__QuicPacket.parse 8L datagram.payload with
                 | Error message -> Error message
                 | Ok (Protected received) ->
-                  if received.kind != Stdlib.QuicPacket.Kind.Initial || Stdlib.Blob.toHex received.destination != Stdlib.Blob.toHex source then Error "Wrong Initial connection"
-                  else Stdlib.QuicCrypto.openPacket keys.server received.bytes received.numberOffset -1L |> Stdlib.Result.map (fun opened -> opened.payload)
+                  if received.kind != Stdlib.__QuicPacket.Kind.Initial || Stdlib.Blob.toHex received.destination != Stdlib.Blob.toHex source then Error "Wrong Initial connection"
+                  else Stdlib.__QuicCrypto.openPacket keys.server received.bytes received.numberOffset -1L |> Stdlib.Result.map (fun opened -> opened.payload)
                 | Ok _ -> Error "Expected server Initial" in
-        let _ = Stdlib.Datagram.close connection in
+        let _ = Stdlib.__Datagram.close connection in
         match result with
         | Error message -> Stdlib.printLine ("ERROR " ++ message)
         | Ok payload -> Stdlib.printLine ("SERVER " ++ Stdlib.Blob.toHex payload)
-      | Error message, Ok connection -> let _ = Stdlib.Datagram.close connection in Stdlib.printLine message
+      | Error message, Ok connection -> let _ = Stdlib.__Datagram.close connection in Stdlib.printLine message
       | _, _ -> Stdlib.printLine "Initial setup failed"
   | _, _ -> Stdlib.printLine "TLS hello failed"
 | _ -> Stdlib.printLine "Entropy failed"

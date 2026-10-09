@@ -78,11 +78,11 @@ def main():
               for data, valid, selected, has_share in vectors]
     source = '''// hello.dark - Independent client negotiation and bounded malformed-input cleanup.
 let check (text: String) (valid: Bool) (selected: String) (hasShare: Bool) : Bool =
-  match Stdlib.Blob.fromHex text |> Stdlib.Result.andThen Stdlib.Tls13ServerHello.parse with
+  match Stdlib.Blob.fromHex text |> Stdlib.Result.andThen Stdlib.__Tls13ServerHello.parse with
   | Error _ -> Stdlib.Bool.not valid
   | Ok hello ->
     let share = match hello.keyShare with | None -> false | Some _ -> true in
-    let protocol = match Stdlib.Tls13ServerHello.selectProtocol hello ["h2", "http/1.1"] with | Error _ -> "error" | Ok name -> name in
+    let protocol = match Stdlib.__Tls13ServerHello.selectProtocol hello ["h2", "http/1.1"] with | Error _ -> "error" | Ok name -> name in
     valid && share == hasShare && protocol == selected
 ''' + '\nStdlib.printLine (if ' + ' &&\n  '.join(checks) + ' then "DONE" else "FAILED")\n'
     with tempfile.TemporaryDirectory(prefix="dark-server-hello-") as temporary:

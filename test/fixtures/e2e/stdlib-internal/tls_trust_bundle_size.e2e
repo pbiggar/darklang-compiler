@@ -1,0 +1,10 @@
+// tls_trust_bundle_size.e2e - trust bundles above the old 256 KiB limit remain parseable.
+
+(match Stdlib.Cli.FileSystem.readFile "test/fixtures/fixtures/tls_large_bundle.pem" with
+ | Error _ -> false
+ | Ok bundle ->
+   match Stdlib.__Tls13Client.parsePemBundle bundle with
+   | Ok roots -> Stdlib.Blob.length bundle > 262144 &&
+                 Stdlib.List.length roots == 1100
+   | Error _ -> false)
+  = true

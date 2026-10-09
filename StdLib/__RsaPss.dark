@@ -1,0 +1,102 @@
+// Stdlib.__RsaPss.dark - RSA-PSS/SHA-256 public signature verification for TLS 1.3.
+
+module Darklang.Stdlib.__RsaPss
+
+let __fromBytes (bytes: Blob) (index: Int64) (value: Int) : Int =
+  if index == Stdlib.Blob.__byteLength bytes then value
+  else
+    let next = Stdlib.Int.add
+                 (Stdlib.Int.multiply value (Stdlib.Int.fromInt64 256L))
+                 (Stdlib.Int.fromInt64 (Stdlib.Blob.__getByte bytes index)) in
+    Stdlib.__RsaPss.__fromBytes bytes (index + 1L) next
+
+let __toBytes (value: Int) (remaining: Int64) (acc: List<Int64>) : Blob =
+  if remaining == 0L then Stdlib.Blob.__fromInt64List (Stdlib.List.reverse acc)
+  else
+    // A 2048-bit divide for each output byte would consume the bounded native heap.
+    let byte = Stdlib.Int.bitwiseAnd
+                 (Stdlib.Int.shiftRight value (Stdlib.Int.fromInt64 ((remaining - 1L) * 8L)))
+                 (Stdlib.Int.fromInt64 255L) in
+    let byte64 = match Stdlib.Int.toInt64 byte with
+                 | Some b -> b
+                 | None -> Builtin.testRuntimeError "RSA byte conversion failed" in
+    Stdlib.__RsaPss.__toBytes value (remaining - 1L) (Stdlib.List.push acc byte64)
+
+let __mgf1 (seed: Blob) (length: Int64) (counter: Int64) (acc: List<Blob>) : Blob =
+  if counter * 32L >= length then
+    Stdlib.Blob.slice (Stdlib.Blob.concat (Stdlib.List.reverse acc))
+      (Stdlib.Int.fromInt64 0L) (Stdlib.Int.fromInt64 length)
+  else
+    let c = Stdlib.Blob.__fromInt64List
+              [counter / 16777216L, counter / 65536L % 256L,
+               counter / 256L % 256L, counter % 256L] in
+    Stdlib.__RsaPss.__mgf1 seed length (counter + 1L)
+      (Stdlib.List.push acc (Stdlib.Crypto.sha256 (Stdlib.Blob.concat [seed, c])))
+
+let __unmask (masked: Blob) (mask: Blob) (index: Int64) (acc: List<Int64>) : Blob =
+  if index == Stdlib.Blob.__byteLength masked then
+    Stdlib.Blob.__fromInt64List (Stdlib.List.reverse acc)
+  else
+    let byte = Stdlib.Int64.bitwiseXor
+                 (Stdlib.Blob.__getByte masked index)
+                 (Stdlib.Blob.__getByte mask index) in
+    Stdlib.__RsaPss.__unmask masked mask (index + 1L) (Stdlib.List.push acc byte)
+
+let __zeroPrefix (db: Blob) (index: Int64) (endIndex: Int64) : Bool =
+  if index == endIndex then true
+  else if Stdlib.Blob.__getByte db index != 0L then false
+  else Stdlib.__RsaPss.__zeroPrefix db (index + 1L) endIndex
+
+let __equalBytes (left: Blob) (right: Blob) (index: Int64) (difference: Int64) : Bool =
+  if index == Stdlib.Blob.__byteLength left then difference == 0L
+  else
+    let byteDifference = Stdlib.Int64.bitwiseXor
+                           (Stdlib.Blob.__getByte left index)
+                           (Stdlib.Blob.__getByte right index) in
+    Stdlib.__RsaPss.__equalBytes left right (index + 1L)
+      (Stdlib.Int64.bitwiseOr difference byteDifference)
+
+// The verifier accepts the TLS 1.3 rsa_pss_rsae_sha256 profile: SHA-256,
+// MGF1-SHA-256, a 32-byte salt, and a 2048- to 8192-bit RSA public key.
+// A malformed key is an error; a well-formed but invalid signature is false.
+let verifySha256 (modulusBytes: Blob) (exponentBytes: Blob)
+                 (message: Blob) (signature: Blob) : Stdlib.Result.Result<Bool, String> =
+  let keyLength = Stdlib.Blob.__byteLength modulusBytes in
+  let exponentLength = Stdlib.Blob.__byteLength exponentBytes in
+  if keyLength < 256L || keyLength > 1024L
+     || Stdlib.Blob.__getByte modulusBytes 0L < 128L
+     || Stdlib.Blob.__getByte modulusBytes (keyLength - 1L) % 2L == 0L
+     || exponentLength == 0L || exponentLength > 4L
+     || Stdlib.Blob.__getByte exponentBytes 0L == 0L then
+    Error "Invalid RSA public key"
+  else
+    let modulus = Stdlib.__RsaPss.__fromBytes modulusBytes 0L (Stdlib.Int.fromInt64 0L) in
+    let exponent = Stdlib.__RsaPss.__fromBytes exponentBytes 0L (Stdlib.Int.fromInt64 0L) in
+    if Stdlib.Int.lessThan exponent (Stdlib.Int.fromInt64 3L)
+       || Stdlib.Int.mod exponent (Stdlib.Int.fromInt64 2L) == Stdlib.Int.fromInt64 0L then
+      Error "Invalid RSA public key"
+    else if Stdlib.Blob.__byteLength signature != keyLength then Ok false
+    else
+      let s = Stdlib.__RsaPss.__fromBytes signature 0L (Stdlib.Int.fromInt64 0L) in
+      if Stdlib.Int.greaterThanOrEqualTo s modulus then Ok false
+      else
+        Stdlib.__RsaMontgomery.publicPow signature exponentBytes modulusBytes |> Stdlib.Result.map (fun em ->
+        let dbLength = keyLength - 33L in
+        let masked = Stdlib.Blob.slice em (Stdlib.Int.fromInt64 0L)
+                       (Stdlib.Int.fromInt64 dbLength) in
+        let h = Stdlib.Blob.slice em (Stdlib.Int.fromInt64 dbLength)
+                  (Stdlib.Int.fromInt64 32L) in
+        let mask = Stdlib.__RsaPss.__mgf1 h dbLength 0L [] in
+        let db = Stdlib.__RsaPss.__unmask masked mask 0L [] in
+        let first = Stdlib.Blob.__getByte db 0L in
+        let salt = Stdlib.Blob.slice db (Stdlib.Int.fromInt64 (dbLength - 32L))
+                     (Stdlib.Int.fromInt64 32L) in
+        let mPrime = Stdlib.Blob.concat
+                       [Stdlib.Blob.__fromInt64List [0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L],
+                        Stdlib.Crypto.sha256 message, salt] in
+        (Stdlib.Blob.__getByte em (keyLength - 1L) == 188L
+            && Stdlib.Blob.__getByte masked 0L < 128L
+            && Stdlib.Int64.bitwiseAnd first 127L == 0L
+            && Stdlib.__RsaPss.__zeroPrefix db 1L (dbLength - 33L)
+            && Stdlib.Blob.__getByte db (dbLength - 33L) == 1L
+            && Stdlib.__RsaPss.__equalBytes h (Stdlib.Crypto.sha256 mPrime) 0L 0L))

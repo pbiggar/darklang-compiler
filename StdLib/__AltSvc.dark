@@ -1,0 +1,101 @@
+// __AltSvc.dark - Bounded HTTP alternative-service parsing and HTTP/3 cache lifetimes.
+module Darklang.Stdlib.__AltSvc
+
+type Text = { value: String, next: Int64 }
+type Parameters = { next: Int64, lifetime: Int64 }
+type Endpoint = { service: Stdlib.__HttpsService.Service, lifetime: Int64 }
+type Advertisement = Clear | Services of List<Stdlib.__AltSvc.Endpoint>
+
+let __space (text: String) (position: Int64) : Int64 =
+  if position == Stdlib.String.__byteLength text then position
+  else
+    let byte = Stdlib.String.__byteAtUnchecked text position in
+    if byte == 32L || byte == 9L then Stdlib.__AltSvc.__space text (position + 1L) else position
+
+let __tokenEnd (text: String) (position: Int64) : Int64 =
+  if position == Stdlib.String.__byteLength text then position
+  else if Stdlib.__HttpWire.__tokenByte (Stdlib.String.__byteAtUnchecked text position) then Stdlib.__AltSvc.__tokenEnd text (position + 1L)
+  else position
+
+let __token (text: String) (position: Int64) : Stdlib.Result.Result<Stdlib.__AltSvc.Text, String> =
+  let finish = Stdlib.__AltSvc.__tokenEnd text position in
+  if finish == position then Error "Invalid Alt-Svc token"
+  else Ok (Stdlib.__AltSvc.Text { value = Stdlib.String.__byteSlice text position finish, next = finish })
+
+let __quoted (text: String) (position: Int64) (pieces: List<String>) : Stdlib.Result.Result<Stdlib.__AltSvc.Text, String> =
+  if position >= Stdlib.String.__byteLength text then Error "Unterminated Alt-Svc quoted string"
+  else
+    let byte = Stdlib.String.__byteAtUnchecked text position in
+    if byte == 34L then Ok (Stdlib.__AltSvc.Text { value = Stdlib.String.join (Stdlib.List.reverse pieces) "", next = position + 1L })
+    else if byte == 92L then
+      if position + 1L >= Stdlib.String.__byteLength text then Error "Unterminated Alt-Svc quoted string"
+      else
+        let escaped = Stdlib.String.__byteAtUnchecked text (position + 1L) in
+        if escaped != 9L && (escaped < 32L || escaped == 127L) then Error "Invalid Alt-Svc quoted string"
+        else Stdlib.__AltSvc.__quoted text (position + 2L) (Stdlib.List.push pieces (Stdlib.String.__byteSlice text (position + 1L) (position + 2L)))
+    else if byte != 9L && (byte < 32L || byte == 127L) then Error "Invalid Alt-Svc quoted string"
+    else Stdlib.__AltSvc.__quoted text (position + 1L) (Stdlib.List.push pieces (Stdlib.String.__byteSlice text position (position + 1L)))
+
+let __value (text: String) (position: Int64) : Stdlib.Result.Result<Stdlib.__AltSvc.Text, String> =
+  if position < Stdlib.String.__byteLength text && Stdlib.String.__byteAtUnchecked text position == 34L then Stdlib.__AltSvc.__quoted text (position + 1L) []
+  else Stdlib.__AltSvc.__token text position
+
+let __age (text: String) (position: Int64) (total: Int64) : Stdlib.Result.Result<Int64, String> =
+  if position == Stdlib.String.__byteLength text then
+    if position == 0L then Error "Invalid Alt-Svc max-age" else Ok total
+  else
+    let digit = Stdlib.String.__byteAtUnchecked text position - 48L in
+    if digit < 0L || digit > 9L then Error "Invalid Alt-Svc max-age"
+    else
+      let value = total * 10L + digit in
+      Stdlib.__AltSvc.__age text (position + 1L) (if value > 86400L then 86400L else value)
+
+let __parameters (text: String) (position: Int64) (lifetime: Int64) (seenAge: Bool) (remaining: Int64)
+  : Stdlib.Result.Result<Stdlib.__AltSvc.Parameters, String> =
+  let start = Stdlib.__AltSvc.__space text position in
+  if start == Stdlib.String.__byteLength text || Stdlib.String.__byteAtUnchecked text start == 44L then
+    Ok (Stdlib.__AltSvc.Parameters { next = start, lifetime = lifetime })
+  else if remaining == 0L then Error "Too many Alt-Svc parameters"
+  else if Stdlib.String.__byteAtUnchecked text start != 59L then Error "Invalid Alt-Svc parameter separator"
+  else Stdlib.__AltSvc.__token text (Stdlib.__AltSvc.__space text (start + 1L)) |> Stdlib.Result.andThen (fun name ->
+    let separator = Stdlib.__AltSvc.__space text name.next in
+    if separator == Stdlib.String.__byteLength text || Stdlib.String.__byteAtUnchecked text separator != 61L then Error "Missing Alt-Svc parameter value"
+    else Stdlib.__AltSvc.__value text (Stdlib.__AltSvc.__space text (separator + 1L)) |> Stdlib.Result.andThen (fun value ->
+      if Stdlib.String.toLowercase name.value != "ma" then Stdlib.__AltSvc.__parameters text value.next lifetime seenAge (remaining - 1L)
+      else if seenAge then Error "Duplicate Alt-Svc max-age"
+      else Stdlib.__AltSvc.__age value.value 0L 0L |> Stdlib.Result.andThen (fun age ->
+        Stdlib.__AltSvc.__parameters text value.next age true (remaining - 1L))))
+
+let __authority (origin: String) (authority: String) (priority: Int64) : Stdlib.Result.Result<Stdlib.__HttpsService.Service, String> =
+  let host = if Stdlib.Option.isSome (Stdlib.__DnsWire.ipv6 origin) then "[" ++ origin ++ "]" else origin in
+  let full = if Stdlib.String.startsWith authority ":" then host ++ authority else authority in
+  Stdlib.__HttpWire.__parseAuthority full 0L |> Stdlib.Result.andThen (fun parsed ->
+    let (target, port) = parsed in
+    if port < 1L || port > 65535L then Error "Invalid Alt-Svc authority"
+    else Ok (Stdlib.__HttpsService.Service { priority = priority, host = target, port = port, ipv4 = [], ipv6 = [] }))
+
+let __entries (text: String) (origin: String) (position: Int64) (count: Int64) (endpoints: List<Stdlib.__AltSvc.Endpoint>)
+  : Stdlib.Result.Result<Stdlib.__AltSvc.Advertisement, String> =
+  let start = Stdlib.__AltSvc.__space text position in
+  if start == Stdlib.String.__byteLength text then
+    if count == 0L then Error "Empty Alt-Svc advertisement" else Ok (Services (Stdlib.List.reverse endpoints))
+  else if count >= 32L then Error "Too many Alt-Svc alternatives"
+  else Stdlib.__AltSvc.__token text start |> Stdlib.Result.andThen (fun protocol ->
+    let separator = Stdlib.__AltSvc.__space text protocol.next in
+    if protocol.value == "clear" && (separator == Stdlib.String.__byteLength text || Stdlib.String.__byteAtUnchecked text separator == 44L) then Ok Clear
+    else if separator == Stdlib.String.__byteLength text || Stdlib.String.__byteAtUnchecked text separator != 61L then Error "Missing Alt-Svc authority"
+    else
+      let value = Stdlib.__AltSvc.__space text (separator + 1L) in
+      if value == Stdlib.String.__byteLength text || Stdlib.String.__byteAtUnchecked text value != 34L then Error "Alt-Svc authority must be quoted"
+      else Stdlib.__AltSvc.__quoted text (value + 1L) [] |> Stdlib.Result.andThen (fun authority ->
+        Stdlib.__AltSvc.__authority origin authority.value (count + 1L) |> Stdlib.Result.andThen (fun service ->
+          Stdlib.__AltSvc.__parameters text authority.next 86400L false 32L |> Stdlib.Result.andThen (fun parameters ->
+            let next = parameters.next in
+            let collected = if protocol.value == "h3" && parameters.lifetime > 0L then Stdlib.List.push endpoints (Stdlib.__AltSvc.Endpoint { service = service, lifetime = parameters.lifetime }) else endpoints in
+            if next == Stdlib.String.__byteLength text then Ok (Services (Stdlib.List.reverse collected))
+            else if Stdlib.__AltSvc.__space text (next + 1L) == Stdlib.String.__byteLength text then Error "Trailing Alt-Svc separator"
+            else Stdlib.__AltSvc.__entries text origin (next + 1L) (count + 1L) collected))))
+
+let parse (origin: String) (text: String) : Stdlib.Result.Result<Stdlib.__AltSvc.Advertisement, String> =
+  if origin == "" || Stdlib.String.__byteLength text > 8192L then Error "Invalid Alt-Svc advertisement"
+  else Stdlib.__AltSvc.__entries text origin 0L 0L []

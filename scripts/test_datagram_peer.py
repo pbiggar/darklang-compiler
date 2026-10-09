@@ -29,36 +29,36 @@ def check(directory, family):
     source = directory / ("udp6.dark" if ipv6 else "udp4.dark")
     binary = source.with_suffix("")
     source.write_text(f"""// udp.dark - Independent peer, packet boundaries, and owned cleanup.
-let loop (connection: Stdlib.Datagram.Socket) (remaining: Int64) : Unit =
+let loop (connection: Stdlib.__Datagram.Socket) (remaining: Int64) : Unit =
   if remaining == 0L then ()
   else
     let _ =
-      match Stdlib.Datagram.receive connection 1000L with
+      match Stdlib.__Datagram.receive connection 1000L with
       | Error code -> Stdlib.printLine ("ERROR " ++ Stdlib.Int64.toString code)
       | Ok message ->
         let _ = Stdlib.printLine ("PEER " ++ Stdlib.Int64.toString message.peer.port ++ " " ++ Stdlib.Blob.toHex message.payload) in
         if message.peer.address != {address} then Stdlib.printLine "BAD ADDRESS"
         else
-          match Stdlib.Datagram.send connection message.peer message.payload 1000L with
+          match Stdlib.__Datagram.send connection message.peer message.payload 1000L with
           | Error code -> Stdlib.printLine ("SEND ERROR " ++ Stdlib.Int64.toString code)
           | Ok () -> () in
     loop connection (remaining - 1L)
-match Stdlib.Datagram.{bind} {address} {port}L with
+match Stdlib.__Datagram.{bind} {address} {port}L with
 | Error code -> Stdlib.printLine ("BIND ERROR " ++ Stdlib.Int64.toString code)
 | Ok connection ->
   let _ =
-    match Stdlib.Datagram.{bind} {address} {port}L with
+    match Stdlib.__Datagram.{bind} {address} {port}L with
     | Error _ -> Stdlib.printLine "COLLISION"
-    | Ok other -> let _ = Stdlib.Datagram.close other in Stdlib.printLine "BAD COLLISION" in
+    | Ok other -> let _ = Stdlib.__Datagram.close other in Stdlib.printLine "BAD COLLISION" in
   let _ = Stdlib.printLine "READY" in
   let _ = loop connection 7L in
   let _ =
-    match Stdlib.Datagram.receive connection 30L with
+    match Stdlib.__Datagram.receive connection 30L with
     | Error code -> if code == 11L || code == 35L then Stdlib.printLine "TIMEOUT" else Stdlib.printLine "BAD TIMEOUT"
     | Ok _ -> Stdlib.printLine "BAD TIMEOUT" in
-  let _ = Stdlib.Datagram.close connection in
-  let _ = Stdlib.Datagram.close connection in
-  match Stdlib.Datagram.receive connection 1000L with
+  let _ = Stdlib.__Datagram.close connection in
+  let _ = Stdlib.__Datagram.close connection in
+  match Stdlib.__Datagram.receive connection 1000L with
   | Error 9L -> Stdlib.printLine "CLOSED"
   | _ -> Stdlib.printLine "BAD CLOSED"
 """)

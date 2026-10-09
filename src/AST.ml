@@ -69,14 +69,14 @@
 *)
 (* AST.ml - Complete semantic syntax and deterministic compiler identity helpers. *)
 [@@@warning "-30"]
+
 type 'a nonEmptyList = 'a NonEmptyList.t
 
 (*
    Compiler-wide warning settings passed from the driver into compiler passes.
    Duplicate binders are language errors, not configurable warnings.
 *)
-type warningSettings = 
-  | WarningSettings
+type warningSettings = WarningSettings
 
 (*
    Types used by semantic checking and the lowering pipeline.
@@ -99,7 +99,7 @@ type warningSettings =
    Native HAMT machinery retains both components. Public source syntax is
    String-keyed and renders only the value component as Dict<Value>.
 *)
-type semanticType = 
+type semanticType =
   | TInt8
   | TInt16
   | TInt32
@@ -130,7 +130,11 @@ type semanticType =
   | TInternalRawPtr
   | TDict of semanticType * semanticType
 
-type 't recordReferenceNode = {sourceTypeName : string; resolvedTypeName : string; typeArgs : 't list}
+type 't recordReferenceNode = {
+  sourceTypeName : string;
+  resolvedTypeName : string;
+  typeArgs : 't list;
+}
 
 type recordReference = semanticType recordReferenceNode
 
@@ -139,13 +143,17 @@ type recordReference = semanticType recordReferenceNode
    The resolved owner is semantic evidence required to assign a declaration-
    scoped FieldId at the checked-program boundary.
 *)
-type recordFieldReference = {sourceFieldName : string; resolvedTypeName : string option; resolvedFieldIndex : int option}
+type recordFieldReference = {
+  sourceFieldName : string;
+  resolvedTypeName : string option;
+  resolvedFieldIndex : int option;
+}
 
 (*
    A source constructor reference before or after nominal resolution.
    `None` is the genuinely unqualified form; no empty-name sentinel is used.
 *)
-type constructorReference = 
+type constructorReference =
   | UnresolvedConstructor of string option
   | ResolvedConstructor of string list * string * semanticType list
 
@@ -170,7 +178,7 @@ type constructorReference =
 (*
    &&
 *)
-type binOp = 
+type binOp =
   | Add
   | Sub
   | Mul
@@ -199,10 +207,7 @@ type binOp =
    Bitwise not: ~~~expr
    NonEmptyList helper functions
 *)
-type unaryOp = 
-  | Neg
-  | Not
-  | BitNot
+type unaryOp = Neg | Not | BitNot
 
 (*
    Pattern matching patterns
@@ -232,7 +237,7 @@ type unaryOp =
    _
    1l
 *)
-type pattern = 
+type pattern =
   | PUnit
   | PWildcard
   | PVar of string
@@ -262,13 +267,17 @@ type pattern =
    The deliberately restricted pattern language shared by non-recursive lets
    and lambda parameters. Match-only patterns cannot be represented here.
 *)
-type letPattern = 
+type letPattern =
   | LPUnit
   | LPWildcard
   | LPVariable of string
   | LPTuple of letPattern * letPattern * letPattern list
 
-type 't lambdaParameterNode = {pattern : letPattern; sourceAnnotation : 't option; inferredType : 't option}
+type 't lambdaParameterNode = {
+  pattern : letPattern;
+  sourceAnnotation : 't option;
+  inferredType : 't option;
+}
 
 type lambdaParameter = semanticType lambdaParameterNode
 
@@ -276,48 +285,35 @@ type lambdaParameter = semanticType lambdaParameterNode
    Stable semantic identities assigned at the parsed-program boundary. The
    representation is private so source spellings cannot be used as identities.
 *)
-type binderStructure = 
+type binderStructure =
   | LetBinderPatterns of letPattern list
   | MatchBinderPattern of pattern
 
-type bindingId = 
+type bindingId =
   | LocalBindingId of int * string option
   | TopLevelValueId of string
 
-type functionId = 
-  | FunctionId of int64
+type functionId = FunctionId of int64
+type typeId = TypeId of int
+type constructorId = ConstructorId of typeId * string * int
+type fieldId = FieldId of typeId * int
+type scopeBoundaryId = ScopeBoundaryId of int
+type recursiveGroupId = RecursiveGroupId of int
+type recursiveMemberId = RecursiveMemberId of int
 
-type typeId = 
-  | TypeId of int
-
-type constructorId = 
-  | ConstructorId of typeId * string * int
-
-type fieldId = 
-  | FieldId of typeId * int
-
-type scopeBoundaryId = 
-  | ScopeBoundaryId of int
-
-type recursiveGroupId = 
-  | RecursiveGroupId of int
-
-type recursiveMemberId = 
-  | RecursiveMemberId of int
-
-type recursiveMemberKind = 
+type recursiveMemberKind =
   | TopLevelFunctionMember
   | NamedLocalFunctionMember
   | DirectLambdaValueMember
 
-type recursiveAvailability = 
+type recursiveAvailability =
   | OrdinaryBinding
   | SelfRecursiveMember
   | MutualRecursiveMember
   | CompletedGroupMember
   | ImportedGroupMember
 
-type recursiveDependencyKind = 
+type recursiveDependencyKind =
   | DelayedCallableDependency
   | EagerValueDependency
   | TypeAliasDependency
@@ -326,38 +322,65 @@ type recursiveDependencyKind =
    Parser-only evidence that a declaration is eligible for recursive
    resolution.
 *)
-type recursiveCandidate = {sourceName : string; kind : recursiveMemberKind}
+type recursiveCandidate = { sourceName : string; kind : recursiveMemberKind }
 
-type parsedRecursiveMember = {binding : bindingId; boundary : scopeBoundaryId; member : recursiveMemberId; sourceName : string; kind : recursiveMemberKind}
+type parsedRecursiveMember = {
+  binding : bindingId;
+  boundary : scopeBoundaryId;
+  member : recursiveMemberId;
+  sourceName : string;
+  kind : recursiveMemberKind;
+}
 
-type resolvedRecursiveMember = {parsed : parsedRecursiveMember; group : recursiveGroupId; groupIndex : int; availability : recursiveAvailability}
+type resolvedRecursiveMember = {
+  parsed : parsedRecursiveMember;
+  group : recursiveGroupId;
+  groupIndex : int;
+  availability : recursiveAvailability;
+}
 
-type typedRecursiveMember = {resolved : resolvedRecursiveMember; monomorphicType : semanticType}
+type typedRecursiveMember = {
+  resolved : resolvedRecursiveMember;
+  monomorphicType : semanticType;
+}
 
-type loweredRecursiveMember = {typed : typedRecursiveMember; environmentIndex : int}
+type loweredRecursiveMember = {
+  typed : typedRecursiveMember;
+  environmentIndex : int;
+}
 
 (*
    Every materialized group is nonempty by construction.
 *)
-type parsedRecursiveGroup = {boundary : scopeBoundaryId; members : parsedRecursiveMember nonEmptyList}
+type parsedRecursiveGroup = {
+  boundary : scopeBoundaryId;
+  members : parsedRecursiveMember nonEmptyList;
+}
 
-type resolvedRecursiveGroup = {group : recursiveGroupId; members : resolvedRecursiveMember nonEmptyList}
+type resolvedRecursiveGroup = {
+  group : recursiveGroupId;
+  members : resolvedRecursiveMember nonEmptyList;
+}
 
-type typedRecursiveGroup = {group : recursiveGroupId; members : typedRecursiveMember nonEmptyList}
+type typedRecursiveGroup = {
+  group : recursiveGroupId;
+  members : typedRecursiveMember nonEmptyList;
+}
 
-type loweredRecursiveGroup = {group : recursiveGroupId; members : loweredRecursiveMember nonEmptyList}
+type loweredRecursiveGroup = {
+  group : recursiveGroupId;
+  members : loweredRecursiveMember nonEmptyList;
+}
 
-type recursiveBindingInfo = 
+type recursiveBindingInfo =
   | RecursiveBindingCandidate of recursiveCandidate
   | ParsedRecursiveBinding of parsedRecursiveMember
   | ResolvedRecursiveBinding of resolvedRecursiveMember
   | TypedRecursiveBinding of typedRecursiveMember
 
-type 't stringPartNode = 
-  | StringText of string
-  | StringExpr of 't exprNode
+type 't stringPartNode = StringText of string | StringExpr of 't exprNode
 
-and 't exprNode = 
+and 't exprNode =
   | UnitLiteral
   | Int64Literal of int64
   | Int128Literal of Z.t
@@ -386,7 +409,8 @@ and 't exprNode =
   | TupleLiteral of 't exprNode list
   | TupleAccess of 't exprNode * int
   | DictLiteral of 't * 't * ('t exprNode * 't exprNode) list
-  | RecordLiteral of 't recordReferenceNode * (recordFieldReference * 't exprNode) list
+  | RecordLiteral of
+      't recordReferenceNode * (recordFieldReference * 't exprNode) list
   | RecordUpdate of 't exprNode * (recordFieldReference * 't exprNode) list
   | RecordAccess of 't exprNode * recordFieldReference
   | Constructor of constructorReference * string * 't exprNode list
@@ -398,46 +422,49 @@ and 't exprNode =
   | RuntimeError of string
   | BoundaryRender of string * 't exprNode
 
-and 't matchCaseNode = {patterns : pattern nonEmptyList; guard : 't exprNode option; body : 't exprNode}
+and 't matchCaseNode = {
+  patterns : pattern nonEmptyList;
+  guard : 't exprNode option;
+  body : 't exprNode;
+}
 
 type expr = semanticType exprNode
-
 type stringPart = semanticType stringPartNode
-
 type matchCase = semanticType matchCaseNode
 
-type 't functionDefNode = {name : string; typeParams : string list; params : (string * 't) nonEmptyList; returnType : 't; body : 't exprNode; recursion : recursiveBindingInfo option}
+type 't functionDefNode = {
+  name : string;
+  typeParams : string list;
+  params : (string * 't) nonEmptyList;
+  returnType : 't;
+  body : 't exprNode;
+  recursion : recursiveBindingInfo option;
+}
 
-type 't variantNode = {name : string; fields : 't list}
+type 't variantNode = { name : string; fields : 't list }
 
-type 't typeDefNode = 
+type 't typeDefNode =
   | RecordDef of string * string list * (string * 't) list
   | SumTypeDef of string * string list * 't variantNode list
   | TypeAlias of string * string list * 't
 
-type 't valueDefNode = 
+type 't valueDefNode =
   | UncheckedValueDef of string * 't exprNode
   | CheckedValueDef of string * 't * 't exprNode
 
 type functionDef = semanticType functionDefNode
-
 type variant = semanticType variantNode
-
 type typeDef = semanticType typeDefNode
-
 type valueDef = semanticType valueDefNode
 
-type 't topLevelNode = 
+type 't topLevelNode =
   | FunctionDef of 't functionDefNode
   | TypeDef of 't typeDefNode
   | ValueDef of 't valueDefNode
   | Expression of string list * 't exprNode
 
-type 't programNode = 
-  | Program of 't topLevelNode list
-
+type 't programNode = Program of 't topLevelNode list
 type topLevel = semanticType topLevelNode
-
 type program = semanticType programNode
 
 (*
@@ -447,33 +474,61 @@ type program = semanticType programNode
    Parameter types (may contain TVar references)
    Return type (may contain TVar references)
 *)
-type moduleFunc = {name : string; typeParams : string list; paramTypes : semanticType list; returnType : semanticType}
+type moduleFunc = {
+  name : string;
+  typeParams : string list;
+  paramTypes : semanticType list;
+  returnType : semanticType;
+}
 
 (*
    Module definition - represents a namespace of functions
    Full module path (e.g., "Darklang.Stdlib.Int64")
    Functions in this module
 *)
-type moduleDef = {name : string; functions : moduleFunc list}
+type moduleDef = { name : string; functions : moduleFunc list }
 
 (*
    Module registry - maps full function paths to their definitions
 *)
 type moduleRegistry = moduleFunc StringOrder.Map.t
+
 module NonEmptyList = NonEmptyList
+
 let defaultWarningSettings = WarningSettings
-let unresolvedRecordReference sourceTypeName typeArgs = {sourceTypeName; resolvedTypeName = sourceTypeName; typeArgs}
-let unresolvedRecordFieldReference sourceFieldName = {sourceFieldName; resolvedTypeName = None; resolvedFieldIndex = None}
-let resolvedRecordFieldReference typeName sourceFieldName index = {sourceFieldName; resolvedTypeName = Some typeName; resolvedFieldIndex = Some index}
+
+let unresolvedRecordReference sourceTypeName typeArgs =
+  { sourceTypeName; resolvedTypeName = sourceTypeName; typeArgs }
+
+let unresolvedRecordFieldReference sourceFieldName =
+  { sourceFieldName; resolvedTypeName = None; resolvedFieldIndex = None }
+
+let resolvedRecordFieldReference typeName sourceFieldName index =
+  {
+    sourceFieldName;
+    resolvedTypeName = Some typeName;
+    resolvedFieldIndex = Some index;
+  }
+
 let constructorReferenceTypeName = function
   | UnresolvedConstructor name -> name
-  | ResolvedConstructor (path, name, _) -> Some (String.concat "." (path @ [name]))
-let resolvedConstructorReference canonical = match List.rev (String.split_on_char '.' canonical) with
+  | ResolvedConstructor (path, name, _) ->
+      Some (String.concat "." (path @ [ name ]))
+
+let resolvedConstructorReference canonical =
+  match List.rev (String.split_on_char '.' canonical) with
   | name :: path -> ResolvedConstructor (List.rev path, name, [])
-  | [] -> Crash.crash "Cannot resolve a constructor against an empty declaring type name"
-let resolvedConstructorReferenceWithTypeArgs canonical typeArgs = match resolvedConstructorReference canonical with
-  | ResolvedConstructor (path, name, _) -> ResolvedConstructor (path, name, typeArgs)
-  | UnresolvedConstructor _ -> Crash.crash "Resolved constructor helper returned an unresolved reference"
+  | [] ->
+      Crash.crash
+        "Cannot resolve a constructor against an empty declaring type name"
+
+let resolvedConstructorReferenceWithTypeArgs canonical typeArgs =
+  match resolvedConstructorReference canonical with
+  | ResolvedConstructor (path, name, _) ->
+      ResolvedConstructor (path, name, typeArgs)
+  | UnresolvedConstructor _ ->
+      Crash.crash "Resolved constructor helper returned an unresolved reference"
+
 (*
    Canonical native identity for an enum case whose display name is shared by
    multiple nominal declarations. The native backends encode case tags as
@@ -482,40 +537,103 @@ let resolvedConstructorReferenceWithTypeArgs canonical typeArgs = match resolved
    stdlib types directly. Their ABI tags predate user-defined ADTs.
 *)
 let constructorRuntimeIdentity declaringType caseName =
-  match declaringType, caseName with
-  | "Darklang.Stdlib.Option.Option", "Some" | "Darklang.Stdlib.Result.Result", "Ok" -> 0
-  | "Darklang.Stdlib.Option.Option", "None" | "Darklang.Stdlib.Result.Result", "Error" -> 1
+  match (declaringType, caseName) with
+  | "Darklang.Stdlib.Option.Option", "Some"
+  | "Darklang.Stdlib.Result.Result", "Ok" ->
+      0
+  | "Darklang.Stdlib.Option.Option", "None"
+  | "Darklang.Stdlib.Result.Result", "Error" ->
+      1
   | _ ->
-      let hash = String.fold_left (fun hash byte -> Int32.mul (Int32.logxor hash (Int32.of_int (Char.code byte))) 16777619l) 0x811c9dc5l (declaringType ^ "." ^ caseName) in
-      2 + Int64.to_int (Int64.rem (Int64.logand (Int64.of_int32 hash) 0xffffffffL) 4094L)
-let lambdaParameter pattern = {pattern; sourceAnnotation = None; inferredType = None}
-let typedLambdaVariable name typ = {pattern = LPVariable name; sourceAnnotation = Some typ; inferredType = Some typ}
-let inferredLambdaVariable name typ = {pattern = LPVariable name; sourceAnnotation = None; inferredType = Some typ}
-let rec letPatternBindings = function LPVariable name -> [name]
-  | LPTuple (first, second, rest) -> List.concat_map letPatternBindings (first :: second :: rest)
+      let hash =
+        String.fold_left
+          (fun hash byte ->
+            Int32.mul
+              (Int32.logxor hash (Int32.of_int (Char.code byte)))
+              16777619l)
+          0x811c9dc5l
+          (declaringType ^ "." ^ caseName)
+      in
+      2
+      + Int64.to_int
+          (Int64.rem (Int64.logand (Int64.of_int32 hash) 0xffffffffL) 4094L)
+
+let lambdaParameter pattern =
+  { pattern; sourceAnnotation = None; inferredType = None }
+
+let typedLambdaVariable name typ =
+  {
+    pattern = LPVariable name;
+    sourceAnnotation = Some typ;
+    inferredType = Some typ;
+  }
+
+let inferredLambdaVariable name typ =
+  {
+    pattern = LPVariable name;
+    sourceAnnotation = None;
+    inferredType = Some typ;
+  }
+
+let rec letPatternBindings = function
+  | LPVariable name -> [ name ]
+  | LPTuple (first, second, rest) ->
+      List.concat_map letPatternBindings (first :: second :: rest)
   | LPUnit | LPWildcard -> []
+
 let rec mapLetPatternBindings fn = function
   | LPVariable name -> LPVariable (fn name)
-  | LPTuple (first, second, rest) -> LPTuple (mapLetPatternBindings fn first, mapLetPatternBindings fn second, List.map (mapLetPatternBindings fn) rest)
-  | LPUnit -> LPUnit | LPWildcard -> LPWildcard
+  | LPTuple (first, second, rest) ->
+      LPTuple
+        ( mapLetPatternBindings fn first,
+          mapLetPatternBindings fn second,
+          List.map (mapLetPatternBindings fn) rest )
+  | LPUnit -> LPUnit
+  | LPWildcard -> LPWildcard
+
 let bindingId ordinal = LocalBindingId (ordinal, None)
 let namedBindingId ordinal name = LocalBindingId (ordinal, Some name)
 let topLevelValueId canonical = TopLevelValueId canonical
-let bindingDisplayName = function LocalBindingId (_, name) -> name | TopLevelValueId canonical -> Some canonical
+
+let bindingDisplayName = function
+  | LocalBindingId (_, name) -> name
+  | TopLevelValueId canonical -> Some canonical
+
 (* Bias the opaque representation so structural comparison retains uint64 order. *)
 let functionId ordinal = FunctionId (Int64.logxor ordinal Int64.min_int)
 let functionIdValue (FunctionId ordinal) = Int64.logxor ordinal Int64.min_int
-let nextFunctionIdOrdinal ordinal = if ordinal = -1L then Crash.crash "Function identity allocation exhausted" else Int64.add ordinal 1L
+
+let nextFunctionIdOrdinal ordinal =
+  if ordinal = -1L then Crash.crash "Function identity allocation exhausted"
+  else Int64.add ordinal 1L
+
 (*
    Allocate deterministic identities from an already-maintained catalog cursor.
 *)
 let allocateFunctionIdsFromOrdinal first names =
-  let sorted = Seq.fold_left (fun names name -> StringOrder.Set.add name names) StringOrder.Set.empty names in
-  snd (StringOrder.Set.fold (fun name (next, ids) -> nextFunctionIdOrdinal next, StringOrder.Map.add name (functionId next) ids) sorted (first, StringOrder.Map.empty))
+  let sorted =
+    Seq.fold_left
+      (fun names name -> StringOrder.Set.add name names)
+      StringOrder.Set.empty names
+  in
+  snd
+    (StringOrder.Set.fold
+       (fun name (next, ids) ->
+         ( nextFunctionIdOrdinal next,
+           StringOrder.Map.add name (functionId next) ids ))
+       sorted
+       (first, StringOrder.Map.empty))
+
 let allocateFunctionIds existing names =
-  let first = Seq.fold_left (fun next identity ->
-    let after = nextFunctionIdOrdinal (functionIdValue identity) in if Int64.unsigned_compare next after >= 0 then next else after) 0L existing in
+  let first =
+    Seq.fold_left
+      (fun next identity ->
+        let after = nextFunctionIdOrdinal (functionIdValue identity) in
+        if Int64.unsigned_compare next after >= 0 then next else after)
+      0L existing
+  in
   allocateFunctionIdsFromOrdinal first names
+
 let typeId ordinal = TypeId ordinal
 let constructorId owner name tag = ConstructorId (owner, name, tag)
 let constructorIdOwner (ConstructorId (owner, _, _)) = owner
@@ -525,107 +643,265 @@ let fieldId owner index = FieldId (owner, index)
 let fieldIdOwner (FieldId (owner, _)) = owner
 let fieldRuntimeIndex (FieldId (_, index)) = index
 let scopeBoundaryId ordinal = ScopeBoundaryId ordinal
+
 (*
    Group IDs share one compact namespace: declaration groups are even and
    singleton local-recursion groups are odd.
 *)
-let topLevelRecursiveGroupId ordinal = RecursiveGroupId (Int32.to_int (Int32.mul (Int32.of_int ordinal) 2l))
+let topLevelRecursiveGroupId ordinal =
+  RecursiveGroupId (Int32.to_int (Int32.mul (Int32.of_int ordinal) 2l))
+
 let recursiveMemberId ordinal = RecursiveMemberId ordinal
-let singletonRecursiveGroupId (RecursiveMemberId ordinal) = RecursiveGroupId (Int32.to_int (Int32.add (Int32.mul (Int32.of_int ordinal) 2l) 1l))
-let recursiveBindingName = function RecursiveBindingCandidate candidate -> candidate.sourceName | ParsedRecursiveBinding parsed -> parsed.sourceName
-  | ResolvedRecursiveBinding resolved -> resolved.parsed.sourceName | TypedRecursiveBinding typed -> typed.resolved.parsed.sourceName
-let recursiveBindingKind = function RecursiveBindingCandidate candidate -> candidate.kind | ParsedRecursiveBinding parsed -> parsed.kind
-  | ResolvedRecursiveBinding resolved -> resolved.parsed.kind | TypedRecursiveBinding typed -> typed.resolved.parsed.kind
-let recursiveBindingId = function ParsedRecursiveBinding parsed -> Some parsed.binding | ResolvedRecursiveBinding resolved -> Some resolved.parsed.binding
-  | TypedRecursiveBinding typed -> Some typed.resolved.parsed.binding | RecursiveBindingCandidate _ -> None
-let recursiveBindingAvailability = function ResolvedRecursiveBinding resolved -> Some resolved.availability | TypedRecursiveBinding typed -> Some typed.resolved.availability
+
+let singletonRecursiveGroupId (RecursiveMemberId ordinal) =
+  RecursiveGroupId
+    (Int32.to_int (Int32.add (Int32.mul (Int32.of_int ordinal) 2l) 1l))
+
+let recursiveBindingName = function
+  | RecursiveBindingCandidate candidate -> candidate.sourceName
+  | ParsedRecursiveBinding parsed -> parsed.sourceName
+  | ResolvedRecursiveBinding resolved -> resolved.parsed.sourceName
+  | TypedRecursiveBinding typed -> typed.resolved.parsed.sourceName
+
+let recursiveBindingKind = function
+  | RecursiveBindingCandidate candidate -> candidate.kind
+  | ParsedRecursiveBinding parsed -> parsed.kind
+  | ResolvedRecursiveBinding resolved -> resolved.parsed.kind
+  | TypedRecursiveBinding typed -> typed.resolved.parsed.kind
+
+let recursiveBindingId = function
+  | ParsedRecursiveBinding parsed -> Some parsed.binding
+  | ResolvedRecursiveBinding resolved -> Some resolved.parsed.binding
+  | TypedRecursiveBinding typed -> Some typed.resolved.parsed.binding
+  | RecursiveBindingCandidate _ -> None
+
+let recursiveBindingAvailability = function
+  | ResolvedRecursiveBinding resolved -> Some resolved.availability
+  | TypedRecursiveBinding typed -> Some typed.resolved.availability
   | RecursiveBindingCandidate _ | ParsedRecursiveBinding _ -> None
+
 (*
    Validate one complete binder structure before any of its names enter scope.
    The returned list preserves source order and never contains ignored names.
 *)
 let validateBinders structure =
   let rec matchBindings = function
-    | PVar name -> [name]
-    | PConstructor (_, fields) | PResolvedConstructor (_, _, _, fields) | PTuple fields | PList fields -> List.concat_map matchBindings fields
-    | PListCons (heads, tail) -> List.concat_map matchBindings heads @ matchBindings tail
+    | PVar name -> [ name ]
+    | PConstructor (_, fields)
+    | PResolvedConstructor (_, _, _, fields)
+    | PTuple fields
+    | PList fields ->
+        List.concat_map matchBindings fields
+    | PListCons (heads, tail) ->
+        List.concat_map matchBindings heads @ matchBindings tail
     | POr alternatives -> matchBindings (NonEmptyList.head alternatives)
-    | PUnit | PWildcard | PInt64 _ | PBigInt _ | PInt128Literal _ | PInt8Literal _ | PInt16Literal _ | PInt32Literal _
-    | PUInt8Literal _ | PUInt16Literal _ | PUInt32Literal _ | PUInt64Literal _ | PUInt128Literal _ | PBool _ | PString _ | PChar _ | PFloat _ -> [] in
-  let names = match structure with LetBinderPatterns patterns -> List.concat_map letPatternBindings patterns | MatchBinderPattern pattern -> matchBindings pattern in
-  let usable = List.filter (fun name -> name <> "" && not (String.starts_with ~prefix:"_" name)) names in
-  let duplicate = snd (List.fold_left (fun (seen, found) name -> match found with
-    | Some _ -> seen, found | None when StringOrder.Set.mem name seen -> seen, Some name | None -> StringOrder.Set.add name seen, None) (StringOrder.Set.empty, None) usable) in
-  match duplicate with Some name -> Error ("Duplicate binding '" ^ name ^ "' in the same pattern") | None -> Ok usable
+    | PUnit | PWildcard | PInt64 _ | PBigInt _ | PInt128Literal _
+    | PInt8Literal _ | PInt16Literal _ | PInt32Literal _ | PUInt8Literal _
+    | PUInt16Literal _ | PUInt32Literal _ | PUInt64Literal _ | PUInt128Literal _
+    | PBool _ | PString _ | PChar _ | PFloat _ ->
+        []
+  in
+  let names =
+    match structure with
+    | LetBinderPatterns patterns -> List.concat_map letPatternBindings patterns
+    | MatchBinderPattern pattern -> matchBindings pattern
+  in
+  let usable =
+    List.filter
+      (fun name -> name <> "" && not (String.starts_with ~prefix:"_" name))
+      names
+  in
+  let duplicate =
+    snd
+      (List.fold_left
+         (fun (seen, found) name ->
+           match found with
+           | Some _ -> (seen, found)
+           | None when StringOrder.Set.mem name seen -> (seen, Some name)
+           | None -> (StringOrder.Set.add name seen, None))
+         (StringOrder.Set.empty, None)
+         usable)
+  in
+  match duplicate with
+  | Some name -> Error ("Duplicate binding '" ^ name ^ "' in the same pattern")
+  | None -> Ok usable
+
 let applyNamed name args = Apply (Var name, [], args)
 let applyNamedWithTypes name typeArgs args = Apply (Var name, typeArgs, args)
-let valueDefName = function UncheckedValueDef (name, _) | CheckedValueDef (name, _, _) -> name
-let valueDefBody = function UncheckedValueDef (_, body) | CheckedValueDef (_, _, body) -> body
+
+let valueDefName = function
+  | UncheckedValueDef (name, _) | CheckedValueDef (name, _, _) -> name
+
+let valueDefBody = function
+  | UncheckedValueDef (_, body) | CheckedValueDef (_, _, body) -> body
+
 (*
    Case names that require a nominal native tag because they occur in more
    than one declaring type in the same compilation unit.
 *)
 let collidingConstructorCaseNames definitions =
-  let owners = List.fold_left (fun owners -> function
-    | SumTypeDef (typeName, _, variants) -> List.fold_left (fun owners (variant : 't variantNode) ->
-        let previous = match StringOrder.Map.find_opt variant.name owners with Some value -> value | None -> StringOrder.Set.empty in
-        StringOrder.Map.add variant.name (StringOrder.Set.add typeName previous) owners) owners variants
-    | RecordDef _ | TypeAlias _ -> owners) StringOrder.Map.empty definitions in
-  StringOrder.Map.fold (fun case owners collisions -> if StringOrder.Set.cardinal owners > 1 then StringOrder.Set.add case collisions else collisions) owners StringOrder.Set.empty
+  let owners =
+    List.fold_left
+      (fun owners -> function
+        | SumTypeDef (typeName, _, variants) ->
+            List.fold_left
+              (fun owners (variant : 't variantNode) ->
+                let previous =
+                  match StringOrder.Map.find_opt variant.name owners with
+                  | Some value -> value
+                  | None -> StringOrder.Set.empty
+                in
+                StringOrder.Map.add variant.name
+                  (StringOrder.Set.add typeName previous)
+                  owners)
+              owners variants
+        | RecordDef _ | TypeAlias _ -> owners)
+      StringOrder.Map.empty definitions
+  in
+  StringOrder.Map.fold
+    (fun case owners collisions ->
+      if StringOrder.Set.cardinal owners > 1 then
+        StringOrder.Set.add case collisions
+      else collisions)
+    owners StringOrder.Set.empty
+
 (* Preserve Stable structural comparison at typed map boundaries. OCaml orders
    constant and payload constructors separately, and its strings use UTF-8. *)
 let compareTypeId (TypeId left) (TypeId right) = Int.compare left right
-let compareBindingId left right = match left, right with
+
+let compareBindingId left right =
+  match (left, right) with
   | LocalBindingId (left, leftName), LocalBindingId (right, rightName) ->
-    let ordinal = Int.compare left right in if ordinal <> 0 then ordinal else Option.compare StringOrder.compare leftName rightName
-  | LocalBindingId _, TopLevelValueId _ -> -1 | TopLevelValueId _, LocalBindingId _ -> 1
-  | TopLevelValueId left, TopLevelValueId right -> StringOrder.compare left right
-let compareConstructorId (ConstructorId (owner, name, tag)) (ConstructorId (otherOwner, otherName, otherTag)) =
-  let ownerOrder = compareTypeId owner otherOwner in if ownerOrder <> 0 then ownerOrder else
-  let nameOrder = StringOrder.compare name otherName in if nameOrder <> 0 then nameOrder else Int.compare tag otherTag
+      let ordinal = Int.compare left right in
+      if ordinal <> 0 then ordinal
+      else Option.compare StringOrder.compare leftName rightName
+  | LocalBindingId _, TopLevelValueId _ -> -1
+  | TopLevelValueId _, LocalBindingId _ -> 1
+  | TopLevelValueId left, TopLevelValueId right ->
+      StringOrder.compare left right
+
+let compareConstructorId (ConstructorId (owner, name, tag))
+    (ConstructorId (otherOwner, otherName, otherTag)) =
+  let ownerOrder = compareTypeId owner otherOwner in
+  if ownerOrder <> 0 then ownerOrder
+  else
+    let nameOrder = StringOrder.compare name otherName in
+    if nameOrder <> 0 then nameOrder else Int.compare tag otherTag
+
 let compareFieldId (FieldId (owner, index)) (FieldId (otherOwner, otherIndex)) =
-  let ownerOrder = compareTypeId owner otherOwner in if ownerOrder <> 0 then ownerOrder else Int.compare index otherIndex
+  let ownerOrder = compareTypeId owner otherOwner in
+  if ownerOrder <> 0 then ownerOrder else Int.compare index otherIndex
+
 let semanticTypeRank = function
-  | TInt8 -> 0 | TInt16 -> 1 | TInt32 -> 2 | TInt64 -> 3 | TInt128 -> 4 | TInt -> 5
-  | TUInt8 -> 6 | TUInt16 -> 7 | TUInt32 -> 8 | TUInt64 -> 9 | TUInt128 -> 10
-  | TBool -> 11 | TFloat64 -> 12 | TString -> 13 | TBlob -> 14 | TChar -> 15 | TDateTime -> 16 | TUnit -> 17 | TNever -> 18
-  | TFunction _ -> 19 | TTuple _ -> 20 | TRecord _ -> 21 | TSum _ -> 22 | TList _ -> 23 | TStream _ -> 24
-  | TVar _ -> 25 | TInferenceVar _ -> 26 | TInternalRawPtr -> 27 | TDict _ -> 28
+  | TInt8 -> 0
+  | TInt16 -> 1
+  | TInt32 -> 2
+  | TInt64 -> 3
+  | TInt128 -> 4
+  | TInt -> 5
+  | TUInt8 -> 6
+  | TUInt16 -> 7
+  | TUInt32 -> 8
+  | TUInt64 -> 9
+  | TUInt128 -> 10
+  | TBool -> 11
+  | TFloat64 -> 12
+  | TString -> 13
+  | TBlob -> 14
+  | TChar -> 15
+  | TDateTime -> 16
+  | TUnit -> 17
+  | TNever -> 18
+  | TFunction _ -> 19
+  | TTuple _ -> 20
+  | TRecord _ -> 21
+  | TSum _ -> 22
+  | TList _ -> 23
+  | TStream _ -> 24
+  | TVar _ -> 25
+  | TInferenceVar _ -> 26
+  | TInternalRawPtr -> 27
+  | TDict _ -> 28
+
 let rec compareSemanticType left right =
   let rank = Int.compare (semanticTypeRank left) (semanticTypeRank right) in
   if rank <> 0 then rank else compareSameSemanticType left right
-and compareSameSemanticType left right = (match left, right with
+
+and compareSameSemanticType left right =
+  (match (left, right) with
   | TFunction (leftParams, leftRet), TFunction (rightParams, rightRet) ->
-    let params = compareSemanticTypeList leftParams rightParams in if params <> 0 then params else compareSemanticType leftRet rightRet
+      let params = compareSemanticTypeList leftParams rightParams in
+      if params <> 0 then params else compareSemanticType leftRet rightRet
   | TTuple left, TTuple right -> compareSemanticTypeList left right
-  | TRecord (leftName, leftArgs), TRecord (rightName, rightArgs) | TSum (leftName, leftArgs), TSum (rightName, rightArgs) ->
-    let name = StringOrder.compare leftName rightName in if name <> 0 then name else compareSemanticTypeList leftArgs rightArgs
-  | TList left, TList right | TStream left, TStream right -> compareSemanticType left right
+  | TRecord (leftName, leftArgs), TRecord (rightName, rightArgs)
+  | TSum (leftName, leftArgs), TSum (rightName, rightArgs) ->
+      let name = StringOrder.compare leftName rightName in
+      if name <> 0 then name else compareSemanticTypeList leftArgs rightArgs
+  | TList left, TList right | TStream left, TStream right ->
+      compareSemanticType left right
   | TVar left, TVar right -> StringOrder.compare left right
   | TInferenceVar (leftName, leftKey), TInferenceVar (rightName, rightKey) ->
-    let name = StringOrder.compare leftName rightName in if name <> 0 then name else StringOrder.compare leftKey rightKey
+      let name = StringOrder.compare leftName rightName in
+      if name <> 0 then name else StringOrder.compare leftKey rightKey
   | TDict (leftKey, leftValue), TDict (rightKey, rightValue) ->
-    let key = compareSemanticType leftKey rightKey in if key <> 0 then key else compareSemanticType leftValue rightValue
-  | (TInt8 | TInt16 | TInt32 | TInt64 | TInt128 | TInt | TUInt8 | TUInt16 | TUInt32 | TUInt64 | TUInt128
-    | TBool | TFloat64 | TString | TBlob | TChar | TDateTime | TUnit | TNever | TInternalRawPtr), _ -> 0
-  | (TFunction _ | TTuple _ | TRecord _ | TSum _ | TList _ | TStream _ | TVar _ | TInferenceVar _ | TDict _), _ -> Crash.crash "Semantic type comparison rank was inconsistent") [@warning "-4"]
-and compareSemanticTypeList left right = match left, right with
-  | [], [] -> 0 | [], _ :: _ -> -1 | _ :: _, [] -> 1
-  | left :: leftRest, right :: rightRest -> let order = compareSemanticType left right in if order <> 0 then order else compareSemanticTypeList leftRest rightRest
+      let key = compareSemanticType leftKey rightKey in
+      if key <> 0 then key else compareSemanticType leftValue rightValue
+  | ( ( TInt8 | TInt16 | TInt32 | TInt64 | TInt128 | TInt | TUInt8 | TUInt16
+      | TUInt32 | TUInt64 | TUInt128 | TBool | TFloat64 | TString | TBlob
+      | TChar | TDateTime | TUnit | TNever | TInternalRawPtr ),
+      _ ) ->
+      0
+  | ( ( TFunction _ | TTuple _ | TRecord _ | TSum _ | TList _ | TStream _
+      | TVar _ | TInferenceVar _ | TDict _ ),
+      _ ) ->
+      Crash.crash "Semantic type comparison rank was inconsistent")
+  [@warning "-4"]
+
+and compareSemanticTypeList left right =
+  match (left, right) with
+  | [], [] -> 0
+  | [], _ :: _ -> -1
+  | _ :: _, [] -> 1
+  | left :: leftRest, right :: rightRest ->
+      let order = compareSemanticType left right in
+      if order <> 0 then order else compareSemanticTypeList leftRest rightRest
 
 module DiagnosticFormatting = struct
- open StructuralValue
- let integer value = Scalar (string_of_int value)
- let optional = function None -> Union ("None", []) | Some value -> Union ("Some", [Text value])
- let binding = function LocalBindingId (ordinal, name) -> Union ("LocalBindingId", [integer ordinal; optional name]) | TopLevelValueId name -> Union ("TopLevelValueId", [Text name])
- let func identity =
-  let value = functionIdValue identity in
-  let unsigned = if value < 0L then Z.add (Z.of_int64 value) (Z.shift_left Z.one 64) else Z.of_int64 value in
-  Union ("FunctionId", [Scalar (Z.to_string unsigned ^ "UL")])
- let typ (TypeId ordinal) = Union ("TypeId", [integer ordinal])
- let constructor (ConstructorId (owner, name, tag)) = Union ("ConstructorId", [typ owner; Text name; integer tag])
- let field (FieldId (owner, index)) = Union ("FieldId", [typ owner; integer index])
- let scope (ScopeBoundaryId ordinal) = Union ("ScopeBoundaryId", [integer ordinal])
- let group (RecursiveGroupId ordinal) = Union ("RecursiveGroupId", [integer ordinal])
- let memberId (RecursiveMemberId ordinal) = Union ("RecursiveMemberId", [integer ordinal])
+  open StructuralValue
+
+  let integer value = Scalar (string_of_int value)
+
+  let optional = function
+    | None -> Union ("None", [])
+    | Some value -> Union ("Some", [ Text value ])
+
+  let binding = function
+    | LocalBindingId (ordinal, name) ->
+        Union ("LocalBindingId", [ integer ordinal; optional name ])
+    | TopLevelValueId name -> Union ("TopLevelValueId", [ Text name ])
+
+  let func identity =
+    let value = functionIdValue identity in
+    let unsigned =
+      if value < 0L then Z.add (Z.of_int64 value) (Z.shift_left Z.one 64)
+      else Z.of_int64 value
+    in
+    Union ("FunctionId", [ Scalar (Z.to_string unsigned ^ "UL") ])
+
+  let typ (TypeId ordinal) = Union ("TypeId", [ integer ordinal ])
+
+  let constructor (ConstructorId (owner, name, tag)) =
+    Union ("ConstructorId", [ typ owner; Text name; integer tag ])
+
+  let field (FieldId (owner, index)) =
+    Union ("FieldId", [ typ owner; integer index ])
+
+  let scope (ScopeBoundaryId ordinal) =
+    Union ("ScopeBoundaryId", [ integer ordinal ])
+
+  let group (RecursiveGroupId ordinal) =
+    Union ("RecursiveGroupId", [ integer ordinal ])
+
+  let memberId (RecursiveMemberId ordinal) =
+    Union ("RecursiveMemberId", [ integer ordinal ])
 end

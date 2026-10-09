@@ -1,0 +1,10 @@
+// Numeric operand constraints determine empty-list callback parameter types.
+Stdlib.List.indexedMap [] (fun i v -> v - Builtin.unwrap (Stdlib.Int.toInt64 i)) = []
+Stdlib.List.map [] (fun v -> v - (1L + 1L)) = []
+Stdlib.List.map [] (fun v -> (1L + 1L) - v) = []
+Stdlib.List.map [3L, 7L] (fun v -> v - (1L + 1L)) = [1L, 5L]
+Stdlib.List.map [] (fun v -> v < (1L + 1L)) = []
+Stdlib.List.map [3L, 7L] (fun v -> v < (1L + 1L)) = [false, false]
+Stdlib.List.map [] (fun v -> let offset = 1L + 1L in v - offset) = []
+Stdlib.List.map [] (fun v -> (v - (1L + 1L), v - (1l + 1l))) = compileerror="Expected TInt64, got TInt32"
+Stdlib.List.map [true] (fun v -> v - (1L + 1L)) = compileerror="Expected TBool, got TInt64"

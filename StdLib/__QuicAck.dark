@@ -1,0 +1,55 @@
+// __QuicAck.dark - Bounded packet replay windows and gap-preserving cumulative QUIC ACKs.
+module Darklang.Stdlib.__QuicAck
+
+type State = { largest: Int64, floor: Int64, ranges: List<Stdlib.__QuicFrames.Range> }
+type Received = { state: Stdlib.__QuicAck.State, fresh: Bool }
+
+val empty = Stdlib.__QuicAck.State { largest = -1L, floor = 0L, ranges = [] }
+
+let __insert (ranges: List<Stdlib.__QuicFrames.Range>) (number: Int64) : List<Stdlib.__QuicFrames.Range> =
+  match ranges with
+  | [] -> [Stdlib.__QuicFrames.Range { smallest = number, largest = number }]
+  | first :: rest ->
+    if number > first.largest + 1L then Stdlib.List.push ranges (Stdlib.__QuicFrames.Range { smallest = number, largest = number })
+    else if number == first.largest + 1L then Stdlib.List.push rest (Stdlib.__QuicFrames.Range { smallest = first.smallest, largest = number })
+    else if number >= first.smallest then ranges
+    else if number == first.smallest - 1L then
+      match rest with
+      | next :: tail when next.largest == number - 1L -> Stdlib.List.push tail (Stdlib.__QuicFrames.Range { smallest = next.smallest, largest = first.largest })
+      | _ -> Stdlib.List.push rest (Stdlib.__QuicFrames.Range { smallest = number, largest = first.largest })
+    else Stdlib.List.push (Stdlib.__QuicAck.__insert rest number) first
+
+// Forgetting ACK ranges also raises the replay floor. Never re-process a
+// packet merely because its range was evicted from the bounded ACK state.
+let receive (state: Stdlib.__QuicAck.State) (number: Int64) : Stdlib.Result.Result<Stdlib.__QuicAck.Received, String> =
+  if number < 0L || number > 4611686018427387903L then Error "Invalid QUIC received packet number"
+  else if number < state.floor || Stdlib.List.any state.ranges (fun range -> number >= range.smallest && number <= range.largest) then
+    Ok (Stdlib.__QuicAck.Received { state = state, fresh = false })
+  else
+    let largest = if number > state.largest then number else state.largest in
+    let floor = if largest >= 4096L && largest - 4095L > state.floor then largest - 4095L else state.floor in
+    let ranges = Stdlib.__QuicAck.__insert state.ranges number
+      |> Stdlib.List.filter (fun range -> range.largest >= floor)
+      |> Stdlib.List.map (fun range -> Stdlib.__QuicFrames.Range { smallest = if range.smallest < floor then floor else range.smallest, largest = range.largest })
+      |> Stdlib.List.take 128 in
+    let floor = if Stdlib.List.length ranges == 128 then (match Stdlib.List.reverse ranges with | last :: _ -> if last.smallest > floor then last.smallest else floor | [] -> floor) else floor in
+    Ok (Stdlib.__QuicAck.Received { fresh = true, state = Stdlib.__QuicAck.State { largest = largest, floor = floor, ranges = ranges } })
+
+let __encode (ranges: List<Stdlib.__QuicFrames.Range>) (previous: Int64) (chunks: List<Blob>)
+  : Stdlib.Result.Result<Blob, String> =
+  match ranges with
+  | [] -> Ok (Stdlib.Blob.concat (Stdlib.List.reverse chunks))
+  | range :: rest ->
+    match Stdlib.__QuicWire.integer (previous - range.largest - 2L), Stdlib.__QuicWire.integer (range.largest - range.smallest) with
+    | Ok gap, Ok length -> Stdlib.__QuicAck.__encode rest range.smallest (Stdlib.List.push (Stdlib.List.push chunks gap) length)
+    | _, _ -> Error "Invalid QUIC ACK state"
+
+let encode (state: Stdlib.__QuicAck.State) : Stdlib.Result.Result<Blob, String> =
+  match Stdlib.List.take state.ranges 8 with
+  | [] -> Error "No QUIC packets to acknowledge"
+  | first :: rest ->
+    match Stdlib.__QuicWire.integer first.largest, Stdlib.__QuicWire.integer (Stdlib.List.fold rest 0L (fun count _range -> count + 1L)), Stdlib.__QuicWire.integer (first.largest - first.smallest) with
+    | Ok largest, Ok count, Ok length ->
+      Stdlib.__QuicAck.__encode rest first.smallest [] |> Stdlib.Result.map (fun tail ->
+        Stdlib.Blob.concat [Stdlib.Blob.__fromInt64List [2L], largest, Stdlib.Blob.__fromInt64List [0L], count, length, tail])
+    | _, _, _ -> Error "Invalid QUIC ACK state"

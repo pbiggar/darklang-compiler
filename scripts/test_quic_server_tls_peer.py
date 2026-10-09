@@ -20,9 +20,9 @@ ROOT = Path(__file__).resolve().parents[1]
 DARK = '''// server-tls.dark - Live raw QUIC TLS flight and authenticated application-key release.
 let arg (index: Int) : Blob = Stdlib.Cli.Args.get index |> Stdlib.Result.andThen Stdlib.Blob.fromHex |> Stdlib.Result.withDefault Stdlib.Blob.empty
 let print (data: Blob) : Unit = Stdlib.printLine (Stdlib.Blob.toHex data)
-let finish (handshake: Stdlib.QuicServerTls.Handshake) : Stdlib.Result.Result<Unit, String> =
+let finish (handshake: Stdlib.__QuicServerTls.Handshake) : Stdlib.Result.Result<Unit, String> =
   Stdlib.Blob.fromHex (Builtin.stdinReadLine (())) |> Stdlib.Result.andThen (fun message ->
-    Stdlib.QuicServerTls.finish handshake message |> Stdlib.Result.map (fun ready ->
+    Stdlib.__QuicServerTls.finish handshake message |> Stdlib.Result.map (fun ready ->
       print ready.send.key
       print ready.send.iv
       print ready.send.hp
@@ -31,13 +31,13 @@ let finish (handshake: Stdlib.QuicServerTls.Handshake) : Stdlib.Result.Result<Un
       print ready.receive.hp
       print ready.parameters.initialSource
       let changed = Stdlib.Blob.concat [Stdlib.Blob.slice message 0 35, Stdlib.Blob.__fromInt64List [Stdlib.Int64.bitwiseXor (Stdlib.Blob.__getByte message 35L) 1L]] in
-      let rejects = match Stdlib.QuicServerTls.finish handshake changed with | Error _ -> true | Ok _ -> false in
+      let rejects = match Stdlib.__QuicServerTls.finish handshake changed with | Error _ -> true | Ok _ -> false in
       Stdlib.printLine (if rejects then "DONE" else "FAILED")))
 let run () : Stdlib.Result.Result<Unit, String> =
   Stdlib.Blob.fromHex "@CERT@" |> Stdlib.Result.andThen (fun certificate ->
     Stdlib.Blob.fromHex "@KEY@" |> Stdlib.Result.andThen (fun key ->
       Stdlib.TlsServerIdentity.create certificate key |> Stdlib.Result.andThen (fun identity ->
-        Stdlib.QuicServerTls.start identity (arg 0) (arg 1) (arg 2) |> Stdlib.Result.andThen (fun handshake ->
+        Stdlib.__QuicServerTls.start identity (arg 0) (arg 1) (arg 2) |> Stdlib.Result.andThen (fun handshake ->
           let flight = handshake.flight in
           print flight.hello
           print flight.encrypted

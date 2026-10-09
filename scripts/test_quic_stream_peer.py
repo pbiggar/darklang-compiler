@@ -30,56 +30,56 @@ let emit (bytes: Blob) (offset: Int64) : Unit =
     let part = Stdlib.Blob.slice bytes (Stdlib.Int.fromInt64 offset) 512 in
     let _ = Stdlib.printLine (Stdlib.Blob.toHex part) in
     emit bytes (offset + 512L)
-let initialize (ready: Stdlib.QuicClient.Ready) : Stdlib.Result.Result<Stdlib.QuicConnection.State, String> =
-  Stdlib.QuicConnection.fromClient ready |> Stdlib.Result.andThen (fun state ->
-    Stdlib.QuicConnection.openStream state 2L |> Stdlib.Result.andThen (fun state ->
-    Stdlib.QuicConnection.openStream state 6L |> Stdlib.Result.andThen (fun state ->
-    Stdlib.QuicConnection.openStream state 10L |> Stdlib.Result.andThen (fun state ->
-    Stdlib.QuicConnection.openStream state 0L |> Stdlib.Result.andThen (fun state ->
-      match Stdlib.Http3Wire.serialize 4L (Stdlib.Http3Wire.settings ()),
-        Stdlib.Qpack.encode [(":method", "GET"), (":scheme", "https"), (":authority", "localhost"), (":path", "/streams")] |> Stdlib.Result.andThen (Stdlib.Http3Wire.serialize 1L) with
+let initialize (ready: Stdlib.__QuicClient.Ready) : Stdlib.Result.Result<Stdlib.__QuicConnection.State, String> =
+  Stdlib.__QuicConnection.fromClient ready |> Stdlib.Result.andThen (fun state ->
+    Stdlib.__QuicConnection.openStream state 2L |> Stdlib.Result.andThen (fun state ->
+    Stdlib.__QuicConnection.openStream state 6L |> Stdlib.Result.andThen (fun state ->
+    Stdlib.__QuicConnection.openStream state 10L |> Stdlib.Result.andThen (fun state ->
+    Stdlib.__QuicConnection.openStream state 0L |> Stdlib.Result.andThen (fun state ->
+      match Stdlib.__Http3Wire.serialize 4L (Stdlib.__Http3Wire.settings ()),
+        Stdlib.__Qpack.encode [(":method", "GET"), (":scheme", "https"), (":authority", "localhost"), (":path", "/streams")] |> Stdlib.Result.andThen (Stdlib.__Http3Wire.serialize 1L) with
       | Ok settings, Ok request ->
-        Stdlib.QuicConnection.write state 2L (Stdlib.Blob.concat [Stdlib.String.toBlob "\\0", settings]) false |> Stdlib.Result.andThen (fun state ->
-        Stdlib.Blob.fromHex "02" |> Stdlib.Result.andThen (fun marker -> Stdlib.QuicConnection.write state 6L marker false) |> Stdlib.Result.andThen (fun state ->
-        Stdlib.Blob.fromHex "03" |> Stdlib.Result.andThen (fun marker -> Stdlib.QuicConnection.write state 10L marker false) |> Stdlib.Result.andThen (fun state ->
-        Stdlib.QuicConnection.write state 0L request true)))
+        Stdlib.__QuicConnection.write state 2L (Stdlib.Blob.concat [Stdlib.String.toBlob "\\0", settings]) false |> Stdlib.Result.andThen (fun state ->
+        Stdlib.Blob.fromHex "02" |> Stdlib.Result.andThen (fun marker -> Stdlib.__QuicConnection.write state 6L marker false) |> Stdlib.Result.andThen (fun state ->
+        Stdlib.Blob.fromHex "03" |> Stdlib.Result.andThen (fun marker -> Stdlib.__QuicConnection.write state 10L marker false) |> Stdlib.Result.andThen (fun state ->
+        Stdlib.__QuicConnection.write state 0L request true)))
       | _, _ -> Error "HTTP/3 encoding failed")))))
-let controls (state: Stdlib.QuicConnection.State) (uni: Stdlib.Http3Uni.State)
-  : Stdlib.Result.Result<(Stdlib.QuicConnection.State * Stdlib.Http3Uni.State), String> =
+let controls (state: Stdlib.__QuicConnection.State) (uni: Stdlib.__Http3Uni.State)
+  : Stdlib.Result.Result<(Stdlib.__QuicConnection.State * Stdlib.__Http3Uni.State), String> =
   Stdlib.List.fold state.flow.channels (Ok ((state, uni))) (fun result channel ->
     if channel.id % 4L != 3L then result
     else result |> Stdlib.Result.andThen (fun pair ->
       let (connection, streams) = pair in
-      Stdlib.QuicConnection.read connection channel.id |> Stdlib.Result.andThen (fun read ->
-        Stdlib.Http3Uni.receive streams channel.id read.bytes read.finished (Stdlib.Option.isSome read.reset)
+      Stdlib.__QuicConnection.read connection channel.id |> Stdlib.Result.andThen (fun read ->
+        Stdlib.__Http3Uni.receive streams channel.id read.bytes read.finished (Stdlib.Option.isSome read.reset)
           |> Stdlib.Result.map (fun received -> (read.state, received.state)))))
-let receive (state: Stdlib.QuicConnection.State) (deadline: Int64)
-  (message: Stdlib.Http3Message.State) (uni: Stdlib.Http3Uni.State)
+let receive (state: Stdlib.__QuicConnection.State) (deadline: Int64)
+  (message: Stdlib.__Http3Message.State) (uni: Stdlib.__Http3Uni.State)
   : Stdlib.Result.Result<Unit, String> =
   controls state uni |> Stdlib.Result.andThen (fun pair ->
   let (connection, streams) = pair in
-  Stdlib.QuicConnection.read connection 0L |> Stdlib.Result.andThen (fun read ->
+  Stdlib.__QuicConnection.read connection 0L |> Stdlib.Result.andThen (fun read ->
     let _ = emit read.bytes 0L in
     if Stdlib.Option.isSome read.reset then Error "Response reset"
-    else Stdlib.Http3Message.feed message read.bytes |> Stdlib.Result.andThen (fun received ->
+    else Stdlib.__Http3Message.feed message read.bytes |> Stdlib.Result.andThen (fun received ->
       if read.finished then
-        Stdlib.Http3Message.finish received.state |> Stdlib.Result.andThen (fun _unit ->
-          Stdlib.QuicConnection.flush read.state |> Stdlib.Result.map (fun _state -> ()))
-      else match Stdlib.Network.monotonicMillis () with
+        Stdlib.__Http3Message.finish received.state |> Stdlib.Result.andThen (fun _unit ->
+          Stdlib.__QuicConnection.flush read.state |> Stdlib.Result.map (fun _state -> ()))
+      else match Stdlib.__Network.monotonicMillis () with
       | Error _ -> Error "Clock failed"
       | Ok now -> if now >= deadline then Error "Response timed out"
-                  else Stdlib.QuicConnection.poll read.state 10L |> Stdlib.Result.andThen (fun next ->
+                  else Stdlib.__QuicConnection.poll read.state 10L |> Stdlib.Result.andThen (fun next ->
                     receive next deadline received.state streams))))
 let run () : Unit =
   match Stdlib.Blob.fromHex "@ROOT@", Stdlib.Cli.Args.get 0 |> Stdlib.Result.andThen (fun value -> Stdlib.Int64.parse value |> Stdlib.Result.mapError (fun _error -> "port")) with
   | Ok root, Ok port ->
-    match Stdlib.QuicClient.connect (Stdlib.Datagram.Endpoint { address = [127L,0L,0L,1L], port = port }) "localhost" [root] 8000L with
+    match Stdlib.__QuicClient.connect (Stdlib.__Datagram.Endpoint { address = [127L,0L,0L,1L], port = port }) "localhost" [root] 8000L with
     | Error message -> Stdlib.printLine ("ERROR " ++ message)
     | Ok ready ->
       let result = initialize ready |> Stdlib.Result.andThen (fun state ->
-        match Stdlib.Network.monotonicMillis () with | Error _ -> Error "Clock failed" | Ok now ->
-          receive state (now + 10000L) (Stdlib.Http3Message.create (Response false)) (Stdlib.Http3Uni.create true)) in
-      let _ = Stdlib.QuicClient.close ready in
+        match Stdlib.__Network.monotonicMillis () with | Error _ -> Error "Clock failed" | Ok now ->
+          receive state (now + 10000L) (Stdlib.__Http3Message.create (Response false)) (Stdlib.__Http3Uni.create true)) in
+      let _ = Stdlib.__QuicClient.close ready in
       match result with | Error message -> Stdlib.printLine ("ERROR " ++ message) | Ok () -> Stdlib.printLine "DONE"
   | _ -> Stdlib.printLine "Bad arguments"
 run ()
@@ -88,7 +88,7 @@ run ()
 
 HTTP_CLIENT_DARK = """// client.dark - Exercise lazy HTTP/3 response ownership and early close.
 let output (kind: Int64) (bytes: Blob) : Unit =
-  match Stdlib.Http3Wire.serialize kind bytes with
+  match Stdlib.__Http3Wire.serialize kind bytes with
   | Error message -> Stdlib.printLine ("ERROR " ++ message)
   | Ok wire -> Stdlib.printLine (Stdlib.Blob.toHex wire)
 let consume (body: Stream<UInt8>) (bytes: List<UInt8>) (count: Int) : Unit =
@@ -104,16 +104,16 @@ let emitBlob (body: Blob) (position: Int) : Unit =
     let _ = output 0L (Stdlib.Blob.slice body position 512) in
     emitBlob body (position + 512)
 let run () : Unit =
-  match Stdlib.Blob.fromHex "@ROOT@", Stdlib.HttpWire.parseUrl "https://localhost/streams", Stdlib.Blob.fromHex "@BODY@",
+  match Stdlib.Blob.fromHex "@ROOT@", Stdlib.__HttpWire.parseUrl "https://localhost/streams", Stdlib.Blob.fromHex "@BODY@",
     Stdlib.Cli.Args.get 0 |> Stdlib.Result.andThen (fun value -> Stdlib.Int64.parse value |> Stdlib.Result.mapError (fun _error -> "port")) with
   | Ok root, Ok url, Ok upload, Ok port ->
-    match Stdlib.QuicClient.connect (Stdlib.Datagram.Endpoint { address = [127L,0L,0L,1L], port = port }) "localhost" [root] 8000L with
+    match Stdlib.__QuicClient.connect (Stdlib.__Datagram.Endpoint { address = [127L,0L,0L,1L], port = port }) "localhost" [root] 8000L with
     | Error message -> Stdlib.printLine ("ERROR " ++ message)
     | Ok ready ->
-      match Stdlib.Http3Client.stream ready (if Stdlib.Blob.length upload == 0 then "GET" else "POST") url [] upload 10000L with
+      match Stdlib.__Http3Client.stream ready (if Stdlib.Blob.length upload == 0 then "GET" else "POST") url [] upload 10000L with
       | Error message -> Stdlib.printLine ("ERROR " ++ message)
       | Ok response ->
-        let _ = match Stdlib.Qpack.encode ([(":status", Stdlib.Int.toString response.statusCode)] @ response.headers) with
+        let _ = match Stdlib.__Qpack.encode ([(":status", Stdlib.Int.toString response.statusCode)] @ response.headers) with
           | Error message -> Stdlib.printLine ("ERROR " ++ message)
           | Ok wire -> output 1L wire in
         let _ = consume response.body [] 0 in
@@ -130,35 +130,35 @@ let emit (bytes: Blob) (offset: Int) : Unit =
     let _ = Stdlib.printLine (Stdlib.Blob.toHex (Stdlib.Blob.slice bytes offset 512)) in
     emit bytes (offset + 512)
 let frame (kind: Int64) (bytes: Blob) : Unit =
-  match Stdlib.Http3Wire.serialize kind bytes with
+  match Stdlib.__Http3Wire.serialize kind bytes with
   | Error message -> Stdlib.printLine ("ERROR " ++ message)
   | Ok bytes -> emit bytes 0
 let fields (values: List<(String * String)>) : Unit =
-  match Stdlib.Qpack.encode values with
+  match Stdlib.__Qpack.encode values with
   | Error message -> Stdlib.printLine ("ERROR " ++ message)
   | Ok bytes -> frame 1L bytes
-let event (value: Stdlib.Http3Message.Event) : Unit =
+let event (value: Stdlib.__Http3Message.Event) : Unit =
   match value with
   | BodyChunk bytes -> frame 0L bytes
   | ResponseHead head -> fields ([(":status", Stdlib.Int64.toString head.status)] @ head.headers)
   | TrailerFields trailers -> fields trailers
   | RequestHead _ -> Stdlib.printLine "ERROR request event"
-let receive (state: Stdlib.Http3.State) : Stdlib.Result.Result<Unit, String> =
-  Stdlib.Http3.receive state |> Stdlib.Result.andThen (fun received ->
+let receive (state: Stdlib.__Http3.State) : Stdlib.Result.Result<Unit, String> =
+  Stdlib.__Http3.receive state |> Stdlib.Result.andThen (fun received ->
     let _ = Stdlib.List.iter received.events event in
     if received.finished then Ok () else receive received.state)
 let run () : Unit =
   match Stdlib.Blob.fromHex "@ROOT@", Stdlib.Cli.Args.get 0 |> Stdlib.Result.andThen (fun value -> Stdlib.Int64.parse value |> Stdlib.Result.mapError (fun _error -> "port")) with
   | Ok root, Ok port ->
-    match Stdlib.QuicClient.connect (Stdlib.Datagram.Endpoint { address = [127L,0L,0L,1L], port = port }) "localhost" [root] 8000L with
+    match Stdlib.__QuicClient.connect (Stdlib.__Datagram.Endpoint { address = [127L,0L,0L,1L], port = port }) "localhost" [root] 8000L with
     | Error message -> Stdlib.printLine ("ERROR " ++ message)
     | Ok ready ->
-      let result = Stdlib.Http3.initialize ready false 10000L |> Stdlib.Result.andThen (fun state ->
-        Stdlib.Qpack.encode [(":method", "GET"), (":scheme", "https"), (":authority", "localhost"), (":path", "/streams")]
-          |> Stdlib.Result.andThen (Stdlib.Http3Wire.serialize 1L)
-          |> Stdlib.Result.andThen (fun request -> Stdlib.Http3.write state request true)
+      let result = Stdlib.__Http3.initialize ready false 10000L |> Stdlib.Result.andThen (fun state ->
+        Stdlib.__Qpack.encode [(":method", "GET"), (":scheme", "https"), (":authority", "localhost"), (":path", "/streams")]
+          |> Stdlib.Result.andThen (Stdlib.__Http3Wire.serialize 1L)
+          |> Stdlib.Result.andThen (fun request -> Stdlib.__Http3.write state request true)
           |> Stdlib.Result.andThen receive) in
-      let _ = Stdlib.QuicClient.close ready in
+      let _ = Stdlib.__QuicClient.close ready in
       match result with | Error message -> Stdlib.printLine ("ERROR " ++ message) | Ok () -> Stdlib.printLine "DONE"
   | _ -> Stdlib.printLine "Bad arguments"
 run ()
@@ -191,17 +191,17 @@ def main():
         source, binary = Path(temporary) / "streams.dark", Path(temporary) / "streams"
         program = HTTP_CLIENT_DARK if options.http_client else HTTP_OWNER_DARK if options.http_owner else DARK
         if options.discovery:
-            helper = '''let advertised (root: Blob) (port: Int64) : Stdlib.Result.Result<Stdlib.QuicClient.Ready, String> =
+            helper = '''let advertised (root: Blob) (port: Int64) : Stdlib.Result.Result<Stdlib.__QuicClient.Ready, String> =
   Stdlib.Blob.fromHex "000103616C74076578616D706C6507696E76616C69640000010003026833000400047F000001"
-    |> Stdlib.Result.andThen (fun wire -> Stdlib.HttpsService.parse "localhost" port wire)
+    |> Stdlib.Result.andThen (fun wire -> Stdlib.__HttpsService.parse "localhost" port wire)
     |> Stdlib.Result.andThen (fun record -> match record with
-      | Some (Service service) -> Stdlib.Http3Discovery.connect [service] "localhost" [root] true |> Stdlib.Result.fromOption "Advertised connection failed"
+      | Some (Service service) -> Stdlib.__Http3Discovery.connect [service] "localhost" [root] true |> Stdlib.Result.fromOption "Advertised connection failed"
       | _ -> Error "Invalid advertisement")
 '''
             program = program.replace("let run () : Unit =", helper + "let run () : Unit =")
-            program = program.replace('Stdlib.QuicClient.connect (Stdlib.Datagram.Endpoint { address = [127L,0L,0L,1L], port = port }) "localhost" [root] 8000L', "advertised root port")
+            program = program.replace('Stdlib.__QuicClient.connect (Stdlib.__Datagram.Endpoint { address = [127L,0L,0L,1L], port = port }) "localhost" [root] 8000L', "advertised root port")
         if options.buffered:
-            program = program.replace("Stdlib.Http3Client.stream", "Stdlib.Http3Client.request").replace("consume response.body [] 0", "emitBlob response.body 0").replace("Stdlib.Stream.close response.body", "()")
+            program = program.replace("Stdlib.__Http3Client.stream", "Stdlib.__Http3Client.request").replace("consume response.body [] 0", "emitBlob response.body 0").replace("Stdlib.Stream.close response.body", "()")
         elif options.close_early:
             program = program.replace("consume response.body [] 0", "()")
         source.write_text(program.replace("@ROOT@", ca.public_bytes(serialization.Encoding.DER).hex()).replace("@BODY@", upload_bytes.hex()))

@@ -1,5 +1,10 @@
 # CLI, process, host, and input parity
 
+Current compiler source review: 2026-10-07 at `7154b0ea9c1a3f53d30984ed17b9e0cc5d8f0dce`.
+See the [current audit](current-audit.md) for post-port status and validation.
+Older revision pairs and executed counts below are historical evidence, not
+a fresh test result for this revision.
+
 This contract was revalidated against compiler HEAD
 `cce6860f02b13d416295ff342341eeeae997f49f` and darklang/dark
 `04fbe9dcc995c6188757d583e273cbd30a3e2d3d`. DCB1 report commit
@@ -13,7 +18,7 @@ All same-source comparisons in this work use those exact revisions.
 | --- | --- | --- |
 | Shell execution | `ExecutionOutcome`, `execute`, the two Result helpers | `$HOME` expansion, `$SHELL` with `/bin/bash` fallback, inherited stdin, independent complete stdout/stderr, untrimmed outcome text |
 | Host | `OS`, `Architecture`, `Shell`, `Host` and discovery functions | Interpreter variants, normalized `uname`, shell recognition, and error precedence |
-| System | `Env.get`, `Env.getAll`, `Cli.Env` lookup/default/home/mutation, the Posix support subset, `Sys.*` | Exact environment values, child inheritance, passwd fallback, LOGNAME/USER/account precedence, uname values, PID/UID, online CPUs, EPERM-as-running |
+| System | `Env.get`, `Env.getAll`, `Cli.Env` lookup/default/home/mutation, the Posix API, `Sys.*` | Exact environment values, child inheritance, passwd fallback, LOGNAME/USER/account precedence, uname values, PID/UID, online CPUs, EPERM-as-running |
 | Filesystem | `Cli.FileSystem.currentDirectory`, `listDirectory`, `pathExists`, `isDirectory`, `readFile`, `readFileAsString`, `overwriteFile`, `appendToFile`, and `deleteFile` | Blob I/O, full paths in directory listings, structured file errors, and observable file mutation |
 | Processes | `ProcessHandle`, `Output`, `spawn`, `communicate`, `terminate`, and portable helpers | PATH-aware argv execution, inherited environment/stdin, normalized signal exits, timeouts, pipelines, and PID lifecycle |
 | Input | `Key`, `Modifiers`, `KeyRead`, helpers, and `readKey` | Portable key names, ALT+CTRL+SHIFT display order, UTF-8/ANSI decoding, repeat coalescing, resize events, and terminal restoration |
@@ -30,12 +35,13 @@ interpreter source omits that match arm, while the AOT compiler requires the
 branch to make the result total. Ahead-of-time type errors remain the normal
 compiler timing divergence.
 
-Only `Posix.Error`, `kill`, `sigterm`, `sigkill`, `sleep`, and
-`isProcessRunning` are claimed from the larger interpreter Posix API. The
-filesystem and environment functions listed above are additionally claimed
-against darklang/dark `v0.0.35` revision
-`0b3888d8e4f30d48ecd738f5cbe5cc2b8d958460`. `Platform.target` and
-`CompilerExecution.execute` belong to the compiler driver.
+The complete interpreter Posix boundary is now implemented: all 29 Builtin
+dependencies of the pinned package, with `Cli.File`, `Cli.Dir`, and
+`Cli.FileSystem` reimported over it. This extension is pinned to darklang/dark
+`v0.0.35` revision `0b3888d8e4f30d48ecd738f5cbe5cc2b8d958460`.
+Daemon is excluded. Coverage, imported behavior, native target details and
+validation limits are recorded in [POSIX host API coverage](posix-host-api.md).
+`Platform.target` and `CompilerExecution.execute` belong to the compiler driver.
 
 ## Native boundary
 
@@ -76,7 +82,7 @@ carried by a typed ANF/MIR/LIR sleep operation and lowered to blocking
 `nanosleep` on Linux ARM64, Linux x86_64, and macOS ARM64. The native timeout is
 normalized into seconds and nanoseconds, and interruption resumes with the
 remaining timeout. This replaces the compiler baseline's observable shell
-execution at `stdlib/CliPosix.dark:29-30`; it does not add a
+execution at `StdLib/Cli/Posix.dark`; it does not add a
 public compiler extension. The full revision-pinned comparison is in
 [Option, Result, and Retry compatibility](stdlib/option-result-retry.md).
 
@@ -97,18 +103,18 @@ Native interpreter behavior is in
 `backend/src/Builtins/Builtins.Cli/Libs/Execution.fs:25-427`,
 `Posix.fs:343-545,945-1052,1305-1398`, and `Stdin.fs:15-386`.
 
-The compiler public wrappers are in the `stdlib/Cli*.dark`
+The compiler public wrappers are in `StdLib/Cli.dark` and `StdLib/Cli/`
 module files.
 The registry is `src/DarkStdlib.ml`; typed lowering starts in
-`passes/anf/AST_to_ANF.fs`, passes through `ir/anf/ANF.fs`, `ir/mir/MIR.fs`, and `ir/lir/LIR.fs`, and
+`src/passes/anf/AST_to_ANF.ml`, passes through `src/ir/anf/ANF.ml`, `src/ir/mir/MIR.ml`, and `src/ir/lir/LIR.ml`, and
 ends in both architecture code generators. Focused native evidence is
 `test/fixtures/e2e/cli_process_host_input.e2e`,
 `test/fixtures/e2e/filesystem_env_parity.e2e`, plus the enabled pinned
 `test/fixtures/e2e/upstream/stdlib/cli-process.dark` corpus. Target-ABI coverage is
-in `ARM64CodeGenTests.fs`, and executable Linux x86_64 coverage runs the native
-operations under QEMU in `X86_64CodeGenTests.fs`.
+in `test/compiler-passes/ARM64CodeGenTests.ml`, and executable Linux x86_64 coverage runs the native
+operations under QEMU in `test/compiler-passes/X86_64CodeGenTests.ml`.
 
-## Verification record
+## Historical verification record
 
 The implementation was rebased onto compiler commit
 `fb61d714723f34d6c43e9bdc03dd96fb46f0c4ea`. Compiler commit

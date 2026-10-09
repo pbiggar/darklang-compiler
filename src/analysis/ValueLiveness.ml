@@ -4,6 +4,9 @@
 *)
 (* ValueLiveness.ml - Backward value-edge transfer independent of physical storage. *)
 module Make (Identity : OwnedIR.Identity) = struct
- type contract = {uses : Identity.Set.t; defines : Identity.Set.t}
- let liveBefore contract liveAfter = Identity.Set.union contract.uses (Identity.Set.diff liveAfter contract.defines)
+  type contract = { uses : Identity.Set.t; defines : Identity.Set.t }
+
+  let liveBefore contract liveAfter =
+    Identity.Set.union contract.uses
+      (Identity.Set.diff liveAfter contract.defines)
 end

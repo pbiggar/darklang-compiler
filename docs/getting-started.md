@@ -7,7 +7,7 @@ document is the short CLI reference.
 
 The compiler uses OCaml 5.5.1, Dune 3.24.2 and the exact packages in
 `dependencies.lock`. The development image provisions this toolchain.
-For a restricted Linux VM, follow [the workspace setup](../scripts/vm/README.md).
+For a restricted Linux VM, follow [ChatGPT Work VM setup](contributing/work-vm-setup.md).
 On a normal host, create an opam switch for OCaml 5.5.1, install the locked
 packages, and activate that switch before building. The compiler also needs
 GMP and SQLite development libraries; macOS uses Homebrew.
@@ -43,6 +43,7 @@ current.
 ./run-tests --ai --filter=List.map # Filter by test name fragment
 ./run-tests --help               # All options
 dune runtest                    # Native text, cache and component regression checks
+python3 scripts/format-ocaml.py --check # Inspect standard OCaml formatting
 ```
 
 Tests follow the selected development target. With no `--target`, the suite

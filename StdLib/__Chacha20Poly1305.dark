@@ -1,0 +1,218 @@
+// __Chacha20Poly1305.dark - RFC 8439 ChaCha20 and Poly1305 authenticated encryption.
+
+module Darklang.Stdlib.__Chacha20Poly1305
+
+let __mask32 (value: Int64) : Int64 = Stdlib.Int64.bitwiseAnd value 4294967295L
+let __xor (left: Int64) (right: Int64) : Int64 = Stdlib.Int64.bitwiseXor left right
+
+let __word (bytes: Blob) (offset: Int64) : Int64 =
+  Stdlib.Blob.__getByte bytes offset +
+  Stdlib.Int64.shiftLeft (Stdlib.Blob.__getByte bytes (offset + 1L)) 8L +
+  Stdlib.Int64.shiftLeft (Stdlib.Blob.__getByte bytes (offset + 2L)) 16L +
+  Stdlib.Int64.shiftLeft (Stdlib.Blob.__getByte bytes (offset + 3L)) 24L
+
+let __wordBytes (word: Int64) : Blob =
+  Stdlib.Blob.__fromInt64List [
+    Stdlib.Int64.bitwiseAnd word 255L,
+    Stdlib.Int64.bitwiseAnd (Stdlib.Int64.shiftRight word 8L) 255L,
+    Stdlib.Int64.bitwiseAnd (Stdlib.Int64.shiftRight word 16L) 255L,
+    Stdlib.Int64.bitwiseAnd (Stdlib.Int64.shiftRight word 24L) 255L]
+
+let __at (words: List<Int64>) (index: Int64) : Int64 =
+  match Stdlib.List.getAt words (Stdlib.Int.fromInt64 index) with
+  | Some word -> word
+  | None -> Builtin.testRuntimeError "Invalid ChaCha20 state"
+
+let __replace (words: List<Int64>) (index: Int64) (value: Int64) : List<Int64> =
+  Stdlib.List.indexedMap words
+    (fun position word -> if position == Stdlib.Int.fromInt64 index then value else word)
+
+let __quarter (words: List<Int64>) (a: Int64) (b: Int64) (c: Int64) (d: Int64)
+  : List<Int64> =
+  let a0 = Stdlib.__Chacha20Poly1305.__at words a in
+  let b0 = Stdlib.__Chacha20Poly1305.__at words b in
+  let c0 = Stdlib.__Chacha20Poly1305.__at words c in
+  let d0 = Stdlib.__Chacha20Poly1305.__at words d in
+  let a1 = Stdlib.__Chacha20Poly1305.__mask32 (a0 + b0) in
+  let d1 = Stdlib.Crypto.__rotl32 (Stdlib.__Chacha20Poly1305.__xor d0 a1) 16L in
+  let c1 = Stdlib.__Chacha20Poly1305.__mask32 (c0 + d1) in
+  let b1 = Stdlib.Crypto.__rotl32 (Stdlib.__Chacha20Poly1305.__xor b0 c1) 12L in
+  let a2 = Stdlib.__Chacha20Poly1305.__mask32 (a1 + b1) in
+  let d2 = Stdlib.Crypto.__rotl32 (Stdlib.__Chacha20Poly1305.__xor d1 a2) 8L in
+  let c2 = Stdlib.__Chacha20Poly1305.__mask32 (c1 + d2) in
+  let b2 = Stdlib.Crypto.__rotl32 (Stdlib.__Chacha20Poly1305.__xor b1 c2) 7L in
+  Stdlib.__Chacha20Poly1305.__replace
+    (Stdlib.__Chacha20Poly1305.__replace
+      (Stdlib.__Chacha20Poly1305.__replace
+        (Stdlib.__Chacha20Poly1305.__replace words a a2) b b2) c c2) d d2
+
+let __rounds (words: List<Int64>) (remaining: Int64) : List<Int64> =
+  if remaining == 0L then words
+  else
+    let c0 = Stdlib.__Chacha20Poly1305.__quarter words 0L 4L 8L 12L in
+    let c1 = Stdlib.__Chacha20Poly1305.__quarter c0 1L 5L 9L 13L in
+    let c2 = Stdlib.__Chacha20Poly1305.__quarter c1 2L 6L 10L 14L in
+    let c3 = Stdlib.__Chacha20Poly1305.__quarter c2 3L 7L 11L 15L in
+    let d0 = Stdlib.__Chacha20Poly1305.__quarter c3 0L 5L 10L 15L in
+    let d1 = Stdlib.__Chacha20Poly1305.__quarter d0 1L 6L 11L 12L in
+    let d2 = Stdlib.__Chacha20Poly1305.__quarter d1 2L 7L 8L 13L in
+    let d3 = Stdlib.__Chacha20Poly1305.__quarter d2 3L 4L 9L 14L in
+    Stdlib.__Chacha20Poly1305.__rounds d3 (remaining - 1L)
+
+let __initial (key: Blob) (nonce: Blob) (counter: Int64) : List<Int64> =
+  [1634760805L, 857760878L, 2036477234L, 1797285236L,
+   Stdlib.__Chacha20Poly1305.__word key 0L, Stdlib.__Chacha20Poly1305.__word key 4L,
+   Stdlib.__Chacha20Poly1305.__word key 8L, Stdlib.__Chacha20Poly1305.__word key 12L,
+   Stdlib.__Chacha20Poly1305.__word key 16L, Stdlib.__Chacha20Poly1305.__word key 20L,
+   Stdlib.__Chacha20Poly1305.__word key 24L, Stdlib.__Chacha20Poly1305.__word key 28L,
+   counter, Stdlib.__Chacha20Poly1305.__word nonce 0L,
+   Stdlib.__Chacha20Poly1305.__word nonce 4L,
+   Stdlib.__Chacha20Poly1305.__word nonce 8L]
+
+let __blockWords (initial: List<Int64>) (mixed: List<Int64>) : List<Blob> =
+  Stdlib.List.map2shortest initial mixed
+    (fun a b -> Stdlib.__Chacha20Poly1305.__wordBytes
+                  (Stdlib.__Chacha20Poly1305.__mask32 (a + b)))
+
+let block (key: Blob) (nonce: Blob) (counter: Int64)
+  : Stdlib.Result.Result<Blob, String> =
+  if Stdlib.Blob.__byteLength key != 32L || Stdlib.Blob.__byteLength nonce != 12L ||
+     counter < 0L || counter > 4294967295L then
+    Error "ChaCha20 requires a 32-byte key, 12-byte nonce, and 32-bit counter"
+  else
+    let initial = Stdlib.__Chacha20Poly1305.__initial key nonce counter in
+    let mixed = Stdlib.__Chacha20Poly1305.__rounds initial 10L in
+    Ok (Stdlib.Blob.concat (Stdlib.__Chacha20Poly1305.__blockWords initial mixed))
+
+let __xorBlock (input: Blob) (offset: Int64) (length: Int64) (stream: Blob)
+  (index: Int64) (acc: List<Int64>) : Blob =
+  if index == length then Stdlib.Blob.__fromInt64List (Stdlib.List.reverse acc)
+  else Stdlib.__Chacha20Poly1305.__xorBlock input offset length stream (index + 1L)
+         (Stdlib.List.push acc
+           (Stdlib.__Chacha20Poly1305.__xor
+             (Stdlib.Blob.__getByte input (offset + index))
+             (Stdlib.Blob.__getByte stream index)))
+
+let __crypt (key: Blob) (nonce: Blob) (input: Blob) (offset: Int64)
+  (counter: Int64) (acc: List<Blob>) : Stdlib.Result.Result<Blob, String> =
+  let remaining = Stdlib.Blob.__byteLength input - offset in
+  if remaining == 0L then Ok (Stdlib.Blob.concat (Stdlib.List.reverse acc))
+  else if counter > 4294967295L then Error "ChaCha20 counter exhausted"
+  else
+    match Stdlib.__Chacha20Poly1305.block key nonce counter with
+    | Error message -> Error message
+    | Ok stream ->
+      let length = if remaining > 64L then 64L else remaining in
+      let chunk = Stdlib.__Chacha20Poly1305.__xorBlock input offset length stream 0L [] in
+      Stdlib.__Chacha20Poly1305.__crypt key nonce input (offset + length)
+        (counter + 1L) (Stdlib.List.push acc chunk)
+
+let __leInt (bytes: Blob) (index: Int64) (end_: Int64) (factor: Int)
+  (acc: Int) : Int =
+  if index == end_ then acc
+  else
+    let byte = Stdlib.Int.fromInt64 (Stdlib.Blob.__getByte bytes index) in
+    Stdlib.__Chacha20Poly1305.__leInt bytes (index + 1L) end_
+      (Stdlib.Int.multiply factor 256)
+      (Stdlib.Int.add acc (Stdlib.Int.multiply byte factor))
+
+let __clamped (key: Blob) (index: Int64) (acc: List<Int64>) : Blob =
+  if index == 16L then Stdlib.Blob.__fromInt64List (Stdlib.List.reverse acc)
+  else
+    let byte = Stdlib.Blob.__getByte key index in
+    let mask = if index == 3L || index == 7L || index == 11L || index == 15L then 15L
+               else if index == 4L || index == 8L || index == 12L then 252L
+               else 255L in
+    Stdlib.__Chacha20Poly1305.__clamped key (index + 1L)
+      (Stdlib.List.push acc (Stdlib.Int64.bitwiseAnd byte mask))
+
+let __polyBlocks (message: Blob) (offset: Int64) (r: Int) (value: Int)
+  (prime: Int) : Int =
+  let remaining = Stdlib.Blob.__byteLength message - offset in
+  if remaining == 0L then value
+  else
+    let length = if remaining > 16L then 16L else remaining in
+    let n = Stdlib.__Chacha20Poly1305.__leInt message offset (offset + length) 1 0 in
+    let high = Stdlib.Int.power 2 (Stdlib.Int.fromInt64 (length * 8L)) in
+    let next = Stdlib.Int.mod
+                 (Stdlib.Int.multiply (Stdlib.Int.add value (Stdlib.Int.add n high)) r)
+                 prime in
+    Stdlib.__Chacha20Poly1305.__polyBlocks message (offset + length) r next prime
+
+let __intBytes (value: Int) (remaining: Int64) (acc: List<Int64>) : Blob =
+  if remaining == 0L then Stdlib.Blob.__fromInt64List (Stdlib.List.reverse acc)
+  else
+    let byte = Stdlib.Int.mod value 256 in
+    match Stdlib.Int.toInt64 byte with
+    | None -> Builtin.testRuntimeError "Poly1305 byte is out of range"
+    | Some next -> Stdlib.__Chacha20Poly1305.__intBytes
+                     (Stdlib.Int.divide value 256) (remaining - 1L)
+                     (Stdlib.List.push acc next)
+
+let __poly1305 (key: Blob) (message: Blob) : Blob =
+  let rBytes = Stdlib.__Chacha20Poly1305.__clamped key 0L [] in
+  let r = Stdlib.__Chacha20Poly1305.__leInt rBytes 0L 16L 1 0 in
+  let s = Stdlib.__Chacha20Poly1305.__leInt key 16L 32L 1 0 in
+  let prime = Stdlib.Int.subtract (Stdlib.Int.power 2 130) 5 in
+  let value = Stdlib.__Chacha20Poly1305.__polyBlocks message 0L r 0 prime in
+  let tag = Stdlib.Int.mod (Stdlib.Int.add value s) (Stdlib.Int.power 2 128) in
+  Stdlib.__Chacha20Poly1305.__intBytes tag 16L []
+
+let poly1305 (key: Blob) (message: Blob) : Stdlib.Result.Result<Blob, String> =
+  if Stdlib.Blob.__byteLength key != 32L then Error "Poly1305 key must be 32 bytes"
+  else Ok (Stdlib.__Chacha20Poly1305.__poly1305 key message)
+
+let __pad (length: Int64) : Blob =
+  Stdlib.Blob.__fromInt64List
+    (Stdlib.List.repeatUnsafe (Stdlib.Int.fromInt64 ((16L - length % 16L) % 16L)) 0L)
+
+let __length64 (length: Int64) (remaining: Int64) (acc: List<Int64>) : Blob =
+  if remaining == 0L then Stdlib.Blob.__fromInt64List (Stdlib.List.reverse acc)
+  else Stdlib.__Chacha20Poly1305.__length64
+         (Stdlib.Int64.shiftRight length 8L) (remaining - 1L)
+         (Stdlib.List.push acc (Stdlib.Int64.bitwiseAnd length 255L))
+
+let __macInput (aad: Blob) (ciphertext: Blob) : Blob =
+  let aadLength = Stdlib.Blob.__byteLength aad in
+  let cipherLength = Stdlib.Blob.__byteLength ciphertext in
+  Stdlib.Blob.concat [aad, Stdlib.__Chacha20Poly1305.__pad aadLength,
+    ciphertext, Stdlib.__Chacha20Poly1305.__pad cipherLength,
+    Stdlib.__Chacha20Poly1305.__length64 aadLength 8L [],
+    Stdlib.__Chacha20Poly1305.__length64 cipherLength 8L []]
+
+let __same (left: Blob) (right: Blob) (index: Int64) (difference: Int64) : Bool =
+  if index == 16L then difference == 0L
+  else Stdlib.__Chacha20Poly1305.__same left right (index + 1L)
+         (Stdlib.Int64.bitwiseOr difference
+           (Stdlib.__Chacha20Poly1305.__xor
+             (Stdlib.Blob.__getByte left index) (Stdlib.Blob.__getByte right index)))
+
+let encrypt (key: Blob) (nonce: Blob) (aad: Blob) (plaintext: Blob)
+  : Stdlib.Result.Result<Blob, String> =
+  match Stdlib.__Chacha20Poly1305.block key nonce 0L with
+  | Error message -> Error message
+  | Ok first ->
+    let polyKey = Stdlib.Blob.slice first 0 32 in
+    match Stdlib.__Chacha20Poly1305.__crypt key nonce plaintext 0L 1L [] with
+    | Error message -> Error message
+    | Ok ciphertext ->
+      let tag = Stdlib.__Chacha20Poly1305.__poly1305 polyKey
+                  (Stdlib.__Chacha20Poly1305.__macInput aad ciphertext) in
+      Ok (Stdlib.Blob.concat [ciphertext, tag])
+
+let decrypt (key: Blob) (nonce: Blob) (aad: Blob) (payload: Blob)
+  : Stdlib.Result.Result<Blob, String> =
+  let length = Stdlib.Blob.__byteLength payload in
+  if length < 16L then Error "ChaCha20-Poly1305 payload lacks tag"
+  else
+    match Stdlib.__Chacha20Poly1305.block key nonce 0L with
+    | Error message -> Error message
+    | Ok first ->
+      let ciphertext = Stdlib.Blob.slice payload 0 (Stdlib.Int.fromInt64 (length - 16L)) in
+      let tag = Stdlib.Blob.slice payload (Stdlib.Int.fromInt64 (length - 16L)) 16 in
+      let expected = Stdlib.__Chacha20Poly1305.__poly1305
+                       (Stdlib.Blob.slice first 0 32)
+                       (Stdlib.__Chacha20Poly1305.__macInput aad ciphertext) in
+      if Stdlib.Bool.not (Stdlib.__Chacha20Poly1305.__same expected tag 0L 0L) then
+        Error "ChaCha20-Poly1305 authentication failed"
+      else Stdlib.__Chacha20Poly1305.__crypt key nonce ciphertext 0L 1L []

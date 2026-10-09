@@ -20,8 +20,8 @@ from test_tls_server_hello import extension, hello, u16
 ROOT = Path(__file__).resolve().parents[1]
 PROBE = '''// probe.dark - Retry validation and transcript bytes without signing.
 let arg (index: Int) : Blob = Stdlib.Cli.Args.get index |> Stdlib.Result.andThen Stdlib.Blob.fromHex |> Stdlib.Result.withDefault Stdlib.Blob.empty
-match Stdlib.Tls13ServerHello.parse (arg 0) |> Stdlib.Result.andThen Stdlib.Tls13ServerRetry.create |> Stdlib.Result.andThen (fun retry ->
-  Stdlib.Tls13ServerRetry.validate retry (arg 1) |> Stdlib.Result.map (fun checked ->
+match Stdlib.__Tls13ServerHello.parse (arg 0) |> Stdlib.Result.andThen Stdlib.__Tls13ServerRetry.create |> Stdlib.Result.andThen (fun retry ->
+  Stdlib.__Tls13ServerRetry.validate retry (arg 1) |> Stdlib.Result.map (fun checked ->
     let (_hello, transcript) = checked in
     Stdlib.printLine (Stdlib.Blob.toHex retry.hello)
     Stdlib.printLine (Stdlib.Blob.toHex transcript))) with

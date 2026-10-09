@@ -21,15 +21,15 @@ match Stdlib.Cli.Args.get 0, Stdlib.Cli.Args.int64 1, Stdlib.Cli.Args.int64 2,
       Stdlib.Cli.Args.get 3, Stdlib.Cli.Args.get 4 with
 | Ok mode, Ok number, Ok offset, Ok a, Ok b ->
   let cid = Stdlib.Blob.fromHex "8394C8F03E515708" |> Stdlib.Result.withDefault Stdlib.Blob.empty in
-  match Stdlib.QuicCrypto.initial cid, Stdlib.Blob.fromHex a, Stdlib.Blob.fromHex b with
+  match Stdlib.__QuicCrypto.initial cid, Stdlib.Blob.fromHex a, Stdlib.Blob.fromHex b with
   | Ok initial, Ok data, Ok payload ->
     let keys = if Stdlib.String.startsWith mode "client" then initial.client else initial.server in
     if Stdlib.String.endsWith mode "seal" then
-      match Stdlib.QuicCrypto.seal keys data payload number offset with
+      match Stdlib.__QuicCrypto.seal keys data payload number offset with
       | Error message -> Stdlib.printLine ("ERROR: " ++ message)
       | Ok packet -> Stdlib.printLine (Stdlib.Blob.toHex packet)
     else
-      match Stdlib.QuicCrypto.openPacket keys data offset number with
+      match Stdlib.__QuicCrypto.openPacket keys data offset number with
       | Error message -> Stdlib.printLine ("ERROR: " ++ message)
       | Ok opened -> Stdlib.printLine (Stdlib.Int64.toString opened.number ++ "|" ++ Stdlib.Blob.toHex opened.header ++ "|" ++ Stdlib.Blob.toHex opened.payload)
   | _, _, _ -> Stdlib.printLine "Invalid inputs"

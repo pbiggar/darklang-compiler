@@ -67,7 +67,7 @@ let run (remaining: Int64) (leftText: String) (rightText: String) (result: Int64
         run (remaining - 1L) leftText rightText ((result + diff.distance * 1000003L + diff.work) % 1000000007L)
 
 let benchmarkArg (index: Int) : Int64 =
-    match Stdlib.Cli.Args.int64 index with
+    match Stdlib.Cli.__Args.int64 index with
     | Ok value -> value
     | Error message -> Builtin.testRuntimeError message
 

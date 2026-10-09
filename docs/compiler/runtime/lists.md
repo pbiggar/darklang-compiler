@@ -101,8 +101,8 @@ garbage collector.
 
 | File | Purpose |
 |---|---|
-| `stdlib/__SkewList.dark` | representation and primitive operations |
-| `stdlib/List.dark` | public list functions |
+| `StdLib/List/__SkewList.dark` | representation and primitive operations |
+| `StdLib/List.dark` | public list functions |
 | `src/passes/anf/AST_to_ANF.ml` | literal and pattern lowering |
 | `src/passes/anf/RefCountInsertion.ml` | list lifetime insertion |
 | `src/backend/arm64/Backend_Arm64_CodeGen.ml` | ARM64 ownership helpers |

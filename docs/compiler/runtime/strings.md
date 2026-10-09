@@ -59,7 +59,7 @@ Unicode helpers are layered on top of the byte representation:
 
 Higher-level stdlib functions such as `repeat`, `join`, `trim`, `split`,
 `replace`, `first`, `last`, `dropFirst`, `dropLast`, `head`, `padStart`, and
-`padEnd` are implemented in `stdlib/String.dark`.
+`padEnd` are implemented in `StdLib/String.dark`.
 
 Public byte-oriented traversal is available for parsers that retain UTF-8 byte
 offsets: `byteLength`, `byteSlice`, `byteRangesEqual`, and `byteIndexOfFrom`.
@@ -69,8 +69,9 @@ temporary suffix strings.
 
 String equality is a representation-level compiler operation:
 
-```fsharp
-| CanonicalBufferEq of dest:Reg * kind:CanonicalBufferKind * left:Operand * right:Operand
+```ocaml
+(* Excerpt of LIR.instr. *)
+| CanonicalBufferEq of reg * MemoryModel.canonicalBufferKind * operand * operand
 ```
 
 Equality first checks pointer identity and byte length, then compares full
@@ -93,9 +94,10 @@ Dynamic strings are now part of the compiler-managed RC model:
 
 The IR operations are:
 
-```fsharp
-| RefCountIncString of str:Operand
-| RefCountDecString of str:Operand
+```ocaml
+(* Excerpt of LIR.instr. *)
+| RefCountIncString of operand
+| RefCountDecString of operand
 ```
 
 Both operations access the refcount directly at the value pointer.
@@ -122,4 +124,4 @@ reuse work remain:
 | `src/passes/anf/RefCountInsertion.ml` | string lifetime insertion |
 | `src/backend/arm64/Backend_Arm64_CodeGen.ml` | ARM64 string allocation and RC |
 | `src/backend/x64/CodeGen_X86_64.ml` | x64 string allocation and RC |
-| `stdlib/String.dark` | stdlib string functions |
+| `StdLib/String.dark` | stdlib string functions |

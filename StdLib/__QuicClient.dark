@@ -1,0 +1,230 @@
+// __QuicClient.dark - Owned QUIC v1 client handshake with bounded UDP recovery and authenticated peer binding.
+module Darklang.Stdlib.__QuicClient
+
+val receiveLimits = Stdlib.__QuicFlow.Limits { data = 262144L, bidiLocal = 65536L, bidiRemote = 65536L, uni = 65536L, streamsBidi = 0L, streamsUni = 3L }
+
+type Identity = {
+  source: Blob, original: Blob, destination: Blob, token: Blob,
+  retrySource: Stdlib.Option.Option<Blob>, keys: Stdlib.__QuicCrypto.Initial, observed: Bool
+}
+type Flight = {
+  identity: Stdlib.__QuicClient.Identity, initial: Stdlib.__QuicSpace.State, handshake: Stdlib.__QuicSpace.State,
+  tls: Stdlib.Option.Option<Stdlib.__QuicTls.Handshake>, privateKey: Blob, hello: Blob, pending: List<Blob>
+}
+type Ready = {
+  socket: Stdlib.__Datagram.Socket, peer: Stdlib.__Datagram.Endpoint,
+  identity: Stdlib.__QuicClient.Identity, handshake: Stdlib.__QuicSpace.State,
+  tls: Stdlib.__QuicTls.Handshake, authenticated: Stdlib.__QuicTls.Authenticated, pending: List<Blob>
+}
+
+let __same (a: Blob) (b: Blob) : Bool =
+  if Stdlib.Blob.__byteLength a != Stdlib.Blob.__byteLength b then false
+  else Stdlib.__QuicReassembly.__same a 0L b 0L (Stdlib.Blob.__byteLength a)
+
+let __flight (state: Stdlib.__QuicClient.Flight) (identity: Stdlib.__QuicClient.Identity)
+  (initial: Stdlib.__QuicSpace.State) (handshake: Stdlib.__QuicSpace.State)
+  (tls: Stdlib.Option.Option<Stdlib.__QuicTls.Handshake>) (pending: List<Blob>) : Stdlib.__QuicClient.Flight =
+  Stdlib.__QuicClient.Flight { identity = identity, initial = initial, handshake = handshake,
+    tls = tls, privateKey = state.privateKey, hello = state.hello, pending = pending }
+
+let __parameter (id: Int64) (bytes: Blob) : Stdlib.Result.Result<Blob, String> =
+  match Stdlib.__QuicWire.integer id, Stdlib.__QuicWire.integer (Stdlib.Blob.__byteLength bytes) with
+  | Ok kind, Ok size -> Ok (Stdlib.Blob.concat [kind, size, bytes])
+  | _, _ -> Error "QUIC local transport parameter encoding failed"
+
+let __parameters (source: Blob) : Stdlib.Result.Result<Blob, String> =
+  let local = Stdlib.__QuicClient.receiveLimits in
+  let values = [(1L, 30000L), (3L, 1200L), (4L, local.data), (5L, local.bidiLocal),
+    (6L, local.bidiRemote), (7L, local.uni), (8L, local.streamsBidi), (9L, local.streamsUni), (10L, 0L), (11L, 0L), (14L, 2L)] in
+  let encoded = Stdlib.List.fold values (Ok []) (fun result pair ->
+    result |> Stdlib.Result.andThen (fun chunks ->
+      let (id, value) = pair in
+      Stdlib.__QuicWire.integer value |> Stdlib.Result.andThen (Stdlib.__QuicClient.__parameter id)
+        |> Stdlib.Result.map (fun bytes -> Stdlib.List.push chunks bytes))) in
+  match encoded, Stdlib.__QuicClient.__parameter 12L Stdlib.Blob.empty, Stdlib.__QuicClient.__parameter 15L source with
+  | Ok chunks, Ok migration, Ok source -> Ok (Stdlib.Blob.concat (Stdlib.List.append (Stdlib.List.reverse chunks) [migration, source]))
+  | _, _, _ -> Error "QUIC local transport parameter encoding failed"
+
+let __initial (state: Stdlib.__QuicClient.Flight) (packet: Stdlib.__QuicPacket.Protected) (now: Int64)
+  : Stdlib.Result.Result<Stdlib.__QuicClient.Flight, String> =
+  match Stdlib.__QuicCrypto.openPacket state.identity.keys.server packet.bytes packet.numberOffset state.initial.received.largest with
+  | Error _ -> Ok state
+  | Ok opened ->
+    if state.identity.observed && Stdlib.Bool.not (Stdlib.__QuicClient.__same packet.source state.identity.destination) then Error "QUIC Initial source connection ID changed"
+    else
+      Stdlib.__QuicSpace.handshake state.initial opened now |> Stdlib.Result.andThen (fun initial ->
+        let identity = Stdlib.__QuicClient.Identity { source = state.identity.source, original = state.identity.original,
+          destination = packet.source, token = state.identity.token, retrySource = state.identity.retrySource,
+          keys = state.identity.keys, observed = true } in
+        let available = Stdlib.__QuicReassembly.available initial.crypto in
+        match state.tls with
+        | Some _ -> if Stdlib.Blob.__byteLength available != 0L then Error "Extra QUIC Initial CRYPTO bytes"
+                    else Ok (Stdlib.__QuicClient.__flight state identity initial state.handshake state.tls state.pending)
+        | None ->
+          match Stdlib.__Tls13.parseServerHello available with
+          | Error Incomplete -> Ok (Stdlib.__QuicClient.__flight state identity initial state.handshake None state.pending)
+          | Error _ -> Error "Invalid QUIC ServerHello"
+          | Ok _ -> Stdlib.__QuicTls.start state.privateKey state.hello available |> Stdlib.Result.map (fun tls ->
+              Stdlib.__QuicClient.__flight state identity (Stdlib.__QuicSpace.drainCrypto initial) state.handshake (Some tls) state.pending))
+
+let __handshake (state: Stdlib.__QuicClient.Flight) (packet: Stdlib.__QuicPacket.Protected) (now: Int64)
+  : Stdlib.Result.Result<Stdlib.__QuicClient.Flight, String> =
+  match state.tls with
+  | None -> Ok state
+  | Some tls ->
+    match Stdlib.__QuicCrypto.openPacket tls.receive packet.bytes packet.numberOffset state.handshake.received.largest with
+    | Error _ -> Ok state
+    | Ok opened ->
+      if Stdlib.Bool.not (Stdlib.__QuicClient.__same packet.source state.identity.destination) then Error "QUIC Handshake source connection ID changed"
+      else Stdlib.__QuicSpace.handshake state.handshake opened now |> Stdlib.Result.andThen (fun handshake ->
+        let available = Stdlib.__QuicReassembly.available handshake.crypto in
+        if Stdlib.Blob.__byteLength available == 0L then
+          Ok (Stdlib.__QuicClient.__flight state state.identity state.initial handshake state.tls state.pending)
+        else Stdlib.__QuicTls.feed tls available |> Stdlib.Result.map (fun next ->
+          Stdlib.__QuicClient.__flight state state.identity state.initial (Stdlib.__QuicSpace.drainCrypto handshake) (Some next) state.pending))
+
+let __retry (state: Stdlib.__QuicClient.Flight) (packet: Stdlib.__QuicPacket.RetryPacket) (now: Int64)
+  : Stdlib.Result.Result<Stdlib.__QuicClient.Flight, String> =
+  let used = match state.identity.retrySource with | Some _ -> true | None -> false in
+  if used || state.identity.observed || Stdlib.Bool.not (Stdlib.__QuicClient.__same packet.destination state.identity.source) ||
+     Stdlib.__QuicClient.__same packet.source state.identity.original then Ok state
+  else
+    match Stdlib.__QuicCrypto.verifyRetry state.identity.original packet.bytes with
+    | Error _ -> Ok state
+    | Ok false -> Ok state
+    | Ok true ->
+      if Stdlib.Blob.__byteLength packet.token > 512L then Error "QUIC Retry token exceeds bounded client profile"
+      else
+        match Stdlib.__QuicCrypto.initial packet.source, Stdlib.__QuicSpace.create (), Stdlib.__QuicFrames.crypto 0L state.hello with
+        | Ok keys, Ok fresh, Ok hello ->
+          // Reset loss/congestion state but retain the sending packet number.
+          let recovery = Stdlib.__QuicRecovery.State { mtu = fresh.recovery.mtu, rtt = fresh.recovery.rtt,
+            congestion = fresh.recovery.congestion, largestSent = state.initial.recovery.largestSent,
+            largestAcked = -1L, clock = now, lastSent = 0L, ptoCount = 0L, packets = [] } in
+          let initial = Stdlib.__QuicSpace.__state fresh fresh.received recovery fresh.crypto [] fresh.nextToken false in
+          Stdlib.__QuicSpace.queue initial hello |> Stdlib.Result.map (fun initial ->
+            let identity = Stdlib.__QuicClient.Identity { source = state.identity.source, original = state.identity.original,
+              destination = packet.source, token = packet.token, retrySource = Some packet.source, keys = keys, observed = false } in
+            Stdlib.__QuicClient.__flight state identity initial state.handshake None state.pending)
+        | _, _, _ -> Error "QUIC Retry initialization failed"
+
+let __packets (state: Stdlib.__QuicClient.Flight) (bytes: Blob) (now: Int64)
+  : Stdlib.Result.Result<Stdlib.__QuicClient.Flight, String> =
+  if Stdlib.Blob.__byteLength bytes == 0L then Ok state
+  else
+    match Stdlib.__QuicPacket.parse 8L bytes with
+    | Error _ -> Ok state
+    | Ok (Protected packet) ->
+      if Stdlib.Bool.not (Stdlib.__QuicClient.__same packet.destination state.identity.source) then Ok state
+      else
+        let next = match packet.kind with
+          | Initial -> if state.handshake.recovery.largestSent >= 0L then Ok state else Stdlib.__QuicClient.__initial state packet now
+          | Handshake -> Stdlib.__QuicClient.__handshake state packet now
+          | OneRtt -> if Stdlib.List.fold state.pending 0L (fun size bytes -> size + Stdlib.Blob.__byteLength bytes) + Stdlib.Blob.__byteLength packet.bytes > 4096L then Ok state
+                      else Ok (Stdlib.__QuicClient.__flight state state.identity state.initial state.handshake state.tls (Stdlib.List.append state.pending [packet.bytes]))
+          | ZeroRtt -> Ok state in
+        next |> Stdlib.Result.andThen (fun next -> Stdlib.__QuicClient.__packets next packet.remaining now)
+    | Ok (Retry packet) -> Stdlib.__QuicClient.__retry state packet now
+    | Ok (VersionNegotiation packet) ->
+      if state.identity.observed || Stdlib.List.member packet.versions 1L ||
+         Stdlib.Bool.not (Stdlib.__QuicClient.__same packet.destination state.identity.source) ||
+         Stdlib.Bool.not (Stdlib.__QuicClient.__same packet.source state.identity.original) then Ok state
+      else Error "Peer does not support QUIC v1"
+    | Ok (UnsupportedVersion _) -> Ok state
+
+let __route (identity: Stdlib.__QuicClient.Identity) : Stdlib.__QuicHandshakePacket.Routing =
+  Stdlib.__QuicHandshakePacket.Routing { source = identity.source, destination = identity.destination, token = identity.token }
+
+let __flush (socket: Stdlib.__Datagram.Socket) (peer: Stdlib.__Datagram.Endpoint) (state: Stdlib.__QuicClient.Flight) (now: Int64)
+  : Stdlib.Result.Result<Stdlib.__QuicClient.Flight, String> =
+  // Initial and Handshake flights are deliberately bounded below the initial
+  // congestion window. Application data gets a single shared recovery owner.
+  let initial = if state.handshake.recovery.largestSent >= 0L then Ok state.initial else Stdlib.__QuicHandshakePacket.send socket peer (Stdlib.__QuicClient.__route state.identity) state.initial state.identity.keys.client Stdlib.__QuicPacket.Kind.Initial now (state.handshake.recovery.congestion.window, state.handshake.recovery.congestion.inFlight) in
+  initial
+    |> Stdlib.Result.andThen (fun initial ->
+      match state.tls with
+      | None -> Ok (Stdlib.__QuicClient.__flight state state.identity initial state.handshake state.tls state.pending)
+      | Some tls -> Stdlib.__QuicHandshakePacket.send socket peer (Stdlib.__QuicClient.__route state.identity) state.handshake tls.send Stdlib.__QuicPacket.Kind.Handshake now (initial.recovery.congestion.window, initial.recovery.congestion.inFlight)
+          |> Stdlib.Result.andThen (fun handshake ->
+            // Sending the first Handshake packet discards Initial receive,
+            // recovery and CRYPTO state. Subsequent Initial packets are ignored.
+            let initial = if state.handshake.recovery.largestSent < 0L && handshake.recovery.largestSent >= 0L then Stdlib.__QuicSpace.create () else Ok initial in
+            initial |> Stdlib.Result.map (fun initial -> Stdlib.__QuicClient.__flight state state.identity initial handshake state.tls state.pending)))
+
+let __receive (socket: Stdlib.__Datagram.Socket) (peer: Stdlib.__Datagram.Endpoint) (state: Stdlib.__QuicClient.Flight)
+  (deadline: Int64) (remaining: Int64) : Stdlib.Result.Result<Stdlib.__QuicClient.Flight, String> =
+  let complete = match state.tls with | Some tls -> tls.flight.phase == Stdlib.__Tls13Handshake.FlightPhase.ServerFinished | None -> false in
+  if complete then Ok state
+  else if remaining == 0L then Error "QUIC handshake datagram limit exceeded"
+  else
+    match Stdlib.__Network.monotonicMillis () with
+    | Error _ -> Error "QUIC monotonic clock failed"
+    | Ok now ->
+      if now >= deadline then Error "QUIC handshake timed out"
+      else
+        let initial = if state.handshake.recovery.largestSent >= 0L then Ok state.initial else Stdlib.__QuicSpace.timeout state.initial now 0L in
+        match initial, Stdlib.__QuicSpace.timeout state.handshake now 0L with
+        | Ok initial, Ok handshake ->
+          Stdlib.__QuicClient.__flush socket peer (Stdlib.__QuicClient.__flight state state.identity initial handshake state.tls state.pending) now
+            |> Stdlib.Result.andThen (fun next ->
+              let wait = if deadline - now < 10L then deadline - now else 10L in
+              match Stdlib.__Datagram.receive socket wait with
+              | Error code -> if code == 11L || code == 35L || code == 4L then Stdlib.__QuicClient.__receive socket peer next deadline remaining
+                              else if code == 90L then Stdlib.__QuicClient.__receive socket peer next deadline (remaining - 1L)
+                              else Error "QUIC handshake receive failed"
+              | Ok datagram ->
+                if datagram.peer.address != peer.address || datagram.peer.port != peer.port then
+                  Stdlib.__QuicClient.__receive socket peer next deadline (remaining - 1L)
+                else
+                  match Stdlib.__Network.monotonicMillis () with
+                  | Error _ -> Error "QUIC monotonic clock failed"
+                  | Ok at -> Stdlib.__QuicClient.__packets next datagram.payload at
+                      |> Stdlib.Result.andThen (fun received -> Stdlib.__QuicClient.__receive socket peer received deadline (remaining - 1L)))
+        | Error message, _ -> Error message
+        | _, Error message -> Error message
+
+let __exchange (socket: Stdlib.__Datagram.Socket) (peer: Stdlib.__Datagram.Endpoint) (host: String) (roots: List<Blob>)
+  (timeout: Int64) : Stdlib.Result.Result<Stdlib.__QuicClient.Ready, String> =
+  match Stdlib.Crypto.__secureRandomBytes 8L, Stdlib.Crypto.__secureRandomBytes 8L,
+        Stdlib.__X25519.generateKeyPair (), Stdlib.Crypto.__secureRandomBytes 32L,
+        Stdlib.__QuicSpace.create (), Stdlib.__QuicSpace.create (), Stdlib.__Network.monotonicMillis () with
+  | Ok source, Ok original, Ok pair, Ok random, Ok initial, Ok handshake, Ok now ->
+    match Stdlib.__QuicClient.__parameters source, Stdlib.__QuicCrypto.initial original with
+    | Ok parameters, Ok keys ->
+      Stdlib.__Tls13.quicClientHello host random pair.publicKey parameters |> Stdlib.Result.andThen (fun hello ->
+        Stdlib.__QuicFrames.crypto 0L hello |> Stdlib.Result.andThen (Stdlib.__QuicSpace.queue initial) |> Stdlib.Result.andThen (fun initial ->
+          let identity = Stdlib.__QuicClient.Identity { source = source, original = original, destination = original,
+            token = Stdlib.Blob.empty, retrySource = None, keys = keys, observed = false } in
+          let state = Stdlib.__QuicClient.Flight { identity = identity, initial = initial, handshake = handshake,
+            tls = None, privateKey = pair.privateKey, hello = hello, pending = [] } in
+          Stdlib.__QuicClient.__receive socket peer state (now + timeout) 4096L |> Stdlib.Result.andThen (fun received ->
+            match received.tls with
+            | None -> Error "Missing QUIC TLS handshake"
+            | Some tls ->
+              let ids = Stdlib.__QuicParameters.ConnectionIds { originalDestination = original,
+                initialSource = received.identity.destination, retrySource = received.identity.retrySource } in
+              Stdlib.__QuicTls.authenticate tls host roots ids |> Stdlib.Result.andThen (fun authenticated ->
+                Stdlib.__QuicFrames.crypto 0L authenticated.finished |> Stdlib.Result.andThen (Stdlib.__QuicSpace.queue received.handshake)
+                  |> Stdlib.Result.andThen (fun handshake ->
+                    match Stdlib.__Network.monotonicMillis () with
+                    | Error _ -> Error "QUIC monotonic clock failed"
+                    | Ok at -> Stdlib.__QuicHandshakePacket.send socket peer (Stdlib.__QuicClient.__route received.identity) handshake tls.send Stdlib.__QuicPacket.Kind.Handshake at (received.initial.recovery.congestion.window, received.initial.recovery.congestion.inFlight)
+                        |> Stdlib.Result.map (fun handshake -> Stdlib.__QuicClient.Ready { socket = socket, peer = peer,
+                          identity = received.identity, handshake = handshake, tls = tls, authenticated = authenticated, pending = received.pending }))))))
+    | _, _ -> Error "QUIC handshake initialization failed"
+  | _, _, _, _, _, _, _ -> Error "QUIC entropy, clock or packet space initialization failed"
+
+let connect (peer: Stdlib.__Datagram.Endpoint) (host: String) (roots: List<Blob>) (timeout: Int64)
+  : Stdlib.Result.Result<Stdlib.__QuicClient.Ready, String> =
+  if timeout < 1L || timeout > 60000L then Error "Invalid QUIC handshake timeout"
+  else
+    let bound = if Stdlib.List.length peer.address == 16 then Stdlib.__Datagram.bind6 [0L,0L,0L,0L,0L,0L,0L,0L,0L,0L,0L,0L,0L,0L,0L,0L] 0L
+                else Stdlib.__Datagram.bind4 [0L,0L,0L,0L] 0L in
+    match bound with
+    | Error _ -> Error "QUIC UDP socket creation failed"
+    | Ok socket ->
+      match Stdlib.__QuicClient.__exchange socket peer host roots timeout with
+      | Error message -> let _ = Stdlib.__Datagram.close socket in Error message
+      | Ok ready -> Ok ready
+
+let close (connection: Stdlib.__QuicClient.Ready) : Unit = Stdlib.__Datagram.close connection.socket

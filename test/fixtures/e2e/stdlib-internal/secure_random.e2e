@@ -1,0 +1,11 @@
+// secure_random.e2e - OS entropy returns the requested bytes or a recoverable error.
+
+(Stdlib.Crypto.__secureRandomBytes 32L |> Stdlib.Result.map Stdlib.Blob.length)
+  = Ok 32
+
+(Stdlib.Crypto.__secureRandomBytes 256L |> Stdlib.Result.map Stdlib.Blob.length)
+  = Ok 256
+
+Stdlib.Crypto.__secureRandomBytes (-1L) = Error "Secure random length must be between 0 and 256"
+Stdlib.Crypto.__secureRandomBytes 257L = Error "Secure random length must be between 0 and 256"
+(Stdlib.Crypto.__secureRandomBytes 0L |> Stdlib.Result.map Stdlib.Blob.length) = Ok 0

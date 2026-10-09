@@ -1,0 +1,6 @@
+// Color is disabled for redirected stdout, independently of NO_COLOR.
+Builtin.cliTerminalColorEnabled () = false env="NO_COLOR="
+Builtin.cliTerminalColorEnabled () = false env="NO_COLOR=1"
+Builtin.cliTerminalColorEnabled () = false env="NO_COLOR=0"
+Darklang.Cli.Terminal.colorEnabled () = false env="NO_COLOR="
+let _ = Stdlib.Cli.Env.unset "NO_COLOR" in Darklang.Cli.Terminal.colorEnabled () = false isolated=true

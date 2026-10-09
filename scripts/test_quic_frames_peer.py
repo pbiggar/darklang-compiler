@@ -13,7 +13,7 @@ from aioquic.quic.stream import QuicStreamReceiver
 
 ROOT = Path(__file__).resolve().parents[1]
 DARK = """// frames.dark - Frame fields, owned ordered bytes, and independent codecs.
-let printFrame (frame: Stdlib.QuicFrames.Frame) : Unit =
+let printFrame (frame: Stdlib.__QuicFrames.Frame) : Unit =
   match frame with
   | Padding count -> Stdlib.printLine ("PAD " ++ Stdlib.Int64.toString count)
   | Ping -> Stdlib.printLine "PING"
@@ -23,36 +23,36 @@ let printFrame (frame: Stdlib.QuicFrames.Frame) : Unit =
     let ranges = Stdlib.List.map value.ranges (fun range -> Stdlib.Int64.toString range.smallest ++ ":" ++ Stdlib.Int64.toString range.largest) in
     let ecn = match value.ecn with | None -> "-" | Some count -> Stdlib.Int64.toString count.ect0 ++ ":" ++ Stdlib.Int64.toString count.ect1 ++ ":" ++ Stdlib.Int64.toString count.ce in
     Stdlib.printLine ("ACK " ++ Stdlib.Int64.toString value.delay ++ " " ++ Stdlib.String.join ranges "," ++ " " ++ ecn)
-let printFrames (frames: List<Stdlib.QuicFrames.Frame>) : Unit =
+let printFrames (frames: List<Stdlib.__QuicFrames.Frame>) : Unit =
   match frames with | [] -> () | frame :: rest -> let _ = printFrame frame in printFrames rest
-let assemble (state: Stdlib.QuicReassembly.State) (frames: List<Stdlib.QuicFrames.Frame>) (chunks: List<Blob>)
+let assemble (state: Stdlib.__QuicReassembly.State) (frames: List<Stdlib.__QuicFrames.Frame>) (chunks: List<Blob>)
   : Stdlib.Result.Result<Blob, String> =
   match frames with
   | [] -> Ok (Stdlib.Blob.concat (Stdlib.List.reverse chunks))
   | Crypto frame :: rest ->
-    match Stdlib.QuicReassembly.insert state frame.offset frame.bytes with
+    match Stdlib.__QuicReassembly.insert state frame.offset frame.bytes with
     | Error message -> Error message
     | Ok next ->
-      let bytes = Stdlib.QuicReassembly.available next in
-      assemble (Stdlib.QuicReassembly.drain next) rest (Stdlib.List.push chunks bytes)
+      let bytes = Stdlib.__QuicReassembly.available next in
+      assemble (Stdlib.__QuicReassembly.drain next) rest (Stdlib.List.push chunks bytes)
   | _ :: rest -> assemble state rest chunks
 let checkFrames () : Unit =
   match Stdlib.Cli.Args.get 0, Stdlib.Cli.Args.get 1 |> Stdlib.Result.andThen Stdlib.Blob.fromHex with
   | Ok mode, Ok data ->
     if mode == "ack" then
       let result =
-        match Stdlib.QuicWire.parseInteger data 0L with
+        match Stdlib.__QuicWire.parseInteger data 0L with
         | Error _ -> Error "Invalid number"
-        | Ok number -> Stdlib.QuicFrames.acknowledge number.value in
+        | Ok number -> Stdlib.__QuicFrames.acknowledge number.value in
       match result with | Error message -> Stdlib.printLine ("ERROR " ++ message) | Ok ack -> Stdlib.printLine (Stdlib.Blob.toHex ack)
     else
-      let result = Stdlib.QuicFrames.parseHandshake data in
+      let result = Stdlib.__QuicFrames.parseHandshake data in
       match result with
       | Error message -> Stdlib.printLine ("ERROR " ++ message)
       | Ok frames ->
         if mode == "decode" then printFrames frames
         else
-          let assembled = Stdlib.QuicReassembly.create 4096L |> Stdlib.Result.andThen (fun state -> assemble state frames []) in
+          let assembled = Stdlib.__QuicReassembly.create 4096L |> Stdlib.Result.andThen (fun state -> assemble state frames []) in
           match assembled with | Error message -> Stdlib.printLine ("ERROR " ++ message) | Ok bytes -> Stdlib.printLine (Stdlib.Blob.toHex bytes)
   | _ -> Stdlib.printLine "Bad arguments"
 checkFrames ()

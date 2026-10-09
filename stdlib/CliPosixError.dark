@@ -1,9 +1,0 @@
-// CliPosixError.dark - upstream POSIX errno values.
-
-module Darklang.Stdlib.Cli.Posix.Errno
-
-val einval = 22
-val esrch = 3
-val eperm = 1
-val enoent = 2
-val eexist = 17

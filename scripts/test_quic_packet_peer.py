@@ -21,10 +21,10 @@ NUMBER = 1073741825
 KINDS = [QuicPacketType.INITIAL, QuicPacketType.ZERO_RTT, QuicPacketType.HANDSHAKE, QuicPacketType.ONE_RTT]
 
 DARK = """// quic_packets.dark - Packet framing and authenticated peer payloads with leak checks.
-let inspect (keys: Stdlib.QuicCrypto.Keys) (data: Blob) : Unit =
+let inspect (keys: Stdlib.__QuicCrypto.Keys) (data: Blob) : Unit =
   if Stdlib.Blob.length data == 0 then ()
   else
-    match Stdlib.QuicPacket.parse 8L data with
+    match Stdlib.__QuicPacket.parse 8L data with
     | Error message -> Stdlib.printLine ("ERROR " ++ message)
     | Ok packet ->
       match packet with
@@ -32,7 +32,7 @@ let inspect (keys: Stdlib.QuicCrypto.Keys) (data: Blob) : Unit =
         let kind = match value.kind with | Initial -> "0" | ZeroRtt -> "1" | Handshake -> "2" | OneRtt -> "3" in
         let _ = Stdlib.printLine ("P " ++ kind ++ " " ++ Stdlib.Blob.toHex value.destination ++ " " ++ Stdlib.Blob.toHex value.source ++ " " ++ Stdlib.Blob.toHex value.token ++ " " ++ Stdlib.Int64.toString value.numberOffset ++ " " ++ Stdlib.Int.toString (Stdlib.Blob.length value.bytes)) in
         let _ =
-          match Stdlib.QuicCrypto.openPacket keys value.bytes value.numberOffset 1073741824L with
+          match Stdlib.__QuicCrypto.openPacket keys value.bytes value.numberOffset 1073741824L with
           | Error message -> Stdlib.printLine ("OPEN ERROR " ++ message)
           | Ok opened -> Stdlib.printLine ("OPEN " ++ Stdlib.Int64.toString opened.number ++ " " ++ Stdlib.Blob.toHex opened.payload) in
         inspect keys value.remaining
@@ -40,7 +40,7 @@ let inspect (keys: Stdlib.QuicCrypto.Keys) (data: Blob) : Unit =
       | VersionNegotiation value -> Stdlib.printLine ("V " ++ Stdlib.Blob.toHex value.destination ++ " " ++ Stdlib.Blob.toHex value.source ++ " " ++ Stdlib.String.join (Stdlib.List.map value.versions Stdlib.Int64.toString) ",")
       | UnsupportedVersion value -> Stdlib.printLine ("U " ++ Stdlib.Int64.toString value.version)
 let checkPackets () : Unit =
-  match Stdlib.Blob.fromHex "000102030405060708090A0B0C0D0E0F101112131415161718191A1B1C1D1E1F" |> Stdlib.Result.andThen Stdlib.QuicCrypto.derive,
+  match Stdlib.Blob.fromHex "000102030405060708090A0B0C0D0E0F101112131415161718191A1B1C1D1E1F" |> Stdlib.Result.andThen Stdlib.__QuicCrypto.derive,
         Stdlib.Blob.fromHex "0001020304050607", Stdlib.Blob.fromHex "08090A",
         Stdlib.Cli.Args.get 0, Stdlib.Cli.Args.get 1, Stdlib.Cli.Args.get 2 with
   | Ok keys, Ok destination, Ok source, Ok mode, Ok code, Ok hex ->
@@ -49,11 +49,11 @@ let checkPackets () : Unit =
     | Ok data ->
       if mode == "inspect" then inspect keys data
       else
-        let kind = if code == "0" then Stdlib.QuicPacket.Kind.Initial else if code == "1" then Stdlib.QuicPacket.Kind.ZeroRtt else Stdlib.QuicPacket.Kind.Handshake in
+        let kind = if code == "0" then Stdlib.__QuicPacket.Kind.Initial else if code == "1" then Stdlib.__QuicPacket.Kind.ZeroRtt else Stdlib.__QuicPacket.Kind.Handshake in
         let result =
-          if mode == "token" then Stdlib.QuicPacket.sealLong Stdlib.QuicPacket.Kind.Initial keys destination source data Stdlib.Blob.empty 1073741825L
-          else if code == "3" then Stdlib.QuicPacket.sealShort keys destination false data 1073741825L
-          else Stdlib.QuicPacket.sealLong kind keys destination source (if code == "0" then Stdlib.String.toBlob "token" else Stdlib.Blob.empty) data 1073741825L in
+          if mode == "token" then Stdlib.__QuicPacket.sealLong Stdlib.__QuicPacket.Kind.Initial keys destination source data Stdlib.Blob.empty 1073741825L
+          else if code == "3" then Stdlib.__QuicPacket.sealShort keys destination false data 1073741825L
+          else Stdlib.__QuicPacket.sealLong kind keys destination source (if code == "0" then Stdlib.String.toBlob "token" else Stdlib.Blob.empty) data 1073741825L in
         match result with
         | Error message -> Stdlib.printLine ("ERROR " ++ message)
         | Ok packet -> Stdlib.printLine (Stdlib.Blob.toHex packet)

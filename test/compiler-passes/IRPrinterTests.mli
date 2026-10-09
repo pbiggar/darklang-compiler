@@ -1,5 +1,6 @@
 (* Original pinned MIR formatting tests. *)
-type testResult=(unit,string) result
+type testResult = (unit, string) result
+
 val testFormatMIR : unit -> testResult
 val testFormatMIRDumpFiltersBeforeFormatting : unit -> testResult
 val testFormatMIRDumpSummary : unit -> testResult

@@ -27,20 +27,20 @@ ROOT = Path(__file__).resolve().parents[1]
 PROBE = '''// server.dark - Exercise real server packet spaces through one TLS retry and Finished.
 let bytes (text: String) : Blob = Stdlib.Blob.fromHex text |> Stdlib.Result.withDefault Stdlib.Blob.empty
 let input () : Blob = bytes (Builtin.stdinReadLine (()))
-let flush (socket: Stdlib.Datagram.Socket) (peer: Stdlib.Datagram.Endpoint) (state: Stdlib.QuicServer.Flight) (now: Int64) (count: Int64) : Stdlib.Result.Result<Stdlib.QuicServer.Flight, String> =
-  if count == 0L then Ok state else Stdlib.QuicServer.__flush socket peer state now |> Stdlib.Result.andThen (fun next -> flush socket peer next (now + 10L) (count - 1L))
-let exchange (socket: Stdlib.Datagram.Socket) : Stdlib.Result.Result<Unit, String> =
-  let peer = Stdlib.Datagram.Endpoint { address = [127L,0L,0L,1L], port = 443L } in
+let flush (socket: Stdlib.__Datagram.Socket) (peer: Stdlib.__Datagram.Endpoint) (state: Stdlib.__QuicServer.Flight) (now: Int64) (count: Int64) : Stdlib.Result.Result<Stdlib.__QuicServer.Flight, String> =
+  if count == 0L then Ok state else Stdlib.__QuicServer.__flush socket peer state now |> Stdlib.Result.andThen (fun next -> flush socket peer next (now + 10L) (count - 1L))
+let exchange (socket: Stdlib.__Datagram.Socket) : Stdlib.Result.Result<Unit, String> =
+  let peer = Stdlib.__Datagram.Endpoint { address = [127L,0L,0L,1L], port = 443L } in
   Stdlib.TlsServerIdentity.create (bytes "@CERT@") (bytes "@KEY@") |> Stdlib.Result.andThen (fun identity ->
-    Stdlib.QuicServer.start identity (bytes "@SECRET@") (Stdlib.Datagram.Message { peer = peer, payload = input () }) 1000L |> Stdlib.Result.andThen (fun state ->
+    Stdlib.__QuicServer.start identity (bytes "@SECRET@") (Stdlib.__Datagram.Message { peer = peer, payload = input () }) 1000L |> Stdlib.Result.andThen (fun state ->
       if Stdlib.Option.isNone state.retry || Stdlib.Option.isSome state.tls then Error "Expected initial TLS retry"
       else flush socket peer state 1000L 1L |> Stdlib.Result.andThen (fun state ->
         Stdlib.printLine "SECOND"
-        Stdlib.QuicServer.packets state (input ()) 1010L |> Stdlib.Result.andThen (fun state ->
+        Stdlib.__QuicServer.packets state (input ()) 1010L |> Stdlib.Result.andThen (fun state ->
           flush socket peer state 1010L 10L |> Stdlib.Result.andThen (fun state ->
             Stdlib.printLine "FINISHED"
             if Stdlib.Option.isSome state.authenticated then Error "Premature application keys"
-            else Stdlib.QuicServer.packets state (input ()) 1200L |> Stdlib.Result.andThen (fun state ->
+            else Stdlib.__QuicServer.packets state (input ()) 1200L |> Stdlib.Result.andThen (fun state ->
               match state.authenticated with
               | None -> Error "Missing authenticated keys"
               | Some ready ->
@@ -50,13 +50,13 @@ let exchange (socket: Stdlib.Datagram.Socket) : Stdlib.Result.Result<Unit, Strin
                   Stdlib.printLine (Stdlib.Blob.toHex ready.receiveSecret)
                   Stdlib.printLine "DONE"
                   Ok ()))))))
-let emit (_peer: Stdlib.Datagram.Endpoint) (packet: Blob) (_timeout: Int64) : Stdlib.Result.Result<Unit, Int64> =
+let emit (_peer: Stdlib.__Datagram.Endpoint) (packet: Blob) (_timeout: Int64) : Stdlib.Result.Result<Unit, Int64> =
   Stdlib.printLine ("PACKET " ++ Stdlib.Blob.toHex packet)
   Ok ()
 let lifecycle = Stdlib.Stream.__new (fun _unit -> Some ()) (fun _unit -> ())
-let socket = Stdlib.Datagram.Socket { lifecycle = lifecycle, receive = fun _timeout -> Error 11L, send = emit }
+let socket = Stdlib.__Datagram.Socket { lifecycle = lifecycle, receive = fun _timeout -> Error 11L, send = emit }
 let result = exchange socket
-Stdlib.Datagram.close socket
+Stdlib.__Datagram.close socket
 match result with | Ok () -> () | Error message -> Stdlib.printLine ("ERROR " ++ message)
 '''
 

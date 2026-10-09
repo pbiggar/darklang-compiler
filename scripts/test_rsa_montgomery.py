@@ -28,7 +28,7 @@ let check (base: String) (exponent: String) (modulus: String) (expected: String)
   let result = Stdlib.Blob.fromHex base |> Stdlib.Result.andThen (fun base ->
     Stdlib.Blob.fromHex exponent |> Stdlib.Result.andThen (fun exponent ->
       Stdlib.Blob.fromHex modulus |> Stdlib.Result.andThen (fun modulus ->
-        Stdlib.RsaMontgomery.publicPow base exponent modulus |> Stdlib.Result.map Stdlib.Blob.toHex))) in
+        Stdlib.__RsaMontgomery.publicPow base exponent modulus |> Stdlib.Result.map Stdlib.Blob.toHex))) in
   match result with | Ok actual -> actual == expected | Error _ -> false
 ''' + '\nStdlib.printLine (if ' + ' &&\n  '.join(checks) + ' then "DONE" else "FAILED")\n'
     with tempfile.TemporaryDirectory(prefix="dark-montgomery-") as temporary:

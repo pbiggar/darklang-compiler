@@ -1,5 +1,10 @@
 # Diff and ValueSearch parity
 
+Current compiler source review: 2026-10-07 at `7154b0ea9c1a3f53d30984ed17b9e0cc5d8f0dce`.
+See the [current audit](../current-audit.md) for post-port status and validation.
+Older revision pairs and executed counts below are historical evidence, not
+a fresh test result for this revision.
+
 This document records the observable parity contract for the compiler's
 `Darklang.Stdlib.Diff` and `Darklang.Stdlib.ValueSearch` modules. The
 comparison was revalidated directly between compiler HEAD
@@ -37,7 +42,7 @@ indices. Public table indices and cells remain `Int`; canonical `List.getAt`
 performs the checked internal conversion and returns `None` when it cannot fit
 the skew-list's machine-sized index.
 
-The copied implementation is in `stdlib/Diff.dark:3-80`.
+The copied implementation is in `StdLib/Diff.dark`.
 Exact ordered probes for identical text, additions, removals, replacements,
 repeated-line ties, empty strings, boundary empty lines, and mixed edits are in
 `test/fixtures/e2e/interpreter/diff.e2e:4-13`.
@@ -71,8 +76,8 @@ Namespace and location behavior follows the interpreter source exactly:
   the namespace filter.
 
 The Dark implementations are in
-`stdlib/PackageManager.dark:3-34` and
-`stdlib/ValueSearch.dark:3-50`. Helper probes are in
+`packages/Darklang/LanguageTools/PackageManager.dark:3-34` and
+`StdLib/ValueSearch.dark`. Helper probes are in
 `test/fixtures/e2e/interpreter/value_search_helpers.e2e:3-13`; prefix scoring,
 shortest-path selection, and stable location ties are covered at
 `test/fixtures/e2e/upstream/stdlib/language-tools/pickLocation.dark:28-159`. The
@@ -85,15 +90,16 @@ lookup/evaluation failures, static result validation, and result order.
 
 The interpreter primitive is backed by its live dev-time package manager and
 database. The compiler intentionally does not acquire that service: it has no
-content-addressed package traversal or ordinary top-level value initialization,
-as documented in `name-resolution.md:81-101`. Instead, each `CompileRequest`
+runtime package-service integration. Compile-time hosted package dependency
+traversal and top-level value initialization now exist independently of
+ValueSearch. Each `CompileRequest`
 contains an explicit immutable `PackageValueCatalog` snapshot
 (`src/driver/CompilationContexts.ml`). This catalog is compiler-only
 machinery, not a new Dark-visible package model.
 
 The snapshot records value hash, recursive custom-type identity, branch-visible
 locations in their already-prioritized order, and typed evaluator state. During
-compilation, the bridge in `driver/PackageCatalog.fs` discovers reachable
+compilation, the bridge in `src/driver/PackageCatalog.ml` discovers reachable
 `ValueSearch` specializations, retains only entries for their concrete result
 types, and materializes the narrow `pmFindValuesByValueType`,
 `pmGetLocationsByValue`, and concrete `pmEvaluateValue<'a>` functions. The

@@ -11,20 +11,23 @@ grouped by purpose; each subject has one canonical source.
 
 ## Contributing
 
+- [ChatGPT Work VM setup](contributing/work-vm-setup.md)
 - [Implementation workflow](contributing/workflow.md)
 - [OCaml coding guidelines](contributing/coding-guidelines.md)
 - [Test DSLs](contributing/testing.md)
-- [Differential compiler fuzzing](contributing/fuzzing.md)
+- [Differential compiler testing](contributing/differential-testing.md)
 - [Verification and performance gates](contributing/verification.md)
 - [Finding compiler slowdowns](contributing/compile-time-optimization.md)
 - [Merge-train integrator recovery](contributing/mergetrain-integrator.md)
 - [Agent operating rules](../AGENTS.md)
+- [ChatGPT app VM setup and recovery](../scripts/vm/README.md)
 
 ## Compiler implementation
 
 - [Architecture overview](compiler/overview.md)
 - [Compiler pipeline](compiler/pipeline.md)
 - [Compiler source organization](compiler/source-organization.md)
+- [Complete embedded library source inventory](compiler/library-sources.md)
 - [Compiler identities](compiler/identities.md)
 - [Intermediate representations](compiler/intermediate-representations.md)
 - [End-to-end example](compiler/end-to-end-example.md)
@@ -37,7 +40,8 @@ grouped by purpose; each subject has one canonical source.
 ## Compatibility and project status
 
 - [Darklang compatibility overview](compatibility/overview.md)
-- [Remaining non-AOT differences](compatibility/remaining-differences.md)
+- [Executed compatibility failures by file and individual test](compatibility/current-audit.md)
+- [Complete imported upstream test inventory](compatibility/upstream-test-inventory.md)
 - [Language compatibility ledgers](compatibility/language/)
 - [Standard-library compatibility ledgers](compatibility/stdlib/)
 - [CLI compatibility](compatibility/cli.md)

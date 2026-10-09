@@ -1,4 +1,5 @@
 open Dark_compiler
+
 (* Typed formatting of complete MIR values in original test diagnostics. *)
 val vReg : MIR.vReg -> StructuralValue.value
 val typedMIRParam : MIR.typedMIRParam -> StructuralValue.value

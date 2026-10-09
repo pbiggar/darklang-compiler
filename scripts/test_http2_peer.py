@@ -26,18 +26,18 @@ match Stdlib.Cli.Args.get 0, Stdlib.Cli.Args.get 1, Stdlib.Cli.Args.get 2 with
   match Stdlib.Cli.FileSystem.readFile ca with
   | Error _ -> Stdlib.printLine "CA read failed"
   | Ok pem ->
-    match Stdlib.Tls13Client.parsePemBundle pem with
+    match Stdlib.__Tls13Client.parsePemBundle pem with
     | Error message -> Stdlib.printLine message
     | Ok roots ->
       let url = "https://localhost:" ++ port ++ "/" ++ mode in
       let method = if mode == "head" then "HEAD" else "POST" in
       let requestBody = Stdlib.String.toBlob (Stdlib.String.join (Stdlib.List.repeatUnsafe 70 (Stdlib.String.repeat "x" 1000)) "") in
       if mode == "buffered" || mode == "early-buffered" then
-        match Stdlib.HttpClient.requestTrustedWithRoots roots method url [] requestBody with
+        match Stdlib.HttpClient.__requestTrustedWithRoots roots method url [] requestBody with
         | Error _ -> Stdlib.printLine "REQUEST ERROR"
         | Ok response -> Stdlib.printLine (Stdlib.Int.toString response.statusCode ++ "|" ++ Stdlib.Int.toString (Stdlib.Blob.length response.body) ++ "|" ++ Stdlib.Int.toString (Stdlib.List.length response.headers))
       else
-        match Stdlib.HttpClient.streamTrustedWithRoots roots method url [] requestBody with
+        match Stdlib.HttpClient.__streamTrustedWithRoots roots method url [] requestBody with
         | Error _ -> Stdlib.printLine "REQUEST ERROR"
         | Ok response ->
           let bytes = if mode == "abandon" then Stdlib.Blob.empty else Stdlib.Stream.toBlob response.body in

@@ -14,14 +14,14 @@ The public contract was revalidated against these exact revisions:
   `04fbe9dcc995c6188757d583e273cbd30a3e2d3d`
 - historical compiler starting point:
   `51093e0a8e31fe45a9aa79a317fbefd6b74fbcc3`, specifically
-  `stdlib/Dict.dark`, `__HAMT.dark`, and
+  `StdLib/Dict.dark`, `__HAMT.dark`, and
   `src/DarkStdlib.ml:150-166`
 - DCB1 report `8a402797` was starting evidence only; retained findings were
   checked again against the current compiler and interpreter revisions above.
 
 The historical and current compiler source blobs are not identical, so the
 historical revision was not treated as proof of current behavior. The relevant
-`Dict.dark`, `__HAMT.dark`, and `Stdlib.fs` blobs at the current compiler point
+`Dict.dark`, `__HAMT.dark`, and `src/DarkStdlib.ml` blobs at the current compiler point
 are identical to the earlier pre-rebase repair point
 `6366204f670c906bbf4cd6b22b53786098c92a03`. The rebased candidate changes
 only parity documentation, focused E2E coverage, and append-only benchmark
@@ -33,8 +33,8 @@ language-visible contract. Ahead-of-time compilation and the HAMT layout are
 compiler implementation details.
 
 Current source evidence at the compiler comparison point is
-`stdlib/Dict.dark:9-216` for the public wrappers and ordered
-higher-order operations, `stdlib/__HAMT.dark:10-60` for the
+`StdLib/Dict.dark:9-216` for the public wrappers and ordered
+higher-order operations, `StdLib/Dict/__HAMT.dark:10-60` for the
 private generic storage boundary, `src/frontend/interpreter/Parser.ml:2034-2035`
 for the empty value, `src/frontend/checking/EqualityHelpers.ml`
 for content equality, `src/frontend/ValueRendering.ml`
@@ -125,7 +125,7 @@ both native architectures.
 
 ## Private generic HAMT
 
-`stdlib/__HAMT.dark` remains a generic persistent Hash Array
+`StdLib/Dict/__HAMT.dark` remains a generic persistent Hash Array
 Mapped Trie. Compiler-owned consumers such as Unicode tables use private
 `Stdlib.Dict.__*` helpers for Int64 and other key types. User code cannot name
 these helpers.
@@ -162,8 +162,8 @@ The contract is anchored in:
 - `src/backend/arm64/runtime/` and `src/backend/x64/runtime/` for native
   allocation, output, and failure behavior
 - `src/frontend/TypeChecking.ml` for public typing and equality
-- `stdlib/Dict.dark` for the public module
-- `stdlib/__HAMT.dark` for private generic storage
+- `StdLib/Dict.dark` for the public module
+- `StdLib/Dict/__HAMT.dark` for private generic storage
 - `test/fixtures/e2e/dict_parity.e2e` and pinned upstream Dict/edict cases for the
   language boundary
 - `test/fixtures/e2e/stdlib-internal/dict-hamt.e2e`, refcounting tests, and

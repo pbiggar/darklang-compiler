@@ -61,7 +61,7 @@ OneTuple.OneTuple (1L, "one")
 Constructor declarations, expressions, and patterns store their ordered fields
 directly as lists. An empty list is a nullary case, multiple list elements are
 multiple constructor fields, and a tuple type or expression in a singleton list
-is one tuple field. `AST.ConstructorReference` represents an unqualified
+is one tuple field. `AST.constructorReference` represents an unqualified
 reference, a source-qualified reference, or a resolved declaring module and
 type without an empty-string sentinel. Type checking predeclares all type names,
 validates type and case duplicates, generic parameters, empty declarations, and

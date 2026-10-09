@@ -16,30 +16,30 @@ The Dark compiler transforms source code through a series of passes, each with a
 
 | #    | Pass                    | File                                                        | Transform                                     |
 |------|-------------------------|-------------------------------------------------------------|-----------------------------------------------|
-| 1    | Parser and validation   | `frontend/interpreter/Parser.fs`, `frontend/WrittenParsing.fs` | Source → validated `WrittenTypes` |
-| 1.5  | Type checking           | `frontend/WrittenChecking.fs` | `WrittenTypes` → checked AST |
-| 1.9  | Function ownership analysis | `passes/ownership/AnalyzeFunctionOwnership.fs` | Checked AST → verified owned HIR (analysis artifact) |
-| 2    | AST → ANF               | `passes/anf/AST_to_ANF.fs`                       | Checked AST → ANF                             |
-| 2 (regions) | List representation and ownership | `passes/hir/`, `passes/storage/`, `passes/ownership/`, `passes/anf/LowerListRegions.fs` | Closed semantic lists → storage → owned arrays → ANF |
-| 2.2  | Generated result output | `passes/anf/PrintInsertion.fs`                   | ANF → ANF                                     |
-| 2.25 | Function reachability   | `passes/anf/ANFDeadCodeElimination.fs`           | ANF → reachable ANF                           |
-| 2.3  | Accumulator helper lowering | `passes/anf/ANFAccumulatorLowering.fs`                  | ANF → ANF with recursive helpers              |
-| 2.4  | ANF → high-level SSA    | `ir/anf/SSAANF.fs`                                           | ANF → typed blocks                             |
-| 2.4.1 | SSA optimizations     | `passes/anf/SSAOptimization.fs`                              | SSA → simplified SSA                           |
-| 2.4.5 | SSA inlining           | `passes/anf/SSAInlining.fs`                                 | SSA → SSA                                     |
-| 2.4.6 | Known closure specialization | `passes/anf/SSAHigherOrderSpecialization.fs`   | SSA → specialized SSA                         |
-| 2.5  | Direct-call specialization | `passes/anf/SSADirectCallSpecialization.fs`             | SSA → specialized SSA                         |
-| 2.6  | Escape analysis        | `passes/anf/SSAEscapeAnalysis.fs`                           | SSA → scalar-replaced SSA                     |
-| 2.7  | Ref count insertion     | `passes/anf/ownership/SSARefCountInsertion.fs`              | SSA + memory ops                              |
-| 2.8  | Tail call detection     | `passes/anf/SSATailCallDetection.fs`                        | SSA → SSA                                     |
-| 3.1  | SSA → MIR               | `passes/anf/ANF_to_MIR.fs`                                   | Typed blocks → SSA-form MIR                   |
-| 3.5  | MIR optimizations       | `passes/mir/MIR_Optimize.fs`                                | MIR → MIR                                     |
-| 4    | MIR → LIR               | `passes/mir/MIR_to_LIR.fs`                                    | MIR → LIR (virtual regs)                      |
-| 4.5  | LIR peephole            | `passes/lir/LIR_Peephole.fs`                                | LIR → LIR                                     |
-| 5    | Register allocation     | `passes/lir/RegisterAllocation.fs`                            | LIR (virtual) → LIR (physical)                |
-| 5.5  | Function tree shaking   | `passes/lir/FunctionTreeShaking.fs`                         | LIR → pruned LIR                              |
-| 6    | Code generation         | `backend/{arm64,x64}/CodeGen.fs`                           | LIR → ISA instructions                        |
-| 7    | Encode & resolve        | `backend/{arm64,x64}/Encoding.fs` + `Resolve.fs`         | ISA → machine code bytes                      |
+| 1    | Parser and validation   | `src/frontend/interpreter/Parser.ml`, `src/frontend/WrittenParsing.ml` | Source → validated `WrittenTypes` |
+| 1.5  | Type checking           | `src/frontend/WrittenChecking.ml` | `WrittenTypes` → checked AST |
+| 1.9  | Function ownership analysis | `src/passes/ownership/AnalyzeFunctionOwnership.ml` | Checked AST → verified owned HIR (analysis artifact) |
+| 2    | AST → ANF               | `src/passes/anf/AST_to_ANF.ml`                       | Checked AST → ANF                             |
+| 2 (regions) | List representation and ownership | `passes/hir/`, `passes/storage/`, `passes/ownership/`, `src/passes/anf/LowerListRegions.ml` | Closed semantic lists → storage → owned arrays → ANF |
+| 2.2  | Generated result output | `src/passes/anf/PrintInsertion.ml`                   | ANF → ANF                                     |
+| 2.25 | Function reachability   | `src/passes/anf/ANFDeadCodeElimination.ml`           | ANF → reachable ANF                           |
+| 2.3  | Accumulator helper lowering | `src/passes/anf/ANFAccumulatorLowering.ml`                  | ANF → ANF with recursive helpers              |
+| 2.4  | ANF → high-level SSA    | `src/ir/anf/SSAANF.ml`                                           | ANF → typed blocks                             |
+| 2.4.1 | SSA optimizations     | `src/passes/anf/SSAOptimization.ml`                              | SSA → simplified SSA                           |
+| 2.4.5 | SSA inlining           | `src/passes/anf/SSAInlining.ml`                                 | SSA → SSA                                     |
+| 2.4.6 | Known closure specialization | `src/passes/anf/SSAHigherOrderSpecialization.ml`   | SSA → specialized SSA                         |
+| 2.5  | Direct-call specialization | `src/passes/anf/SSADirectCallSpecialization.ml`             | SSA → specialized SSA                         |
+| 2.6  | Escape analysis        | `src/passes/anf/SSAEscapeAnalysis.ml`                           | SSA → scalar-replaced SSA                     |
+| 2.7  | Ref count insertion     | `src/passes/anf/ownership/RcSSARefCountInsertion.ml`              | SSA + memory ops                              |
+| 2.8  | Tail call detection     | `src/passes/anf/SSATailCallDetection.ml`                        | SSA → SSA                                     |
+| 3.1  | SSA → MIR               | `src/passes/anf/ANF_to_MIR.ml`                                   | Typed blocks → SSA-form MIR                   |
+| 3.5  | MIR optimizations       | `src/passes/mir/MIR_Optimize.ml`                                | MIR → MIR                                     |
+| 4    | MIR → LIR               | `src/passes/mir/MIR_to_LIR.ml`                                    | MIR → LIR (virtual regs)                      |
+| 4.5  | LIR peephole            | `src/passes/lir/LIR_Peephole.ml`                                | LIR → LIR                                     |
+| 5    | Register allocation     | `src/passes/lir/RegisterAllocation.ml`                            | LIR (virtual) → LIR (physical)                |
+| 5.5  | Function tree shaking   | `src/passes/lir/FunctionTreeShaking.ml`                         | LIR → pruned LIR                              |
+| 6    | Code generation         | `src/backend/arm64/Backend_Arm64_CodeGen.ml` and `src/backend/x64/CodeGen_X86_64.ml`                           | LIR → ISA instructions                        |
+| 7    | Encode & resolve        | `src/backend/arm64/ARM64_Encoding.ml` and `src/backend/x64/X86_64_Encoding.ml` + `src/backend/arm64/ARM64_Resolve.ml` and `src/backend/x64/X86_64_Resolve.ml`         | ISA → machine code bytes                      |
 | 8    | Binary generation       | `backend/{arm64,x64}/Binary_Generation_*.fs`                 | Blob → Mach-O or ELF executable              |
 
 Passes 1–5 are shared across targets. Passes 6–8 live under
@@ -66,7 +66,7 @@ consumed by dependency compilation.
 
 ---
 
-## Pass 1: Parser (`frontend/interpreter/Parser.fs`)
+## Pass 1: Parser (`src/frontend/interpreter/Parser.ml`)
 
 **Input**: Source code string
 **Output**: Validated `WrittenTypes`
@@ -94,13 +94,13 @@ Output: Let("x", BinOp(Add, IntLiteral(1), IntLiteral(2)),
 
 ---
 
-## Pass 1.5: Type Checking (`WrittenChecking.fs`)
+## Pass 1.5: Type Checking (`src/frontend/WrittenChecking.ml`)
 
 **Input**: Validated `WrittenTypes`
 **Output**: Checked AST with phase invariants represented by node shape
 
 Source entry points resolve written type annotations and names directly into
-`CheckedAST.Program`. Runtime failure expressions have semantic type `TNever`;
+`CheckedAST.program`. Runtime failure expressions have semantic type `TNever`;
 privileged compiler sources alone may introduce `TInternalRawPtr` signatures.
 
 ### Responsibilities
@@ -117,7 +117,7 @@ privileged compiler sources alone may introduce `TInternalRawPtr` signatures.
 - **Control-flow checking**: Require Boolean conditions, unify conditional arms, and use a sequence's Unit head and final-result type
 - **Phase boundary construction**: Require inferred lambda parameter types,
   typed recursive identities, resolved nominal references, and checked value
-  bodies before producing `CheckedAST.Program`
+  bodies before producing `CheckedAST.program`
 
 ### Example Error
 ```
@@ -127,7 +127,7 @@ Error:  Type mismatch: expected Int64, got String in binary operator
 
 ---
 
-## Pass 2: AST to ANF (`AST_to_ANF.fs`)
+## Pass 2: AST to ANF (`src/passes/anf/AST_to_ANF.ml`)
 
 **Input**: Checked AST
 **Output**: A-Normal Form (ANF)
@@ -165,7 +165,7 @@ Output: let t0 = 2 * 3 in
 
 ---
 
-## Pass 2.2: Generated Result Output (`PrintInsertion.fs`)
+## Pass 2.2: Generated Result Output (`src/passes/anf/PrintInsertion.ml`)
 
 **Input**: ANF
 **Output**: ANF with explicit result-printing effects
@@ -183,7 +183,7 @@ registries.
 
 ---
 
-## Pass 2.25: Function Reachability (`ANFDeadCodeElimination.fs`)
+## Pass 2.25: Function Reachability (`src/passes/anf/ANFDeadCodeElimination.ml`)
 
 Expression compilation removes functions that cannot be reached from the
 generated program entry before ANF optimization, then repeats the query after
@@ -194,7 +194,7 @@ prebuilt functions and for selecting reachable standard-library functions.
 
 ---
 
-## Pass 2.3: Accumulator Helper Lowering (`ANFAccumulatorLowering.fs`)
+## Pass 2.3: Accumulator Helper Lowering (`src/passes/anf/ANFAccumulatorLowering.ml`)
 
 **Input**: ANF
 **Output**: ANF with eligible recursive helpers
@@ -206,7 +206,7 @@ the direct SSA-lowering step.
 
 ---
 
-## Pass 2.4: ANF to high-level SSA (`SSAANF.fs`)
+## Pass 2.4: ANF to high-level SSA (`src/ir/anf/SSAANF.ml`)
 
 **Input**: ANF after accumulator helper lowering
 **Output**: High-level SSA blocks with explicit edges and block parameters
@@ -218,7 +218,7 @@ the direct SSA-lowering step.
 
 ---
 
-## Pass 2.4.1: SSA Optimizations (`SSAOptimization.fs`)
+## Pass 2.4.1: SSA Optimizations (`src/passes/anf/SSAOptimization.ml`)
 
 **Input**: Typed SSA blocks
 **Output**: Simplified SSA blocks
@@ -234,7 +234,7 @@ inlining so earlier eliminated branches do not change later block layout.
 
 ---
 
-## Pass 2.4.5: SSA Inlining (`SSAInlining.fs`)
+## Pass 2.4.5: SSA Inlining (`src/passes/anf/SSAInlining.ml`)
 
 **Input**: Typed SSA blocks
 **Output**: SSA with selected direct calls inlined
@@ -243,7 +243,7 @@ inlining so earlier eliminated branches do not change later block layout.
 - **Clone callee blocks**: Freshen block labels and value identities at each call
 - **Connect returns**: Route every callee return to one typed continuation
 
-## Pass 2.4.6: Known Closure Specialization (`SSAHigherOrderSpecialization.fs`)
+## Pass 2.4.6: Known Closure Specialization (`src/passes/anf/SSAHigherOrderSpecialization.ml`)
 
 **Input**: Typed SSA blocks
 **Output**: SSA with selected higher-order helpers specialized
@@ -258,7 +258,7 @@ inlining so earlier eliminated branches do not change later block layout.
 
 ---
 
-## Pass 2.5: Direct-Call Specialization (`SSADirectCallSpecialization.fs`)
+## Pass 2.5: Direct-Call Specialization (`src/passes/anf/SSADirectCallSpecialization.ml`)
 
 **Input**: High-level SSA
 **Output**: SSA with specialized direct calls and bounded literal clones
@@ -269,7 +269,7 @@ Call sites and function signatures change together. An exact tuple, record, or
 wide integer argument can be reconstructed in a clone's entry block; an unused
 caller construction is then removed.
 
-## Pass 2.6: Escape Analysis (`SSAEscapeAnalysis.fs`)
+## Pass 2.6: Escape Analysis (`src/passes/anf/SSAEscapeAnalysis.ml`)
 
 **Input**: High-level SSA
 **Output**: SSA with eligible local aggregates scalar-replaced or uniquely reused
@@ -313,7 +313,7 @@ treated as one ownership family. Stack allocation, scalar replacement of
 managed fields, observable-destruction reuse, and interprocedural
 representation changes are outside the current scope.
 
-## Pass 2.7: Reference Count Insertion (`SSARefCountInsertion.fs`)
+## Pass 2.7: Reference Count Insertion (`src/passes/anf/ownership/RcSSARefCountInsertion.ml`)
 
 **Input**: High-level SSA
 **Output**: SSA with RefCountInc/RefCountDec operations
@@ -328,7 +328,7 @@ representation changes are outside the current scope.
 
 ---
 
-## Pass 2.8: Tail Call Optimization (`SSATailCallDetection.fs`)
+## Pass 2.8: Tail Call Optimization (`src/passes/anf/SSATailCallDetection.ml`)
 
 **Input**: SSA with refcounting
 **Output**: SSA annotated for tail calls / self-recursion loops
@@ -339,7 +339,7 @@ representation changes are outside the current scope.
 
 ---
 
-## Pass 3.1: High-level SSA to MIR (`ANF_to_MIR.fs`)
+## Pass 3.1: High-level SSA to MIR (`src/passes/anf/ANF_to_MIR.ml`)
 
 **Input**: High-level SSA blocks
 **Output**: Mid-level CFG already in SSA form
@@ -350,12 +350,12 @@ representation changes are outside the current scope.
 - **Preserve loop inputs**: Put self-tail-call values on loop-header phi edges
 - **Literal lowering**: Keep string and float constants symbolic until needed
 
-`SSA_Construction.fs` remains available for MIR analysis and independent
+`src/passes/mir/SSA_Construction.ml` remains available for MIR analysis and independent
 validation. The production pipeline does not run MIR SSA reconstruction.
 
 ---
 
-## Pass 3.5: MIR Optimizations (`MIR_Optimize.fs`)
+## Pass 3.5: MIR Optimizations (`src/passes/mir/MIR_Optimize.ml`)
 
 **Input**: MIR CFG in SSA
 **Output**: Optimized MIR CFG
@@ -380,7 +380,7 @@ rewrite. The remaining passes follow it in the optimizer's fixed-point loop.
 
 ---
 
-## Pass 4: MIR to LIR (`MIR_to_LIR.fs`)
+## Pass 4: MIR to LIR (`src/passes/mir/MIR_to_LIR.ml`)
 
 **Input**: MIR (target-independent)
 **Output**: LIR (virtual registers, target-neutral instruction shapes)
@@ -409,7 +409,7 @@ when mixing stdlib, preamble, and user functions.
 
 ---
 
-## Pass 4.5: LIR Peephole (`LIR_Peephole.fs`)
+## Pass 4.5: LIR Peephole (`src/passes/lir/LIR_Peephole.ml`)
 
 **Input**: LIR (virtual regs)
 **Output**: Optimized LIR (virtual regs)
@@ -420,7 +420,7 @@ when mixing stdlib, preamble, and user functions.
 
 ---
 
-## Pass 5: Register Allocation (`RegisterAllocation.fs`)
+## Pass 5: Register Allocation (`src/passes/lir/RegisterAllocation.ml`)
 
 **Input**: LIR with virtual registers
 **Output**: LIR with physical registers
@@ -440,7 +440,7 @@ when mixing stdlib, preamble, and user functions.
 ### Register Classes (LIR-level abstraction)
 
 The LIR uses abstract `PhysReg` identifiers X0-X30; each backend maps
-them to actual hardware registers in `backend/{arch}/CodeGen.fs`.
+them to actual hardware registers in `src/backend/arm64/Backend_Arm64_CodeGen.ml` and `src/backend/x64/CodeGen_X86_64.ml`.
 
 - **Caller-saved (preferred)**: X1-X7
 - **Callee-saved**: X19-X26 on ARM64, X19-X21 on x86_64 (fewer because
@@ -453,7 +453,7 @@ the allocator is aware of this via `isX86_64 arch` checks.
 
 ---
 
-## Pass 5.5: Function Tree Shaking (`FunctionTreeShaking.fs`)
+## Pass 5.5: Function Tree Shaking (`src/passes/lir/FunctionTreeShaking.ml`)
 
 **Input**: LIR (physical regs)
 **Output**: LIR with only reachable functions
@@ -461,12 +461,12 @@ the allocator is aware of this via `isX86_64 arch` checks.
 ### Responsibilities
 - **Prune unused functions**: Keep `_start` roots and reachable callees
 - **Stdlib filtering**: Include only stdlib functions called by user code
-- **Call graph helpers**: Uses `DeadCodeElimination.fs` for LIR reachability and
-  `ANFDeadCodeElimination.fs` when computing reachable stdlib names from ANF
+- **Call graph helpers**: Uses `src/passes/lir/DeadCodeElimination.ml` for LIR reachability and
+  `src/passes/anf/ANFDeadCodeElimination.ml` when computing reachable stdlib names from ANF
 
 ---
 
-## Pass 6: Code Generation (`backend/{arm64,x64}/CodeGen.fs`)
+## Pass 6: Code Generation (`src/backend/arm64/Backend_Arm64_CodeGen.ml` and `src/backend/x64/CodeGen_X86_64.ml`)
 
 **Input**: LIR with physical registers
 **Output**: Target-specific symbolic instruction list
@@ -502,8 +502,8 @@ the allocator is aware of this via `isX86_64 arch` checks.
 
 | Backend | Encoding                               | Resolve                               | Binary                                                             |
 |---------|----------------------------------------|---------------------------------------|--------------------------------------------------------------------|
-| arm64   | `backend/arm64/Encoding.fs`           | `backend/arm64/Resolve.fs`           | `backend/arm64/Binary_Generation_{MachO,ELF}.fs` via `Emit.fs` |
-| x64     | `backend/x64/Encoding.fs`             | `backend/x64/Resolve.fs`             | `backend/x64/Binary_Generation_ELF.fs`                            |
+| arm64   | `src/backend/arm64/ARM64_Encoding.ml`           | `src/backend/arm64/ARM64_Resolve.ml`           | `src/backend/arm64/Binary_Generation_MachO.ml` and `src/backend/arm64/Backend_Arm64_Binary_Generation_ELF.ml` via `src/backend/arm64/Emit.ml` |
+| x64     | `src/backend/x64/X86_64_Encoding.ml`             | `src/backend/x64/X86_64_Resolve.ml`             | `src/backend/x64/Binary_Generation_ELF_X86_64.ml`                            |
 
 ---
 
@@ -511,15 +511,15 @@ the allocator is aware of this via `isX86_64 arch` checks.
 
 | File               | Purpose                               |
 |--------------------|---------------------------------------|
-| `AST.fs`           | Abstract Syntax Tree types            |
-| `ir/anf/ANF.fs`           | A-Normal Form types                   |
-| `ir/mir/MIR.fs`           | Mid-level IR types                    |
-| `ir/lir/LIR.fs`           | Low-level IR types                    |
-| `Platform.fs`      | OS/Arch DUs and per-target syscall tables |
-| `backend/arm64/ISA.fs`         | ARM64 instruction and register types  |
-| `backend/arm64/Symbolic.fs` | Symbolic ARM64 instructions (pre-encoding) |
-| `backend/x64/ISA.fs`        | x86_64 instruction and register types |
-| `backend/binary/ELF.fs`    | Shared ELF header/segment types       |
+| `src/AST.ml`           | Abstract Syntax Tree types            |
+| `src/ir/anf/ANF.ml`           | A-Normal Form types                   |
+| `src/ir/mir/MIR.ml`           | Mid-level IR types                    |
+| `src/ir/lir/LIR.ml`           | Low-level IR types                    |
+| `src/Platform.ml`      | OS/Arch DUs and per-target syscall tables |
+| `src/backend/arm64/ARM64.ml`         | ARM64 instruction and register types  |
+| `src/backend/arm64/Symbolic.ml` | Symbolic ARM64 instructions (pre-encoding) |
+| `src/backend/x64/X86_64.ml`        | x86_64 instruction and register types |
+| `src/backend/binary/ELF.ml`    | Shared ELF header/segment types       |
 
 ---
 

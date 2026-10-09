@@ -21,6 +21,7 @@
 *)
 (* Binary.ml - Native executable container data structures. *)
 [@@@warning "-30"]
+
 let mh_MAGIC_64 = 0xFEEDFACFl
 let cpu_TYPE_ARM64 = 0x0100000Cl
 let cpu_SUBTYPE_ARM64_ALL = 0l
@@ -40,46 +41,102 @@ let lc_DYSYMTAB = 0xBl
 let vm_PROT_READ = 0x1l
 let vm_PROT_WRITE = 0x2l
 let vm_PROT_EXECUTE = 0x4l
+
 (*
    Section flags
 *)
 let s_REGULAR = 0x0l
 let s_ATTR_PURE_INSTRUCTIONS = 0x80000000l
 let s_ATTR_SOME_INSTRUCTIONS = 0x00000400l
+
 (*
    Mach-O header
    For 64-bit
 *)
-type machHeader = {magic : int32; cpuType : int32; cpuSubType : int32; fileType : int32; numCommands : int32; sizeOfCommands : int32; flags : int32; reserved : int32}
+type machHeader = {
+  magic : int32;
+  cpuType : int32;
+  cpuSubType : int32;
+  fileType : int32;
+  numCommands : int32;
+  sizeOfCommands : int32;
+  flags : int32;
+  reserved : int32;
+}
+
 (*
    Section within a segment
    Max 16 bytes
 *)
-type section64 = {sectionName : string; segmentName : string; address : int64; size : int64; offset : int32; align : int32; relocationOffset : int32; numRelocations : int32; flags : int32; reserved1 : int32; reserved2 : int32; reserved3 : int32}
+type section64 = {
+  sectionName : string;
+  segmentName : string;
+  address : int64;
+  size : int64;
+  offset : int32;
+  align : int32;
+  relocationOffset : int32;
+  numRelocations : int32;
+  flags : int32;
+  reserved1 : int32;
+  reserved2 : int32;
+  reserved3 : int32;
+}
+
 (*
    LC_SEGMENT_64 load command
    Max 16 bytes
 *)
-type segmentCommand64 = {command : int32; commandSize : int32; segmentName : string; vmAddress : int64; vmSize : int64; fileOffset : int64; fileSize : int64; maxProt : int32; initProt : int32; numSections : int32; flags : int32; sections : section64 list}
+type segmentCommand64 = {
+  command : int32;
+  commandSize : int32;
+  segmentName : string;
+  vmAddress : int64;
+  vmSize : int64;
+  fileOffset : int64;
+  fileSize : int64;
+  maxProt : int32;
+  initProt : int32;
+  numSections : int32;
+  flags : int32;
+  sections : section64 list;
+}
+
 (*
    LC_MAIN load command (entry point)
 *)
-type mainCommand = {command : int32; commandSize : int32; entryOffset : int64; stackSize : int64}
+type mainCommand = {
+  command : int32;
+  commandSize : int32;
+  entryOffset : int64;
+  stackSize : int64;
+}
+
 (*
    LC_LOAD_DYLINKER load command
    Path to dylinker (e.g., "/usr/lib/dyld")
 *)
-type dylinkerCommand = {command : int32; commandSize : int32; name : string}
+type dylinkerCommand = { command : int32; commandSize : int32; name : string }
+
 (*
    LC_LOAD_DYLIB load command
    Path to library (e.g., "/usr/lib/libSystem.B.dylib")
 *)
-type dylibCommand = {command : int32; commandSize : int32; name : string; timestamp : int32; currentVersion : int32; compatibilityVersion : int32}
+type dylibCommand = {
+  command : int32;
+  commandSize : int32;
+  name : string;
+  timestamp : int32;
+  currentVersion : int32;
+  compatibilityVersion : int32;
+}
+
 (*
    LC_UUID load command
    16 bytes
 *)
-type uuidCommand = {command : int32; commandSize : int32; uuid : bytes}
+type uuidCommand = { command : int32; commandSize : int32; uuid : bytes }
+
 (*
    LC_BUILD_VERSION load command
    1 = macOS
@@ -87,19 +144,71 @@ type uuidCommand = {command : int32; commandSize : int32; uuid : bytes}
    SDK version
    Number of tool entries (0 for simplicity)
 *)
-type buildVersionCommand = {command : int32; commandSize : int32; platform : int32; minOS : int32; sdk : int32; numTools : int32}
+type buildVersionCommand = {
+  command : int32;
+  commandSize : int32;
+  platform : int32;
+  minOS : int32;
+  sdk : int32;
+  numTools : int32;
+}
+
 (*
    LC_SYMTAB load command
 *)
-type symtabCommand = {command : int32; commandSize : int32; symbolTableOffset : int32; numSymbols : int32; stringTableOffset : int32; stringTableSize : int32}
+type symtabCommand = {
+  command : int32;
+  commandSize : int32;
+  symbolTableOffset : int32;
+  numSymbols : int32;
+  stringTableOffset : int32;
+  stringTableSize : int32;
+}
+
 (*
    LC_DYSYMTAB load command
    Simplified - just the basic fields
    Zero out the rest
 *)
-type dysymtabCommand = {command : int32; commandSize : int32; localSymIndex : int32; numLocalSymbols : int32; extDefSymIndex : int32; numExtDefSymbols : int32; undefSymIndex : int32; numUndefSymbols : int32; tocOffset : int32; numTocEntries : int32; modTableOffset : int32; numModTableEntries : int32; extRefSymOffset : int32; numExtRefSyms : int32; indirectSymOffset : int32; numIndirectSyms : int32; extRelOffset : int32; numExtRel : int32; locRelOffset : int32; numLocRel : int32}
+type dysymtabCommand = {
+  command : int32;
+  commandSize : int32;
+  localSymIndex : int32;
+  numLocalSymbols : int32;
+  extDefSymIndex : int32;
+  numExtDefSymbols : int32;
+  undefSymIndex : int32;
+  numUndefSymbols : int32;
+  tocOffset : int32;
+  numTocEntries : int32;
+  modTableOffset : int32;
+  numModTableEntries : int32;
+  extRefSymOffset : int32;
+  numExtRefSyms : int32;
+  indirectSymOffset : int32;
+  numIndirectSyms : int32;
+  extRelOffset : int32;
+  numExtRel : int32;
+  locRelOffset : int32;
+  numLocRel : int32;
+}
+
 (*
    Complete Mach-O binary structure
    Constant string data (placed after code)
 *)
-type machOBinary = {header : machHeader; pageZeroCommand : segmentCommand64; textSegmentCommand : segmentCommand64; linkeditSegmentCommand : segmentCommand64; dylinkerCommand : dylinkerCommand; dylibCommand : dylibCommand; symtabCommand : symtabCommand; dysymtabCommand : dysymtabCommand; uuidCommand : uuidCommand; buildVersionCommand : buildVersionCommand; mainCommand : mainCommand; machineCode : bytes; stringData : bytes}
+type machOBinary = {
+  header : machHeader;
+  pageZeroCommand : segmentCommand64;
+  textSegmentCommand : segmentCommand64;
+  linkeditSegmentCommand : segmentCommand64;
+  dylinkerCommand : dylinkerCommand;
+  dylibCommand : dylibCommand;
+  symtabCommand : symtabCommand;
+  dysymtabCommand : dysymtabCommand;
+  uuidCommand : uuidCommand;
+  buildVersionCommand : buildVersionCommand;
+  mainCommand : mainCommand;
+  machineCode : bytes;
+  stringData : bytes;
+}

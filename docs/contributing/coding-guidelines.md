@@ -3,6 +3,15 @@
 The compiler is implemented in OCaml 5.5.1. Repository-specific requirements
 are in [AGENTS.md](../../AGENTS.md).
 
+Use ocamlformat 0.29.0 with the standard `default` profile in the root
+`.ocamlformat`. The pinned development dependencies install it in Docker and
+the Work VM bootstrap. On another host, install it with
+`opam install ocamlformat.0.29.0`. Run `python3 scripts/format-ocaml.py` to format
+maintained compiler, test and tool sources, and
+`python3 scripts/format-ocaml.py --check` to check without editing. The post-port
+formatting pass is a one-time cleanup; formatting is not a build or merge-train
+gate.
+
 ## Interfaces and state
 
 Each implementation has an explicit `.mli` interface. Preserve module

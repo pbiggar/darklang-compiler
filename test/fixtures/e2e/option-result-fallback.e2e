@@ -1,0 +1,22 @@
+// Qualified Option/Result type shortcuts fall back only after local candidates.
+
+module Acme.PackageResolutionProbe =
+  let optionIdentity (value: Option.Option<Int64>) : Option.Option<Int64> = value
+  let resultIdentity (value: Result.Result<Int64, String>) : Result.Result<Int64, String> = value
+  let bareOptionIdentity (value: Option<Int64>) : Option<Int64> = value
+  let bareResultIdentity (value: Result<Int64, String>) : Result<Int64, String> = value
+
+module Acme.LocalResolutionProbe =
+  module Option =
+    type Option<'a> = Present of 'a
+  module Result =
+    type Result<'a, 'b> = Success of 'a | Failure of 'b
+  let optionIdentity (value: Option.Option<Int64>) : Option.Option<Int64> = value
+  let resultIdentity (value: Result.Result<Int64, String>) : Result.Result<Int64, String> = value
+
+Acme.PackageResolutionProbe.optionIdentity (Some 3L) = Some 3L
+Acme.PackageResolutionProbe.resultIdentity (Ok 4L) = Ok 4L
+Acme.PackageResolutionProbe.bareOptionIdentity (Some 5L) = Some 5L
+Acme.PackageResolutionProbe.bareResultIdentity (Error "detail") = Error "detail"
+Acme.LocalResolutionProbe.optionIdentity (Acme.LocalResolutionProbe.Option.Option.Present 6L) = Acme.LocalResolutionProbe.Option.Option.Present 6L
+Acme.LocalResolutionProbe.resultIdentity (Acme.LocalResolutionProbe.Result.Result.Failure "local") = Acme.LocalResolutionProbe.Result.Result.Failure "local"

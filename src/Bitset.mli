@@ -1,5 +1,6 @@
-(** Raw 64-bit words, with the explicit mutable operations. *)
 type bitset = int64 array
+(** Raw 64-bit words, with the explicit mutable operations. *)
+
 val wordCount : int -> int
 val empty : int -> bitset
 val all : int -> bitset

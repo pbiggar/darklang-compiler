@@ -443,7 +443,7 @@ independently:
 The Darklang CLI currently accepts script arguments but does not expose them to
 the executed expression. The diagnostic runner therefore prepares a temporary
 copy of each Dark benchmark with its declared `profiles.json` integer arguments
-substituted at the `Stdlib.Cli.Args.int64` boundary. That copy also
+substituted at the `Stdlib.Cli.__Args.int64` boundary. That copy also
 translates the compiler's documented interpreter-compatibility spellings where
 the interpreter surface differs (including dictionary type
 arguments, tuple projections, enum-value qualification, and unwrapping

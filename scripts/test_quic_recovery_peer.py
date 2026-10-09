@@ -13,15 +13,15 @@ from aioquic.tls import Epoch
 
 ROOT = Path(__file__).resolve().parents[1]
 DARK = '''// recovery.dark - Compare observable ACK, loss and congestion decisions.
-let sendPackets (state: Stdlib.QuicRecovery.State) (number: Int64) (count: Int64)
-  : Stdlib.Result.Result<Stdlib.QuicRecovery.State, String> =
+let sendPackets (state: Stdlib.__QuicRecovery.State) (number: Int64) (count: Int64)
+  : Stdlib.Result.Result<Stdlib.__QuicRecovery.State, String> =
   if number == count then Ok state
-  else Stdlib.QuicRecovery.sent state (Stdlib.QuicRecovery.Packet {
+  else Stdlib.__QuicRecovery.sent state (Stdlib.__QuicRecovery.Packet {
     number = number, at = 100L + number, size = 1200L, token = number, payload = Stdlib.String.toBlob "x" }) true false
     |> Stdlib.Result.andThen (fun next -> sendPackets next (number + 1L) count)
-let check (count: Int64) (ack: Stdlib.QuicFrames.Ack) (now: Int64) : Unit =
-  let result = Stdlib.QuicRecovery.create 1200L |> Stdlib.Result.andThen (fun state -> sendPackets state 0L count)
-    |> Stdlib.Result.andThen (fun state -> Stdlib.QuicRecovery.acknowledge state ack now 0L 25L) in
+let check (count: Int64) (ack: Stdlib.__QuicFrames.Ack) (now: Int64) : Unit =
+  let result = Stdlib.__QuicRecovery.create 1200L |> Stdlib.Result.andThen (fun state -> sendPackets state 0L count)
+    |> Stdlib.Result.andThen (fun state -> Stdlib.__QuicRecovery.acknowledge state ack now 0L 25L) in
   match result with
   | Error message -> Stdlib.printLine ("ERROR " ++ message)
   | Ok update ->
@@ -59,9 +59,9 @@ def main():
         expected.append(f"{recovery.congestion_window} {recovery.bytes_in_flight} "
                         f"{round(recovery._rtt_latest * 1000)} {round(recovery._rtt_smoothed * 1000)} "
                         f"{round(recovery._rtt_variance * 1000)} " + ",".join(map(str, losses)))
-        dark_ranges = ",".join(f"Stdlib.QuicFrames.Range {{ smallest = {r.start}L, largest = {r.stop - 1}L }}"
+        dark_ranges = ",".join(f"Stdlib.__QuicFrames.Range {{ smallest = {r.start}L, largest = {r.stop - 1}L }}"
                                for r in reversed(list(ranges)))
-        program += f"  let _ = check {count}L (Stdlib.QuicFrames.Ack {{ delay = 0L, ecn = None, ranges = [{dark_ranges}] }}) {round(now * 1000)}L in\n"
+        program += f"  let _ = check {count}L (Stdlib.__QuicFrames.Ack {{ delay = 0L, ecn = None, ranges = [{dark_ranges}] }}) {round(now * 1000)}L in\n"
     program += "  ()\nrunChecks ()\n"
     with tempfile.TemporaryDirectory(prefix="dark-quic-recovery-") as temporary:
         source, binary = Path(temporary) / "recovery.dark", Path(temporary) / "recovery"

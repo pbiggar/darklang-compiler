@@ -5,6 +5,7 @@
 *)
 (* BitsetTests.ml - Port the original bitset bounds and shape invariants. *)
 open Dark_compiler
+
 type testResult = (unit, string) result
 
 let expectCrash name action =
@@ -17,8 +18,9 @@ let expectCrashMessage name expected action =
   | () -> Error ("Expected " ^ name ^ " to crash with: " ^ expected)
   | exception Failure message when String.equal message expected -> Ok ()
   | exception ex ->
-      Error (Printf.sprintf "Expected %s to crash with '%s', got: %s"
-               name expected (Printexc.to_string ex))
+      Error
+        (Printf.sprintf "Expected %s to crash with '%s', got: %s" name expected
+           (Printexc.to_string ex))
 
 let testAddIndexInPlaceRejectsOutOfRangeIndex () =
   let bits = Bitset.empty 1 in
@@ -48,14 +50,19 @@ let testContainsIndexHandlesIndexBounds () =
 let testIntersectManyRejectsMismatchedWordCounts () =
   let first = Bitset.empty 2 in
   let shorter = Bitset.empty 1 in
-  expectCrashMessage "intersectMany" "Bitset intersection requires matching word counts"
-    (fun () -> ignore (Bitset.intersectMany first [shorter]))
+  expectCrashMessage "intersectMany"
+    "Bitset intersection requires matching word counts" (fun () ->
+      ignore (Bitset.intersectMany first [ shorter ]))
 
-let tests = [
-  "addIndexInPlace rejects out-of-range index", testAddIndexInPlaceRejectsOutOfRangeIndex;
-  "add rejects out-of-range index", testAddRejectsOutOfRangeIndex;
-  "removeIndexInPlace rejects out-of-range index", testRemoveIndexInPlaceRejectsOutOfRangeIndex;
-  "singleton rejects out-of-range index", testSingletonRejectsOutOfRangeIndex;
-  "containsIndex handles index bounds", testContainsIndexHandlesIndexBounds;
-  "intersectMany rejects mismatched word counts", testIntersectManyRejectsMismatchedWordCounts;
-]
+let tests =
+  [
+    ( "addIndexInPlace rejects out-of-range index",
+      testAddIndexInPlaceRejectsOutOfRangeIndex );
+    ("add rejects out-of-range index", testAddRejectsOutOfRangeIndex);
+    ( "removeIndexInPlace rejects out-of-range index",
+      testRemoveIndexInPlaceRejectsOutOfRangeIndex );
+    ("singleton rejects out-of-range index", testSingletonRejectsOutOfRangeIndex);
+    ("containsIndex handles index bounds", testContainsIndexHandlesIndexBounds);
+    ( "intersectMany rejects mismatched word counts",
+      testIntersectManyRejectsMismatchedWordCounts );
+  ]

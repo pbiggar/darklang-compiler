@@ -1,0 +1,294 @@
+// Stdlib.Cli.Process - portable process helpers over the native execution boundary.
+
+module Darklang.Stdlib.Cli.Process
+
+type ProcessHandle = Int
+type Output = { exitCode: Int, stdout: String, stderr: String }
+
+let __replaceQuotes (s: String) : String =
+    Stdlib.String.replaceAll s "'" "'\\''"
+
+let shellQuote (s: String) : String =
+    $"'{Stdlib.Cli.Process.__replaceQuotes s}'"
+
+let __output (result: Stdlib.Cli.__NativeOutput) : Stdlib.Cli.Process.Output =
+    Stdlib.Cli.Process.Output {
+        exitCode = Stdlib.Int.fromInt64 result.exitCode,
+        stdout = result.stdout,
+        stderr = result.stderr
+    }
+
+let __nativeOutput (result: Stdlib.Cli.__NativeProcessOutput) : Stdlib.Cli.Process.Output =
+    Stdlib.Cli.Process.Output {
+        exitCode = Stdlib.Int.fromInt64 result.exitCode,
+        stdout = result.stdout,
+        stderr = result.stderr
+    }
+
+let __packedArgv (program: String) (args: List<String>) : String =
+    let argv = Stdlib.List.push args program in
+    Stdlib.String.join argv "\0"
+
+let __environmentValue (name: String) (environment: List<(String * String)>) : Stdlib.Option.Option<String> =
+    match environment with
+    | [] -> Stdlib.Option.Option.None
+    | (key, value) :: rest ->
+        if key == name then Some value
+        else Stdlib.Cli.Process.__environmentValue name rest
+
+let __packedEnvironment (environment: List<(String * String)>) : String =
+    Stdlib.String.join
+        (Stdlib.List.map
+            environment
+            (fun pair -> let (key, value) = pair in key ++ "=" ++ value))
+        "\0"
+
+let __candidateProgram (directory: String) (program: String) : String =
+    if directory == "" then program ++ "" else directory ++ "/" ++ program
+
+let __candidatePrograms (program: String) (environment: List<(String * String)>) : List<String> =
+    if Stdlib.String.contains program "/" then [program ++ ""]
+    else
+        let path =
+            match Stdlib.Cli.Process.__environmentValue "PATH" environment with
+            | Some value -> value
+            | None ->
+                match Stdlib.Cli.Env.get "PATH" with
+                | Some value -> value
+                | None -> "/bin:/usr/bin"
+        in
+        Stdlib.List.map
+            (Stdlib.String.split path ":")
+            (fun directory -> Stdlib.Cli.Process.__candidateProgram directory program)
+
+let __runCandidates
+    (mode: Int64)
+    (programs: List<String>)
+    (args: List<String>)
+    (directory: String)
+    (environment: List<(String * String)>)
+    (timeoutMs: Int64)
+    : Stdlib.Result.Result<Stdlib.Cli.__NativeProcessOutput, Stdlib.Cli.Posix.Error> =
+    match programs with
+    | [] -> Error (Stdlib.Cli.Posix.Error { errno = 2, message = "No such file or directory" })
+    | program :: rest ->
+        let request = Stdlib.Cli.__NativeProcessRequest {
+            mode = mode,
+            argv = Stdlib.Cli.Process.__packedArgv program args,
+            cwd = directory,
+            environment = Stdlib.Cli.Process.__packedEnvironment environment,
+            timeoutMs = timeoutMs,
+            pipelineArgv = ""
+        } in
+        let result = Stdlib.Cli.__runProcess request in
+        if result.errno == 0L then Ok result
+        else if result.errno == 2L then
+            Stdlib.Cli.Process.__runCandidates mode rest args directory environment timeoutMs
+        else
+            Error (Stdlib.Cli.Posix.__error (Stdlib.Cli.__NativePosixError {
+                errno = result.errno,
+                message = result.stderr
+            }))
+
+let __runNative
+    (mode: Int64)
+    (program: String)
+    (args: List<String>)
+    (directory: String)
+    (environment: List<(String * String)>)
+    (timeoutMs: Int64)
+    : Stdlib.Result.Result<Stdlib.Cli.__NativeProcessOutput, Stdlib.Cli.Posix.Error> =
+    Stdlib.Cli.Process.__runCandidates
+        mode
+        (Stdlib.Cli.Process.__candidatePrograms program environment)
+        args
+        directory
+        environment
+        timeoutMs
+
+let run (program: String) (args: List<String>) : Stdlib.Result.Result<Stdlib.Cli.Process.Output, Stdlib.Cli.Posix.Error> =
+    match Stdlib.Cli.Process.__runNative 0L program args "" [] 0L with
+    | Ok result -> Ok (Stdlib.Cli.Process.__nativeOutput result)
+    | Error error -> Error error
+
+let exec (program: String) (args: List<String>) : Stdlib.Result.Result<String, String> =
+    match Stdlib.Cli.Process.run program args with
+    | Error error -> Error error.message
+    | Ok output ->
+        if output.exitCode == 0 then Ok (Stdlib.String.trimEnd output.stdout)
+        else
+            let error = Stdlib.String.trimEnd output.stderr in
+            if error == "" then
+                Error ($"Command failed with exit code {Stdlib.Int.toString output.exitCode}")
+            else Error error
+
+let kill (pid: Int) : Stdlib.Result.Result<Unit, Stdlib.Cli.Posix.Error> =
+    Stdlib.Cli.Posix.kill pid Stdlib.Cli.Posix.sigterm
+
+let forceKill (pid: Int) : Stdlib.Result.Result<Unit, Stdlib.Cli.Posix.Error> =
+    Stdlib.Cli.Posix.kill pid Stdlib.Cli.Posix.sigkill
+
+let runIn
+    (directory: String)
+    (program: String)
+    (args: List<String>)
+    : Stdlib.Result.Result<Stdlib.Cli.Process.Output, Stdlib.Cli.Posix.Error> =
+    match Stdlib.Cli.Process.__runNative 1L program args directory [] 0L with
+    | Ok result -> Ok (Stdlib.Cli.Process.__nativeOutput result)
+    | Error error -> Error error
+
+let runSilent (program: String) (args: List<String>) : Stdlib.Result.Result<Int, Stdlib.Cli.Posix.Error> =
+    match Stdlib.Cli.Process.run program args with
+    | Ok output -> Ok output.exitCode
+    | Error error -> Error error
+
+let __firstInvalidEnv (env: List<(String * String)>) : Stdlib.Option.Option<String> =
+    match env with
+    | [] -> Stdlib.Option.Option.None
+    | (key, _) :: rest ->
+        if Stdlib.String.contains key "=" || Stdlib.String.contains key " " then Some key
+        else Stdlib.Cli.Process.__firstInvalidEnv rest
+
+let runWithEnv
+    (program: String)
+    (args: List<String>)
+    (env: List<(String * String)>)
+    : Stdlib.Result.Result<Stdlib.Cli.Process.Output, String> =
+    match Stdlib.Cli.Process.__firstInvalidEnv env with
+    | Some name -> Error ($"Invalid env var name: '{name}' (must not contain '=' or spaces)")
+    | _ ->
+        match Stdlib.Cli.Process.__runNative 2L program args "" env 0L with
+        | Ok result -> Ok (Stdlib.Cli.Process.__nativeOutput result)
+        | Error error -> Error error.message
+
+let runWithTimeout
+    (timeoutMs: Int)
+    (program: String)
+    (args: List<String>)
+    : Stdlib.Result.Result<Stdlib.Cli.Process.Output, String> =
+    if timeoutMs <= 0 then Error "timeoutMs must be positive"
+    else
+        match Stdlib.Int.toInt64 timeoutMs with
+        | None -> Error "timeoutMs is too large"
+        | Some timeoutMs ->
+            match Stdlib.Cli.Process.__runNative 3L program args "" [] timeoutMs with
+            | Error error -> Error error.message
+            | Ok result ->
+                if result.timedOut then Error "Process timed out"
+                else Ok (Stdlib.Cli.Process.__nativeOutput result)
+
+let __runPipeline
+    (program1: String)
+    (args1: List<String>)
+    (program2: String)
+    (args2: List<String>)
+    : Stdlib.Cli.__NativeProcessOutput =
+    Stdlib.Cli.__runProcess (Stdlib.Cli.__NativeProcessRequest {
+        mode = 4L,
+        argv = Stdlib.Cli.Process.__packedArgv program1 args1,
+        cwd = "",
+        environment = "",
+        timeoutMs = 0L,
+        pipelineArgv = Stdlib.Cli.Process.__packedArgv program2 args2
+    })
+
+let __tryPipelineConsumers
+    (program1: String)
+    (args1: List<String>)
+    (args2: List<String>)
+    (programs2: List<String>)
+    : Stdlib.Result.Result<Stdlib.Cli.__NativeProcessOutput, Stdlib.Cli.Posix.Error> =
+    match programs2 with
+    | [] -> Error (Stdlib.Cli.Posix.Error { errno = 2, message = "No such file or directory" })
+    | program2 :: rest ->
+        let result = Stdlib.Cli.Process.__runPipeline program1 args1 program2 args2 in
+        if result.errno == 0L then Ok result
+        else if result.errno == 2L then
+            Stdlib.Cli.Process.__tryPipelineConsumers program1 args1 args2 rest
+        else
+            Error (Stdlib.Cli.Posix.__error (Stdlib.Cli.__NativePosixError {
+                errno = result.errno,
+                message = result.stderr
+            }))
+
+let __tryPipelineProducers
+    (args1: List<String>)
+    (program2: String)
+    (args2: List<String>)
+    (programs1: List<String>)
+    : Stdlib.Result.Result<Stdlib.Cli.__NativeProcessOutput, Stdlib.Cli.Posix.Error> =
+    match programs1 with
+    | [] -> Error (Stdlib.Cli.Posix.Error { errno = 2, message = "No such file or directory" })
+    | program1 :: rest ->
+        match Stdlib.Cli.Process.__tryPipelineConsumers
+            program1
+            args1
+            args2
+            (Stdlib.Cli.Process.__candidatePrograms program2 []) with
+        | Ok result -> Ok result
+        | Error error ->
+            if error.errno == 2 then
+                Stdlib.Cli.Process.__tryPipelineProducers args1 program2 args2 rest
+            else Error error
+
+let pipe
+    (program1: String)
+    (args1: List<String>)
+    (program2: String)
+    (args2: List<String>)
+    : Stdlib.Result.Result<Stdlib.Cli.Process.Output, Stdlib.Cli.Posix.Error> =
+    match Stdlib.Cli.Process.__tryPipelineProducers
+        args1
+        program2
+        args2
+        (Stdlib.Cli.Process.__candidatePrograms program1 []) with
+    | Error error -> Error error
+    | Ok result -> Ok (Stdlib.Cli.Process.__nativeOutput result)
+
+let shellPipeline (commands: List<String>) : Stdlib.Result.Result<Stdlib.Cli.Process.Output, Stdlib.Cli.Posix.Error> =
+    Ok (Stdlib.Cli.Process.__output (Stdlib.Cli.__execute (Stdlib.String.join commands " | ")))
+
+let isRunning (pid: Int) : Bool =
+    Stdlib.Cli.Posix.isProcessRunning pid
+
+let waitFor (pid: Int) : Unit =
+    if Stdlib.Cli.Posix.isProcessRunning pid then
+        let _ = Stdlib.Cli.Posix.sleep 100.0 in
+        Stdlib.Cli.Process.waitFor pid
+    else ()
+
+let spawn (command: String) : Stdlib.Cli.Process.ProcessHandle =
+    Stdlib.Int.fromInt64 (Stdlib.Cli.__spawnProcess command)
+
+let communicate
+    (handle: Stdlib.Cli.Process.ProcessHandle)
+    (input: String)
+    : Stdlib.Cli.ExecutionOutcome =
+    match Stdlib.Int.toInt64 handle with
+    | None -> Stdlib.Cli.ExecutionOutcome {
+        exitCode = -1,
+        stdout = "",
+        stderr = "Invalid process handle"
+      }
+    | Some handle ->
+        let result = Stdlib.Cli.__processIO handle input in
+        Stdlib.Cli.ExecutionOutcome {
+            exitCode = Stdlib.Int.fromInt64 result.exitCode,
+            stdout = result.stdout,
+            stderr = result.stderr
+        }
+
+let terminate (handle: Stdlib.Cli.Process.ProcessHandle) : Stdlib.Cli.ExecutionOutcome =
+    match Stdlib.Int.toInt64 handle with
+    | None -> Stdlib.Cli.ExecutionOutcome {
+        exitCode = -1,
+        stdout = "",
+        stderr = "Invalid process handle"
+      }
+    | Some handle ->
+        let result = Stdlib.Cli.__terminateProcess handle in
+        Stdlib.Cli.ExecutionOutcome {
+            exitCode = Stdlib.Int.fromInt64 result.exitCode,
+            stdout = result.stdout,
+            stderr = result.stderr
+        }

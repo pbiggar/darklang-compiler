@@ -24,7 +24,7 @@ let countPrimes (n: Int64) (count: Int64) : Int64 =
 // Count primes up to 10000
 // Expected: 1229 primes
 let benchmarkArg (index: Int) : Int64 =
-    match Stdlib.Cli.Args.int64 index with
+    match Stdlib.Cli.__Args.int64 index with
     | Ok value -> value
     | Error message -> Builtin.testRuntimeError message
 

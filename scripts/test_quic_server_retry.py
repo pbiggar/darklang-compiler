@@ -78,18 +78,18 @@ def main():
         endpoint = "[" + ",".join(f"{byte}L" for byte in packed) + "]"
         kind = "Initial" if initial else "Handshake"
         expected = f'Some "{original.hex().upper()}"' if valid else "None"
-        checks.append(f'check "{data.hex()}" {now}L {endpoint} {port}L {blob(destination)} {blob(source)} Stdlib.QuicPacket.Kind.{kind} == {expected}')
+        checks.append(f'check "{data.hex()}" {now}L {endpoint} {port}L {blob(destination)} {blob(source)} Stdlib.__QuicPacket.Kind.{kind} == {expected}')
     source = '''// retry.dark - Expiring Retry token oracle and malformed authenticated-field rejection.
 let bytes (text: String) : Blob = Stdlib.Blob.fromHex text |> Stdlib.Result.withDefault Stdlib.Blob.empty
-let check (text: String) (now: Int64) (address: List<Int64>) (port: Int64) (destination: Blob) (source: Blob) (kind: Stdlib.QuicPacket.Kind) : Stdlib.Option.Option<String> =
-  let peer = Stdlib.Datagram.Endpoint { address = address, port = port } in
-  let packet = Stdlib.QuicPacket.Protected { kind = kind, destination = destination, source = source, token = bytes text, bytes = Stdlib.Blob.empty, numberOffset = 0L, remaining = Stdlib.Blob.empty } in
-  match Stdlib.QuicServerRetry.validate (bytes "@SECRET@") peer packet now with
+let check (text: String) (now: Int64) (address: List<Int64>) (port: Int64) (destination: Blob) (source: Blob) (kind: Stdlib.__QuicPacket.Kind) : Stdlib.Option.Option<String> =
+  let peer = Stdlib.__Datagram.Endpoint { address = address, port = port } in
+  let packet = Stdlib.__QuicPacket.Protected { kind = kind, destination = destination, source = source, token = bytes text, bytes = Stdlib.Blob.empty, numberOffset = 0L, remaining = Stdlib.Blob.empty } in
+  match Stdlib.__QuicServerRetry.validate (bytes "@SECRET@") peer packet now with
   | Error _ -> None
   | Ok original -> Some (Stdlib.Blob.toHex original)
 let run () : Unit =
   if (Stdlib.Cli.Args.get 0 |> Stdlib.Result.withDefault "") == "create" then
-    match Stdlib.QuicServerRetry.create (bytes "@SECRET@") (Stdlib.Datagram.Endpoint { address = [127L,0L,0L,1L], port = 443L }) (bytes "@ORIGINAL@") (bytes "@CLIENT@") (bytes "@RETRY@") 123456789L with
+    match Stdlib.__QuicServerRetry.create (bytes "@SECRET@") (Stdlib.__Datagram.Endpoint { address = [127L,0L,0L,1L], port = 443L }) (bytes "@ORIGINAL@") (bytes "@CLIENT@") (bytes "@RETRY@") 123456789L with
     | Error message -> Stdlib.printLine message
     | Ok wire -> Stdlib.printLine (Stdlib.Blob.toHex wire)
   else Stdlib.printLine (if @CHECKS@ then "DONE" else "FAILED")

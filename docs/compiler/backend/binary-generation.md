@@ -74,9 +74,10 @@ boundaries and with large UTF-8 constant pools.
 
 macOS requires all executables to be signed. The compiler calls `codesign`:
 
-```fsharp
-let signProcess = System.Diagnostics.Process.Start(
-    "codesign", $"-s - \"{path}\"")
+```ocaml
+let process =
+  Unix.create_process "codesign" [| "codesign"; "-s"; "-"; path |]
+    Unix.stdin stdoutWrite stderrWrite
 ```
 
 The `-s -` flag performs ad-hoc signing (no certificate needed).
@@ -103,29 +104,14 @@ and for x86-64 in `src/backend/x64/Binary_Generation_ELF_X86_64.ml`.
 
 ### ELF Header Fields
 
-```fsharp
-type Elf64Header = {
-    Ident: byte array       // Magic: 0x7F 'E' 'L' 'F', class, endian
-    Type: uint16            // ET_EXEC (executable)
-    Machine: uint16         // EM_AARCH64 (ARM64) or EM_X86_64
-    Entry: uint64           // Entry point virtual address
-    PhOff: uint64           // Program header offset
-    // ...
-}
+```ocaml
+type elf64Header = {ident : bytes; typ : int; machine : int; version : int32; entry : int64; phOff : int64; shOff : int64; flags : int32; ehSize : int; phEntSize : int; phNum : int; shEntSize : int; shNum : int; shStrNdx : int}
 ```
 
 ### Program Header
 
-```fsharp
-type Elf64ProgramHeader = {
-    Type: uint32            // PT_LOAD
-    Flags: uint32           // PF_R | PF_X (read + execute)
-    Offset: uint64          // File offset
-    VAddr: uint64           // Virtual address (0x400000 typical)
-    FileSize: uint64        // Size in file
-    MemSize: uint64         // Size in memory
-    Align: uint64           // 4KB page alignment
-}
+```ocaml
+type elf64ProgramHeader = {typ : int32; flags : int32; offset : int64; vAddr : int64; pAddr : int64; fileSize : int64; memSize : int64; align : int64}
 ```
 
 ## Memory Layout
@@ -161,11 +147,11 @@ Code generation handles these differences at the MIR/CodeGen level.
 
 | File | Purpose |
 |------|---------|
-| `backend/arm64/Binary_Generation_MachO.fs` | ARM64 Mach-O generation |
-| `backend/arm64/Binary_Generation_ELF.fs` | ARM64 ELF generation |
-| `backend/x64/Binary_Generation_ELF.fs` | x86-64 ELF generation |
-| `backend/binary/Binary.fs` | Common types for binary structures |
-| `backend/binary/ELF.fs` | ELF-specific type definitions |
+| `src/backend/arm64/Binary_Generation_MachO.ml` | ARM64 Mach-O generation |
+| `src/backend/arm64/Backend_Arm64_Binary_Generation_ELF.ml` | ARM64 ELF generation |
+| `src/backend/x64/Binary_Generation_ELF_X86_64.ml` | x86-64 ELF generation |
+| `src/backend/binary/Binary.ml` | Common types for binary structures |
+| `src/backend/binary/ELF.ml` | ELF-specific type definitions |
 
 ## How It Works
 
@@ -186,17 +172,8 @@ Code generation handles these differences at the MIR/CodeGen level.
 
 ## Example: Creating a Binary
 
-```fsharp
-// Mach-O
-let bytes = createExecutableWithPools machineCode stringPool floatPool enableLeakCheck
-writeToFile path bytes |> Result.bind codeSign
-
-// ARM64 ELF
-let bytes = createExecutableWithPools machineCode stringPool floatPool enableLeakCheck
-writeToFile path bytes  // No signing needed
-
-// x86-64 ELF
-let bytes =
-    Binary_Generation_ELF_X86_64.createExecutableWithPools
-        machineCode stringPool floatPool enableLeakCheck entryOffset
+```text
+Mach-O: encode code and literal pools, write the binary, then sign it.
+ARM64 ELF: encode code and literal pools, then write the binary.
+x86-64 ELF: encode code and literal pools with the entry offset, then write the binary.
 ```

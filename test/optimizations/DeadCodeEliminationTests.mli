@@ -1,5 +1,6 @@
 (* Original function-reachability assertions. *)
-type testResult=(unit,string) result
+type testResult = (unit, string) result
+
 val testArgMovesFunctionAddressIsReachable : unit -> testResult
 val testListDisplayHelperIsReachableByCanonicalIdentity : unit -> testResult
 val testFilteredFunctionsPreserveReachableSetAndInputOrder : unit -> testResult

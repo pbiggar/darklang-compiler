@@ -63,145 +63,93 @@
    Restore X2
    Cleanup - restore callee-saved registers
 *)
-let generateFileExists (target: ARM64.targetConfig) (destReg: ARM64.reg) (pathReg: ARM64.reg) =
-    let os = ARM64.targetOS target in
-    let syscalls = ARM64.targetSyscalls target in
+let generateFileExists (target : ARM64.targetConfig) (destReg : ARM64.reg)
+    (pathReg : ARM64.reg) =
+  let os = ARM64.targetOS target in
+  let syscalls = ARM64.targetSyscalls target in
 
-    match os with
-    | Platform.MacOS ->
-        [
-
-            ARM64.STP (ARM64.X19, ARM64.X20, ARM64.SP, -16);
-            ARM64.STP (ARM64.X21, ARM64.X22, ARM64.SP, -32);
-            ARM64.SUB_imm (ARM64.SP, ARM64.SP, 32);
-
-
-            ARM64.SUB_imm (ARM64.SP, ARM64.SP, 255);
-            ARM64.SUB_imm (ARM64.SP, ARM64.SP, 65);
-
-
-            ARM64.MOV_reg (ARM64.X19, pathReg);
-            ARM64.MOV_reg (ARM64.X20, destReg);
-
-
-            ARM64.STR (ARM64.X1, ARM64.SP, 256);
-            ARM64.STR (ARM64.X2, ARM64.SP, 264);
-            ARM64.STR (ARM64.X3, ARM64.SP, 272);
-            ARM64.STR (ARM64.X4, ARM64.SP, 280);
-            ARM64.STR (ARM64.X5, ARM64.SP, 288);
-            ARM64.STR (ARM64.X6, ARM64.SP, 296);
-            ARM64.STR (ARM64.X7, ARM64.SP, 304);
-            ARM64.STR (ARM64.X8, ARM64.SP, 312);
-
-
-
-            ARM64.LDR (ARM64.X10, ARM64.X19, 8);
-
-
-            ARM64.MOV_reg (ARM64.X9, ARM64.SP);
-
-            ARM64.ADD_imm (ARM64.X11, ARM64.X19, 16);
-
-
-
-            ARM64.CBZ_offset (ARM64.X10, 7);
-            ARM64.LDRB_imm (ARM64.X12, ARM64.X11, 0);
-            ARM64.STRB (ARM64.X12, ARM64.X9, 0);
-            ARM64.ADD_imm (ARM64.X9, ARM64.X9, 1);
-            ARM64.ADD_imm (ARM64.X11, ARM64.X11, 1);
-            ARM64.SUB_imm (ARM64.X10, ARM64.X10, 1);
-            ARM64.B (-6);
-
-
-            ARM64.MOVZ (ARM64.X12, 0, 0);
-            ARM64.STRB (ARM64.X12, ARM64.X9, 0);
-
-
-
-            ARM64.MOV_reg (ARM64.X0, ARM64.SP);
-            ARM64.MOVZ (ARM64.X1, 0, 0);
-            ARM64.MOVZ (ARM64.X16, syscalls.ARM64.numbers.Platform.access, 0);
-            ARM64.SVC syscalls.ARM64.svcImmediate;
-
-
-
-            ARM64.CMP_imm (ARM64.X0, 0);
-            ARM64.CSET (ARM64.X0, ARM64.EQ);
-
-
-            ARM64.ADD_imm (ARM64.SP, ARM64.SP, 256);
-            ARM64.ADD_imm (ARM64.SP, ARM64.SP, 16);
-            ARM64.LDP (ARM64.X19, ARM64.X20, ARM64.SP, 0);
-            ARM64.ADD_imm (ARM64.SP, ARM64.SP, 16);
-            ARM64.MOV_reg (destReg, ARM64.X0);
-        ]
-    | Platform.Linux ->
-        [
-
-            ARM64.STP (ARM64.X19, ARM64.X20, ARM64.SP, -16);
-            ARM64.STP (ARM64.X21, ARM64.X22, ARM64.SP, -32);
-            ARM64.SUB_imm (ARM64.SP, ARM64.SP, 32);
-
-
-            ARM64.SUB_imm (ARM64.SP, ARM64.SP, 256);
-
-
-            ARM64.MOV_reg (ARM64.X19, pathReg);
-
-
-
-            ARM64.MOV_reg (ARM64.X21, ARM64.X1);
-            ARM64.MOV_reg (ARM64.X22, ARM64.X2);
-
-
-
-            ARM64.LDR (ARM64.X10, ARM64.X19, 8);
-
-
-            ARM64.MOV_reg (ARM64.X9, ARM64.SP);
-
-            ARM64.ADD_imm (ARM64.X11, ARM64.X19, 16);
-
-
-            ARM64.CBZ_offset (ARM64.X10, 7);
-            ARM64.LDRB_imm (ARM64.X12, ARM64.X11, 0);
-            ARM64.STRB (ARM64.X12, ARM64.X9, 0);
-            ARM64.ADD_imm (ARM64.X9, ARM64.X9, 1);
-            ARM64.ADD_imm (ARM64.X11, ARM64.X11, 1);
-            ARM64.SUB_imm (ARM64.X10, ARM64.X10, 1);
-            ARM64.B (-6);
-
-
-            ARM64.MOVZ (ARM64.X12, 0, 0);
-            ARM64.STRB (ARM64.X12, ARM64.X9, 0);
-
-
-
-            ARM64.MOVZ (ARM64.X0, 100, 0);
-            ARM64.NEG (ARM64.X0, ARM64.X0);
-            ARM64.MOV_reg (ARM64.X1, ARM64.SP);
-            ARM64.MOVZ (ARM64.X2, 0, 0);
-            ARM64.MOVZ (ARM64.X3, 0, 0);
-            ARM64.MOVZ (ARM64.X8, syscalls.ARM64.numbers.Platform.access, 0);
-            ARM64.SVC syscalls.ARM64.svcImmediate;
-
-
-            ARM64.CMP_imm (ARM64.X0, 0);
-            ARM64.CSET (ARM64.X0, ARM64.EQ);
-
-
-            ARM64.MOV_reg (ARM64.X1, ARM64.X21);
-            ARM64.MOV_reg (ARM64.X2, ARM64.X22);
-
-
-            ARM64.ADD_imm (ARM64.SP, ARM64.SP, 256);
-            ARM64.ADD_imm (ARM64.SP, ARM64.SP, 32);
-            ARM64.LDP (ARM64.X21, ARM64.X22, ARM64.SP, 0);
-            ARM64.ADD_imm (ARM64.SP, ARM64.SP, 16);
-            ARM64.LDP (ARM64.X19, ARM64.X20, ARM64.SP, 0);
-            ARM64.ADD_imm (ARM64.SP, ARM64.SP, 16);
-            ARM64.MOV_reg (destReg, ARM64.X0);
-        ]
+  match os with
+  | Platform.MacOS ->
+      [
+        ARM64.STP (ARM64.X19, ARM64.X20, ARM64.SP, -16);
+        ARM64.STP (ARM64.X21, ARM64.X22, ARM64.SP, -32);
+        ARM64.SUB_imm (ARM64.SP, ARM64.SP, 32);
+        ARM64.SUB_imm (ARM64.SP, ARM64.SP, 255);
+        ARM64.SUB_imm (ARM64.SP, ARM64.SP, 65);
+        ARM64.MOV_reg (ARM64.X19, pathReg);
+        ARM64.MOV_reg (ARM64.X20, destReg);
+        ARM64.STR (ARM64.X1, ARM64.SP, 256);
+        ARM64.STR (ARM64.X2, ARM64.SP, 264);
+        ARM64.STR (ARM64.X3, ARM64.SP, 272);
+        ARM64.STR (ARM64.X4, ARM64.SP, 280);
+        ARM64.STR (ARM64.X5, ARM64.SP, 288);
+        ARM64.STR (ARM64.X6, ARM64.SP, 296);
+        ARM64.STR (ARM64.X7, ARM64.SP, 304);
+        ARM64.STR (ARM64.X8, ARM64.SP, 312);
+        ARM64.LDR (ARM64.X10, ARM64.X19, 8);
+        ARM64.MOV_reg (ARM64.X9, ARM64.SP);
+        ARM64.ADD_imm (ARM64.X11, ARM64.X19, 16);
+        ARM64.CBZ_offset (ARM64.X10, 7);
+        ARM64.LDRB_imm (ARM64.X12, ARM64.X11, 0);
+        ARM64.STRB (ARM64.X12, ARM64.X9, 0);
+        ARM64.ADD_imm (ARM64.X9, ARM64.X9, 1);
+        ARM64.ADD_imm (ARM64.X11, ARM64.X11, 1);
+        ARM64.SUB_imm (ARM64.X10, ARM64.X10, 1);
+        ARM64.B (-6);
+        ARM64.MOVZ (ARM64.X12, 0, 0);
+        ARM64.STRB (ARM64.X12, ARM64.X9, 0);
+        ARM64.MOV_reg (ARM64.X0, ARM64.SP);
+        ARM64.MOVZ (ARM64.X1, 0, 0);
+        ARM64.MOVZ (ARM64.X16, syscalls.ARM64.numbers.Platform.access, 0);
+        ARM64.SVC syscalls.ARM64.svcImmediate;
+        ARM64.CMP_imm (ARM64.X0, 0);
+        ARM64.CSET (ARM64.X0, ARM64.EQ);
+        ARM64.ADD_imm (ARM64.SP, ARM64.SP, 256);
+        ARM64.ADD_imm (ARM64.SP, ARM64.SP, 16);
+        ARM64.LDP (ARM64.X19, ARM64.X20, ARM64.SP, 0);
+        ARM64.ADD_imm (ARM64.SP, ARM64.SP, 16);
+        ARM64.MOV_reg (destReg, ARM64.X0);
+      ]
+  | Platform.Linux ->
+      [
+        ARM64.STP (ARM64.X19, ARM64.X20, ARM64.SP, -16);
+        ARM64.STP (ARM64.X21, ARM64.X22, ARM64.SP, -32);
+        ARM64.SUB_imm (ARM64.SP, ARM64.SP, 32);
+        ARM64.SUB_imm (ARM64.SP, ARM64.SP, 256);
+        ARM64.MOV_reg (ARM64.X19, pathReg);
+        ARM64.MOV_reg (ARM64.X21, ARM64.X1);
+        ARM64.MOV_reg (ARM64.X22, ARM64.X2);
+        ARM64.LDR (ARM64.X10, ARM64.X19, 8);
+        ARM64.MOV_reg (ARM64.X9, ARM64.SP);
+        ARM64.ADD_imm (ARM64.X11, ARM64.X19, 16);
+        ARM64.CBZ_offset (ARM64.X10, 7);
+        ARM64.LDRB_imm (ARM64.X12, ARM64.X11, 0);
+        ARM64.STRB (ARM64.X12, ARM64.X9, 0);
+        ARM64.ADD_imm (ARM64.X9, ARM64.X9, 1);
+        ARM64.ADD_imm (ARM64.X11, ARM64.X11, 1);
+        ARM64.SUB_imm (ARM64.X10, ARM64.X10, 1);
+        ARM64.B (-6);
+        ARM64.MOVZ (ARM64.X12, 0, 0);
+        ARM64.STRB (ARM64.X12, ARM64.X9, 0);
+        ARM64.MOVZ (ARM64.X0, 100, 0);
+        ARM64.NEG (ARM64.X0, ARM64.X0);
+        ARM64.MOV_reg (ARM64.X1, ARM64.SP);
+        ARM64.MOVZ (ARM64.X2, 0, 0);
+        ARM64.MOVZ (ARM64.X3, 0, 0);
+        ARM64.MOVZ (ARM64.X8, syscalls.ARM64.numbers.Platform.access, 0);
+        ARM64.SVC syscalls.ARM64.svcImmediate;
+        ARM64.CMP_imm (ARM64.X0, 0);
+        ARM64.CSET (ARM64.X0, ARM64.EQ);
+        ARM64.MOV_reg (ARM64.X1, ARM64.X21);
+        ARM64.MOV_reg (ARM64.X2, ARM64.X22);
+        ARM64.ADD_imm (ARM64.SP, ARM64.SP, 256);
+        ARM64.ADD_imm (ARM64.SP, ARM64.SP, 32);
+        ARM64.LDP (ARM64.X21, ARM64.X22, ARM64.SP, 0);
+        ARM64.ADD_imm (ARM64.SP, ARM64.SP, 16);
+        ARM64.LDP (ARM64.X19, ARM64.X20, ARM64.SP, 0);
+        ARM64.ADD_imm (ARM64.SP, ARM64.SP, 16);
+        ARM64.MOV_reg (destReg, ARM64.X0);
+      ]
 
 (*
    Generate ARM64 instructions to delete a file and return Result<Unit, String>
@@ -289,250 +237,184 @@ let generateFileExists (target: ARM64.targetConfig) (destReg: ARM64.reg) (pathRe
    flags = 0
    unlinkat syscall
 *)
-let generateFileDelete (target: ARM64.targetConfig) (destReg: ARM64.reg) (pathReg: ARM64.reg) =
-    let os = ARM64.targetOS target in
-    let syscalls = ARM64.targetSyscalls target in
-
-    match os with
-    | Platform.MacOS ->
-        [
-
-            ARM64.STP (ARM64.X19, ARM64.X20, ARM64.SP, -16);
-            ARM64.STP (ARM64.X21, ARM64.X22, ARM64.SP, -32);
-            ARM64.SUB_imm (ARM64.SP, ARM64.SP, 32);
-
-
-            ARM64.SUB_imm (ARM64.SP, ARM64.SP, 255);
-            ARM64.SUB_imm (ARM64.SP, ARM64.SP, 65);
-
-
-            ARM64.MOV_reg (ARM64.X19, pathReg);
-            ARM64.MOV_reg (ARM64.X20, destReg);
-
-
-            ARM64.STR (ARM64.X1, ARM64.SP, 256);
-            ARM64.STR (ARM64.X2, ARM64.SP, 264);
-            ARM64.STR (ARM64.X3, ARM64.SP, 272);
-            ARM64.STR (ARM64.X4, ARM64.SP, 280);
-            ARM64.STR (ARM64.X5, ARM64.SP, 288);
-            ARM64.STR (ARM64.X6, ARM64.SP, 296);
-            ARM64.STR (ARM64.X7, ARM64.SP, 304);
-            ARM64.STR (ARM64.X8, ARM64.SP, 312);
-
-
-            ARM64.LDR (ARM64.X2, ARM64.X19, 8);
-
-
-            ARM64.MOV_reg (ARM64.X0, ARM64.SP);
-
-            ARM64.ADD_imm (ARM64.X1, ARM64.X19, 16);
-
-            ARM64.MOVZ (ARM64.X4, 0, 0);
-
-
-
-            ARM64.CBZ_offset (ARM64.X2, 7);
-            ARM64.LDRB (ARM64.X3, ARM64.X1, ARM64.X4);
-            ARM64.STRB (ARM64.X3, ARM64.X0, 0);
-            ARM64.ADD_imm (ARM64.X0, ARM64.X0, 1);
-            ARM64.ADD_imm (ARM64.X1, ARM64.X1, 1);
-            ARM64.SUB_imm (ARM64.X2, ARM64.X2, 1);
-            ARM64.B (-6);
-
-
-            ARM64.MOVZ (ARM64.X3, 0, 0);
-            ARM64.STRB (ARM64.X3, ARM64.X0, 0);
-
-
-
-            ARM64.MOV_reg (ARM64.X0, ARM64.SP);
-            ARM64.MOVZ (ARM64.X16, syscalls.ARM64.numbers.Platform.unlink, 0);
-            ARM64.SVC syscalls.ARM64.svcImmediate;
-
-
-            ARM64.MOV_reg (ARM64.X21, ARM64.X0);
-
-
-            ARM64.MOV_reg (ARM64.X0, ARM64.X28);
-            ARM64.ADD_imm (ARM64.X28, ARM64.X28, 24);
-
-
-            ARM64.CMP_imm (ARM64.X21, 0);
-            ARM64.B_cond (ARM64.NE, 7);
-
-
-            ARM64.MOVZ (ARM64.X1, 0, 0);
-            ARM64.STR (ARM64.X1, ARM64.X0, 0);
-            ARM64.STR (ARM64.X1, ARM64.X0, 8);
-            ARM64.MOVZ (ARM64.X1, 1, 0);
-            ARM64.STR (ARM64.X1, ARM64.X0, 16);
-            ARM64.B (27);
-
-            ARM64.MOV_reg (ARM64.X2, ARM64.X28);
-            ARM64.ADD_imm (ARM64.X28, ARM64.X28, 24);
-            ARM64.MOVZ (ARM64.X1, 5, 0);
-            ARM64.STR (ARM64.X1, ARM64.X2, 8);
-
-            ARM64.MOVZ (ARM64.X1, 69, 0);
-            ARM64.ADD_imm (ARM64.X3, ARM64.X2, 16);
-            ARM64.STRB_reg (ARM64.X1, ARM64.X3);
-            ARM64.MOVZ (ARM64.X1, 114, 0);
-            ARM64.ADD_imm (ARM64.X3, ARM64.X2, 17);
-            ARM64.STRB_reg (ARM64.X1, ARM64.X3);
-            ARM64.MOVZ (ARM64.X1, 114, 0);
-            ARM64.ADD_imm (ARM64.X3, ARM64.X2, 18);
-            ARM64.STRB_reg (ARM64.X1, ARM64.X3);
-            ARM64.MOVZ (ARM64.X1, 111, 0);
-            ARM64.ADD_imm (ARM64.X3, ARM64.X2, 19);
-            ARM64.STRB_reg (ARM64.X1, ARM64.X3);
-            ARM64.MOVZ (ARM64.X1, 114, 0);
-            ARM64.ADD_imm (ARM64.X3, ARM64.X2, 20);
-            ARM64.STRB_reg (ARM64.X1, ARM64.X3);
-            ARM64.MOVZ (ARM64.X1, 1, 0);
-            ARM64.STR (ARM64.X1, ARM64.X2, 0);
-
-            ARM64.MOVZ (ARM64.X1, 1, 0);
-            ARM64.STR (ARM64.X1, ARM64.X0, 0);
-            ARM64.STR (ARM64.X2, ARM64.X0, 8);
-            ARM64.MOVZ (ARM64.X1, 1, 0);
-            ARM64.STR (ARM64.X1, ARM64.X0, 16);
-
-
-            ARM64.LDR (ARM64.X1, ARM64.SP, 256);
-            ARM64.LDR (ARM64.X2, ARM64.SP, 264);
-            ARM64.LDR (ARM64.X3, ARM64.SP, 272);
-            ARM64.LDR (ARM64.X4, ARM64.SP, 280);
-            ARM64.LDR (ARM64.X5, ARM64.SP, 288);
-            ARM64.LDR (ARM64.X6, ARM64.SP, 296);
-            ARM64.LDR (ARM64.X7, ARM64.SP, 304);
-            ARM64.LDR (ARM64.X8, ARM64.SP, 312);
-            ARM64.ADD_imm (ARM64.SP, ARM64.SP, 255);
-            ARM64.ADD_imm (ARM64.SP, ARM64.SP, 65);
-            ARM64.LDP (ARM64.X21, ARM64.X22, ARM64.SP, 0);
-            ARM64.LDP (ARM64.X19, ARM64.X20, ARM64.SP, 16);
-            ARM64.ADD_imm (ARM64.SP, ARM64.SP, 32);
-            ARM64.MOV_reg (destReg, ARM64.X0);
-        ]
-    | Platform.Linux ->
-        [
-
-            ARM64.STP (ARM64.X19, ARM64.X20, ARM64.SP, -16);
-            ARM64.STP (ARM64.X21, ARM64.X22, ARM64.SP, -32);
-            ARM64.SUB_imm (ARM64.SP, ARM64.SP, 32);
-
-
-            ARM64.SUB_imm (ARM64.SP, ARM64.SP, 255);
-            ARM64.SUB_imm (ARM64.SP, ARM64.SP, 65);
-
-
-            ARM64.MOV_reg (ARM64.X19, pathReg);
-
-
-            ARM64.STR (ARM64.X1, ARM64.SP, 256);
-            ARM64.STR (ARM64.X2, ARM64.SP, 264);
-            ARM64.STR (ARM64.X3, ARM64.SP, 272);
-            ARM64.STR (ARM64.X4, ARM64.SP, 280);
-            ARM64.STR (ARM64.X5, ARM64.SP, 288);
-            ARM64.STR (ARM64.X6, ARM64.SP, 296);
-            ARM64.STR (ARM64.X7, ARM64.SP, 304);
-            ARM64.STR (ARM64.X8, ARM64.SP, 312);
-
-
-            ARM64.LDR (ARM64.X2, ARM64.X19, 8);
-
-
-            ARM64.MOV_reg (ARM64.X0, ARM64.SP);
-
-            ARM64.ADD_imm (ARM64.X1, ARM64.X19, 16);
-
-            ARM64.MOVZ (ARM64.X4, 0, 0);
-
-
-            ARM64.CBZ_offset (ARM64.X2, 7);
-            ARM64.LDRB (ARM64.X3, ARM64.X1, ARM64.X4);
-            ARM64.STRB (ARM64.X3, ARM64.X0, 0);
-            ARM64.ADD_imm (ARM64.X0, ARM64.X0, 1);
-            ARM64.ADD_imm (ARM64.X1, ARM64.X1, 1);
-            ARM64.SUB_imm (ARM64.X2, ARM64.X2, 1);
-            ARM64.B (-6);
-
-
-            ARM64.MOVZ (ARM64.X3, 0, 0);
-            ARM64.STRB (ARM64.X3, ARM64.X0, 0);
-
-
-
-            ARM64.MOVZ (ARM64.X0, 100, 0);
-            ARM64.NEG (ARM64.X0, ARM64.X0);
-            ARM64.MOV_reg (ARM64.X1, ARM64.SP);
-            ARM64.MOVZ (ARM64.X2, 0, 0);
-            ARM64.MOVZ (ARM64.X8, syscalls.ARM64.numbers.Platform.unlink, 0);
-            ARM64.SVC syscalls.ARM64.svcImmediate;
-
-
-            ARM64.MOV_reg (ARM64.X21, ARM64.X0);
-
-
-            ARM64.MOV_reg (ARM64.X0, ARM64.X28);
-            ARM64.ADD_imm (ARM64.X28, ARM64.X28, 24);
-
-
-            ARM64.CMP_imm (ARM64.X21, 0);
-            ARM64.B_cond (ARM64.NE, 7);
-
-
-            ARM64.MOVZ (ARM64.X1, 0, 0);
-            ARM64.STR (ARM64.X1, ARM64.X0, 0);
-            ARM64.STR (ARM64.X1, ARM64.X0, 8);
-            ARM64.MOVZ (ARM64.X1, 1, 0);
-            ARM64.STR (ARM64.X1, ARM64.X0, 16);
-            ARM64.B (27);
-
-
-            ARM64.MOV_reg (ARM64.X2, ARM64.X28);
-            ARM64.ADD_imm (ARM64.X28, ARM64.X28, 24);
-            ARM64.MOVZ (ARM64.X1, 5, 0);
-            ARM64.STR (ARM64.X1, ARM64.X2, 8);
-
-            ARM64.MOVZ (ARM64.X1, 69, 0);
-            ARM64.ADD_imm (ARM64.X3, ARM64.X2, 16);
-            ARM64.STRB_reg (ARM64.X1, ARM64.X3);
-            ARM64.MOVZ (ARM64.X1, 114, 0);
-            ARM64.ADD_imm (ARM64.X3, ARM64.X2, 17);
-            ARM64.STRB_reg (ARM64.X1, ARM64.X3);
-            ARM64.MOVZ (ARM64.X1, 114, 0);
-            ARM64.ADD_imm (ARM64.X3, ARM64.X2, 18);
-            ARM64.STRB_reg (ARM64.X1, ARM64.X3);
-            ARM64.MOVZ (ARM64.X1, 111, 0);
-            ARM64.ADD_imm (ARM64.X3, ARM64.X2, 19);
-            ARM64.STRB_reg (ARM64.X1, ARM64.X3);
-            ARM64.MOVZ (ARM64.X1, 114, 0);
-            ARM64.ADD_imm (ARM64.X3, ARM64.X2, 20);
-            ARM64.STRB_reg (ARM64.X1, ARM64.X3);
-            ARM64.MOVZ (ARM64.X1, 1, 0);
-            ARM64.STR (ARM64.X1, ARM64.X2, 0);
-            ARM64.MOVZ (ARM64.X1, 1, 0);
-            ARM64.STR (ARM64.X1, ARM64.X0, 0);
-            ARM64.STR (ARM64.X2, ARM64.X0, 8);
-            ARM64.MOVZ (ARM64.X1, 1, 0);
-            ARM64.STR (ARM64.X1, ARM64.X0, 16);
-
-
-            ARM64.LDR (ARM64.X1, ARM64.SP, 256);
-            ARM64.LDR (ARM64.X2, ARM64.SP, 264);
-            ARM64.LDR (ARM64.X3, ARM64.SP, 272);
-            ARM64.LDR (ARM64.X4, ARM64.SP, 280);
-            ARM64.LDR (ARM64.X5, ARM64.SP, 288);
-            ARM64.LDR (ARM64.X6, ARM64.SP, 296);
-            ARM64.LDR (ARM64.X7, ARM64.SP, 304);
-            ARM64.LDR (ARM64.X8, ARM64.SP, 312);
-            ARM64.ADD_imm (ARM64.SP, ARM64.SP, 255);
-            ARM64.ADD_imm (ARM64.SP, ARM64.SP, 65);
-            ARM64.LDP (ARM64.X21, ARM64.X22, ARM64.SP, 0);
-            ARM64.LDP (ARM64.X19, ARM64.X20, ARM64.SP, 16);
-            ARM64.ADD_imm (ARM64.SP, ARM64.SP, 32);
-            ARM64.MOV_reg (destReg, ARM64.X0);
-        ]
+let generateFileDelete (target : ARM64.targetConfig) (destReg : ARM64.reg)
+    (pathReg : ARM64.reg) =
+  let os = ARM64.targetOS target in
+  let syscalls = ARM64.targetSyscalls target in
+
+  match os with
+  | Platform.MacOS ->
+      [
+        ARM64.STP (ARM64.X19, ARM64.X20, ARM64.SP, -16);
+        ARM64.STP (ARM64.X21, ARM64.X22, ARM64.SP, -32);
+        ARM64.SUB_imm (ARM64.SP, ARM64.SP, 32);
+        ARM64.SUB_imm (ARM64.SP, ARM64.SP, 255);
+        ARM64.SUB_imm (ARM64.SP, ARM64.SP, 65);
+        ARM64.MOV_reg (ARM64.X19, pathReg);
+        ARM64.MOV_reg (ARM64.X20, destReg);
+        ARM64.STR (ARM64.X1, ARM64.SP, 256);
+        ARM64.STR (ARM64.X2, ARM64.SP, 264);
+        ARM64.STR (ARM64.X3, ARM64.SP, 272);
+        ARM64.STR (ARM64.X4, ARM64.SP, 280);
+        ARM64.STR (ARM64.X5, ARM64.SP, 288);
+        ARM64.STR (ARM64.X6, ARM64.SP, 296);
+        ARM64.STR (ARM64.X7, ARM64.SP, 304);
+        ARM64.STR (ARM64.X8, ARM64.SP, 312);
+        ARM64.LDR (ARM64.X2, ARM64.X19, 8);
+        ARM64.MOV_reg (ARM64.X0, ARM64.SP);
+        ARM64.ADD_imm (ARM64.X1, ARM64.X19, 16);
+        ARM64.MOVZ (ARM64.X4, 0, 0);
+        ARM64.CBZ_offset (ARM64.X2, 7);
+        ARM64.LDRB (ARM64.X3, ARM64.X1, ARM64.X4);
+        ARM64.STRB (ARM64.X3, ARM64.X0, 0);
+        ARM64.ADD_imm (ARM64.X0, ARM64.X0, 1);
+        ARM64.ADD_imm (ARM64.X1, ARM64.X1, 1);
+        ARM64.SUB_imm (ARM64.X2, ARM64.X2, 1);
+        ARM64.B (-6);
+        ARM64.MOVZ (ARM64.X3, 0, 0);
+        ARM64.STRB (ARM64.X3, ARM64.X0, 0);
+        ARM64.MOV_reg (ARM64.X0, ARM64.SP);
+        ARM64.MOVZ (ARM64.X16, syscalls.ARM64.numbers.Platform.unlink, 0);
+        ARM64.SVC syscalls.ARM64.svcImmediate;
+        ARM64.MOV_reg (ARM64.X21, ARM64.X0);
+        ARM64.MOV_reg (ARM64.X0, ARM64.X28);
+        ARM64.ADD_imm (ARM64.X28, ARM64.X28, 24);
+        ARM64.CMP_imm (ARM64.X21, 0);
+        ARM64.B_cond (ARM64.NE, 7);
+        ARM64.MOVZ (ARM64.X1, 0, 0);
+        ARM64.STR (ARM64.X1, ARM64.X0, 0);
+        ARM64.STR (ARM64.X1, ARM64.X0, 8);
+        ARM64.MOVZ (ARM64.X1, 1, 0);
+        ARM64.STR (ARM64.X1, ARM64.X0, 16);
+        ARM64.B 27;
+        ARM64.MOV_reg (ARM64.X2, ARM64.X28);
+        ARM64.ADD_imm (ARM64.X28, ARM64.X28, 24);
+        ARM64.MOVZ (ARM64.X1, 5, 0);
+        ARM64.STR (ARM64.X1, ARM64.X2, 8);
+        ARM64.MOVZ (ARM64.X1, 69, 0);
+        ARM64.ADD_imm (ARM64.X3, ARM64.X2, 16);
+        ARM64.STRB_reg (ARM64.X1, ARM64.X3);
+        ARM64.MOVZ (ARM64.X1, 114, 0);
+        ARM64.ADD_imm (ARM64.X3, ARM64.X2, 17);
+        ARM64.STRB_reg (ARM64.X1, ARM64.X3);
+        ARM64.MOVZ (ARM64.X1, 114, 0);
+        ARM64.ADD_imm (ARM64.X3, ARM64.X2, 18);
+        ARM64.STRB_reg (ARM64.X1, ARM64.X3);
+        ARM64.MOVZ (ARM64.X1, 111, 0);
+        ARM64.ADD_imm (ARM64.X3, ARM64.X2, 19);
+        ARM64.STRB_reg (ARM64.X1, ARM64.X3);
+        ARM64.MOVZ (ARM64.X1, 114, 0);
+        ARM64.ADD_imm (ARM64.X3, ARM64.X2, 20);
+        ARM64.STRB_reg (ARM64.X1, ARM64.X3);
+        ARM64.MOVZ (ARM64.X1, 1, 0);
+        ARM64.STR (ARM64.X1, ARM64.X2, 0);
+        ARM64.MOVZ (ARM64.X1, 1, 0);
+        ARM64.STR (ARM64.X1, ARM64.X0, 0);
+        ARM64.STR (ARM64.X2, ARM64.X0, 8);
+        ARM64.MOVZ (ARM64.X1, 1, 0);
+        ARM64.STR (ARM64.X1, ARM64.X0, 16);
+        ARM64.LDR (ARM64.X1, ARM64.SP, 256);
+        ARM64.LDR (ARM64.X2, ARM64.SP, 264);
+        ARM64.LDR (ARM64.X3, ARM64.SP, 272);
+        ARM64.LDR (ARM64.X4, ARM64.SP, 280);
+        ARM64.LDR (ARM64.X5, ARM64.SP, 288);
+        ARM64.LDR (ARM64.X6, ARM64.SP, 296);
+        ARM64.LDR (ARM64.X7, ARM64.SP, 304);
+        ARM64.LDR (ARM64.X8, ARM64.SP, 312);
+        ARM64.ADD_imm (ARM64.SP, ARM64.SP, 255);
+        ARM64.ADD_imm (ARM64.SP, ARM64.SP, 65);
+        ARM64.LDP (ARM64.X21, ARM64.X22, ARM64.SP, 0);
+        ARM64.LDP (ARM64.X19, ARM64.X20, ARM64.SP, 16);
+        ARM64.ADD_imm (ARM64.SP, ARM64.SP, 32);
+        ARM64.MOV_reg (destReg, ARM64.X0);
+      ]
+  | Platform.Linux ->
+      [
+        ARM64.STP (ARM64.X19, ARM64.X20, ARM64.SP, -16);
+        ARM64.STP (ARM64.X21, ARM64.X22, ARM64.SP, -32);
+        ARM64.SUB_imm (ARM64.SP, ARM64.SP, 32);
+        ARM64.SUB_imm (ARM64.SP, ARM64.SP, 255);
+        ARM64.SUB_imm (ARM64.SP, ARM64.SP, 65);
+        ARM64.MOV_reg (ARM64.X19, pathReg);
+        ARM64.STR (ARM64.X1, ARM64.SP, 256);
+        ARM64.STR (ARM64.X2, ARM64.SP, 264);
+        ARM64.STR (ARM64.X3, ARM64.SP, 272);
+        ARM64.STR (ARM64.X4, ARM64.SP, 280);
+        ARM64.STR (ARM64.X5, ARM64.SP, 288);
+        ARM64.STR (ARM64.X6, ARM64.SP, 296);
+        ARM64.STR (ARM64.X7, ARM64.SP, 304);
+        ARM64.STR (ARM64.X8, ARM64.SP, 312);
+        ARM64.LDR (ARM64.X2, ARM64.X19, 8);
+        ARM64.MOV_reg (ARM64.X0, ARM64.SP);
+        ARM64.ADD_imm (ARM64.X1, ARM64.X19, 16);
+        ARM64.MOVZ (ARM64.X4, 0, 0);
+        ARM64.CBZ_offset (ARM64.X2, 7);
+        ARM64.LDRB (ARM64.X3, ARM64.X1, ARM64.X4);
+        ARM64.STRB (ARM64.X3, ARM64.X0, 0);
+        ARM64.ADD_imm (ARM64.X0, ARM64.X0, 1);
+        ARM64.ADD_imm (ARM64.X1, ARM64.X1, 1);
+        ARM64.SUB_imm (ARM64.X2, ARM64.X2, 1);
+        ARM64.B (-6);
+        ARM64.MOVZ (ARM64.X3, 0, 0);
+        ARM64.STRB (ARM64.X3, ARM64.X0, 0);
+        ARM64.MOVZ (ARM64.X0, 100, 0);
+        ARM64.NEG (ARM64.X0, ARM64.X0);
+        ARM64.MOV_reg (ARM64.X1, ARM64.SP);
+        ARM64.MOVZ (ARM64.X2, 0, 0);
+        ARM64.MOVZ (ARM64.X8, syscalls.ARM64.numbers.Platform.unlink, 0);
+        ARM64.SVC syscalls.ARM64.svcImmediate;
+        ARM64.MOV_reg (ARM64.X21, ARM64.X0);
+        ARM64.MOV_reg (ARM64.X0, ARM64.X28);
+        ARM64.ADD_imm (ARM64.X28, ARM64.X28, 24);
+        ARM64.CMP_imm (ARM64.X21, 0);
+        ARM64.B_cond (ARM64.NE, 7);
+        ARM64.MOVZ (ARM64.X1, 0, 0);
+        ARM64.STR (ARM64.X1, ARM64.X0, 0);
+        ARM64.STR (ARM64.X1, ARM64.X0, 8);
+        ARM64.MOVZ (ARM64.X1, 1, 0);
+        ARM64.STR (ARM64.X1, ARM64.X0, 16);
+        ARM64.B 27;
+        ARM64.MOV_reg (ARM64.X2, ARM64.X28);
+        ARM64.ADD_imm (ARM64.X28, ARM64.X28, 24);
+        ARM64.MOVZ (ARM64.X1, 5, 0);
+        ARM64.STR (ARM64.X1, ARM64.X2, 8);
+        ARM64.MOVZ (ARM64.X1, 69, 0);
+        ARM64.ADD_imm (ARM64.X3, ARM64.X2, 16);
+        ARM64.STRB_reg (ARM64.X1, ARM64.X3);
+        ARM64.MOVZ (ARM64.X1, 114, 0);
+        ARM64.ADD_imm (ARM64.X3, ARM64.X2, 17);
+        ARM64.STRB_reg (ARM64.X1, ARM64.X3);
+        ARM64.MOVZ (ARM64.X1, 114, 0);
+        ARM64.ADD_imm (ARM64.X3, ARM64.X2, 18);
+        ARM64.STRB_reg (ARM64.X1, ARM64.X3);
+        ARM64.MOVZ (ARM64.X1, 111, 0);
+        ARM64.ADD_imm (ARM64.X3, ARM64.X2, 19);
+        ARM64.STRB_reg (ARM64.X1, ARM64.X3);
+        ARM64.MOVZ (ARM64.X1, 114, 0);
+        ARM64.ADD_imm (ARM64.X3, ARM64.X2, 20);
+        ARM64.STRB_reg (ARM64.X1, ARM64.X3);
+        ARM64.MOVZ (ARM64.X1, 1, 0);
+        ARM64.STR (ARM64.X1, ARM64.X2, 0);
+        ARM64.MOVZ (ARM64.X1, 1, 0);
+        ARM64.STR (ARM64.X1, ARM64.X0, 0);
+        ARM64.STR (ARM64.X2, ARM64.X0, 8);
+        ARM64.MOVZ (ARM64.X1, 1, 0);
+        ARM64.STR (ARM64.X1, ARM64.X0, 16);
+        ARM64.LDR (ARM64.X1, ARM64.SP, 256);
+        ARM64.LDR (ARM64.X2, ARM64.SP, 264);
+        ARM64.LDR (ARM64.X3, ARM64.SP, 272);
+        ARM64.LDR (ARM64.X4, ARM64.SP, 280);
+        ARM64.LDR (ARM64.X5, ARM64.SP, 288);
+        ARM64.LDR (ARM64.X6, ARM64.SP, 296);
+        ARM64.LDR (ARM64.X7, ARM64.SP, 304);
+        ARM64.LDR (ARM64.X8, ARM64.SP, 312);
+        ARM64.ADD_imm (ARM64.SP, ARM64.SP, 255);
+        ARM64.ADD_imm (ARM64.SP, ARM64.SP, 65);
+        ARM64.LDP (ARM64.X21, ARM64.X22, ARM64.SP, 0);
+        ARM64.LDP (ARM64.X19, ARM64.X20, ARM64.SP, 16);
+        ARM64.ADD_imm (ARM64.SP, ARM64.SP, 32);
+        ARM64.MOV_reg (destReg, ARM64.X0);
+      ]
 
 (*
    Generate ARM64 instructions to set executable permission on a file
@@ -571,234 +453,173 @@ let generateFileDelete (target: ARM64.targetConfig) (destReg: ARM64.reg) (pathRe
    X0 = dirfd (AT_FDCWD = -100), X1 = path, X2 = mode (0755 = 493), X3 = flags (0)
    Allocate Result on heap
 *)
-let generateFileSetExecutable (target: ARM64.targetConfig) (destReg: ARM64.reg) (pathReg: ARM64.reg) =
-    let os = ARM64.targetOS target in
-    let syscalls = ARM64.targetSyscalls target in
+let generateFileSetExecutable (target : ARM64.targetConfig)
+    (destReg : ARM64.reg) (pathReg : ARM64.reg) =
+  let os = ARM64.targetOS target in
+  let syscalls = ARM64.targetSyscalls target in
 
-    match os with
-    | Platform.MacOS ->
-        [
-
-            ARM64.STP (ARM64.X19, ARM64.X20, ARM64.SP, -16);
-            ARM64.SUB_imm (ARM64.SP, ARM64.SP, 16);
-
-
-            ARM64.SUB_imm (ARM64.SP, ARM64.SP, 256);
-
-
-            ARM64.MOV_reg (ARM64.X19, pathReg);
-            ARM64.MOV_reg (ARM64.X20, destReg);
-
-
-            ARM64.LDR (ARM64.X2, ARM64.X19, 8);
-
-
-            ARM64.MOV_reg (ARM64.X0, ARM64.SP);
-
-            ARM64.ADD_imm (ARM64.X1, ARM64.X19, 16);
-
-            ARM64.MOVZ (ARM64.X4, 0, 0);
-
-
-            ARM64.CBZ_offset (ARM64.X2, 7);
-            ARM64.LDRB (ARM64.X3, ARM64.X1, ARM64.X4);
-            ARM64.STRB (ARM64.X3, ARM64.X0, 0);
-            ARM64.ADD_imm (ARM64.X0, ARM64.X0, 1);
-            ARM64.ADD_imm (ARM64.X1, ARM64.X1, 1);
-            ARM64.SUB_imm (ARM64.X2, ARM64.X2, 1);
-            ARM64.B (-6);
-
-
-            ARM64.MOVZ (ARM64.X3, 0, 0);
-            ARM64.STRB (ARM64.X3, ARM64.X0, 0);
-
-
-
-            ARM64.MOV_reg (ARM64.X0, ARM64.SP);
-            ARM64.MOVZ (ARM64.X1, 493, 0);
-            ARM64.MOVZ (ARM64.X16, syscalls.ARM64.numbers.Platform.chmod, 0);
-            ARM64.SVC syscalls.ARM64.svcImmediate;
-
-
-            ARM64.MOV_reg (ARM64.X21, ARM64.X0);
-
-
-            ARM64.MOV_reg (ARM64.X0, ARM64.X28);
-            ARM64.ADD_imm (ARM64.X28, ARM64.X28, 24);
-
-
-            ARM64.CMP_imm (ARM64.X21, 0);
-            ARM64.B_cond (ARM64.NE, 7);
-
-
-            ARM64.MOVZ (ARM64.X1, 0, 0);
-            ARM64.STR (ARM64.X1, ARM64.X0, 0);
-            ARM64.STR (ARM64.X1, ARM64.X0, 8);
-            ARM64.MOVZ (ARM64.X1, 1, 0);
-            ARM64.STR (ARM64.X1, ARM64.X0, 16);
-            ARM64.B (27);
-
-
-            ARM64.MOV_reg (ARM64.X2, ARM64.X28);
-            ARM64.ADD_imm (ARM64.X28, ARM64.X28, 24);
-            ARM64.MOVZ (ARM64.X1, 5, 0);
-            ARM64.STR (ARM64.X1, ARM64.X2, 8);
-            ARM64.MOVZ (ARM64.X1, 69, 0);
-            ARM64.ADD_imm (ARM64.X3, ARM64.X2, 16);
-            ARM64.STRB_reg (ARM64.X1, ARM64.X3);
-            ARM64.MOVZ (ARM64.X1, 114, 0);
-            ARM64.ADD_imm (ARM64.X3, ARM64.X2, 17);
-            ARM64.STRB_reg (ARM64.X1, ARM64.X3);
-            ARM64.MOVZ (ARM64.X1, 114, 0);
-            ARM64.ADD_imm (ARM64.X3, ARM64.X2, 18);
-            ARM64.STRB_reg (ARM64.X1, ARM64.X3);
-            ARM64.MOVZ (ARM64.X1, 111, 0);
-            ARM64.ADD_imm (ARM64.X3, ARM64.X2, 19);
-            ARM64.STRB_reg (ARM64.X1, ARM64.X3);
-            ARM64.MOVZ (ARM64.X1, 114, 0);
-            ARM64.ADD_imm (ARM64.X3, ARM64.X2, 20);
-            ARM64.STRB_reg (ARM64.X1, ARM64.X3);
-            ARM64.MOVZ (ARM64.X1, 1, 0);
-            ARM64.STR (ARM64.X1, ARM64.X2, 0);
-            ARM64.MOVZ (ARM64.X1, 1, 0);
-            ARM64.STR (ARM64.X1, ARM64.X0, 0);
-            ARM64.STR (ARM64.X2, ARM64.X0, 8);
-            ARM64.MOVZ (ARM64.X1, 1, 0);
-            ARM64.STR (ARM64.X1, ARM64.X0, 16);
-
-
-            ARM64.LDR (ARM64.X1, ARM64.SP, 256);
-            ARM64.LDR (ARM64.X2, ARM64.SP, 264);
-            ARM64.LDR (ARM64.X3, ARM64.SP, 272);
-            ARM64.LDR (ARM64.X4, ARM64.SP, 280);
-            ARM64.LDR (ARM64.X5, ARM64.SP, 288);
-            ARM64.LDR (ARM64.X6, ARM64.SP, 296);
-            ARM64.LDR (ARM64.X7, ARM64.SP, 304);
-            ARM64.LDR (ARM64.X8, ARM64.SP, 312);
-            ARM64.ADD_imm (ARM64.SP, ARM64.SP, 255);
-            ARM64.ADD_imm (ARM64.SP, ARM64.SP, 65);
-            ARM64.LDP (ARM64.X21, ARM64.X22, ARM64.SP, 0);
-            ARM64.LDP (ARM64.X19, ARM64.X20, ARM64.SP, 16);
-            ARM64.ADD_imm (ARM64.SP, ARM64.SP, 32);
-            ARM64.MOV_reg (destReg, ARM64.X0);
-        ]
-    | Platform.Linux ->
-        [
-
-            ARM64.STP (ARM64.X19, ARM64.X20, ARM64.SP, -16);
-            ARM64.STP (ARM64.X21, ARM64.X22, ARM64.SP, -32);
-            ARM64.SUB_imm (ARM64.SP, ARM64.SP, 32);
-
-
-            ARM64.SUB_imm (ARM64.SP, ARM64.SP, 255);
-            ARM64.SUB_imm (ARM64.SP, ARM64.SP, 65);
-
-
-            ARM64.MOV_reg (ARM64.X19, pathReg);
-
-
-            ARM64.STR (ARM64.X1, ARM64.SP, 256);
-            ARM64.STR (ARM64.X2, ARM64.SP, 264);
-            ARM64.STR (ARM64.X3, ARM64.SP, 272);
-            ARM64.STR (ARM64.X4, ARM64.SP, 280);
-            ARM64.STR (ARM64.X5, ARM64.SP, 288);
-            ARM64.STR (ARM64.X6, ARM64.SP, 296);
-            ARM64.STR (ARM64.X7, ARM64.SP, 304);
-            ARM64.STR (ARM64.X8, ARM64.SP, 312);
-
-
-            ARM64.LDR (ARM64.X2, ARM64.X19, 8);
-
-
-            ARM64.MOV_reg (ARM64.X0, ARM64.SP);
-
-            ARM64.ADD_imm (ARM64.X1, ARM64.X19, 16);
-
-            ARM64.MOVZ (ARM64.X4, 0, 0);
-
-
-            ARM64.CBZ_offset (ARM64.X2, 7);
-            ARM64.LDRB (ARM64.X3, ARM64.X1, ARM64.X4);
-            ARM64.STRB (ARM64.X3, ARM64.X0, 0);
-            ARM64.ADD_imm (ARM64.X0, ARM64.X0, 1);
-            ARM64.ADD_imm (ARM64.X1, ARM64.X1, 1);
-            ARM64.SUB_imm (ARM64.X2, ARM64.X2, 1);
-            ARM64.B (-6);
-
-
-            ARM64.MOVZ (ARM64.X3, 0, 0);
-            ARM64.STRB (ARM64.X3, ARM64.X0, 0);
-
-
-
-            ARM64.MOVZ (ARM64.X0, 100, 0);
-            ARM64.NEG (ARM64.X0, ARM64.X0);
-            ARM64.MOV_reg (ARM64.X1, ARM64.SP);
-            ARM64.MOVZ (ARM64.X2, 493, 0);
-            ARM64.MOVZ (ARM64.X3, 0, 0);
-            ARM64.MOVZ (ARM64.X8, syscalls.ARM64.numbers.Platform.chmod, 0);
-            ARM64.SVC syscalls.ARM64.svcImmediate;
-
-
-            ARM64.MOV_reg (ARM64.X21, ARM64.X0);
-
-
-            ARM64.MOV_reg (ARM64.X0, ARM64.X28);
-            ARM64.ADD_imm (ARM64.X28, ARM64.X28, 24);
-
-
-            ARM64.CMP_imm (ARM64.X21, 0);
-            ARM64.B_cond (ARM64.NE, 7);
-
-
-            ARM64.MOVZ (ARM64.X1, 0, 0);
-            ARM64.STR (ARM64.X1, ARM64.X0, 0);
-            ARM64.STR (ARM64.X1, ARM64.X0, 8);
-            ARM64.MOVZ (ARM64.X1, 1, 0);
-            ARM64.STR (ARM64.X1, ARM64.X0, 16);
-            ARM64.B (27);
-
-
-            ARM64.MOV_reg (ARM64.X2, ARM64.X28);
-            ARM64.ADD_imm (ARM64.X28, ARM64.X28, 24);
-            ARM64.MOVZ (ARM64.X1, 5, 0);
-            ARM64.STR (ARM64.X1, ARM64.X2, 8);
-            ARM64.MOVZ (ARM64.X1, 69, 0);
-            ARM64.ADD_imm (ARM64.X3, ARM64.X2, 16);
-            ARM64.STRB_reg (ARM64.X1, ARM64.X3);
-            ARM64.MOVZ (ARM64.X1, 114, 0);
-            ARM64.ADD_imm (ARM64.X3, ARM64.X2, 17);
-            ARM64.STRB_reg (ARM64.X1, ARM64.X3);
-            ARM64.MOVZ (ARM64.X1, 114, 0);
-            ARM64.ADD_imm (ARM64.X3, ARM64.X2, 18);
-            ARM64.STRB_reg (ARM64.X1, ARM64.X3);
-            ARM64.MOVZ (ARM64.X1, 111, 0);
-            ARM64.ADD_imm (ARM64.X3, ARM64.X2, 19);
-            ARM64.STRB_reg (ARM64.X1, ARM64.X3);
-            ARM64.MOVZ (ARM64.X1, 114, 0);
-            ARM64.ADD_imm (ARM64.X3, ARM64.X2, 20);
-            ARM64.STRB_reg (ARM64.X1, ARM64.X3);
-            ARM64.MOVZ (ARM64.X1, 1, 0);
-            ARM64.STR (ARM64.X1, ARM64.X2, 0);
-            ARM64.MOVZ (ARM64.X1, 1, 0);
-            ARM64.STR (ARM64.X1, ARM64.X0, 0);
-            ARM64.STR (ARM64.X2, ARM64.X0, 8);
-            ARM64.MOVZ (ARM64.X1, 1, 0);
-            ARM64.STR (ARM64.X1, ARM64.X0, 16);
-
-
-            ARM64.LDR (ARM64.X1, ARM64.SP, 256);
-            ARM64.LDR (ARM64.X2, ARM64.SP, 264);
-            ARM64.LDR (ARM64.X3, ARM64.SP, 272);
-            ARM64.LDR (ARM64.X4, ARM64.SP, 280);
-            ARM64.LDR (ARM64.X5, ARM64.SP, 288);
-            ARM64.LDR (ARM64.X6, ARM64.SP, 296);
-            ARM64.LDR (ARM64.X7, ARM64.SP, 304);
-            ARM64.LDR (ARM64.X8, ARM64.SP, 312);
-            ARM64.ADD_imm (ARM64.SP, ARM64.SP, 255);
-            ARM64.ADD_imm (ARM64.SP, ARM64.SP, 65);
-            ARM64.LDP (ARM64.X21, ARM64.X22, ARM64.SP, 0);
-            ARM64.LDP (ARM64.X19, ARM64.X20, ARM64.SP, 16);
-            ARM64.ADD_imm (ARM64.SP, ARM64.SP, 32);
-            ARM64.MOV_reg (destReg, ARM64.X0);
-        ]
+  match os with
+  | Platform.MacOS ->
+      [
+        ARM64.STP (ARM64.X19, ARM64.X20, ARM64.SP, -16);
+        ARM64.SUB_imm (ARM64.SP, ARM64.SP, 16);
+        ARM64.SUB_imm (ARM64.SP, ARM64.SP, 256);
+        ARM64.MOV_reg (ARM64.X19, pathReg);
+        ARM64.MOV_reg (ARM64.X20, destReg);
+        ARM64.LDR (ARM64.X2, ARM64.X19, 8);
+        ARM64.MOV_reg (ARM64.X0, ARM64.SP);
+        ARM64.ADD_imm (ARM64.X1, ARM64.X19, 16);
+        ARM64.MOVZ (ARM64.X4, 0, 0);
+        ARM64.CBZ_offset (ARM64.X2, 7);
+        ARM64.LDRB (ARM64.X3, ARM64.X1, ARM64.X4);
+        ARM64.STRB (ARM64.X3, ARM64.X0, 0);
+        ARM64.ADD_imm (ARM64.X0, ARM64.X0, 1);
+        ARM64.ADD_imm (ARM64.X1, ARM64.X1, 1);
+        ARM64.SUB_imm (ARM64.X2, ARM64.X2, 1);
+        ARM64.B (-6);
+        ARM64.MOVZ (ARM64.X3, 0, 0);
+        ARM64.STRB (ARM64.X3, ARM64.X0, 0);
+        ARM64.MOV_reg (ARM64.X0, ARM64.SP);
+        ARM64.MOVZ (ARM64.X1, 493, 0);
+        ARM64.MOVZ (ARM64.X16, syscalls.ARM64.numbers.Platform.chmod, 0);
+        ARM64.SVC syscalls.ARM64.svcImmediate;
+        ARM64.MOV_reg (ARM64.X21, ARM64.X0);
+        ARM64.MOV_reg (ARM64.X0, ARM64.X28);
+        ARM64.ADD_imm (ARM64.X28, ARM64.X28, 24);
+        ARM64.CMP_imm (ARM64.X21, 0);
+        ARM64.B_cond (ARM64.NE, 7);
+        ARM64.MOVZ (ARM64.X1, 0, 0);
+        ARM64.STR (ARM64.X1, ARM64.X0, 0);
+        ARM64.STR (ARM64.X1, ARM64.X0, 8);
+        ARM64.MOVZ (ARM64.X1, 1, 0);
+        ARM64.STR (ARM64.X1, ARM64.X0, 16);
+        ARM64.B 27;
+        ARM64.MOV_reg (ARM64.X2, ARM64.X28);
+        ARM64.ADD_imm (ARM64.X28, ARM64.X28, 24);
+        ARM64.MOVZ (ARM64.X1, 5, 0);
+        ARM64.STR (ARM64.X1, ARM64.X2, 8);
+        ARM64.MOVZ (ARM64.X1, 69, 0);
+        ARM64.ADD_imm (ARM64.X3, ARM64.X2, 16);
+        ARM64.STRB_reg (ARM64.X1, ARM64.X3);
+        ARM64.MOVZ (ARM64.X1, 114, 0);
+        ARM64.ADD_imm (ARM64.X3, ARM64.X2, 17);
+        ARM64.STRB_reg (ARM64.X1, ARM64.X3);
+        ARM64.MOVZ (ARM64.X1, 114, 0);
+        ARM64.ADD_imm (ARM64.X3, ARM64.X2, 18);
+        ARM64.STRB_reg (ARM64.X1, ARM64.X3);
+        ARM64.MOVZ (ARM64.X1, 111, 0);
+        ARM64.ADD_imm (ARM64.X3, ARM64.X2, 19);
+        ARM64.STRB_reg (ARM64.X1, ARM64.X3);
+        ARM64.MOVZ (ARM64.X1, 114, 0);
+        ARM64.ADD_imm (ARM64.X3, ARM64.X2, 20);
+        ARM64.STRB_reg (ARM64.X1, ARM64.X3);
+        ARM64.MOVZ (ARM64.X1, 1, 0);
+        ARM64.STR (ARM64.X1, ARM64.X2, 0);
+        ARM64.MOVZ (ARM64.X1, 1, 0);
+        ARM64.STR (ARM64.X1, ARM64.X0, 0);
+        ARM64.STR (ARM64.X2, ARM64.X0, 8);
+        ARM64.MOVZ (ARM64.X1, 1, 0);
+        ARM64.STR (ARM64.X1, ARM64.X0, 16);
+        ARM64.LDR (ARM64.X1, ARM64.SP, 256);
+        ARM64.LDR (ARM64.X2, ARM64.SP, 264);
+        ARM64.LDR (ARM64.X3, ARM64.SP, 272);
+        ARM64.LDR (ARM64.X4, ARM64.SP, 280);
+        ARM64.LDR (ARM64.X5, ARM64.SP, 288);
+        ARM64.LDR (ARM64.X6, ARM64.SP, 296);
+        ARM64.LDR (ARM64.X7, ARM64.SP, 304);
+        ARM64.LDR (ARM64.X8, ARM64.SP, 312);
+        ARM64.ADD_imm (ARM64.SP, ARM64.SP, 255);
+        ARM64.ADD_imm (ARM64.SP, ARM64.SP, 65);
+        ARM64.LDP (ARM64.X21, ARM64.X22, ARM64.SP, 0);
+        ARM64.LDP (ARM64.X19, ARM64.X20, ARM64.SP, 16);
+        ARM64.ADD_imm (ARM64.SP, ARM64.SP, 32);
+        ARM64.MOV_reg (destReg, ARM64.X0);
+      ]
+  | Platform.Linux ->
+      [
+        ARM64.STP (ARM64.X19, ARM64.X20, ARM64.SP, -16);
+        ARM64.STP (ARM64.X21, ARM64.X22, ARM64.SP, -32);
+        ARM64.SUB_imm (ARM64.SP, ARM64.SP, 32);
+        ARM64.SUB_imm (ARM64.SP, ARM64.SP, 255);
+        ARM64.SUB_imm (ARM64.SP, ARM64.SP, 65);
+        ARM64.MOV_reg (ARM64.X19, pathReg);
+        ARM64.STR (ARM64.X1, ARM64.SP, 256);
+        ARM64.STR (ARM64.X2, ARM64.SP, 264);
+        ARM64.STR (ARM64.X3, ARM64.SP, 272);
+        ARM64.STR (ARM64.X4, ARM64.SP, 280);
+        ARM64.STR (ARM64.X5, ARM64.SP, 288);
+        ARM64.STR (ARM64.X6, ARM64.SP, 296);
+        ARM64.STR (ARM64.X7, ARM64.SP, 304);
+        ARM64.STR (ARM64.X8, ARM64.SP, 312);
+        ARM64.LDR (ARM64.X2, ARM64.X19, 8);
+        ARM64.MOV_reg (ARM64.X0, ARM64.SP);
+        ARM64.ADD_imm (ARM64.X1, ARM64.X19, 16);
+        ARM64.MOVZ (ARM64.X4, 0, 0);
+        ARM64.CBZ_offset (ARM64.X2, 7);
+        ARM64.LDRB (ARM64.X3, ARM64.X1, ARM64.X4);
+        ARM64.STRB (ARM64.X3, ARM64.X0, 0);
+        ARM64.ADD_imm (ARM64.X0, ARM64.X0, 1);
+        ARM64.ADD_imm (ARM64.X1, ARM64.X1, 1);
+        ARM64.SUB_imm (ARM64.X2, ARM64.X2, 1);
+        ARM64.B (-6);
+        ARM64.MOVZ (ARM64.X3, 0, 0);
+        ARM64.STRB (ARM64.X3, ARM64.X0, 0);
+        ARM64.MOVZ (ARM64.X0, 100, 0);
+        ARM64.NEG (ARM64.X0, ARM64.X0);
+        ARM64.MOV_reg (ARM64.X1, ARM64.SP);
+        ARM64.MOVZ (ARM64.X2, 493, 0);
+        ARM64.MOVZ (ARM64.X3, 0, 0);
+        ARM64.MOVZ (ARM64.X8, syscalls.ARM64.numbers.Platform.chmod, 0);
+        ARM64.SVC syscalls.ARM64.svcImmediate;
+        ARM64.MOV_reg (ARM64.X21, ARM64.X0);
+        ARM64.MOV_reg (ARM64.X0, ARM64.X28);
+        ARM64.ADD_imm (ARM64.X28, ARM64.X28, 24);
+        ARM64.CMP_imm (ARM64.X21, 0);
+        ARM64.B_cond (ARM64.NE, 7);
+        ARM64.MOVZ (ARM64.X1, 0, 0);
+        ARM64.STR (ARM64.X1, ARM64.X0, 0);
+        ARM64.STR (ARM64.X1, ARM64.X0, 8);
+        ARM64.MOVZ (ARM64.X1, 1, 0);
+        ARM64.STR (ARM64.X1, ARM64.X0, 16);
+        ARM64.B 27;
+        ARM64.MOV_reg (ARM64.X2, ARM64.X28);
+        ARM64.ADD_imm (ARM64.X28, ARM64.X28, 24);
+        ARM64.MOVZ (ARM64.X1, 5, 0);
+        ARM64.STR (ARM64.X1, ARM64.X2, 8);
+        ARM64.MOVZ (ARM64.X1, 69, 0);
+        ARM64.ADD_imm (ARM64.X3, ARM64.X2, 16);
+        ARM64.STRB_reg (ARM64.X1, ARM64.X3);
+        ARM64.MOVZ (ARM64.X1, 114, 0);
+        ARM64.ADD_imm (ARM64.X3, ARM64.X2, 17);
+        ARM64.STRB_reg (ARM64.X1, ARM64.X3);
+        ARM64.MOVZ (ARM64.X1, 114, 0);
+        ARM64.ADD_imm (ARM64.X3, ARM64.X2, 18);
+        ARM64.STRB_reg (ARM64.X1, ARM64.X3);
+        ARM64.MOVZ (ARM64.X1, 111, 0);
+        ARM64.ADD_imm (ARM64.X3, ARM64.X2, 19);
+        ARM64.STRB_reg (ARM64.X1, ARM64.X3);
+        ARM64.MOVZ (ARM64.X1, 114, 0);
+        ARM64.ADD_imm (ARM64.X3, ARM64.X2, 20);
+        ARM64.STRB_reg (ARM64.X1, ARM64.X3);
+        ARM64.MOVZ (ARM64.X1, 1, 0);
+        ARM64.STR (ARM64.X1, ARM64.X2, 0);
+        ARM64.MOVZ (ARM64.X1, 1, 0);
+        ARM64.STR (ARM64.X1, ARM64.X0, 0);
+        ARM64.STR (ARM64.X2, ARM64.X0, 8);
+        ARM64.MOVZ (ARM64.X1, 1, 0);
+        ARM64.STR (ARM64.X1, ARM64.X0, 16);
+        ARM64.LDR (ARM64.X1, ARM64.SP, 256);
+        ARM64.LDR (ARM64.X2, ARM64.SP, 264);
+        ARM64.LDR (ARM64.X3, ARM64.SP, 272);
+        ARM64.LDR (ARM64.X4, ARM64.SP, 280);
+        ARM64.LDR (ARM64.X5, ARM64.SP, 288);
+        ARM64.LDR (ARM64.X6, ARM64.SP, 296);
+        ARM64.LDR (ARM64.X7, ARM64.SP, 304);
+        ARM64.LDR (ARM64.X8, ARM64.SP, 312);
+        ARM64.ADD_imm (ARM64.SP, ARM64.SP, 255);
+        ARM64.ADD_imm (ARM64.SP, ARM64.SP, 65);
+        ARM64.LDP (ARM64.X21, ARM64.X22, ARM64.SP, 0);
+        ARM64.LDP (ARM64.X19, ARM64.X20, ARM64.SP, 16);
+        ARM64.ADD_imm (ARM64.SP, ARM64.SP, 32);
+        ARM64.MOV_reg (destReg, ARM64.X0);
+      ]

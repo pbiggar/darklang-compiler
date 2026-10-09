@@ -23,11 +23,11 @@ let run () : Unit =
   match Stdlib.Blob.fromHex "@ROOT@", Stdlib.Cli.Args.get 0,
     Stdlib.Cli.Args.get 1 |> Stdlib.Result.andThen (fun text -> Stdlib.Int64.parse text |> Stdlib.Result.mapError (fun _error -> "port")) with
   | Ok root, Ok mode, Ok port ->
-    let peer = Stdlib.Datagram.Endpoint { address = [127L,0L,0L,1L], port = port } in
-    match Stdlib.QuicClient.connect peer (if mode == "hostname" then "wrong.example.com" else "localhost")
+    let peer = Stdlib.__Datagram.Endpoint { address = [127L,0L,0L,1L], port = port } in
+    match Stdlib.__QuicClient.connect peer (if mode == "hostname" then "wrong.example.com" else "localhost")
       (if mode == "untrusted" then [] else [root]) 8000L with
     | Error message -> Stdlib.printLine ("ERROR " ++ message)
-    | Ok ready -> let _ = Stdlib.QuicClient.close ready in Stdlib.printLine "AUTHENTICATED"
+    | Ok ready -> let _ = Stdlib.__QuicClient.close ready in Stdlib.printLine "AUTHENTICATED"
   | _ -> Stdlib.printLine "Bad arguments"
 run ()
 """

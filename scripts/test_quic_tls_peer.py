@@ -33,28 +33,28 @@ SUCCESS_MODES = ("trusted", "reordered", "unknown")
 
 DARK = """// handshake.dark - Exercise authenticated Initial/Handshake CRYPTO streams over UDP.
 type Exchange = {
-  initial: Stdlib.QuicReassembly.State, crypto: Stdlib.QuicReassembly.State,
-  tls: Stdlib.Option.Option<Stdlib.QuicTls.Handshake>, destination: Blob,
-  privateKey: Blob, hello: Blob, keys: Stdlib.QuicCrypto.Initial,
+  initial: Stdlib.__QuicReassembly.State, crypto: Stdlib.__QuicReassembly.State,
+  tls: Stdlib.Option.Option<Stdlib.__QuicTls.Handshake>, destination: Blob,
+  privateKey: Blob, hello: Blob, keys: Stdlib.__QuicCrypto.Initial,
   largestInitial: Int64, largestHandshake: Int64
 }
-let update (state: Exchange) (initial: Stdlib.QuicReassembly.State) (crypto: Stdlib.QuicReassembly.State)
-  (tls: Stdlib.Option.Option<Stdlib.QuicTls.Handshake>) (destination: Blob) (largestInitial: Int64) (largestHandshake: Int64) : Exchange =
+let update (state: Exchange) (initial: Stdlib.__QuicReassembly.State) (crypto: Stdlib.__QuicReassembly.State)
+  (tls: Stdlib.Option.Option<Stdlib.__QuicTls.Handshake>) (destination: Blob) (largestInitial: Int64) (largestHandshake: Int64) : Exchange =
   Exchange { initial = initial, crypto = crypto, tls = tls, destination = destination,
     privateKey = state.privateKey, hello = state.hello, keys = state.keys,
     largestInitial = largestInitial, largestHandshake = largestHandshake }
-let collect (state: Stdlib.QuicReassembly.State) (frames: List<Stdlib.QuicFrames.Frame>)
-  : Stdlib.Result.Result<Stdlib.QuicReassembly.State, String> =
+let collect (state: Stdlib.__QuicReassembly.State) (frames: List<Stdlib.__QuicFrames.Frame>)
+  : Stdlib.Result.Result<Stdlib.__QuicReassembly.State, String> =
   match frames with
   | [] -> Ok state
   | Crypto frame :: tail ->
-    Stdlib.QuicReassembly.insert state frame.offset frame.bytes |> Stdlib.Result.andThen (fun next -> collect next tail)
+    Stdlib.__QuicReassembly.insert state frame.offset frame.bytes |> Stdlib.Result.andThen (fun next -> collect next tail)
   | Close _ :: _ -> Error "Peer closed QUIC"
   | _ :: tail -> collect state tail
 let packets (state: Exchange) (bytes: Blob) : Stdlib.Result.Result<Exchange, String> =
   if Stdlib.Blob.length bytes == 0 then Ok state
   else
-    match Stdlib.QuicPacket.parse 8L bytes with
+    match Stdlib.__QuicPacket.parse 8L bytes with
     | Error message -> Error message
     | Ok (Protected packet) ->
       if Stdlib.Blob.toHex packet.destination != "08090A0B0C0D0E0F" then Error "Wrong destination"
@@ -62,62 +62,62 @@ let packets (state: Exchange) (bytes: Blob) : Stdlib.Result.Result<Exchange, Str
         let result =
           match packet.kind with
           | Initial ->
-            match Stdlib.QuicCrypto.openPacket state.keys.server packet.bytes packet.numberOffset state.largestInitial with
+            match Stdlib.__QuicCrypto.openPacket state.keys.server packet.bytes packet.numberOffset state.largestInitial with
             | Error message -> Error message
             | Ok opened ->
               if state.largestInitial >= 0L && Stdlib.Blob.toHex packet.source != Stdlib.Blob.toHex state.destination then
                 Error "QUIC Initial source connection ID changed"
               else
-              match Stdlib.QuicFrames.parseHandshake opened.payload |> Stdlib.Result.andThen (collect state.initial) with
+              match Stdlib.__QuicFrames.parseHandshake opened.payload |> Stdlib.Result.andThen (collect state.initial) with
               | Error message -> Error message
               | Ok initial ->
-                let available = Stdlib.QuicReassembly.available initial in
+                let available = Stdlib.__QuicReassembly.available initial in
                 let largest = if opened.number > state.largestInitial then opened.number else state.largestInitial in
                 match state.tls with
                 | Some _ ->
                   if Stdlib.Blob.length available != 0 then Error "Extra Initial CRYPTO bytes"
                   else Ok (update state initial state.crypto state.tls state.destination largest state.largestHandshake)
                 | None ->
-                  match Stdlib.Tls13.parseServerHello available with
+                  match Stdlib.__Tls13.parseServerHello available with
                   | Error Incomplete -> Ok (update state initial state.crypto None packet.source largest state.largestHandshake)
                   | Error _ -> Error "Invalid server hello"
                   | Ok _ ->
-                    Stdlib.QuicTls.start state.privateKey state.hello available |> Stdlib.Result.map (fun tls -> update state (Stdlib.QuicReassembly.drain initial) state.crypto (Some tls) packet.source largest state.largestHandshake)
+                    Stdlib.__QuicTls.start state.privateKey state.hello available |> Stdlib.Result.map (fun tls -> update state (Stdlib.__QuicReassembly.drain initial) state.crypto (Some tls) packet.source largest state.largestHandshake)
           | Handshake ->
             match state.tls with
             | None -> Error "No handshake keys"
             | Some tls ->
-              match Stdlib.QuicCrypto.openPacket tls.receive packet.bytes packet.numberOffset state.largestHandshake with
+              match Stdlib.__QuicCrypto.openPacket tls.receive packet.bytes packet.numberOffset state.largestHandshake with
               | Error message -> Error message
               | Ok opened ->
-                match Stdlib.QuicFrames.parseHandshake opened.payload |> Stdlib.Result.andThen (collect state.crypto) with
+                match Stdlib.__QuicFrames.parseHandshake opened.payload |> Stdlib.Result.andThen (collect state.crypto) with
                 | Error message -> Error message
                 | Ok crypto ->
-                  let available = Stdlib.QuicReassembly.available crypto in
+                  let available = Stdlib.__QuicReassembly.available crypto in
                   let largest = if opened.number > state.largestHandshake then opened.number else state.largestHandshake in
                   if Stdlib.Blob.length available == 0 then Ok (update state state.initial crypto state.tls state.destination state.largestInitial largest)
-                  else Stdlib.QuicTls.feed tls available |> Stdlib.Result.map (fun next -> update state state.initial (Stdlib.QuicReassembly.drain crypto) (Some next) state.destination state.largestInitial largest)
+                  else Stdlib.__QuicTls.feed tls available |> Stdlib.Result.map (fun next -> update state state.initial (Stdlib.__QuicReassembly.drain crypto) (Some next) state.destination state.largestInitial largest)
           | _ -> Error "Unexpected QUIC packet level" in
         result |> Stdlib.Result.andThen (fun next -> packets next packet.remaining)
     | Ok _ -> Error "Unexpected QUIC control packet"
-let receive (connection: Stdlib.Datagram.Socket) (state: Exchange) (remaining: Int64)
+let receive (connection: Stdlib.__Datagram.Socket) (state: Exchange) (remaining: Int64)
   : Stdlib.Result.Result<Exchange, String> =
-  let complete = match state.tls with | Some tls -> tls.flight.phase == Stdlib.Tls13Handshake.FlightPhase.ServerFinished | None -> false in
+  let complete = match state.tls with | Some tls -> tls.flight.phase == Stdlib.__Tls13Handshake.FlightPhase.ServerFinished | None -> false in
   if complete then Ok state
   else if remaining == 0L then Error "Too many handshake datagrams"
   else
-    match Stdlib.Datagram.receive connection 1000L with
+    match Stdlib.__Datagram.receive connection 1000L with
     | Error _ -> Error "QUIC handshake receive failed"
     | Ok datagram -> packets state datagram.payload |> Stdlib.Result.andThen (fun next -> receive connection next (remaining - 1L))
-let exchange (connection: Stdlib.Datagram.Socket) (peer: Stdlib.Datagram.Endpoint) (state: Exchange)
+let exchange (connection: Stdlib.__Datagram.Socket) (peer: Stdlib.__Datagram.Endpoint) (state: Exchange)
   (source: Blob) (roots: List<Blob>) (host: String) : Stdlib.Result.Result<Unit, String> =
-  match Stdlib.QuicFrames.crypto 0L state.hello with
+  match Stdlib.__QuicFrames.crypto 0L state.hello with
   | Error message -> Error message
   | Ok frame ->
-    match Stdlib.QuicPacket.sealLong Stdlib.QuicPacket.Kind.Initial state.keys.client state.destination source Stdlib.Blob.empty frame 0L with
+    match Stdlib.__QuicPacket.sealLong Stdlib.__QuicPacket.Kind.Initial state.keys.client state.destination source Stdlib.Blob.empty frame 0L with
     | Error message -> Error message
     | Ok packet ->
-      match Stdlib.Datagram.send connection peer packet 1000L with
+      match Stdlib.__Datagram.send connection peer packet 1000L with
       | Error _ -> Error "QUIC Initial send failed"
       | Ok () ->
         match receive connection state 16L with
@@ -126,34 +126,34 @@ let exchange (connection: Stdlib.Datagram.Socket) (peer: Stdlib.Datagram.Endpoin
           match received.tls with
           | None -> Error "Missing TLS flight"
           | Some tls ->
-            let ids = Stdlib.QuicParameters.ConnectionIds {
+            let ids = Stdlib.__QuicParameters.ConnectionIds {
               originalDestination = state.destination, initialSource = received.destination, retrySource = None } in
-            match Stdlib.QuicTls.authenticate tls host roots ids with
+            match Stdlib.__QuicTls.authenticate tls host roots ids with
             | Error message -> Error message
             | Ok authenticated ->
-              match Stdlib.QuicFrames.crypto 0L authenticated.finished, Stdlib.QuicFrames.acknowledge received.largestHandshake with
+              match Stdlib.__QuicFrames.crypto 0L authenticated.finished, Stdlib.__QuicFrames.acknowledge received.largestHandshake with
               | Ok finished, Ok ack ->
-                match Stdlib.QuicPacket.sealLong Stdlib.QuicPacket.Kind.Handshake tls.send received.destination source Stdlib.Blob.empty (Stdlib.Blob.concat [ack, finished]) 0L with
+                match Stdlib.__QuicPacket.sealLong Stdlib.__QuicPacket.Kind.Handshake tls.send received.destination source Stdlib.Blob.empty (Stdlib.Blob.concat [ack, finished]) 0L with
                 | Error message -> Error message
                 | Ok packet ->
-                  match Stdlib.Datagram.send connection peer packet 1000L with
+                  match Stdlib.__Datagram.send connection peer packet 1000L with
                   | Error _ -> Error "QUIC Finished send failed"
                   | Ok () -> Ok ()
               | _, _ -> Error "QUIC Finished framing failed"
 let runExchange () : Unit =
   match Stdlib.Blob.fromHex "@PARAMETERS@", Stdlib.Blob.fromHex "@ROOT@",
         Stdlib.Blob.fromHex "0001020304050607", Stdlib.Blob.fromHex "08090A0B0C0D0E0F",
-        Stdlib.X25519.generateKeyPair (), Stdlib.Crypto.secureRandomBytes 32L,
+        Stdlib.__X25519.generateKeyPair (), Stdlib.Crypto.__secureRandomBytes 32L,
         Stdlib.Cli.Args.get 0, Stdlib.Cli.Args.get 1 |> Stdlib.Result.andThen (fun value -> Stdlib.Int64.parse value |> Stdlib.Result.mapError (fun _error -> "Invalid port")) with
   | Ok parameters, Ok root, Ok destination, Ok source, Ok pair, Ok random, Ok mode, Ok port ->
-    match Stdlib.Tls13.quicClientHello "localhost" random pair.publicKey parameters, Stdlib.QuicCrypto.initial destination, Stdlib.QuicReassembly.create 1048576L, Stdlib.Datagram.bind4 [127L, 0L, 0L, 1L] 0L with
+    match Stdlib.__Tls13.quicClientHello "localhost" random pair.publicKey parameters, Stdlib.__QuicCrypto.initial destination, Stdlib.__QuicReassembly.create 1048576L, Stdlib.__Datagram.bind4 [127L, 0L, 0L, 1L] 0L with
     | Ok hello, Ok keys, Ok initial, Ok connection ->
       let state = Exchange { initial = initial, crypto = initial, tls = None, destination = destination, privateKey = pair.privateKey, hello = hello, keys = keys, largestInitial = -1L, largestHandshake = -1L } in
-      let peer = Stdlib.Datagram.Endpoint { address = [127L, 0L, 0L, 1L], port = port } in
+      let peer = Stdlib.__Datagram.Endpoint { address = [127L, 0L, 0L, 1L], port = port } in
       let result = exchange connection peer state source (if mode == "untrusted" then [] else [root]) (if mode == "hostname" then "wrong.example.com" else "localhost") in
-      let _ = Stdlib.Datagram.close connection in
+      let _ = Stdlib.__Datagram.close connection in
       match result with | Ok () -> Stdlib.printLine "AUTHENTICATED" | Error message -> Stdlib.printLine ("ERROR " ++ message)
-    | _, _, _, Ok connection -> let _ = Stdlib.Datagram.close connection in Stdlib.printLine "Setup failed"
+    | _, _, _, Ok connection -> let _ = Stdlib.__Datagram.close connection in Stdlib.printLine "Setup failed"
     | _, _, _, _ -> Stdlib.printLine "Setup failed"
   | _ -> Stdlib.printLine "Bad arguments"
 runExchange ()

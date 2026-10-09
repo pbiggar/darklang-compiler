@@ -7,5 +7,12 @@ class planningSession : object
   method missCount : int
   method dispose : unit
 end
-val rewriteProgramWithSession : planningSession option -> Types.typeCheckEnv -> CheckedAST.program -> CheckedAST.program
-val rewriteProgram : Types.typeCheckEnv -> CheckedAST.program -> CheckedAST.program
+
+val rewriteProgramWithSession :
+  planningSession option ->
+  Types.typeCheckEnv ->
+  CheckedAST.program ->
+  CheckedAST.program
+
+val rewriteProgram :
+  Types.typeCheckEnv -> CheckedAST.program -> CheckedAST.program

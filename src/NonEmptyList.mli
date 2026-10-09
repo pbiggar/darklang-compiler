@@ -1,5 +1,6 @@
 (* NonEmptyList.mli - Nonempty semantic AST collections. *)
-type 'a t = {head : 'a; tail : 'a list}
+type 'a t = { head : 'a; tail : 'a list }
+
 val singleton : 'a -> 'a t
 val cons : 'a -> 'a t -> 'a t
 val toList : 'a t -> 'a list

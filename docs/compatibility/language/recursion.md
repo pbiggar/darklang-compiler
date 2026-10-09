@@ -1,5 +1,10 @@
 # Recursion parity
 
+Current compiler source review: 2026-10-07 at `7154b0ea9c1a3f53d30984ed17b9e0cc5d8f0dce`.
+See the [current audit](../current-audit.md) for post-port status and validation.
+Older revision pairs and executed counts below are historical evidence, not
+a fresh test result for this revision.
+
 This matrix was revalidated with compiler revision
 `b2e1f3d1e4ce0338d4c4662db9a1326f2e2cb899` and `darklang/dark`
 interpreter revision `04fbe9dcc995c6188757d583e273cbd30a3e2d3d`.
@@ -30,7 +35,7 @@ binding syntax corpus, and native completion cases remain in `tailcall.e2e`.
 | Earlier local function | captured normally | parser boundary was ambiguous | parity defect closed; copied `double`/`quadruple` probe |
 | Later local function | rejected as a forward reference | could be lost during parsing | shared rejection; `forwardEven`/`forwardOdd` |
 | Cross-group and qualified reference | completed/imported functions instantiate normally | blanket source inventory | shared result; distinct completed/imported availability is retained |
-| Eager value cycle | rejected because an ordinary RHS cannot see its binder | same for expressible local values | shared rejection; eager top-level values are not a compiler facility |
+| Eager value cycle | rejected because an ordinary RHS cannot see its binder | same for expressible local values | local RHS rejection; top-level values now exist and are checked sequentially before materialization |
 | Alias-only type cycle | rejected deterministically | expansion could recurse late | shared rejection; declaration validation uses an explicit visiting state |
 | Nominal recursive ADT | accepted | accepted | shared; delayed nominal payload references are not alias edges |
 | Recursive generic ADT | accepts one nominal identity through construction and higher-order folds | accepts with expected-type-aware constructor freshening | shared; pinned `RBTree<'k, 'v>` construction and `List.fold` cases |
@@ -44,7 +49,7 @@ compatibility fixtures.
 
 ## Representation and algorithm
 
-`AST.fs` defines opaque `BindingId`, `ScopeBoundaryId`, `RecursiveGroupId`, and
+`src/AST.ml` defines opaque `BindingId`, `ScopeBoundaryId`, `RecursiveGroupId`, and
 `RecursiveMemberId` values. Parsed, resolved, typed, and lowered groups are
 nonempty records. `RecursiveMemberKind`, `RecursiveAvailability`, and
 `RecursiveDependencyKind` prevent ordinary bindings, self members, mutual
@@ -86,17 +91,17 @@ not public recursion syntax.
 
 ## Source anchors
 
-- Parsing: `frontend/interpreter/Parser.fs`
-- Stable parsed identities: `NameSyntax.fs`
+- Parsing: `src/frontend/interpreter/Parser.ml`
+- Stable parsed identities: `src/NameSyntax.ml`
 - Resolution, SCCs, monomorphic checking, and diagnostics:
-  `frontend/TypeChecking.fs`
-- Closure identity and lowered group layout: `passes/anf/AST_to_ANF.fs`
-- Identity-safe self-tail ownership: `passes/anf/TailCallDetection.fs`
+  `src/frontend/TypeChecking.ml`
+- Closure identity and lowered group layout: `src/passes/anf/AST_to_ANF.ml`
+- Identity-safe self-tail ownership: `src/passes/anf/TailCallDetection.ml`
 - Existing behavioral coverage: `functions.e2e`, `tailcall.e2e`,
   `tuple-recursion.e2e`, closure tests, and
-  `compiler-passes/TailCallDetectionTests.fs`
+  `test/compiler-passes/TailCallDetectionTests.ml`
 
-## Verification
+## Historical verification
 
 The focused parser and E2E recursion corpora pass, including the million-step
 native tail-recursion completion probe. Representative self, mutual, shadowed,

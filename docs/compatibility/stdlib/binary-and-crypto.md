@@ -1,5 +1,13 @@
 # Blob, Base64, Crypto, and X509 parity
 
+Current compiler source review: 2026-10-07 at `7154b0ea9c1a3f53d30984ed17b9e0cc5d8f0dce`.
+See the [current audit](../current-audit.md) for post-port status and validation.
+Older revision pairs and executed counts below are historical evidence, not
+a fresh test result for this revision.
+
+Crypto passes 9/9 in the fresh unchanged-source probe, although its whole-file gate remains.
+See the [fresh probes](../current-audit.md#fresh-probes-of-whole-file-gates).
+
 This contract records the binary API comparison made from compiler HEAD
 `bcd4d46f49a12aaab8588844b72a9afa1f34a0db` and darklang/dark release
 `v0.0.35`, revision `0b3888d8e4f30d48ecd738f5cbe5cc2b8d958460`. DCB1 report commit `8a402797`
@@ -82,15 +90,18 @@ and `X509.fs`; identity and rendering come from
 are `packages/darklang/stdlib/*` plus `backend/tests/Tests/Blob.Tests.fs`.
 
 Compiler type/value registration is in `src/AST.ml` and
-`Stdlib.fs`. Name resolution and equality admission are in
-`frontend/TypeChecking.fs`; value lowering, structural equality, and Blob
-ownership flow through `passes/anf/AST_to_ANF.fs`, ANF/MIR/LIR, reference-count
+`src/DarkStdlib.ml`. Name resolution and equality admission are in
+`src/frontend/TypeChecking.ml`; value lowering, structural equality, and Blob
+ownership flow through `src/passes/anf/AST_to_ANF.ml`, ANF/MIR/LIR, reference-count
 insertion, and both native backends. Public implementations are
-`stdlib/Blob.dark`, `Base64.dark`, `Crypto.dark`, and `X509.dark`.
+`StdLib/Blob.dark`, `Base64.dark`, `Crypto.dark`, and `X509.dark`.
 
 The focused executable probes live in `test/fixtures/e2e/blob.e2e`, `x509.e2e`,
-the migrated local suites, and the activated pinned
-`test/fixtures/e2e/upstream/stdlib/{bytes,base64,crypto,x509}.dark` sources. During
+the migrated local suites, and the imported pinned
+`test/fixtures/e2e/upstream/stdlib/{bytes,base64,crypto,x509}.dark` sources.
+Bytes and X509 are enabled; Base64 has individual line gates; Crypto is
+whole-file gated. The following counts belong to the historical implementation,
+not the current enablement state. During
 implementation the focused filters passed: Blob 37/37, Base64 70/70, Crypto
 125/125, and X509 20/20. The complete native suite passed 5961/5961 after the
 focused work. Full benchmark and integration verification remain the

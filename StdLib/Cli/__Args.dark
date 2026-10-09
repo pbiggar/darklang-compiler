@@ -1,0 +1,24 @@
+// Stdlib.Cli.__Args - typed positional arguments for compiled CLI programs.
+
+module Darklang.Stdlib.Cli.__Args
+
+let get (index: Int) : Stdlib.Result.Result<String, String> =
+    if index < 0 then Error "argument index must not be negative"
+    else
+        match Stdlib.Int.toInt64 index with
+        | None -> Error "command-line argument index is out of range"
+        | Some nativeIndex ->
+            match Stdlib.Cli.__argv nativeIndex with
+            | Some value -> Ok value
+            | None -> Error ("missing command-line argument at index " ++ Stdlib.Int.toString index)
+
+let int64 (index: Int) : Stdlib.Result.Result<Int64, String> =
+    match Stdlib.Cli.__Args.get index with
+    | Error message -> Error message
+    | Ok argument ->
+        match Stdlib.Int.parse argument with
+        | Error _ -> Error ("invalid Int64 command-line argument at index " ++ Stdlib.Int.toString index ++ ": " ++ argument)
+        | Ok number ->
+            match Stdlib.Int.toInt64 number with
+            | Some value -> Ok value
+            | None -> Error ("Int64 command-line argument is out of range at index " ++ Stdlib.Int.toString index)

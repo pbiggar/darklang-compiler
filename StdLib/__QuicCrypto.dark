@@ -1,0 +1,170 @@
+// __QuicCrypto.dark - QUIC v1 AES-128 packet protection and initial key derivation.
+module Darklang.Stdlib.__QuicCrypto
+
+type Keys = { key: Blob, iv: Blob, hp: Blob }
+type Initial = { client: Stdlib.__QuicCrypto.Keys, server: Stdlib.__QuicCrypto.Keys }
+type Opened = { header: Blob, payload: Blob, number: Int64 }
+
+let derive (secret: Blob) : Stdlib.Result.Result<Stdlib.__QuicCrypto.Keys, String> =
+  if Stdlib.Blob.__byteLength secret != 32L then Error "QUIC SHA-256 traffic secret must have 32 bytes"
+  else
+    match Stdlib.__Tls13.hkdfExpandLabel secret "quic key" Stdlib.Blob.empty 16L,
+          Stdlib.__Tls13.hkdfExpandLabel secret "quic iv" Stdlib.Blob.empty 12L,
+          Stdlib.__Tls13.hkdfExpandLabel secret "quic hp" Stdlib.Blob.empty 16L with
+    | Ok key, Ok iv, Ok hp -> Ok (Stdlib.__QuicCrypto.Keys { key = key, iv = iv, hp = hp })
+    | _, _, _ -> Error "QUIC key derivation failed"
+
+let initial (connectionId: Blob) : Stdlib.Result.Result<Stdlib.__QuicCrypto.Initial, String> =
+  if Stdlib.Blob.__byteLength connectionId > 20L then Error "QUIC connection ID exceeds 20 bytes"
+  else
+    let salt = Stdlib.Blob.__fromInt64List [56L, 118L, 44L, 247L, 245L, 89L, 52L, 179L,
+      77L, 23L, 154L, 230L, 164L, 200L, 12L, 173L, 204L, 187L, 127L, 10L] in
+    let secret = Stdlib.__Tls13.hkdfExtract salt connectionId in
+    match Stdlib.__Tls13.hkdfExpandLabel secret "client in" Stdlib.Blob.empty 32L,
+          Stdlib.__Tls13.hkdfExpandLabel secret "server in" Stdlib.Blob.empty 32L with
+    | Ok clientSecret, Ok serverSecret ->
+      match Stdlib.__QuicCrypto.derive clientSecret, Stdlib.__QuicCrypto.derive serverSecret with
+      | Ok client, Ok server -> Ok (Stdlib.__QuicCrypto.Initial { client = client, server = server })
+      | _, _ -> Error "QUIC initial key derivation failed"
+    | _, _ -> Error "QUIC initial secret derivation failed"
+
+let nonce (iv: Blob) (number: Int64) : Stdlib.Result.Result<Blob, String> =
+  if Stdlib.Blob.__byteLength iv != 12L then Error "QUIC IV must have 12 bytes"
+  else if number < 0L || number > 4611686018427387903L then Error "Invalid QUIC packet number"
+  else Ok (Stdlib.__Tls13.__nonceBytes iv number 0L [])
+
+let headerMask (key: Blob) (sample: Blob) : Stdlib.Result.Result<Blob, String> =
+  if Stdlib.Blob.__byteLength key != 16L || Stdlib.Blob.__byteLength sample != 16L then
+    Error "QUIC AES-128 header protection requires 16-byte key and sample"
+  else
+    let expanded = Stdlib.__AesGcm.__expandKey (Stdlib.Blob.__toInt64List key) 4L 4L 1L in
+    Ok (Stdlib.__Http2Wire.__slice (Stdlib.__AesGcm.__encryptBlock expanded sample) 0L 5L)
+
+// RFC 9000 Appendix A.3: choose the full packet number nearest the expected
+// next number. The bounds also keep every intermediate below Int64 overflow.
+let packetNumber (truncated: Int64) (bytes: Int64) (largest: Int64)
+  : Stdlib.Result.Result<Int64, String> =
+  if bytes < 1L || bytes > 4L || largest < -1L || largest > 4611686018427387903L then
+    Error "Invalid truncated QUIC packet number"
+  else
+    let window = Stdlib.__Hpack.__pow2 (bytes * 8L) in
+    if truncated < 0L || truncated >= window then Error "Invalid truncated QUIC packet number"
+    else
+      let expected = largest + 1L in
+      let candidate = (expected / window) * window + truncated in
+      let number =
+        if candidate <= expected - window / 2L && candidate < 4611686018427387904L - window then candidate + window
+        else if candidate > expected + window / 2L && candidate >= window then candidate - window
+        else candidate in
+      if number > 4611686018427387903L then Error "Invalid QUIC packet number" else Ok number
+
+let __numberBytes (data: Blob) (position: Int64) (remaining: Int64) (value: Int64) : Int64 =
+  if remaining == 0L then value
+  else Stdlib.__QuicCrypto.__numberBytes data (position + 1L) (remaining - 1L)
+         (value * 256L + Stdlib.Blob.__getByte data position)
+
+let __maskedNumber (packet: Blob) (offset: Int64) (length: Int64) (mask: Blob)
+  (index: Int64) (bytes: List<Int64>) : Blob =
+  if index == length then Stdlib.Blob.__fromInt64List (Stdlib.List.reverse bytes)
+  else Stdlib.__QuicCrypto.__maskedNumber packet offset length mask (index + 1L)
+         (Stdlib.List.push bytes (Stdlib.Int64.bitwiseXor (Stdlib.Blob.__getByte packet (offset + index))
+           (Stdlib.Blob.__getByte mask (index + 1L))))
+
+let __firstMask (first: Int64) (mask: Blob) : Int64 =
+  let bits = if first >= 128L then 15L else 31L in
+  Stdlib.Int64.bitwiseXor first (Stdlib.Int64.bitwiseAnd (Stdlib.Blob.__getByte mask 0L) bits)
+
+let __header (packet: Blob) (offset: Int64) (length: Int64) (mask: Blob) (first: Int64) : Blob =
+  Stdlib.Blob.concat [Stdlib.Blob.__fromInt64List [first],
+    Stdlib.__Http2Wire.__slice packet 1L (offset - 1L),
+    Stdlib.__QuicCrypto.__maskedNumber packet offset length mask 0L []]
+
+let __reserved (first: Int64) : Bool =
+  Stdlib.Int64.bitwiseAnd first (if first >= 128L then 12L else 24L) == 0L
+
+// The caller constructs a complete header, maintains unique packet numbers,
+// and applies congestion/AEAD usage limits. These pure helpers do not own a
+// connection, retransmission state, TLS authentication, or replay filtering.
+let seal (keys: Stdlib.__QuicCrypto.Keys) (header: Blob) (payload: Blob) (number: Int64) (offset: Int64)
+  : Stdlib.Result.Result<Blob, String> =
+  let size = Stdlib.Blob.__byteLength header in
+  if size == 0L || offset < 1L || offset >= size || size + Stdlib.Blob.__byteLength payload + 16L > 16624L then
+    Error "Invalid QUIC packet bounds"
+  else
+    let first = Stdlib.Blob.__getByte header 0L in
+    let length = Stdlib.Int64.bitwiseAnd first 3L + 1L in
+    if Stdlib.Int64.bitwiseAnd first 64L == 0L || Stdlib.Bool.not (Stdlib.__QuicCrypto.__reserved first) ||
+       offset + length != size || Stdlib.Blob.__byteLength payload + length < 4L then
+      Error "Invalid QUIC packet header or sample length"
+    else if number < 0L || number > 4611686018427387903L ||
+            Stdlib.__QuicCrypto.__numberBytes header offset length 0L != number % Stdlib.__Hpack.__pow2 (length * 8L) then
+      Error "QUIC header packet number mismatch"
+    else
+      match Stdlib.__QuicCrypto.nonce keys.iv number with
+      | Error message -> Error message
+      | Ok nonce ->
+        match Stdlib.__AesGcm.encrypt keys.key nonce header payload with
+        | Error message -> Error message
+        | Ok ciphertext ->
+          let packet = Stdlib.Blob.concat [header, ciphertext] in
+          match Stdlib.__QuicCrypto.headerMask keys.hp (Stdlib.__Http2Wire.__slice packet (offset + 4L) 16L) with
+          | Error message -> Error message
+          | Ok mask -> Ok (Stdlib.Blob.concat [Stdlib.__QuicCrypto.__header packet offset length mask (Stdlib.__QuicCrypto.__firstMask first mask), ciphertext])
+
+// The packet boundary and packet-number offset must be parsed from invariant
+// fields first; coalesced datagrams must be split before calling this helper.
+let openPacket (keys: Stdlib.__QuicCrypto.Keys) (packet: Blob) (offset: Int64) (largest: Int64)
+  : Stdlib.Result.Result<Stdlib.__QuicCrypto.Opened, String> =
+  let size = Stdlib.Blob.__byteLength packet in
+  if offset < 1L || size > 16624L || offset > size - 20L then Error "Invalid QUIC packet bounds"
+  else if Stdlib.Int64.bitwiseAnd (Stdlib.Blob.__getByte packet 0L) 64L == 0L then Error "Invalid QUIC fixed bit"
+  else
+    match Stdlib.__QuicCrypto.headerMask keys.hp (Stdlib.__Http2Wire.__slice packet (offset + 4L) 16L) with
+    | Error message -> Error message
+    | Ok mask ->
+      let first = Stdlib.__QuicCrypto.__firstMask (Stdlib.Blob.__getByte packet 0L) mask in
+      let length = Stdlib.Int64.bitwiseAnd first 3L + 1L in
+      let header = Stdlib.__QuicCrypto.__header packet offset length mask first in
+      let truncated = Stdlib.__QuicCrypto.__numberBytes header offset length 0L in
+      match Stdlib.__QuicCrypto.packetNumber truncated length largest with
+      | Error message -> Error message
+      | Ok number ->
+        match Stdlib.__QuicCrypto.nonce keys.iv number with
+        | Error message -> Error message
+        | Ok nonce ->
+          let ciphertext = Stdlib.__Http2Wire.__slice packet (offset + length) (size - offset - length) in
+          match Stdlib.__AesGcm.decrypt keys.key nonce header ciphertext with
+          | Error message -> Error message
+          | Ok payload ->
+            // Reserved bits are checked only after authentication.
+            if Stdlib.Bool.not (Stdlib.__QuicCrypto.__reserved first) then Error "Invalid QUIC reserved bits"
+            else Ok (Stdlib.__QuicCrypto.Opened { header = header, payload = payload, number = number })
+
+// Retry uses public fixed keys: integrity binds it to the original connection
+// ID, but does not authenticate a server. TLS must still authenticate the peer.
+let retryTag (originalId: Blob) (retry: Blob) : Stdlib.Result.Result<Blob, String> =
+  let idLength = Stdlib.Blob.__byteLength originalId in
+  let size = Stdlib.Blob.__byteLength retry in
+  if idLength > 20L || size < 7L || size > 4096L then Error "Invalid QUIC Retry bounds"
+  else if Stdlib.Int64.bitwiseAnd (Stdlib.Blob.__getByte retry 0L) 240L != 240L ||
+          Stdlib.__Http2Wire.__read32 retry 1L != 1L then Error "Invalid QUIC v1 Retry header"
+  else
+    let destinationLength = Stdlib.Blob.__getByte retry 5L in
+    let sourceOffset = 6L + destinationLength in
+    if destinationLength > 20L || sourceOffset >= size then Error "Invalid QUIC Retry connection ID"
+    else
+      let sourceLength = Stdlib.Blob.__getByte retry sourceOffset in
+      if sourceLength > 20L || sourceOffset + 1L + sourceLength >= size then Error "Invalid QUIC Retry token or connection ID"
+      else
+        let key = Stdlib.Blob.__fromInt64List [190L, 12L, 105L, 11L, 159L, 102L, 87L, 90L, 29L, 118L, 107L, 84L, 227L, 104L, 200L, 78L] in
+        let iv = Stdlib.Blob.__fromInt64List [70L, 21L, 153L, 211L, 93L, 99L, 43L, 242L, 35L, 152L, 37L, 187L] in
+        let pseudo = Stdlib.Blob.concat [Stdlib.Blob.__fromInt64List [idLength], originalId, retry] in
+        Stdlib.__AesGcm.encrypt key iv pseudo Stdlib.Blob.empty
+
+let verifyRetry (originalId: Blob) (packet: Blob) : Stdlib.Result.Result<Bool, String> =
+  let size = Stdlib.Blob.__byteLength packet in
+  if size < 23L || size > 4112L then Error "Invalid QUIC Retry bounds"
+  else
+    match Stdlib.__QuicCrypto.retryTag originalId (Stdlib.__Http2Wire.__slice packet 0L (size - 16L)) with
+    | Error message -> Error message
+    | Ok expected -> Ok (Stdlib.__AesGcm.__sameTag expected (Stdlib.__Http2Wire.__slice packet (size - 16L) 16L) 0L 0L)

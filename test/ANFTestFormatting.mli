@@ -1,17 +1,38 @@
 (* Complete typed ANF and memory descriptions for original test diagnostics. *)
 open Dark_compiler
-val memoryModel_canonicalBufferKind : MemoryModel.canonicalBufferKind -> StructuralValue.value
+
+val memoryModel_canonicalBufferKind :
+  MemoryModel.canonicalBufferKind -> StructuralValue.value
+
 val memoryModel_rcKind : MemoryModel.rcKind -> StructuralValue.value
 val memoryModel_rcShape : MemoryModel.rcShape -> StructuralValue.value
-val memoryModel_rcBoxedSumVariantShape : MemoryModel.rcBoxedSumVariantShape -> StructuralValue.value
-val memoryModel_rcSumShapeInfo : MemoryModel.rcSumShapeInfo -> StructuralValue.value
-val memoryModel_rcSumShapeRegistry : MemoryModel.rcSumShapeRegistry -> StructuralValue.value
+
+val memoryModel_rcBoxedSumVariantShape :
+  MemoryModel.rcBoxedSumVariantShape -> StructuralValue.value
+
+val memoryModel_rcSumShapeInfo :
+  MemoryModel.rcSumShapeInfo -> StructuralValue.value
+
+val memoryModel_rcSumShapeRegistry :
+  MemoryModel.rcSumShapeRegistry -> StructuralValue.value
+
 val memoryModel_rcOperation : MemoryModel.rcOperation -> StructuralValue.value
-val memoryModel_rcStorageClass : MemoryModel.rcStorageClass -> StructuralValue.value
-val memoryModel_rcReleasePlan : MemoryModel.rcReleasePlan -> StructuralValue.value
-val memoryModel_rcPayloadReleasePlan : MemoryModel.rcPayloadReleasePlan -> StructuralValue.value
-val memoryModel_rcFieldRelease : MemoryModel.rcFieldRelease -> StructuralValue.value
-val memoryModel_rcBoxedSumVariantRelease : MemoryModel.rcBoxedSumVariantRelease -> StructuralValue.value
+
+val memoryModel_rcStorageClass :
+  MemoryModel.rcStorageClass -> StructuralValue.value
+
+val memoryModel_rcReleasePlan :
+  MemoryModel.rcReleasePlan -> StructuralValue.value
+
+val memoryModel_rcPayloadReleasePlan :
+  MemoryModel.rcPayloadReleasePlan -> StructuralValue.value
+
+val memoryModel_rcFieldRelease :
+  MemoryModel.rcFieldRelease -> StructuralValue.value
+
+val memoryModel_rcBoxedSumVariantRelease :
+  MemoryModel.rcBoxedSumVariantRelease -> StructuralValue.value
+
 val memoryModel_rcMetadata : MemoryModel.rcMetadata -> StructuralValue.value
 val aNF_tempId : ANF.tempId -> StructuralValue.value
 val aNF_typedParam : ANF.typedParam -> StructuralValue.value

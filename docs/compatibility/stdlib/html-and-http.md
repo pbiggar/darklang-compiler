@@ -1,5 +1,10 @@
 # Html and Http Parity
 
+Current compiler source review: 2026-10-07 at `7154b0ea9c1a3f53d30984ed17b9e0cc5d8f0dce`.
+See the [current audit](../current-audit.md) for post-port status and validation.
+Older revision pairs and executed counts below are historical evidence, not
+a fresh test result for this revision.
+
 This document records the compatibility slice implemented for the canonical
 Html and Http value modules. The comparison used compiler HEAD
 `f84551b75175a2a85b4a43c8cd5dadbf6d758557` and `darklang/dark` revision
@@ -13,7 +18,7 @@ The interpreter baseline is
 `packages/darklang/stdlib/http.dark:4-259`; executable behavior is pinned by
 `backend/testfiles/execution/stdlib/html.dark` and `http.dark` at the same
 revision. The compiler implementation is in
-`stdlib/Html.dark`, `Http.dark`, and `HttpRequest.dark`, loaded
+`StdLib/Html.dark`, `Http.dark`, and `StdLib/Http/Request.dark`, loaded
 after Blob by `src/driver/StdlibCompilation.ml`.
 
 ## Compatibility matrix
@@ -26,7 +31,7 @@ after Blob by `src/driver/StdlibCompilation.ml`.
 | Blob bridge | Http bodies use `Blob`; `String.toBlob` and the bare `Blob.empty` value supply UTF-8 and empty bodies (`http.dark:4-7,91-208`) | `Blob` uses the compiler's dynamic-buffer layout; `String.toBlob` delegates to Blob and bare module values are materialized by AOT lowering | Parity dependency; no duplicate runtime layout |
 | Query parser | Last duplicate wins; empty segments ignored; bare keys get empty values; extra `=` and `?` are preserved; no percent/plus decoding (`http.dark:10-32`) | Direct immutable Dict accumulation preserves those results (`Http.dark:7-37`) | Parity |
 | Header parser | CRLF normalized; blank/malformed lines omitted; names/values trimmed; extra colons preserved; original name casing retained; last duplicate wins (`http.dark:35-54`) | Direct immutable Dict accumulation preserves those results (`Http.dark:39-66`) | Parity |
-| Request accessors | Parameters split only for exactly one `=`; malformed parameters become whole keys with empty values; order and duplicates remain; duplicate lookup values join with commas. An absent or empty query produces one empty pair under frozen `String.split` behavior (`http.dark:57-88`) | Separate `Stdlib.Http.Request` module ports the exact behavior (`HttpRequest.dark:5-34`) | Parity, intentionally distinct from `parseQueryString` |
+| Request accessors | Parameters split only for exactly one `=`; malformed parameters become whole keys with empty values; order and duplicates remain; duplicate lookup values join with commas. An absent or empty query produces one empty pair under frozen `String.split` behavior (`http.dark:57-88`) | Separate `Stdlib.Http.Request` module ports the exact behavior (`StdLib/Http/Request.dark`) | Parity, intentionally distinct from `parseQueryString` |
 | Response helpers | Exact body/status/header argument order, status codes, spelling and order; HTML/text UTF-8 content types; JSON without charset; arbitrary redirect strings; empty 401/403/404 bodies (`http.dark:91-208`) | All helpers ported using Blob values (`Http.dark:68-121`) | Parity |
 | Cookie boundary | `Cookie` is a record; the only `cookie` implementation is commented out and dependency-incomplete (`http.dark:210-259`). The execution fixture's `setCookie` probes are also commented out | Public structural `Cookie` only; no `cookie` or `setCookie` API. Caller-provided ordered and duplicate `Set-Cookie` pairs pass unchanged through `responseWithHeaders` | Non-gap at pinned revision |
 | JSON boundary | `responseWithJson` accepts a serialized `String` (`http.dark:153-160`) | Same signature; no generic JSON serializer was introduced | Non-gap at pinned revision |
@@ -39,9 +44,9 @@ pinned surface; void-tag detection is internal to Html serialization.
 `test/fixtures/e2e/html_http.e2e` covers compiler-supported Dark syntax, public records and sums,
 qualified aliases, every constructor, rendering boundaries, parser quirks,
 request accessors, Blob bodies, every response helper, ordered duplicate
-`Set-Cookie` headers, and Cookie construction. The exact pinned upstream Html
-and Http execution fixtures are included in normal curated discovery without
-enabling other upstream suites.
+`Set-Cookie` headers, and Cookie construction. The imported Html
+execution fixture has local layout adaptations and is enabled with individual line gates. The imported Http
+fixture is currently whole-file gated; `html_http.e2e` supplies focused coverage.
 
 Interpreter-style multiline list layout and qualified bare type aliases needed
 small parser compatibility support. Recursive Html nodes also required the
@@ -51,8 +56,8 @@ not new Html or Http behavior.
 
 Blob equality remains the interpreter's public handle identity. The compiler
 E2E harness normally evaluates expected expressions as Dark equality; therefore
-the imported Http fixture compares response fields and decoded body bytes
-instead of constructing a second fresh Blob for expected values. This adapts
+the focused `html_http.e2e` fixture compares response fields and decoded body
+bytes instead of constructing a second fresh Blob for expected values. This adapts
 the test oracle without changing Blob or Http semantics: the pinned interpreter
 creates a new ephemeral Blob identity for each `String.toBlob` call
 (`backend/src/Builtins/Builtins.Pure/Libs/String.fs:402-411`), represents that
@@ -107,16 +112,17 @@ declared or chunked body receives 413 before the missing body bytes are read.
 
 This initial server is developed and verified on Linux ARM64. Linux native
 lowering also exists for x86_64, without a cross-target verification claim.
-macOS serving returns an explicit clock-unavailable error until the monotonic
-clock boundary is implemented there. The listener owns and closes accepted
-connections, and each response closes its connection. Reads and writes have
+macOS ARM64 lowering now reads Mach absolute ticks with their queried timebase,
+sets close-on-exec through `fcntl` after socket creation, and converts listener
+poll timeouts to Darwin milliseconds. Native macOS execution remains
+unverified. The listener owns and closes accepted connections, and each response closes its connection. Reads and writes have
 10-second monotonic deadlines; headers retain the existing wire parser's line,
 count, and size caps. Configured body limits range from zero through 100 MiB,
 and request wire buffering is capped at the body limit plus 1 MiB for framing.
 Concurrency, IPv6 listeners, persistent connections, response compression,
 interpreter telemetry integration, and server-side TLS remain follow-up work.
 
-`test/fixtures/e2e/http_server.e2e` covers routing, configuration, framing limits,
+`test/fixtures/e2e/stdlib-internal/http_server.e2e` covers routing, configuration, framing limits,
 and listener ownership. `python3 scripts/test_http_server_peer.py` exercises
 the compiled server against local TCP clients, including fragmented and binary
 bodies, 413/400/408/417/500 responses, HEAD, duplicate headers, bind failure,

@@ -1,9 +1,0 @@
-// network_socket.e2e - Exercise the native socket boundary without an HTTP host.
-
-Stdlib.Network.openTcp4 () |> Stdlib.Result.map Stdlib.Network.close = stdout="Darklang.Stdlib.Result.Result<Unit, Int64>.Ok(())\n" stderr=""
-Stdlib.Network.openUdp4 () |> Stdlib.Result.map Stdlib.Network.closeUdp = stdout="Darklang.Stdlib.Result.Result<Unit, Int64>.Ok(())\n" stderr=""
-Stdlib.Network.openUdp4 () |> Stdlib.Result.andThen (fun socket -> let result = Stdlib.Network.exchangeUdp4 socket [127L, 0L, 0L] 53L (Stdlib.String.toBlob "query") 100L in let _ = Stdlib.Network.closeUdp socket in result) = Error 22L
-Stdlib.Network.openUdp4 () |> Stdlib.Result.andThen (fun socket -> let _ = Stdlib.Network.closeUdp socket in Stdlib.Network.exchangeUdp4 socket [127L, 0L, 0L, 1L] 53L (Stdlib.String.toBlob "query") 100L) = Error 9L
-Stdlib.Network.openUdp6 () |> Stdlib.Result.map Stdlib.Network.closeUdp6 = stdout="Darklang.Stdlib.Result.Result<Unit, Int64>.Ok(())\n" stderr=""
-Stdlib.Network.connectTcp4 [127L, 0L, 0L] 80L 100L = Error 22L
-Stdlib.Network.connectTcp6 [0L, 0L, 0L] 80L 100L = Error 22L

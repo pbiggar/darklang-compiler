@@ -33,14 +33,15 @@
 *)
 (* ELF.ml - Native executable container data structures. *)
 [@@@warning "-30"]
-let ei_MAG0 = Char.chr (0x7F)
+
+let ei_MAG0 = Char.chr 0x7F
 let ei_MAG1 = 'E'
 let ei_MAG2 = 'L'
 let ei_MAG3 = 'F'
-let elfclass64 = Char.chr (2)
-let elfdata2lsb = Char.chr (1)
-let ev_CURRENT = Char.chr (1)
-let elfosabi_NONE = Char.chr (0)
+let elfclass64 = Char.chr 2
+let elfdata2lsb = Char.chr 1
+let ev_CURRENT = Char.chr 1
+let elfosabi_NONE = Char.chr 0
 let et_EXEC = 2
 let em_AARCH64 = 183
 let em_X86_64 = 62
@@ -48,10 +49,22 @@ let pt_LOAD = 1l
 let pf_X = 1l
 let pf_W = 2l
 let pf_R = 4l
+
 (*
    ELF identification bytes shared by all ELF64 backends.
 *)
-let createIdent () = Bytes.init 16 (function 0 -> ei_MAG0 | 1 -> ei_MAG1 | 2 -> ei_MAG2 | 3 -> ei_MAG3 | 4 -> elfclass64 | 5 -> elfdata2lsb | 6 -> ev_CURRENT | 7 -> elfosabi_NONE | _ -> '\000')
+let createIdent () =
+  Bytes.init 16 (function
+    | 0 -> ei_MAG0
+    | 1 -> ei_MAG1
+    | 2 -> ei_MAG2
+    | 3 -> ei_MAG3
+    | 4 -> elfclass64
+    | 5 -> elfdata2lsb
+    | 6 -> ev_CURRENT
+    | 7 -> elfosabi_NONE
+    | _ -> '\000')
+
 (*
    ELF64 Header (64 bytes)
    16 bytes: ELF identification
@@ -69,7 +82,23 @@ let createIdent () = Bytes.init 16 (function 0 -> ei_MAG0 | 1 -> ei_MAG1 | 2 -> 
    Number of section header entries
    Section header string table index
 *)
-type elf64Header = {ident : bytes; typ : int; machine : int; version : int32; entry : int64; phOff : int64; shOff : int64; flags : int32; ehSize : int; phEntSize : int; phNum : int; shEntSize : int; shNum : int; shStrNdx : int}
+type elf64Header = {
+  ident : bytes;
+  typ : int;
+  machine : int;
+  version : int32;
+  entry : int64;
+  phOff : int64;
+  shOff : int64;
+  flags : int32;
+  ehSize : int;
+  phEntSize : int;
+  phNum : int;
+  shEntSize : int;
+  shNum : int;
+  shStrNdx : int;
+}
+
 (*
    ELF64 Program Header (56 bytes)
    Segment type (PT_LOAD)
@@ -81,9 +110,24 @@ type elf64Header = {ident : bytes; typ : int; machine : int; version : int32; en
    Segment size in memory
    Segment alignment
 *)
-type elf64ProgramHeader = {typ : int32; flags : int32; offset : int64; vAddr : int64; pAddr : int64; fileSize : int64; memSize : int64; align : int64}
+type elf64ProgramHeader = {
+  typ : int32;
+  flags : int32;
+  offset : int64;
+  vAddr : int64;
+  pAddr : int64;
+  fileSize : int64;
+  memSize : int64;
+  align : int64;
+}
+
 (*
    Complete ELF binary structure
    Constant string data (placed after code)
 *)
-type elfBinary = {header : elf64Header; programHeaders : elf64ProgramHeader list; machineCode : bytes; stringData : bytes}
+type elfBinary = {
+  header : elf64Header;
+  programHeaders : elf64ProgramHeader list;
+  machineCode : bytes;
+  stringData : bytes;
+}

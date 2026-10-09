@@ -1,5 +1,10 @@
 # Equality, ordering, and comparability parity
 
+Current compiler source review: 2026-10-07 at `7154b0ea9c1a3f53d30984ed17b9e0cc5d8f0dce`.
+See the [current audit](../current-audit.md) for post-port status and validation.
+Older revision pairs and executed counts below are historical evidence, not
+a fresh test result for this revision.
+
 The public prelude contract was revalidated between compiler starting HEAD
 `c609b56ce1ec488afc3146c585b6f45a2fcf22a8` and darklang/dark
 `04fbe9dcc995c6188757d583e273cbd30a3e2d3d`. Implementation comparison commit
@@ -10,7 +15,7 @@ the previous parity document were starting evidence only; every retained
 prelude finding was checked again at the exact revisions above.
 
 JSON's separate serialization and parsing parity boundary is documented in
-[`features/json-parity.md`](json.md).
+[the JSON ledger](json.md).
 
 At the implementation comparison commit the focused matrix passed 140/140
 cases. Performance is outside this contract unless it changes observable
@@ -28,11 +33,12 @@ operators `==`, `!=`, `<`, `>`, `<=`, and `>=` plus the unversioned public
 | Signed and unsigned integers, including 128-bit, and `Int` | Numeric equality within one identical numeric type | Numeric ordering within one identical numeric type |
 | Float | IEEE equality | IEEE ordering |
 | Tuple and list | Recursive and structural | Rejected |
-| Record | Recursive and structural within the same nominal record type | Rejected |
+| Record | Recursive by compatible field layout, including separately named records; assignment remains nominal | Rejected |
 | Constructor | Same nominal sum type, variant, and recursively equal payload | Rejected |
 | Dict | Same mapping, independent of insertion order or HAMT shape; values compare recursively | Rejected |
 | Function | Interpreter identity rules described below | Rejected |
 | Blob | Handle identity, recursively inside equality-capable containers | Rejected |
+| Stream | Handle identity without pulling, recursively inside equality-capable containers | Rejected |
 | RawPtr, RuntimeError | Rejected by the compiler comparison type constraint | Rejected |
 
 `Stdlib.equals<'a>(left, right)` and `Stdlib.notEquals<'a>(left, right)` expose
@@ -43,9 +49,11 @@ helpers, function comparators, Dict mapping comparison, and Blob identity. It
 does not inspect runtime tags and does not add a backend comparison path.
 Arguments are evaluated once each from left to right.
 
-Both operands must resolve through aliases to the same admissible type.
+Operands must resolve through aliases to compatible admissible types.
 Consequently mixed numeric widths, integer/float pairs, Char/String pairs,
-distinct nominal records, and distinct nominal sums are rejected. Comparison
+incompatible record field layouts, and distinct nominal sums are rejected.
+The direct checker additionally permits equality between separately named
+records with recursively compatible field types. Comparison
 admissibility is recursive, including nested tuple, list, record, sum, Dict
 value, and function types. Dict key admission remains the Dict subsystem's
 responsibility; equality uses its existing key semantics without widening the
@@ -85,9 +93,9 @@ failure. Invalid comparisons are never constant-folded into Boolean values.
 RawPtr is a compiler-only representation type and its intrinsic constructor is
 not available in user syntax; the type checker nevertheless rejects RawPtr
 comparison explicitly. RuntimeError is likewise an internal flow type rather
-than an equality value. The interpreter's DDB values compare through database
-reference equality and Streams compare handle identity; neither value category
-exists in compiled programs, so both are interpreter-only and unsupported.
+than an equality value. The interpreter's database-reference category has no native host-service parity
+claim. Compiled Streams exist and compare by handle identity, including inside
+equality-capable containers; ordering remains rejected. See [Streams](streams.md).
 
 UUID parity was revalidated at compiler `84ecd026ef3ae8dc1dddbb693cd4adba1c94265f`
 against darklang/dark `04fbe9dcc995c6188757d583e273cbd30a3e2d3d`
@@ -95,11 +103,8 @@ against darklang/dark `04fbe9dcc995c6188757d583e273cbd30a3e2d3d`
 `backend/testfiles/execution/stdlib/uuid.dark`, and
 `backend/src/Builtins/Builtins.Pure/Libs/Uuid.fs`). The interpreter's DUuid is represented in the compiler as the ordinary Dark
 newtype `Uuid = UUID(UInt128)`. Canonical parsing and formatting are defined in
-`Stdlib.Uuid`; ordinary sum equality supplies structural UUID equality. The
-compiler-only `Stdlib.Uuid.Compatibility.parse_v0` retains the historic
-String-returning parser and `UnsupportedUuidParseError` only as an explicitly
-separate compatibility extension; it is not a substitute for canonical
-`Uuid.parse`.
+`Stdlib.Uuid`; ordinary sum equality supplies structural UUID equality. The current source exposes canonical `Uuid.parse`; the former public
+`Stdlib.Uuid.Compatibility.parse_v0` extension is no longer present.
 
 The post-rebase X-format repair was compared from exact compiler HEAD
 `5b3c52db7c53a6c9ed5d3626b97f395b5a6b76d4` against that same exact
@@ -108,7 +113,7 @@ darklang/dark revision. At the interpreter revision,
 `backend/src/Builtins/Builtins.Pure/Libs/Uuid.fs:43-47` delegates validation to
 `System.Guid.TryParse`. A focused probe of that same call established the
 observable X-format rules retained in compiler source
-`stdlib/Uuid.dark:50-143`: Unicode whitespace is ignored,
+`StdLib/Uuid.dark`: Unicode whitespace is ignored,
 leading zeroes and short fields are accepted, the second and third UInt32
 components contribute their low 16 bits, and overflowing UInt32 or byte fields
 return `BadFormat`. Focused same-source cases are in
@@ -132,27 +137,24 @@ identity data in `backend/src/LibExecution/RuntimeTypes.fs` around lines
 895-935. Public error rendering is in
 `packages/darklang/prettyPrinter/runtimeError.dark` around lines 232-242.
 
-Compiler enforcement and typed comparison plans live in
-`src/frontend/TypeChecking.ml` (type errors at 47-121,
-classification at 1172-1345, helper construction at 5231-5552, and helper
-materialization at 5553-5777). Specialization and structural lowering live in
-`src/passes/anf/AST_to_ANF.ml` (plan materialization at 26-69 and
-closure identity and AOT layout selection at 2516-3204), with
-post-specialization orchestration in `src/CompilerLibrary.ml` at
-832-920. Closure layout reaches
-native code through `src/passes/mir/MIR_to_LIR.ml`.
-Semantic Dict equality is lowered in the type checker through the public
-String-keyed `Dict.toList` mapping view at
-`stdlib/Dict.dark:111-113`,
+Current source enforcement lives in `src/frontend/WrittenOperatorSupport.ml`,
+`src/frontend/WrittenTypeSupport.ml`, and
+`src/frontend/checking/ComparisonPlanning.ml`. Structural helpers and their
+specializations are materialized through the checked preparation and ANF
+pipeline; closure layout reaches native code through
+`src/passes/mir/MIR_to_LIR.ml`.
+Semantic Dict equality is lowered in the type checker through the typed
+`Dict.toList` mapping view at
+`StdLib/Dict.dark`,
 using the layout and key helpers exposed from `src/DarkStdlib.ml`.
 Float conditions and architecture-specific integer conditions remain in the
 shared MIR-to-LIR pass and the ARM64/x64 backends. Focused executable evidence
 is in `test/fixtures/e2e/comparison-parity.e2e`, alongside the existing
 `equality.e2e` and `interpreter_behavior_parity.e2e` suites.
 
-The root wrappers are `stdlib/NoModule.dark`, loaded by
-`driver/StdlibCompilation.fs`. Separate stdlib specialization merges user
+The root wrappers are `StdLib/Root.dark`, loaded by
+`src/driver/StdlibCompilation.ml`. Separate stdlib specialization merges user
 record/sum metadata before materializing structural helpers in
-`driver/StdlibCompilation.fs`; the indexed record view is built in
-`frontend/checking/Types.fs`. Public probes are at
+`src/driver/StdlibCompilation.ml`; the indexed record view is built in
+`src/frontend/checking/Types.ml`. Public probes are at
 `comparison-parity.e2e:35-110,148-156`.

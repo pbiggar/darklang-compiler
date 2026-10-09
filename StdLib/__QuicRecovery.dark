@@ -1,0 +1,193 @@
+// __QuicRecovery.dark - Pure QUIC packet tracking, RTT estimation, NewReno and loss/PTO decisions.
+module Darklang.Stdlib.__QuicRecovery
+
+type Rtt = { latest: Int64, minimum: Int64, smoothed: Int64, variance: Int64 }
+type Congestion = { window: Int64, threshold: Int64, inFlight: Int64, recoveryStart: Int64 }
+type Packet = { number: Int64, at: Int64, size: Int64, token: Int64, payload: Blob }
+type State = {
+  mtu: Int64, rtt: Stdlib.__QuicRecovery.Rtt, congestion: Stdlib.__QuicRecovery.Congestion,
+  largestSent: Int64, largestAcked: Int64, clock: Int64, lastSent: Int64, ptoCount: Int64,
+  packets: List<Stdlib.__QuicRecovery.Packet>
+}
+type Update = { state: Stdlib.__QuicRecovery.State, retransmit: List<Stdlib.__QuicRecovery.Packet>, acknowledged: List<Int64>, probe: Bool }
+
+let __max (a: Int64) (b: Int64) : Int64 = if a > b then a else b
+let __min (a: Int64) (b: Int64) : Int64 = if a < b then a else b
+
+let create (mtu: Int64) : Stdlib.Result.Result<Stdlib.__QuicRecovery.State, String> =
+  if mtu < 1200L || mtu > 4096L then Error "Invalid QUIC recovery datagram size"
+  else Ok (Stdlib.__QuicRecovery.State {
+    mtu = mtu, rtt = Stdlib.__QuicRecovery.Rtt { latest = 0L, minimum = 0L, smoothed = 0L, variance = 0L },
+    congestion = Stdlib.__QuicRecovery.Congestion {
+      window = Stdlib.__QuicRecovery.__min (10L * mtu) (Stdlib.__QuicRecovery.__max (2L * mtu) 14720L),
+      threshold = 4611686018427387903L, inFlight = 0L, recoveryStart = -1L },
+    largestSent = -1L, largestAcked = -1L, clock = 0L, lastSent = 0L, ptoCount = 0L, packets = [] })
+
+let pacingDelay (state: Stdlib.__QuicRecovery.State) (now: Int64) (size: Int64) : Stdlib.Result.Result<Int64, String> =
+  if now < state.clock || now > 4611686018427387903L || size < 1L || size > state.mtu then Error "Invalid QUIC pacing request"
+  else if state.rtt.smoothed == 0L then Ok 0L
+  else
+    let spacing = (size * Stdlib.__QuicRecovery.__min state.rtt.smoothed 60000L + state.congestion.window - 1L) / state.congestion.window in
+    Ok (Stdlib.__QuicRecovery.__max 0L (state.lastSent + spacing - now))
+
+let sent (state: Stdlib.__QuicRecovery.State) (packet: Stdlib.__QuicRecovery.Packet) (ackEliciting: Bool) (probe: Bool)
+  : Stdlib.Result.Result<Stdlib.__QuicRecovery.State, String> =
+  if state.largestSent == 4611686018427387903L then Error "QUIC packet numbers exhausted"
+  else if packet.number != state.largestSent + 1L then Error "QUIC sent packet number is not sequential"
+  else if packet.at < state.clock || packet.at > 4611686018427387903L || packet.size < 1L || packet.size > state.mtu ||
+          packet.token < 0L || packet.token > 4611686018427387903L || Stdlib.Blob.__byteLength packet.payload > 4096L then
+    Error "Invalid QUIC sent packet"
+  else if ackEliciting && Stdlib.List.length state.packets >= 2048 then Error "Too many QUIC outstanding packets"
+  else if ackEliciting && Stdlib.Bool.not probe && packet.size > state.congestion.window - state.congestion.inFlight then
+    Error "QUIC congestion window is full"
+  else Ok (Stdlib.__QuicRecovery.State {
+    mtu = state.mtu, rtt = state.rtt, congestion = Stdlib.__QuicRecovery.Congestion {
+      window = state.congestion.window, threshold = state.congestion.threshold, recoveryStart = state.congestion.recoveryStart,
+      inFlight = state.congestion.inFlight + (if ackEliciting then packet.size else 0L) },
+    largestSent = packet.number, largestAcked = state.largestAcked, clock = packet.at, ptoCount = state.ptoCount,
+    lastSent = if ackEliciting then packet.at else state.lastSent,
+    packets = if ackEliciting then Stdlib.List.append state.packets [packet] else state.packets })
+
+let __contains (ranges: List<Stdlib.__QuicFrames.Range>) (number: Int64) : Bool =
+  Stdlib.List.any ranges (fun range -> number >= range.smallest && number <= range.largest)
+
+let __validRanges (ranges: List<Stdlib.__QuicFrames.Range>) (previous: Int64) (largestSent: Int64) : Bool =
+  match ranges with
+  | [] -> true
+  | range :: rest ->
+    if range.smallest < 0L || range.smallest > range.largest || range.largest > largestSent ||
+       (previous >= 0L && range.largest >= previous - 1L) then false
+    else Stdlib.__QuicRecovery.__validRanges rest range.smallest largestSent
+
+let __sample (rtt: Stdlib.__QuicRecovery.Rtt) (raw: Int64) (delay: Int64) : Stdlib.__QuicRecovery.Rtt =
+  let latest = Stdlib.__QuicRecovery.__max 1L raw in
+  let minimum = if rtt.minimum == 0L then latest else Stdlib.__QuicRecovery.__min latest rtt.minimum in
+  if rtt.smoothed == 0L then Stdlib.__QuicRecovery.Rtt {
+    latest = latest, minimum = minimum, smoothed = latest, variance = latest / 2L }
+  else
+    let adjusted = if latest >= minimum + delay then latest - delay else latest in
+    let difference = if rtt.smoothed > adjusted then rtt.smoothed - adjusted else adjusted - rtt.smoothed in
+    Stdlib.__QuicRecovery.Rtt { latest = latest, minimum = minimum,
+      smoothed = rtt.smoothed + (adjusted - rtt.smoothed) / 8L,
+      variance = rtt.variance + (difference - rtt.variance) / 4L }
+
+let __clear (packet: Stdlib.__QuicRecovery.Packet) (tokens: List<Int64>) : Stdlib.__QuicRecovery.Packet =
+  if Stdlib.List.member tokens packet.token then Stdlib.__QuicRecovery.Packet {
+    number = packet.number, at = packet.at, size = packet.size, token = packet.token, payload = Stdlib.Blob.empty }
+  else packet
+
+let __lossDelay (state: Stdlib.__QuicRecovery.State) : Int64 =
+  let rtt = Stdlib.__QuicRecovery.__max state.rtt.latest state.rtt.smoothed in
+  Stdlib.__QuicRecovery.__max 1L (rtt + rtt / 8L)
+
+let __isLost (largestAcked: Int64) (now: Int64) (delay: Int64) (packet: Stdlib.__QuicRecovery.Packet) : Bool =
+  packet.number <= largestAcked && (largestAcked - packet.number >= 3L || now - packet.at >= delay)
+
+let __bytes (packets: List<Stdlib.__QuicRecovery.Packet>) : Int64 =
+  Stdlib.List.fold packets 0L (fun total packet -> total + packet.size)
+
+let __basePto (state: Stdlib.__QuicRecovery.State) (maxAckDelay: Int64) : Int64 =
+  if state.rtt.smoothed == 0L then 1000L
+  else if state.rtt.smoothed >= 60000L || state.rtt.variance >= 15000L then 60000L
+  else Stdlib.__QuicRecovery.__min 60000L (state.rtt.smoothed + Stdlib.__QuicRecovery.__max (4L * state.rtt.variance) 1L + maxAckDelay)
+
+let __afterLoss (state: Stdlib.__QuicRecovery.State) (now: Int64) (lost: List<Stdlib.__QuicRecovery.Packet>)
+  (remaining: List<Stdlib.__QuicRecovery.Packet>) (acked: List<Stdlib.__QuicRecovery.Packet>) (maxAckDelay: Int64)
+  : Stdlib.__QuicRecovery.Congestion =
+  let bytes = state.congestion.inFlight - Stdlib.__QuicRecovery.__bytes lost in
+  let first = Stdlib.List.fold lost now (fun earlier packet -> Stdlib.__QuicRecovery.__min earlier packet.at) in
+  let last = Stdlib.List.fold lost 0L (fun later packet -> Stdlib.__QuicRecovery.__max later packet.at) in
+  let persistent = state.rtt.smoothed > 0L && Stdlib.List.length lost >= 2 &&
+    last - first >= 3L * Stdlib.__QuicRecovery.__basePto state maxAckDelay &&
+    Stdlib.Bool.not (Stdlib.List.any (Stdlib.List.append remaining acked) (fun packet -> packet.at >= first && packet.at <= last)) in
+  if persistent then Stdlib.__QuicRecovery.Congestion {
+    window = 2L * state.mtu, threshold = Stdlib.__QuicRecovery.__max (2L * state.mtu) (state.congestion.window / 2L),
+    inFlight = bytes, recoveryStart = now }
+  else if Stdlib.List.any lost (fun packet -> packet.at > state.congestion.recoveryStart) then
+    let window = Stdlib.__QuicRecovery.__max (2L * state.mtu) (state.congestion.window / 2L) in
+    Stdlib.__QuicRecovery.Congestion { window = window, threshold = window, inFlight = bytes, recoveryStart = now }
+  else Stdlib.__QuicRecovery.Congestion { window = state.congestion.window, threshold = state.congestion.threshold,
+    inFlight = bytes, recoveryStart = state.congestion.recoveryStart }
+
+let acknowledge (state: Stdlib.__QuicRecovery.State) (ack: Stdlib.__QuicFrames.Ack) (now: Int64) (delayMillis: Int64) (maxAckDelay: Int64)
+  : Stdlib.Result.Result<Stdlib.__QuicRecovery.Update, String> =
+  if now < state.clock || now > 4611686018427387903L || delayMillis < 0L || maxAckDelay < 0L || maxAckDelay >= 16384L then Error "Invalid QUIC ACK timing"
+  else if Stdlib.List.length ack.ranges > 256 || Stdlib.List.isEmpty ack.ranges ||
+          Stdlib.Bool.not (Stdlib.__QuicRecovery.__validRanges ack.ranges -1L state.largestSent) then Error "QUIC ACK acknowledges unsent or invalid packets"
+  else
+    match ack.ranges with
+    | [] -> Builtin.crash "Validated QUIC ACK lacks ranges"
+    | first :: _ ->
+      let newly = Stdlib.List.filter state.packets (fun packet -> Stdlib.__QuicRecovery.__contains ack.ranges packet.number) in
+      let tokens = Stdlib.List.map newly (fun packet -> packet.token) in
+      let rtt = match Stdlib.List.findFirst state.packets (fun packet -> packet.number == first.largest) with
+        | Some packet -> if first.largest < state.largestAcked then state.rtt
+                         else Stdlib.__QuicRecovery.__sample state.rtt (now - packet.at) (Stdlib.__QuicRecovery.__min delayMillis maxAckDelay)
+        | None -> state.rtt in
+      let remaining = Stdlib.List.filter state.packets (fun packet -> Stdlib.Bool.not (Stdlib.__QuicRecovery.__contains ack.ranges packet.number))
+                      |> Stdlib.List.map (fun packet -> Stdlib.__QuicRecovery.__clear packet tokens) in
+      let acknowledgedBytes = Stdlib.__QuicRecovery.__bytes newly in
+      let growingBytes = Stdlib.__QuicRecovery.__bytes (Stdlib.List.filter newly (fun packet -> packet.at > state.congestion.recoveryStart)) in
+      let increase = if state.congestion.window < state.congestion.threshold then growingBytes
+                     else state.mtu * growingBytes / state.congestion.window in
+      let window = Stdlib.__QuicRecovery.__min 16777216L (state.congestion.window + increase) in
+      let largest = Stdlib.__QuicRecovery.__max state.largestAcked first.largest in
+      let intermediate = Stdlib.__QuicRecovery.State {
+        mtu = state.mtu, rtt = rtt, congestion = Stdlib.__QuicRecovery.Congestion {
+          window = window, threshold = state.congestion.threshold, recoveryStart = state.congestion.recoveryStart,
+          inFlight = state.congestion.inFlight - acknowledgedBytes },
+        largestSent = state.largestSent, largestAcked = largest, clock = now,
+        lastSent = state.lastSent,
+        ptoCount = if Stdlib.List.isEmpty newly then state.ptoCount else 0L, packets = remaining } in
+      let lost = Stdlib.List.filter remaining (Stdlib.__QuicRecovery.__isLost largest now (Stdlib.__QuicRecovery.__lossDelay intermediate)) in
+      let kept = Stdlib.List.filter remaining (fun packet -> Stdlib.Bool.not (Stdlib.__QuicRecovery.__isLost largest now (Stdlib.__QuicRecovery.__lossDelay intermediate) packet)) in
+      Ok (Stdlib.__QuicRecovery.Update { acknowledged = tokens, probe = false,
+        retransmit = Stdlib.List.filter lost (fun packet -> Stdlib.Blob.__byteLength packet.payload > 0L),
+        state = Stdlib.__QuicRecovery.State { mtu = state.mtu, rtt = rtt,
+          congestion = Stdlib.__QuicRecovery.__afterLoss intermediate now lost kept newly maxAckDelay,
+          largestSent = state.largestSent, largestAcked = largest, clock = now,
+          lastSent = state.lastSent,
+          ptoCount = intermediate.ptoCount, packets = kept } })
+
+let __pto (state: Stdlib.__QuicRecovery.State) (maxAckDelay: Int64) : Int64 =
+  let base = Stdlib.__QuicRecovery.__basePto state maxAckDelay in
+  // Bound backoff to the connection's finite retry policy, avoiding overflow.
+  let multiplier = Stdlib.Int64.shiftLeft 1L (Stdlib.__QuicRecovery.__min state.ptoCount 16L) in
+  Stdlib.__QuicRecovery.__min 60000L (base * multiplier)
+
+let pto (state: Stdlib.__QuicRecovery.State) (maxAckDelay: Int64) : Stdlib.Result.Result<Int64, String> =
+  if maxAckDelay < 0L || maxAckDelay >= 16384L then Error "Invalid QUIC ACK delay bound"
+  else Ok (Stdlib.__QuicRecovery.__pto state maxAckDelay)
+
+let __deadline (state: Stdlib.__QuicRecovery.State) (maxAckDelay: Int64) : Stdlib.Option.Option<Int64> =
+  match Stdlib.List.reverse state.packets with
+  | [] -> None
+  | latest :: _ ->
+    let pto = latest.at + Stdlib.__QuicRecovery.__pto state maxAckDelay in
+    let loss = Stdlib.List.fold state.packets pto (fun earlier packet ->
+      if packet.number > state.largestAcked then earlier
+      else Stdlib.__QuicRecovery.__min earlier (packet.at + Stdlib.__QuicRecovery.__lossDelay state)) in
+    Some loss
+
+let deadline (state: Stdlib.__QuicRecovery.State) (maxAckDelay: Int64)
+  : Stdlib.Result.Result<Stdlib.Option.Option<Int64>, String> =
+  if maxAckDelay < 0L || maxAckDelay >= 16384L then Error "Invalid QUIC ACK delay bound"
+  else Ok (Stdlib.__QuicRecovery.__deadline state maxAckDelay)
+
+let timeout (state: Stdlib.__QuicRecovery.State) (now: Int64) (maxAckDelay: Int64)
+  : Stdlib.Result.Result<Stdlib.__QuicRecovery.Update, String> =
+  if now < state.clock || now > 4611686018427387903L || maxAckDelay < 0L || maxAckDelay >= 16384L then Error "Invalid QUIC timeout timing"
+  else
+    let lost = Stdlib.List.filter state.packets (Stdlib.__QuicRecovery.__isLost state.largestAcked now (Stdlib.__QuicRecovery.__lossDelay state)) in
+    let kept = Stdlib.List.filter state.packets (fun packet -> Stdlib.Bool.not (Stdlib.__QuicRecovery.__isLost state.largestAcked now (Stdlib.__QuicRecovery.__lossDelay state) packet)) in
+    let expired = match Stdlib.__QuicRecovery.__deadline state maxAckDelay with | None -> false | Some at -> now >= at in
+    let probe = Stdlib.List.isEmpty lost && expired in
+    let retransmit = if probe then Stdlib.List.take (Stdlib.List.filter kept (fun packet -> Stdlib.Blob.__byteLength packet.payload > 0L)) 2
+                     else Stdlib.List.filter lost (fun packet -> Stdlib.Blob.__byteLength packet.payload > 0L) in
+    Ok (Stdlib.__QuicRecovery.Update { probe = probe, retransmit = retransmit, acknowledged = [],
+      state = Stdlib.__QuicRecovery.State { mtu = state.mtu, rtt = state.rtt,
+        congestion = Stdlib.__QuicRecovery.__afterLoss state now lost kept [] maxAckDelay,
+        largestSent = state.largestSent, largestAcked = state.largestAcked, clock = now,
+        lastSent = state.lastSent,
+        ptoCount = if probe then Stdlib.__QuicRecovery.__min (state.ptoCount + 1L) 16L else state.ptoCount,
+        packets = kept } })

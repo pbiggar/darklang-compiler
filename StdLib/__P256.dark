@@ -1,0 +1,222 @@
+// __P256.dark - bounded P-256 ECDSA/SHA-256 verification for TLS signatures.
+
+module Darklang.Stdlib.__P256
+
+type Point = { x: Int, y: Int, z: Int }
+type Affine = { x: Int, y: Int }
+
+let __p () : Int = Stdlib.Int.__value "115792089210356248762697446949407573530086143415290314195533631308867097853951"
+let __n () : Int = Stdlib.Int.__value "115792089210356248762697446949407573529996955224135760342422259061068512044369"
+let __b () : Int = Stdlib.Int.__value "41058363725152142129326129780047268409114441015993725554835256314039467401291"
+let __gx () : Int = Stdlib.Int.__value "48439561293906451759052585252797914202762949526041747995844080717082404635286"
+let __gy () : Int = Stdlib.Int.__value "36134250956749795798585127919587881956611106672985015071877198253568414405109"
+
+// p = 2^256 - 2^224 + 2^192 + 2^96 - 1. Folding the high bits
+// avoids the generic bit-at-a-time big-integer division in every field product.
+let __reduceP (value: Int) (p: Int) (two256: Int) : Int =
+  if Stdlib.Int.lessThan value two256 then
+    if Stdlib.Int.greaterThanOrEqualTo value p then Stdlib.Int.subtract value p
+    else value
+  else
+    let high = Stdlib.Int.shiftRight value 256 in
+    let low = Stdlib.Int.subtract value (Stdlib.Int.shiftLeft high 256) in
+    let added = Stdlib.Int.add (Stdlib.Int.add low high)
+                  (Stdlib.Int.shiftLeft high 224) in
+    let sub192 = Stdlib.Int.subtract added (Stdlib.Int.shiftLeft high 192) in
+    let folded = Stdlib.Int.subtract sub192 (Stdlib.Int.shiftLeft high 96) in
+    Stdlib.__P256.__reduceP folded p two256
+
+let __mod (value: Int) (p: Int) : Int =
+  if p == Stdlib.__P256.__p () then
+    if Stdlib.Int.lessThan value 0 then Stdlib.Int.add value p
+    else Stdlib.__P256.__reduceP value p (Stdlib.Int.shiftLeft 1 256)
+  else Stdlib.Int.mod value p
+let __add (a: Int) (b: Int) (p: Int) : Int =
+  Stdlib.__P256.__mod (Stdlib.Int.add a b) p
+let __sub (a: Int) (b: Int) (p: Int) : Int =
+  Stdlib.__P256.__mod (Stdlib.Int.subtract a b) p
+let __mul (a: Int) (b: Int) (p: Int) : Int =
+  Stdlib.__P256.__mod (Stdlib.Int.multiply a b) p
+let __scale (a: Int) (factor: Int) (p: Int) : Int =
+  Stdlib.__P256.__mul a factor p
+
+let __fromBytes (bytes: Blob) (index: Int64) (value: Int) : Int =
+  if index == Stdlib.Blob.__byteLength bytes then value
+  else
+    Stdlib.__P256.__fromBytes bytes (index + 1L)
+      (Stdlib.Int.add (Stdlib.Int.multiply value 256)
+        (Stdlib.Int.fromInt64 (Stdlib.Blob.__getByte bytes index)))
+
+let __powMod (base: Int) (exponent: Int) (modulus: Int) (acc: Int) : Int =
+  if exponent == 0 then acc
+  else
+    let nextAcc = if Stdlib.Int.mod exponent 2 == 1
+                  then Stdlib.__P256.__mul acc base modulus else acc in
+    Stdlib.__P256.__powMod (Stdlib.__P256.__mul base base modulus)
+      (Stdlib.Int.divide exponent 2) modulus nextAcc
+
+let __inverse (value: Int) (modulus: Int) : Int =
+  Stdlib.__P256.__powMod value (Stdlib.Int.subtract modulus 2) modulus 1
+
+let __infinity () : Stdlib.__P256.Point =
+  Stdlib.__P256.Point { x = 0, y = 1, z = 0 }
+
+let __double (point: Stdlib.__P256.Point) (p: Int) : Stdlib.__P256.Point =
+  if point.z == 0 || point.y == 0 then Stdlib.__P256.__infinity ()
+  else
+    let delta = Stdlib.__P256.__mul point.z point.z p in
+    let gamma = Stdlib.__P256.__mul point.y point.y p in
+    let beta = Stdlib.__P256.__mul point.x gamma p in
+    let alpha = Stdlib.__P256.__scale
+                  (Stdlib.__P256.__mul
+                    (Stdlib.__P256.__sub point.x delta p)
+                    (Stdlib.__P256.__add point.x delta p) p) 3 p in
+    let x = Stdlib.__P256.__sub (Stdlib.__P256.__mul alpha alpha p)
+              (Stdlib.__P256.__scale beta 8 p) p in
+    let z = Stdlib.__P256.__sub
+              (Stdlib.__P256.__sub
+                (Stdlib.__P256.__mul (Stdlib.__P256.__add point.y point.z p)
+                  (Stdlib.__P256.__add point.y point.z p) p) gamma p) delta p in
+    let y = Stdlib.__P256.__sub
+              (Stdlib.__P256.__mul alpha
+                (Stdlib.__P256.__sub (Stdlib.__P256.__scale beta 4 p) x p) p)
+              (Stdlib.__P256.__scale (Stdlib.__P256.__mul gamma gamma p) 8 p) p in
+    Stdlib.__P256.Point { x = x, y = y, z = z }
+
+let __addMixed (point: Stdlib.__P256.Point) (other: Stdlib.__P256.Affine) (p: Int)
+  : Stdlib.__P256.Point =
+  if point.z == 0 then Stdlib.__P256.Point { x = other.x, y = other.y, z = 1 }
+  else
+    let zz = Stdlib.__P256.__mul point.z point.z p in
+    let u = Stdlib.__P256.__mul other.x zz p in
+    let s = Stdlib.__P256.__mul other.y (Stdlib.__P256.__mul point.z zz p) p in
+    let h = Stdlib.__P256.__sub u point.x p in
+    let r = Stdlib.__P256.__sub s point.y p in
+    if h == 0 then
+      if r == 0 then Stdlib.__P256.__double point p else Stdlib.__P256.__infinity ()
+    else
+      let hh = Stdlib.__P256.__mul h h p in
+      let hhh = Stdlib.__P256.__mul h hh p in
+      let v = Stdlib.__P256.__mul point.x hh p in
+      let x = Stdlib.__P256.__sub
+                (Stdlib.__P256.__sub (Stdlib.__P256.__mul r r p) hhh p)
+                (Stdlib.__P256.__scale v 2 p) p in
+      let y = Stdlib.__P256.__sub
+                (Stdlib.__P256.__mul r (Stdlib.__P256.__sub v x p) p)
+                (Stdlib.__P256.__mul point.y hhh p) p in
+      let z = Stdlib.__P256.__mul point.z h p in
+      Stdlib.__P256.Point { x = x, y = y, z = z }
+
+let __affine (point: Stdlib.__P256.Point) (p: Int) : Stdlib.__P256.Affine =
+  let inverse = Stdlib.__P256.__inverse point.z p in
+  let inverse2 = Stdlib.__P256.__mul inverse inverse p in
+  Stdlib.__P256.Affine {
+    x = Stdlib.__P256.__mul point.x inverse2 p,
+    y = Stdlib.__P256.__mul point.y (Stdlib.__P256.__mul inverse2 inverse p) p }
+
+let __onCurve (point: Stdlib.__P256.Affine) (p: Int) : Bool =
+  if Stdlib.Int.lessThan point.x 0 || Stdlib.Int.greaterThanOrEqualTo point.x p ||
+     Stdlib.Int.lessThan point.y 0 || Stdlib.Int.greaterThanOrEqualTo point.y p then false
+  else
+    let left = Stdlib.__P256.__mul point.y point.y p in
+    let right = Stdlib.__P256.__add
+                  (Stdlib.__P256.__sub
+                    (Stdlib.__P256.__mul (Stdlib.__P256.__mul point.x point.x p) point.x p)
+                    (Stdlib.__P256.__scale point.x 3 p) p)
+                  (Stdlib.__P256.__b ()) p in
+    left == right
+
+let __point (spki: Blob) : Stdlib.Result.Result<Stdlib.__P256.Affine, String> =
+  let length = Stdlib.Blob.__byteLength spki in
+  if length != 91L then Error "Invalid P-256 SubjectPublicKeyInfo"
+  else
+    match Stdlib.__RsaSpki.__tlv spki 0L length 48L with
+    | Some ((start, end_)) ->
+      if end_ != length then Error "Invalid P-256 SubjectPublicKeyInfo"
+      else
+        let algorithm = Stdlib.Blob.slice spki (Stdlib.Int.fromInt64 start) 21 in
+        if Stdlib.Blob.toHex algorithm !=
+           "301306072A8648CE3D020106082A8648CE3D030107" ||
+           Stdlib.Blob.toHex (Stdlib.Blob.slice spki 23 4) != "03420004" then
+          Error "Invalid P-256 SubjectPublicKeyInfo"
+        else
+          let x = Stdlib.__P256.__fromBytes (Stdlib.Blob.slice spki 27 32) 0L 0 in
+          let y = Stdlib.__P256.__fromBytes (Stdlib.Blob.slice spki 59 32) 0L 0 in
+          let point = Stdlib.__P256.Affine { x = x, y = y } in
+          if Stdlib.__P256.__onCurve point (Stdlib.__P256.__p ()) then Ok point
+          else Error "P-256 public point is not on curve"
+    | None -> Error "Invalid P-256 SubjectPublicKeyInfo"
+
+let __signature (signature: Blob) : Stdlib.Result.Result<(Int * Int), String> =
+  let length = Stdlib.Blob.__byteLength signature in
+  if length < 70L || length > 72L then Error "Invalid P-256 ECDSA signature"
+  else
+    match Stdlib.__RsaSpki.__tlv signature 0L length 48L with
+    | None -> Error "Invalid P-256 ECDSA signature"
+    | Some ((start, end_)) ->
+      if end_ != length then Error "Invalid P-256 ECDSA signature"
+      else
+        match Stdlib.__RsaSpki.__positiveInteger signature start end_ with
+        | None -> Error "Invalid P-256 ECDSA signature"
+        | Some ((rBytes, second)) ->
+          match Stdlib.__RsaSpki.__positiveInteger signature second end_ with
+          | None -> Error "Invalid P-256 ECDSA signature"
+          | Some ((sBytes, final)) ->
+            if final != end_ || Stdlib.Blob.__byteLength rBytes > 32L ||
+               Stdlib.Blob.__byteLength sBytes > 32L then
+              Error "Invalid P-256 ECDSA signature"
+            else
+              let r = Stdlib.__P256.__fromBytes rBytes 0L 0 in
+              let s = Stdlib.__P256.__fromBytes sBytes 0L 0 in
+              let n = Stdlib.__P256.__n () in
+              if r == 0 || s == 0 || Stdlib.Int.greaterThanOrEqualTo r n ||
+                 Stdlib.Int.greaterThanOrEqualTo s n then
+                Error "Invalid P-256 ECDSA signature"
+              else Ok ((r, s))
+
+let __bit (value: Int) (index: Int64) : Bool =
+  Stdlib.Int.bitwiseAnd
+    (Stdlib.Int.shiftRight value (Stdlib.Int.fromInt64 index)) 1 == 1
+
+let __multiplyBoth (u: Int) (v: Int) (g: Stdlib.__P256.Affine)
+  (q: Stdlib.__P256.Affine) (gq: Stdlib.Option.Option<Stdlib.__P256.Affine>) (index: Int64)
+  (point: Stdlib.__P256.Point) (p: Int) : Stdlib.__P256.Point =
+  if index < 0L then point
+  else
+    let doubled = Stdlib.__P256.__double point p in
+    let next =
+      if Stdlib.__P256.__bit u index then
+        if Stdlib.__P256.__bit v index then
+          match gq with
+          | Some sum -> Stdlib.__P256.__addMixed doubled sum p
+          | None -> doubled
+        else Stdlib.__P256.__addMixed doubled g p
+      else if Stdlib.__P256.__bit v index then Stdlib.__P256.__addMixed doubled q p
+      else doubled in
+    Stdlib.__P256.__multiplyBoth u v g q gq (index - 1L) next p
+
+let verifySha256 (spki: Blob) (message: Blob) (signature: Blob)
+  : Stdlib.Result.Result<Bool, String> =
+  match Stdlib.__P256.__point spki with
+  | Error error -> Error error
+  | Ok q ->
+    match Stdlib.__P256.__signature signature with
+    | Error error -> Error error
+    | Ok ((r, s)) ->
+      let p = Stdlib.__P256.__p () in
+      let n = Stdlib.__P256.__n () in
+      let g = Stdlib.__P256.Affine { x = Stdlib.__P256.__gx (), y = Stdlib.__P256.__gy () } in
+      let gqPoint = Stdlib.__P256.__addMixed
+                      (Stdlib.__P256.Point { x = g.x, y = g.y, z = 1 }) q p in
+      let gq = if gqPoint.z == 0 then None
+               else Some (Stdlib.__P256.__affine gqPoint p) in
+      let z = Stdlib.__P256.__fromBytes (Stdlib.Crypto.sha256 message) 0L 0 in
+      let inverse = Stdlib.__P256.__inverse s n in
+      let u = Stdlib.__P256.__mul z inverse n in
+      let v = Stdlib.__P256.__mul r inverse n in
+      let result = Stdlib.__P256.__multiplyBoth u v g q gq 255L
+                     (Stdlib.__P256.__infinity ()) p in
+      if result.z == 0 then Ok false
+      else
+        let x = (Stdlib.__P256.__affine result p).x in
+        Ok (Stdlib.Int.mod x n == r)

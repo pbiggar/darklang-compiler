@@ -1,0 +1,171 @@
+// __QuicParameters.dark - Bounded RFC 9000 transport parameters and handshake connection-ID binding.
+module Darklang.Stdlib.__QuicParameters
+
+type Sender = Client | Server
+type Value = Bytes of Blob | Number of Int64
+type Entry = { id: Int64, value: Stdlib.__QuicParameters.Value }
+type ConnectionIds = {
+  originalDestination: Blob, initialSource: Blob, retrySource: Stdlib.Option.Option<Blob>
+}
+type PreferredAddress = {
+  ipv4: Blob, ipv4Port: Int64, ipv6: Blob, ipv6Port: Int64,
+  connectionId: Blob, resetToken: Blob
+}
+type Parameters = {
+  originalDestination: Stdlib.Option.Option<Blob>, initialSource: Blob,
+  retrySource: Stdlib.Option.Option<Blob>, resetToken: Stdlib.Option.Option<Blob>,
+  idleTimeout: Int64, maxUdpPayload: Int64, maxData: Int64,
+  maxStreamDataBidiLocal: Int64, maxStreamDataBidiRemote: Int64, maxStreamDataUni: Int64,
+  maxStreamsBidi: Int64, maxStreamsUni: Int64, ackDelayExponent: Int64, maxAckDelay: Int64,
+  disableActiveMigration: Bool, activeConnectionIdLimit: Int64,
+  preferredAddress: Stdlib.Option.Option<Stdlib.__QuicParameters.PreferredAddress>
+}
+
+let __entry (sender: Stdlib.__QuicParameters.Sender) (id: Int64) (bytes: Blob)
+  : Stdlib.Result.Result<Stdlib.__QuicParameters.Entry, String> =
+  let size = Stdlib.Blob.__byteLength bytes in
+  if sender == Stdlib.__QuicParameters.Sender.Client && (id == 0L || id == 2L || id == 13L || id == 16L) then
+    Error "Server-only QUIC transport parameter from client"
+  else if (id == 0L || id == 15L || id == 16L) && size > 20L then Error "QUIC connection ID exceeds 20 bytes"
+  else if id == 2L && size != 16L then Error "Invalid QUIC stateless reset token"
+  else if id == 12L && size != 0L then Error "Invalid QUIC disable active migration parameter"
+  else if id == 13L then
+    if size < 42L || size > 61L then Error "Invalid QUIC preferred address"
+    else if Stdlib.Blob.__getByte bytes 24L == 0L || Stdlib.Blob.__getByte bytes 24L > 20L ||
+            size != 41L + Stdlib.Blob.__getByte bytes 24L then Error "Invalid QUIC preferred address"
+    else Ok (Stdlib.__QuicParameters.Entry { id = id, value = Bytes bytes })
+  else if id == 1L || (id >= 3L && id <= 11L) || id == 14L then
+    match Stdlib.__QuicWire.parseInteger bytes 0L with
+    | Error _ -> Error "Invalid QUIC integer transport parameter"
+    | Ok number ->
+      if number.next != size then Error "Invalid QUIC integer transport parameter"
+      else if id == 3L && number.value < 1200L then Error "QUIC maximum UDP payload is below 1200"
+      else if (id == 8L || id == 9L) && number.value > 1152921504606846976L then Error "QUIC stream count exceeds 2^60"
+      else if id == 10L && number.value > 20L then Error "QUIC ACK delay exponent exceeds 20"
+      else if id == 11L && number.value >= 16384L then Error "QUIC maximum ACK delay exceeds limit"
+      else if id == 14L && number.value < 2L then Error "QUIC active connection ID limit is below 2"
+      else Ok (Stdlib.__QuicParameters.Entry { id = id, value = Number number.value })
+  else Ok (Stdlib.__QuicParameters.Entry { id = id, value = Bytes bytes })
+
+let __entries (sender: Stdlib.__QuicParameters.Sender) (data: Blob) (position: Int64)
+  (seen: List<Int64>) (entries: List<Stdlib.__QuicParameters.Entry>)
+  : Stdlib.Result.Result<List<Stdlib.__QuicParameters.Entry>, String> =
+  if position == Stdlib.Blob.__byteLength data then Ok entries
+  else if Stdlib.List.length seen >= 128 then Error "Too many QUIC transport parameters"
+  else
+    match Stdlib.__QuicWire.parseInteger data position with
+    | Error _ -> Error "Truncated QUIC transport parameter"
+    | Ok id ->
+      if Stdlib.List.member seen id.value then Error "Duplicate QUIC transport parameter"
+      else
+        match Stdlib.__QuicWire.parseInteger data id.next with
+        | Error _ -> Error "Truncated QUIC transport parameter"
+        | Ok length ->
+          if length.value > Stdlib.Blob.__byteLength data - length.next then Error "Truncated QUIC transport parameter"
+          else
+            let bytes = Stdlib.__Http2Wire.__slice data length.next length.value in
+            Stdlib.__QuicParameters.__entry sender id.value bytes |> Stdlib.Result.andThen (fun entry ->
+              Stdlib.__QuicParameters.__entries sender data (length.next + length.value)
+                (Stdlib.List.push seen id.value) (Stdlib.List.push entries entry))
+
+let __number (entries: List<Stdlib.__QuicParameters.Entry>) (id: Int64) (fallback: Int64) : Int64 =
+  match entries with
+  | [] -> fallback
+  | entry :: rest ->
+    if entry.id != id then Stdlib.__QuicParameters.__number rest id fallback
+    else match entry.value with | Number value -> value | Bytes _ -> Builtin.crash "QUIC parameter is not an integer"
+
+let __blob (entries: List<Stdlib.__QuicParameters.Entry>) (id: Int64) : Stdlib.Option.Option<Blob> =
+  match entries with
+  | [] -> None
+  | entry :: rest ->
+    if entry.id != id then Stdlib.__QuicParameters.__blob rest id
+    else match entry.value with | Bytes value -> Some value | Number _ -> Builtin.crash "QUIC parameter is not bytes"
+
+let __preferred (bytes: Blob) : Stdlib.__QuicParameters.PreferredAddress =
+  let length = Stdlib.Blob.__getByte bytes 24L in
+  Stdlib.__QuicParameters.PreferredAddress {
+    ipv4 = Stdlib.__Http2Wire.__slice bytes 0L 4L, ipv4Port = Stdlib.__Tls13.__read16 bytes 4L,
+    ipv6 = Stdlib.__Http2Wire.__slice bytes 6L 16L, ipv6Port = Stdlib.__Tls13.__read16 bytes 22L,
+    connectionId = Stdlib.__Http2Wire.__slice bytes 25L length,
+    resetToken = Stdlib.__Http2Wire.__slice bytes (25L + length) 16L }
+
+// Unknown parameters (including GREASE) are ignored, but still participate in
+// duplicate detection. Integer encodings may legally be non-minimal.
+let parse (sender: Stdlib.__QuicParameters.Sender) (data: Blob)
+  : Stdlib.Result.Result<Stdlib.__QuicParameters.Parameters, String> =
+  if Stdlib.Blob.__byteLength data > 4096L then Error "QUIC transport parameters exceed 4096 bytes"
+  else
+    match Stdlib.__QuicParameters.__entries sender data 0L [] [] with
+    | Error message -> Error message
+    | Ok entries ->
+      let original = Stdlib.__QuicParameters.__blob entries 0L in
+      let preferred = Stdlib.__QuicParameters.__blob entries 13L in
+      match Stdlib.__QuicParameters.__blob entries 15L with
+      | None -> Error "Missing QUIC initial source connection ID"
+      | Some source ->
+        if sender == Stdlib.__QuicParameters.Sender.Server && Stdlib.Option.isNone original then
+          Error "Missing QUIC original destination connection ID"
+        else if Stdlib.Option.isSome preferred && Stdlib.Blob.__byteLength source == 0L then
+          Error "QUIC preferred address requires a nonempty initial source connection ID"
+        else Ok (Stdlib.__QuicParameters.Parameters {
+          originalDestination = original, initialSource = source,
+          retrySource = Stdlib.__QuicParameters.__blob entries 16L,
+          resetToken = Stdlib.__QuicParameters.__blob entries 2L,
+          idleTimeout = Stdlib.__QuicParameters.__number entries 1L 0L,
+          maxUdpPayload = Stdlib.__QuicParameters.__number entries 3L 65527L,
+          maxData = Stdlib.__QuicParameters.__number entries 4L 0L,
+          maxStreamDataBidiLocal = Stdlib.__QuicParameters.__number entries 5L 0L,
+          maxStreamDataBidiRemote = Stdlib.__QuicParameters.__number entries 6L 0L,
+          maxStreamDataUni = Stdlib.__QuicParameters.__number entries 7L 0L,
+          maxStreamsBidi = Stdlib.__QuicParameters.__number entries 8L 0L,
+          maxStreamsUni = Stdlib.__QuicParameters.__number entries 9L 0L,
+          ackDelayExponent = Stdlib.__QuicParameters.__number entries 10L 3L,
+          maxAckDelay = Stdlib.__QuicParameters.__number entries 11L 25L,
+          disableActiveMigration = Stdlib.Option.isSome (Stdlib.__QuicParameters.__blob entries 12L),
+          activeConnectionIdLimit = Stdlib.__QuicParameters.__number entries 14L 2L,
+          preferredAddress = Stdlib.Option.map preferred Stdlib.__QuicParameters.__preferred })
+
+let __sameAt (left: Blob) (right: Blob) (position: Int64) : Bool =
+  if position == Stdlib.Blob.__byteLength left then true
+  else if Stdlib.Blob.__getByte left position != Stdlib.Blob.__getByte right position then false
+  else Stdlib.__QuicParameters.__sameAt left right (position + 1L)
+
+let __same (left: Blob) (right: Blob) : Bool =
+  if Stdlib.Blob.__byteLength left != Stdlib.Blob.__byteLength right then false
+  else Stdlib.__QuicParameters.__sameAt left right 0L
+
+let __retry (actual: Stdlib.Option.Option<Blob>) (expected: Stdlib.Option.Option<Blob>)
+  : Stdlib.Result.Result<Unit, String> =
+  match actual, expected with
+  | None, None -> Ok ()
+  | None, Some _ -> Error "Missing QUIC Retry source connection ID"
+  | Some _, None -> Error "Unexpected QUIC Retry source connection ID"
+  | Some left, Some right ->
+    if Stdlib.Blob.__byteLength right > 20L then Error "Invalid QUIC handshake connection IDs"
+    else if Stdlib.__QuicParameters.__same left right then Ok ()
+    else Error "QUIC Retry source connection ID mismatch"
+
+let parseServer (data: Blob) (ids: Stdlib.__QuicParameters.ConnectionIds)
+  : Stdlib.Result.Result<Stdlib.__QuicParameters.Parameters, String> =
+  if Stdlib.Blob.__byteLength ids.originalDestination > 20L || Stdlib.Blob.__byteLength ids.initialSource > 20L then
+    Error "Invalid QUIC handshake connection IDs"
+  else
+    match Stdlib.__QuicParameters.parse Stdlib.__QuicParameters.Sender.Server data with
+    | Error message -> Error message
+    | Ok parameters ->
+      match parameters.originalDestination with
+      | None -> Builtin.crash "Validated QUIC server parameters lack original connection ID"
+      | Some original ->
+        if Stdlib.__QuicParameters.__same original ids.originalDestination == false then
+          Error "QUIC original destination connection ID mismatch"
+        else if Stdlib.__QuicParameters.__same parameters.initialSource ids.initialSource == false then
+          Error "QUIC initial source connection ID mismatch"
+        else Stdlib.__QuicParameters.__retry parameters.retrySource ids.retrySource |> Stdlib.Result.map (fun _ -> parameters)
+
+let parseClient (data: Blob) (initialSource: Blob)
+  : Stdlib.Result.Result<Stdlib.__QuicParameters.Parameters, String> =
+  if Stdlib.Blob.__byteLength initialSource > 20L then Error "Invalid QUIC handshake connection IDs"
+  else Stdlib.__QuicParameters.parse Stdlib.__QuicParameters.Sender.Client data |> Stdlib.Result.andThen (fun parameters ->
+    if Stdlib.__QuicParameters.__same parameters.initialSource initialSource then Ok parameters
+    else Error "QUIC initial source connection ID mismatch")

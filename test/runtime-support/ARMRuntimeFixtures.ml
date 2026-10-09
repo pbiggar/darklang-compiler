@@ -1,9 +1,14 @@
 (* Build a minimal ARM64 context for native runtime execution checks. *)
 open Dark_compiler
+
 let context source target enabled : ARM64CodeGenTypes.codeGenContext =
-  { ARM64CodeGenTypes.target = target;
-    options = { ARM64CodeGenTypes.defaultOptions with
-                ARM64CodeGenTypes.enableLeakCheck = enabled };
+  {
+    ARM64CodeGenTypes.target;
+    options =
+      {
+        ARM64CodeGenTypes.defaultOptions with
+        ARM64CodeGenTypes.enableLeakCheck = enabled;
+      };
     sumShapeRegistry = StringOrder.Map.empty;
     recordRegistry = StringOrder.Map.empty;
     rawSlotInitRetainTargets = None;
@@ -16,4 +21,5 @@ let context source target enabled : ARM64CodeGenTypes.codeGenContext =
     usedCalleeSaved = [];
     usedCalleeSavedF = [];
     heapOverflowLabel = source;
-    recordLirOpExpansion = None }
+    recordLirOpExpansion = None;
+  }

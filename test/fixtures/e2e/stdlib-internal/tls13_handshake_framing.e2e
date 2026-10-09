@@ -1,0 +1,77 @@
+// tls13_handshake_framing.e2e - fragmented and coalesced TLS handshake messages.
+
+(let first = Stdlib.Blob.fromHex "0200"
+ let second = Stdlib.Blob.fromHex "0003010203"
+ match (first, second) with
+ | (Ok a, Ok b) ->
+   match Stdlib.__Tls13Handshake.feed Stdlib.__Tls13Handshake.empty a with
+   | Error error -> Error error
+   | Ok partial ->
+     match Stdlib.__Tls13Handshake.feed partial.next b with
+     | Error error -> Error error
+     | Ok complete ->
+       match complete.messages with
+       | [message] ->
+         Ok ((Stdlib.List.length partial.messages, message.kind,
+              Stdlib.Blob.toHex message.bytes, Stdlib.Blob.toHex message.body,
+              Stdlib.__Tls13Handshake.finish complete.next))
+       | _ -> Error "Unexpected handshake count"
+ | _ -> Error "Invalid fixture")
+  = Ok ((0, 2L, "02000003010203", "010203", Ok ()))
+
+(let input = Stdlib.Blob.fromHex "0200000301020308000000"
+ match input with
+ | Error _ -> Error "Invalid fixture"
+ | Ok bytes ->
+   match Stdlib.__Tls13Handshake.feed Stdlib.__Tls13Handshake.empty bytes with
+   | Error error -> Error error
+   | Ok result -> Ok (Stdlib.List.map result.messages (fun message -> message.kind)))
+  = Ok [2L, 8L]
+
+(let input = Stdlib.Blob.fromHex "02000003"
+ match input with
+ | Error _ -> Error "Invalid fixture"
+ | Ok bytes ->
+   match Stdlib.__Tls13Handshake.feed Stdlib.__Tls13Handshake.empty bytes with
+   | Error error -> Error error
+   | Ok result -> Stdlib.__Tls13Handshake.finish result.next)
+  = Error "TLS handshake truncated"
+
+(let input = Stdlib.Blob.fromHex "0B080001"
+ match input with
+ | Error _ -> Error "Invalid fixture"
+ | Ok bytes ->
+   match Stdlib.__Tls13Handshake.feed Stdlib.__Tls13Handshake.empty bytes with
+   | Error error -> Error error
+   | Ok _ -> Error "Oversized handshake accepted")
+  = Error "TLS handshake message exceeds size limit"
+
+(let input = Stdlib.Blob.fromHex "08000000"
+ match input with
+ | Error _ -> Error "Invalid fixture"
+ | Ok bytes ->
+   match Stdlib.__Tls13Handshake.feed Stdlib.__Tls13Handshake.empty bytes with
+   | Error error -> Error error
+   | Ok result ->
+     match result.messages with
+     | [message] -> Ok ((message.kind, Stdlib.Blob.toHex message.body))
+     | _ -> Error "Unexpected handshake count")
+  = Ok ((8L, ""))
+
+(let encoded = Stdlib.String.repeat "14000000" 64
+ match Stdlib.Blob.fromHex encoded with
+ | Error _ -> Error "Invalid fixture"
+ | Ok bytes ->
+   match Stdlib.__Tls13Handshake.feed Stdlib.__Tls13Handshake.empty bytes with
+   | Error error -> Error error
+   | Ok result -> Ok (Stdlib.List.length result.messages))
+  = Ok 64
+
+(let encoded = Stdlib.String.repeat "14000000" 65
+ match Stdlib.Blob.fromHex encoded with
+ | Error _ -> Error "Invalid fixture"
+ | Ok bytes ->
+   match Stdlib.__Tls13Handshake.feed Stdlib.__Tls13Handshake.empty bytes with
+   | Error error -> Error error
+   | Ok _ -> Error "Unbounded handshake count accepted")
+  = Error "Too many TLS handshake messages in one record"

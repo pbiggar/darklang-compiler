@@ -1,0 +1,33 @@
+// __QuicWire.dark - Bounded RFC 9000 variable-length integers for QUIC and HTTP/3.
+module Darklang.Stdlib.__QuicWire
+
+type ParseError = Incomplete | Invalid of String
+type Number = { value: Int64, next: Int64 }
+
+let __bytes (value: Int64) (remaining: Int64) (bytes: List<Int64>) : List<Int64> =
+  if remaining == 0L then bytes
+  else Stdlib.__QuicWire.__bytes (value / 256L) (remaining - 1L) (Stdlib.List.push bytes (value % 256L))
+
+let integer (value: Int64) : Stdlib.Result.Result<Blob, String> =
+  if value < 0L || value > 4611686018427387903L then Error "QUIC integer out of range"
+  else
+    let (size, tag) = if value < 64L then (1L, 0L)
+                      else if value < 16384L then (2L, 64L)
+                      else if value < 1073741824L then (4L, 128L) else (8L, 192L) in
+    match Stdlib.__QuicWire.__bytes value size [] with
+    | [] -> Builtin.crash "Empty QUIC integer"
+    | first :: rest -> Ok (Stdlib.Blob.__fromInt64List (Stdlib.List.push rest (first + tag)))
+
+let __read (data: Blob) (position: Int64) (remaining: Int64) (value: Int64) : Int64 =
+  if remaining == 0L then value
+  else Stdlib.__QuicWire.__read data (position + 1L) (remaining - 1L) (value * 256L + Stdlib.Blob.__getByte data position)
+
+let parseInteger (data: Blob) (position: Int64) : Stdlib.Result.Result<Stdlib.__QuicWire.Number, Stdlib.__QuicWire.ParseError> =
+  if position < 0L then Error (Invalid "Invalid QUIC integer offset")
+  else if position >= Stdlib.Blob.__byteLength data then Error Incomplete
+  else
+    let first = Stdlib.Blob.__getByte data position in
+    let tag = first / 64L in
+    let size = if tag == 0L then 1L else if tag == 1L then 2L else if tag == 2L then 4L else 8L in
+    if size > Stdlib.Blob.__byteLength data - position then Error Incomplete
+    else Ok (Stdlib.__QuicWire.Number { value = Stdlib.__QuicWire.__read data (position + 1L) (size - 1L) (first % 64L), next = position + size })

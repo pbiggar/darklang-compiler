@@ -17,16 +17,16 @@ ROOT = Path(__file__).resolve().parents[1]
 DARK = '''// flight.dark - Independent TLS server transcript, Finished and application key probe.
 let arg (index: Int64) : String = Stdlib.Cli.Args.get (Stdlib.Int.fromInt64 index) |> Stdlib.Result.withDefault ""
 let bytes (index: Int64) : Blob = Stdlib.Blob.fromHex (arg index) |> Stdlib.Result.withDefault Stdlib.Blob.empty
-let keys (index: Int64) : Stdlib.Tls13.TrafficKeys = Stdlib.Tls13.TrafficKeys { key = bytes index, iv = bytes (index + 1L), sequence = 0L, cipherSuite = 4865L }
+let keys (index: Int64) : Stdlib.__Tls13.TrafficKeys = Stdlib.__Tls13.TrafficKeys { key = bytes index, iv = bytes (index + 1L), sequence = 0L, cipherSuite = 4865L }
 let print (data: Blob) : Unit = Stdlib.printLine (Stdlib.Blob.toHex data)
 let start () : Stdlib.Result.Result<Unit, String> =
   Stdlib.Blob.fromHex "@CERT@" |> Stdlib.Result.andThen (fun certificate ->
     Stdlib.Blob.fromHex "@KEY@" |> Stdlib.Result.andThen (fun key ->
       Stdlib.TlsServerIdentity.create certificate key |> Stdlib.Result.andThen (fun identity ->
-        Stdlib.Tls13ServerHandshake.start identity (bytes 1L) ["h2", "http/1.1"] None |> Stdlib.Result.andThen (fun flight ->
-          Stdlib.Tls13.serializePlaintext 22L flight.hello |> Stdlib.Result.andThen (fun hello ->
-            Stdlib.Tls13.sealRecord flight.handshakeSend 22L flight.encrypted |> Stdlib.Result.andThen (fun encrypted ->
-              Stdlib.Tls13.sealRecord flight.applicationSend 23L (Stdlib.String.toBlob "server application bytes") |> Stdlib.Result.map (fun application ->
+        Stdlib.__Tls13ServerHandshake.start identity (bytes 1L) ["h2", "http/1.1"] None |> Stdlib.Result.andThen (fun flight ->
+          Stdlib.__Tls13.serializePlaintext 22L flight.hello |> Stdlib.Result.andThen (fun hello ->
+            Stdlib.__Tls13.sealRecord flight.handshakeSend 22L flight.encrypted |> Stdlib.Result.andThen (fun encrypted ->
+              Stdlib.__Tls13.sealRecord flight.applicationSend 23L (Stdlib.String.toBlob "server application bytes") |> Stdlib.Result.map (fun application ->
                 print hello
                 print encrypted.bytes
                 print application.bytes
@@ -38,19 +38,19 @@ let start () : Stdlib.Result.Result<Unit, String> =
 let verify () : Stdlib.Result.Result<Unit, String> =
   let receive = keys 1L in
   let application = keys 4L in
-  let secrets = Stdlib.Tls13ServerHandshake.Secrets { handshakeClient = Stdlib.Blob.empty, handshakeServer = Stdlib.Blob.empty, applicationClient = Stdlib.Blob.empty, applicationServer = Stdlib.Blob.empty } in
-  let flight = Stdlib.Tls13ServerHandshake.Flight { hello = Stdlib.Blob.empty, encrypted = Stdlib.Blob.empty, transcript = Stdlib.Blob.empty, handshakeReceive = receive, handshakeSend = receive, clientFinished = bytes 3L, applicationReceive = application, applicationSend = application, protocol = "h2", secrets = secrets } in
-  match Stdlib.Tls13.parseRecord (bytes 6L) with
+  let secrets = Stdlib.__Tls13ServerHandshake.Secrets { handshakeClient = Stdlib.Blob.empty, handshakeServer = Stdlib.Blob.empty, applicationClient = Stdlib.Blob.empty, applicationServer = Stdlib.Blob.empty } in
+  let flight = Stdlib.__Tls13ServerHandshake.Flight { hello = Stdlib.Blob.empty, encrypted = Stdlib.Blob.empty, transcript = Stdlib.Blob.empty, handshakeReceive = receive, handshakeSend = receive, clientFinished = bytes 3L, applicationReceive = application, applicationSend = application, protocol = "h2", secrets = secrets } in
+  match Stdlib.__Tls13.parseRecord (bytes 6L) with
   | Error _ -> Error "Invalid client record"
-  | Ok record -> Stdlib.Tls13.openRecord receive record |> Stdlib.Result.andThen (fun opened ->
+  | Ok record -> Stdlib.__Tls13.openRecord receive record |> Stdlib.Result.andThen (fun opened ->
     if opened.contentType != 22L then Error "Invalid client handshake content type"
-    else Stdlib.Tls13ServerHandshake.finish flight opened.content |> Stdlib.Result.andThen (fun ready ->
+    else Stdlib.__Tls13ServerHandshake.finish flight opened.content |> Stdlib.Result.andThen (fun ready ->
       let changed = Stdlib.Blob.concat [Stdlib.Blob.slice opened.content 0 35, Stdlib.Blob.__fromInt64List [Stdlib.Int64.bitwiseXor (Stdlib.Blob.__getByte opened.content 35L) 1L]] in
-      let rejects = match Stdlib.Tls13ServerHandshake.finish flight changed with | Error _ -> true | Ok _ -> false in
-      let truncates = match Stdlib.Tls13ServerHandshake.finish flight (Stdlib.Blob.slice opened.content 0 35) with | Error _ -> true | Ok _ -> false in
-      match Stdlib.Tls13.parseRecord record.remaining with
+      let rejects = match Stdlib.__Tls13ServerHandshake.finish flight changed with | Error _ -> true | Ok _ -> false in
+      let truncates = match Stdlib.__Tls13ServerHandshake.finish flight (Stdlib.Blob.slice opened.content 0 35) with | Error _ -> true | Ok _ -> false in
+      match Stdlib.__Tls13.parseRecord record.remaining with
       | Error _ -> Error "Missing client application data"
-      | Ok data -> Stdlib.Tls13.openRecord ready.receive data |> Stdlib.Result.map (fun chunk ->
+      | Ok data -> Stdlib.__Tls13.openRecord ready.receive data |> Stdlib.Result.map (fun chunk ->
         Stdlib.printLine (if rejects && truncates && chunk.contentType == 23L && Stdlib.Blob.toHex chunk.content == Stdlib.Blob.toHex (Stdlib.String.toBlob "client application bytes") then "DONE" else "FAILED"))))
 match (if arg 0L == "start" then start () else verify ()) with
 | Error message -> Stdlib.printLine message

@@ -16,7 +16,7 @@ SOURCE = '''// qpack.dark - Decode independent field sections and re-encode with
 match Stdlib.Cli.Args.get 0 with
 | Error _ -> Stdlib.printLine "Missing block"
 | Ok hex ->
-  match Stdlib.Blob.fromHex hex |> Stdlib.Result.andThen Stdlib.Qpack.decode |> Stdlib.Result.andThen Stdlib.Qpack.encode with
+  match Stdlib.Blob.fromHex hex |> Stdlib.Result.andThen Stdlib.__Qpack.decode |> Stdlib.Result.andThen Stdlib.__Qpack.encode with
   | Error message -> Stdlib.printLine message
   | Ok encoded -> Stdlib.printLine (Stdlib.Blob.toHex encoded)
 '''

@@ -41,7 +41,7 @@ let checksum (arr: List<Int64>) : Int64 =
     checksumHelper arr 0L 0L
 
 let benchmarkArg (index: Int) : Int64 =
-    match Stdlib.Cli.Args.int64 index with
+    match Stdlib.Cli.__Args.int64 index with
     | Ok value -> value
     | Error message -> Builtin.testRuntimeError message
 

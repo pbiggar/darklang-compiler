@@ -249,7 +249,7 @@ if [ "$SMOKE_MODE" = true ]; then
                 continue
             fi
         else
-            if ! MAIN_BUILD_OUTPUT=$("$PROJECT_ROOT/dark" "$MAIN_SOURCE" -o "$MAIN_BINARY" -q 2>&1); then
+            if ! MAIN_BUILD_OUTPUT=$("$PROJECT_ROOT/dark" --allow-internal "$MAIN_SOURCE" -o "$MAIN_BINARY" -q 2>&1); then
                 BUILD_FAILURES+=("main|$bench|$(concise_failure "$MAIN_BUILD_OUTPUT")")
                 continue
             fi
@@ -315,7 +315,7 @@ for bench in $BENCHMARKS; do
     if [ "$FORCE_BUILD" = true ] || [ ! -x "$QUICK_BIN" ] || [ "$QUICK_DARK" -nt "$QUICK_BIN" ] || [ "$COMPILER_EXE" -nt "$QUICK_BIN" ]; then
         NEEDS_BUILD=true
     fi
-    if [ "$NEEDS_BUILD" = true ] && ! "$PROJECT_ROOT/dark" --emit-result "$QUICK_DARK" -o "$QUICK_BIN" -q 2>/dev/null; then
+    if [ "$NEEDS_BUILD" = true ] && ! "$PROJECT_ROOT/dark" --allow-internal --emit-result "$QUICK_DARK" -o "$QUICK_BIN" -q 2>/dev/null; then
         BUILD_FAILURES+=("$bench")
         continue
     fi

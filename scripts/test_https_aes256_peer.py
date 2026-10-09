@@ -76,7 +76,7 @@ def main() -> None:
         source = directory / "client.dark"
         if response_mode == "stream":
             operation = f'''    let authorities = if host == "badroot" then [] else roots in
-    match Stdlib.HttpClient.streamTrustedWithRoots authorities "GET" "https://localhost:{port}/" [] Stdlib.Blob.empty with
+    match Stdlib.HttpClient.__streamTrustedWithRoots authorities "GET" "https://localhost:{port}/" [] Stdlib.Blob.empty with
     | Error _ -> Stdlib.printLine "TLS failed: stream request"
     | Ok response ->
       let bytes = Stdlib.Stream.toBlob response.body in
@@ -86,12 +86,12 @@ def main() -> None:
       else Stdlib.printLine "Unexpected HTTP response"
 '''
         else:
-            operation = f'''    match Stdlib.Network.connectTcp4 [127L, 0L, 0L, 1L] {port}L 2000L with
+            operation = f'''    match Stdlib.__Network.connectTcp4 [127L, 0L, 0L, 1L] {port}L 2000L with
     | Error _ -> Stdlib.printLine "TCP connect failed"
     | Ok connection ->
       let request = Stdlib.String.toBlob "GET / HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n" in
-      let response = Stdlib.Tls13Client.exchange connection host "GET" roots request in
-      let _ = Stdlib.Network.closeTcp connection in
+      let response = Stdlib.__Tls13Client.exchange connection host "GET" roots request in
+      let _ = Stdlib.__Network.closeTcp connection in
       match response with
       | Error message -> Stdlib.printLine ("TLS failed: " ++ message)
       | Ok bytes ->
@@ -104,13 +104,13 @@ def main() -> None:
           else Stdlib.printLine "Unexpected HTTP response"
 '''
         source.write_text(f'''// client.dark - Local TLS cipher interoperability probe.
-let host = match Stdlib.Cli.Args.get 0 with
+let host = match Stdlib.Cli.__Args.get 0 with
            | Ok value -> value
            | Error _ -> "localhost" in
 match Stdlib.Cli.FileSystem.readFile "{ca_cert}" with
 | Error _ -> Stdlib.printLine "CA read failed"
 | Ok pem ->
-  match Stdlib.Tls13Client.parsePemBundle pem with
+  match Stdlib.__Tls13Client.parsePemBundle pem with
   | Error message -> Stdlib.printLine message
   | Ok roots ->
 {operation}

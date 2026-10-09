@@ -1,0 +1,84 @@
+// POSIX host behavior from the upstream package: descriptors, errors, paths.
+match Stdlib.Cli.Posix.fdRead (-1) 8 with | Error e -> e.errno | Ok _ -> 0 = 9
+match Stdlib.Cli.Posix.fdRead (-1) (-1) with | Error e -> e.errno | Ok _ -> 0 = 22
+match Stdlib.Cli.Posix.fdClose (-1) with | Error e -> e.errno | Ok _ -> 0 = 9
+match Stdlib.Cli.Posix.stat "/definitely/missing/dark-posix-file" with | Error e -> e.errno | Ok _ -> 0 = 2
+Stdlib.Cli.Posix.fnmatch "[a-c]?*.dark" "b-file.dark" false = true
+Stdlib.Cli.Posix.fnmatch "*" "a/b" true = false
+Stdlib.Cli.Posix.fnmatch "[!a-c]" "z" false = true
+Stdlib.Cli.Posix.fnmatch "\\*" "*" false = true
+let temp = Stdlib.Cli.File.createTemp () in match temp with | Error _ -> false | Ok path -> let wrote = Stdlib.Cli.File.writeText path "abcdef" in let contents = Stdlib.Cli.File.readText path in let removed = Stdlib.Cli.File.delete path in (wrote, contents, removed) == (Ok (), Ok "abcdef", Ok ()) = true isolated=true
+
+// Public upstream algorithms exercise the builtin boundary without a shell.
+match Stdlib.Cli.Posix.stat "/" with | Ok s -> Stdlib.Int.bitwiseAnd s.mode 61440 == 16384 | Error _ -> false = true
+match Stdlib.Cli.Posix.getCwd () with | Ok path -> Stdlib.String.startsWith path "/" | Error _ -> false = true
+match Stdlib.Cli.Posix.uname () with | Ok ((os, host, machine)) -> os != "" && host != "" && machine != "" | Error _ -> false = true
+Stdlib.Cli.Posix.getenv "DARK_POSIX_ENV" = Some "value\n " env="DARK_POSIX_ENV=value\n "
+let set = Stdlib.Cli.Posix.setenv "DARK_POSIX_MUTABLE" "exact\n " in let value = Stdlib.Cli.Posix.getenv "DARK_POSIX_MUTABLE" in let unset = Stdlib.Cli.Posix.unsetenv "DARK_POSIX_MUTABLE" in (set, value, unset, Stdlib.Cli.Posix.getenv "DARK_POSIX_MUTABLE") = (Ok (), Some "exact\n ", Ok (), None) isolated=true
+match Stdlib.Cli.Posix.setenv "bad=name" "x" with | Error e -> e.errno | Ok _ -> 0 = 22
+match Stdlib.Cli.Posix.flock (-1) true with | Error e -> e.errno | Ok _ -> 0 = 9
+match Stdlib.Cli.Posix.fdSeekFromStart (-1) 0 with | Error e -> e.errno | Ok _ -> 0 = 9
+match Stdlib.Cli.Posix.readlink "/definitely/missing/dark-posix-link" with | Error e -> e.errno | Ok _ -> 0 = 2
+match Stdlib.Cli.Posix.listDir "/" with | Ok entries -> Stdlib.List.length entries > 0 | Error _ -> false = true
+
+// directories
+Stdlib.Cli.Dir.withTemp (fun dir -> let nested = dir ++ "/one/two" in let created = Stdlib.Cli.Dir.createRecursive nested in let listed = Stdlib.Cli.Dir.list (dir ++ "/one") in let exists = Stdlib.Cli.Posix.isDirectory nested in (created, listed, exists) == (Ok (), Ok ["two"], true)) = Ok true isolated=true
+
+// cwd
+Stdlib.Cli.Dir.withTemp (fun dir -> let before = Stdlib.Cli.Posix.getCwd () in let changed = Stdlib.Cli.Dir.setCurrent dir in let current = Stdlib.Cli.Dir.current () in let restored = match before with | Ok path -> Stdlib.Cli.Dir.setCurrent path | Error e -> Error e in (changed, current, restored) == (Ok (), Ok dir, Ok ())) = Ok true isolated=true
+
+// copy/move/metadata (upstream areIdentical compares ephemeral Blob identity)
+Stdlib.Cli.Dir.withTemp (fun dir -> let a = dir ++ "/a" in let b = dir ++ "/b" in let c = dir ++ "/c" in let wrote = Stdlib.Cli.File.writeText a "abc" in let chmod = Stdlib.Cli.File.setPermissions a 384 in let copied = Stdlib.Cli.File.copy a b in let same = Stdlib.Cli.File.areIdentical a b in let moved = Stdlib.Cli.File.move b c in let mode = match Stdlib.Cli.Posix.stat c with | Ok s -> Stdlib.Int.bitwiseAnd s.mode 511 | Error _ -> 0 in (wrote, chmod, copied, same, moved, Stdlib.Cli.File.size c, mode, Stdlib.Cli.File.exists b) == (Ok (), Ok (), Ok (), Ok false, Ok (), Ok 3, 384, false)) = Ok true isolated=true
+
+// touch
+Stdlib.Cli.Dir.withTemp (fun dir -> let path = dir ++ "/touch" in let created = Stdlib.Cli.File.touch path in let touched = Stdlib.Cli.File.touch path in let mtime = match Stdlib.Cli.File.getModifiedTime path with | Ok time -> time > 0 | Error _ -> false in (created, touched, Stdlib.Cli.File.size path, mtime) == (Ok (), Ok (), Ok 0, true)) = Ok true isolated=true
+
+// atomic/append/transform
+Stdlib.Cli.Dir.withTemp (fun dir -> let path = dir ++ "/atomic" in let wrote = Stdlib.Cli.File.writeAtomic path "abc" in let appended = Stdlib.Cli.File.appendText path "d" in let transformed = Stdlib.Cli.File.transform path (fun text -> text ++ "e") in (wrote, appended, transformed, Stdlib.Cli.File.readText path) == (Ok (), Ok (), Ok (), Ok "abcde")) = Ok true isolated=true
+
+// lock
+Stdlib.Cli.Dir.withTemp (fun dir -> let path = dir ++ "/lock" in let first = Stdlib.Cli.File.withLock path (fun () -> 42) in let second = Stdlib.Cli.File.withLock path (fun () -> 43) in (first, second) == (Ok 42, Ok 43)) = Ok true isolated=true
+
+// symlink
+Stdlib.Cli.Dir.withTemp (fun dir -> let target = dir ++ "/target" in let link = dir ++ "/link" in let wrote = Stdlib.Cli.File.writeText target "kept" in let linked = Stdlib.Cli.File.createSymlink target link in let read = Stdlib.Cli.File.readSymlink link in let symlink = Stdlib.Cli.Posix.isSymlink link in let rejected = match Stdlib.Cli.File.readText link with | Error _ -> true | Ok _ -> false in let unlinked = Stdlib.Cli.File.delete link in (wrote, linked, read, symlink, rejected, unlinked, Stdlib.Cli.File.readText target) == (Ok (), Ok (), Ok target, Ok true, true, Ok (), Ok "kept")) = Ok true isolated=true
+
+// symlink traversal
+Stdlib.Cli.Dir.withTemp (fun dir -> let target = dir ++ "/target" in let link = dir ++ "/link" in let made = Stdlib.Cli.Dir.create target in let linked = Stdlib.Cli.File.createSymlink target link in let rejected = match Stdlib.Cli.File.writeText (link ++ "/bad") "x" with | Error _ -> true | Ok _ -> false in (made, linked, rejected, Stdlib.Cli.File.exists (target ++ "/bad")) == (Ok (), Ok (), true, false)) = Ok true isolated=true
+
+// recursive walk/glob/size
+Stdlib.Cli.Dir.withTemp (fun dir -> let nested = dir ++ "/a" in let made = Stdlib.Cli.Dir.create nested in let wrote = Stdlib.Cli.File.writeText (nested ++ "/x.dark") "abc" in let glob = Stdlib.Cli.File.glob dir "**/*.dark" in let size = Stdlib.Cli.Dir.size dir in let walk = match Stdlib.Cli.Dir.walk dir with | Ok paths -> Stdlib.List.length paths | Error _ -> 0 in (made, wrote, glob, size, walk) == (Ok (), Ok (), Ok [nested ++ "/x.dark"], Ok 3, 2)) = Ok true isolated=true
+
+// directory error
+Stdlib.Cli.Dir.withTemp (fun dir -> let made = Stdlib.Cli.Dir.create (dir ++ "/one") in let duplicate = match Stdlib.Cli.Dir.create (dir ++ "/one") with | Error e -> e.errno | Ok _ -> 0 in let wrote = Stdlib.Cli.File.writeText (dir ++ "/one/file") "x" in let nonempty = match Stdlib.Cli.Dir.delete (dir ++ "/one") with | Error _ -> true | Ok _ -> false in (made, duplicate, wrote, nonempty) == (Ok (), 17, Ok (), true)) = Ok true isolated=true
+
+// watch polling
+Stdlib.Cli.Dir.withTemp (fun dir -> let path = dir ++ "/watched" in let marker = dir ++ "/marker" in let wrote = Stdlib.Cli.File.writeText path "x" in let watched = Stdlib.Cli.File.watchLoop path 0.0 (-1) (fun () -> Stdlib.Cli.File.exists marker) (fun () -> let _ = Stdlib.Cli.File.writeText marker "called" in ()) in (wrote, watched, Stdlib.Cli.File.readText marker) == (Ok (), Ok (), Ok "called")) = Ok true isolated=true
+
+// watch stop
+Stdlib.Cli.Dir.withTemp (fun dir -> let path = dir ++ "/watch" in let wrote = Stdlib.Cli.File.writeText path "x" in let watched = Stdlib.Cli.File.watch path 0.0 (fun () -> true) (fun () -> ()) in (wrote, watched) == (Ok (), Ok ())) = Ok true isolated=true
+
+// file tail
+Stdlib.Cli.Dir.withTemp (fun dir -> let path = dir ++ "/lines" in let wrote = Stdlib.Cli.File.writeText path "one\ntwo\nthree" in (wrote, Stdlib.Cli.File.readLastLines path 2, Stdlib.Cli.File.readLastLines path 0, Stdlib.Cli.File.readLines path) == (Ok (), Ok ["two", "three"], Ok [], Ok ["one", "two", "three"])) = Ok true isolated=true
+
+// descriptor seek/eof
+Stdlib.Cli.Dir.withTemp (fun dir -> let path = dir ++ "/descriptor" in match Stdlib.Cli.Posix.openFile path (Stdlib.Int.bitwiseOr (Stdlib.Cli.Posix.OpenFlags.rdwr ()) (Stdlib.Cli.Posix.OpenFlags.creat ())) 384 with | Error _ -> false | Ok fd -> let wrote = Stdlib.Cli.Posix.fdWrite fd (Stdlib.Blob.fromString "a\0b") in let seek = Stdlib.Cli.Posix.fdSeekFromStart fd 1 in let bytes = Stdlib.Cli.Posix.fdRead fd 2 |> Stdlib.Result.map Stdlib.Blob.toHex in let eof = Stdlib.Cli.Posix.fdRead fd 2 |> Stdlib.Result.map Stdlib.Blob.length in let closed = Stdlib.Cli.Posix.fdClose fd in let invalid = match Stdlib.Cli.Posix.fdRead fd 1 with | Error e -> e.errno | Ok _ -> 0 in (wrote, seek, bytes, eof, closed, invalid) == (Ok 3, Ok 1, Ok "0062", Ok 0, Ok (), 9)) = Ok true isolated=true
+
+// 64 bit seek
+Stdlib.Cli.Dir.withTemp (fun dir -> let path = dir ++ "/sparse" in match Stdlib.Cli.Posix.openFile path (Stdlib.Int.bitwiseOr (Stdlib.Cli.Posix.OpenFlags.rdwr ()) (Stdlib.Cli.Posix.OpenFlags.creat ())) 384 with | Error _ -> false | Ok fd -> let seek = Stdlib.Cli.Posix.fdSeekFromStart fd 4294967296 in let wrote = Stdlib.Cli.Posix.fdWrite fd (Stdlib.Blob.fromString "z") in let closed = Stdlib.Cli.Posix.fdClose fd in (seek, wrote, closed, Stdlib.Cli.File.size path) == (Ok 4294967296, Ok 1, Ok (), Ok 4294967297)) = Ok true isolated=true
+
+// owner
+Stdlib.Cli.Dir.withTemp (fun dir -> let path = dir ++ "/owned" in let wrote = Stdlib.Cli.File.writeText path "x" in let owner = match Stdlib.Cli.File.getOwner path with | Ok name -> name != "" | Error _ -> false in wrote == Ok () && owner) = Ok true isolated=true
+
+// recursive write
+Stdlib.Cli.Dir.withTemp (fun dir -> let path = dir ++ "/nested/second/file" in let wrote = Stdlib.Cli.FileSystem.writeFile path (Stdlib.Blob.fromString "contents") in (wrote, Stdlib.Cli.File.readText path) == (Ok (), Ok "contents")) = Ok true isolated=true
+
+Stdlib.Cli.File.withTemp (fun path -> Stdlib.Cli.File.exists path) = Ok true isolated=true
+
+// Negative counts, empty writes, and malformed flag names are distinct cases.
+Stdlib.Cli.Posix.fdWrite (-1) Stdlib.Blob.empty = Ok 0
+Stdlib.Cli.Posix.fnmatch "[[:digit:]]" "7" false = true
+Stdlib.Cli.Posix.fnmatch "[]a]" "]" false = true
+Stdlib.Cli.Posix.fnmatch "[[:alpha:]]" "A" false = true
+Stdlib.Cli.Posix.fnmatch "[" "[" false = true
+Stdlib.Cli.Posix.OpenFlags.flag "unknown" = error="Uncaught exception: unknown open() flag `unknown`"
+Stdlib.Cli.Posix.fdClose 4294967299 = error="Uncaught exception: Encountered out-of-range value for type of Int"

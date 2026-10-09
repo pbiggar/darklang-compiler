@@ -1,0 +1,352 @@
+// __X509Identity.dark - bounded DER leaf identity and DNS hostname checks.
+
+module Darklang.Stdlib.__X509Identity
+
+type Tlv = { tag: Int64, content: Int64, end_: Int64 }
+// Name and time checks on this type do not authenticate a certificate chain.
+type UnverifiedLeafIdentity = { notBefore: Int64, notAfter: Int64, dnsNames: List<String> }
+
+let __readLengthBytes (data: Blob) (index: Int64) (remaining: Int64)
+  (value: Int64) : Int64 =
+  if remaining == 0L then value
+  else Stdlib.__X509Identity.__readLengthBytes data (index + 1L) (remaining - 1L)
+         (value * 256L + Stdlib.Blob.__getByte data index)
+
+// DER uses definite, shortest-form lengths. The limit is the enclosing value.
+let __tlv (data: Blob) (offset: Int64) (limit: Int64)
+  : Stdlib.Result.Result<Stdlib.__X509Identity.Tlv, String> =
+  if offset < 0L || offset + 2L > limit then Error "Truncated DER value"
+  else
+    let marker = Stdlib.Blob.__getByte data (offset + 1L) in
+    let count = Stdlib.Int64.bitwiseAnd marker 127L in
+    let longForm = marker >= 128L in
+    if Stdlib.Int64.bitwiseAnd (Stdlib.Blob.__getByte data offset) 31L == 31L then
+      Error "Unsupported DER tag number"
+    else if longForm && (count == 0L || count > 4L || offset + 2L + count > limit) then
+      Error "Invalid DER length"
+    else
+      let length =
+        if longForm then Stdlib.__X509Identity.__readLengthBytes data (offset + 2L) count 0L
+        else marker in
+      let content = if longForm then offset + 2L + count else offset + 2L in
+      let minimum = if count == 1L then 128L else if count == 2L then 256L
+                    else if count == 3L then 65536L else 16777216L in
+      if longForm && length < minimum then Error "Non-canonical DER length"
+      else if length > limit - content then Error "DER value exceeds parent"
+      else Ok (Stdlib.__X509Identity.Tlv {
+        tag = Stdlib.Blob.__getByte data offset,
+        content = content,
+        end_ = content + length })
+
+let __expect (data: Blob) (offset: Int64) (limit: Int64) (tag: Int64)
+  : Stdlib.Result.Result<Stdlib.__X509Identity.Tlv, String> =
+  match Stdlib.__X509Identity.__tlv data offset limit with
+  | Error message -> Error message
+  | Ok item -> if item.tag == tag then Ok item else Error "Unexpected DER tag"
+
+let __slice (data: Blob) (start: Int64) (end_: Int64) : Blob =
+  Stdlib.Blob.slice data (Stdlib.Int.fromInt64 start)
+    (Stdlib.Int.fromInt64 (end_ - start))
+
+let __digit (data: Blob) (index: Int64) : Int64 =
+  Stdlib.Blob.__getByte data index - 48L
+
+let __digits (data: Blob) (start: Int64) (count: Int64)
+  (index: Int64) (value: Int64) : Int64 =
+  if index == count then value
+  else Stdlib.__X509Identity.__digits data start count (index + 1L)
+         (value * 10L + Stdlib.__X509Identity.__digit data (start + index))
+
+let __allDigits (data: Blob) (start: Int64) (count: Int64) (index: Int64) : Bool =
+  if index == count then true
+  else
+    let byte = Stdlib.Blob.__getByte data (start + index) in
+    byte >= 48L && byte <= 57L &&
+    Stdlib.__X509Identity.__allDigits data start count (index + 1L)
+
+let __leap (year: Int64) : Bool =
+  year % 4L == 0L && (year % 100L != 0L || year % 400L == 0L)
+
+let __daysInMonth (year: Int64) (month: Int64) : Int64 =
+  if month == 2L then if Stdlib.__X509Identity.__leap year then 29L else 28L
+  else if month == 4L || month == 6L || month == 9L || month == 11L then 30L
+  else 31L
+
+let __timestamp (year: Int64) (month: Int64) (day: Int64)
+  (hour: Int64) (minute: Int64) (second: Int64) : Int64 =
+  (((((year * 100L + month) * 100L + day) * 100L + hour) * 100L + minute) * 100L + second)
+
+let __time (data: Blob) (item: Stdlib.__X509Identity.Tlv)
+  : Stdlib.Result.Result<Int64, String> =
+  let length = item.end_ - item.content in
+  let digits = if item.tag == 23L then 12L else 14L in
+  if (item.tag != 23L && item.tag != 24L) || length != digits + 1L ||
+     Stdlib.Blob.__getByte data (item.end_ - 1L) != 90L ||
+     Stdlib.Bool.not (Stdlib.__X509Identity.__allDigits data item.content digits 0L) then
+    Error "Invalid X.509 validity time"
+  else
+    let yearDigits = if item.tag == 23L then 2L else 4L in
+    let encodedYear = Stdlib.__X509Identity.__digits data item.content yearDigits 0L 0L in
+    let year =
+      if item.tag == 23L then
+        if encodedYear >= 50L then 1900L + encodedYear else 2000L + encodedYear
+      else encodedYear in
+    let month = Stdlib.__X509Identity.__digits data (item.content + yearDigits) 2L 0L 0L in
+    let day = Stdlib.__X509Identity.__digits data (item.content + yearDigits + 2L) 2L 0L 0L in
+    let hour = Stdlib.__X509Identity.__digits data (item.content + yearDigits + 4L) 2L 0L 0L in
+    let minute = Stdlib.__X509Identity.__digits data (item.content + yearDigits + 6L) 2L 0L 0L in
+    let second = Stdlib.__X509Identity.__digits data (item.content + yearDigits + 8L) 2L 0L 0L in
+    if year == 0L || month < 1L || month > 12L || day < 1L ||
+       day > Stdlib.__X509Identity.__daysInMonth year month || hour > 23L ||
+       minute > 59L || second > 59L then
+      Error "Invalid X.509 calendar date"
+    else Ok (Stdlib.__X509Identity.__timestamp year month day hour minute second)
+
+let __validity (data: Blob) (item: Stdlib.__X509Identity.Tlv)
+  : Stdlib.Result.Result<(Int64 * Int64), String> =
+  match Stdlib.__X509Identity.__tlv data item.content item.end_ with
+  | Error message -> Error message
+  | Ok first ->
+      match Stdlib.__X509Identity.__tlv data first.end_ item.end_ with
+      | Error message -> Error message
+      | Ok second ->
+          if second.end_ != item.end_ then Error "Trailing X.509 validity data"
+          else
+            match (Stdlib.__X509Identity.__time data first,
+                   Stdlib.__X509Identity.__time data second) with
+            | (Ok before, Ok after) ->
+                if before <= after then Ok ((before, after))
+                else Error "Reversed X.509 validity interval"
+            | _ -> Error "Invalid X.509 validity time"
+
+let __validLabel (name: String) (index: Int64) (labelStart: Int64)
+  (wildcard: Bool) : Bool =
+  let length = Stdlib.String.__byteLength name in
+  if index == length || Stdlib.String.__byteAtUnchecked name index == 46L then
+    let labelLength = index - labelStart in
+    if labelLength == 0L || labelLength > 63L ||
+       Stdlib.String.__byteAtUnchecked name (index - 1L) == 45L then false
+    else if index == length then true
+    else Stdlib.__X509Identity.__validLabel name (index + 1L) (index + 1L) false
+  else
+    let byte = Stdlib.String.__byteAtUnchecked name index in
+    let isLetter = (byte >= 65L && byte <= 90L) || (byte >= 97L && byte <= 122L) in
+    let isDigit = byte >= 48L && byte <= 57L in
+    if (byte == 42L && wildcard && index == 0L &&
+        index + 1L < length && Stdlib.String.__byteAtUnchecked name 1L == 46L) ||
+       isLetter || isDigit ||
+       (byte == 45L && index > labelStart) then
+      Stdlib.__X509Identity.__validLabel name (index + 1L) labelStart wildcard
+    else false
+
+let __validName (name: String) (wildcard: Bool) : Bool =
+  let length = Stdlib.String.__byteLength name in
+  length > 0L && length <= 253L &&
+  Stdlib.__X509Identity.__validLabel name 0L 0L wildcard
+
+let __generalNames (data: Blob) (position: Int64) (end_: Int64)
+  (names: List<String>) : Stdlib.Result.Result<List<String>, String> =
+  if position == end_ then Ok (Stdlib.List.reverse names)
+  else
+    match Stdlib.__X509Identity.__tlv data position end_ with
+    | Error message -> Error message
+    | Ok entry ->
+        if entry.tag == 130L then
+          let bytes = Stdlib.__X509Identity.__slice data entry.content entry.end_ in
+          match Stdlib.String.fromBlob bytes with
+          | None -> Error "Invalid X.509 DNS name"
+          | Some name ->
+              if Stdlib.Bool.not (Stdlib.__X509Identity.__validName name true) then
+                Error "Invalid X.509 DNS name"
+              else Stdlib.__X509Identity.__generalNames data entry.end_ end_
+                     (Stdlib.List.push names name)
+        else Stdlib.__X509Identity.__generalNames data entry.end_ end_ names
+
+let __san (data: Blob) (octets: Stdlib.__X509Identity.Tlv)
+  : Stdlib.Result.Result<List<String>, String> =
+  match Stdlib.__X509Identity.__expect data octets.content octets.end_ 48L with
+  | Error message -> Error message
+  | Ok names ->
+      if names.end_ != octets.end_ then Error "Trailing subjectAltName data"
+      else Stdlib.__X509Identity.__generalNames data names.content names.end_ []
+
+let __isSanOid (data: Blob) (oid: Stdlib.__X509Identity.Tlv) : Bool =
+  oid.end_ - oid.content == 3L &&
+  Stdlib.Blob.__getByte data oid.content == 85L &&
+  Stdlib.Blob.__getByte data (oid.content + 1L) == 29L &&
+  Stdlib.Blob.__getByte data (oid.content + 2L) == 17L
+
+let __extension (data: Blob) (item: Stdlib.__X509Identity.Tlv)
+  : Stdlib.Result.Result<Stdlib.Option.Option<List<String>>, String> =
+  match Stdlib.__X509Identity.__expect data item.content item.end_ 6L with
+  | Error message -> Error message
+  | Ok oid ->
+      match Stdlib.__X509Identity.__tlv data oid.end_ item.end_ with
+      | Error message -> Error message
+      | Ok next ->
+          let valueStart = if next.tag == 1L then next.end_ else oid.end_ in
+          if next.tag == 1L &&
+             (next.end_ - next.content != 1L ||
+              Stdlib.Blob.__getByte data next.content != 255L) then
+            Error "Invalid X.509 critical extension flag"
+          else match Stdlib.__X509Identity.__expect data valueStart item.end_ 4L with
+          | Error message -> Error message
+          | Ok octets ->
+              if octets.end_ != item.end_ then Error "Trailing X.509 extension data"
+              else if Stdlib.__X509Identity.__isSanOid data oid then
+                match Stdlib.__X509Identity.__san data octets with
+                | Error message -> Error message
+                | Ok names -> Ok (Some names)
+              else Ok None
+
+let __extensions (data: Blob) (position: Int64) (end_: Int64)
+  (san: Stdlib.Option.Option<List<String>>)
+  : Stdlib.Result.Result<List<String>, String> =
+  if position == end_ then
+    match san with
+    | None -> Error "X.509 subjectAltName missing"
+    | Some [] -> Error "X.509 DNS subjectAltName missing"
+    | Some names -> Ok names
+  else
+    match Stdlib.__X509Identity.__expect data position end_ 48L with
+    | Error message -> Error message
+    | Ok extension ->
+        match Stdlib.__X509Identity.__extension data extension with
+        | Error message -> Error message
+        | Ok None -> Stdlib.__X509Identity.__extensions data extension.end_ end_ san
+        | Ok (Some names) ->
+            match san with
+            | Some _ -> Error "Duplicate X.509 subjectAltName"
+            | None -> Stdlib.__X509Identity.__extensions data extension.end_ end_ (Some names)
+
+let __findExtensions (data: Blob) (position: Int64) (end_: Int64)
+  : Stdlib.Result.Result<List<String>, String> =
+  if position == end_ then Error "X.509 subjectAltName missing"
+  else
+    match Stdlib.__X509Identity.__tlv data position end_ with
+    | Error message -> Error message
+    | Ok field ->
+        if field.tag == 163L then
+          match Stdlib.__X509Identity.__expect data field.content field.end_ 48L with
+          | Error message -> Error message
+          | Ok extensions ->
+              if extensions.end_ != field.end_ || field.end_ != end_ then
+                Error "Invalid X.509 extensions"
+              else Stdlib.__X509Identity.__extensions data extensions.content extensions.end_ None
+        else if field.tag == 129L || field.tag == 130L then
+          Stdlib.__X509Identity.__findExtensions data field.end_ end_
+        else Error "Unexpected X.509 certificate field"
+
+let __tbs (data: Blob) (tbs: Stdlib.__X509Identity.Tlv)
+  : Stdlib.Result.Result<Stdlib.__X509Identity.UnverifiedLeafIdentity, String> =
+  let first =
+    match Stdlib.__X509Identity.__tlv data tbs.content tbs.end_ with
+    | Ok version ->
+        if version.tag == 160L && version.end_ - version.content == 3L &&
+           Stdlib.Blob.__getByte data version.content == 2L &&
+           Stdlib.Blob.__getByte data (version.content + 1L) == 1L &&
+           Stdlib.Blob.__getByte data (version.content + 2L) == 2L then
+          version.end_
+        else -1L
+    | Error _ -> -1L in
+  if first < 0L then Error "X.509 v3 certificate required"
+  else match Stdlib.__X509Identity.__expect data first tbs.end_ 2L with
+  | Error message -> Error message
+  | Ok serial ->
+      match Stdlib.__X509Identity.__expect data serial.end_ tbs.end_ 48L with
+      | Error message -> Error message
+      | Ok signature ->
+          match Stdlib.__X509Identity.__expect data signature.end_ tbs.end_ 48L with
+          | Error message -> Error message
+          | Ok issuer ->
+              match Stdlib.__X509Identity.__expect data issuer.end_ tbs.end_ 48L with
+              | Error message -> Error message
+              | Ok validity ->
+                  match Stdlib.__X509Identity.__expect data validity.end_ tbs.end_ 48L with
+                  | Error message -> Error message
+                  | Ok subject ->
+                      match Stdlib.__X509Identity.__expect data subject.end_ tbs.end_ 48L with
+                      | Error message -> Error message
+                      | Ok spki ->
+                          match Stdlib.__X509Identity.__validity data validity with
+                          | Error message -> Error message
+                          | Ok ((before, after)) ->
+                              match Stdlib.__X509Identity.__findExtensions data spki.end_ tbs.end_ with
+                              | Error message -> Error message
+                              | Ok names ->
+                                  Ok (Stdlib.__X509Identity.UnverifiedLeafIdentity {
+                                    notBefore = before, notAfter = after, dnsNames = names })
+
+let parseUnverifiedLeaf (certificate: Blob)
+  : Stdlib.Result.Result<Stdlib.__X509Identity.UnverifiedLeafIdentity, String> =
+  let length = Stdlib.Blob.__byteLength certificate in
+  if length < 16L || length > 65536L then Error "Invalid X.509 certificate size"
+  else
+    match Stdlib.__X509Identity.__expect certificate 0L length 48L with
+    | Error message -> Error message
+    | Ok outer ->
+        if outer.end_ != length then Error "Trailing X.509 certificate data"
+        else
+          match Stdlib.__X509Identity.__expect certificate outer.content outer.end_ 48L with
+          | Error message -> Error message
+          | Ok tbs ->
+              match Stdlib.__X509Identity.__expect certificate tbs.end_ outer.end_ 48L with
+              | Error message -> Error message
+              | Ok algorithm ->
+                  match Stdlib.__X509Identity.__expect certificate algorithm.end_ outer.end_ 3L with
+                  | Error message -> Error message
+                  | Ok signature ->
+                      if signature.end_ != outer.end_ ||
+                         signature.content == signature.end_ ||
+                         Stdlib.Blob.__getByte certificate signature.content != 0L then
+                        Error "Invalid X.509 signature field"
+                      else Stdlib.__X509Identity.__tbs certificate tbs
+
+let __hasDot (value: String) (index: Int64) : Bool =
+  if index == Stdlib.String.__byteLength value then false
+  else if Stdlib.String.__byteAtUnchecked value index == 46L then true
+  else Stdlib.__X509Identity.__hasDot value (index + 1L)
+
+let __matches (pattern: String) (host: String) : Bool =
+  let expected = Stdlib.String.toLowercase pattern in
+  let actual = Stdlib.String.toLowercase host in
+  if Stdlib.String.startsWith expected "*." then
+    let suffix = Stdlib.String.__byteDrop expected 1L in
+    if Stdlib.Bool.not (Stdlib.String.endsWith actual suffix) then false
+    else
+      let prefixLength = Stdlib.String.__byteLength actual - Stdlib.String.__byteLength suffix in
+      let prefix = Stdlib.String.__byteTake actual prefixLength in
+      Stdlib.__X509Identity.__validName prefix false &&
+      Stdlib.Bool.not (Stdlib.String.startsWith prefix "xn--") &&
+      Stdlib.Bool.not (Stdlib.__X509Identity.__hasDot prefix 0L)
+  else expected == actual
+
+let __anyMatch (names: List<String>) (host: String) : Bool =
+  match names with
+  | [] -> false
+  | name :: rest ->
+      Stdlib.__X509Identity.__matches name host ||
+      Stdlib.__X509Identity.__anyMatch rest host
+
+let __dateNumber (date: DateTime) : Int64 =
+  Stdlib.__X509Identity.__timestamp
+    (Stdlib.DateTime.__intToInt64 (Stdlib.DateTime.year date))
+    (Stdlib.DateTime.__intToInt64 (Stdlib.DateTime.month date))
+    (Stdlib.DateTime.__intToInt64 (Stdlib.DateTime.day date))
+    (Stdlib.DateTime.__intToInt64 (Stdlib.DateTime.hour date))
+    (Stdlib.DateTime.__intToInt64 (Stdlib.DateTime.minute date))
+    (Stdlib.DateTime.__intToInt64 (Stdlib.DateTime.second date))
+
+// This checks identity metadata only. Chain signatures and trust must be
+// verified before the result can authorize HTTPS application data.
+let checkUnverifiedHostnameAt (leaf: Stdlib.__X509Identity.UnverifiedLeafIdentity)
+  (host: String) (date: DateTime) : Stdlib.Result.Result<Unit, String> =
+  if Stdlib.Bool.not (Stdlib.__X509Identity.__validName host false) then
+    Error "Invalid DNS hostname"
+  else
+    let current = Stdlib.__X509Identity.__dateNumber date in
+    if current < leaf.notBefore || current > leaf.notAfter then
+      Error "X.509 certificate is outside its validity interval"
+    else if Stdlib.Bool.not (Stdlib.__X509Identity.__anyMatch leaf.dnsNames host) then
+      Error "X.509 certificate does not match hostname"
+    else Ok ()

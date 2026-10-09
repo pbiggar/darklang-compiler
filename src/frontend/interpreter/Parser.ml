@@ -370,17 +370,25 @@
 *)
 (* Parser.ml - Assemble the frozen grammar and enforce post-syntax validation. *)
 [@@@warning "-4"]
+
 open Tokenizer
 open ParserSupport
 module WT = WrittenTypes
+
 (*
    anchor arg-offside at this construct's column so a let value / if cond /
    match expr doesn't grab the following body (`let x = v\n body`)
 *)
 let rec parseExpr state index =
-  ExpressionControl.parseExpr {ExpressionControl.parseExpr; parseInfix} state index
+  ExpressionControl.parseExpr
+    { ExpressionControl.parseExpr; parseInfix }
+    state index
+
 and parseInfix state index =
-  ExpressionPrecedence.parseInfix {ExpressionPrecedence.parseExpr; parsePrimary} state index
+  ExpressionPrecedence.parseInfix
+    { ExpressionPrecedence.parseExpr; parsePrimary }
+    state index
+
 (*
    space application: `f a b`
    A spaced enum ctor followed by a parenthesized list is a FIELD list, not a
@@ -401,14 +409,20 @@ and parseInfix state index =
    a bare lowercase variable callee becomes a fn name when applied
 *)
 and parseApp state index =
-  ExpressionPrecedence.parseApp {ExpressionPrecedence.parseExpr; parsePrimary} state index
+  ExpressionPrecedence.parseApp
+    { ExpressionPrecedence.parseExpr; parsePrimary }
+    state index
+
 (*
    an indentation-delimited sequence of statements (function / if-branch / match
    arm / lambda body): same-column statements on new lines fold into nested
    EStatement. Fresh scope so statements separate by column.
 *)
 and parseBlock state index =
-  ExpressionControl.parseBlock {ExpressionControl.parseExpr; parseInfix} state index
+  ExpressionControl.parseBlock
+    { ExpressionControl.parseExpr; parseInfix }
+    state index
+
 (*
    `128y` etc. — only valid negated
    unary minus on a numeric literal: `-5L`, `-2.0` (infix `a - b` is handled in
@@ -461,7 +475,16 @@ and parseBlock state index =
    the next declaration survives); skip one token otherwise
 *)
 and parsePrimary state index =
-  ExpressionPrimary.parsePrimary {ExpressionPrimary.parseExpr; parseBlock; parseApp; parseCtorParenFields; parseInterpString} state index
+  ExpressionPrimary.parsePrimary
+    {
+      ExpressionPrimary.parseExpr;
+      parseBlock;
+      parseApp;
+      parseCtorParenFields;
+      parseInterpString;
+    }
+    state index
+
 (*
    A parenthesized enum-constructor field list: `(e1, e2, …)` with `i` at the
    `(`. Commas separate FIELDS (so `Pair(a, b)` is two fields; a tuple field
@@ -472,7 +495,10 @@ and parsePrimary state index =
    `Ctor()` is `Ctor` applied to unit — one unit field, not zero
 *)
 and parseCtorParenFields state index sink =
-  ExpressionPrecedence.parseCtorParenFields {ExpressionPrecedence.parseExpr; parsePrimary} state index sink
+  ExpressionPrecedence.parseCtorParenFields
+    { ExpressionPrecedence.parseExpr; parsePrimary }
+    state index sink
+
 (*
    `$"text {expr} text"` — re-scan the token's source text, deriving exact ranges
    for the literal segments and each `{expr}`; the embedded expression is parsed by
@@ -505,27 +531,49 @@ and parseCtorParenFields state index sink =
    a hard tokenize failure inside `{…}` (e.g. nesting cap) was
    previously swallowed as a silent unit
 *)
-and parseInterpString state index = ExpressionInterpolation.parseInterpString parseTokensAt state index
+and parseInterpString state index =
+  ExpressionInterpolation.parseInterpString parseTokensAt state index
+
 (*
    Parse a pre-tokenized stream. Part of the rec chain so string interpolation
    can recursively parse the (range-offset) sub-tokens of each `{expr}`.
 *)
 and parseTokensAt depth scope tokens =
   let state = makeState depth tokens in
-  FileParser.parseFile {FileParser.parseExpr; parseBlock} scope state
+  FileParser.parseFile { FileParser.parseExpr; parseBlock } scope state
+
 let parseTokens tokens = parseTokensAt 0 ItemScope.Script tokens
-let lexical range message = {code = DiagnosticCode.lex; severity = DiagError; range; message; related = []; hint = None}
-let zero = {start = {row = 0; column = 0}; end_ = {row = 0; column = 0}}
+
+let lexical range message =
+  {
+    code = DiagnosticCode.lex;
+    severity = DiagError;
+    range;
+    message;
+    related = [];
+    hint = None;
+  }
+
+let zero = { start = { row = 0; column = 0 }; end_ = { row = 0; column = 0 } }
+
 (*
    lexical-recovery diagnostics (malformed lexemes the tokenizer recovered from)
    are surfaced alongside the parser's own diagnostics.
 *)
 let parseSyntaxWithRootScope rootScope source =
   match Lexer.tokenize source with
-  | Error message -> {parsed = None; diagnostics = [lexical zero message]}
+  | Error message -> { parsed = None; diagnostics = [ lexical zero message ] }
   | Ok (tokens, lexDiagnostics) ->
       let result = parseTokensAt 0 rootScope (Array.of_list tokens) in
-      {result with diagnostics = List.map (fun (range, message) -> lexical range message) lexDiagnostics @ result.diagnostics}
+      {
+        result with
+        diagnostics =
+          List.map
+            (fun (range, message) -> lexical range message)
+            lexDiagnostics
+          @ result.diagnostics;
+      }
+
 (*
    Parse for tooling: return a recoverable tree and include mode-independent
    structural diagnostics after a clean syntax pass.
@@ -534,29 +582,53 @@ let parseSyntaxWithRootScope rootScope source =
 *)
 let parse source =
   let result = parseSyntaxWithRootScope ItemScope.Script source in
-  let structural = match result.diagnostics, result.parsed with
-    | [], Some (WT.SourceFile file) -> List.map diagnosticOfValidationIssue (Validation.validateStructure file)
-    | _ -> [] in
-  {result with diagnostics = result.diagnostics @ structural}
+  let structural =
+    match (result.diagnostics, result.parsed) with
+    | [], Some (WT.SourceFile file) ->
+        List.map diagnosticOfValidationIssue (Validation.validateStructure file)
+    | _ -> []
+  in
+  { result with diagnostics = result.diagnostics @ structural }
+
 (*
    Parse for execution: syntax, structural, and file-purpose validation run
    once, and only a validated source file can be returned on success.
 *)
 let parseFor mode source =
-  let scope = match mode with Validation.Package -> ItemScope.Module | Validation.Script | Validation.Test -> ItemScope.Script in
+  let scope =
+    match mode with
+    | Validation.Package -> ItemScope.Module
+    | Validation.Script | Validation.Test -> ItemScope.Script
+  in
   let result = parseSyntaxWithRootScope scope source in
-  match result.diagnostics, result.parsed with
-  | [], Some (WT.SourceFile file) ->
-      (match Validation.validate mode file with Ok value -> Ok value
-      | Error issues -> Error (List.map diagnosticOfValidationIssue (ParserDependencies.toList issues)))
+  match (result.diagnostics, result.parsed) with
+  | [], Some (WT.SourceFile file) -> (
+      match Validation.validate mode file with
+      | Ok value -> Ok value
+      | Error issues ->
+          Error
+            (List.map diagnosticOfValidationIssue
+               (ParserDependencies.toList issues)))
   | (_ :: _ as diagnostics), _ -> Error diagnostics
-  | [], None -> Error [{code = DiagnosticCode.unexpected; severity = DiagError; range = zero;
-      message = "Parser did not produce a source tree"; related = []; hint = None}]
+  | [], None ->
+      Error
+        [
+          {
+            code = DiagnosticCode.unexpected;
+            severity = DiagError;
+            range = zero;
+            message = "Parser did not produce a source tree";
+            related = [];
+            hint = None;
+          };
+        ]
+
 (*
    Kept as a compatibility entrypoint. Test syntax has the same parse shape as
    all other source; parseFor Validation.Test applies the Test purpose rules.
 *)
 let parseTestFile = parse
+
 (*
    Render a diagnostic for humans: code, position, message, a source snippet
    with caret markers, related locations, and the hint if any. E.g.
@@ -568,17 +640,46 @@ let parseTestFile = parse
 let renderDiagnostic source (diagnostic : diagnostic) =
   let lines = Array.of_list (String.split_on_char '\n' source) in
   let snippet range =
-    if range.start.row < 0 || range.start.row >= Array.length lines then [] else
-    let original = Text.scalars lines.(range.start.row) in
-    let length = ref (Array.length original) in
-    while !length > 0 && original.(!length - 1) = 13 do decr length done;
-    let line = Text.ofScalars (Array.sub original 0 !length) in
-    let number = string_of_int (range.start.row + 1) in
-    let column = max 0 (min range.start.column !length) in
-    let width = if range.start.row = range.end_.row then max 1 (min (range.end_.column - range.start.column) (max 1 (!length - column))) else 1 in
-    ["  " ^ number ^ " | " ^ line; "  " ^ String.make (String.length number) ' ' ^ " | " ^ String.make column ' ' ^ String.make width '^'] in
-  let first = Printf.sprintf "error[%s] at %d:%d: %s" diagnostic.code (diagnostic.range.start.row + 1) (diagnostic.range.start.column + 1) diagnostic.message in
-  let related = List.concat_map (fun (range, note) ->
-    Printf.sprintf "  note: %s (%d:%d)" note (range.start.row + 1) (range.start.column + 1) :: snippet range) diagnostic.related in
-  let hint = match diagnostic.hint with None -> [] | Some text -> ["  hint: " ^ text] in
-  String.concat "\n" (first :: snippet diagnostic.range @ related @ hint)
+    if range.start.row < 0 || range.start.row >= Array.length lines then []
+    else
+      let original = Text.scalars lines.(range.start.row) in
+      let length = ref (Array.length original) in
+      while !length > 0 && original.(!length - 1) = 13 do
+        decr length
+      done;
+      let line = Text.ofScalars (Array.sub original 0 !length) in
+      let number = string_of_int (range.start.row + 1) in
+      let column = max 0 (min range.start.column !length) in
+      let width =
+        if range.start.row = range.end_.row then
+          max 1
+            (min
+               (range.end_.column - range.start.column)
+               (max 1 (!length - column)))
+        else 1
+      in
+      [
+        "  " ^ number ^ " | " ^ line;
+        "  "
+        ^ String.make (String.length number) ' '
+        ^ " | " ^ String.make column ' ' ^ String.make width '^';
+      ]
+  in
+  let first =
+    Printf.sprintf "error[%s] at %d:%d: %s" diagnostic.code
+      (diagnostic.range.start.row + 1)
+      (diagnostic.range.start.column + 1)
+      diagnostic.message
+  in
+  let related =
+    List.concat_map
+      (fun (range, note) ->
+        Printf.sprintf "  note: %s (%d:%d)" note (range.start.row + 1)
+          (range.start.column + 1)
+        :: snippet range)
+      diagnostic.related
+  in
+  let hint =
+    match diagnostic.hint with None -> [] | Some text -> [ "  hint: " ^ text ]
+  in
+  String.concat "\n" ((first :: snippet diagnostic.range) @ related @ hint)

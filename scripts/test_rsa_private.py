@@ -56,9 +56,9 @@ def main():
     source = '''// import.dark - Generated key import and consistency rejection with cleanup accounting.
 let check (text: String) (format: String) (valid: Bool) : Bool =
   let parsed = Stdlib.Blob.fromHex text |> Stdlib.Result.andThen (fun data ->
-    if format == "pkcs1" then Stdlib.RsaPrivate.parsePkcs1 data
-    else if format == "pkcs8" then Stdlib.RsaPrivate.parsePkcs8 data
-    else Stdlib.RsaPrivate.parsePem data) in
+    if format == "pkcs1" then Stdlib.__RsaPrivate.parsePkcs1 data
+    else if format == "pkcs8" then Stdlib.__RsaPrivate.parsePkcs8 data
+    else Stdlib.__RsaPrivate.parsePem data) in
   match parsed with
   | Error _ -> Stdlib.Bool.not valid
   | Ok key -> valid && Stdlib.Blob.toHex key.modulus == "@N@" && Stdlib.Blob.toHex key.exponent == "010001" && Stdlib.Blob.toHex key.privateExponent == "@D@"

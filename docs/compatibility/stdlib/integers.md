@@ -1,5 +1,10 @@
 # Integer parity
 
+Current compiler source review: 2026-10-07 at `7154b0ea9c1a3f53d30984ed17b9e0cc5d8f0dce`.
+See the [current audit](../current-audit.md) for post-port status and validation.
+Older revision pairs and executed counts below are historical evidence, not
+a fresh test result for this revision.
+
 This implementation was revalidated from compiler baseline
 `C@a78567efd773de86265e55a54445ddf5a5a8911c` and interpreter baseline
 `I@04fbe9dcc995c6188757d583e273cbd30a3e2d3d`. The historical DCB1 report at
@@ -14,9 +19,9 @@ Integration was revalidated after rebasing at exact compiler revision
 interpreter revision `I@04fbe9dcc995c6188757d583e273cbd30a3e2d3d`.
 The comparison used a fresh checkout of the interpreter revision, not the DCB1
 report or only the copied fixtures. At that compiler revision, the public
-implementations are `stdlib/Int.dark`, `Int8.dark` through
+implementations are `StdLib/Int.dark`, `Int8.dark` through
 `UInt64.dark`, `Int128.dark`, and `UInt128.dark`; shared arbitrary-width
-primitives and checked conversions are in `stdlib/__Integer.dark`.
+primitives and checked conversions are in `StdLib/Int/__Integer.dark`.
 The matching behavioral probes are the eleven files under
 `test/fixtures/e2e/upstream/stdlib/ints` and `test/fixtures/e2e/int128-wrapping.e2e`.
 
@@ -43,14 +48,14 @@ zero. Their public modules intentionally have no random function, matching the
 pinned interpreter.
 
 The arbitrary-width implementation is in
-`stdlib/__Integer.dark`; public wrappers are in `Int.dark`, the
+`StdLib/Int/__Integer.dark`; public wrappers are in `Int.dark`, the
 eight fixed-width module files, `Int128.dark`, and `UInt128.dark`. The 128-bit
 modules perform limb arithmetic directly and use arbitrary-width values only
 at operations and conversions that require them. Typed representation views
-are ownership-neutral, while newly computed fixed blocks are owned. `ir/anf/ANF.fs`
+are ownership-neutral, while newly computed fixed blocks are owned. `src/ir/anf/ANF.ml`
 classifies `Int` as a managed dynamic value and both 128-bit types as managed
 16-byte fixed blocks, including when nested in closures and heap shapes. Fixed-width
-shifts and arithmetic lower in `MIR_to_LIR.fs`; signed right shift is
+shifts and arithmetic lower in `src/passes/mir/MIR_to_LIR.ml`; signed right shift is
 arithmetic, unsigned right shift is logical, and counts use the interpreter's
 machine-width masks on both ARM64 and x86-64.
 
@@ -67,13 +72,13 @@ errors for source that can be rejected during type checking.
 The upstream expression `Stdlib.Int8.add Darklang.Test.Values.int8Value 5y`
 obtains the package value `Darklang.Test.Values.int8Value`, whose evaluated
 value is `5y`; the interpreter resolves that global through its package-value
-environment before calling `Int8.add`, producing `10y`. AOT never performs a
-live package lookup. Its compile request receives the immutable
+environment before calling `Int8.add`, producing `10y`. Without an explicit hosted package server, this focused probe uses an immutable
+catalog rather than a live lookup. Its compile request receives the immutable
 `PackageValueCatalog` entry with hash `darklang-test-values-int8Value`, the
 `Darklang.Test.Values.int8Value` location, concrete `Int8` result type, and
 the available evaluator expression `5y`. Materialization generates the typed
 `Builtin.pmEvaluateValue<Int8>` case from that entry. The focused parity test
-in `ValueSearchCatalogTests.fs` calls that generated evaluator and supplies its
+in `test/compiler-passes/ValueSearchCatalogTests.ml` calls that generated evaluator and supplies its
 returned `5y` to `Stdlib.Int8.add(value, 5y)`, asserting the same `10y` result.
 
 The executable parity corpus is the eleven files under

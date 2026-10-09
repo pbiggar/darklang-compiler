@@ -1,0 +1,27 @@
+# language/runtime-to-programtypes.dark
+
+[Source fixture](../../../../test/fixtures/e2e/upstream/language/runtime-to-programtypes.dark) · [File list](../../current-audit.md)
+
+Executed 19 assertions: **0 passed, 19 failed**.
+
+| Test | Observed failure |
+| --- | --- |
+| [L24](../../../../test/fixtures/e2e/upstream/language/runtime-to-programtypes.dark#L24) — (match promote Darklang.LanguageTools.RuntimeTypes.Dval.DUnit with \| Ok (EUnit _) -> true \| _ -> false) | Preamble type error: Unknown type 'Darklang.LanguageTools.ProgramTypes.Expr' |
+| [L26](../../../../test/fixtures/e2e/upstream/language/runtime-to-programtypes.dark#L26) — (match promote (Darklang.LanguageTools.RuntimeTypes.Dval.DBool true) with \| Ok (EBool(_, b)) -> b \| _ -> fa... | Preamble type error: Unknown type 'Darklang.LanguageTools.ProgramTypes.Expr' |
+| [L28](../../../../test/fixtures/e2e/upstream/language/runtime-to-programtypes.dark#L28) — (match promote (int 42) with \| Ok (EInt(_, i)) -> i \| _ -> -1) | Preamble type error: Unknown type 'Darklang.LanguageTools.ProgramTypes.Expr' |
+| [L30](../../../../test/fixtures/e2e/upstream/language/runtime-to-programtypes.dark#L30) — (match promote (Darklang.LanguageTools.RuntimeTypes.Dval.DInt64 7L) with \| Ok (EInt64(_, i)) -> i \| _ -> -1L) | Preamble type error: Unknown type 'Darklang.LanguageTools.ProgramTypes.Expr' |
+| [L32](../../../../test/fixtures/e2e/upstream/language/runtime-to-programtypes.dark#L32) — match promote (Darklang.LanguageTools.RuntimeTypes.Dval.DFloat 3.14) with \| Ok (EFloat(_, _sign, w, f)) -> ... | Preamble type error: Unknown type 'Darklang.LanguageTools.ProgramTypes.Expr' |
+| [L38](../../../../test/fixtures/e2e/upstream/language/runtime-to-programtypes.dark#L38) — match promote (Darklang.LanguageTools.RuntimeTypes.Dval.DFloat (0.1 + 0.2)) with \| Ok (EFloat(_, _sign, w, ... | Preamble type error: Unknown type 'Darklang.LanguageTools.ProgramTypes.Expr' |
+| [L42](../../../../test/fixtures/e2e/upstream/language/runtime-to-programtypes.dark#L42) — (match promote (Darklang.LanguageTools.RuntimeTypes.Dval.DChar 'a') with \| Ok (EChar(_, c)) -> c \| _ -> "FA... | Preamble type error: Unknown type 'Darklang.LanguageTools.ProgramTypes.Expr' |
+| [L44](../../../../test/fixtures/e2e/upstream/language/runtime-to-programtypes.dark#L44) — match promote (Darklang.LanguageTools.RuntimeTypes.Dval.DString "hi") with \| Ok (EString(_, [ StringText s ... | Preamble type error: Unknown type 'Darklang.LanguageTools.ProgramTypes.Expr' |
+| [L50](../../../../test/fixtures/e2e/upstream/language/runtime-to-programtypes.dark#L50) — Stdlib.Result.isError (promote (Darklang.LanguageTools.RuntimeTypes.Dval.DFloat (0.0 / 0.0))) | Preamble type error: Unknown type 'Darklang.LanguageTools.ProgramTypes.Expr' |
+| [L52](../../../../test/fixtures/e2e/upstream/language/runtime-to-programtypes.dark#L52) — Stdlib.Result.isError (promote (Darklang.LanguageTools.RuntimeTypes.Dval.DFloat (1.0 / 0.0))) | Preamble type error: Unknown type 'Darklang.LanguageTools.ProgramTypes.Expr' |
+| [L54](../../../../test/fixtures/e2e/upstream/language/runtime-to-programtypes.dark#L54) — Stdlib.Result.isError (promote (Darklang.LanguageTools.RuntimeTypes.Dval.DFloat 1e30)) | Preamble type error: Unknown type 'Darklang.LanguageTools.ProgramTypes.Expr' |
+| [L57](../../../../test/fixtures/e2e/upstream/language/runtime-to-programtypes.dark#L57) — match promote (Darklang.LanguageTools.RuntimeTypes.Dval.DList(unknownType (), [ int 1, int 2 ])) with \| Ok ... | Preamble type error: Unknown type 'Darklang.LanguageTools.ProgramTypes.Expr' |
+| [L61](../../../../test/fixtures/e2e/upstream/language/runtime-to-programtypes.dark#L61) — match promote ( Darklang.LanguageTools.RuntimeTypes.Dval.DTuple( int 1, Darklang.LanguageTools.RuntimeTypes... | Preamble type error: Unknown type 'Darklang.LanguageTools.ProgramTypes.Expr' |
+| [L72](../../../../test/fixtures/e2e/upstream/language/runtime-to-programtypes.dark#L72) — match promote ( Darklang.LanguageTools.RuntimeTypes.Dval.DList( unknownType (), [ Darklang.LanguageTools.Ru... | Preamble type error: Unknown type 'Darklang.LanguageTools.ProgramTypes.Expr' |
+| [L82](../../../../test/fixtures/e2e/upstream/language/runtime-to-programtypes.dark#L82) — match promote ( Darklang.LanguageTools.RuntimeTypes.Dval.DEnum(fakeType (), fakeType (), [], "Some", [ int ... | Preamble type error: Unknown type 'Darklang.LanguageTools.ProgramTypes.Expr' |
+| [L90](../../../../test/fixtures/e2e/upstream/language/runtime-to-programtypes.dark#L90) — match promote ( Darklang.LanguageTools.RuntimeTypes.Dval.DRecord( fakeType (), fakeType (), [], Stdlib.Dict... | Preamble type error: Unknown type 'Darklang.LanguageTools.ProgramTypes.Expr' |
+| [L103](../../../../test/fixtures/e2e/upstream/language/runtime-to-programtypes.dark#L103) — Stdlib.Result.isError ( promote ( Darklang.LanguageTools.RuntimeTypes.Dval.DEnum( fakeType (), fakeType (),... | Preamble type error: Unknown type 'Darklang.LanguageTools.ProgramTypes.Expr' |
+| [L113](../../../../test/fixtures/e2e/upstream/language/runtime-to-programtypes.dark#L113) — Stdlib.Result.isError (promote (Darklang.LanguageTools.RuntimeTypes.Dval.DDB "mydb")) | Preamble type error: Unknown type 'Darklang.LanguageTools.ProgramTypes.Expr' |
+| [L115](../../../../test/fixtures/e2e/upstream/language/runtime-to-programtypes.dark#L115) — Stdlib.Result.isError (promote (Darklang.LanguageTools.RuntimeTypes.Dval.DUuid (Stdlib.Uuid.generate ()))) | Preamble type error: Unknown type 'Darklang.LanguageTools.ProgramTypes.Expr' |

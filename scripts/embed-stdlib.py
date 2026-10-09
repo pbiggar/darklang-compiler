@@ -12,15 +12,17 @@ def ocaml_string(value):
 
 def main():
     root, output = map(Path, sys.argv[1:])
-    names = [line.strip() for line in (root / "sources.list").read_text().splitlines()
+    names = [line.strip() for line in (root / "library-sources.list").read_text().splitlines()
              if line.strip() and not line.startswith("#")]
     if len(names) != len(set(names)):
         raise ValueError("Duplicate standard-library source")
     for name in names:
         path = Path(name)
-        if path.is_absolute() or ".." in path.parts or path.suffix != ".dark":
+        if (path.is_absolute() or ".." in path.parts or path.suffix != ".dark"
+                or path.parts[0] not in {"StdLib", "packages"}):
             raise ValueError(f"Invalid standard-library source: {name}")
-    actual = {str(path.relative_to(root)) for path in root.rglob("*.dark")}
+    actual = {str(path.relative_to(root)) for directory in ("StdLib", "packages")
+              for path in (root / directory).rglob("*.dark")}
     if set(names) != actual:
         raise ValueError(f"Source manifest mismatch: {sorted(set(names) ^ actual)}")
     with output.open("w", encoding="utf-8") as target:

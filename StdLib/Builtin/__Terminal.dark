@@ -1,0 +1,59 @@
+// Native terminal facts for interpreter package APIs, without libc calls.
+module Builtin
+
+let __isTerminal (fd: Int64) : Bool =
+    // TCGETS on Linux; TIOCGETA on Darwin. Only success matters, so the
+    // scratch buffer covers both kernel layouts without decoding termios.
+    let request = if Stdlib.Cli.__Posix.__mac () then 1078490131L else 21505L in
+    let buffer = __mapped_alloc 128L in
+    let result = Stdlib.Cli.__Posix.__ioctl fd request buffer == 0L in
+    let _ = __mapped_free buffer in
+    result
+
+let cliTerminalSessionInfo () : (Bool * Bool * String) =
+    let input = Builtin.__isTerminal 0L in
+    let output = Builtin.__isTerminal 1L in
+    let name = Stdlib.Option.withDefault (Stdlib.Cli.__getenv "TERM") "" in
+    (input, output, name)
+
+let cliTerminalColorEnabled () : Bool =
+    let noColor = Stdlib.Option.withDefault (Stdlib.Cli.__getenv "NO_COLOR") "" in
+    noColor == "" && Builtin.__isTerminal 1L
+
+let __terminalSize (fd: Int64) : Stdlib.Option.Option<(Int * Int)> =
+    // TIOCGWINSZ: two unsigned 16-bit dimensions, then two pixel dimensions.
+    let request = if Stdlib.Cli.__Posix.__mac () then 1074295912L else 21523L in
+    let buffer = __mapped_alloc 8L in
+    let size =
+        if Stdlib.Cli.__Posix.__ioctl fd request buffer == 0L then
+            let rows = Stdlib.Cli.__Posix.__unsigned buffer 0L 2L in
+            let columns = Stdlib.Cli.__Posix.__unsigned buffer 2L 2L in
+            if rows > 0L && columns > 0L then
+                let dimensions = (Stdlib.Int.fromInt64 columns, Stdlib.Int.fromInt64 rows) in
+                Stdlib.Option.Option.Some dimensions
+            else Stdlib.Option.Option.None
+        else Stdlib.Option.Option.None
+    let _ = __mapped_free buffer in
+    size
+
+let __terminalDimension (name: String) (fallback: Int) : Int =
+    match Stdlib.Cli.__getenv name with
+    | None -> fallback
+    | Some text ->
+        match Stdlib.Int.parse text with
+        | Ok value -> if value > 0 && value <= 2147483647 then value else fallback
+        | Error _ -> fallback
+
+let cliTerminalSize () : (Int * Int) =
+    match Builtin.__terminalSize 1L with
+    | Some size -> size
+    | None ->
+        match Builtin.__terminalSize 0L with
+        | Some size -> size
+        | None ->
+            match Builtin.__terminalSize 2L with
+            | Some size -> size
+            | None ->
+                // Native console dimensions are the same kernel query above.
+                (Builtin.__terminalDimension "COLUMNS" 80,
+                 Builtin.__terminalDimension "LINES" 24)

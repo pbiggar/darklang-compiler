@@ -1,4 +1,5 @@
-type testResult=(unit,string) result
+type testResult = (unit, string) result
+
 val testEncodeReg : unit -> testResult
 val testMOVKShiftEncoding : unit -> testResult
 val testMOVZMOVKSequence : unit -> testResult
@@ -13,5 +14,5 @@ val testPreparedChunksPreserveWholeProgramEncoding : unit -> testResult
 val testRotatedLogicalImmediateEncoding : unit -> testResult
 val testBytePopcountSequenceEncoding : unit -> testResult
 val testInvalidAssertDifferentValueIsRejected : unit -> testResult
-val tests : (string*(unit -> testResult)) list
+val tests : (string * (unit -> testResult)) list
 val runAll : unit -> testResult
