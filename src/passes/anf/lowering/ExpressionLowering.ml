@@ -717,9 +717,9 @@ let lowerExpression (toANFCore : LoweringCallbacks.expressionLowerer)
             let* typ = infer expr in
             let id, gen = A.freshVar gen in
             let value =
-                  match O.integerFunctionForBinOp functionId typ op with
-                  | Some id -> A.Call (id, [ leftAtom; rightAtom ])
-                  | None -> A.Prim (O.convertBinOp op, leftAtom, rightAtom)
+              match O.integerFunctionForBinOp functionId typ op with
+              | Some id -> A.Call (id, [ leftAtom; rightAtom ])
+              | None -> A.Prim (O.convertBinOp op, leftAtom, rightAtom)
             in
             Ok (A.Let (id, value, A.Return (A.Var id)), gen)
       in

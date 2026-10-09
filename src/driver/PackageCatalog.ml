@@ -363,11 +363,12 @@ let materializeReachablePackageValueCatalog (baseContext : X.pipelineContext)
     in
     let environment =
       Option.map
-        (WrittenChecking.includeAllocatedFunctions (C.programSymbols typedProgram))
+        (WrittenChecking.includeAllocatedFunctions
+           (C.programSymbols typedProgram))
         baseContext.X.writtenEnvironment
     in
     let* _, generated, _ =
-      WrittenChecking.checkSourceUnitsWithBase environment true false [source]
+      WrittenChecking.checkSourceUnitsWithBase environment true false [ source ]
       |> Result.map_error (fun error ->
           "Package value catalog validation failed: " ^ error)
     in

@@ -44,7 +44,8 @@ let[@warning "-4"] check checkExpression checkedLiteral globals locals symbols
                 AST.TUInt128;
               ]
           in
-          let unresolved = match leftType with
+          let unresolved =
+            match leftType with
             | AST.TVar _ | AST.TInferenceVar _ -> true
             | _ -> false
           in
@@ -140,16 +141,18 @@ let[@warning "-4"] check checkExpression checkedLiteral globals locals symbols
                     (if op = AST.Neq then C.UnaryOp (AST.Not, equality)
                      else equality))
           | op, true, resultType ->
-              let required = match op with
+              let required =
+                match op with
                 | AST.Add | AST.Sub | AST.Mul | AST.Div | AST.Mod | AST.Pow
                 | AST.Shl | AST.Shr | AST.BitAnd | AST.BitOr | AST.BitXor
                 | AST.Lt | AST.Gt | AST.Lte | AST.Gte ->
-                    WrittenCheckingState.requireOperator op leftType finalSymbols
+                    WrittenCheckingState.requireOperator op leftType
+                      finalSymbols
                 | _ -> Ok finalSymbols
               in
               bind required (fun symbols ->
-                checkedLiteral expected symbols resultType
-                  (C.BinOp (op, checkedLeft, checkedRight)))
+                  checkedLiteral expected symbols resultType
+                    (C.BinOp (op, checkedLeft, checkedRight)))
           | (AST.Eq | AST.Neq), false, _ when mixed ->
               Error "Cannot compare Char and String"
           | _ -> Error "Operator is unavailable for this type"))

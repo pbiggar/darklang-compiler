@@ -13,8 +13,13 @@ type t = {
 }
 
 let create symbols =
-  { symbols; substitution = M.empty; flexible = S.empty; nextVariable = 0;
-    operators = [] }
+  {
+    symbols;
+    substitution = M.empty;
+    flexible = S.empty;
+    nextVariable = 0;
+    operators = [];
+  }
 
 let symbols state = state.symbols
 let resolve state = Types.applySubst state.substitution
@@ -28,13 +33,26 @@ let validateOperator operation = function
   | AST.TVar _ | AST.TInferenceVar _ | AST.TNever -> Ok ()
   | typ ->
       let integer =
-        List.mem typ [AST.TInt; AST.TInt8; AST.TInt16; AST.TInt32;
-          AST.TInt64; AST.TInt128; AST.TUInt8; AST.TUInt16; AST.TUInt32;
-          AST.TUInt64; AST.TUInt128]
+        List.mem typ
+          [
+            AST.TInt;
+            AST.TInt8;
+            AST.TInt16;
+            AST.TInt32;
+            AST.TInt64;
+            AST.TInt128;
+            AST.TUInt8;
+            AST.TUInt16;
+            AST.TUInt32;
+            AST.TUInt64;
+            AST.TUInt128;
+          ]
       in
-      let valid = match operation with
+      let valid =
+        match operation with
         | AST.Shl | AST.Shr | AST.BitAnd | AST.BitOr | AST.BitXor -> integer
-        | AST.Pow -> (integer || typ = AST.TFloat64)
+        | AST.Pow ->
+            (integer || typ = AST.TFloat64)
             && typ <> AST.TInt128 && typ <> AST.TUInt128
         | _ -> integer || typ = AST.TFloat64
       in
@@ -43,16 +61,18 @@ let validateOperator operation = function
 let requireOperator operation typ state =
   let typ = resolve state typ in
   Result.map
-    (fun () -> match typ with
+    (fun () ->
+      match typ with
       | AST.TVar _ | AST.TInferenceVar _ ->
-          {state with operators = (operation, typ) :: state.operators}
+          { state with operators = (operation, typ) :: state.operators }
       | _ -> state)
     (validateOperator operation typ)
 
 let validateOperators state =
   List.fold_left
     (fun result (operation, typ) ->
-      Result.bind result (fun () -> validateOperator operation (resolve state typ)))
+      Result.bind result (fun () ->
+          validateOperator operation (resolve state typ)))
     (Ok ()) state.operators
 
 let constrain first second state =
@@ -77,7 +97,7 @@ let constrain first second state =
                 (Unification.consolidateBindings
                    (M.bindings state.substitution @ bindings))
                 (fun substitution ->
-                  let state = {state with substitution} in
+                  let state = { state with substitution } in
                   Result.map (fun () -> state) (validateOperators state))))
 
 let freshenType rigid typ state =
