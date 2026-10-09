@@ -358,6 +358,20 @@ runner. No backend changes were required; other targets were not executed.
 The deferred `Telemetry.logFilePath` value still prevents compiling the
 unchanged whole Telemetry package; this fix covers its clock function only.
 
+## Compiler build identity
+
+`Darklang.Cli.Installation.Helpers.buildHash` in
+`packages/darklang/cli/installation/helpers.dark` failed with
+`Unknown function or value 'Builtin.getBuildHash'`. Per user direction, the
+compiler embeds Dune's abbreviated git revision during its build. The same
+stamp supplies `Builtin.getBuildHash` in generated programs and the compiler's
+`--version` output. Builds without Git metadata use `dev`, matching the
+interpreter's development fallback. Neither a copied compiler nor its generated
+programs invoke Git or read repository files to determine their identity.
+
+Validation is pending on `chatgpt/compiler-build-hash`. Other declarations in
+the installation helpers package remain individually unreviewed.
+
 ## Completion rule
 
 At the end of the package review, enumerate every skipped package and unresolved

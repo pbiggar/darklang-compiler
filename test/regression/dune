@@ -1,6 +1,10 @@
 ; Native equivalence and allocation regression checks.
 (rule
  (alias runtest)
+ (deps ../../scripts/test_embed_build_hash.py ../../scripts/embed-stdlib.py)
+ (action (run python3 %{dep:../../scripts/test_embed_build_hash.py})))
+(rule
+ (alias runtest)
  (deps ../../mutation/mutation-test.sh ../../mutation/ocaml_sites.py ../../scripts/test_mutation_workflow.py)
  (action (run python3 %{dep:../../scripts/test_mutation_workflow.py})))
 (rule
