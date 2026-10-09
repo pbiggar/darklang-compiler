@@ -55,12 +55,12 @@ def stop(process):
     assert process.returncode == 0 and stdout == b"STOPPED\n" and not stderr, (process.returncode, stdout, stderr)
 
 
-def connect(port, certificate, protocols):
+def connect(port, certificate, protocols, host="127.0.0.1"):
     context = ssl.create_default_context(cadata=certificate.decode())
     context.minimum_version = context.maximum_version = ssl.TLSVersion.TLSv1_3
     context.set_ecdh_curve("X25519")
     context.set_alpn_protocols(protocols)
-    return context.wrap_socket(socket.create_connection(("127.0.0.1", port), timeout=15), server_hostname="localhost")
+    return context.wrap_socket(socket.create_connection((host, port), timeout=15), server_hostname="localhost")
 
 
 def unfinished(port, certificate):

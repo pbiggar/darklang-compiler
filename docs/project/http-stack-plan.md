@@ -165,3 +165,46 @@ each implementation branch, run `./build --ai`, the already-built
 `./run-tests --ai`, and
 `./benchmarks/run_benchmarks.sh --verify-parent full` before merge-train
 handoff.
+
+## Full engine extension scope
+
+The extension branch starts from `b3d13bb` and covers the complete engine gap
+inventory, including optional client and transport extensions. Checked items
+below have focused behavioral and independent peer validation; they do not
+mean the entire branch has passed its integration or performance gates.
+
+- [x] Shared native TCP/UDP readiness sets, retained descriptor ownership,
+  immediate closed-owner events, and combined secure-listener polling.
+- [x] Outgoing HPACK/QPACK static-table references and Huffman encoding,
+  retaining never-indexed credentials and cookies.
+- [x] IPv6 TCP listeners and explicit `serveOn` addresses for plain, TLS,
+  QUIC and combined secure servers.
+- [ ] Incremental nonblocking handshakes and active-connection servicing,
+  including per-connection timers and fair TCP/UDP admission.
+- [ ] Persistent HTTP/1.1 connections and HTTP/2–3 connection reuse/pooling.
+- [ ] HTTP/2 and HTTP/3 request multiplexing, stream allocation and scheduling.
+- [ ] Dynamic HPACK encoding and complete dynamic QPACK tables, instruction
+  streams, blocked sections, feedback and eviction.
+- [ ] Streaming client uploads, server requests and server responses.
+- [ ] Public received/sent trailer APIs.
+- [ ] Content-encoding negotiation, decompression and server compression.
+- [ ] Configurable connect/header/body deadlines and request cancellation.
+- [ ] Happy Eyeballs address racing.
+- [ ] QUIC NAT rebinding, migration, path validation and preferred addresses.
+- [ ] QUIC path-MTU discovery, ECN congestion integration and NEW_TOKEN reuse.
+- [ ] TLS session resumption and replay-controlled 0-RTT.
+- [ ] Broader QUIC/server cipher and identity profiles, SNI selection and mTLS.
+- [ ] CONNECT/extended CONNECT, WebSockets, HTTP/3 datagrams and WebTransport.
+- [ ] Server push and priority scheduling.
+- [ ] Client redirect, cookie-jar and proxy configuration.
+- [ ] Apply peer HTTP/3 SETTINGS and field-section limits.
+- [ ] Negotiated QUIC idle timers.
+- [ ] Typed protocol failures with correct stream and connection wire errors,
+  retaining the current packet-number/key state across recoverable failures.
+
+Focused additions use `network_poll.e2e`, `http_header_compression.e2e` and
+`http_server_ipv6.e2e`; independent readiness, header-compression and IPv6 peer
+scripts exercise production code and compiled leak accounting. The readiness
+work exposed an x64 syscall-argument capture bug when a later operand was held
+in the scratch register. Capture now preserves that operand before loading
+earlier arguments.

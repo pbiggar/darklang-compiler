@@ -41,10 +41,10 @@ run ()
 '''
 
 
-def start(binary, port=None):
+def start(binary, port=None, host="127.0.0.1"):
     if port is None:
-        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as reservation:
-            reservation.bind(("127.0.0.1", 0))
+        with socket.socket(socket.AF_INET6 if ":" in host else socket.AF_INET, socket.SOCK_DGRAM) as reservation:
+            reservation.bind((host, 0))
             port = reservation.getsockname()[1]
     process = subprocess.Popen([str(binary), str(port)], cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     assert select.select([process.stdout], [], [], 5)[0], "listener did not start"
@@ -58,7 +58,7 @@ def stop(process):
     assert process.returncode == 0 and stdout == b"STOPPED\n" and not stderr, (process.returncode, stdout, stderr)
 
 
-def exchange(peer, port, ca, method=b"POST", body=b"HTTP/3 routing", declared=None, stalled=False, protocols=None):
+def exchange(peer, port, ca, method=b"POST", body=b"HTTP/3 routing", declared=None, stalled=False, protocols=None, host="127.0.0.1"):
     config = QuicConfiguration(is_client=True, alpn_protocols=["h3"] if protocols is None else protocols,
                               server_name="localhost", cadata=ca.public_bytes(serialization.Encoding.PEM))
     client = QuicConnection(configuration=config)
@@ -71,7 +71,7 @@ def exchange(peer, port, ca, method=b"POST", body=b"HTTP/3 routing", declared=No
                 super()._check_content_length(stream)
 
     http = MethodAwareH3(client)
-    client.connect(("127.0.0.1", port), time.monotonic())
+    client.connect((host, port), time.monotonic())
     response, headers, finished, sent, replay, retry = bytearray(), [], False, False, None, False
     close = None
     deadline = time.monotonic() + (1 if protocols is not None else 12)

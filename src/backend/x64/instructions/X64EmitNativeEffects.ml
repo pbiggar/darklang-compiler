@@ -148,12 +148,28 @@ let emitCliNative (ctx : X64CodeGenTypes.funcCtx) (dest : LIR.reg)
         |> List.fold_left
              (fun loaded operand ->
                loaded
-               |> bind (fun code ->
-                   loadCliOperand X.R11 operand
-                   |> Result.map (fun next -> code @ next @ [ X.PUSH X.R11 ])))
-             (Ok [])
-        |> Result.map (fun code ->
-            code @ (targets |> List.rev |> List.map (fun r -> X.POP r)))
+               |> bind (fun (code, depth) ->
+                   let capture =
+                     match operand with
+                     | LIR.Reg source ->
+                         resolveReg source
+                         |> Result.map (fun reg ->
+                             if reg = X.R11 then
+                               [
+                                 X.MOV_load (X.R11, X.RSP, Int32.of_int (depth * 8));
+                                 X.PUSH X.R11;
+                               ]
+                             else [ X.PUSH reg ])
+                     | _ ->
+                         loadCliOperand X.R11 operand
+                         |> Result.map (fun next -> next @ [ X.PUSH X.R11 ])
+                   in
+                   capture
+                   |> Result.map (fun next -> (code @ next, depth + 1))))
+             (Ok ([ X.PUSH X.R11 ], 0))
+        |> Result.map (fun (code, _) ->
+            code @ (targets |> List.rev |> List.map (fun r -> X.POP r))
+            @ [ X.POP X.R11 ])
       in
       match operation with
       | LIR.PosixOpenAt | LIR.PosixRead | LIR.PosixWrite | LIR.PosixClose

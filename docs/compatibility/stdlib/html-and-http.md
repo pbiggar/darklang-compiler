@@ -119,8 +119,16 @@ unverified. The listener owns and closes accepted connections, and each response
 10-second monotonic deadlines; headers retain the existing wire parser's line,
 count, and size caps. Configured body limits range from zero through 100 MiB,
 and request wire buffering is capped at the body limit plus 1 MiB for framing.
-Concurrency, IPv6 listeners, persistent connections, response compression,
-interpreter telemetry integration, and server-side TLS remain follow-up work.
+Concurrency, persistent connections, response compression and interpreter
+telemetry integration remain follow-up work; TLS serving is described below.
+
+All four server modules (`HttpServer`, `.Tls`, `.Quic`, `.Secure`) also provide
+`serveOn address config ...`. Four-byte addresses bind IPv4 and sixteen-byte
+addresses bind IPv6; invalid byte vectors fail before announcing. Existing
+`serve` calls retain their IPv4 wildcard binding. IPv6 listeners share the same
+ownership, timeout and shutdown behavior. `http_server_ipv6.e2e` and
+`scripts/test_http_server_ipv6_peer.py` cover IPv6 HTTP/1.1, TLS/no-ALPN, HTTP/2,
+HTTP/3 large bodies, rebinding and compiled leak accounting.
 
 `test/fixtures/e2e/stdlib-internal/http_server.e2e` covers routing, configuration, framing limits,
 and listener ownership. `python3 scripts/test_http_server_peer.py` exercises
@@ -152,6 +160,12 @@ unless the application already supplied one or returned 421. Application
 `Alt-Svc: clear` is preserved. Accepted requests remain sequential; a handshake
 or response-delivery drain can delay another admission. Both transports and
 the shutdown owner are released on bind failure or normal shutdown.
+TCP and UDP listener readiness now share one bounded kernel wait; accepted
+connections and UDP sockets also expose retained native readiness watches for
+the active-connection scheduler. Closed owners return immediate terminal events.
+`network_poll.e2e` and `scripts/test_network_poll_peer.py` verify multi-descriptor
+readiness, including data arriving only on the second descriptor and accepted
+TCP socket reads. Admission still completes one active exchange at a time.
 `python3 scripts/test_http_secure_server_peer.py` checks independent TLS/QUIC
 peers, repeated large requests, the owned client session, lazy body lifetime,
 occupied-port cleanup, same-port rebind and stalled TCP/QUIC shutdown.
@@ -165,6 +179,13 @@ dynamic capacity and no blocked streams. `test/fixtures/e2e/http3_qpack.e2e`
 checks the RFC example, malformed references, table boundaries and list limits;
 `python3 scripts/test_qpack_peer.py` verifies both directions against test-only
 `pylsqpack==0.3.23`, including duplicate fields and compiled leak accounting.
+Outgoing HPACK and QPACK select static indexed fields and static name references,
+and use RFC 7541 Huffman encoding when it is shorter than the original string.
+Credential and cookie values remain never-indexed. `http_header_compression.e2e`
+checks wire vectors and duplicate/Unicode fields; the independent
+`scripts/test_http_header_compression_peer.py` checks all 256 Huffman symbols,
+padding, a near-limit input, HPACK/QPACK round trips and sensitive-field flags.
+Dynamic QPACK capacity and blocked-stream support remain disabled.
 `test/fixtures/e2e/http3_wire.e2e` checks encoding bounds,
 fragmentation, forbidden HTTP/2 frame/settings identifiers and duplicates.
 The QUIC v1 AES-128 protection layer derives initial keys, reconstructs packet

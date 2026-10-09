@@ -1,4 +1,4 @@
-// __Hpack.dark - Bounded RFC 7541 decoding and non-indexing header encoding.
+// __Hpack.dark - Bounded RFC 7541 decoding, static header references and Huffman encoding.
 // Static and Huffman tables are the protocol constants in RFC 7541 appendices A/B.
 module Darklang.Stdlib.__Hpack
 
@@ -553,9 +553,301 @@ let encodeInteger (prefix: Int64) (flags: Int64) (value: Int64) : Blob =
   if value < mask then Stdlib.Blob.__fromInt64List [flags + value]
   else Stdlib.Blob.__fromInt64List (Stdlib.List.push (Stdlib.__Hpack.__encodeRest (value - mask)) (flags + mask))
 
+// RFC 7541 Appendix B, inverse of the decoding table above.
+let __huffmanCode (byte: Int64) : (Int64 * Int64) =
+  match byte with
+  | 0L -> (8184L, 13L)
+  | 1L -> (8388568L, 23L)
+  | 2L -> (268435426L, 28L)
+  | 3L -> (268435427L, 28L)
+  | 4L -> (268435428L, 28L)
+  | 5L -> (268435429L, 28L)
+  | 6L -> (268435430L, 28L)
+  | 7L -> (268435431L, 28L)
+  | 8L -> (268435432L, 28L)
+  | 9L -> (16777194L, 24L)
+  | 10L -> (1073741820L, 30L)
+  | 11L -> (268435433L, 28L)
+  | 12L -> (268435434L, 28L)
+  | 13L -> (1073741821L, 30L)
+  | 14L -> (268435435L, 28L)
+  | 15L -> (268435436L, 28L)
+  | 16L -> (268435437L, 28L)
+  | 17L -> (268435438L, 28L)
+  | 18L -> (268435439L, 28L)
+  | 19L -> (268435440L, 28L)
+  | 20L -> (268435441L, 28L)
+  | 21L -> (268435442L, 28L)
+  | 22L -> (1073741822L, 30L)
+  | 23L -> (268435443L, 28L)
+  | 24L -> (268435444L, 28L)
+  | 25L -> (268435445L, 28L)
+  | 26L -> (268435446L, 28L)
+  | 27L -> (268435447L, 28L)
+  | 28L -> (268435448L, 28L)
+  | 29L -> (268435449L, 28L)
+  | 30L -> (268435450L, 28L)
+  | 31L -> (268435451L, 28L)
+  | 32L -> (20L, 6L)
+  | 33L -> (1016L, 10L)
+  | 34L -> (1017L, 10L)
+  | 35L -> (4090L, 12L)
+  | 36L -> (8185L, 13L)
+  | 37L -> (21L, 6L)
+  | 38L -> (248L, 8L)
+  | 39L -> (2042L, 11L)
+  | 40L -> (1018L, 10L)
+  | 41L -> (1019L, 10L)
+  | 42L -> (249L, 8L)
+  | 43L -> (2043L, 11L)
+  | 44L -> (250L, 8L)
+  | 45L -> (22L, 6L)
+  | 46L -> (23L, 6L)
+  | 47L -> (24L, 6L)
+  | 48L -> (0L, 5L)
+  | 49L -> (1L, 5L)
+  | 50L -> (2L, 5L)
+  | 51L -> (25L, 6L)
+  | 52L -> (26L, 6L)
+  | 53L -> (27L, 6L)
+  | 54L -> (28L, 6L)
+  | 55L -> (29L, 6L)
+  | 56L -> (30L, 6L)
+  | 57L -> (31L, 6L)
+  | 58L -> (92L, 7L)
+  | 59L -> (251L, 8L)
+  | 60L -> (32764L, 15L)
+  | 61L -> (32L, 6L)
+  | 62L -> (4091L, 12L)
+  | 63L -> (1020L, 10L)
+  | 64L -> (8186L, 13L)
+  | 65L -> (33L, 6L)
+  | 66L -> (93L, 7L)
+  | 67L -> (94L, 7L)
+  | 68L -> (95L, 7L)
+  | 69L -> (96L, 7L)
+  | 70L -> (97L, 7L)
+  | 71L -> (98L, 7L)
+  | 72L -> (99L, 7L)
+  | 73L -> (100L, 7L)
+  | 74L -> (101L, 7L)
+  | 75L -> (102L, 7L)
+  | 76L -> (103L, 7L)
+  | 77L -> (104L, 7L)
+  | 78L -> (105L, 7L)
+  | 79L -> (106L, 7L)
+  | 80L -> (107L, 7L)
+  | 81L -> (108L, 7L)
+  | 82L -> (109L, 7L)
+  | 83L -> (110L, 7L)
+  | 84L -> (111L, 7L)
+  | 85L -> (112L, 7L)
+  | 86L -> (113L, 7L)
+  | 87L -> (114L, 7L)
+  | 88L -> (252L, 8L)
+  | 89L -> (115L, 7L)
+  | 90L -> (253L, 8L)
+  | 91L -> (8187L, 13L)
+  | 92L -> (524272L, 19L)
+  | 93L -> (8188L, 13L)
+  | 94L -> (16380L, 14L)
+  | 95L -> (34L, 6L)
+  | 96L -> (32765L, 15L)
+  | 97L -> (3L, 5L)
+  | 98L -> (35L, 6L)
+  | 99L -> (4L, 5L)
+  | 100L -> (36L, 6L)
+  | 101L -> (5L, 5L)
+  | 102L -> (37L, 6L)
+  | 103L -> (38L, 6L)
+  | 104L -> (39L, 6L)
+  | 105L -> (6L, 5L)
+  | 106L -> (116L, 7L)
+  | 107L -> (117L, 7L)
+  | 108L -> (40L, 6L)
+  | 109L -> (41L, 6L)
+  | 110L -> (42L, 6L)
+  | 111L -> (7L, 5L)
+  | 112L -> (43L, 6L)
+  | 113L -> (118L, 7L)
+  | 114L -> (44L, 6L)
+  | 115L -> (8L, 5L)
+  | 116L -> (9L, 5L)
+  | 117L -> (45L, 6L)
+  | 118L -> (119L, 7L)
+  | 119L -> (120L, 7L)
+  | 120L -> (121L, 7L)
+  | 121L -> (122L, 7L)
+  | 122L -> (123L, 7L)
+  | 123L -> (32766L, 15L)
+  | 124L -> (2044L, 11L)
+  | 125L -> (16381L, 14L)
+  | 126L -> (8189L, 13L)
+  | 127L -> (268435452L, 28L)
+  | 128L -> (1048550L, 20L)
+  | 129L -> (4194258L, 22L)
+  | 130L -> (1048551L, 20L)
+  | 131L -> (1048552L, 20L)
+  | 132L -> (4194259L, 22L)
+  | 133L -> (4194260L, 22L)
+  | 134L -> (4194261L, 22L)
+  | 135L -> (8388569L, 23L)
+  | 136L -> (4194262L, 22L)
+  | 137L -> (8388570L, 23L)
+  | 138L -> (8388571L, 23L)
+  | 139L -> (8388572L, 23L)
+  | 140L -> (8388573L, 23L)
+  | 141L -> (8388574L, 23L)
+  | 142L -> (16777195L, 24L)
+  | 143L -> (8388575L, 23L)
+  | 144L -> (16777196L, 24L)
+  | 145L -> (16777197L, 24L)
+  | 146L -> (4194263L, 22L)
+  | 147L -> (8388576L, 23L)
+  | 148L -> (16777198L, 24L)
+  | 149L -> (8388577L, 23L)
+  | 150L -> (8388578L, 23L)
+  | 151L -> (8388579L, 23L)
+  | 152L -> (8388580L, 23L)
+  | 153L -> (2097116L, 21L)
+  | 154L -> (4194264L, 22L)
+  | 155L -> (8388581L, 23L)
+  | 156L -> (4194265L, 22L)
+  | 157L -> (8388582L, 23L)
+  | 158L -> (8388583L, 23L)
+  | 159L -> (16777199L, 24L)
+  | 160L -> (4194266L, 22L)
+  | 161L -> (2097117L, 21L)
+  | 162L -> (1048553L, 20L)
+  | 163L -> (4194267L, 22L)
+  | 164L -> (4194268L, 22L)
+  | 165L -> (8388584L, 23L)
+  | 166L -> (8388585L, 23L)
+  | 167L -> (2097118L, 21L)
+  | 168L -> (8388586L, 23L)
+  | 169L -> (4194269L, 22L)
+  | 170L -> (4194270L, 22L)
+  | 171L -> (16777200L, 24L)
+  | 172L -> (2097119L, 21L)
+  | 173L -> (4194271L, 22L)
+  | 174L -> (8388587L, 23L)
+  | 175L -> (8388588L, 23L)
+  | 176L -> (2097120L, 21L)
+  | 177L -> (2097121L, 21L)
+  | 178L -> (4194272L, 22L)
+  | 179L -> (2097122L, 21L)
+  | 180L -> (8388589L, 23L)
+  | 181L -> (4194273L, 22L)
+  | 182L -> (8388590L, 23L)
+  | 183L -> (8388591L, 23L)
+  | 184L -> (1048554L, 20L)
+  | 185L -> (4194274L, 22L)
+  | 186L -> (4194275L, 22L)
+  | 187L -> (4194276L, 22L)
+  | 188L -> (8388592L, 23L)
+  | 189L -> (4194277L, 22L)
+  | 190L -> (4194278L, 22L)
+  | 191L -> (8388593L, 23L)
+  | 192L -> (67108832L, 26L)
+  | 193L -> (67108833L, 26L)
+  | 194L -> (1048555L, 20L)
+  | 195L -> (524273L, 19L)
+  | 196L -> (4194279L, 22L)
+  | 197L -> (8388594L, 23L)
+  | 198L -> (4194280L, 22L)
+  | 199L -> (33554412L, 25L)
+  | 200L -> (67108834L, 26L)
+  | 201L -> (67108835L, 26L)
+  | 202L -> (67108836L, 26L)
+  | 203L -> (134217694L, 27L)
+  | 204L -> (134217695L, 27L)
+  | 205L -> (67108837L, 26L)
+  | 206L -> (16777201L, 24L)
+  | 207L -> (33554413L, 25L)
+  | 208L -> (524274L, 19L)
+  | 209L -> (2097123L, 21L)
+  | 210L -> (67108838L, 26L)
+  | 211L -> (134217696L, 27L)
+  | 212L -> (134217697L, 27L)
+  | 213L -> (67108839L, 26L)
+  | 214L -> (134217698L, 27L)
+  | 215L -> (16777202L, 24L)
+  | 216L -> (2097124L, 21L)
+  | 217L -> (2097125L, 21L)
+  | 218L -> (67108840L, 26L)
+  | 219L -> (67108841L, 26L)
+  | 220L -> (268435453L, 28L)
+  | 221L -> (134217699L, 27L)
+  | 222L -> (134217700L, 27L)
+  | 223L -> (134217701L, 27L)
+  | 224L -> (1048556L, 20L)
+  | 225L -> (16777203L, 24L)
+  | 226L -> (1048557L, 20L)
+  | 227L -> (2097126L, 21L)
+  | 228L -> (4194281L, 22L)
+  | 229L -> (2097127L, 21L)
+  | 230L -> (2097128L, 21L)
+  | 231L -> (8388595L, 23L)
+  | 232L -> (4194282L, 22L)
+  | 233L -> (4194283L, 22L)
+  | 234L -> (33554414L, 25L)
+  | 235L -> (33554415L, 25L)
+  | 236L -> (16777204L, 24L)
+  | 237L -> (16777205L, 24L)
+  | 238L -> (67108842L, 26L)
+  | 239L -> (8388596L, 23L)
+  | 240L -> (67108843L, 26L)
+  | 241L -> (134217702L, 27L)
+  | 242L -> (67108844L, 26L)
+  | 243L -> (67108845L, 26L)
+  | 244L -> (134217703L, 27L)
+  | 245L -> (134217704L, 27L)
+  | 246L -> (134217705L, 27L)
+  | 247L -> (134217706L, 27L)
+  | 248L -> (134217707L, 27L)
+  | 249L -> (268435454L, 28L)
+  | 250L -> (134217708L, 27L)
+  | 251L -> (134217709L, 27L)
+  | 252L -> (134217710L, 27L)
+  | 253L -> (134217711L, 27L)
+  | 254L -> (134217712L, 27L)
+  | 255L -> (67108846L, 26L)
+  | _ -> Builtin.crash "Invalid byte in HTTP Huffman encoder"
+
+let __emitHuffman (bits: Int64) (length: Int64) (output: List<Int64>) : (Int64 * Int64 * List<Int64>) =
+  if length < 8L then (bits, length, output)
+  else
+    let factor = Stdlib.__Hpack.__pow2 (length - 8L) in
+    Stdlib.__Hpack.__emitHuffman (bits % factor) (length - 8L) (Stdlib.List.push output (bits / factor))
+
+let __encodeHuffman (bytes: Blob) (position: Int64) (bits: Int64) (length: Int64) (output: List<Int64>) : Blob =
+  if position == Stdlib.Blob.__byteLength bytes then
+    let output = if length == 0L then output else
+      let padding = Stdlib.__Hpack.__pow2 (8L - length) in
+      Stdlib.List.push output (bits * padding + padding - 1L) in
+    Stdlib.Blob.__fromInt64List (Stdlib.List.reverse output)
+  else
+    let (code, width) = Stdlib.__Hpack.__huffmanCode (Stdlib.Blob.__getByte bytes position) in
+    let (nextBits, nextLength, nextOutput) = Stdlib.__Hpack.__emitHuffman (bits * Stdlib.__Hpack.__pow2 width + code) (length + width) output in
+    Stdlib.__Hpack.__encodeHuffman bytes (position + 1L) nextBits nextLength nextOutput
+
+let __sensitive (name: String) : Bool =
+  name == "authorization" || name == "proxy-authorization" || name == "cookie" || name == "set-cookie"
+
+let __staticIndex (name: String) (value: String) (exact: Bool) (index: Int64) : Stdlib.Option.Option<Int64> =
+  match Stdlib.__Hpack.__static index with
+  | None -> None
+  | Some entry ->
+    let (entryName, entryValue) = entry in
+    if entryName == name && (Stdlib.Bool.not exact || entryValue == value) then Some index
+    else Stdlib.__Hpack.__staticIndex name value exact (index + 1L)
+
 let encodeText (value: String) : Blob =
-  Stdlib.Blob.concat [Stdlib.__Hpack.encodeInteger 7L 0L (Stdlib.String.__byteLength value),
-                      Stdlib.String.toBlob value]
+  let raw = Stdlib.String.toBlob value in
+  let compressed = Stdlib.__Hpack.__encodeHuffman raw 0L 0L 0L [] in
+  let huffman = Stdlib.Blob.__byteLength compressed < Stdlib.Blob.__byteLength raw in
+  let bytes = if huffman then compressed else raw in
+  Stdlib.Blob.concat [Stdlib.__Hpack.encodeInteger 7L (if huffman then 128L else 0L) (Stdlib.Blob.__byteLength bytes), bytes]
 
 let __encode (headers: List<(String * String)>) (size: Int64) (count: Int64)
   (blocks: List<Blob>) : Stdlib.Result.Result<Blob, String> =
@@ -567,9 +859,15 @@ let __encode (headers: List<(String * String)>) (size: Int64) (count: Int64)
     if count >= 256L || nextSize > 65536L then Error "HPACK header list too large"
     else if name == "" then Error "Empty HTTP header name"
     else
-      // Never-indexed literals avoid persisting sensitive fields in a peer's table.
-      let encoded = Stdlib.Blob.concat [Stdlib.Blob.__fromInt64List [16L],
-        Stdlib.__Hpack.encodeText name, Stdlib.__Hpack.encodeText value] in
+      let exact = if Stdlib.__Hpack.__sensitive name then None else Stdlib.__Hpack.__staticIndex name value true 1L in
+      let encoded = match exact with
+      | Some index -> Stdlib.__Hpack.encodeInteger 7L 128L index
+      | None ->
+        // Name references still carry never-indexed values for sensitive fields.
+        let reference = match Stdlib.__Hpack.__staticIndex name value false 1L with
+        | Some index -> Stdlib.__Hpack.encodeInteger 4L 16L index
+        | None -> Stdlib.Blob.concat [Stdlib.Blob.__fromInt64List [16L], Stdlib.__Hpack.encodeText name] in
+        Stdlib.Blob.concat [reference, Stdlib.__Hpack.encodeText value] in
       Stdlib.__Hpack.__encode rest nextSize (count + 1L) (Stdlib.List.push blocks encoded)
 
 let encode (headers: List<(String * String)>) : Stdlib.Result.Result<Blob, String> =

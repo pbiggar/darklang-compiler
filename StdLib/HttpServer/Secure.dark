@@ -43,14 +43,14 @@ let __loop (context: Stdlib.HttpServer.Quic.Context) (handler: Stdlib.Http.Reque
               | Ok false -> Stdlib.HttpServer.Secure.__loop context handler listener step.recent
             else Stdlib.HttpServer.Secure.__loop context handler listener step.recent
 
-let __bind (config: Stdlib.HttpServer.Config.Config) (identity: Stdlib.TlsServerIdentity.Identity) (handler: Stdlib.Http.Request -> Stdlib.Http.Response) (onListening: Unit -> Unit) (signals: Stdlib.__Network.ShutdownSignals) (port: Int64) (limit: Int64) : Stdlib.Result.Result<Unit, String> =
+let __bind (address: List<Int64>) (config: Stdlib.HttpServer.Config.Config) (identity: Stdlib.TlsServerIdentity.Identity) (handler: Stdlib.Http.Request -> Stdlib.Http.Response) (onListening: Unit -> Unit) (signals: Stdlib.__Network.ShutdownSignals) (port: Int64) (limit: Int64) : Stdlib.Result.Result<Unit, String> =
   match Stdlib.Crypto.__secureRandomBytes 32L with
   | Error _ -> Error "Secure HTTP Retry key generation failed"
   | Ok secret ->
-    match Stdlib.__Network.listenTcp4 [0L,0L,0L,0L] port with
+    match (if Stdlib.List.length address == 16 then Stdlib.__Network.listenTcp6 address port else Stdlib.__Network.listenTcp4 address port) with
     | Error _ -> Error "Cannot bind secure HTTP TCP server"
     | Ok listener ->
-      let result = match Stdlib.__Datagram.bind4 [0L,0L,0L,0L] port with
+      let result = match (if Stdlib.List.length address == 16 then Stdlib.__Datagram.bind6 address port else Stdlib.__Datagram.bind4 address port) with
         | Error _ -> Error "Cannot bind secure HTTP UDP server"
         | Ok socket ->
           let context = Stdlib.HttpServer.Quic.Context { config = config, identity = identity, signals = signals, socket = socket, secret = secret, limit = limit } in
@@ -64,14 +64,18 @@ let __bind (config: Stdlib.HttpServer.Config.Config) (identity: Stdlib.TlsServer
 /// Serve TLS HTTP/1.1 and HTTP/2 over TCP and HTTP/3 over UDP on the same port.
 /// Identity is imported with TlsServerIdentity.create. Bind both transports
 /// before announcing, respect application Alt-Svc, and return on SIGINT/SIGTERM.
-let serve (config: Stdlib.HttpServer.Config.Config) (identity: Stdlib.TlsServerIdentity.Identity) (handler: Stdlib.Http.Request -> Stdlib.Http.Response) (onListening: Unit -> Unit) : Stdlib.Result.Result<Unit, String> =
+let serveOn (address: List<Int64>) (config: Stdlib.HttpServer.Config.Config) (identity: Stdlib.TlsServerIdentity.Identity) (handler: Stdlib.Http.Request -> Stdlib.Http.Response) (onListening: Unit -> Unit) : Stdlib.Result.Result<Unit, String> =
   match Stdlib.Int.toInt64 config.port, Stdlib.Int.toInt64 config.maxBodyBytes with
   | Some port, Some limit ->
     if port <= 0L || port > 65535L || limit < 0L || limit > 104857600L then Error "Invalid secure HTTP server configuration"
     else match Stdlib.__Network.shutdownSignals () with
     | Error _ -> Error "Secure HTTP shutdown setup failed"
     | Ok signals ->
-      let result = Stdlib.HttpServer.Secure.__bind config identity handler onListening signals port limit in
+      let result = Stdlib.HttpServer.Secure.__bind address config identity handler onListening signals port limit in
       let _ = Stdlib.__Network.closeShutdownSignals signals in
       result
   | _, _ -> Error "Invalid secure HTTP server configuration"
+
+/// Serve on the default IPv4 wildcard address. Use serveOn for IPv6 or an explicit interface.
+let serve (config: Stdlib.HttpServer.Config.Config) (identity: Stdlib.TlsServerIdentity.Identity) (handler: Stdlib.Http.Request -> Stdlib.Http.Response) (onListening: Unit -> Unit) : Stdlib.Result.Result<Unit, String> =
+  Stdlib.HttpServer.Secure.serveOn [0L, 0L, 0L, 0L] config identity handler onListening

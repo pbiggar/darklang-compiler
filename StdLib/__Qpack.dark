@@ -193,6 +193,14 @@ let decode (data: Blob) : Stdlib.Result.Result<List<(String * String)>, String> 
           if Stdlib.Blob.__getByte data count.next >= 128L then Error "Invalid QPACK base"
           else Stdlib.__Qpack.__decode data base.next 0L 0L []
 
+let __staticIndex (name: String) (value: String) (exact: Bool) (index: Int64) : Stdlib.Option.Option<Int64> =
+  match Stdlib.__Qpack.staticEntry index with
+  | None -> None
+  | Some entry ->
+    let (entryName, entryValue) = entry in
+    if entryName == name && (Stdlib.Bool.not exact || entryValue == value) then Some index
+    else Stdlib.__Qpack.__staticIndex name value exact (index + 1L)
+
 let __encode (fields: List<(String * String)>) (size: Int64) (count: Int64) (blocks: List<Blob>)
   : Stdlib.Result.Result<Blob, String> =
   match fields with
@@ -203,9 +211,19 @@ let __encode (fields: List<(String * String)>) (size: Int64) (count: Int64) (blo
     if name == "" then Error "Empty HTTP header name"
     else if count >= 256L || nextSize > 65536L then Error "QPACK header list too large"
     else
-      // Never-indexed literals keep sensitive values out of the peer's dynamic table.
-      let block = Stdlib.Blob.concat [Stdlib.__Hpack.encodeInteger 3L 48L (Stdlib.String.__byteLength name),
-        Stdlib.String.toBlob name, Stdlib.__Hpack.encodeText value] in
+      let exact = if Stdlib.__Hpack.__sensitive name then None else Stdlib.__Qpack.__staticIndex name value true 0L in
+      let block = match exact with
+      | Some index -> Stdlib.__Hpack.encodeInteger 6L 192L index
+      | None ->
+        let reference = match Stdlib.__Qpack.__staticIndex name value false 0L with
+        | Some index -> Stdlib.__Hpack.encodeInteger 4L 112L index
+        | None ->
+          let raw = Stdlib.String.toBlob name in
+          let compressed = Stdlib.__Hpack.__encodeHuffman raw 0L 0L 0L [] in
+          let huffman = Stdlib.Blob.__byteLength compressed < Stdlib.Blob.__byteLength raw in
+          let bytes = if huffman then compressed else raw in
+          Stdlib.Blob.concat [Stdlib.__Hpack.encodeInteger 3L (if huffman then 56L else 48L) (Stdlib.Blob.__byteLength bytes), bytes] in
+        Stdlib.Blob.concat [reference, Stdlib.__Hpack.encodeText value] in
       Stdlib.__Qpack.__encode rest nextSize (count + 1L) (Stdlib.List.push blocks block)
 
 let encode (fields: List<(String * String)>) : Stdlib.Result.Result<Blob, String> =

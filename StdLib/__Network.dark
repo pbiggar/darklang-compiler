@@ -337,10 +337,10 @@ let __acceptTcp (descriptor: Int64) (lifecycle: Stream<Unit>) (timeoutMs: Int64)
                         write = Stdlib.__Network.__writeAccepted accepted owner
                     })
 
-let listenTcp4 (address: List<Int64>) (port: Int64) : Stdlib.Result.Result<Stdlib.__Network.TcpListener, Int64> =
-    if Stdlib.Bool.not (Stdlib.__Network.__validAddress false address) || port < 0L || port > 65535L then Error 22L
+let __listenTcp (ipv6: Bool) (address: List<Int64>) (port: Int64) : Stdlib.Result.Result<Stdlib.__Network.TcpListener, Int64> =
+    if Stdlib.Bool.not (Stdlib.__Network.__validAddress ipv6 address) || port < 0L || port > 65535L then Error 22L
     else
-        let descriptor = Stdlib.__Network.__tcp4Socket () in
+        let descriptor = if ipv6 then Stdlib.__Network.__tcp6Socket () else Stdlib.__Network.__tcp4Socket () in
         if descriptor < 0L then Error (0L - descriptor)
         else
             let lifecycle = Stdlib.Stream.__new (fun _ -> Some ()) (fun _ -> let _ = Stdlib.__Network.__close descriptor in ()) in
@@ -348,8 +348,8 @@ let listenTcp4 (address: List<Int64>) (port: Int64) : Stdlib.Result.Result<Stdli
             let _ = __raw_write_word enabled 0L 1L in
             let reused = Stdlib.__Network.__reuseAddress descriptor enabled in
             let _ = __raw_free enabled in
-            let sockaddr = Stdlib.__Network.__socketAddress false address port in
-            let bound = if reused < 0L then reused else Stdlib.__Network.__bind4 descriptor sockaddr in
+            let sockaddr = Stdlib.__Network.__socketAddress ipv6 address port in
+            let bound = if reused < 0L then reused else if ipv6 then Stdlib.__Network.__bind6 descriptor sockaddr else Stdlib.__Network.__bind4 descriptor sockaddr in
             let _ = __raw_free sockaddr in
             let listening = if bound < 0L then bound else Stdlib.__Network.__listen descriptor in
             if listening < 0L then
@@ -361,6 +361,12 @@ let listenTcp4 (address: List<Int64>) (port: Int64) : Stdlib.Result.Result<Stdli
                 accept = Stdlib.__Network.__acceptTcp descriptor lifecycle,
                 wait = fun _ -> Stdlib.__Network.__waitReadable descriptor lifecycle
             })
+
+let listenTcp4 (address: List<Int64>) (port: Int64) : Stdlib.Result.Result<Stdlib.__Network.TcpListener, Int64> =
+    Stdlib.__Network.__listenTcp false address port
+
+let listenTcp6 (address: List<Int64>) (port: Int64) : Stdlib.Result.Result<Stdlib.__Network.TcpListener, Int64> =
+    Stdlib.__Network.__listenTcp true address port
 
 let acceptTcp (listener: Stdlib.__Network.TcpListener) (timeoutMs: Int64)
     : Stdlib.Result.Result<Stdlib.__Network.TcpConnection, Int64> = listener.accept timeoutMs
@@ -395,9 +401,7 @@ let __pollResults (buffer: RawPtr) (count: Int64) (index: Int64)
         let writable = Stdlib.Int64.bitwiseAnd events 4L != 0L in
         let closed = Stdlib.Int64.bitwiseAnd events 16L != 0L in
         let failed = Stdlib.Int64.bitwiseAnd events 40L != 0L in
-        let ready = if events == 0L then ready else Stdlib.List.push ready
-            (Stdlib.__Network.Ready { index = index, readable = readable, writable = writable,
-                closed = closed, failed = failed }) in
+        let ready = if events == 0L then ready else Stdlib.List.push ready (Stdlib.__Network.Ready { index = index, readable = readable, writable = writable, closed = closed, failed = failed }) in
         Stdlib.__Network.__pollResults buffer count (index + 1L) ready
 
 // One kernel wait covers TCP listeners, accepted sockets and UDP together.
@@ -416,8 +420,7 @@ let waitSockets (entries: List<Stdlib.__Network.Interest>) (milliseconds: Int64)
         let _ = __raw_write_word timeout 0L (duration / 1000L) in
         let _ = __raw_write_word timeout 8L ((duration % 1000L) * 1000000L) in
         let code = Stdlib.__Network.__pollMany buffer length timeout in
-        let ready = if code < 0L then Error (0L - code)
-            else Ok (Stdlib.List.sortBy (closed @ Stdlib.__Network.__pollResults buffer length 0L []) (fun event -> event.index)) in
+        let ready = if code < 0L then Error (0L - code) else Ok (Stdlib.List.sortBy (closed @ Stdlib.__Network.__pollResults buffer length 0L []) (fun event -> event.index)) in
         let _ = __raw_free timeout in
         let _ = __raw_free buffer in
         ready

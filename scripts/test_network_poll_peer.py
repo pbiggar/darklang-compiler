@@ -2,6 +2,7 @@
 """Exercise compiled multi-socket readiness against independent TCP/UDP peers."""
 
 import selectors
+import argparse
 import socket
 import subprocess
 import tempfile
@@ -64,12 +65,15 @@ def reserve_port(kind):
 
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--compiler", type=Path, default=ROOT / "dark")
+    args = parser.parse_args()
     with tempfile.TemporaryDirectory(prefix="dark-network-poll-") as temporary:
         directory = Path(temporary)
         source, binary = directory / "poll.dark", directory / "poll"
         source.write_text(SOURCE)
         result = subprocess.run(
-            [str(ROOT / "dark"), str(source), "--allow-internal", "--leak-check", "-o", str(binary)],
+            [str(args.compiler), str(source), "--allow-internal", "--leak-check", "-o", str(binary)],
             cwd=ROOT, capture_output=True, text=True, timeout=120,
         )
         assert result.returncode == 0, result.stdout + result.stderr

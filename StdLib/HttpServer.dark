@@ -382,7 +382,7 @@ let __serveLoop (config: Stdlib.HttpServer.Config.Config) (handler: Stdlib.Http.
 
 /// Bind before announcing, serve one bounded HTTP/1.1 or HTTP/2 request per connection,
 /// and return normally after SIGINT or SIGTERM. Routing remains ordinary Dark.
-let serve (config: Stdlib.HttpServer.Config.Config) (handler: Stdlib.Http.Request -> Stdlib.Http.Response)
+let serveOn (address: List<Int64>) (config: Stdlib.HttpServer.Config.Config) (handler: Stdlib.Http.Request -> Stdlib.Http.Response)
     (onListening: Unit -> Unit) : Stdlib.Result.Result<Unit, String> =
     match Stdlib.Int.toInt64 config.port, Stdlib.Int.toInt64 config.maxBodyBytes with
     | Some port, Some limit ->
@@ -395,7 +395,7 @@ let serve (config: Stdlib.HttpServer.Config.Config) (handler: Stdlib.Http.Reques
                 | Error code -> Error ("Shutdown setup failed: " ++ Stdlib.Int64.toString code)
                 | Ok signals ->
                     let result =
-                        match Stdlib.__Network.listenTcp4 [0L, 0L, 0L, 0L] port with
+                        match (if Stdlib.List.length address == 16 then Stdlib.__Network.listenTcp6 address port else Stdlib.__Network.listenTcp4 address port) with
                         | Error code -> Error ("Cannot bind HTTP server: " ++ Stdlib.Int64.toString code)
                         | Ok listener ->
                             let _ = onListening () in
@@ -405,3 +405,8 @@ let serve (config: Stdlib.HttpServer.Config.Config) (handler: Stdlib.Http.Reques
                     let _ = Stdlib.__Network.closeShutdownSignals signals in
                     result
     | _, _ -> Error "Invalid HTTP server configuration"
+
+/// Serve on the default IPv4 wildcard address. Use serveOn for IPv6 or an explicit interface.
+let serve (config: Stdlib.HttpServer.Config.Config) (handler: Stdlib.Http.Request -> Stdlib.Http.Response)
+    (onListening: Unit -> Unit) : Stdlib.Result.Result<Unit, String> =
+    Stdlib.HttpServer.serveOn [0L, 0L, 0L, 0L] config handler onListening

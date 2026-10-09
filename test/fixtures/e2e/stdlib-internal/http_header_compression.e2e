@@ -1,0 +1,10 @@
+// http_header_compression.e2e - RFC header vectors, static references, and sensitive literals.
+Stdlib.__Hpack.encodeText "www.example.com" |> Stdlib.Blob.toHex = "8CF1E3C2E5F23A6BA0AB90F4FF"
+Stdlib.__Hpack.encodeText "" |> Stdlib.Blob.toHex = "00"
+Stdlib.__Hpack.encode [(":method", "GET"), (":scheme", "https"), (":path", "/")] |> Stdlib.Result.map Stdlib.Blob.toHex = Ok "828784"
+Stdlib.__Qpack.encode [(":method", "GET"), (":scheme", "https"), (":path", "/")] |> Stdlib.Result.map Stdlib.Blob.toHex = Ok "0000D1D7C1"
+Stdlib.__Hpack.encode [("authorization", ""), ("cookie", ""), ("set-cookie", "")] |> Stdlib.Result.andThen (Stdlib.__Hpack.decode (Stdlib.__Hpack.initial ())) |> Stdlib.Result.map (fun decoded -> decoded.state.entries) = Ok []
+Stdlib.__Qpack.encode [("authorization", "secret"), ("cookie", "session=abc"), ("set-cookie", "a=1")] |> Stdlib.Result.andThen Stdlib.__Qpack.decode = Ok [("authorization", "secret"), ("cookie", "session=abc"), ("set-cookie", "a=1")]
+Stdlib.__Hpack.encode [("x-name", "café ☃"), ("x-name", "duplicate"), ("content-type", "text/plain")] |> Stdlib.Result.andThen (Stdlib.__Hpack.decode (Stdlib.__Hpack.initial ())) |> Stdlib.Result.map (fun decoded -> decoded.headers) = Ok [("x-name", "café ☃"), ("x-name", "duplicate"), ("content-type", "text/plain")]
+Stdlib.__Qpack.encode [("x-name", "café ☃"), ("x-name", "duplicate"), ("content-type", "text/plain")] |> Stdlib.Result.andThen Stdlib.__Qpack.decode = Ok [("x-name", "café ☃"), ("x-name", "duplicate"), ("content-type", "text/plain")]
+Stdlib.__Hpack.encodeText "\u0000\u0001\u0002" |> Stdlib.Blob.toHex = "03000102"
