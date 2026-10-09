@@ -373,6 +373,16 @@ let materializeReachablePackageValueCatalog (baseContext : X.pipelineContext)
           "Package value catalog validation failed: " ^ error)
     in
     let generatedSymbols, generatedTops = C.viewProgram generated in
+    (* These catalog evaluators already name their requested specialization.
+       A phantom unknown payload in None does not make them generic again;
+       source checking inferred parameters from that annotation only. *)
+    let generatedTops =
+      List.map
+        (function
+          | C.FunctionDef func -> C.FunctionDef { func with C.typeParams = [] }
+          | top -> top)
+        generatedTops
+    in
     let userSymbols, userTops = C.viewProgram typedProgram in
     let symbols, imported =
       C.composeTopLevels generatedSymbols userSymbols generatedTops
