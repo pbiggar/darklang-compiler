@@ -297,11 +297,13 @@ Backspace and paste behavior. It tests stdin itself for the redirected fallback;
 the original package's isInteractive OR condition would otherwise loop on Escape
 when only stdout is a terminal.
 
-Validation checkpoint: 12 focused E2E cases pass. Native regressions pass for
+Validation: 12 focused E2E cases pass. Native regressions pass for
 mixed reads, UTF-16 boundaries, malformed UTF-8, EOF, closed input, invalid counts,
 200 KB input, real key/modifier/repeat events, resize, paste, grapheme Backspace,
-no echo, unchanged terminal attributes and clean leak diagnostics. Final complete
-host, Dune and benchmark gates are pending. Runtime validation is Linux x86-64;
+no echo, unchanged terminal attributes and clean leak diagnostics. Full host suite:
+11955/11955 passed. `dune runtest`, changed-file OCaml formatting checks, and all
+58 benchmark compile/run workloads passed with clean leak diagnostics.
+Cachegrind comparison remains waived. Runtime validation is Linux x86-64;
 Linux ARM64/macOS lowering is implemented but not executed here.
 
 ## Remaining observed compiler issues outside stdin
