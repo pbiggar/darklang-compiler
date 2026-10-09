@@ -2,6 +2,9 @@
 
 module Darklang.Stdlib.Cli.Stdin
 
+/// Whether stdin or stdout is a terminal, matching the interpreter builtin.
+let isInteractive () : Bool = Builtin.stdinIsInteractive ()
+
 // Replaced by the target terminal decoder during lowering.
 let __readKey () : Stdlib.Cli.Stdin.KeyRead.KeyRead =
     Stdlib.Cli.Stdin.KeyRead.KeyRead { key = Stdlib.Cli.Stdin.Key.Key.Escape, modifiers = Stdlib.Cli.Stdin.Modifiers.Modifiers { alt = false, ctrl = false, shift = false }, keyChar = "", repeat = 1 }

@@ -1,0 +1,3 @@
+// Both E2E streams are redirected, so this process is not interactive.
+Builtin.stdinIsInteractive () = false
+Stdlib.Cli.Stdin.isInteractive () = false
