@@ -31,8 +31,11 @@ the upstream package uses ordinary Dark code.
 |---|---|---|---|
 | `packages/darklang/cli/clear.dark` | `Darklang.Cli.Clear.execute` | `Builtin.stdoutClear` | Direct builtin compilation fails with `Unknown function or value 'Builtin.stdoutClear'` (validated after PR #39). On Linux/macOS the interpreter only writes `ESC[2J` followed by `ESC[H`; implement that sequence in Dark using the existing print API instead of a dedicated builtin. Preserve or separately address the interpreter's Windows-specific `Console.Clear()` behavior. User directed deferral; no compiler builtin was added. |
 
-Other declarations in the Clear package remain individually unreviewed. Retain
-`Clear.execute` in the final unresolved list with this upstream-refactoring reason.
+| `packages/darklang/cli/telemetry.dark` | `Darklang.Cli.Telemetry.logFilePath` (value) | `Builtin.cliGetLogDir` | Isolated original declaration fails with `Unknown function or value 'Builtin.cliGetLogDir'` using the surviving PR #39 compiler binary; the builtin is also absent from main at `b3d13bb1c3d85715c5790f527e5c3b0164127ac0`. The interpreter returns `LibConfig.Config.logDir`: `DARK_CONFIG_RUNDIR` plus `logs/`, defaulting to `./logs/`. Replace the dedicated builtin upstream with ordinary Dark environment/path code, preserving the absolute-path requirement when the variable is set. It does not create the directory. User directed deferral; no compiler builtin was added. |
+
+Other declarations in the Clear and Telemetry packages remain individually
+unreviewed. Retain `Clear.execute` and `Telemetry.logFilePath` in the final
+unresolved list with this upstream-refactoring reason.
 
 ## Decisions
 
