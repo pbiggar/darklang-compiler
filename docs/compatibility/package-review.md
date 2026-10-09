@@ -21,6 +21,19 @@ These are review candidates, not 497 confirmed compilation failures or claims
 of behavioral equivalence. Classify actual failures as each package is visited.
 Entries using the same builtin in both implementations are not in this category.
 
+## Upstream functions that should not use builtins
+
+Per user direction, record these as upstream refactoring candidates rather than
+adding compiler builtin implementations. Keep the affected item unresolved until
+the upstream package uses ordinary Dark code.
+
+| Package file | Item | Builtin to remove | Reason and proposed upstream change |
+|---|---|---|---|
+| `packages/darklang/cli/clear.dark` | `Darklang.Cli.Clear.execute` | `Builtin.stdoutClear` | Direct builtin compilation fails with `Unknown function or value 'Builtin.stdoutClear'` (validated after PR #39). On Linux/macOS the interpreter only writes `ESC[2J` followed by `ESC[H`; implement that sequence in Dark using the existing print API instead of a dedicated builtin. Preserve or separately address the interpreter's Windows-specific `Console.Clear()` behavior. User directed deferral; no compiler builtin was added. |
+
+Other declarations in the Clear package remain individually unreviewed. Retain
+`Clear.execute` in the final unresolved list with this upstream-refactoring reason.
+
 ## Decisions
 
 | Package file | Item | Status | Reason and evidence |
