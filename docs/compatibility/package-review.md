@@ -440,6 +440,10 @@ unmatched passwd entries. Before the fix, the two builtin cases failed with
 an unknown-function diagnostic. After the fix all six pass. The unchanged
 upstream currentUser body compiles and runs with LOGNAME and USER removed,
 returning Some("root") on this host with clean leak accounting.
+Full host suite: 12449/12449 passed. Native Dune regressions passed, and
+all 58 benchmark workloads compiled and ran with clean leak accounting.
+The prior executable-path VM adapter was used for host/native checks;
+benchmark workloads ran natively. Cachegrind equivalence remains waived.
 
 ## Completion rule
 
