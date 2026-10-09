@@ -1044,7 +1044,6 @@ let runTestsWithProgressReporter completedTestReporter args =
         "test/fixtures/e2e/upstream/cli/tailscale.dark";
         "test/fixtures/e2e/upstream/cli/workbench-repl.dark";
         "test/fixtures/e2e/upstream/cloud/db.dark";
-        "test/fixtures/e2e/upstream/language/apply/eapply.dark";
         "test/fixtures/e2e/upstream/language/builtin-introspection.dark";
         "test/fixtures/e2e/upstream/language/effect-ceiling.dark";
         "test/fixtures/e2e/upstream/language/error-type-names.dark";
@@ -1319,12 +1318,6 @@ let runTestsWithProgressReporter completedTestReporter args =
     in
     let upstreamSkipReason (test : E.e2eTest) =
       if
-        pathMatchesSourceFile test.E.sourceFile
-          "test/fixtures/e2e/upstream/language/apply/eapply.dark"
-      then
-        "unsupported interpreter test infrastructure: shared preamble uses \
-         Builtin.testRuntimeError"
-      else if
         Text.contains test.E.source "Builtin.testRuntimeError"
         || Text.contains test.E.preamble "Builtin.testRuntimeError"
       then
