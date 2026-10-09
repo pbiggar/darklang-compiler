@@ -84,6 +84,7 @@ and cliOperation (value : MIR.cliOperation) =
   | MIR.Hostname -> union "CliOperation" "Hostname" []
   | MIR.GetEnv -> union "CliOperation" "GetEnv" []
   | MIR.GetEnvironmentPacked -> union "CliOperation" "GetEnvironmentPacked" []
+  | MIR.StdinState -> union "CliOperation" "StdinState" []
   | MIR.SetEnv -> union "CliOperation" "SetEnv" []
   | MIR.UnsetEnv -> union "CliOperation" "UnsetEnv" []
   | MIR.DirectoryCurrent -> union "CliOperation" "DirectoryCurrent" []

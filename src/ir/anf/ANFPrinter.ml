@@ -90,6 +90,7 @@ let cliOperation = function
   | ANF.Hostname -> "Hostname"
   | ANF.GetEnv -> "GetEnv"
   | ANF.GetEnvironmentPacked -> "GetEnvironmentPacked"
+  | ANF.StdinState -> "StdinState"
   | ANF.SetEnv -> "SetEnv"
   | ANF.UnsetEnv -> "UnsetEnv"
   | ANF.DirectoryCurrent -> "DirectoryCurrent"

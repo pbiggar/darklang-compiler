@@ -52,3 +52,8 @@
  (alias runtest)
  (deps package_http_regression.py)
  (action (run python3 %{dep:package_http_regression.py} %{exe:package_http_regression.exe})))
+
+(rule
+ (alias runtest)
+ (deps stdin_input_regression.py)
+ (action (run python3 %{dep:stdin_input_regression.py} %{exe:../../bin/dark.exe})))

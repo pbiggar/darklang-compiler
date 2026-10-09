@@ -88,6 +88,7 @@ let cliOperation = function
   | MIR.Hostname -> "Hostname"
   | MIR.GetEnv -> "GetEnv"
   | MIR.GetEnvironmentPacked -> "GetEnvironmentPacked"
+  | MIR.StdinState -> "StdinState"
   | MIR.SetEnv -> "SetEnv"
   | MIR.UnsetEnv -> "UnsetEnv"
   | MIR.DirectoryCurrent -> "DirectoryCurrent"

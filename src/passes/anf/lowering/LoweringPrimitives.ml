@@ -397,7 +397,6 @@ let tryPresentationIntrinsic name args =
   match (name, args) with
   | "Builtin.print", [ value ] -> Some (ANF.StdoutWrite (value, false))
   | "Builtin.printLine", [ value ] -> Some (ANF.StdoutWrite (value, true))
-  | "Builtin.stdinReadLine", [ ANF.UnitLiteral ] -> Some ANF.StdinReadLine
   | _ -> None
 
 (*
@@ -427,6 +426,7 @@ let tryCliIntrinsic name args =
         | "Darklang.Stdlib.Cli.__hostArchitectureCode" ->
             Some ANF.HostArchitecture
         | "Darklang.Stdlib.Cli.__hostname" -> Some ANF.Hostname
+        | "Builtin.__stdinState" -> Some ANF.StdinState
         | "Darklang.Stdlib.Cli.__getenv" -> Some ANF.GetEnv
         | "Darklang.Stdlib.Cli.__createExclusive" ->
             Some ANF.FileCreateExclusive

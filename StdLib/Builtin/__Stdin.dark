@@ -1,0 +1,7 @@
+// Interpreter stdin builtin entry points over the native input decoder.
+module Builtin
+
+let stdinReadLine () : String = Stdlib.Cli.__Stdin.__readLine ()
+let stdinReadAll () : String = Stdlib.Cli.__Stdin.__readAll ()
+let stdinReadExactly (length: Int) : String = Stdlib.Cli.__Stdin.__readExactly length
+let stdinReadKey () : Stdlib.Cli.Stdin.KeyRead.KeyRead = Stdlib.Cli.__Stdin.__readKey ()

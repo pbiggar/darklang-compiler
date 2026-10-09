@@ -601,6 +601,20 @@ let emitCliNative (ctx : X64CodeGenTypes.funcCtx) (dest : LIR.reg)
             (loadName
             @ [ X.CALL "__dark_cli_getenv" ]
             @ if destReg = X.RAX then [] else [ X.MOV_reg (destReg, X.RAX) ])
+      | LIR.StdinState -> (
+          match args with
+          | [ LIR.Imm offset ] when offset = 0L || offset = 128L ->
+              Ok
+                [
+                  X.LEA
+                    ( destReg,
+                      freeListBase,
+                      Int32.of_int
+                        (freeListSize + processTableSize + Int64.to_int offset)
+                    );
+                ]
+          | _ -> Error "StdinState expects a fixed state or input-buffer offset"
+          )
       | LIR.GetEnvironmentPacked ->
           Ok
             ([ X.CALL "__dark_cli_environment_packed" ]
