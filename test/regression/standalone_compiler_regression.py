@@ -32,13 +32,13 @@ def main():
         assert copied_version == version, copied_version
         source = directory / "input.dark"
         source.write_text('let length = Stdlib.String.length "hé🚀" in\n'
-                          '$"{length}|{Builtin.getBuildHash ()}"\n', encoding="utf-8")
+                          'Stdlib.Int.toString length ++ "|" ++ Builtin.getBuildHash ()\n', encoding="utf-8")
         output = directory / "program"
         result = subprocess.run(
             [str(binary), "-q", "--emit-result", str(source), "-o", str(output)],
             cwd=directory, env=environment, capture_output=True, text=True, timeout=120, check=False)
         assert result.returncode == 0, result.stdout + result.stderr
-        execution = subprocess.run([str(output)], cwd=directory,
+        execution = subprocess.run([str(output)], cwd=directory, env=environment,
                                    capture_output=True, text=True, timeout=10, check=False)
         assert execution.returncode == 0, execution.stderr
         assert json.loads(execution.stdout) == f"3|{build_hash}", execution.stdout

@@ -369,8 +369,21 @@ stamp supplies `Builtin.getBuildHash` in generated programs and the compiler's
 interpreter's development fallback. Neither a copied compiler nor its generated
 programs invoke Git or read repository files to determine their identity.
 
-Validation is pending on `chatgpt/compiler-build-hash`. Other declarations in
-the installation helpers package remain individually unreviewed.
+Validation: all three focused E2E cases fail on the unchanged compiler with
+the missing builtin and pass with the adapter. The unchanged upstream
+`buildHash` and `cliVersion` bodies compile and run with clean leak checks,
+returning `alpha-` plus the compiler's embedded stamp. The whole Helpers source
+compiles with its original GitHub dependencies included; its network update
+check has not been executed. Generator tests cover revision refresh, absent
+Git metadata and absent Git executable. The copied compiler and generated
+program retain the same stamp without Git on PATH.
+
+Full Linux x86-64 host suite: 11913/11913 passed. Native `dune runtest
+--cache=disabled -j1`, changed OCaml formatting, and all 58 benchmark
+compile/run workloads passed with clean leak checks. Cachegrind equivalence
+remains waived; other targets were not executed. The VM dropped the generated
+test runner's executable bit after rebuilding; restoring that bit allowed the
+already-built full suite to run. No toolchain source changes were required.
 
 ## Completion rule
 
