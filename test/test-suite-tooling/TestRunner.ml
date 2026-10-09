@@ -1046,7 +1046,6 @@ let runTestsWithProgressReporter completedTestReporter args =
         "test/fixtures/e2e/upstream/cloud/db.dark";
         "test/fixtures/e2e/upstream/language/builtin-introspection.dark";
         "test/fixtures/e2e/upstream/language/effect-ceiling.dark";
-        "test/fixtures/e2e/upstream/language/error-type-names.dark";
         "test/fixtures/e2e/upstream/language/runtime-to-programtypes.dark";
         "test/fixtures/e2e/upstream/scm/commit-hash.dark";
         "test/fixtures/e2e/upstream/scm/constraint-kinds.dark";

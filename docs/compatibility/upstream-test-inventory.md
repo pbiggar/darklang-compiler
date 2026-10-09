@@ -4,7 +4,7 @@ Generated from `test/test-suite-tooling/TestRunner.ml` and the imported
 `test/fixtures/e2e/upstream/**/*.dark` files. Regenerate with
 `python3 scripts/audit-upstream-gates.py`; verify with `--check`.
 
-**105 files; 34 whole-file exclusions; 267 line-number entries
+**105 files; 33 whole-file exclusions; 267 line-number entries
 across 32 files.** A line entry is not a skipped-test count.
 The runner matches the `L<number>:` assertion name produced by the fixture
 parser. Declarations and multiline assertions require parser inspection;
@@ -46,7 +46,7 @@ Other skip metadata and runtime filters are outside this inventory.
 | [language/effect-ceiling.dark](../../test/fixtures/e2e/upstream/language/effect-ceiling.dark) | disabled | — |
 | [language/elambda.dark](../../test/fixtures/e2e/upstream/language/elambda.dark) | enabled | 13, 18, 21, 33, 35 |
 | [language/error-syntax.dark](../../test/fixtures/e2e/upstream/language/error-syntax.dark) | enabled | 1 |
-| [language/error-type-names.dark](../../test/fixtures/e2e/upstream/language/error-type-names.dark) | disabled | — |
+| [language/error-type-names.dark](../../test/fixtures/e2e/upstream/language/error-type-names.dark) | enabled | — |
 | [language/flow-control/eif.dark](../../test/fixtures/e2e/upstream/language/flow-control/eif.dark) | enabled | 3, 4, 5, 6, 10, 23, 26 |
 | [language/flow-control/ematch.dark](../../test/fixtures/e2e/upstream/language/flow-control/ematch.dark) | enabled | 656, 660, 663, 667, 672, 677, 681 |
 | [language/flow-control/epipe.dark](../../test/fixtures/e2e/upstream/language/flow-control/epipe.dark) | enabled | 11 |

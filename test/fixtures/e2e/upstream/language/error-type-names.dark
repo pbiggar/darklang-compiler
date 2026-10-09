@@ -23,8 +23,11 @@ module AmbiguousHash =
   let returnsIntParseError (n: Int) : Darklang.Stdlib.Int.ParseError = n
 
   // One hash, three declarations, three names printed.
+  #compileerror="Expected TSum (\"Darklang.Stdlib.Int.ParseError\", []), got TInt"
   (takesIntParseError 5) = error="AmbiguousHash.takesIntParseError's 1st parameter `e` expects Darklang.Stdlib.Int.ParseError, but got Int (5)"
+  #compileerror="Expected TSum (\"Darklang.Stdlib.Uuid.ParseError\", []), got TInt"
   (takesUuidParseError 5) = error="AmbiguousHash.takesUuidParseError's 1st parameter `e` expects Darklang.Stdlib.Uuid.ParseError, but got Int (5)"
+  #compileerror="Expected TSum (\"Darklang.Stdlib.Int.ParseError\", []), got TInt"
   (returnsIntParseError 5) = error="AmbiguousHash.returnsIntParseError's return value expects Darklang.Stdlib.Int.ParseError, but got Int (5)"
 
 module NestedInTypeArguments =
@@ -41,9 +44,13 @@ module NestedInTypeArguments =
     : Int =
     4
 
+  #compileerror="Expected TList (TSum (\"Darklang.Stdlib.Int.ParseError\", [])), got TInt"
   (takesListOfInt 5) = error="NestedInTypeArguments.takesListOfInt's 1st parameter `x` expects List<Darklang.Stdlib.Int.ParseError>, but got Int (5)"
+  #compileerror="Expected TList (TSum (\"Darklang.Stdlib.Uuid.ParseError\", [])), got TInt"
   (takesListOfUuid 5) = error="NestedInTypeArguments.takesListOfUuid's 1st parameter `x` expects List<Darklang.Stdlib.Uuid.ParseError>, but got Int (5)"
+  #compileerror="Expected TDict (TString, TList (TSum (\"Darklang.Stdlib.Uuid.ParseError\", []))), got TInt"
   (takesDeep 5) = error="NestedInTypeArguments.takesDeep's 1st parameter `x` expects Dict<String, List<Darklang.Stdlib.Uuid.ParseError>>, but got Int (5)"
+  #compileerror="Expected TTuple [TSum (\"Darklang.Stdlib.Int.ParseError\", []); TSum (\"Darklang.Stdlib.Uuid.ParseError\", [])], got TInt"
   (takesPair 5) = error="NestedInTypeArguments.takesPair's 1st parameter `x` expects (Darklang.Stdlib.Int.ParseError * Darklang.Stdlib.Uuid.ParseError), but got Int (5)"
 
 module RecordAndEnumFields =
@@ -62,9 +69,13 @@ module RecordAndEnumFields =
 
     { start with e = 5 }
 
+  #compileerror="Expected TSum (\"Darklang.Stdlib.Int.ParseError\", []), got TInt"
   (makeIntRecord ()) = error="Failed to create record. Expected Darklang.Stdlib.Int.ParseError for field `e`, but got 5 (an Int)"
+  #compileerror="Expected TList (TSum (\"Darklang.Stdlib.Uuid.ParseError\", [])), got TInt"
   (makeUuidRecord ()) = error="Failed to create record. Expected List<Darklang.Stdlib.Uuid.ParseError> for field `es`, but got 5 (an Int)"
+  #compileerror="Expected TSum (\"Darklang.Stdlib.Uuid.ParseError\", []), got TInt"
   (makeEnum ()) = error="Failed to create enum. Expected Darklang.Stdlib.Uuid.ParseError for field 0 in `Wrap`, but got Int (5)"
+  #compileerror="Expected TSum (\"Darklang.Stdlib.Int.ParseError\", []), got TInt"
   (updateIntRecord ()) = error="Failed to create updated record. Expected Darklang.Stdlib.Int.ParseError for field `e`, but got 5 (an Int)"
 
 module UnambiguousHash =
@@ -72,6 +83,7 @@ module UnambiguousHash =
   // printed however the author spelled it. Type arguments survive either way.
   let takesOption (o: Darklang.Stdlib.Option.Option<Int>) : Int = 1
 
+  #compileerror="Expected TSum (\"Darklang.Stdlib.Option.Option\", [TInt]), got TInt"
   (takesOption 5) = error="UnambiguousHash.takesOption's 1st parameter `o` expects Darklang.Stdlib.Option.Option<Int>, but got Int (5)"
 
 module LocallyDeclared =
@@ -88,4 +100,5 @@ module LocallyDeclared =
 
   let describe (t: Celsius) : String = "ok"
 
+  #compileerror="Expected TRecord (\"Celsius\", []), got TInt"
   (describe 5) = error="LocallyDeclared.describe's 1st parameter `t` expects LocallyDeclared.Celsius, but got Int (5)"
