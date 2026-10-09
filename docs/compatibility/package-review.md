@@ -385,6 +385,43 @@ remains waived; other targets were not executed. The VM dropped the generated
 test runner's executable bit after rebuilding; restoring that bit allowed the
 already-built full suite to run. No toolchain source changes were required.
 
+## Runtime executable path
+
+`Darklang.Stdlib.Cli.Sys.currentExecutablePath` in
+`packages/darklang/stdlib/cli/sys.dark` failed with
+`Unknown function or value 'Builtin.getCurrentExecutablePath'`.
+`Darklang.Cli.Installation.System.getInstallationMode` also failed because the
+compiler did not expose the public wrapper. Per user direction, both now use
+runtime OS discovery on every compiler target: Linux x86-64 and ARM64 use
+`readlinkat` on `/proc/self/exe`; macOS ARM64 uses Darwin `proc_info` with
+`PROC_INFO_CALL_PIDINFO` and `PROC_PIDPATHINFO`, the kernel operation behind
+`proc_pidpath`. No libc, loader library, shell command, embedded install path,
+or `argv[0]` guess is used. Linux grows a full buffer and retries interrupted
+calls; Darwin uses its 4096-byte maximum buffer. Temporary mappings are freed,
+and OS failures raise a language exception, matching the upstream String API.
+
+All three focused E2E cases reproduce the missing builtin on the baseline.
+All three target images compile. Relocation regressions pass on both Linux
+architectures under pinned QEMU, covering copy, rename, symlinks, UTF-8 paths,
+long paths, forced buffer growth and forged `argv[0]`, with clean leak checks.
+The unchanged `getInstallationMode` body and its dependencies compile.
+macOS execution remains unverified because this VM has no macOS runtime.
+
+Full x86-64 suite: 11916/11916 passed. The VM has no procfs, so a temporary,
+untracked execution adapter routes only generated images containing
+`/proc/self/exe` through QEMU; the remaining tests run natively. Without that
+adapter, the three new cases report the expected missing-procfs OS error.
+Emulating the whole suite instead exposed one unrelated QUIC closing-cache
+timing assertion (100 ms cooldown); all seven cases pass natively. No QUIC
+code or test was changed. A clean worktree avoids stale read-only VM build
+artifacts; the adapter also repairs the repeatedly dropped executable bit on
+the generated test compiler driver.
+
+All 58 quick/full benchmark workloads pass natively on Linux x86-64, and all
+58 pass on Linux ARM64 under QEMU, with clean leak checks. Changed OCaml files
+pass formatting. Native `dune runtest --cache=disabled -j1` passed with the
+same temporary VM adapter. Cachegrind equivalence remains waived.
+
 ## Completion rule
 
 At the end of the package review, enumerate every skipped package and unresolved
