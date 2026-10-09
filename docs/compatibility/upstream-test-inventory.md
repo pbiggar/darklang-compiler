@@ -4,7 +4,7 @@ Generated from `test/test-suite-tooling/TestRunner.ml` and the imported
 `test/fixtures/e2e/upstream/**/*.dark` files. Regenerate with
 `python3 scripts/audit-upstream-gates.py`; verify with `--check`.
 
-**105 files; 34 whole-file exclusions; 270 line-number entries
+**105 files; 34 whole-file exclusions; 268 line-number entries
 across 32 files.** A line entry is not a skipped-test count.
 The runner matches the `L<number>:` assertion name produced by the fixture
 parser. Declarations and multiline assertions require parser inspection;
@@ -38,7 +38,7 @@ Other skip metadata and runtime filters are outside this inventory.
 | [language/collections/dtuple.dark](../../test/fixtures/e2e/upstream/language/collections/dtuple.dark) | enabled | 9, 11 |
 | [language/collections/edict.dark](../../test/fixtures/e2e/upstream/language/collections/edict.dark) | enabled | — |
 | [language/custom-data/aliases.dark](../../test/fixtures/e2e/upstream/language/custom-data/aliases.dark) | enabled | — |
-| [language/custom-data/enums.dark](../../test/fixtures/e2e/upstream/language/custom-data/enums.dark) | enabled | 7, 9, 11, 15, 17, 72, 104 |
+| [language/custom-data/enums.dark](../../test/fixtures/e2e/upstream/language/custom-data/enums.dark) | enabled | 7, 9, 11, 74, 106 |
 | [language/custom-data/record-field-acess.dark](../../test/fixtures/e2e/upstream/language/custom-data/record-field-acess.dark) | enabled | 13 |
 | [language/custom-data/records.dark](../../test/fixtures/e2e/upstream/language/custom-data/records.dark) | enabled | 8 |
 | [language/custom-data/values.dark](../../test/fixtures/e2e/upstream/language/custom-data/values.dark) | enabled | 5, 9, 13, 17, 21, 25, 29, 33, 37, 41, 45, 49, 53, 57, 61, 65, 76, 77, 78, 80, 81, 83, 84, 86, 87, 89, 90, 92, 93, 95, 96, 98, 99, 101, 102, 104, 105, 107, 108, 110, 111, 113, 114, 116, 117, 119, 120, 122, 123, 125, 126, 128, 129 |
@@ -127,4 +127,4 @@ editing the runner. They must not be counted as unsupported expressions.
 | File | Line | Source line |
 | --- | --- | --- |
 
-0 of the 270 entries point to blank or comment lines.
+0 of the 268 entries point to blank or comment lines.

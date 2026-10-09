@@ -8,14 +8,16 @@ Audited on 2026-10-08 (UTC), against compiler revision `4a61318019fb8dea7f34a0bf
 Results from that complete audit, including enabled neighbours: 3,599 assertions, 1,325 passed and 2,274 failed.
 That audit used 34 whole-file gates and 205 assertion lines across 16 mixed files.
 
-Current configured exclusions: **2,339 assertions across 66 files**, including
+Current configured exclusions: **2,337 assertions across 66 files**, including
 **69 unsupported interpreter runtime-error assertions**. There are 34 whole-file
-gates and 270 assertion lines across 32 mixed files. The 19 affected files were
+gates and 268 assertion lines across 32 mixed files. The 19 affected files were
 rerun individually without gates: **1,006 passed
 and 110 failed out of 1,116 assertions**. The ungated application fixture contributes 33 cascading preamble failures;
 disabling only its dependent L118 assertion lets the existing fallback prune the
 helper, and **33/33** remaining assertions pass. The other failures comprise
 69 dependent assertions and eight existing exclusions. `derror.dark:L10` passes and remains enabled.
+
+Constructor arity follow-up: named enum cases and payload counts are validated before generic argument inference, including aliases and explicit arguments. Option `None 5` and `Some(5, 6)` now report field-count compile errors; upstream enum L16 and L19 are enabled with phase-specific overrides. The focused regression passed **8/8** (the original checker failed four); the enum fixture passed **33/33** enabled assertions individually. Native build, the full host suite (**11,910/11,910**, after integrating main `38dceec47`), `dune runtest`, and **58/58** leak workloads passed. Parent benchmark verification stopped before measurement because the stored workload digest is incompatible; no baseline was reset.
 
 The assertion harness now compares original parsed expressions. Multiline applications and literal contents are preserved in individual runs and batches. A follow-up retest of `stdlib/dict.dark` passed all 140 assertions after L21 was changed to expect its existing compile-time key type error.
 
@@ -80,7 +82,7 @@ Each file links to the individual failing assertions and their observed diagnost
 | [language/builtin-introspection.dark](failures/language/builtin-introspection.md) | 2 | 0 | 2 |
 | [language/collections/dlist.dark](failures/interpreter-test-runtime-error.md) | 6 | 4 | 2 |
 | [language/collections/dtuple.dark](failures/interpreter-test-runtime-error.md) | 6 | 4 | 2 |
-| [language/custom-data/enums.dark](failures/language/custom-data/enums.md) | 38 | 31 | 7 |
+| [language/custom-data/enums.dark](failures/language/custom-data/enums.md) | 38 | 33 | 5 |
 | [language/custom-data/record-field-acess.dark](failures/interpreter-test-runtime-error.md) | 5 | 4 | 1 |
 | [language/custom-data/records.dark](failures/interpreter-test-runtime-error.md) | 24 | 23 | 1 |
 | [language/custom-data/values.dark](failures/language/custom-data/values.md) | 72 | 19 | 53 |
