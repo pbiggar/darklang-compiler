@@ -1443,7 +1443,9 @@ let runE2ETestSourceWithPreambleContext stdlib preambleCtx session
         Option.is_some test.errorExpectation
         && Option.is_some test.expectedErrorMessage
         && isUpstreamDarkTestFile test.sourceFile
-        && String.starts_with ~prefix:"Expected error message" failure.message
+        && (String.starts_with ~prefix:"Expected error message" failure.message
+           || String.starts_with ~prefix:"Expected compile error message"
+                failure.message)
   in
   if not fallback then primary
   else

@@ -50,7 +50,7 @@ module NestedInTypeArguments =
   (takesListOfUuid 5) = error="NestedInTypeArguments.takesListOfUuid's 1st parameter `x` expects List<Darklang.Stdlib.Uuid.ParseError>, but got Int (5)"
   #compileerror="Expected TDict (TString, TList (TSum (\"Darklang.Stdlib.Uuid.ParseError\", []))), got TInt"
   (takesDeep 5) = error="NestedInTypeArguments.takesDeep's 1st parameter `x` expects Dict<String, List<Darklang.Stdlib.Uuid.ParseError>>, but got Int (5)"
-  #compileerror="Expected TTuple [TSum (\"Darklang.Stdlib.Int.ParseError\", []); TSum (\"Darklang.Stdlib.Uuid.ParseError\", [])], got TInt"
+  #compileerror="Expected TTuple\n[TSum (\"Darklang.Stdlib.Int.ParseError\", []);\n TSum (\"Darklang.Stdlib.Uuid.ParseError\", [])], got TInt"
   (takesPair 5) = error="NestedInTypeArguments.takesPair's 1st parameter `x` expects (Darklang.Stdlib.Int.ParseError * Darklang.Stdlib.Uuid.ParseError), but got Int (5)"
 
 module RecordAndEnumFields =
