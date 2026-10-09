@@ -14,7 +14,7 @@ def ocaml_string(value):
 def main():
     root, output, build_info = map(Path, sys.argv[1:4])
     build_hash = sys.argv[4] or "dev"
-    if build_hash != "dev" and re.fullmatch(r"[0-9a-f]{7,40}", build_hash) is None:
+    if build_hash != "dev" and re.fullmatch(r"[0-9a-f]{4,64}", build_hash) is None:
         raise ValueError("Invalid compiler build hash")
     names = [line.strip() for line in (root / "library-sources.list").read_text().splitlines()
              if line.strip() and not line.startswith("#")]

@@ -1,4 +1,4 @@
 // Compiler identity is a stable embedded string, including through package wrappers.
-(let hash = Builtin.getBuildHash () in hash == "dev" || Stdlib.String.length hash >= 7) = true
+(let hash = Builtin.getBuildHash () in hash == "dev" || Stdlib.String.length hash >= 4) = true
 Builtin.getBuildHash () == Builtin.getBuildHash () = true
 (let buildHash () : String = Builtin.getBuildHash () in let cliVersion () : String = "alpha-" ++ buildHash () in cliVersion () == "alpha-" ++ Builtin.getBuildHash ()) = true

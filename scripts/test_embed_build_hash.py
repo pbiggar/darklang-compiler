@@ -16,7 +16,8 @@ class BuildHashTests(unittest.TestCase):
             source.write_text('module Builtin\nlet getBuildHash () : String = "__COMPILER_BUILD_HASH__"\n')
             (root / "packages").mkdir()
             (root / "library-sources.list").write_text("StdLib/Builtin/__BuildInfo.dark\n")
-            for argument, expected in [("0123456", "0123456"), ("abcdef0", "abcdef0"), ("", "dev")]:
+            for argument, expected in [("0123456", "0123456"), ("abcd", "abcd"),
+                                       ("abcdef0", "abcdef0"), ("a" * 64, "a" * 64), ("", "dev")]:
                 result = subprocess.run([sys.executable, str(Path(__file__).with_name("embed-stdlib.py")),
                                          str(root), str(root / "EmbeddedStdlib.ml"),
                                          str(root / "BuildInfo.ml"), argument],
