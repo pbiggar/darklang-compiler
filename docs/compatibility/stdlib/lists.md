@@ -34,7 +34,7 @@ Compiler evidence is anchored in:
 
 - `src/frontend/interpreter/Parser.ml` for canonical source parsing
   and AST normalization;
-- `src/AST.ml`, `src/frontend/TypeChecking.ml`, and `src/passes/anf/AST_to_ANF.ml` for the
+- `src/AST.ml`, `src/frontend/WrittenChecking.ml`, and `src/passes/anf/AST_to_ANF.ml` for the
   canonical list form, homogeneous typing, private typed equality, native
   construction, and pattern lowering;
 - `src/memory/RuntimeDataLayout.ml`, `src/DarkStdlib.ml`, `StdLib/List.dark`, and

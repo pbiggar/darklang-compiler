@@ -714,14 +714,12 @@ let lowerExpression (toANFCore : LoweringCallbacks.expressionLowerer)
         | AST.Add | AST.Sub | AST.Mul | AST.Div | AST.Mod | AST.Pow | AST.Shl
         | AST.Shr | AST.BitAnd | AST.BitOr | AST.BitXor | AST.Lt | AST.Gt
         | AST.Lte | AST.Gte | AST.And | AST.Or ->
+            let* typ = infer expr in
             let id, gen = A.freshVar gen in
             let value =
-              match infer left with
-              | Ok typ -> (
-                  match O.integerFunctionForBinOp functionId typ op with
-                  | Some id -> A.Call (id, [ leftAtom; rightAtom ])
-                  | None -> A.Prim (O.convertBinOp op, leftAtom, rightAtom))
-              | Error _ -> A.Prim (O.convertBinOp op, leftAtom, rightAtom)
+              match O.integerFunctionForBinOp functionId typ op with
+              | Some id -> A.Call (id, [ leftAtom; rightAtom ])
+              | None -> A.Prim (O.convertBinOp op, leftAtom, rightAtom)
             in
             Ok (A.Let (id, value, A.Return (A.Var id)), gen)
       in

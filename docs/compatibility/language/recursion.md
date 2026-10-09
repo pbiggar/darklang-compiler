@@ -94,7 +94,7 @@ not public recursion syntax.
 - Parsing: `src/frontend/interpreter/Parser.ml`
 - Stable parsed identities: `src/NameSyntax.ml`
 - Resolution, SCCs, monomorphic checking, and diagnostics:
-  `src/frontend/TypeChecking.ml`
+  `src/frontend/WrittenChecking.ml`
 - Closure identity and lowered group layout: `src/passes/anf/AST_to_ANF.ml`
 - Identity-safe self-tail ownership: `src/passes/anf/TailCallDetection.ml`
 - Existing behavioral coverage: `functions.e2e`, `tailcall.e2e`,

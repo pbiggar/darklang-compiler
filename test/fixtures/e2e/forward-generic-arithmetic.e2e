@@ -1,0 +1,6 @@
+// Generic arithmetic acquires its concrete representation at specialization.
+let forwardSubtract<'a> (a: a) (b: a) : a = a - b
+
+forwardSubtract 9L 4L = 5L
+forwardSubtract 9.0 4.0 = 5.0
+forwardSubtract "a" "b" = compileerror="Arithmetic operator requires numeric operands"

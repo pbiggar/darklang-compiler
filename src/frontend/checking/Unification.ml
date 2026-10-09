@@ -141,7 +141,7 @@ let rec matchTypes pattern actual =
 (*
    Check if a type contains type variables
    The element variable the checker gives an empty list literal that nothing
-   has typed yet (Expressions.ml, CheckMatches.ml). Spelled like a freshened
+   has typed yet. Spelled like a freshened
    parameter so that inference may bind it; a declared `'t` must stay rigid.
 *)
 let emptyListElementVar = "t$empty"

@@ -20,7 +20,7 @@ differences are excluded.
 | --- | --- | --- | --- |
 | Grammar | canonical `src/frontend/interpreter/Parser.ml` entry path | `LibParser/Parser.fs:1634-1644,1945-1970,2063-2077,2245-2399,2760-2805` | Named/qualified/generic construction, mixed separators, non-empty declarations/updates; anonymous literals rejected |
 | Expression identity | `src/AST.ml` | `LibExecution/ProgramTypes.fs:479-493` | Explicit source name, resolved name, and ordered arguments |
-| Declaration metadata | `src/frontend/TypeChecking.ml` | `ProgramTypes.fs:594-610`; `RuntimeTypes.fs:1503-1513` | Declared/phantom parameters and order retained; first-declared lookup |
+| Declaration metadata | `src/frontend/WrittenChecking.ml` | `ProgramTypes.fs:594-610`; `RuntimeTypes.fs:1503-1513` | Declared/phantom parameters and order retained; first-declared lookup |
 | Construction | type-checker record literal and `src/passes/anf/AST_to_ANF.ml` | `LibTypeChecker/TypeChecker.fs:1093-1246`; `ProgramTypesToRuntimeTypes.fs:1077-1102` | Duplicate/missing/unknown/empty/type validation and source-order evaluation |
 | Access/update | type-checker access/update and ANF projection/clone | `Interpreter.fs:1985-2002,2260-2288`; pinned fixtures | Same behavior, with earlier AOT diagnostics |
 | Patterns | parser, type checker, and lowering | pinned program/runtime pattern unions; CLI record docs | Bind the record then access fields |

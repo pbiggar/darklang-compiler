@@ -130,7 +130,7 @@ unit character exactly:
 
 | Contract | Compiler evidence at `882f633f…` | Interpreter evidence at `04fbe9dc…` | Result |
 | --- | --- | --- | --- |
-| Distinct value/type traversal | `src/AST.ml`, `src/frontend/interpreter/Parser.ml`, `src/frontend/TypeChecking.ml`, `src/ir/anf/ANF.ml`, `src/passes/anf/AST_to_ANF.ml`, `src/passes/anf/RefCountInsertion.ml`, `src/passes/mir/MIR_to_LIR.ml`, `src/passes/lir/RegisterAllocation.ml` | `backend/src/LibExecution/RuntimeTypes.fs:133-153,948-969` | Aligned |
+| Distinct value/type traversal | `src/AST.ml`, `src/frontend/interpreter/Parser.ml`, `src/frontend/WrittenChecking.ml`, `src/ir/anf/ANF.ml`, `src/passes/anf/AST_to_ANF.ml`, `src/passes/anf/RefCountInsertion.ml`, `src/passes/mir/MIR_to_LIR.ml`, `src/passes/lir/RegisterAllocation.ml` | `backend/src/LibExecution/RuntimeTypes.fs:133-153,948-969` | Aligned |
 | Clock and tick precision | `src/backend/arm64/instructions/ARM64EmitNativeEffects.ml`, `src/backend/x64/instructions/X64EmitNativeEffects.ml` | `Builtins.Time/Libs/DateTime.fs:14-45`, `DarkDateTime.fs` | Aligned to available host precision |
 | Public signatures and behavior | `StdLib/DateTime.dark` | `packages/darklang/stdlib/dateTime.dark:4-136`, `Builtins.Pure/Libs/DateTime.fs:13-536` | Aligned |
 | Duration grammar and errors | `StdLib/Duration.dark`, `StdLib/Int.dark` | `packages/darklang/stdlib/duration.dark:6-28`, `Builtins.Pure/Libs/Int.fs:359-379` | Aligned for the documented grammar |

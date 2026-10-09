@@ -17,7 +17,7 @@ The interpreter evidence was rechecked in `LibParser/Parser.fs`,
 `LibParser/WrittenTypesToProgramTypes.fs`, `LibDB/NameLookup.fs`,
 `LibExecution/ProgramTypes.fs`, and `Builtins.CliHost/Libs/Cli.fs` at the pinned
 revision. Compiler evidence was rechecked in `src/AST.ml`, `src/NameSyntax.ml`, both
-parser passes, the whole-program section of `src/frontend/TypeChecking.ml`,
+parser passes, the whole-program section of `src/frontend/WrittenChecking.ml`,
 `src/passes/anf/AST_to_ANF.ml`, `src/CompilerLibrary.ml`, `src/Program.ml`, and the e2e runner.
 
 ## Rule matrix

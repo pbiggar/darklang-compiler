@@ -824,6 +824,7 @@ let registryWithExternalSpecs (specialization : S.specializationResult) =
     specialization.S.externalSpecs specialization.S.specRegistry
 
 let monomorphizeWithGenericFuncDefs definitions program =
+  let program = StaticCallReduction.reduce definitions program in
   let specs = collectInitialMonomorphizationSpecs program in
   let specialization =
     specializeFromSpecs (C.programSymbols program) definitions specs

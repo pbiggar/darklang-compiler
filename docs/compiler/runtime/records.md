@@ -111,7 +111,7 @@ ownership planning do not add record syntax.
 | --- | --- |
 | `src/AST.ml` | nominal record references and public expressions |
 | `src/frontend/interpreter/Parser.ml` | canonical interpreter-compatible grammar |
-| `src/frontend/TypeChecking.ml` | metadata, substitution, validation |
+| `src/frontend/WrittenChecking.ml` | metadata, substitution, validation |
 | `src/frontend/ValueRendering.ml` | record rendering |
 | `src/passes/anf/AST_to_ANF.ml` | record allocation, clone, and projection |
 | `src/ir/anf/ANF.ml` | descriptors and ownership shapes |

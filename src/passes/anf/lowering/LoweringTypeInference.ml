@@ -446,9 +446,9 @@ let rec inferTypeCore sums names expr environment registry variants functions
       | AST.Lt | AST.Gt | AST.Lte | AST.Gte -> (
           let* operand = same () in
           match operand with
-          | AST.TInt8 | AST.TInt16 | AST.TInt32 | AST.TInt64 | AST.TInt
-          | AST.TUInt8 | AST.TUInt16 | AST.TUInt32 | AST.TUInt64 | AST.TFloat64
-            ->
+          | AST.TInt8 | AST.TInt16 | AST.TInt32 | AST.TInt64 | AST.TInt128
+          | AST.TInt | AST.TUInt8 | AST.TUInt16 | AST.TUInt32 | AST.TUInt64
+          | AST.TUInt128 | AST.TFloat64 ->
               Ok AST.TBool
           | _ ->
               Error

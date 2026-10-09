@@ -91,7 +91,7 @@ are `packages/darklang/stdlib/*` plus `backend/tests/Tests/Blob.Tests.fs`.
 
 Compiler type/value registration is in `src/AST.ml` and
 `src/DarkStdlib.ml`. Name resolution and equality admission are in
-`src/frontend/TypeChecking.ml`; value lowering, structural equality, and Blob
+`src/frontend/WrittenChecking.ml`; value lowering, structural equality, and Blob
 ownership flow through `src/passes/anf/AST_to_ANF.ml`, ANF/MIR/LIR, reference-count
 insertion, and both native backends. Public implementations are
 `StdLib/Blob.dark`, `Base64.dark`, `Crypto.dark`, and `X509.dark`.
