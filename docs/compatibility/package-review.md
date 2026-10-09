@@ -363,7 +363,7 @@ unchanged whole Telemetry package; this fix covers its clock function only.
 `Darklang.Cli.Installation.Helpers.buildHash` in
 `packages/darklang/cli/installation/helpers.dark` failed with
 `Unknown function or value 'Builtin.getBuildHash'`. Per user direction, the
-compiler embeds Dune's abbreviated git revision during its build. The same
+compiler embeds Git's abbreviated revision during its build. The same
 stamp supplies `Builtin.getBuildHash` in generated programs and the compiler's
 `--version` output. Builds without Git metadata use `dev`, matching the
 interpreter's development fallback. Neither a copied compiler nor its generated

@@ -2,6 +2,7 @@
 """Generate immutable OCaml strings for the standard library in declaration order."""
 from pathlib import Path
 import re
+import subprocess
 import sys
 
 
@@ -13,7 +14,15 @@ def ocaml_string(value):
 
 def main():
     root, output, build_info = map(Path, sys.argv[1:4])
-    build_hash = sys.argv[4] or "dev"
+    if len(sys.argv) == 5:
+        build_hash = sys.argv[4] or "dev"
+    else:
+        try:
+            revision = subprocess.run(["git", "-C", str(root), "rev-parse", "--short", "HEAD"],
+                                      capture_output=True, text=True, check=False)
+            build_hash = revision.stdout.strip() if revision.returncode == 0 else "dev"
+        except FileNotFoundError:
+            build_hash = "dev"
     if build_hash != "dev" and re.fullmatch(r"[0-9a-f]{4,64}", build_hash) is None:
         raise ValueError("Invalid compiler build hash")
     names = [line.strip() for line in (root / "library-sources.list").read_text().splitlines()
