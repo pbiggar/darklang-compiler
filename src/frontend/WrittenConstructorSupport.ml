@@ -54,8 +54,7 @@ let check checkExpression literal globals locals symbols expected
               ("Constructor '" ^ canonical ^ "." ^ caseName ^ "' expects "
               ^ string_of_int (List.length variant.fields)
               ^ " fields")
-        | Some (_, variant) ->
-            map Option.some (variantTypes entry variant))
+        | Some (_, variant) -> map Option.some (variantTypes entry variant))
     | WT.TDAlias target ->
         bind
           (resolveWrittenType globals.allowInternal globals.types entry.path
