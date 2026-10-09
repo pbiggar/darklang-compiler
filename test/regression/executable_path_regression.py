@@ -1,17 +1,22 @@
 #!/usr/bin/env python3
 """Check runtime executable identity after relocation and misleading launch arguments."""
+import argparse
 import json
 import os
 from pathlib import Path
 import platform
 import shutil
 import subprocess
-import sys
 import tempfile
 
 
 def main():
-    compile_all = str(Path(sys.argv[1]).resolve())
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("compile_all")
+    parser.add_argument("--target", choices=["linux-x86_64", "linux-arm64", "macos-arm64"])
+    parser.add_argument("--runner", help="Emulator executable for the selected target")
+    arguments = parser.parse_args()
+    compile_all = str(Path(arguments.compile_all).resolve())
     with tempfile.TemporaryDirectory(prefix="dark-executable-path-") as directory:
         root = Path(directory)
         source = root / "identity.dark"
@@ -22,15 +27,17 @@ if first == second && first == small && first == Builtin.getCurrentExecutablePat
 else Builtin.crash "Executable path results differ"
 ''', encoding="utf-8")
         subprocess.run([compile_all, str(source), str(root)], check=True, timeout=300)
-        target = "macos-arm64" if platform.system() == "Darwin" else (
-            "linux-arm64" if platform.machine() in {"aarch64", "arm64"} else "linux-x86_64")
+        target = arguments.target or ("macos-arm64" if platform.system() == "Darwin" else (
+            "linux-arm64" if platform.machine() in {"aarch64", "arm64"} else "linux-x86_64"))
         binary = root / target
         environment = dict(os.environ, PATH=str(root / "no-tools"))
         unrelated = root / "unrelated"
         unrelated.mkdir()
 
         def check(path):
-            result = subprocess.run(["misleading-argv-zero"], executable=str(path), cwd=unrelated,
+            command = ([arguments.runner, "-0", "misleading-argv-zero", str(path)]
+                       if arguments.runner else ["misleading-argv-zero"])
+            result = subprocess.run(command, executable=arguments.runner or str(path), cwd=unrelated,
                                     env=environment, capture_output=True, text=True, timeout=30)
             assert result.returncode == 0, result.stdout + result.stderr
             assert result.stderr == "", result.stderr
@@ -51,7 +58,7 @@ else Builtin.crash "Executable path results differ"
         link = root / "launch-link"
         link.symlink_to(renamed)
         check(link)
-    print("All native targets compile; host executable paths survive copy, rename, symlink, Unicode and forged argv[0]")
+    print(f"All native targets compile; {target} executable paths survive copy, rename, symlink, Unicode and forged argv[0]")
 
 
 if __name__ == "__main__":
