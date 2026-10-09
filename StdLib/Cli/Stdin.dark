@@ -20,31 +20,8 @@ let readKey () : Stdlib.Cli.Stdin.KeyRead.KeyRead = Builtin.stdinReadKey ()
 /// and a coalesced burst (a held key, or a paste delivering one character many times) appends
 /// `keyChar` `repeat` times so a pasted secret arrives whole.
 let readSecret () : String =
-  if Stdlib.Bool.not (isInteractive ()) then
+  // Secret key input requires a terminal on stdin, even if stdout is a tty.
+  if Stdlib.Bool.not (Builtin.__isTerminal 0L) then
     readLine ()
   else
-    let go (acc: String) : String =
-      let k = readKey ()
-
-      match k.key with
-      | Enter ->
-        Stdlib.printLine ""
-        acc
-      | Backspace -> go (Stdlib.String.dropLast acc 1)
-      | _ ->
-        if k.keyChar == "" then
-          go acc
-        else
-          let chunk =
-            if k.repeat > 1 then Stdlib.String.repeat k.keyChar k.repeat else k.keyChar
-          // A paste arrives as ONE coalesced read whose text can carry the terminating
-          // newline; without this check the loop would wait for an Enter that was already
-          // consumed. Anything pasted after the newline is not secret material and is dropped.
-          match Stdlib.String.split (acc ++ chunk) "\n" with
-          | [ whole ] -> go whole
-          | beforeNewline :: _rest ->
-            Stdlib.printLine ""
-            beforeNewline
-          | [] -> go acc
-
-    go ""
+    Stdlib.Cli.__Stdin.__secretLoop []

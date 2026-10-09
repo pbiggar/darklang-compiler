@@ -269,6 +269,54 @@ leak diagnostics and unchanged terminal attributes. Full host suite:
 passed. Cachegrind comparison remains waived. Runtime validation is Linux
 x86-64; no new syscall lowering was required.
 
+## Stdin streams and key input
+
+PR #39 implements `Builtin.stdinReadAll`, `Builtin.stdinReadExactly`, and
+`Builtin.stdinReadKey`, plus public `Stdin.readLine`, `readAll`, and `readSecret`.
+The existing public `readKey` was a placeholder returning Escape; it now reads
+real terminal events. A private decoder uses direct read, ioctl, poll, clock and
+signal syscalls. Shared input state occupies 512 bytes beside runtime process
+metadata, retaining buffered bytes across line, counted and whole-stream reads.
+There is no libc, shell or package-server dependency.
+
+Line reads accept CR, LF and CRLF, preserve remaining input, and return an empty
+string at EOF. All/count reads decode UTF-8 with replacement for malformed input;
+counted reads use the interpreter's UTF-16 unit count and reject negative or
+out-of-range counts. A count splitting an astral character returns replacement
+for its isolated surrogate; the remaining surrogate is retained for the next
+read and also renders as replacement in native UTF-8 strings. Raw UTF-16 string
+identity is not represented by the compiler.
+
+Key reads temporarily disable canonical mode, echo and terminal signal
+processing; decode text, common CSI/SS3 keys and modifiers; coalesce repeats and
+pastes with 4 ms quiet / 40 ms total bounds; preserve the next differing control
+key; and return NoName on a resize while waiting. Redirected stdin returns Escape,
+as in the interpreter. Terminal attributes and signal masks are restored.
+Secret input uses owned text chunks across calls, preserving Enter, grapheme
+Backspace and paste behavior. It tests stdin itself for the redirected fallback;
+the original package's isInteractive OR condition would otherwise loop on Escape
+when only stdout is a terminal.
+
+Validation checkpoint: 12 focused E2E cases pass. Native regressions pass for
+mixed reads, UTF-16 boundaries, malformed UTF-8, EOF, closed input, invalid counts,
+200 KB input, real key/modifier/repeat events, resize, paste, grapheme Backspace,
+no echo, unchanged terminal attributes and clean leak diagnostics. Final complete
+host, Dune and benchmark gates are pending. Runtime validation is Linux x86-64;
+Linux ARM64/macOS lowering is implemented but not executed here.
+
+## Remaining observed compiler issues outside stdin
+
+The large-input regression initially crashed in the test's `String.toBlob`
+conversion at 100 KB and above. Reading and printing the same input directly
+succeeds with clean leak checks. This conversion issue remains to investigate;
+it was not changed by the stdin implementation.
+
+The original String-accumulator secret loop returned correct edited text but
+underflowed its reference count on repeated separate key reads. Standalone
+`String.dropLast` on runtime input passed. The compiler implementation uses owned
+chunks to avoid that failure; the original loop's ownership bug remains to
+investigate and is not claimed fixed generally.
+
 ## Completion rule
 
 At the end of the package review, enumerate every skipped package and unresolved

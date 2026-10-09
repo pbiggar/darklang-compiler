@@ -30,7 +30,7 @@ let _ = Stdlib.Cli.Posix.fdWrite 2 (Stdlib.String.toBlob report) in
 let _ = Stdlib.Cli.Posix.fdWrite 2 (Stdlib.String.toBlob value) in
 0L''',
             'all': '''let value = Stdlib.Cli.Stdin.readAll () in
-let _ = Stdlib.Cli.Posix.fdWrite 1 (Stdlib.String.toBlob value) in
+let _ = Builtin.print value in
 0L''',
             'split': '''let a = Builtin.stdinReadExactly 1 in
 let b = Builtin.stdinReadExactly 1 in
@@ -41,16 +41,22 @@ let _ = Stdlib.Cli.Posix.fdWrite 1 (Stdlib.String.toBlob (a ++ "|" ++ b ++ "|" +
             'overflow': 'let _ = Builtin.stdinReadExactly 2147483648 in 0L',
         }
         binaries = {}
+        batch = [compiler, "--batch", "-q", "--leak-check", "--"]
         for name, code in programs.items():
             source = root / (name + '.dark')
             source.write_text(code)
             binary = root / name
-            subprocess.run([compiler, '-q', '--leak-check', str(source), '-o', str(binary)], check=True, timeout=120)
+            batch.extend([str(source), str(binary)])
             binaries[name] = binary
+        subprocess.run(batch, check=True, timeout=180)
         for payload in [b'', b'one\r\ntwo\n', '二😀e\u0301\n'.encode(), b'x' * 200000, b'\xffa\xe0\x80\x80']:
+            print('stream bytes:', len(payload), flush=True)
             result = subprocess.run([binaries['all']], input=payload, capture_output=True, timeout=30)
             expected = payload.decode('utf-8', 'replace').encode()
             assert (result.returncode, result.stdout, result.stderr) == (0, expected, b''), result
+        result = subprocess.run([binaries['all']], stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                preexec_fn=lambda: os.close(0), timeout=15)
+        assert result.returncode != 0 and b'errno 9' in result.stderr, result
         result = subprocess.run([binaries['split']], input='😀tail'.encode(), capture_output=True, timeout=15)
         assert (result.returncode, result.stdout, result.stderr) == (0, '�|�|tail'.encode(), b''), result
         for name in ['invalid', 'overflow']:
@@ -92,16 +98,27 @@ let _ = Stdlib.Cli.Posix.fdWrite 1 (Stdlib.String.toBlob (a ++ "|" ++ b ++ "|" +
                 os.close(master)
                 os.close(slave)
 
-        for data, report in [(b'a', b'A|a|1'), (b'A', b'SHIFT+A|A|1'), (b'\x03', b'CTRL+C||1'),
-                             (b'\x1bx', b'ALT+X|x|1'), (b'\x1b', b'Escape||1'),
+        for data, report in [(b'a', b'A|a|1'), (b'A', b'SHIFT+A|A|1'), (b'!', b'SHIFT+D1|!|1'), (b'\0', b'CTRL+Spacebar||1'), (b'\x03', b'CTRL+C||1'),
+                             (b'\x1bx', b'ALT+X|x|1'), (b'\x1bX', b'ALT+SHIFT+X|X|1'), (b'\x1b\x03', b'ALT+CTRL+C||1'), (b'\x1b', b'Escape||1'),
                              (b'\x1b[A', b'UpArrow||1'), (b'\x1b[1;6D', b'CTRL+SHIFT+LeftArrow||1'),
                              (b'\x1b[15~', b'F5||1'), ('二😀\n'.encode(), 'Packet|二😀\n|1'.encode()),
-                             (b'\x1b[B\x1b[B', b'DownArrow||2')]:
+                             (b'\x1b[B\x1b[B', b'DownArrow||2'), (b'\r\r', b'Enter|\n\n|1')]:
             terminal('key', data, report)
         terminal('keys', b'\x1b[B\x1b[B\r', b'DownArrow:2|Enter:1')
         terminal('key', expected=b'NoName||1', resize=True)
         terminal('secret', 'sëcret\nignored'.encode(), 'sëcret'.encode())
+        terminal('secret', expected=b'ab', chunks=[b'a', b'b', b'\r'])
         terminal('secret', expected=b'ac', chunks=[b'a', b'b', b'\x7f', b'c', b'\r'])
+        terminal('secret', expected='二a'.encode(), chunks=['二'.encode(), '😀'.encode(), b'\x7f', b'a', b'\r'])
+        master, slave = pty.openpty()
+        try:
+            original = termios.tcgetattr(slave)
+            result = subprocess.run([binaries['secret']], input=b'pipe secret\n', stdout=slave, stderr=subprocess.PIPE, timeout=15)
+            assert (result.returncode, result.stderr) == (0, b'pipe secret'), result
+            assert termios.tcgetattr(slave) == original
+        finally:
+            os.close(master)
+            os.close(slave)
         # Also exercise ordinary binaries without leak instrumentation.
         source = root / 'plain.dark'
         source.write_text(programs['all'])

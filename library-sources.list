@@ -258,6 +258,7 @@ StdLib/Cli/Sys.dark
 StdLib/Cli/Stdin/Key.dark
 StdLib/Cli/Stdin/Modifiers.dark
 StdLib/Cli/Stdin/KeyRead.dark
+StdLib/Cli/__Stdin.dark
 StdLib/Cli/Stdin.dark
 StdLib/AltJson/ParseError.dark
 StdLib/AltJson.dark
