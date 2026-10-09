@@ -1,0 +1,4 @@
+// Compiler build identity; the library embedder substitutes the build-time revision.
+module Builtin
+
+let getBuildHash () : String = "__COMPILER_BUILD_HASH__"

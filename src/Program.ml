@@ -971,7 +971,11 @@ let run source verbosity (options : cliOptions) =
    Print version information
 *)
 let versionLines () =
-  [ "Dark Compiler v0.1.0"; "Darklang native compiler for macOS and Linux" ]
+  [
+    "Dark Compiler v0.1.0";
+    "Darklang native compiler for macOS and Linux";
+    "Build: " ^ BuildInfo.hash;
+  ]
 
 let printVersion () = List.iter print_endline (versionLines ())
 
