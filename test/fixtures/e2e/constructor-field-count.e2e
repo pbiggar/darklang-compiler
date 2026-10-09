@@ -4,3 +4,7 @@ Stdlib.Option.Option.Some(5, 6) = compileerror="Constructor 'Darklang.Stdlib.Opt
 Stdlib.Option.Option.None<Int64> 5L = compileerror="Constructor 'Darklang.Stdlib.Option.Option.None' expects 0 fields"
 Stdlib.Option.Option.Some 5L = Stdlib.Option.Option.Some 5L
 Stdlib.Option.Option.None<Int64> = Stdlib.Option.Option.None<Int64>
+type Maybe<'a> = Stdlib.Option.Option<'a>
+Maybe.None 5L = compileerror="Constructor 'Darklang.Stdlib.Option.Option.None' expects 0 fields"
+Maybe.Some(5L, 6L) = compileerror="Constructor 'Darklang.Stdlib.Option.Option.Some' expects 1 fields"
+Maybe.Some 5L = Stdlib.Option.Option.Some 5L
