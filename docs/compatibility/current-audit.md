@@ -10,11 +10,11 @@ That audit used 34 whole-file gates and 205 assertion lines across 16 mixed file
 
 Current configured exclusions: **1,810 assertions across 65 files**, including
 **69 unsupported interpreter runtime-error assertions**. There are 32 whole-file
-gates and 294 assertion lines across 33 mixed files. The 19 affected files were
-rerun individually without gates: **1,006 passed
+gates and 294 assertion lines across 33 mixed files. The earlier retirement audit reran the 19 affected files
+individually without gates: **1,006 passed
 and 110 failed out of 1,116 assertions**. The ungated application fixture contributes 33 cascading preamble failures;
 disabling only its dependent L118 assertion lets the existing fallback prune the
-helper, and **33/33** remaining assertions pass. The other failures comprise
+helper, and **33/33** remaining assertions pass. At that point, the other failures comprised
 69 dependent assertions and eight existing exclusions. `derror.dark:L10` passes and remains enabled.
 
 Constructor arity follow-up: named enum cases and payload counts are validated before generic argument inference, including aliases and explicit arguments. Option `None 5` and `Some(5, 6)` now report field-count compile errors; upstream enum L16 and L19 are enabled with phase-specific overrides. The focused regression passed **8/8** (the original checker failed four); the enum fixture passed **33/33** enabled assertions individually. Native build, the full host suite (**11,910/11,910**, after integrating main `38dceec47`), `dune runtest`, and **58/58** leak workloads passed. Parent benchmark verification stopped before measurement because the stored workload digest is incompatible; no baseline was reset.
@@ -53,6 +53,8 @@ Application preamble gate correction (2026-10-09), after merge `2021f6b74`: only
 Compile-error expectation follow-up (2026-10-09), based on main `bf9cd3ad4`: 16 assertions now require their correct compile-time diagnostics: enum L107, all 13 type-name assertions, and JSON L934/L983. Expressions and interpreter expectations remain unchanged. The upstream reduced-declaration retry now handles phase-specific compile-error messages as well as legacy error messages, preserving the ahead-of-time requirement. Before that retry change, seven type-name cases failed on pruned helper names; the complete type-name fixture now passes **13/13**, and enums passes **34/34** enabled assertions.
 
 The real parser enumerated all 6,734 imported assertions; all 127 remaining legacy error expectations were probed individually before the JSON changes. Missing interpreter helpers and unrelated preamble errors are not accepted as replacement diagnostics. JSON was additionally run in full individually: **511/540** passed before expectation updates; the two genuine static type errors bring it to **513/540**. All **513/513** enabled JSON assertions then passed through the normal runner individually. The whole-file JSON gate is replaced with exact gates for its 27 remaining failures, recovering 511 passing neighbours. In total, **527 assertions** are enabled and removed from the failure ledger.
+
+Verification: on the task's original parent `bf9cd3ad4`, native build, the complete host suite (**12,440/12,440**), `dune runtest`, **58/58** leak workloads, and the generated inventory check passed. After integrating main `2b8f02e06`, native build succeeds, **12,440** host tests pass and the three newly added executable-path assertions fail; the new native executable-path regression also fails. This VM has no `/proc/self/exe`; both failures are reproduced on unmodified main. All 58 leak workloads still pass. Parent benchmark verification stops before measurement on the incompatible stored workload digest; no baseline was reset.
 
 ## Unsupported interpreter test infrastructure
 
