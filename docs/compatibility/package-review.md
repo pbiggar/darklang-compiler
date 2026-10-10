@@ -527,7 +527,8 @@ Unicode/long paths, tiny procfs buffers, misleading argv, relative launches,
 cwd/PATH mutation before the first public API call, absent auxiliary input,
 PATH order/empty entries, non-executable files, directories and symlink loops.
 All three native target images are compiled; this VM runs Linux x86-64 only.
-The complete host suite passes 13087/13087 tests and all 58 benchmark workloads
+After integrating main through PR #54, the complete host suite passes
+13138/13138 tests and all 58 benchmark workloads
 compile/run with clean leak checks. Cachegrind equivalence remains waived.
 
 ## Next item awaiting review: Sys.isRoot
