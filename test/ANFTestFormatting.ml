@@ -323,6 +323,8 @@ and aNF_returnOwnership (value : ANF.returnOwnership) =
 and aNF_cliOperation (value : ANF.cliOperation) =
   match value with
   | ANF.Execute -> union "CliOperation" "Execute" []
+  | ANF.StartupStack -> union "CliOperation" "StartupStack" []
+  | ANF.ExecutableState -> union "CliOperation" "ExecutableState" []
   | ANF.RunProcess -> union "CliOperation" "RunProcess" []
   | ANF.HostOS -> union "CliOperation" "HostOS" []
   | ANF.HostArchitecture -> union "CliOperation" "HostArchitecture" []

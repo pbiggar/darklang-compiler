@@ -78,6 +78,8 @@ and rcKind (value : MIR.rcKind) =
 and cliOperation (value : MIR.cliOperation) =
   match value with
   | MIR.Execute -> union "CliOperation" "Execute" []
+  | MIR.StartupStack -> union "CliOperation" "StartupStack" []
+  | MIR.ExecutableState -> union "CliOperation" "ExecutableState" []
   | MIR.RunProcess -> union "CliOperation" "RunProcess" []
   | MIR.HostOS -> union "CliOperation" "HostOS" []
   | MIR.HostArchitecture -> union "CliOperation" "HostArchitecture" []

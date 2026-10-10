@@ -45,7 +45,7 @@ let __executableWalk (parts: List<String>) (remaining: List<String>) (links: Int
             let parent = match parts with | [] -> [] | _ :: tail -> tail in
             Builtin.__executableWalk parent rest links
         else
-            let next = part :: parts in
+            let next = Stdlib.List.push parts part in
             let path = Builtin.__executablePartsPath next in
             match Builtin.__executableReadlink path with
             | Ok target ->
@@ -89,6 +89,12 @@ let __selectExecutableFallback (execfn: String) (argv0: String) (cwd: String) (p
             | None -> None
             | Some directories -> Builtin.__searchExecutablePath argv0 (Stdlib.String.split directories ":") cwd
 
+let __cacheExecutableBytes (path: String) (state: RawPtr) (offset: Int64) : Unit =
+    if offset == Stdlib.String.__byteLength path then ()
+    else
+        let _ = __raw_write_byte state (16L + offset) (Stdlib.String.__byteAtUnchecked path offset) in
+        Builtin.__cacheExecutableBytes path state (offset + 1L)
+
 let __initializeExecutablePath () : Unit =
     let state = Builtin.__executableState () in
     if Builtin.__launchWord state 0L != 0L then ()
@@ -105,7 +111,7 @@ let __initializeExecutablePath () : Unit =
                     let length = Stdlib.String.__byteLength path in
                     if length > 8175L then __raw_write_word state 8L -1L
                     else
-                        let _ = Stdlib.Cli.__Posix.__copyString path state 16L in
+                        let _ = Builtin.__cacheExecutableBytes path state 0L in
                         __raw_write_word state 8L length
                 | None -> __raw_write_word state 8L -1L in
         __raw_write_word state 0L 1L
