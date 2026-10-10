@@ -723,8 +723,8 @@ let emitCliNative (ctx : codeGenContext) (dest : LIR.reg)
       | LIR.PosixMkdirAt | LIR.PosixUnlinkAt | LIR.PosixRenameAt
       | LIR.PosixChmodAt | LIR.PosixChmodAt2 | LIR.PosixUtimesAt
       | LIR.PosixSetAttributesAt | LIR.PosixSymlinkAt | LIR.PosixReadlinkAt
-      | LIR.PosixFlock | LIR.PosixGetDents | LIR.PosixIoctl | LIR.PosixProcInfo
-        -> (
+      | LIR.PosixAccessAt | LIR.PosixFlock | LIR.PosixGetDents | LIR.PosixIoctl
+      | LIR.PosixProcInfo -> (
           let number, arity =
             match operation with
             | LIR.PosixOpenAt ->
@@ -811,6 +811,11 @@ let emitCliNative (ctx : codeGenContext) (dest : LIR.reg)
                 ( (match ARM64.targetOS ctx.target with
                   | Platform.Linux -> Some 78
                   | Platform.MacOS -> Some 473),
+                  4 )
+            | LIR.PosixAccessAt ->
+                ( (match ARM64.targetOS ctx.target with
+                  | Platform.Linux -> Some 48
+                  | Platform.MacOS -> Some 466),
                   4 )
             | LIR.PosixFlock ->
                 ( (match ARM64.targetOS ctx.target with
@@ -1029,6 +1034,25 @@ let emitCliNative (ctx : codeGenContext) (dest : LIR.reg)
                   if destReg = Symbolic.X0 then []
                   else [ Symbolic.MOV_reg (destReg, Symbolic.X0) ])
           | _ -> Error "CLI execute expects exactly one command")
+      | LIR.StartupStack ->
+          let loop =
+            Printf.sprintf "__startup_stack_%s_%s" ctx.functionName
+              ctx.instructionSite
+          in
+          let doneLabel = loop ^ "_done" in
+          Ok
+            [
+              Symbolic.MOV_reg (Symbolic.X9, Symbolic.X29);
+              Symbolic.Label loop;
+              Symbolic.LDR (Symbolic.X10, Symbolic.X9, 0);
+              Symbolic.CBZ (Symbolic.X10, doneLabel);
+              Symbolic.MOV_reg (Symbolic.X9, Symbolic.X10);
+              Symbolic.B_label loop;
+              Symbolic.Label doneLabel;
+              Symbolic.ADD_imm (destReg, Symbolic.X9, 16);
+            ]
+      | LIR.ExecutableState ->
+          Ok [ Symbolic.ADD_imm (destReg, Symbolic.X27, 256 + 512) ]
       | LIR.GetPid | LIR.GetUid ->
           let os = ARM64.targetOS ctx.target in
           let number =

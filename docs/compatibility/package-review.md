@@ -466,7 +466,7 @@ leak accounting. The existing executable-path VM adapter was used for the
 host/native gates; benchmark workloads ran natively. Cachegrind equivalence
 remains waived. Other target runtimes were not executed for this change.
 
-## PID builtin (merge blocked by VM verification)
+## PID builtin (merged before executable-path follow-up)
 
 The original `Darklang.Stdlib.Cli.Sys.currentPid` body failed to compile with
 `Unknown function or value 'Builtin.posixGetpid'` on main `f2e57de`.
@@ -487,7 +487,64 @@ Those same three failures reproduce on the baseline. The native Dune
 executable-path regression also fails on that missing-procfs OS error.
 The initial native run additionally hit a generated EmbeddedStdlib permission
 error; making that generated file writable allowed the retry to proceed.
-This checkpoint is not merged. Cachegrind equivalence remains waived.
+Per user direction, PR #52 was merged at `14b3040d8f9c61e80c4681902786a3c42438dc69` before addressing those existing failures. Cachegrind equivalence remains waived.
+
+## Executable discovery without procfs
+
+The user approved this fallback order after the PID merge: Linux
+`/proc/self/exe`, then Linux `AT_EXECFN`, then an `argv[0]` containing `/`, then
+an executable matching bare `argv[0]` in startup `PATH`, then an explicit
+language exception. macOS keeps Darwin `proc_info` first and uses the same
+argv/PATH fallback. The original runtime-path implementation above describes
+PR #48; this follow-up removes its dependency on procfs being mounted.
+
+The compiler inserts a call to `Builtin.__initializeExecutablePath` before
+user entry when executable discovery is reachable. Two private native
+operations expose the original argc stack address and an unmanaged 8192-byte
+cache reserved alongside runtime state. Dark reads the kernel launch arguments
+and Linux auxiliary vector, captures cwd/PATH, and immediately resolves the
+fallback. No managed object survives in the cache. Later API calls still try
+the native kernel lookup first, then return a copy of the cached fallback.
+
+The resolver walks path components, follows relative and absolute symlinks,
+handles `.` and `..`, caps symlink traversals at 40, and requires a regular
+file with OS executable access. PATH search skips inaccessible and
+non-executable entries, respects directory order, and interprets empty entries
+as startup cwd. A missing or null `AT_EXECFN` proceeds to argv/PATH. Missing
+inputs and failed resolution leave the cache absent; native discovery failure
+then raises an exception instead of returning an invented path.
+
+This is a launch-time fallback: if the executable is renamed or deleted after
+startup and kernel discovery is unavailable, the cached path can describe its
+former location. Discovery cannot recover an intentionally forged argv name
+when both the kernel path and `AT_EXECFN` are unavailable. Resolved paths that
+exceed the cache's 8175-byte payload are treated as unavailable.
+
+The focused tests cover canonical and relative candidates, fallback precedence,
+startup initialization, missing/null auxiliary entries, and explicit failure.
+Independent launch regressions cover copy, rename before launch, symlinks,
+Unicode/long paths, tiny procfs buffers, misleading argv, relative launches,
+cwd/PATH mutation before the first public API call, absent auxiliary input,
+PATH order/empty entries, non-executable files, directories and symlink loops.
+All three native target images are compiled; this VM runs Linux x86-64 only.
+After integrating main through PR #54, the complete host suite passes
+13138/13138 tests and all 58 benchmark workloads
+compile/run with clean leak checks. Cachegrind equivalence remains waived.
+
+## Next item awaiting review: Sys.isRoot
+
+The original `packages/darklang/stdlib/cli/sys.dark` declaration is:
+
+```dark
+let isRoot () : Bool =
+  (Builtin.posixGetuid ()) == 0
+```
+
+Its original expression fails with
+`Unknown function or value 'Builtin.posixGetuid'` after this follow-up.
+The compiler already implements the public wrapper with
+`Stdlib.Cli.__getuid () == 0L`; the missing interpreter builtin adapter is the
+remaining difference. No fix has been applied; await the user's decision.
 
 ## Completion rule
 

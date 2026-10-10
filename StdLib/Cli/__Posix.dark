@@ -20,6 +20,7 @@ let __utimesAt (a0: Int64) (a1: RawPtr) (a2: RawPtr) (a3: Int64) : Int64 = -38L
 let __setAttributesAt (a0: Int64) (a1: RawPtr) (a2: RawPtr) (a3: RawPtr) (a4: Int64) (a5: Int64) : Int64 = -38L
 let __symlinkAt (a0: RawPtr) (a1: Int64) (a2: RawPtr) : Int64 = -38L
 let __readlinkAt (a0: Int64) (a1: RawPtr) (a2: RawPtr) (a3: Int64) : Int64 = -38L
+let __accessAt (fd: Int64) (path: RawPtr) (mode: Int64) (flags: Int64) : Int64 = -38L
 let __flock (a0: Int64) (a1: Int64) : Int64 = -38L
 let __getDents (a0: Int64) (a1: RawPtr) (a2: Int64) (a3: RawPtr) : Int64 = -38L
 

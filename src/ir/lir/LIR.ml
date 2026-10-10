@@ -127,6 +127,8 @@ type cliOperation =
   | GetArgv
   | Kill
   | GetPid
+  | StartupStack
+  | ExecutableState
   | GetUid
   | CpuCount
   | SpawnProcess
@@ -175,6 +177,7 @@ type cliOperation =
   | PosixSetAttributesAt
   | PosixSymlinkAt
   | PosixReadlinkAt
+  | PosixAccessAt
   | PosixFlock
   | PosixGetDents
   | PosixIoctl

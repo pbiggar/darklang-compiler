@@ -30,6 +30,8 @@ let convertCliOperation operation =
   | MIR.GetArgv -> LIR.GetArgv
   | MIR.Kill -> LIR.Kill
   | MIR.GetPid -> LIR.GetPid
+  | MIR.StartupStack -> LIR.StartupStack
+  | MIR.ExecutableState -> LIR.ExecutableState
   | MIR.GetUid -> LIR.GetUid
   | MIR.CpuCount -> LIR.CpuCount
   | MIR.SpawnProcess -> LIR.SpawnProcess
@@ -78,6 +80,7 @@ let convertCliOperation operation =
   | MIR.PosixSetAttributesAt -> LIR.PosixSetAttributesAt
   | MIR.PosixSymlinkAt -> LIR.PosixSymlinkAt
   | MIR.PosixReadlinkAt -> LIR.PosixReadlinkAt
+  | MIR.PosixAccessAt -> LIR.PosixAccessAt
   | MIR.PosixFlock -> LIR.PosixFlock
   | MIR.PosixGetDents -> LIR.PosixGetDents
   | MIR.PosixIoctl -> LIR.PosixIoctl

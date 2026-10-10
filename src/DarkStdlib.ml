@@ -182,6 +182,7 @@ let posixIntrinsicModule : AST.moduleDef =
         fn "__readlinkAt" []
           [ TInt64; TInternalRawPtr; TInternalRawPtr; TInt64 ]
           TInt64;
+        fn "__accessAt" [] [ TInt64; TInternalRawPtr; TInt64; TInt64 ] TInt64;
         fn "__flock" [] [ TInt64; TInt64 ] TInt64;
         fn "__ioctl" [] [ TInt64; TInt64; TInternalRawPtr ] TInt64;
         fn "__procInfo" []
@@ -235,6 +236,8 @@ let builtinPresentationModule : AST.moduleDef =
         fn "print" [] [ TString ] TUnit;
         fn "printLine" [] [ TString ] TUnit;
         fn "__stdinState" [] [ TInt64 ] TInternalRawPtr;
+        fn "__startupStack" [] [] TInternalRawPtr;
+        fn "__executableState" [] [] TInternalRawPtr;
       ];
   }
 
