@@ -8,9 +8,9 @@ Audited on 2026-10-08 (UTC), against compiler revision `4a61318019fb8dea7f34a0bf
 Results from that complete audit, including enabled neighbours: 3,599 assertions, 1,325 passed and 2,274 failed.
 That audit used 34 whole-file gates and 205 assertion lines across 16 mixed files.
 
-Current configured exclusions: **1,810 assertions across 65 files**, including
-**69 unsupported interpreter runtime-error assertions**. There are 32 whole-file
-gates and 294 assertion lines across 33 mixed files. The earlier retirement audit reran the 19 affected files
+Current configured exclusions: **1,217 assertions across 65 files**, including
+**69 unsupported interpreter runtime-error assertions**. There are 31 whole-file
+gates and 341 assertion lines across 34 mixed files. The earlier retirement audit reran the 19 affected files
 individually without gates: **1,006 passed
 and 110 failed out of 1,116 assertions**. The ungated application fixture contributes 33 cascading preamble failures;
 disabling only its dependent L118 assertion lets the existing fallback prune the
@@ -55,6 +55,8 @@ Compile-error expectation follow-up (2026-10-09), based on main `bf9cd3ad4`: 16 
 The real parser enumerated all 6,734 imported assertions; all 127 remaining legacy error expectations were probed individually before the JSON changes. Missing interpreter helpers and unrelated preamble errors are not accepted as replacement diagnostics. JSON was additionally run in full individually: **511/540** passed before expectation updates; the two genuine static type errors bring it to **513/540**. All **513/513** enabled JSON assertions then passed through the normal runner individually. The whole-file JSON gate is replaced with exact gates for its 27 remaining failures, recovering 511 passing neighbours. In total, **527 assertions** are enabled and removed from the failure ledger.
 
 Verification: on the task's original parent `bf9cd3ad4`, native build, the complete host suite (**12,440/12,440**), `dune runtest`, **58/58** leak workloads, and the generated inventory check passed. After integrating main `2b8f02e06`, native build succeeds, **12,440** host tests pass and the three newly added executable-path assertions fail; the new native executable-path regression also fails. This VM has no `/proc/self/exe`; both failures are reproduced on unmodified main. All 58 leak workloads still pass. Parent benchmark verification stops before measurement on the incompatible stored workload digest; no baseline was reset.
+
+Char/String type follow-up (2026-10-10), based on main `f2e57deb5`: Char and String no longer unify or reconcile with each other. Private typed intrinsics preserve their shared managed-buffer representation for explicit conversions; list rendering, Regex, and terminal width helpers now convert explicitly. The upstream `String.fromList ["a"]` assertion at L418 requires its correct compile error. A sweep of imported negative expectations found no other Char/String mismatch assertion. All 640 String assertions were run individually: 592 passed before the expectation override; the corrected override enables the 593rd. The whole-file gate is replaced with exact gates for the 47 remaining failures, recovering 592 working neighbours. The focused regression passes **26/26**, covering both conversion directions, container and branch types, generic calls, interpolation, grapheme conversions, sharing, and private visibility.
 
 ## Unsupported interpreter test infrastructure
 
@@ -134,7 +136,7 @@ Each file links to the individual failing assertions and their observed diagnost
 | [stdlib/nomodule.dark](failures/interpreter-test-runtime-error.md) | 228 | 227 | 1 |
 | [stdlib/prettyPrinter.dark](failures/stdlib/prettyPrinter.md) | 57 | 0 | 57 |
 | [stdlib/sqlite.dark](failures/stdlib/sqlite.md) | 8 | 0 | 8 |
-| [stdlib/string.dark](failures/stdlib/string.md) | 640 | 0 | 640 |
+| [stdlib/string.dark](failures/stdlib/string.md) | 640 | 593 | 47 |
 
 ## Assertions enabled
 

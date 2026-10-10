@@ -1065,11 +1065,60 @@ let runTestsWithProgressReporter completedTestReporter args =
         "test/fixtures/e2e/upstream/stdlib/language-tools/semanticTokenization.dark";
         "test/fixtures/e2e/upstream/stdlib/prettyPrinter.dark";
         "test/fixtures/e2e/upstream/stdlib/sqlite.dark";
-        "test/fixtures/e2e/upstream/stdlib/string.dark";
       ]
     in
     let disabledUpstreamLines =
       [
+        ( "test/fixtures/e2e/upstream/stdlib/string.dark",
+          [
+            182;
+            191;
+            192;
+            193;
+            194;
+            195;
+            382;
+            385;
+            388;
+            389;
+            390;
+            391;
+            392;
+            393;
+            394;
+            395;
+            396;
+            397;
+            399;
+            402;
+            405;
+            406;
+            407;
+            408;
+            413;
+            415;
+            422;
+            424;
+            427;
+            430;
+            433;
+            436;
+            849;
+            850;
+            851;
+            852;
+            853;
+            854;
+            855;
+            856;
+            857;
+            859;
+            860;
+            861;
+            862;
+            863;
+            864;
+          ] );
         ("test/fixtures/e2e/upstream/language/apply/eapply.dark", [ 118 ]);
         ("test/fixtures/e2e/upstream/language/apply/einfix.dark", [ 57; 58; 59 ]);
         ("test/fixtures/e2e/upstream/language/basic/eand.dark", [ 5; 13 ]);
