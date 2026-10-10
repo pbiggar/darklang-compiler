@@ -19,11 +19,43 @@ from test_http3_server_peer import ROOT, SERVER, start, stop
 from test_quic_tls_peer import certificates
 
 
+class ObservedEncoder:
+    def __init__(self, encoder):
+        self.encoder = encoder
+        self.pending = bytearray()
+        self.acknowledged = set()
+
+    def __getattr__(self, name):
+        return getattr(self.encoder, name)
+
+    def feed_decoder(self, data):
+        self.encoder.feed_decoder(data)
+        self.pending.extend(data)
+        while self.pending:
+            first = self.pending[0]
+            mask = 127 if first & 128 else 63
+            value, offset, shift = first & mask, 1, 0
+            if value == mask:
+                while True:
+                    if offset == len(self.pending):
+                        return
+                    byte = self.pending[offset]
+                    value += (byte & 127) << shift
+                    offset += 1
+                    if byte < 128:
+                        break
+                    shift += 7
+            if first & 128:
+                self.acknowledged.add(value)
+            del self.pending[:offset]
+
+
 class DelayedQpack(H3Connection):
     def __init__(self, connection):
         self.delayed = b""
         self.dynamic = False
         super().__init__(connection)
+        self._encoder = ObservedEncoder(self._encoder)
 
     def _encode_headers(self, stream_id, headers):
         # Prime ls-qpack's reuse policy without putting the first section on
@@ -90,7 +122,7 @@ def exchange(port, ca, body):
                 release_at = sent_at + 0.3
             # Do not accept just a completed response: the peer must also
             # process the server's decoder feedback for the dynamic request.
-            if finished and http._decoder_bytes_received > 0:
+            if finished and 0 in http._encoder.acknowledged:
                 assert http.dynamic and released and now - sent_at >= 0.3
                 assert (b":status", b"200") in headers and response == body, (headers, len(response), len(body))
                 return
@@ -115,6 +147,12 @@ def main():
             exchange(port, ca, b"dynamic")
             exchange(port, ca, bytes(range(251)) * 279)
             stop(process)
+        except Exception:
+            if process.poll() is None:
+                process.terminate()
+            stdout, stderr = process.communicate(timeout=3)
+            print("Listener diagnostics:", process.returncode, stdout, stderr, flush=True)
+            raise
         finally:
             if process.poll() is None:
                 process.kill()

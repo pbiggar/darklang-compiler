@@ -532,7 +532,8 @@ let __headerValueValid (value: String) (index: Int64) (length: Int64) : Bool =
     if index >= length then true
     else
         let byte = Stdlib.String.__byteAtUnchecked value index in
-        (byte == 9L || (byte >= 32L && byte <= 126L)) &&
+        // RFC 9110 field-vchar includes obs-text; CTL and DEL remain invalid.
+        (byte == 9L || (byte >= 32L && byte != 127L)) &&
         Stdlib.__HttpWire.__headerValueValid value (index + 1L) length
 
 let __writeHeaders (headers: List<(String * String)>) (acc: String) : Stdlib.Result.Result<String, String> =
