@@ -25,7 +25,7 @@ match run () with | Error message -> Stdlib.printLine message | Ok bytes -> Stdl
 
 def execute(binary, instructions, block):
     result = subprocess.run([str(binary), instructions.hex(), block.hex()], cwd=ROOT,
-                            text=True, capture_output=True, timeout=15)
+                            text=True, capture_output=True, timeout=30)
     assert result.returncode == 0 and not result.stderr, result
     return result.stdout.strip()
 

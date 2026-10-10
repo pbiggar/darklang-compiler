@@ -230,8 +230,9 @@ instructions, eviction, wrap-around, deferred DATA/FIN and exactly-once
 acknowledgments. The independent ls-qpack peer verifies 560 sections, including
 559 dynamic sections and 280 blocked-before-insertion checks. The delayed
 aioquic peer verifies Unicode headers, bytewise encoder instructions, an explicit
-section acknowledgment, a 70 KiB echo and authenticated close. Its 30-second
-observation budget does not change the engine's deadlines. A shared field-value
+section acknowledgment, a 70 KiB echo and authenticated close. The live peer's
+observation window and decoder probe's per-process budget are 30 seconds;
+engine deadlines are unchanged. A shared field-value
 validator now permits UTF-8 obs-text while retaining control-byte rejection;
 `http_header_value_octets.e2e` covers that boundary. The complete host suite
 passes 12,051 tests and native aliases pass in a fresh build directory. Parent
