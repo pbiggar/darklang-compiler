@@ -466,6 +466,29 @@ leak accounting. The existing executable-path VM adapter was used for the
 host/native gates; benchmark workloads ran natively. Cachegrind equivalence
 remains waived. Other target runtimes were not executed for this change.
 
+## PID builtin (merge blocked by VM verification)
+
+The original `Darklang.Stdlib.Cli.Sys.currentPid` body failed to compile with
+`Unknown function or value 'Builtin.posixGetpid'` on main `f2e57de`.
+The user approved exposing the existing native PID implementation. The builtin
+now converts `Stdlib.Cli.__getpid` from Int64 to Int, and the public wrapper
+calls the builtin. No libc, shell command, or backend change is required.
+Three focused E2E cases cover a positive PID, equality with the public wrapper,
+and repeated-call stability. All three fail with the missing-builtin diagnostic
+on the baseline and pass with the fix. An independently launched compiled
+program reports the exact child PID recorded by its parent, with clean leak
+accounting. All 58 benchmark workloads compile and run with clean leak checks.
+
+Workspace maintenance removed the previous toolchain and QEMU/procfs execution
+adapter. The native toolchain was restored and passed all 98 locked-package and
+Unix/native smoke checks. The full host suite reports 12451 passed and three
+existing executable-path failures because this VM has no `/proc/self/exe`.
+Those same three failures reproduce on the baseline. The native Dune
+executable-path regression also fails on that missing-procfs OS error.
+The initial native run additionally hit a generated EmbeddedStdlib permission
+error; making that generated file writable allowed the retry to proceed.
+This checkpoint is not merged. Cachegrind equivalence remains waived.
+
 ## Completion rule
 
 At the end of the package review, enumerate every skipped package and unresolved

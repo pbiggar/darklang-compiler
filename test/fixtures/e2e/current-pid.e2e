@@ -1,0 +1,4 @@
+// The upstream PID builtin exposes the existing native process identity.
+Builtin.posixGetpid () > 0 = true
+Builtin.posixGetpid () == Stdlib.Cli.Sys.currentPid () = true
+Builtin.posixGetpid () == Builtin.posixGetpid () = true
