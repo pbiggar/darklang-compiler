@@ -188,10 +188,15 @@ padding, a near-limit input, HPACK/QPACK round trips and sensitive-field flags.
 The dynamic QPACK checkpoint adds connection-owned inbound tables with a
 4096-byte advertised capacity and one blocked stream. Encoder instructions are
 parsed incrementally; blocked HEADERS defer later DATA until insertions arrive.
-Decoder feedback is queued under QUIC flow control. Focused malformed-wire and
-blocked-message fixtures, plus independent ls-qpack and delayed aioquic peer
-scripts, are added but validation is pending. Outgoing QPACK still uses only
-static/literal representations; dynamic encoder/reference tracking remains open.
+Decoder feedback is queued under QUIC flow control, with each write bounded to
+900 bytes. Focused malformed-wire and blocked-message fixtures pass. Independent
+ls-qpack checks verify 560 sections, fragmentation, eviction and insert-count
+wrap-around. The delayed aioquic peer verifies section acknowledgments, Unicode
+headers, complete 70 KiB bodies and authenticated close; its observation window
+is 30 seconds, without changing engine deadlines. Shared field-value validation
+permits UTF-8 obs-text and still rejects CR, LF, NUL, DEL and other control bytes
+except HTAB. Outgoing QPACK still uses only static/literal representations;
+dynamic encoder/reference tracking remains open.
 HTTP/2 outgoing blocks now share a separate bounded dynamic HPACK table across
 connection state transitions. Peer table-capacity changes evict entries and
 emit ordered size updates before the next block; credentials and cookies stay

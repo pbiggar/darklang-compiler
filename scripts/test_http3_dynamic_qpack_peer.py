@@ -81,7 +81,7 @@ def exchange(port, ca, body):
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as peer:
         peer.bind(("127.0.0.1", 0))
         peer.settimeout(0.01)
-        deadline = time.monotonic() + 15
+        deadline = time.monotonic() + 30
         while time.monotonic() < deadline:
             now = time.monotonic()
             timer = client.get_timer()

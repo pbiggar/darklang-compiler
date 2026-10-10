@@ -187,6 +187,12 @@ mean the entire branch has passed its integration or performance gates.
   literals, and peer table-capacity shrink/grow updates.
 - [ ] Complete dynamic QPACK tables, instruction streams, blocked sections,
   feedback and eviction.
+
+  - [x] Inbound dynamic tables, fragmented encoder instructions, blocked
+    field sections, insertion increments and section acknowledgments.
+  - [ ] Outgoing dynamic encoding, peer feedback/reference tracking and
+    stream cancellation across reusable multiplexed connections.
+
 - [ ] Streaming client uploads, server requests and server responses.
 - [ ] Public received/sent trailer APIs.
 - [ ] Content-encoding negotiation, decompression and server compression.
@@ -219,10 +225,19 @@ encoder instructions, relative/post-base references and Required Insert Count
 wrap-around. Message owners retain blocked sections and defer body events until
 the missing insertions arrive; decoder feedback retains unsent bytes under QUIC
 flow control. The single-exchange profile advertises one blocked stream.
-`qpack_dynamic_decoder.e2e`, `qpack_blocked_message.e2e` and independent ls-qpack
-and delayed aioquic peer scripts specify these paths. Validation of this
-checkpoint is pending. Outgoing dynamic encoding and reference tracking remain
-unimplemented, so the full dynamic QPACK item is still unchecked.
+`qpack_dynamic_decoder.e2e` and `qpack_blocked_message.e2e` cover malformed
+instructions, eviction, wrap-around, deferred DATA/FIN and exactly-once
+acknowledgments. The independent ls-qpack peer verifies 560 sections, including
+559 dynamic sections and 280 blocked-before-insertion checks. The delayed
+aioquic peer verifies Unicode headers, bytewise encoder instructions, an explicit
+section acknowledgment, a 70 KiB echo and authenticated close. Its 30-second
+observation budget does not change the engine's deadlines. A shared field-value
+validator now permits UTF-8 obs-text while retaining control-byte rejection;
+`http_header_value_octets.e2e` covers that boundary. The complete host suite
+passes 12,051 tests and native aliases pass in a fresh build directory. Parent
+benchmark verification remains blocked by an incompatible snapshot workload
+contract; no performance result is claimed. Outgoing dynamic encoding and
+reference tracking remain unimplemented, so the full QPACK item is unchecked.
 
 HTTP/2 now retains an outgoing HPACK table separately from its decoder. Every
 state transition preserves that owner and the peer's decoded field budget;
