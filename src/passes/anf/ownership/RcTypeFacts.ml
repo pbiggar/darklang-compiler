@@ -299,7 +299,8 @@ let inferCExprType ctx expr =
       | A.Hostname -> posix AST.TString
       | A.GetEnvironmentPacked | A.DirectoryCurrent | A.DirectoryListPacked ->
           Some AST.TString
-      | A.StdinState -> Some AST.TInternalRawPtr
+      | A.StdinState | A.StartupStack | A.ExecutableState ->
+          Some AST.TInternalRawPtr
       | A.FileIsDirectory -> Some AST.TBool
       | A.HostOS | A.HostArchitecture | A.GetPid | A.GetUid | A.CpuCount
       | A.SpawnProcess | A.FileCreateExclusive | A.SocketTcp4 | A.SocketTcp6
@@ -314,7 +315,8 @@ let inferCExprType ctx expr =
       | A.PosixChdir | A.PosixMkdirAt | A.PosixUnlinkAt | A.PosixRenameAt
       | A.PosixChmodAt | A.PosixChmodAt2 | A.PosixUtimesAt
       | A.PosixSetAttributesAt | A.PosixSymlinkAt | A.PosixReadlinkAt
-      | A.PosixFlock | A.PosixGetDents | A.PosixIoctl | A.PosixProcInfo ->
+      | A.PosixAccessAt | A.PosixFlock | A.PosixGetDents | A.PosixIoctl
+      | A.PosixProcInfo ->
           Some AST.TInt64)
   | A.IfValue (_, yes, _) -> atom yes
   | A.BorrowedCall (func, [ value ])

@@ -123,6 +123,8 @@ and rcKind (value : LIR.rcKind) =
 and cliOperation (value : LIR.cliOperation) =
   match value with
   | LIR.Execute -> union "CliOperation" "Execute" []
+  | LIR.StartupStack -> union "CliOperation" "StartupStack" []
+  | LIR.ExecutableState -> union "CliOperation" "ExecutableState" []
   | LIR.RunProcess -> union "CliOperation" "RunProcess" []
   | LIR.HostOS -> union "CliOperation" "HostOS" []
   | LIR.HostArchitecture -> union "CliOperation" "HostArchitecture" []
@@ -187,6 +189,7 @@ and cliOperation (value : LIR.cliOperation) =
   | LIR.PosixSetAttributesAt -> union "CliOperation" "PosixSetAttributesAt" []
   | LIR.PosixSymlinkAt -> union "CliOperation" "PosixSymlinkAt" []
   | LIR.PosixReadlinkAt -> union "CliOperation" "PosixReadlinkAt" []
+  | LIR.PosixAccessAt -> union "CliOperation" "PosixAccessAt" []
   | LIR.PosixFlock -> union "CliOperation" "PosixFlock" []
   | LIR.PosixGetDents -> union "CliOperation" "PosixGetDents" []
   | LIR.PosixIoctl -> union "CliOperation" "PosixIoctl" []

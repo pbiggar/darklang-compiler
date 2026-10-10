@@ -78,6 +78,8 @@ and rcKind (value : MIR.rcKind) =
 and cliOperation (value : MIR.cliOperation) =
   match value with
   | MIR.Execute -> union "CliOperation" "Execute" []
+  | MIR.StartupStack -> union "CliOperation" "StartupStack" []
+  | MIR.ExecutableState -> union "CliOperation" "ExecutableState" []
   | MIR.RunProcess -> union "CliOperation" "RunProcess" []
   | MIR.HostOS -> union "CliOperation" "HostOS" []
   | MIR.HostArchitecture -> union "CliOperation" "HostArchitecture" []
@@ -142,6 +144,7 @@ and cliOperation (value : MIR.cliOperation) =
   | MIR.PosixSetAttributesAt -> union "CliOperation" "PosixSetAttributesAt" []
   | MIR.PosixSymlinkAt -> union "CliOperation" "PosixSymlinkAt" []
   | MIR.PosixReadlinkAt -> union "CliOperation" "PosixReadlinkAt" []
+  | MIR.PosixAccessAt -> union "CliOperation" "PosixAccessAt" []
   | MIR.PosixFlock -> union "CliOperation" "PosixFlock" []
   | MIR.PosixGetDents -> union "CliOperation" "PosixGetDents" []
   | MIR.PosixIoctl -> union "CliOperation" "PosixIoctl" []

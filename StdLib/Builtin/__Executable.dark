@@ -1,9 +1,139 @@
 // __Executable.dark - Runtime executable identity from Linux and Darwin syscalls.
 module Builtin
 
+// Unmanaged process-lifetime cache: ready word, signed length, UTF-8 bytes.
+// The compiler calls the initializer before the user entry point when needed.
+let __launchWord (ptr: RawPtr) (offset: Int64) : Int64 = __raw_get ptr offset
+let __launchPointer (ptr: RawPtr) (offset: Int64) : RawPtr = __raw_get ptr offset
+let __launchStringEnd (ptr: RawPtr) (offset: Int64) : Int64 =
+    if __raw_get_byte ptr offset == 0L then offset
+    else Builtin.__launchStringEnd ptr (offset + 1L)
+let __launchString (ptr: RawPtr) : String =
+    Stdlib.Cli.__Posix.__bufferString ptr 0L (Builtin.__launchStringEnd ptr 0L)
+let __launchAuxStart (ptr: RawPtr) (offset: Int64) : Int64 =
+    if Builtin.__launchWord ptr offset == 0L then offset + 8L
+    else Builtin.__launchAuxStart ptr (offset + 8L)
+let __launchExecfn (ptr: RawPtr) (offset: Int64) : String =
+    let key = Builtin.__launchWord ptr offset in
+    if key == 0L then ""
+    else if key == 31L then
+        if Builtin.__launchWord ptr (offset + 8L) == 0L then ""
+        else Builtin.__launchString (Builtin.__launchPointer ptr (offset + 8L))
+    else Builtin.__launchExecfn ptr (offset + 16L)
+
+let __executablePartsPath (parts: List<String>) : String =
+    "/" ++ Stdlib.String.join (Stdlib.List.reverse parts) "/"
+
+let __executableReadlink (path: String) : Stdlib.Result.Result<String, Int64> =
+    let buffer = __mapped_alloc 8192L in
+    let rc = Stdlib.Cli.__Posix.__withCString path (fun name -> Stdlib.Cli.__Posix.__readlinkAt (Stdlib.Cli.__Posix.__cwdFd ()) name buffer 8192L) in
+    let result = if rc < 0L then Error (0L - rc)
+                 else if rc == 8192L then Error 36L
+                 else Ok (Stdlib.Cli.__Posix.__bufferString buffer 0L rc) in
+    let _ = __mapped_free buffer in
+    if rc == -4L then Builtin.__executableReadlink path else result
+
+let __executableWalk (parts: List<String>) (remaining: List<String>) (links: Int64) : Stdlib.Option.Option<String> =
+    match remaining with
+    | [] ->
+        let path = Builtin.__executablePartsPath parts in
+        match Stdlib.Cli.__Posix.__withStat path Stdlib.Cli.__Posix.__statMode with
+        | Ok mode ->
+            if Stdlib.Int64.bitwiseAnd mode 61440L != 32768L then None
+            else
+                let access = Stdlib.Cli.__Posix.__withCString path (fun name -> Stdlib.Cli.__Posix.__accessAt (Stdlib.Cli.__Posix.__cwdFd ()) name 1L 0L) in
+                if access == -4L then Builtin.__executableWalk parts [] links
+                else if access == 0L then Some path else None
+        | Error _ -> None
+    | part :: rest ->
+        if part == "" || part == "." then Builtin.__executableWalk parts rest links
+        else if part == ".." then
+            let parent = match parts with | [] -> [] | _ :: tail -> tail in
+            Builtin.__executableWalk parent rest links
+        else
+            let next = Stdlib.List.push parts part in
+            let path = Builtin.__executablePartsPath next in
+            match Builtin.__executableReadlink path with
+            | Ok target ->
+                if links >= 40L || target == "" then None
+                else
+                    let base = if Stdlib.String.startsWith target "/" then [] else parts in
+                    Builtin.__executableWalk base (Stdlib.List.append (Stdlib.String.split target "/") rest) (links + 1L)
+            | Error errno ->
+                if errno != 22L then None
+                else
+                    match rest with
+                    | [] -> Builtin.__executableWalk next [] links
+                    | _ ->
+                        match Stdlib.Cli.__Posix.__withStat path Stdlib.Cli.__Posix.__statMode with
+                        | Ok mode -> if Stdlib.Int64.bitwiseAnd mode 61440L == 16384L then Builtin.__executableWalk next rest links else None
+                        | Error _ -> None
+
+let __resolveExecutableCandidate (candidate: String) (cwd: String) : Stdlib.Option.Option<String> =
+    if candidate == "" then None
+    else if Stdlib.String.startsWith candidate "/" then Builtin.__executableWalk [] (Stdlib.String.split candidate "/") 0L
+    else if cwd == "" then None
+    else Builtin.__executableWalk [] (Stdlib.String.split (cwd ++ "/" ++ candidate) "/") 0L
+
+let __searchExecutablePath (name: String) (directories: List<String>) (cwd: String) : Stdlib.Option.Option<String> =
+    match directories with
+    | [] -> None
+    | directory :: rest ->
+        let candidate = if directory == "" then name else directory ++ "/" ++ name in
+        match Builtin.__resolveExecutableCandidate candidate cwd with
+        | Some path -> Some path
+        | None -> Builtin.__searchExecutablePath name rest cwd
+
+let __selectExecutableFallback (execfn: String) (argv0: String) (cwd: String) (path: Stdlib.Option.Option<String>) : Stdlib.Option.Option<String> =
+    match Builtin.__resolveExecutableCandidate execfn cwd with
+    | Some resolved -> Some resolved
+    | None ->
+        if Stdlib.String.contains argv0 "/" then Builtin.__resolveExecutableCandidate argv0 cwd
+        else if argv0 == "" then None
+        else
+            match path with
+            | None -> None
+            | Some directories -> Builtin.__searchExecutablePath argv0 (Stdlib.String.split directories ":") cwd
+
+let __cacheExecutableBytes (path: String) (state: RawPtr) (offset: Int64) : Unit =
+    if offset == Stdlib.String.__byteLength path then ()
+    else
+        let _ = __raw_write_byte state (16L + offset) (Stdlib.String.__byteAtUnchecked path offset) in
+        Builtin.__cacheExecutableBytes path state (offset + 1L)
+
+let __initializeExecutablePath () : Unit =
+    let state = Builtin.__executableState () in
+    if Builtin.__launchWord state 0L != 0L then ()
+    else
+        let stack = Builtin.__startupStack () in
+        let argc = Builtin.__launchWord stack 0L in
+        let argv0 = if argc == 0L then "" else Builtin.__launchString (Builtin.__launchPointer stack 8L) in
+        let execfn = if Stdlib.Cli.__Posix.__mac () then ""
+                     else Builtin.__launchExecfn stack (Builtin.__launchAuxStart stack ((argc + 2L) * 8L)) in
+        let cwd = match Stdlib.Cli.__Posix.__getCurrentDirectory () with | Ok path -> path | Error _ -> "" in
+        let fallback = Builtin.__selectExecutableFallback execfn argv0 cwd (Stdlib.Cli.Env.get "PATH") in
+        let _ = match fallback with
+                | Some path ->
+                    let length = Stdlib.String.__byteLength path in
+                    if length > 8175L then __raw_write_word state 8L -1L
+                    else
+                        let _ = Builtin.__cacheExecutableBytes path state 0L in
+                        __raw_write_word state 8L length
+                | None -> __raw_write_word state 8L -1L in
+        __raw_write_word state 0L 1L
+
+let __cachedExecutablePath () : Stdlib.Option.Option<String> =
+    let _ = Builtin.__initializeExecutablePath () in
+    let state = Builtin.__executableState () in
+    let length = Builtin.__launchWord state 8L in
+    if length < 0L then None
+    else Some (Stdlib.Cli.__Posix.__bufferString state 16L (16L + length))
+
 let __executablePathError (errno: Int64) : String =
     let error = Stdlib.Cli.__Posix.__error errno in
-    Builtin.crash ("current executable path failed: " ++ error.message)
+    match Builtin.__cachedExecutablePath () with
+    | Some path -> path
+    | None -> Builtin.crash ("current executable path failed: " ++ error.message ++ "; no launch-path fallback available")
 
 let __linuxExecutablePath (capacity: Int64) : String =
     let buffer = __mapped_alloc capacity in
@@ -32,5 +162,6 @@ let __macExecutablePath () : String =
     else result
 
 let getCurrentExecutablePath () : String =
+    let _ = Builtin.__initializeExecutablePath () in
     if Stdlib.Cli.__Posix.__mac () then Builtin.__macExecutablePath ()
     else Builtin.__linuxExecutablePath 256L

@@ -411,10 +411,58 @@ let compileUserWithPlan ?writtenSources (plan : P.userCompilePlan) =
         SSADirectCallSpecialization.reachableFrom (F.singleton entryId) ssa
       in
       let resultId = ANF.TempId 0 in
+      (* Executable discovery must capture launch paths before user effects.
+         Inspect the reachable native state operation, including stdlib bodies
+         where the initializer may already have been inlined. *)
+      let rec usesExecutableState = function
+        | ANF.Let (_, ANF.CliNative (ANF.ExecutableState, _), _) -> true
+        | ANF.Let (_, _, rest) -> usesExecutableState rest
+        | ANF.If (_, yes, no) | ANF.Join (_, yes, no) ->
+            usesExecutableState yes || usesExecutableState no
+        | ANF.Return _ | ANF.Jump _ -> false
+      in
+      let launchFunctions = (entry :: programFunctions) @ dependencies in
+      let launchGraph =
+        List.fold_left
+          (fun graph additions ->
+            FunctionIdMap.fold
+              (fun graph id calls -> FunctionIdMap.add id calls graph)
+              graph additions)
+          (ANFDeadCodeElimination.buildCallGraph launchFunctions)
+          [ plan.P.stdlib.X.stdlibAnfCallGraph; plan.P.prebuiltCallGraph ]
+      in
+      let reachable =
+        CallGraphReachability.findReachable launchGraph (F.singleton entryId)
+      in
+      let needsLaunchState =
+        List.exists
+          (fun (fn : ANF.functionDef) ->
+            F.mem fn.ANF.id reachable && usesExecutableState fn.ANF.body)
+          (launchFunctions
+          @ List.map snd (M.bindings plan.P.stdlib.X.stdlibAnfFunctions))
+      in
+      let entryBody =
+        ANF.Let (resultId, ANF.Call (entryId, []), ANF.Return (ANF.Var resultId))
+      in
+      let startBody =
+        if not needsLaunchState then entryBody
+        else
+          match
+            M.find_opt "Builtin.__initializeExecutablePath"
+              plan.P.stdlib.X.stdlibAnfFunctions
+          with
+          | None -> Crash.crash "Missing executable launch initializer"
+          | Some init ->
+              ANF.Let
+                ( ANF.TempId 1,
+                  ANF.Call
+                    ( init.ANF.id,
+                      List.map (fun _ -> ANF.UnitLiteral) init.ANF.typedParams
+                    ),
+                  entryBody )
+      in
       let startFunction =
-        R.synthesizeEntryFunction startId "_start" boundary
-          (ANF.Let
-             (resultId, ANF.Call (entryId, []), ANF.Return (ANF.Var resultId)))
+        R.synthesizeEntryFunction startId "_start" boundary startBody
       in
       let startRegistry =
         {
