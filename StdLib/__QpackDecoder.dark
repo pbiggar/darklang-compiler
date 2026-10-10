@@ -44,7 +44,8 @@ let __text (data: Blob) (position: Int64) (prefix: Int64) (huffmanFlag: Int64) :
     else if number.value > Stdlib.Blob.__byteLength data - number.next then Error Incomplete
     else
       let encoded = Stdlib.__Http2Wire.__slice data number.next number.value in
-      let bytes = if Stdlib.Int64.bitwiseAnd (Stdlib.Blob.__getByte data position) huffmanFlag == 0L then Ok encoded
+      let bytes =
+        if Stdlib.Int64.bitwiseAnd (Stdlib.Blob.__getByte data position) huffmanFlag == 0L then Ok encoded
         else Stdlib.__Hpack.__huffman encoded 0L 0L 0L [] 0L in
       bytes |> Stdlib.Result.mapError (fun message -> Invalid message) |> Stdlib.Result.andThen (fun bytes ->
         match Stdlib.Blob.toString bytes with
