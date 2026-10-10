@@ -551,7 +551,13 @@ and macOS ARM64; this change adds no libc or backend dependency.
 The focused tests check a nonnegative UID, public-wrapper agreement, and stable
 repeated calls. A native regression compares the exact UID and both original
 and public `isRoot` results with Python's OS UID, including misleading USER and
-LOGNAME values, with leak checks enabled. Validation is pending.
+LOGNAME values, with leak checks enabled. All three focused cases pass, the
+independent native UID regression passes, the full host suite passes
+13164/13164 tests, and all native Dune regression aliases pass. All 58 benchmark
+workloads compile and run with clean leak checks; Cachegrind equivalence remains
+waived. UID probes compile for all three native targets; Linux x86-64 execution
+matches the OS UID with clean leak accounting. Other target runtimes were not
+executed.
 
 ## Completion rule
 
