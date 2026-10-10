@@ -175,7 +175,7 @@ let __parsePattern (chars: List<Char>) : Stdlib.Result.Result<List<List<Stdlib.R
 // public Char API. A Char is one grapheme cluster, so these inspect its first
 // scalar exactly as the interpreter's character classes do.
 let __firstCodepoint (char: Char) : Stdlib.Option.Option<Int64> =
-    Stdlib.List.head (Stdlib.String.__toCodepoints char)
+    Stdlib.List.head (Stdlib.String.__toCodepoints (Stdlib.Char.toString char))
 
 let __isAlphanumeric (char: Char) : Bool =
     match Stdlib.Regex.__firstCodepoint char with

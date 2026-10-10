@@ -254,7 +254,7 @@ let __intToInt64 (value: Int) : Int64 =
     | Some converted -> converted
     | None -> Builtin.crash "String index did not fit Int64"
 
-let __asChar (value: String) : Char = value
+let __asChar (value: String) : Char = __string_to_char_unchecked value
 
 let toList (value: String) : List<Char> =
     Stdlib.List.map (Stdlib.String.__toGraphemes value) Stdlib.String.__asChar

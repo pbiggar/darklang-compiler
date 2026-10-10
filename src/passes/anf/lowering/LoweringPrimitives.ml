@@ -792,6 +792,9 @@ let tryRawMemoryIntrinsic resolve sumNames name arguments =
   | "__refcount_dec_string", [ value ] -> Some (ANF.RefCountDecString value)
   | "__string_to_rawptr", [ value ] -> Some (ANF.StringToRawPtr value)
   | "__rawptr_to_string", [ value ] -> Some (ANF.RawPtrToString value)
+  | "__char_to_string", [ value ] -> Some (ANF.TypedAtom (value, AST.TString))
+  | "__string_to_char_unchecked", [ value ] ->
+      Some (ANF.TypedAtom (value, AST.TChar))
   | ( ("__int_to_rawptr" | "__int128_to_rawptr" | "__uint128_to_rawptr"),
       [ value ] ) ->
       Some (ANF.TypedAtom (value, AST.TInternalRawPtr))
