@@ -1,0 +1,17 @@
+// Unicode trimming follows whitespace codepoints, including within grapheme clusters.
+
+Stdlib.String.trim "\r\nx\u00a0" = "x"
+Stdlib.String.trimStart "\u00a0\r\nx" = "x"
+Stdlib.String.trimEnd "x\r\n\u00a0" = "x"
+Stdlib.String.trim "\r\n\u00a0\r\n" = ""
+Stdlib.String.trimStart "\u00a0\u0301x" = "\u0301x"
+Stdlib.String.trim "\u00a0\u0301x\u00a0" = "\u0301x"
+Stdlib.String.trimEnd "x\u00a0\u0301" = "x\u00a0\u0301"
+Stdlib.String.trimEnd "x\u0301\u00a0" = "x\u0301"
+Stdlib.String.trim "\u200bx\u200b" = "\u200bx\u200b"
+Stdlib.String.trim "\u0085\u1680\u2003\u2028\u2029\u202f\u205f\u3000x\u3000\u205f\u202f\u2029\u2028\u2003\u1680\u0085" = "x"
+Stdlib.String.trimStart "\u00a0x\r\n" = "x\r\n"
+Stdlib.String.trimEnd "\r\nx\u00a0" = "\r\nx"
+Stdlib.String.trim "\t\r\nx\r\n\t" = "x"
+Stdlib.String.trim "" = ""
+let value = "\u00a0" ++ "👩‍👩‍👧‍👦\r\n\u00a0" in (Stdlib.String.trim value, value) = ("👩‍👩‍👧‍👦", "\u00a0👩‍👩‍👧‍👦\r\n\u00a0")
