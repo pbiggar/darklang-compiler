@@ -1,0 +1,14 @@
+// qpack_blocked_message.e2e - HEADERS wait for insertions without dispatching later DATA or FIN.
+let bytes (hex: String) : Blob = Stdlib.Blob.fromHex hex |> Stdlib.Result.withDefault Stdlib.Blob.empty
+let emptyTable () : Stdlib.__QpackDecoder.State = match Stdlib.__QpackDecoder.create 64L with | Ok state -> state | Error message -> Builtin.crash message
+let blocked () : Stdlib.Result.Result<Stdlib.__Http3Message.Received, String> = Stdlib.__Http3Message.feedWithTable (emptyTable ()) 0L (Stdlib.__Http3Message.create (Response false)) (bytes "01040200D9800003616263")
+blocked () |> Stdlib.Result.map (fun received -> Stdlib.List.length received.events) = Ok 0
+blocked () |> Stdlib.Result.map (fun received -> Stdlib.Option.isSome received.state.waiting) = Ok true
+blocked () |> Stdlib.Result.andThen (fun received -> Stdlib.__Http3Message.finish received.state) = Error "HTTP/3 headers are blocked"
+let resumed () : Stdlib.Result.Result<Stdlib.__Http3Message.Received, String> =
+  blocked () |> Stdlib.Result.andThen (fun received -> Stdlib.__QpackDecoder.feed (emptyTable ()) (bytes "3F2141780179") |> Stdlib.Result.andThen (fun table -> Stdlib.__Http3Message.resume table.state 0L received.state))
+resumed () |> Stdlib.Result.map (fun received -> Stdlib.Option.isNone received.state.waiting) = Ok true
+resumed () |> Stdlib.Result.map (fun received -> Stdlib.Blob.toHex received.feedback) = Ok "80"
+resumed () |> Stdlib.Result.map (fun received -> Stdlib.List.map received.events (fun event -> match event with | ResponseHead head -> Stdlib.Int64.toString head.status | BodyChunk data -> Stdlib.Blob.toString data |> Stdlib.Result.withDefault "Invalid body" | _ -> "Unexpected")) = Ok ["200", "abc"]
+resumed () |> Stdlib.Result.andThen (fun received -> Stdlib.__Http3Message.finish received.state) = Ok ()
+resumed () |> Stdlib.Result.andThen (fun received -> Stdlib.__Http3Message.resume (emptyTable ()) 0L received.state) |> Stdlib.Result.map (fun received -> Stdlib.Blob.toHex received.feedback) = Ok ""

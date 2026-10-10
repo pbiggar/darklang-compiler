@@ -5,9 +5,15 @@ type State = {
   connection: Stdlib.__QuicConnection.State,
   uni: Stdlib.__Http3Uni.State,
   message: Stdlib.__Http3Message.State,
-  deadline: Int64
+  deadline: Int64,
+  feedback: Blob
 }
 type Received = { state: Stdlib.__Http3.State, events: List<Stdlib.__Http3Message.Event>, finished: Bool }
+
+let __uni (fromServer: Bool) : Stdlib.__Http3Uni.State =
+  match Stdlib.__Http3Uni.createWithCapacity fromServer 4096L with
+  | Ok state -> state
+  | Error _ -> Builtin.crash "Fixed HTTP/3 QPACK capacity is invalid"
 
 let __capacity (connection: Stdlib.__QuicConnection.State) (deadline: Int64)
   : Stdlib.Result.Result<Stdlib.__QuicConnection.State, String> =
@@ -18,6 +24,29 @@ let __capacity (connection: Stdlib.__QuicConnection.State) (deadline: Int64)
   | Ok now ->
     if now >= deadline then Error "HTTP/3 initial stream credit timed out"
     else Stdlib.__QuicConnection.poll connection 10L |> Stdlib.Result.andThen (fun next -> Stdlib.__Http3.__capacity next deadline)
+
+let __initialBytes (connection: Stdlib.__QuicConnection.State) (id: Int64) (bytes: Blob) (offset: Int64) (deadline: Int64) : Stdlib.Result.Result<Stdlib.__QuicConnection.State, String> =
+  if offset == Stdlib.Blob.__byteLength bytes then Ok connection
+  else match Stdlib.__Network.monotonicMillis () with
+  | Error _ -> Error "HTTP/3 clock failed"
+  | Ok now ->
+    if now >= deadline then Error "HTTP/3 initial stream credit timed out"
+    else
+      match Stdlib.__QuicFlow.channel connection.flow id with
+      | None -> Builtin.crash "HTTP/3 initial stream is not open"
+      | Some channel ->
+        match channel.send with
+        | None -> Builtin.crash "HTTP/3 initial stream is receive-only"
+        | Some sender ->
+          let streamCredit = sender.credit - sender.offset in
+          let connectionCredit = connection.flow.peer.data - connection.flow.sent in
+          let credit = if streamCredit < connectionCredit then streamCredit else connectionCredit in
+          if credit <= 0L then Stdlib.__QuicConnection.poll connection 10L |> Stdlib.Result.andThen (fun next -> Stdlib.__Http3.__initialBytes next id bytes offset deadline)
+          else
+            let remaining = Stdlib.Blob.__byteLength bytes - offset in
+            let size = if remaining < credit then remaining else credit in
+            Stdlib.__QuicConnection.write connection id (Stdlib.__Http2Wire.__slice bytes offset size) false |> Stdlib.Result.andThen Stdlib.__QuicConnection.flush
+              |> Stdlib.Result.andThen (fun next -> Stdlib.__Http3.__initialBytes next id bytes (offset + size) deadline)
 
 let initialize (ready: Stdlib.__QuicClient.Ready) (headOnly: Bool) (timeout: Int64)
   : Stdlib.Result.Result<Stdlib.__Http3.State, String> =
@@ -32,12 +61,12 @@ let initialize (ready: Stdlib.__QuicClient.Ready) (headOnly: Bool) (timeout: Int
       Stdlib.__QuicConnection.openStream connection 6L |> Stdlib.Result.andThen (fun connection ->
       Stdlib.__QuicConnection.openStream connection 10L |> Stdlib.Result.andThen (fun connection ->
       Stdlib.__QuicConnection.openStream connection 0L |> Stdlib.Result.andThen (fun connection ->
-        Stdlib.__Http3Wire.serialize 4L (Stdlib.__Http3Wire.settings ()) |> Stdlib.Result.andThen (fun settings ->
-          Stdlib.__QuicConnection.write connection 2L (Stdlib.Blob.concat [Stdlib.Blob.__fromInt64List [0L], settings]) false
-            |> Stdlib.Result.andThen (fun connection -> Stdlib.__QuicConnection.write connection 6L (Stdlib.Blob.__fromInt64List [2L]) false)
-            |> Stdlib.Result.andThen (fun connection -> Stdlib.__QuicConnection.write connection 10L (Stdlib.Blob.__fromInt64List [3L]) false)
+        Stdlib.__Http3Wire.settingsWithQpack 4096L 1L |> Stdlib.Result.andThen (Stdlib.__Http3Wire.serialize 4L) |> Stdlib.Result.andThen (fun settings ->
+          Stdlib.__Http3.__initialBytes connection 2L (Stdlib.Blob.concat [Stdlib.Blob.__fromInt64List [0L], settings]) 0L deadline
+            |> Stdlib.Result.andThen (fun connection -> Stdlib.__Http3.__initialBytes connection 6L (Stdlib.Blob.__fromInt64List [2L]) 0L deadline)
+            |> Stdlib.Result.andThen (fun connection -> Stdlib.__Http3.__initialBytes connection 10L (Stdlib.Blob.__fromInt64List [3L]) 0L deadline)
             |> Stdlib.Result.map (fun connection -> Stdlib.__Http3.State { connection = connection,
-              uni = Stdlib.__Http3Uni.create true, message = Stdlib.__Http3Message.create (Response headOnly), deadline = deadline }))))))))
+              uni = Stdlib.__Http3.__uni true, message = Stdlib.__Http3Message.create (Response headOnly), deadline = deadline, feedback = Stdlib.Blob.empty }))))))))
 
 let initializeServer (ready: Stdlib.__QuicServer.Ready) (signals: Stdlib.__Network.ShutdownSignals) (timeout: Int64) : Stdlib.Result.Result<Stdlib.__Http3.State, String> =
   if timeout < 1L || timeout > 60000L then Error "Invalid HTTP/3 exchange timeout"
@@ -50,12 +79,35 @@ let initializeServer (ready: Stdlib.__QuicServer.Ready) (signals: Stdlib.__Netwo
       Stdlib.__QuicConnection.openStream connection 3L |> Stdlib.Result.andThen (fun connection ->
       Stdlib.__QuicConnection.openStream connection 7L |> Stdlib.Result.andThen (fun connection ->
       Stdlib.__QuicConnection.openStream connection 11L |> Stdlib.Result.andThen (fun connection ->
-        Stdlib.__Http3Wire.serialize 4L (Stdlib.__Http3Wire.settings ()) |> Stdlib.Result.andThen (fun settings ->
-          Stdlib.__QuicConnection.write connection 3L (Stdlib.Blob.concat [Stdlib.Blob.__fromInt64List [0L], settings]) false
-            |> Stdlib.Result.andThen (fun connection -> Stdlib.__QuicConnection.write connection 7L (Stdlib.Blob.__fromInt64List [2L]) false)
-            |> Stdlib.Result.andThen (fun connection -> Stdlib.__QuicConnection.write connection 11L (Stdlib.Blob.__fromInt64List [3L]) false)
-            |> Stdlib.Result.map (fun connection -> Stdlib.__Http3.State { connection = connection, uni = Stdlib.__Http3Uni.create false,
-              message = Stdlib.__Http3Message.create Request, deadline = deadline })))))))
+        Stdlib.__Http3Wire.settingsWithQpack 4096L 1L |> Stdlib.Result.andThen (Stdlib.__Http3Wire.serialize 4L) |> Stdlib.Result.andThen (fun settings ->
+          Stdlib.__Http3.__initialBytes connection 3L (Stdlib.Blob.concat [Stdlib.Blob.__fromInt64List [0L], settings]) 0L deadline
+            |> Stdlib.Result.andThen (fun connection -> Stdlib.__Http3.__initialBytes connection 7L (Stdlib.Blob.__fromInt64List [2L]) 0L deadline)
+            |> Stdlib.Result.andThen (fun connection -> Stdlib.__Http3.__initialBytes connection 11L (Stdlib.Blob.__fromInt64List [3L]) 0L deadline)
+            |> Stdlib.Result.map (fun connection -> Stdlib.__Http3.State { connection = connection, uni = Stdlib.__Http3.__uni false,
+              message = Stdlib.__Http3Message.create Request, deadline = deadline, feedback = Stdlib.Blob.empty })))))))
+
+// Decoder feedback is flow-controlled like any other critical stream. Retain
+// bounded unsent bytes rather than failing when the peer's credit is exhausted.
+let __feedback (state: Stdlib.__Http3.State) (bytes: Blob) : Stdlib.Result.Result<Stdlib.__Http3.State, String> =
+  let pending = Stdlib.Blob.concat [state.feedback, bytes] in
+  if Stdlib.Blob.__byteLength pending > 65536L then Error "QPACK feedback buffer exceeds limit"
+  else if Stdlib.Blob.__byteLength pending == 0L then Ok state
+  else
+    let id = if state.connection.flow.role == Stdlib.__QuicFlow.Role.Client then 10L else 11L in
+    match Stdlib.__QuicFlow.channel state.connection.flow id with
+    | None -> Builtin.crash "HTTP/3 decoder stream is not open"
+    | Some channel ->
+      match channel.send with
+      | None -> Builtin.crash "HTTP/3 decoder stream is receive-only"
+      | Some sender ->
+        let connectionCredit = state.connection.flow.peer.data - state.connection.flow.sent in
+        let streamCredit = sender.credit - sender.offset in
+        let credit = if streamCredit < connectionCredit then streamCredit else connectionCredit in
+        let length = Stdlib.Blob.__byteLength pending in
+        let size = if credit < length then credit else length in
+        if size <= 0L then Ok { state with feedback = pending }
+        else Stdlib.__QuicConnection.write state.connection id (Stdlib.__Http2Wire.__slice pending 0L size) false
+          |> Stdlib.Result.map (fun connection -> { state with connection = connection, feedback = Stdlib.__Http2Wire.__slice pending size (length - size) })
 
 let __controls (state: Stdlib.__Http3.State) : Stdlib.Result.Result<Stdlib.__Http3.State, String> =
   Stdlib.List.fold state.connection.flow.channels (Ok state) (fun result channel ->
@@ -63,21 +115,25 @@ let __controls (state: Stdlib.__Http3.State) : Stdlib.Result.Result<Stdlib.__Htt
     else result |> Stdlib.Result.andThen (fun current ->
       Stdlib.__QuicConnection.read current.connection channel.id |> Stdlib.Result.andThen (fun read ->
         Stdlib.__Http3Uni.receive current.uni channel.id read.bytes read.finished (Stdlib.Option.isSome read.reset)
-          |> Stdlib.Result.map (fun received -> { current with connection = read.state, uni = received.state }))))
+          |> Stdlib.Result.andThen (fun received -> Stdlib.__Http3.__feedback { current with connection = read.state, uni = received.state } received.feedback))))
+    |> Stdlib.Result.andThen (fun current -> Stdlib.__Http3.__feedback current Stdlib.Blob.empty)
 
 // Drain before polling so response data and control credit already received cannot starve.
 let __drain (state: Stdlib.__Http3.State) : Stdlib.Result.Result<Stdlib.__Http3.Received, String> =
   Stdlib.__Http3.__controls state |> Stdlib.Result.andThen (fun current ->
-    if Stdlib.Option.isNone (Stdlib.__QuicFlow.channel current.connection.flow 0L) then
-      Stdlib.__QuicConnection.flush current.connection |> Stdlib.Result.map (fun connection -> Stdlib.__Http3.Received { state = { current with connection = connection }, events = [], finished = false })
+    Stdlib.__Http3Message.resume current.uni.table 0L current.message |> Stdlib.Result.andThen (fun resumed ->
+      Stdlib.__Http3.__feedback { current with message = resumed.state } resumed.feedback |> Stdlib.Result.andThen (fun current ->
+    if Stdlib.Option.isSome current.message.waiting || Stdlib.Option.isNone (Stdlib.__QuicFlow.channel current.connection.flow 0L) then
+      Stdlib.__QuicConnection.flush current.connection |> Stdlib.Result.map (fun connection -> Stdlib.__Http3.Received { state = { current with connection = connection }, events = resumed.events, finished = false })
     else Stdlib.__QuicConnection.read current.connection 0L |> Stdlib.Result.andThen (fun read ->
       if Stdlib.Option.isSome read.reset then Error "HTTP/3 response stream reset"
-      else Stdlib.__Http3Message.feed current.message read.bytes |> Stdlib.Result.andThen (fun received ->
-        let next = { current with connection = read.state, message = received.state } in
-        let complete = if read.finished then Stdlib.__Http3Message.finish received.state else Ok () in
+      else Stdlib.__Http3Message.feedWithTable current.uni.table 0L current.message read.bytes |> Stdlib.Result.andThen (fun received ->
+        Stdlib.__Http3.__feedback { current with connection = read.state, message = received.state } received.feedback |> Stdlib.Result.andThen (fun next ->
+        let finished = read.finished && Stdlib.Option.isNone received.state.waiting in
+        let complete = if finished then Stdlib.__Http3Message.finish received.state else Ok () in
         complete |> Stdlib.Result.andThen (fun _unit ->
           Stdlib.__QuicConnection.flush next.connection |> Stdlib.Result.map (fun connection ->
-            Stdlib.__Http3.Received { state = { next with connection = connection }, events = received.events, finished = read.finished })))))
+            Stdlib.__Http3.Received { state = { next with connection = connection }, events = resumed.events @ received.events, finished = finished }))))))))
 
 // Return even without HTTP events: MAX_DATA/MAX_STREAM_DATA can unblock an upload.
 let poll (state: Stdlib.__Http3.State) : Stdlib.Result.Result<Stdlib.__Http3.Received, String> =

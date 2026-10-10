@@ -198,6 +198,7 @@ fragments use `__` even where the interpreter also has private helpers.
 | `StdLib/__QuicRecovery.dark` | `Darklang.Stdlib.__QuicRecovery` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
 | `StdLib/__QuicSpace.dark` | `Darklang.Stdlib.__QuicSpace` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
 | `StdLib/__QuicHandshakePacket.dark` | `Darklang.Stdlib.__QuicHandshakePacket` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
+| `StdLib/__QuicIdle.dark` | `Darklang.Stdlib.__QuicIdle` | Compiler support: negotiated QUIC application idle lifetime |
 | `StdLib/__QuicParameters.dark` | `Darklang.Stdlib.__QuicParameters` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
 | `StdLib/__QuicTls.dark` | `Darklang.Stdlib.__QuicTls` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
 | `StdLib/__QuicKeys.dark` | `Darklang.Stdlib.__QuicKeys` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
@@ -205,6 +206,7 @@ fragments use `__` even where the interpreter also has private helpers.
 | `StdLib/__QuicServer.dark` | `Darklang.Stdlib.__QuicServer` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
 | `StdLib/__QuicConnection.dark` | `Darklang.Stdlib.__QuicConnection` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
 | `StdLib/__Qpack.dark` | `Darklang.Stdlib.__Qpack` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
+| `StdLib/__QpackDecoder.dark` | `Darklang.Stdlib.__QpackDecoder` | Compiler support: bounded dynamic QPACK decoding and encoder-stream instructions |
 | `StdLib/__Http3Wire.dark` | `Darklang.Stdlib.__Http3Wire` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
 | `StdLib/__Http3Stream.dark` | `Darklang.Stdlib.__Http3Stream` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
 | `StdLib/__Http3Message.dark` | `Darklang.Stdlib.__Http3Message` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |

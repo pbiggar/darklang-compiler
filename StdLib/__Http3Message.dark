@@ -3,6 +3,7 @@ module Darklang.Stdlib.__Http3Message
 
 type Mode = Request | Response of Bool
 type Phase = AwaitHead | Body | Trailers
+type Waiting = { bytes: Blob, prefix: Stdlib.__QpackDecoder.Prefix }
 type State = {
   framing: Stdlib.__Http3Stream.State,
   mode: Stdlib.__Http3Message.Mode,
@@ -12,18 +13,20 @@ type State = {
   noBody: Bool,
   informational: Int64,
   headers: List<Blob>,
-  parts: Int64
+  parts: Int64,
+  waiting: Stdlib.Option.Option<Stdlib.__Http3Message.Waiting>,
+  deferred: List<Stdlib.__Http3Stream.Event>
 }
 type Event =
   | RequestHead of Stdlib.__Http2Fields.RequestHead
   | ResponseHead of Stdlib.__Http2Fields.ResponseHead
   | BodyChunk of Blob
   | TrailerFields of List<(String * String)>
-type Received = { state: Stdlib.__Http3Message.State, events: List<Stdlib.__Http3Message.Event> }
+type Received = { state: Stdlib.__Http3Message.State, events: List<Stdlib.__Http3Message.Event>, feedback: Blob }
 
 let create (mode: Stdlib.__Http3Message.Mode) : Stdlib.__Http3Message.State =
   Stdlib.__Http3Message.State { framing = Stdlib.__Http3Stream.empty, mode = mode, phase = AwaitHead,
-    expected = None, received = 0L, noBody = false, informational = 0L, headers = [], parts = 0L }
+    expected = None, received = 0L, noBody = false, informational = 0L, headers = [], parts = 0L, waiting = None, deferred = [] }
 
 let __fields (fields: List<(String * String)>) (request: Bool) : Stdlib.Result.Result<Unit, String> =
   match fields with
@@ -85,12 +88,9 @@ let __head (state: Stdlib.__Http3Message.State) (fields: List<(String * String)>
           let expected = if noBody then None else length in
           Ok (({ state with phase = Body, expected = expected, noBody = noBody }, ResponseHead head))
 
-let __endHeaders (state: Stdlib.__Http3Message.State)
+let __decodedHeaders (state: Stdlib.__Http3Message.State) (fields: List<(String * String)>)
   : Stdlib.Result.Result<(Stdlib.__Http3Message.State * Stdlib.__Http3Message.Event), String> =
-  match Stdlib.__Qpack.decode (Stdlib.Blob.concat (Stdlib.List.reverse state.headers)) with
-  | Error message -> Error message
-  | Ok fields ->
-    let cleared = { state with headers = [], parts = 0L } in
+    let cleared = { state with headers = [], parts = 0L, waiting = None, deferred = [] } in
     let request = state.mode == Request && state.phase == AwaitHead in
     Stdlib.__Http3Message.__fields fields request |> Stdlib.Result.andThen (fun _unit ->
       if state.phase == AwaitHead then Stdlib.__Http3Message.__head cleared fields
@@ -99,39 +99,72 @@ let __endHeaders (state: Stdlib.__Http3Message.State)
         | Error message -> Error message
         | Ok _ -> Ok (({ cleared with phase = Trailers }, TrailerFields fields)))
 
-let __events (state: Stdlib.__Http3Message.State) (input: List<Stdlib.__Http3Stream.Event>)
-  (events: List<Stdlib.__Http3Message.Event>) : Stdlib.Result.Result<Stdlib.__Http3Message.Received, String> =
-  match input with
-  | [] -> Ok (Stdlib.__Http3Message.Received { state = state, events = Stdlib.List.reverse events })
+let __buffer (state: Stdlib.__Http3Message.State) (input: List<Stdlib.__Http3Stream.Event>) : Stdlib.Result.Result<Stdlib.__Http3Message.State, String> =
+  let deferred = state.deferred @ input in
+  let size = Stdlib.List.fold deferred 0L (fun size event -> match event with | Chunk ((_kind, bytes)) -> size + Stdlib.Blob.__byteLength bytes | _ -> size) in
+  if Stdlib.List.length deferred > 1024 || size > 65536L then Error "HTTP/3 blocked message buffer exceeds limit"
+  else Ok { state with deferred = deferred }
+
+let __events (table: Stdlib.__QpackDecoder.State) (id: Int64) (state: Stdlib.__Http3Message.State) (input: List<Stdlib.__Http3Stream.Event>)
+  (events: List<Stdlib.__Http3Message.Event>) (feedback: List<Blob>) : Stdlib.Result.Result<Stdlib.__Http3Message.Received, String> =
+  if Stdlib.Option.isSome state.waiting then
+    Stdlib.__Http3Message.__buffer state input |> Stdlib.Result.map (fun state -> Stdlib.__Http3Message.Received { state = state, events = Stdlib.List.reverse events, feedback = Stdlib.Blob.concat (Stdlib.List.reverse feedback) })
+  else match input with
+  | [] -> Ok (Stdlib.__Http3Message.Received { state = state, events = Stdlib.List.reverse events, feedback = Stdlib.Blob.concat (Stdlib.List.reverse feedback) })
   | event :: rest ->
     match event with
     | Begin ((kind, size)) ->
       (match Stdlib.__Http3Message.__begin state kind size with
       | Error message -> Error message
-      | Ok next -> Stdlib.__Http3Message.__events next rest events)
+      | Ok next -> Stdlib.__Http3Message.__events table id next rest events feedback)
     | Chunk ((kind, data)) ->
       if kind == 1L then
         if state.parts >= 1024L then Error "Too many HTTP/3 header fragments"
-        else Stdlib.__Http3Message.__events { state with headers = Stdlib.List.push state.headers data, parts = state.parts + 1L } rest events
+        else Stdlib.__Http3Message.__events table id { state with headers = Stdlib.List.push state.headers data, parts = state.parts + 1L } rest events feedback
       else if kind == 0L then
-        Stdlib.__Http3Message.__events { state with received = state.received + Stdlib.Blob.__byteLength data }
-          rest (Stdlib.List.push events (BodyChunk data))
-      else Stdlib.__Http3Message.__events state rest events
+        Stdlib.__Http3Message.__events table id { state with received = state.received + Stdlib.Blob.__byteLength data }
+          rest (Stdlib.List.push events (BodyChunk data)) feedback
+      else Stdlib.__Http3Message.__events table id state rest events feedback
     | End kind ->
-      if kind != 1L then Stdlib.__Http3Message.__events state rest events
+      if kind != 1L then Stdlib.__Http3Message.__events table id state rest events feedback
       else
-        match Stdlib.__Http3Message.__endHeaders state with
+        let bytes = Stdlib.Blob.concat (Stdlib.List.reverse state.headers) in
+        match Stdlib.__QpackDecoder.decode table bytes with
         | Error message -> Error message
-        | Ok ((next, head)) -> Stdlib.__Http3Message.__events next rest (Stdlib.List.push events head)
+        | Ok (Blocked prefix) ->
+          let waiting = Stdlib.__Http3Message.Waiting { bytes = bytes, prefix = prefix } in
+          Stdlib.__Http3Message.__events table id { state with waiting = Some waiting, headers = [], parts = 0L } rest events feedback
+        | Ok (Decoded fields) -> Stdlib.__Http3Message.__decodedHeaders state fields.fields |> Stdlib.Result.andThen (fun parsed ->
+          let (next, head) = parsed in
+          let feedback = if fields.required == 0L then feedback else Stdlib.List.push feedback (Stdlib.__QpackDecoder.acknowledge id) in
+          Stdlib.__Http3Message.__events table id next rest (Stdlib.List.push events head) feedback)
+
+let resume (table: Stdlib.__QpackDecoder.State) (id: Int64) (state: Stdlib.__Http3Message.State) : Stdlib.Result.Result<Stdlib.__Http3Message.Received, String> =
+  match state.waiting with
+  | None -> Ok (Stdlib.__Http3Message.Received { state = state, events = [], feedback = Stdlib.Blob.empty })
+  | Some waiting ->
+    Stdlib.__QpackDecoder.decodeReady table waiting.bytes waiting.prefix |> Stdlib.Result.andThen (fun section ->
+      match section with
+      | Blocked _ -> Ok (Stdlib.__Http3Message.Received { state = state, events = [], feedback = Stdlib.Blob.empty })
+      | Decoded fields -> Stdlib.__Http3Message.__decodedHeaders state fields.fields |> Stdlib.Result.andThen (fun parsed ->
+        let (next, head) = parsed in
+        let feedback = if fields.required == 0L then [] else [Stdlib.__QpackDecoder.acknowledge id] in
+        Stdlib.__Http3Message.__events table id next state.deferred [head] feedback))
+
+let feedWithTable (table: Stdlib.__QpackDecoder.State) (id: Int64) (state: Stdlib.__Http3Message.State) (data: Blob)
+  : Stdlib.Result.Result<Stdlib.__Http3Message.Received, String> =
+  Stdlib.__Http3Message.resume table id state |> Stdlib.Result.andThen (fun resumed ->
+    Stdlib.__Http3Stream.feed resumed.state.framing data |> Stdlib.Result.andThen (fun received ->
+      Stdlib.__Http3Message.__events table id { resumed.state with framing = received.state } received.events [] []
+        |> Stdlib.Result.map (fun next -> { next with events = resumed.events @ next.events, feedback = Stdlib.Blob.concat [resumed.feedback, next.feedback] })))
 
 let feed (state: Stdlib.__Http3Message.State) (data: Blob)
   : Stdlib.Result.Result<Stdlib.__Http3Message.Received, String> =
-  match Stdlib.__Http3Stream.feed state.framing data with
-  | Error message -> Error message
-  | Ok received -> Stdlib.__Http3Message.__events { state with framing = received.state } received.events []
+  Stdlib.__QpackDecoder.create 0L |> Stdlib.Result.andThen (fun table -> Stdlib.__Http3Message.feedWithTable table 0L state data)
 
 let finish (state: Stdlib.__Http3Message.State) : Stdlib.Result.Result<Unit, String> =
-  match Stdlib.__Http3Stream.finish state.framing with
+  if Stdlib.Option.isSome state.waiting then Error "HTTP/3 headers are blocked"
+  else match Stdlib.__Http3Stream.finish state.framing with
   | Error message -> Error message
   | Ok _ ->
     if state.phase == AwaitHead then Error "HTTP/3 stream ended before final HEADERS"

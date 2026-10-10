@@ -182,6 +182,7 @@ StdLib/__QuicClient.dark
 StdLib/__QuicServer.dark
 StdLib/__QuicConnection.dark
 StdLib/__Qpack.dark
+StdLib/__QpackDecoder.dark
 StdLib/__Http3Wire.dark
 StdLib/__Http3Stream.dark
 StdLib/__Http3Message.dark

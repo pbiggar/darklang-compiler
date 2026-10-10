@@ -1,0 +1,189 @@
+// __QpackDecoder.dark - Bounded RFC 9204 dynamic tables and incremental encoder instructions.
+module Darklang.Stdlib.__QpackDecoder
+
+type Entry = { index: Int64, field: (String * String) }
+type State = { maximum: Int64, capacity: Int64, inserted: Int64, entries: List<Stdlib.__QpackDecoder.Entry>, pending: Blob }
+type Received = { state: Stdlib.__QpackDecoder.State, increment: Int64 }
+type ParseError = Incomplete | Invalid of String
+type Number = { value: Int64, next: Int64 }
+type Text = { value: String, next: Int64 }
+type Instruction = Capacity of Int64 | Insert of (String * String)
+type Parsed = { instruction: Stdlib.__QpackDecoder.Instruction, next: Int64 }
+type Prefix = { required: Int64, base: Int64, next: Int64 }
+type Fields = { fields: List<(String * String)>, required: Int64 }
+type Section = Decoded of Stdlib.__QpackDecoder.Fields | Blocked of Stdlib.__QpackDecoder.Prefix
+type Field = { field: (String * String), next: Int64, reference: Int64 }
+
+let create (maximum: Int64) : Stdlib.Result.Result<Stdlib.__QpackDecoder.State, String> =
+  if maximum < 0L || maximum > 65536L then Error "Invalid QPACK decoder capacity"
+  else Ok (Stdlib.__QpackDecoder.State { maximum = maximum, capacity = 0L, inserted = 0L, entries = [], pending = Stdlib.Blob.empty })
+
+let __integerRest (data: Blob) (position: Int64) (value: Int64) (factor: Int64) : Stdlib.Result.Result<Stdlib.__QpackDecoder.Number, Stdlib.__QpackDecoder.ParseError> =
+  if position >= Stdlib.Blob.__byteLength data then Error Incomplete
+  else
+    let byte = Stdlib.Blob.__getByte data position in
+    let digit = byte % 128L in
+    if digit > (4611686018427387903L - value) / factor then Error (Invalid "QPACK integer overflow")
+    else
+      let next = value + digit * factor in
+      if byte < 128L then Ok (Stdlib.__QpackDecoder.Number { value = next, next = position + 1L })
+      else if factor > 36028797018963968L then Error (Invalid "QPACK integer overflow")
+      else Stdlib.__QpackDecoder.__integerRest data (position + 1L) next (factor * 128L)
+
+let __integer (data: Blob) (position: Int64) (prefix: Int64) : Stdlib.Result.Result<Stdlib.__QpackDecoder.Number, Stdlib.__QpackDecoder.ParseError> =
+  if position >= Stdlib.Blob.__byteLength data then Error Incomplete
+  else
+    let mask = Stdlib.__Hpack.__pow2 prefix - 1L in
+    let value = Stdlib.Int64.bitwiseAnd (Stdlib.Blob.__getByte data position) mask in
+    if value < mask then Ok (Stdlib.__QpackDecoder.Number { value = value, next = position + 1L })
+    else Stdlib.__QpackDecoder.__integerRest data (position + 1L) value 1L
+
+let __text (data: Blob) (position: Int64) (prefix: Int64) (huffmanFlag: Int64) : Stdlib.Result.Result<Stdlib.__QpackDecoder.Text, Stdlib.__QpackDecoder.ParseError> =
+  Stdlib.__QpackDecoder.__integer data position prefix |> Stdlib.Result.andThen (fun number ->
+    if number.value > 65536L then Error (Invalid "QPACK string too large")
+    else if number.value > Stdlib.Blob.__byteLength data - number.next then Error Incomplete
+    else
+      let encoded = Stdlib.__Http2Wire.__slice data number.next number.value in
+      let bytes = if Stdlib.Int64.bitwiseAnd (Stdlib.Blob.__getByte data position) huffmanFlag == 0L then Ok encoded
+        else Stdlib.__Hpack.__huffman encoded 0L 0L 0L [] 0L in
+      bytes |> Stdlib.Result.mapError (fun message -> Invalid message) |> Stdlib.Result.andThen (fun bytes ->
+        match Stdlib.Blob.toString bytes with
+        | Error _ -> Error (Invalid "Invalid UTF-8 in HTTP header")
+        | Ok value -> Ok (Stdlib.__QpackDecoder.Text { value = value, next = number.next + number.value })))
+
+let __lookup (state: Stdlib.__QpackDecoder.State) (index: Int64) : Stdlib.Result.Result<(String * String), String> =
+  match Stdlib.List.findFirst state.entries (fun entry -> entry.index == index) with
+  | None -> Error "Invalid QPACK dynamic index"
+  | Some entry -> Ok entry.field
+
+let __relative (state: Stdlib.__QpackDecoder.State) (base: Int64) (index: Int64) : Stdlib.Result.Result<(String * String), String> =
+  if index >= base then Error "Invalid QPACK dynamic index"
+  else Stdlib.__QpackDecoder.__lookup state (base - index - 1L)
+
+let __retain (entries: List<Stdlib.__QpackDecoder.Entry>) (capacity: Int64) : List<Stdlib.__QpackDecoder.Entry> =
+  match entries with
+  | [] -> []
+  | entry :: rest ->
+    let size = Stdlib.__Hpack.__entrySize entry.field in
+    if size > capacity then []
+    else Stdlib.List.push (Stdlib.__QpackDecoder.__retain rest (capacity - size)) entry
+
+let __apply (state: Stdlib.__QpackDecoder.State) (instruction: Stdlib.__QpackDecoder.Instruction) : Stdlib.Result.Result<Stdlib.__QpackDecoder.State, String> =
+  match instruction with
+  | Capacity value ->
+    if value > state.maximum then Error "QPACK capacity exceeds advertised limit"
+    else Ok { state with capacity = value, entries = Stdlib.__QpackDecoder.__retain state.entries value }
+  | Insert field ->
+    if Stdlib.__Hpack.__entrySize field > state.capacity then Error "QPACK entry exceeds table capacity"
+    else if state.inserted >= 4611686018427385855L then Error "QPACK insertion count exhausted"
+    else
+      let entry = Stdlib.__QpackDecoder.Entry { index = state.inserted, field = field } in
+      Ok { state with inserted = state.inserted + 1L, entries = Stdlib.__QpackDecoder.__retain (Stdlib.List.push state.entries entry) state.capacity }
+
+let __instruction (state: Stdlib.__QpackDecoder.State) (data: Blob) (position: Int64) : Stdlib.Result.Result<Stdlib.__QpackDecoder.Parsed, Stdlib.__QpackDecoder.ParseError> =
+  let first = Stdlib.Blob.__getByte data position in
+  if first >= 128L then
+    Stdlib.__QpackDecoder.__integer data position 6L |> Stdlib.Result.andThen (fun number ->
+      let reference =
+        if Stdlib.Int64.bitwiseAnd first 64L != 0L then
+          match Stdlib.__Qpack.staticEntry number.value with | None -> Error "Invalid QPACK static index" | Some field -> Ok field
+        else Stdlib.__QpackDecoder.__relative state state.inserted number.value in
+      reference |> Stdlib.Result.mapError (fun message -> Invalid message) |> Stdlib.Result.andThen (fun field ->
+        let (name, _value) = field in
+        Stdlib.__QpackDecoder.__text data number.next 7L 128L |> Stdlib.Result.map (fun value ->
+          Stdlib.__QpackDecoder.Parsed { instruction = Insert ((name, value.value)), next = value.next })))
+  else if first >= 64L then
+    Stdlib.__QpackDecoder.__text data position 5L 32L |> Stdlib.Result.andThen (fun name ->
+      Stdlib.__QpackDecoder.__text data name.next 7L 128L |> Stdlib.Result.map (fun value ->
+        Stdlib.__QpackDecoder.Parsed { instruction = Insert ((name.value, value.value)), next = value.next }))
+  else
+    Stdlib.__QpackDecoder.__integer data position 5L |> Stdlib.Result.andThen (fun number ->
+      if first >= 32L then Ok (Stdlib.__QpackDecoder.Parsed { instruction = Capacity number.value, next = number.next })
+      else Stdlib.__QpackDecoder.__relative state state.inserted number.value |> Stdlib.Result.mapError (fun message -> Invalid message)
+        |> Stdlib.Result.map (fun field -> Stdlib.__QpackDecoder.Parsed { instruction = Insert field, next = number.next }))
+
+let __feed (state: Stdlib.__QpackDecoder.State) (data: Blob) (position: Int64) : Stdlib.Result.Result<Stdlib.__QpackDecoder.State, String> =
+  if position == Stdlib.Blob.__byteLength data then Ok { state with pending = Stdlib.Blob.empty }
+  else
+    match Stdlib.__QpackDecoder.__instruction state data position with
+    | Error Incomplete -> Ok { state with pending = Stdlib.__Http2Wire.__slice data position (Stdlib.Blob.__byteLength data - position) }
+    | Error (Invalid message) -> Error message
+    | Ok parsed -> Stdlib.__QpackDecoder.__apply state parsed.instruction |> Stdlib.Result.andThen (fun next -> Stdlib.__QpackDecoder.__feed next data parsed.next)
+
+let feed (state: Stdlib.__QpackDecoder.State) (data: Blob) : Stdlib.Result.Result<Stdlib.__QpackDecoder.Received, String> =
+  if Stdlib.Blob.__byteLength data > 65536L || Stdlib.Blob.__byteLength state.pending + Stdlib.Blob.__byteLength data > 131088L then Error "QPACK instruction buffer exceeds limit"
+  else Stdlib.__QpackDecoder.__feed state (Stdlib.Blob.concat [state.pending, data]) 0L |> Stdlib.Result.map (fun next ->
+    Stdlib.__QpackDecoder.Received { state = next, increment = next.inserted - state.inserted })
+
+let __required (state: Stdlib.__QpackDecoder.State) (encoded: Int64) : Stdlib.Result.Result<Int64, String> =
+  if encoded == 0L then Ok 0L
+  else
+    let maximum = state.maximum / 32L in
+    let range = 2L * maximum in
+    if encoded > range then Error "Invalid QPACK required insert count"
+    else
+      let value = state.inserted + maximum in
+      let candidate = (value / range) * range + encoded - 1L in
+      let required = if candidate > value then candidate - range else candidate in
+      if required <= 0L then Error "Invalid QPACK required insert count" else Ok required
+
+let __complete (result: Stdlib.Result.Result<'a, Stdlib.__QpackDecoder.ParseError>) : Stdlib.Result.Result<'a, String> =
+  result |> Stdlib.Result.mapError (fun error -> match error with | Incomplete -> "Truncated QPACK field section" | Invalid message -> message)
+
+let __prefix (state: Stdlib.__QpackDecoder.State) (data: Blob) : Stdlib.Result.Result<Stdlib.__QpackDecoder.Prefix, String> =
+  Stdlib.__QpackDecoder.__complete (Stdlib.__QpackDecoder.__integer data 0L 8L) |> Stdlib.Result.andThen (fun count ->
+    Stdlib.__QpackDecoder.__required state count.value |> Stdlib.Result.andThen (fun required ->
+      Stdlib.__QpackDecoder.__complete (Stdlib.__QpackDecoder.__integer data count.next 7L) |> Stdlib.Result.andThen (fun delta ->
+        let negative = Stdlib.Blob.__getByte data count.next >= 128L in
+        if (negative && required <= delta.value) || (Stdlib.Bool.not negative && delta.value > 4611686018427387903L - required) then Error "Invalid QPACK base"
+        else Ok (Stdlib.__QpackDecoder.Prefix { required = required, base = if negative then required - delta.value - 1L else required + delta.value, next = delta.next }))))
+
+let __reference (state: Stdlib.__QpackDecoder.State) (prefix: Stdlib.__QpackDecoder.Prefix) (index: Int64) (post: Bool) : Stdlib.Result.Result<Stdlib.__QpackDecoder.Entry, String> =
+  let absolute = if post then prefix.base + index else prefix.base - index - 1L in
+  if (post && index > 4611686018427387903L - prefix.base) || absolute < 0L || absolute >= prefix.required then Error "Invalid QPACK dynamic index"
+  else Stdlib.__QpackDecoder.__lookup state absolute |> Stdlib.Result.map (fun field -> Stdlib.__QpackDecoder.Entry { index = absolute, field = field })
+
+let __field (state: Stdlib.__QpackDecoder.State) (prefix: Stdlib.__QpackDecoder.Prefix) (data: Blob) (position: Int64) : Stdlib.Result.Result<Stdlib.__QpackDecoder.Field, String> =
+  let first = Stdlib.Blob.__getByte data position in
+  if first >= 32L && first < 64L then
+    Stdlib.__QpackDecoder.__complete (Stdlib.__QpackDecoder.__text data position 3L 8L) |> Stdlib.Result.andThen (fun name ->
+      Stdlib.__QpackDecoder.__complete (Stdlib.__QpackDecoder.__text data name.next 7L 128L) |> Stdlib.Result.map (fun value ->
+        Stdlib.__QpackDecoder.Field { field = (name.value, value.value), next = value.next, reference = 0L }))
+  else
+    let indexed = first >= 128L || (first >= 16L && first < 32L) in
+    let post = first < 32L in
+    let static = (first >= 128L && Stdlib.Int64.bitwiseAnd first 64L != 0L) || (first >= 64L && first < 128L && Stdlib.Int64.bitwiseAnd first 16L != 0L) in
+    let bits = if first >= 128L then 6L else if first >= 64L || indexed then 4L else 3L in
+    Stdlib.__QpackDecoder.__complete (Stdlib.__QpackDecoder.__integer data position bits) |> Stdlib.Result.andThen (fun number ->
+      let entry =
+        if static then
+          match Stdlib.__Qpack.staticEntry number.value with | None -> Error "Invalid QPACK static index" | Some field -> Ok (Stdlib.__QpackDecoder.Entry { index = -1L, field = field })
+        else Stdlib.__QpackDecoder.__reference state prefix number.value post in
+      entry |> Stdlib.Result.andThen (fun entry ->
+        let reference = entry.index + 1L in
+        if indexed then Ok (Stdlib.__QpackDecoder.Field { field = entry.field, next = number.next, reference = reference })
+        else
+          let (name, _value) = entry.field in
+          Stdlib.__QpackDecoder.__complete (Stdlib.__QpackDecoder.__text data number.next 7L 128L) |> Stdlib.Result.map (fun value ->
+            Stdlib.__QpackDecoder.Field { field = (name, value.value), next = value.next, reference = reference })))
+
+let __fields (state: Stdlib.__QpackDecoder.State) (prefix: Stdlib.__QpackDecoder.Prefix) (data: Blob) (position: Int64) (fields: List<(String * String)>) (count: Int64) (size: Int64) (reference: Int64) : Stdlib.Result.Result<Stdlib.__QpackDecoder.Fields, String> =
+  if position == Stdlib.Blob.__byteLength data then
+    if reference != prefix.required then Error "Invalid QPACK required insert count"
+    else Ok (Stdlib.__QpackDecoder.Fields { fields = Stdlib.List.reverse fields, required = prefix.required })
+  else if count >= 256L then Error "QPACK header list too large"
+  else Stdlib.__QpackDecoder.__field state prefix data position |> Stdlib.Result.andThen (fun field ->
+    let nextSize = size + Stdlib.__Hpack.__entrySize field.field in
+    if nextSize > 65536L then Error "QPACK header list too large"
+    else Stdlib.__QpackDecoder.__fields state prefix data field.next (Stdlib.List.push fields field.field) (count + 1L) nextSize (if field.reference > reference then field.reference else reference))
+
+let decodeReady (state: Stdlib.__QpackDecoder.State) (data: Blob) (prefix: Stdlib.__QpackDecoder.Prefix) : Stdlib.Result.Result<Stdlib.__QpackDecoder.Section, String> =
+  if prefix.required > state.inserted then Ok (Blocked prefix)
+  else Stdlib.__QpackDecoder.__fields state prefix data prefix.next [] 0L 0L 0L |> Stdlib.Result.map (fun fields -> Decoded fields)
+
+let decode (state: Stdlib.__QpackDecoder.State) (data: Blob) : Stdlib.Result.Result<Stdlib.__QpackDecoder.Section, String> =
+  if Stdlib.Blob.__byteLength data > 65536L then Error "QPACK field section too large"
+  else Stdlib.__QpackDecoder.__prefix state data |> Stdlib.Result.andThen (Stdlib.__QpackDecoder.decodeReady state data)
+
+let acknowledge (id: Int64) : Blob = Stdlib.__Hpack.encodeInteger 7L 128L id
+let cancel (id: Int64) : Blob = Stdlib.__Hpack.encodeInteger 6L 64L id

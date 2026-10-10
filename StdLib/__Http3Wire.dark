@@ -52,3 +52,13 @@ let parseSettings (payload: Blob) : Stdlib.Result.Result<List<(Int64 * Int64)>, 
 
 // No dynamic-table references or blocked header streams in the initial profile.
 let settings () : Blob = Stdlib.Blob.__fromInt64List [1L, 0L, 7L, 0L, 6L, 128L, 1L, 0L, 0L]
+
+let settingsWithQpack (capacity: Int64) (blocked: Int64) : Stdlib.Result.Result<Blob, String> =
+  if capacity < 0L || capacity > 65536L || blocked < 0L || blocked > 256L then Error "Invalid local QPACK settings"
+  else
+    Stdlib.List.fold [(1L, capacity), (7L, blocked), (6L, 65536L)] (Ok []) (fun result setting ->
+      let (id, value) = setting in
+      result |> Stdlib.Result.andThen (fun blocks ->
+        Stdlib.__QuicWire.integer id |> Stdlib.Result.andThen (fun name ->
+          Stdlib.__QuicWire.integer value |> Stdlib.Result.map (fun bytes -> Stdlib.List.push blocks (Stdlib.Blob.concat [name, bytes])))))
+      |> Stdlib.Result.map (fun blocks -> Stdlib.Blob.concat (Stdlib.List.reverse blocks))

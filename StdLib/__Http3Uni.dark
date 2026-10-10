@@ -1,4 +1,4 @@
-// __Http3Uni.dark - Peer unidirectional stream types, critical ownership, and static QPACK instructions.
+// __Http3Uni.dark - Peer critical streams, control grammar and connection-owned QPACK decoding.
 module Darklang.Stdlib.__Http3Uni
 
 type Stream = { id: Int64, prefix: Blob, kind: Stdlib.Option.Option<Int64>, finished: Bool }
@@ -8,13 +8,20 @@ type State = {
   controlId: Stdlib.Option.Option<Int64>,
   encoderId: Stdlib.Option.Option<Int64>,
   decoderId: Stdlib.Option.Option<Int64>,
-  control: Stdlib.__Http3Control.State
+  control: Stdlib.__Http3Control.State,
+  table: Stdlib.__QpackDecoder.State
 }
-type Received = { state: Stdlib.__Http3Uni.State, events: List<Stdlib.__Http3Control.Event> }
+type Received = { state: Stdlib.__Http3Uni.State, events: List<Stdlib.__Http3Control.Event>, feedback: Blob }
+
+let createWithCapacity (fromServer: Bool) (maximum: Int64) : Stdlib.Result.Result<Stdlib.__Http3Uni.State, String> =
+  Stdlib.__QpackDecoder.create maximum |> Stdlib.Result.map (fun table ->
+    Stdlib.__Http3Uni.State { fromServer = fromServer, streams = [], controlId = None,
+      encoderId = None, decoderId = None, control = Stdlib.__Http3Control.create fromServer, table = table })
 
 let create (fromServer: Bool) : Stdlib.__Http3Uni.State =
-  Stdlib.__Http3Uni.State { fromServer = fromServer, streams = [], controlId = None,
-    encoderId = None, decoderId = None, control = Stdlib.__Http3Control.create fromServer }
+  match Stdlib.__Http3Uni.createWithCapacity fromServer 0L with
+  | Ok state -> state
+  | Error _ -> Builtin.crash "Zero QPACK capacity is invalid"
 
 let __claim (state: Stdlib.__Http3Uni.State) (id: Int64) (kind: Int64)
   : Stdlib.Result.Result<Stdlib.__Http3Uni.State, String> =
@@ -46,13 +53,14 @@ let __payload (state: Stdlib.__Http3Uni.State) (stream: Stdlib.__Http3Uni.Stream
     let next = Stdlib.__Http3Uni.__replace state { stream with prefix = Stdlib.Blob.empty, kind = Some kind, finished = finished || reset } in
     if kind == 0L then
       Stdlib.__Http3Control.feed next.control data |> Stdlib.Result.map (fun received ->
-        Stdlib.__Http3Uni.Received { state = { next with control = received.state }, events = received.events })
+        Stdlib.__Http3Uni.Received { state = { next with control = received.state }, events = received.events, feedback = Stdlib.Blob.empty })
     else if kind == 2L then
-      Stdlib.__Qpack.encoderInstructions data 0L |> Stdlib.Result.map (fun _offset ->
-        Stdlib.__Http3Uni.Received { state = next, events = [] })
+      Stdlib.__QpackDecoder.feed next.table data |> Stdlib.Result.map (fun received ->
+        let feedback = if received.increment == 0L then Stdlib.Blob.empty else Stdlib.__Hpack.encodeInteger 6L 0L received.increment in
+        Stdlib.__Http3Uni.Received { state = { next with table = received.state }, events = [], feedback = feedback })
     else if kind == 3L && Stdlib.Blob.__byteLength data != 0L then
       Error "Unexpected QPACK decoder feedback"
-    else Ok (Stdlib.__Http3Uni.Received { state = next, events = [] })
+    else Ok (Stdlib.__Http3Uni.Received { state = next, events = [], feedback = Stdlib.Blob.empty })
 
 let receive (state: Stdlib.__Http3Uni.State) (id: Int64) (data: Blob) (finished: Bool) (reset: Bool)
   : Stdlib.Result.Result<Stdlib.__Http3Uni.Received, String> =
@@ -65,7 +73,7 @@ let receive (state: Stdlib.__Http3Uni.State) (id: Int64) (data: Blob) (finished:
       Stdlib.__Http3Uni.Stream { id = id, prefix = Stdlib.Blob.empty, kind = None, finished = false } in
     if Stdlib.Option.isNone known && Stdlib.List.length state.streams >= 16 then Error "HTTP/3 stream profile exhausted"
     else if stream.finished then
-      if Stdlib.Blob.__byteLength data == 0L then Ok (Stdlib.__Http3Uni.Received { state = state, events = [] })
+      if Stdlib.Blob.__byteLength data == 0L then Ok (Stdlib.__Http3Uni.Received { state = state, events = [], feedback = Stdlib.Blob.empty })
       else Error "Data after HTTP/3 unidirectional stream end"
     else
       match stream.kind with
@@ -75,8 +83,8 @@ let receive (state: Stdlib.__Http3Uni.State) (id: Int64) (data: Blob) (finished:
         match Stdlib.__QuicWire.parseInteger bytes 0L with
         | Error Incomplete ->
           if finished || reset then
-            Ok (Stdlib.__Http3Uni.Received { state = Stdlib.__Http3Uni.__replace state { stream with prefix = Stdlib.Blob.empty, finished = true }, events = [] })
-          else Ok (Stdlib.__Http3Uni.Received { state = Stdlib.__Http3Uni.__replace state { stream with prefix = bytes }, events = [] })
+            Ok (Stdlib.__Http3Uni.Received { state = Stdlib.__Http3Uni.__replace state { stream with prefix = Stdlib.Blob.empty, finished = true }, events = [], feedback = Stdlib.Blob.empty })
+          else Ok (Stdlib.__Http3Uni.Received { state = Stdlib.__Http3Uni.__replace state { stream with prefix = bytes }, events = [], feedback = Stdlib.Blob.empty })
         | Error (Invalid message) -> Error message
         | Ok kind ->
           Stdlib.__Http3Uni.__claim state id kind.value |> Stdlib.Result.andThen (fun next ->
