@@ -104,7 +104,8 @@ let __feedback (state: Stdlib.__Http3.State) (bytes: Blob) : Stdlib.Result.Resul
         let streamCredit = sender.credit - sender.offset in
         let credit = if streamCredit < connectionCredit then streamCredit else connectionCredit in
         let length = Stdlib.Blob.__byteLength pending in
-        let size = if credit < length then credit else length in
+        let available = if credit < length then credit else length in
+        let size = if available > 900L then 900L else available in
         if size <= 0L then Ok { state with feedback = pending }
         else Stdlib.__QuicConnection.write state.connection id (Stdlib.__Http2Wire.__slice pending 0L size) false
           |> Stdlib.Result.map (fun connection -> { state with connection = connection, feedback = Stdlib.__Http2Wire.__slice pending size (length - size) })
