@@ -401,18 +401,6 @@ let __writeBytes (blob: Blob) (ptr: RawPtr) (index: Int64) : Unit =
         let _ = __raw_write_byte ptr index (Stdlib.Blob.__getByte blob index) in
         Stdlib.Cli.__Posix.__writeBytes blob ptr (index + 1L)
 
-let __writeFully (fd: Int64) (ptr: RawPtr) (blob: Blob) (offset: Int64) : Stdlib.Result.Result<Int, Stdlib.Cli.Posix.Error> =
-    let length = Stdlib.Blob.__byteLength blob in
-    if offset == length then Ok (Stdlib.Int.fromInt64 offset)
-    else
-        // Copy the remaining bytes into the same buffer before each partial write.
-        let remaining = Stdlib.Blob.slice blob (Stdlib.Int.fromInt64 offset) (Stdlib.Int.fromInt64 (length - offset)) in
-        let _ = Stdlib.Cli.__Posix.__writeBytes remaining ptr 0L in
-        let rc = Stdlib.Cli.__Posix.__write fd ptr (length - offset) in
-        if rc < 0L then Error (Stdlib.Cli.__Posix.__error (0L - rc))
-        else if rc == 0L then Error (Stdlib.Cli.Posix.Error { errno = 0, message = "write returned 0" })
-        else Stdlib.Cli.__Posix.__writeFully fd ptr blob (offset + rc)
-
 let __parseEntries (ptr: RawPtr) (offset: Int64) (length: Int64) (entries: List<String>) : List<String> =
     if offset >= length then entries
     else

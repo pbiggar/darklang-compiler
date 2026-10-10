@@ -434,8 +434,6 @@ let tryCliIntrinsic name args =
             Some ANF.FileCreateExclusive
         | "Darklang.Stdlib.Cli.__environmentPacked" ->
             Some ANF.GetEnvironmentPacked
-        | "Darklang.Stdlib.Cli.__setenv" -> Some ANF.SetEnv
-        | "Darklang.Stdlib.Cli.__unsetenv" -> Some ANF.UnsetEnv
         | "Darklang.Stdlib.Cli.__argv" -> Some ANF.GetArgv
         | "Darklang.Stdlib.Cli.__kill" -> Some ANF.Kill
         | "Darklang.Stdlib.Cli.__getpid" -> Some ANF.GetPid

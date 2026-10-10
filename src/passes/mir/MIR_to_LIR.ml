@@ -21,8 +21,6 @@ let convertCliOperation operation =
   | MIR.GetEnv -> LIR.GetEnv
   | MIR.GetEnvironmentPacked -> LIR.GetEnvironmentPacked
   | MIR.StdinState -> LIR.StdinState
-  | MIR.SetEnv -> LIR.SetEnv
-  | MIR.UnsetEnv -> LIR.UnsetEnv
   | MIR.DirectoryCurrent -> LIR.DirectoryCurrent
   | MIR.DirectoryListPacked -> LIR.DirectoryListPacked
   | MIR.FileIsDirectory -> LIR.FileIsDirectory

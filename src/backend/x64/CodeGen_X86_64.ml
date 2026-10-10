@@ -948,8 +948,6 @@ let translateProgram (LIR.Program (functions, variantRegistry, recordRegistry))
       @ generateCliArgvHelper ()
       @ generateCliEnvironmentPackedHelper enableLeakCheck
       @ generateCliDirectoryCurrentHelper enableLeakCheck
-      @ generateCliSetEnvHelper enableLeakCheck
-      @ generateCliUnsetEnvHelper enableLeakCheck
       @ generateCliDirectoryListHelper enableLeakCheck
       @ (if needsCliGetEnvHelper then generateCliGetEnvHelper enableLeakCheck
          else [])

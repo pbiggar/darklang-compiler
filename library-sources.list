@@ -24,6 +24,7 @@ StdLib/Cli/FileSystem/__Packed.dark
 StdLib/Env.dark
 StdLib/Builtin.dark
 StdLib/Builtin/__Posix.dark
+StdLib/Builtin/__Syscall.dark
 StdLib/Builtin/__Terminal.dark
 StdLib/Builtin/__Stdin.dark
 StdLib/Builtin/__Time.dark
@@ -39,7 +40,10 @@ StdLib/Print.dark
 StdLib/Fun.dark
 StdLib/Float.dark
 StdLib/Cli/__Posix.dark
-StdLib/Cli/__Fnmatch.dark
+StdLib/Cli/Glob.dark
+StdLib/Cli/Syscall.dark
+StdLib/Cli/Posix/IO.dark
+StdLib/Cli/Posix/Errors.dark
 StdLib/Cli/Posix.dark
 StdLib/Cli/Posix/__Error.dark
 StdLib/Cli/Posix/OpenFlags.dark

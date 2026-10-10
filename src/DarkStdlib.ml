@@ -90,16 +90,6 @@ let cliIntrinsicModule : AST.moduleDef =
           (TSum ("Darklang.Stdlib.Option.Option", [ TString ]));
         fn "__createExclusive" [] [ TString ] TInt64;
         fn "__environmentPacked" [] [] TString;
-        fn "__setenv" [] [ TString; TString ]
-          (TSum
-             ( "Darklang.Stdlib.Result.Result",
-               [ TUnit; TRecord ("Darklang.Stdlib.Cli.__NativePosixError", []) ]
-             ));
-        fn "__unsetenv" [] [ TString ]
-          (TSum
-             ( "Darklang.Stdlib.Result.Result",
-               [ TUnit; TRecord ("Darklang.Stdlib.Cli.__NativePosixError", []) ]
-             ));
         fn "__kill" [] [ TInt64; TInt64 ]
           (TSum
              ( "Darklang.Stdlib.Result.Result",

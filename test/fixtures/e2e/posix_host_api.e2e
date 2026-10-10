@@ -3,10 +3,10 @@ match Stdlib.Cli.Posix.fdRead (-1) 8 with | Error e -> e.errno | Ok _ -> 0 = 9
 match Stdlib.Cli.Posix.fdRead (-1) (-1) with | Error e -> e.errno | Ok _ -> 0 = 22
 match Stdlib.Cli.Posix.fdClose (-1) with | Error e -> e.errno | Ok _ -> 0 = 9
 match Stdlib.Cli.Posix.stat "/definitely/missing/dark-posix-file" with | Error e -> e.errno | Ok _ -> 0 = 2
-Stdlib.Cli.Posix.fnmatch "[a-c]?*.dark" "b-file.dark" false = true
-Stdlib.Cli.Posix.fnmatch "*" "a/b" true = false
-Stdlib.Cli.Posix.fnmatch "[!a-c]" "z" false = true
-Stdlib.Cli.Posix.fnmatch "\\*" "*" false = true
+Stdlib.Cli.Glob.matches "[a-c]?*.dark" "b-file.dark" false = true
+Stdlib.Cli.Glob.matches "*" "a/b" true = false
+Stdlib.Cli.Glob.matches "[!a-c]" "z" false = true
+Stdlib.Cli.Glob.matches "\\*" "*" false = true
 let temp = Stdlib.Cli.File.createTemp () in match temp with | Error _ -> false | Ok path -> let wrote = Stdlib.Cli.File.writeText path "abcdef" in let contents = Stdlib.Cli.File.readText path in let removed = Stdlib.Cli.File.delete path in (wrote, contents, removed) == (Ok (), Ok "abcdef", Ok ()) = true isolated=true
 
 // Public upstream algorithms exercise the builtin boundary without a shell.
@@ -14,8 +14,6 @@ match Stdlib.Cli.Posix.stat "/" with | Ok s -> Stdlib.Int.bitwiseAnd s.mode 6144
 match Stdlib.Cli.Posix.getCwd () with | Ok path -> Stdlib.String.startsWith path "/" | Error _ -> false = true
 match Stdlib.Cli.Posix.uname () with | Ok ((os, host, machine)) -> os != "" && host != "" && machine != "" | Error _ -> false = true
 Stdlib.Cli.Posix.getenv "DARK_POSIX_ENV" = Some "value\n " env="DARK_POSIX_ENV=value\n "
-let set = Stdlib.Cli.Posix.setenv "DARK_POSIX_MUTABLE" "exact\n " in let value = Stdlib.Cli.Posix.getenv "DARK_POSIX_MUTABLE" in let unset = Stdlib.Cli.Posix.unsetenv "DARK_POSIX_MUTABLE" in (set, value, unset, Stdlib.Cli.Posix.getenv "DARK_POSIX_MUTABLE") = (Ok (), Some "exact\n ", Ok (), None) isolated=true
-match Stdlib.Cli.Posix.setenv "bad=name" "x" with | Error e -> e.errno | Ok _ -> 0 = 22
 match Stdlib.Cli.Posix.flock (-1) true with | Error e -> e.errno | Ok _ -> 0 = 9
 match Stdlib.Cli.Posix.fdSeekFromStart (-1) 0 with | Error e -> e.errno | Ok _ -> 0 = 9
 match Stdlib.Cli.Posix.readlink "/definitely/missing/dark-posix-link" with | Error e -> e.errno | Ok _ -> 0 = 2
@@ -76,9 +74,9 @@ Stdlib.Cli.File.withTemp (fun path -> Stdlib.Cli.File.exists path) = Ok true iso
 
 // Negative counts, empty writes, and malformed flag names are distinct cases.
 Stdlib.Cli.Posix.fdWrite (-1) Stdlib.Blob.empty = Ok 0
-Stdlib.Cli.Posix.fnmatch "[[:digit:]]" "7" false = true
-Stdlib.Cli.Posix.fnmatch "[]a]" "]" false = true
-Stdlib.Cli.Posix.fnmatch "[[:alpha:]]" "A" false = true
-Stdlib.Cli.Posix.fnmatch "[" "[" false = true
+Stdlib.Cli.Glob.matches "[[:digit:]]" "7" false = true
+Stdlib.Cli.Glob.matches "[]a]" "]" false = true
+Stdlib.Cli.Glob.matches "[[:alpha:]]" "A" false = true
+Stdlib.Cli.Glob.matches "[" "[" false = true
 Stdlib.Cli.Posix.OpenFlags.flag "unknown" = error="Uncaught exception: unknown open() flag `unknown`"
 Stdlib.Cli.Posix.fdClose 4294967299 = error="Uncaught exception: Encountered out-of-range value for type of Int"

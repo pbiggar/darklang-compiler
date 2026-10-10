@@ -295,7 +295,7 @@ let inferCExprType ctx expr =
           Some (AST.TRecord ("Darklang.Stdlib.Cli.__NativeProcessOutput", []))
       | A.GetEnv | A.GetArgv ->
           Some (AST.TSum ("Darklang.Stdlib.Option.Option", [ AST.TString ]))
-      | A.Kill | A.SetEnv | A.UnsetEnv -> posix AST.TUnit
+      | A.Kill -> posix AST.TUnit
       | A.Hostname -> posix AST.TString
       | A.GetEnvironmentPacked | A.DirectoryCurrent | A.DirectoryListPacked ->
           Some AST.TString

@@ -241,8 +241,6 @@ let convertCliOperation (operation : ANF.cliOperation) =
   | ANF.GetEnv -> MIR.GetEnv
   | ANF.GetEnvironmentPacked -> MIR.GetEnvironmentPacked
   | ANF.StdinState -> MIR.StdinState
-  | ANF.SetEnv -> MIR.SetEnv
-  | ANF.UnsetEnv -> MIR.UnsetEnv
   | ANF.DirectoryCurrent -> MIR.DirectoryCurrent
   | ANF.DirectoryListPacked -> MIR.DirectoryListPacked
   | ANF.FileIsDirectory -> MIR.FileIsDirectory
@@ -827,8 +825,6 @@ let cliOperationName = function
   | ANF.GetEnv -> "GetEnv"
   | ANF.GetEnvironmentPacked -> "GetEnvironmentPacked"
   | ANF.StdinState -> "StdinState"
-  | ANF.SetEnv -> "SetEnv"
-  | ANF.UnsetEnv -> "UnsetEnv"
   | ANF.DirectoryCurrent -> "DirectoryCurrent"
   | ANF.DirectoryListPacked -> "DirectoryListPacked"
   | ANF.FileIsDirectory -> "FileIsDirectory"

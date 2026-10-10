@@ -793,26 +793,6 @@ let emitCliNative (ctx : X64CodeGenTypes.funcCtx) (dest : LIR.reg)
                       X.MOV_reg (destReg, X.RAX);
                     ])
           | _ -> Error "fileCreateExclusive expects exactly one path")
-      | LIR.SetEnv -> (
-          match args with
-          | [ name; value ] ->
-              loadSocketArgs [ name; value ] [ X.RDI; X.RSI ]
-              |> Result.map (fun loads ->
-                  loads
-                  @ [ X.CALL "__dark_cli_setenv" ]
-                  @
-                  if destReg = X.RAX then [] else [ X.MOV_reg (destReg, X.RAX) ])
-          | _ -> Error "setenv expects exactly a name and value")
-      | LIR.UnsetEnv -> (
-          match args with
-          | [ name ] ->
-              loadCliOperand X.RDI name
-              |> Result.map (fun loads ->
-                  loads
-                  @ [ X.CALL "__dark_cli_unsetenv" ]
-                  @
-                  if destReg = X.RAX then [] else [ X.MOV_reg (destReg, X.RAX) ])
-          | _ -> Error "unsetenv expects exactly one name")
       | LIR.Kill -> (
           let successLabel =
             freshLabel ("kill_" ^ ctx.functionName ^ "_success")

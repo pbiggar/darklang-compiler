@@ -28,34 +28,6 @@ let posixOpen (path: String) (flags: Int) (mode: Int) : Stdlib.Result.Result<Int
     let mode = Builtin.__posixInt32 mode in
     Stdlib.Cli.__Posix.__withEntry path (fun fd name -> Stdlib.Cli.__Posix.__intResult (Stdlib.Cli.__Posix.__openAt fd name (Stdlib.Int64.bitwiseOr flags (Stdlib.Cli.__Posix.__nofollow ())) mode))
 
-let posixFdRead (fd: Int) (count: Int) : Stdlib.Result.Result<Blob, Stdlib.Cli.Posix.Error> =
-    let fd = Builtin.__posixInt32 fd in
-    let count = Builtin.__posixInt32 count in
-    if count < 0L then Error (Stdlib.Cli.__Posix.__error 22L)
-    else
-        let ptr = __mapped_alloc (if count == 0L then 1L else count) in
-        let rc = Stdlib.Cli.__Posix.__read fd ptr count in
-        let result = if rc < 0L then Error (Stdlib.Cli.__Posix.__error (0L - rc)) else Ok (Stdlib.Cli.__Posix.__bufferBytes ptr 0L rc []) in
-        let _ = __mapped_free ptr in
-        result
-
-let posixFdWrite (fd: Int) (blob: Blob) : Stdlib.Result.Result<Int, Stdlib.Cli.Posix.Error> =
-    let fd = Builtin.__posixInt32 fd in
-    let length = Stdlib.Blob.__byteLength blob in
-    let ptr = __mapped_alloc (if length == 0L then 1L else length) in
-    let result = Stdlib.Cli.__Posix.__writeFully fd ptr blob 0L in
-    let _ = __mapped_free ptr in
-    result
-
-let posixFdSeek (fd: Int) (offset: Int) (whence: Int) : Stdlib.Result.Result<Int, Stdlib.Cli.Posix.Error> =
-    let fd = Builtin.__posixInt32 fd in
-    let offset = Builtin.__posixInt64 offset in
-    let whence = Builtin.__posixInt32 whence in
-    Stdlib.Cli.__Posix.__intResult (Stdlib.Cli.__Posix.__seek fd offset whence)
-
-let posixFdClose (fd: Int) : Stdlib.Result.Result<Unit, Stdlib.Cli.Posix.Error> =
-    Stdlib.Cli.__Posix.__unitResult (Stdlib.Cli.__Posix.__close (Builtin.__posixInt32 fd))
-
 let posixStat (path: String) : Stdlib.Result.Result<(Int * Int * Int), Stdlib.Cli.Posix.Error> =
     Stdlib.Cli.__Posix.__withStat path Stdlib.Cli.__Posix.__statValues
 
@@ -146,9 +118,6 @@ let posixListDir (path: String) : Stdlib.Result.Result<List<String>, Stdlib.Cli.
         let _ = __mapped_free position in
         result)
 
-let posixFlock (fd: Int) (exclusive: Bool) : Stdlib.Result.Result<Unit, Stdlib.Cli.Posix.Error> =
-    Stdlib.Cli.__Posix.__unitResult (Stdlib.Cli.__Posix.__flock (Builtin.__posixInt32 fd) (if exclusive then 2L else 8L))
-
 let posixFileOwner (path: String) : Stdlib.Result.Result<String, Stdlib.Cli.Posix.Error> =
     Stdlib.Cli.__Posix.__withStat path (fun ptr ->
         let uid = Stdlib.Cli.__Posix.__unsigned ptr (if Stdlib.Cli.__Posix.__mac () then 16L else if Stdlib.Cli.__Posix.__x64 () then 28L else 24L) 4L in
@@ -165,14 +134,7 @@ let posixGetCurrentUserName () : Stdlib.Option.Option<String> =
     | Error _ -> Stdlib.Option.Option.None
 
 let posixCpuCount () : Int = Stdlib.Int.fromInt64 (Stdlib.Cli.__cpuCount ())
-let posixGetpid () : Int = Stdlib.Int.fromInt64 (Stdlib.Cli.__getpid ())
-let posixGetuid () : Int = Stdlib.Int.fromInt64 (Stdlib.Cli.__getuid ())
-
 let posixGetenv (name: String) : Stdlib.Option.Option<String> = Stdlib.Cli.Env.get name
-let posixSetenv (name: String) (value: String) : Stdlib.Result.Result<Unit, Stdlib.Cli.Posix.Error> = Stdlib.Cli.Env.set name value
-let posixUnsetenv (name: String) : Stdlib.Result.Result<Unit, Stdlib.Cli.Posix.Error> = Stdlib.Cli.Env.unset name
-let posixKill (pid: Int) (signal: Int) : Stdlib.Result.Result<Unit, Stdlib.Cli.Posix.Error> =
-    Stdlib.Cli.__kill (Builtin.__posixInt32 pid) (Builtin.__posixInt32 signal) |> Stdlib.Result.mapError Stdlib.Cli.Posix.__error
 let timeSleep (delayMs: Float) : Unit = Stdlib.Cli.__sleep delayMs
 let posixUname () : Stdlib.Result.Result<(String * String * String), Stdlib.Cli.Posix.Error> =
     match (Stdlib.Cli.Sys.os (), Stdlib.Cli.Sys.hostname (), Stdlib.Cli.Sys.arch ()) with
@@ -181,5 +143,3 @@ let posixUname () : Stdlib.Result.Result<(String * String * String), Stdlib.Cli.
     | (_, Error e, _) -> Error e
     | (_, _, Error e) -> Error e
 
-let posixFnmatch (pattern: String) (str: String) (pathMode: Bool) : Bool =
-    Stdlib.Cli.__Fnmatch.__matches pattern str pathMode 0L 0L

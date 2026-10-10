@@ -76,8 +76,6 @@ type cliOperation =
   | GetEnv
   | GetEnvironmentPacked
   | StdinState
-  | SetEnv
-  | UnsetEnv
   | DirectoryCurrent
   | DirectoryListPacked
   | FileIsDirectory
