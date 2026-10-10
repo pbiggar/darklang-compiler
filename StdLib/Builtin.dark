@@ -15,13 +15,6 @@ let __slugifyFilter (codepoints: List<Int64>) (reversed: List<Int64>) : List<Int
             (codepoint != 11L && Stdlib.String.__Unicode.isWhitespace codepoint) in
         Builtin.__slugifyFilter rest (if keep then Stdlib.List.push reversed codepoint else reversed)
 
-let __slugifyTrim (codepoints: List<Int64>) : List<Int64> =
-    match codepoints with
-    | codepoint :: rest ->
-        if Stdlib.String.__Unicode.isWhitespace codepoint then Builtin.__slugifyTrim rest
-        else codepoints
-    | [] -> []
-
 let __slugifySeparators (codepoints: List<Int64>) (previousSeparator: Bool) (reversed: List<Int64>) : String =
     match codepoints with
     | [] -> Stdlib.String.__fromCodepoints (Stdlib.List.reverse reversed)
@@ -35,8 +28,7 @@ let __slugifySeparators (codepoints: List<Int64>) (previousSeparator: Bool) (rev
 
 let stringSlugify (value: String) : String =
     let filtered = Builtin.__slugifyFilter (Stdlib.String.__toCodepoints (Stdlib.String.toLowercase value)) [] in
-    let leadingTrimmed = Builtin.__slugifyTrim filtered in
-    let trimmed = Stdlib.List.reverse (Builtin.__slugifyTrim (Stdlib.List.reverse leadingTrimmed)) in
+    let trimmed = Stdlib.String.__trimEndCodepoints (Stdlib.String.__trimStartCodepoints filtered) in
     Builtin.__slugifySeparators trimmed false []
 
 // Current interpreter integer probes call these primitive comparison names.

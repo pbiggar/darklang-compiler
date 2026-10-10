@@ -49,6 +49,11 @@ than used as a separator. After trimming whitespace, consecutive separators
 become one hyphen; existing leading or trailing hyphens are preserved. Filtering
 uses codepoints so unsupported combining marks do not discard an ASCII base.
 
+`String.trim`, `trimStart`, and `trimEnd` remove Unicode whitespace codepoints
+at the requested boundaries. Their ASCII byte scan remains the fast path;
+Unicode trimming handles CRLF clusters and preserves any attached non-whitespace
+combining marks after removing a whitespace codepoint.
+
 ## Unicode contract
 
 Compiler source handling uses native UTF-8 strings, Uutf decoding/encoding,
