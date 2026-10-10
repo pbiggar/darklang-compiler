@@ -64,8 +64,9 @@ else Builtin.crash "Executable path results differ"
         check(link)
         for name, expected_path in [(target, binary), ("./" + target, binary),
                                     ("launch-link", renamed), ("./launch-link", renamed)]:
-            command = ([arguments.runner, "-0", name, name] if arguments.runner else [name])
-            relative = subprocess.run(command, executable=arguments.runner or name,
+            executable_path = name if "/" in name else "./" + name
+            command = ([arguments.runner, "-0", name, executable_path] if arguments.runner else [name])
+            relative = subprocess.run(command, executable=arguments.runner or executable_path,
                                       cwd=root, env=environment, capture_output=True, text=True, timeout=30)
             assert relative.returncode == 0, (relative.returncode, relative.stdout, relative.stderr)
             assert json.loads(relative.stdout) == str(expected_path.resolve()), relative.stdout

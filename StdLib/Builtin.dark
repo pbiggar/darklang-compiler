@@ -1,6 +1,43 @@
-// Builtin.dark - portable implementations of upstream builtin comparisons.
+// Builtin.dark - portable implementations and native adapters for upstream builtins.
 
 module Builtin
+
+// The interpreter's slugify regex filters codepoints, not whole grapheme clusters.
+// Vertical tab is deliberately discarded even though it is Unicode whitespace.
+let __slugifyFilter (codepoints: List<Int64>) (reversed: List<Int64>) : List<Int64> =
+    match codepoints with
+    | [] -> Stdlib.List.reverse reversed
+    | codepoint :: rest ->
+        let keep =
+            (codepoint >= 97L && codepoint <= 122L) ||
+            (codepoint >= 48L && codepoint <= 57L) ||
+            codepoint == 45L || codepoint == 95L ||
+            (codepoint != 11L && Stdlib.String.__Unicode.isWhitespace codepoint) in
+        Builtin.__slugifyFilter rest (if keep then Stdlib.List.push reversed codepoint else reversed)
+
+let __slugifyTrim (codepoints: List<Int64>) : List<Int64> =
+    match codepoints with
+    | codepoint :: rest ->
+        if Stdlib.String.__Unicode.isWhitespace codepoint then Builtin.__slugifyTrim rest
+        else codepoints
+    | [] -> []
+
+let __slugifySeparators (codepoints: List<Int64>) (previousSeparator: Bool) (reversed: List<Int64>) : String =
+    match codepoints with
+    | [] -> Stdlib.String.__fromCodepoints (Stdlib.List.reverse reversed)
+    | codepoint :: rest ->
+        let separator = codepoint == 45L || codepoint == 95L || Stdlib.String.__Unicode.isWhitespace codepoint in
+        let next =
+            if separator then
+                if previousSeparator then reversed else Stdlib.List.push reversed 45L
+            else Stdlib.List.push reversed codepoint in
+        Builtin.__slugifySeparators rest separator next
+
+let stringSlugify (value: String) : String =
+    let filtered = Builtin.__slugifyFilter (Stdlib.String.__toCodepoints (Stdlib.String.toLowercase value)) [] in
+    let leadingTrimmed = Builtin.__slugifyTrim filtered in
+    let trimmed = Stdlib.List.reverse (Builtin.__slugifyTrim (Stdlib.List.reverse leadingTrimmed)) in
+    Builtin.__slugifySeparators trimmed false []
 
 // Current interpreter integer probes call these primitive comparison names.
 // The compiler keeps their typed behavior while implementing them portably.
