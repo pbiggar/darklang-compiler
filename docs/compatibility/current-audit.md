@@ -72,6 +72,10 @@ Unicode trimming follow-up (2026-10-10), validated with main `cd5419568`: `Strin
 
 Verification after integrating the executable-path fix from current main: clean native build passes, the complete host suite passes **13,153/13,153**, and `dune runtest` passes. Compiled leaks pass **58/58** workloads; an additional leak-accounted program performs 200 calls to each trim variant on shared dynamic Unicode input and completes cleanly. Inventory and diff checks pass; exclusion counts are unchanged (**1,184 assertions**, 31 whole-file gates and 308 line entries across 34 mixed files). Parent benchmark verification stops before measurement on the incompatible stored workload contract digest; no baseline was reset.
 
+UUID whitespace follow-up (2026-10-10), based on main `4df3c60b2`: X-format parsing removes Unicode whitespace by codepoint, matching the interpreter's `System.Guid.TryParse`. CRLF is accepted between fields, inside `0x`, and between hexadecimal digits. Combining marks and zero-width spaces remain invalid. The filter accumulates codepoints and reconstructs the string once; the unused grapheme-whitespace helper is removed. The eight focused assertions had **4 passes and 4 failures** before the fix and now all pass; the combined UUID regression and imported upstream cases pass **44/44** individually.
+
+Verification: native build passes, the complete host suite passes **13,161/13,161**, and `dune runtest` passes. Compiled leaks pass **58/58** workloads; an additional leak-accounted stress program parses shared dynamic CRLF/non-breaking-space input 200 times and completes cleanly. Inventory and diff checks pass; imported exclusion counts are unchanged (**1,184 assertions**, 31 whole-file gates and 308 line entries across 34 mixed files). Parent benchmark verification stops before measurement on the incompatible stored workload contract digest; no baseline was reset.
+
 ## Unsupported interpreter test infrastructure
 
 The compiler no longer exposes `Builtin.testRuntimeError`. Its compiler-owned
