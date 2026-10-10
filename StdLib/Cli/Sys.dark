@@ -41,7 +41,7 @@ let arch () : Stdlib.Result.Result<String, Stdlib.Cli.Posix.Error> =
     | Error error -> Error (Stdlib.Cli.Posix.Error { errno = 0, message = error })
 let cpuCount () : Int = Builtin.posixCpuCount ()
 let currentPid () : Int = Builtin.posixGetpid ()
-let isRoot () : Bool = Stdlib.Cli.__getuid () == 0L
+let isRoot () : Bool = (Builtin.posixGetuid ()) == 0
 
 /// The full path of the running executable, discovered by the operating system.
 let currentExecutablePath () : String = Builtin.getCurrentExecutablePath ()
