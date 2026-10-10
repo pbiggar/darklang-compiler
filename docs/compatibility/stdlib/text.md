@@ -43,6 +43,12 @@ Padding has argument order `(value, padWith, goalLength)` and returns
 `Result<String, String>`. A pad value other than one EGC returns exactly
 `Expected \`padWith\` to be 1 character long, but it was \`"VALUE"\``.
 
+`Builtin.stringSlugify` lowercases before retaining ASCII letters, digits,
+Unicode whitespace, hyphens, and underscores. Vertical tab is removed rather
+than used as a separator. After trimming whitespace, consecutive separators
+become one hyphen; existing leading or trailing hyphens are preserved. Filtering
+uses codepoints so unsupported combining marks do not discard an ASCII base.
+
 ## Unicode contract
 
 Compiler source handling uses native UTF-8 strings, Uutf decoding/encoding,
@@ -132,10 +138,9 @@ not source-resolvable; public text behavior is provided only by the parity API.
   EGC, scalar construction, UTF-16 versus EGC indexes, and regex match/split
   behavior.
 - The pinned upstream `char.dark`, `string.dark`, and `regex.dark` files are
-  imported. Char and Regex are enabled; String is currently whole-file gated.
-  The upstream String source uses bare `newline`, and contains test-only callbacks
-  and Slugify dependencies. The focused text matrix supplies coverage; the gate
-  does not establish that String is unimplemented.
+  imported. Char and Regex are enabled. String has individual gates for its
+  unsupported interpreter test helpers; the current assertion counts and
+  diagnostics are maintained in the [failure ledger](../failures/stdlib/string.md).
 
 ## Historical integration verification
 
