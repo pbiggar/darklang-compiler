@@ -560,7 +560,16 @@ let emitCliNative (ctx : codeGenContext) (dest : LIR.reg)
       | LIR.PosixChmodAt | LIR.PosixChmodAt2 | LIR.PosixUtimesAt
       | LIR.PosixSetAttributesAt | LIR.PosixSymlinkAt | LIR.PosixReadlinkAt
       | LIR.PosixAccessAt | LIR.PosixFlock | LIR.PosixGetDents | LIR.PosixIoctl
-      | LIR.PosixProcInfo -> (
+      | LIR.PosixProcInfo
+      | LIR.PosixCopyFileRange
+      | LIR.PosixFtruncate
+      | LIR.PosixFchmod
+      | LIR.PosixFsync
+      | LIR.PosixFstat
+      | LIR.PosixPread
+      | LIR.PosixPwrite
+      | LIR.PosixFclonefileat
+      -> (
           let number, arity =
             match operation with
             | LIR.PosixOpenAt ->
@@ -673,6 +682,38 @@ let emitCliNative (ctx : codeGenContext) (dest : LIR.reg)
                   | Platform.Linux -> Some 61
                   | Platform.MacOS -> Some 344),
                   4 )
+            | LIR.PosixCopyFileRange ->
+                ((match ARM64.targetOS ctx.target with
+                  | Platform.Linux -> Some 285
+                  | Platform.MacOS -> None), 6)
+            | LIR.PosixFtruncate ->
+                ((match ARM64.targetOS ctx.target with
+                  | Platform.Linux -> Some 46
+                  | Platform.MacOS -> Some 153), 2)
+            | LIR.PosixFchmod ->
+                ((match ARM64.targetOS ctx.target with
+                  | Platform.Linux -> Some 52
+                  | Platform.MacOS -> Some 94), 2)
+            | LIR.PosixFsync ->
+                ((match ARM64.targetOS ctx.target with
+                  | Platform.Linux -> Some 82
+                  | Platform.MacOS -> Some 95), 1)
+            | LIR.PosixFstat ->
+                ((match ARM64.targetOS ctx.target with
+                  | Platform.Linux -> Some 80
+                  | Platform.MacOS -> Some 189), 2)
+            | LIR.PosixPread ->
+                ((match ARM64.targetOS ctx.target with
+                  | Platform.Linux -> Some 67
+                  | Platform.MacOS -> Some 197), 4)
+            | LIR.PosixPwrite ->
+                ((match ARM64.targetOS ctx.target with
+                  | Platform.Linux -> Some 68
+                  | Platform.MacOS -> Some 198), 4)
+            | LIR.PosixFclonefileat ->
+                ((match ARM64.targetOS ctx.target with
+                  | Platform.Linux -> None
+                  | Platform.MacOS -> Some 517), 4)
             | _ -> Crash.crash "Non-POSIX operation in POSIX lowering"
           in
           if List.length args <> arity then

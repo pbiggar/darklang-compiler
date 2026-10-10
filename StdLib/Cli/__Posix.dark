@@ -1,6 +1,16 @@
 // __Posix.dark - Native POSIX primitive bridge; policy is implemented in Dark.
 module Darklang.Stdlib.Cli.__Posix
 
+let __copyFileRange (a0: Int64) (a1: Int64) (a2: Int64) (a3: Int64) (a4: Int64) (a5: Int64) : Int64 = -38L
+let __ftruncate (a0: Int64) (a1: Int64) : Int64 = -38L
+let __fchmod (a0: Int64) (a1: Int64) : Int64 = -38L
+let __fsync (a0: Int64) : Int64 = -38L
+let __fstat (a0: Int64) (a1: RawPtr) : Int64 = -38L
+let __pread (a0: Int64) (a1: RawPtr) (a2: Int64) (a3: Int64) : Int64 = -38L
+let __pwrite (a0: Int64) (a1: RawPtr) (a2: Int64) (a3: Int64) : Int64 = -38L
+let __fclonefileat (a0: Int64) (a1: Int64) (a2: RawPtr) (a3: Int64) : Int64 = -38L
+let __ioctlValue (fd: Int64) (request: Int64) (value: Int64) : Int64 = -38L
+
 let __openAt (a0: Int64) (a1: RawPtr) (a2: Int64) (a3: Int64) : Int64 = -38L
 let __read (a0: Int64) (a1: RawPtr) (a2: Int64) : Int64 = -38L
 let __write (a0: Int64) (a1: RawPtr) (a2: Int64) : Int64 = -38L
@@ -375,9 +385,16 @@ let __withDirectory (path: String) (fn: Int64 -> Stdlib.Result.Result<'a, Stdlib
         Stdlib.Cli.__Posix.__withCString "/" (fun ptr -> openDirectory (Stdlib.Cli.__Posix.__cwdFd ()) ptr)
     else Stdlib.Cli.__Posix.__withEntry path openDirectory
 
+let __zeroBuffer (ptr: RawPtr) (length: Int64) : Unit =
+    if length <= 0L then ()
+    else
+        let _ = __raw_write_byte ptr (length - 1L) 0uy in
+        Stdlib.Cli.__Posix.__zeroBuffer ptr (length - 1L)
+
 let __withStat (path: String) (fn: RawPtr -> 'a) : Stdlib.Result.Result<'a, Stdlib.Cli.Posix.Error> =
     let statEntry = fun fd name ->
         let ptr = __mapped_alloc 256L in
+        let _ = Stdlib.Cli.__Posix.__zeroBuffer ptr 256L in
         let rc = Stdlib.Cli.__Posix.__statAt fd name ptr (Stdlib.Cli.__Posix.__nofollowAt ()) in
         let result = if rc < 0L then Error (Stdlib.Cli.__Posix.__error (0L - rc)) else Ok (fn ptr) in
         let _ = __mapped_free ptr in

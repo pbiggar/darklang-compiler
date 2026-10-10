@@ -151,6 +151,14 @@ let cliOperation = function
   | MIR.PosixGetDents -> "PosixGetDents"
   | MIR.PosixIoctl -> "PosixIoctl"
   | MIR.PosixProcInfo -> "PosixProcInfo"
+  | MIR.PosixCopyFileRange -> "PosixCopyFileRange"
+  | MIR.PosixFtruncate -> "PosixFtruncate"
+  | MIR.PosixFchmod -> "PosixFchmod"
+  | MIR.PosixFsync -> "PosixFsync"
+  | MIR.PosixFstat -> "PosixFstat"
+  | MIR.PosixPread -> "PosixPread"
+  | MIR.PosixPwrite -> "PosixPwrite"
+  | MIR.PosixFclonefileat -> "PosixFclonefileat"
 
 let prettyPrintCanonicalBufferKind = ANFPrinter.prettyPrintCanonicalBufferKind
 

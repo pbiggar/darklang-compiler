@@ -175,6 +175,14 @@ type cliOperation =
   | PosixGetDents
   | PosixIoctl
   | PosixProcInfo
+  | PosixCopyFileRange
+  | PosixFtruncate
+  | PosixFchmod
+  | PosixFsync
+  | PosixFstat
+  | PosixPread
+  | PosixPwrite
+  | PosixFclonefileat
 
 (*
    Immutable nominal metadata carried through fixed-block lowering for field

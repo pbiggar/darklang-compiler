@@ -153,6 +153,14 @@ let cliOperation = function
   | ANF.PosixGetDents -> "PosixGetDents"
   | ANF.PosixIoctl -> "PosixIoctl"
   | ANF.PosixProcInfo -> "PosixProcInfo"
+  | ANF.PosixCopyFileRange -> "PosixCopyFileRange"
+  | ANF.PosixFtruncate -> "PosixFtruncate"
+  | ANF.PosixFchmod -> "PosixFchmod"
+  | ANF.PosixFsync -> "PosixFsync"
+  | ANF.PosixFstat -> "PosixFstat"
+  | ANF.PosixPread -> "PosixPread"
+  | ANF.PosixPwrite -> "PosixPwrite"
+  | ANF.PosixFclonefileat -> "PosixFclonefileat"
 
 (*
    Pretty-print ANF complex expression

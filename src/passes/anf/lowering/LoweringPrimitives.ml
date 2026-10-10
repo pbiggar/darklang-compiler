@@ -491,6 +491,15 @@ let tryCliIntrinsic name args =
         | "Darklang.Stdlib.Cli.__Posix.__readlinkAt" -> Some ANF.PosixReadlinkAt
         | "Darklang.Stdlib.Cli.__Posix.__accessAt" -> Some ANF.PosixAccessAt
         | "Darklang.Stdlib.Cli.__Posix.__procInfo" -> Some ANF.PosixProcInfo
+        | "Darklang.Stdlib.Cli.__Posix.__copyFileRange" -> Some ANF.PosixCopyFileRange
+        | "Darklang.Stdlib.Cli.__Posix.__ftruncate" -> Some ANF.PosixFtruncate
+        | "Darklang.Stdlib.Cli.__Posix.__fchmod" -> Some ANF.PosixFchmod
+        | "Darklang.Stdlib.Cli.__Posix.__fsync" -> Some ANF.PosixFsync
+        | "Darklang.Stdlib.Cli.__Posix.__fstat" -> Some ANF.PosixFstat
+        | "Darklang.Stdlib.Cli.__Posix.__pread" -> Some ANF.PosixPread
+        | "Darklang.Stdlib.Cli.__Posix.__pwrite" -> Some ANF.PosixPwrite
+        | "Darklang.Stdlib.Cli.__Posix.__fclonefileat" -> Some ANF.PosixFclonefileat
+        | "Darklang.Stdlib.Cli.__Posix.__ioctlValue" -> Some ANF.PosixIoctl
         | "Darklang.Stdlib.Cli.__Posix.__flock" -> Some ANF.PosixFlock
         | "Darklang.Stdlib.Cli.__Posix.__getDents" -> Some ANF.PosixGetDents
         | "Darklang.Stdlib.Cli.__Posix.__ioctl" -> Some ANF.PosixIoctl

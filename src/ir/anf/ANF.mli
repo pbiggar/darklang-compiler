@@ -121,6 +121,14 @@ type cliOperation =
   | PosixGetDents
   | PosixIoctl
   | PosixProcInfo
+  | PosixCopyFileRange
+  | PosixFtruncate
+  | PosixFchmod
+  | PosixFsync
+  | PosixFstat
+  | PosixPread
+  | PosixPwrite
+  | PosixFclonefileat
 
 type recordDescriptor = {
   sourceTypeName : string;

@@ -1,4 +1,3 @@
-// Upstream POSIX Modes declarations (v0.0.35).
 module Darklang.Stdlib.Cli.Posix.Modes
 
 /// 0755 — owner rwx, group rx, others rx

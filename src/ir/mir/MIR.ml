@@ -169,6 +169,14 @@ type cliOperation =
   | PosixGetDents
   | PosixIoctl
   | PosixProcInfo
+  | PosixCopyFileRange
+  | PosixFtruncate
+  | PosixFchmod
+  | PosixFsync
+  | PosixFstat
+  | PosixPread
+  | PosixPwrite
+  | PosixFclonefileat
 
 (*
    Basic block label (defined early for use in Phi nodes)

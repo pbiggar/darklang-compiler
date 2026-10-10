@@ -83,6 +83,14 @@ let convertCliOperation operation =
   | MIR.PosixGetDents -> LIR.PosixGetDents
   | MIR.PosixIoctl -> LIR.PosixIoctl
   | MIR.PosixProcInfo -> LIR.PosixProcInfo
+  | MIR.PosixCopyFileRange -> LIR.PosixCopyFileRange
+  | MIR.PosixFtruncate -> LIR.PosixFtruncate
+  | MIR.PosixFchmod -> LIR.PosixFchmod
+  | MIR.PosixFsync -> LIR.PosixFsync
+  | MIR.PosixFstat -> LIR.PosixFstat
+  | MIR.PosixPread -> LIR.PosixPread
+  | MIR.PosixPwrite -> LIR.PosixPwrite
+  | MIR.PosixFclonefileat -> LIR.PosixFclonefileat
 
 [@@@warning "-4"]
 

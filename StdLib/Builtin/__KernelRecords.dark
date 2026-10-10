@@ -1,0 +1,23 @@
+// Raw kernel records; shared Dark libraries own all field/name decoding.
+module Builtin
+
+let syscallStatAt (path: String) : Stdlib.Result.Result<Blob, Int> =
+    Stdlib.Cli.__Posix.__withStat path
+        (fun ptr -> Stdlib.Cli.__Posix.__bufferBytes ptr 0L 256L [])
+    |> Stdlib.Result.mapError (fun error -> error.errno)
+
+let syscallGetdents (fd: Int) (count: Int) : Stdlib.Result.Result<Blob, Int> =
+    let fd = Builtin.__posixInt32 fd in
+    let count = Builtin.__posixInt32 count in
+    if count < 0L then Error 22
+    else
+        let ptr = __mapped_alloc (if count == 0L then 1L else count) in
+        let position = __mapped_alloc 8L in
+        let _ = __raw_write_word position 0L 0L in
+        let rc = Stdlib.Cli.__Posix.__getDents fd ptr count position in
+        let result =
+            if rc < 0L then Error (Stdlib.Int.fromInt64 (0L - rc))
+            else Ok (Stdlib.Cli.__Posix.__bufferBytes ptr 0L rc []) in
+        let _ = __mapped_free ptr in
+        let _ = __mapped_free position in
+        result

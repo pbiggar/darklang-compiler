@@ -1,6 +1,5 @@
-// POSIX package imported from darklang/dark v0.0.35.
 /// Posix wrappers for filesystem, process, and system operations.
-/// Linux (x86_64, aarch64) and macOS only. Will not work on Windows.
+/// Linux (x86_64, aarch64, armv7) and macOS only. Will not work on Windows.
 module Darklang.Stdlib.Cli.Posix
 
 
@@ -20,6 +19,7 @@ type StatResult =
 /// Open a file. Returns a file descriptor.
 let openFile (path: String) (flags: Int) (mode: Int) : Result.Result<Int, Error> =
   Builtin.posixOpen path flags mode
+  |> Errors.normalize
 
 
 /// Read up to `count` bytes from an open file descriptor.
@@ -31,8 +31,7 @@ let fdRead (fd: Int) (count: Int) : Result.Result<Blob, Error> =
 /// Write <param bytes> to an open file descriptor. Returns the number
 /// of bytes written.
 let fdWrite (fd: Int) (bytes: Blob) : Result.Result<Int, Error> =
-  IO.writeAll (fun chunk -> Syscall.write fd chunk
-    |> Stdlib.Result.mapError Errors.fromErrno) bytes 0
+  IO.writeAll (fun chunk -> Syscall.write fd chunk |> Stdlib.Result.mapError Errors.fromErrno) bytes 0
 
 
 /// Close an open file descriptor.
@@ -63,52 +62,62 @@ let fdSeekFromStart (fd: Int) (offset: Int) : Result.Result<Int, Error> =
 
 /// Stat a file. Returns mode, size, and modification time.
 let stat (path: String) : Result.Result<StatResult, Error> =
-  (Builtin.posixStat path)
-  |> Stdlib.Result.map (fun result ->
-    StatResult
-      { mode = Stdlib.Tuple3.first result
-        size = Stdlib.Tuple3.second result
-        mtimeSec = Stdlib.Tuple3.third result })
+  Syscall.statAt path
+  |> Stdlib.Result.andThen KernelData.metadata
+  |> Stdlib.Result.mapError Errors.fromErrno
+  |> Stdlib.Result.map (fun metadata ->
+    StatResult { mode = metadata.mode; size = metadata.size
+                 mtimeSec = metadata.mtimeSec })
 
 /// Get the current working directory
 let getCwd () : Result.Result<String, Error> =
   Builtin.posixGetcwd ()
+  |> Errors.normalize
 
 /// Change the current working directory
 let chdir (path: String) : Result.Result<Unit, Error> =
   Builtin.posixChdir path
+  |> Errors.normalize
 
 /// Set an environment variable
 let mkdir (path: String) (mode: Int) : Result.Result<Unit, Error> =
   Builtin.posixMkdir path mode
+  |> Errors.normalize
 
 /// Remove an empty directory
 let rmdir (path: String) : Result.Result<Unit, Error> =
   Builtin.posixRmdir path
+  |> Errors.normalize
 
 /// Remove a file
 let unlink (path: String) : Result.Result<Unit, Error> =
   Builtin.posixUnlink path
+  |> Errors.normalize
 
 /// Rename/move a file or directory
 let rename (oldpath: String) (newpath: String) : Result.Result<Unit, Error> =
   Builtin.posixRename oldpath newpath
+  |> Errors.normalize
 
 /// Change file permissions
 let chmod (path: String) (mode: Int) : Result.Result<Unit, Error> =
   Builtin.posixChmod path mode
+  |> Errors.normalize
 
 /// Update atime and mtime to now.
 let utimesNow (path: String) : Result.Result<Unit, Error> =
   Builtin.posixUtimesNow path
+  |> Errors.normalize
 
 /// Create a symbolic link
 let symlink (target: String) (linkpath: String) : Result.Result<Unit, Error> =
   Builtin.posixSymlink target linkpath
+  |> Errors.normalize
 
 /// Read the target of a symbolic link
 let readlink (path: String) : Result.Result<String, Error> =
   Builtin.posixReadlink path
+  |> Errors.normalize
 
 /// Check if a path is a symbolic link.
 /// Uses readlink — returns Ok true/false, or Error on permission/other failures.
@@ -125,11 +134,11 @@ let isSymlink (path: String) : Result.Result<Bool, Error> =
 
 /// Create a unique temporary file. Returns (fd, path).
 let mkstemp (prefix: String) : Result.Result<(Int * String), Error> =
-  Builtin.posixMkstemp prefix
+  Temp.retry (fun _ -> Builtin.posixMkstemp prefix |> Errors.normalize) 100
 
 /// Create a unique temporary directory. Returns the path.
 let mkdtemp (prefix: String) : Result.Result<String, Error> =
-  Builtin.posixMkdtemp prefix
+  Temp.retry (fun _ -> Builtin.posixMkdtemp prefix |> Errors.normalize) 100
 
 /// Match a string against a glob pattern.
 /// If pathMode is true, * does not match /
@@ -139,11 +148,18 @@ let flock (fd: Int) (exclusive: Bool) : Result.Result<Unit, Error> =
 
 /// Get the owner username of a file.
 let fileOwner (path: String) : Result.Result<String, Error> =
-  Builtin.posixFileOwner path
+  Syscall.statAt path
+  |> Stdlib.Result.andThen KernelData.metadata
+  |> Stdlib.Result.mapError Errors.fromErrno
+  |> Stdlib.Result.map (fun metadata ->
+    let uid = Stdlib.toString metadata.uid
+    match Accounts.lookup uid 0 with
+    | Some name -> name
+    | None -> uid)
 
 /// List entries in a directory (filenames only, no "." or "..")
 let listDir (path: String) : Result.Result<List<String>, Error> =
-  Builtin.posixListDir path
+  DirectoryIO.list path
 
 /// Get an environment variable
 let getenv (name: String) : Stdlib.Option.Option<String> =
@@ -153,6 +169,7 @@ let getenv (name: String) : Stdlib.Option.Option<String> =
 /// System name info: (sysname, nodename, machine).
 let uname () : Result.Result<(String * String * String), Error> =
   Builtin.posixUname ()
+  |> Errors.normalize
 
 
 /// Send a signal to a process
@@ -176,7 +193,7 @@ let sleep (delayMs: Float) : Unit =
 let isDirectory (path: String) : Bool =
   match stat path with
   | Ok result ->
-    (Stdlib.Int.bitwiseAnd result.mode StatMode.ifmt) == StatMode.ifdir
+    (result.mode & StatMode.ifmt) == StatMode.ifdir
   | Error _ -> false
 
 

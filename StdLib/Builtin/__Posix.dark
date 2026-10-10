@@ -3,16 +3,6 @@ module Builtin
 
 let posixGetcwd () : Stdlib.Result.Result<String, Stdlib.Cli.Posix.Error> = Stdlib.Cli.__Posix.__getCurrentDirectory ()
 
-let posixOpenFlag (name: String) : Int =
-    let mac = Stdlib.Cli.__Posix.__mac () in
-    if name == "rdonly" then 0
-    else if name == "wronly" then 1
-    else if name == "rdwr" then 2
-    else if name == "creat" then if mac then 512 else 64
-    else if name == "trunc" then if mac then 1024 else 512
-    else if name == "append" then if mac then 8 else 1024
-    else Builtin.crash ($"unknown open() flag `{name}`")
-
 let __posixInt64 (value: Int) : Int64 =
     match Stdlib.Int.toInt64 value with
     | Some value -> value
@@ -27,9 +17,6 @@ let posixOpen (path: String) (flags: Int) (mode: Int) : Stdlib.Result.Result<Int
     let flags = Builtin.__posixInt32 flags in
     let mode = Builtin.__posixInt32 mode in
     Stdlib.Cli.__Posix.__withEntry path (fun fd name -> Stdlib.Cli.__Posix.__intResult (Stdlib.Cli.__Posix.__openAt fd name (Stdlib.Int64.bitwiseOr flags (Stdlib.Cli.__Posix.__nofollow ())) mode))
-
-let posixStat (path: String) : Stdlib.Result.Result<(Int * Int * Int), Stdlib.Cli.Posix.Error> =
-    Stdlib.Cli.__Posix.__withStat path Stdlib.Cli.__Posix.__statValues
 
 let posixChdir (path: String) : Stdlib.Result.Result<Unit, Stdlib.Cli.Posix.Error> =
     Stdlib.Cli.__Posix.__withDirectory path (fun fd -> Stdlib.Cli.__Posix.__unitResult (Stdlib.Cli.__Posix.__chdir fd))
@@ -108,25 +95,6 @@ let posixMkstemp (prefix: String) : Stdlib.Result.Result<(Int * String), Stdlib.
 let posixMkdtemp (prefix: String) : Stdlib.Result.Result<String, Stdlib.Cli.Posix.Error> =
     Stdlib.Cli.__Posix.__createUnique prefix 100L true |> Stdlib.Result.map (fun pair -> let (_, path) = pair in path)
 
-let posixListDir (path: String) : Stdlib.Result.Result<List<String>, Stdlib.Cli.Posix.Error> =
-    Stdlib.Cli.__Posix.__withDirectory path (fun fd ->
-        let buffer = __mapped_alloc 32768L in
-        let position = __mapped_alloc 8L in
-        let _ = __raw_write_word position 0L 0L in
-        let result = Stdlib.Cli.__Posix.__listEntries fd buffer position [] in
-        let _ = __mapped_free buffer in
-        let _ = __mapped_free position in
-        result)
-
-let posixFileOwner (path: String) : Stdlib.Result.Result<String, Stdlib.Cli.Posix.Error> =
-    Stdlib.Cli.__Posix.__withStat path (fun ptr ->
-        let uid = Stdlib.Cli.__Posix.__unsigned ptr (if Stdlib.Cli.__Posix.__mac () then 16L else if Stdlib.Cli.__Posix.__x64 () then 28L else 24L) 4L in
-        let uidText = Stdlib.Int64.toString uid in
-        match Stdlib.Cli.FileSystem.readFileAsString "/etc/passwd" with
-        | Ok contents -> Stdlib.Cli.__Posix.__owner (Stdlib.String.splitOnNewline contents) uidText
-        | Error _ -> uidText)
-
-// Use the native UID rather than trusting LOGNAME or USER.
 let posixGetCurrentUserName () : Stdlib.Option.Option<String> =
     match Stdlib.Cli.FileSystem.readFileAsString "/etc/passwd" with
     | Ok contents ->

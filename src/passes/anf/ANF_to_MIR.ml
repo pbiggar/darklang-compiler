@@ -303,6 +303,14 @@ let convertCliOperation (operation : ANF.cliOperation) =
   | ANF.PosixGetDents -> MIR.PosixGetDents
   | ANF.PosixIoctl -> MIR.PosixIoctl
   | ANF.PosixProcInfo -> MIR.PosixProcInfo
+  | ANF.PosixCopyFileRange -> MIR.PosixCopyFileRange
+  | ANF.PosixFtruncate -> MIR.PosixFtruncate
+  | ANF.PosixFchmod -> MIR.PosixFchmod
+  | ANF.PosixFsync -> MIR.PosixFsync
+  | ANF.PosixFstat -> MIR.PosixFstat
+  | ANF.PosixPread -> MIR.PosixPread
+  | ANF.PosixPwrite -> MIR.PosixPwrite
+  | ANF.PosixFclonefileat -> MIR.PosixFclonefileat
 
 (*
    Precomputed descriptions for primitive ops (avoids formatting on hot path)
@@ -887,6 +895,14 @@ let cliOperationName = function
   | ANF.PosixGetDents -> "PosixGetDents"
   | ANF.PosixIoctl -> "PosixIoctl"
   | ANF.PosixProcInfo -> "PosixProcInfo"
+  | ANF.PosixCopyFileRange -> "PosixCopyFileRange"
+  | ANF.PosixFtruncate -> "PosixFtruncate"
+  | ANF.PosixFchmod -> "PosixFchmod"
+  | ANF.PosixFsync -> "PosixFsync"
+  | ANF.PosixFstat -> "PosixFstat"
+  | ANF.PosixPread -> "PosixPread"
+  | ANF.PosixPwrite -> "PosixPwrite"
+  | ANF.PosixFclonefileat -> "PosixFclonefileat"
 
 (*
    Generate description for a CExpr (for coverage mapping)

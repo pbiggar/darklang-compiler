@@ -63,7 +63,17 @@ fragments use `__` even where the interpreter also has private helpers.
 | `StdLib/Fun.dark` | `Darklang.Stdlib.Fun`  | `packages/darklang/stdlib/fun.dark` |
 | `StdLib/Float.dark` | `Darklang.Stdlib.Float`  | `packages/darklang/stdlib/float.dark` |
 | `StdLib/Cli/__Posix.dark` | `Darklang.Stdlib.Cli.__Posix` | Private native syscall boundary for interpreter POSIX operations |
-| `StdLib/Cli/__Fnmatch.dark` | `Darklang.Stdlib.Cli.__Fnmatch` | Private POSIX pattern matching implementation |
+| `StdLib/Cli/Glob.dark` | `Darklang.Stdlib.Cli.Glob` | Shared pure Dark glob matching |
+| `StdLib/Cli/Syscall.dark` | `Darklang.Stdlib.Cli.Syscall` | Shared single-call, numeric-errno kernel interface |
+| `StdLib/Cli/Runtime.dark` | `Darklang.Stdlib.Cli.Runtime` | Target/startup inputs, not syscalls |
+| `StdLib/Cli/KernelABI.dark` | `Darklang.Stdlib.Cli.KernelABI` | Shared target ABI constants |
+| `StdLib/Cli/KernelData.dark` | `Darklang.Stdlib.Cli.KernelData` | Shared bounded kernel-record decoding |
+| `StdLib/Cli/DirectoryIO.dark` | `Darklang.Stdlib.Cli.DirectoryIO` | Shared directory iteration |
+| `StdLib/Cli/FileCopy.dark` | `Darklang.Stdlib.Cli.FileCopy` | Shared clone/kernel-copy/bounded fallback algorithms |
+| `StdLib/Cli/Posix/IO.dark` | `Darklang.Stdlib.Cli.Posix.IO` | Shared complete-write algorithm |
+| `StdLib/Cli/Posix/Errors.dark` | `Darklang.Stdlib.Cli.Posix.Errors` | Shared errno messages |
+| `StdLib/Cli/Posix/Accounts.dark` | `Darklang.Stdlib.Cli.Posix.Accounts` | Shared passwd-file parsing |
+| `StdLib/Cli/Posix/Temp.dark` | `Darklang.Stdlib.Cli.Posix.Temp` | Shared temporary-entry collision retries |
 | `StdLib/Cli/Posix.dark` | `Darklang.Stdlib.Cli.Posix`  | `packages/darklang/stdlib/cli/posix.dark` |
 | `StdLib/Cli/Posix/__Error.dark` | `Darklang.Stdlib.Cli.Posix` | Private conversion from the existing native CLI error record |
 | `StdLib/Cli/Posix/OpenFlags.dark` | `Darklang.Stdlib.Cli.Posix.OpenFlags` | `packages/darklang/stdlib/cli/posix.dark` |

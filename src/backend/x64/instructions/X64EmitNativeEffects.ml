@@ -162,7 +162,16 @@ let emitCliNative (ctx : X64CodeGenTypes.funcCtx) (dest : LIR.reg)
       | LIR.PosixChmodAt | LIR.PosixChmodAt2 | LIR.PosixUtimesAt
       | LIR.PosixSetAttributesAt | LIR.PosixSymlinkAt | LIR.PosixReadlinkAt
       | LIR.PosixAccessAt | LIR.PosixFlock | LIR.PosixGetDents | LIR.PosixIoctl
-      | LIR.PosixProcInfo -> (
+      | LIR.PosixProcInfo
+      | LIR.PosixCopyFileRange
+      | LIR.PosixFtruncate
+      | LIR.PosixFchmod
+      | LIR.PosixFsync
+      | LIR.PosixFstat
+      | LIR.PosixPread
+      | LIR.PosixPwrite
+      | LIR.PosixFclonefileat
+      -> (
           let number, arity =
             match operation with
             | LIR.PosixOpenAt -> (Some 257, 4)
@@ -186,7 +195,16 @@ let emitCliNative (ctx : X64CodeGenTypes.funcCtx) (dest : LIR.reg)
             | LIR.PosixFlock -> (Some 73, 2)
             | LIR.PosixGetDents -> (Some 217, 4)
             | LIR.PosixIoctl -> (Some 16, 3)
-            | LIR.PosixProcInfo -> (None, 6)
+            | LIR.PosixProcInfo
+      | LIR.PosixCopyFileRange
+      | LIR.PosixFtruncate
+      | LIR.PosixFchmod
+      | LIR.PosixFsync
+      | LIR.PosixFstat
+      | LIR.PosixPread
+      | LIR.PosixPwrite
+      | LIR.PosixFclonefileat
+      -> (None, 6)
             | _ -> Crash.crash "Non-POSIX operation in POSIX lowering"
           in
           if List.length args <> arity then

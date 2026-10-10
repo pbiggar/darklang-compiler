@@ -139,6 +139,15 @@ let posixIntrinsicModule : AST.moduleDef =
     functions =
       [
         fn "__openAt" [] [ TInt64; TInternalRawPtr; TInt64; TInt64 ] TInt64;
+        fn "__copyFileRange" [] [ TInt64; TInt64; TInt64; TInt64; TInt64; TInt64 ] TInt64;
+        fn "__ftruncate" [] [ TInt64; TInt64 ] TInt64;
+        fn "__fchmod" [] [ TInt64; TInt64 ] TInt64;
+        fn "__fsync" [] [ TInt64 ] TInt64;
+        fn "__fstat" [] [ TInt64; TInternalRawPtr ] TInt64;
+        fn "__pread" [] [ TInt64; TInternalRawPtr; TInt64; TInt64 ] TInt64;
+        fn "__pwrite" [] [ TInt64; TInternalRawPtr; TInt64; TInt64 ] TInt64;
+        fn "__fclonefileat" [] [ TInt64; TInt64; TInternalRawPtr; TInt64 ] TInt64;
+        fn "__ioctlValue" [] [ TInt64; TInt64; TInt64 ] TInt64;
         fn "__read" [] [ TInt64; TInternalRawPtr; TInt64 ] TInt64;
         fn "__write" [] [ TInt64; TInternalRawPtr; TInt64 ] TInt64;
         fn "__close" [] [ TInt64 ] TInt64;
