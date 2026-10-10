@@ -561,11 +561,6 @@ let replaceAll (value: String) (search: String) (replacement: String) : String =
     if Stdlib.String.isEmpty search then Stdlib.String.__replaceEmpty (Stdlib.String.__toGraphemes value) replacement ""
     else Stdlib.String.join (Stdlib.String.split value search) replacement
 
-let __egcWhitespace (grapheme: String) : Bool =
-    match Stdlib.String.__toCodepoints grapheme with
-    | [codepoint] -> Stdlib.String.__Unicode.isWhitespace codepoint
-    | _ -> false
-
 // Whitespace is a codepoint property even when a grapheme contains CRLF or marks.
 let __trimStartCodepoints (codepoints: List<Int64>) : List<Int64> =
     match codepoints with
