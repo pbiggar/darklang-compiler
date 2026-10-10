@@ -62,10 +62,14 @@ else Builtin.crash "Executable path results differ"
         link = root / "launch-link"
         link.symlink_to(renamed)
         check(link)
-        relative = subprocess.run([str(link.relative_to(root))], executable="./launch-link",
-                                  cwd=root, env=environment, capture_output=True, text=True, timeout=30)
-        assert relative.returncode == 0, (relative.returncode, relative.stdout, relative.stderr)
-        assert json.loads(relative.stdout) == str(renamed.resolve()), relative.stdout
+        for name, expected_path in [(target, binary), ("./" + target, binary),
+                                    ("launch-link", renamed), ("./launch-link", renamed)]:
+            command = ([arguments.runner, "-0", name, name] if arguments.runner else [name])
+            relative = subprocess.run(command, executable=arguments.runner or name,
+                                      cwd=root, env=environment, capture_output=True, text=True, timeout=30)
+            assert relative.returncode == 0, (relative.returncode, relative.stdout, relative.stderr)
+            assert json.loads(relative.stdout) == str(expected_path.resolve()), relative.stdout
+            assert relative.stderr == "", relative.stderr
 
         # Force absent aux-vector input to exercise argv and PATH fallbacks on
         # hosts where procfs and AT_EXECFN normally hide those branches.
@@ -100,7 +104,8 @@ else Builtin.crash "Executable path results differ"
                           + "\nif " + " && ".join(f"checked{index}" for index in range(len(checks)))
                           + ' then true else Builtin.crash "Executable fallback selection failed"\n', encoding="utf-8")
         subprocess.run([compile_all, str(source), str(root)], check=True, timeout=300)
-        result = subprocess.run([str(binary)], capture_output=True, text=True, timeout=30)
+        command = [arguments.runner, str(binary)] if arguments.runner else [str(binary)]
+        result = subprocess.run(command, capture_output=True, text=True, timeout=30)
         assert result.returncode == 0, result.stdout + result.stderr
         assert json.loads(result.stdout) is True, result.stdout
         assert result.stderr == "", result.stderr

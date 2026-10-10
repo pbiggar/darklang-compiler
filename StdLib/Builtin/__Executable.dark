@@ -9,15 +9,16 @@ let __launchStringEnd (ptr: RawPtr) (offset: Int64) : Int64 =
     if __raw_get_byte ptr offset == 0L then offset
     else Builtin.__launchStringEnd ptr (offset + 1L)
 let __launchString (ptr: RawPtr) : String =
-    if __rawptr_to_int ptr == 0 then ""
-    else Stdlib.Cli.__Posix.__bufferString ptr 0L (Builtin.__launchStringEnd ptr 0L)
+    Stdlib.Cli.__Posix.__bufferString ptr 0L (Builtin.__launchStringEnd ptr 0L)
 let __launchAuxStart (ptr: RawPtr) (offset: Int64) : Int64 =
     if Builtin.__launchWord ptr offset == 0L then offset + 8L
     else Builtin.__launchAuxStart ptr (offset + 8L)
 let __launchExecfn (ptr: RawPtr) (offset: Int64) : String =
     let key = Builtin.__launchWord ptr offset in
     if key == 0L then ""
-    else if key == 31L then Builtin.__launchString (Builtin.__launchPointer ptr (offset + 8L))
+    else if key == 31L then
+        if Builtin.__launchWord ptr (offset + 8L) == 0L then ""
+        else Builtin.__launchString (Builtin.__launchPointer ptr (offset + 8L))
     else Builtin.__launchExecfn ptr (offset + 16L)
 
 let __executablePartsPath (parts: List<String>) : String =
@@ -72,7 +73,7 @@ let __resolveExecutableCandidate (candidate: String) (cwd: String) : Stdlib.Opti
     if candidate == "" then None
     else if Stdlib.String.startsWith candidate "/" then Builtin.__executableWalk [] (Stdlib.String.split candidate "/") 0L
     else if cwd == "" then None
-    else Builtin.__executableWalk [] (Stdlib.String.split (Stdlib.String.join [cwd, candidate] "/") "/") 0L
+    else Builtin.__executableWalk [] (Stdlib.String.split (cwd ++ "/" ++ candidate) "/") 0L
 
 let __searchExecutablePath (name: String) (directories: List<String>) (cwd: String) : Stdlib.Option.Option<String> =
     match directories with
