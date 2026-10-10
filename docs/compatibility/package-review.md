@@ -559,6 +559,30 @@ waived. UID probes compile for all three native targets; Linux x86-64 execution
 matches the OS UID with clean leak accounting. Other target runtimes were not
 executed.
 
+## Next item awaiting review: Frame.renderRowChangeAtWidth
+
+After merging UID PR #58 and pulling main
+`d9db15dc53d366a6bc3434578a9df1e6a3cc4a06`, the original
+`packages/darklang/stdlib/cli/tui/frame.dark` function
+`Darklang.Stdlib.Cli.Tui.Frame.renderRowChangeAtWidth` fails to compile:
+`Unknown function or value 'Text.normalizeToWidth'`. Its original call is
+`let content = Text.normalizeToWidth change.content width`.
+
+The failure reproduces with only the original RowChange type and this function.
+A direct fully qualified call also fails with
+`Unknown function or value 'Stdlib.Cli.Tui.Text.normalizeToWidth'`.
+The preceding changedRowsFrom, changedRows, fullRedrawRowsFrom, and
+fullRedrawRows declarations compile together and a compiled changed/removed-row
+probe runs successfully with clean leak checks.
+
+The upstream helper exists in `packages/darklang/stdlib/cli/tui/text.dark` but
+is absent from the compiler's embedded `StdLib/Cli/Tui/Text.dark`. It clamps
+width to zero, measures text using inspect, returns plain text already within
+the width unchanged, and otherwise calls clipToWidth. Those two dependencies
+already exist in the compiler. This is missing ordinary Dark library code,
+not a new builtin requirement. Await the user's direction before adding it.
+Other Frame declarations remain unreviewed individually.
+
 ## Completion rule
 
 At the end of the package review, enumerate every skipped package and unresolved
