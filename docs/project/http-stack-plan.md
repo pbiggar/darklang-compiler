@@ -214,6 +214,16 @@ server peer checks zero-limit refusal and subsequent listener availability.
 Other peer SETTINGS still need their respective engine features, so the full
 SETTINGS item remains unchecked.
 
+The dynamic QPACK checkpoint adds an inbound 4096-byte table, incremental
+encoder instructions, relative/post-base references and Required Insert Count
+wrap-around. Message owners retain blocked sections and defer body events until
+the missing insertions arrive; decoder feedback retains unsent bytes under QUIC
+flow control. The single-exchange profile advertises one blocked stream.
+`qpack_dynamic_decoder.e2e`, `qpack_blocked_message.e2e` and independent ls-qpack
+and delayed aioquic peer scripts specify these paths. Validation of this
+checkpoint is pending. Outgoing dynamic encoding and reference tracking remain
+unimplemented, so the full dynamic QPACK item is still unchecked.
+
 HTTP/2 now retains an outgoing HPACK table separately from its decoder. Every
 state transition preserves that owner and the peer's decoded field budget;
 successful header writes return the updated table. Peer table-capacity changes

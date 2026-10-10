@@ -88,7 +88,9 @@ def exchange(port, ca, body):
                     http.send_data(0, body, end_stream=True)
                 sent, sent_at = True, now
                 release_at = sent_at + 0.3
-            if finished:
+            # Do not accept just a completed response: the peer must also
+            # process the server's decoder feedback for the dynamic request.
+            if finished and http._decoder_bytes_received > 0:
                 assert http.dynamic and released and now - sent_at >= 0.3
                 assert (b":status", b"200") in headers and response == body, (headers, len(response), len(body))
                 return
