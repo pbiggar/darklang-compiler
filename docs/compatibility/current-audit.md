@@ -60,6 +60,10 @@ Char/String type follow-up (2026-10-10), based on main `f2e57deb5`: Char and Str
 
 Verification of the Char/String follow-up: native build passes; the complete host suite has **13,067 passing tests and three executable-path failures** caused by this VM lacking `/proc/self/exe`. The 593 enabled String assertions also pass individually through the normal runner, and all **58/58** leak workloads are clean. `dune runtest` encounters the same inherited executable-path regression failure. Parent benchmark verification stops before measurement on the incompatible stored workload digest; no baseline was reset. The generated inventory and parsed assertion counts agree with the updated gates.
 
+Display-width padding follow-up (2026-10-10), based on main `14b3040d8`: `String.padStartToWidth` and `padEndToWidth` copy the pinned interpreter’s display-cell padding logic using `displayWidth`, `repeat`, and ordinary concatenation. Negative targets and text already at least as wide as the target return the original text. All 15 upstream padding assertions are enabled, leaving 32 String exclusions. Eight focused boundary regressions failed on missing function names before implementation and now pass; the enabled upstream String assertions pass **608/608** individually.
+
+Verification: native build passes; the complete host suite has **13,093 passing tests and three inherited executable-path failures** because this VM lacks `/proc/self/exe`. `dune runtest` encounters the same inherited executable-path regression failure. Compiled leaks pass **58/58** workloads. Inventory and parsed gate counts agree (**1,202 excluded assertions**, 31 whole-file gates and 326 line entries across 34 mixed files). Parent benchmark verification stops before measurement on the incompatible stored workload digest; no baseline was reset.
+
 ## Unsupported interpreter test infrastructure
 
 The compiler no longer exposes `Builtin.testRuntimeError`. Its compiler-owned
