@@ -2,9 +2,9 @@
 
 module Darklang.Stdlib.Char
 
-let toString (char: Char) : String = char
+let toString (char: Char) : String = __char_to_string char
 
-let __asChar (value: String) : Char = value
+let __asChar (value: String) : Char = __string_to_char_unchecked value
 
 let toUppercase (char: Char) : Char =
     Stdlib.Char.__asChar (Stdlib.String.__Unicode.uppercase (Stdlib.Char.toString char))

@@ -545,7 +545,7 @@ let __charsDisplayItems (list: List<Char>) (first: Bool) : String =
     match list with
     | [] -> ""
     | [h] ->
-        if first then h else ", " ++ h
+        if first then Stdlib.Char.toString h else ", " ++ h
     | h :: t ->
         let rest = Stdlib.List.__charsDisplayItems t false in
         if first then h ++ rest else ", " ++ h ++ rest

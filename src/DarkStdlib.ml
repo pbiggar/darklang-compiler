@@ -279,6 +279,8 @@ let packageCatalogModule : AST.moduleDef =
    __refcount_dec_string : (String) -> Unit - decrement string refcount, free if 0
    __string_to_rawptr : (String) -> RawPtr - borrow string backing pointer
    __rawptr_to_string : (RawPtr) -> String - reinterpret initialized raw allocation as String
+   __char_to_string : (Char) -> String - preserve the managed grapheme buffer
+   __string_to_char_unchecked : (String) -> Char - private view of a known grapheme buffer
    __string_concat_raw : (String, String) -> String - internal byte concat;
    public concatenation normalizes the result to NFC.
    Int uses a tagged machine word: odd words are signed small integers and
@@ -326,6 +328,8 @@ let rawMemoryIntrinsics =
     fn "__refcount_dec_string" [] [ TString ] TUnit;
     fn "__string_to_rawptr" [] [ TString ] TInternalRawPtr;
     fn "__rawptr_to_string" [] [ TInternalRawPtr ] TString;
+    fn "__char_to_string" [] [ TChar ] TString;
+    fn "__string_to_char_unchecked" [] [ TString ] TChar;
     fn "__string_concat_raw" [] [ TString; TString ] TString;
     fn "__int_to_word" [] [ TInt ] TInt64;
     fn "__word_to_int" [] [ TInt64 ] TInt;
