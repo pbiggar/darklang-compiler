@@ -628,6 +628,15 @@ let padEnd (value: String) (padWith: String) (goalLength: Int) : Stdlib.Result.R
     else if Stdlib.String.length value >= goalLength then Ok value
     else Ok (value ++ Stdlib.String.repeat padWith (goalLength - Stdlib.String.length value))
 
+// Pad to display cells without clipping text that already meets the target width.
+let padStartToWidth (value: String) (width: Int) : String =
+    let padding = width - Stdlib.String.displayWidth value in
+    if padding <= 0 then value else Stdlib.String.repeat " " padding ++ value
+
+let padEndToWidth (value: String) (width: Int) : String =
+    let padding = width - Stdlib.String.displayWidth value in
+    if padding <= 0 then value else value ++ Stdlib.String.repeat " " padding
+
 let ellipsis (value: String) (goalLength: Int) : String =
     if Stdlib.String.length value > goalLength then Stdlib.String.slice value (Stdlib.Int.fromInt64 0L) goalLength ++ "..."
     else value
