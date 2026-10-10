@@ -1,0 +1,4 @@
+// Launch-path fallbacks use captured inputs and report discovery failure explicitly.
+Builtin.__resolveExecutableCandidate "" "/" = None
+Builtin.__resolveExecutableCandidate "/definitely/missing/dark-executable" "/" = None
+Builtin.__resolveExecutableCandidate "README.md" "/definitely/missing" = None
