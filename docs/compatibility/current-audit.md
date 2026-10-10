@@ -58,6 +58,8 @@ Verification: on the task's original parent `bf9cd3ad4`, native build, the compl
 
 Char/String type follow-up (2026-10-10), based on main `f2e57deb5`: Char and String no longer unify or reconcile with each other. Private typed intrinsics preserve their shared managed-buffer representation for explicit conversions; list rendering, Regex, and terminal width helpers now convert explicitly. The upstream `String.fromList ["a"]` assertion at L418 requires its correct compile error. A sweep of imported negative expectations found no other Char/String mismatch assertion. All 640 String assertions were run individually: 592 passed before the expectation override; the corrected override enables the 593rd. The whole-file gate is replaced with exact gates for the 47 remaining failures, recovering 592 working neighbours. The focused regression passes **26/26**, covering both conversion directions, container and branch types, generic calls, interpolation, grapheme conversions, sharing, and private visibility.
 
+Verification of the Char/String follow-up: native build passes; the complete host suite has **13,067 passing tests and three executable-path failures** caused by this VM lacking `/proc/self/exe`. The 593 enabled String assertions also pass individually through the normal runner, and all **58/58** leak workloads are clean. `dune runtest` encounters the same inherited executable-path regression failure. Parent benchmark verification stops before measurement on the incompatible stored workload digest; no baseline was reset. The generated inventory and parsed assertion counts agree with the updated gates.
+
 ## Unsupported interpreter test infrastructure
 
 The compiler no longer exposes `Builtin.testRuntimeError`. Its compiler-owned
