@@ -32,7 +32,7 @@ return their documented `None`/`Error`, while replacement decoders insert
 U+FFFD and then normalize.
 
 String traversal (`length`, `slice`, `first`, `last`, `dropFirst`, `dropLast`,
-`head`, `charAt`, `map`, `toList`, `reverse`, padding, and EGC search) counts
+`head`, `charAt`, `map`, `toList`, `reverse`, `padStart`, `padEnd`, and EGC search) counts
 EGCs. Negative slice indexes are relative to the EGC count and are clamped.
 `indexOf` and `lastIndexOf` deliberately return UTF-16 code-unit indexes to
 match the interpreter; `indexOfEgc` and `lastIndexOfEgc` return EGC indexes and
@@ -88,6 +88,11 @@ cells: combining and control scalars contribute zero, East Asian and emoji
 clusters contribute two, regional-indicator pairs form one two-cell flag, and
 VS16 promotes a narrow text glyph to emoji width. Pretty rendering uses this
 cell count when deciding whether a group fits.
+
+`String.padStartToWidth` and `padEndToWidth` take `(value: String, width: Int)`
+and return a String padded with leading or trailing spaces to the requested
+display width. Text already at least that wide is returned unchanged, including
+for negative targets. For example, `padEndToWidth "界" 4` returns `"界  "`.
 
 `Stdlib.Cli.Tui.Text.styledWidth`, `clipToWidth`, and `clipMarked` copy the
 terminal-row behavior pinned at darklang/dark revision

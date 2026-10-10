@@ -8,9 +8,9 @@ Audited on 2026-10-08 (UTC), against compiler revision `4a61318019fb8dea7f34a0bf
 Results from that complete audit, including enabled neighbours: 3,599 assertions, 1,325 passed and 2,274 failed.
 That audit used 34 whole-file gates and 205 assertion lines across 16 mixed files.
 
-Current configured exclusions: **1,217 assertions across 65 files**, including
+Current configured exclusions: **1,202 assertions across 65 files**, including
 **69 unsupported interpreter runtime-error assertions**. There are 31 whole-file
-gates and 341 assertion lines across 34 mixed files. The earlier retirement audit reran the 19 affected files
+gates and 326 assertion lines across 34 mixed files. The earlier retirement audit reran the 19 affected files
 individually without gates: **1,006 passed
 and 110 failed out of 1,116 assertions**. The ungated application fixture contributes 33 cascading preamble failures;
 disabling only its dependent L118 assertion lets the existing fallback prune the
@@ -138,7 +138,7 @@ Each file links to the individual failing assertions and their observed diagnost
 | [stdlib/nomodule.dark](failures/interpreter-test-runtime-error.md) | 228 | 227 | 1 |
 | [stdlib/prettyPrinter.dark](failures/stdlib/prettyPrinter.md) | 57 | 0 | 57 |
 | [stdlib/sqlite.dark](failures/stdlib/sqlite.md) | 8 | 0 | 8 |
-| [stdlib/string.dark](failures/stdlib/string.md) | 640 | 593 | 47 |
+| [stdlib/string.dark](failures/stdlib/string.md) | 640 | 608 | 32 |
 
 ## Assertions enabled
 

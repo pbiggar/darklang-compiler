@@ -2,7 +2,7 @@
 
 [Source fixture](../../../../test/fixtures/e2e/upstream/stdlib/string.dark) · [File list](../../current-audit.md)
 
-Executed 640 assertions individually: **593 passed, 47 failed** after the Char/String type fix and L418 compile-error override.
+Executed 640 assertions individually: **608 passed, 32 failed** after the Char/String type fix, L418 compile-error override, and display-width padding implementation.
 
 | Test | Observed failure |
 | --- | --- |
@@ -38,18 +38,3 @@ Executed 640 assertions individually: **593 passed, 47 failed** after the Char/S
 | [L430](../../../../test/fixtures/e2e/upstream/stdlib/string.dark#L430) — Stdlib.String.toList "🧟‍♀️🧟‍♂️" | Preamble parse error in test/fixtures/e2e/upstream/stdlib/string.dark: Preamble type error: c: Unknown function or value 'Builtin.testToChar' |
 | [L433](../../../../test/fixtures/e2e/upstream/stdlib/string.dark#L433) — Stdlib.String.toList "👱👱🏻👱🏼👱🏽👱🏾👱🏿" | Preamble parse error in test/fixtures/e2e/upstream/stdlib/string.dark: Preamble type error: c: Unknown function or value 'Builtin.testToChar' |
 | [L436](../../../../test/fixtures/e2e/upstream/stdlib/string.dark#L436) — Stdlib.String.toList "żółw🧑🏽‍🦰🧑🏻‍🍼✋✋🏻✋🏿" | Preamble parse error in test/fixtures/e2e/upstream/stdlib/string.dark: Preamble type error: c: Unknown function or value 'Builtin.testToChar' |
-| [L849](../../../../test/fixtures/e2e/upstream/stdlib/string.dark#L849) — Stdlib.String.padEndToWidth "" 0 | <entry>: Unknown function or value 'Stdlib.String.padEndToWidth' |
-| [L850](../../../../test/fixtures/e2e/upstream/stdlib/string.dark#L850) — Stdlib.String.padEndToWidth "abc" 3 | <entry>: Unknown function or value 'Stdlib.String.padEndToWidth' |
-| [L851](../../../../test/fixtures/e2e/upstream/stdlib/string.dark#L851) — Stdlib.String.padEndToWidth "abc" 6 | <entry>: Unknown function or value 'Stdlib.String.padEndToWidth' |
-| [L852](../../../../test/fixtures/e2e/upstream/stdlib/string.dark#L852) — Stdlib.String.padEndToWidth "abc" -3 | <entry>: Unknown function or value 'Stdlib.String.padEndToWidth' |
-| [L853](../../../../test/fixtures/e2e/upstream/stdlib/string.dark#L853) — Stdlib.String.padEndToWidth "abcdef" 3 | <entry>: Unknown function or value 'Stdlib.String.padEndToWidth' |
-| [L854](../../../../test/fixtures/e2e/upstream/stdlib/string.dark#L854) — Stdlib.String.padEndToWidth "界" 4 | <entry>: Unknown function or value 'Stdlib.String.padEndToWidth' |
-| [L855](../../../../test/fixtures/e2e/upstream/stdlib/string.dark#L855) — Stdlib.String.padEndToWidth "界界界" 6 | <entry>: Unknown function or value 'Stdlib.String.padEndToWidth' |
-| [L856](../../../../test/fixtures/e2e/upstream/stdlib/string.dark#L856) — Stdlib.String.padEndToWidth "🙂" 4 | <entry>: Unknown function or value 'Stdlib.String.padEndToWidth' |
-| [L857](../../../../test/fixtures/e2e/upstream/stdlib/string.dark#L857) — Stdlib.String.padEndToWidth "e\\u0301" 3 | <entry>: Unknown function or value 'Stdlib.String.padEndToWidth' |
-| [L859](../../../../test/fixtures/e2e/upstream/stdlib/string.dark#L859) — Stdlib.String.padStartToWidth "" 0 | <entry>: Unknown function or value 'Stdlib.String.padStartToWidth' |
-| [L860](../../../../test/fixtures/e2e/upstream/stdlib/string.dark#L860) — Stdlib.String.padStartToWidth "abc" 6 | <entry>: Unknown function or value 'Stdlib.String.padStartToWidth' |
-| [L861](../../../../test/fixtures/e2e/upstream/stdlib/string.dark#L861) — Stdlib.String.padStartToWidth "abc" 3 | <entry>: Unknown function or value 'Stdlib.String.padStartToWidth' |
-| [L862](../../../../test/fixtures/e2e/upstream/stdlib/string.dark#L862) — Stdlib.String.padStartToWidth "abcdef" 3 | <entry>: Unknown function or value 'Stdlib.String.padStartToWidth' |
-| [L863](../../../../test/fixtures/e2e/upstream/stdlib/string.dark#L863) — Stdlib.String.padStartToWidth "界" 4 | <entry>: Unknown function or value 'Stdlib.String.padStartToWidth' |
-| [L864](../../../../test/fixtures/e2e/upstream/stdlib/string.dark#L864) — Stdlib.String.padStartToWidth "界界界" 6 | <entry>: Unknown function or value 'Stdlib.String.padStartToWidth' |

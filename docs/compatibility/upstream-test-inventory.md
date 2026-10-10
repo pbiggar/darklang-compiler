@@ -4,7 +4,7 @@ Generated from `test/test-suite-tooling/TestRunner.ml` and the imported
 `test/fixtures/e2e/upstream/**/*.dark` files. Regenerate with
 `python3 scripts/audit-upstream-gates.py`; verify with `--check`.
 
-**105 files; 31 whole-file exclusions; 341 line-number entries
+**105 files; 31 whole-file exclusions; 326 line-number entries
 across 34 files.** A line entry is not a skipped-test count.
 The runner matches the `L<number>:` assertion name produced by the fixture
 parser. Declarations and multiline assertions require parser inspection;
@@ -114,7 +114,7 @@ Other skip metadata and runtime filters are outside this inventory.
 | [stdlib/sqlite.dark](../../test/fixtures/e2e/upstream/stdlib/sqlite.dark) | disabled | — |
 | [stdlib/sse.dark](../../test/fixtures/e2e/upstream/stdlib/sse.dark) | enabled | — |
 | [stdlib/stream.dark](../../test/fixtures/e2e/upstream/stdlib/stream.dark) | enabled | — |
-| [stdlib/string.dark](../../test/fixtures/e2e/upstream/stdlib/string.dark) | enabled | 182, 191, 192, 193, 194, 195, 382, 385, 388, 389, 390, 391, 392, 393, 394, 395, 396, 397, 399, 402, 405, 406, 407, 408, 413, 415, 422, 424, 427, 430, 433, 436, 849, 850, 851, 852, 853, 854, 855, 856, 857, 859, 860, 861, 862, 863, 864 |
+| [stdlib/string.dark](../../test/fixtures/e2e/upstream/stdlib/string.dark) | enabled | 182, 191, 192, 193, 194, 195, 382, 385, 388, 389, 390, 391, 392, 393, 394, 395, 396, 397, 399, 402, 405, 406, 407, 408, 413, 415, 422, 424, 427, 430, 433, 436 |
 | [stdlib/tuple.dark](../../test/fixtures/e2e/upstream/stdlib/tuple.dark) | enabled | — |
 | [stdlib/uuid.dark](../../test/fixtures/e2e/upstream/stdlib/uuid.dark) | enabled | — |
 | [stdlib/x509.dark](../../test/fixtures/e2e/upstream/stdlib/x509.dark) | enabled | — |
@@ -127,4 +127,4 @@ editing the runner. They must not be counted as unsupported expressions.
 | File | Line | Source line |
 | --- | --- | --- |
 
-0 of the 341 entries point to blank or comment lines.
+0 of the 326 entries point to blank or comment lines.
