@@ -118,6 +118,7 @@ type cliOperation =
   | PosixSetAttributesAt
   | PosixSymlinkAt
   | PosixReadlinkAt
+  | PosixAccessAt
   | PosixFlock
   | PosixGetDents
   | PosixIoctl

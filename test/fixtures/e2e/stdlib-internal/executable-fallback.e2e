@@ -2,9 +2,12 @@
 Builtin.__resolveExecutableCandidate "" "/" = None
 Builtin.__resolveExecutableCandidate "/definitely/missing/dark-executable" "/" = None
 Builtin.__resolveExecutableCandidate "README.md" "/definitely/missing" = None
+Builtin.__resolveExecutableCandidate "bin/sh" "/" == Builtin.__resolveExecutableCandidate "/bin/sh" "/" = true
+let path = Builtin.getCurrentExecutablePath () in Builtin.__resolveExecutableCandidate (Stdlib.String.slice path 1 (Stdlib.String.length path)) "/" == Some path = true
 match Builtin.__resolveExecutableCandidate "/bin/sh" "/" with | Some path -> Builtin.__resolveExecutableCandidate path "/" == Some path | None -> false = true
 Builtin.__selectExecutableFallback "/bin/sh" "/bin/ls" "/" None == Builtin.__resolveExecutableCandidate "/bin/sh" "/" = true
 Builtin.__selectExecutableFallback "/missing/execfn" "/bin/sh" "/" None == Builtin.__resolveExecutableCandidate "/bin/sh" "/" = true
 Builtin.__selectExecutableFallback "" "sh" "/" (Some "/missing:/bin") == Builtin.__resolveExecutableCandidate "/bin/sh" "/" = true
 Builtin.__selectExecutableFallback "" "missing-dark-program" "/" None = None
 Builtin.__launchWord (Builtin.__executableState ()) 0L = 1L
+let state = Builtin.__executableState () in let _ = __raw_write_word state 8L -1L in Builtin.__executablePathError 2L = error="Uncaught exception: current executable path failed: No such file or directory; no launch-path fallback available" isolated=true

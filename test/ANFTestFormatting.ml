@@ -389,6 +389,7 @@ and aNF_cliOperation (value : ANF.cliOperation) =
   | ANF.PosixSetAttributesAt -> union "CliOperation" "PosixSetAttributesAt" []
   | ANF.PosixSymlinkAt -> union "CliOperation" "PosixSymlinkAt" []
   | ANF.PosixReadlinkAt -> union "CliOperation" "PosixReadlinkAt" []
+  | ANF.PosixAccessAt -> union "CliOperation" "PosixAccessAt" []
   | ANF.PosixFlock -> union "CliOperation" "PosixFlock" []
   | ANF.PosixGetDents -> union "CliOperation" "PosixGetDents" []
   | ANF.PosixIoctl -> union "CliOperation" "PosixIoctl" []

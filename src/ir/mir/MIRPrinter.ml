@@ -148,6 +148,7 @@ let cliOperation = function
   | MIR.PosixSetAttributesAt -> "PosixSetAttributesAt"
   | MIR.PosixSymlinkAt -> "PosixSymlinkAt"
   | MIR.PosixReadlinkAt -> "PosixReadlinkAt"
+  | MIR.PosixAccessAt -> "PosixAccessAt"
   | MIR.PosixFlock -> "PosixFlock"
   | MIR.PosixGetDents -> "PosixGetDents"
   | MIR.PosixIoctl -> "PosixIoctl"

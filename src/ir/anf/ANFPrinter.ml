@@ -150,6 +150,7 @@ let cliOperation = function
   | ANF.PosixSetAttributesAt -> "PosixSetAttributesAt"
   | ANF.PosixSymlinkAt -> "PosixSymlinkAt"
   | ANF.PosixReadlinkAt -> "PosixReadlinkAt"
+  | ANF.PosixAccessAt -> "PosixAccessAt"
   | ANF.PosixFlock -> "PosixFlock"
   | ANF.PosixGetDents -> "PosixGetDents"
   | ANF.PosixIoctl -> "PosixIoctl"

@@ -184,6 +184,7 @@ let prettyPrintCliOperation = function
   | LIR.PosixSetAttributesAt -> "PosixSetAttributesAt"
   | LIR.PosixSymlinkAt -> "PosixSymlinkAt"
   | LIR.PosixReadlinkAt -> "PosixReadlinkAt"
+  | LIR.PosixAccessAt -> "PosixAccessAt"
   | LIR.PosixFlock -> "PosixFlock"
   | LIR.PosixGetDents -> "PosixGetDents"
   | LIR.PosixIoctl -> "PosixIoctl"

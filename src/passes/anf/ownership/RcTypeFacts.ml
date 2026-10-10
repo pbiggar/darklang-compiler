@@ -315,7 +315,8 @@ let inferCExprType ctx expr =
       | A.PosixChdir | A.PosixMkdirAt | A.PosixUnlinkAt | A.PosixRenameAt
       | A.PosixChmodAt | A.PosixChmodAt2 | A.PosixUtimesAt
       | A.PosixSetAttributesAt | A.PosixSymlinkAt | A.PosixReadlinkAt
-      | A.PosixFlock | A.PosixGetDents | A.PosixIoctl | A.PosixProcInfo ->
+      | A.PosixAccessAt | A.PosixFlock | A.PosixGetDents | A.PosixIoctl
+      | A.PosixProcInfo ->
           Some AST.TInt64)
   | A.IfValue (_, yes, _) -> atom yes
   | A.BorrowedCall (func, [ value ])

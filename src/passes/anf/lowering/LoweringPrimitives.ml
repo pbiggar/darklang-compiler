@@ -491,6 +491,7 @@ let tryCliIntrinsic name args =
             Some ANF.PosixSetAttributesAt
         | "Darklang.Stdlib.Cli.__Posix.__symlinkAt" -> Some ANF.PosixSymlinkAt
         | "Darklang.Stdlib.Cli.__Posix.__readlinkAt" -> Some ANF.PosixReadlinkAt
+        | "Darklang.Stdlib.Cli.__Posix.__accessAt" -> Some ANF.PosixAccessAt
         | "Darklang.Stdlib.Cli.__Posix.__procInfo" -> Some ANF.PosixProcInfo
         | "Darklang.Stdlib.Cli.__Posix.__flock" -> Some ANF.PosixFlock
         | "Darklang.Stdlib.Cli.__Posix.__getDents" -> Some ANF.PosixGetDents

@@ -64,7 +64,7 @@ else Builtin.crash "Executable path results differ"
         check(link)
         relative = subprocess.run([str(link.relative_to(root))], executable="./launch-link",
                                   cwd=root, env=environment, capture_output=True, text=True, timeout=30)
-        assert relative.returncode == 0, relative.stdout + relative.stderr
+        assert relative.returncode == 0, (relative.returncode, relative.stdout, relative.stderr)
         assert json.loads(relative.stdout) == str(renamed.resolve()), relative.stdout
 
         # Force absent aux-vector input to exercise argv and PATH fallbacks on

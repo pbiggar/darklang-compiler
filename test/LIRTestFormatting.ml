@@ -189,6 +189,7 @@ and cliOperation (value : LIR.cliOperation) =
   | LIR.PosixSetAttributesAt -> union "CliOperation" "PosixSetAttributesAt" []
   | LIR.PosixSymlinkAt -> union "CliOperation" "PosixSymlinkAt" []
   | LIR.PosixReadlinkAt -> union "CliOperation" "PosixReadlinkAt" []
+  | LIR.PosixAccessAt -> union "CliOperation" "PosixAccessAt" []
   | LIR.PosixFlock -> union "CliOperation" "PosixFlock" []
   | LIR.PosixGetDents -> union "CliOperation" "PosixGetDents" []
   | LIR.PosixIoctl -> union "CliOperation" "PosixIoctl" []

@@ -300,6 +300,7 @@ let convertCliOperation (operation : ANF.cliOperation) =
   | ANF.PosixSetAttributesAt -> MIR.PosixSetAttributesAt
   | ANF.PosixSymlinkAt -> MIR.PosixSymlinkAt
   | ANF.PosixReadlinkAt -> MIR.PosixReadlinkAt
+  | ANF.PosixAccessAt -> MIR.PosixAccessAt
   | ANF.PosixFlock -> MIR.PosixFlock
   | ANF.PosixGetDents -> MIR.PosixGetDents
   | ANF.PosixIoctl -> MIR.PosixIoctl
@@ -885,6 +886,7 @@ let cliOperationName = function
   | ANF.PosixSetAttributesAt -> "PosixSetAttributesAt"
   | ANF.PosixSymlinkAt -> "PosixSymlinkAt"
   | ANF.PosixReadlinkAt -> "PosixReadlinkAt"
+  | ANF.PosixAccessAt -> "PosixAccessAt"
   | ANF.PosixFlock -> "PosixFlock"
   | ANF.PosixGetDents -> "PosixGetDents"
   | ANF.PosixIoctl -> "PosixIoctl"

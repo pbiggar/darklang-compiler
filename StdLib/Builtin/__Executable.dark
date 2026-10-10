@@ -37,7 +37,12 @@ let __executableWalk (parts: List<String>) (remaining: List<String>) (links: Int
     | [] ->
         let path = Builtin.__executablePartsPath parts in
         match Stdlib.Cli.__Posix.__withStat path Stdlib.Cli.__Posix.__statMode with
-        | Ok mode -> if Stdlib.Int64.bitwiseAnd mode 61440L == 32768L && Stdlib.Int64.bitwiseAnd mode 73L != 0L then Some path else None
+        | Ok mode ->
+            if Stdlib.Int64.bitwiseAnd mode 61440L != 32768L then None
+            else
+                let access = Stdlib.Cli.__Posix.__withCString path (fun name -> Stdlib.Cli.__Posix.__accessAt (Stdlib.Cli.__Posix.__cwdFd ()) name 1L 0L) in
+                if access == -4L then Builtin.__executableWalk parts [] links
+                else if access == 0L then Some path else None
         | Error _ -> None
     | part :: rest ->
         if part == "" || part == "." then Builtin.__executableWalk parts rest links
@@ -67,7 +72,7 @@ let __resolveExecutableCandidate (candidate: String) (cwd: String) : Stdlib.Opti
     if candidate == "" then None
     else if Stdlib.String.startsWith candidate "/" then Builtin.__executableWalk [] (Stdlib.String.split candidate "/") 0L
     else if cwd == "" then None
-    else Builtin.__executableWalk [] (Stdlib.String.split (cwd ++ "/" ++ candidate) "/") 0L
+    else Builtin.__executableWalk [] (Stdlib.String.split (Stdlib.String.join [cwd, candidate] "/") "/") 0L
 
 let __searchExecutablePath (name: String) (directories: List<String>) (cwd: String) : Stdlib.Option.Option<String> =
     match directories with

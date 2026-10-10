@@ -144,6 +144,7 @@ and cliOperation (value : MIR.cliOperation) =
   | MIR.PosixSetAttributesAt -> union "CliOperation" "PosixSetAttributesAt" []
   | MIR.PosixSymlinkAt -> union "CliOperation" "PosixSymlinkAt" []
   | MIR.PosixReadlinkAt -> union "CliOperation" "PosixReadlinkAt" []
+  | MIR.PosixAccessAt -> union "CliOperation" "PosixAccessAt" []
   | MIR.PosixFlock -> union "CliOperation" "PosixFlock" []
   | MIR.PosixGetDents -> union "CliOperation" "PosixGetDents" []
   | MIR.PosixIoctl -> union "CliOperation" "PosixIoctl" []
