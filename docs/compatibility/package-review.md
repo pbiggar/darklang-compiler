@@ -466,6 +466,17 @@ leak accounting. The existing executable-path VM adapter was used for the
 host/native gates; benchmark workloads ran natively. Cachegrind equivalence
 remains waived. Other target runtimes were not executed for this change.
 
+## PID builtin (validation pending)
+
+The original `Darklang.Stdlib.Cli.Sys.currentPid` body failed to compile with
+`Unknown function or value 'Builtin.posixGetpid'` on main `f2e57de`.
+The user approved exposing the existing native PID implementation. The builtin
+now converts `Stdlib.Cli.__getpid` from Int64 to Int, and the public wrapper
+calls the builtin. No libc, shell command, or backend change is required.
+Three focused E2E cases cover a positive PID, equality with the public wrapper,
+and repeated-call stability. Validation is pending restoration of the native
+toolchain after workspace maintenance; this checkpoint is not marked merged.
+
 ## Completion rule
 
 At the end of the package review, enumerate every skipped package and unresolved
