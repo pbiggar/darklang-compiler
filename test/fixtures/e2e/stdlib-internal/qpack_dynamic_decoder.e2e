@@ -1,0 +1,21 @@
+// qpack_dynamic_decoder.e2e - Dynamic instructions, blocked sections, eviction and indexing.
+let bytes (hex: String) : Blob = Stdlib.Blob.fromHex hex |> Stdlib.Result.withDefault Stdlib.Blob.empty
+let table (hex: String) : Stdlib.Result.Result<Stdlib.__QpackDecoder.State, String> = Stdlib.__QpackDecoder.create 64L |> Stdlib.Result.andThen (fun state -> Stdlib.__QpackDecoder.feed state (bytes hex)) |> Stdlib.Result.map (fun received -> received.state)
+let decoded (state: Stdlib.__QpackDecoder.State) (hex: String) : Stdlib.Result.Result<List<(String * String)>, String> =
+  Stdlib.__QpackDecoder.decode state (bytes hex) |> Stdlib.Result.andThen (fun section -> match section with | Decoded fields -> Ok fields.fields | Blocked _ -> Error "Blocked")
+table "3F2141780179" |> Stdlib.Result.andThen (fun state -> decoded state "020080") = Ok [("x", "y")]
+table "3F2141780179" |> Stdlib.Result.andThen (fun state -> decoded state "028010") = Ok [("x", "y")]
+table "3F2141780179" |> Stdlib.Result.andThen (fun state -> decoded state "020040017A") = Ok [("x", "z")]
+table "3F2141780179" |> Stdlib.Result.andThen (fun state -> decoded state "028000017A") = Ok [("x", "z")]
+table "3F2141780179" |> Stdlib.Result.andThen (fun state -> decoded state "030080") = Error "Blocked"
+table "3F214178017941610162" |> Stdlib.Result.andThen (fun state -> decoded state "030081") = Error "Invalid QPACK dynamic index"
+table "3F214178017900" |> Stdlib.Result.andThen (fun state -> decoded state "030080") = Ok [("x", "y")]
+table "3F21C002686980017A" |> Stdlib.Result.andThen (fun state -> decoded state "030080") = Ok [(":authority", "z")]
+table "3F214178017920" |> Stdlib.Result.map (fun state -> state.inserted) = Ok 1L
+table "3F214178017920" |> Stdlib.Result.andThen (fun state -> decoded state "020080") = Error "Invalid QPACK dynamic index"
+Stdlib.__QpackDecoder.create 64L |> Stdlib.Result.andThen (fun state -> Stdlib.__QpackDecoder.feed state (bytes "3F21")) |> Stdlib.Result.andThen (fun first -> Stdlib.__QpackDecoder.feed first.state (bytes "417801")) |> Stdlib.Result.andThen (fun second -> Stdlib.__QpackDecoder.feed second.state (bytes "79")) |> Stdlib.Result.map (fun received -> received.increment) = Ok 1L
+table "3F2141780179" |> Stdlib.Result.andThen (fun state -> decoded state "028180") = Error "Invalid QPACK base"
+table "3F22" |> Stdlib.Result.map (fun state -> state.capacity) = Error "QPACK capacity exceeds advertised limit"
+table "41780179" |> Stdlib.Result.map (fun state -> state.inserted) = Error "QPACK entry exceeds table capacity"
+table "3F2100" |> Stdlib.Result.map (fun state -> state.inserted) = Error "Invalid QPACK dynamic index"
+Stdlib.__QpackDecoder.create 0L |> Stdlib.Result.andThen (fun state -> decoded state "020080") = Error "Invalid QPACK required insert count"
