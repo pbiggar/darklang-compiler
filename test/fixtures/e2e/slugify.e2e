@@ -1,0 +1,12 @@
+// Slugify preserves the interpreter's ASCII filtering and Unicode separator rules.
+
+Builtin.stringSlugify "  Hello_World!  " = "hello-world"
+Builtin.stringSlugify "a\u000bb" = "ab"
+Builtin.stringSlugify "\t\r\na\u0085b\u00a0c\u2028d\u2029e\u3000\t" = "a-b-c-d-e"
+Builtin.stringSlugify "  --Hello__World--  " = "-hello-world-"
+Builtin.stringSlugify "a! _\t-?b" = "a-b"
+Builtin.stringSlugify "\u200bA\u200bB\u200b" = "ab"
+Builtin.stringSlugify "z\u0307\u0324" = ""
+Builtin.stringSlugify "l\u030a" = "l"
+let value = "Hello" ++ "_WORLD!" in (Builtin.stringSlugify value, value) = ("hello-world", "Hello_WORLD!")
+Builtin.stringSlugify (Stdlib.String.repeat "ABC_!" 100) = Stdlib.String.repeat "abc-" 100

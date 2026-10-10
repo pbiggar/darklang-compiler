@@ -8,9 +8,9 @@ Audited on 2026-10-08 (UTC), against compiler revision `4a61318019fb8dea7f34a0bf
 Results from that complete audit, including enabled neighbours: 3,599 assertions, 1,325 passed and 2,274 failed.
 That audit used 34 whole-file gates and 205 assertion lines across 16 mixed files.
 
-Current configured exclusions: **1,202 assertions across 65 files**, including
+Current configured exclusions: **1,184 assertions across 65 files**, including
 **69 unsupported interpreter runtime-error assertions**. There are 31 whole-file
-gates and 326 assertion lines across 34 mixed files. The earlier retirement audit reran the 19 affected files
+gates and 308 assertion lines across 34 mixed files. The earlier retirement audit reran the 19 affected files
 individually without gates: **1,006 passed
 and 110 failed out of 1,116 assertions**. The ungated application fixture contributes 33 cascading preamble failures;
 disabling only its dependent L118 assertion lets the existing fallback prune the
@@ -63,6 +63,10 @@ Verification of the Char/String follow-up: native build passes; the complete hos
 Display-width padding follow-up (2026-10-10), based on main `14b3040d8`: `String.padStartToWidth` and `padEndToWidth` copy the pinned interpreter’s display-cell padding logic using `displayWidth`, `repeat`, and ordinary concatenation. Negative targets and text already at least as wide as the target return the original text. All 15 upstream padding assertions are enabled, leaving 32 String exclusions. Eight focused boundary regressions failed on missing function names before implementation and now pass; the enabled upstream String assertions pass **608/608** individually.
 
 Verification: native build passes; the complete host suite has **13,093 passing tests and three inherited executable-path failures** because this VM lacks `/proc/self/exe`. `dune runtest` encounters the same inherited executable-path regression failure. Compiled leaks pass **58/58** workloads. Inventory and parsed gate counts agree (**1,202 excluded assertions**, 31 whole-file gates and 326 line entries across 34 mixed files). Parent benchmark verification stops before measurement on the incompatible stored workload digest; no baseline was reset.
+
+Portable slugify follow-up (2026-10-10), based on main `00ec4fc85`: `Builtin.stringSlugify` is implemented entirely in Darklang. It lowercases, filters codepoints to ASCII letters/digits and separators, discards vertical tab, trims Unicode whitespace, and collapses separator runs to hyphens while preserving existing edge hyphens. Codepoint filtering preserves ASCII bases when unsupported combining marks are removed. Slugify trims its filtered codepoint list directly: reusing the current String.trim Unicode fallback left a leading CRLF grapheme in a mixed-whitespace regression. No general String.trim change is included.
+
+All 18 upstream slugify assertions are enabled; all **626/626** enabled String assertions pass individually, leaving 14 unsupported test-helper assertions. The ten new focused tests fail on missing names before implementation and pass afterwards. Native build passes; the complete host suite has **13,121 passing tests and three inherited executable-path failures** caused by this VM’s missing `/proc/self/exe`. `dune runtest` encounters the same inherited executable-path regression. Compiled leaks pass **58/58** workloads; an additional leak-accounted stress program performs 200 slugify calls on shared dynamic input and completes cleanly. Inventory, parsed gate counts, and diff checks pass (**1,184 exclusions**, 31 whole-file gates and 308 line entries across 34 mixed files). Parent benchmark verification stops before measurement on the incompatible stored workload digest; no baseline was reset.
 
 ## Unsupported interpreter test infrastructure
 
@@ -142,7 +146,7 @@ Each file links to the individual failing assertions and their observed diagnost
 | [stdlib/nomodule.dark](failures/interpreter-test-runtime-error.md) | 228 | 227 | 1 |
 | [stdlib/prettyPrinter.dark](failures/stdlib/prettyPrinter.md) | 57 | 0 | 57 |
 | [stdlib/sqlite.dark](failures/stdlib/sqlite.md) | 8 | 0 | 8 |
-| [stdlib/string.dark](failures/stdlib/string.md) | 640 | 608 | 32 |
+| [stdlib/string.dark](failures/stdlib/string.md) | 640 | 626 | 14 |
 
 ## Assertions enabled
 
