@@ -1,0 +1,16 @@
+// Char and String remain distinct source types despite sharing buffer storage.
+
+Stdlib.String.fromList ["a"] = compileerror="Expected TChar, got TString"
+Stdlib.String.fromList ["ab"] = compileerror="Expected TChar, got TString"
+Stdlib.String.length 'a' = compileerror="Expected TString, got TChar"
+Stdlib.Char.toString "a" = compileerror="Expected TChar, got TString"
+let takesChar (value: Char) : Char = value in takesChar "a" = compileerror="Expected TChar, got TString"
+let takesString (value: String) : String = value in takesString 'a' = compileerror="Expected TString, got TChar"
+let wrongReturn (value: String) : Char = value in wrongReturn "a" = compileerror="Expected TChar, got TString"
+let wrongReturn (value: Char) : String = value in wrongReturn 'a' = compileerror="Expected TString, got TChar"
+
+Stdlib.String.fromList ['a'; '👩‍👩‍👧‍👦'] = "a👩‍👩‍👧‍👦"
+Stdlib.Char.toString '👩‍👩‍👧‍👦' = "👩‍👩‍👧‍👦"
+Stdlib.String.toList "a👩‍👩‍👧‍👦" = ['a'; '👩‍👩‍👧‍👦']
+Stdlib.Char.toString (Stdlib.Char.toUppercase 'é') = "É"
+let value = "a" ++ "b" in Stdlib.String.fromList (Stdlib.String.toList value) = "ab"
