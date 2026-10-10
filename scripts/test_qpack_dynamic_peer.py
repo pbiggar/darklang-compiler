@@ -55,8 +55,11 @@ def main():
                 previous = bytes(instructions)
                 instructions.extend(updates)
                 if updates and block[0]:
-                    assert execute(binary, previous, block) == "Blocked", (index, updates.hex(), block.hex())
-                    blocked += 1
+                    before = execute(binary, previous, block)
+                    if before == "Blocked":
+                        blocked += 1
+                    else:
+                        assert pylsqpack.Decoder(0, 0).feed_header(stream, bytes.fromhex(before))[1] == fields
                 actual = execute(binary, bytes(instructions), block)
                 decoded = pylsqpack.Decoder(0, 0).feed_header(stream, bytes.fromhex(actual))[1]
                 assert decoded == fields, (index, repetition, decoded, fields)

@@ -127,7 +127,7 @@ let __required (state: Stdlib.__QpackDecoder.State) (encoded: Int64) : Stdlib.Re
       let required = if candidate > value then candidate - range else candidate in
       if required <= 0L then Error "Invalid QPACK required insert count" else Ok required
 
-let __complete (result: Stdlib.Result.Result<'a, Stdlib.__QpackDecoder.ParseError>) : Stdlib.Result.Result<'a, String> =
+let __complete<'a> (result: Stdlib.Result.Result<a, Stdlib.__QpackDecoder.ParseError>) : Stdlib.Result.Result<a, String> =
   result |> Stdlib.Result.mapError (fun error -> match error with | Incomplete -> "Truncated QPACK field section" | Invalid message -> message)
 
 let __prefix (state: Stdlib.__QpackDecoder.State) (data: Blob) : Stdlib.Result.Result<Stdlib.__QpackDecoder.Prefix, String> =
