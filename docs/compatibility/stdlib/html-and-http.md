@@ -174,8 +174,8 @@ HTTPS clients now select HTTP/3 from compatible HTTPS DNS advertisements;
 HTTP/3 also has an authenticated UDP server listener described below. The pure
 wire layer provides bounded QUIC variable-length integers and HTTP/3 frame
 and SETTINGS parsing. QPACK supports the RFC 9204 static table, static-name
-references, literal names/values and shared Huffman decoding, advertising zero
-dynamic capacity and no blocked streams. `test/fixtures/e2e/http3_qpack.e2e`
+references, literal names/values and shared Huffman decoding. The static-only
+codec remains available with zero dynamic capacity. `test/fixtures/e2e/http3_qpack.e2e`
 checks the RFC example, malformed references, table boundaries and list limits;
 `python3 scripts/test_qpack_peer.py` verifies both directions against test-only
 `pylsqpack==0.3.23`, including duplicate fields and compiled leak accounting.
@@ -185,7 +185,13 @@ Credential and cookie values remain never-indexed. `http_header_compression.e2e`
 checks wire vectors and duplicate/Unicode fields; the independent
 `scripts/test_http_header_compression_peer.py` checks all 256 Huffman symbols,
 padding, a near-limit input, HPACK/QPACK round trips and sensitive-field flags.
-Dynamic QPACK capacity and blocked-stream support remain disabled.
+The dynamic QPACK checkpoint adds connection-owned inbound tables with a
+4096-byte advertised capacity and one blocked stream. Encoder instructions are
+parsed incrementally; blocked HEADERS defer later DATA until insertions arrive.
+Decoder feedback is queued under QUIC flow control. Focused malformed-wire and
+blocked-message fixtures, plus independent ls-qpack and delayed aioquic peer
+scripts, are added but validation is pending. Outgoing QPACK still uses only
+static/literal representations; dynamic encoder/reference tracking remains open.
 HTTP/2 outgoing blocks now share a separate bounded dynamic HPACK table across
 connection state transitions. Peer table-capacity changes evict entries and
 emit ordered size updates before the next block; credentials and cookies stay
