@@ -182,7 +182,7 @@ let genHeapInit () =
       X.LEA
         ( heapPtr,
           freeListBase,
-          Int32.of_int (freeListSize + processTableSize + 512) );
+          Int32.of_int (freeListSize + processTableSize + 512 + 8192) );
     ]
 
 (*

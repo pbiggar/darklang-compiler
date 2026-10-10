@@ -134,6 +134,8 @@ let prettyPrintCliOperation = function
   | LIR.GetArgv -> "GetArgv"
   | LIR.Kill -> "Kill"
   | LIR.GetPid -> "GetPid"
+  | LIR.StartupStack -> "StartupStack"
+  | LIR.ExecutableState -> "ExecutableState"
   | LIR.GetUid -> "GetUid"
   | LIR.CpuCount -> "CpuCount"
   | LIR.SpawnProcess -> "SpawnProcess"

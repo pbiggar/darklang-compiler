@@ -250,6 +250,8 @@ let convertCliOperation (operation : ANF.cliOperation) =
   | ANF.GetArgv -> MIR.GetArgv
   | ANF.Kill -> MIR.Kill
   | ANF.GetPid -> MIR.GetPid
+  | ANF.StartupStack -> MIR.StartupStack
+  | ANF.ExecutableState -> MIR.ExecutableState
   | ANF.GetUid -> MIR.GetUid
   | ANF.CpuCount -> MIR.CpuCount
   | ANF.SpawnProcess -> MIR.SpawnProcess
@@ -833,6 +835,8 @@ let cliOperationName = function
   | ANF.GetArgv -> "GetArgv"
   | ANF.Kill -> "Kill"
   | ANF.GetPid -> "GetPid"
+  | ANF.StartupStack -> "StartupStack"
+  | ANF.ExecutableState -> "ExecutableState"
   | ANF.GetUid -> "GetUid"
   | ANF.CpuCount -> "CpuCount"
   | ANF.SpawnProcess -> "SpawnProcess"

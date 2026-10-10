@@ -100,6 +100,8 @@ let cliOperation = function
   | ANF.GetArgv -> "GetArgv"
   | ANF.Kill -> "Kill"
   | ANF.GetPid -> "GetPid"
+  | ANF.StartupStack -> "StartupStack"
+  | ANF.ExecutableState -> "ExecutableState"
   | ANF.GetUid -> "GetUid"
   | ANF.CpuCount -> "CpuCount"
   | ANF.SpawnProcess -> "SpawnProcess"

@@ -98,6 +98,8 @@ let cliOperation = function
   | MIR.GetArgv -> "GetArgv"
   | MIR.Kill -> "Kill"
   | MIR.GetPid -> "GetPid"
+  | MIR.StartupStack -> "StartupStack"
+  | MIR.ExecutableState -> "ExecutableState"
   | MIR.GetUid -> "GetUid"
   | MIR.CpuCount -> "CpuCount"
   | MIR.SpawnProcess -> "SpawnProcess"

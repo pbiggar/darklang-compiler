@@ -116,6 +116,8 @@ type cliOperation =
   | GetArgv
   | Kill
   | GetPid
+  | StartupStack
+  | ExecutableState
   | GetUid
   | CpuCount
   | SpawnProcess

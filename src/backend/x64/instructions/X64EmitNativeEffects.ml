@@ -315,6 +315,29 @@ let emitCliNative (ctx : X64CodeGenTypes.funcCtx) (dest : LIR.reg)
                   @
                   if destReg = X.RAX then [] else [ X.MOV_reg (destReg, X.RAX) ])
           | _ -> Error "CLI execute expects exactly one command")
+      | LIR.StartupStack ->
+          let loop = freshLabel ("startup_stack_" ^ ctx.functionName) in
+          let doneLabel = freshLabel "startup_stack_done" in
+          Ok
+            [
+              X.MOV_reg (X.R10, X.RBP);
+              X.Label loop;
+              X.MOV_load (X.R11, X.R10, 0l);
+              X.CMP_imm (X.R11, 0l);
+              X.Jcc (X.EQ, doneLabel);
+              X.MOV_reg (X.R10, X.R11);
+              X.JMP loop;
+              X.Label doneLabel;
+              X.LEA (destReg, X.R10, 8l);
+            ]
+      | LIR.ExecutableState ->
+          Ok
+            [
+              X.LEA
+                ( destReg,
+                  freeListBase,
+                  Int32.of_int (freeListSize + processTableSize + 512) );
+            ]
       | LIR.GetPid ->
           Ok
             (loadImm64 X.RAX 39L @ [ X.SYSCALL ]

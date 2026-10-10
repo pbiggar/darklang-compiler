@@ -299,7 +299,8 @@ let inferCExprType ctx expr =
       | A.Hostname -> posix AST.TString
       | A.GetEnvironmentPacked | A.DirectoryCurrent | A.DirectoryListPacked ->
           Some AST.TString
-      | A.StdinState -> Some AST.TInternalRawPtr
+      | A.StdinState | A.StartupStack | A.ExecutableState ->
+          Some AST.TInternalRawPtr
       | A.FileIsDirectory -> Some AST.TBool
       | A.HostOS | A.HostArchitecture | A.GetPid | A.GetUid | A.CpuCount
       | A.SpawnProcess | A.FileCreateExclusive | A.SocketTcp4 | A.SocketTcp6

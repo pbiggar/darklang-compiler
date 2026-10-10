@@ -66,6 +66,8 @@ let generateHeapInit (target : ARM64.targetConfig) =
       Symbolic.SVC syscalls.ARM64.svcImmediate;
       Symbolic.MOV_reg (Symbolic.X27, Symbolic.X0);
       Symbolic.ADD_imm (Symbolic.X28, Symbolic.X27, freeListSize + 512);
+      Symbolic.ADD_imm (Symbolic.X28, Symbolic.X28, 4096);
+      Symbolic.ADD_imm (Symbolic.X28, Symbolic.X28, 4096);
     ]
 
 (*

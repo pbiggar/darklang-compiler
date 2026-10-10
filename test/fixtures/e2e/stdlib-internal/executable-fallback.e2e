@@ -2,3 +2,9 @@
 Builtin.__resolveExecutableCandidate "" "/" = None
 Builtin.__resolveExecutableCandidate "/definitely/missing/dark-executable" "/" = None
 Builtin.__resolveExecutableCandidate "README.md" "/definitely/missing" = None
+match Builtin.__resolveExecutableCandidate "/bin/sh" "/" with | Some path -> Builtin.__resolveExecutableCandidate path "/" == Some path | None -> false = true
+Builtin.__selectExecutableFallback "/bin/sh" "/bin/ls" "/" None == Builtin.__resolveExecutableCandidate "/bin/sh" "/" = true
+Builtin.__selectExecutableFallback "/missing/execfn" "/bin/sh" "/" None == Builtin.__resolveExecutableCandidate "/bin/sh" "/" = true
+Builtin.__selectExecutableFallback "" "sh" "/" (Some "/missing:/bin") == Builtin.__resolveExecutableCandidate "/bin/sh" "/" = true
+Builtin.__selectExecutableFallback "" "missing-dark-program" "/" None = None
+Builtin.__launchWord (Builtin.__executableState ()) 0L = 1L

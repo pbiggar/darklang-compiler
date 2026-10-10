@@ -427,6 +427,8 @@ let tryCliIntrinsic name args =
             Some ANF.HostArchitecture
         | "Darklang.Stdlib.Cli.__hostname" -> Some ANF.Hostname
         | "Builtin.__stdinState" -> Some ANF.StdinState
+        | "Builtin.__startupStack" -> Some ANF.StartupStack
+        | "Builtin.__executableState" -> Some ANF.ExecutableState
         | "Darklang.Stdlib.Cli.__getenv" -> Some ANF.GetEnv
         | "Darklang.Stdlib.Cli.__createExclusive" ->
             Some ANF.FileCreateExclusive

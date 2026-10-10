@@ -235,6 +235,8 @@ let builtinPresentationModule : AST.moduleDef =
         fn "print" [] [ TString ] TUnit;
         fn "printLine" [] [ TString ] TUnit;
         fn "__stdinState" [] [ TInt64 ] TInternalRawPtr;
+        fn "__startupStack" [] [] TInternalRawPtr;
+        fn "__executableState" [] [] TInternalRawPtr;
       ];
   }
 
