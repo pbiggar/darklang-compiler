@@ -531,7 +531,7 @@ After integrating main through PR #54, the complete host suite passes
 13138/13138 tests and all 58 benchmark workloads
 compile/run with clean leak checks. Cachegrind equivalence remains waived.
 
-## Next item awaiting review: Sys.isRoot
+## UID builtin
 
 The original `packages/darklang/stdlib/cli/sys.dark` declaration is:
 
@@ -540,11 +540,24 @@ let isRoot () : Bool =
   (Builtin.posixGetuid ()) == 0
 ```
 
-Its original expression fails with
-`Unknown function or value 'Builtin.posixGetuid'` after this follow-up.
-The compiler already implements the public wrapper with
-`Stdlib.Cli.__getuid () == 0L`; the missing interpreter builtin adapter is the
-remaining difference. No fix has been applied; await the user's decision.
+Its original expression failed with
+`Unknown function or value 'Builtin.posixGetuid'`. All three focused UID E2E
+cases reproduce that diagnostic before the fix. The user approved adding the
+adapter: `Builtin.posixGetuid` converts the existing native `Stdlib.Cli.__getuid`
+result from Int64 to Int, and the public wrapper now uses the original body.
+The native real-user UID syscall already exists on Linux x86-64, Linux ARM64,
+and macOS ARM64; this change adds no libc or backend dependency.
+
+The focused tests check a nonnegative UID, public-wrapper agreement, and stable
+repeated calls. A native regression compares the exact UID and both original
+and public `isRoot` results with Python's OS UID, including misleading USER and
+LOGNAME values, with leak checks enabled. All three focused cases pass, the
+independent native UID regression passes, the full host suite passes
+13164/13164 tests, and all native Dune regression aliases pass. All 58 benchmark
+workloads compile and run with clean leak checks; Cachegrind equivalence remains
+waived. UID probes compile for all three native targets; Linux x86-64 execution
+matches the OS UID with clean leak accounting. Other target runtimes were not
+executed.
 
 ## Completion rule
 

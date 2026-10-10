@@ -166,6 +166,7 @@ let posixGetCurrentUserName () : Stdlib.Option.Option<String> =
 
 let posixCpuCount () : Int = Stdlib.Int.fromInt64 (Stdlib.Cli.__cpuCount ())
 let posixGetpid () : Int = Stdlib.Int.fromInt64 (Stdlib.Cli.__getpid ())
+let posixGetuid () : Int = Stdlib.Int.fromInt64 (Stdlib.Cli.__getuid ())
 
 let posixGetenv (name: String) : Stdlib.Option.Option<String> = Stdlib.Cli.Env.get name
 let posixSetenv (name: String) (value: String) : Stdlib.Result.Result<Unit, Stdlib.Cli.Posix.Error> = Stdlib.Cli.Env.set name value

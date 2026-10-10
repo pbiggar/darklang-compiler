@@ -1,6 +1,10 @@
 ; Native equivalence and allocation regression checks.
 (rule
  (alias runtest)
+ (deps current_uid_regression.py)
+ (action (run python3 %{dep:current_uid_regression.py} %{exe:../../bin/dark.exe})))
+(rule
+ (alias runtest)
  (deps ../../scripts/test_embed_build_hash.py ../../scripts/embed-stdlib.py)
  (action (run python3 %{dep:../../scripts/test_embed_build_hash.py})))
 (rule
