@@ -51,11 +51,12 @@ let __hyphenatedDigits (s: String) : String =
 // ignores Unicode whitespace and leading zeroes. The first three components
 // parse as UInt32; components two and three contribute their low 16 bits. The
 // remaining eight components must fit in a byte.
-let __removeXWhitespace (parts: List<String>) (acc: String) : String =
-    match parts with
-    | [] -> acc
-    | head :: tail ->
-        Stdlib.Uuid.__removeXWhitespace tail (if Stdlib.String.__egcWhitespace head then acc else acc ++ head)
+let __removeXWhitespace (codepoints: List<Int64>) (reversed: List<Int64>) : String =
+    match codepoints with
+    | [] -> Stdlib.String.__fromCodepoints (Stdlib.List.reverse reversed)
+    | codepoint :: rest ->
+        Stdlib.Uuid.__removeXWhitespace rest
+            (if Stdlib.String.__Unicode.isWhitespace codepoint then reversed else Stdlib.List.push reversed codepoint)
 
 let __xHexEnd (s: String) (index: Int64) : Int64 =
     if index == Stdlib.String.__byteLength s then index
@@ -104,7 +105,7 @@ let __xFields (s: String) (index: Int64) (fieldIndex: Int64) (acc: String) : Std
             else Stdlib.Uuid.__xFields s (digitsEnd + 1L) (fieldIndex + 1L) nextAcc
 
 let __xDigits (s: String) : Stdlib.Option.Option<String> =
-    let compact = Stdlib.Uuid.__removeXWhitespace (Stdlib.String.__toGraphemes s) "" in
+    let compact = Stdlib.Uuid.__removeXWhitespace (Stdlib.String.__toCodepoints s) [] in
     if Stdlib.String.__byteLength compact > 0L && Stdlib.String.__byteAtUnchecked compact 0L == 123L then
         Stdlib.Uuid.__xFields compact 1L 0L ""
     else None
