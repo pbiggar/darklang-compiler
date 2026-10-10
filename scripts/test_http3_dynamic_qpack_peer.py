@@ -120,11 +120,12 @@ def exchange(port, ca, body):
                     http.send_data(0, body, end_stream=True)
                 sent, sent_at = True, now
                 release_at = sent_at + 0.3
-            # Do not accept just a completed response: the peer must also
-            # process the server's decoder feedback for the dynamic request.
-            if finished and 0 in http._encoder.acknowledged:
+            # Keep driving ACKs until the authenticated close: returning at
+            # response FIN strands the sequential server's response drain.
+            if finished and 0 in http._encoder.acknowledged and client._close_event is not None:
                 assert http.dynamic and released and now - sent_at >= 0.3
                 assert (b":status", b"200") in headers and response == body, (headers, len(response), len(body))
+                assert client._close_event.error_code == 256, client._close_event
                 return
         raise AssertionError(("dynamic exchange timed out", sent, released, position, len(http.delayed), headers, len(response), client._close_event))
 
