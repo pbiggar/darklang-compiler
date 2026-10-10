@@ -40,7 +40,7 @@ let arch () : Stdlib.Result.Result<String, Stdlib.Cli.Posix.Error> =
     | Ok Armv7l -> Ok "armv7l"
     | Error error -> Error (Stdlib.Cli.Posix.Error { errno = 0, message = error })
 let cpuCount () : Int = Builtin.posixCpuCount ()
-let currentPid () : Int = Stdlib.Int.fromInt64 (Stdlib.Cli.__getpid ())
+let currentPid () : Int = Builtin.posixGetpid ()
 let isRoot () : Bool = Stdlib.Cli.__getuid () == 0L
 
 /// The full path of the running executable, discovered by the operating system.
