@@ -78,5 +78,5 @@ Stdlib.Cli.Glob.matches "[[:digit:]]" "7" false = true
 Stdlib.Cli.Glob.matches "[]a]" "]" false = true
 Stdlib.Cli.Glob.matches "[[:alpha:]]" "A" false = true
 Stdlib.Cli.Glob.matches "[" "[" false = true
-Stdlib.Cli.Posix.OpenFlags.flag "unknown" = error="Uncaught exception: unknown open() flag `unknown`"
+Stdlib.Cli.Posix.OpenFlags.flag "unknown" = compileerror="Unknown function"
 Stdlib.Cli.Posix.fdClose 4294967299 = error="Uncaught exception: Encountered out-of-range value for type of Int"
