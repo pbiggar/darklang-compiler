@@ -164,6 +164,10 @@ and cliOperation (value : MIR.cliOperation) =
   | MIR.PosixGettimeofday -> union "CliOperation" "PosixGettimeofday" []
   | MIR.PosixNanosleep -> union "CliOperation" "PosixNanosleep" []
   | MIR.PosixMachTimebaseInfo -> union "CliOperation" "PosixMachTimebaseInfo" []
+  | MIR.PosixInotifyInit1 -> union "CliOperation" "PosixInotifyInit1" []
+  | MIR.PosixInotifyAddWatch -> union "CliOperation" "PosixInotifyAddWatch" []
+  | MIR.PosixPpoll -> union "CliOperation" "PosixPpoll" []
+  | MIR.PosixPollDarwin -> union "CliOperation" "PosixPollDarwin" []
 
 and label (value : MIR.label) =
   match value with MIR.Label field0 -> union "Label" "Label" [ text field0 ]

@@ -138,6 +138,10 @@ type cliOperation =
   | PosixGettimeofday
   | PosixNanosleep
   | PosixMachTimebaseInfo
+  | PosixInotifyInit1
+  | PosixInotifyAddWatch
+  | PosixPpoll
+  | PosixPollDarwin
 
 type recordDescriptor = {
   sourceTypeName : string;

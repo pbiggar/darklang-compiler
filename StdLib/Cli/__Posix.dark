@@ -1,6 +1,11 @@
 // __Posix.dark - Native POSIX primitive bridge; policy is implemented in Dark.
 module Darklang.Stdlib.Cli.__Posix
 
+let __inotifyInit1 (flags: Int64) : Int64 = -38L
+let __inotifyAddWatch (fd: Int64) (path: RawPtr) (mask: Int64) : Int64 = -38L
+let __ppoll (fds: RawPtr) (count: Int64) (timeout: RawPtr) (mask: RawPtr) (size: Int64) : Int64 = -38L
+let __pollDarwin (fds: RawPtr) (count: Int64) (timeout: Int64) : Int64 = -38L
+
 let __clockGettime (clock: Int64) (buffer: RawPtr) : Int64 = -38L
 let __gettimeofday (buffer: RawPtr) (zone: RawPtr) (absolute: RawPtr) : Int64 = -38L
 let __nanosleep (request: RawPtr) (remaining: RawPtr) : Int64 = -38L
@@ -435,7 +440,7 @@ let __writeBytes (blob: Blob) (ptr: RawPtr) (index: Int64) : Unit =
         let _ = __raw_write_byte ptr index (Stdlib.Blob.__getByte blob index) in
         Stdlib.Cli.__Posix.__writeBytes blob ptr (index + 1L)
 
-let __metadataPath (path: String) (fn: Int64 -> String -> Stdlib.Result.Result<Unit, Stdlib.Cli.Posix.Error>) : Stdlib.Result.Result<Unit, Stdlib.Cli.Posix.Error> =
+let __metadataPath (path: String) (fn: Int64 -> String -> Stdlib.Result.Result<'a, Stdlib.Cli.Posix.Error>) : Stdlib.Result.Result<'a, Stdlib.Cli.Posix.Error> =
     Stdlib.Cli.__Posix.__withEntry path (fun parent name ->
         let fd = Stdlib.Cli.__Posix.__openAt parent name (2097152L + Stdlib.Cli.__Posix.__nofollow ()) 0L in
         if fd < 0L then Error (Stdlib.Cli.__Posix.__error (0L - fd))

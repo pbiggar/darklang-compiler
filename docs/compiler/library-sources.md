@@ -57,6 +57,8 @@ fragments use `__` even where the interpreter also has private helpers.
 | `StdLib/Builtin/__Terminal.dark` | `Builtin` | Native terminal facts, size, color policy, text inspection and stdin interactivity (`backend/src/Builtins/Builtins.Cli/Libs/{Terminal,Stdin}.fs`) |
 | `StdLib/Builtin/__Stdin.dark` | `Builtin` | Interpreter stdin builtin wrappers (`backend/src/Builtins/Builtins.Cli/Libs/Stdin.fs`) |
 | `StdLib/Builtin/__ClockSyscall.dark` | `Builtin` | One-shot clock/sleep kernel adapters and raw event-loop runtime inputs |
+| `StdLib/Builtin/__WatchSyscall.dark` | `Builtin` | Single-call event queue registration and pollfd ABI adaptation |
+| `StdLib/Cli/FileWatch.dark` | `Darklang.Stdlib.Cli.FileWatch` | Shared event decoding, rearming and callback orchestration |
 | `StdLib/Cli/Clock.dark` | `Darklang.Stdlib.Cli.Clock` | Shared clock decoding/scaling and interrupted-sleep retries |
 | `StdLib/Builtin/__BuildInfo.dark` | `Builtin` | Compiler revision substituted at build time, corresponding to interpreter `getBuildHash` (`backend/src/Builtins/Builtins.Cli/Libs/Environment.fs`) |
 | `StdLib/Builtin/__Executable.dark` | `Builtin` | Runtime executable path via Linux readlinkat or Darwin proc_info, with captured AT_EXECFN/argv/cwd/PATH fallbacks (`backend/src/Builtins/Builtins.Cli/Libs/Directory.fs`) |

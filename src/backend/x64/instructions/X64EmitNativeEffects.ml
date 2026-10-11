@@ -145,15 +145,29 @@ let emitCliNative (ctx : X64CodeGenTypes.funcCtx) (dest : LIR.reg)
       in
       let loadSocketArgs operands targets =
         operands
+        |> List.mapi (fun index operand -> index, operand)
         |> List.fold_left
-             (fun loaded operand ->
+             (fun loaded (index, operand) ->
                loaded
                |> bind (fun code ->
-                   loadCliOperand X.R11 operand
+                   (* Spill reloads can put an incoming operand in R11 itself.
+                      Preserve its original value before collecting earlier
+                      operands, or ppoll's timeout can become NULL. *)
+                   let next =
+                     match operand with
+                     | LIR.Reg source ->
+                         resolveReg source |> bind (fun sourceReg ->
+                           if sourceReg = X.R11 then
+                             Ok [ X.MOV_load (X.R11, X.RSP, Int32.of_int (index * 8)) ]
+                           else loadCliOperand X.R11 operand)
+                     | _ -> loadCliOperand X.R11 operand
+                   in
+                   next
                    |> Result.map (fun next -> code @ next @ [ X.PUSH X.R11 ])))
-             (Ok [])
+             (Ok [ X.PUSH X.R11 ])
         |> Result.map (fun code ->
-            code @ (targets |> List.rev |> List.map (fun r -> X.POP r)))
+            code @ (targets |> List.rev |> List.map (fun r -> X.POP r))
+            @ [ X.ADD_imm (X.RSP, 8l) ])
       in
       match operation with
       | LIR.PosixOpenAt | LIR.PosixRead | LIR.PosixWrite | LIR.PosixClose
@@ -174,6 +188,7 @@ let emitCliNative (ctx : X64CodeGenTypes.funcCtx) (dest : LIR.reg)
       | LIR.PosixGetentropy
       | LIR.PosixUname | LIR.PosixSysctl | LIR.PosixSchedGetaffinity | LIR.PosixFcntlGetPath
       | LIR.PosixClockGettime | LIR.PosixGettimeofday | LIR.PosixNanosleep | LIR.PosixMachTimebaseInfo
+      | LIR.PosixInotifyInit1 | LIR.PosixInotifyAddWatch | LIR.PosixPpoll | LIR.PosixPollDarwin
       -> (
           let number, arity =
             match operation with
@@ -216,6 +231,10 @@ let emitCliNative (ctx : X64CodeGenTypes.funcCtx) (dest : LIR.reg)
             | LIR.PosixGettimeofday -> (Some 96, 3)
             | LIR.PosixNanosleep -> (Some 35, 2)
             | LIR.PosixMachTimebaseInfo -> (None, 1)
+            | LIR.PosixInotifyInit1 -> (Some 294, 1)
+            | LIR.PosixInotifyAddWatch -> (Some 254, 3)
+            | LIR.PosixPpoll -> (Some 271, 5)
+            | LIR.PosixPollDarwin -> (None, 3)
             | _ -> Crash.crash "Non-POSIX operation in POSIX lowering"
           in
           if List.length args <> arity then

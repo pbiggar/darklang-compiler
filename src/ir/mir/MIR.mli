@@ -128,6 +128,10 @@ type cliOperation =
   | PosixGettimeofday
   | PosixNanosleep
   | PosixMachTimebaseInfo
+  | PosixInotifyInit1
+  | PosixInotifyAddWatch
+  | PosixPpoll
+  | PosixPollDarwin
 
 type label = Label of string
 

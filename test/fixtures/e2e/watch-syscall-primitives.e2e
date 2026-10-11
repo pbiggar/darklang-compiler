@@ -1,0 +1,4 @@
+match Stdlib.Cli.Syscall.inotifyInit1 (-1) with | Error e -> e == (if Stdlib.Cli.KernelABI.mac () then 78 else 22) | Ok _ -> false = true
+Stdlib.Cli.Syscall.ppoll [] (-1) = Error 22
+Stdlib.Cli.Syscall.ppoll [] 0 |> Stdlib.Result.map Stdlib.Blob.length = Ok 0
+match Stdlib.Cli.Syscall.ppoll [(-1, 1)] 0 with | Ok bytes -> Stdlib.Blob.length bytes == 8 | Error _ -> false = true

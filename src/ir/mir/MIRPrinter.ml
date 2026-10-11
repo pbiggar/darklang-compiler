@@ -168,6 +168,10 @@ let cliOperation = function
   | MIR.PosixGettimeofday -> "PosixGettimeofday"
   | MIR.PosixNanosleep -> "PosixNanosleep"
   | MIR.PosixMachTimebaseInfo -> "PosixMachTimebaseInfo"
+  | MIR.PosixInotifyInit1 -> "PosixInotifyInit1"
+  | MIR.PosixInotifyAddWatch -> "PosixInotifyAddWatch"
+  | MIR.PosixPpoll -> "PosixPpoll"
+  | MIR.PosixPollDarwin -> "PosixPollDarwin"
 
 let prettyPrintCanonicalBufferKind = ANFPrinter.prettyPrintCanonicalBufferKind
 

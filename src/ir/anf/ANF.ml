@@ -192,6 +192,10 @@ type cliOperation =
   | PosixGettimeofday
   | PosixNanosleep
   | PosixMachTimebaseInfo
+  | PosixInotifyInit1
+  | PosixInotifyAddWatch
+  | PosixPpoll
+  | PosixPollDarwin
 
 (*
    Immutable nominal metadata carried through fixed-block lowering for field

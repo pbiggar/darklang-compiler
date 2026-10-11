@@ -320,6 +320,10 @@ let convertCliOperation (operation : ANF.cliOperation) =
   | ANF.PosixGettimeofday -> MIR.PosixGettimeofday
   | ANF.PosixNanosleep -> MIR.PosixNanosleep
   | ANF.PosixMachTimebaseInfo -> MIR.PosixMachTimebaseInfo
+  | ANF.PosixInotifyInit1 -> MIR.PosixInotifyInit1
+  | ANF.PosixInotifyAddWatch -> MIR.PosixInotifyAddWatch
+  | ANF.PosixPpoll -> MIR.PosixPpoll
+  | ANF.PosixPollDarwin -> MIR.PosixPollDarwin
 
 (*
    Precomputed descriptions for primitive ops (avoids formatting on hot path)
@@ -921,6 +925,10 @@ let cliOperationName = function
   | ANF.PosixGettimeofday -> "PosixGettimeofday"
   | ANF.PosixNanosleep -> "PosixNanosleep"
   | ANF.PosixMachTimebaseInfo -> "PosixMachTimebaseInfo"
+  | ANF.PosixInotifyInit1 -> "PosixInotifyInit1"
+  | ANF.PosixInotifyAddWatch -> "PosixInotifyAddWatch"
+  | ANF.PosixPpoll -> "PosixPpoll"
+  | ANF.PosixPollDarwin -> "PosixPollDarwin"
 
 (*
    Generate description for a CExpr (for coverage mapping)

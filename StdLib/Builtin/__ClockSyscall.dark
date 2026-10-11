@@ -34,11 +34,11 @@ let syscallClockGettime (clock: Int) : Stdlib.Result.Result<Blob, Int> =
     Builtin.__clockRecord 16L (fun ptr -> Stdlib.Cli.__Posix.__clockGettime clock ptr)
 
 let syscallGettimeofday () : Stdlib.Result.Result<Blob, Int> =
-    Builtin.__clockRecord 16L (fun ptr -> Stdlib.Cli.__Posix.__gettimeofday ptr (__int_to_rawptr 0) (__int_to_rawptr 0))
+    Builtin.__clockRecord 16L (fun ptr -> Stdlib.Cli.__Posix.__gettimeofday ptr (__word_to_rawptr 0L) (__word_to_rawptr 0L))
 
 let syscallMachAbsoluteTime () : Stdlib.Result.Result<Blob, Int> =
     if Stdlib.Cli.__Posix.__mac () == false then Error 38
-    else Builtin.__clockRecord 8L (fun ptr -> Stdlib.Cli.__Posix.__gettimeofday (__int_to_rawptr 0) (__int_to_rawptr 0) ptr)
+    else Builtin.__clockRecord 8L (fun ptr -> Stdlib.Cli.__Posix.__gettimeofday (__word_to_rawptr 0L) (__word_to_rawptr 0L) ptr)
 
 let syscallMachTimebaseInfo () : Stdlib.Result.Result<Blob, Int> =
     Builtin.__clockRecord 8L (fun ptr ->

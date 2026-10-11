@@ -100,6 +100,10 @@ let convertCliOperation operation =
   | MIR.PosixGettimeofday -> LIR.PosixGettimeofday
   | MIR.PosixNanosleep -> LIR.PosixNanosleep
   | MIR.PosixMachTimebaseInfo -> LIR.PosixMachTimebaseInfo
+  | MIR.PosixInotifyInit1 -> LIR.PosixInotifyInit1
+  | MIR.PosixInotifyAddWatch -> LIR.PosixInotifyAddWatch
+  | MIR.PosixPpoll -> LIR.PosixPpoll
+  | MIR.PosixPollDarwin -> LIR.PosixPollDarwin
 
 [@@@warning "-4"]
 

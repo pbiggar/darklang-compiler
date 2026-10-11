@@ -186,6 +186,10 @@ type cliOperation =
   | PosixGettimeofday
   | PosixNanosleep
   | PosixMachTimebaseInfo
+  | PosixInotifyInit1
+  | PosixInotifyAddWatch
+  | PosixPpoll
+  | PosixPollDarwin
 
 (*
    Basic block label (defined early for use in Phi nodes)

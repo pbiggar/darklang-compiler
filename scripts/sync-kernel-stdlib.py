@@ -15,7 +15,7 @@ FILES = {
     "kernelData": "KernelData", "directoryIO": "DirectoryIO", "glob": "Glob",
     "posix/io": "Posix/IO", "posix/errors": "Posix/Errors",
     "posix/accounts": "Posix/Accounts", "posix/temp": "Posix/Temp",
-    "fileCopy": "FileCopy", "file": "File",
+    "fileCopy": "FileCopy", "fileWatch": "FileWatch", "file": "File",
     "env": "Env",
     "fileSystem": "FileSystem",
     "pathIO": "PathIO",

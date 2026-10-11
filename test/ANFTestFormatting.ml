@@ -409,6 +409,10 @@ and aNF_cliOperation (value : ANF.cliOperation) =
   | ANF.PosixGettimeofday -> union "CliOperation" "PosixGettimeofday" []
   | ANF.PosixNanosleep -> union "CliOperation" "PosixNanosleep" []
   | ANF.PosixMachTimebaseInfo -> union "CliOperation" "PosixMachTimebaseInfo" []
+  | ANF.PosixInotifyInit1 -> union "CliOperation" "PosixInotifyInit1" []
+  | ANF.PosixInotifyAddWatch -> union "CliOperation" "PosixInotifyAddWatch" []
+  | ANF.PosixPpoll -> union "CliOperation" "PosixPpoll" []
+  | ANF.PosixPollDarwin -> union "CliOperation" "PosixPollDarwin" []
 
 and aNF_recordDescriptor (value : ANF.recordDescriptor) =
   record "RecordDescriptor"

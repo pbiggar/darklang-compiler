@@ -28,7 +28,7 @@ let syscallSysctl (mib: List<Int>) (count: Int) : Stdlib.Result.Result<Blob, Int
         let buffer = __mapped_alloc count in
         let size = __mapped_alloc 8L in
         let _ = __raw_write_word size 0L count in
-        let rc = Stdlib.Cli.__Posix.__sysctl keys length buffer size (__int_to_rawptr 0) 0L in
+        let rc = Stdlib.Cli.__Posix.__sysctl keys length buffer size (__word_to_rawptr 0L) 0L in
         let actual = __raw_get size 0L in
         let result =
             if rc < 0L then Error (Stdlib.Int.fromInt64 (0L - rc))

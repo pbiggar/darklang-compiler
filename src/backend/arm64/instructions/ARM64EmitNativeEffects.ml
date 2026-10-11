@@ -560,6 +560,7 @@ let emitCliNative (ctx : codeGenContext) (dest : LIR.reg)
       | LIR.PosixGetentropy
       | LIR.PosixUname | LIR.PosixSysctl | LIR.PosixSchedGetaffinity | LIR.PosixFcntlGetPath
       | LIR.PosixClockGettime | LIR.PosixGettimeofday | LIR.PosixNanosleep | LIR.PosixMachTimebaseInfo
+      | LIR.PosixInotifyInit1 | LIR.PosixInotifyAddWatch | LIR.PosixPpoll | LIR.PosixPollDarwin
       -> (
           let number, arity =
             match operation with
@@ -741,6 +742,22 @@ let emitCliNative (ctx : codeGenContext) (dest : LIR.reg)
                 ((match ARM64.targetOS ctx.target with
                   | Platform.Linux -> None
                   | Platform.MacOS -> Some (-89)), 1)
+            | LIR.PosixInotifyInit1 ->
+                ((match ARM64.targetOS ctx.target with
+                  | Platform.Linux -> Some 26
+                  | Platform.MacOS -> None), 1)
+            | LIR.PosixInotifyAddWatch ->
+                ((match ARM64.targetOS ctx.target with
+                  | Platform.Linux -> Some 27
+                  | Platform.MacOS -> None), 3)
+            | LIR.PosixPpoll ->
+                ((match ARM64.targetOS ctx.target with
+                  | Platform.Linux -> Some 73
+                  | Platform.MacOS -> None), 5)
+            | LIR.PosixPollDarwin ->
+                ((match ARM64.targetOS ctx.target with
+                  | Platform.Linux -> None
+                  | Platform.MacOS -> Some 230), 3)
             | _ -> Crash.crash "Non-POSIX operation in POSIX lowering"
           in
           if List.length args <> arity then
@@ -754,11 +771,21 @@ let emitCliNative (ctx : codeGenContext) (dest : LIR.reg)
                 Ok (loadImmediate destReg errno)
             | Some number ->
                 args
+                |> List.mapi (fun index operand -> index, operand)
                 |> List.fold_left
-                     (fun result operand ->
+                     (fun result (index, operand) ->
                        result
                        |> bind (fun code ->
-                           loadCliOperand Symbolic.X9 operand
+                           let next =
+                             match operand with
+                             | LIR.Reg source ->
+                                 lirRegToARM64Reg source |> bind (fun sourceReg ->
+                                   if sourceReg = Symbolic.X9 then
+                                     Ok [ Symbolic.LDR (Symbolic.X9, Symbolic.SP, index * 16) ]
+                                   else loadCliOperand Symbolic.X9 operand)
+                             | _ -> loadCliOperand Symbolic.X9 operand
+                           in
+                           next
                            |> Result.map (fun next ->
                                code @ next
                                @ [
@@ -766,7 +793,8 @@ let emitCliNative (ctx : codeGenContext) (dest : LIR.reg)
                                      (Symbolic.SP, Symbolic.SP, 16);
                                    Symbolic.STR (Symbolic.X9, Symbolic.SP, 0);
                                  ])))
-                     (Ok [])
+                     (Ok [ Symbolic.SUB_imm (Symbolic.SP, Symbolic.SP, 16);
+                           Symbolic.STR (Symbolic.X9, Symbolic.SP, 0) ])
                 |> Result.map (fun loads ->
                     let targets =
                       [
@@ -802,6 +830,7 @@ let emitCliNative (ctx : codeGenContext) (dest : LIR.reg)
                             Symbolic.ADD_imm (Symbolic.SP, Symbolic.SP, 16);
                           ]))
                     @ [
+                        Symbolic.ADD_imm (Symbolic.SP, Symbolic.SP, 16);
                         Symbolic.MOVZ (syscall.ARM64.syscallRegister, number, 0);
                         Symbolic.SVC syscall.ARM64.svcImmediate;
                       ]

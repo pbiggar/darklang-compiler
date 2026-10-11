@@ -204,6 +204,10 @@ let prettyPrintCliOperation = function
   | LIR.PosixGettimeofday -> "PosixGettimeofday"
   | LIR.PosixNanosleep -> "PosixNanosleep"
   | LIR.PosixMachTimebaseInfo -> "PosixMachTimebaseInfo"
+  | LIR.PosixInotifyInit1 -> "PosixInotifyInit1"
+  | LIR.PosixInotifyAddWatch -> "PosixInotifyAddWatch"
+  | LIR.PosixPpoll -> "PosixPpoll"
+  | LIR.PosixPollDarwin -> "PosixPollDarwin"
 
 (*
    Pretty-print LIR register

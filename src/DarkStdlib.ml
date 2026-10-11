@@ -323,6 +323,7 @@ let rawMemoryIntrinsics =
     fn "__int_to_word" [] [ TInt ] TInt64;
     fn "__word_to_int" [] [ TInt64 ] TInt;
     fn "__int_to_rawptr" [] [ TInt ] TInternalRawPtr;
+    fn "__word_to_rawptr" [] [ TInt64 ] TInternalRawPtr;
     fn "__rawptr_to_int" [] [ TInternalRawPtr ] TInt;
     fn "__int64_to_uint64_bits" [] [ TInt64 ] TUInt64;
     fn "__uint64_to_int64_bits" [] [ TUInt64 ] TInt64;

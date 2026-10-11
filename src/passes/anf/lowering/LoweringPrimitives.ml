@@ -475,6 +475,10 @@ let tryCliIntrinsic name args =
         | "Darklang.Stdlib.Cli.__Posix.__schedGetaffinity" -> Some ANF.PosixSchedGetaffinity
         | "Darklang.Stdlib.Cli.__Posix.__fcntlGetPath" -> Some ANF.PosixFcntlGetPath
         | "Darklang.Stdlib.Cli.__Posix.__clockGettime" -> Some ANF.PosixClockGettime
+        | "Darklang.Stdlib.Cli.__Posix.__inotifyInit1" -> Some ANF.PosixInotifyInit1
+        | "Darklang.Stdlib.Cli.__Posix.__inotifyAddWatch" -> Some ANF.PosixInotifyAddWatch
+        | "Darklang.Stdlib.Cli.__Posix.__ppoll" -> Some ANF.PosixPpoll
+        | "Darklang.Stdlib.Cli.__Posix.__pollDarwin" -> Some ANF.PosixPollDarwin
         | "Darklang.Stdlib.Cli.__Posix.__gettimeofday" -> Some ANF.PosixGettimeofday
         | "Darklang.Stdlib.Cli.__Posix.__nanosleep" -> Some ANF.PosixNanosleep
         | "Darklang.Stdlib.Cli.__Posix.__machTimebaseInfo" -> Some ANF.PosixMachTimebaseInfo
@@ -788,6 +792,7 @@ let tryRawMemoryIntrinsic resolve sumNames name arguments =
       [ value ] ) ->
       Some (ANF.TypedAtom (value, AST.TInternalRawPtr))
   | "__rawptr_to_int", [ value ] -> Some (ANF.TypedAtom (value, AST.TInt))
+  | "__word_to_rawptr", [ value ] -> Some (ANF.TypedAtom (value, AST.TInternalRawPtr))
   | "__rawptr_to_int128", [ value ] -> Some (ANF.RawPtrToInt128 value)
   | "__rawptr_to_uint128", [ value ] -> Some (ANF.RawPtrToUInt128 value)
   | "__string_concat_raw", [ left; right ] ->

@@ -197,6 +197,10 @@ type cliOperation =
   | PosixGettimeofday
   | PosixNanosleep
   | PosixMachTimebaseInfo
+  | PosixInotifyInit1
+  | PosixInotifyAddWatch
+  | PosixPpoll
+  | PosixPollDarwin
 
 (*
    Basic block label (wrapper type for type safety)

@@ -170,6 +170,10 @@ let cliOperation = function
   | ANF.PosixGettimeofday -> "PosixGettimeofday"
   | ANF.PosixNanosleep -> "PosixNanosleep"
   | ANF.PosixMachTimebaseInfo -> "PosixMachTimebaseInfo"
+  | ANF.PosixInotifyInit1 -> "PosixInotifyInit1"
+  | ANF.PosixInotifyAddWatch -> "PosixInotifyAddWatch"
+  | ANF.PosixPpoll -> "PosixPpoll"
+  | ANF.PosixPollDarwin -> "PosixPollDarwin"
 
 (*
    Pretty-print ANF complex expression
