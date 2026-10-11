@@ -1,4 +1,4 @@
-// HttpClientSession.dark - Owned alternative-service cache without sharing or pooling response connections.
+// HttpClientSession.dark - Owned alternative-service cache and bounded buffered HTTP/1.1 pool.
 module Darklang.Stdlib.HttpClientSession
 
 type Session = {
@@ -7,21 +7,22 @@ type Session = {
   clear: Unit -> Unit,
   close: Unit -> Unit
 }
+type __State = { cache: Stdlib.__AltSvcCache.State, pool: Stdlib.__Http1Pool.State }
 
 let __lookup (cell: RawPtr) (url: String) (now: Int64) : List<Stdlib.__HttpsService.Service> =
   match Stdlib.__HttpWire.parseUrl url with
   | Error _ -> []
   | Ok parsed ->
-    let state = Stdlib.Stream.__cellGet<Stdlib.__AltSvcCache.State> cell in
-    let found = Stdlib.__AltSvcCache.lookup state parsed now in
-    let _ = Stdlib.Stream.__cellSet cell found.state in
+    let state = Stdlib.Stream.__cellGet<Stdlib.HttpClientSession.__State> cell in
+    let found = Stdlib.__AltSvcCache.lookup state.cache parsed now in
+    let _ = Stdlib.Stream.__cellSet cell { state with cache = found.state } in
     found.services
 
 let __learn (cell: RawPtr) (url: String) (status: Int) (headers: List<(String * String)>) (started: Int64) : Unit =
   match Stdlib.__HttpWire.parseUrl url, Stdlib.__Network.monotonicMillis (), Stdlib.Int.toInt64 (Stdlib.DateTime.toSeconds (Stdlib.DateTime.now ())) with
   | Ok parsed, Ok now, Some utc ->
-    let state = Stdlib.Stream.__cellGet<Stdlib.__AltSvcCache.State> cell in
-    Stdlib.Stream.__cellSet cell (Stdlib.__AltSvcCache.learn state parsed status headers started now utc)
+    let state = Stdlib.Stream.__cellGet<Stdlib.HttpClientSession.__State> cell in
+    Stdlib.Stream.__cellSet cell { state with cache = Stdlib.__AltSvcCache.learn state.cache parsed status headers started now utc }
   | _, _, _ -> ()
 
 let __request (cell: RawPtr) (lifecycle: Stream<Unit>) (trusted: Bool) (roots: Stdlib.Option.Option<List<Blob>>)
@@ -33,8 +34,29 @@ let __request (cell: RawPtr) (lifecycle: Stream<Unit>) (trusted: Bool) (roots: S
     match Stdlib.__Network.monotonicMillis () with
     | Error _ -> Error Stdlib.HttpClient.RequestError.NetworkError
     | Ok started ->
-      Stdlib.HttpClient.__requestWithAlternatives trusted roots (Stdlib.HttpClientSession.__lookup cell url started) method url headers body
-        |> Stdlib.Result.map (fun response -> let _ = Stdlib.HttpClientSession.__learn cell url response.statusCode response.headers started in response)
+      Stdlib.HttpClient.__prepare method url headers body false |> Stdlib.Result.andThen (fun prepared ->
+        let alternatives = Stdlib.HttpClientSession.__lookup cell url started in
+        let state = Stdlib.Stream.__cellGet<Stdlib.HttpClientSession.__State> cell in
+        let lease = Stdlib.__Http1Pool.take state.pool prepared.url started in
+        let _ = Stdlib.Stream.__cellSet cell { state with pool = lease.state } in
+        // Newly learned alternative services still get their establishment
+        // attempt before an HTTP/1.1 fallback; never replay an attempted write.
+        let loan =
+          if alternatives == [] then lease.transport
+          else match lease.transport with
+            | None -> None
+            | Some transport -> let _ = Stdlib.__HttpTransport.close transport in None in
+        Stdlib.__Http1Pool.perform loan trusted roots alternatives prepared headers body |> Stdlib.Result.map (fun completed ->
+          let _ = match completed.transport with
+          | None -> ()
+          | Some transport ->
+            match Stdlib.__Network.monotonicMillis () with
+            | Error _ -> Stdlib.__HttpTransport.close transport
+            | Ok now ->
+              let current = Stdlib.Stream.__cellGet<Stdlib.HttpClientSession.__State> cell in
+              Stdlib.Stream.__cellSet cell { current with pool = Stdlib.__Http1Pool.put current.pool prepared.url transport now } in
+          let response = completed.response in
+          let _ = Stdlib.HttpClientSession.__learn cell url response.statusCode response.headers started in response))
 
 let __stream (cell: RawPtr) (lifecycle: Stream<Unit>) (trusted: Bool) (roots: Stdlib.Option.Option<List<Blob>>)
   (method: String) (url: String) (headers: List<(String * String)>) (body: Blob)
@@ -49,11 +71,21 @@ let __stream (cell: RawPtr) (lifecycle: Stream<Unit>) (trusted: Bool) (roots: St
         |> Stdlib.Result.map (fun response -> let _ = Stdlib.HttpClientSession.__learn cell url response.statusCode response.headers started in response)
 
 let __clear (cell: RawPtr) (lifecycle: Stream<Unit>) : Unit =
-  match Stdlib.Stream.next lifecycle with | None -> () | Some _ -> Stdlib.Stream.__cellSet cell Stdlib.__AltSvcCache.empty
+  match Stdlib.Stream.next lifecycle with
+  | None -> ()
+  | Some _ ->
+    let state = Stdlib.Stream.__cellGet<Stdlib.HttpClientSession.__State> cell in
+    let _ = Stdlib.__Http1Pool.close state.pool in
+    Stdlib.Stream.__cellSet cell (Stdlib.HttpClientSession.__State { cache = Stdlib.__AltSvcCache.empty, pool = Stdlib.__Http1Pool.empty })
+
+let __dispose (cell: RawPtr) : Unit =
+  let state = Stdlib.Stream.__cellGet<Stdlib.HttpClientSession.__State> cell in
+  let _ = Stdlib.__Http1Pool.close state.pool in
+  Stdlib.Stream.__cellDispose<Stdlib.HttpClientSession.__State> cell
 
 let __create (trusted: Bool) (roots: Stdlib.Option.Option<List<Blob>>) : Stdlib.HttpClientSession.Session =
-  let cell = Stdlib.Stream.__cellNew Stdlib.__AltSvcCache.empty in
-  let lifecycle = Stdlib.Stream.__new (fun _unit -> Some ()) (fun _unit -> Stdlib.Stream.__cellDispose<Stdlib.__AltSvcCache.State> cell) in
+  let cell = Stdlib.Stream.__cellNew (Stdlib.HttpClientSession.__State { cache = Stdlib.__AltSvcCache.empty, pool = Stdlib.__Http1Pool.empty }) in
+  let lifecycle = Stdlib.Stream.__new (fun _unit -> Some ()) (fun _unit -> Stdlib.HttpClientSession.__dispose cell) in
   Stdlib.HttpClientSession.Session {
     request = fun method url headers body -> Stdlib.HttpClientSession.__request cell lifecycle trusted roots method url headers body,
     stream = fun method url headers body -> Stdlib.HttpClientSession.__stream cell lifecycle trusted roots method url headers body,

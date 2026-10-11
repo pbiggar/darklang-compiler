@@ -3,9 +3,27 @@ module Darklang.Stdlib.__HttpTransport
 
 type Transport = {
   lifecycle: Stream<Unit>,
+  idle: Unit -> Bool,
   read: Unit -> Stdlib.Result.Result<Blob, String>,
   write: Blob -> Stdlib.Result.Result<Unit, String>
 }
+// Data arriving with no outstanding request is not a response to the next one.
+// Conservatively discard even readable TLS control traffic instead of blocking
+// checkout to classify it. Virtual transports cannot prove kernel quiescence.
+let __idleTcp (connection: Stdlib.__Network.TcpConnection) : Bool =
+  match connection.watch with
+  | None -> false
+  | Some watch ->
+    match Stdlib.__Network.waitSockets [Stdlib.__Network.Interest { watch = watch, readable = true, writable = false }] 0L with
+    | Error _ -> false
+    | Ok events -> events == []
+
+let __idleSecure (connection: Stdlib.__Network.TcpConnection) (cell: RawPtr) (lifecycle: Stream<Unit>) : Bool =
+  match Stdlib.Stream.next lifecycle with
+  | None -> false
+  | Some _ ->
+    let state = Stdlib.Stream.__cellGet<Stdlib.__Tls13Client.ApplicationState> cell in
+    Stdlib.Blob.__byteLength state.pending == 0L && Stdlib.__HttpTransport.__idleTcp connection
 let __readSecure (connection: Stdlib.__Network.TcpConnection) (cell: RawPtr)
   (lifecycle: Stream<Unit>) : Stdlib.Result.Result<Blob, String> =
   match Stdlib.Stream.next lifecycle with
@@ -55,6 +73,7 @@ let secure (connection: Stdlib.__Network.TcpConnection) (keys: Stdlib.__Tls13Cli
   let lifecycle = Stdlib.Stream.__new (fun _unit -> Some ()) dispose in
   Stdlib.__HttpTransport.Transport {
     lifecycle = lifecycle,
+    idle = fun _unit -> Stdlib.__HttpTransport.__idleSecure connection cell lifecycle,
     read = fun _unit -> Stdlib.__HttpTransport.__readSecure connection cell lifecycle,
     write = fun bytes -> Stdlib.__HttpTransport.__writeSecure connection cell lifecycle bytes 0L }
 
@@ -86,6 +105,7 @@ let __plain (connection: Stdlib.__Network.TcpConnection)
   (signals: Stdlib.Option.Option<Stdlib.__Network.ShutdownSignals>) : Stdlib.__HttpTransport.Transport =
   Stdlib.__HttpTransport.Transport {
     lifecycle = connection.lifecycle,
+    idle = fun _unit -> Stdlib.__HttpTransport.__idleTcp connection,
     read = fun _unit -> Stdlib.__HttpTransport.__plainRead connection signals,
     write = fun bytes ->
       match Stdlib.__Network.writeTcp connection bytes with
@@ -100,6 +120,7 @@ let plainWithShutdown (connection: Stdlib.__Network.TcpConnection) (signals: Std
 
 let plainWithDeadline (connection: Stdlib.__Network.TcpConnection) (signals: Stdlib.__Network.ShutdownSignals) (deadline: Int64) : Stdlib.__HttpTransport.Transport =
   Stdlib.__HttpTransport.Transport { lifecycle = connection.lifecycle,
+    idle = fun _unit -> Stdlib.__HttpTransport.__idleTcp connection,
     read = fun _unit -> Stdlib.__HttpTransport.__readPlain connection (Some signals) deadline,
     write = fun bytes -> match Stdlib.__Network.writeTcp connection bytes with | Ok () -> Ok () | Error _ -> Error "HTTP application write failed" }
 

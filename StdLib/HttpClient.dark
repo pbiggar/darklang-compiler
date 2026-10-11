@@ -48,6 +48,8 @@ type Connection =
   | Tcp of (Stdlib.__Network.TcpConnection * Stdlib.Option.Option<List<Blob>>)
   | Quic of Stdlib.__QuicClient.Ready
 
+type __Prepared = { method: String, url: Stdlib.__HttpWire.Url, bytes: Blob }
+
 /// Returns an authorization header created using HTTP basic auth.
 let basicAuth
   (username: String)
@@ -255,10 +257,8 @@ let __secureRequest (connection: Stdlib.__Network.TcpConnection) (url: Stdlib.__
         | Error _ -> Error Stdlib.HttpClient.RequestError.NetworkError
         | Ok response -> Stdlib.HttpClient.__parseSecureResponse method response 0L
 
-let __requestWithAlternatives (trusted: Bool) (roots: Stdlib.Option.Option<List<Blob>>) (alternatives: List<Stdlib.__HttpsService.Service>)
-  (method: String) (urlText: String)
-  (headers: List<(String * String)>) (body: Blob)
-  : Stdlib.Result.Result<Stdlib.HttpClient.Response, Stdlib.HttpClient.RequestError> =
+let __prepare (method: String) (urlText: String) (headers: List<(String * String)>) (body: Blob) (close: Bool)
+  : Stdlib.Result.Result<Stdlib.HttpClient.__Prepared, Stdlib.HttpClient.RequestError> =
   let normalizedMethod = Stdlib.String.toUppercase method in
   if method == "" || Stdlib.Bool.not (Stdlib.__HttpWire.__tokenValid method 0L (Stdlib.String.__byteLength method)) then
     Error Stdlib.HttpClient.RequestError.BadMethod
@@ -280,9 +280,17 @@ let __requestWithAlternatives (trusted: Bool) (roots: Stdlib.Option.Option<List<
             Error (Stdlib.HttpClient.RequestError.BadUrl Stdlib.HttpClient.BadUrlDetails.UnsupportedProtocol)
           else
             match Stdlib.__HttpWire.serializeRequest normalizedMethod url
-                    (headers @ [("Connection", "close")]) body with
+                    (if close then headers @ [("Connection", "close")] else headers) body with
             | Error _ -> Error (Stdlib.HttpClient.RequestError.BadUrl Stdlib.HttpClient.BadUrlDetails.InvalidRequest)
-            | Ok requestBytes ->
+            | Ok requestBytes -> Ok (Stdlib.HttpClient.__Prepared { method = normalizedMethod, url = url, bytes = requestBytes })
+
+let __requestWithAlternatives (trusted: Bool) (roots: Stdlib.Option.Option<List<Blob>>) (alternatives: List<Stdlib.__HttpsService.Service>)
+  (method: String) (urlText: String) (headers: List<(String * String)>) (body: Blob)
+  : Stdlib.Result.Result<Stdlib.HttpClient.Response, Stdlib.HttpClient.RequestError> =
+  Stdlib.HttpClient.__prepare method urlText headers body true |> Stdlib.Result.andThen (fun prepared ->
+                let url = prepared.url in
+                let normalizedMethod = prepared.method in
+                let requestBytes = prepared.bytes in
                 match Stdlib.HttpClient.__connectAlternatives url trusted roots alternatives with
                 | Error error -> Error error
                 | Ok connected ->
@@ -301,7 +309,7 @@ let __requestWithAlternatives (trusted: Bool) (roots: Stdlib.Option.Option<List<
                         | Error code -> Error (Stdlib.HttpClient.__transportError code)
                         | Ok () -> Stdlib.HttpClient.__readResponse connection normalizedMethod Stdlib.Blob.empty 0L in
                     let _ = Stdlib.__Network.closeTcp connection in
-                    result
+                    result)
 
 let __request (trusted: Bool) (roots: Stdlib.Option.Option<List<Blob>>) (method: String) (url: String)
   (headers: List<(String * String)>) (body: Blob) : Stdlib.Result.Result<Stdlib.HttpClient.Response, Stdlib.HttpClient.RequestError> =
