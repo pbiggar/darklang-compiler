@@ -5,6 +5,7 @@ type Entry = { origin: Stdlib.__HttpWire.Url, state: Stdlib.__Http3Connection.St
 type State = { entries: List<Stdlib.__Http3Pool.Entry> }
 type Lease = { state: Stdlib.__Http3Pool.State, entry: Stdlib.Option.Option<Stdlib.__Http3Pool.Entry> }
 type Completed = { response: Stdlib.HttpClient.Response, entry: Stdlib.Option.Option<Stdlib.__Http3Pool.Entry> }
+type BodyLease = { entry: Stdlib.__Http3Pool.Entry, cell: RawPtr, lifecycle: Stream<Unit>, returnOwner: Stdlib.__Http3Pool.Entry -> Bool }
 
 val empty = Stdlib.__Http3Pool.State { entries = [] }
 
@@ -78,3 +79,50 @@ let open (ready: Stdlib.__QuicClient.Ready) (method: String) (url: Stdlib.__Http
   match Stdlib.__Http3Connection.open ready with
   | Error _ -> let _ = Stdlib.__QuicClient.close ready in Error Stdlib.HttpClient.RequestError.NetworkError
   | Ok state -> Stdlib.__Http3Pool.exchange (Stdlib.__Http3Pool.Entry { origin = url, state = state, idle = 0L }) method url headers body
+
+// A completed response can precede upload FIN. Reset only the unfinished send
+// direction, then publish the latest packet/key state before returning ownership.
+let __finishUpload (wire: Stdlib.__Http3.State) : Stdlib.Result.Result<Stdlib.__Http3.State, String> =
+  let stopped = match Stdlib.__QuicFlow.channel wire.connection.flow wire.stream with
+    | None -> Error "Missing leased HTTP/3 stream"
+    | Some channel -> match channel.send with
+      | None -> Ok wire.connection
+      | Some sender ->
+        if sender.finished then Ok wire.connection
+        else Stdlib.__QuicFlow.stop wire.connection.flow (Stdlib.__QuicApplication.StreamLimit { id = wire.stream, value = 256L })
+          |> Stdlib.Result.andThen (fun stopped -> Stdlib.__QuicConnection.__queue (Stdlib.__QuicConnection.__flow wire.connection stopped.state) stopped.frames) in
+  stopped |> Stdlib.Result.andThen Stdlib.__QuicConnection.flush |> Stdlib.Result.map (fun connection -> { wire with connection = connection })
+
+let __bodyNext (lease: Stdlib.__Http3Pool.BodyLease) : Stdlib.Option.Option<UInt8> =
+  match Stdlib.Stream.next lease.lifecycle with | None -> None | Some _ -> Stdlib.__Http3Client.__bodyNext lease.cell
+
+let __bodyClose (lease: Stdlib.__Http3Pool.BodyLease) : Unit =
+  let body = Stdlib.Stream.__cellGet<Stdlib.__Http3Client.Body> lease.cell in
+  let returned =
+    if Stdlib.Bool.not body.finished || body.events != [] || body.position != Stdlib.Blob.__byteLength body.bytes then false
+    else match Stdlib.__Http3Pool.__finishUpload body.state with
+      | Error _ -> false
+      | Ok wire ->
+        let entry = { lease.entry with state = { lease.entry.state with wire = wire } } in
+        Stdlib.__Http3Pool.reusable entry.state && lease.returnOwner entry in
+  let _ = if returned then () else Stdlib.__Http3.close body.state in
+  Stdlib.Stream.__cellDispose<Stdlib.__Http3Client.Body> lease.cell
+
+let stream (entry: Stdlib.__Http3Pool.Entry) (prepared: Stdlib.HttpClient.__Prepared) (headers: List<(String * String)>) (body: Blob)
+  (lifecycle: Stream<Unit>) (returnOwner: Stdlib.__Http3Pool.Entry -> Bool)
+  : Stdlib.Result.Result<Stdlib.HttpClient.StreamResponse, Stdlib.HttpClient.RequestError> =
+  let opened =
+    if entry.state.next == 0L then
+      match Stdlib.__Network.monotonicMillis () with
+      | Error _ -> Error "HTTP/3 clock failed"
+      | Ok now -> Ok { entry.state.wire with message = Stdlib.__Http3Message.create (Response (prepared.method == "HEAD")), deadline = now + 10000L }
+    else Stdlib.__Http3.nextRequest entry.state.wire entry.state.next (prepared.method == "HEAD") 10000L in
+  let reply = opened |> Stdlib.Result.andThen (fun wire -> Stdlib.__Http3Client.__startState wire prepared.method prepared.url headers body) in
+  match reply with
+  | Error message -> let _ = Stdlib.__Http3.close entry.state.wire in Error (Stdlib.__Http1Pool.__error message)
+  | Ok reply ->
+    let entry = { entry with state = Stdlib.__Http3Connection.State { wire = reply.state, next = entry.state.next + 4L } } in
+    let initial = Stdlib.__Http3Client.Body { state = reply.state, events = reply.events, bytes = Stdlib.Blob.empty, position = 0L, finished = reply.finished } in
+    let lease = Stdlib.__Http3Pool.BodyLease { entry = entry, cell = Stdlib.Stream.__cellNew initial, lifecycle = lifecycle, returnOwner = returnOwner } in
+    let body = Stdlib.Stream.__new (fun _unit -> Stdlib.__Http3Pool.__bodyNext lease) (fun _unit -> Stdlib.__Http3Pool.__bodyClose lease) in
+    Ok (Stdlib.HttpClient.StreamResponse { statusCode = Stdlib.Int.fromInt64 reply.head.status, headers = reply.head.headers, body = body })

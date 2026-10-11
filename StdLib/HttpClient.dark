@@ -457,16 +457,19 @@ let __streamFetch (state: Stdlib.HttpClient.__StreamBodyState)
   let read = match state.source with
     | Legacy ((connection, transport)) ->
       Stdlib.HttpClient.__streamRead connection transport |> Stdlib.Result.mapError (fun _error -> "HTTP response stream read failed")
-        |> Stdlib.Result.map (fun read -> Stdlib.Option.map read (fun read -> (read.bytes, Stdlib.HttpClient.__StreamSource.Legacy (connection, read.transport))))
+        |> Stdlib.Result.map (fun read -> Stdlib.Option.map read (fun read -> (read.bytes, Stdlib.HttpClient.__StreamSource.Legacy ((connection, read.transport)))))
     | Owned transport -> transport.read () |> Stdlib.Result.map (fun bytes ->
       if Stdlib.Blob.__byteLength bytes == 0L then None else Some ((bytes, state.source))) in
   match read with
   | Error _ -> Error "HTTP response stream read failed"
-  | Ok None -> Ok None
-  | Ok (Some ((bytes, source))) ->
-    Ok (Some (Stdlib.HttpClient.__streamState state source
-      (Stdlib.Blob.concat [Stdlib.HttpClient.__streamRemaining state, bytes])
-      0L state.phase state.total state.chunks))
+  | Ok available ->
+    match available with
+    | None -> Ok None
+    | Some pair ->
+      let (bytes, source) = pair in
+      Ok (Some (Stdlib.HttpClient.__streamState state source
+        (Stdlib.Blob.concat [Stdlib.HttpClient.__streamRemaining state, bytes])
+        0L state.phase state.total state.chunks))
 
 let __streamByte (state: Stdlib.HttpClient.__StreamBodyState) : UInt8 =
   match Stdlib.UInt8.fromInt64 (Stdlib.Blob.__getByte state.buffer state.offset) with
@@ -657,7 +660,7 @@ let __streamWithAlternatives (trusted: Bool) (roots: Stdlib.Option.Option<List<B
                           | Chunked -> Stdlib.HttpClient.__StreamPhase.ChunkHeader
                           | UntilClose -> Stdlib.HttpClient.__StreamPhase.UntilEof in
               let initial = Stdlib.HttpClient.__StreamBodyState {
-                source = Stdlib.HttpClient.__StreamSource.Legacy (connection, nextTransport), onEnd = fun _remaining -> (),
+                source = Stdlib.HttpClient.__StreamSource.Legacy ((connection, nextTransport)), onEnd = fun _remaining -> (),
                 buffer = head.remaining, offset = 0L,
                 phase = phase, total = 0L, chunks = 0L } in
               let stream = Stdlib.Stream.__fromProducer initial

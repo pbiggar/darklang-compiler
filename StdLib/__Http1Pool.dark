@@ -8,7 +8,7 @@ type Read = { response: Stdlib.HttpClient.Response, reusable: Bool }
 type Reusable = Http1 of Stdlib.__HttpTransport.Transport | Http2 of Stdlib.__Http2Pool.Entry | Http3 of Stdlib.__Http3Pool.Entry
 type Completed = { response: Stdlib.HttpClient.Response, reusable: Stdlib.Option.Option<Stdlib.__Http1Pool.Reusable> }
 type StreamHead = { head: Stdlib.__HttpWire.ParsedResponseHead, wire: Blob }
-type StreamOpened = Http1 of Stdlib.__HttpTransport.Transport | Modern of Stdlib.HttpClient.StreamResponse
+type StreamOpened = Http1 of Stdlib.__HttpTransport.Transport | Http3 of Stdlib.__Http3Pool.Entry | Modern of Stdlib.HttpClient.StreamResponse
 
 val empty = Stdlib.__Http1Pool.State { entries = [] }
 
@@ -74,8 +74,10 @@ let openStream (trusted: Bool) (roots: Stdlib.Option.Option<List<Blob>>) (altern
   : Stdlib.Result.Result<Stdlib.__Http1Pool.StreamOpened, Stdlib.HttpClient.RequestError> =
   Stdlib.HttpClient.__connectAlternatives prepared.url trusted roots alternatives |> Stdlib.Result.andThen (fun connected ->
     match connected with
-    | Quic ready -> Stdlib.__Http3Client.stream ready prepared.method prepared.url headers body 10000L
-      |> Stdlib.Result.mapError Stdlib.__Http1Pool.__error |> Stdlib.Result.map (fun response -> Stdlib.__Http1Pool.StreamOpened.Modern response)
+    | Quic ready ->
+      match Stdlib.__Http3Connection.open ready with
+      | Error message -> let _ = Stdlib.__QuicClient.close ready in Error (Stdlib.__Http1Pool.__error message)
+      | Ok state -> Ok (Stdlib.__Http1Pool.StreamOpened.Http3 (Stdlib.__Http3Pool.Entry { origin = prepared.url, state = state, idle = 0L }))
     | Tcp ((connection, authorities)) ->
       match authorities with
       | None -> Ok (Stdlib.__Http1Pool.StreamOpened.Http1 (Stdlib.__HttpTransport.plain connection))

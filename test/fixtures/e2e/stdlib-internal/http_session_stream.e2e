@@ -10,7 +10,7 @@ let check (wire: List<String>) (mode: String) : (String * Int64 * Int64) =
   let reads = Stdlib.Stream.__cellNew (Stdlib.List.map wire Stdlib.String.toBlob) in
   let writes = Stdlib.Stream.__cellNew 0L in
   let closes = Stdlib.Stream.__cellNew 0L in
-  let url = Stdlib.__HttpWire.parseUrl "http://example.com/" |> Stdlib.Result.unwrap in
+  let url = match Stdlib.__HttpWire.parseUrl "http://example.com/" with | Ok url -> url | Error message -> Builtin.crash message in
   let now = Stdlib.__Network.monotonicMillis () |> Stdlib.Result.withDefault 0L in
   let pool = Stdlib.__Http1Pool.put Stdlib.__Http1Pool.empty url (owner reads writes closes) now in
   let initial = Stdlib.HttpClientSession.__State { cache = Stdlib.__AltSvcCache.empty, pool = pool, http2 = Stdlib.__Http2Pool.empty, http3 = Stdlib.__Http3Pool.empty, epoch = 0L } in
@@ -21,7 +21,7 @@ let check (wire: List<String>) (mode: String) : (String * Int64 * Int64) =
     | Ok response ->
       let _ = if mode == "clear" then session.clear () else if mode == "closed" then session.close () else () in
       if mode == "abandon" then let _ = Stdlib.Stream.close response.body in "abandoned"
-      else Stdlib.Stream.toBlob response.body |> Stdlib.String.fromBlob |> Stdlib.Result.withDefault "decode error" in
+      else Stdlib.Stream.toBlob response.body |> Stdlib.String.fromBlob |> Stdlib.Option.withDefault "decode error" in
   let before = Stdlib.Stream.__cellGet<Int64> closes in
   let _ = session.close () in
   let result = (body, before, Stdlib.Stream.__cellGet<Int64> closes) in

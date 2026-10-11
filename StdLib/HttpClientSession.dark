@@ -35,6 +35,14 @@ let __bodyStep (lifecycle: Stream<Unit>) (state: Stdlib.HttpClient.__StreamBodyS
   : Stdlib.Option.Option<(UInt8 * Stdlib.HttpClient.__StreamBodyState)> =
   match Stdlib.Stream.next lifecycle with | None -> None | Some _ -> Stdlib.HttpClient.__streamStep state
 
+let __returnHttp3 (cell: RawPtr) (lifecycle: Stream<Unit>) (epoch: Int64) (entry: Stdlib.__Http3Pool.Entry) : Bool =
+  match Stdlib.Stream.next lifecycle, Stdlib.__Network.monotonicMillis () with
+  | Some _, Ok now ->
+    let current = Stdlib.Stream.__cellGet<Stdlib.HttpClientSession.__State> cell in
+    if current.epoch != epoch then false
+    else let _ = Stdlib.Stream.__cellSet cell { current with http3 = Stdlib.__Http3Pool.put current.http3 entry now } in true
+  | _, _ -> false
+
 let __streamHttp1 (cell: RawPtr) (lifecycle: Stream<Unit>) (epoch: Int64) (transport: Stdlib.__HttpTransport.Transport) (prepared: Stdlib.HttpClient.__Prepared)
   : Stdlib.Result.Result<Stdlib.HttpClient.StreamResponse, Stdlib.HttpClient.RequestError> =
   let result = transport.write prepared.bytes |> Stdlib.Result.mapError Stdlib.__Http1Pool.__error
@@ -140,14 +148,20 @@ let __stream (cell: RawPtr) (lifecycle: Stream<Unit>) (trusted: Bool) (roots: St
         let alternatives = Stdlib.HttpClientSession.__lookup cell url started in
         let state = Stdlib.Stream.__cellGet<Stdlib.HttpClientSession.__State> cell in
         let lease = Stdlib.__Http1Pool.take state.pool prepared.url started in
-        let _ = Stdlib.Stream.__cellSet cell { state with pool = lease.state } in
-        let opened = match lease.transport with
-          | Some transport when alternatives == [] -> Ok (Stdlib.__Http1Pool.StreamOpened.Http1 transport)
-          | loan ->
-            let _ = match loan with | None -> () | Some transport -> Stdlib.__HttpTransport.close transport in
-            Stdlib.__Http1Pool.openStream trusted roots alternatives prepared headers body in
+        let h3 = Stdlib.__Http3Pool.take state.http3 prepared.url started in
+        let _ = Stdlib.Stream.__cellSet cell { state with pool = lease.state, http3 = h3.state } in
+        let opened = match h3.entry with
+          | Some entry ->
+            let _ = match lease.transport with | None -> () | Some transport -> Stdlib.__HttpTransport.close transport in
+            Ok (Stdlib.__Http1Pool.StreamOpened.Http3 entry)
+          | None -> match lease.transport with
+            | Some transport when alternatives == [] -> Ok (Stdlib.__Http1Pool.StreamOpened.Http1 transport)
+            | loan ->
+              let _ = match loan with | None -> () | Some transport -> Stdlib.__HttpTransport.close transport in
+              Stdlib.__Http1Pool.openStream trusted roots alternatives prepared headers body in
         opened |> Stdlib.Result.andThen (fun opened -> match opened with
           | Modern response -> Ok response
+          | Http3 entry -> Stdlib.__Http3Pool.stream entry prepared headers body lifecycle (fun entry -> Stdlib.HttpClientSession.__returnHttp3 cell lifecycle state.epoch entry)
           | Http1 transport -> Stdlib.HttpClientSession.__streamHttp1 cell lifecycle state.epoch transport prepared)
           |> Stdlib.Result.map (fun response -> let _ = Stdlib.HttpClientSession.__learn cell url response.statusCode response.headers started in response))
 
