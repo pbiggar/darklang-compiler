@@ -189,9 +189,23 @@ mean the entire branch has passed its integration or performance gates.
     `http1_pool.e2e` covers expiry, eviction, origins, framing and cleanup;
     `scripts/test_http1_session_peer.py` exercises independent TCP/TLS peers.
   - [ ] Persistent HTTP/1.1 server exchanges and lazy-body pool leases.
-  - [ ] Reusable HTTP/2–3 connection owners and multiplexed stream scheduling.
+  - [x] Buffered HTTP/2 session owners retain HPACK, connection credit and odd
+    stream IDs across requests. Eight idle origins expire after thirty seconds;
+    checkout retires stale/GOAWAY owners before writing a request.
+  - [ ] Reusable HTTP/3 connection owners and lazy-body pool leases.
 
 - [ ] HTTP/2 and HTTP/3 request multiplexing, stream allocation and scheduling.
+
+  - [x] Internal HTTP/2 batch scheduler: at most 32 requests, peer concurrency
+    limits, one DATA frame per active stream per round, separate upload windows,
+    shared HPACK in wire order, ordered per-request results, isolated resets,
+    and GOAWAY draining without replay. Aggregate upload/response bodies each
+    cap at 100 MiB. Client transport polling retains partial TLS/HTTP frames and
+    authenticates post-handshake control records without waiting for more bytes.
+    `http2_connection.e2e`, `http_transport_poll.e2e` and the independent
+    `scripts/test_http2_session_peer.py` cover these boundaries.
+  - [ ] Public session batch/lazy-stream scheduling and multiplexed servers.
+  - [ ] HTTP/3 stream scheduling with reusable QPACK/QUIC ownership.
 - [x] Connection-owned dynamic HPACK encoding, bounded eviction, sensitive
   literals, and peer table-capacity shrink/grow updates.
 - [ ] Complete dynamic QPACK tables, instruction streams, blocked sections,

@@ -1,0 +1,18 @@
+// http_transport_poll.e2e - Buffered TLS polling authenticates control records without a blocking read.
+let pollTls (update: Bool) (eof: Bool) : Stdlib.Result.Result<String, String> =
+  let secret = Stdlib.Blob.__fromInt64List (Stdlib.List.repeatUnsafe 32 0L) in
+  Stdlib.__Tls13.trafficKeys secret |> Stdlib.Result.andThen (fun keys ->
+    let prefix = if update then Stdlib.__Tls13.sealRecord keys 22L (Stdlib.Blob.__fromInt64List [24L, 0L, 0L, 1L, 0L]) |> Stdlib.Result.map (fun sealed -> sealed.bytes) else Ok Stdlib.Blob.empty in
+    let nextKeys = if update then Stdlib.__Tls13KeyUpdate.__next secret keys.cipherSuite |> Stdlib.Result.map (fun pair -> let (_secret, keys) = pair in keys) else Ok keys in
+    prefix |> Stdlib.Result.andThen (fun prefix -> nextKeys |> Stdlib.Result.andThen (fun nextKeys ->
+      Stdlib.__Tls13.sealRecord nextKeys (if eof then 21L else 23L) (if eof then Stdlib.Blob.__fromInt64List [1L, 0L] else Stdlib.String.toBlob "ready") |> Stdlib.Result.map (fun sealed ->
+        let lifecycle = Stdlib.Stream.__new (fun _unit -> Some ()) (fun _unit -> ()) in
+        let connection = Stdlib.__Network.TcpConnection { lifecycle = lifecycle, watch = None, read = fun _length -> Error 11L, write = fun _bytes -> Ok () } in
+        let secure = Stdlib.__Tls13Client.SecureKeys { client = keys, server = keys, clientSecret = secret, serverSecret = secret, pending = Stdlib.Blob.concat [prefix, sealed.bytes] } in
+        let transport = Stdlib.__HttpTransport.secure connection secure in
+        let result = transport.poll () |> Stdlib.Result.map (fun available -> match available with | None -> "not ready" | Some bytes -> if Stdlib.Blob.__byteLength bytes == 0L then "EOF" else Stdlib.Blob.toString bytes |> Stdlib.Result.withDefault "invalid") in
+        let _ = Stdlib.__HttpTransport.close transport in result))) |> Stdlib.Result.andThen (fun result -> result))
+pollTls false false = Ok "ready"
+pollTls true false = Ok "ready"
+pollTls false true = Ok "EOF"
+pollTls true true = Ok "EOF"

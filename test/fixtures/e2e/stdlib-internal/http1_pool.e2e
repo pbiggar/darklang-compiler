@@ -2,7 +2,7 @@
 let origin (host: String) : Stdlib.__HttpWire.Url = Stdlib.__HttpWire.Url { scheme = "http", host = host, port = 80L, authority = host, target = "/" }
 let owner (counter: RawPtr) (idle: Bool) : Stdlib.__HttpTransport.Transport =
   let lifecycle = Stdlib.Stream.__new (fun _unit -> Some ()) (fun _unit -> Stdlib.Stream.__cellSet counter (Stdlib.Stream.__cellGet<Int64> counter + 1L)) in
-  Stdlib.__HttpTransport.Transport { lifecycle = lifecycle, idle = fun _unit -> idle, read = fun _unit -> Error "Unexpected read", write = fun _bytes -> Ok () }
+  Stdlib.__HttpTransport.Transport { lifecycle = lifecycle, idle = fun _unit -> idle, poll = fun _unit -> Ok None, read = fun _unit -> Error "Unexpected read", write = fun _bytes -> Ok () }
 let expiry (now: Int64) (idle: Bool) : (Bool * Int64) =
   let counter = Stdlib.Stream.__cellNew 0L in
   let state = Stdlib.__Http1Pool.put Stdlib.__Http1Pool.empty (origin "a") (owner counter idle) 1000L in

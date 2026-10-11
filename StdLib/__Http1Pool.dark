@@ -5,7 +5,8 @@ type Entry = { origin: Stdlib.__HttpWire.Url, transport: Stdlib.__HttpTransport.
 type State = { entries: List<Stdlib.__Http1Pool.Entry> }
 type Lease = { state: Stdlib.__Http1Pool.State, transport: Stdlib.Option.Option<Stdlib.__HttpTransport.Transport> }
 type Read = { response: Stdlib.HttpClient.Response, reusable: Bool }
-type Completed = { response: Stdlib.HttpClient.Response, transport: Stdlib.Option.Option<Stdlib.__HttpTransport.Transport>, http2: Stdlib.Option.Option<Stdlib.__Http2Pool.Entry> }
+type Reusable = Http1 of Stdlib.__HttpTransport.Transport | Http2 of Stdlib.__Http2Pool.Entry
+type Completed = { response: Stdlib.HttpClient.Response, reusable: Stdlib.Option.Option<Stdlib.__Http1Pool.Reusable> }
 
 val empty = Stdlib.__Http1Pool.State { entries = [] }
 
@@ -80,8 +81,8 @@ let __exchange (transport: Stdlib.__HttpTransport.Transport) (prepared: Stdlib.H
   match result with
   | Error error -> let _ = Stdlib.__HttpTransport.close transport in Error error
   | Ok read ->
-    if read.reusable && transport.idle () then Ok (Stdlib.__Http1Pool.Completed { response = read.response, transport = Some transport, http2 = None })
-    else let _ = Stdlib.__HttpTransport.close transport in Ok (Stdlib.__Http1Pool.Completed { response = read.response, transport = None, http2 = None })
+    if read.reusable && transport.idle () then Ok (Stdlib.__Http1Pool.Completed { response = read.response, reusable = Some (Http1 transport) })
+    else let _ = Stdlib.__HttpTransport.close transport in Ok (Stdlib.__Http1Pool.Completed { response = read.response, reusable = None })
 
 let perform (loan: Stdlib.Option.Option<Stdlib.__HttpTransport.Transport>) (trusted: Bool) (roots: Stdlib.Option.Option<List<Blob>>)
   (alternatives: List<Stdlib.__HttpsService.Service>) (prepared: Stdlib.HttpClient.__Prepared) (headers: List<(String * String)>) (body: Blob)
@@ -94,7 +95,7 @@ let perform (loan: Stdlib.Option.Option<Stdlib.__HttpTransport.Transport>) (trus
       | Quic ready ->
         Stdlib.__Http3Client.request ready prepared.method prepared.url headers body 10000L
           |> Stdlib.Result.mapError (fun _message -> Stdlib.HttpClient.RequestError.NetworkError)
-          |> Stdlib.Result.map (fun response -> Stdlib.__Http1Pool.Completed { response = response, transport = None, http2 = None })
+          |> Stdlib.Result.map (fun response -> Stdlib.__Http1Pool.Completed { response = response, reusable = None })
       | Tcp ((connection, authorities)) ->
         match authorities with
         | None -> Stdlib.__Http1Pool.__exchange (Stdlib.__HttpTransport.plain connection) prepared
@@ -110,4 +111,4 @@ let perform (loan: Stdlib.Option.Option<Stdlib.__HttpTransport.Transport>) (trus
               | Ok state ->
                 let entry = Stdlib.__Http2Pool.Entry { origin = prepared.url, transport = transport, state = state, idle = 0L } in
                 Stdlib.__Http2Pool.exchange entry prepared.method prepared.url headers body
-                  |> Stdlib.Result.map (fun completed -> Stdlib.__Http1Pool.Completed { response = completed.response, transport = None, http2 = completed.entry }))
+                  |> Stdlib.Result.map (fun completed -> Stdlib.__Http1Pool.Completed { response = completed.response, reusable = Stdlib.Option.map completed.entry (fun entry -> Stdlib.__Http1Pool.Reusable.Http2 entry) }))

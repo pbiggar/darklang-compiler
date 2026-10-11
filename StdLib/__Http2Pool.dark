@@ -19,8 +19,17 @@ let take (state: Stdlib.__Http2Pool.State) (origin: Stdlib.__HttpWire.Url) (now:
     if now < entry.idle || now - entry.idle >= 30000L || Stdlib.Option.isSome entry.state.wire.goAway || entry.state.next > 2147483647L then
       let _ = Stdlib.__HttpTransport.close entry.transport in lease
     else if Stdlib.__Http2Pool.__sameOrigin entry.origin origin then
-      if Stdlib.Option.isNone lease.entry && Stdlib.Option.isSome (Stdlib.Stream.next entry.transport.lifecycle) then { lease with entry = Some entry }
-      else let _ = Stdlib.__HttpTransport.close entry.transport in lease
+      if Stdlib.Option.isSome lease.entry || Stdlib.Option.isNone (Stdlib.Stream.next entry.transport.lifecycle) then
+        let _ = Stdlib.__HttpTransport.close entry.transport in lease
+      else
+        // Retire stale/GOAWAY owners before any request write. Reconnecting at
+        // this boundary does not replay an attempted request.
+        let state = { entry.state with wire = { entry.state.wire with frames = 0L } } in
+        match Stdlib.__Http2Connection.prepare entry.transport state with
+        | Error _message -> let _ = Stdlib.__HttpTransport.close entry.transport in lease
+        | Ok state ->
+          if Stdlib.Option.isSome state.wire.goAway then let _ = Stdlib.__HttpTransport.close entry.transport in lease
+          else { lease with entry = Some { entry with state = state } }
     else { lease with state = { lease.state with entries = lease.state.entries @ [entry] } })
 
 let __retain (entries: List<Stdlib.__Http2Pool.Entry>) (count: Int64) : List<Stdlib.__Http2Pool.Entry> =

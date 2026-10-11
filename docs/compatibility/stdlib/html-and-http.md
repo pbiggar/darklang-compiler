@@ -87,9 +87,10 @@ selection uses the Dark HTTP/2 implementation; absent ALPN and `http/1.1`
 retain the existing HTTP/1.1 path. Buffered and lazy streaming responses share
 frame validation, HPACK static/dynamic tables and Huffman decoding, SETTINGS,
 PING, flow-control windows, fragmented headers, informational responses and
-trailers. Duplicate response headers remain ordered. Each exchange owns one
-stream and connection; HTTP/2 pooling, multiplexing, server push, CONNECT tunnels,
-and OPTIONS asterisk-form are not implemented in this profile.
+trailers. Duplicate response headers remain ordered. Stateless and lazy calls
+own one stream and connection; buffered sessions additionally reuse HTTP/2
+owners as described below. Server push, CONNECT tunnels and OPTIONS
+asterisk-form are not implemented in this profile.
 
 `Stdlib.Http.Request.header` performs the upstream case-insensitive lookup.
 `Stdlib.HttpServer.get` and `post` construct handler records and `getMethod`
@@ -314,7 +315,23 @@ the native heap during that fallback check. `rsa_montgomery.e2e` and
 `python3 scripts/test_rsa_montgomery.py` check malformed inputs, carry boundaries
 and 48 independent Python `pow` vectors through 8192-bit moduli. This public
 exponent operation is not a private-key signing implementation.
-HTTP/2–3 multiplexing and pooling remain outside the single-exchange profile.
+Buffered sessions also keep up to eight idle authenticated HTTP/2 origins for
+thirty seconds, preserving HPACK, TLS keys, connection credit and monotonically
+allocated odd stream IDs. Checkout consumes ready control frames and retires
+closed or GOAWAY connections before any new request write. The internal
+`__Http2Connection.requestMany` scheduler supports up to 32 requests and respects
+peer concurrency limits. Upload windows and response parsing are stream-local;
+HPACK and connection credit remain shared. DATA sends rotate across active
+streams, out-of-order responses return in input order, resets affect only their
+stream and GOAWAY drains eligible streams without replaying refused requests.
+Each batch caps aggregate uploads and response buffering separately at 100 MiB.
+TCP/TLS polling retains incomplete records/frames and authenticates TLS control
+records without waiting for more bytes. `http2_connection.e2e`,
+`http_transport_poll.e2e` and `scripts/test_http2_session_peer.py` check reuse,
+reverse/interleaved 70 KiB replies, 140 KiB uploads, early responses, shared
+compression, stream limits, resets, GOAWAY and cleanup. Public session batch
+calls, lazy multiplexed bodies, multiplexed servers and HTTP/3 pooling/scheduling
+are not yet exposed by this implementation.
 Buffered and lazy HTTP/3 clients retain the latest packet-number/key state
 through terminal events and send encrypted H3_NO_ERROR on completion or early
 body closure. Closing keys stay available for three PTOs, capped at thirty

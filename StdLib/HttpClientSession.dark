@@ -1,4 +1,4 @@
-// HttpClientSession.dark - Owned alternative-service cache and bounded buffered HTTP/1.1 pool.
+// HttpClientSession.dark - Owned alternative-service cache and bounded buffered HTTP/1.1–2 pools.
 module Darklang.Stdlib.HttpClientSession
 
 type Session = {
@@ -55,19 +55,17 @@ let __request (cell: RawPtr) (lifecycle: Stream<Unit>) (trusted: Bool) (roots: S
           | Some entry ->
             let _ = match loan with | None -> () | Some transport -> Stdlib.__HttpTransport.close transport in
             Stdlib.__Http2Pool.exchange entry prepared.method prepared.url headers body
-              |> Stdlib.Result.map (fun completed -> Stdlib.__Http1Pool.Completed { response = completed.response, transport = None, http2 = completed.entry }) in
+              |> Stdlib.Result.map (fun completed -> Stdlib.__Http1Pool.Completed { response = completed.response, reusable = Stdlib.Option.map completed.entry (fun entry -> Stdlib.__Http1Pool.Reusable.Http2 entry) }) in
         result |> Stdlib.Result.map (fun completed ->
-          let _ = match completed.transport with
+          let _ = match completed.reusable with
           | None -> ()
-          | Some transport ->
+          | Some (Http1 transport) ->
             match Stdlib.__Network.monotonicMillis () with
             | Error _ -> Stdlib.__HttpTransport.close transport
             | Ok now ->
               let current = Stdlib.Stream.__cellGet<Stdlib.HttpClientSession.__State> cell in
-              Stdlib.Stream.__cellSet cell { current with pool = Stdlib.__Http1Pool.put current.pool prepared.url transport now } in
-          let _ = match completed.http2 with
-          | None -> ()
-          | Some entry ->
+              Stdlib.Stream.__cellSet cell { current with pool = Stdlib.__Http1Pool.put current.pool prepared.url transport now }
+          | Some (Http2 entry) ->
             match Stdlib.__Network.monotonicMillis () with
             | Error _ -> Stdlib.__HttpTransport.close entry.transport
             | Ok now ->

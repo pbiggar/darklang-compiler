@@ -4,6 +4,7 @@ module Darklang.Stdlib.__HttpTransport
 type Transport = {
   lifecycle: Stream<Unit>,
   idle: Unit -> Bool,
+  poll: Unit -> Stdlib.Result.Result<Stdlib.Option.Option<Blob>, String>,
   read: Unit -> Stdlib.Result.Result<Blob, String>,
   write: Blob -> Stdlib.Result.Result<Unit, String>
 }
@@ -24,6 +25,55 @@ let __idleSecure (connection: Stdlib.__Network.TcpConnection) (cell: RawPtr) (li
   | Some _ ->
     let state = Stdlib.Stream.__cellGet<Stdlib.__Tls13Client.ApplicationState> cell in
     Stdlib.Blob.__byteLength state.pending == 0L && Stdlib.__HttpTransport.__idleTcp connection
+
+// None means no application bytes are ready; Some empty is authenticated EOF
+// for TLS and ordinary EOF for TCP. Never wait for a partial TLS record here.
+let __pollTcp (connection: Stdlib.__Network.TcpConnection) : Stdlib.Result.Result<Stdlib.Option.Option<Blob>, String> =
+  match connection.watch with
+  | None -> Error "Transport has no native readiness registration"
+  | Some watch ->
+    Stdlib.__Network.waitSockets [Stdlib.__Network.Interest { watch = watch, readable = true, writable = false }] 0L
+      |> Stdlib.Result.mapError (fun _error -> "HTTP socket poll failed") |> Stdlib.Result.andThen (fun events ->
+        if events == [] then Ok None
+        else if Stdlib.List.any events (fun event -> event.failed) then Error "HTTP socket failed"
+        else if Stdlib.List.any events (fun event -> event.closed && Stdlib.Bool.not event.readable) then Ok (Some Stdlib.Blob.empty)
+        else Stdlib.__Network.readTcp connection 4096L |> Stdlib.Result.mapError (fun _error -> "HTTP socket read failed") |> Stdlib.Result.map (fun bytes -> Some bytes))
+
+let __pollSecureStep (connection: Stdlib.__Network.TcpConnection) (cell: RawPtr) (lifecycle: Stream<Unit>) (budget: Int64) : Stdlib.Result.Result<Stdlib.Option.Option<Blob>, String> =
+  if budget == 0L then Ok None
+  else
+    let state = Stdlib.Stream.__cellGet<Stdlib.__Tls13Client.ApplicationState> cell in
+    if state.records >= 8192L then Error "TLS HTTP response record limit exceeded"
+    else match Stdlib.__Tls13.parseRecord state.pending with
+    | Error (Invalid message) -> Error message
+    | Error Incomplete ->
+      Stdlib.__HttpTransport.__pollTcp connection |> Stdlib.Result.andThen (fun available ->
+        match available with
+        | None -> Ok None
+        | Some bytes ->
+          if Stdlib.Blob.__byteLength bytes == 0L then Error "TLS peer closed without close_notify"
+          else
+            let _ = Stdlib.Stream.__cellSet cell { state with pending = Stdlib.Blob.concat [state.pending, bytes] } in
+            Stdlib.__HttpTransport.__pollSecureStep connection cell lifecycle (budget - 1L))
+    | Ok record ->
+      Stdlib.__Tls13KeyUpdate.process state.updates state.keys record |> Stdlib.Result.andThen (fun processed ->
+        let next = Stdlib.__Tls13Client.ApplicationState { keys = processed.receive, pending = record.remaining, records = state.records + 1L, updates = processed.state } in
+        let _ = Stdlib.Stream.__cellSet cell next in
+        let replied = match processed.reply with | None -> Ok () | Some bytes -> Stdlib.__Tls13Client.__send connection bytes in
+        replied |> Stdlib.Result.andThen (fun _unit ->
+          if processed.closed then let _ = Stdlib.Stream.close lifecycle in Ok (Some Stdlib.Blob.empty)
+          else match processed.data with
+          | Some bytes when Stdlib.Blob.__byteLength bytes != 0L -> Ok (Some bytes)
+          | _ -> Stdlib.__HttpTransport.__pollSecureStep connection cell lifecycle (budget - 1L)))
+
+let __pollSecure (connection: Stdlib.__Network.TcpConnection) (cell: RawPtr) (lifecycle: Stream<Unit>) : Stdlib.Result.Result<Stdlib.Option.Option<Blob>, String> =
+  match Stdlib.Stream.next lifecycle with
+  | None -> Error "HTTP transport is closed"
+  | Some _ ->
+    let result = Stdlib.__HttpTransport.__pollSecureStep connection cell lifecycle 32L in
+    match result with
+    | Ok available -> Ok available
+    | Error message -> let _ = Stdlib.Stream.close lifecycle in Error message
 let __readSecure (connection: Stdlib.__Network.TcpConnection) (cell: RawPtr)
   (lifecycle: Stream<Unit>) : Stdlib.Result.Result<Blob, String> =
   match Stdlib.Stream.next lifecycle with
@@ -74,6 +124,7 @@ let secure (connection: Stdlib.__Network.TcpConnection) (keys: Stdlib.__Tls13Cli
   Stdlib.__HttpTransport.Transport {
     lifecycle = lifecycle,
     idle = fun _unit -> Stdlib.__HttpTransport.__idleSecure connection cell lifecycle,
+    poll = fun _unit -> Stdlib.__HttpTransport.__pollSecure connection cell lifecycle,
     read = fun _unit -> Stdlib.__HttpTransport.__readSecure connection cell lifecycle,
     write = fun bytes -> Stdlib.__HttpTransport.__writeSecure connection cell lifecycle bytes 0L }
 
@@ -106,6 +157,7 @@ let __plain (connection: Stdlib.__Network.TcpConnection)
   Stdlib.__HttpTransport.Transport {
     lifecycle = connection.lifecycle,
     idle = fun _unit -> Stdlib.__HttpTransport.__idleTcp connection,
+    poll = fun _unit -> Stdlib.__HttpTransport.__pollTcp connection,
     read = fun _unit -> Stdlib.__HttpTransport.__plainRead connection signals,
     write = fun bytes ->
       match Stdlib.__Network.writeTcp connection bytes with
@@ -121,6 +173,7 @@ let plainWithShutdown (connection: Stdlib.__Network.TcpConnection) (signals: Std
 let plainWithDeadline (connection: Stdlib.__Network.TcpConnection) (signals: Stdlib.__Network.ShutdownSignals) (deadline: Int64) : Stdlib.__HttpTransport.Transport =
   Stdlib.__HttpTransport.Transport { lifecycle = connection.lifecycle,
     idle = fun _unit -> Stdlib.__HttpTransport.__idleTcp connection,
+    poll = fun _unit -> Stdlib.__HttpTransport.__pollTcp connection,
     read = fun _unit -> Stdlib.__HttpTransport.__readPlain connection (Some signals) deadline,
     write = fun bytes -> match Stdlib.__Network.writeTcp connection bytes with | Ok () -> Ok () | Error _ -> Error "HTTP application write failed" }
 
