@@ -19,7 +19,7 @@ Stdlib.Html.nodeToString (Stdlib.Html.htmlTagNode "img" ([("alt", Some "<&"), ("
 Stdlib.Html.nodeToString (Stdlib.Html.htmlTagNode "IMG" ([]) ([])) = "<IMG></IMG>"
 Stdlib.Html.nodeToString (Stdlib.Html.comment "<raw>") = "<!-- <raw> -->"
 Stdlib.Html.nodeToString (Stdlib.Html.comment "before-->after") = "<!-- before- ->after -->"
-Stdlib.Html.nodeToString (Stdlib.Html.htmlTagNode "a" ([("title", Some "\"<&\'")]) ([])) = "<a title=\"&quot;&lt;&amp;&#x27;\"></a>"
+Stdlib.Html.nodeToString (Stdlib.Html.htmlTagNode "a" ([("title", Some "\"<&'")]) ([])) = "<a title=\"&quot;&lt;&amp;&#x27;\"></a>"
 Stdlib.Html.document ([Stdlib.Html.html ([]) ([])]) = "<!DOCTYPE html><html></html>"
 
 // Complete interpreter constructor family.
