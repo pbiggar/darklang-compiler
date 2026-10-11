@@ -85,7 +85,12 @@ checking enabled. The optional native-runtime diagnostic executable also builds.
 
 This is not a fully cross-platform-verified release. Darwin and Linux ARM64
 execution remain to be tested on suitable hosts. Full interpreter validation
-was blocked by a security review of an HTTP-test destination. A separate
+was initially blocked by a security review of an HTTP-test destination. The
+user-approved isolated retry of `httpclient/line125` subsequently ran, returning
+`Timeout` after five seconds instead of `NetworkError`. This VM lacks the
+fixture's required `banned-loopback.dark.test` to `127.0.0.1` hosts mapping, so
+the retry does not establish loopback-denial coverage. The expected result was
+not weakened and no production HTTP code was changed. A separate
 install-status check cannot obtain .NET executable identity without procfs in
 this VM. The parent performance gate rejects the existing snapshot's workload
 contract digest; Cachegrind also cannot run without real `/proc/self/maps`.
