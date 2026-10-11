@@ -82,15 +82,30 @@ owned-launch handshake rather than the retired process-output wire records.
 
 ## Verification and remaining platform gates
 
-The Linux x86-64 compiler suite passes 13,231 checks, including compiled leak
+The Linux x86-64 compiler suite passes 13,238 checks, including compiled leak
 checks and a closed-pipe regression that explicitly restores default SIGPIPE
 before re-executing Dark. `dune runtest` also passes. Interpreter CLI-library
-validation passes 361 checks in a freshly seeded, isolated test store;
-host-boundary validation passes 18, with one ignored. The 32 shared source units
+validation passes 358 checks in a reloaded, integrity-checked isolated test store
+(three tests of retired error-normalization helpers were removed). Parser and
+round-trip validation passes 583 checks, including private type/function naming;
+DateTime validation passes 222; Builtin validation passes 11.
+Host/security-boundary validation passes 18, with
+one ignored. The 17 shared source units
 are checked byte-for-byte, apart from the documented nested-module splitting.
 An owned-child capture/deadline/interactive smoke program compiles for Linux
 x86-64, Linux ARM64 and macOS ARM64; its Linux x86-64 execution passes with leak
 checking enabled. The optional native-runtime diagnostic executable also builds.
+
+The reduced API introduces no public top-level StdLib declarations relative to
+the pre-migration interpreter. All 16 added helper/forwarding modules are removed;
+necessary algorithms and their two implementation records use private `__` names
+in existing modules. Compiler tests verify that user code cannot call the private
+helpers or the deleted forwarding packages. Builtin names remain `syscallX` and
+`runtimeX`, without `__`.
+The interpreter parser/name resolver accepts private record and function names,
+matching the compiler's existing convention. The VM-only dotnet launcher permits
+an explicit managed-heap-limit override; package reload needed 2 GiB rather than
+its 1 GiB default in this VM. This does not change shipped runtime behavior.
 
 This is not a fully cross-platform-verified release. Darwin and Linux ARM64
 execution remain to be tested on suitable hosts. Full interpreter validation

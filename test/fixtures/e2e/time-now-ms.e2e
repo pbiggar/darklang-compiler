@@ -1,6 +1,0 @@
-// Monotonic milliseconds: nonnegative Int values, ordered calls and real elapsed time.
-Stdlib.Cli.Clock.monotonicMilliseconds () >= 0 = true
-(let first = Stdlib.Cli.Clock.monotonicMilliseconds () in let second = Stdlib.Cli.Clock.monotonicMilliseconds () in second >= first) = true
-(let first = Stdlib.Cli.Clock.monotonicMilliseconds () in let _ = Stdlib.Cli.Posix.sleep 25.0 in Stdlib.Cli.Clock.monotonicMilliseconds () - first >= 20) = true
-(let now () : Int = Stdlib.Cli.Clock.monotonicMilliseconds () in let elapsedMs (startMs: Int) : Int = now () - startMs in let start = now () in elapsedMs start >= 0) = true
-(let sample (remaining: Int) (previous: Int) : Bool = if remaining == 0 then true else let current = Stdlib.Cli.Clock.monotonicMilliseconds () in current >= previous && sample (remaining - 1) current in sample 256 (Stdlib.Cli.Clock.monotonicMilliseconds ())) = true
