@@ -208,6 +208,8 @@ let prettyPrintCliOperation = function
   | LIR.PosixInotifyAddWatch -> "PosixInotifyAddWatch"
   | LIR.PosixPpoll -> "PosixPpoll"
   | LIR.PosixPollDarwin -> "PosixPollDarwin"
+  | LIR.PosixKqueue -> "PosixKqueue"
+  | LIR.PosixKeventVnode -> "PosixKeventVnode"
 
 (*
    Pretty-print LIR register

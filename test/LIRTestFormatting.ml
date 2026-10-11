@@ -213,6 +213,8 @@ and cliOperation (value : LIR.cliOperation) =
   | LIR.PosixInotifyAddWatch -> union "CliOperation" "PosixInotifyAddWatch" []
   | LIR.PosixPpoll -> union "CliOperation" "PosixPpoll" []
   | LIR.PosixPollDarwin -> union "CliOperation" "PosixPollDarwin" []
+  | LIR.PosixKqueue -> union "CliOperation" "PosixKqueue" []
+  | LIR.PosixKeventVnode -> union "CliOperation" "PosixKeventVnode" []
 
 and label (value : LIR.label) =
   match value with LIR.Label field0 -> union "Label" "Label" [ text field0 ]

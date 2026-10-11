@@ -168,6 +168,8 @@ and cliOperation (value : MIR.cliOperation) =
   | MIR.PosixInotifyAddWatch -> union "CliOperation" "PosixInotifyAddWatch" []
   | MIR.PosixPpoll -> union "CliOperation" "PosixPpoll" []
   | MIR.PosixPollDarwin -> union "CliOperation" "PosixPollDarwin" []
+  | MIR.PosixKqueue -> union "CliOperation" "PosixKqueue" []
+  | MIR.PosixKeventVnode -> union "CliOperation" "PosixKeventVnode" []
 
 and label (value : MIR.label) =
   match value with MIR.Label field0 -> union "Label" "Label" [ text field0 ]

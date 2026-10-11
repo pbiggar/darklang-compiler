@@ -5,6 +5,8 @@ let __inotifyInit1 (flags: Int64) : Int64 = -38L
 let __inotifyAddWatch (fd: Int64) (path: RawPtr) (mask: Int64) : Int64 = -38L
 let __ppoll (fds: RawPtr) (count: Int64) (timeout: RawPtr) (mask: RawPtr) (size: Int64) : Int64 = -38L
 let __pollDarwin (fds: RawPtr) (count: Int64) (timeout: Int64) : Int64 = -38L
+let __kqueue () : Int64 = -38L
+let __keventVnode (fd: Int64) (changes: RawPtr) (count: Int64) (events: RawPtr) (capacity: Int64) (timeout: RawPtr) : Int64 = -38L
 
 let __clockGettime (clock: Int64) (buffer: RawPtr) : Int64 = -38L
 let __gettimeofday (buffer: RawPtr) (zone: RawPtr) (absolute: RawPtr) : Int64 = -38L

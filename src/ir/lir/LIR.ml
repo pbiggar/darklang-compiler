@@ -201,6 +201,8 @@ type cliOperation =
   | PosixInotifyAddWatch
   | PosixPpoll
   | PosixPollDarwin
+  | PosixKqueue
+  | PosixKeventVnode
 
 (*
    Basic block label (wrapper type for type safety)

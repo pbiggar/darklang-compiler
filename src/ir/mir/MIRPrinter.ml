@@ -172,6 +172,8 @@ let cliOperation = function
   | MIR.PosixInotifyAddWatch -> "PosixInotifyAddWatch"
   | MIR.PosixPpoll -> "PosixPpoll"
   | MIR.PosixPollDarwin -> "PosixPollDarwin"
+  | MIR.PosixKqueue -> "PosixKqueue"
+  | MIR.PosixKeventVnode -> "PosixKeventVnode"
 
 let prettyPrintCanonicalBufferKind = ANFPrinter.prettyPrintCanonicalBufferKind
 

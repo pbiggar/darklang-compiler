@@ -159,6 +159,8 @@ type cliOperation =
   | PosixInotifyAddWatch
   | PosixPpoll
   | PosixPollDarwin
+  | PosixKqueue
+  | PosixKeventVnode
 
 type label = Label of string
 

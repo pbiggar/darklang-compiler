@@ -324,6 +324,8 @@ let convertCliOperation (operation : ANF.cliOperation) =
   | ANF.PosixInotifyAddWatch -> MIR.PosixInotifyAddWatch
   | ANF.PosixPpoll -> MIR.PosixPpoll
   | ANF.PosixPollDarwin -> MIR.PosixPollDarwin
+  | ANF.PosixKqueue -> MIR.PosixKqueue
+  | ANF.PosixKeventVnode -> MIR.PosixKeventVnode
 
 (*
    Precomputed descriptions for primitive ops (avoids formatting on hot path)
@@ -929,6 +931,8 @@ let cliOperationName = function
   | ANF.PosixInotifyAddWatch -> "PosixInotifyAddWatch"
   | ANF.PosixPpoll -> "PosixPpoll"
   | ANF.PosixPollDarwin -> "PosixPollDarwin"
+  | ANF.PosixKqueue -> "PosixKqueue"
+  | ANF.PosixKeventVnode -> "PosixKeventVnode"
 
 (*
    Generate description for a CExpr (for coverage mapping)

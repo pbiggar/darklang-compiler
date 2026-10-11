@@ -174,6 +174,8 @@ let cliOperation = function
   | ANF.PosixInotifyAddWatch -> "PosixInotifyAddWatch"
   | ANF.PosixPpoll -> "PosixPpoll"
   | ANF.PosixPollDarwin -> "PosixPollDarwin"
+  | ANF.PosixKqueue -> "PosixKqueue"
+  | ANF.PosixKeventVnode -> "PosixKeventVnode"
 
 (*
    Pretty-print ANF complex expression

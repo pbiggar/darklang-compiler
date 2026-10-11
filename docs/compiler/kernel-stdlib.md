@@ -23,16 +23,28 @@ then bounded positional reads/writes. A fallback resumes at the amount already
 copied. EOF is determined by reads, not just the stat size (virtual files can have
 size zero). The fallback retains at most one 64 KiB data chunk. Close failures are
 reported only if there is no earlier failure. Copy is not an atomic snapshot of a
-concurrently mutable file. Darwin's create-by-path clone acceleration is still to
-be wired; its current descriptor clone reports unsupported and uses the fallback.
+concurrently mutable file. Darwin first attempts `fclonefileat` against the held
+source and checked destination parent, with no-follow/no-owner-copy flags. Existing
+destinations and unsupported filesystems use the descriptor-identity/bounded-copy
+path. Recursive directory cloning is not authorized by a single-file capability.
 
 The interpreter must retain path authorization, protected-store checks, and
 no-follow traversal at the trusted boundary. Raw numeric OS descriptors remain
-Native-gated. This migration is not ready to replace scoped-only FileSystem APIs
-until descriptor ownership can preserve their scoped permissions. It must not
-solve that problem by granting Native implicitly or weakening authorization.
+Native-gated. Execution-owned descriptor tokens are unguessable and non-transferable
+between executions. Every operation rechecks its current path grants and open
+mode. Close consumes ownership even on EINTR. Per-descriptor leases prevent reuse
+while a call is in flight without blocking unrelated descriptors behind a wait.
 
-Remaining migration work includes the scoped FileSystem boundary, raw system and
-clock records, efficient file watching/readiness, non-fork process I/O, removal of
-superseded host algorithms, cross-platform verification, and final regression and
+Clock records, uname/sysctl/affinity records, paths and directory records are decoded
+in shared Dark. Sleep retries use the kernel remainder; browser targets use raw
+event-loop runtime inputs. Linux file watches use inotify and ppoll, and Darwin
+uses kqueue with typed vnode registrations. Watched resource grants remain attached
+to the queue and are checked again on every read/wait. Mixed raw-vnode registration
+into a scoped queue is rejected. Dark owns notification coalescing and rearming.
+Linux held-inode registration fails closed without real procfs; the public file
+watch then retains its checked polling fallback. This VM cannot validate that
+held-inode event path or execute Darwin code.
+
+Remaining migration work includes non-fork process I/O, removal of superseded
+host algorithms, cross-platform execution verification, and final regression and
 performance gates. Checkpoints on this branch are not a completed release.

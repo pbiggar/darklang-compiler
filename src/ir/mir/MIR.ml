@@ -190,6 +190,8 @@ type cliOperation =
   | PosixInotifyAddWatch
   | PosixPpoll
   | PosixPollDarwin
+  | PosixKqueue
+  | PosixKeventVnode
 
 (*
    Basic block label (defined early for use in Phi nodes)

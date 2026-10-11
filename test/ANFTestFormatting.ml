@@ -413,6 +413,8 @@ and aNF_cliOperation (value : ANF.cliOperation) =
   | ANF.PosixInotifyAddWatch -> union "CliOperation" "PosixInotifyAddWatch" []
   | ANF.PosixPpoll -> union "CliOperation" "PosixPpoll" []
   | ANF.PosixPollDarwin -> union "CliOperation" "PosixPollDarwin" []
+  | ANF.PosixKqueue -> union "CliOperation" "PosixKqueue" []
+  | ANF.PosixKeventVnode -> union "CliOperation" "PosixKeventVnode" []
 
 and aNF_recordDescriptor (value : ANF.recordDescriptor) =
   record "RecordDescriptor"

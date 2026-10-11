@@ -104,6 +104,8 @@ let convertCliOperation operation =
   | MIR.PosixInotifyAddWatch -> LIR.PosixInotifyAddWatch
   | MIR.PosixPpoll -> LIR.PosixPpoll
   | MIR.PosixPollDarwin -> LIR.PosixPollDarwin
+  | MIR.PosixKqueue -> LIR.PosixKqueue
+  | MIR.PosixKeventVnode -> LIR.PosixKeventVnode
 
 [@@@warning "-4"]
 

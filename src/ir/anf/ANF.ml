@@ -196,6 +196,8 @@ type cliOperation =
   | PosixInotifyAddWatch
   | PosixPpoll
   | PosixPollDarwin
+  | PosixKqueue
+  | PosixKeventVnode
 
 (*
    Immutable nominal metadata carried through fixed-block lowering for field

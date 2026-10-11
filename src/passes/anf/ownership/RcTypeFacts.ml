@@ -338,6 +338,8 @@ let inferCExprType ctx expr =
       | A.PosixInotifyAddWatch
       | A.PosixPpoll
       | A.PosixPollDarwin
+      | A.PosixKqueue
+      | A.PosixKeventVnode
       ->
           Some AST.TInt64)
   | A.IfValue (_, yes, _) -> atom yes

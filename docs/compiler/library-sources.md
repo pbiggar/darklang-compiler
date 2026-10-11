@@ -14,7 +14,8 @@ The rows follow `library-sources.list` declaration order.
 
 The kernel-library migration is described in [kernel-stdlib.md](kernel-stdlib.md).
 Its native Builtin adapters are `Builtin/__Syscall.dark`, `__Runtime.dark`,
-`__KernelRecords.dark`, `__FileSyscall.dark`, and `__PathSyscall.dark`; shared Dark
+`__KernelRecords.dark`, `__FileSyscall.dark`, `__PathSyscall.dark`,
+`__SystemSyscall.dark`, `__ClockSyscall.dark`, and `__WatchSyscall.dark`; shared Dark
 algorithms are checked by `scripts/sync-kernel-stdlib.py`.
 
 A `__` filename marks compiler support or a private implementation fragment.

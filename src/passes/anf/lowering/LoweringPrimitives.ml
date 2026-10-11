@@ -479,6 +479,8 @@ let tryCliIntrinsic name args =
         | "Darklang.Stdlib.Cli.__Posix.__inotifyAddWatch" -> Some ANF.PosixInotifyAddWatch
         | "Darklang.Stdlib.Cli.__Posix.__ppoll" -> Some ANF.PosixPpoll
         | "Darklang.Stdlib.Cli.__Posix.__pollDarwin" -> Some ANF.PosixPollDarwin
+        | "Darklang.Stdlib.Cli.__Posix.__kqueue" -> Some ANF.PosixKqueue
+        | "Darklang.Stdlib.Cli.__Posix.__keventVnode" -> Some ANF.PosixKeventVnode
         | "Darklang.Stdlib.Cli.__Posix.__gettimeofday" -> Some ANF.PosixGettimeofday
         | "Darklang.Stdlib.Cli.__Posix.__nanosleep" -> Some ANF.PosixNanosleep
         | "Darklang.Stdlib.Cli.__Posix.__machTimebaseInfo" -> Some ANF.PosixMachTimebaseInfo

@@ -142,6 +142,8 @@ type cliOperation =
   | PosixInotifyAddWatch
   | PosixPpoll
   | PosixPollDarwin
+  | PosixKqueue
+  | PosixKeventVnode
 
 type recordDescriptor = {
   sourceTypeName : string;
