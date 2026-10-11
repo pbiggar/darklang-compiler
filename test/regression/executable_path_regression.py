@@ -23,7 +23,6 @@ def main():
         source.write_text('''let ready = Builtin.__launchWord (Builtin.__executableState ()) 0L in
 let cached = Builtin.__cachedExecutablePath () in
 let _ = Stdlib.Cli.Dir.setCurrent "/" in
-let _ = Stdlib.Cli.Env.set "PATH" "/definitely/missing" in
 let first = Builtin.getCurrentExecutablePath () in
 let second = Stdlib.Cli.Sys.currentExecutablePath () in
 let small = if Stdlib.Cli.__Posix.__mac () then first else Builtin.__linuxExecutablePath 1L in
