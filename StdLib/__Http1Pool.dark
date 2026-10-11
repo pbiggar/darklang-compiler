@@ -5,7 +5,7 @@ type Entry = { origin: Stdlib.__HttpWire.Url, transport: Stdlib.__HttpTransport.
 type State = { entries: List<Stdlib.__Http1Pool.Entry> }
 type Lease = { state: Stdlib.__Http1Pool.State, transport: Stdlib.Option.Option<Stdlib.__HttpTransport.Transport> }
 type Read = { response: Stdlib.HttpClient.Response, reusable: Bool }
-type Reusable = Http1 of Stdlib.__HttpTransport.Transport | Http2 of Stdlib.__Http2Pool.Entry
+type Reusable = Http1 of Stdlib.__HttpTransport.Transport | Http2 of Stdlib.__Http2Pool.Entry | Http3 of Stdlib.__Http3Pool.Entry
 type Completed = { response: Stdlib.HttpClient.Response, reusable: Stdlib.Option.Option<Stdlib.__Http1Pool.Reusable> }
 
 val empty = Stdlib.__Http1Pool.State { entries = [] }
@@ -93,9 +93,8 @@ let perform (loan: Stdlib.Option.Option<Stdlib.__HttpTransport.Transport>) (trus
     Stdlib.HttpClient.__connectAlternatives prepared.url trusted roots alternatives |> Stdlib.Result.andThen (fun connected ->
       match connected with
       | Quic ready ->
-        Stdlib.__Http3Client.request ready prepared.method prepared.url headers body 10000L
-          |> Stdlib.Result.mapError (fun _message -> Stdlib.HttpClient.RequestError.NetworkError)
-          |> Stdlib.Result.map (fun response -> Stdlib.__Http1Pool.Completed { response = response, reusable = None })
+        Stdlib.__Http3Pool.open ready prepared.method prepared.url headers body
+          |> Stdlib.Result.map (fun completed -> Stdlib.__Http1Pool.Completed { response = completed.response, reusable = Stdlib.Option.map completed.entry (fun entry -> Stdlib.__Http1Pool.Reusable.Http3 entry) })
       | Tcp ((connection, authorities)) ->
         match authorities with
         | None -> Stdlib.__Http1Pool.__exchange (Stdlib.__HttpTransport.plain connection) prepared

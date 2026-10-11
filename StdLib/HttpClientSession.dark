@@ -1,4 +1,4 @@
-// HttpClientSession.dark - Owned alternative-service cache and bounded buffered HTTP/1.1–2 pools.
+// HttpClientSession.dark - Owned alternative-service cache and bounded buffered HTTP/1.1–3 pools.
 module Darklang.Stdlib.HttpClientSession
 
 type Session = {
@@ -7,7 +7,7 @@ type Session = {
   clear: Unit -> Unit,
   close: Unit -> Unit
 }
-type __State = { cache: Stdlib.__AltSvcCache.State, pool: Stdlib.__Http1Pool.State, http2: Stdlib.__Http2Pool.State }
+type __State = { cache: Stdlib.__AltSvcCache.State, pool: Stdlib.__Http1Pool.State, http2: Stdlib.__Http2Pool.State, http3: Stdlib.__Http3Pool.State }
 
 let __lookup (cell: RawPtr) (url: String) (now: Int64) : List<Stdlib.__HttpsService.Service> =
   match Stdlib.__HttpWire.parseUrl url with
@@ -39,7 +39,8 @@ let __request (cell: RawPtr) (lifecycle: Stream<Unit>) (trusted: Bool) (roots: S
         let state = Stdlib.Stream.__cellGet<Stdlib.HttpClientSession.__State> cell in
         let lease = Stdlib.__Http1Pool.take state.pool prepared.url started in
         let h2 = Stdlib.__Http2Pool.take state.http2 prepared.url started in
-        let _ = Stdlib.Stream.__cellSet cell { state with pool = lease.state, http2 = h2.state } in
+        let h3 = Stdlib.__Http3Pool.take state.http3 prepared.url started in
+        let _ = Stdlib.Stream.__cellSet cell { state with pool = lease.state, http2 = h2.state, http3 = h3.state } in
         // Newly learned alternative services still get their establishment
         // attempt before an HTTP/1.1 fallback; never replay an attempted write.
         let loan =
@@ -50,7 +51,13 @@ let __request (cell: RawPtr) (lifecycle: Stream<Unit>) (trusted: Bool) (roots: S
         let h2loan = if alternatives == [] then h2.entry else match h2.entry with
           | None -> None
           | Some entry -> let _ = Stdlib.__HttpTransport.close entry.transport in None in
-        let result = match h2loan with
+        let result = match h3.entry with
+          | Some entry ->
+            let _ = match loan with | None -> () | Some transport -> Stdlib.__HttpTransport.close transport in
+            let _ = match h2loan with | None -> () | Some entry -> Stdlib.__HttpTransport.close entry.transport in
+            Stdlib.__Http3Pool.exchange entry prepared.method prepared.url headers body
+              |> Stdlib.Result.map (fun completed -> Stdlib.__Http1Pool.Completed { response = completed.response, reusable = Stdlib.Option.map completed.entry (fun entry -> Stdlib.__Http1Pool.Reusable.Http3 entry) })
+          | None -> match h2loan with
           | None -> Stdlib.__Http1Pool.perform loan trusted roots alternatives prepared headers body
           | Some entry ->
             let _ = match loan with | None -> () | Some transport -> Stdlib.__HttpTransport.close transport in
@@ -65,6 +72,12 @@ let __request (cell: RawPtr) (lifecycle: Stream<Unit>) (trusted: Bool) (roots: S
             | Ok now ->
               let current = Stdlib.Stream.__cellGet<Stdlib.HttpClientSession.__State> cell in
               Stdlib.Stream.__cellSet cell { current with pool = Stdlib.__Http1Pool.put current.pool prepared.url transport now }
+          | Some (Http3 entry) ->
+            match Stdlib.__Network.monotonicMillis () with
+            | Error _ -> Stdlib.__Http3.close entry.state
+            | Ok now ->
+              let current = Stdlib.Stream.__cellGet<Stdlib.HttpClientSession.__State> cell in
+              Stdlib.Stream.__cellSet cell { current with http3 = Stdlib.__Http3Pool.put current.http3 entry now }
           | Some (Http2 entry) ->
             match Stdlib.__Network.monotonicMillis () with
             | Error _ -> Stdlib.__HttpTransport.close entry.transport
@@ -93,16 +106,18 @@ let __clear (cell: RawPtr) (lifecycle: Stream<Unit>) : Unit =
     let state = Stdlib.Stream.__cellGet<Stdlib.HttpClientSession.__State> cell in
     let _ = Stdlib.__Http1Pool.close state.pool in
     let _ = Stdlib.__Http2Pool.close state.http2 in
-    Stdlib.Stream.__cellSet cell (Stdlib.HttpClientSession.__State { cache = Stdlib.__AltSvcCache.empty, pool = Stdlib.__Http1Pool.empty, http2 = Stdlib.__Http2Pool.empty })
+    let _ = Stdlib.__Http3Pool.close state.http3 in
+    Stdlib.Stream.__cellSet cell (Stdlib.HttpClientSession.__State { cache = Stdlib.__AltSvcCache.empty, pool = Stdlib.__Http1Pool.empty, http2 = Stdlib.__Http2Pool.empty, http3 = Stdlib.__Http3Pool.empty })
 
 let __dispose (cell: RawPtr) : Unit =
   let state = Stdlib.Stream.__cellGet<Stdlib.HttpClientSession.__State> cell in
   let _ = Stdlib.__Http1Pool.close state.pool in
   let _ = Stdlib.__Http2Pool.close state.http2 in
+  let _ = Stdlib.__Http3Pool.close state.http3 in
   Stdlib.Stream.__cellDispose<Stdlib.HttpClientSession.__State> cell
 
 let __create (trusted: Bool) (roots: Stdlib.Option.Option<List<Blob>>) : Stdlib.HttpClientSession.Session =
-  let cell = Stdlib.Stream.__cellNew (Stdlib.HttpClientSession.__State { cache = Stdlib.__AltSvcCache.empty, pool = Stdlib.__Http1Pool.empty, http2 = Stdlib.__Http2Pool.empty }) in
+  let cell = Stdlib.Stream.__cellNew (Stdlib.HttpClientSession.__State { cache = Stdlib.__AltSvcCache.empty, pool = Stdlib.__Http1Pool.empty, http2 = Stdlib.__Http2Pool.empty, http3 = Stdlib.__Http3Pool.empty }) in
   let lifecycle = Stdlib.Stream.__new (fun _unit -> Some ()) (fun _unit -> Stdlib.HttpClientSession.__dispose cell) in
   Stdlib.HttpClientSession.Session {
     request = fun method url headers body -> Stdlib.HttpClientSession.__request cell lifecycle trusted roots method url headers body,
