@@ -110,28 +110,17 @@ type condition = EQ | NE | LT | GT | LE | GE | ULT | UGT | ULE | UGE
 type rcKind = GenericHeap | StreamHeap | TaggedList | DictHeap | ClosureHeap
 
 type cliOperation =
-  | Execute
-  | RunProcess
   | HostOS
   | HostArchitecture
-  | Hostname
   | GetEnv
   | GetEnvironmentPacked
   | StdinState
-  | DirectoryCurrent
-  | DirectoryListPacked
-  | FileIsDirectory
-  | FileCreateExclusive
   | GetArgv
   | Kill
   | GetPid
   | StartupStack
   | ExecutableState
   | GetUid
-  | CpuCount
-  | SpawnProcess
-  | ProcessIO
-  | TerminateProcess
   | SocketTcp4
   | SocketTcp6
   | SocketUdp4
@@ -205,7 +194,6 @@ type cliOperation =
   | ChildState
   | ChildLaunch
   | PosixWait4
-  | PosixFcntl
   | PosixKeventVnode
 
 (*
@@ -603,8 +591,6 @@ type functionCodegenFacts = {
     arm64SlotInitRootRetainTarget option SemanticTypeMap.t option;
   needsCliRuntimeState : bool;
   needsCliArgvHelper : bool;
-  needsCliExecuteHelper : bool;
-  needsCliRunProcessHelper : bool;
   needsCliProcessLifecycleHelpers : bool;
   needsRuntimeErrorHelper : bool;
   arm64RcHelperRequirements : arm64RcHelperRequirements option;
@@ -764,8 +750,6 @@ let analyzeFunctionCodegenFacts (func : functionDef) =
   let rawSlotInitTypes = ref MemoryPlanning.SemanticTypeSet.empty in
   let needsCliRuntimeState = ref false in
   let needsCliArgvHelper = ref false in
-  let needsCliExecuteHelper = ref false in
-  let needsCliRunProcessHelper = ref false in
   let needsCliProcessLifecycleHelpers = ref false in
   LabelMap.iter
     (fun _ block ->
@@ -800,12 +784,7 @@ let analyzeFunctionCodegenFacts (func : functionDef) =
           | CliNative (_, operation, _) ->
               needsCliRuntimeState := true;
               if operation = GetArgv then needsCliArgvHelper := true;
-              if operation = Execute then needsCliExecuteHelper := true;
-              if operation = RunProcess then needsCliRunProcessHelper := true;
-              if
-                operation = SpawnProcess || operation = ProcessIO
-                || operation = TerminateProcess
-                || operation = ChildLaunch
+              if operation = ChildLaunch
               then needsCliProcessLifecycleHelpers := true
           | _ -> ())
         block.instrs)
@@ -822,8 +801,6 @@ let analyzeFunctionCodegenFacts (func : functionDef) =
     arm64RawSlotInitRetainTargets = None;
     needsCliRuntimeState = !needsCliRuntimeState;
     needsCliArgvHelper = !needsCliArgvHelper;
-    needsCliExecuteHelper = !needsCliExecuteHelper;
-    needsCliRunProcessHelper = !needsCliRunProcessHelper;
     needsCliProcessLifecycleHelpers = !needsCliProcessLifecycleHelpers;
     needsRuntimeErrorHelper =
       LabelMap.exists

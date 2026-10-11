@@ -322,28 +322,17 @@ and aNF_returnOwnership (value : ANF.returnOwnership) =
 
 and aNF_cliOperation (value : ANF.cliOperation) =
   match value with
-  | ANF.Execute -> union "CliOperation" "Execute" []
   | ANF.StartupStack -> union "CliOperation" "StartupStack" []
   | ANF.ExecutableState -> union "CliOperation" "ExecutableState" []
-  | ANF.RunProcess -> union "CliOperation" "RunProcess" []
   | ANF.HostOS -> union "CliOperation" "HostOS" []
   | ANF.HostArchitecture -> union "CliOperation" "HostArchitecture" []
-  | ANF.Hostname -> union "CliOperation" "Hostname" []
   | ANF.GetEnv -> union "CliOperation" "GetEnv" []
   | ANF.GetEnvironmentPacked -> union "CliOperation" "GetEnvironmentPacked" []
   | ANF.StdinState -> union "CliOperation" "StdinState" []
-  | ANF.DirectoryCurrent -> union "CliOperation" "DirectoryCurrent" []
-  | ANF.DirectoryListPacked -> union "CliOperation" "DirectoryListPacked" []
-  | ANF.FileIsDirectory -> union "CliOperation" "FileIsDirectory" []
-  | ANF.FileCreateExclusive -> union "CliOperation" "FileCreateExclusive" []
   | ANF.GetArgv -> union "CliOperation" "GetArgv" []
   | ANF.Kill -> union "CliOperation" "Kill" []
   | ANF.GetPid -> union "CliOperation" "GetPid" []
   | ANF.GetUid -> union "CliOperation" "GetUid" []
-  | ANF.CpuCount -> union "CliOperation" "CpuCount" []
-  | ANF.SpawnProcess -> union "CliOperation" "SpawnProcess" []
-  | ANF.ProcessIO -> union "CliOperation" "ProcessIO" []
-  | ANF.TerminateProcess -> union "CliOperation" "TerminateProcess" []
   | ANF.SocketTcp4 -> union "CliOperation" "SocketTcp4" []
   | ANF.SocketTcp6 -> union "CliOperation" "SocketTcp6" []
   | ANF.SocketUdp4 -> union "CliOperation" "SocketUdp4" []
@@ -417,7 +406,6 @@ and aNF_cliOperation (value : ANF.cliOperation) =
   | ANF.ChildState -> union "CliOperation" "ChildState" []
   | ANF.ChildLaunch -> union "CliOperation" "ChildLaunch" []
   | ANF.PosixWait4 -> union "CliOperation" "PosixWait4" []
-  | ANF.PosixFcntl -> union "CliOperation" "PosixFcntl" []
   | ANF.PosixKeventVnode -> union "CliOperation" "PosixKeventVnode" []
 
 and aNF_recordDescriptor (value : ANF.recordDescriptor) =

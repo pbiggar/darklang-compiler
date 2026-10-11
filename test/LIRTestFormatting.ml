@@ -122,28 +122,17 @@ and rcKind (value : LIR.rcKind) =
 
 and cliOperation (value : LIR.cliOperation) =
   match value with
-  | LIR.Execute -> union "CliOperation" "Execute" []
   | LIR.StartupStack -> union "CliOperation" "StartupStack" []
   | LIR.ExecutableState -> union "CliOperation" "ExecutableState" []
-  | LIR.RunProcess -> union "CliOperation" "RunProcess" []
   | LIR.HostOS -> union "CliOperation" "HostOS" []
   | LIR.HostArchitecture -> union "CliOperation" "HostArchitecture" []
-  | LIR.Hostname -> union "CliOperation" "Hostname" []
   | LIR.GetEnv -> union "CliOperation" "GetEnv" []
   | LIR.GetEnvironmentPacked -> union "CliOperation" "GetEnvironmentPacked" []
   | LIR.StdinState -> union "CliOperation" "StdinState" []
-  | LIR.DirectoryCurrent -> union "CliOperation" "DirectoryCurrent" []
-  | LIR.DirectoryListPacked -> union "CliOperation" "DirectoryListPacked" []
-  | LIR.FileIsDirectory -> union "CliOperation" "FileIsDirectory" []
-  | LIR.FileCreateExclusive -> union "CliOperation" "FileCreateExclusive" []
   | LIR.GetArgv -> union "CliOperation" "GetArgv" []
   | LIR.Kill -> union "CliOperation" "Kill" []
   | LIR.GetPid -> union "CliOperation" "GetPid" []
   | LIR.GetUid -> union "CliOperation" "GetUid" []
-  | LIR.CpuCount -> union "CliOperation" "CpuCount" []
-  | LIR.SpawnProcess -> union "CliOperation" "SpawnProcess" []
-  | LIR.ProcessIO -> union "CliOperation" "ProcessIO" []
-  | LIR.TerminateProcess -> union "CliOperation" "TerminateProcess" []
   | LIR.SocketTcp4 -> union "CliOperation" "SocketTcp4" []
   | LIR.SocketTcp6 -> union "CliOperation" "SocketTcp6" []
   | LIR.SocketUdp4 -> union "CliOperation" "SocketUdp4" []
@@ -217,7 +206,6 @@ and cliOperation (value : LIR.cliOperation) =
   | LIR.ChildState -> union "CliOperation" "ChildState" []
   | LIR.ChildLaunch -> union "CliOperation" "ChildLaunch" []
   | LIR.PosixWait4 -> union "CliOperation" "PosixWait4" []
-  | LIR.PosixFcntl -> union "CliOperation" "PosixFcntl" []
   | LIR.PosixKeventVnode -> union "CliOperation" "PosixKeventVnode" []
 
 and label (value : LIR.label) =
@@ -878,8 +866,6 @@ and functionCodegenFacts (value : LIR.functionCodegenFacts) =
           value.LIR.arm64RawSlotInitRetainTargets );
       ("NeedsCliRuntimeState", boolean value.LIR.needsCliRuntimeState);
       ("NeedsCliArgvHelper", boolean value.LIR.needsCliArgvHelper);
-      ("NeedsCliExecuteHelper", boolean value.LIR.needsCliExecuteHelper);
-      ("NeedsCliRunProcessHelper", boolean value.LIR.needsCliRunProcessHelper);
       ( "NeedsCliProcessLifecycleHelpers",
         boolean value.LIR.needsCliProcessLifecycleHelpers );
       ("NeedsRuntimeErrorHelper", boolean value.LIR.needsRuntimeErrorHelper);

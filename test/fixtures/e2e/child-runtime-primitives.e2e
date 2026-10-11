@@ -7,3 +7,5 @@ Builtin.runtimeChildDescriptors (-1) = Error 9
 let outcome = Stdlib.Cli.execute "head -c 100000 /dev/zero; head -c 100000 /dev/zero >&2" in (Stdlib.String.length outcome.stdout, Stdlib.String.length outcome.stderr) = (100000, 100000)
 // Pipe allocation must work even when the launching process has closed stdin.
 let _ = Builtin.syscallClose 0 in match Stdlib.Cli.Process.run "/bin/cat" [] with | Ok output -> (output.exitCode, output.stdout, output.stderr) | Error error -> (-1, "", error.message) = (0, "", "") isolated=true
+// Writing after the child closes its stdin must report EPIPE, not kill Dark.
+let handle = Stdlib.Cli.Process.spawn "exec 0<&-; printf ready; sleep 1" in let _ = Stdlib.Cli.Clock.sleepMilliseconds 100.0 in let response = Stdlib.Cli.Process.communicate handle "input" in let _ = Stdlib.Cli.Process.terminate handle in response.exitCode = -1 isolated=true

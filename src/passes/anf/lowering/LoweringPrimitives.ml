@@ -390,32 +390,22 @@ let tryCliIntrinsic name args =
   | _ ->
       let operation =
         match name with
-        | "Darklang.Stdlib.Cli.__execute" -> Some ANF.Execute
-        | "Darklang.Stdlib.Cli.__runProcess" -> Some ANF.RunProcess
         | "Darklang.Stdlib.Cli.__hostOSCode" -> Some ANF.HostOS
         | "Darklang.Stdlib.Cli.__hostArchitectureCode" ->
             Some ANF.HostArchitecture
-        | "Darklang.Stdlib.Cli.__hostname" -> Some ANF.Hostname
         | "Builtin.__stdinState" -> Some ANF.StdinState
         | "Builtin.__startupStack" -> Some ANF.StartupStack
         | "Builtin.__childState" -> Some ANF.ChildState
         | "Builtin.__childLaunch" -> Some ANF.ChildLaunch
         | "Builtin.__childWait4" -> Some ANF.PosixWait4
-        | "Builtin.__childFcntl" -> Some ANF.PosixFcntl
         | "Builtin.__executableState" -> Some ANF.ExecutableState
         | "Darklang.Stdlib.Cli.__getenv" -> Some ANF.GetEnv
-        | "Darklang.Stdlib.Cli.__createExclusive" ->
-            Some ANF.FileCreateExclusive
         | "Darklang.Stdlib.Cli.__environmentPacked" ->
             Some ANF.GetEnvironmentPacked
         | "Darklang.Stdlib.Cli.__argv" -> Some ANF.GetArgv
         | "Darklang.Stdlib.Cli.__kill" -> Some ANF.Kill
         | "Darklang.Stdlib.Cli.__getpid" -> Some ANF.GetPid
         | "Darklang.Stdlib.Cli.__getuid" -> Some ANF.GetUid
-        | "Darklang.Stdlib.Cli.__cpuCount" -> Some ANF.CpuCount
-        | "Darklang.Stdlib.Cli.__spawnProcess" -> Some ANF.SpawnProcess
-        | "Darklang.Stdlib.Cli.__processIO" -> Some ANF.ProcessIO
-        | "Darklang.Stdlib.Cli.__terminateProcess" -> Some ANF.TerminateProcess
         | "Darklang.Stdlib.__Network.__tcp4Socket" -> Some ANF.SocketTcp4
         | "Darklang.Stdlib.__Network.__tcp6Socket" -> Some ANF.SocketTcp6
         | "Darklang.Stdlib.__Network.__udp4Socket" -> Some ANF.SocketUdp4

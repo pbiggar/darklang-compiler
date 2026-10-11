@@ -61,6 +61,12 @@ before duplication, including when the parent starts with closed stdio slots.
 Darwin and Linux launch adapters are generated; Darwin execution remains untested
 in this Linux VM. Windows/browser captured processes are explicitly unsupported.
 
-Remaining work includes retirement of unreachable legacy compiler effects,
-cross-platform execution verification, and final regression and performance
-gates. Checkpoints on this branch are not a completed release.
+The former native execute/run/spawn/communicate/terminate effects and their
+monolithic assembly helpers have been removed, along with packed-directory,
+hostname, CPU-count and exclusive-create effects. Those behaviors are composed
+in shared Dark over the kernel leaves. Optional backend tests now target the
+owned-launch handshake rather than the retired process-output wire records.
+
+Remaining work includes cross-platform execution verification and final
+regression and performance gates. Checkpoints on this branch are not a
+completed release.

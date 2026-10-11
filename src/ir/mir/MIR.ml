@@ -99,28 +99,17 @@ type unaryOp = Neg | Not | BitNot
 type rcKind = GenericHeap | StreamHeap | TaggedList | DictHeap | ClosureHeap
 
 type cliOperation =
-  | Execute
-  | RunProcess
   | HostOS
   | HostArchitecture
-  | Hostname
   | GetEnv
   | GetEnvironmentPacked
   | StdinState
-  | DirectoryCurrent
-  | DirectoryListPacked
-  | FileIsDirectory
-  | FileCreateExclusive
   | GetArgv
   | Kill
   | GetPid
   | StartupStack
   | ExecutableState
   | GetUid
-  | CpuCount
-  | SpawnProcess
-  | ProcessIO
-  | TerminateProcess
   | SocketTcp4
   | SocketTcp6
   | SocketUdp4
@@ -194,7 +183,6 @@ type cliOperation =
   | ChildState
   | ChildLaunch
   | PosixWait4
-  | PosixFcntl
   | PosixKeventVnode
 
 (*

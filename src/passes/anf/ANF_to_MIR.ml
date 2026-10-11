@@ -233,28 +233,17 @@ let convertUnaryOp (op : ANF.unaryOp) =
 
 let convertCliOperation (operation : ANF.cliOperation) =
   match operation with
-  | ANF.Execute -> MIR.Execute
-  | ANF.RunProcess -> MIR.RunProcess
   | ANF.HostOS -> MIR.HostOS
   | ANF.HostArchitecture -> MIR.HostArchitecture
-  | ANF.Hostname -> MIR.Hostname
   | ANF.GetEnv -> MIR.GetEnv
   | ANF.GetEnvironmentPacked -> MIR.GetEnvironmentPacked
   | ANF.StdinState -> MIR.StdinState
-  | ANF.DirectoryCurrent -> MIR.DirectoryCurrent
-  | ANF.DirectoryListPacked -> MIR.DirectoryListPacked
-  | ANF.FileIsDirectory -> MIR.FileIsDirectory
-  | ANF.FileCreateExclusive -> MIR.FileCreateExclusive
   | ANF.GetArgv -> MIR.GetArgv
   | ANF.Kill -> MIR.Kill
   | ANF.GetPid -> MIR.GetPid
   | ANF.StartupStack -> MIR.StartupStack
   | ANF.ExecutableState -> MIR.ExecutableState
   | ANF.GetUid -> MIR.GetUid
-  | ANF.CpuCount -> MIR.CpuCount
-  | ANF.SpawnProcess -> MIR.SpawnProcess
-  | ANF.ProcessIO -> MIR.ProcessIO
-  | ANF.TerminateProcess -> MIR.TerminateProcess
   | ANF.SocketTcp4 -> MIR.SocketTcp4
   | ANF.SocketTcp6 -> MIR.SocketTcp6
   | ANF.SocketUdp4 -> MIR.SocketUdp4
@@ -328,7 +317,6 @@ let convertCliOperation (operation : ANF.cliOperation) =
   | ANF.ChildState -> MIR.ChildState
   | ANF.ChildLaunch -> MIR.ChildLaunch
   | ANF.PosixWait4 -> MIR.PosixWait4
-  | ANF.PosixFcntl -> MIR.PosixFcntl
   | ANF.PosixKeventVnode -> MIR.PosixKeventVnode
 
 (*
@@ -844,28 +832,17 @@ let operandType builder = function
             Crash.crash (Printf.sprintf "operandType: missing type for v%d" id))
 
 let cliOperationName = function
-  | ANF.Execute -> "Execute"
-  | ANF.RunProcess -> "RunProcess"
   | ANF.HostOS -> "HostOS"
   | ANF.HostArchitecture -> "HostArchitecture"
-  | ANF.Hostname -> "Hostname"
   | ANF.GetEnv -> "GetEnv"
   | ANF.GetEnvironmentPacked -> "GetEnvironmentPacked"
   | ANF.StdinState -> "StdinState"
-  | ANF.DirectoryCurrent -> "DirectoryCurrent"
-  | ANF.DirectoryListPacked -> "DirectoryListPacked"
-  | ANF.FileIsDirectory -> "FileIsDirectory"
-  | ANF.FileCreateExclusive -> "FileCreateExclusive"
   | ANF.GetArgv -> "GetArgv"
   | ANF.Kill -> "Kill"
   | ANF.GetPid -> "GetPid"
   | ANF.StartupStack -> "StartupStack"
   | ANF.ExecutableState -> "ExecutableState"
   | ANF.GetUid -> "GetUid"
-  | ANF.CpuCount -> "CpuCount"
-  | ANF.SpawnProcess -> "SpawnProcess"
-  | ANF.ProcessIO -> "ProcessIO"
-  | ANF.TerminateProcess -> "TerminateProcess"
   | ANF.SocketTcp4 -> "SocketTcp4"
   | ANF.SocketTcp6 -> "SocketTcp6"
   | ANF.SocketUdp4 -> "SocketUdp4"
@@ -939,7 +916,6 @@ let cliOperationName = function
   | ANF.ChildState -> "ChildState"
   | ANF.ChildLaunch -> "ChildLaunch"
   | ANF.PosixWait4 -> "PosixWait4"
-  | ANF.PosixFcntl -> "PosixFcntl"
   | ANF.PosixKeventVnode -> "PosixKeventVnode"
 
 (*

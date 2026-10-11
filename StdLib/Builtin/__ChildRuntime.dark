@@ -4,7 +4,6 @@ module Builtin
 let __childState () : RawPtr = __word_to_rawptr 0L
 let __childLaunch (argv: RawPtr) (environment: RawPtr) (inheritTerminal: Int64) (ports: RawPtr) : Int64 = -38L
 let __childWait4 (pid: Int64) (status: RawPtr) (options: Int64) (usage: RawPtr) : Int64 = -38L
-let __childFcntl (fd: Int64) (command: Int64) (argument: Int64) : Int64 = -38L
 
 let __childAddress (index: Int64) : RawPtr =
     __word_to_rawptr (__rawptr_to_word (Builtin.__childState ()) + index * 64L)

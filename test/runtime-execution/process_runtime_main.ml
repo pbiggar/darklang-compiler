@@ -682,10 +682,6 @@ let nativeEffectChecks () =
   check "2" (emit LIR.HostArchitecture [] @ print);
   check "1" (emit LIR.GetPid [] @ printPositive);
   check (string_of_int (Unix.getuid ())) (emit LIR.GetUid [] @ print);
-  check "1" (emit LIR.CpuCount [] @ printPositive);
-  check (Sys.getcwd ()) (emit LIR.DirectoryCurrent [] @ text);
-  check (Unix.gethostname ())
-    (emit LIR.Hostname [] @ [ S.LDR (S.X19, S.X19, 8) ] @ text);
   check "1"
     (instructions
        (ARM64EmitNativeEffects.emitDateTimeNow ctx (LIR.Physical LIR.X19))
@@ -705,17 +701,6 @@ let nativeEffectChecks () =
   Unix.putenv "PORT_NATIVE_EFFECT_FIXTURE" "hé😀";
   check "hé😀"
     (emit LIR.GetEnv [ LIR.StringSymbol "PORT_NATIVE_EFFECT_FIXTURE" ] @ text);
-  check "1"
-    (emit LIR.FileIsDirectory [ LIR.StringSymbol (Sys.getcwd ()) ] @ print);
-  let path = Filename.temp_file "port-exclusive-" ".file" in
-  Sys.remove path;
-  Fun.protect
-    ~finally:(fun () -> if Sys.file_exists path then Sys.remove path)
-    (fun () ->
-      check "0" (emit LIR.FileCreateExclusive [ LIR.StringSymbol path ] @ print);
-      if not (Sys.file_exists path) then
-        failwith "FileCreateExclusive did not create file";
-      check "17" (emit LIR.FileCreateExclusive [ LIR.StringSymbol path ] @ print));
   check "8"
     (ARM64Operands.loadImmediate S.X20 8L
     @ instructions
@@ -4761,10 +4746,6 @@ let x64NativeEffectChecks () =
       check "P"
         (cli LIR.GetUid [] @ compare reg (Int64.of_int (Unix.getuid ())) @ pass);
       check "P"
-        (cli LIR.CpuCount []
-        @ [ X.CMP_imm (reg, 0l); X.Jcc (X.LE, "failed") ]
-        @ pass);
-      check "P"
         ([ X.LEA (X.R11, X.RBP, 2000l) ]
         @ cli LIR.SecureRandomFill [ LIR.Reg (LIR.Physical LIR.X8); LIR.Imm 8L ]
         @ compare reg 8L @ pass);
@@ -4816,56 +4797,6 @@ let x64NativeEffectChecks () =
             @ compare X.RAX bits @ pass))
         [ -1.; 0.; 0.1; 2. ])
     [ LIR.D0; LIR.D14; LIR.D15 ];
-  let path = Filename.temp_file "port-x64-native-file-" ".bin" in
-  let exclusive = path ^ ".exclusive" in
-  let directory = path ^ ".dir" in
-  Fun.protect
-    ~finally:(fun () ->
-      if Sys.file_exists path then Sys.remove path;
-      if Sys.file_exists exclusive then Sys.remove exclusive;
-      if Sys.file_exists directory then Unix.rmdir directory)
-    (fun () ->
-      Unix.mkdir directory 0o700;
-      List.iter
-        (fun physical ->
-          let dest = LIR.Physical physical
-          and reg = X64Operands.lirRegToX86 physical in
-          List.iter
-            (fun (value, expected) ->
-              check "P"
-                (checked
-                   (E.emitCliNative ctx dest LIR.FileIsDirectory
-                      [ LIR.StringSymbol value ])
-                @ compare reg expected @ pass))
-            [ (path, 0L); (directory, 1L); (path ^ ".missing", 0L) ])
-        gps;
-      check "P"
-        (checked
-           (E.emitCliNative ctx (LIR.Physical LIR.X19) LIR.FileCreateExclusive
-              [ LIR.StringSymbol exclusive ])
-        @ compare X.RBX 0L @ pass);
-      if
-        (not (Sys.file_exists exclusive))
-        || (Unix.stat exclusive).Unix.st_perm <> 0o600
-      then failwith "x64 exclusive create did not create private file";
-      check "P"
-        (checked
-           (E.emitCliNative ctx (LIR.Physical LIR.X19) LIR.FileCreateExclusive
-              [ LIR.StringSymbol exclusive ])
-        @ compare X.RBX 17L @ pass);
-      check "P"
-        (checked
-           (E.emitCliNative ctx (LIR.Physical LIR.X19) LIR.FileCreateExclusive
-              [ LIR.StringSymbol (String.make 4096 'a') ])
-        @ compare X.RBX 36L @ pass));
-  check (Unix.gethostname ())
-    (checked (E.emitCliNative ctx (LIR.Physical LIR.X19) LIR.Hostname [])
-    @ [ X.MOV_load (X.RAX, X.RBX, 0l) ]
-    @ compare X.RAX 0L
-    @ [ X.MOV_load (X.RAX, X.RBX, 8l) ]
-    @ checked
-        (X64EmitPrinting.emitPrintHeapStringNoNewline ctx (LIR.Physical LIR.X0))
-    );
   check "P"
     (checked
        (E.emitCliNative ctx (LIR.Physical LIR.X19) LIR.Kill
@@ -4904,21 +4835,13 @@ let x64ProcessChecks () =
   let text reg =
     checked (X64EmitInteger.emitStdoutWrite ctx (LIR.Reg reg) false)
   in
-  let textX reg = text (LIR.Physical reg) in
-  let printField offset =
-    [ X.MOV_load (X.R12, X.RBX, Int32.of_int offset) ] @ textX LIR.X20
-  in
   let pass = X64Operands.genPrintChars [ 'P' ] in
   let helpers =
     P.generateCliArgvHelper ()
     @ P.generateCliEnvironmentPackedHelper false
-    @ P.generateCliDirectoryCurrentHelper false
-    @ P.generateCliDirectoryListHelper false
     @ P.generateCliGetEnvHelper false
-    @ P.generateLinuxCliSpawnProcessHelper ()
-    @ P.generateLinuxCliProcessLifecycleHelpers false
-    @ P.generateLinuxCliRunProcessHelper false
-    @ P.generateLinuxCliExecuteHelper false
+    @ P.generateChildLaunchHelper ()
+    @ P.generateChildCleanupHelper false
     @ X64Operands.genOomHandler ()
     @ X64Operands.genRuntimeErrorHandler ()
   in
@@ -4994,156 +4917,35 @@ let x64ProcessChecks () =
     (fun output -> List.mem (env ^ "=hé😀") (String.split_on_char '\000' output))
     []
     (emit LIR.GetEnvironmentPacked [] @ text dest);
-  check (Sys.getcwd ()) [] (emit LIR.DirectoryCurrent [] @ text dest);
-  let path = Filename.temp_file "port-x64-directory-" ".tmp" in
-  Sys.remove path;
-  Unix.mkdir path 0o700;
-  Fun.protect
-    ~finally:(fun () ->
-      Array.iter
-        (fun name -> Sys.remove (Filename.concat path name))
-        (Sys.readdir path);
-      Unix.rmdir path)
-    (fun () ->
-      List.iter
-        (fun name ->
-          let c = open_out_bin (Filename.concat path name) in
-          close_out c)
-        [ "first"; "hé😀" ];
-      let paths =
-        List.map (Filename.concat path) [ "first"; "hé😀" ]
-        |> List.sort String.compare
-      in
-      checkWith
-        (fun output ->
-          String.split_on_char '\000' output
-          |> List.filter (( <> ) "")
-          |> List.sort String.compare = paths)
-        []
-        (emit LIR.DirectoryListPacked [ LIR.StringSymbol path ] @ text dest);
-      check "" []
-        (emit LIR.DirectoryListPacked [ LIR.StringSymbol (path ^ ".missing") ]
-        @ text dest));
-  List.iter
-    (fun (command, status, out, err) ->
-      check
-        (out ^ err ^ "P")
-        []
-        (emit LIR.Execute [ LIR.StringSymbol command ]
-        @ [ X.MOV_load (X.RAX, X.RBX, 0l) ]
-        @ compare X.RAX status @ printField 8 @ printField 16 @ pass))
-    [
-      ("true", 0L, "", "");
-      ("printf 'hé😀'; printf 'error' >&2; exit 7", 7L, "hé😀", "error");
-      ("printf 'a\\0b'", 0L, "a\000b", "");
-      ("exit 255", 255L, "", "");
-      ("printf '%8192s' x", 0L, String.make 8191 ' ' ^ "x", "");
-    ];
-  let request kind argv cwd env timeout pipeline =
-    [
-      X.MOV_reg (X.R12, X64Operands.heapPtr);
-      X.ADD_imm (X64Operands.heapPtr, 48l);
-    ]
-    @ imm X.RAX kind
-    @ [ X.MOV_store (X.R12, 0l, X.RAX) ]
+  (* Public capture/deadline/history behavior is exercised through shared Dark
+     by cli_process_host_input.e2e and child-runtime-primitives.e2e. This helper
+     test exercises only the new indivisible launch/exec-error handshake. *)
+  let launch program =
+    [ X.SUB_imm (X.RSP, 80l); X.MOV_reg (X.R12, X.RSP);
+      X.LEA (X.R13, X.RSP, 56l); X.LEA (X.R14, X.RSP, 32l);
+      X.XOR_reg (X.RAX, X.RAX); X.MOV_store (X.RSP, 24l, X.RAX);
+      X.MOV_store (X.RSP, 56l, X.RAX) ]
     @ List.concat_map
-        (fun (offset, value) ->
-          literal X.RAX value
-          @ [ X.MOV_store (X.R12, Int32.of_int offset, X.RAX) ])
-        [ (8, argv); (16, cwd); (24, env); (40, pipeline) ]
-    @ imm X.RAX timeout
-    @ [ X.MOV_store (X.R12, 32l, X.RAX) ]
+        (fun (offset, value) -> literal X.RAX value
+          @ [ X.ADD_imm (X.RAX, 16l); X.MOV_store (X.RSP, offset, X.RAX) ])
+        [ (0l, program); (8l, "-c"); (16l, "exit 7") ]
+    @ emit LIR.ChildLaunch
+        [ LIR.Reg (LIR.Physical LIR.X20); LIR.Reg (LIR.Physical LIR.X21);
+          LIR.Imm 1L; LIR.Reg (LIR.Physical LIR.X22) ]
   in
-  let run kind argv cwd env timeout pipeline status errno out err timed =
-    check
-      (out ^ err ^ "P")
-      []
-      (request kind argv cwd env timeout pipeline
-      @ emit LIR.RunProcess [ LIR.Reg (LIR.Physical LIR.X20) ]
-      @ [ X.MOV_load (X.RAX, X.RBX, 0l) ]
-      @ compare X.RAX errno
-      @ [ X.MOV_load (X.RAX, X.RBX, 8l) ]
-      @ compare X.RAX status
-      @ [ X.MOV_load (X.RAX, X.RBX, 32l) ]
-      @ compare X.RAX timed @ printField 16 @ printField 24 @ pass)
-  in
-  run 0L "/bin/printf\000hé😀" "" "" 0L "" 0L 0L "hé😀" "" 0L;
-  run 0L "/bin/bash\000-c\000printf out; printf err >&2; exit 7" "" "" 0L "" 7L
-    0L "out" "err" 0L;
-  run 0L "/definitely/missing/port-command" "" "" 0L "" 127L 2L "" "" 0L;
-  run 1L "/bin/pwd" (Sys.getcwd ()) "" 0L "" 0L 0L (Sys.getcwd () ^ "\n") "" 0L;
-  run 1L "/bin/true" "/definitely/missing/port-cwd" "" 0L "" 127L 2L "" "" 0L;
-  run 0L
-    ("/bin/bash\000-c\000printf \"$" ^ env ^ "\"")
-    "" (env ^ "=override") 0L "" 0L 0L "hé😀" "" 0L;
-  run 0L
-    ("/bin/bash\000-c\000printf \"$" ^ env ^ "_EXTRA\"")
-    "" (env ^ "_EXTRA=provided") 0L "" 0L 0L "provided" "" 0L;
-  run 4L "/bin/printf\000hello" "" "" 0L "/bin/cat" 0L 0L "hello" "" 0L;
-  run 3L "/bin/sleep\00010" "" "" 1L "" 137L 0L "" "" 1L;
-  List.iter
-    (fun handle ->
-      List.iter
-        (fun op ->
-          check "Process not foundP" []
-            (emit op
-               (if op = LIR.ProcessIO then
-                  [ LIR.Imm handle; LIR.StringSymbol "" ]
-                else [ LIR.Imm handle ])
-            @ [ X.MOV_load (X.RAX, X.RBX, 0l) ]
-            @ compare X.RAX (-1L) @ printField 16 @ pass))
-        [ LIR.ProcessIO; LIR.TerminateProcess ])
-    [ -1L; 0L; 1L; 63L; 64L ];
-  let waitFinished =
-    [ X.Label "process_poll" ]
-    @ emit LIR.ProcessIO [ LIR.Reg (LIR.Physical LIR.X20); LIR.StringSymbol "" ]
-    @ [
-        X.MOV_reg (X.R13, X.R12);
-        X.SHL_imm (X.R13, 6);
-        X.ADD_reg (X.R13, X.R15);
-        X.MOV_load (X.RAX, X.R13, Int32.of_int X64Operands.processTableOffset);
-        X.CMP_imm (X.RAX, 2l);
-        X.Jcc (X.EQ, "process_finished");
-      ]
-    @ imm X.RAX (Int64.bits_of_float 1.)
-    @ [ X.MOVQ_from_gp (X.XMM0, X.RAX) ]
-    @ checked (X64EmitNativeEffects.emitSleep ctx 0 (LIR.FPhysical LIR.D0))
-    @ [ X.JMP "process_poll"; X.Label "process_finished" ]
-  in
-  check "outputerrorP" []
-    (emit LIR.SpawnProcess
-       [ LIR.StringSymbol "printf output; printf error >&2; exit 7" ]
-    @ [
-        X.MOV_reg (X.R12, X.RBX); X.CMP_imm (X.R12, 1l); X.Jcc (X.LT, "failed");
-      ]
-    @ waitFinished
-    @ emit LIR.TerminateProcess [ LIR.Reg (LIR.Physical LIR.X20) ]
-    @ [ X.MOV_load (X.RAX, X.RBX, 0l) ]
-    @ compare X.RAX 7L @ printField 8 @ printField 16 @ pass);
-  check "hé😀P" []
-    (emit LIR.SpawnProcess
-       [ LIR.StringSymbol "IFS= read -r line; printf '%s' \"$line\"" ]
-    @ [ X.MOV_reg (X.R12, X.RBX) ]
-    @ emit LIR.ProcessIO
-        [ LIR.Reg (LIR.Physical LIR.X20); LIR.StringSymbol "hé😀" ]
-    @ waitFinished
-    @ emit LIR.TerminateProcess [ LIR.Reg (LIR.Physical LIR.X20) ]
-    @ [ X.MOV_load (X.RAX, X.RBX, 0l) ]
-    @ compare X.RAX 0L @ printField 8 @ pass);
   check "P" []
-    (emit LIR.SpawnProcess [ LIR.StringSymbol "exec /bin/sleep 10" ]
-    @ [ X.MOV_reg (X.R12, X.RBX) ]
-    @ emit LIR.TerminateProcess [ LIR.Reg (LIR.Physical LIR.X20) ]
-    @ [ X.MOV_load (X.RAX, X.RBX, 0l) ]
-    @ compare X.RAX 143L @ pass);
+    (launch "/bin/sh"
+    @ [ X.CMP_imm (X.RBX, 0l); X.Jcc (X.LE, "failed");
+        X.Label "owned_launch_reap"; X.MOV_reg (X.RDI, X.RBX);
+        X.LEA (X.RSI, X.RSP, 64l); X.XOR_reg (X.RDX, X.RDX);
+        X.XOR_reg (X.R10, X.R10) ]
+    @ imm X.RAX 61L @ [ X.SYSCALL; X.CMP_imm (X.RAX, -4l);
+        X.Jcc (X.EQ, "owned_launch_reap"); X.CMP_imm (X.RAX, 0l);
+        X.Jcc (X.LE, "failed"); X.MOV_load (X.RAX, X.RSP, 64l) ]
+    @ compare X.RAX 1792L @ [ X.ADD_imm (X.RSP, 80l) ] @ pass);
   check "P" []
-    (emit LIR.SpawnProcess [ LIR.StringSymbol "exec /bin/sleep 10" ]
-    @ [
-        X.CALL "__dark_cli_cleanup_processes";
-        X.MOV_load
-          (X.RAX, X.R15, Int32.of_int (X64Operands.processTableOffset + 64));
-      ]
-    @ compare X.RAX 0L @ pass);
+    (launch "/definitely/missing/owned-child"
+    @ compare X.RBX (-2L) @ [ X.ADD_imm (X.RSP, 80l) ] @ pass);
   !total
 [@@warning "-42"]
 
@@ -5487,12 +5289,6 @@ let x64ProgramChecks () =
         ] );
       ( "42",
         [
-          LIR.CliNative (reg 0, LIR.Execute, [ LIR.StringSymbol "printf 42" ]);
-          LIR.HeapLoad (reg 1, reg 0, 8);
-          LIR.StdoutWrite (0, LIR.Reg (reg 1), false);
-        ] );
-      ( "42",
-        [
           LIR.ClosureAlloc (reg 0, AST.functionId 1L, []);
           LIR.RefCountInc (reg 0, 8, LIR.ClosureHeap, None);
           LIR.SaveRegs ([], []);
@@ -5502,13 +5298,6 @@ let x64ProgramChecks () =
           LIR.PrintInt64NoNewline (reg 1);
           LIR.RefCountDec (reg 0, 8, LIR.ClosureHeap, None);
           LIR.RefCountDec (reg 0, 8, LIR.ClosureHeap, None);
-        ] );
-      ( "1",
-        [
-          LIR.CliNative
-            (reg 0, LIR.SpawnProcess, [ LIR.StringSymbol "exec /bin/sleep 10" ]);
-          LIR.Mov (reg 1, LIR.Imm 1L);
-          LIR.PrintInt64NoNewline (reg 1);
         ] );
     ]
   in

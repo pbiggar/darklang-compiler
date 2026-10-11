@@ -77,28 +77,17 @@ and rcKind (value : MIR.rcKind) =
 
 and cliOperation (value : MIR.cliOperation) =
   match value with
-  | MIR.Execute -> union "CliOperation" "Execute" []
   | MIR.StartupStack -> union "CliOperation" "StartupStack" []
   | MIR.ExecutableState -> union "CliOperation" "ExecutableState" []
-  | MIR.RunProcess -> union "CliOperation" "RunProcess" []
   | MIR.HostOS -> union "CliOperation" "HostOS" []
   | MIR.HostArchitecture -> union "CliOperation" "HostArchitecture" []
-  | MIR.Hostname -> union "CliOperation" "Hostname" []
   | MIR.GetEnv -> union "CliOperation" "GetEnv" []
   | MIR.GetEnvironmentPacked -> union "CliOperation" "GetEnvironmentPacked" []
   | MIR.StdinState -> union "CliOperation" "StdinState" []
-  | MIR.DirectoryCurrent -> union "CliOperation" "DirectoryCurrent" []
-  | MIR.DirectoryListPacked -> union "CliOperation" "DirectoryListPacked" []
-  | MIR.FileIsDirectory -> union "CliOperation" "FileIsDirectory" []
-  | MIR.FileCreateExclusive -> union "CliOperation" "FileCreateExclusive" []
   | MIR.GetArgv -> union "CliOperation" "GetArgv" []
   | MIR.Kill -> union "CliOperation" "Kill" []
   | MIR.GetPid -> union "CliOperation" "GetPid" []
   | MIR.GetUid -> union "CliOperation" "GetUid" []
-  | MIR.CpuCount -> union "CliOperation" "CpuCount" []
-  | MIR.SpawnProcess -> union "CliOperation" "SpawnProcess" []
-  | MIR.ProcessIO -> union "CliOperation" "ProcessIO" []
-  | MIR.TerminateProcess -> union "CliOperation" "TerminateProcess" []
   | MIR.SocketTcp4 -> union "CliOperation" "SocketTcp4" []
   | MIR.SocketTcp6 -> union "CliOperation" "SocketTcp6" []
   | MIR.SocketUdp4 -> union "CliOperation" "SocketUdp4" []
@@ -172,7 +161,6 @@ and cliOperation (value : MIR.cliOperation) =
   | MIR.ChildState -> union "CliOperation" "ChildState" []
   | MIR.ChildLaunch -> union "CliOperation" "ChildLaunch" []
   | MIR.PosixWait4 -> union "CliOperation" "PosixWait4" []
-  | MIR.PosixFcntl -> union "CliOperation" "PosixFcntl" []
   | MIR.PosixKeventVnode -> union "CliOperation" "PosixKeventVnode" []
 
 and label (value : MIR.label) =

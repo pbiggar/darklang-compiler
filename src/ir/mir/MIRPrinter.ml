@@ -81,28 +81,17 @@ let prettyPrintMIRVReg (MIR.VReg n) = "v" ^ string_of_int n
 let prettyPrintMIRLabel (MIR.Label name) = name
 
 let cliOperation = function
-  | MIR.Execute -> "Execute"
-  | MIR.RunProcess -> "RunProcess"
   | MIR.HostOS -> "HostOS"
   | MIR.HostArchitecture -> "HostArchitecture"
-  | MIR.Hostname -> "Hostname"
   | MIR.GetEnv -> "GetEnv"
   | MIR.GetEnvironmentPacked -> "GetEnvironmentPacked"
   | MIR.StdinState -> "StdinState"
-  | MIR.DirectoryCurrent -> "DirectoryCurrent"
-  | MIR.DirectoryListPacked -> "DirectoryListPacked"
-  | MIR.FileIsDirectory -> "FileIsDirectory"
-  | MIR.FileCreateExclusive -> "FileCreateExclusive"
   | MIR.GetArgv -> "GetArgv"
   | MIR.Kill -> "Kill"
   | MIR.GetPid -> "GetPid"
   | MIR.StartupStack -> "StartupStack"
   | MIR.ExecutableState -> "ExecutableState"
   | MIR.GetUid -> "GetUid"
-  | MIR.CpuCount -> "CpuCount"
-  | MIR.SpawnProcess -> "SpawnProcess"
-  | MIR.ProcessIO -> "ProcessIO"
-  | MIR.TerminateProcess -> "TerminateProcess"
   | MIR.SocketTcp4 -> "SocketTcp4"
   | MIR.SocketTcp6 -> "SocketTcp6"
   | MIR.SocketUdp4 -> "SocketUdp4"
@@ -176,7 +165,6 @@ let cliOperation = function
   | MIR.ChildState -> "ChildState"
   | MIR.ChildLaunch -> "ChildLaunch"
   | MIR.PosixWait4 -> "PosixWait4"
-  | MIR.PosixFcntl -> "PosixFcntl"
   | MIR.PosixKeventVnode -> "PosixKeventVnode"
 
 let prettyPrintCanonicalBufferKind = ANFPrinter.prettyPrintCanonicalBufferKind

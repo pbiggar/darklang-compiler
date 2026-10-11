@@ -89,8 +89,6 @@ type arm64ProgramFacts = {
   closureCaptureTypes : AST.semanticType list StringOrder.Map.t;
   recursiveReleaseTypes : MemoryPlanning.SemanticTypeSet.t;
   cliArgvHelperLabels : StringOrder.Set.t;
-  needsCliExecuteHelper : bool;
-  needsCliRunProcessHelper : bool;
   needsCliProcessLifecycleHelpers : bool;
   needsRuntimeErrorHelper : bool;
 }

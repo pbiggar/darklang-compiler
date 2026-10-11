@@ -289,21 +289,15 @@ let inferCExprType ctx expr =
   | A.Sleep _ | A.StdoutWrite _ -> Some AST.TUnit
   | A.CliNative (op, _) -> (
       match op with
-      | A.Execute | A.ProcessIO | A.TerminateProcess ->
-          Some (AST.TRecord ("Darklang.Stdlib.Cli.__NativeOutput", []))
-      | A.RunProcess ->
-          Some (AST.TRecord ("Darklang.Stdlib.Cli.__NativeProcessOutput", []))
       | A.GetEnv | A.GetArgv ->
           Some (AST.TSum ("Darklang.Stdlib.Option.Option", [ AST.TString ]))
       | A.Kill -> posix AST.TUnit
-      | A.Hostname -> posix AST.TString
-      | A.GetEnvironmentPacked | A.DirectoryCurrent | A.DirectoryListPacked ->
+      | A.GetEnvironmentPacked ->
           Some AST.TString
       | A.StdinState | A.StartupStack | A.ExecutableState | A.ChildState ->
           Some AST.TInternalRawPtr
-      | A.FileIsDirectory -> Some AST.TBool
-      | A.HostOS | A.HostArchitecture | A.GetPid | A.GetUid | A.CpuCount
-      | A.SpawnProcess | A.FileCreateExclusive | A.SocketTcp4 | A.SocketTcp6
+      | A.HostOS | A.HostArchitecture | A.GetPid | A.GetUid
+      | A.SocketTcp4 | A.SocketTcp6
       | A.SocketUdp4 | A.SocketUdp6 | A.SocketConnect4 | A.SocketConnect6
       | A.SocketSend | A.SocketSendTo | A.SocketReceive | A.SocketReceiveFrom
       | A.SocketReceiveTimeout | A.SocketSendTimeout | A.SocketClose
@@ -323,7 +317,7 @@ let inferCExprType ctx expr =
       | A.PosixClockGettime | A.PosixGettimeofday | A.PosixNanosleep
       | A.PosixMachTimebaseInfo | A.PosixInotifyInit1 | A.PosixInotifyAddWatch
       | A.PosixPpoll | A.PosixPollDarwin | A.PosixKqueue | A.ChildLaunch
-      | A.PosixWait4 | A.PosixFcntl | A.PosixKeventVnode ->
+      | A.PosixWait4 | A.PosixKeventVnode ->
           Some AST.TInt64)
   | A.IfValue (_, yes, _) -> atom yes
   | A.BorrowedCall (func, [ value ])
