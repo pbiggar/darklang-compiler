@@ -79,6 +79,16 @@ if ! compiler_works > "$root/unix-smoke.log" 2>&1; then
         cd "$root/src/ocaml-$version"
         log="$root/ocaml-configure.log"
         bash ./configure --prefix="$prefix" > "$root/ocaml-configure.log" 2>&1
+        # An interrupted VM probe can exit successfully with a partially
+        # generated header. In particular, missing GETCWD builds a compiler
+        # that fails at coldstart. Retry the real probes, never invent results.
+        if ! grep -q '^#define HAS_GETCWD 1$' runtime/caml/s.h; then
+            bash ./configure --prefix="$prefix" >> "$root/ocaml-configure.log" 2>&1
+        fi
+        grep -q '^#define HAS_GETCWD 1$' runtime/caml/s.h || {
+            echo 'OCaml configure did not detect getcwd; refusing a broken runtime.' >&2
+            false
+        }
         # Native compiler processes need stack attributes even when procfs is
         # unavailable. Keep this adapter out of configure's feature probes.
         ulimit -s 65536

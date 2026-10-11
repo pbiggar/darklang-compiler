@@ -1,6 +1,10 @@
 // Typed checked-path kernel adapters. Policy/marshalling stays private.
 module Builtin
 
+let syscallUnlinkAt (path: String) (flags: Int) : Stdlib.Result.Result<Unit, Int> =
+    Builtin.__checkedUnlinkAt path flags
+    |> Stdlib.Result.mapError (fun error -> error.errno)
+
 let syscallOpen (path: String) (flags: Int) (mode: Int) : Stdlib.Result.Result<Int, Int> =
     Builtin.__checkedOpen path flags mode
     |> Stdlib.Result.mapError (fun error -> error.errno)

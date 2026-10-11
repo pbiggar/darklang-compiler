@@ -28,11 +28,9 @@ let __checkedMkdir (path: String) (mode: Int) : Stdlib.Result.Result<Unit, Stdli
     let mode = Builtin.__posixInt32 mode in
     Stdlib.Cli.__Posix.__withEntry path (fun fd name -> Stdlib.Cli.__Posix.__unitResult (Stdlib.Cli.__Posix.__mkdirAt fd name mode))
 
-let posixRmdir (path: String) : Stdlib.Result.Result<Unit, Stdlib.Cli.Posix.Error> =
-    Stdlib.Cli.__Posix.__withEntry path (fun fd name -> Stdlib.Cli.__Posix.__unitResult (Stdlib.Cli.__Posix.__unlinkAt fd name (if Stdlib.Cli.__Posix.__mac () then 128L else 512L)))
-
-let posixUnlink (path: String) : Stdlib.Result.Result<Unit, Stdlib.Cli.Posix.Error> =
-    Stdlib.Cli.__Posix.__withEntry path (fun fd name -> Stdlib.Cli.__Posix.__unitResult (Stdlib.Cli.__Posix.__unlinkAt fd name 0L))
+let __checkedUnlinkAt (path: String) (flags: Int) : Stdlib.Result.Result<Unit, Stdlib.Cli.Posix.Error> =
+    let flags = Builtin.__posixInt32 flags in
+    Stdlib.Cli.__Posix.__withEntry path (fun fd name -> Stdlib.Cli.__Posix.__unitResult (Stdlib.Cli.__Posix.__unlinkAt fd name flags))
 
 let __checkedRename (oldpath: String) (newpath: String) : Stdlib.Result.Result<Unit, Stdlib.Cli.Posix.Error> =
     Stdlib.Cli.__Posix.__withEntry oldpath (fun fromFd fromName ->
