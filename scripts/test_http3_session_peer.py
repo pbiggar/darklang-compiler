@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Verify connection-wide QPACK and HTTP/3 session reuse with an independent aioquic peer."""
 import argparse
+import shutil
 import socket
 import subprocess
 import tempfile
@@ -112,6 +113,7 @@ def main():
     parser.add_argument("--requests", type=int, default=5)
     parser.add_argument("--multiplex", choices=["interleave", "reset", "goaway"])
     parser.add_argument("--public", action="store_true")
+    parser.add_argument("--stream", action="store_true", help="Drain lazy session bodies between requests")
     args = parser.parse_args()
     key, leaf, ca = certificates()
     configuration = QuicConfiguration(is_client=False, alpn_protocols=["h3"])
@@ -123,6 +125,10 @@ def main():
         listener.settimeout(0.01)
         source, binary = Path(temporary) / "session.dark", Path(temporary) / "session"
         test_source = (PUBLIC_MULTIPLEX if args.public else MULTIPLEX).replace("@MODE@", '"' + args.multiplex + '"') if args.multiplex else SOURCE
+        if args.stream:
+            if args.multiplex:
+                parser.error("--stream requires sequential requests")
+            test_source = test_source.replace('session.request "GET"', 'session.stream "GET"').replace('Stdlib.Blob.toHex response.body', 'Stdlib.Blob.toHex (Stdlib.Stream.toBlob response.body)')
         source.write_text(test_source.replace("@CA@", ca.public_bytes(serialization.Encoding.DER).hex()).replace("@COUNT@", str(args.requests)))
         compiled = subprocess.run([str(args.compiler), str(source), "--allow-internal", "--leak-check", "-o", str(binary)], cwd=ROOT, capture_output=True, text=True, timeout=120)
         assert compiled.returncode == 0, compiled.stdout + compiled.stderr
@@ -184,6 +190,11 @@ def main():
             stopped.set()
             thread.join(timeout=2)
         assert not thread.is_alive() and not errors, errors
+        if result.returncode != 0:
+            artifacts = ROOT / "TestResults" / "ai" / "http3-session-failure"
+            artifacts.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source, artifacts / "session.dark")
+            shutil.copy2(binary, artifacts / "session")
         assert result.returncode == 0 and result.stdout == "OK\n" and not result.stderr, (result, streams)
         assert len(connections) == 1 and streams == (([0, 4] if args.multiplex == "goaway" else [0, 4, 8]) if args.multiplex else list(range(0, args.requests * 4, 4))), streams
     print(f"HTTP/3 {args.multiplex or 'session'}: streams {streams}, shared Unicode QPACK and leak-free disposal passed")

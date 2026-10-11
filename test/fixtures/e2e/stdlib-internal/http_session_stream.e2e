@@ -13,8 +13,7 @@ let check (wire: List<String>) (mode: String) : (String * Int64 * Int64) =
   let url = match Stdlib.__HttpWire.parseUrl "http://example.com/" with | Ok url -> url | Error message -> Builtin.crash message in
   let now = Stdlib.__Network.monotonicMillis () |> Stdlib.Result.withDefault 0L in
   let pool = Stdlib.__Http1Pool.put Stdlib.__Http1Pool.empty url (owner reads writes closes) now in
-  let initial = Stdlib.HttpClientSession.__State { cache = Stdlib.__AltSvcCache.empty, pool = pool, http2 = Stdlib.__Http2Pool.empty, http3 = Stdlib.__Http3Pool.empty, epoch = 0L } in
-  let session = Stdlib.HttpClientSession.__createState initial true None in
+  let session = Stdlib.HttpClientSession.__createState (Stdlib.HttpClientSession.__State { cache = Stdlib.__AltSvcCache.empty, pool = pool, http2 = Stdlib.__Http2Pool.empty, http3 = Stdlib.__Http3Pool.empty, epoch = 0L }) true None in
   let response = session.stream "GET" "http://example.com/" [] Stdlib.Blob.empty in
   let body = match response with
     | Error _ -> "error"
