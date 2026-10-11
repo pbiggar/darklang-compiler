@@ -192,7 +192,11 @@ mean the entire branch has passed its integration or performance gates.
   - [x] Buffered HTTP/2 session owners retain HPACK, connection credit and odd
     stream IDs across requests. Eight idle origins expire after thirty seconds;
     checkout retires stale/GOAWAY owners before writing a request.
-  - [ ] Reusable HTTP/3 connection owners and lazy-body pool leases.
+  - [x] Buffered HTTP/3 session owners retain QUIC recovery, traffic keys,
+    QPACK tables and stream IDs across requests. Eight idle origins expire
+    after thirty seconds. Completed stream history remains bounded by rotation
+    after 1024 requests; closed streams do not consume the 64 active owner slots.
+  - [ ] Lazy HTTP/3 body pool leases.
 
 - [ ] HTTP/2 and HTTP/3 request multiplexing, stream allocation and scheduling.
 
@@ -204,8 +208,18 @@ mean the entire branch has passed its integration or performance gates.
     authenticates post-handshake control records without waiting for more bytes.
     `http2_connection.e2e`, `http_transport_poll.e2e` and the independent
     `scripts/test_http2_session_peer.py` cover these boundaries.
-  - [ ] Public session batch/lazy-stream scheduling and multiplexed servers.
-  - [ ] HTTP/3 stream scheduling with reusable QPACK/QUIC ownership.
+  - [x] Public `Session.requestMany` validates at most 32 requests before I/O,
+    groups origins, multiplexes negotiated HTTP/2–3 and restores input result
+    order. Different origins are serviced sequentially; HTTP/1.1 uses complete
+    sequential exchanges. Network failures are per-request outcomes; invalid
+    batches fail before sending any request.
+  - [ ] Lazy-stream scheduling and multiplexed servers.
+  - [x] HTTP/3 request scheduling shares connection credit and QPACK while
+    retaining independent message parsers. Each round sends one bounded chunk
+    per stream. Resets and GOAWAY preserve eligible responses without replay;
+    unfinished uploads are reset only after a complete early response. Aggregate
+    uploads and responses each cap at 100 MiB. `http_session_batch.e2e`,
+    `quic_flow.e2e` and independent HTTP/2–3 session peers cover these boundaries.
 - [x] Connection-owned dynamic HPACK encoding, bounded eviction, sensitive
   literals, and peer table-capacity shrink/grow updates.
 - [ ] Complete dynamic QPACK tables, instruction streams, blocked sections,

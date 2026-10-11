@@ -74,7 +74,7 @@ match Stdlib.Cli.__Args.int64 0, Stdlib.Blob.fromHex "@CA@" with
 '''
 
 
-PUBLIC_MULTIPLEX = '''// h3-session-batch.dark - Public batches use advertised QUIC without a TCP fallback.
+PUBLIC_MULTIPLEX = r'''// h3-session-batch.dark - Public batches use advertised QUIC without a TCP fallback.
 let request (path: String) : Stdlib.HttpClientSession.Request =
   Stdlib.HttpClientSession.Request { method = "GET", url = "https://localhost" ++ path, headers = [("x-shared", "café ☃")], body = Stdlib.Blob.empty }
 let check (session: Stdlib.HttpClientSession.Session) (reset: Bool) : Bool =

@@ -286,7 +286,7 @@ explicit close. The live stream peer's `--http-client`, `--request-size=71680`,
 `--buffered`, `--close-early` and `--discovery` options verify these paths,
 including alternate-target authentication and both directions crossing 64 KiB.
 `HttpClientSession.create`, `createTrusted` and `createTrustedWithRoots` expose
-owned `request`, `stream`, `clear` and `close` functions. Each session learns
+owned `request`, `requestMany`, `stream`, `clear` and `close` functions. Each session learns
 `h3` Alt-Svc alternatives from authenticated HTTPS response headers, binds them
 to the original scheme/host/port and replaces that origin's advertisements on
 each new field. Its cache holds at most 32 alternatives, caps freshness at one
@@ -455,3 +455,17 @@ fields, ignores comments and non-data blocks, and flushes a final unterminated
 block at end of stream. The source is split and qualified where required by the
 compiler's module grammar; that does not change the public API or consumption
 behavior.
+
+Buffered HTTP/3 sessions now retain QUIC packet recovery, traffic keys, QPACK
+state and client stream IDs across requests, with eight idle origins and thirty
+second expiry. Connection rotation after 1024 requests bounds retained final-size
+history. Up to 64 active transport owners are independent of completed channels.
+`Session.requestMany` accepts up to 32 `Request` records and returns ordered
+`Outcome` records containing their input index and response result. It validates
+all requests before any I/O, groups requests by origin and uses the negotiated
+HTTP/2 or HTTP/3 scheduler; distinct origins and HTTP/1.1 exchanges run sequentially.
+Uploads and responses each have a 100 MiB aggregate batch limit. A stream reset
+fails that request while other eligible streams finish. Requests rejected by
+GOAWAY are reported without replay. Lazy body pooling is still pending.
+`http_session_batch.e2e`, `quic_flow.e2e`, and the session peers' `--public`
+HTTP/2 and `--public --multiplex` HTTP/3 modes exercise these APIs.

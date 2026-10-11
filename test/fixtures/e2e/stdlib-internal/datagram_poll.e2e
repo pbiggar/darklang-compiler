@@ -1,0 +1,6 @@
+// datagram_poll.e2e - Closed and unregistered UDP owners never attempt a blocking receive.
+let socket () : Stdlib.__Datagram.Socket =
+  Stdlib.__Datagram.Socket { lifecycle = Stdlib.Stream.__new (fun _unit -> Some ()) (fun _unit -> ()), watch = None,
+    send = fun _peer _bytes _timeout -> Ok (), receive = fun _timeout -> Builtin.crash "Unready datagram must not be read" }
+let transport = socket () in let result = Stdlib.__Datagram.poll transport in let _ = Stdlib.__Datagram.close transport in result = Error 22L // leak_check
+let transport = socket () in let _ = Stdlib.__Datagram.close transport in Stdlib.__Datagram.poll transport = Error 9L // leak_check

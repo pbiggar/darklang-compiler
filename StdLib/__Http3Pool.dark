@@ -18,6 +18,14 @@ let reusable (state: Stdlib.__Http3Connection.State) : Bool =
   // Bound final-size history without losing duplicate-frame validation.
   state.next < 4096L && Stdlib.Option.isNone state.wire.uni.control.goAway && Stdlib.Option.isNone state.wire.connection.meta.closed
 
+let __prepare (state: Stdlib.__Http3.State) (budget: Int64) : Stdlib.Result.Result<Stdlib.__Http3.State, String> =
+  Stdlib.__Http3.__controls state |> Stdlib.Result.andThen (fun state ->
+    if budget == 0L || Stdlib.Option.isSome state.uni.control.goAway then Ok state
+    else Stdlib.__Datagram.readable state.connection.transport.socket |> Stdlib.Result.mapError (fun _code -> "QUIC idle readiness failed") |> Stdlib.Result.andThen (fun ready ->
+      if Stdlib.Bool.not ready then Ok state
+      else Stdlib.__QuicConnection.poll state.connection 0L |> Stdlib.Result.andThen (fun connection ->
+        Stdlib.__Http3Pool.__prepare { state with connection = connection } (budget - 1L))))
+
 let take (state: Stdlib.__Http3Pool.State) (origin: Stdlib.__HttpWire.Url) (now: Int64) : Stdlib.__Http3Pool.Lease =
   Stdlib.List.fold state.entries (Stdlib.__Http3Pool.Lease { state = Stdlib.__Http3Pool.empty, entry = None }) (fun lease entry ->
     if now < entry.idle || now - entry.idle >= 30000L || Stdlib.Bool.not (Stdlib.__Http3Pool.reusable entry.state) then
@@ -27,7 +35,7 @@ let take (state: Stdlib.__Http3Pool.State) (origin: Stdlib.__HttpWire.Url) (now:
         let _ = Stdlib.__Http3.close entry.state.wire in lease
       else
         // Service received close/GOAWAY/decoder feedback before attempting a write.
-        match Stdlib.__QuicConnection.poll entry.state.wire.connection 1L |> Stdlib.Result.andThen (fun connection -> Stdlib.__Http3.__controls { entry.state.wire with connection = connection }) with
+        match Stdlib.__Http3Pool.__prepare entry.state.wire 64L with
         | Error _ -> let _ = Stdlib.__Http3.close entry.state.wire in lease
         | Ok state ->
           if Stdlib.__Http3Pool.reusable { entry.state with wire = state } then { lease with entry = Some { entry with state = { entry.state with wire = state } } }

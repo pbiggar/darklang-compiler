@@ -284,14 +284,18 @@ let __tick (state: Stdlib.__QuicConnection.State) (now: Int64) : Stdlib.Result.R
       Stdlib.__QuicConnection.__send (Stdlib.__QuicConnection.__copy state space state.flow state.receiveKeys state.sending state.ids meta) now)))
 
 let poll (state: Stdlib.__QuicConnection.State) (timeout: Int64) : Stdlib.Result.Result<Stdlib.__QuicConnection.State, String> =
-  if timeout < 1L || timeout > 10000L then Error "Invalid QUIC application receive timeout"
+  if timeout < 0L || timeout > 10000L then Error "Invalid QUIC application receive timeout"
   else if Stdlib.Option.isSome state.meta.closed then Error "QUIC connection is closed"
   else Stdlib.__QuicConnection.__shutdown state |> Stdlib.Result.andThen (fun _unit -> match Stdlib.__Network.monotonicMillis () with
   | Error _ -> Error "QUIC monotonic clock failed"
   | Ok now -> Stdlib.__QuicConnection.__tick state now |> Stdlib.Result.andThen (fun next ->
-      match Stdlib.__Datagram.receive state.transport.socket (if timeout > 10L then 10L else timeout) with
+      let received =
+        if timeout == 0L then Stdlib.__Datagram.poll state.transport.socket
+        else Stdlib.__Datagram.receive state.transport.socket (if timeout > 10L then 10L else timeout) |> Stdlib.Result.map (fun datagram -> Some datagram) in
+      match received with
       | Error code -> if code == 11L || code == 35L || code == 4L || code == 90L then Ok next else Error "QUIC application receive failed"
-      | Ok datagram ->
+      | Ok None -> Ok next
+      | Ok (Some datagram) ->
         if datagram.peer.address != state.transport.peer.address || datagram.peer.port != state.transport.peer.port then Ok next
         else match Stdlib.__Network.monotonicMillis () with
         | Error _ -> Error "QUIC monotonic clock failed"

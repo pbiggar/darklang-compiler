@@ -1,0 +1,29 @@
+// http_session_batch.e2e - Public batch validation, origin grouping, result order and disposal.
+let origin (host: String) : Stdlib.__HttpWire.Url =
+  Stdlib.__HttpWire.Url { scheme = "http", host = host, port = 80L, authority = host, target = "/" }
+let request (url: String) : Stdlib.HttpClientSession.Request =
+  Stdlib.HttpClientSession.Request { method = "GET", url = url, headers = [], body = Stdlib.Blob.empty }
+let owner (writes: RawPtr) (closes: RawPtr) : Stdlib.__HttpTransport.Transport =
+  let life = Stdlib.Stream.__new (fun _unit -> Some ()) (fun _unit -> Stdlib.Stream.__cellSet closes (Stdlib.Stream.__cellGet<Int64> closes + 1L)) in
+  Stdlib.__HttpTransport.Transport { lifecycle = life, idle = fun _unit -> true,
+    poll = fun _unit -> Ok None,
+    read = fun _unit -> Ok (Stdlib.String.toBlob "HTTP/1.1 200 OK\r\nContent-Length: 1\r\n\r\nx"),
+    write = fun _bytes -> let _ = Stdlib.Stream.__cellSet writes (Stdlib.Stream.__cellGet<Int64> writes + 1L) in Ok () }
+let grouped () : (List<Int64> * Int64 * Int64) =
+  let writes = Stdlib.Stream.__cellNew 0L in
+  let closes = Stdlib.Stream.__cellNew 0L in
+  let now = Stdlib.__Network.monotonicMillis () |> Stdlib.Result.withDefault 0L in
+  let pool = Stdlib.__Http1Pool.put Stdlib.__Http1Pool.empty (origin "a") (owner writes closes) now in
+  let pool = Stdlib.__Http1Pool.put pool (origin "b") (owner writes closes) now in
+  let session = Stdlib.HttpClientSession.__createState (Stdlib.HttpClientSession.__State { cache = Stdlib.__AltSvcCache.empty, pool = pool, http2 = Stdlib.__Http2Pool.empty, http3 = Stdlib.__Http3Pool.empty }) true None in
+  let outcomes = session.requestMany [request "http://a/one", request "http://b/two", request "http://a/three"] in
+  let order = match outcomes with | Error _ -> [] | Ok outcomes -> Stdlib.List.map outcomes (fun outcome -> match outcome.response with | Ok response -> if response.statusCode == 200 then outcome.index else -1L | Error _ -> -1L) in
+  let _ = session.close () in
+  let result = (order, Stdlib.Stream.__cellGet<Int64> writes, Stdlib.Stream.__cellGet<Int64> closes) in
+  let _ = Stdlib.Stream.__cellDispose<Int64> writes in
+  let _ = Stdlib.Stream.__cellDispose<Int64> closes in result
+grouped () = ([0L, 1L, 2L], 3L, 2L) // leak_check
+let session = Stdlib.HttpClientSession.createTrusted () in let result = session.requestMany [] in let _ = session.close () in result = Ok [] // leak_check
+let session = Stdlib.HttpClientSession.createTrusted () in let result = session.requestMany [request "http://example.com/", request "invalid"] in let _ = session.close () in result = Error (Stdlib.HttpClient.RequestError.BadUrl Stdlib.HttpClient.BadUrlDetails.InvalidUri) // leak_check
+let session = Stdlib.HttpClientSession.createTrusted () in let result = session.requestMany (Stdlib.List.repeatUnsafe 33 (request "http://example.com/")) in let _ = session.close () in result = Error (Stdlib.HttpClient.RequestError.BadUrl Stdlib.HttpClient.BadUrlDetails.InvalidRequest) // leak_check
+let session = Stdlib.HttpClientSession.createTrusted () in let _ = session.close () in session.requestMany [] = Error Stdlib.HttpClient.RequestError.NetworkError // leak_check

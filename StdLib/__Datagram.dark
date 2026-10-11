@@ -99,6 +99,24 @@ let bind4 (address: List<Int64>) (port: Int64) : Stdlib.Result.Result<Stdlib.__D
 let bind6 (address: List<Int64>) (port: Int64) : Stdlib.Result.Result<Stdlib.__Datagram.Socket, Int64> =
   Stdlib.__Datagram.__bind true address port
 
+// Readiness is checked before receiving, preserving complete datagram boundaries.
+let readable (socket: Stdlib.__Datagram.Socket) : Stdlib.Result.Result<Bool, Int64> =
+  match Stdlib.Stream.next socket.lifecycle with
+  | None -> Error 9L
+  | Some _ ->
+    match socket.watch with
+    | None -> Error 22L
+    | Some watch -> Stdlib.__Network.waitSockets [Stdlib.__Network.Interest { watch = watch, readable = true, writable = false }] 0L |> Stdlib.Result.andThen (fun events ->
+      if Stdlib.List.any events (fun event -> event.failed || event.closed) then Error 5L
+      else Ok (Stdlib.List.any events (fun event -> event.readable)))
+
+let poll (socket: Stdlib.__Datagram.Socket) : Stdlib.Result.Result<Stdlib.Option.Option<Stdlib.__Datagram.Message>, Int64> =
+  Stdlib.__Datagram.readable socket |> Stdlib.Result.andThen (fun ready ->
+    if Stdlib.Bool.not ready then Ok None
+    else match socket.receive 1L with
+    | Ok datagram -> Ok (Some datagram)
+    | Error code -> if code == 11L || code == 35L || code == 4L then Ok None else Error code)
+
 let close (socket: Stdlib.__Datagram.Socket) : Unit =
   Stdlib.Stream.close socket.lifecycle
 
