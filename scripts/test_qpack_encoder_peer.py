@@ -14,14 +14,16 @@ SOURCE = '''// encoder.dark - Outgoing tables survive sections and fragmented de
 let feed (state: Stdlib.__QpackEncoder.State) (bytes: Blob) (offset: Int64) : Stdlib.Result.Result<Stdlib.__QpackEncoder.State, String> =
   if offset == Stdlib.Blob.__byteLength bytes then Ok state
   else Stdlib.__QpackEncoder.feed state (Stdlib.__Http2Wire.__slice bytes offset 1L) |> Stdlib.Result.andThen (fun next -> feed next bytes (offset + 1L))
-let run (state: Stdlib.__QpackEncoder.State) (index: Int64) : Stdlib.Result.Result<Unit, String> =
-  if index == 560L then Ok ()
+let run (state: Stdlib.__QpackEncoder.State) (index: Int64) (count: Int64) : Stdlib.Result.Result<Unit, String> =
+  if index == count then Ok ()
   else
     let fields = [(":status", "200"), ("x-name", Stdlib.Int64.toString (index / 2L)), ("x-utf8", "café ☃"), ("set-cookie", "a=1"), ("set-cookie", "b=2")] in
     Stdlib.__QpackEncoder.encode state (index * 4L) fields 65536L |> Stdlib.Result.andThen (fun encoded ->
       let _ = Stdlib.printLine ((Stdlib.Blob.toHex encoded.instructions) ++ "|" ++ (Stdlib.Blob.toHex encoded.bytes)) in
-      Stdlib.Blob.fromHex (Stdlib.Cli.Stdin.readLine ()) |> Stdlib.Result.andThen (fun bytes -> feed encoded.state bytes 0L) |> Stdlib.Result.andThen (fun next -> run next (index + 1L)))
-match Stdlib.__QpackEncoder.create 4096L 1L |> Stdlib.Result.andThen (fun state -> run state 0L) with
+      Stdlib.Blob.fromHex (Stdlib.Cli.Stdin.readLine ()) |> Stdlib.Result.andThen (fun bytes -> feed encoded.state bytes 0L) |> Stdlib.Result.andThen (fun next -> run next (index + 1L) count))
+let maximum = Stdlib.Cli.__Args.get 0 |> Stdlib.Result.withDefault "4096" |> Stdlib.Int64.parse |> Stdlib.Result.withDefault 0L
+let count = Stdlib.Cli.__Args.get 1 |> Stdlib.Result.withDefault "560" |> Stdlib.Int64.parse |> Stdlib.Result.withDefault 0L
+match Stdlib.__QpackEncoder.create maximum 1L |> Stdlib.Result.andThen (fun state -> run state 0L count) with
 | Error message -> Stdlib.printLine message
 | Ok _unit -> Stdlib.printLine "done"
 '''
@@ -39,7 +41,13 @@ def line(process):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--compiler", type=Path, default=ROOT / "dark")
+    parser.add_argument("--maximum", type=int, choices=[64, 4096, 8192], default=4096,
+                        help="Peer capacity; 8192 tests wrap-around using the peer maximum, not our 4 KiB local limit")
+    parser.add_argument("--sections", type=int, default=560,
+                        help="Even count >= 560; use 1120 to wrap the 8192-byte peer's insert count")
     args = parser.parse_args()
+    if args.sections < 560 or args.sections % 2:
+        parser.error("--sections must be even and at least 560")
     with tempfile.TemporaryDirectory(prefix="dark-qpack-encoder-") as temporary:
         directory = Path(temporary)
         source, binary = directory / "encoder.dark", directory / "encoder"
@@ -47,12 +55,12 @@ def main():
         result = subprocess.run([str(args.compiler), str(source), "--allow-internal", "--leak-check", "-o", str(binary)],
                                 cwd=ROOT, text=True, capture_output=True, timeout=180)
         assert result.returncode == 0, result.stdout + result.stderr
-        process = subprocess.Popen([str(binary)], cwd=ROOT, text=True, stdin=subprocess.PIPE,
+        process = subprocess.Popen([str(binary), str(args.maximum), str(args.sections)], cwd=ROOT, text=True, stdin=subprocess.PIPE,
                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, bufsize=1)
         dynamic, blocked = 0, 0
-        decoder = pylsqpack.Decoder(4096, 1)
+        decoder = pylsqpack.Decoder(args.maximum, 1)
         try:
-            for index in range(560):
+            for index in range(args.sections):
                 updates, block = (bytes.fromhex(part) for part in line(process).split("|"))
                 stream = index * 4
                 expected = [(b":status", b"200"), (b"x-name", str(index // 2).encode()),
@@ -62,6 +70,8 @@ def main():
                         decoder.feed_header(stream, block)
                     except pylsqpack.StreamBlocked:
                         blocked += 1
+                    except pylsqpack.DecompressionFailed as error:
+                        raise AssertionError((index, args.maximum, updates.hex(), block.hex())) from error
                     else:
                         raise AssertionError("New insertion did not block before encoder instructions")
                     unblocked = []
@@ -83,8 +93,8 @@ def main():
             if process.poll() is None:
                 process.kill()
                 process.communicate()
-        assert dynamic == 560 and blocked >= 280, (dynamic, blocked)
-    print(f"560 outgoing QPACK sections, {dynamic} dynamic and {blocked} blocked-before-insertion; independent decoder, fragmented feedback, eviction, wrap-around and compiled cleanup verified")
+        assert dynamic == args.sections and blocked >= args.sections // 2, (dynamic, blocked)
+    print(f"{args.sections} outgoing QPACK sections at peer capacity {args.maximum}, {dynamic} dynamic and {blocked} blocked-before-insertion; independent decoder, fragmented feedback, eviction, wrap-around and compiled cleanup verified")
 
 
 if __name__ == "__main__":

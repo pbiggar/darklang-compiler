@@ -255,12 +255,43 @@ prevents insertion. Credentials and cookies remain never-indexed.
 decoder probe with 560 sections, bytewise instructions/feedback, table eviction
 and Required Insert Count wrap-around. The recovered pinned toolchain and native
 build pass; focused QPACK tests pass 93/93 and HTTP/3 tests pass 132/132.
-The independent outgoing probe passes 560 dynamic sections, including 280
-blocked-before-insertion cases and compiled cleanup. The delayed aioquic peer
+The independent outgoing probe passes 2,240 dynamic sections across 64-byte,
+4 KiB and 8 KiB peer maxima, including 1,120 blocked-before-insertion cases and
+compiled cleanup. The delayed aioquic peer
 also passes, now requiring outgoing dynamic response headers as well as inbound
-dynamic request headers, with Unicode and a 70 KiB echo. Full host/native
-regression gates are pending for this outgoing checkpoint. Reusable multiplexed
-connection ownership is still missing; the full QPACK item remains unchecked.
+dynamic request headers, with Unicode and a 70 KiB echo. The broader HTTP/3
+listener peer also passes routing, body limits, SETTINGS limits, idle timeout,
+encrypted close, replay suppression, shutdown, rebind and cleanup checks.
+The complete host suite passes 12,078/12,078 tests and native regression aliases
+pass in a fresh sibling build directory. Parent benchmark verification was
+rerun and remains blocked by the incompatible snapshot workload contract;
+no performance result is claimed. Reusable multiplexed connection ownership
+is still missing; the full QPACK item remains unchecked.
+
+The larger-maximum test exposed a **test-peer** compatibility issue, not an
+engine encoding failure. The published `pylsqpack==0.3.23` wheel changes its
+wrap modulus when receiving a smaller table capacity; with an 8 KiB advertised
+maximum and our 4 KiB table, it rejects section 504 (`ff0200` prefix). RFC 9204
+section 4.5.1.1 bases the modulus on the advertised maximum, not current table
+capacity. Upstream reverted the conflicting behavior in ls-qpack v2.6.3
+([issue 44](https://github.com/litespeedtech/ls-qpack/issues/44)). The 8 KiB
+check therefore uses the unchanged pylsqpack 0.3.23 wrapper at
+`e2fef71d4280aa5adbc09c18c147e3cf07cf9f3c` with ls-qpack v2.7.0 at
+`91567706c41c0d97ab8dc576873ecd472d7869fa`, built only as a test dependency.
+No engine workaround or production C dependency was added. Reproduce in a
+fresh external test-dependency directory, using the writable workspace from
+the VM setup instructions:
+
+```bash
+git clone --depth 1 --branch 0.3.23 https://github.com/aiortc/pylsqpack.git "$workspace/qpack-peer-source"
+git clone --depth 1 --branch v2.7.0 --recurse-submodules https://github.com/litespeedtech/ls-qpack.git "$workspace/qpack-peer-source/vendor/ls-qpack"
+env CC=gcc python3 -m pip install --no-deps --no-build-isolation --target "$workspace/http-peers-fixed" "$workspace/qpack-peer-source"
+PYTHONPATH="$workspace/http-peers-fixed:$workspace/http-peers" python3 scripts/test_qpack_encoder_peer.py --maximum=8192 --sections=1120
+```
+
+The default 560-section check and `--maximum=64` also pass with the original
+published wheel. `--compiler` selects an already-built compiler when using a
+fresh sibling Dune build directory.
 
 HTTP/2 now retains an outgoing HPACK table separately from its decoder. Every
 state transition preserves that owner and the peer's decoded field budget;
