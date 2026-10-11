@@ -43,7 +43,7 @@ let __status (context: Stdlib.__Http1Server.Context) (owner: Stdlib.__Http1Serve
   let response = Stdlib.Http.responseWithText (if status == 413 then "413 Payload Too Large" else "Invalid HTTP request") status in
   let buffer = match owner.phase with | Prelude bytes -> bytes | Request buffer | AwaitRequest buffer -> buffer.bytes | Output _ -> Stdlib.Blob.empty in
   let method = match Stdlib.HttpServer.__statusError status buffer with
-    | Status ((_status, method)) -> Stdlib.Option.withDefault "(unknown)" method
+    | Status ((_status, method)) -> Stdlib.Option.withDefault method "(unknown)"
     | _ -> Builtin.crash "HTTP status helper returned a transport error" in
   Stdlib.__Http1Server.__output context owner now method "(invalid request)" response Stdlib.__Http1Server.After.Close
 

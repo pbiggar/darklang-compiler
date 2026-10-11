@@ -103,7 +103,10 @@ does not match `/files/a/b`.
 `Stdlib.HttpServer.Config.defaults port` supplies the upstream 30 MiB request
 body cap and the three enabled policy flags. `HttpServer.serve config handler
 onListening` now binds a native IPv4 listener, calls `onListening` after a
-successful bind, and serves HTTP/1.1 sequentially until SIGINT or SIGTERM.
+successful bind, and serves bounded persistent plaintext HTTP/1.1 owners until
+SIGINT or SIGTERM. HTTP/1.1 requests and responses may explicitly close the
+connection; HTTP/1.0 always closes. Fully framed requests can be pipelined,
+with ordered responses and correct HEAD handling.
 Request URLs retain their raw path and query bytes; actual request methods are
 prepended as `x-http-method`. Forwarded HTTPS canonicalization, optional
 standard Server/HSTS headers, ordered duplicate response headers, HEAD body
@@ -116,12 +119,21 @@ lowering also exists for x86_64, without a cross-target verification claim.
 macOS ARM64 lowering now reads Mach absolute ticks with their queried timebase,
 sets close-on-exec through `fcntl` after socket creation, and converts listener
 poll timeouts to Darwin milliseconds. Native macOS execution remains
-unverified. The listener owns and closes accepted connections, and each response closes its connection. Reads and writes have
-10-second monotonic deadlines; headers retain the existing wire parser's line,
+unverified. The persistent plaintext profile is also peer-verified on Linux
+x86_64. The listener owns at most sixty-four accepted connections; each serves
+at most one hundred requests. Per-call nonblocking I/O advances one bounded
+transition per owner per round, so a slow upload or an unread response does not
+hold the HTTP/1.1 listener. Request deadlines are ten seconds; idle and response
+write deadlines are thirty seconds. Headers retain the wire parser's line,
 count, and size caps. Configured body limits range from zero through 100 MiB,
 and request wire buffering is capped at the body limit plus 1 MiB for framing.
-Concurrency, persistent connections, response compression and interpreter
-telemetry integration remain follow-up work; TLS serving is described below.
+Total retained request/output wire data caps at 101 MiB. Native read/write
+polling, persistence, pipelining, close tokens, slow-client fairness and disposal
+are checked by `http1_server_owner.e2e` and the independent server peer.
+TLS HTTP/1.1 persistence, multiplexed HTTP/2–3 servers, response compression and
+interpreter telemetry integration remain follow-up work. The existing h2c
+single-exchange dispatch/drain still blocks active HTTP/1.1 owners while it runs;
+the fairness claim does not extend across that protocol boundary yet.
 
 All four server modules (`HttpServer`, `.Tls`, `.Quic`, `.Secure`) also provide
 `serveOn address config ...`. Four-byte addresses bind IPv4 and sixteen-byte

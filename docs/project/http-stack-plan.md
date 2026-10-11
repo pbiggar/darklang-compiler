@@ -181,6 +181,15 @@ mean the entire branch has passed its integration or performance gates.
   QUIC and combined secure servers.
 - [ ] Incremental nonblocking handshakes and active-connection servicing,
   including per-connection timers and fair TCP/UDP admission.
+
+  - [x] Native per-call nonblocking TCP receive/send, with partial-write
+    accounting, unready results, EOF and closed-owner checks. Existing blocking
+    handshake helpers retain their descriptor mode. The independent
+    `scripts/test_network_nonblocking_peer.py` verifies backpressure and cleanup.
+  - [x] Plaintext HTTP/1.1 active owners share readiness waits and advance one
+    bounded read, parse or write transition per round. Slow uploads and unread
+    responses do not monopolize other HTTP/1.1 clients. TLS handshakes, h2c
+    dispatch/draining and HTTP/2–3 servers still need the active-owner migration.
 - [ ] Persistent HTTP/1.1 connections and HTTP/2–3 connection reuse/pooling.
 
   - [x] Buffered `HttpClientSession.request` HTTP/1.1 reuse over TCP/TLS:
@@ -188,7 +197,12 @@ mean the entire branch has passed its integration or performance gates.
     idle readiness checks, explicit clear/close and no attempted-request replay.
     `http1_pool.e2e` covers expiry, eviction, origins, framing and cleanup;
     `scripts/test_http1_session_peer.py` exercises independent TCP/TLS peers.
-  - [ ] Persistent HTTP/1.1 server exchanges.
+  - [x] Persistent plaintext HTTP/1.1 server exchanges and ordered pipelining,
+    with HEAD framing, explicit close tokens, one hundred requests per owner,
+    sixty-four accepted owners, ten-second request deadlines, thirty-second
+    idle/write deadlines and a 101 MiB retained-wire budget. HTTP/1.0 retires
+    after one exchange; TLS HTTP/1.1 persistence remains pending.
+  - [ ] Persistent TLS HTTP/1.1 server exchanges.
   - [x] Lazy HTTP/1.1 session body leases over TCP/TLS. Complete self-delimited
     framing alone returns the owner; early close, surplus bytes, HTTP/1.0,
     close tokens and EOF-delimited bodies retire it. Clear invalidates outstanding

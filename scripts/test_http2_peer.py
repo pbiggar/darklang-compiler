@@ -255,10 +255,16 @@ def main():
     parser.add_argument("--compiler", type=Path, default=ROOT / "dark", help="Compiler executable to verify")
     parser.add_argument("--client-mode", choices=("buffered", "stream", "head", "abandon", "truncated", "early-buffered", "early-stream"),
                         help="Run one client case, without the server checks")
+    parser.add_argument("--server-only", action="store_true", help="Verify cleartext serving without rerunning TLS clients")
     args = parser.parse_args()
+    if args.server_only and args.client_mode:
+        parser.error("--server-only cannot be combined with --client-mode")
     with tempfile.TemporaryDirectory(prefix="dark-http2-") as temporary:
         directory = Path(temporary)
-        if args.client_mode:
+        if args.server_only:
+            server_checks(directory, args.compiler)
+            print("HTTP/2 cleartext server verified: flow control, HEAD, early rejection, draining, shutdown and cleanup")
+        elif args.client_mode:
             client_checks(directory, (args.client_mode,), args.compiler)
             print("HTTP/2 client case verified:", args.client_mode)
         else:
