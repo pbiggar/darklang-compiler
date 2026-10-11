@@ -1,0 +1,117 @@
+// __TlsServer.dark - Fair incremental TLS handshakes and persistent HTTP/1 transport owners.
+module Darklang.Stdlib.__TlsServer
+
+type Context = { http: Stdlib.__Http1Server.Context, identity: Stdlib.TlsServerIdentity.Identity }
+type Handshake = { connection: Stdlib.__Network.TcpConnection, state: Stdlib.__Tls13ServerPoll.State, deadline: Int64 }
+type Owner = Handshake of Stdlib.__TlsServer.Handshake | Http1 of Stdlib.__Http1Server.Owner
+type Step = { owner: Stdlib.Option.Option<Stdlib.__TlsServer.Owner>, stopped: Bool }
+type Round = { owners: List<Stdlib.__TlsServer.Owner>, stopped: Bool }
+
+let __close (owner: Stdlib.__TlsServer.Owner) : Unit =
+  match owner with
+  | Handshake handshake -> Stdlib.__Network.closeTcp handshake.connection
+  | Http1 owner -> Stdlib.__HttpTransport.close owner.transport
+let __closeAll (owners: List<Stdlib.__TlsServer.Owner>) : Unit = Stdlib.List.fold owners () (fun _unit owner -> Stdlib.__TlsServer.__close owner)
+
+// Retain the existing h2 compatibility profile until its stream scheduler is
+// migrated. This dispatch/drain still monopolizes the listener while it runs.
+let __http2 (context: Stdlib.__TlsServer.Context) (connection: Stdlib.__Network.TcpConnection) (accepted: Stdlib.__Tls13ServerTcp.Accepted) : Bool =
+  let transport = Stdlib.__Tls13ServerTcp.transport connection context.http.signals None accepted in
+  let result = Stdlib.__Http2.serve transport Stdlib.Blob.empty context.http.config (fun request -> Stdlib.HttpServer.__http2Handler context.http.config context.http.handler request) in
+  let stopped = match result with | Error message -> message == "HTTP server shutting down" | Ok () -> false in
+  let drained = if stopped then false else match Stdlib.__Network.monotonicMillis () with
+    | Error _ -> false
+    | Ok now -> Stdlib.HttpServer.__drainHttp2 connection context.http.signals (now + 10000L) 131072L in
+  let _ = Stdlib.__HttpTransport.close transport in stopped || drained
+
+let __step (context: Stdlib.__TlsServer.Context) (owner: Stdlib.__TlsServer.Owner) (now: Int64) : Stdlib.Result.Result<Stdlib.__TlsServer.Step, String> =
+  match owner with
+  | Http1 owner -> Stdlib.__Http1Server.step context.http owner now |> Stdlib.Result.map (fun step -> Stdlib.__TlsServer.Step { owner = Stdlib.Option.map step.owner (fun owner -> Stdlib.__TlsServer.Owner.Http1 owner), stopped = step.stopped })
+  | Handshake handshake ->
+    if now >= handshake.deadline then let _ = Stdlib.__Network.closeTcp handshake.connection in Ok (Stdlib.__TlsServer.Step { owner = None, stopped = false })
+    else match Stdlib.__Tls13ServerPoll.poll handshake.connection context.identity handshake.state with
+    | Error _ -> let _ = Stdlib.__Network.closeTcp handshake.connection in Ok (Stdlib.__TlsServer.Step { owner = None, stopped = false })
+    | Ok state -> match state with
+      | Ready accepted ->
+        if accepted.ready.protocol == "h2" then
+          let stopped = Stdlib.__TlsServer.__http2 context handshake.connection accepted in Ok (Stdlib.__TlsServer.Step { owner = None, stopped = stopped })
+        else
+          let transport = Stdlib.__Tls13ServerTcp.transport handshake.connection context.http.signals None accepted in
+          let buffer = Stdlib.__Http1Server.RequestBuffer { bytes = Stdlib.Blob.empty, continued = false } in
+          let owner = Stdlib.__Http1Server.Owner { connection = handshake.connection, transport = transport, phase = Stdlib.__Http1Server.Phase.AwaitRequest buffer, started = now, deadline = now + 10000L, requests = 0L } in
+          Ok (Stdlib.__TlsServer.Step { owner = Some (Stdlib.__TlsServer.Owner.Http1 owner), stopped = false })
+      | _ -> Ok (Stdlib.__TlsServer.Step { owner = Some (Stdlib.__TlsServer.Owner.Handshake { handshake with state = state }), stopped = false })
+
+let __inputSize (input: Stdlib.__Tls13ServerPoll.Input) : Int64 =
+  match input with
+  | Hello hello -> Stdlib.Blob.__byteLength hello.pending + Stdlib.Blob.__byteLength hello.handshake
+  | Finished finished -> Stdlib.Blob.__byteLength finished.pending + Stdlib.Blob.__byteLength finished.message + Stdlib.Blob.__byteLength finished.flight.encrypted + Stdlib.Blob.__byteLength finished.flight.transcript
+let __size (owner: Stdlib.__TlsServer.Owner) : Int64 =
+  match owner with
+  | Http1 owner -> Stdlib.__Http1Server.__size owner
+  | Handshake handshake -> match handshake.state with
+    | Input input -> Stdlib.__TlsServer.__inputSize input
+    | Output output -> Stdlib.Blob.__byteLength output.bytes + Stdlib.__TlsServer.__inputSize output.after
+    | Ready accepted -> Stdlib.Blob.__byteLength accepted.pending
+let __total (owners: List<Stdlib.__TlsServer.Owner>) : Int64 = Stdlib.List.fold owners 0L (fun total owner -> total + Stdlib.__TlsServer.__size owner)
+
+let __round (context: Stdlib.__TlsServer.Context) (now: Int64) (remaining: List<Stdlib.__TlsServer.Owner>) (next: List<Stdlib.__TlsServer.Owner>) : Stdlib.Result.Result<Stdlib.__TlsServer.Round, String> =
+  match remaining with
+  | [] -> Ok (Stdlib.__TlsServer.Round { owners = Stdlib.List.reverse next, stopped = false })
+  | owner :: rest -> match Stdlib.__TlsServer.__step context owner now with
+    | Error message -> let _ = Stdlib.__TlsServer.__closeAll (remaining @ next) in Error message
+    | Ok step ->
+      if step.stopped then let _ = Stdlib.__TlsServer.__closeAll rest in Ok (Stdlib.__TlsServer.Round { owners = Stdlib.List.reverse next, stopped = true })
+      else match step.owner with
+      | None -> Stdlib.__TlsServer.__round context now rest next
+      | Some candidate ->
+        if Stdlib.__TlsServer.__size candidate + Stdlib.__TlsServer.__total (rest @ next) > 105906176L then
+          let candidate = match candidate with
+            | Handshake _ -> let _ = Stdlib.__TlsServer.__close candidate in None
+            | Http1 current -> Some (Stdlib.__TlsServer.Owner.Http1 (Stdlib.__Http1Server.__status context.http current now 503)) in
+          Stdlib.__TlsServer.__round context now rest (match candidate with | None -> next | Some candidate -> Stdlib.List.push next candidate)
+        else Stdlib.__TlsServer.__round context now rest (Stdlib.List.push next candidate)
+
+let __interest (owner: Stdlib.__TlsServer.Owner) : Stdlib.Option.Option<Stdlib.__Network.Interest> =
+  match owner with
+  | Http1 owner -> Stdlib.__Http1Server.__interest owner
+  | Handshake handshake -> Stdlib.Option.map handshake.connection.watch (fun watch ->
+    let writing = match handshake.state with | Output _ -> true | _ -> false in
+    Stdlib.__Network.Interest { watch = watch, readable = Stdlib.Bool.not writing, writable = writing })
+let __immediate (owner: Stdlib.__TlsServer.Owner) : Bool =
+  match owner with
+  | Handshake handshake -> Stdlib.__Tls13ServerPoll.immediate handshake.state
+  | Http1 owner -> match owner.phase with | Request _ -> true | _ -> false
+
+let __loop (context: Stdlib.__TlsServer.Context) (listener: Stdlib.__Network.TcpListener) (owners: List<Stdlib.__TlsServer.Owner>) : Stdlib.Result.Result<Unit, String> =
+  match Stdlib.__Network.shutdownRequested context.http.signals, Stdlib.__Network.monotonicMillis () with
+  | Ok true, _ -> let _ = Stdlib.__TlsServer.__closeAll owners in Ok ()
+  | Ok false, Ok now ->
+    Stdlib.__TlsServer.__round context now owners [] |> Stdlib.Result.andThen (fun round ->
+      if round.stopped then let _ = Stdlib.__TlsServer.__closeAll round.owners in Ok ()
+      else
+        let accepting = Stdlib.List.length round.owners < 64 in
+        let listenerInterest = Stdlib.__Network.Interest { watch = listener.watch, readable = accepting, writable = false } in
+        let interests = Stdlib.List.push (Stdlib.List.filterMap round.owners Stdlib.__TlsServer.__interest) listenerInterest in
+        match Stdlib.__Network.waitSockets interests (if Stdlib.List.any round.owners Stdlib.__TlsServer.__immediate then 0L else 100L) with
+        | Error code ->
+          if code == 4L then Stdlib.__TlsServer.__loop context listener round.owners
+          else let _ = Stdlib.__TlsServer.__closeAll round.owners in Error "TLS HTTP readiness failed"
+        | Ok events ->
+          if Stdlib.List.any events (fun event -> event.index == 0L && (event.failed || event.closed)) then
+            let _ = Stdlib.__TlsServer.__closeAll round.owners in Error "TLS HTTP listener failed"
+          else if accepting && Stdlib.List.any events (fun event -> event.index == 0L && event.readable) then
+            match Stdlib.__Network.acceptTcp listener 100L with
+            | Error code ->
+              if code == 4L || code == 11L || code == 35L then Stdlib.__TlsServer.__loop context listener round.owners
+              else let _ = Stdlib.__TlsServer.__closeAll round.owners in Error "TLS HTTP accept failed"
+            | Ok connection ->
+              let owner = Stdlib.__TlsServer.Handshake { connection = connection, state = Stdlib.__Tls13ServerPoll.initial (), deadline = now + 10000L } in
+              Stdlib.__TlsServer.__loop context listener (round.owners @ [Stdlib.__TlsServer.Owner.Handshake owner])
+          else Stdlib.__TlsServer.__loop context listener round.owners)
+  | _, _ -> let _ = Stdlib.__TlsServer.__closeAll owners in Error "TLS HTTP clock or shutdown check failed"
+
+let serve (config: Stdlib.HttpServer.Config.Config) (identity: Stdlib.TlsServerIdentity.Identity) (handler: Stdlib.Http.Request -> Stdlib.Http.Response)
+  (signals: Stdlib.__Network.ShutdownSignals) (listener: Stdlib.__Network.TcpListener) (limit: Int64) : Stdlib.Result.Result<Unit, String> =
+  let http = Stdlib.__Http1Server.Context { config = config, handler = fun request -> Stdlib.HttpServer.Tls.__handler handler request, signals = signals, limit = limit } in
+  Stdlib.__TlsServer.__loop (Stdlib.__TlsServer.Context { http = http, identity = identity }) listener []

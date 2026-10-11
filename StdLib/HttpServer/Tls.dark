@@ -1,4 +1,4 @@
-// HttpServerTls.dark - Sequential authenticated TLS serving with ALPN HTTP/2 and HTTP/1.1.
+// HttpServerTls.dark - Owned TLS serving with incremental handshakes and HTTP/1.1 persistence.
 module Darklang.Stdlib.HttpServer.Tls
 
 let __handler (handler: Stdlib.Http.Request -> Stdlib.Http.Response) (request: Stdlib.Http.Request) : Stdlib.Http.Response =
@@ -28,25 +28,7 @@ let __connection (config: Stdlib.HttpServer.Config.Config) (handler: Stdlib.Http
       match served with | Ok wasStopped -> Ok (wasStopped || stopped) | Error message -> Error message
 
 let __loop (config: Stdlib.HttpServer.Config.Config) (identity: Stdlib.TlsServerIdentity.Identity) (handler: Stdlib.Http.Request -> Stdlib.Http.Response) (signals: Stdlib.__Network.ShutdownSignals) (listener: Stdlib.__Network.TcpListener) (limit: Int64) : Stdlib.Result.Result<Unit, String> =
-  match Stdlib.__Network.shutdownRequested signals with
-  | Error _ -> Error "TLS HTTP server shutdown check failed"
-  | Ok true -> Ok ()
-  | Ok false ->
-    match Stdlib.__Network.waitListener listener with
-    | Error code ->
-      if code == 4L then Stdlib.HttpServer.Tls.__loop config identity handler signals listener limit else Error "TLS HTTP listener failed"
-    | Ok false -> Stdlib.HttpServer.Tls.__loop config identity handler signals listener limit
-    | Ok true ->
-      match Stdlib.__Network.acceptTcp listener 100L with
-      | Error code ->
-        if code == 4L || code == 11L || code == 35L then Stdlib.HttpServer.Tls.__loop config identity handler signals listener limit else Error "TLS HTTP accept failed"
-      | Ok connection ->
-        let result = Stdlib.HttpServer.Tls.__connection config handler signals identity connection limit in
-        let _ = Stdlib.__Network.closeTcp connection in
-        match result with
-        | Error message -> Error message
-        | Ok true -> Ok ()
-        | Ok false -> Stdlib.HttpServer.Tls.__loop config identity handler signals listener limit
+  Stdlib.__TlsServer.serve config identity handler signals listener limit
 
 /// Import the certificate and key with TlsServerIdentity.create before serving.
 /// Bind before announcing and return normally on SIGINT or SIGTERM, including

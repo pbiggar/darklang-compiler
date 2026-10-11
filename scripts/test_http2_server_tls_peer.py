@@ -9,6 +9,7 @@ import socket
 import ssl
 import subprocess
 import tempfile
+import time
 from pathlib import Path
 
 from cryptography import x509
@@ -23,7 +24,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SERVER = '''// server.dark - TLS HTTP routing, bounded bodies and shutdown ownership.
 let handler (request: Stdlib.Http.Request) : Stdlib.Http.Response =
   if Stdlib.Bool.not (Stdlib.String.startsWith request.url "https://localhost") then Stdlib.Http.responseWithText "wrong scheme" 500
-  else Stdlib.Http.Response { statusCode = 200, headers = [("set-cookie", "a=1"), ("set-cookie", "b=2")], body = request.body }
+  else Stdlib.Http.Response { statusCode = 200, headers = [("set-cookie", "a=1"), ("set-cookie", "b=2")], body = if Stdlib.String.endsWith request.url "/big" then Stdlib.String.toBlob (Stdlib.String.join (Stdlib.List.repeatUnsafe 70 (Stdlib.String.repeat "b" 1000)) "") else request.body }
 let run () : Unit =
   let port = Stdlib.Cli.__Args.get 0 |> Stdlib.Result.withDefault "0" |> Stdlib.Int.parse |> Stdlib.Result.withDefault 0 in
   let imported = Stdlib.Blob.fromHex "@CERT@" |> Stdlib.Result.andThen (fun certificate ->
@@ -61,6 +62,59 @@ def connect(port, certificate, protocols, host="127.0.0.1"):
     context.set_ecdh_curve("X25519")
     context.set_alpn_protocols(protocols)
     return context.wrap_socket(socket.create_connection((host, port), timeout=15), server_hostname="localhost")
+
+
+def http1_response(reader, head=False):
+    status = reader.readline()
+    assert status.startswith(b"HTTP/1.1 200"), status
+    headers = []
+    while (line := reader.readline()) != b"\r\n":
+        assert line, "Truncated response headers"
+        name, value = line.rstrip(b"\r\n").split(b":", 1)
+        headers.append((name.lower(), value.strip()))
+    length = next(int(value) for name, value in headers if name == b"content-length")
+    body = reader.read(0 if head else length)
+    assert head or len(body) == length, "Truncated TLS response body"
+    return headers, body
+
+
+def http1_owners(port, certificate):
+    with connect(port, certificate, ["http/1.1"]) as peer, peer.makefile("rb") as reader:
+        for method, body in (("POST", b"first"), ("HEAD", b""), ("POST", b"second")):
+            peer.sendall(f"{method} /echo HTTP/1.1\r\nHost: localhost\r\nContent-Length: {len(body)}\r\n\r\n".encode() + body)
+            headers, received = http1_response(reader, head=method == "HEAD")
+            assert received == body and (b"connection", b"close") not in headers
+        peer.sendall(b"POST /echo HTTP/1.1\r\nHost: localhost\r\nContent-Length: 1\r\n\r\na"
+                     b"POST /echo HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\nContent-Length: 1\r\n\r\nb")
+        assert http1_response(reader)[1] == b"a"
+        assert http1_response(reader)[1] == b"b"
+        assert not reader.read(1)
+
+    def other_client():
+        started = time.monotonic()
+        with connect(port, certificate, ["http/1.1"]) as peer, peer.makefile("rb") as reader:
+            peer.sendall(b"GET /echo HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
+            assert http1_response(reader)[1] == b""
+        assert time.monotonic() - started < 2, "A stalled TLS owner monopolized the listener"
+
+    with socket.create_connection(("127.0.0.1", port), timeout=5) as stalled:
+        stalled.sendall(b"\x16\x03\x03\x00")
+        other_client()
+    stalled, _finished = unfinished(port, certificate)
+    try:
+        other_client()
+    finally:
+        stalled.close()
+    with connect(port, certificate, ["http/1.1"]) as stalled, stalled.makefile("rb") as reader:
+        stalled.sendall(b"POST /echo HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\nContent-Length: 4\r\n\r\na")
+        other_client()
+        stalled.sendall(b"bcd")
+        assert http1_response(reader)[1] == b"abcd"
+    with connect(port, certificate, ["http/1.1"]) as stalled:
+        stalled.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 4096)
+        stalled.sendall(b"GET /big HTTP/1.1\r\nHost: localhost\r\n\r\n" * 70)
+        time.sleep(0.5)
+        other_client()
 
 
 def unfinished(port, certificate):
@@ -151,13 +205,14 @@ def main():
         assert compiled.returncode == 0, compiled.stdout + compiled.stderr
         process, port = start(binary)
         try:
+            http1_owners(port, certificate)
             for method, total in (("POST", 70000), ("HEAD", 0), ("POST", 80001)):
                 with connect(port, certificate, ["h2", "http/1.1"]) as peer:
                     h2_exchange(peer, port, method, total)
             for protocols in (["http/1.1"], []):
                 with connect(port, certificate, protocols) as peer:
                     assert peer.selected_alpn_protocol() == (protocols[0] if protocols else None)
-                    peer.sendall(f"POST /echo HTTP/1.1\r\nHost: localhost:{port}\r\nContent-Length: 8192\r\nExpect: 100-continue\r\n\r\n".encode())
+                    peer.sendall(f"POST /echo HTTP/1.1\r\nHost: localhost:{port}\r\nConnection: close\r\nContent-Length: 8192\r\nExpect: 100-continue\r\n\r\n".encode())
                     assert peer.recv(4096) == b"HTTP/1.1 100 Continue\r\n\r\n"
                     peer.sendall(b"x" * 8192)
                     response = bytearray()
@@ -215,7 +270,7 @@ def main():
                 if process.poll() is None:
                     process.kill()
                     process.communicate()
-    print("TLS HTTP/2 server verified: 70 KiB flow control, HEAD, early 413, HTTP/1.1/no-ALPN, Expect, ALPN rejection, fragmented hello, forged Finished, stalled shutdown and zero leaks")
+    print("TLS server verified: persistent/pipelined HTTP/1, stalled hello/Finished/upload/send fairness, 70 KiB HTTP/2 flow control, HEAD, early 413, no-ALPN, Expect, ALPN rejection, forged Finished, shutdown and zero leaks")
 
 
 if __name__ == "__main__":

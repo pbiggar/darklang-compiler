@@ -5,7 +5,7 @@ let prepared (input: String) (response: Stdlib.Http.Response) (count: Int64) : (
   let config = { Stdlib.HttpServer.Config.defaults 80 with injectStandardHeaders = false, logRequests = false } in
   let context = Stdlib.__Http1Server.Context { config = config, handler = fun _request -> response, signals = Stdlib.__Network.ShutdownSignals { lifecycle = life }, limit = 16L } in
   let buffer = Stdlib.__Http1Server.RequestBuffer { bytes = Stdlib.String.toBlob input, continued = false } in
-  let owner = Stdlib.__Http1Server.Owner { connection = connection, phase = Stdlib.__Http1Server.Phase.Request buffer, started = 0L, deadline = 10000L, requests = count } in
+  let owner = Stdlib.__Http1Server.Owner { connection = connection, transport = Stdlib.__HttpTransport.plain connection, phase = Stdlib.__Http1Server.Phase.Request buffer, started = 0L, deadline = 10000L, requests = count } in
   let next = Stdlib.__Http1Server.prepare context owner 1L buffer in
   let result = match next.phase with
     | Output output ->

@@ -224,6 +224,7 @@ StdLib/__Tls13ServerHandshake.dark
 StdLib/__Tls13KeyUpdate.dark
 StdLib/__Tls13ServerTcp.dark
 StdLib/__Tls13ServerPoll.dark
+StdLib/__TlsServer.dark
 StdLib/__QuicServerTls.dark
 StdLib/__QuicServerRetry.dark
 StdLib/HttpServer/Tls.dark

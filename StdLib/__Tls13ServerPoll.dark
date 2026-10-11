@@ -115,6 +115,17 @@ let step (identity: Stdlib.TlsServerIdentity.Identity) (state: Stdlib.__Tls13Ser
 let poll (connection: Stdlib.__Network.TcpConnection) (identity: Stdlib.TlsServerIdentity.Identity) (state: Stdlib.__Tls13ServerPoll.State) : Stdlib.Result.Result<Stdlib.__Tls13ServerPoll.State, String> =
   match Stdlib.Stream.next connection.lifecycle with
   | None -> Error "TLS handshake connection is closed"
-  | Some _ -> Stdlib.__Tls13ServerPoll.step identity state
-      (fun _unit -> Stdlib.__Network.pollReadTcp connection |> Stdlib.Result.mapError (fun _code -> "TLS handshake read failed"))
-      (fun bytes -> Stdlib.__Network.pollWriteTcp connection bytes |> Stdlib.Result.mapError (fun _code -> "TLS handshake write failed"))
+  | Some _ -> Stdlib.__Tls13ServerPoll.step identity state (fun _unit -> Stdlib.__Network.pollReadTcp connection |> Stdlib.Result.mapError (fun _code -> "TLS handshake read failed")) (fun bytes -> Stdlib.__Network.pollWriteTcp connection bytes |> Stdlib.Result.mapError (fun _code -> "TLS handshake write failed"))
+
+let __recordReady (pending: Blob) : Bool =
+  match Stdlib.__Tls13.parseRecord pending with | Error Incomplete -> false | _ -> true
+
+let immediate (state: Stdlib.__Tls13ServerPoll.State) : Bool =
+  match state with
+  | Ready _ -> true
+  | Output output -> output.offset == Stdlib.Blob.__byteLength output.bytes
+  | Input input -> match input with
+    | Finished finished -> Stdlib.Blob.__byteLength finished.message >= 36L || Stdlib.__Tls13ServerPoll.__recordReady finished.pending
+    | Hello hello ->
+      let complete = match Stdlib.__Tls13Handshake.parseHandshakeFrame hello.handshake with | Error Incomplete -> false | _ -> true in
+      complete || Stdlib.__Tls13ServerPoll.__recordReady hello.pending
