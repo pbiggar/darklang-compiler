@@ -207,6 +207,7 @@ fragments use `__` even where the interpreter also has private helpers.
 | `StdLib/__QuicConnection.dark` | `Darklang.Stdlib.__QuicConnection` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
 | `StdLib/__Qpack.dark` | `Darklang.Stdlib.__Qpack` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
 | `StdLib/__QpackDecoder.dark` | `Darklang.Stdlib.__QpackDecoder` | Compiler support: bounded dynamic QPACK decoding and encoder-stream instructions |
+| `StdLib/__QpackEncoder.dark` | `Darklang.Stdlib.__QpackEncoder` | Compiler support: bounded outgoing dynamic QPACK, reference pins and decoder feedback |
 | `StdLib/__Http3Wire.dark` | `Darklang.Stdlib.__Http3Wire` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
 | `StdLib/__Http3Stream.dark` | `Darklang.Stdlib.__Http3Stream` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
 | `StdLib/__Http3Message.dark` | `Darklang.Stdlib.__Http3Message` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |

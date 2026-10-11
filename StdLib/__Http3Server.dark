@@ -50,11 +50,11 @@ let __respond (state: Stdlib.__Http3.State) (config: Stdlib.HttpServer.Config.Co
         let length = if status == 204L then [] else [("content-length", Stdlib.Int64.toString (Stdlib.Blob.__byteLength response.body))] in
         let fields = [(":status", Stdlib.Int64.toString status)] @ headers @ length in
         let body = if method == "HEAD" || status == 204L || status == 304L then Stdlib.Blob.empty else response.body in
-        Stdlib.__Http3Control.checkFields state.uni.control fields |> Stdlib.Result.andThen (fun _unit -> Stdlib.__Qpack.encode fields) |> Stdlib.Result.andThen (Stdlib.__Http3Wire.serialize 1L) |> Stdlib.Result.andThen (fun bytes ->
+        Stdlib.__Http3.encodeHeaders state 0L fields |> Stdlib.Result.andThen (fun encoded ->
           // Only request stream zero is accepted in this sequential profile.
           Stdlib.__QuicWire.integer 4L |> Stdlib.Result.andThen (Stdlib.__Http3Wire.serialize 7L) |> Stdlib.Result.andThen (fun goaway ->
-            Stdlib.__QuicConnection.write state.connection 3L goaway false |> Stdlib.Result.andThen (fun connection ->
-              Stdlib.__Http3.write { state with connection = connection } bytes false |> Stdlib.Result.andThen (fun next -> Stdlib.__Http3Server.__write next body 0L)))))
+            Stdlib.__QuicConnection.write encoded.state.connection 3L goaway false |> Stdlib.Result.andThen (fun connection ->
+              Stdlib.__Http3.write { encoded.state with connection = connection } encoded.bytes false |> Stdlib.Result.andThen (fun next -> Stdlib.__Http3Server.__write next body 0L)))))
 
 let serve (ready: Stdlib.__QuicServer.Ready) (signals: Stdlib.__Network.ShutdownSignals) (config: Stdlib.HttpServer.Config.Config) (handler: Stdlib.Http.Request -> Stdlib.Http.Response) (limit: Int64) : Stdlib.Result.Result<Stdlib.__Http3.State, String> =
   Stdlib.__Http3.initializeServer ready signals 10000L |> Stdlib.Result.andThen (fun state ->

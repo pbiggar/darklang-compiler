@@ -9,14 +9,21 @@ type State = {
   encoderId: Stdlib.Option.Option<Int64>,
   decoderId: Stdlib.Option.Option<Int64>,
   control: Stdlib.__Http3Control.State,
-  table: Stdlib.__QpackDecoder.State
+  table: Stdlib.__QpackDecoder.State,
+  outgoing: Stdlib.__QpackEncoder.State
 }
 type Received = { state: Stdlib.__Http3Uni.State, events: List<Stdlib.__Http3Control.Event>, feedback: Blob }
 
 let createWithCapacity (fromServer: Bool) (maximum: Int64) : Stdlib.Result.Result<Stdlib.__Http3Uni.State, String> =
+  Stdlib.__QpackEncoder.create 0L 0L |> Stdlib.Result.andThen (fun outgoing ->
   Stdlib.__QpackDecoder.create maximum |> Stdlib.Result.map (fun table ->
     Stdlib.__Http3Uni.State { fromServer = fromServer, streams = [], controlId = None,
-      encoderId = None, decoderId = None, control = Stdlib.__Http3Control.create fromServer, table = table })
+      encoderId = None, decoderId = None, control = Stdlib.__Http3Control.create fromServer, table = table, outgoing = outgoing }))
+
+let __setting (parameters: List<(Int64 * Int64)>) (id: Int64) : Int64 =
+  match Stdlib.List.findFirst parameters (fun parameter -> let (key, _value) = parameter in key == id) with
+  | None -> 0L
+  | Some parameter -> let (_key, value) = parameter in value
 
 let create (fromServer: Bool) : Stdlib.__Http3Uni.State =
   match Stdlib.__Http3Uni.createWithCapacity fromServer 0L with
@@ -52,14 +59,19 @@ let __payload (state: Stdlib.__Http3Uni.State) (stream: Stdlib.__Http3Uni.Stream
   else
     let next = Stdlib.__Http3Uni.__replace state { stream with prefix = Stdlib.Blob.empty, kind = Some kind, finished = finished || reset } in
     if kind == 0L then
-      Stdlib.__Http3Control.feed next.control data |> Stdlib.Result.map (fun received ->
-        Stdlib.__Http3Uni.Received { state = { next with control = received.state }, events = received.events, feedback = Stdlib.Blob.empty })
+      Stdlib.__Http3Control.feed next.control data |> Stdlib.Result.andThen (fun received ->
+        let outgoing =
+          if Stdlib.Bool.not next.control.settings && received.state.settings then
+            Stdlib.__QpackEncoder.create (Stdlib.__Http3Uni.__setting received.state.parameters 1L) (Stdlib.__Http3Uni.__setting received.state.parameters 7L)
+          else Ok next.outgoing in
+        outgoing |> Stdlib.Result.map (fun outgoing -> Stdlib.__Http3Uni.Received { state = { next with control = received.state, outgoing = outgoing }, events = received.events, feedback = Stdlib.Blob.empty }))
     else if kind == 2L then
       Stdlib.__QpackDecoder.feed next.table data |> Stdlib.Result.map (fun received ->
         let feedback = if received.increment == 0L then Stdlib.Blob.empty else Stdlib.__Hpack.encodeInteger 6L 0L received.increment in
         Stdlib.__Http3Uni.Received { state = { next with table = received.state }, events = [], feedback = feedback })
-    else if kind == 3L && Stdlib.Blob.__byteLength data != 0L then
-      Error "Unexpected QPACK decoder feedback"
+    else if kind == 3L then
+      Stdlib.__QpackEncoder.feed next.outgoing data |> Stdlib.Result.map (fun outgoing ->
+        Stdlib.__Http3Uni.Received { state = { next with outgoing = outgoing }, events = [], feedback = Stdlib.Blob.empty })
     else Ok (Stdlib.__Http3Uni.Received { state = next, events = [], feedback = Stdlib.Blob.empty })
 
 let receive (state: Stdlib.__Http3Uni.State) (id: Int64) (data: Blob) (finished: Bool) (reset: Bool)

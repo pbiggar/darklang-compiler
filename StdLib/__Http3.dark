@@ -9,6 +9,7 @@ type State = {
   feedback: Blob
 }
 type Received = { state: Stdlib.__Http3.State, events: List<Stdlib.__Http3Message.Event>, finished: Bool }
+type Headers = { state: Stdlib.__Http3.State, bytes: Blob }
 
 let __uni (fromServer: Bool) : Stdlib.__Http3Uni.State =
   match Stdlib.__Http3Uni.createWithCapacity fromServer 4096L with
@@ -118,6 +119,36 @@ let __controls (state: Stdlib.__Http3.State) : Stdlib.Result.Result<Stdlib.__Htt
         Stdlib.__Http3Uni.receive current.uni channel.id read.bytes read.finished (Stdlib.Option.isSome read.reset)
           |> Stdlib.Result.andThen (fun received -> Stdlib.__Http3.__feedback { current with connection = read.state, uni = received.state } received.feedback))))
     |> Stdlib.Result.andThen (fun current -> Stdlib.__Http3.__feedback current Stdlib.Blob.empty)
+
+let __encoderBytes (state: Stdlib.__Http3.State) (id: Int64) (bytes: Blob) (offset: Int64) : Stdlib.Result.Result<Stdlib.__Http3.State, String> =
+  if offset == Stdlib.Blob.__byteLength bytes then Ok state
+  else
+    let remaining = Stdlib.Blob.__byteLength bytes - offset in
+    let size = if remaining > 900L then 900L else remaining in
+    Stdlib.__QuicConnection.write state.connection id (Stdlib.__Http2Wire.__slice bytes offset size) false
+      |> Stdlib.Result.andThen Stdlib.__QuicConnection.flush
+      |> Stdlib.Result.andThen (fun connection -> Stdlib.__Http3.__encoderBytes { state with connection = connection } id bytes (offset + size))
+
+// Reserve enough critical-stream AND connection credit for every instruction in
+// the batch. Lack of credit selects literals, never a partially sent insertion
+// that the peer would have to decode before granting us more credit.
+let encodeHeaders (state: Stdlib.__Http3.State) (stream: Int64) (fields: List<(String * String)>) : Stdlib.Result.Result<Stdlib.__Http3.Headers, String> =
+  Stdlib.__Http3.__controls state |> Stdlib.Result.andThen (fun state ->
+    Stdlib.__Http3Control.checkFields state.uni.control fields |> Stdlib.Result.andThen (fun _unit ->
+      let id = if state.connection.flow.role == Stdlib.__QuicFlow.Role.Client then 6L else 7L in
+      match Stdlib.__QuicFlow.channel state.connection.flow id with
+      | None -> Builtin.crash "HTTP/3 encoder stream is not open"
+      | Some channel -> match channel.send with
+        | None -> Builtin.crash "HTTP/3 encoder stream is receive-only"
+        | Some sender ->
+          let connectionCredit = state.connection.flow.peer.data - state.connection.flow.sent in
+          let streamCredit = sender.credit - sender.offset in
+          let credit = if streamCredit < connectionCredit then streamCredit else connectionCredit in
+          let budget = if credit < 0L then 0L else if credit > 65536L then 65536L else credit in
+          Stdlib.__QpackEncoder.encode state.uni.outgoing stream fields budget |> Stdlib.Result.andThen (fun encoded ->
+            Stdlib.__Http3Wire.serialize 1L encoded.bytes |> Stdlib.Result.andThen (fun bytes ->
+              Stdlib.__Http3.__encoderBytes { state with uni = { state.uni with outgoing = encoded.state } } id encoded.instructions 0L
+                |> Stdlib.Result.map (fun next -> Stdlib.__Http3.Headers { state = next, bytes = bytes })))))
 
 // Drain before polling so response data and control credit already received cannot starve.
 let __drain (state: Stdlib.__Http3.State) : Stdlib.Result.Result<Stdlib.__Http3.Received, String> =
