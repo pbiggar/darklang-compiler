@@ -1,0 +1,38 @@
+// tls_output_queue.e2e - Requested key updates retain ordered ciphertext under backpressure.
+let queuedUpdate () : Stdlib.Result.Result<(String * Int64 * Int64), String> =
+  let secret = Stdlib.Blob.__fromInt64List (Stdlib.List.repeatUnsafe 32 0L) in
+  Stdlib.__Tls13.trafficKeys secret |> Stdlib.Result.andThen (fun keys ->
+    Stdlib.__Tls13.sealRecord keys 22L (Stdlib.Blob.__fromInt64List [24L, 0L, 0L, 1L, 1L]) |> Stdlib.Result.andThen (fun update ->
+      Stdlib.__Tls13KeyUpdate.__next secret keys.cipherSuite |> Stdlib.Result.andThen (fun pair ->
+        let (_secret, receive) = pair in
+        Stdlib.__Tls13.sealRecord receive 23L (Stdlib.String.toBlob "ready") |> Stdlib.Result.andThen (fun data ->
+          let state = Stdlib.__Tls13Client.applicationState (Stdlib.__Tls13Client.SecureKeys { client = keys, server = keys, clientSecret = secret, serverSecret = secret, pending = Stdlib.Blob.concat [update.bytes, data.bytes] }) in
+          let cell = Stdlib.Stream.__cellNew state in
+          let life = Stdlib.Stream.__new (fun _unit -> Some ()) (fun _unit -> ()) in
+          let connection = Stdlib.__Network.TcpConnection { lifecycle = life, watch = None, read = fun _length -> Builtin.crash "Buffered poll must not read", write = fun _bytes -> Builtin.crash "KeyUpdate poll must not block" } in
+          let polled = Stdlib.__HttpTransport.__pollSecureStep connection cell life 32L (fun _bytes -> Ok None) in
+          let result = polled |> Stdlib.Result.andThen (fun available ->
+            let state = Stdlib.Stream.__cellGet<Stdlib.__Tls13Client.ApplicationState> cell in
+            match available with
+            | None -> Error "Missing application bytes"
+            | Some bytes -> Stdlib.Blob.toString bytes |> Stdlib.Result.map (fun text -> (text, Stdlib.Blob.__byteLength state.outgoing, state.updates.send.sequence))) in
+          let _ = Stdlib.Stream.__cellDispose<Stdlib.__Tls13Client.ApplicationState> cell in
+          let _ = Stdlib.Stream.close life in result))))
+queuedUpdate () = Ok ("ready", 27L, 0L) // leak_check
+
+let flushOutput (size: Int64) : Stdlib.Result.Result<(Bool * String * Int64), String> =
+  let secret = Stdlib.Blob.__fromInt64List (Stdlib.List.repeatUnsafe 32 0L) in
+  Stdlib.__Tls13.trafficKeys secret |> Stdlib.Result.andThen (fun keys ->
+    let state = Stdlib.__Tls13Client.applicationState (Stdlib.__Tls13Client.SecureKeys { client = keys, server = keys, clientSecret = secret, serverSecret = secret, pending = Stdlib.Blob.empty }) in
+    let cell = Stdlib.Stream.__cellNew { state with outgoing = Stdlib.String.toBlob "abcdef", outgoingOffset = 1L } in
+    let result = Stdlib.__HttpTransport.__pollOutput cell (fun bytes ->
+      if Stdlib.Blob.toString bytes != Ok "bcdef" then Error "Wrong write suffix"
+      else if size < 0L then Ok None else Ok (Some size)) |> Stdlib.Result.andThen (fun done ->
+        let state = Stdlib.Stream.__cellGet<Stdlib.__Tls13Client.ApplicationState> cell in
+        Stdlib.Blob.toString state.outgoing |> Stdlib.Result.map (fun text -> (done, text, state.outgoingOffset))) in
+    let _ = Stdlib.Stream.__cellDispose<Stdlib.__Tls13Client.ApplicationState> cell in result)
+flushOutput -1L = Ok (false, "abcdef", 1L) // leak_check
+flushOutput 2L = Ok (false, "abcdef", 3L) // leak_check
+flushOutput 5L = Ok (true, "", 0L) // leak_check
+flushOutput 0L = Error "Invalid TLS write progress" // leak_check
+flushOutput 6L = Error "Invalid TLS write progress" // leak_check
