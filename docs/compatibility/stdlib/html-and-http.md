@@ -300,8 +300,11 @@ expired, closed, failed or readable idle sockets; TLS owners also reject
 buffered encrypted bytes. This conservatively discards TLS control traffic
 instead of blocking checkout. A failed attempted request is never replayed.
 Session clear and close release the cache and pooled connections; a returned
-lazy body remains unpooled and keeps owning its connection until consumed or
-closed. Calls after session close return `NetworkError`. Existing stateless
+lazy body exclusively borrows its connection until consumed or closed. Valid
+completion returns eligible HTTP/1.1–3 owners; abandonment retires them. Clear
+invalidates outstanding leases, so later completion cannot repopulate the pool.
+Calls after session close return `NetworkError`; a subsequent body pull releases
+its borrowed owner. Existing stateless
 client entry points retain HTTPS DNS discovery without persistent Alt-Svc state.
 `alt_svc.e2e`, `alt_svc_cache.e2e`, `http_client_session.e2e` and
 `python3 scripts/test_alt_svc_peer.py` cover parsing, bounded cache eviction,
@@ -329,9 +332,9 @@ TCP/TLS polling retains incomplete records/frames and authenticates TLS control
 records without waiting for more bytes. `http2_connection.e2e`,
 `http_transport_poll.e2e` and `scripts/test_http2_session_peer.py` check reuse,
 reverse/interleaved 70 KiB replies, 140 KiB uploads, early responses, shared
-compression, stream limits, resets, GOAWAY and cleanup. Public session batch
-calls, lazy multiplexed bodies, multiplexed servers and HTTP/3 pooling/scheduling
-are not yet exposed by this implementation.
+compression, stream limits, resets, GOAWAY and cleanup. Public session batches
+and HTTP/3 pooling/scheduling are described below. Lazy multiplexed bodies and
+multiplexed servers remain unfinished.
 Buffered and lazy HTTP/3 clients retain the latest packet-number/key state
 through terminal events and send encrypted H3_NO_ERROR on completion or early
 body closure. Closing keys stay available for three PTOs, capped at thirty
@@ -466,6 +469,14 @@ all requests before any I/O, groups requests by origin and uses the negotiated
 HTTP/2 or HTTP/3 scheduler; distinct origins and HTTP/1.1 exchanges run sequentially.
 Uploads and responses each have a 100 MiB aggregate batch limit. A stream reset
 fails that request while other eligible streams finish. Requests rejected by
-GOAWAY are reported without replay. Lazy body pooling is still pending.
+GOAWAY are reported without replay. `Session.stream` now exclusively checks out
+an HTTP/1.1, HTTP/2 or HTTP/3 owner. Only complete, validated body framing returns
+it to the pool. HTTP/1.1 additionally requires no surplus bytes and idle readiness;
+HTTP/2–3 preserve shared compression and terminal parser/transport state.
+Early closure, failures, GOAWAY and session invalidation retire the borrowed owner.
+Simultaneous lazy bodies use separate checked-out connections, not multiplexed
+body readers. `http_session_stream.e2e`, `http_session_stream_h2.e2e` and the
+session peers' `--stream` modes cover framing, invalidation, reuse and cleanup,
+including independent 70 KiB TCP/TLS, HTTP/2 and HTTP/3 responses.
 `http_session_batch.e2e`, `quic_flow.e2e`, and the session peers' `--public`
 HTTP/2 and `--public --multiplex` HTTP/3 modes exercise these APIs.

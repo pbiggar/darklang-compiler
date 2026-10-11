@@ -128,7 +128,7 @@ def main():
         if args.stream:
             if args.multiplex:
                 parser.error("--stream requires sequential requests")
-            test_source = test_source.replace('session.request "GET"', 'session.stream "GET"').replace('Stdlib.Blob.toHex response.body', 'Stdlib.Blob.toHex (Stdlib.Stream.toBlob response.body)')
+            test_source = test_source.replace('session.request "GET"', 'session.stream "GET"').replace('Stdlib.Blob.toHex response.body == Stdlib.Blob.toHex (Stdlib.String.toBlob ("/" ++ Stdlib.Int64.toString index))', 'Stdlib.Blob.__byteLength (Stdlib.Stream.toBlob response.body) == 70000L')
         source.write_text(test_source.replace("@CA@", ca.public_bytes(serialization.Encoding.DER).hex()).replace("@COUNT@", str(args.requests)))
         compiled = subprocess.run([str(args.compiler), str(source), "--allow-internal", "--leak-check", "-o", str(binary)], cwd=ROOT, capture_output=True, text=True, timeout=120)
         assert compiled.returncode == 0, compiled.stdout + compiled.stderr
@@ -175,6 +175,8 @@ def main():
                                             http.send_headers(identifier, [(b":status", b"200"), (b"content-length", b"70000"), (b"x-shared", "café ☃".encode())])
                                             http.send_data(identifier, bytes([97 + identifier]) * 70000, end_stream=True)
                                 else:
+                                    if args.stream and received.stream_id >= 4:
+                                        body = b"s" * 70000
                                     http.send_headers(received.stream_id, [(b":status", b"200"), (b"content-length", str(len(body)).encode()), (b"x-shared", "café ☃".encode())])
                                     http.send_data(received.stream_id, body, end_stream=True)
                     for data, address in connection.datagrams_to_send(now):

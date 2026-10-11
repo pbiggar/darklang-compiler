@@ -188,7 +188,11 @@ mean the entire branch has passed its integration or performance gates.
     idle readiness checks, explicit clear/close and no attempted-request replay.
     `http1_pool.e2e` covers expiry, eviction, origins, framing and cleanup;
     `scripts/test_http1_session_peer.py` exercises independent TCP/TLS peers.
-  - [ ] Persistent HTTP/1.1 server exchanges and lazy-body pool leases.
+  - [ ] Persistent HTTP/1.1 server exchanges.
+  - [x] Lazy HTTP/1.1 session body leases over TCP/TLS. Complete self-delimited
+    framing alone returns the owner; early close, surplus bytes, HTTP/1.0,
+    close tokens and EOF-delimited bodies retire it. Clear invalidates outstanding
+    lease generations, and pulls after session close release the borrowed owner.
   - [x] Buffered HTTP/2 session owners retain HPACK, connection credit and odd
     stream IDs across requests. Eight idle origins expire after thirty seconds;
     checkout retires stale/GOAWAY owners before writing a request.
@@ -196,7 +200,13 @@ mean the entire branch has passed its integration or performance gates.
     QPACK tables and stream IDs across requests. Eight idle origins expire
     after thirty seconds. Completed stream history remains bounded by rotation
     after 1024 requests; closed streams do not consume the 64 active owner slots.
-  - [ ] Lazy HTTP/3 body pool leases.
+  - [x] Lazy HTTP/3 session body leases retain the latest QUIC/QPACK owner on
+    valid completion and retire it on abandonment, failure or invalidation.
+    A completed early response resets only an unfinished upload before reuse.
+  - [x] Lazy HTTP/2 session body leases use the connection scheduler and retain
+    terminal DATA/trailer state, HPACK and connection credit. Owners remain
+    exclusively checked out until the body is consumed or closed; concurrent
+    lazy bodies are not yet multiplexed on one connection.
 
 - [ ] HTTP/2 and HTTP/3 request multiplexing, stream allocation and scheduling.
 
