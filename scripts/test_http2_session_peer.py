@@ -166,7 +166,7 @@ class Peer:
                         elif isinstance(event, StreamEnded):
                             ended.add(event.stream_id)
                     ready = [stream for stream in ended if stream not in outgoing]
-                    if self.mode not in ("reuse", "limit") and not replied:
+                    if self.mode not in ("reuse", "lazy", "limit") and not replied:
                         ready = [3, 1] if ((self.mode == "early" and len(paths) >= 2) or {1, 3}.issubset(ended)) else []
                         if ready:
                             replied = True
@@ -219,6 +219,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--compiler", type=Path, default=ROOT / "dark")
     parser.add_argument("--public", action="store_true")
+    parser.add_argument("--stream", action="store_true", help="Verify lazy 70 KiB response leases before multiplexing checks")
     args = parser.parse_args()
     key, leaf, ca = certificates()
     with tempfile.TemporaryDirectory(prefix="dark-http2-session-") as temporary:
@@ -232,11 +233,20 @@ def main():
         context.set_alpn_protocols(["h2"])
         context.load_cert_chain(certificate, private)
         source, binary = directory / "session.dark", directory / "session"
-        source.write_text(SOURCE.replace("@CA@", ca.public_bytes(serialization.Encoding.PEM).hex()))
+        program = SOURCE
+        if args.stream:
+            program = program.replace("session.request", "exchange session").replace('Stdlib.Blob.toHex first.body == "2F61" && Stdlib.Blob.toHex second.body == "2F62"', 'Stdlib.Blob.__byteLength first.body == 70000L && Stdlib.Blob.__byteLength second.body == 70000L')
+            program = '''// lazy-h2.dark - Fully consumed lazy responses return the HTTP/2 owner.
+let exchange (session: Stdlib.HttpClientSession.Session) (method: String) (url: String) (headers: List<(String * String)>) (body: Blob)
+  : Stdlib.Result.Result<Stdlib.HttpClient.Response, Stdlib.HttpClient.RequestError> =
+  session.stream method url headers body |> Stdlib.Result.map (fun response ->
+    Stdlib.HttpClient.Response { statusCode = response.statusCode, headers = response.headers, body = Stdlib.Stream.toBlob response.body })
+''' + program
+        source.write_text(program.replace("@CA@", ca.public_bytes(serialization.Encoding.PEM).hex()))
         compiled = subprocess.run([str(args.compiler), str(source), "--allow-internal", "--leak-check", "-o", str(binary)],
                                   cwd=ROOT, capture_output=True, text=True, timeout=180)
         assert compiled.returncode == 0, compiled.stdout + compiled.stderr
-        peer = Peer(context)
+        peer = Peer(context, "lazy" if args.stream else "reuse")
         try:
             result = subprocess.run([str(binary), f"https://localhost:{peer.port}"], cwd=ROOT,
                                     capture_output=True, text=True, timeout=60)

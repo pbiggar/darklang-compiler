@@ -8,7 +8,7 @@ type Read = { response: Stdlib.HttpClient.Response, reusable: Bool }
 type Reusable = Http1 of Stdlib.__HttpTransport.Transport | Http2 of Stdlib.__Http2Pool.Entry | Http3 of Stdlib.__Http3Pool.Entry
 type Completed = { response: Stdlib.HttpClient.Response, reusable: Stdlib.Option.Option<Stdlib.__Http1Pool.Reusable> }
 type StreamHead = { head: Stdlib.__HttpWire.ParsedResponseHead, wire: Blob }
-type StreamOpened = Http1 of Stdlib.__HttpTransport.Transport | Http3 of Stdlib.__Http3Pool.Entry | Modern of Stdlib.HttpClient.StreamResponse
+type StreamOpened = Http1 of Stdlib.__HttpTransport.Transport | Http2 of Stdlib.__Http2Pool.Entry | Http3 of Stdlib.__Http3Pool.Entry
 
 val empty = Stdlib.__Http1Pool.State { entries = [] }
 
@@ -87,9 +87,9 @@ let openStream (trusted: Bool) (roots: Stdlib.Option.Option<List<Blob>>) (altern
         | Ok negotiated ->
           let transport = Stdlib.__HttpTransport.secure connection negotiated.keys in
           if negotiated.protocol != "h2" then Ok (Stdlib.__Http1Pool.StreamOpened.Http1 transport)
-          else match Stdlib.__Http2.stream transport prepared.method prepared.url headers body with
+          else match Stdlib.__Http2Connection.open transport with
             | Error message -> let _ = Stdlib.__HttpTransport.close transport in Error (Stdlib.__Http1Pool.__error message)
-            | Ok response -> Ok (Stdlib.__Http1Pool.StreamOpened.Modern response))
+            | Ok state -> Ok (Stdlib.__Http1Pool.StreamOpened.Http2 (Stdlib.__Http2Pool.Entry { origin = prepared.url, transport = transport, state = state, idle = 0L })))
 
 let __response (parsed: Stdlib.__HttpWire.ParsedResponse) : Stdlib.HttpClient.Response =
   Stdlib.HttpClient.Response { statusCode = Stdlib.Int.fromInt64 parsed.statusCode, headers = parsed.headers, body = parsed.body }

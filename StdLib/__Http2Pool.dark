@@ -5,6 +5,9 @@ type Entry = { origin: Stdlib.__HttpWire.Url, transport: Stdlib.__HttpTransport.
 type State = { entries: List<Stdlib.__Http2Pool.Entry> }
 type Lease = { state: Stdlib.__Http2Pool.State, entry: Stdlib.Option.Option<Stdlib.__Http2Pool.Entry> }
 type Completed = { response: Stdlib.HttpClient.Response, entry: Stdlib.Option.Option<Stdlib.__Http2Pool.Entry> }
+type StreamReady = { work: Stdlib.__Http2Connection.Work, head: Stdlib.__Http2Fields.ResponseHead }
+type Body = { work: Stdlib.__Http2Connection.Work, bytes: Blob, position: Int64, finished: Bool }
+type BodyLease = { entry: Stdlib.__Http2Pool.Entry, cell: RawPtr, lifecycle: Stream<Unit>, returnOwner: Stdlib.__Http2Pool.Entry -> Bool }
 
 val empty = Stdlib.__Http2Pool.State { entries = [] }
 
@@ -59,3 +62,77 @@ let exchange (entry: Stdlib.__Http2Pool.Entry) (method: String) (url: Stdlib.__H
         else Ok (Stdlib.__Http2Pool.Completed { response = response, entry = Some { entry with state = batch.state } })
       | Error _message -> let _ = Stdlib.__HttpTransport.close entry.transport in Error Stdlib.HttpClient.RequestError.NetworkError
     | _ -> Builtin.crash "Singleton HTTP/2 exchange returned wrong response count"
+
+let __head (transport: Stdlib.__HttpTransport.Transport) (work: Stdlib.__Http2Connection.Work)
+  : Stdlib.Result.Result<Stdlib.__Http2Pool.StreamReady, String> =
+  match work.completed with
+  | [outcome] ->
+    match outcome.response with
+    | Error message -> Error message
+    | Ok response -> Ok (Stdlib.__Http2Pool.StreamReady { work = work, head = Stdlib.__Http2Fields.ResponseHead { status = Stdlib.Int64.__fromIntUnchecked response.statusCode, headers = response.headers } })
+  | [] ->
+    match Stdlib.List.findFirst work.active (fun stream -> Stdlib.Option.isSome stream.head) with
+    | Some stream ->
+      match stream.head with | None -> Builtin.crash "Missing selected HTTP/2 head" | Some head -> Ok (Stdlib.__Http2Pool.StreamReady { work = work, head = head })
+    | None ->
+      Stdlib.__Http2Connection.__admit transport work |> Stdlib.Result.andThen (fun work ->
+        Stdlib.__Http2Connection.__sendRound transport work.active (Stdlib.__Http2Connection.Round { work = work, progressed = false }) |> Stdlib.Result.andThen (fun round ->
+          let received = if round.progressed then Stdlib.__Http2Connection.__poll transport round.work |> Stdlib.Result.map (fun round -> round.work) else Stdlib.__Http2Connection.__receive transport round.work in
+          received |> Stdlib.Result.andThen (Stdlib.__Http2Pool.__head transport)))
+  | _ -> Builtin.crash "Multiple outcomes in lazy HTTP/2 exchange"
+
+// Publish every frame, including terminal trailers or an empty terminal DATA
+// frame. The generic producer's None path cannot carry an updated parser state.
+let __bodyNext (lease: Stdlib.__Http2Pool.BodyLease) : Stdlib.Option.Option<UInt8> =
+  match Stdlib.Stream.next lease.lifecycle with
+  | None -> None
+  | Some _ ->
+    let body = Stdlib.Stream.__cellGet<Stdlib.__Http2Pool.Body> lease.cell in
+    if body.position < Stdlib.Blob.__byteLength body.bytes then
+      match Stdlib.UInt8.fromInt64 (Stdlib.Blob.__getByte body.bytes body.position) with
+      | None -> Builtin.crash "Invalid leased HTTP/2 byte"
+      | Some byte -> let _ = Stdlib.Stream.__cellSet lease.cell { body with position = body.position + 1L } in Some byte
+    else if body.finished then None
+    else match body.work.completed with
+      | [outcome] ->
+        match outcome.response with
+        | Error message -> Builtin.testRuntimeError message
+        | Ok response ->
+          let next = { body with work = { body.work with completed = [] }, bytes = response.body, position = 0L, finished = true } in
+          let _ = Stdlib.Stream.__cellSet lease.cell next in Stdlib.__Http2Pool.__bodyNext lease
+      | [] ->
+        match body.work.active with
+        | [stream] when stream.blocks != [] ->
+          let next = { body with work = { body.work with active = [{ stream with blocks = [] }] }, bytes = Stdlib.Blob.concat (Stdlib.List.reverse stream.blocks), position = 0L } in
+          let _ = Stdlib.Stream.__cellSet lease.cell next in Stdlib.__Http2Pool.__bodyNext lease
+        | _ ->
+          match Stdlib.__Http2Connection.__receive lease.entry.transport body.work with
+          | Error message -> Builtin.testRuntimeError message
+          | Ok work -> let _ = Stdlib.Stream.__cellSet lease.cell { body with work = work } in Stdlib.__Http2Pool.__bodyNext lease
+      | _ -> Builtin.crash "Multiple outcomes in leased HTTP/2 body"
+
+let __bodyClose (lease: Stdlib.__Http2Pool.BodyLease) : Unit =
+  let body = Stdlib.Stream.__cellGet<Stdlib.__Http2Pool.Body> lease.cell in
+  let returned =
+    if Stdlib.Bool.not body.finished || body.position != Stdlib.Blob.__byteLength body.bytes || Stdlib.Option.isSome body.work.connection.wire.goAway || body.work.connection.next > 2147483647L then false
+    else lease.returnOwner { lease.entry with state = body.work.connection } in
+  let _ = if returned then () else Stdlib.__HttpTransport.close lease.entry.transport in
+  Stdlib.Stream.__cellDispose<Stdlib.__Http2Pool.Body> lease.cell
+
+let stream (entry: Stdlib.__Http2Pool.Entry) (prepared: Stdlib.HttpClient.__Prepared) (headers: List<(String * String)>) (bytes: Blob)
+  (lifecycle: Stream<Unit>) (returnOwner: Stdlib.__Http2Pool.Entry -> Bool)
+  : Stdlib.Result.Result<Stdlib.HttpClient.StreamResponse, Stdlib.HttpClient.RequestError> =
+  let result = Stdlib.__Http2Fields.requestFields prepared.method prepared.url headers bytes |> Stdlib.Result.andThen (fun fields ->
+    let state = { entry.state with wire = { entry.state.wire with frames = 0L } } in
+    Stdlib.__Http2Connection.prepare entry.transport state |> Stdlib.Result.andThen (fun state ->
+      if Stdlib.Option.isSome state.wire.goAway || state.next > 2147483647L then Error "HTTP/2 connection is draining"
+      else
+        let pending = Stdlib.__Http2Connection.Pending { index = 0L, request = Stdlib.__Http2Connection.Request { method = prepared.method, fields = fields, body = bytes } } in
+        Stdlib.__Http2Pool.__head entry.transport (Stdlib.__Http2Connection.Work { connection = state, waiting = [pending], active = [], completed = [], total = 0L }))) in
+  match result with
+  | Error message -> let _ = Stdlib.__HttpTransport.close entry.transport in Error (Stdlib.__Http1Pool.__error message)
+  | Ok ready ->
+    let initial = Stdlib.__Http2Pool.Body { work = ready.work, bytes = Stdlib.Blob.empty, position = 0L, finished = false } in
+    let lease = Stdlib.__Http2Pool.BodyLease { entry = entry, cell = Stdlib.Stream.__cellNew initial, lifecycle = lifecycle, returnOwner = returnOwner } in
+    let body = Stdlib.Stream.__new (fun _unit -> Stdlib.__Http2Pool.__bodyNext lease) (fun _unit -> Stdlib.__Http2Pool.__bodyClose lease) in
+    Ok (Stdlib.HttpClient.StreamResponse { statusCode = Stdlib.Int.fromInt64 ready.head.status, headers = ready.head.headers, body = body })
