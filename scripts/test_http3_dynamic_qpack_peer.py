@@ -50,12 +50,31 @@ class ObservedEncoder:
             del self.pending[:offset]
 
 
+class ObservedDecoder:
+    def __init__(self, decoder):
+        self.decoder = decoder
+        self.dynamic = False
+        self.instructions = 0
+
+    def __getattr__(self, name):
+        return getattr(self.decoder, name)
+
+    def feed_encoder(self, data):
+        self.instructions += len(data)
+        return self.decoder.feed_encoder(data)
+
+    def feed_header(self, stream_id, data):
+        self.dynamic |= bool(data[0])
+        return self.decoder.feed_header(stream_id, data)
+
+
 class DelayedQpack(H3Connection):
     def __init__(self, connection):
         self.delayed = b""
         self.dynamic = False
         super().__init__(connection)
         self._encoder = ObservedEncoder(self._encoder)
+        self._decoder = ObservedDecoder(self._decoder)
 
     def _encode_headers(self, stream_id, headers):
         # Prime ls-qpack's reuse policy without putting the first section on
@@ -124,6 +143,7 @@ def exchange(port, ca, body):
             # response FIN strands the sequential server's response drain.
             if finished and 0 in http._encoder.acknowledged and client._close_event is not None:
                 assert http.dynamic and released and now - sent_at >= 0.3
+                assert http._decoder.dynamic and http._decoder.instructions > 0, "response did not use outgoing dynamic QPACK"
                 assert (b":status", b"200") in headers and response == body, (headers, len(response), len(body))
                 assert client._close_event.error_code == 256, client._close_event
                 return

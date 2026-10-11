@@ -237,8 +237,24 @@ validator now permits UTF-8 obs-text while retaining control-byte rejection;
 `http_header_value_octets.e2e` covers that boundary. The complete host suite
 passes 12,051 tests and native aliases pass in a fresh build directory. Parent
 benchmark verification remains blocked by an incompatible snapshot workload
-contract; no performance result is claimed. Outgoing dynamic encoding and
-reference tracking remain unimplemented, so the full QPACK item is unchecked.
+contract; no performance result is claimed. These results describe the inbound
+checkpoint, not later unvalidated changes.
+
+The outgoing QPACK checkpoint adds a connection-owned encoder with a bounded
+4 KiB local table, peer SETTINGS, decoder feedback, FIFO section acknowledgments
+and stream cancellations. Entries remain pinned until their insertion is known
+received and every outstanding field-section reference has been released.
+Potentially blocked streams are counted distinctly; zero blocked-stream credit
+permits speculative insertion but forbids references until acknowledgment.
+Header owners reserve complete instruction batches against both stream and
+connection credit, falling back to literals when credit or eviction safety
+prevents insertion. Credentials and cookies remain never-indexed.
+`qpack_dynamic_encoder.e2e` exercises those boundaries, and
+`scripts/test_qpack_encoder_peer.py` adds a persistent independent ls-qpack
+decoder probe with 560 sections, bytewise instructions/feedback, table eviction
+and Required Insert Count wrap-around. Validation is pending while the pinned
+toolchain is rebuilt after workspace recovery. Reusable multiplexed connection
+ownership is still missing; the full QPACK item remains unchecked.
 
 HTTP/2 now retains an outgoing HPACK table separately from its decoder. Every
 state transition preserves that owner and the peer's decoded field budget;
