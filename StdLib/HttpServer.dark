@@ -126,7 +126,7 @@ let __request (config: Stdlib.HttpServer.Config.Config) (parsed: Stdlib.__HttpWi
         let prefix = if forwarded then "https://" ++ host else "http://" ++ authority in
         Ok (Stdlib.Http.Request { url = prefix ++ parsed.target; headers = headers; body = parsed.body })
 
-let __responseBytes (method: String) (config: Stdlib.HttpServer.Config.Config) (response: Stdlib.Http.Response)
+let __responseBytesFor (method: String) (config: Stdlib.HttpServer.Config.Config) (response: Stdlib.Http.Response) (persistent: Bool)
     : Stdlib.Result.Result<Blob, String> =
     let headers = Stdlib.List.filter (Stdlib.HttpServer.__standardHeaders config.injectStandardHeaders response.headers) (fun pair -> let (name, _) = pair in
             let lower = Stdlib.String.toLowercase name in
@@ -134,7 +134,8 @@ let __responseBytes (method: String) (config: Stdlib.HttpServer.Config.Config) (
     match Stdlib.Int.toInt64 response.statusCode with
     | None -> Error "Invalid HTTP status"
     | Some status ->
-        match Stdlib.__HttpWire.serializeResponse status (Stdlib.List.append headers [("Connection", "close")]) response.body with
+        let headers = if persistent then headers else Stdlib.List.append headers [("Connection", "close")] in
+        match Stdlib.__HttpWire.serializeResponse status headers response.body with
         | Error message -> Error message
         | Ok bytes ->
             if method != "HEAD" then Ok bytes
@@ -143,6 +144,10 @@ let __responseBytes (method: String) (config: Stdlib.HttpServer.Config.Config) (
                 | Error _ -> Error "Invalid HTTP response headers"
                 | Ok head -> Ok (Stdlib.Blob.slice bytes 0
                     (Stdlib.Int.fromInt64 (Stdlib.Blob.__byteLength bytes - Stdlib.Blob.__byteLength head.remaining)))
+
+let __responseBytes (method: String) (config: Stdlib.HttpServer.Config.Config) (response: Stdlib.Http.Response)
+    : Stdlib.Result.Result<Blob, String> =
+    Stdlib.HttpServer.__responseBytesFor method config response false
 
 let __http2Handler (config: Stdlib.HttpServer.Config.Config)
     (handler: Stdlib.Http.Request -> Stdlib.Http.Response) (request: Stdlib.Http.Request) : Stdlib.Http.Response =
@@ -355,32 +360,7 @@ let __handleConnection (config: Stdlib.HttpServer.Config.Config) (handler: Stdli
     | Error _ -> Error "HTTP server clock failed"
     | Ok now -> Stdlib.HttpServer.__dispatchPrelude config handler signals connection limit (now + 10000L) Stdlib.Blob.empty
 
-let __serveLoop (config: Stdlib.HttpServer.Config.Config) (handler: Stdlib.Http.Request -> Stdlib.Http.Response)
-    (signals: Stdlib.__Network.ShutdownSignals) (listener: Stdlib.__Network.TcpListener) (limit: Int64)
-    : Stdlib.Result.Result<Unit, String> =
-    match Stdlib.__Network.shutdownRequested signals with
-    | Error code -> Error ("Shutdown check failed: " ++ Stdlib.Int64.toString code)
-    | Ok true -> Ok ()
-    | Ok false ->
-        match Stdlib.__Network.waitListener listener with
-        | Error code ->
-            if code == 4L then Stdlib.HttpServer.__serveLoop config handler signals listener limit
-            else Error ("Listener failed: " ++ Stdlib.Int64.toString code)
-        | Ok false -> Stdlib.HttpServer.__serveLoop config handler signals listener limit
-        | Ok true ->
-            match Stdlib.__Network.acceptTcp listener 100L with
-            | Error code ->
-                if code == 4L || code == 11L || code == 35L then Stdlib.HttpServer.__serveLoop config handler signals listener limit
-                else Error ("Accept failed: " ++ Stdlib.Int64.toString code)
-            | Ok connection ->
-                let handled = Stdlib.HttpServer.__handleConnection config handler signals connection limit in
-                let _ = Stdlib.__Network.closeTcp connection in
-                match handled with
-                | Error message -> Error message
-                | Ok true -> Ok ()
-                | Ok false -> Stdlib.HttpServer.__serveLoop config handler signals listener limit
-
-/// Bind before announcing, serve one bounded HTTP/1.1 or HTTP/2 request per connection,
+/// Bind before announcing, serve bounded persistent HTTP/1.1 connections or one HTTP/2 exchange,
 /// and return normally after SIGINT or SIGTERM. Routing remains ordinary Dark.
 let serveOn (address: List<Int64>) (config: Stdlib.HttpServer.Config.Config) (handler: Stdlib.Http.Request -> Stdlib.Http.Response)
     (onListening: Unit -> Unit) : Stdlib.Result.Result<Unit, String> =
@@ -399,7 +379,7 @@ let serveOn (address: List<Int64>) (config: Stdlib.HttpServer.Config.Config) (ha
                         | Error code -> Error ("Cannot bind HTTP server: " ++ Stdlib.Int64.toString code)
                         | Ok listener ->
                             let _ = onListening () in
-                            let result = Stdlib.HttpServer.__serveLoop config handler signals listener limit in
+                            let result = Stdlib.__Http1Server.serve config handler signals listener limit in
                             let _ = Stdlib.__Network.closeListener listener in
                             result in
                     let _ = Stdlib.__Network.closeShutdownSignals signals in

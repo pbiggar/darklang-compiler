@@ -151,6 +151,7 @@ StdLib/HttpClient/ContentType.dark
 StdLib/HttpClient/Sse.dark
 StdLib/HttpServer/Config.dark
 StdLib/HttpServer.dark
+StdLib/__Http1Server.dark
 StdLib/__Network.dark
 StdLib/__Datagram.dark
 StdLib/__HttpWire.dark
