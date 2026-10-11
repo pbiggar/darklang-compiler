@@ -159,6 +159,7 @@ and cliOperation (value : MIR.cliOperation) =
   | MIR.PosixUname -> union "CliOperation" "PosixUname" []
   | MIR.PosixSysctl -> union "CliOperation" "PosixSysctl" []
   | MIR.PosixSchedGetaffinity -> union "CliOperation" "PosixSchedGetaffinity" []
+  | MIR.PosixFcntlGetPath -> union "CliOperation" "PosixFcntlGetPath" []
 
 and label (value : MIR.label) =
   match value with MIR.Label field0 -> union "Label" "Label" [ text field0 ]

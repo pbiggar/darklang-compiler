@@ -187,6 +187,7 @@ type cliOperation =
   | PosixUname
   | PosixSysctl
   | PosixSchedGetaffinity
+  | PosixFcntlGetPath
 
 (*
    Immutable nominal metadata carried through fixed-block lowering for field

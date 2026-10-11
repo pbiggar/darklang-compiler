@@ -199,6 +199,7 @@ let prettyPrintCliOperation = function
   | LIR.PosixUname -> "PosixUname"
   | LIR.PosixSysctl -> "PosixSysctl"
   | LIR.PosixSchedGetaffinity -> "PosixSchedGetaffinity"
+  | LIR.PosixFcntlGetPath -> "PosixFcntlGetPath"
 
 (*
    Pretty-print LIR register

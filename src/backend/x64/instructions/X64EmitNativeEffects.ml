@@ -172,7 +172,7 @@ let emitCliNative (ctx : X64CodeGenTypes.funcCtx) (dest : LIR.reg)
       | LIR.PosixPwrite
       | LIR.PosixFclonefileat
       | LIR.PosixGetentropy
-      | LIR.PosixUname | LIR.PosixSysctl | LIR.PosixSchedGetaffinity
+      | LIR.PosixUname | LIR.PosixSysctl | LIR.PosixSchedGetaffinity | LIR.PosixFcntlGetPath
       -> (
           let number, arity =
             match operation with
@@ -210,6 +210,7 @@ let emitCliNative (ctx : X64CodeGenTypes.funcCtx) (dest : LIR.reg)
             | LIR.PosixUname -> (Some 63, 1)
             | LIR.PosixSysctl -> (None, 6)
             | LIR.PosixSchedGetaffinity -> (Some 204, 3)
+            | LIR.PosixFcntlGetPath -> (None, 3)
             | _ -> Crash.crash "Non-POSIX operation in POSIX lowering"
           in
           if List.length args <> arity then

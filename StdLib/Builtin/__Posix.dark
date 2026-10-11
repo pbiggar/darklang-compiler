@@ -1,7 +1,6 @@
 // __Posix.dark - Interpreter Builtin POSIX names over typed native primitives.
 module Builtin
 
-let posixGetcwd () : Stdlib.Result.Result<String, Stdlib.Cli.Posix.Error> = Stdlib.Cli.__Posix.__getCurrentDirectory ()
 
 let __posixInt64 (value: Int) : Int64 =
     match Stdlib.Int.toInt64 value with
@@ -45,40 +44,6 @@ let __checkedChmod (path: String) (mode: Int) : Stdlib.Result.Result<Unit, Stdli
         if rc == -38L || rc == -22L then
             Stdlib.Cli.__Posix.__withCString held (fun ptr -> Stdlib.Cli.__Posix.__unitResult (Stdlib.Cli.__Posix.__chmodAt (Stdlib.Cli.__Posix.__cwdFd ()) ptr mode 0L))
         else Stdlib.Cli.__Posix.__unitResult rc)
-
-let posixUtimesNow (path: String) : Stdlib.Result.Result<Unit, Stdlib.Cli.Posix.Error> =
-    if Stdlib.Cli.__Posix.__mac () then
-        Stdlib.Cli.__Posix.__withEntry path (fun fd name ->
-            // Darwin's libc utimensat uses setattrlistat. Build its attrlist
-            // and modification/access times explicitly for the kernel ABI.
-            let attrs = __mapped_alloc 24L in
-            let _ = __raw_write_word attrs 0L 21990232555525L in
-            let _ = __raw_write_word attrs 8L 0L in
-            let _ = __raw_write_word attrs 16L 0L in
-            let times = __mapped_alloc 32L in
-            let ticks = Stdlib.DateTime.__toUnixTimeTicks (Stdlib.DateTime.now ()) in
-            let seconds = ticks / 10000000L in
-            let nanos = (ticks % 10000000L) * 100L in
-            let _ = __raw_write_word times 0L seconds in
-            let _ = __raw_write_word times 8L nanos in
-            let _ = __raw_write_word times 16L seconds in
-            let _ = __raw_write_word times 24L nanos in
-            let result = Stdlib.Cli.__Posix.__unitResult (Stdlib.Cli.__Posix.__setAttributesAt fd name attrs times 32L 1L) in
-            let _ = __mapped_free attrs in
-            let _ = __mapped_free times in
-            result)
-    else Stdlib.Cli.__Posix.__metadataPath path (fun heldFd held ->
-        let times = __mapped_alloc 32L in
-        let _ = __raw_write_word times 0L 0L in
-        let _ = __raw_write_word times 8L 1073741823L in
-        let _ = __raw_write_word times 16L 0L in
-        let _ = __raw_write_word times 24L 1073741823L in
-        let rc = Stdlib.Cli.__Posix.__withCString "" (fun ptr -> Stdlib.Cli.__Posix.__utimesAt heldFd ptr times 4096L) in
-        let result =
-            if rc == -22L then Stdlib.Cli.__Posix.__withCString held (fun ptr -> Stdlib.Cli.__Posix.__unitResult (Stdlib.Cli.__Posix.__utimesAt (Stdlib.Cli.__Posix.__cwdFd ()) ptr times 0L))
-            else Stdlib.Cli.__Posix.__unitResult rc in
-        let _ = __mapped_free times in
-        result)
 
 let __checkedSymlink (target: String) (linkpath: String) : Stdlib.Result.Result<Unit, Stdlib.Cli.Posix.Error> =
     Stdlib.Cli.__Posix.__withCString target (fun targetPtr ->

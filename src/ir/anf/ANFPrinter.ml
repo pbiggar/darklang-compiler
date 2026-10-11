@@ -165,6 +165,7 @@ let cliOperation = function
   | ANF.PosixUname -> "PosixUname"
   | ANF.PosixSysctl -> "PosixSysctl"
   | ANF.PosixSchedGetaffinity -> "PosixSchedGetaffinity"
+  | ANF.PosixFcntlGetPath -> "PosixFcntlGetPath"
 
 (*
    Pretty-print ANF complex expression

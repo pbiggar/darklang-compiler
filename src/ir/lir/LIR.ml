@@ -192,6 +192,7 @@ type cliOperation =
   | PosixUname
   | PosixSysctl
   | PosixSchedGetaffinity
+  | PosixFcntlGetPath
 
 (*
    Basic block label (wrapper type for type safety)

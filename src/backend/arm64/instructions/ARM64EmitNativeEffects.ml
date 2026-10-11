@@ -558,7 +558,7 @@ let emitCliNative (ctx : codeGenContext) (dest : LIR.reg)
       | LIR.PosixPwrite
       | LIR.PosixFclonefileat
       | LIR.PosixGetentropy
-      | LIR.PosixUname | LIR.PosixSysctl | LIR.PosixSchedGetaffinity
+      | LIR.PosixUname | LIR.PosixSysctl | LIR.PosixSchedGetaffinity | LIR.PosixFcntlGetPath
       -> (
           let number, arity =
             match operation with
@@ -595,7 +595,7 @@ let emitCliNative (ctx : codeGenContext) (dest : LIR.reg)
             | LIR.PosixGetCwd ->
                 ( (match ARM64.targetOS ctx.target with
                   | Platform.Linux -> Some 17
-                  | Platform.MacOS -> Some 326),
+                  | Platform.MacOS -> None),
                   2 )
             | LIR.PosixChdir ->
                 ( (match ARM64.targetOS ctx.target with
@@ -720,6 +720,10 @@ let emitCliNative (ctx : codeGenContext) (dest : LIR.reg)
                 ((match ARM64.targetOS ctx.target with
                   | Platform.Linux -> Some 123
                   | Platform.MacOS -> None), 3)
+            | LIR.PosixFcntlGetPath ->
+                ((match ARM64.targetOS ctx.target with
+                  | Platform.Linux -> None
+                  | Platform.MacOS -> Some 92), 3)
             | _ -> Crash.crash "Non-POSIX operation in POSIX lowering"
           in
           if List.length args <> arity then

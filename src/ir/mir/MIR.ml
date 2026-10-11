@@ -181,6 +181,7 @@ type cliOperation =
   | PosixUname
   | PosixSysctl
   | PosixSchedGetaffinity
+  | PosixFcntlGetPath
 
 (*
    Basic block label (defined early for use in Phi nodes)

@@ -95,6 +95,7 @@ let convertCliOperation operation =
   | MIR.PosixUname -> LIR.PosixUname
   | MIR.PosixSysctl -> LIR.PosixSysctl
   | MIR.PosixSchedGetaffinity -> LIR.PosixSchedGetaffinity
+  | MIR.PosixFcntlGetPath -> LIR.PosixFcntlGetPath
 
 [@@@warning "-4"]
 

@@ -150,6 +150,7 @@ type cliOperation =
   | PosixUname
   | PosixSysctl
   | PosixSchedGetaffinity
+  | PosixFcntlGetPath
 
 type label = Label of string
 

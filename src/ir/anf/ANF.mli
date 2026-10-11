@@ -133,6 +133,7 @@ type cliOperation =
   | PosixUname
   | PosixSysctl
   | PosixSchedGetaffinity
+  | PosixFcntlGetPath
 
 type recordDescriptor = {
   sourceTypeName : string;

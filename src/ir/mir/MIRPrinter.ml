@@ -163,6 +163,7 @@ let cliOperation = function
   | MIR.PosixUname -> "PosixUname"
   | MIR.PosixSysctl -> "PosixSysctl"
   | MIR.PosixSchedGetaffinity -> "PosixSchedGetaffinity"
+  | MIR.PosixFcntlGetPath -> "PosixFcntlGetPath"
 
 let prettyPrintCanonicalBufferKind = ANFPrinter.prettyPrintCanonicalBufferKind
 

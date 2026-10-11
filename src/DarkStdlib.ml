@@ -125,6 +125,7 @@ let posixIntrinsicModule : AST.moduleDef =
         fn "__uname" [] [ TInternalRawPtr ] TInt64;
         fn "__sysctl" [] [ TInternalRawPtr; TInt64; TInternalRawPtr; TInternalRawPtr; TInternalRawPtr; TInt64 ] TInt64;
         fn "__schedGetaffinity" [] [ TInt64; TInt64; TInternalRawPtr ] TInt64;
+        fn "__fcntlGetPath" [] [ TInt64; TInt64; TInternalRawPtr ] TInt64;
         fn "__fstat" [] [ TInt64; TInternalRawPtr ] TInt64;
         fn "__pread" [] [ TInt64; TInternalRawPtr; TInt64; TInt64 ] TInt64;
         fn "__pwrite" [] [ TInt64; TInternalRawPtr; TInt64; TInt64 ] TInt64;
