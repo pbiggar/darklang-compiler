@@ -401,6 +401,9 @@ and aNF_cliOperation (value : ANF.cliOperation) =
   | ANF.PosixPwrite -> union "CliOperation" "PosixPwrite" []
   | ANF.PosixFclonefileat -> union "CliOperation" "PosixFclonefileat" []
   | ANF.PosixGetentropy -> union "CliOperation" "PosixGetentropy" []
+  | ANF.PosixUname -> union "CliOperation" "PosixUname" []
+  | ANF.PosixSysctl -> union "CliOperation" "PosixSysctl" []
+  | ANF.PosixSchedGetaffinity -> union "CliOperation" "PosixSchedGetaffinity" []
 
 and aNF_recordDescriptor (value : ANF.recordDescriptor) =
   record "RecordDescriptor"

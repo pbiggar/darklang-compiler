@@ -1,0 +1,6 @@
+// Kernel host records are decoded in shared Dark code.
+match Stdlib.Cli.Syscall.uname () with | Ok bytes -> Stdlib.Blob.length bytes == 390 | Error e -> e == 38 || e == 78 = true
+match Stdlib.Cli.Syscall.schedGetaffinity 0 128 with | Ok mask -> Stdlib.Blob.length mask > 0 | Error e -> e == 38 || e == 78 = true
+Stdlib.Cli.Sys.cpuCount () > 0 = true
+Builtin.posixUname () = compileerror="Unknown function"
+Builtin.posixCpuCount () = compileerror="Unknown function"

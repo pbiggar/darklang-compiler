@@ -84,20 +84,5 @@ let __checkedSymlink (target: String) (linkpath: String) : Stdlib.Result.Result<
     Stdlib.Cli.__Posix.__withCString target (fun targetPtr ->
         Stdlib.Cli.__Posix.__withEntry linkpath (fun fd name -> Stdlib.Cli.__Posix.__unitResult (Stdlib.Cli.__Posix.__symlinkAt targetPtr fd name)))
 
-let posixReadlink (path: String) : Stdlib.Result.Result<String, Stdlib.Cli.Posix.Error> =
-    Stdlib.Cli.__Posix.__withEntry path (fun fd name ->
-        let buffer = __mapped_alloc 4096L in
-        let rc = Stdlib.Cli.__Posix.__readlinkAt fd name buffer 4096L in
-        let result = if rc < 0L then Error (Stdlib.Cli.__Posix.__error (0L - rc)) else Ok (Stdlib.Cli.__Posix.__bufferString buffer 0L rc) in
-        let _ = __mapped_free buffer in
-        result)
-
-let posixCpuCount () : Int = Stdlib.Int.fromInt64 (Stdlib.Cli.__cpuCount ())
 let timeSleep (delayMs: Float) : Unit = Stdlib.Cli.__sleep delayMs
-let posixUname () : Stdlib.Result.Result<(String * String * String), Stdlib.Cli.Posix.Error> =
-    match (Stdlib.Cli.Sys.os (), Stdlib.Cli.Sys.hostname (), Stdlib.Cli.Sys.arch ()) with
-    | (Ok os, Ok hostname, Ok arch) -> Ok ((os, hostname, if Stdlib.Cli.__Posix.__mac () then "arm64" else arch))
-    | (Error e, _, _) -> Error e
-    | (_, Error e, _) -> Error e
-    | (_, _, Error e) -> Error e
 

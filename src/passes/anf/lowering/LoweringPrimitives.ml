@@ -470,6 +470,9 @@ let tryCliIntrinsic name args =
         | "Darklang.Stdlib.Cli.__Posix.__pwrite" -> Some ANF.PosixPwrite
         | "Darklang.Stdlib.Cli.__Posix.__fclonefileat" -> Some ANF.PosixFclonefileat
         | "Darklang.Stdlib.Cli.__Posix.__getentropy" -> Some ANF.PosixGetentropy
+        | "Darklang.Stdlib.Cli.__Posix.__uname" -> Some ANF.PosixUname
+        | "Darklang.Stdlib.Cli.__Posix.__sysctl" -> Some ANF.PosixSysctl
+        | "Darklang.Stdlib.Cli.__Posix.__schedGetaffinity" -> Some ANF.PosixSchedGetaffinity
         | "Darklang.Stdlib.Cli.__Posix.__ioctlValue" -> Some ANF.PosixIoctl
         | "Darklang.Stdlib.Cli.__Posix.__flock" -> Some ANF.PosixFlock
         | "Darklang.Stdlib.Cli.__Posix.__getDents" -> Some ANF.PosixGetDents

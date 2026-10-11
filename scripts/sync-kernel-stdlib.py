@@ -18,6 +18,8 @@ FILES = {
     "fileCopy": "FileCopy", "file": "File",
     "env": "Env",
     "fileSystem": "FileSystem",
+    "pathIO": "PathIO",
+    "system": "System", "sys": "Sys",
 }
 
 def main():

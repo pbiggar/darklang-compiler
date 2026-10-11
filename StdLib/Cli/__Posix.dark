@@ -1,6 +1,10 @@
 // __Posix.dark - Native POSIX primitive bridge; policy is implemented in Dark.
 module Darklang.Stdlib.Cli.__Posix
 
+let __uname (buffer: RawPtr) : Int64 = -38L
+let __sysctl (mib: RawPtr) (length: Int64) (buffer: RawPtr) (size: RawPtr) (new_: RawPtr) (newLength: Int64) : Int64 = -38L
+let __schedGetaffinity (pid: Int64) (count: Int64) (buffer: RawPtr) : Int64 = -38L
+
 let __copyFileRange (a0: Int64) (a1: Int64) (a2: Int64) (a3: Int64) (a4: Int64) (a5: Int64) : Int64 = -38L
 let __ftruncate (a0: Int64) (a1: Int64) : Int64 = -38L
 let __fchmod (a0: Int64) (a1: Int64) : Int64 = -38L

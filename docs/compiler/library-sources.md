@@ -48,6 +48,8 @@ fragments use `__` even where the interpreter also has private helpers.
 | `StdLib/Cli/Posix/Errno.dark` | `Darklang.Stdlib.Cli.Posix.Errno`  | `packages/darklang/stdlib/cli/posix.dark` |
 | `StdLib/Cli/Posix/StatMode.dark` | `Darklang.Stdlib.Cli.Posix.StatMode`  | `packages/darklang/stdlib/cli/posix.dark` |
 | `StdLib/Cli/FileSystem.dark` | `Darklang.Stdlib.Cli.FileSystem`  | `packages/darklang/stdlib/cli/fileSystem.dark` |
+| `StdLib/Cli/PathIO.dark` | `Darklang.Stdlib.Cli.PathIO` | Shared path buffer growth and decoding |
+| `StdLib/Cli/System.dark` | `Darklang.Stdlib.Cli.System` | Shared kernel host-record decoding |
 | `StdLib/Cli/FileSystem/FileError.dark` | `Darklang.Stdlib.Cli.FileSystem.FileError`  | `packages/darklang/stdlib/cli/fileSystem.dark` |
 | `StdLib/Env.dark` | `Darklang.Stdlib.Env`  | `packages/darklang/stdlib/env.dark` |
 | `StdLib/Builtin.dark` | `Builtin`  | Portable interpreter builtin bridges plus native adapter helpers (`backend/src/Builtins/Builtins.Pure/Libs/{UInt64,String}.fs` and `backend/src/Builtins/Builtins.Cli/Libs/{Directory,File,Environment}.fs`) |

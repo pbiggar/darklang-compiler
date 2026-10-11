@@ -92,6 +92,9 @@ let convertCliOperation operation =
   | MIR.PosixPwrite -> LIR.PosixPwrite
   | MIR.PosixFclonefileat -> LIR.PosixFclonefileat
   | MIR.PosixGetentropy -> LIR.PosixGetentropy
+  | MIR.PosixUname -> LIR.PosixUname
+  | MIR.PosixSysctl -> LIR.PosixSysctl
+  | MIR.PosixSchedGetaffinity -> LIR.PosixSchedGetaffinity
 
 [@@@warning "-4"]
 

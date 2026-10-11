@@ -162,6 +162,9 @@ let cliOperation = function
   | ANF.PosixPwrite -> "PosixPwrite"
   | ANF.PosixFclonefileat -> "PosixFclonefileat"
   | ANF.PosixGetentropy -> "PosixGetentropy"
+  | ANF.PosixUname -> "PosixUname"
+  | ANF.PosixSysctl -> "PosixSysctl"
+  | ANF.PosixSchedGetaffinity -> "PosixSchedGetaffinity"
 
 (*
    Pretty-print ANF complex expression

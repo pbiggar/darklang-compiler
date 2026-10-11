@@ -1,4 +1,4 @@
 // Executable identity is discovered at runtime through the builtin and public API.
-Stdlib.String.startsWith (Builtin.getCurrentExecutablePath ()) "/" = true
-Builtin.getCurrentExecutablePath () == Builtin.getCurrentExecutablePath () = true
-Stdlib.Cli.Sys.currentExecutablePath () == Builtin.getCurrentExecutablePath () = true
+Stdlib.String.startsWith (Stdlib.Cli.Runtime.executablePath ()) "/" = true
+Stdlib.Cli.Runtime.executablePath () == Stdlib.Cli.Runtime.executablePath () = true
+Stdlib.Cli.Sys.currentExecutablePath () == Stdlib.Cli.Runtime.executablePath () = true

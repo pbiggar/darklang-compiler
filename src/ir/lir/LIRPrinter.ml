@@ -196,6 +196,9 @@ let prettyPrintCliOperation = function
   | LIR.PosixPwrite -> "PosixPwrite"
   | LIR.PosixFclonefileat -> "PosixFclonefileat"
   | LIR.PosixGetentropy -> "PosixGetentropy"
+  | LIR.PosixUname -> "PosixUname"
+  | LIR.PosixSysctl -> "PosixSysctl"
+  | LIR.PosixSchedGetaffinity -> "PosixSchedGetaffinity"
 
 (*
    Pretty-print LIR register

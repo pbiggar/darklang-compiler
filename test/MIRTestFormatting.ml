@@ -156,6 +156,9 @@ and cliOperation (value : MIR.cliOperation) =
   | MIR.PosixPwrite -> union "CliOperation" "PosixPwrite" []
   | MIR.PosixFclonefileat -> union "CliOperation" "PosixFclonefileat" []
   | MIR.PosixGetentropy -> union "CliOperation" "PosixGetentropy" []
+  | MIR.PosixUname -> union "CliOperation" "PosixUname" []
+  | MIR.PosixSysctl -> union "CliOperation" "PosixSysctl" []
+  | MIR.PosixSchedGetaffinity -> union "CliOperation" "PosixSchedGetaffinity" []
 
 and label (value : MIR.label) =
   match value with MIR.Label field0 -> union "Label" "Label" [ text field0 ]

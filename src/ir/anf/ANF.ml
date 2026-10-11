@@ -184,6 +184,9 @@ type cliOperation =
   | PosixPwrite
   | PosixFclonefileat
   | PosixGetentropy
+  | PosixUname
+  | PosixSysctl
+  | PosixSchedGetaffinity
 
 (*
    Immutable nominal metadata carried through fixed-block lowering for field

@@ -189,6 +189,9 @@ type cliOperation =
   | PosixPwrite
   | PosixFclonefileat
   | PosixGetentropy
+  | PosixUname
+  | PosixSysctl
+  | PosixSchedGetaffinity
 
 (*
    Basic block label (wrapper type for type safety)

@@ -161,7 +161,7 @@ let __macExecutablePath () : String =
     else if length == 0L then Builtin.__executablePathError 5L
     else result
 
-let getCurrentExecutablePath () : String =
+let runtimeExecutablePath () : String =
     let _ = Builtin.__initializeExecutablePath () in
     if Stdlib.Cli.__Posix.__mac () then Builtin.__macExecutablePath ()
     else Builtin.__linuxExecutablePath 256L

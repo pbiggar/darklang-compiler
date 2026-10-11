@@ -558,6 +558,7 @@ let emitCliNative (ctx : codeGenContext) (dest : LIR.reg)
       | LIR.PosixPwrite
       | LIR.PosixFclonefileat
       | LIR.PosixGetentropy
+      | LIR.PosixUname | LIR.PosixSysctl | LIR.PosixSchedGetaffinity
       -> (
           let number, arity =
             match operation with
@@ -707,13 +708,29 @@ let emitCliNative (ctx : codeGenContext) (dest : LIR.reg)
                 ((match ARM64.targetOS ctx.target with
                   | Platform.Linux -> Some 278
                   | Platform.MacOS -> Some 500), 3)
+            | LIR.PosixUname ->
+                ((match ARM64.targetOS ctx.target with
+                  | Platform.Linux -> Some 160
+                  | Platform.MacOS -> None), 1)
+            | LIR.PosixSysctl ->
+                ((match ARM64.targetOS ctx.target with
+                  | Platform.Linux -> None
+                  | Platform.MacOS -> Some 202), 6)
+            | LIR.PosixSchedGetaffinity ->
+                ((match ARM64.targetOS ctx.target with
+                  | Platform.Linux -> Some 123
+                  | Platform.MacOS -> None), 3)
             | _ -> Crash.crash "Non-POSIX operation in POSIX lowering"
           in
           if List.length args <> arity then
             Error "POSIX primitive: invalid argument count"
           else
             match number with
-            | None -> Ok (loadImmediate destReg (-38L))
+            | None ->
+                let errno = match ARM64.targetOS ctx.target with
+                  | Platform.Linux -> -38L
+                  | Platform.MacOS -> -78L in
+                Ok (loadImmediate destReg errno)
             | Some number ->
                 args
                 |> List.fold_left

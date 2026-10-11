@@ -1,6 +1,20 @@
 // Typed checked-path kernel adapters. Policy/marshalling stays private.
 module Builtin
 
+let syscallReadlinkAt (path: String) (count: Int) : Stdlib.Result.Result<Blob, Int> =
+    let count = Builtin.__posixInt32 count in
+    if count <= 0L then Error 22
+    else
+        Stdlib.Cli.__Posix.__withEntry path (fun fd name ->
+            let buffer = __mapped_alloc count in
+            let rc = Stdlib.Cli.__Posix.__readlinkAt fd name buffer count in
+            let result =
+                if rc < 0L then Error (Stdlib.Cli.__Posix.__error (0L - rc))
+                else Ok (Stdlib.Cli.__Posix.__bufferBytes buffer 0L rc []) in
+            let _ = __mapped_free buffer in
+            result)
+        |> Stdlib.Result.mapError (fun error -> error.errno)
+
 let syscallUnlinkAt (path: String) (flags: Int) : Stdlib.Result.Result<Unit, Int> =
     Builtin.__checkedUnlinkAt path flags
     |> Stdlib.Result.mapError (fun error -> error.errno)

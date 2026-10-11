@@ -120,6 +120,9 @@ type cliOperation =
   | PosixPwrite
   | PosixFclonefileat
   | PosixGetentropy
+  | PosixUname
+  | PosixSysctl
+  | PosixSchedGetaffinity
 
 type label = Label of string
 

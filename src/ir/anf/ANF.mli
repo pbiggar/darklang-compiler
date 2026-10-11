@@ -130,6 +130,9 @@ type cliOperation =
   | PosixPwrite
   | PosixFclonefileat
   | PosixGetentropy
+  | PosixUname
+  | PosixSysctl
+  | PosixSchedGetaffinity
 
 type recordDescriptor = {
   sourceTypeName : string;

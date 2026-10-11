@@ -27,6 +27,7 @@ StdLib/Builtin/__Syscall.dark
 StdLib/Builtin/__Runtime.dark
 StdLib/Builtin/__KernelRecords.dark
 StdLib/Builtin/__FileSyscall.dark
+StdLib/Builtin/__SystemSyscall.dark
 StdLib/Builtin/__PathSyscall.dark
 StdLib/Builtin/__Terminal.dark
 StdLib/Builtin/__Stdin.dark
@@ -45,6 +46,8 @@ StdLib/Float.dark
 StdLib/Cli/__Posix.dark
 StdLib/Cli/Glob.dark
 StdLib/Cli/Syscall.dark
+StdLib/Cli/PathIO.dark
+StdLib/Cli/System.dark
 StdLib/Cli/Runtime.dark
 StdLib/Cli/KernelABI.dark
 StdLib/Cli/KernelData.dark

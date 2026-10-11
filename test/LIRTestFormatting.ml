@@ -201,6 +201,9 @@ and cliOperation (value : LIR.cliOperation) =
   | LIR.PosixPwrite -> union "CliOperation" "PosixPwrite" []
   | LIR.PosixFclonefileat -> union "CliOperation" "PosixFclonefileat" []
   | LIR.PosixGetentropy -> union "CliOperation" "PosixGetentropy" []
+  | LIR.PosixUname -> union "CliOperation" "PosixUname" []
+  | LIR.PosixSysctl -> union "CliOperation" "PosixSysctl" []
+  | LIR.PosixSchedGetaffinity -> union "CliOperation" "PosixSchedGetaffinity" []
 
 and label (value : LIR.label) =
   match value with LIR.Label field0 -> union "Label" "Label" [ text field0 ]

@@ -312,6 +312,9 @@ let convertCliOperation (operation : ANF.cliOperation) =
   | ANF.PosixPwrite -> MIR.PosixPwrite
   | ANF.PosixFclonefileat -> MIR.PosixFclonefileat
   | ANF.PosixGetentropy -> MIR.PosixGetentropy
+  | ANF.PosixUname -> MIR.PosixUname
+  | ANF.PosixSysctl -> MIR.PosixSysctl
+  | ANF.PosixSchedGetaffinity -> MIR.PosixSchedGetaffinity
 
 (*
    Precomputed descriptions for primitive ops (avoids formatting on hot path)
@@ -905,6 +908,9 @@ let cliOperationName = function
   | ANF.PosixPwrite -> "PosixPwrite"
   | ANF.PosixFclonefileat -> "PosixFclonefileat"
   | ANF.PosixGetentropy -> "PosixGetentropy"
+  | ANF.PosixUname -> "PosixUname"
+  | ANF.PosixSysctl -> "PosixSysctl"
+  | ANF.PosixSchedGetaffinity -> "PosixSchedGetaffinity"
 
 (*
    Generate description for a CExpr (for coverage mapping)
