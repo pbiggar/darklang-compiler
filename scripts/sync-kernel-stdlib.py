@@ -20,6 +20,7 @@ FILES = {
     "fileSystem": "FileSystem",
     "pathIO": "PathIO",
     "system": "System", "sys": "Sys",
+    "clock": "Clock",
 }
 
 def main():

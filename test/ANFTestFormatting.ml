@@ -405,6 +405,10 @@ and aNF_cliOperation (value : ANF.cliOperation) =
   | ANF.PosixSysctl -> union "CliOperation" "PosixSysctl" []
   | ANF.PosixSchedGetaffinity -> union "CliOperation" "PosixSchedGetaffinity" []
   | ANF.PosixFcntlGetPath -> union "CliOperation" "PosixFcntlGetPath" []
+  | ANF.PosixClockGettime -> union "CliOperation" "PosixClockGettime" []
+  | ANF.PosixGettimeofday -> union "CliOperation" "PosixGettimeofday" []
+  | ANF.PosixNanosleep -> union "CliOperation" "PosixNanosleep" []
+  | ANF.PosixMachTimebaseInfo -> union "CliOperation" "PosixMachTimebaseInfo" []
 
 and aNF_recordDescriptor (value : ANF.recordDescriptor) =
   record "RecordDescriptor"

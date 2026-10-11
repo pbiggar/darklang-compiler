@@ -205,6 +205,10 @@ and cliOperation (value : LIR.cliOperation) =
   | LIR.PosixSysctl -> union "CliOperation" "PosixSysctl" []
   | LIR.PosixSchedGetaffinity -> union "CliOperation" "PosixSchedGetaffinity" []
   | LIR.PosixFcntlGetPath -> union "CliOperation" "PosixFcntlGetPath" []
+  | LIR.PosixClockGettime -> union "CliOperation" "PosixClockGettime" []
+  | LIR.PosixGettimeofday -> union "CliOperation" "PosixGettimeofday" []
+  | LIR.PosixNanosleep -> union "CliOperation" "PosixNanosleep" []
+  | LIR.PosixMachTimebaseInfo -> union "CliOperation" "PosixMachTimebaseInfo" []
 
 and label (value : LIR.label) =
   match value with LIR.Label field0 -> union "Label" "Label" [ text field0 ]

@@ -124,6 +124,10 @@ type cliOperation =
   | PosixSysctl
   | PosixSchedGetaffinity
   | PosixFcntlGetPath
+  | PosixClockGettime
+  | PosixGettimeofday
+  | PosixNanosleep
+  | PosixMachTimebaseInfo
 
 type label = Label of string
 

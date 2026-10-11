@@ -188,6 +188,10 @@ type cliOperation =
   | PosixSysctl
   | PosixSchedGetaffinity
   | PosixFcntlGetPath
+  | PosixClockGettime
+  | PosixGettimeofday
+  | PosixNanosleep
+  | PosixMachTimebaseInfo
 
 (*
    Immutable nominal metadata carried through fixed-block lowering for field

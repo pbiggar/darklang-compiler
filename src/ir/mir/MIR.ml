@@ -182,6 +182,10 @@ type cliOperation =
   | PosixSysctl
   | PosixSchedGetaffinity
   | PosixFcntlGetPath
+  | PosixClockGettime
+  | PosixGettimeofday
+  | PosixNanosleep
+  | PosixMachTimebaseInfo
 
 (*
    Basic block label (defined early for use in Phi nodes)

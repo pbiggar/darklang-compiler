@@ -28,10 +28,10 @@ StdLib/Builtin/__Runtime.dark
 StdLib/Builtin/__KernelRecords.dark
 StdLib/Builtin/__FileSyscall.dark
 StdLib/Builtin/__SystemSyscall.dark
+StdLib/Builtin/__ClockSyscall.dark
 StdLib/Builtin/__PathSyscall.dark
 StdLib/Builtin/__Terminal.dark
 StdLib/Builtin/__Stdin.dark
-StdLib/Builtin/__Time.dark
 StdLib/Builtin/__BuildInfo.dark
 StdLib/Builtin/__Executable.dark
 StdLib/Tuple2.dark
@@ -48,6 +48,7 @@ StdLib/Cli/Glob.dark
 StdLib/Cli/Syscall.dark
 StdLib/Cli/PathIO.dark
 StdLib/Cli/System.dark
+StdLib/Cli/Clock.dark
 StdLib/Cli/Runtime.dark
 StdLib/Cli/KernelABI.dark
 StdLib/Cli/KernelData.dark

@@ -49,5 +49,4 @@ let __checkedSymlink (target: String) (linkpath: String) : Stdlib.Result.Result<
     Stdlib.Cli.__Posix.__withCString target (fun targetPtr ->
         Stdlib.Cli.__Posix.__withEntry linkpath (fun fd name -> Stdlib.Cli.__Posix.__unitResult (Stdlib.Cli.__Posix.__symlinkAt targetPtr fd name)))
 
-let timeSleep (delayMs: Float) : Unit = Stdlib.Cli.__sleep delayMs
 

@@ -316,6 +316,10 @@ let convertCliOperation (operation : ANF.cliOperation) =
   | ANF.PosixSysctl -> MIR.PosixSysctl
   | ANF.PosixSchedGetaffinity -> MIR.PosixSchedGetaffinity
   | ANF.PosixFcntlGetPath -> MIR.PosixFcntlGetPath
+  | ANF.PosixClockGettime -> MIR.PosixClockGettime
+  | ANF.PosixGettimeofday -> MIR.PosixGettimeofday
+  | ANF.PosixNanosleep -> MIR.PosixNanosleep
+  | ANF.PosixMachTimebaseInfo -> MIR.PosixMachTimebaseInfo
 
 (*
    Precomputed descriptions for primitive ops (avoids formatting on hot path)
@@ -913,6 +917,10 @@ let cliOperationName = function
   | ANF.PosixSysctl -> "PosixSysctl"
   | ANF.PosixSchedGetaffinity -> "PosixSchedGetaffinity"
   | ANF.PosixFcntlGetPath -> "PosixFcntlGetPath"
+  | ANF.PosixClockGettime -> "PosixClockGettime"
+  | ANF.PosixGettimeofday -> "PosixGettimeofday"
+  | ANF.PosixNanosleep -> "PosixNanosleep"
+  | ANF.PosixMachTimebaseInfo -> "PosixMachTimebaseInfo"
 
 (*
    Generate description for a CExpr (for coverage mapping)
@@ -1294,8 +1302,12 @@ let simpleCExprInstrs builder tempId destReg destType cexpr =
           Ok [ MIR.HeapLoad (destReg, tempToVReg tid, mulInt index 8, typ) ]
       | _ ->
           Error
-            "Internal error: Tuple access on non-variable (ANF invariant \
-             violated)")
+            ("Internal error: Tuple access on non-variable (ANF invariant violated) in "
+             ^ builder.funcName ^ ": "
+             ^ (match tuple with
+                | ANF.UnitLiteral -> "unit"
+                | ANF.IntLiteral n -> ANF.sizedIntToString n
+                | _ -> "literal")))
   | ANF.RecordAlloc (_, fields) | ANF.RecordClone (_, _, fields) ->
       let alloc = MIR.HeapAlloc (destReg, mulInt (List.length fields) 8) in
       let+ stores = storeFields fields in

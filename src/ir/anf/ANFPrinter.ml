@@ -166,6 +166,10 @@ let cliOperation = function
   | ANF.PosixSysctl -> "PosixSysctl"
   | ANF.PosixSchedGetaffinity -> "PosixSchedGetaffinity"
   | ANF.PosixFcntlGetPath -> "PosixFcntlGetPath"
+  | ANF.PosixClockGettime -> "PosixClockGettime"
+  | ANF.PosixGettimeofday -> "PosixGettimeofday"
+  | ANF.PosixNanosleep -> "PosixNanosleep"
+  | ANF.PosixMachTimebaseInfo -> "PosixMachTimebaseInfo"
 
 (*
    Pretty-print ANF complex expression

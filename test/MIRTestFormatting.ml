@@ -160,6 +160,10 @@ and cliOperation (value : MIR.cliOperation) =
   | MIR.PosixSysctl -> union "CliOperation" "PosixSysctl" []
   | MIR.PosixSchedGetaffinity -> union "CliOperation" "PosixSchedGetaffinity" []
   | MIR.PosixFcntlGetPath -> union "CliOperation" "PosixFcntlGetPath" []
+  | MIR.PosixClockGettime -> union "CliOperation" "PosixClockGettime" []
+  | MIR.PosixGettimeofday -> union "CliOperation" "PosixGettimeofday" []
+  | MIR.PosixNanosleep -> union "CliOperation" "PosixNanosleep" []
+  | MIR.PosixMachTimebaseInfo -> union "CliOperation" "PosixMachTimebaseInfo" []
 
 and label (value : MIR.label) =
   match value with MIR.Label field0 -> union "Label" "Label" [ text field0 ]

@@ -330,6 +330,10 @@ let inferCExprType ctx expr =
       | A.PosixSysctl
       | A.PosixSchedGetaffinity
       | A.PosixFcntlGetPath
+      | A.PosixClockGettime
+      | A.PosixGettimeofday
+      | A.PosixNanosleep
+      | A.PosixMachTimebaseInfo
       ->
           Some AST.TInt64)
   | A.IfValue (_, yes, _) -> atom yes

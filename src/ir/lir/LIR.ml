@@ -193,6 +193,10 @@ type cliOperation =
   | PosixSysctl
   | PosixSchedGetaffinity
   | PosixFcntlGetPath
+  | PosixClockGettime
+  | PosixGettimeofday
+  | PosixNanosleep
+  | PosixMachTimebaseInfo
 
 (*
    Basic block label (wrapper type for type safety)

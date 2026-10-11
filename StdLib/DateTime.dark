@@ -222,9 +222,9 @@ let atStartOfDay (date: DateTime) : DateTime =
     Stdlib.DateTime.__fromValidTicks (
         Stdlib.DateTime.__daysSinceEpoch date * Stdlib.DateTime.__ticksPerDay ())
 
-let now () : DateTime = Stdlib.DateTime.__now ()
+let now () : DateTime = Stdlib.Cli.Clock.now ()
 
-let today () : DateTime = Stdlib.DateTime.atStartOfDay (Stdlib.DateTime.now ())
+let today () : DateTime = Stdlib.Cli.Clock.today ()
 
 let __padZero2 (value: Int64) : String =
     if value < 10L then "0" ++ Stdlib.Int64.toString value

@@ -474,6 +474,10 @@ let tryCliIntrinsic name args =
         | "Darklang.Stdlib.Cli.__Posix.__sysctl" -> Some ANF.PosixSysctl
         | "Darklang.Stdlib.Cli.__Posix.__schedGetaffinity" -> Some ANF.PosixSchedGetaffinity
         | "Darklang.Stdlib.Cli.__Posix.__fcntlGetPath" -> Some ANF.PosixFcntlGetPath
+        | "Darklang.Stdlib.Cli.__Posix.__clockGettime" -> Some ANF.PosixClockGettime
+        | "Darklang.Stdlib.Cli.__Posix.__gettimeofday" -> Some ANF.PosixGettimeofday
+        | "Darklang.Stdlib.Cli.__Posix.__nanosleep" -> Some ANF.PosixNanosleep
+        | "Darklang.Stdlib.Cli.__Posix.__machTimebaseInfo" -> Some ANF.PosixMachTimebaseInfo
         | "Darklang.Stdlib.Cli.__Posix.__ioctlValue" -> Some ANF.PosixIoctl
         | "Darklang.Stdlib.Cli.__Posix.__flock" -> Some ANF.PosixFlock
         | "Darklang.Stdlib.Cli.__Posix.__getDents" -> Some ANF.PosixGetDents

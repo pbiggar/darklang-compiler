@@ -96,6 +96,10 @@ let convertCliOperation operation =
   | MIR.PosixSysctl -> LIR.PosixSysctl
   | MIR.PosixSchedGetaffinity -> LIR.PosixSchedGetaffinity
   | MIR.PosixFcntlGetPath -> LIR.PosixFcntlGetPath
+  | MIR.PosixClockGettime -> LIR.PosixClockGettime
+  | MIR.PosixGettimeofday -> LIR.PosixGettimeofday
+  | MIR.PosixNanosleep -> LIR.PosixNanosleep
+  | MIR.PosixMachTimebaseInfo -> LIR.PosixMachTimebaseInfo
 
 [@@@warning "-4"]
 

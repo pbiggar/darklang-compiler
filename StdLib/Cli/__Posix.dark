@@ -1,6 +1,11 @@
 // __Posix.dark - Native POSIX primitive bridge; policy is implemented in Dark.
 module Darklang.Stdlib.Cli.__Posix
 
+let __clockGettime (clock: Int64) (buffer: RawPtr) : Int64 = -38L
+let __gettimeofday (buffer: RawPtr) (zone: RawPtr) (absolute: RawPtr) : Int64 = -38L
+let __nanosleep (request: RawPtr) (remaining: RawPtr) : Int64 = -38L
+let __machTimebaseInfo (buffer: RawPtr) : Int64 = -38L
+
 let __uname (buffer: RawPtr) : Int64 = -38L
 let __sysctl (mib: RawPtr) (length: Int64) (buffer: RawPtr) (size: RawPtr) (new_: RawPtr) (newLength: Int64) : Int64 = -38L
 let __schedGetaffinity (pid: Int64) (count: Int64) (buffer: RawPtr) : Int64 = -38L

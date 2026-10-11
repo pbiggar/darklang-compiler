@@ -134,6 +134,10 @@ type cliOperation =
   | PosixSysctl
   | PosixSchedGetaffinity
   | PosixFcntlGetPath
+  | PosixClockGettime
+  | PosixGettimeofday
+  | PosixNanosleep
+  | PosixMachTimebaseInfo
 
 type recordDescriptor = {
   sourceTypeName : string;
