@@ -88,7 +88,7 @@ retain the existing HTTP/1.1 path. Buffered and lazy streaming responses share
 frame validation, HPACK static/dynamic tables and Huffman decoding, SETTINGS,
 PING, flow-control windows, fragmented headers, informational responses and
 trailers. Duplicate response headers remain ordered. Each exchange owns one
-stream and connection; pooling, multiplexing, server push, CONNECT tunnels,
+stream and connection; HTTP/2 pooling, multiplexing, server push, CONNECT tunnels,
 and OPTIONS asterisk-form are not implemented in this profile.
 
 `Stdlib.Http.Request.header` performs the upstream case-insensitive lookup.
@@ -291,8 +291,15 @@ to the original scheme/host/port and replaces that origin's advertisements on
 each new field. Its cache holds at most 32 alternatives, caps freshness at one
 day and conservatively subtracts response age and request duration. `clear`,
 expired advertisements and status 421 invalidate alternatives; callers should
-clear the session after a network change. Session close releases only the
-cache; a returned lazy body keeps owning its connection until consumed or
+clear the session after a network change. Buffered HTTP/1.1 session requests
+also retain at most eight idle origin connections for thirty seconds, over
+TCP or TLS. Only fully consumed, self-delimited HTTP/1.1 responses without a
+`Connection: close` token or surplus bytes are reusable. Checkout discards
+expired, closed, failed or readable idle sockets; TLS owners also reject
+buffered encrypted bytes. This conservatively discards TLS control traffic
+instead of blocking checkout. A failed attempted request is never replayed.
+Session clear and close release the cache and pooled connections; a returned
+lazy body remains unpooled and keeps owning its connection until consumed or
 closed. Calls after session close return `NetworkError`. Existing stateless
 client entry points retain HTTPS DNS discovery without persistent Alt-Svc state.
 `alt_svc.e2e`, `alt_svc_cache.e2e`, `http_client_session.e2e` and
@@ -307,7 +314,7 @@ the native heap during that fallback check. `rsa_montgomery.e2e` and
 `python3 scripts/test_rsa_montgomery.py` check malformed inputs, carry boundaries
 and 48 independent Python `pow` vectors through 8192-bit moduli. This public
 exponent operation is not a private-key signing implementation.
-Multiplexing and connection pooling remain outside the single-exchange profile.
+HTTP/2–3 multiplexing and pooling remain outside the single-exchange profile.
 Buffered and lazy HTTP/3 clients retain the latest packet-number/key state
 through terminal events and send encrypted H3_NO_ERROR on completion or early
 body closure. Closing keys stay available for three PTOs, capped at thirty

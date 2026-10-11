@@ -1,0 +1,73 @@
+// http1_pool.e2e - Bounded ownership, expiry, origins and conservative response reuse.
+let origin (host: String) : Stdlib.__HttpWire.Url = Stdlib.__HttpWire.Url { scheme = "http", host = host, port = 80L, authority = host, target = "/" }
+let owner (counter: RawPtr) (idle: Bool) : Stdlib.__HttpTransport.Transport =
+  let lifecycle = Stdlib.Stream.__new (fun _unit -> Some ()) (fun _unit -> Stdlib.Stream.__cellSet counter (Stdlib.Stream.__cellGet<Int64> counter + 1L)) in
+  Stdlib.__HttpTransport.Transport { lifecycle = lifecycle, idle = fun _unit -> idle, read = fun _unit -> Error "Unexpected read", write = fun _bytes -> Ok () }
+let expiry (now: Int64) (idle: Bool) : (Bool * Int64) =
+  let counter = Stdlib.Stream.__cellNew 0L in
+  let state = Stdlib.__Http1Pool.put Stdlib.__Http1Pool.empty (origin "a") (owner counter idle) 1000L in
+  let lease = Stdlib.__Http1Pool.take state (origin "a") now in
+  let result = (Stdlib.Option.isSome lease.transport, Stdlib.Stream.__cellGet<Int64> counter) in
+  let _ = match lease.transport with | None -> () | Some transport -> Stdlib.__HttpTransport.close transport in
+  let _ = Stdlib.__Http1Pool.close lease.state in
+  let _ = Stdlib.Stream.__cellDispose<Int64> counter in result
+expiry 30999L true = (true, 0L)
+expiry 31000L true = (false, 1L)
+expiry 999L true = (false, 1L)
+expiry 1001L false = (false, 1L)
+let bounded () : (Int * Int64 * Int64) =
+  let counter = Stdlib.Stream.__cellNew 0L in
+  let state = Stdlib.List.fold (Stdlib.List.range 1 10) Stdlib.__Http1Pool.empty (fun state index -> Stdlib.__Http1Pool.put state (origin (Stdlib.Int.toString index)) (owner counter true) 1000L) in
+  let count = Stdlib.List.length state.entries in
+  let evicted = Stdlib.Stream.__cellGet<Int64> counter in
+  let _ = Stdlib.__Http1Pool.close state in
+  let _ = Stdlib.__Http1Pool.close state in
+  let closed = Stdlib.Stream.__cellGet<Int64> counter in
+  let _ = Stdlib.Stream.__cellDispose<Int64> counter in (count, evicted, closed)
+bounded () = (8, 2L, 10L)
+let replace () : (Int64 * Int64) =
+  let counter = Stdlib.Stream.__cellNew 0L in
+  let first = Stdlib.__Http1Pool.put Stdlib.__Http1Pool.empty (origin "a") (owner counter true) 1000L in
+  let second = Stdlib.__Http1Pool.put first (origin "a") (owner counter true) 1001L in
+  let replaced = Stdlib.Stream.__cellGet<Int64> counter in
+  let _ = Stdlib.__Http1Pool.close second in
+  let closed = Stdlib.Stream.__cellGet<Int64> counter in
+  let _ = Stdlib.Stream.__cellDispose<Int64> counter in (replaced, closed)
+replace () = (1L, 2L)
+let separate () : (Bool * Int) =
+  let counter = Stdlib.Stream.__cellNew 0L in
+  let state = Stdlib.__Http1Pool.put Stdlib.__Http1Pool.empty (origin "a") (owner counter true) 1000L in
+  let lease = Stdlib.__Http1Pool.take state (origin "b") 1001L in
+  let result = (Stdlib.Option.isNone lease.transport, Stdlib.List.length lease.state.entries) in
+  let _ = Stdlib.__Http1Pool.close lease.state in
+  let _ = Stdlib.Stream.__cellDispose<Int64> counter in result
+separate () = (true, 1)
+let clear () : (Int64 * Int64) =
+  let counter = Stdlib.Stream.__cellNew 0L in
+  let pool = Stdlib.__Http1Pool.put Stdlib.__Http1Pool.empty (origin "a") (owner counter true) 1000L in
+  let cell = Stdlib.Stream.__cellNew (Stdlib.HttpClientSession.__State { cache = Stdlib.__AltSvcCache.empty, pool = pool }) in
+  let lifecycle = Stdlib.Stream.__new (fun _unit -> Some ()) (fun _unit -> Stdlib.HttpClientSession.__dispose cell) in
+  let _ = Stdlib.HttpClientSession.__clear cell lifecycle in
+  let cleared = Stdlib.Stream.__cellGet<Int64> counter in
+  let _ = Stdlib.HttpClientSession.__clear cell lifecycle in
+  let _ = Stdlib.Stream.close lifecycle in
+  let _ = Stdlib.HttpClientSession.__clear cell lifecycle in
+  let _ = Stdlib.Stream.close lifecycle in
+  let closed = Stdlib.Stream.__cellGet<Int64> counter in
+  let _ = Stdlib.Stream.__cellDispose<Int64> counter in (cleared, closed)
+clear () = (1L, 1L)
+Stdlib.__Http1Pool.sameOrigin (origin "a") { origin "a" with target = "/other" } = true
+Stdlib.__Http1Pool.sameOrigin (origin "a") (origin "b") = false
+Stdlib.__Http1Pool.sameOrigin (origin "a") { origin "a" with port = 81L } = false
+Stdlib.__Http1Pool.sameOrigin (origin "a") { origin "a" with scheme = "https" } = false
+let reuse (method: String) (wire: String) : Bool = Stdlib.__Http1Pool.reusable method (Stdlib.String.toBlob wire) Stdlib.Blob.empty
+reuse "GET" "HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n" = true
+reuse "HEAD" "HTTP/1.1 200 OK\r\nContent-Length: 50\r\n\r\n" = true
+reuse "GET" "HTTP/1.1 204 No Content\r\n\r\n" = true
+reuse "GET" "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n0\r\n\r\n" = true
+reuse "GET" "HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: keep-alive, ClOsE\r\n\r\n" = false
+reuse "GET" "HTTP/1.0 200 OK\r\nContent-Length: 0\r\n\r\n" = false
+reuse "GET" "HTTP/1.1 200 OK\r\n\r\n" = false
+reuse "CONNECT" "HTTP/1.1 200 OK\r\n\r\n" = false
+reuse "GET" "HTTP/1.1 101 Switching Protocols\r\n\r\n" = false
+Stdlib.__Http1Pool.reusable "GET" (Stdlib.String.toBlob "HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n") (Stdlib.String.toBlob "unsolicited") = false

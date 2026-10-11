@@ -182,6 +182,15 @@ mean the entire branch has passed its integration or performance gates.
 - [ ] Incremental nonblocking handshakes and active-connection servicing,
   including per-connection timers and fair TCP/UDP admission.
 - [ ] Persistent HTTP/1.1 connections and HTTP/2–3 connection reuse/pooling.
+
+  - [x] Buffered `HttpClientSession.request` HTTP/1.1 reuse over TCP/TLS:
+    eight idle origins, thirty-second expiry, complete self-delimited responses,
+    idle readiness checks, explicit clear/close and no attempted-request replay.
+    `http1_pool.e2e` covers expiry, eviction, origins, framing and cleanup;
+    `scripts/test_http1_session_peer.py` exercises independent TCP/TLS peers.
+  - [ ] Persistent HTTP/1.1 server exchanges and lazy-body pool leases.
+  - [ ] Reusable HTTP/2–3 connection owners and multiplexed stream scheduling.
+
 - [ ] HTTP/2 and HTTP/3 request multiplexing, stream allocation and scheduling.
 - [x] Connection-owned dynamic HPACK encoding, bounded eviction, sensitive
   literals, and peer table-capacity shrink/grow updates.

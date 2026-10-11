@@ -40,7 +40,7 @@ let put (state: Stdlib.__Http1Pool.State) (origin: Stdlib.__HttpWire.Url) (trans
 
 let __closeHeader (headers: List<(String * String)>) : Bool =
   Stdlib.List.any headers (fun header -> let (name, value) = header in
-    name == "connection" && Stdlib.List.any (Stdlib.String.split value ",") (fun token -> Stdlib.String.toLowercase (Stdlib.String.trim token) == "close"))
+    Stdlib.String.toLowercase name == "connection" && Stdlib.List.any (Stdlib.String.split value ",") (fun token -> Stdlib.String.toLowercase (Stdlib.String.trim token) == "close"))
 
 let reusable (method: String) (wire: Blob) (remaining: Blob) : Bool =
   if method == "CONNECT" || Stdlib.Blob.__byteLength remaining != 0L then false

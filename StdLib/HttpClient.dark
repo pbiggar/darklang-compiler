@@ -288,28 +288,28 @@ let __requestWithAlternatives (trusted: Bool) (roots: Stdlib.Option.Option<List<
   (method: String) (urlText: String) (headers: List<(String * String)>) (body: Blob)
   : Stdlib.Result.Result<Stdlib.HttpClient.Response, Stdlib.HttpClient.RequestError> =
   Stdlib.HttpClient.__prepare method urlText headers body true |> Stdlib.Result.andThen (fun prepared ->
-                let url = prepared.url in
-                let normalizedMethod = prepared.method in
-                let requestBytes = prepared.bytes in
-                match Stdlib.HttpClient.__connectAlternatives url trusted roots alternatives with
-                | Error error -> Error error
-                | Ok connected ->
-                  match connected with
-                  | Quic ready ->
-                    Stdlib.__Http3Client.request ready normalizedMethod url headers body 10000L |> Stdlib.Result.mapError (fun _message -> Stdlib.HttpClient.RequestError.NetworkError)
-                  | Tcp pair ->
-                    let (connection, authorities) = pair in
-                    let result =
-                      match authorities with
-                      | Some authorities ->
-                          Stdlib.HttpClient.__secureRequest connection url normalizedMethod
-                            authorities headers body requestBytes
-                      | None ->
-                        match Stdlib.__Network.writeTcp connection requestBytes with
-                        | Error code -> Error (Stdlib.HttpClient.__transportError code)
-                        | Ok () -> Stdlib.HttpClient.__readResponse connection normalizedMethod Stdlib.Blob.empty 0L in
-                    let _ = Stdlib.__Network.closeTcp connection in
-                    result)
+    let url = prepared.url in
+    let normalizedMethod = prepared.method in
+    let requestBytes = prepared.bytes in
+    match Stdlib.HttpClient.__connectAlternatives url trusted roots alternatives with
+    | Error error -> Error error
+    | Ok connected ->
+      match connected with
+      | Quic ready ->
+        Stdlib.__Http3Client.request ready normalizedMethod url headers body 10000L |> Stdlib.Result.mapError (fun _message -> Stdlib.HttpClient.RequestError.NetworkError)
+      | Tcp pair ->
+        let (connection, authorities) = pair in
+        let result =
+          match authorities with
+          | Some authorities ->
+            Stdlib.HttpClient.__secureRequest connection url normalizedMethod
+              authorities headers body requestBytes
+          | None ->
+            match Stdlib.__Network.writeTcp connection requestBytes with
+            | Error code -> Error (Stdlib.HttpClient.__transportError code)
+            | Ok () -> Stdlib.HttpClient.__readResponse connection normalizedMethod Stdlib.Blob.empty 0L in
+        let _ = Stdlib.__Network.closeTcp connection in
+        result)
 
 let __request (trusted: Bool) (roots: Stdlib.Option.Option<List<Blob>>) (method: String) (url: String)
   (headers: List<(String * String)>) (body: Blob) : Stdlib.Result.Result<Stdlib.HttpClient.Response, Stdlib.HttpClient.RequestError> =

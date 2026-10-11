@@ -15,7 +15,7 @@ from test_quic_tls_peer import certificates
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = '''// session.dark - Buffered connection reuse, clear/close and no request replay.
 let id (response: Stdlib.HttpClient.Response) : String =
-  match Stdlib.List.findFirst response.headers (fun header -> let (name, _value) = header in name == "x-connection") with
+  match Stdlib.List.findFirst response.headers (fun header -> let (name, _value) = header in Stdlib.String.toLowercase name == "x-connection") with
   | None -> ""
   | Some header -> let (_name, value) = header in value
 let run (session: Stdlib.HttpClientSession.Session) (url: String) (path: String) (same: Bool) : Stdlib.Result.Result<Unit, String> =
@@ -28,10 +28,18 @@ let run (session: Stdlib.HttpClientSession.Session) (url: String) (path: String)
   let _ = session.close () in
   match first, second, third, session.request "GET" url [] Stdlib.Blob.empty with
   | Ok first, Ok second, Ok third, Error _ ->
-    if id first == "" || id second == "" || (id first == id second) != same then Error "Connection reuse failed"
+    if id first == "" || id second == "" || (id first == id second) != same then Error ("Connection reuse failed: " ++ id first ++ ", " ++ id second)
     else if id third == id second || Stdlib.Blob.__byteLength third.body != 70000L then Error "Clear or body framing failed"
     else Ok ()
   | _, _, _, _ -> Error "Session request or lifecycle failed"
+let dropped (session: Stdlib.HttpClientSession.Session) (url: String) : Stdlib.Result.Result<Unit, String> =
+  let warm = session.request "GET" (url ++ "/fixed") [] Stdlib.Blob.empty in
+  let failed = session.request "POST" (url ++ "/drop") [] (Stdlib.String.toBlob "do-not-replay") in
+  let recovered = session.request "GET" (url ++ "/fixed") [] Stdlib.Blob.empty in
+  let _ = session.close () in
+  match warm, failed, recovered with
+  | Ok warm, Error _error, Ok recovered -> if id warm != id recovered then Ok () else Error "Failed owner reused"
+  | _, _, _ -> Error "Dropped POST did not fail safely"
 let url = Stdlib.Cli.__Args.get 0 |> Stdlib.Result.withDefault ""
 let path = Stdlib.Cli.__Args.get 1 |> Stdlib.Result.withDefault "/fixed"
 let same = (Stdlib.Cli.__Args.get 2 |> Stdlib.Result.withDefault "same") == "same"
@@ -40,7 +48,8 @@ match roots with
 | Error message -> Stdlib.printLine message
 | Ok roots ->
   let session = Stdlib.HttpClientSession.createTrustedWithRoots roots in
-  match run session url path same with | Error message -> Stdlib.printLine message | Ok _unit -> Stdlib.printLine "OK"
+  let result = if path == "/drop" then dropped session url else run session url path same in
+  match result with | Error message -> Stdlib.printLine message | Ok _unit -> Stdlib.printLine "OK"
 '''
 
 
@@ -55,6 +64,7 @@ class Peer:
         self.stopping = threading.Event()
         self.workers, self.connections, self.errors = [], [], []
         self.count = 0
+        self.dropped = 0
         self.thread = threading.Thread(target=self.accept, daemon=True)
         self.thread.start()
 
@@ -74,7 +84,9 @@ class Peer:
 
     def serve(self, connection, number):
         try:
-            connection.settimeout(3)
+            # Leave enough time for the native TLS client to authenticate and
+            # decrypt the large response before clearing its pooled owner.
+            connection.settimeout(30)
             if self.context:
                 connection = self.context.wrap_socket(connection, server_side=True)
                 self.connections.append(connection)
@@ -97,6 +109,10 @@ class Peer:
                             raise AssertionError("Truncated request body")
                         buffer += chunk
                     buffer = buffer[length:]
+                    if path == b"/drop":
+                        assert method == b"POST" and length == len(b"do-not-replay"), "Dropped POST corrupted"
+                        self.dropped += 1
+                        return
                     body = b"b" * 70000 if path == b"/big" else str(number).encode()
                     version = b"HTTP/1.0" if path == b"/old" else b"HTTP/1.1"
                     response = version + b" 200 OK\r\nX-Connection: " + str(number).encode() + b"\r\n"
@@ -119,7 +135,7 @@ class Peer:
                             except ssl.SSLError:
                                 pass
                         return
-        except (OSError, ssl.SSLError) as error:
+        except (OSError, ssl.SSLError, AssertionError) as error:
             if not self.stopping.is_set():
                 self.errors.append(error)
 
@@ -160,15 +176,16 @@ def main():
             peer = Peer(security)
             try:
                 for path, same in [("fixed", True), ("chunked", True), ("head", True),
-                                   ("close", False), ("eof", False), ("old", False), ("extra", False)]:
+                                   ("close", False), ("eof", False), ("old", False), ("extra", False), ("drop", False)]:
                     result = subprocess.run([str(binary), f"{scheme}://localhost:{peer.port}", f"/{path}",
                                              "same" if same else "different"], cwd=ROOT, text=True,
                                             capture_output=True, timeout=30)
                     assert result.returncode == 0 and result.stdout == "OK\n" and not result.stderr, (scheme, path, result)
                 assert not peer.errors, peer.errors
+                assert peer.dropped == 1, f"POST replayed {peer.dropped} times"
             finally:
                 peer.close()
-    print("TCP/TLS session reuse, chunked/HEAD/EOF framing, close tokens, HTTP/1.0, surplus bytes, clear/close, 70 KiB bodies and compiled cleanup verified")
+    print("TCP/TLS session reuse, chunked/HEAD/EOF framing, close tokens, HTTP/1.0, surplus bytes, clear/close, dropped POST without replay, 70 KiB bodies and compiled cleanup verified")
 
 
 if __name__ == "__main__":
