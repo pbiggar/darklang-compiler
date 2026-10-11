@@ -73,7 +73,7 @@ let __select (selected: Stdlib.__QpackEncoder.Selected) (stream: Int64) (fields:
     let chosen =
       if sensitive || Stdlib.Option.isSome static then None
       else match found with
-      | Some entry -> Some (selected.state, entry.index, Stdlib.Blob.empty)
+      | Some entry -> Some ((selected.state, entry.index, Stdlib.Blob.empty))
       | None ->
         let instruction = Stdlib.__QpackEncoder.__insertBytes field in
         let entrySize = Stdlib.__Hpack.__entrySize field in
@@ -84,10 +84,10 @@ let __select (selected: Stdlib.__QpackEncoder.Selected) (stream: Int64) (fields:
         | None -> None
         | Some entries ->
           let entry = Stdlib.__QpackDecoder.Entry { index = selected.state.inserted, field = field } in
-          Some ({ selected.state with inserted = selected.state.inserted + 1L, entries = Stdlib.List.push entries entry }, entry.index, instruction) in
+          Some (({ selected.state with inserted = selected.state.inserted + 1L, entries = Stdlib.List.push entries entry }, entry.index, instruction)) in
     let next = match chosen with
     | None -> { selected with fields = Stdlib.List.push selected.fields (Literal (Stdlib.__QpackEncoder.__literal field)) }
-    | Some (state, index, instruction) ->
+    | Some ((state, index, instruction)) ->
       let reference = Stdlib.__QpackEncoder.__canReference state stream index in
       let encoded = if reference then Reference index else Literal (Stdlib.__QpackEncoder.__literal field) in
       { selected with state = state, fields = Stdlib.List.push selected.fields encoded,
@@ -102,8 +102,8 @@ let encode (state: Stdlib.__QpackEncoder.State) (stream: Int64) (fields: List<(S
     if Stdlib.List.length state.sections >= 1024 || Stdlib.Blob.__byteLength state.instructions > budget then
       Stdlib.__QpackEncoder.Encoded { state = state, bytes = fallback, instructions = Stdlib.Blob.empty }
     else
-      let selected = Stdlib.__QpackEncoder.__select
-        (Stdlib.__QpackEncoder.Selected { state = { state with instructions = Stdlib.Blob.empty }, fields = [], references = [], instructions = [state.instructions], budget = budget - Stdlib.Blob.__byteLength state.instructions }) stream fields in
+      let initial = Stdlib.__QpackEncoder.Selected { state = { state with instructions = Stdlib.Blob.empty }, fields = [], references = [], instructions = [state.instructions], budget = budget - Stdlib.Blob.__byteLength state.instructions } in
+      let selected = Stdlib.__QpackEncoder.__select initial stream fields in
       let required = Stdlib.List.fold selected.references 0L (fun highest index -> if index + 1L > highest then index + 1L else highest) in
       let count = if required == 0L then 0L else required % (2L * (state.maximum / 32L)) + 1L in
       let blocks = Stdlib.List.map (Stdlib.List.reverse selected.fields) (fun field -> match field with
@@ -120,7 +120,7 @@ let __ack (sections: List<Stdlib.__QpackEncoder.Section>) (stream: Int64)
   match sections with
   | [] -> Error "Unexpected QPACK section acknowledgment"
   | section :: rest ->
-    if section.stream == stream then Ok (rest, section.required)
+    if section.stream == stream then Ok ((rest, section.required))
     else Stdlib.__QpackEncoder.__ack rest stream |> Stdlib.Result.map (fun result -> let (remaining, required) = result in (Stdlib.List.push remaining section, required))
 
 let __apply (state: Stdlib.__QpackEncoder.State) (first: Int64) (value: Int64) : Stdlib.Result.Result<Stdlib.__QpackEncoder.State, String> =

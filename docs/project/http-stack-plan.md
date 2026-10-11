@@ -190,8 +190,9 @@ mean the entire branch has passed its integration or performance gates.
 
   - [x] Inbound dynamic tables, fragmented encoder instructions, blocked
     field sections, insertion increments and section acknowledgments.
-  - [ ] Outgoing dynamic encoding, peer feedback/reference tracking and
-    stream cancellation across reusable multiplexed connections.
+  - [x] Outgoing dynamic encoding, peer feedback, reference tracking and
+    pure stream-cancellation ownership.
+  - [ ] Cancellation and table ownership across reusable multiplexed connections.
 
 - [ ] Streaming client uploads, server requests and server responses.
 - [ ] Public received/sent trailer APIs.
@@ -252,9 +253,14 @@ prevents insertion. Credentials and cookies remain never-indexed.
 `qpack_dynamic_encoder.e2e` exercises those boundaries, and
 `scripts/test_qpack_encoder_peer.py` adds a persistent independent ls-qpack
 decoder probe with 560 sections, bytewise instructions/feedback, table eviction
-and Required Insert Count wrap-around. Validation is pending while the pinned
-toolchain is rebuilt after workspace recovery. Reusable multiplexed connection
-ownership is still missing; the full QPACK item remains unchecked.
+and Required Insert Count wrap-around. The recovered pinned toolchain and native
+build pass; focused QPACK tests pass 93/93 and HTTP/3 tests pass 132/132.
+The independent outgoing probe passes 560 dynamic sections, including 280
+blocked-before-insertion cases and compiled cleanup. The delayed aioquic peer
+also passes, now requiring outgoing dynamic response headers as well as inbound
+dynamic request headers, with Unicode and a 70 KiB echo. Full host/native
+regression gates are pending for this outgoing checkpoint. Reusable multiplexed
+connection ownership is still missing; the full QPACK item remains unchecked.
 
 HTTP/2 now retains an outgoing HPACK table separately from its decoder. Every
 state transition preserves that owner and the peer's decoded field budget;
