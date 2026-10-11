@@ -88,7 +88,7 @@ Stdlib.List.filter [ 1L, 2L, 3L ] (fun item ->
   match item with
   | 1L -> Stdlib.Option.Option.None
   | 2L -> false
-  | 3L -> true) = compileerror="Expected TBool, got TSum (\"Darklang.Stdlib.Option.Option\", [TVar \"t\"])"
+  | 3L -> true) = compileerror="Expected TBool, got TSum\n(\"Darklang.Stdlib.Option.Option\","
 Stdlib.List.filter [ true, false, true ] (fun item -> "a") = compileerror="Expected TBool, got TString"
 Stdlib.List.filter [ 1L, 2L, 3L ] (fun item ->
   match item with
@@ -225,7 +225,7 @@ module Partition =
     match item with
     | 1L -> Stdlib.Option.Option.None
     | 2L -> false
-    | 3L -> true) = compileerror="Expected TBool, got TSum (\"Darklang.Stdlib.Option.Option\", [TVar \"t\"])"
+    | 3L -> true) = compileerror="Expected TBool, got TSum\n(\"Darklang.Stdlib.Option.Option\","
 Stdlib.List.pushBack [ 2L, 3L ] 1L = [ 2L, 3L, 1L ]
 Stdlib.List.pushBack [] 1L = [ 1L ]
 
