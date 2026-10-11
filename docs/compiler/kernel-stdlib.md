@@ -75,9 +75,13 @@ owned-launch handshake rather than the retired process-output wire records.
 
 The Linux x86-64 compiler suite passes 13,231 checks, including compiled leak
 checks and a closed-pipe regression that explicitly restores default SIGPIPE
-before re-executing Dark. Interpreter CLI-library validation passes 360 checks;
+before re-executing Dark. `dune runtest` also passes. Interpreter CLI-library
+validation passes 361 checks in a freshly seeded, isolated test store;
 host-boundary validation passes 18, with one ignored. The 32 shared source units
 are checked byte-for-byte, apart from the documented nested-module splitting.
+An owned-child capture/deadline/interactive smoke program compiles for Linux
+x86-64, Linux ARM64 and macOS ARM64; its Linux x86-64 execution passes with leak
+checking enabled. The optional native-runtime diagnostic executable also builds.
 
 This is not a fully cross-platform-verified release. Darwin and Linux ARM64
 execution remain to be tested on suitable hosts. Full interpreter validation
