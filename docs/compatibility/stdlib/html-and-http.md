@@ -386,3 +386,20 @@ fields, ignores comments and non-data blocks, and flushes a final unterminated
 block at end of stream. The source is split and qualified where required by the
 compiler's module grammar; that does not change the public API or consumption
 behavior.
+
+## Upstream correctness adoption (2026-10-11)
+
+The historical matrix above documents the earlier pinned interpreter behavior,
+not the current upstream contract. The branch `adopt/upstream-http-html-correctness`
+updates the pure surfaces to match darklang/dark PRs #5727 and #5735:
+
+- `Http.parseQueryString` decodes `+` as a space and percent escapes as bytes,
+  preserves invalid escapes, and keeps last-duplicate-wins dictionary semantics.
+- `Http.Request.queryParams` splits at the first `=` and decodes keys and
+  values while preserving ordered duplicates; `queryParam` still joins
+  duplicate values with commas.
+- `Html.nodeToString` escapes attribute values with `escapeHtml`, and
+  `Html.comment` rewrites `--` to `- -` to prevent premature closure.
+
+The updated `test/fixtures/e2e/html_http.e2e` pins the new behavior.
+This note records a source change, not a verified passing test run.
