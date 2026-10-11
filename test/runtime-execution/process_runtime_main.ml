@@ -705,18 +705,6 @@ let nativeEffectChecks () =
   Unix.putenv "PORT_NATIVE_EFFECT_FIXTURE" "hé😀";
   check "hé😀"
     (emit LIR.GetEnv [ LIR.StringSymbol "PORT_NATIVE_EFFECT_FIXTURE" ] @ text);
-  check "changed"
-    (emit LIR.SetEnv
-       [
-         LIR.StringSymbol "PORT_NATIVE_EFFECT_FIXTURE";
-         LIR.StringSymbol "changed";
-       ]
-    @ emit LIR.GetEnv [ LIR.StringSymbol "PORT_NATIVE_EFFECT_FIXTURE" ]
-    @ text);
-  check "0"
-    (emit LIR.UnsetEnv [ LIR.StringSymbol "PORT_NATIVE_EFFECT_FIXTURE" ]
-    @ emit LIR.GetEnv [ LIR.StringSymbol "PORT_NATIVE_EFFECT_FIXTURE" ]
-    @ print);
   check "1"
     (emit LIR.FileIsDirectory [ LIR.StringSymbol (Sys.getcwd ()) ] @ print);
   let path = Filename.temp_file "port-exclusive-" ".file" in
@@ -4925,8 +4913,6 @@ let x64ProcessChecks () =
     P.generateCliArgvHelper ()
     @ P.generateCliEnvironmentPackedHelper false
     @ P.generateCliDirectoryCurrentHelper false
-    @ P.generateCliSetEnvHelper false
-    @ P.generateCliUnsetEnvHelper false
     @ P.generateCliDirectoryListHelper false
     @ P.generateCliGetEnvHelper false
     @ P.generateLinuxCliSpawnProcessHelper ()
@@ -5004,26 +4990,6 @@ let x64ProcessChecks () =
   check "P" []
     (emit LIR.GetEnv [ LIR.StringSymbol (env ^ "_MISSING") ]
     @ compare X.RBX 0L @ pass);
-  List.iter
-    (fun value ->
-      check value []
-        (emit LIR.SetEnv [ LIR.StringSymbol env; LIR.StringSymbol value ]
-        @ [ X.MOV_load (X.RAX, X.RBX, 0l) ]
-        @ compare X.RAX 0L
-        @ emit LIR.GetEnv [ LIR.StringSymbol env ]
-        @ text dest))
-    [ ""; "changed"; "hé😀" ];
-  check "new" []
-    (emit LIR.SetEnv [ LIR.StringSymbol (env ^ "_NEW"); LIR.StringSymbol "new" ]
-    @ emit LIR.GetEnv [ LIR.StringSymbol (env ^ "_NEW") ]
-    @ text dest);
-  List.iter
-    (fun name ->
-      check "P" []
-        (emit LIR.UnsetEnv [ LIR.StringSymbol name ]
-        @ emit LIR.GetEnv [ LIR.StringSymbol name ]
-        @ compare X.RBX 0L @ pass))
-    [ env; env ^ "_MISSING" ];
   checkWith
     (fun output -> List.mem (env ^ "=hé😀") (String.split_on_char '\000' output))
     []

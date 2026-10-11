@@ -1,4 +1,4 @@
 // Interpreter UID builtin compatibility and real-user identity.
-Builtin.posixGetuid () >= 0 = true
-(Builtin.posixGetuid () == 0) == Stdlib.Cli.Sys.isRoot () = true
-Builtin.posixGetuid () == Builtin.posixGetuid () = true
+Stdlib.Cli.Syscall.getuid () >= 0 = true
+(Stdlib.Cli.Syscall.getuid () == 0) == Stdlib.Cli.Sys.isRoot () = true
+Stdlib.Cli.Syscall.getuid () == Stdlib.Cli.Syscall.getuid () = true

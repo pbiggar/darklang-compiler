@@ -129,6 +129,7 @@ type cliOperation =
   | PosixPread
   | PosixPwrite
   | PosixFclonefileat
+  | PosixGetentropy
 
 type recordDescriptor = {
   sourceTypeName : string;

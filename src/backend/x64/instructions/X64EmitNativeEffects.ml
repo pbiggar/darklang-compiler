@@ -171,6 +171,7 @@ let emitCliNative (ctx : X64CodeGenTypes.funcCtx) (dest : LIR.reg)
       | LIR.PosixPread
       | LIR.PosixPwrite
       | LIR.PosixFclonefileat
+      | LIR.PosixGetentropy
       -> (
           let number, arity =
             match operation with
@@ -195,16 +196,16 @@ let emitCliNative (ctx : X64CodeGenTypes.funcCtx) (dest : LIR.reg)
             | LIR.PosixFlock -> (Some 73, 2)
             | LIR.PosixGetDents -> (Some 217, 4)
             | LIR.PosixIoctl -> (Some 16, 3)
-            | LIR.PosixProcInfo
-      | LIR.PosixCopyFileRange
-      | LIR.PosixFtruncate
-      | LIR.PosixFchmod
-      | LIR.PosixFsync
-      | LIR.PosixFstat
-      | LIR.PosixPread
-      | LIR.PosixPwrite
-      | LIR.PosixFclonefileat
-      -> (None, 6)
+            | LIR.PosixProcInfo -> (None, 6)
+            | LIR.PosixCopyFileRange -> (Some 326, 6)
+            | LIR.PosixFtruncate -> (Some 77, 2)
+            | LIR.PosixFchmod -> (Some 91, 2)
+            | LIR.PosixFsync -> (Some 74, 1)
+            | LIR.PosixFstat -> (Some 5, 2)
+            | LIR.PosixPread -> (Some 17, 4)
+            | LIR.PosixPwrite -> (Some 18, 4)
+            | LIR.PosixFclonefileat -> (None, 4)
+            | LIR.PosixGetentropy -> (Some 318, 3)
             | _ -> Crash.crash "Non-POSIX operation in POSIX lowering"
           in
           if List.length args <> arity then

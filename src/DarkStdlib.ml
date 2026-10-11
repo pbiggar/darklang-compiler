@@ -143,6 +143,7 @@ let posixIntrinsicModule : AST.moduleDef =
         fn "__ftruncate" [] [ TInt64; TInt64 ] TInt64;
         fn "__fchmod" [] [ TInt64; TInt64 ] TInt64;
         fn "__fsync" [] [ TInt64 ] TInt64;
+        fn "__getentropy" [] [ TInternalRawPtr; TInt64; TInt64 ] TInt64;
         fn "__fstat" [] [ TInt64; TInternalRawPtr ] TInt64;
         fn "__pread" [] [ TInt64; TInternalRawPtr; TInt64; TInt64 ] TInt64;
         fn "__pwrite" [] [ TInt64; TInternalRawPtr; TInt64; TInt64 ] TInt64;

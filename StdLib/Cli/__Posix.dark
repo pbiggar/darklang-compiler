@@ -5,6 +5,7 @@ let __copyFileRange (a0: Int64) (a1: Int64) (a2: Int64) (a3: Int64) (a4: Int64) 
 let __ftruncate (a0: Int64) (a1: Int64) : Int64 = -38L
 let __fchmod (a0: Int64) (a1: Int64) : Int64 = -38L
 let __fsync (a0: Int64) : Int64 = -38L
+let __getentropy (buffer: RawPtr) (length: Int64) (flags: Int64) : Int64 = -38L
 let __fstat (a0: Int64) (a1: RawPtr) : Int64 = -38L
 let __pread (a0: Int64) (a1: RawPtr) (a2: Int64) (a3: Int64) : Int64 = -38L
 let __pwrite (a0: Int64) (a1: RawPtr) (a2: Int64) (a3: Int64) : Int64 = -38L
@@ -388,7 +389,7 @@ let __withDirectory (path: String) (fn: Int64 -> Stdlib.Result.Result<'a, Stdlib
 let __zeroBuffer (ptr: RawPtr) (length: Int64) : Unit =
     if length <= 0L then ()
     else
-        let _ = __raw_write_byte ptr (length - 1L) 0uy in
+        let _ = __raw_write_byte ptr (length - 1L) 0L in
         Stdlib.Cli.__Posix.__zeroBuffer ptr (length - 1L)
 
 let __withStat (path: String) (fn: RawPtr -> 'a) : Stdlib.Result.Result<'a, Stdlib.Cli.Posix.Error> =
@@ -407,59 +408,11 @@ let __statMode (ptr: RawPtr) : Int64 =
     if Stdlib.Cli.__Posix.__mac () then Stdlib.Cli.__Posix.__unsigned ptr 4L 2L
     else Stdlib.Cli.__Posix.__unsigned ptr (if Stdlib.Cli.__Posix.__x64 () then 24L else 16L) 4L
 
-let __statValues (ptr: RawPtr) : (Int * Int * Int) =
-    let size = __raw_get<Int64> ptr (if Stdlib.Cli.__Posix.__mac () then 96L else 48L) in
-    let mtime = __raw_get<Int64> ptr (if Stdlib.Cli.__Posix.__mac () then 48L else 88L) in
-    (Stdlib.Int.fromInt64 (Stdlib.Cli.__Posix.__statMode ptr), Stdlib.Int.fromInt64 size, Stdlib.Int.fromInt64 mtime)
-
 let __writeBytes (blob: Blob) (ptr: RawPtr) (index: Int64) : Unit =
     if index >= Stdlib.Blob.__byteLength blob then ()
     else
         let _ = __raw_write_byte ptr index (Stdlib.Blob.__getByte blob index) in
         Stdlib.Cli.__Posix.__writeBytes blob ptr (index + 1L)
-
-let __parseEntries (ptr: RawPtr) (offset: Int64) (length: Int64) (entries: List<String>) : List<String> =
-    if offset >= length then entries
-    else
-        let recordLength = Stdlib.Cli.__Posix.__unsigned ptr (offset + 16L) 2L in
-        let start = offset + (if Stdlib.Cli.__Posix.__mac () then 21L else 19L) in
-        let end_ = Stdlib.Cli.__Posix.__nullEnd ptr start (offset + recordLength) in
-        let name = Stdlib.Cli.__Posix.__bufferString ptr start end_ in
-        let next = if name == "." || name == ".." then entries else Stdlib.List.push entries name in
-        Stdlib.Cli.__Posix.__parseEntries ptr (offset + recordLength) length next
-
-let __listEntries (fd: Int64) (ptr: RawPtr) (position: RawPtr) (entries: List<String>) : Stdlib.Result.Result<List<String>, Stdlib.Cli.Posix.Error> =
-    let rc = Stdlib.Cli.__Posix.__getDents fd ptr 32768L position in
-    if rc < 0L then Error (Stdlib.Cli.__Posix.__error (0L - rc))
-    else if rc == 0L then Ok (Stdlib.List.reverse entries)
-    else Stdlib.Cli.__Posix.__listEntries fd ptr position (Stdlib.Cli.__Posix.__parseEntries ptr 0L rc entries)
-
-let __suffix (word: Int64) (remaining: Int64) : String =
-    if remaining == 0L then ""
-    else
-        let alphabet = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789" in
-        Stdlib.String.__byteSlice alphabet (word % 62L) (word % 62L + 1L) ++ Stdlib.Cli.__Posix.__suffix (word / 62L) (remaining - 1L)
-
-let __createUnique (prefix: String) (remaining: Int64) (directory: Bool) : Stdlib.Result.Result<(Int * String), Stdlib.Cli.Posix.Error> =
-    let suffix = Stdlib.Cli.__Posix.__suffix (Stdlib.Int64.bitwiseAnd (Stdlib.Int.__randomInt64Word ()) 9223372036854775807L) 6L in
-    let path = prefix ++ suffix in
-    let result = Stdlib.Cli.__Posix.__withEntry path (fun parent name ->
-        let rc = if directory then Stdlib.Cli.__Posix.__mkdirAt parent name 448L
-                 else Stdlib.Cli.__Posix.__openAt parent name ((if Stdlib.Cli.__Posix.__mac () then 2562L else 194L) + Stdlib.Cli.__Posix.__nofollow ()) 384L in
-        if rc < 0L then Error (Stdlib.Cli.__Posix.__error (0L - rc))
-        else Ok ((Stdlib.Int.fromInt64 rc, path))) in
-    match result with
-    | Error e -> if e.errno == 17 && remaining > 0L then Stdlib.Cli.__Posix.__createUnique prefix (remaining - 1L) directory else Error e
-    | Ok value -> Ok value
-
-let __owner (lines: List<String>) (uid: String) : String =
-    match lines with
-    | [] -> uid
-    | line :: rest ->
-        let fields = Stdlib.String.split line ":" in
-        match (Stdlib.List.getAt fields 0, Stdlib.List.getAt fields 2) with
-        | (Some name, Some ownerUid) -> if ownerUid == uid then name else Stdlib.Cli.__Posix.__owner rest uid
-        | _ -> Stdlib.Cli.__Posix.__owner rest uid
 
 let __metadataPath (path: String) (fn: Int64 -> String -> Stdlib.Result.Result<Unit, Stdlib.Cli.Posix.Error>) : Stdlib.Result.Result<Unit, Stdlib.Cli.Posix.Error> =
     Stdlib.Cli.__Posix.__withEntry path (fun parent name ->

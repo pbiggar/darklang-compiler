@@ -91,6 +91,7 @@ let convertCliOperation operation =
   | MIR.PosixPread -> LIR.PosixPread
   | MIR.PosixPwrite -> LIR.PosixPwrite
   | MIR.PosixFclonefileat -> LIR.PosixFclonefileat
+  | MIR.PosixGetentropy -> LIR.PosixGetentropy
 
 [@@@warning "-4"]
 

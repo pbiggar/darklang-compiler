@@ -1,0 +1,26 @@
+// Typed checked-path kernel adapters. Policy/marshalling stays private.
+module Builtin
+
+let syscallOpen (path: String) (flags: Int) (mode: Int) : Stdlib.Result.Result<Int, Int> =
+    Builtin.__checkedOpen path flags mode
+    |> Stdlib.Result.mapError (fun error -> error.errno)
+
+let syscallMkdir (path: String) (mode: Int) : Stdlib.Result.Result<Unit, Int> =
+    Builtin.__checkedMkdir path mode
+    |> Stdlib.Result.mapError (fun error -> error.errno)
+
+let syscallChdir (path: String) : Stdlib.Result.Result<Unit, Int> =
+    Builtin.__checkedChdir path
+    |> Stdlib.Result.mapError (fun error -> error.errno)
+
+let syscallRename (oldpath: String) (newpath: String) : Stdlib.Result.Result<Unit, Int> =
+    Builtin.__checkedRename oldpath newpath
+    |> Stdlib.Result.mapError (fun error -> error.errno)
+
+let syscallChmod (path: String) (mode: Int) : Stdlib.Result.Result<Unit, Int> =
+    Builtin.__checkedChmod path mode
+    |> Stdlib.Result.mapError (fun error -> error.errno)
+
+let syscallSymlink (target: String) (linkpath: String) : Stdlib.Result.Result<Unit, Int> =
+    Builtin.__checkedSymlink target linkpath
+    |> Stdlib.Result.mapError (fun error -> error.errno)

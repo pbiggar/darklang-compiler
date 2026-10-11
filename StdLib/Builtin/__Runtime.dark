@@ -1,6 +1,10 @@
 // Native startup inputs and target identity, distinct from kernel primitives.
 module Builtin
 
+// Native executables do not have the interpreter's optional capability policy.
+let runtimeAuthorizeReadPath (path: String) : Stdlib.Option.Option<String> =
+    Some path
+
 let runtimeTargetOS () : String =
     let target = Stdlib.Cli.__hostOSCode () in
     if target == 1L then "linux" else if target == 2L then "darwin"

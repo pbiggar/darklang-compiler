@@ -183,6 +183,7 @@ type cliOperation =
   | PosixPread
   | PosixPwrite
   | PosixFclonefileat
+  | PosixGetentropy
 
 (*
    Immutable nominal metadata carried through fixed-block lowering for field

@@ -449,18 +449,6 @@ let emitDirectoryListPacked (ctx : codeGenContext) (destReg : Symbolic.reg)
   @ loadStringLiteralPointer destReg ""
   @ [ Symbolic.Label complete ]
 
-let emitUnitOk (ctx : codeGenContext) (destReg : Symbolic.reg) =
-  [
-    Symbolic.MOV_reg (destReg, Symbolic.X28);
-    Symbolic.ADD_imm (Symbolic.X28, Symbolic.X28, 24);
-    Symbolic.MOVZ (Symbolic.X9, 0, 0);
-    Symbolic.STR (Symbolic.X9, destReg, 0);
-    Symbolic.STR (Symbolic.X9, destReg, 8);
-    Symbolic.MOVZ (Symbolic.X9, 1, 0);
-    Symbolic.STR (Symbolic.X9, destReg, 16);
-  ]
-  @ generateLeakCounterInc ctx
-
 let emitRandomInt64 (ctx : codeGenContext) (dest : LIR.reg) =
   lirRegToARM64Reg dest
   |> Result.map (fun destReg ->
@@ -569,6 +557,7 @@ let emitCliNative (ctx : codeGenContext) (dest : LIR.reg)
       | LIR.PosixPread
       | LIR.PosixPwrite
       | LIR.PosixFclonefileat
+      | LIR.PosixGetentropy
       -> (
           let number, arity =
             match operation with
@@ -714,6 +703,10 @@ let emitCliNative (ctx : codeGenContext) (dest : LIR.reg)
                 ((match ARM64.targetOS ctx.target with
                   | Platform.Linux -> None
                   | Platform.MacOS -> Some 517), 4)
+            | LIR.PosixGetentropy ->
+                ((match ARM64.targetOS ctx.target with
+                  | Platform.Linux -> Some 278
+                  | Platform.MacOS -> Some 500), 3)
             | _ -> Crash.crash "Non-POSIX operation in POSIX lowering"
           in
           if List.length args <> arity then

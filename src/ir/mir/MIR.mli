@@ -119,6 +119,7 @@ type cliOperation =
   | PosixPread
   | PosixPwrite
   | PosixFclonefileat
+  | PosixGetentropy
 
 type label = Label of string
 

@@ -12,6 +12,11 @@ inventory records source placement and origin, not complete API parity.
 [source organization](source-organization.md#standard-library-layout).
 The rows follow `library-sources.list` declaration order.
 
+The kernel-library migration is described in [kernel-stdlib.md](kernel-stdlib.md).
+Its native Builtin adapters are `Builtin/__Syscall.dark`, `__Runtime.dark`,
+`__KernelRecords.dark`, `__FileSyscall.dark`, and `__PathSyscall.dark`; shared Dark
+algorithms are checked by `scripts/sync-kernel-stdlib.py`.
+
 A `__` filename marks compiler support or a private implementation fragment.
 It does not rename the declared module or enforce language visibility: that
 is controlled by declaration names and the frontend's internal-mode checks.

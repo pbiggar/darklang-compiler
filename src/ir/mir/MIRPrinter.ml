@@ -159,6 +159,7 @@ let cliOperation = function
   | MIR.PosixPread -> "PosixPread"
   | MIR.PosixPwrite -> "PosixPwrite"
   | MIR.PosixFclonefileat -> "PosixFclonefileat"
+  | MIR.PosixGetentropy -> "PosixGetentropy"
 
 let prettyPrintCanonicalBufferKind = ANFPrinter.prettyPrintCanonicalBufferKind
 

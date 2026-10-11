@@ -16,6 +16,7 @@ FILES = {
     "posix/io": "Posix/IO", "posix/errors": "Posix/Errors",
     "posix/accounts": "Posix/Accounts", "posix/temp": "Posix/Temp",
     "fileCopy": "FileCopy", "file": "File",
+    "env": "Env",
 }
 
 def main():

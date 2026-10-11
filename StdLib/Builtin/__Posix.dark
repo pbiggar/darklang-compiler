@@ -13,15 +13,18 @@ let __posixInt32 (value: Int) : Int64 =
     if narrowed < -2147483648L || narrowed > 2147483647L then Builtin.crash "Encountered out-of-range value for type of Int"
     else narrowed
 
-let posixOpen (path: String) (flags: Int) (mode: Int) : Stdlib.Result.Result<Int, Stdlib.Cli.Posix.Error> =
+let __checkedOpen (path: String) (flags: Int) (mode: Int) : Stdlib.Result.Result<Int, Stdlib.Cli.Posix.Error> =
     let flags = Builtin.__posixInt32 flags in
     let mode = Builtin.__posixInt32 mode in
-    Stdlib.Cli.__Posix.__withEntry path (fun fd name -> Stdlib.Cli.__Posix.__intResult (Stdlib.Cli.__Posix.__openAt fd name (Stdlib.Int64.bitwiseOr flags (Stdlib.Cli.__Posix.__nofollow ())) mode))
+    let openAt = fun fd name -> Stdlib.Cli.__Posix.__intResult (Stdlib.Cli.__Posix.__openAt fd name (Stdlib.Int64.bitwiseOr flags (Stdlib.Cli.__Posix.__nofollow ())) mode) in
+    if path != "" && Stdlib.String.replaceAll path "/" "" == "" then
+        Stdlib.Cli.__Posix.__withCString "/" (fun ptr -> openAt (Stdlib.Cli.__Posix.__cwdFd ()) ptr)
+    else Stdlib.Cli.__Posix.__withEntry path openAt
 
-let posixChdir (path: String) : Stdlib.Result.Result<Unit, Stdlib.Cli.Posix.Error> =
+let __checkedChdir (path: String) : Stdlib.Result.Result<Unit, Stdlib.Cli.Posix.Error> =
     Stdlib.Cli.__Posix.__withDirectory path (fun fd -> Stdlib.Cli.__Posix.__unitResult (Stdlib.Cli.__Posix.__chdir fd))
 
-let posixMkdir (path: String) (mode: Int) : Stdlib.Result.Result<Unit, Stdlib.Cli.Posix.Error> =
+let __checkedMkdir (path: String) (mode: Int) : Stdlib.Result.Result<Unit, Stdlib.Cli.Posix.Error> =
     let mode = Builtin.__posixInt32 mode in
     Stdlib.Cli.__Posix.__withEntry path (fun fd name -> Stdlib.Cli.__Posix.__unitResult (Stdlib.Cli.__Posix.__mkdirAt fd name mode))
 
@@ -31,11 +34,11 @@ let posixRmdir (path: String) : Stdlib.Result.Result<Unit, Stdlib.Cli.Posix.Erro
 let posixUnlink (path: String) : Stdlib.Result.Result<Unit, Stdlib.Cli.Posix.Error> =
     Stdlib.Cli.__Posix.__withEntry path (fun fd name -> Stdlib.Cli.__Posix.__unitResult (Stdlib.Cli.__Posix.__unlinkAt fd name 0L))
 
-let posixRename (oldpath: String) (newpath: String) : Stdlib.Result.Result<Unit, Stdlib.Cli.Posix.Error> =
+let __checkedRename (oldpath: String) (newpath: String) : Stdlib.Result.Result<Unit, Stdlib.Cli.Posix.Error> =
     Stdlib.Cli.__Posix.__withEntry oldpath (fun fromFd fromName ->
         Stdlib.Cli.__Posix.__withEntry newpath (fun toFd toName -> Stdlib.Cli.__Posix.__unitResult (Stdlib.Cli.__Posix.__renameAt fromFd fromName toFd toName)))
 
-let posixChmod (path: String) (mode: Int) : Stdlib.Result.Result<Unit, Stdlib.Cli.Posix.Error> =
+let __checkedChmod (path: String) (mode: Int) : Stdlib.Result.Result<Unit, Stdlib.Cli.Posix.Error> =
     let mode = Builtin.__posixInt32 mode in
     if Stdlib.Cli.__Posix.__mac () then
         Stdlib.Cli.__Posix.__withEntry path (fun fd name -> Stdlib.Cli.__Posix.__unitResult (Stdlib.Cli.__Posix.__chmodAt fd name mode 32L))
@@ -79,7 +82,7 @@ let posixUtimesNow (path: String) : Stdlib.Result.Result<Unit, Stdlib.Cli.Posix.
         let _ = __mapped_free times in
         result)
 
-let posixSymlink (target: String) (linkpath: String) : Stdlib.Result.Result<Unit, Stdlib.Cli.Posix.Error> =
+let __checkedSymlink (target: String) (linkpath: String) : Stdlib.Result.Result<Unit, Stdlib.Cli.Posix.Error> =
     Stdlib.Cli.__Posix.__withCString target (fun targetPtr ->
         Stdlib.Cli.__Posix.__withEntry linkpath (fun fd name -> Stdlib.Cli.__Posix.__unitResult (Stdlib.Cli.__Posix.__symlinkAt targetPtr fd name)))
 
@@ -91,18 +94,7 @@ let posixReadlink (path: String) : Stdlib.Result.Result<String, Stdlib.Cli.Posix
         let _ = __mapped_free buffer in
         result)
 
-let posixMkstemp (prefix: String) : Stdlib.Result.Result<(Int * String), Stdlib.Cli.Posix.Error> = Stdlib.Cli.__Posix.__createUnique prefix 100L false
-let posixMkdtemp (prefix: String) : Stdlib.Result.Result<String, Stdlib.Cli.Posix.Error> =
-    Stdlib.Cli.__Posix.__createUnique prefix 100L true |> Stdlib.Result.map (fun pair -> let (_, path) = pair in path)
-
-let posixGetCurrentUserName () : Stdlib.Option.Option<String> =
-    match Stdlib.Cli.FileSystem.readFileAsString "/etc/passwd" with
-    | Ok contents ->
-        Stdlib.Cli.Sys.__currentUserFromPasswd (Stdlib.String.splitOnNewline contents) (Stdlib.Int64.toString (Stdlib.Cli.__getuid ()))
-    | Error _ -> Stdlib.Option.Option.None
-
 let posixCpuCount () : Int = Stdlib.Int.fromInt64 (Stdlib.Cli.__cpuCount ())
-let posixGetenv (name: String) : Stdlib.Option.Option<String> = Stdlib.Cli.Env.get name
 let timeSleep (delayMs: Float) : Unit = Stdlib.Cli.__sleep delayMs
 let posixUname () : Stdlib.Result.Result<(String * String * String), Stdlib.Cli.Posix.Error> =
     match (Stdlib.Cli.Sys.os (), Stdlib.Cli.Sys.hostname (), Stdlib.Cli.Sys.arch ()) with

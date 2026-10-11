@@ -20,7 +20,7 @@ let currentUser () : Stdlib.Option.Option<String> =
         match Stdlib.Cli.Env.get "USER" with
         | Some user -> Some user
         | _ ->
-            Builtin.posixGetCurrentUserName ()
+            Stdlib.Cli.Posix.Accounts.lookup (Stdlib.Int.toString (Stdlib.Cli.Syscall.getuid ())) 0
 
 let hostname () : Stdlib.Result.Result<String, Stdlib.Cli.Posix.Error> =
     match Stdlib.Cli.__hostname () with

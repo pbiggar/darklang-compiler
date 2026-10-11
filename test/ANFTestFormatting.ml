@@ -332,8 +332,6 @@ and aNF_cliOperation (value : ANF.cliOperation) =
   | ANF.GetEnv -> union "CliOperation" "GetEnv" []
   | ANF.GetEnvironmentPacked -> union "CliOperation" "GetEnvironmentPacked" []
   | ANF.StdinState -> union "CliOperation" "StdinState" []
-  | ANF.SetEnv -> union "CliOperation" "SetEnv" []
-  | ANF.UnsetEnv -> union "CliOperation" "UnsetEnv" []
   | ANF.DirectoryCurrent -> union "CliOperation" "DirectoryCurrent" []
   | ANF.DirectoryListPacked -> union "CliOperation" "DirectoryListPacked" []
   | ANF.FileIsDirectory -> union "CliOperation" "FileIsDirectory" []
@@ -394,6 +392,15 @@ and aNF_cliOperation (value : ANF.cliOperation) =
   | ANF.PosixGetDents -> union "CliOperation" "PosixGetDents" []
   | ANF.PosixIoctl -> union "CliOperation" "PosixIoctl" []
   | ANF.PosixProcInfo -> union "CliOperation" "PosixProcInfo" []
+  | ANF.PosixCopyFileRange -> union "CliOperation" "PosixCopyFileRange" []
+  | ANF.PosixFtruncate -> union "CliOperation" "PosixFtruncate" []
+  | ANF.PosixFchmod -> union "CliOperation" "PosixFchmod" []
+  | ANF.PosixFsync -> union "CliOperation" "PosixFsync" []
+  | ANF.PosixFstat -> union "CliOperation" "PosixFstat" []
+  | ANF.PosixPread -> union "CliOperation" "PosixPread" []
+  | ANF.PosixPwrite -> union "CliOperation" "PosixPwrite" []
+  | ANF.PosixFclonefileat -> union "CliOperation" "PosixFclonefileat" []
+  | ANF.PosixGetentropy -> union "CliOperation" "PosixGetentropy" []
 
 and aNF_recordDescriptor (value : ANF.recordDescriptor) =
   record "RecordDescriptor"

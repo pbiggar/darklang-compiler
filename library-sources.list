@@ -28,6 +28,7 @@ StdLib/Builtin/__Syscall.dark
 StdLib/Builtin/__Runtime.dark
 StdLib/Builtin/__KernelRecords.dark
 StdLib/Builtin/__FileSyscall.dark
+StdLib/Builtin/__PathSyscall.dark
 StdLib/Builtin/__Terminal.dark
 StdLib/Builtin/__Stdin.dark
 StdLib/Builtin/__Time.dark

@@ -188,6 +188,7 @@ type cliOperation =
   | PosixPread
   | PosixPwrite
   | PosixFclonefileat
+  | PosixGetentropy
 
 (*
    Basic block label (wrapper type for type safety)

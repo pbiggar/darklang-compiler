@@ -177,6 +177,7 @@ type cliOperation =
   | PosixPread
   | PosixPwrite
   | PosixFclonefileat
+  | PosixGetentropy
 
 (*
    Basic block label (defined early for use in Phi nodes)

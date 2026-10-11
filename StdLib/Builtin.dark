@@ -82,9 +82,9 @@ let fileWrite (content: Blob) (path: String) : Stdlib.Result.Result<Unit, Stdlib
     let pathExists = Stdlib.File.exists path in
     Stdlib.File.writeBlob path content |> Stdlib.Result.mapError (Builtin.__fileOperationError pathExists)
 
-let environmentGet (name: String) : Stdlib.Option.Option<String> =
+let runtimeEnvironmentGet (name: String) : Stdlib.Option.Option<String> =
     Stdlib.Cli.__getenv name
 
-let environmentGetAll () : Dict<String, String> =
+let runtimeEnvironmentGetAll () : Dict<String, String> =
     Stdlib.Cli.__environmentPacked ()
     |> Stdlib.Env.__decodePacked

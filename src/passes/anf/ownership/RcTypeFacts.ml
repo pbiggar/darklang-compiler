@@ -325,6 +325,7 @@ let inferCExprType ctx expr =
       | A.PosixPread
       | A.PosixPwrite
       | A.PosixFclonefileat
+      | A.PosixGetentropy
       ->
           Some AST.TInt64)
   | A.IfValue (_, yes, _) -> atom yes
