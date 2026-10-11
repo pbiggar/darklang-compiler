@@ -188,8 +188,8 @@ mean the entire branch has passed its integration or performance gates.
     `scripts/test_network_nonblocking_peer.py` verifies backpressure and cleanup.
   - [x] Plaintext HTTP/1.1 active owners share readiness waits and advance one
     bounded read, parse or write transition per round. Slow uploads and unread
-    responses do not monopolize other HTTP/1.1 clients. Client and combined-
-    listener TLS handshakes, h2c dispatch/draining and HTTP/2–3 servers still
+    responses do not monopolize other HTTP/1.1 clients. Client TLS handshakes,
+    h2c dispatch/draining and HTTP/2–3 servers still
     need the active-owner migration.
   - [x] Owned TLS transports queue KeyUpdate replies and application ciphertext
     across nonblocking partial writes. `pollWrite` reports accepted plaintext;
@@ -197,11 +197,12 @@ mean the entire branch has passed its integration or performance gates.
     (at most 2 KiB plaintext) plus bounded control records, never reseals a
     partial record, and is drained before legacy blocking writes. Independent
     record-crypto peers verify backpressure and old/new-key wire ordering.
-  - [x] The dedicated `HttpServer.Tls` listener services at most sixty-four
+  - [x] `HttpServer.Tls` and the TCP side of `HttpServer.Secure` service at most sixty-four
     incremental handshake/HTTP/1 owners. Stalled ClientHello, Finished, uploads
     and response readers do not monopolize other TLS HTTP/1 clients. Admission
     and owner steps use fresh clock readings even after legacy blocking h2
-    dispatch. Combined secure TCP/UDP servicing and h2 scheduling remain pending.
+    dispatch. QUIC active-owner servicing and h2 scheduling remain pending;
+    admitted QUIC exchanges can still monopolize the combined listener.
 - [ ] Persistent HTTP/1.1 connections and HTTP/2–3 connection reuse/pooling.
 
   - [x] Buffered `HttpClientSession.request` HTTP/1.1 reuse over TCP/TLS:
@@ -214,10 +215,11 @@ mean the entire branch has passed its integration or performance gates.
     sixty-four accepted owners, ten-second request deadlines, thirty-second
     idle/write deadlines and a 101 MiB retained-wire budget. HTTP/1.0 retires
     after one exchange.
-  - [x] Persistent TLS HTTP/1.1 exchanges and ordered pipelining on the dedicated
-    `HttpServer.Tls` listener, with the same HEAD/close/count/deadline rules and
-    explicit ciphertext flush before exchange completion. The combined
-    `HttpServer.Secure` entry point still uses its sequential TCP adapter.
+  - [x] Persistent TLS HTTP/1.1 exchanges and ordered pipelining on both
+    `HttpServer.Tls` and `HttpServer.Secure`, with the same HEAD/close/count/deadline
+    rules and explicit ciphertext flush before exchange completion. Same-port
+    peers also verify Alt-Svc policy, repeated HTTP/3 exchanges, shutdown,
+    rebinding and cleanup when either bind fails.
   - [x] Lazy HTTP/1.1 session body leases over TCP/TLS. Complete self-delimited
     framing alone returns the owner; early close, surplus bytes, HTTP/1.0,
     close tokens and EOF-delimited bodies retire it. Clear invalidates outstanding

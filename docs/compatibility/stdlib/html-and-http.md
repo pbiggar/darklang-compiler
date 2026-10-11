@@ -130,7 +130,7 @@ and request wire buffering is capped at the body limit plus 1 MiB for framing.
 Total retained request/output wire data caps at 101 MiB. Native read/write
 polling, persistence, pipelining, close tokens, slow-client fairness and disposal
 are checked by `http1_server_owner.e2e` and the independent server peer.
-Combined secure-listener TCP persistence, multiplexed HTTP/2–3 servers, response compression and
+Multiplexed HTTP/2–3 servers, response compression and
 interpreter telemetry integration remain follow-up work. The existing h2c
 single-exchange dispatch/drain still blocks active HTTP/1.1 owners while it runs;
 the fairness claim does not extend across that protocol boundary yet.
@@ -143,13 +143,15 @@ queued without blocking a record poll; idle checkout rejects unsent output.
 The ciphertext queue is capped at 32 KiB. `tls_output_queue.e2e`, existing
 TLS polling fixtures, and `scripts/test_tls_poll_queue_peer.py` cover blocked
 and partial sends, flush, closed ownership and independent old/new-key ordering.
-The dedicated `HttpServer.Tls` listener now uses incremental handshake owners
+`HttpServer.Tls` and the TCP side of `HttpServer.Secure` use incremental handshake owners
 and persistent HTTP/1.1 owners with the same count and deadline rules as the
 plaintext listener. Independent peers verify another TLS client can complete
 while a client stalls in ClientHello, Finished, upload or response reading.
 Client application keys remain gated by authenticated Finished. This does not
-yet migrate the combined secure listener or multiplexed HTTP/2–3 scheduling;
-dedicated TLS h2 dispatch/draining still uses the blocking compatibility path.
+yet migrate QUIC active-owner servicing or multiplexed HTTP/2–3 scheduling;
+TLS h2 dispatch/draining and admitted QUIC exchanges still use blocking
+compatibility paths. The combined listener's shared wait includes its TCP/UDP
+listeners and TCP owners; its pending QUIC migration limits cross-protocol fairness.
 
 All four server modules (`HttpServer`, `.Tls`, `.Quic`, `.Secure`) also provide
 `serveOn address config ...`. Four-byte addresses bind IPv4 and sixteen-byte
