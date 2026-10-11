@@ -4,7 +4,7 @@ module Darklang.Stdlib.__Http2
 type State = {
   pending: Blob, deferred: List<Stdlib.__Http2Wire.Frame>, decoder: Stdlib.__Hpack.State, encoder: Stdlib.__Hpack.Encoder, fieldLimit: Stdlib.Option.Option<Int64>,
   sendConnection: Int64, sendStream: Int64, initialWindow: Int64,
-  maximum: Int64, settingsSeen: Bool, frames: Int64, streamId: Int64
+  maximum: Int64, concurrent: Int64, goAway: Stdlib.Option.Option<Int64>, settingsSeen: Bool, frames: Int64, streamId: Int64
 }
 type Next = { frame: Stdlib.__Http2Wire.Frame, state: Stdlib.__Http2.State }
 type Head = { fields: List<(String * String)>, ended: Bool, state: Stdlib.__Http2.State }
@@ -20,7 +20,7 @@ type Body = {
 let initial (streamId: Int64) : Stdlib.__Http2.State =
   Stdlib.__Http2.State { pending = Stdlib.Blob.empty, deferred = [],
     decoder = Stdlib.__Hpack.initial (), encoder = Stdlib.__Hpack.encoder (), fieldLimit = None, sendConnection = 65535L, sendStream = 65535L,
-    initialWindow = 65535L, maximum = 16384L, settingsSeen = false, frames = 0L, streamId = streamId }
+    initialWindow = 65535L, maximum = 16384L, concurrent = 4294967295L, goAway = None, settingsSeen = false, frames = 0L, streamId = streamId }
 
 let __copy (state: Stdlib.__Http2.State) (pending: Blob) (deferred: List<Stdlib.__Http2Wire.Frame>) (decoder: Stdlib.__Hpack.State)
   (flow: (Int64 * Int64 * Int64 * Int64 * Bool * Int64 * Int64)) : Stdlib.__Http2.State =
@@ -77,7 +77,7 @@ let __settings (state: Stdlib.__Http2.State) (payload: Blob) (position: Int64)
       let next = Stdlib.__Http2.__copy state state.pending state.deferred state.decoder (state.sendConnection, stream, (if id == 4L then value else state.initialWindow), (if id == 5L then value else state.maximum), true, state.frames, state.streamId) in
       let updated =
         if id == 1L then Stdlib.__Hpack.resizeEncoder next.encoder value |> Stdlib.Result.map (fun encoder -> { next with encoder = encoder })
-        else Ok { next with fieldLimit = if id == 6L then Some value else next.fieldLimit } in
+        else Ok { next with fieldLimit = if id == 6L then Some value else next.fieldLimit, concurrent = if id == 3L then value else next.concurrent } in
       updated |> Stdlib.Result.andThen (fun next -> Stdlib.__Http2.__settings next payload (position + 6L))
 
 let __control (transport: Stdlib.__HttpTransport.Transport) (state: Stdlib.__Http2.State)
@@ -108,7 +108,9 @@ let __control (transport: Stdlib.__HttpTransport.Transport) (state: Stdlib.__Htt
     else Ok (Stdlib.__Http2.__copy state state.pending state.deferred state.decoder (connection, stream, state.initialWindow, state.maximum, state.settingsSeen, state.frames, state.streamId))
   else if frame.kind == 7L then
     let last = Stdlib.Int64.bitwiseAnd (Stdlib.__Http2Wire.__read32 frame.payload 0L) 2147483647L in
-    if state.streamId > last then Error "HTTP/2 stream refused by GOAWAY" else Ok state
+    let invalid = match state.goAway with | None -> false | Some previous -> last > previous in
+    if invalid then Error "HTTP/2 GOAWAY stream limit increased"
+    else if state.streamId > last then Error "HTTP/2 stream refused by GOAWAY" else Ok { state with goAway = Some last }
   else if frame.kind == 2L then Ok state
   else if frame.kind == 3L then
     if frame.streamId == state.streamId then Error "HTTP/2 stream reset" else Ok state

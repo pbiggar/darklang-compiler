@@ -45,7 +45,7 @@ separate () = (true, 1)
 let clear () : (Int64 * Int64) =
   let counter = Stdlib.Stream.__cellNew 0L in
   let pool = Stdlib.__Http1Pool.put Stdlib.__Http1Pool.empty (origin "a") (owner counter true) 1000L in
-  let cell = Stdlib.Stream.__cellNew (Stdlib.HttpClientSession.__State { cache = Stdlib.__AltSvcCache.empty, pool = pool }) in
+  let cell = Stdlib.Stream.__cellNew (Stdlib.HttpClientSession.__State { cache = Stdlib.__AltSvcCache.empty, pool = pool, http2 = Stdlib.__Http2Pool.empty }) in
   let lifecycle = Stdlib.Stream.__new (fun _unit -> Some ()) (fun _unit -> Stdlib.HttpClientSession.__dispose cell) in
   let _ = Stdlib.HttpClientSession.__clear cell lifecycle in
   let cleared = Stdlib.Stream.__cellGet<Int64> counter in

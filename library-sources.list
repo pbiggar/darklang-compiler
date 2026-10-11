@@ -162,6 +162,7 @@ StdLib/__TlsAlpn.dark
 StdLib/__HttpTransport.dark
 StdLib/__Http2Fields.dark
 StdLib/__Http2.dark
+StdLib/__Http2Connection.dark
 StdLib/__QuicWire.dark
 StdLib/__QuicCrypto.dark
 StdLib/__QuicPacket.dark
@@ -196,6 +197,7 @@ StdLib/__Http3Discovery.dark
 StdLib/__AltSvc.dark
 StdLib/__AltSvcCache.dark
 StdLib/__Http1Pool.dark
+StdLib/__Http2Pool.dark
 StdLib/HttpClientSession.dark
 StdLib/__HttpsService.dark
 StdLib/__HttpsDns.dark

@@ -186,6 +186,7 @@ fragments use `__` even where the interpreter also has private helpers.
 | `StdLib/__HttpTransport.dark` | `Darklang.Stdlib.__HttpTransport` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
 | `StdLib/__Http2Fields.dark` | `Darklang.Stdlib.__Http2Fields` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
 | `StdLib/__Http2.dark` | `Darklang.Stdlib.__Http2` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
+| `StdLib/__Http2Connection.dark` | `Darklang.Stdlib.__Http2Connection` | Compiler support: reusable HTTP/2 state and bounded stream scheduling |
 | `StdLib/__QuicWire.dark` | `Darklang.Stdlib.__QuicWire` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
 | `StdLib/__QuicCrypto.dark` | `Darklang.Stdlib.__QuicCrypto` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
 | `StdLib/__QuicPacket.dark` | `Darklang.Stdlib.__QuicPacket` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
@@ -220,6 +221,7 @@ fragments use `__` even where the interpreter also has private helpers.
 | `StdLib/__AltSvc.dark` | `Darklang.Stdlib.__AltSvc` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
 | `StdLib/__AltSvcCache.dark` | `Darklang.Stdlib.__AltSvcCache` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
 | `StdLib/__Http1Pool.dark` | `Darklang.Stdlib.__Http1Pool` | Compiler support: bounded HTTP/1.1 session connection ownership and response reuse |
+| `StdLib/__Http2Pool.dark` | `Darklang.Stdlib.__Http2Pool` | Compiler support: bounded persistent HTTP/2 session owners |
 | `StdLib/HttpClientSession.dark` | `Darklang.Stdlib.HttpClientSession` | Compiler extension: HTTP transport and secure server support |
 | `StdLib/__HttpsService.dark` | `Darklang.Stdlib.__HttpsService` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
 | `StdLib/__HttpsDns.dark` | `Darklang.Stdlib.__HttpsDns` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |

@@ -1,0 +1,52 @@
+// __Http2Pool.dark - Bounded persistent authenticated HTTP/2 session owners.
+module Darklang.Stdlib.__Http2Pool
+
+type Entry = { origin: Stdlib.__HttpWire.Url, transport: Stdlib.__HttpTransport.Transport, state: Stdlib.__Http2Connection.State, idle: Int64 }
+type State = { entries: List<Stdlib.__Http2Pool.Entry> }
+type Lease = { state: Stdlib.__Http2Pool.State, entry: Stdlib.Option.Option<Stdlib.__Http2Pool.Entry> }
+type Completed = { response: Stdlib.HttpClient.Response, entry: Stdlib.Option.Option<Stdlib.__Http2Pool.Entry> }
+
+val empty = Stdlib.__Http2Pool.State { entries = [] }
+
+let __sameOrigin (left: Stdlib.__HttpWire.Url) (right: Stdlib.__HttpWire.Url) : Bool =
+  left.scheme == right.scheme && left.host == right.host && left.port == right.port
+
+let close (state: Stdlib.__Http2Pool.State) : Unit =
+  Stdlib.List.fold state.entries () (fun _unit entry -> Stdlib.__HttpTransport.close entry.transport)
+
+let take (state: Stdlib.__Http2Pool.State) (origin: Stdlib.__HttpWire.Url) (now: Int64) : Stdlib.__Http2Pool.Lease =
+  Stdlib.List.fold state.entries (Stdlib.__Http2Pool.Lease { state = Stdlib.__Http2Pool.empty, entry = None }) (fun lease entry ->
+    if now < entry.idle || now - entry.idle >= 30000L || Stdlib.Option.isSome entry.state.wire.goAway || entry.state.next > 2147483647L then
+      let _ = Stdlib.__HttpTransport.close entry.transport in lease
+    else if Stdlib.__Http2Pool.__sameOrigin entry.origin origin then
+      if Stdlib.Option.isNone lease.entry && Stdlib.Option.isSome (Stdlib.Stream.next entry.transport.lifecycle) then { lease with entry = Some entry }
+      else let _ = Stdlib.__HttpTransport.close entry.transport in lease
+    else { lease with state = { lease.state with entries = lease.state.entries @ [entry] } })
+
+let __retain (entries: List<Stdlib.__Http2Pool.Entry>) (count: Int64) : List<Stdlib.__Http2Pool.Entry> =
+  match entries with
+  | [] -> []
+  | entry :: rest ->
+    if count >= 8L then let _ = Stdlib.__HttpTransport.close entry.transport in Stdlib.__Http2Pool.__retain rest count
+    else Stdlib.List.push (Stdlib.__Http2Pool.__retain rest (count + 1L)) entry
+
+let put (state: Stdlib.__Http2Pool.State) (entry: Stdlib.__Http2Pool.Entry) (now: Int64) : Stdlib.__Http2Pool.State =
+  let remaining = Stdlib.List.filter state.entries (fun current ->
+    if Stdlib.__Http2Pool.__sameOrigin entry.origin current.origin then let _ = Stdlib.__HttpTransport.close current.transport in false else true) in
+  Stdlib.__Http2Pool.State { entries = Stdlib.__Http2Pool.__retain (Stdlib.List.push remaining { entry with idle = now }) 0L }
+
+let exchange (entry: Stdlib.__Http2Pool.Entry) (method: String) (url: Stdlib.__HttpWire.Url) (headers: List<(String * String)>) (body: Blob) : Stdlib.Result.Result<Stdlib.__Http2Pool.Completed, Stdlib.HttpClient.RequestError> =
+  let result = Stdlib.__Http2Fields.requestFields method url headers body |> Stdlib.Result.andThen (fun fields ->
+    Stdlib.__Http2Connection.requestMany entry.transport entry.state [Stdlib.__Http2Connection.Request { method = method, fields = fields, body = body }]) in
+  match result with
+  | Error _message -> let _ = Stdlib.__HttpTransport.close entry.transport in Error Stdlib.HttpClient.RequestError.NetworkError
+  | Ok batch ->
+    match batch.responses with
+    | [outcome] ->
+      match outcome.response with
+      | Ok response ->
+        if Stdlib.Option.isSome batch.state.wire.goAway || batch.state.next > 2147483647L then
+          let _ = Stdlib.__HttpTransport.close entry.transport in Ok (Stdlib.__Http2Pool.Completed { response = response, entry = None })
+        else Ok (Stdlib.__Http2Pool.Completed { response = response, entry = Some { entry with state = batch.state } })
+      | Error _message -> let _ = Stdlib.__HttpTransport.close entry.transport in Error Stdlib.HttpClient.RequestError.NetworkError
+    | _ -> Builtin.crash "Singleton HTTP/2 exchange returned wrong response count"
