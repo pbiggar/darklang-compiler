@@ -1,0 +1,25 @@
+name: Verify upstream HTTP and HTML adoption
+
+on:
+  push:
+    branches:
+      - ci/verify-upstream-http-html
+  workflow_dispatch:
+
+jobs:
+  compiler:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build pinned toolchain container
+        run: docker build -t dark-compiler-verification .
+      - name: Compile and test
+        run: |
+          docker run --rm -v "$PWD":/workspace -w /workspace dark-compiler-verification bash -lc '
+            set -euo pipefail
+            ./build --ai
+            dune runtest
+            ./run-tests --ai
+            python3 scripts/check_compiled_leaks.py
+          '
