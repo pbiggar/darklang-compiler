@@ -9,7 +9,7 @@ let check (mode: String) (trailers: Bool) : (String * Int64 * Int64) =
   let ending = if trailers then frame 1L 5L 1L (fields [("x-end", "yes")]) else frame 0L 1L 1L Stdlib.Blob.empty in
   let chunks = Stdlib.Stream.fromList [frame 1L 4L 1L (fields [(":status", "200"), ("content-length", "3")]), frame 0L 0L 1L (Stdlib.String.toBlob "abc"), ending] in
   let life = Stdlib.Stream.__new (fun _unit -> Some ()) (fun _unit -> let _ = Stdlib.Stream.close chunks in Stdlib.Stream.__cellSet closes (Stdlib.Stream.__cellGet<Int64> closes + 1L)) in
-  let transport = Stdlib.__HttpTransport.Transport { lifecycle = life, idle = fun _unit -> true, poll = fun _unit -> Ok None, read = fun _unit -> Ok (Stdlib.Stream.next chunks |> Stdlib.Option.withDefault Stdlib.Blob.empty), write = fun _bytes -> Ok () } in
+  let transport = Stdlib.__HttpTransport.Transport { lifecycle = life, idle = fun _unit -> true, poll = fun _unit -> Ok None, pollWrite = fun bytes -> Ok (Some (Stdlib.Blob.__byteLength bytes)), flush = fun _unit -> Ok true, read = fun _unit -> Ok (Stdlib.Stream.next chunks |> Stdlib.Option.withDefault Stdlib.Blob.empty), write = fun _bytes -> Ok () } in
   let state = Stdlib.__Http2Connection.State { wire = { Stdlib.__Http2.initial 0L with settingsSeen = true }, next = 1L } in
   let entry = Stdlib.__Http2Pool.Entry { origin = origin, transport = transport, state = state, idle = 0L } in
   let now = Stdlib.__Network.monotonicMillis () |> Stdlib.Result.withDefault 0L in

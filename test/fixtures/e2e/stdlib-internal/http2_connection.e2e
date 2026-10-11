@@ -8,7 +8,7 @@ let request () : Stdlib.__Http2Connection.Request = Stdlib.__Http2Connection.Req
 let multiplex (limit: Int64) (input: Blob) : Stdlib.Result.Result<(List<String> * Int64), String> =
   let bytes = Stdlib.Stream.fromList [input] in
   let lifecycle = Stdlib.Stream.__new (fun _unit -> Some ()) (fun _unit -> Stdlib.Stream.close bytes) in
-  let transport = Stdlib.__HttpTransport.Transport { lifecycle = lifecycle, idle = fun _unit -> true, poll = fun _unit -> Ok None, read = fun _unit -> Ok (Stdlib.Stream.next bytes |> Stdlib.Option.withDefault Stdlib.Blob.empty), write = fun _bytes -> Ok () } in
+  let transport = Stdlib.__HttpTransport.Transport { lifecycle = lifecycle, idle = fun _unit -> true, poll = fun _unit -> Ok None, pollWrite = fun bytes -> Ok (Some (Stdlib.Blob.__byteLength bytes)), flush = fun _unit -> Ok true, read = fun _unit -> Ok (Stdlib.Stream.next bytes |> Stdlib.Option.withDefault Stdlib.Blob.empty), write = fun _bytes -> Ok () } in
   let state = Stdlib.__Http2Connection.State { wire = { Stdlib.__Http2.initial 0L with settingsSeen = true, concurrent = limit }, next = 1L } in
   let result = Stdlib.__Http2Connection.requestMany transport state [request (), request ()] |> Stdlib.Result.map (fun batch ->
     (Stdlib.List.map batch.responses (fun outcome -> match outcome.response with | Error _ -> "reset" | Ok response -> Stdlib.Blob.toString response.body |> Stdlib.Result.withDefault "invalid"), batch.state.next)) in
@@ -23,14 +23,14 @@ Stdlib.__Http2.__settings (Stdlib.__Http2.initial 1L) (Stdlib.Blob.fromHex "0003
 let active (id: Int64) : Stdlib.__Http2Connection.Active = Stdlib.__Http2Connection.Active { index = id, id = id, request = { request () with body = Stdlib.String.toBlob "abcdef" }, window = 3L, position = 0L, head = None, informational = 0L, total = 0L, blocks = [] }
 let flow () : Stdlib.Result.Result<(List<(Int64 * Int64)> * Int64), String> =
   let owner = Stdlib.Stream.__new (fun _unit -> Some ()) (fun _unit -> ()) in
-  let transport = Stdlib.__HttpTransport.Transport { lifecycle = owner, idle = fun _unit -> true, poll = fun _unit -> Ok None, read = fun _unit -> Error "Unexpected read", write = fun _bytes -> Ok () } in
+  let transport = Stdlib.__HttpTransport.Transport { lifecycle = owner, idle = fun _unit -> true, poll = fun _unit -> Ok None, pollWrite = fun bytes -> Ok (Some (Stdlib.Blob.__byteLength bytes)), flush = fun _unit -> Ok true, read = fun _unit -> Error "Unexpected read", write = fun _bytes -> Ok () } in
   let work = Stdlib.__Http2Connection.Work { connection = Stdlib.__Http2Connection.State { wire = { Stdlib.__Http2.initial 0L with settingsSeen = true, sendConnection = 5L }, next = 5L }, waiting = [], active = [active 1L, active 3L], completed = [], total = 0L } in
   let result = Stdlib.__Http2Connection.__sendRound transport work.active (Stdlib.__Http2Connection.Round { work = work, progressed = false }) |> Stdlib.Result.map (fun round -> (Stdlib.List.map round.work.active (fun stream -> (stream.position, stream.window)), round.work.connection.wire.sendConnection)) in
   let _ = Stdlib.__HttpTransport.close transport in result
 flow () = Ok (([(3L, 0L), (2L, 1L)], 0L))
 let isolated () : Stdlib.Result.Result<List<Int64>, String> =
   let owner = Stdlib.Stream.__new (fun _unit -> Some ()) (fun _unit -> ()) in
-  let transport = Stdlib.__HttpTransport.Transport { lifecycle = owner, idle = fun _unit -> true, poll = fun _unit -> Ok None, read = fun _unit -> Error "Unexpected read", write = fun _bytes -> Ok () } in
+  let transport = Stdlib.__HttpTransport.Transport { lifecycle = owner, idle = fun _unit -> true, poll = fun _unit -> Ok None, pollWrite = fun bytes -> Ok (Some (Stdlib.Blob.__byteLength bytes)), flush = fun _unit -> Ok true, read = fun _unit -> Error "Unexpected read", write = fun _bytes -> Ok () } in
   let work = Stdlib.__Http2Connection.Work { connection = Stdlib.__Http2Connection.State { wire = { Stdlib.__Http2.initial 0L with settingsSeen = true }, next = 5L }, waiting = [], active = [active 1L, active 3L], completed = [], total = 0L } in
   let frame = Stdlib.__Http2Wire.Frame { kind = 8L, flags = 0L, streamId = 3L, payload = Stdlib.__Http2Wire.__u32 5L } in
   let result = Stdlib.__Http2Connection.__control transport work frame |> Stdlib.Result.map (fun work -> Stdlib.List.map work.active (fun stream -> stream.window)) in
@@ -39,7 +39,7 @@ isolated () = Ok [3L, 8L]
 let partial () : Stdlib.Result.Result<Int64, String> =
   let chunks = Stdlib.Stream.fromList [Stdlib.Blob.__fromInt64List [0L, 0L]] in
   let owner = Stdlib.Stream.__new (fun _unit -> Some ()) (fun _unit -> Stdlib.Stream.close chunks) in
-  let transport = Stdlib.__HttpTransport.Transport { lifecycle = owner, idle = fun _unit -> false, poll = fun _unit -> Ok (Stdlib.Stream.next chunks), read = fun _unit -> Error "Partial poll blocked", write = fun _bytes -> Ok () } in
+  let transport = Stdlib.__HttpTransport.Transport { lifecycle = owner, idle = fun _unit -> false, poll = fun _unit -> Ok (Stdlib.Stream.next chunks), pollWrite = fun bytes -> Ok (Some (Stdlib.Blob.__byteLength bytes)), flush = fun _unit -> Ok true, read = fun _unit -> Error "Partial poll blocked", write = fun _bytes -> Ok () } in
   let state = Stdlib.__Http2Connection.State { wire = { Stdlib.__Http2.initial 0L with settingsSeen = true }, next = 1L } in
   let result = Stdlib.__Http2Connection.prepare transport state |> Stdlib.Result.map (fun state -> Stdlib.Blob.__byteLength state.wire.pending) in
   let _ = Stdlib.__HttpTransport.close transport in result
@@ -47,7 +47,7 @@ partial () = Ok 2L
 let pooled (now: Int64) (draining: Bool) : (Bool * Int64) =
   let counter = Stdlib.Stream.__cellNew 0L in
   let owner = Stdlib.Stream.__new (fun _unit -> Some ()) (fun _unit -> Stdlib.Stream.__cellSet counter (Stdlib.Stream.__cellGet<Int64> counter + 1L)) in
-  let transport = Stdlib.__HttpTransport.Transport { lifecycle = owner, idle = fun _unit -> true, poll = fun _unit -> Ok None, read = fun _unit -> Error "Unexpected read", write = fun _bytes -> Ok () } in
+  let transport = Stdlib.__HttpTransport.Transport { lifecycle = owner, idle = fun _unit -> true, poll = fun _unit -> Ok None, pollWrite = fun bytes -> Ok (Some (Stdlib.Blob.__byteLength bytes)), flush = fun _unit -> Ok true, read = fun _unit -> Error "Unexpected read", write = fun _bytes -> Ok () } in
   let wire = { Stdlib.__Http2.initial 0L with settingsSeen = true, goAway = if draining then Some 1L else None } in
   let state = Stdlib.__Http2Connection.State { wire = wire, next = 3L } in
   let origin = Stdlib.__HttpWire.Url { scheme = "https", host = "example.com", port = 443L, authority = "example.com", target = "/" } in

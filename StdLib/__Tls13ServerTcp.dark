@@ -155,4 +155,7 @@ let transport (connection: Stdlib.__Network.TcpConnection) (signals: Stdlib.__Ne
     outgoing = Stdlib.Blob.empty, outgoingOffset = 0L } in
   let cell = Stdlib.Stream.__cellNew state in
   let lifecycle = Stdlib.Stream.__new (fun _unit -> Some ()) (fun _unit -> Stdlib.__Tls13ServerTcp.__dispose connection cell) in
-  Stdlib.__HttpTransport.Transport { lifecycle = lifecycle, idle = fun _unit -> false, poll = fun _unit -> Stdlib.__Tls13ServerTcp.__poll connection signals deadline cell lifecycle, read = fun _unit -> Stdlib.__Tls13ServerTcp.__read connection signals deadline cell lifecycle, write = fun bytes -> Stdlib.__Tls13ServerTcp.__write connection cell lifecycle bytes 0L }
+  Stdlib.__HttpTransport.Transport { lifecycle = lifecycle, idle = fun _unit -> false, poll = fun _unit -> Stdlib.__Tls13ServerTcp.__poll connection signals deadline cell lifecycle,
+    pollWrite = fun bytes -> Stdlib.__HttpTransport.__pollWriteSecure connection cell lifecycle bytes,
+    flush = fun _unit -> Stdlib.__HttpTransport.__flushSecure connection cell lifecycle,
+    read = fun _unit -> Stdlib.__Tls13ServerTcp.__read connection signals deadline cell lifecycle, write = fun bytes -> Stdlib.__Tls13ServerTcp.__write connection cell lifecycle bytes 0L }

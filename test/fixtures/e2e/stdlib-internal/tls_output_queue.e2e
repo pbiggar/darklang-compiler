@@ -18,7 +18,7 @@ let queuedUpdate () : Stdlib.Result.Result<(String * Int64 * Int64), String> =
             | Some bytes -> Stdlib.Blob.toString bytes |> Stdlib.Result.map (fun text -> (text, Stdlib.Blob.__byteLength state.outgoing, state.updates.send.sequence))) in
           let _ = Stdlib.Stream.__cellDispose<Stdlib.__Tls13Client.ApplicationState> cell in
           let _ = Stdlib.Stream.close life in result))))
-queuedUpdate () = Ok ("ready", 27L, 0L) // leak_check
+queuedUpdate () = Ok (("ready", 27L, 0L)) // leak_check
 
 let flushOutput (size: Int64) : Stdlib.Result.Result<(Bool * String * Int64), String> =
   let secret = Stdlib.Blob.__fromInt64List (Stdlib.List.repeatUnsafe 32 0L) in
@@ -31,8 +31,28 @@ let flushOutput (size: Int64) : Stdlib.Result.Result<(Bool * String * Int64), St
         let state = Stdlib.Stream.__cellGet<Stdlib.__Tls13Client.ApplicationState> cell in
         Stdlib.Blob.toString state.outgoing |> Stdlib.Result.map (fun text -> (done, text, state.outgoingOffset))) in
     let _ = Stdlib.Stream.__cellDispose<Stdlib.__Tls13Client.ApplicationState> cell in result)
-flushOutput -1L = Ok (false, "abcdef", 1L) // leak_check
-flushOutput 2L = Ok (false, "abcdef", 3L) // leak_check
-flushOutput 5L = Ok (true, "", 0L) // leak_check
+flushOutput -1L = Ok ((false, "abcdef", 1L)) // leak_check
+flushOutput 2L = Ok ((false, "abcdef", 3L)) // leak_check
+flushOutput 5L = Ok ((true, "", 0L)) // leak_check
 flushOutput 0L = Error "Invalid TLS write progress" // leak_check
 flushOutput 6L = Error "Invalid TLS write progress" // leak_check
+
+let queuedApplication (partial: Bool) : Stdlib.Result.Result<(Int64 * Int64 * Int64 * String * Int64), String> =
+  let secret = Stdlib.Blob.__fromInt64List (Stdlib.List.repeatUnsafe 32 0L) in
+  Stdlib.__Tls13.trafficKeys secret |> Stdlib.Result.andThen (fun keys ->
+    let state = Stdlib.__Tls13Client.applicationState (Stdlib.__Tls13Client.SecureKeys { client = keys, server = keys, clientSecret = secret, serverSecret = secret, pending = Stdlib.Blob.empty }) in
+    let cell = Stdlib.Stream.__cellNew state in
+    let writer = fun _bytes -> if partial then Ok (Some 3L) else Ok None in
+    let result = Stdlib.__HttpTransport.__pollWriteSecureStep cell (Stdlib.String.toBlob "hello") writer |> Stdlib.Result.andThen (fun accepted ->
+      let again = Stdlib.__HttpTransport.__pollWriteSecureStep cell (Stdlib.String.toBlob "second") (fun _bytes -> Ok None) in
+      if again != Ok None then Error "Accepted another record before flushing"
+      else
+        let state = Stdlib.Stream.__cellGet<Stdlib.__Tls13Client.ApplicationState> cell in
+        let offset = state.outgoingOffset in
+        let sequence = state.updates.send.sequence in
+        Stdlib.__Tls13.parseRecord state.outgoing |> Stdlib.Result.mapError (fun _error -> "Invalid queued record") |> Stdlib.Result.andThen (fun record ->
+          Stdlib.__Tls13.openRecord keys record |> Stdlib.Result.andThen (fun opened ->
+            Stdlib.Blob.toString opened.content |> Stdlib.Result.map (fun text -> (Stdlib.Option.withDefault accepted -1L, offset, sequence, text, opened.contentType))))) in
+    let _ = Stdlib.Stream.__cellDispose<Stdlib.__Tls13Client.ApplicationState> cell in result)
+queuedApplication false = Ok ((5L, 0L, 1L, "hello", 23L)) // leak_check
+queuedApplication true = Ok ((5L, 3L, 1L, "hello", 23L)) // leak_check

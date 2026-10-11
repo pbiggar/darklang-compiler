@@ -5,6 +5,10 @@ type Transport = {
   lifecycle: Stream<Unit>,
   idle: Unit -> Bool,
   poll: Unit -> Stdlib.Result.Result<Stdlib.Option.Option<Blob>, String>,
+  // Accepted plaintext bytes, not ciphertext bytes transmitted. Flush must
+  // finish before completing a response or returning this owner to its pool.
+  pollWrite: Blob -> Stdlib.Result.Result<Stdlib.Option.Option<Int64>, String>,
+  flush: Unit -> Stdlib.Result.Result<Bool, String>,
   read: Unit -> Stdlib.Result.Result<Blob, String>,
   write: Blob -> Stdlib.Result.Result<Unit, String>
 }
@@ -57,6 +61,37 @@ let __drainSecure (connection: Stdlib.__Network.TcpConnection) (cell: RawPtr) (l
   match Stdlib.__HttpTransport.__drainOutput connection cell with
   | Ok () -> Ok ()
   | Error message -> let _ = Stdlib.Stream.close lifecycle in Error message
+
+let __pollWriteSecureStep (cell: RawPtr) (bytes: Blob)
+  (write: Blob -> Stdlib.Result.Result<Stdlib.Option.Option<Int64>, String>) : Stdlib.Result.Result<Stdlib.Option.Option<Int64>, String> =
+  Stdlib.__HttpTransport.__pollOutput cell write |> Stdlib.Result.andThen (fun drained ->
+    if Stdlib.Bool.not drained then Ok None
+    else
+      let length = Stdlib.Blob.__byteLength bytes in
+      if length == 0L then Ok (Some 0L)
+      else
+        let size = if length > 2048L then 2048L else length in
+        let state = Stdlib.Stream.__cellGet<Stdlib.__Tls13Client.ApplicationState> cell in
+        Stdlib.__Tls13.sealRecord state.updates.send 23L (Stdlib.__Http2Wire.__slice bytes 0L size) |> Stdlib.Result.andThen (fun sealed ->
+          let updates = { state.updates with send = sealed.nextKeys } in
+          let _ = Stdlib.Stream.__cellSet cell { state with updates = updates, outgoing = sealed.bytes, outgoingOffset = 0L } in
+          Stdlib.__HttpTransport.__pollOutput cell write |> Stdlib.Result.map (fun _drained -> Some size)))
+
+let __pollWriteSecure (connection: Stdlib.__Network.TcpConnection) (cell: RawPtr) (lifecycle: Stream<Unit>) (bytes: Blob) : Stdlib.Result.Result<Stdlib.Option.Option<Int64>, String> =
+  match Stdlib.Stream.next lifecycle with
+  | None -> Error "HTTP transport is closed"
+  | Some _ ->
+    match Stdlib.__HttpTransport.__pollWriteSecureStep cell bytes (fun bytes -> Stdlib.__HttpTransport.__pollWriteTcp connection bytes) with
+    | Ok sent -> Ok sent
+    | Error message -> let _ = Stdlib.Stream.close lifecycle in Error message
+
+let __flushSecure (connection: Stdlib.__Network.TcpConnection) (cell: RawPtr) (lifecycle: Stream<Unit>) : Stdlib.Result.Result<Bool, String> =
+  match Stdlib.Stream.next lifecycle with
+  | None -> Error "HTTP transport is closed"
+  | Some _ ->
+    match Stdlib.__HttpTransport.__pollOutput cell (fun bytes -> Stdlib.__HttpTransport.__pollWriteTcp connection bytes) with
+    | Ok drained -> Ok drained
+    | Error message -> let _ = Stdlib.Stream.close lifecycle in Error message
 
 // None means no application bytes are ready; Some empty is authenticated EOF
 // for TLS and ordinary EOF for TCP. Never wait for a partial TLS record here.
@@ -156,6 +191,8 @@ let secure (connection: Stdlib.__Network.TcpConnection) (keys: Stdlib.__Tls13Cli
     lifecycle = lifecycle,
     idle = fun _unit -> Stdlib.__HttpTransport.__idleSecure connection cell lifecycle,
     poll = fun _unit -> Stdlib.__HttpTransport.__pollSecure connection cell lifecycle,
+    pollWrite = fun bytes -> Stdlib.__HttpTransport.__pollWriteSecure connection cell lifecycle bytes,
+    flush = fun _unit -> Stdlib.__HttpTransport.__flushSecure connection cell lifecycle,
     read = fun _unit -> Stdlib.__HttpTransport.__readSecure connection cell lifecycle,
     write = fun bytes -> Stdlib.__HttpTransport.__writeSecure connection cell lifecycle bytes 0L }
 
@@ -189,6 +226,8 @@ let __plain (connection: Stdlib.__Network.TcpConnection)
     lifecycle = connection.lifecycle,
     idle = fun _unit -> Stdlib.__HttpTransport.__idleTcp connection,
     poll = fun _unit -> Stdlib.__HttpTransport.__pollTcp connection,
+    pollWrite = fun bytes -> Stdlib.__HttpTransport.__pollWriteTcp connection bytes,
+    flush = fun _unit -> match Stdlib.Stream.next connection.lifecycle with | None -> Error "HTTP transport is closed" | Some _ -> Ok true,
     read = fun _unit -> Stdlib.__HttpTransport.__plainRead connection signals,
     write = fun bytes ->
       match Stdlib.__Network.writeTcp connection bytes with
@@ -205,6 +244,8 @@ let plainWithDeadline (connection: Stdlib.__Network.TcpConnection) (signals: Std
   Stdlib.__HttpTransport.Transport { lifecycle = connection.lifecycle,
     idle = fun _unit -> Stdlib.__HttpTransport.__idleTcp connection,
     poll = fun _unit -> Stdlib.__HttpTransport.__pollTcp connection,
+    pollWrite = fun bytes -> Stdlib.__HttpTransport.__pollWriteTcp connection bytes,
+    flush = fun _unit -> match Stdlib.Stream.next connection.lifecycle with | None -> Error "HTTP transport is closed" | Some _ -> Ok true,
     read = fun _unit -> Stdlib.__HttpTransport.__readPlain connection (Some signals) deadline,
     write = fun bytes -> match Stdlib.__Network.writeTcp connection bytes with | Ok () -> Ok () | Error _ -> Error "HTTP application write failed" }
 

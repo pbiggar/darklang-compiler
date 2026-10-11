@@ -2,6 +2,7 @@
 let owner (reads: RawPtr) (writes: RawPtr) (closes: RawPtr) : Stdlib.__HttpTransport.Transport =
   let life = Stdlib.Stream.__new (fun _unit -> Some ()) (fun _unit -> Stdlib.Stream.__cellSet closes (Stdlib.Stream.__cellGet<Int64> closes + 1L)) in
   Stdlib.__HttpTransport.Transport { lifecycle = life, idle = fun _unit -> true, poll = fun _unit -> Ok None,
+    pollWrite = fun bytes -> Ok (Some (Stdlib.Blob.__byteLength bytes)), flush = fun _unit -> Ok true,
     read = fun _unit -> match Stdlib.Stream.__cellGet<List<Blob>> reads with
       | [] -> Ok Stdlib.Blob.empty
       | first :: rest -> let _ = Stdlib.Stream.__cellSet reads rest in Ok first,
