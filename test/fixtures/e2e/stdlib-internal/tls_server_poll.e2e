@@ -1,0 +1,44 @@
+// tls_server_poll.e2e - Incremental handshake input, partial flight output and authenticated Finished.
+let identity () : Stdlib.TlsServerIdentity.Identity = Stdlib.TlsServerIdentity.Identity { certificates = [], key = Stdlib.__RsaPrivate.Key { modulus = Stdlib.Blob.empty, exponent = Stdlib.Blob.empty, privateExponent = Stdlib.Blob.empty } }
+let describe (state: Stdlib.__Tls13ServerPoll.State) : String =
+  match state with
+  | Output output -> "output:" ++ Stdlib.Int64.toString output.offset
+  | Input input -> match input with
+    | Hello hello -> "hello:" ++ Stdlib.Int64.toString (Stdlib.Blob.__byteLength hello.pending) ++ ":" ++ Stdlib.Int64.toString (Stdlib.Blob.__byteLength hello.handshake) ++ ":" ++ Stdlib.Int64.toString hello.records
+    | Finished finished -> "finished:" ++ Stdlib.Int64.toString (Stdlib.Blob.__byteLength finished.message) ++ ":" ++ Stdlib.Int64.toString finished.keys.sequence
+  | Ready ready -> "ready:" ++ Stdlib.Int64.toString (Stdlib.Blob.__byteLength ready.pending)
+let initialRead (bytes: Stdlib.Option.Option<Blob>) : Stdlib.Result.Result<String, String> =
+  Stdlib.__Tls13ServerPoll.step (identity ()) (Stdlib.__Tls13ServerPoll.initial ()) (fun _unit -> Ok bytes) (fun _bytes -> Builtin.crash "Unexpected write") |> Stdlib.Result.map describe
+initialRead None = Ok "hello:0:0:0" // leak_check
+initialRead (Some (Stdlib.Blob.__fromInt64List [22L, 3L])) = Ok "hello:2:0:0" // leak_check
+initialRead (Some Stdlib.Blob.empty) = Error "TLS peer closed during handshake" // leak_check
+let bufferedHello (bytes: List<Int64>) (records: Int64) : Stdlib.Result.Result<String, String> =
+  let hello = Stdlib.__Tls13ServerPoll.Hello { pending = Stdlib.Blob.__fromInt64List bytes, handshake = Stdlib.Blob.empty, records = records, retry = None } in
+  Stdlib.__Tls13ServerPoll.step (identity ()) (Stdlib.__Tls13ServerPoll.State.Input (Stdlib.__Tls13ServerPoll.Input.Hello hello)) (fun _unit -> Builtin.crash "Buffered record read") (fun _bytes -> Builtin.crash "Unexpected write") |> Stdlib.Result.map describe
+bufferedHello [22L, 3L, 1L, 0L, 3L, 1L, 0L, 0L] 0L = Ok "hello:0:3:1" // leak_check
+bufferedHello [23L, 3L, 3L, 0L, 0L] 0L = Error "Expected plaintext TLS handshake" // leak_check
+bufferedHello [] 65L = Error "TLS ClientHello exceeds limit" // leak_check
+let flightWrite (count: Int64) : Stdlib.Result.Result<String, String> =
+  let hello = Stdlib.__Tls13ServerPoll.Hello { pending = Stdlib.Blob.empty, handshake = Stdlib.Blob.empty, records = 0L, retry = None } in
+  let output = Stdlib.__Tls13ServerPoll.Output { bytes = Stdlib.String.toBlob "abcdef", offset = 1L, after = Stdlib.__Tls13ServerPoll.Input.Hello hello } in
+  Stdlib.__Tls13ServerPoll.step (identity ()) (Stdlib.__Tls13ServerPoll.State.Output output) (fun _unit -> Builtin.crash "Flight read") (fun bytes ->
+    if Stdlib.Blob.toString bytes != Ok "bcdef" then Error "Wrong flight suffix"
+    else if count < 0L then Ok None else Ok (Some count)) |> Stdlib.Result.map describe
+flightWrite -1L = Ok "output:1" // leak_check
+flightWrite 2L = Ok "output:3" // leak_check
+flightWrite 5L = Ok "output:6" // leak_check
+flightWrite 0L = Error "Invalid TLS handshake write progress" // leak_check
+flightWrite 6L = Error "Invalid TLS handshake write progress" // leak_check
+let finished () : Stdlib.Result.Result<List<String>, String> =
+  let secret = Stdlib.Blob.__fromInt64List (Stdlib.List.repeatUnsafe 32 0L) in
+  Stdlib.__Tls13.trafficKeys secret |> Stdlib.Result.andThen (fun keys ->
+    let flight = Stdlib.__Tls13ServerHandshake.Flight { hello = Stdlib.Blob.empty, encrypted = Stdlib.Blob.empty, transcript = Stdlib.Blob.empty,
+      handshakeReceive = keys, handshakeSend = keys, clientFinished = secret, applicationReceive = keys, applicationSend = keys,
+      protocol = "http/1.1", secrets = Stdlib.__Tls13ServerHandshake.Secrets { handshakeClient = secret, handshakeServer = secret, applicationClient = secret, applicationServer = secret } } in
+    Stdlib.__Tls13.sealRecord keys 22L (Stdlib.Blob.__fromInt64List [20L, 0L, 0L, 32L]) |> Stdlib.Result.andThen (fun first ->
+      Stdlib.__Tls13.sealRecord first.nextKeys 22L secret |> Stdlib.Result.andThen (fun second ->
+        let input = Stdlib.__Tls13ServerPoll.Finished { flight = flight, keys = keys, pending = Stdlib.Blob.concat [first.bytes, second.bytes, Stdlib.String.toBlob "surplus"], message = Stdlib.Blob.empty, records = 0L } in
+        let step = fun state -> Stdlib.__Tls13ServerPoll.step (identity ()) state (fun _unit -> Builtin.crash "Finished read") (fun _bytes -> Builtin.crash "Finished write") in
+        step (Stdlib.__Tls13ServerPoll.State.Input (Stdlib.__Tls13ServerPoll.Input.Finished input)) |> Stdlib.Result.andThen (fun first ->
+          step first |> Stdlib.Result.andThen (fun second -> step second |> Stdlib.Result.map (fun third -> [describe first, describe second, describe third]))))))
+finished () = Ok ["finished:4:1", "finished:36:2", "ready:7"] // leak_check

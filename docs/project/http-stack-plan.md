@@ -190,6 +190,12 @@ mean the entire branch has passed its integration or performance gates.
     bounded read, parse or write transition per round. Slow uploads and unread
     responses do not monopolize other HTTP/1.1 clients. TLS handshakes, h2c
     dispatch/draining and HTTP/2–3 servers still need the active-owner migration.
+  - [x] Owned TLS transports queue KeyUpdate replies and application ciphertext
+    across nonblocking partial writes. `pollWrite` reports accepted plaintext;
+    `flush` confirms ciphertext completion. A queue holds one application record
+    (at most 2 KiB plaintext) plus bounded control records, never reseals a
+    partial record, and is drained before legacy blocking writes. Independent
+    record-crypto peers verify backpressure and old/new-key wire ordering.
 - [ ] Persistent HTTP/1.1 connections and HTTP/2–3 connection reuse/pooling.
 
   - [x] Buffered `HttpClientSession.request` HTTP/1.1 reuse over TCP/TLS:

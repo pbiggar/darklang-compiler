@@ -56,3 +56,13 @@ let queuedApplication (partial: Bool) : Stdlib.Result.Result<(Int64 * Int64 * In
     let _ = Stdlib.Stream.__cellDispose<Stdlib.__Tls13Client.ApplicationState> cell in result)
 queuedApplication false = Ok ((5L, 0L, 1L, "hello", 23L)) // leak_check
 queuedApplication true = Ok ((5L, 3L, 1L, "hello", 23L)) // leak_check
+
+let closedOutput () : Stdlib.Result.Result<Bool, String> =
+  let secret = Stdlib.Blob.__fromInt64List (Stdlib.List.repeatUnsafe 32 0L) in
+  Stdlib.__Tls13.trafficKeys secret |> Stdlib.Result.map (fun keys ->
+    let life = Stdlib.Stream.__new (fun _unit -> Some ()) (fun _unit -> ()) in
+    let connection = Stdlib.__Network.TcpConnection { lifecycle = life, watch = None, read = fun _length -> Builtin.crash "Closed read", write = fun _bytes -> Builtin.crash "Closed write" } in
+    let transport = Stdlib.__HttpTransport.secure connection (Stdlib.__Tls13Client.SecureKeys { client = keys, server = keys, clientSecret = secret, serverSecret = secret, pending = Stdlib.Blob.empty }) in
+    let _ = Stdlib.__HttpTransport.close transport in
+    transport.pollWrite (Stdlib.String.toBlob "after close") == Error "HTTP transport is closed" && transport.flush () == Error "HTTP transport is closed")
+closedOutput () = Ok true // leak_check

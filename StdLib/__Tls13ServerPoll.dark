@@ -1,0 +1,120 @@
+// __Tls13ServerPoll.dark - Incremental TLS server handshake records and immutable output ownership.
+module Darklang.Stdlib.__Tls13ServerPoll
+
+type Hello = { pending: Blob, handshake: Blob, records: Int64, retry: Stdlib.Option.Option<Stdlib.__Tls13ServerRetry.State> }
+type Finished = { flight: Stdlib.__Tls13ServerHandshake.Flight, keys: Stdlib.__Tls13.TrafficKeys, pending: Blob, message: Blob, records: Int64 }
+type Input = Hello of Stdlib.__Tls13ServerPoll.Hello | Finished of Stdlib.__Tls13ServerPoll.Finished
+type Output = { bytes: Blob, offset: Int64, after: Stdlib.__Tls13ServerPoll.Input }
+type State = Input of Stdlib.__Tls13ServerPoll.Input | Output of Stdlib.__Tls13ServerPoll.Output | Ready of Stdlib.__Tls13ServerTcp.Accepted
+type Received = { pending: Blob, record: Stdlib.Option.Option<Stdlib.__Tls13.Record> }
+
+let initial () : Stdlib.__Tls13ServerPoll.State =
+  Stdlib.__Tls13ServerPoll.State.Input (Stdlib.__Tls13ServerPoll.Input.Hello (Stdlib.__Tls13ServerPoll.Hello { pending = Stdlib.Blob.empty, handshake = Stdlib.Blob.empty, records = 0L, retry = None }))
+
+// Read at most one socket chunk. Fragmented records keep their exact bytes;
+// a later round parses them without blocking to finish the record.
+let __receive (pending: Blob) (initial: Bool)
+  (read: Unit -> Stdlib.Result.Result<Stdlib.Option.Option<Blob>, String>) : Stdlib.Result.Result<Stdlib.__Tls13ServerPoll.Received, String> =
+  let pending = if initial && Stdlib.Blob.__byteLength pending >= 5L && Stdlib.Blob.__getByte pending 0L == 22L && Stdlib.__Tls13.__read16 pending 1L == 769L then
+                  Stdlib.Blob.concat [Stdlib.Blob.slice pending 0 1, Stdlib.Blob.__fromInt64List [3L, 3L], Stdlib.__Http2Wire.__slice pending 3L (Stdlib.Blob.__byteLength pending - 3L)]
+                else pending in
+  match Stdlib.__Tls13.parseRecord pending with
+  | Error (Invalid message) -> Error message
+  | Ok record -> Ok (Stdlib.__Tls13ServerPoll.Received { pending = record.remaining, record = Some record })
+  | Error Incomplete ->
+    if Stdlib.Blob.__byteLength pending > 16645L then Error "TLS server record buffer exceeds limit"
+    else read () |> Stdlib.Result.andThen (fun available ->
+      match available with
+      | None -> Ok (Stdlib.__Tls13ServerPoll.Received { pending = pending, record = None })
+      | Some bytes ->
+        if Stdlib.Blob.__byteLength bytes == 0L then Error "TLS peer closed during handshake"
+        else if Stdlib.Blob.__byteLength bytes > 4096L then Error "TLS handshake read exceeds limit"
+        else Ok (Stdlib.__Tls13ServerPoll.Received { pending = Stdlib.Blob.concat [pending, bytes], record = None }))
+
+let __sealFlight (keys: Stdlib.__Tls13.TrafficKeys) (data: Blob) (offset: Int64) (records: List<Blob>) : Stdlib.Result.Result<Blob, String> =
+  let remaining = Stdlib.Blob.__byteLength data - offset in
+  if remaining == 0L then Ok (Stdlib.Blob.concat (Stdlib.List.reverse records))
+  else
+    let size = if remaining > 16384L then 16384L else remaining in
+    Stdlib.__Tls13.sealRecord keys 22L (Stdlib.__Http2Wire.__slice data offset size) |> Stdlib.Result.andThen (fun sealed ->
+      Stdlib.__Tls13ServerPoll.__sealFlight sealed.nextKeys data (offset + size) (Stdlib.List.push records sealed.bytes))
+
+let __flight (flight: Stdlib.__Tls13ServerHandshake.Flight) (pending: Blob) : Stdlib.Result.Result<Stdlib.__Tls13ServerPoll.State, String> =
+  if Stdlib.Blob.__byteLength flight.encrypted > 131072L then Error "TLS server flight exceeds limit"
+  else Stdlib.__Tls13.serializePlaintext 22L flight.hello |> Stdlib.Result.andThen (fun hello ->
+    Stdlib.__Tls13ServerPoll.__sealFlight flight.handshakeSend flight.encrypted 0L [] |> Stdlib.Result.map (fun encrypted ->
+      let after = Stdlib.__Tls13ServerPoll.Input.Finished (Stdlib.__Tls13ServerPoll.Finished { flight = flight, keys = flight.handshakeReceive, pending = pending, message = Stdlib.Blob.empty, records = 0L }) in
+      Stdlib.__Tls13ServerPoll.State.Output (Stdlib.__Tls13ServerPoll.Output { bytes = Stdlib.Blob.concat [hello, encrypted], offset = 0L, after = after })))
+
+let __hello (identity: Stdlib.TlsServerIdentity.Identity) (hello: Stdlib.__Tls13ServerPoll.Hello)
+  (read: Unit -> Stdlib.Result.Result<Stdlib.Option.Option<Blob>, String>) : Stdlib.Result.Result<Stdlib.__Tls13ServerPoll.State, String> =
+  if hello.records > 64L || Stdlib.Blob.__byteLength hello.handshake > 32768L then Error "TLS ClientHello exceeds limit"
+  else match Stdlib.__Tls13Handshake.parseHandshakeFrame hello.handshake with
+  | Error (Invalid message) -> Error message
+  | Ok frame ->
+    if frame.kind != 1L || Stdlib.Blob.__byteLength frame.remaining != 0L then Error "Expected TLS ClientHello"
+    else
+      let flight = match hello.retry with
+        | None -> Stdlib.__Tls13ServerHandshake.start identity frame.raw ["h2", "http/1.1"] None
+        | Some retry -> Stdlib.__Tls13ServerHandshake.startAfterRetry identity retry frame.raw ["h2", "http/1.1"] None in
+      match flight with
+      | Ok flight -> Stdlib.__Tls13ServerPoll.__flight flight hello.pending
+      | Error "TLS ClientHello requires HelloRetryRequest" ->
+        if Stdlib.Option.isSome hello.retry then Error "TLS retry requested twice"
+        else Stdlib.__Tls13ServerHello.parse frame.raw |> Stdlib.Result.andThen Stdlib.__Tls13ServerRetry.create |> Stdlib.Result.andThen (fun retry ->
+          Stdlib.__Tls13.serializePlaintext 22L retry.hello |> Stdlib.Result.map (fun bytes ->
+            let after = Stdlib.__Tls13ServerPoll.Input.Hello (Stdlib.__Tls13ServerPoll.Hello { pending = hello.pending, handshake = Stdlib.Blob.empty, records = 0L, retry = Some retry }) in
+            Stdlib.__Tls13ServerPoll.State.Output (Stdlib.__Tls13ServerPoll.Output { bytes = bytes, offset = 0L, after = after })))
+      | Error message -> Error message
+  | Error Incomplete ->
+    Stdlib.__Tls13ServerPoll.__receive hello.pending (Stdlib.Option.isNone hello.retry && hello.records == 0L) read |> Stdlib.Result.andThen (fun received ->
+      let next = { hello with pending = received.pending } in
+      match received.record with
+      | None -> Ok (Stdlib.__Tls13ServerPoll.State.Input (Stdlib.__Tls13ServerPoll.Input.Hello next))
+      | Some record ->
+        if Stdlib.Option.isSome hello.retry && record.contentType == 20L && Stdlib.Blob.toHex record.payload == "01" then
+          Ok (Stdlib.__Tls13ServerPoll.State.Input (Stdlib.__Tls13ServerPoll.Input.Hello { next with records = hello.records + 1L }))
+        else if record.contentType != 22L || Stdlib.Blob.__byteLength record.payload > 16384L then Error "Expected plaintext TLS handshake"
+        else Ok (Stdlib.__Tls13ServerPoll.State.Input (Stdlib.__Tls13ServerPoll.Input.Hello { next with handshake = Stdlib.Blob.concat [hello.handshake, record.payload], records = hello.records + 1L })))
+
+let __finished (finished: Stdlib.__Tls13ServerPoll.Finished)
+  (read: Unit -> Stdlib.Result.Result<Stdlib.Option.Option<Blob>, String>) : Stdlib.Result.Result<Stdlib.__Tls13ServerPoll.State, String> =
+  if finished.records > 64L || Stdlib.Blob.__byteLength finished.message > 36L then Error "TLS client Finished exceeds limit"
+  else if Stdlib.Blob.__byteLength finished.message == 36L then
+    Stdlib.__Tls13ServerHandshake.finish finished.flight finished.message |> Stdlib.Result.map (fun ready -> Stdlib.__Tls13ServerPoll.State.Ready (Stdlib.__Tls13ServerTcp.Accepted { ready = ready, pending = finished.pending }))
+  else Stdlib.__Tls13ServerPoll.__receive finished.pending false read |> Stdlib.Result.andThen (fun received ->
+    let next = { finished with pending = received.pending } in
+    match received.record with
+    | None -> Ok (Stdlib.__Tls13ServerPoll.State.Input (Stdlib.__Tls13ServerPoll.Input.Finished next))
+    | Some record ->
+      if record.contentType == 20L && Stdlib.Blob.toHex record.payload == "01" then
+        Ok (Stdlib.__Tls13ServerPoll.State.Input (Stdlib.__Tls13ServerPoll.Input.Finished { next with records = finished.records + 1L }))
+      else if record.contentType != 23L then Error "Expected encrypted TLS client Finished"
+      else Stdlib.__Tls13.openRecord finished.keys record |> Stdlib.Result.andThen (fun opened ->
+        if opened.contentType != 22L then Error "Expected TLS client Finished"
+        else Ok (Stdlib.__Tls13ServerPoll.State.Input (Stdlib.__Tls13ServerPoll.Input.Finished { next with keys = opened.nextKeys, message = Stdlib.Blob.concat [finished.message, opened.content], records = finished.records + 1L }))))
+
+let step (identity: Stdlib.TlsServerIdentity.Identity) (state: Stdlib.__Tls13ServerPoll.State)
+  (read: Unit -> Stdlib.Result.Result<Stdlib.Option.Option<Blob>, String>)
+  (write: Blob -> Stdlib.Result.Result<Stdlib.Option.Option<Int64>, String>) : Stdlib.Result.Result<Stdlib.__Tls13ServerPoll.State, String> =
+  match state with
+  | Ready _ -> Ok state
+  | Input input -> match input with | Hello hello -> Stdlib.__Tls13ServerPoll.__hello identity hello read | Finished finished -> Stdlib.__Tls13ServerPoll.__finished finished read
+  | Output output ->
+    let remaining = Stdlib.Blob.__byteLength output.bytes - output.offset in
+    if remaining == 0L then Ok (Stdlib.__Tls13ServerPoll.State.Input output.after)
+    else
+      let size = if remaining > 4096L then 4096L else remaining in
+      write (Stdlib.__Http2Wire.__slice output.bytes output.offset size) |> Stdlib.Result.andThen (fun sent ->
+        match sent with
+        | None -> Ok state
+        | Some count ->
+          if count <= 0L || count > size then Error "Invalid TLS handshake write progress"
+          else Ok (Stdlib.__Tls13ServerPoll.State.Output { output with offset = output.offset + count }))
+
+let poll (connection: Stdlib.__Network.TcpConnection) (identity: Stdlib.TlsServerIdentity.Identity) (state: Stdlib.__Tls13ServerPoll.State) : Stdlib.Result.Result<Stdlib.__Tls13ServerPoll.State, String> =
+  match Stdlib.Stream.next connection.lifecycle with
+  | None -> Error "TLS handshake connection is closed"
+  | Some _ -> Stdlib.__Tls13ServerPoll.step identity state
+      (fun _unit -> Stdlib.__Network.pollReadTcp connection |> Stdlib.Result.mapError (fun _code -> "TLS handshake read failed"))
+      (fun bytes -> Stdlib.__Network.pollWriteTcp connection bytes |> Stdlib.Result.mapError (fun _code -> "TLS handshake write failed"))

@@ -135,6 +135,17 @@ interpreter telemetry integration remain follow-up work. The existing h2c
 single-exchange dispatch/drain still blocks active HTTP/1.1 owners while it runs;
 the fairness claim does not extend across that protocol boundary yet.
 
+Owned TCP/TLS transports provide nonblocking application writes and explicit
+flush completion. TLS accepts at most 2 KiB plaintext into one encrypted record,
+retains its ciphertext and offset across partial sends, and drains earlier
+control records before new application data. Requested KeyUpdate replies are
+queued without blocking a record poll; idle checkout rejects unsent output.
+The ciphertext queue is capped at 32 KiB. `tls_output_queue.e2e`, existing
+TLS polling fixtures, and `scripts/test_tls_poll_queue_peer.py` cover blocked
+and partial sends, flush, closed ownership and independent old/new-key ordering.
+This transport support does not yet make server TLS handshakes incremental or
+migrate multiplexed server scheduling.
+
 All four server modules (`HttpServer`, `.Tls`, `.Quic`, `.Secure`) also provide
 `serveOn address config ...`. Four-byte addresses bind IPv4 and sixteen-byte
 addresses bind IPv6; invalid byte vectors fail before announcing. Existing
