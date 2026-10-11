@@ -189,8 +189,7 @@ let emitCliNative (ctx : X64CodeGenTypes.funcCtx) (dest : LIR.reg)
       | LIR.PosixFcntlGetPath | LIR.PosixClockGettime | LIR.PosixGettimeofday
       | LIR.PosixNanosleep | LIR.PosixMachTimebaseInfo | LIR.PosixInotifyInit1
       | LIR.PosixInotifyAddWatch | LIR.PosixPpoll | LIR.PosixPollDarwin
-      | LIR.PosixKqueue | LIR.PosixKeventVnode | LIR.PosixWait4
-        -> (
+      | LIR.PosixKqueue | LIR.PosixKeventVnode | LIR.PosixWait4 -> (
           let number, arity =
             match operation with
             | LIR.PosixOpenAt -> (Some 257, 4)

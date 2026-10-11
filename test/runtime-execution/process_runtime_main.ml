@@ -4921,31 +4921,57 @@ let x64ProcessChecks () =
      by cli_process_host_input.e2e and child-runtime-primitives.e2e. This helper
      test exercises only the new indivisible launch/exec-error handshake. *)
   let launch program =
-    [ X.SUB_imm (X.RSP, 80l); X.MOV_reg (X.R12, X.RSP);
-      X.LEA (X.R13, X.RSP, 56l); X.LEA (X.R14, X.RSP, 32l);
-      X.XOR_reg (X.RAX, X.RAX); X.MOV_store (X.RSP, 24l, X.RAX);
-      X.MOV_store (X.RSP, 56l, X.RAX) ]
+    [
+      X.SUB_imm (X.RSP, 80l);
+      X.MOV_reg (X.R12, X.RSP);
+      X.LEA (X.R13, X.RSP, 56l);
+      X.LEA (X.R14, X.RSP, 32l);
+      X.XOR_reg (X.RAX, X.RAX);
+      X.MOV_store (X.RSP, 24l, X.RAX);
+      X.MOV_store (X.RSP, 56l, X.RAX);
+      X.MOV_store (X.RSP, 64l, X.RAX);
+    ]
     @ List.concat_map
-        (fun (offset, value) -> literal X.RAX value
+        (fun (offset, value) ->
+          literal X.RAX value
           @ [ X.ADD_imm (X.RAX, 16l); X.MOV_store (X.RSP, offset, X.RAX) ])
         [ (0l, program); (8l, "-c"); (16l, "exit 7") ]
     @ emit LIR.ChildLaunch
-        [ LIR.Reg (LIR.Physical LIR.X20); LIR.Reg (LIR.Physical LIR.X21);
-          LIR.Imm 1L; LIR.Reg (LIR.Physical LIR.X22) ]
+        [
+          LIR.Reg (LIR.Physical LIR.X20);
+          LIR.Reg (LIR.Physical LIR.X21);
+          LIR.Imm 1L;
+          LIR.Reg (LIR.Physical LIR.X22);
+        ]
   in
   check "P" []
     (launch "/bin/sh"
-    @ [ X.CMP_imm (X.RBX, 0l); X.Jcc (X.LE, "failed");
-        X.Label "owned_launch_reap"; X.MOV_reg (X.RDI, X.RBX);
-        X.LEA (X.RSI, X.RSP, 64l); X.XOR_reg (X.RDX, X.RDX);
-        X.XOR_reg (X.R10, X.R10) ]
-    @ imm X.RAX 61L @ [ X.SYSCALL; X.CMP_imm (X.RAX, -4l);
-        X.Jcc (X.EQ, "owned_launch_reap"); X.CMP_imm (X.RAX, 0l);
-        X.Jcc (X.LE, "failed"); X.MOV_load (X.RAX, X.RSP, 64l) ]
-    @ compare X.RAX 1792L @ [ X.ADD_imm (X.RSP, 80l) ] @ pass);
+    @ [
+        X.CMP_imm (X.RBX, 0l);
+        X.Jcc (X.LE, "failed");
+        X.Label "owned_launch_reap";
+        X.MOV_reg (X.RDI, X.RBX);
+        X.LEA (X.RSI, X.RSP, 64l);
+        X.XOR_reg (X.RDX, X.RDX);
+        X.XOR_reg (X.R10, X.R10);
+      ]
+    @ imm X.RAX 61L
+    @ [
+        X.SYSCALL;
+        X.CMP_imm (X.RAX, -4l);
+        X.Jcc (X.EQ, "owned_launch_reap");
+        X.CMP_imm (X.RAX, 0l);
+        X.Jcc (X.LE, "failed");
+        X.MOV_load (X.RAX, X.RSP, 64l);
+      ]
+    @ compare X.RAX 1792L
+    @ [ X.ADD_imm (X.RSP, 80l) ]
+    @ pass);
   check "P" []
     (launch "/definitely/missing/owned-child"
-    @ compare X.RBX (-2L) @ [ X.ADD_imm (X.RSP, 80l) ] @ pass);
+    @ compare X.RBX (-2L)
+    @ [ X.ADD_imm (X.RSP, 80l) ]
+    @ pass);
   !total
 [@@warning "-42"]
 

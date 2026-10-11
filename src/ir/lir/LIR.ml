@@ -784,8 +784,8 @@ let analyzeFunctionCodegenFacts (func : functionDef) =
           | CliNative (_, operation, _) ->
               needsCliRuntimeState := true;
               if operation = GetArgv then needsCliArgvHelper := true;
-              if operation = ChildLaunch
-              then needsCliProcessLifecycleHelpers := true
+              if operation = ChildLaunch then
+                needsCliProcessLifecycleHelpers := true
           | _ -> ())
         block.instrs)
     func.cfg.blocks;

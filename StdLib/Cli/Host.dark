@@ -15,7 +15,7 @@ let getRuntimeHost () : Stdlib.Result.Result<Host.Host, String> =
   match os, arch, defaultShell with
   | Ok os, Ok arch, Ok defaultShell ->
     Stdlib.Result.Result.Ok(
-      Host
+      Host.Host
         { os = os
           arch = arch
           defaultShell = defaultShell }

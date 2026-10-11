@@ -2,7 +2,6 @@
    ProcessLifecycle.ml - Generate process lifecycle and argument-vector runtime helpers.
 *)
 open ARM64CodeGenTypes
-open HeapAllocation
 open LeakAccounting
 open ARM64Operands
 
@@ -173,6 +172,19 @@ let generateChildLaunchHelper target =
       ]
   in
   let zero r = S.MOVZ (r, 0, 0) in
+  (* Linux rt_sigaction and Darwin __user64_sigaction have distinct layouts,
+     but an ignore/default handler with zero flags/mask needs only the first
+     word. Reserve and clear the larger (32-byte) kernel action record. *)
+  let sigpipe handler errorLabel =
+    [ zero S.X9 ]
+    @ List.map (fun offset -> S.STR (S.X9, S.SP, offset)) [ 96; 104; 112; 120 ]
+    @ loadImmediate S.X9 handler
+    @ [ S.STR (S.X9, S.SP, 96) ]
+    @ loadImmediate S.X0 13L
+    @ [ S.ADD_imm (S.X1, S.SP, 96); zero S.X2 ]
+    @ loadImmediate S.X3 8L @ trap 134 46
+    @ [ S.CMP_imm (S.X0, 0); S.B_cond_label (S.LT, errorLabel) ]
+  in
   let fd offset high =
     [ S.LDR (S.X0, S.SP, offset) ]
     @
@@ -265,7 +277,7 @@ let generateChildLaunchHelper target =
   [ S.Label "__dark_child_launch" ]
   @ List.map (fun (a, b) -> S.STP_pre (a, b, S.SP, -16)) preserved
   @ [
-      S.SUB_imm (S.SP, S.SP, 96);
+      S.SUB_imm (S.SP, S.SP, 128);
       S.STR (S.X0, S.SP, 32);
       S.STR (S.X1, S.SP, 40);
       S.STR (S.X2, S.SP, 48);
@@ -273,7 +285,8 @@ let generateChildLaunchHelper target =
     ]
   @ loadImmediate S.X9 (-1L)
   @ List.map (fun offset -> S.STR (S.X9, S.SP, offset)) [ 0; 8; 16; 24 ]
-  @ [ S.CBNZ (S.X2, "__child_launch_pipes_ready") ]
+  @ sigpipe 1L "__child_launch_error"
+  @ [ S.LDR (S.X2, S.SP, 48); S.CBNZ (S.X2, "__child_launch_pipes_ready") ]
   @ pipe 0 @ pipe 8 @ pipe 16
   @ [ S.Label "__child_launch_pipes_ready" ]
   @ pipe 24
@@ -343,16 +356,13 @@ let generateChildLaunchHelper target =
   @ [
       S.LDR (S.X0, S.SP, 72);
       S.Label "__child_launch_return";
-      S.STR (S.X0, S.SP, 240);
-      S.ADD_imm (S.SP, S.SP, 96);
+      S.STR (S.X0, S.SP, 272);
+      S.ADD_imm (S.SP, S.SP, 128);
     ]
   @ List.map (fun (a, b) -> S.LDP_post (a, b, S.SP, 16)) (List.rev preserved)
-  @ [
-      S.RET;
-      S.Label "__child_launch_child";
-      S.LDR (S.X9, S.SP, 48);
-      S.CBNZ (S.X9, "__child_launch_exec");
-    ]
+  @ [ S.RET; S.Label "__child_launch_child" ]
+  @ sigpipe 0L "__child_launch_child_error"
+  @ [ S.LDR (S.X9, S.SP, 48); S.CBNZ (S.X9, "__child_launch_exec") ]
   @ duplicate 0 false 0L @ duplicate 8 true 1L @ duplicate 16 true 2L
   @ [ S.Label "__child_launch_exec" ]
   @ close 0 false @ close 0 true @ close 8 false @ close 8 true @ close 16 false

@@ -312,9 +312,7 @@ let generatePreparedARM64WithOptionsAndCache target options
              facts.LIR.recursiveReleaseTypes))
     || (not
           (MemoryPlanning.SemanticTypeSet.is_empty facts.LIR.rawSlotInitTypes))
-    || facts.LIR.needsCliArgvHelper
-
-    || facts.LIR.needsCliProcessLifecycleHelpers
+    || facts.LIR.needsCliArgvHelper || facts.LIR.needsCliProcessLifecycleHelpers
     || facts.LIR.needsRuntimeErrorHelper || contributesRcHelpers
   in
   let releasePlanSummary = precomputedReleasePlanSummary in
@@ -1132,9 +1130,9 @@ let generatePreparedARM64WithOptionsAndCache target options
           @ (if needsCliProcessLifecycleHelpers then
                generateChildLaunchHelper target
              else [])
-          @ (if needsCliProcessLifecycleHelpers then
-               generateChildCleanupHelper ctx
-             else [])
+          @
+          if needsCliProcessLifecycleHelpers then generateChildCleanupHelper ctx
+          else []
         in
         recordPhase "ARM64 Helper CLI Generation" cliHelperTimer;
         let runtimeErrorHelper =

@@ -318,12 +318,26 @@ let generateCliGetEnvHelper (enableLeakCheck : bool) =
       X86_64.RET;
     ]
 
-(*  Start a shell command and retain its pid, descriptors, and raw output in a *)
-(*  fixed process table. The otherwise-unused first free-list slot owns the *)
-(*  table pointer without consuming an allocatable register. *)
+(* Launch an argv child with owned pipes and a CLOEXEC error handshake. Capture,
+   deadlines, output limits and interactive IO are implemented in Dark. *)
 let generateChildLaunchHelper () =
   let module X = X86_64 in
   let trap n = loadImm64 X.RAX n @ [ X.SYSCALL ] in
+  (* Parent pipe writes must return EPIPE, not terminate Dark. Children get
+     the default disposition back before exec, so ordinary Unix pipelines
+     retain their signal semantics. The action is a kernel ABI record. *)
+  let sigpipe handler errorLabel =
+    loadImm64 X.RAX 0L
+    @ List.map
+        (fun offset -> X.MOV_store (X.RSP, offset, X.RAX))
+        [ 96l; 104l; 112l; 120l ]
+    @ loadImm64 X.RAX handler
+    @ [ X.MOV_store (X.RSP, 96l, X.RAX) ]
+    @ loadImm64 X.RDI 13L
+    @ [ X.LEA (X.RSI, X.RSP, 96l) ]
+    @ loadImm64 X.RDX 0L @ loadImm64 X.R10 8L @ trap 13L
+    @ [ X.CMP_imm (X.RAX, 0l); X.Jcc (X.LT, errorLabel) ]
+  in
   let fd offset high =
     [ X.MOV_load (X.RDI, X.RSP, offset) ]
     @ if high then [ X.SHR_imm (X.RDI, 32) ] else [ X.MOV_reg32 (X.RDI, X.RDI) ]
@@ -397,7 +411,7 @@ let generateChildLaunchHelper () =
   [ X.Label "__dark_child_launch" ]
   @ List.map (fun r -> X.PUSH r) preserved
   @ [
-      X.SUB_imm (X.RSP, 96l);
+      X.SUB_imm (X.RSP, 128l);
       X.MOV_store (X.RSP, 32l, X.RDI);
       X.MOV_store (X.RSP, 40l, X.RSI);
       X.MOV_store (X.RSP, 48l, X.RDX);
@@ -407,7 +421,12 @@ let generateChildLaunchHelper () =
   @ List.map
       (fun offset -> X.MOV_store (X.RSP, offset, X.RAX))
       [ 0l; 8l; 16l; 24l ]
-  @ [ X.CMP_imm (X.RDX, 0l); X.Jcc (X.NE, "__child_launch_pipes_ready") ]
+  @ sigpipe 1L "__child_launch_error"
+  @ [
+      X.MOV_load (X.RDX, X.RSP, 48l);
+      X.CMP_imm (X.RDX, 0l);
+      X.Jcc (X.NE, "__child_launch_pipes_ready");
+    ]
   @ pipe 0l @ pipe 8l @ pipe 16l
   @ [ X.Label "__child_launch_pipes_ready" ]
   @ pipe 24l @ trap 57L
@@ -475,12 +494,12 @@ let generateChildLaunchHelper () =
   @ [
       X.MOV_load (X.RAX, X.RSP, 72l);
       X.Label "__child_launch_return";
-      X.ADD_imm (X.RSP, 96l);
+      X.ADD_imm (X.RSP, 128l);
     ]
   @ List.map (fun r -> X.POP r) (List.rev preserved)
+  @ [ X.RET; X.Label "__child_launch_child" ]
+  @ sigpipe 0L "__child_launch_child_error"
   @ [
-      X.RET;
-      X.Label "__child_launch_child";
       X.MOV_load (X.RAX, X.RSP, 48l);
       X.CMP_imm (X.RAX, 0l);
       X.Jcc (X.NE, "__child_launch_exec");

@@ -292,22 +292,20 @@ let inferCExprType ctx expr =
       | A.GetEnv | A.GetArgv ->
           Some (AST.TSum ("Darklang.Stdlib.Option.Option", [ AST.TString ]))
       | A.Kill -> posix AST.TUnit
-      | A.GetEnvironmentPacked ->
-          Some AST.TString
+      | A.GetEnvironmentPacked -> Some AST.TString
       | A.StdinState | A.StartupStack | A.ExecutableState | A.ChildState ->
           Some AST.TInternalRawPtr
-      | A.HostOS | A.HostArchitecture | A.GetPid | A.GetUid
-      | A.SocketTcp4 | A.SocketTcp6
-      | A.SocketUdp4 | A.SocketUdp6 | A.SocketConnect4 | A.SocketConnect6
-      | A.SocketSend | A.SocketSendTo | A.SocketReceive | A.SocketReceiveFrom
-      | A.SocketReceiveTimeout | A.SocketSendTimeout | A.SocketClose
-      | A.SocketBind4 | A.SocketBind6 | A.SocketListen | A.SocketAccept
-      | A.SocketCloexec | A.SocketReuseAddress | A.SocketPoll | A.SignalBlock
-      | A.SignalRestore | A.SignalPending | A.SignalWait | A.MonotonicTime
-      | A.SecureRandomFill | A.PosixOpenAt | A.PosixRead | A.PosixWrite
-      | A.PosixClose | A.PosixSeek | A.PosixStatAt | A.PosixGetCwd
-      | A.PosixChdir | A.PosixMkdirAt | A.PosixUnlinkAt | A.PosixRenameAt
-      | A.PosixChmodAt | A.PosixChmodAt2 | A.PosixUtimesAt
+      | A.HostOS | A.HostArchitecture | A.GetPid | A.GetUid | A.SocketTcp4
+      | A.SocketTcp6 | A.SocketUdp4 | A.SocketUdp6 | A.SocketConnect4
+      | A.SocketConnect6 | A.SocketSend | A.SocketSendTo | A.SocketReceive
+      | A.SocketReceiveFrom | A.SocketReceiveTimeout | A.SocketSendTimeout
+      | A.SocketClose | A.SocketBind4 | A.SocketBind6 | A.SocketListen
+      | A.SocketAccept | A.SocketCloexec | A.SocketReuseAddress | A.SocketPoll
+      | A.SignalBlock | A.SignalRestore | A.SignalPending | A.SignalWait
+      | A.MonotonicTime | A.SecureRandomFill | A.PosixOpenAt | A.PosixRead
+      | A.PosixWrite | A.PosixClose | A.PosixSeek | A.PosixStatAt
+      | A.PosixGetCwd | A.PosixChdir | A.PosixMkdirAt | A.PosixUnlinkAt
+      | A.PosixRenameAt | A.PosixChmodAt | A.PosixChmodAt2 | A.PosixUtimesAt
       | A.PosixSetAttributesAt | A.PosixSymlinkAt | A.PosixReadlinkAt
       | A.PosixAccessAt | A.PosixFlock | A.PosixGetDents | A.PosixIoctl
       | A.PosixProcInfo | A.PosixCopyFileRange | A.PosixFtruncate

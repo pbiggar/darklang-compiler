@@ -3,10 +3,6 @@
 *)
 [@@@warning "-4"]
 
-let int16 value =
-  let low = value land 65535 in
-  if low >= 32768 then low - 65536 else low
-
 let bind f value = Result.bind value f
 let mul a b = Int32.to_int (Int32.mul (Int32.of_int a) (Int32.of_int b))
 
@@ -1282,8 +1278,7 @@ let emitCliNative (ctx : codeGenContext) (dest : LIR.reg)
                       @ prepareFailureCheck @ [ branchToFailure ] @ success
                       @ [ Symbolic.B (List.length failure + 1) ]
                       @ failure))
-          | _ -> Error "CLI kill expects a pid and signal")
-)
+          | _ -> Error "CLI kill expects a pid and signal"))
 
 (*
    Increment coverage counter at _coverage_data[exprId * 8]

@@ -7,7 +7,7 @@ type OS =
 
 let getOS () : Stdlib.Result.Result<OS, String> =
   match Runtime.targetOS () with
-  | "linux" -> Ok Linux
-  | "darwin" -> Ok MacOS
-  | "windows" -> Ok Windows
+  | "linux" -> Ok OS.OS.Linux
+  | "darwin" -> Ok OS.OS.MacOS
+  | "windows" -> Ok OS.OS.Windows
   | _ -> Error "Unsupported operating system"

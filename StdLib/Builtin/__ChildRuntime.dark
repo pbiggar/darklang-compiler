@@ -76,7 +76,11 @@ let runtimeChildDescriptors (handle: Int) : Stdlib.Result.Result<List<Int>, Int>
     if slot == 0L then Error 9
     else
         let record = Builtin.__childAddress slot in
-        Ok [Stdlib.Int.fromInt64 (__raw_get<Int64> record 16L), Stdlib.Int.fromInt64 (__raw_get<Int64> record 24L), Stdlib.Int.fromInt64 (__raw_get<Int64> record 32L)]
+        let stdin = __raw_get<Int64> record 16L in
+        let stdout = __raw_get<Int64> record 24L in
+        let stderr = __raw_get<Int64> record 32L in
+        if stdin == -1L && stdout == -1L && stderr == -1L then Ok []
+        else Ok [Stdlib.Int.fromInt64 stdin, Stdlib.Int.fromInt64 stdout, Stdlib.Int.fromInt64 stderr]
 
 let runtimeChildPoll (handle: Int) : Stdlib.Result.Result<Stdlib.Option.Option<Int>, Int> =
     let slot = Builtin.__childFind (Builtin.__posixInt64 handle) 1L in

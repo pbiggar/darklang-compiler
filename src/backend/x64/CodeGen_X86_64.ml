@@ -79,8 +79,7 @@ let translateProgram (LIR.Program (functions, variantRegistry, recordRegistry))
         |> LIR.LabelMap.exists (fun _ (block : LIR.basicBlock) ->
             block.LIR.instrs
             |> List.exists (function
-              | LIR.CliNative (_, LIR.ChildLaunch, _) ->
-                  true
+              | LIR.CliNative (_, LIR.ChildLaunch, _) -> true
               | _ -> false)))
   in
   let functionNames =
