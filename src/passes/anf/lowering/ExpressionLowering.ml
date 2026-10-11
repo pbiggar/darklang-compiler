@@ -944,39 +944,35 @@ let lowerExpression (toANFCore : LoweringCallbacks.expressionLowerer)
           with
           | Some value -> finish value
           | None -> (
-              match P.tryFileIntrinsic name values with
+              match
+                P.tryRawMemoryIntrinsic functionId sums.P.names name values
+              with
               | Some value -> finish value
               | None -> (
-                  match
-                    P.tryRawMemoryIntrinsic functionId sums.P.names name values
-                  with
+                  match P.tryCanonicalPrimitiveIntrinsic name values with
                   | Some value -> finish value
                   | None -> (
-                      match P.tryCanonicalPrimitiveIntrinsic name values with
+                      match P.tryFloatIntrinsic name values with
                       | Some value -> finish value
                       | None -> (
-                          match P.tryFloatIntrinsic name values with
+                          match P.tryRandomIntrinsic name values with
                           | Some value -> finish value
                           | None -> (
-                              match P.tryRandomIntrinsic name values with
+                              match P.tryDateTimeIntrinsic name values with
                               | Some value -> finish value
                               | None -> (
-                                  match P.tryDateTimeIntrinsic name values with
-                                  | Some value -> finish value
-                                  | None -> (
-                                      match
-                                        FunctionIdMap.tryFind callee functions
-                                      with
-                                      | Some (_, AST.TFunction (params, _)) ->
-                                          finish
-                                            (A.Call
-                                               ( callee,
-                                                 SpecializationIdentity
-                                                 .normalizeSyntheticNullaryArgAtoms
-                                                   params sourceArgs values ))
-                                      | Some _ | None ->
-                                          finish (A.Call (callee, values))))))))
-              )))
+                                  match
+                                    FunctionIdMap.tryFind callee functions
+                                  with
+                                  | Some (_, AST.TFunction (params, _)) ->
+                                      finish
+                                        (A.Call
+                                           ( callee,
+                                             SpecializationIdentity
+                                             .normalizeSyntheticNullaryArgAtoms
+                                               params sourceArgs values ))
+                                  | Some _ | None ->
+                                      finish (A.Call (callee, values))))))))))
   | C.TypeApp _ -> Error "Generic function calls not yet implemented"
   | C.TupleLiteral values ->
       let* results, gen = convertBound (C.tupleElementsToList values) gen [] in

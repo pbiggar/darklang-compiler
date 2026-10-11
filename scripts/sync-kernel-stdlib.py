@@ -17,6 +17,7 @@ FILES = {
     "posix/accounts": "Posix/Accounts", "posix/temp": "Posix/Temp",
     "fileCopy": "FileCopy", "file": "File",
     "env": "Env",
+    "fileSystem": "FileSystem",
 }
 
 def main():
@@ -27,6 +28,16 @@ def main():
     source = args.interpreter / "packages/darklang/stdlib/cli"
     outputs = {f"StdLib/Cli/{dest}.dark": (source / f"{src}.dark").read_bytes()
                for src, dest in FILES.items()}
+    filesystem = outputs["StdLib/Cli/FileSystem.dark"].decode()
+    nested = re.search(r"^module FileError =\n((?:  .*\n|\n)+)", filesystem, re.MULTILINE)
+    if nested is None:
+        raise SystemExit("Missing expected FileSystem.FileError module")
+    body = "\n".join(line[2:] if line.startswith("  ") else line
+                     for line in nested.group(1).splitlines())
+    outputs["StdLib/Cli/FileSystem/FileError.dark"] = (
+        "module Darklang.Stdlib.Cli.FileSystem.FileError\n\n" + body.rstrip() + "\n").encode()
+    outputs["StdLib/Cli/FileSystem.dark"] = (
+        filesystem[:nested.start()] + filesystem[nested.end():]).encode()
     posix = (source / "posix.dark").read_text()
     # The compiler embeds nested modules as separately named source units.
     for name in ("Modes", "OpenFlags", "Errno", "StatMode"):

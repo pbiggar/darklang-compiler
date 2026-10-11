@@ -1,0 +1,4 @@
+// Shared Dark filesystem algorithms, not whole-file native adapters.
+Stdlib.File.exists "/missing" = compileerror="Unknown function"
+match Stdlib.Cli.File.writeBytes "/definitely/missing/dark-parent/value" (Stdlib.Blob.fromString "bytes") with | Error e -> e.errno == 2 | Ok _ -> false = true
+Stdlib.Cli.Dir.withTemp (fun dir -> let path = Stdlib.Cli.Path.join [dir, "data"] in let written = Stdlib.Cli.File.writeBytes path (Stdlib.Blob.fromList [0uy, 255uy, 10uy]) in let bytes = Stdlib.Cli.FileSystem.readFile path |> Stdlib.Result.map Stdlib.Blob.toList in (written, bytes) == (Ok (), Ok [0uy, 255uy, 10uy])) = Ok true isolated=true

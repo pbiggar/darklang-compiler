@@ -108,28 +108,6 @@ let cliIntrinsicModule : AST.moduleDef =
   }
 
 (*
-   Compiler-only file effects used by portable stdlib implementations.
-*)
-let fileIntrinsicModule : AST.moduleDef =
-  {
-    AST.name = "Darklang.Stdlib.File";
-    functions =
-      [
-        fn "currentDirectory" [] [] TString;
-        fn "listDirectoryPacked" [] [ TString ] TString;
-        fn "readBlob" [] [ TString ] (resultType TBlob);
-        fn "exists" [] [ TString ] TBool;
-        fn "isDirectory" [] [ TString ] TBool;
-        fn "writeBlob" [] [ TString; TBlob ] (resultType TUnit);
-        fn "appendText" [] [ TString; TString ] (resultType TUnit);
-        fn "delete" [] [ TString ] (resultType TUnit);
-        fn "createDirectory" [] [ TString ] (resultType TUnit);
-        fn "setExecutable" [] [ TString ] (resultType TUnit);
-        fn "writeFromPtr" [] [ TString; TInternalRawPtr; TInt64 ] TUnit;
-      ];
-  }
-
-(*
    Private socket syscalls. The Dark Network module converts signed errno
    results into typed values and owns the descriptors returned here.
 *)
@@ -397,7 +375,6 @@ let allModules =
     floatIntrinsicModule;
     cliIntrinsicModule;
     posixIntrinsicModule;
-    fileIntrinsicModule;
     networkIntrinsicModule;
     randomModule;
     dateTimeModule;

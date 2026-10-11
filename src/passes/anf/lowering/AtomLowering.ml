@@ -696,7 +696,6 @@ let lowerAtom (toANFCore : LoweringCallbacks.expressionLowerer)
                 (fun () -> P.tryPresentationIntrinsic name args);
                 (fun () ->
                   P.tryCliIntrinsic name (P.normalizeNullaryIntrinsicArgs args));
-                (fun () -> P.tryFileIntrinsic name args);
                 (fun () ->
                   P.tryRawMemoryIntrinsic functionId sums.P.names name args);
                 (fun () -> P.tryCanonicalPrimitiveIntrinsic name args);

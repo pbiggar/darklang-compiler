@@ -361,36 +361,6 @@ let patternLiteralToSizedInt = function
   | _ -> None
 
 (*
-   Try to convert a function call to a file I/O intrinsic CExpr
-   Returns Some CExpr if it's a file intrinsic, None otherwise
-*)
-let tryFileIntrinsic name args =
-  match (name, args) with
-  | "Darklang.Stdlib.File.currentDirectory", ([] | [ ANF.UnitLiteral ]) ->
-      Some (ANF.CliNative (ANF.DirectoryCurrent, []))
-  | "Darklang.Stdlib.File.listDirectoryPacked", [ pathAtom ] ->
-      Some (ANF.CliNative (ANF.DirectoryListPacked, [ pathAtom ]))
-  | "Darklang.Stdlib.File.readBlob", [ pathAtom ] ->
-      Some (ANF.FileReadBlob pathAtom)
-  | "Darklang.Stdlib.File.exists", [ pathAtom ] ->
-      Some (ANF.FileExists pathAtom)
-  | "Darklang.Stdlib.File.isDirectory", [ pathAtom ] ->
-      Some (ANF.CliNative (ANF.FileIsDirectory, [ pathAtom ]))
-  | "Darklang.Stdlib.File.writeBlob", [ pathAtom; contentAtom ] ->
-      Some (ANF.FileWriteBlob (pathAtom, contentAtom))
-  | "Darklang.Stdlib.File.appendText", [ pathAtom; contentAtom ] ->
-      Some (ANF.FileAppendText (pathAtom, contentAtom))
-  | "Darklang.Stdlib.File.delete", [ pathAtom ] ->
-      Some (ANF.FileDelete pathAtom)
-  | "Darklang.Stdlib.File.createDirectory", [ pathAtom ] ->
-      Some (ANF.FileCreateDirectory pathAtom)
-  | "Darklang.Stdlib.File.setExecutable", [ pathAtom ] ->
-      Some (ANF.FileSetExecutable pathAtom)
-  | "Darklang.Stdlib.File.writeFromPtr", [ pathAtom; ptrAtom; lengthAtom ] ->
-      Some (ANF.FileWriteFromPtr (pathAtom, ptrAtom, lengthAtom))
-  | _ -> None
-
-(*
    Convert the public console builtins into explicit ordered effects.
 *)
 let tryPresentationIntrinsic name args =
