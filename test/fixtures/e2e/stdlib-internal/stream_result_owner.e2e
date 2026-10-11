@@ -1,0 +1,11 @@
+// stream-result-owner.e2e - Explicit stream disposal inside Result continuations balances captures.
+let owned (value: Int64) : Stdlib.Result.Result<Bool, String> =
+  Ok value |> Stdlib.Result.andThen (fun value ->
+    match Some value with
+    | None -> Error "missing"
+    | Some value ->
+      let cell = Stdlib.Stream.__cellNew value in
+      let life = Stdlib.Stream.__new (fun _unit -> Some ()) (fun _unit -> Stdlib.Stream.__cellDispose<Int64> cell) in
+      let _ = Stdlib.Stream.close life in
+      let _ = Stdlib.Stream.close life in Ok true)
+owned 42L = Ok true // leak_check

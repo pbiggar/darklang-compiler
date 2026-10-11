@@ -71,3 +71,5 @@ reuse "GET" "HTTP/1.1 200 OK\r\n\r\n" = false
 reuse "CONNECT" "HTTP/1.1 200 OK\r\n\r\n" = false
 reuse "GET" "HTTP/1.1 101 Switching Protocols\r\n\r\n" = false
 Stdlib.__Http1Pool.reusable "GET" (Stdlib.String.toBlob "HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n") (Stdlib.String.toBlob "unsolicited") = false
+let session = Stdlib.HttpClientSession.createTrusted () in let _ = session.clear () in let _ = session.close () in true = true // leak_check
+clear () = (1L, 1L) // leak_check

@@ -192,6 +192,7 @@ StdLib/__Http3Control.dark
 StdLib/__Http3Uni.dark
 StdLib/__Http3.dark
 StdLib/__Http3Client.dark
+StdLib/__Http3Connection.dark
 StdLib/__Http3Server.dark
 StdLib/__Http3Discovery.dark
 StdLib/__AltSvc.dark

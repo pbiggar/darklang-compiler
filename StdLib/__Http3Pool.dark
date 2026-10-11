@@ -15,9 +15,9 @@ let close (state: Stdlib.__Http3Pool.State) : Unit =
   Stdlib.List.fold state.entries () (fun _unit entry -> Stdlib.__Http3.close entry.state)
 
 let reusable (state: Stdlib.__Http3.State) : Bool =
-  // Six critical streams share the current sixteen-channel transport profile.
-  // Rotate before exhausting it; retain closed channels for duplicate/final-size validation.
-  if state.stream >= 36L || Stdlib.Option.isSome state.uni.control.goAway || Stdlib.Option.isSome state.connection.meta.closed then false
+  // Rotate at 1024 requests, bounding final-size history without losing
+  // duplicate-frame validation or the separate active-stream allowance.
+  if state.stream >= 4092L || Stdlib.Option.isSome state.uni.control.goAway || Stdlib.Option.isSome state.connection.meta.closed then false
   else match Stdlib.__QuicFlow.channel state.connection.flow state.stream with
   | None -> false
   | Some channel ->

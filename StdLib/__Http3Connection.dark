@@ -1,0 +1,138 @@
+// __Http3Connection.dark - Shared QUIC/QPACK ownership and fair bounded request multiplexing.
+module Darklang.Stdlib.__Http3Connection
+
+type State = { wire: Stdlib.__Http3.State, next: Int64 }
+type Request = { method: String, fields: List<(String * String)>, body: Blob }
+type Pending = { index: Int64, request: Stdlib.__Http3Connection.Request }
+type Active = {
+  index: Int64, id: Int64, request: Stdlib.__Http3Connection.Request,
+  message: Stdlib.__Http3Message.State, head: Stdlib.Option.Option<Stdlib.__Http2Fields.ResponseHead>,
+  bytes: Blob, offset: Int64, position: Int64, blocks: List<Blob>
+}
+type Outcome = { index: Int64, response: Stdlib.Result.Result<Stdlib.HttpClient.Response, String> }
+type Work = { connection: Stdlib.__Http3Connection.State, waiting: List<Stdlib.__Http3Connection.Pending>, active: List<Stdlib.__Http3Connection.Active>, completed: List<Stdlib.__Http3Connection.Outcome>, total: Int64 }
+type Batch = { state: Stdlib.__Http3Connection.State, responses: List<Stdlib.__Http3Connection.Outcome> }
+
+let open (ready: Stdlib.__QuicClient.Ready) : Stdlib.Result.Result<Stdlib.__Http3Connection.State, String> =
+  Stdlib.__Http3.initialize ready false 10000L |> Stdlib.Result.map (fun wire -> Stdlib.__Http3Connection.State { wire = wire, next = 0L })
+
+let __replace (work: Stdlib.__Http3Connection.Work) (stream: Stdlib.__Http3Connection.Active) : Stdlib.__Http3Connection.Work =
+  { work with active = Stdlib.List.map work.active (fun current -> if current.id == stream.id then stream else current) }
+
+let __wire (work: Stdlib.__Http3Connection.Work) (wire: Stdlib.__Http3.State) : Stdlib.__Http3Connection.Work =
+  { work with connection = { work.connection with wire = { wire with stream = work.connection.wire.stream } } }
+
+let __done (work: Stdlib.__Http3Connection.Work) (stream: Stdlib.__Http3Connection.Active) (response: Stdlib.Result.Result<Stdlib.HttpClient.Response, String>) : Stdlib.__Http3Connection.Work =
+  { work with active = Stdlib.List.filter work.active (fun current -> current.id != stream.id), completed = Stdlib.List.push work.completed (Stdlib.__Http3Connection.Outcome { index = stream.index, response = response }) }
+
+let __stop (work: Stdlib.__Http3Connection.Work) (stream: Stdlib.__Http3Connection.Active) (code: Int64) : Stdlib.Result.Result<Stdlib.__Http3Connection.Work, String> =
+  Stdlib.__QuicFlow.stop work.connection.wire.connection.flow (Stdlib.__QuicApplication.StreamLimit { id = stream.id, value = code }) |> Stdlib.Result.andThen (fun stopped ->
+    Stdlib.__QuicConnection.__queue (Stdlib.__QuicConnection.__flow work.connection.wire.connection stopped.state) stopped.frames |> Stdlib.Result.map (fun connection ->
+      { work with connection = { work.connection with wire = { work.connection.wire with connection = connection } } }))
+
+let __admit (work: Stdlib.__Http3Connection.Work) : Stdlib.Result.Result<Stdlib.__Http3Connection.Work, String> =
+  if Stdlib.Option.isSome work.connection.wire.uni.control.goAway || Stdlib.List.length work.active >= 32 || work.connection.next / 4L >= work.connection.wire.connection.flow.peer.streamsBidi then Ok work
+  else match work.waiting with
+  | [] -> Ok work
+  | pending :: rest ->
+    let id = work.connection.next in
+    let message = Stdlib.__Http3Message.create (Response (pending.request.method == "HEAD")) in
+    let opened =
+      if id == 0L then Ok { work.connection.wire with message = message }
+      else Stdlib.__Http3.nextRequest work.connection.wire id (pending.request.method == "HEAD") 10000L in
+    opened |> Stdlib.Result.andThen (fun wire -> Stdlib.__Http3.encodeHeaders wire id pending.request.fields) |> Stdlib.Result.andThen (fun encoded ->
+      let stream = Stdlib.__Http3Connection.Active { index = pending.index, id = id, request = pending.request,
+        message = message, head = None, bytes = encoded.bytes, offset = 0L, position = 0L, blocks = [] } in
+      Stdlib.__Http3Connection.__admit { work with connection = { wire = { encoded.state with deadline = work.connection.wire.deadline }, next = id + 4L }, waiting = rest, active = work.active @ [stream] })
+
+// One bounded write per stream per round; every stream shares connection credit.
+let __sendRound (streams: List<Stdlib.__Http3Connection.Active>) (work: Stdlib.__Http3Connection.Work) : Stdlib.Result.Result<Stdlib.__Http3Connection.Work, String> =
+  match streams with
+  | [] -> Ok work
+  | stream :: rest ->
+    if Stdlib.Option.isSome stream.head then Stdlib.__Http3Connection.__sendRound rest work
+    else
+      let remaining = Stdlib.Blob.__byteLength stream.request.body - stream.position in
+      let prepared =
+        if stream.offset < Stdlib.Blob.__byteLength stream.bytes || remaining == 0L then Ok stream
+        else
+          let size = if remaining > 896L then 896L else remaining in
+          Stdlib.__Http3Wire.serialize 0L (Stdlib.__Http2Wire.__slice stream.request.body stream.position size) |> Stdlib.Result.map (fun bytes ->
+            { stream with bytes = bytes, offset = 0L, position = stream.position + size }) in
+      prepared |> Stdlib.Result.andThen (fun stream ->
+        let wire = { work.connection.wire with stream = stream.id, message = stream.message } in
+        let credit = Stdlib.__Http3.sendCredit wire in
+        let remaining = Stdlib.Blob.__byteLength stream.bytes - stream.offset in
+        let size = if remaining < credit then remaining else credit in
+        if size <= 0L then Stdlib.__Http3Connection.__sendRound rest (Stdlib.__Http3Connection.__replace work stream)
+        else
+          let finished = stream.position == Stdlib.Blob.__byteLength stream.request.body && size == remaining in
+          Stdlib.__Http3.write wire (Stdlib.__Http2Wire.__slice stream.bytes stream.offset size) finished |> Stdlib.Result.andThen (fun wire ->
+            let work = Stdlib.__Http3Connection.__replace (Stdlib.__Http3Connection.__wire work wire) { stream with offset = stream.offset + size } in
+            Stdlib.__Http3Connection.__sendRound rest work))
+
+let __events (stream: Stdlib.__Http3Connection.Active) (events: List<Stdlib.__Http3Message.Event>) : Stdlib.__Http3Connection.Active =
+  Stdlib.List.fold events stream (fun stream event -> match event with
+    | ResponseHead head -> if head.status >= 200L then { stream with head = Some head } else stream
+    | BodyChunk bytes -> { stream with blocks = Stdlib.List.push stream.blocks bytes }
+    | _ -> stream)
+
+let __drain (streams: List<Stdlib.__Http3Connection.Active>) (work: Stdlib.__Http3Connection.Work) : Stdlib.Result.Result<Stdlib.__Http3Connection.Work, String> =
+  match streams with
+  | [] ->
+    if Stdlib.List.length (Stdlib.List.filter work.active (fun stream -> Stdlib.Option.isSome stream.message.waiting)) > 1 then Error "Peer exceeded advertised QPACK blocked stream limit"
+    else Ok work
+  | stream :: rest ->
+    let boundary = work.connection.wire.uni.control.goAway in
+    let refused = match boundary with | None -> false | Some boundary -> stream.id >= boundary in
+    let reset = match Stdlib.__QuicFlow.channel work.connection.wire.connection.flow stream.id with
+      | None -> None
+      | Some channel -> match channel.receive with | None -> None | Some receiver -> receiver.resetCode in
+    if refused || Stdlib.Option.isSome reset then
+      Stdlib.__QuicConnection.read work.connection.wire.connection stream.id |> Stdlib.Result.andThen (fun read ->
+        let wire = { work.connection.wire with connection = read.state } in
+        Stdlib.__Http3.__feedback wire (Stdlib.__QpackDecoder.cancel stream.id) |> Stdlib.Result.andThen (fun wire ->
+          Stdlib.__Http3Connection.__stop (Stdlib.__Http3Connection.__wire work wire) stream 268L |> Stdlib.Result.andThen (fun work ->
+            Stdlib.__Http3Connection.__drain rest (Stdlib.__Http3Connection.__done work stream (Error (if refused then "HTTP/3 stream refused by GOAWAY" else "HTTP/3 response stream reset"))))))
+    else
+      let wire = { work.connection.wire with stream = stream.id, message = stream.message } in
+      Stdlib.__Http3.__drain wire |> Stdlib.Result.andThen (fun received ->
+        let stream = Stdlib.__Http3Connection.__events { stream with message = received.state.message } received.events in
+        let added = Stdlib.List.fold received.events 0L (fun total event -> match event with | BodyChunk bytes -> total + Stdlib.Blob.__byteLength bytes | _ -> total) in
+        let work = { Stdlib.__Http3Connection.__wire work received.state with total = work.total + added } in
+        if work.total > 104857600L then Error "HTTP/3 batch response body limit exceeded"
+        else if Stdlib.Bool.not received.finished then Stdlib.__Http3Connection.__drain rest (Stdlib.__Http3Connection.__replace work stream)
+        else match stream.head with
+        | None -> Error "HTTP/3 stream ended without final response"
+        | Some head ->
+          Stdlib.__Http3Connection.__stop work stream 256L |> Stdlib.Result.andThen (fun work ->
+            let response = Stdlib.HttpClient.Response { statusCode = Stdlib.Int.fromInt64 head.status, headers = head.headers, body = Stdlib.Blob.concat (Stdlib.List.reverse stream.blocks) } in
+            Stdlib.__Http3Connection.__drain rest (Stdlib.__Http3Connection.__done work stream (Ok response))))
+
+let __run (work: Stdlib.__Http3Connection.Work) : Stdlib.Result.Result<Stdlib.__Http3Connection.Batch, String> =
+  Stdlib.__Http3.__controls work.connection.wire |> Stdlib.Result.andThen (fun wire ->
+    let work = Stdlib.__Http3Connection.__wire work wire in
+    let work = if Stdlib.Option.isNone wire.uni.control.goAway then work else
+      { work with waiting = [], completed = Stdlib.List.fold work.waiting work.completed (fun completed pending ->
+        Stdlib.List.push completed (Stdlib.__Http3Connection.Outcome { index = pending.index, response = Error "HTTP/3 connection is draining" })) } in
+    Stdlib.__Http3Connection.__drain work.active work |> Stdlib.Result.andThen Stdlib.__Http3Connection.__admit |> Stdlib.Result.andThen (fun work ->
+      if work.active == [] && work.waiting == [] then
+        Stdlib.__QuicConnection.flush work.connection.wire.connection |> Stdlib.Result.map (fun connection ->
+          Stdlib.__Http3Connection.Batch { state = { work.connection with wire = { work.connection.wire with connection = connection } }, responses = Stdlib.List.sortBy work.completed (fun outcome -> outcome.index) })
+      else match Stdlib.__Network.monotonicMillis () with
+      | Error _ -> Error "HTTP/3 clock failed"
+      | Ok now ->
+        if now >= work.connection.wire.deadline then Error "HTTP/3 batch timed out"
+        else Stdlib.__Http3Connection.__sendRound work.active work |> Stdlib.Result.andThen (fun work ->
+          Stdlib.__QuicConnection.poll work.connection.wire.connection 1L |> Stdlib.Result.andThen (fun connection ->
+            Stdlib.__Http3Connection.__run { work with connection = { work.connection with wire = { work.connection.wire with connection = connection } } }))))
+
+let requestMany (state: Stdlib.__Http3Connection.State) (requests: List<Stdlib.__Http3Connection.Request>) : Stdlib.Result.Result<Stdlib.__Http3Connection.Batch, String> =
+  let length = Stdlib.Int64.__fromIntUnchecked (Stdlib.List.length requests) in
+  let size = Stdlib.List.fold requests 0L (fun total request -> total + Stdlib.Blob.__byteLength request.body) in
+  if length > 32L || size > 104857600L || state.next / 4L + length > 1024L then Error "HTTP/3 batch exceeds bounded owner profile"
+  else match Stdlib.__Network.monotonicMillis () with
+  | Error _ -> Error "HTTP/3 clock failed"
+  | Ok now ->
+    let waiting = Stdlib.List.indexedMap requests (fun index request -> Stdlib.__Http3Connection.Pending { index = Stdlib.Int64.__fromIntUnchecked index, request = request }) in
+    Stdlib.__Http3Connection.__run (Stdlib.__Http3Connection.Work { connection = { state with wire = { state.wire with deadline = now + 10000L } }, waiting = waiting, active = [], completed = [], total = 0L })

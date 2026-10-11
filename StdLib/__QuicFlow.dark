@@ -54,13 +54,21 @@ let __receiver (window: Int64) : Stdlib.Result.Result<Stdlib.__QuicStreams.Recei
     buffer = receiver.buffer, credit = 0L, highest = 0L, finalSize = None, resetCode = None })
   else Stdlib.__QuicStreams.receiver window
 
+// Finished channels retain final offsets for retransmission validation but do
+// not consume an active owner slot. Bound history separately from concurrency.
+let __closed (channel: Stdlib.__QuicFlow.Channel) : Bool =
+  let sent = match channel.send with | None -> true | Some sender -> sender.finished in
+  let received = match channel.receive with | None -> true | Some receiver -> Stdlib.__QuicStreams.complete receiver in
+  sent && received
+
 let __new (state: Stdlib.__QuicFlow.State) (id: Int64) : Stdlib.Result.Result<Stdlib.__QuicFlow.Channel, String> =
   let local = Stdlib.__QuicFlow.__local state id in
   let uni = Stdlib.__QuicFlow.__uni id in
   let limits = if local then state.peer else state.local in
   let count = if uni then limits.streamsUni else limits.streamsBidi in
   if id < 0L || id > 4611686018427387903L || id / 4L >= count then Error "QUIC stream concurrency limit exceeded"
-  else if Stdlib.List.length state.channels >= 16 then Error "QUIC stream owner profile exhausted"
+  else if Stdlib.List.length state.channels >= 1030 then Error "QUIC stream history profile exhausted"
+  else if Stdlib.List.length (Stdlib.List.filter state.channels (fun channel -> Stdlib.Bool.not (Stdlib.__QuicFlow.__closed channel))) >= 64 then Error "QUIC active stream owner profile exhausted"
   else
     let sending = if uni && Stdlib.Bool.not local then Ok None else Stdlib.__QuicStreams.sender id (if uni then state.peer.uni else if local then state.peer.bidiRemote else state.peer.bidiLocal) |> Stdlib.Result.map (fun sender -> Some sender) in
     let window = if uni then state.local.uni else if local then state.local.bidiLocal else state.local.bidiRemote in
@@ -127,11 +135,14 @@ let read (state: Stdlib.__QuicFlow.State) (id: Int64) : Stdlib.Result.Result<Std
     | None -> Error "Cannot read a send-only QUIC stream"
     | Some receiver ->
       let bytes = Stdlib.__QuicStreams.available receiver in
-      let next = if Stdlib.Blob.__byteLength bytes == 0L then receiver else Stdlib.__QuicStreams.drain receiver in
+      let next =
+        if Stdlib.Option.isSome receiver.resetCode then
+          { receiver with buffer = { receiver.buffer with consumed = receiver.highest, segments = [] } }
+        else if Stdlib.Blob.__byteLength bytes == 0L then receiver else Stdlib.__QuicStreams.drain receiver in
       let consumed = state.consumed + next.buffer.consumed - receiver.buffer.consumed in
       let credit = if consumed > 4611686018427387903L - state.local.data then 4611686018427387903L else consumed + state.local.data in
       let frames =
-        if Stdlib.Blob.__byteLength bytes == 0L then Ok Stdlib.Blob.empty
+        if consumed == state.consumed then Ok Stdlib.Blob.empty
         else (match Stdlib.__QuicApplication.limit 16L credit, Stdlib.__QuicApplication.streamLimit 17L id next.credit with
         | Ok connection, Ok stream -> Ok (Stdlib.Blob.concat [connection, stream])
         | _, _ -> Error "QUIC receive credit encoding failed") in
