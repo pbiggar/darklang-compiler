@@ -2,6 +2,7 @@
 module Darklang.Stdlib.__HttpSessionBatch
 
 type Context = { cell: RawPtr, life: Stream<Unit>, trusted: Bool, roots: Stdlib.Option.Option<List<Blob>> }
+type Budget = { outcomes: List<Stdlib.HttpClientSession.Outcome>, bytes: Int64, exceeded: Bool }
 type Pending = { index: Int64, request: Stdlib.HttpClientSession.Request, prepared: Stdlib.HttpClient.__Prepared }
 
 let __outcome (pending: Stdlib.__HttpSessionBatch.Pending) (response: Stdlib.Result.Result<Stdlib.HttpClient.Response, Stdlib.HttpClient.RequestError>) : Stdlib.HttpClientSession.Outcome =
@@ -16,9 +17,27 @@ let __learn (cell: RawPtr) (pending: Stdlib.__HttpSessionBatch.Pending) (respons
   | Ok response -> Stdlib.HttpClientSession.__learn cell pending.request.url response.statusCode response.headers started in
   Stdlib.__HttpSessionBatch.__outcome pending response
 
+let __cap (limit: Int64) (budget: Stdlib.__HttpSessionBatch.Budget) (outcomes: List<Stdlib.HttpClientSession.Outcome>) : Stdlib.__HttpSessionBatch.Budget =
+  Stdlib.List.fold outcomes budget (fun budget outcome ->
+    match outcome.response with
+    | Error _ -> { budget with outcomes = budget.outcomes @ [outcome] }
+    | Ok response ->
+      let size = Stdlib.Blob.__byteLength response.body in
+      if size > limit - budget.bytes then
+        { budget with outcomes = budget.outcomes @ [{ outcome with response = Error Stdlib.HttpClient.RequestError.NetworkError }], exceeded = true }
+      else { budget with outcomes = budget.outcomes @ [outcome], bytes = budget.bytes + size })
+
+let __http1Run (context: Stdlib.__HttpSessionBatch.Context) (pending: List<Stdlib.__HttpSessionBatch.Pending>) (budget: Stdlib.__HttpSessionBatch.Budget) : List<Stdlib.HttpClientSession.Outcome> =
+  if budget.exceeded then budget.outcomes @ Stdlib.__HttpSessionBatch.__failure pending Stdlib.HttpClient.RequestError.NetworkError
+  else match pending with
+  | [] -> budget.outcomes
+  | first :: rest ->
+    let response = Stdlib.HttpClientSession.__request context.cell context.life context.trusted context.roots first.request.method first.request.url first.request.headers first.request.body in
+    let budget = Stdlib.__HttpSessionBatch.__cap 104857600L budget [Stdlib.__HttpSessionBatch.__outcome first response] in
+    Stdlib.__HttpSessionBatch.__http1Run context rest budget
+
 let __http1 (context: Stdlib.__HttpSessionBatch.Context) (pending: List<Stdlib.__HttpSessionBatch.Pending>) : List<Stdlib.HttpClientSession.Outcome> =
-  Stdlib.List.map pending (fun pending ->
-    Stdlib.__HttpSessionBatch.__outcome pending (Stdlib.HttpClientSession.__request context.cell context.life context.trusted context.roots pending.request.method pending.request.url pending.request.headers pending.request.body))
+  Stdlib.__HttpSessionBatch.__http1Run context pending (Stdlib.__HttpSessionBatch.Budget { outcomes = [], bytes = 0L, exceeded = false })
 
 let __h2 (cell: RawPtr) (entry: Stdlib.__Http2Pool.Entry) (pending: List<Stdlib.__HttpSessionBatch.Pending>) (started: Int64) : List<Stdlib.HttpClientSession.Outcome> =
   let requests = Stdlib.List.fold pending (Ok []) (fun result pending -> result |> Stdlib.Result.andThen (fun requests ->
@@ -123,15 +142,16 @@ let __group (context: Stdlib.__HttpSessionBatch.Context) (pending: List<Stdlib._
         | Some transport -> Stdlib.__HttpSessionBatch.__tcp context transport origin pending started
         | None -> Stdlib.__HttpSessionBatch.__connect context [] origin pending started
 
-let __groups (context: Stdlib.__HttpSessionBatch.Context) (pending: List<Stdlib.__HttpSessionBatch.Pending>) (completed: List<Stdlib.HttpClientSession.Outcome>) : List<Stdlib.HttpClientSession.Outcome> =
-  match pending with
-  | [] -> Stdlib.List.sortBy completed (fun outcome -> outcome.index)
+let __groups (context: Stdlib.__HttpSessionBatch.Context) (pending: List<Stdlib.__HttpSessionBatch.Pending>) (budget: Stdlib.__HttpSessionBatch.Budget) : List<Stdlib.HttpClientSession.Outcome> =
+  if budget.exceeded then Stdlib.List.sortBy (budget.outcomes @ Stdlib.__HttpSessionBatch.__failure pending Stdlib.HttpClient.RequestError.NetworkError) (fun outcome -> outcome.index)
+  else match pending with
+  | [] -> Stdlib.List.sortBy budget.outcomes (fun outcome -> outcome.index)
   | first :: _ ->
     let same = fun pending -> Stdlib.__Http1Pool.sameOrigin first.prepared.url pending.prepared.url in
     let group = Stdlib.List.filter pending same in
     let rest = Stdlib.List.filter pending (fun pending -> Stdlib.Bool.not (same pending)) in
     let outcomes = Stdlib.__HttpSessionBatch.__group context group first.prepared.url first.request.url in
-    Stdlib.__HttpSessionBatch.__groups context rest (completed @ outcomes)
+    Stdlib.__HttpSessionBatch.__groups context rest (Stdlib.__HttpSessionBatch.__cap 104857600L budget outcomes)
 
 let requestMany (cell: RawPtr) (life: Stream<Unit>) (trusted: Bool) (roots: Stdlib.Option.Option<List<Blob>>) (requests: List<Stdlib.HttpClientSession.Request>) : Stdlib.Result.Result<List<Stdlib.HttpClientSession.Outcome>, Stdlib.HttpClient.RequestError> =
   let context = Stdlib.__HttpSessionBatch.Context { cell = cell, life = life, trusted = trusted, roots = roots } in
@@ -146,4 +166,4 @@ let requestMany (cell: RawPtr) (life: Stream<Unit>) (trusted: Bool) (roots: Stdl
         let (index, request) = pair in
         Stdlib.HttpClient.__prepare request.method request.url request.headers request.body false |> Stdlib.Result.map (fun prepared ->
           pending @ [Stdlib.__HttpSessionBatch.Pending { index = index, request = request, prepared = prepared }]))) |> Stdlib.Result.map (fun pending ->
-        Stdlib.__HttpSessionBatch.__groups context pending [])
+        Stdlib.__HttpSessionBatch.__groups context pending (Stdlib.__HttpSessionBatch.Budget { outcomes = [], bytes = 0L, exceeded = false }))

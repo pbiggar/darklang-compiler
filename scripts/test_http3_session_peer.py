@@ -8,8 +8,8 @@ import threading
 import time
 from pathlib import Path
 
-from aioquic.buffer import Buffer
-from aioquic.h3.connection import H3Connection
+from aioquic.buffer import Buffer, encode_uint_var
+from aioquic.h3.connection import H3Connection, encode_frame
 from aioquic.h3.events import HeadersReceived
 from aioquic.quic.configuration import QuicConfiguration
 from aioquic.quic.connection import QuicConnection
@@ -48,18 +48,19 @@ match Stdlib.Cli.__Args.int64 0, Stdlib.Blob.fromHex "@CA@" with
 MULTIPLEX = '''// h3-multiplex.dark - Interleaved responses retain per-stream parsers and shared QPACK.
 let request (path: String) : Stdlib.__Http3Connection.Request =
   Stdlib.__Http3Connection.Request { method = "GET", fields = [(":method", "GET"), (":scheme", "https"), (":authority", "localhost"), (":path", path), ("x-shared", "café ☃")], body = Stdlib.Blob.empty }
-let check (state: Stdlib.__Http3Connection.State) (reset: Bool) : Stdlib.Result.Result<Bool, String> =
+let check (state: Stdlib.__Http3Connection.State) (mode: String) : Stdlib.Result.Result<Bool, String> =
   Stdlib.__Http3Connection.requestMany state [request "/one", request "/two"] |> Stdlib.Result.andThen (fun batch ->
     let valid = match batch.responses with
     | [first, second] ->
       match first.response, second.response with
-      | Ok first, Ok second -> Stdlib.Bool.not reset && Stdlib.Blob.__byteLength first.body == 70000L && Stdlib.Blob.__byteLength second.body == 70000L
-      | Error _, Ok second -> reset && Stdlib.Blob.__byteLength second.body == 70000L
+      | Ok first, Ok second -> mode == "interleave" && Stdlib.Blob.__byteLength first.body == 70000L && Stdlib.Blob.__byteLength second.body == 70000L
+      | Error _, Ok second -> mode == "reset" && Stdlib.Blob.__byteLength second.body == 70000L
+      | Ok first, Error _ -> mode == "goaway" && Stdlib.Blob.__byteLength first.body == 70000L
       | _, _ -> false
     | _ -> false in
     let result = Stdlib.__Http3Connection.requestMany batch.state [request "/after"] |> Stdlib.Result.map (fun after ->
       let _ = Stdlib.__Http3.close after.state.wire in
-      let followup = match after.responses with | [outcome] -> (match outcome.response with | Ok response -> Stdlib.Blob.toHex response.body == "2F6166746572" | Error _ -> false) | _ -> false in
+      let followup = match after.responses with | [outcome] -> (match outcome.response with | Ok response -> Stdlib.Blob.toHex response.body == "2F6166746572" | Error _ -> mode == "goaway") | _ -> false in
       valid && followup) in
     match result with | Ok result -> Ok result | Error message -> let _ = Stdlib.__Http3.close batch.state.wire in Error message)
 match Stdlib.Cli.__Args.int64 0, Stdlib.Blob.fromHex "@CA@" with
@@ -67,7 +68,7 @@ match Stdlib.Cli.__Args.int64 0, Stdlib.Blob.fromHex "@CA@" with
   match Stdlib.__QuicClient.connect (Stdlib.__Datagram.Endpoint { address = [127L, 0L, 0L, 1L], port = port }) "localhost" [root] 10000L with
   | Error message -> Stdlib.printLine message
   | Ok ready ->
-    let result = Stdlib.__Http3Connection.open ready |> Stdlib.Result.andThen (fun state -> check state @RESET@) in
+    let result = Stdlib.__Http3Connection.open ready |> Stdlib.Result.andThen (fun state -> check state @MODE@) in
     let _ = Stdlib.__QuicClient.close ready in
     match result with | Ok true -> Stdlib.printLine "OK" | Ok false -> Stdlib.printLine "FAILED" | Error message -> Stdlib.printLine message
 | _, _ -> Stdlib.printLine "Bad arguments"
@@ -77,24 +78,27 @@ match Stdlib.Cli.__Args.int64 0, Stdlib.Blob.fromHex "@CA@" with
 PUBLIC_MULTIPLEX = r'''// h3-session-batch.dark - Public batches use advertised QUIC without a TCP fallback.
 let request (path: String) : Stdlib.HttpClientSession.Request =
   Stdlib.HttpClientSession.Request { method = "GET", url = "https://localhost" ++ path, headers = [("x-shared", "café ☃")], body = Stdlib.Blob.empty }
-let check (session: Stdlib.HttpClientSession.Session) (reset: Bool) : Bool =
+let check (session: Stdlib.HttpClientSession.Session) (mode: String) : Bool =
   match session.requestMany [request "/one", request "/two"] with
   | Error _ -> false
   | Ok outcomes ->
     let valid = match outcomes with
     | [first, second] -> first.index == 0L && second.index == 1L && (match first.response, second.response with
-      | Ok first, Ok second -> Stdlib.Bool.not reset && Stdlib.Blob.__byteLength first.body == 70000L && Stdlib.Blob.__byteLength second.body == 70000L
-      | Error _, Ok second -> reset && Stdlib.Blob.__byteLength second.body == 70000L
+      | Ok first, Ok second -> mode == "interleave" && Stdlib.Blob.__byteLength first.body == 70000L && Stdlib.Blob.__byteLength second.body == 70000L
+      | Error _, Ok second -> mode == "reset" && Stdlib.Blob.__byteLength second.body == 70000L
+      | Ok first, Error _ -> mode == "goaway" && Stdlib.Blob.__byteLength first.body == 70000L
       | _, _ -> false)
     | _ -> false in
-    let after = session.request "GET" "https://localhost/after" [("x-shared", "café ☃")] Stdlib.Blob.empty in
-    valid && (match after with | Ok response -> Stdlib.Blob.toHex response.body == "2F6166746572" | Error _ -> false)
+    if mode == "goaway" then valid
+    else
+      let after = session.request "GET" "https://localhost/after" [("x-shared", "café ☃")] Stdlib.Blob.empty in
+      valid && (match after with | Ok response -> Stdlib.Blob.toHex response.body == "2F6166746572" | Error _ -> false)
 match Stdlib.Cli.__Args.int64 0, Stdlib.Blob.fromHex "@CA@", Stdlib.__Network.monotonicMillis () with
 | Ok port, Ok root, Ok now ->
   let origin = Stdlib.__HttpWire.Url { scheme = "https", host = "localhost", port = 443L, authority = "localhost", target = "/" } in
   let cache = Stdlib.__AltSvcCache.learn Stdlib.__AltSvcCache.empty origin 200 [("alt-svc", "h3=\"127.0.0.1:" ++ Stdlib.Int64.toString port ++ "\"; ma=60")] now now 0L in
   let session = Stdlib.HttpClientSession.__createState (Stdlib.HttpClientSession.__State { cache = cache, pool = Stdlib.__Http1Pool.empty, http2 = Stdlib.__Http2Pool.empty, http3 = Stdlib.__Http3Pool.empty }) true (Some [root]) in
-  let valid = check session @RESET@ in
+  let valid = check session @MODE@ in
   let _ = session.clear () in
   let _ = session.close () in
   if valid then Stdlib.printLine "OK" else Stdlib.printLine "FAILED"
@@ -106,7 +110,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--compiler", type=Path, default=ROOT / "dark")
     parser.add_argument("--requests", type=int, default=5)
-    parser.add_argument("--multiplex", choices=["interleave", "reset"])
+    parser.add_argument("--multiplex", choices=["interleave", "reset", "goaway"])
     parser.add_argument("--public", action="store_true")
     args = parser.parse_args()
     key, leaf, ca = certificates()
@@ -118,7 +122,7 @@ def main():
         listener.bind(("127.0.0.1", 0))
         listener.settimeout(0.01)
         source, binary = Path(temporary) / "session.dark", Path(temporary) / "session"
-        test_source = (PUBLIC_MULTIPLEX if args.public else MULTIPLEX).replace("@RESET@", "true" if args.multiplex == "reset" else "false") if args.multiplex else SOURCE
+        test_source = (PUBLIC_MULTIPLEX if args.public else MULTIPLEX).replace("@MODE@", '"' + args.multiplex + '"') if args.multiplex else SOURCE
         source.write_text(test_source.replace("@CA@", ca.public_bytes(serialization.Encoding.DER).hex()).replace("@COUNT@", str(args.requests)))
         compiled = subprocess.run([str(args.compiler), str(source), "--allow-internal", "--leak-check", "-o", str(binary)], cwd=ROOT, capture_output=True, text=True, timeout=120)
         assert compiled.returncode == 0, compiled.stdout + compiled.stderr
@@ -154,7 +158,11 @@ def main():
                                 if args.multiplex and received.stream_id < 8:
                                     pending[received.stream_id] = body
                                     if len(pending) == 2:
+                                        if args.multiplex == "goaway":
+                                            connection.send_stream_data(http._local_control_stream_id, encode_frame(7, encode_uint_var(4)))
                                         for identifier in [4, 0]:
+                                            if identifier == 4 and args.multiplex == "goaway":
+                                                continue
                                             if identifier == 0 and args.multiplex == "reset":
                                                 connection.reset_stream(0, 268)
                                                 continue
@@ -177,7 +185,7 @@ def main():
             thread.join(timeout=2)
         assert not thread.is_alive() and not errors, errors
         assert result.returncode == 0 and result.stdout == "OK\n" and not result.stderr, (result, streams)
-        assert len(connections) == 1 and streams == ([0, 4, 8] if args.multiplex else list(range(0, args.requests * 4, 4))), streams
+        assert len(connections) == 1 and streams == (([0, 4] if args.multiplex == "goaway" else [0, 4, 8]) if args.multiplex else list(range(0, args.requests * 4, 4))), streams
     print(f"HTTP/3 {args.multiplex or 'session'}: streams {streams}, shared Unicode QPACK and leak-free disposal passed")
 
 

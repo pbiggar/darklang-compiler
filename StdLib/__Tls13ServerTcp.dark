@@ -128,9 +128,25 @@ let __dispose (connection: Stdlib.__Network.TcpConnection) (cell: RawPtr) : Unit
   let _ = Stdlib.__Network.closeTcp connection in
   Stdlib.Stream.__cellDispose<Stdlib.__Tls13Client.ApplicationState> cell
 
+// Reuse the directional record poller with server traffic secrets. Shutdown
+// and any fixed request deadline are checked before inspecting application data.
+let __poll (connection: Stdlib.__Network.TcpConnection) (signals: Stdlib.__Network.ShutdownSignals) (deadline: Stdlib.Option.Option<Int64>) (cell: RawPtr) (lifecycle: Stream<Unit>) : Stdlib.Result.Result<Stdlib.Option.Option<Blob>, String> =
+  match Stdlib.Stream.next lifecycle with
+  | None -> Error "HTTP transport is closed"
+  | Some _ ->
+    let available = match Stdlib.__Network.shutdownRequested signals, Stdlib.__Network.monotonicMillis () with
+    | Ok false, Ok now ->
+      let expired = match deadline with | None -> false | Some deadline -> now >= deadline in
+      if expired then Error "TLS server read timed out" else Stdlib.__HttpTransport.__pollSecure connection cell lifecycle
+    | Ok true, _ -> Error "HTTP server shutting down"
+    | _, _ -> Error "TLS server clock or shutdown check failed" in
+    match available with
+    | Ok available -> Ok available
+    | Error message -> let _ = Stdlib.Stream.close lifecycle in Error message
+
 let transport (connection: Stdlib.__Network.TcpConnection) (signals: Stdlib.__Network.ShutdownSignals) (deadline: Stdlib.Option.Option<Int64>) (accepted: Stdlib.__Tls13ServerTcp.Accepted) : Stdlib.__HttpTransport.Transport =
   let state = Stdlib.__Tls13Client.ApplicationState { keys = accepted.ready.receive, pending = accepted.pending, records = 0L,
     updates = Stdlib.__Tls13KeyUpdate.create accepted.ready.receiveSecret accepted.ready.sendSecret accepted.ready.send false } in
   let cell = Stdlib.Stream.__cellNew state in
   let lifecycle = Stdlib.Stream.__new (fun _unit -> Some ()) (fun _unit -> Stdlib.__Tls13ServerTcp.__dispose connection cell) in
-  Stdlib.__HttpTransport.Transport { lifecycle = lifecycle, idle = fun _unit -> false, poll = fun _unit -> Error "Nonblocking server TLS polling is not supported", read = fun _unit -> Stdlib.__Tls13ServerTcp.__read connection signals deadline cell lifecycle, write = fun bytes -> Stdlib.__Tls13ServerTcp.__write connection cell lifecycle bytes 0L }
+  Stdlib.__HttpTransport.Transport { lifecycle = lifecycle, idle = fun _unit -> false, poll = fun _unit -> Stdlib.__Tls13ServerTcp.__poll connection signals deadline cell lifecycle, read = fun _unit -> Stdlib.__Tls13ServerTcp.__read connection signals deadline cell lifecycle, write = fun bytes -> Stdlib.__Tls13ServerTcp.__write connection cell lifecycle bytes 0L }

@@ -258,7 +258,8 @@ def main():
                 assert peer.streams == expected and not peer.errors, (mode, peer.streams, peer.errors)
             finally:
                 peer.close()
-    print("HTTP/2 session reuse and independent multiplexing: reverse/interleaved 70 KiB replies, HPACK, PING, per-stream limits/reset, 140 KiB upload, early replies, GOAWAY and cleanup verified")
+    prefix = "Public HTTP/2 batches" if args.public else "Internal HTTP/2 multiplexing"
+    print(prefix + ": session reuse, reverse/interleaved 70 KiB replies, HPACK, PING, per-stream limits/reset, 140 KiB upload, early replies and cleanup verified" + ("" if args.public else "; GOAWAY without replay verified"))
 
 
 if __name__ == "__main__":
