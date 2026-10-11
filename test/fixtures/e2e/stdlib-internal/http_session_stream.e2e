@@ -1,0 +1,41 @@
+// http_session_stream.e2e - Lazy framing completion, lease invalidation and abandonment.
+let owner (reads: RawPtr) (writes: RawPtr) (closes: RawPtr) : Stdlib.__HttpTransport.Transport =
+  let life = Stdlib.Stream.__new (fun _unit -> Some ()) (fun _unit -> Stdlib.Stream.__cellSet closes (Stdlib.Stream.__cellGet<Int64> closes + 1L)) in
+  Stdlib.__HttpTransport.Transport { lifecycle = life, idle = fun _unit -> true, poll = fun _unit -> Ok None,
+    read = fun _unit -> match Stdlib.Stream.__cellGet<List<Blob>> reads with
+      | [] -> Ok Stdlib.Blob.empty
+      | first :: rest -> let _ = Stdlib.Stream.__cellSet reads rest in Ok first,
+    write = fun _bytes -> let _ = Stdlib.Stream.__cellSet writes (Stdlib.Stream.__cellGet<Int64> writes + 1L) in Ok () }
+let check (wire: List<String>) (mode: String) : (String * Int64 * Int64) =
+  let reads = Stdlib.Stream.__cellNew (Stdlib.List.map wire Stdlib.String.toBlob) in
+  let writes = Stdlib.Stream.__cellNew 0L in
+  let closes = Stdlib.Stream.__cellNew 0L in
+  let url = Stdlib.__HttpWire.parseUrl "http://example.com/" |> Stdlib.Result.unwrap in
+  let now = Stdlib.__Network.monotonicMillis () |> Stdlib.Result.withDefault 0L in
+  let pool = Stdlib.__Http1Pool.put Stdlib.__Http1Pool.empty url (owner reads writes closes) now in
+  let initial = Stdlib.HttpClientSession.__State { cache = Stdlib.__AltSvcCache.empty, pool = pool, http2 = Stdlib.__Http2Pool.empty, http3 = Stdlib.__Http3Pool.empty, epoch = 0L } in
+  let session = Stdlib.HttpClientSession.__createState initial true None in
+  let response = session.stream "GET" "http://example.com/" [] Stdlib.Blob.empty in
+  let body = match response with
+    | Error _ -> "error"
+    | Ok response ->
+      let _ = if mode == "clear" then session.clear () else if mode == "closed" then session.close () else () in
+      if mode == "abandon" then let _ = Stdlib.Stream.close response.body in "abandoned"
+      else Stdlib.Stream.toBlob response.body |> Stdlib.String.fromBlob |> Stdlib.Result.withDefault "decode error" in
+  let before = Stdlib.Stream.__cellGet<Int64> closes in
+  let _ = session.close () in
+  let result = (body, before, Stdlib.Stream.__cellGet<Int64> closes) in
+  let _ = Stdlib.Stream.__cellDispose<List<Blob>> reads in
+  let _ = Stdlib.Stream.__cellDispose<Int64> writes in
+  let _ = Stdlib.Stream.__cellDispose<Int64> closes in result
+check ["HTTP/1.1 200 OK\r\nContent-Length: 3\r\n\r\n", "abc"] "complete" = ("abc", 0L, 1L) // leak_check
+check ["HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n1\r\na\r\n", "2\r\nbc\r\n0\r\nX-End: y\r\n", "\r\n"] "complete" = ("abc", 0L, 1L) // leak_check
+check ["HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n"] "complete" = ("", 0L, 1L) // leak_check
+check ["HTTP/1.1 200 OK\r\nContent-Length: 3\r\n\r\nabc"] "abandon" = ("abandoned", 1L, 1L) // leak_check
+check ["HTTP/1.1 200 OK\r\nContent-Length: 3\r\n\r\nabc"] "clear" = ("abc", 1L, 1L) // leak_check
+check ["HTTP/1.1 200 OK\r\nContent-Length: 3\r\n\r\nabc"] "closed" = ("", 1L, 1L) // leak_check
+check ["HTTP/1.1 200 OK\r\nContent-Length: 3\r\n\r\nabcEXTRA"] "complete" = ("abc", 1L, 1L) // leak_check
+check ["HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n3\r\nabc\r\n0\r\n\r\nEXTRA"] "complete" = ("abc", 1L, 1L) // leak_check
+check ["HTTP/1.0 200 OK\r\nContent-Length: 3\r\n\r\nabc"] "complete" = ("abc", 1L, 1L) // leak_check
+check ["HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Length: 3\r\n\r\nabc"] "complete" = ("abc", 1L, 1L) // leak_check
+check ["HTTP/1.1 200 OK\r\n\r\nabc"] "complete" = ("abc", 1L, 1L) // leak_check

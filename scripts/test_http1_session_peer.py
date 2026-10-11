@@ -155,6 +155,7 @@ class Peer:
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--compiler", type=Path, default=ROOT / "dark")
+    parser.add_argument("--stream", action="store_true", help="Consume lazy session bodies before checking reuse")
     args = parser.parse_args()
     key, leaf, ca = certificates()
     with tempfile.TemporaryDirectory(prefix="dark-http1-session-") as temporary:
@@ -168,7 +169,16 @@ def main():
         context.set_alpn_protocols(["http/1.1"])
         context.load_cert_chain(certificate, private)
         source, binary = directory / "session.dark", directory / "session"
-        source.write_text(SOURCE.replace("@CA@", ca.public_bytes(serialization.Encoding.PEM).hex()))
+        program = SOURCE
+        if args.stream:
+            program = program.replace("session.request", "exchange session")
+            program = '''// stream-exchange.dark - Fully consume each lazy response before the next request.
+let exchange (session: Stdlib.HttpClientSession.Session) (method: String) (url: String) (headers: List<(String * String)>) (body: Blob)
+  : Stdlib.Result.Result<Stdlib.HttpClient.Response, Stdlib.HttpClient.RequestError> =
+  session.stream method url headers body |> Stdlib.Result.map (fun response ->
+    Stdlib.HttpClient.Response { statusCode = response.statusCode, headers = response.headers, body = Stdlib.Stream.toBlob response.body })
+''' + program
+        source.write_text(program.replace("@CA@", ca.public_bytes(serialization.Encoding.PEM).hex()))
         result = subprocess.run([str(args.compiler), str(source), "--allow-internal", "--leak-check", "-o", str(binary)],
                                 cwd=ROOT, text=True, capture_output=True, timeout=180)
         assert result.returncode == 0, result.stdout + result.stderr
@@ -185,7 +195,7 @@ def main():
                 assert peer.dropped == 1, f"POST replayed {peer.dropped} times"
             finally:
                 peer.close()
-    print("TCP/TLS session reuse, chunked/HEAD/EOF framing, close tokens, HTTP/1.0, surplus bytes, clear/close, dropped POST without replay, 70 KiB bodies and compiled cleanup verified")
+    print(("Lazy" if args.stream else "Buffered") + " TCP/TLS session reuse, chunked/HEAD/EOF framing, close tokens, HTTP/1.0, surplus bytes, clear/close, dropped POST without replay, 70 KiB bodies and compiled cleanup verified")
 
 
 if __name__ == "__main__":

@@ -15,7 +15,7 @@ let grouped () : (List<Int64> * Int64 * Int64) =
   let now = Stdlib.__Network.monotonicMillis () |> Stdlib.Result.withDefault 0L in
   let pool = Stdlib.__Http1Pool.put Stdlib.__Http1Pool.empty (origin "a") (owner writes closes) now in
   let pool = Stdlib.__Http1Pool.put pool (origin "b") (owner writes closes) now in
-  let session = Stdlib.HttpClientSession.__createState (Stdlib.HttpClientSession.__State { cache = Stdlib.__AltSvcCache.empty, pool = pool, http2 = Stdlib.__Http2Pool.empty, http3 = Stdlib.__Http3Pool.empty }) true None in
+  let session = Stdlib.HttpClientSession.__createState (Stdlib.HttpClientSession.__State { cache = Stdlib.__AltSvcCache.empty, pool = pool, http2 = Stdlib.__Http2Pool.empty, http3 = Stdlib.__Http3Pool.empty, epoch = 0L }) true None in
   let outcomes = session.requestMany [request "http://a/one", request "http://b/two", request "http://a/three"] in
   let order = match outcomes with | Error _ -> [] | Ok outcomes -> Stdlib.List.map outcomes (fun outcome -> match outcome.response with | Ok response -> if response.statusCode == 200 then outcome.index else -1L | Error _ -> -1L) in
   let _ = session.close () in

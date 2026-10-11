@@ -357,6 +357,10 @@ type __StreamTransport =
   | Plain
   | Secure of Stdlib.__Tls13Client.ApplicationState
 
+type __StreamSource =
+  | Legacy of (Stdlib.__Network.TcpConnection * Stdlib.HttpClient.__StreamTransport)
+  | Owned of Stdlib.__HttpTransport.Transport
+
 type __StreamPhase =
   | Finished
   | FixedBytes of Int64
@@ -367,8 +371,8 @@ type __StreamPhase =
   | Trailers
 
 type __StreamBodyState = {
-  connection: Stdlib.__Network.TcpConnection,
-  transport: Stdlib.HttpClient.__StreamTransport,
+  source: Stdlib.HttpClient.__StreamSource,
+  onEnd: Blob -> Unit,
   buffer: Blob,
   offset: Int64,
   phase: Stdlib.HttpClient.__StreamPhase,
@@ -434,11 +438,11 @@ let __streamHead (connection: Stdlib.__Network.TcpConnection)
           (Stdlib.Blob.concat [buffer, read.bytes]) informational
 
 let __streamState (previous: Stdlib.HttpClient.__StreamBodyState)
-  (transport: Stdlib.HttpClient.__StreamTransport) (buffer: Blob)
+  (source: Stdlib.HttpClient.__StreamSource) (buffer: Blob)
   (offset: Int64) (phase: Stdlib.HttpClient.__StreamPhase)
   (total: Int64) (chunks: Int64) : Stdlib.HttpClient.__StreamBodyState =
   Stdlib.HttpClient.__StreamBodyState {
-    connection = previous.connection, transport = transport, buffer = buffer,
+    source = source, onEnd = previous.onEnd, buffer = buffer,
     offset = offset, phase = phase, total = total, chunks = chunks }
 
 let __streamAvailable (state: Stdlib.HttpClient.__StreamBodyState) : Int64 =
@@ -450,12 +454,18 @@ let __streamRemaining (state: Stdlib.HttpClient.__StreamBodyState) : Blob =
 
 let __streamFetch (state: Stdlib.HttpClient.__StreamBodyState)
   : Stdlib.Result.Result<Stdlib.Option.Option<Stdlib.HttpClient.__StreamBodyState>, String> =
-  match Stdlib.HttpClient.__streamRead state.connection state.transport with
+  let read = match state.source with
+    | Legacy ((connection, transport)) ->
+      Stdlib.HttpClient.__streamRead connection transport |> Stdlib.Result.mapError (fun _error -> "HTTP response stream read failed")
+        |> Stdlib.Result.map (fun read -> Stdlib.Option.map read (fun read -> (read.bytes, Stdlib.HttpClient.__StreamSource.Legacy (connection, read.transport))))
+    | Owned transport -> transport.read () |> Stdlib.Result.map (fun bytes ->
+      if Stdlib.Blob.__byteLength bytes == 0L then None else Some ((bytes, state.source))) in
+  match read with
   | Error _ -> Error "HTTP response stream read failed"
   | Ok None -> Ok None
-  | Ok (Some read) ->
-    Ok (Some (Stdlib.HttpClient.__streamState state read.transport
-      (Stdlib.Blob.concat [Stdlib.HttpClient.__streamRemaining state, read.bytes])
+  | Ok (Some ((bytes, source))) ->
+    Ok (Some (Stdlib.HttpClient.__streamState state source
+      (Stdlib.Blob.concat [Stdlib.HttpClient.__streamRemaining state, bytes])
       0L state.phase state.total state.chunks))
 
 let __streamByte (state: Stdlib.HttpClient.__StreamBodyState) : UInt8 =
@@ -466,9 +476,9 @@ let __streamByte (state: Stdlib.HttpClient.__StreamBodyState) : UInt8 =
 let __streamStep (state: Stdlib.HttpClient.__StreamBodyState)
   : Stdlib.Option.Option<(UInt8 * Stdlib.HttpClient.__StreamBodyState)> =
   match state.phase with
-  | Finished -> None
+  | Finished -> let _ = state.onEnd (Stdlib.HttpClient.__streamRemaining state) in None
   | FixedBytes remaining ->
-    if remaining == 0L then None
+    if remaining == 0L then let _ = state.onEnd (Stdlib.HttpClient.__streamRemaining state) in None
     else if Stdlib.HttpClient.__streamAvailable state == 0L then
       match Stdlib.HttpClient.__streamFetch state with
       | Error message -> Builtin.testRuntimeError message
@@ -476,7 +486,7 @@ let __streamStep (state: Stdlib.HttpClient.__StreamBodyState)
       | Ok (Some next) -> Stdlib.HttpClient.__streamStep next
     else
       let byte = Stdlib.HttpClient.__streamByte state in
-      let next = Stdlib.HttpClient.__streamState state state.transport state.buffer
+      let next = Stdlib.HttpClient.__streamState state state.source state.buffer
                    (state.offset + 1L) (FixedBytes (remaining - 1L))
                    (state.total + 1L) state.chunks in
       Some ((byte, next))
@@ -484,13 +494,13 @@ let __streamStep (state: Stdlib.HttpClient.__StreamBodyState)
     if Stdlib.HttpClient.__streamAvailable state == 0L then
       match Stdlib.HttpClient.__streamFetch state with
       | Error message -> Builtin.testRuntimeError message
-      | Ok None -> None
+      | Ok None -> let _ = state.onEnd Stdlib.Blob.empty in None
       | Ok (Some next) -> Stdlib.HttpClient.__streamStep next
     else if state.total >= 104857600L then
       Builtin.testRuntimeError "HTTP body too large"
     else
       let byte = Stdlib.HttpClient.__streamByte state in
-      let next = Stdlib.HttpClient.__streamState state state.transport state.buffer
+      let next = Stdlib.HttpClient.__streamState state state.source state.buffer
                    (state.offset + 1L) UntilEof (state.total + 1L) state.chunks in
       Some ((byte, next))
   | ChunkHeader ->
@@ -515,12 +525,12 @@ let __streamStep (state: Stdlib.HttpClient.__StreamBodyState)
           else
             let phase = if size == 0L then Trailers else ChunkBytes size in
             Stdlib.HttpClient.__streamStep
-              (Stdlib.HttpClient.__streamState state state.transport state.buffer
+              (Stdlib.HttpClient.__streamState state state.source state.buffer
                 (state.offset + afterLine) phase state.total (state.chunks + 1L))
   | ChunkBytes remaining ->
     if remaining == 0L then
       Stdlib.HttpClient.__streamStep
-        (Stdlib.HttpClient.__streamState state state.transport state.buffer
+        (Stdlib.HttpClient.__streamState state state.source state.buffer
           state.offset ChunkTail state.total state.chunks)
     else if Stdlib.HttpClient.__streamAvailable state == 0L then
       match Stdlib.HttpClient.__streamFetch state with
@@ -529,7 +539,7 @@ let __streamStep (state: Stdlib.HttpClient.__StreamBodyState)
       | Ok (Some next) -> Stdlib.HttpClient.__streamStep next
     else
       let byte = Stdlib.HttpClient.__streamByte state in
-      let next = Stdlib.HttpClient.__streamState state state.transport state.buffer
+      let next = Stdlib.HttpClient.__streamState state state.source state.buffer
                    (state.offset + 1L) (ChunkBytes (remaining - 1L))
                    (state.total + 1L) state.chunks in
       Some ((byte, next))
@@ -544,11 +554,13 @@ let __streamStep (state: Stdlib.HttpClient.__StreamBodyState)
       Builtin.testRuntimeError "Malformed HTTP chunk"
     else
       Stdlib.HttpClient.__streamStep
-        (Stdlib.HttpClient.__streamState state state.transport state.buffer
+        (Stdlib.HttpClient.__streamState state state.source state.buffer
           (state.offset + 2L) ChunkHeader state.total state.chunks)
   | Trailers ->
     match Stdlib.__HttpWire.__headers (Stdlib.HttpClient.__streamRemaining state) 0L 0L 0L [] with
-    | Ok _ -> None
+    | Ok ((_headers, after)) ->
+      let remaining = Stdlib.__Http2Wire.__slice state.buffer (state.offset + after) (Stdlib.HttpClient.__streamAvailable state - after) in
+      let _ = state.onEnd remaining in None
     | Error (Invalid message) -> Builtin.testRuntimeError message
     | Error Incomplete ->
       if Stdlib.HttpClient.__streamAvailable state > 65536L then
@@ -560,7 +572,9 @@ let __streamStep (state: Stdlib.HttpClient.__StreamBodyState)
         | Ok (Some next) -> Stdlib.HttpClient.__streamStep next
 
 let __streamDispose (state: Stdlib.HttpClient.__StreamBodyState) : Unit =
-  Stdlib.__Network.closeTcp state.connection
+  match state.source with
+  | Legacy ((connection, _transport)) -> Stdlib.__Network.closeTcp connection
+  | Owned transport -> Stdlib.__HttpTransport.close transport
 
 type StreamStart = Legacy of Stdlib.HttpClient.__StreamTransport | Modern of Stdlib.HttpClient.StreamResponse
 
@@ -643,7 +657,7 @@ let __streamWithAlternatives (trusted: Bool) (roots: Stdlib.Option.Option<List<B
                           | Chunked -> Stdlib.HttpClient.__StreamPhase.ChunkHeader
                           | UntilClose -> Stdlib.HttpClient.__StreamPhase.UntilEof in
               let initial = Stdlib.HttpClient.__StreamBodyState {
-                connection = connection, transport = nextTransport,
+                source = Stdlib.HttpClient.__StreamSource.Legacy (connection, nextTransport), onEnd = fun _remaining -> (),
                 buffer = head.remaining, offset = 0L,
                 phase = phase, total = 0L, chunks = 0L } in
               let stream = Stdlib.Stream.__fromProducer initial

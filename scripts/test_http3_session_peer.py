@@ -33,7 +33,7 @@ let run (port: Int64) (root: Blob) : Stdlib.Result.Result<Bool, String> =
       match completed.entry, Stdlib.__Network.monotonicMillis () with
       | Some entry, Ok now ->
         let pool = Stdlib.__Http3Pool.put Stdlib.__Http3Pool.empty entry now in
-        let session = Stdlib.HttpClientSession.__createState (Stdlib.HttpClientSession.__State { cache = Stdlib.__AltSvcCache.empty, pool = Stdlib.__Http1Pool.empty, http2 = Stdlib.__Http2Pool.empty, http3 = pool }) true (Some [root]) in
+        let session = Stdlib.HttpClientSession.__createState (Stdlib.HttpClientSession.__State { cache = Stdlib.__AltSvcCache.empty, pool = Stdlib.__Http1Pool.empty, http2 = Stdlib.__Http2Pool.empty, http3 = pool, epoch = 0L }) true (Some [root]) in
         let valid = check session 1L in
         let _ = session.clear () in
         let _ = session.close () in
@@ -97,7 +97,7 @@ match Stdlib.Cli.__Args.int64 0, Stdlib.Blob.fromHex "@CA@", Stdlib.__Network.mo
 | Ok port, Ok root, Ok now ->
   let origin = Stdlib.__HttpWire.Url { scheme = "https", host = "localhost", port = 443L, authority = "localhost", target = "/" } in
   let cache = Stdlib.__AltSvcCache.learn Stdlib.__AltSvcCache.empty origin 200 [("alt-svc", "h3=\"127.0.0.1:" ++ Stdlib.Int64.toString port ++ "\"; ma=60")] now now 0L in
-  let session = Stdlib.HttpClientSession.__createState (Stdlib.HttpClientSession.__State { cache = cache, pool = Stdlib.__Http1Pool.empty, http2 = Stdlib.__Http2Pool.empty, http3 = Stdlib.__Http3Pool.empty }) true (Some [root]) in
+  let session = Stdlib.HttpClientSession.__createState (Stdlib.HttpClientSession.__State { cache = cache, pool = Stdlib.__Http1Pool.empty, http2 = Stdlib.__Http2Pool.empty, http3 = Stdlib.__Http3Pool.empty, epoch = 0L }) true (Some [root]) in
   let valid = check session @MODE@ in
   let _ = session.clear () in
   let _ = session.close () in
