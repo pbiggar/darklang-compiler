@@ -169,6 +169,10 @@ and cliOperation (value : MIR.cliOperation) =
   | MIR.PosixPpoll -> union "CliOperation" "PosixPpoll" []
   | MIR.PosixPollDarwin -> union "CliOperation" "PosixPollDarwin" []
   | MIR.PosixKqueue -> union "CliOperation" "PosixKqueue" []
+  | MIR.ChildState -> union "CliOperation" "ChildState" []
+  | MIR.ChildLaunch -> union "CliOperation" "ChildLaunch" []
+  | MIR.PosixWait4 -> union "CliOperation" "PosixWait4" []
+  | MIR.PosixFcntl -> union "CliOperation" "PosixFcntl" []
   | MIR.PosixKeventVnode -> union "CliOperation" "PosixKeventVnode" []
 
 and label (value : MIR.label) =

@@ -209,6 +209,10 @@ let prettyPrintCliOperation = function
   | LIR.PosixPpoll -> "PosixPpoll"
   | LIR.PosixPollDarwin -> "PosixPollDarwin"
   | LIR.PosixKqueue -> "PosixKqueue"
+  | LIR.ChildState -> "ChildState"
+  | LIR.ChildLaunch -> "ChildLaunch"
+  | LIR.PosixWait4 -> "PosixWait4"
+  | LIR.PosixFcntl -> "PosixFcntl"
   | LIR.PosixKeventVnode -> "PosixKeventVnode"
 
 (*

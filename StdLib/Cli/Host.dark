@@ -1,15 +1,31 @@
-// Stdlib.Cli.Host - aggregate runtime host discovery.
-
 module Darklang.Stdlib.Cli.Host
 
-type Host = { os: Stdlib.Cli.OS.OS, arch: Stdlib.Cli.Architecture.Architecture, defaultShell: Stdlib.Cli.Shell.Shell }
+type Host =
+  { os: OS.OS
+    arch: Architecture.Architecture
+    defaultShell: Shell.Shell }
 
-let getRuntimeHost () : Stdlib.Result.Result<Stdlib.Cli.Host.Host, String> =
-    let os = Stdlib.Cli.OS.getOS () in
-    let arch = Stdlib.Cli.Architecture.getArchitecture () in
-    let shell = Stdlib.Cli.Shell.getDefaultShell () in
-    match (os, arch, shell) with
-    | (Ok os, Ok arch, Ok shell) -> Ok (Stdlib.Cli.Host.Host { os = os, arch = arch, defaultShell = shell })
-    | (Error error, _, _) -> Error ($"Couldn't determine host OS: {error}")
-    | (_, Error error, _) -> Error ($"Couldn't determine host architecture: {error}")
-    | (_, _, Error error) -> Error ($"Couldn't determine host default shell {error}")
+/// Identifies and returns the operating system and architecture of the runtime host.
+/// Returns {{Ok <Host>}} on success, or an {{Error}} with combined stderr if it fails
+let getRuntimeHost () : Stdlib.Result.Result<Host.Host, String> =
+  let os = OS.getOS ()
+  let arch = Architecture.getArchitecture ()
+  let defaultShell = Shell.getDefaultShell ()
+
+  match os, arch, defaultShell with
+  | Ok os, Ok arch, Ok defaultShell ->
+    Stdlib.Result.Result.Ok(
+      Host
+        { os = os
+          arch = arch
+          defaultShell = defaultShell }
+    )
+
+  | Error os, _, _ ->
+    Stdlib.Result.Result.Error $"Couldn't determine host OS: ${os}"
+  | _, Error arch, _ ->
+    Stdlib.Result.Result.Error
+      $"Couldn't determine host architecture: ${arch}"
+  | _, _, Error defaultShell ->
+    Stdlib.Result.Result.Error
+      $"Couldn't determine host default shell ${defaultShell}"

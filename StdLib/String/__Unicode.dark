@@ -188,11 +188,13 @@ let __insertCanonical (codepoint: Int64) (ccc: Int64) (segment: List<Int64>) : L
 
 let __reorder (codepoints: List<Int64>) (segment: List<Int64>) (acc: List<Int64>) : List<Int64> =
     match codepoints with
-    | [] -> Stdlib.List.append acc segment
+    | [] -> Stdlib.List.append (Stdlib.List.reverse acc) segment
     | codepoint :: rest ->
         let ccc = Stdlib.String.__Unicode.combiningClass codepoint in
         if ccc == 0L then
-            Stdlib.String.__Unicode.__reorder rest ([codepoint]) (Stdlib.List.append acc segment)
+            // Completed segments are accumulated backwards: appending to the
+            // entire prefix made ordinary large ASCII captures quadratic.
+            Stdlib.String.__Unicode.__reorder rest ([codepoint]) (Stdlib.List.append (Stdlib.List.reverse segment) acc)
         else
             Stdlib.String.__Unicode.__reorder rest (Stdlib.String.__Unicode.__insertCanonical codepoint ccc segment) acc
 
@@ -245,9 +247,12 @@ let normalize (value: String) : Stdlib.Result.Result<String, Stdlib.String.__Uni
         Ok (Stdlib.String.__fromCodepointsRaw (Stdlib.String.__Unicode.__compose reordered None 0L []))
 
 let normalizeValid (value: String) : String =
-    match Stdlib.String.__Unicode.normalize value with
-    | Ok normalized -> normalized
-    | Error _ -> Builtin.crash "Invalid UTF-8 string"
+    // ASCII is already NFC; avoid allocating normalization lists for it.
+    if Stdlib.String.__isAscii value then value
+    else
+        match Stdlib.String.__Unicode.normalize value with
+        | Ok normalized -> normalized
+        | Error _ -> Builtin.crash "Invalid UTF-8 string"
 
 let __isControlProperty (property: Stdlib.String.__Unicode.__Data.GraphemeBreak) : Bool =
     property == Stdlib.String.__Unicode.__Data.GraphemeBreak.GBCR ||

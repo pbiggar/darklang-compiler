@@ -214,6 +214,10 @@ and cliOperation (value : LIR.cliOperation) =
   | LIR.PosixPpoll -> union "CliOperation" "PosixPpoll" []
   | LIR.PosixPollDarwin -> union "CliOperation" "PosixPollDarwin" []
   | LIR.PosixKqueue -> union "CliOperation" "PosixKqueue" []
+  | LIR.ChildState -> union "CliOperation" "ChildState" []
+  | LIR.ChildLaunch -> union "CliOperation" "ChildLaunch" []
+  | LIR.PosixWait4 -> union "CliOperation" "PosixWait4" []
+  | LIR.PosixFcntl -> union "CliOperation" "PosixFcntl" []
   | LIR.PosixKeventVnode -> union "CliOperation" "PosixKeventVnode" []
 
 and label (value : LIR.label) =

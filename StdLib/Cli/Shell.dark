@@ -1,32 +1,44 @@
-// Stdlib.Cli.Shell - portable public shell model and discovery.
-
 module Darklang.Stdlib.Cli.Shell
 
-type Shell = Bash | Zsh | Fish | PowerShell
+type Shell =
+  | Bash
+  | Zsh
+  | Fish
+  | PowerShell
 
-let __linux (shell: String) : Stdlib.Result.Result<Stdlib.Cli.Shell.Shell, String> =
-    let shell = Stdlib.String.trim shell in
-    if shell == "/bin/bash" then Ok Stdlib.Cli.Shell.Shell.Bash
-    else if shell == "/bin/zsh" then Ok Stdlib.Cli.Shell.Shell.Zsh
-    else if Stdlib.String.contains shell "/fish" then Ok Stdlib.Cli.Shell.Shell.Fish
-    else Error "Unsupported shell, if you are on Linux please use Bash, Zsh, or Fish"
+/// Determines the default shell used by the current user.
+/// Returns  {{Ok <Shell>}} if successful, or {{Error}} with a message if the shell is unsupported or an error occurs.
+let getDefaultShell () : Stdlib.Result.Result<Shell, String> =
+  match OS.getOS () with
+  | Ok Linux ->
+    (Stdlib.Result.Result.Ok (Stdlib.Option.withDefault (Stdlib.Cli.Env.get "SHELL") "/bin/bash"))
+    |> Stdlib.Result.andThen (fun shell ->
+      match Stdlib.String.trim shell with
+      | "/bin/bash" -> Stdlib.Result.Result.Ok Shell.Bash
+      | "/bin/zsh" -> Stdlib.Result.Result.Ok Shell.Zsh
+      | shell when shell |> Stdlib.String.contains "/fish" ->
+        Stdlib.Result.Result.Ok Shell.Fish
+      | _ ->
+        Stdlib.Result.Result.Error
+          "Unsupported shell, if you are on Linux please use Bash, Zsh, or Fish")
 
-let __macOS (shell: String) : Stdlib.Result.Result<Stdlib.Cli.Shell.Shell, String> =
-    let shell = Stdlib.String.trim shell in
-    if shell == "/bin/zsh" then Ok Stdlib.Cli.Shell.Shell.Zsh
-    else if Stdlib.String.contains shell "/bin/bash" then Ok Stdlib.Cli.Shell.Shell.Bash
-    else if Stdlib.String.contains shell "/fish" then Ok Stdlib.Cli.Shell.Shell.Fish
-    else Error "Unsupported shell, if you are on MacOS please use Bash, Zsh, or Fish"
+  | Ok MacOS ->
+    (Stdlib.Result.Result.Ok (Stdlib.Option.withDefault (Stdlib.Cli.Env.get "SHELL") "/bin/bash"))
+    |> Stdlib.Result.andThen (fun shell ->
+      match Stdlib.String.trim shell with
+      | "/bin/zsh" -> Stdlib.Result.Result.Ok Shell.Zsh
+      | shell when shell |> Stdlib.String.contains "/bin/bash" ->
+        Stdlib.Result.Result.Ok Shell.Bash
+      | shell when shell |> Stdlib.String.contains "/fish" ->
+        Stdlib.Result.Result.Ok Shell.Fish
+      | _ ->
+        Stdlib.Result.Result.Error
+          "Unsupported shell, if you are on MacOS please use Bash, Zsh, or Fish")
 
-let getDefaultShell () : Stdlib.Result.Result<Stdlib.Cli.Shell.Shell, String> =
-    match Stdlib.Cli.OS.getOS () with
-    | Ok Linux ->
-        match Stdlib.Cli.Env.get "SHELL" with
-        | Some shell -> Stdlib.Cli.Shell.__linux shell
-        | None -> Stdlib.Cli.Shell.__linux "/bin/bash"
-    | Ok MacOS ->
-        match Stdlib.Cli.Env.get "SHELL" with
-        | Some shell -> Stdlib.Cli.Shell.__macOS shell
-        | None -> Stdlib.Cli.Shell.__macOS "/bin/bash"
-    | Ok Windows -> Ok Stdlib.Cli.Shell.Shell.PowerShell
-    | Error _ -> Error "Unsupported OS, couldn't determine default shell"
+  | Ok Windows ->
+    // TODO: Add support for Command Prompt
+    Stdlib.Result.Result.Ok Shell.PowerShell
+
+  | Error _ ->
+    Stdlib.Result.Result.Error
+      "Unsupported OS, couldn't determine default shell"

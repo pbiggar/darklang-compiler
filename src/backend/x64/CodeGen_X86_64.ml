@@ -101,7 +101,8 @@ let translateProgram (LIR.Program (functions, variantRegistry, recordRegistry))
             |> List.exists (function
               | LIR.CliNative
                   ( _,
-                    (LIR.SpawnProcess | LIR.ProcessIO | LIR.TerminateProcess),
+                    ( LIR.SpawnProcess | LIR.ProcessIO | LIR.TerminateProcess
+                    | LIR.ChildLaunch ),
                     _ ) ->
                   true
               | _ -> false)))
@@ -952,8 +953,8 @@ let translateProgram (LIR.Program (functions, variantRegistry, recordRegistry))
       @ (if needsCliGetEnvHelper then generateCliGetEnvHelper enableLeakCheck
          else [])
       @ (if needsCliProcessLifecycleHelpers then
-           generateLinuxCliSpawnProcessHelper ()
-           @ generateLinuxCliProcessLifecycleHelpers enableLeakCheck
+           generateChildLaunchHelper ()
+           @ generateChildCleanupHelper enableLeakCheck
          else [])
       @ (if needsCliRunProcessHelper then
            generateLinuxCliRunProcessHelper enableLeakCheck

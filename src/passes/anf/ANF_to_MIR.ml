@@ -325,6 +325,10 @@ let convertCliOperation (operation : ANF.cliOperation) =
   | ANF.PosixPpoll -> MIR.PosixPpoll
   | ANF.PosixPollDarwin -> MIR.PosixPollDarwin
   | ANF.PosixKqueue -> MIR.PosixKqueue
+  | ANF.ChildState -> MIR.ChildState
+  | ANF.ChildLaunch -> MIR.ChildLaunch
+  | ANF.PosixWait4 -> MIR.PosixWait4
+  | ANF.PosixFcntl -> MIR.PosixFcntl
   | ANF.PosixKeventVnode -> MIR.PosixKeventVnode
 
 (*
@@ -932,6 +936,10 @@ let cliOperationName = function
   | ANF.PosixPpoll -> "PosixPpoll"
   | ANF.PosixPollDarwin -> "PosixPollDarwin"
   | ANF.PosixKqueue -> "PosixKqueue"
+  | ANF.ChildState -> "ChildState"
+  | ANF.ChildLaunch -> "ChildLaunch"
+  | ANF.PosixWait4 -> "PosixWait4"
+  | ANF.PosixFcntl -> "PosixFcntl"
   | ANF.PosixKeventVnode -> "PosixKeventVnode"
 
 (*
@@ -1314,12 +1322,13 @@ let simpleCExprInstrs builder tempId destReg destType cexpr =
           Ok [ MIR.HeapLoad (destReg, tempToVReg tid, mulInt index 8, typ) ]
       | _ ->
           Error
-            ("Internal error: Tuple access on non-variable (ANF invariant violated) in "
-             ^ builder.funcName ^ ": "
-             ^ (match tuple with
-                | ANF.UnitLiteral -> "unit"
-                | ANF.IntLiteral n -> ANF.sizedIntToString n
-                | _ -> "literal")))
+            ("Internal error: Tuple access on non-variable (ANF invariant \
+              violated) in " ^ builder.funcName ^ ": "
+            ^
+            match tuple with
+            | ANF.UnitLiteral -> "unit"
+            | ANF.IntLiteral n -> ANF.sizedIntToString n
+            | _ -> "literal"))
   | ANF.RecordAlloc (_, fields) | ANF.RecordClone (_, _, fields) ->
       let alloc = MIR.HeapAlloc (destReg, mulInt (List.length fields) 8) in
       let+ stores = storeFields fields in

@@ -73,8 +73,7 @@ let __withCString (text: String) (fn: RawPtr -> 'a) : 'a =
     result
 
 let __bufferBytes (ptr: RawPtr) (offset: Int64) (end_: Int64) (bytes: List<Int64>) : Blob =
-    if offset >= end_ then Stdlib.Blob.__fromInt64List (Stdlib.List.reverse bytes)
-    else Stdlib.Cli.__Posix.__bufferBytes ptr (offset + 1L) end_ (Stdlib.List.push bytes (__raw_get_byte ptr offset))
+    Stdlib.Blob.__fromBuffer ptr offset (if end_ <= offset then 0L else end_ - offset)
 
 let __bufferString (ptr: RawPtr) (start: Int64) (end_: Int64) : String =
     Stdlib.String.fromBlobWithReplacement (Stdlib.Cli.__Posix.__bufferBytes ptr start end_ [])

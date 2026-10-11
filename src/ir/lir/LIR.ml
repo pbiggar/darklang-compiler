@@ -202,6 +202,10 @@ type cliOperation =
   | PosixPpoll
   | PosixPollDarwin
   | PosixKqueue
+  | ChildState
+  | ChildLaunch
+  | PosixWait4
+  | PosixFcntl
   | PosixKeventVnode
 
 (*
@@ -801,6 +805,7 @@ let analyzeFunctionCodegenFacts (func : functionDef) =
               if
                 operation = SpawnProcess || operation = ProcessIO
                 || operation = TerminateProcess
+                || operation = ChildLaunch
               then needsCliProcessLifecycleHelpers := true
           | _ -> ())
         block.instrs)

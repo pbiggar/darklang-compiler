@@ -761,6 +761,272 @@ let generateLinuxCliSpawnProcessHelper () =
   @ syscall 59L @ loadImm64 X86_64.RDI 127L @ syscall 60L
 
 (*  Communicate with process-table children and collect their final output. *)
+(* Private launch unit: argv/envp are already marshalled by the Dark adapter.
+   No output capture, user deadlines, waiting loop, or exposed fork primitive.
+   The CLOEXEC error pipe distinguishes exec failure from an exit code of 127. *)
+let generateChildLaunchHelper () =
+  let module X = X86_64 in
+  let trap n = loadImm64 X.RAX n @ [ X.SYSCALL ] in
+  let fd offset high =
+    [ X.MOV_load (X.RDI, X.RSP, offset) ]
+    @ if high then [ X.SHR_imm (X.RDI, 32) ] else [ X.MOV_reg32 (X.RDI, X.RDI) ]
+  in
+  let close offset high = fd offset high @ trap 3L in
+  let closeAll =
+    List.concat_map
+      (fun offset -> close offset false @ close offset true)
+      [ 0l; 8l; 16l; 24l ]
+  in
+  (* Keep pipe endpoints away from stdio before dup2. Otherwise a closed
+     parent stdio slot can be reused, remain CLOEXEC, then be closed twice. *)
+  let lift offset high =
+    let doneLabel = Printf.sprintf "__child_lift_%ld_%b" offset high in
+    fd offset high
+    @ [ X.CMP_imm (X.RDI, 3l); X.Jcc (X.GE, doneLabel) ]
+    @ loadImm64 X.RSI 1030L @ loadImm64 X.RDX 3L @ trap 72L
+    @ [
+        X.CMP_imm (X.RAX, 0l);
+        X.Jcc (X.LT, "__child_launch_error");
+        X.MOV_reg (X.R8, X.RAX);
+      ]
+    @ trap 3L
+    @ [ X.MOV_load (X.RDX, X.RSP, offset) ]
+    @ (if high then [ X.MOV_reg32 (X.RDX, X.RDX); X.SHL_imm (X.R8, 32) ]
+       else [ X.SHR_imm (X.RDX, 32); X.SHL_imm (X.RDX, 32) ])
+    @ [
+        X.OR_reg (X.RDX, X.R8);
+        X.MOV_store (X.RSP, offset, X.RDX);
+        X.Label doneLabel;
+      ]
+  in
+  let pipe offset =
+    [ X.LEA (X.RDI, X.RSP, offset) ]
+    @ loadImm64 X.RSI 524288L @ trap 293L
+    @ [ X.CMP_imm (X.RAX, 0l); X.Jcc (X.LT, "__child_launch_error") ]
+    @ lift offset false @ lift offset true
+  in
+  let nonblocking offset high =
+    fd offset high @ loadImm64 X.RSI 3L @ loadImm64 X.RDX 0L @ trap 72L
+    @ [
+        X.CMP_imm (X.RAX, 0l);
+        X.Jcc (X.LT, "__child_launch_kill_error");
+        X.MOV_reg (X.RDX, X.RAX);
+      ]
+    @ loadImm64 X.R11 2048L
+    @ [ X.OR_reg (X.RDX, X.R11) ]
+    @ fd offset high @ loadImm64 X.RSI 4L @ trap 72L
+    @ [ X.CMP_imm (X.RAX, 0l); X.Jcc (X.LT, "__child_launch_kill_error") ]
+  in
+  let duplicate offset high target =
+    fd offset high @ loadImm64 X.RSI target @ trap 33L
+    @ [ X.CMP_imm (X.RAX, 0l); X.Jcc (X.LT, "__child_launch_child_error") ]
+  in
+  let preserved =
+    [
+      X.RBP;
+      X.RBX;
+      X.R12;
+      X.R13;
+      X.RDI;
+      X.RSI;
+      X.RDX;
+      X.RCX;
+      X.R8;
+      X.R9;
+      X.R10;
+      X.R11;
+    ]
+  in
+  [ X.Label "__dark_child_launch" ]
+  @ List.map (fun r -> X.PUSH r) preserved
+  @ [
+      X.SUB_imm (X.RSP, 96l);
+      X.MOV_store (X.RSP, 32l, X.RDI);
+      X.MOV_store (X.RSP, 40l, X.RSI);
+      X.MOV_store (X.RSP, 48l, X.RDX);
+      X.MOV_store (X.RSP, 56l, X.RCX);
+    ]
+  @ loadImm64 X.RAX (-1L)
+  @ List.map
+      (fun offset -> X.MOV_store (X.RSP, offset, X.RAX))
+      [ 0l; 8l; 16l; 24l ]
+  @ [ X.CMP_imm (X.RDX, 0l); X.Jcc (X.NE, "__child_launch_pipes_ready") ]
+  @ pipe 0l @ pipe 8l @ pipe 16l
+  @ [ X.Label "__child_launch_pipes_ready" ]
+  @ pipe 24l @ trap 57L
+  @ [
+      X.CMP_imm (X.RAX, 0l);
+      X.Jcc (X.LT, "__child_launch_error");
+      X.Jcc (X.EQ, "__child_launch_child");
+      X.MOV_store (X.RSP, 64l, X.RAX);
+    ]
+  @ close 0l false @ close 8l true @ close 16l true @ close 24l true
+  @ [ X.Label "__child_launch_handshake" ]
+  @ fd 24l false
+  @ [ X.LEA (X.RSI, X.RSP, 72l) ]
+  @ loadImm64 X.RDX 8L @ trap 0L
+  @ [
+      X.CMP_imm (X.RAX, -4l);
+      X.Jcc (X.EQ, "__child_launch_handshake");
+      X.CMP_imm (X.RAX, 0l);
+      X.Jcc (X.LT, "__child_launch_kill_error");
+      X.Jcc (X.GT, "__child_launch_exec_error");
+    ]
+  @ close 24l false
+  @ [
+      X.MOV_load (X.RAX, X.RSP, 48l);
+      X.CMP_imm (X.RAX, 0l);
+      X.Jcc (X.NE, "__child_launch_inherited");
+    ]
+  @ nonblocking 0l true @ nonblocking 8l false @ nonblocking 16l false
+  @ [ X.MOV_load (X.RBX, X.RSP, 56l) ]
+  @ fd 0l true
+  @ [ X.MOV_store (X.RBX, 0l, X.RDI) ]
+  @ fd 8l false
+  @ [ X.MOV_store (X.RBX, 8l, X.RDI) ]
+  @ fd 16l false
+  @ [
+      X.MOV_store (X.RBX, 16l, X.RDI);
+      X.Label "__child_launch_inherited";
+      X.MOV_load (X.RAX, X.RSP, 64l);
+      X.JMP "__child_launch_return";
+      X.Label "__child_launch_exec_error";
+      X.MOV_load (X.RAX, X.RSP, 72l);
+      X.JMP "__child_launch_reap_error";
+      X.Label "__child_launch_kill_error";
+      X.MOV_store (X.RSP, 72l, X.RAX);
+      X.MOV_load (X.RDI, X.RSP, 64l);
+    ]
+  @ loadImm64 X.RSI 9L @ trap 62L
+  @ [
+      X.MOV_load (X.RAX, X.RSP, 72l);
+      X.Label "__child_launch_reap_error";
+      X.MOV_store (X.RSP, 72l, X.RAX);
+      X.Label "__child_launch_reap_retry";
+      X.MOV_load (X.RDI, X.RSP, 64l);
+      X.LEA (X.RSI, X.RSP, 80l);
+    ]
+  @ loadImm64 X.RDX 0L @ loadImm64 X.R10 0L @ trap 61L
+  @ [
+      X.CMP_imm (X.RAX, -4l);
+      X.Jcc (X.EQ, "__child_launch_reap_retry");
+      X.MOV_load (X.RAX, X.RSP, 72l);
+      X.Label "__child_launch_error";
+      X.MOV_store (X.RSP, 72l, X.RAX);
+    ]
+  @ closeAll
+  @ [
+      X.MOV_load (X.RAX, X.RSP, 72l);
+      X.Label "__child_launch_return";
+      X.ADD_imm (X.RSP, 96l);
+    ]
+  @ List.map (fun r -> X.POP r) (List.rev preserved)
+  @ [
+      X.RET;
+      X.Label "__child_launch_child";
+      X.MOV_load (X.RAX, X.RSP, 48l);
+      X.CMP_imm (X.RAX, 0l);
+      X.Jcc (X.NE, "__child_launch_exec");
+    ]
+  @ duplicate 0l false 0L @ duplicate 8l true 1L @ duplicate 16l true 2L
+  @ [ X.Label "__child_launch_exec" ]
+  @ close 0l false @ close 0l true @ close 8l false @ close 8l true
+  @ close 16l false @ close 16l true @ close 24l false
+  @ [
+      X.MOV_load (X.RSI, X.RSP, 32l);
+      X.MOV_load (X.RDI, X.RSI, 0l);
+      X.MOV_load (X.RDX, X.RSP, 40l);
+    ]
+  @ trap 59L
+  @ [ X.Label "__child_launch_child_error"; X.MOV_store (X.RSP, 72l, X.RAX) ]
+  @ fd 24l true
+  @ [ X.LEA (X.RSI, X.RSP, 72l) ]
+  @ loadImm64 X.RDX 8L @ trap 1L @ loadImm64 X.RDI 127L @ trap 60L
+
+let generateChildCleanupHelper enableLeakCheck =
+  let module X = X86_64 in
+  let trap n = loadImm64 X.RAX n @ [ X.SYSCALL ] in
+  let preserve = [ X.RAX; X.RBX; X.R12; X.RDI; X.RSI; X.RDX; X.R10; X.R11 ] in
+  let close offset =
+    let doneLabel = Printf.sprintf "__child_cleanup_closed_%ld" offset in
+    [
+      X.MOV_load (X.RDI, X.RBX, offset);
+      X.CMP_imm (X.RDI, 0l);
+      X.Jcc (X.LT, doneLabel);
+    ]
+    @ loadImm64 X.R11 (-1L)
+    @ [ X.MOV_store (X.RBX, offset, X.R11) ]
+    @ trap 3L @ [ X.Label doneLabel ]
+  in
+  let free offset =
+    let doneLabel = Printf.sprintf "__child_cleanup_freed_%ld" offset in
+    [
+      X.MOV_load (X.RDI, X.RBX, offset);
+      X.CMP_imm (X.RDI, 0l);
+      X.Jcc (X.EQ, doneLabel);
+      X.XOR_reg (X.R11, X.R11);
+      X.MOV_store (X.RBX, offset, X.R11);
+      X.SUB_imm (X.RDI, 8l);
+      X.MOV_load (X.RSI, X.RDI, 0l);
+    ]
+    @ trap 11L
+    @ (if not enableLeakCheck then []
+       else
+         [
+           X.LEA_rip (X.R11, "_leak_count");
+           X.MOV_load (X.R10, X.R11, 0l);
+           X.SUB_imm (X.R10, 1l);
+           X.MOV_store (X.R11, 0l, X.R10);
+         ])
+    @ [ X.Label doneLabel ]
+  in
+  [ X.Label "__dark_cli_cleanup_processes" ]
+  @ List.map (fun r -> X.PUSH r) preserve
+  @ [
+      X.SUB_imm (X.RSP, 16l);
+      X.MOV_imm32 (X.R12, 1l);
+      X.Label "__child_cleanup_next";
+      X.CMP_imm (X.R12, 63l);
+      X.Jcc (X.GT, "__child_cleanup_done");
+      X.LEA (X.RBX, freeListBase, Int32.of_int processTableOffset);
+      X.MOV_reg (X.R10, X.R12);
+      X.SHL_imm (X.R10, 6);
+      X.ADD_reg (X.RBX, X.R10);
+      X.MOV_load (X.RAX, X.RBX, 0l);
+      X.CMP_imm (X.RAX, 0l);
+      X.Jcc (X.EQ, "__child_cleanup_advance");
+      X.MOV_load (X.RAX, X.RBX, 40l);
+      X.CMP_imm (X.RAX, 0l);
+      X.Jcc (X.GE, "__child_cleanup_pipes");
+      X.MOV_load (X.RDI, X.RBX, 8l);
+    ]
+  @ loadImm64 X.RSI 9L @ trap 62L
+  @ [
+      X.Label "__child_cleanup_reap";
+      X.MOV_load (X.RDI, X.RBX, 8l);
+      X.MOV_reg (X.RSI, X.RSP);
+      X.XOR_reg (X.RDX, X.RDX);
+      X.XOR_reg (X.R10, X.R10);
+    ]
+  @ trap 61L
+  @ [
+      X.CMP_imm (X.RAX, -4l);
+      X.Jcc (X.EQ, "__child_cleanup_reap");
+      X.Label "__child_cleanup_pipes";
+    ]
+  @ close 16l @ close 24l @ close 32l @ free 48l @ free 56l
+  @ [
+      X.XOR_reg (X.RAX, X.RAX);
+      X.MOV_store (X.RBX, 0l, X.RAX);
+      X.Label "__child_cleanup_advance";
+      X.ADD_imm (X.R12, 1l);
+      X.JMP "__child_cleanup_next";
+      X.Label "__child_cleanup_done";
+      X.ADD_imm (X.RSP, 16l);
+    ]
+  @ List.map (fun r -> X.POP r) (List.rev preserve)
+  @ [ X.RET ]
+
 let generateLinuxCliProcessLifecycleHelpers (enableLeakCheck : bool) =
   let syscall number = loadImm64 X86_64.RAX number @ [ X86_64.SYSCALL ] in
   let leakInc count =

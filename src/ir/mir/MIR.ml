@@ -191,6 +191,10 @@ type cliOperation =
   | PosixPpoll
   | PosixPollDarwin
   | PosixKqueue
+  | ChildState
+  | ChildLaunch
+  | PosixWait4
+  | PosixFcntl
   | PosixKeventVnode
 
 (*

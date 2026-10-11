@@ -20,7 +20,7 @@ FILES = {
     "fileSystem": "FileSystem",
     "pathIO": "PathIO",
     "system": "System", "sys": "Sys",
-    "clock": "Clock",
+    "clock": "Clock", "childIO": "ChildIO", "process": "Process", "execution": "",
 }
 
 def main():
@@ -29,7 +29,7 @@ def main():
     parser.add_argument("--check", action="store_true")
     args = parser.parse_args()
     source = args.interpreter / "packages/darklang/stdlib/cli"
-    outputs = {f"StdLib/Cli/{dest}.dark": (source / f"{src}.dark").read_bytes()
+    outputs = {(f"StdLib/Cli/{dest}.dark" if dest else "StdLib/Cli.dark"): (source / f"{src}.dark").read_bytes()
                for src, dest in FILES.items()}
     filesystem = outputs["StdLib/Cli/FileSystem.dark"].decode()
     nested = re.search(r"^module FileError =\n((?:  .*\n|\n)+)", filesystem, re.MULTILINE)
@@ -54,6 +54,15 @@ def main():
             f"module Darklang.Stdlib.Cli.Posix.{name}\n\n{body.rstrip()}\n").encode()
         posix = posix[:match.start()] + posix[match.end():]
     outputs["StdLib/Cli/Posix.dark"] = posix.encode()
+    host = (source / "host.dark").read_text()
+    for name in ("OS", "Architecture", "Shell", "Host"):
+        match = re.search(rf"^module {name} =\n((?:  .*\n|\n)+)", host, re.MULTILINE)
+        if match is None:
+            raise SystemExit(f"Missing expected Cli.{name} module")
+        body = "\n".join(line[2:] if line.startswith("  ") else line
+                         for line in match.group(1).splitlines())
+        outputs[f"StdLib/Cli/{name}.dark"] = (
+            f"module Darklang.Stdlib.Cli.{name}\n\n{body.rstrip()}\n").encode()
     different = []
     for relative, content in outputs.items():
         target = ROOT / relative

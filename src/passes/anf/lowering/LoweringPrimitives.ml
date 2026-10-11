@@ -398,6 +398,10 @@ let tryCliIntrinsic name args =
         | "Darklang.Stdlib.Cli.__hostname" -> Some ANF.Hostname
         | "Builtin.__stdinState" -> Some ANF.StdinState
         | "Builtin.__startupStack" -> Some ANF.StartupStack
+        | "Builtin.__childState" -> Some ANF.ChildState
+        | "Builtin.__childLaunch" -> Some ANF.ChildLaunch
+        | "Builtin.__childWait4" -> Some ANF.PosixWait4
+        | "Builtin.__childFcntl" -> Some ANF.PosixFcntl
         | "Builtin.__executableState" -> Some ANF.ExecutableState
         | "Darklang.Stdlib.Cli.__getenv" -> Some ANF.GetEnv
         | "Darklang.Stdlib.Cli.__createExclusive" ->
@@ -461,29 +465,39 @@ let tryCliIntrinsic name args =
         | "Darklang.Stdlib.Cli.__Posix.__readlinkAt" -> Some ANF.PosixReadlinkAt
         | "Darklang.Stdlib.Cli.__Posix.__accessAt" -> Some ANF.PosixAccessAt
         | "Darklang.Stdlib.Cli.__Posix.__procInfo" -> Some ANF.PosixProcInfo
-        | "Darklang.Stdlib.Cli.__Posix.__copyFileRange" -> Some ANF.PosixCopyFileRange
+        | "Darklang.Stdlib.Cli.__Posix.__copyFileRange" ->
+            Some ANF.PosixCopyFileRange
         | "Darklang.Stdlib.Cli.__Posix.__ftruncate" -> Some ANF.PosixFtruncate
         | "Darklang.Stdlib.Cli.__Posix.__fchmod" -> Some ANF.PosixFchmod
         | "Darklang.Stdlib.Cli.__Posix.__fsync" -> Some ANF.PosixFsync
         | "Darklang.Stdlib.Cli.__Posix.__fstat" -> Some ANF.PosixFstat
         | "Darklang.Stdlib.Cli.__Posix.__pread" -> Some ANF.PosixPread
         | "Darklang.Stdlib.Cli.__Posix.__pwrite" -> Some ANF.PosixPwrite
-        | "Darklang.Stdlib.Cli.__Posix.__fclonefileat" -> Some ANF.PosixFclonefileat
+        | "Darklang.Stdlib.Cli.__Posix.__fclonefileat" ->
+            Some ANF.PosixFclonefileat
         | "Darklang.Stdlib.Cli.__Posix.__getentropy" -> Some ANF.PosixGetentropy
         | "Darklang.Stdlib.Cli.__Posix.__uname" -> Some ANF.PosixUname
         | "Darklang.Stdlib.Cli.__Posix.__sysctl" -> Some ANF.PosixSysctl
-        | "Darklang.Stdlib.Cli.__Posix.__schedGetaffinity" -> Some ANF.PosixSchedGetaffinity
-        | "Darklang.Stdlib.Cli.__Posix.__fcntlGetPath" -> Some ANF.PosixFcntlGetPath
-        | "Darklang.Stdlib.Cli.__Posix.__clockGettime" -> Some ANF.PosixClockGettime
-        | "Darklang.Stdlib.Cli.__Posix.__inotifyInit1" -> Some ANF.PosixInotifyInit1
-        | "Darklang.Stdlib.Cli.__Posix.__inotifyAddWatch" -> Some ANF.PosixInotifyAddWatch
+        | "Darklang.Stdlib.Cli.__Posix.__schedGetaffinity" ->
+            Some ANF.PosixSchedGetaffinity
+        | "Darklang.Stdlib.Cli.__Posix.__fcntlGetPath" ->
+            Some ANF.PosixFcntlGetPath
+        | "Darklang.Stdlib.Cli.__Posix.__clockGettime" ->
+            Some ANF.PosixClockGettime
+        | "Darklang.Stdlib.Cli.__Posix.__inotifyInit1" ->
+            Some ANF.PosixInotifyInit1
+        | "Darklang.Stdlib.Cli.__Posix.__inotifyAddWatch" ->
+            Some ANF.PosixInotifyAddWatch
         | "Darklang.Stdlib.Cli.__Posix.__ppoll" -> Some ANF.PosixPpoll
         | "Darklang.Stdlib.Cli.__Posix.__pollDarwin" -> Some ANF.PosixPollDarwin
         | "Darklang.Stdlib.Cli.__Posix.__kqueue" -> Some ANF.PosixKqueue
-        | "Darklang.Stdlib.Cli.__Posix.__keventVnode" -> Some ANF.PosixKeventVnode
-        | "Darklang.Stdlib.Cli.__Posix.__gettimeofday" -> Some ANF.PosixGettimeofday
+        | "Darklang.Stdlib.Cli.__Posix.__keventVnode" ->
+            Some ANF.PosixKeventVnode
+        | "Darklang.Stdlib.Cli.__Posix.__gettimeofday" ->
+            Some ANF.PosixGettimeofday
         | "Darklang.Stdlib.Cli.__Posix.__nanosleep" -> Some ANF.PosixNanosleep
-        | "Darklang.Stdlib.Cli.__Posix.__machTimebaseInfo" -> Some ANF.PosixMachTimebaseInfo
+        | "Darklang.Stdlib.Cli.__Posix.__machTimebaseInfo" ->
+            Some ANF.PosixMachTimebaseInfo
         | "Darklang.Stdlib.Cli.__Posix.__ioctlValue" -> Some ANF.PosixIoctl
         | "Darklang.Stdlib.Cli.__Posix.__flock" -> Some ANF.PosixFlock
         | "Darklang.Stdlib.Cli.__Posix.__getDents" -> Some ANF.PosixGetDents
@@ -794,7 +808,9 @@ let tryRawMemoryIntrinsic resolve sumNames name arguments =
       [ value ] ) ->
       Some (ANF.TypedAtom (value, AST.TInternalRawPtr))
   | "__rawptr_to_int", [ value ] -> Some (ANF.TypedAtom (value, AST.TInt))
-  | "__word_to_rawptr", [ value ] -> Some (ANF.TypedAtom (value, AST.TInternalRawPtr))
+  | "__word_to_rawptr", [ value ] ->
+      Some (ANF.TypedAtom (value, AST.TInternalRawPtr))
+  | "__rawptr_to_word", [ value ] -> Some (ANF.TypedAtom (value, AST.TInt64))
   | "__rawptr_to_int128", [ value ] -> Some (ANF.RawPtrToInt128 value)
   | "__rawptr_to_uint128", [ value ] -> Some (ANF.RawPtrToUInt128 value)
   | "__string_concat_raw", [ left; right ] ->

@@ -175,6 +175,10 @@ let cliOperation = function
   | ANF.PosixPpoll -> "PosixPpoll"
   | ANF.PosixPollDarwin -> "PosixPollDarwin"
   | ANF.PosixKqueue -> "PosixKqueue"
+  | ANF.ChildState -> "ChildState"
+  | ANF.ChildLaunch -> "ChildLaunch"
+  | ANF.PosixWait4 -> "PosixWait4"
+  | ANF.PosixFcntl -> "PosixFcntl"
   | ANF.PosixKeventVnode -> "PosixKeventVnode"
 
 (*

@@ -743,10 +743,7 @@ let generatePreparedARM64WithOptionsAndCache target options
   convertedFunctionChunks
   |> Result.map (fun functionChunks ->
       let functionChunks =
-        if
-          needsCliProcessLifecycleHelpers
-          && ARM64.targetOS target = Platform.Linux
-        then
+        if needsCliProcessLifecycleHelpers then
           List.map
             (fun chunk ->
               let containsStartEpilogue =
@@ -1156,15 +1153,11 @@ let generatePreparedARM64WithOptionsAndCache target options
         in
         let cliHelpers =
           cliArgvHelpers
-          @ (if
-               needsCliProcessLifecycleHelpers
-               && ARM64.targetOS target = Platform.Linux
-             then generateLinuxCliSpawnProcessHelper ()
+          @ (if needsCliProcessLifecycleHelpers then
+               generateChildLaunchHelper target
              else [])
-          @ (if
-               needsCliProcessLifecycleHelpers
-               && ARM64.targetOS target = Platform.Linux
-             then generateLinuxCliProcessLifecycleHelpers ctx
+          @ (if needsCliProcessLifecycleHelpers then
+               generateChildCleanupHelper ctx
              else [])
           @ (if
                needsCliRunProcessHelper

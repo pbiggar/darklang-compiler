@@ -1,47 +1,43 @@
-// Stdlib.Cli.Execution - shell execution and canonical execution outcomes.
-
 module Darklang.Stdlib.Cli
 
-type ExecutionOutcome = { exitCode: Int, stdout: String, stderr: String }
-type __NativeOutput = { exitCode: Int64, stdout: String, stderr: String }
-type __NativePosixError = { errno: Int64, message: String }
-type __NativeProcessRequest = { mode: Int64, argv: String, cwd: String, environment: String, timeoutMs: Int64, pipelineArgv: String }
-type __NativeProcessOutput = { errno: Int64, exitCode: Int64, stdout: String, stderr: String, timedOut: Bool }
 
-// Replaced by the native CLI effect during AST-to-ANF conversion.
-let __execute (command: String) : Stdlib.Cli.__NativeOutput =
-    Stdlib.Cli.__NativeOutput { exitCode = -1L, stdout = "", stderr = "native CLI execution unavailable" }
-let __runProcess (request: Stdlib.Cli.__NativeProcessRequest) : Stdlib.Cli.__NativeProcessOutput =
-    Stdlib.Cli.__NativeProcessOutput { errno = 38L, exitCode = -1L, stdout = "", stderr = "native process execution unavailable", timedOut = false }
+/// The result of running a command in the CLI, typically with `Cli.execute`
+type ExecutionOutcome =
+  { exitCode: Int
 
-let __hostOSCode () : Int64 = -1L
-let __hostArchitectureCode () : Int64 = -1L
-let __hostname () : Stdlib.Result.Result<String, Stdlib.Cli.__NativePosixError> = Error (Stdlib.Cli.__NativePosixError { errno = -1L, message = "native hostname unavailable" })
-let __getenv (name: String) : Stdlib.Option.Option<String> = Stdlib.Option.Option.None
-let __createExclusive (path: String) : Int64 = 38L
-let __environmentPacked () : String = ""
-let __argv (index: Int64) : Stdlib.Option.Option<String> = Stdlib.Option.Option.None
-let __kill (pid: Int64) (signal: Int64) : Stdlib.Result.Result<Unit, Stdlib.Cli.__NativePosixError> = Ok (())
-let __sleep (delayMs: Float) : Unit = ()
-let __getpid () : Int64 = 0L
-let __getuid () : Int64 = 0L
-let __cpuCount () : Int64 = 1L
-let __spawnProcess (command: String) : Int64 = -1L
-let __processIO (handle: Int64) (input: String) : Stdlib.Cli.__NativeOutput = Stdlib.Cli.__NativeOutput { exitCode = -1L, stdout = "", stderr = "Invalid process handle" }
-let __terminateProcess (handle: Int64) : Stdlib.Cli.__NativeOutput = Stdlib.Cli.__NativeOutput { exitCode = -1L, stdout = "", stderr = "Invalid process handle" }
+    // TODO bytes, not strings -- see internal note in Process.fs
+    stdout: String
+    stderr: String }
 
-let execute (command: String) : Stdlib.Cli.ExecutionOutcome =
-    let result = Stdlib.Cli.__execute command in
-    Stdlib.Cli.ExecutionOutcome {
-        exitCode = Stdlib.Int.fromInt64 result.exitCode,
-        stdout = result.stdout,
-        stderr = result.stderr
-    }
 
-let executeWithUnitOrStdErr (command: String) : Stdlib.Result.Result<Unit, String> =
-    let result = Stdlib.Cli.execute command in
-    if result.exitCode == 0 then Ok (()) else Error result.stderr
+/// Execute a command in the CLI (i.e. `Cli.execute "ls ."`)
+let execute (command: String) : ExecutionOutcome =
+  Process.executionOutcome (ChildIO.run "/bin/sh" ["-c", command] Stdlib.Option.Option.None)
 
-let executeWithStdOutOrStdErr (command: String) : Stdlib.Result.Result<String, String> =
-    let result = Stdlib.Cli.execute command in
-    if result.exitCode == 0 then Ok result.stdout else Error result.stderr
+
+/// Execute a command in the CLI,
+/// returning `Unit` if exit code 0
+/// , or a `String` of stderr if not
+let executeWithUnitOrStdErr
+  (command: String)
+  : Stdlib.Result.Result<Unit, String> =
+  let result = execute command
+
+  if result.exitCode == 0 then
+    Stdlib.Result.Result.Ok()
+  else
+    Stdlib.Result.Result.Error result.stderr
+
+
+/// Execute a command in the CLI,
+/// returning `String` of stdout if exit code 0
+/// or `String` of stderr if not
+let executeWithStdOutOrStdErr
+  (command: String)
+  : Stdlib.Result.Result<String, String> =
+  let result = execute command
+
+  if result.exitCode == 0 then
+    Stdlib.Result.Result.Ok result.stdout
+  else
+    Stdlib.Result.Result.Error result.stderr

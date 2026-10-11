@@ -15,7 +15,8 @@ The rows follow `library-sources.list` declaration order.
 The kernel-library migration is described in [kernel-stdlib.md](kernel-stdlib.md).
 Its native Builtin adapters are `Builtin/__Syscall.dark`, `__Runtime.dark`,
 `__KernelRecords.dark`, `__FileSyscall.dark`, `__PathSyscall.dark`,
-`__SystemSyscall.dark`, `__ClockSyscall.dark`, and `__WatchSyscall.dark`; shared Dark
+`__SystemSyscall.dark`, `__ClockSyscall.dark`, `__WatchSyscall.dark`, and
+`__ChildRuntime.dark`; shared Dark
 algorithms are checked by `scripts/sync-kernel-stdlib.py`.
 
 A `__` filename marks compiler support or a private implementation fragment.
@@ -59,6 +60,7 @@ fragments use `__` even where the interpreter also has private helpers.
 | `StdLib/Builtin/__Stdin.dark` | `Builtin` | Interpreter stdin builtin wrappers (`backend/src/Builtins/Builtins.Cli/Libs/Stdin.fs`) |
 | `StdLib/Builtin/__ClockSyscall.dark` | `Builtin` | One-shot clock/sleep kernel adapters and raw event-loop runtime inputs |
 | `StdLib/Builtin/__WatchSyscall.dark` | `Builtin` | Single-call event queue registration and pollfd ABI adaptation |
+| `StdLib/Builtin/__ChildRuntime.dark` | `Builtin` | Owned argv launch, supervision and opaque child byte cells |
 | `StdLib/Cli/FileWatch.dark` | `Darklang.Stdlib.Cli.FileWatch` | Shared event decoding, rearming and callback orchestration |
 | `StdLib/Cli/Clock.dark` | `Darklang.Stdlib.Cli.Clock` | Shared clock decoding/scaling and interrupted-sleep retries |
 | `StdLib/Builtin/__BuildInfo.dark` | `Builtin` | Compiler revision substituted at build time, corresponding to interpreter `getBuildHash` (`backend/src/Builtins/Builtins.Cli/Libs/Environment.fs`) |
@@ -301,6 +303,8 @@ fragments use `__` even where the interpreter also has private helpers.
 | `StdLib/Cli/Env.dark` | `Darklang.Stdlib.Cli.Env`  | `packages/darklang/stdlib/cli/env.dark` |
 | `StdLib/Cli/__Args.dark` | `Darklang.Stdlib.Cli.__Args`  | Compiler positional CLI argument helpers |
 | `StdLib/Cli/Process.dark` | `Darklang.Stdlib.Cli.Process`  | `packages/darklang/stdlib/cli/process.dark` |
+| `StdLib/Cli/ChildIO.dark` | `Darklang.Stdlib.Cli.ChildIO` | `packages/darklang/stdlib/cli/childIO.dark` |
+| `StdLib/Cli/__NativeRuntime.dark` | `Darklang.Stdlib.Cli` | Private native startup/environment/kernel prototypes |
 | `StdLib/Cli/Sys.dark` | `Darklang.Stdlib.Cli.Sys`  | `packages/darklang/stdlib/cli/sys.dark` |
 | `StdLib/Cli/Stdin/Key.dark` | `Darklang.Stdlib.Cli.Stdin.Key`  | `packages/darklang/stdlib/cli/stdin.dark` |
 | `StdLib/Cli/Stdin/Modifiers.dark` | `Darklang.Stdlib.Cli.Stdin.Modifiers`  | `packages/darklang/stdlib/cli/stdin.dark` |

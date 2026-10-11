@@ -1,0 +1,9 @@
+Builtin.runtimeChildPoll (-1) = Error 9
+Builtin.runtimeChildKill (-1) = Error 9
+Builtin.runtimeChildClose (-1) = Error 9
+Builtin.runtimeChildDescriptors (-1) = Error 9
+(match Builtin.runtimeChildStart "/bin/sh" ["-c", "exit 7"] true with | Error _ -> false | Ok child -> let _ = Stdlib.Cli.Clock.sleepMilliseconds 100.0 in let result = Builtin.runtimeChildPoll child in let _ = Builtin.runtimeChildClose child in result == Ok (Some 7)) = true
+// Capturing large output must not expand every byte into an intermediate list.
+let outcome = Stdlib.Cli.execute "head -c 100000 /dev/zero; head -c 100000 /dev/zero >&2" in (Stdlib.String.length outcome.stdout, Stdlib.String.length outcome.stderr) = (100000, 100000)
+// Pipe allocation must work even when the launching process has closed stdin.
+let _ = Builtin.syscallClose 0 in match Stdlib.Cli.Process.run "/bin/cat" [] with | Ok output -> (output.exitCode, output.stdout, output.stderr) | Error error -> (-1, "", error.message) = (0, "", "") isolated=true

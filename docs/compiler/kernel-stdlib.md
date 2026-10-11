@@ -45,6 +45,22 @@ Linux held-inode registration fails closed without real procfs; the public file
 watch then retains its checked polling fallback. This VM cannot validate that
 held-inode event path or execute Darwin code.
 
-Remaining migration work includes non-fork process I/O, removal of superseded
-host algorithms, cross-platform execution verification, and final regression and
-performance gates. Checkpoints on this branch are not a completed release.
+Process capture, partial writes, simultaneous stdout/stderr draining, output
+limits, deadlines, UTF-8 conversion, and interactive history now live in shared
+`Cli.ChildIO` and `Cli.Process`. The runtime leaves launch argv directly, expose
+owned pipe descriptors, supervise only their own child, and own two opaque byte
+cells. They do not implement capture loops or text decoding. Closing resources
+is always permitted for cleanup; other uses recheck retained process authority.
+Child waiting releases the ownership lease before blocking so cleanup can kill
+and unblock it. Execution teardown disposes unreleased handles and byte cells.
+
+The interpreter uses .NET's process supervisor, never raw waitpid on its children.
+The compiler's private launch adapter performs pipe/CLOEXEC/exec-error-handshake
+setup and reaping, without exposing fork. Pipe endpoints are lifted above stdio
+before duplication, including when the parent starts with closed stdio slots.
+Darwin and Linux launch adapters are generated; Darwin execution remains untested
+in this Linux VM. Windows/browser captured processes are explicitly unsupported.
+
+Remaining work includes retirement of unreachable legacy compiler effects,
+cross-platform execution verification, and final regression and performance
+gates. Checkpoints on this branch are not a completed release.

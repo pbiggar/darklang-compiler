@@ -548,23 +548,28 @@ let emitCliNative (ctx : codeGenContext) (dest : LIR.reg)
       | LIR.PosixChmodAt | LIR.PosixChmodAt2 | LIR.PosixUtimesAt
       | LIR.PosixSetAttributesAt | LIR.PosixSymlinkAt | LIR.PosixReadlinkAt
       | LIR.PosixAccessAt | LIR.PosixFlock | LIR.PosixGetDents | LIR.PosixIoctl
-      | LIR.PosixProcInfo
-      | LIR.PosixCopyFileRange
-      | LIR.PosixFtruncate
-      | LIR.PosixFchmod
-      | LIR.PosixFsync
-      | LIR.PosixFstat
-      | LIR.PosixPread
-      | LIR.PosixPwrite
-      | LIR.PosixFclonefileat
-      | LIR.PosixGetentropy
-      | LIR.PosixUname | LIR.PosixSysctl | LIR.PosixSchedGetaffinity | LIR.PosixFcntlGetPath
-      | LIR.PosixClockGettime | LIR.PosixGettimeofday | LIR.PosixNanosleep | LIR.PosixMachTimebaseInfo
-      | LIR.PosixInotifyInit1 | LIR.PosixInotifyAddWatch | LIR.PosixPpoll | LIR.PosixPollDarwin
-      | LIR.PosixKqueue | LIR.PosixKeventVnode
-      -> (
+      | LIR.PosixProcInfo | LIR.PosixCopyFileRange | LIR.PosixFtruncate
+      | LIR.PosixFchmod | LIR.PosixFsync | LIR.PosixFstat | LIR.PosixPread
+      | LIR.PosixPwrite | LIR.PosixFclonefileat | LIR.PosixGetentropy
+      | LIR.PosixUname | LIR.PosixSysctl | LIR.PosixSchedGetaffinity
+      | LIR.PosixFcntlGetPath | LIR.PosixClockGettime | LIR.PosixGettimeofday
+      | LIR.PosixNanosleep | LIR.PosixMachTimebaseInfo | LIR.PosixInotifyInit1
+      | LIR.PosixInotifyAddWatch | LIR.PosixPpoll | LIR.PosixPollDarwin
+      | LIR.PosixKqueue | LIR.PosixKeventVnode | LIR.PosixWait4 | LIR.PosixFcntl
+      | LIR.ChildLaunch -> (
           let number, arity =
             match operation with
+            | LIR.ChildLaunch -> (Some 0, 4)
+            | LIR.PosixWait4 ->
+                ( Some
+                    (if ARM64.targetOS ctx.target = Platform.Linux then 260
+                     else 7),
+                  4 )
+            | LIR.PosixFcntl ->
+                ( Some
+                    (if ARM64.targetOS ctx.target = Platform.Linux then 25
+                     else 92),
+                  3 )
             | LIR.PosixOpenAt ->
                 ( (match ARM64.targetOS ctx.target with
                   | Platform.Linux -> Some 56
@@ -676,97 +681,120 @@ let emitCliNative (ctx : codeGenContext) (dest : LIR.reg)
                   | Platform.MacOS -> Some 344),
                   4 )
             | LIR.PosixCopyFileRange ->
-                ((match ARM64.targetOS ctx.target with
+                ( (match ARM64.targetOS ctx.target with
                   | Platform.Linux -> Some 285
-                  | Platform.MacOS -> None), 6)
+                  | Platform.MacOS -> None),
+                  6 )
             | LIR.PosixFtruncate ->
-                ((match ARM64.targetOS ctx.target with
+                ( (match ARM64.targetOS ctx.target with
                   | Platform.Linux -> Some 46
-                  | Platform.MacOS -> Some 153), 2)
+                  | Platform.MacOS -> Some 153),
+                  2 )
             | LIR.PosixFchmod ->
-                ((match ARM64.targetOS ctx.target with
+                ( (match ARM64.targetOS ctx.target with
                   | Platform.Linux -> Some 52
-                  | Platform.MacOS -> Some 94), 2)
+                  | Platform.MacOS -> Some 94),
+                  2 )
             | LIR.PosixFsync ->
-                ((match ARM64.targetOS ctx.target with
+                ( (match ARM64.targetOS ctx.target with
                   | Platform.Linux -> Some 82
-                  | Platform.MacOS -> Some 95), 1)
+                  | Platform.MacOS -> Some 95),
+                  1 )
             | LIR.PosixFstat ->
-                ((match ARM64.targetOS ctx.target with
+                ( (match ARM64.targetOS ctx.target with
                   | Platform.Linux -> Some 80
-                  | Platform.MacOS -> Some 189), 2)
+                  | Platform.MacOS -> Some 189),
+                  2 )
             | LIR.PosixPread ->
-                ((match ARM64.targetOS ctx.target with
+                ( (match ARM64.targetOS ctx.target with
                   | Platform.Linux -> Some 67
-                  | Platform.MacOS -> Some 197), 4)
+                  | Platform.MacOS -> Some 197),
+                  4 )
             | LIR.PosixPwrite ->
-                ((match ARM64.targetOS ctx.target with
+                ( (match ARM64.targetOS ctx.target with
                   | Platform.Linux -> Some 68
-                  | Platform.MacOS -> Some 198), 4)
+                  | Platform.MacOS -> Some 198),
+                  4 )
             | LIR.PosixFclonefileat ->
-                ((match ARM64.targetOS ctx.target with
+                ( (match ARM64.targetOS ctx.target with
                   | Platform.Linux -> None
-                  | Platform.MacOS -> Some 517), 4)
+                  | Platform.MacOS -> Some 517),
+                  4 )
             | LIR.PosixGetentropy ->
-                ((match ARM64.targetOS ctx.target with
+                ( (match ARM64.targetOS ctx.target with
                   | Platform.Linux -> Some 278
-                  | Platform.MacOS -> Some 500), 3)
+                  | Platform.MacOS -> Some 500),
+                  3 )
             | LIR.PosixUname ->
-                ((match ARM64.targetOS ctx.target with
+                ( (match ARM64.targetOS ctx.target with
                   | Platform.Linux -> Some 160
-                  | Platform.MacOS -> None), 1)
+                  | Platform.MacOS -> None),
+                  1 )
             | LIR.PosixSysctl ->
-                ((match ARM64.targetOS ctx.target with
+                ( (match ARM64.targetOS ctx.target with
                   | Platform.Linux -> None
-                  | Platform.MacOS -> Some 202), 6)
+                  | Platform.MacOS -> Some 202),
+                  6 )
             | LIR.PosixSchedGetaffinity ->
-                ((match ARM64.targetOS ctx.target with
+                ( (match ARM64.targetOS ctx.target with
                   | Platform.Linux -> Some 123
-                  | Platform.MacOS -> None), 3)
+                  | Platform.MacOS -> None),
+                  3 )
             | LIR.PosixFcntlGetPath ->
-                ((match ARM64.targetOS ctx.target with
+                ( (match ARM64.targetOS ctx.target with
                   | Platform.Linux -> None
-                  | Platform.MacOS -> Some 92), 3)
+                  | Platform.MacOS -> Some 92),
+                  3 )
             | LIR.PosixClockGettime ->
-                ((match ARM64.targetOS ctx.target with
+                ( (match ARM64.targetOS ctx.target with
                   | Platform.Linux -> Some 113
-                  | Platform.MacOS -> None), 2)
+                  | Platform.MacOS -> None),
+                  2 )
             | LIR.PosixGettimeofday ->
-                ((match ARM64.targetOS ctx.target with
+                ( (match ARM64.targetOS ctx.target with
                   | Platform.Linux -> Some 169
-                  | Platform.MacOS -> Some 116), 3)
+                  | Platform.MacOS -> Some 116),
+                  3 )
             | LIR.PosixNanosleep ->
-                ((match ARM64.targetOS ctx.target with
+                ( (match ARM64.targetOS ctx.target with
                   | Platform.Linux -> Some 101
-                  | Platform.MacOS -> Some 240), 2)
+                  | Platform.MacOS -> Some 240),
+                  2 )
             | LIR.PosixMachTimebaseInfo ->
-                ((match ARM64.targetOS ctx.target with
+                ( (match ARM64.targetOS ctx.target with
                   | Platform.Linux -> None
-                  | Platform.MacOS -> Some (-89)), 1)
+                  | Platform.MacOS -> Some (-89)),
+                  1 )
             | LIR.PosixInotifyInit1 ->
-                ((match ARM64.targetOS ctx.target with
+                ( (match ARM64.targetOS ctx.target with
                   | Platform.Linux -> Some 26
-                  | Platform.MacOS -> None), 1)
+                  | Platform.MacOS -> None),
+                  1 )
             | LIR.PosixInotifyAddWatch ->
-                ((match ARM64.targetOS ctx.target with
+                ( (match ARM64.targetOS ctx.target with
                   | Platform.Linux -> Some 27
-                  | Platform.MacOS -> None), 3)
+                  | Platform.MacOS -> None),
+                  3 )
             | LIR.PosixPpoll ->
-                ((match ARM64.targetOS ctx.target with
+                ( (match ARM64.targetOS ctx.target with
                   | Platform.Linux -> Some 73
-                  | Platform.MacOS -> None), 5)
+                  | Platform.MacOS -> None),
+                  5 )
             | LIR.PosixPollDarwin ->
-                ((match ARM64.targetOS ctx.target with
+                ( (match ARM64.targetOS ctx.target with
                   | Platform.Linux -> None
-                  | Platform.MacOS -> Some 230), 3)
+                  | Platform.MacOS -> Some 230),
+                  3 )
             | LIR.PosixKqueue ->
-                ((match ARM64.targetOS ctx.target with
+                ( (match ARM64.targetOS ctx.target with
                   | Platform.Linux -> None
-                  | Platform.MacOS -> Some 362), 0)
+                  | Platform.MacOS -> Some 362),
+                  0 )
             | LIR.PosixKeventVnode ->
-                ((match ARM64.targetOS ctx.target with
+                ( (match ARM64.targetOS ctx.target with
                   | Platform.Linux -> None
-                  | Platform.MacOS -> Some 363), 6)
+                  | Platform.MacOS -> Some 363),
+                  6 )
             | _ -> Crash.crash "Non-POSIX operation in POSIX lowering"
           in
           if List.length args <> arity then
@@ -774,13 +802,15 @@ let emitCliNative (ctx : codeGenContext) (dest : LIR.reg)
           else
             match number with
             | None ->
-                let errno = match ARM64.targetOS ctx.target with
+                let errno =
+                  match ARM64.targetOS ctx.target with
                   | Platform.Linux -> -38L
-                  | Platform.MacOS -> -78L in
+                  | Platform.MacOS -> -78L
+                in
                 Ok (loadImmediate destReg errno)
             | Some number ->
                 args
-                |> List.mapi (fun index operand -> index, operand)
+                |> List.mapi (fun index operand -> (index, operand))
                 |> List.fold_left
                      (fun result (index, operand) ->
                        result
@@ -788,10 +818,17 @@ let emitCliNative (ctx : codeGenContext) (dest : LIR.reg)
                            let next =
                              match operand with
                              | LIR.Reg source ->
-                                 lirRegToARM64Reg source |> bind (fun sourceReg ->
-                                   if sourceReg = Symbolic.X9 then
-                                     Ok [ Symbolic.LDR (Symbolic.X9, Symbolic.SP, index * 16) ]
-                                   else loadCliOperand Symbolic.X9 operand)
+                                 lirRegToARM64Reg source
+                                 |> bind (fun sourceReg ->
+                                     if sourceReg = Symbolic.X9 then
+                                       Ok
+                                         [
+                                           Symbolic.LDR
+                                             ( Symbolic.X9,
+                                               Symbolic.SP,
+                                               index * 16 );
+                                         ]
+                                     else loadCliOperand Symbolic.X9 operand)
                              | _ -> loadCliOperand Symbolic.X9 operand
                            in
                            next
@@ -802,8 +839,11 @@ let emitCliNative (ctx : codeGenContext) (dest : LIR.reg)
                                      (Symbolic.SP, Symbolic.SP, 16);
                                    Symbolic.STR (Symbolic.X9, Symbolic.SP, 0);
                                  ])))
-                     (Ok [ Symbolic.SUB_imm (Symbolic.SP, Symbolic.SP, 16);
-                           Symbolic.STR (Symbolic.X9, Symbolic.SP, 0) ])
+                     (Ok
+                        [
+                          Symbolic.SUB_imm (Symbolic.SP, Symbolic.SP, 16);
+                          Symbolic.STR (Symbolic.X9, Symbolic.SP, 0);
+                        ])
                 |> Result.map (fun loads ->
                     let targets =
                       [
@@ -822,9 +862,10 @@ let emitCliNative (ctx : codeGenContext) (dest : LIR.reg)
                         ctx.instructionSite
                     in
                     let normalize =
-                      match ARM64.targetOS ctx.target with
-                      | Platform.Linux -> []
-                      | Platform.MacOS ->
+                      match (operation, ARM64.targetOS ctx.target) with
+                      | LIR.ChildLaunch, _ -> []
+                      | _, Platform.Linux -> []
+                      | _, Platform.MacOS ->
                           [
                             Symbolic.B_cond_label (Symbolic.LO, doneLabel);
                             Symbolic.NEG (Symbolic.X0, Symbolic.X0);
@@ -838,11 +879,15 @@ let emitCliNative (ctx : codeGenContext) (dest : LIR.reg)
                             Symbolic.LDR (reg, Symbolic.SP, 0);
                             Symbolic.ADD_imm (Symbolic.SP, Symbolic.SP, 16);
                           ]))
-                    @ [
-                        Symbolic.ADD_imm (Symbolic.SP, Symbolic.SP, 16);
-                        Symbolic.MOVZ (syscall.ARM64.syscallRegister, number, 0);
-                        Symbolic.SVC syscall.ARM64.svcImmediate;
-                      ]
+                    @ [ Symbolic.ADD_imm (Symbolic.SP, Symbolic.SP, 16) ]
+                    @ (if operation = LIR.ChildLaunch then
+                         [ Symbolic.BL "__dark_child_launch" ]
+                       else
+                         [
+                           Symbolic.MOVZ
+                             (syscall.ARM64.syscallRegister, number, 0);
+                           Symbolic.SVC syscall.ARM64.svcImmediate;
+                         ])
                     @ normalize
                     @ [ Symbolic.MOV_reg (destReg, Symbolic.X0) ]))
       | LIR.HostOS ->
@@ -999,6 +1044,10 @@ let emitCliNative (ctx : codeGenContext) (dest : LIR.reg)
             ]
       | LIR.ExecutableState ->
           Ok [ Symbolic.ADD_imm (destReg, Symbolic.X27, 256 + 512) ]
+      | LIR.ChildState ->
+          Ok
+            (loadImmediate destReg 8960L
+            @ [ Symbolic.ADD_reg (destReg, Symbolic.X27, destReg) ])
       | LIR.GetPid | LIR.GetUid ->
           let os = ARM64.targetOS ctx.target in
           let number =

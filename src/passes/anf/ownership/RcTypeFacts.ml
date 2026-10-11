@@ -299,7 +299,7 @@ let inferCExprType ctx expr =
       | A.Hostname -> posix AST.TString
       | A.GetEnvironmentPacked | A.DirectoryCurrent | A.DirectoryListPacked ->
           Some AST.TString
-      | A.StdinState | A.StartupStack | A.ExecutableState ->
+      | A.StdinState | A.StartupStack | A.ExecutableState | A.ChildState ->
           Some AST.TInternalRawPtr
       | A.FileIsDirectory -> Some AST.TBool
       | A.HostOS | A.HostArchitecture | A.GetPid | A.GetUid | A.CpuCount
@@ -316,31 +316,14 @@ let inferCExprType ctx expr =
       | A.PosixChmodAt | A.PosixChmodAt2 | A.PosixUtimesAt
       | A.PosixSetAttributesAt | A.PosixSymlinkAt | A.PosixReadlinkAt
       | A.PosixAccessAt | A.PosixFlock | A.PosixGetDents | A.PosixIoctl
-      | A.PosixProcInfo
-      | A.PosixCopyFileRange
-      | A.PosixFtruncate
-      | A.PosixFchmod
-      | A.PosixFsync
-      | A.PosixFstat
-      | A.PosixPread
-      | A.PosixPwrite
-      | A.PosixFclonefileat
-      | A.PosixGetentropy
-      | A.PosixUname
-      | A.PosixSysctl
-      | A.PosixSchedGetaffinity
-      | A.PosixFcntlGetPath
-      | A.PosixClockGettime
-      | A.PosixGettimeofday
-      | A.PosixNanosleep
-      | A.PosixMachTimebaseInfo
-      | A.PosixInotifyInit1
-      | A.PosixInotifyAddWatch
-      | A.PosixPpoll
-      | A.PosixPollDarwin
-      | A.PosixKqueue
-      | A.PosixKeventVnode
-      ->
+      | A.PosixProcInfo | A.PosixCopyFileRange | A.PosixFtruncate
+      | A.PosixFchmod | A.PosixFsync | A.PosixFstat | A.PosixPread
+      | A.PosixPwrite | A.PosixFclonefileat | A.PosixGetentropy | A.PosixUname
+      | A.PosixSysctl | A.PosixSchedGetaffinity | A.PosixFcntlGetPath
+      | A.PosixClockGettime | A.PosixGettimeofday | A.PosixNanosleep
+      | A.PosixMachTimebaseInfo | A.PosixInotifyInit1 | A.PosixInotifyAddWatch
+      | A.PosixPpoll | A.PosixPollDarwin | A.PosixKqueue | A.ChildLaunch
+      | A.PosixWait4 | A.PosixFcntl | A.PosixKeventVnode ->
           Some AST.TInt64)
   | A.IfValue (_, yes, _) -> atom yes
   | A.BorrowedCall (func, [ value ])

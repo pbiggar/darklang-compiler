@@ -105,6 +105,10 @@ let convertCliOperation operation =
   | MIR.PosixPpoll -> LIR.PosixPpoll
   | MIR.PosixPollDarwin -> LIR.PosixPollDarwin
   | MIR.PosixKqueue -> LIR.PosixKqueue
+  | MIR.ChildState -> LIR.ChildState
+  | MIR.ChildLaunch -> LIR.ChildLaunch
+  | MIR.PosixWait4 -> LIR.PosixWait4
+  | MIR.PosixFcntl -> LIR.PosixFcntl
   | MIR.PosixKeventVnode -> LIR.PosixKeventVnode
 
 [@@@warning "-4"]

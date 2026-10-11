@@ -30,6 +30,7 @@ StdLib/Builtin/__FileSyscall.dark
 StdLib/Builtin/__SystemSyscall.dark
 StdLib/Builtin/__ClockSyscall.dark
 StdLib/Builtin/__WatchSyscall.dark
+StdLib/Builtin/__ChildRuntime.dark
 StdLib/Builtin/__PathSyscall.dark
 StdLib/Builtin/__Terminal.dark
 StdLib/Builtin/__Stdin.dark
@@ -45,6 +46,7 @@ StdLib/Print.dark
 StdLib/Fun.dark
 StdLib/Float.dark
 StdLib/Cli/__Posix.dark
+StdLib/Cli/__NativeRuntime.dark
 StdLib/Cli/Glob.dark
 StdLib/Cli/Syscall.dark
 StdLib/Cli/PathIO.dark
@@ -65,6 +67,7 @@ StdLib/Retry.dark
 StdLib/Cli/Path.dark
 StdLib/Cli/FileCopy.dark
 StdLib/Cli/FileWatch.dark
+StdLib/Cli/ChildIO.dark
 StdLib/Cli/File.dark
 StdLib/Cli/Dir.dark
 StdLib/String/__Unicode/__Data.dark

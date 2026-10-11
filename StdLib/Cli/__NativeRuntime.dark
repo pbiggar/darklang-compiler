@@ -1,0 +1,14 @@
+// Native runtime inputs and kernel prototypes, separate from shared public APIs.
+module Darklang.Stdlib.Cli
+
+type __NativePosixError = { errno: Int64, message: String }
+
+let __hostOSCode () : Int64 = -1L
+let __hostArchitectureCode () : Int64 = -1L
+let __getenv (name: String) : Stdlib.Option.Option<String> = Stdlib.Option.Option.None
+let __environmentPacked () : String = ""
+let __argv (index: Int64) : Stdlib.Option.Option<String> = Stdlib.Option.Option.None
+let __kill (pid: Int64) (signal: Int64) : Stdlib.Result.Result<Unit, Stdlib.Cli.__NativePosixError> = Ok (())
+let __sleep (delayMs: Float) : Unit = ()
+let __getpid () : Int64 = 0L
+let __getuid () : Int64 = 0L

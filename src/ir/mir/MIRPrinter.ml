@@ -173,6 +173,10 @@ let cliOperation = function
   | MIR.PosixPpoll -> "PosixPpoll"
   | MIR.PosixPollDarwin -> "PosixPollDarwin"
   | MIR.PosixKqueue -> "PosixKqueue"
+  | MIR.ChildState -> "ChildState"
+  | MIR.ChildLaunch -> "ChildLaunch"
+  | MIR.PosixWait4 -> "PosixWait4"
+  | MIR.PosixFcntl -> "PosixFcntl"
   | MIR.PosixKeventVnode -> "PosixKeventVnode"
 
 let prettyPrintCanonicalBufferKind = ANFPrinter.prettyPrintCanonicalBufferKind

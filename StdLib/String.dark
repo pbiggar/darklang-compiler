@@ -102,10 +102,10 @@ let __byteLastIndexOf (value: String) (search: String) : Stdlib.Option.Option<In
 let __utf8ByteLength (codepoint: Int64) : Int64 =
     if codepoint < 128L then 1L else if codepoint < 2048L then 2L else if codepoint < 65536L then 3L else 4L
 
-let __totalUtf8Length (codepoints: List<Int64>) : Int64 =
+let __totalUtf8Length (codepoints: List<Int64>) (total: Int64) : Int64 =
     match codepoints with
-    | [] -> 0L
-    | codepoint :: rest -> Stdlib.String.__utf8ByteLength codepoint + Stdlib.String.__totalUtf8Length rest
+    | [] -> total
+    | codepoint :: rest -> Stdlib.String.__totalUtf8Length rest (total + Stdlib.String.__utf8ByteLength codepoint)
 
 let __encodeUtf8At (pointer: RawPtr) (offset: Int64) (codepoint: Int64) : Int64 =
     if codepoint < 128L then
@@ -130,7 +130,7 @@ let __encodeCodepoints (pointer: RawPtr) (offset: Int64) (codepoints: List<Int64
         Stdlib.String.__encodeCodepoints pointer (Stdlib.String.__encodeUtf8At pointer offset codepoint) rest
 
 let __fromCodepointsRaw (codepoints: List<Int64>) : String =
-    let byteLength = Stdlib.String.__totalUtf8Length codepoints in
+    let byteLength = Stdlib.String.__totalUtf8Length codepoints 0L in
     if byteLength == 0L then ""
     else
         let dataSize = Stdlib.String.__alignedDataSize byteLength in
@@ -709,7 +709,9 @@ let __decodeBlobWithReplacement (blob: Blob) (index: Int64) (acc: List<Int64>) :
         else Stdlib.String.__decodeBlobWithReplacement blob (index + 1L) (Stdlib.List.push acc 65533L)
 
 let fromBlobWithReplacement (blob: Blob) : String =
-    Stdlib.String.__Unicode.normalizeValid (Stdlib.String.__fromCodepointsRaw (Stdlib.String.__decodeBlobWithReplacement blob 0L []))
+    let copied = Stdlib.Blob.__copyToString blob in
+    if Stdlib.String.__isAscii copied then copied
+    else Stdlib.String.__Unicode.normalizeValid (Stdlib.String.__fromCodepointsRaw (Stdlib.String.__decodeBlobWithReplacement blob 0L []))
 
 let fromBytes (bytes: List<UInt8>) : Stdlib.Option.Option<String> =
     Stdlib.String.fromBlob (Stdlib.Blob.fromList bytes)

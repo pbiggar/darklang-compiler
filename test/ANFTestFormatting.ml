@@ -414,6 +414,10 @@ and aNF_cliOperation (value : ANF.cliOperation) =
   | ANF.PosixPpoll -> union "CliOperation" "PosixPpoll" []
   | ANF.PosixPollDarwin -> union "CliOperation" "PosixPollDarwin" []
   | ANF.PosixKqueue -> union "CliOperation" "PosixKqueue" []
+  | ANF.ChildState -> union "CliOperation" "ChildState" []
+  | ANF.ChildLaunch -> union "CliOperation" "ChildLaunch" []
+  | ANF.PosixWait4 -> union "CliOperation" "PosixWait4" []
+  | ANF.PosixFcntl -> union "CliOperation" "PosixFcntl" []
   | ANF.PosixKeventVnode -> union "CliOperation" "PosixKeventVnode" []
 
 and aNF_recordDescriptor (value : ANF.recordDescriptor) =
