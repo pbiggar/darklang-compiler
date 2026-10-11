@@ -1,6 +1,6 @@
-# Shared kernel StdLib (migration in progress)
+# Shared kernel StdLib
 
-The public CLI libraries are moving onto the same Dark implementation in the
+The migrated public CLI libraries use the same Dark implementation in the
 compiler and interpreter. `Cli.Syscall` contains kernel operations, `Cli.Runtime`
 contains target/startup inputs, and ordinary CLI APIs compose these primitives.
 `Builtin.syscallX` means a kernel operation plus unavoidable ABI adaptation and
@@ -58,6 +58,10 @@ The interpreter uses .NET's process supervisor, never raw waitpid on its childre
 The compiler's private launch adapter performs pipe/CLOEXEC/exec-error-handshake
 setup and reaping, without exposing fork. Pipe endpoints are lifted above stdio
 before duplication, including when the parent starts with closed stdio slots.
+The native owned-child runtime ignores SIGPIPE in its parent so closed-pipe
+writes return EPIPE, and restores the default disposition in children before
+exec. This is private runtime setup, not an exposed signal or fork primitive.
+Inherited-terminal children expose no owned pipe descriptors in either engine.
 Darwin and Linux launch adapters are generated; Darwin execution remains untested
 in this Linux VM. Windows/browser captured processes are explicitly unsupported.
 
@@ -67,6 +71,18 @@ hostname, CPU-count and exclusive-create effects. Those behaviors are composed
 in shared Dark over the kernel leaves. Optional backend tests now target the
 owned-launch handshake rather than the retired process-output wire records.
 
-Remaining work includes cross-platform execution verification and final
-regression and performance gates. Checkpoints on this branch are not a
-completed release.
+## Verification and remaining platform gates
+
+The Linux x86-64 compiler suite passes 13,231 checks, including compiled leak
+checks and a closed-pipe regression that explicitly restores default SIGPIPE
+before re-executing Dark. Interpreter CLI-library validation passes 360 checks;
+host-boundary validation passes 18, with one ignored. The 32 shared source units
+are checked byte-for-byte, apart from the documented nested-module splitting.
+
+This is not a fully cross-platform-verified release. Darwin and Linux ARM64
+execution remain to be tested on suitable hosts. Full interpreter validation
+was blocked by a security review of an HTTP-test destination. A separate
+install-status check cannot obtain .NET executable identity without procfs in
+this VM. The parent performance gate rejects the existing snapshot's workload
+contract digest; Cachegrind also cannot run without real `/proc/self/maps`.
+No benchmark baseline was replaced to hide either limitation.
