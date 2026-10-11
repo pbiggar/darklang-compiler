@@ -251,7 +251,7 @@ let[@warning "-4"] resolveWrittenType allowInternal types modulePath typeParams
                   Error ("Cyclic type alias '" ^ canonical ^ "'")
                 else
                   map
-                    (Types.applySubst
+                    (Types.applyTypeArguments
                        (M.of_list (List.combine entry.params args)))
                     (convert (S.add canonical seen) entry.path
                        (S.of_list entry.params) target)
@@ -321,7 +321,7 @@ let[@warning "-4"] resolveNamedType globals expected
             | WT.TDAlias target ->
                 bind
                   (map
-                     (Types.applySubst
+                     (Types.applyTypeArguments
                         (M.of_list (List.combine entry.params args)))
                      (resolveWrittenType globals.allowInternal globals.types
                         entry.path (S.of_list entry.params) target))
@@ -342,7 +342,8 @@ let[@warning "-4"] recordFields allowInternal types entry args =
       ResultList.traverse
         (fun ((field : WT.recordFieldSyntax), _) ->
           map
-            (fun typ -> (snd field.WT.name, Types.applySubst substitution typ))
+            (fun typ ->
+              (snd field.WT.name, Types.applyTypeArguments substitution typ))
             (resolveWrittenType allowInternal types entry.path
                (S.of_list entry.params) field.WT.typ))
         fields

@@ -1295,9 +1295,6 @@ let runTestsWithProgressReporter completedTestReporter args =
             932;
             1071;
             1076;
-            1136;
-            1152;
-            1159;
             1178;
             1180;
             1236;
@@ -1312,7 +1309,6 @@ let runTestsWithProgressReporter completedTestReporter args =
             1406;
             1408;
             1411;
-            1423;
           ] );
         ( "test/fixtures/e2e/upstream/stdlib/list.dark",
           [ 61; 65; 71; 75; 81; 157; 184; 238; 346 ] );
