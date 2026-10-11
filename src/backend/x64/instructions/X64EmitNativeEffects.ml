@@ -156,7 +156,8 @@ let emitCliNative (ctx : X64CodeGenTypes.funcCtx) (dest : LIR.reg)
                          |> Result.map (fun reg ->
                              if reg = X.R11 then
                                [
-                                 X.MOV_load (X.R11, X.RSP, Int32.of_int (depth * 8));
+                                 X.MOV_load
+                                   (X.R11, X.RSP, Int32.of_int (depth * 8));
                                  X.PUSH X.R11;
                                ]
                              else [ X.PUSH reg ])
@@ -164,11 +165,11 @@ let emitCliNative (ctx : X64CodeGenTypes.funcCtx) (dest : LIR.reg)
                          loadCliOperand X.R11 operand
                          |> Result.map (fun next -> next @ [ X.PUSH X.R11 ])
                    in
-                   capture
-                   |> Result.map (fun next -> (code @ next, depth + 1))))
+                   capture |> Result.map (fun next -> (code @ next, depth + 1))))
              (Ok ([ X.PUSH X.R11 ], 0))
         |> Result.map (fun (code, _) ->
-            code @ (targets |> List.rev |> List.map (fun r -> X.POP r))
+            code
+            @ (targets |> List.rev |> List.map (fun r -> X.POP r))
             @ [ X.POP X.R11 ])
       in
       match operation with
@@ -392,6 +393,21 @@ let emitCliNative (ctx : X64CodeGenTypes.funcCtx) (dest : LIR.reg)
                   @ loadImm64 X.R8 0L @ loadImm64 X.R9 0L
                   @ loadImm64 X.RAX (Int64.of_int syscalls.Platform.sendTo)
                   @ [ X.SYSCALL ] @ finish)
+          | LIR.SocketSend, [ descriptor; blob; nonblocking ] ->
+              loadSocketArgs
+                [ descriptor; blob; nonblocking ]
+                [ X.RDI; X.RSI; X.R10 ]
+              |> Result.map (fun loads ->
+                  let constants = Platform.socketConstantsFor Platform.Linux in
+                  loads
+                  @ [ X.MOV_load (X.RDX, X.RSI, 8l); X.ADD_imm (X.RSI, 16l) ]
+                  @ loadImm64 X.R8 constants.Platform.dontWait
+                  @ [ X.IMUL_reg (X.R10, X.R8) ]
+                  @ loadImm64 X.R8 constants.Platform.noSignal
+                  @ [ X.OR_reg (X.R10, X.R8) ]
+                  @ loadImm64 X.R8 0L @ loadImm64 X.R9 0L
+                  @ loadImm64 X.RAX (Int64.of_int syscalls.Platform.sendTo)
+                  @ [ X.SYSCALL ] @ finish)
           | LIR.SocketSendTo, [ descriptor; blob; address; length ] ->
               loadSocketArgs
                 [ descriptor; blob; address; length ]
@@ -421,6 +437,19 @@ let emitCliNative (ctx : X64CodeGenTypes.funcCtx) (dest : LIR.reg)
               |> Result.map (fun loads ->
                   loads
                   @ loadImm64 X.RAX (Int64.of_int syscalls.Platform.read)
+                  @ [ X.SYSCALL ] @ finish)
+          | LIR.SocketReceive, [ descriptor; buffer; length; nonblocking ] ->
+              loadSocketArgs
+                [ descriptor; buffer; length; nonblocking ]
+                [ X.RDI; X.RSI; X.RDX; X.R10 ]
+              |> Result.map (fun loads ->
+                  loads
+                  @ loadImm64 X.R8
+                      (Platform.socketConstantsFor Platform.Linux)
+                        .Platform.dontWait
+                  @ [ X.IMUL_reg (X.R10, X.R8) ]
+                  @ loadImm64 X.R8 0L @ loadImm64 X.R9 0L
+                  @ loadImm64 X.RAX (Int64.of_int syscalls.Platform.recvFrom)
                   @ [ X.SYSCALL ] @ finish)
           | ( (LIR.SocketReceiveTimeout | LIR.SocketSendTimeout),
               [ descriptor; timeval ] ) ->
@@ -483,7 +512,9 @@ let emitCliNative (ctx : X64CodeGenTypes.funcCtx) (dest : LIR.reg)
                 (loadImm64 X.RSI 1L @ loadImm64 X.R10 0L @ loadImm64 X.R8 8L)
                 syscalls.Platform.poll
           | LIR.SocketPoll, [ pollfds; count; timeout ] ->
-              emit [ pollfds; count; timeout ] [ X.RDI; X.RSI; X.RDX ]
+              emit
+                [ pollfds; count; timeout ]
+                [ X.RDI; X.RSI; X.RDX ]
                 (loadImm64 X.R10 0L @ loadImm64 X.R8 8L)
                 syscalls.Platform.poll
           | LIR.SignalBlock, [ mask; previous ] ->

@@ -29,15 +29,7 @@ let __idleSecure (connection: Stdlib.__Network.TcpConnection) (cell: RawPtr) (li
 // None means no application bytes are ready; Some empty is authenticated EOF
 // for TLS and ordinary EOF for TCP. Never wait for a partial TLS record here.
 let __pollTcp (connection: Stdlib.__Network.TcpConnection) : Stdlib.Result.Result<Stdlib.Option.Option<Blob>, String> =
-  match connection.watch with
-  | None -> Error "Transport has no native readiness registration"
-  | Some watch ->
-    Stdlib.__Network.waitSockets [Stdlib.__Network.Interest { watch = watch, readable = true, writable = false }] 0L
-      |> Stdlib.Result.mapError (fun _error -> "HTTP socket poll failed") |> Stdlib.Result.andThen (fun events ->
-        if events == [] then Ok None
-        else if Stdlib.List.any events (fun event -> event.failed) then Error "HTTP socket failed"
-        else if Stdlib.List.any events (fun event -> event.closed && Stdlib.Bool.not event.readable) then Ok (Some Stdlib.Blob.empty)
-        else Stdlib.__Network.readTcp connection 4096L |> Stdlib.Result.mapError (fun _error -> "HTTP socket read failed") |> Stdlib.Result.map (fun bytes -> Some bytes))
+  Stdlib.__Network.pollReadTcp connection |> Stdlib.Result.mapError (fun _error -> "HTTP socket poll failed")
 
 let __pollSecureStep (connection: Stdlib.__Network.TcpConnection) (cell: RawPtr) (lifecycle: Stream<Unit>) (budget: Int64) : Stdlib.Result.Result<Stdlib.Option.Option<Blob>, String> =
   if budget == 0L then Ok None

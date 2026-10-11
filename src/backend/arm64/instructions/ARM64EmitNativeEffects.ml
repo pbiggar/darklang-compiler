@@ -1228,6 +1228,32 @@ let emitCliNative (ctx : codeGenContext) (dest : LIR.reg)
                         ]
                       @ normalize
                       @ [ Symbolic.MOV_reg (destReg, Symbolic.X0) ]))
+          | LIR.SocketSend, [ descriptor; blob; nonblocking ] ->
+              loadArguments
+                [ descriptor; blob; nonblocking ]
+                [ Symbolic.X0; Symbolic.X1; Symbolic.X3 ]
+              |> Result.map (fun loads ->
+                  let constants = Platform.socketConstantsFor os in
+                  loads
+                  @ [
+                      Symbolic.LDR (Symbolic.X2, Symbolic.X1, 8);
+                      Symbolic.ADD_imm (Symbolic.X1, Symbolic.X1, 16);
+                    ]
+                  @ loadImmediate Symbolic.X6 constants.Platform.dontWait
+                  @ [ Symbolic.MUL (Symbolic.X3, Symbolic.X3, Symbolic.X6) ]
+                  @ loadImmediate Symbolic.X6 constants.Platform.noSignal
+                  @ [
+                      Symbolic.ORR_reg (Symbolic.X3, Symbolic.X3, Symbolic.X6);
+                      Symbolic.MOVZ (Symbolic.X4, 0, 0);
+                      Symbolic.MOVZ (Symbolic.X5, 0, 0);
+                      Symbolic.MOVZ
+                        ( syscall.ARM64.syscallRegister,
+                          syscall.ARM64.numbers.Platform.sendTo,
+                          0 );
+                      Symbolic.SVC syscall.ARM64.svcImmediate;
+                    ]
+                  @ normalize
+                  @ [ Symbolic.MOV_reg (destReg, Symbolic.X0) ])
           | LIR.SocketSendTo, [ descriptor; blob; address; length ] ->
               loadArguments
                 [ descriptor; blob; address; length ]
@@ -1284,6 +1310,26 @@ let emitCliNative (ctx : codeGenContext) (dest : LIR.reg)
                             ]
                           @ normalize
                           @ [ Symbolic.MOV_reg (destReg, Symbolic.X0) ])))
+          | LIR.SocketReceive, [ descriptor; buffer; length; nonblocking ] ->
+              loadArguments
+                [ descriptor; buffer; length; nonblocking ]
+                [ Symbolic.X0; Symbolic.X1; Symbolic.X2; Symbolic.X3 ]
+              |> Result.map (fun loads ->
+                  loads
+                  @ loadImmediate Symbolic.X6
+                      (Platform.socketConstantsFor os).Platform.dontWait
+                  @ [
+                      Symbolic.MUL (Symbolic.X3, Symbolic.X3, Symbolic.X6);
+                      Symbolic.MOVZ (Symbolic.X4, 0, 0);
+                      Symbolic.MOVZ (Symbolic.X5, 0, 0);
+                      Symbolic.MOVZ
+                        ( syscall.ARM64.syscallRegister,
+                          syscall.ARM64.numbers.Platform.recvFrom,
+                          0 );
+                      Symbolic.SVC syscall.ARM64.svcImmediate;
+                    ]
+                  @ normalize
+                  @ [ Symbolic.MOV_reg (destReg, Symbolic.X0) ])
           | ( (LIR.SocketReceiveTimeout | LIR.SocketSendTimeout),
               [ descriptor; timeval ] ) ->
               loadCliOperand Symbolic.X0 descriptor
@@ -1380,8 +1426,8 @@ let emitCliNative (ctx : codeGenContext) (dest : LIR.reg)
                     (Int64.of_int constants.Platform.reuseAddress)
                 @ loadImmediate Symbolic.X4 4L)
                 syscall.ARM64.numbers.Platform.setSockOpt
-          | LIR.SocketPoll,
-            (([ pollfd; timeout ] | [ pollfd; _; timeout ]) as arguments) ->
+          | ( LIR.SocketPoll,
+              (([ pollfd; timeout ] | [ pollfd; _; timeout ]) as arguments) ) ->
               let timeoutLoads =
                 if os = Platform.Linux then loadCliOperand Symbolic.X2 timeout
                 else
@@ -1416,11 +1462,12 @@ let emitCliNative (ctx : codeGenContext) (dest : LIR.reg)
                     | [ _; count; _ ] ->
                         ([ pollfd; count ], [ Symbolic.X0; Symbolic.X1 ], [])
                     | _ ->
-                        ([ pollfd ], [ Symbolic.X0 ], loadImmediate Symbolic.X1 1L)
+                        ( [ pollfd ],
+                          [ Symbolic.X0 ],
+                          loadImmediate Symbolic.X1 1L )
                   in
                   emit operands registers
-                    (loads
-                    @ countLoads
+                    (loads @ countLoads
                     @ loadImmediate Symbolic.X3 0L
                     @ loadImmediate Symbolic.X4 8L)
                     syscall.ARM64.numbers.Platform.poll)

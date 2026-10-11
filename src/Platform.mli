@@ -45,6 +45,7 @@ type socketConstants = {
   sendTimeout : int;
   reuseAddress : int;
   noSignal : int64;
+  dontWait : int64;
   blockSignal : int;
   restoreSignal : int;
 }

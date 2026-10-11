@@ -236,6 +236,7 @@ type socketConstants = {
   sendTimeout : int;
   reuseAddress : int;
   noSignal : int64;
+  dontWait : int64;
   blockSignal : int;
   restoreSignal : int;
 }
@@ -253,6 +254,7 @@ let socketConstantsFor = function
         sendTimeout = 4101;
         reuseAddress = 4;
         noSignal = 524288L;
+        dontWait = 128L;
         blockSignal = 1;
         restoreSignal = 3;
       }
@@ -267,6 +269,7 @@ let socketConstantsFor = function
         sendTimeout = 21;
         reuseAddress = 2;
         noSignal = 16384L;
+        dontWait = 64L;
         blockSignal = 0;
         restoreSignal = 2;
       }

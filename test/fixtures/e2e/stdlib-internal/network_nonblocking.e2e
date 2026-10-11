@@ -1,0 +1,5 @@
+// network_nonblocking.e2e - Per-call socket modes execute native I/O, not fallback stubs.
+Stdlib.__Network.__sendWithMode (-1L) Stdlib.Blob.empty true = -9L
+Stdlib.__Network.__sendWithMode (-1L) Stdlib.Blob.empty false = -9L
+let buffer = __raw_alloc 1L in let code = Stdlib.__Network.__receiveWithMode (-1L) buffer 1L true in let _ = __raw_free buffer in code = -9L // leak_check
+let buffer = __raw_alloc 1L in let code = Stdlib.__Network.__receiveWithMode (-1L) buffer 1L false in let _ = __raw_free buffer in code = -9L // leak_check

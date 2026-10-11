@@ -37,11 +37,13 @@ let __tcp6Socket () : Int64 = -38L
 let __connect4 (descriptor: Int64) (address: RawPtr) : Int64 = -38L
 let __connect6 (descriptor: Int64) (address: RawPtr) : Int64 = -38L
 let __send (descriptor: Int64) (payload: Blob) : Int64 = -38L
+let __sendWithMode (descriptor: Int64) (payload: Blob) (nonblocking: Bool) : Int64 = -38L
 let __sendTo (descriptor: Int64) (payload: Blob) (address: RawPtr) (addressLength: Int64) : Int64 = -38L
 // Peer storage holds a socklen word followed by the sockaddr at offset eight.
 let __receiveFrom (descriptor: Int64) (buffer: RawPtr) (length: Int64) (peer: RawPtr) : Int64 = -38L
 let __bind6 (descriptor: Int64) (address: RawPtr) : Int64 = -38L
 let __receive (descriptor: Int64) (buffer: RawPtr) (length: Int64) : Int64 = -38L
+let __receiveWithMode (descriptor: Int64) (buffer: RawPtr) (length: Int64) (nonblocking: Bool) : Int64 = -38L
 let __receiveTimeout (descriptor: Int64) (timeval: RawPtr) : Int64 = -38L
 let __sendTimeout (descriptor: Int64) (timeval: RawPtr) : Int64 = -38L
 let __close (descriptor: Int64) : Int64 = -38L
@@ -197,6 +199,38 @@ let writeTcp (connection: Stdlib.__Network.TcpConnection) (payload: Blob) : Stdl
 
 let readTcp (connection: Stdlib.__Network.TcpConnection) (length: Int64) : Stdlib.Result.Result<Blob, Int64> =
     connection.read length
+
+// Per-call nonblocking I/O does not change the descriptor mode used by existing
+// blocking handshake/read helpers. None means retry after readiness, not EOF.
+let pollReadTcp (connection: Stdlib.__Network.TcpConnection) : Stdlib.Result.Result<Stdlib.Option.Option<Blob>, Int64> =
+    match Stdlib.Stream.next connection.lifecycle with
+    | None -> Error 9L
+    | Some _ -> match connection.watch with
+      | None -> Error 22L
+      | Some watch ->
+        let buffer = __raw_alloc 4096L in
+        let received = Stdlib.__Network.__receiveWithMode watch.descriptor buffer 4096L true in
+        let result =
+          if received == -4L || received == -11L || received == -35L then Ok None
+          else if received < 0L then Error (0L - received)
+          else Ok (Some (Stdlib.__Network.__copyReceived buffer 0L received [])) in
+        let _ = __raw_free buffer in result
+
+let pollWriteTcp (connection: Stdlib.__Network.TcpConnection) (payload: Blob) : Stdlib.Result.Result<Stdlib.Option.Option<Int64>, Int64> =
+    match Stdlib.Stream.next connection.lifecycle with
+    | None -> Error 9L
+    | Some _ -> match connection.watch with
+      | None -> Error 22L
+      | Some watch ->
+        let length = Stdlib.Blob.__byteLength payload in
+        if length > 16384L then Error 22L
+        else if length == 0L then Ok (Some 0L)
+        else
+          let sent = Stdlib.__Network.__sendWithMode watch.descriptor payload true in
+          if sent == -4L || sent == -11L || sent == -35L then Ok None
+          else if sent < 0L then Error (0L - sent)
+          else if sent == 0L then Error 32L
+          else Ok (Some sent)
 
 let __word (buffer: RawPtr) (offset: Int64) : Int64 = __raw_get buffer offset
 
