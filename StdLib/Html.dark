@@ -36,7 +36,7 @@ let htmlTagNode (name: String) (attrs: Stdlib.Html.Attributes) (children: List<S
 
 let __attributeToString (attr: (String * Stdlib.Option.Option<String>)) : String =
     match attr with
-    | (key, Some value) -> key ++ "=\"" ++ value ++ "\""
+    | (key, Some value) -> key ++ "=\"" ++ Stdlib.Html.escapeHtml value ++ "\""
     | (key, None) -> key
 
 let __attributesToString (attrs: Stdlib.Html.Attributes) : String =
@@ -61,7 +61,7 @@ let nodeToString (node: Stdlib.Html.Node) : String =
             startTag ++ childHtml ++ "</" ++ tag.name ++ ">"
 
 let comment (value: String) : Stdlib.Html.Node =
-    Stdlib.Html.stringNode ("<!-- " ++ value ++ " -->")
+    Stdlib.Html.stringNode ("<!-- " ++ Stdlib.String.replaceAll value "--" "- -" ++ " -->")
 
 let classes (classList: List<String>) : (String * Stdlib.Option.Option<String>) =
     ("class", Some (Stdlib.String.join classList " "))
