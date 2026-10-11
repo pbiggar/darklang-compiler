@@ -43,7 +43,7 @@ let __admit (work: Stdlib.__Http3Connection.Work) : Stdlib.Result.Result<Stdlib.
     opened |> Stdlib.Result.andThen (fun wire -> Stdlib.__Http3.encodeHeaders wire id pending.request.fields) |> Stdlib.Result.andThen (fun encoded ->
       let stream = Stdlib.__Http3Connection.Active { index = pending.index, id = id, request = pending.request,
         message = message, head = None, bytes = encoded.bytes, offset = 0L, position = 0L, blocks = [] } in
-      Stdlib.__Http3Connection.__admit { work with connection = { wire = { encoded.state with deadline = work.connection.wire.deadline }, next = id + 4L }, waiting = rest, active = work.active @ [stream] })
+      Stdlib.__Http3Connection.__admit { work with connection = Stdlib.__Http3Connection.State { wire = { encoded.state with deadline = work.connection.wire.deadline }, next = id + 4L }, waiting = rest, active = work.active @ [stream] })
 
 // One bounded write per stream per round; every stream shares connection credit.
 let __sendRound (streams: List<Stdlib.__Http3Connection.Active>) (work: Stdlib.__Http3Connection.Work) : Stdlib.Result.Result<Stdlib.__Http3Connection.Work, String> =

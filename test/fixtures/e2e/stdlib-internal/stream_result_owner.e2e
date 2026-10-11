@@ -9,3 +9,12 @@ let owned (value: Int64) : Stdlib.Result.Result<Bool, String> =
       let _ = Stdlib.Stream.close life in
       let _ = Stdlib.Stream.close life in Ok true)
 owned 42L = Ok true // leak_check
+let passed (life: Stream<Unit>) (index: Int64) : Bool =
+  if index == 1L then true
+  else match Stdlib.Stream.next life with | None -> false | Some _ -> passed life (index + 1L)
+let argument () : Bool =
+  let cell = Stdlib.Stream.__cellNew 42L in
+  let life = Stdlib.Stream.__new (fun _unit -> Some ()) (fun _unit -> Stdlib.Stream.__cellDispose<Int64> cell) in
+  let valid = passed life 1L in
+  let _ = Stdlib.Stream.close life in valid
+argument () = true // leak_check

@@ -224,6 +224,7 @@ fragments use `__` even where the interpreter also has private helpers.
 | `StdLib/__Http1Pool.dark` | `Darklang.Stdlib.__Http1Pool` | Compiler support: bounded HTTP/1.1 session connection ownership and response reuse |
 | `StdLib/__Http2Pool.dark` | `Darklang.Stdlib.__Http2Pool` | Compiler support: bounded persistent HTTP/2 session owners |
 | `StdLib/__Http3Pool.dark` | `Darklang.Stdlib.__Http3Pool` | Compiler support: bounded persistent HTTP/3 session owners |
+| `StdLib/__HttpSessionBatch.dark` | `Darklang.Stdlib.__HttpSessionBatch` | Compiler support: session batch protocol selection and owner checkout |
 | `StdLib/HttpClientSession.dark` | `Darklang.Stdlib.HttpClientSession` | Compiler extension: HTTP transport and secure server support |
 | `StdLib/__HttpsService.dark` | `Darklang.Stdlib.__HttpsService` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
 | `StdLib/__HttpsDns.dark` | `Darklang.Stdlib.__HttpsDns` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |

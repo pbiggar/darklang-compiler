@@ -78,6 +78,36 @@ match Stdlib.Cli.__Args.int64 0, roots with
 '''
 
 
+PUBLIC_MULTIPLEX = '''// session-batch.dark - Public batches use one negotiated HTTP/2 owner.
+let request (url: String) (upload: Bool) : Stdlib.HttpClientSession.Request =
+  let body = if upload then Stdlib.String.toBlob (Stdlib.String.join (Stdlib.List.repeatUnsafe 70 (Stdlib.String.repeat "u" 1000)) "") else Stdlib.Blob.empty in
+  Stdlib.HttpClientSession.Request { method = if upload then "POST" else "GET", url = url, headers = [], body = body }
+let check (session: Stdlib.HttpClientSession.Session) (url: String) (mode: String) : Bool =
+  let upload = mode == "upload" || mode == "early" in
+  match session.requestMany [request (url ++ "/one") upload, request (url ++ "/two") upload] with
+  | Error _ -> false
+  | Ok outcomes ->
+    let valid = match outcomes with
+    | [first, second] ->
+      first.index == 0L && second.index == 1L && (match first.response, second.response with
+      | Ok first, Ok second -> mode != "reset" && Stdlib.Blob.__byteLength first.body == 70000L && Stdlib.Blob.__byteLength second.body == 70000L
+      | Error _, Ok second -> mode == "reset" && Stdlib.Blob.__byteLength second.body == 70000L
+      | _, _ -> false)
+    | _ -> false in
+    let after = session.request "GET" (url ++ "/after") [] Stdlib.Blob.empty in
+    valid && (match after with | Ok response -> Stdlib.Blob.toHex response.body == "2F6166746572" | Error _ -> false)
+let roots = Stdlib.Blob.fromHex "@CA@" |> Stdlib.Result.andThen Stdlib.__Tls13Client.parsePemBundle
+let mode = Stdlib.Cli.__Args.get 1 |> Stdlib.Result.withDefault "multiplex"
+match Stdlib.Cli.__Args.int64 0, roots with
+| Ok port, Ok roots ->
+  let session = Stdlib.HttpClientSession.createTrustedWithRoots roots in
+  let valid = check session ("https://localhost:" ++ Stdlib.Int64.toString port) mode in
+  let _ = session.close () in
+  if valid then Stdlib.printLine "OK" else Stdlib.printLine "FAILED"
+| _, _ -> Stdlib.printLine "Invalid arguments"
+'''
+
+
 class Peer:
     def __init__(self, context, mode="reuse"):
         self.context = context
@@ -188,6 +218,7 @@ class Peer:
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--compiler", type=Path, default=ROOT / "dark")
+    parser.add_argument("--public", action="store_true")
     args = parser.parse_args()
     key, leaf, ca = certificates()
     with tempfile.TemporaryDirectory(prefix="dark-http2-session-") as temporary:
@@ -214,11 +245,11 @@ def main():
             assert not peer.errors, peer.errors
         finally:
             peer.close()
-        source.write_text(MULTIPLEX.replace("@CA@", ca.public_bytes(serialization.Encoding.PEM).hex()))
+        source.write_text((PUBLIC_MULTIPLEX if args.public else MULTIPLEX).replace("@CA@", ca.public_bytes(serialization.Encoding.PEM).hex()))
         compiled = subprocess.run([str(args.compiler), str(source), "--allow-internal", "--leak-check", "-o", str(binary)],
                                   cwd=ROOT, capture_output=True, text=True, timeout=180)
         assert compiled.returncode == 0, compiled.stdout + compiled.stderr
-        for mode in ("multiplex", "reset", "limit", "upload", "early", "goaway"):
+        for mode in (("multiplex", "reset", "limit", "upload", "early") if args.public else ("multiplex", "reset", "limit", "upload", "early", "goaway")):
             peer = Peer(context, mode)
             try:
                 result = subprocess.run([str(binary), str(peer.port), mode], cwd=ROOT, capture_output=True, text=True, timeout=60)

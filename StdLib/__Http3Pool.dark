@@ -1,7 +1,7 @@
 // __Http3Pool.dark - Bounded persistent QUIC owners retaining connection-wide QPACK state.
 module Darklang.Stdlib.__Http3Pool
 
-type Entry = { origin: Stdlib.__HttpWire.Url, state: Stdlib.__Http3.State, idle: Int64 }
+type Entry = { origin: Stdlib.__HttpWire.Url, state: Stdlib.__Http3Connection.State, idle: Int64 }
 type State = { entries: List<Stdlib.__Http3Pool.Entry> }
 type Lease = { state: Stdlib.__Http3Pool.State, entry: Stdlib.Option.Option<Stdlib.__Http3Pool.Entry> }
 type Completed = { response: Stdlib.HttpClient.Response, entry: Stdlib.Option.Option<Stdlib.__Http3Pool.Entry> }
@@ -12,32 +12,25 @@ let __sameOrigin (left: Stdlib.__HttpWire.Url) (right: Stdlib.__HttpWire.Url) : 
   left.scheme == right.scheme && left.host == right.host && left.port == right.port
 
 let close (state: Stdlib.__Http3Pool.State) : Unit =
-  Stdlib.List.fold state.entries () (fun _unit entry -> Stdlib.__Http3.close entry.state)
+  Stdlib.List.fold state.entries () (fun _unit entry -> Stdlib.__Http3.close entry.state.wire)
 
-let reusable (state: Stdlib.__Http3.State) : Bool =
-  // Rotate at 1024 requests, bounding final-size history without losing
-  // duplicate-frame validation or the separate active-stream allowance.
-  if state.stream >= 4092L || Stdlib.Option.isSome state.uni.control.goAway || Stdlib.Option.isSome state.connection.meta.closed then false
-  else match Stdlib.__QuicFlow.channel state.connection.flow state.stream with
-  | None -> false
-  | Some channel ->
-    match channel.send, channel.receive with
-    | Some sender, Some receiver -> sender.finished && Stdlib.__QuicStreams.complete receiver && Stdlib.Option.isNone receiver.resetCode
-    | _, _ -> false
+let reusable (state: Stdlib.__Http3Connection.State) : Bool =
+  // Bound final-size history without losing duplicate-frame validation.
+  state.next < 4096L && Stdlib.Option.isNone state.wire.uni.control.goAway && Stdlib.Option.isNone state.wire.connection.meta.closed
 
 let take (state: Stdlib.__Http3Pool.State) (origin: Stdlib.__HttpWire.Url) (now: Int64) : Stdlib.__Http3Pool.Lease =
   Stdlib.List.fold state.entries (Stdlib.__Http3Pool.Lease { state = Stdlib.__Http3Pool.empty, entry = None }) (fun lease entry ->
     if now < entry.idle || now - entry.idle >= 30000L || Stdlib.Bool.not (Stdlib.__Http3Pool.reusable entry.state) then
-      let _ = Stdlib.__Http3.close entry.state in lease
+      let _ = Stdlib.__Http3.close entry.state.wire in lease
     else if Stdlib.__Http3Pool.__sameOrigin entry.origin origin then
-      if Stdlib.Option.isSome lease.entry || Stdlib.Option.isNone (Stdlib.Stream.next entry.state.connection.transport.socket.lifecycle) then
-        let _ = Stdlib.__Http3.close entry.state in lease
+      if Stdlib.Option.isSome lease.entry || Stdlib.Option.isNone (Stdlib.Stream.next entry.state.wire.connection.transport.socket.lifecycle) then
+        let _ = Stdlib.__Http3.close entry.state.wire in lease
       else
         // Service received close/GOAWAY/decoder feedback before attempting a write.
-        match Stdlib.__QuicConnection.poll entry.state.connection 1L |> Stdlib.Result.andThen (fun connection -> Stdlib.__Http3.__controls { entry.state with connection = connection }) with
-        | Error _ -> let _ = Stdlib.__Http3.close entry.state in lease
+        match Stdlib.__QuicConnection.poll entry.state.wire.connection 1L |> Stdlib.Result.andThen (fun connection -> Stdlib.__Http3.__controls { entry.state.wire with connection = connection }) with
+        | Error _ -> let _ = Stdlib.__Http3.close entry.state.wire in lease
         | Ok state ->
-          if Stdlib.__Http3Pool.reusable state then { lease with entry = Some { entry with state = state } }
+          if Stdlib.__Http3Pool.reusable { entry.state with wire = state } then { lease with entry = Some { entry with state = { entry.state with wire = state } } }
           else let _ = Stdlib.__Http3.close state in lease
     else { lease with state = { lease.state with entries = lease.state.entries @ [entry] } })
 
@@ -45,36 +38,35 @@ let __retain (entries: List<Stdlib.__Http3Pool.Entry>) (count: Int64) : List<Std
   match entries with
   | [] -> []
   | entry :: rest ->
-    if count >= 8L then let _ = Stdlib.__Http3.close entry.state in Stdlib.__Http3Pool.__retain rest count
+    if count >= 8L then let _ = Stdlib.__Http3.close entry.state.wire in Stdlib.__Http3Pool.__retain rest count
     else Stdlib.List.push (Stdlib.__Http3Pool.__retain rest (count + 1L)) entry
 
 let put (state: Stdlib.__Http3Pool.State) (entry: Stdlib.__Http3Pool.Entry) (now: Int64) : Stdlib.__Http3Pool.State =
   let remaining = Stdlib.List.filter state.entries (fun current ->
-    if Stdlib.__Http3Pool.__sameOrigin entry.origin current.origin then let _ = Stdlib.__Http3.close current.state in false else true) in
+    if Stdlib.__Http3Pool.__sameOrigin entry.origin current.origin then let _ = Stdlib.__Http3.close current.state.wire in false else true) in
   Stdlib.__Http3Pool.State { entries = Stdlib.__Http3Pool.__retain (Stdlib.List.push remaining { entry with idle = now }) 0L }
-
-let __exchange (entry: Stdlib.__Http3Pool.Entry) (method: String) (url: Stdlib.__HttpWire.Url) (headers: List<(String * String)>) (body: Blob)
-  : Stdlib.Result.Result<Stdlib.__Http3Pool.Completed, Stdlib.HttpClient.RequestError> =
-  match Stdlib.__Http3Client.__startState entry.state method url headers body |> Stdlib.Result.andThen (fun reply ->
-    Stdlib.__Http3Client.__buffer reply.state reply.events reply.finished [] |> Stdlib.Result.map (fun pair ->
-      let (bytes, state) = pair in
-      let response = Stdlib.HttpClient.Response { statusCode = Stdlib.Int.fromInt64 reply.head.status, headers = reply.head.headers, body = bytes } in
-      if Stdlib.__Http3Pool.reusable state then Stdlib.__Http3Pool.Completed { response = response, entry = Some { entry with state = state } }
-      else let _ = Stdlib.__Http3.close state in Stdlib.__Http3Pool.Completed { response = response, entry = None })) with
-  | Ok completed -> Ok completed
-  | Error message ->
-    // Failed I/O may have consumed a send nonce; abort instead of encrypted close or replay.
-    let _ = Stdlib.__Http3.close entry.state in
-    Error (if Stdlib.String.contains message "timed out" then Stdlib.HttpClient.RequestError.Timeout else Stdlib.HttpClient.RequestError.NetworkError)
 
 let exchange (entry: Stdlib.__Http3Pool.Entry) (method: String) (url: Stdlib.__HttpWire.Url) (headers: List<(String * String)>) (body: Blob)
   : Stdlib.Result.Result<Stdlib.__Http3Pool.Completed, Stdlib.HttpClient.RequestError> =
-  match Stdlib.__Http3.nextRequest entry.state (entry.state.stream + 4L) (method == "HEAD") 10000L with
-  | Error _ -> let _ = Stdlib.__Http3.close entry.state in Error Stdlib.HttpClient.RequestError.NetworkError
-  | Ok state -> Stdlib.__Http3Pool.__exchange { entry with state = state } method url headers body
+  let result = Stdlib.__Http2Fields.requestFields method url headers body |> Stdlib.Result.andThen (fun fields ->
+    Stdlib.__Http3Connection.requestMany entry.state [Stdlib.__Http3Connection.Request { method = method, fields = fields, body = body }]) in
+  match result with
+  | Error message ->
+    // Failed I/O may have consumed a send nonce; abort instead of encrypted close or replay.
+    let _ = Stdlib.__Http3.close entry.state.wire in
+    Error (if Stdlib.String.contains message "timed out" then Stdlib.HttpClient.RequestError.Timeout else Stdlib.HttpClient.RequestError.NetworkError)
+  | Ok batch ->
+    match batch.responses with
+    | [outcome] ->
+      match outcome.response with
+      | Error _ -> let _ = Stdlib.__Http3.close batch.state.wire in Error Stdlib.HttpClient.RequestError.NetworkError
+      | Ok response ->
+        if Stdlib.__Http3Pool.reusable batch.state then Ok (Stdlib.__Http3Pool.Completed { response = response, entry = Some { entry with state = batch.state } })
+        else let _ = Stdlib.__Http3.close batch.state.wire in Ok (Stdlib.__Http3Pool.Completed { response = response, entry = None })
+    | _ -> Builtin.crash "Singleton HTTP/3 exchange returned wrong response count"
 
 let open (ready: Stdlib.__QuicClient.Ready) (method: String) (url: Stdlib.__HttpWire.Url) (headers: List<(String * String)>) (body: Blob)
   : Stdlib.Result.Result<Stdlib.__Http3Pool.Completed, Stdlib.HttpClient.RequestError> =
-  match Stdlib.__Http3.initialize ready (method == "HEAD") 10000L with
+  match Stdlib.__Http3Connection.open ready with
   | Error _ -> let _ = Stdlib.__QuicClient.close ready in Error Stdlib.HttpClient.RequestError.NetworkError
-  | Ok state -> Stdlib.__Http3Pool.__exchange (Stdlib.__Http3Pool.Entry { origin = url, state = state, idle = 0L }) method url headers body
+  | Ok state -> Stdlib.__Http3Pool.exchange (Stdlib.__Http3Pool.Entry { origin = url, state = state, idle = 0L }) method url headers body

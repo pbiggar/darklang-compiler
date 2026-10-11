@@ -200,6 +200,7 @@ StdLib/__AltSvcCache.dark
 StdLib/__Http1Pool.dark
 StdLib/__Http2Pool.dark
 StdLib/__Http3Pool.dark
+StdLib/__HttpSessionBatch.dark
 StdLib/HttpClientSession.dark
 StdLib/__HttpsService.dark
 StdLib/__HttpsDns.dark

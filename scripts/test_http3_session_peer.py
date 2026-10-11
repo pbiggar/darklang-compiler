@@ -19,13 +19,11 @@ from test_quic_tls_peer import certificates
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = '''// h3-session.dark - Repeated requests share QUIC and dynamic QPACK ownership.
-let request (cell: RawPtr) (life: Stream<Unit>) (root: Blob) (path: String) : Stdlib.Result.Result<Stdlib.HttpClient.Response, Stdlib.HttpClient.RequestError> =
-  Stdlib.HttpClientSession.__request cell life true (Some [root]) "GET" ("https://localhost" ++ path) [("x-shared", "café ☃")] Stdlib.Blob.empty
-let check (cell: RawPtr) (life: Stream<Unit>) (root: Blob) (index: Int64) : Bool =
+let check (session: Stdlib.HttpClientSession.Session) (index: Int64) : Bool =
   if index == @COUNT@L then true
-  else match request cell life root ("/" ++ Stdlib.Int64.toString index) with
+  else match session.request "GET" ("https://localhost/" ++ Stdlib.Int64.toString index) [("x-shared", "café ☃")] Stdlib.Blob.empty with
   | Error _ -> false
-  | Ok response -> Stdlib.Blob.toHex response.body == Stdlib.Blob.toHex (Stdlib.String.toBlob ("/" ++ Stdlib.Int64.toString index)) && check cell life root (index + 1L)
+  | Ok response -> Stdlib.Blob.toHex response.body == Stdlib.Blob.toHex (Stdlib.String.toBlob ("/" ++ Stdlib.Int64.toString index)) && check session (index + 1L)
 let run (port: Int64) (root: Blob) : Stdlib.Result.Result<Bool, String> =
   Stdlib.__QuicClient.connect (Stdlib.__Datagram.Endpoint { address = [127L, 0L, 0L, 1L], port = port }) "localhost" [root] 10000L |> Stdlib.Result.andThen (fun ready ->
     let origin = Stdlib.__HttpWire.Url { scheme = "https", host = "localhost", port = 443L, authority = "localhost", target = "/0" } in
@@ -35,13 +33,11 @@ let run (port: Int64) (root: Blob) : Stdlib.Result.Result<Bool, String> =
       match completed.entry, Stdlib.__Network.monotonicMillis () with
       | Some entry, Ok now ->
         let pool = Stdlib.__Http3Pool.put Stdlib.__Http3Pool.empty entry now in
-        let cell = Stdlib.Stream.__cellNew (Stdlib.HttpClientSession.__State { cache = Stdlib.__AltSvcCache.empty, pool = Stdlib.__Http1Pool.empty, http2 = Stdlib.__Http2Pool.empty, http3 = pool }) in
-        let life = Stdlib.Stream.__new (fun _unit -> Some ()) (fun _unit -> Stdlib.HttpClientSession.__dispose cell) in
-        let valid = check cell life root 1L in
-        let _ = Stdlib.HttpClientSession.__clear cell life in
-        let _ = Stdlib.Stream.close life in
-        let _ = Stdlib.Stream.close life in
-        let _ = Stdlib.__QuicClient.close ready in Ok valid
+        let session = Stdlib.HttpClientSession.__createState (Stdlib.HttpClientSession.__State { cache = Stdlib.__AltSvcCache.empty, pool = Stdlib.__Http1Pool.empty, http2 = Stdlib.__Http2Pool.empty, http3 = pool }) true (Some [root]) in
+        let valid = check session 1L in
+        let _ = session.clear () in
+        let _ = session.close () in
+        let _ = session.close () in Ok valid
       | _, _ -> Error "First connection was not reusable")
 match Stdlib.Cli.__Args.int64 0, Stdlib.Blob.fromHex "@CA@" with
 | Ok port, Ok root -> match run port root with | Ok true -> Stdlib.printLine "OK" | Ok false -> Stdlib.printLine "FAILED" | Error message -> Stdlib.printLine message
@@ -78,13 +74,40 @@ match Stdlib.Cli.__Args.int64 0, Stdlib.Blob.fromHex "@CA@" with
 '''
 
 
+PUBLIC_MULTIPLEX = '''// h3-session-batch.dark - Public batches use advertised QUIC without a TCP fallback.
+let request (path: String) : Stdlib.HttpClientSession.Request =
+  Stdlib.HttpClientSession.Request { method = "GET", url = "https://localhost" ++ path, headers = [("x-shared", "café ☃")], body = Stdlib.Blob.empty }
+let check (session: Stdlib.HttpClientSession.Session) (reset: Bool) : Bool =
+  match session.requestMany [request "/one", request "/two"] with
+  | Error _ -> false
+  | Ok outcomes ->
+    let valid = match outcomes with
+    | [first, second] -> first.index == 0L && second.index == 1L && (match first.response, second.response with
+      | Ok first, Ok second -> Stdlib.Bool.not reset && Stdlib.Blob.__byteLength first.body == 70000L && Stdlib.Blob.__byteLength second.body == 70000L
+      | Error _, Ok second -> reset && Stdlib.Blob.__byteLength second.body == 70000L
+      | _, _ -> false)
+    | _ -> false in
+    let after = session.request "GET" "https://localhost/after" [("x-shared", "café ☃")] Stdlib.Blob.empty in
+    valid && (match after with | Ok response -> Stdlib.Blob.toHex response.body == "2F6166746572" | Error _ -> false)
+match Stdlib.Cli.__Args.int64 0, Stdlib.Blob.fromHex "@CA@", Stdlib.__Network.monotonicMillis () with
+| Ok port, Ok root, Ok now ->
+  let origin = Stdlib.__HttpWire.Url { scheme = "https", host = "localhost", port = 443L, authority = "localhost", target = "/" } in
+  let cache = Stdlib.__AltSvcCache.learn Stdlib.__AltSvcCache.empty origin 200 [("alt-svc", "h3=\"127.0.0.1:" ++ Stdlib.Int64.toString port ++ "\"; ma=60")] now now 0L in
+  let session = Stdlib.HttpClientSession.__createState (Stdlib.HttpClientSession.__State { cache = cache, pool = Stdlib.__Http1Pool.empty, http2 = Stdlib.__Http2Pool.empty, http3 = Stdlib.__Http3Pool.empty }) true (Some [root]) in
+  let valid = check session @RESET@ in
+  let _ = session.clear () in
+  let _ = session.close () in
+  if valid then Stdlib.printLine "OK" else Stdlib.printLine "FAILED"
+| _, _, _ -> Stdlib.printLine "Bad arguments"
+'''
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--compiler", type=Path, default=ROOT / "dark")
     parser.add_argument("--requests", type=int, default=5)
-    parser.add_argument("--direct", action="store_true")
-    parser.add_argument("--no-clear", action="store_true")
     parser.add_argument("--multiplex", choices=["interleave", "reset"])
+    parser.add_argument("--public", action="store_true")
     args = parser.parse_args()
     key, leaf, ca = certificates()
     configuration = QuicConfiguration(is_client=False, alpn_protocols=["h3"])
@@ -95,13 +118,7 @@ def main():
         listener.bind(("127.0.0.1", 0))
         listener.settimeout(0.01)
         source, binary = Path(temporary) / "session.dark", Path(temporary) / "session"
-        test_source = MULTIPLEX.replace("@RESET@", "true" if args.multiplex == "reset" else "false") if args.multiplex else SOURCE
-        if args.no_clear:
-            test_source = test_source.replace("let _ = Stdlib.HttpClientSession.__clear cell life in", "let _ = () in")
-        if args.direct:
-            start = test_source.index("        let pool =")
-            end = test_source.index("      | _, _ ->", start)
-            test_source = test_source[:start] + "        let pool = Stdlib.__Http3Pool.put Stdlib.__Http3Pool.empty entry now in\n        let cell = Stdlib.Stream.__cellNew (Stdlib.HttpClientSession.__State { cache = Stdlib.__AltSvcCache.empty, pool = Stdlib.__Http1Pool.empty, http2 = Stdlib.__Http2Pool.empty, http3 = pool }) in\n        let _ = Stdlib.HttpClientSession.__dispose cell in Ok true\n" + test_source[end:]
+        test_source = (PUBLIC_MULTIPLEX if args.public else MULTIPLEX).replace("@RESET@", "true" if args.multiplex == "reset" else "false") if args.multiplex else SOURCE
         source.write_text(test_source.replace("@CA@", ca.public_bytes(serialization.Encoding.DER).hex()).replace("@COUNT@", str(args.requests)))
         compiled = subprocess.run([str(args.compiler), str(source), "--allow-internal", "--leak-check", "-o", str(binary)], cwd=ROOT, capture_output=True, text=True, timeout=120)
         assert compiled.returncode == 0, compiled.stdout + compiled.stderr
@@ -160,7 +177,7 @@ def main():
             thread.join(timeout=2)
         assert not thread.is_alive() and not errors, errors
         assert result.returncode == 0 and result.stdout == "OK\n" and not result.stderr, (result, streams)
-        assert len(connections) == 1 and streams == ([0, 4, 8] if args.multiplex else list(range(0, (1 if args.direct else args.requests) * 4, 4))), streams
+        assert len(connections) == 1 and streams == ([0, 4, 8] if args.multiplex else list(range(0, args.requests * 4, 4))), streams
     print(f"HTTP/3 {args.multiplex or 'session'}: streams {streams}, shared Unicode QPACK and leak-free disposal passed")
 
 
