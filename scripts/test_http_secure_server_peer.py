@@ -10,10 +10,10 @@ from pathlib import Path
 from cryptography.hazmat.primitives import serialization
 
 from test_http3_server_peer import ROOT, SERVER, exchange, start, stop
-from test_http2_server_tls_peer import connect, h2_exchange
+from test_http2_server_tls_peer import connect, h2_exchange, http1_owners
 from test_quic_tls_peer import certificates
 
-CLIENT = '''// client.dark - Learn same-origin HTTP/3 and retain lazy body ownership after session close.
+CLIENT = '''// client.dark - Learn same-origin HTTP/3 and consume lazy body ownership before session close.
 let run () : Unit =
   match Stdlib.Blob.fromHex "@ROOT@" with
   | Error _ -> Stdlib.printLine "ERROR"
@@ -26,9 +26,9 @@ let run () : Unit =
       else session.request "POST" url [] body |> Stdlib.Result.andThen (fun second ->
         if second.statusCode != 200 || Stdlib.Blob.toList second.body != Stdlib.Blob.toList body then Error Stdlib.HttpClient.RequestError.NetworkError
         else session.stream "POST" url [] body |> Stdlib.Result.map (fun third ->
-          session.close ()
           let received = Stdlib.Stream.toList third.body in
           Stdlib.Stream.close third.body
+          session.close ()
           third.statusCode == 200 && received == Stdlib.Blob.toList body))) in
     session.close ()
     Stdlib.printLine (match result with | Ok true -> "DONE" | _ -> "ERROR")
@@ -47,6 +47,7 @@ def main():
     server = SERVER.replace("Stdlib.HttpServer.Quic.serve", "Stdlib.HttpServer.Secure.serve")
     server = server.replace('  else if Stdlib.HttpServer.getMethod', '''  else if Stdlib.String.endsWith request.url "/clear" then Stdlib.Http.Response { statusCode = 200, headers = [("alt-svc", "clear")], body = Stdlib.Blob.empty }
   else if Stdlib.String.endsWith request.url "/421" then Stdlib.Http.responseWithText "misdirected" 421
+  else if Stdlib.String.endsWith request.url "/big" then Stdlib.Http.responseWithText (Stdlib.String.join (Stdlib.List.repeatUnsafe 70 (Stdlib.String.repeat "b" 1000)) "") 200
   else if Stdlib.HttpServer.getMethod''')
     with tempfile.TemporaryDirectory(prefix="dark-http-secure-", dir=ROOT.parent) as temporary:
         source, binary = Path(temporary) / "server.dark", Path(temporary) / "server"
@@ -55,6 +56,7 @@ def main():
         assert result.returncode == 0, result.stdout + result.stderr
         process, port = start(binary)
         try:
+            http1_owners(port, trust)
             advertisement = f'h3=":{port}"; ma=3600'.encode()
             for protocols in (["http/1.1"], []):
                 with connect(port, trust, protocols) as peer:

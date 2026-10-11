@@ -5,28 +5,6 @@ let __handler (handler: Stdlib.Http.Request -> Stdlib.Http.Response) (request: S
   let url = if Stdlib.String.startsWith request.url "http://" then "https://" ++ Stdlib.String.dropFirst request.url 7 else request.url in
   handler (Stdlib.Http.Request { url = url, headers = request.headers, body = request.body })
 
-let __connection (config: Stdlib.HttpServer.Config.Config) (handler: Stdlib.Http.Request -> Stdlib.Http.Response) (signals: Stdlib.__Network.ShutdownSignals) (identity: Stdlib.TlsServerIdentity.Identity) (connection: Stdlib.__Network.TcpConnection) (limit: Int64) : Stdlib.Result.Result<Bool, String> =
-  match Stdlib.__Tls13ServerTcp.accept connection signals identity with
-  | Error message -> Ok (message == "HTTP server shutting down")
-  | Ok accepted ->
-    match Stdlib.__Network.monotonicMillis () with
-    | Error _ -> Error "TLS HTTP server clock failed"
-    | Ok now ->
-      let deadline = if accepted.ready.protocol == "h2" then None else Some (now + 10000L) in
-      let transport = Stdlib.__Tls13ServerTcp.transport connection signals deadline accepted in
-      let handler = fun request -> Stdlib.HttpServer.Tls.__handler handler request in
-      let served =
-        if accepted.ready.protocol == "h2" then
-          let result = Stdlib.__Http2.serve transport Stdlib.Blob.empty config (fun request -> Stdlib.HttpServer.__http2Handler config handler request) in
-          match result with | Error message -> Ok (message == "HTTP server shutting down") | Ok () -> Ok false
-        else Stdlib.HttpServer.__handleHttp1Transport config handler signals transport limit Stdlib.Blob.empty in
-      let stopped =
-        match served, Stdlib.__Network.monotonicMillis () with
-        | Ok false, Ok finished -> Stdlib.HttpServer.__drainHttp2 connection signals (finished + 10000L) 131072L
-        | _, _ -> false in
-      let _ = Stdlib.__HttpTransport.close transport in
-      match served with | Ok wasStopped -> Ok (wasStopped || stopped) | Error message -> Error message
-
 let __loop (config: Stdlib.HttpServer.Config.Config) (identity: Stdlib.TlsServerIdentity.Identity) (handler: Stdlib.Http.Request -> Stdlib.Http.Response) (signals: Stdlib.__Network.ShutdownSignals) (listener: Stdlib.__Network.TcpListener) (limit: Int64) : Stdlib.Result.Result<Unit, String> =
   Stdlib.__TlsServer.serve config identity handler signals listener limit
 
