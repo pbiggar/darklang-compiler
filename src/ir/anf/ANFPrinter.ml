@@ -145,7 +145,6 @@ let cliOperation = function
   | ANF.PosixCopyFileRange -> "PosixCopyFileRange"
   | ANF.PosixFtruncate -> "PosixFtruncate"
   | ANF.PosixFchmod -> "PosixFchmod"
-  | ANF.PosixFsync -> "PosixFsync"
   | ANF.PosixFstat -> "PosixFstat"
   | ANF.PosixPread -> "PosixPread"
   | ANF.PosixPwrite -> "PosixPwrite"

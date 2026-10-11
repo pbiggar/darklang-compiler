@@ -25,9 +25,9 @@ let cached = Builtin.__cachedExecutablePath () in
 let _ = Stdlib.Cli.Dir.setCurrent "/" in
 let first = Builtin.runtimeExecutablePath () in
 let second = Stdlib.Cli.Sys.currentExecutablePath () in
-let small = if Stdlib.Cli.Runtime.targetOS () == "darwin" then first else Builtin.__linuxExecutablePath 1L in
+let small = if Builtin.runtimeTargetOS () == "darwin" then first else Builtin.__linuxExecutablePath 1L in
 // Darwin has no AT_EXECFN fallback when argv[0] is forged and PATH is unusable.
-let fallbackMatches = match cached with | Some path -> path == first | None -> Stdlib.Cli.Runtime.targetOS () == "darwin" in
+let fallbackMatches = match cached with | Some path -> path == first | None -> Builtin.runtimeTargetOS () == "darwin" in
 if ready == 1L && fallbackMatches && first == second && first == small && first == Builtin.runtimeExecutablePath () then first
 else Builtin.crash "Executable path results differ"
 ''', encoding="utf-8")

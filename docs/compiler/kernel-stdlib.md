@@ -1,8 +1,9 @@
 # Shared kernel StdLib
 
 The migrated public CLI libraries use the same Dark implementation in the
-compiler and interpreter. `Cli.Syscall` contains kernel operations, `Cli.Runtime`
-contains target/startup inputs, and ordinary CLI APIs compose these primitives.
+compiler and interpreter. Existing public APIs compose private `__` helpers
+within File, Process, Posix, Sys and DateTime. Those helpers call Builtins directly;
+there are no public syscall/runtime wrapper packages or separate algorithm modules.
 `Builtin.syscallX` means a kernel operation plus unavoidable ABI adaptation and
 trusted authorization. `Builtin.runtimeX` is not a claim that an OS syscall exists.
 There is no generic syscall-number/pointer escape hatch and no new fork primitive.
@@ -47,12 +48,20 @@ held-inode event path or execute Darwin code.
 
 Process capture, partial writes, simultaneous stdout/stderr draining, output
 limits, deadlines, UTF-8 conversion, and interactive history now live in shared
-`Cli.ChildIO` and `Cli.Process`. The runtime leaves launch argv directly, expose
+private `Cli.Process.__child*` helpers. The runtime leaves launch argv directly, expose
 owned pipe descriptors, supervise only their own child, and own two opaque byte
 cells. They do not implement capture loops or text decoding. Closing resources
 is always permitted for cleanup; other uses recheck retained process authority.
 Child waiting releases the ownership lease before blocking so cleanup can kill
 and unblock it. Execution teardown disposes unreleased handles and byte cells.
+
+The two history cells remain necessary for the existing opaque integer
+ProcessHandle API: communicate returns each new response, while terminate returns
+the accumulated history across earlier calls. An immutable local accumulator
+cannot persist between those calls without changing the public handle contract.
+Builtin names stay `syscallX`/`runtimeX`; Builtins are already private. The unused
+`syscallFsync` and its compiler lowering have been removed; the interpreter's
+internal durable-filesystem implementation still uses fsync where required.
 
 The interpreter uses .NET's process supervisor, never raw waitpid on its children.
 The compiler's private launch adapter performs pipe/CLOEXEC/exec-error-handshake

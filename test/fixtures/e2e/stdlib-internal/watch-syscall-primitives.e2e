@@ -1,0 +1,4 @@
+match Builtin.syscallInotifyInit1 (-1) with | Error e -> e == (if Stdlib.Cli.Posix.__abiMac () then 78 else 22) | Ok _ -> false = true
+Builtin.syscallPpoll [] (-1) = Error 22
+Builtin.syscallPpoll [] 0 |> Stdlib.Result.map Stdlib.Blob.length = Ok 0
+match Builtin.syscallPpoll [(-1, 1)] 0 with | Ok bytes -> Stdlib.Blob.length bytes == 8 | Error _ -> false = true

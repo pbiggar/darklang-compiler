@@ -384,7 +384,6 @@ and aNF_cliOperation (value : ANF.cliOperation) =
   | ANF.PosixCopyFileRange -> union "CliOperation" "PosixCopyFileRange" []
   | ANF.PosixFtruncate -> union "CliOperation" "PosixFtruncate" []
   | ANF.PosixFchmod -> union "CliOperation" "PosixFchmod" []
-  | ANF.PosixFsync -> union "CliOperation" "PosixFsync" []
   | ANF.PosixFstat -> union "CliOperation" "PosixFstat" []
   | ANF.PosixPread -> union "CliOperation" "PosixPread" []
   | ANF.PosixPwrite -> union "CliOperation" "PosixPwrite" []

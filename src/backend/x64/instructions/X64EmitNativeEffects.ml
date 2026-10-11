@@ -183,7 +183,7 @@ let emitCliNative (ctx : X64CodeGenTypes.funcCtx) (dest : LIR.reg)
       | LIR.PosixSetAttributesAt | LIR.PosixSymlinkAt | LIR.PosixReadlinkAt
       | LIR.PosixAccessAt | LIR.PosixFlock | LIR.PosixGetDents | LIR.PosixIoctl
       | LIR.PosixProcInfo | LIR.PosixCopyFileRange | LIR.PosixFtruncate
-      | LIR.PosixFchmod | LIR.PosixFsync | LIR.PosixFstat | LIR.PosixPread
+      | LIR.PosixFchmod | LIR.PosixFstat | LIR.PosixPread
       | LIR.PosixPwrite | LIR.PosixFclonefileat | LIR.PosixGetentropy
       | LIR.PosixUname | LIR.PosixSysctl | LIR.PosixSchedGetaffinity
       | LIR.PosixFcntlGetPath | LIR.PosixClockGettime | LIR.PosixGettimeofday
@@ -217,7 +217,6 @@ let emitCliNative (ctx : X64CodeGenTypes.funcCtx) (dest : LIR.reg)
             | LIR.PosixCopyFileRange -> (Some 326, 6)
             | LIR.PosixFtruncate -> (Some 77, 2)
             | LIR.PosixFchmod -> (Some 91, 2)
-            | LIR.PosixFsync -> (Some 74, 1)
             | LIR.PosixFstat -> (Some 5, 2)
             | LIR.PosixPread -> (Some 17, 4)
             | LIR.PosixPwrite -> (Some 18, 4)

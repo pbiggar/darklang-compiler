@@ -8,10 +8,10 @@ type Architecture =
   | Armv7l
 
 let getArchitecture () : Stdlib.Result.Result<Architecture, String> =
-  match Runtime.targetArchitecture () with
+  match Builtin.runtimeTargetArchitecture () with
   | "x64" -> Ok Architecture.Architecture.X86_64
   | "arm64" ->
-    if Runtime.targetOS () == "darwin" then Ok Architecture.Architecture.Arm64
+    if Builtin.runtimeTargetOS () == "darwin" then Ok Architecture.Architecture.Arm64
     else Ok Architecture.Architecture.Aarch64
   | "arm" -> Ok Architecture.Architecture.Arm
   | _ -> Error "Unsupported architecture"

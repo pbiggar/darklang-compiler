@@ -295,7 +295,6 @@ let convertCliOperation (operation : ANF.cliOperation) =
   | ANF.PosixCopyFileRange -> MIR.PosixCopyFileRange
   | ANF.PosixFtruncate -> MIR.PosixFtruncate
   | ANF.PosixFchmod -> MIR.PosixFchmod
-  | ANF.PosixFsync -> MIR.PosixFsync
   | ANF.PosixFstat -> MIR.PosixFstat
   | ANF.PosixPread -> MIR.PosixPread
   | ANF.PosixPwrite -> MIR.PosixPwrite
@@ -894,7 +893,6 @@ let cliOperationName = function
   | ANF.PosixCopyFileRange -> "PosixCopyFileRange"
   | ANF.PosixFtruncate -> "PosixFtruncate"
   | ANF.PosixFchmod -> "PosixFchmod"
-  | ANF.PosixFsync -> "PosixFsync"
   | ANF.PosixFstat -> "PosixFstat"
   | ANF.PosixPread -> "PosixPread"
   | ANF.PosixPwrite -> "PosixPwrite"

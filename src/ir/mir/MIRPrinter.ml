@@ -143,7 +143,6 @@ let cliOperation = function
   | MIR.PosixCopyFileRange -> "PosixCopyFileRange"
   | MIR.PosixFtruncate -> "PosixFtruncate"
   | MIR.PosixFchmod -> "PosixFchmod"
-  | MIR.PosixFsync -> "PosixFsync"
   | MIR.PosixFstat -> "PosixFstat"
   | MIR.PosixPread -> "PosixPread"
   | MIR.PosixPwrite -> "PosixPwrite"

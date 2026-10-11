@@ -1,4 +1,4 @@
 // The upstream PID builtin exposes the existing native process identity.
-Stdlib.Cli.Syscall.getpid () > 0 = true
-Stdlib.Cli.Syscall.getpid () == Stdlib.Cli.Sys.currentPid () = true
-Stdlib.Cli.Syscall.getpid () == Stdlib.Cli.Syscall.getpid () = true
+Builtin.syscallGetpid () > 0 = true
+Builtin.syscallGetpid () == Stdlib.Cli.Sys.currentPid () = true
+Builtin.syscallGetpid () == Builtin.syscallGetpid () = true

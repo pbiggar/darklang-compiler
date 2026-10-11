@@ -20,7 +20,6 @@ let __schedGetaffinity (pid: Int64) (count: Int64) (buffer: RawPtr) : Int64 = -3
 let __copyFileRange (a0: Int64) (a1: Int64) (a2: Int64) (a3: Int64) (a4: Int64) (a5: Int64) : Int64 = -38L
 let __ftruncate (a0: Int64) (a1: Int64) : Int64 = -38L
 let __fchmod (a0: Int64) (a1: Int64) : Int64 = -38L
-let __fsync (a0: Int64) : Int64 = -38L
 let __getentropy (buffer: RawPtr) (length: Int64) (flags: Int64) : Int64 = -38L
 let __fstat (a0: Int64) (a1: RawPtr) : Int64 = -38L
 let __pread (a0: Int64) (a1: RawPtr) (a2: Int64) (a3: Int64) : Int64 = -38L

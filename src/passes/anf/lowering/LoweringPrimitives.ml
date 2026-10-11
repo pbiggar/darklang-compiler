@@ -459,7 +459,6 @@ let tryCliIntrinsic name args =
             Some ANF.PosixCopyFileRange
         | "Darklang.Stdlib.Cli.__Posix.__ftruncate" -> Some ANF.PosixFtruncate
         | "Darklang.Stdlib.Cli.__Posix.__fchmod" -> Some ANF.PosixFchmod
-        | "Darklang.Stdlib.Cli.__Posix.__fsync" -> Some ANF.PosixFsync
         | "Darklang.Stdlib.Cli.__Posix.__fstat" -> Some ANF.PosixFstat
         | "Darklang.Stdlib.Cli.__Posix.__pread" -> Some ANF.PosixPread
         | "Darklang.Stdlib.Cli.__Posix.__pwrite" -> Some ANF.PosixPwrite

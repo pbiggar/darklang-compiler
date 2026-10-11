@@ -309,7 +309,7 @@ let inferCExprType ctx expr =
       | A.PosixSetAttributesAt | A.PosixSymlinkAt | A.PosixReadlinkAt
       | A.PosixAccessAt | A.PosixFlock | A.PosixGetDents | A.PosixIoctl
       | A.PosixProcInfo | A.PosixCopyFileRange | A.PosixFtruncate
-      | A.PosixFchmod | A.PosixFsync | A.PosixFstat | A.PosixPread
+      | A.PosixFchmod | A.PosixFstat | A.PosixPread
       | A.PosixPwrite | A.PosixFclonefileat | A.PosixGetentropy | A.PosixUname
       | A.PosixSysctl | A.PosixSchedGetaffinity | A.PosixFcntlGetPath
       | A.PosixClockGettime | A.PosixGettimeofday | A.PosixNanosleep

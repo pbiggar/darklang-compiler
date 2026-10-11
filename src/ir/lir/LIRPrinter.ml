@@ -179,7 +179,6 @@ let prettyPrintCliOperation = function
   | LIR.PosixCopyFileRange -> "PosixCopyFileRange"
   | LIR.PosixFtruncate -> "PosixFtruncate"
   | LIR.PosixFchmod -> "PosixFchmod"
-  | LIR.PosixFsync -> "PosixFsync"
   | LIR.PosixFstat -> "PosixFstat"
   | LIR.PosixPread -> "PosixPread"
   | LIR.PosixPwrite -> "PosixPwrite"

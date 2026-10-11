@@ -6,7 +6,7 @@ type OS =
   | Windows
 
 let getOS () : Stdlib.Result.Result<OS, String> =
-  match Runtime.targetOS () with
+  match Builtin.runtimeTargetOS () with
   | "linux" -> Ok OS.OS.Linux
   | "darwin" -> Ok OS.OS.MacOS
   | "windows" -> Ok OS.OS.Windows

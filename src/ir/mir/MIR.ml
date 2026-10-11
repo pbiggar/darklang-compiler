@@ -161,7 +161,6 @@ type cliOperation =
   | PosixCopyFileRange
   | PosixFtruncate
   | PosixFchmod
-  | PosixFsync
   | PosixFstat
   | PosixPread
   | PosixPwrite

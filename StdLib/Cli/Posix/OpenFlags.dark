@@ -3,6 +3,6 @@ module Darklang.Stdlib.Cli.Posix.OpenFlags
 let rdonly () : Int = 0
 let wronly () : Int = 1
 let rdwr () : Int = 2
-let creat () : Int = Stdlib.Cli.KernelABI.openCreate ()
-let trunc () : Int = Stdlib.Cli.KernelABI.openTruncate ()
-let append () : Int = Stdlib.Cli.KernelABI.openAppend ()
+let creat () : Int = Stdlib.Cli.Posix.__abiOpenCreate ()
+let trunc () : Int = Stdlib.Cli.Posix.__abiOpenTruncate ()
+let append () : Int = Stdlib.Cli.Posix.__abiOpenAppend ()

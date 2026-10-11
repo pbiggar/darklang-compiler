@@ -11,16 +11,10 @@ import sys
 
 ROOT = Path(__file__).resolve().parent.parent
 FILES = {
-    "syscall": "Syscall", "runtime": "Runtime", "kernelABI": "KernelABI",
-    "kernelData": "KernelData", "directoryIO": "DirectoryIO", "glob": "Glob",
-    "posix/io": "Posix/IO", "posix/errors": "Posix/Errors",
-    "posix/accounts": "Posix/Accounts", "posix/temp": "Posix/Temp",
-    "fileCopy": "FileCopy", "fileWatch": "FileWatch", "file": "File",
+    "file": "File",
     "env": "Env",
     "fileSystem": "FileSystem",
-    "pathIO": "PathIO",
-    "system": "System", "sys": "Sys",
-    "clock": "Clock", "childIO": "ChildIO", "process": "Process", "execution": "",
+    "sys": "Sys", "process": "Process", "execution": "",
 }
 
 def main():
@@ -31,6 +25,12 @@ def main():
     source = args.interpreter / "packages/darklang/stdlib/cli"
     outputs = {(f"StdLib/Cli/{dest}.dark" if dest else "StdLib/Cli.dark"): (source / f"{src}.dark").read_bytes()
                for src, dest in FILES.items()}
+    # DateTime's representation is engine-specific; only its clock algorithms
+    # are shared. Keep them in the existing module rather than a public Cli.Clock.
+    marker = "// Shared clock implementation.\n"
+    clock = (source.parent / "dateTime.dark").read_text().split(marker, 1)[1]
+    date_time = (ROOT / "StdLib/DateTime.dark").read_text().split(marker, 1)[0]
+    outputs["StdLib/DateTime.dark"] = (date_time + marker + clock).encode()
     filesystem = outputs["StdLib/Cli/FileSystem.dark"].decode()
     nested = re.search(r"^module FileError =\n((?:  .*\n|\n)+)", filesystem, re.MULTILINE)
     if nested is None:

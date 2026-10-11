@@ -50,10 +50,6 @@ let syscallFchmod (fd: Int) (mode: Int) : Stdlib.Result.Result<Unit, Int> =
         (Stdlib.Cli.__Posix.__fchmod (Builtin.__posixInt32 fd)
             (Builtin.__posixInt32 mode))
 
-let syscallFsync (fd: Int) : Stdlib.Result.Result<Unit, Int> =
-    Builtin.__syscallUnitResult
-        (Stdlib.Cli.__Posix.__fsync (Builtin.__posixInt32 fd))
-
 let syscallFstat (fd: Int) : Stdlib.Result.Result<Blob, Int> =
     let fd = Builtin.__posixInt32 fd in
     let ptr = __mapped_alloc 256L in

@@ -139,7 +139,6 @@ and cliOperation (value : MIR.cliOperation) =
   | MIR.PosixCopyFileRange -> union "CliOperation" "PosixCopyFileRange" []
   | MIR.PosixFtruncate -> union "CliOperation" "PosixFtruncate" []
   | MIR.PosixFchmod -> union "CliOperation" "PosixFchmod" []
-  | MIR.PosixFsync -> union "CliOperation" "PosixFsync" []
   | MIR.PosixFstat -> union "CliOperation" "PosixFstat" []
   | MIR.PosixPread -> union "CliOperation" "PosixPread" []
   | MIR.PosixPwrite -> union "CliOperation" "PosixPwrite" []

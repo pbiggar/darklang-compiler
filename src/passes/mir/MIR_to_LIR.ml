@@ -75,7 +75,6 @@ let convertCliOperation operation =
   | MIR.PosixCopyFileRange -> LIR.PosixCopyFileRange
   | MIR.PosixFtruncate -> LIR.PosixFtruncate
   | MIR.PosixFchmod -> LIR.PosixFchmod
-  | MIR.PosixFsync -> LIR.PosixFsync
   | MIR.PosixFstat -> LIR.PosixFstat
   | MIR.PosixPread -> LIR.PosixPread
   | MIR.PosixPwrite -> LIR.PosixPwrite

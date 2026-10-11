@@ -19,6 +19,11 @@ Its native Builtin adapters are `Builtin/__Syscall.dark`, `__Runtime.dark`,
 `__ChildRuntime.dark`; shared Dark
 algorithms are checked by `scripts/sync-kernel-stdlib.py`.
 
+Shared algorithms are private `__` declarations in the existing File, Process,
+Posix, Sys and DateTime modules. Syscall and runtime Builtins are called directly;
+there are no public forwarding packages for them. DateTime's clock block is
+shared while each engine retains its own DateTime representation implementation.
+
 A `__` filename marks compiler support or a private implementation fragment.
 It does not rename the declared module or enforce language visibility: that
 is controlled by declaration names and the frontend's internal-mode checks.
@@ -50,8 +55,6 @@ fragments use `__` even where the interpreter also has private helpers.
 | `StdLib/Cli/Posix/Errno.dark` | `Darklang.Stdlib.Cli.Posix.Errno`  | `packages/darklang/stdlib/cli/posix.dark` |
 | `StdLib/Cli/Posix/StatMode.dark` | `Darklang.Stdlib.Cli.Posix.StatMode`  | `packages/darklang/stdlib/cli/posix.dark` |
 | `StdLib/Cli/FileSystem.dark` | `Darklang.Stdlib.Cli.FileSystem`  | `packages/darklang/stdlib/cli/fileSystem.dark` |
-| `StdLib/Cli/PathIO.dark` | `Darklang.Stdlib.Cli.PathIO` | Shared path buffer growth and decoding |
-| `StdLib/Cli/System.dark` | `Darklang.Stdlib.Cli.System` | Shared kernel host-record decoding |
 | `StdLib/Cli/FileSystem/FileError.dark` | `Darklang.Stdlib.Cli.FileSystem.FileError`  | `packages/darklang/stdlib/cli/fileSystem.dark` |
 | `StdLib/Env.dark` | `Darklang.Stdlib.Env`  | `packages/darklang/stdlib/env.dark` |
 | `StdLib/Builtin.dark` | `Builtin`  | Portable interpreter builtin bridges plus native adapter helpers (`backend/src/Builtins/Builtins.Pure/Libs/{UInt64,String}.fs` and `backend/src/Builtins/Builtins.Cli/Libs/{Directory,File,Environment}.fs`) |
@@ -61,8 +64,6 @@ fragments use `__` even where the interpreter also has private helpers.
 | `StdLib/Builtin/__ClockSyscall.dark` | `Builtin` | One-shot clock/sleep kernel adapters and raw event-loop runtime inputs |
 | `StdLib/Builtin/__WatchSyscall.dark` | `Builtin` | Single-call event queue registration and pollfd ABI adaptation |
 | `StdLib/Builtin/__ChildRuntime.dark` | `Builtin` | Owned argv launch, supervision and opaque child byte cells |
-| `StdLib/Cli/FileWatch.dark` | `Darklang.Stdlib.Cli.FileWatch` | Shared event decoding, rearming and callback orchestration |
-| `StdLib/Cli/Clock.dark` | `Darklang.Stdlib.Cli.Clock` | Shared clock decoding/scaling and interrupted-sleep retries |
 | `StdLib/Builtin/__BuildInfo.dark` | `Builtin` | Compiler revision substituted at build time, corresponding to interpreter `getBuildHash` (`backend/src/Builtins/Builtins.Cli/Libs/Environment.fs`) |
 | `StdLib/Builtin/__Executable.dark` | `Builtin` | Runtime executable path via Linux readlinkat or Darwin proc_info, with captured AT_EXECFN/argv/cwd/PATH fallbacks (`backend/src/Builtins/Builtins.Cli/Libs/Directory.fs`) |
 | `StdLib/Tuple2.dark` | `Darklang.Stdlib.Tuple2`  | `packages/darklang/stdlib/tuple2.dark` |
@@ -75,17 +76,6 @@ fragments use `__` even where the interpreter also has private helpers.
 | `StdLib/Fun.dark` | `Darklang.Stdlib.Fun`  | `packages/darklang/stdlib/fun.dark` |
 | `StdLib/Float.dark` | `Darklang.Stdlib.Float`  | `packages/darklang/stdlib/float.dark` |
 | `StdLib/Cli/__Posix.dark` | `Darklang.Stdlib.Cli.__Posix` | Private native syscall boundary for interpreter POSIX operations |
-| `StdLib/Cli/Glob.dark` | `Darklang.Stdlib.Cli.Glob` | Shared pure Dark glob matching |
-| `StdLib/Cli/Syscall.dark` | `Darklang.Stdlib.Cli.Syscall` | Shared single-call, numeric-errno kernel interface |
-| `StdLib/Cli/Runtime.dark` | `Darklang.Stdlib.Cli.Runtime` | Target/startup inputs, not syscalls |
-| `StdLib/Cli/KernelABI.dark` | `Darklang.Stdlib.Cli.KernelABI` | Shared target ABI constants |
-| `StdLib/Cli/KernelData.dark` | `Darklang.Stdlib.Cli.KernelData` | Shared bounded kernel-record decoding |
-| `StdLib/Cli/DirectoryIO.dark` | `Darklang.Stdlib.Cli.DirectoryIO` | Shared directory iteration |
-| `StdLib/Cli/FileCopy.dark` | `Darklang.Stdlib.Cli.FileCopy` | Shared clone/kernel-copy/bounded fallback algorithms |
-| `StdLib/Cli/Posix/IO.dark` | `Darklang.Stdlib.Cli.Posix.IO` | Shared complete-write algorithm |
-| `StdLib/Cli/Posix/Errors.dark` | `Darklang.Stdlib.Cli.Posix.Errors` | Shared errno messages |
-| `StdLib/Cli/Posix/Accounts.dark` | `Darklang.Stdlib.Cli.Posix.Accounts` | Shared passwd-file parsing |
-| `StdLib/Cli/Posix/Temp.dark` | `Darklang.Stdlib.Cli.Posix.Temp` | Shared temporary-entry collision retries |
 | `StdLib/Cli/Posix.dark` | `Darklang.Stdlib.Cli.Posix`  | `packages/darklang/stdlib/cli/posix.dark` |
 | `StdLib/Cli/Posix/__Error.dark` | `Darklang.Stdlib.Cli.Posix` | Private conversion from the existing native CLI error record |
 | `StdLib/Cli/Posix/OpenFlags.dark` | `Darklang.Stdlib.Cli.Posix.OpenFlags` | `packages/darklang/stdlib/cli/posix.dark` |
@@ -303,7 +293,6 @@ fragments use `__` even where the interpreter also has private helpers.
 | `StdLib/Cli/Env.dark` | `Darklang.Stdlib.Cli.Env`  | `packages/darklang/stdlib/cli/env.dark` |
 | `StdLib/Cli/__Args.dark` | `Darklang.Stdlib.Cli.__Args`  | Compiler positional CLI argument helpers |
 | `StdLib/Cli/Process.dark` | `Darklang.Stdlib.Cli.Process`  | `packages/darklang/stdlib/cli/process.dark` |
-| `StdLib/Cli/ChildIO.dark` | `Darklang.Stdlib.Cli.ChildIO` | `packages/darklang/stdlib/cli/childIO.dark` |
 | `StdLib/Cli/__NativeRuntime.dark` | `Darklang.Stdlib.Cli` | Private native startup/environment/kernel prototypes |
 | `StdLib/Cli/Sys.dark` | `Darklang.Stdlib.Cli.Sys`  | `packages/darklang/stdlib/cli/sys.dark` |
 | `StdLib/Cli/Stdin/Key.dark` | `Darklang.Stdlib.Cli.Stdin.Key`  | `packages/darklang/stdlib/cli/stdin.dark` |

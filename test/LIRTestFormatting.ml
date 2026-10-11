@@ -184,7 +184,6 @@ and cliOperation (value : LIR.cliOperation) =
   | LIR.PosixCopyFileRange -> union "CliOperation" "PosixCopyFileRange" []
   | LIR.PosixFtruncate -> union "CliOperation" "PosixFtruncate" []
   | LIR.PosixFchmod -> union "CliOperation" "PosixFchmod" []
-  | LIR.PosixFsync -> union "CliOperation" "PosixFsync" []
   | LIR.PosixFstat -> union "CliOperation" "PosixFstat" []
   | LIR.PosixPread -> union "CliOperation" "PosixPread" []
   | LIR.PosixPwrite -> union "CliOperation" "PosixPwrite" []
