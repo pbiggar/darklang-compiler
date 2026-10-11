@@ -58,7 +58,9 @@ let __total (owners: List<Stdlib.__TlsServer.Owner>) : Int64 = Stdlib.List.fold 
 let __round (context: Stdlib.__TlsServer.Context) (now: Int64) (remaining: List<Stdlib.__TlsServer.Owner>) (next: List<Stdlib.__TlsServer.Owner>) : Stdlib.Result.Result<Stdlib.__TlsServer.Round, String> =
   match remaining with
   | [] -> Ok (Stdlib.__TlsServer.Round { owners = Stdlib.List.reverse next, stopped = false })
-  | owner :: rest -> match Stdlib.__TlsServer.__step context owner now with
+  | owner :: rest ->
+    let stepped = Stdlib.__Network.monotonicMillis () |> Stdlib.Result.mapError (fun _code -> "TLS HTTP clock failed") |> Stdlib.Result.andThen (fun current -> Stdlib.__TlsServer.__step context owner current) in
+    match stepped with
     | Error message -> let _ = Stdlib.__TlsServer.__closeAll (remaining @ next) in Error message
     | Ok step ->
       if step.stopped then let _ = Stdlib.__TlsServer.__closeAll rest in Ok (Stdlib.__TlsServer.Round { owners = Stdlib.List.reverse next, stopped = true })
@@ -106,8 +108,11 @@ let __loop (context: Stdlib.__TlsServer.Context) (listener: Stdlib.__Network.Tcp
               if code == 4L || code == 11L || code == 35L then Stdlib.__TlsServer.__loop context listener round.owners
               else let _ = Stdlib.__TlsServer.__closeAll round.owners in Error "TLS HTTP accept failed"
             | Ok connection ->
-              let owner = Stdlib.__TlsServer.Handshake { connection = connection, state = Stdlib.__Tls13ServerPoll.initial (), deadline = now + 10000L } in
-              Stdlib.__TlsServer.__loop context listener (round.owners @ [Stdlib.__TlsServer.Owner.Handshake owner])
+              match Stdlib.__Network.monotonicMillis () with
+              | Error _ -> let _ = Stdlib.__Network.closeTcp connection in let _ = Stdlib.__TlsServer.__closeAll round.owners in Error "TLS HTTP clock failed"
+              | Ok admitted ->
+                let owner = Stdlib.__TlsServer.Handshake { connection = connection, state = Stdlib.__Tls13ServerPoll.initial (), deadline = admitted + 10000L } in
+                Stdlib.__TlsServer.__loop context listener (round.owners @ [Stdlib.__TlsServer.Owner.Handshake owner])
           else Stdlib.__TlsServer.__loop context listener round.owners)
   | _, _ -> let _ = Stdlib.__TlsServer.__closeAll owners in Error "TLS HTTP clock or shutdown check failed"
 

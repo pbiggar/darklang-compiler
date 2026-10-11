@@ -185,6 +185,7 @@ def h2_exchange(peer, port, method, total):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--compiler", type=Path, default=ROOT / "dark")
+    parser.add_argument("--skip-owner-checks", action="store_true", help="Isolate the legacy HTTP/2 and handshake compatibility cases")
     args = parser.parse_args()
     key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
     now = datetime.datetime.now(datetime.timezone.utc)
@@ -205,7 +206,8 @@ def main():
         assert compiled.returncode == 0, compiled.stdout + compiled.stderr
         process, port = start(binary)
         try:
-            http1_owners(port, certificate)
+            if not args.skip_owner_checks:
+                http1_owners(port, certificate)
             for method, total in (("POST", 70000), ("HEAD", 0), ("POST", 80001)):
                 with connect(port, certificate, ["h2", "http/1.1"]) as peer:
                     h2_exchange(peer, port, method, total)
@@ -239,6 +241,12 @@ def main():
             with connect(port, certificate, ["h2"]) as peer:
                 h2_exchange(peer, port, "HEAD", 0)
             stop(process)
+        except BaseException as error:
+            running = process.poll() is None
+            if running:
+                process.kill()
+            stdout, stderr = process.communicate()
+            raise AssertionError(f"TLS server peer failed; running_before_cleanup={running}, exit={process.returncode}, stdout={stdout!r}, stderr={stderr!r}") from error
         finally:
             if process.poll() is None:
                 process.kill()

@@ -147,7 +147,8 @@ let __round (context: Stdlib.__Http1Server.Context) (now: Int64) (remaining: Lis
   match remaining with
   | [] -> Ok (Stdlib.__Http1Server.Round { owners = Stdlib.List.reverse next, stopped = false })
   | owner :: rest ->
-    match Stdlib.__Http1Server.step context owner now with
+    let stepped = Stdlib.__Network.monotonicMillis () |> Stdlib.Result.mapError (fun _code -> "HTTP server clock failed") |> Stdlib.Result.andThen (fun current -> Stdlib.__Http1Server.step context owner current) in
+    match stepped with
     | Error message -> let _ = Stdlib.__Http1Server.__closeAll (next @ remaining) in Error message
     | Ok stepped ->
       if stepped.stopped then let _ = Stdlib.__Http1Server.__closeAll rest in Ok (Stdlib.__Http1Server.Round { owners = Stdlib.List.reverse next, stopped = true })
@@ -186,8 +187,11 @@ let __loop (context: Stdlib.__Http1Server.Context) (listener: Stdlib.__Network.T
               if code == 4L || code == 11L || code == 35L then Stdlib.__Http1Server.__loop context listener round.owners
               else let _ = Stdlib.__Http1Server.__closeAll round.owners in Error "HTTP server accept failed"
             | Ok connection ->
-              let owner = Stdlib.__Http1Server.Owner { connection = connection, transport = Stdlib.__HttpTransport.plain connection, phase = Stdlib.__Http1Server.Phase.Prelude Stdlib.Blob.empty, deadline = now + 10000L, started = now, requests = 0L } in
-              Stdlib.__Http1Server.__loop context listener (round.owners @ [owner])
+              match Stdlib.__Network.monotonicMillis () with
+              | Error _ -> let _ = Stdlib.__Network.closeTcp connection in let _ = Stdlib.__Http1Server.__closeAll round.owners in Error "HTTP server clock failed"
+              | Ok admitted ->
+                let owner = Stdlib.__Http1Server.Owner { connection = connection, transport = Stdlib.__HttpTransport.plain connection, phase = Stdlib.__Http1Server.Phase.Prelude Stdlib.Blob.empty, deadline = admitted + 10000L, started = admitted, requests = 0L } in
+                Stdlib.__Http1Server.__loop context listener (round.owners @ [owner])
           else Stdlib.__Http1Server.__loop context listener round.owners)
   | _, _ -> let _ = Stdlib.__Http1Server.__closeAll owners in Error "HTTP server clock or shutdown check failed"
 
