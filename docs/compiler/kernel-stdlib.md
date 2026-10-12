@@ -133,9 +133,8 @@ in existing modules. Compiler tests verify that user code cannot call the privat
 helpers or the deleted forwarding packages. Builtin names remain `syscallX` and
 `runtimeX`, without `__`.
 The interpreter parser/name resolver accepts private record and function names,
-matching the compiler's existing convention. The VM-only dotnet launcher permits
-an explicit managed-heap-limit override; package reload needed 2 GiB rather than
-its 1 GiB default in this VM. This does not change shipped runtime behavior.
+matching the compiler's existing convention. Temporary interpreter VM launchers
+used during the earlier validation are no longer part of that PR.
 
 The final interpreter commit above passed CI: 12,574 tests, four ignored, and
 all 13 build gates. Interpreter allocation budgets do not apply to native compiler
@@ -146,3 +145,14 @@ execution remain to be tested on suitable hosts. The earlier compiler parent
 performance gate rejected an incompatible workload-contract snapshot; that
 failure did not justify replacing its benchmark baseline. Current compiler
 validation is reported separately in the compiler PR.
+
+For the final interpreter alignment, `env -u LD_PRELOAD ./build --ai` passed,
+`TZ=UTC ./run-tests --ai` passed 13,267/13,267 tests, `dune runtest` passed
+(including explicit/empty HOME and real-UID passwd fallback), and
+`python3 scripts/check_compiled_leaks.py` passed all 58 workloads. A shared
+process/home/clock/system smoke program compiled for Linux x86-64, Linux ARM64
+and macOS ARM64; its Linux x86-64 execution passed with clean leak accounting.
+The 17-source equality and 63 referenced syscall/runtime adapter checks passed.
+`./benchmarks/run_benchmarks.sh --verify-parent full` failed preflight with
+`snapshot workload contract digest is incompatible`; it produced no performance
+measurement. No tracked benchmark data differs from main.
