@@ -136,14 +136,14 @@ Stdlib.Char.isASCII '\t' = true
 
 Stdlib.Char.toAsciiCode 'a' = Stdlib.Option.Option.Some 97
 Stdlib.Char.toAsciiCode 'A' = Stdlib.Option.Option.Some 65
-Stdlib.Char.toAsciiCode 'á' = Stdlib.Option.Option.Some 225
-Stdlib.Char.toAsciiCode 'Á' = Stdlib.Option.Option.Some 193
+Stdlib.Char.toAsciiCode 'á' = Stdlib.Option.Option.None
+Stdlib.Char.toAsciiCode 'Á' = Stdlib.Option.Option.None
 Stdlib.Char.toAsciiCode '3' = Stdlib.Option.Option.Some 51
 Stdlib.Char.toAsciiCode (smiley ()) = Stdlib.Option.Option.None
 Stdlib.Char.toAsciiCode 'ż' = Stdlib.Option.Option.None
 Stdlib.Char.toAsciiCode 'Ż' = Stdlib.Option.Option.None
-Stdlib.Char.toAsciiCode 'ó' = Stdlib.Option.Option.Some 243
-Stdlib.Char.toAsciiCode 'Ó' = Stdlib.Option.Option.Some 211
+Stdlib.Char.toAsciiCode 'ó' = Stdlib.Option.Option.None
+Stdlib.Char.toAsciiCode 'Ó' = Stdlib.Option.Option.None
 Stdlib.Char.toAsciiCode 'ł' = Stdlib.Option.Option.None
 Stdlib.Char.toAsciiCode 'Ł' = Stdlib.Option.Option.None
 Stdlib.Char.toAsciiCode (hand ()) = Stdlib.Option.Option.None
@@ -276,3 +276,11 @@ Stdlib.Char.toCodepoint (Stdlib.Char.fromCodepoint 65 |> Builtin.unwrap) =
   Stdlib.Option.Option.Some 65
 Stdlib.Char.toCodepoint (Stdlib.Char.fromCodepoint 128514 |> Builtin.unwrap) =
   Stdlib.Option.Option.Some 128514
+
+// Upstream #5790: an ASCII prefix does not make a grapheme ASCII.
+Stdlib.Char.toAsciiCode 'é' = Stdlib.Option.Option.None
+Stdlib.Char.toAsciiCode 'ÿ' = Stdlib.Option.Option.None
+Stdlib.Char.toAsciiCode '~' = Stdlib.Option.Option.Some 126
+Stdlib.Char.toAsciiCode '\t' = Stdlib.Option.Option.Some 9
+Stdlib.Char.toAsciiCode 'ä͖̭̈̇' = Stdlib.Option.Option.None
+Stdlib.Char.isASCII 'ä͖̭̈̇' = false

@@ -52,10 +52,10 @@ let toCodepoint (char: Char) : Stdlib.Option.Option<Int> =
     | _ -> None
 
 let toAsciiCode (char: Char) : Stdlib.Option.Option<Int> =
-    match Stdlib.Char.__firstCodepoint char with
-    | Some codepoint ->
-        if codepoint >= 0L && codepoint <= 255L then Some (Stdlib.Int.fromInt64 codepoint) else None
-    | None -> None
+    match Stdlib.String.__toCodepoints (Stdlib.Char.toString char) with
+    | [codepoint] ->
+        if codepoint >= 0L && codepoint < 128L then Some (Stdlib.Int.fromInt64 codepoint) else None
+    | _ -> None
 
 let isASCII (char: Char) : Bool =
     match Stdlib.Char.toAsciiCode char with

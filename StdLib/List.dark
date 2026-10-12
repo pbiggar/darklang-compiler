@@ -9,6 +9,15 @@ module Darklang.Stdlib.List
 
 type ChunkBySizeError = | SizeMustBeGreaterThanZero
 
+type IndexError = | IndexOutOfBounds
+
+let setAt<'a> (list: List<a>) (index: Int) (value: a) : Stdlib.Result.Result<List<a>, Stdlib.List.IndexError> =
+    let length = Stdlib.List.length list in
+    let resolvedIndex = if index < 0 then length + index else index in
+    if resolvedIndex < 0 || resolvedIndex >= length then
+        Error Stdlib.List.IndexError.IndexOutOfBounds
+    else Ok (Stdlib.List.indexedMap list (fun i element -> if i == resolvedIndex then value else element))
+
 val empty = []
 
 // Check if list is empty - O(1)
@@ -113,7 +122,7 @@ let __reverseByIndexHelper<'a> (list: List<a>) (index: Int64) (acc: List<a>) : L
             Stdlib.List.__reverseByIndexHelper<a> list (index - 1L) (Stdlib.List.__pushBack<a> acc v)
 
 let sortByComparator<'a> (list: List<a>) (comparator: a -> a -> Int) : Stdlib.Result.Result<List<a>, String> =
-    Stdlib.List.SortByComparatorHelpers.mergeSort<a> comparator list
+    Stdlib.List.SortByComparatorHelpers.mergeSort list comparator
 
 // Canonical interpreter ordering is synthesized per concrete AOT type.
 let sort<'a> (list: List<a>) : List<a> =
@@ -450,18 +459,18 @@ let randomElement<'a> (list: List<a>) : Stdlib.Option.Option<a> =
     if length == 0L then None
     else Stdlib.List.__getAt<a> list (Stdlib.List.__randomIndex length)
 
-let chunkBySizeHelper<'a> (size: Int) (currentList: List<a>) (accum: List<List<a>>) : List<List<a>> =
+let chunkBySizeHelper<'a> (currentList: List<a>) (size: Int) (accum: List<List<a>>) : List<List<a>> =
     match currentList with
     | [] -> Stdlib.List.reverse<List<a>> accum
     | _ ->
         let taken = Stdlib.List.take<a> currentList size in
         let rest = Stdlib.List.drop<a> currentList size in
         let next = if Stdlib.List.isEmpty<a> taken then accum else Stdlib.List.push<List<a>> accum taken in
-        Stdlib.List.chunkBySizeHelper<a> size rest next
+        Stdlib.List.chunkBySizeHelper rest size next
 
 let chunkBySize<'a> (list: List<a>) (size: Int) : Stdlib.Result.Result<List<List<a>>, Stdlib.List.ChunkBySizeError> =
     if size <= 0 then Error Stdlib.List.ChunkBySizeError.SizeMustBeGreaterThanZero
-    else Ok (Stdlib.List.chunkBySizeHelper size list [])
+    else Ok (Stdlib.List.chunkBySizeHelper list size [])
 
 // Convert list to display string representation: "[elem1, elem2, ...]"
 // Note: Generic version disabled due to function reference bug

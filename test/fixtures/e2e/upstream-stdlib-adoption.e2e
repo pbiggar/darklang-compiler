@@ -1,0 +1,30 @@
+// Public StdLib regressions for the approved upstream compatibility adoption.
+Stdlib.Tuple2.mapFirst ("one", 2L) (fun x -> Stdlib.String.toUppercase x) = ("ONE", 2L)
+Stdlib.Tuple2.mapSecond ("one", 2L) (fun x -> x + 1L) = ("one", 3L)
+Stdlib.Tuple2.mapBoth ("one", 2L) (fun x -> Stdlib.String.toUppercase x) (fun x -> x + 1L) = ("ONE", 3L)
+Stdlib.Tuple3.mapFirst ("one", 2L, true) (fun x -> Stdlib.String.toUppercase x) = ("ONE", 2L, true)
+Stdlib.Tuple3.mapSecond ("one", 2L, true) (fun x -> x + 1L) = ("one", 3L, true)
+Stdlib.Tuple3.mapThird ("one", 2L, true) (fun x -> !x) = ("one", 2L, false)
+Stdlib.Tuple3.mapAllThree ("one", 2L, true) (fun x -> Stdlib.String.toUppercase x) (fun x -> x + 1L) (fun x -> !x) = ("ONE", 3L, false)
+Stdlib.List.SortByComparatorHelpers.validate 1L 2L (fun a b -> if a < b then -1 else 0) = Ok -1
+Stdlib.List.SortByComparatorHelpers.merge [1L, 3L] [2L, 4L] (fun a b -> if a < b then -1 else if a == b then 0 else 1) = Ok [1L, 2L, 3L, 4L]
+Stdlib.List.SortByComparatorHelpers.mergeSort [3L, 1L, 2L] (fun a b -> if a < b then -1 else if a == b then 0 else 1) = Ok [1L, 2L, 3L]
+Stdlib.List.chunkBySizeHelper [1L, 2L, 3L] 2 [] = [[1L, 2L], [3L]]
+Stdlib.Char.toAsciiCode 'é' = None
+Stdlib.Char.toAsciiCode 'ä͖̭̈̇' = None
+Stdlib.Char.toAsciiCode 'a' = Some 97
+Stdlib.Char.toAsciiCode '\u007f' = Some 127
+Stdlib.Char.isASCII 'ä͖̭̈̇' = false
+Stdlib.Float.isFinite 1.0 = true
+Stdlib.Float.isFinite (1.0 / 0.0) = false
+Stdlib.Float.isFinite (0.0 / 0.0) = false
+Stdlib.Float.clampRefusingNaN 3.0 2.0 1.0 = Ok 2.0
+Stdlib.Float.clampRefusingNaN 1.0 (0.0 / 0.0) 2.0 = Error "clampRefusingNaN requires limits that are numbers"
+Stdlib.String.compare "a" "b" < 0L = true
+Stdlib.String.compare "😀" "\uE000" < 0L = true
+Stdlib.String.compare "é" "é" = 0L
+Stdlib.List.setAt [1L, 2L, 3L] -1 9L = Ok [1L, 2L, 9L]
+Stdlib.List.setAt [1L, 2L, 3L] 0 9L = Ok [9L, 2L, 3L]
+Stdlib.List.setAt [1L, 2L, 3L] -3 9L = Ok [9L, 2L, 3L]
+Stdlib.List.setAt [1L, 2L, 3L] -4 9L = Error Stdlib.List.IndexError.IndexOutOfBounds
+Stdlib.List.setAt [] 0 9L = Error Stdlib.List.IndexError.IndexOutOfBounds

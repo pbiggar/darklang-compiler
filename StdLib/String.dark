@@ -2,6 +2,9 @@
 
 module Darklang.Stdlib.String
 
+// Ordinal UTF-16 ordering; only the sign of the result is significant.
+let compare (left: String) (right: String) : Int64 = __compare left right
+
 val newline = "\n"
 
 // Internal byte primitives. Public text functions never expose these indexes.

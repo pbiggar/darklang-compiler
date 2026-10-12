@@ -14,12 +14,12 @@ let second<'a, 'b> (t: (a * b)) : b = match t with | (x, y) -> y
 
 let swap<'a, 'b> (t: (a * b)) : (b * a) = match t with | (x, y) -> (y, x)
 
-let mapFirst<'a, 'b, 'c> (fn: a -> c) (t: (a * b)) : (c * b) =
+let mapFirst<'a, 'b, 'c> (t: (a * b)) (fn: a -> c) : (c * b) =
     match t with | (x, y) -> (fn x, y)
 
-let mapSecond<'a, 'b, 'c> (fn: b -> c) (t: (a * b)) : (a * c) =
+let mapSecond<'a, 'b, 'c> (t: (a * b)) (fn: b -> c) : (a * c) =
     match t with | (x, y) -> (x, fn y)
 
-let mapBoth<'a, 'b, 'c, 'd> (fnFirst: a -> c) (fnSecond: b -> d) (t: (a * b)) : (c * d) =
+let mapBoth<'a, 'b, 'c, 'd> (t: (a * b)) (fnFirst: a -> c) (fnSecond: b -> d) : (c * d) =
     match t with | (x, y) -> (fnFirst x, fnSecond y)
 

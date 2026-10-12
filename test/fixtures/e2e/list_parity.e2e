@@ -29,7 +29,7 @@ Stdlib.List.randomElement [] = None
 Stdlib.List.randomElement ([42L]) = Some 42L
 
 Stdlib.List.chunkBySize ([1L, 2L, 3L, 4L, 5L]) 2 = Ok ([[1L, 2L], [3L, 4L], [5L]])
-Stdlib.List.chunkBySizeHelper 2 ([1L, 2L, 3L]) [] = [[1L, 2L], [3L]]
+Stdlib.List.chunkBySizeHelper ([1L, 2L, 3L]) 2 [] = [[1L, 2L], [3L]]
 Stdlib.List.chunkBySize [] 4 = Ok []
 Stdlib.List.chunkBySize ([1L]) 0 = Error Stdlib.List.ChunkBySizeError.SizeMustBeGreaterThanZero
 Stdlib.List.chunkBySize ([1L]) (-1) = Error Stdlib.List.ChunkBySizeError.SizeMustBeGreaterThanZero
@@ -44,10 +44,10 @@ Stdlib.List.sortBy ([6L, 2L, 8L, 3L]) (fun x -> 0L - x) = [8L, 6L, 3L, 2L]
 Stdlib.List.unique ([7L, 42L, 7L, 2L, 10L]) = [2L, 7L, 10L, 42L]
 Stdlib.List.uniqueBy ([1L, 2L, 3L, 4L]) (fun x -> x / 2L) = [1L, 2L, 4L]
 
-Stdlib.List.SortByComparatorHelpers.validate (fun a b -> 3) 1L 2L = Error "Expected comparator function to return -1, 0, or 1, but it returned 3"
+Stdlib.List.SortByComparatorHelpers.validate 1L 2L (fun a b -> 3) = Error "Expected comparator function to return -1, 0, or 1, but it returned 3"
 Stdlib.List.SortByComparatorHelpers.splitList ([1L, 2L, 3L, 4L, 5L]) = ([1L, 3L, 5L], [2L, 4L])
-Stdlib.List.SortByComparatorHelpers.merge<Int64> (fun a b -> if a < b then -1 else if a > b then 1 else 0) ([1L, 3L]) ([2L, 4L]) = Ok ([1L, 2L, 3L, 4L])
-Stdlib.List.SortByComparatorHelpers.mergeSort<Int64> (fun a b -> if a < b then -1 else if a > b then 1 else 0) ([3L, 1L, 2L]) = Ok ([1L, 2L, 3L])
+Stdlib.List.SortByComparatorHelpers.merge ([1L, 3L]) ([2L, 4L]) (fun a b -> if a < b then -1 else if a > b then 1 else 0) = Ok ([1L, 2L, 3L, 4L])
+Stdlib.List.SortByComparatorHelpers.mergeSort ([3L, 1L, 2L]) (fun a b -> if a < b then -1 else if a > b then 1 else 0) = Ok ([1L, 2L, 3L])
 Stdlib.List.sortByComparator ([3L, 1L, 2L]) (fun a b -> if a < b then -1 else if a > b then 1 else 0) = Ok ([1L, 2L, 3L])
 Stdlib.List.sortByComparator ([(1L, "first"), (1L, "second"), (0L, "zero")]) (fun (a, _) (b, _) -> if a < b then -1 else if a > b then 1 else 0) = Ok ([(0L, "zero"), (1L, "first"), (1L, "second")])
 Stdlib.List.sortByComparator ([1L, 2L]) (fun _ _ -> 2) = Error "Expected comparator function to return -1, 0, or 1, but it returned 2"
