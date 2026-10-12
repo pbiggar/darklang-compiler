@@ -19,6 +19,7 @@ let scoped (bytes: Blob) : (Int64 * Int64) =
 scoped (frame 8L 0L 1L (Stdlib.__Http2Wire.__u32 0L)) = (1L, 1L) // leak_check
 scoped (frame 8L 0L 0L (Stdlib.__Http2Wire.__u32 0L)) = (0L, 1L) // leak_check
 scoped (frame 8L 0L 5L (Stdlib.__Http2Wire.__u32 1L)) = (0L, 1L) // leak_check
+scoped (frame 2L 0L 1L (Stdlib.Blob.concat [Stdlib.__Http2Wire.__u32 1L, Stdlib.Blob.__fromInt64List [0L]])) = (1L, 1L) // leak_check
 error (Stdlib.__Http2Server.parseFrame (state (frame 8L 0L 1L Stdlib.Blob.empty))) = (0L, 6L) // leak_check
 error (Stdlib.__Http2Server.parseFrame (state (frame 4L 0L 0L (Stdlib.Blob.concat [Stdlib.Blob.__fromInt64List [0L, 4L], Stdlib.__Http2Wire.__u32 2147483648L])))) = (0L, 3L) // leak_check
 Stdlib.__Http2Server.parseFrame (state (Stdlib.Blob.__fromInt64List [0L, 0L])) |> Stdlib.Result.map (fun next -> Stdlib.Option.isNone next) = Ok true // leak_check

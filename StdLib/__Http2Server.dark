@@ -269,9 +269,14 @@ let parseFrame (state: Stdlib.__Http2Server.State) : Stdlib.Result.Result<Stdlib
       if Stdlib.Bool.not ordered then Error (Stdlib.__Http2Server.__connection 1L "Interleaved HTTP/2 header block")
       else if Stdlib.Bool.not state.wire.settingsSeen && (frame.kind != 4L || Stdlib.Int64.bitwiseAnd frame.flags 1L != 0L) then
         Error (Stdlib.__Http2Server.__connection 1L "HTTP/2 peer must start with SETTINGS")
-      else Stdlib.__Http2Server.__validateFrame frame |> Stdlib.Result.map (fun _unit ->
+      else
         let next = { state with wire = { state.wire with pending = Stdlib.__Http2Wire.__slice bytes (length + 9L) (available - length - 9L), frames = state.wire.frames + 1L } } in
-        Some (Stdlib.__Http2Server.Next { frame = frame, state = next }))
+        let parsed = Some (Stdlib.__Http2Server.Next { frame = frame, state = next }) in
+        // Stream errors are handled after consumption by the frame dispatcher;
+        // returning one here would leave the rejected frame at the input head.
+        match Stdlib.__Http2Server.__validateFrame frame with
+        | Ok () -> Ok parsed
+        | Error failure -> match failure.scope with | Connection -> Error failure | Stream _ -> Ok parsed
 
 let control (state: Stdlib.__Http2Server.State) (frame: Stdlib.__Http2Wire.Frame) : Stdlib.Result.Result<Stdlib.__Http2Server.State, Stdlib.__Http2Server.Failure> =
   Stdlib.__Http2Server.__validateFrame frame |> Stdlib.Result.andThen (fun _unit ->
