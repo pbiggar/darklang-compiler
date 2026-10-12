@@ -38,7 +38,7 @@ let isLetter (char: Char) : Bool =
 
 let isAlphanumeric (char: Char) : Bool =
     match Stdlib.Char.__firstCodepoint char with
-    | Some codepoint -> Stdlib.String.__Unicode.isLetter codepoint || Stdlib.String.__Unicode.isNumber codepoint
+    | Some codepoint -> Stdlib.String.__Unicode.isLetter codepoint || Stdlib.String.__Unicode.generalCategory codepoint == Stdlib.String.__Unicode.__Data.GeneralCategory.Nd
     | None -> false
 
 let isWhitespace (char: Char) : Bool =

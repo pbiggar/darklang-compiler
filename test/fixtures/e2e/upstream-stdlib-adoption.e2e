@@ -28,3 +28,19 @@ Stdlib.List.setAt [1L, 2L, 3L] 0 9L = Ok [9L, 2L, 3L]
 Stdlib.List.setAt [1L, 2L, 3L] -3 9L = Ok [9L, 2L, 3L]
 Stdlib.List.setAt [1L, 2L, 3L] -4 9L = Error Stdlib.List.IndexError.IndexOutOfBounds
 Stdlib.List.setAt [] 0 9L = Error Stdlib.List.IndexError.IndexOutOfBounds
+Stdlib.Char.isAlphanumeric '²' = false
+Stdlib.Char.isAlphanumeric 'Ⅳ' = false
+Stdlib.Char.isAlphanumeric '٢' = true
+Stdlib.Char.isAlphanumeric '𐐀' = true
+Stdlib.List.dedup [3L, 1L, 3L, 2L, 1L] = [3L, 1L, 2L]
+Stdlib.List.dedup [3, 1, 3, 2, 1] = [3, 1, 2]
+Stdlib.List.dedup ["b", "a", "b", "c", "a"] = ["b", "a", "c"]
+Stdlib.List.dedup [("b", 2L), ("a", 1L), ("b", 2L)] = [("b", 2L), ("a", 1L)]
+let nan = 0.0 / 0.0 in Stdlib.List.length (Stdlib.List.dedup [nan, nan]) = 2
+let fn = (fun x -> x + 1L) in Stdlib.List.length (Stdlib.List.dedup [fn, fn]) = 1
+let first = Stdlib.String.toBlob "same" in let second = Stdlib.String.toBlob "same" in Stdlib.List.length (Stdlib.List.dedup [first, second, first]) = 2
+Stdlib.List.setAt [1L, 2L, 3L] 3 9L = Error Stdlib.List.IndexError.IndexOutOfBounds
+Stdlib.List.setAt ["a", "b", "c"] -1 "replacement" = Ok ["a", "b", "replacement"]
+Stdlib.Float.isFinite (-1.0 / 0.0) = false
+Stdlib.Float.isFinite -0.0 = true
+Stdlib.Float.isNaN (Builtin.unwrap (Stdlib.Float.clampRefusingNaN (0.0 / 0.0) 1.0 2.0)) = true
