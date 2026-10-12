@@ -13,6 +13,7 @@ type Flight = {
   initialDiscarded: Bool, pending: List<Blob>, invalid: Int64
 }
 type Ready = { socket: Stdlib.__Datagram.Socket, peer: Stdlib.__Datagram.Endpoint, routing: Stdlib.__QuicHandshakePacket.Routing, authenticated: Stdlib.__QuicServerTls.Ready, pending: List<Blob> }
+type Progress = Waiting of Stdlib.__QuicServer.Flight | Complete of Stdlib.__QuicServer.Ready
 
 let __parameters (source: Blob) (original: Blob) : Stdlib.Result.Result<Blob, String> =
   let local = Stdlib.__QuicServer.receiveLimits in
@@ -125,21 +126,39 @@ let __flush (socket: Stdlib.__Datagram.Socket) (peer: Stdlib.__Datagram.Endpoint
         Stdlib.__QuicHandshakePacket.send socket peer state.routing handshake tls.send Stdlib.__QuicPacket.Kind.Handshake now (initial.recovery.congestion.window, initial.recovery.congestion.inFlight)
           |> Stdlib.Result.map (fun handshake -> { state with initial = initial, handshake = handshake })))
 
+// The listener routes datagrams; a handshake never receives from the shared
+// socket here. An unrelated peer cannot consume another owner's flight state.
+let receive (state: Stdlib.__QuicServer.Flight) (peer: Stdlib.__Datagram.Endpoint) (datagram: Stdlib.__Datagram.Message) (now: Int64) : Stdlib.Result.Result<Stdlib.__QuicServer.Flight, String> =
+  if datagram.peer != peer then Ok state
+  else if Stdlib.Blob.__byteLength datagram.payload < 1200L && (match Stdlib.__QuicPacket.parse (Stdlib.Blob.__byteLength state.routing.source) datagram.payload with | Ok (Protected packet) -> packet.kind == Stdlib.__QuicPacket.Kind.Initial | _ -> false) then Ok state
+  else Stdlib.__QuicServer.packets state datagram.payload now
+
+// Advance one retained flight, with at most one datagram and one packet per
+// encryption level. The absolute handshake deadline is owned by the caller.
+// Sending still uses the compatibility datagram writer; this is not yet a
+// nonblocking active-connection listener.
+let advance (socket: Stdlib.__Datagram.Socket) (peer: Stdlib.__Datagram.Endpoint) (state: Stdlib.__QuicServer.Flight) (datagram: Stdlib.Option.Option<Stdlib.__Datagram.Message>) (now: Int64) (deadline: Int64) : Stdlib.Result.Result<Stdlib.__QuicServer.Progress, String> =
+  if now >= deadline then Error "QUIC server handshake timed out"
+  else
+    let received = match datagram with | None -> Ok state | Some datagram -> Stdlib.__QuicServer.receive state peer datagram now in
+    received |> Stdlib.Result.andThen (fun state -> Stdlib.__QuicServer.__flush socket peer state now) |> Stdlib.Result.map (fun next ->
+      match next.authenticated with
+      | None -> Stdlib.__QuicServer.Progress.Waiting next
+      | Some authenticated -> Stdlib.__QuicServer.Progress.Complete (Stdlib.__QuicServer.Ready { socket = socket, peer = peer, routing = next.routing, authenticated = authenticated, pending = next.pending }))
+
 let accept (socket: Stdlib.__Datagram.Socket) (peer: Stdlib.__Datagram.Endpoint) (signals: Stdlib.__Network.ShutdownSignals) (state: Stdlib.__QuicServer.Flight) (deadline: Int64) (remaining: Int64) : Stdlib.Result.Result<Stdlib.__QuicServer.Ready, String> =
   match Stdlib.__Network.shutdownRequested signals, Stdlib.__Network.monotonicMillis () with
   | Ok true, _ -> Error "HTTP server shutting down"
   | Ok false, Ok now ->
     if now >= deadline || remaining <= 0L then Error "QUIC server handshake timed out"
-    else Stdlib.__QuicServer.__flush socket peer state now |> Stdlib.Result.andThen (fun next ->
-      match next.authenticated with
-      | Some authenticated -> Ok (Stdlib.__QuicServer.Ready { socket = socket, peer = peer, routing = next.routing, authenticated = authenticated, pending = next.pending })
-      | None ->
+    else Stdlib.__QuicServer.advance socket peer state None now deadline |> Stdlib.Result.andThen (fun progress ->
+      match progress with
+      | Complete ready -> Ok ready
+      | Waiting next ->
         match Stdlib.__Datagram.receive socket 10L with
         | Error code -> if code == 11L || code == 35L || code == 4L || code == 90L then Stdlib.__QuicServer.accept socket peer signals next deadline (remaining - 1L) else Error "QUIC server handshake receive failed"
         | Ok datagram ->
-          if datagram.peer.address != peer.address || datagram.peer.port != peer.port then Stdlib.__QuicServer.accept socket peer signals next deadline (remaining - 1L)
-          else if Stdlib.Blob.__byteLength datagram.payload < 1200L && (match Stdlib.__QuicPacket.parse (Stdlib.Blob.__byteLength next.routing.source) datagram.payload with | Ok (Protected packet) -> packet.kind == Stdlib.__QuicPacket.Kind.Initial | _ -> false) then Stdlib.__QuicServer.accept socket peer signals next deadline (remaining - 1L)
-          else match Stdlib.__Network.monotonicMillis () with
+          match Stdlib.__Network.monotonicMillis () with
           | Error _ -> Error "QUIC server clock failed"
-          | Ok at -> Stdlib.__QuicServer.packets next datagram.payload at |> Stdlib.Result.andThen (fun received -> Stdlib.__QuicServer.accept socket peer signals received deadline (remaining - 1L)))
+          | Ok at -> Stdlib.__QuicServer.receive next peer datagram at |> Stdlib.Result.andThen (fun received -> Stdlib.__QuicServer.accept socket peer signals received deadline (remaining - 1L)))
   | _, _ -> Error "QUIC server shutdown or clock check failed"

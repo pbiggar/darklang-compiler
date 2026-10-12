@@ -1,0 +1,22 @@
+// Retained handshake steps never read from a shared UDP socket or renew deadlines.
+let flight () : Stdlib.__QuicServer.Flight =
+  let space = match Stdlib.__QuicSpace.create () with | Ok space -> space | Error _ -> Builtin.crash "Packet space creation failed" in
+  let key = Stdlib.__QuicCrypto.Keys { key = Stdlib.Blob.empty, iv = Stdlib.Blob.empty, hp = Stdlib.Blob.empty } in
+  let identity = Stdlib.TlsServerIdentity.Identity { certificates = [], key = Stdlib.__RsaPrivate.Key { modulus = Stdlib.Blob.empty, exponent = Stdlib.Blob.empty, privateExponent = Stdlib.Blob.empty } } in
+  Stdlib.__QuicServer.Flight { identity = identity, routing = Stdlib.__QuicHandshakePacket.Routing { source = Stdlib.String.toBlob "serverID", destination = Stdlib.String.toBlob "clientID", token = Stdlib.Blob.empty },
+    token = Stdlib.Blob.empty, parameters = Stdlib.Blob.empty, keys = Stdlib.__QuicCrypto.Initial { client = key, server = key }, initial = space, handshake = space,
+    tls = None, retry = None, authenticated = None, initialDiscarded = true, pending = [Stdlib.String.toBlob "retained"], invalid = 7L }
+let peer () : Stdlib.__Datagram.Endpoint = Stdlib.__Datagram.Endpoint { address = [127L, 0L, 0L, 1L], port = 443L }
+let probe (now: Int64) (deadline: Int64) (foreign: Bool) : Stdlib.Result.Result<(Int64 * Int64), String> =
+  let life = Stdlib.Stream.__new (fun _unit -> Some ()) (fun _unit -> ()) in
+  let socket = Stdlib.__Datagram.Socket { lifecycle = life, watch = None,
+    send = fun _peer _bytes _timeout -> Builtin.crash "Unexpected handshake output", receive = fun _timeout -> Builtin.crash "Handshake stole a shared datagram" } in
+  let datagram = if foreign then Some (Stdlib.__Datagram.Message { peer = { peer () with port = 444L }, payload = Stdlib.String.toBlob "other owner" }) else None in
+  let result = Stdlib.__QuicServer.advance socket (peer ()) (flight ()) datagram now deadline |> Stdlib.Result.map (fun progress ->
+    match progress with | Complete _ -> Builtin.crash "Unfinished handshake became ready" | Waiting state -> (state.invalid, Stdlib.Int64.__fromIntUnchecked (Stdlib.List.length state.pending))) in
+  Stdlib.__Datagram.close socket
+  result
+probe 1L 10000L false = Ok ((7L, 1L)) // leak_check
+probe 1L 10000L true = Ok ((7L, 1L)) // leak_check
+probe 10000L 10000L false = Error "QUIC server handshake timed out" // leak_check
+probe 10001L 10000L true = Error "QUIC server handshake timed out" // leak_check
