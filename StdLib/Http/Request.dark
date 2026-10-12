@@ -1,4 +1,4 @@
-// Stdlib.Http.Request - frozen query accessors for canonical HTTP request values.
+// Stdlib.Http.Request - decoded query accessors for canonical HTTP request values.
 
 module Darklang.Stdlib.Http.Request
 
