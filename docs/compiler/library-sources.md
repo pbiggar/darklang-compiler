@@ -249,7 +249,7 @@ fragments use `__` even where the interpreter also has private helpers.
 | `StdLib/__Tls13KeyUpdate.dark` | `Darklang.Stdlib.__Tls13KeyUpdate` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
 | `StdLib/__Tls13ServerTcp.dark` | `Darklang.Stdlib.__Tls13ServerTcp` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
 | `StdLib/__Tls13ServerPoll.dark` | `Darklang.Stdlib.__Tls13ServerPoll` | Compiler support: incremental nonblocking TLS server handshake ownership |
-| `StdLib/__TlsServer.dark` | `Darklang.Stdlib.__TlsServer` | Compiler support: fair TLS handshake and persistent HTTP/1.1 transport owners |
+| `StdLib/__TlsServer.dark` | `Darklang.Stdlib.__TlsServer` | Compiler support: fair TLS handshake and persistent HTTP/1.1–2 transport owners |
 | `StdLib/__QuicServerTls.dark` | `Darklang.Stdlib.__QuicServerTls` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
 | `StdLib/__QuicServerRetry.dark` | `Darklang.Stdlib.__QuicServerRetry` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
 | `StdLib/HttpServer/Tls.dark` | `Darklang.Stdlib.HttpServer.Tls` | Compiler extension: HTTP transport and secure server support |

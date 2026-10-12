@@ -189,7 +189,7 @@ mean the entire branch has passed its integration or performance gates.
   - [x] Plaintext HTTP/1.1 active owners share readiness waits and advance one
     bounded read, parse or write transition per round. Slow uploads and unread
     responses do not monopolize other HTTP/1.1 clients. Client TLS handshakes,
-    h2c dispatch/draining and HTTP/2–3 servers still
+    h2c dispatch/draining and HTTP/3 servers still
     need the active-owner migration.
   - [x] Owned TLS transports queue KeyUpdate replies and application ciphertext
     across nonblocking partial writes. `pollWrite` reports accepted plaintext;
@@ -198,10 +198,12 @@ mean the entire branch has passed its integration or performance gates.
     partial record, and is drained before legacy blocking writes. Independent
     record-crypto peers verify backpressure and old/new-key wire ordering.
   - [x] `HttpServer.Tls` and the TCP side of `HttpServer.Secure` service at most sixty-four
-    incremental handshake/HTTP/1 owners. Stalled ClientHello, Finished, uploads
-    and response readers do not monopolize other TLS HTTP/1 clients. Admission
-    and owner steps use fresh clock readings even after legacy blocking h2
-    dispatch. QUIC active-owner servicing and h2 scheduling remain pending;
+    incremental handshake/HTTP/1–2 owners. HTTP/2 retains shared HPACK, up to
+    thirty-two streams, separate stream windows, connection credit and queued
+    frame output. Stalled ClientHello, Finished, uploads, response readers and
+    HTTP/2 streams without credit do not monopolize other TLS TCP clients.
+    Admission and owner steps use fresh clock readings. QUIC active-owner
+    servicing and plaintext h2c scheduling remain pending;
     admitted QUIC exchanges can still monopolize the combined listener.
 - [ ] Persistent HTTP/1.1 connections and HTTP/2–3 connection reuse/pooling.
 
@@ -254,7 +256,15 @@ mean the entire branch has passed its integration or performance gates.
     order. Different origins are serviced sequentially; HTTP/1.1 uses complete
     sequential exchanges. Network failures are per-request outcomes; invalid
     batches fail before sending any request.
-  - [ ] Lazy-stream scheduling and multiplexed servers.
+  - [x] TLS HTTP/2 servers retain independent request/response state and shared
+    compression across exchanges, rotate writable streams, isolate resets,
+    and publish receive credit only after control frames are flushed. Partial
+    headers, bounded bodies, early responses and per-stream deadlines are
+    covered by `http2_server_flow.e2e`, `http2_server_control.e2e` and
+    `http2_server_dispatch.e2e`. The independent TLS server peer verifies
+    blocked-stream admission fairness, selective window updates, reset
+    isolation, persistent reuse and 70 KiB upload/response bodies.
+  - [ ] Lazy-stream scheduling, plaintext h2c owners and multiplexed HTTP/3 servers.
   - [x] HTTP/3 request scheduling shares connection credit and QPACK while
     retaining independent message parsers. Each round sends one bounded chunk
     per stream. Resets and GOAWAY preserve eligible responses without replay;
