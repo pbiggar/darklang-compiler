@@ -1,0 +1,18 @@
+// Generic aliases instantiate declaration parameters without capturing nested arguments.
+
+type NestedAliasResult<'ok, 'err> = Stdlib.Result.Result<'ok, 'err>
+type ChainedAliasResult<'ok, 'err> = NestedAliasResult<'ok, 'err>
+type SwappedAliasResult<'err, 'ok> = NestedAliasResult<'ok, 'err>
+
+Stdlib.Json.serialize<NestedAliasResult<NestedAliasResult<Int64, String>, String>> (NestedAliasResult.Ok(NestedAliasResult.Error "err")) = "{\"Ok\":[{\"Error\":[\"err\"]}]}"
+Stdlib.Json.serialize<NestedAliasResult<NestedAliasResult<Int64, String>, String>> (NestedAliasResult.Ok(NestedAliasResult.Ok 42L)) = "{\"Ok\":[{\"Ok\":[42]}]}"
+Stdlib.Json.parse<NestedAliasResult<NestedAliasResult<Int64, String>, String>> "{\"Ok\":[{\"Error\":[\"err\"]}]}" = NestedAliasResult.Ok(NestedAliasResult.Ok(NestedAliasResult.Error "err"))
+Stdlib.Json.parse<NestedAliasResult<Int64, String>> "{\"Error\":[\"err\"]}" = NestedAliasResult.Ok(NestedAliasResult.Error "err")
+Stdlib.Json.serialize<ChainedAliasResult<ChainedAliasResult<Int64, String>, String>> (ChainedAliasResult.Ok(ChainedAliasResult.Error "err")) = "{\"Ok\":[{\"Error\":[\"err\"]}]}"
+Stdlib.Json.serialize<SwappedAliasResult<String, SwappedAliasResult<String, Int64>>> (SwappedAliasResult.Ok(SwappedAliasResult.Error "err")) = "{\"Ok\":[{\"Error\":[\"err\"]}]}"
+
+let wrapAliased (value: NestedAliasResult<'ok, 'err>) : NestedAliasResult<NestedAliasResult<'ok, 'err>, String> = NestedAliasResult.Ok value
+Stdlib.Json.serialize<NestedAliasResult<NestedAliasResult<Int64, String>, String>> (wrapAliased (NestedAliasResult.Error "err")) = "{\"Ok\":[{\"Error\":[\"err\"]}]}"
+
+NestedAliasResult<Int64, String>.Ok "wrong" = compileerror="Expected TInt64, got TString"
+NestedAliasResult<Int64>.Ok 42L = compileerror="expects 2 arguments, got 1"

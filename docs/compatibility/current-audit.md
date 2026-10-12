@@ -8,9 +8,9 @@ Audited on 2026-10-08 (UTC), against compiler revision `4a61318019fb8dea7f34a0bf
 Results from that complete audit, including enabled neighbours: 3,599 assertions, 1,325 passed and 2,274 failed.
 That audit used 34 whole-file gates and 205 assertion lines across 16 mixed files.
 
-Current configured exclusions: **1,171 assertions across 65 files**, including
+Current configured exclusions: **1,167 assertions across 65 files**, including
 **69 unsupported interpreter runtime-error assertions**. There are 31 whole-file
-gates and 295 assertion lines across 34 mixed files. The earlier retirement audit reran the 19 affected files
+gates and 291 assertion lines across 34 mixed files. The earlier retirement audit reran the 19 affected files
 individually without gates: **1,006 passed
 and 110 failed out of 1,116 assertions**. The ungated application fixture contributes 33 cascading preamble failures;
 disabling only its dependent L118 assertion lets the existing fallback prune the
@@ -79,6 +79,10 @@ Verification: native build passes, the complete host suite passes **13,161/13,16
 Character-literal fixture import (2026-10-11), based on main `d9db15dc5`: the String and cloud DB fixtures import the character-literal replacements from `darklang/dark` PR #5899 (head `3d0699bc34df51135d668def77fb7137431b4a6f`). The compiler's existing fixture differences and `String.fromList ["a"]` compile-error override are retained. Thirteen String assertions previously blocked by `Builtin.testToChar` are enabled. All **639/639** enabled String assertions pass individually; the only remaining String exclusion is the callback-counter assertion, now at L179 after removing the helper declaration. The test-only counter builtins remain unsupported and deferred alongside the five List callback-counter tests.
 
 Verification of source/test revision `fdc2f3c13`: `env -u LD_PRELOAD ./build --ai` passes; `./run-tests --ai --filter=upstream/stdlib/string.dark --e2e-batch-size=1` passes **639/639**; the complete host suite (`./run-tests --ai`) passes **13,177/13,177**; `dune runtest` passes; and `python3 scripts/check_compiled_leaks.py` passes **58/58** workloads. The generated inventory and diff checks pass (**1,171 exclusions**, 31 whole-file gates and 295 line entries across 34 mixed files). `./benchmarks/run_benchmarks.sh --verify-parent full` stops before measurement because the stored workload contract digest is incompatible; no baseline was reset and no performance ratio is available. The imported FromChar, FromList and ToList sections match PR #5899 after removing compiler-only expectation metadata. A whole-corpus comparison still differs because of pre-existing fixture adaptations and unrelated upstream additions; this import does not replace those adaptations.
+
+Nested generic alias follow-up (2026-10-11), based on main `d59646aa0`: alias expansion, named alias construction, record fields, constructor fields, and canonical declaration resolution instantiate declared parameters simultaneously rather than rewriting parameters inside replacement arguments. Constructor inference also freshens each invocation's declaration variables before matching its payloads, so an inner `Result.Error` cannot bind the outer `Result.Ok`'s parameters. The original nested alias JSON serialization now produces `{"Ok":[{"Error":["err"]}]}` instead of a compile error with extra Result layers. Twelve focused E2E regressions cover nested/chained/reordered aliases, generic functions, record construction, and compile-time payload/arity rejection; they pass individually and in the normal batched runner. Four existing negative expectations retain their compile-error phase and nominal type mismatch, without depending on internal inference-variable identities or prematurely concrete payload types.
+
+Upstream JSON L1136, L1152, L1159, and L1423 are enabled with unchanged source expressions and expected values; all **517/517** enabled JSON assertions pass individually. The native build passes, the complete host suite passes **13,193/13,193**, `dune runtest` passes, and compiled leaks pass **58/58** workloads. Formatting, inventory, and diff checks pass (**1,167 exclusions**, 31 whole-file gates and 291 line entries across 34 mixed files). Parent benchmark verification still stops before measurement on the incompatible stored workload contract digest; no baseline was reset and no branch-relative performance ratio is available.
 
 ## Unsupported interpreter test infrastructure
 
