@@ -165,3 +165,20 @@ for the post-rebase comparisons was
 The compiler's intentional AOT boundary is also preserved: a type-invalid call
 fails during compilation and reports the inferred type, whereas the interpreter
 fixture's corresponding runtime error includes the concrete argument value.
+
+## String addition adoption (2026-10-12)
+
+Interpreter `07bafe2d8` implements String `+` with NFC normalization in
+`FastOps.fs` and `Builtins.Pure/Libs/NoModule.fs`. The compiler now selects
+the existing normalized concatenation operation for typed String operands and
+for generic addition specialized to String. For example, `"e" + "́"` returns
+`"é"`; no second Unicode implementation or runtime type dispatch is added.
+Numeric addition keeps its existing implementation. Mixed operand types,
+Bool addition and Char addition are rejected during compilation; legacy `++`
+continues to accept its existing String/Char operands.
+
+`test/fixtures/e2e/string-plus.e2e` covers literals, variables, function calls,
+pipelines, chained operands, inferred lambdas, explicit generic functions,
+empty operands, legacy syntax and compilation-error boundaries. The focused
+native x86-64 run passed 19/19 assertions after reproducing the missing behavior
+before implementation. Full readiness gates are pending at this checkpoint.
