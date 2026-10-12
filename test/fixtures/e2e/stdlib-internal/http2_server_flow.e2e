@@ -75,3 +75,18 @@ let selected (window: Int64) : Stdlib.Result.Result<(Int64 * List<Int64>), Stdli
     (id, Stdlib.List.map next.streams (fun stream -> stream.id)))
 selected 0L = Ok ((3L, [1L, 3L])) // leak_check
 selected 10L = Ok ((1L, [3L, 1L])) // leak_check
+
+// A maximum DATA payload plus its nine-byte frame header spans native writes.
+let maximumFrame () : Stdlib.Result.Result<(Int64 * Int64 * Int64), Stdlib.__Http2Server.Failure> =
+  let initial = state () in
+  let body = Stdlib.String.toBlob (Stdlib.String.repeat "x" 16384) in
+  let active = stream 1L 65535L in
+  let active = { active with message = Stdlib.__Http2Server.Message.Responding (Stdlib.__Http2Server.Reply { method = "GET", fields = [], body = body, position = 0L, headers = true }) } in
+  Stdlib.__Http2Server.scheduleData { initial with streams = [active], total = 16384L } 1L |> Stdlib.Result.andThen (fun scheduled ->
+    let writer = fun bytes -> if Stdlib.Blob.__byteLength bytes > 16384L then Error "Native write limit" else Ok (Some (Stdlib.Blob.__byteLength bytes)) in
+    Stdlib.__Http2Server.pollOutput scheduled writer (fun _unit -> Builtin.crash "Premature flush") |> Stdlib.Result.andThen (fun first ->
+      let offset = match first.current with | None -> -1L | Some output -> output.offset in
+      Stdlib.__Http2Server.pollOutput first writer (fun _unit -> Builtin.crash "Premature flush") |> Stdlib.Result.map (fun second ->
+        let complete = match second.current with | None -> -1L | Some output -> output.offset in
+        (offset, complete, second.wire.sendConnection))))
+maximumFrame () = Ok ((16384L, 16393L, 49151L)) // leak_check

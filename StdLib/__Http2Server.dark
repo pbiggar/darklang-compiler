@@ -209,11 +209,12 @@ let pollOutput (state: Stdlib.__Http2Server.State) (writer: Blob -> Stdlib.Resul
         if done then Stdlib.__Http2Server.__completed state output.after else Ok state)
     else
       let remaining = length - output.offset in
-      writer (Stdlib.__Http2Wire.__slice output.bytes output.offset remaining) |> Stdlib.Result.mapError (fun message -> Stdlib.__Http2Server.__connection 2L message) |> Stdlib.Result.andThen (fun progress ->
+      let requested = if remaining > 16384L then 16384L else remaining in
+      writer (Stdlib.__Http2Wire.__slice output.bytes output.offset requested) |> Stdlib.Result.mapError (fun message -> Stdlib.__Http2Server.__connection 2L message) |> Stdlib.Result.andThen (fun progress ->
         match progress with
         | None -> Ok state
         | Some size ->
-          if size <= 0L || size > remaining then Error (Stdlib.__Http2Server.__connection 2L "Invalid HTTP/2 output progress")
+          if size <= 0L || size > requested then Error (Stdlib.__Http2Server.__connection 2L "Invalid HTTP/2 output progress")
           else Ok { state with current = Some { output with offset = output.offset + size } })
 
 // Rotate only a selected stream. A stream without credit cannot hold up another
