@@ -205,6 +205,13 @@ mean the entire branch has passed its integration or performance gates.
     Admission and owner steps use fresh clock readings. QUIC active-owner
     servicing remains pending;
     admitted QUIC exchanges can still monopolize the combined listener.
+  - [ ] QUIC handshake admission now has a retained `advance` step accepting
+    one routed datagram, emitting at most one packet per encryption level,
+    preserving queued CRYPTO and packet numbers, and enforcing an absolute
+    caller-owned deadline. It never receives from the shared UDP socket.
+    The compatibility handshake wrapper uses the same step. Datagram output,
+    active UDP admission and HTTP/3 request servicing still need migration;
+    this foundation does not provide nonblocking QUIC listener fairness.
 - [ ] Persistent HTTP/1.1 connections and HTTP/2–3 connection reuse/pooling.
 
   - [x] Buffered `HttpClientSession.request` HTTP/1.1 reuse over TCP/TLS:

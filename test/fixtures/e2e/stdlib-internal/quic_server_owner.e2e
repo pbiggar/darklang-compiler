@@ -20,3 +20,28 @@ probe 1L 10000L false = Ok ((7L, 1L)) // leak_check
 probe 1L 10000L true = Ok ((7L, 1L)) // leak_check
 probe 10000L 10000L false = Error "QUIC server handshake timed out" // leak_check
 probe 10001L 10000L true = Error "QUIC server handshake timed out" // leak_check
+
+// A retained flight emits one Initial packet per step, preserving queued CRYPTO
+// and advancing packet numbers instead of replaying the first transmission.
+let sent () : Stdlib.Result.Result<(Int64 * Int64 * Int64), String> =
+  let life = Stdlib.Stream.__new (fun _unit -> Some ()) (fun _unit -> ()) in
+  let socket = Stdlib.__Datagram.Socket { lifecycle = life, watch = None,
+    send = fun _peer bytes _timeout -> if Stdlib.Blob.__byteLength bytes < 1200L then Error 90L else Ok (),
+    receive = fun _timeout -> Builtin.crash "Handshake stole a shared datagram" } in
+  let initial = flight () in
+  let key = Stdlib.__QuicCrypto.Keys { key = Stdlib.String.toBlob (Stdlib.String.repeat "k" 16), iv = Stdlib.String.toBlob (Stdlib.String.repeat "i" 12), hp = Stdlib.String.toBlob (Stdlib.String.repeat "h" 16) } in
+  let initial = { initial with initialDiscarded = false, keys = Stdlib.__QuicCrypto.Initial { client = key, server = key } } in
+  let bytes = Stdlib.String.toBlob (Stdlib.String.repeat "c" 700) in
+  let result = Stdlib.__QuicFrames.crypto 0L bytes |> Stdlib.Result.andThen (Stdlib.__QuicSpace.queue initial.initial) |> Stdlib.Result.andThen (fun space ->
+    Stdlib.__QuicFrames.crypto 700L bytes |> Stdlib.Result.andThen (Stdlib.__QuicSpace.queue space) |> Stdlib.Result.andThen (fun space ->
+      Stdlib.__QuicServer.advance socket (peer ()) { initial with initial = space } None 1L 10000L |> Stdlib.Result.andThen (fun progress ->
+        match progress with
+        | Complete _ -> Error "Unfinished handshake became ready"
+        | Waiting first ->
+          Stdlib.__QuicServer.advance socket (peer ()) first None 2L 10000L |> Stdlib.Result.map (fun progress ->
+            match progress with
+            | Complete _ -> Builtin.crash "Unfinished handshake became ready"
+            | Waiting second -> (first.initial.recovery.largestSent, second.initial.recovery.largestSent, Stdlib.Int64.__fromIntUnchecked (Stdlib.List.length second.initial.queued)))))) in
+  Stdlib.__Datagram.close socket
+  result
+sent () = Ok ((0L, 1L, 0L)) // leak_check
