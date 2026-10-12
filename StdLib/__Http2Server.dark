@@ -13,7 +13,7 @@ type Action = Nothing | Credit of (Int64 * Int64) | Headers of (Int64 * Bool) | 
 type Output = { stream: Int64, bytes: Blob, offset: Int64, after: Stdlib.__Http2Server.Action }
 type State = {
   wire: Stdlib.__Http2.State, preface: Bool, streams: List<Stdlib.__Http2Server.Active>,
-  last: Int64, opened: Int64, continuation: Stdlib.Option.Option<Stdlib.__Http2Server.Block>,
+  last: Int64, accepted: Int64, opened: Int64, continuation: Stdlib.Option.Option<Stdlib.__Http2Server.Block>,
   outputs: List<Stdlib.__Http2Server.Output>, current: Stdlib.Option.Option<Stdlib.__Http2Server.Output>,
   total: Int64, receiveConnection: Int64, draining: Bool, stopped: Bool
 }
@@ -22,7 +22,7 @@ type Decoded = { id: Int64, fields: List<(String * String)>, ended: Bool, fresh:
 
 let initial (pending: Blob) : Stdlib.__Http2Server.State =
   Stdlib.__Http2Server.State { wire = { Stdlib.__Http2.initial 0L with pending = pending }, preface = true,
-    streams = [], last = 0L, opened = 0L, continuation = None, outputs = [], current = None,
+    streams = [], last = 0L, accepted = 0L, opened = 0L, continuation = None, outputs = [], current = None,
     total = 0L, receiveConnection = 65535L, draining = false, stopped = false }
 
 let __connection (code: Int64) (message: String) : Stdlib.__Http2Server.Failure =
@@ -337,3 +337,61 @@ let receiveHeaders (state: Stdlib.__Http2Server.State) (frame: Stdlib.__Http2Wir
         Stdlib.__Hpack.decode next.wire.decoder block.bytes |> Stdlib.Result.mapError (fun message -> Stdlib.__Http2Server.__connection 9L message) |> Stdlib.Result.map (fun decoded ->
           let next = { next with continuation = None, wire = { next.wire with decoder = decoded.state } } in
           (next, Some (Stdlib.__Http2Server.Decoded { id = block.id, fields = decoded.headers, ended = block.ended, fresh = block.fresh }))))
+
+let __goAway (state: Stdlib.__Http2Server.State) (code: Int64) (fatal: Bool) : Stdlib.Result.Result<Stdlib.__Http2Server.State, Stdlib.__Http2Server.Failure> =
+  let payload = Stdlib.Blob.concat [Stdlib.__Http2Wire.__u32 state.accepted, Stdlib.__Http2Wire.__u32 code] in
+  let after = if fatal then Stdlib.__Http2Server.Action.Stop else Stdlib.__Http2Server.Action.Nothing in
+  let next = { state with draining = true, outputs = if fatal then [] else state.outputs } in
+  Stdlib.__Http2Server.__frame 7L 0L 0L payload after |> Stdlib.Result.andThen (fun output -> Stdlib.__Http2Server.__queue next output)
+
+let reject (state: Stdlib.__Http2Server.State) (failure: Stdlib.__Http2Server.Failure) : Stdlib.Result.Result<Stdlib.__Http2Server.State, Stdlib.__Http2Server.Failure> =
+  match failure.scope with
+  | Connection -> Stdlib.__Http2Server.__goAway state failure.code true
+  | Stream id ->
+    Stdlib.__Http2Server.reset state id |> Stdlib.Result.andThen (fun next ->
+      Stdlib.__Http2Server.__frame 3L 0L id (Stdlib.__Http2Wire.__u32 failure.code) Stdlib.__Http2Server.Action.Nothing |> Stdlib.Result.andThen (fun output -> Stdlib.__Http2Server.__queue next output))
+
+let __reply (context: Stdlib.__Http2Server.Context) (state: Stdlib.__Http2Server.State) (stream: Stdlib.__Http2Server.Active) (method: String) (response: Stdlib.Http.Response) (now: Int64) : Stdlib.Result.Result<Stdlib.__Http2Server.State, Stdlib.__Http2Server.Failure> =
+  let reply = match Stdlib.__Http2Server.__response context.config method response with
+    | Ok reply -> Ok reply
+    | Error _ -> Stdlib.__Http2Server.__response context.config method (Stdlib.Http.responseWithText "500 Internal Server Error" 500) in
+  reply |> Stdlib.Result.mapError (fun message -> Stdlib.__Http2Server.__connection 2L message) |> Stdlib.Result.andThen (fun reply ->
+    let total = state.total - Stdlib.__Http2Server.__messageSize stream.message + Stdlib.Blob.__byteLength reply.body in
+    if total > 104857600L then Error (Stdlib.__Http2Server.__connection 11L "HTTP/2 retained body budget exhausted")
+    else Ok (Stdlib.__Http2Server.__replace { state with total = total } { stream with deadline = now + 30000L, message = Stdlib.__Http2Server.Message.Responding reply }))
+
+let dispatch (context: Stdlib.__Http2Server.Context) (state: Stdlib.__Http2Server.State) (id: Int64) (now: Int64) : Stdlib.Result.Result<Stdlib.__Http2Server.State, Stdlib.__Http2Server.Failure> =
+  match Stdlib.__Http2Server.__find state id with
+  | None -> Ok state
+  | Some stream -> match stream.message with
+    | Responding _ -> Ok state
+    | Receiving input ->
+      if Stdlib.Bool.not stream.ended then Ok state
+      else
+        let valid = match input.expected with | None -> true | Some expected -> expected == input.total in
+        if Stdlib.Bool.not valid then Error (Stdlib.__Http2Server.__stream id 1L "HTTP/2 Content-Length mismatch")
+        else
+          let request = Stdlib.Http.Request { url = input.head.url, headers = Stdlib.List.push input.head.headers ("x-http-method", input.head.method), body = Stdlib.Blob.concat (Stdlib.List.reverse input.blocks) } in
+          Stdlib.__Http2Server.__reply context state stream input.head.method (context.handler request) now
+
+let applyHeaders (context: Stdlib.__Http2Server.Context) (state: Stdlib.__Http2Server.State) (head: Stdlib.__Http2Server.Decoded) (now: Int64) : Stdlib.Result.Result<Stdlib.__Http2Server.State, Stdlib.__Http2Server.Failure> =
+  if head.fresh then
+    if state.draining || Stdlib.List.length state.streams >= 32 then Error (Stdlib.__Http2Server.__stream head.id 7L "HTTP/2 stream refused")
+    else if state.opened > 1024L then
+      Stdlib.__Http2Server.__goAway state 0L false |> Stdlib.Result.andThen (fun next -> Stdlib.__Http2Server.reject next (Stdlib.__Http2Server.__stream head.id 7L "HTTP/2 stream lifetime limit"))
+    else
+      Stdlib.__Http2Fields.request head.fields |> Stdlib.Result.mapError (fun message -> Stdlib.__Http2Server.__stream head.id 1L message) |> Stdlib.Result.andThen (fun request ->
+        Stdlib.__Http2Fields.length request.headers |> Stdlib.Result.mapError (fun message -> Stdlib.__Http2Server.__stream head.id 1L message) |> Stdlib.Result.andThen (fun expected ->
+          let input = Stdlib.__Http2Server.Incoming { head = request, expected = expected, blocks = [], total = 0L } in
+          let stream = Stdlib.__Http2Server.Active { id = head.id, window = state.wire.initialWindow, receiveWindow = 65535L, ended = head.ended, deadline = now + 10000L, message = Stdlib.__Http2Server.Message.Receiving input } in
+          let next = { state with streams = state.streams @ [stream], accepted = head.id } in
+          let oversized = match expected with | None -> false | Some expected -> expected > context.limit in
+          if oversized then Stdlib.__Http2Server.__reply context next stream request.method (Stdlib.Http.responseWithText "413 Payload Too Large" 413) now
+          else Stdlib.__Http2Server.dispatch context next head.id now))
+  else match Stdlib.__Http2Server.__find state head.id with
+    | None -> Ok state
+    | Some stream ->
+      if stream.ended then Error (Stdlib.__Http2Server.__stream head.id 5L "HTTP/2 headers after request end")
+      else if Stdlib.Bool.not head.ended then Error (Stdlib.__Http2Server.__stream head.id 1L "HTTP/2 trailers must end request")
+      else Stdlib.__Http2Fields.trailers head.fields |> Stdlib.Result.mapError (fun message -> Stdlib.__Http2Server.__stream head.id 1L message) |> Stdlib.Result.andThen (fun _unit ->
+        Stdlib.__Http2Server.dispatch context (Stdlib.__Http2Server.__replace state { stream with ended = true }) head.id now)

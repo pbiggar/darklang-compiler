@@ -1,0 +1,40 @@
+// Buffered request admission, message validation and response ownership.
+let handler (request: Stdlib.Http.Request) : Stdlib.Http.Response =
+  let method = Stdlib.__Http2Fields.__find request.headers "x-http-method" |> Stdlib.Option.withDefault "missing" in
+  let body = Stdlib.Blob.toString request.body |> Stdlib.Result.withDefault "invalid" in
+  Stdlib.Http.responseWithText (method ++ ":" ++ body) 200
+let context () : Stdlib.__Http2Server.Context =
+  let config = { Stdlib.HttpServer.Config.defaults 80 with injectStandardHeaders = false, logRequests = false } in
+  Stdlib.__Http2Server.Context { config = config, handler = handler, limit = 4L }
+let head (method: String) (ended: Bool) (headers: List<(String * String)>) : Stdlib.__Http2Server.Decoded =
+  Stdlib.__Http2Server.Decoded { id = 1L, fresh = true, ended = ended, fields = [(":method", method), (":scheme", "http"), (":authority", "example.com"), (":path", "/")] @ headers }
+let state () : Stdlib.__Http2Server.State =
+  { Stdlib.__Http2Server.initial Stdlib.Blob.empty with preface = false, last = 1L, opened = 1L }
+let admitted (method: String) (ended: Bool) (headers: List<(String * String)>) : Stdlib.Result.Result<Stdlib.__Http2Server.State, Stdlib.__Http2Server.Failure> =
+  Stdlib.__Http2Server.applyHeaders (context ()) (state ()) (head method ended headers) 100L
+let summary (result: Stdlib.Result.Result<Stdlib.__Http2Server.State, Stdlib.__Http2Server.Failure>) : Stdlib.Result.Result<(String * String * Bool * Int64), Int64> =
+  result |> Stdlib.Result.mapError (fun failure -> failure.code) |> Stdlib.Result.map (fun state ->
+    match state.streams with
+    | [] -> ("missing", "", false, state.total)
+    | stream :: _rest -> match stream.message with
+      | Receiving _ -> ("receiving", "", stream.ended, state.total)
+      | Responding reply ->
+        let status = Stdlib.__Http2Fields.__find reply.fields ":status" |> Stdlib.Option.withDefault "missing" in
+        let body = Stdlib.Blob.toString reply.body |> Stdlib.Result.withDefault "invalid" in
+        (status, body, stream.ended, state.total))
+summary (admitted "GET" true []) = Ok (("200", "GET:", true, 4L)) // complete_request
+summary (admitted "POST" false [("content-length", "3")]) = Ok (("receiving", "", false, 0L)) // incomplete_upload
+summary (admitted "POST" true [("content-length", "3")]) = Error 1L // truncated_upload
+summary (admitted "POST" false [("content-length", "5")]) = Ok (("413", "413 Payload Too Large", false, 21L)) // reject_large_upload_early
+summary (admitted "HEAD" true []) = Ok (("200", "", true, 0L)) // head_response_ownership
+let trailers (fields: List<(String * String)>) : Stdlib.Result.Result<Stdlib.__Http2Server.State, Stdlib.__Http2Server.Failure> =
+  admitted "POST" false [] |> Stdlib.Result.andThen (fun state ->
+    let trailers = Stdlib.__Http2Server.Decoded { id = 1L, fresh = false, ended = true, fields = fields } in
+    Stdlib.__Http2Server.applyHeaders (context ()) state trailers 200L)
+summary (trailers [("x-end", "yes")]) = Ok (("200", "POST:", true, 5L)) // final_trailers_dispatch
+summary (trailers [("content-length", "0")]) = Error 1L // invalid_trailer_length
+let fallback () : Stdlib.Result.Result<Stdlib.__Http2Server.State, Stdlib.__Http2Server.Failure> =
+  let config = context () in
+  let config = { config with handler = fun _request -> Stdlib.Http.responseWithText "invalid status" 199 } in
+  Stdlib.__Http2Server.applyHeaders config (state ()) (head "GET" true []) 100L
+summary (fallback ()) = Ok (("500", "500 Internal Server Error", true, 25L)) // invalid_handler_response
