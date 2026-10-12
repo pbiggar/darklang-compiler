@@ -38,3 +38,29 @@ let fallback () : Stdlib.Result.Result<Stdlib.__Http2Server.State, Stdlib.__Http
   let config = { config with handler = fun _request -> Stdlib.Http.responseWithText "invalid status" 199 } in
   Stdlib.__Http2Server.applyHeaders config (state ()) (head "GET" true []) 100L
 summary (fallback ()) = Ok (("500", "500 Internal Server Error", true, 25L)) // invalid_handler_response
+let data (flags: Int64) (bytes: Blob) : Stdlib.__Http2Wire.Frame =
+  Stdlib.__Http2Wire.Frame { kind = 0L, flags = flags, streamId = 1L, payload = bytes }
+let uploaded (flags: Int64) (bytes: Blob) : Stdlib.Result.Result<Stdlib.__Http2Server.State, Stdlib.__Http2Server.Failure> =
+  admitted "POST" false [("content-length", "3")] |> Stdlib.Result.andThen (fun state -> Stdlib.__Http2Server.receiveData (context ()) state (data flags bytes) 200L)
+summary (uploaded 1L (Stdlib.String.toBlob "abc")) = Ok (("200", "POST:abc", true, 8L)) // buffered_body_dispatch
+let padding () : Stdlib.Result.Result<(Int64 * Int64 * Int64), Int64> =
+  uploaded 9L (Stdlib.Blob.__fromInt64List [2L, 97L, 98L, 99L, 0L, 0L]) |> Stdlib.Result.mapError (fun failure -> failure.code) |> Stdlib.Result.map (fun state ->
+    let streamWindow = match state.streams with | [] -> -1L | stream :: _rest -> stream.receiveWindow in
+    (state.receiveConnection, streamWindow, state.total))
+padding () = Ok ((65529L, 65529L, 8L)) // padded_flow_credit
+let fragmented () : Stdlib.Result.Result<Stdlib.__Http2Server.State, Stdlib.__Http2Server.Failure> =
+  uploaded 0L (Stdlib.String.toBlob "ab") |> Stdlib.Result.andThen (fun state -> Stdlib.__Http2Server.receiveData (context ()) state (data 1L (Stdlib.String.toBlob "c")) 300L)
+summary (fragmented ()) = Ok (("200", "POST:abc", true, 8L)) // fragmented_request_body
+let rejected () : Stdlib.Result.Result<(Int64 * Int64 * Int64), Int64> =
+  uploaded 1L (Stdlib.String.toBlob "ab") |> Stdlib.Result.mapError (fun failure -> failure.code) |> Stdlib.Result.map (fun state ->
+    let code = match Stdlib.List.reverse state.outputs with | [] -> -1L | output :: _rest -> Stdlib.__Http2Wire.__read32 output.bytes 9L in
+    (state.receiveConnection, state.total, code))
+rejected () = Ok ((65533L, 0L, 1L)) // malformed_body_keeps_connection_credit
+summary (uploaded 1L Stdlib.Blob.empty) = Ok (("missing", "", false, 0L)) // empty_data_length_mismatch
+let streamOverflow () : Stdlib.Result.Result<(Int64 * Int64), Int64> =
+  admitted "POST" false [] |> Stdlib.Result.andThen (fun state ->
+    let state = { state with streams = Stdlib.List.map state.streams (fun stream -> { stream with receiveWindow = 2L }) } in
+    Stdlib.__Http2Server.receiveData (context ()) state (data 1L (Stdlib.String.toBlob "abc")) 200L) |> Stdlib.Result.mapError (fun failure -> failure.code) |> Stdlib.Result.map (fun state ->
+      let code = match Stdlib.List.reverse state.outputs with | [] -> -1L | output :: _rest -> Stdlib.__Http2Wire.__read32 output.bytes 9L in
+      (state.receiveConnection, code))
+streamOverflow () = Ok ((65532L, 3L)) // independent_receive_window

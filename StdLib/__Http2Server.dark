@@ -395,3 +395,52 @@ let applyHeaders (context: Stdlib.__Http2Server.Context) (state: Stdlib.__Http2S
       else if Stdlib.Bool.not head.ended then Error (Stdlib.__Http2Server.__stream head.id 1L "HTTP/2 trailers must end request")
       else Stdlib.__Http2Fields.trailers head.fields |> Stdlib.Result.mapError (fun message -> Stdlib.__Http2Server.__stream head.id 1L message) |> Stdlib.Result.andThen (fun _unit ->
         Stdlib.__Http2Server.dispatch context (Stdlib.__Http2Server.__replace state { stream with ended = true }) head.id now)
+
+let __recover (state: Stdlib.__Http2Server.State) (result: Stdlib.Result.Result<Stdlib.__Http2Server.State, Stdlib.__Http2Server.Failure>) : Stdlib.Result.Result<Stdlib.__Http2Server.State, Stdlib.__Http2Server.Failure> =
+  match result with | Ok next -> Ok next | Error failure -> Stdlib.__Http2Server.reject state failure
+
+let __credit (state: Stdlib.__Http2Server.State) (id: Int64) (size: Int64) : Stdlib.Result.Result<Stdlib.__Http2Server.State, Stdlib.__Http2Server.Failure> =
+  if size == 0L then Ok state
+  else Stdlib.__Http2Server.__frame 8L 0L id (Stdlib.__Http2Wire.__u32 size) (Stdlib.__Http2Server.Action.Credit ((id, size))) |> Stdlib.Result.andThen (fun output -> Stdlib.__Http2Server.__queue state output)
+
+let __body (context: Stdlib.__Http2Server.Context) (state: Stdlib.__Http2Server.State) (stream: Stdlib.__Http2Server.Active) (bytes: Blob) (ended: Bool) (now: Int64) : Stdlib.Result.Result<Stdlib.__Http2Server.State, Stdlib.__Http2Server.Failure> =
+  if stream.ended then Error (Stdlib.__Http2Server.__stream stream.id 5L "HTTP/2 DATA after request end")
+  else match stream.message with
+    | Responding _ -> Ok (Stdlib.__Http2Server.__replace state { stream with ended = ended })
+    | Receiving input ->
+      let size = Stdlib.Blob.__byteLength bytes in
+      let total = input.total + size in
+      if total > context.limit then Stdlib.__Http2Server.__reply context state { stream with ended = ended } input.head.method (Stdlib.Http.responseWithText "413 Payload Too Large" 413) now
+      else if state.total + size > 104857600L then Error (Stdlib.__Http2Server.__connection 11L "HTTP/2 retained body budget exhausted")
+      else
+        let valid = match input.expected with | None -> true | Some expected -> total <= expected in
+        if Stdlib.Bool.not valid then Error (Stdlib.__Http2Server.__stream stream.id 1L "HTTP/2 Content-Length exceeded")
+        else
+          let input = { input with total = total, blocks = if size == 0L then input.blocks else Stdlib.List.push input.blocks bytes } in
+          let next = Stdlib.__Http2Server.__replace { state with total = state.total + size } { stream with ended = ended, message = Stdlib.__Http2Server.Message.Receiving input } in
+          Stdlib.__Http2Server.dispatch context next stream.id now
+
+// Charge padded wire bytes, while retaining only message content. Connection
+// credit survives stream errors and closed-stream DATA; stream credit does not.
+let receiveData (context: Stdlib.__Http2Server.Context) (state: Stdlib.__Http2Server.State) (frame: Stdlib.__Http2Wire.Frame) (now: Int64) : Stdlib.Result.Result<Stdlib.__Http2Server.State, Stdlib.__Http2Server.Failure> =
+  if frame.kind != 0L then Error (Stdlib.__Http2Server.__connection 1L "Expected HTTP/2 DATA")
+  else Stdlib.__Http2Server.__validateFrame frame |> Stdlib.Result.andThen (fun _unit ->
+    let size = Stdlib.Blob.__byteLength frame.payload in
+    if frame.streamId % 2L != 1L || frame.streamId > state.last then Error (Stdlib.__Http2Server.__connection 1L "HTTP/2 DATA on idle stream")
+    else if size > state.receiveConnection then Error (Stdlib.__Http2Server.__connection 3L "HTTP/2 receive connection window exceeded")
+    else
+      let next = { state with receiveConnection = state.receiveConnection - size } in
+      Stdlib.__Http2Server.__credit next 0L size |> Stdlib.Result.andThen (fun charged ->
+        match Stdlib.__Http2Server.__find charged frame.streamId with
+        | None -> Ok charged
+        | Some stream ->
+          if size > stream.receiveWindow then Stdlib.__Http2Server.reject charged (Stdlib.__Http2Server.__stream stream.id 3L "HTTP/2 receive stream window exceeded")
+          else
+            let stream = { stream with receiveWindow = stream.receiveWindow - size } in
+            let charged = Stdlib.__Http2Server.__replace charged stream in
+            let ended = Stdlib.Int64.bitwiseAnd frame.flags 1L != 0L in
+            let received = Stdlib.__Http2Server.__body context charged stream (Stdlib.__Http2Wire.content frame) ended now in
+            Stdlib.__Http2Server.__recover charged received |> Stdlib.Result.andThen (fun next ->
+              match Stdlib.__Http2Server.__find next stream.id with
+              | None -> Ok next
+              | Some stream -> if stream.ended then Ok next else Stdlib.__Http2Server.__credit next stream.id size)))
