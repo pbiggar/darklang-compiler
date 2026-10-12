@@ -4,7 +4,7 @@ Generated from `test/test-suite-tooling/TestRunner.ml` and the imported
 `test/fixtures/e2e/upstream/**/*.dark` files. Regenerate with
 `python3 scripts/audit-upstream-gates.py`; verify with `--check`.
 
-**105 files; 31 whole-file exclusions; 308 line-number entries
+**105 files; 31 whole-file exclusions; 291 line-number entries
 across 34 files.** A line entry is not a skipped-test count.
 The runner matches the `L<number>:` assertion name produced by the fixture
 parser. Declarations and multiline assertions require parser inspection;
@@ -99,7 +99,7 @@ Other skip metadata and runtime filters are outside this inventory.
 | [stdlib/ints/uint32.dark](../../test/fixtures/e2e/upstream/stdlib/ints/uint32.dark) | enabled | — |
 | [stdlib/ints/uint64.dark](../../test/fixtures/e2e/upstream/stdlib/ints/uint64.dark) | enabled | — |
 | [stdlib/ints/uint8.dark](../../test/fixtures/e2e/upstream/stdlib/ints/uint8.dark) | enabled | — |
-| [stdlib/json.dark](../../test/fixtures/e2e/upstream/stdlib/json.dark) | enabled | 722, 726, 728, 750, 751, 755, 932, 1071, 1076, 1136, 1152, 1159, 1178, 1180, 1236, 1239, 1243, 1248, 1268, 1330, 1388, 1392, 1402, 1406, 1408, 1411, 1423 |
+| [stdlib/json.dark](../../test/fixtures/e2e/upstream/stdlib/json.dark) | enabled | 722, 726, 728, 750, 751, 755, 932, 1071, 1076, 1178, 1180, 1236, 1239, 1243, 1248, 1268, 1330, 1388, 1392, 1402, 1406, 1408, 1411 |
 | [stdlib/language-tools/parsedFileShape.dark](../../test/fixtures/e2e/upstream/stdlib/language-tools/parsedFileShape.dark) | disabled | — |
 | [stdlib/language-tools/pickLocation.dark](../../test/fixtures/e2e/upstream/stdlib/language-tools/pickLocation.dark) | disabled | — |
 | [stdlib/language-tools/semanticTokenization.dark](../../test/fixtures/e2e/upstream/stdlib/language-tools/semanticTokenization.dark) | disabled | — |
@@ -114,7 +114,7 @@ Other skip metadata and runtime filters are outside this inventory.
 | [stdlib/sqlite.dark](../../test/fixtures/e2e/upstream/stdlib/sqlite.dark) | disabled | — |
 | [stdlib/sse.dark](../../test/fixtures/e2e/upstream/stdlib/sse.dark) | enabled | — |
 | [stdlib/stream.dark](../../test/fixtures/e2e/upstream/stdlib/stream.dark) | enabled | — |
-| [stdlib/string.dark](../../test/fixtures/e2e/upstream/stdlib/string.dark) | enabled | 182, 191, 192, 193, 194, 195, 413, 415, 422, 424, 427, 430, 433, 436 |
+| [stdlib/string.dark](../../test/fixtures/e2e/upstream/stdlib/string.dark) | enabled | 179 |
 | [stdlib/tuple.dark](../../test/fixtures/e2e/upstream/stdlib/tuple.dark) | enabled | — |
 | [stdlib/uuid.dark](../../test/fixtures/e2e/upstream/stdlib/uuid.dark) | enabled | — |
 | [stdlib/x509.dark](../../test/fixtures/e2e/upstream/stdlib/x509.dark) | enabled | — |
@@ -127,4 +127,4 @@ editing the runner. They must not be counted as unsupported expressions.
 | File | Line | Source line |
 | --- | --- | --- |
 
-0 of the 308 entries point to blank or comment lines.
+0 of the 291 entries point to blank or comment lines.
