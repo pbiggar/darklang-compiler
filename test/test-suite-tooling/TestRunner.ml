@@ -1246,7 +1246,6 @@ let runTestsWithProgressReporter completedTestReporter args =
             173;
             176;
             244;
-            255;
           ] );
         ( "test/fixtures/e2e/upstream/stdlib/html.dark",
           [ 42; 44; 66; 69; 72; 75; 83 ] );

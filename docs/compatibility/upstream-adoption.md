@@ -18,6 +18,7 @@ metadata/cancellation, the Dark at-rest checker, package persistence/SCM and UI.
 | `Char.toAsciiCode` | Only a single ASCII scalar yields `Some` | Upstream #5790; a non-ASCII scalar or compound grapheme yields `None`. `isASCII` uses this result. |
 | `Char.isAlphanumeric` | Letters or decimal digits, rather than all Unicode numbers | Match #5741's `Rune.IsLetterOrDigit`: superscript digits and Roman numerals are false; Arabic decimal digits and supplementary letters are true. Reuse existing Unicode categories. |
 | `Float.isFinite` | Add current upstream declaration | NaN and both infinities yield false; finite values yield true. |
+| `Float.toBits` | Interpret public bits as signed Int64 before converting to Int | Match #5741's `DoubleToInt64Bits`; -0.0 yields -9,223,372,036,854,775,808. Keep the private unsigned representation unchanged; recover imported Float assertion L255. |
 | `Float.clampRefusingNaN` | Add current upstream name and exact error text | Reuse existing Float clamp behavior. Preserve compiler `Float.clamp` and its historical error text; generic clamp/trait dispatch remains discussion-only. |
 | `String.compare` | Add ordinal UTF-16 comparison | Reuse existing typed comparison; only its sign is significant. |
 | `List.setAt`, `List.IndexError` | Add checked replacement with negative indexing | Resolve index from list length; return `IndexOutOfBounds` outside the list, including empty lists. |

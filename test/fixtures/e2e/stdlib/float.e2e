@@ -55,9 +55,9 @@ Stdlib.Float.sqrt 4.0 == 2.0 = true
 Stdlib.Float.absoluteValue (-5.0) > 4.0 = true
 
 // Stdlib.Float.toBits - IEEE 754 bit representation
-// Note: UInt64 values with high bit set are printed as signed (compiler limitation)
+// Public bits use the upstream signed Int64 interpretation, returned as Int.
 Stdlib.Float.toBits 1.0 = 4607182418800017408
-Stdlib.Float.toBits (-1.0) = 13830554455654793216
+Stdlib.Float.toBits (-1.0) = -4616189618054758400
 Stdlib.Float.toBits 0.0 = 0
 
 // Stdlib.Float.toString - special cases
@@ -88,7 +88,7 @@ Stdlib.Float.clamp 0.0 Builtin.testNan 1.0 = Error "clamp requires arguments to 
 Stdlib.Float.parse " +.5\t" = Ok 0.5
 Stdlib.Float.parse "1.0000000000000002" = Ok 1.0000000000000002
 Stdlib.Float.parse "5e-324" = Ok (5e-324)
-Stdlib.Float.toBits (Stdlib.Result.withDefault (Stdlib.Float.parse "-0") 1.0) = 9223372036854775808
+Stdlib.Float.toBits (Stdlib.Result.withDefault (Stdlib.Float.parse "-0") 1.0) = -9223372036854775808
 Stdlib.Float.parse "" = Error Stdlib.Float.ParseError.BadFormat
 Stdlib.Float.parse "1e" = Error Stdlib.Float.ParseError.BadFormat
 Stdlib.Float.parse "1.8e308" = Ok (1.0 / 0.0)
@@ -121,7 +121,7 @@ Stdlib.Float.toBits (Stdlib.Result.withDefault (Stdlib.Float.parse (Stdlib.Float
 Stdlib.Float.power 4.0 (-0.5) = 0.5
 Stdlib.Float.power (-2.0) 3.0 = -8.0
 Stdlib.Float.isNaN (Stdlib.Float.power (-2.0) 0.5) = true
-Stdlib.Float.toBits (Stdlib.Float.power (-0.0) 3.0) = 9223372036854775808
+Stdlib.Float.toBits (Stdlib.Float.power (-0.0) 3.0) = -9223372036854775808
 Stdlib.Float.power (1e308) 2.0 = 1.0 / 0.0
 Stdlib.Float.power (1e-300) 2.0 = 0.0
 Stdlib.Float.toBits (Stdlib.Float.power 2.0 0.5) = 4609047870845172685

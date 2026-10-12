@@ -26,7 +26,7 @@ let __sum (values: List<Float>) (total: Float) : Float =
 // Private native representation primitive; the public upstream API returns Int.
 let __toBits (f: Float) : UInt64 = 0UL
 
-let toBits (value: Float) : Int = Stdlib.Int.fromUInt64 (Stdlib.Float.__toBits value)
+let toBits (value: Float) : Int = Stdlib.Int.fromInt64 (__uint64_to_int64_bits (Stdlib.Float.__toBits value))
 let toInt (value: Float) : Int = Stdlib.Float.roundTowardsZero value
 
 let isNaN (value: Float) : Bool = value != value
