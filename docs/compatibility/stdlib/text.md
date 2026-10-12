@@ -181,4 +181,9 @@ continues to accept its existing String/Char operands.
 pipelines, chained operands, inferred lambdas, explicit generic functions,
 empty operands, legacy syntax and compilation-error boundaries. The focused
 native x86-64 run passed 19/19 assertions after reproducing the missing behavior
-before implementation. Full readiness gates are pending at this checkpoint.
+before implementation. Native x86-64 validation passed `env -u LD_PRELOAD
+./build --ai`, `./run-tests --ai` (13,212/13,212), `dune runtest`, and
+`python3 scripts/check_compiled_leaks.py` (58/58 clean). The parent benchmark
+gate stopped before measurement on the existing x86-64 snapshot's incompatible
+workload contract, as documented in the HTTP/HTML adoption ledger; no benchmark
+sources, contracts or snapshots changed. The PR remains draft and unmerged.
