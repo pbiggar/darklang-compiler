@@ -504,6 +504,8 @@ let rec simpleInferType expr typeEnv funcParams funcReturns genericDefs typeReg
       let left = infer left in
       let right = infer right in
       match operation with
+      | AST.Add when left = Some AST.TString && right = Some AST.TString ->
+          Some AST.TString
       | AST.Add | AST.Sub | AST.Mul | AST.Div | AST.Mod | AST.Pow -> (
           match (left, right) with
           | Some left, Some right

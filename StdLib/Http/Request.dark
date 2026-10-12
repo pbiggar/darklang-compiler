@@ -1,17 +1,17 @@
-// Stdlib.Http.Request - frozen query accessors for canonical HTTP request values.
+// Stdlib.Http.Request - decoded query accessors for canonical HTTP request values.
 
 module Darklang.Stdlib.Http.Request
 
 let __queryParamPair (param: String) : (String * String) =
     match Stdlib.String.split param "=" with
-    | [key, value] -> (key, value)
-    | _ -> (param, "")
+    | [] -> ("", "")
+    | key :: valueParts -> (Stdlib.Http.urlDecode key, Stdlib.Http.urlDecode (Stdlib.String.join valueParts "="))
 
 let queryParams (req: Stdlib.Http.Request) : List<(String * String)> =
     match Stdlib.String.split req.url "?" with
     | [] -> []
     | _ :: queryParts ->
-        Stdlib.List.map (Stdlib.String.split (Stdlib.String.join queryParts "") "&") Stdlib.Http.Request.__queryParamPair
+        Stdlib.List.map (Stdlib.String.split (Stdlib.String.join queryParts "?") "&") Stdlib.Http.Request.__queryParamPair
 
 let __matchingValue (key: String) (pair: (String * String)) : Stdlib.Option.Option<String> =
     let (pairKey, value) = pair in
