@@ -508,7 +508,7 @@ let poll (context: Stdlib.__Http2Server.Context) (transport: Stdlib.__HttpTransp
       | Some bytes ->
         let size = Stdlib.Blob.__byteLength bytes in
         if size == 0L then Error (Stdlib.__Http2Server.__connection 2L "HTTP/2 connection ended")
-        else if size > 4096L || Stdlib.Blob.__byteLength state.wire.pending + size > 65536L then Error (Stdlib.__Http2Server.__connection 11L "HTTP/2 input budget exceeded")
+        else if size > 16384L || Stdlib.Blob.__byteLength state.wire.pending + size > 65536L then Error (Stdlib.__Http2Server.__connection 11L "HTTP/2 input budget exceeded")
         else
           let next = { state with wire = { state.wire with pending = Stdlib.Blob.concat [state.wire.pending, bytes] } } in
           Stdlib.__Http2Server.__input context next now |> Stdlib.Result.andThen Stdlib.__Http2Server.schedule))

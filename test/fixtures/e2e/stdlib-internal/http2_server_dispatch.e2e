@@ -76,3 +76,10 @@ let polled () : Stdlib.Result.Result<(Int64 * Bool), Int64> =
   let _ = Stdlib.__HttpTransport.close transport in result
 polled () = Ok ((2L, false)) // partial_poll_preserves_header_frame
 summary (admitted "POST" false [] |> Stdlib.Result.andThen (fun state -> Stdlib.__Http2Server.__expire (context ()) state state.streams 10101L)) = Ok (("408", "408 Request Timeout", false, 19L)) // request_deadline_response
+let fullRecord () : Stdlib.Result.Result<(Bool * Int64), Int64> =
+  let lifecycle = Stdlib.Stream.__new (fun _unit -> Some ()) (fun _unit -> ()) in
+  let bytes = Stdlib.Blob.concat [Stdlib.String.toBlob (Stdlib.__Http2Wire.preface ()), Stdlib.String.toBlob (Stdlib.String.repeat "x" 5000)] in
+  let transport = Stdlib.__HttpTransport.Transport { lifecycle = lifecycle, idle = fun _unit -> false, poll = fun _unit -> Ok (Some bytes), pollWrite = fun _bytes -> Builtin.crash "Premature write", flush = fun _unit -> Ok true, read = fun _unit -> Builtin.crash "Blocking read", write = fun _bytes -> Builtin.crash "Blocking write" } in
+  let result = Stdlib.__Http2Server.poll (context ()) transport (Stdlib.__Http2Server.initial Stdlib.Blob.empty) 200L |> Stdlib.Result.mapError (fun failure -> failure.code) |> Stdlib.Result.map (fun state -> (state.preface, Stdlib.Blob.__byteLength state.wire.pending)) in
+  let _ = Stdlib.__HttpTransport.close transport in result
+fullRecord () = Ok ((false, 5000L)) // whole_tls_record_poll
