@@ -99,3 +99,20 @@ silently doing so would remove existing compiler-supported behavior. New
 regressions retain first-occurrence order, compound values, repeated NaNs,
 function identity and Blob identity. A future targeted optimization needs to
 address these boundaries and pass the full performance gate before adoption.
+
+## Combined validation
+
+All three adoption branches were combined without changing their reviewed
+implementation files, at `e66e4053aa94ed564b1bca471446d5e5bd653466` on
+`adopt/upstream-adoption-combined`. Native x86-64 validation passed:
+
+- `env -u LD_PRELOAD ./build --ai`;
+- `./run-tests --ai`: 13,278/13,278, in 133.0 seconds;
+- `dune runtest`;
+- `python3 scripts/check_compiled_leaks.py`: 58/58 clean workloads.
+
+`./benchmarks/run_benchmarks.sh --verify-parent full` was attempted again and
+stopped before measurement on the same incompatible existing x86-64 snapshot.
+All approved areas have been reviewed; confirmed gaps are implemented and
+correctness-tested. No deferred feature was implemented. PRs #60, #62 and #63
+remain draft and unmerged because full performance verification is outstanding.
