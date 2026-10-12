@@ -417,3 +417,24 @@ scripts exercise production code and compiled leak accounting. The readiness
 work exposed an x64 syscall-argument capture bug when a later operand was held
 in the scratch register. Capture now preserves that operand before loading
 earlier arguments.
+
+Plaintext HTTP/2 now uses the same persistent stream owners as TLS HTTP/2.
+Independent hyper-h2 peers verify zero-window streams, selective response
+credit, reset isolation, shared compression across later requests, and HTTP/1
+admission while an HTTP/2 response is blocked. A maximum DATA frame spans
+bounded native writes without duplicating its payload or flow debit. The
+focused HTTP/2 server suite passes 65/65 cases.
+
+Retained QUIC handshake steps accept listener-routed datagrams and enforce
+absolute deadlines without receiving from the shared socket. Five new cases
+check waiting-state retention, foreign-peer isolation, expiry and one-packet
+flight progress; the focused QUIC server suite passes 8/8 cases. The legacy
+sequential HTTP/3 wrapper still serves one request per connection and uses
+compatibility datagram sends. Active UDP ownership remains unfinished.
+
+At runtime checkpoint `a65761e34c77e6d0a78614137ac5a326977dd8a2`, a fresh
+build, all 12,248 host tests and native regression aliases pass. Independent
+plaintext/TLS HTTP/2, HTTP/3, combined secure-listener and IPv6 peers pass.
+One TLS peer run timed out during shutdown; a full rerun passed. Parent
+performance verification remains blocked by the stored snapshot's incompatible
+workload contract digest. No baseline reset or performance pass is claimed.
