@@ -1,0 +1,37 @@
+// Incremental server parsing preserves wire error scopes and connection ordering.
+let frame (kind: Int64) (flags: Int64) (id: Int64) (payload: Blob) : Blob =
+  let length = Stdlib.Blob.__byteLength payload in
+  Stdlib.Blob.concat [Stdlib.Blob.__fromInt64List [length / 65536L, (length / 256L) % 256L, length % 256L, kind, flags], Stdlib.__Http2Wire.__u32 id, payload]
+let state (bytes: Blob) : Stdlib.__Http2Server.State =
+  let initial = Stdlib.__Http2Server.initial bytes in
+  { initial with preface = false, last = 3L, wire = { initial.wire with settingsSeen = true } }
+let error (result: Stdlib.Result.Result<Stdlib.Option.Option<Stdlib.__Http2Server.Next>, Stdlib.__Http2Server.Failure>) : (Int64 * Int64) =
+  match result with
+  | Ok _ -> (-1L, -1L)
+  | Error failure -> let id = match failure.scope with | Connection -> 0L | Stream id -> id in (id, failure.code)
+let handled (bytes: Blob) : Stdlib.Result.Result<Stdlib.__Http2Server.State, Stdlib.__Http2Server.Failure> =
+  Stdlib.__Http2Server.parseFrame (state bytes) |> Stdlib.Result.andThen (fun parsed ->
+    match parsed with | None -> Builtin.crash "Expected control frame" | Some next -> Stdlib.__Http2Server.control next.state next.frame)
+let scoped (bytes: Blob) : (Int64 * Int64) =
+  match handled bytes with
+  | Ok _ -> (-1L, -1L)
+  | Error failure -> let id = match failure.scope with | Connection -> 0L | Stream id -> id in (id, failure.code)
+scoped (frame 8L 0L 1L (Stdlib.__Http2Wire.__u32 0L)) = (1L, 1L) // leak_check
+scoped (frame 8L 0L 0L (Stdlib.__Http2Wire.__u32 0L)) = (0L, 1L) // leak_check
+scoped (frame 8L 0L 5L (Stdlib.__Http2Wire.__u32 1L)) = (0L, 1L) // leak_check
+error (Stdlib.__Http2Server.parseFrame (state (frame 8L 0L 1L Stdlib.Blob.empty))) = (0L, 6L) // leak_check
+error (Stdlib.__Http2Server.parseFrame (state (frame 4L 0L 0L (Stdlib.Blob.concat [Stdlib.Blob.__fromInt64List [0L, 4L], Stdlib.__Http2Wire.__u32 2147483648L])))) = (0L, 3L) // leak_check
+Stdlib.__Http2Server.parseFrame (state (Stdlib.Blob.__fromInt64List [0L, 0L])) |> Stdlib.Result.map (fun next -> Stdlib.Option.isNone next) = Ok true // leak_check
+let ordering (kind: Int64) (id: Int64) : (Int64 * Int64) =
+  let initial = state (frame kind 4L id Stdlib.Blob.empty) in
+  let continuation = Stdlib.__Http2Server.Block { id = 1L, bytes = Stdlib.Blob.empty, ended = false, fresh = true } in
+  error (Stdlib.__Http2Server.parseFrame { initial with continuation = Some continuation })
+ordering 9L 3L = (0L, 1L) // leak_check
+ordering 1L 1L = (0L, 1L) // leak_check
+ordering 9L 1L = (-1L, -1L) // leak_check
+let ack () : Stdlib.Result.Result<(Bool * Int64 * Int64), Stdlib.__Http2Server.Failure> =
+  handled (frame 4L 0L 0L Stdlib.Blob.empty) |> Stdlib.Result.map (fun state ->
+    let bytes = match state.outputs with | [] -> Stdlib.Blob.empty | output :: _rest -> output.bytes in
+    (state.wire.settingsSeen, Stdlib.Blob.__getByte bytes 3L, Stdlib.Blob.__getByte bytes 4L))
+ack () = Ok ((true, 4L, 1L)) // leak_check
+handled (frame 7L 0L 0L (Stdlib.Blob.concat [Stdlib.__Http2Wire.__u32 0L, Stdlib.__Http2Wire.__u32 0L])) |> Stdlib.Result.map (fun state -> state.draining && Stdlib.List.length state.streams == 0) = Ok true // leak_check

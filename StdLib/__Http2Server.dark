@@ -17,6 +17,7 @@ type State = {
   outputs: List<Stdlib.__Http2Server.Output>, current: Stdlib.Option.Option<Stdlib.__Http2Server.Output>,
   total: Int64, receiveConnection: Int64, draining: Bool, stopped: Bool
 }
+type Next = { frame: Stdlib.__Http2Wire.Frame, state: Stdlib.__Http2Server.State }
 
 let initial (pending: Blob) : Stdlib.__Http2Server.State =
   Stdlib.__Http2Server.State { wire = { Stdlib.__Http2.initial 0L with pending = pending }, preface = true,
@@ -233,3 +234,59 @@ let schedule (state: Stdlib.__Http2Server.State) : Stdlib.Result.Result<Stdlib._
   else match state.outputs with
     | output :: rest -> Ok { state with current = Some output, outputs = rest }
     | [] -> Stdlib.__Http2Server.__select state state.streams
+
+// Preserve wire error scope before generic validation flattens it to a string.
+let __validateFrame (frame: Stdlib.__Http2Wire.Frame) : Stdlib.Result.Result<Unit, Stdlib.__Http2Server.Failure> =
+  let length = Stdlib.Blob.__byteLength frame.payload in
+  if ((frame.kind == 2L && length != 5L) || (frame.kind == 3L && length != 4L) || (frame.kind == 6L && length != 8L) ||
+      (frame.kind == 7L && length < 8L) || (frame.kind == 8L && length != 4L) ||
+      (frame.kind == 4L && (length % 6L != 0L || (Stdlib.Int64.bitwiseAnd frame.flags 1L != 0L && length != 0L)))) then
+    Error (Stdlib.__Http2Server.__connection 6L "Invalid HTTP/2 frame length")
+  else if frame.kind == 8L then Ok ()
+  else if frame.kind == 4L && frame.streamId == 0L && Stdlib.__Http2Server.__badWindowSetting frame.payload 0L then
+    Error (Stdlib.__Http2Server.__connection 3L "Invalid HTTP/2 initial window")
+  else if frame.kind == 2L && frame.streamId != 0L && Stdlib.Int64.bitwiseAnd (Stdlib.__Http2Wire.__read32 frame.payload 0L) 2147483647L == frame.streamId then
+    Error (Stdlib.__Http2Server.__stream frame.streamId 1L "HTTP/2 stream depends on itself")
+  else Stdlib.__Http2Wire.validate frame |> Stdlib.Result.mapError (fun message -> Stdlib.__Http2Server.__connection 1L message)
+
+let parseFrame (state: Stdlib.__Http2Server.State) : Stdlib.Result.Result<Stdlib.Option.Option<Stdlib.__Http2Server.Next>, Stdlib.__Http2Server.Failure> =
+  let bytes = state.wire.pending in
+  let available = Stdlib.Blob.__byteLength bytes in
+  if state.preface || Stdlib.Option.isSome state.current then Ok None
+  else if available < 9L then Ok None
+  else
+    let length = Stdlib.Blob.__getByte bytes 0L * 65536L + Stdlib.Blob.__getByte bytes 1L * 256L + Stdlib.Blob.__getByte bytes 2L in
+    if length > 16384L then Error (Stdlib.__Http2Server.__connection 6L "HTTP/2 frame exceeds receive limit")
+    else if available < length + 9L then Ok None
+    else if state.wire.frames >= 16384L then Error (Stdlib.__Http2Server.__connection 11L "HTTP/2 frame budget exhausted")
+    else
+      let frame = Stdlib.__Http2Wire.Frame { kind = Stdlib.Blob.__getByte bytes 3L, flags = Stdlib.Blob.__getByte bytes 4L,
+        streamId = Stdlib.Int64.bitwiseAnd (Stdlib.__Http2Wire.__read32 bytes 5L) 2147483647L, payload = Stdlib.__Http2Wire.__slice bytes 9L length } in
+      let ordered = match state.continuation with
+        | None -> frame.kind != 9L
+        | Some block -> frame.kind == 9L && frame.streamId == block.id in
+      if Stdlib.Bool.not ordered then Error (Stdlib.__Http2Server.__connection 1L "Interleaved HTTP/2 header block")
+      else if Stdlib.Bool.not state.wire.settingsSeen && (frame.kind != 4L || Stdlib.Int64.bitwiseAnd frame.flags 1L != 0L) then
+        Error (Stdlib.__Http2Server.__connection 1L "HTTP/2 peer must start with SETTINGS")
+      else Stdlib.__Http2Server.__validateFrame frame |> Stdlib.Result.map (fun _unit ->
+        let next = { state with wire = { state.wire with pending = Stdlib.__Http2Wire.__slice bytes (length + 9L) (available - length - 9L), frames = state.wire.frames + 1L } } in
+        Some (Stdlib.__Http2Server.Next { frame = frame, state = next }))
+
+let control (state: Stdlib.__Http2Server.State) (frame: Stdlib.__Http2Wire.Frame) : Stdlib.Result.Result<Stdlib.__Http2Server.State, Stdlib.__Http2Server.Failure> =
+  Stdlib.__Http2Server.__validateFrame frame |> Stdlib.Result.andThen (fun _unit ->
+    if frame.kind == 4L then
+      if Stdlib.Int64.bitwiseAnd frame.flags 1L != 0L then Ok state
+      else Stdlib.__Http2Server.applySettings state frame.payload |> Stdlib.Result.andThen (fun next ->
+        Stdlib.__Http2Server.__frame 4L 1L 0L Stdlib.Blob.empty Stdlib.__Http2Server.Action.Nothing |> Stdlib.Result.andThen (fun output -> Stdlib.__Http2Server.__queue next output))
+    else if frame.kind == 6L then
+      if Stdlib.Int64.bitwiseAnd frame.flags 1L != 0L then Ok state
+      else Stdlib.__Http2Server.__frame 6L 1L 0L frame.payload Stdlib.__Http2Server.Action.Nothing |> Stdlib.Result.andThen (fun output -> Stdlib.__Http2Server.__queue state output)
+    else if frame.kind == 8L then Stdlib.__Http2Server.windowUpdate state frame.streamId (Stdlib.Int64.bitwiseAnd (Stdlib.__Http2Wire.__read32 frame.payload 0L) 2147483647L)
+    else if frame.kind == 3L then Stdlib.__Http2Server.reset state frame.streamId
+    else if frame.kind == 2L then Ok state
+    else if frame.kind == 7L then
+      let last = Stdlib.Int64.bitwiseAnd (Stdlib.__Http2Wire.__read32 frame.payload 0L) 2147483647L in
+      let increased = match state.wire.goAway with | None -> false | Some previous -> last > previous in
+      if increased then Error (Stdlib.__Http2Server.__connection 1L "HTTP/2 GOAWAY limit increased")
+      else Ok { state with draining = true, wire = { state.wire with goAway = Some last } }
+    else Error (Stdlib.__Http2Server.__connection 1L "Unexpected HTTP/2 control frame"))
