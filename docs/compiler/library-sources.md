@@ -13,6 +13,10 @@ inventory records source placement and origin, not complete API parity.
 The rows follow `library-sources.list` declaration order.
 
 The kernel-library migration is described in [kernel-stdlib.md](kernel-stdlib.md).
+Its shared CLI and clock algorithms instead track interpreter PR #5907 at
+`26cab9978740a7f9c9d56ea643f3fade813f079e`; the general compatibility pin above
+still applies to other packages. Check this subset with
+`python3 scripts/sync-kernel-stdlib.py INTERPRETER_CHECKOUT --check`.
 Its native Builtin adapters are `Builtin/__Syscall.dark`, `__Runtime.dark`,
 `__KernelRecords.dark`, `__FileSyscall.dark`, `__PathSyscall.dark`,
 `__SystemSyscall.dark`, `__ClockSyscall.dark`, `__WatchSyscall.dark`, and

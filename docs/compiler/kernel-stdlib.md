@@ -1,5 +1,10 @@
 # Shared kernel StdLib
 
+The shared source reference is interpreter
+[PR #5907](https://github.com/darklang/dark/pull/5907), commit
+`26cab9978740a7f9c9d56ea643f3fade813f079e`. The 17 synchronized units include
+the final `Cli.Env.home` UID/passwd fallback using `Posix.__decimal`.
+
 The migrated public CLI libraries use the same Dark implementation in the
 compiler and interpreter. Existing public APIs compose private `__` helpers
 within File, Process, Posix, Sys and DateTime. Those helpers call Builtins directly;
@@ -43,8 +48,8 @@ uses kqueue with typed vnode registrations. Watched resource grants remain attac
 to the queue and are checked again on every read/wait. Mixed raw-vnode registration
 into a scoped queue is rejected. Dark owns notification coalescing and rearming.
 Linux held-inode registration fails closed without real procfs; the public file
-watch then retains its checked polling fallback. This VM cannot validate that
-held-inode event path or execute Darwin code.
+watch then retains its checked polling fallback. Darwin execution requires a
+Darwin host; cross-compilation alone does not validate it.
 
 Process capture, partial writes, simultaneous stdout/stderr draining, output
 limits, deadlines, UTF-8 conversion, and interactive history now live in shared
@@ -80,9 +85,34 @@ hostname, CPU-count and exclusive-create effects. Those behaviors are composed
 in shared Dark over the kernel leaves. Optional backend tests now target the
 owned-launch handshake rather than the retired process-output wire records.
 
-## Verification and remaining platform gates
+## Public surface and runtime differences
 
-The Linux x86-64 compiler suite passes 13,238 checks, including compiled leak
+There are no public additions to the interpreter's migrated API. The six
+removed functions are `Cli.Env.set`, `Cli.Env.unset`, `Cli.Posix.setenv`,
+`Cli.Posix.unsetenv`, `Cli.Posix.fnmatch`, and `Cli.Posix.OpenFlags.flag`.
+Named open flags remain. Glob matching is a private Dark algorithm. Environment
+reads use runtime inputs, not fictitious environment syscalls.
+
+Account fallback parses `/etc/passwd`; it does not emulate NSS. `Cli.Env.home`
+uses HOME first, then the real UID's home field. CPU count uses Linux affinity
+or Darwin `hw.ncpu`; it does not separately apply cgroup quotas. Darwin
+`utimesNow` supplies whole seconds. DateTime.today uses a UTC day boundary.
+
+The compiler emits native syscall instructions and ABI adapters; it does not
+compile or link the interpreter's C transport. Its native executables have no
+interpreter capability policy or effect-replay store. Consequently the compiler's
+`runtimeAuthorizeReadPath` returns the candidate path, while the interpreter
+checks its retained grants. Shared algorithms do not imply identical host
+security policies. There is no new public fork or arbitrary-syscall API.
+
+Compiler-only private source fragments remain necessary for native lowering.
+Their filenames do not add public modules. The interpreter's removed VM
+scaffolding is not copied here: the compiler's pre-existing `scripts/vm` remains
+its documented native-toolchain bootstrap.
+
+## Earlier validation and remaining platform gates
+
+At compiler commit `d72e328c0`, the Linux x86-64 suite passed 13,238 checks, including compiled leak
 checks and a closed-pipe regression that explicitly restores default SIGPIPE
 before re-executing Dark. `dune runtest` also passes. Interpreter CLI-library
 validation passes 358 checks in a reloaded, integrity-checked isolated test store
@@ -107,15 +137,12 @@ matching the compiler's existing convention. The VM-only dotnet launcher permits
 an explicit managed-heap-limit override; package reload needed 2 GiB rather than
 its 1 GiB default in this VM. This does not change shipped runtime behavior.
 
+The final interpreter commit above passed CI: 12,574 tests, four ignored, and
+all 13 build gates. Interpreter allocation budgets do not apply to native compiler
+benchmarks and are not copied into this repository.
+
 This is not a fully cross-platform-verified release. Darwin and Linux ARM64
-execution remain to be tested on suitable hosts. Full interpreter validation
-was initially blocked by a security review of an HTTP-test destination. The
-user-approved isolated retry of `httpclient/line125` subsequently ran, returning
-`Timeout` after five seconds instead of `NetworkError`. This VM lacks the
-fixture's required `banned-loopback.dark.test` to `127.0.0.1` hosts mapping, so
-the retry does not establish loopback-denial coverage. The expected result was
-not weakened and no production HTTP code was changed. A separate
-install-status check cannot obtain .NET executable identity without procfs in
-this VM. The parent performance gate rejects the existing snapshot's workload
-contract digest; Cachegrind also cannot run without real `/proc/self/maps`.
-No benchmark baseline was replaced to hide either limitation.
+execution remain to be tested on suitable hosts. The earlier compiler parent
+performance gate rejected an incompatible workload-contract snapshot; that
+failure did not justify replacing its benchmark baseline. Current compiler
+validation is reported separately in the compiler PR.
