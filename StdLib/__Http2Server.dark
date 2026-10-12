@@ -512,3 +512,20 @@ let poll (context: Stdlib.__Http2Server.Context) (transport: Stdlib.__HttpTransp
         else
           let next = { state with wire = { state.wire with pending = Stdlib.Blob.concat [state.wire.pending, bytes] } } in
           Stdlib.__Http2Server.__input context next now |> Stdlib.Result.andThen Stdlib.__Http2Server.schedule))
+
+let deadline (previous: Stdlib.__Http2Server.State) (state: Stdlib.__Http2Server.State) (deadline: Int64) (now: Int64) : Int64 =
+  let before = match previous.current with | None -> -1L | Some output -> output.offset in
+  let after = match state.current with | None -> -1L | Some output -> output.offset in
+  let progressed = before != after || state.wire.frames != previous.wire.frames || state.preface != previous.preface || Stdlib.Blob.__byteLength state.wire.pending != Stdlib.Blob.__byteLength previous.wire.pending in
+  if Stdlib.Bool.not state.wire.settingsSeen then deadline
+  else if Stdlib.Option.isSome state.continuation then
+    if Stdlib.Option.isNone previous.continuation then now + 10000L else deadline
+  else if Stdlib.Option.isSome previous.continuation then now + 30000L
+  else if Stdlib.Blob.__byteLength state.wire.pending > 0L && Stdlib.Bool.not (Stdlib.__Http2Server.immediate state) then
+    if Stdlib.Blob.__byteLength previous.wire.pending == 0L then now + 10000L else deadline
+  else if progressed then now + 30000L else deadline
+
+let retained (state: Stdlib.__Http2Server.State) : Int64 =
+  let block = match state.continuation with | None -> 0L | Some block -> Stdlib.Blob.__byteLength block.bytes in
+  let output = match state.current with | None -> 0L | Some output -> Stdlib.Blob.__byteLength output.bytes in
+  state.total + Stdlib.Blob.__byteLength state.wire.pending + block + output + Stdlib.__Http2Server.__queuedBytes state.outputs

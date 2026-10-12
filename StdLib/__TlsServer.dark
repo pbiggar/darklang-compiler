@@ -26,17 +26,7 @@ let __http2 (context: Stdlib.__TlsServer.Context) (owner: Stdlib.__TlsServer.Htt
       let finished = state.stopped || (state.draining && state.streams == [] && state.outputs == [] && Stdlib.Option.isNone state.current) in
       if finished then let _ = Stdlib.__HttpTransport.close owner.transport in Stdlib.__TlsServer.Step { owner = None, stopped = false }
       else
-        let before = match owner.state.current with | None -> -1L | Some output -> output.offset in
-        let after = match state.current with | None -> -1L | Some output -> output.offset in
-        let progressed = before != after || state.wire.frames != owner.state.wire.frames || state.preface != owner.state.preface || Stdlib.Blob.__byteLength state.wire.pending != Stdlib.Blob.__byteLength owner.state.wire.pending in
-        let deadline =
-          if Stdlib.Bool.not state.wire.settingsSeen then owner.deadline
-          else if Stdlib.Option.isSome state.continuation then
-            if Stdlib.Option.isNone owner.state.continuation then now + 10000L else owner.deadline
-          else if Stdlib.Option.isSome owner.state.continuation then now + 30000L
-          else if Stdlib.Blob.__byteLength state.wire.pending > 0L && Stdlib.Bool.not (Stdlib.__Http2Server.immediate state) then
-            if Stdlib.Blob.__byteLength owner.state.wire.pending == 0L then now + 10000L else owner.deadline
-          else if progressed then now + 30000L else owner.deadline in
+        let deadline = Stdlib.__Http2Server.deadline owner.state state owner.deadline now in
         Stdlib.__TlsServer.Step { owner = Some (Stdlib.__TlsServer.Owner.Http2 { owner with state = state, deadline = deadline }), stopped = false }
 
 let __step (context: Stdlib.__TlsServer.Context) (owner: Stdlib.__TlsServer.Owner) (now: Int64) : Stdlib.Result.Result<Stdlib.__TlsServer.Step, String> =
@@ -67,10 +57,7 @@ let __inputSize (input: Stdlib.__Tls13ServerPoll.Input) : Int64 =
 let __size (owner: Stdlib.__TlsServer.Owner) : Int64 =
   match owner with
   | Http1 owner -> Stdlib.__Http1Server.__size owner
-  | Http2 owner ->
-    let block = match owner.state.continuation with | None -> 0L | Some block -> Stdlib.Blob.__byteLength block.bytes in
-    let output = match owner.state.current with | None -> 0L | Some output -> Stdlib.Blob.__byteLength output.bytes in
-    owner.state.total + Stdlib.Blob.__byteLength owner.state.wire.pending + block + output + Stdlib.__Http2Server.__queuedBytes owner.state.outputs
+  | Http2 owner -> Stdlib.__Http2Server.retained owner.state
   | Handshake handshake -> match handshake.state with
     | Input input -> Stdlib.__TlsServer.__inputSize input
     | Output output -> Stdlib.Blob.__byteLength output.bytes + Stdlib.__TlsServer.__inputSize output.after
