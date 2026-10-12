@@ -35,3 +35,27 @@ let ack () : Stdlib.Result.Result<(Bool * Int64 * Int64), Stdlib.__Http2Server.F
     (state.wire.settingsSeen, Stdlib.Blob.__getByte bytes 3L, Stdlib.Blob.__getByte bytes 4L))
 ack () = Ok ((true, 4L, 1L)) // leak_check
 handled (frame 7L 0L 0L (Stdlib.Blob.concat [Stdlib.__Http2Wire.__u32 0L, Stdlib.__Http2Wire.__u32 0L])) |> Stdlib.Result.map (fun state -> state.draining && Stdlib.List.length state.streams == 0) = Ok true // leak_check
+Stdlib.__Http2Server.consumePreface (Stdlib.__Http2Server.initial (Stdlib.String.toBlob "PRI * HTTP/2.0")) |> Stdlib.Result.map (fun next -> Stdlib.Option.isNone next) = Ok true // leak_check
+let preface () : Stdlib.Result.Result<(Bool * Int64 * Int64), Stdlib.__Http2Server.Failure> =
+  let settings = frame 4L 0L 0L Stdlib.Blob.empty in
+  Stdlib.__Http2Server.consumePreface (Stdlib.__Http2Server.initial (Stdlib.Blob.concat [Stdlib.String.toBlob (Stdlib.__Http2Wire.preface ()), settings])) |> Stdlib.Result.map (fun available ->
+    match available with | None -> (true, -1L, -1L) | Some state -> (state.preface, Stdlib.Blob.__byteLength state.wire.pending, Stdlib.Int.toInt64 (Stdlib.List.length state.outputs) |> Stdlib.Option.withDefault -1L))
+preface () = Ok ((false, 9L, 1L)) // leak_check
+
+let header (id: Int64) (kind: Int64) (flags: Int64) (bytes: Blob) : Stdlib.__Http2Wire.Frame =
+  Stdlib.__Http2Wire.Frame { kind = kind, flags = flags, streamId = id, payload = bytes }
+let compression () : Stdlib.Result.Result<(Bool * Bool * Bool * List<(String * String)>), String> =
+  let fields = [(":method", "GET"), ("x-shared", "retired-stream-dynamic-value")] in
+  Stdlib.__Hpack.encodeDynamic (Stdlib.__Hpack.encoder ()) fields |> Stdlib.Result.andThen (fun first ->
+    Stdlib.__Hpack.encodeDynamic first.state fields |> Stdlib.Result.andThen (fun second ->
+      Stdlib.__Http2Server.receiveHeaders (state Stdlib.Blob.empty) (header 1L 1L 1L (Stdlib.__Http2Wire.__slice first.bytes 0L 1L)) |> Stdlib.Result.mapError (fun failure -> failure.message) |> Stdlib.Result.andThen (fun partial ->
+        let (partial, decoded) = partial in
+        if Stdlib.Option.isSome decoded then Error "Decoded incomplete header block"
+        else Stdlib.__Http2Server.receiveHeaders partial (header 1L 9L 4L (Stdlib.__Http2Wire.__slice first.bytes 1L (Stdlib.Blob.__byteLength first.bytes - 1L))) |> Stdlib.Result.mapError (fun failure -> failure.message) |> Stdlib.Result.andThen (fun completed ->
+          let (next, decoded) = completed in
+          let ended = match decoded with | None -> false | Some decoded -> decoded.ended && Stdlib.Bool.not decoded.fresh in
+          Stdlib.__Http2Server.receiveHeaders next (header 5L 1L 5L second.bytes) |> Stdlib.Result.mapError (fun failure -> failure.message) |> Stdlib.Result.map (fun received ->
+            let (next, decoded) = received in
+            match decoded with | None -> (false, false, false, []) | Some decoded -> (ended, decoded.fresh, Stdlib.Option.isNone next.continuation, decoded.fields))))))
+compression () = Ok ((true, true, true, [(":method", "GET"), ("x-shared", "retired-stream-dynamic-value")])) // leak_check
+Stdlib.__Http2Server.receiveHeaders (state Stdlib.Blob.empty) (header 1L 1L 4L (Stdlib.Blob.__fromInt64List [255L])) |> Stdlib.Result.mapError (fun failure -> failure.code) |> Stdlib.Result.map (fun _decoded -> true) = Error 9L // leak_check

@@ -18,6 +18,7 @@ type State = {
   total: Int64, receiveConnection: Int64, draining: Bool, stopped: Bool
 }
 type Next = { frame: Stdlib.__Http2Wire.Frame, state: Stdlib.__Http2Server.State }
+type Decoded = { id: Int64, fields: List<(String * String)>, ended: Bool, fresh: Bool }
 
 let initial (pending: Blob) : Stdlib.__Http2Server.State =
   Stdlib.__Http2Server.State { wire = { Stdlib.__Http2.initial 0L with pending = pending }, preface = true,
@@ -290,3 +291,40 @@ let control (state: Stdlib.__Http2Server.State) (frame: Stdlib.__Http2Wire.Frame
       if increased then Error (Stdlib.__Http2Server.__connection 1L "HTTP/2 GOAWAY limit increased")
       else Ok { state with draining = true, wire = { state.wire with goAway = Some last } }
     else Error (Stdlib.__Http2Server.__connection 1L "Unexpected HTTP/2 control frame"))
+
+let consumePreface (state: Stdlib.__Http2Server.State) : Stdlib.Result.Result<Stdlib.Option.Option<Stdlib.__Http2Server.State>, Stdlib.__Http2Server.Failure> =
+  let bytes = state.wire.pending in
+  let length = Stdlib.Blob.__byteLength bytes in
+  if Stdlib.Bool.not state.preface then Ok (Some state)
+  else if Stdlib.Bool.not (Stdlib.__Http2Wire.isPrefacePrefix bytes 0L) then Error (Stdlib.__Http2Server.__connection 1L "Invalid HTTP/2 preface")
+  else if length < 24L then Ok None
+  else
+    let settings = Stdlib.Blob.__fromInt64List [0L, 3L, 0L, 0L, 0L, 32L, 0L, 6L, 0L, 1L, 0L, 0L] in
+    let next = { state with preface = false, wire = { state.wire with pending = Stdlib.__Http2Wire.__slice bytes 24L (length - 24L) } } in
+    Stdlib.__Http2Server.__frame 4L 0L 0L settings Stdlib.__Http2Server.Action.Nothing |> Stdlib.Result.andThen (fun output -> Stdlib.__Http2Server.__queue next output) |> Stdlib.Result.map (fun next -> Some next)
+
+// Decode every completed block, including headers on retired streams, before
+// request validation. Retiring a stream must not roll back the shared table.
+let receiveHeaders (state: Stdlib.__Http2Server.State) (frame: Stdlib.__Http2Wire.Frame) : Stdlib.Result.Result<(Stdlib.__Http2Server.State * Stdlib.Option.Option<Stdlib.__Http2Server.Decoded>), Stdlib.__Http2Server.Failure> =
+  let block = if frame.kind == 1L then
+    if Stdlib.Option.isSome state.continuation then Error (Stdlib.__Http2Server.__connection 1L "Interleaved HTTP/2 header block")
+    else if frame.streamId <= 0L || frame.streamId % 2L != 1L then Error (Stdlib.__Http2Server.__connection 1L "Invalid HTTP/2 client stream")
+    else Stdlib.__Http2Server.__validateFrame frame |> Stdlib.Result.map (fun _unit ->
+      Stdlib.__Http2Server.Block { id = frame.streamId, bytes = Stdlib.__Http2Wire.content frame,
+        ended = Stdlib.Int64.bitwiseAnd frame.flags 1L != 0L, fresh = frame.streamId > state.last })
+  else if frame.kind == 9L then
+    match state.continuation with
+    | None -> Error (Stdlib.__Http2Server.__connection 1L "Unexpected HTTP/2 CONTINUATION")
+    | Some block ->
+      if block.id != frame.streamId then Error (Stdlib.__Http2Server.__connection 1L "Interleaved HTTP/2 header block")
+      else Ok { block with bytes = Stdlib.Blob.concat [block.bytes, frame.payload] }
+  else Error (Stdlib.__Http2Server.__connection 1L "Expected HTTP/2 header frame") in
+  block |> Stdlib.Result.andThen (fun block ->
+    if Stdlib.Blob.__byteLength block.bytes > 65536L then Error (Stdlib.__Http2Server.__connection 9L "HTTP/2 compressed header limit exceeded")
+    else
+      let next = if frame.kind == 1L && block.fresh then { state with last = block.id, opened = state.opened + 1L } else state in
+      if Stdlib.Int64.bitwiseAnd frame.flags 4L == 0L then Ok (({ next with continuation = Some block }, None))
+      else
+        Stdlib.__Hpack.decode next.wire.decoder block.bytes |> Stdlib.Result.mapError (fun message -> Stdlib.__Http2Server.__connection 9L message) |> Stdlib.Result.map (fun decoded ->
+          let next = { next with continuation = None, wire = { next.wire with decoder = decoded.state } } in
+          (next, Some (Stdlib.__Http2Server.Decoded { id = block.id, fields = decoded.headers, ended = block.ended, fresh = block.fresh }))))
