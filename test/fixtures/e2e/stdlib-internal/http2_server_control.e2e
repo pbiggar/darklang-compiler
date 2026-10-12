@@ -59,4 +59,4 @@ let compression () : Stdlib.Result.Result<(Bool * Bool * Bool * List<(String * S
             let (next, decoded) = received in
             match decoded with | None -> (false, false, false, []) | Some decoded -> (ended, decoded.fresh, Stdlib.Option.isNone next.continuation, decoded.fields))))))
 compression () = Ok ((true, true, true, [(":method", "GET"), ("x-shared", "retired-stream-dynamic-value")])) // leak_check
-Stdlib.__Http2Server.receiveHeaders (state Stdlib.Blob.empty) (header 1L 1L 4L (Stdlib.Blob.__fromInt64List [255L])) |> Stdlib.Result.mapError (fun failure -> failure.code) |> Stdlib.Result.map (fun _decoded -> true) = Error 9L // leak_check
+Stdlib.__Http2Server.receiveHeaders (state Stdlib.Blob.empty) (header 1L 1L 4L (Stdlib.Blob.__fromInt64List [255L])) |> Stdlib.Result.mapError (fun failure -> failure.code) |> Stdlib.Result.map (fun _decoded -> true) = Error 9L // rejected_header_block
