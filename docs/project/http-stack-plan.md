@@ -188,9 +188,9 @@ mean the entire branch has passed its integration or performance gates.
     `scripts/test_network_nonblocking_peer.py` verifies backpressure and cleanup.
   - [x] Plaintext HTTP/1.1 active owners share readiness waits and advance one
     bounded read, parse or write transition per round. Slow uploads and unread
-    responses do not monopolize other HTTP/1.1 clients. Client TLS handshakes,
-    h2c dispatch/draining and HTTP/3 servers still
-    need the active-owner migration.
+    responses do not monopolize other HTTP/1.1 clients. Prior-knowledge h2c
+    connections now use the shared multiplexed HTTP/2 owners. Client TLS
+    handshakes and HTTP/3 servers still need the active-owner migration.
   - [x] Owned TLS transports queue KeyUpdate replies and application ciphertext
     across nonblocking partial writes. `pollWrite` reports accepted plaintext;
     `flush` confirms ciphertext completion. A queue holds one application record
@@ -203,7 +203,7 @@ mean the entire branch has passed its integration or performance gates.
     frame output. Stalled ClientHello, Finished, uploads, response readers and
     HTTP/2 streams without credit do not monopolize other TLS TCP clients.
     Admission and owner steps use fresh clock readings. QUIC active-owner
-    servicing and plaintext h2c scheduling remain pending;
+    servicing remains pending;
     admitted QUIC exchanges can still monopolize the combined listener.
 - [ ] Persistent HTTP/1.1 connections and HTTP/2–3 connection reuse/pooling.
 
@@ -256,15 +256,17 @@ mean the entire branch has passed its integration or performance gates.
     order. Different origins are serviced sequentially; HTTP/1.1 uses complete
     sequential exchanges. Network failures are per-request outcomes; invalid
     batches fail before sending any request.
-  - [x] TLS HTTP/2 servers retain independent request/response state and shared
+  - [x] Plaintext and TLS HTTP/2 servers retain independent request/response state and shared
     compression across exchanges, rotate writable streams, isolate resets,
     and publish receive credit only after control frames are flushed. Partial
     headers, bounded bodies, early responses and per-stream deadlines are
     covered by `http2_server_flow.e2e`, `http2_server_control.e2e` and
-    `http2_server_dispatch.e2e`. The independent TLS server peer verifies
+    `http2_server_dispatch.e2e`. The independent plaintext and TLS server peers verify
     blocked-stream admission fairness, selective window updates, reset
-    isolation, persistent reuse and 70 KiB upload/response bodies.
-  - [ ] Lazy-stream scheduling, plaintext h2c owners and multiplexed HTTP/3 servers.
+    isolation, persistent reuse and 70 KiB upload/response bodies. Maximum DATA
+    frames retain their nine-byte headers across bounded native writes without
+    debiting flow credit twice.
+  - [ ] Lazy-stream scheduling and multiplexed HTTP/3 servers.
   - [x] HTTP/3 request scheduling shares connection credit and QPACK while
     retaining independent message parsers. Each round sends one bounded chunk
     per stream. Resets and GOAWAY preserve eligible responses without replay;

@@ -79,7 +79,7 @@ selected 10L = Ok ((1L, [3L, 1L])) // leak_check
 // A maximum DATA payload plus its nine-byte frame header spans native writes.
 let maximumFrame () : Stdlib.Result.Result<(Int64 * Int64 * Int64), Stdlib.__Http2Server.Failure> =
   let initial = state () in
-  let body = Stdlib.String.toBlob (Stdlib.String.repeat "x" 16384) in
+  let body = Stdlib.String.toBlob (Stdlib.String.join (Stdlib.List.repeatUnsafe 16 (Stdlib.String.repeat "x" 1024)) "") in
   let active = stream 1L 65535L in
   let active = { active with message = Stdlib.__Http2Server.Message.Responding (Stdlib.__Http2Server.Reply { method = "GET", fields = [], body = body, position = 0L, headers = true }) } in
   Stdlib.__Http2Server.scheduleData { initial with streams = [active], total = 16384L } 1L |> Stdlib.Result.andThen (fun scheduled ->
