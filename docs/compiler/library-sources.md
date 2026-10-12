@@ -188,6 +188,7 @@ fragments use `__` even where the interpreter also has private helpers.
 | `StdLib/__Http2Fields.dark` | `Darklang.Stdlib.__Http2Fields` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
 | `StdLib/__Http2.dark` | `Darklang.Stdlib.__Http2` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
 | `StdLib/__Http2Connection.dark` | `Darklang.Stdlib.__Http2Connection` | Compiler support: reusable HTTP/2 state and bounded stream scheduling |
+| `StdLib/__Http2Server.dark` | `Darklang.Stdlib.__Http2Server` | Compiler support: shared HTTP/2 server state, stream windows and scoped failures |
 | `StdLib/__QuicWire.dark` | `Darklang.Stdlib.__QuicWire` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
 | `StdLib/__QuicCrypto.dark` | `Darklang.Stdlib.__QuicCrypto` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
 | `StdLib/__QuicPacket.dark` | `Darklang.Stdlib.__QuicPacket` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |

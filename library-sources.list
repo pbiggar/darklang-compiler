@@ -164,6 +164,7 @@ StdLib/__HttpTransport.dark
 StdLib/__Http2Fields.dark
 StdLib/__Http2.dark
 StdLib/__Http2Connection.dark
+StdLib/__Http2Server.dark
 StdLib/__QuicWire.dark
 StdLib/__QuicCrypto.dark
 StdLib/__QuicPacket.dark
