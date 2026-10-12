@@ -19,6 +19,7 @@ from cryptography.x509.oid import ExtendedKeyUsageOID, NameOID
 from h2.config import H2Configuration
 from h2.connection import H2Connection
 from h2.events import DataReceived, ResponseReceived, StreamEnded
+from h2.settings import SettingCodes
 
 ROOT = Path(__file__).resolve().parents[1]
 SERVER = '''// server.dark - TLS HTTP routing, bounded bodies and shutdown ownership.
@@ -117,6 +118,68 @@ def http1_owners(port, certificate):
         other_client()
 
 
+def http2_owners(port, certificate):
+    with connect(port, certificate, ["h2"]) as peer:
+        peer.settimeout(5)
+        h2 = H2Connection(H2Configuration(client_side=True, header_encoding="utf-8"))
+        h2.initiate_connection()
+        h2.update_settings({SettingCodes.INITIAL_WINDOW_SIZE: 0})
+        for stream in (1, 3):
+            h2.send_headers(stream, [(":method", "GET"), (":scheme", "https"),
+                                    (":authority", f"localhost:{port}"), (":path", "/big"),
+                                    ("x-shared", "shared-request-compression")], end_stream=True)
+        peer.sendall(h2.data_to_send())
+        headers, bodies, ended = {}, {1: bytearray(), 3: bytearray()}, set()
+
+        def receive():
+            wire = peer.recv(65536)
+            assert wire, "Persistent HTTP/2 owner closed prematurely"
+            events = h2.receive_data(wire)
+            completed = {event.stream_id for event in events if isinstance(event, StreamEnded)}
+            for event in events:
+                if isinstance(event, ResponseReceived):
+                    headers[event.stream_id] = event.headers
+                elif isinstance(event, DataReceived):
+                    bodies[event.stream_id].extend(event.data)
+                    h2.increment_flow_control_window(event.flow_controlled_length)
+                    if event.stream_id not in completed:
+                        h2.increment_flow_control_window(event.flow_controlled_length, event.stream_id)
+                elif isinstance(event, StreamEnded):
+                    ended.add(event.stream_id)
+            outgoing = h2.data_to_send()
+            if outgoing:
+                peer.sendall(outgoing)
+
+        while set(headers) != {1, 3}:
+            receive()
+        assert not bodies[1] and not bodies[3], "Zero stream credit leaked DATA"
+        started = time.monotonic()
+        with connect(port, certificate, ["http/1.1"]) as other, other.makefile("rb") as reader:
+            other.sendall(b"GET /echo HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
+            assert http1_response(reader)[1] == b""
+        assert time.monotonic() - started < 2, "Blocked HTTP/2 stream monopolized TLS admission"
+
+        # Only stream 3 receives credit: stream 1 must remain blocked.
+        h2.increment_flow_control_window(65535, 3)
+        peer.sendall(h2.data_to_send())
+        while 3 not in ended:
+            receive()
+        assert bodies[3] == b"b" * 70000 and not bodies[1]
+        assert [value for name, value in headers[3] if name == "set-cookie"] == ["a=1", "b=2"]
+
+        # Cancel the blocked response and reuse the same compression/connection state.
+        h2.reset_stream(1)
+        bodies[5] = bytearray()
+        h2.send_headers(5, [(":method", "GET"), (":scheme", "https"),
+                           (":authority", f"localhost:{port}"), (":path", "/big"),
+                           ("x-shared", "shared-request-compression")], end_stream=True)
+        h2.increment_flow_control_window(65535, 5)
+        peer.sendall(h2.data_to_send())
+        while 5 not in ended:
+            receive()
+        assert bodies[5] == b"b" * 70000
+
+
 def unfinished(port, certificate):
     context = ssl.create_default_context(cadata=certificate.decode())
     context.minimum_version = context.maximum_version = ssl.TLSVersion.TLSv1_3
@@ -208,6 +271,7 @@ def main():
         try:
             if not args.skip_owner_checks:
                 http1_owners(port, certificate)
+                http2_owners(port, certificate)
             for method, total in (("POST", 70000), ("HEAD", 0), ("POST", 80001)):
                 with connect(port, certificate, ["h2", "http/1.1"]) as peer:
                     h2_exchange(peer, port, method, total)
@@ -278,7 +342,7 @@ def main():
                 if process.poll() is None:
                     process.kill()
                     process.communicate()
-    print("TLS server verified: persistent/pipelined HTTP/1, stalled hello/Finished/upload/send fairness, 70 KiB HTTP/2 flow control, HEAD, early 413, no-ALPN, Expect, ALPN rejection, forged Finished, shutdown and zero leaks")
+    print("TLS server verified: persistent/pipelined HTTP/1, multiplexed persistent HTTP/2 with independent windows and reset isolation, stalled-client fairness, 70 KiB flow control, HEAD, early 413, no-ALPN, Expect, ALPN rejection, forged Finished, shutdown and zero leaks")
 
 
 if __name__ == "__main__":
