@@ -52,9 +52,13 @@ assertions before the changes; it then passed 29/29 individually. Four further
 classification regressions reproduced two `Char.isAlphanumeric` failures
 before its correction. Existing
 tuple and Char fixtures retain their language assertions while adopting the
-new argument order and ASCII expectations. Full StdLib readiness gates are
-pending after the additional classification correction. The preceding StdLib
-checkpoint passed 13,228/13,228 host tests, `dune runtest` and 58/58 leak checks.
+new argument order and ASCII expectations. The final StdLib checkpoint passed
+`env -u LD_PRELOAD ./build --ai`, `./run-tests --ai` (13,255/13,255),
+`dune runtest`, and `python3 scripts/check_compiled_leaks.py` (58/58 clean).
+Focused results were 47/47 adoption assertions, 149/149 enabled imported Float
+assertions, and 8/8 quoted-grapheme regressions. The signed `Float.toBits`
+correction reproduced two focused failures before implementation; the full
+run also found and recovered one old indirect unsigned-bit expectation.
 
 The existing x86-64 full performance snapshot has an incompatible workload
 contract digest. The parent benchmark gate rejects it before measurement; no
