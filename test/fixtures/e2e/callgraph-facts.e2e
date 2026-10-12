@@ -6,7 +6,7 @@ addConstantFact 1L = 42L
 
 let constantFloatFact () : Float = -0.0
 let floatBitsFact () : Int = Stdlib.Float.toBits (constantFloatFact ())
-floatBitsFact () = 9223372036854775808
+floatBitsFact () = -9223372036854775808
 
 let effectfulConstantFact () : Int64 = let _ = Builtin.print "called" in 7L
 let useEffectfulConstantFact () : Int64 = effectfulConstantFact () + 1L
