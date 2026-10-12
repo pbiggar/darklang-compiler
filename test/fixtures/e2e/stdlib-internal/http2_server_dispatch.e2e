@@ -64,3 +64,15 @@ let streamOverflow () : Stdlib.Result.Result<(Int64 * Int64), Int64> =
       let code = match Stdlib.List.reverse state.outputs with | [] -> -1L | output :: _rest -> Stdlib.__Http2Wire.__read32 output.bytes 9L in
       (state.receiveConnection, code))
 streamOverflow () = Ok ((65532L, 3L)) // independent_receive_window
+let polled () : Stdlib.Result.Result<(Int64 * Bool), Int64> =
+  let lifecycle = Stdlib.Stream.__new (fun _unit -> Some ()) (fun _unit -> ()) in
+  let transport = Stdlib.__HttpTransport.Transport { lifecycle = lifecycle, idle = fun _unit -> false, poll = fun _unit -> Ok None, pollWrite = fun bytes -> Ok (Some (if Stdlib.Blob.__byteLength bytes > 2L then 2L else Stdlib.Blob.__byteLength bytes)), flush = fun _unit -> Ok false, read = fun _unit -> Builtin.crash "Blocking HTTP/2 read", write = fun _bytes -> Builtin.crash "Blocking HTTP/2 write" } in
+  let result = admitted "GET" true [] |> Stdlib.Result.andThen (fun state ->
+    Stdlib.__Http2Server.poll (context ()) transport state 200L |> Stdlib.Result.andThen (fun selected ->
+      Stdlib.__Http2Server.poll (context ()) transport selected 201L |> Stdlib.Result.map (fun next ->
+        let offset = match next.current with | None -> -1L | Some output -> output.offset in
+        let headers = match next.streams with | [] -> true | stream :: _rest -> match stream.message with | Receiving _ -> true | Responding reply -> reply.headers in
+        (offset, headers)))) |> Stdlib.Result.mapError (fun failure -> failure.code) in
+  let _ = Stdlib.__HttpTransport.close transport in result
+polled () = Ok ((2L, false)) // partial_poll_preserves_header_frame
+summary (admitted "POST" false [] |> Stdlib.Result.andThen (fun state -> Stdlib.__Http2Server.__expire (context ()) state state.streams 10101L)) = Ok (("408", "408 Request Timeout", false, 19L)) // request_deadline_response
