@@ -444,3 +444,71 @@ let receiveData (context: Stdlib.__Http2Server.Context) (state: Stdlib.__Http2Se
               match Stdlib.__Http2Server.__find next stream.id with
               | None -> Ok next
               | Some stream -> if stream.ended then Ok next else Stdlib.__Http2Server.__credit next stream.id size)))
+
+let handleFrame (context: Stdlib.__Http2Server.Context) (state: Stdlib.__Http2Server.State) (frame: Stdlib.__Http2Wire.Frame) (now: Int64) : Stdlib.Result.Result<Stdlib.__Http2Server.State, Stdlib.__Http2Server.Failure> =
+  if frame.kind == 1L || frame.kind == 9L then
+    match Stdlib.__Http2Server.receiveHeaders state frame with
+    | Error failure -> Stdlib.__Http2Server.reject state failure
+    | Ok pair ->
+      let (next, decoded) = pair in
+      match decoded with
+      | None -> Ok next
+      | Some head -> Stdlib.__Http2Server.__recover next (Stdlib.__Http2Server.applyHeaders context next head now)
+  else if frame.kind == 0L then Stdlib.__Http2Server.__recover state (Stdlib.__Http2Server.receiveData context state frame now)
+  else if Stdlib.__Http2.__isControl frame then Stdlib.__Http2Server.__recover state (Stdlib.__Http2Server.control state frame)
+  else if frame.kind == 5L then Stdlib.__Http2Server.reject state (Stdlib.__Http2Server.__connection 1L "HTTP/2 client cannot send PUSH_PROMISE")
+  else Ok state
+
+let __expire (context: Stdlib.__Http2Server.Context) (state: Stdlib.__Http2Server.State) (remaining: List<Stdlib.__Http2Server.Active>) (now: Int64) : Stdlib.Result.Result<Stdlib.__Http2Server.State, Stdlib.__Http2Server.Failure> =
+  match remaining with
+  | [] -> Ok state
+  | stream :: rest ->
+    let updated =
+      if now < stream.deadline then Ok state
+      else match stream.message with
+        | Receiving input -> Stdlib.__Http2Server.__reply context state stream input.head.method (Stdlib.Http.responseWithText "408 Request Timeout" 408) now
+        | Responding _ ->
+          let writing = match state.current with | None -> false | Some output -> output.stream == stream.id in
+          if writing then Error (Stdlib.__Http2Server.__connection 2L "HTTP/2 partial response write timed out")
+          else Stdlib.__Http2Server.reject state (Stdlib.__Http2Server.__stream stream.id 8L "HTTP/2 response timed out") in
+    updated |> Stdlib.Result.andThen (fun next -> Stdlib.__Http2Server.__expire context next rest now)
+
+let __input (context: Stdlib.__Http2Server.Context) (state: Stdlib.__Http2Server.State) (now: Int64) : Stdlib.Result.Result<Stdlib.__Http2Server.State, Stdlib.__Http2Server.Failure> =
+  if state.preface then
+    match Stdlib.__Http2Server.consumePreface state with
+    | Error failure -> Stdlib.__Http2Server.reject state failure
+    | Ok available -> Ok (Stdlib.Option.withDefault available state)
+  else match Stdlib.__Http2Server.parseFrame state with
+    | Error failure -> Stdlib.__Http2Server.reject state failure
+    | Ok available -> match available with
+      | None -> Ok state
+      | Some next -> Stdlib.__Http2Server.handleFrame context next.state next.frame now
+
+let immediate (state: Stdlib.__Http2Server.State) : Bool =
+  if Stdlib.Option.isSome state.current || state.stopped then false
+  else if state.outputs != [] then true
+  else if state.preface then Stdlib.Blob.__byteLength state.wire.pending >= 24L || Stdlib.Bool.not (Stdlib.__Http2Wire.isPrefacePrefix state.wire.pending 0L)
+  else
+    let bytes = state.wire.pending in
+    if Stdlib.Blob.__byteLength bytes < 9L then false
+    else
+      let length = Stdlib.Blob.__getByte bytes 0L * 65536L + Stdlib.Blob.__getByte bytes 1L * 256L + Stdlib.Blob.__getByte bytes 2L in
+      length > 16384L || Stdlib.Blob.__byteLength bytes >= length + 9L
+
+// Flush the current frame and publish its action before reading another frame.
+let poll (context: Stdlib.__Http2Server.Context) (transport: Stdlib.__HttpTransport.Transport) (state: Stdlib.__Http2Server.State) (now: Int64) : Stdlib.Result.Result<Stdlib.__Http2Server.State, Stdlib.__Http2Server.Failure> =
+  if state.stopped then Ok state
+  else Stdlib.__Http2Server.__expire context state state.streams now |> Stdlib.Result.andThen (fun state ->
+    if Stdlib.Option.isSome state.current then Stdlib.__Http2Server.pollOutput state transport.pollWrite transport.flush
+    else if state.outputs != [] then Stdlib.__Http2Server.schedule state
+    else if Stdlib.__Http2Server.immediate state then Stdlib.__Http2Server.__input context state now |> Stdlib.Result.andThen Stdlib.__Http2Server.schedule
+    else transport.poll () |> Stdlib.Result.mapError (fun message -> Stdlib.__Http2Server.__connection 2L message) |> Stdlib.Result.andThen (fun available ->
+      match available with
+      | None -> Stdlib.__Http2Server.schedule state
+      | Some bytes ->
+        let size = Stdlib.Blob.__byteLength bytes in
+        if size == 0L then Error (Stdlib.__Http2Server.__connection 2L "HTTP/2 connection ended")
+        else if size > 4096L || Stdlib.Blob.__byteLength state.wire.pending + size > 65536L then Error (Stdlib.__Http2Server.__connection 11L "HTTP/2 input budget exceeded")
+        else
+          let next = { state with wire = { state.wire with pending = Stdlib.Blob.concat [state.wire.pending, bytes] } } in
+          Stdlib.__Http2Server.__input context next now |> Stdlib.Result.andThen Stdlib.__Http2Server.schedule))
