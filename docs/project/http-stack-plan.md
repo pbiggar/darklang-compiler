@@ -189,8 +189,8 @@ mean the entire branch has passed its integration or performance gates.
   - [x] Plaintext HTTP/1.1 active owners share readiness waits and advance one
     bounded read, parse or write transition per round. Slow uploads and unread
     responses do not monopolize other HTTP/1.1 clients. Prior-knowledge h2c
-    connections now use the shared multiplexed HTTP/2 owners. Client TLS
-    handshakes and HTTP/3 servers still need the active-owner migration.
+    connections now use the shared multiplexed HTTP/2 owners. Client TCP/TLS
+    connection establishment still needs the active-owner migration.
   - [x] Owned TLS transports queue KeyUpdate replies and application ciphertext
     across nonblocking partial writes. `pollWrite` reports accepted plaintext;
     `flush` confirms ciphertext completion. A queue holds one application record
@@ -202,16 +202,22 @@ mean the entire branch has passed its integration or performance gates.
     thirty-two streams, separate stream windows, connection credit and queued
     frame output. Stalled ClientHello, Finished, uploads, response readers and
     HTTP/2 streams without credit do not monopolize other TLS TCP clients.
-    Admission and owner steps use fresh clock readings. QUIC active-owner
-    servicing remains pending;
-    admitted QUIC exchanges can still monopolize the combined listener.
-  - [ ] QUIC handshake admission now has a retained `advance` step accepting
-    one routed datagram, emitting at most one packet per encryption level,
-    preserving queued CRYPTO and packet numbers, and enforcing an absolute
-    caller-owned deadline. It never receives from the shared UDP socket.
-    The compatibility handshake wrapper uses the same step. Datagram output,
-    active UDP admission and HTTP/3 request servicing still need migration;
-    this foundation does not provide nonblocking QUIC listener fairness.
+    Admission and owner steps use fresh clock readings.
+  - [x] QUIC listeners retain at most sixty-four handshake, initialization,
+    HTTP/3 and drain owners. One listener routes a datagram by CID and peer,
+    then advances every owner with fresh clock readings and independent
+    deadlines. HTTP/3 critical-stream initialization waits incrementally for
+    credit. The combined listener advances TCP and UDP owners in the same loop.
+    Per-call nonblocking UDP sends retain sealed packets in an eight-packet
+    child queue; each round attempts one atomic send per owner. Unready sends
+    never reserve a new nonce or reseal a packet. Closing children leaves the
+    shared socket live. A 101 MiB payload budget includes HTTP bodies, queued
+    transport frames and stream reassembly across all QUIC owners.
+    `datagram_poll.e2e` and `quic_listener_owner.e2e` cover native polling,
+    atomic backpressure and cleanup. The independent secure-server peer proves
+    that stalled uploads, zero critical-stream credit and an unsent Finished
+    leave TCP and a second QUIC connection live, with simultaneous-owner
+    shutdown, same-port rebind and zero leaks.
 - [ ] Persistent HTTP/1.1 connections and HTTP/2–3 connection reuse/pooling.
 
   - [x] Buffered `HttpClientSession.request` HTTP/1.1 reuse over TCP/TLS:
@@ -283,9 +289,9 @@ mean the entire branch has passed its integration or performance gates.
     boundary 4,096 and drains eligible replies. `http3_server_owners.e2e`
     covers these boundaries; the independent aioquic peer verifies a stalled
     request alongside a 70 KiB response, selective stream credit, cancellation
-    and forty sequential requests on the same connection. UDP connection
-    admission and compatibility datagram sends remain sequential/blocking;
-    this does not establish cross-connection fairness.
+    and forty sequential requests on the same connection. Listener-owned
+    connection routing and nonblocking queued datagram output now extend
+    fairness across connections and the combined TCP/UDP listener.
   - [x] HTTP/3 request scheduling shares connection credit and QPACK while
     retaining independent message parsers. Each round sends one bounded chunk
     per stream. Resets and GOAWAY preserve eligible responses without replay;
@@ -320,6 +326,13 @@ mean the entire branch has passed its integration or performance gates.
   first ack-eliciting-send restart and the RTT-derived three-PTO floor.
 - [ ] Typed protocol failures with correct stream and connection wire errors,
   retaining the current packet-number/key state across recoverable failures.
+- [ ] Sustained native TLS connection churn without exhausting the fixed heap.
+  The parent implementation reproduced `Out of heap memory` after twenty-one
+  successful fresh TLS exchanges on Linux x86-64; variable-size String/Blob
+  allocations are not reusable yet (see [reference counting](../compiler/runtime/reference-counting.md#leak-checking)).
+  The secure-server peer runs each additional fairness case in a fresh serving
+  scope and separately verifies simultaneous-owner cleanup. Passing those
+  bounded cases does not establish an indefinitely reusable native heap.
 
 HTTP/3 control owners now retain peer parameters and enforce
 `SETTINGS_MAX_FIELD_SECTION_SIZE` against decoded name/value byte lengths,
