@@ -451,3 +451,24 @@ plaintext/TLS HTTP/2, HTTP/3, combined secure-listener and IPv6 peers pass.
 One TLS peer run timed out during shutdown; a full rerun passed. Parent
 performance verification remains blocked by the stored snapshot's incompatible
 workload contract digest. No baseline reset or performance pass is claimed.
+
+HTTP/3 servers now retain independent request and response owners on one
+connection. The public serving signatures are unchanged. Independent aioquic
+validation covers a 70 KiB response alongside a stalled request, selective
+response credit, reset isolation and forty requests on the same connection.
+Completed stream directions renew MAX_STREAMS; the 1,024-request history bound
+sends one flow-controlled GOAWAY and drains eligible responses. Thirteen focused
+cases cover those boundaries, message-error isolation, request timeout, response
+semantics and invalid Huffman padding at connection scope. The compression
+regression fails against the pre-fix build and passes against the fixed build.
+
+Runtime checkpoint `f2056bbaddc80b1d9308cc902603209d0b87dba0` passes all
+12,261 host tests and native regression aliases. The HTTP/3, combined secure
+listener and IPv6 peer checks pass. Two initial full runs exposed three native
+execution tests treating interrupted waits as failures; their shared test-only
+helper now retries EINTR while retaining the absolute timeout and reaping the
+child. Its focused native execution group passes 22/22. Parent performance
+verification was rerun and remains blocked by the incompatible snapshot
+workload contract. No baseline was reset. UDP connection admission and datagram
+output remain sequential/blocking; active QUIC listener fairness is still
+unfinished.
