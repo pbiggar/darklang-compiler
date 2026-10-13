@@ -37,8 +37,6 @@ let predeclare allowInternal types (base : globals) items symbols =
               in
               if M.mem name globals.traits then
                 Error ("Duplicate trait '" ^ name ^ "'")
-              else if declaration.WT.bounds <> [] then
-                Error "Trait declaration bounds are not implemented"
               else
                 let traitParams = List.map fst declaration.WT.typeParams in
                 if List.length traitParams <> S.cardinal (S.of_list traitParams)
@@ -52,8 +50,6 @@ let predeclare allowInternal types (base : globals) items symbols =
                              if M.mem methodName methods then
                                Error
                                  ("Duplicate trait method '" ^ methodName ^ "'")
-                             else if method_.WT.bounds <> [] then
-                               Error "Trait method bounds are not implemented"
                              else
                                let typeParams =
                                  traitParams
@@ -86,6 +82,7 @@ let predeclare allowInternal types (base : globals) items symbols =
                                                id;
                                                traitMethod =
                                                  Some (name, methodName);
+                                               bounds = [];
                                                typeParams;
                                                parameters;
                                                return;
@@ -245,6 +242,16 @@ let validate (globals : globals) implementations =
                                              if
                                                parameters <> actual.parameters
                                                || return <> actual.return
+                                               || List.exists
+                                                    (fun bound ->
+                                                      not
+                                                        (List.mem bound
+                                                           (List.map
+                                                              (TraitResolution
+                                                               .substitute
+                                                                 substitution)
+                                                              expected.bounds)))
+                                                    actual.bounds
                                                || Option.is_some
                                                     actual.traitMethod
                                              then
@@ -308,3 +315,175 @@ let select (globals : globals) traitName methodName traitArgs =
         | None ->
             Crash.crash "Validated implementation is missing a trait method")
     | _ -> Error ("Ambiguous implementation of trait '" ^ traitName ^ "'")
+
+let resolveBounds (globals : globals) path params bounds =
+  ResultList.traverse
+    (fun (bound : WT.typeParamBound) ->
+      if not (List.mem bound.WT.param params) then
+        Error ("Undeclared bound type parameter '" ^ bound.WT.param ^ "'")
+      else
+        let spelling = WS.qualifiedType bound.WT.trait_ in
+        match resolveTrait globals path spelling with
+        | None -> Error ("Unknown trait '" ^ spelling ^ "'")
+        | Some (name, trait_) ->
+            bind
+              (ResultList.traverse
+                 (resolveWrittenType globals.allowInternal globals.types path
+                    (S.of_list params))
+                 bound.WT.trait_.WT.typeArgs)
+              (fun args ->
+                let args = AST.TVar bound.WT.param :: args in
+                if List.length args <> List.length trait_.traitParams then
+                  Error ("Trait '" ^ name ^ "' type argument count mismatch")
+                else Ok (name, args)))
+    bounds
+
+let prepareBounds (globals : globals) items =
+  List.fold_left
+    (fun result item ->
+      bind result (fun globals ->
+          match item with
+          | WS.Function (path, fn) -> (
+              let name = String.concat "." (path @ [ fn.WT.name.WT.name ]) in
+              match M.find_opt name globals.functions with
+              | None -> Crash.crash "Missing predeclared bounded function"
+              | Some signature ->
+                  Result.map
+                    (fun bounds ->
+                      {
+                        globals with
+                        functions =
+                          M.add name { signature with bounds } globals.functions;
+                      })
+                    (resolveBounds globals path signature.typeParams
+                       fn.WT.bounds))
+          | WS.Trait (path, declaration) -> (
+              let name =
+                String.concat "." (path @ [ declaration.WT.name.WT.name ])
+              in
+              match M.find_opt name globals.traits with
+              | None -> Crash.crash "Missing predeclared bounded trait"
+              | Some trait_ ->
+                  bind
+                    (List.fold_left
+                       (fun result (method_ : WT.traitMethodDecl) ->
+                         bind result (fun methods ->
+                             let methodName = method_.WT.name.WT.name in
+                             match M.find_opt methodName methods with
+                             | None ->
+                                 Crash.crash
+                                   "Missing predeclared bounded trait method"
+                             | Some (signature : functionSignature) ->
+                                 Result.map
+                                   (fun bounds ->
+                                     M.add methodName { signature with bounds }
+                                       methods)
+                                   (resolveBounds globals path
+                                      signature.typeParams
+                                      (declaration.WT.bounds @ method_.WT.bounds))))
+                       (Ok trait_.methods) declaration.WT.methods)
+                    (fun methods ->
+                      Ok
+                        {
+                          globals with
+                          traits =
+                            M.add name { trait_ with methods } globals.traits;
+                        }))
+          | _ -> Ok globals))
+    (Ok globals) items
+
+let catalog (globals : globals) symbols =
+  let dispatches =
+    M.fold
+      (fun traitName trait_ catalog ->
+        M.fold
+          (fun methodName _ catalog ->
+            M.add
+              (traitName ^ "." ^ methodName)
+              {
+                TraitCatalog.traitName;
+                methodName;
+                arity = List.length trait_.traitParams;
+              }
+              catalog)
+          trait_.methods catalog)
+      globals.traits M.empty
+  in
+  let nameOf id =
+    match C.functionName id symbols with
+    | Some name -> name
+    | None -> Crash.crash "Trait method function lost its canonical identity"
+  in
+  let implementations =
+    List.fold_left
+      (fun catalog implementation ->
+        let methods =
+          M.map
+            (fun (signature : functionSignature) ->
+              {
+                TraitCatalog.name = nameOf signature.id;
+                typeParams = signature.typeParams;
+              })
+            implementation.methodFunctions
+        in
+        let identity =
+          String.concat ":"
+            (List.map
+               (fun (_, target) -> target.TraitCatalog.name)
+               (M.bindings methods))
+        in
+        M.add identity
+          {
+            TraitCatalog.identity;
+            traitName = implementation.traitName;
+            typeParams = [];
+            typeArgs = implementation.traitArgs;
+            bounds = [];
+            methods;
+          }
+          catalog)
+      M.empty globals.implementations
+  in
+  let functionBounds =
+    M.fold
+      (fun name (signature : functionSignature) catalog ->
+        if signature.bounds = [] then catalog
+        else M.add name (signature.typeParams, signature.bounds) catalog)
+      globals.functions M.empty
+  in
+  bind
+    (M.fold
+       (fun name (entry : typeEntry) result ->
+         bind result (fun catalog ->
+             Result.map
+               (fun bounds ->
+                 if bounds = [] then catalog
+                 else M.add name (entry.params, bounds) catalog)
+               (resolveBounds globals entry.path entry.params entry.bounds)))
+       globals.types (Ok M.empty))
+    (fun typeBounds ->
+      let catalog =
+        { TraitCatalog.dispatches; implementations; functionBounds; typeBounds }
+      in
+      bind
+        (M.fold
+           (fun _ (signature : functionSignature) result ->
+             bind result (fun () ->
+                 List.fold_left
+                   (fun result typ ->
+                     bind result (fun () ->
+                         TraitResolution.checkType catalog signature.bounds typ))
+                   (Ok ())
+                   (signature.return :: signature.parameters)))
+           globals.functions (Ok ()))
+        (fun () -> Ok catalog))
+
+let checkSignatureBounds (globals : globals) symbols
+    (signature : functionSignature) types =
+  if signature.bounds = [] then Ok ()
+  else if List.length signature.typeParams <> List.length types then
+    Error "Trait-bound type argument count mismatch"
+  else
+    TraitResolution.checkBounds (C.traitCatalog symbols) globals.bounds
+      (M.of_list (List.combine signature.typeParams types))
+      signature.bounds

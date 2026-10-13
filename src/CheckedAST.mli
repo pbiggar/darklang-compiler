@@ -278,3 +278,6 @@ val map2 :
   ('a, 'error) result ->
   ('b, 'error) result ->
   ('c, 'error) result
+
+val traitCatalog : symbols -> TraitCatalog.t
+val withTraitCatalog : TraitCatalog.t -> symbols -> symbols

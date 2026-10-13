@@ -48,7 +48,14 @@ let rec checkExpression (globals : globals) locals symbols expected expression =
            && S.mem wanted globals.typeParams
            && S.mem actual globals.typeParams ->
         Error ("Expected type parameter '" ^ wanted ^ "', got '" ^ actual ^ "'")
-    | _ -> WrittenTypeSupport.checkedLiteral expected symbols typ expr
+    | _ ->
+        bind
+          (TraitResolution.checkType
+             (C.traitCatalog (WrittenCheckingState.symbols symbols))
+             globals.bounds
+             (WrittenCheckingState.resolve symbols typ))
+          (fun () ->
+            WrittenTypeSupport.checkedLiteral expected symbols typ expr)
   in
   let literal = checkedLiteral expected symbols in
   let check = checkExpression globals locals in

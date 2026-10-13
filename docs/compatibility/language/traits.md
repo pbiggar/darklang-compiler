@@ -6,19 +6,21 @@ Reference grammar: `backend/src/LibParser/{Parser,WrittenTypes}.fs`.
 Reference semantics: `backend/src/LibExecution/Traits.fs` and
 `packages/darklang/stdlib/traits.dark` at that revision.
 
-This is an unfinished implementation checkpoint. M0–M2 are implemented and
-focused checks pass. M3–M7 remain unfinished; this is not a readiness claim.
+This is an unfinished implementation checkpoint. M0–M3 are implemented and
+focused checks pass. M4–M7 remain unfinished; this is not a readiness claim.
 
 | Behavior | Checkpoint implementation | Executed evidence / remaining validation |
 | --- | --- | --- |
 | Trait and impl grammar, method aliases, multiple methods | Range-bearing syntax and source-unit flattening | `test/fixtures/syntax/traits.syntax` |
-| Single, multiple, parameterized and type-declaration bounds | Parsed and retained; checking rejects unsupported bounds explicitly | `test/fixtures/syntax/traits.syntax` |
+| Single, multiple, parameterized and type-declaration bounds | Parsed, retained and enforced on function calls and type uses | `test/fixtures/syntax/traits.syntax` |
 | Concrete named method calls | Select an implementation and emit ordinary checked function calls | `test/fixtures/e2e/traits.e2e` |
 | Method aliases | Validate against the referenced ordinary function signature | `test/fixtures/e2e/traits-alias.e2e` |
 | Unknown trait, missing impl, incomplete method set, wrong signature | Frontend compile errors | `traits-{unknown,missing-impl,method-set,wrong-method}.e2e` |
 | Competing identical implementations | Compile-time ambiguity when selecting a call | `traits-ambiguous.e2e` |
 | Traits as value types | Traits are excluded from the nominal type catalog | `test/fixtures/e2e/traits-as-types.e2e` passed |
-| Bounded generic specialization and conditional impls | Not implemented (M3–M4) | Required |
+| Bounded generic specialization | Typed calls resolve after substitution, before ordinary dependency planning | `traits-generic.e2e`, `traits-multiple-bounds.e2e`, `traits-generic-values.e2e`, `traits-bound-failure.e2e` passed |
+| Bounds on generic types | Check construction, signatures and declaration field types | `traits-type-bounds.e2e` passed |
+| Generic/conditional implementations | Not implemented (M4) | Required |
 | Receivers and operators | Not implemented (M5) | Required |
 | Upstream stdlib traits and hosted packages | Not implemented (M6) | Required |
 | Full parity and readiness gates | Not executed (M7) | Required |
@@ -55,3 +57,10 @@ Validation:
 The representative work-order fixture uses `Stdlib.Int64.toString` to render
 its `Int64` field: the current compiler does not define `Stdlib.toString`.
 Activating the upstream generic `ToString` surface belongs to M6.
+
+M3 focused validation: rebuilt successfully; `./run-tests --ai --filter=traits`
+passed **22/22** (15.7 seconds). The full host and regression reruns are in
+progress. Static obligations are retained in the immutable checked catalog;
+method identities are canonical ordinary functions. Specialization rewrites
+trait applications before dependency planning, and final preparation returns a
+compile error for unresolved obligations. There is no trait-specific backend ABI.

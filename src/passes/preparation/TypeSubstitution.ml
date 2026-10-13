@@ -198,8 +198,8 @@ let consolidateTypeBindings bindings =
    Substitute in type arguments and value arguments
    Substitute types in parameter annotations and body
 *)
-let rec applySubstToExpr subst expr =
-  let recurse = applySubstToExpr subst in
+let rec applySubstToExprWithCalls subst rewrite expr =
+  let recurse = applySubstToExprWithCalls subst rewrite in
   let checked typ =
     C.checkedType (applySubstToType subst (C.semanticType typ))
   in
@@ -230,7 +230,7 @@ let rec applySubstToExpr subst expr =
   | C.Sequence (first, next) -> C.Sequence (recurse first, recurse next)
   | C.Call (target, args) -> C.Call (target, NonEmptyList.map recurse args)
   | C.TypeApp (target, parameters, args) ->
-      C.TypeApp (target, types parameters, NonEmptyList.map recurse args)
+      rewrite target (types parameters) (NonEmptyList.map recurse args)
   | C.TupleLiteral elements ->
       C.TupleLiteral (C.mapTupleElements recurse elements)
   | C.TupleAccess (value, index) -> C.TupleAccess (recurse value, index)
@@ -287,6 +287,14 @@ let rec applySubstToExpr subst expr =
 (*
    Resolve type aliases to their target types
 *)
+let applySubstToExpr subst expr =
+  applySubstToExprWithCalls subst
+    (fun target parameters args -> C.TypeApp (target, parameters, args))
+    expr
+
+let rewriteTypeApps rewrite expr =
+  applySubstToExprWithCalls M.empty rewrite expr
+
 let rec resolveAliasType aliases typ =
   let recurse = resolveAliasType aliases in
   match typ with

@@ -50,3 +50,11 @@ val specializeFunction :
   CheckedAST.functionDef ->
   AST.semanticType list ->
   CheckedAST.functionDef
+
+val rewriteTypeApps :
+  (AST.functionId ->
+  CheckedAST.checkedType list ->
+  CheckedAST.expr NonEmptyList.t ->
+  CheckedAST.expr) ->
+  CheckedAST.expr ->
+  CheckedAST.expr

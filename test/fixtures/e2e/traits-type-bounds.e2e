@@ -1,0 +1,14 @@
+trait TypeBoundShow<'a> =
+  let show (value: 'a) : String
+impl TypeBoundShow for Int64 =
+  let show (value: Int64) : String = "integer"
+type ShownBox<'a: TypeBoundShow> = { value: 'a }
+let unwrapShown<'a: TypeBoundShow> (box: ShownBox<'a>) : 'a = box.value
+unwrapShown (ShownBox { value = 42L }) = 42L
+
+(
+trait TypeBoundMissing<'a> =
+  let show (value: 'a) : String
+type UnusableBox<'a: TypeBoundMissing> = { value: 'a }
+UnusableBox { value = "missing" }
+) = compileerror="No implementation of trait 'TypeBoundMissing'"

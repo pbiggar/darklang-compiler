@@ -73,7 +73,23 @@ let collectTypeApps symbols expr =
         let args = NonEmptyList.toList args in
         let specs = many specs args in
         let variables = List.exists S.containsTypeVar types in
-        if name = P.eqHelperDispatchMarker || name = "__compare" then
+        if
+          M.mem name (C.traitCatalog symbols).TraitCatalog.dispatches
+          && not variables
+        then
+          match
+            M.find_opt name (C.traitCatalog symbols).TraitCatalog.dispatches
+          with
+          | None -> Crash.crash "Static trait dispatch entry disappeared"
+          | Some dispatch -> (
+              match
+                TraitResolution.select (C.traitCatalog symbols) dispatch types
+              with
+              | Ok (target, parameters) when parameters <> [] ->
+                  SS.add (target, parameters) specs
+              | Ok _ -> specs
+              | Error _ -> SS.add (name, types) specs)
+        else if name = P.eqHelperDispatchMarker || name = "__compare" then
           if variables then specs else SS.add (name, types) specs
         else if S.isGenericKeyIntrinsicName name then
           match types with
@@ -193,6 +209,32 @@ let rec collectCalledFunctions expr =
 (*
    Specialize only the requested generic specs, returning new functions and a registry
 *)
+(* Resolve trait targets immediately after substitution so ordinary dependency
+   planning sees the selected implementation. Failed obligations remain typed
+   applications until the Result-returning preparation boundary diagnoses them. *)
+let resolveSpecializedTraits symbols body =
+  T.rewriteTypeApps
+    (fun id types args ->
+      let original = C.TypeApp (id, types, args) in
+      match
+        Option.bind (C.functionName id symbols) (fun name ->
+            M.find_opt name (C.traitCatalog symbols).TraitCatalog.dispatches)
+      with
+      | None -> original
+      | Some dispatch -> (
+          match
+            TraitResolution.select (C.traitCatalog symbols) dispatch
+              (C.semanticTypeArgs types)
+          with
+          | Error _ -> original
+          | Ok (name, parameters) -> (
+              match C.tryFindFunctionId name symbols with
+              | None -> original
+              | Some target ->
+                  if parameters = [] then C.Call (target, args)
+                  else C.TypeApp (target, C.checkedTypeArgs parameters, args))))
+    body
+
 let specializeFromSpecs symbols definitions initial =
   let rec iterate pending processed functions registry externalSpecs symbols =
     let fresh = SS.diff pending processed in
@@ -231,6 +273,12 @@ let specializeFromSpecs symbols definitions initial =
                    in
                    let id, symbols = C.internFunction specializedName symbols in
                    let func = T.specializeFunction id artifact.S.func types in
+                   let func =
+                     {
+                       func with
+                       C.body = resolveSpecializedTraits symbols func.C.body;
+                     }
+                   in
                    let specialized =
                      {
                        S.symbols;
@@ -239,9 +287,7 @@ let specializeFromSpecs symbols definitions initial =
                      }
                    in
                    let registry = SM.add (name, types) func.C.name registry in
-                   let bodySpecs =
-                     collectTypeAppsFromFunc artifact.S.symbols func
-                   in
+                   let bodySpecs = collectTypeAppsFromFunc symbols func in
                    ( specialized :: funcs,
                      SS.union pending bodySpecs,
                      registry,
@@ -311,6 +357,9 @@ let replaceTypeAppsCore symbols registry expr =
           | None -> Crash.crash "Generic function value is absent from symbols"
         in
         let types = C.semanticTypeArgs args in
+        let* () =
+          TraitResolution.functionBounds (C.traitCatalog symbols) [] name types
+        in
         let specialized = S.specName name types in
         if List.exists S.containsTypeVar types then
           Error ("Cannot infer specialization for function value '" ^ name ^ "'")
@@ -357,114 +406,146 @@ let replaceTypeAppsCore symbols registry expr =
               Crash.crash
                 "Type application function identity is absent from symbols"
         in
-        let variables = List.exists S.containsTypeVar types in
-        let args = NonEmptyList.toList arguments in
-        let emptyDict =
-          (name = "Darklang.Stdlib.Dict.fromList" || name = "Dict.fromList")
-          && args = [ C.ListLiteral [] ]
-          && not variables
-        in
-        let genericKey = S.isGenericKeyIntrinsicName name in
-        let unresolvedKey args =
-          wrap args
-            (S.unresolvedKeyIntrinsicTypeArgErrorExpr (resolved "Builtin.crash")
-               name)
-        in
-        let polymorphicComparison args =
-          if name = P.eqHelperDispatchMarker then
-            match args with
-            | [ left; right ] -> C.BinOp (AST.Eq, left, right)
-            | _ -> Crash.crash "Comparison plan expected exactly two operands"
-          else
-            wrap args
-              (C.RuntimeError
-                 "Canonical comparison remained polymorphic after \
-                  monomorphization")
-        in
-        match registry with
-        | None ->
-            if name = P.eqHelperDispatchMarker then
-              let* args = many args in
-              match types with
-              | [ typ ] when not variables -> materialize typ args
-              | _ -> Ok (polymorphicComparison args)
-            else if name = "__compare" then
-              let* args = many args in
-              match (types, args) with
-              | [ typ ], [ left; right ] when not variables ->
-                  Ok
-                    (call
-                       (ComparisonPlanning.compareHelperName typ)
-                       [ left; right ])
-              | _ -> Ok (polymorphicComparison args)
-            else if emptyDict then
-              Ok (call (S.specName "Darklang.Stdlib.Dict.empty" types) [])
-            else if genericKey && variables then
-              let* args = many args in
-              Ok (unresolvedKey args)
-            else if genericKey then
-              let* args = many args in
-              key name types args
-            else
-              let specialized = S.specName name types in
-              (* Resolve the target before traversing arguments, as in Call construction. *)
-              let target = resolved specialized in
-              let* args = many args in
-              Ok (C.Call (target, S.exprArgsFromList args))
-        | Some registry ->
-            let resolvedName =
-              if name = P.eqHelperDispatchMarker then
-                match types with
-                | [ _ ] when not variables -> Ok P.eqHelperDispatchMarker
-                | _ ->
-                    Error
-                      "Comparison helper remained polymorphic after \
-                       monomorphization"
-              else if name = "__compare" then
-                match types with
-                | [ typ ] when not variables ->
-                    Ok (ComparisonPlanning.compareHelperName typ)
-                | _ ->
-                    Error
-                      "Canonical comparison remained polymorphic after \
-                       monomorphization"
-              else if genericKey || isIntrinsicTypeAppName name then
-                Ok (S.specName name types)
-              else
-                let name =
-                  if emptyDict then "Darklang.Stdlib.Dict.empty" else name
-                in
-                match SM.find_opt (name, types) registry with
-                | Some specialized -> Ok specialized
-                | None -> Error (missingSpecMessage name types)
+        match
+          M.find_opt name (C.traitCatalog symbols).TraitCatalog.dispatches
+        with
+        | Some dispatch -> (
+            let* targetName, parameters =
+              TraitResolution.select (C.traitCatalog symbols) dispatch types
             in
-            if genericKey && variables then
-              let* args = many args in
-              Ok (unresolvedKey args)
-            else if genericKey then
-              let* args = many args in
-              key name types args
-            else if
-              (name = P.eqHelperDispatchMarker || name = "__compare")
-              && variables
-            then
-              let* args = many args in
-              Ok (polymorphicComparison args)
-            else if name = P.eqHelperDispatchMarker && not variables then
-              let* args = many args in
-              let target =
-                match types with
-                | head :: _ -> head
-                | [] ->
-                    Crash.crash "The input list was empty. (Parameter 'list')"
-              in
-              materialize target args
-            else
-              let* specialized = resolvedName in
-              if emptyDict then Ok (call specialized [])
+            let* () =
+              TraitResolution.functionBounds (C.traitCatalog symbols) []
+                targetName parameters
+            in
+            let* args = many (NonEmptyList.toList arguments) in
+            match C.tryFindFunctionId targetName symbols with
+            | None ->
+                Error
+                  ("Unresolved trait implementation method '" ^ targetName ^ "'")
+            | Some target ->
+                if parameters = [] then
+                  Ok (C.Call (target, S.exprArgsFromList args))
+                else
+                  replace
+                    (C.TypeApp
+                       ( target,
+                         C.checkedTypeArgs parameters,
+                         S.exprArgsFromList args )))
+        | None -> (
+            let* () =
+              TraitResolution.functionBounds (C.traitCatalog symbols) [] name
+                types
+            in
+            let variables = List.exists S.containsTypeVar types in
+            let args = NonEmptyList.toList arguments in
+            let emptyDict =
+              (name = "Darklang.Stdlib.Dict.fromList" || name = "Dict.fromList")
+              && args = [ C.ListLiteral [] ]
+              && not variables
+            in
+            let genericKey = S.isGenericKeyIntrinsicName name in
+            let unresolvedKey args =
+              wrap args
+                (S.unresolvedKeyIntrinsicTypeArgErrorExpr
+                   (resolved "Builtin.crash") name)
+            in
+            let polymorphicComparison args =
+              if name = P.eqHelperDispatchMarker then
+                match args with
+                | [ left; right ] -> C.BinOp (AST.Eq, left, right)
+                | _ ->
+                    Crash.crash "Comparison plan expected exactly two operands"
               else
-                let* args = many args in
-                Ok (call specialized args))
+                wrap args
+                  (C.RuntimeError
+                     "Canonical comparison remained polymorphic after \
+                      monomorphization")
+            in
+            match registry with
+            | None ->
+                if name = P.eqHelperDispatchMarker then
+                  let* args = many args in
+                  match types with
+                  | [ typ ] when not variables -> materialize typ args
+                  | _ -> Ok (polymorphicComparison args)
+                else if name = "__compare" then
+                  let* args = many args in
+                  match (types, args) with
+                  | [ typ ], [ left; right ] when not variables ->
+                      Ok
+                        (call
+                           (ComparisonPlanning.compareHelperName typ)
+                           [ left; right ])
+                  | _ -> Ok (polymorphicComparison args)
+                else if emptyDict then
+                  Ok (call (S.specName "Darklang.Stdlib.Dict.empty" types) [])
+                else if genericKey && variables then
+                  let* args = many args in
+                  Ok (unresolvedKey args)
+                else if genericKey then
+                  let* args = many args in
+                  key name types args
+                else
+                  let specialized = S.specName name types in
+                  (* Resolve the target before traversing arguments, as in Call construction. *)
+                  let target = resolved specialized in
+                  let* args = many args in
+                  Ok (C.Call (target, S.exprArgsFromList args))
+            | Some registry ->
+                let resolvedName =
+                  if name = P.eqHelperDispatchMarker then
+                    match types with
+                    | [ _ ] when not variables -> Ok P.eqHelperDispatchMarker
+                    | _ ->
+                        Error
+                          "Comparison helper remained polymorphic after \
+                           monomorphization"
+                  else if name = "__compare" then
+                    match types with
+                    | [ typ ] when not variables ->
+                        Ok (ComparisonPlanning.compareHelperName typ)
+                    | _ ->
+                        Error
+                          "Canonical comparison remained polymorphic after \
+                           monomorphization"
+                  else if genericKey || isIntrinsicTypeAppName name then
+                    Ok (S.specName name types)
+                  else
+                    let name =
+                      if emptyDict then "Darklang.Stdlib.Dict.empty" else name
+                    in
+                    match SM.find_opt (name, types) registry with
+                    | Some specialized -> Ok specialized
+                    | None -> Error (missingSpecMessage name types)
+                in
+                if genericKey && variables then
+                  let* args = many args in
+                  Ok (unresolvedKey args)
+                else if genericKey then
+                  let* args = many args in
+                  key name types args
+                else if
+                  (name = P.eqHelperDispatchMarker || name = "__compare")
+                  && variables
+                then
+                  let* args = many args in
+                  Ok (polymorphicComparison args)
+                else if name = P.eqHelperDispatchMarker && not variables then
+                  let* args = many args in
+                  let target =
+                    match types with
+                    | head :: _ -> head
+                    | [] ->
+                        Crash.crash
+                          "The input list was empty. (Parameter 'list')"
+                  in
+                  materialize target args
+                else
+                  let* specialized = resolvedName in
+                  if emptyDict then Ok (call specialized [])
+                  else
+                    let* args = many args in
+                    Ok (call specialized args)))
     | C.TupleLiteral values ->
         let* values = many (C.tupleElementsToList values) in
         Ok (C.TupleLiteral (C.tupleElementsOfList values))
