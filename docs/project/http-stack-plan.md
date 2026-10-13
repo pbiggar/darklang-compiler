@@ -273,7 +273,19 @@ mean the entire branch has passed its integration or performance gates.
     isolation, persistent reuse and 70 KiB upload/response bodies. Maximum DATA
     frames retain their nine-byte headers across bounded native writes without
     debiting flow credit twice.
-  - [ ] Lazy-stream scheduling and multiplexed HTTP/3 servers.
+  - [ ] Lazy-stream scheduling.
+  - [x] HTTP/3 servers retain up to thirty-two independent request/response
+    owners on one connection, share QPACK and connection credit, skip blocked
+    response streams, isolate resets and malformed messages, and renew
+    MAX_STREAMS only after both directions close. Retained bodies cap at
+    100 MiB; request and response deadlines remain independent. The 1,024
+    request-history bound sends one flow-controlled GOAWAY with exclusive
+    boundary 4,096 and drains eligible replies. `http3_server_owners.e2e`
+    covers these boundaries; the independent aioquic peer verifies a stalled
+    request alongside a 70 KiB response, selective stream credit, cancellation
+    and forty sequential requests on the same connection. UDP connection
+    admission and compatibility datagram sends remain sequential/blocking;
+    this does not establish cross-connection fairness.
   - [x] HTTP/3 request scheduling shares connection credit and QPACK while
     retaining independent message parsers. Each round sends one bounded chunk
     per stream. Resets and GOAWAY preserve eligible responses without replay;
@@ -428,9 +440,10 @@ focused HTTP/2 server suite passes 65/65 cases.
 Retained QUIC handshake steps accept listener-routed datagrams and enforce
 absolute deadlines without receiving from the shared socket. Five new cases
 check waiting-state retention, foreign-peer isolation, expiry and one-packet
-flight progress; the focused QUIC server suite passes 8/8 cases. The legacy
-sequential HTTP/3 wrapper still serves one request per connection and uses
-compatibility datagram sends. Active UDP ownership remains unfinished.
+flight progress; the focused QUIC server suite passes 8/8 cases. HTTP/3 now
+multiplexes requests within an admitted connection, but still uses the
+sequential UDP admission wrapper and compatibility datagram sends. Active UDP
+ownership remains unfinished.
 
 At runtime checkpoint `a65761e34c77e6d0a78614137ac5a326977dd8a2`, a fresh
 build, all 12,248 host tests and native regression aliases pass. Independent

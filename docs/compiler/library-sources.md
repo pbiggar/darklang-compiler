@@ -219,7 +219,7 @@ fragments use `__` even where the interpreter also has private helpers.
 | `StdLib/__Http3.dark` | `Darklang.Stdlib.__Http3` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
 | `StdLib/__Http3Client.dark` | `Darklang.Stdlib.__Http3Client` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
 | `StdLib/__Http3Connection.dark` | `Darklang.Stdlib.__Http3Connection` | Compiler support: shared QUIC/QPACK request scheduler |
-| `StdLib/__Http3Server.dark` | `Darklang.Stdlib.__Http3Server` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
+| `StdLib/__Http3Server.dark` | `Darklang.Stdlib.__Http3Server` | Compiler support: bounded multiplexed HTTP/3 server request owners |
 | `StdLib/__Http3Discovery.dark` | `Darklang.Stdlib.__Http3Discovery` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
 | `StdLib/__AltSvc.dark` | `Darklang.Stdlib.__AltSvc` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
 | `StdLib/__AltSvcCache.dark` | `Darklang.Stdlib.__AltSvcCache` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |

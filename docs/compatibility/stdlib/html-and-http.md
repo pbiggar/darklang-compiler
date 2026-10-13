@@ -451,12 +451,17 @@ bidirectional streams. `python3 scripts/test_quic_server_peer.py` checks live
 Retry, authenticated HTTP/3 echoes through 70 KiB, dropped flights, duplicates,
 corrupted ciphertext, zero server-bidi credit and zero leaks.
 
-`HttpServer.Quic.serve` provides sequential IPv4 UDP serving using the same
+`HttpServer.Quic.serve` provides multiplexed requests within each connection,
+with sequential UDP connection admission, using the same
 configuration, imported identity and HTTP handler as the TLS listener. It
 shares method/URL/header handling, optional standard headers and logging,
 configured body limits, HEAD representation lengths and early 413 rejection.
 Application state is disposed through a child socket while the listener stays
-open. Successful responses get a bounded ten-second delivery drain before an
+open. A successful response leaves its connection available for reuse. Up to
+thirty-two request owners share compression and connection credit while
+retaining independent parsing, response credit and deadlines. Completed streams
+renew concurrency credit; the bounded request history drains through GOAWAY.
+Graceful server termination gets a bounded ten-second delivery drain before an
 encrypted H3_NO_ERROR close; closing keys are retained for three PTOs, capped
 at thirty seconds, with fresh packet numbers for repeated close frames.
 The listener retains only peer/CID/key/packet-number closing metadata, not
@@ -465,10 +470,13 @@ Closing replies are rate-limited and failed sends discard the closing keys
 instead of risking a stale nonce. Shutdown interrupts handshake and request
 waits and disposes the cache. The independent
 `python3 scripts/test_http3_server_peer.py` checks routing, 70 KiB flow, HEAD,
-early 413, encrypted closure, token replay suppression, unsupported ALPN,
+early 413, explicit encrypted peer closure, token replay suppression, unsupported ALPN,
 same-port rebind, incomplete-body shutdown and zero leaks. Its aioquic client
 supplies HEAD method semantics because that library's raw H3 layer does not
-retain the originating request method.
+retain the originating request method. The same peer also checks forty requests
+on one connection and a completed response alongside a stalled stream. These
+checks do not establish fair admission of other UDP/TCP connections; that
+active-listener migration remains pending.
 
 `QuicServerRetry` provides listener-key HMAC tokens bound to the peer's address
 and port, original destination CID, client source CID and Retry source CID.
