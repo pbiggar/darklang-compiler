@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Regression checks for policy inheritance, discovery, and evidence invalidation."""
 import importlib.util
+import shutil
 import tempfile
 import unittest
 from pathlib import Path
@@ -125,6 +126,20 @@ class Build(unittest.TestCase):
         self.assertTrue(all(f'docs/porting/generated/{c}.md' in first for c in p.CATEGORIES))
         self.assertTrue(all(r['behavior'] == 'unverified' for r in records))
 
+    def test_relocation_does_not_change_outputs(self):
+        first, _ = self.build()
+        with tempfile.TemporaryDirectory() as relocated:
+            target = Path(relocated) / 'different-worktree-name'
+            shutil.copytree(self.root, target)
+            with patch.object(p, 'git_revision', return_value=self.revision), patch.object(p, 'checked_files', return_value=self.upstream):
+                second, _ = p.build(target, target)
+            self.assertEqual(first, second)
+
+    def test_wrong_upstream_head_is_rejected(self):
+        with patch.object(p, 'git_revision', return_value='0' * 40):
+            with self.assertRaises(ValueError):
+                p.build(self.root, self.root)
+
     def test_test_source_count_ignores_comments(self):
         _, records = self.build()
         item = next(r for r in records if r['id'] == 'tests:packages/acme/tests.dark')
@@ -146,6 +161,18 @@ class Build(unittest.TestCase):
         (self.root / 'porting/evidence.yaml').write_text(yaml.safe_dump({'entries': [entry]}))
         with self.assertRaises(ValueError):
             self.build()
+
+    def test_policy_edit_invalidates_evidence(self):
+        _, records = self.build()
+        item = next(r for r in records if r['category'] == 'language')
+        entry = dict(id=item['id'], fingerprint=item['fingerprint'], target='linux-x64', status='pass', command='actual-check', notes='fixture')
+        (self.root / 'porting/evidence.yaml').write_text(yaml.safe_dump({'entries': [entry]}))
+        path = self.root / 'porting/manifests/language.yaml'
+        node = p.read_yaml(path)
+        node['questions'].append('New agreed review boundary')
+        path.write_text(yaml.safe_dump(node))
+        _, records = self.build()
+        self.assertEqual(next(r for r in records if r['id'] == item['id'])['behavior'], 'stale')
 
     def test_dependencies_are_exposed(self):
         path = self.root / 'porting/manifests/tests.yaml'
