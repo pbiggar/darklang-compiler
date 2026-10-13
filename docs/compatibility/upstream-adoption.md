@@ -132,8 +132,9 @@ Full verification found a closure-signature registration gap, which was fixed.
 Two subsequent runs hit interrupted waits in the existing x64 test harness.
 The harness now retries `EINTR` from polling and process waits while preserving
 its original timeout, exit-code and signal checks; the final full run passed.
-No benchmark sources or snapshots were changed. The PR remains draft and unmerged
-because the full performance gate is outstanding.
+No benchmark sources or snapshots were changed. PR #65 merged into
+`adopt/upstream-adoption-combined` at the user's request on 2026-10-13. The
+full performance gate remains outstanding.
 
 ## Combined validation
 
@@ -150,4 +151,23 @@ implementation files, at `e66e4053aa94ed564b1bca471446d5e5bd653466` on
 stopped before measurement on the same incompatible existing x86-64 snapshot.
 All approved areas have been reviewed; confirmed gaps are implemented and
 correctness-tested. No deferred feature was implemented. PRs #60, #62 and #63
-remain draft and unmerged because full performance verification is outstanding.
+were superseded for main integration by PR #66, which preserves their commits.
+
+## Main integration (2026-10-13)
+
+[PR #66](https://github.com/pbiggar/darklang-compiler/pull/66) combines the
+adoption branch with `main@82fb2cef`, including the shared-syscall StdLib work.
+The merge required no compiler conflict repairs. The pinned Work VM toolchain
+was restored and passed all 98 package and native/Unix checks.
+
+`env -u LD_PRELOAD ./build --ai` passed. `TZ=UTC ./run-tests --ai` passed
+13,376/13,376 assertions in 124.3 seconds. Benchmark report consistency and
+E2E temporary-path isolation checks passed. Stale generated reports were
+regenerated from their existing snapshots, without changing measurements.
+`TZ=UTC dune runtest` passed, and `python3 scripts/check_compiled_leaks.py`
+passed 58/58 clean workloads. Benchmark source integrity passed as well.
+
+`./benchmarks/run_benchmarks.sh --verify-parent full` still stops before
+measurement because the existing snapshot workload contract digest is
+incompatible. The user explicitly requested main integration with that
+previously reported limitation; no performance ratio is claimed.
