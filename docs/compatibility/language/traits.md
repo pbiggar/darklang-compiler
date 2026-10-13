@@ -40,11 +40,17 @@ Validation:
 - `env -u LD_PRELOAD ./build --ai` passed after strict-warning fixes.
 - `./run-tests --ai --filter=traits`: **12/12 passed** (15.6 seconds).
 - `./run-tests --ai --filter=syntax`: **82/82 passed** (14.3 seconds).
-- `dune runtest` passed before the E2E-loader correction; the current-source
-  rerun and full host suite are in progress.
+- `./run-tests --ai`: **13,394/13,394 passed** (128.9 seconds), native
+  Linux x86-64 host suite.
+- `dune runtest`: **passed** on the current source, including HTTP/TLS, package
+  caches, native runtime, process/terminal and differential-tool regressions.
 - `git diff --check` passed; changed OCaml files were formatted with pinned
   ocamlformat. Syntax-only checks are superseded by the successful full build.
-- Full parent-relative performance validation is still required.
+- `./benchmarks/run_benchmarks.sh --verify-parent full`: **blocked before
+  measurement**, exit 1: `snapshot workload contract digest is incompatible`.
+  The same command on the compiler baseline checkout fails with the same
+  diagnostic. No timing comparison or performance pass is claimed. The stored
+  baseline needs reconciliation; this task has not reset it.
 
 The representative work-order fixture uses `Stdlib.Int64.toString` to render
 its `Int64` field: the current compiler does not define `Stdlib.toString`.
