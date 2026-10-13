@@ -44,6 +44,38 @@ type functionCatalog = {
    Restore original TypeEnv (remove parameters) after processing the function
 *)
 let liftLambdasInFunc (func : C.functionDef) state =
+  let* () =
+    if
+      String.starts_with ~prefix:"Darklang.Stdlib.List.__keyMember_" func.C.name
+    then
+      let key =
+        match snd (NonEmptyList.head (C.functionParameterTypes func)) with
+        | AST.TList key -> key
+        | _ -> Crash.crash "Key membership helper requires a List parameter"
+      in
+      let records =
+        StringOrder.Map.map
+          (fun (info : R.recordTypeInfo) ->
+            ({
+               Types.fields = info.R.fields;
+               fieldTypes = StringOrder.Map.of_list info.R.fields;
+               typeParams = info.R.typeParams;
+             }
+              : Types.recordTypeInfo))
+          state.A.typeReg
+      in
+      if
+        ComparisonPlanning.dictKeyAdmissibleType StringOrder.Map.empty records
+          (Types.indexSumTypeRegistry state.A.variantLookup)
+          key
+      then Ok ()
+      else
+        Error
+          ("Type "
+          ^ StructuralFormat.semanticType key
+          ^ " cannot be used as a Dict key")
+    else Ok ()
+  in
   let bindings =
     C.functionParameterTypes func
     |> NonEmptyList.toList |> List.to_seq |> B.of_seq
@@ -51,7 +83,11 @@ let liftLambdasInFunc (func : C.functionDef) state =
   let child =
     { state with A.typeEnv = mergeBindings state.A.typeEnv bindings }
   in
-  let* body, next = L.liftLambdasInExpr func.C.body child in
+  let* body, next =
+    Result.map_error
+      (fun error -> func.C.name ^ ": " ^ error)
+      (L.liftLambdasInExpr func.C.body child)
+  in
   Ok ({ func with C.body }, { next with A.typeEnv = state.A.typeEnv })
 
 let ordinal id =

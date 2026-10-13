@@ -594,12 +594,10 @@ let lowerExpression (toANFCore : LoweringCallbacks.expressionLowerer)
       Ok
         ( K.bindReturns setup (fun _ -> A.Let (id, value, A.Return (A.Var id))),
           gen )
-  | C.BinOp (((AST.StringConcat | AST.Add) as operation), left, right)
-    when operation = AST.StringConcat || infer expr = Ok AST.TString -> (
+  | C.BinOp (AST.StringConcat, left, right) -> (
       let rec collect value acc =
         match value with
-        | C.BinOp (((AST.StringConcat | AST.Add) as operation), left, right)
-          when operation = AST.StringConcat || infer value = Ok AST.TString ->
+        | C.BinOp (AST.StringConcat, left, right) ->
             collect left (collect right acc)
         | value -> value :: acc
       in

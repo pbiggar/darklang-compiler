@@ -369,6 +369,29 @@ let[@warning "-4"] checkNamed checkExpression checkedLiteral globals locals
                                  ^ currentName)
                             | _ -> Ok types)
                       in
+                      let inferred =
+                        bind inferred (fun types ->
+                            let key =
+                              match (qualifiedFnName name, types) with
+                              | [ "Stdlib"; "List"; "dedup" ], [ key ] ->
+                                  Some key
+                              | [ "Stdlib"; "List"; "uniqueBy" ], [ _; key ] ->
+                                  Some key
+                              | _ -> None
+                            in
+                            match key with
+                            | None -> Ok types
+                            | Some key ->
+                                if
+                                  WrittenTypeSupport.dictKeyAdmissibleType
+                                    globals key
+                                then Ok types
+                                else
+                                  Error
+                                    ("Type "
+                                    ^ StructuralFormat.semanticType key
+                                    ^ " cannot be used as a Dict key"))
+                      in
                       bind inferred (fun inferredTypeArgs ->
                           let substitution =
                             M.of_list

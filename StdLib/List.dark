@@ -172,8 +172,15 @@ let __uniqueByHelper<'a, 'b> (remaining: List<a>) (fn: a -> b) (uniqueValues: Li
     | [] -> uniqueValues
     | value :: tail ->
         let key = fn value in
-        if Stdlib.List.member<b> seen key then Stdlib.List.__uniqueByHelper<a, b> tail fn uniqueValues seen
+        if Stdlib.List.__keyMember<b> seen key then Stdlib.List.__uniqueByHelper<a, b> tail fn uniqueValues seen
         else Stdlib.List.__uniqueByHelper<a, b> tail fn (Stdlib.List.push<a> uniqueValues value) (Stdlib.List.push<b> seen key)
+
+// Dictionary key equality is total: NaNs, including nested NaNs, compare equal.
+// Keep the ordered scan until a dictionary optimization passes its own gates.
+let __keyMember<'a> (keys: List<a>) (key: a) : Bool =
+    match keys with
+    | [] -> false
+    | head :: tail -> if __compare<a> head key == 0L then true else Stdlib.List.__keyMember<a> tail key
 
 let dedup<'a> (list: List<a>) : List<a> =
     Stdlib.List.reverse (Stdlib.List.__dedup list [] [])
@@ -182,7 +189,7 @@ let __dedup<'a> (remaining: List<a>) (seen: List<a>) (result: List<a>) : List<a>
     match remaining with
     | [] -> result
     | head :: tail ->
-        if Stdlib.List.member seen head then Stdlib.List.__dedup tail seen result
+        if Stdlib.List.__keyMember seen head then Stdlib.List.__dedup tail seen result
         else Stdlib.List.__dedup tail (Stdlib.List.push seen head) (Stdlib.List.push result head)
 
 // Fold left (reduce) over a list - O(n)

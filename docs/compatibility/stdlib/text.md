@@ -173,7 +173,9 @@ Interpreter `07bafe2d8` implements String `+` with NFC normalization in
 the existing normalized concatenation operation for typed String operands and
 for generic addition specialized to String. For example, `"e" + "́"` returns
 `"é"`; no second Unicode implementation or runtime type dispatch is added.
-Numeric addition keeps its existing implementation. Mixed operand types,
+Specialized additions resolve bottom-up during preparation, before ANF
+conversion. ANF flattens the resolved `StringConcat` tree without repeatedly
+inferring subtree types. Numeric addition keeps its existing implementation. Mixed operand types,
 Bool addition and Char addition are rejected during compilation; legacy `++`
 continues to accept its existing String/Char operands.
 
