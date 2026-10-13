@@ -34,7 +34,7 @@ Stdlib.Cli.UI.Prompt.select "Pick" ["alpha"; "beta"] = stdout="Pick\n  \u001b[1m
 Stdlib.Cli.UI.Prompt.select "Pick" ["alpha"; "beta"] = stdout="Pick\n  \u001b[1m1\u001b[0m. alpha\n  \u001b[1m2\u001b[0m. beta\nEnter number: \u001b[31mInvalid selection\u001b[0m\nPick\n  \u001b[1m1\u001b[0m. alpha\n  \u001b[1m2\u001b[0m. beta\nEnter number: \"alpha\"\n" stderr="" stdin="3\n1\n" exact_bytes=true
 
 Stdlib.Cli.UI.Spinner.run "Working" (fun () -> 7L) = stdout="Working... \u001b[32mdone\u001b[0m\n7\n" stderr="" exact_bytes=true
-Stdlib.Cli.UI.Spinner.run "Working" (fun () -> let _ = Builtin.testRuntimeError "boom" in 0L) = exit=1 stdout="Working... " stderr="Uncaught exception: boom" exact_bytes=true
+Stdlib.Cli.UI.Spinner.run "Working" (fun () -> let _ = Builtin.crash "boom" in 0L) = exit=1 stdout="Working... " stderr="Uncaught exception: boom" exact_bytes=true
 
 (let _ = Stdlib.Cli.UI.Table.print ["Name", "Value"] [["e\u0301", "x"], ["long"]] in ()) = stdout="\u001b[1mName  Value\u001b[0m\n----  -----\né     x    \nlong       \n" stderr="" exact_bytes=true
 (let _ = Stdlib.Cli.UI.Table.print ["G"] [["🇺🇸"], ["가"], ["1️⃣"]] in ()) = stdout="\u001b[1mG\u001b[0m\n-\n🇺🇸\n가\n1️⃣\n" stderr="" exact_bytes=true

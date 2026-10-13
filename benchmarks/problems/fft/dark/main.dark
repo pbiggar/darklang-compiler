@@ -31,7 +31,7 @@ let combine (evens: List<Complex>) (odds: List<Complex>) (index: Int64) (size: I
         let twiddle = Complex { real = Stdlib.Math.cos angle, imaginary = Stdlib.Math.sin angle } in
         let product = multiply twiddle odd in
         combine evenRest oddRest (index + 1L) size (Stdlib.List.push lower (add even product)) (Stdlib.List.push upper (subtract even product))
-    | _ -> Builtin.testRuntimeError "FFT halves had different lengths"
+    | _ -> Builtin.crash "FFT halves had different lengths"
 
 let fft (values: List<Complex>) (size: Int64) : List<Complex> =
     if size <= 1L then values
@@ -70,12 +70,12 @@ let isPowerOfTwo (value: Int64) : Bool =
 let benchmarkArg (index: Int) : Int64 =
     match Stdlib.Cli.__Args.int64 index with
     | Ok value -> value
-    | Error message -> Builtin.testRuntimeError message
+    | Error message -> Builtin.crash message
 
 let size = benchmarkArg 0 in
 let repetitions = benchmarkArg 1 in
 if Stdlib.Bool.not (isPowerOfTwo size) || repetitions <= 0L then
-    Builtin.testRuntimeError "FFT size must be a positive power of two and repetitions must be positive"
+    Builtin.crash "FFT size must be a positive power of two and repetitions must be positive"
 else
     let input = generateInput size 0L [] in
     Builtin.printLine (Stdlib.Int64.toString (run repetitions input size 0L))

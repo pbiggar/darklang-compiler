@@ -1,0 +1,4 @@
+// Executable identity is discovered at runtime through the builtin and public API.
+Stdlib.String.startsWith (Builtin.runtimeExecutablePath ()) "/" = true
+Builtin.runtimeExecutablePath () == Builtin.runtimeExecutablePath () = true
+Stdlib.Cli.Sys.currentExecutablePath () == Builtin.runtimeExecutablePath () = true

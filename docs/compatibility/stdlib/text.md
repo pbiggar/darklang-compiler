@@ -32,7 +32,7 @@ return their documented `None`/`Error`, while replacement decoders insert
 U+FFFD and then normalize.
 
 String traversal (`length`, `slice`, `first`, `last`, `dropFirst`, `dropLast`,
-`head`, `charAt`, `map`, `toList`, `reverse`, padding, and EGC search) counts
+`head`, `charAt`, `map`, `toList`, `reverse`, `padStart`, `padEnd`, and EGC search) counts
 EGCs. Negative slice indexes are relative to the EGC count and are clamped.
 `indexOf` and `lastIndexOf` deliberately return UTF-16 code-unit indexes to
 match the interpreter; `indexOfEgc` and `lastIndexOfEgc` return EGC indexes and
@@ -42,6 +42,17 @@ containment, and replacement are ordinal.
 Padding has argument order `(value, padWith, goalLength)` and returns
 `Result<String, String>`. A pad value other than one EGC returns exactly
 `Expected \`padWith\` to be 1 character long, but it was \`"VALUE"\``.
+
+`Builtin.stringSlugify` lowercases before retaining ASCII letters, digits,
+Unicode whitespace, hyphens, and underscores. Vertical tab is removed rather
+than used as a separator. After trimming whitespace, consecutive separators
+become one hyphen; existing leading or trailing hyphens are preserved. Filtering
+uses codepoints so unsupported combining marks do not discard an ASCII base.
+
+`String.trim`, `trimStart`, and `trimEnd` remove Unicode whitespace codepoints
+at the requested boundaries. Their ASCII byte scan remains the fast path;
+Unicode trimming handles CRLF clusters and preserves any attached non-whitespace
+combining marks after removing a whitespace codepoint.
 
 ## Unicode contract
 
@@ -89,6 +100,11 @@ clusters contribute two, regional-indicator pairs form one two-cell flag, and
 VS16 promotes a narrow text glyph to emoji width. Pretty rendering uses this
 cell count when deciding whether a group fits.
 
+`String.padStartToWidth` and `padEndToWidth` take `(value: String, width: Int)`
+and return a String padded with leading or trailing spaces to the requested
+display width. Text already at least that wide is returned unchanged, including
+for negative targets. For example, `padEndToWidth "界" 4` returns `"界  "`.
+
 `Stdlib.Cli.Tui.Text.styledWidth`, `clipToWidth`, and `clipMarked` copy the
 terminal-row behavior pinned at darklang/dark revision
 `0b3888d8e4f30d48ecd738f5cbe5cc2b8d958460`. SGR sequences occupy no cells and
@@ -127,10 +143,9 @@ not source-resolvable; public text behavior is provided only by the parity API.
   EGC, scalar construction, UTF-16 versus EGC indexes, and regex match/split
   behavior.
 - The pinned upstream `char.dark`, `string.dark`, and `regex.dark` files are
-  imported. Char and Regex are enabled; String is currently whole-file gated.
-  The upstream String source uses bare `newline`, and contains test-only callbacks
-  and Slugify dependencies. The focused text matrix supplies coverage; the gate
-  does not establish that String is unimplemented.
+  imported. Char and Regex are enabled. String has individual gates for its
+  unsupported interpreter test helpers; the current assertion counts and
+  diagnostics are maintained in the [failure ledger](../failures/stdlib/string.md).
 
 ## Historical integration verification
 
@@ -150,3 +165,33 @@ for the post-rebase comparisons was
 The compiler's intentional AOT boundary is also preserved: a type-invalid call
 fails during compilation and reports the inferred type, whereas the interpreter
 fixture's corresponding runtime error includes the concrete argument value.
+
+## String addition adoption (2026-10-12)
+
+Interpreter `07bafe2d8` implements String `+` with NFC normalization in
+`FastOps.fs` and `Builtins.Pure/Libs/NoModule.fs`. The compiler now selects
+the existing normalized concatenation operation for typed String operands and
+for generic addition specialized to String. For example, `"e" + "́"` returns
+`"é"`; no second Unicode implementation or runtime type dispatch is added.
+Specialized additions resolve bottom-up during preparation, before ANF
+conversion. ANF flattens the resolved `StringConcat` tree without repeatedly
+inferring subtree types. Numeric addition keeps its existing implementation. Mixed operand types,
+Bool addition and Char addition are rejected during compilation; legacy `++`
+continues to accept its existing String/Char operands.
+
+`test/fixtures/e2e/string-plus.e2e` covers literals, variables, function calls,
+pipelines, chained operands, inferred lambdas, explicit generic functions,
+empty operands, legacy syntax and compilation-error boundaries. The focused
+native x86-64 run passed 19/19 assertions after reproducing the missing behavior
+before implementation. Native x86-64 validation passed `env -u LD_PRELOAD
+./build --ai`, `./run-tests --ai` (13,212/13,212), `dune runtest`, and
+`python3 scripts/check_compiled_leaks.py` (58/58 clean). The parent benchmark
+gate stopped before measurement on the existing x86-64 snapshot's incompatible
+workload contract, as documented in the HTTP/HTML adoption ledger; no benchmark
+sources, contracts or snapshots changed. The PR remains draft and unmerged.
+
+The 2026-10-13 review follow-up in [PR #65](https://github.com/pbiggar/darklang-compiler/pull/65)
+expanded this fixture to 25/25 passing assertions, including closure operands,
+simultaneous String/numeric specializations and a 128-operand generic chain.
+The complete host suite passed 13,302/13,302; see the [adoption ledger](../upstream-adoption.md)
+for the full verification results and remaining performance-gate blocker.

@@ -640,10 +640,7 @@ let lowerAtom (toANFCore : LoweringCallbacks.expressionLowerer)
         Error
           "Internal error: Builtin.unwrap should be lowered via toANF, not \
            toAtom"
-      else if
-        functionNameIs id "Builtin.testRuntimeError"
-        || functionNameIs id "Builtin.crash"
-      then
+      else if functionNameIs id "Builtin.crash" then
         match S.exprArgsToList args with
         | [ message ] -> (
             match P.unwrapErrorPayloadToString message with
@@ -699,7 +696,6 @@ let lowerAtom (toANFCore : LoweringCallbacks.expressionLowerer)
                 (fun () -> P.tryPresentationIntrinsic name args);
                 (fun () ->
                   P.tryCliIntrinsic name (P.normalizeNullaryIntrinsicArgs args));
-                (fun () -> P.tryFileIntrinsic name args);
                 (fun () ->
                   P.tryRawMemoryIntrinsic functionId sums.P.names name args);
                 (fun () -> P.tryCanonicalPrimitiveIntrinsic name args);

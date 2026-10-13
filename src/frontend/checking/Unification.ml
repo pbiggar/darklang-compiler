@@ -50,7 +50,6 @@ let combineResults initial results =
 (*
    Type variable matches anything - record the binding
    Same var, no binding needed
-   Char and String share runtime representation.
    Bind type variable to List type
    Unify type arguments if both have them
    Bind type variable to Record type
@@ -74,11 +73,9 @@ let rec matchTypes pattern actual =
   match pattern with
   | TVar name | TInferenceVar (_, name) ->
       if equal actual pattern then Ok [] else Ok [ (name, actual) ]
-  | TString -> if actual = TChar then Ok [] else matchConcrete TString actual
-  | TChar -> if actual = TString then Ok [] else matchConcrete TChar actual
   | ( TInt8 | TInt16 | TInt32 | TInt64 | TInt128 | TInt | TUInt8 | TUInt16
-    | TUInt32 | TUInt64 | TUInt128 | TBool | TFloat64 | TBlob | TDateTime
-    | TUnit | TNever | TInternalRawPtr ) as concrete ->
+    | TUInt32 | TUInt64 | TUInt128 | TBool | TFloat64 | TString | TChar | TBlob
+    | TDateTime | TUnit | TNever | TInternalRawPtr ) as concrete ->
       matchConcrete concrete actual
   | TList inner -> (
       (match actual with
@@ -312,8 +309,6 @@ let rec reconcileTypes aliases first second =
     (match (first, second) with
     | TNever, right -> Some right
     | left, TNever -> Some left
-    | TString, TChar -> Some TString
-    | TChar, TString -> Some TChar
     | TList left, TList right ->
         Option.map
           (fun inner -> TList inner)

@@ -9,3 +9,12 @@ Stdlib.List.__arrayCopy 0L 0L 0L 0L = compileerror="Internal identifier not allo
 Stdlib.List.__arrayOwnershipBoundary_i64 [] = compileerror="Internal identifier not allowed in user code: Stdlib.List.__arrayOwnershipBoundary_i64"
 Stdlib.Internal.SkewList.empty () = compileerror="Unknown function or value 'Stdlib.Internal.SkewList.empty'"
 Stdlib.Internal.ListArray.copy 0L 0L 0L 0L = compileerror="Unknown function or value 'Stdlib.Internal.ListArray.copy'"
+
+// Shared CLI algorithms are implementation details of the existing APIs.
+Stdlib.Cli.File.__globMatches "*" "file" true = compileerror="Internal identifier not allowed in user code: Stdlib.Cli.File.__globMatches"
+Stdlib.Cli.Process.__childEmpty () = compileerror="Internal identifier not allowed in user code: Stdlib.Cli.Process.__childEmpty"
+Stdlib.Cli.Posix.__kernelField [] 0 4 = compileerror="Internal identifier not allowed in user code: Stdlib.Cli.Posix.__kernelField"
+Stdlib.DateTime.__monotonicMilliseconds () = compileerror="Internal identifier not allowed in user code: Stdlib.DateTime.__monotonicMilliseconds"
+Stdlib.Cli.Syscall.getpid () = compileerror="Unknown function"
+Stdlib.Cli.Runtime.targetOS () = compileerror="Unknown function"
+Builtin.syscallFsync 0 = compileerror="Unknown function"

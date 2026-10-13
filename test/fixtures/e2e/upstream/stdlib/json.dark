@@ -930,6 +930,7 @@ module Uuid =
 
 module BadTypes =
   Stdlib.Json.parse<Int64 -> Int64> "{}" = error="Unsupported type in JSON: (Int64) -> Int64. Some types are not supported in Json serialization, and cannot be used as arguments to Builtin.jsonParse or Builtin.jsonSerialize"
+  #compileerror="Expected TInt64, got TInt"
   Stdlib.Json.serialize<Int64 -> Int64> (fun i -> 5) = error="Cannot serialize (lambda) into JSON"
 module List =
   type MyString = String
@@ -978,6 +979,7 @@ module List =
       Dict { "name": "Charlie"; "role": "user" } ]
 
   module Errors =
+    #compileerror="Expected TList TInt64, got TTuple [TInt64; TInt64; TString]"
     Stdlib.Json.serialize<List<Int64>> (1L, 2L, "three") = error="Darklang.Stdlib.Json.serialize's 1st parameter `value` expects List<Int64>, but got (Int64 * Int64 * String) ((1, 2, \"three\"))"
     (Stdlib.Json.parse<List<Int64>> "[1, 2, \"three\"]") |> err =
       Result.Error "Can't parse JSON `\"three\"` as type `Int64` at path: `root[2]`"

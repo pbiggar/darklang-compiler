@@ -1,0 +1,6 @@
+// Public runtime failure and rejection of interpreter test infrastructure.
+Builtin.crash "literal failure" = error="Uncaught exception: literal failure"
+let message = Stdlib.String.append "dynamic " "failure" in Builtin.crash message = error="Uncaught exception: dynamic failure"
+(if true then Builtin.crash "branch failure" else 7L) = error="Uncaught exception: branch failure"
+let fail (message: String) = Builtin.crash message in fail "local failure" = error="Uncaught exception: local failure"
+Builtin.testRuntimeError "retired builtin" = compileerror="Unknown function or value 'Builtin.testRuntimeError'"

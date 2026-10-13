@@ -43,7 +43,7 @@ Stdlib.Dict.map (Dict { "b": 2L; "a": 1L }) (fun key value -> key ++ Stdlib.Int6
 Stdlib.Dict.filter (Dict { "b": 2L; "a": 1L }) (fun key value -> key == "b") = Dict { "b": 2L }
 Stdlib.Dict.filterMap (Dict { "b": 2L; "a": 1L }) (fun key value -> if key == "a" then Some (value + 10L) else None) = Dict { "a": 11L }
 let observed = Stdlib.Dict.iter (Dict { "b": 2L; "a": 1L }) (fun key value -> ()) in observed = ()
-Stdlib.Dict.iter (Dict { "b": 2L; "a": 1L }) (fun key value -> let ignored = Builtin.testRuntimeError key in ()) = exit=1 stderr="Uncaught exception: a\n"
+Stdlib.Dict.iter (Dict { "b": 2L; "a": 1L }) (fun key value -> let ignored = Builtin.crash key in ()) = exit=1 stderr="Uncaught exception: a\n"
 
 // Equality and rendering are content-based and independent of HAMT shape.
 Stdlib.Dict.setOverridingDuplicates (Stdlib.Dict.singleton "b" 2L) "a" 1L == Dict { "a": 1L; "b": 2L } = true

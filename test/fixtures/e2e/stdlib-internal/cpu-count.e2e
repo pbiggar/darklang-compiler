@@ -1,0 +1,3 @@
+// CPU count is a positive Int shared by the upstream builtin and public wrapper.
+Stdlib.Cli.Sys.cpuCount () > 0 = true
+Stdlib.Cli.Sys.__countBits 255 = 8

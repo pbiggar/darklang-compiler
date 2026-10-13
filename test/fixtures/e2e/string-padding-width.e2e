@@ -1,0 +1,10 @@
+// Space padding measures display cells and preserves text when no padding is needed.
+
+Stdlib.String.padStartToWidth "abc" -3 = "abc"
+Stdlib.String.padStartToWidth "" 3 = "   "
+Stdlib.String.padEndToWidth "" 3 = "   "
+Stdlib.String.padStartToWidth "👩‍👩‍👧‍👦" 4 = "  👩‍👩‍👧‍👦"
+Stdlib.String.padEndToWidth "👩‍👩‍👧‍👦" 4 = "👩‍👩‍👧‍👦  "
+Stdlib.String.padStartToWidth "e\u0301" 3 = "  e\u0301"
+let value = "界" ++ "abc" in (Stdlib.String.padEndToWidth value 2, value) = ("界abc", "界abc")
+Stdlib.String.padEndToWidth "abc" -999999999999999999999999999999999999999 = "abc"

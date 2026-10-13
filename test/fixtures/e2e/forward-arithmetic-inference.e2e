@@ -13,4 +13,4 @@ let subtract = fun a b -> a - b in subtract 9L 4L = 5L
 let subtract = fun a b -> a - b in subtract 9.0 4.0 = 5.0
 let subtract = fun a b -> a - b in subtract "a" "b" = compileerror="Operator is unavailable for this type"
 let unused = fun a b -> a - b in 7L = 7L
-Stdlib.Option.map2 Stdlib.Option.Option.None Stdlib.Option.Option.None (let callback = Builtin.testRuntimeError "callback evaluated" in callback) = error="Uncaught exception: callback evaluated"
+Stdlib.Option.map2 Stdlib.Option.Option.None Stdlib.Option.Option.None (let callback = Builtin.crash "callback evaluated" in callback) = error="Uncaught exception: callback evaluated"

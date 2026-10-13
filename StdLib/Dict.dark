@@ -34,11 +34,11 @@ let get<'k, 'v> (dict: Dict<k, v>) (key: k) : Stdlib.Option.Option<v> =
 
 // Concrete specializations receive the shared value renderer before ANF.
 let __renderGenericKey<'k> (key: k) : String =
-    Builtin.testRuntimeError "Dictionary key renderer was not specialized"
+    Builtin.crash "Dictionary key renderer was not specialized"
 
 let set<'k, 'v> (dict: Dict<k, v>) (key: k) (value: v) : Dict<k, v> =
     if Stdlib.Dict.__contains<k, v> dict key then
-        Builtin.testRuntimeError
+        Builtin.crash
             ("Cannot add two dictionary entries with the same key " ++ Stdlib.Dict.__renderGenericKey key)
     else
         Stdlib.Dict.__setOverwriting<k, v> dict key value

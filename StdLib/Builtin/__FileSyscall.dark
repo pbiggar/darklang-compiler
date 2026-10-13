@@ -1,0 +1,88 @@
+// Scalar/buffer ABI adaptation for single descriptor syscalls.
+module Builtin
+
+let syscallGetentropy (count: Int) : Stdlib.Result.Result<Blob, Int> =
+    let count = Builtin.__posixInt32 count in
+    if count < 0L || count > 256L then Error 22
+    else
+        let ptr = __mapped_alloc (if count == 0L then 1L else count) in
+        let rc = Stdlib.Cli.__Posix.__getentropy ptr count 0L in
+        let result =
+            if rc < 0L then Error (Stdlib.Int.fromInt64 (0L - rc))
+            else
+                let length = if Stdlib.Cli.__Posix.__mac () then count else rc in
+                Ok (Stdlib.Cli.__Posix.__bufferBytes ptr 0L length []) in
+        let _ = __mapped_free ptr in
+        result
+
+let syscallCopyFileRange (source: Int) (destination: Int) (count: Int)
+    : Stdlib.Result.Result<Int, Int> =
+    let source = Builtin.__posixInt32 source in
+    let destination = Builtin.__posixInt32 destination in
+    let count = Builtin.__posixInt32 count in
+    if count < 0L then Error 22
+    else
+        Builtin.__syscallIntResult
+            (Stdlib.Cli.__Posix.__copyFileRange source 0L destination 0L count 0L)
+
+let syscallCloneFile (source: Int) (destination: Int)
+    : Stdlib.Result.Result<Unit, Int> =
+    if Stdlib.Cli.__Posix.__mac () then Error 78
+    else
+        Builtin.__syscallUnitResult
+            (Stdlib.Cli.__Posix.__ioctlValue (Builtin.__posixInt32 destination)
+                1074041865L (Builtin.__posixInt32 source))
+
+let syscallFtruncate (fd: Int) (length: Int) : Stdlib.Result.Result<Unit, Int> =
+    Builtin.__syscallUnitResult
+        (Stdlib.Cli.__Posix.__ftruncate (Builtin.__posixInt32 fd)
+            (Builtin.__posixInt64 length))
+
+let syscallFclonefileAt (source: Int) (destination: String) (flags: Int) : Stdlib.Result.Result<Unit, Int> =
+    let source = Builtin.__posixInt32 source in
+    let flags = Stdlib.Int64.bitwiseOr (Builtin.__posixInt32 flags) 1L in
+    Stdlib.Cli.__Posix.__withEntry destination (fun parent name ->
+        Stdlib.Cli.__Posix.__unitResult (Stdlib.Cli.__Posix.__fclonefileat source parent name flags))
+    |> Stdlib.Result.mapError (fun error -> error.errno)
+
+let syscallFchmod (fd: Int) (mode: Int) : Stdlib.Result.Result<Unit, Int> =
+    Builtin.__syscallUnitResult
+        (Stdlib.Cli.__Posix.__fchmod (Builtin.__posixInt32 fd)
+            (Builtin.__posixInt32 mode))
+
+let syscallFstat (fd: Int) : Stdlib.Result.Result<Blob, Int> =
+    let fd = Builtin.__posixInt32 fd in
+    let ptr = __mapped_alloc 256L in
+    let _ = Stdlib.Cli.__Posix.__zeroBuffer ptr 256L in
+    let rc = Stdlib.Cli.__Posix.__fstat fd ptr in
+    let result =
+        if rc < 0L then Error (Stdlib.Int.fromInt64 (0L - rc))
+        else Ok (Stdlib.Cli.__Posix.__bufferBytes ptr 0L 256L []) in
+    let _ = __mapped_free ptr in
+    result
+
+let syscallPread (fd: Int) (count: Int) (offset: Int)
+    : Stdlib.Result.Result<Blob, Int> =
+    let fd = Builtin.__posixInt32 fd in
+    let count = Builtin.__posixInt32 count in
+    let offset = Builtin.__posixInt64 offset in
+    if count < 0L then Error 22
+    else
+        let ptr = __mapped_alloc (if count == 0L then 1L else count) in
+        let rc = Stdlib.Cli.__Posix.__pread fd ptr count offset in
+        let result =
+            if rc < 0L then Error (Stdlib.Int.fromInt64 (0L - rc))
+            else Ok (Stdlib.Cli.__Posix.__bufferBytes ptr 0L rc []) in
+        let _ = __mapped_free ptr in
+        result
+
+let syscallPwrite (fd: Int) (bytes: Blob) (offset: Int)
+    : Stdlib.Result.Result<Int, Int> =
+    let fd = Builtin.__posixInt32 fd in
+    let offset = Builtin.__posixInt64 offset in
+    let count = Stdlib.Blob.__byteLength bytes in
+    let ptr = __mapped_alloc (if count == 0L then 1L else count) in
+    let _ = Stdlib.Cli.__Posix.__writeBytes bytes ptr 0L in
+    let rc = Stdlib.Cli.__Posix.__pwrite fd ptr count offset in
+    let _ = __mapped_free ptr in
+    Builtin.__syscallIntResult rc

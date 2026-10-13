@@ -10,12 +10,25 @@ module B = C.BindingIdMap
 
 let ( let* ) = Result.bind
 
-let infer expr state =
-  A.simpleInferType expr state.A.typeEnv state.A.funcParams
-    state.A.funcReturnTypes state.A.genericFuncDefs state.A.typeReg
-    state.A.variantLookup
+let inferChecked expr state =
+  LoweringTypeInference.inferTypeCore
+    (LoweringPrimitives.sumMetadataFromVariantLookup state.A.variantLookup)
     (R.typeNamesFromSymbols state.A.symbols)
-    state.A.symbols
+    expr state.A.typeEnv state.A.typeReg state.A.variantLookup
+    state.A.inferenceFunctions
+    (C.functionNames state.A.symbols)
+    StringOrder.Map.empty
+
+let infer expr state =
+  match
+    A.simpleInferType expr state.A.typeEnv state.A.funcParams
+      state.A.funcReturnTypes state.A.genericFuncDefs state.A.typeReg
+      state.A.variantLookup
+      (R.typeNamesFromSymbols state.A.symbols)
+      state.A.symbols
+  with
+  | Some typ -> Some typ
+  | None -> Result.to_option (inferChecked expr state)
 
 let merge environment bindings = B.fold B.add bindings environment
 
@@ -52,6 +65,19 @@ let rec liftLambdasInExpr expr state =
       Ok (expr, state)
   | C.BoundaryRender (renderer, value) ->
       one value (fun value -> C.BoundaryRender (renderer, value))
+  | C.BinOp (AST.Add, left, right) ->
+      (* Specialization has made operand types concrete. Resolve String +
+         bottom-up here so ANF sees a single, already classified concat tree.
+         A rewritten child is StringConcat, whose result type is constant-time. *)
+      let* left, state = liftLambdasInExpr left state in
+      let* right, state = liftLambdasInExpr right state in
+      let* typ =
+        match infer left state with
+        | Some typ -> Ok typ
+        | None -> inferChecked left state
+      in
+      let op = if typ = AST.TString then AST.StringConcat else AST.Add in
+      Ok (C.BinOp (op, left, right), state)
   | C.BinOp (op, left, right) ->
       two left right (fun left right -> C.BinOp (op, left, right))
   | C.UnaryOp (op, inner) -> one inner (fun value -> C.UnaryOp (op, value))
@@ -331,6 +357,14 @@ and liftLambda argument parameters annotation body state =
       typeEnv = state.A.typeEnv;
       funcParams = state1.A.funcParams;
       funcReturnTypes = state1.A.funcReturnTypes;
+      inferenceFunctions =
+        FunctionIdMap.add func.C.id
+          ( func.C.name,
+            AST.TFunction
+              ( List.map snd
+                  (NonEmptyList.toList (C.functionParameterTypes func)),
+                C.functionReturnType func ) )
+          state1.A.inferenceFunctions;
       genericFuncDefs = state1.A.genericFuncDefs;
       typeReg = state1.A.typeReg;
       variantLookup = state1.A.variantLookup;

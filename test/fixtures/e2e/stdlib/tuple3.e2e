@@ -41,34 +41,34 @@ Stdlib.Tuple3.third (("one", 2L, "pi")) = "pi"
 // Stdlib.Tuple3.mapFirst - Transform the first value in a triple
 // ===================================================================
 
-Stdlib.Tuple3.first (Stdlib.Tuple3.mapFirst (fun x -> x + 1L) ((5L, 10L, 15L))) = 6L
-Stdlib.Tuple3.second (Stdlib.Tuple3.mapFirst (fun x -> x + 1L) ((5L, 10L, 15L))) = 10L
-Stdlib.Tuple3.third (Stdlib.Tuple3.mapFirst (fun x -> x + 1L) ((5L, 10L, 15L))) = 15L
-Stdlib.Tuple3.mapFirst (fun x -> Stdlib.String.toUppercase x) (("one", 2L, "pi")) = ("ONE", 2L, "pi")
+Stdlib.Tuple3.first (Stdlib.Tuple3.mapFirst ((5L, 10L, 15L)) (fun x -> x + 1L)) = 6L
+Stdlib.Tuple3.second (Stdlib.Tuple3.mapFirst ((5L, 10L, 15L)) (fun x -> x + 1L)) = 10L
+Stdlib.Tuple3.third (Stdlib.Tuple3.mapFirst ((5L, 10L, 15L)) (fun x -> x + 1L)) = 15L
+Stdlib.Tuple3.mapFirst (("one", 2L, "pi")) (fun x -> Stdlib.String.toUppercase x) = ("ONE", 2L, "pi")
 
 // ===================================================================
 // Stdlib.Tuple3.mapSecond - Transform the second value in a triple
 // ===================================================================
 
-Stdlib.Tuple3.first (Stdlib.Tuple3.mapSecond (fun x -> x + 1L) ((5L, 10L, 15L))) = 5L
-Stdlib.Tuple3.second (Stdlib.Tuple3.mapSecond (fun x -> x + 1L) ((5L, 10L, 15L))) = 11L
-Stdlib.Tuple3.third (Stdlib.Tuple3.mapSecond (fun x -> x + 1L) ((5L, 10L, 15L))) = 15L
-Stdlib.Tuple3.mapSecond (fun x -> x - 2L) (("one", 2L, "pi")) = ("one", 0L, "pi")
+Stdlib.Tuple3.first (Stdlib.Tuple3.mapSecond ((5L, 10L, 15L)) (fun x -> x + 1L)) = 5L
+Stdlib.Tuple3.second (Stdlib.Tuple3.mapSecond ((5L, 10L, 15L)) (fun x -> x + 1L)) = 11L
+Stdlib.Tuple3.third (Stdlib.Tuple3.mapSecond ((5L, 10L, 15L)) (fun x -> x + 1L)) = 15L
+Stdlib.Tuple3.mapSecond (("one", 2L, "pi")) (fun x -> x - 2L) = ("one", 0L, "pi")
 
 // ===================================================================
 // Stdlib.Tuple3.mapThird - Transform the third value in a triple
 // ===================================================================
 
-Stdlib.Tuple3.first (Stdlib.Tuple3.mapThird (fun x -> x + 1L) ((5L, 10L, 15L))) = 5L
-Stdlib.Tuple3.second (Stdlib.Tuple3.mapThird (fun x -> x + 1L) ((5L, 10L, 15L))) = 10L
-Stdlib.Tuple3.third (Stdlib.Tuple3.mapThird (fun x -> x + 1L) ((5L, 10L, 15L))) = 16L
-Stdlib.Tuple3.mapThird (fun x -> Stdlib.String.toUppercase x) (("one", 2L, "pi")) = ("one", 2L, "PI")
+Stdlib.Tuple3.first (Stdlib.Tuple3.mapThird ((5L, 10L, 15L)) (fun x -> x + 1L)) = 5L
+Stdlib.Tuple3.second (Stdlib.Tuple3.mapThird ((5L, 10L, 15L)) (fun x -> x + 1L)) = 10L
+Stdlib.Tuple3.third (Stdlib.Tuple3.mapThird ((5L, 10L, 15L)) (fun x -> x + 1L)) = 16L
+Stdlib.Tuple3.mapThird (("one", 2L, "pi")) (fun x -> Stdlib.String.toUppercase x) = ("one", 2L, "PI")
 
 // ===================================================================
 // Stdlib.Tuple3.mapAllThree - Transform all three values in a triple
 // ===================================================================
 
-Stdlib.Tuple3.first (Stdlib.Tuple3.mapAllThree (fun x -> x + 1L) (fun y -> y * 2L) (fun z -> z - 1L) ((5L, 10L, 15L))) = 6L
-Stdlib.Tuple3.second (Stdlib.Tuple3.mapAllThree (fun x -> x + 1L) (fun y -> y * 2L) (fun z -> z - 1L) ((5L, 10L, 15L))) = 20L
-Stdlib.Tuple3.third (Stdlib.Tuple3.mapAllThree (fun x -> x + 1L) (fun y -> y * 2L) (fun z -> z - 1L) ((5L, 10L, 15L))) = 14L
-Stdlib.Tuple3.mapAllThree (fun x -> Stdlib.String.toUppercase x) (fun y -> y - 2L) (fun z -> Stdlib.String.toUppercase z) (("one", 2L, "pi")) = ("ONE", 0L, "PI")
+Stdlib.Tuple3.first (Stdlib.Tuple3.mapAllThree ((5L, 10L, 15L)) (fun x -> x + 1L) (fun y -> y * 2L) (fun z -> z - 1L)) = 6L
+Stdlib.Tuple3.second (Stdlib.Tuple3.mapAllThree ((5L, 10L, 15L)) (fun x -> x + 1L) (fun y -> y * 2L) (fun z -> z - 1L)) = 20L
+Stdlib.Tuple3.third (Stdlib.Tuple3.mapAllThree ((5L, 10L, 15L)) (fun x -> x + 1L) (fun y -> y * 2L) (fun z -> z - 1L)) = 14L
+Stdlib.Tuple3.mapAllThree (("one", 2L, "pi")) (fun x -> Stdlib.String.toUppercase x) (fun y -> y - 2L) (fun z -> Stdlib.String.toUppercase z) = ("ONE", 0L, "PI")

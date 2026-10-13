@@ -96,7 +96,7 @@ let __bodyNext (lease: Stdlib.__Http2Pool.BodyLease) : Stdlib.Option.Option<UInt
     else match body.work.completed with
       | [outcome] ->
         match outcome.response with
-        | Error message -> Builtin.testRuntimeError message
+        | Error message -> Builtin.crash message
         | Ok response ->
           let next = { body with work = { body.work with completed = [] }, bytes = response.body, position = 0L, finished = true } in
           let _ = Stdlib.Stream.__cellSet lease.cell next in Stdlib.__Http2Pool.__bodyNext lease
@@ -107,7 +107,7 @@ let __bodyNext (lease: Stdlib.__Http2Pool.BodyLease) : Stdlib.Option.Option<UInt
           let _ = Stdlib.Stream.__cellSet lease.cell next in Stdlib.__Http2Pool.__bodyNext lease
         | _ ->
           match Stdlib.__Http2Connection.__receive lease.entry.transport body.work with
-          | Error message -> Builtin.testRuntimeError message
+          | Error message -> Builtin.crash message
           | Ok work -> let _ = Stdlib.Stream.__cellSet lease.cell { body with work = work } in Stdlib.__Http2Pool.__bodyNext lease
       | _ -> Builtin.crash "Multiple outcomes in leased HTTP/2 body"
 

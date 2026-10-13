@@ -1,0 +1,6 @@
+Stdlib.Cli.File.__watchEvents [] 0 false false = Ok ((false, false))
+Stdlib.Cli.File.__watchEvents [0uy] 1 false false = Error 5
+Stdlib.Cli.File.__watchEvents [1uy,0uy,0uy,0uy,2uy,0uy,0uy,0uy,0uy,0uy,0uy,0uy,0uy,0uy,0uy,0uy] 16 false false = Ok ((true, false))
+Stdlib.Cli.File.__watchEvents [1uy,0uy,0uy,0uy,0uy,8uy,0uy,0uy,0uy,0uy,0uy,0uy,0uy,0uy,0uy,0uy] 16 false false = Ok ((true, true))
+Stdlib.Cli.File.__watchEvents [1uy,0uy,0uy,0uy,2uy,0uy,0uy,0uy,0uy,0uy,0uy,0uy,8uy,0uy,0uy,0uy] 16 false false = Error 5
+Stdlib.Cli.File.__watchLinux "/does-not-exist" 10 (fun _ -> true) (fun _ -> ()) = Ok ()

@@ -103,11 +103,11 @@ let repeatRender (remaining: Int64) (spheres: List<Sphere>) (light: Vec3) (size:
 let benchmarkArg (index: Int) : Int64 =
     match Stdlib.Cli.__Args.int64 index with
     | Ok value -> value
-    | Error message -> Builtin.testRuntimeError message
+    | Error message -> Builtin.crash message
 
 let size = benchmarkArg 0 in
 let repetitions = benchmarkArg 1 in
-if size < 2L || repetitions <= 0L then Builtin.testRuntimeError "ray tracer size must be at least two and repetitions must be positive"
+if size < 2L || repetitions <= 0L then Builtin.crash "ray tracer size must be at least two and repetitions must be positive"
 else
     let spheres = [
         Sphere { center = vector 0.0 0.0 0.0, radius = 1.0, color = color 0.90 0.22 0.18 },

@@ -1,0 +1,1 @@
+// Current-user builtin ignores environment overrides; the public wrapper preserves them.

@@ -518,3 +518,33 @@ session peers' `--stream` modes cover framing, invalidation, reuse and cleanup,
 including independent 70 KiB TCP/TLS, HTTP/2 and HTTP/3 responses.
 `http_session_batch.e2e`, `quic_flow.e2e`, and the session peers' `--public`
 HTTP/2 and `--public --multiplex` HTTP/3 modes exercise these APIs.
+
+## Upstream correctness adoption (2026-10-11)
+
+The historical matrix above documents the earlier pinned interpreter behavior,
+not the current upstream contract. The branch `adopt/upstream-http-html-correctness`
+updates the pure surfaces to match darklang/dark PRs #5727 and #5735:
+
+- `Http.parseQueryString` decodes `+` as a space and percent escapes as bytes,
+  preserves invalid escapes, and keeps last-duplicate-wins dictionary semantics.
+- `Http.Request.queryParams` splits at the first `=` and decodes keys and
+  values while preserving ordered duplicates; `queryParam` still joins
+  duplicate values with commas.
+- `Html.nodeToString` escapes attribute values with `escapeHtml`, and
+  `Html.comment` rewrites `--` to `- -` to prevent premature closure.
+
+The updated `test/fixtures/e2e/html_http.e2e` pins the new behavior.
+On 2026-10-12, after incorporating compiler main at
+`26a2a769276e24c0d8ab6b03e025a0ead2214aaa`, native x86-64 validation passed:
+`env -u LD_PRELOAD ./build --ai`; the focused `--filter=html_http` run
+(37/37); `./run-tests --ai` (13,197/13,197); `dune runtest`; and
+`python3 scripts/check_compiled_leaks.py` (58/58 clean workloads).
+The VM used OCaml 5.5.1, Dune 3.24.2 and all 98 locked packages, with
+the repository's native compilation and Unix smoke checks passing.
+
+`./benchmarks/run_benchmarks.sh --verify-parent full` stopped before measurement:
+the existing x86-64 full snapshot has an incompatible workload contract digest
+(`2ead0323fc6859c952a3b8a83c56e0b0da61e1350b7ddd39ecc4a0b1da25e861`,
+versus current `2a3f42ac1a2085fe75562c15a454d4ec18429c61d8f22ee22c9619d5d0ef029f`).
+This branch changes no benchmark sources, contracts or snapshots. Correctness
+checks passed; the performance gate is unverified and the PR remains unmerged.

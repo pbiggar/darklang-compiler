@@ -4,13 +4,34 @@ module Darklang.Stdlib.Http
 
 type Request = { url: String, headers: List<(String * String)>, body: Blob }
 
+// Decode URL form fields at the byte level, matching upstream PR #5727.
+// '+' represents a space; invalid percent escapes are preserved verbatim.
+let urlDecode (value: String) : String =
+    match Stdlib.String.split (Stdlib.String.replaceAll value "+" " ") "%" with
+    | [] -> ""
+    | first :: rest ->
+        let decodedBytes =
+            Stdlib.List.fold rest (Stdlib.String.toBytes first) (fun acc piece ->
+                let hex = Stdlib.String.slice piece 0 2 in
+                let parsed =
+                    if Stdlib.String.length hex == 2 then Stdlib.Blob.fromHex hex
+                    else Error "not an escape" in
+                match parsed with
+                | Ok blob ->
+                    Stdlib.List.append
+                        (Stdlib.List.append acc (Stdlib.Blob.toList blob))
+                        (Stdlib.String.toBytes (Stdlib.String.dropFirst piece 2))
+                | Error _ ->
+                    Stdlib.List.append acc (Stdlib.String.toBytes ("%" ++ piece))) in
+        Stdlib.String.fromBytesWithReplacement decodedBytes
+
 let __parseQueryParam (param: String) : Stdlib.Option.Option<(String * String)> =
     if param == "" then None
     else
         match Stdlib.String.split param "=" with
-        | [key, value] -> Some ((key, value))
-        | [key] -> Some ((key, ""))
-        | key :: valueParts -> Some ((key, Stdlib.String.join valueParts "="))
+        | [key, value] -> Some ((Stdlib.Http.urlDecode key, Stdlib.Http.urlDecode value))
+        | [key] -> Some ((Stdlib.Http.urlDecode key, ""))
+        | key :: valueParts -> Some ((Stdlib.Http.urlDecode key, Stdlib.Http.urlDecode (Stdlib.String.join valueParts "=")))
         | [] -> None
 
 let __queryParamsToDict (params: List<String>) (result: Dict<String, String>) : Dict<String, String> =

@@ -9,8 +9,6 @@ open ARM64ReleaseSelection
 open ARM64DictReferenceCounts
 open GenericReferenceCounts
 open ProcessLifecycle
-open RunProcess
-open ExecuteProcess
 open ARM64Functions
 open Peephole
 open ReleasePlanSummary
@@ -56,8 +54,6 @@ type helperCacheKey = {
   closureCaptureTypes : (string * AST.semanticType list) list;
   recursiveReleaseTypes : AST.semanticType list;
   cliArgvHelperLabels : string list;
-  needsCliExecuteHelper : bool;
-  needsCliRunProcessHelper : bool;
   needsCliProcessLifecycleHelpers : bool;
   needsRuntimeErrorHelper : bool;
   listDecHelperLabels : string list;
@@ -272,8 +268,6 @@ let generatePreparedARM64WithOptionsAndCache target options
           closureCaptureTypes = StringOrder.Map.empty;
           recursiveReleaseTypes = MemoryPlanning.SemanticTypeSet.empty;
           cliArgvHelperLabels = StringOrder.Set.empty;
-          needsCliExecuteHelper = false;
-          needsCliRunProcessHelper = false;
           needsCliProcessLifecycleHelpers = false;
           needsRuntimeErrorHelper = false;
         };
@@ -318,9 +312,7 @@ let generatePreparedARM64WithOptionsAndCache target options
              facts.LIR.recursiveReleaseTypes))
     || (not
           (MemoryPlanning.SemanticTypeSet.is_empty facts.LIR.rawSlotInitTypes))
-    || facts.LIR.needsCliArgvHelper || facts.LIR.needsCliExecuteHelper
-    || facts.LIR.needsCliRunProcessHelper
-    || facts.LIR.needsCliProcessLifecycleHelpers
+    || facts.LIR.needsCliArgvHelper || facts.LIR.needsCliProcessLifecycleHelpers
     || facts.LIR.needsRuntimeErrorHelper || contributesRcHelpers
   in
   let releasePlanSummary = precomputedReleasePlanSummary in
@@ -422,12 +414,6 @@ let generatePreparedARM64WithOptionsAndCache target options
                  ("__dark_cli_argv_" ^ func.LIR.name)
                  withAllocSizes.facts.cliArgvHelperLabels
              else withAllocSizes.facts.cliArgvHelperLabels);
-          needsCliExecuteHelper =
-            withAllocSizes.facts.needsCliExecuteHelper
-            || facts.LIR.needsCliExecuteHelper;
-          needsCliRunProcessHelper =
-            withAllocSizes.facts.needsCliRunProcessHelper
-            || facts.LIR.needsCliRunProcessHelper;
           needsCliProcessLifecycleHelpers =
             withAllocSizes.facts.needsCliProcessLifecycleHelpers
             || facts.LIR.needsCliProcessLifecycleHelpers;
@@ -507,8 +493,6 @@ let generatePreparedARM64WithOptionsAndCache target options
     && MemoryPlanning.SemanticTypeSet.is_empty
          metadata.facts.recursiveReleaseTypes
     && StringOrder.Set.is_empty metadata.facts.cliArgvHelperLabels
-    && (not metadata.facts.needsCliExecuteHelper)
-    && (not metadata.facts.needsCliRunProcessHelper)
     && (not metadata.facts.needsCliProcessLifecycleHelpers)
     && (not metadata.facts.needsRuntimeErrorHelper)
     && not (hasRcHelperRequirements metadata.rcHelperRequirements)
@@ -536,12 +520,6 @@ let generatePreparedARM64WithOptionsAndCache target options
             cliArgvHelperLabels =
               StringOrder.Set.union left.facts.cliArgvHelperLabels
                 right.facts.cliArgvHelperLabels;
-            needsCliExecuteHelper =
-              left.facts.needsCliExecuteHelper
-              || right.facts.needsCliExecuteHelper;
-            needsCliRunProcessHelper =
-              left.facts.needsCliRunProcessHelper
-              || right.facts.needsCliRunProcessHelper;
             needsCliProcessLifecycleHelpers =
               left.facts.needsCliProcessLifecycleHelpers
               || right.facts.needsCliProcessLifecycleHelpers;
@@ -578,10 +556,6 @@ let generatePreparedARM64WithOptionsAndCache target options
   in
   recordPhase "ARM64 Metadata Group Composition" groupCompositionTimer;
   let rcHelperRequirements = programMetadata.rcHelperRequirements in
-  let needsCliExecuteHelper = programMetadata.facts.needsCliExecuteHelper in
-  let needsCliRunProcessHelper =
-    programMetadata.facts.needsCliRunProcessHelper
-  in
   let needsCliProcessLifecycleHelpers =
     programMetadata.facts.needsCliProcessLifecycleHelpers
   in
@@ -743,10 +717,7 @@ let generatePreparedARM64WithOptionsAndCache target options
   convertedFunctionChunks
   |> Result.map (fun functionChunks ->
       let functionChunks =
-        if
-          needsCliProcessLifecycleHelpers
-          && ARM64.targetOS target = Platform.Linux
-        then
+        if needsCliProcessLifecycleHelpers then
           List.map
             (fun chunk ->
               let containsStartEpilogue =
@@ -1156,24 +1127,11 @@ let generatePreparedARM64WithOptionsAndCache target options
         in
         let cliHelpers =
           cliArgvHelpers
-          @ (if
-               needsCliProcessLifecycleHelpers
-               && ARM64.targetOS target = Platform.Linux
-             then generateLinuxCliSpawnProcessHelper ()
-             else [])
-          @ (if
-               needsCliProcessLifecycleHelpers
-               && ARM64.targetOS target = Platform.Linux
-             then generateLinuxCliProcessLifecycleHelpers ctx
-             else [])
-          @ (if
-               needsCliRunProcessHelper
-               && ARM64.targetOS target = Platform.Linux
-             then generateLinuxCliRunProcessHelper ()
+          @ (if needsCliProcessLifecycleHelpers then
+               generateChildLaunchHelper target
              else [])
           @
-          if needsCliExecuteHelper && ARM64.targetOS target = Platform.Linux
-          then generateLinuxCliExecuteHelper ()
+          if needsCliProcessLifecycleHelpers then generateChildCleanupHelper ctx
           else []
         in
         recordPhase "ARM64 Helper CLI Generation" cliHelperTimer;
@@ -1207,9 +1165,6 @@ let generatePreparedARM64WithOptionsAndCache target options
               programMetadata.facts.recursiveReleaseTypes;
           cliArgvHelperLabels =
             StringOrder.Set.elements programMetadata.facts.cliArgvHelperLabels;
-          needsCliExecuteHelper = programMetadata.facts.needsCliExecuteHelper;
-          needsCliRunProcessHelper =
-            programMetadata.facts.needsCliRunProcessHelper;
           needsCliProcessLifecycleHelpers =
             programMetadata.facts.needsCliProcessLifecycleHelpers;
           needsRuntimeErrorHelper =

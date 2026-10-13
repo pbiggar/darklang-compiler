@@ -9,7 +9,7 @@ let matA (i: Int64) (j: Int64) : Float =
 let getAt (v: List<Float>) (i: Int64) : Float =
     match Stdlib.List.getAt v (Stdlib.Int.fromInt64 i) with
     | Some value -> value
-    | None -> Builtin.testRuntimeError "Spectral vector index is out of range"
+    | None -> Builtin.crash "Spectral vector index is out of range"
 
 let setAt (list: List<Float>) (index: Int64) (value: Float) : List<Float> =
     match list with
@@ -21,7 +21,7 @@ let setAt (list: List<Float>) (index: Int64) (value: Float) : List<Float> =
 let repeat (value: Float) (count: Int64) : List<Float> =
     match Stdlib.List.repeat (Stdlib.Int.fromInt64 count) value with
     | Ok values -> values
-    | Error message -> Builtin.testRuntimeError message
+    | Error message -> Builtin.crash message
 
 let avRow (i: Int64) (j: Int64) (n: Int64) (v: List<Float>) (acc: Float) : Float =
     if j >= n then acc
@@ -61,6 +61,6 @@ let spectralNorm (n: Int64) (iterations: Int64) : Float =
 let benchmarkArg (index: Int) : Int64 =
     match Stdlib.Cli.__Args.int64 index with
     | Ok value -> value
-    | Error message -> Builtin.testRuntimeError message
+    | Error message -> Builtin.crash message
 
 Builtin.printLine (Stdlib.Int64.toString (Stdlib.Int64.fromFloat (spectralNorm (benchmarkArg 0) (benchmarkArg 1) * 1000000000.0)))

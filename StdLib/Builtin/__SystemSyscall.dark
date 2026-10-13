@@ -1,0 +1,53 @@
+// Typed byte-record adapters for host-fact syscalls; no decoding or retries.
+module Builtin
+
+let syscallUname () : Stdlib.Result.Result<Blob, Int> =
+    let buffer = __mapped_alloc 390L in
+    let rc = Stdlib.Cli.__Posix.__uname buffer in
+    let result =
+        if rc < 0L then Error (Stdlib.Int.fromInt64 (0L - rc))
+        else Ok (Stdlib.Cli.__Posix.__bufferBytes buffer 0L 390L []) in
+    let _ = __mapped_free buffer in
+    result
+
+let __writeMib (mib: List<Int>) (buffer: RawPtr) (offset: Int64) : Unit =
+    match mib with
+    | [] -> ()
+    | key :: rest ->
+        // Allocate four padding bytes so the last word write remains in bounds.
+        let _ = __raw_write_word buffer offset (Builtin.__posixInt32 key) in
+        Builtin.__writeMib rest buffer (offset + 4L)
+
+let syscallSysctl (mib: List<Int>) (count: Int) : Stdlib.Result.Result<Blob, Int> =
+    let count = Builtin.__posixInt32 count in
+    let length = Stdlib.Int.toInt64 (Stdlib.List.length mib) |> Builtin.unwrap in
+    if count <= 0L || length == 0L then Error 22
+    else
+        let keys = __mapped_alloc (length * 4L + 4L) in
+        let _ = Builtin.__writeMib mib keys 0L in
+        let buffer = __mapped_alloc count in
+        let size = __mapped_alloc 8L in
+        let _ = __raw_write_word size 0L count in
+        let rc = Stdlib.Cli.__Posix.__sysctl keys length buffer size (__word_to_rawptr 0L) 0L in
+        let actual = __raw_get size 0L in
+        let result =
+            if rc < 0L then Error (Stdlib.Int.fromInt64 (0L - rc))
+            else if actual < 0L || actual > count then Error 5
+            else Ok (Stdlib.Cli.__Posix.__bufferBytes buffer 0L actual []) in
+        let _ = __mapped_free size in
+        let _ = __mapped_free buffer in
+        let _ = __mapped_free keys in
+        result
+
+let syscallSchedGetaffinity (pid: Int) (count: Int) : Stdlib.Result.Result<Blob, Int> =
+    let pid = Builtin.__posixInt32 pid in
+    let count = Builtin.__posixInt32 count in
+    if count <= 0L then Error 22
+    else
+        let buffer = __mapped_alloc count in
+        let rc = Stdlib.Cli.__Posix.__schedGetaffinity pid count buffer in
+        let result =
+            if rc < 0L then Error (Stdlib.Int.fromInt64 (0L - rc))
+            else Ok (Stdlib.Cli.__Posix.__bufferBytes buffer 0L rc []) in
+        let _ = __mapped_free buffer in
+        result

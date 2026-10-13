@@ -105,7 +105,6 @@ val uint128LiteralComparison :
 
 val typeToString : AST.semanticType -> string
 val patternLiteralToSizedInt : CheckedAST.pattern -> ANF.sizedInt option
-val tryFileIntrinsic : string -> ANF.atom list -> ANF.cExpr option
 val tryCliIntrinsic : string -> ANF.atom list -> ANF.cExpr option
 val normalizeNullaryIntrinsicArgs : ANF.atom list -> ANF.atom list
 val tryPresentationIntrinsic : string -> ANF.atom list -> ANF.cExpr option
@@ -129,7 +128,6 @@ val tryRawMemoryIntrinsic :
 val tryRandomIntrinsic : string -> ANF.atom list -> ANF.cExpr option
 val tryDateTimeIntrinsic : string -> ANF.atom list -> ANF.cExpr option
 val isBuiltinUnwrapName : string -> bool
-val isBuiltinTestRuntimeErrorName : string -> bool
 val isSourceCrashName : string -> bool
 val isRuntimeFailureName : string -> bool
 val unwrapErrorPayloadToString : CheckedAST.expr -> string option

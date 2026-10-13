@@ -105,28 +105,17 @@ type returnOwnership = OwnedReturn | BorrowedReturn
    Typed native effects retained after the portable Stdlib.Cli wrappers lower.
 *)
 type cliOperation =
-  | Execute
-  | RunProcess
   | HostOS
   | HostArchitecture
-  | Hostname
   | GetEnv
   | GetEnvironmentPacked
   | StdinState
-  | SetEnv
-  | UnsetEnv
-  | DirectoryCurrent
-  | DirectoryListPacked
-  | FileIsDirectory
-  | FileCreateExclusive
   | GetArgv
   | Kill
   | GetPid
+  | StartupStack
+  | ExecutableState
   | GetUid
-  | CpuCount
-  | SpawnProcess
-  | ProcessIO
-  | TerminateProcess
   | SocketTcp4
   | SocketTcp6
   | SocketUdp4
@@ -170,9 +159,36 @@ type cliOperation =
   | PosixSetAttributesAt
   | PosixSymlinkAt
   | PosixReadlinkAt
+  | PosixAccessAt
   | PosixFlock
   | PosixGetDents
   | PosixIoctl
+  | PosixProcInfo
+  | PosixCopyFileRange
+  | PosixFtruncate
+  | PosixFchmod
+  | PosixFstat
+  | PosixPread
+  | PosixPwrite
+  | PosixFclonefileat
+  | PosixGetentropy
+  | PosixUname
+  | PosixSysctl
+  | PosixSchedGetaffinity
+  | PosixFcntlGetPath
+  | PosixClockGettime
+  | PosixGettimeofday
+  | PosixNanosleep
+  | PosixMachTimebaseInfo
+  | PosixInotifyInit1
+  | PosixInotifyAddWatch
+  | PosixPpoll
+  | PosixPollDarwin
+  | PosixKqueue
+  | ChildState
+  | ChildLaunch
+  | PosixWait4
+  | PosixKeventVnode
 
 (*
    Immutable nominal metadata carried through fixed-block lowering for field

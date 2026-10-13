@@ -1,0 +1,4 @@
+// Interpreter UID builtin compatibility and real-user identity.
+Builtin.syscallGetuid () >= 0 = true
+(Builtin.syscallGetuid () == 0) == Stdlib.Cli.Sys.isRoot () = true
+Builtin.syscallGetuid () == Builtin.syscallGetuid () = true

@@ -15,4 +15,4 @@ let __styledWidth (remaining: List<Char>) (total: Int) : Int =
         else
             Stdlib.Cli.Tui.Text.__styledWidth
                 rest
-                (total + Stdlib.String.displayWidth cluster)
+                (total + Stdlib.String.displayWidth (Stdlib.Char.toString cluster))

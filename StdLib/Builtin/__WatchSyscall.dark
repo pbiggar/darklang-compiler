@@ -1,0 +1,93 @@
+// One-call event-queue/poll ABI adapters; event decoding and watch policy are Dark.
+module Builtin
+
+let syscallInotifyInit1 (flags: Int) : Stdlib.Result.Result<Int, Int> =
+    Builtin.__syscallIntResult (Stdlib.Cli.__Posix.__inotifyInit1 (Builtin.__posixInt32 flags))
+
+let syscallInotifyAddWatch (fd: Int) (path: String) (mask: Int) : Stdlib.Result.Result<Int, Int> =
+    let fd = Builtin.__posixInt32 fd in
+    let mask = Stdlib.Int64.bitwiseAnd (Builtin.__posixInt32 mask) (-33554433L) in
+    if Stdlib.Cli.__Posix.__mac () then Error 78
+    else
+        Stdlib.Cli.__Posix.__metadataPath path (fun _ held ->
+            let rc = Stdlib.Cli.__Posix.__withCString held (fun ptr -> Stdlib.Cli.__Posix.__inotifyAddWatch fd ptr mask) in
+            if rc < 0L then Error (Stdlib.Cli.__Posix.__error (0L - rc))
+            else Ok (Stdlib.Int.fromInt64 rc))
+        |> Stdlib.Result.mapError (fun error -> error.errno)
+
+let __writePollDescriptors (ptr: RawPtr) (offset: Int64) (fds: List<(Int * Int)>) : Unit =
+    match fds with
+    | [] -> ()
+    | pair :: rest ->
+        let (fd, events) = pair in
+        let fd = Stdlib.Int64.bitwiseAnd (Builtin.__posixInt32 fd) 4294967295L in
+        let events = Builtin.__posixInt32 events in
+        let _ = __raw_write_word ptr offset (fd + events * 4294967296L) in
+        Builtin.__writePollDescriptors ptr (offset + 8L) rest
+
+let __pollRecords (darwin: Bool) (fds: List<(Int * Int)>) (timeoutMs: Int) : Stdlib.Result.Result<Blob, Int> =
+    let timeoutMs = Builtin.__posixInt32 timeoutMs in
+    let count = Stdlib.List.length fds in
+    if timeoutMs < 0L || count > 1024 || Stdlib.List.any fds (fun pair -> let (_, events) = pair in events < 0 || events > 32767) then Error 22
+    else
+        let length = Builtin.__posixInt64 (count * 8) in
+        let ptr = __mapped_alloc (if length == 0L then 1L else length) in
+        let timeout = __mapped_alloc 16L in
+        let _ = Builtin.__writePollDescriptors ptr 0L fds in
+        let _ = __raw_write_word timeout 0L (timeoutMs / 1000L) in
+        let _ = __raw_write_word timeout 8L ((timeoutMs % 1000L) * 1000000L) in
+        let rc = if darwin then Stdlib.Cli.__Posix.__pollDarwin ptr (Builtin.__posixInt64 count) timeoutMs
+                 else Stdlib.Cli.__Posix.__ppoll ptr (Builtin.__posixInt64 count) timeout (__word_to_rawptr 0L) 8L in
+        let result = if rc < 0L then Error (Stdlib.Int.fromInt64 (0L - rc))
+                     else Ok (Stdlib.Cli.__Posix.__bufferBytes ptr 0L length []) in
+        let _ = __mapped_free timeout in
+        let _ = __mapped_free ptr in
+        result
+
+let syscallPpoll (fds: List<(Int * Int)>) (timeoutMs: Int) : Stdlib.Result.Result<Blob, Int> =
+    Builtin.__pollRecords false fds timeoutMs
+
+let syscallPollDarwin (fds: List<(Int * Int)>) (timeoutMs: Int) : Stdlib.Result.Result<Blob, Int> =
+    Builtin.__pollRecords true fds timeoutMs
+
+let syscallKqueue () : Stdlib.Result.Result<Int, Int> =
+    Builtin.__syscallIntResult (Stdlib.Cli.__Posix.__kqueue ())
+
+let __writeVnodeChanges (ptr: RawPtr) (offset: Int64) (changes: List<(Int * Int * Int)>) : Unit =
+    match changes with
+    | [] -> ()
+    | change :: rest ->
+        let (fd, flags, mask) = change in
+        let fd = Builtin.__posixInt32 fd in
+        let flags = Builtin.__posixInt32 flags in
+        let mask = Builtin.__posixInt32 mask in
+        let _ = __raw_write_word ptr offset fd in
+        let _ = __raw_write_word ptr (offset + 8L) (65532L + flags * 65536L + mask * 4294967296L) in
+        let _ = __raw_write_word ptr (offset + 16L) 0L in
+        let _ = __raw_write_word ptr (offset + 24L) 0L in
+        Builtin.__writeVnodeChanges ptr (offset + 32L) rest
+
+let syscallKeventVnode (queue: Int) (changes: List<(Int * Int * Int)>) (capacity: Int) (timeoutMs: Int)
+    : Stdlib.Result.Result<Blob, Int> =
+    let queue = Builtin.__posixInt32 queue in
+    let timeoutMs = Builtin.__posixInt32 timeoutMs in
+    let count = Stdlib.List.length changes in
+    if timeoutMs < 0L || capacity < 0 || capacity > 1024 || count > 1024
+       || Stdlib.List.any changes (fun change -> let (_, flags, mask) = change in flags < 0 || flags > 65535 || mask < 0 || mask > 2147483647) then Error 22
+    else
+        let inputLength = Builtin.__posixInt64 (count * 32) in
+        let outputLength = Builtin.__posixInt64 (capacity * 32) in
+        let input = __mapped_alloc (if inputLength == 0L then 1L else inputLength) in
+        let output = __mapped_alloc (if outputLength == 0L then 1L else outputLength) in
+        let timeout = __mapped_alloc 16L in
+        let _ = Builtin.__writeVnodeChanges input 0L changes in
+        let _ = __raw_write_word timeout 0L (timeoutMs / 1000L) in
+        let _ = __raw_write_word timeout 8L ((timeoutMs % 1000L) * 1000000L) in
+        let rc = Stdlib.Cli.__Posix.__keventVnode queue input (Builtin.__posixInt64 count) output (Builtin.__posixInt64 capacity) timeout in
+        let result = if rc < 0L then Error (Stdlib.Int.fromInt64 (0L - rc))
+                     else if rc > Builtin.__posixInt64 capacity then Error 5
+                     else Ok (Stdlib.Cli.__Posix.__bufferBytes output 0L (rc * 32L) []) in
+        let _ = __mapped_free timeout in
+        let _ = __mapped_free output in
+        let _ = __mapped_free input in
+        result

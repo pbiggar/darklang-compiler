@@ -2,7 +2,9 @@
 
 [Source fixture](../../../../test/fixtures/e2e/upstream/stdlib/float.dark) · [File list](../../current-audit.md)
 
-Executed 167 assertions: **145 passed, 22 failed**.
+Historical audit: 167 assertions, **145 passed, 22 failed**. On 2026-10-12,
+L255 was re-enabled after adopting signed `Float.toBits`; see the
+[upstream adoption ledger](../../upstream-adoption.md) for current validation.
 
 | Test | Observed failure |
 | --- | --- |
@@ -12,10 +14,10 @@ Executed 167 assertions: **145 passed, 22 failed**.
 | [L59](../../../../test/fixtures/e2e/upstream/stdlib/float.dark#L59) — Stdlib.Float.absoluteValue Builtin.testNan | Value mismatch |
 | [L64](../../../../test/fixtures/e2e/upstream/stdlib/float.dark#L64) — Stdlib.Float.negate Builtin.testNan | Value mismatch |
 | [L65](../../../../test/fixtures/e2e/upstream/stdlib/float.dark#L65) — Stdlib.Float.negate Builtin.testInfinity | Unknown function or value 'Builtin.testNegativeInfinity' |
-| [L73](../../../../test/fixtures/e2e/upstream/stdlib/float.dark#L73) — Stdlib.Float.clamp Builtin.testNegativeInfinity -1.0 0.5 | Unknown function or value 'Builtin.testNegativeInfinity' |
-| [L76](../../../../test/fixtures/e2e/upstream/stdlib/float.dark#L76) — Stdlib.Float.clamp Builtin.testNan -1.0 1.0 | Value mismatch |
-| [L81](../../../../test/fixtures/e2e/upstream/stdlib/float.dark#L81) — Stdlib.Float.clamp 0.5 Builtin.testNegativeInfinity 1.0 | Unknown function or value 'Builtin.testNegativeInfinity' |
-| [L89](../../../../test/fixtures/e2e/upstream/stdlib/float.dark#L89) — Stdlib.Float.clamp -1.0 0.5 Builtin.testNegativeInfinity | Unknown function or value 'Builtin.testNegativeInfinity' |
+| [L73](../../../../test/fixtures/e2e/upstream/stdlib/float.dark#L73) — Stdlib.Float.clampRefusingNaN Builtin.testNegativeInfinity -1.0 0.5 | Unknown function or value 'Builtin.testNegativeInfinity' |
+| [L76](../../../../test/fixtures/e2e/upstream/stdlib/float.dark#L76) — Stdlib.Float.clampRefusingNaN Builtin.testNan -1.0 1.0 | Value mismatch |
+| [L81](../../../../test/fixtures/e2e/upstream/stdlib/float.dark#L81) — Stdlib.Float.clampRefusingNaN 0.5 Builtin.testNegativeInfinity 1.0 | Unknown function or value 'Builtin.testNegativeInfinity' |
+| [L89](../../../../test/fixtures/e2e/upstream/stdlib/float.dark#L89) — Stdlib.Float.clampRefusingNaN -1.0 0.5 Builtin.testNegativeInfinity | Unknown function or value 'Builtin.testNegativeInfinity' |
 | [L107](../../../../test/fixtures/e2e/upstream/stdlib/float.dark#L107) — Stdlib.Float.divide 9.0 -0.0 | Unknown function or value 'Builtin.testNegativeInfinity' |
 | [L110](../../../../test/fixtures/e2e/upstream/stdlib/float.dark#L110) — 17.0 / 3.3 | Value mismatch |
 | [L111](../../../../test/fixtures/e2e/upstream/stdlib/float.dark#L111) — -8.74 / 5.351 | Value mismatch |
@@ -27,4 +29,3 @@ Executed 167 assertions: **145 passed, 22 failed**.
 | [L173](../../../../test/fixtures/e2e/upstream/stdlib/float.dark#L173) — Stdlib.Float.parse "-5.55555555556e+28" | Value mismatch |
 | [L176](../../../../test/fixtures/e2e/upstream/stdlib/float.dark#L176) — Stdlib.Float.parse "-1.8E+308" | Unknown function or value 'Builtin.testNegativeInfinity' |
 | [L244](../../../../test/fixtures/e2e/upstream/stdlib/float.dark#L244) — Stdlib.Float.toInt Builtin.testNegativeInfinity | Expected error message 'Encountered out-of-range value for type of Int' not found in stderr. Actual stderr: <entry>: Unknown function or value 'Builtin.testNegativeInfinity' |
-| [L255](../../../../test/fixtures/e2e/upstream/stdlib/float.dark#L255) — Stdlib.Float.toBits -0.0 | Unknown function or value 'Builtin.testNegativeInfinity' |

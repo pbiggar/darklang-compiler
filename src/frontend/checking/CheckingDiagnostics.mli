@@ -31,7 +31,6 @@ val ifConditionTypeMismatchMessage : AST.expr -> AST.semanticType -> string
 val interpolationTypeMismatchMessage : AST.expr -> AST.semanticType -> string
 val substituteInterpolationLiteral : string -> AST.expr -> AST.expr -> AST.expr
 val isBuiltinUnwrapName : string -> bool
-val isBuiltinTestRuntimeErrorName : string -> bool
 val isRuntimeFailureName : string -> bool
 val isBuiltinTestNanName : string -> bool
 val isBuiltinTestInfinityName : string -> bool
@@ -39,9 +38,9 @@ val isBuiltinBlobEmptyName : string -> bool
 val isNeverType : AST.semanticType -> bool
 val isKnownFailureConstructorExpr : AST.expr -> bool
 val isKnownUnwrapFailureExpr : AST.expr StringOrder.Map.t -> AST.expr -> bool
-val isKnownTestRuntimeErrorExpr : AST.expr StringOrder.Map.t -> AST.expr -> bool
+val isKnownCrashExpr : AST.expr StringOrder.Map.t -> AST.expr -> bool
 
-val tryExtractKnownTestRuntimeErrorMessage :
+val tryExtractKnownCrashMessage :
   AST.expr StringOrder.Map.t -> AST.expr -> string option
 
 val tryFormatLiteralValue : AST.expr -> string option

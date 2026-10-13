@@ -31,8 +31,11 @@ the upstream package uses ordinary Dark code.
 |---|---|---|---|
 | `packages/darklang/cli/clear.dark` | `Darklang.Cli.Clear.execute` | `Builtin.stdoutClear` | Direct builtin compilation fails with `Unknown function or value 'Builtin.stdoutClear'` (validated after PR #39). On Linux/macOS the interpreter only writes `ESC[2J` followed by `ESC[H`; implement that sequence in Dark using the existing print API instead of a dedicated builtin. Preserve or separately address the interpreter's Windows-specific `Console.Clear()` behavior. User directed deferral; no compiler builtin was added. |
 
-Other declarations in the Clear package remain individually unreviewed. Retain
-`Clear.execute` in the final unresolved list with this upstream-refactoring reason.
+| `packages/darklang/cli/telemetry.dark` | `Darklang.Cli.Telemetry.logFilePath` (value) | `Builtin.cliGetLogDir` | Isolated original declaration fails with `Unknown function or value 'Builtin.cliGetLogDir'` using the surviving PR #39 compiler binary; the builtin is also absent from main at `b3d13bb1c3d85715c5790f527e5c3b0164127ac0`. The interpreter returns `LibConfig.Config.logDir`: `DARK_CONFIG_RUNDIR` plus `logs/`, defaulting to `./logs/`. Replace the dedicated builtin upstream with ordinary Dark environment/path code, preserving the absolute-path requirement when the variable is set. It does not create the directory. User directed deferral; no compiler builtin was added. |
+
+Other declarations in the Clear and Telemetry packages remain individually
+unreviewed. Retain `Clear.execute` and `Telemetry.logFilePath` in the final
+unresolved list with this upstream-refactoring reason.
 
 ## Decisions
 
@@ -331,6 +334,230 @@ underflowed its reference count on repeated separate key reads. Standalone
 `String.dropLast` on runtime input passed. The compiler implementation uses owned
 chunks to avoid that failure; the original loop's ownership bug remains to
 investigate and is not claimed fixed generally.
+
+## Monotonic milliseconds
+
+`Darklang.Cli.Telemetry.now` in `packages/darklang/cli/telemetry.dark` failed
+with `Unknown function or value 'Builtin.timeNowMs'`. Per user direction,
+`Builtin.timeNowMs` now calls the existing syscall-backed
+`Stdlib.__Network.monotonicMillis`, converts successful `Int64` milliseconds
+to `Int`, and crashes with the errno if the clock cannot be read. It does not
+add a syscall or use wall-clock time; only elapsed differences are meaningful.
+
+All five focused E2E cases fail with the missing builtin when the adapter is
+disabled and pass with it enabled: nonnegative Int results, ordered calls,
+elapsed time across sleep, the original package signatures, and repeated reads.
+The unchanged original `now` and `elapsedMs` bodies compile and run in isolation
+with clean leak checks. Full Linux x86-64 host suite: 11900/11900 passed.
+Native `dune runtest --cache=disabled -j 1` passed, and all 58 benchmark
+compile/run workloads passed with clean leak checks. Cachegrind equivalence
+remains waived. A fresh `_build-time-validated` directory was used for the host
+suite and native checks after stale VM build artifacts retained an old test
+runner. No backend changes were required; other targets were not executed.
+
+The deferred `Telemetry.logFilePath` value still prevents compiling the
+unchanged whole Telemetry package; this fix covers its clock function only.
+
+## Compiler build identity
+
+`Darklang.Cli.Installation.Helpers.buildHash` in
+`packages/darklang/cli/installation/helpers.dark` failed with
+`Unknown function or value 'Builtin.getBuildHash'`. Per user direction, the
+compiler embeds Git's abbreviated revision during its build. The same
+stamp supplies `Builtin.getBuildHash` in generated programs and the compiler's
+`--version` output. Builds without Git metadata use `dev`, matching the
+interpreter's development fallback. Neither a copied compiler nor its generated
+programs invoke Git or read repository files to determine their identity.
+
+Validation: all three focused E2E cases fail on the unchanged compiler with
+the missing builtin and pass with the adapter. The unchanged upstream
+`buildHash` and `cliVersion` bodies compile and run with clean leak checks,
+returning `alpha-` plus the compiler's embedded stamp. The whole Helpers source
+compiles with its original GitHub dependencies included; its network update
+check has not been executed. Generator tests cover revision refresh, absent
+Git metadata and absent Git executable. The copied compiler and generated
+program retain the same stamp without Git on PATH.
+
+Full Linux x86-64 host suite: 11913/11913 passed. Native `dune runtest
+--cache=disabled -j1`, changed OCaml formatting, and all 58 benchmark
+compile/run workloads passed with clean leak checks. Cachegrind equivalence
+remains waived; other targets were not executed. The VM dropped the generated
+test runner's executable bit after rebuilding; restoring that bit allowed the
+already-built full suite to run. No toolchain source changes were required.
+
+## Runtime executable path
+
+`Darklang.Stdlib.Cli.Sys.currentExecutablePath` in
+`packages/darklang/stdlib/cli/sys.dark` failed with
+`Unknown function or value 'Builtin.getCurrentExecutablePath'`.
+`Darklang.Cli.Installation.System.getInstallationMode` also failed because the
+compiler did not expose the public wrapper. Per user direction, both now use
+runtime OS discovery on every compiler target: Linux x86-64 and ARM64 use
+`readlinkat` on `/proc/self/exe`; macOS ARM64 uses Darwin `proc_info` with
+`PROC_INFO_CALL_PIDINFO` and `PROC_PIDPATHINFO`, the kernel operation behind
+`proc_pidpath`. No libc, loader library, shell command, embedded install path,
+or `argv[0]` guess is used. Linux grows a full buffer and retries interrupted
+calls; Darwin uses its 4096-byte maximum buffer. Temporary mappings are freed,
+and OS failures raise a language exception, matching the upstream String API.
+
+All three focused E2E cases reproduce the missing builtin on the baseline.
+All three target images compile. Relocation regressions pass on both Linux
+architectures under pinned QEMU, covering copy, rename, symlinks, UTF-8 paths,
+long paths, forced buffer growth and forged `argv[0]`, with clean leak checks.
+The unchanged `getInstallationMode` body and its dependencies compile.
+macOS execution remains unverified because this VM has no macOS runtime.
+
+Full x86-64 suite: 11916/11916 passed. The VM has no procfs, so a temporary,
+untracked execution adapter routes only generated images containing
+`/proc/self/exe` through QEMU; the remaining tests run natively. Without that
+adapter, the three new cases report the expected missing-procfs OS error.
+Emulating the whole suite instead exposed one unrelated QUIC closing-cache
+timing assertion (100 ms cooldown); all seven cases pass natively. No QUIC
+code or test was changed. A clean worktree avoids stale read-only VM build
+artifacts; the adapter also repairs the repeatedly dropped executable bit on
+the generated test compiler driver.
+
+All 58 quick/full benchmark workloads pass natively on Linux x86-64, and all
+58 pass on Linux ARM64 under QEMU, with clean leak checks. Changed OCaml files
+pass formatting. Native `dune runtest --cache=disabled -j1` passed with the
+same temporary VM adapter. Cachegrind equivalence remains waived.
+
+## Current-user builtin fallback
+
+The original `Darklang.Stdlib.Cli.Sys.currentUser` body failed to compile because
+`Builtin.posixGetCurrentUserName` was absent. The user explicitly approved
+implementing this item despite the general deferred-builtin category.
+The builtin now reuses the compiler's native UID and `/etc/passwd` lookup;
+the public wrapper preserves LOGNAME, then USER, then builtin precedence.
+No environment override affects the builtin itself. Missing or unreadable
+passwd data and an unmatched UID return None. This retains the compiler's
+existing account-lookup limitation: NSS-only and macOS Directory Services
+accounts are not resolved, unlike the interpreter's getpwuid-based lookup.
+
+Six focused E2E tests cover builtin independence from environment overrides,
+public precedence, fallback with both variables absent, and malformed or
+unmatched passwd entries. Before the fix, the two builtin cases failed with
+an unknown-function diagnostic. After the fix all six pass. The unchanged
+upstream currentUser body compiles and runs with LOGNAME and USER removed,
+returning Some("root") on this host with clean leak accounting.
+Full host suite: 12449/12449 passed. Native Dune regressions passed, and
+all 58 benchmark workloads compiled and ran with clean leak accounting.
+The prior executable-path VM adapter was used for host/native checks;
+benchmark workloads ran natively. Cachegrind equivalence remains waived.
+
+## CPU-count builtin
+
+The original `Darklang.Stdlib.Cli.Sys.cpuCount` body failed to compile because
+`Builtin.posixCpuCount` was absent. The user explicitly approved this item
+rather than deferring the existing-implementation builtin mismatch.
+The builtin now converts the existing native CPU-count primitive's Int64
+result to Int, and the public wrapper calls it. Linux counts the process CPU
+affinity mask; macOS queries HW_AVAILCPU. This preserves existing compiler
+behavior, including its minimum-one fallback, without libc or shell commands.
+The interpreter uses sysconf's online CPU count, so affinity-restricted Linux
+hosts can still report a different count between implementations.
+
+Two focused E2E tests failed with the missing-builtin diagnostic before the
+fix and pass afterward: a positive Int result and equality with the public API.
+The unchanged upstream body compiles and runs, returning 9 on this host with
+clean leak accounting. Full host suite: 12451/12451 passed. Native Dune
+regressions passed; all 58 benchmark workloads compiled and ran with clean
+leak accounting. The existing executable-path VM adapter was used for the
+host/native gates; benchmark workloads ran natively. Cachegrind equivalence
+remains waived. Other target runtimes were not executed for this change.
+
+## PID builtin (merged before executable-path follow-up)
+
+The original `Darklang.Stdlib.Cli.Sys.currentPid` body failed to compile with
+`Unknown function or value 'Builtin.posixGetpid'` on main `f2e57de`.
+The user approved exposing the existing native PID implementation. The builtin
+now converts `Stdlib.Cli.__getpid` from Int64 to Int, and the public wrapper
+calls the builtin. No libc, shell command, or backend change is required.
+Three focused E2E cases cover a positive PID, equality with the public wrapper,
+and repeated-call stability. All three fail with the missing-builtin diagnostic
+on the baseline and pass with the fix. An independently launched compiled
+program reports the exact child PID recorded by its parent, with clean leak
+accounting. All 58 benchmark workloads compile and run with clean leak checks.
+
+Workspace maintenance removed the previous toolchain and QEMU/procfs execution
+adapter. The native toolchain was restored and passed all 98 locked-package and
+Unix/native smoke checks. The full host suite reports 12451 passed and three
+existing executable-path failures because this VM has no `/proc/self/exe`.
+Those same three failures reproduce on the baseline. The native Dune
+executable-path regression also fails on that missing-procfs OS error.
+The initial native run additionally hit a generated EmbeddedStdlib permission
+error; making that generated file writable allowed the retry to proceed.
+Per user direction, PR #52 was merged at `14b3040d8f9c61e80c4681902786a3c42438dc69` before addressing those existing failures. Cachegrind equivalence remains waived.
+
+## Executable discovery without procfs
+
+The user approved this fallback order after the PID merge: Linux
+`/proc/self/exe`, then Linux `AT_EXECFN`, then an `argv[0]` containing `/`, then
+an executable matching bare `argv[0]` in startup `PATH`, then an explicit
+language exception. macOS keeps Darwin `proc_info` first and uses the same
+argv/PATH fallback. The original runtime-path implementation above describes
+PR #48; this follow-up removes its dependency on procfs being mounted.
+
+The compiler inserts a call to `Builtin.__initializeExecutablePath` before
+user entry when executable discovery is reachable. Two private native
+operations expose the original argc stack address and an unmanaged 8192-byte
+cache reserved alongside runtime state. Dark reads the kernel launch arguments
+and Linux auxiliary vector, captures cwd/PATH, and immediately resolves the
+fallback. No managed object survives in the cache. Later API calls still try
+the native kernel lookup first, then return a copy of the cached fallback.
+
+The resolver walks path components, follows relative and absolute symlinks,
+handles `.` and `..`, caps symlink traversals at 40, and requires a regular
+file with OS executable access. PATH search skips inaccessible and
+non-executable entries, respects directory order, and interprets empty entries
+as startup cwd. A missing or null `AT_EXECFN` proceeds to argv/PATH. Missing
+inputs and failed resolution leave the cache absent; native discovery failure
+then raises an exception instead of returning an invented path.
+
+This is a launch-time fallback: if the executable is renamed or deleted after
+startup and kernel discovery is unavailable, the cached path can describe its
+former location. Discovery cannot recover an intentionally forged argv name
+when both the kernel path and `AT_EXECFN` are unavailable. Resolved paths that
+exceed the cache's 8175-byte payload are treated as unavailable.
+
+The focused tests cover canonical and relative candidates, fallback precedence,
+startup initialization, missing/null auxiliary entries, and explicit failure.
+Independent launch regressions cover copy, rename before launch, symlinks,
+Unicode/long paths, tiny procfs buffers, misleading argv, relative launches,
+cwd/PATH mutation before the first public API call, absent auxiliary input,
+PATH order/empty entries, non-executable files, directories and symlink loops.
+All three native target images are compiled; this VM runs Linux x86-64 only.
+After integrating main through PR #54, the complete host suite passes
+13138/13138 tests and all 58 benchmark workloads
+compile/run with clean leak checks. Cachegrind equivalence remains waived.
+
+## UID builtin
+
+The original `packages/darklang/stdlib/cli/sys.dark` declaration is:
+
+```dark
+let isRoot () : Bool =
+  (Builtin.posixGetuid ()) == 0
+```
+
+Its original expression failed with
+`Unknown function or value 'Builtin.posixGetuid'`. All three focused UID E2E
+cases reproduce that diagnostic before the fix. The user approved adding the
+adapter: `Builtin.posixGetuid` converts the existing native `Stdlib.Cli.__getuid`
+result from Int64 to Int, and the public wrapper now uses the original body.
+The native real-user UID syscall already exists on Linux x86-64, Linux ARM64,
+and macOS ARM64; this change adds no libc or backend dependency.
+
+The focused tests check a nonnegative UID, public-wrapper agreement, and stable
+repeated calls. A native regression compares the exact UID and both original
+and public `isRoot` results with Python's OS UID, including misleading USER and
+LOGNAME values, with leak checks enabled. All three focused cases pass, the
+independent native UID regression passes, the full host suite passes
+13164/13164 tests, and all native Dune regression aliases pass. All 58 benchmark
+workloads compile and run with clean leak checks; Cachegrind equivalence remains
+waived. UID probes compile for all three native targets; Linux x86-64 execution
+matches the OS UID with clean leak accounting. Other target runtimes were not
+executed.
 
 ## Completion rule
 

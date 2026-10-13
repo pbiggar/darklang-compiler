@@ -2,6 +2,9 @@
 
 module Darklang.Stdlib.String
 
+// Ordinal UTF-16 ordering; only the sign of the result is significant.
+let compare (left: String) (right: String) : Int64 = __compare left right
+
 val newline = "\n"
 
 // Internal byte primitives. Public text functions never expose these indexes.
@@ -18,7 +21,7 @@ let __byteAtUnchecked (value: String) (index: Int64) : Int64 =
 let __decodeUtf8At (value: String) (index: Int64) : (Int64 * Int64) =
     match Stdlib.String.__Unicode.decodeAt value index with
     | Ok decoded -> decoded
-    | Error _ -> Builtin.testRuntimeError "Invalid UTF-8 string"
+    | Error _ -> Builtin.crash "Invalid UTF-8 string"
 
 let __copyBytesToPtr (source: String) (sourceStart: Int64) (destination: RawPtr) (destinationStart: Int64) (count: Int64) : Unit =
     if count <= 0L then ()
@@ -59,7 +62,7 @@ let __substring (value: String) (start_: Int64) (end_: Int64) : String =
     let actualEnd = if end_ < actualStart then actualStart else if end_ > length then length else end_ in
     if Stdlib.String.__isUtf8Boundary value actualStart && Stdlib.String.__isUtf8Boundary value actualEnd then
         Stdlib.String.__Unicode.normalizeValid (Stdlib.String.__byteSlice value actualStart actualEnd)
-    else Builtin.testRuntimeError "String byte index is not a UTF-8 scalar boundary"
+    else Builtin.crash "String byte index is not a UTF-8 scalar boundary"
 
 let __compareBytes (left: String) (leftStart: Int64) (right: String) (rightStart: Int64) (count: Int64) : Bool =
     if count <= 0L then true
@@ -102,10 +105,10 @@ let __byteLastIndexOf (value: String) (search: String) : Stdlib.Option.Option<In
 let __utf8ByteLength (codepoint: Int64) : Int64 =
     if codepoint < 128L then 1L else if codepoint < 2048L then 2L else if codepoint < 65536L then 3L else 4L
 
-let __totalUtf8Length (codepoints: List<Int64>) : Int64 =
+let __totalUtf8Length (codepoints: List<Int64>) (total: Int64) : Int64 =
     match codepoints with
-    | [] -> 0L
-    | codepoint :: rest -> Stdlib.String.__utf8ByteLength codepoint + Stdlib.String.__totalUtf8Length rest
+    | [] -> total
+    | codepoint :: rest -> Stdlib.String.__totalUtf8Length rest (total + Stdlib.String.__utf8ByteLength codepoint)
 
 let __encodeUtf8At (pointer: RawPtr) (offset: Int64) (codepoint: Int64) : Int64 =
     if codepoint < 128L then
@@ -130,7 +133,7 @@ let __encodeCodepoints (pointer: RawPtr) (offset: Int64) (codepoints: List<Int64
         Stdlib.String.__encodeCodepoints pointer (Stdlib.String.__encodeUtf8At pointer offset codepoint) rest
 
 let __fromCodepointsRaw (codepoints: List<Int64>) : String =
-    let byteLength = Stdlib.String.__totalUtf8Length codepoints in
+    let byteLength = Stdlib.String.__totalUtf8Length codepoints 0L in
     if byteLength == 0L then ""
     else
         let dataSize = Stdlib.String.__alignedDataSize byteLength in
@@ -147,12 +150,12 @@ let __allScalars (codepoints: List<Int64>) : Bool =
 
 let __fromCodepoints (codepoints: List<Int64>) : String =
     if Stdlib.String.__allScalars codepoints then Stdlib.String.__Unicode.normalizeValid (Stdlib.String.__fromCodepointsRaw codepoints)
-    else Builtin.testRuntimeError "Invalid Unicode scalar"
+    else Builtin.crash "Invalid Unicode scalar"
 
 let __toCodepoints (value: String) : List<Int64> =
     match Stdlib.String.__Unicode.decode value with
     | Ok codepoints -> codepoints
-    | Error _ -> Builtin.testRuntimeError "Invalid UTF-8 string"
+    | Error _ -> Builtin.crash "Invalid UTF-8 string"
 
 let __codepointLength (value: String) : Int64 =
     Stdlib.List.__length (Stdlib.String.__toCodepoints value)
@@ -252,9 +255,9 @@ let isEmpty (value: String) : Bool = Stdlib.String.__byteLength value == 0L
 let __intToInt64 (value: Int) : Int64 =
     match Stdlib.Int.toInt64 value with
     | Some converted -> converted
-    | None -> Builtin.testRuntimeError "String index did not fit Int64"
+    | None -> Builtin.crash "String index did not fit Int64"
 
-let __asChar (value: String) : Char = value
+let __asChar (value: String) : Char = __string_to_char_unchecked value
 
 let toList (value: String) : List<Char> =
     Stdlib.List.map (Stdlib.String.__toGraphemes value) Stdlib.String.__asChar
@@ -312,7 +315,7 @@ let byteSlice (value: String) (start_: Int64) (end_: Int64) : String =
     let actualEnd = if end_ < actualStart then actualStart else if end_ > length then length else end_ in
     if Stdlib.String.__isUtf8Boundary value actualStart && Stdlib.String.__isUtf8Boundary value actualEnd then
         Stdlib.String.__normalizeAfterConcat (Stdlib.String.__byteSlice value actualStart actualEnd)
-    else Builtin.testRuntimeError "String byte index is not a UTF-8 scalar boundary"
+    else Builtin.crash "String byte index is not a UTF-8 scalar boundary"
 
 /// Compare equal-length byte ranges without allocating either range.
 let byteRangesEqual (left: String) (leftStart: Int64) (right: String) (rightStart: Int64) (count: Int64) : Bool =
@@ -561,18 +564,16 @@ let replaceAll (value: String) (search: String) (replacement: String) : String =
     if Stdlib.String.isEmpty search then Stdlib.String.__replaceEmpty (Stdlib.String.__toGraphemes value) replacement ""
     else Stdlib.String.join (Stdlib.String.split value search) replacement
 
-let __egcWhitespace (grapheme: String) : Bool =
-    match Stdlib.String.__toCodepoints grapheme with
-    | [codepoint] -> Stdlib.String.__Unicode.isWhitespace codepoint
-    | _ -> false
-
-let __trimStart (graphemes: List<String>) : List<String> =
-    match graphemes with
-    | head :: rest -> if Stdlib.String.__egcWhitespace head then Stdlib.String.__trimStart rest else graphemes
+// Whitespace is a codepoint property even when a grapheme contains CRLF or marks.
+let __trimStartCodepoints (codepoints: List<Int64>) : List<Int64> =
+    match codepoints with
+    | head :: rest ->
+        if Stdlib.String.__Unicode.isWhitespace head then Stdlib.String.__trimStartCodepoints rest
+        else codepoints
     | [] -> []
 
-let __trimEnd (graphemes: List<String>) : List<String> =
-    Stdlib.List.reverse (Stdlib.String.__trimStart (Stdlib.List.reverse graphemes))
+let __trimEndCodepoints (codepoints: List<Int64>) : List<Int64> =
+    Stdlib.List.reverse (Stdlib.String.__trimStartCodepoints (Stdlib.List.reverse codepoints))
 
 let __asciiWhitespace (byte: Int64) : Bool =
     byte == 9L || byte == 10L || byte == 11L || byte == 12L || byte == 13L || byte == 32L
@@ -600,13 +601,13 @@ let trimStart (value: String) : String =
     match Stdlib.String.__asciiTrimStartBoundary value 0L length with
     | Some 0L -> value
     | Some start_ -> Stdlib.String.__byteSlice value start_ length
-    | None -> Stdlib.String.join (Stdlib.String.__trimStart (Stdlib.String.__toGraphemes value)) ""
+    | None -> Stdlib.String.__fromCodepoints (Stdlib.String.__trimStartCodepoints (Stdlib.String.__toCodepoints value))
 
 let trimEnd (value: String) : String =
     let length = Stdlib.String.__byteLength value in
     match Stdlib.String.__asciiTrimEndBoundary value length with
     | Some end_ -> if end_ == length then value else Stdlib.String.__byteSlice value 0L end_
-    | None -> Stdlib.String.join (Stdlib.String.__trimEnd (Stdlib.String.__toGraphemes value)) ""
+    | None -> Stdlib.String.__fromCodepoints (Stdlib.String.__trimEndCodepoints (Stdlib.String.__toCodepoints value))
 
 let trim (value: String) : String =
     let length = Stdlib.String.__byteLength value in
@@ -614,7 +615,7 @@ let trim (value: String) : String =
     | (Some start_, Some end_) ->
         if start_ == 0L && end_ == length then value
         else Stdlib.String.__byteSlice value start_ end_
-    | _ -> Stdlib.String.join (Stdlib.String.__trimEnd (Stdlib.String.__trimStart (Stdlib.String.__toGraphemes value))) ""
+    | _ -> Stdlib.String.__fromCodepoints (Stdlib.String.__trimEndCodepoints (Stdlib.String.__trimStartCodepoints (Stdlib.String.__toCodepoints value)))
 
 let padStart (value: String) (padWith: String) (goalLength: Int) : Stdlib.Result.Result<String, String> =
     if Stdlib.String.length padWith != Stdlib.Int.fromInt64 1L then
@@ -627,6 +628,15 @@ let padEnd (value: String) (padWith: String) (goalLength: Int) : Stdlib.Result.R
         Error ("Expected `padWith` to be 1 character long, but it was `\"" ++ padWith ++ "\"`")
     else if Stdlib.String.length value >= goalLength then Ok value
     else Ok (value ++ Stdlib.String.repeat padWith (goalLength - Stdlib.String.length value))
+
+// Pad to display cells without clipping text that already meets the target width.
+let padStartToWidth (value: String) (width: Int) : String =
+    let padding = width - Stdlib.String.displayWidth value in
+    if padding <= 0 then value else Stdlib.String.repeat " " padding ++ value
+
+let padEndToWidth (value: String) (width: Int) : String =
+    let padding = width - Stdlib.String.displayWidth value in
+    if padding <= 0 then value else value ++ Stdlib.String.repeat " " padding
 
 let ellipsis (value: String) (goalLength: Int) : String =
     if Stdlib.String.length value > goalLength then Stdlib.String.slice value (Stdlib.Int.fromInt64 0L) goalLength ++ "..."
@@ -702,7 +712,9 @@ let __decodeBlobWithReplacement (blob: Blob) (index: Int64) (acc: List<Int64>) :
         else Stdlib.String.__decodeBlobWithReplacement blob (index + 1L) (Stdlib.List.push acc 65533L)
 
 let fromBlobWithReplacement (blob: Blob) : String =
-    Stdlib.String.__Unicode.normalizeValid (Stdlib.String.__fromCodepointsRaw (Stdlib.String.__decodeBlobWithReplacement blob 0L []))
+    let copied = Stdlib.Blob.__copyToString blob in
+    if Stdlib.String.__isAscii copied then copied
+    else Stdlib.String.__Unicode.normalizeValid (Stdlib.String.__fromCodepointsRaw (Stdlib.String.__decodeBlobWithReplacement blob 0L []))
 
 let fromBytes (bytes: List<UInt8>) : Stdlib.Option.Option<String> =
     Stdlib.String.fromBlob (Stdlib.Blob.fromList bytes)

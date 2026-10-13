@@ -78,17 +78,17 @@ let __hexEncode (blob: Blob) (index: Int64) (length: Int64) (acc: String) : Stri
 let __int64ToUInt8 (value: Int64) : UInt8 =
     match Stdlib.Int.toUInt8 (Stdlib.Int.fromInt64 value) with
     | Some converted -> converted
-    | None -> Builtin.testRuntimeError "Blob byte did not fit UInt8"
+    | None -> Builtin.crash "Blob byte did not fit UInt8"
 
 let __uint8ToInt64 (value: UInt8) : Int64 =
     match Stdlib.Int.toInt64 (Stdlib.Int.fromUInt8 value) with
     | Some converted -> converted
-    | None -> Builtin.testRuntimeError "UInt8 did not fit Int64"
+    | None -> Builtin.crash "UInt8 did not fit Int64"
 
 let __intToInt64 (value: Int) : Int64 =
     match Stdlib.Int.toInt64 value with
     | Some converted -> converted
-    | None -> Builtin.testRuntimeError "Clamped Blob index did not fit Int64"
+    | None -> Builtin.crash "Clamped Blob index did not fit Int64"
 
 let length (blob: Blob) : Int =
     Stdlib.Int.fromInt64 (Stdlib.Blob.__byteLength blob)
@@ -110,18 +110,35 @@ let __fromList (bytes: List<UInt8>) (acc: List<Int64>) : Blob =
 let fromList (bytes: List<UInt8>) : Blob =
     Stdlib.Blob.__fromList bytes []
 
-let __appendBlob (blob: Blob) (index: Int64) (acc: List<Int64>) : List<Int64> =
-    if index >= Stdlib.Blob.__byteLength blob then acc
-    else Stdlib.Blob.__appendBlob blob (index + 1L) (Stdlib.List.push acc (Stdlib.Blob.__getByte blob index))
+// Copy into the final immutable allocation, not a boxed list node per byte.
+let __copyRange (src: RawPtr) (start: Int64) (dest: RawPtr) (offset: Int64) (remaining: Int64) : Unit =
+    if remaining <= 0L then ()
+    else
+        let _ = __raw_write_byte dest offset (__raw_get_byte src start) in
+        Stdlib.Blob.__copyRange src (start + 1L) dest (offset + 1L) (remaining - 1L)
 
-let __concat (blobs: List<Blob>) (acc: List<Int64>) : Blob =
+let __fromBuffer (ptr: RawPtr) (start: Int64) (length: Int64) : Blob =
+    let blob = Stdlib.Blob.__createZeroed length in
+    let _ = Stdlib.Blob.__copyRange ptr start (__blob_to_rawptr blob) 16L length in
+    blob
+
+let __totalBytes (blobs: List<Blob>) (total: Int64) : Int64 =
     match blobs with
-    | [] -> Stdlib.Blob.__fromInt64List (Stdlib.List.reverse acc)
+    | [] -> total
+    | blob :: rest -> Stdlib.Blob.__totalBytes rest (total + Stdlib.Blob.__byteLength blob)
+
+let __concatInto (blobs: List<Blob>) (ptr: RawPtr) (offset: Int64) : Unit =
+    match blobs with
+    | [] -> ()
     | blob :: rest ->
-        Stdlib.Blob.__concat rest (Stdlib.Blob.__appendBlob blob 0L acc)
+        let length = Stdlib.Blob.__byteLength blob in
+        let _ = Stdlib.Blob.__copyRange (__blob_to_rawptr blob) 16L ptr offset length in
+        Stdlib.Blob.__concatInto rest ptr (offset + length)
 
 let concat (blobs: List<Blob>) : Blob =
-    Stdlib.Blob.__concat blobs []
+    let blob = Stdlib.Blob.__createZeroed (Stdlib.Blob.__totalBytes blobs 0L) in
+    let _ = Stdlib.Blob.__concatInto blobs (__blob_to_rawptr blob) 16L in
+    blob
 
 let slice (blob: Blob) (start: Int) (length: Int) : Blob =
     let zero = Stdlib.Int.fromInt64 0L in
@@ -129,8 +146,8 @@ let slice (blob: Blob) (start: Int) (length: Int) : Blob =
     let safeStart = if start < zero then zero else if start > blobLength then blobLength else start in
     let remaining = blobLength - safeStart in
     let safeLength = if length < zero then zero else if length > remaining then remaining else length in
-    Stdlib.Blob.__fromInt64List (
-        Stdlib.List.take (Stdlib.List.drop (Stdlib.Blob.__toInt64List blob) safeStart) safeLength)
+    Stdlib.Blob.__fromBuffer (__blob_to_rawptr blob)
+        (16L + Stdlib.Blob.__intToInt64 safeStart) (Stdlib.Blob.__intToInt64 safeLength)
 
 let toHex (blob: Blob) : String =
     Stdlib.Blob.__hexEncode blob 0L (Stdlib.Blob.__byteLength blob) ""

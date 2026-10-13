@@ -4,7 +4,6 @@ val int64IntrinsicModule : AST.moduleDef
 val floatIntrinsicModule : AST.moduleDef
 val resultType : AST.semanticType -> AST.semanticType
 val cliIntrinsicModule : AST.moduleDef
-val fileIntrinsicModule : AST.moduleDef
 val networkIntrinsicModule : AST.moduleDef
 val randomModule : AST.moduleDef
 val dateTimeModule : AST.moduleDef

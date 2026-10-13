@@ -12,8 +12,10 @@ Stdlib.Result.Result.Error(Builtin.testRuntimeError "err") = error="Uncaught exc
 
 module Errors =
   module Builtins =
+    #compileerror="Constructor 'Darklang.Stdlib.Option.Option.None' expects 0 fields"
     Stdlib.Option.Option.None 5 = error="Expected 0 fields in Darklang.Stdlib.Option.Option.`None`, but got 1"
 
+    #compileerror="Constructor 'Darklang.Stdlib.Option.Option.Some' expects 1 fields"
     Stdlib.Option.Option.Some(5, 6) = error="Expected 1 fields in Darklang.Stdlib.Option.Option.`Some`, but got 2"
 
   module User =
@@ -101,6 +103,7 @@ module TuplesVsNonTuples =
   (match Tuples.NotTuple("printer broke", 7L) with
    | NotTuple(reason, 7L) -> reason) = compileerror="Non-exhaustive match expression"
 
+  #compileerror="Constructor 'Tuples.NotTuple' expects 2 fields"
   (Tuples.NotTuple(("printer broke", 7L))) = error="Expected 2 fields in TuplesVsNonTuples.Tuples.`NotTuple`, but got 1"
 
   (match Tuples.Tuple(("printer broke", 7L)) with

@@ -2,9 +2,9 @@
 
 module Darklang.Stdlib.Char
 
-let toString (char: Char) : String = char
+let toString (char: Char) : String = __char_to_string char
 
-let __asChar (value: String) : Char = value
+let __asChar (value: String) : Char = __string_to_char_unchecked value
 
 let toUppercase (char: Char) : Char =
     Stdlib.Char.__asChar (Stdlib.String.__Unicode.uppercase (Stdlib.Char.toString char))
@@ -38,7 +38,7 @@ let isLetter (char: Char) : Bool =
 
 let isAlphanumeric (char: Char) : Bool =
     match Stdlib.Char.__firstCodepoint char with
-    | Some codepoint -> Stdlib.String.__Unicode.isLetter codepoint || Stdlib.String.__Unicode.isNumber codepoint
+    | Some codepoint -> Stdlib.String.__Unicode.isLetter codepoint || Stdlib.String.__Unicode.generalCategory codepoint == Stdlib.String.__Unicode.__Data.GeneralCategory.Nd
     | None -> false
 
 let isWhitespace (char: Char) : Bool =
@@ -52,10 +52,10 @@ let toCodepoint (char: Char) : Stdlib.Option.Option<Int> =
     | _ -> None
 
 let toAsciiCode (char: Char) : Stdlib.Option.Option<Int> =
-    match Stdlib.Char.__firstCodepoint char with
-    | Some codepoint ->
-        if codepoint >= 0L && codepoint <= 255L then Some (Stdlib.Int.fromInt64 codepoint) else None
-    | None -> None
+    match Stdlib.String.__toCodepoints (Stdlib.Char.toString char) with
+    | [codepoint] ->
+        if codepoint >= 0L && codepoint < 128L then Some (Stdlib.Int.fromInt64 codepoint) else None
+    | _ -> None
 
 let isASCII (char: Char) : Bool =
     match Stdlib.Char.toAsciiCode char with

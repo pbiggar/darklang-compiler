@@ -66,6 +66,8 @@ def inject_interpreter_arguments(source: str, arguments: tuple[str, ...]) -> str
 def adapt_interpreter_source(source: str, arguments: tuple[str, ...]) -> str:
     """Translate compiler compatibility syntax to the current interpreter surface."""
     transformed = inject_interpreter_arguments(source, arguments)
+    # The diagnostic source runs in the interpreter, whose failure builtin differs.
+    transformed = transformed.replace("Builtin.crash", "Builtin.testRuntimeError")
     transformed = SINGLE_VALUE_DICT_PATTERN.sub(r"Dict<String, \1>", transformed)
     transformed = SINGLE_VALUE_DICT_FUNCTION_PATTERN.sub(
         r"\1<String, \2>", transformed

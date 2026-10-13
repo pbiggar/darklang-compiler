@@ -2,7 +2,7 @@
 
 [Source fixture](../../../../test/fixtures/e2e/upstream/stdlib/list.dark) · [File list](../../current-audit.md)
 
-Executed 220 assertions: **215 passed, 5 failed**.
+Executed 220 assertions: **211 passed, 9 failed**.
 
 ## Deferred test-only builtins
 
@@ -23,3 +23,7 @@ tests at present. This is missing test instrumentation, not evidence that
 | [L71](../../../../test/fixtures/e2e/upstream/stdlib/list.dark#L71) — Stdlib.List.iter [] (fun x -> Builtin.testIncrementSideEffectCounter ()) Builtin.testSideEffectCount () | Unknown function or value 'Builtin.testIncrementSideEffectCounter' |
 | [L75](../../../../test/fixtures/e2e/upstream/stdlib/list.dark#L75) — Stdlib.List.iter [ 10L, 20L, 30L ] (fun x -> Builtin.testIncrementSideEffectCounter () Builtin.testIncremen... | Unknown function or value 'Builtin.testIncrementSideEffectCounter' |
 | [L81](../../../../test/fixtures/e2e/upstream/stdlib/list.dark#L81) — Stdlib.List.iter [ 1L, 2L, 3L ] (fun x -> if x > 2L then Builtin.testIncrementSideEffectCounter ()) Builtin... | Unknown function or value 'Builtin.testIncrementSideEffectCounter' |
+| [L157](../../../../test/fixtures/e2e/upstream/stdlib/list.dark#L157) — Stdlib.List.head [ Builtin.testRuntimeError "test" ] | Unsupported interpreter test infrastructure: `Unknown function or value 'Builtin.testRuntimeError'` |
+| [L184](../../../../test/fixtures/e2e/upstream/stdlib/list.dark#L184) — Stdlib.List.last [ Builtin.testRuntimeError "test" ] | Unsupported interpreter test infrastructure: `Unknown function or value 'Builtin.testRuntimeError'` |
+| [L238](../../../../test/fixtures/e2e/upstream/stdlib/list.dark#L238) — Stdlib.List.randomElement [ Builtin.testRuntimeError "test" ] | Unsupported interpreter test infrastructure: `Unknown function or value 'Builtin.testRuntimeError'` |
+| [L346](../../../../test/fixtures/e2e/upstream/stdlib/list.dark#L346) — Stdlib.List.zip [ Builtin.testRuntimeError "msg" ] [ Some "" ] | Unsupported interpreter test infrastructure: `Unknown function or value 'Builtin.testRuntimeError'` |

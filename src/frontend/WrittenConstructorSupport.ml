@@ -42,14 +42,28 @@ let check checkExpression literal globals locals symbols expected
           (S.of_list entry.params) field.typ)
       variant.fields
   in
-  let rec fieldsForInference (entry : typeEntry) =
+  let inferArgs canonical params types checked =
+    (* Nested constructors must not bind each other's declaration parameters. *)
+    let freshParams, renaming =
+      CheckingDiagnostics.freshenTypeParams (Some canonical) params
+    in
+    Unification.inferTypeArgs freshParams
+      (List.map (CheckingDiagnostics.applyTypeVarRenaming renaming) types)
+      (List.map fst checked) None None
+  in
+  let rec fieldsForInference canonical (entry : typeEntry) =
     match entry.definition with
     | WT.TDEnum cases -> (
         match findCase cases with
-        | Some (_, variant) when List.length variant.fields = List.length fields
-          ->
-            map Option.some (variantTypes entry variant)
-        | _ -> Ok None)
+        | None ->
+            Error ("Unknown constructor '" ^ canonical ^ "." ^ caseName ^ "'")
+        | Some (_, variant)
+          when List.length variant.fields <> List.length fields ->
+            Error
+              ("Constructor '" ^ canonical ^ "." ^ caseName ^ "' expects "
+              ^ string_of_int (List.length variant.fields)
+              ^ " fields")
+        | Some (_, variant) -> map Option.some (variantTypes entry variant))
     | WT.TDAlias target ->
         bind
           (resolveWrittenType globals.allowInternal globals.types entry.path
@@ -61,7 +75,7 @@ let check checkExpression literal globals locals symbols expected
                     let subst = M.of_list (List.combine entry.params args) in
                     map
                       (Option.map (List.map (Types.applyTypeArguments subst)))
-                      (fieldsForInference entry)
+                      (fieldsForInference target entry)
                 | _ -> Error ("Unknown enum type '" ^ target ^ "'"))
             | _ -> Error "Expected an enum type")
     | _ -> Ok None
@@ -69,18 +83,16 @@ let check checkExpression literal globals locals symbols expected
   let resolved =
     if typeName.typ.name <> "" then
       let inferred =
-        if typeName.typeArgs <> [] then Ok None
-        else
-          bind (findNamedType globals typeName) (fun (_, entry) ->
-              if entry.params = [] then Ok None
-              else
-                bind (fieldsForInference entry) (function
+        bind (findNamedType globals typeName) (fun (canonical, entry) ->
+            bind (fieldsForInference canonical entry) (fun types ->
+                if typeName.typeArgs <> [] || entry.params = [] then Ok None
+                else
+                  match types with
                   | None -> Ok None
                   | Some types ->
                       bind (checkFields symbols fields []) (fun (checked, _) ->
                           map Option.some
-                            (Unification.inferTypeArgs entry.params types
-                               (List.map fst checked) None None))))
+                            (inferArgs canonical entry.params types checked))))
       in
       bind inferred (resolveNamedType globals expected typeName)
     else
@@ -120,8 +132,8 @@ let check checkExpression literal globals locals symbols expected
                             (fun (checked, _) ->
                               map
                                 (fun args -> (canonical, entry, args))
-                                (Unification.inferTypeArgs entry.params types
-                                   (List.map fst checked) None None))))
+                                (inferArgs canonical entry.params types checked)))
+                  )
               | _ -> Error ("Type '" ^ canonical ^ "' is not an enum"))
           | [] -> Error ("Unknown constructor '" ^ caseName ^ "'")
           | _ ->
@@ -150,7 +162,7 @@ let check checkExpression literal globals locals symbols expected
               let subst = M.of_list (List.combine entry.params args) in
               bind
                 (map
-                   (List.map (Types.applySubst subst))
+                   (List.map (Types.applyTypeArguments subst))
                    (variantTypes entry variant))
                 (fun types ->
                   bind (checkFields symbols fields types)

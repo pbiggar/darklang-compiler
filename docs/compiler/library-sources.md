@@ -12,6 +12,22 @@ inventory records source placement and origin, not complete API parity.
 [source organization](source-organization.md#standard-library-layout).
 The rows follow `library-sources.list` declaration order.
 
+The kernel-library migration is described in [kernel-stdlib.md](kernel-stdlib.md).
+Its shared CLI and clock algorithms instead track interpreter PR #5907 at
+`26cab9978740a7f9c9d56ea643f3fade813f079e`; the general compatibility pin above
+still applies to other packages. Check this subset with
+`python3 scripts/sync-kernel-stdlib.py INTERPRETER_CHECKOUT --check`.
+Its native Builtin adapters are `Builtin/__Syscall.dark`, `__Runtime.dark`,
+`__KernelRecords.dark`, `__FileSyscall.dark`, `__PathSyscall.dark`,
+`__SystemSyscall.dark`, `__ClockSyscall.dark`, `__WatchSyscall.dark`, and
+`__ChildRuntime.dark`; shared Dark
+algorithms are checked by `scripts/sync-kernel-stdlib.py`.
+
+Shared algorithms are private `__` declarations in the existing File, Process,
+Posix, Sys and DateTime modules. Syscall and runtime Builtins are called directly;
+there are no public forwarding packages for them. DateTime's clock block is
+shared while each engine retains its own DateTime representation implementation.
+
 A `__` filename marks compiler support or a private implementation fragment.
 It does not rename the declared module or enforce language visibility: that
 is controlled by declaration names and the frontend's internal-mode checks.
@@ -44,12 +60,16 @@ fragments use `__` even where the interpreter also has private helpers.
 | `StdLib/Cli/Posix/StatMode.dark` | `Darklang.Stdlib.Cli.Posix.StatMode`  | `packages/darklang/stdlib/cli/posix.dark` |
 | `StdLib/Cli/FileSystem.dark` | `Darklang.Stdlib.Cli.FileSystem`  | `packages/darklang/stdlib/cli/fileSystem.dark` |
 | `StdLib/Cli/FileSystem/FileError.dark` | `Darklang.Stdlib.Cli.FileSystem.FileError`  | `packages/darklang/stdlib/cli/fileSystem.dark` |
-| `StdLib/Cli/FileSystem/__Packed.dark` | `Darklang.Stdlib.Cli.FileSystem` | Private decoder for native directory adapter |
 | `StdLib/Env.dark` | `Darklang.Stdlib.Env`  | `packages/darklang/stdlib/env.dark` |
-| `StdLib/Builtin.dark` | `Builtin`  | Portable interpreter builtin bridges plus native adapter helpers (`backend/src/Builtins/Builtins.Pure/Libs/UInt64.fs` and `backend/src/Builtins/Builtins.Cli/Libs/{Directory,File,Environment}.fs`) |
+| `StdLib/Builtin.dark` | `Builtin`  | Portable interpreter builtin bridges plus native adapter helpers (`backend/src/Builtins/Builtins.Pure/Libs/{UInt64,String}.fs` and `backend/src/Builtins/Builtins.Cli/Libs/{Directory,File,Environment}.fs`) |
 | `StdLib/Builtin/__Posix.dark` | `Builtin` | Interpreter POSIX builtin bridge (`backend/src/Builtins/Builtins.Cli/Libs/Posix.fs`) |
 | `StdLib/Builtin/__Terminal.dark` | `Builtin` | Native terminal facts, size, color policy, text inspection and stdin interactivity (`backend/src/Builtins/Builtins.Cli/Libs/{Terminal,Stdin}.fs`) |
 | `StdLib/Builtin/__Stdin.dark` | `Builtin` | Interpreter stdin builtin wrappers (`backend/src/Builtins/Builtins.Cli/Libs/Stdin.fs`) |
+| `StdLib/Builtin/__ClockSyscall.dark` | `Builtin` | One-shot clock/sleep kernel adapters and raw event-loop runtime inputs |
+| `StdLib/Builtin/__WatchSyscall.dark` | `Builtin` | Single-call event queue registration and pollfd ABI adaptation |
+| `StdLib/Builtin/__ChildRuntime.dark` | `Builtin` | Owned argv launch, supervision and opaque child byte cells |
+| `StdLib/Builtin/__BuildInfo.dark` | `Builtin` | Compiler revision substituted at build time, corresponding to interpreter `getBuildHash` (`backend/src/Builtins/Builtins.Cli/Libs/Environment.fs`) |
+| `StdLib/Builtin/__Executable.dark` | `Builtin` | Runtime executable path via Linux readlinkat or Darwin proc_info, with captured AT_EXECFN/argv/cwd/PATH fallbacks (`backend/src/Builtins/Builtins.Cli/Libs/Directory.fs`) |
 | `StdLib/Tuple2.dark` | `Darklang.Stdlib.Tuple2`  | `packages/darklang/stdlib/tuple2.dark` |
 | `StdLib/Tuple3.dark` | `Darklang.Stdlib.Tuple3`  | `packages/darklang/stdlib/tuple3.dark` |
 | `StdLib/Result.dark` | `Darklang.Stdlib.Result`  | `packages/darklang/stdlib/result.dark` |
@@ -60,7 +80,6 @@ fragments use `__` even where the interpreter also has private helpers.
 | `StdLib/Fun.dark` | `Darklang.Stdlib.Fun`  | `packages/darklang/stdlib/fun.dark` |
 | `StdLib/Float.dark` | `Darklang.Stdlib.Float`  | `packages/darklang/stdlib/float.dark` |
 | `StdLib/Cli/__Posix.dark` | `Darklang.Stdlib.Cli.__Posix` | Private native syscall boundary for interpreter POSIX operations |
-| `StdLib/Cli/__Fnmatch.dark` | `Darklang.Stdlib.Cli.__Fnmatch` | Private POSIX pattern matching implementation |
 | `StdLib/Cli/Posix.dark` | `Darklang.Stdlib.Cli.Posix`  | `packages/darklang/stdlib/cli/posix.dark` |
 | `StdLib/Cli/Posix/__Error.dark` | `Darklang.Stdlib.Cli.Posix` | Private conversion from the existing native CLI error record |
 | `StdLib/Cli/Posix/OpenFlags.dark` | `Darklang.Stdlib.Cli.Posix.OpenFlags` | `packages/darklang/stdlib/cli/posix.dark` |
@@ -291,6 +310,7 @@ fragments use `__` even where the interpreter also has private helpers.
 | `StdLib/Cli/Env.dark` | `Darklang.Stdlib.Cli.Env`  | `packages/darklang/stdlib/cli/env.dark` |
 | `StdLib/Cli/__Args.dark` | `Darklang.Stdlib.Cli.__Args`  | Compiler positional CLI argument helpers |
 | `StdLib/Cli/Process.dark` | `Darklang.Stdlib.Cli.Process`  | `packages/darklang/stdlib/cli/process.dark` |
+| `StdLib/Cli/__NativeRuntime.dark` | `Darklang.Stdlib.Cli` | Private native startup/environment/kernel prototypes |
 | `StdLib/Cli/Sys.dark` | `Darklang.Stdlib.Cli.Sys`  | `packages/darklang/stdlib/cli/sys.dark` |
 | `StdLib/Cli/Stdin/Key.dark` | `Darklang.Stdlib.Cli.Stdin.Key`  | `packages/darklang/stdlib/cli/stdin.dark` |
 | `StdLib/Cli/Stdin/Modifiers.dark` | `Darklang.Stdlib.Cli.Stdin.Modifiers`  | `packages/darklang/stdlib/cli/stdin.dark` |

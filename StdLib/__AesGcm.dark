@@ -7,7 +7,7 @@ type Bits128 = { hi: Int64, lo: Int64 }
 let __at (bytes: List<Int64>) (index: Int64) : Int64 =
   match Stdlib.List.getAt bytes (Stdlib.Int.fromInt64 index) with
   | Some value -> value
-  | None -> Builtin.testRuntimeError "Invalid AES block shape"
+  | None -> Builtin.crash "Invalid AES block shape"
 
 let __xor (a: Int64) (b: Int64) : Int64 = Stdlib.Int64.bitwiseXor a b
 let __and (a: Int64) (b: Int64) : Int64 = Stdlib.Int64.bitwiseAnd a b

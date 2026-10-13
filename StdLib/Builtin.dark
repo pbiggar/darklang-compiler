@@ -1,6 +1,35 @@
-// Builtin.dark - portable implementations of upstream builtin comparisons.
+// Builtin.dark - portable implementations and native adapters for upstream builtins.
 
 module Builtin
+
+// The interpreter's slugify regex filters codepoints, not whole grapheme clusters.
+// Vertical tab is deliberately discarded even though it is Unicode whitespace.
+let __slugifyFilter (codepoints: List<Int64>) (reversed: List<Int64>) : List<Int64> =
+    match codepoints with
+    | [] -> Stdlib.List.reverse reversed
+    | codepoint :: rest ->
+        let keep =
+            (codepoint >= 97L && codepoint <= 122L) ||
+            (codepoint >= 48L && codepoint <= 57L) ||
+            codepoint == 45L || codepoint == 95L ||
+            (codepoint != 11L && Stdlib.String.__Unicode.isWhitespace codepoint) in
+        Builtin.__slugifyFilter rest (if keep then Stdlib.List.push reversed codepoint else reversed)
+
+let __slugifySeparators (codepoints: List<Int64>) (previousSeparator: Bool) (reversed: List<Int64>) : String =
+    match codepoints with
+    | [] -> Stdlib.String.__fromCodepoints (Stdlib.List.reverse reversed)
+    | codepoint :: rest ->
+        let separator = codepoint == 45L || codepoint == 95L || Stdlib.String.__Unicode.isWhitespace codepoint in
+        let next =
+            if separator then
+                if previousSeparator then reversed else Stdlib.List.push reversed 45L
+            else Stdlib.List.push reversed codepoint in
+        Builtin.__slugifySeparators rest separator next
+
+let stringSlugify (value: String) : String =
+    let filtered = Builtin.__slugifyFilter (Stdlib.String.__toCodepoints (Stdlib.String.toLowercase value)) [] in
+    let trimmed = Stdlib.String.__trimEndCodepoints (Stdlib.String.__trimStartCodepoints filtered) in
+    Builtin.__slugifySeparators trimmed false []
 
 // Current interpreter integer probes call these primitive comparison names.
 // The compiler keeps their typed behavior while implementing them portably.
@@ -10,52 +39,9 @@ let uint64GreaterThanOrEqualTo (a: UInt64) (b: UInt64) : Bool =
 let uint64LessThanOrEqualTo (a: UInt64) (b: UInt64) : Bool =
     Stdlib.UInt64.lessThanOrEqualTo a b
 
-let __fileError (message: String) : Stdlib.Cli.FileSystem.FileError =
-    if message == "File not found" then Stdlib.Cli.FileSystem.FileError.NotFound
-    else if message == "Permission denied" then Stdlib.Cli.FileSystem.FileError.OsAccessDenied
-    else Stdlib.Cli.FileSystem.FileError.Other message
-
-let __fileDeleteError (message: String) : Stdlib.Cli.FileSystem.FileError =
-    if message == "Error" then Stdlib.Cli.FileSystem.FileError.NotFound
-    else Builtin.__fileError message
-
-let __fileOperationError (pathExists: Bool) (message: String) : Stdlib.Cli.FileSystem.FileError =
-    if pathExists then Stdlib.Cli.FileSystem.FileError.OsAccessDenied
-    else Builtin.__fileError message
-
-let __fileDeleteOperationError (pathExists: Bool) (message: String) : Stdlib.Cli.FileSystem.FileError =
-    if pathExists then Stdlib.Cli.FileSystem.FileError.OsAccessDenied
-    else Builtin.__fileDeleteError message
-
-let directoryCurrent () : String = Stdlib.File.currentDirectory ()
-
-let directoryList (path: String) : List<String> =
-    Stdlib.File.listDirectoryPacked path
-    |> Stdlib.Cli.FileSystem.__decodePackedPaths
-
-let fileExists (path: String) : Bool = Stdlib.File.exists path
-
-let fileIsDirectory (path: String) : Bool = Stdlib.File.isDirectory path
-
-let fileDelete (path: String) : Stdlib.Result.Result<Unit, Stdlib.Cli.FileSystem.FileError> =
-    let pathExists = Stdlib.File.exists path in
-    Stdlib.File.delete path |> Stdlib.Result.mapError (Builtin.__fileDeleteOperationError pathExists)
-
-let fileAppendText (path: String) (content: String) : Stdlib.Result.Result<Unit, Stdlib.Cli.FileSystem.FileError> =
-    let pathExists = Stdlib.File.exists path in
-    Stdlib.File.appendText path content |> Stdlib.Result.mapError (Builtin.__fileOperationError pathExists)
-
-let fileRead (path: String) : Stdlib.Result.Result<Blob, Stdlib.Cli.FileSystem.FileError> =
-    let pathExists = Stdlib.File.exists path in
-    Stdlib.File.readBlob path |> Stdlib.Result.mapError (Builtin.__fileOperationError pathExists)
-
-let fileWrite (content: Blob) (path: String) : Stdlib.Result.Result<Unit, Stdlib.Cli.FileSystem.FileError> =
-    let pathExists = Stdlib.File.exists path in
-    Stdlib.File.writeBlob path content |> Stdlib.Result.mapError (Builtin.__fileOperationError pathExists)
-
-let environmentGet (name: String) : Stdlib.Option.Option<String> =
+let runtimeEnvironmentGet (name: String) : Stdlib.Option.Option<String> =
     Stdlib.Cli.__getenv name
 
-let environmentGetAll () : Dict<String, String> =
+let runtimeEnvironmentGetAll () : Dict<String, String> =
     Stdlib.Cli.__environmentPacked ()
     |> Stdlib.Env.__decodePacked

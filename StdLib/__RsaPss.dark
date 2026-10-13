@@ -19,7 +19,7 @@ let __toBytes (value: Int) (remaining: Int64) (acc: List<Int64>) : Blob =
                  (Stdlib.Int.fromInt64 255L) in
     let byte64 = match Stdlib.Int.toInt64 byte with
                  | Some b -> b
-                 | None -> Builtin.testRuntimeError "RSA byte conversion failed" in
+                 | None -> Builtin.crash "RSA byte conversion failed" in
     Stdlib.__RsaPss.__toBytes value (remaining - 1L) (Stdlib.List.push acc byte64)
 
 let __mgf1 (seed: Blob) (length: Int64) (counter: Int64) (acc: List<Blob>) : Blob =

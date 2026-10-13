@@ -80,12 +80,12 @@ let exitOne test =
 
 let testParsesMultilineExpectationOnNextLine () =
   one
-    "(if true then Builtin.testRuntimeError \"a\" else 0L) =\n\
+    "(if true then Builtin.crash \"a\" else 0L) =\n\
     \  error=\"Uncaught exception: a\"\n"
     "Expected multiline .dark-style test to parse" (fun test ->
       let* () =
         require
-          (Text.contains test.source "Builtin.testRuntimeError")
+          (Text.contains test.source "Builtin.crash")
           ("Expected parsed source to contain runtime error expression, got: "
          ^ test.source)
       in
@@ -476,7 +476,7 @@ let testCompileErrorDirectiveOverridesAnyUpstreamExpectation () =
     "#compileerror=\"first compile failure\"\n\
      1L = 1L\n\
      #compileerror=\"second compile failure\"\n\
-     Builtin.testRuntimeError \"runtime\" = error=\"runtime\"\n" (fun path ->
+     Builtin.crash \"runtime\" = error=\"runtime\"\n" (fun path ->
       match parseE2ETestFile path with
       | Ok [ first; second ]
         when first.errorExpectation = Some CompileError

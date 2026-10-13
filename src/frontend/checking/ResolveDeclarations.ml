@@ -153,7 +153,7 @@ let declarationResolutionEnvironment topLevels moduleRegistry
   let builtins =
     List.map
       (fun name -> builtin name (N.BuiltinFunction (name, 0)) name)
-      [ "unwrap"; "testRuntimeError"; "crash" ]
+      [ "unwrap"; "crash" ]
     @ List.concat_map
         (fun name ->
           [
@@ -377,7 +377,9 @@ let resolveProgramNames resolutionEnv aliases recordNames (Program topLevels) =
       | ("DateTime" | "Uuid"), _ -> Ok (make name args)
       | _, Some (params, target) when List.length params = List.length args ->
           recurse
-            (Types.applySubst (M.of_list (List.combine params args)) target)
+            (Types.applyTypeArguments
+               (M.of_list (List.combine params args))
+               target)
       | _ -> Ok (make name args)
     in
     match typ with

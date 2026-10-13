@@ -367,8 +367,7 @@ let replaceTypeAppsCore symbols registry expr =
         let genericKey = S.isGenericKeyIntrinsicName name in
         let unresolvedKey args =
           wrap args
-            (S.unresolvedKeyIntrinsicTypeArgErrorExpr
-               (resolved "Builtin.testRuntimeError")
+            (S.unresolvedKeyIntrinsicTypeArgErrorExpr (resolved "Builtin.crash")
                name)
         in
         let polymorphicComparison args =
@@ -866,6 +865,8 @@ let programNeedsLambdaLowering _knownNames program =
     | C.Lambda _ | C.Apply _ | C.IndirectApply _ | C.FuncRef _
     | C.GenericFuncRef _ | C.Closure _ ->
         true
+    (* The preparation traversal also resolves specialized String additions. *)
+    | C.BinOp (AST.Add, _, _) -> true
     | C.Local _ -> false
     | C.BoundaryRender (_, value)
     | C.UnaryOp (_, value)
@@ -910,6 +911,10 @@ let programNeedsLambdaLowering _knownNames program =
   in
   C.programTopLevels program
   |> List.exists (function
+    | C.FunctionDef func
+      when String.starts_with ~prefix:"Darklang.Stdlib.List.__keyMember_"
+             func.C.name ->
+        true
     | C.FunctionDef func ->
         let bound =
           C.functionParameterTypes func

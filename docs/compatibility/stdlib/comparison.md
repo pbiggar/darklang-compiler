@@ -113,11 +113,15 @@ darklang/dark revision. At the interpreter revision,
 `backend/src/Builtins/Builtins.Pure/Libs/Uuid.fs:43-47` delegates validation to
 `System.Guid.TryParse`. A focused probe of that same call established the
 observable X-format rules retained in compiler source
-`StdLib/Uuid.dark`: Unicode whitespace is ignored,
+`StdLib/Uuid.dark`: Unicode whitespace codepoints are ignored anywhere in X format,
 leading zeroes and short fields are accepted, the second and third UInt32
 components contribute their low 16 bits, and overflowing UInt32 or byte fields
 return `BadFormat`. Focused same-source cases are in
-`test/fixtures/e2e/stdlib/uuid.e2e:7-23`.
+`test/fixtures/e2e/stdlib/uuid.e2e:7-23`. The codepoint filter also removes CRLF
+between fields, within `0x`, and between hexadecimal digits, matching Guid's
+`EatAllWhitespace` behavior. Whitespace does not make adjacent combining marks
+or zero-width spaces valid input; these boundaries are covered by
+`test/fixtures/e2e/uuid-whitespace.e2e`.
 
 Ahead-of-time rejection and the absent interpreter-only value categories are
 the intentional public boundary retained here.

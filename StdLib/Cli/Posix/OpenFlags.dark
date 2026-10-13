@@ -1,13 +1,8 @@
-// Upstream POSIX OpenFlags declarations (v0.0.35).
 module Darklang.Stdlib.Cli.Posix.OpenFlags
 
-/// The platform-specific value of one open() flag: "rdonly", "wronly",
-/// "rdwr", "creat", "trunc" or "append".
-let flag (name: String) : Int = Builtin.posixOpenFlag name
-
-let rdonly () : Int = flag "rdonly"
-let wronly () : Int = flag "wronly"
-let rdwr () : Int = flag "rdwr"
-let creat () : Int = flag "creat"
-let trunc () : Int = flag "trunc"
-let append () : Int = flag "append"
+let rdonly () : Int = 0
+let wronly () : Int = 1
+let rdwr () : Int = 2
+let creat () : Int = Stdlib.Cli.Posix.__abiOpenCreate ()
+let trunc () : Int = Stdlib.Cli.Posix.__abiOpenTruncate ()
+let append () : Int = Stdlib.Cli.Posix.__abiOpenAppend ()

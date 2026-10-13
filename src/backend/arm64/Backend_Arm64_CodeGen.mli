@@ -27,8 +27,6 @@ type helperCacheKey = {
   closureCaptureTypes : (string * AST.semanticType list) list;
   recursiveReleaseTypes : AST.semanticType list;
   cliArgvHelperLabels : string list;
-  needsCliExecuteHelper : bool;
-  needsCliRunProcessHelper : bool;
   needsCliProcessLifecycleHelpers : bool;
   needsRuntimeErrorHelper : bool;
   listDecHelperLabels : string list;

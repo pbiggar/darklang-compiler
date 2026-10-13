@@ -4,7 +4,7 @@
 let byteAt (value: String) (index: Int64) : Int64 =
     match Stdlib.String.getByteAt value (Stdlib.Int.fromInt64 index) with
     | Some byte -> Stdlib.Int64.fromUInt8 byte
-    | None -> Builtin.testRuntimeError "Regex byte index is out of range"
+    | None -> Builtin.crash "Regex byte index is out of range"
 
 let stringLengthFrom (value: String) (index: Int64) : Int64 =
     match Stdlib.String.getByteAt value (Stdlib.Int.fromInt64 index) with
@@ -33,7 +33,7 @@ let parsePiece (pattern: String) (index: Int64) : (Piece * Int64) =
         if index + 4L >= stringLength pattern
            || byteAt pattern (index + 2L) != 45L
            || byteAt pattern (index + 4L) != 93L then
-            Builtin.testRuntimeError "regex range must have form [a-z]"
+            Builtin.crash "regex range must have form [a-z]"
         else
             parseQuantifier pattern (index + 5L) (Range ((byteAt pattern (index + 1L), byteAt pattern (index + 3L))))
     else parseQuantifier pattern (index + 1L) (Literal byte)
@@ -116,11 +116,11 @@ let run (remaining: Int64) (alternatives: List<List<Piece>>) (text: String) (res
 let benchmarkArg (index: Int) : Int64 =
     match Stdlib.Cli.__Args.int64 index with
     | Ok value -> value
-    | Error message -> Builtin.testRuntimeError message
+    | Error message -> Builtin.crash message
 
 let blocks = benchmarkArg 0 in
 let repetitions = benchmarkArg 1 in
-if blocks <= 0L || repetitions <= 0L then Builtin.testRuntimeError "regex workload arguments must be positive"
+if blocks <= 0L || repetitions <= 0L then Builtin.crash "regex workload arguments must be positive"
 else
     let pattern = "dark[a-z]*lang|compiler[0-9]+|ab[0-9]?" in
     let alternatives = parseAlternatives pattern 0L [] [] in

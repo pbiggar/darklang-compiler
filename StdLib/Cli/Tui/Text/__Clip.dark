@@ -23,6 +23,6 @@ let __clipToWidth
             else if Stdlib.Cli.Tui.Text.__isControl cluster then
                 Stdlib.Cli.Tui.Text.__clipToWidth rest available result
             else
-                let width = Stdlib.String.displayWidth cluster in
+                let width = Stdlib.String.displayWidth (Stdlib.Char.toString cluster) in
                 if width > available then result
                 else Stdlib.Cli.Tui.Text.__clipToWidth rest (available - width) (result ++ cluster)

@@ -233,28 +233,17 @@ let convertUnaryOp (op : ANF.unaryOp) =
 
 let convertCliOperation (operation : ANF.cliOperation) =
   match operation with
-  | ANF.Execute -> MIR.Execute
-  | ANF.RunProcess -> MIR.RunProcess
   | ANF.HostOS -> MIR.HostOS
   | ANF.HostArchitecture -> MIR.HostArchitecture
-  | ANF.Hostname -> MIR.Hostname
   | ANF.GetEnv -> MIR.GetEnv
   | ANF.GetEnvironmentPacked -> MIR.GetEnvironmentPacked
   | ANF.StdinState -> MIR.StdinState
-  | ANF.SetEnv -> MIR.SetEnv
-  | ANF.UnsetEnv -> MIR.UnsetEnv
-  | ANF.DirectoryCurrent -> MIR.DirectoryCurrent
-  | ANF.DirectoryListPacked -> MIR.DirectoryListPacked
-  | ANF.FileIsDirectory -> MIR.FileIsDirectory
-  | ANF.FileCreateExclusive -> MIR.FileCreateExclusive
   | ANF.GetArgv -> MIR.GetArgv
   | ANF.Kill -> MIR.Kill
   | ANF.GetPid -> MIR.GetPid
+  | ANF.StartupStack -> MIR.StartupStack
+  | ANF.ExecutableState -> MIR.ExecutableState
   | ANF.GetUid -> MIR.GetUid
-  | ANF.CpuCount -> MIR.CpuCount
-  | ANF.SpawnProcess -> MIR.SpawnProcess
-  | ANF.ProcessIO -> MIR.ProcessIO
-  | ANF.TerminateProcess -> MIR.TerminateProcess
   | ANF.SocketTcp4 -> MIR.SocketTcp4
   | ANF.SocketTcp6 -> MIR.SocketTcp6
   | ANF.SocketUdp4 -> MIR.SocketUdp4
@@ -298,9 +287,36 @@ let convertCliOperation (operation : ANF.cliOperation) =
   | ANF.PosixSetAttributesAt -> MIR.PosixSetAttributesAt
   | ANF.PosixSymlinkAt -> MIR.PosixSymlinkAt
   | ANF.PosixReadlinkAt -> MIR.PosixReadlinkAt
+  | ANF.PosixAccessAt -> MIR.PosixAccessAt
   | ANF.PosixFlock -> MIR.PosixFlock
   | ANF.PosixGetDents -> MIR.PosixGetDents
   | ANF.PosixIoctl -> MIR.PosixIoctl
+  | ANF.PosixProcInfo -> MIR.PosixProcInfo
+  | ANF.PosixCopyFileRange -> MIR.PosixCopyFileRange
+  | ANF.PosixFtruncate -> MIR.PosixFtruncate
+  | ANF.PosixFchmod -> MIR.PosixFchmod
+  | ANF.PosixFstat -> MIR.PosixFstat
+  | ANF.PosixPread -> MIR.PosixPread
+  | ANF.PosixPwrite -> MIR.PosixPwrite
+  | ANF.PosixFclonefileat -> MIR.PosixFclonefileat
+  | ANF.PosixGetentropy -> MIR.PosixGetentropy
+  | ANF.PosixUname -> MIR.PosixUname
+  | ANF.PosixSysctl -> MIR.PosixSysctl
+  | ANF.PosixSchedGetaffinity -> MIR.PosixSchedGetaffinity
+  | ANF.PosixFcntlGetPath -> MIR.PosixFcntlGetPath
+  | ANF.PosixClockGettime -> MIR.PosixClockGettime
+  | ANF.PosixGettimeofday -> MIR.PosixGettimeofday
+  | ANF.PosixNanosleep -> MIR.PosixNanosleep
+  | ANF.PosixMachTimebaseInfo -> MIR.PosixMachTimebaseInfo
+  | ANF.PosixInotifyInit1 -> MIR.PosixInotifyInit1
+  | ANF.PosixInotifyAddWatch -> MIR.PosixInotifyAddWatch
+  | ANF.PosixPpoll -> MIR.PosixPpoll
+  | ANF.PosixPollDarwin -> MIR.PosixPollDarwin
+  | ANF.PosixKqueue -> MIR.PosixKqueue
+  | ANF.ChildState -> MIR.ChildState
+  | ANF.ChildLaunch -> MIR.ChildLaunch
+  | ANF.PosixWait4 -> MIR.PosixWait4
+  | ANF.PosixKeventVnode -> MIR.PosixKeventVnode
 
 (*
    Precomputed descriptions for primitive ops (avoids formatting on hot path)
@@ -815,28 +831,17 @@ let operandType builder = function
             Crash.crash (Printf.sprintf "operandType: missing type for v%d" id))
 
 let cliOperationName = function
-  | ANF.Execute -> "Execute"
-  | ANF.RunProcess -> "RunProcess"
   | ANF.HostOS -> "HostOS"
   | ANF.HostArchitecture -> "HostArchitecture"
-  | ANF.Hostname -> "Hostname"
   | ANF.GetEnv -> "GetEnv"
   | ANF.GetEnvironmentPacked -> "GetEnvironmentPacked"
   | ANF.StdinState -> "StdinState"
-  | ANF.SetEnv -> "SetEnv"
-  | ANF.UnsetEnv -> "UnsetEnv"
-  | ANF.DirectoryCurrent -> "DirectoryCurrent"
-  | ANF.DirectoryListPacked -> "DirectoryListPacked"
-  | ANF.FileIsDirectory -> "FileIsDirectory"
-  | ANF.FileCreateExclusive -> "FileCreateExclusive"
   | ANF.GetArgv -> "GetArgv"
   | ANF.Kill -> "Kill"
   | ANF.GetPid -> "GetPid"
+  | ANF.StartupStack -> "StartupStack"
+  | ANF.ExecutableState -> "ExecutableState"
   | ANF.GetUid -> "GetUid"
-  | ANF.CpuCount -> "CpuCount"
-  | ANF.SpawnProcess -> "SpawnProcess"
-  | ANF.ProcessIO -> "ProcessIO"
-  | ANF.TerminateProcess -> "TerminateProcess"
   | ANF.SocketTcp4 -> "SocketTcp4"
   | ANF.SocketTcp6 -> "SocketTcp6"
   | ANF.SocketUdp4 -> "SocketUdp4"
@@ -880,9 +885,36 @@ let cliOperationName = function
   | ANF.PosixSetAttributesAt -> "PosixSetAttributesAt"
   | ANF.PosixSymlinkAt -> "PosixSymlinkAt"
   | ANF.PosixReadlinkAt -> "PosixReadlinkAt"
+  | ANF.PosixAccessAt -> "PosixAccessAt"
   | ANF.PosixFlock -> "PosixFlock"
   | ANF.PosixGetDents -> "PosixGetDents"
   | ANF.PosixIoctl -> "PosixIoctl"
+  | ANF.PosixProcInfo -> "PosixProcInfo"
+  | ANF.PosixCopyFileRange -> "PosixCopyFileRange"
+  | ANF.PosixFtruncate -> "PosixFtruncate"
+  | ANF.PosixFchmod -> "PosixFchmod"
+  | ANF.PosixFstat -> "PosixFstat"
+  | ANF.PosixPread -> "PosixPread"
+  | ANF.PosixPwrite -> "PosixPwrite"
+  | ANF.PosixFclonefileat -> "PosixFclonefileat"
+  | ANF.PosixGetentropy -> "PosixGetentropy"
+  | ANF.PosixUname -> "PosixUname"
+  | ANF.PosixSysctl -> "PosixSysctl"
+  | ANF.PosixSchedGetaffinity -> "PosixSchedGetaffinity"
+  | ANF.PosixFcntlGetPath -> "PosixFcntlGetPath"
+  | ANF.PosixClockGettime -> "PosixClockGettime"
+  | ANF.PosixGettimeofday -> "PosixGettimeofday"
+  | ANF.PosixNanosleep -> "PosixNanosleep"
+  | ANF.PosixMachTimebaseInfo -> "PosixMachTimebaseInfo"
+  | ANF.PosixInotifyInit1 -> "PosixInotifyInit1"
+  | ANF.PosixInotifyAddWatch -> "PosixInotifyAddWatch"
+  | ANF.PosixPpoll -> "PosixPpoll"
+  | ANF.PosixPollDarwin -> "PosixPollDarwin"
+  | ANF.PosixKqueue -> "PosixKqueue"
+  | ANF.ChildState -> "ChildState"
+  | ANF.ChildLaunch -> "ChildLaunch"
+  | ANF.PosixWait4 -> "PosixWait4"
+  | ANF.PosixKeventVnode -> "PosixKeventVnode"
 
 (*
    Generate description for a CExpr (for coverage mapping)
@@ -1264,8 +1296,13 @@ let simpleCExprInstrs builder tempId destReg destType cexpr =
           Ok [ MIR.HeapLoad (destReg, tempToVReg tid, mulInt index 8, typ) ]
       | _ ->
           Error
-            "Internal error: Tuple access on non-variable (ANF invariant \
-             violated)")
+            ("Internal error: Tuple access on non-variable (ANF invariant \
+              violated) in " ^ builder.funcName ^ ": "
+            ^
+            match tuple with
+            | ANF.UnitLiteral -> "unit"
+            | ANF.IntLiteral n -> ANF.sizedIntToString n
+            | _ -> "literal"))
   | ANF.RecordAlloc (_, fields) | ANF.RecordClone (_, _, fields) ->
       let alloc = MIR.HeapAlloc (destReg, mulInt (List.length fields) 8) in
       let+ stores = storeFields fields in
