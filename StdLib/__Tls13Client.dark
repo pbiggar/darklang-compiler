@@ -14,7 +14,9 @@ type ApplicationState = {
   keys: Stdlib.__Tls13.TrafficKeys,
   pending: Blob,
   records: Int64,
-  updates: Stdlib.__Tls13KeyUpdate.State
+  updates: Stdlib.__Tls13KeyUpdate.State,
+  outgoing: Blob,
+  outgoingOffset: Int64
 }
 type Negotiated = { keys: Stdlib.__Tls13Client.SecureKeys, protocol: String }
 type PemState = {
@@ -357,7 +359,8 @@ let __framedComplete (method: String) (response: Blob) (informational: Int64) : 
 
 let applicationState (secure: Stdlib.__Tls13Client.SecureKeys) : Stdlib.__Tls13Client.ApplicationState =
   Stdlib.__Tls13Client.ApplicationState { keys = secure.server, pending = secure.pending, records = 0L,
-    updates = Stdlib.__Tls13KeyUpdate.create secure.serverSecret secure.clientSecret secure.client true }
+    updates = Stdlib.__Tls13KeyUpdate.create secure.serverSecret secure.clientSecret secure.client true,
+    outgoing = Stdlib.Blob.empty, outgoingOffset = 0L }
 
 let __readApplication (connection: Stdlib.__Network.TcpConnection)
   (method: String) (state: Stdlib.__Tls13Client.ApplicationState) (response: Blob) : Stdlib.Result.Result<Blob, String> =
@@ -424,7 +427,7 @@ let readApplicationChunk (connection: Stdlib.__Network.TcpConnection)
     | Error message -> Error message
     | Ok received ->
       Stdlib.__Tls13KeyUpdate.process state.updates state.keys received.record |> Stdlib.Result.andThen (fun processed ->
-        let next = Stdlib.__Tls13Client.ApplicationState { keys = processed.receive, pending = received.pending, records = state.records + 1L, updates = processed.state } in
+        let next = { state with keys = processed.receive, pending = received.pending, records = state.records + 1L, updates = processed.state } in
         let replied = match processed.reply with | None -> Ok () | Some bytes -> Stdlib.__Tls13Client.__send connection bytes in
         replied |> Stdlib.Result.andThen (fun _unit ->
           if processed.closed then Ok None

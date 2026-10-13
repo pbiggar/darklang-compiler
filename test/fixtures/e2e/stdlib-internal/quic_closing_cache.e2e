@@ -8,7 +8,7 @@ let checkClosingCache (mode: Int64) : Bool =
     let sender = if mode == 4L then { peer with port = 12346L } else peer in
     let result = Stdlib.__QuicPacket.sealShort keys destination false (Stdlib.Blob.__fromInt64List [1L]) 1L |> Stdlib.Result.map (fun wire ->
       let lifecycle = Stdlib.Stream.__new (fun _unit -> Some ()) (fun _unit -> ()) in
-      let socket = Stdlib.__Datagram.Socket { lifecycle = lifecycle, send = fun _peer _bytes _timeout -> if mode == 1L then Error 5L else Ok (), receive = fun _timeout -> Ok (Stdlib.__Datagram.Message { peer = sender, payload = wire }) } in
+      let socket = Stdlib.__Datagram.Socket { lifecycle = lifecycle, watch = None, send = fun _peer _bytes _timeout -> if mode == 1L then Error 5L else Ok (), receive = fun _timeout -> Ok (Stdlib.__Datagram.Message { peer = sender, payload = wire }) } in
       let closing = Stdlib.__QuicConnection.Closing { peer = peer, source = source, destination = Stdlib.String.toBlob "clientid", keys = keys, phase = false, deadline = if mode == 3L then now - 1000L else now + 30000L, number = 10L, lastSent = if mode == 2L then now else now - 1000L } in
       let recent = [Stdlib.HttpServer.Quic.Recent { source = source, expires = if mode == 6L then now - 1000L else now + 30000L, closing = Some closing }] in
       let identity = Stdlib.TlsServerIdentity.Identity { certificates = [], key = Stdlib.__RsaPrivate.Key { modulus = Stdlib.Blob.empty, exponent = Stdlib.Blob.empty, privateExponent = Stdlib.Blob.empty } } in

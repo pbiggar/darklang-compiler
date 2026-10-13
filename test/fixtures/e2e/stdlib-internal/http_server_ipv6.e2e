@@ -1,0 +1,6 @@
+// http_server_ipv6.e2e - IPv6 listener ownership and explicit HTTP bind addresses.
+Stdlib.__Network.listenTcp6 [0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 1L] 0L |> Stdlib.Result.map (fun listener -> Stdlib.__Network.closeListener listener) = Ok ()
+Stdlib.__Network.listenTcp6 [0L, 0L, 0L] 8080L = Error 22L
+Stdlib.__Network.listenTcp6 [0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 1L] 65536L = Error 22L
+Stdlib.__Network.listenTcp6 [0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 1L] 0L |> Stdlib.Result.andThen (fun listener -> let _ = Stdlib.__Network.closeListener listener in Stdlib.__Network.acceptTcp listener 100L |> Stdlib.Result.map (fun connection -> Stdlib.__Network.closeTcp connection)) = Error 9L
+Stdlib.HttpServer.serveOn [127L, 0L, 0L] (Stdlib.HttpServer.Config.defaults 8080) (fun request -> Stdlib.Http.success request.body) (fun _unit -> Stdlib.printLine "UNEXPECTED") = Error "Cannot bind HTTP server: 22"

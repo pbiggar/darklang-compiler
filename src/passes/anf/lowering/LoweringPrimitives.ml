@@ -413,11 +413,14 @@ let tryCliIntrinsic name args =
         | "Darklang.Stdlib.__Network.__connect4" -> Some ANF.SocketConnect4
         | "Darklang.Stdlib.__Network.__connect6" -> Some ANF.SocketConnect6
         | "Darklang.Stdlib.__Network.__send" -> Some ANF.SocketSend
+        | "Darklang.Stdlib.__Network.__sendWithMode" -> Some ANF.SocketSend
         | "Darklang.Stdlib.__Network.__sendTo" -> Some ANF.SocketSendTo
         | "Darklang.Stdlib.__Network.__receiveFrom" ->
             Some ANF.SocketReceiveFrom
         | "Darklang.Stdlib.__Network.__bind6" -> Some ANF.SocketBind6
         | "Darklang.Stdlib.__Network.__receive" -> Some ANF.SocketReceive
+        | "Darklang.Stdlib.__Network.__receiveWithMode" ->
+            Some ANF.SocketReceive
         | "Darklang.Stdlib.__Network.__receiveTimeout" ->
             Some ANF.SocketReceiveTimeout
         | "Darklang.Stdlib.__Network.__sendTimeout" ->
@@ -429,7 +432,9 @@ let tryCliIntrinsic name args =
         | "Darklang.Stdlib.__Network.__cloexec" -> Some ANF.SocketCloexec
         | "Darklang.Stdlib.__Network.__reuseAddress" ->
             Some ANF.SocketReuseAddress
-        | "Darklang.Stdlib.__Network.__poll" -> Some ANF.SocketPoll
+        | "Darklang.Stdlib.__Network.__poll"
+        | "Darklang.Stdlib.__Network.__pollMany" ->
+            Some ANF.SocketPoll
         | "Darklang.Stdlib.__Network.__signalBlock" -> Some ANF.SignalBlock
         | "Darklang.Stdlib.__Network.__signalRestore" -> Some ANF.SignalRestore
         | "Darklang.Stdlib.__Network.__signalPending" -> Some ANF.SignalPending

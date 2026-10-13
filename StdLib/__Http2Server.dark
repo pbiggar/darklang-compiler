@@ -1,0 +1,532 @@
+// __Http2Server.dark - Shared server compression, independent streams and wire-scoped failures.
+module Darklang.Stdlib.__Http2Server
+
+type Scope = Connection | Stream of Int64
+type Failure = { scope: Stdlib.__Http2Server.Scope, code: Int64, message: String }
+type Context = { config: Stdlib.HttpServer.Config.Config, handler: Stdlib.Http.Request -> Stdlib.Http.Response, limit: Int64 }
+type Incoming = { head: Stdlib.__Http2Fields.RequestHead, expected: Stdlib.Option.Option<Int64>, blocks: List<Blob>, total: Int64 }
+type Reply = { method: String, fields: List<(String * String)>, body: Blob, position: Int64, headers: Bool }
+type Message = Receiving of Stdlib.__Http2Server.Incoming | Responding of Stdlib.__Http2Server.Reply
+type Active = { id: Int64, window: Int64, receiveWindow: Int64, ended: Bool, deadline: Int64, message: Stdlib.__Http2Server.Message }
+type Block = { id: Int64, bytes: Blob, ended: Bool, fresh: Bool }
+type Action = Nothing | Credit of (Int64 * Int64) | Headers of (Int64 * Bool) | Finish of Int64 | Stop
+type Output = { stream: Int64, bytes: Blob, offset: Int64, after: Stdlib.__Http2Server.Action }
+type State = {
+  wire: Stdlib.__Http2.State, preface: Bool, streams: List<Stdlib.__Http2Server.Active>,
+  last: Int64, accepted: Int64, opened: Int64, continuation: Stdlib.Option.Option<Stdlib.__Http2Server.Block>,
+  outputs: List<Stdlib.__Http2Server.Output>, current: Stdlib.Option.Option<Stdlib.__Http2Server.Output>,
+  total: Int64, receiveConnection: Int64, draining: Bool, stopped: Bool
+}
+type Next = { frame: Stdlib.__Http2Wire.Frame, state: Stdlib.__Http2Server.State }
+type Decoded = { id: Int64, fields: List<(String * String)>, ended: Bool, fresh: Bool }
+
+let initial (pending: Blob) : Stdlib.__Http2Server.State =
+  Stdlib.__Http2Server.State { wire = { Stdlib.__Http2.initial 0L with pending = pending }, preface = true,
+    streams = [], last = 0L, accepted = 0L, opened = 0L, continuation = None, outputs = [], current = None,
+    total = 0L, receiveConnection = 65535L, draining = false, stopped = false }
+
+let __connection (code: Int64) (message: String) : Stdlib.__Http2Server.Failure =
+  Stdlib.__Http2Server.Failure { scope = Stdlib.__Http2Server.Scope.Connection, code = code, message = message }
+let __stream (id: Int64) (code: Int64) (message: String) : Stdlib.__Http2Server.Failure =
+  Stdlib.__Http2Server.Failure { scope = Stdlib.__Http2Server.Scope.Stream id, code = code, message = message }
+let __replace (state: Stdlib.__Http2Server.State) (stream: Stdlib.__Http2Server.Active) : Stdlib.__Http2Server.State =
+  { state with streams = Stdlib.List.map state.streams (fun current -> if current.id == stream.id then stream else current) }
+let __find (state: Stdlib.__Http2Server.State) (id: Int64) : Stdlib.Option.Option<Stdlib.__Http2Server.Active> =
+  Stdlib.List.findFirst state.streams (fun stream -> stream.id == id)
+
+// Duplicate settings apply in wire order; a reduced initial window may be negative.
+let __settings (state: Stdlib.__Http2Server.State) (payload: Blob) (position: Int64) : Stdlib.Result.Result<Stdlib.__Http2Server.State, Stdlib.__Http2Server.Failure> =
+  if position == Stdlib.Blob.__byteLength payload then Ok { state with wire = { state.wire with settingsSeen = true } }
+  else
+    let id = Stdlib.__TlsAlpn.__read16 payload position in
+    let value = Stdlib.__Http2Wire.__read32 payload (position + 2L) in
+    let next =
+      if id == 4L then
+        let difference = value - state.wire.initialWindow in
+        if Stdlib.List.any state.streams (fun stream -> stream.window + difference > 2147483647L) then Error (Stdlib.__Http2Server.__connection 3L "HTTP/2 stream window overflow")
+        else Ok { state with wire = { state.wire with initialWindow = value }, streams = Stdlib.List.map state.streams (fun stream -> { stream with window = stream.window + difference }) }
+      else if id == 1L then
+        Stdlib.__Hpack.resizeEncoder state.wire.encoder value |> Stdlib.Result.mapError (fun message -> Stdlib.__Http2Server.__connection 2L message) |> Stdlib.Result.map (fun encoder -> { state with wire = { state.wire with encoder = encoder } })
+      else if id == 5L then Ok { state with wire = { state.wire with maximum = value } }
+      else if id == 6L then Ok { state with wire = { state.wire with fieldLimit = Some value } }
+      else Ok state in
+    next |> Stdlib.Result.andThen (fun next -> Stdlib.__Http2Server.__settings next payload (position + 6L))
+
+let __badWindowSetting (payload: Blob) (position: Int64) : Bool =
+  if position < 0L || position > Stdlib.Blob.__byteLength payload - 6L then false
+  else if Stdlib.__TlsAlpn.__read16 payload position == 4L && Stdlib.__Http2Wire.__read32 payload (position + 2L) > 2147483647L then true
+  else Stdlib.__Http2Server.__badWindowSetting payload (position + 6L)
+let applySettings (state: Stdlib.__Http2Server.State) (payload: Blob) : Stdlib.Result.Result<Stdlib.__Http2Server.State, Stdlib.__Http2Server.Failure> =
+  if Stdlib.Blob.__byteLength payload % 6L != 0L then Error (Stdlib.__Http2Server.__connection 6L "Invalid HTTP/2 SETTINGS length")
+  else if Stdlib.__Http2Server.__badWindowSetting payload 0L then Error (Stdlib.__Http2Server.__connection 3L "Invalid HTTP/2 initial window")
+  else if Stdlib.Bool.not (Stdlib.__Http2Wire.__settingsValid payload 0L) then Error (Stdlib.__Http2Server.__connection 1L "Invalid HTTP/2 SETTINGS value")
+  else Stdlib.__Http2Server.__settings state payload 0L
+
+let windowUpdate (state: Stdlib.__Http2Server.State) (id: Int64) (increment: Int64) : Stdlib.Result.Result<Stdlib.__Http2Server.State, Stdlib.__Http2Server.Failure> =
+  if id == 0L then
+    if increment <= 0L || increment > 2147483647L then Error (Stdlib.__Http2Server.__connection 1L "Invalid HTTP/2 connection window increment")
+    else if state.wire.sendConnection + increment > 2147483647L then Error (Stdlib.__Http2Server.__connection 3L "HTTP/2 connection window overflow")
+    else Ok { state with wire = { state.wire with sendConnection = state.wire.sendConnection + increment } }
+  else match Stdlib.__Http2Server.__find state id with
+    | None ->
+      if id > 0L && id % 2L == 1L && id <= state.last then
+        if increment <= 0L || increment > 2147483647L then Error (Stdlib.__Http2Server.__stream id 1L "Invalid HTTP/2 stream window increment") else Ok state
+      else Error (Stdlib.__Http2Server.__connection 1L "HTTP/2 window update on idle stream")
+    | Some stream ->
+      if increment <= 0L || increment > 2147483647L then Error (Stdlib.__Http2Server.__stream id 1L "Invalid HTTP/2 stream window increment")
+      else if stream.window + increment > 2147483647L then Error (Stdlib.__Http2Server.__stream id 3L "HTTP/2 stream window overflow")
+      else Ok (Stdlib.__Http2Server.__replace state { stream with window = stream.window + increment })
+
+let __messageSize (message: Stdlib.__Http2Server.Message) : Int64 =
+  match message with | Receiving input -> input.total | Responding reply -> Stdlib.Blob.__byteLength reply.body
+let reset (state: Stdlib.__Http2Server.State) (id: Int64) : Stdlib.Result.Result<Stdlib.__Http2Server.State, Stdlib.__Http2Server.Failure> =
+  if id <= 0L || id % 2L != 1L || id > state.last then Error (Stdlib.__Http2Server.__connection 1L "HTTP/2 reset on idle stream")
+  else
+    let released = match Stdlib.__Http2Server.__find state id with | None -> 0L | Some stream -> Stdlib.__Http2Server.__messageSize stream.message in
+    Ok { state with streams = Stdlib.List.filter state.streams (fun stream -> stream.id != id), total = state.total - released,
+      outputs = Stdlib.List.filter state.outputs (fun output -> output.stream != id) }
+
+let __response (config: Stdlib.HttpServer.Config.Config) (method: String) (response: Stdlib.Http.Response) : Stdlib.Result.Result<Stdlib.__Http2Server.Reply, String> =
+  match Stdlib.Int.toInt64 response.statusCode with
+  | None -> Error "Invalid HTTP response status"
+  | Some status ->
+    if status < 200L || status > 599L || Stdlib.Blob.__byteLength response.body > 104857600L then Error "Invalid HTTP response status or body limit"
+    else
+      let headers = Stdlib.List.filter (Stdlib.HttpServer.__standardHeaders config.injectStandardHeaders response.headers) (fun pair ->
+        let (name, _value) = pair in let lower = Stdlib.String.toLowercase name in Stdlib.Bool.not (Stdlib.__Http2Fields.__connectionSpecific lower) && lower != "content-length") in
+      Stdlib.__Http2Fields.__outgoing headers |> Stdlib.Result.map (fun headers ->
+        let length = if status == 204L then [] else [("content-length", Stdlib.Int64.toString (Stdlib.Blob.__byteLength response.body))] in
+        let body = if method == "HEAD" || status == 204L || status == 304L then Stdlib.Blob.empty else response.body in
+        Stdlib.__Http2Server.Reply { method = method, fields = [(":status", Stdlib.Int64.toString status)] @ headers @ length, body = body, position = 0L, headers = false })
+
+let __frame (kind: Int64) (flags: Int64) (id: Int64) (payload: Blob) (after: Stdlib.__Http2Server.Action) : Stdlib.Result.Result<Stdlib.__Http2Server.Output, Stdlib.__Http2Server.Failure> =
+  Stdlib.__Http2Wire.serialize kind flags id payload |> Stdlib.Result.mapError (fun message -> Stdlib.__Http2Server.__connection 2L message) |> Stdlib.Result.map (fun bytes ->
+    Stdlib.__Http2Server.Output { stream = id, bytes = bytes, offset = 0L, after = after })
+let __queuedBytes (outputs: List<Stdlib.__Http2Server.Output>) : Int64 = Stdlib.List.fold outputs 0L (fun total output -> total + Stdlib.Blob.__byteLength output.bytes)
+let __queue (state: Stdlib.__Http2Server.State) (output: Stdlib.__Http2Server.Output) : Stdlib.Result.Result<Stdlib.__Http2Server.State, Stdlib.__Http2Server.Failure> =
+  if Stdlib.List.length state.outputs >= 256 || Stdlib.__Http2Server.__queuedBytes state.outputs + Stdlib.Blob.__byteLength output.bytes > 262144L then Error (Stdlib.__Http2Server.__connection 11L "HTTP/2 control output budget exhausted")
+  else Ok { state with outputs = state.outputs @ [output] }
+
+// Reserve credit once, keeping the same serialized frame through partial writes.
+let scheduleData (state: Stdlib.__Http2Server.State) (id: Int64) : Stdlib.Result.Result<Stdlib.__Http2Server.State, Stdlib.__Http2Server.Failure> =
+  if Stdlib.Option.isSome state.current then Ok state
+  else match Stdlib.__Http2Server.__find state id with
+    | None -> Ok state
+    | Some stream -> match stream.message with
+      | Receiving _ -> Ok state
+      | Responding reply ->
+        let remaining = Stdlib.Blob.__byteLength reply.body - reply.position in
+        if Stdlib.Bool.not reply.headers || remaining <= 0L || stream.window <= 0L || state.wire.sendConnection <= 0L then Ok state
+        else
+          let maximum = if state.wire.maximum < 16384L then state.wire.maximum else 16384L in
+          let size = if remaining < maximum then remaining else maximum in
+          let size = if stream.window < size then stream.window else size in
+          let size = if state.wire.sendConnection < size then state.wire.sendConnection else size in
+          if size <= 0L then Error (Stdlib.__Http2Server.__connection 2L "Invalid HTTP/2 DATA scheduling limit")
+          else
+            let ended = size == remaining in
+            let after = if ended then Stdlib.__Http2Server.Action.Finish id else Stdlib.__Http2Server.Action.Nothing in
+            Stdlib.__Http2Server.__frame 0L (if ended then 1L else 0L) id (Stdlib.__Http2Wire.__slice reply.body reply.position size) after |> Stdlib.Result.map (fun output ->
+              let stream = { stream with window = stream.window - size, message = Stdlib.__Http2Server.Message.Responding { reply with position = reply.position + size } } in
+              let state = Stdlib.__Http2Server.__replace state stream in
+              { state with wire = { state.wire with sendConnection = state.wire.sendConnection - size }, current = Some output })
+
+// Serialize the whole header block before publishing its shared encoder state.
+// A partial write must finish every CONTINUATION before another stream's frame.
+let __headerFrames (id: Int64) (bytes: Blob) (position: Int64) (maximum: Int64) (ended: Bool) (blocks: List<Blob>) : Stdlib.Result.Result<Blob, Stdlib.__Http2Server.Failure> =
+  let remaining = Stdlib.Blob.__byteLength bytes - position in
+  let size = if remaining < maximum then remaining else maximum in
+  let first = position == 0L in
+  let final = size == remaining in
+  let flags = (if final then 4L else 0L) + (if first && ended then 1L else 0L) in
+  Stdlib.__Http2Wire.serialize (if first then 1L else 9L) flags id (Stdlib.__Http2Wire.__slice bytes position size) |> Stdlib.Result.mapError (fun message -> Stdlib.__Http2Server.__connection 2L message) |> Stdlib.Result.andThen (fun frame ->
+    let blocks = Stdlib.List.push blocks frame in
+    if final then Ok (Stdlib.Blob.concat (Stdlib.List.reverse blocks))
+    else Stdlib.__Http2Server.__headerFrames id bytes (position + size) maximum ended blocks)
+
+let scheduleHeaders (state: Stdlib.__Http2Server.State) (id: Int64) : Stdlib.Result.Result<Stdlib.__Http2Server.State, Stdlib.__Http2Server.Failure> =
+  if Stdlib.Option.isSome state.current then Ok state
+  else match Stdlib.__Http2Server.__find state id with
+    | None -> Ok state
+    | Some stream -> match stream.message with
+      | Receiving _ -> Ok state
+      | Responding reply ->
+        if reply.headers then Ok state
+        else if state.wire.maximum < 16384L then Error (Stdlib.__Http2Server.__connection 2L "Invalid HTTP/2 header scheduling limit")
+        else
+          let size = Stdlib.List.fold reply.fields 0L (fun total pair -> total + Stdlib.__Hpack.__entrySize pair) in
+          let permitted = match state.wire.fieldLimit with | None -> true | Some limit -> size <= limit in
+          if Stdlib.Bool.not permitted then Error (Stdlib.__Http2Server.__stream id 2L "HTTP/2 peer header list limit exceeded")
+          else
+            Stdlib.__Hpack.encodeDynamic state.wire.encoder reply.fields |> Stdlib.Result.mapError (fun message -> Stdlib.__Http2Server.__stream id 2L message) |> Stdlib.Result.andThen (fun encoded ->
+              let ended = Stdlib.Blob.__byteLength reply.body == 0L in
+              let maximum = if state.wire.maximum < 16384L then state.wire.maximum else 16384L in
+              Stdlib.__Http2Server.__headerFrames id encoded.bytes 0L maximum ended [] |> Stdlib.Result.map (fun bytes ->
+                { state with wire = { state.wire with encoder = encoded.state }, current = Some (Stdlib.__Http2Server.Output { stream = id, bytes = bytes, offset = 0L, after = Stdlib.__Http2Server.Action.Headers ((id, ended)) }) }))
+
+let __finish (state: Stdlib.__Http2Server.State) (id: Int64) : Stdlib.Result.Result<Stdlib.__Http2Server.State, Stdlib.__Http2Server.Failure> =
+  let unfinished = match Stdlib.__Http2Server.__find state id with | None -> false | Some stream -> Stdlib.Bool.not stream.ended in
+  Stdlib.__Http2Server.reset state id |> Stdlib.Result.andThen (fun next ->
+    if Stdlib.Bool.not unfinished then Ok next
+    else Stdlib.__Http2Server.__frame 3L 0L id (Stdlib.__Http2Wire.__u32 0L) Stdlib.__Http2Server.Action.Nothing |> Stdlib.Result.andThen (fun output -> Stdlib.__Http2Server.__queue next output))
+
+let __completed (state: Stdlib.__Http2Server.State) (after: Stdlib.__Http2Server.Action) : Stdlib.Result.Result<Stdlib.__Http2Server.State, Stdlib.__Http2Server.Failure> =
+  let state = { state with current = None } in
+  match after with
+  | Nothing -> Ok state
+  | Stop -> Ok { state with stopped = true }
+  | Finish id -> Stdlib.__Http2Server.__finish state id
+  | Headers pair ->
+    let (id, ended) = pair in
+    if ended then Stdlib.__Http2Server.__finish state id
+    else match Stdlib.__Http2Server.__find state id with
+      | None -> Ok state
+      | Some stream -> match stream.message with
+        | Receiving _ -> Error (Stdlib.__Http2Server.__connection 2L "HTTP/2 response headers without response")
+        | Responding reply -> Ok (Stdlib.__Http2Server.__replace state { stream with message = Stdlib.__Http2Server.Message.Responding { reply with headers = true } })
+  | Credit pair ->
+    let (id, size) = pair in
+    if size <= 0L then Error (Stdlib.__Http2Server.__connection 2L "Invalid HTTP/2 receive credit")
+    else if id == 0L then
+      if state.receiveConnection + size > 2147483647L then Error (Stdlib.__Http2Server.__connection 2L "HTTP/2 receive connection overflow")
+      else Ok { state with receiveConnection = state.receiveConnection + size }
+    else match Stdlib.__Http2Server.__find state id with
+      | None -> Ok state
+      | Some stream ->
+        if stream.receiveWindow + size > 2147483647L then Error (Stdlib.__Http2Server.__connection 2L "HTTP/2 receive stream overflow")
+        else Ok (Stdlib.__Http2Server.__replace state { stream with receiveWindow = stream.receiveWindow + size })
+
+// Count accepted plaintext, not TLS ciphertext. Publish completion/receive credit
+// only after the transport flushes; no input may be processed before that action.
+let pollOutput (state: Stdlib.__Http2Server.State) (writer: Blob -> Stdlib.Result.Result<Stdlib.Option.Option<Int64>, String>) (flush: Unit -> Stdlib.Result.Result<Bool, String>) : Stdlib.Result.Result<Stdlib.__Http2Server.State, Stdlib.__Http2Server.Failure> =
+  match state.current with
+  | None -> Ok state
+  | Some output ->
+    let length = Stdlib.Blob.__byteLength output.bytes in
+    if output.offset < 0L || output.offset > length then Error (Stdlib.__Http2Server.__connection 2L "Invalid HTTP/2 output offset")
+    else if output.offset == length then
+      flush () |> Stdlib.Result.mapError (fun message -> Stdlib.__Http2Server.__connection 2L message) |> Stdlib.Result.andThen (fun done ->
+        if done then Stdlib.__Http2Server.__completed state output.after else Ok state)
+    else
+      let remaining = length - output.offset in
+      let requested = if remaining > 16384L then 16384L else remaining in
+      writer (Stdlib.__Http2Wire.__slice output.bytes output.offset requested) |> Stdlib.Result.mapError (fun message -> Stdlib.__Http2Server.__connection 2L message) |> Stdlib.Result.andThen (fun progress ->
+        match progress with
+        | None -> Ok state
+        | Some size ->
+          if size <= 0L || size > requested then Error (Stdlib.__Http2Server.__connection 2L "Invalid HTTP/2 output progress")
+          else Ok { state with current = Some { output with offset = output.offset + size } })
+
+// Rotate only a selected stream. A stream without credit cannot hold up another
+// response, while pending control frames retain connection-wide ordering.
+let __select (state: Stdlib.__Http2Server.State) (candidates: List<Stdlib.__Http2Server.Active>) : Stdlib.Result.Result<Stdlib.__Http2Server.State, Stdlib.__Http2Server.Failure> =
+  match candidates with
+  | [] -> Ok state
+  | stream :: rest ->
+    let selected = match stream.message with
+      | Receiving _ -> Ok state
+      | Responding reply ->
+        if reply.headers then Stdlib.__Http2Server.scheduleData state stream.id
+        else Stdlib.__Http2Server.scheduleHeaders state stream.id in
+    selected |> Stdlib.Result.andThen (fun next ->
+      if Stdlib.Option.isNone next.current then Stdlib.__Http2Server.__select next rest
+      else match Stdlib.__Http2Server.__find next stream.id with
+        | None -> Error (Stdlib.__Http2Server.__connection 2L "Scheduled missing HTTP/2 stream")
+        | Some updated -> Ok { next with streams = Stdlib.List.filter next.streams (fun current -> current.id != stream.id) @ [updated] })
+
+let schedule (state: Stdlib.__Http2Server.State) : Stdlib.Result.Result<Stdlib.__Http2Server.State, Stdlib.__Http2Server.Failure> =
+  if Stdlib.Option.isSome state.current then Ok state
+  else match state.outputs with
+    | output :: rest -> Ok { state with current = Some output, outputs = rest }
+    | [] -> Stdlib.__Http2Server.__select state state.streams
+
+// Preserve wire error scope before generic validation flattens it to a string.
+let __validateFrame (frame: Stdlib.__Http2Wire.Frame) : Stdlib.Result.Result<Unit, Stdlib.__Http2Server.Failure> =
+  let length = Stdlib.Blob.__byteLength frame.payload in
+  if ((frame.kind == 2L && length != 5L) || (frame.kind == 3L && length != 4L) || (frame.kind == 6L && length != 8L) ||
+      (frame.kind == 7L && length < 8L) || (frame.kind == 8L && length != 4L) ||
+      (frame.kind == 4L && (length % 6L != 0L || (Stdlib.Int64.bitwiseAnd frame.flags 1L != 0L && length != 0L)))) then
+    Error (Stdlib.__Http2Server.__connection 6L "Invalid HTTP/2 frame length")
+  else if frame.kind == 8L then Ok ()
+  else if (if frame.kind == 4L && frame.streamId == 0L then Stdlib.__Http2Server.__badWindowSetting frame.payload 0L else false) then
+    Error (Stdlib.__Http2Server.__connection 3L "Invalid HTTP/2 initial window")
+  else if frame.kind == 2L && frame.streamId != 0L && Stdlib.Int64.bitwiseAnd (Stdlib.__Http2Wire.__read32 frame.payload 0L) 2147483647L == frame.streamId then
+    Error (Stdlib.__Http2Server.__stream frame.streamId 1L "HTTP/2 stream depends on itself")
+  else Stdlib.__Http2Wire.validate frame |> Stdlib.Result.mapError (fun message -> Stdlib.__Http2Server.__connection 1L message)
+
+let parseFrame (state: Stdlib.__Http2Server.State) : Stdlib.Result.Result<Stdlib.Option.Option<Stdlib.__Http2Server.Next>, Stdlib.__Http2Server.Failure> =
+  let bytes = state.wire.pending in
+  let available = Stdlib.Blob.__byteLength bytes in
+  if state.preface || Stdlib.Option.isSome state.current then Ok None
+  else if available < 9L then Ok None
+  else
+    let length = Stdlib.Blob.__getByte bytes 0L * 65536L + Stdlib.Blob.__getByte bytes 1L * 256L + Stdlib.Blob.__getByte bytes 2L in
+    if length > 16384L then Error (Stdlib.__Http2Server.__connection 6L "HTTP/2 frame exceeds receive limit")
+    else if available < length + 9L then Ok None
+    else if state.wire.frames >= 16384L then Error (Stdlib.__Http2Server.__connection 11L "HTTP/2 frame budget exhausted")
+    else
+      let frame = Stdlib.__Http2Wire.Frame { kind = Stdlib.Blob.__getByte bytes 3L, flags = Stdlib.Blob.__getByte bytes 4L,
+        streamId = Stdlib.Int64.bitwiseAnd (Stdlib.__Http2Wire.__read32 bytes 5L) 2147483647L, payload = Stdlib.__Http2Wire.__slice bytes 9L length } in
+      let ordered = match state.continuation with
+        | None -> frame.kind != 9L
+        | Some block -> frame.kind == 9L && frame.streamId == block.id in
+      if Stdlib.Bool.not ordered then Error (Stdlib.__Http2Server.__connection 1L "Interleaved HTTP/2 header block")
+      else if Stdlib.Bool.not state.wire.settingsSeen && (frame.kind != 4L || Stdlib.Int64.bitwiseAnd frame.flags 1L != 0L) then
+        Error (Stdlib.__Http2Server.__connection 1L "HTTP/2 peer must start with SETTINGS")
+      else
+        let next = { state with wire = { state.wire with pending = Stdlib.__Http2Wire.__slice bytes (length + 9L) (available - length - 9L), frames = state.wire.frames + 1L } } in
+        let parsed = Some (Stdlib.__Http2Server.Next { frame = frame, state = next }) in
+        // Stream errors are handled after consumption by the frame dispatcher;
+        // returning one here would leave the rejected frame at the input head.
+        match Stdlib.__Http2Server.__validateFrame frame with
+        | Ok () -> Ok parsed
+        | Error failure -> match failure.scope with | Connection -> Error failure | Stream _ -> Ok parsed
+
+let control (state: Stdlib.__Http2Server.State) (frame: Stdlib.__Http2Wire.Frame) : Stdlib.Result.Result<Stdlib.__Http2Server.State, Stdlib.__Http2Server.Failure> =
+  Stdlib.__Http2Server.__validateFrame frame |> Stdlib.Result.andThen (fun _unit ->
+    if frame.kind == 4L then
+      if Stdlib.Int64.bitwiseAnd frame.flags 1L != 0L then Ok state
+      else Stdlib.__Http2Server.applySettings state frame.payload |> Stdlib.Result.andThen (fun next ->
+        Stdlib.__Http2Server.__frame 4L 1L 0L Stdlib.Blob.empty Stdlib.__Http2Server.Action.Nothing |> Stdlib.Result.andThen (fun output -> Stdlib.__Http2Server.__queue next output))
+    else if frame.kind == 6L then
+      if Stdlib.Int64.bitwiseAnd frame.flags 1L != 0L then Ok state
+      else Stdlib.__Http2Server.__frame 6L 1L 0L frame.payload Stdlib.__Http2Server.Action.Nothing |> Stdlib.Result.andThen (fun output -> Stdlib.__Http2Server.__queue state output)
+    else if frame.kind == 8L then Stdlib.__Http2Server.windowUpdate state frame.streamId (Stdlib.Int64.bitwiseAnd (Stdlib.__Http2Wire.__read32 frame.payload 0L) 2147483647L)
+    else if frame.kind == 3L then Stdlib.__Http2Server.reset state frame.streamId
+    else if frame.kind == 2L then Ok state
+    else if frame.kind == 7L then
+      let last = Stdlib.Int64.bitwiseAnd (Stdlib.__Http2Wire.__read32 frame.payload 0L) 2147483647L in
+      let increased = match state.wire.goAway with | None -> false | Some previous -> last > previous in
+      if increased then Error (Stdlib.__Http2Server.__connection 1L "HTTP/2 GOAWAY limit increased")
+      else Ok { state with draining = true, wire = { state.wire with goAway = Some last } }
+    else Error (Stdlib.__Http2Server.__connection 1L "Unexpected HTTP/2 control frame"))
+
+let consumePreface (state: Stdlib.__Http2Server.State) : Stdlib.Result.Result<Stdlib.Option.Option<Stdlib.__Http2Server.State>, Stdlib.__Http2Server.Failure> =
+  let bytes = state.wire.pending in
+  let length = Stdlib.Blob.__byteLength bytes in
+  if Stdlib.Bool.not state.preface then Ok (Some state)
+  else if Stdlib.Bool.not (Stdlib.__Http2Wire.isPrefacePrefix bytes 0L) then Error (Stdlib.__Http2Server.__connection 1L "Invalid HTTP/2 preface")
+  else if length < 24L then Ok None
+  else
+    let settings = Stdlib.Blob.__fromInt64List [0L, 3L, 0L, 0L, 0L, 32L, 0L, 6L, 0L, 1L, 0L, 0L] in
+    let next = { state with preface = false, wire = { state.wire with pending = Stdlib.__Http2Wire.__slice bytes 24L (length - 24L) } } in
+    Stdlib.__Http2Server.__frame 4L 0L 0L settings Stdlib.__Http2Server.Action.Nothing |> Stdlib.Result.andThen (fun output -> Stdlib.__Http2Server.__queue next output) |> Stdlib.Result.map (fun next -> Some next)
+
+// Decode every completed block, including headers on retired streams, before
+// request validation. Retiring a stream must not roll back the shared table.
+let receiveHeaders (state: Stdlib.__Http2Server.State) (frame: Stdlib.__Http2Wire.Frame) : Stdlib.Result.Result<(Stdlib.__Http2Server.State * Stdlib.Option.Option<Stdlib.__Http2Server.Decoded>), Stdlib.__Http2Server.Failure> =
+  let block =
+    if frame.kind == 1L then
+      if Stdlib.Option.isSome state.continuation then Error (Stdlib.__Http2Server.__connection 1L "Interleaved HTTP/2 header block")
+      else if frame.streamId <= 0L || frame.streamId % 2L != 1L then Error (Stdlib.__Http2Server.__connection 1L "Invalid HTTP/2 client stream")
+      else Stdlib.__Http2Server.__validateFrame frame |> Stdlib.Result.map (fun _unit ->
+        Stdlib.__Http2Server.Block { id = frame.streamId, bytes = Stdlib.__Http2Wire.content frame,
+          ended = Stdlib.Int64.bitwiseAnd frame.flags 1L != 0L, fresh = frame.streamId > state.last })
+    else if frame.kind == 9L then
+      match state.continuation with
+      | None -> Error (Stdlib.__Http2Server.__connection 1L "Unexpected HTTP/2 CONTINUATION")
+      | Some block ->
+        if block.id != frame.streamId then Error (Stdlib.__Http2Server.__connection 1L "Interleaved HTTP/2 header block")
+        else Ok { block with bytes = Stdlib.Blob.concat [block.bytes, frame.payload] }
+    else Error (Stdlib.__Http2Server.__connection 1L "Expected HTTP/2 header frame") in
+  block |> Stdlib.Result.andThen (fun block ->
+    if Stdlib.Blob.__byteLength block.bytes > 65536L then Error (Stdlib.__Http2Server.__connection 9L "HTTP/2 compressed header limit exceeded")
+    else
+      let next = if frame.kind == 1L && block.fresh then { state with last = block.id, opened = state.opened + 1L } else state in
+      if Stdlib.Int64.bitwiseAnd frame.flags 4L == 0L then Ok (({ next with continuation = Some block }, None))
+      else
+        Stdlib.__Hpack.decode next.wire.decoder block.bytes |> Stdlib.Result.mapError (fun message -> Stdlib.__Http2Server.__connection 9L message) |> Stdlib.Result.map (fun decoded ->
+          let next = { next with continuation = None, wire = { next.wire with decoder = decoded.state } } in
+          (next, Some (Stdlib.__Http2Server.Decoded { id = block.id, fields = decoded.headers, ended = block.ended, fresh = block.fresh }))))
+
+let __goAway (state: Stdlib.__Http2Server.State) (code: Int64) (fatal: Bool) : Stdlib.Result.Result<Stdlib.__Http2Server.State, Stdlib.__Http2Server.Failure> =
+  let payload = Stdlib.Blob.concat [Stdlib.__Http2Wire.__u32 state.accepted, Stdlib.__Http2Wire.__u32 code] in
+  let after = if fatal then Stdlib.__Http2Server.Action.Stop else Stdlib.__Http2Server.Action.Nothing in
+  let next = { state with draining = true, outputs = if fatal then [] else state.outputs } in
+  Stdlib.__Http2Server.__frame 7L 0L 0L payload after |> Stdlib.Result.andThen (fun output -> Stdlib.__Http2Server.__queue next output)
+
+let reject (state: Stdlib.__Http2Server.State) (failure: Stdlib.__Http2Server.Failure) : Stdlib.Result.Result<Stdlib.__Http2Server.State, Stdlib.__Http2Server.Failure> =
+  match failure.scope with
+  | Connection -> Stdlib.__Http2Server.__goAway state failure.code true
+  | Stream id ->
+    Stdlib.__Http2Server.reset state id |> Stdlib.Result.andThen (fun next ->
+      Stdlib.__Http2Server.__frame 3L 0L id (Stdlib.__Http2Wire.__u32 failure.code) Stdlib.__Http2Server.Action.Nothing |> Stdlib.Result.andThen (fun output -> Stdlib.__Http2Server.__queue next output))
+
+let __reply (context: Stdlib.__Http2Server.Context) (state: Stdlib.__Http2Server.State) (stream: Stdlib.__Http2Server.Active) (method: String) (response: Stdlib.Http.Response) (now: Int64) : Stdlib.Result.Result<Stdlib.__Http2Server.State, Stdlib.__Http2Server.Failure> =
+  let reply = match Stdlib.__Http2Server.__response context.config method response with
+    | Ok reply -> Ok reply
+    | Error _ -> Stdlib.__Http2Server.__response context.config method (Stdlib.Http.responseWithText "500 Internal Server Error" 500) in
+  reply |> Stdlib.Result.mapError (fun message -> Stdlib.__Http2Server.__connection 2L message) |> Stdlib.Result.andThen (fun reply ->
+    let total = state.total - Stdlib.__Http2Server.__messageSize stream.message + Stdlib.Blob.__byteLength reply.body in
+    if total > 104857600L then Error (Stdlib.__Http2Server.__connection 11L "HTTP/2 retained body budget exhausted")
+    else Ok (Stdlib.__Http2Server.__replace { state with total = total } { stream with deadline = now + 30000L, message = Stdlib.__Http2Server.Message.Responding reply }))
+
+let dispatch (context: Stdlib.__Http2Server.Context) (state: Stdlib.__Http2Server.State) (id: Int64) (now: Int64) : Stdlib.Result.Result<Stdlib.__Http2Server.State, Stdlib.__Http2Server.Failure> =
+  match Stdlib.__Http2Server.__find state id with
+  | None -> Ok state
+  | Some stream -> match stream.message with
+    | Responding _ -> Ok state
+    | Receiving input ->
+      if Stdlib.Bool.not stream.ended then Ok state
+      else
+        let valid = match input.expected with | None -> true | Some expected -> expected == input.total in
+        if Stdlib.Bool.not valid then Error (Stdlib.__Http2Server.__stream id 1L "HTTP/2 Content-Length mismatch")
+        else
+          let request = Stdlib.Http.Request { url = input.head.url, headers = Stdlib.List.push input.head.headers ("x-http-method", input.head.method), body = Stdlib.Blob.concat (Stdlib.List.reverse input.blocks) } in
+          Stdlib.__Http2Server.__reply context state stream input.head.method (context.handler request) now
+
+let applyHeaders (context: Stdlib.__Http2Server.Context) (state: Stdlib.__Http2Server.State) (head: Stdlib.__Http2Server.Decoded) (now: Int64) : Stdlib.Result.Result<Stdlib.__Http2Server.State, Stdlib.__Http2Server.Failure> =
+  if head.fresh then
+    if state.draining || Stdlib.List.length state.streams >= 32 then Error (Stdlib.__Http2Server.__stream head.id 7L "HTTP/2 stream refused")
+    else if state.opened > 1024L then
+      Stdlib.__Http2Server.__goAway state 0L false |> Stdlib.Result.andThen (fun next -> Stdlib.__Http2Server.reject next (Stdlib.__Http2Server.__stream head.id 7L "HTTP/2 stream lifetime limit"))
+    else
+      Stdlib.__Http2Fields.request head.fields |> Stdlib.Result.mapError (fun message -> Stdlib.__Http2Server.__stream head.id 1L message) |> Stdlib.Result.andThen (fun request ->
+        Stdlib.__Http2Fields.length request.headers |> Stdlib.Result.mapError (fun message -> Stdlib.__Http2Server.__stream head.id 1L message) |> Stdlib.Result.andThen (fun expected ->
+          let input = Stdlib.__Http2Server.Incoming { head = request, expected = expected, blocks = [], total = 0L } in
+          let stream = Stdlib.__Http2Server.Active { id = head.id, window = state.wire.initialWindow, receiveWindow = 65535L, ended = head.ended, deadline = now + 10000L, message = Stdlib.__Http2Server.Message.Receiving input } in
+          let next = { state with streams = state.streams @ [stream], accepted = head.id } in
+          let oversized = match expected with | None -> false | Some expected -> expected > context.limit in
+          if oversized then Stdlib.__Http2Server.__reply context next stream request.method (Stdlib.Http.responseWithText "413 Payload Too Large" 413) now
+          else Stdlib.__Http2Server.dispatch context next head.id now))
+  else match Stdlib.__Http2Server.__find state head.id with
+    | None -> Ok state
+    | Some stream ->
+      if stream.ended then Error (Stdlib.__Http2Server.__stream head.id 5L "HTTP/2 headers after request end")
+      else if Stdlib.Bool.not head.ended then Error (Stdlib.__Http2Server.__stream head.id 1L "HTTP/2 trailers must end request")
+      else Stdlib.__Http2Fields.trailers head.fields |> Stdlib.Result.mapError (fun message -> Stdlib.__Http2Server.__stream head.id 1L message) |> Stdlib.Result.andThen (fun _unit ->
+        Stdlib.__Http2Server.dispatch context (Stdlib.__Http2Server.__replace state { stream with ended = true }) head.id now)
+
+let __recover (state: Stdlib.__Http2Server.State) (result: Stdlib.Result.Result<Stdlib.__Http2Server.State, Stdlib.__Http2Server.Failure>) : Stdlib.Result.Result<Stdlib.__Http2Server.State, Stdlib.__Http2Server.Failure> =
+  match result with | Ok next -> Ok next | Error failure -> Stdlib.__Http2Server.reject state failure
+
+let __credit (state: Stdlib.__Http2Server.State) (id: Int64) (size: Int64) : Stdlib.Result.Result<Stdlib.__Http2Server.State, Stdlib.__Http2Server.Failure> =
+  if size == 0L then Ok state
+  else Stdlib.__Http2Server.__frame 8L 0L id (Stdlib.__Http2Wire.__u32 size) (Stdlib.__Http2Server.Action.Credit ((id, size))) |> Stdlib.Result.andThen (fun output -> Stdlib.__Http2Server.__queue state output)
+
+let __body (context: Stdlib.__Http2Server.Context) (state: Stdlib.__Http2Server.State) (stream: Stdlib.__Http2Server.Active) (bytes: Blob) (ended: Bool) (now: Int64) : Stdlib.Result.Result<Stdlib.__Http2Server.State, Stdlib.__Http2Server.Failure> =
+  if stream.ended then Error (Stdlib.__Http2Server.__stream stream.id 5L "HTTP/2 DATA after request end")
+  else match stream.message with
+    | Responding _ -> Ok (Stdlib.__Http2Server.__replace state { stream with ended = ended })
+    | Receiving input ->
+      let size = Stdlib.Blob.__byteLength bytes in
+      let total = input.total + size in
+      if total > context.limit then Stdlib.__Http2Server.__reply context state { stream with ended = ended } input.head.method (Stdlib.Http.responseWithText "413 Payload Too Large" 413) now
+      else if state.total + size > 104857600L then Error (Stdlib.__Http2Server.__connection 11L "HTTP/2 retained body budget exhausted")
+      else
+        let valid = match input.expected with | None -> true | Some expected -> total <= expected in
+        if Stdlib.Bool.not valid then Error (Stdlib.__Http2Server.__stream stream.id 1L "HTTP/2 Content-Length exceeded")
+        else
+          let input = { input with total = total, blocks = if size == 0L then input.blocks else Stdlib.List.push input.blocks bytes } in
+          let next = Stdlib.__Http2Server.__replace { state with total = state.total + size } { stream with ended = ended, message = Stdlib.__Http2Server.Message.Receiving input } in
+          Stdlib.__Http2Server.dispatch context next stream.id now
+
+// Charge padded wire bytes, while retaining only message content. Connection
+// credit survives stream errors and closed-stream DATA; stream credit does not.
+let receiveData (context: Stdlib.__Http2Server.Context) (state: Stdlib.__Http2Server.State) (frame: Stdlib.__Http2Wire.Frame) (now: Int64) : Stdlib.Result.Result<Stdlib.__Http2Server.State, Stdlib.__Http2Server.Failure> =
+  if frame.kind != 0L then Error (Stdlib.__Http2Server.__connection 1L "Expected HTTP/2 DATA")
+  else Stdlib.__Http2Server.__validateFrame frame |> Stdlib.Result.andThen (fun _unit ->
+    let size = Stdlib.Blob.__byteLength frame.payload in
+    if frame.streamId % 2L != 1L || frame.streamId > state.last then Error (Stdlib.__Http2Server.__connection 1L "HTTP/2 DATA on idle stream")
+    else if size > state.receiveConnection then Error (Stdlib.__Http2Server.__connection 3L "HTTP/2 receive connection window exceeded")
+    else
+      let next = { state with receiveConnection = state.receiveConnection - size } in
+      Stdlib.__Http2Server.__credit next 0L size |> Stdlib.Result.andThen (fun charged ->
+        match Stdlib.__Http2Server.__find charged frame.streamId with
+        | None -> Ok charged
+        | Some stream ->
+          if size > stream.receiveWindow then Stdlib.__Http2Server.reject charged (Stdlib.__Http2Server.__stream stream.id 3L "HTTP/2 receive stream window exceeded")
+          else
+            let stream = { stream with receiveWindow = stream.receiveWindow - size } in
+            let charged = Stdlib.__Http2Server.__replace charged stream in
+            let ended = Stdlib.Int64.bitwiseAnd frame.flags 1L != 0L in
+            let received = Stdlib.__Http2Server.__body context charged stream (Stdlib.__Http2Wire.content frame) ended now in
+            Stdlib.__Http2Server.__recover charged received |> Stdlib.Result.andThen (fun next ->
+              match Stdlib.__Http2Server.__find next stream.id with
+              | None -> Ok next
+              | Some stream -> if stream.ended then Ok next else Stdlib.__Http2Server.__credit next stream.id size)))
+
+let handleFrame (context: Stdlib.__Http2Server.Context) (state: Stdlib.__Http2Server.State) (frame: Stdlib.__Http2Wire.Frame) (now: Int64) : Stdlib.Result.Result<Stdlib.__Http2Server.State, Stdlib.__Http2Server.Failure> =
+  if frame.kind == 1L || frame.kind == 9L then
+    match Stdlib.__Http2Server.receiveHeaders state frame with
+    | Error failure -> Stdlib.__Http2Server.reject state failure
+    | Ok pair ->
+      let (next, decoded) = pair in
+      match decoded with
+      | None -> Ok next
+      | Some head -> Stdlib.__Http2Server.__recover next (Stdlib.__Http2Server.applyHeaders context next head now)
+  else if frame.kind == 0L then Stdlib.__Http2Server.__recover state (Stdlib.__Http2Server.receiveData context state frame now)
+  else if Stdlib.__Http2.__isControl frame then Stdlib.__Http2Server.__recover state (Stdlib.__Http2Server.control state frame)
+  else if frame.kind == 5L then Stdlib.__Http2Server.reject state (Stdlib.__Http2Server.__connection 1L "HTTP/2 client cannot send PUSH_PROMISE")
+  else Ok state
+
+let __expire (context: Stdlib.__Http2Server.Context) (state: Stdlib.__Http2Server.State) (remaining: List<Stdlib.__Http2Server.Active>) (now: Int64) : Stdlib.Result.Result<Stdlib.__Http2Server.State, Stdlib.__Http2Server.Failure> =
+  match remaining with
+  | [] -> Ok state
+  | stream :: rest ->
+    let updated =
+      if now < stream.deadline then Ok state
+      else match stream.message with
+        | Receiving input -> Stdlib.__Http2Server.__reply context state stream input.head.method (Stdlib.Http.responseWithText "408 Request Timeout" 408) now
+        | Responding _ ->
+          let writing = match state.current with | None -> false | Some output -> output.stream == stream.id in
+          if writing then Error (Stdlib.__Http2Server.__connection 2L "HTTP/2 partial response write timed out")
+          else Stdlib.__Http2Server.reject state (Stdlib.__Http2Server.__stream stream.id 8L "HTTP/2 response timed out") in
+    updated |> Stdlib.Result.andThen (fun next -> Stdlib.__Http2Server.__expire context next rest now)
+
+let __input (context: Stdlib.__Http2Server.Context) (state: Stdlib.__Http2Server.State) (now: Int64) : Stdlib.Result.Result<Stdlib.__Http2Server.State, Stdlib.__Http2Server.Failure> =
+  if state.preface then
+    match Stdlib.__Http2Server.consumePreface state with
+    | Error failure -> Stdlib.__Http2Server.reject state failure
+    | Ok available -> Ok (Stdlib.Option.withDefault available state)
+  else match Stdlib.__Http2Server.parseFrame state with
+    | Error failure -> Stdlib.__Http2Server.reject state failure
+    | Ok available -> match available with
+      | None -> Ok state
+      | Some next -> Stdlib.__Http2Server.handleFrame context next.state next.frame now
+
+let immediate (state: Stdlib.__Http2Server.State) : Bool =
+  if Stdlib.Option.isSome state.current || state.stopped then false
+  else if state.outputs != [] then true
+  else if state.preface then Stdlib.Blob.__byteLength state.wire.pending >= 24L || Stdlib.Bool.not (Stdlib.__Http2Wire.isPrefacePrefix state.wire.pending 0L)
+  else
+    let bytes = state.wire.pending in
+    if Stdlib.Blob.__byteLength bytes < 9L then false
+    else
+      let length = Stdlib.Blob.__getByte bytes 0L * 65536L + Stdlib.Blob.__getByte bytes 1L * 256L + Stdlib.Blob.__getByte bytes 2L in
+      length > 16384L || Stdlib.Blob.__byteLength bytes >= length + 9L
+
+// Flush the current frame and publish its action before reading another frame.
+let poll (context: Stdlib.__Http2Server.Context) (transport: Stdlib.__HttpTransport.Transport) (state: Stdlib.__Http2Server.State) (now: Int64) : Stdlib.Result.Result<Stdlib.__Http2Server.State, Stdlib.__Http2Server.Failure> =
+  if state.stopped then Ok state
+  else Stdlib.__Http2Server.__expire context state state.streams now |> Stdlib.Result.andThen (fun state ->
+    if Stdlib.Option.isSome state.current then Stdlib.__Http2Server.pollOutput state transport.pollWrite transport.flush
+    else if state.outputs != [] then Stdlib.__Http2Server.schedule state
+    else if Stdlib.__Http2Server.immediate state then Stdlib.__Http2Server.__input context state now |> Stdlib.Result.andThen Stdlib.__Http2Server.schedule
+    else transport.poll () |> Stdlib.Result.mapError (fun message -> Stdlib.__Http2Server.__connection 2L message) |> Stdlib.Result.andThen (fun available ->
+      match available with
+      | None -> Stdlib.__Http2Server.schedule state
+      | Some bytes ->
+        let size = Stdlib.Blob.__byteLength bytes in
+        if size == 0L then Error (Stdlib.__Http2Server.__connection 2L "HTTP/2 connection ended")
+        else if size > 16384L || Stdlib.Blob.__byteLength state.wire.pending + size > 65536L then Error (Stdlib.__Http2Server.__connection 11L "HTTP/2 input budget exceeded")
+        else
+          let next = { state with wire = { state.wire with pending = Stdlib.Blob.concat [state.wire.pending, bytes] } } in
+          Stdlib.__Http2Server.__input context next now |> Stdlib.Result.andThen Stdlib.__Http2Server.schedule))
+
+let deadline (previous: Stdlib.__Http2Server.State) (state: Stdlib.__Http2Server.State) (deadline: Int64) (now: Int64) : Int64 =
+  let before = match previous.current with | None -> -1L | Some output -> output.offset in
+  let after = match state.current with | None -> -1L | Some output -> output.offset in
+  let progressed = before != after || state.wire.frames != previous.wire.frames || state.preface != previous.preface || Stdlib.Blob.__byteLength state.wire.pending != Stdlib.Blob.__byteLength previous.wire.pending in
+  if Stdlib.Bool.not state.wire.settingsSeen then deadline
+  else if Stdlib.Option.isSome state.continuation then
+    if Stdlib.Option.isNone previous.continuation then now + 10000L else deadline
+  else if Stdlib.Option.isSome previous.continuation then now + 30000L
+  else if Stdlib.Blob.__byteLength state.wire.pending > 0L && Stdlib.Bool.not (Stdlib.__Http2Server.immediate state) then
+    if Stdlib.Blob.__byteLength previous.wire.pending == 0L then now + 10000L else deadline
+  else if progressed then now + 30000L else deadline
+
+let retained (state: Stdlib.__Http2Server.State) : Int64 =
+  let block = match state.continuation with | None -> 0L | Some block -> Stdlib.Blob.__byteLength block.bytes in
+  let output = match state.current with | None -> 0L | Some output -> Stdlib.Blob.__byteLength output.bytes in
+  state.total + Stdlib.Blob.__byteLength state.wire.pending + block + output + Stdlib.__Http2Server.__queuedBytes state.outputs

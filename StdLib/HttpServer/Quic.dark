@@ -8,6 +8,7 @@ type Step = { recent: List<Stdlib.HttpServer.Quic.Recent>, stopped: Bool }
 let __socket (parent: Stdlib.__Datagram.Socket) : Stdlib.__Datagram.Socket =
   let lifecycle = Stdlib.Stream.__new (fun _unit -> Some ()) (fun _unit -> ()) in
   Stdlib.__Datagram.Socket { lifecycle = lifecycle,
+    watch = Stdlib.Option.map parent.watch (fun watch -> { watch with lifecycle = lifecycle }),
     send = fun peer bytes timeout -> match Stdlib.Stream.next lifecycle with | None -> Error 9L | Some () -> Stdlib.__Datagram.send parent peer bytes timeout,
     receive = fun timeout -> match Stdlib.Stream.next lifecycle with | None -> Error 9L | Some () -> Stdlib.__Datagram.receive parent timeout }
 
@@ -99,11 +100,11 @@ let __loop (context: Stdlib.HttpServer.Quic.Context) (handler: Stdlib.Http.Reque
   | Error message -> Error message
   | Ok step -> if step.stopped then Ok () else Stdlib.HttpServer.Quic.__loop context handler step.recent
 
-/// Serve one HTTPS request per authenticated QUIC v1 connection. Import the
+/// Serve bounded multiplexed HTTPS requests per authenticated QUIC v1 connection. Import the
 /// certificate chain and private key with TlsServerIdentity.create. Every new
 /// connection proves its source address with Retry before a certificate flight.
 /// The shared UDP listener returns normally on SIGINT or SIGTERM.
-let serve (config: Stdlib.HttpServer.Config.Config) (identity: Stdlib.TlsServerIdentity.Identity) (handler: Stdlib.Http.Request -> Stdlib.Http.Response) (onListening: Unit -> Unit) : Stdlib.Result.Result<Unit, String> =
+let serveOn (address: List<Int64>) (config: Stdlib.HttpServer.Config.Config) (identity: Stdlib.TlsServerIdentity.Identity) (handler: Stdlib.Http.Request -> Stdlib.Http.Response) (onListening: Unit -> Unit) : Stdlib.Result.Result<Unit, String> =
   match Stdlib.Int.toInt64 config.port, Stdlib.Int.toInt64 config.maxBodyBytes with
   | Some port, Some limit ->
     if port <= 0L || port > 65535L || limit < 0L || limit > 104857600L then Error "Invalid HTTP/3 server configuration"
@@ -112,7 +113,7 @@ let serve (config: Stdlib.HttpServer.Config.Config) (identity: Stdlib.TlsServerI
     | Ok signals ->
       let result = match Stdlib.Crypto.__secureRandomBytes 32L with
         | Error _ -> Error "HTTP/3 Retry key generation failed"
-        | Ok secret -> match Stdlib.__Datagram.bind4 [0L,0L,0L,0L] port with
+        | Ok secret -> match (if Stdlib.List.length address == 16 then Stdlib.__Datagram.bind6 address port else Stdlib.__Datagram.bind4 address port) with
           | Error _ -> Error "Cannot bind HTTP/3 server"
           | Ok socket ->
             onListening ()
@@ -123,3 +124,7 @@ let serve (config: Stdlib.HttpServer.Config.Config) (identity: Stdlib.TlsServerI
       Stdlib.__Network.closeShutdownSignals signals
       result
   | _, _ -> Error "Invalid HTTP/3 server configuration"
+
+/// Serve on the default IPv4 wildcard address. Use serveOn for IPv6 or an explicit interface.
+let serve (config: Stdlib.HttpServer.Config.Config) (identity: Stdlib.TlsServerIdentity.Identity) (handler: Stdlib.Http.Request -> Stdlib.Http.Response) (onListening: Unit -> Unit) : Stdlib.Result.Result<Unit, String> =
+  Stdlib.HttpServer.Quic.serveOn [0L, 0L, 0L, 0L] config identity handler onListening

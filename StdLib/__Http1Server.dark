@@ -1,0 +1,207 @@
+// __Http1Server.dark - Fair bounded HTTP/1.1 transport owners and persistent framing.
+module Darklang.Stdlib.__Http1Server
+
+type Context = { config: Stdlib.HttpServer.Config.Config, handler: Stdlib.Http.Request -> Stdlib.Http.Response, signals: Stdlib.__Network.ShutdownSignals, limit: Int64 }
+type RequestBuffer = { bytes: Blob, continued: Bool }
+type After = Close | Request of Blob | Continue of Blob
+type Log = { method: String, target: String, status: Int, started: Int64 }
+type Output = { bytes: Blob, offset: Int64, after: Stdlib.__Http1Server.After, log: Stdlib.Option.Option<Stdlib.__Http1Server.Log> }
+type Phase = Prelude of Blob | Request of Stdlib.__Http1Server.RequestBuffer | AwaitRequest of Stdlib.__Http1Server.RequestBuffer | Output of Stdlib.__Http1Server.Output | Http2 of Stdlib.__Http2Server.State
+type Owner = { connection: Stdlib.__Network.TcpConnection, transport: Stdlib.__HttpTransport.Transport, phase: Stdlib.__Http1Server.Phase, deadline: Int64, started: Int64, requests: Int64 }
+type Step = { owner: Stdlib.Option.Option<Stdlib.__Http1Server.Owner>, stopped: Bool }
+type Round = { owners: List<Stdlib.__Http1Server.Owner>, stopped: Bool }
+
+let __close (owner: Stdlib.__Http1Server.Owner) : Stdlib.__Http1Server.Step =
+  let _ = Stdlib.__HttpTransport.close owner.transport in Stdlib.__Http1Server.Step { owner = None, stopped = false }
+
+let __closeAll (owners: List<Stdlib.__Http1Server.Owner>) : Unit =
+  Stdlib.List.fold owners () (fun _unit owner -> Stdlib.__HttpTransport.close owner.transport)
+
+let __keep (owner: Stdlib.__Http1Server.Owner) : Stdlib.__Http1Server.Step = Stdlib.__Http1Server.Step { owner = Some owner, stopped = false }
+
+let __closeToken (headers: List<(String * String)>) : Bool =
+  Stdlib.List.any headers (fun header -> let (name, value) = header in
+    Stdlib.String.toLowercase name == "connection" && Stdlib.List.any (Stdlib.String.split value ",") (fun token -> Stdlib.String.toLowercase (Stdlib.String.trim token) == "close"))
+
+let persistent (request: Stdlib.__HttpWire.ParsedRequest) (response: Stdlib.Http.Response) (count: Int64) : Bool =
+  request.version == "HTTP/1.1" && request.method != "CONNECT" && response.statusCode >= 200 && count < 100L &&
+  Stdlib.Bool.not (Stdlib.__Http1Server.__closeToken request.headers) && Stdlib.Bool.not (Stdlib.__Http1Server.__closeToken response.headers)
+
+let __output (context: Stdlib.__Http1Server.Context) (owner: Stdlib.__Http1Server.Owner) (now: Int64) (method: String) (target: String)
+  (response: Stdlib.Http.Response) (after: Stdlib.__Http1Server.After) : Stdlib.__Http1Server.Owner =
+  let persistent = match after with | Request _ -> true | _ -> false in
+  let result = Stdlib.HttpServer.__responseBytesFor method context.config response persistent in
+  let (bytes, status, after) = match result with
+    | Ok bytes -> (bytes, response.statusCode, after)
+    | Error _ ->
+      let head = "HTTP/1.1 500 Internal Server Error\r\nConnection: close\r\nContent-Length: 21\r\n\r\n" in
+      (Stdlib.String.toBlob (if method == "HEAD" then head else head ++ "Internal server error"), 500, Stdlib.__Http1Server.After.Close) in
+  let log = Stdlib.__Http1Server.Log { method = method, target = target, status = status, started = owner.started } in
+  { owner with phase = Stdlib.__Http1Server.Phase.Output (Stdlib.__Http1Server.Output { bytes = bytes, offset = 0L, after = after, log = Some log }), deadline = now + 30000L }
+
+let __status (context: Stdlib.__Http1Server.Context) (owner: Stdlib.__Http1Server.Owner) (now: Int64) (status: Int) : Stdlib.__Http1Server.Owner =
+  let response = Stdlib.Http.responseWithText (if status == 413 then "413 Payload Too Large" else "Invalid HTTP request") status in
+  let buffer = match owner.phase with | Prelude bytes -> bytes | Request buffer | AwaitRequest buffer -> buffer.bytes | Output _ | Http2 _ -> Stdlib.Blob.empty in
+  let method = match Stdlib.HttpServer.__statusError status buffer with
+    | Status ((_status, method)) -> Stdlib.Option.withDefault method "(unknown)"
+    | _ -> Builtin.crash "HTTP status helper returned a transport error" in
+  Stdlib.__Http1Server.__output context owner now method "(invalid request)" response Stdlib.__Http1Server.After.Close
+
+let prepare (context: Stdlib.__Http1Server.Context) (owner: Stdlib.__Http1Server.Owner) (now: Int64) (buffer: Stdlib.__Http1Server.RequestBuffer) : Stdlib.__Http1Server.Owner =
+  match Stdlib.__HttpWire.parseRequestWithLimit context.limit buffer.bytes with
+  | Error (Invalid message) -> Stdlib.__Http1Server.__status context owner now (if message == "HTTP body too large" then 413 else 400)
+  | Error Incomplete ->
+    match Stdlib.HttpServer.__expectContinue buffer.bytes with
+    | Error _ -> Stdlib.__Http1Server.__status context owner now 417
+    | Ok expect ->
+      if expect && Stdlib.Bool.not buffer.continued then
+        let output = Stdlib.__Http1Server.Output { bytes = Stdlib.String.toBlob "HTTP/1.1 100 Continue\r\n\r\n", offset = 0L, after = Stdlib.__Http1Server.After.Continue buffer.bytes, log = None } in
+        { owner with phase = Stdlib.__Http1Server.Phase.Output output }
+      else { owner with phase = Stdlib.__Http1Server.Phase.AwaitRequest buffer }
+  | Ok request ->
+    let response = match Stdlib.HttpServer.__request context.config request with | Error _ -> Stdlib.Http.badRequest "Invalid HTTP request" | Ok request -> context.handler request in
+    let count = owner.requests + 1L in
+    let after = if Stdlib.__Http1Server.persistent request response count then Stdlib.__Http1Server.After.Request request.remaining else Stdlib.__Http1Server.After.Close in
+    Stdlib.__Http1Server.__output context { owner with requests = count } now request.method request.target response after
+
+let __read (context: Stdlib.__Http1Server.Context) (owner: Stdlib.__Http1Server.Owner) (now: Int64) (buffer: Blob) (continued: Bool) (prelude: Bool)
+  : Stdlib.Result.Result<Stdlib.__Http1Server.Step, String> =
+  match owner.transport.poll () with
+  | Error _ -> Ok (Stdlib.__Http1Server.__close owner)
+  | Ok available ->
+    match available with
+    | None -> Ok (Stdlib.__Http1Server.__keep owner)
+    | Some bytes ->
+      if Stdlib.Blob.__byteLength bytes == 0L then
+        if Stdlib.Blob.__byteLength buffer == 0L || prelude then Ok (Stdlib.__Http1Server.__close owner)
+        else Ok (Stdlib.__Http1Server.__keep (Stdlib.__Http1Server.__status context owner now 400))
+      else
+        let pending = Stdlib.Blob.concat [buffer, bytes] in
+        let owner = if Stdlib.Blob.__byteLength buffer == 0L then { owner with deadline = now + 10000L, started = now } else owner in
+        if Stdlib.Blob.__byteLength pending > context.limit + 1048576L then Ok (Stdlib.__Http1Server.__keep (Stdlib.__Http1Server.__status context owner now 413))
+        else if prelude && Stdlib.__Http2Wire.isPrefacePrefix pending 0L then
+          if Stdlib.Blob.__byteLength pending < 24L then Ok (Stdlib.__Http1Server.__keep { owner with phase = Stdlib.__Http1Server.Phase.Prelude pending })
+          else
+            Ok (Stdlib.__Http1Server.__keep { owner with phase = Stdlib.__Http1Server.Phase.Http2 (Stdlib.__Http2Server.initial pending) })
+        else
+          let request = Stdlib.__Http1Server.RequestBuffer { bytes = pending, continued = continued } in
+          Ok (Stdlib.__Http1Server.__keep { owner with phase = Stdlib.__Http1Server.Phase.Request request })
+
+let __written (context: Stdlib.__Http1Server.Context) (owner: Stdlib.__Http1Server.Owner) (now: Int64) (output: Stdlib.__Http1Server.Output) : Stdlib.__Http1Server.Step =
+    let _ = match output.log with
+      | Some log when context.config.logRequests -> Stdlib.printLine ("[HttpServer] " ++ log.method ++ " " ++ log.target ++ " " ++ Stdlib.Int.toString log.status ++ " " ++ Stdlib.Int64.toString (now - log.started) ++ "ms")
+      | _ -> () in
+    match output.after with
+    | Close -> Stdlib.__Http1Server.__close owner
+    | Continue bytes ->
+      let buffer = Stdlib.__Http1Server.RequestBuffer { bytes = bytes, continued = true } in
+      Stdlib.__Http1Server.__keep { owner with phase = Stdlib.__Http1Server.Phase.AwaitRequest buffer, deadline = owner.started + 10000L }
+    | Request bytes ->
+      let buffer = Stdlib.__Http1Server.RequestBuffer { bytes = bytes, continued = false } in
+      let phase = if Stdlib.Blob.__byteLength bytes == 0L then Stdlib.__Http1Server.Phase.AwaitRequest buffer else Stdlib.__Http1Server.Phase.Request buffer in
+      Stdlib.__Http1Server.__keep { owner with phase = phase, started = now, deadline = now + (if Stdlib.Blob.__byteLength bytes == 0L then 30000L else 10000L) }
+let __write (context: Stdlib.__Http1Server.Context) (owner: Stdlib.__Http1Server.Owner) (now: Int64) (output: Stdlib.__Http1Server.Output) : Stdlib.__Http1Server.Step =
+  let remaining = Stdlib.Blob.__byteLength output.bytes - output.offset in
+  if remaining == 0L then
+    match owner.transport.flush () with
+    | Error _ -> Stdlib.__Http1Server.__close owner
+    | Ok false -> Stdlib.__Http1Server.__keep owner
+    | Ok true -> Stdlib.__Http1Server.__written context owner now output
+  else
+    let size = if remaining > 4096L then 4096L else remaining in
+    match owner.transport.pollWrite (Stdlib.__Http2Wire.__slice output.bytes output.offset size) with
+    | Error _ -> Stdlib.__Http1Server.__close owner
+    | Ok sent -> match sent with
+      | None -> Stdlib.__Http1Server.__keep owner
+      | Some size -> Stdlib.__Http1Server.__keep { owner with phase = Stdlib.__Http1Server.Phase.Output { output with offset = output.offset + size } }
+
+let step (context: Stdlib.__Http1Server.Context) (owner: Stdlib.__Http1Server.Owner) (now: Int64) : Stdlib.Result.Result<Stdlib.__Http1Server.Step, String> =
+  match Stdlib.Stream.next owner.transport.lifecycle with
+  | None -> Ok (Stdlib.__Http1Server.__close owner)
+  | Some _ ->
+    if now >= owner.deadline then
+      match owner.phase with
+      | Request buffer | AwaitRequest buffer when Stdlib.Blob.__byteLength buffer.bytes != 0L -> Ok (Stdlib.__Http1Server.__keep (Stdlib.__Http1Server.__status context owner now 408))
+      | _ -> Ok (Stdlib.__Http1Server.__close owner)
+    else match owner.phase with
+      | Prelude bytes -> Stdlib.__Http1Server.__read context owner now bytes false true
+      | Request buffer -> Ok (Stdlib.__Http1Server.__keep (Stdlib.__Http1Server.prepare context owner now buffer))
+      | AwaitRequest buffer -> Stdlib.__Http1Server.__read context owner now buffer.bytes buffer.continued false
+      | Output output -> Ok (Stdlib.__Http1Server.__write context owner now output)
+      | Http2 previous ->
+        let http = Stdlib.__Http2Server.Context { config = context.config, limit = context.limit, handler = fun request -> Stdlib.HttpServer.__http2Handler context.config context.handler request } in
+        match Stdlib.__Http2Server.poll http owner.transport previous now with
+        | Error _ -> Ok (Stdlib.__Http1Server.__close owner)
+        | Ok state ->
+          if state.stopped || (state.draining && state.streams == [] && state.outputs == [] && Stdlib.Option.isNone state.current) then Ok (Stdlib.__Http1Server.__close owner)
+          else Ok (Stdlib.__Http1Server.__keep { owner with phase = Stdlib.__Http1Server.Phase.Http2 state, deadline = Stdlib.__Http2Server.deadline previous state owner.deadline now })
+
+let __size (owner: Stdlib.__Http1Server.Owner) : Int64 =
+  match owner.phase with
+  | Prelude bytes -> Stdlib.Blob.__byteLength bytes
+  | Http2 state -> Stdlib.__Http2Server.retained state
+  | Request buffer | AwaitRequest buffer -> Stdlib.Blob.__byteLength buffer.bytes
+  | Output output ->
+    let pending = match output.after with | Close -> 0L | Continue bytes | Request bytes -> Stdlib.Blob.__byteLength bytes in
+    Stdlib.Blob.__byteLength output.bytes + pending
+
+let __total (owners: List<Stdlib.__Http1Server.Owner>) : Int64 = Stdlib.List.fold owners 0L (fun total owner -> total + Stdlib.__Http1Server.__size owner)
+
+let __round (context: Stdlib.__Http1Server.Context) (now: Int64) (remaining: List<Stdlib.__Http1Server.Owner>) (next: List<Stdlib.__Http1Server.Owner>) : Stdlib.Result.Result<Stdlib.__Http1Server.Round, String> =
+  match remaining with
+  | [] -> Ok (Stdlib.__Http1Server.Round { owners = Stdlib.List.reverse next, stopped = false })
+  | owner :: rest ->
+    let stepped = Stdlib.__Network.monotonicMillis () |> Stdlib.Result.mapError (fun _code -> "HTTP server clock failed") |> Stdlib.Result.andThen (fun current -> Stdlib.__Http1Server.step context owner current) in
+    match stepped with
+    | Error message -> let _ = Stdlib.__Http1Server.__closeAll (next @ remaining) in Error message
+    | Ok stepped ->
+      if stepped.stopped then let _ = Stdlib.__Http1Server.__closeAll rest in Ok (Stdlib.__Http1Server.Round { owners = Stdlib.List.reverse next, stopped = true })
+      else match stepped.owner with
+        | None -> Stdlib.__Http1Server.__round context now rest next
+        | Some candidate ->
+          let candidate =
+            if Stdlib.__Http1Server.__size candidate + Stdlib.__Http1Server.__total (rest @ next) <= 105906176L then Some candidate
+            else match candidate.phase with
+              | Http2 _ -> let _ = Stdlib.__HttpTransport.close candidate.transport in None
+              | _ -> Some (Stdlib.__Http1Server.__status context owner now 503) in
+          Stdlib.__Http1Server.__round context now rest (match candidate with | None -> next | Some candidate -> Stdlib.List.push next candidate)
+
+let __interest (owner: Stdlib.__Http1Server.Owner) : Stdlib.Option.Option<Stdlib.__Network.Interest> =
+  Stdlib.Option.map owner.connection.watch (fun watch ->
+    let writing = match owner.phase with | Output _ -> true | Http2 state -> Stdlib.Option.isSome state.current | _ -> false in
+    Stdlib.__Network.Interest { watch = watch, readable = Stdlib.Bool.not writing, writable = writing })
+
+let __loop (context: Stdlib.__Http1Server.Context) (listener: Stdlib.__Network.TcpListener) (owners: List<Stdlib.__Http1Server.Owner>) : Stdlib.Result.Result<Unit, String> =
+  match Stdlib.__Network.shutdownRequested context.signals, Stdlib.__Network.monotonicMillis () with
+  | Ok true, _ -> let _ = Stdlib.__Http1Server.__closeAll owners in Ok ()
+  | Ok false, Ok now ->
+    Stdlib.__Http1Server.__round context now owners [] |> Stdlib.Result.andThen (fun round ->
+      if round.stopped then let _ = Stdlib.__Http1Server.__closeAll round.owners in Ok ()
+      else
+        let accepting = Stdlib.List.length round.owners < 64 in
+        let first = Stdlib.__Network.Interest { watch = listener.watch, readable = accepting, writable = false } in
+        let entries = Stdlib.List.push (Stdlib.List.filterMap round.owners Stdlib.__Http1Server.__interest) first in
+        let immediate = Stdlib.List.any round.owners (fun owner -> match owner.phase with | Request _ -> true | Http2 state -> Stdlib.__Http2Server.immediate state | _ -> false) in
+        match Stdlib.__Network.waitSockets entries (if immediate then 0L else 100L) with
+        | Error code ->
+          if code == 4L then Stdlib.__Http1Server.__loop context listener round.owners
+          else let _ = Stdlib.__Http1Server.__closeAll round.owners in Error "HTTP server readiness failed"
+        | Ok events ->
+          if Stdlib.List.any events (fun event -> event.index == 0L && (event.failed || event.closed)) then
+            let _ = Stdlib.__Http1Server.__closeAll round.owners in Error "HTTP server listener failed"
+          else if accepting && Stdlib.List.any events (fun event -> event.index == 0L && event.readable) then
+            match Stdlib.__Network.acceptTcp listener 100L with
+            | Error code ->
+              if code == 4L || code == 11L || code == 35L then Stdlib.__Http1Server.__loop context listener round.owners
+              else let _ = Stdlib.__Http1Server.__closeAll round.owners in Error "HTTP server accept failed"
+            | Ok connection ->
+              match Stdlib.__Network.monotonicMillis () with
+              | Error _ -> let _ = Stdlib.__Network.closeTcp connection in let _ = Stdlib.__Http1Server.__closeAll round.owners in Error "HTTP server clock failed"
+              | Ok admitted ->
+                let owner = Stdlib.__Http1Server.Owner { connection = connection, transport = Stdlib.__HttpTransport.plain connection, phase = Stdlib.__Http1Server.Phase.Prelude Stdlib.Blob.empty, deadline = admitted + 10000L, started = admitted, requests = 0L } in
+                Stdlib.__Http1Server.__loop context listener (round.owners @ [owner])
+          else Stdlib.__Http1Server.__loop context listener round.owners)
+  | _, _ -> let _ = Stdlib.__Http1Server.__closeAll owners in Error "HTTP server clock or shutdown check failed"
+
+let serve (config: Stdlib.HttpServer.Config.Config) (handler: Stdlib.Http.Request -> Stdlib.Http.Response) (signals: Stdlib.__Network.ShutdownSignals) (listener: Stdlib.__Network.TcpListener) (limit: Int64) : Stdlib.Result.Result<Unit, String> =
+  Stdlib.__Http1Server.__loop (Stdlib.__Http1Server.Context { config = config, handler = handler, signals = signals, limit = limit }) listener []

@@ -1,0 +1,196 @@
+// __Http2Connection.dark - Reusable HTTP/2 connection state and bounded fair stream scheduler.
+module Darklang.Stdlib.__Http2Connection
+
+type State = { wire: Stdlib.__Http2.State, next: Int64 }
+type Request = { method: String, fields: List<(String * String)>, body: Blob }
+type Pending = { index: Int64, request: Stdlib.__Http2Connection.Request }
+type Active = {
+  index: Int64, id: Int64, request: Stdlib.__Http2Connection.Request,
+  window: Int64, position: Int64, head: Stdlib.Option.Option<Stdlib.__Http2Fields.ResponseHead>,
+  informational: Int64, total: Int64, blocks: List<Blob>
+}
+type Outcome = { index: Int64, response: Stdlib.Result.Result<Stdlib.HttpClient.Response, String> }
+type Work = { connection: Stdlib.__Http2Connection.State, waiting: List<Stdlib.__Http2Connection.Pending>, active: List<Stdlib.__Http2Connection.Active>, completed: List<Stdlib.__Http2Connection.Outcome>, total: Int64 }
+type Round = { work: Stdlib.__Http2Connection.Work, progressed: Bool }
+type Batch = { state: Stdlib.__Http2Connection.State, responses: List<Stdlib.__Http2Connection.Outcome> }
+
+let open (transport: Stdlib.__HttpTransport.Transport) : Stdlib.Result.Result<Stdlib.__Http2Connection.State, String> =
+  Stdlib.__Http2.openClient transport |> Stdlib.Result.map (fun wire -> Stdlib.__Http2Connection.State { wire = { wire with streamId = 0L }, next = 1L })
+
+let __replace (work: Stdlib.__Http2Connection.Work) (stream: Stdlib.__Http2Connection.Active) : Stdlib.__Http2Connection.Work =
+  { work with active = Stdlib.List.map work.active (fun current -> if current.id == stream.id then stream else current) }
+
+let __done (work: Stdlib.__Http2Connection.Work) (stream: Stdlib.__Http2Connection.Active) (response: Stdlib.Result.Result<Stdlib.HttpClient.Response, String>) : Stdlib.__Http2Connection.Work =
+  { work with active = Stdlib.List.filter work.active (fun current -> current.id != stream.id), completed = Stdlib.List.push work.completed (Stdlib.__Http2Connection.Outcome { index = stream.index, response = response }) }
+
+let __refuse (work: Stdlib.__Http2Connection.Work) : Stdlib.__Http2Connection.Work =
+  let last = match work.connection.wire.goAway with | None -> 2147483647L | Some last -> last in
+  let completed = Stdlib.List.fold work.waiting work.completed (fun completed pending -> Stdlib.List.push completed (Stdlib.__Http2Connection.Outcome { index = pending.index, response = Error "HTTP/2 connection is draining" })) in
+  let next = { work with waiting = [], completed = completed } in
+  Stdlib.List.fold work.active next (fun next stream -> if stream.id > last then Stdlib.__Http2Connection.__done next stream (Error "HTTP/2 stream refused by GOAWAY") else next)
+
+let __admit (transport: Stdlib.__HttpTransport.Transport) (work: Stdlib.__Http2Connection.Work) : Stdlib.Result.Result<Stdlib.__Http2Connection.Work, String> =
+  if Stdlib.Option.isSome work.connection.wire.goAway then Ok (Stdlib.__Http2Connection.__refuse work)
+  else if Stdlib.Int64.__fromIntUnchecked (Stdlib.List.length work.active) >= work.connection.wire.concurrent then Ok work
+  else match work.waiting with
+  | [] -> Ok work
+  | pending :: rest ->
+    if work.connection.next > 2147483647L then Error "HTTP/2 stream identifiers exhausted"
+    else
+      let id = work.connection.next in
+      let wire = { work.connection.wire with streamId = id, sendStream = work.connection.wire.initialWindow } in
+      Stdlib.__Http2.sendHeaders transport wire pending.request.fields (Stdlib.Blob.__byteLength pending.request.body == 0L) |> Stdlib.Result.andThen (fun sent ->
+        let stream = Stdlib.__Http2Connection.Active { index = pending.index, id = id, request = pending.request, window = sent.initialWindow,
+          position = 0L, head = None, informational = 0L, total = 0L, blocks = [] } in
+        Stdlib.__Http2Connection.__admit transport { work with connection = { work.connection with wire = { sent with streamId = 0L }, next = id + 2L }, waiting = rest, active = work.active @ [stream] })
+
+// Send at most one DATA frame per stream per round. Connection credit is shared;
+// stream credit and upload offsets are never copied from a different stream.
+let __sendRound (transport: Stdlib.__HttpTransport.Transport) (streams: List<Stdlib.__Http2Connection.Active>) (round: Stdlib.__Http2Connection.Round) : Stdlib.Result.Result<Stdlib.__Http2Connection.Round, String> =
+  match streams with
+  | [] -> Ok round
+  | stream :: rest ->
+    let remaining = Stdlib.Blob.__byteLength stream.request.body - stream.position in
+    if remaining <= 0L || stream.window <= 0L || round.work.connection.wire.sendConnection <= 0L || Stdlib.Option.isSome stream.head then
+      Stdlib.__Http2Connection.__sendRound transport rest round
+    else
+      let wire = round.work.connection.wire in
+      let maximum = if remaining < wire.maximum then remaining else wire.maximum in
+      let connection = if maximum < wire.sendConnection then maximum else wire.sendConnection in
+      let size = if connection < stream.window then connection else stream.window in
+      Stdlib.__Http2.__writeFrame transport 0L (if size == remaining then 1L else 0L) stream.id (Stdlib.__Http2Wire.__slice stream.request.body stream.position size)
+        |> Stdlib.Result.andThen (fun _unit ->
+          let work = Stdlib.__Http2Connection.__replace round.work { stream with window = stream.window - size, position = stream.position + size } in
+          let work = { work with connection = { work.connection with wire = { wire with sendConnection = wire.sendConnection - size } } } in
+          Stdlib.__Http2Connection.__sendRound transport rest (Stdlib.__Http2Connection.Round { work = work, progressed = true }))
+
+let __finish (transport: Stdlib.__HttpTransport.Transport) (work: Stdlib.__Http2Connection.Work) (stream: Stdlib.__Http2Connection.Active) : Stdlib.Result.Result<Stdlib.__Http2Connection.Work, String> =
+  match stream.head with
+  | None -> Error "HTTP/2 stream ended without final response"
+  | Some head ->
+    Stdlib.__Http2Fields.length head.headers |> Stdlib.Result.andThen (fun expected ->
+      let noBody = stream.request.method == "HEAD" || head.status == 204L || head.status == 304L in
+      let valid = match expected with | None -> true | Some size -> noBody || size == stream.total in
+      if Stdlib.Bool.not valid then Error "HTTP/2 Content-Length mismatch"
+      else
+        // Only cancel an incomplete upload after the complete response arrives:
+        // an early reset would also cancel its still-in-flight response body.
+        let stopped = if stream.position < Stdlib.Blob.__byteLength stream.request.body then
+                        Stdlib.__Http2.__writeFrame transport 3L 0L stream.id (Stdlib.__Http2Wire.__u32 0L) else Ok () in
+        stopped |> Stdlib.Result.map (fun _unit -> Stdlib.__Http2Connection.__done work stream (Ok (Stdlib.HttpClient.Response { statusCode = Stdlib.Int.fromInt64 head.status,
+          headers = head.headers, body = Stdlib.Blob.concat (Stdlib.List.reverse stream.blocks) }))))
+
+let __headers (transport: Stdlib.__HttpTransport.Transport) (work: Stdlib.__Http2Connection.Work) (frame: Stdlib.__Http2Wire.Frame) : Stdlib.Result.Result<Stdlib.__Http2Connection.Work, String> =
+  let wire = { work.connection.wire with streamId = frame.streamId } in
+  Stdlib.__Http2.__headBlock transport (Stdlib.__Http2.Next { state = wire, frame = frame }) |> Stdlib.Result.andThen (fun decoded ->
+    let work = { work with connection = { work.connection with wire = { decoded.state with streamId = 0L } } } in
+    match Stdlib.List.findFirst work.active (fun stream -> stream.id == frame.streamId) with
+    | None ->
+      // Closed streams can still change the shared HPACK table.
+      if frame.streamId < work.connection.next && frame.streamId % 2L == 1L then Ok work else Error "HTTP/2 HEADERS on idle stream"
+    | Some stream ->
+      match stream.head with
+      | Some _head ->
+        if Stdlib.Bool.not decoded.ended then Error "HTTP/2 trailers must end stream"
+        else Stdlib.__Http2Fields.trailers decoded.fields |> Stdlib.Result.andThen (fun _unit -> Stdlib.__Http2Connection.__finish transport work stream)
+      | None ->
+        Stdlib.__Http2Fields.response decoded.fields |> Stdlib.Result.andThen (fun head ->
+          if head.status < 200L then
+            if decoded.ended || stream.informational >= 8L then Error "Invalid informational HTTP/2 response"
+            else Ok (Stdlib.__Http2Connection.__replace work { stream with informational = stream.informational + 1L })
+          else
+            let stream = { stream with head = Some head } in
+            if decoded.ended then Stdlib.__Http2Connection.__finish transport work stream else Ok (Stdlib.__Http2Connection.__replace work stream)))
+
+let __data (transport: Stdlib.__HttpTransport.Transport) (work: Stdlib.__Http2Connection.Work) (frame: Stdlib.__Http2Wire.Frame) : Stdlib.Result.Result<Stdlib.__Http2Connection.Work, String> =
+  match Stdlib.List.findFirst work.active (fun stream -> stream.id == frame.streamId) with
+  | None ->
+    if frame.streamId >= work.connection.next || frame.streamId % 2L != 1L then Error "HTTP/2 DATA on idle stream"
+    else if Stdlib.Blob.__byteLength frame.payload == 0L then Ok work
+    else Stdlib.__Http2.__writeFrame transport 8L 0L 0L (Stdlib.__Http2Wire.__u32 (Stdlib.Blob.__byteLength frame.payload)) |> Stdlib.Result.map (fun _unit -> work)
+  | Some stream ->
+    match stream.head with
+    | None -> Error "HTTP/2 DATA before response headers"
+    | Some head ->
+      let bytes = Stdlib.__Http2Wire.content frame in
+      let size = Stdlib.Blob.__byteLength bytes in
+      let total = stream.total + size in
+      let noBody = stream.request.method == "HEAD" || head.status == 204L || head.status == 304L in
+      if (noBody && size != 0L) || total > 104857600L || work.total + size > 104857600L then Error "HTTP/2 batch body limit exceeded"
+      else Stdlib.__Http2.__credit transport stream.id (Stdlib.Blob.__byteLength frame.payload) |> Stdlib.Result.andThen (fun _unit ->
+        let stream = { stream with total = total, blocks = Stdlib.List.push stream.blocks bytes } in
+        let work = { work with total = work.total + size } in
+        if Stdlib.Int64.bitwiseAnd frame.flags 1L != 0L then Stdlib.__Http2Connection.__finish transport work stream
+        else Ok (Stdlib.__Http2Connection.__replace work stream))
+
+let __control (transport: Stdlib.__HttpTransport.Transport) (work: Stdlib.__Http2Connection.Work) (frame: Stdlib.__Http2Wire.Frame) : Stdlib.Result.Result<Stdlib.__Http2Connection.Work, String> =
+  if frame.kind == 3L then
+    match Stdlib.List.findFirst work.active (fun stream -> stream.id == frame.streamId) with
+    | Some stream -> Ok (Stdlib.__Http2Connection.__done work stream (Error "HTTP/2 stream reset"))
+    | None -> if frame.streamId < work.connection.next && frame.streamId % 2L == 1L then Ok work else Error "HTTP/2 reset on idle stream"
+  else if frame.kind == 8L && frame.streamId != 0L then
+    match Stdlib.List.findFirst work.active (fun stream -> stream.id == frame.streamId) with
+    | None -> if frame.streamId < work.connection.next && frame.streamId % 2L == 1L then Ok work else Error "HTTP/2 window update on idle stream"
+    | Some stream ->
+      let window = stream.window + Stdlib.Int64.bitwiseAnd (Stdlib.__Http2Wire.__read32 frame.payload 0L) 2147483647L in
+      if window > 2147483647L then Error "HTTP/2 stream window overflow" else Ok (Stdlib.__Http2Connection.__replace work { stream with window = window })
+  else
+    let wire = { work.connection.wire with streamId = 0L, sendStream = work.connection.wire.initialWindow } in
+    Stdlib.__Http2.__control transport wire frame |> Stdlib.Result.andThen (fun next ->
+      let delta = next.initialWindow - wire.initialWindow in
+      let active = Stdlib.List.map work.active (fun stream -> { stream with window = stream.window + delta }) in
+      if Stdlib.List.any active (fun stream -> stream.window > 2147483647L) then Error "HTTP/2 stream window overflow"
+      else if frame.kind == 7L && Stdlib.__Http2Wire.__read32 frame.payload 4L != 0L then Error "HTTP/2 connection error in GOAWAY"
+      else
+        let work = { work with connection = { work.connection with wire = next }, active = active } in
+        Ok (if Stdlib.Option.isSome next.goAway then Stdlib.__Http2Connection.__refuse work else work))
+
+let __receive (transport: Stdlib.__HttpTransport.Transport) (work: Stdlib.__Http2Connection.Work) : Stdlib.Result.Result<Stdlib.__Http2Connection.Work, String> =
+  Stdlib.__Http2.__wireNext transport work.connection.wire |> Stdlib.Result.andThen (fun received ->
+    let work = { work with connection = { work.connection with wire = received.state } } in
+    let frame = received.frame in
+    if frame.kind == 1L then Stdlib.__Http2Connection.__headers transport work frame
+    else if frame.kind == 0L then Stdlib.__Http2Connection.__data transport work frame
+    else if Stdlib.__Http2.__isControl frame then Stdlib.__Http2Connection.__control transport work frame
+    else if frame.kind >= 10L then Ok work
+    else Error "Unexpected HTTP/2 connection frame")
+
+// Drain buffered/readable control traffic before admitting new requests. A
+// draining connection cannot silently create another stream after GOAWAY.
+let __poll (transport: Stdlib.__HttpTransport.Transport) (work: Stdlib.__Http2Connection.Work) : Stdlib.Result.Result<Stdlib.__Http2Connection.Round, String> =
+  match Stdlib.__Http2Wire.parse 16384L work.connection.wire.pending with
+  | Ok _parsed -> Stdlib.__Http2Connection.__receive transport work |> Stdlib.Result.map (fun work -> Stdlib.__Http2Connection.Round { work = work, progressed = true })
+  | Error (Invalid message) -> Error message
+  | Error Incomplete ->
+    transport.poll () |> Stdlib.Result.andThen (fun available ->
+      match available with
+      | None -> Ok (Stdlib.__Http2Connection.Round { work = work, progressed = false })
+      | Some bytes ->
+        if Stdlib.Blob.__byteLength bytes == 0L then Error "Truncated HTTP/2 connection"
+        else
+          let connection = { work.connection with wire = { work.connection.wire with pending = Stdlib.Blob.concat [work.connection.wire.pending, bytes] } } in
+          Stdlib.__Http2Connection.__poll transport { work with connection = connection })
+
+let prepare (transport: Stdlib.__HttpTransport.Transport) (state: Stdlib.__Http2Connection.State) : Stdlib.Result.Result<Stdlib.__Http2Connection.State, String> =
+  let work = Stdlib.__Http2Connection.Work { connection = state, waiting = [], active = [], completed = [], total = 0L } in
+  Stdlib.__Http2Connection.__poll transport work |> Stdlib.Result.andThen (fun received ->
+    if received.progressed then Stdlib.__Http2Connection.prepare transport received.work.connection else Ok received.work.connection)
+
+let __run (transport: Stdlib.__HttpTransport.Transport) (work: Stdlib.__Http2Connection.Work) : Stdlib.Result.Result<Stdlib.__Http2Connection.Batch, String> =
+  Stdlib.__Http2Connection.__admit transport work |> Stdlib.Result.andThen (fun work ->
+    if work.active == [] && work.waiting == [] then
+      let responses = Stdlib.List.sortBy work.completed (fun outcome -> outcome.index) in
+      Ok (Stdlib.__Http2Connection.Batch { state = work.connection, responses = responses })
+    else
+      Stdlib.__Http2Connection.__sendRound transport work.active (Stdlib.__Http2Connection.Round { work = work, progressed = false }) |> Stdlib.Result.andThen (fun round ->
+        if round.progressed then Stdlib.__Http2Connection.__poll transport round.work |> Stdlib.Result.andThen (fun received ->
+          Stdlib.__Http2Connection.__run transport received.work)
+        else Stdlib.__Http2Connection.__receive transport round.work |> Stdlib.Result.andThen (Stdlib.__Http2Connection.__run transport)))
+
+let requestMany (transport: Stdlib.__HttpTransport.Transport) (state: Stdlib.__Http2Connection.State) (requests: List<Stdlib.__Http2Connection.Request>) : Stdlib.Result.Result<Stdlib.__Http2Connection.Batch, String> =
+  if Stdlib.List.length requests > 32 || Stdlib.List.fold requests 0L (fun total request -> total + Stdlib.Blob.__byteLength request.body) > 104857600L then Error "HTTP/2 batch request limit exceeded"
+  else
+    let state = { state with wire = { state.wire with frames = 0L } } in
+    Stdlib.__Http2Connection.prepare transport state |> Stdlib.Result.andThen (fun state ->
+      let waiting = Stdlib.List.indexedMap requests (fun index request -> Stdlib.__Http2Connection.Pending { index = Stdlib.Int64.__fromIntUnchecked index, request = request }) in
+      Stdlib.__Http2Connection.__run transport (Stdlib.__Http2Connection.Work { connection = state, waiting = waiting, active = [], completed = [], total = 0L }))

@@ -165,3 +165,310 @@ each implementation branch, run `./build --ai`, the already-built
 `./run-tests --ai`, and
 `./benchmarks/run_benchmarks.sh --verify-parent full` before merge-train
 handoff.
+
+## Full engine extension scope
+
+The extension branch starts from `b3d13bb` and covers the complete engine gap
+inventory, including optional client and transport extensions. Checked items
+below have focused behavioral and independent peer validation; they do not
+mean the entire branch has passed its integration or performance gates.
+
+- [x] Shared native TCP/UDP readiness sets, retained descriptor ownership,
+  immediate closed-owner events, and combined secure-listener polling.
+- [x] Outgoing HPACK/QPACK static-table references and Huffman encoding,
+  retaining never-indexed credentials and cookies.
+- [x] IPv6 TCP listeners and explicit `serveOn` addresses for plain, TLS,
+  QUIC and combined secure servers.
+- [ ] Incremental nonblocking handshakes and active-connection servicing,
+  including per-connection timers and fair TCP/UDP admission.
+
+  - [x] Native per-call nonblocking TCP receive/send, with partial-write
+    accounting, unready results, EOF and closed-owner checks. Existing blocking
+    handshake helpers retain their descriptor mode. The independent
+    `scripts/test_network_nonblocking_peer.py` verifies backpressure and cleanup.
+  - [x] Plaintext HTTP/1.1 active owners share readiness waits and advance one
+    bounded read, parse or write transition per round. Slow uploads and unread
+    responses do not monopolize other HTTP/1.1 clients. Prior-knowledge h2c
+    connections now use the shared multiplexed HTTP/2 owners. Client TLS
+    handshakes and HTTP/3 servers still need the active-owner migration.
+  - [x] Owned TLS transports queue KeyUpdate replies and application ciphertext
+    across nonblocking partial writes. `pollWrite` reports accepted plaintext;
+    `flush` confirms ciphertext completion. A queue holds one application record
+    (at most 2 KiB plaintext) plus bounded control records, never reseals a
+    partial record, and is drained before legacy blocking writes. Independent
+    record-crypto peers verify backpressure and old/new-key wire ordering.
+  - [x] `HttpServer.Tls` and the TCP side of `HttpServer.Secure` service at most sixty-four
+    incremental handshake/HTTP/1–2 owners. HTTP/2 retains shared HPACK, up to
+    thirty-two streams, separate stream windows, connection credit and queued
+    frame output. Stalled ClientHello, Finished, uploads, response readers and
+    HTTP/2 streams without credit do not monopolize other TLS TCP clients.
+    Admission and owner steps use fresh clock readings. QUIC active-owner
+    servicing remains pending;
+    admitted QUIC exchanges can still monopolize the combined listener.
+  - [ ] QUIC handshake admission now has a retained `advance` step accepting
+    one routed datagram, emitting at most one packet per encryption level,
+    preserving queued CRYPTO and packet numbers, and enforcing an absolute
+    caller-owned deadline. It never receives from the shared UDP socket.
+    The compatibility handshake wrapper uses the same step. Datagram output,
+    active UDP admission and HTTP/3 request servicing still need migration;
+    this foundation does not provide nonblocking QUIC listener fairness.
+- [ ] Persistent HTTP/1.1 connections and HTTP/2–3 connection reuse/pooling.
+
+  - [x] Buffered `HttpClientSession.request` HTTP/1.1 reuse over TCP/TLS:
+    eight idle origins, thirty-second expiry, complete self-delimited responses,
+    idle readiness checks, explicit clear/close and no attempted-request replay.
+    `http1_pool.e2e` covers expiry, eviction, origins, framing and cleanup;
+    `scripts/test_http1_session_peer.py` exercises independent TCP/TLS peers.
+  - [x] Persistent plaintext HTTP/1.1 server exchanges and ordered pipelining,
+    with HEAD framing, explicit close tokens, one hundred requests per owner,
+    sixty-four accepted owners, ten-second request deadlines, thirty-second
+    idle/write deadlines and a 101 MiB retained-wire budget. HTTP/1.0 retires
+    after one exchange.
+  - [x] Persistent TLS HTTP/1.1 exchanges and ordered pipelining on both
+    `HttpServer.Tls` and `HttpServer.Secure`, with the same HEAD/close/count/deadline
+    rules and explicit ciphertext flush before exchange completion. Same-port
+    peers also verify Alt-Svc policy, repeated HTTP/3 exchanges, shutdown,
+    rebinding and cleanup when either bind fails.
+  - [x] Lazy HTTP/1.1 session body leases over TCP/TLS. Complete self-delimited
+    framing alone returns the owner; early close, surplus bytes, HTTP/1.0,
+    close tokens and EOF-delimited bodies retire it. Clear invalidates outstanding
+    lease generations, and pulls after session close release the borrowed owner.
+  - [x] Buffered HTTP/2 session owners retain HPACK, connection credit and odd
+    stream IDs across requests. Eight idle origins expire after thirty seconds;
+    checkout retires stale/GOAWAY owners before writing a request.
+  - [x] Buffered HTTP/3 session owners retain QUIC recovery, traffic keys,
+    QPACK tables and stream IDs across requests. Eight idle origins expire
+    after thirty seconds. Completed stream history remains bounded by rotation
+    after 1024 requests; closed streams do not consume the 64 active owner slots.
+  - [x] Lazy HTTP/3 session body leases retain the latest QUIC/QPACK owner on
+    valid completion and retire it on abandonment, failure or invalidation.
+    A completed early response resets only an unfinished upload before reuse.
+  - [x] Lazy HTTP/2 session body leases use the connection scheduler and retain
+    terminal DATA/trailer state, HPACK and connection credit. Owners remain
+    exclusively checked out until the body is consumed or closed; concurrent
+    lazy bodies are not yet multiplexed on one connection.
+
+- [ ] HTTP/2 and HTTP/3 request multiplexing, stream allocation and scheduling.
+
+  - [x] Internal HTTP/2 batch scheduler: at most 32 requests, peer concurrency
+    limits, one DATA frame per active stream per round, separate upload windows,
+    shared HPACK in wire order, ordered per-request results, isolated resets,
+    and GOAWAY draining without replay. Aggregate upload/response bodies each
+    cap at 100 MiB. Client transport polling retains partial TLS/HTTP frames and
+    authenticates post-handshake control records without waiting for more bytes.
+    `http2_connection.e2e`, `http_transport_poll.e2e` and the independent
+    `scripts/test_http2_session_peer.py` cover these boundaries.
+  - [x] Public `Session.requestMany` validates at most 32 requests before I/O,
+    groups origins, multiplexes negotiated HTTP/2–3 and restores input result
+    order. Different origins are serviced sequentially; HTTP/1.1 uses complete
+    sequential exchanges. Network failures are per-request outcomes; invalid
+    batches fail before sending any request.
+  - [x] Plaintext and TLS HTTP/2 servers retain independent request/response state and shared
+    compression across exchanges, rotate writable streams, isolate resets,
+    and publish receive credit only after control frames are flushed. Partial
+    headers, bounded bodies, early responses and per-stream deadlines are
+    covered by `http2_server_flow.e2e`, `http2_server_control.e2e` and
+    `http2_server_dispatch.e2e`. The independent plaintext and TLS server peers verify
+    blocked-stream admission fairness, selective window updates, reset
+    isolation, persistent reuse and 70 KiB upload/response bodies. Maximum DATA
+    frames retain their nine-byte headers across bounded native writes without
+    debiting flow credit twice.
+  - [ ] Lazy-stream scheduling.
+  - [x] HTTP/3 servers retain up to thirty-two independent request/response
+    owners on one connection, share QPACK and connection credit, skip blocked
+    response streams, isolate resets and malformed messages, and renew
+    MAX_STREAMS only after both directions close. Retained bodies cap at
+    100 MiB; request and response deadlines remain independent. The 1,024
+    request-history bound sends one flow-controlled GOAWAY with exclusive
+    boundary 4,096 and drains eligible replies. `http3_server_owners.e2e`
+    covers these boundaries; the independent aioquic peer verifies a stalled
+    request alongside a 70 KiB response, selective stream credit, cancellation
+    and forty sequential requests on the same connection. UDP connection
+    admission and compatibility datagram sends remain sequential/blocking;
+    this does not establish cross-connection fairness.
+  - [x] HTTP/3 request scheduling shares connection credit and QPACK while
+    retaining independent message parsers. Each round sends one bounded chunk
+    per stream. Resets and GOAWAY preserve eligible responses without replay;
+    unfinished uploads are reset only after a complete early response. Aggregate
+    uploads and responses each cap at 100 MiB. `http_session_batch.e2e`,
+    `quic_flow.e2e` and independent HTTP/2–3 session peers cover these boundaries.
+- [x] Connection-owned dynamic HPACK encoding, bounded eviction, sensitive
+  literals, and peer table-capacity shrink/grow updates.
+- [ ] Complete dynamic QPACK tables, instruction streams, blocked sections,
+  feedback and eviction.
+
+  - [x] Inbound dynamic tables, fragmented encoder instructions, blocked
+    field sections, insertion increments and section acknowledgments.
+  - [x] Outgoing dynamic encoding, peer feedback, reference tracking and
+    pure stream-cancellation ownership.
+  - [ ] Cancellation and table ownership across reusable multiplexed connections.
+
+- [ ] Streaming client uploads, server requests and server responses.
+- [ ] Public received/sent trailer APIs.
+- [ ] Content-encoding negotiation, decompression and server compression.
+- [ ] Configurable connect/header/body deadlines and request cancellation.
+- [ ] Happy Eyeballs address racing.
+- [ ] QUIC NAT rebinding, migration, path validation and preferred addresses.
+- [ ] QUIC path-MTU discovery, ECN congestion integration and NEW_TOKEN reuse.
+- [ ] TLS session resumption and replay-controlled 0-RTT.
+- [ ] Broader QUIC/server cipher and identity profiles, SNI selection and mTLS.
+- [ ] CONNECT/extended CONNECT, WebSockets, HTTP/3 datagrams and WebTransport.
+- [ ] Server push and priority scheduling.
+- [ ] Client redirect, cookie-jar and proxy configuration.
+- [ ] Apply peer HTTP/3 SETTINGS and field-section limits.
+- [x] Negotiated QUIC application idle timers, authenticated activity resets,
+  first ack-eliciting-send restart and the RTT-derived three-PTO floor.
+- [ ] Typed protocol failures with correct stream and connection wire errors,
+  retaining the current packet-number/key state across recoverable failures.
+
+HTTP/3 control owners now retain peer parameters and enforce
+`SETTINGS_MAX_FIELD_SECTION_SIZE` against decoded name/value byte lengths,
+including each field's 32-byte overhead, before sending request or response
+headers when the peer setting has arrived. `http3_peer_settings.e2e` covers
+exact boundaries, duplicate names, absent limits and zero limits. The aioquic
+server peer checks zero-limit refusal and subsequent listener availability.
+Other peer SETTINGS still need their respective engine features, so the full
+SETTINGS item remains unchecked.
+
+The dynamic QPACK checkpoint adds an inbound 4096-byte table, incremental
+encoder instructions, relative/post-base references and Required Insert Count
+wrap-around. Message owners retain blocked sections and defer body events until
+the missing insertions arrive; decoder feedback retains unsent bytes under QUIC
+flow control. The single-exchange profile advertises one blocked stream.
+`qpack_dynamic_decoder.e2e` and `qpack_blocked_message.e2e` cover malformed
+instructions, eviction, wrap-around, deferred DATA/FIN and exactly-once
+acknowledgments. The independent ls-qpack peer verifies 560 sections, including
+559 dynamic sections and 280 blocked-before-insertion checks. The delayed
+aioquic peer verifies Unicode headers, bytewise encoder instructions, an explicit
+section acknowledgment, a 70 KiB echo and authenticated close. The live peer's
+observation window and decoder probe's per-process budget are 30 seconds;
+engine deadlines are unchanged. A shared field-value
+validator now permits UTF-8 obs-text while retaining control-byte rejection;
+`http_header_value_octets.e2e` covers that boundary. The complete host suite
+passes 12,051 tests and native aliases pass in a fresh build directory. Parent
+benchmark verification remains blocked by an incompatible snapshot workload
+contract; no performance result is claimed. These results describe the inbound
+checkpoint, not later unvalidated changes.
+
+The outgoing QPACK checkpoint adds a connection-owned encoder with a bounded
+4 KiB local table, peer SETTINGS, decoder feedback, FIFO section acknowledgments
+and stream cancellations. Entries remain pinned until their insertion is known
+received and every outstanding field-section reference has been released.
+Potentially blocked streams are counted distinctly; zero blocked-stream credit
+permits speculative insertion but forbids references until acknowledgment.
+Header owners reserve complete instruction batches against both stream and
+connection credit, falling back to literals when credit or eviction safety
+prevents insertion. Credentials and cookies remain never-indexed.
+`qpack_dynamic_encoder.e2e` exercises those boundaries, and
+`scripts/test_qpack_encoder_peer.py` adds a persistent independent ls-qpack
+decoder probe with 560 sections, bytewise instructions/feedback, table eviction
+and Required Insert Count wrap-around. The recovered pinned toolchain and native
+build pass; focused QPACK tests pass 93/93 and HTTP/3 tests pass 132/132.
+The independent outgoing probe passes 2,240 dynamic sections across 64-byte,
+4 KiB and 8 KiB peer maxima, including 1,120 blocked-before-insertion cases and
+compiled cleanup. The delayed aioquic peer
+also passes, now requiring outgoing dynamic response headers as well as inbound
+dynamic request headers, with Unicode and a 70 KiB echo. The broader HTTP/3
+listener peer also passes routing, body limits, SETTINGS limits, idle timeout,
+encrypted close, replay suppression, shutdown, rebind and cleanup checks.
+The complete host suite passes 12,078/12,078 tests and native regression aliases
+pass in a fresh sibling build directory. Parent benchmark verification was
+rerun and remains blocked by the incompatible snapshot workload contract;
+no performance result is claimed. Reusable multiplexed connection ownership
+is still missing; the full QPACK item remains unchecked.
+
+The larger-maximum test exposed a **test-peer** compatibility issue, not an
+engine encoding failure. The published `pylsqpack==0.3.23` wheel changes its
+wrap modulus when receiving a smaller table capacity; with an 8 KiB advertised
+maximum and our 4 KiB table, it rejects section 504 (`ff0200` prefix). RFC 9204
+section 4.5.1.1 bases the modulus on the advertised maximum, not current table
+capacity. Upstream reverted the conflicting behavior in ls-qpack v2.6.3
+([issue 44](https://github.com/litespeedtech/ls-qpack/issues/44)). The 8 KiB
+check therefore uses the unchanged pylsqpack 0.3.23 wrapper at
+`e2fef71d4280aa5adbc09c18c147e3cf07cf9f3c` with ls-qpack v2.7.0 at
+`91567706c41c0d97ab8dc576873ecd472d7869fa`, built only as a test dependency.
+No engine workaround or production C dependency was added. Reproduce in a
+fresh external test-dependency directory, using the writable workspace from
+the VM setup instructions:
+
+```bash
+git clone --depth 1 --branch 0.3.23 https://github.com/aiortc/pylsqpack.git "$workspace/qpack-peer-source"
+git clone --depth 1 --branch v2.7.0 --recurse-submodules https://github.com/litespeedtech/ls-qpack.git "$workspace/qpack-peer-source/vendor/ls-qpack"
+env CC=gcc python3 -m pip install --no-deps --no-build-isolation --target "$workspace/http-peers-fixed" "$workspace/qpack-peer-source"
+PYTHONPATH="$workspace/http-peers-fixed:$workspace/http-peers" python3 scripts/test_qpack_encoder_peer.py --maximum=8192 --sections=1120
+```
+
+The default 560-section check and `--maximum=64` also pass with the original
+published wheel. `--compiler` selects an already-built compiler when using a
+fresh sibling Dune build directory.
+
+HTTP/2 now retains an outgoing HPACK table separately from its decoder. Every
+state transition preserves that owner and the peer's decoded field budget;
+successful header writes return the updated table. Peer table-capacity changes
+evict immediately and the next block signals the smallest intervening size
+before the final size. `hpack_dynamic_encoder.e2e` and
+`http2_outgoing_limits.e2e` exercise reuse, eviction, never-indexed sensitive
+fields, disabled tables, duplicate-field accounting and resize ordering. The
+independent `hpack` decoder checks seven consecutive blocks, and the existing
+TLS/hyper-h2 server peer validates routing, flow control and owned shutdown.
+
+QUIC application owners now enforce the minimum nonzero local/peer idle limit
+before sending or processing packets, independently of the HTTP deadline.
+Valid authenticated receives restart the timer; unauthenticated traffic and
+ACK-only sends do not. Only the first ack-eliciting send after a receive
+restarts it, including retransmitted Handshake packets. Retry backoff does not
+inflate the RTT-derived three-PTO floor. `quic_idle.e2e` covers negotiation,
+timer boundaries and restart rules. The aioquic server peer advertises a short
+limit, stalls an upload and verifies that completing it after expiry produces
+no response; normal requests afterward still succeed. Handshake deadlines
+remain bounded separately by the existing handshake owner.
+
+Focused additions use `network_poll.e2e`, `http_header_compression.e2e` and
+`http_server_ipv6.e2e`; independent readiness, header-compression and IPv6 peer
+scripts exercise production code and compiled leak accounting. The readiness
+work exposed an x64 syscall-argument capture bug when a later operand was held
+in the scratch register. Capture now preserves that operand before loading
+earlier arguments.
+
+Plaintext HTTP/2 now uses the same persistent stream owners as TLS HTTP/2.
+Independent hyper-h2 peers verify zero-window streams, selective response
+credit, reset isolation, shared compression across later requests, and HTTP/1
+admission while an HTTP/2 response is blocked. A maximum DATA frame spans
+bounded native writes without duplicating its payload or flow debit. The
+focused HTTP/2 server suite passes 65/65 cases.
+
+Retained QUIC handshake steps accept listener-routed datagrams and enforce
+absolute deadlines without receiving from the shared socket. Five new cases
+check waiting-state retention, foreign-peer isolation, expiry and one-packet
+flight progress; the focused QUIC server suite passes 8/8 cases. HTTP/3 now
+multiplexes requests within an admitted connection, but still uses the
+sequential UDP admission wrapper and compatibility datagram sends. Active UDP
+ownership remains unfinished.
+
+At runtime checkpoint `a65761e34c77e6d0a78614137ac5a326977dd8a2`, a fresh
+build, all 12,248 host tests and native regression aliases pass. Independent
+plaintext/TLS HTTP/2, HTTP/3, combined secure-listener and IPv6 peers pass.
+One TLS peer run timed out during shutdown; a full rerun passed. Parent
+performance verification remains blocked by the stored snapshot's incompatible
+workload contract digest. No baseline reset or performance pass is claimed.
+
+HTTP/3 servers now retain independent request and response owners on one
+connection. The public serving signatures are unchanged. Independent aioquic
+validation covers a 70 KiB response alongside a stalled request, selective
+response credit, reset isolation and forty requests on the same connection.
+Completed stream directions renew MAX_STREAMS; the 1,024-request history bound
+sends one flow-controlled GOAWAY and drains eligible responses. Thirteen focused
+cases cover those boundaries, message-error isolation, request timeout, response
+semantics and invalid Huffman padding at connection scope. The compression
+regression fails against the pre-fix build and passes against the fixed build.
+
+Runtime checkpoint `f2056bbaddc80b1d9308cc902603209d0b87dba0` passes all
+12,261 host tests and native regression aliases. The HTTP/3, combined secure
+listener and IPv6 peer checks pass. Two initial full runs exposed three native
+execution tests treating interrupted waits as failures; their shared test-only
+helper now retries EINTR while retaining the absolute timeout and reaping the
+child. Its focused native execution group passes 22/22. Parent performance
+verification was rerun and remains blocked by the incompatible snapshot
+workload contract. No baseline was reset. UDP connection admission and datagram
+output remain sequential/blocking; active QUIC listener fairness is still
+unfinished.

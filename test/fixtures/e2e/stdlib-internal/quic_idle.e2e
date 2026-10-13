@@ -1,0 +1,13 @@
+// quic_idle.e2e - Negotiated idle lifetime, PTO floor and activity restart rules.
+Stdlib.__QuicIdle.create 30000L 5000L 100L |> Stdlib.Result.map (fun state -> state.timeout) = Ok 5000L
+Stdlib.__QuicIdle.create 0L 5000L 100L |> Stdlib.Result.map (fun state -> state.timeout) = Ok 5000L
+Stdlib.__QuicIdle.create 30000L 0L 100L |> Stdlib.Result.map (fun state -> state.timeout) = Ok 30000L
+Stdlib.__QuicIdle.create 0L 0L 100L |> Stdlib.Result.andThen (fun state -> Stdlib.__QuicIdle.expired state 999999L 100L) = Ok false
+Stdlib.__QuicIdle.create 1000L 500L 100L |> Stdlib.Result.andThen (fun state -> Stdlib.__QuicIdle.expired state 599L 100L) = Ok false
+Stdlib.__QuicIdle.create 1000L 500L 100L |> Stdlib.Result.andThen (fun state -> Stdlib.__QuicIdle.expired state 600L 100L) = Ok true
+Stdlib.__QuicIdle.create 100L 100L 100L |> Stdlib.Result.andThen (fun state -> Stdlib.__QuicIdle.expired state 399L 100L) = Ok false
+Stdlib.__QuicIdle.create 100L 100L 100L |> Stdlib.Result.andThen (fun state -> Stdlib.__QuicIdle.expired state 400L 100L) = Ok true
+Stdlib.__QuicIdle.create 500L 500L 100L |> Stdlib.Result.map (fun state -> Stdlib.__QuicIdle.sent (Stdlib.__QuicIdle.sent state true 200L) true 300L |> fun next -> next.started) = Ok 200L
+Stdlib.__QuicIdle.create 500L 500L 100L |> Stdlib.Result.map (fun state -> Stdlib.__QuicIdle.sent state false 200L |> fun next -> next.started) = Ok 100L
+Stdlib.__QuicIdle.create 500L 500L 100L |> Stdlib.Result.map (fun state -> Stdlib.__QuicIdle.sent (Stdlib.__QuicIdle.received (Stdlib.__QuicIdle.sent state true 200L) 300L) true 400L |> fun next -> next.started) = Ok 400L
+Stdlib.__QuicIdle.create -1L 500L 100L |> Stdlib.Result.map (fun state -> state.timeout) = Error "Invalid QUIC idle timeout"

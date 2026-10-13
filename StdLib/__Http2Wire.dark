@@ -64,7 +64,7 @@ let validate (frame: Stdlib.__Http2Wire.Frame) : Stdlib.Result.Result<Unit, Stri
     Error "Zero HTTP/2 window increment"
   else if (frame.kind == 0L || frame.kind == 1L || frame.kind == 5L) &&
           Stdlib.Int64.bitwiseAnd frame.flags 8L != 0L &&
-          (size == 0L || Stdlib.Blob.__getByte frame.payload 0L >= size) then
+          (if size == 0L then true else Stdlib.Blob.__getByte frame.payload 0L >= size) then
     Error "Invalid HTTP/2 padding"
   else if frame.kind == 1L && Stdlib.Int64.bitwiseAnd frame.flags 32L != 0L then
     let offset = if Stdlib.Int64.bitwiseAnd frame.flags 8L != 0L then 1L else 0L in

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Validate native Dark HTTP serving, framing, shutdown, and cleanup with local TCP peers."""
 
+import argparse
 import http.client
 from contextlib import closing
 import select
@@ -25,6 +26,10 @@ let handler (req: Stdlib.Http.Request) : Stdlib.Http.Response =
              ("Set-Cookie", "a=1"), ("Set-Cookie", "b=2")] 200
     else if path == "/invalid" then
         Stdlib.Http.responseWithHeaders Stdlib.Blob.empty [("X-Bad", "unsafe\\r\\nvalue")] 200
+    else if path == "/big" then
+        Stdlib.Http.success (Stdlib.String.toBlob (Stdlib.String.join (Stdlib.List.repeatUnsafe 70 (Stdlib.String.repeat "b" 1000)) ""))
+    else if path == "/close" then
+        Stdlib.Http.responseWithHeaders (Stdlib.String.toBlob "bye") [("Connection", "keep-alive, ClOsE")] 200
     else
         Stdlib.HttpServer.routeRequest
             [Stdlib.HttpServer.get "/ping" (fun _ -> Stdlib.Http.responseWithText "pong" 200)] req
@@ -92,11 +97,14 @@ def stop(process, shutdown_signal=signal.SIGTERM):
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--compiler", type=Path, default=ROOT / "dark")
+    args = parser.parse_args()
     directory = ROOT / "TestResults/ai/http-server-peer"
     directory.mkdir(parents=True, exist_ok=True)
     source, binary = directory / "server.dark", directory / "server"
     source.write_text(SOURCE)
-    compiled = subprocess.run([str(ROOT / "dark"), str(source), "--allow-internal", "--leak-check", "-o", str(binary)],
+    compiled = subprocess.run([str(args.compiler), str(source), "--allow-internal", "--leak-check", "-o", str(binary)],
                               cwd=ROOT, capture_output=True, text=True, timeout=120)
     assert compiled.returncode == 0, compiled.stdout + compiled.stderr
     port = free_port()
@@ -105,6 +113,50 @@ def main() -> None:
         status, headers, body = request(port, "GET", "/ping")
         assert (status, body) == (200, b"pong")
         assert ("Server", "darklang") in headers
+        # Fully consumed responses retain the same socket, including HEAD.
+        with closing(http.client.HTTPConnection("127.0.0.1", port, timeout=5)) as client:
+            client.request("GET", "/ping")
+            response = client.getresponse()
+            assert response.read() == b"pong" and not response.will_close
+            original = client.sock
+            client.request("HEAD", "/headers")
+            response = client.getresponse()
+            assert response.read() == b"" and client.sock is original
+            client.request("GET", "/close")
+            response = client.getresponse()
+            assert response.read() == b"bye" and response.will_close
+        # Pipelined messages preserve response order and the unread next request.
+        with socket.create_connection(("127.0.0.1", port), timeout=5) as pipelined:
+            pipelined.sendall(b"GET /ping HTTP/1.1\r\nHost: localhost\r\n\r\nGET /headers HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
+            with pipelined.makefile("rb") as buffered:
+                for expected in (b"pong", b"headers"):
+                    assert buffered.readline().startswith(b"HTTP/1.1 200 ")
+                    fields = {}
+                    while (line := buffered.readline()) != b"\r\n":
+                        assert line, "Pipelined response truncated"
+                        name, value = line.rstrip(b"\r\n").split(b":", 1)
+                        fields[name.lower()] = value.strip()
+                    assert buffered.read(int(fields[b"content-length"])) == expected
+                assert buffered.read(1) == b""
+        # A slow upload or blocked sender cannot occupy the whole listener.
+        with socket.create_connection(("127.0.0.1", port), timeout=5) as slow:
+            slow.sendall(b"POST /echo HTTP/1.1\r\nHost: localhost\r\nContent-Length: 4\r\n\r\na")
+            started = time.monotonic()
+            assert request(port, "GET", "/ping")[2] == b"pong"
+            assert time.monotonic() - started < 1.0, "Slow upload blocked another client"
+            slow.sendall(b"bcd")
+            response = http.client.HTTPResponse(slow)
+            response.begin()
+            assert response.read() == b"abcd"
+        with socket.socket() as blocked:
+            blocked.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 4096)
+            blocked.settimeout(5)
+            blocked.connect(("127.0.0.1", port))
+            blocked.sendall(b"GET /big HTTP/1.1\r\nHost: localhost\r\n\r\n" * 70)
+            time.sleep(0.2)
+            started = time.monotonic()
+            assert request(port, "GET", "/ping")[2] == b"pong"
+            assert time.monotonic() - started < 1.0, "Blocked sender starved another client"
         assert ("Strict-Transport-Security", "max-age=31536000; includeSubDomains; preload") in headers
         assert request(port, "GET", "/missing")[0] == 404
         assert request(port, "POST", "/ping")[0] == 404
@@ -163,8 +215,7 @@ def main() -> None:
             response = http.client.HTTPResponse(fragmented)
             response.begin()
             assert response.read() == b"echo"
-        # Socket timeouts are retried, but an absolute monotonic deadline ends
-        # a stalled request and releases the sequential listener for the next.
+        # Per-owner deadlines end stalled requests without delaying admission.
         with socket.create_connection(("127.0.0.1", port), timeout=12) as stalled:
             started = time.monotonic()
             stalled.sendall(b"GET /ping HTTP/1.1\r\n")
@@ -201,7 +252,7 @@ def main() -> None:
         if process.poll() is None:
             process.kill()
             process.communicate()
-    print("HTTP server peer: routing, framing, limits, headers, signals, rebind, and leak checks passed")
+    print("HTTP server peer: keep-alive/HEAD, pipelining, slow-upload/send fairness, routing, framing, limits, headers, signals, rebind, and leak checks passed")
 
 
 if __name__ == "__main__":

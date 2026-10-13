@@ -1,0 +1,169 @@
+// __HttpSessionBatch.dark - Public session batches grouped by origin and multiplexed by negotiated protocol.
+module Darklang.Stdlib.__HttpSessionBatch
+
+type Context = { cell: RawPtr, life: Stream<Unit>, trusted: Bool, roots: Stdlib.Option.Option<List<Blob>> }
+type Budget = { outcomes: List<Stdlib.HttpClientSession.Outcome>, bytes: Int64, exceeded: Bool }
+type Pending = { index: Int64, request: Stdlib.HttpClientSession.Request, prepared: Stdlib.HttpClient.__Prepared }
+
+let __outcome (pending: Stdlib.__HttpSessionBatch.Pending) (response: Stdlib.Result.Result<Stdlib.HttpClient.Response, Stdlib.HttpClient.RequestError>) : Stdlib.HttpClientSession.Outcome =
+  Stdlib.HttpClientSession.Outcome { index = pending.index, response = response }
+
+let __failure (pending: List<Stdlib.__HttpSessionBatch.Pending>) (error: Stdlib.HttpClient.RequestError) : List<Stdlib.HttpClientSession.Outcome> =
+  Stdlib.List.map pending (fun pending -> Stdlib.__HttpSessionBatch.__outcome pending (Error error))
+
+let __learn (cell: RawPtr) (pending: Stdlib.__HttpSessionBatch.Pending) (response: Stdlib.Result.Result<Stdlib.HttpClient.Response, Stdlib.HttpClient.RequestError>) (started: Int64) : Stdlib.HttpClientSession.Outcome =
+  let _ = match response with
+  | Error _ -> ()
+  | Ok response -> Stdlib.HttpClientSession.__learn cell pending.request.url response.statusCode response.headers started in
+  Stdlib.__HttpSessionBatch.__outcome pending response
+
+let __cap (limit: Int64) (budget: Stdlib.__HttpSessionBatch.Budget) (outcomes: List<Stdlib.HttpClientSession.Outcome>) : Stdlib.__HttpSessionBatch.Budget =
+  Stdlib.List.fold outcomes budget (fun budget outcome ->
+    match outcome.response with
+    | Error _ -> { budget with outcomes = budget.outcomes @ [outcome] }
+    | Ok response ->
+      let size = Stdlib.Blob.__byteLength response.body in
+      if size > limit - budget.bytes then
+        { budget with outcomes = budget.outcomes @ [{ outcome with response = Error Stdlib.HttpClient.RequestError.NetworkError }], exceeded = true }
+      else { budget with outcomes = budget.outcomes @ [outcome], bytes = budget.bytes + size })
+
+let __http1Run (context: Stdlib.__HttpSessionBatch.Context) (pending: List<Stdlib.__HttpSessionBatch.Pending>) (budget: Stdlib.__HttpSessionBatch.Budget) : List<Stdlib.HttpClientSession.Outcome> =
+  if budget.exceeded then budget.outcomes @ Stdlib.__HttpSessionBatch.__failure pending Stdlib.HttpClient.RequestError.NetworkError
+  else match pending with
+  | [] -> budget.outcomes
+  | first :: rest ->
+    let response = Stdlib.HttpClientSession.__request context.cell context.life context.trusted context.roots first.request.method first.request.url first.request.headers first.request.body in
+    let budget = Stdlib.__HttpSessionBatch.__cap 104857600L budget [Stdlib.__HttpSessionBatch.__outcome first response] in
+    Stdlib.__HttpSessionBatch.__http1Run context rest budget
+
+let __http1 (context: Stdlib.__HttpSessionBatch.Context) (pending: List<Stdlib.__HttpSessionBatch.Pending>) : List<Stdlib.HttpClientSession.Outcome> =
+  Stdlib.__HttpSessionBatch.__http1Run context pending (Stdlib.__HttpSessionBatch.Budget { outcomes = [], bytes = 0L, exceeded = false })
+
+let __h2 (cell: RawPtr) (entry: Stdlib.__Http2Pool.Entry) (pending: List<Stdlib.__HttpSessionBatch.Pending>) (started: Int64) : List<Stdlib.HttpClientSession.Outcome> =
+  let requests = Stdlib.List.fold pending (Ok []) (fun result pending -> result |> Stdlib.Result.andThen (fun requests ->
+    Stdlib.__Http2Fields.requestFields pending.prepared.method pending.prepared.url pending.request.headers pending.request.body |> Stdlib.Result.map (fun fields ->
+      requests @ [Stdlib.__Http2Connection.Request { method = pending.prepared.method, fields = fields, body = pending.request.body }]))) in
+  match requests |> Stdlib.Result.andThen (Stdlib.__Http2Connection.requestMany entry.transport entry.state) with
+  | Error _ -> let _ = Stdlib.__HttpTransport.close entry.transport in Stdlib.__HttpSessionBatch.__failure pending Stdlib.HttpClient.RequestError.NetworkError
+  | Ok batch ->
+    let _ = match Stdlib.__Network.monotonicMillis () with
+    | Ok now when Stdlib.Option.isNone batch.state.wire.goAway && batch.state.next <= 2147483647L ->
+      let state = Stdlib.Stream.__cellGet<Stdlib.HttpClientSession.__State> cell in
+      Stdlib.Stream.__cellSet cell { state with http2 = Stdlib.__Http2Pool.put state.http2 { entry with state = batch.state } now }
+    | _ -> Stdlib.__HttpTransport.close entry.transport in
+    Stdlib.List.map batch.responses (fun outcome ->
+      match Stdlib.List.getAt pending (Stdlib.Int.fromInt64 outcome.index) with
+      | None -> Builtin.crash "HTTP/2 batch returned an invalid request index"
+      | Some pending -> Stdlib.__HttpSessionBatch.__learn cell pending (Stdlib.Result.mapError outcome.response (fun _message -> Stdlib.HttpClient.RequestError.NetworkError)) started)
+
+let __h3 (cell: RawPtr) (entry: Stdlib.__Http3Pool.Entry) (pending: List<Stdlib.__HttpSessionBatch.Pending>) (started: Int64) : List<Stdlib.HttpClientSession.Outcome> =
+  let requests = Stdlib.List.fold pending (Ok []) (fun result pending -> result |> Stdlib.Result.andThen (fun requests ->
+    Stdlib.__Http2Fields.requestFields pending.prepared.method pending.prepared.url pending.request.headers pending.request.body |> Stdlib.Result.map (fun fields ->
+      requests @ [Stdlib.__Http3Connection.Request { method = pending.prepared.method, fields = fields, body = pending.request.body }]))) in
+  match requests |> Stdlib.Result.andThen (Stdlib.__Http3Connection.requestMany entry.state) with
+  | Error message ->
+    let _ = Stdlib.__Http3.close entry.state.wire in
+    Stdlib.__HttpSessionBatch.__failure pending (if Stdlib.String.contains message "timed out" then Stdlib.HttpClient.RequestError.Timeout else Stdlib.HttpClient.RequestError.NetworkError)
+  | Ok batch ->
+    let _ = match Stdlib.__Network.monotonicMillis () with
+    | Ok now when Stdlib.__Http3Pool.reusable batch.state ->
+      let state = Stdlib.Stream.__cellGet<Stdlib.HttpClientSession.__State> cell in
+      Stdlib.Stream.__cellSet cell { state with http3 = Stdlib.__Http3Pool.put state.http3 { entry with state = batch.state } now }
+    | _ -> Stdlib.__Http3.close batch.state.wire in
+    Stdlib.List.map batch.responses (fun outcome ->
+      match Stdlib.List.getAt pending (Stdlib.Int.fromInt64 outcome.index) with
+      | None -> Builtin.crash "HTTP/3 batch returned an invalid request index"
+      | Some pending -> Stdlib.__HttpSessionBatch.__learn cell pending (Stdlib.Result.mapError outcome.response (fun _message -> Stdlib.HttpClient.RequestError.NetworkError)) started)
+
+let __tcp (context: Stdlib.__HttpSessionBatch.Context) (transport: Stdlib.__HttpTransport.Transport) (origin: Stdlib.__HttpWire.Url) (pending: List<Stdlib.__HttpSessionBatch.Pending>) (started: Int64) : List<Stdlib.HttpClientSession.Outcome> =
+  let state = Stdlib.Stream.__cellGet<Stdlib.HttpClientSession.__State> context.cell in
+  let _ = Stdlib.Stream.__cellSet context.cell { state with pool = Stdlib.__Http1Pool.put state.pool origin transport started } in
+  Stdlib.__HttpSessionBatch.__http1 context pending
+
+let __openH2 (cell: RawPtr) (transport: Stdlib.__HttpTransport.Transport) (origin: Stdlib.__HttpWire.Url) (pending: List<Stdlib.__HttpSessionBatch.Pending>) (started: Int64) : List<Stdlib.HttpClientSession.Outcome> =
+  match Stdlib.__Http2Connection.open transport with
+  | Error _ -> let _ = Stdlib.__HttpTransport.close transport in Stdlib.__HttpSessionBatch.__failure pending Stdlib.HttpClient.RequestError.NetworkError
+  | Ok state -> Stdlib.__HttpSessionBatch.__h2 cell (Stdlib.__Http2Pool.Entry { origin = origin, transport = transport, state = state, idle = started }) pending started
+
+let __openH3 (cell: RawPtr) (ready: Stdlib.__QuicClient.Ready) (origin: Stdlib.__HttpWire.Url) (pending: List<Stdlib.__HttpSessionBatch.Pending>) (started: Int64) : List<Stdlib.HttpClientSession.Outcome> =
+  match Stdlib.__Http3Connection.open ready with
+  | Error _ -> let _ = Stdlib.__QuicClient.close ready in Stdlib.__HttpSessionBatch.__failure pending Stdlib.HttpClient.RequestError.NetworkError
+  | Ok state -> Stdlib.__HttpSessionBatch.__h3 cell (Stdlib.__Http3Pool.Entry { origin = origin, state = state, idle = started }) pending started
+
+let __tls (context: Stdlib.__HttpSessionBatch.Context) (connection: Stdlib.__Network.TcpConnection) (authorities: List<Blob>) (origin: Stdlib.__HttpWire.Url) (pending: List<Stdlib.__HttpSessionBatch.Pending>) (started: Int64) : List<Stdlib.HttpClientSession.Outcome> =
+  match Stdlib.__Tls13Client.handshakeWithProtocols connection origin.host authorities ["h2", "http/1.1"] with
+  | Error _ -> let _ = Stdlib.__Network.closeTcp connection in Stdlib.__HttpSessionBatch.__failure pending Stdlib.HttpClient.RequestError.NetworkError
+  | Ok negotiated ->
+    let transport = Stdlib.__HttpTransport.secure connection negotiated.keys in
+    if negotiated.protocol == "h2" then Stdlib.__HttpSessionBatch.__openH2 context.cell transport origin pending started
+    else Stdlib.__HttpSessionBatch.__tcp context transport origin pending started
+
+let __connectedTcp (context: Stdlib.__HttpSessionBatch.Context) (connection: Stdlib.__Network.TcpConnection) (authorities: Stdlib.Option.Option<List<Blob>>) (origin: Stdlib.__HttpWire.Url) (pending: List<Stdlib.__HttpSessionBatch.Pending>) (started: Int64) : List<Stdlib.HttpClientSession.Outcome> =
+  match authorities with
+  | None -> Stdlib.__HttpSessionBatch.__tcp context (Stdlib.__HttpTransport.plain connection) origin pending started
+  | Some authorities -> Stdlib.__HttpSessionBatch.__tls context connection authorities origin pending started
+
+let __connected (context: Stdlib.__HttpSessionBatch.Context) (connected: Stdlib.HttpClient.Connection) (origin: Stdlib.__HttpWire.Url) (pending: List<Stdlib.__HttpSessionBatch.Pending>) (started: Int64) : List<Stdlib.HttpClientSession.Outcome> =
+  match connected with
+  | Quic ready -> Stdlib.__HttpSessionBatch.__openH3 context.cell ready origin pending started
+  | Tcp ((connection, authorities)) -> Stdlib.__HttpSessionBatch.__connectedTcp context connection authorities origin pending started
+
+let __connect (context: Stdlib.__HttpSessionBatch.Context) (alternatives: List<Stdlib.__HttpsService.Service>) (origin: Stdlib.__HttpWire.Url) (pending: List<Stdlib.__HttpSessionBatch.Pending>) (started: Int64) : List<Stdlib.HttpClientSession.Outcome> =
+  match Stdlib.HttpClient.__connectAlternatives origin context.trusted context.roots alternatives with
+  | Error error -> Stdlib.__HttpSessionBatch.__failure pending error
+  | Ok connected -> Stdlib.__HttpSessionBatch.__connected context connected origin pending started
+
+let __group (context: Stdlib.__HttpSessionBatch.Context) (pending: List<Stdlib.__HttpSessionBatch.Pending>) (origin: Stdlib.__HttpWire.Url) (url: String) : List<Stdlib.HttpClientSession.Outcome> =
+  match Stdlib.__Network.monotonicMillis () with
+  | Error _ -> Stdlib.__HttpSessionBatch.__failure pending Stdlib.HttpClient.RequestError.NetworkError
+  | Ok started ->
+    let alternatives = Stdlib.HttpClientSession.__lookup context.cell url started in
+    let state = Stdlib.Stream.__cellGet<Stdlib.HttpClientSession.__State> context.cell in
+    let h1 = Stdlib.__Http1Pool.take state.pool origin started in
+    let h2 = Stdlib.__Http2Pool.take state.http2 origin started in
+    let h3 = Stdlib.__Http3Pool.take state.http3 origin started in
+    let _ = Stdlib.Stream.__cellSet context.cell { state with pool = h1.state, http2 = h2.state, http3 = h3.state } in
+    match h3.entry with
+    | Some entry ->
+      let _ = match h1.transport with | None -> () | Some transport -> Stdlib.__HttpTransport.close transport in
+      let _ = match h2.entry with | None -> () | Some entry -> Stdlib.__HttpTransport.close entry.transport in
+      Stdlib.__HttpSessionBatch.__h3 context.cell entry pending started
+    | None ->
+      if alternatives != [] then
+        let _ = match h1.transport with | None -> () | Some transport -> Stdlib.__HttpTransport.close transport in
+        let _ = match h2.entry with | None -> () | Some entry -> Stdlib.__HttpTransport.close entry.transport in
+        Stdlib.__HttpSessionBatch.__connect context alternatives origin pending started
+      else match h2.entry with
+      | Some entry ->
+        let _ = match h1.transport with | None -> () | Some transport -> Stdlib.__HttpTransport.close transport in
+        Stdlib.__HttpSessionBatch.__h2 context.cell entry pending started
+      | None ->
+        match h1.transport with
+        | Some transport -> Stdlib.__HttpSessionBatch.__tcp context transport origin pending started
+        | None -> Stdlib.__HttpSessionBatch.__connect context [] origin pending started
+
+let __groups (context: Stdlib.__HttpSessionBatch.Context) (pending: List<Stdlib.__HttpSessionBatch.Pending>) (budget: Stdlib.__HttpSessionBatch.Budget) : List<Stdlib.HttpClientSession.Outcome> =
+  if budget.exceeded then Stdlib.List.sortBy (budget.outcomes @ Stdlib.__HttpSessionBatch.__failure pending Stdlib.HttpClient.RequestError.NetworkError) (fun outcome -> outcome.index)
+  else match pending with
+  | [] -> Stdlib.List.sortBy budget.outcomes (fun outcome -> outcome.index)
+  | first :: _ ->
+    let same = fun pending -> Stdlib.__Http1Pool.sameOrigin first.prepared.url pending.prepared.url in
+    let group = Stdlib.List.filter pending same in
+    let rest = Stdlib.List.filter pending (fun pending -> Stdlib.Bool.not (same pending)) in
+    let outcomes = Stdlib.__HttpSessionBatch.__group context group first.prepared.url first.request.url in
+    Stdlib.__HttpSessionBatch.__groups context rest (Stdlib.__HttpSessionBatch.__cap 104857600L budget outcomes)
+
+let requestMany (cell: RawPtr) (life: Stream<Unit>) (trusted: Bool) (roots: Stdlib.Option.Option<List<Blob>>) (requests: List<Stdlib.HttpClientSession.Request>) : Stdlib.Result.Result<List<Stdlib.HttpClientSession.Outcome>, Stdlib.HttpClient.RequestError> =
+  let context = Stdlib.__HttpSessionBatch.Context { cell = cell, life = life, trusted = trusted, roots = roots } in
+  match Stdlib.Stream.next life with
+  | None -> Error Stdlib.HttpClient.RequestError.NetworkError
+  | Some _ ->
+    let size = Stdlib.List.fold requests 0L (fun total request -> total + Stdlib.Blob.__byteLength request.body) in
+    if Stdlib.List.length requests > 32 || size > 104857600L then Error (Stdlib.HttpClient.RequestError.BadUrl Stdlib.HttpClient.BadUrlDetails.InvalidRequest)
+    else
+      let indexed = Stdlib.List.indexedMap requests (fun index request -> (Stdlib.Int64.__fromIntUnchecked index, request)) in
+      Stdlib.List.fold indexed (Ok []) (fun result pair -> result |> Stdlib.Result.andThen (fun pending ->
+        let (index, request) = pair in
+        Stdlib.HttpClient.__prepare request.method request.url request.headers request.body false |> Stdlib.Result.map (fun prepared ->
+          pending @ [Stdlib.__HttpSessionBatch.Pending { index = index, request = request, prepared = prepared }]))) |> Stdlib.Result.map (fun pending ->
+        Stdlib.__HttpSessionBatch.__groups context pending (Stdlib.__HttpSessionBatch.Budget { outcomes = [], bytes = 0L, exceeded = false }))

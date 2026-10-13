@@ -1,0 +1,30 @@
+// __QuicIdle.dark - RFC 9000 section 10.1 negotiated idle lifetime.
+module Darklang.Stdlib.__QuicIdle
+
+type State = { timeout: Int64, started: Int64, sentSinceReceive: Bool }
+
+let negotiated (local: Int64) (peer: Int64) : Int64 =
+  if local == 0L then peer
+  else if peer == 0L || local < peer then local
+  else peer
+
+let create (local: Int64) (peer: Int64) (now: Int64) : Stdlib.Result.Result<Stdlib.__QuicIdle.State, String> =
+  if local < 0L || peer < 0L || local > 4611686018427387903L || peer > 4611686018427387903L || now < 0L || now > 4611686018427387903L then Error "Invalid QUIC idle timeout"
+  else Ok (Stdlib.__QuicIdle.State { timeout = Stdlib.__QuicIdle.negotiated local peer, started = now, sentSinceReceive = false })
+
+// Call only after successful authenticated packet processing. Unauthenticated
+// datagrams, packets for other connections and sends of ACK-only packets do
+// not keep a connection alive.
+let received (state: Stdlib.__QuicIdle.State) (now: Int64) : Stdlib.__QuicIdle.State =
+  { state with started = now, sentSinceReceive = false }
+
+let sent (state: Stdlib.__QuicIdle.State) (eliciting: Bool) (now: Int64) : Stdlib.__QuicIdle.State =
+  if Stdlib.Bool.not eliciting || state.sentSinceReceive then state
+  else { state with started = now, sentSinceReceive = true }
+
+let expired (state: Stdlib.__QuicIdle.State) (now: Int64) (pto: Int64) : Stdlib.Result.Result<Bool, String> =
+  if now < state.started || now > 4611686018427387903L || pto < 0L || pto > 1537228672809129301L then Error "Invalid QUIC idle clock"
+  else if state.timeout == 0L then Ok false
+  else
+    let period = if state.timeout < 3L * pto then 3L * pto else state.timeout in
+    Ok (now - state.started >= period)

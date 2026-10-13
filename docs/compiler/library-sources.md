@@ -194,6 +194,7 @@ fragments use `__` even where the interpreter also has private helpers.
 | `StdLib/HttpClient/Sse.dark` | `Darklang.Stdlib.HttpClient.Sse`  | `packages/darklang/stdlib/httpclient.dark` |
 | `StdLib/HttpServer/Config.dark` | `Darklang.Stdlib.HttpServer.Config`  | `packages/darklang/stdlib/httpserver.dark` |
 | `StdLib/HttpServer.dark` | `Darklang.Stdlib.HttpServer`  | `packages/darklang/stdlib/httpserver.dark` |
+| `StdLib/__Http1Server.dark` | `Darklang.Stdlib.__Http1Server` | Compiler support: bounded persistent HTTP/1.1 server owners and fair plaintext I/O |
 | `StdLib/__Network.dark` | `Darklang.Stdlib.__Network`  | Compiler support: Owned native TCP/UDP sockets, listeners, deadlines, and scoped shutdown signals |
 | `StdLib/__Datagram.dark` | `Darklang.Stdlib.__Datagram` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
 | `StdLib/__HttpWire.dark` | `Darklang.Stdlib.__HttpWire`  | Compiler support: Byte-bounded HTTP/1.1 and URL primitives written in Dark |
@@ -205,6 +206,8 @@ fragments use `__` even where the interpreter also has private helpers.
 | `StdLib/__HttpTransport.dark` | `Darklang.Stdlib.__HttpTransport` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
 | `StdLib/__Http2Fields.dark` | `Darklang.Stdlib.__Http2Fields` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
 | `StdLib/__Http2.dark` | `Darklang.Stdlib.__Http2` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
+| `StdLib/__Http2Connection.dark` | `Darklang.Stdlib.__Http2Connection` | Compiler support: reusable HTTP/2 state and bounded stream scheduling |
+| `StdLib/__Http2Server.dark` | `Darklang.Stdlib.__Http2Server` | Compiler support: shared HTTP/2 server state, stream windows and scoped failures |
 | `StdLib/__QuicWire.dark` | `Darklang.Stdlib.__QuicWire` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
 | `StdLib/__QuicCrypto.dark` | `Darklang.Stdlib.__QuicCrypto` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
 | `StdLib/__QuicPacket.dark` | `Darklang.Stdlib.__QuicPacket` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
@@ -217,6 +220,7 @@ fragments use `__` even where the interpreter also has private helpers.
 | `StdLib/__QuicRecovery.dark` | `Darklang.Stdlib.__QuicRecovery` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
 | `StdLib/__QuicSpace.dark` | `Darklang.Stdlib.__QuicSpace` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
 | `StdLib/__QuicHandshakePacket.dark` | `Darklang.Stdlib.__QuicHandshakePacket` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
+| `StdLib/__QuicIdle.dark` | `Darklang.Stdlib.__QuicIdle` | Compiler support: negotiated QUIC application idle lifetime |
 | `StdLib/__QuicParameters.dark` | `Darklang.Stdlib.__QuicParameters` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
 | `StdLib/__QuicTls.dark` | `Darklang.Stdlib.__QuicTls` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
 | `StdLib/__QuicKeys.dark` | `Darklang.Stdlib.__QuicKeys` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
@@ -224,6 +228,8 @@ fragments use `__` even where the interpreter also has private helpers.
 | `StdLib/__QuicServer.dark` | `Darklang.Stdlib.__QuicServer` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
 | `StdLib/__QuicConnection.dark` | `Darklang.Stdlib.__QuicConnection` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
 | `StdLib/__Qpack.dark` | `Darklang.Stdlib.__Qpack` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
+| `StdLib/__QpackDecoder.dark` | `Darklang.Stdlib.__QpackDecoder` | Compiler support: bounded dynamic QPACK decoding and encoder-stream instructions |
+| `StdLib/__QpackEncoder.dark` | `Darklang.Stdlib.__QpackEncoder` | Compiler support: bounded outgoing dynamic QPACK, reference pins and decoder feedback |
 | `StdLib/__Http3Wire.dark` | `Darklang.Stdlib.__Http3Wire` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
 | `StdLib/__Http3Stream.dark` | `Darklang.Stdlib.__Http3Stream` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
 | `StdLib/__Http3Message.dark` | `Darklang.Stdlib.__Http3Message` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
@@ -231,10 +237,15 @@ fragments use `__` even where the interpreter also has private helpers.
 | `StdLib/__Http3Uni.dark` | `Darklang.Stdlib.__Http3Uni` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
 | `StdLib/__Http3.dark` | `Darklang.Stdlib.__Http3` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
 | `StdLib/__Http3Client.dark` | `Darklang.Stdlib.__Http3Client` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
-| `StdLib/__Http3Server.dark` | `Darklang.Stdlib.__Http3Server` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
+| `StdLib/__Http3Connection.dark` | `Darklang.Stdlib.__Http3Connection` | Compiler support: shared QUIC/QPACK request scheduler |
+| `StdLib/__Http3Server.dark` | `Darklang.Stdlib.__Http3Server` | Compiler support: bounded multiplexed HTTP/3 server request owners |
 | `StdLib/__Http3Discovery.dark` | `Darklang.Stdlib.__Http3Discovery` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
 | `StdLib/__AltSvc.dark` | `Darklang.Stdlib.__AltSvc` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
 | `StdLib/__AltSvcCache.dark` | `Darklang.Stdlib.__AltSvcCache` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
+| `StdLib/__Http1Pool.dark` | `Darklang.Stdlib.__Http1Pool` | Compiler support: bounded HTTP/1.1 session connection ownership and response reuse |
+| `StdLib/__Http2Pool.dark` | `Darklang.Stdlib.__Http2Pool` | Compiler support: bounded persistent HTTP/2 session owners |
+| `StdLib/__Http3Pool.dark` | `Darklang.Stdlib.__Http3Pool` | Compiler support: bounded persistent HTTP/3 session owners |
+| `StdLib/__HttpSessionBatch.dark` | `Darklang.Stdlib.__HttpSessionBatch` | Compiler support: session batch protocol selection and owner checkout |
 | `StdLib/HttpClientSession.dark` | `Darklang.Stdlib.HttpClientSession` | Compiler extension: HTTP transport and secure server support |
 | `StdLib/__HttpsService.dark` | `Darklang.Stdlib.__HttpsService` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
 | `StdLib/__HttpsDns.dark` | `Darklang.Stdlib.__HttpsDns` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
@@ -256,6 +267,8 @@ fragments use `__` even where the interpreter also has private helpers.
 | `StdLib/__Tls13ServerHandshake.dark` | `Darklang.Stdlib.__Tls13ServerHandshake` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
 | `StdLib/__Tls13KeyUpdate.dark` | `Darklang.Stdlib.__Tls13KeyUpdate` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
 | `StdLib/__Tls13ServerTcp.dark` | `Darklang.Stdlib.__Tls13ServerTcp` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
+| `StdLib/__Tls13ServerPoll.dark` | `Darklang.Stdlib.__Tls13ServerPoll` | Compiler support: incremental nonblocking TLS server handshake ownership |
+| `StdLib/__TlsServer.dark` | `Darklang.Stdlib.__TlsServer` | Compiler support: fair TLS handshake and persistent HTTP/1.1–2 transport owners |
 | `StdLib/__QuicServerTls.dark` | `Darklang.Stdlib.__QuicServerTls` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
 | `StdLib/__QuicServerRetry.dark` | `Darklang.Stdlib.__QuicServerRetry` | Compiler support: HTTP/2, HTTP/3, QUIC, or TLS protocol implementation |
 | `StdLib/HttpServer/Tls.dark` | `Darklang.Stdlib.HttpServer.Tls` | Compiler extension: HTTP transport and secure server support |
