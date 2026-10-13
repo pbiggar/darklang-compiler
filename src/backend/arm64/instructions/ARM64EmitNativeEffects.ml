@@ -250,11 +250,11 @@ let emitCliNative (ctx : codeGenContext) (dest : LIR.reg)
       | LIR.PosixSetAttributesAt | LIR.PosixSymlinkAt | LIR.PosixReadlinkAt
       | LIR.PosixAccessAt | LIR.PosixFlock | LIR.PosixGetDents | LIR.PosixIoctl
       | LIR.PosixProcInfo | LIR.PosixCopyFileRange | LIR.PosixFtruncate
-      | LIR.PosixFchmod | LIR.PosixFstat | LIR.PosixPread
-      | LIR.PosixPwrite | LIR.PosixFclonefileat | LIR.PosixGetentropy
-      | LIR.PosixUname | LIR.PosixSysctl | LIR.PosixSchedGetaffinity
-      | LIR.PosixFcntlGetPath | LIR.PosixClockGettime | LIR.PosixGettimeofday
-      | LIR.PosixNanosleep | LIR.PosixMachTimebaseInfo | LIR.PosixInotifyInit1
+      | LIR.PosixFchmod | LIR.PosixFstat | LIR.PosixPread | LIR.PosixPwrite
+      | LIR.PosixFclonefileat | LIR.PosixGetentropy | LIR.PosixUname
+      | LIR.PosixSysctl | LIR.PosixSchedGetaffinity | LIR.PosixFcntlGetPath
+      | LIR.PosixClockGettime | LIR.PosixGettimeofday | LIR.PosixNanosleep
+      | LIR.PosixMachTimebaseInfo | LIR.PosixInotifyInit1
       | LIR.PosixInotifyAddWatch | LIR.PosixPpoll | LIR.PosixPollDarwin
       | LIR.PosixKqueue | LIR.PosixKeventVnode | LIR.PosixWait4
       | LIR.ChildLaunch -> (
@@ -867,6 +867,66 @@ let emitCliNative (ctx : codeGenContext) (dest : LIR.reg)
                       Symbolic.MOVZ
                         ( syscall.ARM64.syscallRegister,
                           syscall.ARM64.numbers.Platform.sendTo,
+                          0 );
+                      Symbolic.SVC syscall.ARM64.svcImmediate;
+                    ]
+                  @ normalize
+                  @ [ Symbolic.MOV_reg (destReg, Symbolic.X0) ])
+          | LIR.SocketSendTo, [ descriptor; blob; address; length; nonblocking ]
+            ->
+              loadArguments
+                [ descriptor; blob; address; length; nonblocking ]
+                [
+                  Symbolic.X0;
+                  Symbolic.X1;
+                  Symbolic.X4;
+                  Symbolic.X5;
+                  Symbolic.X3;
+                ]
+              |> Result.map (fun loads ->
+                  let constants = Platform.socketConstantsFor os in
+                  loads
+                  @ [
+                      Symbolic.LDR (Symbolic.X2, Symbolic.X1, 8);
+                      Symbolic.ADD_imm (Symbolic.X1, Symbolic.X1, 16);
+                    ]
+                  @ loadImmediate Symbolic.X6 constants.Platform.dontWait
+                  @ [ Symbolic.MUL (Symbolic.X3, Symbolic.X3, Symbolic.X6) ]
+                  @ loadImmediate Symbolic.X6 constants.Platform.noSignal
+                  @ [
+                      Symbolic.ORR_reg (Symbolic.X3, Symbolic.X3, Symbolic.X6);
+                      Symbolic.MOVZ
+                        ( syscall.ARM64.syscallRegister,
+                          syscall.ARM64.numbers.Platform.sendTo,
+                          0 );
+                      Symbolic.SVC syscall.ARM64.svcImmediate;
+                    ]
+                  @ normalize
+                  @ [ Symbolic.MOV_reg (destReg, Symbolic.X0) ])
+          | ( LIR.SocketReceiveFrom,
+              [ descriptor; buffer; length; peer; nonblocking ] ) ->
+              loadArguments
+                [ descriptor; buffer; length; peer; nonblocking ]
+                [
+                  Symbolic.X0;
+                  Symbolic.X1;
+                  Symbolic.X2;
+                  Symbolic.X4;
+                  Symbolic.X3;
+                ]
+              |> Result.map (fun loads ->
+                  loads
+                  @ [
+                      Symbolic.MOV_reg (Symbolic.X5, Symbolic.X4);
+                      Symbolic.ADD_imm (Symbolic.X4, Symbolic.X4, 8);
+                    ]
+                  @ loadImmediate Symbolic.X6
+                      (Platform.socketConstantsFor os).Platform.dontWait
+                  @ [
+                      Symbolic.MUL (Symbolic.X3, Symbolic.X3, Symbolic.X6);
+                      Symbolic.MOVZ
+                        ( syscall.ARM64.syscallRegister,
+                          syscall.ARM64.numbers.Platform.recvFrom,
                           0 );
                       Symbolic.SVC syscall.ARM64.svcImmediate;
                     ]

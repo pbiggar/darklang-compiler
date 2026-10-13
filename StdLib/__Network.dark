@@ -39,8 +39,10 @@ let __connect6 (descriptor: Int64) (address: RawPtr) : Int64 = -38L
 let __send (descriptor: Int64) (payload: Blob) : Int64 = -38L
 let __sendWithMode (descriptor: Int64) (payload: Blob) (nonblocking: Bool) : Int64 = -38L
 let __sendTo (descriptor: Int64) (payload: Blob) (address: RawPtr) (addressLength: Int64) : Int64 = -38L
+let __sendToWithMode (descriptor: Int64) (payload: Blob) (address: RawPtr) (addressLength: Int64) (nonblocking: Bool) : Int64 = -38L
 // Peer storage holds a socklen word followed by the sockaddr at offset eight.
 let __receiveFrom (descriptor: Int64) (buffer: RawPtr) (length: Int64) (peer: RawPtr) : Int64 = -38L
+let __receiveFromWithMode (descriptor: Int64) (buffer: RawPtr) (length: Int64) (peer: RawPtr) (nonblocking: Bool) : Int64 = -38L
 let __bind6 (descriptor: Int64) (address: RawPtr) : Int64 = -38L
 let __receive (descriptor: Int64) (buffer: RawPtr) (length: Int64) : Int64 = -38L
 let __receiveWithMode (descriptor: Int64) (buffer: RawPtr) (length: Int64) (nonblocking: Bool) : Int64 = -38L

@@ -57,6 +57,27 @@ def main():
         process, port = start(binary)
         try:
             http1_owners(port, trust)
+            # Keep one authenticated QUIC request incomplete while admitting
+            # both a TCP client and a second QUIC connection on the same port.
+            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as stalled:
+                stalled.bind(("127.0.0.1", 0))
+                stalled.settimeout(0.01)
+                client, _http, _replay = exchange(stalled, port, ca, body=b"partial", declared=100, stalled=True)
+                with connect(port, trust, ["http/1.1"]) as peer:
+                    peer.sendall(b"GET /echo HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
+                    response = bytearray()
+                    while data := peer.recv(65536):
+                        response.extend(data)
+                    assert response.startswith(b"HTTP/1.1 200"), response
+                with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as peer:
+                    peer.bind(("127.0.0.1", 0))
+                    peer.settimeout(0.01)
+                    _headers, response, _replay = exchange(peer, port, ca, body=b"other connection")
+                    assert response == b"other connection", response
+                client.close(error_code=256)
+                for packet, target in client.datagrams_to_send(time.monotonic()):
+                    stalled.sendto(packet, target)
+            print("Stalled QUIC upload leaves TCP and another QUIC connection live", flush=True)
             advertisement = f'h3=":{port}"; ma=3600'.encode()
             for protocols in (["http/1.1"], []):
                 with connect(port, trust, protocols) as peer:
