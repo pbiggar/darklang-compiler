@@ -83,7 +83,7 @@ Other skip metadata and runtime filters are outside this inventory.
 | [stdlib/duration.dark](../../test/fixtures/e2e/upstream/stdlib/duration.dark) | enabled | — |
 | [stdlib/earg.dark](../../test/fixtures/e2e/upstream/stdlib/earg.dark) | disabled | — |
 | [stdlib/eself.dark](../../test/fixtures/e2e/upstream/stdlib/eself.dark) | disabled | — |
-| [stdlib/float.dark](../../test/fixtures/e2e/upstream/stdlib/float.dark) | enabled | 47, 55, 58, 59, 64, 65, 73, 76, 81, 89, 107, 110, 111, 125, 127, 134, 136, 160, 173, 176, 244, 255 |
+| [stdlib/float.dark](../../test/fixtures/e2e/upstream/stdlib/float.dark) | enabled | 47, 55, 58, 59, 64, 65, 73, 76, 81, 89, 107, 110, 111, 125, 127, 134, 136, 160, 173, 176, 244 |
 | [stdlib/html.dark](../../test/fixtures/e2e/upstream/stdlib/html.dark) | enabled | 42, 44, 66, 69, 72, 75, 83 |
 | [stdlib/http.dark](../../test/fixtures/e2e/upstream/stdlib/http.dark) | enabled | 21, 27, 33, 48, 51, 57, 63, 102, 108, 110, 111, 114, 117, 122, 123, 124, 128, 129, 130, 131, 133, 137, 144, 149, 155, 161 |
 | [stdlib/httpclient.dark](../../test/fixtures/e2e/upstream/stdlib/httpclient.dark) | enabled | 71, 108, 111, 131, 132, 133, 134 |

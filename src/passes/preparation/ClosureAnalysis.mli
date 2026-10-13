@@ -14,6 +14,7 @@ type liftState = {
   typeEnv : AST.semanticType CheckedAST.BindingIdMap.t;
   funcParams : AST.semanticType list FunctionIdMap.t;
   funcReturnTypes : AST.semanticType FunctionIdMap.t;
+  inferenceFunctions : TypeRegistries.functionRegistry;
   genericFuncDefs : (string list * AST.semanticType) FunctionIdMap.t;
   typeReg : TypeRegistries.typeRegistry;
   variantLookup : LoweringPrimitives.variantLookup;

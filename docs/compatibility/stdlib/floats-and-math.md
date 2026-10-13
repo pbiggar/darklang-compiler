@@ -59,10 +59,11 @@ source (`floatCeiling` delegates to `System.Math.Ceiling`) and current public
 probes establish rounding toward positive infinity with an Int result.
 
 `isNaN` uses IEEE unordered self-comparison and therefore recognizes every NaN
-payload. `clamp` rejects a NaN bound with exactly
-`clamp requires arguments to be valid numbers`, accepts bounds in either
+payload. `clampRefusingNaN` rejects a NaN bound with exactly
+`clampRefusingNaN requires limits that are numbers`, accepts bounds in either
 order, and returns a NaN value inside `Ok` without treating it as a bad bound.
-Infinities and signed zero follow ordinary IEEE comparisons.
+Infinities and signed zero follow ordinary IEEE comparisons. The old public
+`Float.clamp` name has been removed to complete the upstream migration.
 
 ## Decimal parsing and formatting
 

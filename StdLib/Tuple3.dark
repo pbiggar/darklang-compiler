@@ -14,15 +14,15 @@ let second<'a, 'b, 'c> (t: (a * b * c)) : b = match t with | (x, y, z) -> y
 
 let third<'a, 'b, 'c> (t: (a * b * c)) : c = match t with | (x, y, z) -> z
 
-let mapFirst<'a, 'b, 'c, 'd> (fn: a -> d) (t: (a * b * c)) : (d * b * c) =
+let mapFirst<'a, 'b, 'c, 'd> (t: (a * b * c)) (fn: a -> d) : (d * b * c) =
     match t with | (x, y, z) -> (fn x, y, z)
 
-let mapSecond<'a, 'b, 'c, 'd> (fn: b -> d) (t: (a * b * c)) : (a * d * c) =
+let mapSecond<'a, 'b, 'c, 'd> (t: (a * b * c)) (fn: b -> d) : (a * d * c) =
     match t with | (x, y, z) -> (x, fn y, z)
 
-let mapThird<'a, 'b, 'c, 'd> (fn: c -> d) (t: (a * b * c)) : (a * b * d) =
+let mapThird<'a, 'b, 'c, 'd> (t: (a * b * c)) (fn: c -> d) : (a * b * d) =
     match t with | (x, y, z) -> (x, y, fn z)
 
-let mapAllThree<'a, 'b, 'c, 'd, 'e, 'f> (fnFirst: a -> d) (fnSecond: b -> e) (fnThird: c -> f) (t: (a * b * c)) : (d * e * f) =
+let mapAllThree<'a, 'b, 'c, 'd, 'e, 'f> (t: (a * b * c)) (fnFirst: a -> d) (fnSecond: b -> e) (fnThird: c -> f) : (d * e * f) =
     match t with | (x, y, z) -> (fnFirst x, fnSecond y, fnThird z)
 
