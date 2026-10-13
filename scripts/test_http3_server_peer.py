@@ -141,6 +141,14 @@ def exchange(peer, port, ca, method=b"POST", body=b"HTTP/3 routing", declared=No
         # part of this interoperability gate.
         if close is None:
             close = client._close_event
+        if finished and close is None:
+            # Persistent servers retain the connection after a response. The
+            # harness explicitly closes its owner before the next connection.
+            assert retry and replay is not None
+            client.close(error_code=256)
+            for packet, target in client.datagrams_to_send(time.monotonic()):
+                peer.sendto(packet, target)
+            return headers, bytes(response), replay
         if close:
             if field_limit == 0:
                 assert sent and not headers and not response, (sent, headers, response)
@@ -157,6 +165,85 @@ def exchange(peer, port, ca, method=b"POST", body=b"HTTP/3 routing", declared=No
     raise AssertionError(("exchange timed out", sent, finished, len(response), headers, close))
 
 
+def server_owners(peer, port, ca):
+    config = QuicConfiguration(is_client=True, alpn_protocols=["h3"], server_name="localhost",
+                               cadata=ca.public_bytes(serialization.Encoding.PEM))
+    client = QuicConnection(configuration=config)
+    # Test-only independent transport control: no response stream has credit
+    # until we explicitly grant it; critical unidirectional streams retain credit.
+    client._local_max_stream_data_bidi_local = 0
+    http = H3Connection(client)
+    client.connect(("127.0.0.1", port), time.monotonic())
+    headers, bodies, ended = {}, {}, set()
+    authenticated = False
+
+    def request(stream, body, declared=None, finished=True):
+        bodies[stream] = bytearray()
+        http.send_headers(stream, [(b":method", b"POST"), (b":scheme", b"https"),
+                                   (b":authority", b"localhost"), (b":path", b"/echo"),
+                                   (b"x-shared", b"persistent-request-compression"),
+                                   (b"content-length", str(len(body) if declared is None else declared).encode())],
+                          end_stream=not body and finished)
+        if body:
+            http.send_data(stream, body, end_stream=finished)
+
+    def pump():
+        nonlocal authenticated
+        now = time.monotonic()
+        timer = client.get_timer()
+        if timer is not None and timer <= now:
+            client.handle_timer(now)
+        for data, target in client.datagrams_to_send(now):
+            peer.sendto(data, target)
+        try:
+            data, source = peer.recvfrom(8192)
+            client.receive_datagram(data, source, time.monotonic())
+        except socket.timeout:
+            pass
+        while (event := client.next_event()) is not None:
+            assert not isinstance(event, ConnectionTerminated), event
+            if isinstance(event, HandshakeCompleted):
+                authenticated = True
+            for received in http.handle_event(event):
+                if isinstance(received, HeadersReceived):
+                    headers[received.stream_id] = received.headers
+                elif isinstance(received, DataReceived):
+                    bodies[received.stream_id].extend(received.data)
+                if received.stream_ended:
+                    ended.add(received.stream_id)
+        assert client._close_event is None, client._close_event
+
+    def until(predicate):
+        deadline = time.monotonic() + 8
+        while not predicate():
+            assert time.monotonic() < deadline, ("HTTP/3 owners stalled", list(headers), ended)
+            pump()
+
+    until(lambda: authenticated)
+    request(0, b"a", declared=2, finished=False)
+    body = b"b" * 70000
+    request(4, body)
+    # Only stream 4 receives response credit; stream 0's upload is unfinished.
+    client._streams[4].max_stream_data_local = 100000
+    until(lambda: 4 in ended)
+    assert bodies[4] == body and not bodies[0] and 0 not in ended
+    assert [value for name, value in headers[4] if name == b"set-cookie"] == [b"a=1", b"b=2"]
+    client.reset_stream(0, error_code=268)
+    client.stop_stream(0, error_code=268)
+    # Reuse past the initial 32-stream allowance: completed owners must renew
+    # MAX_STREAMS while retaining the connection's compression state.
+    for index in range(40):
+        stream = 8 + index * 4
+        value = f"request-{index}".encode()
+        request(stream, value)
+        client._streams[stream].max_stream_data_local = 1024
+        until(lambda: stream in ended)
+        assert bodies[stream] == value and (b":status", b"200") in headers[stream]
+    client.close(error_code=256)
+    for data, target in client.datagrams_to_send(time.monotonic()):
+        peer.sendto(data, target)
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--compiler", type=Path, default=ROOT / "dark")
@@ -171,6 +258,11 @@ def main():
         assert result.returncode == 0, result.stdout + result.stderr
         process, port = start(binary)
         try:
+            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as peer:
+                peer.bind(("127.0.0.1", 0))
+                peer.settimeout(0.01)
+                server_owners(peer, port, ca)
+            print("HTTP/3 stream isolation, selective flow credit, reset and 40 persistent requests verified", flush=True)
             with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as peer:
                 peer.bind(("127.0.0.1", 0))
                 peer.settimeout(0.01)
@@ -244,7 +336,7 @@ def main():
                             continue
                         kind = pull_quic_header(Buffer(data=data), host_cid_length=8).packet_type
                         assert kind not in (QuicPacketType.INITIAL, QuicPacketType.HANDSHAKE, QuicPacketType.RETRY), kind
-                    print(f"{method.decode()} {status.decode()}: {len(body)} bytes, routing/body limits, encrypted close and replay suppression", flush=True)
+                    print(f"{method.decode()} {status.decode()}: {len(body)} bytes, routing/body limits, explicit encrypted owner close and replay suppression", flush=True)
             with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as peer:
                 peer.bind(("127.0.0.1", 0))
                 peer.settimeout(0.01)
