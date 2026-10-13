@@ -642,6 +642,15 @@ let liftLambdasInProgram baseRegistry baseVariants baseFunctions program =
       typeEnv = B.empty;
       funcParams = params;
       funcReturnTypes = runtimeReturns;
+      inferenceFunctions =
+        FunctionIdMap.map
+          (fun id result ->
+            let parameters =
+              Option.value (FunctionIdMap.tryFind id params) ~default:[]
+            in
+            let name = Option.value (C.functionName id symbols) ~default:"" in
+            (name, AST.TFunction (parameters, result)))
+          runtimeReturns;
       genericFuncDefs = generic;
       typeReg = canonicalRegistry;
       variantLookup = mergedVariants;

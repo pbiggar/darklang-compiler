@@ -63,3 +63,6 @@ let dedup<'a> (values: List<a>) : List<a> = Stdlib.List.dedup values; let fn = (
 let dedup<'a> (values: List<a>) : List<a> = Stdlib.List.dedup values; dedup [Stdlib.String.toBlob "key"] = compileerror="cannot be used as a Dict key"
 type Key = { value: Float }; let nan = 0.0 / 0.0 in Stdlib.List.length (Stdlib.List.dedup [Key { value = nan }, Key { value = nan }]) = 1
 type Key = { value: Blob }; Stdlib.List.dedup [Key { value = Stdlib.String.toBlob "key" }] = compileerror="cannot be used as a Dict key"
+Stdlib.List.dedup [Stdlib.Stream.fromList [1L]] = compileerror="cannot be used as a Dict key"
+type Key = Value of Float | Empty; let nan = 0.0 / 0.0 in Stdlib.List.length (Stdlib.List.dedup [Key.Value nan, Key.Value nan, Key.Empty]) = 2
+type Key = Value of Blob | Empty; Stdlib.List.dedup [Key.Value (Stdlib.String.toBlob "key")] = compileerror="cannot be used as a Dict key"

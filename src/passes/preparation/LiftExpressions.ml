@@ -11,22 +11,11 @@ module B = C.BindingIdMap
 let ( let* ) = Result.bind
 
 let inferChecked expr state =
-  let functions =
-    FunctionIdMap.map
-      (fun id result ->
-        let parameters =
-          Option.value (FunctionIdMap.tryFind id state.A.funcParams) ~default:[]
-        in
-        let name =
-          Option.value (C.functionName id state.A.symbols) ~default:""
-        in
-        (name, AST.TFunction (parameters, result)))
-      state.A.funcReturnTypes
-  in
   LoweringTypeInference.inferTypeCore
     (LoweringPrimitives.sumMetadataFromVariantLookup state.A.variantLookup)
     (R.typeNamesFromSymbols state.A.symbols)
-    expr state.A.typeEnv state.A.typeReg state.A.variantLookup functions
+    expr state.A.typeEnv state.A.typeReg state.A.variantLookup
+    state.A.inferenceFunctions
     (C.functionNames state.A.symbols)
     StringOrder.Map.empty
 
@@ -368,6 +357,14 @@ and liftLambda argument parameters annotation body state =
       typeEnv = state.A.typeEnv;
       funcParams = state1.A.funcParams;
       funcReturnTypes = state1.A.funcReturnTypes;
+      inferenceFunctions =
+        FunctionIdMap.add func.C.id
+          ( func.C.name,
+            AST.TFunction
+              ( List.map snd
+                  (NonEmptyList.toList (C.functionParameterTypes func)),
+                C.functionReturnType func ) )
+          state1.A.inferenceFunctions;
       genericFuncDefs = state1.A.genericFuncDefs;
       typeReg = state1.A.typeReg;
       variantLookup = state1.A.variantLookup;
