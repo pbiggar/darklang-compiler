@@ -52,3 +52,26 @@ val selectCall :
   string ->
   AST.semanticType list ->
   (AST.functionId * AST.semanticType list, string) result
+
+val namedMethod :
+  WrittenTypes.range -> string -> string -> WrittenTypes.qualifiedFnIdentifier
+
+val receiverMethod :
+  WrittenTypeSupport.globals ->
+  CheckedAST.symbols ->
+  AST.semanticType ->
+  string ->
+  (string option, string) result
+
+val proofAvailable :
+  WrittenTypeSupport.globals ->
+  CheckedAST.symbols ->
+  string ->
+  AST.semanticType ->
+  bool
+
+val inferFromBounds :
+  WrittenTypeSupport.globals ->
+  WrittenTypeSupport.functionSignature ->
+  AST.semanticType list ->
+  AST.semanticType list

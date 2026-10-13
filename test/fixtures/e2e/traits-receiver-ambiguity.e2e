@@ -1,0 +1,11 @@
+(
+trait ReceiverA<'a> =
+  let show (value: 'a) : String
+trait ReceiverB<'a> =
+  let show (value: 'a) : String
+impl ReceiverA for Int64 =
+  let show (value: Int64) : String = "a"
+impl ReceiverB for Int64 =
+  let show (value: Int64) : String = "b"
+42L.show
+) = compileerror="Ambiguous receiver method 'show'"

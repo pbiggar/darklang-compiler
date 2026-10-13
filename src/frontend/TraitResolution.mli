@@ -33,3 +33,6 @@ val checkType :
   TraitCatalog.obligation list ->
   AST.semanticType ->
   (unit, string) result
+
+val matchArguments :
+  AST.semanticType list -> AST.semanticType list -> Types.substitution option

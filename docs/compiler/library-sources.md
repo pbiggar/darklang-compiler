@@ -42,6 +42,7 @@ fragments use `__` even where the interpreter also has private helpers.
 |---|---|---|
 | `StdLib/__Types.dark` | (root declarations) | Compiler representation of the interpreter’s root Uuid type (`backend/src/LibExecution/RuntimeTypes.fs`) |
 | `StdLib/Root.dark` | `Darklang.Stdlib`  | `packages/darklang/stdlib/noModule.dark` |
+| `StdLib/traits.dark` | `Darklang.Stdlib` | Unchanged `packages/darklang/stdlib/traits.dark` at `a9d93efc853486244630dad693fe79f6f4882cf6` |
 | `StdLib/Int8.dark` | `Darklang.Stdlib.Int8`  | `packages/darklang/stdlib/int8.dark` |
 | `StdLib/Int16.dark` | `Darklang.Stdlib.Int16`  | `packages/darklang/stdlib/int16.dark` |
 | `StdLib/Int32.dark` | `Darklang.Stdlib.Int32`  | `packages/darklang/stdlib/int32.dark` |

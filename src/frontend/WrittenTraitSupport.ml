@@ -17,7 +17,8 @@ let resolveTrait (globals : globals) path name =
       Option.map
         (fun signature -> (candidate, signature))
         (M.find_opt candidate globals.traits))
-    (NameResolution.candidateSpellings NameResolution.Type path name)
+    (NameResolution.candidateSpellings NameResolution.Type path name
+    @ if String.contains name '.' then [] else [ "Darklang.Stdlib." ^ name ])
 
 let parameterTypes convert parameters =
   ResultList.traverse
@@ -606,3 +607,105 @@ let selectCall symbols traitName methodName types =
           match C.tryFindFunctionId name symbols with
           | None -> Error ("Unresolved implementation method '" ^ name ^ "'")
           | Some id -> Ok (id, args))
+
+let namedMethod range traitName methodName : WT.qualifiedFnIdentifier =
+  {
+    WT.range;
+    modules =
+      List.map
+        (fun name -> (({ WT.range; name } : WT.identifier), range))
+        (String.split_on_char '.' traitName);
+    fn = { WT.range; name = methodName };
+  }
+
+let receiverMethod (globals : globals) symbols typ methodName =
+  let applicable =
+    M.bindings globals.traits
+    |> List.filter_map (fun (name, trait_) ->
+        if not (M.mem methodName trait_.methods) then None
+        else
+          let supplied =
+            List.exists
+              (fun (owner, args) ->
+                owner = name
+                && match args with self :: _ -> self = typ | [] -> false)
+              globals.bounds
+          in
+          if supplied then Some name
+          else if List.length trait_.traitParams <> 1 then
+            let matches =
+              M.bindings (C.traitCatalog symbols).TraitCatalog.implementations
+              |> List.exists
+                   (fun (_, (implementation : TraitCatalog.implementation)) ->
+                     implementation.TraitCatalog.traitName = name
+                     &&
+                     match implementation.TraitCatalog.typeArgs with
+                     | self :: _ ->
+                         Option.is_some
+                           (TraitResolution.matchArguments [ self ] [ typ ])
+                     | [] -> false)
+            in
+            if matches then Some name else None
+          else
+            match
+              TraitResolution.check (C.traitCatalog symbols) globals.bounds
+                (name, [ typ ])
+            with
+            | Ok () -> Some name
+            | Error error
+              when String.starts_with ~prefix:"Ambiguous implementation" error
+              ->
+                Some name
+            | Error _ -> None)
+  in
+  match applicable with
+  | [] -> Ok None
+  | [ name ] -> Ok (Some name)
+  | _ -> Error ("Ambiguous receiver method '" ^ methodName ^ "'")
+
+let proofAvailable (globals : globals) symbols traitName typ =
+  Result.is_ok
+    (TraitResolution.check (C.traitCatalog symbols) globals.bounds
+       (traitName, [ typ ]))
+
+let inferFromBounds (globals : globals) (signature : functionSignature) inferred
+    =
+  match signature.traitMethod with
+  | None -> inferred
+  | Some (traitName, _) -> (
+      match M.find_opt traitName globals.traits with
+      | None -> inferred
+      | Some trait_ -> (
+          let arity = List.length trait_.traitParams in
+          let traitArgs = List.filteri (fun i _ -> i < arity) inferred in
+          let flexible = function
+            | AST.TVar name -> not (S.mem name globals.typeParams)
+            | AST.TInferenceVar _ -> true
+            | _ -> false
+          in
+          let candidates =
+            List.filter_map
+              (fun (name, args) ->
+                if
+                  name <> traitName
+                  || List.length args <> List.length traitArgs
+                  || not
+                       (List.for_all2
+                          (fun current wanted ->
+                            current = wanted || flexible current)
+                          traitArgs args)
+                then None
+                else Some args)
+              globals.bounds
+          in
+          match candidates with
+          | [ args ] ->
+              let rec fill args current =
+                match (args, current) with
+                | [], rest -> rest
+                | wanted :: bounds, typ :: rest ->
+                    (if flexible typ then wanted else typ) :: fill bounds rest
+                | _ -> Crash.crash "Checked trait bound inference arity changed"
+              in
+              fill args inferred
+          | _ -> inferred))

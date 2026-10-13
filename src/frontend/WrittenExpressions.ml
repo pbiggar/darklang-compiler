@@ -163,6 +163,59 @@ let rec checkExpression (globals : globals) locals symbols expected expression =
       check symbols expected
         (WT.EApply
            (range, WT.EVariable (nameRange, name.fn.name), typeArgs, args))
+  | WT.EApply (range, WT.EFnName (_, name), [], [ argument ])
+    when List.mem (qualifiedFnName name)
+           [ [ "Builtin"; "negate" ]; [ "Builtin"; "bitwiseNot" ] ] ->
+      bind (check symbols None argument) (fun (typ, _, checkedSymbols) ->
+          let traitName, methodName =
+            if name.WT.fn.WT.name = "negate" then
+              ("Darklang.Stdlib.Negate", "negate")
+            else ("Darklang.Stdlib.BitwiseNot", "bitwiseNot")
+          in
+          let integer =
+            List.mem typ
+              [
+                AST.TInt;
+                AST.TInt8;
+                AST.TInt16;
+                AST.TInt32;
+                AST.TInt64;
+                AST.TInt128;
+                AST.TUInt8;
+                AST.TUInt16;
+                AST.TUInt32;
+                AST.TUInt64;
+                AST.TUInt128;
+              ]
+          in
+          let fast = integer || (methodName = "negate" && typ = AST.TFloat64) in
+          let custom =
+            match typ with
+            | AST.TRecord _ | AST.TSum _ | AST.TList _ | AST.TDict _
+            | AST.TTuple _ | AST.TStream _ | AST.TFunction _ ->
+                true
+            | _ -> false
+          in
+          let use =
+            (not fast) && typ <> AST.TNever
+            && (custom
+               || WrittenTraitSupport.proofAvailable globals
+                    (WrittenCheckingState.symbols checkedSymbols)
+                    traitName typ)
+          in
+          if
+            use
+            && Option.is_some
+                 (resolveFunction globals
+                    (String.split_on_char '.' (traitName ^ "." ^ methodName)))
+          then
+            WrittenCallSupport.checkNamed checkExpression checkedLiteral globals
+              locals symbols expected range
+              (WrittenTraitSupport.namedMethod range traitName methodName)
+              [] [ argument ]
+          else
+            WrittenApplicationSupport.builtin checkExpression checkedLiteral
+              globals locals symbols expected name.WT.fn.WT.name [] [ argument ])
   | WT.EApply (_, WT.EFnName (_, name), typeArgs, args)
     when List.mem (qualifiedFnName name)
            [
@@ -177,6 +230,32 @@ let rec checkExpression (globals : globals) locals symbols expected expression =
     when Option.is_some (resolveFunction globals (qualifiedFnName name)) ->
       WrittenCallSupport.checkNamed checkExpression checkedLiteral globals
         locals symbols expected range name typeArgs args
+  | WT.EApply
+      ( range,
+        (WT.ERecordFieldAccess (_, record, (_, methodName), _) as target),
+        typeArgs,
+        args ) -> (
+      match
+        WrittenRecordSupport.access checkExpression checkedLiteral globals
+          locals symbols None record methodName
+      with
+      | Ok _ ->
+          WrittenApplicationSupport.indirect checkExpression checkedLiteral
+            globals locals symbols expected range target typeArgs args
+      | Error original ->
+          bind (check symbols None record) (fun (typ, _, checkedSymbols) ->
+              bind
+                (WrittenTraitSupport.receiverMethod globals
+                   (WrittenCheckingState.symbols checkedSymbols)
+                   typ methodName)
+                (function
+                  | None -> Error original
+                  | Some traitName ->
+                      WrittenCallSupport.checkNamed checkExpression
+                        checkedLiteral globals locals symbols expected range
+                        (WrittenTraitSupport.namedMethod range traitName
+                           methodName)
+                        typeArgs (record :: args))))
   | WT.EApply (range, target, typeArgs, args) ->
       WrittenApplicationSupport.indirect checkExpression checkedLiteral globals
         locals symbols expected range target typeArgs args
@@ -186,9 +265,25 @@ let rec checkExpression (globals : globals) locals symbols expected expression =
   | WT.ERecord (_, name, fields, _, _) ->
       WrittenRecordSupport.record checkExpression checkedLiteral globals locals
         symbols expected name fields
-  | WT.ERecordFieldAccess (_, record, (_, name), _) ->
-      WrittenRecordSupport.access checkExpression checkedLiteral globals locals
-        symbols expected record name
+  | WT.ERecordFieldAccess (range, record, (_, name), _) -> (
+      match
+        WrittenRecordSupport.access checkExpression checkedLiteral globals
+          locals symbols None record name
+      with
+      | Ok (typ, value, symbols) -> checkedLiteral expected symbols typ value
+      | Error original ->
+          bind (check symbols None record) (fun (typ, _, checkedSymbols) ->
+              bind
+                (WrittenTraitSupport.receiverMethod globals
+                   (WrittenCheckingState.symbols checkedSymbols)
+                   typ name)
+                (function
+                  | None -> Error original
+                  | Some traitName ->
+                      WrittenCallSupport.checkNamed checkExpression
+                        checkedLiteral globals locals symbols expected range
+                        (WrittenTraitSupport.namedMethod range traitName name)
+                        [] [ record ])))
   | WT.ERecordUpdate (_, record, updates, _, _, _) ->
       WrittenRecordSupport.update checkExpression checkedLiteral globals locals
         symbols expected record updates

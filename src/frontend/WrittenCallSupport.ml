@@ -409,6 +409,10 @@ let[@warning "-4"] checkNamed checkExpression checkedLiteral globals locals
                                     ^ " cannot be used as a Dict key"))
                       in
                       bind inferred (fun inferredTypeArgs ->
+                          let inferredTypeArgs =
+                            WrittenTraitSupport.inferFromBounds globals
+                              signature inferredTypeArgs
+                          in
                           bind
                             (WrittenTraitSupport.checkSignatureBounds globals
                                (WrittenCheckingState.symbols symbols)

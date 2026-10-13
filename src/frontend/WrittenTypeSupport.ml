@@ -118,11 +118,21 @@ let restrictedIdentifier allowInternal segments =
        segments
 
 let resolveFunction globals segments =
+  let spelling = String.concat "." segments in
+  let candidates =
+    NameResolution.candidateSpellings NameResolution.Callable globals.modulePath
+      spelling
+  in
+  let fallback =
+    match segments with
+    | traitName :: _ when M.mem ("Darklang.Stdlib." ^ traitName) globals.traits
+      ->
+        [ "Darklang.Stdlib." ^ spelling ]
+    | _ -> []
+  in
   List.find_map
     (fun candidate -> M.find_opt candidate globals.functions)
-    (NameResolution.candidateSpellings NameResolution.Callable
-       globals.modulePath
-       (String.concat "." segments))
+    (candidates @ fallback)
 
 let resolveValue globals segments =
   List.find_map

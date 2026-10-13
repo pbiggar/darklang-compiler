@@ -6,8 +6,8 @@ Reference grammar: `backend/src/LibParser/{Parser,WrittenTypes}.fs`.
 Reference semantics: `backend/src/LibExecution/Traits.fs` and
 `packages/darklang/stdlib/traits.dark` at that revision.
 
-This is an unfinished implementation checkpoint. M0–M4 are implemented and
-focused checks pass. M5–M7 remain unfinished; this is not a readiness claim.
+This is an unfinished implementation checkpoint. M0–M5 are implemented.
+M6–M7 remain unfinished; this is not a readiness claim.
 
 | Behavior | Checkpoint implementation | Executed evidence / remaining validation |
 | --- | --- | --- |
@@ -21,8 +21,8 @@ focused checks pass. M5–M7 remain unfinished; this is not a readiness claim.
 | Bounded generic specialization | Typed calls resolve after substitution, before ordinary dependency planning | `traits-generic.e2e`, `traits-multiple-bounds.e2e`, `traits-generic-values.e2e`, `traits-bound-failure.e2e` passed |
 | Bounds on generic types | Check construction, signatures and declaration field types | `traits-type-bounds.e2e` passed |
 | Generic/conditional implementations | Directional argument matching, recursive obligations, blanket fallback and static specialization | `traits-conditional.e2e`, `traits-concrete-arguments.e2e`, `traits-generic-alias.e2e`, `traits-patterns.e2e`, `traits-shared-alias.e2e` passed |
-| Receivers and operators | Not implemented (M5) | Required |
-| Upstream stdlib traits and hosted packages | Not implemented (M6) | Required |
+| Receivers and operators | Static receiver calls, record-field precedence, custom and bounded-generic operators; primitive fast paths preserved | `traits-receivers.e2e`, `traits-receiver-parameters.e2e`, `traits-receiver-ambiguity.e2e`, `traits-operators.e2e` |
+| Upstream stdlib traits and hosted packages | Unchanged upstream trait declarations and generic utilities loaded; primitive impls and hosted imports unfinished (M6) | Required |
 | Full parity and readiness gates | Not executed (M7) | Required |
 
 Intentional scoped differences: selection must finish at compilation; equally
@@ -60,17 +60,24 @@ Activating the upstream generic `ToString` surface belongs to M6.
 
 M3 focused validation: rebuilt successfully; `./run-tests --ai --filter=traits`
 passed **22/22** (15.7 seconds). The full host and regression reruns are in
-progress. Static obligations are retained in the immutable checked catalog;
+the records below. Static obligations are retained in the immutable checked catalog;
 method identities are canonical ordinary functions. Specialization rewrites
 trait applications before dependency planning, and final preparation returns a
 compile error for unresolved obligations. There is no trait-specific backend ABI.
 
 M3 full host rerun passed **13,404/13,404** (134.7 seconds); `dune runtest`
 passed. M4 focused suite passed **40/40** (17.5 seconds), including method-local
-generics and conditional proofs inside generic bodies. Its full host and
-regression reruns are in progress. Implementation entries retain independent
+generics and conditional proofs inside generic bodies. M4 full host passed
+**13,422/13,422** (156.5 seconds); regression checks passed. Implementation entries retain independent
 identities even when two impls alias the same function.
 
 The blanket fixtures use `for ('a)` to preserve the pinned lexer grammar's
 apostrophe context handling; the pinned upstream lexer does not treat a bare
 apostrophe after `for` as a type variable. No lexer extension was introduced.
+
+M5 focused suite passed **66/66** (16.8 seconds). Full-host validation exposed
+diagnostic regressions for invalid primitive operators and stream ordering;
+these cases retain their previous diagnostics. Full-host rerun is pending.
+`dune runtest` passed, including package caches, HTTP/TLS, host/runtime and
+differential-tool regressions. `StdLib/traits.dark` is byte-identical to the
+pinned upstream source; its primitive implementations are still M6 work.
