@@ -1,0 +1,16 @@
+// Interpreter trait syntax pinned to darklang/dark a9d93efc853486244630dad693fe79f6f4882cf6.
+// Concrete calls must resolve before native execution.
+trait WorkShow<'a> =
+  let show (value: 'a) : String
+
+type WorkPoint = { x: Int64 }
+
+impl WorkShow for WorkPoint =
+  let show (point: WorkPoint) : String = Stdlib.toString point.x
+
+WorkShow.show (WorkPoint { x = 42L }) = "42"
+
+// An implementation cannot name an undeclared trait.
+impl MissingWorkTrait for Int64 =
+  let show (value: Int64) : String = Stdlib.toString value
+0L = compileerror="Unknown trait 'MissingWorkTrait'"
