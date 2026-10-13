@@ -528,6 +528,10 @@ let checkItems (checkExpression : expressionChecker) baseEnvironment
                       | WS.Type (path, declaration) ->
                           String.concat "."
                             (path @ [ declaration.WT.name.WT.name ])
+                      | WS.Trait (path, declaration) ->
+                          String.concat "." (path @ [ declaration.WT.name.WT.name ])
+                      | WS.Impl (path, declaration) ->
+                          String.concat "." (path @ [ "impl"; WS.qualifiedType declaration.WT.trait_ ])
                       | WS.Expression (path, _) ->
                           String.concat "." (path @ [ "<entry>" ])
                     in
@@ -617,6 +621,8 @@ let checkItems (checkExpression : expressionChecker) baseEnvironment
                                 (checkExpression
                                    { globals with modulePath = path }
                                    M.empty symbols None expr))
+                      | WS.Trait _ | WS.Impl _ ->
+                          Error "Trait checking is not implemented"
                       | WS.Type (path, declaration) ->
                           map
                             (fun (definition, symbols) ->

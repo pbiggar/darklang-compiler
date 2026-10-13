@@ -356,6 +356,8 @@ let keyword = function
   | "then" -> TThen
   | "else" -> TElse
   | "type" -> TType
+  | "trait" -> TTrait
+  | "impl" -> TImpl
   | "of" -> TOf
   | "match" -> TMatch
   | "with" -> TWith

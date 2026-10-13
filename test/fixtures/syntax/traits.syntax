@@ -1,0 +1,47 @@
+---NAME---
+trait and implementation declarations
+---SOURCE---
+trait Show<'a> =
+  let show (value: 'a) : String
+  let format<'b: Show> (value: 'a) (other: 'b) : String
+impl Show for Int64 =
+  let show (value: Int64) : String = "integer"
+  let format<'b: Show> (value: Int64) (other: 'b) : String = "integer"
+---ROUNDTRIP---
+
+---NAME---
+conditional implementation and nested parameterized bound
+---SOURCE---
+impl<'a: Show + Convert<List<Int64>>> Show for List<'a> =
+  let show = renderList
+---ROUNDTRIP---
+
+---NAME---
+bounds on type declarations
+---SOURCE---
+type Bounded<'a: Show + Compare> = { value: 'a }
+---ROUNDTRIP---
+
+---NAME---
+trait needs self parameter
+---SOURCE---
+trait Show =
+  let show (value: Int64) : String
+---EXPECT-ERROR---
+A trait needs a type parameter
+
+---NAME---
+trait default methods are rejected
+---SOURCE---
+trait Show<'a> =
+  let show (value: 'a) : String = "default"
+---EXPECT-ERROR---
+Default method bodies are not supported
+
+---NAME---
+implementation requires for keyword
+---SOURCE---
+impl Show Int64 =
+  let show (value: Int64) : String = "integer"
+---EXPECT-ERROR---
+'for' between the trait and the type

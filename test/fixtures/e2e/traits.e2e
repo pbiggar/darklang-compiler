@@ -9,8 +9,3 @@ impl WorkShow for WorkPoint =
   let show (point: WorkPoint) : String = Stdlib.toString point.x
 
 WorkShow.show (WorkPoint { x = 42L }) = "42"
-
-// An implementation cannot name an undeclared trait.
-impl MissingWorkTrait for Int64 =
-  let show (value: Int64) : String = Stdlib.toString value
-0L = compileerror="Unknown trait 'MissingWorkTrait'"

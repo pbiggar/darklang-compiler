@@ -427,6 +427,7 @@ and fnDecl (value : WrittenTypes.fnDecl) =
           let part0, part1 = item in
           tuple [ quoted part0; (fun _ -> "") part1 ])
         value.WrittenTypes.typeParams;
+      list typeParamBound value.WrittenTypes.bounds;
       list (fun item -> fnParam item) value.WrittenTypes.parameters;
       option
         (fun item -> list (fun item -> identifier item) item)
@@ -521,11 +522,36 @@ and typeDecl (value : WrittenTypes.typeDecl) =
           let part0, part1 = item in
           tuple [ quoted part0; (fun _ -> "") part1 ])
         value.WrittenTypes.typeParams;
+      list typeParamBound value.WrittenTypes.bounds;
       typeDefinition value.WrittenTypes.definition;
       (fun _ -> "") value.WrittenTypes.keywordType;
       (fun _ -> "") value.WrittenTypes.symbolEquals;
       quoted value.WrittenTypes.description;
     ]
+
+and typeParamBound (value : WrittenTypes.typeParamBound) =
+  record [ quoted value.param; qualifiedTypeIdentifier value.trait_ ]
+
+and traitMethodDecl (value : WrittenTypes.traitMethodDecl) =
+  record [ identifier value.name;
+    list (fun (name, _) -> quoted name) value.typeParams;
+    list typeParamBound value.bounds; list fnParam value.parameters;
+    option (list identifier) value.effects; typeReference value.returnType;
+    option expr value.body; quoted value.description ]
+
+and traitDecl (value : WrittenTypes.traitDecl) =
+  record [ identifier value.name;
+    list (fun (name, _) -> quoted name) value.typeParams;
+    list typeParamBound value.bounds; list traitMethodDecl value.methods;
+    quoted value.description ]
+
+and implDecl (value : WrittenTypes.implDecl) =
+  record [ list (fun (name, _) -> quoted name) value.typeParams;
+    list typeParamBound value.bounds; qualifiedTypeIdentifier value.trait_;
+    typeReference value.forType;
+    list (function WrittenTypes.IMethod method_ -> union "IMethod" [ fnDecl method_ ]
+      | WrittenTypes.IAlias alias -> union "IAlias" [ valueDecl alias ]) value.members;
+    quoted value.description ]
 
 and moduleDecl (value : WrittenTypes.moduleDecl) =
   record
@@ -557,6 +583,8 @@ and declaration (value : WrittenTypes.declaration) =
   | WrittenTypes.DValue field0 -> union "DValue" [ valueDecl field0 ]
   | WrittenTypes.DModule field0 -> union "DModule" [ moduleDecl field0 ]
   | WrittenTypes.DType field0 -> union "DType" [ typeDecl field0 ]
+  | WrittenTypes.DTrait field0 -> union "DTrait" [ traitDecl field0 ]
+  | WrittenTypes.DImpl field0 -> union "DImpl" [ implDecl field0 ]
   | WrittenTypes.DExpr field0 -> union "DExpr" [ expr field0 ]
   | WrittenTypes.DTypeDB field0 -> union "DTypeDB" [ typeDecl field0 ]
   | WrittenTypes.DTest field0 -> union "DTest" [ test field0 ]

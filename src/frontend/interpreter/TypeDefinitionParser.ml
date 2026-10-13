@@ -19,7 +19,7 @@ let rec parseTypeDecl state index =
         errExpected state (index + 1) "a type name";
         { WT.range = rng state (index + 1); name = "_" }
   in
-  let typeParams, next = parseTypeParams state (index + 2) in
+  let typeParams, bounds, next = TypeParameterParser.parseTypeParams state (index + 2) in
   let equals, next =
     if tok state next = TEquals then (rng state next, next + 1)
     else begin
@@ -34,6 +34,7 @@ let rec parseTypeDecl state index =
         WT.range = span keyword ending;
         name;
         typeParams;
+        bounds;
         definition;
         keywordType = keyword;
         symbolEquals = equals;

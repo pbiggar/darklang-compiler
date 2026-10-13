@@ -426,6 +426,8 @@ let expandRequiredPreambleFunctions dependencies initial =
 let declarationRange = function
   | WT.DFunction d -> d.WT.range
   | WT.DValue d -> d.WT.range
+  | WT.DTrait d -> d.WT.range
+  | WT.DImpl d -> d.WT.range
   | WT.DType d | WT.DTypeDB d -> d.WT.range
   | WT.DModule d -> d.WT.range
   | WT.DExpr e -> WT.exprRange e
