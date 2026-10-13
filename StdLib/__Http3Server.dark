@@ -94,7 +94,7 @@ let __read (context: Stdlib.__Http3Server.Context) (state: Stdlib.__Http3Server.
       else match Stdlib.__Http3Server.__parse context state active request read now with
         | Ok next -> Ok next
         | Error message ->
-          if Stdlib.String.contains message "QPACK" || message == "Unexpected HTTP/3 frame on message stream" || message == "HTTP/3 DATA outside message body" || message == "HEADERS after HTTP/3 trailers" then Error message
+          if Stdlib.String.contains message "QPACK" || Stdlib.String.contains message "HPACK" || message == "Unexpected HTTP/3 frame on message stream" || message == "HTTP/3 DATA outside message body" || message == "HEADERS after HTTP/3 trailers" then Error message
           else Stdlib.__Http3Server.cancel state active.id 270L)
 
 // One bounded response chunk per active stream; a blocked stream is skipped.
