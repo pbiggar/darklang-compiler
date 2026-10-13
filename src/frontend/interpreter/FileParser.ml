@@ -158,11 +158,15 @@ and parseItemsBody grammar state itemScope start minColumn =
             stop := after
           end
       | TTrait, _ ->
-          let declaration, after = TraitDeclarationParser.parseTraitDecl grammar.parseBlock state !stop in
+          let declaration, after =
+            TraitDeclarationParser.parseTraitDecl grammar.parseBlock state !stop
+          in
           RevBuffer.add declarations declaration;
           stop := after
       | TImpl, _ ->
-          let declaration, after = TraitDeclarationParser.parseImplDecl grammar.parseBlock state !stop in
+          let declaration, after =
+            TraitDeclarationParser.parseImplDecl grammar.parseBlock state !stop
+          in
           RevBuffer.add declarations declaration;
           stop := after
       | TType, TIdent _ ->

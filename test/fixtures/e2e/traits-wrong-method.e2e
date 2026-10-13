@@ -1,5 +1,7 @@
+(
 trait WrongMethodShow<'a> =
   let show (value: 'a) : String
 impl WrongMethodShow for Int64 =
   let show (value: String) : String = value
-0L = compileerror="Trait method signature mismatch"
+0L
+) = compileerror="Trait method signature mismatch"

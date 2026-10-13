@@ -227,22 +227,36 @@ let qualifiedNames units =
                           case.WT.fields)
                       cases)
             | Trait (_, declaration) ->
-                List.map (fun bound -> qualifiedType bound.WT.trait_) declaration.WT.bounds
-                @ List.concat_map (fun (method_ : WT.traitMethodDecl) ->
-                    List.concat_map (function
-                      | WT.FPUnit _ -> []
-                      | WT.FPNormal (_, _, typ, _, _, _, _) -> typeNames typ)
-                      method_.WT.parameters @ typeNames method_.WT.returnType
-                    @ List.map (fun bound -> qualifiedType bound.WT.trait_) method_.WT.bounds)
+                List.map
+                  (fun (bound : WT.typeParamBound) ->
+                    qualifiedType bound.WT.trait_)
+                  declaration.WT.bounds
+                @ List.concat_map
+                    (fun (method_ : WT.traitMethodDecl) ->
+                      List.concat_map
+                        (function
+                          | WT.FPUnit _ -> []
+                          | WT.FPNormal (_, _, typ, _, _, _, _) -> typeNames typ)
+                        method_.WT.parameters
+                      @ typeNames method_.WT.returnType
+                      @ List.map
+                          (fun (bound : WT.typeParamBound) ->
+                            qualifiedType bound.WT.trait_)
+                          method_.WT.bounds)
                     declaration.WT.methods
             | Impl (_, declaration) ->
-                qualifiedType declaration.WT.trait_ ::
-                (List.concat_map typeNames declaration.WT.trait_.WT.typeArgs
-                 @ typeNames declaration.WT.forType
-                 @ List.map (fun bound -> qualifiedType bound.WT.trait_) declaration.WT.bounds
-                 @ List.concat_map (function
-                    | WT.IMethod fn -> expressionNames fn.WT.body
-                    | WT.IAlias value -> expressionNames value.WT.body) declaration.WT.members)
+                qualifiedType declaration.WT.trait_
+                :: (List.concat_map typeNames declaration.WT.trait_.WT.typeArgs
+                   @ typeNames declaration.WT.forType
+                   @ List.map
+                       (fun (bound : WT.typeParamBound) ->
+                         qualifiedType bound.WT.trait_)
+                       declaration.WT.bounds
+                   @ List.concat_map
+                       (function
+                         | WT.IMethod fn -> expressionNames fn.WT.body
+                         | WT.IAlias value -> expressionNames value.WT.body)
+                       declaration.WT.members)
             | Expression (_, expression) -> expressionNames expression)
           (List.concat groups)
       in

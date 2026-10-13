@@ -282,15 +282,21 @@ let rec declarationStructureIssues = function
   | WT.DTrait trait_ ->
       List.concat_map
         (fun (method_ : WT.traitMethodDecl) ->
-          duplicateIssues (List.filter_map (function
-            | WT.FPNormal (_, name, _, _, _, _, _) -> Some (name.name, name.range)
-            | WT.FPUnit _ -> None) method_.parameters)
+          duplicateIssues
+            (List.filter_map
+               (function
+                 | WT.FPNormal (_, name, _, _, _, _, _) ->
+                     Some (name.name, name.range)
+                 | WT.FPUnit _ -> None)
+               method_.parameters)
           @ List.concat_map exprIssues (Option.to_list method_.body))
         trait_.methods
   | WT.DImpl impl ->
-      List.concat_map (function
-        | WT.IMethod fn -> declarationStructureIssues (WT.DFunction fn)
-        | WT.IAlias value -> exprIssues value.body) impl.members
+      List.concat_map
+        (function
+          | WT.IMethod fn -> declarationStructureIssues (WT.DFunction fn)
+          | WT.IAlias value -> exprIssues value.body)
+        impl.members
   | WT.DModule modul ->
       List.concat_map declarationStructureIssues modul.declarations
   | WT.DExpr expr -> exprIssues expr

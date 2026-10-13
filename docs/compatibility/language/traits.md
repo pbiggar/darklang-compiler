@@ -6,12 +6,10 @@ Reference grammar: `backend/src/LibParser/{Parser,WrittenTypes}.fs`.
 Reference semantics: `backend/src/LibExecution/Traits.fs` and
 `packages/darklang/stdlib/traits.dark` at that revision.
 
-This is an unfinished implementation checkpoint, not a compatibility claim.
-M0 fixtures and M1 parser plumbing are preserved; M2 concrete checking and
-selection are implemented but await a successful build and native execution.
-No milestone exit gate has yet been demonstrated.
+This is an unfinished implementation checkpoint. M0–M2 are implemented and
+focused checks pass. M3–M7 remain unfinished; this is not a readiness claim.
 
-| Behavior | Checkpoint implementation | Evidence awaiting execution |
+| Behavior | Checkpoint implementation | Executed evidence / remaining validation |
 | --- | --- | --- |
 | Trait and impl grammar, method aliases, multiple methods | Range-bearing syntax and source-unit flattening | `test/fixtures/syntax/traits.syntax` |
 | Single, multiple, parameterized and type-declaration bounds | Parsed and retained; checking rejects unsupported bounds explicitly | `test/fixtures/syntax/traits.syntax` |
@@ -19,7 +17,7 @@ No milestone exit gate has yet been demonstrated.
 | Method aliases | Validate against the referenced ordinary function signature | `test/fixtures/e2e/traits-alias.e2e` |
 | Unknown trait, missing impl, incomplete method set, wrong signature | Frontend compile errors | `traits-{unknown,missing-impl,method-set,wrong-method}.e2e` |
 | Competing identical implementations | Compile-time ambiguity when selecting a call | `traits-ambiguous.e2e` |
-| Traits as value types | Traits are excluded from the nominal type catalog | Additional E2E coverage required |
+| Traits as value types | Traits are excluded from the nominal type catalog | `test/fixtures/e2e/traits-as-types.e2e` passed |
 | Bounded generic specialization and conditional impls | Not implemented (M3–M4) | Required |
 | Receivers and operators | Not implemented (M5) | Required |
 | Upstream stdlib traits and hosted packages | Not implemented (M6) | Required |
@@ -30,9 +28,24 @@ applicable competing implementations are errors. Trait objects, runtime lookup,
 newest-wins arbitration, trait effect ceilings and persistence/history pinning
 are outside the work order. Existing ordinary function effect checks remain.
 
-Validation so far: `git diff --check` passed. All changed OCaml source/interface
-files passed syntax parsing using the bootstrap's pinned OCaml bytecode compiler
-(`ocamlc -stop-after parsing`); this does not establish type correctness.
-`./run-tests --ai` could not start because the native test executable is absent.
-The prescribed toolchain bootstrap failed during its first native compiler build
-without a compiler diagnostic; a clean prescribed retry is in progress.
+Validation:
+
+- Prescribed toolchain retry passed: OCaml 5.5.1, Dune 3.24.2, all 98 locked
+  packages, native compilation, Unix processes, temporary files, GMP and SQLite.
+- Baseline `./build --ai` passed. The baseline runner confirmed unsupported trait
+  parsing; its suite context failed on the concrete trait preamble and consequently
+  invalidated the other tests. This is failure evidence, not a baseline pass.
+  The baseline used the same corrected trait-aware E2E loader, without the
+  compiler/parser implementation changes.
+- `env -u LD_PRELOAD ./build --ai` passed after strict-warning fixes.
+- `./run-tests --ai --filter=traits`: **12/12 passed** (15.6 seconds).
+- `./run-tests --ai --filter=syntax`: **82/82 passed** (14.3 seconds).
+- `dune runtest` passed before the E2E-loader correction; the current-source
+  rerun and full host suite are in progress.
+- `git diff --check` passed; changed OCaml files were formatted with pinned
+  ocamlformat. Syntax-only checks are superseded by the successful full build.
+- Full parent-relative performance validation is still required.
+
+The representative work-order fixture uses `Stdlib.Int64.toString` to render
+its `Int64` field: the current compiler does not define `Stdlib.toString`.
+Activating the upstream generic `ToString` surface belongs to M6.

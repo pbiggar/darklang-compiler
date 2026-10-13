@@ -23,6 +23,7 @@ type diagnosticSeverity = DiagError | DiagWarning
 
 module DiagnosticCode = struct
   let expected = "PARSE-EXPECTED"
+  let bound = "PARSE-BOUND"
   let unclosed = "PARSE-UNCLOSED"
   let escape = "PARSE-ESCAPE"
   let intRange = "PARSE-INT-RANGE"
@@ -176,10 +177,10 @@ let isIntLit = function
       true
   | TFloat _ | TStringLit _ | TCharLit _ | TInterpString | TTrue | TFalse
   | TPlus | TPlusPlus | TMinus | TStar | TStarStar | TSlash | TLParen | TRParen
-  | TLet | TVal | TIn | TIf | TElif | TThen | TElse | TType | TTrait | TImpl | TCons | TColon
-  | TComma | TSemicolon | TDot | TLBrace | TRBrace | TBar | TOf | TMatch | TWith
-  | TFun | TArrow | TUnderscore | TWhen | TLBracket | TRBracket | TEquals
-  | TEqEq | TNeq | TLt | TGt | TLte | TGte | TAnd | TOr | TNot | TPipe
+  | TLet | TVal | TIn | TIf | TElif | TThen | TElse | TType | TTrait | TImpl
+  | TCons | TColon | TComma | TSemicolon | TDot | TLBrace | TRBrace | TBar | TOf
+  | TMatch | TWith | TFun | TArrow | TUnderscore | TWhen | TLBracket | TRBracket
+  | TEquals | TEqEq | TNeq | TLt | TGt | TLte | TGte | TAnd | TOr | TNot | TPipe
   | TDotDotDot | TPercent | TShl | TShr | TBitAnd | TBitXor | TBitNot | TAt
   | TIdent _ | TEOF ->
       false

@@ -99,8 +99,10 @@ let[@warning "-4"] predeclareTypes items =
                  let name =
                    String.concat "." (path @ [ declaration.WT.name.WT.name ])
                  in
-                 if declaration.WT.bounds <> [] then Error "Type declaration trait bounds are not implemented"
-                 else if M.mem name types then Error ("Duplicate type '" ^ name ^ "'")
+                 if declaration.WT.bounds <> [] then
+                   Error "Type declaration trait bounds are not implemented"
+                 else if M.mem name types then
+                   Error ("Duplicate type '" ^ name ^ "'")
                  else
                    let kind =
                      match declaration.WT.definition with
@@ -243,7 +245,8 @@ let[@warning "-4"] predeclareFunctions allowInternal types items symbols =
             match item with
             | WS.Function (path, fn) ->
                 let name = String.concat "." (path @ [ fn.WT.name.WT.name ]) in
-                if fn.WT.bounds <> [] then Error "Generic trait bounds are not implemented"
+                if fn.WT.bounds <> [] then
+                  Error "Generic trait bounds are not implemented"
                 else if M.mem name functions then
                   Error ("Duplicate function '" ^ name ^ "'")
                 else
@@ -273,7 +276,13 @@ let[@warning "-4"] predeclareFunctions allowInternal types items symbols =
                         (fun return ->
                           let id, symbols = C.internFunction name symbols in
                           ( M.add name
-                              { id; traitMethod = None; typeParams = allParams; parameters; return }
+                              {
+                                id;
+                                traitMethod = None;
+                                typeParams = allParams;
+                                parameters;
+                                return;
+                              }
                               functions,
                             symbols ))
                         (resolveWrittenType allowInternal types path typeParams
@@ -503,161 +512,187 @@ let checkItems (checkExpression : expressionChecker) baseEnvironment
         | None -> (emptyGlobals, C.emptySymbols ())
       in
       let types = M.fold M.add localTypes baseGlobals.types in
-      let items, implementations = WrittenTraitSupport.materialize
-        (List.length baseGlobals.implementations) items in
-      bind (WrittenTraitSupport.predeclare allowInternal types baseGlobals items baseSymbols)
-        (fun (baseGlobals, baseSymbols) ->
-      bind (predeclareFunctions allowInternal types items baseSymbols)
-        (fun (localFunctions, symbols) ->
-          let functions = M.fold M.add localFunctions baseGlobals.functions in
-          let colliding = collidingCaseNames types in
-          let initialGlobals =
-            {
-              baseGlobals with
-              functions;
-              types;
-              collidingCases = colliding;
-              allowInternal;
-              modulePath = [];
-              typeParams = S.empty;
-              currentFunction = None;
-            }
-          in
-          bind (WrittenTraitSupport.validate initialGlobals implementations)
-            (fun initialGlobals ->
-          let initialGlobals = {initialGlobals with functions = WrittenTraitSupport.functions initialGlobals} in
-          let result =
-            List.fold_left
-              (fun result item ->
-                bind result (fun (globals, symbols, reversed, entryType) ->
-                    let itemName =
-                      match item with
-                      | WS.Function (path, fn) ->
-                          String.concat "." (path @ [ fn.WT.name.WT.name ])
-                      | WS.Value (path, value) ->
-                          String.concat "." (path @ [ value.WT.name.WT.name ])
-                      | WS.Type (path, declaration) ->
-                          String.concat "."
-                            (path @ [ declaration.WT.name.WT.name ])
-                      | WS.Trait (path, declaration) ->
-                          String.concat "." (path @ [ declaration.WT.name.WT.name ])
-                      | WS.Impl (path, declaration) ->
-                          String.concat "." (path @ [ "impl"; WS.qualifiedType declaration.WT.trait_ ])
-                      | WS.Expression (path, _) ->
-                          String.concat "." (path @ [ "<entry>" ])
-                    in
-                    let checked =
-                      match item with
-                      | WS.Function (path, fn) ->
-                          map
-                            (fun (definition, symbols) ->
-                              ( globals,
-                                symbols,
-                                C.FunctionDef definition :: reversed,
-                                entryType ))
-                            (checkFunction checkExpression globals symbols path
-                               fn)
-                      | WS.Value (path, value) -> (
-                          let name =
-                            String.concat "." (path @ [ value.WT.name.WT.name ])
-                          in
-                          let[@warning "-4"] genericAlias =
-                            let source =
-                              match value.WT.body with
-                              | WT.EVariable (_, name) -> Some [ name ]
-                              | WT.EFnName (_, name) ->
-                                  Some (qualifiedFnName name)
-                              | _ -> None
+      let items, implementations =
+        WrittenTraitSupport.materialize
+          (List.length baseGlobals.implementations)
+          items
+      in
+      bind
+        (WrittenTraitSupport.predeclare allowInternal types baseGlobals items
+           baseSymbols) (fun (baseGlobals, baseSymbols) ->
+          bind (predeclareFunctions allowInternal types items baseSymbols)
+            (fun (localFunctions, symbols) ->
+              let functions =
+                M.fold M.add localFunctions baseGlobals.functions
+              in
+              let colliding = collidingCaseNames types in
+              let initialGlobals =
+                {
+                  baseGlobals with
+                  functions;
+                  types;
+                  collidingCases = colliding;
+                  allowInternal;
+                  modulePath = [];
+                  typeParams = S.empty;
+                  currentFunction = None;
+                }
+              in
+              bind (WrittenTraitSupport.validate initialGlobals implementations)
+                (fun initialGlobals ->
+                  let initialGlobals =
+                    {
+                      initialGlobals with
+                      functions = WrittenTraitSupport.functions initialGlobals;
+                    }
+                  in
+                  let result =
+                    List.fold_left
+                      (fun result item ->
+                        bind result
+                          (fun (globals, symbols, reversed, entryType) ->
+                            let itemName =
+                              match item with
+                              | WS.Function (path, fn) ->
+                                  String.concat "."
+                                    (path @ [ fn.WT.name.WT.name ])
+                              | WS.Value (path, value) ->
+                                  String.concat "."
+                                    (path @ [ value.WT.name.WT.name ])
+                              | WS.Type (path, declaration) ->
+                                  String.concat "."
+                                    (path @ [ declaration.WT.name.WT.name ])
+                              | WS.Trait (path, declaration) ->
+                                  String.concat "."
+                                    (path @ [ declaration.WT.name.WT.name ])
+                              | WS.Impl (path, declaration) ->
+                                  String.concat "."
+                                    (path
+                                    @ [
+                                        "impl";
+                                        WS.qualifiedType declaration.WT.trait_;
+                                      ])
+                              | WS.Expression (path, _) ->
+                                  String.concat "." (path @ [ "<entry>" ])
                             in
-                            Option.bind source (fun source ->
-                                match
-                                  resolveFunction
-                                    { globals with modulePath = path }
-                                    source
-                                with
-                                | Some signature when signature.typeParams <> []
-                                  ->
-                                    Some signature
-                                | _ -> None)
-                          in
-                          match genericAlias with
-                          | Some signature ->
-                              (* A pure polymorphic function alias has no single runtime
+                            let checked =
+                              match item with
+                              | WS.Function (path, fn) ->
+                                  map
+                                    (fun (definition, symbols) ->
+                                      ( globals,
+                                        symbols,
+                                        C.FunctionDef definition :: reversed,
+                                        entryType ))
+                                    (checkFunction checkExpression globals
+                                       symbols path fn)
+                              | WS.Value (path, value) -> (
+                                  let name =
+                                    String.concat "."
+                                      (path @ [ value.WT.name.WT.name ])
+                                  in
+                                  let[@warning "-4"] genericAlias =
+                                    let source =
+                                      match value.WT.body with
+                                      | WT.EVariable (_, name) -> Some [ name ]
+                                      | WT.EFnName (_, name) ->
+                                          Some (qualifiedFnName name)
+                                      | _ -> None
+                                    in
+                                    Option.bind source (fun source ->
+                                        match
+                                          resolveFunction
+                                            { globals with modulePath = path }
+                                            source
+                                        with
+                                        | Some signature
+                                          when signature.typeParams <> [] ->
+                                            Some signature
+                                        | _ -> None)
+                                  in
+                                  match genericAlias with
+                                  | Some signature ->
+                                      (* A pure polymorphic function alias has no single runtime
                                  closure. Resolve each use to the same function identity
                                  and specialize it there, preserving alias equality. *)
-                              Ok
-                                ( {
-                                    globals with
-                                    functions =
-                                      M.add name signature globals.functions;
-                                  },
-                                  symbols,
-                                  reversed,
-                                  entryType )
-                          | None ->
-                              map
-                                (fun (typ, body, symbols) ->
-                                  let id, symbols =
-                                    C.internValue name symbols
-                                  in
-                                  let definition : C.valueDef =
-                                    {
-                                      C.id;
-                                      name;
-                                      typ = C.checkedType typ;
-                                      body;
-                                    }
-                                  in
-                                  ( {
-                                      globals with
-                                      values =
-                                        M.add name (typ, id) globals.values;
-                                    },
-                                    symbols,
-                                    C.ValueDef definition :: reversed,
-                                    entryType ))
-                                (checkExpression
-                                   { globals with modulePath = path }
-                                   M.empty symbols None value.WT.body))
-                      | WS.Expression (path, expr) -> (
-                          match entryType with
-                          | Some _ -> Error "Multiple program entry expressions"
-                          | None ->
-                              map
-                                (fun (typ, body, symbols) ->
-                                  ( globals,
-                                    symbols,
-                                    C.Expression body :: reversed,
-                                    Some typ ))
-                                (checkExpression
-                                   { globals with modulePath = path }
-                                   M.empty symbols None expr))
-                      | WS.Trait _ | WS.Impl _ ->
-                          Ok (globals, symbols, reversed, entryType)
-                      | WS.Type (path, declaration) ->
-                          map
-                            (fun (definition, symbols) ->
-                              ( globals,
-                                symbols,
-                                definition :: reversed,
-                                entryType ))
-                            (checkTypeDeclaration globals.allowInternal
-                               globals.types globals.collidingCases symbols path
-                               declaration)
-                    in
-                    Result.map_error
-                      (fun error -> itemName ^ ": " ^ error)
-                      checked))
-              (Ok (initialGlobals, symbols, [], None))
-              items
-          in
-          bind result (fun (finalGlobals, finalSymbols, reversed, entryType) ->
-              match (requireEntry, entryType) with
-              | true, None -> Error "Program requires an entry expression"
-              | _, typ ->
-                  Ok
-                    ( Option.value typ ~default:AST.TUnit,
-                      attachRecursiveGroups
-                        (C.programFromCheckedParts
-                           (finalSymbols, List.rev reversed)),
-                      Environment (finalGlobals, finalSymbols) ))))))
+                                      Ok
+                                        ( {
+                                            globals with
+                                            functions =
+                                              M.add name signature
+                                                globals.functions;
+                                          },
+                                          symbols,
+                                          reversed,
+                                          entryType )
+                                  | None ->
+                                      map
+                                        (fun (typ, body, symbols) ->
+                                          let id, symbols =
+                                            C.internValue name symbols
+                                          in
+                                          let definition : C.valueDef =
+                                            {
+                                              C.id;
+                                              name;
+                                              typ = C.checkedType typ;
+                                              body;
+                                            }
+                                          in
+                                          ( {
+                                              globals with
+                                              values =
+                                                M.add name (typ, id)
+                                                  globals.values;
+                                            },
+                                            symbols,
+                                            C.ValueDef definition :: reversed,
+                                            entryType ))
+                                        (checkExpression
+                                           { globals with modulePath = path }
+                                           M.empty symbols None value.WT.body))
+                              | WS.Expression (path, expr) -> (
+                                  match entryType with
+                                  | Some _ ->
+                                      Error "Multiple program entry expressions"
+                                  | None ->
+                                      map
+                                        (fun (typ, body, symbols) ->
+                                          ( globals,
+                                            symbols,
+                                            C.Expression body :: reversed,
+                                            Some typ ))
+                                        (checkExpression
+                                           { globals with modulePath = path }
+                                           M.empty symbols None expr))
+                              | WS.Trait _ | WS.Impl _ ->
+                                  Ok (globals, symbols, reversed, entryType)
+                              | WS.Type (path, declaration) ->
+                                  map
+                                    (fun (definition, symbols) ->
+                                      ( globals,
+                                        symbols,
+                                        definition :: reversed,
+                                        entryType ))
+                                    (checkTypeDeclaration globals.allowInternal
+                                       globals.types globals.collidingCases
+                                       symbols path declaration)
+                            in
+                            Result.map_error
+                              (fun error -> itemName ^ ": " ^ error)
+                              checked))
+                      (Ok (initialGlobals, symbols, [], None))
+                      items
+                  in
+                  bind result
+                    (fun (finalGlobals, finalSymbols, reversed, entryType) ->
+                      match (requireEntry, entryType) with
+                      | true, None ->
+                          Error "Program requires an entry expression"
+                      | _, typ ->
+                          Ok
+                            ( Option.value typ ~default:AST.TUnit,
+                              attachRecursiveGroups
+                                (C.programFromCheckedParts
+                                   (finalSymbols, List.rev reversed)),
+                              Environment (finalGlobals, finalSymbols) ))))))

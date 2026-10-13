@@ -1008,7 +1008,11 @@ let parseMultilineTest fullText startLineNumber filePath preamble funcLineMap =
                Keep their opening column without turning declarations local.
                Other expressions retain their grouping, including tuples. *)
             let source =
-              if starts (trimStart inner) "let " then " " ^ inner
+              if
+                List.exists
+                  (starts (trimStart inner))
+                  [ "let "; "type "; "trait "; "impl " ]
+              then " " ^ inner
               else slice fullText first (close - first + 1)
             in
             direct () |> Result.map (fun test -> { test with source }))
@@ -1092,7 +1096,8 @@ let trimLeadingSpaces n s =
   if n <= 0 then s else tail s (min n (countLeadingSpaces s))
 
 let definitionStart s =
-  List.exists (starts s) [ "def "; "type "; "let "; "val "; "module "; "[<" ]
+  List.exists (starts s)
+    [ "def "; "type "; "trait "; "impl "; "let "; "val "; "module "; "[<" ]
 
 let parseE2ETestFile path =
   if not (FileIO.exists path) then Error ("Test file not found: " ^ path)

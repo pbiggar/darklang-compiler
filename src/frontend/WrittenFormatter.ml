@@ -530,28 +530,49 @@ and typeDecl (value : WrittenTypes.typeDecl) =
     ]
 
 and typeParamBound (value : WrittenTypes.typeParamBound) =
-  record [ quoted value.param; qualifiedTypeIdentifier value.trait_ ]
+  record
+    [
+      quoted value.WrittenTypes.param;
+      qualifiedTypeIdentifier value.WrittenTypes.trait_;
+    ]
 
 and traitMethodDecl (value : WrittenTypes.traitMethodDecl) =
-  record [ identifier value.name;
-    list (fun (name, _) -> quoted name) value.typeParams;
-    list typeParamBound value.bounds; list fnParam value.parameters;
-    option (list identifier) value.effects; typeReference value.returnType;
-    option expr value.body; quoted value.description ]
+  record
+    [
+      identifier value.WrittenTypes.name;
+      list (fun (name, _) -> quoted name) value.WrittenTypes.typeParams;
+      list typeParamBound value.WrittenTypes.bounds;
+      list fnParam value.WrittenTypes.parameters;
+      option (list identifier) value.WrittenTypes.effects;
+      typeReference value.WrittenTypes.returnType;
+      option expr value.WrittenTypes.body;
+      quoted value.WrittenTypes.description;
+    ]
 
 and traitDecl (value : WrittenTypes.traitDecl) =
-  record [ identifier value.name;
-    list (fun (name, _) -> quoted name) value.typeParams;
-    list typeParamBound value.bounds; list traitMethodDecl value.methods;
-    quoted value.description ]
+  record
+    [
+      identifier value.WrittenTypes.name;
+      list (fun (name, _) -> quoted name) value.WrittenTypes.typeParams;
+      list typeParamBound value.WrittenTypes.bounds;
+      list traitMethodDecl value.WrittenTypes.methods;
+      quoted value.WrittenTypes.description;
+    ]
 
 and implDecl (value : WrittenTypes.implDecl) =
-  record [ list (fun (name, _) -> quoted name) value.typeParams;
-    list typeParamBound value.bounds; qualifiedTypeIdentifier value.trait_;
-    typeReference value.forType;
-    list (function WrittenTypes.IMethod method_ -> union "IMethod" [ fnDecl method_ ]
-      | WrittenTypes.IAlias alias -> union "IAlias" [ valueDecl alias ]) value.members;
-    quoted value.description ]
+  record
+    [
+      list (fun (name, _) -> quoted name) value.WrittenTypes.typeParams;
+      list typeParamBound value.WrittenTypes.bounds;
+      qualifiedTypeIdentifier value.WrittenTypes.trait_;
+      typeReference value.WrittenTypes.forType;
+      list
+        (function
+          | WrittenTypes.IMethod method_ -> union "IMethod" [ fnDecl method_ ]
+          | WrittenTypes.IAlias alias -> union "IAlias" [ valueDecl alias ])
+        value.WrittenTypes.members;
+      quoted value.WrittenTypes.description;
+    ]
 
 and moduleDecl (value : WrittenTypes.moduleDecl) =
   record

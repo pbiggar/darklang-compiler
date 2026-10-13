@@ -1,5 +1,6 @@
 (* TypeParameterParser.ml - Interpreter generic parameter and trait-bound grammar. *)
 [@@@warning "-4"]
+
 open Tokenizer
 open ParserSupport
 module WT = WrittenTypes
@@ -9,8 +10,19 @@ let parseBoundTrait state index =
   match reference with
   | WT.TCustom name -> (Some name, after)
   | other ->
-      err state DiagnosticCode.expected index "A bound names a trait, not a type";
-      ignore other;
+      state.diagnostics :=
+        {
+          code = DiagnosticCode.bound;
+          severity = DiagError;
+          range = WT.typeReferenceRange other;
+          message = "A bound names a trait, not a type";
+          related = [];
+          hint =
+            Some
+              "write `'a: Show`, where `Show` is a trait; `'a: String` is not \
+               a bound";
+        }
+        :: !(state.diagnostics);
       (None, after)
 
 let parseTypeParams state index =
@@ -28,7 +40,10 @@ let parseTypeParams state index =
     let names = ref []
     and next = ref (index + 1)
     and expectingName = ref true in
-    while state.pendingGt = 0 && not (List.mem (tok state !next) [ TGt; TShr; TEOF ]) do
+    while
+      state.pendingGt = 0
+      && not (List.mem (tok state !next) [ TGt; TShr; TEOF ])
+    do
       match (!expectingName, tok state !next) with
       | true, TIdent name ->
           if not (String.starts_with ~prefix:"'" (txt state !next)) then
@@ -45,9 +60,15 @@ let parseTypeParams state index =
             while !more do
               let trait_, after = parseBoundTrait state !next in
               Option.iter
-                (fun trait_ ->
-                  bounds := { WT.range = span colon trait_.WT.range;
-                    param = name; trait_; symbolColon = colon } :: !bounds)
+                (fun (trait_ : WT.qualifiedTypeIdentifier) ->
+                  bounds :=
+                    {
+                      WT.range = span colon trait_.WT.range;
+                      param = name;
+                      trait_;
+                      symbolColon = colon;
+                    }
+                    :: !bounds)
                 trait_;
               next := if after > !next then after else !next + 1;
               if tok state !next = TPlus then incr next else more := false
@@ -85,4 +106,3 @@ let parseTypeParams state index =
     (List.rev !names, List.rev !bounds, stop)
   end
 [@@warning "-4"]
-

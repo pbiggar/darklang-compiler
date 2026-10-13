@@ -1,4 +1,6 @@
+(
 // An implementation cannot name an undeclared trait.
 impl MissingWorkTrait for Int64 =
-  let show (value: Int64) : String = Stdlib.toString value
-0L = compileerror="Unknown trait 'MissingWorkTrait'"
+  let show (value: Int64) : String = Stdlib.Int64.toString value
+0L
+) = compileerror="Unknown trait 'MissingWorkTrait'"

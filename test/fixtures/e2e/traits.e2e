@@ -6,6 +6,6 @@ trait WorkShow<'a> =
 type WorkPoint = { x: Int64 }
 
 impl WorkShow for WorkPoint =
-  let show (point: WorkPoint) : String = Stdlib.toString point.x
+  let show (point: WorkPoint) : String = Stdlib.Int64.toString point.x
 
 WorkShow.show (WorkPoint { x = 42L }) = "42"

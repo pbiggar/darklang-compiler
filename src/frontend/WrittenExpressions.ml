@@ -26,20 +26,20 @@ let rec checkExpression (globals : globals) locals symbols expected expression =
     if Option.is_some signature.traitMethod then
       Error "Trait method values require a resolved implementation"
     else
-    let typ = AST.TFunction (signature.parameters, signature.return) in
-    if signature.typeParams = [] then
-      WrittenTypeSupport.checkedLiteral expected symbols typ
-        (C.FuncRef signature.id)
-    else
-      let fresh, symbols =
-        WrittenCheckingState.freshenType S.empty typ symbols
-      in
-      bind
-        (Unification.inferTypeArgs signature.typeParams [ typ ] [ fresh ] None
-           None) (fun args ->
-          WrittenTypeSupport.checkedLiteral expected symbols fresh
-            (C.GenericFuncRef
-               (signature.id, C.checkedTypeArgs args, C.checkedType fresh)))
+      let typ = AST.TFunction (signature.parameters, signature.return) in
+      if signature.typeParams = [] then
+        WrittenTypeSupport.checkedLiteral expected symbols typ
+          (C.FuncRef signature.id)
+      else
+        let fresh, symbols =
+          WrittenCheckingState.freshenType S.empty typ symbols
+        in
+        bind
+          (Unification.inferTypeArgs signature.typeParams [ typ ] [ fresh ] None
+             None) (fun args ->
+            WrittenTypeSupport.checkedLiteral expected symbols fresh
+              (C.GenericFuncRef
+                 (signature.id, C.checkedTypeArgs args, C.checkedType fresh)))
   in
   let checkedLiteral expected symbols typ expr =
     match (expected, typ) with

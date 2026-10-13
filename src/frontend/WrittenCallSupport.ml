@@ -37,10 +37,14 @@ let[@warning "-4"] checkNamed checkExpression checkedLiteral globals locals
   | None ->
       Error
         ("Unknown function '" ^ String.concat "." (qualifiedFnName name) ^ "'")
-  | Some signature when Option.is_some signature.traitMethod
-      && ((args = [] && typeArgs <> [])
-          || (args <> [] && List.length args < List.length signature.parameters)) ->
-      Error "Trait method values and partial applications require a resolved implementation"
+  | Some signature
+    when Option.is_some signature.traitMethod
+         && ((args = [] && typeArgs <> [])
+            || args <> []
+               && List.length args < List.length signature.parameters) ->
+      Error
+        "Trait method values and partial applications require a resolved \
+         implementation"
   | Some signature
     when args = [] && typeArgs <> [] && signature.parameters <> [] ->
       bind
@@ -475,19 +479,34 @@ let[@warning "-4"] checkNamed checkExpression checkedLiteral globals locals
                                   let target =
                                     match signature.traitMethod with
                                     | None -> Ok (signature.id, inferredTypeArgs)
-                                    | Some (traitName, methodName) ->
-                                        (match M.find_opt traitName globals.traits with
-                                        | None -> Crash.crash "Missing predeclared trait signature"
+                                    | Some (traitName, methodName) -> (
+                                        match
+                                          M.find_opt traitName globals.traits
+                                        with
+                                        | None ->
+                                            Crash.crash
+                                              "Missing predeclared trait \
+                                               signature"
                                         | Some trait_ ->
-                                            let count = List.length trait_.traitParams in
-                                            map (fun selected ->
-                                              (selected.id, drop count inferredTypeArgs))
-                                              (WrittenTraitSupport.select globals traitName methodName
-                                                (take count inferredTypeArgs)))
+                                            let count =
+                                              List.length trait_.traitParams
+                                            in
+                                            map
+                                              (fun selected ->
+                                                ( selected.id,
+                                                  drop count inferredTypeArgs ))
+                                              (WrittenTraitSupport.select
+                                                 globals traitName methodName
+                                                 (take count inferredTypeArgs)))
                                   in
                                   bind target (fun (id, typeArgs) ->
-                                    let call =
-                                      if typeArgs = [] then C.Call (id, args)
-                                      else C.TypeApp (id, List.map C.checkedType typeArgs, args)
-                                    in
-                                    checkedLiteral expected symbols returnType call)))))
+                                      let call =
+                                        if typeArgs = [] then C.Call (id, args)
+                                        else
+                                          C.TypeApp
+                                            ( id,
+                                              List.map C.checkedType typeArgs,
+                                              args )
+                                      in
+                                      checkedLiteral expected symbols returnType
+                                        call)))))

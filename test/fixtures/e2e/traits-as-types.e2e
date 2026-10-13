@@ -1,0 +1,7 @@
+// A trait constraint must not enter the ordinary type namespace.
+(
+trait ConstraintOnly<'a> =
+  let show (value: 'a) : String
+let countConstraintValues (values: List<ConstraintOnly>) : Int64 = 0L
+countConstraintValues []
+) = compileerror="Unknown type 'ConstraintOnly'"

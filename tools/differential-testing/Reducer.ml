@@ -136,6 +136,14 @@ let candidates source (parsed : W.sourceFile) =
     | W.DFunction func -> replace func.range "" :: expression func.body
     | W.DValue value -> replace value.range "" :: expression value.body
     | W.DType typ | W.DTypeDB typ -> [ replace typ.range "" ]
+    | W.DTrait trait_ -> [ replace trait_.W.range "" ]
+    | W.DImpl impl ->
+        replace impl.W.range ""
+        :: List.concat_map
+             (function
+               | W.IMethod fn -> expression fn.W.body
+               | W.IAlias value -> expression value.W.body)
+             impl.W.members
     | W.DModule module_ -> List.concat_map declaration module_.declarations
     | W.DExpr value -> expression value
     | W.DTest _ -> []
