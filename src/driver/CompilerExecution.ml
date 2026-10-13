@@ -36,6 +36,17 @@ let streamText bytes =
   in
   ContentEncoding.decodeContent encoding bytes
 
+(* A signal must not abort a busy-executable retry or restart its delay. *)
+let pauseForRetry () =
+  let start = Int64.to_float (Mtime_clock.elapsed_ns ()) /. 1e6 in
+  let rec loop () =
+    let remaining = 0.01 -. (elapsed start /. 1000.) in
+    if remaining > 0. then
+      try ignore (Unix.select [] [] [] remaining)
+      with Unix.Unix_error (Unix.EINTR, _, _) -> loop ()
+  in
+  loop ()
+
 let captured info input =
   let stdinRead, stdinWrite = Unix.pipe ~cloexec:true () in
   let stdoutRead, stdoutWrite = Unix.pipe ~cloexec:true () in
@@ -68,7 +79,7 @@ let captured info input =
         match SourcePreparation.tryStartProcess info with
         | Error error when attempts > 0 && Text.contains error "Text file busy"
           ->
-            ignore (Unix.select [] [] [] 0.01);
+            pauseForRetry ();
             start (attempts - 1)
         | result -> result
       in
@@ -311,7 +322,7 @@ let executeAttached target verbosity binary =
             match SourcePreparation.tryStartProcess (info path [] []) with
             | Error error
               when attempts > 0 && Text.contains error "Text file busy" ->
-                ignore (Unix.select [] [] [] 0.01);
+                pauseForRetry ();
                 retry (attempts - 1)
             | result -> result
           in
