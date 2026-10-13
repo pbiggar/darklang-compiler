@@ -58,7 +58,7 @@ def stop(process):
     assert process.returncode == 0 and stdout == b"STOPPED\n" and not stderr, (process.returncode, stdout, stderr)
 
 
-def exchange(peer, port, ca, method=b"POST", body=b"HTTP/3 routing", declared=None, stalled=False, protocols=None, host="127.0.0.1", field_limit=None, idle_timeout=60):
+def exchange(peer, port, ca, method=b"POST", body=b"HTTP/3 routing", declared=None, stalled=False, protocols=None, host="127.0.0.1", field_limit=None, idle_timeout=60, handshake_only=False, server_uni_credit=None):
     config = QuicConfiguration(is_client=True, alpn_protocols=["h3"] if protocols is None else protocols,
                               server_name="localhost", cadata=ca.public_bytes(serialization.Encoding.PEM))
     class AdvertisedIdleQuic(QuicConnection):
@@ -75,6 +75,8 @@ def exchange(peer, port, ca, method=b"POST", body=b"HTTP/3 routing", declared=No
                 self._configuration.idle_timeout = previous
 
     client = AdvertisedIdleQuic(configuration=config)
+    if server_uni_credit is not None:
+        client._local_max_stream_data_uni = server_uni_credit
     class MethodAwareH3(H3Connection):
         def _get_local_settings(self):
             settings = super()._get_local_settings()
@@ -117,6 +119,9 @@ def exchange(peer, port, ca, method=b"POST", body=b"HTTP/3 routing", declared=No
                 close = event
             if isinstance(event, HandshakeCompleted) and not sent:
                 assert event.alpn_protocol == "h3"
+                if handshake_only:
+                    # Finished is queued locally but has not been emitted.
+                    return client, http, replay
                 fields = [(b":method", method), (b":scheme", b"https"), (b":authority", b"localhost"), (b":path", b"/echo"),
                           (b"content-length", str(len(body) if declared is None else declared).encode())]
                 end_stream = not stalled and (declared is None or declared == len(body))

@@ -1,0 +1,32 @@
+// quic_listener_owner.e2e - Atomic backpressure retains sealed packets and closes child queues independently.
+let queued (blocked: Bool) : Bool =
+  let peer = Stdlib.__Datagram.Endpoint { address = [127L, 0L, 0L, 1L], port = 443L } in
+  let (child, outbox) = Stdlib.HttpServer.Quic.__socket peer in
+  let life = Stdlib.Stream.__new (fun _unit -> Some ()) (fun _unit -> ()) in
+  let parent = Stdlib.__Datagram.Socket { lifecycle = life, watch = Some (Stdlib.__Network.Watch { descriptor = -1L, lifecycle = life }),
+    send = fun target bytes timeout -> if target != peer || Stdlib.Bool.not (Stdlib.__QuicClient.__same bytes (Stdlib.String.toBlob "sealed packet")) || timeout != 0L then Error 22L else if blocked then Error 11L else Ok (),
+    receive = fun _timeout -> Builtin.crash "Owner stole listener input" } in
+  let identity = Stdlib.TlsServerIdentity.Identity { certificates = [], key = Stdlib.__RsaPrivate.Key { modulus = Stdlib.Blob.empty, exponent = Stdlib.Blob.empty, privateExponent = Stdlib.Blob.empty } } in
+  let config = Stdlib.HttpServer.Config.Config { port = 443, maxBodyBytes = 1024, injectStandardHeaders = false, canonicalizeFromForwardedProto = false, logRequests = false } in
+  match Stdlib.__Network.shutdownSignals () with
+  | Error _ -> let _ = Stdlib.__Datagram.close child in
+    let _ = Stdlib.__Datagram.close parent in
+    false
+  | Ok signals ->
+    let context = Stdlib.HttpServer.Quic.Context { config = config, identity = identity, signals = signals, socket = parent, secret = Stdlib.Blob.empty, limit = 1024L } in
+    let keys = Stdlib.__QuicCrypto.Keys { key = Stdlib.Blob.empty, iv = Stdlib.Blob.empty, hp = Stdlib.Blob.empty } in
+    let closing = Stdlib.__QuicConnection.Closing { peer = peer, source = Stdlib.Blob.empty, destination = Stdlib.Blob.empty, keys = keys, phase = false, deadline = 100L, number = 2L, lastSent = 0L } in
+    let owner = Stdlib.HttpServer.Quic.__Owner { source = Stdlib.Blob.empty, peer = peer, socket = child, outbox = outbox, phase = Stdlib.HttpServer.Quic.__Phase.Closing closing } in
+    let sent = Stdlib.__Datagram.send child peer (Stdlib.String.toBlob "sealed packet") 1000L in
+    let flushed = Stdlib.HttpServer.Quic.__flush context owner in
+    let pending = Stdlib.Stream.__cellGet<List<Blob>> outbox in
+    let expected = if blocked then ["7365616C6564207061636B6574"] else [] in
+    let result = sent == Ok () && flushed == Ok () && Stdlib.List.map pending Stdlib.Blob.toHex == expected in
+    let _ = Stdlib.__Datagram.close child in
+    let closed = Stdlib.__Datagram.send child peer Stdlib.Blob.empty 1000L == Error 9L in
+    let parentLive = Stdlib.Stream.next parent.lifecycle == Some () in
+    let _ = Stdlib.__Datagram.close parent in
+    let _ = Stdlib.__Network.closeShutdownSignals signals in
+    result && closed && parentLive
+queued true = true // leak_check
+queued false = true // leak_check

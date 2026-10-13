@@ -14,12 +14,12 @@ let checkClosingCache (mode: Int64) : Bool =
       let identity = Stdlib.TlsServerIdentity.Identity { certificates = [], key = Stdlib.__RsaPrivate.Key { modulus = Stdlib.Blob.empty, exponent = Stdlib.Blob.empty, privateExponent = Stdlib.Blob.empty } } in
       let config = Stdlib.HttpServer.Config.Config { port = 1000, maxBodyBytes = 1024, injectStandardHeaders = false, canonicalizeFromForwardedProto = false, logRequests = false } in
       let context = Stdlib.HttpServer.Quic.Context { config = config, identity = identity, signals = signals, socket = socket, secret = Stdlib.String.toBlob "01234567890123456789012345678901", limit = 1024L } in
-      let result = Stdlib.HttpServer.Quic.__step context (fun _request -> Stdlib.Http.responseWithText "unused" 200) recent 1L in
+      let result = Stdlib.HttpServer.Quic.__step context (fun _request -> Stdlib.Http.responseWithText "unused" 200) (Stdlib.HttpServer.Quic.__Runtime { recent = recent, owners = [] }) 1L in
       Stdlib.__Datagram.close socket
       match result with
       | Error _ -> false
       | Ok step ->
-        match step.recent with
+        match step.state.recent with
         | [] -> mode == 6L && Stdlib.Bool.not step.stopped
         | [entry] -> Stdlib.Bool.not step.stopped && (match entry.closing with | Some next -> next.number == (if mode == 0L then 11L else 10L) && mode != 1L && mode != 3L | None -> mode == 1L || mode == 3L)
         | _ -> false) in
