@@ -13,6 +13,7 @@ type checkedExpression =
 
 type functionSignature = {
   id : AST.functionId;
+  traitMethod : (string * string) option;
   typeParams : string list;
   parameters : AST.semanticType list;
   return : AST.semanticType;
@@ -29,7 +30,22 @@ type typeEntry = {
 
 type typeInventory = typeEntry M.t
 
+(* Traits occupy their own identity catalog, never the nominal type inventory. *)
+type traitSignature = {
+  traitParams : string list;
+  methods : functionSignature M.t;
+}
+
+type traitImplementation = {
+  traitName : string;
+  selfType : AST.semanticType;
+  traitArgs : AST.semanticType list;
+  methodFunctions : functionSignature M.t;
+}
+
 type globals = {
+  traits : traitSignature M.t;
+  implementations : traitImplementation list;
   functions : functionSignature M.t;
   values : locals;
   types : typeInventory;
@@ -42,6 +58,8 @@ type globals = {
 
 let emptyGlobals =
   {
+    traits = M.empty;
+    implementations = [];
     functions = M.empty;
     values = M.empty;
     types = M.empty;

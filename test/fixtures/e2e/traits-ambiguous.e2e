@@ -1,0 +1,7 @@
+trait AmbiguousShow<'a> =
+  let show (value: 'a) : String
+impl AmbiguousShow for Int64 =
+  let show (value: Int64) : String = "first"
+impl AmbiguousShow for Int64 =
+  let show (value: Int64) : String = "second"
+AmbiguousShow.show 42L = compileerror="Ambiguous implementation of trait 'AmbiguousShow'"

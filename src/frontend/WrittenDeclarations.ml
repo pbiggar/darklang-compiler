@@ -99,7 +99,8 @@ let[@warning "-4"] predeclareTypes items =
                  let name =
                    String.concat "." (path @ [ declaration.WT.name.WT.name ])
                  in
-                 if M.mem name types then Error ("Duplicate type '" ^ name ^ "'")
+                 if declaration.WT.bounds <> [] then Error "Type declaration trait bounds are not implemented"
+                 else if M.mem name types then Error ("Duplicate type '" ^ name ^ "'")
                  else
                    let kind =
                      match declaration.WT.definition with
@@ -209,6 +210,7 @@ let[@warning "-4"] predeclareFunctions allowInternal types items symbols =
         ( M.add name
             {
               id;
+              traitMethod = None;
               typeParams = [];
               parameters = [ AST.TString ];
               return = AST.TNever;
@@ -224,6 +226,7 @@ let[@warning "-4"] predeclareFunctions allowInternal types items symbols =
         ( M.add name
             {
               id;
+              traitMethod = None;
               typeParams = entry.AST.typeParams;
               parameters = entry.AST.paramTypes;
               return = entry.AST.returnType;
@@ -240,7 +243,8 @@ let[@warning "-4"] predeclareFunctions allowInternal types items symbols =
             match item with
             | WS.Function (path, fn) ->
                 let name = String.concat "." (path @ [ fn.WT.name.WT.name ]) in
-                if M.mem name functions then
+                if fn.WT.bounds <> [] then Error "Generic trait bounds are not implemented"
+                else if M.mem name functions then
                   Error ("Duplicate function '" ^ name ^ "'")
                 else
                   let explicitParams = List.map fst fn.WT.typeParams in
@@ -269,7 +273,7 @@ let[@warning "-4"] predeclareFunctions allowInternal types items symbols =
                         (fun return ->
                           let id, symbols = C.internFunction name symbols in
                           ( M.add name
-                              { id; typeParams = allParams; parameters; return }
+                              { id; traitMethod = None; typeParams = allParams; parameters; return }
                               functions,
                             symbols ))
                         (resolveWrittenType allowInternal types path typeParams
@@ -499,6 +503,10 @@ let checkItems (checkExpression : expressionChecker) baseEnvironment
         | None -> (emptyGlobals, C.emptySymbols ())
       in
       let types = M.fold M.add localTypes baseGlobals.types in
+      let items, implementations = WrittenTraitSupport.materialize
+        (List.length baseGlobals.implementations) items in
+      bind (WrittenTraitSupport.predeclare allowInternal types baseGlobals items baseSymbols)
+        (fun (baseGlobals, baseSymbols) ->
       bind (predeclareFunctions allowInternal types items baseSymbols)
         (fun (localFunctions, symbols) ->
           let functions = M.fold M.add localFunctions baseGlobals.functions in
@@ -515,6 +523,9 @@ let checkItems (checkExpression : expressionChecker) baseEnvironment
               currentFunction = None;
             }
           in
+          bind (WrittenTraitSupport.validate initialGlobals implementations)
+            (fun initialGlobals ->
+          let initialGlobals = {initialGlobals with functions = WrittenTraitSupport.functions initialGlobals} in
           let result =
             List.fold_left
               (fun result item ->
@@ -622,7 +633,7 @@ let checkItems (checkExpression : expressionChecker) baseEnvironment
                                    { globals with modulePath = path }
                                    M.empty symbols None expr))
                       | WS.Trait _ | WS.Impl _ ->
-                          Error "Trait checking is not implemented"
+                          Ok (globals, symbols, reversed, entryType)
                       | WS.Type (path, declaration) ->
                           map
                             (fun (definition, symbols) ->
@@ -649,4 +660,4 @@ let checkItems (checkExpression : expressionChecker) baseEnvironment
                       attachRecursiveGroups
                         (C.programFromCheckedParts
                            (finalSymbols, List.rev reversed)),
-                      Environment (finalGlobals, finalSymbols) ))))
+                      Environment (finalGlobals, finalSymbols) ))))))

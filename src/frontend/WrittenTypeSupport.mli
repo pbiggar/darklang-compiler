@@ -6,6 +6,7 @@ type checkedExpression =
 
 type functionSignature = {
   id : AST.functionId;
+  traitMethod : (string * string) option;
   typeParams : string list;
   parameters : AST.semanticType list;
   return : AST.semanticType;
@@ -22,7 +23,22 @@ type typeEntry = {
 
 type typeInventory = typeEntry StringOrder.Map.t
 
+(* Traits occupy their own identity catalog, never the nominal type inventory. *)
+type traitSignature = {
+  traitParams : string list;
+  methods : functionSignature StringOrder.Map.t;
+}
+
+type traitImplementation = {
+  traitName : string;
+  selfType : AST.semanticType;
+  traitArgs : AST.semanticType list;
+  methodFunctions : functionSignature StringOrder.Map.t;
+}
+
 type globals = {
+  traits : traitSignature StringOrder.Map.t;
+  implementations : traitImplementation list;
   functions : functionSignature StringOrder.Map.t;
   values : locals;
   types : typeInventory;

@@ -23,6 +23,9 @@ let rec checkExpression (globals : globals) locals symbols expected expression =
   in
   let expected = Option.map (WrittenCheckingState.resolve symbols) expected in
   let functionValue (signature : functionSignature) symbols =
+    if Option.is_some signature.traitMethod then
+      Error "Trait method values require a resolved implementation"
+    else
     let typ = AST.TFunction (signature.parameters, signature.return) in
     if signature.typeParams = [] then
       WrittenTypeSupport.checkedLiteral expected symbols typ

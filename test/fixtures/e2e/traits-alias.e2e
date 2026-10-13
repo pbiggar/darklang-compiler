@@ -1,0 +1,6 @@
+trait AliasShow<'a> =
+  let show (value: 'a) : String
+let renderWorkInt (value: Int64) : String = Stdlib.toString value
+impl AliasShow for Int64 =
+  let show = renderWorkInt
+AliasShow.show 42L = "42"
