@@ -40,6 +40,7 @@ grouped by purpose; each subject has one canonical source.
 ## Compatibility and project status
 
 - [Darklang compatibility overview](compatibility/overview.md)
+- [Approved upstream adoption](compatibility/upstream-adoption.md)
 - [Executed compatibility failures by file and individual test](compatibility/current-audit.md)
 - [Complete imported upstream test inventory](compatibility/upstream-test-inventory.md)
 - [Language compatibility ledgers](compatibility/language/)

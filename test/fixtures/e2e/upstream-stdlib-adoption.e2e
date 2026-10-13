@@ -1,0 +1,68 @@
+// Public StdLib regressions for the approved upstream compatibility adoption.
+Stdlib.Tuple2.mapFirst ("one", 2L) (fun x -> Stdlib.String.toUppercase x) = ("ONE", 2L)
+Stdlib.Tuple2.mapSecond ("one", 2L) (fun x -> x + 1L) = ("one", 3L)
+Stdlib.Tuple2.mapBoth ("one", 2L) (fun x -> Stdlib.String.toUppercase x) (fun x -> x + 1L) = ("ONE", 3L)
+Stdlib.Tuple3.mapFirst ("one", 2L, true) (fun x -> Stdlib.String.toUppercase x) = ("ONE", 2L, true)
+Stdlib.Tuple3.mapSecond ("one", 2L, true) (fun x -> x + 1L) = ("one", 3L, true)
+Stdlib.Tuple3.mapThird ("one", 2L, true) (fun x -> !x) = ("one", 2L, false)
+Stdlib.Tuple3.mapAllThree ("one", 2L, true) (fun x -> Stdlib.String.toUppercase x) (fun x -> x + 1L) (fun x -> !x) = ("ONE", 3L, false)
+Stdlib.List.SortByComparatorHelpers.validate 1L 2L (fun a b -> if a < b then -1 else 0) = Ok -1
+Stdlib.List.SortByComparatorHelpers.merge [1L, 3L] [2L, 4L] (fun a b -> if a < b then -1 else if a == b then 0 else 1) = Ok [1L, 2L, 3L, 4L]
+Stdlib.List.SortByComparatorHelpers.mergeSort [3L, 1L, 2L] (fun a b -> if a < b then -1 else if a == b then 0 else 1) = Ok [1L, 2L, 3L]
+Stdlib.List.chunkBySizeHelper [1L, 2L, 3L] 2 [] = [[1L, 2L], [3L]]
+Stdlib.Char.toAsciiCode 'é' = None
+Stdlib.Char.toAsciiCode 'ä͖̭̈̇' = None
+Stdlib.Char.toAsciiCode 'a' = Some 97
+Stdlib.Char.toAsciiCode '\u007f' = Some 127
+Stdlib.Char.isASCII 'ä͖̭̈̇' = false
+Stdlib.Float.isFinite 1.0 = true
+Stdlib.Float.isFinite (1.0 / 0.0) = false
+Stdlib.Float.isFinite (0.0 / 0.0) = false
+Stdlib.Float.clampRefusingNaN 3.0 2.0 1.0 = Ok 2.0
+Stdlib.Float.clampRefusingNaN 1.0 (0.0 / 0.0) 2.0 = Error "clampRefusingNaN requires limits that are numbers"
+Stdlib.String.compare "a" "b" < 0L = true
+Stdlib.String.compare "😀" "\uE000" < 0L = true
+Stdlib.String.compare "é" "é" = 0L
+Stdlib.List.setAt [1L, 2L, 3L] -1 9L = Ok [1L, 2L, 9L]
+Stdlib.List.setAt [1L, 2L, 3L] 0 9L = Ok [9L, 2L, 3L]
+Stdlib.List.setAt [1L, 2L, 3L] -3 9L = Ok [9L, 2L, 3L]
+Stdlib.List.setAt [1L, 2L, 3L] -4 9L = Error Stdlib.List.IndexError.IndexOutOfBounds
+Stdlib.List.setAt [] 0 9L = Error Stdlib.List.IndexError.IndexOutOfBounds
+Stdlib.Char.isAlphanumeric '²' = false
+Stdlib.Char.isAlphanumeric 'Ⅳ' = false
+Stdlib.Char.isAlphanumeric '٢' = true
+Stdlib.Char.isAlphanumeric '𐐀' = true
+Stdlib.List.dedup [3L, 1L, 3L, 2L, 1L] = [3L, 1L, 2L]
+Stdlib.List.dedup [3, 1, 3, 2, 1] = [3, 1, 2]
+Stdlib.List.dedup ["b", "a", "b", "c", "a"] = ["b", "a", "c"]
+Stdlib.List.dedup [("b", 2L), ("a", 1L), ("b", 2L)] = [("b", 2L), ("a", 1L)]
+let nan = 0.0 / 0.0 in Stdlib.List.length (Stdlib.List.dedup [nan, nan]) = 1
+let fn = (fun x -> x + 1L) in Stdlib.List.length (Stdlib.List.dedup [fn, fn]) = compileerror="cannot be used as a Dict key"
+let first = Stdlib.String.toBlob "same" in let second = Stdlib.String.toBlob "same" in Stdlib.List.length (Stdlib.List.dedup [first, second, first]) = compileerror="cannot be used as a Dict key"
+Stdlib.List.setAt [1L, 2L, 3L] 3 9L = Error Stdlib.List.IndexError.IndexOutOfBounds
+Stdlib.List.setAt ["a", "b", "c"] -1 "replacement" = Ok ["a", "b", "replacement"]
+Stdlib.Float.isFinite (-1.0 / 0.0) = false
+Stdlib.Float.isFinite -0.0 = true
+Stdlib.Float.isNaN (Builtin.unwrap (Stdlib.Float.clampRefusingNaN (0.0 / 0.0) 1.0 2.0)) = true
+Stdlib.Float.toBits -0.0 = -9223372036854775808
+Stdlib.Float.toBits (-1.0) = -4616189618054758400
+
+// Key equality is total, including NaNs nested inside comparable values.
+let nan = 0.0 / 0.0 in Stdlib.List.length (Stdlib.List.dedup [(nan, 1L), (nan, 1L)]) = 1
+let nan = 0.0 / 0.0 in Stdlib.List.length (Stdlib.List.dedup [[nan], [nan]]) = 1
+Stdlib.List.dedup [0.0, -0.0] = [0.0]
+Stdlib.List.uniqueBy [3, 1, 2, 3] (fun value -> value) = [1, 2, 3]
+let nan = 0.0 / 0.0 in Stdlib.List.uniqueBy [3L, 1L, 2L] (fun _ -> nan) = [3L]
+let nan = 0.0 / 0.0 in Stdlib.List.uniqueBy [3L, 1L, 2L] (fun _ -> (nan, 1L)) = [3L]
+Stdlib.List.uniqueBy [3L, 1L] (fun _ -> Stdlib.String.toBlob "key") = compileerror="cannot be used as a Dict key"
+Stdlib.Float.clamp 1.0 0.0 2.0 = compileerror="Unknown function"
+Stdlib.Float.clampRefusingNaN 0.5 1.0 (0.0 / 0.0) = Error "clampRefusingNaN requires limits that are numbers"
+Stdlib.Float.clampRefusingNaN (1.0 / 0.0) -1.0 0.5 = Ok 0.5
+Stdlib.Float.clampRefusingNaN (-1.0 / 0.0) -1.0 0.5 = Ok -1.0
+let dedup<'a> (values: List<a>) : List<a> = Stdlib.List.dedup values; let fn = (fun x -> x + 1L) in dedup [fn, fn] = compileerror="cannot be used as a Dict key"
+let dedup<'a> (values: List<a>) : List<a> = Stdlib.List.dedup values; dedup [Stdlib.String.toBlob "key"] = compileerror="cannot be used as a Dict key"
+type Key = { value: Float }; let nan = 0.0 / 0.0 in Stdlib.List.length (Stdlib.List.dedup [Key { value = nan }, Key { value = nan }]) = 1
+type Key = { value: Blob }; Stdlib.List.dedup [Key { value = Stdlib.String.toBlob "key" }] = compileerror="cannot be used as a Dict key"
+Stdlib.List.dedup [Stdlib.Stream.fromList [1L]] = compileerror="cannot be used as a Dict key"
+type Key = Value of Float | Empty; let nan = 0.0 / 0.0 in Stdlib.List.length (Stdlib.List.dedup [Key.Value nan, Key.Value nan, Key.Empty]) = 2
+type Key = Value of Blob | Empty; Stdlib.List.dedup [Key.Value (Stdlib.String.toBlob "key")] = compileerror="cannot be used as a Dict key"

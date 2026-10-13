@@ -1,0 +1,9 @@
+// Upstream quoted-grapheme parser contexts from 0f87a71ac and 3d0699bc3.
+Stdlib.Char.toString ('Z̤͔ͧ̑̓') = "Z̤͔ͧ̑̓"
+Stdlib.Tuple2.second ('a', 'Z̤͔ͧ̑̓') = 'Z̤͔ͧ̑̓'
+Stdlib.List.head ['a', 'Z̤͔ͧ̑̓'] = Some 'a'
+let x = 'Z̤͔ͧ̑̓' in Stdlib.Char.toString x = "Z̤͔ͧ̑̓"
+Stdlib.List.map [1L, 2L] (fun x -> 'Z̤͔ͧ̑̓') = ['Z̤͔ͧ̑̓', 'Z̤͔ͧ̑̓']
+Stdlib.Char.toCodepoint 'é' = Some 233
+Stdlib.List.map ['a', 'é', 'Z̤͔ͧ̑̓', 'ä͖̭̈̇', 'lͮ̒ͫ', 'ǧ̗͚̚', 'o̙̔ͮ̇͐̇'] Stdlib.Char.toString = ["a", "é", "Z̤͔ͧ̑̓", "ä͖̭̈̇", "lͮ̒ͫ", "ǧ̗͚̚", "o̙̔ͮ̇͐̇"]
+let first = 'a' let second = 'Z̤͔ͧ̑̓' in (first, second) = ('a', 'Z̤͔ͧ̑̓')

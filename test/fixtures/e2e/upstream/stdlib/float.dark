@@ -68,39 +68,39 @@ Stdlib.Float.negate 5.6 = -5.6
 Stdlib.Float.negate 0.0 = -0.0
 Stdlib.Float.negate -0.0 = 0.0
 
-Stdlib.Float.clamp Builtin.testInfinity -1.0 0.5 = Stdlib.Result.Result.Ok 0.5
+Stdlib.Float.clampRefusingNaN Builtin.testInfinity -1.0 0.5 = Stdlib.Result.Result.Ok 0.5
 
-Stdlib.Float.clamp Builtin.testNegativeInfinity -1.0 0.5 = Stdlib.Result.Result.Ok
+Stdlib.Float.clampRefusingNaN Builtin.testNegativeInfinity -1.0 0.5 = Stdlib.Result.Result.Ok
   -1.0
 
-Stdlib.Float.clamp Builtin.testNan -1.0 1.0 = Stdlib.Result.Result.Ok
+Stdlib.Float.clampRefusingNaN Builtin.testNan -1.0 1.0 = Stdlib.Result.Result.Ok
   Builtin.testNan
 
-Stdlib.Float.clamp 0.5 Builtin.testInfinity 1.0 = Stdlib.Result.Result.Ok 1.0
+Stdlib.Float.clampRefusingNaN 0.5 Builtin.testInfinity 1.0 = Stdlib.Result.Result.Ok 1.0
 
-Stdlib.Float.clamp 0.5 Builtin.testNegativeInfinity 1.0 = Stdlib.Result.Result.Ok
+Stdlib.Float.clampRefusingNaN 0.5 Builtin.testNegativeInfinity 1.0 = Stdlib.Result.Result.Ok
   0.5
 
-Stdlib.Float.clamp 0.5 Builtin.testNan 1.0 = Stdlib.Result.Result.Error
-  "clamp requires arguments to be valid numbers"
+Stdlib.Float.clampRefusingNaN 0.5 Builtin.testNan 1.0 = Stdlib.Result.Result.Error
+  "clampRefusingNaN requires limits that are numbers"
 
-Stdlib.Float.clamp -1.0 0.5 Builtin.testInfinity = Stdlib.Result.Result.Ok 0.5
+Stdlib.Float.clampRefusingNaN -1.0 0.5 Builtin.testInfinity = Stdlib.Result.Result.Ok 0.5
 
-Stdlib.Float.clamp -1.0 0.5 Builtin.testNegativeInfinity = Stdlib.Result.Result.Ok
+Stdlib.Float.clampRefusingNaN -1.0 0.5 Builtin.testNegativeInfinity = Stdlib.Result.Result.Ok
   -1.0
 
-Stdlib.Float.clamp 0.5 1.0 Builtin.testNan = Stdlib.Result.Result.Error
-  "clamp requires arguments to be valid numbers"
+Stdlib.Float.clampRefusingNaN 0.5 1.0 Builtin.testNan = Stdlib.Result.Result.Error
+  "clampRefusingNaN requires limits that are numbers"
 
-Stdlib.Float.clamp -2.0 -5.0 5.0 = Stdlib.Result.Result.Ok -2.0
+Stdlib.Float.clampRefusingNaN -2.0 -5.0 5.0 = Stdlib.Result.Result.Ok -2.0
 
-Stdlib.Float.clamp -3.0 -2.0 1.0 = Stdlib.Result.Result.Ok -2.0
+Stdlib.Float.clampRefusingNaN -3.0 -2.0 1.0 = Stdlib.Result.Result.Ok -2.0
 
-Stdlib.Float.clamp -5.0 1.0 1.0 = Stdlib.Result.Result.Ok 1.0
+Stdlib.Float.clampRefusingNaN -5.0 1.0 1.0 = Stdlib.Result.Result.Ok 1.0
 
-Stdlib.Float.clamp 1.0 2.0 1.0 = Stdlib.Result.Result.Ok 1.0
+Stdlib.Float.clampRefusingNaN 1.0 2.0 1.0 = Stdlib.Result.Result.Ok 1.0
 
-Stdlib.Float.clamp 3.0 0.0 2.0 = Stdlib.Result.Result.Ok 2.0
+Stdlib.Float.clampRefusingNaN 3.0 0.0 2.0 = Stdlib.Result.Result.Ok 2.0
 
 Stdlib.Float.divide 9.0 2.0 = 4.5
 Stdlib.Float.divide 9.0 0.0 = Builtin.testInfinity

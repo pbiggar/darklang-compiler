@@ -60,6 +60,8 @@ let[@warning "-4"] check checkExpression checkedLiteral globals locals symbols
             | WT.BinOp WT.BinOpOr -> (AST.Or, leftType = AST.TBool, AST.TBool)
             | WT.InfixFnCall op -> (
                 match op with
+                | WT.ArithmeticPlus when leftType = AST.TString ->
+                    (AST.StringConcat, rightType = AST.TString, AST.TString)
                 | WT.ArithmeticPlus -> (AST.Add, numeric, leftType)
                 | WT.ArithmeticMinus -> (AST.Sub, numeric, leftType)
                 | WT.ArithmeticMultiply -> (AST.Mul, numeric, leftType)

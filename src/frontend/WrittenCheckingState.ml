@@ -50,6 +50,7 @@ let validateOperator operation = function
       in
       let valid =
         match operation with
+        | AST.Add -> integer || typ = AST.TFloat64 || typ = AST.TString
         | AST.Shl | AST.Shr | AST.BitAnd | AST.BitOr | AST.BitXor -> integer
         | AST.Pow ->
             (integer || typ = AST.TFloat64)
