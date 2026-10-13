@@ -189,3 +189,9 @@ before implementation. Native x86-64 validation passed `env -u LD_PRELOAD
 gate stopped before measurement on the existing x86-64 snapshot's incompatible
 workload contract, as documented in the HTTP/HTML adoption ledger; no benchmark
 sources, contracts or snapshots changed. The PR remains draft and unmerged.
+
+The 2026-10-13 review follow-up in [PR #65](https://github.com/pbiggar/darklang-compiler/pull/65)
+expanded this fixture to 25/25 passing assertions, including closure operands,
+simultaneous String/numeric specializations and a 128-operand generic chain.
+The complete host suite passed 13,302/13,302; see the [adoption ledger](../upstream-adoption.md)
+for the full verification results and remaining performance-gate blocker.

@@ -114,6 +114,27 @@ sorts the surviving values. Ordinary language equality is unchanged.
   dictionary optimization. Regressions cover scalar and compound NaNs,
   signed zero, first-occurrence order, Int `uniqueBy`, and rejected key shapes.
 
+Follow-up branch: `adopt/upstream-review-fixes`; [PR #65](https://github.com/pbiggar/darklang-compiler/pull/65).
+Native x86-64 verification of the review fixes:
+
+- `env -u LD_PRELOAD ./build --ai`: passed.
+- `./run-tests --ai`: 13,302/13,302 passed in 118.5 seconds.
+- `./run-tests --ai --filter=upstream-stdlib-adoption`: 65/65.
+- `./run-tests --ai --filter=string-plus`: 25/25, including a 128-operand generic chain.
+- `./run-tests --ai --filter=closures --e2e-batch-size=1`: 94/94.
+- `./run-tests --ai --filter=x64`: 98/98.
+- `dune runtest`: passed.
+- `python3 scripts/check_compiled_leaks.py`: 58/58 clean workloads.
+- `./benchmarks/run_benchmarks.sh --verify-parent full`: blocked before measurement;
+  the existing snapshot workload contract digest is incompatible.
+
+Full verification found a closure-signature registration gap, which was fixed.
+Two subsequent runs hit interrupted waits in the existing x64 test harness.
+The harness now retries `EINTR` from polling and process waits while preserving
+its original timeout, exit-code and signal checks; the final full run passed.
+No benchmark sources or snapshots were changed. The PR remains draft and unmerged
+because the full performance gate is outstanding.
+
 ## Combined validation
 
 All three adoption branches were combined without changing their reviewed
