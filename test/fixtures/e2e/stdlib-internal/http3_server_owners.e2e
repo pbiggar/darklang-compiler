@@ -98,14 +98,14 @@ let draining (credit: Int64) : Stdlib.Result.Result<(Bool * Int64), String> =
 draining 0L = Ok ((false, 0L)) // leak_check
 draining 100L = Ok ((true, 4L)) // leak_check
 
-// An incomplete QPACK index returns a shared HPACK decoder error. It must
+// Invalid QPACK Huffman padding returns a shared HPACK decoder error. It must
 // fail the connection, not merely reset this request and retain its QPACK owner.
 let malformedCompression () : Stdlib.Result.Result<Unit, String> =
   let initial = fixture () in
-  let payload = Stdlib.Blob.fromHex "0000ff" |> Stdlib.Result.withDefault Stdlib.Blob.empty in
+  let payload = Stdlib.Blob.fromHex "0000290000" |> Stdlib.Result.withDefault Stdlib.Blob.empty in
   let result = Stdlib.__Http3Wire.serialize 1L payload |> Stdlib.Result.andThen (fun bytes ->
     Stdlib.__QuicFlow.receive initial.wire.connection.flow (Stdlib.__QuicApplication.StreamData { id = 0L, offset = 0L, bytes = bytes, fin = true }) |> Stdlib.Result.andThen (fun flow ->
       Stdlib.__Http3Server.step (context ()) { initial with wire = { initial.wire with connection = Stdlib.__QuicConnection.__flow initial.wire.connection flow } } 1L) |> Stdlib.Result.map (fun _state -> ())) in
   Stdlib.__Http3.close initial.wire
   result
-malformedCompression () = Error "Truncated HPACK integer" // leak_check
+malformedCompression () = Error "Invalid HPACK Huffman padding" // leak_check
