@@ -1,0 +1,3 @@
+# Each entry records id, fingerprint, target, status, command, and notes.
+# The script marks evidence stale when that item's full input fingerprint changes.
+entries: []
