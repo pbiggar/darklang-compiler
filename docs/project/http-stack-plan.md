@@ -305,6 +305,10 @@ mean the entire branch has passed its integration or performance gates.
 
   - [x] Inbound dynamic tables, fragmented encoder instructions, blocked
     field sections, insertion increments and section acknowledgments.
+    Server request owners retain QUIC receive credit while a field section
+    waits for insertions, preventing a valid large upload from overflowing
+    deferred DATA. Resets still cancel blocked requests. The server-owner
+    fixture and independent fragmented-instruction QPACK peer cover this case.
   - [x] Outgoing dynamic encoding, peer feedback, reference tracking and
     pure stream-cancellation ownership.
   - [ ] Cancellation and table ownership across reusable multiplexed connections.

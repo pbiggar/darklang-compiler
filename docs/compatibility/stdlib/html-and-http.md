@@ -484,6 +484,10 @@ output retains at most eight sealed datagrams per child and retries one atomic
 nonblocking send per round without resealing or reserving another nonce. All
 QUIC owners share a 101 MiB retained payload budget; child disposal never closes
 the shared UDP listener.
+QPACK-blocked request owners keep DATA in transport reassembly without returning
+receive credit until the required insertions arrive. Encoder/control streams
+and request resets still advance, so a large upload cannot grow deferred DATA
+past the blocked-message bound while waiting for its HEADERS section.
 
 `QuicServerRetry` provides listener-key HMAC tokens bound to the peer's address
 and port, original destination CID, client source CID and Retry source CID.
