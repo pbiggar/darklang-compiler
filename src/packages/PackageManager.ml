@@ -5,7 +5,13 @@
 
 type config = { server : string; cachePath : string }
 type resolvedSource = { name : string; source : string }
-type itemKind = PackageType | PackageValue | PackageFunction
+
+type itemKind =
+  | PackageType
+  | PackageValue
+  | PackageFunction
+  | PackageTrait
+  | PackageImpl
 
 type locatedEntity = {
   kind : itemKind;
@@ -84,8 +90,11 @@ let kindPath = function
   | PackageType -> "type"
   | PackageValue -> "value"
   | PackageFunction -> "function"
+  | PackageTrait -> "trait"
+  | PackageImpl -> "impl"
 
-let allKinds = [ PackageType; PackageValue; PackageFunction ]
+let allKinds =
+  [ PackageType; PackageValue; PackageFunction; PackageTrait; PackageImpl ]
 
 let rec createDirectory path =
   if path <> "" && not (Sys.file_exists path) then (
@@ -471,7 +480,9 @@ let rec renderExpr parameters selfName element =
           else Error ("Invalid package argument index " ^ string_of_int index)
       | None -> Error "Invalid package argument index")
   | "ESelf", [ _ ] -> Ok selfName
-  | "EFnName", [ _; name ] | "EValue", [ _; name ] -> resolvedName name
+  | "EFnName", [ _; name ] | "EFnName", [ _; name; _ ] | "EValue", [ _; name ]
+    ->
+      resolvedName name
   | "EList", [ _; values ] ->
       let+ values = renderMany (arrayItems values) in
       "[" ^ String.concat ", " values ^ "]"
@@ -512,7 +523,7 @@ let rec renderExpr parameters selfName element =
   | "EApply", [ _; fn; typeArgs; args ] -> (
       let* name, fields = enumCase fn in
       match (name, fields) with
-      | "EFnName", [ _; name ] ->
+      | "EFnName", [ _; name ] | "EFnName", [ _; name; _ ] ->
           let* name = resolvedName name in
           application name typeArgs args
       | _ ->
@@ -609,9 +620,16 @@ let rec renderExpr parameters selfName element =
             let* op = infixText infix in
             let+ argument = recurse argument in
             "(" ^ op ^ ") (" ^ argument ^ ")"
-        | "EPipeFnCall", [ _; name; typeArgs; args ] ->
+        | "EPipeFnCall", [ _; name; typeArgs; args ]
+        | "EPipeFnCall", [ _; name; typeArgs; args; _ ] ->
             let* name = resolvedName name in
-            application name typeArgs args
+            if arrayItems args <> [] then application name typeArgs args
+            else
+              let+ types =
+                ResultList.mapResults renderType (arrayItems typeArgs)
+              in
+              name
+              ^ if types = [] then "" else "<" ^ String.concat ", " types ^ ">"
         | "EPipeEnum", [ _; name; caseName; values ] ->
             let* name = resolvedName name in
             let* leaf = stringValue caseName in
@@ -675,6 +693,64 @@ let dependencyRefs json =
     Ok (distinct (collect (parse json)))
   with ex -> Error ("Could not inspect package dependencies: " ^ message ex)
 
+let renderTraitRef value =
+  match (tryField "trait_" value, tryField "typeArgs" value) with
+  | Some trait_, Some args ->
+      let* name = resolvedName trait_ in
+      let+ args = ResultList.mapResults renderType (arrayItems args) in
+      name ^ if args = [] then "" else "<" ^ String.concat ", " args ^ ">"
+  | _ -> Error "Invalid package trait reference"
+
+let renderTypeParameters types bounds =
+  let* types = ResultList.mapResults stringValue (arrayItems types) in
+  let* bounds =
+    ResultList.mapResults
+      (fun bound ->
+        match (tryField "param" bound, tryField "trait_" bound) with
+        | Some param, Some trait_ ->
+            let* param = stringValue param in
+            let+ trait_ = renderTraitRef trait_ in
+            (param, trait_)
+        | _ -> Error "Invalid package trait bound")
+      (Option.fold ~none:[] ~some:arrayItems bounds)
+  in
+  if List.exists (fun (param, _) -> not (List.mem param types)) bounds then
+    Error "Package bound refers to an undeclared type parameter"
+  else
+    Ok
+      (if types = [] then ""
+       else
+         "<"
+         ^ String.concat ", "
+             (List.map
+                (fun param ->
+                  let constraints =
+                    List.filter_map
+                      (fun (name, trait_) ->
+                        if name = param then Some trait_ else None)
+                      bounds
+                  in
+                  "'" ^ param
+                  ^
+                  if constraints = [] then ""
+                  else ": " ^ String.concat " + " constraints)
+                types)
+         ^ ">")
+
+let renderParameters parameters =
+  ResultList.mapResults
+    (fun element ->
+      match (tryField "name" element, tryField "typ" element) with
+      | Some name, Some typ ->
+          let* name = stringValue name in
+          let name =
+            NameSyntax.formatIdentifier (NameSyntax.identifierFromText name)
+          in
+          let+ typ = renderType typ in
+          (name, "(" ^ name ^ ": " ^ typ ^ ")")
+      | _ -> Error "Invalid package function parameter")
+    (arrayItems parameters)
+
 let renderEntity entity =
   try
     let root = parse entity.json in
@@ -692,14 +768,79 @@ let renderEntity entity =
                 source = "module " ^ moduleName ^ "\n" ^ body;
               }
             in
-            let typeDecl types =
-              if types = [] then ""
-              else
-                "<"
-                ^ String.concat ", " (List.map (fun t -> "'" ^ t) types)
-                ^ ">"
-            in
             match entity.kind with
+            | PackageTrait -> (
+                match
+                  (tryField "typeParams" value, tryField "methods" value)
+                with
+                | Some types, Some methods ->
+                    let* types =
+                      renderTypeParameters types (tryField "bounds" value)
+                    in
+                    let* methods =
+                      ResultList.mapResults
+                        (fun method_ ->
+                          match
+                            ( tryField "name" method_,
+                              tryField "typeParams" method_,
+                              tryField "parameters" method_,
+                              tryField "returnType" method_ )
+                          with
+                          | Some name, Some types, Some parameters, Some result
+                            ->
+                              let* name = stringValue name in
+                              let* types =
+                                renderTypeParameters types
+                                  (tryField "bounds" method_)
+                              in
+                              let* parameters = renderParameters parameters in
+                              let+ result = renderType result in
+                              "  let " ^ name ^ types ^ " "
+                              ^ String.concat " " (List.map snd parameters)
+                              ^ " : " ^ result
+                          | _ -> Error "Invalid package trait method")
+                        (arrayItems methods)
+                    in
+                    Ok
+                      (prefix
+                         ("trait " ^ leaf ^ types ^ " =\n"
+                        ^ String.concat "\n" methods))
+                | _ -> Error ("Invalid package trait " ^ entity.location))
+            | PackageImpl -> (
+                match
+                  ( tryField "trait_" value,
+                    tryField "traitTypeArgs" value,
+                    tryField "self" value,
+                    tryField "typeParams" value,
+                    tryField "methods" value )
+                with
+                | Some trait_, Some args, Some self, Some types, Some methods ->
+                    let* trait_ = resolvedName trait_ in
+                    let* args =
+                      ResultList.mapResults renderType (arrayItems args)
+                    in
+                    let* self = renderType self in
+                    let* types =
+                      renderTypeParameters types (tryField "bounds" value)
+                    in
+                    let+ methods =
+                      ResultList.mapResults
+                        (fun method_ ->
+                          match arrayItems method_ with
+                          | [ name; target ] ->
+                              let* name = stringValue name in
+                              let+ target = resolvedName target in
+                              "  let " ^ name ^ " = " ^ target
+                          | _ -> Error "Invalid package implementation method")
+                        (arrayItems methods)
+                    in
+                    prefix
+                      ("impl" ^ types ^ " " ^ trait_
+                      ^ (if args = [] then ""
+                         else "<" ^ String.concat ", " args ^ ">")
+                      ^ " for (" ^ self ^ ") =\n" ^ String.concat "\n" methods)
+                | _ ->
+                    Error ("Invalid package implementation " ^ entity.location))
             | PackageFunction -> (
                 match
                   ( tryField "parameters" value,
@@ -727,14 +868,14 @@ let renderEntity entity =
                       ResultList.mapResults parameter (arrayItems parameters)
                     in
                     let* types =
-                      ResultList.mapResults stringValue (arrayItems typeParams)
+                      renderTypeParameters typeParams (tryField "bounds" value)
                     in
                     let* result = renderType returnType in
                     let+ body =
                       renderExpr (List.map fst parameters) entity.location body
                     in
                     prefix
-                      ("let " ^ leaf ^ typeDecl types ^ " "
+                      ("let " ^ leaf ^ types ^ " "
                       ^ String.concat " " (List.map snd parameters)
                       ^ " : " ^ result ^ " = " ^ body)
                 | _ -> Error ("Invalid package function " ^ entity.location))
@@ -754,11 +895,11 @@ let renderEntity entity =
                     with
                     | Some typeParams, Some definition -> (
                         let* types =
-                          ResultList.mapResults stringValue
-                            (arrayItems typeParams)
+                          renderTypeParameters typeParams
+                            (tryField "bounds" declaration)
                         in
                         let* name, fields = enumCase definition in
-                        let head = "type " ^ leaf ^ typeDecl types ^ " = " in
+                        let head = "type " ^ leaf ^ types ^ " = " in
                         match (name, fields) with
                         | "Alias", [ target ] ->
                             let+ typ = renderType target in
@@ -862,10 +1003,10 @@ let resolveNames config resolutionEnv names =
             Some entity
       in
       let findRoots () =
-        let* roots =
-          ResultList.collectResults
+        let attempts =
+          List.concat_map
             (fun name ->
-              ResultList.collectResults
+              List.map
                 (fun kind ->
                   let path =
                     "/" ^ kindPath kind ^ "/find/" ^ escapeDataString name
@@ -881,7 +1022,17 @@ let resolveNames config resolutionEnv names =
                (fun name -> not (isKnownName name))
                (candidatePrefixes isKnownName names))
         in
-        Ok (distinct roots)
+        let roots =
+          List.concat_map
+            (function Ok values -> values | Error _ -> [])
+            attempts
+        in
+        if roots <> [] || List.for_all Result.is_ok attempts then
+          Ok (distinct roots)
+        else
+          match List.find_opt Result.is_error attempts with
+          | Some (Error error) -> Error error
+          | _ -> Ok []
       in
       let rec load pending visited loaded =
         match pending with
@@ -906,8 +1057,8 @@ let resolveNames config resolutionEnv names =
                   (StringOrder.Set.add hash visited)
                   (entity :: loaded))
         | (None, hash) :: rest -> (
-            let* attempts =
-              ResultList.mapResults
+            let attempts =
+              List.map
                 (fun kind ->
                   let+ found = fetchLocated kind hash in
                   (kind, found))
@@ -915,8 +1066,10 @@ let resolveNames config resolutionEnv names =
             in
             match
               List.find_map
-                (fun (kind, found) ->
-                  Option.map (fun entity -> (kind, entity)) found)
+                (function
+                  | Ok (kind, found) ->
+                      Option.map (fun entity -> (kind, entity)) found
+                  | Error _ -> None)
                 attempts
             with
             | None -> Error ("Package dependency " ^ hash ^ " was not found")

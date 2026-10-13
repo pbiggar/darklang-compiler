@@ -124,3 +124,59 @@ let fromInt64 (value: Int64) : Stdlib.Option.Option<Int32> = Stdlib.Int.toInt32 
 let fromUInt64 (value: UInt64) : Stdlib.Option.Option<Int32> = Stdlib.Int.toInt32 (Stdlib.Int.fromUInt64 value)
 let fromInt128 (value: Int128) : Stdlib.Option.Option<Int32> = Stdlib.Int.toInt32 (Stdlib.Int.fromInt128 value)
 let fromUInt128 (value: UInt128) : Stdlib.Option.Option<Int32> = Stdlib.Int.toInt32 (Stdlib.Int.fromUInt128 value)
+
+// Trait implementations reuse the compiler's existing native operations.
+
+impl Stdlib.Add for Int32 =
+  let add = Stdlib.Int32.add
+
+impl Stdlib.Subtract for Int32 =
+  let subtract = Stdlib.Int32.subtract
+
+impl Stdlib.Multiply for Int32 =
+  let multiply = Stdlib.Int32.multiply
+
+impl Stdlib.Divide for Int32 =
+  let divide = Stdlib.Int32.divide
+
+impl Stdlib.Modulo for Int32 =
+  let modulo = Stdlib.Int32.mod
+
+impl Stdlib.Power for Int32 =
+  let power = Stdlib.Int32.power
+
+impl Stdlib.Negate for Int32 =
+  let negate = Stdlib.Int32.negate
+
+impl Stdlib.BitwiseAnd for Int32 =
+  let bitwiseAnd = Stdlib.Int32.bitwiseAnd
+
+impl Stdlib.BitwiseOr for Int32 =
+  let bitwiseOr = Stdlib.Int32.bitwiseOr
+
+impl Stdlib.BitwiseXor for Int32 =
+  let bitwiseXor = Stdlib.Int32.bitwiseXor
+
+impl Stdlib.BitwiseNot for Int32 =
+  let bitwiseNot = Stdlib.Int32.bitwiseNot
+
+impl Stdlib.ShiftLeft for Int32 =
+  let shiftLeft = Stdlib.Int32.shiftLeft
+
+impl Stdlib.ShiftRight for Int32 =
+  let shiftRight = Stdlib.Int32.shiftRight
+
+impl Stdlib.ToString for Int32 =
+  let toString = Stdlib.Int32.toString
+
+impl Stdlib.Compare for Int32 =
+  let lessThan = Stdlib.Int32.lessThan
+  let lessThanOrEqualTo = Stdlib.Int32.lessThanOrEqualTo
+  let greaterThan = Stdlib.Int32.greaterThan
+  let greaterThanOrEqualTo = Stdlib.Int32.greaterThanOrEqualTo
+
+impl Stdlib.Zero for Int32 =
+  let zero () : Int32 = 0l
+
+impl Stdlib.One for Int32 =
+  let one () : Int32 = 1l

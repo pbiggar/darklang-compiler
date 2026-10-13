@@ -185,3 +185,57 @@ let shiftRight (value: UInt128) (count: UInt128) : UInt128 =
     if amount == 0UL then value
     else if amount < 64UL then Stdlib.UInt128.__fromWords (Stdlib.UInt64.bitwiseOr (Stdlib.UInt64.shiftRight low amount) (Stdlib.UInt64.shiftLeft high (64UL - amount))) (Stdlib.UInt64.shiftRight high amount)
     else Stdlib.UInt128.__fromWords (Stdlib.UInt64.shiftRight high (amount - 64UL)) 0UL
+
+// Trait implementations reuse the compiler's existing native operations.
+
+impl Stdlib.Add for UInt128 =
+  let add = Stdlib.UInt128.add
+
+impl Stdlib.Subtract for UInt128 =
+  let subtract = Stdlib.UInt128.subtract
+
+impl Stdlib.Multiply for UInt128 =
+  let multiply = Stdlib.UInt128.multiply
+
+impl Stdlib.Divide for UInt128 =
+  let divide = Stdlib.UInt128.divide
+
+impl Stdlib.Modulo for UInt128 =
+  let modulo = Stdlib.UInt128.mod
+
+impl Stdlib.Power for UInt128 =
+  let power (base: UInt128) (exponent: UInt128) : UInt128 =
+    Stdlib.UInt128.__fromInt (Stdlib.Int.power (Stdlib.Int.fromUInt128 base) (Stdlib.Int.fromUInt128 exponent))
+
+impl Stdlib.BitwiseAnd for UInt128 =
+  let bitwiseAnd = Stdlib.UInt128.bitwiseAnd
+
+impl Stdlib.BitwiseOr for UInt128 =
+  let bitwiseOr = Stdlib.UInt128.bitwiseOr
+
+impl Stdlib.BitwiseXor for UInt128 =
+  let bitwiseXor = Stdlib.UInt128.bitwiseXor
+
+impl Stdlib.BitwiseNot for UInt128 =
+  let bitwiseNot = Stdlib.UInt128.bitwiseNot
+
+impl Stdlib.ShiftLeft for UInt128 =
+  let shiftLeft = Stdlib.UInt128.shiftLeft
+
+impl Stdlib.ShiftRight for UInt128 =
+  let shiftRight = Stdlib.UInt128.shiftRight
+
+impl Stdlib.ToString for UInt128 =
+  let toString = Stdlib.UInt128.toString
+
+impl Stdlib.Compare for UInt128 =
+  let lessThan = Stdlib.UInt128.lessThan
+  let lessThanOrEqualTo = Stdlib.UInt128.lessThanOrEqualTo
+  let greaterThan = Stdlib.UInt128.greaterThan
+  let greaterThanOrEqualTo = Stdlib.UInt128.greaterThanOrEqualTo
+
+impl Stdlib.Zero for UInt128 =
+  let zero () : UInt128 = 0Z
+
+impl Stdlib.One for UInt128 =
+  let one () : UInt128 = 1Z

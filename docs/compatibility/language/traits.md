@@ -7,7 +7,7 @@ Reference semantics: `backend/src/LibExecution/Traits.fs` and
 `packages/darklang/stdlib/traits.dark` at that revision.
 
 This is an unfinished implementation checkpoint. M0–M5 are implemented.
-M6–M7 remain unfinished; this is not a readiness claim.
+M6 package breadth and M7 remain unfinished; this is not a readiness claim.
 
 | Behavior | Checkpoint implementation | Executed evidence / remaining validation |
 | --- | --- | --- |
@@ -22,7 +22,7 @@ M6–M7 remain unfinished; this is not a readiness claim.
 | Bounds on generic types | Check construction, signatures and declaration field types | `traits-type-bounds.e2e` passed |
 | Generic/conditional implementations | Directional argument matching, recursive obligations, blanket fallback and static specialization | `traits-conditional.e2e`, `traits-concrete-arguments.e2e`, `traits-generic-alias.e2e`, `traits-patterns.e2e`, `traits-shared-alias.e2e` passed |
 | Receivers and operators | Static receiver calls, record-field precedence, custom and bounded-generic operators; primitive fast paths preserved | `traits-receivers.e2e`, `traits-receiver-parameters.e2e`, `traits-receiver-ambiguity.e2e`, `traits-operators.e2e` |
-| Upstream stdlib traits and hosted packages | Unchanged upstream trait declarations and generic utilities loaded; primitive impls and hosted imports unfinished (M6) | Required |
+| Upstream stdlib traits and hosted packages | Unchanged trait declarations/utilities; native primitive aliases; hosted trait/impl/bound rendering and dependency closure | `traits-stdlib.e2e`, `traits-stdlib-identities.e2e`, `trait_packages_regression.py`; package discovery limitations below |
 | Full parity and readiness gates | Not executed (M7) | Required |
 
 Intentional scoped differences: selection must finish at compilation; equally
@@ -54,9 +54,7 @@ Validation:
   diagnostic. No timing comparison or performance pass is claimed. The stored
   baseline needs reconciliation; this task has not reset it.
 
-The representative work-order fixture uses `Stdlib.Int64.toString` to render
-its `Int64` field: the current compiler does not define `Stdlib.toString`.
-Activating the upstream generic `ToString` surface belongs to M6.
+The upstream generic `Stdlib.toString` is now loaded and statically specialized.
 
 M3 focused validation: rebuilt successfully; `./run-tests --ai --filter=traits`
 passed **22/22** (15.7 seconds). The full host and regression reruns are in
@@ -77,7 +75,37 @@ apostrophe after `for` as a type variable. No lexer extension was introduced.
 
 M5 focused suite passed **66/66** (16.8 seconds). Full-host validation exposed
 diagnostic regressions for invalid primitive operators and stream ordering;
-these cases retain their previous diagnostics. Full-host rerun is pending.
+these cases retain their previous diagnostics. Full host passed **13,448/13,448**
+(126.3 seconds).
 `dune runtest` passed, including package caches, HTTP/TLS, host/runtime and
 differential-tool regressions. `StdLib/traits.dark` is byte-identical to the
-pinned upstream source; its primitive implementations are still M6 work.
+pinned upstream source.
+
+M6 focused checks passed **87/87** (17.6 seconds). Primitive implementations
+reuse the existing native functions for integer arithmetic, comparisons,
+bitwise operations and rendering; Float, String, Char, Bool, DateTime and Uuid
+receive their upstream trait surfaces. String ordering now uses the upstream
+Compare implementation, so the prior rejection test now expects `false`.
+The hosted-package native E2E reproduced a missing trait dependency before
+implementation and then passed. Its current pipeline-format extension also
+reproduced a renderer failure before its fix. The full-host and regression
+reruns after that fix are pending.
+
+Package imports fetch `trait` and `impl` kinds by name/hash alongside the
+existing kinds, preserve source names with location/hash, follow trait and
+method dependencies, and render bounds on functions, types, traits and methods.
+The E2E uses a local HTTP package service and executes a bounded imported
+function and pipeline against an imported implementation. This does not
+establish support by a deployed upstream service: the pinned server source
+under `later/packages` exposes the earlier type/value/function routes.
+The importer loads implementations reached by qualified implementation-method
+references and dependencies; it does not enumerate unrelated active impls
+from a remote server. Broader implementation discovery remains M6 work.
+
+Stored `EFnName.boundImpls`, `EPipeFnCall.boundImpls` and trait implementation
+choice/history metadata are not preserved as persistence semantics by the
+source renderer. Compilation selects against the imported static catalog.
+This is a deferred persistence-semantic gap, not a claim to preserve upstream
+saved-call pinning. Upstream trait-corpus adoption and reusable-catalog boundary
+coverage remain M7 work. The cache-context fixture passed **2/2** and confirms
+that a caller-local specific implementation does not reuse the blanket result.

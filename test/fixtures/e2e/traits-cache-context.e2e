@@ -1,0 +1,11 @@
+trait CachedTraitShow<'a> =
+  let show (value: 'a) : String
+impl<'a> CachedTraitShow for ('a) =
+  let show (value: 'a) : String = "blanket"
+let cachedTraitShow<'a: CachedTraitShow> (value: 'a) : String = CachedTraitShow.show value
+cachedTraitShow 42L = "blanket"
+(
+impl CachedTraitShow for Int64 =
+  let show (value: Int64) : String = "specific"
+cachedTraitShow 42L
+) = "specific"

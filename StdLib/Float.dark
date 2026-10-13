@@ -488,3 +488,38 @@ let power (base: Float) (exponent: Float) : Float =
                 | None ->
                     let magnitude = Stdlib.Float.__exp (exponent * Stdlib.Float.__log absBase) in
                     if base < 0.0 && odd then 0.0 - magnitude else magnitude
+
+// Trait implementations reuse the compiler's existing native operations.
+
+impl Stdlib.Add for Float =
+  let add = Stdlib.Float.add
+
+impl Stdlib.Subtract for Float =
+  let subtract = Stdlib.Float.subtract
+
+impl Stdlib.Multiply for Float =
+  let multiply = Stdlib.Float.multiply
+
+impl Stdlib.Divide for Float =
+  let divide = Stdlib.Float.divide
+
+impl Stdlib.Power for Float =
+  let power = Stdlib.Float.power
+
+impl Stdlib.Negate for Float =
+  let negate = Stdlib.Float.negate
+
+impl Stdlib.ToString for Float =
+  let toString = Stdlib.Float.toString
+
+impl Stdlib.Compare for Float =
+  let lessThan = Stdlib.Float.lessThan
+  let lessThanOrEqualTo = Stdlib.Float.lessThanOrEqualTo
+  let greaterThan = Stdlib.Float.greaterThan
+  let greaterThanOrEqualTo = Stdlib.Float.greaterThanOrEqualTo
+
+impl Stdlib.Zero for Float =
+  let zero () : Float = 0.0
+
+impl Stdlib.One for Float =
+  let one () : Float = 1.0

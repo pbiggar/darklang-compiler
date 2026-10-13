@@ -28,6 +28,13 @@ Posix, Sys and DateTime modules. Syscall and runtime Builtins are called directl
 there are no public forwarding packages for them. DateTime's clock block is
 shared while each engine retains its own DateTime representation implementation.
 
+Trait declarations and generic utilities in `StdLib/traits.dark` are unchanged
+from interpreter `a9d93efc853486244630dad693fe79f6f4882cf6`. Trait implementations
+live beside each type's existing functions, as upstream does. Their methods
+alias native compiler operations rather than duplicate the interpreter's F#
+builtin adapters. See [trait compatibility](../compatibility/language/traits.md)
+for static selection and hosted-package limitations.
+
 A `__` filename marks compiler support or a private implementation fragment.
 It does not rename the declared module or enforce language visibility: that
 is controlled by declaration names and the frontend's internal-mode checks.

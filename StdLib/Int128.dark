@@ -143,3 +143,60 @@ let shiftRight (value: Int128) (count: Int128) : Int128 =
     if amount == 0UL then value
     else if amount < 64UL then Stdlib.Int128.__fromWords (Stdlib.UInt64.bitwiseOr (Stdlib.UInt64.shiftRight low amount) (Stdlib.UInt64.shiftLeft high (64UL - amount))) (Stdlib.UInt64.bitwiseOr (Stdlib.UInt64.shiftRight high amount) (Stdlib.UInt64.shiftLeft fill (64UL - amount)))
     else Stdlib.Int128.__fromWords (Stdlib.UInt64.bitwiseOr (Stdlib.UInt64.shiftRight high (amount - 64UL)) (Stdlib.UInt64.shiftLeft fill (128UL - amount))) fill
+
+// Trait implementations reuse the compiler's existing native operations.
+
+impl Stdlib.Add for Int128 =
+  let add = Stdlib.Int128.add
+
+impl Stdlib.Subtract for Int128 =
+  let subtract = Stdlib.Int128.subtract
+
+impl Stdlib.Multiply for Int128 =
+  let multiply = Stdlib.Int128.multiply
+
+impl Stdlib.Divide for Int128 =
+  let divide = Stdlib.Int128.divide
+
+impl Stdlib.Modulo for Int128 =
+  let modulo = Stdlib.Int128.mod
+
+impl Stdlib.Power for Int128 =
+  let power (base: Int128) (exponent: Int128) : Int128 =
+    Stdlib.Int128.__fromInt (Stdlib.Int.power (Stdlib.Int.fromInt128 base) (Stdlib.Int.fromInt128 exponent))
+
+impl Stdlib.Negate for Int128 =
+  let negate = Stdlib.Int128.negate
+
+impl Stdlib.BitwiseAnd for Int128 =
+  let bitwiseAnd = Stdlib.Int128.bitwiseAnd
+
+impl Stdlib.BitwiseOr for Int128 =
+  let bitwiseOr = Stdlib.Int128.bitwiseOr
+
+impl Stdlib.BitwiseXor for Int128 =
+  let bitwiseXor = Stdlib.Int128.bitwiseXor
+
+impl Stdlib.BitwiseNot for Int128 =
+  let bitwiseNot = Stdlib.Int128.bitwiseNot
+
+impl Stdlib.ShiftLeft for Int128 =
+  let shiftLeft = Stdlib.Int128.shiftLeft
+
+impl Stdlib.ShiftRight for Int128 =
+  let shiftRight = Stdlib.Int128.shiftRight
+
+impl Stdlib.ToString for Int128 =
+  let toString = Stdlib.Int128.toString
+
+impl Stdlib.Compare for Int128 =
+  let lessThan = Stdlib.Int128.lessThan
+  let lessThanOrEqualTo = Stdlib.Int128.lessThanOrEqualTo
+  let greaterThan = Stdlib.Int128.greaterThan
+  let greaterThanOrEqualTo = Stdlib.Int128.greaterThanOrEqualTo
+
+impl Stdlib.Zero for Int128 =
+  let zero () : Int128 = 0Q
+
+impl Stdlib.One for Int128 =
+  let one () : Int128 = 1Q

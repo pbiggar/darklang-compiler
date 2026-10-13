@@ -3,7 +3,13 @@
 
 type config = { server : string; cachePath : string }
 type resolvedSource = { name : string; source : string }
-type itemKind = PackageType | PackageValue | PackageFunction
+
+type itemKind =
+  | PackageType
+  | PackageValue
+  | PackageFunction
+  | PackageTrait
+  | PackageImpl
 
 type locatedEntity = {
   kind : itemKind;
