@@ -13,8 +13,8 @@ def main():
         root = pathlib.Path(directory)
         source = root / "uid.dark"
         binary = root / "uid"
-        source.write_text('''let isRoot () : Bool = (Builtin.posixGetuid ()) == 0
-let report = $"{Stdlib.Int.toString (Builtin.posixGetuid ())}|{Stdlib.Bool.toString (isRoot ())}|{Stdlib.Bool.toString (Stdlib.Cli.Sys.isRoot ())}" in
+        source.write_text('''let isRoot () : Bool = (Builtin.syscallGetuid ()) == 0
+let report = $"{Stdlib.Int.toString (Builtin.syscallGetuid ())}|{Stdlib.Bool.toString (isRoot ())}|{Stdlib.Bool.toString (Stdlib.Cli.Sys.isRoot ())}" in
 let _ = Builtin.print report in
 0L
 ''', encoding="utf-8")

@@ -2,7 +2,6 @@
    ProcessLifecycle.ml - Generate process lifecycle and argument-vector runtime helpers.
 *)
 open ARM64CodeGenTypes
-open HeapAllocation
 open LeakAccounting
 open ARM64Operands
 
@@ -66,7 +65,7 @@ let generateHeapInit (target : ARM64.targetConfig) =
       Symbolic.SVC syscalls.ARM64.svcImmediate;
       Symbolic.MOV_reg (Symbolic.X27, Symbolic.X0);
       Symbolic.ADD_imm (Symbolic.X28, Symbolic.X27, freeListSize + 512);
-      Symbolic.MOVZ (Symbolic.X9, 8192, 0);
+      Symbolic.MOVZ (Symbolic.X9, 8192 + 4096, 0);
       Symbolic.ADD_reg (Symbolic.X28, Symbolic.X28, Symbolic.X9);
     ]
 
@@ -152,600 +151,330 @@ let generateCliArgvHelper (_ctx : ARM64CodeGenTypes.codeGenContext)
    communicate call copies only its newly-read suffix into immutable
    managed strings; terminate copies the complete buffers.
 *)
-let generateLinuxCliSpawnProcessHelper () =
-  let syscall number =
-    [ Symbolic.MOVZ (Symbolic.X8, number, 0); Symbolic.SVC 0 ]
-  in
-  let zero reg = Symbolic.MOVZ (reg, 0, 0) in
-  let pairFd slot shift =
-    [
-      Symbolic.LDR (Symbolic.X0, Symbolic.SP, slot);
-      Symbolic.LSR_imm (Symbolic.X0, Symbolic.X0, shift);
-      Symbolic.AND_imm (Symbolic.X0, Symbolic.X0, 0xffffffffL);
-    ]
-  in
-  let closeFd slot shift = pairFd slot shift @ syscall 57 in
-  let setNonblocking slot =
-    pairFd slot 0
-    @ [
-        Symbolic.MOVZ (Symbolic.X1, 4, 0); Symbolic.MOVZ (Symbolic.X2, 2048, 0);
+(* One private launch unit. Only native instructions run in the forked child;
+   argv/env policy, capture/draining, and deadlines belong to shared Dark. *)
+let generateChildLaunchHelper target =
+  let module S = Symbolic in
+  let mac = ARM64.targetOS target = Platform.MacOS in
+  let abi = ARM64.targetSyscalls target in
+  let serial = ref 0 in
+  let trap linux darwin =
+    incr serial;
+    let doneLabel = Printf.sprintf "__child_trap_%d" !serial in
+    loadImmediate abi.ARM64.syscallRegister
+      (Int64.of_int (if mac then darwin else linux))
+    @ [ S.SVC abi.ARM64.svcImmediate ]
+    @
+    if not mac then []
+    else
+      [
+        S.B_cond_label (S.LO, doneLabel); S.NEG (S.X0, S.X0); S.Label doneLabel;
       ]
-    @ syscall 25
   in
-  [
-    Symbolic.Label "__dark_cli_spawn_process";
-    Symbolic.STP_pre (Symbolic.X29, Symbolic.X30, Symbolic.SP, -16);
-    Symbolic.MOV_reg (Symbolic.X29, Symbolic.SP);
-    Symbolic.STP_pre (Symbolic.X19, Symbolic.X20, Symbolic.SP, -16);
-    Symbolic.STP_pre (Symbolic.X21, Symbolic.X22, Symbolic.SP, -16);
-    Symbolic.SUB_imm (Symbolic.SP, Symbolic.SP, 80);
-    Symbolic.CBNZ (Symbolic.X25, "__dark_spawn_table_ready");
-    Symbolic.MOV_reg (Symbolic.X25, Symbolic.X28);
-    Symbolic.MOVZ (Symbolic.X9, 4096, 0);
-    Symbolic.ADD_reg (Symbolic.X28, Symbolic.X28, Symbolic.X9);
-    Symbolic.Label "__dark_spawn_table_ready";
-    Symbolic.MOV_reg (Symbolic.X19, Symbolic.X28);
-    Symbolic.LDR (Symbolic.X10, Symbolic.X0, 8);
-    Symbolic.ADD_imm (Symbolic.X11, Symbolic.X0, 16);
-    zero Symbolic.X12;
-    Symbolic.Label "__dark_spawn_command_copy";
-    Symbolic.CMP_reg (Symbolic.X12, Symbolic.X10);
-    Symbolic.B_cond_label (Symbolic.GE, "__dark_spawn_command_copied");
-    Symbolic.LDRB (Symbolic.X13, Symbolic.X11, Symbolic.X12);
-    Symbolic.ADD_reg (Symbolic.X14, Symbolic.X19, Symbolic.X12);
-    Symbolic.STRB_reg (Symbolic.X13, Symbolic.X14);
-    Symbolic.ADD_imm (Symbolic.X12, Symbolic.X12, 1);
-    Symbolic.B_label "__dark_spawn_command_copy";
-    Symbolic.Label "__dark_spawn_command_copied";
-    Symbolic.ADD_reg (Symbolic.X14, Symbolic.X19, Symbolic.X10);
-    zero Symbolic.X13;
-    Symbolic.STRB_reg (Symbolic.X13, Symbolic.X14);
-    Symbolic.ADD_imm (Symbolic.X10, Symbolic.X10, 8);
-    Symbolic.LSR_imm (Symbolic.X10, Symbolic.X10, 3);
-    Symbolic.LSL_imm (Symbolic.X10, Symbolic.X10, 3);
-    Symbolic.ADD_reg (Symbolic.X28, Symbolic.X28, Symbolic.X10);
-    Symbolic.MOV_reg (Symbolic.X14, Symbolic.X29);
-    Symbolic.Label "__dark_spawn_find_root";
-    Symbolic.LDR (Symbolic.X13, Symbolic.X14, 0);
-    Symbolic.CBZ (Symbolic.X13, "__dark_spawn_root_found");
-    Symbolic.MOV_reg (Symbolic.X14, Symbolic.X13);
-    Symbolic.B_label "__dark_spawn_find_root";
-    Symbolic.Label "__dark_spawn_root_found";
-    Symbolic.ADD_imm (Symbolic.X14, Symbolic.X14, 24);
-    Symbolic.Label "__dark_spawn_find_envp";
-    Symbolic.LDR (Symbolic.X13, Symbolic.X14, 0);
-    Symbolic.ADD_imm (Symbolic.X14, Symbolic.X14, 8);
-    Symbolic.CBNZ (Symbolic.X13, "__dark_spawn_find_envp");
-    Symbolic.MOV_reg (Symbolic.X22, Symbolic.X14);
-    Symbolic.ADD_imm (Symbolic.X0, Symbolic.SP, 0);
-    zero Symbolic.X1;
-  ]
-  @ syscall 59
-  @ [
-      Symbolic.CMP_imm (Symbolic.X0, 0);
-      Symbolic.B_cond_label (Symbolic.LT, "__dark_spawn_failed");
-      Symbolic.ADD_imm (Symbolic.X0, Symbolic.SP, 8);
-      zero Symbolic.X1;
+  let zero r = S.MOVZ (r, 0, 0) in
+  (* Linux rt_sigaction and Darwin __user64_sigaction have distinct layouts,
+     but an ignore/default handler with zero flags/mask needs only the first
+     word. Reserve and clear the larger (32-byte) kernel action record. *)
+  let sigpipe handler errorLabel =
+    [ zero S.X9 ]
+    @ List.map (fun offset -> S.STR (S.X9, S.SP, offset)) [ 96; 104; 112; 120 ]
+    @ loadImmediate S.X9 handler
+    @ [ S.STR (S.X9, S.SP, 96) ]
+    @ loadImmediate S.X0 13L
+    @ [ S.ADD_imm (S.X1, S.SP, 96); zero S.X2 ]
+    @ loadImmediate S.X3 8L @ trap 134 46
+    @ [ S.CMP_imm (S.X0, 0); S.B_cond_label (S.LT, errorLabel) ]
+  in
+  let fd offset high =
+    [ S.LDR (S.X0, S.SP, offset) ]
+    @
+    if high then [ S.LSR_imm (S.X0, S.X0, 32) ]
+    else loadImmediate S.X9 4294967295L @ [ S.AND_reg (S.X0, S.X0, S.X9) ]
+  in
+  let close offset high = fd offset high @ trap 57 6 in
+  let error =
+    [ S.CMP_imm (S.X0, 0); S.B_cond_label (S.LT, "__child_launch_error") ]
+  in
+  let lift offset high =
+    let doneLabel = Printf.sprintf "__child_lift_%d_%b" offset high in
+    fd offset high
+    @ [
+        S.CMP_imm (S.X0, 3);
+        S.B_cond_label (S.GE, doneLabel);
+        S.STR (S.X0, S.SP, 88);
+      ]
+    @ loadImmediate S.X1 (if mac then 67L else 1030L)
+    @ loadImmediate S.X2 3L @ trap 25 92 @ error
+    @ [ S.STR (S.X0, S.SP, 80); S.LDR (S.X0, S.SP, 88) ]
+    @ trap 57 6
+    @ [ S.LDR (S.X10, S.SP, 80); S.LDR (S.X11, S.SP, offset) ]
+    @ (if high then
+         loadImmediate S.X9 4294967295L
+         @ [ S.AND_reg (S.X11, S.X11, S.X9); S.LSL_imm (S.X10, S.X10, 32) ]
+       else [ S.LSR_imm (S.X11, S.X11, 32); S.LSL_imm (S.X11, S.X11, 32) ])
+    @ [
+        S.ORR_reg (S.X11, S.X11, S.X10);
+        S.STR (S.X11, S.SP, offset);
+        S.Label doneLabel;
+      ]
+  in
+  let pipe offset =
+    (if not mac then
+       [ S.ADD_imm (S.X0, S.SP, offset) ]
+       @ loadImmediate S.X1 524288L @ trap 59 42
+     else trap 59 42)
+    @ error
+    @ (if not mac then []
+       else
+         [
+           S.LSL_imm (S.X1, S.X1, 32);
+           S.ORR_reg (S.X9, S.X0, S.X1);
+           S.STR (S.X9, S.SP, offset);
+         ]
+         @ fd offset false @ loadImmediate S.X1 2L @ loadImmediate S.X2 1L
+         @ trap 25 92 @ error @ fd offset true @ loadImmediate S.X1 2L
+         @ loadImmediate S.X2 1L @ trap 25 92 @ error)
+    @ lift offset false @ lift offset true
+  in
+  let nonblocking offset high =
+    fd offset high @ loadImmediate S.X1 3L
+    @ [ zero S.X2 ]
+    @ trap 25 92
+    @ [
+        S.CMP_imm (S.X0, 0);
+        S.B_cond_label (S.LT, "__child_launch_kill_error");
+        S.MOV_reg (S.X2, S.X0);
+      ]
+    @ loadImmediate S.X9 (if mac then 4L else 2048L)
+    @ [ S.ORR_reg (S.X2, S.X2, S.X9) ]
+    @ fd offset high @ loadImmediate S.X1 4L @ trap 25 92
+    @ [
+        S.CMP_imm (S.X0, 0); S.B_cond_label (S.LT, "__child_launch_kill_error");
+      ]
+  in
+  let duplicate offset high target =
+    fd offset high @ loadImmediate S.X1 target
+    @ [ zero S.X2 ]
+    @ trap 24 90
+    @ [
+        S.CMP_imm (S.X0, 0); S.B_cond_label (S.LT, "__child_launch_child_error");
+      ]
+  in
+  let preserved =
+    [
+      (S.X0, S.X1);
+      (S.X2, S.X3);
+      (S.X4, S.X5);
+      (S.X6, S.X7);
+      (S.X8, S.X9);
+      (S.X10, S.X11);
+      (S.X12, S.X13);
+      (S.X14, S.X15);
+      (S.X16, S.X17);
+      (S.X29, S.X30);
     ]
-  @ syscall 59
+  in
+  [ S.Label "__dark_child_launch" ]
+  @ List.map (fun (a, b) -> S.STP_pre (a, b, S.SP, -16)) preserved
   @ [
-      Symbolic.CMP_imm (Symbolic.X0, 0);
-      Symbolic.B_cond_label (Symbolic.LT, "__dark_spawn_failed_close_stdin");
-      Symbolic.ADD_imm (Symbolic.X0, Symbolic.SP, 16);
-      zero Symbolic.X1;
+      S.SUB_imm (S.SP, S.SP, 128);
+      S.STR (S.X0, S.SP, 32);
+      S.STR (S.X1, S.SP, 40);
+      S.STR (S.X2, S.SP, 48);
+      S.STR (S.X3, S.SP, 56);
     ]
-  @ syscall 59
+  @ loadImmediate S.X9 (-1L)
+  @ List.map (fun offset -> S.STR (S.X9, S.SP, offset)) [ 0; 8; 16; 24 ]
+  @ sigpipe 1L "__child_launch_error"
+  @ [ S.LDR (S.X2, S.SP, 48); S.CBNZ (S.X2, "__child_launch_pipes_ready") ]
+  @ pipe 0 @ pipe 8 @ pipe 16
+  @ [ S.Label "__child_launch_pipes_ready" ]
+  @ pipe 24
+  @ (if mac then trap 220 2
+     else
+       [ S.MOVZ (S.X0, 17, 0); zero S.X1; zero S.X2; zero S.X3; zero S.X4 ]
+       @ trap 220 2)
+  @ error
+  @ (if mac then [ S.CBNZ (S.X1, "__child_launch_child") ]
+     else [ S.CBZ (S.X0, "__child_launch_child") ])
+  @ [ S.STR (S.X0, S.SP, 64) ]
+  @ close 0 false @ close 8 true @ close 16 true @ close 24 true
+  @ [ S.Label "__child_launch_handshake" ]
+  @ fd 24 false
+  @ [ S.ADD_imm (S.X1, S.SP, 72) ]
+  @ loadImmediate S.X2 8L @ trap 63 3 @ loadImmediate S.X9 (-4L)
   @ [
-      Symbolic.CMP_imm (Symbolic.X0, 0);
-      Symbolic.B_cond_label (Symbolic.LT, "__dark_spawn_failed_close_output");
-      Symbolic.MOVZ (Symbolic.X0, 17, 0);
-      zero Symbolic.X1;
-      zero Symbolic.X2;
-      zero Symbolic.X3;
-      zero Symbolic.X4;
+      S.CMP_reg (S.X0, S.X9);
+      S.B_cond_label (S.EQ, "__child_launch_handshake");
+      S.CMP_imm (S.X0, 0);
+      S.B_cond_label (S.LT, "__child_launch_kill_error");
+      S.B_cond_label (S.GT, "__child_launch_exec_error");
     ]
-  @ syscall 220
+  @ close 24 false
+  @ [ S.LDR (S.X9, S.SP, 48); S.CBNZ (S.X9, "__child_launch_inherited") ]
+  @ nonblocking 0 true @ nonblocking 8 false @ nonblocking 16 false
+  @ [ S.LDR (S.X12, S.SP, 56) ]
+  @ fd 0 true
+  @ [ S.STR (S.X0, S.X12, 0) ]
+  @ fd 8 false
+  @ [ S.STR (S.X0, S.X12, 8) ]
+  @ fd 16 false
   @ [
-      Symbolic.CBZ (Symbolic.X0, "__dark_spawn_child");
-      Symbolic.CMP_imm (Symbolic.X0, 0);
-      Symbolic.B_cond_label (Symbolic.LT, "__dark_spawn_failed_close_all");
-      Symbolic.MOV_reg (Symbolic.X21, Symbolic.X0);
+      S.STR (S.X0, S.X12, 16);
+      S.Label "__child_launch_inherited";
+      S.LDR (S.X0, S.SP, 64);
+      S.B_label "__child_launch_return";
+      S.Label "__child_launch_exec_error";
+      S.LDR (S.X0, S.SP, 72);
+      S.B_label "__child_launch_reap_error";
+      S.Label "__child_launch_kill_error";
+      S.STR (S.X0, S.SP, 72);
+      S.LDR (S.X0, S.SP, 64);
     ]
-  @ closeFd 0 0 @ closeFd 8 32 @ closeFd 16 32 @ setNonblocking 8
-  @ setNonblocking 16
+  @ loadImmediate S.X1 9L @ trap 129 37
   @ [
-      Symbolic.MOVZ (Symbolic.X0, 1, 0);
-      Symbolic.Label "__dark_spawn_find_slot";
-      Symbolic.CMP_imm (Symbolic.X0, 63);
-      Symbolic.B_cond_label (Symbolic.GT, "__dark_spawn_no_slot");
-      Symbolic.LSL_imm (Symbolic.X10, Symbolic.X0, 6);
-      Symbolic.ADD_reg (Symbolic.X10, Symbolic.X25, Symbolic.X10);
-      Symbolic.LDR (Symbolic.X9, Symbolic.X10, 0);
-      Symbolic.CBZ (Symbolic.X9, "__dark_spawn_slot_found");
-      Symbolic.ADD_imm (Symbolic.X0, Symbolic.X0, 1);
-      Symbolic.B_label "__dark_spawn_find_slot";
-      Symbolic.Label "__dark_spawn_slot_found";
-      Symbolic.MOVZ (Symbolic.X9, 1, 0);
-      Symbolic.STR (Symbolic.X9, Symbolic.X10, 0);
-      Symbolic.STR (Symbolic.X21, Symbolic.X10, 8);
-      Symbolic.LDR (Symbolic.X9, Symbolic.SP, 0);
-      Symbolic.LSR_imm (Symbolic.X9, Symbolic.X9, 32);
-      Symbolic.STR (Symbolic.X9, Symbolic.X10, 16);
-      Symbolic.LDR (Symbolic.X9, Symbolic.SP, 8);
-      Symbolic.AND_imm (Symbolic.X9, Symbolic.X9, 0xffffffffL);
-      Symbolic.STR (Symbolic.X9, Symbolic.X10, 24);
-      Symbolic.LDR (Symbolic.X9, Symbolic.SP, 16);
-      Symbolic.AND_imm (Symbolic.X9, Symbolic.X9, 0xffffffffL);
-      Symbolic.STR (Symbolic.X9, Symbolic.X10, 32);
-      Symbolic.STR (Symbolic.X28, Symbolic.X10, 48);
-      zero Symbolic.X9;
-      Symbolic.STR (Symbolic.X9, Symbolic.X28, 0);
+      S.LDR (S.X0, S.SP, 72);
+      S.Label "__child_launch_reap_error";
+      S.STR (S.X0, S.SP, 72);
+      S.Label "__child_launch_reap_retry";
+      S.LDR (S.X0, S.SP, 64);
+      S.ADD_imm (S.X1, S.SP, 80);
+      zero S.X2;
+      zero S.X3;
     ]
-  @ loadImmediate Symbolic.X9 1048584L
+  @ trap 260 7 @ loadImmediate S.X9 (-4L)
   @ [
-      Symbolic.ADD_reg (Symbolic.X28, Symbolic.X28, Symbolic.X9);
-      Symbolic.STR (Symbolic.X28, Symbolic.X10, 56);
-      zero Symbolic.X9;
-      Symbolic.STR (Symbolic.X9, Symbolic.X28, 0);
+      S.CMP_reg (S.X0, S.X9);
+      S.B_cond_label (S.EQ, "__child_launch_reap_retry");
+      S.LDR (S.X0, S.SP, 72);
+      S.Label "__child_launch_error";
+      S.STR (S.X0, S.SP, 72);
     ]
-  @ loadImmediate Symbolic.X9 1048584L
+  @ List.concat_map
+      (fun offset -> close offset false @ close offset true)
+      [ 0; 8; 16; 24 ]
   @ [
-      Symbolic.ADD_reg (Symbolic.X28, Symbolic.X28, Symbolic.X9);
-      Symbolic.B_label "__dark_spawn_return";
-      Symbolic.Label "__dark_spawn_no_slot";
-      Symbolic.MOV_reg (Symbolic.X0, Symbolic.X21);
-      Symbolic.MOVZ (Symbolic.X1, 9, 0);
+      S.LDR (S.X0, S.SP, 72);
+      S.Label "__child_launch_return";
+      S.STR (S.X0, S.SP, 272);
+      S.ADD_imm (S.SP, S.SP, 128);
     ]
-  @ syscall 129
-  @ [
-      Symbolic.MOVZ (Symbolic.X0, 0, 0);
-      Symbolic.MVN (Symbolic.X0, Symbolic.X0);
-      Symbolic.B_label "__dark_spawn_return";
-      Symbolic.Label "__dark_spawn_failed_close_all";
-    ]
-  @ closeFd 16 0 @ closeFd 16 32
-  @ [ Symbolic.Label "__dark_spawn_failed_close_output" ]
-  @ closeFd 8 0 @ closeFd 8 32
-  @ [ Symbolic.Label "__dark_spawn_failed_close_stdin" ]
-  @ closeFd 0 0 @ closeFd 0 32
-  @ [
-      Symbolic.Label "__dark_spawn_failed";
-      Symbolic.MOVZ (Symbolic.X0, 0, 0);
-      Symbolic.MVN (Symbolic.X0, Symbolic.X0);
-      Symbolic.Label "__dark_spawn_return";
-      Symbolic.ADD_imm (Symbolic.SP, Symbolic.SP, 80);
-      Symbolic.LDP_post (Symbolic.X21, Symbolic.X22, Symbolic.SP, 16);
-      Symbolic.LDP_post (Symbolic.X19, Symbolic.X20, Symbolic.SP, 16);
-      Symbolic.LDP_post (Symbolic.X29, Symbolic.X30, Symbolic.SP, 16);
-      Symbolic.RET;
-      Symbolic.Label "__dark_spawn_child";
-    ]
-  @ pairFd 0 0
-  @ [ zero Symbolic.X1; zero Symbolic.X2 ]
-  @ syscall 24 @ pairFd 8 32
-  @ [ Symbolic.MOVZ (Symbolic.X1, 1, 0); zero Symbolic.X2 ]
-  @ syscall 24 @ pairFd 16 32
-  @ [ Symbolic.MOVZ (Symbolic.X1, 2, 0); zero Symbolic.X2 ]
-  @ syscall 24 @ closeFd 0 0 @ closeFd 0 32 @ closeFd 8 0 @ closeFd 8 32
-  @ closeFd 16 0 @ closeFd 16 32
-  @ loadStringLiteralPointer Symbolic.X20 "/bin/bash"
-  @ loadStringLiteralPointer Symbolic.X9 "-c"
-  @ [
-      Symbolic.ADD_imm (Symbolic.X20, Symbolic.X20, 16);
-      Symbolic.ADD_imm (Symbolic.X9, Symbolic.X9, 16);
-      Symbolic.STR (Symbolic.X20, Symbolic.SP, 32);
-      Symbolic.STR (Symbolic.X9, Symbolic.SP, 40);
-      Symbolic.STR (Symbolic.X19, Symbolic.SP, 48);
-      zero Symbolic.X9;
-      Symbolic.STR (Symbolic.X9, Symbolic.SP, 56);
-      Symbolic.MOV_reg (Symbolic.X0, Symbolic.X20);
-      Symbolic.ADD_imm (Symbolic.X1, Symbolic.SP, 32);
-      Symbolic.MOV_reg (Symbolic.X2, Symbolic.X22);
-    ]
-  @ syscall 221
-  @ [ Symbolic.MOVZ (Symbolic.X0, 127, 0) ]
-  @ syscall 93
+  @ List.map (fun (a, b) -> S.LDP_post (a, b, S.SP, 16)) (List.rev preserved)
+  @ [ S.RET; S.Label "__child_launch_child" ]
+  @ sigpipe 0L "__child_launch_child_error"
+  @ [ S.LDR (S.X9, S.SP, 48); S.CBNZ (S.X9, "__child_launch_exec") ]
+  @ duplicate 0 false 0L @ duplicate 8 true 1L @ duplicate 16 true 2L
+  @ [ S.Label "__child_launch_exec" ]
+  @ close 0 false @ close 0 true @ close 8 false @ close 8 true @ close 16 false
+  @ close 16 true @ close 24 false
+  @ [ S.LDR (S.X1, S.SP, 32); S.LDR (S.X0, S.X1, 0); S.LDR (S.X2, S.SP, 40) ]
+  @ trap 221 59
+  @ [ S.Label "__child_launch_child_error"; S.STR (S.X0, S.SP, 72) ]
+  @ fd 24 true
+  @ [ S.ADD_imm (S.X1, S.SP, 72) ]
+  @ loadImmediate S.X2 8L @ trap 64 4 @ loadImmediate S.X0 127L @ trap 93 1
 
-(*
-   Communicate with and terminate children tracked by the X25 process table.
-   Write input plus the interpreter's WriteLine newline.
-   wait4 writes a 32-bit status. Clear the full stack word so the
-   64-bit decode below cannot observe stale upper bytes.
-   A live child may await more input. Return after its response has
-   been quiet for one poll, while still allowing chunked output.
-   Copy the newly-read suffix (or the full accumulation for the
-   terminate caller) into immutable managed strings.
-   wait4 writes only the low 32 bits of the status slot.
-   overwritten below; keep X0 defined
-   Call communicate with empty input to drain and box the outcome.
-   Recover handle from slot address rather than the allocation counter.
-*)
-let generateLinuxCliProcessLifecycleHelpers
-    (ctx : ARM64CodeGenTypes.codeGenContext) =
-  let syscall number =
-    [ Symbolic.MOVZ (Symbolic.X8, number, 0); Symbolic.SVC 0 ]
+let generateChildCleanupHelper (ctx : codeGenContext) =
+  let module S = Symbolic in
+  let abi = ARM64.targetSyscalls ctx.target in
+  let mac = ARM64.targetOS ctx.target = Platform.MacOS in
+  let serial = ref 0 in
+  let trap linux darwin =
+    incr serial;
+    let doneLabel = Printf.sprintf "__child_cleanup_trap_%d" !serial in
+    loadImmediate abi.ARM64.syscallRegister
+      (Int64.of_int (if mac then darwin else linux))
+    @ [ S.SVC abi.ARM64.svcImmediate ]
+    @
+    if not mac then []
+    else
+      [
+        S.B_cond_label (S.LO, doneLabel); S.NEG (S.X0, S.X0); S.Label doneLabel;
+      ]
   in
-  let zero reg = Symbolic.MOVZ (reg, 0, 0) in
-  let finalizeString buffer lengthReg =
+  let close offset =
+    let doneLabel = Printf.sprintf "__child_cleanup_closed_%d" offset in
     [
-      Symbolic.STR (lengthReg, buffer, 8);
-      Symbolic.MOVZ (Symbolic.X10, 1, 0);
-      Symbolic.STR (Symbolic.X10, buffer, 0);
+      S.LDR (S.X0, S.X20, offset);
+      S.CMP_imm (S.X0, 0);
+      S.B_cond_label (S.LT, doneLabel);
+    ]
+    @ loadImmediate S.X9 (-1L)
+    @ [ S.STR (S.X9, S.X20, offset) ]
+    @ trap 57 6 @ [ S.Label doneLabel ]
+  in
+  let free offset =
+    let doneLabel = Printf.sprintf "__child_cleanup_freed_%d" offset in
+    [
+      S.LDR (S.X0, S.X20, offset);
+      S.CBZ (S.X0, doneLabel);
+      S.MOVZ (S.X9, 0, 0);
+      S.STR (S.X9, S.X20, offset);
+      S.SUB_imm (S.X0, S.X0, 8);
+      S.LDR (S.X1, S.X0, 0);
+    ]
+    @ trap 215 73 @ generateLeakCounterDec ctx @ [ S.Label doneLabel ]
+  in
+  let preserve =
+    [
+      (S.X0, S.X1);
+      (S.X2, S.X3);
+      (S.X4, S.X5);
+      (S.X6, S.X7);
+      (S.X8, S.X9);
+      (S.X10, S.X11);
+      (S.X12, S.X13);
+      (S.X14, S.X15);
+      (S.X16, S.X17);
+      (S.X19, S.X20);
+      (S.X29, S.X30);
     ]
   in
-  let epilogue =
-    [
-      Symbolic.ADD_imm (Symbolic.SP, Symbolic.SP, 64);
-      Symbolic.LDP_post (Symbolic.X23, Symbolic.X24, Symbolic.SP, 16);
-      Symbolic.LDP_post (Symbolic.X21, Symbolic.X22, Symbolic.SP, 16);
-      Symbolic.LDP_post (Symbolic.X19, Symbolic.X20, Symbolic.SP, 16);
-      Symbolic.LDP_post (Symbolic.X29, Symbolic.X30, Symbolic.SP, 16);
-      Symbolic.RET;
+  [ S.Label "__dark_cli_cleanup_processes" ]
+  @ List.map (fun (a, b) -> S.STP_pre (a, b, S.SP, -16)) preserve
+  @ [
+      S.SUB_imm (S.SP, S.SP, 16);
+      S.MOVZ (S.X19, 1, 0);
+      S.Label "__child_cleanup_next";
+      S.CMP_imm (S.X19, 63);
+      S.B_cond_label (S.GT, "__child_cleanup_done");
     ]
-  in
-  let invalidOutcome label =
-    loadStringLiteralPointer Symbolic.X8 ""
-    @ loadStringLiteralPointer Symbolic.X9 "Process not found"
-    @ [
-        Symbolic.MOV_reg (Symbolic.X0, Symbolic.X28);
-        Symbolic.ADD_imm (Symbolic.X28, Symbolic.X28, 32);
-        zero Symbolic.X10;
-        Symbolic.MVN (Symbolic.X10, Symbolic.X10);
-        Symbolic.STR (Symbolic.X10, Symbolic.X0, 0);
-        Symbolic.STR (Symbolic.X8, Symbolic.X0, 8);
-        Symbolic.STR (Symbolic.X9, Symbolic.X0, 16);
-        Symbolic.MOVZ (Symbolic.X10, 1, 0);
-        Symbolic.STR (Symbolic.X10, Symbolic.X0, 24);
-      ]
-    @ generateLeakCounterInc ctx @ [ Symbolic.B_label label ]
-  in
-  let communicate =
-    [
-      Symbolic.Label "__dark_cli_process_io";
-      Symbolic.STP_pre (Symbolic.X29, Symbolic.X30, Symbolic.SP, -16);
-      Symbolic.MOV_reg (Symbolic.X29, Symbolic.SP);
-      Symbolic.STP_pre (Symbolic.X19, Symbolic.X20, Symbolic.SP, -16);
-      Symbolic.STP_pre (Symbolic.X21, Symbolic.X22, Symbolic.SP, -16);
-      Symbolic.STP_pre (Symbolic.X23, Symbolic.X24, Symbolic.SP, -16);
-      Symbolic.SUB_imm (Symbolic.SP, Symbolic.SP, 64);
-      Symbolic.MOV_reg (Symbolic.X19, Symbolic.X0);
-      Symbolic.MOV_reg (Symbolic.X20, Symbolic.X1);
-      Symbolic.STR (Symbolic.X2, Symbolic.SP, 24);
-      Symbolic.CMP_imm (Symbolic.X19, 1);
-      Symbolic.B_cond_label (Symbolic.LT, "__dark_process_io_invalid");
-      Symbolic.CMP_imm (Symbolic.X19, 63);
-      Symbolic.B_cond_label (Symbolic.GT, "__dark_process_io_invalid");
-      Symbolic.LSL_imm (Symbolic.X9, Symbolic.X19, 6);
-      Symbolic.ADD_reg (Symbolic.X21, Symbolic.X25, Symbolic.X9);
-      Symbolic.LDR (Symbolic.X9, Symbolic.X21, 0);
-      Symbolic.CBZ (Symbolic.X9, "__dark_process_io_invalid");
-      Symbolic.LDR (Symbolic.X22, Symbolic.X21, 48);
-      Symbolic.LDR (Symbolic.X23, Symbolic.X21, 56);
-      Symbolic.LDR (Symbolic.X9, Symbolic.X22, 0);
-      Symbolic.STR (Symbolic.X9, Symbolic.SP, 0);
-      Symbolic.LDR (Symbolic.X9, Symbolic.X23, 0);
-      Symbolic.STR (Symbolic.X9, Symbolic.SP, 8);
-      Symbolic.LDR (Symbolic.X9, Symbolic.SP, 24);
-      Symbolic.CBZ (Symbolic.X9, "__dark_process_io_suffix_ready");
-      zero Symbolic.X9;
-      Symbolic.STR (Symbolic.X9, Symbolic.SP, 0);
-      Symbolic.STR (Symbolic.X9, Symbolic.SP, 8);
-      Symbolic.Label "__dark_process_io_suffix_ready";
-      zero Symbolic.X24;
-      zero Symbolic.X9;
-      Symbolic.STR (Symbolic.X9, Symbolic.SP, 56);
-      Symbolic.LDR (Symbolic.X2, Symbolic.X20, 8);
-      Symbolic.STR (Symbolic.X2, Symbolic.SP, 16);
-      Symbolic.CBZ (Symbolic.X2, "__dark_process_io_read_stdout");
-      Symbolic.LDR (Symbolic.X0, Symbolic.X21, 16);
-      Symbolic.ADD_imm (Symbolic.X1, Symbolic.X20, 16);
+  @ loadImmediate S.X20 8960L
+  @ [
+      S.ADD_reg (S.X20, S.X27, S.X20);
+      S.LSL_imm (S.X9, S.X19, 6);
+      S.ADD_reg (S.X20, S.X20, S.X9);
+      S.LDR (S.X9, S.X20, 0);
+      S.CBZ (S.X9, "__child_cleanup_advance");
+      S.LDR (S.X9, S.X20, 40);
+      S.CMP_imm (S.X9, 0);
+      S.B_cond_label (S.GE, "__child_cleanup_pipes");
+      S.LDR (S.X0, S.X20, 8);
+      S.MOVZ (S.X1, 9, 0);
     ]
-    @ syscall 64
-    @ [
-        Symbolic.MOVZ (Symbolic.X9, 10, 0);
-        Symbolic.STRB (Symbolic.X9, Symbolic.SP, 56);
-        Symbolic.LDR (Symbolic.X0, Symbolic.X21, 16);
-        Symbolic.ADD_imm (Symbolic.X1, Symbolic.SP, 56);
-        Symbolic.MOVZ (Symbolic.X2, 1, 0);
-      ]
-    @ syscall 64
-    @ [
-        zero Symbolic.X9;
-        Symbolic.STR (Symbolic.X9, Symbolic.SP, 56);
-        Symbolic.Label "__dark_process_io_read_stdout";
-        Symbolic.LDR (Symbolic.X19, Symbolic.X22, 0);
-        Symbolic.ADD_imm (Symbolic.X1, Symbolic.X22, 8);
-        Symbolic.ADD_reg (Symbolic.X1, Symbolic.X1, Symbolic.X19);
-      ]
-    @ loadImmediate Symbolic.X2 1048576L
-    @ [
-        Symbolic.SUB_reg (Symbolic.X2, Symbolic.X2, Symbolic.X19);
-        Symbolic.CBZ (Symbolic.X2, "__dark_process_io_read_stderr");
-        Symbolic.LDR (Symbolic.X0, Symbolic.X21, 24);
-      ]
-    @ syscall 63
-    @ [
-        Symbolic.CMP_imm (Symbolic.X0, 0);
-        Symbolic.B_cond_label (Symbolic.LE, "__dark_process_io_read_stderr");
-        Symbolic.ADD_reg (Symbolic.X19, Symbolic.X19, Symbolic.X0);
-        Symbolic.STR (Symbolic.X19, Symbolic.X22, 0);
-        Symbolic.B_label "__dark_process_io_read_stdout";
-        Symbolic.Label "__dark_process_io_read_stderr";
-        Symbolic.LDR (Symbolic.X20, Symbolic.X23, 0);
-        Symbolic.ADD_imm (Symbolic.X1, Symbolic.X23, 8);
-        Symbolic.ADD_reg (Symbolic.X1, Symbolic.X1, Symbolic.X20);
-      ]
-    @ loadImmediate Symbolic.X2 1048576L
-    @ [
-        Symbolic.SUB_reg (Symbolic.X2, Symbolic.X2, Symbolic.X20);
-        Symbolic.CBZ (Symbolic.X2, "__dark_process_io_status");
-        Symbolic.LDR (Symbolic.X0, Symbolic.X21, 32);
-      ]
-    @ syscall 63
-    @ [
-        Symbolic.CMP_imm (Symbolic.X0, 0);
-        Symbolic.B_cond_label (Symbolic.LE, "__dark_process_io_status");
-        Symbolic.ADD_reg (Symbolic.X20, Symbolic.X20, Symbolic.X0);
-        Symbolic.STR (Symbolic.X20, Symbolic.X23, 0);
-        Symbolic.B_label "__dark_process_io_read_stderr";
-        Symbolic.Label "__dark_process_io_status";
-        Symbolic.LDR (Symbolic.X9, Symbolic.X21, 0);
-        Symbolic.CMP_imm (Symbolic.X9, 2);
-        Symbolic.B_cond_label (Symbolic.EQ, "__dark_process_io_stored_status");
-        Symbolic.LDR (Symbolic.X0, Symbolic.X21, 8);
-        Symbolic.ADD_imm (Symbolic.X1, Symbolic.SP, 32);
-        Symbolic.MOVZ (Symbolic.X2, 1, 0);
-        zero Symbolic.X3;
-        zero Symbolic.X9;
-        Symbolic.STR (Symbolic.X9, Symbolic.SP, 32);
-      ]
-    @ syscall 260
-    @ [
-        Symbolic.CMP_imm (Symbolic.X0, 0);
-        Symbolic.B_cond_label (Symbolic.LT, "__dark_process_io_read_stdout");
-        Symbolic.CBNZ (Symbolic.X0, "__dark_process_io_finished");
-        Symbolic.LDR (Symbolic.X9, Symbolic.SP, 16);
-        Symbolic.CBZ (Symbolic.X9, "__dark_process_io_running");
-        Symbolic.LDR (Symbolic.X19, Symbolic.X22, 0);
-        Symbolic.LDR (Symbolic.X20, Symbolic.X23, 0);
-        Symbolic.ADD_reg (Symbolic.X9, Symbolic.X19, Symbolic.X20);
-        Symbolic.LDR (Symbolic.X10, Symbolic.SP, 0);
-        Symbolic.SUB_reg (Symbolic.X9, Symbolic.X9, Symbolic.X10);
-        Symbolic.LDR (Symbolic.X10, Symbolic.SP, 8);
-        Symbolic.SUB_reg (Symbolic.X9, Symbolic.X9, Symbolic.X10);
-        Symbolic.LDR (Symbolic.X10, Symbolic.SP, 56);
-        Symbolic.CMP_reg (Symbolic.X9, Symbolic.X10);
-        Symbolic.B_cond_label (Symbolic.NE, "__dark_process_io_response_changed");
-        Symbolic.CBNZ (Symbolic.X9, "__dark_process_io_running");
-        Symbolic.B_label "__dark_process_io_poll";
-        Symbolic.Label "__dark_process_io_response_changed";
-        Symbolic.STR (Symbolic.X9, Symbolic.SP, 56);
-        zero Symbolic.X24;
-        Symbolic.Label "__dark_process_io_poll";
-        Symbolic.ADD_imm (Symbolic.X24, Symbolic.X24, 1);
-        Symbolic.CMP_imm (Symbolic.X24, 100);
-        Symbolic.B_cond_label (Symbolic.GE, "__dark_process_io_running");
-        zero Symbolic.X9;
-        Symbolic.STR (Symbolic.X9, Symbolic.SP, 40);
-      ]
-    @ loadImmediate Symbolic.X9 100000000L
-    @ [
-        Symbolic.STR (Symbolic.X9, Symbolic.SP, 48);
-        Symbolic.ADD_imm (Symbolic.X0, Symbolic.SP, 40);
-        zero Symbolic.X1;
-      ]
-    @ syscall 101
-    @ [
-        Symbolic.B_label "__dark_process_io_read_stdout";
-        Symbolic.Label "__dark_process_io_finished";
-        Symbolic.LDR (Symbolic.X10, Symbolic.SP, 32);
-        Symbolic.AND_imm (Symbolic.X11, Symbolic.X10, 0x7fL);
-        Symbolic.CBNZ (Symbolic.X11, "__dark_process_io_signaled");
-        Symbolic.LSR_imm (Symbolic.X24, Symbolic.X10, 8);
-        Symbolic.B_label "__dark_process_io_store_status";
-        Symbolic.Label "__dark_process_io_signaled";
-        Symbolic.ADD_imm (Symbolic.X24, Symbolic.X11, 128);
-        Symbolic.Label "__dark_process_io_store_status";
-        Symbolic.MOVZ (Symbolic.X9, 2, 0);
-        Symbolic.STR (Symbolic.X9, Symbolic.X21, 0);
-        Symbolic.STR (Symbolic.X24, Symbolic.X21, 40);
-        Symbolic.B_label "__dark_process_io_build";
-        Symbolic.Label "__dark_process_io_stored_status";
-        Symbolic.LDR (Symbolic.X24, Symbolic.X21, 40);
-        Symbolic.B_label "__dark_process_io_build";
-        Symbolic.Label "__dark_process_io_running";
-        zero Symbolic.X24;
-        Symbolic.Label "__dark_process_io_build";
-        Symbolic.MOV_reg (Symbolic.X19, Symbolic.X28);
-      ]
-    @ loadImmediate Symbolic.X9 1048592L
-    @ [
-        Symbolic.ADD_reg (Symbolic.X28, Symbolic.X28, Symbolic.X9);
-        Symbolic.LDR (Symbolic.X10, Symbolic.X22, 0);
-        Symbolic.LDR (Symbolic.X11, Symbolic.SP, 0);
-        Symbolic.SUB_reg (Symbolic.X10, Symbolic.X10, Symbolic.X11);
-        zero Symbolic.X12;
-        Symbolic.Label "__dark_process_io_copy_stdout";
-        Symbolic.CMP_reg (Symbolic.X12, Symbolic.X10);
-        Symbolic.B_cond_label (Symbolic.GE, "__dark_process_io_stdout_copied");
-        Symbolic.ADD_imm (Symbolic.X13, Symbolic.X22, 8);
-        Symbolic.ADD_reg (Symbolic.X13, Symbolic.X13, Symbolic.X11);
-        Symbolic.LDRB (Symbolic.X14, Symbolic.X13, Symbolic.X12);
-        Symbolic.ADD_imm (Symbolic.X15, Symbolic.X19, 16);
-        Symbolic.ADD_reg (Symbolic.X15, Symbolic.X15, Symbolic.X12);
-        Symbolic.STRB_reg (Symbolic.X14, Symbolic.X15);
-        Symbolic.ADD_imm (Symbolic.X12, Symbolic.X12, 1);
-        Symbolic.B_label "__dark_process_io_copy_stdout";
-        Symbolic.Label "__dark_process_io_stdout_copied";
-        Symbolic.MOV_reg (Symbolic.X20, Symbolic.X28);
-        Symbolic.STR (Symbolic.X10, Symbolic.SP, 0);
-      ]
-    @ loadImmediate Symbolic.X9 1048592L
-    @ [
-        Symbolic.ADD_reg (Symbolic.X28, Symbolic.X28, Symbolic.X9);
-        Symbolic.LDR (Symbolic.X10, Symbolic.X23, 0);
-        Symbolic.LDR (Symbolic.X11, Symbolic.SP, 8);
-        Symbolic.SUB_reg (Symbolic.X10, Symbolic.X10, Symbolic.X11);
-        zero Symbolic.X12;
-        Symbolic.Label "__dark_process_io_copy_stderr";
-        Symbolic.CMP_reg (Symbolic.X12, Symbolic.X10);
-        Symbolic.B_cond_label (Symbolic.GE, "__dark_process_io_stderr_copied");
-        Symbolic.ADD_imm (Symbolic.X13, Symbolic.X23, 8);
-        Symbolic.ADD_reg (Symbolic.X13, Symbolic.X13, Symbolic.X11);
-        Symbolic.LDRB (Symbolic.X14, Symbolic.X13, Symbolic.X12);
-        Symbolic.ADD_imm (Symbolic.X15, Symbolic.X20, 16);
-        Symbolic.ADD_reg (Symbolic.X15, Symbolic.X15, Symbolic.X12);
-        Symbolic.STRB_reg (Symbolic.X14, Symbolic.X15);
-        Symbolic.ADD_imm (Symbolic.X12, Symbolic.X12, 1);
-        Symbolic.B_label "__dark_process_io_copy_stderr";
-        Symbolic.Label "__dark_process_io_stderr_copied";
-        Symbolic.STR (Symbolic.X10, Symbolic.SP, 8);
-      ]
-    @ [ Symbolic.LDR (Symbolic.X10, Symbolic.SP, 0) ]
-    @ finalizeString Symbolic.X19 Symbolic.X10
-    @ [ Symbolic.LDR (Symbolic.X10, Symbolic.SP, 8) ]
-    @ finalizeString Symbolic.X20 Symbolic.X10
-    @ [
-        Symbolic.MOV_reg (Symbolic.X0, Symbolic.X28);
-        Symbolic.ADD_imm (Symbolic.X28, Symbolic.X28, 32);
-        Symbolic.STR (Symbolic.X24, Symbolic.X0, 0);
-        Symbolic.STR (Symbolic.X19, Symbolic.X0, 8);
-        Symbolic.STR (Symbolic.X20, Symbolic.X0, 16);
-        Symbolic.MOVZ (Symbolic.X9, 1, 0);
-        Symbolic.STR (Symbolic.X9, Symbolic.X0, 24);
-      ]
-    @ generateLeakCounterInc ctx @ generateLeakCounterInc ctx
-    @ generateLeakCounterInc ctx
-    @ [
-        Symbolic.B_label "__dark_process_io_return";
-        Symbolic.Label "__dark_process_io_invalid";
-      ]
-    @ invalidOutcome "__dark_process_io_return"
-    @ [ Symbolic.Label "__dark_process_io_return" ]
-    @ epilogue
-  in
-  let terminate =
-    [
-      Symbolic.Label "__dark_cli_terminate_process";
-      Symbolic.STP_pre (Symbolic.X29, Symbolic.X30, Symbolic.SP, -16);
-      Symbolic.MOV_reg (Symbolic.X29, Symbolic.SP);
-      Symbolic.STP_pre (Symbolic.X19, Symbolic.X20, Symbolic.SP, -16);
-      Symbolic.STP_pre (Symbolic.X21, Symbolic.X22, Symbolic.SP, -16);
-      Symbolic.STP_pre (Symbolic.X23, Symbolic.X24, Symbolic.SP, -16);
-      Symbolic.SUB_imm (Symbolic.SP, Symbolic.SP, 64);
-      Symbolic.CMP_imm (Symbolic.X0, 1);
-      Symbolic.B_cond_label (Symbolic.LT, "__dark_terminate_invalid");
-      Symbolic.CMP_imm (Symbolic.X0, 63);
-      Symbolic.B_cond_label (Symbolic.GT, "__dark_terminate_invalid");
-      Symbolic.LSL_imm (Symbolic.X9, Symbolic.X0, 6);
-      Symbolic.ADD_reg (Symbolic.X21, Symbolic.X25, Symbolic.X9);
-      Symbolic.LDR (Symbolic.X9, Symbolic.X21, 0);
-      Symbolic.CBZ (Symbolic.X9, "__dark_terminate_invalid");
-      Symbolic.CMP_imm (Symbolic.X9, 2);
-      Symbolic.B_cond_label (Symbolic.EQ, "__dark_terminate_collect");
-      Symbolic.LDR (Symbolic.X0, Symbolic.X21, 8);
-      Symbolic.MOVZ (Symbolic.X1, 15, 0);
+  @ trap 129 37
+  @ [
+      S.Label "__child_cleanup_reap";
+      S.LDR (S.X0, S.X20, 8);
+      S.MOV_reg (S.X1, S.SP);
+      S.MOVZ (S.X2, 0, 0);
+      S.MOVZ (S.X3, 0, 0);
     ]
-    @ syscall 129
-    @ [
-        Symbolic.LDR (Symbolic.X0, Symbolic.X21, 8);
-        Symbolic.ADD_imm (Symbolic.X1, Symbolic.SP, 32);
-        zero Symbolic.X2;
-        zero Symbolic.X3;
-        zero Symbolic.X9;
-        Symbolic.STR (Symbolic.X9, Symbolic.SP, 32);
-      ]
-    @ syscall 260
-    @ [
-        Symbolic.LDR (Symbolic.X10, Symbolic.SP, 32);
-        Symbolic.AND_imm (Symbolic.X11, Symbolic.X10, 0x7fL);
-        Symbolic.CBNZ (Symbolic.X11, "__dark_terminate_signaled");
-        Symbolic.LSR_imm (Symbolic.X9, Symbolic.X10, 8);
-        Symbolic.B_label "__dark_terminate_store";
-        Symbolic.Label "__dark_terminate_signaled";
-        Symbolic.ADD_imm (Symbolic.X9, Symbolic.X11, 128);
-        Symbolic.Label "__dark_terminate_store";
-        Symbolic.STR (Symbolic.X9, Symbolic.X21, 40);
-        Symbolic.MOVZ (Symbolic.X9, 2, 0);
-        Symbolic.STR (Symbolic.X9, Symbolic.X21, 0);
-        Symbolic.Label "__dark_terminate_collect";
-        Symbolic.LSR_imm (Symbolic.X0, Symbolic.X9, 6);
-        zero Symbolic.X1;
-      ]
-    @ [
-        Symbolic.SUB_reg (Symbolic.X0, Symbolic.X21, Symbolic.X25);
-        Symbolic.LSR_imm (Symbolic.X0, Symbolic.X0, 6);
-      ]
-    @ loadStringLiteralPointer Symbolic.X1 ""
-    @ [
-        Symbolic.MOVZ (Symbolic.X2, 1, 0);
-        Symbolic.BL "__dark_cli_process_io";
-        Symbolic.MOV_reg (Symbolic.X19, Symbolic.X0);
-        Symbolic.LDR (Symbolic.X0, Symbolic.X21, 16);
-      ]
-    @ syscall 57
-    @ [ Symbolic.LDR (Symbolic.X0, Symbolic.X21, 24) ]
-    @ syscall 57
-    @ [ Symbolic.LDR (Symbolic.X0, Symbolic.X21, 32) ]
-    @ syscall 57
-    @ [
-        zero Symbolic.X9;
-        Symbolic.STR (Symbolic.X9, Symbolic.X21, 0);
-        Symbolic.MOV_reg (Symbolic.X0, Symbolic.X19);
-        Symbolic.B_label "__dark_terminate_return";
-        Symbolic.Label "__dark_terminate_invalid";
-      ]
-    @ invalidOutcome "__dark_terminate_return"
-    @ [ Symbolic.Label "__dark_terminate_return" ]
-    @ epilogue
-  in
-  let cleanup =
-    [
-      Symbolic.Label "__dark_cli_cleanup_processes";
-      Symbolic.STP_pre (Symbolic.X19, Symbolic.X30, Symbolic.SP, -16);
-      Symbolic.SUB_imm (Symbolic.SP, Symbolic.SP, 16);
-      Symbolic.CBZ (Symbolic.X25, "__dark_cleanup_process_done");
-      Symbolic.MOVZ (Symbolic.X19, 1, 0);
-      Symbolic.Label "__dark_cleanup_process_next";
-      Symbolic.CMP_imm (Symbolic.X19, 63);
-      Symbolic.B_cond_label (Symbolic.GT, "__dark_cleanup_process_done");
-      Symbolic.LSL_imm (Symbolic.X9, Symbolic.X19, 6);
-      Symbolic.ADD_reg (Symbolic.X9, Symbolic.X25, Symbolic.X9);
-      Symbolic.LDR (Symbolic.X10, Symbolic.X9, 0);
-      Symbolic.CBZ (Symbolic.X10, "__dark_cleanup_process_advance");
-      Symbolic.LDR (Symbolic.X0, Symbolic.X9, 8);
-      Symbolic.MOVZ (Symbolic.X1, 9, 0);
+  @ trap 260 7 @ loadImmediate S.X9 (-4L)
+  @ [
+      S.CMP_reg (S.X0, S.X9);
+      S.B_cond_label (S.EQ, "__child_cleanup_reap");
+      S.Label "__child_cleanup_pipes";
     ]
-    @ syscall 129
-    @ [
-        Symbolic.LSL_imm (Symbolic.X9, Symbolic.X19, 6);
-        Symbolic.ADD_reg (Symbolic.X9, Symbolic.X25, Symbolic.X9);
-        Symbolic.LDR (Symbolic.X0, Symbolic.X9, 8);
-        Symbolic.MOV_reg (Symbolic.X1, Symbolic.SP);
-        zero Symbolic.X2;
-        zero Symbolic.X3;
-      ]
-    @ syscall 260
-    @ [
-        Symbolic.LSL_imm (Symbolic.X9, Symbolic.X19, 6);
-        Symbolic.ADD_reg (Symbolic.X9, Symbolic.X25, Symbolic.X9);
-        Symbolic.LDR (Symbolic.X0, Symbolic.X9, 16);
-      ]
-    @ syscall 57
-    @ [ Symbolic.LDR (Symbolic.X0, Symbolic.X9, 24) ]
-    @ syscall 57
-    @ [ Symbolic.LDR (Symbolic.X0, Symbolic.X9, 32) ]
-    @ syscall 57
-    @ [
-        zero Symbolic.X10;
-        Symbolic.STR (Symbolic.X10, Symbolic.X9, 0);
-        Symbolic.Label "__dark_cleanup_process_advance";
-        Symbolic.ADD_imm (Symbolic.X19, Symbolic.X19, 1);
-        Symbolic.B_label "__dark_cleanup_process_next";
-        Symbolic.Label "__dark_cleanup_process_done";
-        Symbolic.ADD_imm (Symbolic.SP, Symbolic.SP, 16);
-        Symbolic.LDP_post (Symbolic.X19, Symbolic.X30, Symbolic.SP, 16);
-        Symbolic.RET;
-      ]
-  in
-  communicate @ terminate @ cleanup
+  @ close 16 @ close 24 @ close 32 @ free 48 @ free 56
+  @ [
+      S.MOVZ (S.X9, 0, 0);
+      S.STR (S.X9, S.X20, 0);
+      S.Label "__child_cleanup_advance";
+      S.ADD_imm (S.X19, S.X19, 1);
+      S.B_label "__child_cleanup_next";
+      S.Label "__child_cleanup_done";
+      S.ADD_imm (S.SP, S.SP, 16);
+    ]
+  @ List.map (fun (a, b) -> S.LDP_post (a, b, S.SP, 16)) (List.rev preserve)
+  @ [ S.RET ]

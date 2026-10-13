@@ -72,26 +72,6 @@ let translateProgram (LIR.Program (functions, variantRegistry, recordRegistry))
               | LIR.CliNative (_, LIR.GetEnv, _) -> true
               | _ -> false)))
   in
-  let needsCliExecuteHelper =
-    functions
-    |> List.exists (fun (func : LIR.functionDef) ->
-        func.LIR.cfg.LIR.blocks
-        |> LIR.LabelMap.exists (fun _ (block : LIR.basicBlock) ->
-            block.LIR.instrs
-            |> List.exists (function
-              | LIR.CliNative (_, LIR.Execute, _) -> true
-              | _ -> false)))
-  in
-  let needsCliRunProcessHelper =
-    functions
-    |> List.exists (fun (func : LIR.functionDef) ->
-        func.LIR.cfg.LIR.blocks
-        |> LIR.LabelMap.exists (fun _ (block : LIR.basicBlock) ->
-            block.LIR.instrs
-            |> List.exists (function
-              | LIR.CliNative (_, LIR.RunProcess, _) -> true
-              | _ -> false)))
-  in
   let needsCliProcessLifecycleHelpers =
     functions
     |> List.exists (fun (func : LIR.functionDef) ->
@@ -99,11 +79,7 @@ let translateProgram (LIR.Program (functions, variantRegistry, recordRegistry))
         |> LIR.LabelMap.exists (fun _ (block : LIR.basicBlock) ->
             block.LIR.instrs
             |> List.exists (function
-              | LIR.CliNative
-                  ( _,
-                    (LIR.SpawnProcess | LIR.ProcessIO | LIR.TerminateProcess),
-                    _ ) ->
-                  true
+              | LIR.CliNative (_, LIR.ChildLaunch, _) -> true
               | _ -> false)))
   in
   let functionNames =
@@ -947,20 +923,10 @@ let translateProgram (LIR.Program (functions, variantRegistry, recordRegistry))
       @ streamDecHelper @ recursiveNominalRcDecHelpers
       @ generateCliArgvHelper ()
       @ generateCliEnvironmentPackedHelper enableLeakCheck
-      @ generateCliDirectoryCurrentHelper enableLeakCheck
-      @ generateCliSetEnvHelper enableLeakCheck
-      @ generateCliUnsetEnvHelper enableLeakCheck
-      @ generateCliDirectoryListHelper enableLeakCheck
       @ (if needsCliGetEnvHelper then generateCliGetEnvHelper enableLeakCheck
          else [])
       @ (if needsCliProcessLifecycleHelpers then
-           generateLinuxCliSpawnProcessHelper ()
-           @ generateLinuxCliProcessLifecycleHelpers enableLeakCheck
-         else [])
-      @ (if needsCliRunProcessHelper then
-           generateLinuxCliRunProcessHelper enableLeakCheck
-         else [])
-      @ (if needsCliExecuteHelper then
-           generateLinuxCliExecuteHelper enableLeakCheck
+           generateChildLaunchHelper ()
+           @ generateChildCleanupHelper enableLeakCheck
          else [])
       @ genOomHandler () @ genRuntimeErrorHandler ())

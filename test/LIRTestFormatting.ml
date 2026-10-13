@@ -122,30 +122,17 @@ and rcKind (value : LIR.rcKind) =
 
 and cliOperation (value : LIR.cliOperation) =
   match value with
-  | LIR.Execute -> union "CliOperation" "Execute" []
   | LIR.StartupStack -> union "CliOperation" "StartupStack" []
   | LIR.ExecutableState -> union "CliOperation" "ExecutableState" []
-  | LIR.RunProcess -> union "CliOperation" "RunProcess" []
   | LIR.HostOS -> union "CliOperation" "HostOS" []
   | LIR.HostArchitecture -> union "CliOperation" "HostArchitecture" []
-  | LIR.Hostname -> union "CliOperation" "Hostname" []
   | LIR.GetEnv -> union "CliOperation" "GetEnv" []
   | LIR.GetEnvironmentPacked -> union "CliOperation" "GetEnvironmentPacked" []
   | LIR.StdinState -> union "CliOperation" "StdinState" []
-  | LIR.SetEnv -> union "CliOperation" "SetEnv" []
-  | LIR.UnsetEnv -> union "CliOperation" "UnsetEnv" []
-  | LIR.DirectoryCurrent -> union "CliOperation" "DirectoryCurrent" []
-  | LIR.DirectoryListPacked -> union "CliOperation" "DirectoryListPacked" []
-  | LIR.FileIsDirectory -> union "CliOperation" "FileIsDirectory" []
-  | LIR.FileCreateExclusive -> union "CliOperation" "FileCreateExclusive" []
   | LIR.GetArgv -> union "CliOperation" "GetArgv" []
   | LIR.Kill -> union "CliOperation" "Kill" []
   | LIR.GetPid -> union "CliOperation" "GetPid" []
   | LIR.GetUid -> union "CliOperation" "GetUid" []
-  | LIR.CpuCount -> union "CliOperation" "CpuCount" []
-  | LIR.SpawnProcess -> union "CliOperation" "SpawnProcess" []
-  | LIR.ProcessIO -> union "CliOperation" "ProcessIO" []
-  | LIR.TerminateProcess -> union "CliOperation" "TerminateProcess" []
   | LIR.SocketTcp4 -> union "CliOperation" "SocketTcp4" []
   | LIR.SocketTcp6 -> union "CliOperation" "SocketTcp6" []
   | LIR.SocketUdp4 -> union "CliOperation" "SocketUdp4" []
@@ -194,6 +181,31 @@ and cliOperation (value : LIR.cliOperation) =
   | LIR.PosixGetDents -> union "CliOperation" "PosixGetDents" []
   | LIR.PosixIoctl -> union "CliOperation" "PosixIoctl" []
   | LIR.PosixProcInfo -> union "CliOperation" "PosixProcInfo" []
+  | LIR.PosixCopyFileRange -> union "CliOperation" "PosixCopyFileRange" []
+  | LIR.PosixFtruncate -> union "CliOperation" "PosixFtruncate" []
+  | LIR.PosixFchmod -> union "CliOperation" "PosixFchmod" []
+  | LIR.PosixFstat -> union "CliOperation" "PosixFstat" []
+  | LIR.PosixPread -> union "CliOperation" "PosixPread" []
+  | LIR.PosixPwrite -> union "CliOperation" "PosixPwrite" []
+  | LIR.PosixFclonefileat -> union "CliOperation" "PosixFclonefileat" []
+  | LIR.PosixGetentropy -> union "CliOperation" "PosixGetentropy" []
+  | LIR.PosixUname -> union "CliOperation" "PosixUname" []
+  | LIR.PosixSysctl -> union "CliOperation" "PosixSysctl" []
+  | LIR.PosixSchedGetaffinity -> union "CliOperation" "PosixSchedGetaffinity" []
+  | LIR.PosixFcntlGetPath -> union "CliOperation" "PosixFcntlGetPath" []
+  | LIR.PosixClockGettime -> union "CliOperation" "PosixClockGettime" []
+  | LIR.PosixGettimeofday -> union "CliOperation" "PosixGettimeofday" []
+  | LIR.PosixNanosleep -> union "CliOperation" "PosixNanosleep" []
+  | LIR.PosixMachTimebaseInfo -> union "CliOperation" "PosixMachTimebaseInfo" []
+  | LIR.PosixInotifyInit1 -> union "CliOperation" "PosixInotifyInit1" []
+  | LIR.PosixInotifyAddWatch -> union "CliOperation" "PosixInotifyAddWatch" []
+  | LIR.PosixPpoll -> union "CliOperation" "PosixPpoll" []
+  | LIR.PosixPollDarwin -> union "CliOperation" "PosixPollDarwin" []
+  | LIR.PosixKqueue -> union "CliOperation" "PosixKqueue" []
+  | LIR.ChildState -> union "CliOperation" "ChildState" []
+  | LIR.ChildLaunch -> union "CliOperation" "ChildLaunch" []
+  | LIR.PosixWait4 -> union "CliOperation" "PosixWait4" []
+  | LIR.PosixKeventVnode -> union "CliOperation" "PosixKeventVnode" []
 
 and label (value : LIR.label) =
   match value with LIR.Label field0 -> union "Label" "Label" [ text field0 ]
@@ -853,8 +865,6 @@ and functionCodegenFacts (value : LIR.functionCodegenFacts) =
           value.LIR.arm64RawSlotInitRetainTargets );
       ("NeedsCliRuntimeState", boolean value.LIR.needsCliRuntimeState);
       ("NeedsCliArgvHelper", boolean value.LIR.needsCliArgvHelper);
-      ("NeedsCliExecuteHelper", boolean value.LIR.needsCliExecuteHelper);
-      ("NeedsCliRunProcessHelper", boolean value.LIR.needsCliRunProcessHelper);
       ( "NeedsCliProcessLifecycleHelpers",
         boolean value.LIR.needsCliProcessLifecycleHelpers );
       ("NeedsRuntimeErrorHelper", boolean value.LIR.needsRuntimeErrorHelper);

@@ -1,4 +1,3 @@
-// Upstream POSIX Errno declarations (v0.0.35).
 module Darklang.Stdlib.Cli.Posix.Errno
 
 /// Invalid argument

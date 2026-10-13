@@ -105,7 +105,6 @@ val uint128LiteralComparison :
 
 val typeToString : AST.semanticType -> string
 val patternLiteralToSizedInt : CheckedAST.pattern -> ANF.sizedInt option
-val tryFileIntrinsic : string -> ANF.atom list -> ANF.cExpr option
 val tryCliIntrinsic : string -> ANF.atom list -> ANF.cExpr option
 val normalizeNullaryIntrinsicArgs : ANF.atom list -> ANF.atom list
 val tryPresentationIntrinsic : string -> ANF.atom list -> ANF.cExpr option

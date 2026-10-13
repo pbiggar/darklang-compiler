@@ -36,10 +36,7 @@ Stdlib.Cli.Env.getOr "DARK_ENV_MISSING_VALUE" "fallback" = "fallback"
 
 Stdlib.Cli.Env.home () = Some "/tmp/upstream-home" env="HOME=/tmp/upstream-home"
 
-let unset = Stdlib.Cli.Env.unset "HOME" in match (unset, Stdlib.Cli.Env.home ()) with | (Ok (()), Some directory) -> Stdlib.String.startsWith directory "/" | _ -> false = true isolated=true
 
-match Stdlib.Cli.Env.set "bad=name" "value" with | Error error -> error.errno | Ok (()) -> 0 = 22
 
 match Stdlib.Env.getAll () |> Stdlib.Dict.get "DARK_ENV_ENUM_VALUE" with | Some value -> value | None -> "missing" = "enumerated" env="DARK_ENV_ENUM_VALUE=enumerated"
 
-let name = "DARK_NATIVE_MUTABLE_ENV" in let setResult = Stdlib.Cli.Env.set name "changed" in let direct = Stdlib.Cli.Env.get name in let inherited = match Stdlib.Cli.Process.run "/bin/sh" (["-c", "printf %s \"$DARK_NATIVE_MUTABLE_ENV\""]) with | Ok output -> output.stdout | Error error -> error.message in let unsetResult = Stdlib.Cli.Env.unset name in (setResult, direct, inherited, unsetResult, Stdlib.Cli.Env.get name) = (Ok (), Some "changed", "changed", Ok (), None) isolated=true

@@ -1,0 +1,56 @@
+// Typed, single-call kernel adapters. Raw pointers never escape these adapters.
+module Builtin
+
+let __syscallIntResult (rc: Int64) : Stdlib.Result.Result<Int, Int> =
+    if rc < 0L then Error (Stdlib.Int.fromInt64 (0L - rc))
+    else Ok (Stdlib.Int.fromInt64 rc)
+
+let __syscallUnitResult (rc: Int64) : Stdlib.Result.Result<Unit, Int> =
+    if rc < 0L then Error (Stdlib.Int.fromInt64 (0L - rc)) else Ok ()
+
+let syscallRead (fd: Int) (count: Int) : Stdlib.Result.Result<Blob, Int> =
+    let fd = Builtin.__posixInt32 fd in
+    let count = Builtin.__posixInt32 count in
+    if count < 0L then Error 22
+    else
+        let ptr = __mapped_alloc (if count == 0L then 1L else count) in
+        let rc = Stdlib.Cli.__Posix.__read fd ptr count in
+        let result =
+            if rc < 0L then Error (Stdlib.Int.fromInt64 (0L - rc))
+            else Ok (Stdlib.Cli.__Posix.__bufferBytes ptr 0L rc []) in
+        let _ = __mapped_free ptr in
+        result
+
+let syscallWrite (fd: Int) (bytes: Blob) : Stdlib.Result.Result<Int, Int> =
+    let fd = Builtin.__posixInt32 fd in
+    let count = Stdlib.Blob.__byteLength bytes in
+    let ptr = __mapped_alloc (if count == 0L then 1L else count) in
+    let _ = Stdlib.Cli.__Posix.__writeBytes bytes ptr 0L in
+    let rc = Stdlib.Cli.__Posix.__write fd ptr count in
+    let _ = __mapped_free ptr in
+    Builtin.__syscallIntResult rc
+
+let syscallClose (fd: Int) : Stdlib.Result.Result<Unit, Int> =
+    Builtin.__syscallUnitResult
+        (Stdlib.Cli.__Posix.__close (Builtin.__posixInt32 fd))
+
+let syscallLseek (fd: Int) (offset: Int) (whence: Int)
+    : Stdlib.Result.Result<Int, Int> =
+    Builtin.__syscallIntResult
+        (Stdlib.Cli.__Posix.__seek (Builtin.__posixInt32 fd)
+            (Builtin.__posixInt64 offset) (Builtin.__posixInt32 whence))
+
+let syscallFlock (fd: Int) (operation: Int) : Stdlib.Result.Result<Unit, Int> =
+    Builtin.__syscallUnitResult
+        (Stdlib.Cli.__Posix.__flock (Builtin.__posixInt32 fd)
+            (Builtin.__posixInt32 operation))
+
+let syscallKill (pid: Int) (signal: Int) : Stdlib.Result.Result<Unit, Int> =
+    match Stdlib.Cli.__kill (Builtin.__posixInt32 pid)
+        (Builtin.__posixInt32 signal) with
+    | Ok () -> Ok ()
+    | Error error -> Error (Stdlib.Int.fromInt64 error.errno)
+
+let syscallGetpid () : Int = Stdlib.Int.fromInt64 (Stdlib.Cli.__getpid ())
+
+let syscallGetuid () : Int = Stdlib.Int.fromInt64 (Stdlib.Cli.__getuid ())

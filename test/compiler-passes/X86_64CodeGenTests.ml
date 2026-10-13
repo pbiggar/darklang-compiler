@@ -494,11 +494,15 @@ let testCliHostOperationsExecute () =
   let program =
     makeSimpleProgram
       [
-        CliNative (Physical X0, CpuCount, []);
+        Mov (Physical X19, Imm 512L);
+        RawAlloc (Physical X20, Physical X19);
+        CliNative
+          ( Physical X0,
+            PosixSchedGetaffinity,
+            [ Imm 0L; Imm 512L; Reg (Physical X20) ] );
         PrintInt64 (Physical X0);
-        CliNative (Physical X0, Hostname, []);
-        HeapLoad (Physical X1, Physical X0, 8);
-        PrintHeapString (Physical X1);
+        CliNative (Physical X0, PosixUname, [ Reg (Physical X20) ]);
+        PrintInt64 (Physical X0);
         CliNative (Physical X0, GetEnv, [ StringSymbol "PATH" ]);
         PrintHeapString (Physical X0);
         CliNative (Physical X0, GetPid, []);
@@ -515,14 +519,15 @@ let testCliHostOperationsExecute () =
       prefix exitCode stdout stderr
   in
   match String.split_on_char '\n' stdout with
-  | cpu :: hostname :: path :: errno :: _ -> (
+  | affinityBytes :: unameStatus :: path :: errno :: _ -> (
       match
-        ( Int64.of_string_opt (Text.trim cpu),
+        ( Int64.of_string_opt (Text.trim affinityBytes),
           Int64.of_string_opt (Text.trim errno) )
       with
       | Some count, Some 22L
-        when exitCode = 0 && count > 0L && hostname <> "" && path <> ""
-             && stderr = "" ->
+        when exitCode = 0 && count > 0L
+             && Text.trim unameStatus = "0"
+             && path <> "" && stderr = "" ->
           Ok ()
       | _ -> Error (error "Unexpected"))
   | _ -> Error (error "Incomplete")
@@ -533,7 +538,7 @@ let testCliNativePreservesLiveCallerRegister () =
       [
         Mov (Physical X3, Imm 42L);
         SaveRegs ([ X3 ], []);
-        CliNative (Physical X0, CpuCount, []);
+        CliNative (Physical X0, GetPid, []);
         RestoreRegs ([ X3 ], []);
         Mov (Physical X0, Reg (Physical X3));
         PrintInt64 (Physical X0);

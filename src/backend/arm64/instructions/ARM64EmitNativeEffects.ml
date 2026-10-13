@@ -3,10 +3,6 @@
 *)
 [@@@warning "-4"]
 
-let int16 value =
-  let low = value land 65535 in
-  if low >= 32768 then low - 65536 else low
-
 let bind f value = Result.bind value f
 let mul a b = Int32.to_int (Int32.mul (Int32.of_int a) (Int32.of_int b))
 
@@ -83,91 +79,6 @@ let emitMacOSMonotonicTime (ctx : codeGenContext) destReg time =
           Symbolic.MOV_reg (destReg, Symbolic.X0);
         ])
 
-let emitManagedStringFromStack (ctx : codeGenContext) (labelPrefix : string)
-    (destReg : Symbolic.reg) (stackOffset : int)
-    (releaseStack : Symbolic.instr list) =
-  let lengthLoop = Printf.sprintf "%s_length" labelPrefix in
-  let lengthDone = Printf.sprintf "%s_length_done" labelPrefix in
-  let copyLoop = Printf.sprintf "%s_copy" labelPrefix in
-  let copyDone = Printf.sprintf "%s_copy_done" labelPrefix in
-  [
-    Symbolic.ADD_imm (Symbolic.X9, Symbolic.SP, stackOffset);
-    Symbolic.MOVZ (Symbolic.X10, 0, 0);
-    Symbolic.Label lengthLoop;
-    Symbolic.LDRB (Symbolic.X11, Symbolic.X9, Symbolic.X10);
-    Symbolic.CBZ (Symbolic.X11, lengthDone);
-    Symbolic.ADD_imm (Symbolic.X10, Symbolic.X10, 1);
-    Symbolic.B_label lengthLoop;
-    Symbolic.Label lengthDone;
-    Symbolic.MOV_reg (destReg, Symbolic.X28);
-    Symbolic.MOVZ (Symbolic.X11, 1, 0);
-    Symbolic.STR (Symbolic.X11, destReg, 0);
-    Symbolic.STR (Symbolic.X10, destReg, 8);
-    Symbolic.ADD_imm (Symbolic.X12, Symbolic.X10, 7);
-    Symbolic.LSR_imm (Symbolic.X12, Symbolic.X12, 3);
-    Symbolic.LSL_imm (Symbolic.X12, Symbolic.X12, 3);
-    Symbolic.ADD_imm (Symbolic.X12, Symbolic.X12, 16);
-    Symbolic.ADD_reg (Symbolic.X28, Symbolic.X28, Symbolic.X12);
-    Symbolic.ADD_imm (Symbolic.X11, destReg, 16);
-    Symbolic.MOV_reg (Symbolic.X12, Symbolic.X10);
-    Symbolic.Label copyLoop;
-    Symbolic.CBZ (Symbolic.X12, copyDone);
-    Symbolic.LDRB_imm (Symbolic.X13, Symbolic.X9, 0);
-    Symbolic.STRB_reg (Symbolic.X13, Symbolic.X11);
-    Symbolic.ADD_imm (Symbolic.X9, Symbolic.X9, 1);
-    Symbolic.ADD_imm (Symbolic.X11, Symbolic.X11, 1);
-    Symbolic.SUB_imm (Symbolic.X12, Symbolic.X12, 1);
-    Symbolic.B_label copyLoop;
-    Symbolic.Label copyDone;
-  ]
-  @ releaseStack @ generateLeakCounterInc ctx
-
-let emitDirectoryCurrent (ctx : codeGenContext) (destReg : Symbolic.reg) =
-  let labelPrefix =
-    Printf.sprintf "__cwd_%s_%s" ctx.functionName ctx.instructionSite
-  in
-  let failure = Printf.sprintf "%s_failure" labelPrefix in
-  let complete = Printf.sprintf "%s_complete" labelPrefix in
-  let syscalls = ARM64.targetSyscalls ctx.target in
-  let syscallNumber =
-    match ARM64.targetOS ctx.target with
-    | Platform.Linux -> 17
-    | Platform.MacOS -> 326
-  in
-  let failureCheck =
-    match ARM64.targetOS ctx.target with
-    | Platform.Linux ->
-        [
-          Symbolic.CMP_imm (Symbolic.X0, 0);
-          Symbolic.B_cond_label (Symbolic.LT, failure);
-        ]
-    | Platform.MacOS -> [ Symbolic.B_cond_label (Symbolic.HS, failure) ]
-  in
-  [
-    Symbolic.SUB_imm (Symbolic.SP, Symbolic.SP, 2048);
-    Symbolic.SUB_imm (Symbolic.SP, Symbolic.SP, 2048);
-    Symbolic.MOV_reg (Symbolic.X0, Symbolic.SP);
-  ]
-  @ loadImmediate Symbolic.X1 4096L
-  @ [
-      Symbolic.MOVZ (syscalls.ARM64.syscallRegister, syscallNumber, 0);
-      Symbolic.SVC syscalls.ARM64.svcImmediate;
-    ]
-  @ failureCheck
-  @ emitManagedStringFromStack ctx labelPrefix destReg 0
-      [
-        Symbolic.ADD_imm (Symbolic.SP, Symbolic.SP, 2048);
-        Symbolic.ADD_imm (Symbolic.SP, Symbolic.SP, 2048);
-        Symbolic.B_label complete;
-      ]
-  @ [
-      Symbolic.Label failure;
-      Symbolic.ADD_imm (Symbolic.SP, Symbolic.SP, 2048);
-      Symbolic.ADD_imm (Symbolic.SP, Symbolic.SP, 2048);
-    ]
-  @ loadStringLiteralPointer destReg ""
-  @ [ Symbolic.Label complete ]
-
 let emitEnvironmentPacked (ctx : codeGenContext) (destReg : Symbolic.reg) =
   let labelPrefix =
     Printf.sprintf "__env_all_%s_%s" ctx.functionName ctx.instructionSite
@@ -239,392 +150,6 @@ let emitEnvironmentPacked (ctx : codeGenContext) (destReg : Symbolic.reg) =
   ]
   @ generateLeakCounterInc ctx
 
-let emitDirectoryListPacked (ctx : codeGenContext) (destReg : Symbolic.reg)
-    (pathLoads : Symbolic.instr list) =
-  let prefix =
-    Printf.sprintf "__list_dir_%s_%s" ctx.functionName ctx.instructionSite
-  in
-  let pathCopy = Printf.sprintf "%s_path_copy" prefix in
-  let pathDone = Printf.sprintf "%s_path_done" prefix in
-  let openFailed = Printf.sprintf "%s_open_failed" prefix in
-  let readChunk = Printf.sprintf "%s_read_chunk" prefix in
-  let readDone = Printf.sprintf "%s_read_done" prefix in
-  let entryLoop = Printf.sprintf "%s_entry_loop" prefix in
-  let entriesDone = Printf.sprintf "%s_entries_done" prefix in
-  let skipEntry = Printf.sprintf "%s_skip_entry" prefix in
-  let appendPath = Printf.sprintf "%s_append_path" prefix in
-  let appendPathDone = Printf.sprintf "%s_append_path_done" prefix in
-  let appendName = Printf.sprintf "%s_append_name" prefix in
-  let appendNameDone = Printf.sprintf "%s_append_name_done" prefix in
-  let noSlash = Printf.sprintf "%s_no_slash" prefix in
-  let complete = Printf.sprintf "%s_complete" prefix in
-  let syscalls = ARM64.targetSyscalls ctx.target in
-  let os = ARM64.targetOS ctx.target in
-  let openCall, openFailureCheck, readCall, readFailureCheck, nameOffset =
-    match os with
-    | Platform.Linux ->
-        ( loadImmediate Symbolic.X0 (-100L)
-          @ [ Symbolic.MOV_reg (Symbolic.X1, Symbolic.SP) ]
-          @ loadImmediate Symbolic.X2 16384L
-          @ [
-              Symbolic.MOVZ (Symbolic.X3, 0, 0);
-              Symbolic.MOVZ
-                ( syscalls.ARM64.syscallRegister,
-                  syscalls.ARM64.numbers.Platform.open_,
-                  0 );
-              Symbolic.SVC syscalls.ARM64.svcImmediate;
-            ],
-          [
-            Symbolic.CMP_imm (Symbolic.X0, 0);
-            Symbolic.B_cond_label (Symbolic.LT, openFailed);
-          ],
-          [
-            Symbolic.MOV_reg (Symbolic.X0, Symbolic.X9);
-            Symbolic.MOV_reg (Symbolic.X1, Symbolic.X5);
-          ]
-          @ loadImmediate Symbolic.X2 4096L
-          @ [
-              Symbolic.MOVZ (syscalls.ARM64.syscallRegister, 61, 0);
-              Symbolic.SVC syscalls.ARM64.svcImmediate;
-            ],
-          [
-            Symbolic.CMP_imm (Symbolic.X0, 0);
-            Symbolic.B_cond_label (Symbolic.LE, readDone);
-          ],
-          19 )
-    | Platform.MacOS ->
-        ( [ Symbolic.MOV_reg (Symbolic.X0, Symbolic.SP) ]
-          @ loadImmediate Symbolic.X1 0x100000L
-          @ [
-              Symbolic.MOVZ (Symbolic.X2, 0, 0);
-              Symbolic.MOVZ
-                ( syscalls.ARM64.syscallRegister,
-                  syscalls.ARM64.numbers.Platform.open_,
-                  0 );
-              Symbolic.SVC syscalls.ARM64.svcImmediate;
-            ],
-          [ Symbolic.B_cond_label (Symbolic.HS, openFailed) ],
-          [
-            Symbolic.MOV_reg (Symbolic.X0, Symbolic.X9);
-            Symbolic.MOV_reg (Symbolic.X1, Symbolic.X5);
-          ]
-          @ loadImmediate Symbolic.X2 4096L
-          @ [
-              Symbolic.ADD_imm (Symbolic.X3, Symbolic.SP, 4080);
-              Symbolic.MOVZ (syscalls.ARM64.syscallRegister, 344, 0);
-              Symbolic.SVC syscalls.ARM64.svcImmediate;
-            ],
-          [
-            Symbolic.B_cond_label (Symbolic.HS, readDone);
-            Symbolic.CBZ (Symbolic.X0, readDone);
-          ],
-          21 )
-  in
-  pathLoads
-  @ [
-      Symbolic.SUB_imm (Symbolic.SP, Symbolic.SP, 2048);
-      Symbolic.SUB_imm (Symbolic.SP, Symbolic.SP, 2048);
-      Symbolic.SUB_imm (Symbolic.SP, Symbolic.SP, 2048);
-      Symbolic.SUB_imm (Symbolic.SP, Symbolic.SP, 2048);
-      Symbolic.MOV_reg (Symbolic.X12, Symbolic.X0);
-      Symbolic.LDR (Symbolic.X13, Symbolic.X12, 8);
-      Symbolic.ADD_imm (Symbolic.X4, Symbolic.X12, 16);
-      Symbolic.MOV_reg (Symbolic.X6, Symbolic.SP);
-      Symbolic.MOV_reg (Symbolic.X7, Symbolic.X13);
-      Symbolic.Label pathCopy;
-      Symbolic.CBZ (Symbolic.X7, pathDone);
-      Symbolic.LDRB_imm (Symbolic.X8, Symbolic.X4, 0);
-      Symbolic.STRB_reg (Symbolic.X8, Symbolic.X6);
-      Symbolic.ADD_imm (Symbolic.X4, Symbolic.X4, 1);
-      Symbolic.ADD_imm (Symbolic.X6, Symbolic.X6, 1);
-      Symbolic.SUB_imm (Symbolic.X7, Symbolic.X7, 1);
-      Symbolic.B_label pathCopy;
-      Symbolic.Label pathDone;
-      Symbolic.MOVZ (Symbolic.X8, 0, 0);
-      Symbolic.STRB_reg (Symbolic.X8, Symbolic.X6);
-    ]
-  @ openCall @ openFailureCheck
-  @ [
-      Symbolic.MOV_reg (Symbolic.X9, Symbolic.X0);
-      Symbolic.MOV_reg (Symbolic.X10, Symbolic.X28);
-      Symbolic.MOVZ (Symbolic.X11, 0, 0);
-      Symbolic.ADD_imm (Symbolic.X5, Symbolic.SP, 2048);
-      Symbolic.ADD_imm (Symbolic.X5, Symbolic.X5, 2048);
-      Symbolic.Label readChunk;
-    ]
-  @ readCall @ readFailureCheck
-  @ [
-      Symbolic.MOV_reg (Symbolic.X14, Symbolic.X0);
-      Symbolic.MOVZ (Symbolic.X15, 0, 0);
-      Symbolic.Label entryLoop;
-      Symbolic.CMP_reg (Symbolic.X15, Symbolic.X14);
-      Symbolic.B_cond_label (Symbolic.GE, entriesDone);
-      Symbolic.ADD_reg (Symbolic.X4, Symbolic.X5, Symbolic.X15);
-      Symbolic.LDRB_imm (Symbolic.X6, Symbolic.X4, 16);
-      Symbolic.LDRB_imm (Symbolic.X7, Symbolic.X4, 17);
-      Symbolic.LSL_imm (Symbolic.X7, Symbolic.X7, 8);
-      Symbolic.ORR_reg (Symbolic.X6, Symbolic.X6, Symbolic.X7);
-      Symbolic.ADD_imm (Symbolic.X8, Symbolic.X4, nameOffset);
-      Symbolic.LDRB_imm (Symbolic.X7, Symbolic.X8, 0);
-      Symbolic.CMP_imm (Symbolic.X7, 46);
-      Symbolic.B_cond_label (Symbolic.NE, appendPath);
-      Symbolic.LDRB_imm (Symbolic.X7, Symbolic.X8, 1);
-      Symbolic.CBZ (Symbolic.X7, skipEntry);
-      Symbolic.CMP_imm (Symbolic.X7, 46);
-      Symbolic.B_cond_label (Symbolic.NE, appendPath);
-      Symbolic.LDRB_imm (Symbolic.X7, Symbolic.X8, 2);
-      Symbolic.CBZ (Symbolic.X7, skipEntry);
-      Symbolic.Label appendPath;
-      Symbolic.ADD_imm (Symbolic.X1, Symbolic.X12, 16);
-      Symbolic.MOV_reg (Symbolic.X2, Symbolic.X13);
-      Symbolic.ADD_imm (Symbolic.X3, Symbolic.X10, 16);
-      Symbolic.ADD_reg (Symbolic.X3, Symbolic.X3, Symbolic.X11);
-      Symbolic.Label appendPathDone;
-      Symbolic.CBZ (Symbolic.X2, noSlash);
-      Symbolic.LDRB_imm (Symbolic.X7, Symbolic.X1, 0);
-      Symbolic.STRB_reg (Symbolic.X7, Symbolic.X3);
-      Symbolic.ADD_imm (Symbolic.X1, Symbolic.X1, 1);
-      Symbolic.ADD_imm (Symbolic.X3, Symbolic.X3, 1);
-      Symbolic.ADD_imm (Symbolic.X11, Symbolic.X11, 1);
-      Symbolic.SUB_imm (Symbolic.X2, Symbolic.X2, 1);
-      Symbolic.B_label appendPathDone;
-      Symbolic.Label noSlash;
-      Symbolic.CBZ (Symbolic.X13, appendName);
-      Symbolic.SUB_imm (Symbolic.X1, Symbolic.X13, 1);
-      Symbolic.ADD_imm (Symbolic.X2, Symbolic.X12, 16);
-      Symbolic.LDRB (Symbolic.X7, Symbolic.X2, Symbolic.X1);
-      Symbolic.CMP_imm (Symbolic.X7, 47);
-      Symbolic.B_cond_label (Symbolic.EQ, appendName);
-      Symbolic.MOVZ (Symbolic.X7, 47, 0);
-      Symbolic.STRB_reg (Symbolic.X7, Symbolic.X3);
-      Symbolic.ADD_imm (Symbolic.X3, Symbolic.X3, 1);
-      Symbolic.ADD_imm (Symbolic.X11, Symbolic.X11, 1);
-      Symbolic.Label appendName;
-      Symbolic.LDRB_imm (Symbolic.X7, Symbolic.X8, 0);
-      Symbolic.CBZ (Symbolic.X7, appendNameDone);
-      Symbolic.STRB_reg (Symbolic.X7, Symbolic.X3);
-      Symbolic.ADD_imm (Symbolic.X8, Symbolic.X8, 1);
-      Symbolic.ADD_imm (Symbolic.X3, Symbolic.X3, 1);
-      Symbolic.ADD_imm (Symbolic.X11, Symbolic.X11, 1);
-      Symbolic.B_label appendName;
-      Symbolic.Label appendNameDone;
-      Symbolic.MOVZ (Symbolic.X7, 0, 0);
-      Symbolic.STRB_reg (Symbolic.X7, Symbolic.X3);
-      Symbolic.ADD_imm (Symbolic.X11, Symbolic.X11, 1);
-      Symbolic.Label skipEntry;
-      Symbolic.ADD_reg (Symbolic.X15, Symbolic.X15, Symbolic.X6);
-      Symbolic.B_label entryLoop;
-      Symbolic.Label entriesDone;
-      Symbolic.B_label readChunk;
-      Symbolic.Label readDone;
-      Symbolic.MOV_reg (Symbolic.X0, Symbolic.X9);
-      Symbolic.MOVZ
-        ( syscalls.ARM64.syscallRegister,
-          syscalls.ARM64.numbers.Platform.close,
-          0 );
-      Symbolic.SVC syscalls.ARM64.svcImmediate;
-      Symbolic.MOVZ (Symbolic.X7, 1, 0);
-      Symbolic.STR (Symbolic.X7, Symbolic.X10, 0);
-      Symbolic.STR (Symbolic.X11, Symbolic.X10, 8);
-      Symbolic.ADD_imm (Symbolic.X7, Symbolic.X11, 7);
-      Symbolic.LSR_imm (Symbolic.X7, Symbolic.X7, 3);
-      Symbolic.LSL_imm (Symbolic.X7, Symbolic.X7, 3);
-      Symbolic.ADD_imm (Symbolic.X7, Symbolic.X7, 16);
-      Symbolic.ADD_reg (Symbolic.X28, Symbolic.X28, Symbolic.X7);
-      Symbolic.MOV_reg (destReg, Symbolic.X10);
-      Symbolic.ADD_imm (Symbolic.SP, Symbolic.SP, 2048);
-      Symbolic.ADD_imm (Symbolic.SP, Symbolic.SP, 2048);
-      Symbolic.ADD_imm (Symbolic.SP, Symbolic.SP, 2048);
-      Symbolic.ADD_imm (Symbolic.SP, Symbolic.SP, 2048);
-    ]
-  @ generateLeakCounterInc ctx
-  @ [
-      Symbolic.B_label complete;
-      Symbolic.Label openFailed;
-      Symbolic.ADD_imm (Symbolic.SP, Symbolic.SP, 2048);
-      Symbolic.ADD_imm (Symbolic.SP, Symbolic.SP, 2048);
-      Symbolic.ADD_imm (Symbolic.SP, Symbolic.SP, 2048);
-      Symbolic.ADD_imm (Symbolic.SP, Symbolic.SP, 2048);
-    ]
-  @ loadStringLiteralPointer destReg ""
-  @ [ Symbolic.Label complete ]
-
-let emitUnitOk (ctx : codeGenContext) (destReg : Symbolic.reg) =
-  [
-    Symbolic.MOV_reg (destReg, Symbolic.X28);
-    Symbolic.ADD_imm (Symbolic.X28, Symbolic.X28, 24);
-    Symbolic.MOVZ (Symbolic.X9, 0, 0);
-    Symbolic.STR (Symbolic.X9, destReg, 0);
-    Symbolic.STR (Symbolic.X9, destReg, 8);
-    Symbolic.MOVZ (Symbolic.X9, 1, 0);
-    Symbolic.STR (Symbolic.X9, destReg, 16);
-  ]
-  @ generateLeakCounterInc ctx
-
-let emitSetEnv (ctx : codeGenContext) (destReg : Symbolic.reg)
-    (loads : Symbolic.instr list) =
-  let prefix =
-    Printf.sprintf "__setenv_%s_%s" ctx.functionName ctx.instructionSite
-  in
-  let findRoot = Printf.sprintf "%s_find_root" prefix in
-  let rootFound = Printf.sprintf "%s_root_found" prefix in
-  let findArgvEnd = Printf.sprintf "%s_find_argv_end" prefix in
-  let nextEntry = Printf.sprintf "%s_next_entry" prefix in
-  let compare = Printf.sprintf "%s_compare" prefix in
-  let nameMatched = Printf.sprintf "%s_name_matched" prefix in
-  let useSlot = Printf.sprintf "%s_use_slot" prefix in
-  let copyName = Printf.sprintf "%s_copy_name" prefix in
-  let nameDone = Printf.sprintf "%s_name_done" prefix in
-  let copyValue = Printf.sprintf "%s_copy_value" prefix in
-  let valueDone = Printf.sprintf "%s_value_done" prefix in
-  let nextSlot = Printf.sprintf "%s_next_slot" prefix in
-  let stored = Printf.sprintf "%s_stored" prefix in
-  loads
-  @ [
-      Symbolic.MOV_reg (Symbolic.X9, Symbolic.X29);
-      Symbolic.Label findRoot;
-      Symbolic.LDR (Symbolic.X10, Symbolic.X9, 0);
-      Symbolic.CBZ (Symbolic.X10, rootFound);
-      Symbolic.MOV_reg (Symbolic.X9, Symbolic.X10);
-      Symbolic.B_label findRoot;
-      Symbolic.Label rootFound;
-      Symbolic.ADD_imm (Symbolic.X9, Symbolic.X9, 24);
-      Symbolic.Label findArgvEnd;
-      Symbolic.LDR (Symbolic.X10, Symbolic.X9, 0);
-      Symbolic.ADD_imm (Symbolic.X9, Symbolic.X9, 8);
-      Symbolic.CBNZ (Symbolic.X10, findArgvEnd);
-      Symbolic.LDR (Symbolic.X11, Symbolic.X14, 8);
-      Symbolic.Label nextEntry;
-      Symbolic.LDR (Symbolic.X10, Symbolic.X9, 0);
-      Symbolic.CBZ (Symbolic.X10, useSlot);
-      Symbolic.MOVZ (Symbolic.X12, 0, 0);
-      Symbolic.Label compare;
-      Symbolic.CMP_reg (Symbolic.X12, Symbolic.X11);
-      Symbolic.B_cond_label (Symbolic.GE, nameMatched);
-      Symbolic.ADD_imm (Symbolic.X13, Symbolic.X14, 16);
-      Symbolic.LDRB (Symbolic.X13, Symbolic.X13, Symbolic.X12);
-      Symbolic.LDRB (Symbolic.X15, Symbolic.X10, Symbolic.X12);
-      Symbolic.CMP_reg (Symbolic.X13, Symbolic.X15);
-      Symbolic.B_cond_label (Symbolic.NE, nextSlot);
-      Symbolic.ADD_imm (Symbolic.X12, Symbolic.X12, 1);
-      Symbolic.B_label compare;
-      Symbolic.Label nameMatched;
-      Symbolic.LDRB (Symbolic.X13, Symbolic.X10, Symbolic.X12);
-      Symbolic.CMP_imm (Symbolic.X13, 61);
-      Symbolic.B_cond_label (Symbolic.EQ, useSlot);
-      Symbolic.Label nextSlot;
-      Symbolic.ADD_imm (Symbolic.X9, Symbolic.X9, 8);
-      Symbolic.B_label nextEntry;
-      Symbolic.Label useSlot;
-      Symbolic.MOV_reg (Symbolic.X10, Symbolic.X28);
-      Symbolic.LDR (Symbolic.X12, Symbolic.X1, 8);
-      Symbolic.ADD_reg (Symbolic.X13, Symbolic.X11, Symbolic.X12);
-      Symbolic.ADD_imm (Symbolic.X13, Symbolic.X13, 9);
-      Symbolic.LSR_imm (Symbolic.X13, Symbolic.X13, 3);
-      Symbolic.LSL_imm (Symbolic.X13, Symbolic.X13, 3);
-      Symbolic.ADD_reg (Symbolic.X28, Symbolic.X28, Symbolic.X13);
-      Symbolic.ADD_imm (Symbolic.X13, Symbolic.X14, 16);
-      Symbolic.MOV_reg (Symbolic.X15, Symbolic.X10);
-      Symbolic.MOV_reg (Symbolic.X12, Symbolic.X11);
-      Symbolic.Label copyName;
-      Symbolic.CBZ (Symbolic.X12, nameDone);
-      Symbolic.LDRB_imm (Symbolic.X11, Symbolic.X13, 0);
-      Symbolic.STRB_reg (Symbolic.X11, Symbolic.X15);
-      Symbolic.ADD_imm (Symbolic.X13, Symbolic.X13, 1);
-      Symbolic.ADD_imm (Symbolic.X15, Symbolic.X15, 1);
-      Symbolic.SUB_imm (Symbolic.X12, Symbolic.X12, 1);
-      Symbolic.B_label copyName;
-      Symbolic.Label nameDone;
-      Symbolic.MOVZ (Symbolic.X11, 61, 0);
-      Symbolic.STRB_reg (Symbolic.X11, Symbolic.X15);
-      Symbolic.ADD_imm (Symbolic.X15, Symbolic.X15, 1);
-      Symbolic.ADD_imm (Symbolic.X13, Symbolic.X1, 16);
-      Symbolic.LDR (Symbolic.X12, Symbolic.X1, 8);
-      Symbolic.Label copyValue;
-      Symbolic.CBZ (Symbolic.X12, valueDone);
-      Symbolic.LDRB_imm (Symbolic.X11, Symbolic.X13, 0);
-      Symbolic.STRB_reg (Symbolic.X11, Symbolic.X15);
-      Symbolic.ADD_imm (Symbolic.X13, Symbolic.X13, 1);
-      Symbolic.ADD_imm (Symbolic.X15, Symbolic.X15, 1);
-      Symbolic.SUB_imm (Symbolic.X12, Symbolic.X12, 1);
-      Symbolic.B_label copyValue;
-      Symbolic.Label valueDone;
-      Symbolic.MOVZ (Symbolic.X11, 0, 0);
-      Symbolic.STRB_reg (Symbolic.X11, Symbolic.X15);
-      Symbolic.LDR (Symbolic.X11, Symbolic.X9, 0);
-      Symbolic.STR (Symbolic.X10, Symbolic.X9, 0);
-      Symbolic.CBNZ (Symbolic.X11, stored);
-      Symbolic.STR (Symbolic.X11, Symbolic.X9, 8);
-      Symbolic.Label stored;
-    ]
-  @ emitUnitOk ctx destReg
-
-let emitUnsetEnv (ctx : codeGenContext) (destReg : Symbolic.reg)
-    (loads : Symbolic.instr list) =
-  let prefix =
-    Printf.sprintf "__unsetenv_%s_%s" ctx.functionName ctx.instructionSite
-  in
-  let findRoot = Printf.sprintf "%s_find_root" prefix in
-  let rootFound = Printf.sprintf "%s_root_found" prefix in
-  let findArgvEnd = Printf.sprintf "%s_find_argv_end" prefix in
-  let nextEntry = Printf.sprintf "%s_next_entry" prefix in
-  let compare = Printf.sprintf "%s_compare" prefix in
-  let nameMatched = Printf.sprintf "%s_name_matched" prefix in
-  let advance = Printf.sprintf "%s_advance" prefix in
-  let shift = Printf.sprintf "%s_shift" prefix in
-  let doneLabel = Printf.sprintf "%s_done" prefix in
-  loads
-  @ [
-      Symbolic.MOV_reg (Symbolic.X9, Symbolic.X29);
-      Symbolic.Label findRoot;
-      Symbolic.LDR (Symbolic.X10, Symbolic.X9, 0);
-      Symbolic.CBZ (Symbolic.X10, rootFound);
-      Symbolic.MOV_reg (Symbolic.X9, Symbolic.X10);
-      Symbolic.B_label findRoot;
-      Symbolic.Label rootFound;
-      Symbolic.ADD_imm (Symbolic.X9, Symbolic.X9, 24);
-      Symbolic.Label findArgvEnd;
-      Symbolic.LDR (Symbolic.X10, Symbolic.X9, 0);
-      Symbolic.ADD_imm (Symbolic.X9, Symbolic.X9, 8);
-      Symbolic.CBNZ (Symbolic.X10, findArgvEnd);
-      Symbolic.LDR (Symbolic.X11, Symbolic.X0, 8);
-      Symbolic.Label nextEntry;
-      Symbolic.LDR (Symbolic.X10, Symbolic.X9, 0);
-      Symbolic.CBZ (Symbolic.X10, doneLabel);
-      Symbolic.MOVZ (Symbolic.X12, 0, 0);
-      Symbolic.Label compare;
-      Symbolic.CMP_reg (Symbolic.X12, Symbolic.X11);
-      Symbolic.B_cond_label (Symbolic.GE, nameMatched);
-      Symbolic.ADD_imm (Symbolic.X13, Symbolic.X0, 16);
-      Symbolic.LDRB (Symbolic.X13, Symbolic.X13, Symbolic.X12);
-      Symbolic.LDRB (Symbolic.X14, Symbolic.X10, Symbolic.X12);
-      Symbolic.CMP_reg (Symbolic.X13, Symbolic.X14);
-      Symbolic.B_cond_label (Symbolic.NE, advance);
-      Symbolic.ADD_imm (Symbolic.X12, Symbolic.X12, 1);
-      Symbolic.B_label compare;
-      Symbolic.Label nameMatched;
-      Symbolic.LDRB (Symbolic.X13, Symbolic.X10, Symbolic.X12);
-      Symbolic.CMP_imm (Symbolic.X13, 61);
-      Symbolic.B_cond_label (Symbolic.NE, advance);
-      Symbolic.MOV_reg (Symbolic.X13, Symbolic.X9);
-      Symbolic.ADD_imm (Symbolic.X14, Symbolic.X9, 8);
-      Symbolic.Label shift;
-      Symbolic.LDR (Symbolic.X15, Symbolic.X14, 0);
-      Symbolic.STR (Symbolic.X15, Symbolic.X13, 0);
-      Symbolic.CBZ (Symbolic.X15, doneLabel);
-      Symbolic.ADD_imm (Symbolic.X13, Symbolic.X13, 8);
-      Symbolic.ADD_imm (Symbolic.X14, Symbolic.X14, 8);
-      Symbolic.B_label shift;
-      Symbolic.Label advance;
-      Symbolic.ADD_imm (Symbolic.X9, Symbolic.X9, 8);
-      Symbolic.B_label nextEntry;
-      Symbolic.Label doneLabel;
-    ]
-  @ emitUnitOk ctx destReg
-
-(*
-   Generate random 8 bytes as Int64
-*)
 let emitRandomInt64 (ctx : codeGenContext) (dest : LIR.reg) =
   lirRegToARM64Reg dest
   |> Result.map (fun destReg ->
@@ -724,9 +249,23 @@ let emitCliNative (ctx : codeGenContext) (dest : LIR.reg)
       | LIR.PosixChmodAt | LIR.PosixChmodAt2 | LIR.PosixUtimesAt
       | LIR.PosixSetAttributesAt | LIR.PosixSymlinkAt | LIR.PosixReadlinkAt
       | LIR.PosixAccessAt | LIR.PosixFlock | LIR.PosixGetDents | LIR.PosixIoctl
-      | LIR.PosixProcInfo -> (
+      | LIR.PosixProcInfo | LIR.PosixCopyFileRange | LIR.PosixFtruncate
+      | LIR.PosixFchmod | LIR.PosixFstat | LIR.PosixPread
+      | LIR.PosixPwrite | LIR.PosixFclonefileat | LIR.PosixGetentropy
+      | LIR.PosixUname | LIR.PosixSysctl | LIR.PosixSchedGetaffinity
+      | LIR.PosixFcntlGetPath | LIR.PosixClockGettime | LIR.PosixGettimeofday
+      | LIR.PosixNanosleep | LIR.PosixMachTimebaseInfo | LIR.PosixInotifyInit1
+      | LIR.PosixInotifyAddWatch | LIR.PosixPpoll | LIR.PosixPollDarwin
+      | LIR.PosixKqueue | LIR.PosixKeventVnode | LIR.PosixWait4
+      | LIR.ChildLaunch -> (
           let number, arity =
             match operation with
+            | LIR.ChildLaunch -> (Some 0, 4)
+            | LIR.PosixWait4 ->
+                ( Some
+                    (if ARM64.targetOS ctx.target = Platform.Linux then 260
+                     else 7),
+                  4 )
             | LIR.PosixOpenAt ->
                 ( (match ARM64.targetOS ctx.target with
                   | Platform.Linux -> Some 56
@@ -760,7 +299,7 @@ let emitCliNative (ctx : codeGenContext) (dest : LIR.reg)
             | LIR.PosixGetCwd ->
                 ( (match ARM64.targetOS ctx.target with
                   | Platform.Linux -> Some 17
-                  | Platform.MacOS -> Some 326),
+                  | Platform.MacOS -> None),
                   2 )
             | LIR.PosixChdir ->
                 ( (match ARM64.targetOS ctx.target with
@@ -837,20 +376,153 @@ let emitCliNative (ctx : codeGenContext) (dest : LIR.reg)
                   | Platform.Linux -> Some 61
                   | Platform.MacOS -> Some 344),
                   4 )
+            | LIR.PosixCopyFileRange ->
+                ( (match ARM64.targetOS ctx.target with
+                  | Platform.Linux -> Some 285
+                  | Platform.MacOS -> None),
+                  6 )
+            | LIR.PosixFtruncate ->
+                ( (match ARM64.targetOS ctx.target with
+                  | Platform.Linux -> Some 46
+                  | Platform.MacOS -> Some 153),
+                  2 )
+            | LIR.PosixFchmod ->
+                ( (match ARM64.targetOS ctx.target with
+                  | Platform.Linux -> Some 52
+                  | Platform.MacOS -> Some 94),
+                  2 )
+            | LIR.PosixFstat ->
+                ( (match ARM64.targetOS ctx.target with
+                  | Platform.Linux -> Some 80
+                  | Platform.MacOS -> Some 189),
+                  2 )
+            | LIR.PosixPread ->
+                ( (match ARM64.targetOS ctx.target with
+                  | Platform.Linux -> Some 67
+                  | Platform.MacOS -> Some 197),
+                  4 )
+            | LIR.PosixPwrite ->
+                ( (match ARM64.targetOS ctx.target with
+                  | Platform.Linux -> Some 68
+                  | Platform.MacOS -> Some 198),
+                  4 )
+            | LIR.PosixFclonefileat ->
+                ( (match ARM64.targetOS ctx.target with
+                  | Platform.Linux -> None
+                  | Platform.MacOS -> Some 517),
+                  4 )
+            | LIR.PosixGetentropy ->
+                ( (match ARM64.targetOS ctx.target with
+                  | Platform.Linux -> Some 278
+                  | Platform.MacOS -> Some 500),
+                  3 )
+            | LIR.PosixUname ->
+                ( (match ARM64.targetOS ctx.target with
+                  | Platform.Linux -> Some 160
+                  | Platform.MacOS -> None),
+                  1 )
+            | LIR.PosixSysctl ->
+                ( (match ARM64.targetOS ctx.target with
+                  | Platform.Linux -> None
+                  | Platform.MacOS -> Some 202),
+                  6 )
+            | LIR.PosixSchedGetaffinity ->
+                ( (match ARM64.targetOS ctx.target with
+                  | Platform.Linux -> Some 123
+                  | Platform.MacOS -> None),
+                  3 )
+            | LIR.PosixFcntlGetPath ->
+                ( (match ARM64.targetOS ctx.target with
+                  | Platform.Linux -> None
+                  | Platform.MacOS -> Some 92),
+                  3 )
+            | LIR.PosixClockGettime ->
+                ( (match ARM64.targetOS ctx.target with
+                  | Platform.Linux -> Some 113
+                  | Platform.MacOS -> None),
+                  2 )
+            | LIR.PosixGettimeofday ->
+                ( (match ARM64.targetOS ctx.target with
+                  | Platform.Linux -> Some 169
+                  | Platform.MacOS -> Some 116),
+                  3 )
+            | LIR.PosixNanosleep ->
+                ( (match ARM64.targetOS ctx.target with
+                  | Platform.Linux -> Some 101
+                  | Platform.MacOS -> Some 240),
+                  2 )
+            | LIR.PosixMachTimebaseInfo ->
+                ( (match ARM64.targetOS ctx.target with
+                  | Platform.Linux -> None
+                  | Platform.MacOS -> Some (-89)),
+                  1 )
+            | LIR.PosixInotifyInit1 ->
+                ( (match ARM64.targetOS ctx.target with
+                  | Platform.Linux -> Some 26
+                  | Platform.MacOS -> None),
+                  1 )
+            | LIR.PosixInotifyAddWatch ->
+                ( (match ARM64.targetOS ctx.target with
+                  | Platform.Linux -> Some 27
+                  | Platform.MacOS -> None),
+                  3 )
+            | LIR.PosixPpoll ->
+                ( (match ARM64.targetOS ctx.target with
+                  | Platform.Linux -> Some 73
+                  | Platform.MacOS -> None),
+                  5 )
+            | LIR.PosixPollDarwin ->
+                ( (match ARM64.targetOS ctx.target with
+                  | Platform.Linux -> None
+                  | Platform.MacOS -> Some 230),
+                  3 )
+            | LIR.PosixKqueue ->
+                ( (match ARM64.targetOS ctx.target with
+                  | Platform.Linux -> None
+                  | Platform.MacOS -> Some 362),
+                  0 )
+            | LIR.PosixKeventVnode ->
+                ( (match ARM64.targetOS ctx.target with
+                  | Platform.Linux -> None
+                  | Platform.MacOS -> Some 363),
+                  6 )
             | _ -> Crash.crash "Non-POSIX operation in POSIX lowering"
           in
           if List.length args <> arity then
             Error "POSIX primitive: invalid argument count"
           else
             match number with
-            | None -> Ok (loadImmediate destReg (-38L))
+            | None ->
+                let errno =
+                  match ARM64.targetOS ctx.target with
+                  | Platform.Linux -> -38L
+                  | Platform.MacOS -> -78L
+                in
+                Ok (loadImmediate destReg errno)
             | Some number ->
                 args
+                |> List.mapi (fun index operand -> (index, operand))
                 |> List.fold_left
-                     (fun result operand ->
+                     (fun result (index, operand) ->
                        result
                        |> bind (fun code ->
-                           loadCliOperand Symbolic.X9 operand
+                           let next =
+                             match operand with
+                             | LIR.Reg source ->
+                                 lirRegToARM64Reg source
+                                 |> bind (fun sourceReg ->
+                                     if sourceReg = Symbolic.X9 then
+                                       Ok
+                                         [
+                                           Symbolic.LDR
+                                             ( Symbolic.X9,
+                                               Symbolic.SP,
+                                               index * 16 );
+                                         ]
+                                     else loadCliOperand Symbolic.X9 operand)
+                             | _ -> loadCliOperand Symbolic.X9 operand
+                           in
+                           next
                            |> Result.map (fun next ->
                                code @ next
                                @ [
@@ -858,7 +530,11 @@ let emitCliNative (ctx : codeGenContext) (dest : LIR.reg)
                                      (Symbolic.SP, Symbolic.SP, 16);
                                    Symbolic.STR (Symbolic.X9, Symbolic.SP, 0);
                                  ])))
-                     (Ok [])
+                     (Ok
+                        [
+                          Symbolic.SUB_imm (Symbolic.SP, Symbolic.SP, 16);
+                          Symbolic.STR (Symbolic.X9, Symbolic.SP, 0);
+                        ])
                 |> Result.map (fun loads ->
                     let targets =
                       [
@@ -877,9 +553,10 @@ let emitCliNative (ctx : codeGenContext) (dest : LIR.reg)
                         ctx.instructionSite
                     in
                     let normalize =
-                      match ARM64.targetOS ctx.target with
-                      | Platform.Linux -> []
-                      | Platform.MacOS ->
+                      match (operation, ARM64.targetOS ctx.target) with
+                      | LIR.ChildLaunch, _ -> []
+                      | _, Platform.Linux -> []
+                      | _, Platform.MacOS ->
                           [
                             Symbolic.B_cond_label (Symbolic.LO, doneLabel);
                             Symbolic.NEG (Symbolic.X0, Symbolic.X0);
@@ -893,10 +570,15 @@ let emitCliNative (ctx : codeGenContext) (dest : LIR.reg)
                             Symbolic.LDR (reg, Symbolic.SP, 0);
                             Symbolic.ADD_imm (Symbolic.SP, Symbolic.SP, 16);
                           ]))
-                    @ [
-                        Symbolic.MOVZ (syscall.ARM64.syscallRegister, number, 0);
-                        Symbolic.SVC syscall.ARM64.svcImmediate;
-                      ]
+                    @ [ Symbolic.ADD_imm (Symbolic.SP, Symbolic.SP, 16) ]
+                    @ (if operation = LIR.ChildLaunch then
+                         [ Symbolic.BL "__dark_child_launch" ]
+                       else
+                         [
+                           Symbolic.MOVZ
+                             (syscall.ARM64.syscallRegister, number, 0);
+                           Symbolic.SVC syscall.ARM64.svcImmediate;
+                         ])
                     @ normalize
                     @ [ Symbolic.MOV_reg (destReg, Symbolic.X0) ]))
       | LIR.HostOS ->
@@ -915,125 +597,6 @@ let emitCliNative (ctx : codeGenContext) (dest : LIR.reg)
                   (if ARM64.targetOS ctx.target = Platform.MacOS then 3 else 2),
                   0 );
             ]
-      | LIR.Hostname ->
-          let label suffix =
-            Printf.sprintf "__hostname_%s_%s_%s" ctx.functionName
-              ctx.instructionSite suffix
-          in
-          let failureLabel = label "failure" in
-          let lengthLabel = label "length" in
-          let lengthDoneLabel = label "length_done" in
-          let copyLabel = label "copy" in
-          let copyDoneLabel = label "copy_done" in
-          let completeLabel = label "complete" in
-          let os = ARM64.targetOS ctx.target in
-          let stackSize, nodeOffset, syscallNumber =
-            match os with
-            | Platform.Linux -> (400, 65, 160)
-            | Platform.MacOS -> (1280, 256, 164)
-          in
-          let failureCheck =
-            match os with
-            | Platform.Linux ->
-                [
-                  Symbolic.CMP_imm (Symbolic.X0, 0);
-                  Symbolic.B_cond_label (Symbolic.LT, failureLabel);
-                ]
-            | Platform.MacOS ->
-                [ Symbolic.B_cond_label (Symbolic.HS, failureLabel) ]
-          in
-          let normalizeErrno =
-            match os with
-            | Platform.Linux -> [ Symbolic.NEG (Symbolic.X2, Symbolic.X0) ]
-            | Platform.MacOS -> [ Symbolic.MOV_reg (Symbolic.X2, Symbolic.X0) ]
-          in
-          Ok
-            ([
-               Symbolic.SUB_imm (Symbolic.SP, Symbolic.SP, stackSize);
-               Symbolic.MOV_reg (Symbolic.X0, Symbolic.SP);
-               Symbolic.MOVZ
-                 ( (ARM64.targetSyscalls ctx.target).ARM64.syscallRegister,
-                   syscallNumber,
-                   0 );
-               Symbolic.SVC (ARM64.targetSyscalls ctx.target).ARM64.svcImmediate;
-             ]
-            @ failureCheck
-            @ [
-                Symbolic.ADD_imm (Symbolic.X2, Symbolic.SP, nodeOffset);
-                Symbolic.MOVZ (Symbolic.X3, 0, 0);
-                Symbolic.Label lengthLabel;
-                Symbolic.LDRB (Symbolic.X4, Symbolic.X2, Symbolic.X3);
-                Symbolic.CBZ (Symbolic.X4, lengthDoneLabel);
-                Symbolic.ADD_imm (Symbolic.X3, Symbolic.X3, 1);
-                Symbolic.B_label lengthLabel;
-                Symbolic.Label lengthDoneLabel;
-                Symbolic.MOV_reg (Symbolic.X5, Symbolic.X28);
-                Symbolic.MOVZ (Symbolic.X8, 1, 0);
-                Symbolic.STR (Symbolic.X8, Symbolic.X5, 0);
-                Symbolic.STR (Symbolic.X3, Symbolic.X5, 8);
-                Symbolic.ADD_imm (Symbolic.X6, Symbolic.X3, 7);
-                Symbolic.LSR_imm (Symbolic.X6, Symbolic.X6, 3);
-                Symbolic.LSL_imm (Symbolic.X6, Symbolic.X6, 3);
-                Symbolic.ADD_imm (Symbolic.X7, Symbolic.X6, 16);
-                Symbolic.ADD_reg (Symbolic.X28, Symbolic.X28, Symbolic.X7);
-                Symbolic.ADD_imm (Symbolic.X7, Symbolic.X5, 16);
-                Symbolic.MOV_reg (Symbolic.X8, Symbolic.X3);
-                Symbolic.Label copyLabel;
-                Symbolic.CBZ (Symbolic.X8, copyDoneLabel);
-                Symbolic.LDRB_imm (Symbolic.X9, Symbolic.X2, 0);
-                Symbolic.STRB_reg (Symbolic.X9, Symbolic.X7);
-                Symbolic.ADD_imm (Symbolic.X2, Symbolic.X2, 1);
-                Symbolic.ADD_imm (Symbolic.X7, Symbolic.X7, 1);
-                Symbolic.SUB_imm (Symbolic.X8, Symbolic.X8, 1);
-                Symbolic.B_label copyLabel;
-                Symbolic.Label copyDoneLabel;
-                Symbolic.ADD_imm (Symbolic.SP, Symbolic.SP, stackSize);
-              ]
-            @ generateLeakCounterInc ctx
-            @ [
-                Symbolic.MOV_reg (destReg, Symbolic.X28);
-                Symbolic.ADD_imm (Symbolic.X28, Symbolic.X28, 24);
-                Symbolic.MOVZ (Symbolic.X8, 0, 0);
-                Symbolic.STR (Symbolic.X8, destReg, 0);
-                Symbolic.STR (Symbolic.X5, destReg, 8);
-                Symbolic.MOVZ (Symbolic.X8, 1, 0);
-                Symbolic.STR (Symbolic.X8, destReg, 16);
-              ]
-            @ generateLeakCounterInc ctx
-            @ [ Symbolic.B_label completeLabel; Symbolic.Label failureLabel ]
-            @ normalizeErrno
-            @ [ Symbolic.ADD_imm (Symbolic.SP, Symbolic.SP, stackSize) ]
-            @ loadStringLiteralPointer Symbolic.X3 "POSIX error"
-            @ [
-                Symbolic.MOV_reg (Symbolic.X4, Symbolic.X28);
-                Symbolic.ADD_imm (Symbolic.X28, Symbolic.X28, 24);
-                Symbolic.STR (Symbolic.X2, Symbolic.X4, 0);
-                Symbolic.STR (Symbolic.X3, Symbolic.X4, 8);
-                Symbolic.MOVZ (Symbolic.X5, 1, 0);
-                Symbolic.STR (Symbolic.X5, Symbolic.X4, 16);
-              ]
-            @ generateLeakCounterInc ctx
-            @ [
-                Symbolic.MOV_reg (destReg, Symbolic.X28);
-                Symbolic.ADD_imm (Symbolic.X28, Symbolic.X28, 24);
-                Symbolic.MOVZ (Symbolic.X5, 1, 0);
-                Symbolic.STR (Symbolic.X5, destReg, 0);
-                Symbolic.STR (Symbolic.X4, destReg, 8);
-                Symbolic.STR (Symbolic.X5, destReg, 16);
-              ]
-            @ generateLeakCounterInc ctx
-            @ [ Symbolic.Label completeLabel ])
-      | LIR.Execute when ARM64.targetOS ctx.target = Platform.Linux -> (
-          match args with
-          | [ command ] ->
-              loadCliOperand Symbolic.X0 command
-              |> Result.map (fun loads ->
-                  loads
-                  @ [ Symbolic.BL "__dark_cli_execute" ]
-                  @
-                  if destReg = Symbolic.X0 then []
-                  else [ Symbolic.MOV_reg (destReg, Symbolic.X0) ])
-          | _ -> Error "CLI execute expects exactly one command")
       | LIR.StartupStack ->
           let loop =
             Printf.sprintf "__startup_stack_%s_%s" ctx.functionName
@@ -1053,6 +616,10 @@ let emitCliNative (ctx : codeGenContext) (dest : LIR.reg)
             ]
       | LIR.ExecutableState ->
           Ok [ Symbolic.ADD_imm (destReg, Symbolic.X27, 256 + 512) ]
+      | LIR.ChildState ->
+          Ok
+            (loadImmediate destReg 8960L
+            @ [ Symbolic.ADD_reg (destReg, Symbolic.X27, destReg) ])
       | LIR.GetPid | LIR.GetUid ->
           let os = ARM64.targetOS ctx.target in
           let number =
@@ -1508,95 +1075,6 @@ let emitCliNative (ctx : codeGenContext) (dest : LIR.reg)
                   @ normalize
                   @ [ Symbolic.MOV_reg (destReg, Symbolic.X0) ])
           | _ -> Error "SocketClose expects one descriptor")
-      | LIR.CpuCount -> (
-          match ARM64.targetOS ctx.target with
-          | Platform.MacOS ->
-              let label suffix =
-                Printf.sprintf "__cpu_count_%s_%s_%s" ctx.functionName
-                  ctx.instructionSite suffix
-              in
-              let fallback = label "fallback" in
-              let complete = label "complete" in
-              Ok
-                ([ Symbolic.SUB_imm (Symbolic.SP, Symbolic.SP, 32) ]
-                @ loadImmediate Symbolic.X9 0x1900000006L
-                @ [
-                    Symbolic.STR (Symbolic.X9, Symbolic.SP, 0);
-                    Symbolic.MOVZ (Symbolic.X9, 0, 0);
-                    Symbolic.STR (Symbolic.X9, Symbolic.SP, 8);
-                    Symbolic.MOVZ (Symbolic.X9, 4, 0);
-                    Symbolic.STR (Symbolic.X9, Symbolic.SP, 16);
-                    Symbolic.MOV_reg (Symbolic.X0, Symbolic.SP);
-                    Symbolic.MOVZ (Symbolic.X1, 2, 0);
-                    Symbolic.ADD_imm (Symbolic.X2, Symbolic.SP, 8);
-                    Symbolic.ADD_imm (Symbolic.X3, Symbolic.SP, 16);
-                    Symbolic.MOVZ (Symbolic.X4, 0, 0);
-                    Symbolic.MOVZ (Symbolic.X5, 0, 0);
-                    Symbolic.MOVZ (Symbolic.X16, 202, 0);
-                    Symbolic.SVC 0x80;
-                    Symbolic.B_cond_label (Symbolic.HS, fallback);
-                    Symbolic.LDR (Symbolic.X9, Symbolic.SP, 8);
-                    Symbolic.CBZ (Symbolic.X9, fallback);
-                    Symbolic.MOV_reg (destReg, Symbolic.X9);
-                    Symbolic.B_label complete;
-                    Symbolic.Label fallback;
-                    Symbolic.MOVZ (destReg, 1, 0);
-                    Symbolic.Label complete;
-                    Symbolic.ADD_imm (Symbolic.SP, Symbolic.SP, 32);
-                  ])
-          | Platform.Linux ->
-              let label suffix =
-                Printf.sprintf "__cpu_count_%s_%s_%s" ctx.functionName
-                  ctx.instructionSite suffix
-              in
-              let byteLoop = label "byte_loop" in
-              let bitLoop = label "bit_loop" in
-              let nextByte = label "next_byte" in
-              let doneLabel = label "done" in
-              let fallback = label "fallback" in
-              let complete = label "complete" in
-              let zeroMask =
-                List.init 16 Fun.id
-                |> List.map (fun index ->
-                    Symbolic.STR (Symbolic.X9, Symbolic.SP, int16 (mul index 8)))
-              in
-              Ok
-                ([
-                   Symbolic.SUB_imm (Symbolic.SP, Symbolic.SP, 128);
-                   Symbolic.MOVZ (Symbolic.X9, 0, 0);
-                 ]
-                @ zeroMask
-                @ [
-                    Symbolic.MOVZ (Symbolic.X0, 0, 0);
-                    Symbolic.MOVZ (Symbolic.X1, 128, 0);
-                    Symbolic.MOV_reg (Symbolic.X2, Symbolic.SP);
-                    Symbolic.MOVZ (Symbolic.X8, 123, 0);
-                    Symbolic.SVC 0;
-                    Symbolic.CMP_imm (Symbolic.X0, 0);
-                    Symbolic.B_cond_label (Symbolic.LT, fallback);
-                    Symbolic.MOVZ (Symbolic.X9, 0, 0);
-                    Symbolic.MOVZ (Symbolic.X10, 0, 0);
-                    Symbolic.Label byteLoop;
-                    Symbolic.CMP_imm (Symbolic.X9, 128);
-                    Symbolic.B_cond_label (Symbolic.GE, doneLabel);
-                    Symbolic.LDRB (Symbolic.X11, Symbolic.SP, Symbolic.X9);
-                    Symbolic.Label bitLoop;
-                    Symbolic.CBZ (Symbolic.X11, nextByte);
-                    Symbolic.AND_imm (Symbolic.X12, Symbolic.X11, 1L);
-                    Symbolic.ADD_reg (Symbolic.X10, Symbolic.X10, Symbolic.X12);
-                    Symbolic.LSR_imm (Symbolic.X11, Symbolic.X11, 1);
-                    Symbolic.B_label bitLoop;
-                    Symbolic.Label nextByte;
-                    Symbolic.ADD_imm (Symbolic.X9, Symbolic.X9, 1);
-                    Symbolic.B_label byteLoop;
-                    Symbolic.Label doneLabel;
-                    Symbolic.MOV_reg (destReg, Symbolic.X10);
-                    Symbolic.B_label complete;
-                    Symbolic.Label fallback;
-                    Symbolic.MOVZ (destReg, 1, 0);
-                    Symbolic.Label complete;
-                    Symbolic.ADD_imm (Symbolic.SP, Symbolic.SP, 128);
-                  ]))
       | LIR.GetArgv -> (
           match args with
           | [ index ] ->
@@ -1717,205 +1195,6 @@ let emitCliNative (ctx : codeGenContext) (dest : LIR.reg)
           | _ -> Error "StdinState expects a fixed state or input-buffer offset"
           )
       | LIR.GetEnvironmentPacked -> Ok (emitEnvironmentPacked ctx destReg)
-      | LIR.DirectoryCurrent -> Ok (emitDirectoryCurrent ctx destReg)
-      | LIR.DirectoryListPacked -> (
-          match args with
-          | [ path ] ->
-              loadCliOperand Symbolic.X0 path
-              |> Result.map (emitDirectoryListPacked ctx destReg)
-          | _ -> Error "directoryList expects exactly one path")
-      | LIR.FileIsDirectory -> (
-          match args with
-          | [ path ] ->
-              loadCliOperand Symbolic.X0 path
-              |> Result.map (fun loads ->
-                  let labelPrefix =
-                    Printf.sprintf "__is_dir_%s_%s" ctx.functionName
-                      ctx.instructionSite
-                  in
-                  let copyLoop = Printf.sprintf "%s_copy" labelPrefix in
-                  let copyDone = Printf.sprintf "%s_copy_done" labelPrefix in
-                  let failure = Printf.sprintf "%s_failure" labelPrefix in
-                  let complete = Printf.sprintf "%s_complete" labelPrefix in
-                  let syscalls = ARM64.targetSyscalls ctx.target in
-                  let openCall, failureCheck =
-                    match ARM64.targetOS ctx.target with
-                    | Platform.Linux ->
-                        ( loadImmediate Symbolic.X0 (-100L)
-                          @ [ Symbolic.MOV_reg (Symbolic.X1, Symbolic.SP) ]
-                          @ loadImmediate Symbolic.X2 16384L
-                          @ [
-                              Symbolic.MOVZ (Symbolic.X3, 0, 0);
-                              Symbolic.MOVZ
-                                ( syscalls.ARM64.syscallRegister,
-                                  syscalls.ARM64.numbers.Platform.open_,
-                                  0 );
-                              Symbolic.SVC syscalls.ARM64.svcImmediate;
-                            ],
-                          [
-                            Symbolic.CMP_imm (Symbolic.X0, 0);
-                            Symbolic.B_cond_label (Symbolic.LT, failure);
-                          ] )
-                    | Platform.MacOS ->
-                        ( [ Symbolic.MOV_reg (Symbolic.X0, Symbolic.SP) ]
-                          @ loadImmediate Symbolic.X1 0x100000L
-                          @ [
-                              Symbolic.MOVZ (Symbolic.X2, 0, 0);
-                              Symbolic.MOVZ
-                                ( syscalls.ARM64.syscallRegister,
-                                  syscalls.ARM64.numbers.Platform.open_,
-                                  0 );
-                              Symbolic.SVC syscalls.ARM64.svcImmediate;
-                            ],
-                          [ Symbolic.B_cond_label (Symbolic.HS, failure) ] )
-                  in
-                  loads
-                  @ [
-                      Symbolic.SUB_imm (Symbolic.SP, Symbolic.SP, 2048);
-                      Symbolic.SUB_imm (Symbolic.SP, Symbolic.SP, 2048);
-                      Symbolic.LDR (Symbolic.X9, Symbolic.X0, 8);
-                      Symbolic.ADD_imm (Symbolic.X10, Symbolic.X0, 16);
-                      Symbolic.MOV_reg (Symbolic.X11, Symbolic.SP);
-                      Symbolic.Label copyLoop;
-                      Symbolic.CBZ (Symbolic.X9, copyDone);
-                      Symbolic.LDRB_imm (Symbolic.X12, Symbolic.X10, 0);
-                      Symbolic.STRB_reg (Symbolic.X12, Symbolic.X11);
-                      Symbolic.ADD_imm (Symbolic.X10, Symbolic.X10, 1);
-                      Symbolic.ADD_imm (Symbolic.X11, Symbolic.X11, 1);
-                      Symbolic.SUB_imm (Symbolic.X9, Symbolic.X9, 1);
-                      Symbolic.B_label copyLoop;
-                      Symbolic.Label copyDone;
-                      Symbolic.MOVZ (Symbolic.X12, 0, 0);
-                      Symbolic.STRB_reg (Symbolic.X12, Symbolic.X11);
-                    ]
-                  @ openCall @ failureCheck
-                  @ [
-                      Symbolic.MOV_reg (Symbolic.X9, Symbolic.X0);
-                      Symbolic.MOVZ
-                        ( syscalls.ARM64.syscallRegister,
-                          syscalls.ARM64.numbers.Platform.close,
-                          0 );
-                      Symbolic.SVC syscalls.ARM64.svcImmediate;
-                      Symbolic.MOVZ (destReg, 1, 0);
-                      Symbolic.B_label complete;
-                      Symbolic.Label failure;
-                      Symbolic.MOVZ (destReg, 0, 0);
-                      Symbolic.Label complete;
-                      Symbolic.ADD_imm (Symbolic.SP, Symbolic.SP, 2048);
-                      Symbolic.ADD_imm (Symbolic.SP, Symbolic.SP, 2048);
-                    ])
-          | _ -> Error "fileIsDirectory expects exactly one path")
-      | LIR.FileCreateExclusive -> (
-          match args with
-          | [ path ] ->
-              loadCliOperand Symbolic.X0 path
-              |> Result.map (fun loads ->
-                  let labelPrefix =
-                    Printf.sprintf "__create_exclusive_%s_%s" ctx.functionName
-                      ctx.instructionSite
-                  in
-                  let copyLoop = Printf.sprintf "%s_copy" labelPrefix in
-                  let copyDone = Printf.sprintf "%s_copy_done" labelPrefix in
-                  let tooLong = Printf.sprintf "%s_too_long" labelPrefix in
-                  let failure = Printf.sprintf "%s_failure" labelPrefix in
-                  let complete = Printf.sprintf "%s_complete" labelPrefix in
-                  let syscalls = ARM64.targetSyscalls ctx.target in
-                  let openCall, failureCheck, normalizeError =
-                    match ARM64.targetOS ctx.target with
-                    | Platform.Linux ->
-                        ( loadImmediate Symbolic.X0 (-100L)
-                          @ [ Symbolic.MOV_reg (Symbolic.X1, Symbolic.SP) ]
-                          @ loadImmediate Symbolic.X2 194L
-                          @ loadImmediate Symbolic.X3 0o600L
-                          @ [
-                              Symbolic.MOVZ
-                                ( syscalls.ARM64.syscallRegister,
-                                  syscalls.ARM64.numbers.Platform.open_,
-                                  0 );
-                              Symbolic.SVC syscalls.ARM64.svcImmediate;
-                            ],
-                          [
-                            Symbolic.CMP_imm (Symbolic.X0, 0);
-                            Symbolic.B_cond_label (Symbolic.LT, failure);
-                          ],
-                          [ Symbolic.NEG (destReg, Symbolic.X0) ] )
-                    | Platform.MacOS ->
-                        ( [ Symbolic.MOV_reg (Symbolic.X0, Symbolic.SP) ]
-                          @ loadImmediate Symbolic.X1 2562L
-                          @ loadImmediate Symbolic.X2 0o600L
-                          @ [
-                              Symbolic.MOVZ
-                                ( syscalls.ARM64.syscallRegister,
-                                  syscalls.ARM64.numbers.Platform.open_,
-                                  0 );
-                              Symbolic.SVC syscalls.ARM64.svcImmediate;
-                            ],
-                          [ Symbolic.B_cond_label (Symbolic.HS, failure) ],
-                          [ Symbolic.MOV_reg (destReg, Symbolic.X0) ] )
-                  in
-                  loads
-                  @ [
-                      Symbolic.SUB_imm (Symbolic.SP, Symbolic.SP, 2048);
-                      Symbolic.SUB_imm (Symbolic.SP, Symbolic.SP, 2048);
-                      Symbolic.LDR (Symbolic.X9, Symbolic.X0, 8);
-                    ]
-                  @ loadImmediate Symbolic.X12 4096L
-                  @ [
-                      Symbolic.CMP_reg (Symbolic.X9, Symbolic.X12);
-                      Symbolic.B_cond_label (Symbolic.GE, tooLong);
-                      Symbolic.ADD_imm (Symbolic.X10, Symbolic.X0, 16);
-                      Symbolic.MOV_reg (Symbolic.X11, Symbolic.SP);
-                      Symbolic.Label copyLoop;
-                      Symbolic.CBZ (Symbolic.X9, copyDone);
-                      Symbolic.LDRB_imm (Symbolic.X12, Symbolic.X10, 0);
-                      Symbolic.STRB_reg (Symbolic.X12, Symbolic.X11);
-                      Symbolic.ADD_imm (Symbolic.X10, Symbolic.X10, 1);
-                      Symbolic.ADD_imm (Symbolic.X11, Symbolic.X11, 1);
-                      Symbolic.SUB_imm (Symbolic.X9, Symbolic.X9, 1);
-                      Symbolic.B_label copyLoop;
-                      Symbolic.Label copyDone;
-                      Symbolic.MOVZ (Symbolic.X12, 0, 0);
-                      Symbolic.STRB_reg (Symbolic.X12, Symbolic.X11);
-                    ]
-                  @ openCall @ failureCheck
-                  @ [
-                      Symbolic.MOVZ
-                        ( syscalls.ARM64.syscallRegister,
-                          syscalls.ARM64.numbers.Platform.close,
-                          0 );
-                      Symbolic.SVC syscalls.ARM64.svcImmediate;
-                      Symbolic.MOVZ (destReg, 0, 0);
-                      Symbolic.B_label complete;
-                      Symbolic.Label failure;
-                    ]
-                  @ normalizeError
-                  @ [
-                      Symbolic.B_label complete;
-                      Symbolic.Label tooLong;
-                      Symbolic.MOVZ (destReg, 36, 0);
-                      Symbolic.Label complete;
-                      Symbolic.ADD_imm (Symbolic.SP, Symbolic.SP, 2048);
-                      Symbolic.ADD_imm (Symbolic.SP, Symbolic.SP, 2048);
-                    ])
-          | _ -> Error "fileCreateExclusive expects exactly one path")
-      | LIR.SetEnv -> (
-          match args with
-          | [ name; value ] ->
-              loadCliOperand Symbolic.X0 name
-              |> bind (fun nameLoads ->
-                  loadCliOperand Symbolic.X1 value
-                  |> Result.map (fun valueLoads ->
-                      emitSetEnv ctx destReg
-                        (nameLoads
-                        @ [ Symbolic.MOV_reg (Symbolic.X14, Symbolic.X0) ]
-                        @ valueLoads)))
-          | _ -> Error "setenv expects exactly a name and value")
-      | LIR.UnsetEnv -> (
-          match args with
-          | [ name ] ->
-              loadCliOperand Symbolic.X0 name
-              |> Result.map (emitUnsetEnv ctx destReg)
-          | _ -> Error "unsetenv expects exactly one name")
       | LIR.Kill -> (
           match args with
           | [ pid; signal ] ->
@@ -1994,98 +1273,7 @@ let emitCliNative (ctx : codeGenContext) (dest : LIR.reg)
                       @ prepareFailureCheck @ [ branchToFailure ] @ success
                       @ [ Symbolic.B (List.length failure + 1) ]
                       @ failure))
-          | _ -> Error "CLI kill expects a pid and signal")
-      | LIR.RunProcess when ARM64.targetOS ctx.target = Platform.Linux -> (
-          match args with
-          | [ request ] ->
-              loadCliOperand Symbolic.X0 request
-              |> Result.map (fun loads ->
-                  loads
-                  @ [ Symbolic.BL "__dark_cli_run_process" ]
-                  @
-                  if destReg = Symbolic.X0 then []
-                  else [ Symbolic.MOV_reg (destReg, Symbolic.X0) ])
-          | _ -> Error "CLI run process expects one request")
-      | LIR.RunProcess ->
-          Ok
-            (loadStringLiteralPointer Symbolic.X8 ""
-            @ loadStringLiteralPointer Symbolic.X9
-                "native process execution unavailable"
-            @ [
-                Symbolic.MOV_reg (destReg, Symbolic.X28);
-                Symbolic.ADD_imm (Symbolic.X28, Symbolic.X28, 48);
-                Symbolic.MOVZ (Symbolic.X10, 38, 0);
-                Symbolic.STR (Symbolic.X10, destReg, 0);
-                Symbolic.MOVZ (Symbolic.X10, 0, 0);
-                Symbolic.MVN (Symbolic.X10, Symbolic.X10);
-                Symbolic.STR (Symbolic.X10, destReg, 8);
-                Symbolic.STR (Symbolic.X8, destReg, 16);
-                Symbolic.STR (Symbolic.X9, destReg, 24);
-                Symbolic.MOVZ (Symbolic.X10, 0, 0);
-                Symbolic.STR (Symbolic.X10, destReg, 32);
-                Symbolic.MOVZ (Symbolic.X10, 1, 0);
-                Symbolic.STR (Symbolic.X10, destReg, 40);
-              ])
-      | LIR.SpawnProcess when ARM64.targetOS ctx.target = Platform.Linux -> (
-          match args with
-          | [ command ] ->
-              loadCliOperand Symbolic.X0 command
-              |> Result.map (fun loads ->
-                  loads
-                  @ [
-                      Symbolic.BL "__dark_cli_spawn_process";
-                      Symbolic.MOV_reg (destReg, Symbolic.X0);
-                    ])
-          | _ -> Error "CLI spawn process expects one command")
-      | LIR.ProcessIO when ARM64.targetOS ctx.target = Platform.Linux -> (
-          match args with
-          | [ handle; input ] ->
-              loadCliOperand Symbolic.X0 handle
-              |> bind (fun handleLoads ->
-                  loadCliOperand Symbolic.X1 input
-                  |> Result.map (fun inputLoads ->
-                      handleLoads @ inputLoads
-                      @ [
-                          Symbolic.MOVZ (Symbolic.X2, 0, 0);
-                          Symbolic.BL "__dark_cli_process_io";
-                          Symbolic.MOV_reg (destReg, Symbolic.X0);
-                        ]))
-          | _ -> Error "CLI process IO expects a handle and input")
-      | LIR.TerminateProcess when ARM64.targetOS ctx.target = Platform.Linux
-        -> (
-          match args with
-          | [ handle ] ->
-              loadCliOperand Symbolic.X0 handle
-              |> Result.map (fun loads ->
-                  loads
-                  @ [
-                      Symbolic.BL "__dark_cli_terminate_process";
-                      Symbolic.MOV_reg (destReg, Symbolic.X0);
-                    ])
-          | _ -> Error "CLI terminate process expects one handle")
-      | LIR.Execute | LIR.ProcessIO | LIR.TerminateProcess ->
-          let errorMessage =
-            match operation with
-            | LIR.ProcessIO | LIR.TerminateProcess -> "Invalid process handle"
-            | _ -> "native CLI operation unavailable"
-          in
-          Ok
-            (loadStringLiteralPointer Symbolic.X8 ""
-            @ loadStringLiteralPointer Symbolic.X9 errorMessage
-            @ [
-                Symbolic.MOV_reg (destReg, Symbolic.X28);
-                Symbolic.ADD_imm (Symbolic.X28, Symbolic.X28, 32);
-              ]
-            @ [
-                Symbolic.MOVZ (Symbolic.X10, 0, 0);
-                Symbolic.MVN (Symbolic.X10, Symbolic.X10);
-                Symbolic.STR (Symbolic.X10, destReg, 0);
-                Symbolic.STR (Symbolic.X8, destReg, 8);
-                Symbolic.STR (Symbolic.X9, destReg, 16);
-                Symbolic.MOVZ (Symbolic.X10, 1, 0);
-                Symbolic.STR (Symbolic.X10, destReg, 24);
-              ])
-      | LIR.SpawnProcess -> Ok (loadImmediate destReg (-1L)))
+          | _ -> Error "CLI kill expects a pid and signal"))
 
 (*
    Increment coverage counter at _coverage_data[exprId * 8]

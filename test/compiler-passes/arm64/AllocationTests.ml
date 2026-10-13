@@ -153,8 +153,22 @@ let testCliHostOperationsUseTargetKernelABIs () =
   bothTargets
     [
       L.CliNative (L.Physical L.X0, L.HostArchitecture, []);
-      L.CliNative (L.Physical L.X0, L.Hostname, []);
-      L.CliNative (L.Physical L.X0, L.CpuCount, []);
+      L.CliNative (L.Physical L.X0, L.PosixUname, [ L.Reg (L.Physical L.X1) ]);
+      L.CliNative
+        ( L.Physical L.X0,
+          L.PosixSchedGetaffinity,
+          [ L.Imm 0L; L.Imm 512L; L.Reg (L.Physical L.X1) ] );
+      L.CliNative
+        ( L.Physical L.X0,
+          L.PosixSysctl,
+          [
+            L.Reg (L.Physical L.X1);
+            L.Imm 2L;
+            L.Reg (L.Physical L.X2);
+            L.Reg (L.Physical L.X3);
+            L.Imm 0L;
+            L.Imm 0L;
+          ] );
       L.CliNative (L.Physical L.X0, L.Kill, [ L.Imm 1L; L.Imm 0L ]);
     ]
     "CLI host"
@@ -172,7 +186,7 @@ let testCliHostOperationsUseTargetKernelABIs () =
         List.mem (S.MOVZ (S.X0, 3, 0)) mac
         && List.for_all
              (fun number -> containsSyscall S.X16 number 128 mac)
-             [ 164; 202; 37 ]
+             [ 202; 37 ]
         && List.exists
              (function S.B_cond_label (ARM64.HS, _) -> true | _ -> false)
              mac

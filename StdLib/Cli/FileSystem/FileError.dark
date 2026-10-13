@@ -1,4 +1,3 @@
-// Imported upstream FileError nested module.
 module Darklang.Stdlib.Cli.FileSystem.FileError
 
 /// Render a FileError for display or for callers that haven't migrated to

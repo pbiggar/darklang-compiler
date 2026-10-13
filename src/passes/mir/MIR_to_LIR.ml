@@ -13,30 +13,17 @@
 *)
 let convertCliOperation operation =
   match operation with
-  | MIR.Execute -> LIR.Execute
-  | MIR.RunProcess -> LIR.RunProcess
   | MIR.HostOS -> LIR.HostOS
   | MIR.HostArchitecture -> LIR.HostArchitecture
-  | MIR.Hostname -> LIR.Hostname
   | MIR.GetEnv -> LIR.GetEnv
   | MIR.GetEnvironmentPacked -> LIR.GetEnvironmentPacked
   | MIR.StdinState -> LIR.StdinState
-  | MIR.SetEnv -> LIR.SetEnv
-  | MIR.UnsetEnv -> LIR.UnsetEnv
-  | MIR.DirectoryCurrent -> LIR.DirectoryCurrent
-  | MIR.DirectoryListPacked -> LIR.DirectoryListPacked
-  | MIR.FileIsDirectory -> LIR.FileIsDirectory
-  | MIR.FileCreateExclusive -> LIR.FileCreateExclusive
   | MIR.GetArgv -> LIR.GetArgv
   | MIR.Kill -> LIR.Kill
   | MIR.GetPid -> LIR.GetPid
   | MIR.StartupStack -> LIR.StartupStack
   | MIR.ExecutableState -> LIR.ExecutableState
   | MIR.GetUid -> LIR.GetUid
-  | MIR.CpuCount -> LIR.CpuCount
-  | MIR.SpawnProcess -> LIR.SpawnProcess
-  | MIR.ProcessIO -> LIR.ProcessIO
-  | MIR.TerminateProcess -> LIR.TerminateProcess
   | MIR.SocketTcp4 -> LIR.SocketTcp4
   | MIR.SocketTcp6 -> LIR.SocketTcp6
   | MIR.SocketUdp4 -> LIR.SocketUdp4
@@ -85,6 +72,31 @@ let convertCliOperation operation =
   | MIR.PosixGetDents -> LIR.PosixGetDents
   | MIR.PosixIoctl -> LIR.PosixIoctl
   | MIR.PosixProcInfo -> LIR.PosixProcInfo
+  | MIR.PosixCopyFileRange -> LIR.PosixCopyFileRange
+  | MIR.PosixFtruncate -> LIR.PosixFtruncate
+  | MIR.PosixFchmod -> LIR.PosixFchmod
+  | MIR.PosixFstat -> LIR.PosixFstat
+  | MIR.PosixPread -> LIR.PosixPread
+  | MIR.PosixPwrite -> LIR.PosixPwrite
+  | MIR.PosixFclonefileat -> LIR.PosixFclonefileat
+  | MIR.PosixGetentropy -> LIR.PosixGetentropy
+  | MIR.PosixUname -> LIR.PosixUname
+  | MIR.PosixSysctl -> LIR.PosixSysctl
+  | MIR.PosixSchedGetaffinity -> LIR.PosixSchedGetaffinity
+  | MIR.PosixFcntlGetPath -> LIR.PosixFcntlGetPath
+  | MIR.PosixClockGettime -> LIR.PosixClockGettime
+  | MIR.PosixGettimeofday -> LIR.PosixGettimeofday
+  | MIR.PosixNanosleep -> LIR.PosixNanosleep
+  | MIR.PosixMachTimebaseInfo -> LIR.PosixMachTimebaseInfo
+  | MIR.PosixInotifyInit1 -> LIR.PosixInotifyInit1
+  | MIR.PosixInotifyAddWatch -> LIR.PosixInotifyAddWatch
+  | MIR.PosixPpoll -> LIR.PosixPpoll
+  | MIR.PosixPollDarwin -> LIR.PosixPollDarwin
+  | MIR.PosixKqueue -> LIR.PosixKqueue
+  | MIR.ChildState -> LIR.ChildState
+  | MIR.ChildLaunch -> LIR.ChildLaunch
+  | MIR.PosixWait4 -> LIR.PosixWait4
+  | MIR.PosixKeventVnode -> LIR.PosixKeventVnode
 
 [@@@warning "-4"]
 

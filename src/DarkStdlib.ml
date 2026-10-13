@@ -73,33 +73,11 @@ let cliIntrinsicModule : AST.moduleDef =
     AST.name = "Darklang.Stdlib.Cli";
     functions =
       [
-        fn "__execute" [] [ TString ]
-          (TRecord ("Darklang.Stdlib.Cli.__NativeOutput", []));
-        fn "__runProcess" []
-          [ TRecord ("Darklang.Stdlib.Cli.__NativeProcessRequest", []) ]
-          (TRecord ("Darklang.Stdlib.Cli.__NativeProcessOutput", []));
         fn "__hostOSCode" [] [] TInt64;
         fn "__hostArchitectureCode" [] [] TInt64;
-        fn "__hostname" [] []
-          (TSum
-             ( "Darklang.Stdlib.Result.Result",
-               [
-                 TString; TRecord ("Darklang.Stdlib.Cli.__NativePosixError", []);
-               ] ));
         fn "__getenv" [] [ TString ]
           (TSum ("Darklang.Stdlib.Option.Option", [ TString ]));
-        fn "__createExclusive" [] [ TString ] TInt64;
         fn "__environmentPacked" [] [] TString;
-        fn "__setenv" [] [ TString; TString ]
-          (TSum
-             ( "Darklang.Stdlib.Result.Result",
-               [ TUnit; TRecord ("Darklang.Stdlib.Cli.__NativePosixError", []) ]
-             ));
-        fn "__unsetenv" [] [ TString ]
-          (TSum
-             ( "Darklang.Stdlib.Result.Result",
-               [ TUnit; TRecord ("Darklang.Stdlib.Cli.__NativePosixError", []) ]
-             ));
         fn "__kill" [] [ TInt64; TInt64 ]
           (TSum
              ( "Darklang.Stdlib.Result.Result",
@@ -108,34 +86,6 @@ let cliIntrinsicModule : AST.moduleDef =
         fn "__sleep" [] [ TFloat64 ] TUnit;
         fn "__getpid" [] [] TInt64;
         fn "__getuid" [] [] TInt64;
-        fn "__cpuCount" [] [] TInt64;
-        fn "__spawnProcess" [] [ TString ] TInt64;
-        fn "__processIO" [] [ TInt64; TString ]
-          (TRecord ("Darklang.Stdlib.Cli.__NativeOutput", []));
-        fn "__terminateProcess" [] [ TInt64 ]
-          (TRecord ("Darklang.Stdlib.Cli.__NativeOutput", []));
-      ];
-  }
-
-(*
-   Compiler-only file effects used by portable stdlib implementations.
-*)
-let fileIntrinsicModule : AST.moduleDef =
-  {
-    AST.name = "Darklang.Stdlib.File";
-    functions =
-      [
-        fn "currentDirectory" [] [] TString;
-        fn "listDirectoryPacked" [] [ TString ] TString;
-        fn "readBlob" [] [ TString ] (resultType TBlob);
-        fn "exists" [] [ TString ] TBool;
-        fn "isDirectory" [] [ TString ] TBool;
-        fn "writeBlob" [] [ TString; TBlob ] (resultType TUnit);
-        fn "appendText" [] [ TString; TString ] (resultType TUnit);
-        fn "delete" [] [ TString ] (resultType TUnit);
-        fn "createDirectory" [] [ TString ] (resultType TUnit);
-        fn "setExecutable" [] [ TString ] (resultType TUnit);
-        fn "writeFromPtr" [] [ TString; TInternalRawPtr; TInt64 ] TUnit;
       ];
   }
 
@@ -149,6 +99,38 @@ let posixIntrinsicModule : AST.moduleDef =
     functions =
       [
         fn "__openAt" [] [ TInt64; TInternalRawPtr; TInt64; TInt64 ] TInt64;
+        fn "__copyFileRange" []
+          [ TInt64; TInt64; TInt64; TInt64; TInt64; TInt64 ]
+          TInt64;
+        fn "__ftruncate" [] [ TInt64; TInt64 ] TInt64;
+        fn "__fchmod" [] [ TInt64; TInt64 ] TInt64;
+        fn "__getentropy" [] [ TInternalRawPtr; TInt64; TInt64 ] TInt64;
+        fn "__uname" [] [ TInternalRawPtr ] TInt64;
+        fn "__sysctl" []
+          [
+            TInternalRawPtr;
+            TInt64;
+            TInternalRawPtr;
+            TInternalRawPtr;
+            TInternalRawPtr;
+            TInt64;
+          ]
+          TInt64;
+        fn "__schedGetaffinity" [] [ TInt64; TInt64; TInternalRawPtr ] TInt64;
+        fn "__fcntlGetPath" [] [ TInt64; TInt64; TInternalRawPtr ] TInt64;
+        fn "__clockGettime" [] [ TInt64; TInternalRawPtr ] TInt64;
+        fn "__gettimeofday" []
+          [ TInternalRawPtr; TInternalRawPtr; TInternalRawPtr ]
+          TInt64;
+        fn "__nanosleep" [] [ TInternalRawPtr; TInternalRawPtr ] TInt64;
+        fn "__machTimebaseInfo" [] [ TInternalRawPtr ] TInt64;
+        fn "__fstat" [] [ TInt64; TInternalRawPtr ] TInt64;
+        fn "__pread" [] [ TInt64; TInternalRawPtr; TInt64; TInt64 ] TInt64;
+        fn "__pwrite" [] [ TInt64; TInternalRawPtr; TInt64; TInt64 ] TInt64;
+        fn "__fclonefileat" []
+          [ TInt64; TInt64; TInternalRawPtr; TInt64 ]
+          TInt64;
+        fn "__ioctlValue" [] [ TInt64; TInt64; TInt64 ] TInt64;
         fn "__read" [] [ TInt64; TInternalRawPtr; TInt64 ] TInt64;
         fn "__write" [] [ TInt64; TInternalRawPtr; TInt64 ] TInt64;
         fn "__close" [] [ TInt64 ] TInt64;
@@ -337,6 +319,8 @@ let rawMemoryIntrinsics =
     fn "__int_to_word" [] [ TInt ] TInt64;
     fn "__word_to_int" [] [ TInt64 ] TInt;
     fn "__int_to_rawptr" [] [ TInt ] TInternalRawPtr;
+    fn "__word_to_rawptr" [] [ TInt64 ] TInternalRawPtr;
+    fn "__rawptr_to_word" [] [ TInternalRawPtr ] TInt64;
     fn "__rawptr_to_int" [] [ TInternalRawPtr ] TInt;
     fn "__int64_to_uint64_bits" [] [ TInt64 ] TUInt64;
     fn "__uint64_to_int64_bits" [] [ TUInt64 ] TInt64;
@@ -397,7 +381,6 @@ let allModules =
     floatIntrinsicModule;
     cliIntrinsicModule;
     posixIntrinsicModule;
-    fileIntrinsicModule;
     networkIntrinsicModule;
     randomModule;
     dateTimeModule;

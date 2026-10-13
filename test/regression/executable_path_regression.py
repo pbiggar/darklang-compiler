@@ -23,13 +23,12 @@ def main():
         source.write_text('''let ready = Builtin.__launchWord (Builtin.__executableState ()) 0L in
 let cached = Builtin.__cachedExecutablePath () in
 let _ = Stdlib.Cli.Dir.setCurrent "/" in
-let _ = Stdlib.Cli.Env.set "PATH" "/definitely/missing" in
-let first = Builtin.getCurrentExecutablePath () in
+let first = Builtin.runtimeExecutablePath () in
 let second = Stdlib.Cli.Sys.currentExecutablePath () in
-let small = if Stdlib.Cli.__Posix.__mac () then first else Builtin.__linuxExecutablePath 1L in
+let small = if Builtin.runtimeTargetOS () == "darwin" then first else Builtin.__linuxExecutablePath 1L in
 // Darwin has no AT_EXECFN fallback when argv[0] is forged and PATH is unusable.
-let fallbackMatches = match cached with | Some path -> path == first | None -> Stdlib.Cli.__Posix.__mac () in
-if ready == 1L && fallbackMatches && first == second && first == small && first == Builtin.getCurrentExecutablePath () then first
+let fallbackMatches = match cached with | Some path -> path == first | None -> Builtin.runtimeTargetOS () == "darwin" in
+if ready == 1L && fallbackMatches && first == second && first == small && first == Builtin.runtimeExecutablePath () then first
 else Builtin.crash "Executable path results differ"
 ''', encoding="utf-8")
         subprocess.run([compile_all, str(source), str(root)], check=True, timeout=300)

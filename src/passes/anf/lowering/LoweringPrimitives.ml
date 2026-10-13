@@ -361,36 +361,6 @@ let patternLiteralToSizedInt = function
   | _ -> None
 
 (*
-   Try to convert a function call to a file I/O intrinsic CExpr
-   Returns Some CExpr if it's a file intrinsic, None otherwise
-*)
-let tryFileIntrinsic name args =
-  match (name, args) with
-  | "Darklang.Stdlib.File.currentDirectory", ([] | [ ANF.UnitLiteral ]) ->
-      Some (ANF.CliNative (ANF.DirectoryCurrent, []))
-  | "Darklang.Stdlib.File.listDirectoryPacked", [ pathAtom ] ->
-      Some (ANF.CliNative (ANF.DirectoryListPacked, [ pathAtom ]))
-  | "Darklang.Stdlib.File.readBlob", [ pathAtom ] ->
-      Some (ANF.FileReadBlob pathAtom)
-  | "Darklang.Stdlib.File.exists", [ pathAtom ] ->
-      Some (ANF.FileExists pathAtom)
-  | "Darklang.Stdlib.File.isDirectory", [ pathAtom ] ->
-      Some (ANF.CliNative (ANF.FileIsDirectory, [ pathAtom ]))
-  | "Darklang.Stdlib.File.writeBlob", [ pathAtom; contentAtom ] ->
-      Some (ANF.FileWriteBlob (pathAtom, contentAtom))
-  | "Darklang.Stdlib.File.appendText", [ pathAtom; contentAtom ] ->
-      Some (ANF.FileAppendText (pathAtom, contentAtom))
-  | "Darklang.Stdlib.File.delete", [ pathAtom ] ->
-      Some (ANF.FileDelete pathAtom)
-  | "Darklang.Stdlib.File.createDirectory", [ pathAtom ] ->
-      Some (ANF.FileCreateDirectory pathAtom)
-  | "Darklang.Stdlib.File.setExecutable", [ pathAtom ] ->
-      Some (ANF.FileSetExecutable pathAtom)
-  | "Darklang.Stdlib.File.writeFromPtr", [ pathAtom; ptrAtom; lengthAtom ] ->
-      Some (ANF.FileWriteFromPtr (pathAtom, ptrAtom, lengthAtom))
-  | _ -> None
-
-(*
    Convert the public console builtins into explicit ordered effects.
 *)
 let tryPresentationIntrinsic name args =
@@ -420,30 +390,22 @@ let tryCliIntrinsic name args =
   | _ ->
       let operation =
         match name with
-        | "Darklang.Stdlib.Cli.__execute" -> Some ANF.Execute
-        | "Darklang.Stdlib.Cli.__runProcess" -> Some ANF.RunProcess
         | "Darklang.Stdlib.Cli.__hostOSCode" -> Some ANF.HostOS
         | "Darklang.Stdlib.Cli.__hostArchitectureCode" ->
             Some ANF.HostArchitecture
-        | "Darklang.Stdlib.Cli.__hostname" -> Some ANF.Hostname
         | "Builtin.__stdinState" -> Some ANF.StdinState
         | "Builtin.__startupStack" -> Some ANF.StartupStack
+        | "Builtin.__childState" -> Some ANF.ChildState
+        | "Builtin.__childLaunch" -> Some ANF.ChildLaunch
+        | "Builtin.__childWait4" -> Some ANF.PosixWait4
         | "Builtin.__executableState" -> Some ANF.ExecutableState
         | "Darklang.Stdlib.Cli.__getenv" -> Some ANF.GetEnv
-        | "Darklang.Stdlib.Cli.__createExclusive" ->
-            Some ANF.FileCreateExclusive
         | "Darklang.Stdlib.Cli.__environmentPacked" ->
             Some ANF.GetEnvironmentPacked
-        | "Darklang.Stdlib.Cli.__setenv" -> Some ANF.SetEnv
-        | "Darklang.Stdlib.Cli.__unsetenv" -> Some ANF.UnsetEnv
         | "Darklang.Stdlib.Cli.__argv" -> Some ANF.GetArgv
         | "Darklang.Stdlib.Cli.__kill" -> Some ANF.Kill
         | "Darklang.Stdlib.Cli.__getpid" -> Some ANF.GetPid
         | "Darklang.Stdlib.Cli.__getuid" -> Some ANF.GetUid
-        | "Darklang.Stdlib.Cli.__cpuCount" -> Some ANF.CpuCount
-        | "Darklang.Stdlib.Cli.__spawnProcess" -> Some ANF.SpawnProcess
-        | "Darklang.Stdlib.Cli.__processIO" -> Some ANF.ProcessIO
-        | "Darklang.Stdlib.Cli.__terminateProcess" -> Some ANF.TerminateProcess
         | "Darklang.Stdlib.__Network.__tcp4Socket" -> Some ANF.SocketTcp4
         | "Darklang.Stdlib.__Network.__tcp6Socket" -> Some ANF.SocketTcp6
         | "Darklang.Stdlib.__Network.__udp4Socket" -> Some ANF.SocketUdp4
@@ -493,6 +455,39 @@ let tryCliIntrinsic name args =
         | "Darklang.Stdlib.Cli.__Posix.__readlinkAt" -> Some ANF.PosixReadlinkAt
         | "Darklang.Stdlib.Cli.__Posix.__accessAt" -> Some ANF.PosixAccessAt
         | "Darklang.Stdlib.Cli.__Posix.__procInfo" -> Some ANF.PosixProcInfo
+        | "Darklang.Stdlib.Cli.__Posix.__copyFileRange" ->
+            Some ANF.PosixCopyFileRange
+        | "Darklang.Stdlib.Cli.__Posix.__ftruncate" -> Some ANF.PosixFtruncate
+        | "Darklang.Stdlib.Cli.__Posix.__fchmod" -> Some ANF.PosixFchmod
+        | "Darklang.Stdlib.Cli.__Posix.__fstat" -> Some ANF.PosixFstat
+        | "Darklang.Stdlib.Cli.__Posix.__pread" -> Some ANF.PosixPread
+        | "Darklang.Stdlib.Cli.__Posix.__pwrite" -> Some ANF.PosixPwrite
+        | "Darklang.Stdlib.Cli.__Posix.__fclonefileat" ->
+            Some ANF.PosixFclonefileat
+        | "Darklang.Stdlib.Cli.__Posix.__getentropy" -> Some ANF.PosixGetentropy
+        | "Darklang.Stdlib.Cli.__Posix.__uname" -> Some ANF.PosixUname
+        | "Darklang.Stdlib.Cli.__Posix.__sysctl" -> Some ANF.PosixSysctl
+        | "Darklang.Stdlib.Cli.__Posix.__schedGetaffinity" ->
+            Some ANF.PosixSchedGetaffinity
+        | "Darklang.Stdlib.Cli.__Posix.__fcntlGetPath" ->
+            Some ANF.PosixFcntlGetPath
+        | "Darklang.Stdlib.Cli.__Posix.__clockGettime" ->
+            Some ANF.PosixClockGettime
+        | "Darklang.Stdlib.Cli.__Posix.__inotifyInit1" ->
+            Some ANF.PosixInotifyInit1
+        | "Darklang.Stdlib.Cli.__Posix.__inotifyAddWatch" ->
+            Some ANF.PosixInotifyAddWatch
+        | "Darklang.Stdlib.Cli.__Posix.__ppoll" -> Some ANF.PosixPpoll
+        | "Darklang.Stdlib.Cli.__Posix.__pollDarwin" -> Some ANF.PosixPollDarwin
+        | "Darklang.Stdlib.Cli.__Posix.__kqueue" -> Some ANF.PosixKqueue
+        | "Darklang.Stdlib.Cli.__Posix.__keventVnode" ->
+            Some ANF.PosixKeventVnode
+        | "Darklang.Stdlib.Cli.__Posix.__gettimeofday" ->
+            Some ANF.PosixGettimeofday
+        | "Darklang.Stdlib.Cli.__Posix.__nanosleep" -> Some ANF.PosixNanosleep
+        | "Darklang.Stdlib.Cli.__Posix.__machTimebaseInfo" ->
+            Some ANF.PosixMachTimebaseInfo
+        | "Darklang.Stdlib.Cli.__Posix.__ioctlValue" -> Some ANF.PosixIoctl
         | "Darklang.Stdlib.Cli.__Posix.__flock" -> Some ANF.PosixFlock
         | "Darklang.Stdlib.Cli.__Posix.__getDents" -> Some ANF.PosixGetDents
         | "Darklang.Stdlib.Cli.__Posix.__ioctl" -> Some ANF.PosixIoctl
@@ -802,6 +797,9 @@ let tryRawMemoryIntrinsic resolve sumNames name arguments =
       [ value ] ) ->
       Some (ANF.TypedAtom (value, AST.TInternalRawPtr))
   | "__rawptr_to_int", [ value ] -> Some (ANF.TypedAtom (value, AST.TInt))
+  | "__word_to_rawptr", [ value ] ->
+      Some (ANF.TypedAtom (value, AST.TInternalRawPtr))
+  | "__rawptr_to_word", [ value ] -> Some (ANF.TypedAtom (value, AST.TInt64))
   | "__rawptr_to_int128", [ value ] -> Some (ANF.RawPtrToInt128 value)
   | "__rawptr_to_uint128", [ value ] -> Some (ANF.RawPtrToUInt128 value)
   | "__string_concat_raw", [ left; right ] ->

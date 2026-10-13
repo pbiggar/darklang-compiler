@@ -1,47 +1,99 @@
-// Stdlib.Cli.Sys - portable system-information wrappers.
-
 module Darklang.Stdlib.Cli.Sys
 
-let __currentUserFromPasswd (lines: List<String>) (uid: String) : Stdlib.Option.Option<String> =
-    match lines with
-    | [] -> Stdlib.Option.Option.None
-    | line :: rest ->
-        let fields = Stdlib.String.split line ":" in
-        match (Stdlib.List.getAt fields 0, Stdlib.List.getAt fields 2) with
-        | (Some user, Some candidateUid) ->
-            if candidateUid == uid then Some user
-            else Stdlib.Cli.Sys.__currentUserFromPasswd rest uid
-        | _ -> Stdlib.Cli.Sys.__currentUserFromPasswd rest uid
 
+/// Get the current user's login name.
+/// Checks $LOGNAME, then $USER, then falls back to the passwd database.
 let currentUser () : Stdlib.Option.Option<String> =
-    match Stdlib.Cli.Env.get "LOGNAME" with
-    | Some user -> Some user
-    | _ ->
-        match Stdlib.Cli.Env.get "USER" with
-        | Some user -> Some user
-        | _ ->
-            Builtin.posixGetCurrentUserName ()
+  match Env.get "LOGNAME" with
+  | Some u -> Stdlib.Option.Option.Some u
+  | None ->
+    match Env.get "USER" with
+    | Some u -> Stdlib.Option.Option.Some u
+    | None -> Stdlib.Cli.Posix.__accountLookup (Stdlib.Cli.Posix.__decimal (Builtin.syscallGetuid ())) 0
 
-let hostname () : Stdlib.Result.Result<String, Stdlib.Cli.Posix.Error> =
-    match Stdlib.Cli.__hostname () with
-    | Ok value -> Ok value
-    | Error error -> Error (Stdlib.Cli.Posix.__error error)
-let os () : Stdlib.Result.Result<String, Stdlib.Cli.Posix.Error> =
-    match Stdlib.Cli.OS.getOS () with
-    | Ok Linux -> Ok "Linux"
-    | Ok MacOS -> Ok "Darwin"
-    | _ -> Error (Stdlib.Cli.Posix.Error { errno = 0, message = "Unsupported operating system" })
-let arch () : Stdlib.Result.Result<String, Stdlib.Cli.Posix.Error> =
-    match Stdlib.Cli.Architecture.getArchitecture () with
-    | Ok X86_64 -> Ok "x86_64"
-    | Ok Aarch64 -> Ok "aarch64"
-    | Ok Arm -> Ok "arm"
-    | Ok Arm64 -> Ok "arm64"
-    | Ok Armv7l -> Ok "armv7l"
-    | Error error -> Error (Stdlib.Cli.Posix.Error { errno = 0, message = error })
-let cpuCount () : Int = Builtin.posixCpuCount ()
-let currentPid () : Int = Builtin.posixGetpid ()
-let isRoot () : Bool = (Builtin.posixGetuid ()) == 0
 
-/// The full path of the running executable, discovered by the operating system.
-let currentExecutablePath () : String = Builtin.getCurrentExecutablePath ()
+/// Get the system hostname.
+let hostname () : Result.Result<String, Posix.Error> =
+  (Posix.uname ())
+  |> Stdlib.Result.map (fun result -> Stdlib.Tuple3.second result)
+
+
+/// Get the operating system name (e.g. "Linux", "Darwin").
+let os () : Result.Result<String, Posix.Error> =
+  (Posix.uname ())
+  |> Stdlib.Result.map (fun result -> Stdlib.Tuple3.first result)
+
+
+/// Get the CPU architecture (e.g. "x86_64", "aarch64").
+let arch () : Result.Result<String, Posix.Error> =
+  (Posix.uname ())
+  |> Stdlib.Result.map (fun result -> Stdlib.Tuple3.third result)
+
+
+/// The path of the running executable.
+let currentExecutablePath () : String =
+  Builtin.runtimeExecutablePath ()
+
+
+/// Get the number of available CPUs.
+let cpuCount () : Int =
+  Stdlib.Cli.Sys.__cpuCount () |> Builtin.unwrap
+
+
+/// Get the current process ID.
+let currentPid () : Int =
+  Builtin.syscallGetpid ()
+
+
+/// Check if the current user is root (uid 0).
+let isRoot () : Bool =
+  (Builtin.syscallGetuid ()) == 0
+
+
+/// Host record selection, buffer growth and decoding shared by both engines.
+
+let __text (buffer: Blob) (offset: Int) (length: Int) : String =
+  Stdlib.Blob.toList buffer
+  |> Stdlib.List.drop offset
+  |> Stdlib.List.take length
+  |> Stdlib.List.takeWhile (fun byte -> byte != 0uy)
+  |> Stdlib.String.fromBytesWithReplacement
+
+let __sysctlWith (mib: List<Int>) (count: Int) : Result.Result<Blob, Int> =
+  match Builtin.syscallSysctl mib count with
+  | Error e ->
+    if e == 4 then __sysctlWith mib count
+    else if e == 12 && count < 1048576 then __sysctlWith mib (count * 2)
+    else Error e
+  | Ok bytes -> Ok bytes
+
+let __sysctlText (mib: List<Int>) : Result.Result<String, Int> =
+  __sysctlWith mib 256
+  |> Stdlib.Result.map (fun bytes -> __text bytes 0 (Stdlib.Blob.length bytes))
+
+let __countBits (value: Int) : Int =
+  if value == 0 then 0
+  else value % 2 + __countBits (value / 2)
+
+let __affinityWith (count: Int) : Result.Result<Blob, Int> =
+  match Builtin.syscallSchedGetaffinity 0 count with
+  | Error e ->
+    if e == 4 then __affinityWith count
+    else if e == 22 && count < 1048576 then __affinityWith (count * 2)
+    else Error e
+  | Ok mask -> Ok mask
+
+/// Available CPUs means the calling process's affinity on Linux, hw.ncpu on
+/// Darwin, and one on the interpreter's single-threaded browser runtime.
+let __cpuCount () : Result.Result<Int, Int> =
+  let result =
+    if Builtin.runtimeTargetOS () == "browser" then Ok 1
+    else if Stdlib.Cli.Posix.__abiMac () then
+      __sysctlWith [6, 3] 4
+      |> Stdlib.Result.andThen (fun bytes -> Stdlib.Cli.Posix.__kernelField (Stdlib.Blob.toList bytes) 0 4)
+    else
+      __affinityWith 128
+      |> Stdlib.Result.map (fun bytes ->
+        Stdlib.List.fold (Stdlib.Blob.toList bytes) 0
+          (fun total byte -> total + __countBits (Stdlib.Int.fromUInt8 byte)))
+  result |> Stdlib.Result.andThen (fun count -> if count > 0 then Ok count else Error 5)
