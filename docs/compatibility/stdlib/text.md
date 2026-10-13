@@ -173,7 +173,9 @@ Interpreter `07bafe2d8` implements String `+` with NFC normalization in
 the existing normalized concatenation operation for typed String operands and
 for generic addition specialized to String. For example, `"e" + "́"` returns
 `"é"`; no second Unicode implementation or runtime type dispatch is added.
-Numeric addition keeps its existing implementation. Mixed operand types,
+Specialized additions resolve bottom-up during preparation, before ANF
+conversion. ANF flattens the resolved `StringConcat` tree without repeatedly
+inferring subtree types. Numeric addition keeps its existing implementation. Mixed operand types,
 Bool addition and Char addition are rejected during compilation; legacy `++`
 continues to accept its existing String/Char operands.
 
@@ -187,3 +189,9 @@ before implementation. Native x86-64 validation passed `env -u LD_PRELOAD
 gate stopped before measurement on the existing x86-64 snapshot's incompatible
 workload contract, as documented in the HTTP/HTML adoption ledger; no benchmark
 sources, contracts or snapshots changed. The PR remains draft and unmerged.
+
+The 2026-10-13 review follow-up in [PR #65](https://github.com/pbiggar/darklang-compiler/pull/65)
+expanded this fixture to 25/25 passing assertions, including closure operands,
+simultaneous String/numeric specializations and a 128-operand generic chain.
+The complete host suite passed 13,302/13,302; see the [adoption ledger](../upstream-adoption.md)
+for the full verification results and remaining performance-gate blocker.

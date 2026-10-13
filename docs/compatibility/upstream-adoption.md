@@ -19,7 +19,7 @@ metadata/cancellation, the Dark at-rest checker, package persistence/SCM and UI.
 | `Char.isAlphanumeric` | Letters or decimal digits, rather than all Unicode numbers | Match #5741's `Rune.IsLetterOrDigit`: superscript digits and Roman numerals are false; Arabic decimal digits and supplementary letters are true. Reuse existing Unicode categories. |
 | `Float.isFinite` | Add current upstream declaration | NaN and both infinities yield false; finite values yield true. |
 | `Float.toBits` | Interpret public bits as signed Int64 before converting to Int | Match #5741's `DoubleToInt64Bits`; -0.0 yields -9,223,372,036,854,775,808. Keep the private unsigned representation unchanged; recover imported Float assertion L255. |
-| `Float.clampRefusingNaN` | Add current upstream name and exact error text | Reuse existing Float clamp behavior. Preserve compiler `Float.clamp` and its historical error text; generic clamp/trait dispatch remains discussion-only. |
+| `Float.clampRefusingNaN` | Complete upstream rename and exact error text | Implement `clampRefusingNaN` directly, remove `Float.clamp`, and migrate fixtures; generic clamp/trait dispatch remains discussion-only. |
 | `String.compare` | Add ordinal UTF-16 comparison | Reuse existing typed comparison; only its sign is significant. |
 | `List.setAt`, `List.IndexError` | Add checked replacement with negative indexing | Resolve index from list length; return `IndexOutOfBounds` outside the list, including empty lists. |
 
@@ -90,15 +90,50 @@ length; repeated-input probes contain 1,000 equal values and check length 1.
 | `dedup`, repeated Int | 4,122,482 | 4,120,328 | 0.9995 |
 | `dedup`, repeated Int64 | 3,886,837 | 3,844,749 | 0.9892 |
 
-Neither general replacement was adopted. The `uniqueBy<Int>` candidate failed
-compilation because its generated Int comparison helper was absent. The
-`dedup` candidate changed repeated-NaN behavior and failed compilation for
-function-valued elements (`Could not recover Dict type` for a function key).
-Upstream explicitly changed these operations to dictionary-key semantics;
-silently doing so would remove existing compiler-supported behavior. New
-regressions retain first-occurrence order, compound values, repeated NaNs,
-function identity and Blob identity. A future targeted optimization needs to
-address these boundaries and pass the full performance gate before adoption.
+The dictionary optimization remains unadopted. Its historical
+`uniqueBy<Int>` trial failed because a generated comparison helper was absent.
+Those measurements predate the review fixes and do not measure the current code.
+
+The review follow-up adopts upstream key semantics independently of that
+optimization: `dedup` and `uniqueBy` use canonical comparison equality, including
+NaNs nested in tuples, lists and records. Function, Blob and Stream keys are
+rejected, including through generic wrappers and nested record fields. The
+ordered scan remains quadratic in the number of distinct keys. `dedup` keeps
+first-occurrence order; `uniqueBy` keeps the first value for each key and then
+sorts the surviving values. Ordinary language equality is unchanged.
+
+## Review corrections (2026-10-13)
+
+- Resolve specialized String addition bottom-up during preparation. ANF now
+  receives `StringConcat` and flattens it without repeated subtree inference.
+  Checked type recovery handles internal numeric intrinsics, and failures
+  propagate as compilation errors.
+- Complete the `Float.clampRefusingNaN` migration, including imported fixtures.
+  `Float.clamp` is no longer public; NaN bounds use the upstream error text.
+- Adopt List key equality and restrictions without adopting the unverified
+  dictionary optimization. Regressions cover scalar and compound NaNs,
+  signed zero, first-occurrence order, Int `uniqueBy`, and rejected key shapes.
+
+Follow-up branch: `adopt/upstream-review-fixes`; [PR #65](https://github.com/pbiggar/darklang-compiler/pull/65).
+Native x86-64 verification of the review fixes:
+
+- `env -u LD_PRELOAD ./build --ai`: passed.
+- `./run-tests --ai`: 13,302/13,302 passed in 118.5 seconds.
+- `./run-tests --ai --filter=upstream-stdlib-adoption`: 65/65.
+- `./run-tests --ai --filter=string-plus`: 25/25, including a 128-operand generic chain.
+- `./run-tests --ai --filter=closures --e2e-batch-size=1`: 94/94.
+- `./run-tests --ai --filter=x64`: 98/98.
+- `dune runtest`: passed.
+- `python3 scripts/check_compiled_leaks.py`: 58/58 clean workloads.
+- `./benchmarks/run_benchmarks.sh --verify-parent full`: blocked before measurement;
+  the existing snapshot workload contract digest is incompatible.
+
+Full verification found a closure-signature registration gap, which was fixed.
+Two subsequent runs hit interrupted waits in the existing x64 test harness.
+The harness now retries `EINTR` from polling and process waits while preserving
+its original timeout, exit-code and signal checks; the final full run passed.
+No benchmark sources or snapshots were changed. The PR remains draft and unmerged
+because the full performance gate is outstanding.
 
 ## Combined validation
 

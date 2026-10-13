@@ -80,9 +80,9 @@ Stdlib.Float.ceiling (1.0 / 0.0) = error="Encountered out-of-range value for typ
 // IEEE classification and clamp deliberately reject only NaN limits
 Stdlib.Float.isNaN Builtin.testNan = true
 Stdlib.Float.isNaN (1.0 / 0.0) = false
-Stdlib.Float.clamp 3.0 2.0 1.0 = Ok 2.0
-match Stdlib.Float.clamp Builtin.testNan (-1.0) 1.0 with | Ok value -> Stdlib.Float.isNaN value | Error _ -> false = true
-Stdlib.Float.clamp 0.0 Builtin.testNan 1.0 = Error "clamp requires arguments to be valid numbers"
+Stdlib.Float.clampRefusingNaN 3.0 2.0 1.0 = Ok 2.0
+match Stdlib.Float.clampRefusingNaN Builtin.testNan (-1.0) 1.0 with | Ok value -> Stdlib.Float.isNaN value | Error _ -> false = true
+Stdlib.Float.clampRefusingNaN 0.0 Builtin.testNan 1.0 = Error "clampRefusingNaN requires limits that are numbers"
 
 // Culture-independent runtime parsing, including whitespace and signed zero
 Stdlib.Float.parse " +.5\t" = Ok 0.5

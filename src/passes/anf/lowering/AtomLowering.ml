@@ -527,12 +527,10 @@ let lowerAtom (toANFCore : LoweringCallbacks.expressionLowerer)
         | _ -> A.UnaryPrim (A.BitNot, value)
       in
       Ok (A.Var id, bindings @ [ (id, expression) ], gen)
-  | C.BinOp (((AST.StringConcat | AST.Add) as operation), left, right)
-    when operation = AST.StringConcat || infer expr = Ok AST.TString -> (
+  | C.BinOp (AST.StringConcat, left, right) -> (
       let rec collect expr acc =
         match expr with
-        | C.BinOp (((AST.StringConcat | AST.Add) as operation), left, right)
-          when operation = AST.StringConcat || infer expr = Ok AST.TString ->
+        | C.BinOp (AST.StringConcat, left, right) ->
             collect left (collect right acc)
         | part -> part :: acc
       in

@@ -159,14 +159,21 @@ let runElfBinary binary =
           Unix.close stderrRead)
         (fun () ->
           let deadline = Unix.gettimeofday () +. 10. in
+          let rec waitpid flags =
+            try Unix.waitpid flags process
+            with Unix.Unix_error (Unix.EINTR, _, _) -> waitpid flags
+          in
           let rec wait () =
-            match Unix.waitpid [ Unix.WNOHANG ] process with
+            match waitpid [ Unix.WNOHANG ] with
             | 0, _ when Unix.gettimeofday () < deadline ->
-                ignore (Unix.select [] [] [] 0.01);
+                (* Signals may interrupt the pause; the original deadline
+                   still bounds the next poll. *)
+                (try ignore (Unix.select [] [] [] 0.01)
+                 with Unix.Unix_error (Unix.EINTR, _, _) -> ());
                 wait ()
             | 0, _ ->
                 Unix.kill process Sys.sigkill;
-                ignore (Unix.waitpid [] process);
+                ignore (waitpid []);
                 Error "Timed out executing x86-64 ELF binary"
             | _, Unix.WEXITED code -> Ok code
             | _, Unix.WSIGNALED signal | _, Unix.WSTOPPED signal ->
