@@ -1,0 +1,20 @@
+trait NestedShow<'a> =
+  let show (value: 'a) : String
+impl NestedShow for Int64 =
+  let show (value: Int64) : String = "integer"
+impl<'a: NestedShow> NestedShow for List<'a> =
+  let show (values: List<'a>) : String = match values with | [value] -> NestedShow.show value | _ -> "many"
+let renderNested<'a: NestedShow> (value: 'a) : String = NestedShow.show value
+renderNested [42L] = "integer"
+renderNested [[42L]] = "integer"
+
+(
+trait MissingNestedShow<'a> =
+  let show (value: 'a) : String
+impl<'a: MissingNestedShow> MissingNestedShow for List<'a> =
+  let show (values: List<'a>) : String = "list"
+MissingNestedShow.show ["missing"]
+) = compileerror="No implementation of trait 'MissingNestedShow'"
+
+let wrapListConditional<'a: NestedShow> (value: 'a) : String = NestedShow.show [value]
+wrapListConditional 42L = "integer"

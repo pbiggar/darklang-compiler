@@ -97,7 +97,9 @@ let predeclare allowInternal types (base : globals) items symbols =
                         ( {
                             globals with
                             traits =
-                              M.add name { traitParams; methods } globals.traits;
+                              M.add name
+                                { traitParams; requirements = []; methods }
+                                globals.traits;
                           },
                           symbols ))
           | _ -> Ok (globals, symbols)))
@@ -113,7 +115,16 @@ let materialize offset items =
         let methods =
           List.filter_map
             (function
-              | WT.IMethod fn -> Some (WS.Function (methodPath, fn))
+              | WT.IMethod fn ->
+                  Some
+                    (WS.Function
+                       ( methodPath,
+                         {
+                           fn with
+                           WT.typeParams =
+                             declaration.WT.typeParams @ fn.WT.typeParams;
+                           bounds = declaration.WT.bounds @ fn.WT.bounds;
+                         } ))
               | WT.IAlias _ -> None)
             declaration.WT.members
         in
@@ -124,197 +135,6 @@ let materialize offset items =
     | item :: rest -> loop ordinal (item :: reversed) implementations rest
   in
   loop offset [] [] items
-
-let validate (globals : globals) implementations =
-  List.fold_left
-    (fun result (path, methodPath, (declaration : WT.implDecl)) ->
-      bind result (fun globals ->
-          let spelling = WS.qualifiedType declaration.WT.trait_ in
-          match resolveTrait globals path spelling with
-          | None -> Error ("Unknown trait '" ^ spelling ^ "'")
-          | Some (traitName, trait_) ->
-              if declaration.WT.typeParams <> [] || declaration.WT.bounds <> []
-              then
-                Error
-                  "Generic and conditional implementations are not implemented"
-              else
-                let convert =
-                  resolveWrittenType globals.allowInternal globals.types path
-                    S.empty
-                in
-                bind (convert declaration.WT.forType) (fun selfType ->
-                    bind
-                      (ResultList.traverse convert
-                         declaration.WT.trait_.WT.typeArgs) (fun args ->
-                        let traitArgs = selfType :: args in
-                        if
-                          List.length traitArgs
-                          <> List.length trait_.traitParams
-                        then
-                          Error
-                            ("Trait '" ^ traitName
-                           ^ "' type argument count mismatch")
-                        else
-                          let substitution =
-                            M.of_list
-                              (List.combine trait_.traitParams traitArgs)
-                          in
-                          bind
-                            (List.fold_left
-                               (fun result member ->
-                                 bind result (fun methods ->
-                                     let name, signature =
-                                       match member with
-                                       | WT.IMethod fn ->
-                                           let name = fn.WT.name.WT.name in
-                                           ( name,
-                                             M.find_opt
-                                               (String.concat "."
-                                                  (methodPath @ [ name ]))
-                                               globals.functions )
-                                       | WT.IAlias value ->
-                                           let source =
-                                             match value.WT.body with
-                                             | WT.EVariable (_, name) ->
-                                                 Some [ name ]
-                                             | WT.EFnName (_, name) ->
-                                                 Some (qualifiedFnName name)
-                                             | _ -> None
-                                           in
-                                           ( value.WT.name.WT.name,
-                                             Option.bind source
-                                               (resolveFunction
-                                                  {
-                                                    globals with
-                                                    modulePath = path;
-                                                  }) )
-                                     in
-                                     if M.mem name methods then
-                                       Error
-                                         ("Duplicate implementation method '"
-                                        ^ name ^ "'")
-                                     else
-                                       match
-                                         ( M.find_opt name trait_.methods,
-                                           signature )
-                                       with
-                                       | None, _ ->
-                                           Error
-                                             ("Extra trait method '" ^ name
-                                            ^ "'")
-                                       | _, None ->
-                                           Error
-                                             ("Unknown implementation method \
-                                               alias '" ^ name ^ "'")
-                                       | Some expected, Some actual ->
-                                           let methodParams =
-                                             List.filter
-                                               (fun param ->
-                                                 not
-                                                   (List.mem param
-                                                      trait_.traitParams))
-                                               expected.typeParams
-                                           in
-                                           if
-                                             List.length methodParams
-                                             <> List.length actual.typeParams
-                                           then
-                                             Error
-                                               ("Trait method signature \
-                                                 mismatch: '" ^ name ^ "'")
-                                           else
-                                             let substitution =
-                                               List.fold_left2
-                                                 (fun subst param actual ->
-                                                   M.add param (AST.TVar actual)
-                                                     subst)
-                                                 substitution methodParams
-                                                 actual.typeParams
-                                             in
-                                             let parameters =
-                                               List.map
-                                                 (Types.applySubst substitution)
-                                                 expected.parameters
-                                             and return =
-                                               Types.applySubst substitution
-                                                 expected.return
-                                             in
-                                             if
-                                               parameters <> actual.parameters
-                                               || return <> actual.return
-                                               || List.exists
-                                                    (fun bound ->
-                                                      not
-                                                        (List.mem bound
-                                                           (List.map
-                                                              (TraitResolution
-                                                               .substitute
-                                                                 substitution)
-                                                              expected.bounds)))
-                                                    actual.bounds
-                                               || Option.is_some
-                                                    actual.traitMethod
-                                             then
-                                               Error
-                                                 ("Trait method signature \
-                                                   mismatch: '" ^ name ^ "'")
-                                             else Ok (M.add name actual methods)))
-                               (Ok M.empty) declaration.WT.members)
-                            (fun methodFunctions ->
-                              match
-                                List.find_opt
-                                  (fun (name, _) ->
-                                    not (M.mem name methodFunctions))
-                                  (M.bindings trait_.methods)
-                              with
-                              | Some (name, _) ->
-                                  Error ("Missing trait method '" ^ name ^ "'")
-                              | None ->
-                                  Ok
-                                    {
-                                      globals with
-                                      implementations =
-                                        globals.implementations
-                                        @ [
-                                            {
-                                              traitName;
-                                              selfType;
-                                              traitArgs;
-                                              methodFunctions;
-                                            };
-                                          ];
-                                    })))))
-    (Ok globals) implementations
-
-let functions (globals : globals) =
-  M.fold
-    (fun traitName trait_ functions ->
-      M.fold
-        (fun methodName signature functions ->
-          M.add (traitName ^ "." ^ methodName) signature functions)
-        trait_.methods functions)
-    globals.traits globals.functions
-
-let select (globals : globals) traitName methodName traitArgs =
-  if List.exists Unification.containsTVar traitArgs then
-    Error
-      ("Unresolved generic trait call '" ^ traitName ^ "." ^ methodName ^ "'")
-  else
-    let matches =
-      List.filter
-        (fun implementation ->
-          implementation.traitName = traitName
-          && implementation.traitArgs = traitArgs)
-        globals.implementations
-    in
-    match matches with
-    | [] -> Error ("No implementation of trait '" ^ traitName ^ "'")
-    | [ implementation ] -> (
-        match M.find_opt methodName implementation.methodFunctions with
-        | Some method_ -> Ok method_
-        | None ->
-            Crash.crash "Validated implementation is missing a trait method")
-    | _ -> Error ("Ambiguous implementation of trait '" ^ traitName ^ "'")
 
 let resolveBounds (globals : globals) path params bounds =
   ResultList.traverse
@@ -337,6 +157,282 @@ let resolveBounds (globals : globals) path params bounds =
                   Error ("Trait '" ^ name ^ "' type argument count mismatch")
                 else Ok (name, args)))
     bounds
+
+let validate (globals : globals) implementations =
+  List.fold_left
+    (fun result (path, methodPath, (declaration : WT.implDecl)) ->
+      bind result (fun globals ->
+          let spelling = WS.qualifiedType declaration.WT.trait_ in
+          match resolveTrait globals path spelling with
+          | None -> Error ("Unknown trait '" ^ spelling ^ "'")
+          | Some (traitName, trait_) ->
+              let typeParams = List.map fst declaration.WT.typeParams in
+              if List.length typeParams <> S.cardinal (S.of_list typeParams)
+              then Error "Duplicate implementation type parameter"
+              else
+                let convert =
+                  resolveWrittenType globals.allowInternal globals.types path
+                    (S.of_list typeParams)
+                in
+                bind (convert declaration.WT.forType) (fun selfType ->
+                    bind
+                      (ResultList.traverse convert
+                         declaration.WT.trait_.WT.typeArgs) (fun args ->
+                        let traitArgs = selfType :: args in
+                        if
+                          List.length traitArgs
+                          <> List.length trait_.traitParams
+                        then
+                          Error
+                            ("Trait '" ^ traitName
+                           ^ "' type argument count mismatch")
+                        else
+                          let substitution =
+                            M.of_list
+                              (List.combine trait_.traitParams traitArgs)
+                          in
+                          bind
+                            (resolveBounds globals path typeParams
+                               declaration.WT.bounds)
+                            (fun implementationBounds ->
+                              let bounds =
+                                implementationBounds
+                                @ List.map
+                                    (TraitResolution.substitute substitution)
+                                    trait_.requirements
+                              in
+                              let patternVars =
+                                List.fold_left
+                                  (fun vars typ ->
+                                    Types.collectTypeVarsInType typ vars)
+                                  [] traitArgs
+                              in
+                              if
+                                List.exists
+                                  (fun param ->
+                                    not (List.mem param patternVars))
+                                  typeParams
+                              then
+                                Error "Unresolved implementation type parameter"
+                              else
+                                bind
+                                  (List.fold_left
+                                     (fun result member ->
+                                       bind result (fun (methods, arguments) ->
+                                           let name, signature =
+                                             match member with
+                                             | WT.IMethod fn ->
+                                                 let name =
+                                                   fn.WT.name.WT.name
+                                                 in
+                                                 ( name,
+                                                   M.find_opt
+                                                     (String.concat "."
+                                                        (methodPath @ [ name ]))
+                                                     globals.functions )
+                                             | WT.IAlias value ->
+                                                 let source =
+                                                   match value.WT.body with
+                                                   | WT.EVariable (_, name) ->
+                                                       Some [ name ]
+                                                   | WT.EFnName (_, name) ->
+                                                       Some
+                                                         (qualifiedFnName name)
+                                                   | _ -> None
+                                                 in
+                                                 ( value.WT.name.WT.name,
+                                                   Option.bind source
+                                                     (resolveFunction
+                                                        {
+                                                          globals with
+                                                          modulePath = path;
+                                                        }) )
+                                           in
+                                           if M.mem name methods then
+                                             Error
+                                               ("Duplicate implementation \
+                                                 method '" ^ name ^ "'")
+                                           else
+                                             match
+                                               ( M.find_opt name trait_.methods,
+                                                 signature )
+                                             with
+                                             | None, _ ->
+                                                 Error
+                                                   ("Extra trait method '"
+                                                  ^ name ^ "'")
+                                             | _, None ->
+                                                 Error
+                                                   ("Unknown implementation \
+                                                     method alias '" ^ name
+                                                  ^ "'")
+                                             | Some expected, Some actual ->
+                                                 let methodParams =
+                                                   List.filter
+                                                     (fun param ->
+                                                       not
+                                                         (List.mem param
+                                                            trait_.traitParams))
+                                                     expected.typeParams
+                                                 in
+                                                 let fresh, renaming =
+                                                   CheckingDiagnostics
+                                                   .freshenTypeParams
+                                                     (Some
+                                                        (String.concat "."
+                                                           (methodPath
+                                                          @ [ name ])))
+                                                     methodParams
+                                                 in
+                                                 let expectedSubst =
+                                                   List.fold_left
+                                                     (fun subst (old, fresh) ->
+                                                       M.add old
+                                                         (AST.TVar fresh) subst)
+                                                     substitution
+                                                     (List.combine methodParams
+                                                        fresh)
+                                                 in
+                                                 let expectedParameters =
+                                                   List.map
+                                                     (Types.applySubst
+                                                        expectedSubst)
+                                                     expected.parameters
+                                                 and expectedReturn =
+                                                   Types.applySubst
+                                                     expectedSubst
+                                                     expected.return
+                                                 in
+                                                 if
+                                                   Option.is_some
+                                                     actual.traitMethod
+                                                 then
+                                                   Error
+                                                     ("Trait method signature \
+                                                       mismatch: '" ^ name ^ "'"
+                                                     )
+                                                 else
+                                                   bind
+                                                     (Result.map_error
+                                                        (fun error ->
+                                                          "Trait method \
+                                                           signature mismatch: \
+                                                           '" ^ name ^ "': "
+                                                          ^ error)
+                                                        (Unification
+                                                         .inferTypeArgs
+                                                           actual.typeParams
+                                                           actual.parameters
+                                                           expectedParameters
+                                                           (Some actual.return)
+                                                           (Some expectedReturn)))
+                                                     (fun inferred ->
+                                                       let actualSubst =
+                                                         M.of_list
+                                                           (List.combine
+                                                              actual.typeParams
+                                                              inferred)
+                                                       in
+                                                       let allowed =
+                                                         bounds
+                                                         @ List.map
+                                                             (TraitResolution
+                                                              .substitute
+                                                                expectedSubst)
+                                                             expected.bounds
+                                                       in
+                                                       let free =
+                                                         List.fold_left
+                                                           (fun vars typ ->
+                                                             Types
+                                                             .collectTypeVarsInType
+                                                               typ vars)
+                                                           [] inferred
+                                                       in
+                                                       if
+                                                         List.map
+                                                           (Types.applySubst
+                                                              actualSubst)
+                                                           actual.parameters
+                                                         <> expectedParameters
+                                                         || Types.applySubst
+                                                              actualSubst
+                                                              actual.return
+                                                            <> expectedReturn
+                                                         || List.exists
+                                                              (fun var ->
+                                                                not
+                                                                  (List.mem var
+                                                                     (typeParams
+                                                                    @ fresh)))
+                                                              free
+                                                         || List.exists
+                                                              (fun obligation ->
+                                                                not
+                                                                  (List.mem
+                                                                     (TraitResolution
+                                                                      .substitute
+                                                                        actualSubst
+                                                                        obligation)
+                                                                     allowed))
+                                                              actual.bounds
+                                                       then
+                                                         Error
+                                                           ("Trait method \
+                                                             signature \
+                                                             mismatch: '" ^ name
+                                                          ^ "'")
+                                                       else
+                                                         let _ = renaming in
+                                                         Ok
+                                                           ( M.add name actual
+                                                               methods,
+                                                             M.add name
+                                                               (inferred, fresh)
+                                                               arguments ))))
+                                     (Ok (M.empty, M.empty))
+                                     declaration.WT.members)
+                                  (fun (methodFunctions, methodArguments) ->
+                                    match
+                                      List.find_opt
+                                        (fun (name, _) ->
+                                          not (M.mem name methodFunctions))
+                                        (M.bindings trait_.methods)
+                                    with
+                                    | Some (name, _) ->
+                                        Error
+                                          ("Missing trait method '" ^ name ^ "'")
+                                    | None ->
+                                        Ok
+                                          {
+                                            globals with
+                                            implementations =
+                                              globals.implementations
+                                              @ [
+                                                  {
+                                                    identity =
+                                                      String.concat "."
+                                                        methodPath;
+                                                    traitName;
+                                                    selfType;
+                                                    traitArgs;
+                                                    typeParams;
+                                                    bounds;
+                                                    methodFunctions;
+                                                    methodArguments;
+                                                  };
+                                                ];
+                                          }))))))
+    (Ok globals) implementations
+
+let functions (globals : globals) =
+  M.fold
+    (fun traitName trait_ functions ->
+      M.fold
+        (fun methodName signature functions ->
+          M.add (traitName ^ "." ^ methodName) signature functions)
+        trait_.methods functions)
+    globals.traits globals.functions
 
 let prepareBounds (globals : globals) items =
   List.fold_left
@@ -365,30 +461,37 @@ let prepareBounds (globals : globals) items =
               | None -> Crash.crash "Missing predeclared bounded trait"
               | Some trait_ ->
                   bind
-                    (List.fold_left
-                       (fun result (method_ : WT.traitMethodDecl) ->
-                         bind result (fun methods ->
-                             let methodName = method_.WT.name.WT.name in
-                             match M.find_opt methodName methods with
-                             | None ->
-                                 Crash.crash
-                                   "Missing predeclared bounded trait method"
-                             | Some (signature : functionSignature) ->
-                                 Result.map
-                                   (fun bounds ->
-                                     M.add methodName { signature with bounds }
-                                       methods)
-                                   (resolveBounds globals path
-                                      signature.typeParams
-                                      (declaration.WT.bounds @ method_.WT.bounds))))
-                       (Ok trait_.methods) declaration.WT.methods)
-                    (fun methods ->
-                      Ok
-                        {
-                          globals with
-                          traits =
-                            M.add name { trait_ with methods } globals.traits;
-                        }))
+                    (resolveBounds globals path trait_.traitParams
+                       declaration.WT.bounds) (fun requirements ->
+                      bind
+                        (List.fold_left
+                           (fun result (method_ : WT.traitMethodDecl) ->
+                             bind result (fun methods ->
+                                 let methodName = method_.WT.name.WT.name in
+                                 match M.find_opt methodName methods with
+                                 | None ->
+                                     Crash.crash
+                                       "Missing predeclared bounded trait \
+                                        method"
+                                 | Some (signature : functionSignature) ->
+                                     Result.map
+                                       (fun bounds ->
+                                         M.add methodName
+                                           { signature with bounds } methods)
+                                       (resolveBounds globals path
+                                          signature.typeParams
+                                          (declaration.WT.bounds
+                                         @ method_.WT.bounds))))
+                           (Ok trait_.methods) declaration.WT.methods)
+                        (fun methods ->
+                          Ok
+                            {
+                              globals with
+                              traits =
+                                M.add name
+                                  { trait_ with methods; requirements }
+                                  globals.traits;
+                            })))
           | _ -> Ok globals))
     (Ok globals) items
 
@@ -418,27 +521,28 @@ let catalog (globals : globals) symbols =
     List.fold_left
       (fun catalog implementation ->
         let methods =
-          M.map
-            (fun (signature : functionSignature) ->
-              {
-                TraitCatalog.name = nameOf signature.id;
-                typeParams = signature.typeParams;
-              })
+          M.mapi
+            (fun methodName (signature : functionSignature) ->
+              match M.find_opt methodName implementation.methodArguments with
+              | None ->
+                  Crash.crash
+                    "Validated method lost its generic argument mapping"
+              | Some (typeArgs, methodParams) ->
+                  {
+                    TraitCatalog.name = nameOf signature.id;
+                    typeArgs;
+                    methodParams;
+                  })
             implementation.methodFunctions
         in
-        let identity =
-          String.concat ":"
-            (List.map
-               (fun (_, target) -> target.TraitCatalog.name)
-               (M.bindings methods))
-        in
+        let identity = implementation.identity in
         M.add identity
           {
             TraitCatalog.identity;
             traitName = implementation.traitName;
-            typeParams = [];
+            typeParams = implementation.typeParams;
             typeArgs = implementation.traitArgs;
-            bounds = [];
+            bounds = implementation.bounds;
             methods;
           }
           catalog)
@@ -487,3 +591,18 @@ let checkSignatureBounds (globals : globals) symbols
     TraitResolution.checkBounds (C.traitCatalog symbols) globals.bounds
       (M.of_list (List.combine signature.typeParams types))
       signature.bounds
+
+let selectCall symbols traitName methodName types =
+  match
+    M.find_opt
+      (traitName ^ "." ^ methodName)
+      (C.traitCatalog symbols).TraitCatalog.dispatches
+  with
+  | None -> Error ("Unknown trait method '" ^ traitName ^ "." ^ methodName ^ "'")
+  | Some dispatch ->
+      bind
+        (TraitResolution.select (C.traitCatalog symbols) dispatch types)
+        (fun (name, args) ->
+          match C.tryFindFunctionId name symbols with
+          | None -> Error ("Unresolved implementation method '" ^ name ^ "'")
+          | Some id -> Ok (id, args))

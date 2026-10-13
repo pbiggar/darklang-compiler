@@ -1,6 +1,12 @@
 (* TraitCatalog.mli - Canonical, immutable trait metadata for static specialization. *)
 type obligation = string * AST.semanticType list
-type methodTarget = { name : string; typeParams : string list }
+
+type methodTarget = {
+  name : string;
+  typeArgs : AST.semanticType list;
+  methodParams : string list;
+}
+
 type dispatch = { traitName : string; methodName : string; arity : int }
 
 type implementation = {

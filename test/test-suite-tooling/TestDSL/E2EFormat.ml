@@ -1011,7 +1011,7 @@ let parseMultilineTest fullText startLineNumber filePath preamble funcLineMap =
               if
                 List.exists
                   (starts (trimStart inner))
-                  [ "let "; "type "; "trait "; "impl " ]
+                  [ "let "; "type "; "trait "; "impl "; "impl<" ]
               then " " ^ inner
               else slice fullText first (close - first + 1)
             in
@@ -1097,7 +1097,17 @@ let trimLeadingSpaces n s =
 
 let definitionStart s =
   List.exists (starts s)
-    [ "def "; "type "; "trait "; "impl "; "let "; "val "; "module "; "[<" ]
+    [
+      "def ";
+      "type ";
+      "trait ";
+      "impl ";
+      "impl<";
+      "let ";
+      "val ";
+      "module ";
+      "[<";
+    ]
 
 let parseE2ETestFile path =
   if not (FileIO.exists path) then Error ("Test file not found: " ^ path)

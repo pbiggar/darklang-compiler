@@ -15,19 +15,23 @@ let matchArguments patterns actuals =
     match Unification.matchTypes (AST.TTuple patterns) (AST.TTuple actuals) with
     | Error _ -> None
     | Ok bindings ->
-        List.fold_left
-          (fun result (name, typ) ->
-            Option.bind result (fun substitution ->
-                match M.find_opt name substitution with
-                | None -> Some (M.add name typ substitution)
-                | Some existing when existing = typ -> Some substitution
-                | Some _ -> None))
-          (Some M.empty) bindings
+        let result =
+          List.fold_left
+            (fun result (name, typ) ->
+              Option.bind result (fun substitution ->
+                  match M.find_opt name substitution with
+                  | None -> Some (M.add name typ substitution)
+                  | Some existing when existing = typ -> Some substitution
+                  | Some _ -> None))
+            (Some M.empty) bindings
+        in
+        Option.bind result (fun substitution ->
+            if List.map (Types.applySubst substitution) patterns = actuals then
+              Some substitution
+            else None)
 
-let rec candidates catalog stack ((traitName, args) as obligation) =
-  if List.exists Unification.containsTVar args then
-    Error ("Unresolved trait obligation '" ^ traitName ^ "'")
-  else if List.mem obligation stack then
+let rec candidates catalog available stack ((traitName, args) as obligation) =
+  if List.mem obligation stack then
     Error ("Cyclic trait obligation '" ^ traitName ^ "'")
   else
     let stack = obligation :: stack in
@@ -48,7 +52,9 @@ let rec candidates catalog stack ((traitName, args) as obligation) =
                 List.fold_left
                   (fun result bound ->
                     bind result (fun () ->
-                        satisfy catalog stack (substitute substitution bound)))
+                        let obligation = substitute substitution bound in
+                        if List.mem obligation available then Ok ()
+                        else satisfy catalog available stack obligation))
                   (Ok ()) implementation.T.bounds
               in
               match check with
@@ -78,11 +84,12 @@ let rec candidates catalog stack ((traitName, args) as obligation) =
         | [ candidate ] -> Ok candidate
         | _ -> Error ("Ambiguous implementation of trait '" ^ traitName ^ "'"))
 
-and satisfy catalog stack obligation =
-  Result.map (fun _ -> ()) (candidates catalog stack obligation)
+and satisfy catalog available stack obligation =
+  Result.map (fun _ -> ()) (candidates catalog available stack obligation)
 
 let check catalog available obligation =
-  if List.mem obligation available then Ok () else satisfy catalog [] obligation
+  if List.mem obligation available then Ok ()
+  else satisfy catalog available [] obligation
 
 let checkBounds catalog available substitution bounds =
   List.fold_left
@@ -114,23 +121,42 @@ let select catalog (dispatch : T.dispatch) types =
         | [] -> Crash.crash "Checked trait method argument arity changed"
     in
     let args, methodArgs = split dispatch.T.arity [] types in
-    bind
-      (candidates catalog [] (dispatch.T.traitName, args))
-      (fun (implementation, substitution) ->
-        match M.find_opt dispatch.T.methodName implementation.T.methods with
-        | None -> Crash.crash "Validated trait implementation lost a method"
-        | Some target ->
-            bind
-              (ResultList.traverse
-                 (fun param ->
-                   match M.find_opt param substitution with
-                   | Some typ -> Ok typ
-                   | None ->
-                       Error
-                         ("Unresolved implementation type parameter '" ^ param
-                        ^ "'"))
-                 implementation.T.typeParams)
-              (fun inherited -> Ok (target.T.name, inherited @ methodArgs)))
+    if List.exists Unification.containsTVar args then
+      Error ("Unresolved trait obligation '" ^ dispatch.T.traitName ^ "'")
+    else
+      bind
+        (candidates catalog [] [] (dispatch.T.traitName, args))
+        (fun (implementation, substitution) ->
+          match M.find_opt dispatch.T.methodName implementation.T.methods with
+          | None -> Crash.crash "Validated trait implementation lost a method"
+          | Some target ->
+              if List.length methodArgs <> List.length target.T.methodParams
+              then Error "Trait method generic argument count mismatch"
+              else
+                let substitution =
+                  List.fold_left2
+                    (fun subst param typ -> M.add param typ subst)
+                    substitution target.T.methodParams methodArgs
+                in
+                let parameters =
+                  List.map (Types.applySubst substitution) target.T.typeArgs
+                in
+                let permitted =
+                  List.fold_left
+                    (fun vars typ -> Types.collectTypeVarsInType typ vars)
+                    [] methodArgs
+                in
+                let remaining =
+                  List.fold_left
+                    (fun vars typ -> Types.collectTypeVarsInType typ vars)
+                    [] parameters
+                in
+                if
+                  List.exists
+                    (fun var -> not (List.mem var permitted))
+                    remaining
+                then Error "Unresolved implementation type arguments"
+                else Ok (target.T.name, parameters))
 
 let rec checkType catalog available typ =
   if M.is_empty catalog.T.typeBounds then Ok ()

@@ -35,12 +35,17 @@ type typeInventory = typeEntry M.t
 (* Traits occupy their own identity catalog, never the nominal type inventory. *)
 type traitSignature = {
   traitParams : string list;
+  requirements : TraitCatalog.obligation list;
   methods : functionSignature M.t;
 }
 
 type traitImplementation = {
+  identity : string;
   traitName : string;
   selfType : AST.semanticType;
+  typeParams : string list;
+  bounds : TraitCatalog.obligation list;
+  methodArguments : (AST.semanticType list * string list) M.t;
   traitArgs : AST.semanticType list;
   methodFunctions : functionSignature M.t;
 }

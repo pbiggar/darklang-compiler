@@ -1,0 +1,9 @@
+trait SharedAlias<'a> =
+  let show (value: 'a) : String
+let sharedAliasTarget<'a> (value: 'a) : String = "shared"
+impl SharedAlias for Int64 =
+  let show = sharedAliasTarget
+impl SharedAlias for String =
+  let show = sharedAliasTarget
+SharedAlias.show 42L = "shared"
+SharedAlias.show "text" = "shared"

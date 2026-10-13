@@ -1,0 +1,11 @@
+trait ArgumentShow<'a> =
+  let show (value: 'a) : String
+impl ArgumentShow for List<Int64> =
+  let show (values: List<Int64>) : String = "integers"
+impl ArgumentShow for List<String> =
+  let show (values: List<String>) : String = "strings"
+impl<'a> ArgumentShow for ('a) =
+  let show (value: 'a) : String = "fallback"
+ArgumentShow.show [42L] = "integers"
+ArgumentShow.show ["text"] = "strings"
+ArgumentShow.show true = "fallback"

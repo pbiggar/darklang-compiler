@@ -6,8 +6,8 @@ Reference grammar: `backend/src/LibParser/{Parser,WrittenTypes}.fs`.
 Reference semantics: `backend/src/LibExecution/Traits.fs` and
 `packages/darklang/stdlib/traits.dark` at that revision.
 
-This is an unfinished implementation checkpoint. M0–M3 are implemented and
-focused checks pass. M4–M7 remain unfinished; this is not a readiness claim.
+This is an unfinished implementation checkpoint. M0–M4 are implemented and
+focused checks pass. M5–M7 remain unfinished; this is not a readiness claim.
 
 | Behavior | Checkpoint implementation | Executed evidence / remaining validation |
 | --- | --- | --- |
@@ -20,7 +20,7 @@ focused checks pass. M4–M7 remain unfinished; this is not a readiness claim.
 | Traits as value types | Traits are excluded from the nominal type catalog | `test/fixtures/e2e/traits-as-types.e2e` passed |
 | Bounded generic specialization | Typed calls resolve after substitution, before ordinary dependency planning | `traits-generic.e2e`, `traits-multiple-bounds.e2e`, `traits-generic-values.e2e`, `traits-bound-failure.e2e` passed |
 | Bounds on generic types | Check construction, signatures and declaration field types | `traits-type-bounds.e2e` passed |
-| Generic/conditional implementations | Not implemented (M4) | Required |
+| Generic/conditional implementations | Directional argument matching, recursive obligations, blanket fallback and static specialization | `traits-conditional.e2e`, `traits-concrete-arguments.e2e`, `traits-generic-alias.e2e`, `traits-patterns.e2e`, `traits-shared-alias.e2e` passed |
 | Receivers and operators | Not implemented (M5) | Required |
 | Upstream stdlib traits and hosted packages | Not implemented (M6) | Required |
 | Full parity and readiness gates | Not executed (M7) | Required |
@@ -64,3 +64,13 @@ progress. Static obligations are retained in the immutable checked catalog;
 method identities are canonical ordinary functions. Specialization rewrites
 trait applications before dependency planning, and final preparation returns a
 compile error for unresolved obligations. There is no trait-specific backend ABI.
+
+M3 full host rerun passed **13,404/13,404** (134.7 seconds); `dune runtest`
+passed. M4 focused suite passed **40/40** (17.5 seconds), including method-local
+generics and conditional proofs inside generic bodies. Its full host and
+regression reruns are in progress. Implementation entries retain independent
+identities even when two impls alias the same function.
+
+The blanket fixtures use `for ('a)` to preserve the pinned lexer grammar's
+apostrophe context handling; the pinned upstream lexer does not treat a bare
+apostrophe after `for` as a type variable. No lexer extension was introduced.

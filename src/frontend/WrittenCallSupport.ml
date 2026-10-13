@@ -506,11 +506,11 @@ let[@warning "-4"] checkNamed checkExpression checkedLiteral globals locals
                                                   "Missing predeclared trait \
                                                    signature"
                                             | Some trait_ ->
-                                                let count =
-                                                  List.length trait_.traitParams
-                                                in
                                                 let traitArgs =
-                                                  take count inferredTypeArgs
+                                                  take
+                                                    (List.length
+                                                       trait_.traitParams)
+                                                    inferredTypeArgs
                                                 in
                                                 if
                                                   List.exists
@@ -529,14 +529,11 @@ let[@warning "-4"] checkNamed checkExpression checkedLiteral globals locals
                                                         ( signature.id,
                                                           inferredTypeArgs ))
                                                 else
-                                                  map
-                                                    (fun selected ->
-                                                      ( selected.id,
-                                                        drop count
-                                                          inferredTypeArgs ))
-                                                    (WrittenTraitSupport.select
-                                                       globals traitName
-                                                       methodName traitArgs))
+                                                  WrittenTraitSupport.selectCall
+                                                    (WrittenCheckingState
+                                                     .symbols symbols)
+                                                    traitName methodName
+                                                    inferredTypeArgs)
                                       in
                                       bind target (fun (id, typeArgs) ->
                                           let call =

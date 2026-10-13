@@ -22,13 +22,6 @@ val functions :
   WrittenTypeSupport.globals ->
   WrittenTypeSupport.functionSignature StringOrder.Map.t
 
-val select :
-  WrittenTypeSupport.globals ->
-  string ->
-  string ->
-  AST.semanticType list ->
-  (WrittenTypeSupport.functionSignature, string) result
-
 val resolveBounds :
   WrittenTypeSupport.globals ->
   string list ->
@@ -52,3 +45,10 @@ val checkSignatureBounds :
   WrittenTypeSupport.functionSignature ->
   AST.semanticType list ->
   (unit, string) result
+
+val selectCall :
+  CheckedAST.symbols ->
+  string ->
+  string ->
+  AST.semanticType list ->
+  (AST.functionId * AST.semanticType list, string) result

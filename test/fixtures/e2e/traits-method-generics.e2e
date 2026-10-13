@@ -1,0 +1,7 @@
+trait GenericMethod<'a> =
+  let choose<'b> (value: 'a) (other: 'b) : 'b
+impl GenericMethod for Int64 =
+  let choose<'b> (value: Int64) (other: 'b) : 'b = other
+let useGenericMethod<'b> (other: 'b) : 'b = GenericMethod.choose 42L other
+useGenericMethod "text" = "text"
+useGenericMethod 42L = 42L

@@ -1,0 +1,28 @@
+trait PatternShow<'a> =
+  let show (value: 'a) : String
+type PatternBox<'a> = { value: 'a }
+impl<'a> PatternShow for PatternBox<'a> =
+  let show (value: PatternBox<'a>) : String = "box"
+impl<'a, 'b> PatternShow for ('a * 'b) =
+  let show (value: ('a * 'b)) : String = "tuple"
+impl<'a> PatternShow for Dict<String, 'a> =
+  let show (value: Dict<String, 'a>) : String = "dict"
+PatternShow.show (PatternBox { value = 42L }) = "box"
+PatternShow.show (42L, "text") = "tuple"
+PatternShow.show (Dict { "value": 42L }) = "dict"
+
+(
+trait SamePair<'a> =
+  let show (value: 'a) : String
+impl<'a> SamePair for ('a * 'a) =
+  let show (value: ('a * 'a)) : String = "same"
+SamePair.show (42L, "different")
+) = compileerror="No implementation of trait 'SamePair'"
+
+(
+trait CircularShow<'a> =
+  let show (value: 'a) : String
+impl<'a: CircularShow> CircularShow for ('a) =
+  let show (value: 'a) : String = "cycle"
+CircularShow.show 42L
+) = compileerror="Cyclic trait obligation 'CircularShow'"
