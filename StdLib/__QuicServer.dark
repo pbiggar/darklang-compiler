@@ -1,7 +1,7 @@
 // __QuicServer.dark - Address-validated server handshake packet spaces and Finished-gated application ownership.
 module Darklang.Stdlib.__QuicServer
 
-val receiveLimits = Stdlib.__QuicFlow.Limits { data = 262144L, bidiLocal = 65536L, bidiRemote = 65536L, uni = 65536L, streamsBidi = 1L, streamsUni = 3L }
+val receiveLimits = Stdlib.__QuicFlow.Limits { data = 262144L, bidiLocal = 65536L, bidiRemote = 65536L, uni = 65536L, streamsBidi = 32L, streamsUni = 3L }
 
 type Flight = {
   identity: Stdlib.TlsServerIdentity.Identity, routing: Stdlib.__QuicHandshakePacket.Routing,
