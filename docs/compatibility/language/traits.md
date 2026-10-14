@@ -216,11 +216,34 @@ Current M7 validation uses the pinned activation and external Dune directory
   differs only by nine AOT directives; the archived corpus and stdlib trait
   definitions match the pinned upstream source byte-for-byte.
 
-The package-discovery refinements receive another host/regression rerun before
-handoff. M7 is not a readiness claim until the blocked benchmark gate is resolved.
+After the final package-discovery and imported-identity changes, the full host
+suite passed **13,552/13,552** (145.3 seconds), `dune runtest` passed, and the
+compiled-leak gate passed **58/58** again. The performance command was retried
+against the final checkpoint and remains blocked before measurement by the same
+baseline contract mismatch. M7 implementation/tests/documentation are complete
+for the scoped model; final readiness is not claimed while that gate is blocked.
 
 Imported trait methods now retain `permissionCeiling` as content-identity
 metadata. A hosted negative test first selected an implementation belonging to
 another trait because the renderer had discarded this distinction; it now
 requires a missing-implementation diagnostic for the distinct trait. No check
 compares implementation effects against trait ceilings.
+
+Final executed commands (after sourcing the pinned toolchain), with
+`B=/workspace/scratch/a30f2ed4b872/toolchains/traits-build-corpus2`:
+
+```bash
+env -u LD_PRELOAD ./build --ai -- --build-dir="$B"
+./run-tests --ai --build-dir="$B"
+PORT_VM_DUNE_BUILD_DIR="$B" dune runtest --build-dir="$B"
+python3 scripts/check_compiled_leaks.py
+./benchmarks/run_benchmarks.sh --verify-parent full
+```
+
+Build, host, regressions and leaks passed. Benchmark verification exited 1
+before measurement. Generated executables needed their execute permissions
+restored after the VM's file synchronization; the checks were then rerun.
+The final hosted regression includes discovery, alias-only impl leaves,
+canonical identity metadata, missing/ambiguous selection, stdlib bounds,
+pipelines and offline inventory reuse. All selected calls still become
+ordinary checked function references before executable lowering.
