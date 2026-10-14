@@ -1504,7 +1504,25 @@ let parseNamedE2ETestFile path raw =
       adapterPath (FileIO.absolutePath (Filename.dirname path))
     in
     let adapter = FileIO.readText adapterPath in
-    let preamble = adapter ^ "\n" ^ String.concat "\n" (List.rev !preamble) in
+    (* Removing named tests can leave an empty nested module. Drop its header
+       so preamble parsing does not fall back to discarding scoped declarations. *)
+    let _, preamble =
+      List.fold_right
+        (fun line (nextIndent, kept) ->
+          let text = trim line in
+          let indent = countLeadingSpaces line in
+          if text = "" || starts text "//" then (nextIndent, line :: kept)
+          else if
+            starts text "module "
+            && String.ends_with ~suffix:"=" text
+            && Option.fold ~none:true
+                 ~some:(fun next -> next <= indent)
+                 nextIndent
+          then (nextIndent, kept)
+          else (Some indent, line :: kept))
+        (List.rev !preamble) (None, [])
+    in
+    let preamble = adapter ^ "\n" ^ String.concat "\n" preamble in
     Ok
       (List.rev_map
          (fun test ->

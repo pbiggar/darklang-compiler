@@ -280,3 +280,42 @@ retry. No compiler change was made for that host interruption. The complete retr
 exits 1 before measurement on the existing workload-contract digest mismatch.
 For this adoption, the pinned build/test commands use external Dune directory
 `/workspace/scratch/a30f2ed4b872/toolchains/traits-build-adoption`.
+
+Local pipeline inference follow-up: continuation lookahead and expression
+checking now share `WrittenPipeSupport.lower`. Piped local lambdas receive
+concrete parameter types from the same application form as ordinary local
+calls, including later pipeline segments and unary local calls. Inferred trait
+requirements still reject unsupported concrete types and mixed arguments during
+checking; no runtime dispatch or backend trait representation is introduced.
+
+The focused fixture first passed its ordinary-call control and failed the other
+five individual cases with missing Compare diagnostics. The new regression adds
+chain, String, unary rendering and unsatisfied-bound cases. Current pinned
+`language/apply.dark:lambdasAndOperators` and
+`language/pipe.dark:FnName.pipeIntoBoundFn` are copied unchanged as selected named
+tests. The adapter also removes module headers left empty after stripping named
+test bodies, preserving its assertion declarations instead of triggering the
+legacy reduced-preamble fallback.
+
+Pipeline follow-up validation: pinned build passed; the focused fixture passed
+**8/8** (19.8 seconds); the two unchanged upstream named tests passed **2/2**
+(18.9 seconds); full host passed **13,941/13,941** (205.2 seconds).
+`dune runtest`, the **58/58** compiled-leak gate, the **25** porting-framework
+regressions, generated-inventory consistency, pinned ocamlformat and diff checks
+passed. Both upstream named-test bodies were compared with the pinned source.
+
+These commands used the pinned activation and
+`B=/workspace/scratch/a30f2ed4b872/toolchains/traits-build-pipeline-final`:
+
+```bash
+env -u LD_PRELOAD ./build --ai -- --build-dir="$B"
+./run-tests --ai --filter=traits-local-pipeline --build-dir="$B"
+./run-tests --ai --filter=trait-adoption/language --build-dir="$B"
+./run-tests --ai --build-dir="$B"
+PORT_VM_DUNE_BUILD_DIR="$B" dune runtest --build-dir="$B"
+python3 scripts/check_compiled_leaks.py
+```
+
+The parent performance command was retried and remains blocked, exit 1 before
+measurement, by the stored baseline workload-contract digest mismatch. No
+snapshot reset or performance pass is claimed.
