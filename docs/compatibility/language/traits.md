@@ -263,3 +263,20 @@ an unrelated constant-summary invariant comparing NaN with ordinary equality.
 The driver now shares the optimizer's bitwise float operand comparison, retaining
 NaN payload and signed-zero distinctions. The added `float-callee-constants.e2e`
 provides native NaN-helper and negative-zero regression coverage.
+
+The selected upstream run now passes **59/59** (19.2 seconds), and the focused
+Float-callee fixture passes **3/3** (16.6 seconds). All 59 named-test blocks were
+compared verbatim with their pinned upstream sources. Build, `dune runtest`, the
+**58/58** compiled-leak gate, formatting and the generated inventory check pass.
+The controlled baseline probes reject all five generic helper names; the trait
+compiler produces the expected native results for those same upstream expressions.
+The 14 rendering tests add regression coverage rather than proving that primitive
+rendering was newly implemented by traits.
+
+The first full rerun passed 13,613 cases and hit one output-collection `EINTR`
+in `interpreter_layout_parity.e2e`; that fixture passed **28/28** immediately on
+retry. No compiler change was made for that host interruption. The complete retry passed **13,614/13,614** (142.9 seconds), including all
+59 adopted upstream named tests and three focused Float-callee regressions. Parent performance verification still
+exits 1 before measurement on the existing workload-contract digest mismatch.
+For this adoption, the pinned build/test commands use external Dune directory
+`/workspace/scratch/a30f2ed4b872/toolchains/traits-build-adoption`.
