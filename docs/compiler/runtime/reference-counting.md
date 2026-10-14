@@ -111,11 +111,12 @@ does not always mean the memory is reusable:
   lists
 - Stream shells and their 8-byte producer-state cells are reusable fixed-size
   allocations; last-owner release shares the explicit-close finalizer
-- Linux x86-64 recycles canonical String, Blob and boxed Int buffers through
-  8 KiB after their last managed reference is released, including values held
+- Linux x86-64 recycles canonical String, Blob and boxed Int buffers after their
+  last managed reference is released, including values held
   in records, sums, lists, dictionaries and closures. Literals, tagged Ints and
-  buffers outside the native arena never enter these free lists. Buffers beyond
-  those size classes remain bump allocations; ARM64 still lacks this recycling
+  buffers outside the native arena never enter these free lists. Buffers through
+  8 KiB use indexed size classes; larger buffers use an exact-size linked list.
+  Blocks are not split or coalesced; ARM64 still lacks this recycling
 - arbitrary raw pointers are not automatically reclaimed
 - `String`/`Blob`/`Dict`/`List -> RawPtr` intrinsics expose borrowed raw views;
   `RawPtr -> String`/`Blob` and `RawPtr -> Dict`/`List` retag initialized raw
@@ -124,7 +125,7 @@ does not always mean the memory is reusable:
 Tests that need to prove allocator reuse should test reuse explicitly instead
 of relying only on leak-check silence.
 `small-buffer-reuse.e2e` exceeds the arena's cumulative capacity with temporary
-strings, Blobs and Ints, checks the largest recyclable class, and preserves live
+strings, Blobs and Ints, checks the largest indexed class and mixed larger sizes, and preserves live
 aliases under churn. The independent TLS peer's `--churn` mode checks repeated
 fresh connections in one serving process rather than restarting between them.
 

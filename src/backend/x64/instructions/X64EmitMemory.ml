@@ -228,16 +228,20 @@ let emitRawAllocResolved ctx destReg sizeReg =
      If freeList[payload_class] is non-null, pop from free list and skip bump alloc. *)
   let bumpLabel = freshLabel "rawalloc_bump" in
   let doneLabel = freshLabel "rawalloc_done" in
+  let largeLabel = freshLabel "rawalloc_large" in
+  let largeLoopLabel = freshLabel "rawalloc_large_loop" in
+  let largeFoundLabel = freshLabel "rawalloc_large_found" in
+  let largeMissLabel = freshLabel "rawalloc_large_miss" in
   (* Pick two temp registers that don't conflict with destReg or sizeReg *)
   let available =
     List.filter
       (fun r -> r <> destReg && r <> sizeReg)
-      [ X.RAX; X.RCX; X.RDX; X.RDI; X.RSI ]
+      [ X.RAX; X.RCX; X.RDX; X.RDI; X.RSI; X.R8; X.R9 ]
   in
-  let temp1, temp2 =
+  let temp1, temp2, node, capacity =
     match available with
-    | first :: second :: _ -> (first, second)
-    | _ -> Crash.crash "Raw allocation requires two temporary registers"
+    | first :: second :: third :: fourth :: _ -> (first, second, third, fourth)
+    | _ -> Crash.crash "Raw allocation requires four temporary registers"
   in
   (* holds &freeList[payload_class] *)
   let freeListCheck =
@@ -255,7 +259,7 @@ let emitRawAllocResolved ctx destReg sizeReg =
       X.SUB_imm (temp1, 8l);
       (* temp1 = payload_class *)
       X.CMP_imm (temp1, Int32.of_int maxFreeListPayload);
-      X.Jcc (X.GT, bumpLabel);
+      X.Jcc (X.GT, largeLabel);
       (* Compute free list slot address: &freeList[payload_class] *)
       X.MOV_reg (temp2, freeListBase);
       X.ADD_reg (temp2, temp1);
@@ -275,6 +279,33 @@ let emitRawAllocResolved ctx destReg sizeReg =
       X.POP temp2;
       X.POP temp1;
       X.JMP doneLabel;
+      X.Label largeLabel;
+      X.PUSH node;
+      X.PUSH capacity;
+      X.ADD_imm (temp1, 8l);
+      X.LEA (temp2, freeListBase, Int32.of_int largeBufferHeadOffset);
+      X.Label largeLoopLabel;
+      X.MOV_load (node, temp2, 0l);
+      X.TEST_reg (node, node);
+      X.Jcc (X.EQ, largeMissLabel);
+      X.MOV_load (capacity, node, 8l);
+      X.CMP_reg (capacity, temp1);
+      X.Jcc (X.EQ, largeFoundLabel);
+      (* The previous link lives at offset zero, including the global head. *)
+      X.MOV_reg (temp2, node);
+      X.JMP largeLoopLabel;
+      X.Label largeFoundLabel;
+      X.MOV_load (capacity, node, 0l);
+      X.MOV_store (temp2, 0l, capacity);
+      X.MOV_reg (destReg, node);
+      X.POP capacity;
+      X.POP node;
+      X.POP temp2;
+      X.POP temp1;
+      X.JMP doneLabel;
+      X.Label largeMissLabel;
+      X.POP capacity;
+      X.POP node;
       X.Label bumpLabel;
       X.POP temp2;
       X.POP temp1;

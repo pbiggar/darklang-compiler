@@ -250,9 +250,12 @@ def main():
     parser.add_argument("--compiler", type=Path, default=ROOT / "dark")
     parser.add_argument("--skip-owner-checks", action="store_true", help="Isolate the legacy HTTP/2 and handshake compatibility cases")
     parser.add_argument("--churn", type=int, default=0, help="Run only this many fresh TLS connections against one serving process")
+    parser.add_argument("--churn-body-bytes", type=int, default=128, help="Echo body size for each churn connection (up to the server's 80000-byte limit)")
     args = parser.parse_args()
     if args.churn < 0:
         parser.error("--churn must be nonnegative")
+    if not 0 <= args.churn_body_bytes <= 80000:
+        parser.error("--churn-body-bytes must be between 0 and 80000")
     key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
     now = datetime.datetime.now(datetime.timezone.utc)
     name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "localhost")])
@@ -274,13 +277,13 @@ def main():
         try:
             if args.churn:
                 for index in range(args.churn):
-                    body = bytes([index % 251]) * 128
+                    body = bytes([index % 251]) * args.churn_body_bytes
                     with connect(port, certificate, ["http/1.1"]) as peer, peer.makefile("rb") as reader:
-                        peer.sendall(b"POST /echo HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\nContent-Length: 128\r\n\r\n" + body)
+                        peer.sendall(b"POST /echo HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\nContent-Length: " + str(len(body)).encode("ascii") + b"\r\n\r\n" + body)
                         assert http1_response(reader)[1] == body, index
                         assert not reader.read(1), index
                 stop(process)
-                print(f"TLS server: {args.churn} fresh connections on one process, exact bodies and zero leaks", flush=True)
+                print(f"TLS server: {args.churn} fresh connections on one process, {args.churn_body_bytes}-byte exact bodies and zero leaks", flush=True)
                 return
             if not args.skip_owner_checks:
                 http1_owners(port, certificate)

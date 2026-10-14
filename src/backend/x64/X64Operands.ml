@@ -246,11 +246,15 @@ let freeListBase = X86_64.R15
 *)
 let freeListSize = 8192
 
+(* Large canonical buffers retain their aligned size in the dead header and
+   form a separate exact-size list, without an arena-sized head table. *)
+let largeBufferHeadOffset = freeListSize
+
 (*
    The process table is raw runtime state, not a managed allocation. Keeping
    it at a fixed address avoids aliasing a free-list head in batched programs.
 *)
-let processTableOffset = freeListSize
+let processTableOffset = add largeBufferHeadOffset 8
 let processTableSize = 4096
 
 (*
@@ -406,6 +410,7 @@ let genBufferRecycle pointer =
   let count = if pointer = X86_64.RCX then X86_64.RAX else X86_64.RCX in
   let slot = if pointer = X86_64.RDX then X86_64.RSI else X86_64.RDX in
   let doneLabel = freshLabel "buffer_recycle_done" in
+  let largeLabel = freshLabel "buffer_recycle_large" in
   [
     X86_64.PUSH count;
     X86_64.PUSH slot;
@@ -418,17 +423,25 @@ let genBufferRecycle pointer =
     X86_64.MOV_load (count, pointer, 8l);
     X86_64.CMP_imm (count, 0l);
     X86_64.Jcc (X86_64.LT, doneLabel);
-    X86_64.CMP_imm (count, Int32.of_int (freeListSize - 16));
+    X86_64.CMP_imm (count, Int64.to_int32 (Int64.sub heapMmapSizeBytes 16L));
     X86_64.Jcc (X86_64.GT, doneLabel);
     (* aligned allocation = roundUp(length + 16, 8); class excludes 8 bytes. *)
     X86_64.ADD_imm (count, 23l);
     X86_64.AND_imm (count, -8l);
+    X86_64.CMP_imm (count, Int32.of_int freeListSize);
+    X86_64.Jcc (X86_64.GT, largeLabel);
     X86_64.SUB_imm (count, 8l);
     X86_64.MOV_reg (slot, freeListBase);
     X86_64.ADD_reg (slot, count);
     X86_64.MOV_load (count, slot, 0l);
     X86_64.MOV_store (pointer, 0l, count);
     X86_64.MOV_store (slot, 0l, pointer);
+    X86_64.JMP doneLabel;
+    X86_64.Label largeLabel;
+    X86_64.MOV_store (pointer, 8l, count);
+    X86_64.MOV_load (slot, freeListBase, Int32.of_int largeBufferHeadOffset);
+    X86_64.MOV_store (pointer, 0l, slot);
+    X86_64.MOV_store (freeListBase, Int32.of_int largeBufferHeadOffset, pointer);
     X86_64.Label doneLabel;
     X86_64.POP slot;
     X86_64.POP count;

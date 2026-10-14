@@ -337,8 +337,12 @@ mean the entire branch has passed its integration or performance gates.
     fresh connections in one serving process, with exact bodies and zero leaks.
     Cumulative allocation and live-alias E2E cases cover the ownership boundary
     (see [reference counting](../compiler/runtime/reference-counting.md#leak-checking)).
-  - [ ] Larger buffers and general raw temporary allocations still need
-    reusable storage, and ARM64 needs the corresponding recycling migration.
+  - [x] Larger canonical buffers reuse an exact-size list. Repeated 70 KB and
+    128 KB allocations and held aliases exceed the arena's cumulative capacity
+    without exhaustion; all three cases fail before the large-buffer change.
+  - [ ] General raw temporary allocations still need reusable storage, and
+    ARM64 needs the corresponding recycling migration. Large-block splitting
+    and coalescing remain unsupported.
     Passing bounded churn cases does not establish an indefinitely reusable
     native heap. The secure-server fairness peer retains its separate scopes.
 
