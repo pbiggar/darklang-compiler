@@ -35,8 +35,7 @@ let genDynamicBufferFieldRelease ctx skipTagged fieldOffset =
       X86_64.TEST_reg (X86_64.R9, X86_64.R9);
       X86_64.Jcc (X86_64.NE, noFreeLabel);
     ]
-  @ (if skipTagged then [] else genSmallBufferRecycle X86_64.R8)
-  @ leakDec
+  @ genBufferRecycle X86_64.R8 @ leakDec
   @ [
       X86_64.Label noFreeLabel;
       X86_64.Label literalLabel;

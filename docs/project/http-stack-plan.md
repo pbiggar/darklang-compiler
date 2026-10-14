@@ -331,12 +331,16 @@ mean the entire branch has passed its integration or performance gates.
 - [ ] Typed protocol failures with correct stream and connection wire errors,
   retaining the current packet-number/key state across recoverable failures.
 - [ ] Sustained native TLS connection churn without exhausting the fixed heap.
-  The parent implementation reproduced `Out of heap memory` after twenty-one
-  successful fresh TLS exchanges on Linux x86-64; variable-size String/Blob
-  allocations are not reusable yet (see [reference counting](../compiler/runtime/reference-counting.md#leak-checking)).
-  The secure-server peer runs each additional fairness case in a fresh serving
-  scope and separately verifies simultaneous-owner cleanup. Passing those
-  bounded cases does not establish an indefinitely reusable native heap.
+  - [x] The parent fails the isolated thirty-two-connection TLS churn peer with
+    `Out of heap memory`. Linux x86-64 now recycles canonical String/Blob/Int
+    buffers and fixed blocks through 8 KiB. The same peer completes sixty-four
+    fresh connections in one serving process, with exact bodies and zero leaks.
+    Cumulative allocation and live-alias E2E cases cover the ownership boundary
+    (see [reference counting](../compiler/runtime/reference-counting.md#leak-checking)).
+  - [ ] Larger buffers and general raw temporary allocations still need
+    reusable storage, and ARM64 needs the corresponding recycling migration.
+    Passing bounded churn cases does not establish an indefinitely reusable
+    native heap. The secure-server fairness peer retains its separate scopes.
 
 HTTP/3 control owners now retain peer parameters and enforce
 `SETTINGS_MAX_FIELD_SECTION_SIZE` against decoded name/value byte lengths,

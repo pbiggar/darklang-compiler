@@ -192,7 +192,7 @@ let generateListRefCountDecHelperWith helperLabel enableLeakCheck recordRegistry
             X86_64.TEST_reg (X86_64.R9, X86_64.R9);
             X86_64.Jcc (X86_64.NE, leafPayloadDone);
           ]
-        @ genSmallBufferRecycle X86_64.R10
+        @ genBufferRecycle X86_64.R10
         @ leakDec
         @ [ X86_64.Label leafPayloadDone ]
     | DynamicIntLeafPayload ->
@@ -215,6 +215,7 @@ let generateListRefCountDecHelperWith helperLabel enableLeakCheck recordRegistry
             X86_64.TEST_reg (X86_64.R9, X86_64.R9);
             X86_64.Jcc (X86_64.NE, leafPayloadDone);
           ]
+        @ genBufferRecycle X86_64.R10
         @ leakDec
         @ [ X86_64.Label leafPayloadDone ]
     | FixedBlockPlannedLeafPayload (payloadSize, releasePlan) ->
