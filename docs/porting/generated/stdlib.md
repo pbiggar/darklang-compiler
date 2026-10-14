@@ -2,7 +2,7 @@
 
 ## Current section
 
-Embedded from StdLib/ in library-sources.list order, with nested modules split into files and native representation helpers.
+Embedded from StdLib/ in library-sources.list order, with nested modules split into files and native representation helpers. The isolated package-layout trial embeds upstream cli/env.dark and intact cli/fileSystem.dark at their upstream packages/ paths, retaining their bytes and source order. Production sources have not moved; native compilation and behavioral parity remain unverified.
 
 ## Intended section
 
@@ -15,6 +15,7 @@ Embedded from StdLib/ in library-sources.list order, with nested modules split i
 ## Open questions
 
 - Agree the destination for compiler-specific List and Dict implementations after a trial.
+- Compile the Env/FileSystem layout trial once the pinned VM setup can finish; embedding alone does not prove nested name-resolution parity.
 
 ## Source observations
 
