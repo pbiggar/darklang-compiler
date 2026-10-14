@@ -751,6 +751,27 @@ let renderParameters parameters =
       | _ -> Error "Invalid package function parameter")
     (arrayItems parameters)
 
+(* Ceilings are trait identity data. Preserve them without enforcing a ceiling
+   against implementation effects, which remains outside this compiler scope. *)
+let renderTraitCeiling method_ =
+  match tryField "permissionCeiling" method_ with
+  | None -> Ok ""
+  | Some ceiling -> (
+      let* case, fields = enumCase ceiling in
+      match (case, fields) with
+      | "None", [] -> Ok ""
+      | "Some", [ effects ] ->
+          let+ effects =
+            ResultList.mapResults
+              (fun effect_ ->
+                let* name, fields = enumCase effect_ in
+                if fields = [] then Ok name
+                else Error "Invalid package trait effect")
+              (arrayItems effects)
+          in
+          "{" ^ String.concat ", " effects ^ "} "
+      | _ -> Error "Invalid package trait method ceiling")
+
 let renderEntity entity =
   try
     let root = parse entity.json in
@@ -794,10 +815,11 @@ let renderEntity entity =
                                   (tryField "bounds" method_)
                               in
                               let* parameters = renderParameters parameters in
+                              let* ceiling = renderTraitCeiling method_ in
                               let+ result = renderType result in
                               "  let " ^ name ^ types ^ " "
                               ^ String.concat " " (List.map snd parameters)
-                              ^ " : " ^ result
+                              ^ " : " ^ ceiling ^ result
                           | _ -> Error "Invalid package trait method")
                         (arrayItems methods)
                     in

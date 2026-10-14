@@ -218,3 +218,9 @@ Current M7 validation uses the pinned activation and external Dune directory
 
 The package-discovery refinements receive another host/regression rerun before
 handoff. M7 is not a readiness claim until the blocked benchmark gate is resolved.
+
+Imported trait methods now retain `permissionCeiling` as content-identity
+metadata. A hosted negative test first selected an implementation belonging to
+another trait because the renderer had discarded this distinction; it now
+requires a missing-implementation diagnostic for the distinct trait. No check
+compares implementation effects against trait ceilings.

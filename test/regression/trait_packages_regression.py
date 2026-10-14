@@ -52,6 +52,10 @@ def main():
         parameters=[dict(name="value", typ=variable)], returnType={"TString": []},
         body={"EApply": [1, {"EFnName": [2, dict(originalName=["Darklang", "Stdlib", "ToString", "toString"],
             resolved={"Error": ["unresolved"]}), []]}, [], [{"EArg": [3, 0]}]]}))
+    # Ceilings affect content identity even though trait ceiling checking is deferred.
+    ceiling_signature = dict(signature, permissionCeiling={"Some": [[]]})
+    entities[("trait", "ceiling-trait-hash")] = ("Hosted.CeilingText", dict(
+        typeParams=["a"], bounds=[], methods=[ceiling_signature]))
     requests = []
     for (_, hash_), (_, body) in entities.items():
         body["hash"] = {"Hash": [hash_]}
@@ -120,6 +124,12 @@ def main():
             assert json.loads(output) == "hosted|hosted|42", output
             assert "/Hosted" in requests and "/Hosted.Int64" in requests, requests
             assert not any("stdlib-trait-hash" in request for request in requests), requests
+            source.write_text('Hosted.CeilingText.toText 42L\n')
+            ceiling = subprocess.run([compiler, "-q", "--emit-result", "--package-server",
+                f"http://127.0.0.1:{server.server_port}", str(source), "-o", str(program)],
+                env=env, capture_output=True, text=True, timeout=120)
+            assert ceiling.returncode != 0, ceiling.stdout + ceiling.stderr
+            assert "No implementation of trait" in ceiling.stdout + ceiling.stderr, ceiling.stdout + ceiling.stderr
             source.write_text('Hosted.ToText.toText 42L\n')
             direct = subprocess.run([compiler, "-q", "--emit-result", "--package-server",
                 f"http://127.0.0.1:{server.server_port}", str(source), "-o", str(program)],
