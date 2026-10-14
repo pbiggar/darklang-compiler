@@ -14,7 +14,9 @@ let parseDecl parseBlock state index =
         errExpected state nameIndex "a declaration name";
         { WT.range = rng state nameIndex; name = "_" }
   in
-  let typeParams, next = parseTypeParams state (nameIndex + 1) in
+  let typeParams, bounds, next =
+    TypeParameterParser.parseTypeParams state (nameIndex + 1)
+  in
   if tok state next = TLParen then (
     let parameters = RevBuffer.create ()
     and stop = ref next
@@ -64,6 +66,7 @@ let parseDecl parseBlock state index =
           WT.range = span keyword (WT.exprRange body);
           name;
           typeParams;
+          bounds;
           parameters = RevBuffer.toList parameters;
           effects;
           returnType;

@@ -1,0 +1,17 @@
+// Native named-test assertions. This adapter is injected only by the fixture
+// runner, not included in the compiler's production library. Preserve Pass/Fail
+// and failure aggregation; use plain mismatch text instead of runtime toRepr.
+module Darklang.Stdlib.Test =
+  type Result = Pass | Fail of messages: List<String>
+
+  let equal<'a> (actual: 'a) (expected: 'a) : Result =
+    if actual == expected then Result.Pass else Result.Fail ["Values differ"]
+
+  let all (tests: List<Result>) : Result =
+    let failures = Stdlib.List.fold tests [] (fun messages test ->
+      match test with
+      | Pass -> messages
+      | Fail failures ->
+        if failures == [] then Stdlib.List.append messages ["Assertion failed"]
+        else Stdlib.List.append messages failures)
+    if failures == [] then Result.Pass else Result.Fail failures

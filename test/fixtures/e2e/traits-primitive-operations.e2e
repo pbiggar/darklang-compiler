@@ -1,0 +1,18 @@
+Stdlib.Add.add 127y 1y = -128y
+Stdlib.Add.add 255uy 1uy = 0uy
+Stdlib.Power.power (-2Q) 127Q = -170141183460469231731687303715884105728Q
+Stdlib.Power.power 2Z 128Z = 0Z
+Stdlib.Power.power 2Q 1000000Q = 0Q
+Stdlib.Power.power 2Z 1000000Z = 0Z
+Stdlib.Power.power 2Q 18446744073709551616Q = 0Q
+Stdlib.Power.power 2Z 340282366920938463463374607431768211455Z = 0Z
+Stdlib.Power.power 0Z 0Z = 1Z
+Stdlib.Power.power 2Q -1Q = error="Cannot raise integer to a negative exponent"
+Stdlib.BitwiseXor.bitwiseXor 7L 3L = 4L
+Stdlib.ShiftLeft.shiftLeft 1L 5L = 32L
+Stdlib.ToString.toString 340282366920938463463374607431768211455Z = "340282366920938463463374607431768211455"
+Stdlib.max 32767s -32768s = 32767s
+Stdlib.max 65535us 0us = 65535us
+Stdlib.max 2147483647l -2147483648l = 2147483647l
+Stdlib.max 4294967295ul 0ul = 4294967295ul
+Stdlib.max 18446744073709551615UL 0UL = 18446744073709551615UL

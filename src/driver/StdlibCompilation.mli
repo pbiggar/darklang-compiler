@@ -12,5 +12,6 @@ val buildStdlibSpecializations :
   SpecializationIdentity.SpecSet.t ->
   TypeRegistries.typeRegistry ->
   LoweringPrimitives.variantLookup ->
+  CheckedAST.symbols ->
   CompilerOptions.passTimingRecorder option ->
   (CompilationContexts.stdlibResult, string) result

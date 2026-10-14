@@ -125,3 +125,59 @@ let fromInt64 (value: Int64) : Stdlib.Option.Option<Int16> = Stdlib.Int.toInt16 
 let fromUInt64 (value: UInt64) : Stdlib.Option.Option<Int16> = Stdlib.Int.toInt16 (Stdlib.Int.fromUInt64 value)
 let fromInt128 (value: Int128) : Stdlib.Option.Option<Int16> = Stdlib.Int.toInt16 (Stdlib.Int.fromInt128 value)
 let fromUInt128 (value: UInt128) : Stdlib.Option.Option<Int16> = Stdlib.Int.toInt16 (Stdlib.Int.fromUInt128 value)
+
+// Trait implementations reuse the compiler's existing native operations.
+
+impl Stdlib.Add for Int16 =
+  let add = Stdlib.Int16.add
+
+impl Stdlib.Subtract for Int16 =
+  let subtract = Stdlib.Int16.subtract
+
+impl Stdlib.Multiply for Int16 =
+  let multiply = Stdlib.Int16.multiply
+
+impl Stdlib.Divide for Int16 =
+  let divide = Stdlib.Int16.divide
+
+impl Stdlib.Modulo for Int16 =
+  let modulo = Stdlib.Int16.mod
+
+impl Stdlib.Power for Int16 =
+  let power = Stdlib.Int16.power
+
+impl Stdlib.Negate for Int16 =
+  let negate = Stdlib.Int16.negate
+
+impl Stdlib.BitwiseAnd for Int16 =
+  let bitwiseAnd = Stdlib.Int16.bitwiseAnd
+
+impl Stdlib.BitwiseOr for Int16 =
+  let bitwiseOr = Stdlib.Int16.bitwiseOr
+
+impl Stdlib.BitwiseXor for Int16 =
+  let bitwiseXor = Stdlib.Int16.bitwiseXor
+
+impl Stdlib.BitwiseNot for Int16 =
+  let bitwiseNot = Stdlib.Int16.bitwiseNot
+
+impl Stdlib.ShiftLeft for Int16 =
+  let shiftLeft = Stdlib.Int16.shiftLeft
+
+impl Stdlib.ShiftRight for Int16 =
+  let shiftRight = Stdlib.Int16.shiftRight
+
+impl Stdlib.ToString for Int16 =
+  let toString = Stdlib.Int16.toString
+
+impl Stdlib.Compare for Int16 =
+  let lessThan = Stdlib.Int16.lessThan
+  let lessThanOrEqualTo = Stdlib.Int16.lessThanOrEqualTo
+  let greaterThan = Stdlib.Int16.greaterThan
+  let greaterThanOrEqualTo = Stdlib.Int16.greaterThanOrEqualTo
+
+impl Stdlib.Zero for Int16 =
+  let zero () : Int16 = 0s
+
+impl Stdlib.One for Int16 =
+  let one () : Int16 = 1s

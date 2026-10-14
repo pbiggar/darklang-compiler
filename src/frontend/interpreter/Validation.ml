@@ -279,6 +279,24 @@ let rec declarationStructureIssues = function
       @ exprIssues fn.body
   | WT.DValue value -> exprIssues value.body
   | WT.DType _ -> []
+  | WT.DTrait trait_ ->
+      List.concat_map
+        (fun (method_ : WT.traitMethodDecl) ->
+          duplicateIssues
+            (List.filter_map
+               (function
+                 | WT.FPNormal (_, name, _, _, _, _, _) ->
+                     Some (name.name, name.range)
+                 | WT.FPUnit _ -> None)
+               method_.parameters)
+          @ List.concat_map exprIssues (Option.to_list method_.body))
+        trait_.methods
+  | WT.DImpl impl ->
+      List.concat_map
+        (function
+          | WT.IMethod fn -> declarationStructureIssues (WT.DFunction fn)
+          | WT.IAlias value -> exprIssues value.body)
+        impl.members
   | WT.DModule modul ->
       List.concat_map declarationStructureIssues modul.declarations
   | WT.DExpr expr -> exprIssues expr
@@ -307,7 +325,7 @@ let validateStructure (sourceFile : WT.sourceFile) =
    parser validates the block form while it still has that syntax detail.
 *)
 let rec declarationPurposeIssues mode = function
-  | WT.DFunction _ | WT.DValue _ | WT.DType _ -> []
+  | WT.DFunction _ | WT.DValue _ | WT.DType _ | WT.DTrait _ | WT.DImpl _ -> []
   | WT.DModule modul ->
       List.concat_map (declarationPurposeIssues mode) modul.declarations
   | WT.DExpr expr -> (

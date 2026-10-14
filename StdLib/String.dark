@@ -752,3 +752,18 @@ let random (length: Int) : Stdlib.Result.Result<String, String> =
     let zero = Stdlib.Int.fromInt64 0L in
     if length < zero then Error ("Expected `length` to be positive, but it was `" ++ Stdlib.Int.toString length ++ "`")
     else Ok (Stdlib.String.__random length "")
+
+impl Stdlib.ToString for String =
+  let toString (value: String) : String = value
+
+impl Stdlib.Add for String =
+  let add = Stdlib.String.append
+
+impl Stdlib.Zero for String =
+  let zero () : String = ""
+
+impl Stdlib.Compare for String =
+  let lessThan (a: String) (b: String) : Bool = Stdlib.String.compare a b < 0L
+  let lessThanOrEqualTo (a: String) (b: String) : Bool = Stdlib.String.compare a b <= 0L
+  let greaterThan (a: String) (b: String) : Bool = Stdlib.String.compare a b > 0L
+  let greaterThanOrEqualTo (a: String) (b: String) : Bool = Stdlib.String.compare a b >= 0L

@@ -1,0 +1,13 @@
+trait ReceiverShow<'a> =
+  let show (value: 'a) : String
+type ReceiverPoint = { value: Int64 }
+impl ReceiverShow for ReceiverPoint =
+  let show (value: ReceiverPoint) : String = "point"
+let receiverGeneric<'a: ReceiverShow> (value: 'a) : String = value.show
+(ReceiverPoint { value = 42L }).show = "point"
+receiverGeneric (ReceiverPoint { value = 42L }) = "point"
+
+type ReceiverField = { show: String }
+(ReceiverField { show = "field" }).show = "field"
+impl ReceiverShow for ReceiverField =
+  let show (value: ReceiverField) : String = "trait"

@@ -58,12 +58,29 @@ let[@warning "-4"] checkNamed checkExpression checkedLiteral globals locals
                  (signature.id, C.checkedTypeArgs types, C.checkedType typ)))
   | Some signature
     when args <> [] && List.length args < List.length signature.parameters ->
-      bind
-        (ResultList.traverse
-           (resolveWrittenType globals.allowInternal globals.types
-              globals.modulePath globals.typeParams)
-           typeArgs)
-        (fun givenTypeArgs ->
+      let givenTypeArgs =
+        if typeArgs = [] && Option.is_some signature.traitMethod then
+          bind
+            (ResultList.traverse
+               (fun arg ->
+                 map (fun (typ, _, _) -> typ) (check symbols None arg))
+               args)
+            (fun actual ->
+              Unification.inferTypeArgs signature.typeParams
+                (take (List.length args) signature.parameters)
+                actual
+                (Some
+                   (AST.TFunction
+                      ( drop (List.length args) signature.parameters,
+                        signature.return )))
+                expected)
+        else
+          ResultList.traverse
+            (resolveWrittenType globals.allowInternal globals.types
+               globals.modulePath globals.typeParams)
+            typeArgs
+      in
+      bind givenTypeArgs (fun givenTypeArgs ->
           if List.length givenTypeArgs <> List.length signature.typeParams then
             Error
               ("Partial application of generic function '" ^ name.WT.fn.WT.name
@@ -175,6 +192,14 @@ let[@warning "-4"] checkNamed checkExpression checkedLiteral globals locals
                 signature.parameters;
             return =
               CheckingDiagnostics.applyTypeVarRenaming renaming signature.return;
+            bounds =
+              List.map
+                (fun (name, args) ->
+                  ( name,
+                    List.map
+                      (CheckingDiagnostics.applyTypeVarRenaming renaming)
+                      args ))
+                signature.bounds;
           }
       in
       let normalizedArgs =
@@ -393,90 +418,146 @@ let[@warning "-4"] checkNamed checkExpression checkedLiteral globals locals
                                     ^ " cannot be used as a Dict key"))
                       in
                       bind inferred (fun inferredTypeArgs ->
-                          let substitution =
-                            M.of_list
-                              (List.combine signature.typeParams
-                                 inferredTypeArgs)
+                          let inferredTypeArgs =
+                            WrittenTraitSupport.inferFromBounds globals
+                              signature inferredTypeArgs
                           in
-                          let parameterTypes =
-                            List.map
-                              (Types.applySubst substitution)
-                              signature.parameters
-                          and returnType =
-                            Types.applySubst substitution signature.return
-                          in
-                          let pairs =
-                            List.mapi
-                              (fun index pair -> (index, pair))
-                              (List.combine checkedArgs parameterTypes)
-                          in
-                          let mismatch =
-                            List.find_opt
-                              (fun (index, ((typ, _), parameterType)) ->
-                                (not
-                                   (((isStdlibEquality && index = 1)
-                                    || (isDictKeyOperation && index = 1))
-                                   && structuralEqualityCompatible globals
-                                        parameterType typ))
-                                && Option.is_none
-                                     (Unification.reconcileTypes None
-                                        parameterType typ))
-                              pairs
-                          in
-                          match mismatch with
-                          | Some (_, ((actual, _), wanted)) ->
-                              Error
-                                ("Function argument type mismatch: expected "
-                                ^ StructuralFormat.semanticType wanted
-                                ^ ", got "
-                                ^ StructuralFormat.semanticType actual)
-                          | None ->
-                              let converted =
-                                List.fold_left
-                                  (fun state
-                                       (index, ((actualType, value), targetType))
-                                     ->
-                                    bind state (fun (reversed, symbols) ->
-                                        if
-                                          index = 1
-                                          && (isStdlibEquality
-                                            || isDictKeyOperation)
-                                          && Option.is_none
-                                               (Unification.reconcileTypes None
-                                                  targetType actualType)
-                                          && structuralEqualityCompatible
-                                               globals targetType actualType
-                                        then
-                                          map
-                                            (fun (value, symbols) ->
-                                              (value :: reversed, symbols))
-                                            (convertStructuralRecord globals
-                                               targetType actualType value
-                                               symbols)
-                                        else
-                                          map
-                                            (fun symbols ->
-                                              (value :: reversed, symbols))
-                                            (WrittenCheckingState.constrain
-                                               targetType actualType symbols)))
-                                  (Ok ([], symbols))
+                          bind
+                            (WrittenTraitSupport.checkSignatureBounds globals
+                               (WrittenCheckingState.symbols symbols)
+                               signature inferredTypeArgs)
+                            (fun () ->
+                              let substitution =
+                                M.of_list
+                                  (List.combine signature.typeParams
+                                     inferredTypeArgs)
+                              in
+                              let parameterTypes =
+                                List.map
+                                  (Types.applySubst substitution)
+                                  signature.parameters
+                              and returnType =
+                                Types.applySubst substitution signature.return
+                              in
+                              let pairs =
+                                List.mapi
+                                  (fun index pair -> (index, pair))
+                                  (List.combine checkedArgs parameterTypes)
+                              in
+                              let mismatch =
+                                List.find_opt
+                                  (fun (index, ((typ, _), parameterType)) ->
+                                    (not
+                                       (((isStdlibEquality && index = 1)
+                                        || (isDictKeyOperation && index = 1))
+                                       && structuralEqualityCompatible globals
+                                            parameterType typ))
+                                    && Option.is_none
+                                         (Unification.reconcileTypes None
+                                            parameterType typ))
                                   pairs
                               in
-                              bind converted (fun (reversed, symbols) ->
-                                  let args =
-                                    match List.rev reversed with
-                                    | [] -> NonEmptyList.singleton C.UnitLiteral
-                                    | args -> NonEmptyList.fromList args
+                              match mismatch with
+                              | Some (_, ((actual, _), wanted)) ->
+                                  Error
+                                    ("Function argument type mismatch: \
+                                      expected "
+                                    ^ StructuralFormat.semanticType wanted
+                                    ^ ", got "
+                                    ^ StructuralFormat.semanticType actual)
+                              | None ->
+                                  let converted =
+                                    List.fold_left
+                                      (fun state
+                                           ( index,
+                                             ((actualType, value), targetType)
+                                           ) ->
+                                        bind state (fun (reversed, symbols) ->
+                                            if
+                                              index = 1
+                                              && (isStdlibEquality
+                                                || isDictKeyOperation)
+                                              && Option.is_none
+                                                   (Unification.reconcileTypes
+                                                      None targetType actualType)
+                                              && structuralEqualityCompatible
+                                                   globals targetType actualType
+                                            then
+                                              map
+                                                (fun (value, symbols) ->
+                                                  (value :: reversed, symbols))
+                                                (convertStructuralRecord globals
+                                                   targetType actualType value
+                                                   symbols)
+                                            else
+                                              map
+                                                (fun symbols ->
+                                                  (value :: reversed, symbols))
+                                                (WrittenCheckingState.constrain
+                                                   targetType actualType symbols)))
+                                      (Ok ([], symbols))
+                                      pairs
                                   in
-                                  let call =
-                                    if signature.typeParams = [] then
-                                      C.Call (signature.id, args)
-                                    else
-                                      C.TypeApp
-                                        ( signature.id,
-                                          List.map C.checkedType
-                                            inferredTypeArgs,
-                                          args )
-                                  in
-                                  checkedLiteral expected symbols returnType
-                                    call))))
+                                  bind converted (fun (reversed, symbols) ->
+                                      let args =
+                                        match List.rev reversed with
+                                        | [] ->
+                                            NonEmptyList.singleton C.UnitLiteral
+                                        | args -> NonEmptyList.fromList args
+                                      in
+                                      let target =
+                                        match signature.traitMethod with
+                                        | None ->
+                                            Ok (signature.id, inferredTypeArgs)
+                                        | Some (traitName, methodName) -> (
+                                            match
+                                              M.find_opt traitName
+                                                globals.traits
+                                            with
+                                            | None ->
+                                                Crash.crash
+                                                  "Missing predeclared trait \
+                                                   signature"
+                                            | Some trait_ ->
+                                                let traitArgs =
+                                                  take
+                                                    (List.length
+                                                       trait_.traitParams)
+                                                    inferredTypeArgs
+                                                in
+                                                if
+                                                  List.exists
+                                                    Unification.containsTVar
+                                                    traitArgs
+                                                then
+                                                  bind
+                                                    (TraitResolution.check
+                                                       (C.traitCatalog
+                                                          (WrittenCheckingState
+                                                           .symbols symbols))
+                                                       globals.bounds
+                                                       (traitName, traitArgs))
+                                                    (fun () ->
+                                                      Ok
+                                                        ( signature.id,
+                                                          inferredTypeArgs ))
+                                                else
+                                                  WrittenTraitSupport.selectCall
+                                                    (WrittenCheckingState
+                                                     .symbols symbols)
+                                                    traitName methodName
+                                                    inferredTypeArgs)
+                                      in
+                                      bind target (fun (id, typeArgs) ->
+                                          let call =
+                                            if typeArgs = [] then
+                                              C.Call (id, args)
+                                            else
+                                              C.TypeApp
+                                                ( id,
+                                                  List.map C.checkedType
+                                                    typeArgs,
+                                                  args )
+                                          in
+                                          checkedLiteral expected symbols
+                                            returnType call))))))

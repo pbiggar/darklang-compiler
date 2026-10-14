@@ -14,6 +14,8 @@ type item =
   | Function of string list * WT.fnDecl
   | Value of string list * WT.valueDecl
   | Type of string list * WT.typeDecl
+  | Trait of string list * WT.traitDecl
+  | Impl of string list * WT.implDecl
   | Expression of string list * WT.expr
 
 let moduleSegments name =
@@ -26,6 +28,8 @@ let rec flattenDeclaration path = function
   | WT.DFunction fn -> Ok [ Function (path, fn) ]
   | WT.DValue value -> Ok [ Value (path, value) ]
   | WT.DType typ -> Ok [ Type (path, typ) ]
+  | WT.DTrait trait_ -> Ok [ Trait (path, trait_) ]
+  | WT.DImpl impl -> Ok [ Impl (path, impl) ]
   | WT.DExpr expression -> Ok [ Expression (path, expression) ]
   | WT.DModule modul ->
       Result.bind
@@ -222,6 +226,37 @@ let qualifiedNames units =
                             typeNames field.WT.typ)
                           case.WT.fields)
                       cases)
+            | Trait (_, declaration) ->
+                List.map
+                  (fun (bound : WT.typeParamBound) ->
+                    qualifiedType bound.WT.trait_)
+                  declaration.WT.bounds
+                @ List.concat_map
+                    (fun (method_ : WT.traitMethodDecl) ->
+                      List.concat_map
+                        (function
+                          | WT.FPUnit _ -> []
+                          | WT.FPNormal (_, _, typ, _, _, _, _) -> typeNames typ)
+                        method_.WT.parameters
+                      @ typeNames method_.WT.returnType
+                      @ List.map
+                          (fun (bound : WT.typeParamBound) ->
+                            qualifiedType bound.WT.trait_)
+                          method_.WT.bounds)
+                    declaration.WT.methods
+            | Impl (_, declaration) ->
+                qualifiedType declaration.WT.trait_
+                :: (List.concat_map typeNames declaration.WT.trait_.WT.typeArgs
+                   @ typeNames declaration.WT.forType
+                   @ List.map
+                       (fun (bound : WT.typeParamBound) ->
+                         qualifiedType bound.WT.trait_)
+                       declaration.WT.bounds
+                   @ List.concat_map
+                       (function
+                         | WT.IMethod fn -> expressionNames fn.WT.body
+                         | WT.IAlias value -> expressionNames value.WT.body)
+                       declaration.WT.members)
             | Expression (_, expression) -> expressionNames expression)
           (List.concat groups)
       in

@@ -1,0 +1,27 @@
+trait OriginalIdentity<'a> =
+  let renderIdentity (value: 'a) : String
+trait AliasIdentity<'a> =
+  let renderIdentity (renamed: 'a) : String
+impl OriginalIdentity for Int64 =
+  let renderIdentity (value: Int64) : String = "shared"
+AliasIdentity.renderIdentity 42L = "shared"
+42L.renderIdentity = "shared"
+
+trait SharedToString<'a> =
+  let toString (value: 'a) : String
+SharedToString.toString 42L = "42"
+
+trait OrderedIdentity<'a> =
+  let renderIdentity (value: 'a) : String
+  let otherIdentity (value: 'a) : String
+OrderedIdentity.renderIdentity 42L = compileerror="No implementation of trait"
+
+trait DifferentBinderIdentity<'b> =
+  let renderIdentity (value: 'b) : String
+DifferentBinderIdentity.renderIdentity 42L = compileerror="No implementation of trait"
+
+(
+impl AliasIdentity for Int64 =
+  let renderIdentity (value: Int64) : String = "competing"
+OriginalIdentity.renderIdentity 42L
+) = compileerror="Ambiguous implementation"

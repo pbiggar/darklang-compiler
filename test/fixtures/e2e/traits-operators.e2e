@@ -1,0 +1,58 @@
+type OperatorCount = { value: Int64 }
+impl Stdlib.Add for OperatorCount =
+  let add (a: OperatorCount) (b: OperatorCount) : OperatorCount = OperatorCount { value = a.value + b.value }
+impl Stdlib.Compare for OperatorCount =
+  let lessThan (a: OperatorCount) (b: OperatorCount) : Bool = a.value < b.value
+  let lessThanOrEqualTo (a: OperatorCount) (b: OperatorCount) : Bool = a.value <= b.value
+  let greaterThan (a: OperatorCount) (b: OperatorCount) : Bool = a.value > b.value
+  let greaterThanOrEqualTo (a: OperatorCount) (b: OperatorCount) : Bool = a.value >= b.value
+impl Stdlib.BitwiseAnd for OperatorCount =
+  let bitwiseAnd (a: OperatorCount) (b: OperatorCount) : OperatorCount = OperatorCount { value = a.value & b.value }
+impl Stdlib.Negate for OperatorCount =
+  let negate (a: OperatorCount) : OperatorCount = OperatorCount { value = -a.value }
+let genericCountAdd<'a: Stdlib.Add> (a: 'a) (b: 'a) : 'a = a + b
+(OperatorCount { value = 20L }) + (OperatorCount { value = 22L }) = OperatorCount { value = 42L }
+genericCountAdd (OperatorCount { value = 20L }) (OperatorCount { value = 22L }) = OperatorCount { value = 42L }
+(OperatorCount { value = 20L }) < (OperatorCount { value = 22L }) = true
+(OperatorCount { value = 7L }) & (OperatorCount { value = 3L }) = OperatorCount { value = 3L }
+-(OperatorCount { value = 42L }) = OperatorCount { value = -42L }
+(OperatorCount { value = 42L }) == (OperatorCount { value = 42L }) = true
+1L + 2L = 3L
+
+impl Stdlib.Subtract for OperatorCount =
+  let subtract (a: OperatorCount) (b: OperatorCount) : OperatorCount = OperatorCount { value = a.value - b.value }
+impl Stdlib.Multiply for OperatorCount =
+  let multiply (a: OperatorCount) (b: OperatorCount) : OperatorCount = OperatorCount { value = a.value * b.value }
+impl Stdlib.Divide for OperatorCount =
+  let divide (a: OperatorCount) (b: OperatorCount) : OperatorCount = OperatorCount { value = a.value / b.value }
+impl Stdlib.Modulo for OperatorCount =
+  let modulo (a: OperatorCount) (b: OperatorCount) : OperatorCount = OperatorCount { value = a.value % b.value }
+impl Stdlib.Power for OperatorCount =
+  let power (a: OperatorCount) (b: OperatorCount) : OperatorCount = OperatorCount { value = a.value ** b.value }
+impl Stdlib.BitwiseOr for OperatorCount =
+  let bitwiseOr (a: OperatorCount) (b: OperatorCount) : OperatorCount = OperatorCount { value = a.value | b.value }
+impl Stdlib.BitwiseXor for OperatorCount =
+  let bitwiseXor (a: OperatorCount) (b: OperatorCount) : OperatorCount = OperatorCount { value = a.value ^ b.value }
+impl Stdlib.ShiftLeft for OperatorCount =
+  let shiftLeft (a: OperatorCount) (b: OperatorCount) : OperatorCount = OperatorCount { value = a.value << b.value }
+impl Stdlib.ShiftRight for OperatorCount =
+  let shiftRight (a: OperatorCount) (b: OperatorCount) : OperatorCount = OperatorCount { value = a.value >> b.value }
+impl Stdlib.BitwiseNot for OperatorCount =
+  let bitwiseNot (a: OperatorCount) : OperatorCount = OperatorCount { value = ~a.value }
+impl Stdlib.ToString for OperatorCount =
+  let toString (a: OperatorCount) : String = Stdlib.Int64.toString a.value
+let genericCountNegate<'a: Stdlib.Negate> (a: 'a) : 'a = -a
+let renderAnyCount<'a: ToString> (a: 'a) : String = a.toString
+(OperatorCount { value = 20L }) - (OperatorCount { value = 8L }) = OperatorCount { value = 12L }
+(OperatorCount { value = 6L }) * (OperatorCount { value = 7L }) = OperatorCount { value = 42L }
+(OperatorCount { value = 42L }) / (OperatorCount { value = 7L }) = OperatorCount { value = 6L }
+(OperatorCount { value = 7L }) % (OperatorCount { value = 3L }) = OperatorCount { value = 1L }
+(OperatorCount { value = 2L }) ** (OperatorCount { value = 3L }) = OperatorCount { value = 8L }
+(OperatorCount { value = 4L }) | (OperatorCount { value = 3L }) = OperatorCount { value = 7L }
+(OperatorCount { value = 7L }) ^ (OperatorCount { value = 3L }) = OperatorCount { value = 4L }
+(OperatorCount { value = 3L }) << (OperatorCount { value = 2L }) = OperatorCount { value = 12L }
+(OperatorCount { value = 12L }) >> (OperatorCount { value = 2L }) = OperatorCount { value = 3L }
+~(OperatorCount { value = 0L }) = OperatorCount { value = -1L }
+genericCountNegate (OperatorCount { value = 42L }) = OperatorCount { value = -42L }
+renderAnyCount (OperatorCount { value = 42L }) = "42"
+(OperatorCount { value = 20L }) |> (+) (OperatorCount { value = 22L }) = OperatorCount { value = 42L }

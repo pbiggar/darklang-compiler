@@ -2,6 +2,7 @@
 # Layout and interpreter origins: docs/compiler/library-sources.md
 StdLib/__Types.dark
 StdLib/Root.dark
+StdLib/traits.dark
 StdLib/Int8.dark
 StdLib/Int16.dark
 StdLib/Int32.dark

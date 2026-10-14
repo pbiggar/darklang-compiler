@@ -3,6 +3,8 @@ type item =
   | Function of string list * WrittenTypes.fnDecl
   | Value of string list * WrittenTypes.valueDecl
   | Type of string list * WrittenTypes.typeDecl
+  | Trait of string list * WrittenTypes.traitDecl
+  | Impl of string list * WrittenTypes.implDecl
   | Expression of string list * WrittenTypes.expr
 
 val items : Validation.validatedSourceFile -> (item list, string) result
@@ -17,3 +19,5 @@ val expressionNames : WrittenTypes.expr -> string list
 
 val qualifiedNames :
   Validation.validatedSourceFile list -> (string list, string) result
+
+val qualifiedType : WrittenTypes.qualifiedTypeIdentifier -> string

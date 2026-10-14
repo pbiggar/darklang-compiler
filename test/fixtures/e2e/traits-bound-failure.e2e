@@ -1,0 +1,11 @@
+(
+trait RequiredShow<'a> =
+  let show (value: 'a) : String
+let ignoreBound<'a: RequiredShow> (value: 'a) : Int64 = 1L
+ignoreBound 42L
+) = compileerror="No implementation of trait 'RequiredShow'"
+
+(
+let missingTraitBound<'a: UnresolvedBound> (value: 'a) : Int64 = 1L
+missingTraitBound 42L
+) = compileerror="Unknown trait 'UnresolvedBound'"

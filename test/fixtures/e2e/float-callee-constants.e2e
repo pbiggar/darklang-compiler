@@ -1,0 +1,5 @@
+let upstreamNaNCallee () : Float = 0.0 / 0.0
+let upstreamNegativeZeroCallee () : Float = -0.0
+Stdlib.Float.isNaN (upstreamNaNCallee ()) = true
+Stdlib.Float.isNaN (Stdlib.max 10.0 (upstreamNaNCallee ())) = true
+Stdlib.Float.toBits (upstreamNegativeZeroCallee ()) = -9223372036854775808

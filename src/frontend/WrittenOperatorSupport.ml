@@ -5,6 +5,35 @@ open WrittenTypeSupport
 
 let bind = Result.bind
 
+(* Canonical mappings from the pinned interpreter's NumericTraits.ofInfix. *)
+let traitMethod = function
+  | WT.BinOp _ -> None
+  | WT.InfixFnCall op ->
+      let method_ =
+        match op with
+        | WT.ArithmeticPlus -> Some ("Add", "add")
+        | WT.ArithmeticMinus -> Some ("Subtract", "subtract")
+        | WT.ArithmeticMultiply -> Some ("Multiply", "multiply")
+        | WT.ArithmeticDivide -> Some ("Divide", "divide")
+        | WT.ArithmeticModulo -> Some ("Modulo", "modulo")
+        | WT.ArithmeticPower -> Some ("Power", "power")
+        | WT.ComparisonLessThan -> Some ("Compare", "lessThan")
+        | WT.ComparisonLessThanOrEqual -> Some ("Compare", "lessThanOrEqualTo")
+        | WT.ComparisonGreaterThan -> Some ("Compare", "greaterThan")
+        | WT.ComparisonGreaterThanOrEqual ->
+            Some ("Compare", "greaterThanOrEqualTo")
+        | WT.BitwiseAnd -> Some ("BitwiseAnd", "bitwiseAnd")
+        | WT.BitwiseOr -> Some ("BitwiseOr", "bitwiseOr")
+        | WT.BitwiseXor -> Some ("BitwiseXor", "bitwiseXor")
+        | WT.ShiftLeft -> Some ("ShiftLeft", "shiftLeft")
+        | WT.ShiftRight -> Some ("ShiftRight", "shiftRight")
+        | WT.ComparisonEquals | WT.ComparisonNotEquals | WT.StringConcat -> None
+      in
+      Option.map
+        (fun (traitName, methodName) ->
+          ("Darklang.Stdlib." ^ traitName, methodName))
+        method_
+
 let[@warning "-4"] check checkExpression checkedLiteral globals locals symbols
     expected infix left right =
   let check = checkExpression globals locals in
@@ -98,63 +127,109 @@ let[@warning "-4"] check checkExpression checkedLiteral globals locals symbols
                         AST.TNever
                       else AST.TString ))
           in
-          match selection with
-          | _ when leftType = AST.TNever ->
-              checkedLiteral expected finalSymbols AST.TNever checkedLeft
-          | _ when rightType = AST.TNever ->
-              checkedLiteral expected finalSymbols AST.TNever
-                (C.Sequence (checkedLeft, checkedRight))
-          | AST.Pow, _, _ when leftType = AST.TInt128 ->
-              Error "Cannot perform numeric operation on Int128 and Int128"
-          | AST.Pow, _, _ when leftType = AST.TUInt128 ->
-              Error "Cannot perform numeric operation on UInt128 and UInt128"
-          | ((AST.Eq | AST.Neq) as op), true, resultType
-            when match leftType with
-                 | AST.TList _ | AST.TTuple _ | AST.TRecord _ | AST.TSum _
-                 | AST.TDict _ | AST.TVar _ | AST.TInferenceVar _
-                 | AST.TFunction _ ->
-                     true
-                 | _ -> false ->
-              let normalized =
+          let dispatch =
+            match traitMethod infix with
+            | None -> None
+            | Some (traitName, methodName) ->
+                let fast =
+                  integer || leftType = AST.TFloat64
+                  || leftType = AST.TString
+                     && infix = WT.InfixFnCall WT.ArithmeticPlus
+                in
+                let custom =
+                  match leftType with
+                  | AST.TRecord _ | AST.TSum _ | AST.TList _ | AST.TDict _
+                  | AST.TTuple _ | AST.TFunction _ ->
+                      true
+                  | _ -> false
+                in
+                let use =
+                  (not fast)
+                  && (custom
+                     || WrittenTraitSupport.proofAvailable globals
+                          (WrittenCheckingState.symbols finalSymbols)
+                          traitName leftType)
+                in
                 if
-                  Option.is_none
-                    (Unification.reconcileTypes None leftType rightType)
-                  && structuralEqualityCompatible globals leftType rightType
-                then
-                  convertStructuralRecord globals leftType rightType
-                    checkedRight finalSymbols
-                else Ok (checkedRight, finalSymbols)
+                  use && leftType <> AST.TNever && rightType <> AST.TNever
+                  && Option.is_some
+                       (resolveFunction globals
+                          (String.split_on_char '.'
+                             (traitName ^ "." ^ methodName)))
+                then Some (traitName, methodName)
+                else None
+          in
+          match dispatch with
+          | Some (traitName, methodName) ->
+              let range =
+                {
+                  Tokenizer.start = (WT.exprRange left).Tokenizer.start;
+                  end_ = (WT.exprRange right).Tokenizer.end_;
+                }
               in
-              bind normalized (fun (rightValue, symbols) ->
-                  let marker =
-                    ComparisonPlanning.internalTypeAppMarkerName
-                      ComparisonPlanning.EqHelperDispatch
+              WrittenCallSupport.checkNamed checkExpression checkedLiteral
+                globals locals symbols expected range
+                (WrittenTraitSupport.namedMethod range traitName methodName)
+                [] [ left; right ]
+          | None -> (
+              match selection with
+              | _ when leftType = AST.TNever ->
+                  checkedLiteral expected finalSymbols AST.TNever checkedLeft
+              | _ when rightType = AST.TNever ->
+                  checkedLiteral expected finalSymbols AST.TNever
+                    (C.Sequence (checkedLeft, checkedRight))
+              | AST.Pow, _, _ when leftType = AST.TInt128 ->
+                  Error "Cannot perform numeric operation on Int128 and Int128"
+              | AST.Pow, _, _ when leftType = AST.TUInt128 ->
+                  Error
+                    "Cannot perform numeric operation on UInt128 and UInt128"
+              | ((AST.Eq | AST.Neq) as op), true, resultType
+                when match leftType with
+                     | AST.TList _ | AST.TTuple _ | AST.TRecord _ | AST.TSum _
+                     | AST.TDict _ | AST.TVar _ | AST.TInferenceVar _
+                     | AST.TFunction _ ->
+                         true
+                     | _ -> false ->
+                  let normalized =
+                    if
+                      Option.is_none
+                        (Unification.reconcileTypes None leftType rightType)
+                      && structuralEqualityCompatible globals leftType rightType
+                    then
+                      convertStructuralRecord globals leftType rightType
+                        checkedRight finalSymbols
+                    else Ok (checkedRight, finalSymbols)
                   in
-                  let id, symbols =
-                    WrittenCheckingState.internFunction marker symbols
+                  bind normalized (fun (rightValue, symbols) ->
+                      let marker =
+                        ComparisonPlanning.internalTypeAppMarkerName
+                          ComparisonPlanning.EqHelperDispatch
+                      in
+                      let id, symbols =
+                        WrittenCheckingState.internFunction marker symbols
+                      in
+                      let equality =
+                        C.TypeApp
+                          ( id,
+                            [ C.checkedType leftType ],
+                            NonEmptyList.fromList [ checkedLeft; rightValue ] )
+                      in
+                      checkedLiteral expected symbols resultType
+                        (if op = AST.Neq then C.UnaryOp (AST.Not, equality)
+                         else equality))
+              | op, true, resultType ->
+                  let required =
+                    match op with
+                    | AST.Add | AST.Sub | AST.Mul | AST.Div | AST.Mod | AST.Pow
+                    | AST.Shl | AST.Shr | AST.BitAnd | AST.BitOr | AST.BitXor
+                    | AST.Lt | AST.Gt | AST.Lte | AST.Gte ->
+                        WrittenCheckingState.requireOperator op leftType
+                          finalSymbols
+                    | _ -> Ok finalSymbols
                   in
-                  let equality =
-                    C.TypeApp
-                      ( id,
-                        [ C.checkedType leftType ],
-                        NonEmptyList.fromList [ checkedLeft; rightValue ] )
-                  in
-                  checkedLiteral expected symbols resultType
-                    (if op = AST.Neq then C.UnaryOp (AST.Not, equality)
-                     else equality))
-          | op, true, resultType ->
-              let required =
-                match op with
-                | AST.Add | AST.Sub | AST.Mul | AST.Div | AST.Mod | AST.Pow
-                | AST.Shl | AST.Shr | AST.BitAnd | AST.BitOr | AST.BitXor
-                | AST.Lt | AST.Gt | AST.Lte | AST.Gte ->
-                    WrittenCheckingState.requireOperator op leftType
-                      finalSymbols
-                | _ -> Ok finalSymbols
-              in
-              bind required (fun symbols ->
-                  checkedLiteral expected symbols resultType
-                    (C.BinOp (op, checkedLeft, checkedRight)))
-          | (AST.Eq | AST.Neq), false, _ when mixed ->
-              Error "Cannot compare Char and String"
-          | _ -> Error "Operator is unavailable for this type"))
+                  bind required (fun symbols ->
+                      checkedLiteral expected symbols resultType
+                        (C.BinOp (op, checkedLeft, checkedRight)))
+              | (AST.Eq | AST.Neq), false, _ when mixed ->
+                  Error "Cannot compare Char and String"
+              | _ -> Error "Operator is unavailable for this type")))

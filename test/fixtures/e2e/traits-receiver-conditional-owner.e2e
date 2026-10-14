@@ -1,0 +1,11 @@
+trait ReceiverElement<'a> =
+  let element (value: 'a) : String
+trait ConditionalReceiver<'a, 'b> =
+  let choose (value: 'a) (other: 'b) : String
+trait ApplicableReceiver<'a> =
+  let choose (value: 'a) (other: Int64) : String
+impl<'a: ReceiverElement> ConditionalReceiver<Int64> for List<'a> =
+  let choose (value: List<'a>) (other: Int64) : String = "conditional"
+impl ApplicableReceiver for List<Bool> =
+  let choose (value: List<Bool>) (other: Int64) : String = "applicable"
+[true].choose 42L = "applicable"

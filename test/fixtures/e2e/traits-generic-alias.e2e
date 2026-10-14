@@ -1,0 +1,7 @@
+trait MixedAlias<'a> =
+  let first<'b> (value: 'a) (other: 'b) : 'a
+let aliasFirst<'b, 'a> (value: List<'a>) (other: 'b) : List<'a> = value
+impl<'a> MixedAlias for List<'a> =
+  let first = aliasFirst
+MixedAlias.first [42L] "text" = [42L]
+MixedAlias.first ["text"] 42L = ["text"]
