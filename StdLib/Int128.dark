@@ -161,9 +161,16 @@ impl Stdlib.Divide for Int128 =
 impl Stdlib.Modulo for Int128 =
   let modulo = Stdlib.Int128.mod
 
+let __powerLoop (base: Int128) (exponent: Int128) (result: Int128) : Int128 =
+  if exponent == 0Q then result
+  else
+    let next = if Stdlib.Int128.mod exponent 2Q == 1Q then Stdlib.Int128.multiply result base else result
+    Stdlib.Int128.__powerLoop (Stdlib.Int128.multiply base base) (Stdlib.Int128.divide exponent 2Q) next
+
 impl Stdlib.Power for Int128 =
   let power (base: Int128) (exponent: Int128) : Int128 =
-    Stdlib.Int128.__fromInt (Stdlib.Int.power (Stdlib.Int.fromInt128 base) (Stdlib.Int.fromInt128 exponent))
+    if exponent < 0Q then Builtin.crash "Cannot raise integer to a negative exponent"
+    else Stdlib.Int128.__powerLoop base exponent 1Q
 
 impl Stdlib.Negate for Int128 =
   let negate = Stdlib.Int128.negate

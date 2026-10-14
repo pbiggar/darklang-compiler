@@ -27,7 +27,7 @@ M6 package breadth and M7 remain unfinished; this is not a readiness claim.
 | Generic/conditional implementations | Directional argument matching, recursive obligations, blanket fallback and static specialization | `traits-conditional.e2e`, `traits-concrete-arguments.e2e`, `traits-generic-alias.e2e`, `traits-patterns.e2e`, `traits-shared-alias.e2e` passed |
 | Receivers and operators | Static receiver calls, record-field precedence, custom and bounded-generic operators; primitive fast paths preserved | `traits-receivers.e2e`, `traits-receiver-parameters.e2e`, `traits-receiver-ambiguity.e2e`, `traits-operators.e2e` |
 | Upstream stdlib traits and hosted packages | Unchanged trait declarations/utilities; native primitive aliases; hosted trait/impl/bound rendering and dependency closure | `traits-stdlib.e2e`, `traits-stdlib-identities.e2e`, `trait_packages_regression.py`; package discovery limitations below |
-| Full parity and readiness gates | Not executed (M7) | Required |
+| Readiness gates | Host and regression checks pass; parent performance gate blocks before measurement | Validation below; full upstream named-test format remains outside the executable inventory |
 
 Intentional scoped differences: selection must finish at compilation; equally
 applicable competing implementations are errors. Trait objects, runtime lookup,
@@ -143,3 +143,18 @@ new upstream test format and broad remote implementation discovery. These
 are unfinished work, rather than approved semantic differences. The performance
 gate remains blocked before measurement by the baseline digest mismatch.
 The final full-host and regression reruns after these M7 fixes are pending.
+
+The M7 identity/sorting/method-value checkpoint passed the full host suite
+**13,493/13,493** (147.5 seconds) and `dune runtest`. A subsequent package
+boundary test reproduced attempts to fetch an already loaded stdlib trait;
+package preparation now receives the checked catalog's known trait names
+without adding traits to the ordinary type namespace. The hosted E2E then
+passed with a stdlib-bounded imported function and verifies that the package
+service receives no fetch for that stdlib trait.
+
+Primitive trait boundary checks reproduced an out-of-heap failure in 128-bit
+powers: converting an unbounded power to a fixed-width result allocated the
+unbounded intermediate. Signed and unsigned trait powers now use wrapping
+repeated squaring, as upstream's bounded power implementation does. The focused
+suite passed **125/125** (18.0 seconds) before four further exponent boundary
+cases were added. Final host/regression checks on these follow-ups are pending.

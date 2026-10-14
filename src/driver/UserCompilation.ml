@@ -75,6 +75,16 @@ let compileUserWithPlan ?writtenSources (plan : P.userCompilePlan) =
             | Some config -> (
                 let* packages =
                   PackageManager.resolveWritten config
+                    ~knownTraits:
+                      ( CheckedAST.traitCatalog plan.P.baseContext.X.symbols
+                      |> fun catalog ->
+                        M.bindings catalog.TraitCatalog.dispatches
+                        |> List.map (fun (name, _) ->
+                            String.concat "."
+                              (List.rev
+                                 (List.tl
+                                    (List.rev (String.split_on_char '.' name)))))
+                        |> List.sort_uniq String.compare )
                     plan.P.baseContext.X.typeCheckEnv.Types.resolutionEnv parsed
                 in
                 let packages =

@@ -46,6 +46,11 @@ def main():
         body={"EPipe": [1, {"EArg": [2, 0]}, [{"EPipeFnCall": [3,
             dict(originalName=["Hosted", "ToText", "toText"], resolved={"Error": ["unresolved"]}),
             [], [], []]}]]}))
+    entities[("function", "stdlib-hash")] = ("Hosted.stdlibDescribe", dict(typeParams=["a"],
+        bounds=[dict(param="a", trait_=dict(trait_=reference("Darklang.Stdlib.ToString", "stdlib-trait-hash"), typeArgs=[]))],
+        parameters=[dict(name="value", typ=variable)], returnType={"TString": []},
+        body={"EApply": [1, {"EFnName": [2, dict(originalName=["Darklang", "Stdlib", "ToString", "toString"],
+            resolved={"Error": ["unresolved"]}), []]}, [], [{"EArg": [3, 0]}]]}))
     requests = []
 
     class Handler(http.server.BaseHTTPRequestHandler):
@@ -76,16 +81,17 @@ def main():
             directory = Path(temporary)
             env = dict(os.environ, XDG_DATA_HOME=temporary)
             source = directory / "input.dark"
-            source.write_text('Hosted.Int64.ToText.toText 42L ++ "|" ++ Hosted.describe 42L ++ "|" ++ Hosted.describePipe 42L\n')
+            source.write_text('Hosted.Int64.ToText.toText 42L ++ "|" ++ Hosted.describe 42L ++ "|" ++ Hosted.describePipe 42L ++ "|" ++ Hosted.stdlibDescribe 42L\n')
             program = directory / "program"
             result = subprocess.run([compiler, "-q", "--emit-result", "--package-server",
                 f"http://127.0.0.1:{server.server_port}", str(source), "-o", str(program)],
                 env=env, capture_output=True, text=True, timeout=120)
             assert result.returncode == 0, result.stdout + result.stderr
             output = subprocess.check_output([str(program)], text=True, timeout=10)
-            assert json.loads(output) == "hosted|hosted|hosted", output
+            assert json.loads(output) == "hosted|hosted|hosted|42", output
             assert "/trait/get/with-location/trait-hash" in requests, requests
             assert "/impl/get/with-location/impl-hash" in requests, requests
+            assert not any("stdlib-trait-hash" in request for request in requests), requests
         server.shutdown()
     print("Hosted traits, implementations, dependencies and bounded functions execute natively")
 

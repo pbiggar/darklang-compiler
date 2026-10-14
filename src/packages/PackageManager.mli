@@ -56,6 +56,7 @@ val renderEntity : locatedEntity -> (resolvedSource, string) result
 val candidatePrefixes : (string -> bool) -> string list -> string list
 
 val resolveWritten :
+  ?knownTraits:string list ->
   config ->
   NameResolution.resolutionEnvironment ->
   Validation.validatedSourceFile list ->

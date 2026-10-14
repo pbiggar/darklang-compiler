@@ -203,9 +203,15 @@ impl Stdlib.Divide for UInt128 =
 impl Stdlib.Modulo for UInt128 =
   let modulo = Stdlib.UInt128.mod
 
+let __powerLoop (base: UInt128) (exponent: UInt128) (result: UInt128) : UInt128 =
+  if exponent == 0Z then result
+  else
+    let next = if Stdlib.UInt128.mod exponent 2Z == 1Z then Stdlib.UInt128.multiply result base else result
+    Stdlib.UInt128.__powerLoop (Stdlib.UInt128.multiply base base) (Stdlib.UInt128.divide exponent 2Z) next
+
 impl Stdlib.Power for UInt128 =
   let power (base: UInt128) (exponent: UInt128) : UInt128 =
-    Stdlib.UInt128.__fromInt (Stdlib.Int.power (Stdlib.Int.fromUInt128 base) (Stdlib.Int.fromUInt128 exponent))
+    Stdlib.UInt128.__powerLoop base exponent 1Z
 
 impl Stdlib.BitwiseAnd for UInt128 =
   let bitwiseAnd = Stdlib.UInt128.bitwiseAnd

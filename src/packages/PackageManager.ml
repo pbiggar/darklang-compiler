@@ -980,16 +980,21 @@ let escapeDataString text =
     text;
   Buffer.contents escaped
 
-let resolveNames config resolutionEnv names =
+let resolveNames config resolutionEnv knownTraits names =
   let client = PackageIO.create () in
   Fun.protect
     ~finally:(fun () -> PackageIO.dispose client)
     (fun () ->
       let isKnownName name =
-        List.exists
-          (fun context ->
-            Result.is_ok (NameResolution.resolve context name resolutionEnv))
-          [ NameResolution.Type; NameResolution.Callable; NameResolution.Value ]
+        List.mem name knownTraits
+        || List.exists
+             (fun context ->
+               Result.is_ok (NameResolution.resolve context name resolutionEnv))
+             [
+               NameResolution.Type;
+               NameResolution.Callable;
+               NameResolution.Value;
+             ]
       in
       let fetchLocated kind hash =
         let path =
@@ -1093,6 +1098,6 @@ let resolveNames config resolutionEnv names =
       in
       ResultList.mapResults renderEntity entities)
 
-let resolveWritten config resolutionEnv units =
+let resolveWritten ?(knownTraits = []) config resolutionEnv units =
   let* names = WrittenSource.qualifiedNames units in
-  resolveNames config resolutionEnv names
+  resolveNames config resolutionEnv knownTraits names
