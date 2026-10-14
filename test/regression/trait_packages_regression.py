@@ -8,6 +8,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import urllib.parse
 
 
 def location(name):
@@ -23,7 +24,7 @@ def reference(name, hash_):
 def main():
     compiler = str(Path(sys.argv[1]).resolve())
     trait = reference("Hosted.ToText", "trait-hash")
-    method = reference("Hosted.Int64.ToText.toText", "method-hash")
+    method = reference("Hosted.externalText", "method-hash")
     variable = {"TVariable": ["a"]}
     signature = dict(name="toText", typeParams=[], bounds=[],
                      parameters=[dict(name="value", typ=variable)], returnType={"TString": []})
@@ -31,7 +32,7 @@ def main():
         ("trait", "trait-hash"): ("Hosted.ToText", dict(typeParams=["a"], bounds=[], methods=[signature])),
         ("impl", "impl-hash"): ("Hosted.Int64.ToText", dict(trait_=trait, traitTypeArgs=[],
             self={"TInt64": []}, typeParams=[], bounds=[], methods=[["toText", method]])),
-        ("function", "method-hash"): ("Hosted.Int64.ToText.toText", dict(typeParams=[], bounds=[],
+        ("function", "method-hash"): ("Hosted.externalText", dict(typeParams=[], bounds=[],
             parameters=[dict(name="value", typ={"TInt64": []})], returnType={"TString": []},
             body={"EString": [1, [{"StringText": ["hosted"]}]]})),
         ("function", "describe-hash"): ("Hosted.describe", dict(typeParams=["a"],
@@ -60,8 +61,19 @@ def main():
             requests.append(self.path)
             parts = self.path.strip("/").split("/")
             payload = None
-            if len(parts) == 1 and parts[0].startswith("Hosted"):
+            search = urllib.parse.urlparse(self.path)
+            query = urllib.parse.parse_qs(search.query)
+            if search.path == "/search":
+                assert query.get("entityTypes") == ["module"], query
+                module = query["modules"][0].split(".")
+            else:
                 module = parts[0].split(".")
+            if self.path == "/Hosted.Int64":
+                # A nominal leaf can shadow the implementation's parent module.
+                payload = {"hash": {"Hash": ["shadowed-type"]}}
+            elif self.path == "/Hosted.Int64.ToText":
+                payload = entities[("impl", "impl-hash")][1] if ("impl", "impl-hash") in entities else None
+            elif (len(parts) == 1 and parts[0].startswith("Hosted")) or search.path == "/search":
                 payload = dict(submodules=[], types=[], values=[], fns=[], traits=[], impls=[], tests=[])
                 fields = {"function": "fns", "trait": "traits", "impl": "impls"}
                 for (kind, _), (name, body) in entities.items():
@@ -72,6 +84,9 @@ def main():
                         child = parent[:len(module) + 1]
                         if child not in payload["submodules"]:
                             payload["submodules"].append(child)
+                if search.path == "/search":
+                    for field in fields.values():
+                        payload[field] = []
             elif len(parts) == 3 and parts[1] == "find":
                 for (kind, hash_), (name, _) in entities.items():
                     if kind not in ("trait", "impl") and kind == parts[0] and name == parts[2]:
@@ -100,7 +115,7 @@ def main():
             result = subprocess.run([compiler, "-q", "--emit-result", "--package-server",
                 f"http://127.0.0.1:{server.server_port}", str(source), "-o", str(program)],
                 env=env, capture_output=True, text=True, timeout=120)
-            assert result.returncode == 0, result.stdout + result.stderr
+            assert result.returncode == 0, result.stdout + result.stderr + repr(requests)
             output = subprocess.check_output([str(program)], text=True, timeout=10)
             assert json.loads(output) == "hosted|hosted|42", output
             assert "/Hosted" in requests and "/Hosted.Int64" in requests, requests
@@ -110,6 +125,36 @@ def main():
                 f"http://127.0.0.1:{server.server_port}", str(source), "-o", str(program)],
                 env=env, capture_output=True, text=True, timeout=120)
             assert direct.returncode == 0, direct.stdout + direct.stderr
+            assert json.loads(subprocess.check_output([str(program)], text=True, timeout=10)) == "hosted"
+            # Imported equal candidates must be diagnosed, never newest-wins.
+            key = ("impl", "rival-hash")
+            rival = dict(entities[("impl", "impl-hash")][1])
+            rival["hash"] = {"Hash": ["rival-hash"]}
+            entities[key] = ("Hosted.Rival", rival)
+            ambiguous = subprocess.run([compiler, "-q", "--emit-result", "--package-server",
+                f"http://127.0.0.1:{server.server_port}", str(source), "-o", str(program)],
+                env=env, capture_output=True, text=True, timeout=120)
+            assert ambiguous.returncode != 0, ambiguous.stdout + ambiguous.stderr
+            assert "Ambiguous implementation" in ambiguous.stdout + ambiguous.stderr, ambiguous.stdout + ambiguous.stderr
+            del entities[key]
+            original_impl = entities.pop(("impl", "impl-hash"))
+            missing = subprocess.run([compiler, "-q", "--emit-result", "--package-server",
+                f"http://127.0.0.1:{server.server_port}", str(source), "-o", str(program)],
+                env=env, capture_output=True, text=True, timeout=120)
+            assert missing.returncode != 0, missing.stdout + missing.stderr
+            assert "No implementation of trait" in missing.stdout + missing.stderr, missing.stdout + missing.stderr
+            entities[("impl", "impl-hash")] = original_impl
+            # Refresh the mutable inventory, then prove it is reusable offline.
+            refreshed = subprocess.run([compiler, "-q", "--emit-result", "--package-server",
+                f"http://127.0.0.1:{server.server_port}", str(source), "-o", str(program)],
+                env=env, capture_output=True, text=True, timeout=120)
+            assert refreshed.returncode == 0, refreshed.stdout + refreshed.stderr
+            server.shutdown()
+            server.server_close()
+            offline = subprocess.run([compiler, "-q", "--emit-result", "--package-server",
+                f"http://127.0.0.1:{server.server_port}", str(source), "-o", str(program)],
+                env=env, capture_output=True, text=True, timeout=120)
+            assert offline.returncode == 0, offline.stdout + offline.stderr
             assert json.loads(subprocess.check_output([str(program)], text=True, timeout=10)) == "hosted"
 
         server.shutdown()

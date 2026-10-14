@@ -143,9 +143,15 @@ by the chosen ordinary method call or existing structural comparison before
 ANF; no trait-specific runtime or backend operation is introduced.
 
 The parent performance gate remains blocked before measurement by the stored
-baseline digest mismatch. Module paths shadowed by a nominal leaf may hide
-child inventories in the pinned upstream browser; general discovery through
-such paths is not established by the hosted regression.
+baseline digest mismatch. When a nominal leaf shadows a module, the importer uses the pinned
+`/search?modules=...&searchDepth=direct&entityTypes=module` endpoint to discover
+child modules, then reads complete trait/impl browser leaves. The hosted
+regression covers this shape. Alias-only implementations
+have no method child module. The importer probes their upstream-defined
+`<module>[.<Type>].<Trait>` locations for traits in the static catalog; the
+hosted regression covers an external method alias hidden beneath a nominal
+leaf. Inventories and browser leaves retain their canonical hashes/locations.
+
 
 The M7 identity/sorting/method-value checkpoint passed the full host suite
 **13,493/13,493** (147.5 seconds) and `dune runtest`. A subsequent package
@@ -187,3 +193,28 @@ compiler initially rejected its missing trait dependency. After discovery,
 the bounded function, pipeline and stdlib-bound function execute natively,
 without requesting an already loaded stdlib trait. The new caller-sum helper
 fixture adds three native equality/membership boundary checks.
+
+The hosted regression additionally passes direct trait calls, compile-time
+ambiguity and missing-implementation cases, and a second native compilation
+from cached module inventories after the server shuts down. The ambiguity
+fixture imports independently named implementations; no stamp or ordering
+arbitration is used.
+
+Current M7 validation uses the pinned activation and external Dune directory
+`/workspace/scratch/a30f2ed4b872/toolchains/traits-build-corpus2`:
+
+- `env -u LD_PRELOAD ./build --ai -- --build-dir=...`: passed.
+- `./run-tests --ai --build-dir=...`: **13,552/13,552 passed** (147.6 seconds),
+  including the 36 enabled upstream named tests and three caller-sum helper cases.
+- `python3 scripts/check_compiled_leaks.py`: **58/58 clean**, covering quick
+  and full workloads for all 29 canonical benchmarks. The launcher used a copy
+  of the current external-build compiler in its generated default output path.
+- Parent full performance verification still exits 1 before measurement with
+  `snapshot workload contract digest is incompatible`; no baseline reset or
+  performance comparison is claimed.
+- Pinned ocamlformat and diff checks pass. The enabled upstream trait corpus
+  differs only by nine AOT directives; the archived corpus and stdlib trait
+  definitions match the pinned upstream source byte-for-byte.
+
+The package-discovery refinements receive another host/regression rerun before
+handoff. M7 is not a readiness claim until the blocked benchmark gate is resolved.

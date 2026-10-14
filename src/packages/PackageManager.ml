@@ -1024,6 +1024,47 @@ let parseModuleInventory moduleName json =
         Ok (Some (entities, modules))
   with ex -> Error ("Invalid package module inventory: " ^ message ex)
 
+(* A browser leaf may shadow a module. Trait/impl leaves still carry their
+   complete body; the route itself supplies the canonical location. *)
+let parseBrowserTraitLeaf location json =
+  try
+    let root = parse json in
+    let kind =
+      if
+        Option.is_some (tryField "trait_" root)
+        && Option.is_some (tryField "self" root)
+      then Some PackageImpl
+      else if Option.is_some (tryField "methods" root) then Some PackageTrait
+      else None
+    in
+    match kind with
+    | None -> Ok []
+    | Some kind ->
+        let* hash =
+          match tryField "hash" root with
+          | None -> Error "Package browser trait item is missing its hash"
+          | Some hash -> parseHashJson (Yojson.Raw.to_string hash)
+        in
+        let parts = String.split_on_char '.' location in
+        let owner = List.hd parts in
+        let name = List.hd (List.rev parts) in
+        let modules = List.tl parts |> List.rev |> List.tl |> List.rev in
+        let located =
+          Yojson.Safe.to_string
+            (`Assoc
+               [
+                 ("owner", `String owner);
+                 ("modules", `List (List.map (fun name -> `String name) modules));
+                 ("name", `String name);
+               ])
+        in
+        let+ entity =
+          parseLocatedEntity kind hash
+            ("{\"entity\":" ^ json ^ ",\"location\":" ^ located ^ "}")
+        in
+        [ entity ]
+  with ex -> Error ("Invalid package browser trait item: " ^ message ex)
+
 let packageModule location =
   let parts = String.split_on_char '.' location in
   String.concat "." (List.take (min 2 (max 1 (List.length parts - 1))) parts)
@@ -1055,46 +1096,87 @@ let resolveNames config resolutionEnv knownTraits names =
             let+ entity = parseLocatedEntity kind hash json in
             Some entity
       in
+      let shadowedModules = ref StringOrder.Set.empty in
       let rec browse modules visited inventory =
         match modules with
-        | [] -> Ok (visited, inventory)
+        | [] ->
+            (* WrittenTypes.implMemberPath fixes impl locations as
+               <module>[.<Type>].<Trait>. Alias-only impls have no child
+               method module, so search's module list cannot reveal them. *)
+            let traitNames =
+              StringOrder.Map.bindings inventory
+              |> List.filter_map (fun (_, entity) ->
+                  if entity.kind = PackageTrait then Some entity.location
+                  else None)
+            in
+            let probes =
+              StringOrder.Set.elements !shadowedModules
+              |> List.concat_map (fun location ->
+                  List.map
+                    (fun trait ->
+                      let leaf =
+                        List.hd (List.rev (String.split_on_char '.' trait))
+                      in
+                      location ^ "." ^ leaf)
+                    (traitNames @ knownTraits))
+              |> distinct
+              |> List.filter (fun name ->
+                  not (StringOrder.Set.mem name visited))
+            in
+            if probes = [] then Ok (visited, inventory)
+            else browse probes visited inventory
         | name :: rest when StringOrder.Set.mem name visited ->
             browse rest visited inventory
         | name :: rest -> (
             let visited = StringOrder.Set.add name visited in
             match findByName client config ("/" ^ escapeDataString name) with
             | Error _ | Ok Missing -> browse rest visited inventory
-            | Ok (Found json) -> (
+            | Ok (Found json) ->
                 let* parsed = parseModuleInventory name json in
-                match parsed with
-                | None ->
-                    let parent =
-                      String.split_on_char '.' name
-                      |> List.rev |> List.tl |> List.rev |> String.concat "."
-                    in
-                    browse
-                      (if parent = "" then rest else parent :: rest)
-                      visited inventory
-                | Some (entities, children) ->
-                    let* inventory =
-                      List.fold_left
-                        (fun result entity ->
-                          let* inventory = result in
-                          match
-                            StringOrder.Map.find_opt entity.hash inventory
-                          with
-                          | Some previous when previous.kind <> entity.kind ->
-                              Error
-                                ("Package hash has conflicting item kinds: "
-                               ^ entity.hash)
-                          | Some _ -> Ok inventory
-                          | None ->
-                              Ok
-                                (StringOrder.Map.add entity.hash entity
-                                   inventory))
-                        (Ok inventory) entities
-                    in
-                    browse (children @ rest) visited inventory))
+                let* entities, children =
+                  match parsed with
+                  | Some inventory -> Ok inventory
+                  | None ->
+                      let* entities = parseBrowserTraitLeaf name json in
+                      if entities = [] then
+                        shadowedModules :=
+                          StringOrder.Set.add name !shadowedModules;
+                      let path =
+                        "/search?modules=" ^ escapeDataString name
+                        ^ "&searchDepth=direct&entityTypes=module"
+                      in
+                      let* children =
+                        match findByName client config path with
+                        | Error _ | Ok Missing -> Ok []
+                        | Ok (Found json) -> (
+                            let+ inventory = parseModuleInventory name json in
+                            match inventory with
+                            | None -> []
+                            | Some (_, children) -> children)
+                      in
+                      let parent =
+                        String.split_on_char '.' name
+                        |> List.rev |> List.tl |> List.rev |> String.concat "."
+                      in
+                      Ok
+                        ( entities,
+                          children @ if parent = "" then [] else [ parent ] )
+                in
+                let* inventory =
+                  List.fold_left
+                    (fun result entity ->
+                      let* inventory = result in
+                      match StringOrder.Map.find_opt entity.hash inventory with
+                      | Some previous when previous.kind <> entity.kind ->
+                          Error
+                            ("Package hash has conflicting item kinds: "
+                           ^ entity.hash)
+                      | Some _ -> Ok inventory
+                      | None ->
+                          Ok (StringOrder.Map.add entity.hash entity inventory))
+                    (Ok inventory) entities
+                in
+                browse (children @ rest) visited inventory)
       in
       let findRoots () =
         let attempts =
