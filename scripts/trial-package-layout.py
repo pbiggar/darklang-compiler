@@ -16,7 +16,11 @@ import porting
 
 ROOT = Path(__file__).resolve().parent.parent
 SAMPLES = {
-    'packages/darklang/stdlib/cli/env.dark': ['StdLib/Cli/Env.dark'],
+    'packages/darklang/stdlib/cli/env.dark': ['packages/darklang/stdlib/cli/env.dark'],
+    'packages/darklang/stdlib/cli/file.dark': ['packages/darklang/stdlib/cli/file.dark'],
+    'packages/darklang/stdlib/cli/process.dark': ['packages/darklang/stdlib/cli/process.dark'],
+    'packages/darklang/stdlib/cli/sys.dark': ['packages/darklang/stdlib/cli/sys.dark'],
+    'packages/darklang/stdlib/cli/execution.dark': ['packages/darklang/stdlib/cli/execution.dark'],
     'packages/darklang/stdlib/cli/fileSystem.dark': [
         'StdLib/Cli/FileSystem.dark', 'StdLib/Cli/FileSystem/FileError.dark'],
 }
@@ -94,12 +98,28 @@ class LayoutTrial(unittest.TestCase):
             for sample in selections:
                 self.assertEqual(embedded[sample], self.upstream_bytes(sample),
                                  'The copied upstream source was rewritten or split.')
-            self.assertFalse(removed & set(embedded), 'A replacement duplicated its old source.')
+            self.assertFalse((removed - set(selections)) & set(embedded), 'A replacement duplicated its old source.')
         self.assertEqual(source_snapshot(), before, 'Trial mutated production libraries.')
         self.assertEqual((ROOT / 'library-sources.list').read_bytes(), manifest_before)
 
     def test_simple_file_at_upstream_path(self):
         self.run_trial(['packages/darklang/stdlib/cli/env.dark'])
+
+    def test_simple_file_production_mirrors_upstream(self):
+        sample = 'packages/darklang/stdlib/cli/env.dark'
+        self.assertTrue((ROOT / sample).is_file(), 'Cli.Env is not at its upstream path.')
+        self.assertEqual((ROOT / sample).read_bytes(), self.upstream_bytes(sample))
+        self.assertFalse((ROOT / 'StdLib/Cli/Env.dark').exists(), 'Old Env source would duplicate the module.')
+
+    def test_all_simple_production_copies_match_upstream(self):
+        for name in ('env', 'file', 'process', 'sys', 'execution'):
+            sample = f'packages/darklang/stdlib/cli/{name}.dark'
+            with self.subTest(source=sample):
+                self.assertTrue((ROOT / sample).is_file(), 'Source has not reached the mirrored path.')
+                self.assertEqual((ROOT / sample).read_bytes(), self.upstream_bytes(sample))
+        for old in ('StdLib/Cli/Env.dark', 'StdLib/Cli/File.dark', 'StdLib/Cli/Process.dark',
+                    'StdLib/Cli/Sys.dark', 'StdLib/Cli.dark'):
+            self.assertFalse((ROOT / old).exists(), 'An old source duplicates a mirrored module.')
 
     def test_intact_nested_module_at_upstream_path(self):
         sample = 'packages/darklang/stdlib/cli/fileSystem.dark'
@@ -122,7 +142,8 @@ def main():
     result = unittest.TextTestRunner(verbosity=2).run(unittest.defaultTestLoader.loadTestsFromTestCase(LayoutTrial))
     if result.wasSuccessful():
         print('Embedding accepts unchanged upstream paths and intact nested-module bytes.')
-        print('Compilation and runtime behavior were NOT tested; production layout is unchanged.')
+        print('Five shared CLI sources use mirrored production paths; the trial does not modify production files.')
+        print('Compilation and runtime behavior were NOT tested.')
     return 0 if result.wasSuccessful() else 1
 
 

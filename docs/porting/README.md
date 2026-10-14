@@ -57,11 +57,18 @@ intact nested module, and both together. Independent decoding of the emitted
 OCaml byte strings checks exact source preservation and declaration order;
 the trial checks production sources and their manifest remain unchanged.
 
+Env, File, Process, Sys, and root Cli execution are now production copies under
+`packages/darklang/stdlib/cli/`. Their sources are byte-identical to the pin,
+the previous embedding slots are retained, and the old files are removed.
+The sync script writes their mirrored paths. Production regressions verify
+the copies and absence of old duplicates. The remaining FileSystem
+trial still operates only in a temporary tree.
+
 This establishes that the embedding generator accepts mirrored paths and
 does not require splitting nested modules. Source inspection also finds nested
 module flattening in `WrittenSource`, but only compilation can establish that
 name resolution, type checking, and declaration dependencies work for these
-unchanged files. The trial does not migrate files or claim runtime parity.
+unchanged files. The trial itself does not migrate files or claim runtime parity.
 
 The next boundary is native compilation of the temporary library. VM setup
 uses the compiler's `scripts/vm/setup-native-toolchain` and `scripts/vm/README.md`;
