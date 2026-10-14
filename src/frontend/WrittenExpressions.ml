@@ -298,47 +298,7 @@ let rec checkExpression (globals : globals) locals symbols expected expression =
       WrittenCollectionSupport.dict checkExpression checkedLiteral globals
         locals symbols expected entries
   | WT.EPipe (range, first, segments) ->
-      let lowered =
-        List.fold_left
-          (fun result (_, segment) ->
-            map
-              (fun input ->
-                match segment with
-                | WT.EPipeInfix (_, op, right) ->
-                    WT.EInfix (range, op, input, right)
-                | WT.EPipeFnCall (_, name, typeArgs, args) ->
-                    WT.EApply
-                      ( range,
-                        WT.EFnName (name.range, name),
-                        typeArgs,
-                        input :: args )
-                | WT.EPipeEnum (_, name, caseName, fields, dot) ->
-                    WT.EEnum (range, name, caseName, input :: fields, dot)
-                | WT.EPipeLambda (_, [ pattern ], body, keyword, arrow) ->
-                    WT.ELet (range, pattern, input, body, keyword, arrow)
-                | WT.EPipeLambda (_, patterns, body, keyword, arrow) ->
-                    WT.EApply
-                      ( range,
-                        WT.ELambda (range, patterns, body, keyword, arrow),
-                        [],
-                        [ input ] )
-                | WT.EPipeVariableOrFnCall (nameRange, name) ->
-                    let target =
-                      if M.mem name locals then WT.EVariable (nameRange, name)
-                      else
-                        let identifier : WT.identifier =
-                          { range = nameRange; name }
-                        in
-                        let qualified : WT.qualifiedFnIdentifier =
-                          { range = nameRange; modules = []; fn = identifier }
-                        in
-                        WT.EFnName (nameRange, qualified)
-                    in
-                    WT.EApply (range, target, [], [ input ]))
-              result)
-          (Ok first) segments
-      in
-      bind lowered (check symbols expected)
+      check symbols expected (WrittenPipeSupport.lower range first segments)
   | WT.EIf (_, condition, yes, no, _, _, _) ->
       bind (check symbols (Some AST.TBool) condition)
         (fun (_, condition, symbols) ->

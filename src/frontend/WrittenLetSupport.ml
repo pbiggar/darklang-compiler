@@ -69,36 +69,9 @@ let check checkExpression (globals : globals) locals symbols expected
     | WT.EInfix (_, _, left, right) ->
         orElse (inferredUsageType name left) (fun () ->
             inferredUsageType name right)
-    | WT.EPipe (_, source, segments) ->
-        let piped =
-          match segments with
-          | (_, WT.EPipeFnCall (_, functionName, [], arguments)) :: _ -> (
-              match
-                ( resolveFunction globals (qualifiedFnName functionName),
-                  check symbols None source )
-              with
-              | Some signature, Ok (sourceType, _, _)
-                when List.length signature.parameters
-                     = 1 + List.length arguments -> (
-                  match signature.parameters with
-                  | first :: rest -> (
-                      match Unification.matchTypes first sourceType with
-                      | Error _ -> None
-                      | Ok bindings ->
-                          let substitutions = M.of_list bindings in
-                          List.find_map
-                            (fun (argument, parameter) ->
-                              if callsBinding name argument then
-                                Some
-                                  (Types.applyTypeArguments substitutions
-                                     parameter)
-                              else inferredUsageType name argument)
-                            (List.combine arguments rest))
-                  | [] -> None)
-              | _ -> None)
-          | _ -> None
-        in
-        orElse (inferredUsageType name source) (fun () -> piped)
+    | WT.EPipe (pipeRange, source, segments) ->
+        inferredUsageType name
+          (WrittenPipeSupport.lower pipeRange source segments)
     | WT.ELet (_, _, bound, next, _, _) | WT.EStatement (_, bound, next) ->
         orElse (inferredUsageType name bound) (fun () ->
             inferredUsageType name next)

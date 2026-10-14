@@ -1,0 +1,17 @@
+module Darklang.Language.Tests.Pipe
+
+module FnName =
+  test pipeIntoBoundFn =
+    Stdlib.Test.all
+      [ (let fn = (fun x -> x + 1L)
+         6L |> fn)
+        |> Stdlib.Test.equal 7L
+        (let fn = (+)
+         3L |> fn 4L)
+        |> Stdlib.Test.equal 7L
+        (let fn = (-)
+         11L |> fn 4L)
+        |> Stdlib.Test.equal 7L
+        (let fn = (fun a b -> Stdlib.max a b)
+         3L |> fn 7L)
+        |> Stdlib.Test.equal 7L ]
