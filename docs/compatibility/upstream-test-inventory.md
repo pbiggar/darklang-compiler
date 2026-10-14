@@ -4,7 +4,7 @@ Generated from `test/test-suite-tooling/TestRunner.ml` and the imported
 `test/fixtures/e2e/upstream/**/*.dark` files. Regenerate with
 `python3 scripts/audit-upstream-gates.py`; verify with `--check`.
 
-**119 files; 31 whole-file exclusions; 290 line-number entries
+**123 files; 31 whole-file exclusions; 290 line-number entries
 across 34 files.** A line entry is not a skipped-test count.
 The runner matches the `L<number>:` assertion name produced by the fixture
 parser. Declarations and multiline assertions require parser inspection;
@@ -119,6 +119,8 @@ Other skip metadata and runtime filters are outside this inventory.
 | [stdlib/tuple.dark](../../test/fixtures/e2e/upstream/stdlib/tuple.dark) | enabled | — |
 | [stdlib/uuid.dark](../../test/fixtures/e2e/upstream/stdlib/uuid.dark) | enabled | — |
 | [stdlib/x509.dark](../../test/fixtures/e2e/upstream/stdlib/x509.dark) | enabled | — |
+| [trait-adoption/language/apply.dark](../../test/fixtures/e2e/upstream/trait-adoption/language/apply.dark) | enabled | — |
+| [trait-adoption/language/pipe.dark](../../test/fixtures/e2e/upstream/trait-adoption/language/pipe.dark) | enabled | — |
 | [trait-adoption/stdlib/char.dark](../../test/fixtures/e2e/upstream/trait-adoption/stdlib/char.dark) | enabled | — |
 | [trait-adoption/stdlib/float.dark](../../test/fixtures/e2e/upstream/trait-adoption/stdlib/float.dark) | enabled | — |
 | [trait-adoption/stdlib/ints-int.dark](../../test/fixtures/e2e/upstream/trait-adoption/stdlib/ints-int.dark) | enabled | — |
@@ -132,6 +134,8 @@ Other skip metadata and runtime filters are outside this inventory.
 | [trait-adoption/stdlib/ints-uint32.dark](../../test/fixtures/e2e/upstream/trait-adoption/stdlib/ints-uint32.dark) | enabled | — |
 | [trait-adoption/stdlib/ints-uint64.dark](../../test/fixtures/e2e/upstream/trait-adoption/stdlib/ints-uint64.dark) | enabled | — |
 | [trait-adoption/stdlib/ints-uint8.dark](../../test/fixtures/e2e/upstream/trait-adoption/stdlib/ints-uint8.dark) | enabled | — |
+| [traits-pin-investigation/apply.dark](../../test/fixtures/e2e/upstream/traits-pin-investigation/apply.dark) | enabled | — |
+| [traits-pin-investigation/pipe.dark](../../test/fixtures/e2e/upstream/traits-pin-investigation/pipe.dark) | enabled | — |
 
 ## Blank and comment line entries
 

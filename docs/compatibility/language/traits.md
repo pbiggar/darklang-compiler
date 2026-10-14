@@ -280,3 +280,19 @@ retry. No compiler change was made for that host interruption. The complete retr
 exits 1 before measurement on the existing workload-contract digest mismatch.
 For this adoption, the pinned build/test commands use external Dune directory
 `/workspace/scratch/a30f2ed4b872/toolchains/traits-build-adoption`.
+
+Local pipeline inference follow-up: continuation lookahead and expression
+checking now share `WrittenPipeSupport.lower`. Piped local lambdas receive
+concrete parameter types from the same application form as ordinary local
+calls, including later pipeline segments and unary local calls. Inferred trait
+requirements still reject unsupported concrete types and mixed arguments during
+checking; no runtime dispatch or backend trait representation is introduced.
+
+The focused fixture first passed its ordinary-call control and failed the other
+five individual cases with missing Compare diagnostics. The new regression adds
+chain, String, unary rendering and unsatisfied-bound cases. Current pinned
+`language/apply.dark:lambdasAndOperators` and
+`language/pipe.dark:FnName.pipeIntoBoundFn` are copied unchanged as selected named
+tests. The adapter also removes module headers left empty after stripping named
+test bodies, preserving its assertion declarations instead of triggering the
+legacy reduced-preamble fallback.
