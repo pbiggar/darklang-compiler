@@ -1,0 +1,18 @@
+// small-buffer-reuse.e2e - Repeated temporary buffers must not consume the whole heap; live aliases stay immutable.
+let temporaryBuffer (byte: Int64) : Blob =
+  let pointer = __raw_alloc 256L in
+  let _ = __raw_write_word pointer 0L 1L in
+  let _ = __raw_write_word pointer 8L 240L in
+  let _ = __raw_write_byte pointer 16L byte in
+  let _ = __raw_write_byte pointer 255L (byte + 1L) in
+  __rawptr_to_blob pointer
+
+let bufferChurn (remaining: Int64) (total: Int64) : Int64 =
+  if remaining == 0L then total
+  else
+    let bytes = temporaryBuffer (remaining % 200L) in
+    let value = Stdlib.Blob.__getByte bytes 0L + Stdlib.Blob.__getByte bytes 239L in
+    bufferChurn (remaining - 1L) (total + value)
+
+bufferChurn 2200000L 0L = stdout="440000000\n" stderr="" disable_opt_inline=true
+let held = temporaryBuffer 41L in let aliases = (held, [held]) in let _ = bufferChurn 10000L 0L in let (first, rest) = aliases in Stdlib.Blob.__getByte first 0L + (match rest with | [second] -> Stdlib.Blob.__getByte second 239L | _ -> -1L) = stdout="83\n" stderr="" disable_opt_inline=true
