@@ -972,6 +972,26 @@ let applyToInstr arch mapping instr =
   | LIR.RawFree ptr ->
       let ptrReg, ptrLoads = loadSpilled mapping ptr LIR.X12 in
       ptrLoads @ [ LIR.RawFree ptrReg ]
+  | LIR.RawFreeSized (ptr, size) ->
+      let spilled reg =
+        match reg with
+        | LIR.Virtual id -> (
+            match tryAllocation mapping id with
+            | Some (StackSlot _) -> true
+            | _ -> false)
+        | LIR.Physical _ -> false
+      in
+      let (ptrReg, ptrLoads), (sizeReg, sizeLoads) =
+        loadSpilledPair arch mapping ptr size (LIR.Physical LIR.X3)
+      in
+      let release =
+        ptrLoads @ sizeLoads @ [ LIR.RawFreeSized (ptrReg, sizeReg) ]
+      in
+      if isX86_64 arch && spilled ptr && spilled size then
+        [ LIR.SaveRegs ([ LIR.X3 ], []) ]
+        @ release
+        @ [ LIR.RestoreRegs ([ LIR.X3 ], []) ]
+      else release
   | LIR.MappedFree ptr ->
       let ptrReg, ptrLoads = loadSpilled mapping ptr LIR.X12 in
       ptrLoads @ [ LIR.MappedFree ptrReg ]

@@ -122,7 +122,7 @@ let __setTimeout (descriptor: Int64) (timeoutMs: Int64) : Stdlib.Result.Result<U
     let sendResult =
         if receiveResult < 0L then receiveResult
         else Stdlib.__Network.__sendTimeout descriptor timeval in
-    let _ = __raw_free timeval in
+    let _ = __raw_free_sized timeval 16L in
     if sendResult < 0L then Error (0L - sendResult) else Ok ()
 
 let __writeAll (descriptor: Int64) (lifecycle: Stream<Unit>) (payload: Blob) : Stdlib.Result.Result<Unit, Int64> =
@@ -152,7 +152,7 @@ let __readChunk (descriptor: Int64) (lifecycle: Stream<Unit>) (length: Int64) : 
             let result =
                 if received < 0L then Error (0L - received)
                 else Ok (Stdlib.__Network.__copyReceived buffer 0L received []) in
-            let _ = __raw_free buffer in
+            let _ = __raw_free_sized buffer length in
             result
 
 let __connectTcp (ipv6: Bool) (address: List<Int64>) (port: Int64) (timeoutMs: Int64)
@@ -176,7 +176,7 @@ let __connectTcp (ipv6: Bool) (address: List<Int64>) (port: Int64) (timeoutMs: I
                 let connected =
                     if ipv6 then Stdlib.__Network.__connect6 descriptor sockaddr
                     else Stdlib.__Network.__connect4 descriptor sockaddr in
-                let _ = __raw_free sockaddr in
+                let _ = __raw_free_sized sockaddr (if ipv6 then 32L else 16L) in
                 if connected < 0L then
                     let _ = Stdlib.Stream.close lifecycle in
                     Error (0L - connected)
@@ -216,7 +216,7 @@ let pollReadTcp (connection: Stdlib.__Network.TcpConnection) : Stdlib.Result.Res
           if received == -4L || received == -11L || received == -35L then Ok None
           else if received < 0L then Error (0L - received)
           else Ok (Some (Stdlib.__Network.__copyReceived buffer 0L received [])) in
-        let _ = __raw_free buffer in result
+        let _ = __raw_free_sized buffer 4096L in result
 
 let pollWriteTcp (connection: Stdlib.__Network.TcpConnection) (payload: Blob) : Stdlib.Result.Result<Stdlib.Option.Option<Int64>, Int64> =
     match Stdlib.Stream.next connection.lifecycle with
@@ -245,7 +245,7 @@ let monotonicMillis () : Stdlib.Result.Result<Int64, Int64> =
             let seconds = Stdlib.__Network.__word buffer 0L in
             let nanos = Stdlib.__Network.__word buffer 8L in
             Ok (seconds * 1000L + nanos / 1000000L) in
-    let _ = __raw_free buffer in
+    let _ = __raw_free_sized buffer 16L in
     result
 
 // Signal masks belong to the serving scope and are restored on its last-owner
@@ -281,7 +281,7 @@ let __consumeShutdown (seen: Bool) : Stdlib.Result.Result<Bool, Int64> =
     else
         let info = __raw_alloc 128L in
         let waited = Stdlib.__Network.__signalWait mask info in
-        let _ = __raw_free info in
+        let _ = __raw_free_sized info 128L in
         let _ = __raw_free mask in
         if waited < 0L then Error (0L - waited)
         else Stdlib.__Network.__consumeShutdown true
@@ -313,7 +313,7 @@ let __waitReadable (descriptor: Int64) (lifecycle: Stream<Unit>) : Stdlib.Result
         let code = Stdlib.__Network.__poll pollfd timeout in
         let events = Stdlib.__Network.__word pollfd 0L in
         let _ = __raw_free pollfd in
-        let _ = __raw_free timeout in
+        let _ = __raw_free_sized timeout 16L in
         if code < 0L then Error (0L - code)
         else if code == 0L then Ok false
         else if Stdlib.Int64.bitwiseAnd (Stdlib.Int64.shiftRight events 48L) 1L == 1L then Ok true
@@ -386,7 +386,7 @@ let __listenTcp (ipv6: Bool) (address: List<Int64>) (port: Int64) : Stdlib.Resul
             let _ = __raw_free enabled in
             let sockaddr = Stdlib.__Network.__socketAddress ipv6 address port in
             let bound = if reused < 0L then reused else if ipv6 then Stdlib.__Network.__bind6 descriptor sockaddr else Stdlib.__Network.__bind4 descriptor sockaddr in
-            let _ = __raw_free sockaddr in
+            let _ = __raw_free_sized sockaddr (if ipv6 then 32L else 16L) in
             let listening = if bound < 0L then bound else Stdlib.__Network.__listen descriptor in
             if listening < 0L then
                 let _ = Stdlib.Stream.close lifecycle in
@@ -457,8 +457,8 @@ let waitSockets (entries: List<Stdlib.__Network.Interest>) (milliseconds: Int64)
         let _ = __raw_write_word timeout 8L ((duration % 1000L) * 1000000L) in
         let code = Stdlib.__Network.__pollMany buffer length timeout in
         let ready = if code < 0L then Error (0L - code) else Ok (Stdlib.List.sortBy (closed @ Stdlib.__Network.__pollResults buffer length 0L []) (fun event -> event.index)) in
-        let _ = __raw_free timeout in
-        let _ = __raw_free buffer in
+        let _ = __raw_free_sized timeout 16L in
+        let _ = __raw_free_sized buffer (if length == 0L then 8L else length * 8L) in
         ready
 
 let __udpExchange (descriptor: Int64) (lifecycle: Stream<Unit>) (ipv6: Bool)
@@ -475,14 +475,14 @@ let __udpExchange (descriptor: Int64) (lifecycle: Stream<Unit>) (ipv6: Bool)
             let connected =
                 if ipv6 then Stdlib.__Network.__connect6 descriptor sockaddr
                 else Stdlib.__Network.__connect4 descriptor sockaddr in
-            let _ = __raw_free sockaddr in
+            let _ = __raw_free_sized sockaddr (if ipv6 then 32L else 16L) in
             if connected < 0L then Error (0L - connected)
             else
                 let timeval = __raw_alloc 16L in
                 let _ = __raw_write_word timeval 0L (timeoutMs / 1000L) in
                 let _ = __raw_write_word timeval 8L ((timeoutMs % 1000L) * 1000L) in
                 let timed = Stdlib.__Network.__receiveTimeout descriptor timeval in
-                let _ = __raw_free timeval in
+                let _ = __raw_free_sized timeval 16L in
                 if timed < 0L then Error (0L - timed)
                 else
                     let sent = Stdlib.__Network.__send descriptor payload in
@@ -495,7 +495,7 @@ let __udpExchange (descriptor: Int64) (lifecycle: Stream<Unit>) (ipv6: Bool)
                             if received < 0L then Error (0L - received)
                             else if received > 4096L then Error 90L
                             else Ok (Stdlib.__Network.__copyReceived buffer 0L received []) in
-                        let _ = __raw_free buffer in
+                        let _ = __raw_free_sized buffer 4097L in
                         result
 
 let openUdp4 () : Stdlib.Result.Result<Stdlib.__Network.UdpSocket, Int64> =

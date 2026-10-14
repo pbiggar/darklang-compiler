@@ -72,6 +72,7 @@ let hasSideEffects (instruction : instr) =
   | RawAlloc _ -> true
   | MappedAlloc _ -> true
   | RawFree _ -> true
+  | RawFreeSized _ -> true
   | MappedFree _ -> true
   | RawGet _ -> false
   | RawGetByte _ -> false
@@ -402,6 +403,7 @@ let getInstrDest (instruction : instr) =
   | Print _ -> None
   | StdoutWrite _ -> None
   | RawFree _ -> None
+  | RawFreeSized _ -> None
   | MappedFree _ -> None
   | RawWriteWord _ -> None
   | RawWriteByte _ -> None
@@ -491,6 +493,7 @@ let foldInstrUses folder state (instruction : instr) =
   | FloatToString (_, source) ->
       operand state source
   | Sleep (_, _, delay) -> operand state delay
+  | RawFreeSized (ptr, size) -> operand (operand state ptr) size
   | FileWriteFromPtr (_, first, second, third)
   | RawWriteWord (first, second, third)
   | RawWriteByte (first, second, third)

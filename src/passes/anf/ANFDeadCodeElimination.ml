@@ -76,6 +76,7 @@ let extractFromCExpr cexpr =
   | ANF.RawAlloc numBytes -> extractFromAtom numBytes
   | ANF.MappedAlloc numBytes -> extractFromAtom numBytes
   | ANF.RawFree ptr -> extractFromAtom ptr
+  | ANF.RawFreeSized (ptr, size) -> extractFromAtom ptr @ extractFromAtom size
   | ANF.MappedFree ptr -> extractFromAtom ptr
   | ANF.RawGet (ptr, offset, _) -> extractFromAtom ptr @ extractFromAtom offset
   | ANF.RawTake (ptr, offset, _) -> extractFromAtom ptr @ extractFromAtom offset

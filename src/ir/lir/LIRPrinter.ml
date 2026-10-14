@@ -573,6 +573,9 @@ let prettyPrintLIRInstr functionNames instr =
       prettyPrintLIRReg dest ^ " <- MappedAlloc(" ^ prettyPrintLIRReg numBytes
       ^ ")"
   | LIR.RawFree ptr -> "RawFree(" ^ prettyPrintLIRReg ptr ^ ")"
+  | LIR.RawFreeSized (ptr, size) ->
+      "RawFreeSized(" ^ prettyPrintLIRReg ptr ^ ", " ^ prettyPrintLIRReg size
+      ^ ")"
   | LIR.MappedFree ptr -> "MappedFree(" ^ prettyPrintLIRReg ptr ^ ")"
   | LIR.RawGet (dest, ptr, byteOffset) ->
       prettyPrintLIRReg dest ^ " <- RawGet(" ^ prettyPrintLIRReg ptr ^ ", "

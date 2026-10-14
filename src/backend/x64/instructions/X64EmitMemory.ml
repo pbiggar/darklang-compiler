@@ -373,6 +373,12 @@ let emitRawFree ctx ptr =
       @ genLeakCounterDec ctx)
     (resolveReg ptr)
 
+let emitRawFreeSized ctx ptr size =
+  Result.bind (resolveReg ptr) (fun pointer ->
+      Result.map
+        (fun bytes -> genRawRecycle pointer bytes @ genLeakCounterDec ctx)
+        (resolveReg size))
+
 let emitRawGet (_ctx : funcCtx) dest ptr byteOffset =
   Result.bind (resolveReg dest) (fun d ->
       Result.bind (resolveReg ptr) (fun p ->

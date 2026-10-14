@@ -39,6 +39,12 @@ val emitRawAllocResolved :
 val emitRawFree :
   X64CodeGenTypes.funcCtx -> LIR.reg -> (X86_64.instr list, string) result
 
+val emitRawFreeSized :
+  X64CodeGenTypes.funcCtx ->
+  LIR.reg ->
+  LIR.reg ->
+  (X86_64.instr list, string) result
+
 val emitRawGet :
   X64CodeGenTypes.funcCtx ->
   LIR.reg ->

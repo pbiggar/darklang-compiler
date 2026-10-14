@@ -365,6 +365,7 @@ let renameCExpr mapping cexpr =
   | RawAlloc numBytes -> RawAlloc (r numBytes)
   | MappedAlloc numBytes -> MappedAlloc (r numBytes)
   | RawFree ptr -> RawFree (r ptr)
+  | RawFreeSized (ptr, size) -> RawFreeSized (r ptr, r size)
   | MappedFree ptr -> MappedFree (r ptr)
   | RawGet (ptr, offset, valueType) -> RawGet (r ptr, r offset, valueType)
   | RawTake (ptr, offset, valueType) -> RawTake (r ptr, r offset, valueType)

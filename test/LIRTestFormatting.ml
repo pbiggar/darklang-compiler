@@ -520,6 +520,8 @@ and instr (value : LIR.instr) =
   | LIR.MappedAlloc (field0, field1) ->
       union "Instr" "MappedAlloc" [ reg field0; reg field1 ]
   | LIR.RawFree field0 -> union "Instr" "RawFree" [ reg field0 ]
+  | LIR.RawFreeSized (ptr, size) ->
+      union "Instr" "RawFreeSized" [ reg ptr; reg size ]
   | LIR.MappedFree field0 -> union "Instr" "MappedFree" [ reg field0 ]
   | LIR.RawGet (field0, field1, field2) ->
       union "Instr" "RawGet" [ reg field0; reg field1; reg field2 ]

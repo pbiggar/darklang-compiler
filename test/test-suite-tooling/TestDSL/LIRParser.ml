@@ -269,6 +269,11 @@ let parseInstructionOrTerminator lineNum line =
             let* bytes = parseRegister g.(2) in
             Ok (RawAlloc (dest, bytes)) );
         unary "RawFree" (fun reg -> RawFree reg);
+        ( arguments "RawFreeSized" [ [ lazyText ]; [ any ] ],
+          fun g ->
+            let* ptr = parseRegister g.(1) in
+            let* bytes = parseRegister g.(2) in
+            Ok (RawFreeSized (ptr, bytes)) );
         ( assignment "StringConcat" [ [ lazyText ]; [ any ] ],
           fun g ->
             let* dest = parseRegister g.(1) in

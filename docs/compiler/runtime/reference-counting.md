@@ -118,6 +118,11 @@ does not always mean the memory is reusable:
   8 KiB use indexed size classes; larger buffers use an exact-size linked list.
   Blocks are not split or coalesced; ARM64 still lacks this recycling
 - arbitrary raw pointers are not automatically reclaimed
+- `__raw_free_sized` explicitly releases an internal raw allocation using its
+  original byte size. Linux x86-64 returns it to the indexed or large-buffer
+  free list; ARM64 reuses only its existing classes through 256 bytes. The
+  unsized `__raw_free` remains the 8-byte cell operation. Network polling,
+  receive, address and entropy buffers, and RSA scratch storage use sized release
 - `String`/`Blob`/`Dict`/`List -> RawPtr` intrinsics expose borrowed raw views;
   `RawPtr -> String`/`Blob` and `RawPtr -> Dict`/`List` retag initialized raw
   allocations as managed values with normal RC ownership rules

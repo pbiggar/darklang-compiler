@@ -1099,5 +1099,5 @@ let __secureRandomBytes (length: Int64) : Stdlib.Result.Result<Blob, String> =
             else if received != length then
                 Error "OS entropy returned fewer bytes than requested"
             else Ok (Stdlib.Crypto.__secureRandomRead buffer 0L length []) in
-        let _ = __raw_free buffer in
+        let _ = __raw_free_sized buffer length in
         result

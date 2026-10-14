@@ -367,6 +367,38 @@ let emitRawFree (ctx : codeGenContext) (ptr : LIR.reg) =
       ]
       @ generateLeakCounterDec ctx)
 
+(* Sized raw release preserves accounting on ARM64. Its existing small indexed
+   classes are reusable; large-buffer recycling remains x64-specific. *)
+let emitRawFreeSized (ctx : codeGenContext) (ptr : LIR.reg) (size : LIR.reg) =
+  lirRegToARM64Reg ptr
+  |> bind (fun pointer ->
+      lirRegToARM64Reg size
+      |> Result.map (fun bytes ->
+          let recycle =
+            [
+              Symbolic.ADD_imm (Symbolic.X14, Symbolic.X14, 7);
+              Symbolic.MOVZ (Symbolic.X13, 3, 0);
+              Symbolic.LSR_reg (Symbolic.X14, Symbolic.X14, Symbolic.X13);
+              Symbolic.LSL_reg (Symbolic.X14, Symbolic.X14, Symbolic.X13);
+              Symbolic.SUB_imm (Symbolic.X14, Symbolic.X14, 8);
+              Symbolic.ADD_reg (Symbolic.X15, Symbolic.X27, Symbolic.X14);
+              Symbolic.LDR (Symbolic.X14, Symbolic.X15, 0);
+              Symbolic.STR (Symbolic.X14, pointer, 0);
+              Symbolic.STR (pointer, Symbolic.X15, 0);
+            ]
+          in
+          (if ctx.options.disableFreeList then []
+           else
+             [
+               Symbolic.MOV_reg (Symbolic.X14, bytes);
+               Symbolic.CMP_imm (Symbolic.X14, 1);
+               Symbolic.B_cond (Symbolic.LT, List.length recycle + 3);
+               Symbolic.CMP_imm (Symbolic.X14, 256);
+               Symbolic.B_cond (Symbolic.GT, List.length recycle + 1);
+             ]
+             @ recycle)
+          @ generateLeakCounterDec ctx))
+
 (*
    Load 8 bytes from ptr + byteOffset
    X15 = ptr + offset

@@ -340,8 +340,12 @@ mean the entire branch has passed its integration or performance gates.
   - [x] Larger canonical buffers reuse an exact-size list. Repeated 70 KB and
     128 KB allocations and held aliases exceed the arena's cumulative capacity
     without exhaustion; all three cases fail before the large-buffer change.
-  - [ ] General raw temporary allocations still need reusable storage, and
-    ARM64 needs the corresponding recycling migration. Large-block splitting
+  - [x] Sized raw release returns TCP/UDP polling, receive and address buffers,
+    entropy reads and RSA scratch allocations to reusable storage on x86-64.
+    Unaligned 4 KiB and 70 KB raw-buffer regressions exceed cumulative arena
+    capacity, with small-size and live-register checks at the release boundary.
+  - [ ] Remaining unsized raw callers need a size audit, and ARM64 needs the
+    corresponding canonical/large-buffer recycling migration. Large-block splitting
     and coalescing remain unsupported.
     Passing bounded churn cases does not establish an indefinitely reusable
     native heap. The secure-server fairness peer retains its separate scopes.

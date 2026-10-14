@@ -103,6 +103,7 @@ let substCExprValue env cexpr =
   | RawAlloc numBytes -> RawAlloc (s numBytes)
   | MappedAlloc numBytes -> MappedAlloc (s numBytes)
   | RawFree ptr -> RawFree (s ptr)
+  | RawFreeSized (ptr, size) -> RawFreeSized (s ptr, s size)
   | MappedFree ptr -> MappedFree (s ptr)
   | RawGet (ptr, byteOffset, valueType) ->
       RawGet (s ptr, s byteOffset, valueType)

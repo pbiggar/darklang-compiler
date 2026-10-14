@@ -232,11 +232,11 @@ let tryCSEKey = function
   | RuntimeErrorString _ | FileReadBlob _ | FileExists _ | FileWriteBlob _
   | FileAppendText _ | FileDelete _ | FileCreateDirectory _
   | FileSetExecutable _ | FileWriteFromPtr _ | RawAlloc _ | MappedAlloc _
-  | RawFree _ | MappedFree _ | RawGet _ | RawTake _ | RawGetByte _
-  | RawWriteWord _ | RawWriteByte _ | RawSlotInit _ | StringToRawPtr _
-  | RawPtrToString _ | BlobToRawPtr _ | RawPtrToBlob _ | RawPtrToInt128 _
-  | RawPtrToUInt128 _ | DictToRawPtr _ | RawPtrToDict _ | ListToRawPtr _
-  | FixedBlockToRawPtr _ | RawPtrToList _ | RefCountIncString _
+  | RawFree _ | RawFreeSized _ | MappedFree _ | RawGet _ | RawTake _
+  | RawGetByte _ | RawWriteWord _ | RawWriteByte _ | RawSlotInit _
+  | StringToRawPtr _ | RawPtrToString _ | BlobToRawPtr _ | RawPtrToBlob _
+  | RawPtrToInt128 _ | RawPtrToUInt128 _ | DictToRawPtr _ | RawPtrToDict _
+  | ListToRawPtr _ | FixedBlockToRawPtr _ | RawPtrToList _ | RefCountIncString _
   | RefCountDecString _ | RefCountIncBlob _ | RefCountDecBlob _
   | RefCountIncInt _ | RefCountDecInt _ | RandomInt64 | DateTimeNow | Sleep _
   | CliNative _ | FloatToString _ ->

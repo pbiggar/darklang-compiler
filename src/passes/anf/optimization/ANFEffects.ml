@@ -80,6 +80,7 @@ let mustPreserveEvaluation (context : ANFConstants.optimizeContext) cexpr =
   | RawAlloc _ -> true (* Allocates memory *)
   | MappedAlloc _ -> true (* Allocates memory *)
   | RawFree _ -> true (* Frees memory *)
+  | RawFreeSized _ -> true
   | MappedFree _ -> true (* Frees memory *)
   | RawGet _ -> false (* Pure memory read *)
   | RawTake _ ->
@@ -183,6 +184,7 @@ let foldCExprTempIds add cexpr uses =
   | RawAlloc numBytes -> addAtomUse numBytes uses
   | MappedAlloc numBytes -> addAtomUse numBytes uses
   | RawFree ptr -> addAtomUse ptr uses
+  | RawFreeSized (ptr, size) -> uses |> addAtomUse ptr |> addAtomUse size
   | MappedFree ptr -> addAtomUse ptr uses
   | RawGet (ptr, byteOffset, _) ->
       uses |> addAtomUse ptr |> addAtomUse byteOffset
@@ -283,6 +285,7 @@ let cexprUsesTemp tid cexpr =
   | StringConcat (first, second, remaining) ->
       anyUsed (first :: second :: remaining)
   | Prim (_, left, right)
+  | RawFreeSized (left, right)
   | CanonicalBufferEq (_, left, right)
   | FileWriteBlob (left, right)
   | FileAppendText (left, right)
