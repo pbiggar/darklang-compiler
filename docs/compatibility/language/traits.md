@@ -6,8 +6,9 @@ Reference grammar: `backend/src/LibParser/{Parser,WrittenTypes}.fs`.
 Reference semantics: `backend/src/LibExecution/Traits.fs` and
 `packages/darklang/stdlib/traits.dark` at that revision.
 
-This is an unfinished implementation checkpoint. M0–M5 are implemented.
-M6 package breadth and M7 remain unfinished; this is not a readiness claim.
+M0–M6 are implemented for the scoped static model. M7 compatibility coverage
+includes the pinned upstream trait corpus. Readiness remains blocked by the
+parent performance baseline contract described below.
 
 | Behavior | Checkpoint implementation | Executed evidence / remaining validation |
 | --- | --- | --- |
@@ -27,7 +28,7 @@ M6 package breadth and M7 remain unfinished; this is not a readiness claim.
 | Generic/conditional implementations | Directional argument matching, recursive obligations, blanket fallback and static specialization | `traits-conditional.e2e`, `traits-concrete-arguments.e2e`, `traits-generic-alias.e2e`, `traits-patterns.e2e`, `traits-shared-alias.e2e` passed |
 | Receivers and operators | Static receiver calls, record-field precedence, custom and bounded-generic operators; primitive fast paths preserved | `traits-receivers.e2e`, `traits-receiver-parameters.e2e`, `traits-receiver-ambiguity.e2e`, `traits-operators.e2e` |
 | Upstream stdlib traits and hosted packages | Unchanged trait declarations/utilities; native primitive aliases; hosted trait/impl/bound rendering and dependency closure | `traits-stdlib.e2e`, `traits-stdlib-identities.e2e`, `trait_packages_regression.py`; package discovery limitations below |
-| Readiness gates | Host and regression checks pass; parent performance gate blocks before measurement | Validation below; full upstream named-test format remains outside the executable inventory |
+| Readiness gates | Host and regression checks pass; parent performance gate blocks before measurement | Validation below; named trait tests execute with approved AOT overrides |
 
 Intentional scoped differences: selection must finish at compilation; equally
 applicable competing implementations are errors. Trait objects, runtime lookup,
@@ -100,30 +101,33 @@ Package imports fetch `trait` and `impl` kinds by name/hash alongside the
 existing kinds, preserve source names with location/hash, follow trait and
 method dependencies, and render bounds on functions, types, traits and methods.
 The E2E uses a local HTTP package service and executes a bounded imported
-function and pipeline against an imported implementation. This does not
-establish support by a deployed upstream service: the pinned server source
-under `later/packages` exposes the earlier type/value/function routes.
-The importer loads implementations reached by qualified implementation-method
-references and dependencies; it does not enumerate unrelated active impls
-from a remote server. Broader implementation discovery remains M6 work.
+function and pipeline against an imported implementation. The importer also uses the pinned upstream `/:location` module browser, whose
+inventories include complete located traits and implementations. It follows
+child modules and loads active implementations without requiring an explicit
+implementation-method reference. Required missing dependencies remain compile
+errors. Legacy services without module browsing retain name/hash lookup.
+The local service models this documented upstream endpoint; this is not an
+execution claim against a deployed remote service.
 
 Stored `EFnName.boundImpls`, `EPipeFnCall.boundImpls` and trait implementation
 choice/history metadata are not preserved as persistence semantics by the
 source renderer. Compilation selects against the imported static catalog.
 This is a deferred persistence-semantic gap, not a claim to preserve upstream
-saved-call pinning. Upstream trait-corpus adoption and reusable-catalog boundary
-coverage remain M7 work. The cache-context fixture passed **2/2** and confirms
+saved-call pinning. Saved-call history remains deliberately deferred. The cache-context fixture passed **2/2** and confirms
 that a caller-local specific implementation does not reuse the blanket result.
 
-M7 coverage is in progress. The unchanged current upstream trait corpus is
-stored at `test/fixtures/upstream-reference/language/traits.dark` and compares
-byte-for-byte with the pinned source. Attempting to execute it exposed a test
-infrastructure mismatch: its named `test` and `=> raises` syntax and
-`Stdlib.Test` assertions are newer than this compiler's fixture loader. No
-claim is made that this reference file executes. Adapted expectations in
-`traits-upstream-shapes.e2e` cover its concrete, conditional, callback,
-receiver and public implementation-function behaviors. They reproduced
-unsupported method names and method values before their fixes.
+The pinned upstream trait corpus is archived unchanged at
+`test/fixtures/upstream-reference/language/traits.dark`. The enabled copy at
+`test/fixtures/e2e/upstream/language/traits.dark` differs only by nine approved
+`#compileerror=` expectations for failures the interpreter raises at runtime.
+The fixture loader supports named tests and `=> raises`, preserves declaration
+and test expressions, and uses a fixture-only `Stdlib.Test.equal`/`all` adapter.
+The adapter returns ordinary sum values; it does not implement runtime test
+counters or reflective mismatch rendering. All **36/36** upstream trait tests
+passed (16.6 seconds). Their first loader execution failed 36 cases; subsequent
+execution exposed missing caller constructor identities in stdlib helper
+specialization. Caller type metadata now composes into that preparation without
+importing caller implementation catalogs.
 
 M7's focused suite passed **111/111** (17.8 seconds), including receiver
 partial-application boundary cases. It also reproduced a false receiver-owner
@@ -138,11 +142,10 @@ enforcing them. Sorting uses a frontend-only static marker that is replaced
 by the chosen ordinary method call or existing structural comparison before
 ANF; no trait-specific runtime or backend operation is introduced.
 
-Remaining coverage gaps include full execution of the
-new upstream test format and broad remote implementation discovery. These
-are unfinished work, rather than approved semantic differences. The performance
-gate remains blocked before measurement by the baseline digest mismatch.
-The final full-host and regression results are recorded below.
+The parent performance gate remains blocked before measurement by the stored
+baseline digest mismatch. Module paths shadowed by a nominal leaf may hide
+child inventories in the pinned upstream browser; general discovery through
+such paths is not established by the hosted regression.
 
 The M7 identity/sorting/method-value checkpoint passed the full host suite
 **13,493/13,493** (147.5 seconds) and `dune runtest`. A subsequent package
@@ -177,3 +180,10 @@ directory, `/workspace/scratch/a30f2ed4b872/toolchains/traits-build-packages-fin
   incompatible. The baseline was not reset and no performance pass is claimed.
 - Pinned ocamlformat, `git diff --check`, upstream trait-definition byte
   comparison and unchanged upstream reference-corpus byte comparison: passed.
+
+Package discovery was tested first against a local service exposing trait and
+implementation inventories but no dedicated trait/impl lookup routes. The
+compiler initially rejected its missing trait dependency. After discovery,
+the bounded function, pipeline and stdlib-bound function execute natively,
+without requesting an already loaded stdlib trait. The new caller-sum helper
+fixture adds three native equality/membership boundary checks.

@@ -52,19 +52,33 @@ def main():
         body={"EApply": [1, {"EFnName": [2, dict(originalName=["Darklang", "Stdlib", "ToString", "toString"],
             resolved={"Error": ["unresolved"]}), []]}, [], [{"EArg": [3, 0]}]]}))
     requests = []
+    for (_, hash_), (_, body) in entities.items():
+        body["hash"] = {"Hash": [hash_]}
 
     class Handler(http.server.BaseHTTPRequestHandler):
         def do_GET(self):
             requests.append(self.path)
             parts = self.path.strip("/").split("/")
             payload = None
-            if len(parts) == 3 and parts[1] == "find":
+            if len(parts) == 1 and parts[0].startswith("Hosted"):
+                module = parts[0].split(".")
+                payload = dict(submodules=[], types=[], values=[], fns=[], traits=[], impls=[], tests=[])
+                fields = {"function": "fns", "trait": "traits", "impl": "impls"}
+                for (kind, _), (name, body) in entities.items():
+                    parent = name.split(".")[:-1]
+                    if parent == module:
+                        payload[fields[kind]].append(dict(entity=body, location=location(name)))
+                    elif parent[:len(module)] == module:
+                        child = parent[:len(module) + 1]
+                        if child not in payload["submodules"]:
+                            payload["submodules"].append(child)
+            elif len(parts) == 3 and parts[1] == "find":
                 for (kind, hash_), (name, _) in entities.items():
-                    if kind == parts[0] and name == parts[2]:
+                    if kind not in ("trait", "impl") and kind == parts[0] and name == parts[2]:
                         payload = {"Hash": [hash_]}
             elif len(parts) == 4 and parts[1:3] == ["get", "with-location"]:
                 entity = entities.get((parts[0], parts[3]))
-                if entity:
+                if entity and parts[0] not in ("trait", "impl"):
                     name, body = entity
                     payload = dict(entity=body, location=location(name))
             self.send_response(200 if payload else 404)
@@ -81,17 +95,23 @@ def main():
             directory = Path(temporary)
             env = dict(os.environ, XDG_DATA_HOME=temporary)
             source = directory / "input.dark"
-            source.write_text('Hosted.Int64.ToText.toText 42L ++ "|" ++ Hosted.describe 42L ++ "|" ++ Hosted.describePipe 42L ++ "|" ++ Hosted.stdlibDescribe 42L\n')
+            source.write_text('Hosted.describe 42L ++ "|" ++ Hosted.describePipe 42L ++ "|" ++ Hosted.stdlibDescribe 42L\n')
             program = directory / "program"
             result = subprocess.run([compiler, "-q", "--emit-result", "--package-server",
                 f"http://127.0.0.1:{server.server_port}", str(source), "-o", str(program)],
                 env=env, capture_output=True, text=True, timeout=120)
             assert result.returncode == 0, result.stdout + result.stderr
             output = subprocess.check_output([str(program)], text=True, timeout=10)
-            assert json.loads(output) == "hosted|hosted|hosted|42", output
-            assert "/trait/get/with-location/trait-hash" in requests, requests
-            assert "/impl/get/with-location/impl-hash" in requests, requests
+            assert json.loads(output) == "hosted|hosted|42", output
+            assert "/Hosted" in requests and "/Hosted.Int64" in requests, requests
             assert not any("stdlib-trait-hash" in request for request in requests), requests
+            source.write_text('Hosted.ToText.toText 42L\n')
+            direct = subprocess.run([compiler, "-q", "--emit-result", "--package-server",
+                f"http://127.0.0.1:{server.server_port}", str(source), "-o", str(program)],
+                env=env, capture_output=True, text=True, timeout=120)
+            assert direct.returncode == 0, direct.stdout + direct.stderr
+            assert json.loads(subprocess.check_output([str(program)], text=True, timeout=10)) == "hosted"
+
         server.shutdown()
     print("Hosted traits, implementations, dependencies and bounded functions execute natively")
 

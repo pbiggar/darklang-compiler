@@ -980,6 +980,54 @@ let escapeDataString text =
     text;
   Buffer.contents escaped
 
+(* The upstream /:location module browser returns complete LocatedItems and
+   direct child modules, including traits and impls. Keep non-trait items in
+   the hash index for dependency loading, without importing unrelated bodies. *)
+let parseModuleInventory moduleName json =
+  try
+    let root = parse json in
+    match tryField "submodules" root with
+    | None -> Ok None
+    | Some modules ->
+        let* modules =
+          ResultList.mapResults
+            (fun parts ->
+              let* parts =
+                ResultList.mapResults stringValue (arrayItems parts)
+              in
+              let name = String.concat "." parts in
+              if String.starts_with ~prefix:(moduleName ^ ".") name then Ok name
+              else Error ("Invalid package child module '" ^ name ^ "'"))
+            (arrayItems modules)
+        in
+        let* entities =
+          ResultList.collectResults
+            (fun (field, kind) ->
+              ResultList.mapResults
+                (fun item ->
+                  match
+                    Option.bind (tryField "entity" item) (tryField "hash")
+                  with
+                  | None -> Error "Package inventory item is missing its hash"
+                  | Some hash ->
+                      let* hash = parseHashJson (Yojson.Raw.to_string hash) in
+                      parseLocatedEntity kind hash (Yojson.Raw.to_string item))
+                (Option.fold ~none:[] ~some:arrayItems (tryField field root)))
+            [
+              ("types", PackageType);
+              ("values", PackageValue);
+              ("fns", PackageFunction);
+              ("traits", PackageTrait);
+              ("impls", PackageImpl);
+            ]
+        in
+        Ok (Some (entities, modules))
+  with ex -> Error ("Invalid package module inventory: " ^ message ex)
+
+let packageModule location =
+  let parts = String.split_on_char '.' location in
+  String.concat "." (List.take (min 2 (max 1 (List.length parts - 1))) parts)
+
 let resolveNames config resolutionEnv knownTraits names =
   let client = PackageIO.create () in
   Fun.protect
@@ -1006,6 +1054,47 @@ let resolveNames config resolutionEnv knownTraits names =
         | Found json ->
             let+ entity = parseLocatedEntity kind hash json in
             Some entity
+      in
+      let rec browse modules visited inventory =
+        match modules with
+        | [] -> Ok (visited, inventory)
+        | name :: rest when StringOrder.Set.mem name visited ->
+            browse rest visited inventory
+        | name :: rest -> (
+            let visited = StringOrder.Set.add name visited in
+            match findByName client config ("/" ^ escapeDataString name) with
+            | Error _ | Ok Missing -> browse rest visited inventory
+            | Ok (Found json) -> (
+                let* parsed = parseModuleInventory name json in
+                match parsed with
+                | None ->
+                    let parent =
+                      String.split_on_char '.' name
+                      |> List.rev |> List.tl |> List.rev |> String.concat "."
+                    in
+                    browse
+                      (if parent = "" then rest else parent :: rest)
+                      visited inventory
+                | Some (entities, children) ->
+                    let* inventory =
+                      List.fold_left
+                        (fun result entity ->
+                          let* inventory = result in
+                          match
+                            StringOrder.Map.find_opt entity.hash inventory
+                          with
+                          | Some previous when previous.kind <> entity.kind ->
+                              Error
+                                ("Package hash has conflicting item kinds: "
+                               ^ entity.hash)
+                          | Some _ -> Ok inventory
+                          | None ->
+                              Ok
+                                (StringOrder.Map.add entity.hash entity
+                                   inventory))
+                        (Ok inventory) entities
+                    in
+                    browse (children @ rest) visited inventory))
       in
       let findRoots () =
         let attempts =
@@ -1039,62 +1128,115 @@ let resolveNames config resolutionEnv knownTraits names =
           | Some (Error error) -> Error error
           | _ -> Ok []
       in
-      let rec load pending visited loaded =
+      let rec load pending visited browsed inventory loaded =
         match pending with
         | [] -> Ok (List.rev loaded)
-        | (_, hash) :: rest when StringOrder.Set.mem hash visited ->
-            load rest visited loaded
-        | (Some kind, hash) :: rest -> (
-            let* entity = fetchLocated kind hash in
+        | (_, hash, _) :: rest when StringOrder.Set.mem hash visited ->
+            load rest visited browsed inventory loaded
+        | (kind, hash, name) :: rest -> (
+            let* browsed, inventory =
+              match name with
+              | Some name when not (StringOrder.Map.mem hash inventory) ->
+                  browse [ packageModule name ] browsed inventory
+              | _ -> Ok (browsed, inventory)
+            in
+            let* entity =
+              match StringOrder.Map.find_opt hash inventory with
+              | Some entity -> Ok (Some entity)
+              | None -> (
+                  match kind with
+                  | Some kind -> fetchLocated kind hash
+                  | None ->
+                      let attempts =
+                        List.map (fun kind -> fetchLocated kind hash) allKinds
+                      in
+                      Ok
+                        (List.find_map
+                           (function
+                             | Ok (Some entity) -> Some entity | _ -> None)
+                           attempts))
+            in
             match entity with
-            | None ->
-                Error
-                  ("Package " ^ kindPath kind ^ " " ^ hash ^ " was not found")
+            | None -> Error ("Package dependency " ^ hash ^ " was not found")
             | Some entity ->
                 let* dependencies = dependencyRefs entity.json in
                 let next =
                   List.filter_map
                     (fun (hash, name) ->
-                      if isKnownName name then None else Some (None, hash))
+                      if isKnownName name then None
+                      else Some (None, hash, Some name))
                     dependencies
                 in
-                load (next @ rest)
-                  (StringOrder.Set.add hash visited)
-                  (entity :: loaded))
-        | (None, hash) :: rest -> (
-            let attempts =
-              List.map
-                (fun kind ->
-                  let+ found = fetchLocated kind hash in
-                  (kind, found))
-                allKinds
-            in
-            match
-              List.find_map
-                (function
-                  | Ok (kind, found) ->
-                      Option.map (fun entity -> (kind, entity)) found
-                  | Error _ -> None)
-                attempts
-            with
-            | None -> Error ("Package dependency " ^ hash ^ " was not found")
-            | Some (_, entity) ->
-                let* dependencies = dependencyRefs entity.json in
-                let next =
-                  List.filter_map
-                    (fun (hash, name) ->
-                      if isKnownName name then None else Some (None, hash))
-                    dependencies
+                let discovered =
+                  StringOrder.Map.bindings inventory
+                  |> List.filter_map (fun (hash, entity) ->
+                      if
+                        (entity.kind = PackageTrait || entity.kind = PackageImpl)
+                        && not (StringOrder.Set.mem hash visited)
+                      then Some (Some entity.kind, hash, Some entity.location)
+                      else None)
                 in
-                load (next @ rest)
+                load
+                  (next @ rest @ discovered)
                   (StringOrder.Set.add hash visited)
-                  (entity :: loaded))
+                  browsed inventory (entity :: loaded))
+      in
+      let candidates =
+        candidatePrefixes isKnownName names
+        |> List.filter (fun name -> not (isKnownName name))
+      in
+      let* browsed, inventory =
+        browse
+          (List.map packageModule candidates |> distinct)
+          StringOrder.Set.empty StringOrder.Map.empty
       in
       let* roots = findRoots () in
+      let inventoryRoots =
+        StringOrder.Map.bindings inventory
+        |> List.filter_map (fun (hash, entity) ->
+            if List.mem entity.location candidates then Some (entity.kind, hash)
+            else None)
+      in
+      let roots = distinct (roots @ inventoryRoots) in
+      let* rootEntities =
+        ResultList.mapResults
+          (fun (kind, hash) ->
+            let* entity =
+              match StringOrder.Map.find_opt hash inventory with
+              | Some entity -> Ok (Some entity)
+              | None -> fetchLocated kind hash
+            in
+            match entity with
+            | Some entity -> Ok entity
+            | None -> Error ("Package root was not found: " ^ hash))
+          roots
+      in
+      let modules =
+        List.map (fun entity -> packageModule entity.location) rootEntities
+        |> distinct
+      in
+      let* browsed, inventory = browse modules browsed inventory in
+      let inventory =
+        List.fold_left
+          (fun inventory entity ->
+            StringOrder.Map.add entity.hash entity inventory)
+          inventory rootEntities
+      in
+      let discovered =
+        StringOrder.Map.bindings inventory
+        |> List.filter_map (fun (hash, entity) ->
+            if entity.kind = PackageTrait || entity.kind = PackageImpl then
+              Some (Some entity.kind, hash, Some entity.location)
+            else None)
+      in
       let* entities =
         load
-          (List.map (fun (kind, hash) -> (Some kind, hash)) roots)
-          StringOrder.Set.empty []
+          (List.map
+             (fun entity ->
+               (Some entity.kind, entity.hash, Some entity.location))
+             rootEntities
+          @ discovered)
+          StringOrder.Set.empty browsed inventory []
       in
       ResultList.mapResults renderEntity entities)
 

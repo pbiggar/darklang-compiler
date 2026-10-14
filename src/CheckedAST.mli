@@ -235,6 +235,10 @@ val includeBindingCursor : int -> symbols -> symbols
 val composeTopLevels :
   symbols -> symbols -> topLevel list -> symbols * topLevel list
 
+(* Import caller-owned type, field and constructor identities without making
+   caller function definitions or trait implementations part of a library. *)
+val includeTypeMetadata : symbols -> symbols -> symbols
+
 val composeDeclaredTopLevels :
   symbols -> symbols -> topLevel list -> symbols * topLevel list
 

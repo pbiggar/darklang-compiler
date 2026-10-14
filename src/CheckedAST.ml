@@ -867,6 +867,23 @@ let composeTopLevels (sourceCatalog : symbols) (targetCatalog : symbols)
   in
   (catalog, topLevels)
 
+(* Share caller type identities without importing caller function or trait catalogs. *)
+let includeTypeMetadata (source : symbols) (target : symbols) =
+  let inherited =
+    {
+      target with
+      typeNames = source.typeNames;
+      typeIds = source.typeIds;
+      nextTypeOrdinal = source.nextTypeOrdinal;
+      constructorNames = source.constructorNames;
+      constructorIds = source.constructorIds;
+      fieldNames = source.fieldNames;
+      fieldIds = source.fieldIds;
+      constructorLookups = source.constructorLookups;
+    }
+  in
+  fst (composeTopLevels inherited target [])
+
 (*
    Import only declarations introduced by a checked unit. References in its
    bodies carry canonical IDs, while the target already owns external names.
