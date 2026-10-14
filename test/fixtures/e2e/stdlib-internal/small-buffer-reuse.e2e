@@ -16,3 +16,15 @@ let bufferChurn (remaining: Int64) (total: Int64) : Int64 =
 
 bufferChurn 2200000L 0L = stdout="440000000\n" stderr="" disable_opt_inline=true
 let held = temporaryBuffer 41L in let aliases = (held, [held]) in let _ = bufferChurn 10000L 0L in let (first, rest) = aliases in Stdlib.Blob.__getByte first 0L + (match rest with | [second] -> Stdlib.Blob.__getByte second 239L | _ -> -1L) = stdout="83\n" stderr="" disable_opt_inline=true
+
+let stringProbe (remaining: Int64) : Int64 =
+  let index = remaining % 26L in
+  let right = Stdlib.String.__byteSlice "ABCDEFGHIJKLMNOPQRSTUVWXYZ" index (index + 1L) in
+  let joined = __string_concat_raw "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" right in
+  Stdlib.String.__byteAtUnchecked joined 0L + Stdlib.String.__byteAtUnchecked joined 239L
+
+let stringChurn (remaining: Int64) (total: Int64) : Int64 =
+  if remaining == 0L then total
+  else stringChurn (remaining - 1L) (total + stringProbe remaining)
+
+stringChurn 2200000L 0L = stdout="383899930\n" stderr="" disable_opt_inline=true

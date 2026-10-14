@@ -396,3 +396,33 @@ let labelCounter = ref 0
 let freshLabel prefix =
   labelCounter := add !labelCounter 1;
   Printf.sprintf "__%s_%d" prefix !labelCounter
+
+(* A dead canonical String/Blob can enter the same size classes as raw and
+   fixed-block allocations. Logical length is a conservative capacity when a
+   producer reserved extra bytes. Preserve every temporary: callers include
+   iterative list destruction and nested record/closure release helpers. *)
+let genSmallBufferRecycle pointer =
+  let count = if pointer = X86_64.RCX then X86_64.RAX else X86_64.RCX in
+  let slot = if pointer = X86_64.RDX then X86_64.RSI else X86_64.RDX in
+  let doneLabel = freshLabel "buffer_recycle_done" in
+  [
+    X86_64.PUSH count;
+    X86_64.PUSH slot;
+    X86_64.MOV_load (count, pointer, 8l);
+    X86_64.CMP_imm (count, 0l);
+    X86_64.Jcc (X86_64.LT, doneLabel);
+    X86_64.CMP_imm (count, Int32.of_int (freeListSize - 16));
+    X86_64.Jcc (X86_64.GT, doneLabel);
+    (* aligned allocation = roundUp(length + 16, 8); class excludes 8 bytes. *)
+    X86_64.ADD_imm (count, 23l);
+    X86_64.AND_imm (count, -8l);
+    X86_64.SUB_imm (count, 8l);
+    X86_64.MOV_reg (slot, freeListBase);
+    X86_64.ADD_reg (slot, count);
+    X86_64.MOV_load (count, slot, 0l);
+    X86_64.MOV_store (pointer, 0l, count);
+    X86_64.MOV_store (slot, 0l, pointer);
+    X86_64.Label doneLabel;
+    X86_64.POP slot;
+    X86_64.POP count;
+  ]
