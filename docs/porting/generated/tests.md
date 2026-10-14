@@ -23,7 +23,121 @@ Current checked-in named tests have qualified source identities and file/module 
 The category total also includes file groups, backend sources/fixtures, and legacy imports; it is not an executable test count.
 IDs use file paths and qualified names, never line numbers. Links use current source lines.
 Module scopes use `FILE/named/Qualified/Module`; actual named-test runner discovery, support, and execution remain unverified.
-Legacy imports can export real parsed cases and effective skips with `./run-tests --target=linux-x86_64 --inventory-upstream=PATH`; this export has not run in the current VM.
+Legacy runner discovery: **unverified**. This is separate from behavioral verification.
+Collect real parsed cases and effective skips with `python3 scripts/collect-upstream-discovery.py --upstream CHECKOUT`; the collector builds first and never invents an export.
+
+## Legacy runner discovery
+
+| File group | Discovery | Reported cases | Eligible | Skipped | Unmatched line gates | Parse error |
+| --- | --- | ---: | ---: | ---: | --- | --- |
+| tests:compiler/test/fixtures/e2e/upstream/cli/app-service-safety.dark | unverified | — | — | — | — | — |
+| tests:compiler/test/fixtures/e2e/upstream/cli/command-completions.dark | unverified | — | — | — | — | — |
+| tests:compiler/test/fixtures/e2e/upstream/cli/deprecation-kinds.dark | unverified | — | — | — | — | — |
+| tests:compiler/test/fixtures/e2e/upstream/cli/file.dark | unverified | — | — | — | — | — |
+| tests:compiler/test/fixtures/e2e/upstream/cli/include-parsing.dark | unverified | — | — | — | — | — |
+| tests:compiler/test/fixtures/e2e/upstream/cli/outliner.dark | unverified | — | — | — | — | — |
+| tests:compiler/test/fixtures/e2e/upstream/cli/permissions-display.dark | unverified | — | — | — | — | — |
+| tests:compiler/test/fixtures/e2e/upstream/cli/permissions-grammar.dark | unverified | — | — | — | — | — |
+| tests:compiler/test/fixtures/e2e/upstream/cli/tailscale.dark | unverified | — | — | — | — | — |
+| tests:compiler/test/fixtures/e2e/upstream/cli/workbench-repl.dark | unverified | — | — | — | — | — |
+| tests:compiler/test/fixtures/e2e/upstream/cloud/db.dark | unverified | — | — | — | — | — |
+| tests:compiler/test/fixtures/e2e/upstream/language/apply/eapply.dark | unverified | — | — | — | — | — |
+| tests:compiler/test/fixtures/e2e/upstream/language/apply/einfix.dark | unverified | — | — | — | — | — |
+| tests:compiler/test/fixtures/e2e/upstream/language/basic/dfloat.dark | unverified | — | — | — | — | — |
+| tests:compiler/test/fixtures/e2e/upstream/language/basic/eand.dark | unverified | — | — | — | — | — |
+| tests:compiler/test/fixtures/e2e/upstream/language/basic/elet.dark | unverified | — | — | — | — | — |
+| tests:compiler/test/fixtures/e2e/upstream/language/basic/eor.dark | unverified | — | — | — | — | — |
+| tests:compiler/test/fixtures/e2e/upstream/language/basic/estring.dark | unverified | — | — | — | — | — |
+| tests:compiler/test/fixtures/e2e/upstream/language/basic/evariable.dark | unverified | — | — | — | — | — |
+| tests:compiler/test/fixtures/e2e/upstream/language/big.dark | unverified | — | — | — | — | — |
+| tests:compiler/test/fixtures/e2e/upstream/language/builtin-introspection.dark | unverified | — | — | — | — | — |
+| tests:compiler/test/fixtures/e2e/upstream/language/collections/dlist.dark | unverified | — | — | — | — | — |
+| tests:compiler/test/fixtures/e2e/upstream/language/collections/dtuple.dark | unverified | — | — | — | — | — |
+| tests:compiler/test/fixtures/e2e/upstream/language/collections/edict.dark | unverified | — | — | — | — | — |
+| tests:compiler/test/fixtures/e2e/upstream/language/custom-data/aliases.dark | unverified | — | — | — | — | — |
+| tests:compiler/test/fixtures/e2e/upstream/language/custom-data/enums.dark | unverified | — | — | — | — | — |
+| tests:compiler/test/fixtures/e2e/upstream/language/custom-data/record-field-acess.dark | unverified | — | — | — | — | — |
+| tests:compiler/test/fixtures/e2e/upstream/language/custom-data/records.dark | unverified | — | — | — | — | — |
+| tests:compiler/test/fixtures/e2e/upstream/language/custom-data/values.dark | unverified | — | — | — | — | — |
+| tests:compiler/test/fixtures/e2e/upstream/language/derror.dark | unverified | — | — | — | — | — |
+| tests:compiler/test/fixtures/e2e/upstream/language/effect-ceiling.dark | unverified | — | — | — | — | — |
+| tests:compiler/test/fixtures/e2e/upstream/language/elambda.dark | unverified | — | — | — | — | — |
+| tests:compiler/test/fixtures/e2e/upstream/language/error-syntax.dark | unverified | — | — | — | — | — |
+| tests:compiler/test/fixtures/e2e/upstream/language/error-type-names.dark | unverified | — | — | — | — | — |
+| tests:compiler/test/fixtures/e2e/upstream/language/flow-control/eif.dark | unverified | — | — | — | — | — |
+| tests:compiler/test/fixtures/e2e/upstream/language/flow-control/ematch.dark | unverified | — | — | — | — | — |
+| tests:compiler/test/fixtures/e2e/upstream/language/flow-control/epipe.dark | unverified | — | — | — | — | — |
+| tests:compiler/test/fixtures/e2e/upstream/language/interpreter.dark | unverified | — | — | — | — | — |
+| tests:compiler/test/fixtures/e2e/upstream/language/nested-fns.dark | unverified | — | — | — | — | — |
+| tests:compiler/test/fixtures/e2e/upstream/language/runtime-to-programtypes.dark | unverified | — | — | — | — | — |
+| tests:compiler/test/fixtures/e2e/upstream/scm/branch-identity.dark | unverified | — | — | — | — | — |
+| tests:compiler/test/fixtures/e2e/upstream/scm/commit-hash.dark | unverified | — | — | — | — | — |
+| tests:compiler/test/fixtures/e2e/upstream/scm/conflicts.dark | unverified | — | — | — | — | — |
+| tests:compiler/test/fixtures/e2e/upstream/scm/constraint-kinds.dark | unverified | — | — | — | — | — |
+| tests:compiler/test/fixtures/e2e/upstream/scm/lww.dark | unverified | — | — | — | — | — |
+| tests:compiler/test/fixtures/e2e/upstream/scm/matter-routes.dark | unverified | — | — | — | — | — |
+| tests:compiler/test/fixtures/e2e/upstream/scm/propagation-policy.dark | unverified | — | — | — | — | — |
+| tests:compiler/test/fixtures/e2e/upstream/scm/removal-conflicts.dark | unverified | — | — | — | — | — |
+| tests:compiler/test/fixtures/e2e/upstream/scm/sync-seen-everything.dark | unverified | — | — | — | — | — |
+| tests:compiler/test/fixtures/e2e/upstream/scm/sync-wire.dark | unverified | — | — | — | — | — |
+| tests:compiler/test/fixtures/e2e/upstream/stachu/darklangParser.dark | unverified | — | — | — | — | — |
+| tests:compiler/test/fixtures/e2e/upstream/stachu/parser.dark | unverified | — | — | — | — | — |
+| tests:compiler/test/fixtures/e2e/upstream/stachu/tinyLang.dark | unverified | — | — | — | — | — |
+| tests:compiler/test/fixtures/e2e/upstream/stdlib/alt-json.dark | unverified | — | — | — | — | — |
+| tests:compiler/test/fixtures/e2e/upstream/stdlib/base64.dark | unverified | — | — | — | — | — |
+| tests:compiler/test/fixtures/e2e/upstream/stdlib/bool.dark | unverified | — | — | — | — | — |
+| tests:compiler/test/fixtures/e2e/upstream/stdlib/bytes.dark | unverified | — | — | — | — | — |
+| tests:compiler/test/fixtures/e2e/upstream/stdlib/char.dark | unverified | — | — | — | — | — |
+| tests:compiler/test/fixtures/e2e/upstream/stdlib/cli-color.dark | unverified | — | — | — | — | — |
+| tests:compiler/test/fixtures/e2e/upstream/stdlib/cli-glob.dark | unverified | — | — | — | — | — |
+| tests:compiler/test/fixtures/e2e/upstream/stdlib/cli-path.dark | unverified | — | — | — | — | — |
+| tests:compiler/test/fixtures/e2e/upstream/stdlib/cli-process.dark | unverified | — | — | — | — | — |
+| tests:compiler/test/fixtures/e2e/upstream/stdlib/cli-tui-text.dark | unverified | — | — | — | — | — |
+| tests:compiler/test/fixtures/e2e/upstream/stdlib/crypto.dark | unverified | — | — | — | — | — |
+| tests:compiler/test/fixtures/e2e/upstream/stdlib/date.dark | unverified | — | — | — | — | — |
+| tests:compiler/test/fixtures/e2e/upstream/stdlib/dict.dark | unverified | — | — | — | — | — |
+| tests:compiler/test/fixtures/e2e/upstream/stdlib/discovery.dark | unverified | — | — | — | — | — |
+| tests:compiler/test/fixtures/e2e/upstream/stdlib/duration.dark | unverified | — | — | — | — | — |
+| tests:compiler/test/fixtures/e2e/upstream/stdlib/earg.dark | unverified | — | — | — | — | — |
+| tests:compiler/test/fixtures/e2e/upstream/stdlib/eself.dark | unverified | — | — | — | — | — |
+| tests:compiler/test/fixtures/e2e/upstream/stdlib/float.dark | unverified | — | — | — | — | — |
+| tests:compiler/test/fixtures/e2e/upstream/stdlib/html.dark | unverified | — | — | — | — | — |
+| tests:compiler/test/fixtures/e2e/upstream/stdlib/http.dark | unverified | — | — | — | — | — |
+| tests:compiler/test/fixtures/e2e/upstream/stdlib/httpclient.dark | unverified | — | — | — | — | — |
+| tests:compiler/test/fixtures/e2e/upstream/stdlib/httpserver.dark | unverified | — | — | — | — | — |
+| tests:compiler/test/fixtures/e2e/upstream/stdlib/ints/int.dark | unverified | — | — | — | — | — |
+| tests:compiler/test/fixtures/e2e/upstream/stdlib/ints/int128.dark | unverified | — | — | — | — | — |
+| tests:compiler/test/fixtures/e2e/upstream/stdlib/ints/int16.dark | unverified | — | — | — | — | — |
+| tests:compiler/test/fixtures/e2e/upstream/stdlib/ints/int32.dark | unverified | — | — | — | — | — |
+| tests:compiler/test/fixtures/e2e/upstream/stdlib/ints/int64.dark | unverified | — | — | — | — | — |
+| tests:compiler/test/fixtures/e2e/upstream/stdlib/ints/int8.dark | unverified | — | — | — | — | — |
+| tests:compiler/test/fixtures/e2e/upstream/stdlib/ints/uint128.dark | unverified | — | — | — | — | — |
+| tests:compiler/test/fixtures/e2e/upstream/stdlib/ints/uint16.dark | unverified | — | — | — | — | — |
+| tests:compiler/test/fixtures/e2e/upstream/stdlib/ints/uint32.dark | unverified | — | — | — | — | — |
+| tests:compiler/test/fixtures/e2e/upstream/stdlib/ints/uint64.dark | unverified | — | — | — | — | — |
+| tests:compiler/test/fixtures/e2e/upstream/stdlib/ints/uint8.dark | unverified | — | — | — | — | — |
+| tests:compiler/test/fixtures/e2e/upstream/stdlib/json.dark | unverified | — | — | — | — | — |
+| tests:compiler/test/fixtures/e2e/upstream/stdlib/language-tools/parsedFileShape.dark | unverified | — | — | — | — | — |
+| tests:compiler/test/fixtures/e2e/upstream/stdlib/language-tools/pickLocation.dark | unverified | — | — | — | — | — |
+| tests:compiler/test/fixtures/e2e/upstream/stdlib/language-tools/semanticTokenization.dark | unverified | — | — | — | — | — |
+| tests:compiler/test/fixtures/e2e/upstream/stdlib/list.dark | unverified | — | — | — | — | — |
+| tests:compiler/test/fixtures/e2e/upstream/stdlib/math.dark | unverified | — | — | — | — | — |
+| tests:compiler/test/fixtures/e2e/upstream/stdlib/nomodule.dark | unverified | — | — | — | — | — |
+| tests:compiler/test/fixtures/e2e/upstream/stdlib/option.dark | unverified | — | — | — | — | — |
+| tests:compiler/test/fixtures/e2e/upstream/stdlib/pretty.dark | unverified | — | — | — | — | — |
+| tests:compiler/test/fixtures/e2e/upstream/stdlib/prettyPrinter.dark | unverified | — | — | — | — | — |
+| tests:compiler/test/fixtures/e2e/upstream/stdlib/regex.dark | unverified | — | — | — | — | — |
+| tests:compiler/test/fixtures/e2e/upstream/stdlib/result.dark | unverified | — | — | — | — | — |
+| tests:compiler/test/fixtures/e2e/upstream/stdlib/sqlite.dark | unverified | — | — | — | — | — |
+| tests:compiler/test/fixtures/e2e/upstream/stdlib/sse.dark | unverified | — | — | — | — | — |
+| tests:compiler/test/fixtures/e2e/upstream/stdlib/stream.dark | unverified | — | — | — | — | — |
+| tests:compiler/test/fixtures/e2e/upstream/stdlib/string.dark | unverified | — | — | — | — | — |
+| tests:compiler/test/fixtures/e2e/upstream/stdlib/tuple.dark | unverified | — | — | — | — | — |
+| tests:compiler/test/fixtures/e2e/upstream/stdlib/uuid.dark | unverified | — | — | — | — | — |
+| tests:compiler/test/fixtures/e2e/upstream/stdlib/x509.dark | unverified | — | — | — | — | — |
+
+Stale counts describe an old export, not current selection. Eligible cases are not passing tests.
+Legacy case IDs hash actual parser names (which include line coordinates); unlike named-package IDs, they may change when lines move.
 
 ## Source observations
 

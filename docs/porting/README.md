@@ -159,9 +159,47 @@ the runner would select a case; it does not establish compilation or a pass.
 The command and native regressions are implemented but have not run in this VM:
 the pinned native dependency setup remains blocked. Consequently the framework
 still reports effective execution support as unverified. Do not commit a
-guessed discovery output or turn configured gates into skip counts. The next
-adapter will fingerprint inputs and reconcile an actual export into the tracked
-inventory, detecting orphaned gates and missing/failed fixtures.
+guessed discovery output or turn configured gates into skip counts.
+
+To collect and reconcile a real export into tracked results, run:
+
+```bash
+python3 scripts/collect-upstream-discovery.py --upstream /path/to/interpreter
+```
+
+The collector validates the pin, builds with the repository's bounded build
+command, then exports through the already-built runner. It fingerprints compiler,
+fixture, script, build-graph and manifest inputs before and after collection;
+changing inputs aborts without replacing the previous ledger. It validates the
+schema, complete corpus coverage, unique identities, source coordinates, skip
+consistency and the runner's exit status. Native build failure also leaves the
+previous ledger untouched. No performance checks run.
+
+`porting/discovery.yaml` holds the captured export and its source provenance.
+Its initial `null` entry means not collected, not zero tests. A successful
+collection refreshes the inventories; a partial collection records parse errors
+and exits unsuccessfully. Framework refresh/check never executes the collector.
+Changes make discovery **stale** independently of behavioral evidence. Stale case
+selectors remain available while their file exists, but their old eligibility
+and counts never become current claims. Actual parsed cases inherit file scopes
+under `compiler/FILE/runner/HASH`; use their generated IDs for precise exceptions.
+These legacy IDs hash the parser's display name, including line coordinates,
+unlike the line-independent current named-package-test identities.
+
+Current, successfully parsed files also report configured line gates that match
+no actual parser `L<number>:` identity. These are consultation candidates, not
+automatic permission to delete gates. Failed or stale files do not infer them.
+
+### Builtin registration candidates
+
+Each builtin source remains a broad file group. Refresh also enumerates literal
+`fn`/`value` registrations with kind, name, version and source links, under scopes
+such as `FILE/declarations/fn/boolNot/v0`. File-wide rules apply automatically;
+narrow exceptions do not require pre-writing a manifest for every function.
+Computed names/versions remain counted source gaps. Literal constructors can be
+called repeatedly, renamed or filtered, so none of these counts is an assembled
+registry count. Same-spelling compiler declarations are only mapping candidates;
+signatures, host registration, aliases and behavior still need actual adapters.
 
 The List/Dict source destinations start undecided, while their behavior remains
 required to match. This does not approve replacing their native representations

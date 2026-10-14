@@ -13,7 +13,7 @@ Discovery gaps and same-name candidates remain explicit. No behavior tests run d
 | [parser](parser.md) | 26 | 26 | 0 |
 | [tests](tests.md) | 2394 | 2394 | 0 |
 | [packages](packages.md) | 429 | 429 | 0 |
-| [builtins](builtins.md) | 70 | 70 | 0 |
+| [builtins](builtins.md) | 783 | 783 | 0 |
 | [stdlib](stdlib.md) | 300 | 300 | 0 |
 
 ## Discovery boundaries
@@ -21,8 +21,8 @@ Discovery gaps and same-name candidates remain explicit. No behavior tests run d
 - Packages/StdLib: all checked-in `.dark` files; root-module mappings are candidates, not declaration mappings.
 - Language: written constructor names plus broad curated behavioral workstreams; full feature taxonomy still needs trials.
 - Parser: upstream components and same-stem OCaml candidates; split components remain classified separately.
-- Tests: file groups and qualified named-test source identities, backend sources/fixtures, and legacy imports. A real-parser/shared-gate legacy YAML export is implemented but unexecuted; named-test adapters and export reconciliation remain pending.
-- Builtins: declaration/registration sources. Assembled registries, aliases, signatures, and compiler bindings are not yet compared.
+- Tests: qualified named-test source identities, backend sources/fixtures, and legacy imports. The real-parser/shared-gate export and fingerprinted collector are implemented; actual collection is unverified here and current named-test execution remains pending.
+- Builtins: registration sources plus literal function/value candidates; computed constructors remain counted gaps. Assembled registries, aliases, signatures, and compiler bindings are not yet compared.
 - Only x64 Linux evidence is accepted. Inventory discovery does not establish execution support.
 
 ## Recorded upstream bugs

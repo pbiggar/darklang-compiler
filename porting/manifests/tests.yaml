@@ -10,4 +10,14 @@ policy:
 questions:
   - Trial current named package tests and preserve their result and error expectations.
   - Export actual runner identities and effective exclusions; source discovery is not test execution.
-children: []
+children:
+  - scope: packages
+    current: The pinned upstream DTest carries a named TestDecl, while this compiler branch's DTest still carries a legacy actual/expected assertion. Upstream keeps that older form separately as DAssertion. The current named suite also relies on Darklang.Stdlib.Test.Result and helpers, which have no mirrored compiler module yet.
+    reason: Source inspection of WrittenTypes, FileParser, WrittenSource and the checked-in Test module identifies prerequisites; this is not a behavioral exclusion.
+    depends_on:
+      - parser:backend/src/LibParser/WrittenTypes.fs
+      - parser:backend/src/LibParser/Parser.fs
+      - stdlib:packages/darklang/stdlib/test.dark
+    questions:
+      - Trial the named TestDecl path and unchanged Test.Result helper code before claiming named-suite execution support.
+      - Port test-local runtime-error and counter context according to upstream semantics; consult the user before accepting a new AOT difference.
