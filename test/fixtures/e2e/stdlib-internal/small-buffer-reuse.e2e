@@ -69,3 +69,23 @@ let retainedInteger (negative: Bool) (byte: Int64) : Int =
   Stdlib.Int.__adopt pointer negative 3L
 
 let first = retainedInteger false 41L in let second = retainedInteger true 42L in let aliases = (first, [second]) in let _ = integerChurn 10000L 0L in let (positive, rest) = aliases in Stdlib.Int.__limb positive 0L + (match rest with | [negative] -> Stdlib.Int.__limb negative 0L + Stdlib.Int.__signedCount negative | _ -> -1L) = stdout="80\n" stderr="" disable_opt_inline=true
+
+let largeBuffer (length: Int64) (byte: Int64) : Blob =
+  let pointer = __raw_alloc (length + 16L) in
+  let _ = __raw_write_word pointer 0L 1L in
+  let _ = __raw_write_word pointer 8L length in
+  let _ = __raw_write_byte pointer 16L byte in
+  let _ = __raw_write_byte pointer (length + 15L) (byte + 1L) in
+  __rawptr_to_blob pointer
+
+let largeBufferChurn (remaining: Int64) (mixed: Bool) (total: Int64) : Int64 =
+  if remaining == 0L then total
+  else
+    let length = if mixed && remaining % 2L == 0L then 131073L else 70001L in
+    let bytes = largeBuffer length 17L in
+    let value = Stdlib.Blob.__getByte bytes 0L + Stdlib.Blob.__getByte bytes (length - 1L) in
+    largeBufferChurn (remaining - 1L) mixed (total + value)
+
+largeBufferChurn 9000L false 0L = stdout="315000\n" stderr="" disable_opt_inline=true
+largeBufferChurn 9000L true 0L = stdout="315000\n" stderr="" disable_opt_inline=true
+let held = largeBuffer 70001L 41L in let aliases = (held, [held]) in let _ = largeBufferChurn 9000L true 0L in let (first, rest) = aliases in Stdlib.Blob.__getByte first 0L + (match rest with | [second] -> Stdlib.Blob.__getByte second 70000L | _ -> -1L) = stdout="83\n" stderr="" disable_opt_inline=true
