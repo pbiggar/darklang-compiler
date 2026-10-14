@@ -85,6 +85,40 @@ class Discovery(unittest.TestCase):
     def test_markdown_escaping(self):
         self.assertEqual(p.cell('a|b\nc'), 'a\\|b c')
 
+    def test_named_tests_follow_nested_module_boundaries(self):
+        text = ('module Acme.Tests\nmodule Left =\n  module Inner =\n'
+                '    test same = true\n  test same = false\n'
+                'module Right =\n  test same = true\ntest root = true\n')
+        self.assertEqual(p.named_tests(text), [
+            {'name': 'Acme.Tests.Left.Inner.same', 'line': 4},
+            {'name': 'Acme.Tests.Left.same', 'line': 5},
+            {'name': 'Acme.Tests.Right.same', 'line': 7},
+            {'name': 'Acme.Tests.root', 'line': 8}])
+
+    def test_named_tests_ignore_literals_and_comments(self):
+        text = ('module Acme.Tests\n(* module Fake =\n test fake = true *)\n'
+                'val x = """\nmodule Wrong =\n test wrong = true\n"""\n'
+                '// test comment = true\ntest real = true\n')
+        self.assertEqual(p.named_tests(text), [{'name': 'Acme.Tests.real', 'line': 9}])
+
+    def test_duplicate_named_tests_fail_instead_of_collapsing(self):
+        with self.assertRaisesRegex(ValueError, 'Duplicate named test'):
+            p.named_tests('module Acme.Tests\ntest same = true\ntest same = false\n')
+
+    def test_unrecognized_test_header_fails_instead_of_omitting(self):
+        with self.assertRaisesRegex(ValueError, 'Unsupported named test'):
+            p.named_tests('module Acme.Tests\ntest unsupported name = true\n')
+
+    def test_unrecognized_module_header_fails_instead_of_guessing_name(self):
+        with self.assertRaisesRegex(ValueError, 'Unsupported module'):
+            p.named_tests('module Acme.Tests\nmodule unsupported name =\n  test real = true\n')
+
+    def test_record_fields_and_local_expressions_are_not_test_declarations(self):
+        text = ('module Acme.Tests\ntype Finished =\n  { name: String\n    test: Bool }\n'
+                'module Nested =\n    type Record =\n      { test: Bool }\n'
+                '    test real = true\nlet run test =\n  test true\n')
+        self.assertEqual(p.named_tests(text), [{'name': 'Acme.Tests.Nested.real', 'line': 8}])
+
 
 class Build(unittest.TestCase):
     def setUp(self):
@@ -144,6 +178,24 @@ class Build(unittest.TestCase):
         _, records = self.build()
         item = next(r for r in records if r['id'] == 'tests:packages/acme/tests.dark')
         self.assertIn('1 declaration candidates: real', item['detail'])
+
+    def test_named_test_id_and_nested_policy_survive_line_insertion(self):
+        path = self.root / 'porting/manifests/tests.yaml'
+        manifest = p.read_yaml(path)
+        manifest['children'] = [dict(scope='packages/acme/tests.dark/named/Acme/Tests',
+                                    policy={'disposition': 'deferred'}, reason='Fixture module deferral')]
+        path.write_text(yaml.safe_dump(manifest))
+        outputs, records = self.build()
+        identity = 'tests:packages/acme/tests.dark#Acme.Tests.real'
+        item = next(r for r in records if r['id'] == identity)
+        self.assertEqual(item['policy']['disposition'], 'deferred')
+        self.assertEqual(item['source_line'], 3)
+        self.assertIn('#L3', outputs['docs/porting/generated/tests.md'])
+        self.upstream['packages/acme/tests.dark'] = b'// inserted\n' + self.upstream['packages/acme/tests.dark']
+        _, records = self.build()
+        moved = next(r for r in records if r['id'] == identity)
+        self.assertEqual(moved['source_line'], 4)
+        self.assertNotEqual(item['fingerprint'], moved['fingerprint'])
 
     def test_current_evidence_and_invalidation(self):
         _, records = self.build()

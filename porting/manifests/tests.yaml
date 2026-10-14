@@ -1,6 +1,6 @@
 category: tests
 scope: ''
-current: Legacy upstream fixtures plus compiler-owned tests; file gates, line gates, and fixture metadata affect discovery.
+current: Current checked-in named tests have qualified source identities and file/module scopes. Legacy upstream fixtures plus compiler-owned tests remain separate; file gates, line gates, and fixture metadata affect runtime discovery, which is still unverified.
 policy:
   source: identical-with-adapter
   behavior: identical-with-aot-rules

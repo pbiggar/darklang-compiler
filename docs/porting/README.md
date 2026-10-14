@@ -98,7 +98,8 @@ children:
 ```
 
 All scopes are full relative upstream paths (or `compiler/` plus a compiler
-path for compiler-only items). Path boundaries matter: `packages/acme` does not
+path for compiler-only items), except the named-test module scopes below.
+Path boundaries matter: `packages/acme` does not
 match `packages/acmeOther`. Use `item: language:expr/EIf` for a precise item
 exception. Nested item selectors must belong to their parent scope. Children
 cannot overlap unless explicitly nested; overrides require a reason. Duplicate
@@ -108,6 +109,29 @@ YAML keys, unknown fields, unmatched exceptions, and orphaned evidence fail.
 learned, rather than inventing a complete graph before porting begins. Root
 policies do not imply a section is complete. A deferred item retains its required
 contract; deferral does not declare compatibility.
+
+### Named upstream tests
+
+The test inventory retains file groups and adds generated identities such as
+`tests:packages/darklang/tests/language/traits.dark#Darklang.Language.Tests.Traits.Shapes.implMethodIsFn`.
+An identity is the checked-in file plus its qualified declaration name, not its
+line number. Moving a declaration between modules or renaming its file changes
+the identity and requires reviewing any existing evidence or exceptions.
+
+A file scope includes its named tests. Inside it, use synthetic module scopes
+such as `packages/darklang/tests/language/traits.dark/named/Darklang/Language/Tests/Traits/Shapes`,
+with narrower nested scopes or exact `item` exceptions as needed. These scopes
+describe declarations, not filesystem directories. Names and module grouping
+are generated; only decisions and exceptions need handwritten manifest entries.
+
+Discovery masks comments/string literals and follows indentation-scoped modules.
+It distinguishes declaration headers from record fields and local expressions.
+Unsupported declaration-level module/test headers and duplicate qualified names
+within a file fail refresh instead of silently dropping or merging items. This
+is a bounded source scanner, not the interpreter parser or runner. Each named
+record links to the current source line, records its file group, and inherits
+the file's source fingerprint. Inserting lines preserves the ID but invalidates
+evidence conservatively. No declaration is marked passing simply by discovery.
 
 The List/Dict source destinations start undecided, while their behavior remains
 required to match. This does not approve replacing their native representations

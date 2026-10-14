@@ -181,6 +181,46 @@ def module_names(text):
     return sorted(set(re.findall(r'^module\s+([\w.]+)', strip_comments(text, True), re.M)))
 
 
+def named_tests(text):
+    """Discover source declarations, not runner cases, with indentation-scoped names.
+
+    Fail closed on unfamiliar headers: this bounded scanner must not silently
+    invent a module or lose a declaration when upstream syntax changes.
+    """
+    root, modules, result, seen = (), [], [], set()
+    for number, line in enumerate(strip_comments(text, True).splitlines(), 1):
+        if not line.strip():
+            continue
+        indent = len(line) - len(line.lstrip())
+        while modules and indent <= modules[-1][0]:
+            modules.pop()
+        if modules and modules[-1][2] is None:
+            column, names, _ = modules[-1]
+            modules[-1] = (column, names, indent)
+        declaration_indent = modules[-1][2] if modules else 0
+        statement = line.strip()
+        if indent == declaration_indent and re.match(r'module\b', statement):
+            match = re.fullmatch(r'module\s+([\w\x27]+(?:\.[\w\x27]+)*)(\s*=)?\s*', statement)
+            if not match or (not match[2] and indent):
+                raise ValueError(f'Unsupported module header at line {number}')
+            names = tuple(match[1].split('.'))
+            if match[2]:
+                modules.append((indent, names, None))
+            else:
+                root = names
+                modules.clear()
+        elif indent == declaration_indent and re.match(r'test\b', statement):
+            match = re.match(r'test\s+([\w\x27]+)\s*=', statement)
+            if not match:
+                raise ValueError(f'Unsupported named test header at line {number}')
+            name = '.'.join(root + tuple(part for _, names, _ in modules for part in names) + (match[1],))
+            if name in seen:
+                raise ValueError(f'Duplicate named test {name} at line {number}')
+            seen.add(name)
+            result.append(dict(name=name, line=number))
+    return result
+
+
 def variants(text, wanted):
     clean = strip_comments(text, True)
     matches = list(re.finditer(r'^(?:type|and)\s+(\w+)\b[^=\n]*=', clean, re.M))
@@ -243,11 +283,19 @@ def discover(root, upstream_files):
         # Package inventory includes StdLib and test sources, with cross-category references.
         if category == 'stdlib':
             add('packages', path, path, candidates, observation, 'Also listed in stdlib inventory')
-        clean = strip_comments(body.decode(), True)
-        tests = re.findall(r'^\s*test\s+([\w\x27]+)\s*=', clean, re.M)
+        try:
+            tests = named_tests(body.decode())
+        except ValueError as error:
+            raise ValueError(f'{path}: {error}') from error
         if tests:
             add('tests', path, path, (), 'named-test source; execution adapter unverified',
-                f'{len(tests)} declaration candidates: ' + ', '.join(tests))
+                f'{len(tests)} declaration candidates: ' + ', '.join(t['name'].split('.')[-1] for t in tests))
+            for test in tests:
+                add('tests', f'{path}#{test["name"]}', path, (),
+                    'named-test declaration; runtime discovery and execution unverified', test['name'])
+                records[-1].update(scope=f'{path}/named/' + test['name'].replace('.', '/'),
+                                   source_line=test['line'], named_test=test['name'],
+                                   source_group=f'tests:{path}')
     for path in sorted(set(p for p in compiler_files if p.endswith('.dark') and p.startswith(('StdLib/', 'packages/'))) - mapped):
         category = 'stdlib' if path.startswith('StdLib/') else 'packages'
         add(category, 'compiler/' + path, 'compiler/' + path, [path], 'compiler-only source; classify intended treatment')
@@ -416,9 +464,19 @@ def build(root, upstream):
         lines = [f'# {category.capitalize()} porting inventory', '', '## Current section', '', node['current'], '', '## Intended section', '']
         lines += [f'- {key}: {value}' for key, value in defaults[category].items()]
         lines += ['', '## Open questions', ''] + [f'- {q}' for q in node.get('questions', [])]
+        if category == 'tests':
+            declarations = [r for r in items if 'named_test' in r]
+            groups = {r['source_group'] for r in declarations}
+            lines += ['', '## Named-test discovery', '',
+                      f'{len(declarations)} named source declarations in {len(groups)} checked-in files.',
+                      'The category total also includes file groups, backend sources/fixtures, and legacy imports; it is not an executable test count.',
+                      'IDs use file paths and qualified names, never line numbers. Links use current source lines.',
+                      'Module scopes use `FILE/named/Qualified/Module`; actual runner discovery, support, and execution remain unverified.']
         lines += ['', '## Source observations', '', '| Identity | Upstream | Compiler candidates | Observation | Behavior | Source policy | Disposition |', '| --- | --- | --- | --- | --- | --- | --- |']
         for r in items:
             url = f'https://github.com/{sources["upstream_repository"]}/blob/{revision}/{r["upstream"]}' if r['upstream'] else None
+            if url and 'source_line' in r:
+                url += f'#L{r["source_line"]}'
             source = f'[{r["upstream"]}]({url})' if url else '—'
             cp = ', '.join(f'[{p}](../../../{p})' for p in r['compiler']) or '—'
             lines.append('| ' + ' | '.join(map(cell, [r['id'], source, cp, r['observation'], r['behavior'], r['policy']['source'], r['policy']['disposition']])) + ' |')
@@ -427,7 +485,7 @@ def build(root, upstream):
                  '- Packages/StdLib: all checked-in `.dark` files; root-module mappings are candidates, not declaration mappings.',
                  '- Language: written constructor names plus broad curated behavioral workstreams; full feature taxonomy still needs trials.',
                  '- Parser: upstream components and same-stem OCaml candidates; split components remain classified separately.',
-                 '- Tests: named-test source candidates, backend test sources/fixtures, and legacy imports. No runner identity or exclusion export yet.',
+                 '- Tests: file groups and qualified named-test source identities, backend test sources/fixtures, and legacy imports. No actual runner discovery or effective exclusion export yet.',
                  '- Builtins: declaration/registration sources. Assembled registries, aliases, signatures, and compiler bindings are not yet compared.',
                  '- Only x64 Linux evidence is accepted. Inventory discovery does not establish execution support.', '']
     overview += ['## Recorded upstream bugs', '']
