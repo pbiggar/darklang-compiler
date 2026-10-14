@@ -10,8 +10,8 @@ Discovery gaps and same-name candidates remain explicit. No behavior tests run d
 | Category | Items | Unverified | Stale |
 | --- | ---: | ---: | ---: |
 | [language](language.md) | 103 | 103 | 0 |
-| [parser](parser.md) | 26 | 26 | 0 |
-| [tests](tests.md) | 287 | 287 | 0 |
+| [parser](parser.md) | 28 | 28 | 0 |
+| [tests](tests.md) | 301 | 301 | 0 |
 | [packages](packages.md) | 429 | 429 | 0 |
 | [builtins](builtins.md) | 70 | 70 | 0 |
 | [stdlib](stdlib.md) | 300 | 300 | 0 |
