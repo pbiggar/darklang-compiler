@@ -247,3 +247,19 @@ The final hosted regression includes discovery, alias-only impl leaves,
 canonical identity metadata, missing/ambiguous selection, stdlib bounds,
 pipelines and offline inventory reuse. All selected calls still become
 ordinary checked function references before executable lowering.
+
+Additional upstream adoption uses selected named tests copied without changes
+from the same pinned revision's stdlib integer, Float and Char files, under
+`test/fixtures/e2e/upstream/trait-adoption/stdlib`. Each file records its origin;
+this is a selected-test inventory, not a claim that the entire source file runs.
+There are 45 generic utility tests (`abs`, `max`, `min`, `clamp`, `sum`) and 14
+rendering tests. The generic utility spellings are unavailable in the pre-trait
+M0 compiler (`c9116bfe8feca093fcac0504f8d9c31706be82d4`, based on the recorded
+main baseline); controlled local HTTP 404 lookup confirms unknown-function
+errors for representative upstream calls to all five helpers.
+
+The first selected-corpus execution passed 56/59. Three Float tests exposed
+an unrelated constant-summary invariant comparing NaN with ordinary equality.
+The driver now shares the optimizer's bitwise float operand comparison, retaining
+NaN payload and signed-zero distinctions. The added `float-callee-constants.e2e`
+provides native NaN-helper and negative-zero regression coverage.

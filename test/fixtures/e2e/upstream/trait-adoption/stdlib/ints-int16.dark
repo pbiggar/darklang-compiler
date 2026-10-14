@@ -1,0 +1,34 @@
+// Selected unchanged named tests from darklang/dark a9d93efc853486244630dad693fe79f6f4882cf6
+// packages/darklang/tests/stdlib/ints/int16.dark
+module Darklang.Stdlib.Int16.Tests
+
+test abs =
+  Stdlib.Test.all
+    [ Stdlib.abs -5s |> Stdlib.Test.equal 5s
+      Stdlib.abs 5s |> Stdlib.Test.equal 5s
+      Stdlib.abs -32768s |> Stdlib.Test.equal -32768s ]
+
+// `Stdlib.max`, `min` and `clamp` are one generic over `Compare`; these check
+// that it reaches this type and that the type's own comparison holds at its
+// extremes.
+
+test max =
+  Stdlib.max 32767s -32768s |> Stdlib.Test.equal 32767s
+
+test min =
+  Stdlib.min 32767s -32768s |> Stdlib.Test.equal -32768s
+
+test clamp =
+  Stdlib.clamp -100s 0s -1s |> Stdlib.Test.equal -1s
+
+/// Wraps on overflow.
+test toString =
+  Stdlib.Test.all
+    [ Stdlib.toString 0s |> Stdlib.Test.equal "0"
+      Stdlib.toString 1s |> Stdlib.Test.equal "1"
+      Stdlib.toString -1s |> Stdlib.Test.equal "-1"
+      // Int16 lower limit
+      Stdlib.toString -32768s |> Stdlib.Test.equal "-32768"
+      // Int16 upper limit
+      Stdlib.toString 32767s |> Stdlib.Test.equal "32767" ]
+

@@ -1,0 +1,25 @@
+// Selected unchanged named tests from darklang/dark a9d93efc853486244630dad693fe79f6f4882cf6
+// packages/darklang/tests/stdlib/ints/uint128.dark
+module Darklang.Stdlib.UInt128.Tests
+
+// `Stdlib.max`, `min` and `clamp` are one generic over `Compare`; these check
+// that it reaches this type and that the type's own comparison holds at its
+// extremes.
+
+test max =
+  Stdlib.max 10Z 1Z |> Stdlib.Test.equal 10Z
+
+test min =
+  Stdlib.min 340282366920938463463374607431768211455Z 0Z |> Stdlib.Test.equal 0Z
+
+test clamp =
+  Stdlib.clamp 100Z 0Z 0Z |> Stdlib.Test.equal 0Z
+
+/// Wraps on overflow.
+test toString =
+  Stdlib.Test.all
+    [ Stdlib.toString 0Z |> Stdlib.Test.equal "0"
+      Stdlib.toString 1Z |> Stdlib.Test.equal "1"
+      Stdlib.toString 340282366920938463463374607431768211455Z
+      |> Stdlib.Test.equal "340282366920938463463374607431768211455" ]
+

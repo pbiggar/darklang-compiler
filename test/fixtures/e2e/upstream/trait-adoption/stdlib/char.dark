@@ -1,0 +1,31 @@
+// Selected unchanged named tests from darklang/dark a9d93efc853486244630dad693fe79f6f4882cf6
+// packages/darklang/tests/stdlib/char.dark
+module Darklang.Stdlib.Char.Tests
+
+let smiley () : Char =
+  "😂" |> Stdlib.String.head |> Builtin.unwrap
+
+let hand () : Char =
+  "✋🏿" |> Stdlib.String.head |> Builtin.unwrap
+
+// `e` followed by a combining acute accent: one grapheme, two code units
+let eCombiningAcute () : Char =
+  "e\u0301" |> Stdlib.String.head |> Builtin.unwrap
+
+let family () : Char =
+  "👩‍👩‍👧‍👦" |> Stdlib.String.head |> Builtin.unwrap
+
+test toString =
+  Stdlib.Test.all
+    [ Stdlib.toString 'A' |> Stdlib.Test.equal "A"
+      Stdlib.toString 'a' |> Stdlib.Test.equal "a"
+      Stdlib.toString 'Á' |> Stdlib.Test.equal "Á"
+      Stdlib.toString '3' |> Stdlib.Test.equal "3"
+      Stdlib.toString (smiley ()) |> Stdlib.Test.equal "😂"
+      Stdlib.toString 'Ż' |> Stdlib.Test.equal "Ż"
+      Stdlib.toString 'Ó' |> Stdlib.Test.equal "Ó"
+      Stdlib.toString 'Ł' |> Stdlib.Test.equal "Ł"
+      Stdlib.toString (hand ()) |> Stdlib.Test.equal "✋🏿"
+      Stdlib.toString 'Ჾ' |> Stdlib.Test.equal "Ჾ"
+      Stdlib.toString 'ჾ' |> Stdlib.Test.equal "ჾ" ]
+

@@ -1,0 +1,48 @@
+// Selected unchanged named tests from darklang/dark a9d93efc853486244630dad693fe79f6f4882cf6
+// packages/darklang/tests/stdlib/ints/int64.dark
+module Darklang.Stdlib.Int64.Tests
+
+test abs =
+  Stdlib.Test.all
+    [ Stdlib.abs -5L |> Stdlib.Test.equal 5L
+      Stdlib.abs 5L |> Stdlib.Test.equal 5L
+      Stdlib.abs (-9223372036854775808L) |> Stdlib.Test.equal -9223372036854775808L ]
+
+// `Stdlib.max`, `min` and `clamp` are one generic over `Compare`; these check
+// that it reaches this type and that the type's own comparison holds at its
+// extremes.
+
+test max =
+  Stdlib.max -100L -20000L |> Stdlib.Test.equal -100L
+
+test min =
+  Stdlib.min -100L -20000L |> Stdlib.Test.equal -20000L
+
+test clamp =
+  Stdlib.clamp -2147483647L 250L -26L |> Stdlib.Test.equal -26L
+
+test sum =
+  Stdlib.sum 0L [ 1L, 2L ] |> Stdlib.Test.equal 3L
+
+test toString =
+  Stdlib.Test.all
+    [ Stdlib.toString 0L |> Stdlib.Test.equal "0"
+      Stdlib.toString 1L |> Stdlib.Test.equal "1"
+      Stdlib.toString -1L |> Stdlib.Test.equal "-1"
+      // int63 lower limit
+      Stdlib.toString -4611686018427387904L
+      |> Stdlib.Test.equal "-4611686018427387904"
+      // past the int63 upper limit"
+      Stdlib.toString -4611686018427387905L
+      |> Stdlib.Test.equal "-4611686018427387905"
+      // .NET lower limit
+      Stdlib.toString -9223372036854775808L
+      |> Stdlib.Test.equal "-9223372036854775808"
+      // int63 upper limit
+      Stdlib.toString 4611686018427387903L |> Stdlib.Test.equal "4611686018427387903"
+      // past the int63 upper limit
+      Stdlib.toString 4611686018427387904L |> Stdlib.Test.equal "4611686018427387904"
+      // .NET upper limit
+      Stdlib.toString 9223372036854775807L
+      |> Stdlib.Test.equal "9223372036854775807" ]
+
