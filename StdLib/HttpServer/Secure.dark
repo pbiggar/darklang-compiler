@@ -1,4 +1,4 @@
-// HttpServerSecure.dark - Same-port TLS owners and QUIC compatibility serving with shared readiness.
+// HttpServerSecure.dark - Same-port retained TLS and QUIC owners with shared readiness.
 module Darklang.Stdlib.HttpServer.Secure
 
 let __advertise (port: Int64) (handler: Stdlib.Http.Request -> Stdlib.Http.Response) (request: Stdlib.Http.Request) : Stdlib.Http.Response =
@@ -7,44 +7,61 @@ let __advertise (port: Int64) (handler: Stdlib.Http.Request -> Stdlib.Http.Respo
   else { response with headers = Stdlib.List.push response.headers ("alt-svc", "h3=\":" ++ Stdlib.Int64.toString port ++ "\"; ma=3600") }
 
 let __loop (context: Stdlib.HttpServer.Quic.Context) (tls: Stdlib.__TlsServer.Context) (listener: Stdlib.__Network.TcpListener)
-  (recent: List<Stdlib.HttpServer.Quic.Recent>) (owners: List<Stdlib.__TlsServer.Owner>) : Stdlib.Result.Result<Unit, String> =
+  (quic: Stdlib.HttpServer.Quic.__Runtime) (owners: List<Stdlib.__TlsServer.Owner>) : Stdlib.Result.Result<Unit, String> =
+  let abort = fun message ->
+    let _ = Stdlib.__TlsServer.__closeAll owners in
+    let _ = Stdlib.HttpServer.Quic.__closeAll quic.owners in
+    Error message in
   match Stdlib.__Network.shutdownRequested context.signals, Stdlib.__Network.monotonicMillis () with
-  | Ok true, _ -> let _ = Stdlib.__TlsServer.__closeAll owners in Ok ()
+  | Ok true, _ -> let _ = Stdlib.__TlsServer.__closeAll owners in
+    let _ = Stdlib.HttpServer.Quic.__closeAll quic.owners in
+    Ok ()
   | Ok false, Ok now ->
-    Stdlib.__TlsServer.__round tls now owners [] |> Stdlib.Result.andThen (fun round ->
-      if round.stopped then let _ = Stdlib.__TlsServer.__closeAll round.owners in Ok ()
-      else match context.socket.watch with
-      | None -> let _ = Stdlib.__TlsServer.__closeAll round.owners in Error "Secure HTTP listener has no native readiness watch"
-      | Some udp ->
-        let accepting = Stdlib.List.length round.owners < 64 in
-        let listeners = [Stdlib.__Network.Interest { watch = listener.watch, readable = accepting, writable = false }, Stdlib.__Network.Interest { watch = udp, readable = true, writable = false }] in
-        let interests = listeners @ Stdlib.List.filterMap round.owners Stdlib.__TlsServer.__interest in
-        match Stdlib.__Network.waitSockets interests (if Stdlib.List.any round.owners Stdlib.__TlsServer.__immediate then 0L else 100L) with
-        | Error 4L -> Stdlib.HttpServer.Secure.__loop context tls listener recent round.owners
-        | Error _ -> let _ = Stdlib.__TlsServer.__closeAll round.owners in Error "Secure HTTP readiness wait failed"
-        | Ok events ->
-          if Stdlib.List.any events (fun event -> event.index < 2L && (event.closed || event.failed)) then
-            let _ = Stdlib.__TlsServer.__closeAll round.owners in Error "Secure HTTP listener closed"
-          else
-            // Retry/closing-key pruning remains bounded while idle. An admitted
-            // QUIC exchange still uses the legacy sequential compatibility path.
-            match Stdlib.HttpServer.Quic.__step context tls.http.handler recent 1L with
-            | Error message -> let _ = Stdlib.__TlsServer.__closeAll round.owners in Error message
-            | Ok step ->
-              if step.stopped then let _ = Stdlib.__TlsServer.__closeAll round.owners in Ok ()
-              else if accepting && Stdlib.List.any events (fun event -> event.index == 0L && event.readable) then
-                match Stdlib.__Network.acceptTcp listener 100L with
-                | Error code ->
-                  if code == 4L || code == 11L || code == 35L then Stdlib.HttpServer.Secure.__loop context tls listener step.recent round.owners
-                  else let _ = Stdlib.__TlsServer.__closeAll round.owners in Error "Secure HTTP accept failed"
-                | Ok connection ->
-                  match Stdlib.__Network.monotonicMillis () with
-                  | Error _ -> let _ = Stdlib.__Network.closeTcp connection in let _ = Stdlib.__TlsServer.__closeAll round.owners in Error "Secure HTTP clock failed"
-                  | Ok admitted ->
-                    let handshake = Stdlib.__TlsServer.Handshake { connection = connection, state = Stdlib.__Tls13ServerPoll.initial (), deadline = admitted + 10000L } in
-                    Stdlib.HttpServer.Secure.__loop context tls listener step.recent (round.owners @ [Stdlib.__TlsServer.Owner.Handshake handshake])
-              else Stdlib.HttpServer.Secure.__loop context tls listener step.recent round.owners)
-  | _, _ -> let _ = Stdlib.__TlsServer.__closeAll owners in Error "Secure HTTP clock or shutdown check failed"
+    match Stdlib.__TlsServer.__round tls now owners [] with
+    | Error message -> let _ = Stdlib.HttpServer.Quic.__closeAll quic.owners in
+      Error message
+    | Ok round ->
+      if round.stopped then
+        let _ = Stdlib.__TlsServer.__closeAll round.owners in
+        let _ = Stdlib.HttpServer.Quic.__closeAll quic.owners in
+        Ok ()
+      else match Stdlib.HttpServer.Quic.__step context tls.http.handler quic 0L with
+      | Error message -> let _ = Stdlib.__TlsServer.__closeAll round.owners in
+        Error message
+      | Ok step ->
+        let abort = fun message ->
+          let _ = Stdlib.__TlsServer.__closeAll round.owners in
+          let _ = Stdlib.HttpServer.Quic.__closeAll step.state.owners in
+          Error message in
+        if step.stopped then let _ = Stdlib.__TlsServer.__closeAll round.owners in
+          Ok ()
+        else match context.socket.watch with
+        | None -> abort "Secure HTTP listener has no native readiness watch"
+        | Some udp ->
+          let accepting = Stdlib.List.length round.owners < 64 in
+          let writable = Stdlib.List.any step.state.owners (fun owner -> Stdlib.Stream.__cellGet<List<Blob>> owner.outbox != []) in
+          let listeners = [Stdlib.__Network.Interest { watch = listener.watch, readable = accepting, writable = false }, Stdlib.__Network.Interest { watch = udp, readable = true, writable = writable }] in
+          let interests = listeners @ Stdlib.List.filterMap round.owners Stdlib.__TlsServer.__interest in
+          let timeout = if Stdlib.List.any round.owners Stdlib.__TlsServer.__immediate then 0L else if step.state.owners != [] then 10L else 100L in
+          match Stdlib.__Network.waitSockets interests timeout with
+          | Error 4L -> Stdlib.HttpServer.Secure.__loop context tls listener step.state round.owners
+          | Error _ -> abort "Secure HTTP readiness wait failed"
+          | Ok events ->
+            if Stdlib.List.any events (fun event -> event.index < 2L && (event.closed || event.failed)) then abort "Secure HTTP listener closed"
+            else if accepting && Stdlib.List.any events (fun event -> event.index == 0L && event.readable) then
+              match Stdlib.__Network.acceptTcp listener 100L with
+              | Error code ->
+                if code == 4L || code == 11L || code == 35L then Stdlib.HttpServer.Secure.__loop context tls listener step.state round.owners
+                else abort "Secure HTTP accept failed"
+              | Ok connection ->
+                match Stdlib.__Network.monotonicMillis () with
+                | Error _ -> let _ = Stdlib.__Network.closeTcp connection in
+                  abort "Secure HTTP clock failed"
+                | Ok admitted ->
+                  let handshake = Stdlib.__TlsServer.Handshake { connection = connection, state = Stdlib.__Tls13ServerPoll.initial (), deadline = admitted + 10000L } in
+                  Stdlib.HttpServer.Secure.__loop context tls listener step.state (round.owners @ [Stdlib.__TlsServer.Owner.Handshake handshake])
+            else Stdlib.HttpServer.Secure.__loop context tls listener step.state round.owners
+  | _, _ -> abort "Secure HTTP clock or shutdown check failed"
 
 let __bind (address: List<Int64>) (config: Stdlib.HttpServer.Config.Config) (identity: Stdlib.TlsServerIdentity.Identity) (handler: Stdlib.Http.Request -> Stdlib.Http.Response) (onListening: Unit -> Unit) (signals: Stdlib.__Network.ShutdownSignals) (port: Int64) (limit: Int64) : Stdlib.Result.Result<Unit, String> =
   match Stdlib.Crypto.__secureRandomBytes 32L with
@@ -61,7 +78,7 @@ let __bind (address: List<Int64>) (config: Stdlib.HttpServer.Config.Config) (ide
           let http = Stdlib.__Http1Server.Context { config = config, handler = fun request -> Stdlib.HttpServer.Tls.__handler advertised request, signals = signals, limit = limit } in
           let tls = Stdlib.__TlsServer.Context { http = http, identity = identity } in
           onListening ()
-          let result = Stdlib.HttpServer.Secure.__loop context tls listener [] [] in
+          let result = Stdlib.HttpServer.Secure.__loop context tls listener (Stdlib.HttpServer.Quic.__initial ()) [] in
           Stdlib.__Datagram.close socket
           result in
       let _ = Stdlib.__Network.closeListener listener in

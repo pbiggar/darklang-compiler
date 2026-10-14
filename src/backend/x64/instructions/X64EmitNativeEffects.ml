@@ -183,11 +183,11 @@ let emitCliNative (ctx : X64CodeGenTypes.funcCtx) (dest : LIR.reg)
       | LIR.PosixSetAttributesAt | LIR.PosixSymlinkAt | LIR.PosixReadlinkAt
       | LIR.PosixAccessAt | LIR.PosixFlock | LIR.PosixGetDents | LIR.PosixIoctl
       | LIR.PosixProcInfo | LIR.PosixCopyFileRange | LIR.PosixFtruncate
-      | LIR.PosixFchmod | LIR.PosixFstat | LIR.PosixPread
-      | LIR.PosixPwrite | LIR.PosixFclonefileat | LIR.PosixGetentropy
-      | LIR.PosixUname | LIR.PosixSysctl | LIR.PosixSchedGetaffinity
-      | LIR.PosixFcntlGetPath | LIR.PosixClockGettime | LIR.PosixGettimeofday
-      | LIR.PosixNanosleep | LIR.PosixMachTimebaseInfo | LIR.PosixInotifyInit1
+      | LIR.PosixFchmod | LIR.PosixFstat | LIR.PosixPread | LIR.PosixPwrite
+      | LIR.PosixFclonefileat | LIR.PosixGetentropy | LIR.PosixUname
+      | LIR.PosixSysctl | LIR.PosixSchedGetaffinity | LIR.PosixFcntlGetPath
+      | LIR.PosixClockGettime | LIR.PosixGettimeofday | LIR.PosixNanosleep
+      | LIR.PosixMachTimebaseInfo | LIR.PosixInotifyInit1
       | LIR.PosixInotifyAddWatch | LIR.PosixPpoll | LIR.PosixPollDarwin
       | LIR.PosixKqueue | LIR.PosixKeventVnode | LIR.PosixWait4 -> (
           let number, arity =
@@ -379,6 +379,35 @@ let emitCliNative (ctx : X64CodeGenTypes.funcCtx) (dest : LIR.reg)
                       (Platform.socketConstantsFor Platform.Linux)
                         .Platform.noSignal
                   @ loadImm64 X.RAX (Int64.of_int syscalls.Platform.sendTo)
+                  @ [ X.SYSCALL ] @ finish)
+          | LIR.SocketSendTo, [ descriptor; blob; address; length; nonblocking ]
+            ->
+              loadSocketArgs
+                [ descriptor; blob; address; length; nonblocking ]
+                [ X.RDI; X.RSI; X.R8; X.R9; X.R10 ]
+              |> Result.map (fun loads ->
+                  let constants = Platform.socketConstantsFor Platform.Linux in
+                  loads
+                  @ [ X.MOV_load (X.RDX, X.RSI, 8l); X.ADD_imm (X.RSI, 16l) ]
+                  @ loadImm64 X.RAX constants.Platform.dontWait
+                  @ [ X.IMUL_reg (X.R10, X.RAX) ]
+                  @ loadImm64 X.RAX constants.Platform.noSignal
+                  @ [ X.OR_reg (X.R10, X.RAX) ]
+                  @ loadImm64 X.RAX (Int64.of_int syscalls.Platform.sendTo)
+                  @ [ X.SYSCALL ] @ finish)
+          | ( LIR.SocketReceiveFrom,
+              [ descriptor; buffer; length; peer; nonblocking ] ) ->
+              loadSocketArgs
+                [ descriptor; buffer; length; peer; nonblocking ]
+                [ X.RDI; X.RSI; X.RDX; X.R8; X.R10 ]
+              |> Result.map (fun loads ->
+                  loads
+                  @ [ X.MOV_reg (X.R9, X.R8); X.ADD_imm (X.R8, 8l) ]
+                  @ loadImm64 X.RAX
+                      (Platform.socketConstantsFor Platform.Linux)
+                        .Platform.dontWait
+                  @ [ X.IMUL_reg (X.R10, X.RAX) ]
+                  @ loadImm64 X.RAX (Int64.of_int syscalls.Platform.recvFrom)
                   @ [ X.SYSCALL ] @ finish)
           | LIR.SocketReceiveFrom, [ descriptor; buffer; length; peer ] ->
               loadSocketArgs

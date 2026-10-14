@@ -127,7 +127,6 @@ let __encoderBytes (state: Stdlib.__Http3.State) (id: Int64) (bytes: Blob) (offs
     let remaining = Stdlib.Blob.__byteLength bytes - offset in
     let size = if remaining > 900L then 900L else remaining in
     Stdlib.__QuicConnection.write state.connection id (Stdlib.__Http2Wire.__slice bytes offset size) false
-      |> Stdlib.Result.andThen Stdlib.__QuicConnection.flush
       |> Stdlib.Result.andThen (fun connection -> Stdlib.__Http3.__encoderBytes { state with connection = connection } id bytes (offset + size))
 
 // Reserve enough critical-stream AND connection credit for every instruction in

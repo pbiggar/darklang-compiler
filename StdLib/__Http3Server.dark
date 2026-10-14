@@ -85,7 +85,19 @@ let __parse (context: Stdlib.__Http3Server.Context) (state: Stdlib.__Http3Server
             if next.total > 104857600L then Error "HTTP/3 server retained body budget exceeded" else Stdlib.__Http3Server.__dispatch context next active request finished now)))))
 
 let __read (context: Stdlib.__Http3Server.Context) (state: Stdlib.__Http3Server.State) (active: Stdlib.__Http3Server.Active) (now: Int64) : Stdlib.Result.Result<Stdlib.__Http3Server.State, String> =
-  Stdlib.__QuicConnection.read state.wire.connection active.id |> Stdlib.Result.andThen (fun read ->
+  let blocked = match active.message with
+    | ResponseOutput _ -> false
+    | RequestInput request -> match request.message.waiting with
+      | None -> false
+      | Some waiting -> waiting.prefix.required > state.wire.uni.table.inserted in
+  let reset = match Stdlib.__QuicFlow.channel state.wire.connection.flow active.id with
+    | None -> false
+    | Some channel -> match channel.receive with | None -> false | Some receiver -> Stdlib.Option.isSome receiver.resetCode in
+  // Keep DATA in QUIC reassembly without returning receive credit while the
+  // HEADERS section is blocked. Encoder/control streams still advance first;
+  // resets must also remain observable while waiting for table insertions.
+  if blocked && Stdlib.Bool.not reset then Ok state
+  else Stdlib.__QuicConnection.read state.wire.connection active.id |> Stdlib.Result.andThen (fun read ->
     let state = { state with wire = { state.wire with connection = read.state } } in
     match active.message with
     | ResponseOutput _ -> Ok state

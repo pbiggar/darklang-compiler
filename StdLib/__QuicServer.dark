@@ -135,8 +135,8 @@ let receive (state: Stdlib.__QuicServer.Flight) (peer: Stdlib.__Datagram.Endpoin
 
 // Advance one retained flight, with at most one datagram and one packet per
 // encryption level. The absolute handshake deadline is owned by the caller.
-// Sending still uses the compatibility datagram writer; this is not yet a
-// nonblocking active-connection listener.
+// Active listeners supply a child writer that retains sealed packets for
+// nonblocking transmission; the compatibility wrapper may use a direct writer.
 let advance (socket: Stdlib.__Datagram.Socket) (peer: Stdlib.__Datagram.Endpoint) (state: Stdlib.__QuicServer.Flight) (datagram: Stdlib.Option.Option<Stdlib.__Datagram.Message>) (now: Int64) (deadline: Int64) : Stdlib.Result.Result<Stdlib.__QuicServer.Progress, String> =
   if now >= deadline then Error "QUIC server handshake timed out"
   else

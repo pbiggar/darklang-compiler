@@ -5,6 +5,7 @@ import argparse
 import socket
 import subprocess
 import tempfile
+import time
 from pathlib import Path
 
 from cryptography.hazmat.primitives import serialization
@@ -56,6 +57,34 @@ def main():
         assert result.returncode == 0, result.stdout + result.stderr
         process, port = start(binary)
         try:
+            # Keep one authenticated QUIC request incomplete while admitting
+            # both a TCP client and a second QUIC connection on the same port.
+            for mode in ({}, {"server_uni_credit": 0}, {"handshake_only": True}):
+                with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as stalled:
+                    stalled.bind(("127.0.0.1", 0))
+                    stalled.settimeout(0.01)
+                    client, _http, _replay = exchange(stalled, port, ca, body=b"partial", declared=100, stalled=True, **mode)
+                    started = time.monotonic()
+                    with connect(port, trust, ["http/1.1"]) as peer:
+                        peer.sendall(b"GET /echo HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
+                        response = bytearray()
+                        while data := peer.recv(65536):
+                            response.extend(data)
+                        assert response.startswith(b"HTTP/1.1 200"), response
+                    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as peer:
+                        peer.bind(("127.0.0.1", 0))
+                        peer.settimeout(0.01)
+                        _headers, response, _replay = exchange(peer, port, ca, body=b"other connection")
+                        assert response == b"other connection", response
+                    assert time.monotonic() - started < 5, ("listener waited for stalled owner", mode)
+                    client.close(error_code=256)
+                    for packet, target in client.datagrams_to_send(time.monotonic()):
+                        stalled.sendto(packet, target)
+                # Keep each case within the native arena's current lifetime
+                # allocation limit; also verify simultaneous owner disposal.
+                stop(process)
+                process, _ = start(binary, port)
+            print("Stalled QUIC upload, critical-stream credit and Finished leave TCP and another QUIC connection live", flush=True)
             http1_owners(port, trust)
             advertisement = f'h3=":{port}"; ma=3600'.encode()
             for protocols in (["http/1.1"], []):

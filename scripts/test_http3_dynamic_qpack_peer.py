@@ -139,13 +139,16 @@ def exchange(port, ca, body):
                     http.send_data(0, body, end_stream=True)
                 sent, sent_at = True, now
                 release_at = sent_at + 0.3
-            # Keep driving ACKs until the authenticated close: returning at
-            # response FIN strands the sequential server's response drain.
-            if finished and 0 in http._encoder.acknowledged and client._close_event is not None:
+            # Persistent servers keep the connection after response FIN.
+            # Drive QPACK feedback first, then explicitly close this owner.
+            if finished and 0 in http._encoder.acknowledged:
                 assert http.dynamic and released and now - sent_at >= 0.3
                 assert http._decoder.dynamic and http._decoder.instructions > 0, "response did not use outgoing dynamic QPACK"
                 assert (b":status", b"200") in headers and response == body, (headers, len(response), len(body))
-                assert client._close_event.error_code == 256, client._close_event
+                assert client._close_event is None, client._close_event
+                client.close(error_code=256)
+                for packet, target in client.datagrams_to_send(time.monotonic()):
+                    peer.sendto(packet, target)
                 return
         raise AssertionError(("dynamic exchange timed out", sent, released, position, len(http.delayed), headers, len(response), client._close_event))
 

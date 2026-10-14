@@ -130,10 +130,9 @@ and request wire buffering is capped at the body limit plus 1 MiB for framing.
 Total retained request/output wire data caps at 101 MiB. Native read/write
 polling, persistence, pipelining, close tokens, slow-client fairness and disposal
 are checked by `http1_server_owner.e2e` and the independent server peer.
-Multiplexed HTTP/2–3 servers, response compression and
-interpreter telemetry integration remain follow-up work. The existing h2c
-single-exchange dispatch/drain still blocks active HTTP/1.1 owners while it runs;
-the fairness claim does not extend across that protocol boundary yet.
+Multiplexed HTTP/2–3 servers now retain independent stream owners and shared
+compression/flow state. Prior-knowledge h2c uses the same active scheduler as
+HTTP/1.1. Response compression and interpreter telemetry remain follow-up work.
 
 Owned TCP/TLS transports provide nonblocking application writes and explicit
 flush completion. TLS accepts at most 2 KiB plaintext into one encrypted record,
@@ -147,11 +146,11 @@ and partial sends, flush, closed ownership and independent old/new-key ordering.
 and persistent HTTP/1.1 owners with the same count and deadline rules as the
 plaintext listener. Independent peers verify another TLS client can complete
 while a client stalls in ClientHello, Finished, upload or response reading.
-Client application keys remain gated by authenticated Finished. This does not
-yet migrate QUIC active-owner servicing or multiplexed HTTP/2–3 scheduling;
-TLS h2 dispatch/draining and admitted QUIC exchanges still use blocking
-compatibility paths. The combined listener's shared wait includes its TCP/UDP
-listeners and TCP owners; its pending QUIC migration limits cross-protocol fairness.
+Client application keys remain gated by authenticated Finished. TLS HTTP/2
+owners retain multiplexed stream state and queued output. QUIC owners now retain
+handshake, critical-stream initialization, HTTP/3 and drain state across rounds.
+The combined listener advances TCP and UDP owners before its shared readiness
+wait. Client TCP/TLS connection establishment remains synchronous.
 
 All four server modules (`HttpServer`, `.Tls`, `.Quic`, `.Secure`) also provide
 `serveOn address config ...`. Four-byte addresses bind IPv4 and sixteen-byte
@@ -188,18 +187,23 @@ timeouts only poll this deadline; they do not prematurely close a slow reader.
 on the same IPv4 port, announcing only after both binds succeed. It shares the
 TLS HTTP/1.1/h2 and QUIC HTTP/3 handlers and adds a same-port `Alt-Svc` advertisement
 unless the application already supplied one or returned 421. Application
-`Alt-Svc: clear` is preserved. Accepted requests remain sequential; a handshake
-or response-delivery drain can delay another admission. Both transports and
+`Alt-Svc: clear` is preserved. Accepted connections advance independently;
+stalled handshakes, uploads and flow credit do not monopolize admission. Both transports and
 the shutdown owner are released on bind failure or normal shutdown.
 TCP and UDP listener readiness now share one bounded kernel wait; accepted
 connections and UDP sockets also expose retained native readiness watches for
 the active-connection scheduler. Closed owners return immediate terminal events.
 `network_poll.e2e` and `scripts/test_network_poll_peer.py` verify multi-descriptor
 readiness, including data arriving only on the second descriptor and accepted
-TCP socket reads. Admission still completes one active exchange at a time.
+TCP socket reads. Retained QUIC owners share routed datagrams and timers with
+the TCP scheduler, with at most sixty-four owners per transport.
 `python3 scripts/test_http_secure_server_peer.py` checks independent TLS/QUIC
 peers, repeated large requests, the owned client session, lazy body lifetime,
-occupied-port cleanup, same-port rebind and stalled TCP/QUIC shutdown.
+occupied-port cleanup, same-port rebind and stalled TCP/QUIC shutdown. It also
+checks TCP and a second QUIC connection while the first waits for upload bytes,
+critical-stream credit or Finished. These bounded cases pass with zero leaks;
+the [HTTP stack plan](../../project/http-stack-plan.md) separately tracks the
+native heap lifetime limit exposed by repeated fresh TLS handshakes.
 
 HTTPS clients now select HTTP/3 from compatible HTTPS DNS advertisements;
 HTTP/3 also has an authenticated UDP server listener described below. The pure
@@ -451,8 +455,8 @@ bidirectional streams. `python3 scripts/test_quic_server_peer.py` checks live
 Retry, authenticated HTTP/3 echoes through 70 KiB, dropped flights, duplicates,
 corrupted ciphertext, zero server-bidi credit and zero leaks.
 
-`HttpServer.Quic.serve` provides multiplexed requests within each connection,
-with sequential UDP connection admission, using the same
+`HttpServer.Quic.serve` provides multiplexed requests within each connection
+and fair retained connection admission, using the same
 configuration, imported identity and HTTP handler as the TLS listener. It
 shares method/URL/header handling, optional standard headers and logging,
 configured body limits, HEAD representation lengths and early 413 rejection.
@@ -474,9 +478,16 @@ early 413, explicit encrypted peer closure, token replay suppression, unsupporte
 same-port rebind, incomplete-body shutdown and zero leaks. Its aioquic client
 supplies HEAD method semantics because that library's raw H3 layer does not
 retain the originating request method. The same peer also checks forty requests
-on one connection and a completed response alongside a stalled stream. These
-checks do not establish fair admission of other UDP/TCP connections; that
-active-listener migration remains pending.
+on one connection and a completed response alongside a stalled stream. The
+secure-server peer separately establishes fair UDP/TCP admission. Listener
+output retains at most eight sealed datagrams per child and retries one atomic
+nonblocking send per round without resealing or reserving another nonce. All
+QUIC owners share a 101 MiB retained payload budget; child disposal never closes
+the shared UDP listener.
+QPACK-blocked request owners keep DATA in transport reassembly without returning
+receive credit until the required insertions arrive. Encoder/control streams
+and request resets still advance, so a large upload cannot grow deferred DATA
+past the blocked-message bound while waiting for its HEADERS section.
 
 `QuicServerRetry` provides listener-key HMAC tokens bound to the peer's address
 and port, original destination CID, client source CID and Retry source CID.
