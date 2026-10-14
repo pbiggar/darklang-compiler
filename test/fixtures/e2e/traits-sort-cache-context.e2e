@@ -1,0 +1,10 @@
+type TraitSortCache = { key: Int64 }
+Stdlib.List.sort [TraitSortCache { key = 2L }, TraitSortCache { key = 1L }] = [TraitSortCache { key = 1L }, TraitSortCache { key = 2L }]
+(
+impl Stdlib.Compare for TraitSortCache =
+  let lessThan (a: TraitSortCache) (b: TraitSortCache) : Bool = a.key > b.key
+  let lessThanOrEqualTo (a: TraitSortCache) (b: TraitSortCache) : Bool = a.key >= b.key
+  let greaterThan (a: TraitSortCache) (b: TraitSortCache) : Bool = a.key < b.key
+  let greaterThanOrEqualTo (a: TraitSortCache) (b: TraitSortCache) : Bool = a.key <= b.key
+Stdlib.List.sort [TraitSortCache { key = 1L }, TraitSortCache { key = 2L }]
+) = [TraitSortCache { key = 2L }, TraitSortCache { key = 1L }]

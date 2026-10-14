@@ -142,7 +142,7 @@ Remaining coverage gaps include full execution of the
 new upstream test format and broad remote implementation discovery. These
 are unfinished work, rather than approved semantic differences. The performance
 gate remains blocked before measurement by the baseline digest mismatch.
-The final full-host and regression reruns after these M7 fixes are pending.
+The final full-host and regression results are recorded below.
 
 The M7 identity/sorting/method-value checkpoint passed the full host suite
 **13,493/13,493** (147.5 seconds) and `dune runtest`. A subsequent package
@@ -157,4 +157,23 @@ powers: converting an unbounded power to a fixed-width result allocated the
 unbounded intermediate. Signed and unsigned trait powers now use wrapping
 repeated squaring, as upstream's bounded power implementation does. The focused
 suite passed **125/125** (18.0 seconds) before four further exponent boundary
-cases were added. Final host/regression checks on these follow-ups are pending.
+cases were added. The final build passed; the full host suite passed
+**13,511/13,511** (143.7 seconds), including all four additional exponent
+boundaries, and `dune runtest` passed. The added `traits-sort-cache-context.e2e`
+passed **2/2** (17.2 seconds): a caller-local Compare implementation changes
+sorting even when the same concrete sort had already used structural order.
+No extra cache invalidation machinery was necessary for that tested boundary.
+
+Final commands used the pinned activation file and an external Dune build
+directory, `/workspace/scratch/a30f2ed4b872/toolchains/traits-build-packages-final`:
+
+- `env -u LD_PRELOAD ./build --ai -- --build-dir=...`: passed.
+- `./run-tests --ai --build-dir=...`: passed, **13,511/13,511**.
+- `PORT_VM_DUNE_BUILD_DIR=... dune runtest --build-dir=...`: passed, including
+  hosted trait HTTP imports, stdlib bounds, native runtime/host/TLS, caches,
+  standalone executable packaging and differential-tool regressions.
+- `./benchmarks/run_benchmarks.sh --verify-parent full`: blocked, exit 1,
+  before measurement because the stored baseline workload digest is
+  incompatible. The baseline was not reset and no performance pass is claimed.
+- Pinned ocamlformat, `git diff --check`, upstream trait-definition byte
+  comparison and unchanged upstream reference-corpus byte comparison: passed.
