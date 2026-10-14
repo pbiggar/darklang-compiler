@@ -1,0 +1,12 @@
+category: parser
+scope: ''
+current: OCaml port in src/frontend/interpreter/, with compiler-specific adapters and split parser components.
+policy:
+  source: faithful-port
+  behavior: identical
+  freshness: follow-upstream
+  destination: Retain the OCaml port with explicit upstream component mappings; final monorepo placement undecided.
+  disposition: required
+questions:
+  - Trial tokens, syntax trees, diagnostics, ranges, and validation comparisons.
+children: []

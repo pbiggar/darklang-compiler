@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# check-porting - Run framework checks against an isolated pinned upstream checkout.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+porting_temp=$(mktemp -d)
+# This removes only the fresh directory created above, never a supplied checkout.
+trap 'rm -rf -- "$porting_temp"' EXIT
+python3 -m venv "$porting_temp/venv"
+"$porting_temp/venv/bin/pip" install -r scripts/porting-requirements.txt
+porting_revision=$("$porting_temp/venv/bin/python" -c 'import yaml; print(yaml.safe_load(open("porting/sources.yaml"))["upstream_revision"])')
+git init -q "$porting_temp/upstream"
+git -C "$porting_temp/upstream" fetch -q --depth 1 https://github.com/darklang/dark.git "$porting_revision"
+git -C "$porting_temp/upstream" checkout -q --detach FETCH_HEAD
+"$porting_temp/venv/bin/python" scripts/test_porting.py
+"$porting_temp/venv/bin/python" scripts/porting.py check --upstream "$porting_temp/upstream"

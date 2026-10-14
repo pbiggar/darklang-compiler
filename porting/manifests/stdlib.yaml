@@ -1,0 +1,17 @@
+category: stdlib
+extends: packages
+scope: packages/darklang/stdlib
+current: Embedded from StdLib/ in library-sources.list order, with nested modules split into files and native representation helpers.
+questions:
+  - Agree the destination for compiler-specific List and Dict implementations after a trial.
+children:
+  - scope: packages/darklang/stdlib/list.dark
+    current: Compiler-owned persistent list implementation and split helper files.
+    policy:
+      source: undecided
+    reason: Behavior must match; the final shared-code boundary needs consultation.
+  - scope: packages/darklang/stdlib/dict.dark
+    current: Compiler-owned HAMT implementation and representation helpers.
+    policy:
+      source: undecided
+    reason: Behavior must match; the final shared-code boundary needs consultation.
