@@ -30,6 +30,7 @@ python3 scripts/porting.py refresh --upstream /path/to/interpreter
 python3 scripts/porting.py check --upstream /path/to/interpreter
 python3 scripts/porting.py next --upstream /path/to/interpreter --category parser
 python3 scripts/porting.py show --upstream /path/to/interpreter --item language:expr/EIf
+python3 scripts/trial-package-layout.py --upstream /path/to/interpreter
 ```
 
 Activate the virtual environment first, or use its Python executable. `check`
@@ -45,6 +46,36 @@ fetches the exact pinned public upstream commit, runs the framework regressions,
 and checks generated inventories. Network access is used only to materialize
 pinned inputs and the pinned Python dependency. For offline checks, use the
 commands above with an existing checkout and environment.
+
+## First layout trial
+
+`trial-package-layout.py` uses the actual checked-in upstream Env and FileSystem
+files from the pin. It copies the compiler library into a temporary directory,
+replaces their current manifest entries with unchanged files at upstream paths,
+and invokes the real embedding generator. Three cases cover a simple file, an
+intact nested module, and both together. Independent decoding of the emitted
+OCaml byte strings checks exact source preservation and declaration order;
+the trial checks production sources and their manifest remain unchanged.
+
+Env, File, Process, Sys, and root Cli execution are now production copies under
+`packages/darklang/stdlib/cli/`. Their sources are byte-identical to the pin,
+the previous embedding slots are retained, and the old files are removed.
+The sync script writes their mirrored paths. Production regressions verify
+the copies and absence of old duplicates. The remaining FileSystem
+trial still operates only in a temporary tree.
+
+This establishes that the embedding generator accepts mirrored paths and
+does not require splitting nested modules. Source inspection also finds nested
+module flattening in `WrittenSource`, but only compilation can establish that
+name resolution, type checking, and declaration dependencies work for these
+unchanged files. The trial itself does not migrate files or claim runtime parity.
+
+The next boundary is native compilation of the temporary library. VM setup
+uses the compiler's `scripts/vm/setup-native-toolchain` and `scripts/vm/README.md`;
+it does not require a separately provisioned environment. In the current VM,
+OCaml builds successfully, but network policy denies the bootstrap's pinned
+`snapshot.ubuntu.com` downloads, leaving the native dependencies unavailable.
+This is a validation blocker, not a package-source availability problem.
 
 ## Broad policies and nested exceptions
 

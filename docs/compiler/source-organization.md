@@ -37,6 +37,13 @@ runs through `./run-tests --ai` after `./build --ai`.
 
 ## Standard-library layout
 
+Incremental upstream-tree mirroring has started with Env, File, Process, Sys,
+and root Cli execution under `packages/darklang/stdlib/cli/`. It preserves their
+upstream relative paths, module names, and exact source bytes. Other sources still use the layout below;
+this is not a completed tree migration. Keep the original manifest slot when
+moving a source. The [porting framework](../porting/README.md) records the goal
+and the remaining verification boundaries.
+
 `StdLib/` implicitly represents the `Darklang.Stdlib` package prefix. For
 example, `Darklang.Stdlib.Cli.UI.Colors` lives in `StdLib/Cli/UI/Colors.dark`.
 `Builtin` is the standard-library bridge exception: it lives at
