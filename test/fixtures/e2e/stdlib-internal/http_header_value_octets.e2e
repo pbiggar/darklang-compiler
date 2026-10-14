@@ -1,0 +1,10 @@
+// http_header_value_octets.e2e - Permit UTF-8 obs-text while rejecting HTTP control bytes.
+Stdlib.__HttpWire.__headerValueValid "café ☃" 0L (Stdlib.String.__byteLength "café ☃") = true
+Stdlib.__Http2Fields.response [(":status", "200"), ("x-name", "café ☃")] |> Stdlib.Result.map (fun head -> head.headers) = Ok [("x-name", "café ☃")]
+Stdlib.__Http2Fields.__outgoing [("x-name", "café ☃")] = Ok [("x-name", "café ☃")]
+Stdlib.__HttpWire.__headerValueValid "a\u0000b" 0L 3L = false
+Stdlib.__HttpWire.__headerValueValid "a\u001Fb" 0L 3L = false
+Stdlib.__HttpWire.__headerValueValid "a\u007Fb" 0L 3L = false
+Stdlib.__HttpWire.__headerValueValid "a\rb" 0L 3L = false
+Stdlib.__HttpWire.__headerValueValid "a\nb" 0L 3L = false
+Stdlib.__HttpWire.__headerValueValid "a\tb" 0L 3L = true

@@ -1,0 +1,62 @@
+// Incremental server parsing preserves wire error scopes and connection ordering.
+let frame (kind: Int64) (flags: Int64) (id: Int64) (payload: Blob) : Blob =
+  let length = Stdlib.Blob.__byteLength payload in
+  Stdlib.Blob.concat [Stdlib.Blob.__fromInt64List [length / 65536L, (length / 256L) % 256L, length % 256L, kind, flags], Stdlib.__Http2Wire.__u32 id, payload]
+let state (bytes: Blob) : Stdlib.__Http2Server.State =
+  let initial = Stdlib.__Http2Server.initial bytes in
+  { initial with preface = false, last = 3L, wire = { initial.wire with settingsSeen = true } }
+let error (result: Stdlib.Result.Result<Stdlib.Option.Option<Stdlib.__Http2Server.Next>, Stdlib.__Http2Server.Failure>) : (Int64 * Int64) =
+  match result with
+  | Ok _ -> (-1L, -1L)
+  | Error failure -> let id = match failure.scope with | Connection -> 0L | Stream id -> id in (id, failure.code)
+let handled (bytes: Blob) : Stdlib.Result.Result<Stdlib.__Http2Server.State, Stdlib.__Http2Server.Failure> =
+  Stdlib.__Http2Server.parseFrame (state bytes) |> Stdlib.Result.andThen (fun parsed ->
+    match parsed with | None -> Builtin.crash "Expected control frame" | Some next -> Stdlib.__Http2Server.control next.state next.frame)
+let scoped (bytes: Blob) : (Int64 * Int64) =
+  match handled bytes with
+  | Ok _ -> (-1L, -1L)
+  | Error failure -> let id = match failure.scope with | Connection -> 0L | Stream id -> id in (id, failure.code)
+scoped (frame 8L 0L 1L (Stdlib.__Http2Wire.__u32 0L)) = (1L, 1L) // leak_check
+scoped (frame 8L 0L 0L (Stdlib.__Http2Wire.__u32 0L)) = (0L, 1L) // leak_check
+scoped (frame 8L 0L 5L (Stdlib.__Http2Wire.__u32 1L)) = (0L, 1L) // leak_check
+scoped (frame 2L 0L 1L (Stdlib.Blob.concat [Stdlib.__Http2Wire.__u32 1L, Stdlib.Blob.__fromInt64List [0L]])) = (1L, 1L) // leak_check
+error (Stdlib.__Http2Server.parseFrame (state (frame 8L 0L 1L Stdlib.Blob.empty))) = (0L, 6L) // leak_check
+error (Stdlib.__Http2Server.parseFrame (state (frame 4L 0L 0L (Stdlib.Blob.concat [Stdlib.Blob.__fromInt64List [0L, 4L], Stdlib.__Http2Wire.__u32 2147483648L])))) = (0L, 3L) // leak_check
+Stdlib.__Http2Server.parseFrame (state (Stdlib.Blob.__fromInt64List [0L, 0L])) |> Stdlib.Result.map (fun next -> Stdlib.Option.isNone next) = Ok true // leak_check
+let ordering (kind: Int64) (id: Int64) : (Int64 * Int64) =
+  let initial = state (frame kind 4L id Stdlib.Blob.empty) in
+  let continuation = Stdlib.__Http2Server.Block { id = 1L, bytes = Stdlib.Blob.empty, ended = false, fresh = true } in
+  error (Stdlib.__Http2Server.parseFrame { initial with continuation = Some continuation })
+ordering 9L 3L = (0L, 1L) // leak_check
+ordering 1L 1L = (0L, 1L) // leak_check
+ordering 9L 1L = (-1L, -1L) // leak_check
+let ack () : Stdlib.Result.Result<(Bool * Int64 * Int64), Stdlib.__Http2Server.Failure> =
+  handled (frame 4L 0L 0L Stdlib.Blob.empty) |> Stdlib.Result.map (fun state ->
+    let bytes = match state.outputs with | [] -> Stdlib.Blob.empty | output :: _rest -> output.bytes in
+    (state.wire.settingsSeen, Stdlib.Blob.__getByte bytes 3L, Stdlib.Blob.__getByte bytes 4L))
+ack () = Ok ((true, 4L, 1L)) // leak_check
+handled (frame 7L 0L 0L (Stdlib.Blob.concat [Stdlib.__Http2Wire.__u32 0L, Stdlib.__Http2Wire.__u32 0L])) |> Stdlib.Result.map (fun state -> state.draining && Stdlib.List.length state.streams == 0) = Ok true // leak_check
+Stdlib.__Http2Server.consumePreface (Stdlib.__Http2Server.initial (Stdlib.String.toBlob "PRI * HTTP/2.0")) |> Stdlib.Result.map (fun next -> Stdlib.Option.isNone next) = Ok true // leak_check
+let preface () : Stdlib.Result.Result<(Bool * Int64 * Int64), Stdlib.__Http2Server.Failure> =
+  let settings = frame 4L 0L 0L Stdlib.Blob.empty in
+  Stdlib.__Http2Server.consumePreface (Stdlib.__Http2Server.initial (Stdlib.Blob.concat [Stdlib.String.toBlob (Stdlib.__Http2Wire.preface ()), settings])) |> Stdlib.Result.map (fun available ->
+    match available with | None -> (true, -1L, -1L) | Some state -> (state.preface, Stdlib.Blob.__byteLength state.wire.pending, Stdlib.Int.toInt64 (Stdlib.List.length state.outputs) |> Stdlib.Option.withDefault -1L))
+preface () = Ok ((false, 9L, 1L)) // leak_check
+
+let header (id: Int64) (kind: Int64) (flags: Int64) (bytes: Blob) : Stdlib.__Http2Wire.Frame =
+  Stdlib.__Http2Wire.Frame { kind = kind, flags = flags, streamId = id, payload = bytes }
+let compression () : Stdlib.Result.Result<(Bool * Bool * Bool * List<(String * String)>), String> =
+  let fields = [(":method", "GET"), ("x-shared", "retired-stream-dynamic-value")] in
+  Stdlib.__Hpack.encodeDynamic (Stdlib.__Hpack.encoder ()) fields |> Stdlib.Result.andThen (fun first ->
+    Stdlib.__Hpack.encodeDynamic first.state fields |> Stdlib.Result.andThen (fun second ->
+      Stdlib.__Http2Server.receiveHeaders (state Stdlib.Blob.empty) (header 1L 1L 1L (Stdlib.__Http2Wire.__slice first.bytes 0L 1L)) |> Stdlib.Result.mapError (fun failure -> failure.message) |> Stdlib.Result.andThen (fun partial ->
+        let (partial, decoded) = partial in
+        if Stdlib.Option.isSome decoded then Error "Decoded incomplete header block"
+        else Stdlib.__Http2Server.receiveHeaders partial (header 1L 9L 4L (Stdlib.__Http2Wire.__slice first.bytes 1L (Stdlib.Blob.__byteLength first.bytes - 1L))) |> Stdlib.Result.mapError (fun failure -> failure.message) |> Stdlib.Result.andThen (fun completed ->
+          let (next, decoded) = completed in
+          let ended = match decoded with | None -> false | Some decoded -> decoded.ended && Stdlib.Bool.not decoded.fresh in
+          Stdlib.__Http2Server.receiveHeaders next (header 5L 1L 5L second.bytes) |> Stdlib.Result.mapError (fun failure -> failure.message) |> Stdlib.Result.map (fun received ->
+            let (next, decoded) = received in
+            match decoded with | None -> (false, false, false, []) | Some decoded -> (ended, decoded.fresh, Stdlib.Option.isNone next.continuation, decoded.fields))))))
+compression () = Ok ((true, true, true, [(":method", "GET"), ("x-shared", "retired-stream-dynamic-value")])) // leak_check
+Stdlib.__Http2Server.receiveHeaders (state Stdlib.Blob.empty) (header 1L 1L 4L (Stdlib.Blob.__fromInt64List [255L])) |> Stdlib.Result.mapError (fun failure -> failure.code) |> Stdlib.Result.map (fun _decoded -> true) = Error 9L // rejected_header_block

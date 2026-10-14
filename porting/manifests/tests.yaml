@@ -1,0 +1,13 @@
+category: tests
+scope: ''
+current: Legacy upstream fixtures plus compiler-owned tests; file gates, line gates, and fixture metadata affect discovery.
+policy:
+  source: identical-with-adapter
+  behavior: identical-with-aot-rules
+  freshness: follow-upstream
+  destination: Unchanged current upstream test bodies with engine adapters and separate AOT expectations.
+  disposition: required
+questions:
+  - Trial current named package tests and preserve their result and error expectations.
+  - Export actual runner identities and effective exclusions; source discovery is not test execution.
+children: []

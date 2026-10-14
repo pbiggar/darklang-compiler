@@ -1,71 +1,188 @@
-// __Http3Server.dark - Single-request HTTP/3 serving with shared routing and bounded bodies.
+// __Http3Server.dark - Independent HTTP/3 request owners sharing QUIC flow and QPACK.
 module Darklang.Stdlib.__Http3Server
 
-type Request = { state: Stdlib.__Http3.State, head: Stdlib.Option.Option<Stdlib.__Http2Fields.RequestHead>, chunks: List<Blob>, length: Int64, oversized: Bool }
+type Context = { config: Stdlib.HttpServer.Config.Config, handler: Stdlib.Http.Request -> Stdlib.Http.Response, limit: Int64 }
+type Request = { message: Stdlib.__Http3Message.State, head: Stdlib.Option.Option<Stdlib.__Http2Fields.RequestHead>, chunks: List<Blob>, length: Int64, oversized: Bool }
+type Reply = { fields: List<(String * String)>, body: Blob, bytes: Blob, offset: Int64, position: Int64, encoded: Bool }
+type Message = RequestInput of Stdlib.__Http3Server.Request | ResponseOutput of Stdlib.__Http3Server.Reply
+type Active = { id: Int64, message: Stdlib.__Http3Server.Message, deadline: Int64 }
+type State = { wire: Stdlib.__Http3.State, streams: List<Stdlib.__Http3Server.Active>, seen: List<Int64>, granted: List<Int64>, total: Int64, deadline: Int64, goAwaySent: Bool }
 
-let __events (request: Stdlib.__Http3Server.Request) (events: List<Stdlib.__Http3Message.Event>) (limit: Int64) : Stdlib.Result.Result<Stdlib.__Http3Server.Request, String> =
-  match events with
-  | [] -> Ok request
-  | RequestHead head :: rest ->
-    if Stdlib.Option.isSome request.head then Error "Duplicate HTTP/3 request head"
+let initial (wire: Stdlib.__Http3.State) (now: Int64) : Stdlib.__Http3Server.State =
+  Stdlib.__Http3Server.State { wire = wire, streams = [], seen = [], granted = [], total = 0L, deadline = now + 30000L, goAwaySent = false }
+
+let __size (message: Stdlib.__Http3Server.Message) : Int64 =
+  match message with | RequestInput request -> request.length | ResponseOutput reply -> Stdlib.Blob.__byteLength reply.body
+
+let __replace (state: Stdlib.__Http3Server.State) (active: Stdlib.__Http3Server.Active) : Stdlib.__Http3Server.State =
+  let previous = match Stdlib.List.findFirst state.streams (fun stream -> stream.id == active.id) with | None -> 0L | Some stream -> Stdlib.__Http3Server.__size stream.message in
+  { state with streams = Stdlib.List.map state.streams (fun stream -> if stream.id == active.id then active else stream), total = state.total - previous + Stdlib.__Http3Server.__size active.message }
+
+let __remove (state: Stdlib.__Http3Server.State) (id: Int64) : Stdlib.__Http3Server.State =
+  let released = match Stdlib.List.findFirst state.streams (fun stream -> stream.id == id) with | None -> 0L | Some stream -> Stdlib.__Http3Server.__size stream.message in
+  { state with streams = Stdlib.List.filter state.streams (fun stream -> stream.id != id), total = state.total - released }
+
+let admit (state: Stdlib.__Http3Server.State) (now: Int64) : Stdlib.Result.Result<Stdlib.__Http3Server.State, String> =
+  Stdlib.List.fold state.wire.connection.flow.channels (Ok state) (fun result channel -> result |> Stdlib.Result.andThen (fun state ->
+    if channel.id % 4L != 0L || Stdlib.List.any state.seen (fun id -> id == channel.id) then Ok state
+    else if Stdlib.List.length state.streams >= 32 || Stdlib.List.length state.seen >= 1024 then Error "HTTP/3 server stream owner limit exceeded"
     else
-      let oversized = match request.state.message.expected with | Some length -> length > limit | None -> false in
-      Stdlib.__Http3Server.__events { request with head = Some head, oversized = oversized } rest limit
-  | BodyChunk bytes :: rest ->
-    let length = request.length + Stdlib.Blob.__byteLength bytes in
-    let oversized = request.oversized || length > limit in
-    let chunks = if oversized then [] else Stdlib.List.push request.chunks bytes in
-    Stdlib.__Http3Server.__events { request with length = length, oversized = oversized, chunks = chunks } rest limit
-  | TrailerFields _ :: rest -> Stdlib.__Http3Server.__events request rest limit
-  | _ -> Error "Response event on HTTP/3 server request"
+      let request = Stdlib.__Http3Server.Request { message = Stdlib.__Http3Message.create Request, head = None, chunks = [], length = 0L, oversized = false } in
+      let active = Stdlib.__Http3Server.Active { id = channel.id, message = Stdlib.__Http3Server.Message.RequestInput request, deadline = now + 10000L } in
+      Ok { state with streams = state.streams @ [active], seen = state.seen @ [channel.id], deadline = now + 30000L }))
 
-let __request (request: Stdlib.__Http3Server.Request) (limit: Int64) : Stdlib.Result.Result<Stdlib.__Http3Server.Request, String> =
-  Stdlib.__Http3.receive request.state |> Stdlib.Result.andThen (fun received ->
-    Stdlib.__Http3Server.__events { request with state = received.state } received.events limit |> Stdlib.Result.andThen (fun next ->
-      if received.finished || next.oversized then
-        if Stdlib.Option.isNone next.head then Error "HTTP/3 request finished without headers" else Ok next
-      else Stdlib.__Http3Server.__request next limit))
+let events (request: Stdlib.__Http3Server.Request) (events: List<Stdlib.__Http3Message.Event>) (limit: Int64) : Stdlib.Result.Result<Stdlib.__Http3Server.Request, String> =
+  Stdlib.List.fold events (Ok request) (fun result event -> result |> Stdlib.Result.andThen (fun request -> match event with
+    | RequestHead head ->
+      if Stdlib.Option.isSome request.head then Error "Duplicate HTTP/3 request head"
+      else
+        let oversized = match request.message.expected with | None -> false | Some length -> length > limit in
+        Ok { request with head = Some head, oversized = request.oversized || oversized }
+    | BodyChunk bytes ->
+      let length = request.length + Stdlib.Blob.__byteLength bytes in
+      let oversized = request.oversized || length > limit in
+      Ok { request with length = length, oversized = oversized, chunks = if oversized then [] else Stdlib.List.push request.chunks bytes }
+    | TrailerFields _ -> Ok request
+    | ResponseHead _ -> Error "Response event on HTTP/3 server request"))
 
-let __write (state: Stdlib.__Http3.State) (bytes: Blob) (offset: Int64) : Stdlib.Result.Result<Stdlib.__Http3.State, String> =
-  let length = Stdlib.Blob.__byteLength bytes in
-  if offset == length then Stdlib.__Http3.write state Stdlib.Blob.empty true
-  else
-    let credit = Stdlib.__Http3.sendCredit state in
-    if credit < 8L then Stdlib.__Http3.poll state |> Stdlib.Result.andThen (fun received -> Stdlib.__Http3Server.__write received.state bytes offset)
+let __stopUpload (state: Stdlib.__Http3Server.State) (id: Int64) (code: Int64) : Stdlib.Result.Result<Stdlib.__Http3Server.State, String> =
+  Stdlib.__QuicApplication.streamLimit 5L id code |> Stdlib.Result.andThen (Stdlib.__QuicConnection.__queue state.wire.connection) |> Stdlib.Result.map (fun connection -> { state with wire = { state.wire with connection = connection } })
+
+let cancel (state: Stdlib.__Http3Server.State) (id: Int64) (code: Int64) : Stdlib.Result.Result<Stdlib.__Http3Server.State, String> =
+  Stdlib.__QuicFlow.stop state.wire.connection.flow (Stdlib.__QuicApplication.StreamLimit { id = id, value = code }) |> Stdlib.Result.andThen (fun stopped ->
+    Stdlib.__QuicConnection.__queue (Stdlib.__QuicConnection.__flow state.wire.connection stopped.state) stopped.frames |> Stdlib.Result.andThen (fun connection ->
+      Stdlib.__Http3.__feedback { state.wire with connection = connection } (Stdlib.__QpackDecoder.cancel id) |> Stdlib.Result.andThen (fun wire ->
+        Stdlib.__Http3Server.__stopUpload (Stdlib.__Http3Server.__remove { state with wire = wire } id) id code)))
+
+let respond (context: Stdlib.__Http3Server.Context) (state: Stdlib.__Http3Server.State) (active: Stdlib.__Http3Server.Active) (method: String) (response: Stdlib.Http.Response) (now: Int64) : Stdlib.Result.Result<Stdlib.__Http3Server.State, String> =
+  let prepared = match Stdlib.__Http2Server.__response context.config method response with | Ok reply -> Ok reply | Error _ -> Stdlib.__Http2Server.__response context.config method (Stdlib.Http.responseWithText "Internal server error" 500) in
+  prepared |> Stdlib.Result.andThen (fun prepared ->
+    let reply = Stdlib.__Http3Server.Reply { fields = prepared.fields, body = prepared.body, bytes = Stdlib.Blob.empty, offset = 0L, position = 0L, encoded = false } in
+    let next = Stdlib.__Http3Server.__replace state { active with message = Stdlib.__Http3Server.Message.ResponseOutput reply, deadline = now + 30000L } in
+    if next.total > 104857600L then Error "HTTP/3 server retained body budget exceeded" else Ok next)
+
+let __dispatch (context: Stdlib.__Http3Server.Context) (state: Stdlib.__Http3Server.State) (active: Stdlib.__Http3Server.Active) (request: Stdlib.__Http3Server.Request) (finished: Bool) (now: Int64) : Stdlib.Result.Result<Stdlib.__Http3Server.State, String> =
+  match request.head with
+  | None -> if finished then Stdlib.__Http3Server.cancel state active.id 270L else Ok state
+  | Some head ->
+    if request.oversized then
+      Stdlib.__Http3Server.__stopUpload state active.id 268L |> Stdlib.Result.andThen (fun state -> Stdlib.__Http3Server.respond context state active head.method (Stdlib.Http.responseWithText "Request body too large" 413) now)
+    else if Stdlib.Bool.not finished then Ok state
     else
-      let size = if length - offset < credit - 8L then length - offset else credit - 8L in
-      Stdlib.__Http3Wire.serialize 0L (Stdlib.__Http2Wire.__slice bytes offset size) |> Stdlib.Result.andThen (fun frame ->
-        Stdlib.__Http3.write state frame false |> Stdlib.Result.andThen (fun next -> Stdlib.__Http3Server.__write next bytes (offset + size)))
+      let response = if Stdlib.Bool.not (Stdlib.String.startsWith head.url "https://") then Stdlib.Http.badRequest "HTTP/3 requires an HTTPS URL" else context.handler (Stdlib.Http.Request { url = head.url, headers = Stdlib.List.push head.headers ("x-http-method", head.method), body = Stdlib.Blob.concat (Stdlib.List.reverse request.chunks) }) in
+      Stdlib.__Http3Server.respond context state active head.method response now
 
-let __respond (state: Stdlib.__Http3.State) (config: Stdlib.HttpServer.Config.Config) (method: String) (response: Stdlib.Http.Response) : Stdlib.Result.Result<Stdlib.__Http3.State, String> =
-  match Stdlib.Int.toInt64 response.statusCode with
-  | None -> Error "Invalid HTTP response status"
-  | Some status ->
-    if status < 200L || status > 599L then Error "Invalid HTTP response status"
-    else
-      let headers = Stdlib.List.filter (Stdlib.HttpServer.__standardHeaders config.injectStandardHeaders response.headers) (fun pair -> let (name, _) = pair in
-        let lower = Stdlib.String.toLowercase name in
-        Stdlib.Bool.not (Stdlib.__Http2Fields.__connectionSpecific lower) && lower != "content-length") in
-      Stdlib.__Http2Fields.__outgoing headers |> Stdlib.Result.andThen (fun headers ->
-        let length = if status == 204L then [] else [("content-length", Stdlib.Int64.toString (Stdlib.Blob.__byteLength response.body))] in
-        let fields = [(":status", Stdlib.Int64.toString status)] @ headers @ length in
-        let body = if method == "HEAD" || status == 204L || status == 304L then Stdlib.Blob.empty else response.body in
-        Stdlib.__Qpack.encode fields |> Stdlib.Result.andThen (Stdlib.__Http3Wire.serialize 1L) |> Stdlib.Result.andThen (fun bytes ->
-          // Only request stream zero is accepted in this sequential profile.
-          Stdlib.__QuicWire.integer 4L |> Stdlib.Result.andThen (Stdlib.__Http3Wire.serialize 7L) |> Stdlib.Result.andThen (fun goaway ->
-            Stdlib.__QuicConnection.write state.connection 3L goaway false |> Stdlib.Result.andThen (fun connection ->
-              Stdlib.__Http3.write { state with connection = connection } bytes false |> Stdlib.Result.andThen (fun next -> Stdlib.__Http3Server.__write next body 0L)))))
+let __parse (context: Stdlib.__Http3Server.Context) (state: Stdlib.__Http3Server.State) (active: Stdlib.__Http3Server.Active) (request: Stdlib.__Http3Server.Request) (read: Stdlib.__QuicConnection.Read) (now: Int64) : Stdlib.Result.Result<Stdlib.__Http3Server.State, String> =
+  Stdlib.__Http3Message.resume state.wire.uni.table active.id request.message |> Stdlib.Result.andThen (fun resumed ->
+    Stdlib.__Http3Message.feedWithTable state.wire.uni.table active.id resumed.state read.bytes |> Stdlib.Result.andThen (fun received ->
+      Stdlib.__Http3.__feedback { state.wire with connection = read.state } (Stdlib.Blob.concat [resumed.feedback, received.feedback]) |> Stdlib.Result.andThen (fun wire ->
+        Stdlib.__Http3Server.events { request with message = received.state } (resumed.events @ received.events) context.limit |> Stdlib.Result.andThen (fun request ->
+          let finished = read.finished && Stdlib.Option.isNone request.message.waiting in
+          let valid = if finished && Stdlib.Bool.not request.oversized then Stdlib.__Http3Message.finish request.message else Ok () in
+          valid |> Stdlib.Result.andThen (fun _unit ->
+            let active = { active with message = Stdlib.__Http3Server.Message.RequestInput request } in
+            let next = Stdlib.__Http3Server.__replace { state with wire = wire, deadline = if Stdlib.Blob.__byteLength read.bytes > 0L then now + 30000L else state.deadline } active in
+            if next.total > 104857600L then Error "HTTP/3 server retained body budget exceeded" else Stdlib.__Http3Server.__dispatch context next active request finished now)))))
+
+let __read (context: Stdlib.__Http3Server.Context) (state: Stdlib.__Http3Server.State) (active: Stdlib.__Http3Server.Active) (now: Int64) : Stdlib.Result.Result<Stdlib.__Http3Server.State, String> =
+  let blocked = match active.message with
+    | ResponseOutput _ -> false
+    | RequestInput request -> match request.message.waiting with
+      | None -> false
+      | Some waiting -> waiting.prefix.required > state.wire.uni.table.inserted in
+  let reset = match Stdlib.__QuicFlow.channel state.wire.connection.flow active.id with
+    | None -> false
+    | Some channel -> match channel.receive with | None -> false | Some receiver -> Stdlib.Option.isSome receiver.resetCode in
+  // Keep DATA in QUIC reassembly without returning receive credit while the
+  // HEADERS section is blocked. Encoder/control streams still advance first;
+  // resets must also remain observable while waiting for table insertions.
+  if blocked && Stdlib.Bool.not reset then Ok state
+  else Stdlib.__QuicConnection.read state.wire.connection active.id |> Stdlib.Result.andThen (fun read ->
+    let state = { state with wire = { state.wire with connection = read.state } } in
+    match active.message with
+    | ResponseOutput _ -> Ok state
+    | RequestInput request ->
+      if Stdlib.Option.isSome read.reset then Stdlib.__Http3Server.cancel state active.id 268L
+      else match Stdlib.__Http3Server.__parse context state active request read now with
+        | Ok next -> Ok next
+        | Error message ->
+          if Stdlib.String.contains message "QPACK" || Stdlib.String.contains message "HPACK" || message == "Unexpected HTTP/3 frame on message stream" || message == "HTTP/3 DATA outside message body" || message == "HEADERS after HTTP/3 trailers" then Error message
+          else Stdlib.__Http3Server.cancel state active.id 270L)
+
+// One bounded response chunk per active stream; a blocked stream is skipped.
+let send (state: Stdlib.__Http3Server.State) (active: Stdlib.__Http3Server.Active) (now: Int64) : Stdlib.Result.Result<Stdlib.__Http3Server.State, String> =
+  match active.message with
+  | RequestInput _ -> Ok state
+  | ResponseOutput reply ->
+    let prepared = if reply.encoded then Ok ((state, reply)) else Stdlib.__Http3.encodeHeaders state.wire active.id reply.fields |> Stdlib.Result.map (fun encoded -> ({ state with wire = encoded.state }, { reply with bytes = encoded.bytes, offset = 0L, encoded = true })) in
+    prepared |> Stdlib.Result.andThen (fun pair ->
+      let (state, reply) = pair in
+      let prepared =
+        if reply.offset < Stdlib.Blob.__byteLength reply.bytes || reply.position == Stdlib.Blob.__byteLength reply.body then Ok reply
+        else
+          let remaining = Stdlib.Blob.__byteLength reply.body - reply.position in
+          let size = if remaining > 896L then 896L else remaining in
+          Stdlib.__Http3Wire.serialize 0L (Stdlib.__Http2Wire.__slice reply.body reply.position size) |> Stdlib.Result.map (fun bytes -> { reply with bytes = bytes, offset = 0L, position = reply.position + size }) in
+      prepared |> Stdlib.Result.andThen (fun reply ->
+        let credit = Stdlib.__Http3.sendCredit { state.wire with stream = active.id } in
+        let remaining = Stdlib.Blob.__byteLength reply.bytes - reply.offset in
+        let size = if remaining < credit then remaining else credit in
+        if size <= 0L then Ok (Stdlib.__Http3Server.__replace state { active with message = Stdlib.__Http3Server.Message.ResponseOutput reply })
+        else
+          let finished = size == remaining && reply.position == Stdlib.Blob.__byteLength reply.body in
+          Stdlib.__QuicConnection.write state.wire.connection active.id (Stdlib.__Http2Wire.__slice reply.bytes reply.offset size) finished |> Stdlib.Result.map (fun connection ->
+            let next = { state with wire = { state.wire with connection = connection }, deadline = now + 30000L } in
+            if finished then Stdlib.__Http3Server.__remove next active.id
+            else Stdlib.__Http3Server.__replace next { active with message = Stdlib.__Http3Server.Message.ResponseOutput { reply with offset = reply.offset + size } })))
+
+let __retire (state: Stdlib.__Http3Server.State) : Stdlib.Result.Result<Stdlib.__Http3Server.State, String> =
+  Stdlib.List.fold state.wire.connection.flow.channels (Ok state) (fun result channel -> result |> Stdlib.Result.andThen (fun state ->
+    if channel.id % 4L != 0L || Stdlib.List.any state.streams (fun active -> active.id == channel.id) then Ok state
+    else Stdlib.__QuicConnection.read state.wire.connection channel.id |> Stdlib.Result.andThen (fun read ->
+      let state = { state with wire = { state.wire with connection = read.state } } in
+      let closed = match Stdlib.__QuicFlow.channel read.state.flow channel.id with | None -> false | Some channel -> Stdlib.__QuicFlow.__closed channel in
+      if Stdlib.Bool.not closed || Stdlib.List.any state.granted (fun id -> id == channel.id) then Ok state
+      else
+        let count = if read.state.flow.local.streamsBidi >= 1024L then 1024L else read.state.flow.local.streamsBidi + 1L in
+        let connection = Stdlib.__QuicConnection.__flow read.state { read.state.flow with local = { read.state.flow.local with streamsBidi = count } } in
+        Stdlib.__QuicApplication.limit 18L count |> Stdlib.Result.andThen (Stdlib.__QuicConnection.__queue connection) |> Stdlib.Result.map (fun connection -> { state with wire = { state.wire with connection = connection }, granted = state.granted @ [channel.id] }))))
+
+// Stop advertising new stream slots at the transport history bound. GOAWAY is
+// an exclusive request-ID boundary; retain its send until control credit exists.
+let goAway (state: Stdlib.__Http3Server.State) : Stdlib.Result.Result<Stdlib.__Http3Server.State, String> =
+  if state.goAwaySent || Stdlib.List.length state.seen < 1024 then Ok state
+  else Stdlib.__QuicWire.integer 4096L |> Stdlib.Result.andThen (Stdlib.__Http3Wire.serialize 7L) |> Stdlib.Result.andThen (fun bytes ->
+    if Stdlib.__Http3.sendCredit { state.wire with stream = 3L } < Stdlib.Blob.__byteLength bytes then Ok state
+    else Stdlib.__QuicConnection.write state.wire.connection 3L bytes false |> Stdlib.Result.map (fun connection -> { state with wire = { state.wire with connection = connection }, goAwaySent = true }))
+
+let step (context: Stdlib.__Http3Server.Context) (state: Stdlib.__Http3Server.State) (now: Int64) : Stdlib.Result.Result<Stdlib.__Http3Server.State, String> =
+  Stdlib.__Http3.__controls state.wire |> Stdlib.Result.andThen (fun wire -> Stdlib.__Http3Server.admit { state with wire = wire } now) |> Stdlib.Result.andThen (fun state ->
+    Stdlib.List.fold state.streams (Ok state) (fun result active -> result |> Stdlib.Result.andThen (fun state ->
+      if now >= active.deadline then
+        match active.message with
+        | ResponseOutput _ -> Stdlib.__Http3Server.cancel state active.id 268L
+        | RequestInput request -> match request.head with
+          | None -> Stdlib.__Http3Server.cancel state active.id 270L
+          | Some head -> Stdlib.__Http3Server.__stopUpload state active.id 268L |> Stdlib.Result.andThen (fun state -> Stdlib.__Http3Server.respond context state active head.method (Stdlib.Http.responseWithText "408 Request Timeout" 408) now)
+      else Stdlib.__Http3Server.__read context state active now)) |> Stdlib.Result.andThen (fun state ->
+      if Stdlib.List.length (Stdlib.List.filter state.streams (fun active -> match active.message with | ResponseOutput _ -> false | RequestInput request -> Stdlib.Option.isSome request.message.waiting)) > 1 then Error "Peer exceeded advertised QPACK blocked stream limit"
+      else Stdlib.List.fold state.streams (Ok state) (fun result active -> result |> Stdlib.Result.andThen (fun state ->
+        let stopped = match Stdlib.__QuicFlow.channel state.wire.connection.flow active.id with | None -> false | Some channel -> Stdlib.Option.isSome channel.stopped in
+        if stopped then Stdlib.__Http3Server.cancel state active.id 268L else Stdlib.__Http3Server.send state active now)) |> Stdlib.Result.andThen Stdlib.__Http3Server.__retire |> Stdlib.Result.andThen Stdlib.__Http3Server.goAway))
+
+let __run (context: Stdlib.__Http3Server.Context) (state: Stdlib.__Http3Server.State) : Stdlib.Result.Result<Stdlib.__Http3.State, String> =
+  if Stdlib.Option.isSome state.wire.connection.meta.closed then Ok state.wire
+  else Stdlib.__QuicConnection.__shutdown state.wire.connection |> Stdlib.Result.andThen (fun _unit ->
+    match Stdlib.__Network.monotonicMillis () with
+    | Error _ -> Error "HTTP/3 server clock failed"
+    | Ok now ->
+      let drained = state.goAwaySent && state.streams == [] && state.wire.connection.space.queued == [] && state.wire.connection.space.recovery.congestion.inFlight == 0L in
+      if drained || (now >= state.deadline && state.streams == []) then Ok state.wire
+      else Stdlib.__Http3Server.step context state now |> Stdlib.Result.andThen (fun state ->
+        Stdlib.__QuicConnection.poll state.wire.connection 1L |> Stdlib.Result.andThen (fun connection -> Stdlib.__Http3Server.__run context { state with wire = { state.wire with connection = connection } })))
 
 let serve (ready: Stdlib.__QuicServer.Ready) (signals: Stdlib.__Network.ShutdownSignals) (config: Stdlib.HttpServer.Config.Config) (handler: Stdlib.Http.Request -> Stdlib.Http.Response) (limit: Int64) : Stdlib.Result.Result<Stdlib.__Http3.State, String> =
-  Stdlib.__Http3.initializeServer ready signals 10000L |> Stdlib.Result.andThen (fun state ->
-    let request = Stdlib.__Http3Server.Request { state = state, head = None, chunks = [], length = 0L, oversized = false } in
-    Stdlib.__Http3Server.__request request limit |> Stdlib.Result.andThen (fun request ->
-      match request.head with
-      | None -> Error "Missing HTTP/3 request headers"
-      | Some head ->
-        if request.oversized then
-          Stdlib.__QuicApplication.streamLimit 5L 0L 268L |> Stdlib.Result.andThen (Stdlib.__QuicConnection.__queue request.state.connection) |> Stdlib.Result.andThen (fun connection ->
-            Stdlib.__Http3Server.__respond { request.state with connection = connection } config head.method (Stdlib.Http.responseWithText "Request body too large" 413))
-        else
-          let response = if Stdlib.Bool.not (Stdlib.String.startsWith head.url "https://") then Stdlib.Http.badRequest "HTTP/3 requires an HTTPS URL" else handler (Stdlib.Http.Request { url = head.url, headers = Stdlib.List.push head.headers ("x-http-method", head.method), body = Stdlib.Blob.concat (Stdlib.List.reverse request.chunks) }) in
-          Stdlib.__Http3Server.__respond request.state config head.method response))
+  Stdlib.__Http3.initializeServer ready signals 10000L |> Stdlib.Result.andThen (fun wire ->
+    match Stdlib.__Network.monotonicMillis () with
+    | Error _ -> Error "HTTP/3 server clock failed"
+    | Ok now -> Stdlib.__Http3Server.__run (Stdlib.__Http3Server.Context { config = config, handler = handler, limit = limit }) (Stdlib.__Http3Server.initial wire now))

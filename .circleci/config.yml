@@ -28,6 +28,9 @@ jobs:
           name: Fix workspace ownership
           command: docker exec -u root dark-ci chown -R agent:agent /workspace
       - run:
+          name: Check porting framework consistency (not behavior)
+          command: docker exec dark-ci bash scripts/check-porting
+      - run:
           name: Build (debug)
           command: docker exec dark-ci ./build --ai
       - run:

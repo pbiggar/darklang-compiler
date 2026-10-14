@@ -12,11 +12,13 @@ import ssl
 import subprocess
 import tempfile
 import threading
+import time
 from pathlib import Path
 
 from h2.config import H2Configuration
 from h2.connection import H2Connection
 from h2.events import DataReceived, RequestReceived, ResponseReceived, StreamEnded
+from h2.settings import SettingCodes
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -48,7 +50,8 @@ match Stdlib.Cli.__Args.get 0, Stdlib.Cli.__Args.get 1, Stdlib.Cli.__Args.get 2 
 
 SERVER = '''// server.dark - HTTP/1.1 and prior-knowledge HTTP/2 share routing and ownership.
 let handler (req: Stdlib.Http.Request) : Stdlib.Http.Response =
-  Stdlib.Http.responseWithHeaders req.body [("set-cookie", "a=1"), ("set-cookie", "b=2")] 200
+  let body = if Stdlib.String.endsWith req.url "/big" then Stdlib.String.toBlob (Stdlib.String.join (Stdlib.List.repeatUnsafe 70 (Stdlib.String.repeat "b" 1000)) "") else req.body in
+  Stdlib.Http.responseWithHeaders body [("set-cookie", "a=1"), ("set-cookie", "b=2")] 200
 
 match Stdlib.Cli.__Args.int64 0 with
 | Error _ -> Stdlib.printLine "Invalid port"
@@ -185,6 +188,68 @@ def client_checks(directory, modes=("buffered", "stream", "head", "abandon", "tr
                 assert result.returncode == 0 and result.stdout == expected and not result.stderr, result
 
 
+def server_owners(port):
+    with socket.create_connection(("127.0.0.1", port), timeout=5) as peer:
+        h2 = H2Connection(H2Configuration(client_side=True, header_encoding="utf-8"))
+        h2.initiate_connection()
+        h2.update_settings({SettingCodes.INITIAL_WINDOW_SIZE: 0})
+        for stream in (1, 3):
+            h2.send_headers(stream, [(":method", "GET"), (":scheme", "http"),
+                                    (":authority", f"localhost:{port}"), (":path", "/big"),
+                                    ("x-shared", "shared-request-compression")], end_stream=True)
+        peer.sendall(h2.data_to_send())
+        headers, bodies, ended = {}, {1: bytearray(), 3: bytearray()}, set()
+
+        def receive():
+            wire = peer.recv(65536)
+            assert wire, "Persistent HTTP/2 owner closed prematurely"
+            events = h2.receive_data(wire)
+            completed = {event.stream_id for event in events if isinstance(event, StreamEnded)}
+            for event in events:
+                if isinstance(event, ResponseReceived):
+                    headers[event.stream_id] = event.headers
+                elif isinstance(event, DataReceived):
+                    bodies[event.stream_id].extend(event.data)
+                    h2.increment_flow_control_window(event.flow_controlled_length)
+                    if event.stream_id not in completed:
+                        h2.increment_flow_control_window(event.flow_controlled_length, event.stream_id)
+                elif isinstance(event, StreamEnded):
+                    ended.add(event.stream_id)
+            outgoing = h2.data_to_send()
+            if outgoing:
+                peer.sendall(outgoing)
+
+        while set(headers) != {1, 3}:
+            receive()
+        assert not bodies[1] and not bodies[3], "Zero stream credit leaked DATA"
+        started = time.monotonic()
+        with socket.create_connection(("127.0.0.1", port), timeout=2) as other, other.makefile("rb") as reader:
+            other.sendall(b"GET /echo HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
+            assert reader.readline().startswith(b"HTTP/1.1 200 ")
+            while True:
+                line = reader.readline()
+                assert line, "HTTP/1 response truncated"
+                if line == b"\r\n":
+                    break
+        assert time.monotonic() - started < 2, "Blocked HTTP/2 stream monopolized plaintext admission"
+        h2.increment_flow_control_window(65535, 3)
+        peer.sendall(h2.data_to_send())
+        while 3 not in ended:
+            receive()
+        assert bodies[3] == b"b" * 70000 and not bodies[1]
+        assert [value for name, value in headers[3] if name == "set-cookie"] == ["a=1", "b=2"]
+        h2.reset_stream(1)
+        bodies[5] = bytearray()
+        h2.send_headers(5, [(":method", "GET"), (":scheme", "http"),
+                           (":authority", f"localhost:{port}"), (":path", "/big"),
+                           ("x-shared", "shared-request-compression")], end_stream=True)
+        h2.increment_flow_control_window(65535, 5)
+        peer.sendall(h2.data_to_send())
+        while 5 not in ended:
+            receive()
+        assert bodies[5] == b"b" * 70000
+
+
 def server_checks(directory, compiler=ROOT / "dark"):
     binary = compile_source(directory, "server", SERVER, compiler)
     with socket.socket() as reservation:
@@ -218,7 +283,7 @@ def server_checks(directory, compiler=ROOT / "dark"):
                         except ConnectionResetError as error:
                             raise AssertionError((method, total, offset, status, bytes(response))) from error
                     data = peer.recv(65536)
-                    assert data, "Server truncated response"
+                    assert data, ("Server truncated response", method, total, offset, status, len(response), process.poll())
                     for event in h2.receive_data(data):
                         if isinstance(event, ResponseReceived):
                             headers = event.headers
@@ -232,6 +297,7 @@ def server_checks(directory, compiler=ROOT / "dark"):
                 if total <= 80000:
                     assert bytes(response) == b"x" * total
                     assert headers.count(("set-cookie", "a=1")) == 1 and headers.count(("set-cookie", "b=2")) == 1
+        server_owners(port)
         # Signal during a stalled HTTP/2 body read, not just an idle listener.
         # Consumed shutdown signals must propagate to the serving loop.
         with socket.create_connection(("127.0.0.1", port), timeout=15) as stalled:
@@ -255,10 +321,16 @@ def main():
     parser.add_argument("--compiler", type=Path, default=ROOT / "dark", help="Compiler executable to verify")
     parser.add_argument("--client-mode", choices=("buffered", "stream", "head", "abandon", "truncated", "early-buffered", "early-stream"),
                         help="Run one client case, without the server checks")
+    parser.add_argument("--server-only", action="store_true", help="Verify cleartext serving without rerunning TLS clients")
     args = parser.parse_args()
+    if args.server_only and args.client_mode:
+        parser.error("--server-only cannot be combined with --client-mode")
     with tempfile.TemporaryDirectory(prefix="dark-http2-") as temporary:
         directory = Path(temporary)
-        if args.client_mode:
+        if args.server_only:
+            server_checks(directory, args.compiler)
+            print("HTTP/2 cleartext server verified: flow control, HEAD, early rejection, draining, shutdown and cleanup")
+        elif args.client_mode:
             client_checks(directory, (args.client_mode,), args.compiler)
             print("HTTP/2 client case verified:", args.client_mode)
         else:

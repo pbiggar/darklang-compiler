@@ -1,0 +1,33 @@
+// http_session_stream_h2.e2e - Leased scheduler state survives DATA and terminal trailers.
+let frame (kind: Int64) (flags: Int64) (id: Int64) (bytes: Blob) : Blob =
+  match Stdlib.__Http2Wire.serialize kind flags id bytes with | Ok bytes -> bytes | Error message -> Builtin.crash message
+let fields (values: List<(String * String)>) : Blob =
+  Stdlib.__Hpack.encode values |> Stdlib.Result.withDefault Stdlib.Blob.empty
+let check (mode: String) (trailers: Bool) : (String * Int64 * Int64) =
+  let closes = Stdlib.Stream.__cellNew 0L in
+  let origin = match Stdlib.__HttpWire.parseUrl "https://example.com/" with | Ok url -> url | Error message -> Builtin.crash message in
+  let ending = if trailers then frame 1L 5L 1L (fields [("x-end", "yes")]) else frame 0L 1L 1L Stdlib.Blob.empty in
+  let chunks = Stdlib.Stream.fromList [frame 1L 4L 1L (fields [(":status", "200"), ("content-length", "3")]), frame 0L 0L 1L (Stdlib.String.toBlob "abc"), ending] in
+  let life = Stdlib.Stream.__new (fun _unit -> Some ()) (fun _unit -> let _ = Stdlib.Stream.close chunks in Stdlib.Stream.__cellSet closes (Stdlib.Stream.__cellGet<Int64> closes + 1L)) in
+  let transport = Stdlib.__HttpTransport.Transport { lifecycle = life, idle = fun _unit -> true, poll = fun _unit -> Ok None, pollWrite = fun bytes -> Ok (Some (Stdlib.Blob.__byteLength bytes)), flush = fun _unit -> Ok true, read = fun _unit -> Ok (Stdlib.Stream.next chunks |> Stdlib.Option.withDefault Stdlib.Blob.empty), write = fun _bytes -> Ok () } in
+  let state = Stdlib.__Http2Connection.State { wire = { Stdlib.__Http2.initial 0L with settingsSeen = true }, next = 1L } in
+  let entry = Stdlib.__Http2Pool.Entry { origin = origin, transport = transport, state = state, idle = 0L } in
+  let now = Stdlib.__Network.monotonicMillis () |> Stdlib.Result.withDefault 0L in
+  let pool = Stdlib.__Http2Pool.put Stdlib.__Http2Pool.empty entry now in
+  let session = Stdlib.HttpClientSession.__createState (Stdlib.HttpClientSession.__State { cache = Stdlib.__AltSvcCache.empty, pool = Stdlib.__Http1Pool.empty, http2 = pool, http3 = Stdlib.__Http3Pool.empty, epoch = 0L }) true None in
+  let response = session.stream "GET" "https://example.com/" [] Stdlib.Blob.empty in
+  let body = match response with
+    | Error _ -> "error"
+    | Ok response ->
+      let _ = if mode == "clear" then session.clear () else if mode == "closed" then session.close () else () in
+      if mode == "abandon" then let _ = Stdlib.Stream.close response.body in "abandoned"
+      else Stdlib.Stream.toBlob response.body |> Stdlib.Blob.toString |> Stdlib.Result.withDefault "decode error" in
+  let before = Stdlib.Stream.__cellGet<Int64> closes in
+  let _ = session.close () in
+  let result = (body, before, Stdlib.Stream.__cellGet<Int64> closes) in
+  let _ = Stdlib.Stream.__cellDispose<Int64> closes in result
+check "complete" false = ("abc", 0L, 1L) // leak_check
+check "complete" true = ("abc", 0L, 1L) // leak_check
+check "clear" true = ("abc", 1L, 1L) // leak_check
+check "closed" true = ("", 1L, 1L) // leak_check
+check "abandon" true = ("abandoned", 1L, 1L) // leak_check

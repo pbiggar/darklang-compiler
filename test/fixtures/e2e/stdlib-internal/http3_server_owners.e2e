@@ -1,0 +1,136 @@
+// Independent request parsers and bounded responses share one QUIC/QPACK owner.
+let fixture () : Stdlib.__Http3Server.State =
+  let life = Stdlib.Stream.__new (fun _unit -> Some ()) (fun _unit -> ()) in
+  let socket = Stdlib.__Datagram.Socket { lifecycle = life, watch = None, send = fun _peer _bytes _timeout -> Ok (), receive = fun _timeout -> Builtin.crash "Scheduler attempted socket receive" } in
+  let secret = Stdlib.String.toBlob (Stdlib.String.repeat "s" 32) in
+  let keys = match Stdlib.__QuicCrypto.derive secret with | Ok keys -> keys | Error _ -> Builtin.crash "Invalid test keys" in
+  let parameters = Stdlib.__QuicParameters.Parameters { originalDestination = None, initialSource = Stdlib.String.toBlob "clientID", retrySource = None, resetToken = None,
+    idleTimeout = 0L, maxUdpPayload = 1200L, maxData = 262144L, maxStreamDataBidiLocal = 65536L, maxStreamDataBidiRemote = 65536L, maxStreamDataUni = 65536L,
+    maxStreamsBidi = 32L, maxStreamsUni = 3L, ackDelayExponent = 3L, maxAckDelay = 25L, disableActiveMigration = true, activeConnectionIdLimit = 2L, preferredAddress = None } in
+  let ready = Stdlib.__QuicServer.Ready { socket = socket, peer = Stdlib.__Datagram.Endpoint { address = [127L, 0L, 0L, 1L], port = 443L }, routing = Stdlib.__QuicHandshakePacket.Routing { source = Stdlib.String.toBlob "serverID", destination = Stdlib.String.toBlob "clientID", token = Stdlib.Blob.empty },
+    authenticated = Stdlib.__QuicServerTls.Ready { send = keys, receive = keys, sendSecret = secret, receiveSecret = secret, parameters = parameters }, pending = [] } in
+  match Stdlib.__Http3.initializeServer ready (Stdlib.__Network.ShutdownSignals { lifecycle = life }) 10000L with
+  | Error _ -> Builtin.crash "Test HTTP/3 initialization failed"
+  | Ok wire -> Stdlib.__Http3Server.initial wire 0L
+let context () : Stdlib.__Http3Server.Context =
+  Stdlib.__Http3Server.Context { config = { Stdlib.HttpServer.Config.defaults 443 with injectStandardHeaders = false, logRequests = false }, handler = fun request -> Stdlib.Http.responseWithText (Stdlib.Blob.toString request.body |> Stdlib.Result.withDefault "invalid") 200, limit = 4L }
+let request (state: Stdlib.__Http3Server.State) (id: Int64) (body: String) (length: Int64) (finished: Bool) : Stdlib.Result.Result<Stdlib.__Http3Server.State, String> =
+  Stdlib.__Qpack.encode [(":method", "POST"), (":scheme", "https"), (":authority", "localhost"), (":path", "/echo"), ("content-length", Stdlib.Int64.toString length)] |> Stdlib.Result.andThen (Stdlib.__Http3Wire.serialize 1L) |> Stdlib.Result.andThen (fun headers ->
+    Stdlib.__Http3Wire.serialize 0L (Stdlib.String.toBlob body) |> Stdlib.Result.andThen (fun data ->
+      Stdlib.__QuicFlow.receive state.wire.connection.flow (Stdlib.__QuicApplication.StreamData { id = id, offset = 0L, bytes = Stdlib.Blob.concat [headers, data], fin = finished }) |> Stdlib.Result.map (fun flow -> { state with wire = { state.wire with connection = Stdlib.__QuicConnection.__flow state.wire.connection flow } })))
+let summary (state: Stdlib.__Http3Server.State) : List<(Int64 * String)> =
+  Stdlib.List.map state.streams (fun active -> (active.id, match active.message with | RequestInput _ -> "receiving" | ResponseOutput _ -> "responding"))
+let owners (finished: Bool) : Stdlib.Result.Result<(List<(Int64 * String)> * Int64), String> =
+  let initial = fixture () in
+  let result = request initial 0L "a" 2L finished |> Stdlib.Result.andThen (fun state -> request state 4L "b" 1L true) |> Stdlib.Result.andThen (fun state -> Stdlib.__Http3Server.step (context ()) state 1L) |> Stdlib.Result.map (fun state -> (summary state, state.total)) in
+  Stdlib.__Http3.close initial.wire
+  result
+owners false = Ok (([(0L, "receiving"), (4L, "responding")], 2L)) // leak_check
+owners true = Ok (([(4L, "responding")], 1L)) // leak_check
+
+let completed () : Stdlib.Result.Result<(List<(Int64 * String)> * Int64 * Int64), String> =
+  let initial = fixture () in
+  let result = request initial 0L "a" 1L true |> Stdlib.Result.andThen (fun state -> request state 4L "b" 1L true) |> Stdlib.Result.andThen (fun state -> Stdlib.__Http3Server.step (context ()) state 1L) |> Stdlib.Result.andThen (fun state -> Stdlib.__Http3Server.step (context ()) state 2L) |> Stdlib.Result.map (fun state -> (summary state, state.total, state.wire.connection.flow.local.streamsBidi)) in
+  Stdlib.__Http3.close initial.wire
+  result
+completed () = Ok (([], 0L, 34L)) // leak_check
+
+let blocked () : Stdlib.Result.Result<(List<(Int64 * String)> * Int64), String> =
+  let initial = fixture () in
+  let result = request initial 0L "a" 1L true |> Stdlib.Result.andThen (fun state -> request state 4L "b" 1L true) |> Stdlib.Result.andThen (fun state ->
+    let channels = Stdlib.List.map state.wire.connection.flow.channels (fun channel -> if channel.id != 0L then channel else { channel with send = Stdlib.Option.map channel.send (fun sender -> { sender with credit = 0L }) }) in
+    let state = { state with wire = { state.wire with connection = Stdlib.__QuicConnection.__flow state.wire.connection { state.wire.connection.flow with channels = channels } } } in
+    Stdlib.__Http3Server.step (context ()) state 1L |> Stdlib.Result.andThen (fun state -> Stdlib.__Http3Server.step (context ()) state 2L) |> Stdlib.Result.map (fun state ->
+      let offset = match Stdlib.__QuicFlow.channel state.wire.connection.flow 0L with | None -> -1L | Some channel -> match channel.send with | None -> -1L | Some sender -> sender.offset in
+      (summary state, offset))) in
+  Stdlib.__Http3.close initial.wire
+  result
+blocked () = Ok (([(0L, "responding")], 0L)) // leak_check
+
+// A QPACK-blocked request must retain its receive window until encoder
+// instructions arrive, rather than consuming unlimited deferred DATA.
+let qpackBlockedCredit () : Stdlib.Result.Result<Int64, String> =
+  let initial = fixture () in
+  let result = request initial 0L "a" 2L false |> Stdlib.Result.andThen (fun state -> Stdlib.__Http3Server.admit state 1L) |> Stdlib.Result.andThen (fun state ->
+    let streams = Stdlib.List.map state.streams (fun active -> match active.message with
+      | ResponseOutput _ -> active
+      | RequestInput request ->
+        let waiting = Stdlib.__Http3Message.Waiting { bytes = Stdlib.Blob.empty, prefix = Stdlib.__QpackDecoder.Prefix { required = 1L, base = 1L, next = 0L } } in
+        { active with message = Stdlib.__Http3Server.Message.RequestInput { request with message = { request.message with waiting = Some waiting } } }) in
+    Stdlib.__Http3Server.step (context ()) { state with streams = streams } 2L |> Stdlib.Result.map (fun state -> state.wire.connection.flow.consumed)) in
+  Stdlib.__Http3.close initial.wire
+  result
+qpackBlockedCredit () = Ok 0L // leak_check
+
+// RESET_STREAM remains observable even when the request's QPACK section waits.
+let reset () : Stdlib.Result.Result<(List<(Int64 * String)> * Int64), String> =
+  let initial = fixture () in
+  let result = request initial 0L "a" 2L false |> Stdlib.Result.andThen (fun state -> request state 4L "b" 1L true) |> Stdlib.Result.andThen (fun state ->
+    let size = match Stdlib.__QuicFlow.channel state.wire.connection.flow 0L with | None -> -1L | Some channel -> match channel.receive with | None -> -1L | Some receiver -> receiver.highest in
+    Stdlib.__Http3Server.admit state 1L |> Stdlib.Result.andThen (fun state ->
+      let streams = Stdlib.List.map state.streams (fun active ->
+        if active.id != 0L then active
+        else match active.message with
+        | ResponseOutput _ -> active
+        | RequestInput request ->
+          let waiting = Stdlib.__Http3Message.Waiting { bytes = Stdlib.Blob.empty, prefix = Stdlib.__QpackDecoder.Prefix { required = 1L, base = 1L, next = 0L } } in
+          { active with message = Stdlib.__Http3Server.Message.RequestInput { request with message = { request.message with waiting = Some waiting } } }) in
+      let state = { state with streams = streams } in
+      Stdlib.__QuicFlow.reset state.wire.connection.flow (Stdlib.__QuicApplication.Reset { id = 0L, code = 268L, finalSize = size }) |> Stdlib.Result.andThen (fun flow ->
+      Stdlib.__Http3Server.step (context ()) { state with wire = { state.wire with connection = Stdlib.__QuicConnection.__flow state.wire.connection flow } } 1L) |> Stdlib.Result.map (fun state -> (summary state, state.total)))) in
+  Stdlib.__Http3.close initial.wire
+  result
+reset () = Ok (([(4L, "responding")], 1L)) // leak_check
+
+let timeout () : Stdlib.Result.Result<(String * Int64), String> =
+  let initial = fixture () in
+  let result = request initial 0L "a" 2L false |> Stdlib.Result.andThen (fun state -> Stdlib.__Http3Server.step (context ()) state 1L) |> Stdlib.Result.andThen (fun state -> Stdlib.__Http3Server.step (context ()) state 10001L) |> Stdlib.Result.map (fun state ->
+    match state.streams with
+    | [active] -> match active.message with | RequestInput _ -> ("input", active.deadline) | ResponseOutput reply -> (Stdlib.List.fold reply.fields "missing" (fun status field -> let (name, value) = field in if name == ":status" then value else status), active.deadline)
+    | _ -> ("missing", -1L)) in
+  Stdlib.__Http3.close initial.wire
+  result
+timeout () = Ok (("408", 40001L)) // leak_check
+
+let response (method: String) (status: Int) : Stdlib.Result.Result<(Int64 * List<String> * String), String> =
+  let initial = fixture () in
+  let result = request initial 0L "" 0L true |> Stdlib.Result.andThen (fun state -> Stdlib.__Http3Server.admit state 1L) |> Stdlib.Result.andThen (fun state ->
+    match state.streams with
+    | [active] -> Stdlib.__Http3Server.respond (context ()) state active method (Stdlib.Http.responseWithText "abc" status) 2L |> Stdlib.Result.map (fun state ->
+      match state.streams with
+      | [active] -> match active.message with
+        | RequestInput _ -> (-1L, [], "input")
+        | ResponseOutput reply ->
+          let lengths = Stdlib.List.filterMap reply.fields (fun field -> let (name, value) = field in if name == "content-length" then Some value else None) in
+          let status = Stdlib.List.fold reply.fields "missing" (fun status field -> let (name, value) = field in if name == ":status" then value else status) in
+          (Stdlib.Blob.__byteLength reply.body, lengths, status)
+      | _ -> (-1L, [], "missing"))
+    | _ -> Error "Missing test stream") in
+  Stdlib.__Http3.close initial.wire
+  result
+response "HEAD" 200 = Ok ((0L, ["3"], "200")) // leak_check
+response "GET" 204 = Ok ((0L, [], "204")) // leak_check
+response "GET" 304 = Ok ((0L, ["3"], "304")) // leak_check
+response "GET" 101 = Ok ((21L, ["21"], "500")) // leak_check
+
+let draining (credit: Int64) : Stdlib.Result.Result<(Bool * Int64), String> =
+  let initial = fixture () in
+  let channels = Stdlib.List.map initial.wire.connection.flow.channels (fun channel -> if channel.id != 3L then channel else { channel with send = Stdlib.Option.map channel.send (fun sender -> { sender with credit = sender.offset + credit }) }) in
+  let state = { initial with seen = Stdlib.List.repeatUnsafe 1024 0L, wire = { initial.wire with connection = Stdlib.__QuicConnection.__flow initial.wire.connection { initial.wire.connection.flow with channels = channels } } } in
+  let result = Stdlib.__Http3Server.goAway state |> Stdlib.Result.andThen (fun first -> Stdlib.__Http3Server.goAway first) |> Stdlib.Result.map (fun next -> (next.goAwaySent, next.wire.connection.flow.sent - initial.wire.connection.flow.sent)) in
+  Stdlib.__Http3.close initial.wire
+  result
+draining 0L = Ok ((false, 0L)) // leak_check
+draining 100L = Ok ((true, 4L)) // leak_check
+
+// Invalid QPACK Huffman padding returns a shared HPACK decoder error. It must
+// fail the connection, not merely reset this request and retain its QPACK owner.
+let malformedCompression () : Stdlib.Result.Result<Unit, String> =
+  let initial = fixture () in
+  let payload = Stdlib.Blob.fromHex "0000290000" |> Stdlib.Result.withDefault Stdlib.Blob.empty in
+  let result = Stdlib.__Http3Wire.serialize 1L payload |> Stdlib.Result.andThen (fun bytes ->
+    Stdlib.__QuicFlow.receive initial.wire.connection.flow (Stdlib.__QuicApplication.StreamData { id = 0L, offset = 0L, bytes = bytes, fin = true }) |> Stdlib.Result.andThen (fun flow ->
+      Stdlib.__Http3Server.step (context ()) { initial with wire = { initial.wire with connection = Stdlib.__QuicConnection.__flow initial.wire.connection flow } } 1L) |> Stdlib.Result.map (fun _state -> ())) in
+  Stdlib.__Http3.close initial.wire
+  result
+malformedCompression () = Error "Invalid HPACK Huffman padding" // leak_check

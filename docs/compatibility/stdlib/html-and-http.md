@@ -87,9 +87,10 @@ selection uses the Dark HTTP/2 implementation; absent ALPN and `http/1.1`
 retain the existing HTTP/1.1 path. Buffered and lazy streaming responses share
 frame validation, HPACK static/dynamic tables and Huffman decoding, SETTINGS,
 PING, flow-control windows, fragmented headers, informational responses and
-trailers. Duplicate response headers remain ordered. Each exchange owns one
-stream and connection; pooling, multiplexing, server push, CONNECT tunnels,
-and OPTIONS asterisk-form are not implemented in this profile.
+trailers. Duplicate response headers remain ordered. Stateless and lazy calls
+own one stream and connection; buffered sessions additionally reuse HTTP/2
+owners as described below. Server push, CONNECT tunnels and OPTIONS
+asterisk-form are not implemented in this profile.
 
 `Stdlib.Http.Request.header` performs the upstream case-insensitive lookup.
 `Stdlib.HttpServer.get` and `post` construct handler records and `getMethod`
@@ -102,7 +103,10 @@ does not match `/files/a/b`.
 `Stdlib.HttpServer.Config.defaults port` supplies the upstream 30 MiB request
 body cap and the three enabled policy flags. `HttpServer.serve config handler
 onListening` now binds a native IPv4 listener, calls `onListening` after a
-successful bind, and serves HTTP/1.1 sequentially until SIGINT or SIGTERM.
+successful bind, and serves bounded persistent plaintext HTTP/1.1 owners until
+SIGINT or SIGTERM. HTTP/1.1 requests and responses may explicitly close the
+connection; HTTP/1.0 always closes. Fully framed requests can be pipelined,
+with ordered responses and correct HEAD handling.
 Request URLs retain their raw path and query bytes; actual request methods are
 prepended as `x-http-method`. Forwarded HTTPS canonicalization, optional
 standard Server/HSTS headers, ordered duplicate response headers, HEAD body
@@ -115,12 +119,46 @@ lowering also exists for x86_64, without a cross-target verification claim.
 macOS ARM64 lowering now reads Mach absolute ticks with their queried timebase,
 sets close-on-exec through `fcntl` after socket creation, and converts listener
 poll timeouts to Darwin milliseconds. Native macOS execution remains
-unverified. The listener owns and closes accepted connections, and each response closes its connection. Reads and writes have
-10-second monotonic deadlines; headers retain the existing wire parser's line,
+unverified. The persistent plaintext profile is also peer-verified on Linux
+x86_64. The listener owns at most sixty-four accepted connections; each serves
+at most one hundred requests. Per-call nonblocking I/O advances one bounded
+transition per owner per round, so a slow upload or an unread response does not
+hold the HTTP/1.1 listener. Request deadlines are ten seconds; idle and response
+write deadlines are thirty seconds. Headers retain the wire parser's line,
 count, and size caps. Configured body limits range from zero through 100 MiB,
 and request wire buffering is capped at the body limit plus 1 MiB for framing.
-Concurrency, IPv6 listeners, persistent connections, response compression,
-interpreter telemetry integration, and server-side TLS remain follow-up work.
+Total retained request/output wire data caps at 101 MiB. Native read/write
+polling, persistence, pipelining, close tokens, slow-client fairness and disposal
+are checked by `http1_server_owner.e2e` and the independent server peer.
+Multiplexed HTTP/2–3 servers now retain independent stream owners and shared
+compression/flow state. Prior-knowledge h2c uses the same active scheduler as
+HTTP/1.1. Response compression and interpreter telemetry remain follow-up work.
+
+Owned TCP/TLS transports provide nonblocking application writes and explicit
+flush completion. TLS accepts at most 2 KiB plaintext into one encrypted record,
+retains its ciphertext and offset across partial sends, and drains earlier
+control records before new application data. Requested KeyUpdate replies are
+queued without blocking a record poll; idle checkout rejects unsent output.
+The ciphertext queue is capped at 32 KiB. `tls_output_queue.e2e`, existing
+TLS polling fixtures, and `scripts/test_tls_poll_queue_peer.py` cover blocked
+and partial sends, flush, closed ownership and independent old/new-key ordering.
+`HttpServer.Tls` and the TCP side of `HttpServer.Secure` use incremental handshake owners
+and persistent HTTP/1.1 owners with the same count and deadline rules as the
+plaintext listener. Independent peers verify another TLS client can complete
+while a client stalls in ClientHello, Finished, upload or response reading.
+Client application keys remain gated by authenticated Finished. TLS HTTP/2
+owners retain multiplexed stream state and queued output. QUIC owners now retain
+handshake, critical-stream initialization, HTTP/3 and drain state across rounds.
+The combined listener advances TCP and UDP owners before its shared readiness
+wait. Client TCP/TLS connection establishment remains synchronous.
+
+All four server modules (`HttpServer`, `.Tls`, `.Quic`, `.Secure`) also provide
+`serveOn address config ...`. Four-byte addresses bind IPv4 and sixteen-byte
+addresses bind IPv6; invalid byte vectors fail before announcing. Existing
+`serve` calls retain their IPv4 wildcard binding. IPv6 listeners share the same
+ownership, timeout and shutdown behavior. `http_server_ipv6.e2e` and
+`scripts/test_http_server_ipv6_peer.py` cover IPv6 HTTP/1.1, TLS/no-ALPN, HTTP/2,
+HTTP/3 large bodies, rebinding and compiled leak accounting.
 
 `test/fixtures/e2e/stdlib-internal/http_server.e2e` covers routing, configuration, framing limits,
 and listener ownership. `python3 scripts/test_http_server_peer.py` exercises
@@ -149,22 +187,58 @@ timeouts only poll this deadline; they do not prematurely close a slow reader.
 on the same IPv4 port, announcing only after both binds succeed. It shares the
 TLS HTTP/1.1/h2 and QUIC HTTP/3 handlers and adds a same-port `Alt-Svc` advertisement
 unless the application already supplied one or returned 421. Application
-`Alt-Svc: clear` is preserved. Accepted requests remain sequential; a handshake
-or response-delivery drain can delay another admission. Both transports and
+`Alt-Svc: clear` is preserved. Accepted connections advance independently;
+stalled handshakes, uploads and flow credit do not monopolize admission. Both transports and
 the shutdown owner are released on bind failure or normal shutdown.
+TCP and UDP listener readiness now share one bounded kernel wait; accepted
+connections and UDP sockets also expose retained native readiness watches for
+the active-connection scheduler. Closed owners return immediate terminal events.
+`network_poll.e2e` and `scripts/test_network_poll_peer.py` verify multi-descriptor
+readiness, including data arriving only on the second descriptor and accepted
+TCP socket reads. Retained QUIC owners share routed datagrams and timers with
+the TCP scheduler, with at most sixty-four owners per transport.
 `python3 scripts/test_http_secure_server_peer.py` checks independent TLS/QUIC
 peers, repeated large requests, the owned client session, lazy body lifetime,
-occupied-port cleanup, same-port rebind and stalled TCP/QUIC shutdown.
+occupied-port cleanup, same-port rebind and stalled TCP/QUIC shutdown. It also
+checks TCP and a second QUIC connection while the first waits for upload bytes,
+critical-stream credit or Finished. These bounded cases pass with zero leaks;
+the [HTTP stack plan](../../project/http-stack-plan.md) separately tracks the
+native heap lifetime limit exposed by repeated fresh TLS handshakes.
 
 HTTPS clients now select HTTP/3 from compatible HTTPS DNS advertisements;
 HTTP/3 also has an authenticated UDP server listener described below. The pure
 wire layer provides bounded QUIC variable-length integers and HTTP/3 frame
 and SETTINGS parsing. QPACK supports the RFC 9204 static table, static-name
-references, literal names/values and shared Huffman decoding, advertising zero
-dynamic capacity and no blocked streams. `test/fixtures/e2e/http3_qpack.e2e`
+references, literal names/values and shared Huffman decoding. The static-only
+codec remains available with zero dynamic capacity. `test/fixtures/e2e/http3_qpack.e2e`
 checks the RFC example, malformed references, table boundaries and list limits;
 `python3 scripts/test_qpack_peer.py` verifies both directions against test-only
 `pylsqpack==0.3.23`, including duplicate fields and compiled leak accounting.
+Outgoing HPACK and QPACK select static indexed fields and static name references,
+and use RFC 7541 Huffman encoding when it is shorter than the original string.
+Credential and cookie values remain never-indexed. `http_header_compression.e2e`
+checks wire vectors and duplicate/Unicode fields; the independent
+`scripts/test_http_header_compression_peer.py` checks all 256 Huffman symbols,
+padding, a near-limit input, HPACK/QPACK round trips and sensitive-field flags.
+The dynamic QPACK checkpoint adds connection-owned inbound tables with a
+4096-byte advertised capacity and one blocked stream. Encoder instructions are
+parsed incrementally; blocked HEADERS defer later DATA until insertions arrive.
+Decoder feedback is queued under QUIC flow control, with each write bounded to
+900 bytes. Focused malformed-wire and blocked-message fixtures pass. Independent
+ls-qpack checks verify 560 sections, fragmentation, eviction and insert-count
+wrap-around. The delayed aioquic peer verifies section acknowledgments, Unicode
+headers, complete 70 KiB bodies and authenticated close; its observation window
+is 30 seconds, without changing engine deadlines. Shared field-value validation
+permits UTF-8 obs-text and still rejects CR, LF, NUL, DEL and other control bytes
+except HTAB. Outgoing QPACK still uses only static/literal representations;
+dynamic encoder/reference tracking remains open.
+HTTP/2 outgoing blocks now share a separate bounded dynamic HPACK table across
+connection state transitions. Peer table-capacity changes evict entries and
+emit ordered size updates before the next block; credentials and cookies stay
+never-indexed. Peer HTTP/2 and HTTP/3 decoded field-section limits are checked
+before outgoing headers when the setting is known. Focused encoder/limit
+fixtures and seven consecutive blocks decoded by the independent `hpack`
+implementation cover reuse, eviction and intermediate capacity changes.
 `test/fixtures/e2e/http3_wire.e2e` checks encoding bounds,
 fragmentation, forbidden HTTP/2 frame/settings identifiers and duplicates.
 The QUIC v1 AES-128 protection layer derives initial keys, reconstructs packet
@@ -217,6 +291,12 @@ GOAWAY identifiers and identifies unique control/QPACK streams by stream type;
 closing a critical stream fails the exchange. `http3_stream.e2e`,
 `http3_message.e2e`, `http3_control.e2e` and `http3_uni.e2e` cover these rules,
 and the live stream peer also feeds response/control bytes through this layer.
+Authenticated QUIC application owners enforce the negotiated nonzero idle
+limit with an RTT-derived three-PTO floor, independently of HTTP exchange
+deadlines. Receives and the first ack-eliciting send after a receive restart
+the timer. The idle fixture and an aioquic upload stalled beyond a short peer
+limit check expiry and subsequent listener availability. Handshake owners
+retain their separate bounded deadlines.
 `HttpsService` parses bounded HTTPS RDATA into aliases or endpoints advertising
 `h3`, including alternate ports and IPv4/IPv6 hints. It rejects malformed
 parameter ordering, lengths, target compression and mandatory-key lists;
@@ -240,15 +320,25 @@ explicit close. The live stream peer's `--http-client`, `--request-size=71680`,
 `--buffered`, `--close-early` and `--discovery` options verify these paths,
 including alternate-target authentication and both directions crossing 64 KiB.
 `HttpClientSession.create`, `createTrusted` and `createTrustedWithRoots` expose
-owned `request`, `stream`, `clear` and `close` functions. Each session learns
+owned `request`, `requestMany`, `stream`, `clear` and `close` functions. Each session learns
 `h3` Alt-Svc alternatives from authenticated HTTPS response headers, binds them
 to the original scheme/host/port and replaces that origin's advertisements on
 each new field. Its cache holds at most 32 alternatives, caps freshness at one
 day and conservatively subtracts response age and request duration. `clear`,
 expired advertisements and status 421 invalidate alternatives; callers should
-clear the session after a network change. Session close releases only the
-cache; a returned lazy body keeps owning its connection until consumed or
-closed. Calls after session close return `NetworkError`. Existing stateless
+clear the session after a network change. Buffered HTTP/1.1 session requests
+also retain at most eight idle origin connections for thirty seconds, over
+TCP or TLS. Only fully consumed, self-delimited HTTP/1.1 responses without a
+`Connection: close` token or surplus bytes are reusable. Checkout discards
+expired, closed, failed or readable idle sockets; TLS owners also reject
+buffered encrypted bytes. This conservatively discards TLS control traffic
+instead of blocking checkout. A failed attempted request is never replayed.
+Session clear and close release the cache and pooled connections; a returned
+lazy body exclusively borrows its connection until consumed or closed. Valid
+completion returns eligible HTTP/1.1–3 owners; abandonment retires them. Clear
+invalidates outstanding leases, so later completion cannot repopulate the pool.
+Calls after session close return `NetworkError`; a subsequent body pull releases
+its borrowed owner. Existing stateless
 client entry points retain HTTPS DNS discovery without persistent Alt-Svc state.
 `alt_svc.e2e`, `alt_svc_cache.e2e`, `http_client_session.e2e` and
 `python3 scripts/test_alt_svc_peer.py` cover parsing, bounded cache eviction,
@@ -262,7 +352,23 @@ the native heap during that fallback check. `rsa_montgomery.e2e` and
 `python3 scripts/test_rsa_montgomery.py` check malformed inputs, carry boundaries
 and 48 independent Python `pow` vectors through 8192-bit moduli. This public
 exponent operation is not a private-key signing implementation.
-Multiplexing and connection pooling remain outside the single-exchange profile.
+Buffered sessions also keep up to eight idle authenticated HTTP/2 origins for
+thirty seconds, preserving HPACK, TLS keys, connection credit and monotonically
+allocated odd stream IDs. Checkout consumes ready control frames and retires
+closed or GOAWAY connections before any new request write. The internal
+`__Http2Connection.requestMany` scheduler supports up to 32 requests and respects
+peer concurrency limits. Upload windows and response parsing are stream-local;
+HPACK and connection credit remain shared. DATA sends rotate across active
+streams, out-of-order responses return in input order, resets affect only their
+stream and GOAWAY drains eligible streams without replaying refused requests.
+Each batch caps aggregate uploads and response buffering separately at 100 MiB.
+TCP/TLS polling retains incomplete records/frames and authenticates TLS control
+records without waiting for more bytes. `http2_connection.e2e`,
+`http_transport_poll.e2e` and `scripts/test_http2_session_peer.py` check reuse,
+reverse/interleaved 70 KiB replies, 140 KiB uploads, early responses, shared
+compression, stream limits, resets, GOAWAY and cleanup. Public session batches
+and HTTP/3 pooling/scheduling are described below. Lazy multiplexed bodies and
+multiplexed servers remain unfinished.
 Buffered and lazy HTTP/3 clients retain the latest packet-number/key state
 through terminal events and send encrypted H3_NO_ERROR on completion or early
 body closure. Closing keys stay available for three PTOs, capped at thirty
@@ -349,12 +455,17 @@ bidirectional streams. `python3 scripts/test_quic_server_peer.py` checks live
 Retry, authenticated HTTP/3 echoes through 70 KiB, dropped flights, duplicates,
 corrupted ciphertext, zero server-bidi credit and zero leaks.
 
-`HttpServer.Quic.serve` provides sequential IPv4 UDP serving using the same
+`HttpServer.Quic.serve` provides multiplexed requests within each connection
+and fair retained connection admission, using the same
 configuration, imported identity and HTTP handler as the TLS listener. It
 shares method/URL/header handling, optional standard headers and logging,
 configured body limits, HEAD representation lengths and early 413 rejection.
 Application state is disposed through a child socket while the listener stays
-open. Successful responses get a bounded ten-second delivery drain before an
+open. A successful response leaves its connection available for reuse. Up to
+thirty-two request owners share compression and connection credit while
+retaining independent parsing, response credit and deadlines. Completed streams
+renew concurrency credit; the bounded request history drains through GOAWAY.
+Graceful server termination gets a bounded ten-second delivery drain before an
 encrypted H3_NO_ERROR close; closing keys are retained for three PTOs, capped
 at thirty seconds, with fresh packet numbers for repeated close frames.
 The listener retains only peer/CID/key/packet-number closing metadata, not
@@ -363,10 +474,20 @@ Closing replies are rate-limited and failed sends discard the closing keys
 instead of risking a stale nonce. Shutdown interrupts handshake and request
 waits and disposes the cache. The independent
 `python3 scripts/test_http3_server_peer.py` checks routing, 70 KiB flow, HEAD,
-early 413, encrypted closure, token replay suppression, unsupported ALPN,
+early 413, explicit encrypted peer closure, token replay suppression, unsupported ALPN,
 same-port rebind, incomplete-body shutdown and zero leaks. Its aioquic client
 supplies HEAD method semantics because that library's raw H3 layer does not
-retain the originating request method.
+retain the originating request method. The same peer also checks forty requests
+on one connection and a completed response alongside a stalled stream. The
+secure-server peer separately establishes fair UDP/TCP admission. Listener
+output retains at most eight sealed datagrams per child and retries one atomic
+nonblocking send per round without resealing or reserving another nonce. All
+QUIC owners share a 101 MiB retained payload budget; child disposal never closes
+the shared UDP listener.
+QPACK-blocked request owners keep DATA in transport reassembly without returning
+receive credit until the required insertions arrive. Encoder/control streams
+and request resets still advance, so a large upload cannot grow deferred DATA
+past the blocked-message bound while waiting for its HEADERS section.
 
 `QuicServerRetry` provides listener-key HMAC tokens bound to the peer's address
 and port, original destination CID, client source CID and Retry source CID.
@@ -386,6 +507,28 @@ fields, ignores comments and non-data blocks, and flushes a final unterminated
 block at end of stream. The source is split and qualified where required by the
 compiler's module grammar; that does not change the public API or consumption
 behavior.
+
+Buffered HTTP/3 sessions now retain QUIC packet recovery, traffic keys, QPACK
+state and client stream IDs across requests, with eight idle origins and thirty
+second expiry. Connection rotation after 1024 requests bounds retained final-size
+history. Up to 64 active transport owners are independent of completed channels.
+`Session.requestMany` accepts up to 32 `Request` records and returns ordered
+`Outcome` records containing their input index and response result. It validates
+all requests before any I/O, groups requests by origin and uses the negotiated
+HTTP/2 or HTTP/3 scheduler; distinct origins and HTTP/1.1 exchanges run sequentially.
+Uploads and responses each have a 100 MiB aggregate batch limit. A stream reset
+fails that request while other eligible streams finish. Requests rejected by
+GOAWAY are reported without replay. `Session.stream` now exclusively checks out
+an HTTP/1.1, HTTP/2 or HTTP/3 owner. Only complete, validated body framing returns
+it to the pool. HTTP/1.1 additionally requires no surplus bytes and idle readiness;
+HTTP/2–3 preserve shared compression and terminal parser/transport state.
+Early closure, failures, GOAWAY and session invalidation retire the borrowed owner.
+Simultaneous lazy bodies use separate checked-out connections, not multiplexed
+body readers. `http_session_stream.e2e`, `http_session_stream_h2.e2e` and the
+session peers' `--stream` modes cover framing, invalidation, reuse and cleanup,
+including independent 70 KiB TCP/TLS, HTTP/2 and HTTP/3 responses.
+`http_session_batch.e2e`, `quic_flow.e2e`, and the session peers' `--public`
+HTTP/2 and `--public --multiplex` HTTP/3 modes exercise these APIs.
 
 ## Upstream correctness adoption (2026-10-11)
 

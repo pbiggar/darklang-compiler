@@ -53,7 +53,7 @@ StdLib/Cli/Posix/__Error.dark
 StdLib/Cli/Posix/OpenFlags.dark
 StdLib/Retry.dark
 StdLib/Cli/Path.dark
-StdLib/Cli/File.dark
+packages/darklang/stdlib/cli/file.dark
 StdLib/Cli/Dir.dark
 StdLib/String/__Unicode/__Data.dark
 StdLib/String/__Unicode/__Data/__Index00.dark
@@ -162,6 +162,7 @@ StdLib/HttpClient/ContentType.dark
 StdLib/HttpClient/Sse.dark
 StdLib/HttpServer/Config.dark
 StdLib/HttpServer.dark
+StdLib/__Http1Server.dark
 StdLib/__Network.dark
 StdLib/__Datagram.dark
 StdLib/__HttpWire.dark
@@ -173,6 +174,8 @@ StdLib/__TlsAlpn.dark
 StdLib/__HttpTransport.dark
 StdLib/__Http2Fields.dark
 StdLib/__Http2.dark
+StdLib/__Http2Connection.dark
+StdLib/__Http2Server.dark
 StdLib/__QuicWire.dark
 StdLib/__QuicCrypto.dark
 StdLib/__QuicPacket.dark
@@ -185,6 +188,7 @@ StdLib/__QuicFlow.dark
 StdLib/__QuicRecovery.dark
 StdLib/__QuicSpace.dark
 StdLib/__QuicHandshakePacket.dark
+StdLib/__QuicIdle.dark
 StdLib/__QuicParameters.dark
 StdLib/__QuicTls.dark
 StdLib/__QuicKeys.dark
@@ -192,6 +196,8 @@ StdLib/__QuicClient.dark
 StdLib/__QuicServer.dark
 StdLib/__QuicConnection.dark
 StdLib/__Qpack.dark
+StdLib/__QpackDecoder.dark
+StdLib/__QpackEncoder.dark
 StdLib/__Http3Wire.dark
 StdLib/__Http3Stream.dark
 StdLib/__Http3Message.dark
@@ -199,10 +205,15 @@ StdLib/__Http3Control.dark
 StdLib/__Http3Uni.dark
 StdLib/__Http3.dark
 StdLib/__Http3Client.dark
+StdLib/__Http3Connection.dark
 StdLib/__Http3Server.dark
 StdLib/__Http3Discovery.dark
 StdLib/__AltSvc.dark
 StdLib/__AltSvcCache.dark
+StdLib/__Http1Pool.dark
+StdLib/__Http2Pool.dark
+StdLib/__Http3Pool.dark
+StdLib/__HttpSessionBatch.dark
 StdLib/HttpClientSession.dark
 StdLib/__HttpsService.dark
 StdLib/__HttpsDns.dark
@@ -224,6 +235,8 @@ StdLib/__Tls13ServerRetry.dark
 StdLib/__Tls13ServerHandshake.dark
 StdLib/__Tls13KeyUpdate.dark
 StdLib/__Tls13ServerTcp.dark
+StdLib/__Tls13ServerPoll.dark
+StdLib/__TlsServer.dark
 StdLib/__QuicServerTls.dark
 StdLib/__QuicServerRetry.dark
 StdLib/HttpServer/Tls.dark
@@ -257,15 +270,15 @@ StdLib/Cli/UI/Progress.dark
 StdLib/Cli/UI/Prompt.dark
 StdLib/Cli/UI/Spinner.dark
 StdLib/Cli/UI/Table.dark
-StdLib/Cli.dark
+packages/darklang/stdlib/cli/execution.dark
 StdLib/Cli/OS.dark
 StdLib/Cli/Architecture.dark
 StdLib/Cli/Shell.dark
 StdLib/Cli/Host.dark
-StdLib/Cli/Env.dark
+packages/darklang/stdlib/cli/env.dark
 StdLib/Cli/__Args.dark
-StdLib/Cli/Process.dark
-StdLib/Cli/Sys.dark
+packages/darklang/stdlib/cli/process.dark
+packages/darklang/stdlib/cli/sys.dark
 StdLib/Cli/Stdin/Key.dark
 StdLib/Cli/Stdin/Modifiers.dark
 StdLib/Cli/Stdin/KeyRead.dark

@@ -5,15 +5,16 @@ import argparse
 import socket
 import subprocess
 import tempfile
+import time
 from pathlib import Path
 
 from cryptography.hazmat.primitives import serialization
 
 from test_http3_server_peer import ROOT, SERVER, exchange, start, stop
-from test_http2_server_tls_peer import connect, h2_exchange
+from test_http2_server_tls_peer import connect, h2_exchange, http1_owners
 from test_quic_tls_peer import certificates
 
-CLIENT = '''// client.dark - Learn same-origin HTTP/3 and retain lazy body ownership after session close.
+CLIENT = '''// client.dark - Learn same-origin HTTP/3 and consume lazy body ownership before session close.
 let run () : Unit =
   match Stdlib.Blob.fromHex "@ROOT@" with
   | Error _ -> Stdlib.printLine "ERROR"
@@ -26,9 +27,9 @@ let run () : Unit =
       else session.request "POST" url [] body |> Stdlib.Result.andThen (fun second ->
         if second.statusCode != 200 || Stdlib.Blob.toList second.body != Stdlib.Blob.toList body then Error Stdlib.HttpClient.RequestError.NetworkError
         else session.stream "POST" url [] body |> Stdlib.Result.map (fun third ->
-          session.close ()
           let received = Stdlib.Stream.toList third.body in
           Stdlib.Stream.close third.body
+          session.close ()
           third.statusCode == 200 && received == Stdlib.Blob.toList body))) in
     session.close ()
     Stdlib.printLine (match result with | Ok true -> "DONE" | _ -> "ERROR")
@@ -47,6 +48,7 @@ def main():
     server = SERVER.replace("Stdlib.HttpServer.Quic.serve", "Stdlib.HttpServer.Secure.serve")
     server = server.replace('  else if Stdlib.HttpServer.getMethod', '''  else if Stdlib.String.endsWith request.url "/clear" then Stdlib.Http.Response { statusCode = 200, headers = [("alt-svc", "clear")], body = Stdlib.Blob.empty }
   else if Stdlib.String.endsWith request.url "/421" then Stdlib.Http.responseWithText "misdirected" 421
+  else if Stdlib.String.endsWith request.url "/big" then Stdlib.Http.responseWithText (Stdlib.String.join (Stdlib.List.repeatUnsafe 70 (Stdlib.String.repeat "b" 1000)) "") 200
   else if Stdlib.HttpServer.getMethod''')
     with tempfile.TemporaryDirectory(prefix="dark-http-secure-", dir=ROOT.parent) as temporary:
         source, binary = Path(temporary) / "server.dark", Path(temporary) / "server"
@@ -55,6 +57,35 @@ def main():
         assert result.returncode == 0, result.stdout + result.stderr
         process, port = start(binary)
         try:
+            # Keep one authenticated QUIC request incomplete while admitting
+            # both a TCP client and a second QUIC connection on the same port.
+            for mode in ({}, {"server_uni_credit": 0}, {"handshake_only": True}):
+                with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as stalled:
+                    stalled.bind(("127.0.0.1", 0))
+                    stalled.settimeout(0.01)
+                    client, _http, _replay = exchange(stalled, port, ca, body=b"partial", declared=100, stalled=True, **mode)
+                    started = time.monotonic()
+                    with connect(port, trust, ["http/1.1"]) as peer:
+                        peer.sendall(b"GET /echo HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
+                        response = bytearray()
+                        while data := peer.recv(65536):
+                            response.extend(data)
+                        assert response.startswith(b"HTTP/1.1 200"), response
+                    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as peer:
+                        peer.bind(("127.0.0.1", 0))
+                        peer.settimeout(0.01)
+                        _headers, response, _replay = exchange(peer, port, ca, body=b"other connection")
+                        assert response == b"other connection", response
+                    assert time.monotonic() - started < 5, ("listener waited for stalled owner", mode)
+                    client.close(error_code=256)
+                    for packet, target in client.datagrams_to_send(time.monotonic()):
+                        stalled.sendto(packet, target)
+                # Keep each case within the native arena's current lifetime
+                # allocation limit; also verify simultaneous owner disposal.
+                stop(process)
+                process, _ = start(binary, port)
+            print("Stalled QUIC upload, critical-stream credit and Finished leave TCP and another QUIC connection live", flush=True)
+            http1_owners(port, trust)
             advertisement = f'h3=":{port}"; ma=3600'.encode()
             for protocols in (["http/1.1"], []):
                 with connect(port, trust, protocols) as peer:

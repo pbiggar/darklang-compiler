@@ -1,0 +1,7 @@
+// network_poll.e2e - Shared socket readiness, closed owners, and bounded waits.
+Stdlib.__Network.waitSockets [] 0L = Ok []
+Stdlib.__Network.waitSockets [] -1L = Error 22L
+Stdlib.__Network.waitSockets [] 60001L = Error 22L
+Stdlib.__Network.listenTcp4 [127L, 0L, 0L, 1L] 0L |> Stdlib.Result.andThen (fun listener -> Stdlib.__Network.waitSockets [Stdlib.__Network.Interest { watch = listener.watch, readable = true, writable = false }] 0L |> Stdlib.Result.map (fun events -> let _ = Stdlib.__Network.closeListener listener in events)) = Ok []
+Stdlib.__Network.listenTcp4 [127L, 0L, 0L, 1L] 0L |> Stdlib.Result.andThen (fun listener -> let _ = Stdlib.__Network.closeListener listener in Stdlib.__Network.waitSockets [Stdlib.__Network.Interest { watch = listener.watch, readable = true, writable = false }] 10000L) = Ok [Stdlib.__Network.Ready { index = 0L, readable = false, writable = false, closed = true, failed = false }]
+Stdlib.__Network.listenTcp4 [127L, 0L, 0L, 1L] 0L |> Stdlib.Result.andThen (fun first -> Stdlib.__Network.listenTcp4 [127L, 0L, 0L, 1L] 0L |> Stdlib.Result.andThen (fun second -> let _ = Stdlib.__Network.closeListener second in Stdlib.__Network.waitSockets [Stdlib.__Network.Interest { watch = first.watch, readable = true, writable = false }, Stdlib.__Network.Interest { watch = second.watch, readable = true, writable = false }] 10000L |> Stdlib.Result.map (fun events -> let _ = Stdlib.__Network.closeListener first in events))) = Ok [Stdlib.__Network.Ready { index = 1L, readable = false, writable = false, closed = true, failed = false }]
