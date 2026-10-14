@@ -27,6 +27,9 @@ type typeInventory = typeEntry StringOrder.Map.t
 
 (* Traits occupy their own identity catalog, never the nominal type inventory. *)
 type traitSignature = {
+  identity : string;
+  methodOrder : string list;
+  methodEffects : string list option StringOrder.Map.t;
   traitParams : string list;
   requirements : TraitCatalog.obligation list;
   methods : functionSignature StringOrder.Map.t;

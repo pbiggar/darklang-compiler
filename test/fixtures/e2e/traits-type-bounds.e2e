@@ -8,7 +8,7 @@ unwrapShown (ShownBox { value = 42L }) = 42L
 
 (
 trait TypeBoundMissing<'a> =
-  let show (value: 'a) : String
+  let missingShow (value: 'a) : String
 type UnusableBox<'a: TypeBoundMissing> = { value: 'a }
 UnusableBox { value = "missing" }
 ) = compileerror="No implementation of trait 'TypeBoundMissing'"

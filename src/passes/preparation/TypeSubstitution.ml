@@ -198,8 +198,8 @@ let consolidateTypeBindings bindings =
    Substitute in type arguments and value arguments
    Substitute types in parameter annotations and body
 *)
-let rec applySubstToExprWithCalls subst rewrite expr =
-  let recurse = applySubstToExprWithCalls subst rewrite in
+let rec applySubstToExprWithCalls subst rewrite rewriteReference expr =
+  let recurse = applySubstToExprWithCalls subst rewrite rewriteReference in
   let checked typ =
     C.checkedType (applySubstToType subst (C.semanticType typ))
   in
@@ -209,7 +209,7 @@ let rec applySubstToExprWithCalls subst rewrite expr =
   in
   match expr with
   | C.GenericFuncRef (id, args, typ) ->
-      C.GenericFuncRef (id, types args, checked typ)
+      rewriteReference id (types args) (checked typ)
   | C.UnitLiteral | C.Int64Literal _ | C.Int128Literal _ | C.BigIntLiteral _
   | C.Int8Literal _ | C.Int16Literal _ | C.Int32Literal _ | C.UInt8Literal _
   | C.UInt16Literal _ | C.UInt32Literal _ | C.UInt64Literal _
@@ -290,10 +290,14 @@ let rec applySubstToExprWithCalls subst rewrite expr =
 let applySubstToExpr subst expr =
   applySubstToExprWithCalls subst
     (fun target parameters args -> C.TypeApp (target, parameters, args))
+    (fun target parameters typ -> C.GenericFuncRef (target, parameters, typ))
     expr
 
-let rewriteTypeApps rewrite expr =
-  applySubstToExprWithCalls M.empty rewrite expr
+let rewriteTypeApps
+    ?(rewriteReference =
+      fun target parameters typ -> C.GenericFuncRef (target, parameters, typ))
+    rewrite expr =
+  applySubstToExprWithCalls M.empty rewrite rewriteReference expr
 
 let rec resolveAliasType aliases typ =
   let recurse = resolveAliasType aliases in

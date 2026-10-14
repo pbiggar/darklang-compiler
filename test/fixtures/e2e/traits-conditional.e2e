@@ -10,10 +10,10 @@ renderNested [[42L]] = "integer"
 
 (
 trait MissingNestedShow<'a> =
-  let show (value: 'a) : String
+  let missingShow (value: 'a) : String
 impl<'a: MissingNestedShow> MissingNestedShow for List<'a> =
-  let show (values: List<'a>) : String = "list"
-MissingNestedShow.show ["missing"]
+  let missingShow (values: List<'a>) : String = "list"
+MissingNestedShow.missingShow ["missing"]
 ) = compileerror="No implementation of trait 'MissingNestedShow'"
 
 let wrapListConditional<'a: NestedShow> (value: 'a) : String = NestedShow.show [value]

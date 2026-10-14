@@ -8,7 +8,7 @@ renderApplied 42L = "integer"
 
 (
 trait MissingValueShow<'a> =
-  let show (value: 'a) : String
-let renderMissingValue<'a: MissingValueShow> (value: 'a) : String = MissingValueShow.show value
+  let missingShow (value: 'a) : String
+let renderMissingValue<'a: MissingValueShow> (value: 'a) : String = MissingValueShow.missingShow value
 let render = renderMissingValue<Int64> in render 42L
 ) = compileerror="No implementation of trait 'MissingValueShow'"

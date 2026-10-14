@@ -52,6 +52,11 @@ val specializeFunction :
   CheckedAST.functionDef
 
 val rewriteTypeApps :
+  ?rewriteReference:
+    (AST.functionId ->
+    CheckedAST.checkedType list ->
+    CheckedAST.checkedType ->
+    CheckedAST.expr) ->
   (AST.functionId ->
   CheckedAST.checkedType list ->
   CheckedAST.expr NonEmptyList.t ->

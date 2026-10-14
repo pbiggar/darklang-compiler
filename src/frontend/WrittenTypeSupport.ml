@@ -34,6 +34,9 @@ type typeInventory = typeEntry M.t
 
 (* Traits occupy their own identity catalog, never the nominal type inventory. *)
 type traitSignature = {
+  identity : string;
+  methodOrder : string list;
+  methodEffects : string list option M.t;
   traitParams : string list;
   requirements : TraitCatalog.obligation list;
   methods : functionSignature M.t;

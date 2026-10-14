@@ -13,16 +13,16 @@ PatternShow.show (Dict { "value": 42L }) = "dict"
 
 (
 trait SamePair<'a> =
-  let show (value: 'a) : String
+  let samePair (value: 'a) : String
 impl<'a> SamePair for ('a * 'a) =
-  let show (value: ('a * 'a)) : String = "same"
-SamePair.show (42L, "different")
+  let samePair (value: ('a * 'a)) : String = "same"
+SamePair.samePair (42L, "different")
 ) = compileerror="No implementation of trait 'SamePair'"
 
 (
 trait CircularShow<'a> =
-  let show (value: 'a) : String
+  let circularShow (value: 'a) : String
 impl<'a: CircularShow> CircularShow for ('a) =
-  let show (value: 'a) : String = "cycle"
-CircularShow.show 42L
+  let circularShow (value: 'a) : String = "cycle"
+CircularShow.circularShow 42L
 ) = compileerror="Cyclic trait obligation 'CircularShow'"

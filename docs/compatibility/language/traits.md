@@ -15,6 +15,10 @@ M6 package breadth and M7 remain unfinished; this is not a readiness claim.
 | Single, multiple, parameterized and type-declaration bounds | Parsed, retained and enforced on function calls and type uses | `test/fixtures/syntax/traits.syntax` |
 | Concrete named method calls | Select an implementation and emit ordinary checked function calls | `test/fixtures/e2e/traits.e2e` |
 | Method aliases | Validate against the referenced ordinary function signature | `test/fixtures/e2e/traits-alias.e2e` |
+| Implementation methods as ordinary functions | Public `<Type>.<Trait>.<method>` spellings resolve to the existing method FunctionId when unique | `traits-upstream-shapes.e2e` |
+| Trait method function values | Existing generic function references select static method targets before specialization planning | `traits-upstream-shapes.e2e`, `traits-method-values.e2e` |
+| Identically shaped trait declarations | Coalesce identities using upstream hash-relevant fields; declaration/parameter names are cosmetic, binder names and method order are significant | `traits-content-identity.e2e` |
+| Trait-aware sorting | Select `Compare.lessThan` statically for concrete list elements; retain structural fallback and stable equal ordering | `traits-sort.e2e` |
 | Unknown trait, missing impl, incomplete method set, wrong signature | Frontend compile errors | `traits-{unknown,missing-impl,method-set,wrong-method}.e2e` |
 | Competing identical implementations | Compile-time ambiguity when selecting a call | `traits-ambiguous.e2e` |
 | Traits as value types | Traits are excluded from the nominal type catalog | `test/fixtures/e2e/traits-as-types.e2e` passed |
@@ -88,8 +92,9 @@ receive their upstream trait surfaces. String ordering now uses the upstream
 Compare implementation, so the prior rejection test now expects `false`.
 The hosted-package native E2E reproduced a missing trait dependency before
 implementation and then passed. Its current pipeline-format extension also
-reproduced a renderer failure before its fix. The full-host and regression
-reruns after that fix are pending.
+reproduced a renderer failure before its fix. The full-host rerun passed
+**13,469/13,469** (150.0 seconds); `dune runtest` passed after the pipeline and
+offline-cache fixes.
 
 Package imports fetch `trait` and `impl` kinds by name/hash alongside the
 existing kinds, preserve source names with location/hash, follow trait and
@@ -109,3 +114,32 @@ This is a deferred persistence-semantic gap, not a claim to preserve upstream
 saved-call pinning. Upstream trait-corpus adoption and reusable-catalog boundary
 coverage remain M7 work. The cache-context fixture passed **2/2** and confirms
 that a caller-local specific implementation does not reuse the blanket result.
+
+M7 coverage is in progress. The unchanged current upstream trait corpus is
+stored at `test/fixtures/upstream-reference/language/traits.dark` and compares
+byte-for-byte with the pinned source. Attempting to execute it exposed a test
+infrastructure mismatch: its named `test` and `=> raises` syntax and
+`Stdlib.Test` assertions are newer than this compiler's fixture loader. No
+claim is made that this reference file executes. Adapted expectations in
+`traits-upstream-shapes.e2e` cover its concrete, conditional, callback,
+receiver and public implementation-function behaviors. They reproduced
+unsupported method names and method values before their fixes.
+
+M7's focused suite passed **111/111** (17.8 seconds), including receiver
+partial-application boundary cases. It also reproduced a false receiver-owner
+ambiguity caused by an unsatisfied conditional bound on a parameterized trait;
+owner filtering now discharges those known bounds. Trait-method partial values
+infer their self type and lower to ordinary captured lambdas. Identical local
+trait signatures share the upstream content identity; existing negative tests
+now use different method names where they require genuinely different traits.
+The coalescing key follows `LibSerialization/Hashing/Canonical.fs.writeTrait`
+at the pinned revision, including effect ceilings as identity data without
+enforcing them. Sorting uses a frontend-only static marker that is replaced
+by the chosen ordinary method call or existing structural comparison before
+ANF; no trait-specific runtime or backend operation is introduced.
+
+Remaining coverage gaps include full execution of the
+new upstream test format and broad remote implementation discovery. These
+are unfinished work, rather than approved semantic differences. The performance
+gate remains blocked before measurement by the baseline digest mismatch.
+The final full-host and regression reruns after these M7 fixes are pending.

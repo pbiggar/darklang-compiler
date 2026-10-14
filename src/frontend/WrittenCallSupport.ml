@@ -38,14 +38,6 @@ let[@warning "-4"] checkNamed checkExpression checkedLiteral globals locals
       Error
         ("Unknown function '" ^ String.concat "." (qualifiedFnName name) ^ "'")
   | Some signature
-    when Option.is_some signature.traitMethod
-         && ((args = [] && typeArgs <> [])
-            || args <> []
-               && List.length args < List.length signature.parameters) ->
-      Error
-        "Trait method values and partial applications require a resolved \
-         implementation"
-  | Some signature
     when args = [] && typeArgs <> [] && signature.parameters <> [] ->
       bind
         (ResultList.traverse
@@ -66,12 +58,29 @@ let[@warning "-4"] checkNamed checkExpression checkedLiteral globals locals
                  (signature.id, C.checkedTypeArgs types, C.checkedType typ)))
   | Some signature
     when args <> [] && List.length args < List.length signature.parameters ->
-      bind
-        (ResultList.traverse
-           (resolveWrittenType globals.allowInternal globals.types
-              globals.modulePath globals.typeParams)
-           typeArgs)
-        (fun givenTypeArgs ->
+      let givenTypeArgs =
+        if typeArgs = [] && Option.is_some signature.traitMethod then
+          bind
+            (ResultList.traverse
+               (fun arg ->
+                 map (fun (typ, _, _) -> typ) (check symbols None arg))
+               args)
+            (fun actual ->
+              Unification.inferTypeArgs signature.typeParams
+                (take (List.length args) signature.parameters)
+                actual
+                (Some
+                   (AST.TFunction
+                      ( drop (List.length args) signature.parameters,
+                        signature.return )))
+                expected)
+        else
+          ResultList.traverse
+            (resolveWrittenType globals.allowInternal globals.types
+               globals.modulePath globals.typeParams)
+            typeArgs
+      in
+      bind givenTypeArgs (fun givenTypeArgs ->
           if List.length givenTypeArgs <> List.length signature.typeParams then
             Error
               ("Partial application of generic function '" ^ name.WT.fn.WT.name

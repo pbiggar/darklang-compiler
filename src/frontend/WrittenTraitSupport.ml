@@ -15,7 +15,7 @@ let resolveTrait (globals : globals) path name =
   List.find_map
     (fun candidate ->
       Option.map
-        (fun signature -> (candidate, signature))
+        (fun (signature : traitSignature) -> (signature.identity, signature))
         (M.find_opt candidate globals.traits))
     (NameResolution.candidateSpellings NameResolution.Type path name
     @ if String.contains name '.' then [] else [ "Darklang.Stdlib." ^ name ])
@@ -99,7 +99,32 @@ let predeclare allowInternal types (base : globals) items symbols =
                             globals with
                             traits =
                               M.add name
-                                { traitParams; requirements = []; methods }
+                                {
+                                  identity = name;
+                                  methodOrder =
+                                    List.map
+                                      (fun (method_ : WT.traitMethodDecl) ->
+                                        method_.WT.name.WT.name)
+                                      declaration.WT.methods;
+                                  methodEffects =
+                                    M.of_list
+                                      (List.map
+                                         (fun (method_ : WT.traitMethodDecl) ->
+                                           ( method_.WT.name.WT.name,
+                                             Option.map
+                                               (fun effects ->
+                                                 List.sort_uniq String.compare
+                                                   (List.map
+                                                      (fun (ceiling :
+                                                             WT.identifier) ->
+                                                        ceiling.WT.name)
+                                                      effects))
+                                               method_.WT.effects ))
+                                         declaration.WT.methods);
+                                  traitParams;
+                                  requirements = [];
+                                  methods;
+                                }
                                 globals.traits;
                           },
                           symbols ))
@@ -427,15 +452,172 @@ let validate (globals : globals) implementations =
     (Ok globals) implementations
 
 let functions (globals : globals) =
+  let leaf name = List.hd (List.rev (String.split_on_char '.' name)) in
+  let selfName = function
+    | AST.TInt8 -> Some "Int8"
+    | AST.TInt16 -> Some "Int16"
+    | AST.TInt32 -> Some "Int32"
+    | AST.TInt64 -> Some "Int64"
+    | AST.TInt128 -> Some "Int128"
+    | AST.TInt -> Some "Int"
+    | AST.TUInt8 -> Some "UInt8"
+    | AST.TUInt16 -> Some "UInt16"
+    | AST.TUInt32 -> Some "UInt32"
+    | AST.TUInt64 -> Some "UInt64"
+    | AST.TUInt128 -> Some "UInt128"
+    | AST.TFloat64 -> Some "Float"
+    | AST.TBool -> Some "Bool"
+    | AST.TString -> Some "String"
+    | AST.TChar -> Some "Char"
+    | AST.TBlob -> Some "Blob"
+    | AST.TDateTime -> Some "DateTime"
+    | AST.TUnit -> Some "Unit"
+    | AST.TList _ -> Some "List"
+    | AST.TDict _ -> Some "Dict"
+    | AST.TTuple _ -> Some "Tuple"
+    | AST.TStream _ -> Some "Stream"
+    | AST.TRecord (name, _) | AST.TSum (name, _) -> Some (leaf name)
+    | AST.TVar _ | AST.TInferenceVar _ | AST.TFunction _ | AST.TNever
+    | AST.TInternalRawPtr ->
+        None
+  in
+  let aliases =
+    List.fold_left
+      (fun aliases implementation ->
+        match selfName implementation.selfType with
+        | None -> aliases
+        | Some self ->
+            let path =
+              List.rev
+                (List.tl
+                   (List.rev (String.split_on_char '.' implementation.identity)))
+            in
+            let path =
+              if
+                match List.rev path with
+                | name :: _ -> name = self
+                | [] -> false
+              then path
+              else path @ [ self ]
+            in
+            let path = path @ [ leaf implementation.traitName ] in
+            M.fold
+              (fun methodName signature aliases ->
+                let name = String.concat "." (path @ [ methodName ]) in
+                M.update name
+                  (function
+                    | None -> Some [ signature ]
+                    | Some values -> Some (signature :: values))
+                  aliases)
+              implementation.methodFunctions aliases)
+      M.empty globals.implementations
+  in
+  let functions =
+    M.fold
+      (fun name candidates functions ->
+        match candidates with
+        | [ signature ] when not (M.mem name functions) ->
+            M.add name signature functions
+        | _ -> functions)
+      aliases globals.functions
+  in
   M.fold
     (fun traitName trait_ functions ->
       M.fold
         (fun methodName signature functions ->
           M.add (traitName ^ "." ^ methodName) signature functions)
         trait_.methods functions)
-    globals.traits globals.functions
+    globals.traits functions
+
+(* The upstream trait hash includes binder names, ordered method signatures,
+   bounds and effect ceilings, but excludes declaration and parameter names. *)
+let canonicalizeTraits localNames (globals : globals) =
+  let shape (trait_ : traitSignature) =
+    ( trait_.traitParams,
+      trait_.requirements,
+      List.map
+        (fun name ->
+          let method_ = M.find name trait_.methods in
+          ( name,
+            method_.typeParams,
+            method_.parameters,
+            method_.return,
+            method_.bounds,
+            M.find name trait_.methodEffects ))
+        trait_.methodOrder )
+  in
+  let rec normalize (traits : traitSignature M.t) =
+    let ordered =
+      M.bindings traits
+      |> List.stable_sort (fun (a, _) (b, _) ->
+          Bool.compare (S.mem a localNames) (S.mem b localNames))
+    in
+    let _, identities =
+      List.fold_left
+        (fun (representatives, identities) (name, trait_) ->
+          match
+            List.find_opt
+              (fun (_, representative) -> shape representative = shape trait_)
+              representatives
+          with
+          | Some (_, representative) ->
+              (representatives, M.add name representative.identity identities)
+          | None ->
+              ( (name, trait_) :: representatives,
+                M.add name trait_.identity identities ))
+        ([], M.empty) ordered
+    in
+    let obligation (name, args) =
+      (Option.value ~default:name (M.find_opt name identities), args)
+    in
+    let rewritten =
+      M.mapi
+        (fun name (trait_ : traitSignature) ->
+          let identity = M.find name identities in
+          let representative = M.find identity traits in
+          {
+            trait_ with
+            identity;
+            requirements = List.map obligation representative.requirements;
+            methods =
+              M.map
+                (fun (method_ : functionSignature) ->
+                  { method_ with bounds = List.map obligation method_.bounds })
+                representative.methods;
+          })
+        traits
+    in
+    if
+      M.for_all
+        (fun name (trait_ : traitSignature) ->
+          trait_.identity = (M.find name traits).identity
+          && shape trait_ = shape (M.find name traits))
+        rewritten
+    then (rewritten, obligation)
+    else normalize rewritten
+  in
+  let traits, obligation = normalize globals.traits in
+  {
+    globals with
+    traits;
+    functions =
+      M.map
+        (fun (method_ : functionSignature) ->
+          { method_ with bounds = List.map obligation method_.bounds })
+        globals.functions;
+    bounds = List.map obligation globals.bounds;
+  }
 
 let prepareBounds (globals : globals) items =
+  let localNames =
+    List.filter_map
+      (function
+        | WS.Trait (path, declaration) ->
+            Some (String.concat "." (path @ [ declaration.WT.name.WT.name ]))
+        | _ -> None)
+      items
+    |> S.of_list
+  in
   List.fold_left
     (fun result item ->
       bind result (fun globals ->
@@ -495,17 +677,18 @@ let prepareBounds (globals : globals) items =
                             })))
           | _ -> Ok globals))
     (Ok globals) items
+  |> Result.map (canonicalizeTraits localNames)
 
 let catalog (globals : globals) symbols =
   let dispatches =
     M.fold
-      (fun traitName trait_ catalog ->
+      (fun traitName (trait_ : traitSignature) catalog ->
         M.fold
           (fun methodName _ catalog ->
             M.add
               (traitName ^ "." ^ methodName)
               {
-                TraitCatalog.traitName;
+                TraitCatalog.traitName = trait_.identity;
                 methodName;
                 arity = List.length trait_.traitParams;
               }
@@ -621,7 +804,8 @@ let namedMethod range traitName methodName : WT.qualifiedFnIdentifier =
 let receiverMethod (globals : globals) symbols typ methodName =
   let applicable =
     M.bindings globals.traits
-    |> List.filter_map (fun (name, trait_) ->
+    |> List.filter_map (fun (_, (trait_ : traitSignature)) ->
+        let name = trait_.identity in
         if not (M.mem methodName trait_.methods) then None
         else
           let supplied =
@@ -640,9 +824,31 @@ let receiverMethod (globals : globals) symbols typ methodName =
                      implementation.TraitCatalog.traitName = name
                      &&
                      match implementation.TraitCatalog.typeArgs with
-                     | self :: _ ->
-                         Option.is_some
-                           (TraitResolution.matchArguments [ self ] [ typ ])
+                     | self :: _ -> (
+                         match
+                           TraitResolution.matchArguments [ self ] [ typ ]
+                         with
+                         | None -> false
+                         | Some substitution ->
+                             let bounds =
+                               List.map
+                                 (TraitResolution.substitute substitution)
+                                 implementation.TraitCatalog.bounds
+                             in
+                             if
+                               List.exists
+                                 (fun (_, args) ->
+                                   List.exists
+                                     (fun typ ->
+                                       Types.collectTypeVarsInType typ [] <> [])
+                                     args)
+                                 bounds
+                             then true
+                             else
+                               Result.is_ok
+                                 (TraitResolution.checkBounds
+                                    (C.traitCatalog symbols) globals.bounds
+                                    M.empty bounds))
                      | [] -> false)
             in
             if matches then Some name else None
@@ -657,6 +863,7 @@ let receiverMethod (globals : globals) symbols typ methodName =
               ->
                 Some name
             | Error _ -> None)
+    |> List.sort_uniq String.compare
   in
   match applicable with
   | [] -> Ok None

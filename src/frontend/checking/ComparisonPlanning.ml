@@ -338,7 +338,7 @@ let validateDictKeyCall aliases registry sums name args =
 let validateCanonicalSortableCall aliases registry sums name args =
   let required =
     (match (name, args) with
-    | ( ( "__compare" | "Darklang.Stdlib.List.sort"
+    | ( ( "__compare" | "__sort_precedes" | "Darklang.Stdlib.List.sort"
         | "Darklang.Stdlib.List.unique" ),
         [ typ ] )
     | "Darklang.Stdlib.List.uniqueBy", [ typ; _ ] ->
