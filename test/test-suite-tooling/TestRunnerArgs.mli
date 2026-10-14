@@ -13,6 +13,7 @@ val hasQuietArg : string array -> bool
 val hasAiArg : string array -> bool
 val parseTimingsJsonArg : string array -> (string option, string) result
 val parseCodegenProfileJsonArg : string array -> (string option, string) result
+val parseUpstreamInventoryArg : string array -> (string option, string) result
 val defaultE2EBatchSize : int
 val parseE2EBatchSizeArg : string array -> (int, string) result
 val matchesFilter : string option -> string -> bool

@@ -1,10 +1,10 @@
 # Imported upstream test inventory
 
-Generated from `test/test-suite-tooling/TestRunner.ml` and the imported
+Generated from `test/test-suite-tooling/E2EDiscovery.ml` (shared with the runner) and the imported
 `test/fixtures/e2e/upstream/**/*.dark` files. Regenerate with
 `python3 scripts/audit-upstream-gates.py`; verify with `--check`.
 
-**105 files; 31 whole-file exclusions; 291 line-number entries
+**105 files; 31 whole-file exclusions; 290 line-number entries
 across 34 files.** A line entry is not a skipped-test count.
 The runner matches the `L<number>:` assertion name produced by the fixture
 parser. Declarations and multiline assertions require parser inspection;
@@ -127,4 +127,4 @@ editing the runner. They must not be counted as unsupported expressions.
 | File | Line | Source line |
 | --- | --- | --- |
 
-0 of the 291 entries point to blank or comment lines.
+0 of the 290 entries point to blank or comment lines.

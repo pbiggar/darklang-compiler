@@ -179,6 +179,21 @@ class Build(unittest.TestCase):
         item = next(r for r in records if r['id'] == 'tests:packages/acme/tests.dark')
         self.assertIn('1 declaration candidates: real', item['detail'])
 
+    def test_legacy_configuration_comes_from_shared_discovery_module(self):
+        path = 'test/fixtures/e2e/upstream/example.dark'
+        fixture = self.root / path
+        fixture.parent.mkdir(parents=True)
+        fixture.write_text('1L = 1L\n')
+        module = self.root / 'test/test-suite-tooling/E2EDiscovery.ml'
+        module.parent.mkdir(parents=True)
+        module.write_text('let disabledUpstreamFiles = [ "' + path + '" ]\n'
+                          'let disabledUpstreamLines = [ ("' + path + '", [ 1; 2 ]) ]\n'
+                          'let loadE2ETests files = files\n')
+        _, records = self.build()
+        item = next(r for r in records if r['id'] == 'tests:compiler/' + path)
+        self.assertIn('Configured whole-file gate: True; line entries: 1, 2', item['detail'])
+        self.assertEqual(item['behavior'], 'unverified')
+
     def test_named_test_id_and_nested_policy_survive_line_insertion(self):
         path = self.root / 'porting/manifests/tests.yaml'
         manifest = p.read_yaml(path)

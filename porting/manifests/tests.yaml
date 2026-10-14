@@ -1,6 +1,6 @@
 category: tests
 scope: ''
-current: Current checked-in named tests have qualified source identities and file/module scopes. Legacy upstream fixtures plus compiler-owned tests remain separate; file gates, line gates, and fixture metadata affect runtime discovery, which is still unverified.
+current: Current checked-in named tests have qualified source identities and file/module scopes. Legacy fixtures have a discovery-only YAML export using the real parser and shared execution gates; the export and native regressions have not run in this VM. Current named package tests are not yet adapted to the compiler runner.
 policy:
   source: identical-with-adapter
   behavior: identical-with-aot-rules

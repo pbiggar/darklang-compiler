@@ -133,6 +133,36 @@ record links to the current source line, records its file group, and inherits
 the file's source fingerprint. Inserting lines preserves the ID but invalidates
 evidence conservatively. No declaration is marked passing simply by discovery.
 
+### Actual legacy runner discovery
+
+After a successful native build, export the imported legacy corpus with:
+
+```bash
+./run-tests --target=linux-x86_64 --inventory-upstream=TestResults/upstream-discovery.yaml
+```
+
+This mode uses `E2EFormat.parseE2ETestFile` and the same `E2EDiscovery` gate
+application as normal execution. It returns before StdLib compilation and test
+execution, without building anything. Files are sorted; paths are relative to
+the repository; the YAML contains no timestamps or timing data. Each parsed
+case records its runner name, source line, AOT/error expectation, effective skip
+reason, gate provenance, and eligibility. Fixture metadata takes precedence over
+whole-file and line gates, preserving the existing execution contract. A line
+gate matches the parser's `L<number>:` name, not an inferred source-line count.
+
+Parse errors are retained in the output and make the command fail. Filtered or
+duplicate inventory requests fail instead of exporting a misleading subset.
+The export covers only legacy imported `.dark` fixtures, not current named
+package tests, compiler-owned tests, or other test suites. Eligibility means
+the runner would select a case; it does not establish compilation or a pass.
+
+The command and native regressions are implemented but have not run in this VM:
+the pinned native dependency setup remains blocked. Consequently the framework
+still reports effective execution support as unverified. Do not commit a
+guessed discovery output or turn configured gates into skip counts. The next
+adapter will fingerprint inputs and reconcile an actual export into the tracked
+inventory, detecting orphaned gates and missing/failed fixtures.
+
 The List/Dict source destinations start undecided, while their behavior remains
 required to match. This does not approve replacing their native representations
 or permit behavioral differences. The desired package destination is a mirror

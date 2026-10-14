@@ -347,19 +347,19 @@ def discover(root, upstream_files):
         else:
             add('builtins', path, path, (), 'registration/support source; assembled registry export needed')
     # Retain all legacy imports and configuration observations, not inferred skip counts.
-    runner = compiler_files.get('test/test-suite-tooling/TestRunner.ml', b'').decode()
+    runner = compiler_files.get('test/test-suite-tooling/E2EDiscovery.ml', b'').decode()
     def gate_block(name):
         if not runner:
             return ''
         if f'let {name} =' not in runner:
             raise ValueError(f'Runner gate structure changed: {name}; update discovery')
-        return runner.split(f'let {name} =', 1)[1].split('\n    in', 1)[0]
+        return runner.split(f'let {name} =', 1)[1].split('\nlet ', 1)[0]
     disabled = set(re.findall(r'"(test/fixtures/e2e/upstream/[^"\n]+)"', gate_block('disabledUpstreamFiles')))
     line_entries = {path: re.findall(r'\d+', numbers) for path, numbers in
                     re.findall(r'\(\s*"([^"]+)"\s*,\s*\[([^]]*)\]\s*\)', gate_block('disabledUpstreamLines'))}
     for path in sorted(p for p in compiler_files if p.startswith('test/fixtures/e2e/upstream/') and p.endswith('.dark')):
         add('tests', 'compiler/' + path, 'compiler/' + path, [path],
-            'legacy imported fixture; effective runner exclusions not yet exported',
+            'legacy imported fixture; real parser/gate YAML export available but not executed here',
             f'Configured whole-file gate: {path in disabled}; line entries: ' + ', '.join(line_entries.get(path, [])) +
             '; fixture metadata and runtime filters still require runner export')
     ids = [r['id'] for r in records]
@@ -471,7 +471,8 @@ def build(root, upstream):
                       f'{len(declarations)} named source declarations in {len(groups)} checked-in files.',
                       'The category total also includes file groups, backend sources/fixtures, and legacy imports; it is not an executable test count.',
                       'IDs use file paths and qualified names, never line numbers. Links use current source lines.',
-                      'Module scopes use `FILE/named/Qualified/Module`; actual runner discovery, support, and execution remain unverified.']
+                      'Module scopes use `FILE/named/Qualified/Module`; actual named-test runner discovery, support, and execution remain unverified.',
+                      'Legacy imports can export real parsed cases and effective skips with `./run-tests --target=linux-x86_64 --inventory-upstream=PATH`; this export has not run in the current VM.']
         lines += ['', '## Source observations', '', '| Identity | Upstream | Compiler candidates | Observation | Behavior | Source policy | Disposition |', '| --- | --- | --- | --- | --- | --- | --- |']
         for r in items:
             url = f'https://github.com/{sources["upstream_repository"]}/blob/{revision}/{r["upstream"]}' if r['upstream'] else None
@@ -485,7 +486,7 @@ def build(root, upstream):
                  '- Packages/StdLib: all checked-in `.dark` files; root-module mappings are candidates, not declaration mappings.',
                  '- Language: written constructor names plus broad curated behavioral workstreams; full feature taxonomy still needs trials.',
                  '- Parser: upstream components and same-stem OCaml candidates; split components remain classified separately.',
-                 '- Tests: file groups and qualified named-test source identities, backend test sources/fixtures, and legacy imports. No actual runner discovery or effective exclusion export yet.',
+                 '- Tests: file groups and qualified named-test source identities, backend sources/fixtures, and legacy imports. A real-parser/shared-gate legacy YAML export is implemented but unexecuted; named-test adapters and export reconciliation remain pending.',
                  '- Builtins: declaration/registration sources. Assembled registries, aliases, signatures, and compiler bindings are not yet compared.',
                  '- Only x64 Linux evidence is accepted. Inventory discovery does not establish execution support.', '']
     overview += ['## Recorded upstream bugs', '']
