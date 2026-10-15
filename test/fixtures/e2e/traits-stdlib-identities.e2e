@@ -1,0 +1,8 @@
+Stdlib.sum "" ["a", "b", "c"] = "abc"
+Stdlib.Zero.zero<String> () = ""
+Stdlib.ToString.toString 42 = "42"
+Stdlib.ToString.toString 2.5 = "2.5"
+Stdlib.min "apple" "banana" = "apple"
+Stdlib.max 'a' 'z' = 'z'
+Stdlib.Zero.zero<Int64> () = 0L
+Stdlib.One.one<Float> () = 1.0

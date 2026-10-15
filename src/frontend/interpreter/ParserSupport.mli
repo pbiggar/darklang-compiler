@@ -3,6 +3,7 @@ type diagnosticSeverity = DiagError | DiagWarning
 
 module DiagnosticCode : sig
   val expected : string
+  val bound : string
   val unclosed : string
   val escape : string
   val intRange : string
@@ -108,10 +109,6 @@ val parseQualified :
   * int
 
 val expectGt : parserState -> int -> Tokenizer.tokenRange * int
-
-val parseTypeParams :
-  parserState -> int -> (string * Tokenizer.tokenRange) list * int
-
 val setStmtCol : parserState -> int -> unit
 val withStmtScope : parserState -> int -> (unit -> 'a) -> 'a
 val barStartsArm : parserState -> int -> bool

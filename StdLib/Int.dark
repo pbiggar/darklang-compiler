@@ -74,3 +74,59 @@ let bitwiseXor (a: Int) (b: Int) : Int = Stdlib.Int.__bitwiseXor a b
 let bitwiseNot (value: Int) : Int = Stdlib.Int.__bitwiseNot value
 let shiftLeft (value: Int) (count: Int) : Int = Stdlib.Int.__shiftLeft value count
 let shiftRight (value: Int) (count: Int) : Int = Stdlib.Int.__shiftRight value count
+
+// Trait implementations reuse the compiler's existing native operations.
+
+impl Stdlib.Add for Int =
+  let add = Stdlib.Int.add
+
+impl Stdlib.Subtract for Int =
+  let subtract = Stdlib.Int.subtract
+
+impl Stdlib.Multiply for Int =
+  let multiply = Stdlib.Int.multiply
+
+impl Stdlib.Divide for Int =
+  let divide = Stdlib.Int.divide
+
+impl Stdlib.Modulo for Int =
+  let modulo = Stdlib.Int.mod
+
+impl Stdlib.Power for Int =
+  let power = Stdlib.Int.power
+
+impl Stdlib.Negate for Int =
+  let negate = Stdlib.Int.negate
+
+impl Stdlib.BitwiseAnd for Int =
+  let bitwiseAnd = Stdlib.Int.bitwiseAnd
+
+impl Stdlib.BitwiseOr for Int =
+  let bitwiseOr = Stdlib.Int.bitwiseOr
+
+impl Stdlib.BitwiseXor for Int =
+  let bitwiseXor = Stdlib.Int.bitwiseXor
+
+impl Stdlib.BitwiseNot for Int =
+  let bitwiseNot = Stdlib.Int.bitwiseNot
+
+impl Stdlib.ShiftLeft for Int =
+  let shiftLeft = Stdlib.Int.shiftLeft
+
+impl Stdlib.ShiftRight for Int =
+  let shiftRight = Stdlib.Int.shiftRight
+
+impl Stdlib.ToString for Int =
+  let toString = Stdlib.Int.toString
+
+impl Stdlib.Compare for Int =
+  let lessThan = Stdlib.Int.lessThan
+  let lessThanOrEqualTo = Stdlib.Int.lessThanOrEqualTo
+  let greaterThan = Stdlib.Int.greaterThan
+  let greaterThanOrEqualTo = Stdlib.Int.greaterThanOrEqualTo
+
+impl Stdlib.Zero for Int =
+  let zero () : Int = 0
+
+impl Stdlib.One for Int =
+  let one () : Int = 1

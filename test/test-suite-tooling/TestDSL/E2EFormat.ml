@@ -1008,7 +1008,11 @@ let parseMultilineTest fullText startLineNumber filePath preamble funcLineMap =
                Keep their opening column without turning declarations local.
                Other expressions retain their grouping, including tuples. *)
             let source =
-              if starts (trimStart inner) "let " then " " ^ inner
+              if
+                List.exists
+                  (starts (trimStart inner))
+                  [ "let "; "type "; "trait "; "impl "; "impl<" ]
+              then " " ^ inner
               else slice fullText first (close - first + 1)
             in
             direct () |> Result.map (fun test -> { test with source }))
@@ -1092,9 +1096,20 @@ let trimLeadingSpaces n s =
   if n <= 0 then s else tail s (min n (countLeadingSpaces s))
 
 let definitionStart s =
-  List.exists (starts s) [ "def "; "type "; "let "; "val "; "module "; "[<" ]
+  List.exists (starts s)
+    [
+      "def ";
+      "type ";
+      "trait ";
+      "impl ";
+      "impl<";
+      "let ";
+      "val ";
+      "module ";
+      "[<";
+    ]
 
-let parseE2ETestFile path =
+let parseLegacyE2ETestFile path =
   if not (FileIO.exists path) then Error ("Test file not found: " ^ path)
   else
     let raw = readLines path in
@@ -1333,6 +1348,208 @@ let parseE2ETestFile path =
             ("Line "
             ^ string_of_int (line - 1)
             ^ ": #compileerror must immediately precede a test")
+
+(* Named package tests keep their declaration scopes and shared source intact.
+   Their assertion result is compared with Pass; raises remain runtime error
+   expectations unless an explicit AOT override changes the required phase. *)
+let parseNamedE2ETestFile path raw =
+  let ( let* ) = Result.bind in
+  let* overrides, directives = collectCompileErrorOverrides raw in
+  let scopes = ref [] in
+  let preamble = ref [] in
+  let tests = ref [] in
+  let errors = ref [] in
+  let index = ref 0 in
+  let namedLines = ref IntSet.empty in
+  while !index < Array.length raw do
+    let line = raw.(!index) in
+    let text = trim line in
+    let number = !index + 1 in
+    let indent = countLeadingSpaces line in
+    if
+      text <> ""
+      && (not (starts text "//"))
+      && not (IntSet.mem number directives)
+    then begin
+      let rec pop = function
+        | (column, _) :: rest when indent <= column -> pop rest
+        | scopes -> scopes
+      in
+      scopes := pop !scopes;
+      if starts text "module " then begin
+        let moduleName = trim (tail text 7) in
+        let nested = String.ends_with ~suffix:"=" moduleName in
+        let moduleName =
+          if nested then trim (slice moduleName 0 (length moduleName - 1))
+          else moduleName
+        in
+        let parts = String.split_on_char '.' moduleName in
+        let parent = match !scopes with (_, path) :: _ -> path | [] -> [] in
+        scopes :=
+          if nested then (indent, parent @ parts) :: !scopes
+          else [ (-1, parts) ];
+        preamble := line :: !preamble;
+        incr index
+      end
+      else if starts text "test " then begin
+        namedLines := IntSet.add number !namedLines;
+        let next = ref (!index + 1) in
+        while
+          !next < Array.length raw
+          &&
+          let text = trim raw.(!next) in
+          text = "" || starts text "//"
+          || countLeadingSpaces raw.(!next) > indent
+        do
+          incr next
+        done;
+        (match String.index_opt text '=' with
+        | None ->
+            errors :=
+              ("Line " ^ string_of_int number ^ ": Named test requires '='")
+              :: !errors
+        | Some separator -> (
+            let name = trim (slice text 5 (separator - 5)) in
+            let inline = trim (tail text (separator + 1)) in
+            let body =
+              (if inline = "" then [] else [ inline ])
+              @ List.init
+                  (!next - !index - 1)
+                  (fun offset ->
+                    trimLeadingSpaces (indent + 2) raw.(!index + offset + 1))
+            in
+            let rec split source = function
+              | [] -> (List.rev source, "Stdlib.Test.Result.Pass")
+              | line :: rest when starts (trim line) "=> raises" ->
+                  ( List.rev source,
+                    "error="
+                    ^ trim
+                        (String.concat "\n" (trim (tail (trim line) 9) :: rest))
+                  )
+              | line :: rest -> split (line :: source) rest
+            in
+            let body, expectation = split [] body in
+            let modulePath =
+              match !scopes with (_, path) :: _ -> path | [] -> []
+            in
+            let source =
+              if expectation = "Stdlib.Test.Result.Pass" then
+                let functionName =
+                  "nativeFixtureTest_" ^ name ^ "_" ^ string_of_int number
+                in
+                let declaration =
+                  "let " ^ functionName ^ " () : Stdlib.Test.Result =\n"
+                  ^ String.concat "\n" (List.map (fun line -> "  " ^ line) body)
+                in
+                if modulePath = [] then
+                  declaration ^ "\n" ^ functionName ^ " ()"
+                else
+                  "module "
+                  ^ String.concat "." modulePath
+                  ^ " =\n"
+                  ^ String.concat "\n"
+                      (List.map
+                         (fun line -> "  " ^ line)
+                         (String.split_on_char '\n' declaration))
+                  ^ "\n"
+                  ^ String.concat "." (modulePath @ [ functionName ])
+                  ^ " ()"
+              else
+                (if modulePath = [] then ""
+                 else "module " ^ String.concat "." modulePath ^ "\n")
+                ^ String.concat "\n" body
+            in
+            match
+              parseTestLineWithPreamble ("0L = " ^ expectation) number path ""
+                StringMap.empty
+            with
+            | Error error -> errors := error :: !errors
+            | Ok test ->
+                tests :=
+                  {
+                    test with
+                    source;
+                    name = "L" ^ string_of_int number ^ ": test " ^ name;
+                  }
+                  :: !tests));
+        index := !next
+      end
+      else begin
+        preamble := line :: !preamble;
+        incr index
+      end
+    end
+    else begin
+      if not (IntSet.mem number directives) then preamble := line :: !preamble;
+      incr index
+    end
+  done;
+  let orphaned =
+    IntMap.exists (fun line _ -> not (IntSet.mem line !namedLines)) overrides
+  in
+  if orphaned then
+    Error "A #compileerror directive must immediately precede a named test"
+  else if !errors <> [] then Error (String.concat "\n" (List.rev !errors))
+  else
+    let rec adapterPath directory =
+      let candidate = Filename.concat directory "support/named-test.dark" in
+      if FileIO.exists candidate then Ok candidate
+      else
+        let parent = Filename.dirname directory in
+        if parent = directory then
+          Error "Named fixture assertion adapter was not found"
+        else adapterPath parent
+    in
+    let* adapterPath =
+      adapterPath (FileIO.absolutePath (Filename.dirname path))
+    in
+    let adapter = FileIO.readText adapterPath in
+    (* Removing named tests can leave an empty nested module. Drop its header
+       so preamble parsing does not fall back to discarding scoped declarations. *)
+    let _, preamble =
+      List.fold_right
+        (fun line (nextIndent, kept) ->
+          let text = trim line in
+          let indent = countLeadingSpaces line in
+          if text = "" || starts text "//" then (nextIndent, line :: kept)
+          else if
+            starts text "module "
+            && String.ends_with ~suffix:"=" text
+            && Option.fold ~none:true
+                 ~some:(fun next -> next <= indent)
+                 nextIndent
+          then (nextIndent, kept)
+          else (Some indent, line :: kept))
+        (List.rev !preamble) (None, [])
+    in
+    let preamble = adapter ^ "\n" ^ String.concat "\n" preamble in
+    Ok
+      (List.rev_map
+         (fun test ->
+           let test = { test with preamble } in
+           match IntMap.find_opt test.sourceLine overrides with
+           | None -> test
+           | Some expectedErrorMessage ->
+               {
+                 test with
+                 expectedValueExpr = None;
+                 expectedStdout = None;
+                 expectedStderr = None;
+                 expectedExitCode = 1;
+                 errorExpectation = Some CompileError;
+                 expectedErrorMessage;
+                 skipReason = None;
+               })
+         !tests)
+
+let parseE2ETestFile path =
+  if FileIO.exists path && String.ends_with ~suffix:".dark" (lowerAscii path)
+  then
+    let raw = readLines path in
+    if Array.exists (fun line -> starts (trim line) "test ") raw then
+      parseNamedE2ETestFile path raw
+    else parseLegacyE2ETestFile path
+  else parseLegacyE2ETestFile path
 
 let parseE2ETest _path =
   Error "Old format no longer supported - use parseE2ETestFile instead"

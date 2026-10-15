@@ -4,6 +4,10 @@ The compiler targets interpreter **v0.0.35**, revision
 `0b3888d8e4f30d48ecd738f5cbe5cc2b8d958460` in `darklang/dark`.
 This inventory was checked against that revision, including nested modules.
 Paths in the interpreter column are relative to the interpreter repository.
+The mirrored Env, File, Process, Sys, and root Cli execution sources under
+`packages/darklang/stdlib/cli/` are byte-identical to the porting pin in
+`porting/sources.yaml`; they retain their previous embedding slots. This migration does not
+advance the general historical baseline or claim fresh runtime validation.
 The compatibility ledgers own API coverage and behavioral differences; this
 inventory records source placement and origin, not complete API parity.
 
@@ -28,6 +32,13 @@ Posix, Sys and DateTime modules. Syscall and runtime Builtins are called directl
 there are no public forwarding packages for them. DateTime's clock block is
 shared while each engine retains its own DateTime representation implementation.
 
+Trait declarations and generic utilities in `StdLib/traits.dark` are unchanged
+from interpreter `a9d93efc853486244630dad693fe79f6f4882cf6`. Trait implementations
+live beside each type's existing functions, as upstream does. Their methods
+alias native compiler operations rather than duplicate the interpreter's F#
+builtin adapters. See [trait compatibility](../compatibility/language/traits.md)
+for static selection and hosted-package limitations.
+
 A `__` filename marks compiler support or a private implementation fragment.
 It does not rename the declared module or enforce language visibility: that
 is controlled by declaration names and the frontend's internal-mode checks.
@@ -42,6 +53,7 @@ fragments use `__` even where the interpreter also has private helpers.
 |---|---|---|
 | `StdLib/__Types.dark` | (root declarations) | Compiler representation of the interpreter’s root Uuid type (`backend/src/LibExecution/RuntimeTypes.fs`) |
 | `StdLib/Root.dark` | `Darklang.Stdlib`  | `packages/darklang/stdlib/noModule.dark` |
+| `StdLib/traits.dark` | `Darklang.Stdlib` | Unchanged `packages/darklang/stdlib/traits.dark` at `a9d93efc853486244630dad693fe79f6f4882cf6` |
 | `StdLib/Int8.dark` | `Darklang.Stdlib.Int8`  | `packages/darklang/stdlib/int8.dark` |
 | `StdLib/Int16.dark` | `Darklang.Stdlib.Int16`  | `packages/darklang/stdlib/int16.dark` |
 | `StdLib/Int32.dark` | `Darklang.Stdlib.Int32`  | `packages/darklang/stdlib/int32.dark` |
@@ -85,7 +97,7 @@ fragments use `__` even where the interpreter also has private helpers.
 | `StdLib/Cli/Posix/OpenFlags.dark` | `Darklang.Stdlib.Cli.Posix.OpenFlags` | `packages/darklang/stdlib/cli/posix.dark` |
 | `StdLib/Retry.dark` | `Darklang.Stdlib.Retry`  | `packages/darklang/stdlib/retry.dark` |
 | `StdLib/Cli/Path.dark` | `Darklang.Stdlib.Cli.Path`  | `packages/darklang/stdlib/cli/path.dark` |
-| `StdLib/Cli/File.dark` | `Darklang.Stdlib.Cli.File`  | `packages/darklang/stdlib/cli/file.dark` |
+| `packages/darklang/stdlib/cli/file.dark` | `Darklang.Stdlib.Cli.File`  | `packages/darklang/stdlib/cli/file.dark` (unchanged copy at the porting pin) |
 | `StdLib/Cli/Dir.dark` | `Darklang.Stdlib.Cli.Dir` | `packages/darklang/stdlib/cli/dir.dark` |
 | `StdLib/String/__Unicode/__Data.dark` | `Darklang.Stdlib.String.__Unicode.__Data`  | Generated compiler Unicode lookup data |
 | `StdLib/String/__Unicode/__Data/__Index00.dark` | `Darklang.Stdlib.String.__Unicode.__Data`  | Generated compiler Unicode lookup data |
@@ -302,16 +314,16 @@ fragments use `__` even where the interpreter also has private helpers.
 | `StdLib/Cli/UI/Prompt.dark` | `Darklang.Stdlib.Cli.UI.Prompt`  | `packages/darklang/stdlib/cli/ui/prompt.dark` |
 | `StdLib/Cli/UI/Spinner.dark` | `Darklang.Stdlib.Cli.UI.Spinner`  | `packages/darklang/stdlib/cli/ui/spinner.dark` |
 | `StdLib/Cli/UI/Table.dark` | `Darklang.Stdlib.Cli.UI.Table`  | `packages/darklang/stdlib/cli/ui/table.dark` |
-| `StdLib/Cli.dark` | `Darklang.Stdlib.Cli`  | `packages/darklang/stdlib/cli/execution.dark`, `packages/darklang/stdlib/cli/host.dark` |
+| `packages/darklang/stdlib/cli/execution.dark` | `Darklang.Stdlib.Cli`  | `packages/darklang/stdlib/cli/execution.dark` (unchanged copy at the porting pin) |
 | `StdLib/Cli/OS.dark` | `Darklang.Stdlib.Cli.OS`  | `packages/darklang/stdlib/cli/host.dark` |
 | `StdLib/Cli/Architecture.dark` | `Darklang.Stdlib.Cli.Architecture`  | `packages/darklang/stdlib/cli/host.dark` |
 | `StdLib/Cli/Shell.dark` | `Darklang.Stdlib.Cli.Shell`  | `packages/darklang/stdlib/cli/host.dark` |
 | `StdLib/Cli/Host.dark` | `Darklang.Stdlib.Cli.Host`  | `packages/darklang/stdlib/cli/host.dark` |
-| `StdLib/Cli/Env.dark` | `Darklang.Stdlib.Cli.Env`  | `packages/darklang/stdlib/cli/env.dark` |
+| `packages/darklang/stdlib/cli/env.dark` | `Darklang.Stdlib.Cli.Env`  | `packages/darklang/stdlib/cli/env.dark` (unchanged copy at the porting pin) |
 | `StdLib/Cli/__Args.dark` | `Darklang.Stdlib.Cli.__Args`  | Compiler positional CLI argument helpers |
-| `StdLib/Cli/Process.dark` | `Darklang.Stdlib.Cli.Process`  | `packages/darklang/stdlib/cli/process.dark` |
+| `packages/darklang/stdlib/cli/process.dark` | `Darklang.Stdlib.Cli.Process`  | `packages/darklang/stdlib/cli/process.dark` (unchanged copy at the porting pin) |
 | `StdLib/Cli/__NativeRuntime.dark` | `Darklang.Stdlib.Cli` | Private native startup/environment/kernel prototypes |
-| `StdLib/Cli/Sys.dark` | `Darklang.Stdlib.Cli.Sys`  | `packages/darklang/stdlib/cli/sys.dark` |
+| `packages/darklang/stdlib/cli/sys.dark` | `Darklang.Stdlib.Cli.Sys`  | `packages/darklang/stdlib/cli/sys.dark` (unchanged copy at the porting pin) |
 | `StdLib/Cli/Stdin/Key.dark` | `Darklang.Stdlib.Cli.Stdin.Key`  | `packages/darklang/stdlib/cli/stdin.dark` |
 | `StdLib/Cli/Stdin/Modifiers.dark` | `Darklang.Stdlib.Cli.Stdin.Modifiers`  | `packages/darklang/stdlib/cli/stdin.dark` |
 | `StdLib/Cli/Stdin/KeyRead.dark` | `Darklang.Stdlib.Cli.Stdin.KeyRead`  | `packages/darklang/stdlib/cli/stdin.dark` |

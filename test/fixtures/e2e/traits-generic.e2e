@@ -1,0 +1,11 @@
+trait GenericShow<'a> =
+  let show (value: 'a) : String
+impl GenericShow for Int64 =
+  let show (value: Int64) : String = "integer"
+impl GenericShow for String =
+  let show (value: String) : String = "string"
+let describeGeneric<'a: GenericShow> (value: 'a) : String = GenericShow.show value
+let wrapGeneric<'a: GenericShow> (value: 'a) : String = describeGeneric value
+wrapGeneric 42L = "integer"
+wrapGeneric "text" = "string"
+describeGeneric<Int64> 42L = "integer"

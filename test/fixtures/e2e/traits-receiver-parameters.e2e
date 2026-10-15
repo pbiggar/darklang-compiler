@@ -1,0 +1,8 @@
+trait ReceiverConvert<'a, 'b> =
+  let convert (value: 'a) : 'b
+impl ReceiverConvert<String> for Int64 =
+  let convert (value: Int64) : String = "converted"
+let useReceiverConvert (value: Int64) : String = value.convert
+useReceiverConvert 42L = "converted"
+let genericUseReceiverConvert<'a: ReceiverConvert<String>> (value: 'a) : String = let output = value.convert in output
+genericUseReceiverConvert 42L = "converted"

@@ -1,0 +1,26 @@
+category: stdlib
+extends: packages
+scope: packages/darklang/stdlib
+current: >-
+  Embedded from StdLib/ in library-sources.list order, with nested modules split
+  into files and native representation helpers. The isolated package-layout trial
+  embeds upstream cli/env.dark and intact cli/fileSystem.dark at their upstream
+  packages/ paths, retaining their bytes and source order. Env, File, Process,
+  Sys, and root Cli execution now live at their upstream packages/darklang/stdlib/cli/
+  paths and are copied byte-for-byte from the pin; their original embedding slots
+  are preserved. Split files and compiler-specific implementations have not moved;
+  native compilation and behavioral parity remain unverified.
+questions:
+  - Agree the destination for compiler-specific List and Dict implementations after a trial.
+  - Compile the Env/FileSystem layout trial once the pinned VM setup can finish; embedding alone does not prove nested name-resolution parity.
+children:
+  - scope: packages/darklang/stdlib/list.dark
+    current: Compiler-owned persistent list implementation and split helper files.
+    policy:
+      source: undecided
+    reason: Behavior must match; the final shared-code boundary needs consultation.
+  - scope: packages/darklang/stdlib/dict.dark
+    current: Compiler-owned HAMT implementation and representation helpers.
+    policy:
+      source: undecided
+    reason: Behavior must match; the final shared-code boundary needs consultation.

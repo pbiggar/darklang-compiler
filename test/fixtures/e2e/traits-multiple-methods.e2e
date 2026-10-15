@@ -1,0 +1,8 @@
+trait TwoMethods<'a> =
+  let show (value: 'a) : String
+  let number (value: 'a) : Int64
+impl TwoMethods for Int64 =
+  let show (value: Int64) : String = "integer"
+  let number (value: Int64) : Int64 = value
+TwoMethods.show 42L = "integer"
+TwoMethods.number 42L = 42L

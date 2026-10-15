@@ -18,6 +18,7 @@ val optimizeFunctionWithEffectFreeCallsAndTickTrace :
   MIR.functionDef
 
 val optimizeFunction : MIR.functionDef -> MIR.functionDef
+val sameReturnOperand : MIR.operand -> MIR.operand -> bool
 val constantReturnOperand : MIR.functionDef -> MIR.operand option
 
 val optimizeProgramWithOptions :

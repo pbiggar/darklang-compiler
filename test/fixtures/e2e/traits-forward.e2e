@@ -1,0 +1,6 @@
+// Trait declarations are collected before implementations and executable bodies.
+impl ForwardShow for Int64 =
+  let show (value: Int64) : String = "forward"
+trait ForwardShow<'a> =
+  let show (value: 'a) : String
+ForwardShow.show 42L = "forward"

@@ -102,6 +102,8 @@ type token =
   | TThen
   | TElse
   | TType
+  | TTrait
+  | TImpl
   | TCons
   | TColon
   | TComma

@@ -1,0 +1,14 @@
+type MethodValueCount = { value: Int64 }
+impl Stdlib.Add for MethodValueCount =
+  let add (a: MethodValueCount) (b: MethodValueCount) : MethodValueCount = MethodValueCount { value = a.value + b.value }
+let addToCount (a: MethodValueCount) : MethodValueCount -> MethodValueCount = a.add
+(addToCount (MethodValueCount { value = 20L })) (MethodValueCount { value = 22L }) = MethodValueCount { value = 42L }
+let plus = (MethodValueCount { value = 20L }).add in plus (MethodValueCount { value = 22L }) = MethodValueCount { value = 42L }
+let render = Stdlib.ToString.toString<Int64> in render 42L = "42"
+Stdlib.List.map [1L, 2L] Stdlib.ToString.toString = ["1", "2"]
+Stdlib.List.map [true, false] Stdlib.ToString.toString = ["true", "false"]
+trait MethodValueOnlyInt<'a> =
+  let renderInt (value: 'a) : String
+impl MethodValueOnlyInt for Int64 =
+  let renderInt (value: Int64) : String = Stdlib.toString value
+Stdlib.List.map [true] MethodValueOnlyInt.renderInt = compileerror="No implementation of trait"

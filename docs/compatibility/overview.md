@@ -16,3 +16,7 @@ Compiler-owned library code, benchmarks, and tests use the public
 that depend on `testRuntimeError` are retained and excluded according to
 individual native reruns. Only the dependent assertion is excluded in the application fixture; the
 existing preamble fallback prunes its unused helper for the other assertions. Their identities are recorded in the [failure ledger](current-audit.md).
+
+The [trait compatibility record](language/traits.md) records the current
+implementation scope, native test evidence, intentional AOT differences,
+and unfinished milestones.

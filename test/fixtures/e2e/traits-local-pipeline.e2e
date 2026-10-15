@@ -1,0 +1,8 @@
+(let fn = (fun a b -> Stdlib.max a b) in fn 3L 7L) = 7L
+(let fn = (fun a b -> Stdlib.max a b) in 3L |> fn 7L) = 7L
+(let fn = (fun a b -> Stdlib.max a b) in 3L |> Stdlib.Int64.add 1L |> fn 7L) = 7L
+(let fn = (fun a b -> Stdlib.max a b) in 3L |> fn 7L |> Stdlib.Int64.add 1L) = 8L
+(let fn = (fun a b -> Stdlib.max a b) in "a" |> fn "z") = "z"
+(let fn = (fun a b -> Stdlib.max a b) in 3L |> fn "z") = compileerror="Expected TInt64, got TString"
+(let render = (fun value -> Stdlib.toString value) in 42L |> render) = "42"
+(let choose = (fun a b -> Stdlib.max a b) in true |> choose false) = compileerror="No implementation of trait"

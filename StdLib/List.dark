@@ -132,7 +132,7 @@ let __canonicalInsert<'a> (value: a) (sorted: List<a>) : List<a> =
     match sorted with
     | [] -> [value]
     | head :: tail ->
-        if __compare<a> value head == -1L then Stdlib.List.push<a> sorted value
+        if __sort_precedes<a> value head then Stdlib.List.push<a> sorted value
         else Stdlib.List.push<a> (Stdlib.List.__canonicalInsert<a> value tail) head
 
 let __canonicalSortHelper<'a> (remaining: List<a>) (sorted: List<a>) : List<a> =

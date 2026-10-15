@@ -11,10 +11,7 @@ import sys
 
 ROOT = Path(__file__).resolve().parent.parent
 FILES = {
-    "file": "File",
-    "env": "Env",
     "fileSystem": "FileSystem",
-    "sys": "Sys", "process": "Process", "execution": "",
 }
 
 def main():
@@ -23,8 +20,11 @@ def main():
     parser.add_argument("--check", action="store_true")
     args = parser.parse_args()
     source = args.interpreter / "packages/darklang/stdlib/cli"
-    outputs = {(f"StdLib/Cli/{dest}.dark" if dest else "StdLib/Cli.dark"): (source / f"{src}.dark").read_bytes()
+    outputs = {f"StdLib/Cli/{dest}.dark": (source / f"{src}.dark").read_bytes()
                for src, dest in FILES.items()}
+    # Shared files with no transformations retain their exact upstream paths.
+    for name in ("env", "file", "process", "sys", "execution"):
+        outputs[f"packages/darklang/stdlib/cli/{name}.dark"] = (source / f"{name}.dark").read_bytes()
     # DateTime's representation is engine-specific; only its clock algorithms
     # are shared. Keep them in the existing module rather than a public Cli.Clock.
     marker = "// Shared clock implementation.\n"
