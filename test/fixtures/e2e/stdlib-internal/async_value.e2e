@@ -1,0 +1,48 @@
+// async_value.e2e - Ready/pending native carriers preserve payload bits and RC.
+// The carriers are explicit here; implicit compiler forcing is a later slice.
+
+type AsyncValueBox<'a> = { value: Stdlib.__Async.__Value<a> }
+
+let carrierReady<'a> (value: a) : Option<a> =
+  Stdlib.__Async.__pollValue (Stdlib.__Async.__ready value)
+
+carrierReady (-9223372036854775808L) = Some (-9223372036854775808L) // leak_check
+carrierReady 18446744073709551615UL = Some 18446744073709551615UL // leak_check
+carrierReady 3.25 = Some 3.25 // leak_check
+carrierReady<Option<Int64>> None = Some None // leak_check
+carrierReady ("ready" ++ " value") = Some "ready value" // leak_check
+
+let carrierIdentity<'a> (value: Stdlib.__Async.__Value<a>) : Stdlib.__Async.__Value<a> = value
+
+let carrierPropagation () : (Bool * Option<String> * Option<String> * Option<String>) =
+  let promise = Stdlib.__Async.__new<String> () in
+  let value = carrierIdentity (Stdlib.__Async.__pending promise) in
+  let items = [value] in
+  let record = AsyncValueBox { value = value } in
+  let captured = fun _unit -> value in
+  let before = Stdlib.__Async.__isReady promise in
+  let _ = Stdlib.__Async.__resolve promise ("pending" ++ " value") in
+  let first = match items with | [] -> None | head :: _tail -> Stdlib.__Async.__pollValue head in
+  let second = Stdlib.__Async.__pollValue record.value in
+  let third = Stdlib.__Async.__pollValue (captured ()) in
+  (before, first, second, third)
+
+carrierPropagation () = (false, Some "pending value", Some "pending value", Some "pending value") // leak_check
+
+let carrierPending () : Option<Int64> =
+  let promise = Stdlib.__Async.__new<Int64> () in
+  Stdlib.__Async.__pollValue (Stdlib.__Async.__pending promise)
+
+carrierPending () = None // leak_check
+
+let carrierDrop<'a> (promise: Stdlib.__Async.__Promise<a>) : Unit =
+  let consumer = Stdlib.__Async.__pending promise in
+  ()
+
+let carrierProducerOwns () : Option<String> =
+  let promise = Stdlib.__Async.__new<String> () in
+  let _ = carrierDrop promise in
+  let _ = Stdlib.__Async.__resolve promise ("producer" ++ " result") in
+  Stdlib.__Async.__poll promise
+
+carrierProducerOwns () = Some "producer result" // leak_check

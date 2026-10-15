@@ -34,6 +34,7 @@ grouped by purpose; each subject has one canonical source.
 - [Design decisions](compiler/design-decisions.md)
 - [Frontend](compiler/frontend/)
 - [Runtime and language representations](compiler/runtime/)
+- [Async runtime and promise ownership](compiler/runtime/async.md)
 - [Native backends](compiler/backend/)
 - [Optimizations](compiler/optimizations/)
 

@@ -1,4 +1,4 @@
-// async_promise.e2e - Native promise transitions and explicit operation ownership.
+// async_promise.e2e - Native promise transitions and reference-counted ownership.
 // These exercise the private promise object, not transparent forcing or fibers.
 
 let promiseTransitions () : (Bool * Option<Int64> * List<Int64> * Bool * Option<Int64> * Option<Int64>) =
@@ -12,7 +12,6 @@ let promiseTransitions () : (Bool * Option<Int64> * List<Int64> * Bool * Option<
   let late = Stdlib.__Async.__wait promise 33L in
   let first = Stdlib.__Async.__poll promise in
   let second = Stdlib.__Async.__poll promise in
-  let _ = Stdlib.__Async.__release promise in
   (before, missing, waiters, late, first, second)
 
 promiseTransitions () = (false, None, [11L, 22L], false, Some 42L, Some 42L) // leak_check
@@ -20,11 +19,9 @@ promiseTransitions () = (false, None, [11L, 22L], false, Some 42L, Some 42L) // 
 let promiseReady<'a> (value: a) : Option<a> =
   let promise = Stdlib.__Async.__new<a> () in
   let _ = Stdlib.__Async.__resolve promise value in
-  let result = Stdlib.__Async.__poll promise in
-  let _ = Stdlib.__Async.__release promise in
-  result
+  Stdlib.__Async.__poll promise
 
-promiseReady -9223372036854775808L = Some -9223372036854775808L // leak_check
+promiseReady (-9223372036854775808L) = Some (-9223372036854775808L) // leak_check
 promiseReady 18446744073709551615UL = Some 18446744073709551615UL // leak_check
 promiseReady 3.25 = Some 3.25 // leak_check
 promiseReady 170141183460469231731687303715884105727Q = Some 170141183460469231731687303715884105727Q // leak_check
@@ -41,29 +38,23 @@ promiseReady<Result<Int64, String>> (Error ("network" ++ " failure")) = Some (Er
 
 let promiseAbandon () : Unit =
   let promise = Stdlib.__Async.__new<String> () in
-  Stdlib.__Async.__release promise
+  ()
 
 promiseAbandon () = () // leak_check
 
-let promiseProducerOwns () : Option<String> =
+let promiseProducer () : Unit -> Option<String> =
   let promise = Stdlib.__Async.__new<String> () in
-  let _ = Stdlib.__Async.__retain promise in
-  let _ = Stdlib.__Async.__release promise in
-  let _ = Stdlib.__Async.__resolve promise ("producer" ++ " alive") in
-  let result = Stdlib.__Async.__poll promise in
-  let _ = Stdlib.__Async.__release promise in
-  result
+  fun _unit ->
+    let _ = Stdlib.__Async.__resolve promise ("producer" ++ " alive") in
+    Stdlib.__Async.__poll promise
 
-promiseProducerOwns () = Some "producer alive" // leak_check
+let producer = promiseProducer () in producer () = Some "producer alive" // leak_check
 
 let promiseSharedPayload () : (Option<String> * Option<String>) =
   let promise = Stdlib.__Async.__new<String> () in
-  let _ = Stdlib.__Async.__retain promise in
   let _ = Stdlib.__Async.__resolve promise ("shared" ++ " payload") in
   let first = Stdlib.__Async.__poll promise in
-  let _ = Stdlib.__Async.__release promise in
   let second = Stdlib.__Async.__poll promise in
-  let _ = Stdlib.__Async.__release promise in
   (first, second)
 
 promiseSharedPayload () = (Some "shared payload", Some "shared payload") // leak_check
@@ -71,7 +62,7 @@ promiseSharedPayload () = (Some "shared payload", Some "shared payload") // leak
 let promiseDropPayload (counter: RawPtr) : Unit =
   let promise = Stdlib.__Async.__new<Stream<Int64>> () in
   let _ = Stdlib.__Async.__resolve promise (Stdlib.Stream.__new (fun _unit -> None) (fun _unit -> __raw_write_word counter 0L 1L)) in
-  Stdlib.__Async.__release promise
+  ()
 
 let counter = __raw_alloc 8L in let _ = __raw_write_word counter 0L 0L in let _ = promiseDropPayload counter in let result = __raw_get<Int64> counter 0L in let _ = __raw_free counter in result = 1L // leak_check
 
@@ -92,4 +83,4 @@ promiseDoubleResolve () = error="Uncaught exception: Async promise resolved more
 
 let promise = Stdlib.__Async.__new<Int64> () in Stdlib.__Async.__resolve promise "wrong" = compileerror="Expected TInt64, got TString"
 
-let promise = Stdlib.__Async.__new<Int64> () in let _ = Stdlib.__Async.__wait promise 1L in Stdlib.__Async.__release promise = error="Uncaught exception: Async promise still has waiting tasks"
+let promise = Stdlib.__Async.__new<Int64> () in let _ = Stdlib.__Async.__wait promise 1L in () = error="Uncaught exception: Async promise still has waiting tasks"
