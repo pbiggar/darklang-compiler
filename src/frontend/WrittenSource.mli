@@ -7,6 +7,8 @@ type item =
 
 val items : Validation.validatedSourceFile -> (item list, string) result
 
+val moduleSegments : string -> (string list, string) result
+
 val validateSourceUnits :
   bool ->
   (string * NameSyntax.SourceUnitPurpose.t * Validation.validatedSourceFile)

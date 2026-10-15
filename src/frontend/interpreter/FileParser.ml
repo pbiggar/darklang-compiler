@@ -39,6 +39,60 @@ let parseTestExpected grammar state index =
       let value, next = grammar.parseExpr state index in
       (WT.TEExpr value, next)
 
+(* Package tests retain their body and outcome; execution belongs to the runner. *)
+let parseTestDecl grammar state index =
+  let keywordTest = rng state index in
+  let name : WT.identifier =
+    match tok state (index + 1) with
+    | TIdent name -> { range = rng state (index + 1); name }
+    | _ ->
+        errExpected state (index + 1) "a test name";
+        { range = rng state (index + 1); name = "_" }
+  in
+  let beforeEquals =
+    if tok state (index + 2) = TColon then begin
+      errExpected state (index + 2)
+        "'='; tests use instance and called-function permissions";
+      snd (DeclarationSupport.parseEffectRow state (index + 3))
+    end
+    else index + 2
+  in
+  let symbolEquals, afterEquals =
+    if tok state beforeEquals = TEquals then
+      (rng state beforeEquals, beforeEquals + 1)
+    else begin
+      errExpected state beforeEquals "'='";
+      (zeroWidthAtEnd (rng state beforeEquals), beforeEquals)
+    end
+  in
+  let body, afterBody = grammar.parseBlock state afterEquals in
+  let isOutcome =
+    tok state afterBody = TEquals
+    && tok state (afterBody + 1) = TGt
+    && (rng state afterBody).end_ = (rng state (afterBody + 1)).start
+  in
+  let symbolOutcome, errorKindRange, expectedError, afterTest, ending =
+    if isOutcome then
+      let outcome = span (rng state afterBody) (rng state (afterBody + 1)) in
+      match (tok state (afterBody + 2), tok state (afterBody + 3)) with
+      | TIdent "raises", TStringLit message ->
+          let messageRange = rng state (afterBody + 3) in
+          (Some outcome, Some (rng state (afterBody + 2)),
+           Some (messageRange, WT.RuntimeError message), afterBody + 4, messageRange)
+      | TIdent "raises", _ ->
+          errExpected state (afterBody + 3) "an expected error string";
+          (Some outcome, Some (rng state (afterBody + 2)), None, afterBody + 3, outcome)
+      | _ ->
+          errExpected state (afterBody + 2) "'raises' after '=>'";
+          (Some outcome, None, None, afterBody + 2, outcome)
+    else (None, None, None, afterBody, WT.exprRange body)
+  in
+  (WT.DTest
+     { range = span keywordTest ending; name; body; expectedError;
+       keywordTest; errorKindRange; symbolOutcome; symbolEquals;
+       description = docOf state index },
+   afterTest)
+
 (*
    Parse declarations/expressions whose start column is >= minCol (offside): a
    less-indented item ends the scope. Used for the file body and, recursively,
@@ -163,6 +217,13 @@ and parseItemsBody grammar state itemScope start minColumn =
           in
           RevBuffer.add declarations declaration;
           stop := after
+      | TIdent "test", TIdent _
+        when tok state (!stop + 2) = TEquals
+             || tok state (!stop + 2) = TColon
+             || tok state (!stop + 2) = TIdent "raises" ->
+          let declaration, after = parseTestDecl grammar state !stop in
+          RevBuffer.add declarations declaration;
+          stop := after
       | TIdent "module", TIdent name ->
           let keyword = rng state !stop
           and column = (rng state !stop).start.column in
@@ -210,7 +271,7 @@ and parseItemsBody grammar state itemScope start minColumn =
               if next > 0 then rng state (next - 1) else rng state after
             in
             RevBuffer.add declarations
-              (WT.DTest
+              (WT.DAssertion
                  {
                    WT.range = span (WT.exprRange expression) ending;
                    actual = expression;

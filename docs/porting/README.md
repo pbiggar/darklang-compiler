@@ -258,3 +258,52 @@ Do not wait for complete classification before porting a useful section. Start
 representative trials in any of the six categories. They establish the missing
 copying, parser comparison, test execution, builtin registry, or semantic probe
 adapters as actual work exposes the requirements.
+
+## Named package test syntax trial
+
+The compiler now follows the pinned interpreter's distinction between a named
+`DTest` declaration (`test name = body`) and a legacy `DAssertion`
+(`actual = expected`). Named declarations preserve the body, documentation,
+keyword and outcome ranges, and optional `=> raises "message"` expectation.
+`test` remains a contextual identifier. Named tests are valid only for Package
+purpose; legacy assertions retain their Test-only boundary.
+
+`test/regression/named_test_parser_regression.ml` covers simple and nested tests,
+multiline bodies, documentation/ranges, expected errors, malformed outcomes,
+contextual identifiers, and both purpose boundaries. Build first, then run
+`dune exec test/regression/named_test_parser_regression.exe` or `dune runtest`.
+These native regressions have not run in this VM; syntax checking is not
+behavioral evidence. Executable source flattening explicitly rejects named
+tests until the execution adapter is implemented.
+
+`NamedPackageTests.partition` now provides the explicit runner boundary. It
+accepts validated Package source, retains tests in declaration order with their
+qualified module scopes, and returns a separately validated package containing
+the ordinary declarations. Test bodies, documentation, source ranges, and
+expected errors remain unchanged. Duplicate qualified test identities are
+rejected; identical short names in different modules remain distinct. Ordinary
+compiler entry points still reject named tests instead of silently dropping them.
+
+`test/regression/named_test_partition_regression.ml` covers ordered/nested scopes,
+helper and value preservation, unchanged test declarations, duplicate names,
+test-free packages, and the explicit Package boundary. These regressions have
+not run: native setup was retried and failed downloading pinned native packages
+with HTTP 503. OCaml parsing checks passed, which does not establish type-checking
+or execution. The next step is unchanged `Stdlib.Test.Result` helper code and
+test-local runtime context, followed by independent compilation and execution of
+each extracted body with its original expected outcome.
+
+`NamedPackageTests.executable` selects a test by its full qualified identity and
+prepares a validated Script with that unchanged body as its only entry. The entry
+stays at the test's original declaration position and module scope; all ordinary
+declarations are retained and other test bodies are removed. The selected test's
+original declaration, including its expected error, is returned separately for
+the runner. Unknown identities, duplicate identities and non-Package inputs are
+rejected. Preparation does not execute the body or interpret its result.
+
+The partition regression now also checks independent preparation, source order,
+expected-error preservation and lexical name resolution through the ordinary
+checker. OCaml parsing checks and all 47 ledger-tooling regressions pass; the
+native regressions still require the pinned dependency setup and build. The
+unchanged Test helpers, test-local builtin context, result/error interpretation
+and actual per-test execution remain unfinished.

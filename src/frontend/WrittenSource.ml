@@ -23,6 +23,7 @@ let moduleSegments name =
   | None -> Error ("Invalid parsed module name '" ^ name ^ "'")
 
 let rec flattenDeclaration path = function
+  | WT.DTest _ -> Error "Named package test requires a test execution adapter"
   | WT.DFunction fn -> Ok [ Function (path, fn) ]
   | WT.DValue value -> Ok [ Value (path, value) ]
   | WT.DType typ -> Ok [ Type (path, typ) ]
@@ -33,7 +34,7 @@ let rec flattenDeclaration path = function
         (fun segments ->
           flattenDeclarations (path @ segments) modul.WT.declarations)
   | WT.DTypeDB _ -> Error "Test-only database declaration in executable source"
-  | WT.DTest _ -> Error "Test assertion in executable source"
+  | WT.DAssertion _ -> Error "Test assertion in executable source"
 
 and flattenDeclarations path declarations =
   Result.map List.rev

@@ -543,7 +543,7 @@ and testExpected (value : WrittenTypes.testExpected) =
   | WrittenTypes.TEError field0 -> union "TEError" [ quoted field0 ]
   | WrittenTypes.TESqlError field0 -> union "TESqlError" [ quoted field0 ]
 
-and test (value : WrittenTypes.test) =
+and assertion (value : WrittenTypes.assertion) =
   record
     [
       (fun _ -> "") value.WrittenTypes.range;
@@ -553,13 +553,26 @@ and test (value : WrittenTypes.test) =
 
 and declaration (value : WrittenTypes.declaration) =
   match value with
+  | WrittenTypes.DTest field0 -> union "DTest" [ testDecl field0 ]
   | WrittenTypes.DFunction field0 -> union "DFunction" [ fnDecl field0 ]
   | WrittenTypes.DValue field0 -> union "DValue" [ valueDecl field0 ]
   | WrittenTypes.DModule field0 -> union "DModule" [ moduleDecl field0 ]
   | WrittenTypes.DType field0 -> union "DType" [ typeDecl field0 ]
   | WrittenTypes.DExpr field0 -> union "DExpr" [ expr field0 ]
   | WrittenTypes.DTypeDB field0 -> union "DTypeDB" [ typeDecl field0 ]
-  | WrittenTypes.DTest field0 -> union "DTest" [ test field0 ]
+  | WrittenTypes.DAssertion field0 -> union "DAssertion" [ assertion field0 ]
+
+and testDecl (value : WrittenTypes.testDecl) =
+  record
+    [
+      identifier value.WrittenTypes.name;
+      expr value.WrittenTypes.body;
+      option
+        (fun (_, WrittenTypes.RuntimeError message) ->
+          union "RuntimeError" [ quoted message ])
+        value.WrittenTypes.expectedError;
+      quoted value.WrittenTypes.description;
+    ]
 
 and sourceFile (value : WrittenTypes.sourceFile) =
   record

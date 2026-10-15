@@ -9,4 +9,11 @@ policy:
   disposition: required
 questions:
   - Trial tokens, syntax trees, diagnostics, ranges, and validation comparisons.
-children: []
+children:
+  - scope: backend/src/LibParser/Parser.fs
+    current: FileParser now ports named test declarations, contextual test identifiers, contiguous outcome separators, expected runtime errors, and documentation/ranges from the pin. Native parser regressions are implemented but not executed; faithful parser parity remains unverified.
+    reason: This representative parser port unblocks the syntax prerequisite for current package tests without claiming execution support.
+    questions:
+      - Run test/regression/named_test_parser_regression.exe after building the pinned native graph, then extend comparisons to unchanged upstream cases.
+  - scope: backend/src/LibParser/WrittenTypes.fs
+    current: DTest/testDecl now represents named package tests; DAssertion/assertion represents legacy actual/expected assertions. Both compiler syntax interfaces and declaration consumers are updated. Type-checking and native regression execution remain unverified.

@@ -125,7 +125,9 @@ bootstrap does not provision the full Docker benchmark environment.
   another host providing those paths and Cachegrind. The native host suite and
   compiled leak check can still run in the VM.
 
-Commit completed repository changes locally and report the exact verification
-commands and any limitations. Work does not have the macOS `./land` workflow;
-use a GitHub branch or PR only when the user authorizes that handoff. Do not
+Commit and push repository changes to a task branch, including unfinished
+checkpoints, and report the exact verification commands and any limitations.
+The owner grants standing authorization for task-branch pushes to the public
+`pbiggar/darklang-compiler` repository; see `AGENTS.chatgpt.md`. Work does not have
+the macOS `./land` workflow. Merging still requires user authorization. Do not
 push or merge `main` as part of setup.

@@ -138,7 +138,7 @@ let candidates source (parsed : W.sourceFile) =
     | W.DType typ | W.DTypeDB typ -> [ replace typ.range "" ]
     | W.DModule module_ -> List.concat_map declaration module_.declarations
     | W.DExpr value -> expression value
-    | W.DTest _ -> []
+    | W.DAssertion _ | W.DTest _ -> []
   in
   let candidates =
     List.concat_map declaration parsed.W.declarations
