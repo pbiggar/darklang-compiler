@@ -72,10 +72,13 @@ unchanged files. The trial itself does not migrate files or claim runtime parity
 
 The next boundary is native compilation of the temporary library. VM setup
 uses the compiler's `scripts/vm/setup-native-toolchain` and `scripts/vm/README.md`;
-it does not require a separately provisioned environment. In the current VM,
-OCaml builds successfully, but network policy denies the bootstrap's pinned
-`snapshot.ubuntu.com` downloads, leaving the native dependencies unavailable.
-This is a validation blocker, not a package-source availability problem.
+it does not require a separately provisioned environment. The latest retry reused
+the pinned OCaml compiler, installed the native prerequisite libraries, and
+initialized the pinned opam switch. Locked OCaml dependencies remain unavailable:
+the network proxy returned HTTP 403 CONNECT failures for opam cache downloads
+and package source downloads. Native build and execution remain unverified;
+this is a validation blocker, not a package-source availability problem. Do not
+bypass network restrictions or replace pinned sources/checksums to obtain a pass.
 
 ## Broad policies and nested exceptions
 
@@ -304,6 +307,8 @@ rejected. Preparation does not execute the body or interpret its result.
 The partition regression now also checks independent preparation, source order,
 expected-error preservation and lexical name resolution through the ordinary
 checker. OCaml parsing checks and all 47 ledger-tooling regressions pass; the
-native regressions still require the pinned dependency setup and build. The
+native regressions still require the pinned dependency setup and build. The five
+package-layout regressions also pass, establishing only byte preservation and
+embedding, not compilation or runtime compatibility. The
 unchanged Test helpers, test-local builtin context, result/error interpretation
 and actual per-test execution remain unfinished.
