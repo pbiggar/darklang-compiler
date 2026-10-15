@@ -29,18 +29,20 @@ let __cellIsReady (ptr: RawPtr) : Bool =
     else if state == 1L then true
     else Builtin.crash "Invalid async promise state"
 
+let __disposePayload<'a> (ptr: RawPtr) : Unit =
+    if Stdlib.__Async.__cellIsReady ptr then
+        let payload = __raw_take<a> ptr (Stdlib.__Async.__PAYLOAD ()) in
+        let _ = __raw_write_word ptr (Stdlib.__Async.__PAYLOAD ()) 0L in
+        ()
+    else ()
+
 let __disposeCell<'a> (ptr: RawPtr) : Unit =
     let waiters = __raw_take<List<Int64>> ptr (Stdlib.__Async.__WAITERS ()) in
-    if not (Stdlib.List.isEmpty waiters) then
-        Builtin.crash "Async promise still has waiting tasks"
-    else
+    if Stdlib.List.isEmpty waiters then
         let _ = __raw_write_word ptr (Stdlib.__Async.__WAITERS ()) 0L in
-        let _ = if Stdlib.__Async.__cellIsReady ptr then
-            let payload = __raw_take<a> ptr (Stdlib.__Async.__PAYLOAD ()) in
-            let _ = __raw_write_word ptr (Stdlib.__Async.__PAYLOAD ()) 0L in
-            ()
-          else () in
+        let _ = Stdlib.__Async.__disposePayload<a> ptr in
         __raw_free ptr
+    else Builtin.crash "Async promise still has waiting tasks"
 
 let __new<'a> () : Stdlib.__Async.__Promise<a> =
     let ptr = __raw_alloc (Stdlib.__Async.__SIZE ()) in
@@ -48,7 +50,7 @@ let __new<'a> () : Stdlib.__Async.__Promise<a> =
     let _ = __raw_write_word ptr (Stdlib.__Async.__PAYLOAD ()) 0L in
     let _ = __raw_slot_init<List<Int64>> ptr (Stdlib.__Async.__WAITERS ()) [] in
     let lifecycle = Stdlib.Stream.__new (fun _unit -> None) (fun _unit -> Stdlib.__Async.__disposeCell<a> ptr) in
-    { cell = ptr; lifecycle = lifecycle }
+    Stdlib.__Async.__Promise { cell = ptr; lifecycle = lifecycle }
 
 let __isReady<'a> (promise: Stdlib.__Async.__Promise<a>) : Bool =
     Stdlib.__Async.__cellIsReady promise.cell
