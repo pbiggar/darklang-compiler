@@ -154,6 +154,7 @@ StdLib/DateTime.dark
 StdLib/Duration.dark
 StdLib/Blob.dark
 StdLib/Stream.dark
+StdLib/__Async.dark
 StdLib/Html.dark
 StdLib/Http.dark
 StdLib/Http/Request.dark

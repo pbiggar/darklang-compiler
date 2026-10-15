@@ -1,0 +1,102 @@
+// __Async.dark - Native promise cells for the single-threaded async runtime.
+//
+// This is the promise object, not the transparent source-value carrier. The
+// phantom payload type prevents reading a cell using a different release plan.
+// A handle is an unmanaged native root: every operation/consumer owner must
+// explicitly retain/release it until compiler-managed pending roots are wired in.
+// Waiter IDs are non-owning scheduler identities; their parked stacks must keep
+// their own promise references. Only the scheduler thread may mutate these cells.
+
+module Darklang.Stdlib.__Async
+
+type __Promise<'a> = | Promise of RawPtr
+
+let __REFCOUNT () : Int64 = 0L
+let __STATE () : Int64 = 8L
+let __PAYLOAD () : Int64 = 16L
+let __WAITERS () : Int64 = 24L
+let __SIZE () : Int64 = 32L
+
+let __ptr<'a> (promise: Stdlib.__Async.__Promise<a>) : RawPtr =
+    match promise with | Promise ptr -> ptr
+
+// The initial reference belongs to the producer. Publishing to a consumer
+// requires another reference, so abandoning the result cannot free active I/O.
+let __new<'a> () : Stdlib.__Async.__Promise<a> =
+    let ptr = __raw_alloc (Stdlib.__Async.__SIZE ()) in
+    let _ = __raw_write_word ptr (Stdlib.__Async.__REFCOUNT ()) 1L in
+    let _ = __raw_write_word ptr (Stdlib.__Async.__STATE ()) 0L in
+    let _ = __raw_write_word ptr (Stdlib.__Async.__PAYLOAD ()) 0L in
+    let _ = __raw_slot_init<List<Int64>> ptr (Stdlib.__Async.__WAITERS ()) [] in
+    Promise ptr
+
+let __retain<'a> (promise: Stdlib.__Async.__Promise<a>) : Unit =
+    let ptr = Stdlib.__Async.__ptr promise in
+    let count = __raw_get<Int64> ptr (Stdlib.__Async.__REFCOUNT ()) in
+    if count <= 0L || count == 9223372036854775807L then
+        Builtin.crash "Invalid async promise reference count"
+    else __raw_write_word ptr (Stdlib.__Async.__REFCOUNT ()) (count + 1L)
+
+let __isReady<'a> (promise: Stdlib.__Async.__Promise<a>) : Bool =
+    let ptr = Stdlib.__Async.__ptr promise in
+    let state = __raw_get<Int64> ptr (Stdlib.__Async.__STATE ()) in
+    if state == 0L then false
+    else if state == 1L then true
+    else Builtin.crash "Invalid async promise state"
+
+// Returning a borrowed payload establishes an ordinary owned result through
+// existing typed raw-slot/projection RC. No special failure or exception slot:
+// a failed I/O operation stores its ordinary Result.Error value here.
+let __poll<'a> (promise: Stdlib.__Async.__Promise<a>) : Stdlib.Option.Option<a> =
+    if Stdlib.__Async.__isReady promise then
+        let ptr = Stdlib.__Async.__ptr promise in
+        Some (__raw_get<a> ptr (Stdlib.__Async.__PAYLOAD ()))
+    else None
+
+// False means completion already happened; the caller must not park. In the
+// single-threaded scheduler the state check and insertion cannot race completion.
+// Registration is idempotent so completion never enqueues one task twice.
+let __wait<'a> (promise: Stdlib.__Async.__Promise<a>) (task: Int64) : Bool =
+    if Stdlib.__Async.__isReady promise then false
+    else
+        let ptr = Stdlib.__Async.__ptr promise in
+        let waiters = __raw_get<List<Int64>> ptr (Stdlib.__Async.__WAITERS ()) in
+        if Stdlib.List.member waiters task then true
+        else
+            let next = Stdlib.List.push waiters task in
+            let previous = __raw_take<List<Int64>> ptr (Stdlib.__Async.__WAITERS ()) in
+            let _ = __raw_slot_init<List<Int64>> ptr (Stdlib.__Async.__WAITERS ()) next in
+            true
+
+// Publish the retained payload before handing the waiter IDs to the scheduler.
+// Taking and clearing the waiter slot transfers its ownership out of the cell.
+// Enqueueing happens after this function, never by reentering a parked task here.
+let __resolve<'a> (promise: Stdlib.__Async.__Promise<a>) (value: a) : List<Int64> =
+    if Stdlib.__Async.__isReady promise then
+        Builtin.crash "Async promise resolved more than once"
+    else
+        let ptr = Stdlib.__Async.__ptr promise in
+        let _ = __raw_slot_init<a> ptr (Stdlib.__Async.__PAYLOAD ()) value in
+        let waiters = __raw_take<List<Int64>> ptr (Stdlib.__Async.__WAITERS ()) in
+        let _ = __raw_write_word ptr (Stdlib.__Async.__WAITERS ()) 0L in
+        let _ = __raw_write_word ptr (Stdlib.__Async.__STATE ()) 1L in
+        Stdlib.List.reverse waiters
+
+let __release<'a> (promise: Stdlib.__Async.__Promise<a>) : Unit =
+    let ptr = Stdlib.__Async.__ptr promise in
+    let count = __raw_get<Int64> ptr (Stdlib.__Async.__REFCOUNT ()) in
+    if count <= 0L then Builtin.crash "Invalid async promise reference count"
+    else if count > 1L then
+        __raw_write_word ptr (Stdlib.__Async.__REFCOUNT ()) (count - 1L)
+    else
+        let waiters = __raw_take<List<Int64>> ptr (Stdlib.__Async.__WAITERS ()) in
+        if not (Stdlib.List.isEmpty waiters) then
+            Builtin.crash "Async promise still has waiting tasks"
+        else
+            let _ = __raw_write_word ptr (Stdlib.__Async.__WAITERS ()) 0L in
+            let _ = if Stdlib.__Async.__isReady promise then
+                let payload = __raw_take<a> ptr (Stdlib.__Async.__PAYLOAD ()) in
+                let _ = __raw_write_word ptr (Stdlib.__Async.__PAYLOAD ()) 0L in
+                ()
+              else () in
+            __raw_free ptr

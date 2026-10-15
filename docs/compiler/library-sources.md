@@ -198,6 +198,7 @@ fragments use `__` even where the interpreter also has private helpers.
 | `StdLib/Duration.dark` | `Darklang.Stdlib.Duration`  | `packages/darklang/stdlib/duration.dark` |
 | `StdLib/Blob.dark` | `Darklang.Stdlib.Blob`  | `packages/darklang/stdlib/blob.dark` |
 | `StdLib/Stream.dark` | `Darklang.Stdlib.Stream`  | `packages/darklang/stdlib/stream.dark` |
+| `StdLib/__Async.dark` | `Darklang.Stdlib.__Async` | Compiler support: typed native promise cells, explicit operation ownership, and waiter handoff; not yet transparent source values or scheduling |
 | `StdLib/Html.dark` | `Darklang.Stdlib.Html`  | `packages/darklang/stdlib/html.dark` |
 | `StdLib/Http.dark` | `Darklang.Stdlib.Http`  | `packages/darklang/stdlib/http.dark` |
 | `StdLib/Http/Request.dark` | `Darklang.Stdlib.Http.Request`  | `packages/darklang/stdlib/http.dark` |
