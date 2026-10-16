@@ -325,7 +325,13 @@ mean the entire branch has passed its integration or performance gates.
 - [ ] CONNECT/extended CONNECT, WebSockets, HTTP/3 datagrams and WebTransport.
 - [ ] Server push and priority scheduling.
 - [ ] Client redirect, cookie-jar and proxy configuration.
-- [ ] Apply peer HTTP/3 SETTINGS and field-section limits.
+- [x] Apply peer HTTP/3 SETTINGS and field-section limits. Connection-owned
+  control state configures QPACK and checks uncompressed field budgets before
+  encoding request or response headers. Peer blocked-stream allowances accept
+  the complete QUIC integer range; the encoder still uses its bounded local
+  table and outstanding-section limits. `http3_peer_settings.e2e` covers
+  defaults, exact/over-budget fields, full-range integers and fragmented
+  settings. The dynamic-QPACK peer also exercises a full-range advertisement.
 - [x] Negotiated QUIC application idle timers, authenticated activity resets,
   first ack-eliciting-send restart and the RTT-derived three-PTO floor.
 - [ ] Typed protocol failures with correct stream and connection wire errors,

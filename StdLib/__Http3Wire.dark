@@ -43,7 +43,7 @@ let __settings (data: Blob) (position: Int64) (seen: List<Int64>) (settings: Lis
         match Stdlib.__QuicWire.parseInteger data id.next with
         | Error _ -> Error "Truncated HTTP/3 setting"
         | Ok value ->
-          if (id.value == 7L && value.value > 65535L) || (id.value == 8L && value.value > 1L) then Error "Invalid HTTP/3 setting value"
+          if id.value == 8L && value.value > 1L then Error "Invalid HTTP/3 setting value"
           else Stdlib.__Http3Wire.__settings data value.next (Stdlib.List.push seen id.value) (Stdlib.List.push settings (id.value, value.value))
 
 let parseSettings (payload: Blob) : Stdlib.Result.Result<List<(Int64 * Int64)>, String> =
