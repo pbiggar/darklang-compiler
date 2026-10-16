@@ -44,10 +44,10 @@ let parseTestDecl grammar state index =
   let keywordTest = rng state index in
   let name : WT.identifier =
     match tok state (index + 1) with
-    | TIdent name -> { range = rng state (index + 1); name }
+    | TIdent name -> { WT.range = rng state (index + 1); name }
     | _ ->
         errExpected state (index + 1) "a test name";
-        { range = rng state (index + 1); name = "_" }
+        { WT.range = rng state (index + 1); name = "_" }
   in
   let beforeEquals =
     if tok state (index + 2) = TColon then begin
@@ -72,26 +72,41 @@ let parseTestDecl grammar state index =
     && (rng state afterBody).end_ = (rng state (afterBody + 1)).start
   in
   let symbolOutcome, errorKindRange, expectedError, afterTest, ending =
-    if isOutcome then
+    if isOutcome then (
       let outcome = span (rng state afterBody) (rng state (afterBody + 1)) in
       match (tok state (afterBody + 2), tok state (afterBody + 3)) with
       | TIdent "raises", TStringLit message ->
           let messageRange = rng state (afterBody + 3) in
-          (Some outcome, Some (rng state (afterBody + 2)),
-           Some (messageRange, WT.RuntimeError message), afterBody + 4, messageRange)
+          ( Some outcome,
+            Some (rng state (afterBody + 2)),
+            Some (messageRange, WT.RuntimeError message),
+            afterBody + 4,
+            messageRange )
       | TIdent "raises", _ ->
           errExpected state (afterBody + 3) "an expected error string";
-          (Some outcome, Some (rng state (afterBody + 2)), None, afterBody + 3, outcome)
+          ( Some outcome,
+            Some (rng state (afterBody + 2)),
+            None,
+            afterBody + 3,
+            outcome )
       | _ ->
           errExpected state (afterBody + 2) "'raises' after '=>'";
-          (Some outcome, None, None, afterBody + 2, outcome)
+          (Some outcome, None, None, afterBody + 2, outcome))
     else (None, None, None, afterBody, WT.exprRange body)
   in
-  (WT.DTest
-     { range = span keywordTest ending; name; body; expectedError;
-       keywordTest; errorKindRange; symbolOutcome; symbolEquals;
-       description = docOf state index },
-   afterTest)
+  ( WT.DTest
+      {
+        WT.range = span keywordTest ending;
+        name;
+        body;
+        expectedError;
+        keywordTest;
+        errorKindRange;
+        symbolOutcome;
+        symbolEquals;
+        description = docOf state index;
+      },
+    afterTest )
 
 (*
    Parse declarations/expressions whose start column is >= minCol (offside): a
