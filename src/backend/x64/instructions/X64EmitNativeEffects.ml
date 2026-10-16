@@ -280,7 +280,7 @@ let emitCliNative (ctx : X64CodeGenTypes.funcCtx) (dest : LIR.reg)
               X.LEA
                 ( destReg,
                   freeListBase,
-                  Int32.of_int (freeListSize + processTableSize + 512) );
+                  Int32.of_int (processTableOffset + processTableSize + 512) );
             ]
       | LIR.ChildState ->
           Ok [ X.LEA (destReg, freeListBase, Int32.of_int processTableOffset) ]
@@ -592,8 +592,8 @@ let emitCliNative (ctx : X64CodeGenTypes.funcCtx) (dest : LIR.reg)
                     ( destReg,
                       freeListBase,
                       Int32.of_int
-                        (freeListSize + processTableSize + Int64.to_int offset)
-                    );
+                        (processTableOffset + processTableSize
+                       + Int64.to_int offset) );
                 ]
           | _ -> Error "StdinState expects a fixed state or input-buffer offset"
           )

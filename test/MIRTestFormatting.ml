@@ -346,6 +346,8 @@ and instr (value : MIR.instr) =
   | MIR.MappedAlloc (field0, field1) ->
       union "Instr" "MappedAlloc" [ vReg field0; operand field1 ]
   | MIR.RawFree field0 -> union "Instr" "RawFree" [ operand field0 ]
+  | MIR.RawFreeSized (ptr, size) ->
+      union "Instr" "RawFreeSized" [ operand ptr; operand size ]
   | MIR.MappedFree field0 -> union "Instr" "MappedFree" [ operand field0 ]
   | MIR.RawGet (field0, field1, field2, field3) ->
       union "Instr" "RawGet"

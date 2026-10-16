@@ -834,8 +834,8 @@ let testGenericRefCountDecMixedSumPayloadUsesVariantDispatch () =
   let* instrs = translate program false in
   let rec branchAppearsBeforeSecondCase seen = function
     | [] -> false
-    | X.CMP_imm (_, 0l) :: rest -> branchAppearsBeforeSecondCase true rest
-    | X.CMP_imm (_, 1l) :: _ when seen -> false
+    | X.CMP_imm (X.R10, 0l) :: rest -> branchAppearsBeforeSecondCase true rest
+    | X.CMP_imm (X.R10, 1l) :: _ when seen -> false
     | X.JMP _ :: _ when seen -> true
     | _ :: rest -> branchAppearsBeforeSecondCase seen rest
   in

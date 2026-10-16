@@ -19,6 +19,11 @@ reference-counted buffer of little-endian base-2^31 limbs. Its signed used-limb
 count records the sign without requiring two's-complement padding. Zero and
 small arithmetic results use tagged values; operations accept either form.
 
+Heap Ints start with a reference count at offset zero and a byte-capacity field
+at offset eight. The signed used-limb count is at offset sixteen; limbs start
+at offset twenty-four. Normalization changes the used count, retaining the
+capacity needed to release or recycle the allocation safely.
+
 The compiler tracks this representation as `DynamicInt`, separately from
 strings and blobs. Dedicated retain/release instructions skip tagged values and
 manage only limb buffers, including when an `Int` is captured or stored in a

@@ -328,6 +328,7 @@ type cExpr =
   | RawAlloc of atom
   | MappedAlloc of atom
   | RawFree of atom
+  | RawFreeSized of atom * atom
   | MappedFree of atom
   | RawGet of atom * atom * AST.semanticType option
   | RawTake of atom * atom * AST.semanticType option

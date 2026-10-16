@@ -65,8 +65,8 @@ let addCallsFromInstr functionIds instr calls =
   | LIR.FloatToBits _ | LIR.GpToFp _ | LIR.FpToGp _ | LIR.HeapAlloc _
   | LIR.HeapLoad _ | LIR.RefCountInc _ | LIR.RefCountDec _
   | LIR.PrintHeapString _ | LIR.FileWriteFromPtr _ | LIR.RawAlloc _
-  | LIR.MappedAlloc _ | LIR.RawFree _ | LIR.MappedFree _ | LIR.RawGet _
-  | LIR.RawGetByte _ | LIR.RawWriteWord _ | LIR.RawWriteByte _
+  | LIR.MappedAlloc _ | LIR.RawFree _ | LIR.RawFreeSized _ | LIR.MappedFree _
+  | LIR.RawGet _ | LIR.RawGetByte _ | LIR.RawWriteWord _ | LIR.RawWriteByte _
   | LIR.RawSlotInit _ | LIR.RandomInt64 _ | LIR.DateTimeNow _ | LIR.Sleep _
   | LIR.FloatToString _ | LIR.CoverageHit _ ->
       calls

@@ -212,6 +212,7 @@ let propagateCopyInstr copies (instruction : instr) =
   | RawAlloc (dest, numBytes) -> RawAlloc (dest, p numBytes)
   | MappedAlloc (dest, numBytes) -> MappedAlloc (dest, p numBytes)
   | RawFree ptr -> RawFree (p ptr)
+  | RawFreeSized (ptr, size) -> RawFreeSized (p ptr, p size)
   | MappedFree ptr -> MappedFree (p ptr)
   | RawGet (dest, ptr, byteOffset, valueType) ->
       RawGet (dest, p ptr, p byteOffset, valueType)

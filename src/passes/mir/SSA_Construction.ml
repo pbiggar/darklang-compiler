@@ -748,6 +748,8 @@ let renameInstr state (instruction : instr) =
   | RawFree ptr ->
       let ptr' = renameOperand state ptr in
       (RawFree ptr', state)
+  | RawFreeSized (ptr, size) ->
+      (RawFreeSized (renameOperand state ptr, renameOperand state size), state)
   | MappedFree ptr ->
       let ptr' = renameOperand state ptr in
       (MappedFree ptr', state)

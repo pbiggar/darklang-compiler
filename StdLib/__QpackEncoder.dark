@@ -9,7 +9,7 @@ type Field = Literal of Blob | Reference of Int64
 type Selected = { state: Stdlib.__QpackEncoder.State, fields: List<Stdlib.__QpackEncoder.Field>, references: List<Int64>, instructions: List<Blob>, budget: Int64 }
 
 let create (maximum: Int64) (blocked: Int64) : Stdlib.Result.Result<Stdlib.__QpackEncoder.State, String> =
-  if maximum < 0L || maximum > 4611686018427387903L || blocked < 0L || blocked > 65535L then Error "Invalid QPACK encoder settings"
+  if maximum < 0L || maximum > 4611686018427387903L || blocked < 0L || blocked > 4611686018427387903L then Error "Invalid QPACK encoder settings"
   else
     let capacity = if maximum > 4096L then 4096L else maximum in
     let instructions = if capacity == 0L then Stdlib.Blob.empty else Stdlib.__Hpack.encodeInteger 5L 32L capacity in

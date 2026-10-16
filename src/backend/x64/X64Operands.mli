@@ -12,6 +12,7 @@ val withPreservedFloatScratch :
 val heapPtr : X86_64.reg
 val freeListBase : X86_64.reg
 val freeListSize : int
+val largeBufferHeadOffset : int
 val processTableOffset : int
 val processTableSize : int
 val maxFreeListPayload : int
@@ -27,3 +28,5 @@ val genOomJump : unit -> X86_64.instr list
 val genOomHandler : unit -> X86_64.instr list
 val genRuntimeErrorHandler : unit -> X86_64.instr list
 val freshLabel : string -> string
+val genBufferRecycle : X86_64.reg -> X86_64.instr list
+val genRawRecycle : X86_64.reg -> X86_64.reg -> X86_64.instr list

@@ -325,18 +325,40 @@ mean the entire branch has passed its integration or performance gates.
 - [ ] CONNECT/extended CONNECT, WebSockets, HTTP/3 datagrams and WebTransport.
 - [ ] Server push and priority scheduling.
 - [ ] Client redirect, cookie-jar and proxy configuration.
-- [ ] Apply peer HTTP/3 SETTINGS and field-section limits.
+- [x] Apply peer HTTP/3 SETTINGS and field-section limits. Connection-owned
+  control state configures QPACK and checks uncompressed field budgets before
+  encoding request or response headers. Peer blocked-stream allowances accept
+  the complete QUIC integer range; the encoder still uses its bounded local
+  table and outstanding-section limits. `http3_peer_settings.e2e` covers
+  defaults, exact/over-budget fields, full-range integers and fragmented
+  settings. The dynamic-QPACK peer also exercises a full-range advertisement.
 - [x] Negotiated QUIC application idle timers, authenticated activity resets,
   first ack-eliciting-send restart and the RTT-derived three-PTO floor.
 - [ ] Typed protocol failures with correct stream and connection wire errors,
   retaining the current packet-number/key state across recoverable failures.
 - [ ] Sustained native TLS connection churn without exhausting the fixed heap.
-  The parent implementation reproduced `Out of heap memory` after twenty-one
-  successful fresh TLS exchanges on Linux x86-64; variable-size String/Blob
-  allocations are not reusable yet (see [reference counting](../compiler/runtime/reference-counting.md#leak-checking)).
-  The secure-server peer runs each additional fairness case in a fresh serving
-  scope and separately verifies simultaneous-owner cleanup. Passing those
-  bounded cases does not establish an indefinitely reusable native heap.
+  - [x] The parent fails the isolated thirty-two-connection TLS churn peer with
+    `Out of heap memory`. Linux x86-64 now recycles canonical String/Blob/Int
+    buffers and fixed blocks through 8 KiB. The same peer completes sixty-four
+    fresh connections in one serving process, with exact bodies and zero leaks.
+    Cumulative allocation and live-alias E2E cases cover the ownership boundary
+    (see [reference counting](../compiler/runtime/reference-counting.md#leak-checking)).
+  - [x] Larger canonical buffers reuse an exact-size list. Repeated 70 KB and
+    128 KB allocations and held aliases exceed the arena's cumulative capacity
+    without exhaustion; all three cases fail before the large-buffer change.
+  - [x] Sized raw release returns TCP/UDP polling, receive and address buffers,
+    entropy reads and RSA scratch allocations to reusable storage on x86-64.
+    Unaligned 4 KiB and 70 KB raw-buffer regressions exceed cumulative arena
+    capacity, with small-size and live-register checks at the release boundary.
+    The independent TLS peer also completes sixty-four fresh connections with
+    70,001-byte echo bodies in one process and zero reported leaks.
+  - [x] The remaining unsized standard-library raw releases are all 8-byte
+    Stream cells, shutdown masks/state, single poll descriptors and socket options.
+  - [ ] ARM64 needs the corresponding canonical/large-buffer recycling migration.
+    Large-block splitting
+    and coalescing remain unsupported.
+    Passing bounded churn cases does not establish an indefinitely reusable
+    native heap. The secure-server fairness peer retains its separate scopes.
 
 HTTP/3 control owners now retain peer parameters and enforce
 `SETTINGS_MAX_FIELD_SECTION_SIZE` against decoded name/value byte lengths,

@@ -220,111 +220,146 @@ let emitMappedFree ctx ptr =
       @ genLeakCounterDec ctx)
     (resolveReg ptr)
 
-let emitRawAlloc ctx dest numBytes =
-  let okLabel = freshLabel "rawalloc_ok" in
-  Result.bind (resolveReg dest) (fun destReg ->
-      Result.map
-        (fun sizeReg ->
-          (* --- Free list reuse ---
+let emitRawAllocResolved ctx destReg sizeReg =
+  let okLabel = freshLabel "raw_ok" in
+  (* --- Free list reuse ---
      Before bump-allocating, check if the free list has a block of the right size class.
      aligned_size = (numBytes + 7) & ~7; payload_class = aligned_size - 8
      If freeList[payload_class] is non-null, pop from free list and skip bump alloc. *)
-          let bumpLabel = freshLabel "rawalloc_bump" in
-          let doneLabel = freshLabel "rawalloc_done" in
-          (* Pick two temp registers that don't conflict with destReg or sizeReg *)
-          let available =
-            List.filter
-              (fun r -> r <> destReg && r <> sizeReg)
-              [ X.RAX; X.RCX; X.RDX; X.RDI; X.RSI ]
-          in
-          let temp1 = List.nth available 0 in
-          (* holds aligned_size → payload_class → head → next *)
-          let temp2 = List.nth available 1 in
-          (* holds &freeList[payload_class] *)
-          let freeListCheck =
-            [
-              X.PUSH temp1;
-              X.PUSH temp2;
-              (* Compute aligned size *)
-              X.MOV_reg (temp1, sizeReg);
-              X.ADD_imm (temp1, 7l);
-              X.AND_imm (temp1, -8l);
-              (* temp1 = aligned_size *)
-              (* Need at least 16 bytes (8 payload + 8 refcount) for free list *)
-              X.CMP_imm (temp1, 8l);
-              X.Jcc (X.LT, bumpLabel);
-              X.SUB_imm (temp1, 8l);
-              (* temp1 = payload_class *)
-              X.CMP_imm (temp1, Int32.of_int maxFreeListPayload);
-              X.Jcc (X.GT, bumpLabel);
-              (* Compute free list slot address: &freeList[payload_class] *)
-              X.MOV_reg (temp2, freeListBase);
-              X.ADD_reg (temp2, temp1);
-              (* temp2 = &freeList[payload_class] *)
-              (* Load free list head *)
-              X.MOV_load (temp1, temp2, 0l);
-              (* temp1 = head *)
-              X.TEST_reg (temp1, temp1);
-              X.Jcc (X.EQ, bumpLabel);
-              (* Pop from free list: dest = head, freeList[class] = head->next *)
-              X.MOV_reg (destReg, temp1);
-              (* dest = free block *)
-              X.MOV_load (temp1, temp1, 0l);
-              (* temp1 = next ptr *)
-              X.MOV_store (temp2, 0l, temp1);
-              (* update head *)
-              X.POP temp2;
-              X.POP temp1;
-              X.JMP doneLabel;
-              X.Label bumpLabel;
-              X.POP temp2;
-              X.POP temp1;
-            ]
-          in
-          (* --- Bump allocation (existing) --- *)
-          let allocInstrs =
-            if destReg = sizeReg then
-              [
-                X.MOV_reg (scratch, sizeReg);
-                X.MOV_reg (destReg, heapPtr);
-                X.ADD_reg (heapPtr, scratch);
-                X.ADD_imm (heapPtr, 7l);
-                X.AND_imm (heapPtr, -8l);
-              ]
-            else
-              [
-                X.MOV_reg (destReg, heapPtr);
-                X.ADD_reg (heapPtr, sizeReg);
-                X.ADD_imm (heapPtr, 7l);
-                X.AND_imm (heapPtr, -8l);
-              ]
-          in
-          (* Bounds check: heapPtr - freeListBase <= heapMmapSize
+  let bumpLabel = freshLabel "rawalloc_bump" in
+  let doneLabel = freshLabel "rawalloc_done" in
+  let largeLabel = freshLabel "rawalloc_large" in
+  let largeLoopLabel = freshLabel "rawalloc_large_loop" in
+  let largeFoundLabel = freshLabel "rawalloc_large_found" in
+  let largeMissLabel = freshLabel "rawalloc_large_miss" in
+  (* Pick two temp registers that don't conflict with destReg or sizeReg *)
+  let available =
+    List.filter
+      (fun r -> r <> destReg && r <> sizeReg)
+      [ X.RAX; X.RCX; X.RDX; X.RDI; X.RSI; X.R8; X.R9 ]
+  in
+  let temp1, temp2, node, capacity =
+    match available with
+    | first :: second :: third :: fourth :: _ -> (first, second, third, fourth)
+    | _ -> Crash.crash "Raw allocation requires four temporary registers"
+  in
+  (* holds &freeList[payload_class] *)
+  let freeListCheck =
+    [
+      X.PUSH temp1;
+      X.PUSH temp2;
+      (* Compute aligned size *)
+      X.MOV_reg (temp1, sizeReg);
+      X.ADD_imm (temp1, 7l);
+      X.AND_imm (temp1, -8l);
+      (* temp1 = aligned_size *)
+      (* Need at least 16 bytes (8 payload + 8 refcount) for free list *)
+      X.CMP_imm (temp1, 8l);
+      X.Jcc (X.LT, bumpLabel);
+      X.SUB_imm (temp1, 8l);
+      (* temp1 = payload_class *)
+      X.CMP_imm (temp1, Int32.of_int maxFreeListPayload);
+      X.Jcc (X.GT, largeLabel);
+      (* Compute free list slot address: &freeList[payload_class] *)
+      X.MOV_reg (temp2, freeListBase);
+      X.ADD_reg (temp2, temp1);
+      (* temp2 = &freeList[payload_class] *)
+      (* Load free list head *)
+      X.MOV_load (temp1, temp2, 0l);
+      (* temp1 = head *)
+      X.TEST_reg (temp1, temp1);
+      X.Jcc (X.EQ, bumpLabel);
+      (* Pop from free list: dest = head, freeList[class] = head->next *)
+      X.MOV_reg (destReg, temp1);
+      (* dest = free block *)
+      X.MOV_load (temp1, temp1, 0l);
+      (* temp1 = next ptr *)
+      X.MOV_store (temp2, 0l, temp1);
+      (* update head *)
+      X.POP temp2;
+      X.POP temp1;
+      X.JMP doneLabel;
+      X.Label largeLabel;
+      X.PUSH node;
+      X.PUSH capacity;
+      X.ADD_imm (temp1, 8l);
+      X.LEA (temp2, freeListBase, Int32.of_int largeBufferHeadOffset);
+      X.Label largeLoopLabel;
+      X.MOV_load (node, temp2, 0l);
+      X.TEST_reg (node, node);
+      X.Jcc (X.EQ, largeMissLabel);
+      X.MOV_load (capacity, node, 8l);
+      X.CMP_reg (capacity, temp1);
+      X.Jcc (X.EQ, largeFoundLabel);
+      (* The previous link lives at offset zero, including the global head. *)
+      X.MOV_reg (temp2, node);
+      X.JMP largeLoopLabel;
+      X.Label largeFoundLabel;
+      X.MOV_load (capacity, node, 0l);
+      X.MOV_store (temp2, 0l, capacity);
+      X.MOV_reg (destReg, node);
+      X.POP capacity;
+      X.POP node;
+      X.POP temp2;
+      X.POP temp1;
+      X.JMP doneLabel;
+      X.Label largeMissLabel;
+      X.POP capacity;
+      X.POP node;
+      X.Label bumpLabel;
+      X.POP temp2;
+      X.POP temp1;
+    ]
+  in
+  (* --- Bump allocation (existing) --- *)
+  let allocInstrs =
+    if destReg = sizeReg then
+      [
+        X.MOV_reg (scratch, sizeReg);
+        X.MOV_reg (destReg, heapPtr);
+        X.ADD_reg (heapPtr, scratch);
+        X.ADD_imm (heapPtr, 7l);
+        X.AND_imm (heapPtr, -8l);
+      ]
+    else
+      [
+        X.MOV_reg (destReg, heapPtr);
+        X.ADD_reg (heapPtr, sizeReg);
+        X.ADD_imm (heapPtr, 7l);
+        X.AND_imm (heapPtr, -8l);
+      ]
+  in
+  (* Bounds check: heapPtr - freeListBase <= heapMmapSize
      Use RAX temp if dest or size uses scratch (R11) *)
-          let useScratch = destReg <> scratch && sizeReg <> scratch in
-          let boundsCheck =
-            (if useScratch then
-               [
-                 X.MOV_reg (scratch, heapPtr);
-                 X.SUB_reg (scratch, freeListBase);
-                 X.CMP_imm (scratch, Int64.to_int32 heapMmapSizeBytes);
-                 X.Jcc (X.LE, okLabel);
-               ]
-             else
-               [
-                 X.PUSH X.RAX;
-                 X.MOV_reg (X.RAX, heapPtr);
-                 X.SUB_reg (X.RAX, freeListBase);
-                 X.CMP_imm (X.RAX, Int64.to_int32 heapMmapSizeBytes);
-                 X.POP X.RAX;
-                 X.Jcc (X.LE, okLabel);
-               ])
-            @ genOomJump () @ [ X.Label okLabel ]
-          in
-          (* Recycled blocks become live allocations just like bumped
+  let useScratch = destReg <> scratch && sizeReg <> scratch in
+  let boundsCheck =
+    (if useScratch then
+       [
+         X.MOV_reg (scratch, heapPtr);
+         X.SUB_reg (scratch, freeListBase);
+         X.CMP_imm (scratch, Int64.to_int32 heapMmapSizeBytes);
+         X.Jcc (X.LE, okLabel);
+       ]
+     else
+       [
+         X.PUSH X.RAX;
+         X.MOV_reg (X.RAX, heapPtr);
+         X.SUB_reg (X.RAX, freeListBase);
+         X.CMP_imm (X.RAX, Int64.to_int32 heapMmapSizeBytes);
+         X.POP X.RAX;
+         X.Jcc (X.LE, okLabel);
+       ])
+    @ genOomJump () @ [ X.Label okLabel ]
+  in
+  (* Recycled blocks become live allocations just like bumped
      blocks. Both paths must reach the accounting increment. *)
-          freeListCheck @ allocInstrs @ boundsCheck @ [ X.Label doneLabel ]
-          @ genLeakCounterInc ctx)
+  freeListCheck @ allocInstrs @ boundsCheck @ [ X.Label doneLabel ]
+  @ genLeakCounterInc ctx
+
+let emitRawAlloc ctx dest numBytes =
+  Result.bind (resolveReg dest) (fun destReg ->
+      Result.map
+        (fun sizeReg -> emitRawAllocResolved ctx destReg sizeReg)
         (resolveReg numBytes))
 
 let emitRawFree ctx ptr =
@@ -337,6 +372,12 @@ let emitRawFree ctx ptr =
       ]
       @ genLeakCounterDec ctx)
     (resolveReg ptr)
+
+let emitRawFreeSized ctx ptr size =
+  Result.bind (resolveReg ptr) (fun pointer ->
+      Result.map
+        (fun bytes -> genRawRecycle pointer bytes @ genLeakCounterDec ctx)
+        (resolveReg size))
 
 let emitRawGet (_ctx : funcCtx) dest ptr byteOffset =
   Result.bind (resolveReg dest) (fun d ->

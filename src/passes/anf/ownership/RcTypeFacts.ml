@@ -309,13 +309,13 @@ let inferCExprType ctx expr =
       | A.PosixSetAttributesAt | A.PosixSymlinkAt | A.PosixReadlinkAt
       | A.PosixAccessAt | A.PosixFlock | A.PosixGetDents | A.PosixIoctl
       | A.PosixProcInfo | A.PosixCopyFileRange | A.PosixFtruncate
-      | A.PosixFchmod | A.PosixFstat | A.PosixPread
-      | A.PosixPwrite | A.PosixFclonefileat | A.PosixGetentropy | A.PosixUname
-      | A.PosixSysctl | A.PosixSchedGetaffinity | A.PosixFcntlGetPath
-      | A.PosixClockGettime | A.PosixGettimeofday | A.PosixNanosleep
-      | A.PosixMachTimebaseInfo | A.PosixInotifyInit1 | A.PosixInotifyAddWatch
-      | A.PosixPpoll | A.PosixPollDarwin | A.PosixKqueue | A.ChildLaunch
-      | A.PosixWait4 | A.PosixKeventVnode ->
+      | A.PosixFchmod | A.PosixFstat | A.PosixPread | A.PosixPwrite
+      | A.PosixFclonefileat | A.PosixGetentropy | A.PosixUname | A.PosixSysctl
+      | A.PosixSchedGetaffinity | A.PosixFcntlGetPath | A.PosixClockGettime
+      | A.PosixGettimeofday | A.PosixNanosleep | A.PosixMachTimebaseInfo
+      | A.PosixInotifyInit1 | A.PosixInotifyAddWatch | A.PosixPpoll
+      | A.PosixPollDarwin | A.PosixKqueue | A.ChildLaunch | A.PosixWait4
+      | A.PosixKeventVnode ->
           Some AST.TInt64)
   | A.IfValue (_, yes, _) -> atom yes
   | A.BorrowedCall (func, [ value ])
@@ -475,9 +475,9 @@ let inferCExprType ctx expr =
   | A.RawPtrToInt128 _ -> Some AST.TInt128
   | A.RawPtrToUInt128 _ -> Some AST.TUInt128
   | A.RawPtrToDict (_, _, typ) | A.RawPtrToList (_, _, typ) -> Some typ
-  | A.RefCountInc _ | A.RefCountDec _ | A.Print _ | A.RawFree _ | A.MappedFree _
-  | A.RawWriteWord _ | A.RawWriteByte _ | A.RawSlotInit _
-  | A.RefCountIncString _ | A.RefCountDecString _ | A.RefCountIncBlob _
-  | A.RefCountDecBlob _ | A.RefCountIncInt _ | A.RefCountDecInt _
-  | A.RuntimeError _ | A.RuntimeErrorString _ ->
+  | A.RefCountInc _ | A.RefCountDec _ | A.Print _ | A.RawFree _
+  | A.RawFreeSized _ | A.MappedFree _ | A.RawWriteWord _ | A.RawWriteByte _
+  | A.RawSlotInit _ | A.RefCountIncString _ | A.RefCountDecString _
+  | A.RefCountIncBlob _ | A.RefCountDecBlob _ | A.RefCountIncInt _
+  | A.RefCountDecInt _ | A.RuntimeError _ | A.RuntimeErrorString _ ->
       Some AST.TUnit

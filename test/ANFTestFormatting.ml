@@ -550,6 +550,8 @@ and aNF_cExpr (value : ANF.cExpr) =
   | ANF.RawAlloc field0 -> union "CExpr" "RawAlloc" [ aNF_atom field0 ]
   | ANF.MappedAlloc field0 -> union "CExpr" "MappedAlloc" [ aNF_atom field0 ]
   | ANF.RawFree field0 -> union "CExpr" "RawFree" [ aNF_atom field0 ]
+  | ANF.RawFreeSized (ptr, size) ->
+      union "CExpr" "RawFreeSized" [ aNF_atom ptr; aNF_atom size ]
   | ANF.MappedFree field0 -> union "CExpr" "MappedFree" [ aNF_atom field0 ]
   | ANF.RawGet (field0, field1, field2) ->
       union "CExpr" "RawGet"

@@ -319,6 +319,9 @@ let prettyPrintMIRInstr functionNames instr =
       ^ prettyPrintMIROperand numBytes
       ^ ")"
   | MIR.RawFree ptr -> "RawFree(" ^ prettyPrintMIROperand ptr ^ ")"
+  | MIR.RawFreeSized (ptr, size) ->
+      "RawFreeSized(" ^ prettyPrintMIROperand ptr ^ ", "
+      ^ prettyPrintMIROperand size ^ ")"
   | MIR.MappedFree ptr -> "MappedFree(" ^ prettyPrintMIROperand ptr ^ ")"
   | MIR.RawGet (dest, ptr, byteOffset, valueType) ->
       let baseText =

@@ -41,6 +41,12 @@ val emitRawFree :
   LIR.reg ->
   (Symbolic.instr list, string) result
 
+val emitRawFreeSized :
+  ARM64CodeGenTypes.codeGenContext ->
+  LIR.reg ->
+  LIR.reg ->
+  (Symbolic.instr list, string) result
+
 val emitRawGet :
   ARM64CodeGenTypes.codeGenContext ->
   LIR.reg ->

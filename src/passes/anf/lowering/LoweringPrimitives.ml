@@ -779,6 +779,7 @@ let tryRawMemoryIntrinsic resolve sumNames name arguments =
   | "__raw_alloc", [ n ] -> Some (ANF.RawAlloc n)
   | "__mapped_alloc", [ n ] -> Some (ANF.MappedAlloc n)
   | "__raw_free", [ ptr ] -> Some (ANF.RawFree ptr)
+  | "__raw_free_sized", [ ptr; size ] -> Some (ANF.RawFreeSized (ptr, size))
   | "__mapped_free", [ ptr ] -> Some (ANF.MappedFree ptr)
   | "__list_array_release_small", [ ptr ] -> Some (releaseRuntimeSmall ptr)
   | "__raw_get_byte", [ ptr; offset ] -> Some (ANF.RawGetByte (ptr, offset))

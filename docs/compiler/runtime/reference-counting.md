@@ -111,15 +111,28 @@ does not always mean the memory is reusable:
   lists
 - Stream shells and their 8-byte producer-state cells are reusable fixed-size
   allocations; last-owner release shares the explicit-close finalizer
-- dynamic strings and Blobs currently balance leak accounting, while
-  variable-size reuse remains a design decision
+- Linux x86-64 recycles canonical String, Blob and boxed Int buffers after their
+  last managed reference is released, including values held
+  in records, sums, lists, dictionaries and closures. Literals, tagged Ints and
+  buffers outside the native arena never enter these free lists. Buffers through
+  8 KiB use indexed size classes; larger buffers use an exact-size linked list.
+  Blocks are not split or coalesced; ARM64 still lacks this recycling
 - arbitrary raw pointers are not automatically reclaimed
+- `__raw_free_sized` explicitly releases an internal raw allocation using its
+  original byte size. Linux x86-64 returns it to the indexed or large-buffer
+  free list; ARM64 reuses only its existing classes through 256 bytes. The
+  unsized `__raw_free` remains the 8-byte cell operation. Network polling,
+  receive, address and entropy buffers, and RSA scratch storage use sized release
 - `String`/`Blob`/`Dict`/`List -> RawPtr` intrinsics expose borrowed raw views;
   `RawPtr -> String`/`Blob` and `RawPtr -> Dict`/`List` retag initialized raw
   allocations as managed values with normal RC ownership rules
 
 Tests that need to prove allocator reuse should test reuse explicitly instead
 of relying only on leak-check silence.
+`small-buffer-reuse.e2e` exceeds the arena's cumulative capacity with temporary
+strings, Blobs and Ints, checks the largest indexed class and mixed larger sizes, and preserves live
+aliases under churn. The independent TLS peer's `--churn` mode checks repeated
+fresh connections in one serving process rather than restarting between them.
 
 ## Known Gaps
 
