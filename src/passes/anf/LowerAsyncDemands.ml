@@ -390,13 +390,21 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
                 in
                 match listMode element mode with
                 | Stored storage ->
+                    let result =
+                      match (builder.AsyncListCalls.callee, arguments) with
+                      | "Darklang.Stdlib.List.__concat", [ _; (_, suffix) ]
+                        when Option.is_some (lookup env suffix) ->
+                          PendingStored storage
+                      | _ -> Stored storage
+                    in
                     Ok
                       (Some
                          ( builder.AsyncListCalls.callee,
                            element,
                            mode,
                            storage,
-                           arguments ))
+                           arguments,
+                           result ))
                 | Concrete -> Ok None
                 | _ ->
                     Crash.crash "Async list builder inferred outer pendingness")
@@ -639,9 +647,10 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
           let* state, result, stored =
             match operation with
             | _ when Option.is_some builder ->
-                let element, storage =
+                let element, storage, result =
                   match builder with
-                  | Some (_, element, _, storage, _) -> (element, storage)
+                  | Some (_, element, _, storage, _, result) ->
+                      (element, storage, result)
                   | None ->
                       Crash.crash "Async list builder lost its source plan"
                 in
@@ -650,7 +659,15 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
                     (fun typ -> Ok typ)
                     storage (AST.TList element)
                 in
-                Ok (state, None, Some storage)
+                let value =
+                  match result with
+                  | PendingStored fields ->
+                      Some
+                        (AsyncTransport.physicalType (Stored fields)
+                           (AST.TList element))
+                  | _ -> None
+                in
+                Ok (state, value, Some storage)
             | A.Call (callee, arguments)
             | A.BorrowedCall (callee, arguments)
             | A.TailCall (callee, arguments)
@@ -1081,6 +1098,96 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
           let id, gen = freshVar gen in
           (A.Var id, [ (id, A.Call (value.force, [ atom ])) ], gen)
     in
+    let appendBridge element mode leftMode gen =
+      let physicalElement = AsyncTransport.physicalType mode element in
+      let listType = AST.TList element in
+      let physicalList = AST.TList physicalElement in
+      let leftType = AsyncTransport.physicalType leftMode listType in
+      let rightType = carrier physicalList in
+      let key =
+        SpecializationIdentity.specName "__dark_async_append"
+          [ leftType; rightType ]
+      in
+      match Names.find_opt key gen.mappers with
+      | Some bridge -> Ok (bridge, gen)
+      | None ->
+          let* force =
+            helper "Darklang.Stdlib.__Task.__forceCurrent" physicalList
+          in
+          let* empty =
+            helper "Darklang.Stdlib.List.__isEmpty" physicalElement
+          in
+          let* concat =
+            helper "Darklang.Stdlib.List.__concat" physicalElement
+          in
+          let bridge =
+            {
+              id = AST.functionId gen.cursor;
+              name = "__dark_async_append_" ^ Int64.to_string gen.cursor;
+            }
+          in
+          let gen =
+            {
+              gen with
+              cursor = Int64.succ gen.cursor;
+              mappers = Names.add key bridge gen.mappers;
+            }
+          in
+          let left, gen = freshVar gen in
+          let right, gen = freshVar gen in
+          let concreteLeft, before, gen =
+            match leftMode with
+            | PendingStored _ ->
+                let concrete, gen = freshVar gen in
+                ( A.Var concrete,
+                  [ (concrete, A.Call (force, [ A.Var left ])) ],
+                  gen )
+            | Stored _ -> (A.Var left, [], gen)
+            | _ -> Crash.crash "Async append bridge has no element layout"
+          in
+          let condition, gen = freshVar gen in
+          let concreteRight, gen = freshVar gen in
+          let appended, gen = freshVar gen in
+          let readyValue, readyBindings, gen =
+            ready physicalList (A.Var appended) gen
+          in
+          let body =
+            wraps
+              (before @ [ (condition, A.Call (empty, [ concreteLeft ])) ])
+              (A.If
+                 ( A.Var condition,
+                   A.Return (A.Var right),
+                   wraps
+                     ([
+                        (concreteRight, A.Call (force, [ A.Var right ]));
+                        ( appended,
+                          A.Call (concat, [ concreteLeft; A.Var concreteRight ])
+                        );
+                      ]
+                     @ readyBindings)
+                     (A.Return readyValue) ))
+          in
+          let definition =
+            {
+              A.id = bridge.id;
+              name = bridge.name;
+              typedParams =
+                [
+                  { A.id = left; typ = leftType };
+                  { A.id = right; typ = rightType };
+                ];
+              returnType = rightType;
+              returnOwnership = A.OwnedReturn;
+              body;
+            }
+          in
+          Ok
+            ( bridge,
+              {
+                gen with
+                generatedFunctions = definition :: gen.generatedFunctions;
+              } )
+    in
     let rec materializeSlot slot atom gen =
       match slot with
       | None -> Ok (atom, [], gen)
@@ -1354,7 +1461,7 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
             | _ when Option.is_some builder ->
                 let element, storage =
                   match builder with
-                  | Some (_, element, _, storage, _) -> (element, storage)
+                  | Some (_, element, _, storage, _, _) -> (element, storage)
                   | None ->
                       Crash.crash "Async list builder lost its source plan"
                 in
@@ -1421,47 +1528,88 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
           in
           let* operation, before, value, gen =
             match operation with
-            | _ when Option.is_some builder ->
-                let base, element, mode, storage, arguments =
+            | _ when Option.is_some builder -> (
+                let base, element, mode, storage, arguments, result =
                   match builder with
                   | Some plan -> plan
                   | None ->
                       Crash.crash "Async list builder lost its source plan"
                 in
-                let physical = AsyncTransport.physicalType mode element in
-                let* callee = helper base physical in
-                let* arguments, before, gen =
-                  List.fold_left
-                    (fun result (role, atom) ->
-                      let* arguments, before, gen = result in
-                      let actual = modeOf env stores atom in
-                      let source, expected, atom, actual, outer, gen =
-                        match role with
-                        | AsyncListCalls.ElementInput ->
-                            (element, mode, atom, actual, [], gen)
-                        | AsyncListCalls.ListInput ->
-                            let atom, outer, gen = forceAtom env atom gen in
-                            let actual =
-                              match actual with
-                              | Pending -> Concrete
-                              | PendingStored storage -> Stored storage
-                              | mode -> mode
-                            in
-                            ( AST.TList element,
-                              Stored storage,
-                              atom,
-                              actual,
-                              outer,
-                              gen )
+                let* conditional =
+                  match (result, arguments) with
+                  | PendingStored _, [ (_, left); (_, right) ] ->
+                      let leftMode =
+                        match modeOf env stores left with
+                        | Pending | PendingStored _ -> PendingStored storage
+                        | _ -> Stored storage
                       in
-                      let* atom, added, gen =
-                        prepareValue expected source atom actual gen
+                      let leftActual = modeOf env stores left in
+                      let rightActual = modeOf env stores right in
+                      let* left, before, gen =
+                        prepareValue leftMode (AST.TList element) left
+                          leftActual gen
                       in
-                      Ok (atom :: arguments, before @ outer @ added, gen))
-                    (Ok ([], [], gen))
-                    arguments
+                      let* right, added, gen =
+                        prepareValue (PendingStored storage) (AST.TList element)
+                          right rightActual gen
+                      in
+                      let* bridge, gen =
+                        appendBridge element mode leftMode gen
+                      in
+                      let* value =
+                        info
+                          (AsyncTransport.physicalType (Stored storage)
+                             (AST.TList element))
+                      in
+                      Ok
+                        (Some
+                           ( A.Call (bridge.id, [ left; right ]),
+                             before @ added,
+                             Some value,
+                             gen ))
+                  | Stored _, _ -> Ok None
+                  | _ ->
+                      Crash.crash
+                        "Async list builder has an inconsistent result \
+                         interface"
                 in
-                Ok (A.Call (callee, List.rev arguments), before, None, gen)
+                match conditional with
+                | Some lowered -> Ok lowered
+                | None ->
+                    let physical = AsyncTransport.physicalType mode element in
+                    let* callee = helper base physical in
+                    let* arguments, before, gen =
+                      List.fold_left
+                        (fun result (role, atom) ->
+                          let* arguments, before, gen = result in
+                          let actual = modeOf env stores atom in
+                          let source, expected, atom, actual, outer, gen =
+                            match role with
+                            | AsyncListCalls.ElementInput ->
+                                (element, mode, atom, actual, [], gen)
+                            | AsyncListCalls.ListInput ->
+                                let atom, outer, gen = forceAtom env atom gen in
+                                let actual =
+                                  match actual with
+                                  | Pending -> Concrete
+                                  | PendingStored storage -> Stored storage
+                                  | mode -> mode
+                                in
+                                ( AST.TList element,
+                                  Stored storage,
+                                  atom,
+                                  actual,
+                                  outer,
+                                  gen )
+                          in
+                          let* atom, added, gen =
+                            prepareValue expected source atom actual gen
+                          in
+                          Ok (atom :: arguments, before @ outer @ added, gen))
+                        (Ok ([], [], gen))
+                        arguments
+                    in
+                    Ok (A.Call (callee, List.rev arguments), before, None, gen))
             | operation when Option.is_some (listEmptyCheck stores operation) ->
                 let op, list =
                   match listEmptyCheck stores operation with

@@ -111,7 +111,9 @@ Head selection preserves the element layout without demanding the selected value
 tail and reversal preserve that layout while changing only the spine. Singleton,
 push, pushBack and append merge element layouts and promote concrete inputs
 without demanding pending elements. Builders inspect outer spines when their
-operation needs them. Native
+operation needs them. Append uses a typed bridge when its suffix has outer
+pendingness: it inspects the prefix, returns the untouched suffix for an empty
+prefix, and demands the suffix spine only for a nonempty prefix. Native
 result adapters map typed demands over the list. List pattern bindings preserve
 element layouts; length and empty checks inspect only the spine, while literal
 comparisons and guards demand the values they inspect. Unmigrated list operations,
@@ -308,3 +310,6 @@ and guards. Wildcards and unused bindings leave element producers unresolved.
 pending scalars, managed values, tuples with pending fields, and pending outer
 list spines. Constructing a singleton around an unresolved list does not demand
 that inner spine.
+
+`async_list_append.e2e` checks conditional suffix demands with ready and pending
+prefixes, abandonment, and native managed results.
