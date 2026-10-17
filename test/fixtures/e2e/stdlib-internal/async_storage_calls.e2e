@@ -1,0 +1,16 @@
+// async_storage_calls.e2e - Pending fields cross ordinary source signatures.
+
+type StoredSourceRecord = { value: Int64, ready: Int64 }
+let sourceTuplePass (pair: (Int64 * Int64)) : (Int64 * Int64) = pair
+let sourceTupleReady (pair: (Int64 * Int64)) : Int64 = let (_, ready) = pair in ready
+let sourceRecordPass (record: StoredSourceRecord) : StoredSourceRecord = record
+let sourceRecordReady (record: StoredSourceRecord) : Int64 = record.ready
+let sourceMakePair (value: Int64) : (Int64 * Int64) = (value, 1L)
+let sourceMakeRecord (value: Int64) : StoredSourceRecord = StoredSourceRecord { value = value; ready = 1L }
+
+Stdlib.__Task.__runMain (fun _unit -> let gate = Stdlib.__Async.__new<Int64> () in let value = Stdlib.__Task.__transport (Stdlib.__Async.__pending gate) in let pair = sourceTuplePass (value, 1L) in let _ = Stdlib.__Task.__resolve (__fiber_current ()) gate 42L in let (left, right) = pair in left + right) = 43L // tuple argument and result transport pending fields; leak_check
+Stdlib.__Task.__runMain (fun _unit -> let gate = Stdlib.__Async.__new<Int64> () in let value = Stdlib.__Task.__transport (Stdlib.__Async.__pending gate) in sourceTupleReady (value, 42L)) = 42L // tuple callee inspects only the selected field; leak_check
+Stdlib.__Task.__runMain (fun _unit -> let gate = Stdlib.__Async.__new<Int64> () in let value = Stdlib.__Task.__transport (Stdlib.__Async.__pending gate) in let record = sourceRecordPass (StoredSourceRecord { value = value; ready = 1L }) in let _ = Stdlib.__Task.__resolve (__fiber_current ()) gate 42L in record.value + record.ready) = 43L // nominal record transport keeps physical field types; leak_check
+Stdlib.__Task.__runMain (fun _unit -> let gate = Stdlib.__Async.__new<Int64> () in let value = Stdlib.__Task.__transport (Stdlib.__Async.__pending gate) in sourceRecordReady (StoredSourceRecord { value = value; ready = 42L })) = 42L // record callee does not demand an unrelated field; leak_check
+Stdlib.__Task.__runMain (fun _unit -> let gate = Stdlib.__Async.__new<Int64> () in let value = Stdlib.__Task.__transport (Stdlib.__Async.__pending gate) in let pair = sourceMakePair value in let _ = Stdlib.__Task.__resolve (__fiber_current ()) gate 42L in let (left, right) = pair in left + right) = 43L // constructing a tuple in a callee does not demand its argument; leak_check
+Stdlib.__Task.__runMain (fun _unit -> let gate = Stdlib.__Async.__new<Int64> () in let value = Stdlib.__Task.__transport (Stdlib.__Async.__pending gate) in let record = sourceMakeRecord value in let _ = Stdlib.__Task.__resolve (__fiber_current ()) gate 42L in record.value + record.ready) = 43L // constructing a record in a callee does not demand its argument; leak_check
