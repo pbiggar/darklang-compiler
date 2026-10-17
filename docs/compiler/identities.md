@@ -171,6 +171,10 @@ Some strings are not substitutes for semantic identity:
   for source-compatible rendering and errors;
 - string and float literal-pool keys represent literal values, not declarations.
 
+Specialization type encodings include nominal and callable arities and tag type
+variables separately. This keeps nested payloads unambiguous when typed native
+intrinsics recover their slot types from generated specialization names.
+
 Hard-coded checks that infer semantic properties from a particular helper name
 are more fragile than registration-time metadata, even when the name denotes a
 real ABI symbol. Those checks should be treated separately from legitimate

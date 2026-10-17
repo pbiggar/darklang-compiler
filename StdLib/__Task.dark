@@ -1,10 +1,14 @@
-// __Task.dark - Cooperative native tasks, promise parking and timer completions.
+// __Task.dark - Native tasks, promise parking, timers and socket readiness.
 // Context and scheduler pointers are borrowed; owned lists retain task lifetimes.
 // This private explicit scheduler is not yet the automatic program entry point.
 module Darklang.Stdlib.__Task
 
 type __Task = { context: RawPtr, lifecycle: Stream<Unit> }
 type __Timer = { deadline: Int64, complete: Unit -> Unit }
+type __IO = {
+    interest: Stdlib.__Network.Interest,
+    complete: Stdlib.Result.Result<Stdlib.__Network.Ready, Int64> -> Unit
+}
 
 let __STACK_BYTES () : Int64 = 8388608L
 let __CONTEXT_BYTES () : Int64 = 208L
@@ -12,6 +16,7 @@ let __TASKS () : Int64 = 208L
 let __FRONT () : Int64 = 216L
 let __BACK () : Int64 = 224L
 let __TIMERS () : Int64 = 232L
+let __IO_QUEUE () : Int64 = 240L
 
 let __set<'a> (cell: RawPtr) (offset: Int64) (value: a) : Unit =
     let previous = __raw_take<a> cell offset in
@@ -169,19 +174,77 @@ let __earliest (timers: List<Stdlib.__Task.__Timer>) (earliest: Int64) : Int64 =
     | [] -> earliest
     | timer :: tail -> Stdlib.__Task.__earliest tail (if timer.deadline < earliest then timer.deadline else earliest)
 
+// Registrations retain both the descriptor owner and the completion's promise.
+// Discarding a consumer does not cancel an operation already registered here.
+let __watchCurrent (interest: Stdlib.__Network.Interest) : Stdlib.__Async.__Value<Stdlib.Result.Result<Stdlib.__Network.Ready, Int64>> =
+    let context = __fiber_current () in
+    if __rawptr_to_word context == 0L then Builtin.crash "Cannot watch a socket outside a native task"
+    else
+        let scheduler = Stdlib.__Task.__scheduler context in
+        let entries = __raw_get<List<Stdlib.__Task.__IO>> scheduler (Stdlib.__Task.__IO_QUEUE ()) in
+        if interest.watch.descriptor < 0L || interest.watch.descriptor > 2147483647L || Stdlib.List.length entries >= 1024 then
+            Stdlib.__Async.__ready (Error 22L)
+        else
+            let promise = Stdlib.__Async.__new<Stdlib.Result.Result<Stdlib.__Network.Ready, Int64>> () in
+            let entry = Stdlib.__Task.__IO { interest = interest; complete = (fun result -> Stdlib.__Task.__wake scheduler (Stdlib.__Async.__resolve promise result)) } in
+            let _ = Stdlib.__Task.__set scheduler (Stdlib.__Task.__IO_QUEUE ()) (Stdlib.List.append entries [entry]) in
+            Stdlib.__Async.__pending promise
+
+let __landIO (entries: List<Stdlib.__Task.__IO>) (events: List<Stdlib.__Network.Ready>) (index: Int64) (keep: List<Stdlib.__Task.__IO>) : List<Stdlib.__Task.__IO> =
+    match entries with
+    | [] -> Stdlib.List.reverse keep
+    | entry :: tail ->
+        match events with
+        | [] -> Stdlib.List.append (Stdlib.List.reverse keep) entries
+        | event :: rest ->
+            if event.index == index then
+                let _ = entry.complete (Ok event) in
+                Stdlib.__Task.__landIO tail rest (index + 1L) keep
+            else Stdlib.__Task.__landIO tail events (index + 1L) (Stdlib.List.push keep entry)
+
+let __failIO (entries: List<Stdlib.__Task.__IO>) (code: Int64) : Unit =
+    match entries with
+    | [] -> ()
+    | entry :: tail ->
+        let _ = entry.complete (Error code) in
+        Stdlib.__Task.__failIO tail code
+
+let __pollIO (scheduler: RawPtr) (milliseconds: Int64) : Unit =
+    let entries = __raw_take<List<Stdlib.__Task.__IO>> scheduler (Stdlib.__Task.__IO_QUEUE ()) in
+    let _ = __raw_write_word scheduler (Stdlib.__Task.__IO_QUEUE ()) 0L in
+    if Stdlib.List.isEmpty entries then ()
+    else
+        let keep =
+            match Stdlib.__Network.waitSockets (Stdlib.List.map entries (fun entry -> entry.interest)) milliseconds with
+            | Ok events -> Stdlib.__Task.__landIO entries events 0L []
+            | Error code ->
+                if code == 4L then entries
+                else let _ = Stdlib.__Task.__failIO entries code in [] in
+        // Callbacks may register additional watches while this batch is detached.
+        let registered = __raw_get<List<Stdlib.__Task.__IO>> scheduler (Stdlib.__Task.__IO_QUEUE ()) in
+        Stdlib.__Task.__set scheduler (Stdlib.__Task.__IO_QUEUE ()) (Stdlib.List.append keep registered)
+
 let __waitEvent (scheduler: RawPtr) : Unit =
-    match __raw_get<List<Stdlib.__Task.__Timer>> scheduler (Stdlib.__Task.__TIMERS ()) with
-    | [] -> Builtin.crash "Native tasks deadlocked without an event source"
-    | head :: tail ->
-        let delay = Stdlib.__Task.__earliest tail head.deadline - Stdlib.__Task.__now () in
-        if delay > 0L then Stdlib.Cli.__sleep (Stdlib.Int64.toFloat delay) else ()
+    let timers = __raw_get<List<Stdlib.__Task.__Timer>> scheduler (Stdlib.__Task.__TIMERS ()) in
+    let entries = __raw_get<List<Stdlib.__Task.__IO>> scheduler (Stdlib.__Task.__IO_QUEUE ()) in
+    if Stdlib.List.isEmpty timers && Stdlib.List.isEmpty entries then Builtin.crash "Native tasks deadlocked without an event source"
+    else
+        let delay =
+            match timers with
+            | [] -> 60000L
+            | head :: tail -> Stdlib.__Task.__earliest tail head.deadline - Stdlib.__Task.__now () in
+        let delay = if delay < 0L then 0L else if delay > 60000L then 60000L else delay in
+        if Stdlib.List.isEmpty entries then
+            if delay > 0L then Stdlib.Cli.__sleep (Stdlib.Int64.toFloat delay) else ()
+        else Stdlib.__Task.__pollIO scheduler delay
 
 let __loop (scheduler: RawPtr) (remaining: Int64) : Unit =
     let _ = Stdlib.__Task.__pollTimers scheduler in
+    let _ = Stdlib.__Task.__pollIO scheduler 0L in
     match Stdlib.__Task.__dequeue scheduler with
     | None ->
         if remaining == 0L then
-            if Stdlib.List.isEmpty (__raw_get<List<Stdlib.__Task.__Timer>> scheduler (Stdlib.__Task.__TIMERS ())) then ()
+            if Stdlib.List.isEmpty (__raw_get<List<Stdlib.__Task.__Timer>> scheduler (Stdlib.__Task.__TIMERS ())) && Stdlib.List.isEmpty (__raw_get<List<Stdlib.__Task.__IO>> scheduler (Stdlib.__Task.__IO_QUEUE ())) then ()
             else
                 let _ = Stdlib.__Task.__waitEvent scheduler in
                 Stdlib.__Task.__loop scheduler remaining
@@ -204,6 +267,7 @@ let __disposeScheduler (scheduler: RawPtr) : Unit =
     let front = __raw_take<List<Stdlib.__Task.__Task>> scheduler (Stdlib.__Task.__FRONT ()) in
     let back = __raw_take<List<Stdlib.__Task.__Task>> scheduler (Stdlib.__Task.__BACK ()) in
     let timers = __raw_take<List<Stdlib.__Task.__Timer>> scheduler (Stdlib.__Task.__TIMERS ()) in
+    let entries = __raw_take<List<Stdlib.__Task.__IO>> scheduler (Stdlib.__Task.__IO_QUEUE ()) in
     let _ = __raw_free scheduler in
     ()
 
@@ -211,12 +275,13 @@ let __disposeScheduler (scheduler: RawPtr) : Unit =
 // It does not decide the lifetime policy of an automatically compiled program.
 let __run (entries: List<RawPtr -> Unit>) : Unit =
     let previous = __fiber_current () in
-    let scheduler = __raw_alloc 240L in
+    let scheduler = __raw_alloc 248L in
     let _ = __raw_write_word scheduler 56L 0L in
     let _ = __raw_slot_init<List<Stdlib.__Task.__Task>> scheduler (Stdlib.__Task.__TASKS ()) [] in
     let _ = __raw_slot_init<List<Stdlib.__Task.__Task>> scheduler (Stdlib.__Task.__FRONT ()) [] in
     let _ = __raw_slot_init<List<Stdlib.__Task.__Task>> scheduler (Stdlib.__Task.__BACK ()) [] in
     let _ = __raw_slot_init<List<Stdlib.__Task.__Timer>> scheduler (Stdlib.__Task.__TIMERS ()) [] in
+    let _ = __raw_slot_init<List<Stdlib.__Task.__IO>> scheduler (Stdlib.__Task.__IO_QUEUE ()) [] in
     let tasks = Stdlib.List.map entries (fun entry -> Stdlib.__Task.__new scheduler entry) in
     let _ = Stdlib.__Task.__set scheduler (Stdlib.__Task.__TASKS ()) tasks in
     let _ = Stdlib.__Task.__set scheduler (Stdlib.__Task.__FRONT ()) tasks in

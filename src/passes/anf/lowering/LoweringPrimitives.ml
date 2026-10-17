@@ -518,7 +518,8 @@ let normalizeNullaryIntrinsicArgs = function
 
 (*
    Parse a mangled type name (from typeToMangledName) into an AST type.
-   Returns Error if the mangled form is ambiguous or unsupported.
+   Constructor arities delimit nominal arguments and callable parameters, so
+   nested nominal/function types never require guessing where a type ends.
    `TNever` is mangled as two underscore-separated tokens.
 *)
 let tryParseMangledTypeWithSumTypeNames sumNames mangled =
@@ -549,14 +550,10 @@ let tryParseMangledTypeWithSumTypeNames sumNames mangled =
     | "rawptr" -> Some AST.TInternalRawPtr
     | _ -> None
   in
-  let firstIsLower text =
-    match Text.first text with
-    | None -> false
-    | Some character -> Uucp.Gc.general_category character = `Ll
-  in
   let rec parseType = function
     | [] -> []
     | "runtime" :: "error" :: rest -> [ (AST.TNever, rest) ]
+    | "var" :: name :: rest -> [ (AST.TVar name, rest) ]
     | token :: rest -> (
         match token with
         | "list" ->
@@ -585,21 +582,33 @@ let tryParseMangledTypeWithSumTypeNames sumNames mangled =
                   (fun (values, rest) -> (AST.TTuple values, rest))
                   (parseExactly (Int32.to_int count) rest)
             | _ -> [])
-        | "tup" ->
-            List.map
-              (fun (values, rest) -> (AST.TTuple values, rest))
-              (parseTupleElems rest)
-        | "fn" -> parseFunction rest
+        | token when String.starts_with ~prefix:"named" token -> (
+            match
+              ( Text.tryParseInt32 (String.sub token 5 (String.length token - 5)),
+                rest )
+            with
+            | Some count, name :: rest when count >= 0l ->
+                List.map
+                  (fun (args, rest) -> (named name args, rest))
+                  (parseExactly (Int32.to_int count) rest)
+            | _ -> [])
+        | token when String.starts_with ~prefix:"fn" token -> (
+            match
+              Text.tryParseInt32 (String.sub token 2 (String.length token - 2))
+            with
+            | Some count when count >= 0l ->
+                List.concat_map
+                  (fun (parameters, rest) ->
+                    List.map
+                      (fun (result, rest) ->
+                        (AST.TFunction (parameters, result), rest))
+                      (parseType rest))
+                  (parseExactly (Int32.to_int count) rest)
+            | _ -> [])
         | _ -> (
             match primitive token with
             | Some value -> [ (value, rest) ]
-            | None when String.contains token '$' || firstIsLower token ->
-                [ (AST.TVar token, rest) ]
-            | None ->
-                (named token [], rest)
-                :: List.map
-                     (fun (args, rest) -> (named token args, rest))
-                     (parseTupleElems rest)))
+            | None -> []))
   and parseExactly count tokens =
     if count = 0 then [ ([], tokens) ]
     else
@@ -609,36 +618,6 @@ let tryParseMangledTypeWithSumTypeNames sumNames mangled =
             (fun (values, rest) -> (first :: values, rest))
             (parseExactly (count - 1) rest))
         (parseType tokens)
-  and parseTupleElems tokens =
-    List.concat_map
-      (fun (first, rest) ->
-        ([ first ], rest)
-        :: List.map
-             (fun (values, rest) -> (first :: values, rest))
-             (parseTupleElems rest))
-      (parseType tokens)
-  and parseFunction tokens =
-    let rec split accumulated = function
-      | [] -> None
-      | "to" :: rest -> Some (List.rev accumulated, rest)
-      | token :: rest -> split (token :: accumulated) rest
-    in
-    match split [] tokens with
-    | None -> []
-    | Some (parameters, result) ->
-        let complete values =
-          List.filter_map
-            (fun (value, rest) -> if rest = [] then Some value else None)
-            values
-        in
-        let parameters = complete (parseTupleElems parameters)
-        and results = complete (parseType result) in
-        List.concat_map
-          (fun parameters ->
-            List.map
-              (fun result -> (AST.TFunction (parameters, result), []))
-              results)
-          parameters
   in
   match
     List.filter

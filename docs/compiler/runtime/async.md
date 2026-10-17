@@ -129,9 +129,17 @@ in native leak accounting.
 
 `__delay` starts a private monotonic timer eagerly and returns a pending carrier.
 The completion callback retains both the promise and its typed payload until
-the deadline. Timers land on the scheduler thread; when no task is runnable the
-scheduler sleeps until the earliest deadline. This explicit test/runtime scope
-drains all registered tasks and timers. It does not choose the production
+the deadline. `__watchCurrent` starts a one-shot native socket readiness wait
+and returns a pending ordinary `Result<Ready, Int64>` carrier. Its registration
+owns the descriptor lifecycle and producer promise until completion, including
+when the consumer is discarded. Registrations wake tasks in registration order;
+native readiness errors remain ordinary result payloads.
+
+Timers and socket events land on the scheduler thread. Runnable tasks permit
+nonblocking readiness probes; with no runnable task, the scheduler waits in the
+OS for registered descriptors or the earliest timer deadline. Interrupted waits
+preserve registrations. This explicit test/runtime scope drains all registered
+tasks, timers and readiness registrations. It does not choose the production
 program's policy for unused outstanding I/O, cancellation or effect ordering.
 
 The next integration boundary is compiler carrier and demand lowering across
@@ -156,3 +164,5 @@ switches, nested scopes and scheduler callbacks, including pending demands
 outside a task.
 `async_entry.e2e` checks typed entry results, managed aggregates and closures,
 ordinary `Result.Error` payloads, nested entries and leak accounting.
+`async_io.e2e` checks native descriptor readiness, socket closure from a timer,
+FIFO wakeups, invalid descriptors and abandoned readiness consumers.
