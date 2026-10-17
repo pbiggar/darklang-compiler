@@ -108,7 +108,10 @@ widened consistently across each connected allocation component. List aliases,
 ordinary calls and captures carry the element layout; length and emptiness use
 library specializations for the physical element type without demanding elements.
 Head selection preserves the element layout without demanding the selected value;
-tail and reversal preserve that layout while changing only the spine. Native
+tail and reversal preserve that layout while changing only the spine. Singleton,
+push, pushBack and append merge element layouts and promote concrete inputs
+without demanding pending elements. Builders inspect outer spines when their
+operation needs them. Native
 result adapters map typed demands over the list. List pattern bindings preserve
 element layouts; length and empty checks inspect only the spine, while literal
 comparisons and guards demand the values they inspect. Unmigrated list operations,
@@ -299,3 +302,8 @@ elements alone, including managed payloads and records with pending fields.
 `async_list_patterns.e2e` covers exact and cons patterns, nested lists and tuples,
 managed and floating point bindings, outer pending lists, literal comparisons
 and guards. Wildcards and unused bindings leave element producers unresolved.
+
+`async_list_construction.e2e` checks singleton, push, pushBack and append with
+pending scalars, managed values, tuples with pending fields, and pending outer
+list spines. Constructing a singleton around an unresolved list does not demand
+that inner spine.

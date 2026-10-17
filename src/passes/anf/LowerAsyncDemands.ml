@@ -350,6 +350,59 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
           | _ -> None)
       | _ -> None
     in
+    let listBuildCall env stores = function
+      | A.Call (callee, arguments)
+      | A.BorrowedCall (callee, arguments)
+      | A.TailCall (callee, arguments) -> (
+          let builder = Option.bind (name callee) AsyncListCalls.builder in
+          match builder with
+          | None -> Ok None
+          | Some builder -> (
+              if
+                List.length arguments
+                <> List.length builder.AsyncListCalls.arguments
+              then Error "Async list builder has an inconsistent argument count"
+              else
+                let element =
+                  match originalResult callee with
+                  | AST.TList element -> element
+                  | _ -> Crash.crash "Async list builder has a non-list result"
+                in
+                let arguments =
+                  List.combine builder.AsyncListCalls.arguments arguments
+                in
+                let* mode =
+                  List.fold_left
+                    (fun result (role, atom) ->
+                      let* mode = result in
+                      let actual = modeOf env stores atom in
+                      let elementMode =
+                        match (role, actual) with
+                        | AsyncListCalls.ElementInput, mode -> mode
+                        | AsyncListCalls.ListInput, (Concrete | Pending) ->
+                            Concrete
+                        | ( AsyncListCalls.ListInput,
+                            (Stored storage | PendingStored storage) ) ->
+                            listElementMode storage
+                      in
+                      AsyncTransport.merge mode elementMode)
+                    (Ok Concrete) arguments
+                in
+                match listMode element mode with
+                | Stored storage ->
+                    Ok
+                      (Some
+                         ( builder.AsyncListCalls.callee,
+                           element,
+                           mode,
+                           storage,
+                           arguments ))
+                | Concrete -> Ok None
+                | _ ->
+                    Crash.crash "Async list builder inferred outer pendingness")
+          )
+      | _ -> Ok None
+    in
     let listEmptyCheck stores = function
       | A.Prim (((A.Eq | A.Neq) as op), list, A.IntLiteral (A.Int64 0L)) -> (
           match lookup stores list with
@@ -512,6 +565,7 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
           in
           infer fn env stores continuation state
       | A.Let (id, operation, rest) ->
+          let* builder = listBuildCall env stores operation in
           let* state =
             match operation with
             | A.RawSlotInit (pointer, offset, value, _) -> (
@@ -584,6 +638,19 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
           in
           let* state, result, stored =
             match operation with
+            | _ when Option.is_some builder ->
+                let element, storage =
+                  match builder with
+                  | Some (_, element, _, storage, _) -> (element, storage)
+                  | None ->
+                      Crash.crash "Async list builder lost its source plan"
+                in
+                let* storage =
+                  AsyncTransport.instantiateStorage
+                    (fun typ -> Ok typ)
+                    storage (AST.TList element)
+                in
+                Ok (state, None, Some storage)
             | A.Call (callee, arguments)
             | A.BorrowedCall (callee, arguments)
             | A.TailCall (callee, arguments)
@@ -1208,6 +1275,11 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
           in
           Ok (A.Join (parameter, continuation, entry), gen)
       | A.Let (id, operation, rest) ->
+          let* builder =
+            Result.map_error
+              (fun message -> Diagnostic message)
+              (listBuildCall env stores operation)
+          in
           let* () =
             let hasList =
               T.exists
@@ -1239,6 +1311,7 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
               | A.BorrowedCall (callee, args)
               | A.TailCall (callee, args) ->
                   (not (eligible callee))
+                  && Option.is_none builder
                   && Option.is_none (listCall stores callee args)
                   && List.exists
                        (fun atom -> Option.is_some (lookup stores atom))
@@ -1278,6 +1351,16 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
           in
           let* storedValue =
             match operation with
+            | _ when Option.is_some builder ->
+                let element, storage =
+                  match builder with
+                  | Some (_, element, _, storage, _) -> (element, storage)
+                  | None ->
+                      Crash.crash "Async list builder lost its source plan"
+                in
+                Result.map Option.some
+                  (AsyncTransport.instantiateStorage info storage
+                     (AST.TList element))
             | A.Call (callee, args)
             | A.BorrowedCall (callee, args)
             | A.TailCall (callee, args)
@@ -1338,6 +1421,47 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
           in
           let* operation, before, value, gen =
             match operation with
+            | _ when Option.is_some builder ->
+                let base, element, mode, storage, arguments =
+                  match builder with
+                  | Some plan -> plan
+                  | None ->
+                      Crash.crash "Async list builder lost its source plan"
+                in
+                let physical = AsyncTransport.physicalType mode element in
+                let* callee = helper base physical in
+                let* arguments, before, gen =
+                  List.fold_left
+                    (fun result (role, atom) ->
+                      let* arguments, before, gen = result in
+                      let actual = modeOf env stores atom in
+                      let source, expected, atom, actual, outer, gen =
+                        match role with
+                        | AsyncListCalls.ElementInput ->
+                            (element, mode, atom, actual, [], gen)
+                        | AsyncListCalls.ListInput ->
+                            let atom, outer, gen = forceAtom env atom gen in
+                            let actual =
+                              match actual with
+                              | Pending -> Concrete
+                              | PendingStored storage -> Stored storage
+                              | mode -> mode
+                            in
+                            ( AST.TList element,
+                              Stored storage,
+                              atom,
+                              actual,
+                              outer,
+                              gen )
+                      in
+                      let* atom, added, gen =
+                        prepareValue expected source atom actual gen
+                      in
+                      Ok (atom :: arguments, before @ outer @ added, gen))
+                    (Ok ([], [], gen))
+                    arguments
+                in
+                Ok (A.Call (callee, List.rev arguments), before, None, gen)
             | operation when Option.is_some (listEmptyCheck stores operation) ->
                 let op, list =
                   match listEmptyCheck stores operation with
