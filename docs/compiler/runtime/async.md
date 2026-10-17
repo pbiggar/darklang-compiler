@@ -93,9 +93,13 @@ entry callbacks demand their result to satisfy the runtime ABI. Closure capture
 slots widen independently to carriers, with matching environment types in lifted
 function versions. Statically known closure calls propagate pending arguments
 and results. Capturing closures with concrete callable interfaces can escape
-through ordinary source functions. Aggregate storage and escaping callables
-whose argument or result interface changes still require coordinated rewriting
-and currently produce compilation diagnostics. The hooks are
+through ordinary source functions. Local tuples retain independent pending field
+layouts through aliases and nested tuples. Projecting one field preserves that
+field's carrier and does not inspect its siblings; explicit native result adapters
+materialize tuple fields recursively. Tuple transport across ordinary signatures,
+joins and captures, other aggregate storage, and escaping callables whose argument
+or result interface changes still require coordinated rewriting and currently
+produce compilation diagnostics. The hooks are
 compiler test interfaces, not public async APIs or automatic I/O lowering.
 
 | Operation | Demand |
@@ -233,4 +237,8 @@ ordinary functions, so an early demand prevents the expected result.
 
 `async_capture.e2e` checks delayed inspection of captured integers, floats and
 managed payloads, abandoned and nested captures, known closure calls, escaping
-inspecting closures, and native child task result adaptation.
+inspecting closures, callable aliases, and native child task result adaptation.
+
+`async_tuple.e2e` checks construction, aliases, independent integer/float fields,
+unrelated projections, abandoned managed fields, nested tuples, and concrete
+native entry results.

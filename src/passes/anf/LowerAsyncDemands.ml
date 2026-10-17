@@ -28,6 +28,64 @@ let delayName = "Darklang.Stdlib.__Task.__delayTransparent"
 let specialized base name = String.starts_with ~prefix:(base ^ "_") name
 let lookup env = function A.Var id -> M.find_opt id env | _ -> None
 
+(* Tuple facts describe independently pending fields. Their layout remains local
+   until the aggregate call-interface migration can carry the same facts. *)
+type 'a tupleSlot =
+  | PendingSlot of 'a
+  | NestedTuple of 'a tupleSlot option list
+
+let tupleField fields index =
+  match
+    List.find_opt
+      (fun (offset, _) -> offset = index)
+      (List.mapi (fun i field -> (i, field)) fields)
+  with
+  | Some (_, field) -> field
+  | None -> Crash.crash "Async tuple projection is outside its layout"
+
+let tupleFacts env tuples = function
+  | A.TupleAlloc values ->
+      let fields =
+        List.map
+          (fun atom ->
+            match lookup env atom with
+            | Some value -> Some (PendingSlot value)
+            | None ->
+                Option.map
+                  (fun fields -> NestedTuple fields)
+                  (lookup tuples atom))
+          values
+      in
+      if List.exists Option.is_some fields then Some fields else None
+  | A.Atom atom | A.TypedAtom (atom, _) -> lookup tuples atom
+  | A.TupleGet (atom, index) -> (
+      match lookup tuples atom with
+      | Some fields -> (
+          match tupleField fields index with
+          | Some (NestedTuple fields) -> Some fields
+          | _ -> None)
+      | None -> None)
+  | _ -> None
+
+let bindTuple env tuples id operation =
+  match tupleFacts env tuples operation with
+  | Some fields -> M.add id fields tuples
+  | None -> M.remove id tuples
+
+let rec tupleRepresentation fields types =
+  if List.length types <> List.length fields then
+    Crash.crash "Async typed tuple has an inconsistent layout";
+  List.map2
+    (fun typ slot ->
+      match (slot, typ) with
+      | None, _ -> typ
+      | Some (PendingSlot _), _ -> carrier typ
+      | Some (NestedTuple fields), AST.TTuple types ->
+          AST.TTuple (tupleRepresentation fields types)
+      | Some (NestedTuple _), _ ->
+          Crash.crash "Async nested tuple has a non-tuple source type")
+    types fields
+
 let nativeRuntime name =
   List.exists
     (fun prefix -> String.starts_with ~prefix name)
@@ -211,7 +269,7 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
                 if offset = index && pending then Some typ else None)
       | _ -> None
     in
-    let rec infer (fn : A.functionDef) env body state =
+    let rec infer (fn : A.functionDef) env tuples body state =
       let update transform =
         let current = summary state fn.A.id in
         F.add fn.A.id (transform current) state
@@ -226,15 +284,16 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
             update (fun current ->
                 { current with joins = T.add target current.joins })
           else state
-      | A.If (_, yes, no) -> infer fn env no (infer fn env yes state)
+      | A.If (_, yes, no) ->
+          infer fn env tuples no (infer fn env tuples yes state)
       | A.Join (parameter, continuation, entry) ->
-          let state = infer fn env entry state in
+          let state = infer fn env tuples entry state in
           let env =
             if T.mem parameter.A.id (summary state fn.A.id).joins then
               M.add parameter.A.id parameter.A.typ env
             else M.remove parameter.A.id env
           in
-          infer fn env continuation state
+          infer fn env tuples continuation state
       | A.Let (id, operation, rest) ->
           let state, result =
             match operation with
@@ -252,7 +311,13 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
                 let captures = List.map2 ( || ) actual current.captures in
                 (F.add callee { current with captures } state, None)
             | A.TupleGet (atom, index) ->
-                (state, captureType fn state atom index)
+                ( state,
+                  match lookup tuples atom with
+                  | Some fields -> (
+                      match tupleField fields index with
+                      | Some (PendingSlot value) -> Some value
+                      | _ -> None)
+                  | None -> captureType fn state atom index )
             | A.ClosureCall (closure, arguments) -> (
                 match callable fn closure with
                 | Some callee when eligible callee ->
@@ -313,12 +378,13 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
                   else None )
             | _ -> (state, None)
           in
+          let tuples = bindTuple env tuples id operation in
           let env =
             match result with
             | Some typ -> M.add id typ env
             | None -> M.remove id env
           in
-          infer fn env rest state
+          infer fn env tuples rest state
     in
     let equal left right =
       left.parameters = right.parameters
@@ -339,7 +405,7 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
                     if pending then M.add param.A.id param.A.typ env else env)
                   M.empty fn.A.typedParams current.parameters
               in
-              infer fn env fn.A.body state)
+              infer fn env M.empty fn.A.body state)
           state definitions
       in
       if F.forall (fun id value -> equal value (summary state id)) next then
@@ -438,21 +504,55 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
           let id, gen = A.freshVar gen in
           (A.Var id, [ (id, A.Call (value.force, [ atom ])) ], gen)
     in
-    let forceUses env operation gen =
+    let rec forceTuple fields atom gen =
+      let values, before, gen =
+        List.fold_left
+          (fun (values, before, gen) (index, pending) ->
+            let projected, gen = A.freshVar gen in
+            let before = before @ [ (projected, A.TupleGet (atom, index)) ] in
+            match pending with
+            | None -> (A.Var projected :: values, before, gen)
+            | Some (PendingSlot value) ->
+                let forced, gen = A.freshVar gen in
+                ( A.Var forced :: values,
+                  before
+                  @ [ (forced, A.Call (value.force, [ A.Var projected ])) ],
+                  gen )
+            | Some (NestedTuple fields) ->
+                let value, added, gen =
+                  forceTuple fields (A.Var projected) gen
+                in
+                (value :: values, before @ added, gen))
+          ([], [], gen)
+          (List.mapi (fun i value -> (i, value)) fields)
+      in
+      let result, gen = A.freshVar gen in
+      (A.Var result, before @ [ (result, A.TupleAlloc (List.rev values)) ], gen)
+    in
+    let forceUses env tuples operation gen =
       let substitutions, before, gen =
         T.fold
           (fun id (substitutions, before, gen) ->
-            match M.find_opt id env with
-            | None -> (substitutions, before, gen)
-            | Some value ->
-                let forced, gen = A.freshVar gen in
-                ( M.add id forced substitutions,
-                  (forced, A.Call (value.force, [ A.Var id ])) :: before,
-                  gen ))
+            let atom, added, gen =
+              match M.find_opt id env with
+              | Some value ->
+                  let forced, gen = A.freshVar gen in
+                  ( A.Var forced,
+                    [ (forced, A.Call (value.force, [ A.Var id ])) ],
+                    gen )
+              | None -> (
+                  match M.find_opt id tuples with
+                  | Some fields -> forceTuple fields (A.Var id) gen
+                  | None -> (A.Var id, [], gen))
+            in
+            match atom with
+            | A.Var forced when forced <> id ->
+                (M.add id forced substitutions, before @ added, gen)
+            | _ -> (substitutions, before, gen))
           (ANFEffects.cexprTempUses operation)
           (M.empty, [], gen)
       in
-      (InliningCommon.renameCExpr substitutions operation, List.rev before, gen)
+      (InliningCommon.renameCExpr substitutions operation, before, gen)
     in
     let rec joinTypes types = function
       | A.Return _ | A.Jump _ -> types
@@ -465,7 +565,7 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
                continuation)
             entry
     in
-    let rec expression (fn : A.functionDef) nativeReturn env body gen =
+    let rec expression (fn : A.functionDef) nativeReturn env tuples body gen =
       let signature = summary summaries fn.A.id in
       let returnsCarrier = signature.returnsPending && not nativeReturn in
       let joinPayloads = joinTypes M.empty fn.A.body in
@@ -476,7 +576,13 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
       in
       match body with
       | A.Return atom -> (
-          if changedCallable fn atom then
+          if Option.is_some (lookup tuples atom) then
+            match lookup tuples atom with
+            | Some fields when nativeReturn ->
+                let atom, before, gen = forceTuple fields atom gen in
+                Ok (wraps before (A.Return atom), gen)
+            | _ -> unsupported fn.A.name "a tuple result interface"
+          else if changedCallable fn atom then
             unsupported fn.A.name "an escaping callable result"
           else if returnsCarrier then
             let atom, before, gen = prepare fn.A.returnType atom gen in
@@ -489,7 +595,9 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
                 Ok (wraps before (A.Return atom), gen)
             | Some _ -> Error "Async return inference lost a pending result")
       | A.Jump (target, atom) ->
-          if changedCallable fn atom then
+          if Option.is_some (lookup tuples atom) then
+            unsupported fn.A.name "a tuple join"
+          else if changedCallable fn atom then
             unsupported fn.A.name "a callable join"
           else if T.mem target signature.joins then
             let payload =
@@ -504,8 +612,8 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
           else Ok (body, gen)
       | A.If (condition, yes, no) ->
           let condition, before, gen = forceAtom env condition gen in
-          let* yes, gen = expression fn nativeReturn env yes gen in
-          let* no, gen = expression fn nativeReturn env no gen in
+          let* yes, gen = expression fn nativeReturn env tuples yes gen in
+          let* no, gen = expression fn nativeReturn env tuples no gen in
           Ok (wraps before (A.If (condition, yes, no)), gen)
       | A.Join (parameter, continuation, entry) ->
           let* value =
@@ -519,9 +627,9 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
             | None -> M.remove parameter.A.id env
           in
           let* continuation, gen =
-            expression fn nativeReturn continuationEnv continuation gen
+            expression fn nativeReturn continuationEnv tuples continuation gen
           in
-          let* entry, gen = expression fn nativeReturn env entry gen in
+          let* entry, gen = expression fn nativeReturn env tuples entry gen in
           let parameter =
             if Option.is_some value then
               { parameter with A.typ = carrier parameter.A.typ }
@@ -529,6 +637,32 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
           in
           Ok (A.Join (parameter, continuation, entry), gen)
       | A.Let (id, operation, rest) ->
+          let* () =
+            let tupleEscape =
+              match operation with
+              | A.Call (_, args)
+              | A.BorrowedCall (_, args)
+              | A.TailCall (_, args)
+              | A.ClosureAlloc (_, args)
+              | A.ClosureCall (_, args)
+              | A.IndirectCall (_, args)
+              | A.RecordAlloc (_, args) ->
+                  List.exists
+                    (fun atom -> Option.is_some (lookup tuples atom))
+                    args
+              | A.IfValue (_, yes, no) ->
+                  Option.is_some (lookup tuples yes)
+                  || Option.is_some (lookup tuples no)
+              | A.TypedAtom (atom, typ) -> (
+                  Option.is_some (lookup tuples atom)
+                  && match typ with AST.TTuple _ -> false | _ -> true)
+              | _ -> false
+            in
+            if tupleEscape then
+              unsupported fn.A.name "an aggregate storage or call interface"
+            else Ok ()
+          in
+          let tupleValue = tupleFacts env tuples operation in
           let* () =
             let escape =
               match operation with
@@ -663,21 +797,47 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
                 in
                 Ok
                   (A.ClosureAlloc (callee, List.rev captures), before, None, gen)
+            | A.TupleAlloc _ -> Ok (operation, [], None, gen)
             | A.TupleGet (atom, index) -> (
-                match captureType fn summaries atom index with
-                | Some payload ->
-                    let* value = info payload in
-                    Ok (operation, [], Some value, gen)
-                | None ->
-                    let operation, before, gen = forceUses env operation gen in
-                    Ok (operation, before, None, gen))
+                let value =
+                  match lookup tuples atom with
+                  | Some fields -> (
+                      match tupleField fields index with
+                      | Some (PendingSlot value) -> Some value
+                      | _ -> None)
+                  | None -> None
+                in
+                match (value, lookup tuples atom) with
+                | Some value, _ -> Ok (operation, [], Some value, gen)
+                | None, Some _ -> Ok (operation, [], None, gen)
+                | None, None -> (
+                    match captureType fn summaries atom index with
+                    | Some payload ->
+                        let* value = info payload in
+                        Ok (operation, [], Some value, gen)
+                    | None ->
+                        let operation, before, gen =
+                          forceUses env tuples operation gen
+                        in
+                        Ok (operation, before, None, gen)))
             | A.Atom atom -> Ok (operation, [], lookup env atom, gen)
+            | A.TypedAtom (atom, AST.TTuple types)
+              when Option.is_some (lookup tuples atom) ->
+                let fields =
+                  match lookup tuples atom with
+                  | Some fields -> fields
+                  | None -> Crash.crash "Async typed tuple lost its fields"
+                in
+                let types = tupleRepresentation fields types in
+                Ok (A.TypedAtom (atom, AST.TTuple types), [], None, gen)
             | A.TypedAtom (atom, typ) -> (
                 match lookup env atom with
                 | Some value when typ = value.payload ->
                     Ok (A.TypedAtom (atom, carrier typ), [], Some value, gen)
                 | _ ->
-                    let operation, before, gen = forceUses env operation gen in
+                    let operation, before, gen =
+                      forceUses env tuples operation gen
+                    in
                     Ok (operation, before, None, gen))
             | A.IfValue (condition, yes, no) -> (
                 let condition, before, gen = forceAtom env condition gen in
@@ -760,7 +920,7 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
             | _ ->
                 let hasPending =
                   T.exists
-                    (fun id -> M.mem id env)
+                    (fun id -> M.mem id env || M.mem id tuples)
                     (ANFEffects.cexprTempUses operation)
                 in
                 if not hasPending then Ok (operation, [], None, gen)
@@ -787,15 +947,22 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
                         Ok ()
                     | _ -> unsupported fn.A.name "this call or storage boundary"
                   in
-                  let operation, before, gen = forceUses env operation gen in
+                  let operation, before, gen =
+                    forceUses env tuples operation gen
+                  in
                   Ok (operation, before, None, gen)
+          in
+          let tuples =
+            match tupleValue with
+            | Some fields -> M.add id fields tuples
+            | None -> M.remove id tuples
           in
           let env =
             match value with
             | Some value -> M.add id value env
             | None -> M.remove id env
           in
-          let* rest, gen = expression fn nativeReturn env rest gen in
+          let* rest, gen = expression fn nativeReturn env tuples rest gen in
           Ok (wraps before (A.Let (id, operation, rest)), gen)
     in
     let initialTemp =
@@ -815,7 +982,7 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
             else Ok env)
           (Ok M.empty) fn.A.typedParams modes
       in
-      expression fn nativeReturn env fn.A.body gen
+      expression fn nativeReturn env M.empty fn.A.body gen
     in
     let* originals, gen =
       List.fold_left
