@@ -11,7 +11,14 @@ module Names = StringOrder.Map
 let ( let* ) = Result.bind
 
 type pending = { payload : AST.semanticType; force : AST.functionId }
-type summary = { parameters : bool list; returnsPending : bool; joins : T.t }
+
+type summary = {
+  parameters : bool list;
+  captures : bool list;
+  returnsPending : bool;
+  joins : T.t;
+}
+
 type version = { id : AST.functionId; name : string }
 type lowered = { functions : A.functionDef list; nextFunctionOrdinal : int64 }
 
@@ -73,11 +80,59 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
       | Some value -> value
       | None -> Crash.crash "Async inference lost a function summary"
     in
+    let target bindings = function
+      | A.FuncRef id -> Some id
+      | A.Var id -> M.find_opt id bindings
+      | _ -> None
+    in
+    let nativeEntry id =
+      match name id with
+      | Some name ->
+          List.exists
+            (fun base -> specialized ("Darklang.Stdlib.__Task." ^ base) name)
+            [ "__runMain"; "__startCurrent"; "__startValueCurrent" ]
+      | None -> false
+    in
+    let rec entries bindings found = function
+      | A.Return _ | A.Jump _ -> found
+      | A.If (_, yes, no) -> entries bindings (entries bindings found yes) no
+      | A.Join (_, continuation, entry) ->
+          entries bindings (entries bindings found continuation) entry
+      | A.Let (id, expression, rest) ->
+          let found =
+            match expression with
+            | A.Call (callee, [ entry ]) when nativeEntry callee -> (
+                match target bindings entry with
+                | Some entry -> S.add entry found
+                | None -> found)
+            | _ -> found
+          in
+          let bindings =
+            match expression with
+            | A.ClosureAlloc (callee, _) -> M.add id callee bindings
+            | A.Atom atom | A.TypedAtom (atom, _) -> (
+                match target bindings atom with
+                | Some callee -> M.add id callee bindings
+                | None -> M.remove id bindings)
+            | _ -> M.remove id bindings
+          in
+          entries bindings found rest
+    in
+    let nativeEntries =
+      F.fold
+        (fun found _ fn -> entries M.empty found fn.A.body)
+        S.empty definitions
+    in
     let initial =
       F.map
         (fun _ (fn : A.functionDef) ->
           {
             parameters = List.map (fun _ -> false) fn.A.typedParams;
+            captures =
+              (match fn.A.typedParams with
+              | { A.typ = AST.TTuple (AST.TInt64 :: fields); _ } :: _ ->
+                  List.map (fun _ -> false) fields
+              | _ -> []);
             returnsPending = false;
             joins = T.empty;
           })
@@ -116,6 +171,46 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
          || List.exists (fun atom -> Option.is_some (lookup env atom)) arguments
          )
     in
+    let rec closureBindings bindings = function
+      | A.Return _ | A.Jump _ -> bindings
+      | A.If (_, yes, no) -> closureBindings (closureBindings bindings yes) no
+      | A.Join (_, continuation, entry) ->
+          closureBindings (closureBindings bindings entry) continuation
+      | A.Let (id, operation, rest) ->
+          let callee =
+            match operation with
+            | A.ClosureAlloc (callee, _) -> Some callee
+            | A.Atom atom | A.TypedAtom (atom, _) -> target bindings atom
+            | _ -> None
+          in
+          let bindings =
+            match callee with
+            | Some callee -> M.add id callee bindings
+            | None -> bindings
+          in
+          closureBindings bindings rest
+    in
+    let callables =
+      F.map (fun _ fn -> closureBindings M.empty fn.A.body) definitions
+    in
+    let callable (fn : A.functionDef) atom =
+      match F.tryFind fn.A.id callables with
+      | Some bindings -> target bindings atom
+      | None -> Crash.crash "Async inference lost callable bindings"
+    in
+    let captureType (fn : A.functionDef) state atom index =
+      match (fn.A.typedParams, atom) with
+      | { A.id; typ = AST.TTuple (_ :: fields) } :: _, A.Var source
+        when id = source && index > 0 ->
+          let modes = (summary state fn.A.id).captures in
+          if not (List.exists Fun.id modes) then None
+          else
+            List.combine fields modes
+            |> List.mapi (fun offset value -> (offset + 1, value))
+            |> List.find_map (fun (offset, (typ, pending)) ->
+                if offset = index && pending then Some typ else None)
+      | _ -> None
+    in
     let rec infer (fn : A.functionDef) env body state =
       let update transform =
         let current = summary state fn.A.id in
@@ -145,6 +240,42 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
             match operation with
             | A.Call (callee, _) when producer callee ->
                 (state, Some (originalResult callee))
+            | A.ClosureAlloc (callee, captures) when eligible callee ->
+                let current = summary state callee in
+                let actual =
+                  List.map
+                    (fun atom -> Option.is_some (lookup env atom))
+                    captures
+                in
+                if List.length actual <> List.length current.captures then
+                  Crash.crash "Async closure capture layout is inconsistent";
+                let captures = List.map2 ( || ) actual current.captures in
+                (F.add callee { current with captures } state, None)
+            | A.TupleGet (atom, index) ->
+                (state, captureType fn state atom index)
+            | A.ClosureCall (closure, arguments) -> (
+                match callable fn closure with
+                | Some callee when eligible callee ->
+                    let current = summary state callee in
+                    let actual =
+                      false
+                      :: List.map
+                           (fun atom -> Option.is_some (lookup env atom))
+                           arguments
+                    in
+                    if List.length actual <> List.length current.parameters then
+                      Crash.crash
+                        "Async closure argument layout is inconsistent";
+                    let parameters =
+                      List.map2 ( || ) actual current.parameters
+                    in
+                    ( F.add callee { current with parameters } state,
+                      if
+                        current.returnsPending
+                        && not (S.mem callee nativeEntries)
+                      then Some (originalResult callee)
+                      else None )
+                | _ -> (state, None))
             | A.Atom atom -> (state, lookup env atom)
             | A.TypedAtom (atom, typ) ->
                 ( state,
@@ -191,6 +322,7 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
     in
     let equal left right =
       left.parameters = right.parameters
+      && left.captures = right.captures
       && left.returnsPending = right.returnsPending
       && T.equal left.joins right.joins
     in
@@ -217,50 +349,9 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
     let summaries = converge initial in
     let modeChanges id =
       let value = summary summaries id in
-      value.returnsPending || List.exists Fun.id value.parameters
-    in
-    let target bindings = function
-      | A.FuncRef id -> Some id
-      | A.Var id -> M.find_opt id bindings
-      | _ -> None
-    in
-    let nativeEntry id =
-      match name id with
-      | Some name ->
-          List.exists
-            (fun base -> specialized ("Darklang.Stdlib.__Task." ^ base) name)
-            [ "__runMain"; "__startCurrent"; "__startValueCurrent" ]
-      | None -> false
-    in
-    let rec entries bindings found = function
-      | A.Return _ | A.Jump _ -> found
-      | A.If (_, yes, no) -> entries bindings (entries bindings found yes) no
-      | A.Join (_, continuation, entry) ->
-          entries bindings (entries bindings found continuation) entry
-      | A.Let (id, expression, rest) ->
-          let found =
-            match expression with
-            | A.Call (callee, [ entry ]) when nativeEntry callee -> (
-                match target bindings entry with
-                | Some entry -> S.add entry found
-                | None -> found)
-            | _ -> found
-          in
-          let bindings =
-            match expression with
-            | A.ClosureAlloc (callee, _) -> M.add id callee bindings
-            | A.Atom atom | A.TypedAtom (atom, _) -> (
-                match target bindings atom with
-                | Some callee -> M.add id callee bindings
-                | None -> M.remove id bindings)
-            | _ -> M.remove id bindings
-          in
-          entries bindings found rest
-    in
-    let nativeEntries =
-      F.fold
-        (fun found _ fn -> entries M.empty found fn.A.body)
-        S.empty definitions
+      value.returnsPending
+      || List.exists Fun.id value.parameters
+      || List.exists Fun.id value.captures
     in
     let local =
       List.fold_left
@@ -290,7 +381,11 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
                 in
                 (F.add id version versions, Int64.succ next)
             in
-            if imported && boundary fn && S.mem id startsAsync then
+            if
+              boundary fn
+              && ((imported && S.mem id startsAsync)
+                 || List.exists Fun.id (summary summaries id).captures)
+            then
               let version =
                 {
                   id = AST.functionId next;
@@ -308,6 +403,18 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
       Error
         ("Async transport across " ^ where ^ " is not implemented in "
        ^ functionName)
+    in
+    let changedCallable fn atom =
+      match callable fn atom with
+      | Some callee when eligible callee && not (S.mem callee nativeEntries)
+        -> (
+          let state = summary summaries callee in
+          state.returnsPending
+          ||
+          match state.parameters with
+          | _ :: values -> List.exists Fun.id values
+          | [] -> false)
+      | _ -> false
     in
     let wraps bindings body =
       List.fold_right
@@ -369,7 +476,9 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
       in
       match body with
       | A.Return atom -> (
-          if returnsCarrier then
+          if changedCallable fn atom then
+            unsupported fn.A.name "an escaping callable result"
+          else if returnsCarrier then
             let atom, before, gen = prepare fn.A.returnType atom gen in
             Ok (wraps before (A.Return atom), gen)
           else
@@ -380,7 +489,9 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
                 Ok (wraps before (A.Return atom), gen)
             | Some _ -> Error "Async return inference lost a pending result")
       | A.Jump (target, atom) ->
-          if T.mem target signature.joins then
+          if changedCallable fn atom then
+            unsupported fn.A.name "a callable join"
+          else if T.mem target signature.joins then
             let payload =
               match M.find_opt target joinPayloads with
               | Some typ -> typ
@@ -418,6 +529,22 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
           in
           Ok (A.Join (parameter, continuation, entry), gen)
       | A.Let (id, operation, rest) ->
+          let* () =
+            let escape =
+              match operation with
+              | A.Call (_, args)
+              | A.BorrowedCall (_, args)
+              | A.TailCall (_, args)
+              | A.ClosureAlloc (_, args)
+              | A.TupleAlloc args
+              | A.RecordAlloc (_, args) ->
+                  List.exists (changedCallable fn) args
+              | _ -> false
+            in
+            if escape then
+              unsupported fn.A.name "an escaping callable interface"
+            else Ok ()
+          in
           let* operation, before, value, gen =
             match operation with
             | A.Call (callee, arguments) when producer callee ->
@@ -497,31 +624,53 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
                   else Ok None
                 in
                 Ok (A.Call (callee, arguments), before, value, gen)
-            | A.ClosureAlloc (callee, captures) ->
-                if
-                  List.exists
-                    (fun atom -> Option.is_some (lookup env atom))
-                    captures
-                then unsupported fn.A.name "a closure capture"
-                else
-                  let* callee =
-                    if S.mem callee nativeEntries then
-                      Ok
-                        (match F.tryFind callee nativeVersions with
-                        | Some version -> version.id
-                        | None -> callee)
-                    else if
-                      eligible callee && modeChanges callee
-                      && S.mem callee startsAsync
-                    then unsupported fn.A.name "a callable interface"
-                    else if eligible callee && S.mem callee startsAsync then
-                      Ok
-                        (match F.tryFind callee versions with
-                        | Some version -> version.id
-                        | None -> callee)
-                    else Ok callee
-                  in
-                  Ok (A.ClosureAlloc (callee, captures), [], None, gen)
+            | A.ClosureAlloc (callee, captures) when eligible callee ->
+                let definition =
+                  match F.tryFind callee definitions with
+                  | Some definition -> definition
+                  | None -> Crash.crash "Async closure lost its source body"
+                in
+                let fields =
+                  match definition.A.typedParams with
+                  | { A.typ = AST.TTuple (_ :: fields); _ } :: _ -> fields
+                  | _ ->
+                      Crash.crash "Async closure has no environment parameter"
+                in
+                let modes = (summary summaries callee).captures in
+                let captures, before, gen =
+                  List.fold_left2
+                    (fun (values, before, gen) (atom, typ) mode ->
+                      let atom, added, gen =
+                        if mode then prepare typ atom gen else (atom, [], gen)
+                      in
+                      (atom :: values, before @ added, gen))
+                    ([], [], gen)
+                    (if List.length captures = List.length fields then
+                       List.combine captures fields
+                     else
+                       Crash.crash
+                         ("Async capture count mismatch in " ^ definition.A.name))
+                    modes
+                in
+                let versions =
+                  if S.mem callee nativeEntries then nativeVersions
+                  else versions
+                in
+                let callee =
+                  match F.tryFind callee versions with
+                  | Some version -> version.id
+                  | None -> callee
+                in
+                Ok
+                  (A.ClosureAlloc (callee, List.rev captures), before, None, gen)
+            | A.TupleGet (atom, index) -> (
+                match captureType fn summaries atom index with
+                | Some payload ->
+                    let* value = info payload in
+                    Ok (operation, [], Some value, gen)
+                | None ->
+                    let operation, before, gen = forceUses env operation gen in
+                    Ok (operation, before, None, gen))
             | A.Atom atom -> Ok (operation, [], lookup env atom, gen)
             | A.TypedAtom (atom, typ) -> (
                 match lookup env atom with
@@ -547,6 +696,52 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
                         before @ left @ right,
                         Some value,
                         gen ))
+            | A.ClosureCall (closure, arguments)
+              when match callable fn closure with
+                   | Some callee -> eligible callee
+                   | None -> false ->
+                let callee =
+                  match callable fn closure with
+                  | Some callee -> callee
+                  | None -> Crash.crash "Async closure call lost its target"
+                in
+                let state = summary summaries callee in
+                let definition =
+                  match F.tryFind callee definitions with
+                  | Some definition -> definition
+                  | None ->
+                      Crash.crash "Async closure call lost its source body"
+                in
+                let parameters, modes =
+                  match (definition.A.typedParams, state.parameters) with
+                  | _ :: parameters, _ :: modes -> (parameters, modes)
+                  | _ ->
+                      Crash.crash
+                        "Async closure call has no environment parameter"
+                in
+                let arguments, before, gen =
+                  List.fold_left2
+                    (fun (values, before, gen)
+                         (atom, (parameter : A.typedParam)) mode ->
+                      let atom, added, gen =
+                        if mode then prepare parameter.A.typ atom gen
+                        else (atom, [], gen)
+                      in
+                      (atom :: values, before @ added, gen))
+                    ([], [], gen)
+                    (List.combine arguments parameters)
+                    modes
+                in
+                let* value =
+                  if state.returnsPending && not (S.mem callee nativeEntries)
+                  then Result.map Option.some (info definition.A.returnType)
+                  else Ok None
+                in
+                Ok
+                  ( A.ClosureCall (closure, List.rev arguments),
+                    before,
+                    value,
+                    gen )
             | A.ClosureCall (callee, arguments)
             | A.IndirectCall (callee, arguments) ->
                 if
@@ -627,7 +822,10 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
         (fun result (fn : A.functionDef) ->
           let* values, gen = result in
           if
-            nativeRuntime fn.A.name || (modeChanges fn.A.id && not (boundary fn))
+            nativeRuntime fn.A.name
+            || modeChanges fn.A.id
+               && ((not (boundary fn))
+                  || List.exists Fun.id (summary summaries fn.A.id).captures)
           then Ok (fn :: values, gen)
           else
             let* body, gen =
@@ -652,7 +850,25 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
              ->
             let id, gen = A.freshVar gen in
             let typ =
-              if mode then carrier parameter.A.typ else parameter.A.typ
+              if mode then carrier parameter.A.typ
+              else if
+                parameter.A.id
+                =
+                match fn.A.typedParams with
+                | first :: _ -> first.A.id
+                | [] -> Crash.crash "Async clone has no parameter"
+              then
+                match parameter.A.typ with
+                | AST.TTuple (code :: fields)
+                  when List.length fields = List.length state.captures ->
+                    AST.TTuple
+                      (code
+                      :: List.map2
+                           (fun typ pending ->
+                             if pending then carrier typ else typ)
+                           fields state.captures)
+                | typ -> typ
+              else parameter.A.typ
             in
             ( { A.id; typ } :: parameters,
               M.add parameter.A.id id substitutions,
