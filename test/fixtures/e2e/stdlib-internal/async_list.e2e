@@ -1,0 +1,9 @@
+// async_list.e2e - Literal list storage retains pending elements without inspection.
+
+let sourceListPass (values: List<Int64>) : List<Int64> = values
+
+Stdlib.__Task.__runMain (fun _unit -> let gate = Stdlib.__Async.__new<Int64> () in let value = Stdlib.__Task.__transport (Stdlib.__Async.__pending gate) in let values = [value, 1L] in let _ = Stdlib.__Task.__resolve (__fiber_current ()) gate 42L in values) = [42L, 1L] // list construction does not demand an element; leak_check
+Stdlib.__Task.__runMain (fun _unit -> let gate = Stdlib.__Async.__new<Int64> () in let value = Stdlib.__Task.__transport (Stdlib.__Async.__pending gate) in let values = [value, 42L] in Stdlib.List.length values) = 2 // list length does not inspect unresolved elements; leak_check
+Stdlib.__Task.__runMain (fun _unit -> let gate = Stdlib.__Async.__new<String> () in let value = Stdlib.__Task.__transport (Stdlib.__Async.__pending gate) in let unused = [value, "ready"] in 42L) = 42L // abandoned list releases pending managed elements; leak_check
+Stdlib.__Task.__runMain (fun _unit -> let gate = Stdlib.__Async.__new<Float> () in let value = Stdlib.__Task.__transport (Stdlib.__Async.__pending gate) in let values = [value, 2.0, 3.0] in let _ = Stdlib.__Task.__resolve (__fiber_current ()) gate 40.25 in values) = [40.25, 2.0, 3.0] // float elements use their pending representation in tree nodes; leak_check
+Stdlib.__Task.__runMain (fun _unit -> let gate = Stdlib.__Async.__new<Int64> () in let value = Stdlib.__Task.__transport (Stdlib.__Async.__pending gate) in let values = sourceListPass [value, 1L] in let _ = Stdlib.__Task.__resolve (__fiber_current ()) gate 42L in values) = [42L, 1L] // lists cross ordinary calls without forcing elements; leak_check
