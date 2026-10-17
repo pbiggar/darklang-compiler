@@ -59,6 +59,15 @@ type mode = AsyncTransport.mode =
   | Stored of unit storage
   | PendingStored of unit storage
 
+type listMapping = {
+  listValue : A.atom;
+  callback : A.atom;
+  callbackTarget : AST.functionId;
+  inputType : AST.semanticType;
+  outputType : AST.semanticType;
+  actualElement : mode;
+}
+
 type listResult = ListScalar | ListElement | ListRemainder
 
 let listResult storage = function
@@ -494,6 +503,60 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
       | Some bindings -> target bindings atom
       | None -> Crash.crash "Async inference lost callable bindings"
     in
+    let mappingCall fn env stores state = function
+      | A.Call (callee, [ listValue; callback ])
+      | A.BorrowedCall (callee, [ listValue; callback ])
+      | A.TailCall (callee, [ listValue; callback ]) -> (
+          let isMap =
+            match name callee with
+            | Some name ->
+                specialized "Darklang.Stdlib.List.map" name
+                || specialized "Darklang.Stdlib.List.__map" name
+            | None -> false
+          in
+          match (isMap, callable fn callback) with
+          | true, Some target
+            when eligible target && not (S.mem target nativeEntries) -> (
+              match F.tryFind target definitions with
+              | Some { A.typedParams = [ _; parameter ]; returnType; _ } ->
+                  let actualElement =
+                    match modeOf env stores listValue with
+                    | Stored storage | PendingStored storage ->
+                        listElementMode storage
+                    | Concrete | Pending -> Concrete
+                  in
+                  let current = summary state target in
+                  let parameterMode =
+                    match current.parameters with
+                    | [ _; mode ] -> mode
+                    | _ ->
+                        Crash.crash
+                          "Async mapping callback has an inconsistent signature"
+                  in
+                  if
+                    changed actualElement || changed parameterMode
+                    || changed current.result
+                  then
+                    Some
+                      {
+                        listValue;
+                        callback;
+                        callbackTarget = target;
+                        inputType = parameter.A.typ;
+                        outputType = returnType;
+                        actualElement;
+                      }
+                  else None
+              | _ -> None)
+          | _ -> None)
+      | _ -> None
+    in
+    let mappingModes state mapping =
+      let current = summary state mapping.callbackTarget in
+      match current.parameters with
+      | [ _; input ] -> (input, current.result)
+      | _ -> Crash.crash "Async mapping callback has an inconsistent signature"
+    in
     let seed mapError (fn : A.functionDef) state modes transform =
       let* env, stores =
         List.fold_left2
@@ -574,6 +637,7 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
           infer fn env stores continuation state
       | A.Let (id, operation, rest) ->
           let* builder = listBuildCall env stores operation in
+          let mapping = mappingCall fn env stores state operation in
           let* state =
             match operation with
             | A.RawSlotInit (pointer, offset, value, _) -> (
@@ -646,6 +710,31 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
           in
           let* state, result, stored =
             match operation with
+            | _ when Option.is_some mapping ->
+                let mapping =
+                  match mapping with
+                  | Some mapping -> mapping
+                  | None ->
+                      Crash.crash "Async list mapping lost its source plan"
+                in
+                let* state =
+                  mergeActual mapping.callbackTarget
+                    [ Concrete; mapping.actualElement ]
+                in
+                let _, result = mappingModes state mapping in
+                let* storage =
+                  match listMode mapping.outputType result with
+                  | Concrete -> Ok None
+                  | Stored storage ->
+                      Result.map Option.some
+                        (AsyncTransport.instantiateStorage
+                           (fun typ -> Ok typ)
+                           storage (AST.TList mapping.outputType))
+                  | _ ->
+                      Crash.crash
+                        "Async list mapping inferred outer pendingness"
+                in
+                Ok (state, None, storage)
             | _ when Option.is_some builder ->
                 let element, storage, result =
                   match builder with
@@ -1387,6 +1476,7 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
               (fun message -> Diagnostic message)
               (listBuildCall env stores operation)
           in
+          let mapping = mappingCall fn env stores summaries operation in
           let* () =
             let hasList =
               T.exists
@@ -1418,7 +1508,7 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
               | A.BorrowedCall (callee, args)
               | A.TailCall (callee, args) ->
                   (not (eligible callee))
-                  && Option.is_none builder
+                  && Option.is_none builder && Option.is_none mapping
                   && Option.is_none (listCall stores callee args)
                   && List.exists
                        (fun atom -> Option.is_some (lookup stores atom))
@@ -1458,6 +1548,17 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
           in
           let* storedValue =
             match operation with
+            | _ when Option.is_some mapping ->
+                let mapping =
+                  match mapping with
+                  | Some mapping -> mapping
+                  | None ->
+                      Crash.crash "Async list mapping lost its source plan"
+                in
+                let _, result = mappingModes summaries mapping in
+                storedResult
+                  (listMode mapping.outputType result)
+                  (AST.TList mapping.outputType)
             | _ when Option.is_some builder ->
                 let element, storage =
                   match builder with
@@ -1509,6 +1610,14 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
           let* () =
             let escape =
               match operation with
+              | _ when Option.is_some mapping ->
+                  let mapping =
+                    match mapping with
+                    | Some mapping -> mapping
+                    | None ->
+                        Crash.crash "Async list mapping lost its source plan"
+                  in
+                  changedCallable fn mapping.listValue
               | A.Call (_, args)
               | A.BorrowedCall (_, args)
               | A.TailCall (_, args)
@@ -1528,6 +1637,44 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
           in
           let* operation, before, value, gen =
             match operation with
+            | _ when Option.is_some mapping ->
+                let mapping =
+                  match mapping with
+                  | Some mapping -> mapping
+                  | None ->
+                      Crash.crash "Async list mapping lost its source plan"
+                in
+                let inputMode, resultMode = mappingModes summaries mapping in
+                let inputType =
+                  AsyncTransport.physicalType inputMode mapping.inputType
+                in
+                let outputType =
+                  AsyncTransport.physicalType resultMode mapping.outputType
+                in
+                let* callee =
+                  helperTypes "Darklang.Stdlib.List.map"
+                    [ inputType; outputType ]
+                in
+                let actual = modeOf env stores mapping.listValue in
+                let listValue, before, gen =
+                  forceAtom env mapping.listValue gen
+                in
+                let actual =
+                  match actual with
+                  | Pending -> Concrete
+                  | PendingStored storage -> Stored storage
+                  | mode -> mode
+                in
+                let* listValue, added, gen =
+                  prepareValue
+                    (listMode mapping.inputType inputMode)
+                    (AST.TList mapping.inputType) listValue actual gen
+                in
+                Ok
+                  ( A.Call (callee, [ listValue; mapping.callback ]),
+                    before @ added,
+                    None,
+                    gen )
             | _ when Option.is_some builder -> (
                 let base, element, mode, storage, arguments, result =
                   match builder with

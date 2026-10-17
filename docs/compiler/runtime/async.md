@@ -113,7 +113,12 @@ push, pushBack and append merge element layouts and promote concrete inputs
 without demanding pending elements. Builders inspect outer spines when their
 operation needs them. Append uses a typed bridge when its suffix has outer
 pendingness: it inspects the prefix, returns the untouched suffix for an empty
-prefix, and demands the suffix spine only for a nonempty prefix. Native
+prefix, and demands the suffix spine only for a nonempty prefix. List.map can
+coordinate a known local callback with the input element layout and the callback
+result layout. It invokes callbacks eagerly; callback bodies demand only the
+values they inspect, and pending callback results remain stored in the mapped
+list. Opaque callback interfaces still require diagnostics when their ABI would
+change. Native
 result adapters map typed demands over the list. List pattern bindings preserve
 element layouts; length and empty checks inspect only the spine, while literal
 comparisons and guards demand the values they inspect. Unmigrated list operations,
@@ -313,3 +318,7 @@ that inner spine.
 
 `async_list_append.e2e` checks conditional suffix demands with ready and pending
 prefixes, abandonment, and native managed results.
+
+`async_list_map.e2e` checks known callbacks that ignore or inspect pending inputs,
+return pending values or records with pending fields, share ready and pending
+call sites, initiate producers eagerly, and retain mixed outer and field layouts.
