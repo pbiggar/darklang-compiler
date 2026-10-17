@@ -14,6 +14,10 @@ type pending = { payload : AST.semanticType; force : AST.functionId }
 type version = { id : AST.functionId; name : string }
 type lowered = { functions : A.functionDef list; nextFunctionOrdinal : int64 }
 
+type failure =
+  | Diagnostic of string
+  | MissingRuntimeSpecializations of SpecializationIdentity.SpecSet.t
+
 let carrier payload = AST.TSum ("Darklang.Stdlib.__Async.__Value", [ payload ])
 let transportName = "Darklang.Stdlib.__Task.__transport"
 let delayName = "Darklang.Stdlib.__Task.__delayTransparent"
@@ -176,7 +180,10 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
       let name = SpecializationIdentity.specName base [ payload ] in
       match Names.find_opt name ids with
       | Some id -> Ok id
-      | None -> Error ("Async runtime specialization is missing: " ^ name)
+      | None ->
+          Error
+            (MissingRuntimeSpecializations
+               (SpecializationIdentity.SpecSet.singleton (base, [ payload ])))
     in
     let info payload =
       let* force = helper "Darklang.Stdlib.__Task.__forceCurrent" payload in
@@ -305,7 +312,7 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
       | Some bindings -> target bindings atom
       | None -> Crash.crash "Async inference lost callable bindings"
     in
-    let seed (fn : A.functionDef) state modes transform =
+    let seed mapError (fn : A.functionDef) state modes transform =
       let* env, stores =
         List.fold_left2
           (fun result (parameter : A.typedParam) mode ->
@@ -328,9 +335,10 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
                 }
             in
             let* mode =
-              AsyncTransport.merge
-                (modeOf env stores (A.Var parameter.A.id))
-                captureMode
+              Result.map_error mapError
+                (AsyncTransport.merge
+                   (modeOf env stores (A.Var parameter.A.id))
+                   captureMode)
             in
             bindMode transform env stores parameter.A.id parameter.A.typ mode
         | _ ->
@@ -507,7 +515,8 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
             if not (eligible id) then Ok state
             else
               let* env, stores =
-                seed fn state (summary state id).parameters (fun typ -> Ok typ)
+                seed Fun.id fn state (summary state id).parameters (fun typ ->
+                    Ok typ)
               in
               infer fn env stores fn.A.body state)
           (Ok state) definitions
@@ -515,7 +524,9 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
       if F.forall (fun id value -> value = summary state id) next then Ok next
       else converge next
     in
-    let* summaries = converge initial in
+    let* summaries =
+      Result.map_error (fun message -> Diagnostic message) (converge initial)
+    in
     let modeChanges id =
       let value = summary summaries id in
       changed value.result
@@ -570,8 +581,9 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
     in
     let unsupported functionName where =
       Error
-        ("Async transport across " ^ where ^ " is not implemented in "
-       ^ functionName)
+        (Diagnostic
+           ("Async transport across " ^ where ^ " is not implemented in "
+          ^ functionName))
     in
     let changedCallable fn atom =
       match callable fn atom with
@@ -661,7 +673,9 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
           in
           Ok (A.Var result, before @ [ (result, allocation) ], gen)
       | _ ->
-          Error "Async inferred interface lost a pending value or field layout"
+          Error
+            (Diagnostic
+               "Async inferred interface lost a pending value or field layout")
     in
     let storedResult mode typ =
       match mode with
@@ -889,6 +903,8 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
               | A.TupleAlloc args
               | A.RecordAlloc (_, args) ->
                   List.exists (changedCallable fn) args
+              | A.IfValue (_, yes, no) ->
+                  changedCallable fn yes || changedCallable fn no
               | _ -> false
             in
             if escape then
@@ -924,7 +940,9 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
                         ( A.Call (delayHelper, [ delay; argument ]),
                           before @ added,
                           gen )
-                  | _ -> Error "Invalid async source operation arguments"
+                  | _ ->
+                      Error
+                        (Diagnostic "Invalid async source operation arguments")
                 in
                 Ok (operation, before, Some value, gen)
             | A.Call (callee, arguments)
@@ -953,7 +971,8 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
                         (before @ added) gen
                   | _ ->
                       Error
-                        "Async direct call has an invalid argument interface"
+                        (Diagnostic
+                           "Async direct call has an invalid argument interface")
                 in
                 let* arguments, before, gen =
                   argumentsLoop arguments calleeDefinition.A.typedParams
@@ -1212,7 +1231,9 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
           0 definitions
     in
     let rewrite (fn : A.functionDef) nativeReturn modes gen =
-      let* env, stores = seed fn summaries modes info in
+      let* env, stores =
+        seed (fun message -> Diagnostic message) fn summaries modes info
+      in
       expression fn nativeReturn env stores fn.A.body gen
     in
     let* originals, gen =
@@ -1243,7 +1264,10 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
       in
       let* body, gen = rewrite fn nativeReturn modes gen in
       let* parameterEnv, parameterStores =
-        seed fn summaries modes (fun typ -> Ok typ)
+        seed
+          (fun message -> Diagnostic message)
+          fn summaries modes
+          (fun typ -> Ok typ)
       in
       let parameters, substitutions, gen =
         List.fold_left

@@ -312,6 +312,19 @@ let compileUserWithPlan ?writtenSources (plan : P.userCompilePlan) =
       let build registry candidates optimizations noInline funcs ownership early
           =
         ANFPipeline.buildAnf ~asyncDefinitions:plan.P.asyncDefinitions
+          ~asyncRuntime:
+            {
+              ANFPipeline.context =
+                {
+                  plan.P.baseContext with
+                  X.symbols;
+                  registries = registry;
+                  typeCheckEnv = env;
+                };
+              materialize =
+                AsyncRuntimeMaterialization.materialize
+                  plan.P.passTimingRecorder;
+            }
           plan.P.verbosity plan.P.options elapsed registry
           (CheckedAST.nextFunctionOrdinal symbols)
           InliningCommon.defaultConfig candidates optimizations noInline funcs

@@ -85,8 +85,13 @@ let buildPreambleContext allowInternal (stdlib : X.stdlibResult) preamble
     in
     let* functions, ssa, typeMap =
       ANFPipeline.buildAnf
-        ~asyncDefinitions:stdlib.X.stdlibAnfOptimizationCandidates 0 options
-        elapsed registries
+        ~asyncDefinitions:stdlib.X.stdlibAnfOptimizationCandidates
+        ~asyncRuntime:
+          {
+            ANFPipeline.context;
+            materialize = AsyncRuntimeMaterialization.materialize recorder;
+          }
+        0 options elapsed registries
         (CheckedAST.nextFunctionOrdinal conversion.P.symbols)
         InliningCommon.defaultConfig FunctionIdMap.empty M.empty
         SpecializationIdentity.FunctionSet.empty conversion.P.functions
@@ -196,8 +201,13 @@ let buildPreambleContextFromAnalysis (stdlib : X.stdlibResult)
   in
   let* functions, ssa, typeMap =
     ANFPipeline.buildAnf
-      ~asyncDefinitions:stdlib.X.stdlibAnfOptimizationCandidates 0 options
-      elapsed registries
+      ~asyncDefinitions:stdlib.X.stdlibAnfOptimizationCandidates
+      ~asyncRuntime:
+        {
+          ANFPipeline.context;
+          materialize = AsyncRuntimeMaterialization.materialize recorder;
+        }
+      0 options elapsed registries
       (CheckedAST.nextFunctionOrdinal conversion.P.symbols)
       InliningCommon.defaultConfig FunctionIdMap.empty M.empty
       SpecializationIdentity.FunctionSet.empty conversion.P.functions

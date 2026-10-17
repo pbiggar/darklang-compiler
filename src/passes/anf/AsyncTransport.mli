@@ -15,7 +15,7 @@ val mapStorage : ('a -> 'b) -> 'a storage -> 'b storage
 val physicalType : mode -> AST.semanticType -> AST.semanticType
 
 val instantiateStorage :
-  (AST.semanticType -> ('a, string) result) ->
+  (AST.semanticType -> ('a, 'error) result) ->
   unit storage ->
   AST.semanticType ->
-  ('a storage, string) result
+  ('a storage, 'error) result

@@ -7,6 +7,14 @@ module F = SpecializationIdentity.FunctionSet
 
 let ( let* ) = Result.bind
 
+type asyncRuntime = {
+  context : CompilationContexts.pipelineContext;
+  materialize :
+    CompilationContexts.pipelineContext ->
+    SpecializationIdentity.SpecSet.t ->
+    (CompilationContexts.pipelineContext * ANF.functionDef list, string) result;
+}
+
 let buildConversionResult (ANF.Program (functions, _) as program)
     (registries : AST_to_ANF.registries) ownershipContracts =
   let funcReg =
@@ -43,7 +51,7 @@ let stdlibInliningConfig =
   }
 
 (* Lower accumulator helpers, construct SSA, then optimize and elaborate ownership. *)
-let buildAnf ?(asyncDefinitions = StringOrder.Map.empty) verbosity
+let buildAnf ?(asyncDefinitions = StringOrder.Map.empty) ?asyncRuntime verbosity
     (options : compilerOptions) elapsed (registries : AST_to_ANF.registries)
     nextFunctionOrdinal inliningConfig externalInlineCandidates
     externalOptimizationFunctions nonInlineableFunctionNames functions
@@ -87,10 +95,54 @@ let buildAnf ?(asyncDefinitions = StringOrder.Map.empty) verbosity
         else StringOrder.Map.add name definition definitions)
       asyncDefinitions externalOptimizationFunctions
   in
-  let* lowered =
-    LowerAsyncDemands.lower registries.AST_to_ANF.funcReg
-      registries.AST_to_ANF.functionNames registries.AST_to_ANF.functionIds
-      nextFunctionOrdinal asyncDefinitions functions
+  let rec lowerAsync (registries : AST_to_ANF.registries) nextFunctionOrdinal
+      runtime functions =
+    match
+      LowerAsyncDemands.lower registries.AST_to_ANF.funcReg
+        registries.AST_to_ANF.functionNames registries.AST_to_ANF.functionIds
+        nextFunctionOrdinal asyncDefinitions functions
+    with
+    | Ok lowered -> Ok (lowered, registries)
+    | Error (LowerAsyncDemands.Diagnostic message) -> Error message
+    | Error (LowerAsyncDemands.MissingRuntimeSpecializations requested) -> (
+        match runtime with
+        | None ->
+            Error
+              "Async runtime specialization requires a source compilation \
+               context"
+        | Some runtime ->
+            let context =
+              { runtime.context with CompilationContexts.registries }
+            in
+            let* context, helpers = runtime.materialize context requested in
+            let provided =
+              SpecializationIdentity.SpecSet.for_all
+                (fun (name, types) ->
+                  StringOrder.Map.mem
+                    (SpecializationIdentity.specName name types)
+                    context.CompilationContexts.registries
+                      .AST_to_ANF.functionIds)
+                requested
+            in
+            if not provided then
+              Error
+                "Async runtime specialization did not provide the requested \
+                 helpers"
+            else
+              let registry = context.CompilationContexts.registries in
+              let (ANF.Program (helpers, _)) =
+                ANF_Intrinsics.canonicalizeProgram
+                  registry.AST_to_ANF.functionIds registry.AST_to_ANF.funcReg
+                  (ANF.Program (helpers, ANF.Return ANF.UnitLiteral))
+              in
+              lowerAsync registry
+                (CheckedAST.nextFunctionOrdinal
+                   context.CompilationContexts.symbols)
+                (Some { runtime with context })
+                (functions @ helpers))
+  in
+  let* lowered, registries =
+    lowerAsync registries nextFunctionOrdinal asyncRuntime functions
   in
   let functions = lowered.LowerAsyncDemands.functions in
   let nextFunctionOrdinal = lowered.LowerAsyncDemands.nextFunctionOrdinal in

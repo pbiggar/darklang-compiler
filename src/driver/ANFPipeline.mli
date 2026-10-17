@@ -1,4 +1,12 @@
 (* ANFPipeline.mli - Construct and optimize SSA after ANF helper lowering. *)
+type asyncRuntime = {
+  context : CompilationContexts.pipelineContext;
+  materialize :
+    CompilationContexts.pipelineContext ->
+    SpecializationIdentity.SpecSet.t ->
+    (CompilationContexts.pipelineContext * ANF.functionDef list, string) result;
+}
+
 val buildConversionResult :
   ANF.program ->
   AST_to_ANF.registries ->
@@ -10,6 +18,7 @@ val stdlibInliningConfig : InliningCommon.inliningConfig
 (* The elapsed callback supplies the caller-owned stopwatch's milliseconds. *)
 val buildAnf :
   ?asyncDefinitions:ANF.functionDef StringOrder.Map.t ->
+  ?asyncRuntime:asyncRuntime ->
   int ->
   CompilerOptions.compilerOptions ->
   (unit -> float) ->
