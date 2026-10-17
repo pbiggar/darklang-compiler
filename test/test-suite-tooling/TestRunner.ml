@@ -132,6 +132,7 @@ let printHelp () =
       "  --target=TARGET     Validate host (default) or linux-x86_64";
       "  --inventory-upstream=PATH  Export parsed upstream cases and effective skips to YAML; do not run tests";
       "  --timings-json=PATH  Write machine-readable timing data to PATH";
+      "  --results-json=PATH  Write individual E2E outcomes for ledger updates";
       "  --codegen-profile-json=PATH  Write opt-in per-function ARM64 codegen \
        metrics";
       "  --quiet            Quiet mode: print 'success' or list failed tests";
@@ -590,6 +591,7 @@ let runTestsWithProgressReporter completedTestReporter args =
     and showAllTestTimings = TestRunnerArgs.hasAllTestTimingsArg args
     and verbose = TestRunnerArgs.hasVerboseArg args in
     let timingsJsonPath = get (TestRunnerArgs.parseTimingsJsonArg args)
+    and resultsJsonPath = get (TestRunnerArgs.parsePath "--results-json" args)
     and codegenProfileJsonPath =
       get (TestRunnerArgs.parseCodegenProfileJsonArg args)
     and e2eBatchSize = get (TestRunnerArgs.parseE2EBatchSizeArg args) in
@@ -918,6 +920,7 @@ let runTestsWithProgressReporter completedTestReporter args =
       { F.pass = "✓"; fail = "✗"; sectionPrefix = "└─" }
     in
     let runState = F.createStateWithProgressReporter completedTestReporter in
+    let e2eOutcomes = Queue.create () in
     let codegenMetrics = ref []
     and codegenLirOpMetrics = ref []
     and cacheCounts = ref M.empty in
@@ -1175,6 +1178,13 @@ let runTestsWithProgressReporter completedTestReporter args =
             let recordLogicalResult index (test : E.e2eTest) result =
               let _, _, _, compile, runtime = unpack (fromResult result) in
               results.(index) <- Some (test, result);
+              if Option.is_some resultsJsonPath then Queue.add
+                ( RepositoryTestFiles.relativePath test.E.sourceFile,
+                  test.E.name,
+                  match result with
+                  | Ok _ -> ("pass", "")
+                  | Error failure -> ("fail", failure.R.message) )
+                e2eOutcomes;
               recordTiming
                 {
                   F.name = suiteName ^ ": " ^ test.E.name;
@@ -1782,6 +1792,27 @@ let runTestsWithProgressReporter completedTestReporter args =
       in
       writeJson false path (json_timingJsonPayload { summary; tests; passes })
     in
+    Option.iter
+      (fun path ->
+        let rows =
+          queueList e2eOutcomes
+          |> List.sort (fun (fileA, nameA, _) (fileB, nameB, _) ->
+              compare (fileA, nameA) (fileB, nameB))
+          |> List.map (fun (file, name, (status, message)) ->
+              JObject
+                [ ("source_file", JString file); ("name", JString name);
+                  ("status", JString status); ("message", JString message) ])
+        in
+        writeJson false path
+          (JObject
+             [ ("schema", JInt 1); ("mode", JString "execution");
+               ("target", JString (match target with
+                  | Platform.LinuxX86_64 -> "linux-x64"
+                  | Platform.ARM64Backend Platform.LinuxARM64 -> "linux-arm64"
+                  | Platform.ARM64Backend Platform.MacOSARM64 -> "macos-arm64"));
+               ("filter", JString (Option.value ~default:"" filter));
+               ("tests", JArray rows) ]))
+      resultsJsonPath;
     Option.iter
       (fun path ->
         writeTimingsJson path;

@@ -1,0 +1,834 @@
+# Repeatable compatibility ledger
+
+Generated from pinned sources and maintained decisions. No compatibility probes or new tests are generated.
+
+Upstream: `a9d93efc853486244630dad693fe79f6f4882cf6`; target: `linux-x64`.
+
+## Language features
+
+| Feature | Status | Review needed |
+| --- | --- | --- |
+| Async | not-assessed | yes |
+| Effects | not-assessed | yes |
+| Named package tests | partial | yes |
+| Traits | not-assessed | yes |
+
+## Source equivalency
+
+| Ledger | Identical | Different | Missing | Compiler-only |
+| --- | ---: | ---: | ---: | ---: |
+| stdlib | 5 | 61 | 32 | 202 |
+| packages | 5 | 69 | 350 | 5 |
+
+## Existing test references
+
+Lexical references are coverage hints, not evidence of execution. One deterministic witness (the shortest indirect path) and the total reference count per declaration are in `porting/generated/ledger.json`.
+
+| Direct | Indirect | Maintained | Not identified |
+| ---: | ---: | ---: | ---: |
+| 1505 | 3107 | 0 | 612 |
+
+Package compilation: not run; a declaration-only compilation adapter remains to be implemented.
+
+## Parser and builtins
+
+Builtin rows are literal registration candidates. Same-name matches do not establish assembled bindings; aliases and computed registrations remain review items.
+
+- parser: candidate: 22, unmapped: 4
+- builtins: missing: 663, same-name: 50
+- Computed builtin registrations needing review: 7
+
+## Existing test execution
+
+State: **blocked**.
+
+Build the pinned native graph with ./build --ai first.
+
+Imported legacy cases with current execution receipts:
+
+| Pass | Fail | Skipped | Blocked |
+| ---: | ---: | ---: | ---: |
+| 0 | 0 | 0 | 0 |
+
+Named package tests: 2107 declarations, execution blocked (not silently skipped).
+
+## Review queue
+
+- Review feature status: Async
+- Review feature status: Effects
+- Review feature status: Named package tests
+- Review feature status: Traits
+- Source mapping/difference: packages:packages/darklang/cli/accepts.dark
+- Source mapping/difference: packages:packages/darklang/cli/backups.dark
+- Source mapping/difference: packages:packages/darklang/cli/builtins.dark
+- Source mapping/difference: packages:packages/darklang/cli/clear.dark
+- Source mapping/difference: packages:packages/darklang/cli/completionPicker.dark
+- Source mapping/difference: packages:packages/darklang/cli/component.dark
+- Source mapping/difference: packages:packages/darklang/cli/config.dark
+- Source mapping/difference: packages:packages/darklang/cli/constraints.dark
+- Source mapping/difference: packages:packages/darklang/cli/core.dark
+- Source mapping/difference: packages:packages/darklang/cli/docs/cli.dark
+- Source mapping/difference: packages:packages/darklang/cli/docs/command.dark
+- Source mapping/difference: packages:packages/darklang/cli/docs/deprecation.dark
+- Source mapping/difference: packages:packages/darklang/cli/docs/enums.dark
+- Source mapping/difference: packages:packages/darklang/cli/docs/errors.dark
+- Source mapping/difference: packages:packages/darklang/cli/docs/for-ai-internal.dark
+- Source mapping/difference: packages:packages/darklang/cli/docs/for-ai.dark
+- Source mapping/difference: packages:packages/darklang/cli/docs/functions.dark
+- Source mapping/difference: packages:packages/darklang/cli/docs/http-server.dark
+- Source mapping/difference: packages:packages/darklang/cli/docs/interactive-testing.dark
+- Source mapping/difference: packages:packages/darklang/cli/docs/live.dark
+- Source mapping/difference: packages:packages/darklang/cli/docs/operators.dark
+- Source mapping/difference: packages:packages/darklang/cli/docs/packages.dark
+- Source mapping/difference: packages:packages/darklang/cli/docs/pattern-matching.dark
+- Source mapping/difference: packages:packages/darklang/cli/docs/processes.dark
+- Source mapping/difference: packages:packages/darklang/cli/docs/records.dark
+- Source mapping/difference: packages:packages/darklang/cli/docs/scm.dark
+- Source mapping/difference: packages:packages/darklang/cli/docs/stdlib.dark
+- Source mapping/difference: packages:packages/darklang/cli/docs/stdlibOverview.dark
+- Source mapping/difference: packages:packages/darklang/cli/docs/syntax.dark
+- Source mapping/difference: packages:packages/darklang/cli/docs/terminalUi.dark
+- Source mapping/difference: packages:packages/darklang/cli/docs/traits.dark
+- Source mapping/difference: packages:packages/darklang/cli/docs/types.dark
+- Source mapping/difference: packages:packages/darklang/cli/entry.dark
+- Source mapping/difference: packages:packages/darklang/cli/execution/eval.dark
+- Source mapping/difference: packages:packages/darklang/cli/execution/repl.dark
+- Source mapping/difference: packages:packages/darklang/cli/execution/run.dark
+- Source mapping/difference: packages:packages/darklang/cli/exportSeed.dark
+- Source mapping/difference: packages:packages/darklang/cli/help.dark
+- Source mapping/difference: packages:packages/darklang/cli/http/serve.dark
+- Source mapping/difference: packages:packages/darklang/cli/installation/config.dark
+- Source mapping/difference: packages:packages/darklang/cli/installation/download.dark
+- Source mapping/difference: packages:packages/darklang/cli/installation/helpers.dark
+- Source mapping/difference: packages:packages/darklang/cli/installation/install.dark
+- Source mapping/difference: packages:packages/darklang/cli/installation/status.dark
+- Source mapping/difference: packages:packages/darklang/cli/installation/system.dark
+- Source mapping/difference: packages:packages/darklang/cli/installation/uninstall.dark
+- Source mapping/difference: packages:packages/darklang/cli/installation/update.dark
+- Source mapping/difference: packages:packages/darklang/cli/installation/version.dark
+- Source mapping/difference: packages:packages/darklang/cli/liveview/host.dark
+- Source mapping/difference: packages:packages/darklang/cli/liveview/model.dark
+- Source mapping/difference: packages:packages/darklang/cli/liveview/runner.dark
+- Source mapping/difference: packages:packages/darklang/cli/loop.dark
+- Source mapping/difference: packages:packages/darklang/cli/outliner/app.dark
+- Source mapping/difference: packages:packages/darklang/cli/outliner/commands.dark
+- Source mapping/difference: packages:packages/darklang/cli/outliner/core.dark
+- Source mapping/difference: packages:packages/darklang/cli/outliner/editor.dark
+- Source mapping/difference: packages:packages/darklang/cli/outliner/main.dark
+- Source mapping/difference: packages:packages/darklang/cli/outliner/store.dark
+- Source mapping/difference: packages:packages/darklang/cli/packages/atRestCheck.dark
+- Source mapping/difference: packages:packages/darklang/cli/packages/back.dark
+- Source mapping/difference: packages:packages/darklang/cli/packages/core.dark
+- Source mapping/difference: packages:packages/darklang/cli/packages/delete.dark
+- Source mapping/difference: packages:packages/darklang/cli/packages/deprecate.dark
+- Source mapping/difference: packages:packages/darklang/cli/packages/display.dark
+- Source mapping/difference: packages:packages/darklang/cli/packages/edit.dark
+- Source mapping/difference: packages:packages/darklang/cli/packages/errors.dark
+- Source mapping/difference: packages:packages/darklang/cli/packages/findValues.dark
+- Source mapping/difference: packages:packages/darklang/cli/packages/fn.dark
+- Source mapping/difference: packages:packages/darklang/cli/packages/hash.dark
+- Source mapping/difference: packages:packages/darklang/cli/packages/impl.dark
+- Source mapping/difference: packages:packages/darklang/cli/packages/impls.dark
+- Source mapping/difference: packages:packages/darklang/cli/packages/listing.dark
+- Source mapping/difference: packages:packages/darklang/cli/packages/location.dark
+- Source mapping/difference: packages:packages/darklang/cli/packages/module.dark
+- Source mapping/difference: packages:packages/darklang/cli/packages/nav.dark
+- Source mapping/difference: packages:packages/darklang/cli/packages/navInteractive.dark
+- Source mapping/difference: packages:packages/darklang/cli/packages/propagate.dark
+- Source mapping/difference: packages:packages/darklang/cli/packages/query.dark
+- Source mapping/difference: packages:packages/darklang/cli/packages/rename.dark
+- Source mapping/difference: packages:packages/darklang/cli/packages/search.dark
+- Source mapping/difference: packages:packages/darklang/cli/packages/signatures.dark
+- Source mapping/difference: packages:packages/darklang/cli/packages/test.dark
+- Source mapping/difference: packages:packages/darklang/cli/packages/trait.dark
+- Source mapping/difference: packages:packages/darklang/cli/packages/traversal.dark
+- Source mapping/difference: packages:packages/darklang/cli/packages/tree.dark
+- Source mapping/difference: packages:packages/darklang/cli/packages/type.dark
+- Source mapping/difference: packages:packages/darklang/cli/packages/typecheck.dark
+- Source mapping/difference: packages:packages/darklang/cli/packages/value.dark
+- Source mapping/difference: packages:packages/darklang/cli/packages/view.dark
+- Source mapping/difference: packages:packages/darklang/cli/permissions/command.dark
+- Source mapping/difference: packages:packages/darklang/cli/permissions/profiles.dark
+- Source mapping/difference: packages:packages/darklang/cli/prompt.dark
+- Source mapping/difference: packages:packages/darklang/cli/ps.dark
+- Source mapping/difference: packages:packages/darklang/cli/quit.dark
+- Source mapping/difference: packages:packages/darklang/cli/registry.dark
+- Source mapping/difference: packages:packages/darklang/cli/scm/branch.dark
+- Source mapping/difference: packages:packages/darklang/cli/scm/branchHistory.dark
+- Source mapping/difference: packages:packages/darklang/cli/scm/branchMerge.dark
+- Source mapping/difference: packages:packages/darklang/cli/scm/commit.dark
+- Source mapping/difference: packages:packages/darklang/cli/scm/commits.dark
+- Source mapping/difference: packages:packages/darklang/cli/scm/conflicts.dark
+- Source mapping/difference: packages:packages/darklang/cli/scm/deps.dark
+- Source mapping/difference: packages:packages/darklang/cli/scm/discard.dark
+- Source mapping/difference: packages:packages/darklang/cli/scm/ops.dark
+- Source mapping/difference: packages:packages/darklang/cli/scm/propagate.dark
+- Source mapping/difference: packages:packages/darklang/cli/scm/scmjson.dark
+- Source mapping/difference: packages:packages/darklang/cli/scm/status.dark
+- Source mapping/difference: packages:packages/darklang/cli/scm/undo.dark
+- Source mapping/difference: packages:packages/darklang/cli/telemetry.dark
+- Source mapping/difference: packages:packages/darklang/cli/traceVerbs.dark
+- Source mapping/difference: packages:packages/darklang/cli/traceWatch.dark
+- Source mapping/difference: packages:packages/darklang/cli/tracing.dark
+- Source mapping/difference: packages:packages/darklang/cli/utils/completion.dark
+- Source mapping/difference: packages:packages/darklang/cli/utils/flagParser.dark
+- Source mapping/difference: packages:packages/darklang/cli/utils/glyphs.dark
+- Source mapping/difference: packages:packages/darklang/cli/utils/listing.dark
+- Source mapping/difference: packages:packages/darklang/cli/utils/logo.dark
+- Source mapping/difference: packages:packages/darklang/cli/utils/relativeTime.dark
+- Source mapping/difference: packages:packages/darklang/cli/utils/syntaxHighlighting.dark
+- Source mapping/difference: packages:packages/darklang/cli/utils/terminal.dark
+- Source mapping/difference: packages:packages/darklang/cli/utils/text.dark
+- Source mapping/difference: packages:packages/darklang/cli/workbench/app.dark
+- Source mapping/difference: packages:packages/darklang/cli/workbench/authoring.dark
+- Source mapping/difference: packages:packages/darklang/cli/workbench/branches.dark
+- Source mapping/difference: packages:packages/darklang/cli/workbench/chrome.dark
+- Source mapping/difference: packages:packages/darklang/cli/workbench/detail.dark
+- Source mapping/difference: packages:packages/darklang/cli/workbench/frame-assembly.dark
+- Source mapping/difference: packages:packages/darklang/cli/workbench/frame.dark
+- Source mapping/difference: packages:packages/darklang/cli/workbench/home.dark
+- Source mapping/difference: packages:packages/darklang/cli/workbench/input.dark
+- Source mapping/difference: packages:packages/darklang/cli/workbench/keys-view.dark
+- Source mapping/difference: packages:packages/darklang/cli/workbench/keys.dark
+- Source mapping/difference: packages:packages/darklang/cli/workbench/loaders-misc.dark
+- Source mapping/difference: packages:packages/darklang/cli/workbench/loaders.dark
+- Source mapping/difference: packages:packages/darklang/cli/workbench/nav.dark
+- Source mapping/difference: packages:packages/darklang/cli/workbench/navbar.dark
+- Source mapping/difference: packages:packages/darklang/cli/workbench/render.dark
+- Source mapping/difference: packages:packages/darklang/cli/workbench/scm-status.dark
+- Source mapping/difference: packages:packages/darklang/cli/workbench/types.dark
+- Source mapping/difference: packages:packages/darklang/cli/workbench/viewdefs.dark
+- Source mapping/difference: packages:packages/darklang/cli/workbench/views-misc.dark
+- Source mapping/difference: packages:packages/darklang/cli/workbench/views-scm-repl.dark
+- Source mapping/difference: packages:packages/darklang/dark-packages.dark
+- Source mapping/difference: packages:packages/darklang/demo-data/httpserver-test.dark
+- Source mapping/difference: packages:packages/darklang/github.dark
+- Source mapping/difference: packages:packages/darklang/languageTools/atRestTypeChecker.dark
+- Source mapping/difference: packages:packages/darklang/languageTools/atRestTypeChecker/coverage.dark
+- Source mapping/difference: packages:packages/darklang/languageTools/atRestTypeChecker/declarations.dark
+- Source mapping/difference: packages:packages/darklang/languageTools/atRestTypeChecker/environment.dark
+- Source mapping/difference: packages:packages/darklang/languageTools/atRestTypeChecker/generate.dark
+- Source mapping/difference: packages:packages/darklang/languageTools/atRestTypeChecker/impls.dark
+- Source mapping/difference: packages:packages/darklang/languageTools/atRestTypeChecker/items.dark
+- Source mapping/difference: packages:packages/darklang/languageTools/atRestTypeChecker/model.dark
+- Source mapping/difference: packages:packages/darklang/languageTools/atRestTypeChecker/nodeIds.dark
+- Source mapping/difference: packages:packages/darklang/languageTools/atRestTypeChecker/run.dark
+- Source mapping/difference: packages:packages/darklang/languageTools/atRestTypeChecker/solve.dark
+- Source mapping/difference: packages:packages/darklang/languageTools/atRestTypeChecker/types.dark
+- Source mapping/difference: packages:packages/darklang/languageTools/common.dark
+- Source mapping/difference: packages:packages/darklang/languageTools/interpreterStats.dark
+- Source mapping/difference: packages:packages/darklang/languageTools/nameResolver.dark
+- Source mapping/difference: packages:packages/darklang/languageTools/packageManager.dark
+- Source mapping/difference: packages:packages/darklang/languageTools/parser/cliScript.dark
+- Source mapping/difference: packages:packages/darklang/languageTools/parser/core.dark
+- Source mapping/difference: packages:packages/darklang/languageTools/parser/parse.dark
+- Source mapping/difference: packages:packages/darklang/languageTools/perf.dark
+- Source mapping/difference: packages:packages/darklang/languageTools/permissions.dark
+- Source mapping/difference: packages:packages/darklang/languageTools/programTypes.dark
+- Source mapping/difference: packages:packages/darklang/languageTools/runtimeErrors.dark
+- Source mapping/difference: packages:packages/darklang/languageTools/runtimeTypes.dark
+- Source mapping/difference: packages:packages/darklang/languageTools/runtimeTypesToProgramTypes.dark
+- Source mapping/difference: packages:packages/darklang/languageTools/semanticTokens.dark
+- Source mapping/difference: packages:packages/darklang/languageTools/testWorker.dark
+- Source mapping/difference: packages:packages/darklang/languageTools/writtenTypes.dark
+- Source mapping/difference: packages:packages/darklang/languageTools/writtenTypesToProgramTypes.dark
+- Source mapping/difference: packages:packages/darklang/prettyPrinter/ast.dark
+- Source mapping/difference: packages:packages/darklang/prettyPrinter/cliScript.dark
+- Source mapping/difference: packages:packages/darklang/prettyPrinter/common.dark
+- Source mapping/difference: packages:packages/darklang/prettyPrinter/instructions.dark
+- Source mapping/difference: packages:packages/darklang/prettyPrinter/moduleDeclaration.dark
+- Source mapping/difference: packages:packages/darklang/prettyPrinter/programTypes.dark
+- Source mapping/difference: packages:packages/darklang/prettyPrinter/runtimeError.dark
+- Source mapping/difference: packages:packages/darklang/prettyPrinter/runtimeTypes.dark
+- Source mapping/difference: packages:packages/darklang/scm/branch.dark
+- Source mapping/difference: packages:packages/darklang/scm/branches.dark
+- Source mapping/difference: packages:packages/darklang/scm/commits.dark
+- Source mapping/difference: packages:packages/darklang/scm/conflicts.dark
+- Source mapping/difference: packages:packages/darklang/scm/constraints.dark
+- Source mapping/difference: packages:packages/darklang/scm/deps.dark
+- Source mapping/difference: packages:packages/darklang/scm/docs.dark
+- Source mapping/difference: packages:packages/darklang/scm/draft.dark
+- Source mapping/difference: packages:packages/darklang/scm/draftRewrite.dark
+- Source mapping/difference: packages:packages/darklang/scm/lineage.dark
+- Source mapping/difference: packages:packages/darklang/scm/packageOps.dark
+- Source mapping/difference: packages:packages/darklang/scm/packageOpsBindings.dark
+- Source mapping/difference: packages:packages/darklang/scm/packageOpsBranch.dark
+- Source mapping/difference: packages:packages/darklang/scm/packageOpsCommits.dark
+- Source mapping/difference: packages:packages/darklang/scm/packageOpsDraft.dark
+- Source mapping/difference: packages:packages/darklang/scm/packageOpsMerge.dark
+- Source mapping/difference: packages:packages/darklang/scm/packageOpsRepoints.dark
+- Source mapping/difference: packages:packages/darklang/scm/partialCommit.dark
+- Source mapping/difference: packages:packages/darklang/scm/propagation.dark
+- Source mapping/difference: packages:packages/darklang/scm/scm.dark
+- Source mapping/difference: packages:packages/darklang/scm/storeHealth.dark
+- Source mapping/difference: packages:packages/darklang/stdlib/alt-json.dark
+- Source mapping/difference: packages:packages/darklang/stdlib/await.dark
+- Source mapping/difference: packages:packages/darklang/stdlib/base64.dark
+- Source mapping/difference: packages:packages/darklang/stdlib/blob.dark
+- Source mapping/difference: packages:packages/darklang/stdlib/bool.dark
+- Source mapping/difference: packages:packages/darklang/stdlib/char.dark
+- Source mapping/difference: packages:packages/darklang/stdlib/cli/bash.dark
+- Source mapping/difference: packages:packages/darklang/stdlib/cli/curl.dark
+- Source mapping/difference: packages:packages/darklang/stdlib/cli/dir.dark
+- Source mapping/difference: packages:packages/darklang/stdlib/cli/fileSystem.dark
+- Source mapping/difference: packages:packages/darklang/stdlib/cli/fish.dark
+- Source mapping/difference: packages:packages/darklang/stdlib/cli/host.dark
+- Source mapping/difference: packages:packages/darklang/stdlib/cli/log.dark
+- Source mapping/difference: packages:packages/darklang/stdlib/cli/path.dark
+- Source mapping/difference: packages:packages/darklang/stdlib/cli/posix.dark
+- Source mapping/difference: packages:packages/darklang/stdlib/cli/powershell.dark
+- Source mapping/difference: packages:packages/darklang/stdlib/cli/stdin.dark
+- Source mapping/difference: packages:packages/darklang/stdlib/cli/tui/core.dark
+- Source mapping/difference: packages:packages/darklang/stdlib/cli/tui/frame.dark
+- Source mapping/difference: packages:packages/darklang/stdlib/cli/tui/inlineFrame.dark
+- Source mapping/difference: packages:packages/darklang/stdlib/cli/tui/layout.dark
+- Source mapping/difference: packages:packages/darklang/stdlib/cli/tui/terminalSession.dark
+- Source mapping/difference: packages:packages/darklang/stdlib/cli/tui/terminalSupport.dark
+- Source mapping/difference: packages:packages/darklang/stdlib/cli/tui/text.dark
+- Source mapping/difference: packages:packages/darklang/stdlib/cli/ui/box.dark
+- Source mapping/difference: packages:packages/darklang/stdlib/cli/ui/canvas.dark
+- Source mapping/difference: packages:packages/darklang/stdlib/cli/ui/chrome.dark
+- Source mapping/difference: packages:packages/darklang/stdlib/cli/ui/colors.dark
+- Source mapping/difference: packages:packages/darklang/stdlib/cli/ui/confirm.dark
+- Source mapping/difference: packages:packages/darklang/stdlib/cli/ui/editor.dark
+- Source mapping/difference: packages:packages/darklang/stdlib/cli/ui/html.dark
+- Source mapping/difference: packages:packages/darklang/stdlib/cli/ui/layout.dark
+- Source mapping/difference: packages:packages/darklang/stdlib/cli/ui/listview.dark
+- Source mapping/difference: packages:packages/darklang/stdlib/cli/ui/node.dark
+- Source mapping/difference: packages:packages/darklang/stdlib/cli/ui/picker.dark
+- Source mapping/difference: packages:packages/darklang/stdlib/cli/ui/progress.dark
+- Source mapping/difference: packages:packages/darklang/stdlib/cli/ui/prompt.dark
+- Source mapping/difference: packages:packages/darklang/stdlib/cli/ui/splitpane.dark
+- Source mapping/difference: packages:packages/darklang/stdlib/cli/ui/table.dark
+- Source mapping/difference: packages:packages/darklang/stdlib/cli/ui/text.dark
+- Source mapping/difference: packages:packages/darklang/stdlib/cli/ui/textfield.dark
+- Source mapping/difference: packages:packages/darklang/stdlib/cli/ui/widget.dark
+- Source mapping/difference: packages:packages/darklang/stdlib/cli/unix.dark
+- Source mapping/difference: packages:packages/darklang/stdlib/cli/zsh.dark
+- Source mapping/difference: packages:packages/darklang/stdlib/crypto.dark
+- Source mapping/difference: packages:packages/darklang/stdlib/dateTime.dark
+- Source mapping/difference: packages:packages/darklang/stdlib/dict.dark
+- Source mapping/difference: packages:packages/darklang/stdlib/diff.dark
+- Source mapping/difference: packages:packages/darklang/stdlib/duration.dark
+- Source mapping/difference: packages:packages/darklang/stdlib/env.dark
+- Source mapping/difference: packages:packages/darklang/stdlib/exec.dark
+- Source mapping/difference: packages:packages/darklang/stdlib/execPolicy.dark
+- Source mapping/difference: packages:packages/darklang/stdlib/float.dark
+- Source mapping/difference: packages:packages/darklang/stdlib/fun.dark
+- Source mapping/difference: packages:packages/darklang/stdlib/hostAwait.dark
+- Source mapping/difference: packages:packages/darklang/stdlib/html.dark
+- Source mapping/difference: packages:packages/darklang/stdlib/http.dark
+- Source mapping/difference: packages:packages/darklang/stdlib/httpclient.dark
+- Source mapping/difference: packages:packages/darklang/stdlib/httpserver.dark
+- Source mapping/difference: packages:packages/darklang/stdlib/int.dark
+- Source mapping/difference: packages:packages/darklang/stdlib/int128.dark
+- Source mapping/difference: packages:packages/darklang/stdlib/int16.dark
+- Source mapping/difference: packages:packages/darklang/stdlib/int32.dark
+- Source mapping/difference: packages:packages/darklang/stdlib/int64.dark
+- Source mapping/difference: packages:packages/darklang/stdlib/int8.dark
+- Source mapping/difference: packages:packages/darklang/stdlib/json.dark
+- Source mapping/difference: packages:packages/darklang/stdlib/list.dark
+- Source mapping/difference: packages:packages/darklang/stdlib/live.dark
+- Source mapping/difference: packages:packages/darklang/stdlib/localStore.dark
+- Source mapping/difference: packages:packages/darklang/stdlib/math.dark
+- Source mapping/difference: packages:packages/darklang/stdlib/noModule.dark
+- Source mapping/difference: packages:packages/darklang/stdlib/option.dark
+- Source mapping/difference: packages:packages/darklang/stdlib/pretty.dark
+- Source mapping/difference: packages:packages/darklang/stdlib/print.dark
+- Source mapping/difference: packages:packages/darklang/stdlib/regex.dark
+- Source mapping/difference: packages:packages/darklang/stdlib/result.dark
+- Source mapping/difference: packages:packages/darklang/stdlib/retry.dark
+- Source mapping/difference: packages:packages/darklang/stdlib/sqlite.dark
+- Source mapping/difference: packages:packages/darklang/stdlib/stream.dark
+- Source mapping/difference: packages:packages/darklang/stdlib/string.dark
+- Source mapping/difference: packages:packages/darklang/stdlib/test.dark
+- Source mapping/difference: packages:packages/darklang/stdlib/testProcess.dark
+- Source mapping/difference: packages:packages/darklang/stdlib/traits.dark
+- Source mapping/difference: packages:packages/darklang/stdlib/tuple2.dark
+- Source mapping/difference: packages:packages/darklang/stdlib/tuple3.dark
+- Source mapping/difference: packages:packages/darklang/stdlib/uint128.dark
+- Source mapping/difference: packages:packages/darklang/stdlib/uint16.dark
+- Source mapping/difference: packages:packages/darklang/stdlib/uint32.dark
+- Source mapping/difference: packages:packages/darklang/stdlib/uint64.dark
+- Source mapping/difference: packages:packages/darklang/stdlib/uint8.dark
+- Source mapping/difference: packages:packages/darklang/stdlib/uuid.dark
+- Source mapping/difference: packages:packages/darklang/stdlib/valueSearch.dark
+- Source mapping/difference: packages:packages/darklang/stdlib/x509.dark
+- Source mapping/difference: packages:packages/darklang/test/test.dark
+- Source mapping/difference: packages:packages/darklang/test/test_earg.dark
+- Source mapping/difference: packages:packages/darklang/test/test_eself.dark
+- Source mapping/difference: packages:packages/darklang/tests/cli/commandCompletions.dark
+- Source mapping/difference: packages:packages/darklang/tests/cli/deprecationKinds.dark
+- Source mapping/difference: packages:packages/darklang/tests/cli/file.dark
+- Source mapping/difference: packages:packages/darklang/tests/cli/golden.dark
+- Source mapping/difference: packages:packages/darklang/tests/cli/includeParsing.dark
+- Source mapping/difference: packages:packages/darklang/tests/cli/instance-tests.dark
+- Source mapping/difference: packages:packages/darklang/tests/cli/instance.dark
+- Source mapping/difference: packages:packages/darklang/tests/cli/interactive.dark
+- Source mapping/difference: packages:packages/darklang/tests/cli/interactiveTests.dark
+- Source mapping/difference: packages:packages/darklang/tests/cli/isolation.dark
+- Source mapping/difference: packages:packages/darklang/tests/cli/listing.dark
+- Source mapping/difference: packages:packages/darklang/tests/cli/outliner.dark
+- Source mapping/difference: packages:packages/darklang/tests/cli/permissionsDisplay.dark
+- Source mapping/difference: packages:packages/darklang/tests/cli/permissionsGrammar.dark
+- Source mapping/difference: packages:packages/darklang/tests/cli/propagate.dark
+- Source mapping/difference: packages:packages/darklang/tests/cli/releaseAssets.dark
+- Source mapping/difference: packages:packages/darklang/tests/cli/searchRanking.dark
+- Source mapping/difference: packages:packages/darklang/tests/cli/tests-picker.dark
+- Source mapping/difference: packages:packages/darklang/tests/cli/tests-tui.dark
+- Source mapping/difference: packages:packages/darklang/tests/cli/tests-workbench.dark
+- Source mapping/difference: packages:packages/darklang/tests/cli/tests.dark
+- Source mapping/difference: packages:packages/darklang/tests/cli/tracesRendering.dark
+- Source mapping/difference: packages:packages/darklang/tests/cli/workbenchRepl.dark
+- Source mapping/difference: packages:packages/darklang/tests/language/aliases.dark
+- Source mapping/difference: packages:packages/darklang/tests/language/apply.dark
+- Source mapping/difference: packages:packages/darklang/tests/language/archivedArgs.dark
+- Source mapping/difference: packages:packages/darklang/tests/language/archivedSelf.dark
+- Source mapping/difference: packages:packages/darklang/tests/language/basic.dark
+- Source mapping/difference: packages:packages/darklang/tests/language/big.dark
+- Source mapping/difference: packages:packages/darklang/tests/language/collections.dark
+- Source mapping/difference: packages:packages/darklang/tests/language/conditionals.dark
+- Source mapping/difference: packages:packages/darklang/tests/language/earg.dark
+- Source mapping/difference: packages:packages/darklang/tests/language/effectCeiling.dark
+- Source mapping/difference: packages:packages/darklang/tests/language/enums.dark
+- Source mapping/difference: packages:packages/darklang/tests/language/equality.dark
+- Source mapping/difference: packages:packages/darklang/tests/language/errorPropagation.dark
+- Source mapping/difference: packages:packages/darklang/tests/language/errorTypeNames.dark
+- Source mapping/difference: packages:packages/darklang/tests/language/eself.dark
+- Source mapping/difference: packages:packages/darklang/tests/language/fastOps.dark
+- Source mapping/difference: packages:packages/darklang/tests/language/interpreter.dark
+- Source mapping/difference: packages:packages/darklang/tests/language/lambdas.dark
+- Source mapping/difference: packages:packages/darklang/tests/language/letBindings.dark
+- Source mapping/difference: packages:packages/darklang/tests/language/matchExpressions.dark
+- Source mapping/difference: packages:packages/darklang/tests/language/nestedFunctions.dark
+- Source mapping/difference: packages:packages/darklang/tests/language/operators.dark
+- Source mapping/difference: packages:packages/darklang/tests/language/pipe.dark
+- Source mapping/difference: packages:packages/darklang/tests/language/records.dark
+- Source mapping/difference: packages:packages/darklang/tests/language/runtimeToProgramTypes.dark
+- Source mapping/difference: packages:packages/darklang/tests/language/semantics.dark
+- Source mapping/difference: packages:packages/darklang/tests/language/stringInterpolation.dark
+- Source mapping/difference: packages:packages/darklang/tests/language/traits.dark
+- Source mapping/difference: packages:packages/darklang/tests/language/tupleLiterals.dark
+- Source mapping/difference: packages:packages/darklang/tests/language/unwrap.dark
+- Source mapping/difference: packages:packages/darklang/tests/language/values.dark
+- Source mapping/difference: packages:packages/darklang/tests/languageTools/atRestTypeChecker.dark
+- Source mapping/difference: packages:packages/darklang/tests/languageTools/builtinIntrospection.dark
+- Source mapping/difference: packages:packages/darklang/tests/languageTools/parsedFileShape.dark
+- Source mapping/difference: packages:packages/darklang/tests/languageTools/perf.dark
+- Source mapping/difference: packages:packages/darklang/tests/languageTools/pickLocation.dark
+- Source mapping/difference: packages:packages/darklang/tests/languageTools/semanticTokenization.dark
+- Source mapping/difference: packages:packages/darklang/tests/prettyPrinter/runtimeTypes.dark
+- Source mapping/difference: packages:packages/darklang/tests/scm/branchIdentity.dark
+- Source mapping/difference: packages:packages/darklang/tests/scm/commitHash.dark
+- Source mapping/difference: packages:packages/darklang/tests/scm/conflicts.dark
+- Source mapping/difference: packages:packages/darklang/tests/scm/constraintKinds.dark
+- Source mapping/difference: packages:packages/darklang/tests/scm/lww.dark
+- Source mapping/difference: packages:packages/darklang/tests/scm/removalConflicts.dark
+- Source mapping/difference: packages:packages/darklang/tests/stdlib/altJson.dark
+- Source mapping/difference: packages:packages/darklang/tests/stdlib/base64.dark
+- Source mapping/difference: packages:packages/darklang/tests/stdlib/bool.dark
+- Source mapping/difference: packages:packages/darklang/tests/stdlib/bytes.dark
+- Source mapping/difference: packages:packages/darklang/tests/stdlib/char.dark
+- Source mapping/difference: packages:packages/darklang/tests/stdlib/cli/color.dark
+- Source mapping/difference: packages:packages/darklang/tests/stdlib/cli/glob.dark
+- Source mapping/difference: packages:packages/darklang/tests/stdlib/cli/path.dark
+- Source mapping/difference: packages:packages/darklang/tests/stdlib/cli/process.dark
+- Source mapping/difference: packages:packages/darklang/tests/stdlib/cli/sgr.dark
+- Source mapping/difference: packages:packages/darklang/tests/stdlib/cli/tuiText.dark
+- Source mapping/difference: packages:packages/darklang/tests/stdlib/crypto.dark
+- Source mapping/difference: packages:packages/darklang/tests/stdlib/dateTime.dark
+- Source mapping/difference: packages:packages/darklang/tests/stdlib/dict.dark
+- Source mapping/difference: packages:packages/darklang/tests/stdlib/diff.dark
+- Source mapping/difference: packages:packages/darklang/tests/stdlib/discovery.dark
+- Source mapping/difference: packages:packages/darklang/tests/stdlib/duration.dark
+- Source mapping/difference: packages:packages/darklang/tests/stdlib/float.dark
+- Source mapping/difference: packages:packages/darklang/tests/stdlib/html.dark
+- Source mapping/difference: packages:packages/darklang/tests/stdlib/http.dark
+- Source mapping/difference: packages:packages/darklang/tests/stdlib/httpclient.dark
+- Source mapping/difference: packages:packages/darklang/tests/stdlib/httpserver.dark
+- Source mapping/difference: packages:packages/darklang/tests/stdlib/ints/int.dark
+- Source mapping/difference: packages:packages/darklang/tests/stdlib/ints/int128.dark
+- Source mapping/difference: packages:packages/darklang/tests/stdlib/ints/int16.dark
+- Source mapping/difference: packages:packages/darklang/tests/stdlib/ints/int32.dark
+- Source mapping/difference: packages:packages/darklang/tests/stdlib/ints/int64.dark
+- Source mapping/difference: packages:packages/darklang/tests/stdlib/ints/int8.dark
+- Source mapping/difference: packages:packages/darklang/tests/stdlib/ints/uint128.dark
+- Source mapping/difference: packages:packages/darklang/tests/stdlib/ints/uint16.dark
+- Source mapping/difference: packages:packages/darklang/tests/stdlib/ints/uint32.dark
+- Source mapping/difference: packages:packages/darklang/tests/stdlib/ints/uint64.dark
+- Source mapping/difference: packages:packages/darklang/tests/stdlib/ints/uint8.dark
+- Source mapping/difference: packages:packages/darklang/tests/stdlib/json.dark
+- Source mapping/difference: packages:packages/darklang/tests/stdlib/list.dark
+- Source mapping/difference: packages:packages/darklang/tests/stdlib/live.dark
+- Source mapping/difference: packages:packages/darklang/tests/stdlib/math.dark
+- Source mapping/difference: packages:packages/darklang/tests/stdlib/option.dark
+- Source mapping/difference: packages:packages/darklang/tests/stdlib/pretty.dark
+- Source mapping/difference: packages:packages/darklang/tests/stdlib/regex.dark
+- Source mapping/difference: packages:packages/darklang/tests/stdlib/result.dark
+- Source mapping/difference: packages:packages/darklang/tests/stdlib/sqlite.dark
+- Source mapping/difference: packages:packages/darklang/tests/stdlib/sse.dark
+- Source mapping/difference: packages:packages/darklang/tests/stdlib/stream.dark
+- Source mapping/difference: packages:packages/darklang/tests/stdlib/string.dark
+- Source mapping/difference: packages:packages/darklang/tests/stdlib/test.dark
+- Source mapping/difference: packages:packages/darklang/tests/stdlib/tuple.dark
+- Source mapping/difference: packages:packages/darklang/tests/stdlib/uuid.dark
+- Source mapping/difference: packages:packages/darklang/tests/stdlib/x509.dark
+- Source mapping/difference: packages:packages/darklang/tracing/format.dark
+- Source mapping/difference: packages:packages/darklang/tracing/store.dark
+- Source mapping/difference: packages:packages/darklang/tracing/types.dark
+- Source mapping/difference: packages:packages/internal/tests.dark
+- Source mapping/difference: stdlib:packages/darklang/stdlib/alt-json.dark
+- Source mapping/difference: stdlib:packages/darklang/stdlib/await.dark
+- Source mapping/difference: stdlib:packages/darklang/stdlib/base64.dark
+- Source mapping/difference: stdlib:packages/darklang/stdlib/blob.dark
+- Source mapping/difference: stdlib:packages/darklang/stdlib/bool.dark
+- Source mapping/difference: stdlib:packages/darklang/stdlib/char.dark
+- Source mapping/difference: stdlib:packages/darklang/stdlib/cli/bash.dark
+- Source mapping/difference: stdlib:packages/darklang/stdlib/cli/curl.dark
+- Source mapping/difference: stdlib:packages/darklang/stdlib/cli/dir.dark
+- Source mapping/difference: stdlib:packages/darklang/stdlib/cli/fileSystem.dark
+- Source mapping/difference: stdlib:packages/darklang/stdlib/cli/fish.dark
+- Source mapping/difference: stdlib:packages/darklang/stdlib/cli/host.dark
+- Source mapping/difference: stdlib:packages/darklang/stdlib/cli/log.dark
+- Source mapping/difference: stdlib:packages/darklang/stdlib/cli/path.dark
+- Source mapping/difference: stdlib:packages/darklang/stdlib/cli/posix.dark
+- Source mapping/difference: stdlib:packages/darklang/stdlib/cli/powershell.dark
+- Source mapping/difference: stdlib:packages/darklang/stdlib/cli/stdin.dark
+- Source mapping/difference: stdlib:packages/darklang/stdlib/cli/tui/core.dark
+- Source mapping/difference: stdlib:packages/darklang/stdlib/cli/tui/frame.dark
+- Source mapping/difference: stdlib:packages/darklang/stdlib/cli/tui/inlineFrame.dark
+- Source mapping/difference: stdlib:packages/darklang/stdlib/cli/tui/layout.dark
+- Source mapping/difference: stdlib:packages/darklang/stdlib/cli/tui/terminalSession.dark
+- Source mapping/difference: stdlib:packages/darklang/stdlib/cli/tui/terminalSupport.dark
+- Source mapping/difference: stdlib:packages/darklang/stdlib/cli/tui/text.dark
+- Source mapping/difference: stdlib:packages/darklang/stdlib/cli/ui/box.dark
+- Source mapping/difference: stdlib:packages/darklang/stdlib/cli/ui/canvas.dark
+- Source mapping/difference: stdlib:packages/darklang/stdlib/cli/ui/chrome.dark
+- Source mapping/difference: stdlib:packages/darklang/stdlib/cli/ui/colors.dark
+- Source mapping/difference: stdlib:packages/darklang/stdlib/cli/ui/confirm.dark
+- Source mapping/difference: stdlib:packages/darklang/stdlib/cli/ui/editor.dark
+- Source mapping/difference: stdlib:packages/darklang/stdlib/cli/ui/html.dark
+- Source mapping/difference: stdlib:packages/darklang/stdlib/cli/ui/layout.dark
+- Source mapping/difference: stdlib:packages/darklang/stdlib/cli/ui/listview.dark
+- Source mapping/difference: stdlib:packages/darklang/stdlib/cli/ui/node.dark
+- Source mapping/difference: stdlib:packages/darklang/stdlib/cli/ui/picker.dark
+- Source mapping/difference: stdlib:packages/darklang/stdlib/cli/ui/progress.dark
+- Source mapping/difference: stdlib:packages/darklang/stdlib/cli/ui/prompt.dark
+- Source mapping/difference: stdlib:packages/darklang/stdlib/cli/ui/splitpane.dark
+- Source mapping/difference: stdlib:packages/darklang/stdlib/cli/ui/table.dark
+- Source mapping/difference: stdlib:packages/darklang/stdlib/cli/ui/text.dark
+- Source mapping/difference: stdlib:packages/darklang/stdlib/cli/ui/textfield.dark
+- Source mapping/difference: stdlib:packages/darklang/stdlib/cli/ui/widget.dark
+- Source mapping/difference: stdlib:packages/darklang/stdlib/cli/unix.dark
+- Source mapping/difference: stdlib:packages/darklang/stdlib/cli/zsh.dark
+- Source mapping/difference: stdlib:packages/darklang/stdlib/crypto.dark
+- Source mapping/difference: stdlib:packages/darklang/stdlib/dateTime.dark
+- Source mapping/difference: stdlib:packages/darklang/stdlib/dict.dark
+- Source mapping/difference: stdlib:packages/darklang/stdlib/diff.dark
+- Source mapping/difference: stdlib:packages/darklang/stdlib/duration.dark
+- Source mapping/difference: stdlib:packages/darklang/stdlib/env.dark
+- Source mapping/difference: stdlib:packages/darklang/stdlib/exec.dark
+- Source mapping/difference: stdlib:packages/darklang/stdlib/execPolicy.dark
+- Source mapping/difference: stdlib:packages/darklang/stdlib/float.dark
+- Source mapping/difference: stdlib:packages/darklang/stdlib/fun.dark
+- Source mapping/difference: stdlib:packages/darklang/stdlib/hostAwait.dark
+- Source mapping/difference: stdlib:packages/darklang/stdlib/html.dark
+- Source mapping/difference: stdlib:packages/darklang/stdlib/http.dark
+- Source mapping/difference: stdlib:packages/darklang/stdlib/httpclient.dark
+- Source mapping/difference: stdlib:packages/darklang/stdlib/httpserver.dark
+- Source mapping/difference: stdlib:packages/darklang/stdlib/int.dark
+- Source mapping/difference: stdlib:packages/darklang/stdlib/int128.dark
+- Source mapping/difference: stdlib:packages/darklang/stdlib/int16.dark
+- Source mapping/difference: stdlib:packages/darklang/stdlib/int32.dark
+- Source mapping/difference: stdlib:packages/darklang/stdlib/int64.dark
+- Source mapping/difference: stdlib:packages/darklang/stdlib/int8.dark
+- Source mapping/difference: stdlib:packages/darklang/stdlib/json.dark
+- Source mapping/difference: stdlib:packages/darklang/stdlib/list.dark
+- Source mapping/difference: stdlib:packages/darklang/stdlib/live.dark
+- Source mapping/difference: stdlib:packages/darklang/stdlib/localStore.dark
+- Source mapping/difference: stdlib:packages/darklang/stdlib/math.dark
+- Source mapping/difference: stdlib:packages/darklang/stdlib/noModule.dark
+- Source mapping/difference: stdlib:packages/darklang/stdlib/option.dark
+- Source mapping/difference: stdlib:packages/darklang/stdlib/pretty.dark
+- Source mapping/difference: stdlib:packages/darklang/stdlib/print.dark
+- Source mapping/difference: stdlib:packages/darklang/stdlib/regex.dark
+- Source mapping/difference: stdlib:packages/darklang/stdlib/result.dark
+- Source mapping/difference: stdlib:packages/darklang/stdlib/retry.dark
+- Source mapping/difference: stdlib:packages/darklang/stdlib/sqlite.dark
+- Source mapping/difference: stdlib:packages/darklang/stdlib/stream.dark
+- Source mapping/difference: stdlib:packages/darklang/stdlib/string.dark
+- Source mapping/difference: stdlib:packages/darklang/stdlib/test.dark
+- Source mapping/difference: stdlib:packages/darklang/stdlib/testProcess.dark
+- Source mapping/difference: stdlib:packages/darklang/stdlib/traits.dark
+- Source mapping/difference: stdlib:packages/darklang/stdlib/tuple2.dark
+- Source mapping/difference: stdlib:packages/darklang/stdlib/tuple3.dark
+- Source mapping/difference: stdlib:packages/darklang/stdlib/uint128.dark
+- Source mapping/difference: stdlib:packages/darklang/stdlib/uint16.dark
+- Source mapping/difference: stdlib:packages/darklang/stdlib/uint32.dark
+- Source mapping/difference: stdlib:packages/darklang/stdlib/uint64.dark
+- Source mapping/difference: stdlib:packages/darklang/stdlib/uint8.dark
+- Source mapping/difference: stdlib:packages/darklang/stdlib/uuid.dark
+- Source mapping/difference: stdlib:packages/darklang/stdlib/valueSearch.dark
+- Source mapping/difference: stdlib:packages/darklang/stdlib/x509.dark
+- ambiguous declaration: Darklang.Language.Tests.Enums.Polymorphism.insert
+- ambiguous declaration: Darklang.Language.Tests.Enums.Polymorphism.toList
+- ambiguous declaration: Darklang.ShadowingTest.valueShadowing
+- ambiguous declaration: test1
+- ambiguous declaration: test10
+- ambiguous declaration: test11
+- ambiguous declaration: test12
+- ambiguous declaration: test13
+- ambiguous declaration: test14
+- ambiguous declaration: test2
+- ambiguous declaration: test3
+- ambiguous declaration: test4
+- ambiguous declaration: test5
+- ambiguous declaration: test6
+- ambiguous declaration: test7
+- ambiguous declaration: test8
+- ambiguous declaration: test9
+- ambiguous declaration: testList
+- packages/darklang/stdlib/bool.dark:12: unindexed declaration header
+- packages/darklang/stdlib/bool.dark:17: unindexed declaration header
+- packages/darklang/stdlib/bool.dark:9: unindexed declaration header
+- packages/darklang/stdlib/char.dark:81: unindexed declaration header
+- packages/darklang/stdlib/char.dark:88: unindexed declaration header
+- packages/darklang/stdlib/dateTime.dark:10: unindexed declaration header
+- packages/darklang/stdlib/dateTime.dark:63: unindexed declaration header
+- packages/darklang/stdlib/dict.dark:88: unindexed declaration header
+- packages/darklang/stdlib/dict.dark:8: unindexed declaration header
+- packages/darklang/stdlib/float.dark:143: unindexed declaration header
+- packages/darklang/stdlib/float.dark:148: unindexed declaration header
+- packages/darklang/stdlib/float.dark:151: unindexed declaration header
+- packages/darklang/stdlib/float.dark:39: unindexed declaration header
+- packages/darklang/stdlib/float.dark:48: unindexed declaration header
+- packages/darklang/stdlib/float.dark:53: unindexed declaration header
+- packages/darklang/stdlib/float.dark:58: unindexed declaration header
+- packages/darklang/stdlib/float.dark:63: unindexed declaration header
+- packages/darklang/stdlib/float.dark:69: unindexed declaration header
+- packages/darklang/stdlib/float.dark:74: unindexed declaration header
+- packages/darklang/stdlib/int.dark:14: unindexed declaration header
+- packages/darklang/stdlib/int.dark:162: unindexed declaration header
+- packages/darklang/stdlib/int.dark:165: unindexed declaration header
+- packages/darklang/stdlib/int.dark:168: unindexed declaration header
+- packages/darklang/stdlib/int.dark:171: unindexed declaration header
+- packages/darklang/stdlib/int.dark:174: unindexed declaration header
+- packages/darklang/stdlib/int.dark:177: unindexed declaration header
+- packages/darklang/stdlib/int.dark:185: unindexed declaration header
+- packages/darklang/stdlib/int.dark:189: unindexed declaration header
+- packages/darklang/stdlib/int.dark:192: unindexed declaration header
+- packages/darklang/stdlib/int.dark:32: unindexed declaration header
+- packages/darklang/stdlib/int.dark:37: unindexed declaration header
+- packages/darklang/stdlib/int.dark:42: unindexed declaration header
+- packages/darklang/stdlib/int.dark:47: unindexed declaration header
+- packages/darklang/stdlib/int.dark:52: unindexed declaration header
+- packages/darklang/stdlib/int.dark:59: unindexed declaration header
+- packages/darklang/stdlib/int.dark:64: unindexed declaration header
+- packages/darklang/stdlib/int128.dark:126: unindexed declaration header
+- packages/darklang/stdlib/int128.dark:131: unindexed declaration header
+- packages/darklang/stdlib/int128.dark:136: unindexed declaration header
+- packages/darklang/stdlib/int128.dark:141: unindexed declaration header
+- packages/darklang/stdlib/int128.dark:146: unindexed declaration header
+- packages/darklang/stdlib/int128.dark:151: unindexed declaration header
+- packages/darklang/stdlib/int128.dark:155: unindexed declaration header
+- packages/darklang/stdlib/int128.dark:159: unindexed declaration header
+- packages/darklang/stdlib/int128.dark:162: unindexed declaration header
+- packages/darklang/stdlib/int128.dark:30: unindexed declaration header
+- packages/darklang/stdlib/int128.dark:35: unindexed declaration header
+- packages/darklang/stdlib/int128.dark:40: unindexed declaration header
+- packages/darklang/stdlib/int128.dark:45: unindexed declaration header
+- packages/darklang/stdlib/int128.dark:50: unindexed declaration header
+- packages/darklang/stdlib/int128.dark:58: unindexed declaration header
+- packages/darklang/stdlib/int128.dark:63: unindexed declaration header
+- packages/darklang/stdlib/int128.dark:9: unindexed declaration header
+- packages/darklang/stdlib/int16.dark:140: unindexed declaration header
+- packages/darklang/stdlib/int16.dark:145: unindexed declaration header
+- packages/darklang/stdlib/int16.dark:150: unindexed declaration header
+- packages/darklang/stdlib/int16.dark:155: unindexed declaration header
+- packages/darklang/stdlib/int16.dark:160: unindexed declaration header
+- packages/darklang/stdlib/int16.dark:165: unindexed declaration header
+- packages/darklang/stdlib/int16.dark:169: unindexed declaration header
+- packages/darklang/stdlib/int16.dark:173: unindexed declaration header
+- packages/darklang/stdlib/int16.dark:176: unindexed declaration header
+- packages/darklang/stdlib/int16.dark:30: unindexed declaration header
+- packages/darklang/stdlib/int16.dark:35: unindexed declaration header
+- packages/darklang/stdlib/int16.dark:40: unindexed declaration header
+- packages/darklang/stdlib/int16.dark:45: unindexed declaration header
+- packages/darklang/stdlib/int16.dark:53: unindexed declaration header
+- packages/darklang/stdlib/int16.dark:58: unindexed declaration header
+- packages/darklang/stdlib/int16.dark:63: unindexed declaration header
+- packages/darklang/stdlib/int16.dark:9: unindexed declaration header
+- packages/darklang/stdlib/int32.dark:138: unindexed declaration header
+- packages/darklang/stdlib/int32.dark:143: unindexed declaration header
+- packages/darklang/stdlib/int32.dark:148: unindexed declaration header
+- packages/darklang/stdlib/int32.dark:153: unindexed declaration header
+- packages/darklang/stdlib/int32.dark:158: unindexed declaration header
+- packages/darklang/stdlib/int32.dark:163: unindexed declaration header
+- packages/darklang/stdlib/int32.dark:167: unindexed declaration header
+- packages/darklang/stdlib/int32.dark:171: unindexed declaration header
+- packages/darklang/stdlib/int32.dark:174: unindexed declaration header
+- packages/darklang/stdlib/int32.dark:30: unindexed declaration header
+- packages/darklang/stdlib/int32.dark:35: unindexed declaration header
+- packages/darklang/stdlib/int32.dark:40: unindexed declaration header
+- packages/darklang/stdlib/int32.dark:45: unindexed declaration header
+- packages/darklang/stdlib/int32.dark:50: unindexed declaration header
+- packages/darklang/stdlib/int32.dark:58: unindexed declaration header
+- packages/darklang/stdlib/int32.dark:63: unindexed declaration header
+- packages/darklang/stdlib/int32.dark:9: unindexed declaration header
+- packages/darklang/stdlib/int64.dark:156: unindexed declaration header
+- packages/darklang/stdlib/int64.dark:161: unindexed declaration header
+- packages/darklang/stdlib/int64.dark:166: unindexed declaration header
+- packages/darklang/stdlib/int64.dark:171: unindexed declaration header
+- packages/darklang/stdlib/int64.dark:176: unindexed declaration header
+- packages/darklang/stdlib/int64.dark:181: unindexed declaration header
+- packages/darklang/stdlib/int64.dark:185: unindexed declaration header
+- packages/darklang/stdlib/int64.dark:189: unindexed declaration header
+- packages/darklang/stdlib/int64.dark:192: unindexed declaration header
+- packages/darklang/stdlib/int64.dark:30: unindexed declaration header
+- packages/darklang/stdlib/int64.dark:35: unindexed declaration header
+- packages/darklang/stdlib/int64.dark:40: unindexed declaration header
+- packages/darklang/stdlib/int64.dark:45: unindexed declaration header
+- packages/darklang/stdlib/int64.dark:50: unindexed declaration header
+- packages/darklang/stdlib/int64.dark:58: unindexed declaration header
+- packages/darklang/stdlib/int64.dark:63: unindexed declaration header
+- packages/darklang/stdlib/int64.dark:9: unindexed declaration header
+- packages/darklang/stdlib/int8.dark:138: unindexed declaration header
+- packages/darklang/stdlib/int8.dark:143: unindexed declaration header
+- packages/darklang/stdlib/int8.dark:148: unindexed declaration header
+- packages/darklang/stdlib/int8.dark:153: unindexed declaration header
+- packages/darklang/stdlib/int8.dark:158: unindexed declaration header
+- packages/darklang/stdlib/int8.dark:163: unindexed declaration header
+- packages/darklang/stdlib/int8.dark:167: unindexed declaration header
+- packages/darklang/stdlib/int8.dark:171: unindexed declaration header
+- packages/darklang/stdlib/int8.dark:174: unindexed declaration header
+- packages/darklang/stdlib/int8.dark:30: unindexed declaration header
+- packages/darklang/stdlib/int8.dark:35: unindexed declaration header
+- packages/darklang/stdlib/int8.dark:40: unindexed declaration header
+- packages/darklang/stdlib/int8.dark:45: unindexed declaration header
+- packages/darklang/stdlib/int8.dark:53: unindexed declaration header
+- packages/darklang/stdlib/int8.dark:58: unindexed declaration header
+- packages/darklang/stdlib/int8.dark:63: unindexed declaration header
+- packages/darklang/stdlib/int8.dark:9: unindexed declaration header
+- packages/darklang/stdlib/list.dark:105: unindexed declaration header
+- packages/darklang/stdlib/list.dark:80: unindexed declaration header
+- packages/darklang/stdlib/list.dark:8: unindexed declaration header
+- packages/darklang/stdlib/option.dark:189: unindexed declaration header
+- packages/darklang/stdlib/option.dark:199: unindexed declaration header
+- packages/darklang/stdlib/result.dark:204: unindexed declaration header
+- packages/darklang/stdlib/result.dark:214: unindexed declaration header
+- packages/darklang/stdlib/string.dark:100: unindexed declaration header
+- packages/darklang/stdlib/string.dark:584: unindexed declaration header
+- packages/darklang/stdlib/string.dark:597: unindexed declaration header
+- packages/darklang/stdlib/string.dark:96: unindexed declaration header
+- packages/darklang/stdlib/traits.dark:100: unindexed declaration header
+- packages/darklang/stdlib/traits.dark:12: unindexed declaration header
+- packages/darklang/stdlib/traits.dark:17: unindexed declaration header
+- packages/darklang/stdlib/traits.dark:22: unindexed declaration header
+- packages/darklang/stdlib/traits.dark:27: unindexed declaration header
+- packages/darklang/stdlib/traits.dark:32: unindexed declaration header
+- packages/darklang/stdlib/traits.dark:37: unindexed declaration header
+- packages/darklang/stdlib/traits.dark:42: unindexed declaration header
+- packages/darklang/stdlib/traits.dark:48: unindexed declaration header
+- packages/darklang/stdlib/traits.dark:53: unindexed declaration header
+- packages/darklang/stdlib/traits.dark:58: unindexed declaration header
+- packages/darklang/stdlib/traits.dark:63: unindexed declaration header
+- packages/darklang/stdlib/traits.dark:68: unindexed declaration header
+- packages/darklang/stdlib/traits.dark:73: unindexed declaration header
+- packages/darklang/stdlib/traits.dark:78: unindexed declaration header
+- packages/darklang/stdlib/traits.dark:83: unindexed declaration header
+- packages/darklang/stdlib/traits.dark:88: unindexed declaration header
+- packages/darklang/stdlib/uint128.dark:104: unindexed declaration header
+- packages/darklang/stdlib/uint128.dark:110: unindexed declaration header
+- packages/darklang/stdlib/uint128.dark:115: unindexed declaration header
+- packages/darklang/stdlib/uint128.dark:121: unindexed declaration header
+- packages/darklang/stdlib/uint128.dark:126: unindexed declaration header
+- packages/darklang/stdlib/uint128.dark:130: unindexed declaration header
+- packages/darklang/stdlib/uint128.dark:133: unindexed declaration header
+- packages/darklang/stdlib/uint128.dark:17: unindexed declaration header
+- packages/darklang/stdlib/uint128.dark:22: unindexed declaration header
+- packages/darklang/stdlib/uint128.dark:27: unindexed declaration header
+- packages/darklang/stdlib/uint128.dark:32: unindexed declaration header
+- packages/darklang/stdlib/uint128.dark:37: unindexed declaration header
+- packages/darklang/stdlib/uint128.dark:44: unindexed declaration header
+- packages/darklang/stdlib/uint128.dark:92: unindexed declaration header
+- packages/darklang/stdlib/uint128.dark:98: unindexed declaration header
+- packages/darklang/stdlib/uint128.dark:9: unindexed declaration header
+- packages/darklang/stdlib/uint16.dark:129: unindexed declaration header
+- packages/darklang/stdlib/uint16.dark:134: unindexed declaration header
+- packages/darklang/stdlib/uint16.dark:139: unindexed declaration header
+- packages/darklang/stdlib/uint16.dark:144: unindexed declaration header
+- packages/darklang/stdlib/uint16.dark:149: unindexed declaration header
+- packages/darklang/stdlib/uint16.dark:154: unindexed declaration header
+- packages/darklang/stdlib/uint16.dark:158: unindexed declaration header
+- packages/darklang/stdlib/uint16.dark:162: unindexed declaration header
+- packages/darklang/stdlib/uint16.dark:165: unindexed declaration header
+- packages/darklang/stdlib/uint16.dark:17: unindexed declaration header
+- packages/darklang/stdlib/uint16.dark:22: unindexed declaration header
+- packages/darklang/stdlib/uint16.dark:27: unindexed declaration header
+- packages/darklang/stdlib/uint16.dark:32: unindexed declaration header
+- packages/darklang/stdlib/uint16.dark:44: unindexed declaration header
+- packages/darklang/stdlib/uint16.dark:49: unindexed declaration header
+- packages/darklang/stdlib/uint16.dark:9: unindexed declaration header
+- packages/darklang/stdlib/uint32.dark:128: unindexed declaration header
+- packages/darklang/stdlib/uint32.dark:133: unindexed declaration header
+- packages/darklang/stdlib/uint32.dark:138: unindexed declaration header
+- packages/darklang/stdlib/uint32.dark:143: unindexed declaration header
+- packages/darklang/stdlib/uint32.dark:148: unindexed declaration header
+- packages/darklang/stdlib/uint32.dark:153: unindexed declaration header
+- packages/darklang/stdlib/uint32.dark:157: unindexed declaration header
+- packages/darklang/stdlib/uint32.dark:161: unindexed declaration header
+- packages/darklang/stdlib/uint32.dark:164: unindexed declaration header
+- packages/darklang/stdlib/uint32.dark:17: unindexed declaration header
+- packages/darklang/stdlib/uint32.dark:22: unindexed declaration header
+- packages/darklang/stdlib/uint32.dark:27: unindexed declaration header
+- packages/darklang/stdlib/uint32.dark:32: unindexed declaration header
+- packages/darklang/stdlib/uint32.dark:44: unindexed declaration header
+- packages/darklang/stdlib/uint32.dark:49: unindexed declaration header
+- packages/darklang/stdlib/uint32.dark:9: unindexed declaration header
+- packages/darklang/stdlib/uint64.dark:144: unindexed declaration header
+- packages/darklang/stdlib/uint64.dark:149: unindexed declaration header
+- packages/darklang/stdlib/uint64.dark:154: unindexed declaration header
+- packages/darklang/stdlib/uint64.dark:159: unindexed declaration header
+- packages/darklang/stdlib/uint64.dark:15: unindexed declaration header
+- packages/darklang/stdlib/uint64.dark:164: unindexed declaration header
+- packages/darklang/stdlib/uint64.dark:169: unindexed declaration header
+- packages/darklang/stdlib/uint64.dark:173: unindexed declaration header
+- packages/darklang/stdlib/uint64.dark:177: unindexed declaration header
+- packages/darklang/stdlib/uint64.dark:180: unindexed declaration header
+- packages/darklang/stdlib/uint64.dark:20: unindexed declaration header
+- packages/darklang/stdlib/uint64.dark:25: unindexed declaration header
+- packages/darklang/stdlib/uint64.dark:30: unindexed declaration header
+- packages/darklang/stdlib/uint64.dark:35: unindexed declaration header
+- packages/darklang/stdlib/uint64.dark:47: unindexed declaration header
+- packages/darklang/stdlib/uint64.dark:9: unindexed declaration header
+- packages/darklang/stdlib/uint8.dark:127: unindexed declaration header
+- packages/darklang/stdlib/uint8.dark:132: unindexed declaration header
+- packages/darklang/stdlib/uint8.dark:137: unindexed declaration header
+- packages/darklang/stdlib/uint8.dark:142: unindexed declaration header
+- packages/darklang/stdlib/uint8.dark:147: unindexed declaration header
+- packages/darklang/stdlib/uint8.dark:152: unindexed declaration header
+- packages/darklang/stdlib/uint8.dark:156: unindexed declaration header
+- packages/darklang/stdlib/uint8.dark:160: unindexed declaration header
+- packages/darklang/stdlib/uint8.dark:163: unindexed declaration header
+- packages/darklang/stdlib/uint8.dark:17: unindexed declaration header
+- packages/darklang/stdlib/uint8.dark:22: unindexed declaration header
+- packages/darklang/stdlib/uint8.dark:27: unindexed declaration header
+- packages/darklang/stdlib/uint8.dark:32: unindexed declaration header
+- packages/darklang/stdlib/uint8.dark:44: unindexed declaration header
+- packages/darklang/stdlib/uint8.dark:49: unindexed declaration header
+- packages/darklang/stdlib/uint8.dark:9: unindexed declaration header
+- packages/darklang/stdlib/uuid.dark:15: unindexed declaration header
+- packages/darklang/tests/language/traits.dark:100: unindexed declaration header
+- packages/darklang/tests/language/traits.dark:10: unindexed declaration header
+- packages/darklang/tests/language/traits.dark:13: unindexed declaration header
+- packages/darklang/tests/language/traits.dark:143: unindexed declaration header
+- packages/darklang/tests/language/traits.dark:147: unindexed declaration header
+- packages/darklang/tests/language/traits.dark:150: unindexed declaration header
+- packages/darklang/tests/language/traits.dark:154: unindexed declaration header
+- packages/darklang/tests/language/traits.dark:175: unindexed declaration header
+- packages/darklang/tests/language/traits.dark:178: unindexed declaration header
+- packages/darklang/tests/language/traits.dark:17: unindexed declaration header
+- packages/darklang/tests/language/traits.dark:20: unindexed declaration header
+- packages/darklang/tests/language/traits.dark:211: unindexed declaration header
+- packages/darklang/tests/language/traits.dark:23: unindexed declaration header
+- packages/darklang/tests/language/traits.dark:373: unindexed declaration header

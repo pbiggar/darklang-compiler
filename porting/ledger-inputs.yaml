@@ -1,0 +1,26 @@
+# Maintained decisions only. Generated facts belong in generated/ledger.json.
+schema: 1
+features:
+  - name: Async
+    status: not-assessed
+    sources: [src/frontend/WrittenExpressions.ml]
+    notes: Review the compiler revision being inventoried; async is also being implemented on a separate branch.
+  - name: Effects
+    status: not-assessed
+    sources: [src/frontend/interpreter/LibExecution_Effects.ml]
+    notes: Parsing annotations is distinct from implementing effects.
+  - name: Traits
+    status: not-assessed
+    sources: [src/frontend/WrittenDeclarations.ml]
+    notes: Track coarse implementation status here; behavior belongs in existing tests.
+  - name: Named package tests
+    status: partial
+    sources: [src/frontend/NamedPackageTests.ml]
+    notes: Parsing and extraction exist; Test helpers, test-local builtins and outcome execution remain unfinished.
+source_mappings: {}
+parser_mappings: {}
+builtin_mappings: {}
+# Qualified declaration name -> existing test source paths, with an explanation.
+coverage: {}
+# Upstream source path -> explanation of an accepted source difference.
+source_exceptions: {}
