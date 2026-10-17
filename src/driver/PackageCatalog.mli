@@ -19,6 +19,7 @@ type userCompilePlan = {
   baseContext : CompilationContexts.pipelineContext;
   monomorphization : SourcePreparation.monomorphizationMode;
   externalInlineCandidates : InliningCommon.functionInfo FunctionIdMap.t;
+  asyncDefinitions : ANF.functionDef StringOrder.Map.t;
   prebuiltSymbolicFunctions : LIR.functionDef list;
   prebuiltCallGraphSummaries :
     CompilationCacheIdentity.functionSummary FunctionIdMap.t;

@@ -9,6 +9,7 @@ val stdlibInliningConfig : InliningCommon.inliningConfig
 
 (* The elapsed callback supplies the caller-owned stopwatch's milliseconds. *)
 val buildAnf :
+  ?asyncDefinitions:ANF.functionDef StringOrder.Map.t ->
   int ->
   CompilerOptions.compilerOptions ->
   (unit -> float) ->

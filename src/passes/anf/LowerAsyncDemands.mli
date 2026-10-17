@@ -1,7 +1,11 @@
-(* LowerAsyncDemands.mli - Keep private source values pending until concrete inspection. *)
+(* LowerAsyncDemands.mli - Lower pending source values and coordinated native call interfaces. *)
+type lowered = { functions : ANF.functionDef list; nextFunctionOrdinal : int64 }
+
 val lower :
   TypeRegistries.functionRegistry ->
   TypeRegistries.functionNameRegistry ->
   TypeRegistries.functionIdRegistry ->
+  int64 ->
+  ANF.functionDef StringOrder.Map.t ->
   ANF.functionDef list ->
-  (ANF.functionDef list, string) result
+  (lowered, string) result

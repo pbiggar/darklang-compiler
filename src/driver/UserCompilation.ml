@@ -311,7 +311,8 @@ let compileUserWithPlan ?writtenSources (plan : P.userCompilePlan) =
       in
       let build registry candidates optimizations noInline funcs ownership early
           =
-        ANFPipeline.buildAnf plan.P.verbosity plan.P.options elapsed registry
+        ANFPipeline.buildAnf ~asyncDefinitions:plan.P.asyncDefinitions
+          plan.P.verbosity plan.P.options elapsed registry
           (CheckedAST.nextFunctionOrdinal symbols)
           InliningCommon.defaultConfig candidates optimizations noInline funcs
           ownership early plan.P.passTimingRecorder

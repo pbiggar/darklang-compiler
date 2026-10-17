@@ -63,6 +63,7 @@ val buildContext :
 
 type preambleContext = {
   context : pipelineContext;
+  sourceAnfFunctions : ANF.functionDef list;
   anfFunctions : ANF.functionDef list;
   typeMap : ANF.typeMap;
   symbolicFunctions : LIR.functionDef list;

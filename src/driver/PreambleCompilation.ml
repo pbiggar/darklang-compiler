@@ -26,6 +26,7 @@ let buildPreambleContext allowInternal (stdlib : X.stdlibResult) preamble
       ( stdlib,
         {
           X.context = stdlib.X.context;
+          sourceAnfFunctions = [];
           anfFunctions = [];
           typeMap = stdlib.X.stdlibTypeMap;
           symbolicFunctions = [];
@@ -83,7 +84,9 @@ let buildPreambleContext allowInternal (stdlib : X.stdlibResult) preamble
       }
     in
     let* functions, ssa, typeMap =
-      ANFPipeline.buildAnf 0 options elapsed registries
+      ANFPipeline.buildAnf
+        ~asyncDefinitions:stdlib.X.stdlibAnfOptimizationCandidates 0 options
+        elapsed registries
         (CheckedAST.nextFunctionOrdinal conversion.P.symbols)
         InliningCommon.defaultConfig FunctionIdMap.empty M.empty
         SpecializationIdentity.FunctionSet.empty conversion.P.functions
@@ -114,6 +117,7 @@ let buildPreambleContext allowInternal (stdlib : X.stdlibResult) preamble
       ( stdlib,
         {
           X.context;
+          sourceAnfFunctions = conversion.P.functions;
           anfFunctions = functions;
           typeMap;
           symbolicFunctions = symbolic;
@@ -191,7 +195,9 @@ let buildPreambleContextFromAnalysis (stdlib : X.stdlibResult)
     }
   in
   let* functions, ssa, typeMap =
-    ANFPipeline.buildAnf 0 options elapsed registries
+    ANFPipeline.buildAnf
+      ~asyncDefinitions:stdlib.X.stdlibAnfOptimizationCandidates 0 options
+      elapsed registries
       (CheckedAST.nextFunctionOrdinal conversion.P.symbols)
       InliningCommon.defaultConfig FunctionIdMap.empty M.empty
       SpecializationIdentity.FunctionSet.empty conversion.P.functions
@@ -221,6 +227,7 @@ let buildPreambleContextFromAnalysis (stdlib : X.stdlibResult)
     ( stdlib,
       {
         X.context;
+        sourceAnfFunctions = conversion.P.functions;
         anfFunctions = functions;
         typeMap;
         symbolicFunctions = symbolic;

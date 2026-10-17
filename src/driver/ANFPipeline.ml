@@ -43,11 +43,11 @@ let stdlibInliningConfig =
   }
 
 (* Lower accumulator helpers, construct SSA, then optimize and elaborate ownership. *)
-let buildAnf verbosity (options : compilerOptions) elapsed
-    (registries : AST_to_ANF.registries) nextFunctionOrdinal inliningConfig
-    externalInlineCandidates externalOptimizationFunctions
-    nonInlineableFunctionNames functions ownershipContracts
-    specializeInternalSignatures passTimingRecorder =
+let buildAnf ?(asyncDefinitions = StringOrder.Map.empty) verbosity
+    (options : compilerOptions) elapsed (registries : AST_to_ANF.registries)
+    nextFunctionOrdinal inliningConfig externalInlineCandidates
+    externalOptimizationFunctions nonInlineableFunctionNames functions
+    ownershipContracts specializeInternalSignatures passTimingRecorder =
   let elapsedDetail enabled duration =
     if verbosity >= 2 && enabled then
       let scaled = duration *. 10. in
@@ -80,10 +80,37 @@ let buildAnf verbosity (options : compilerOptions) elapsed
       (ANF.Program (functions, ANF.Return ANF.UnitLiteral))
   in
   let (ANF.Program (functions, main)) = anfProgram in
-  let* functions =
+  let asyncDefinitions =
+    StringOrder.Map.fold
+      (fun name definition definitions ->
+        if StringOrder.Map.mem name definitions then definitions
+        else StringOrder.Map.add name definition definitions)
+      asyncDefinitions externalOptimizationFunctions
+  in
+  let* lowered =
     LowerAsyncDemands.lower registries.AST_to_ANF.funcReg
       registries.AST_to_ANF.functionNames registries.AST_to_ANF.functionIds
-      functions
+      nextFunctionOrdinal asyncDefinitions functions
+  in
+  let functions = lowered.LowerAsyncDemands.functions in
+  let nextFunctionOrdinal = lowered.LowerAsyncDemands.nextFunctionOrdinal in
+  let registries =
+    {
+      registries with
+      AST_to_ANF.funcReg =
+        AST_to_ANF.extendFunctionRegistryWithConverted
+          registries.AST_to_ANF.funcReg functions;
+      functionNames =
+        List.fold_left
+          (fun names (fn : ANF.functionDef) ->
+            FunctionIdMap.add fn.ANF.id fn.ANF.name names)
+          registries.AST_to_ANF.functionNames functions;
+      functionIds =
+        List.fold_left
+          (fun ids (fn : ANF.functionDef) ->
+            StringOrder.Map.add fn.ANF.name fn.ANF.id ids)
+          registries.AST_to_ANF.functionIds functions;
+    }
   in
   let anfProgram = ANF.Program (functions, main) in
   if shouldDumpIR verbosity options.dumpANF then

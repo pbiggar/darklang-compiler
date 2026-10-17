@@ -3,6 +3,7 @@ module X = CompilationContexts
 module P = PackageCatalog
 module O = CompilerOptions
 module S = StringOrder.Set
+module M = StringOrder.Map
 
 let labelsForMode = function
   | O.FullProgram ->
@@ -22,7 +23,7 @@ let labelsForMode = function
       }
 
 let buildCompilePlan (request : X.compileRequest) =
-  let stdlib, context, symbolic, graph, summaries, names =
+  let stdlib, context, symbolic, graph, summaries, names, sourceFunctions =
     match request.X.context with
     | X.StdlibOnly stdlib ->
         ( stdlib,
@@ -30,7 +31,8 @@ let buildCompilePlan (request : X.compileRequest) =
           [],
           FunctionIdMap.empty,
           FunctionIdMap.empty,
-          S.empty )
+          S.empty,
+          [] )
     | X.StdlibWithPreamble (stdlib, preamble) ->
         let names =
           List.map
@@ -43,7 +45,8 @@ let buildCompilePlan (request : X.compileRequest) =
           preamble.X.symbolicFunctions,
           preamble.X.symbolicCallGraph,
           preamble.X.callGraphSummaries,
-          names )
+          names,
+          preamble.X.sourceAnfFunctions )
   in
   let events, treeShake =
     match request.X.mode with
@@ -70,6 +73,13 @@ let buildCompilePlan (request : X.compileRequest) =
     baseContext = context;
     monomorphization;
     externalInlineCandidates = stdlib.X.stdlibInlineCandidates;
+    asyncDefinitions =
+      List.fold_left
+        (fun definitions (fn : ANF.functionDef) ->
+          if M.mem fn.ANF.name stdlib.X.stdlibAnfOptimizationCandidates then
+            definitions
+          else M.add fn.ANF.name fn definitions)
+        M.empty sourceFunctions;
     prebuiltSymbolicFunctions = symbolic;
     prebuiltCallGraphSummaries = summaries;
     prebuiltCallGraph = graph;
