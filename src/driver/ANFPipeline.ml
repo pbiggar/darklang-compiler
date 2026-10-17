@@ -79,6 +79,13 @@ let buildAnf verbosity (options : compilerOptions) elapsed
       registries.AST_to_ANF.funcReg
       (ANF.Program (functions, ANF.Return ANF.UnitLiteral))
   in
+  let (ANF.Program (functions, main)) = anfProgram in
+  let* functions =
+    LowerAsyncDemands.lower registries.AST_to_ANF.funcReg
+      registries.AST_to_ANF.functionNames registries.AST_to_ANF.functionIds
+      functions
+  in
+  let anfProgram = ANF.Program (functions, main) in
   if shouldDumpIR verbosity options.dumpANF then
     printANFProgram options "=== ANF (before optimization) ===" anfProgram;
   let anfLoweringStart = elapsed () in

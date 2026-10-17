@@ -160,6 +160,14 @@ let __delayCurrent<'a> (delay: Int64) (value: a) : Stdlib.__Async.__Value<a> =
 let __delayValueCurrent<'a> (delay: Int64) (value: Stdlib.__Async.__Value<a>) : Stdlib.__Async.__Value<a> =
     Stdlib.__Task.__joinCurrent (Stdlib.__Task.__delayCurrent delay value)
 
+// Source-demand lowering recognizes these typed hooks before ownership. Their
+// bodies also materialize the runtime specializations used by that lowering.
+let __transport<'a> (value: Stdlib.__Async.__Value<a>) : a =
+    Stdlib.__Task.__forceCurrent value
+
+let __delayTransparent<'a> (delay: Int64) (value: a) : a =
+    Stdlib.__Task.__forceCurrent (Stdlib.__Task.__delayValueCurrent delay (Stdlib.__Async.__ready value))
+
 let __landTimers (now: Int64) (timers: List<Stdlib.__Task.__Timer>) (keep: List<Stdlib.__Task.__Timer>) : List<Stdlib.__Task.__Timer> =
     match timers with
     | [] -> Stdlib.List.reverse keep

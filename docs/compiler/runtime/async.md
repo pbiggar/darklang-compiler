@@ -11,8 +11,7 @@ machines. Interpreter differences are not constraints on this implementation.
 
 `StdLib/__Async.dark` implements a private, typed promise object and an explicit
 ready/pending value carrier. Both are embedded in the compiler, using the existing
-typed raw-slot operations, sums and lifecycle owners. Implicit source-value
-lowering is not yet implemented. The private `__Task` runtime connects these
+typed raw-slot operations, sums and lifecycle owners. The private `__Task` runtime connects these
 cells to native stack suspension and timer completions; ordinary source-level
 operations do not yet use it implicitly.
 
@@ -78,6 +77,16 @@ through ordinary closure ownership and support repeated demands.
 
 The following demand rules guide the next compiler slice; they are not
 implemented by defining these explicit runtime types alone.
+
+`LowerAsyncDemands` now provides an initial local lowering through private
+`__Task.__transport` and `__Task.__delayTransparent` hooks. Their source results
+have the ordinary payload type. Bindings and same-type aliases retain the
+carrier; arithmetic, branch conditions and other concrete inspections insert
+typed force calls before ownership elaboration. Explicit native task entry
+callbacks demand their result to satisfy the runtime ABI. This slice rejects
+pending transport across ordinary call, return, join and storage boundaries;
+those signatures and layouts still need coordinated rewriting. The hooks are
+compiler test interfaces, not public async APIs or automatic I/O lowering.
 
 | Operation | Demand |
 |---|---|
@@ -202,3 +211,5 @@ producer ownership after consumer abandonment, managed results and startup
 arguments from child stacks.
 `async_chain.e2e` checks composition without early demands, repeated reads,
 managed storage and capture, abandonment, and deep floating-point chains.
+`async_demand.e2e` checks ordinary source types through bindings, aliases,
+arithmetic, conditions, unused values and explicit native entry results.
