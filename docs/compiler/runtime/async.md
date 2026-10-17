@@ -96,6 +96,15 @@ switches to the scheduler. Completion enqueues registered tasks in FIFO order.
 The scheduler never repeatedly probes parked tasks. `__yield` returns a runnable
 task to the back of the queue.
 
+`__forceCurrent` obtains the current task from a private native runtime slot, so
+ordinary functions can demand a value without receiving a context parameter.
+The native switch updates that slot before resuming a task and clears it while
+the scheduler executes completion callbacks. Nested explicit `__run` scopes
+restore the enclosing task before disposing their scheduler. Ready values can
+be forced outside a task; forcing a pending value there reports a runtime error.
+This helper is the entry point for future demand lowering, which is not yet
+inserted automatically.
+
 On Linux x64, each task has an 8 MiB fixed-address virtual-memory stack with a
 64 KiB inaccessible guard at each end. The native switch saves stack and frame
 pointers, allocatable callee-saved integer registers and floating-point
@@ -135,3 +144,6 @@ do not establish implicit propagation or platform-specific I/O behavior.
 deep live stack locals, multiple promise waiters, timers, floating-point values,
 shared-heap allocation and startup arguments inside a fiber. These remain
 private runtime tests rather than evidence of transparent source propagation.
+`async_context.e2e` exercises implicit context lookup across deep calls, task
+switches, nested scopes and scheduler callbacks, including pending demands
+outside a task.

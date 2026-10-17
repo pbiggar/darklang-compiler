@@ -90,7 +90,8 @@ let __yield (context: RawPtr) : Unit =
     ()
 
 let __park<'a> (context: RawPtr) (promise: Stdlib.__Async.__Promise<a>) : Unit =
-    if Stdlib.__Async.__wait promise (__rawptr_to_word context) then
+    if __rawptr_to_word context == 0L then Builtin.crash "Cannot force a pending value outside a native task"
+    else if Stdlib.__Async.__wait promise (__rawptr_to_word context) then
         let _ = __raw_write_word context 64L 3L in
         let _ = __fiber_switch context (Stdlib.__Task.__scheduler context) in
         ()
@@ -108,6 +109,13 @@ let __force<'a> (context: RawPtr) (value: Stdlib.__Async.__Value<a>) : a =
 
 let __resolve<'a> (context: RawPtr) (promise: Stdlib.__Async.__Promise<a>) (value: a) : Unit =
     Stdlib.__Task.__wake (Stdlib.__Task.__scheduler context) (Stdlib.__Async.__resolve promise value)
+
+// Compiler-inserted demands use the current task instead of changing the
+// argument list of ordinary calls. Already-ready values need no task context.
+let __forceCurrent<'a> (value: Stdlib.__Async.__Value<a>) : a =
+    match Stdlib.__Async.__pollValue value with
+    | Some result -> result
+    | None -> Stdlib.__Task.__force (__fiber_current ()) value
 
 let __now () : Int64 =
     match Stdlib.__Network.monotonicMillis () with
@@ -197,7 +205,9 @@ let __disposeScheduler (scheduler: RawPtr) : Unit =
 // This explicit private scope drains its registered tasks and timer producers.
 // It does not decide the lifetime policy of an automatically compiled program.
 let __run (entries: List<RawPtr -> Unit>) : Unit =
+    let previous = __fiber_current () in
     let scheduler = __raw_alloc 240L in
+    let _ = __raw_write_word scheduler 56L 0L in
     let _ = __raw_slot_init<List<Stdlib.__Task.__Task>> scheduler (Stdlib.__Task.__TASKS ()) [] in
     let _ = __raw_slot_init<List<Stdlib.__Task.__Task>> scheduler (Stdlib.__Task.__FRONT ()) [] in
     let _ = __raw_slot_init<List<Stdlib.__Task.__Task>> scheduler (Stdlib.__Task.__BACK ()) [] in
@@ -206,4 +216,5 @@ let __run (entries: List<RawPtr -> Unit>) : Unit =
     let _ = Stdlib.__Task.__set scheduler (Stdlib.__Task.__TASKS ()) tasks in
     let _ = Stdlib.__Task.__set scheduler (Stdlib.__Task.__FRONT ()) tasks in
     let _ = Stdlib.__Task.__loop scheduler (Stdlib.List.__length tasks) in
+    let _ = __fiber_set_current previous in
     Stdlib.__Task.__disposeScheduler scheduler

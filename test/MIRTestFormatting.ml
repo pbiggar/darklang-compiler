@@ -81,6 +81,8 @@ and cliOperation (value : MIR.cliOperation) =
   | MIR.FiberStackFree -> union "CliOperation" "FiberStackFree" []
   | MIR.FiberPrepare -> union "CliOperation" "FiberPrepare" []
   | MIR.FiberSwitch -> union "CliOperation" "FiberSwitch" []
+  | MIR.FiberCurrent -> union "CliOperation" "FiberCurrent" []
+  | MIR.FiberSetCurrent -> union "CliOperation" "FiberSetCurrent" []
   | MIR.StartupStack -> union "CliOperation" "StartupStack" []
   | MIR.ExecutableState -> union "CliOperation" "ExecutableState" []
   | MIR.HostOS -> union "CliOperation" "HostOS" []

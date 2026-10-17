@@ -99,6 +99,8 @@ let convertCliOperation operation =
   | MIR.FiberStackFree -> LIR.FiberStackFree
   | MIR.FiberPrepare -> LIR.FiberPrepare
   | MIR.FiberSwitch -> LIR.FiberSwitch
+  | MIR.FiberCurrent -> LIR.FiberCurrent
+  | MIR.FiberSetCurrent -> LIR.FiberSetCurrent
   | MIR.PosixWait4 -> LIR.PosixWait4
   | MIR.PosixKeventVnode -> LIR.PosixKeventVnode
 

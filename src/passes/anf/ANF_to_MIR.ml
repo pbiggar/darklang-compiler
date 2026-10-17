@@ -319,6 +319,8 @@ let convertCliOperation (operation : ANF.cliOperation) =
   | ANF.FiberStackFree -> MIR.FiberStackFree
   | ANF.FiberPrepare -> MIR.FiberPrepare
   | ANF.FiberSwitch -> MIR.FiberSwitch
+  | ANF.FiberCurrent -> MIR.FiberCurrent
+  | ANF.FiberSetCurrent -> MIR.FiberSetCurrent
   | ANF.PosixWait4 -> MIR.PosixWait4
   | ANF.PosixKeventVnode -> MIR.PosixKeventVnode
 
@@ -921,6 +923,8 @@ let cliOperationName = function
   | ANF.FiberStackFree -> "FiberStackFree"
   | ANF.FiberPrepare -> "FiberPrepare"
   | ANF.FiberSwitch -> "FiberSwitch"
+  | ANF.FiberCurrent -> "FiberCurrent"
+  | ANF.FiberSetCurrent -> "FiberSetCurrent"
   | ANF.PosixWait4 -> "PosixWait4"
   | ANF.PosixKeventVnode -> "PosixKeventVnode"
 

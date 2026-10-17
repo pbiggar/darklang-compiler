@@ -289,8 +289,9 @@ let inferCExprType ctx expr =
   | A.Sleep _ | A.StdoutWrite _ -> Some AST.TUnit
   | A.CliNative (op, _) -> (
       match op with
-      | A.FiberStackAlloc -> Some AST.TInternalRawPtr
-      | A.FiberStackFree | A.FiberPrepare | A.FiberSwitch -> Some AST.TUnit
+      | A.FiberStackAlloc | A.FiberCurrent -> Some AST.TInternalRawPtr
+      | A.FiberStackFree | A.FiberPrepare | A.FiberSwitch | A.FiberSetCurrent ->
+          Some AST.TUnit
       | A.GetEnv | A.GetArgv ->
           Some (AST.TSum ("Darklang.Stdlib.Option.Option", [ AST.TString ]))
       | A.Kill -> posix AST.TUnit

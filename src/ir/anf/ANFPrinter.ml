@@ -169,6 +169,8 @@ let cliOperation = function
   | ANF.FiberStackFree -> "FiberStackFree"
   | ANF.FiberPrepare -> "FiberPrepare"
   | ANF.FiberSwitch -> "FiberSwitch"
+  | ANF.FiberCurrent -> "FiberCurrent"
+  | ANF.FiberSetCurrent -> "FiberSetCurrent"
   | ANF.PosixWait4 -> "PosixWait4"
   | ANF.PosixKeventVnode -> "PosixKeventVnode"
 

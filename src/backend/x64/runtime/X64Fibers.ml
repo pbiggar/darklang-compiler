@@ -35,11 +35,20 @@ let guard = 65536
    continuation address. An ordinary return on the incoming stack resumes it.
    LIR's normal native-effect call barrier preserves caller-owned GP values. *)
 let switch resume =
+  let current = freshLabel "fiber_current_task" in
   [
     X.MOV_reg (X.R10, X.RSI);
     X.LEA_rip (X.RAX, resume);
     X.PUSH X.RAX;
     X.MOV_store (X.RDI, 0l, X.RSP);
+    (* Scheduler contexts have no parent. Publish zero while completion
+       callbacks run there, and the task identity before its stack resumes. *)
+    X.MOV_load (X.RAX, X.R10, 56l);
+    X.TEST_reg (X.RAX, X.RAX);
+    X.Jcc (X.EQ, current);
+    X.MOV_reg (X.RAX, X.R10);
+    X.Label current;
+    X.MOV_store (freeListBase, Int32.of_int currentTaskOffset, X.RAX);
   ]
   @ List.map
       (fun (reg, offset) -> X.MOV_store (X.RDI, Int32.of_int offset, reg))
@@ -61,6 +70,15 @@ let switch resume =
 let emit ctx dest operation =
   let finish = if dest = X.RAX then [] else [ X.MOV_reg (dest, X.RAX) ] in
   match operation with
+  | LIR.FiberCurrent ->
+      Ok [ X.MOV_load (dest, freeListBase, Int32.of_int currentTaskOffset) ]
+  | LIR.FiberSetCurrent ->
+      Ok
+        ([
+           X.MOV_store (freeListBase, Int32.of_int currentTaskOffset, X.RDI);
+           X.XOR_reg (X.RAX, X.RAX);
+         ]
+        @ finish)
   | LIR.FiberSwitch -> Ok (switch (freshLabel "fiber_resume") @ finish)
   | LIR.FiberPrepare ->
       let start = freshLabel "fiber_start" in

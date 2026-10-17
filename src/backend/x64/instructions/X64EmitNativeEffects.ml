@@ -177,12 +177,14 @@ let emitCliNative (ctx : X64CodeGenTypes.funcCtx) (dest : LIR.reg)
       in
       match operation with
       | LIR.FiberStackAlloc | LIR.FiberStackFree | LIR.FiberPrepare
-      | LIR.FiberSwitch ->
+      | LIR.FiberSwitch | LIR.FiberCurrent | LIR.FiberSetCurrent ->
           let targets =
             match operation with
             | LIR.FiberStackAlloc -> [ X.RSI ]
             | LIR.FiberStackFree | LIR.FiberSwitch -> [ X.RDI; X.RSI ]
             | LIR.FiberPrepare -> [ X.RDI; X.RSI; X.RDX ]
+            | LIR.FiberCurrent -> []
+            | LIR.FiberSetCurrent -> [ X.RDI ]
             | _ -> []
           in
           if List.length args <> List.length targets then

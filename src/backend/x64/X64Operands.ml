@@ -252,6 +252,11 @@ let freeListSize = 256
 let processTableOffset = freeListSize
 let processTableSize = 4096
 
+(* One scheduler thread initially. Keep its current task outside the allocator
+   free lists, stdin buffers and executable-path cache. mmap zero-initializes it. *)
+let currentTaskOffset = freeListSize + processTableSize + 512 + 8192
+let runtimeStateSize = currentTaskOffset + 16
+
 (*
    Max payload size class for free list reuse (freeListSize - 8)
 *)

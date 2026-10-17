@@ -127,6 +127,8 @@ type cliOperation =
   | FiberStackFree
   | FiberPrepare
   | FiberSwitch
+  | FiberCurrent
+  | FiberSetCurrent
   | PosixWait4
   | PosixKeventVnode
 

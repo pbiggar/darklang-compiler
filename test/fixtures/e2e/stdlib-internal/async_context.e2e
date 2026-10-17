@@ -1,0 +1,38 @@
+// async_context.e2e - Demand helpers find the current task without context arguments.
+
+__rawptr_to_word (__fiber_current ()) = 0L
+let contextFromUnit (unit: Unit) : Int64 = __rawptr_to_word (__fiber_current unit)
+contextFromUnit () = 0L
+Stdlib.__Task.__forceCurrent (Stdlib.__Async.__ready 42L) = 42L
+
+let currentContext (expected: RawPtr) : Bool =
+  __rawptr_to_word (__fiber_current ()) == __rawptr_to_word expected
+
+let contextAfterYield (cell: RawPtr) (offset: Int64) (context: RawPtr) : Unit =
+  let before = currentContext context in
+  let _ = Stdlib.__Task.__yield context in
+  __raw_write_word cell offset (if before && currentContext context then 1L else 0L)
+
+let cell = __raw_alloc 16L in let _ = Stdlib.__Task.__run [(fun context -> contextAfterYield cell 0L context), (fun context -> contextAfterYield cell 8L context)] in let result = (__raw_get<Int64> cell 0L, __raw_get<Int64> cell 8L, __rawptr_to_word (__fiber_current ())) in let _ = __raw_free cell in result = (1L, 1L, 0L)
+
+let implicitDeep (depth: Int64) (value: Stdlib.__Async.__Value<Int64>) : Int64 =
+  if depth == 0L then Stdlib.__Task.__forceCurrent value
+  else 1L + implicitDeep (depth - 1L) value
+
+let cell = __raw_alloc 8L in let _ = Stdlib.__Task.__run [(fun context -> let pending = Stdlib.__Task.__delay context 0L 42L in __raw_write_word cell 0L (implicitDeep 32L pending))] in let result = __raw_get<Int64> cell 0L in let _ = __raw_free cell in result = 74L
+
+let contextNested (cell: RawPtr) (outer: RawPtr) : Unit =
+  let _ = Stdlib.__Task.__run [(fun inner -> __raw_write_word cell 0L (if currentContext inner && __rawptr_to_word inner != __rawptr_to_word outer then 1L else 0L))] in
+  let restored = currentContext outer in
+  let _ = Stdlib.__Task.__yield outer in
+  if restored && currentContext outer then () else __raw_write_word cell 0L 0L
+
+let cell = __raw_alloc 8L in let _ = Stdlib.__Task.__run [(fun context -> contextNested cell context)] in let result = (__raw_get<Int64> cell 0L, __rawptr_to_word (__fiber_current ())) in let _ = __raw_free cell in result = (1L, 0L)
+
+let contextCallback (cell: RawPtr) (context: RawPtr) : Unit =
+  let timer = Stdlib.__Task.__Timer { deadline = 0L; complete = (fun _unit -> __raw_write_word cell 0L (__rawptr_to_word (__fiber_current ()))) } in
+  Stdlib.__Task.__registerTimer (Stdlib.__Task.__scheduler context) timer
+
+let cell = __raw_alloc 8L in let _ = __raw_write_word cell 0L 1L in let _ = Stdlib.__Task.__run [(fun context -> contextCallback cell context)] in let result = __raw_get<Int64> cell 0L in let _ = __raw_free cell in result = 0L
+
+let promise = Stdlib.__Async.__new<Int64> () in Stdlib.__Task.__forceCurrent (Stdlib.__Async.__pending promise) = error="Uncaught exception: Cannot force a pending value outside a native task"

@@ -167,6 +167,8 @@ let cliOperation = function
   | MIR.FiberStackFree -> "FiberStackFree"
   | MIR.FiberPrepare -> "FiberPrepare"
   | MIR.FiberSwitch -> "FiberSwitch"
+  | MIR.FiberCurrent -> "FiberCurrent"
+  | MIR.FiberSetCurrent -> "FiberSetCurrent"
   | MIR.PosixWait4 -> "PosixWait4"
   | MIR.PosixKeventVnode -> "PosixKeventVnode"
 

@@ -387,6 +387,8 @@ let tryFloatIntrinsic name args =
 let tryCliIntrinsic name args =
   match (name, args) with
   | "Darklang.Stdlib.Cli.__sleep", [ delay ] -> Some (ANF.Sleep delay)
+  | "__fiber_current", ([] | [ _ ]) ->
+      Some (ANF.CliNative (ANF.FiberCurrent, []))
   | _ ->
       let operation =
         match name with
@@ -394,6 +396,7 @@ let tryCliIntrinsic name args =
         | "__fiber_stack_free" -> Some ANF.FiberStackFree
         | "__fiber_prepare" -> Some ANF.FiberPrepare
         | "__fiber_switch" -> Some ANF.FiberSwitch
+        | "__fiber_set_current" -> Some ANF.FiberSetCurrent
         | "Darklang.Stdlib.Cli.__hostOSCode" -> Some ANF.HostOS
         | "Darklang.Stdlib.Cli.__hostArchitectureCode" ->
             Some ANF.HostArchitecture

@@ -14,6 +14,8 @@ val freeListBase : X86_64.reg
 val freeListSize : int
 val processTableOffset : int
 val processTableSize : int
+val currentTaskOffset : int
+val runtimeStateSize : int
 val maxFreeListPayload : int
 val emitStringLiteral : X86_64.reg -> string -> X86_64.instr list
 val emitStringLiteralNoRefCount : X86_64.reg -> string -> X86_64.instr list

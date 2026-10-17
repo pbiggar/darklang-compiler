@@ -244,7 +244,7 @@ let emitCliNative (ctx : codeGenContext) (dest : LIR.reg)
   |> bind (fun destReg ->
       match operation with
       | LIR.FiberStackAlloc | LIR.FiberStackFree | LIR.FiberPrepare
-      | LIR.FiberSwitch ->
+      | LIR.FiberSwitch | LIR.FiberCurrent | LIR.FiberSetCurrent ->
           Error "Native fiber support is not implemented for ARM64"
       | LIR.PosixOpenAt | LIR.PosixRead | LIR.PosixWrite | LIR.PosixClose
       | LIR.PosixSeek | LIR.PosixStatAt | LIR.PosixGetCwd | LIR.PosixChdir

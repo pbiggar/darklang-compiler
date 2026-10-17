@@ -326,6 +326,8 @@ and aNF_cliOperation (value : ANF.cliOperation) =
   | ANF.FiberStackFree -> union "CliOperation" "FiberStackFree" []
   | ANF.FiberPrepare -> union "CliOperation" "FiberPrepare" []
   | ANF.FiberSwitch -> union "CliOperation" "FiberSwitch" []
+  | ANF.FiberCurrent -> union "CliOperation" "FiberCurrent" []
+  | ANF.FiberSetCurrent -> union "CliOperation" "FiberSetCurrent" []
   | ANF.StartupStack -> union "CliOperation" "StartupStack" []
   | ANF.ExecutableState -> union "CliOperation" "ExecutableState" []
   | ANF.HostOS -> union "CliOperation" "HostOS" []
