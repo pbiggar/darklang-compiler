@@ -350,6 +350,13 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
           | _ -> None)
       | _ -> None
     in
+    let listEmptyCheck stores = function
+      | A.Prim (((A.Eq | A.Neq) as op), list, A.IntLiteral (A.Int64 0L)) -> (
+          match lookup stores list with
+          | Some { kind = ListStorage _; _ } -> Some (op, list)
+          | _ -> None)
+      | _ -> None
+    in
     let initial =
       F.map
         (fun _ (fn : A.functionDef) ->
@@ -1219,8 +1226,10 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
                   true
               | _ -> false
             in
-            if hasList && not supported then
-              unsupported fn.A.name "this list inspection"
+            if
+              hasList && (not supported)
+              && Option.is_none (listEmptyCheck stores operation)
+            then unsupported fn.A.name "this list inspection"
             else Ok ()
           in
           let* () =
@@ -1329,6 +1338,19 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
           in
           let* operation, before, value, gen =
             match operation with
+            | operation when Option.is_some (listEmptyCheck stores operation) ->
+                let op, list =
+                  match listEmptyCheck stores operation with
+                  | Some check -> check
+                  | None ->
+                      Crash.crash "Async list empty check lost its source plan"
+                in
+                let list, before, gen = forceAtom env list gen in
+                Ok
+                  ( A.Prim (op, list, A.IntLiteral (A.Int64 0L)),
+                    before,
+                    None,
+                    gen )
             | A.Call (callee, arguments)
             | A.BorrowedCall (callee, arguments)
             | A.TailCall (callee, arguments)

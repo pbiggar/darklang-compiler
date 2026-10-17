@@ -102,16 +102,20 @@ fields recursively and rebuild nominal records using their source descriptors.
 `AsyncTransport` merges these layouts across direct signatures, typed joins and
 closure captures, promoting concrete fields to ready carriers where call sites
 require a common layout. Concrete calls to synchronous functions keep their
-original representations. Literal lists retain their skew-tree representation with typed element slots
+original representations. Literal lists retain their skew-tree representation
+with typed element slots
 widened consistently across each connected allocation component. List aliases,
 ordinary calls and captures carry the element layout; length and emptiness use
 library specializations for the physical element type without demanding elements.
 Head selection preserves the element layout without demanding the selected value;
 tail and reversal preserve that layout while changing only the spine. Native
-result adapters map typed demands over the list. Unmigrated list operations
-and patterns, dictionary and variant storage, untyped value selections, and
+result adapters map typed demands over the list. List pattern bindings preserve
+element layouts; length and empty checks inspect only the spine, while literal
+comparisons and guards demand the values they inspect. Unmigrated list operations,
+dictionary and variant storage, untyped value selections, and
 escaping callables whose argument or result interface changes still produce
-compilation diagnostics. Outer pendingness also carries the inferred field layout. A generated mapper
+compilation diagnostics. Outer pendingness also carries the inferred field
+layout. A generated mapper
 promotes only concrete fields, and `__mapValueCurrent` applies it to an outer
 payload when demanded. This reconciles wholly pending containers and concrete
 containers with pending fields without waiting at calls, captures or returns.
@@ -291,3 +295,7 @@ calls, captures, nested lists and mixed record elements. It also reconciles a
 wholly pending list with a list containing independently pending elements. Head
 selection defers demands until inspection, and tail and reversal leave unresolved
 elements alone, including managed payloads and records with pending fields.
+
+`async_list_patterns.e2e` covers exact and cons patterns, nested lists and tuples,
+managed and floating point bindings, outer pending lists, literal comparisons
+and guards. Wildcards and unused bindings leave element producers unresolved.

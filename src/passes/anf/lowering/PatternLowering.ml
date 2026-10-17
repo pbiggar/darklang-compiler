@@ -204,74 +204,13 @@ type collectionMode = General | TupleBody | Guard | Nested
    tupleType is the type of the tuple being matched (TTuple elemTypes)
    Use correct element type
    Empty list: check scrutinee == 0 (EMPTY)
-   A singleton has one digit whose tree pointer is at offset 16.
-   Literal pattern: check tag==SINGLE, extract value, check value==literal
-   Important: bindings must come BEFORE the literal check since they define valueVar
-   Structure: check tag -> extract value (bindings) -> check literal -> if match then body else else
-   Note: We use two nested Ifs because the tag check guards the memory access in bindings
-   bindings must be OUTSIDE the inner If to define valueVar before litCheckExpr uses it
-   Use element type
-   Structural comparison must run before extracting binders so a
-   failed nested pattern cannot leak its bindings into this arm.
-   Multiple elements: check length == patternLen (safe for all list types)
-   Untag to get pointer (only used in then-branch after length check passes)
-   Note: lengthExpr and checkExpr are safe (length handles EMPTY)
-   ptrExpr just does bitwise and, doesn't dereference
-   Keep consistent naming for the rest of the code
-   Extract elements using getAt (handles varying prefix/suffix layouts)
-   Returns: (env, bindings, conditionAtoms, vg)
-   Use getAt to retrieve element at this index
-   getAt returns Option, but we know length == patternLen so it's always Some
-   Select a type-specific wrapper to avoid defaulting to Int64 for floats.
-   Monomorphization happens at AST level, so we must use a non-generic wrapper here.
-   Unwrap the Some - getAt returns tagged value with tag 1 for Some
-   Some payload at offset 8
-   Build the inner expression based on whether we have extra conditions
-   No extra conditions - just return body
-   AND condition atoms together (length check is handled separately by checkVar)
-   Wrap with element bindings (inside length check)
-   Wrap with length check
-   Compile a list cons pattern [h, ...t] for SkewList
-   This pattern extracts head element(s) and binds the rest to tail
-   For SkewList:
-   - SINGLE (tag 1): head is the element, tail is EMPTY
-   - DEEP (tag 2): head is prefix[0], tail requires calling SkewList.tail
-   Helper to extract tuple elements
-   Extract element types from tuple type
-   Even for wildcard, we need to extract the element (for proper tuple access)
-   but don't bind it to a name. Just add the raw binding and continue.
-   All head elements extracted - bind tail and compile body
-   Use actual list type
-   Single head pattern [h, ...t] - most common case
-   Use branching based on tag to handle SINGLE vs DEEP nodes
-   Check list is not empty
-   Get tag
-   Untag to get pointer
-   The old single/deep distinction no longer exists. Route every
-   non-empty digit through the generic tree-root branch below.
-   notEmptyVar must be bound OUTSIDE the If since it's used as the condition
-   Compile the SINGLE branch: node at offset 0, tail = EMPTY
-   Wrap headVar with TypedAtom to preserve correct element type in TypeMap
-   Tail is empty list (0 = EMPTY sentinel) - wrap with TypedAtom to preserve list type
-   EMPTY
-   Bind head pattern - returns (env, tupleBindings, vg, guardOpt)
-   guardOpt is Some(var, expr) for literal patterns that need comparison
-   Use typed head var with element type
-   Compare head value to literal - guard check
-   If there's a guard (literal pattern), add check AFTER head bindings
-   because guardExpr uses headVar which is defined in headBindings
-   headBindingsWithType -> guardVar -> if guard then body else elseExpr
-   Compile the DEEP branch: node at offset 16 (prefix[0])
-   For tail, call Stdlib.List.__tail to properly compute the tail
-   Call Stdlib.List.__tail to get the tail
-   Wrap with TypedAtom to preserve correct list type in TypeMap
-   Use typed tail var with correct list type
-   because guardExpr uses headVar which is defined in headBindingsWithType
-   Build the combined expression with branching
-   If SINGLE then singleBranch else deepBranch
-   Wrap inner bindings (tag, ptr, isSingle) around the tag branch
-   If not empty then execute inner bindings + branch else elseExpr
-   Bind notEmptyVar BEFORE the If
+   A singleton first checks its cached length, then projects its head.
+   Exact multi-element patterns walk a checked spine through head/tail calls.
+   Keep those projections typed until async lowering can select physical
+   element specializations; raw word loads would erase pending layouts.
+   Literal comparisons run after binding their selected element.
+   A cons pattern first proves that the spine is non-empty, then binds a
+   typed head and tail without inspecting either element payload.
    Multiple head patterns [a, b, ...t]
    Check length >= number of head patterns
    Extract head elements and final tail using head/tail calls
@@ -713,34 +652,15 @@ let lowerMatch (toANFCore : LoweringCallbacks.expressionLowerer)
   let numericIncludingBig pat =
     numeric pat || match pat with C.PBigInt _ -> true | _ -> false
   in
-  let unwrapLeaf elem leaf gen bindings =
-    let ptr, gen = A.freshVar gen in
-    let value, gen = A.freshVar gen in
-    ( A.Var value,
-      value,
-      bindings
-      @ [
-          (ptr, A.Prim (A.BitAnd, leaf, int (-8L)));
-          ( value,
-            A.RawGet
-              ( A.Var ptr,
-                int 0L,
-                if elem = AST.TFloat64 then Some AST.TFloat64 else None ) );
-        ],
-      gen )
-  in
+  (* Keep list projection semantic until async interfaces have been inferred.
+     A raw word load here erases both pendingness and managed payload ownership. *)
   let singletonLoads elem source gen =
-    let ptr, gen = A.freshVar gen in
-    let node, gen = A.freshVar gen in
-    let value, _, bindings, gen =
-      unwrapLeaf elem (A.Var node) gen
-        [
-          (ptr, A.Prim (A.BitAnd, source, int (-8L)));
-          (node, A.RawGet (A.Var ptr, int 16L, None));
-        ]
-    in
+    let raw, gen = A.freshVar gen in
     let typed, gen = A.freshVar gen in
-    (A.Var typed, typed, bindings @ [ (typed, A.TypedAtom (value, elem)) ], gen)
+    ( A.Var typed,
+      typed,
+      [ (raw, head elem source); (typed, A.TypedAtom (A.Var raw, elem)) ],
+      gen )
   in
   let tupleVariables pats source typ env bindings gen =
     let* types =
@@ -1349,7 +1269,6 @@ let lowerMatch (toANFCore : LoweringCallbacks.expressionLowerer)
         | _ ->
             let length, gen = A.freshVar gen in
             let check, gen = A.freshVar gen in
-            let ptr, gen = A.freshVar gen in
             let lengthName =
               if elem = AST.TFloat64 then "Darklang.Stdlib.List.__lengthFloat"
               else "Darklang.Stdlib.List.__length_i64"
@@ -1361,34 +1280,18 @@ let lowerMatch (toANFCore : LoweringCallbacks.expressionLowerer)
                   A.Prim
                     (A.Eq, A.Var length, int (Int64.of_int (List.length pats)))
                 );
-                (ptr, A.Prim (A.BitAnd, source, int (-8L)));
               ]
             in
-            let rec loop pats index env bindings conditions gen =
+            let rec loop pats current env bindings conditions gen =
               match pats with
               | [] -> Ok (env, bindings, conditions, gen)
-              | pat :: rest ->
-                  let opt, gen = A.freshVar gen in
+              | pat :: rest -> (
                   let raw, gen = A.freshVar gen in
                   let value, gen = A.freshVar gen in
-                  let getAt =
-                    if elem = AST.TFloat64 then
-                      "Darklang.Stdlib.List.__getAtFloat"
-                    else "Darklang.Stdlib.List.__getAtInt64"
-                  in
                   let bindings =
                     bindings
                     @ [
-                        ( opt,
-                          A.Call
-                            ( functionId getAt,
-                              [ source; int (Int64.of_int index) ] ) );
-                        ( raw,
-                          A.RawGet
-                            ( A.Var opt,
-                              int 8L,
-                              if elem = AST.TFloat64 then Some elem else None )
-                        );
+                        (raw, head elem current);
                         (value, A.TypedAtom (A.Var raw, elem));
                       ]
                   in
@@ -1422,9 +1325,22 @@ let lowerMatch (toANFCore : LoweringCallbacks.expressionLowerer)
                     | _ ->
                         Error ("Unsupported pattern in list element: " ^ fmt pat)
                   in
-                  loop rest (index + 1) env bindings conditions gen
+                  match rest with
+                  | [] -> Ok (env, bindings, conditions, gen)
+                  | _ ->
+                      let rawTail, gen = A.freshVar gen in
+                      let typedTail, gen = A.freshVar gen in
+                      loop rest (A.Var typedTail) env
+                        (bindings
+                        @ [
+                            (rawTail, tail current);
+                            (typedTail, A.TypedAtom (A.Var rawTail, typ));
+                          ])
+                        conditions gen)
             in
-            let* env, bindings, conditions, gen = loop pats 0 env [] [] gen in
+            let* env, bindings, conditions, gen =
+              loop pats source env [] [] gen
+            in
             let* body, gen = anf body gen env in
             let body, gen = guardChecks conditions body elseExpr gen in
             Ok
@@ -1515,28 +1431,13 @@ let lowerMatch (toANFCore : LoweringCallbacks.expressionLowerer)
            | C.PVariable _ | C.PWildcard -> true
            | _ -> false ->
         let notEmpty, gen = A.freshVar gen in
-        let tag, gen = A.freshVar gen in
-        let ptr, gen = A.freshVar gen in
-        let isSingle, gen = A.freshVar gen in
-        let compileBranch isLegacy gen =
-          let node, gen = A.freshVar gen in
-          let value, _, bindings, gen =
-            unwrapLeaf elem (A.Var node) gen
-              [
-                ( node,
-                  A.RawGet (A.Var ptr, int (if isLegacy then 0L else 16L), None)
-                );
-              ]
-          in
-          let typedHead, gen = A.freshVar gen in
-          let bindings =
-            bindings @ [ (typedHead, A.TypedAtom (value, elem)) ]
-          in
+        let compileBranch gen =
+          let _, typedHead, bindings, gen = singletonLoads elem source gen in
           let rawTail, gen = A.freshVar gen in
           let typedTail, gen = A.freshVar gen in
           let tailBindings =
             [
-              (rawTail, if isLegacy then A.Atom (int 0L) else tail source);
+              (rawTail, tail source);
               (typedTail, A.TypedAtom (A.Var rawTail, typ));
             ]
           in
@@ -1594,17 +1495,7 @@ let lowerMatch (toANFCore : LoweringCallbacks.expressionLowerer)
           in
           Ok (K.wrapBindings bindings (K.wrapBindings tupleBindings body), gen)
         in
-        let* single, gen = compileBranch true gen in
-        let* deep, gen = compileBranch false gen in
-        let inner =
-          K.wrapBindings
-            [
-              (tag, A.Prim (A.BitAnd, source, int 7L));
-              (ptr, A.Prim (A.BitAnd, source, int (-8L)));
-              (isSingle, A.Atom (A.BoolLiteral false));
-            ]
-            (A.If (A.Var isSingle, single, deep))
-        in
+        let* inner, gen = compileBranch gen in
         Ok
           ( A.Let
               ( notEmpty,
