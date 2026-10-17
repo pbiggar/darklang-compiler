@@ -591,7 +591,7 @@ let runTestsWithProgressReporter completedTestReporter args =
     and showAllTestTimings = TestRunnerArgs.hasAllTestTimingsArg args
     and verbose = TestRunnerArgs.hasVerboseArg args in
     let timingsJsonPath = get (TestRunnerArgs.parseTimingsJsonArg args)
-    and resultsJsonPath = get (TestRunnerArgs.parsePath "--results-json" args)
+    and resultsJsonPath = get (TestRunnerArgs.parseResultsJsonArg args)
     and codegenProfileJsonPath =
       get (TestRunnerArgs.parseCodegenProfileJsonArg args)
     and e2eBatchSize = get (TestRunnerArgs.parseE2EBatchSizeArg args) in

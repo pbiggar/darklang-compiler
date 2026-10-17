@@ -18,3 +18,4 @@ val defaultE2EBatchSize : int
 val parseE2EBatchSizeArg : string array -> (int, string) result
 val matchesFilter : string option -> string -> bool
 val hasHelpArg : string array -> bool
+val parseResultsJsonArg : string array -> (string option, string) result

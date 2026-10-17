@@ -22,6 +22,7 @@ python3 scripts/update-ledger.py --upstream /path/to/interpreter --check
 # After activating the pinned native environment:
 env -u LD_PRELOAD ./build --ai
 python3 scripts/update-ledger.py --upstream /path/to/interpreter --run-tests
+python3 scripts/update-ledger.py --upstream /path/to/interpreter --compile-packages
 ```
 
 The default command only reads sources and existing execution receipts.
@@ -30,6 +31,9 @@ The default command only reads sources and existing execution receipts.
 expectations, consumes individual outcomes, and refreshes the ledger. It does
 not build implicitly. A missing binary or unavailable result export is blocked,
 not a pass or a test failure.
+
+`--compile-packages` runs the already-built native declaration adapter, separately
+from test execution. Default regeneration consumes its receipt without compiling.
 
 `bash scripts/check-porting` runs the existing tooling/layout checks and checks
 the generated ledger using an isolated checkout of the pin. It does not execute
@@ -41,9 +45,9 @@ the compiler suite; use `--run-tests` for that.
 | --- | --- | --- |
 | Language | A short feature list and hashes of its watched sources | Implemented, partial, missing, or not-assessed |
 | Parser | Source components, known mappings and unmapped components | Split/combined component mappings and remaining gaps |
-| Builtins | Literal upstream registrations and same-name compiler declarations | Confirmed aliases/counterparts where names differ |
+| Builtins | Literal upstream registrations, actual Builtin declarations and source implementation counterparts | Confirmed compiler builtin mappings |
 | StdLib | Exact byte identity, differing sources, missing mappings, compiler-only files | Source mappings and accepted differences |
-| Packages | Source identity and existing test references for functions/types | Exceptional mappings and otherwise unresolved coverage |
+| Packages | Source identity, native declaration compilation and existing test references for functions/types | Exceptional mappings and otherwise unresolved coverage |
 | Tests | Actual pass/fail/skipped/blocked outcomes from existing imported tests | Existing exclusions and agreed AOT expectations stay in the test suite |
 
 Packages include StdLib sources; the two counts overlap. A root-module match is
@@ -52,9 +56,34 @@ is exact bytes, not normalized ASTs or concatenated approximations of split file
 Builtin discovery does not invent registrations with computed names or claim
 that a same-name declaration proves an assembled runtime binding.
 
-Package compilation is currently **not run**. A declaration-only compilation
-adapter remains to be implemented; source identity, references from tests and
-parsing are not substitutes for successful compilation.
+Builtin counterparts follow qualified upstream wrappers into the compiler's
+matching declaration. Numeric trait methods can map to the compiler's pre-trait
+type module (`Int64.Add.add` to `Int64.add`). These identify implementation
+locations, not callable `Builtin.int64Add` aliases. Generic intrinsic registrations
+with the same short name are no longer counted as builtin bindings. Computed
+constructors retain their source/line review entries; no runtime registry is built.
+
+## Original-source package compilation
+
+`tools/ledger/compile_packages.exe` uses the existing parser and native preamble
+pipeline: checking, generic handling, ANF/SSA and allocated native LIR. It compiles
+declarations, not a fabricated entry expression, and does not link or run them.
+Generic bodies are checked; only naturally demanded concrete instances are lowered.
+
+The update script materializes byte-identical pinned Git blobs in a temporary
+directory. Each original package file is compiled with its indexed transitive
+non-StdLib dependencies, against the embedded compiler StdLib. Named test bodies
+are separated using `NamedPackageTests.partition`, not rewritten. Test-only files
+can therefore have an empty declaration set; success says nothing about their tests.
+Dependency discovery is lexical: unresolved dynamic references or unfamiliar syntax
+remain limitations, not proof that a package's own body is defective. The receipt
+includes dependency paths and actual compiler diagnostics for every original file.
+
+`porting/package-results.json` records the upstream pin and source/build context.
+Changed inputs make receipts stale; missing executables or adapter-wide failures
+are blocked. Package errors are failures, not exclusions. Compilation never changes
+the source-identity or test-outcome scores. Full logs stay in ignored
+`TestResults/porting/package-compilation.log`.
 
 ## Maintained inputs and ChatGPT review
 
@@ -74,6 +103,13 @@ deterministic witness; indirect witnesses use the shortest discovered path.
 This is a bounded source analysis, not proof a particular branch executed.
 Unknown headers, ambiguous declarations and unresolved source differences stay
 in the review queue instead of being guessed away.
+
+Trait/impl methods and escaped declaration names are included in the inventory.
+String interpolation expressions retain their references, while literal prose is
+masked. Maintained references also propagate indirectly to helpers. The generated
+[coverage-gap list](generated/coverage-gaps.md) lists every remaining unreferenced
+declaration. Archived helper copies and implicit operator dispatch are not silently
+counted as covered merely because a similarly named test exists.
 
 Maintained coverage names a qualified declaration and supplies `tests` and
 `reason`. Test references must be existing named-test IDs
@@ -106,9 +142,8 @@ execution exit unsuccessfully.
 
 ## Remaining implementation
 
-- Add original-source package compilation, without synthesizing probe programs.
 - Finish current named-package test execution using the existing upstream tests.
-- Review/populate the coarse feature decisions and ambiguous mappings.
+- Fix the compatibility gaps reported by source differences, missing mappings and compilation errors.
 - Expand maintained coverage references only where source analysis cannot resolve them.
 
 Behavioral details belong in the existing suite. Performance validation is not

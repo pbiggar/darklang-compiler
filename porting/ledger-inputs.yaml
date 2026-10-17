@@ -2,50 +2,62 @@
 schema: 1
 features:
   - name: Async
+    reviewed_sha256: ca1967700ac5e14cce0a83f77a0f1581254c7755f9e1842803be9f0a63d56837
     status: missing
     sources: [src/frontend/WrittenExpressions.ml, src/frontend/interpreter/WrittenTypes.ml, src/AST.ml]
     notes: This branch has no async expression or future runtime representation. Separate async branch work is not counted here.
   - name: Effects
+    reviewed_sha256: d79b1588411e0b826c624c49456e9e1bdb923fc15e5db2bffd41acc83907901c
     status: partial
     sources: [src/frontend/interpreter/LibExecution_Effects.ml, src/frontend/interpreter/DeclarationSupport.ml, src/frontend/WrittenDeclarations.ml, src/frontend/WrittenSource.ml]
     notes: Effect names and function annotations are parsed; the direct checker does not propagate or enforce permission ceilings.
   - name: Traits
+    reviewed_sha256: 03438f329a0eb3ebe30331627caa71f83d25c528955a61a5dc55fea238f53cb6
     status: missing
     sources: [src/frontend/interpreter/WrittenTypes.ml, src/frontend/WrittenSource.ml]
     notes: No trait/impl declaration variants or trait dispatch in this branch. Ordinary generic functions are supported separately.
   - name: Named package tests
+    reviewed_sha256: 2f7543e0107953e3bb30e23f348daeae4395afa3b3670d592a5c1867245b28e6
     status: partial
     sources: [src/frontend/NamedPackageTests.ml]
     notes: Parsing and extraction exist; Test helpers, test-local builtins and outcome execution remain unfinished.
   - name: Primitive literals and numeric types
+    reviewed_sha256: 24418d30308de4c0cf9b4d40d299a3c0116f5777c247e377af95571153ca5ce4
     status: implemented
     sources: [src/frontend/WrittenExpressions.ml, src/AST.ml]
     notes: Coarse source assessment only; individual literal and numeric edge cases remain in the suite.
   - name: Bindings, functions and closures
+    reviewed_sha256: 5389586c84e78ce5780d2ba1dbf082459d950aceaa920aad3d9272819df9e410
     status: implemented
     sources: [src/frontend/WrittenExpressions.ml, src/frontend/WrittenDeclarations.ml]
     notes: Local bindings, module functions, first-class functions and lambda checking exist.
   - name: Recursion
+    reviewed_sha256: 974334658437315d7a958cad3b03b5d2567a1fd9b28b63719a2a5d66d8222828
     status: implemented
     sources: [src/frontend/WrittenDeclarations.ml, src/frontend/checking/ResolveDeclarations.ml]
     notes: Recursive function groups are collected and checked before lowering.
   - name: Modules and name resolution
+    reviewed_sha256: 9d80d3bd29aa4e049cd57d43bf41d12f8c805c39da5e714f8fd4d02f5c556171
     status: implemented
     sources: [src/frontend/WrittenSource.ml, src/NameResolution.ml]
     notes: File and nested modules with lexical/qualified lookup; detailed differences stay in existing compatibility tests.
   - name: Generic functions and algebraic types
+    reviewed_sha256: 4d6a06463b3235caeb64dcc2164f646ef576a67ecc1b90d7b1ff455d4aa1aad8
     status: implemented
     sources: [src/frontend/WrittenDeclarations.ml, src/frontend/WrittenTypeSupport.ml]
     notes: Generic functions, records, sums and aliases are checked; trait bounds are not included in this status.
   - name: Pattern matching
+    reviewed_sha256: 4ef40d26d24f6ab6647d796f570ab8bc86adac6f8c87a9087cf2874f79f6a1e3
     status: implemented
     sources: [src/frontend/WrittenExpressions.ml, src/frontend/WrittenPatternSupport.ml]
     notes: Ahead-of-time match checking and typed pattern lowering exist; individual patterns remain suite concerns.
   - name: Lists, dictionaries and tuples
+    reviewed_sha256: 76a1c94c2e5af3dfb089cc5783cf655cc3b1d134dbdfa25c3475baaad9b16a21
     status: implemented
     sources: [src/frontend/WrittenExpressions.ml, src/frontend/WrittenCollectionSupport.ml]
     notes: Typed collection/tuple construction and access exist.
   - name: Runtime reflection and dynamic evaluation
+    reviewed_sha256: cc123ac32801364759323efd51e7726d6850ab3f6bdbe079b370002bc90a7022
     status: missing
     sources: [src/frontend/WrittenApplicationSupport.ml, src/AST.ml]
     notes: No interpreter-style runtime program evaluation/reflection implementation; compile-time metadata is not runtime reflection.
@@ -77,7 +89,525 @@ parser_mappings:
 builtin_mappings:
   builtins:backend/src/Builtins/Builtins.Pure/Libs/Bool.fs#fn/boolNot/v0: [src/frontend/WrittenApplicationSupport.ml]
   builtins:backend/src/Builtins/Builtins.Pure/Libs/NoModule.fs#fn/unwrap/v0: [src/frontend/WrittenApplicationSupport.ml]
+  builtins:backend/src/Builtins/Builtins.Pure/Libs/NoModule.fs#fn/negate/v0: [src/frontend/WrittenApplicationSupport.ml]
+  builtins:backend/src/Builtins/Builtins.Pure/Libs/NoModule.fs#fn/bitwiseNot/v0: [src/frontend/WrittenApplicationSupport.ml]
 # Qualified declaration name -> existing test source paths, with an explanation.
-coverage: {}
+coverage:
+  Darklang.Stdlib.Int8.Add.add:
+    tests: ["packages/darklang/tests/stdlib/ints/int8.dark#Darklang.Stdlib.Int8.Tests.add"]
+    reason: "Existing typed numeric suite exercises +; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.Int8.Subtract.subtract:
+    tests: ["packages/darklang/tests/stdlib/ints/int8.dark#Darklang.Stdlib.Int8.Tests.subtract"]
+    reason: "Existing typed numeric suite exercises -; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.Int8.Multiply.multiply:
+    tests: ["packages/darklang/tests/stdlib/ints/int8.dark#Darklang.Stdlib.Int8.Tests.multiply"]
+    reason: "Existing typed numeric suite exercises *; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.Int8.Divide.divide:
+    tests: ["packages/darklang/tests/stdlib/ints/int8.dark#Darklang.Stdlib.Int8.Tests.divide"]
+    reason: "Existing typed numeric suite exercises /; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.Int8.Modulo.modulo:
+    tests: ["packages/darklang/tests/stdlib/ints/int8.dark#Darklang.Stdlib.Int8.Tests.modulo"]
+    reason: "Existing typed numeric suite exercises %; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.Int8.Power.power:
+    tests: ["packages/darklang/tests/stdlib/ints/int8.dark#Darklang.Stdlib.Int8.Tests.power"]
+    reason: "Existing typed numeric suite exercises **; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.Int8.Negate.negate:
+    tests: ["packages/darklang/tests/stdlib/ints/int8.dark#Darklang.Stdlib.Int8.Tests.negate"]
+    reason: "Existing typed numeric suite exercises -; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.Int8.Compare.lessThan:
+    tests: ["packages/darklang/tests/stdlib/ints/int8.dark#Darklang.Stdlib.Int8.Tests.lessThan"]
+    reason: "Existing typed numeric suite exercises <; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.Int8.Compare.lessThanOrEqualTo:
+    tests: ["packages/darklang/tests/stdlib/ints/int8.dark#Darklang.Stdlib.Int8.Tests.lessThanOrEqualTo"]
+    reason: "Existing typed numeric suite exercises <=; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.Int8.Compare.greaterThan:
+    tests: ["packages/darklang/tests/stdlib/ints/int8.dark#Darklang.Stdlib.Int8.Tests.greaterThan"]
+    reason: "Existing typed numeric suite exercises >; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.Int8.Compare.greaterThanOrEqualTo:
+    tests: ["packages/darklang/tests/stdlib/ints/int8.dark#Darklang.Stdlib.Int8.Tests.greaterThanOrEqualTo"]
+    reason: "Existing typed numeric suite exercises >=; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.Int8.BitwiseAnd.bitwiseAnd:
+    tests: ["packages/darklang/tests/stdlib/ints/int8.dark#Darklang.Stdlib.Int8.Tests.bitwiseAnd"]
+    reason: "Existing typed numeric suite exercises &; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.Int8.BitwiseOr.bitwiseOr:
+    tests: ["packages/darklang/tests/stdlib/ints/int8.dark#Darklang.Stdlib.Int8.Tests.bitwiseOr"]
+    reason: "Existing typed numeric suite exercises |; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.Int8.BitwiseXor.bitwiseXor:
+    tests: ["packages/darklang/tests/stdlib/ints/int8.dark#Darklang.Stdlib.Int8.Tests.bitwiseXor"]
+    reason: "Existing typed numeric suite exercises ^; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.Int8.BitwiseNot.bitwiseNot:
+    tests: ["packages/darklang/tests/stdlib/ints/int8.dark#Darklang.Stdlib.Int8.Tests.bitwiseNot"]
+    reason: "Existing typed numeric suite exercises ~; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.Int8.ShiftLeft.shiftLeft:
+    tests: ["packages/darklang/tests/stdlib/ints/int8.dark#Darklang.Stdlib.Int8.Tests.shiftLeft"]
+    reason: "Existing typed numeric suite exercises <<; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.Int8.ShiftRight.shiftRight:
+    tests: ["packages/darklang/tests/stdlib/ints/int8.dark#Darklang.Stdlib.Int8.Tests.shiftRight"]
+    reason: "Existing typed numeric suite exercises >>; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.Int8.ToString.toString:
+    tests: ["packages/darklang/tests/stdlib/ints/int8.dark#Darklang.Stdlib.Int8.Tests.toString"]
+    reason: "Existing typed numeric suite exercises Stdlib.toString; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.UInt8.Add.add:
+    tests: ["packages/darklang/tests/stdlib/ints/uint8.dark#Darklang.Stdlib.UInt8.Tests.add"]
+    reason: "Existing typed numeric suite exercises +; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.UInt8.Subtract.subtract:
+    tests: ["packages/darklang/tests/stdlib/ints/uint8.dark#Darklang.Stdlib.UInt8.Tests.subtract"]
+    reason: "Existing typed numeric suite exercises -; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.UInt8.Multiply.multiply:
+    tests: ["packages/darklang/tests/stdlib/ints/uint8.dark#Darklang.Stdlib.UInt8.Tests.multiply"]
+    reason: "Existing typed numeric suite exercises *; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.UInt8.Divide.divide:
+    tests: ["packages/darklang/tests/stdlib/ints/uint8.dark#Darklang.Stdlib.UInt8.Tests.divide"]
+    reason: "Existing typed numeric suite exercises /; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.UInt8.Modulo.modulo:
+    tests: ["packages/darklang/tests/stdlib/ints/uint8.dark#Darklang.Stdlib.UInt8.Tests.modulo"]
+    reason: "Existing typed numeric suite exercises %; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.UInt8.Power.power:
+    tests: ["packages/darklang/tests/stdlib/ints/uint8.dark#Darklang.Stdlib.UInt8.Tests.power"]
+    reason: "Existing typed numeric suite exercises **; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.UInt8.Compare.lessThan:
+    tests: ["packages/darklang/tests/stdlib/ints/uint8.dark#Darklang.Stdlib.UInt8.Tests.lessThan"]
+    reason: "Existing typed numeric suite exercises <; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.UInt8.Compare.lessThanOrEqualTo:
+    tests: ["packages/darklang/tests/stdlib/ints/uint8.dark#Darklang.Stdlib.UInt8.Tests.lessThanOrEqualTo"]
+    reason: "Existing typed numeric suite exercises <=; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.UInt8.Compare.greaterThan:
+    tests: ["packages/darklang/tests/stdlib/ints/uint8.dark#Darklang.Stdlib.UInt8.Tests.greaterThan"]
+    reason: "Existing typed numeric suite exercises >; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.UInt8.Compare.greaterThanOrEqualTo:
+    tests: ["packages/darklang/tests/stdlib/ints/uint8.dark#Darklang.Stdlib.UInt8.Tests.greaterThanOrEqualTo"]
+    reason: "Existing typed numeric suite exercises >=; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.UInt8.BitwiseAnd.bitwiseAnd:
+    tests: ["packages/darklang/tests/stdlib/ints/uint8.dark#Darklang.Stdlib.UInt8.Tests.bitwiseAnd"]
+    reason: "Existing typed numeric suite exercises &; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.UInt8.BitwiseOr.bitwiseOr:
+    tests: ["packages/darklang/tests/stdlib/ints/uint8.dark#Darklang.Stdlib.UInt8.Tests.bitwiseOr"]
+    reason: "Existing typed numeric suite exercises |; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.UInt8.BitwiseXor.bitwiseXor:
+    tests: ["packages/darklang/tests/stdlib/ints/uint8.dark#Darklang.Stdlib.UInt8.Tests.bitwiseXor"]
+    reason: "Existing typed numeric suite exercises ^; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.UInt8.BitwiseNot.bitwiseNot:
+    tests: ["packages/darklang/tests/stdlib/ints/uint8.dark#Darklang.Stdlib.UInt8.Tests.bitwiseNot"]
+    reason: "Existing typed numeric suite exercises ~; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.UInt8.ShiftLeft.shiftLeft:
+    tests: ["packages/darklang/tests/stdlib/ints/uint8.dark#Darklang.Stdlib.UInt8.Tests.shiftLeft"]
+    reason: "Existing typed numeric suite exercises <<; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.UInt8.ShiftRight.shiftRight:
+    tests: ["packages/darklang/tests/stdlib/ints/uint8.dark#Darklang.Stdlib.UInt8.Tests.shiftRight"]
+    reason: "Existing typed numeric suite exercises >>; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.UInt8.ToString.toString:
+    tests: ["packages/darklang/tests/stdlib/ints/uint8.dark#Darklang.Stdlib.UInt8.Tests.toString"]
+    reason: "Existing typed numeric suite exercises Stdlib.toString; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.Int16.Add.add:
+    tests: ["packages/darklang/tests/stdlib/ints/int16.dark#Darklang.Stdlib.Int16.Tests.add"]
+    reason: "Existing typed numeric suite exercises +; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.Int16.Subtract.subtract:
+    tests: ["packages/darklang/tests/stdlib/ints/int16.dark#Darklang.Stdlib.Int16.Tests.subtract"]
+    reason: "Existing typed numeric suite exercises -; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.Int16.Multiply.multiply:
+    tests: ["packages/darklang/tests/stdlib/ints/int16.dark#Darklang.Stdlib.Int16.Tests.multiply"]
+    reason: "Existing typed numeric suite exercises *; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.Int16.Divide.divide:
+    tests: ["packages/darklang/tests/stdlib/ints/int16.dark#Darklang.Stdlib.Int16.Tests.divide"]
+    reason: "Existing typed numeric suite exercises /; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.Int16.Power.power:
+    tests: ["packages/darklang/tests/stdlib/ints/int16.dark#Darklang.Stdlib.Int16.Tests.power"]
+    reason: "Existing typed numeric suite exercises **; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.Int16.Negate.negate:
+    tests: ["packages/darklang/tests/stdlib/ints/int16.dark#Darklang.Stdlib.Int16.Tests.negate"]
+    reason: "Existing typed numeric suite exercises -; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.Int16.Compare.lessThan:
+    tests: ["packages/darklang/tests/stdlib/ints/int16.dark#Darklang.Stdlib.Int16.Tests.lessThan"]
+    reason: "Existing typed numeric suite exercises <; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.Int16.Compare.lessThanOrEqualTo:
+    tests: ["packages/darklang/tests/stdlib/ints/int16.dark#Darklang.Stdlib.Int16.Tests.lessThanOrEqualTo"]
+    reason: "Existing typed numeric suite exercises <=; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.Int16.Compare.greaterThan:
+    tests: ["packages/darklang/tests/stdlib/ints/int16.dark#Darklang.Stdlib.Int16.Tests.greaterThan"]
+    reason: "Existing typed numeric suite exercises >; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.Int16.Compare.greaterThanOrEqualTo:
+    tests: ["packages/darklang/tests/stdlib/ints/int16.dark#Darklang.Stdlib.Int16.Tests.greaterThanOrEqualTo"]
+    reason: "Existing typed numeric suite exercises >=; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.Int16.BitwiseAnd.bitwiseAnd:
+    tests: ["packages/darklang/tests/stdlib/ints/int16.dark#Darklang.Stdlib.Int16.Tests.bitwiseAnd"]
+    reason: "Existing typed numeric suite exercises &; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.Int16.BitwiseOr.bitwiseOr:
+    tests: ["packages/darklang/tests/stdlib/ints/int16.dark#Darklang.Stdlib.Int16.Tests.bitwiseOr"]
+    reason: "Existing typed numeric suite exercises |; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.Int16.BitwiseXor.bitwiseXor:
+    tests: ["packages/darklang/tests/stdlib/ints/int16.dark#Darklang.Stdlib.Int16.Tests.bitwiseXor"]
+    reason: "Existing typed numeric suite exercises ^; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.Int16.BitwiseNot.bitwiseNot:
+    tests: ["packages/darklang/tests/stdlib/ints/int16.dark#Darklang.Stdlib.Int16.Tests.bitwiseNot"]
+    reason: "Existing typed numeric suite exercises ~; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.Int16.ShiftLeft.shiftLeft:
+    tests: ["packages/darklang/tests/stdlib/ints/int16.dark#Darklang.Stdlib.Int16.Tests.shiftLeft"]
+    reason: "Existing typed numeric suite exercises <<; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.Int16.ShiftRight.shiftRight:
+    tests: ["packages/darklang/tests/stdlib/ints/int16.dark#Darklang.Stdlib.Int16.Tests.shiftRight"]
+    reason: "Existing typed numeric suite exercises >>; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.Int16.ToString.toString:
+    tests: ["packages/darklang/tests/stdlib/ints/int16.dark#Darklang.Stdlib.Int16.Tests.toString"]
+    reason: "Existing typed numeric suite exercises Stdlib.toString; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.UInt16.Add.add:
+    tests: ["packages/darklang/tests/stdlib/ints/uint16.dark#Darklang.Stdlib.UInt16.Tests.add"]
+    reason: "Existing typed numeric suite exercises +; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.UInt16.Subtract.subtract:
+    tests: ["packages/darklang/tests/stdlib/ints/uint16.dark#Darklang.Stdlib.UInt16.Tests.subtract"]
+    reason: "Existing typed numeric suite exercises -; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.UInt16.Multiply.multiply:
+    tests: ["packages/darklang/tests/stdlib/ints/uint16.dark#Darklang.Stdlib.UInt16.Tests.multiply"]
+    reason: "Existing typed numeric suite exercises *; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.UInt16.Divide.divide:
+    tests: ["packages/darklang/tests/stdlib/ints/uint16.dark#Darklang.Stdlib.UInt16.Tests.divide"]
+    reason: "Existing typed numeric suite exercises /; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.UInt16.Modulo.modulo:
+    tests: ["packages/darklang/tests/stdlib/ints/uint16.dark#Darklang.Stdlib.UInt16.Tests.modulo"]
+    reason: "Existing typed numeric suite exercises %; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.UInt16.Power.power:
+    tests: ["packages/darklang/tests/stdlib/ints/uint16.dark#Darklang.Stdlib.UInt16.Tests.power"]
+    reason: "Existing typed numeric suite exercises **; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.UInt16.Compare.lessThan:
+    tests: ["packages/darklang/tests/stdlib/ints/uint16.dark#Darklang.Stdlib.UInt16.Tests.lessThan"]
+    reason: "Existing typed numeric suite exercises <; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.UInt16.Compare.lessThanOrEqualTo:
+    tests: ["packages/darklang/tests/stdlib/ints/uint16.dark#Darklang.Stdlib.UInt16.Tests.lessThanOrEqualTo"]
+    reason: "Existing typed numeric suite exercises <=; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.UInt16.Compare.greaterThan:
+    tests: ["packages/darklang/tests/stdlib/ints/uint16.dark#Darklang.Stdlib.UInt16.Tests.greaterThan"]
+    reason: "Existing typed numeric suite exercises >; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.UInt16.Compare.greaterThanOrEqualTo:
+    tests: ["packages/darklang/tests/stdlib/ints/uint16.dark#Darklang.Stdlib.UInt16.Tests.greaterThanOrEqualTo"]
+    reason: "Existing typed numeric suite exercises >=; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.UInt16.BitwiseAnd.bitwiseAnd:
+    tests: ["packages/darklang/tests/stdlib/ints/uint16.dark#Darklang.Stdlib.UInt16.Tests.bitwiseAnd"]
+    reason: "Existing typed numeric suite exercises &; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.UInt16.BitwiseOr.bitwiseOr:
+    tests: ["packages/darklang/tests/stdlib/ints/uint16.dark#Darklang.Stdlib.UInt16.Tests.bitwiseOr"]
+    reason: "Existing typed numeric suite exercises |; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.UInt16.BitwiseXor.bitwiseXor:
+    tests: ["packages/darklang/tests/stdlib/ints/uint16.dark#Darklang.Stdlib.UInt16.Tests.bitwiseXor"]
+    reason: "Existing typed numeric suite exercises ^; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.UInt16.BitwiseNot.bitwiseNot:
+    tests: ["packages/darklang/tests/stdlib/ints/uint16.dark#Darklang.Stdlib.UInt16.Tests.bitwiseNot"]
+    reason: "Existing typed numeric suite exercises ~; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.UInt16.ShiftLeft.shiftLeft:
+    tests: ["packages/darklang/tests/stdlib/ints/uint16.dark#Darklang.Stdlib.UInt16.Tests.shiftLeft"]
+    reason: "Existing typed numeric suite exercises <<; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.UInt16.ShiftRight.shiftRight:
+    tests: ["packages/darklang/tests/stdlib/ints/uint16.dark#Darklang.Stdlib.UInt16.Tests.shiftRight"]
+    reason: "Existing typed numeric suite exercises >>; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.UInt16.ToString.toString:
+    tests: ["packages/darklang/tests/stdlib/ints/uint16.dark#Darklang.Stdlib.UInt16.Tests.toString"]
+    reason: "Existing typed numeric suite exercises Stdlib.toString; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.Int32.Add.add:
+    tests: ["packages/darklang/tests/stdlib/ints/int32.dark#Darklang.Stdlib.Int32.Tests.add"]
+    reason: "Existing typed numeric suite exercises +; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.Int32.Subtract.subtract:
+    tests: ["packages/darklang/tests/stdlib/ints/int32.dark#Darklang.Stdlib.Int32.Tests.subtract"]
+    reason: "Existing typed numeric suite exercises -; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.Int32.Multiply.multiply:
+    tests: ["packages/darklang/tests/stdlib/ints/int32.dark#Darklang.Stdlib.Int32.Tests.multiply"]
+    reason: "Existing typed numeric suite exercises *; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.Int32.Divide.divide:
+    tests: ["packages/darklang/tests/stdlib/ints/int32.dark#Darklang.Stdlib.Int32.Tests.divide"]
+    reason: "Existing typed numeric suite exercises /; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.Int32.Modulo.modulo:
+    tests: ["packages/darklang/tests/stdlib/ints/int32.dark#Darklang.Stdlib.Int32.Tests.modulo"]
+    reason: "Existing typed numeric suite exercises %; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.Int32.Power.power:
+    tests: ["packages/darklang/tests/stdlib/ints/int32.dark#Darklang.Stdlib.Int32.Tests.power"]
+    reason: "Existing typed numeric suite exercises **; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.Int32.Negate.negate:
+    tests: ["packages/darklang/tests/stdlib/ints/int32.dark#Darklang.Stdlib.Int32.Tests.negate"]
+    reason: "Existing typed numeric suite exercises -; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.Int32.Compare.lessThan:
+    tests: ["packages/darklang/tests/stdlib/ints/int32.dark#Darklang.Stdlib.Int32.Tests.lessThan"]
+    reason: "Existing typed numeric suite exercises <; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.Int32.Compare.lessThanOrEqualTo:
+    tests: ["packages/darklang/tests/stdlib/ints/int32.dark#Darklang.Stdlib.Int32.Tests.lessThanOrEqualTo"]
+    reason: "Existing typed numeric suite exercises <=; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.Int32.Compare.greaterThan:
+    tests: ["packages/darklang/tests/stdlib/ints/int32.dark#Darklang.Stdlib.Int32.Tests.greaterThan"]
+    reason: "Existing typed numeric suite exercises >; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.Int32.Compare.greaterThanOrEqualTo:
+    tests: ["packages/darklang/tests/stdlib/ints/int32.dark#Darklang.Stdlib.Int32.Tests.greaterThanOrEqualTo"]
+    reason: "Existing typed numeric suite exercises >=; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.Int32.BitwiseAnd.bitwiseAnd:
+    tests: ["packages/darklang/tests/stdlib/ints/int32.dark#Darklang.Stdlib.Int32.Tests.bitwiseAnd"]
+    reason: "Existing typed numeric suite exercises &; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.Int32.BitwiseOr.bitwiseOr:
+    tests: ["packages/darklang/tests/stdlib/ints/int32.dark#Darklang.Stdlib.Int32.Tests.bitwiseOr"]
+    reason: "Existing typed numeric suite exercises |; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.Int32.BitwiseXor.bitwiseXor:
+    tests: ["packages/darklang/tests/stdlib/ints/int32.dark#Darklang.Stdlib.Int32.Tests.bitwiseXor"]
+    reason: "Existing typed numeric suite exercises ^; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.Int32.BitwiseNot.bitwiseNot:
+    tests: ["packages/darklang/tests/stdlib/ints/int32.dark#Darklang.Stdlib.Int32.Tests.bitwiseNot"]
+    reason: "Existing typed numeric suite exercises ~; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.Int32.ShiftLeft.shiftLeft:
+    tests: ["packages/darklang/tests/stdlib/ints/int32.dark#Darklang.Stdlib.Int32.Tests.shiftLeft"]
+    reason: "Existing typed numeric suite exercises <<; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.Int32.ShiftRight.shiftRight:
+    tests: ["packages/darklang/tests/stdlib/ints/int32.dark#Darklang.Stdlib.Int32.Tests.shiftRight"]
+    reason: "Existing typed numeric suite exercises >>; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.Int32.ToString.toString:
+    tests: ["packages/darklang/tests/stdlib/ints/int32.dark#Darklang.Stdlib.Int32.Tests.toString"]
+    reason: "Existing typed numeric suite exercises Stdlib.toString; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.UInt32.Add.add:
+    tests: ["packages/darklang/tests/stdlib/ints/uint32.dark#Darklang.Stdlib.UInt32.Tests.add"]
+    reason: "Existing typed numeric suite exercises +; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.UInt32.Subtract.subtract:
+    tests: ["packages/darklang/tests/stdlib/ints/uint32.dark#Darklang.Stdlib.UInt32.Tests.subtract"]
+    reason: "Existing typed numeric suite exercises -; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.UInt32.Multiply.multiply:
+    tests: ["packages/darklang/tests/stdlib/ints/uint32.dark#Darklang.Stdlib.UInt32.Tests.multiply"]
+    reason: "Existing typed numeric suite exercises *; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.UInt32.Divide.divide:
+    tests: ["packages/darklang/tests/stdlib/ints/uint32.dark#Darklang.Stdlib.UInt32.Tests.divide"]
+    reason: "Existing typed numeric suite exercises /; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.UInt32.Modulo.modulo:
+    tests: ["packages/darklang/tests/stdlib/ints/uint32.dark#Darklang.Stdlib.UInt32.Tests.modulo"]
+    reason: "Existing typed numeric suite exercises %; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.UInt32.Power.power:
+    tests: ["packages/darklang/tests/stdlib/ints/uint32.dark#Darklang.Stdlib.UInt32.Tests.power"]
+    reason: "Existing typed numeric suite exercises **; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.UInt32.Compare.lessThan:
+    tests: ["packages/darklang/tests/stdlib/ints/uint32.dark#Darklang.Stdlib.UInt32.Tests.lessThan"]
+    reason: "Existing typed numeric suite exercises <; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.UInt32.Compare.lessThanOrEqualTo:
+    tests: ["packages/darklang/tests/stdlib/ints/uint32.dark#Darklang.Stdlib.UInt32.Tests.lessThanOrEqualTo"]
+    reason: "Existing typed numeric suite exercises <=; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.UInt32.Compare.greaterThan:
+    tests: ["packages/darklang/tests/stdlib/ints/uint32.dark#Darklang.Stdlib.UInt32.Tests.greaterThan"]
+    reason: "Existing typed numeric suite exercises >; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.UInt32.Compare.greaterThanOrEqualTo:
+    tests: ["packages/darklang/tests/stdlib/ints/uint32.dark#Darklang.Stdlib.UInt32.Tests.greaterThanOrEqualTo"]
+    reason: "Existing typed numeric suite exercises >=; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.UInt32.BitwiseAnd.bitwiseAnd:
+    tests: ["packages/darklang/tests/stdlib/ints/uint32.dark#Darklang.Stdlib.UInt32.Tests.bitwiseAnd"]
+    reason: "Existing typed numeric suite exercises &; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.UInt32.BitwiseOr.bitwiseOr:
+    tests: ["packages/darklang/tests/stdlib/ints/uint32.dark#Darklang.Stdlib.UInt32.Tests.bitwiseOr"]
+    reason: "Existing typed numeric suite exercises |; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.UInt32.BitwiseXor.bitwiseXor:
+    tests: ["packages/darklang/tests/stdlib/ints/uint32.dark#Darklang.Stdlib.UInt32.Tests.bitwiseXor"]
+    reason: "Existing typed numeric suite exercises ^; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.UInt32.BitwiseNot.bitwiseNot:
+    tests: ["packages/darklang/tests/stdlib/ints/uint32.dark#Darklang.Stdlib.UInt32.Tests.bitwiseNot"]
+    reason: "Existing typed numeric suite exercises ~; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.UInt32.ShiftLeft.shiftLeft:
+    tests: ["packages/darklang/tests/stdlib/ints/uint32.dark#Darklang.Stdlib.UInt32.Tests.shiftLeft"]
+    reason: "Existing typed numeric suite exercises <<; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.UInt32.ShiftRight.shiftRight:
+    tests: ["packages/darklang/tests/stdlib/ints/uint32.dark#Darklang.Stdlib.UInt32.Tests.shiftRight"]
+    reason: "Existing typed numeric suite exercises >>; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.UInt32.ToString.toString:
+    tests: ["packages/darklang/tests/stdlib/ints/uint32.dark#Darklang.Stdlib.UInt32.Tests.toString"]
+    reason: "Existing typed numeric suite exercises Stdlib.toString; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.Int64.Add.add:
+    tests: ["packages/darklang/tests/stdlib/ints/int64.dark#Darklang.Stdlib.Int64.Tests.add"]
+    reason: "Existing typed numeric suite exercises +; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.Int64.Subtract.subtract:
+    tests: ["packages/darklang/tests/stdlib/ints/int64.dark#Darklang.Stdlib.Int64.Tests.subtract"]
+    reason: "Existing typed numeric suite exercises -; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.Int64.Multiply.multiply:
+    tests: ["packages/darklang/tests/stdlib/ints/int64.dark#Darklang.Stdlib.Int64.Tests.multiply"]
+    reason: "Existing typed numeric suite exercises *; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.Int64.Divide.divide:
+    tests: ["packages/darklang/tests/stdlib/ints/int64.dark#Darklang.Stdlib.Int64.Tests.divide"]
+    reason: "Existing typed numeric suite exercises /; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.Int64.Modulo.modulo:
+    tests: ["packages/darklang/tests/stdlib/ints/int64.dark#Darklang.Stdlib.Int64.Tests.modulo"]
+    reason: "Existing typed numeric suite exercises %; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.Int64.Power.power:
+    tests: ["packages/darklang/tests/stdlib/ints/int64.dark#Darklang.Stdlib.Int64.Tests.power"]
+    reason: "Existing typed numeric suite exercises **; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.Int64.Negate.negate:
+    tests: ["packages/darklang/tests/stdlib/ints/int64.dark#Darklang.Stdlib.Int64.Tests.negate"]
+    reason: "Existing typed numeric suite exercises -; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.Int64.Compare.lessThan:
+    tests: ["packages/darklang/tests/stdlib/ints/int64.dark#Darklang.Stdlib.Int64.Tests.lessThan"]
+    reason: "Existing typed numeric suite exercises <; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.Int64.Compare.lessThanOrEqualTo:
+    tests: ["packages/darklang/tests/stdlib/ints/int64.dark#Darklang.Stdlib.Int64.Tests.lessThanOrEqualTo"]
+    reason: "Existing typed numeric suite exercises <=; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.Int64.Compare.greaterThan:
+    tests: ["packages/darklang/tests/stdlib/ints/int64.dark#Darklang.Stdlib.Int64.Tests.greaterThan"]
+    reason: "Existing typed numeric suite exercises >; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.Int64.Compare.greaterThanOrEqualTo:
+    tests: ["packages/darklang/tests/stdlib/ints/int64.dark#Darklang.Stdlib.Int64.Tests.greaterThanOrEqualTo"]
+    reason: "Existing typed numeric suite exercises >=; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.Int64.BitwiseAnd.bitwiseAnd:
+    tests: ["packages/darklang/tests/stdlib/ints/int64.dark#Darklang.Stdlib.Int64.Tests.bitwiseAnd"]
+    reason: "Existing typed numeric suite exercises &; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.Int64.BitwiseOr.bitwiseOr:
+    tests: ["packages/darklang/tests/stdlib/ints/int64.dark#Darklang.Stdlib.Int64.Tests.bitwiseOr"]
+    reason: "Existing typed numeric suite exercises |; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.Int64.BitwiseXor.bitwiseXor:
+    tests: ["packages/darklang/tests/stdlib/ints/int64.dark#Darklang.Stdlib.Int64.Tests.bitwiseXor"]
+    reason: "Existing typed numeric suite exercises ^; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.Int64.BitwiseNot.bitwiseNot:
+    tests: ["packages/darklang/tests/stdlib/ints/int64.dark#Darklang.Stdlib.Int64.Tests.bitwiseNot"]
+    reason: "Existing typed numeric suite exercises ~; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.Int64.ShiftLeft.shiftLeft:
+    tests: ["packages/darklang/tests/stdlib/ints/int64.dark#Darklang.Stdlib.Int64.Tests.shiftLeft"]
+    reason: "Existing typed numeric suite exercises <<; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.Int64.ShiftRight.shiftRight:
+    tests: ["packages/darklang/tests/stdlib/ints/int64.dark#Darklang.Stdlib.Int64.Tests.shiftRight"]
+    reason: "Existing typed numeric suite exercises >>; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.Int64.ToString.toString:
+    tests: ["packages/darklang/tests/stdlib/ints/int64.dark#Darklang.Stdlib.Int64.Tests.toString"]
+    reason: "Existing typed numeric suite exercises Stdlib.toString; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.UInt64.Add.add:
+    tests: ["packages/darklang/tests/stdlib/ints/uint64.dark#Darklang.Stdlib.UInt64.Tests.add"]
+    reason: "Existing typed numeric suite exercises +; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.UInt64.Subtract.subtract:
+    tests: ["packages/darklang/tests/stdlib/ints/uint64.dark#Darklang.Stdlib.UInt64.Tests.subtract"]
+    reason: "Existing typed numeric suite exercises -; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.UInt64.Multiply.multiply:
+    tests: ["packages/darklang/tests/stdlib/ints/uint64.dark#Darklang.Stdlib.UInt64.Tests.multiply"]
+    reason: "Existing typed numeric suite exercises *; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.UInt64.Divide.divide:
+    tests: ["packages/darklang/tests/stdlib/ints/uint64.dark#Darklang.Stdlib.UInt64.Tests.divide"]
+    reason: "Existing typed numeric suite exercises /; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.UInt64.Modulo.modulo:
+    tests: ["packages/darklang/tests/stdlib/ints/uint64.dark#Darklang.Stdlib.UInt64.Tests.modulo"]
+    reason: "Existing typed numeric suite exercises %; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.UInt64.Power.power:
+    tests: ["packages/darklang/tests/stdlib/ints/uint64.dark#Darklang.Stdlib.UInt64.Tests.power"]
+    reason: "Existing typed numeric suite exercises **; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.UInt64.Compare.lessThan:
+    tests: ["packages/darklang/tests/stdlib/ints/uint64.dark#Darklang.Stdlib.UInt64.Tests.lessThan"]
+    reason: "Existing typed numeric suite exercises <; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.UInt64.Compare.lessThanOrEqualTo:
+    tests: ["packages/darklang/tests/stdlib/ints/uint64.dark#Darklang.Stdlib.UInt64.Tests.lessThanOrEqualTo"]
+    reason: "Existing typed numeric suite exercises <=; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.UInt64.Compare.greaterThan:
+    tests: ["packages/darklang/tests/stdlib/ints/uint64.dark#Darklang.Stdlib.UInt64.Tests.greaterThan"]
+    reason: "Existing typed numeric suite exercises >; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.UInt64.Compare.greaterThanOrEqualTo:
+    tests: ["packages/darklang/tests/stdlib/ints/uint64.dark#Darklang.Stdlib.UInt64.Tests.greaterThanOrEqualTo"]
+    reason: "Existing typed numeric suite exercises >=; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.UInt64.BitwiseAnd.bitwiseAnd:
+    tests: ["packages/darklang/tests/stdlib/ints/uint64.dark#Darklang.Stdlib.UInt64.Tests.bitwiseAnd"]
+    reason: "Existing typed numeric suite exercises &; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.UInt64.BitwiseOr.bitwiseOr:
+    tests: ["packages/darklang/tests/stdlib/ints/uint64.dark#Darklang.Stdlib.UInt64.Tests.bitwiseOr"]
+    reason: "Existing typed numeric suite exercises |; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.UInt64.BitwiseXor.bitwiseXor:
+    tests: ["packages/darklang/tests/stdlib/ints/uint64.dark#Darklang.Stdlib.UInt64.Tests.bitwiseXor"]
+    reason: "Existing typed numeric suite exercises ^; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.UInt64.BitwiseNot.bitwiseNot:
+    tests: ["packages/darklang/tests/stdlib/ints/uint64.dark#Darklang.Stdlib.UInt64.Tests.bitwiseNot"]
+    reason: "Existing typed numeric suite exercises ~; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.UInt64.ShiftLeft.shiftLeft:
+    tests: ["packages/darklang/tests/stdlib/ints/uint64.dark#Darklang.Stdlib.UInt64.Tests.shiftLeft"]
+    reason: "Existing typed numeric suite exercises <<; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.UInt64.ShiftRight.shiftRight:
+    tests: ["packages/darklang/tests/stdlib/ints/uint64.dark#Darklang.Stdlib.UInt64.Tests.shiftRight"]
+    reason: "Existing typed numeric suite exercises >>; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.UInt64.ToString.toString:
+    tests: ["packages/darklang/tests/stdlib/ints/uint64.dark#Darklang.Stdlib.UInt64.Tests.toString"]
+    reason: "Existing typed numeric suite exercises Stdlib.toString; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.Int128.Add.add:
+    tests: ["packages/darklang/tests/stdlib/ints/int128.dark#Darklang.Stdlib.Int128.Tests.add"]
+    reason: "Existing typed numeric suite exercises +; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.Int128.Subtract.subtract:
+    tests: ["packages/darklang/tests/stdlib/ints/int128.dark#Darklang.Stdlib.Int128.Tests.subtract"]
+    reason: "Existing typed numeric suite exercises -; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.Int128.Multiply.multiply:
+    tests: ["packages/darklang/tests/stdlib/ints/int128.dark#Darklang.Stdlib.Int128.Tests.multiply"]
+    reason: "Existing typed numeric suite exercises *; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.Int128.Divide.divide:
+    tests: ["packages/darklang/tests/stdlib/ints/int128.dark#Darklang.Stdlib.Int128.Tests.divide"]
+    reason: "Existing typed numeric suite exercises /; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.Int128.Modulo.modulo:
+    tests: ["packages/darklang/tests/stdlib/ints/int128.dark#Darklang.Stdlib.Int128.Tests.modulo"]
+    reason: "Existing typed numeric suite exercises %; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.Int128.Negate.negate:
+    tests: ["packages/darklang/tests/stdlib/ints/int128.dark#Darklang.Stdlib.Int128.Tests.negate"]
+    reason: "Existing typed numeric suite exercises -; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.Int128.Compare.lessThan:
+    tests: ["packages/darklang/tests/stdlib/ints/int128.dark#Darklang.Stdlib.Int128.Tests.lessThan"]
+    reason: "Existing typed numeric suite exercises <; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.Int128.Compare.lessThanOrEqualTo:
+    tests: ["packages/darklang/tests/stdlib/ints/int128.dark#Darklang.Stdlib.Int128.Tests.lessThanOrEqualTo"]
+    reason: "Existing typed numeric suite exercises <=; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.Int128.Compare.greaterThan:
+    tests: ["packages/darklang/tests/stdlib/ints/int128.dark#Darklang.Stdlib.Int128.Tests.greaterThan"]
+    reason: "Existing typed numeric suite exercises >; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.Int128.Compare.greaterThanOrEqualTo:
+    tests: ["packages/darklang/tests/stdlib/ints/int128.dark#Darklang.Stdlib.Int128.Tests.greaterThanOrEqualTo"]
+    reason: "Existing typed numeric suite exercises >=; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.Int128.BitwiseAnd.bitwiseAnd:
+    tests: ["packages/darklang/tests/stdlib/ints/int128.dark#Darklang.Stdlib.Int128.Tests.bitwiseAnd"]
+    reason: "Existing typed numeric suite exercises &; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.Int128.BitwiseOr.bitwiseOr:
+    tests: ["packages/darklang/tests/stdlib/ints/int128.dark#Darklang.Stdlib.Int128.Tests.bitwiseOr"]
+    reason: "Existing typed numeric suite exercises |; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.Int128.BitwiseXor.bitwiseXor:
+    tests: ["packages/darklang/tests/stdlib/ints/int128.dark#Darklang.Stdlib.Int128.Tests.bitwiseXor"]
+    reason: "Existing typed numeric suite exercises ^; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.Int128.BitwiseNot.bitwiseNot:
+    tests: ["packages/darklang/tests/stdlib/ints/int128.dark#Darklang.Stdlib.Int128.Tests.bitwiseNot"]
+    reason: "Existing typed numeric suite exercises ~; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.Int128.ShiftLeft.shiftLeft:
+    tests: ["packages/darklang/tests/stdlib/ints/int128.dark#Darklang.Stdlib.Int128.Tests.shiftLeft"]
+    reason: "Existing typed numeric suite exercises <<; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.Int128.ShiftRight.shiftRight:
+    tests: ["packages/darklang/tests/stdlib/ints/int128.dark#Darklang.Stdlib.Int128.Tests.shiftRight"]
+    reason: "Existing typed numeric suite exercises >>; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.Int128.ToString.toString:
+    tests: ["packages/darklang/tests/stdlib/ints/int128.dark#Darklang.Stdlib.Int128.Tests.toString"]
+    reason: "Existing typed numeric suite exercises Stdlib.toString; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.UInt128.Add.add:
+    tests: ["packages/darklang/tests/stdlib/ints/uint128.dark#Darklang.Stdlib.UInt128.Tests.add"]
+    reason: "Existing typed numeric suite exercises +; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.UInt128.Subtract.subtract:
+    tests: ["packages/darklang/tests/stdlib/ints/uint128.dark#Darklang.Stdlib.UInt128.Tests.subtract"]
+    reason: "Existing typed numeric suite exercises -; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.UInt128.Multiply.multiply:
+    tests: ["packages/darklang/tests/stdlib/ints/uint128.dark#Darklang.Stdlib.UInt128.Tests.multiply"]
+    reason: "Existing typed numeric suite exercises *; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.UInt128.Divide.divide:
+    tests: ["packages/darklang/tests/stdlib/ints/uint128.dark#Darklang.Stdlib.UInt128.Tests.divide"]
+    reason: "Existing typed numeric suite exercises /; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.UInt128.Modulo.modulo:
+    tests: ["packages/darklang/tests/stdlib/ints/uint128.dark#Darklang.Stdlib.UInt128.Tests.modulo"]
+    reason: "Existing typed numeric suite exercises %; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.UInt128.Compare.lessThan:
+    tests: ["packages/darklang/tests/stdlib/ints/uint128.dark#Darklang.Stdlib.UInt128.Tests.lessThan"]
+    reason: "Existing typed numeric suite exercises <; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.UInt128.Compare.lessThanOrEqualTo:
+    tests: ["packages/darklang/tests/stdlib/ints/uint128.dark#Darklang.Stdlib.UInt128.Tests.lessThanOrEqualTo"]
+    reason: "Existing typed numeric suite exercises <=; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.UInt128.Compare.greaterThan:
+    tests: ["packages/darklang/tests/stdlib/ints/uint128.dark#Darklang.Stdlib.UInt128.Tests.greaterThan"]
+    reason: "Existing typed numeric suite exercises >; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.UInt128.Compare.greaterThanOrEqualTo:
+    tests: ["packages/darklang/tests/stdlib/ints/uint128.dark#Darklang.Stdlib.UInt128.Tests.greaterThanOrEqualTo"]
+    reason: "Existing typed numeric suite exercises >=; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.UInt128.BitwiseAnd.bitwiseAnd:
+    tests: ["packages/darklang/tests/stdlib/ints/uint128.dark#Darklang.Stdlib.UInt128.Tests.bitwiseAnd"]
+    reason: "Existing typed numeric suite exercises &; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.UInt128.BitwiseOr.bitwiseOr:
+    tests: ["packages/darklang/tests/stdlib/ints/uint128.dark#Darklang.Stdlib.UInt128.Tests.bitwiseOr"]
+    reason: "Existing typed numeric suite exercises |; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.UInt128.BitwiseXor.bitwiseXor:
+    tests: ["packages/darklang/tests/stdlib/ints/uint128.dark#Darklang.Stdlib.UInt128.Tests.bitwiseXor"]
+    reason: "Existing typed numeric suite exercises ^; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.UInt128.BitwiseNot.bitwiseNot:
+    tests: ["packages/darklang/tests/stdlib/ints/uint128.dark#Darklang.Stdlib.UInt128.Tests.bitwiseNot"]
+    reason: "Existing typed numeric suite exercises ~; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.UInt128.ShiftLeft.shiftLeft:
+    tests: ["packages/darklang/tests/stdlib/ints/uint128.dark#Darklang.Stdlib.UInt128.Tests.shiftLeft"]
+    reason: "Existing typed numeric suite exercises <<; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.UInt128.ShiftRight.shiftRight:
+    tests: ["packages/darklang/tests/stdlib/ints/uint128.dark#Darklang.Stdlib.UInt128.Tests.shiftRight"]
+    reason: "Existing typed numeric suite exercises >>; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
+  Darklang.Stdlib.UInt128.ToString.toString:
+    tests: ["packages/darklang/tests/stdlib/ints/uint128.dark#Darklang.Stdlib.UInt128.Tests.toString"]
+    reason: "Existing typed numeric suite exercises Stdlib.toString; upstream trait dispatch selects this method, without an explicit qualified call. Reference only, not execution evidence."
 # Upstream source path -> explanation of an accepted source difference.
 source_exceptions: {}

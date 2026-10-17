@@ -20,8 +20,10 @@ import porting as p
 ROOT = p.ROOT
 INPUTS = 'porting/ledger-inputs.yaml'
 RECEIPT = 'porting/test-results.json'
+PACKAGE_RECEIPT = 'porting/package-results.json'
 OUTPUT = 'porting/generated/ledger.json'
 REPORT = 'docs/porting/generated/ledger.md'
+GAPS = 'docs/porting/generated/coverage-gaps.md'
 
 
 def encoded(value):
@@ -62,6 +64,7 @@ def declarations(path, text):
     References below are lexical coverage hints, not proof that a branch ran.
     Unknown declaration headers are returned for review instead of discarded.
     """
+    original_lines = text.splitlines()
     clean = p.strip_comments(text, True).splitlines()
     root, modules, rows, review = (), [], [], []
     for number, line in enumerate(clean, 1):
@@ -88,23 +91,71 @@ def declarations(path, text):
             else:
                 root, modules = names, []
             continue
-        match = re.match(r'(let|val|type|test)\s+([\w\x27]+)\b', statement)
+        scope = root + tuple(part for _, names, _ in modules for part in names)
+        trait = re.match(r'trait\s+([\w\x27]+)(?:<[^>]*>)?\s*=\s*$', statement)
+        impl = re.match(r'impl(?:<[^>]*>)?\s+([\w.]+)(?:<[^>]*>)?\s+for\s+([\w.]+)(?:<[^>]*>)?\s*=\s*$', statement)
+        if trait:
+            modules.append((indent, (trait[1],), None))
+            continue
+        if impl:
+            typ, trait_name = impl[2].split('.')[-1], impl[1].split('.')[-1]
+            names = (trait_name,) if scope and scope[-1] == typ else (typ, trait_name)
+            modules.append((indent, names, None))
+            continue
+        match = re.match(r'(let|val|type|test)\s+(?:``([^`]+)``|([\w\x27]+)\b)', statement)
         if not match:
             if re.match(r'(let|val|type|test|trait|impl)\b', statement):
                 review.append(f'{path}:{number}: unindexed declaration header')
             continue
-        scope = root + tuple(part for _, names, _ in modules for part in names)
         end = number
         while end < len(clean) and (not clean[end].strip() or len(clean[end]) - len(clean[end].lstrip()) > indent):
             end += 1
-        name = '.'.join(scope + (match[2],))
+        name = '.'.join(scope + (match[2] or match[3],))
         rows.append(dict(id=path + '#' + name, name=name, source=path, line=number,
                          kind={'let': 'function', 'val': 'value', 'type': 'type', 'test': 'test'}[match[1]],
-                         scope=scope, body='\n'.join(clean[number - 1:end])))
+                         scope=scope, body='\n'.join(original_lines[number - 1:end])))
     return rows, review
 
 
-def coverage_index(upstream, compiler, maintained):
+def reference_text(text):
+    """Mask literal text/comments but retain expressions inside interpolated strings.
+
+    This is only a lexical reference index, not a parser or an execution claim.
+    """
+    text = p.strip_comments(text)
+    output = ['\n' if char == '\n' else ' ' for char in text]
+
+    def code(index, nested=False):
+        depth = 0
+        while index < len(text):
+            char = text[index]
+            if nested and char == '}' and depth == 0:
+                return index + 1
+            if char == '"' or text.startswith('$"', index):
+                interpolated = char == '$'
+                index += int(interpolated)
+                delimiter = '"""' if text.startswith('"""', index) else '"'
+                index += len(delimiter)
+                while index < len(text) and not text.startswith(delimiter, index):
+                    if text[index] == '\\':
+                        index += 2
+                    elif interpolated and text[index] == '{':
+                        index = code(index + 1, True)
+                    else:
+                        index += 1
+                index += len(delimiter)
+                continue
+            if nested:
+                depth += int(char == '{') - int(char == '}')
+            output[index] = char
+            index += 1
+        return index
+
+    code(0)
+    return ''.join(output).replace('``', '')
+
+
+def declaration_graph(upstream):
     rows, review = [], []
     for path, body in sorted(upstream.items()):
         if path.startswith('packages/') and path.endswith('.dark'):
@@ -119,6 +170,7 @@ def coverage_index(upstream, compiler, maintained):
 
     def references(body, scope):
         result = set()
+        body = reference_text(body)
         # Avoid attributing a local binding/parameter to a package declaration.
         locals_ = set(re.findall(r'\blet\s+([\w\x27]+)|\(([\w\x27]+)\s*:', body))
         shadowed = {name for pair in locals_ for name in pair if name}
@@ -126,7 +178,7 @@ def coverage_index(upstream, compiler, maintained):
             if token.split('.')[0] in shadowed:
                 continue
             token = 'Darklang.' + token if token.startswith('Stdlib.') else token
-            choices = [token] + ['.'.join(scope[:n] + (token,)) for n in range(len(scope), 0, -1)]
+            choices = ['.'.join(scope[:n] + (token,)) for n in range(len(scope), 0, -1)] + [token]
             for choice in choices:
                 # A constructor/field can reference a type through its prefix.
                 while choice:
@@ -140,29 +192,47 @@ def coverage_index(upstream, compiler, maintained):
         return result
 
     graph = {row['id']: references(row['body'], row['scope']) - {row['id']} for row in rows}
+    return rows, graph, references, review
+
+
+def coverage_index(upstream, compiler, maintained):
+    rows, graph, references, review = declaration_graph(upstream)
+    by_name = {row['name'] for row in rows}
     roots = {row['id']: graph[row['id']] for row in rows if row['kind'] == 'test'}
     for path, body in sorted(compiler.items()):
         if path.startswith('test/fixtures/e2e/upstream/') and path.endswith('.dark'):
-            roots[path] = references(p.strip_comments(body.decode(), True), ())
+            roots[path] = references(body.decode(), ())
+    maintained_targets = defaultdict(set)
+    for row in rows:
+        manual = maintained.get(row['name'])
+        if manual is not None:
+            if (not isinstance(manual, dict) or set(manual) != {'tests', 'reason'}
+                    or not manual['reason'] or not isinstance(manual['tests'], list) or not manual['tests']):
+                raise ValueError('Invalid maintained coverage for ' + row['name'])
+            for test in manual['tests']:
+                if test not in roots:
+                    raise ValueError('Unknown existing test reference: ' + str(test))
+                maintained_targets[test].add(row['id'])
     witnesses = defaultdict(dict)
     for test, initial in sorted(roots.items()):
-        queue = deque((target, []) for target in sorted(initial))
+        queue = deque((target, [], 'lexical') for target in sorted(initial))
+        queue.extend((target, [], 'maintained') for target in sorted(maintained_targets[test] - initial))
         visited = set()
         while queue:
-            target, via = queue.popleft()
+            target, via, basis = queue.popleft()
             if target in visited:
                 continue
             visited.add(target)
-            witnesses[target][test] = via
+            witnesses[target][test] = dict(via=via, basis=basis)
             for child in sorted(graph.get(target, ())):
-                queue.append((child, via + [target]))
+                queue.append((child, via + [target], basis))
     result = defaultdict(list)
     for row in rows:
         if row['kind'] == 'test':
             continue
         hints = witnesses[row['id']]
-        direct = sorted(test for test, via in hints.items() if not via)
-        indirect = sorted((test for test, via in hints.items() if via), key=lambda t: (len(hints[t]), t))
+        direct = sorted(test for test, witness in hints.items() if not witness['via'] and witness['basis'] == 'lexical')
+        indirect = sorted((test for test, witness in hints.items() if witness['via']), key=lambda t: (len(hints[t]['via']), t))
         manual = maintained.get(row['name'])
         if manual is not None:
             if not isinstance(manual, dict) or set(manual) != {'tests', 'reason'} or not manual['reason']:
@@ -172,16 +242,154 @@ def coverage_index(upstream, compiler, maintained):
             for test in manual['tests']:
                 if test not in roots:
                     raise ValueError(f'Unknown existing test reference: {test}')
-        kind = 'direct' if direct else 'indirect' if indirect else 'maintained' if manual else 'not-identified'
-        examples = direct or indirect
+        kind = 'direct' if direct else 'maintained' if manual else 'indirect' if indirect else 'not-identified'
+        examples = direct or sorted(manual['tests']) if manual else direct or indirect
         result[row['source']].append(dict(name=row['name'], kind=row['kind'], line=row['line'],
             coverage=dict(kind=kind, reference_count=len(hints),
-                          examples=[dict(test=t, via=hints[t]) for t in examples[:1]],
+                          examples=[dict(test=t, **hints[t]) for t in examples[:1]],
                           maintained=manual)))
     unknown = set(maintained) - set(by_name)
     if unknown:
         raise ValueError('Coverage entries refer to unknown declarations: ' + ', '.join(sorted(unknown)))
     return result, review
+
+
+def package_manifest(upstream):
+    """File dependencies from existing declaration references, not generated probes.
+
+    Embedded StdLib supplies standard dependencies. The requested original file
+    is always compiled, even when it replaces an embedded module.
+    """
+    rows, graph, _, _ = declaration_graph(upstream)
+    paths = {row['id']: row['source'] for row in rows}
+    dependencies = defaultdict(set)
+    for row in rows:
+        if row['kind'] != 'test':
+            dependencies[row['source']].update(paths[key] for key in graph[row['id']]
+                if paths[key] != row['source'] and not paths[key].startswith('packages/darklang/stdlib/'))
+    result = []
+    for path in sorted(upstream):
+        if not path.startswith('packages/') or not path.endswith('.dark'):
+            continue
+        found, ordered = {path}, []
+        def visit(dependency):
+            if dependency in found:
+                return
+            found.add(dependency)
+            for child in sorted(dependencies[dependency]):
+                visit(child)
+            ordered.append(dependency)
+        for dependency in sorted(dependencies[path]):
+            visit(dependency)
+        result.append(dict(source=path, dependencies=ordered))
+    return result
+
+
+def execute_packages(root, upstream, expected_context):
+    executable = root / '_build/default/tools/ledger/compile_packages.exe'
+    if not executable.is_file():
+        return dict(context=expected_context, state='blocked', packages=[],
+                    reason='Build the native package adapter with ./build --ai first.')
+    manifest = package_manifest(upstream)
+    with tempfile.TemporaryDirectory(prefix='ledger-packages-') as temp:
+        directory = Path(temp)
+        # Byte-for-byte pinned blobs, never dirty checkout files or probe source.
+        for path, body in sorted(upstream.items()):
+            if path.startswith('packages/') and path.endswith('.dark'):
+                destination = directory / path
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                destination.write_bytes(body)
+        inputs, report = directory / 'manifest.json', directory / 'report.json'
+        inputs.write_text(encoded(manifest))
+        log = root / 'TestResults/porting/package-compilation.log'
+        log.parent.mkdir(parents=True, exist_ok=True)
+        with log.open('w') as output:
+            run = subprocess.run([str(executable), str(directory), str(inputs), str(report)],
+                                 cwd=root, stdout=output, stderr=subprocess.STDOUT)
+        if run.returncode != 0 or not report.is_file():
+            return dict(context=expected_context, state='blocked', packages=[],
+                reason='Native package adapter could not finish; see TestResults/porting/package-compilation.log.')
+        value = json.loads(report.read_text())
+        if (value.get('schema') != 1 or value.get('stage') != 'native-declarations'
+                or value.get('target') != expected_context['target']):
+            raise ValueError('Invalid native package compilation report')
+        expected = {row['source']: row['dependencies'] for row in manifest}
+        seen = set()
+        for row in value['packages']:
+            path = row['source']
+            if (path in seen or path not in expected or row['dependencies'] != expected[path]
+                    or row['status'] not in ('compiled', 'fail')):
+                raise ValueError('Unexpected or duplicate native package result')
+            seen.add(path)
+            row['reason'] = row['reason'].replace(str(directory), '<pinned-sources>').replace(str(root), '<compiler>')
+        if seen != set(expected):
+            raise ValueError('Native package compilation report is incomplete')
+        return dict(context=expected_context, state='recorded', stage=value['stage'],
+                    packages=sorted(value['packages'], key=lambda row: row['source']))
+
+
+def builtin_counterparts(upstream, compiler):
+    """Map implementation counterparts, not source-callable Builtin bindings.
+
+    A qualified upstream wrapper that calls Builtin.foo identifies a counterpart
+    only when the compiler declares that same qualified wrapper. A builtin name
+    prefix alone is never enough (notably for integer trait methods).
+    """
+    native = defaultdict(set)
+    for path, body in sorted(compiler.items()):
+        if path.startswith(('StdLib/', 'packages/')) and path.endswith('.dark'):
+            for row in declarations(path, body.decode())[0]:
+                if row['kind'] in ('function', 'value'):
+                    native[row['name']].add(path)
+    wrappers = defaultdict(list)
+    for path, body in sorted(upstream.items()):
+        if path.startswith('packages/') and path.endswith('.dark'):
+            for row in declarations(path, body.decode())[0]:
+                names = [row['name']]
+                # Upstream moved numeric operators into trait impl namespaces;
+                # the pre-trait compiler retains the method at its type module.
+                parts = row['name'].split('.')
+                operator_traits = {'Add', 'Subtract', 'Multiply', 'Divide', 'Modulo', 'Power', 'Negate',
+                    'Compare', 'BitwiseAnd', 'BitwiseOr', 'BitwiseXor', 'BitwiseNot', 'ShiftLeft', 'ShiftRight', 'ToString'}
+                if len(parts) >= 5 and parts[-2] in operator_traits and parts[:2] == ['Darklang', 'Stdlib']:
+                    names.append('.'.join(parts[:-2] + parts[-1:]))
+                matches = sorted({path for name in names for path in native.get(name, ())})
+                if row['kind'] in ('function', 'value') and matches:
+                    for name in sorted(set(re.findall(r'\bBuiltin\.([\w\x27]+)', reference_text(row['body'])))):
+                        wrappers[name].append(dict(name=row['name'], upstream=path,
+                                                   compiler=matches))
+    return native, wrappers
+
+
+def computed_builtin_calls(upstream):
+    """Reviewed local constructor families with literal first-argument names.
+
+    This expands source call sites only; it does not validate an assembled runner
+    or registry. Unfamiliar computed constructors remain visible in the ledger.
+    """
+    families = {
+        'Builtins.Cli/Libs/RuntimeChild.fs': ['make', 'child'],
+        'Builtins.Cli/Libs/Syscall.fs': ['make', 'timestamp', 'clock', 'clockUnit', 'poll'],
+        'Builtins.Time/Libs/RuntimeClock.fs': ['make'],
+        'Builtins.Matter/Libs/PM/Packages.fs': ['locationsByHashFn', 'findByLocationFn', 'getByHashFn'],
+        'Builtins.Matter/Libs/PM/Permissions.fs': ['policyFn', 'hostOnly'],
+    }
+    rows = []
+    for suffix, helpers in sorted(families.items()):
+        path = 'backend/src/Builtins/' + suffix
+        if path not in upstream:
+            continue
+        text = p.strip_comments(upstream[path].decode())
+        templates = re.findall(r'\bname\s*=\s*fn\s+(?:name|builtinName)\s+(\d+)\b', text)
+        if not templates or set(templates) != {'0'}:
+            raise ValueError('Review changed computed builtin constructor versions: ' + path)
+        pattern = r'(?<![\w.])(' + '|'.join(helpers) + r')\s+"([^"\\\n]+)"'
+        for match in re.finditer(pattern, text):
+            rows.append(dict(category='builtins', upstream=path, compiler=[],
+                id=f'builtins:{path}#fn/{match[2]}/v0',
+                builtin=dict(kind='fn', name=match[2], version=0),
+                constructor=match[1], source_line=text.count('\n', 0, match.start()) + 1))
+    return rows
 
 
 def context(root, upstream, records, compiler):
@@ -243,15 +451,18 @@ def execute_tests(root, expected_context):
                     parse_errors=discovery['parse_errors'], tests=tests)
 
 
-def build(root, upstream, run_tests=False):
+def build(root, upstream, run_tests=False, compile_packages=False):
     config = read_inputs(root)
     sources = p.read_yaml(root / 'porting/sources.yaml')
     if p.git_revision(upstream) != sources['upstream_revision']:
         raise ValueError('Upstream checkout must match porting/sources.yaml exactly')
     upstream_files = p.checked_files(upstream, sources['upstream_revision'])
     records, compiler = p.discover(root, upstream_files)
+    known_builtins = {record['id'] for record in records}
+    records += [record for record in computed_builtin_calls(upstream_files) if record['id'] not in known_builtins]
     provenance = context(root, upstream, records, compiler)
     coverage, review = coverage_index(upstream_files, compiler, config['coverage'])
+    native_names, wrapper_counterparts = builtin_counterparts(upstream_files, compiler)
     features = []
     for feature in sorted(config['features'], key=lambda f: f['name']):
         hashes = {path: p.digest(compiler[path]) if path in compiler else None for path in feature['sources']}
@@ -272,39 +483,79 @@ def build(root, upstream, run_tests=False):
                 used_mappings.add(path)
             if not isinstance(candidates, list) or any(not isinstance(c, str) or c not in compiler for c in candidates):
                 raise ValueError(f'Invalid source mapping: {path}')
+            # Exact identity can recover moved files without a maintained guess.
+            exact = [c for c, body in compiler.items() if c.startswith(('StdLib/', 'packages/'))
+                     and c.endswith('.dark') and path and body == upstream_files[path]]
+            if exact:
+                candidates = exact
             identical = [c for c in candidates if path and compiler[c] == upstream_files[path]]
             status = ('compiler-only' if path is None else 'identical' if identical else
                       'different' if candidates else 'missing')
             exception = config['source_exceptions'].get(path)
+            original = {r['name'] for r in declarations(path, upstream_files[path].decode())[0]} if path else set()
+            counterparts = {r['name'] for c in candidates for r in declarations(c, compiler[c].decode())[0]}
             source_rows.append(dict(id=record['id'], category=category, upstream=path,
                 compiler=sorted(candidates), source_status=status, identical=sorted(identical),
+                mapping_basis='byte-identity' if identical else 'maintained' if path in used_mappings else 'declared-root-module' if candidates else 'none',
+                declaration_comparison=dict(shared=sorted(original & counterparts),
+                    upstream_only=sorted(original - counterparts), compiler_only=sorted(counterparts - original)),
                 exception=exception, declarations=coverage.get(path, []),
                 compilation=dict(status='not-run', reason='Declaration-only package compilation adapter pending')
                     if category == 'packages' else None))
-            if status in ('different', 'missing') and not exception:
-                review.append('Source mapping/difference: ' + record['id'])
+            if status == 'different' and not exception:
+                review.append(('Source difference: ' if original & counterparts else 'Module-only mapping needs review: ') + record['id'])
+            elif status == 'missing' and not exception:
+                review.append('Missing source counterpart: ' + record['id'])
         elif category == 'parser':
             paths = config['parser_mappings'].get(record['id'], record['compiler'])
             if record['id'] in config['parser_mappings']:
                 used_parser.add(record['id'])
             if not isinstance(paths, list) or any(path not in compiler for path in paths):
                 raise ValueError('Invalid parser mapping: ' + record['id'])
-            status = 'maintained' if record['id'] in used_parser else 'candidate' if paths else 'unmapped'
+            status = ('maintained' if record['id'] in used_parser else 'compiler-only' if path is None
+                      else 'candidate' if paths else 'unmapped')
             parser.append(dict(id=record['id'], compiler=sorted(paths), mapping=status))
         elif category == 'builtins' and 'builtin' in record:
-            paths = config['builtin_mappings'].get(record['id'], record['compiler'])
+            # A generic fn "toString" registration elsewhere is not Builtin.toString.
+            paths = config['builtin_mappings'].get(record['id'],
+                sorted(native_names.get('Builtin.' + record['builtin']['name'], ()))
+                if record['builtin']['version'] == 0 else [])
             if record['id'] in config['builtin_mappings']:
                 used_builtins.add(record['id'])
             if not isinstance(paths, list) or any(path not in compiler for path in paths):
                 raise ValueError('Invalid builtin mapping: ' + record['id'])
+            counterparts = wrapper_counterparts.get(record['builtin']['name'], [])
             builtins.append(dict(id=record['id'], **record['builtin'], compiler=sorted(paths),
-                                 mapping='maintained' if record['id'] in used_builtins else 'same-name' if paths else 'missing'))
+                mapping='maintained' if record['id'] in used_builtins else 'declared-builtin' if paths else 'source-counterpart' if counterparts else 'missing',
+                source_counterparts=counterparts,
+                binding='mapped' if paths else 'not-mapped',
+                note='Source counterparts identify implementation locations, not callable Builtin aliases or behavior.'))
     for key, used in [('source_mappings', used_mappings), ('parser_mappings', used_parser), ('builtin_mappings', used_builtins)]:
         if set(config[key]) - used:
             raise ValueError('Unused maintained mappings: ' + ', '.join(sorted(set(config[key]) - used)))
     for path, reason in config['source_exceptions'].items():
         if path not in upstream_files or not isinstance(reason, str) or not reason.strip():
             raise ValueError('Invalid source exception: ' + str(path))
+
+    package_path = root / PACKAGE_RECEIPT
+    package_receipt = json.loads(package_path.read_text()) if package_path.exists() and not compile_packages else None
+    if package_receipt is not None and (package_receipt.get('schema') != 1
+            or package_receipt.get('state') not in ('recorded', 'blocked')
+            or not isinstance(package_receipt.get('packages'), list)):
+        raise ValueError('Invalid package-results.json receipt')
+    if compile_packages:
+        package_receipt = dict(schema=1, **execute_packages(root, upstream_files, provenance))
+        _, after = p.discover(root, upstream_files)
+        if context(root, upstream, records, after) != provenance:
+            raise ValueError('Inputs changed during package compilation; previous results are unchanged')
+        package_path.write_text(encoded(package_receipt))
+    package_current = package_receipt is not None and package_receipt.get('context') == provenance
+    compilation_state = package_receipt['state'] if package_current else 'stale' if package_receipt else 'not-run'
+    results = {row['source']: row for row in package_receipt['packages']} if package_current else {}
+    for row in source_rows:
+        if row['category'] == 'packages':
+            row['compilation'] = results.get(row['upstream'], dict(status='not-applicable' if row['upstream'] is None else compilation_state,
+                reason='Compiler-only support file' if row['upstream'] is None else package_receipt.get('reason', '') if package_current else 'Run --compile-packages for current source inputs'))
 
     receipt_path = root / RECEIPT
     receipt = json.loads(receipt_path.read_text()) if receipt_path.exists() and not run_tests else None
@@ -332,9 +583,15 @@ def build(root, upstream, run_tests=False):
                  named_tests=dict(count=len(named), cases=named, status='blocked',
                      reason='Named package test execution is not implemented; no pass inferred from discovery.'))
     builtin_sources = [r for r in records if r['category'] == 'builtins' and 'builtin_declaration_counts' in r]
+    computed = [dict(source=path, **item) for path, body in sorted(upstream_files.items())
+                if path.startswith('backend/src/Builtins/') and path.endswith('.fs')
+                for item in p.builtin_declarations(body.decode())[1]]
     return dict(schema=1, context=provenance, features=features, parser=parser, builtins=builtins,
                 computed_builtin_registrations=sum(r['builtin_declaration_counts']['computed'] for r in builtin_sources),
-                sources=source_rows, tests=tests, review=sorted(set(review)))
+                computed_builtin_review=computed,
+                sources=source_rows, tests=tests, compilation=dict(state=compilation_state,
+                    reason=package_receipt.get('reason', '') if package_current else '',
+                    stage='native-declarations'), review=sorted(set(review)))
 
 
 def markdown(value):
@@ -354,9 +611,11 @@ def markdown(value):
               'Lexical references are coverage hints, not evidence of execution. One deterministic witness (the shortest indirect path) and the total reference count per declaration are in `porting/generated/ledger.json`.', '',
               '| Direct | Indirect | Maintained | Not identified |', '| ---: | ---: | ---: | ---: |',
               '| ' + ' | '.join(str(counts[k]) for k in ('direct', 'indirect', 'maintained', 'not-identified')) + ' |', '',
-              'Package compilation: not run; a declaration-only compilation adapter remains to be implemented.', '',
+              'Package compilation state: **' + value['compilation']['state'] + '**. Original declarations are parsed, checked and lowered through the native preamble pipeline; no entry program is synthesized or linked.', '',
+              '| Compiled | Fail | Blocked | Stale | Not run |', '| ---: | ---: | ---: | ---: | ---: |',
+              '| ' + ' | '.join(str(Counter(r['compilation']['status'] for r in package_rows)[k]) for k in ('compiled', 'fail', 'blocked', 'stale', 'not-run')) + ' |', '',
               '## Parser and builtins', '',
-              'Builtin rows are literal registration candidates. Same-name matches do not establish assembled bindings; aliases and computed registrations remain review items.', '']
+              'Builtin mappings distinguish callable Builtin declarations from source implementation counterparts. A counterpart is not a callable alias or a behavior pass. Computed registrations remain explicit review items.', '']
     for category in ('parser', 'builtins'):
         lines.append('- ' + category + ': ' + ', '.join(f'{k}: {v}' for k, v in sorted(Counter(r['mapping'] for r in value[category]).items())))
     lines += [f"- Computed builtin registrations needing review: {value['computed_builtin_registrations']}", '',
@@ -373,17 +632,38 @@ def markdown(value):
     return '\n'.join(lines) + '\n'
 
 
+def coverage_gaps(value):
+    lines = ['# Existing-test reference gaps', '',
+        'Regenerated from the pinned source index. These are not failing tests or proof that no test exists.', '',
+        'Review found three recurring cases: numeric trait methods reached implicitly by operators '
+        '(maintained references record the existing typed suites); archived `darklang/test/test_*` helpers '
+        'whose newer tests redeclare their own functions; and CLI/host APIs without a discovered path '
+        'from an existing test. None is silently exempted or supplied with a new test.', '',
+        'Remaining implicit dispatch, reflection, and unfamiliar syntax can require maintained references. '
+        'References do not establish runtime execution.', '']
+    for row in value['sources']:
+        if row['category'] != 'packages' or not row['upstream']:
+            continue
+        gaps = [d for d in row['declarations'] if d['coverage']['kind'] == 'not-identified']
+        if gaps:
+            lines += ['## ' + row['upstream'], '', '| Declaration | Kind | Line |', '| --- | --- | ---: |']
+            lines += [f"| {p.cell(d['name'])} | {d['kind']} | {d['line']} |" for d in gaps]
+            lines += ['']
+    return '\n'.join(lines) + '\n'
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--upstream', type=Path, required=True)
     parser.add_argument('--run-tests', action='store_true', help='Execute existing tests; does not build the compiler')
+    parser.add_argument('--compile-packages', action='store_true', help='Compile pinned original declarations; no probes and no test execution')
     parser.add_argument('--check', action='store_true', help='Compare deterministic generated outputs without writing')
     args = parser.parse_args()
-    if args.check and args.run_tests:
-        parser.error('--check does not execute tests')
+    if args.check and (args.run_tests or args.compile_packages):
+        parser.error('--check does not execute tests or compilation')
     try:
-        value = build(ROOT, args.upstream.resolve(), args.run_tests)
-        outputs = {OUTPUT: encoded(value), REPORT: markdown(value)}
+        value = build(ROOT, args.upstream.resolve(), args.run_tests, args.compile_packages)
+        outputs = {OUTPUT: encoded(value), REPORT: markdown(value), GAPS: coverage_gaps(value)}
         for name, contents in outputs.items():
             path = ROOT / name
             if args.check:
@@ -396,6 +676,10 @@ def main():
         if args.run_tests and (value['tests']['state'] != 'recorded' or value['tests']['parse_errors']
                 or value['tests']['suite_exit_code'] != 0 or value['tests']['named_tests']['count'] > 0
                 or any(t['status'] in ('fail', 'blocked') for t in value['tests']['outcomes'])):
+            return 1
+        if args.compile_packages and (value['compilation']['state'] != 'recorded'
+                or any(row['compilation']['status'] != 'compiled' for row in value['sources']
+                       if row['category'] == 'packages' and row['upstream'])):
             return 1
         return 0
     except (OSError, ValueError, KeyError, TypeError, subprocess.CalledProcessError) as error:

@@ -92,6 +92,7 @@ let parsePath flag args =
    Parse --timings-json=PATH option
 *)
 let parseTimingsJsonArg = parsePath "--timings-json"
+let parseResultsJsonArg = parsePath "--results-json"
 
 (*
    Parse --codegen-profile-json=PATH option
