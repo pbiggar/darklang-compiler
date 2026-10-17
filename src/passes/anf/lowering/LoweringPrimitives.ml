@@ -176,7 +176,10 @@ let spareImmediateSumSentinel name args sums =
   | Some (AST.TList _) -> Some 4L
   | _ -> None
 
-let sumPayloadExpr source atom sums =
+let sumPayloadExpr source payloadType atom sums =
+  let boxed () =
+    ANF.RawGet (atom, ANF.IntLiteral (ANF.Int64 8L), Some payloadType)
+  in
   match source with
   | AST.TSum (name, args) -> (
       let payload =
@@ -192,8 +195,8 @@ let sumPayloadExpr source atom sums =
       in
       match payload with
       | Some typ -> ANF.TypedAtom (atom, typ)
-      | None -> ANF.TupleGet (atom, 1))
-  | _ -> ANF.TupleGet (atom, 1)
+      | None -> boxed ())
+  | _ -> boxed ()
 
 let sumTypeNamesFromVariantLookup variants =
   M.fold (fun _ (owner, _, _, _) names -> S.add owner names) variants S.empty

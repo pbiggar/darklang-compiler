@@ -1,0 +1,54 @@
+// async_chain.e2e - Pending composition does not force a transported argument.
+
+Stdlib.__Task.__forceCurrent (Stdlib.__Task.__joinCurrent (Stdlib.__Async.__ready (Stdlib.__Async.__ready 42L))) = 42L
+
+let chainPending () : Int64 =
+  let outer = Stdlib.__Async.__new<Stdlib.__Async.__Value<Int64>> () in
+  let joined = Stdlib.__Task.__joinCurrent (Stdlib.__Async.__pending outer) in
+  let _ = Stdlib.__Task.__resolve (__fiber_current ()) outer (Stdlib.__Async.__ready 42L) in
+  Stdlib.__Task.__forceCurrent joined
+
+Stdlib.__Task.__runMain (fun _unit -> chainPending ()) = 42L // join does not wait for the outer promise; leak_check
+
+let chainInput () : Int64 =
+  let input = Stdlib.__Async.__new<Int64> () in
+  let result = Stdlib.__Task.__delayValueCurrent 0L (Stdlib.__Async.__pending input) in
+  let _ = Stdlib.__Task.__resolve (__fiber_current ()) input 42L in
+  Stdlib.__Task.__forceCurrent result
+
+Stdlib.__Task.__runMain (fun _unit -> chainInput ()) = 42L // timer transport does not force its input; leak_check
+
+let chainStart () : Int64 =
+  let input = Stdlib.__Async.__new<Int64> () in
+  let result = Stdlib.__Task.__startValueCurrent (fun _unit -> Stdlib.__Async.__pending input) in
+  let _ = Stdlib.__Task.__resolve (__fiber_current ()) input 42L in
+  Stdlib.__Task.__forceCurrent result
+
+Stdlib.__Task.__runMain (fun _unit -> chainStart ()) = 42L // operation return does not force its pending result; leak_check
+
+Stdlib.__Task.__runMain (fun _unit -> let result = Stdlib.__Task.__delayValueCurrent 0L (Stdlib.__Async.__ready ("managed" ++ " payload")) in (Stdlib.__Task.__forceCurrent result, Stdlib.__Task.__forceCurrent result)) = ("managed payload", "managed payload") // repeat demands retain owned results; leak_check
+
+let outside = Stdlib.__Task.__runMain (fun _unit -> Stdlib.__Task.__delayValueCurrent 0L (Stdlib.__Async.__ready ("after" ++ " scope"))) in Stdlib.__Task.__forceCurrent outside = "after scope" // resolved joins can be forced outside a task; leak_check
+
+Stdlib.__Task.__runMain (fun _unit -> let unused = Stdlib.__Task.__delayValueCurrent 0L (Stdlib.__Async.__ready ("unused" ++ " payload")) in 42L) = 42L // dropping a join preserves producer ownership; leak_check
+
+type ChainBox = { value: Stdlib.__Async.__Value<String> }
+let chainStorage () : List<Stdlib.__Async.__Value<String>> * ChainBox * (Unit -> Stdlib.__Async.__Value<String>) =
+  let value = Stdlib.__Task.__delayValueCurrent 0L (Stdlib.__Async.__ready ("stored" ++ " payload")) in
+  ([value], ChainBox { value = value }, fun _unit -> value)
+
+let stored = Stdlib.__Task.__runMain (fun _unit -> chainStorage ()) in let (items, box, captured) = stored in let first = match items with | [] -> "missing" | head :: _tail -> Stdlib.__Task.__forceCurrent head in (first, Stdlib.__Task.__forceCurrent box.value, Stdlib.__Task.__forceCurrent (captured ())) = ("stored payload", "stored payload", "stored payload") // stored joins survive scope cleanup; leak_check
+
+let chainDepth (depth: Int64) (value: Stdlib.__Async.__Value<Float>) : Stdlib.__Async.__Value<Float> =
+  if depth == 0L then value
+  else Stdlib.__Task.__delayValueCurrent 0L (chainDepth (depth - 1L) value)
+
+Stdlib.__Task.__runMain (fun _unit -> Stdlib.__Task.__forceCurrent (chainDepth 64L (Stdlib.__Async.__ready 42.25))) = 42.25 // deep joins preserve float payloads; leak_check
+Stdlib.__Task.__runMain (fun _unit -> Stdlib.__Task.__forceCurrent (chainDepth 1L (Stdlib.__Async.__ready 42.25))) = 42.25 // single float join; leak_check
+Stdlib.__Task.__runMain (fun _unit -> Stdlib.__Task.__forceCurrent (chainDepth 2L (Stdlib.__Async.__ready 42.25))) = 42.25 // nested float joins; leak_check
+
+let chainIntDepth (depth: Int64) (value: Stdlib.__Async.__Value<Int64>) : Stdlib.__Async.__Value<Int64> =
+  if depth == 0L then value
+  else Stdlib.__Task.__delayValueCurrent 0L (chainIntDepth (depth - 1L) value)
+
+Stdlib.__Task.__runMain (fun _unit -> Stdlib.__Task.__forceCurrent (chainIntDepth 64L (Stdlib.__Async.__ready 42L))) = 42L // deep integer joins; leak_check

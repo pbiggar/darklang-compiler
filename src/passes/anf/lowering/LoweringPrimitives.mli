@@ -46,7 +46,11 @@ val spareImmediateSumSentinel :
   string -> AST.semanticType list -> sumRepresentationIndex -> int64 option
 
 val sumPayloadExpr :
-  AST.semanticType -> ANF.atom -> sumRepresentationIndex -> ANF.cExpr
+  AST.semanticType ->
+  AST.semanticType ->
+  ANF.atom ->
+  sumRepresentationIndex ->
+  ANF.cExpr
 
 val sumTypeNamesFromVariantLookup : variantLookup -> StringOrder.Set.t
 val sumMetadataFromVariantLookup : variantLookup -> sumMetadata

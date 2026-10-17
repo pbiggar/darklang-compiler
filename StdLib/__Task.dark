@@ -107,6 +107,7 @@ let __park<'a> (context: RawPtr) (promise: Stdlib.__Async.__Promise<a>) : Unit =
 let __force<'a> (context: RawPtr) (value: Stdlib.__Async.__Value<a>) : a =
     match value with
     | ValueReady result -> result
+    | ValueDeferred follow -> Stdlib.__Task.__force context (follow ())
     | ValuePending promise ->
         match Stdlib.__Async.__poll promise with
         | Some result -> result
@@ -123,6 +124,11 @@ let __forceCurrent<'a> (value: Stdlib.__Async.__Value<a>) : a =
     match Stdlib.__Async.__pollValue value with
     | Some result -> result
     | None -> Stdlib.__Task.__force (__fiber_current ()) value
+
+let __joinCurrent<'a> (value: Stdlib.__Async.__Value<Stdlib.__Async.__Value<a>>) : Stdlib.__Async.__Value<a> =
+    match Stdlib.__Async.__pollValue value with
+    | Some inner -> inner
+    | None -> Stdlib.__Async.__deferred (fun _unit -> Stdlib.__Task.__forceCurrent value)
 
 let __now () : Int64 =
     match Stdlib.__Network.monotonicMillis () with
@@ -150,6 +156,9 @@ let __delayCurrent<'a> (delay: Int64) (value: a) : Stdlib.__Async.__Value<a> =
     let context = __fiber_current () in
     if __rawptr_to_word context == 0L then Builtin.crash "Cannot start a timer outside a native task"
     else Stdlib.__Task.__delay context delay value
+
+let __delayValueCurrent<'a> (delay: Int64) (value: Stdlib.__Async.__Value<a>) : Stdlib.__Async.__Value<a> =
+    Stdlib.__Task.__joinCurrent (Stdlib.__Task.__delayCurrent delay value)
 
 let __landTimers (now: Int64) (timers: List<Stdlib.__Task.__Timer>) (keep: List<Stdlib.__Task.__Timer>) : List<Stdlib.__Task.__Timer> =
     match timers with
@@ -256,6 +265,9 @@ let __startCurrent<'a> (entry: Unit -> a) : Stdlib.__Async.__Value<a> =
         let _ = __raw_write_word task.context 64L 2L in
         let _ = __fiber_switch context task.context in
         Stdlib.__Async.__pending promise
+
+let __startValueCurrent<'a> (entry: Unit -> Stdlib.__Async.__Value<a>) : Stdlib.__Async.__Value<a> =
+    Stdlib.__Task.__joinCurrent (Stdlib.__Task.__startCurrent entry)
 
 let __landIO (scheduler: RawPtr) (entries: List<Stdlib.__Task.__IO>) (events: List<Stdlib.__Network.Ready>) (index: Int64) (keep: List<Stdlib.__Task.__IO>) : List<Stdlib.__Task.__IO> =
     match entries with

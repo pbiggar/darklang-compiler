@@ -796,7 +796,8 @@ let lowerExpression (toANFCore : LoweringCallbacks.expressionLowerer)
             let yes =
               A.Let
                 ( raw,
-                  (if unboxed then A.Atom value else A.TupleGet (value, 1)),
+                  (if unboxed then A.Atom value
+                   else A.RawGet (value, int 8L, Some payloadType)),
                   A.Let
                     ( typed,
                       A.TypedAtom (A.Var raw, payloadType),

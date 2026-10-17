@@ -58,12 +58,23 @@ run-completion policy are not implemented by dropping this object.
 
 ## Compiler integration contract
 
-`__Value<a>` is a boxed sum with `ValueReady a` and `ValuePending (__Promise<a>)`
-variants. The ordinary sum release plans own either payload correctly, including
+`__Value<a>` is a boxed sum with `ValueReady a`, `ValuePending (__Promise<a>)`
+and `ValueDeferred (Unit -> __Value<a>)` variants. The ordinary sum release plans
+own these payloads correctly, including
 when carriers are returned, captured or nested in containers. `__ready` and
 `__pending` construct it; `__pollValue` probes it without waiting. This separates
 the discriminator from full-width scalar/float payloads while retaining ordinary
 native calls. It does not yet change the representation of source-level values.
+
+A deferred carrier follows an already-started producer when demanded; it does
+not postpone initiation. `__joinCurrent` flattens a carrier containing another
+carrier without forcing either at the join point. `__delayValueCurrent` and
+`__startValueCurrent` use it to transport pending arguments and operation results.
+The nonblocking `__pollValue` probe returns `None` for an unevaluated deferred
+join, even if following that join would no longer require suspension. Forcing it
+outside a task succeeds when its underlying promises are ready; an unresolved
+promise still requires a task. Deferred joins retain their producer references
+through ordinary closure ownership and support repeated demands.
 
 The following demand rules guide the next compiler slice; they are not
 implemented by defining these explicit runtime types alone.
@@ -189,3 +200,5 @@ regression also checks native leak accounting.
 `async_start.e2e` checks eager entry, nested operations, runnable ordering,
 producer ownership after consumer abandonment, managed results and startup
 arguments from child stacks.
+`async_chain.e2e` checks composition without early demands, repeated reads,
+managed storage and capture, abandonment, and deep floating-point chains.

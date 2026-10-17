@@ -16,7 +16,10 @@ type __Promise<'a> = { cell: RawPtr, lifecycle: Stream<Unit> }
 // are private runtime types, not Future/Promise types in user programs. Compiler
 // transport lowering will select carriers; ordinary concrete values stay on
 // their existing representation until that lowering is implemented.
-type __Value<'a> = | ValueReady of a | ValuePending of Stdlib.__Async.__Promise<a>
+type __Value<'a> =
+    | ValueReady of a
+    | ValuePending of Stdlib.__Async.__Promise<a>
+    | ValueDeferred of (Unit -> Stdlib.__Async.__Value<a>)
 
 let __STATE () : Int64 = 0L
 let __PAYLOAD () : Int64 = 8L
@@ -97,9 +100,14 @@ let __ready<'a> (value: a) : Stdlib.__Async.__Value<a> = ValueReady value
 
 let __pending<'a> (promise: Stdlib.__Async.__Promise<a>) : Stdlib.__Async.__Value<a> = ValuePending promise
 
+// A join retains an already-started producer. Its closure follows the outer
+// result only when demanded; creating or storing the join never starts work.
+let __deferred<'a> (follow: Unit -> Stdlib.__Async.__Value<a>) : Stdlib.__Async.__Value<a> = ValueDeferred follow
+
 // A nonblocking probe of the carrier, useful independently of task suspension.
 // The eventual force primitive must park on a pending promise, not poll in a loop.
 let __pollValue<'a> (value: Stdlib.__Async.__Value<a>) : Stdlib.Option.Option<a> =
     match value with
     | ValueReady payload -> Some payload
     | ValuePending promise -> Stdlib.__Async.__poll promise
+    | ValueDeferred _ -> None

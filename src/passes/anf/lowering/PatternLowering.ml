@@ -546,7 +546,8 @@ let lowerMatch (toANFCore : LoweringCallbacks.expressionLowerer)
               let pat, ptype = payload pats fields in
               let id, gen = A.freshVar gen in
               collect mode pat (A.Var id) ptype env
-                (append [ (id, P.sumPayloadExpr typ source sums.P.cases) ])
+                (append
+                   [ (id, P.sumPayloadExpr typ ptype source sums.P.cases) ])
                 gen)
     | C.PList pats | C.PListCons (pats, _) ->
         let isCons = match pat with C.PListCons _ -> true | _ -> false in
@@ -812,7 +813,7 @@ let lowerMatch (toANFCore : LoweringCallbacks.expressionLowerer)
                 Ok
                   ( K.wrapBindings
                       [
-                        (raw, P.sumPayloadExpr typ source sums.P.cases);
+                        (raw, P.sumPayloadExpr typ ptype source sums.P.cases);
                         (typed, A.TypedAtom (A.Var raw, ptype));
                       ]
                       body,
@@ -1158,7 +1159,17 @@ let lowerMatch (toANFCore : LoweringCallbacks.expressionLowerer)
                         (Some
                            ( A.Var id,
                              bindings
-                             @ [ (value, A.TupleGet (source, 1)) ]
+                             @ [
+                                 ( value,
+                                   P.sumPayloadExpr typ
+                                     (match ptype with
+                                     | Some typ -> typ
+                                     | None ->
+                                         Crash.crash
+                                           "Constructor payload pattern lost \
+                                            its type")
+                                     source sums.P.cases );
+                               ]
                              @ innerBindings
                              @ [ (id, A.Prim (A.And, A.Var cmp, condition)) ],
                              gen )))
@@ -1796,13 +1807,19 @@ let lowerMatch (toANFCore : LoweringCallbacks.expressionLowerer)
                 ],
                 A.Var cmp )
             in
-            let* stages, gen =
-              buildPatternStages inner (A.Var value) (Some ptype) gen
-            in
-            Ok
-              ( stage
-                :: prependBindings [ (value, A.TupleGet (source, 1)) ] stages,
-                gen )
+            if pats = [] then Ok ([ stage ], gen)
+            else
+              let* stages, gen =
+                buildPatternStages inner (A.Var value) (Some ptype) gen
+              in
+              Ok
+                ( stage
+                  :: prependBindings
+                       [
+                         (value, P.sumPayloadExpr typ ptype source sums.P.cases);
+                       ]
+                       stages,
+                  gen )
         | _ -> flat ())
     | C.PTuple pats ->
         let rec elements pats index gen stages =
