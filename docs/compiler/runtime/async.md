@@ -93,11 +93,14 @@ entry callbacks demand their result to satisfy the runtime ABI. Closure capture
 slots widen independently to carriers, with matching environment types in lifted
 function versions. Statically known closure calls propagate pending arguments
 and results. Capturing closures with concrete callable interfaces can escape
-through ordinary source functions. Local tuples retain independent pending field
-layouts through aliases and nested tuples. Projecting one field preserves that
-field's carrier and does not inspect its siblings; explicit native result adapters
-materialize tuple fields recursively. Tuple transport across ordinary signatures,
-joins and captures, other aggregate storage, and escaping callables whose argument
+through ordinary source functions. Local tuples and records retain independent
+pending field layouts through aliases and nested storage. Local records use a
+structural physical type with updated field descriptors, so ownership sees each
+field's actual carrier type. Projecting one field preserves that field's carrier
+and does not inspect its siblings; explicit native result adapters materialize
+fields recursively and rebuild nominal records using their source descriptors.
+Aggregate transport across ordinary signatures, joins and captures, collection
+storage, and escaping callables whose argument
 or result interface changes still require coordinated rewriting and currently
 produce compilation diagnostics. The hooks are
 compiler test interfaces, not public async APIs or automatic I/O lowering.
@@ -242,3 +245,9 @@ inspecting closures, callable aliases, and native child task result adaptation.
 `async_tuple.e2e` checks construction, aliases, independent integer/float fields,
 unrelated projections, abandoned managed fields, nested tuples, and concrete
 native entry results.
+
+`async_record.e2e` checks independent fields, managed native results, nested
+records and tuples, record updates and abandoned fields. `async_callable.e2e`
+checks that passing or abandoning a pending function value does not demand it,
+while invocation does. `async_result.e2e` checks constructor demands across
+ordinary calls and preserves managed `Error` values as ordinary payloads.
