@@ -78,14 +78,19 @@ through ordinary closure ownership and support repeated demands.
 The following demand rules guide the next compiler slice; they are not
 implemented by defining these explicit runtime types alone.
 
-`LowerAsyncDemands` now provides an initial local lowering through private
+`LowerAsyncDemands` provides lowering through private
 `__Task.__transport` and `__Task.__delayTransparent` hooks. Their source results
 have the ordinary payload type. Bindings and same-type aliases retain the
 carrier; arithmetic, branch conditions and other concrete inspections insert
-typed force calls before ownership elaboration. Explicit native task entry
-callbacks demand their result to satisfy the runtime ABI. This slice rejects
-pending transport across ordinary call, return, join and storage boundaries;
-those signatures and layouts still need coordinated rewriting. The hooks are
+typed force calls before ownership elaboration. A fixed-point analysis propagates
+pending parameters and results through direct calls, recursion and branch joins.
+Pending-capable calls use generated function versions with typed carrier
+parameters and results; concrete calls to synchronous functions retain their
+existing signatures. Original source ANF bodies are retained across preamble
+compilation so later callers can request these versions. Explicit native task
+entry callbacks demand their result to satisfy the runtime ABI. Pending storage,
+capture and indirect argument interfaces still require coordinated layout and
+callable rewriting and currently produce compilation diagnostics. The hooks are
 compiler test interfaces, not public async APIs or automatic I/O lowering.
 
 | Operation | Demand |
@@ -179,7 +184,7 @@ tasks, timers and readiness registrations. It does not choose the production
 program's policy for unused outstanding I/O, cancellation or effect ordering.
 
 The next integration boundary is compiler carrier and demand lowering across
-signatures, joins, closures and aggregate storage, followed by automatic entry
+closures, indirect calls and aggregate storage, followed by automatic entry
 and real I/O initiation. The explicit runtime does not establish those source
 semantics by itself.
 
@@ -213,3 +218,8 @@ arguments from child stacks.
 managed storage and capture, abandonment, and deep floating-point chains.
 `async_demand.e2e` checks ordinary source types through bindings, aliases,
 arithmetic, conditions, unused values and explicit native entry results.
+
+`async_calls.e2e` and `async_returns.e2e` check direct argument/result transport,
+recursive calls, mixed concrete and pending call sites, branch joins, and
+unselected pending arguments. They resolve a promise after passing it through
+ordinary functions, so an early demand prevents the expected result.

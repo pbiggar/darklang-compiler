@@ -2,6 +2,10 @@
 
 let sourcePass (value: Int64) : Int64 = value
 let sourcePassAgain (value: Int64) : Int64 = sourcePass value
+let sourceFloatPass (value: Float) : Float = value
+let sourceTextPass (value: String) : String = value
+let sourceSelect (condition: Bool) (left: Int64) (right: Int64) : Int64 =
+  if condition then left else right
 let sourceInspect (value: Int64) : Int64 = value + 1L
 let sourceRecursivePass (depth: Int64) (value: Int64) : Int64 =
   if depth == 0L then value else sourceRecursivePass (depth - 1L) value
@@ -11,3 +15,8 @@ Stdlib.__Task.__runMain (fun _unit -> let gate = Stdlib.__Async.__new<Int64> () 
 Stdlib.__Task.__runMain (fun _unit -> let gate = Stdlib.__Async.__new<Int64> () in let value = Stdlib.__Task.__transport (Stdlib.__Async.__pending gate) in let passed = sourcePassAgain value in let _ = Stdlib.__Task.__resolve (__fiber_current ()) gate 42L in passed + 1L) = 43L // propagation crosses multiple ordinary calls; leak_check
 Stdlib.__Task.__runMain (fun _unit -> sourceInspect (Stdlib.__Task.__delayTransparent 0L 41L)) = 42L // the callee suspends only when inspecting; leak_check
 Stdlib.__Task.__runMain (fun _unit -> let gate = Stdlib.__Async.__new<Int64> () in let value = Stdlib.__Task.__transport (Stdlib.__Async.__pending gate) in let passed = sourceRecursivePass 32L value in let _ = Stdlib.__Task.__resolve (__fiber_current ()) gate 42L in passed + 1L) = 43L // recursive returns keep pending transport; leak_check
+
+Stdlib.__Task.__runMain (fun _unit -> let gate = Stdlib.__Async.__new<Float> () in let value = Stdlib.__Task.__transport (Stdlib.__Async.__pending gate) in let passed = sourceFloatPass value in let _ = Stdlib.__Task.__resolve (__fiber_current ()) gate 40.25 in passed + 2.0) = 42.25 // float return uses carrier ABI until demanded; leak_check
+Stdlib.__Task.__runMain (fun _unit -> let gate = Stdlib.__Async.__new<String> () in let value = Stdlib.__Task.__transport (Stdlib.__Async.__pending gate) in let passed = sourceTextPass value in let _ = Stdlib.__Task.__resolve (__fiber_current ()) gate ("managed" ++ " result") in passed ++ "!") = "managed result!" // managed return retains payload ownership; leak_check
+Stdlib.__Task.__runMain (fun _unit -> let gate = Stdlib.__Async.__new<Int64> () in let value = Stdlib.__Task.__transport (Stdlib.__Async.__pending gate) in let first = sourceSelect false value 20L in let second = sourceSelect true 22L value in first + second) = 42L // widening both argument positions never inspects unselected values; leak_check
+Stdlib.__Task.__runMain (fun _unit -> let gate = Stdlib.__Async.__new<Int64> () in let value = Stdlib.__Task.__transport (Stdlib.__Async.__pending gate) in let selected = if true then sourcePass value else 0L in let _ = Stdlib.__Task.__resolve (__fiber_current ()) gate 42L in selected + 1L) = 43L // a branch join transports its selected pending result; leak_check

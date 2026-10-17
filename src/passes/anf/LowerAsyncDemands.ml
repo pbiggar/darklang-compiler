@@ -666,7 +666,6 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
       in
       Ok
         ( {
-            fn with
             A.id = version.id;
             name = version.name;
             typedParams = List.rev parameters;

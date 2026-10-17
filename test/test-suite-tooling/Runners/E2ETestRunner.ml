@@ -708,6 +708,7 @@ let buildSuiteContexts stdlib tests passTimingRecorder =
                   Ok
                     {
                       CC.context = specialized.CC.context;
+                      sourceAnfFunctions = [];
                       anfFunctions = [];
                       typeMap = specialized.CC.stdlibTypeMap;
                       symbolicFunctions = [];
