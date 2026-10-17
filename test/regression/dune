@@ -1,6 +1,10 @@
 ; Native equivalence and allocation regression checks.
 (rule
  (alias runtest)
+ (deps async_socket_regression.py)
+ (action (run python3 %{dep:async_socket_regression.py} %{exe:../../bin/dark.exe})))
+(rule
+ (alias runtest)
  (deps trait_packages_regression.py)
  (action (run python3 %{dep:trait_packages_regression.py} %{exe:../../bin/dark.exe})))
 (rule

@@ -135,6 +135,13 @@ owns the descriptor lifecycle and producer promise until completion, including
 when the consumer is discarded. Registrations wake tasks in registration order;
 native readiness errors remain ordinary result payloads.
 
+`__readTcpCurrent` starts a nonblocking native receive immediately and returns a
+typed pending result. An operation that would block registers a readiness
+callback retaining its connection and promise; the callback retries receive
+before resolving the payload. No task is created for this operation. EOF is an
+ordinary empty Blob and socket errors are ordinary `Result.Error` payloads.
+This private chunk-read primitive does not yet replace public HTTP calls.
+
 Timers and socket events land on the scheduler thread. Runnable tasks permit
 nonblocking readiness probes; with no runnable task, the scheduler waits in the
 OS for registered descriptors or the earliest timer deadline. Interrupted waits
@@ -166,3 +173,7 @@ outside a task.
 ordinary `Result.Error` payloads, nested entries and leak accounting.
 `async_io.e2e` checks native descriptor readiness, socket closure from a timer,
 FIFO wakeups, invalid descriptors and abandoned readiness consumers.
+The native `async_socket_regression.py` peer sends response B and requires its
+acknowledgement before sending response A. A single task starts both reads and
+consumes B first, proving eager initiation without an early wait on A. The
+regression also checks native leak accounting.

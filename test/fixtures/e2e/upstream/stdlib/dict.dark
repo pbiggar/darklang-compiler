@@ -400,20 +400,20 @@ module NonStringKeys =
       [ [ [ 1L ], [ 3L ] ], [ [ 2L ] ] ]
 
   module RecursiveAdmissibility =
-#compileerror="Compilation failed: Could not recover List type from intrinsic"
+#compileerror="cannot be used as a Dict key"
     Dict { [ (fun x -> x) ]: 1L } = error="Cannot use [(lambda)] as a dict key. Functions, streams, database references, blobs, and values containing them cannot be keys."
 
-#compileerror="Compilation failed: Could not recover List type from intrinsic"
+#compileerror="cannot be used as a Dict key"
     Dict { (1L, (fun x -> x)): 1L } = error="Cannot use (1, (lambda)) as a dict key. Functions, streams, database references, blobs, and values containing them cannot be keys."
 
-#compileerror="Compilation failed: Could not recover List type from intrinsic"
+#compileerror="cannot be used as a Dict key"
     Dict { (Stdlib.Option.Option.Some (fun x -> x)): 1L } = error="Cannot use Some((lambda)) as a dict key. Functions, streams, database references, blobs, and values containing them cannot be keys."
 
   module Errors =
 #compileerror="Expected TInt64, got TString"
     Dict { 1L: "a"; "b": "c" } = error="This dict uses keys of type Int64, but \"b\" has type String."
 
-#compileerror="Compilation failed: Could not recover List type from intrinsic"
+#compileerror="cannot be used as a Dict key"
     (Dict { (fun x -> x): 1L }) = error="Cannot use (lambda) as a dict key. Functions, streams, database references, blobs, and values containing them cannot be keys."
 
 #compileerror="Lambda requires an expected function type"

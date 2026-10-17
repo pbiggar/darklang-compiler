@@ -136,9 +136,15 @@ let dict checkExpression literal globals locals symbols expected entries =
       let key, value =
         Option.value types ~default:(AST.TVar "dictKey", AST.TVar "dictValue")
       in
-      literal expected symbols
-        (AST.TDict (key, value))
-        (C.DictLiteral (C.checkedType key, C.checkedType value, entries)))
+      if not (WrittenTypeSupport.dictKeyAdmissibleType globals key) then
+        Error
+          ("Type "
+          ^ StructuralFormat.semanticType key
+          ^ " cannot be used as a Dict key")
+      else
+        literal expected symbols
+          (AST.TDict (key, value))
+          (C.DictLiteral (C.checkedType key, C.checkedType value, entries)))
 
 let matchExpression checkExpression literal globals locals symbols expected
     scrutinee cases =

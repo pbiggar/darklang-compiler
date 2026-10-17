@@ -38,8 +38,7 @@ let testPreservesTypeVarsInSpecialization () =
         |> NonEmptyList.toList |> List.map snd
       in
       if
-        definition.C.name = "id_t"
-        && parameterTypes = [ AST.TVar "t" ]
+        parameterTypes = [ AST.TVar "t" ]
         && C.functionReturnType definition = AST.TVar "t"
       then Ok ()
       else

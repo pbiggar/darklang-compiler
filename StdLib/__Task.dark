@@ -17,6 +17,7 @@ let __FRONT () : Int64 = 216L
 let __BACK () : Int64 = 224L
 let __TIMERS () : Int64 = 232L
 let __IO_QUEUE () : Int64 = 240L
+let __IO_COUNT () : Int64 = 248L
 
 let __set<'a> (cell: RawPtr) (offset: Int64) (value: a) : Unit =
     let previous = __raw_take<a> cell offset in
@@ -127,7 +128,7 @@ let __now () : Int64 =
     | Ok value -> value
     | Error _ -> Builtin.crash "Native task clock failed"
 
-let __timerComplete<'a> (scheduler: RawPtr) (promise: Stdlib.__Async.__Promise<a>) (value: a) : Unit =
+let __completePromise<'a> (scheduler: RawPtr) (promise: Stdlib.__Async.__Promise<a>) (value: a) : Unit =
     Stdlib.__Task.__wake scheduler (Stdlib.__Async.__resolve promise value)
 
 let __registerTimer (scheduler: RawPtr) (timer: Stdlib.__Task.__Timer) : Unit =
@@ -140,7 +141,7 @@ let __delay<'a> (context: RawPtr) (delay: Int64) (value: a) : Stdlib.__Async.__V
     else
         let scheduler = Stdlib.__Task.__scheduler context in
         let promise = Stdlib.__Async.__new<a> () in
-        let timer = Stdlib.__Task.__Timer { deadline = now + delay; complete = (fun _unit -> Stdlib.__Task.__timerComplete scheduler promise value) } in
+        let timer = Stdlib.__Task.__Timer { deadline = now + delay; complete = (fun _unit -> Stdlib.__Task.__completePromise scheduler promise value) } in
         let _ = Stdlib.__Task.__registerTimer scheduler timer in
         Stdlib.__Async.__pending promise
 
@@ -176,21 +177,65 @@ let __earliest (timers: List<Stdlib.__Task.__Timer>) (earliest: Int64) : Int64 =
 
 // Registrations retain both the descriptor owner and the completion's promise.
 // Discarding a consumer does not cancel an operation already registered here.
+let __registerIO (scheduler: RawPtr) (entry: Stdlib.__Task.__IO) : Unit =
+    let count = __raw_get<Int64> scheduler (Stdlib.__Task.__IO_COUNT ()) in
+    let entries = __raw_get<List<Stdlib.__Task.__IO>> scheduler (Stdlib.__Task.__IO_QUEUE ()) in
+    if count >= 1024L then entry.complete (Error 22L)
+    else
+        let _ = __raw_write_word scheduler (Stdlib.__Task.__IO_COUNT ()) (count + 1L) in
+        Stdlib.__Task.__set scheduler (Stdlib.__Task.__IO_QUEUE ()) (Stdlib.List.append entries [entry])
+
+let __completeIO (scheduler: RawPtr) (entry: Stdlib.__Task.__IO) (result: Stdlib.Result.Result<Stdlib.__Network.Ready, Int64>) : Unit =
+    let count = __raw_get<Int64> scheduler (Stdlib.__Task.__IO_COUNT ()) in
+    if count <= 0L then Builtin.crash "Invalid native readiness registration count"
+    else
+        let _ = __raw_write_word scheduler (Stdlib.__Task.__IO_COUNT ()) (count - 1L) in
+        entry.complete result
+
 let __watchCurrent (interest: Stdlib.__Network.Interest) : Stdlib.__Async.__Value<Stdlib.Result.Result<Stdlib.__Network.Ready, Int64>> =
     let context = __fiber_current () in
     if __rawptr_to_word context == 0L then Builtin.crash "Cannot watch a socket outside a native task"
     else
         let scheduler = Stdlib.__Task.__scheduler context in
-        let entries = __raw_get<List<Stdlib.__Task.__IO>> scheduler (Stdlib.__Task.__IO_QUEUE ()) in
-        if interest.watch.descriptor < 0L || interest.watch.descriptor > 2147483647L || Stdlib.List.length entries >= 1024 then
+        if interest.watch.descriptor < 0L || interest.watch.descriptor > 2147483647L then
             Stdlib.__Async.__ready (Error 22L)
         else
             let promise = Stdlib.__Async.__new<Stdlib.Result.Result<Stdlib.__Network.Ready, Int64>> () in
             let entry = Stdlib.__Task.__IO { interest = interest; complete = (fun result -> Stdlib.__Task.__wake scheduler (Stdlib.__Async.__resolve promise result)) } in
-            let _ = Stdlib.__Task.__set scheduler (Stdlib.__Task.__IO_QUEUE ()) (Stdlib.List.append entries [entry]) in
+            let _ = Stdlib.__Task.__registerIO scheduler entry in
             Stdlib.__Async.__pending promise
 
-let __landIO (entries: List<Stdlib.__Task.__IO>) (events: List<Stdlib.__Network.Ready>) (index: Int64) (keep: List<Stdlib.__Task.__IO>) : List<Stdlib.__Task.__IO> =
+// The initiating call attempts recv immediately. EAGAIN registers a producer,
+// not a new task or a blocked native call. Readiness retries recv because an OS
+// readiness event is advisory, and EOF is an ordinary empty Blob payload.
+let __readTcpStart (scheduler: RawPtr) (connection: Stdlib.__Network.TcpConnection) (promise: Stdlib.__Async.__Promise<Stdlib.Result.Result<Blob, Int64>>) : Unit =
+    match Stdlib.__Network.pollReadTcp connection with
+    | Error code -> Stdlib.__Task.__completePromise scheduler promise (Error code)
+    | Ok available ->
+        match available with
+        | Some bytes -> Stdlib.__Task.__completePromise scheduler promise (Ok bytes)
+        | None ->
+            match connection.watch with
+            | None -> Stdlib.__Task.__completePromise scheduler promise (Error 22L)
+            | Some watch ->
+                let entry = Stdlib.__Task.__IO {
+                    interest = Stdlib.__Network.Interest { watch = watch; readable = true; writable = false },
+                    complete = (fun result ->
+                        match result with
+                        | Error code -> Stdlib.__Task.__completePromise scheduler promise (Error code)
+                        | Ok _ -> Stdlib.__Task.__readTcpStart scheduler connection promise)
+                } in
+                Stdlib.__Task.__registerIO scheduler entry
+
+let __readTcpCurrent (connection: Stdlib.__Network.TcpConnection) : Stdlib.__Async.__Value<Stdlib.Result.Result<Blob, Int64>> =
+    let context = __fiber_current () in
+    if __rawptr_to_word context == 0L then Builtin.crash "Cannot start a socket read outside a native task"
+    else
+        let promise = Stdlib.__Async.__new<Stdlib.Result.Result<Blob, Int64>> () in
+        let _ = Stdlib.__Task.__readTcpStart (Stdlib.__Task.__scheduler context) connection promise in
+        Stdlib.__Async.__pending promise
+
+let __landIO (scheduler: RawPtr) (entries: List<Stdlib.__Task.__IO>) (events: List<Stdlib.__Network.Ready>) (index: Int64) (keep: List<Stdlib.__Task.__IO>) : List<Stdlib.__Task.__IO> =
     match entries with
     | [] -> Stdlib.List.reverse keep
     | entry :: tail ->
@@ -198,16 +243,16 @@ let __landIO (entries: List<Stdlib.__Task.__IO>) (events: List<Stdlib.__Network.
         | [] -> Stdlib.List.append (Stdlib.List.reverse keep) entries
         | event :: rest ->
             if event.index == index then
-                let _ = entry.complete (Ok event) in
-                Stdlib.__Task.__landIO tail rest (index + 1L) keep
-            else Stdlib.__Task.__landIO tail events (index + 1L) (Stdlib.List.push keep entry)
+                let _ = Stdlib.__Task.__completeIO scheduler entry (Ok event) in
+                Stdlib.__Task.__landIO scheduler tail rest (index + 1L) keep
+            else Stdlib.__Task.__landIO scheduler tail events (index + 1L) (Stdlib.List.push keep entry)
 
-let __failIO (entries: List<Stdlib.__Task.__IO>) (code: Int64) : Unit =
+let __failIO (scheduler: RawPtr) (entries: List<Stdlib.__Task.__IO>) (code: Int64) : Unit =
     match entries with
     | [] -> ()
     | entry :: tail ->
-        let _ = entry.complete (Error code) in
-        Stdlib.__Task.__failIO tail code
+        let _ = Stdlib.__Task.__completeIO scheduler entry (Error code) in
+        Stdlib.__Task.__failIO scheduler tail code
 
 let __pollIO (scheduler: RawPtr) (milliseconds: Int64) : Unit =
     let entries = __raw_take<List<Stdlib.__Task.__IO>> scheduler (Stdlib.__Task.__IO_QUEUE ()) in
@@ -216,10 +261,10 @@ let __pollIO (scheduler: RawPtr) (milliseconds: Int64) : Unit =
     else
         let keep =
             match Stdlib.__Network.waitSockets (Stdlib.List.map entries (fun entry -> entry.interest)) milliseconds with
-            | Ok events -> Stdlib.__Task.__landIO entries events 0L []
+            | Ok events -> Stdlib.__Task.__landIO scheduler entries events 0L []
             | Error code ->
                 if code == 4L then entries
-                else let _ = Stdlib.__Task.__failIO entries code in [] in
+                else let _ = Stdlib.__Task.__failIO scheduler entries code in [] in
         // Callbacks may register additional watches while this batch is detached.
         let registered = __raw_get<List<Stdlib.__Task.__IO>> scheduler (Stdlib.__Task.__IO_QUEUE ()) in
         Stdlib.__Task.__set scheduler (Stdlib.__Task.__IO_QUEUE ()) (Stdlib.List.append keep registered)
@@ -275,13 +320,14 @@ let __disposeScheduler (scheduler: RawPtr) : Unit =
 // It does not decide the lifetime policy of an automatically compiled program.
 let __run (entries: List<RawPtr -> Unit>) : Unit =
     let previous = __fiber_current () in
-    let scheduler = __raw_alloc 248L in
+    let scheduler = __raw_alloc 256L in
     let _ = __raw_write_word scheduler 56L 0L in
     let _ = __raw_slot_init<List<Stdlib.__Task.__Task>> scheduler (Stdlib.__Task.__TASKS ()) [] in
     let _ = __raw_slot_init<List<Stdlib.__Task.__Task>> scheduler (Stdlib.__Task.__FRONT ()) [] in
     let _ = __raw_slot_init<List<Stdlib.__Task.__Task>> scheduler (Stdlib.__Task.__BACK ()) [] in
     let _ = __raw_slot_init<List<Stdlib.__Task.__Timer>> scheduler (Stdlib.__Task.__TIMERS ()) [] in
     let _ = __raw_slot_init<List<Stdlib.__Task.__IO>> scheduler (Stdlib.__Task.__IO_QUEUE ()) [] in
+    let _ = __raw_write_word scheduler (Stdlib.__Task.__IO_COUNT ()) 0L in
     let tasks = Stdlib.List.map entries (fun entry -> Stdlib.__Task.__new scheduler entry) in
     let _ = Stdlib.__Task.__set scheduler (Stdlib.__Task.__TASKS ()) tasks in
     let _ = Stdlib.__Task.__set scheduler (Stdlib.__Task.__FRONT ()) tasks in
