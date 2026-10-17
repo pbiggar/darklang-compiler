@@ -117,6 +117,10 @@ let __now () : Int64 =
 let __timerComplete<'a> (scheduler: RawPtr) (promise: Stdlib.__Async.__Promise<a>) (value: a) : Unit =
     Stdlib.__Task.__wake scheduler (Stdlib.__Async.__resolve promise value)
 
+let __registerTimer (scheduler: RawPtr) (timer: Stdlib.__Task.__Timer) : Unit =
+    let timers = __raw_get<List<Stdlib.__Task.__Timer>> scheduler (Stdlib.__Task.__TIMERS ()) in
+    Stdlib.__Task.__set scheduler (Stdlib.__Task.__TIMERS ()) (Stdlib.List.push timers timer)
+
 let __delay<'a> (context: RawPtr) (delay: Int64) (value: a) : Stdlib.__Async.__Value<a> =
     let now = Stdlib.__Task.__now () in
     if delay < 0L || now + delay < now then Builtin.crash "Invalid native task timer delay"
@@ -124,8 +128,7 @@ let __delay<'a> (context: RawPtr) (delay: Int64) (value: a) : Stdlib.__Async.__V
         let scheduler = Stdlib.__Task.__scheduler context in
         let promise = Stdlib.__Async.__new<a> () in
         let timer = Stdlib.__Task.__Timer { deadline = now + delay; complete = (fun _unit -> Stdlib.__Task.__timerComplete scheduler promise value) } in
-        let timers = __raw_get<List<Stdlib.__Task.__Timer>> scheduler (Stdlib.__Task.__TIMERS ()) in
-        let _ = Stdlib.__Task.__set scheduler (Stdlib.__Task.__TIMERS ()) (Stdlib.List.push timers timer) in
+        let _ = Stdlib.__Task.__registerTimer scheduler timer in
         Stdlib.__Async.__pending promise
 
 let __landTimers (now: Int64) (timers: List<Stdlib.__Task.__Timer>) (keep: List<Stdlib.__Task.__Timer>) : List<Stdlib.__Task.__Timer> =
@@ -141,7 +144,12 @@ let __pollTimers (scheduler: RawPtr) : Unit =
     let timers = __raw_take<List<Stdlib.__Task.__Timer>> scheduler (Stdlib.__Task.__TIMERS ()) in
     let _ = __raw_write_word scheduler (Stdlib.__Task.__TIMERS ()) 0L in
     if Stdlib.List.isEmpty timers then ()
-    else Stdlib.__Task.__set scheduler (Stdlib.__Task.__TIMERS ()) (Stdlib.__Task.__landTimers (Stdlib.__Task.__now ()) timers [])
+    else
+        let keep = Stdlib.__Task.__landTimers (Stdlib.__Task.__now ()) timers [] in
+        // Completion callbacks and managed-payload cleanup may register
+        // another producer while this batch is detached.
+        let registered = __raw_get<List<Stdlib.__Task.__Timer>> scheduler (Stdlib.__Task.__TIMERS ()) in
+        Stdlib.__Task.__set scheduler (Stdlib.__Task.__TIMERS ()) (Stdlib.List.append keep registered)
 
 let __earliest (timers: List<Stdlib.__Task.__Timer>) (earliest: Int64) : Int64 =
     match timers with

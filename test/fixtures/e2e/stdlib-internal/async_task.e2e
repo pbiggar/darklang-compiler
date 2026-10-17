@@ -76,3 +76,16 @@ let expected = Stdlib.Cli.__argv 0L in let cell = __raw_alloc 8L in let _ = Stdl
 let taskFailure () : Result<Int64, String> = Error ("ordinary" ++ " failure")
 
 let _ = Stdlib.__Task.__run [(fun context -> let unused = Stdlib.__Task.__delay context 0L (taskFailure ()) in ())] in true = true // producer owns an abandoned result until completion; leak_check
+
+let taskTimerCleanup (cell: RawPtr) (context: RawPtr) : Unit =
+  let payload = Stdlib.Stream.__new<Unit> (fun _unit -> None) (fun _unit -> Stdlib.__Task.__set cell 0L (Stdlib.__Task.__delay context 0L 99L)) in
+  let unused = Stdlib.__Task.__delay context 0L payload in
+  ()
+
+let cell = __raw_alloc 8L in let _ = __raw_slot_init cell 0L (Stdlib.__Async.__ready 0L) in let _ = Stdlib.__Task.__run [(fun context -> taskTimerCleanup cell context)] in let value = __raw_take<Stdlib.__Async.__Value<Int64>> cell 0L in let result = Stdlib.__Async.__pollValue value in let _ = __raw_free cell in result = Some 99L // completion cleanup retains newly registered timers; leak_check
+
+let taskTimerChain (cell: RawPtr) (context: RawPtr) : Unit =
+  let timer = Stdlib.__Task.__Timer { deadline = 0L; complete = (fun _unit -> Stdlib.__Task.__set cell 0L (Stdlib.__Task.__delay context 0L 77L)) } in
+  Stdlib.__Task.__registerTimer (Stdlib.__Task.__scheduler context) timer
+
+let cell = __raw_alloc 8L in let _ = __raw_slot_init cell 0L (Stdlib.__Async.__ready 0L) in let _ = Stdlib.__Task.__run [(fun context -> taskTimerChain cell context)] in let value = __raw_take<Stdlib.__Async.__Value<Int64>> cell 0L in let result = Stdlib.__Async.__pollValue value in let _ = __raw_free cell in result = Some 77L // timer callbacks preserve chained producers; leak_check
