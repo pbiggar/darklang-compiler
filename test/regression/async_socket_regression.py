@@ -14,6 +14,12 @@ def main():
         print("Native async socket regression requires Linux x64")
         return
     compiler = str(pathlib.Path(sys.argv[1]).resolve())
+    for transparent in (False, True):
+        run_reads(compiler, transparent)
+    print("Eager explicit and source-typed socket reads overlap and preserve owned results")
+
+
+def run_reads(compiler, transparent):
     with tempfile.TemporaryDirectory(prefix="dark-async-socket-") as directory:
         root = pathlib.Path(directory)
         with socket.socket() as listener:
@@ -23,7 +29,7 @@ def main():
             port = listener.getsockname()[1]
             source = root / "reads.dark"
             binary = root / "reads"
-            source.write_text('''let connect () : Stdlib.__Network.TcpConnection =
+            program = '''let connect () : Stdlib.__Network.TcpConnection =
   match Stdlib.__Network.connectTcp4 [127L, 0L, 0L, 1L] PORTL 1000L with
   | Ok connection -> connection
   | Error code -> Builtin.crash (Stdlib.Int64.toString code)
@@ -40,7 +46,18 @@ let result = Stdlib.__Task.__runMain (fun _unit ->
   (Builtin.unwrap (Stdlib.Blob.toString firstBytes)) ++ "|" ++ (Builtin.unwrap (Stdlib.Blob.toString secondBytes))) in
 let _ = Builtin.print result in
 0L
-'''.replace("PORTL", f"{port}L"), encoding="utf-8")
+'''.replace("PORTL", f"{port}L")
+            if transparent:
+                program = (
+                    "let sourceRead (connection: Stdlib.__Network.TcpConnection) : Stdlib.Result.Result<Blob, Int64> =\n"
+                    "  Stdlib.__Task.__transport (Stdlib.__Task.__readTcpCurrent connection)\n"
+                    "let passRead (value: Stdlib.Result.Result<Blob, Int64>) : Stdlib.Result.Result<Blob, Int64> = value\n"
+                    + program.replace("Stdlib.__Task.__readTcpCurrent first", "passRead (sourceRead first)")
+                    .replace("Stdlib.__Task.__readTcpCurrent second", "passRead (sourceRead second)")
+                    .replace("(Stdlib.__Task.__forceCurrent pendingSecond)", "pendingSecond")
+                    .replace("(Stdlib.__Task.__forceCurrent pendingFirst)", "pendingFirst")
+                )
+            source.write_text(program, encoding="utf-8")
             subprocess.run([compiler, "-q", "--allow-internal", "--leak-check",
                             str(source), "-o", str(binary)], check=True, timeout=120)
             failures = []
@@ -69,7 +86,6 @@ let _ = Builtin.print result in
             assert not peer.is_alive(), "Async peer did not finish"
             assert not failures, failures
             assert (result.returncode, result.stdout, result.stderr) == (0, b"A|B", b""), result
-    print("Eager native socket reads overlap and preserve owned results")
 
 
 if __name__ == "__main__":

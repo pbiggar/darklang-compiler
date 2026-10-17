@@ -63,7 +63,8 @@ own these payloads correctly, including
 when carriers are returned, captured or nested in containers. `__ready` and
 `__pending` construct it; `__pollValue` probes it without waiting. This separates
 the discriminator from full-width scalar/float payloads while retaining ordinary
-native calls. It does not yet change the representation of source-level values.
+native calls. Source representation changes currently enter through the private
+compiler hooks described below.
 
 A deferred carrier follows an already-started producer when demanded; it does
 not postpone initiation. `__joinCurrent` flattens a carrier containing another
@@ -88,9 +89,13 @@ Pending-capable calls use generated function versions with typed carrier
 parameters and results; concrete calls to synchronous functions retain their
 existing signatures. Original source ANF bodies are retained across preamble
 compilation so later callers can request these versions. Explicit native task
-entry callbacks demand their result to satisfy the runtime ABI. Pending storage,
-capture and indirect argument interfaces still require coordinated layout and
-callable rewriting and currently produce compilation diagnostics. The hooks are
+entry callbacks demand their result to satisfy the runtime ABI. Closure capture
+slots widen independently to carriers, with matching environment types in lifted
+function versions. Statically known closure calls propagate pending arguments
+and results. Capturing closures with concrete callable interfaces can escape
+through ordinary source functions. Aggregate storage and escaping callables
+whose argument or result interface changes still require coordinated rewriting
+and currently produce compilation diagnostics. The hooks are
 compiler test interfaces, not public async APIs or automatic I/O lowering.
 
 | Operation | Demand |
@@ -127,8 +132,8 @@ The native switch updates that slot before resuming a task and clears it while
 the scheduler executes completion callbacks. Nested explicit `__run` scopes
 restore the enclosing task before disposing their scheduler. Ready values can
 be forced outside a task; forcing a pending value there reports a runtime error.
-This helper is the entry point for future demand lowering, which is not yet
-inserted automatically.
+The private source hooks use this helper for inserted demand calls. Public I/O
+calls and CLI entry points have not yet been migrated.
 
 `__runMain` is a private typed entry adapter from an ordinary `Unit -> a` closure
 to a root task. Its promise retains the result after the root stack is released;
@@ -210,7 +215,9 @@ FIFO wakeups, invalid descriptors and abandoned readiness consumers.
 The native `async_socket_regression.py` peer sends response B and requires its
 acknowledgement before sending response A. A single task starts both reads and
 consumes B first, proving eager initiation without an early wait on A. The
-regression also checks native leak accounting.
+regression also checks native leak accounting. It runs both explicit runtime
+carriers and ordinary source `Result<Blob, Int64>` values passed through helper
+functions; the latter relies on compiler-inserted demands.
 `async_start.e2e` checks eager entry, nested operations, runnable ordering,
 producer ownership after consumer abandonment, managed results and startup
 arguments from child stacks.
@@ -223,3 +230,7 @@ arithmetic, conditions, unused values and explicit native entry results.
 recursive calls, mixed concrete and pending call sites, branch joins, and
 unselected pending arguments. They resolve a promise after passing it through
 ordinary functions, so an early demand prevents the expected result.
+
+`async_capture.e2e` checks delayed inspection of captured integers, floats and
+managed payloads, abandoned and nested captures, known closure calls, escaping
+inspecting closures, and native child task result adaptation.
