@@ -59,7 +59,10 @@ type mode = AsyncTransport.mode =
   | Stored of unit storage
   | PendingStored of unit storage
 
+type listMappingKind = MapElements | FilterElements
+
 type listMapping = {
+  mappingKind : listMappingKind;
   listValue : A.atom;
   callback : A.atom;
   callbackTarget : AST.functionId;
@@ -507,15 +510,18 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
       | A.Call (callee, [ listValue; callback ])
       | A.BorrowedCall (callee, [ listValue; callback ])
       | A.TailCall (callee, [ listValue; callback ]) -> (
-          let isMap =
+          let kind =
             match name callee with
-            | Some name ->
-                specialized "Darklang.Stdlib.List.map" name
-                || specialized "Darklang.Stdlib.List.__map" name
-            | None -> false
+            | Some name
+              when specialized "Darklang.Stdlib.List.map" name
+                   || specialized "Darklang.Stdlib.List.__map" name ->
+                Some MapElements
+            | Some name when specialized "Darklang.Stdlib.List.filter" name ->
+                Some FilterElements
+            | _ -> None
           in
-          match (isMap, callable fn callback) with
-          | true, Some target
+          match (kind, callable fn callback) with
+          | Some mappingKind, Some target
             when eligible target && not (S.mem target nativeEntries) -> (
               match F.tryFind target definitions with
               | Some { A.typedParams = [ _; parameter ]; returnType; _ } ->
@@ -539,6 +545,7 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
                   then
                     Some
                       {
+                        mappingKind;
                         listValue;
                         callback;
                         callbackTarget = target;
@@ -556,6 +563,15 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
       match current.parameters with
       | [ _; input ] -> (input, current.result)
       | _ -> Crash.crash "Async mapping callback has an inconsistent signature"
+    in
+    let mappingResult state mapping =
+      let input, result = mappingModes state mapping in
+      let element, mode =
+        match mapping.mappingKind with
+        | MapElements -> (mapping.outputType, result)
+        | FilterElements -> (mapping.inputType, input)
+      in
+      (element, listMode element mode)
     in
     let seed mapError (fn : A.functionDef) state modes transform =
       let* env, stores =
@@ -721,15 +737,15 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
                   mergeActual mapping.callbackTarget
                     [ Concrete; mapping.actualElement ]
                 in
-                let _, result = mappingModes state mapping in
+                let element, result = mappingResult state mapping in
                 let* storage =
-                  match listMode mapping.outputType result with
+                  match result with
                   | Concrete -> Ok None
                   | Stored storage ->
                       Result.map Option.some
                         (AsyncTransport.instantiateStorage
                            (fun typ -> Ok typ)
-                           storage (AST.TList mapping.outputType))
+                           storage (AST.TList element))
                   | _ ->
                       Crash.crash
                         "Async list mapping inferred outer pendingness"
@@ -1277,6 +1293,67 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
                 generatedFunctions = definition :: gen.generatedFunctions;
               } )
     in
+    let predicateAdapter inputType gen =
+      let key =
+        SpecializationIdentity.specName "__dark_async_predicate" [ inputType ]
+      in
+      match Names.find_opt key gen.mappers with
+      | Some adapter -> Ok (adapter, gen)
+      | None ->
+          let* force =
+            helper "Darklang.Stdlib.__Task.__forceCurrent" AST.TBool
+          in
+          let adapter =
+            {
+              id = AST.functionId gen.cursor;
+              name = "__dark_async_predicate_" ^ Int64.to_string gen.cursor;
+            }
+          in
+          let gen =
+            {
+              gen with
+              cursor = Int64.succ gen.cursor;
+              mappers = Names.add key adapter gen.mappers;
+            }
+          in
+          let environment, gen = freshVar gen in
+          let parameter, gen = freshVar gen in
+          let callback, gen = freshVar gen in
+          let pending, gen = freshVar gen in
+          let result, gen = freshVar gen in
+          let callbackType = AST.TFunction ([ inputType ], carrier AST.TBool) in
+          let definition =
+            {
+              A.id = adapter.id;
+              name = adapter.name;
+              typedParams =
+                [
+                  {
+                    A.id = environment;
+                    typ = AST.TTuple [ AST.TInt64; callbackType ];
+                  };
+                  { A.id = parameter; typ = inputType };
+                ];
+              returnType = AST.TBool;
+              returnOwnership = A.OwnedReturn;
+              body =
+                wraps
+                  [
+                    (callback, A.TupleGet (A.Var environment, 1));
+                    ( pending,
+                      A.ClosureCall (A.Var callback, [ A.Var parameter ]) );
+                    (result, A.Call (force, [ A.Var pending ]));
+                  ]
+                  (A.Return (A.Var result));
+            }
+          in
+          Ok
+            ( adapter,
+              {
+                gen with
+                generatedFunctions = definition :: gen.generatedFunctions;
+              } )
+    in
     let rec materializeSlot slot atom gen =
       match slot with
       | None -> Ok (atom, [], gen)
@@ -1555,10 +1632,8 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
                   | None ->
                       Crash.crash "Async list mapping lost its source plan"
                 in
-                let _, result = mappingModes summaries mapping in
-                storedResult
-                  (listMode mapping.outputType result)
-                  (AST.TList mapping.outputType)
+                let element, result = mappingResult summaries mapping in
+                storedResult result (AST.TList element)
             | _ when Option.is_some builder ->
                 let element, storage =
                   match builder with
@@ -1651,9 +1726,35 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
                 let outputType =
                   AsyncTransport.physicalType resultMode mapping.outputType
                 in
-                let* callee =
-                  helperTypes "Darklang.Stdlib.List.map"
-                    [ inputType; outputType ]
+                let* callee, callback, adapterBindings, gen =
+                  match mapping.mappingKind with
+                  | MapElements ->
+                      let* callee =
+                        helperTypes "Darklang.Stdlib.List.map"
+                          [ inputType; outputType ]
+                      in
+                      Ok (callee, mapping.callback, [], gen)
+                  | FilterElements -> (
+                      let* callee =
+                        helper "Darklang.Stdlib.List.filter" inputType
+                      in
+                      match resultMode with
+                      | Concrete -> Ok (callee, mapping.callback, [], gen)
+                      | Pending ->
+                          let* adapter, gen = predicateAdapter inputType gen in
+                          let closure, gen = freshVar gen in
+                          Ok
+                            ( callee,
+                              A.Var closure,
+                              [
+                                ( closure,
+                                  A.ClosureAlloc
+                                    (adapter.id, [ mapping.callback ]) );
+                              ],
+                              gen )
+                      | Stored _ | PendingStored _ ->
+                          Crash.crash
+                            "Async predicate result has a non-Boolean layout")
                 in
                 let actual = modeOf env stores mapping.listValue in
                 let listValue, before, gen =
@@ -1671,8 +1772,8 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
                     (AST.TList mapping.inputType) listValue actual gen
                 in
                 Ok
-                  ( A.Call (callee, [ listValue; mapping.callback ]),
-                    before @ added,
+                  ( A.Call (callee, [ listValue; callback ]),
+                    before @ added @ adapterBindings,
                     None,
                     gen )
             | _ when Option.is_some builder -> (
