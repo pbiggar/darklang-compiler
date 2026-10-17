@@ -315,6 +315,10 @@ let convertCliOperation (operation : ANF.cliOperation) =
   | ANF.PosixKqueue -> MIR.PosixKqueue
   | ANF.ChildState -> MIR.ChildState
   | ANF.ChildLaunch -> MIR.ChildLaunch
+  | ANF.FiberStackAlloc -> MIR.FiberStackAlloc
+  | ANF.FiberStackFree -> MIR.FiberStackFree
+  | ANF.FiberPrepare -> MIR.FiberPrepare
+  | ANF.FiberSwitch -> MIR.FiberSwitch
   | ANF.PosixWait4 -> MIR.PosixWait4
   | ANF.PosixKeventVnode -> MIR.PosixKeventVnode
 
@@ -913,6 +917,10 @@ let cliOperationName = function
   | ANF.PosixKqueue -> "PosixKqueue"
   | ANF.ChildState -> "ChildState"
   | ANF.ChildLaunch -> "ChildLaunch"
+  | ANF.FiberStackAlloc -> "FiberStackAlloc"
+  | ANF.FiberStackFree -> "FiberStackFree"
+  | ANF.FiberPrepare -> "FiberPrepare"
+  | ANF.FiberSwitch -> "FiberSwitch"
   | ANF.PosixWait4 -> "PosixWait4"
   | ANF.PosixKeventVnode -> "PosixKeventVnode"
 

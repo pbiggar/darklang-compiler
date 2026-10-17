@@ -176,6 +176,22 @@ let emitCliNative (ctx : X64CodeGenTypes.funcCtx) (dest : LIR.reg)
             @ [ X.ADD_imm (X.RSP, 8l) ])
       in
       match operation with
+      | LIR.FiberStackAlloc | LIR.FiberStackFree | LIR.FiberPrepare
+      | LIR.FiberSwitch ->
+          let targets =
+            match operation with
+            | LIR.FiberStackAlloc -> [ X.RSI ]
+            | LIR.FiberStackFree | LIR.FiberSwitch -> [ X.RDI; X.RSI ]
+            | LIR.FiberPrepare -> [ X.RDI; X.RSI; X.RDX ]
+            | _ -> []
+          in
+          if List.length args <> List.length targets then
+            Error "Invalid native fiber arity"
+          else
+            loadSocketArgs args targets
+            |> bind (fun loads ->
+                X64Fibers.emit ctx destReg operation
+                |> Result.map (fun code -> loads @ code))
       | LIR.PosixOpenAt | LIR.PosixRead | LIR.PosixWrite | LIR.PosixClose
       | LIR.PosixSeek | LIR.PosixStatAt | LIR.PosixGetCwd | LIR.PosixChdir
       | LIR.PosixMkdirAt | LIR.PosixUnlinkAt | LIR.PosixRenameAt

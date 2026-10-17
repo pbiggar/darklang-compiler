@@ -123,6 +123,10 @@ type cliOperation =
   | PosixKqueue
   | ChildState
   | ChildLaunch
+  | FiberStackAlloc
+  | FiberStackFree
+  | FiberPrepare
+  | FiberSwitch
   | PosixWait4
   | PosixKeventVnode
 

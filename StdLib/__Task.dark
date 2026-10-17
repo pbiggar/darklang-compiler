@@ -1,0 +1,201 @@
+// __Task.dark - Cooperative native tasks, promise parking and timer completions.
+// Context and scheduler pointers are borrowed; owned lists retain task lifetimes.
+// This private explicit scheduler is not yet the automatic program entry point.
+module Darklang.Stdlib.__Task
+
+type __Task = { context: RawPtr, lifecycle: Stream<Unit> }
+type __Timer = { deadline: Int64, complete: Unit -> Unit }
+
+let __STACK_BYTES () : Int64 = 8388608L
+let __CONTEXT_BYTES () : Int64 = 208L
+let __TASKS () : Int64 = 208L
+let __FRONT () : Int64 = 216L
+let __BACK () : Int64 = 224L
+let __TIMERS () : Int64 = 232L
+
+let __set<'a> (cell: RawPtr) (offset: Int64) (value: a) : Unit =
+    let previous = __raw_take<a> cell offset in
+    let _ = __raw_slot_init<a> cell offset value in
+    ()
+
+let __state (context: RawPtr) : Int64 = __raw_get<Int64> context 64L
+let __scheduler (context: RawPtr) : RawPtr = __raw_get<RawPtr> context 56L
+
+let __disposeTask (context: RawPtr) : Unit =
+    let state = Stdlib.__Task.__state context in
+    if state == 0L || state == 4L then
+        let entry = __raw_take<RawPtr -> Unit> context 40L in
+        let mapping = __raw_get<RawPtr> context 48L in
+        let _ = __fiber_stack_free mapping (Stdlib.__Task.__STACK_BYTES ()) in
+        let _ = __raw_free context in
+        ()
+    else Builtin.crash "Cannot discard a live native task stack"
+
+let __new (scheduler: RawPtr) (entry: RawPtr -> Unit) : Stdlib.__Task.__Task =
+    let context = __raw_alloc (Stdlib.__Task.__CONTEXT_BYTES ()) in
+    let mapping = __fiber_stack_alloc (Stdlib.__Task.__STACK_BYTES ()) in
+    let _ = __raw_slot_init<RawPtr -> Unit> context 40L entry in
+    let _ = __raw_slot_init<RawPtr> context 48L mapping in
+    let _ = __raw_slot_init<RawPtr> context 56L scheduler in
+    let _ = __raw_write_word context 64L 0L in
+    let _ = __fiber_prepare context mapping (Stdlib.__Task.__STACK_BYTES ()) in
+    let lifecycle = Stdlib.Stream.__new (fun _unit -> None) (fun _unit -> Stdlib.__Task.__disposeTask context) in
+    Stdlib.__Task.__Task { context = context; lifecycle = lifecycle }
+
+let __enqueue (scheduler: RawPtr) (task: Stdlib.__Task.__Task) : Unit =
+    let back = __raw_get<List<Stdlib.__Task.__Task>> scheduler (Stdlib.__Task.__BACK ()) in
+    Stdlib.__Task.__set scheduler (Stdlib.__Task.__BACK ()) (Stdlib.List.push back task)
+
+let __dequeueFront (scheduler: RawPtr) : Stdlib.Option.Option<Stdlib.__Task.__Task> =
+    match __raw_get<List<Stdlib.__Task.__Task>> scheduler (Stdlib.__Task.__FRONT ()) with
+    | [] -> None
+    | head :: tail ->
+        let _ = Stdlib.__Task.__set scheduler (Stdlib.__Task.__FRONT ()) tail in
+        Some head
+
+let __dequeue (scheduler: RawPtr) : Stdlib.Option.Option<Stdlib.__Task.__Task> =
+    match Stdlib.__Task.__dequeueFront scheduler with
+    | Some task -> Some task
+    | None ->
+        let back = __raw_take<List<Stdlib.__Task.__Task>> scheduler (Stdlib.__Task.__BACK ()) in
+        let _ = __raw_write_word scheduler (Stdlib.__Task.__BACK ()) 0L in
+        let _ = Stdlib.__Task.__set scheduler (Stdlib.__Task.__FRONT ()) (Stdlib.List.reverse back) in
+        Stdlib.__Task.__dequeueFront scheduler
+
+let __find (tasks: List<Stdlib.__Task.__Task>) (id: Int64) : Stdlib.__Task.__Task =
+    match tasks with
+    | [] -> Builtin.crash "Unknown native task waiter"
+    | task :: tail ->
+        if __rawptr_to_word task.context == id then task
+        else Stdlib.__Task.__find tail id
+
+let __wakeOne (scheduler: RawPtr) (task: Stdlib.__Task.__Task) : Unit =
+    if Stdlib.__Task.__state task.context == 3L then
+        let _ = __raw_write_word task.context 64L 1L in
+        Stdlib.__Task.__enqueue scheduler task
+    else ()
+
+let __wake (scheduler: RawPtr) (waiters: List<Int64>) : Unit =
+    match waiters with
+    | [] -> ()
+    | id :: tail ->
+        let tasks = __raw_get<List<Stdlib.__Task.__Task>> scheduler (Stdlib.__Task.__TASKS ()) in
+        let task = Stdlib.__Task.__find tasks id in
+        let _ = Stdlib.__Task.__wakeOne scheduler task in
+        Stdlib.__Task.__wake scheduler tail
+
+let __yield (context: RawPtr) : Unit =
+    let _ = __raw_write_word context 64L 1L in
+    let _ = __fiber_switch context (Stdlib.__Task.__scheduler context) in
+    ()
+
+let __park<'a> (context: RawPtr) (promise: Stdlib.__Async.__Promise<a>) : Unit =
+    if Stdlib.__Async.__wait promise (__rawptr_to_word context) then
+        let _ = __raw_write_word context 64L 3L in
+        let _ = __fiber_switch context (Stdlib.__Task.__scheduler context) in
+        ()
+    else ()
+
+let __force<'a> (context: RawPtr) (value: Stdlib.__Async.__Value<a>) : a =
+    match value with
+    | ValueReady result -> result
+    | ValuePending promise ->
+        match Stdlib.__Async.__poll promise with
+        | Some result -> result
+        | None ->
+            let _ = Stdlib.__Task.__park context promise in
+            Stdlib.__Task.__force context value
+
+let __resolve<'a> (context: RawPtr) (promise: Stdlib.__Async.__Promise<a>) (value: a) : Unit =
+    Stdlib.__Task.__wake (Stdlib.__Task.__scheduler context) (Stdlib.__Async.__resolve promise value)
+
+let __now () : Int64 =
+    match Stdlib.__Network.monotonicMillis () with
+    | Ok value -> value
+    | Error _ -> Builtin.crash "Native task clock failed"
+
+let __timerComplete<'a> (scheduler: RawPtr) (promise: Stdlib.__Async.__Promise<a>) (value: a) : Unit =
+    Stdlib.__Task.__wake scheduler (Stdlib.__Async.__resolve promise value)
+
+let __delay<'a> (context: RawPtr) (delay: Int64) (value: a) : Stdlib.__Async.__Value<a> =
+    let now = Stdlib.__Task.__now () in
+    if delay < 0L || now + delay < now then Builtin.crash "Invalid native task timer delay"
+    else
+        let scheduler = Stdlib.__Task.__scheduler context in
+        let promise = Stdlib.__Async.__new<a> () in
+        let timer = Stdlib.__Task.__Timer { deadline = now + delay; complete = (fun _unit -> Stdlib.__Task.__timerComplete scheduler promise value) } in
+        let timers = __raw_get<List<Stdlib.__Task.__Timer>> scheduler (Stdlib.__Task.__TIMERS ()) in
+        let _ = Stdlib.__Task.__set scheduler (Stdlib.__Task.__TIMERS ()) (Stdlib.List.push timers timer) in
+        Stdlib.__Async.__pending promise
+
+let __landTimers (now: Int64) (timers: List<Stdlib.__Task.__Timer>) (keep: List<Stdlib.__Task.__Timer>) : List<Stdlib.__Task.__Timer> =
+    match timers with
+    | [] -> Stdlib.List.reverse keep
+    | timer :: tail ->
+        if timer.deadline <= now then
+            let _ = timer.complete () in
+            Stdlib.__Task.__landTimers now tail keep
+        else Stdlib.__Task.__landTimers now tail (Stdlib.List.push keep timer)
+
+let __pollTimers (scheduler: RawPtr) : Unit =
+    let timers = __raw_take<List<Stdlib.__Task.__Timer>> scheduler (Stdlib.__Task.__TIMERS ()) in
+    let _ = __raw_write_word scheduler (Stdlib.__Task.__TIMERS ()) 0L in
+    if Stdlib.List.isEmpty timers then ()
+    else Stdlib.__Task.__set scheduler (Stdlib.__Task.__TIMERS ()) (Stdlib.__Task.__landTimers (Stdlib.__Task.__now ()) timers [])
+
+let __earliest (timers: List<Stdlib.__Task.__Timer>) (earliest: Int64) : Int64 =
+    match timers with
+    | [] -> earliest
+    | timer :: tail -> Stdlib.__Task.__earliest tail (if timer.deadline < earliest then timer.deadline else earliest)
+
+let __waitEvent (scheduler: RawPtr) : Unit =
+    match __raw_get<List<Stdlib.__Task.__Timer>> scheduler (Stdlib.__Task.__TIMERS ()) with
+    | [] -> Builtin.crash "Native tasks deadlocked without an event source"
+    | head :: tail ->
+        let delay = Stdlib.__Task.__earliest tail head.deadline - Stdlib.__Task.__now () in
+        if delay > 0L then Stdlib.Cli.__sleep (Stdlib.Int64.toFloat delay) else ()
+
+let __loop (scheduler: RawPtr) (remaining: Int64) : Unit =
+    let _ = Stdlib.__Task.__pollTimers scheduler in
+    match Stdlib.__Task.__dequeue scheduler with
+    | None ->
+        if remaining == 0L then
+            if Stdlib.List.isEmpty (__raw_get<List<Stdlib.__Task.__Timer>> scheduler (Stdlib.__Task.__TIMERS ())) then ()
+            else
+                let _ = Stdlib.__Task.__waitEvent scheduler in
+                Stdlib.__Task.__loop scheduler remaining
+        else
+            let _ = Stdlib.__Task.__waitEvent scheduler in
+            Stdlib.__Task.__loop scheduler remaining
+    | Some task ->
+        let _ = __raw_write_word task.context 64L 2L in
+        let _ = __fiber_switch scheduler task.context in
+        let state = Stdlib.__Task.__state task.context in
+        if state == 4L then Stdlib.__Task.__loop scheduler (remaining - 1L)
+        else if state == 3L then Stdlib.__Task.__loop scheduler remaining
+        else if state == 1L then
+            let _ = Stdlib.__Task.__enqueue scheduler task in
+            Stdlib.__Task.__loop scheduler remaining
+        else Builtin.crash "Invalid native task state after suspension"
+
+let __disposeScheduler (scheduler: RawPtr) : Unit =
+    let tasks = __raw_take<List<Stdlib.__Task.__Task>> scheduler (Stdlib.__Task.__TASKS ()) in
+    let front = __raw_take<List<Stdlib.__Task.__Task>> scheduler (Stdlib.__Task.__FRONT ()) in
+    let back = __raw_take<List<Stdlib.__Task.__Task>> scheduler (Stdlib.__Task.__BACK ()) in
+    let timers = __raw_take<List<Stdlib.__Task.__Timer>> scheduler (Stdlib.__Task.__TIMERS ()) in
+    let _ = __raw_free scheduler in
+    ()
+
+// This explicit private scope drains its registered tasks and timer producers.
+// It does not decide the lifetime policy of an automatically compiled program.
+let __run (entries: List<RawPtr -> Unit>) : Unit =
+    let scheduler = __raw_alloc 240L in
+    let _ = __raw_slot_init<List<Stdlib.__Task.__Task>> scheduler (Stdlib.__Task.__TASKS ()) [] in
+    let _ = __raw_slot_init<List<Stdlib.__Task.__Task>> scheduler (Stdlib.__Task.__FRONT ()) [] in
+    let _ = __raw_slot_init<List<Stdlib.__Task.__Task>> scheduler (Stdlib.__Task.__BACK ()) [] in
+    let _ = __raw_slot_init<List<Stdlib.__Task.__Timer>> scheduler (Stdlib.__Task.__TIMERS ()) [] in
+    let tasks = Stdlib.List.map entries (fun entry -> Stdlib.__Task.__new scheduler entry) in
+    let _ = Stdlib.__Task.__set scheduler (Stdlib.__Task.__TASKS ()) tasks in
+    let _ = Stdlib.__Task.__set scheduler (Stdlib.__Task.__FRONT ()) tasks in
+    let _ = Stdlib.__Task.__loop scheduler (Stdlib.List.__length tasks) in
+    Stdlib.__Task.__disposeScheduler scheduler

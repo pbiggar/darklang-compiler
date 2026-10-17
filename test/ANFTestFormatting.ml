@@ -322,6 +322,10 @@ and aNF_returnOwnership (value : ANF.returnOwnership) =
 
 and aNF_cliOperation (value : ANF.cliOperation) =
   match value with
+  | ANF.FiberStackAlloc -> union "CliOperation" "FiberStackAlloc" []
+  | ANF.FiberStackFree -> union "CliOperation" "FiberStackFree" []
+  | ANF.FiberPrepare -> union "CliOperation" "FiberPrepare" []
+  | ANF.FiberSwitch -> union "CliOperation" "FiberSwitch" []
   | ANF.StartupStack -> union "CliOperation" "StartupStack" []
   | ANF.ExecutableState -> union "CliOperation" "ExecutableState" []
   | ANF.HostOS -> union "CliOperation" "HostOS" []

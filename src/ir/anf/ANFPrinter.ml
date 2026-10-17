@@ -165,6 +165,10 @@ let cliOperation = function
   | ANF.PosixKqueue -> "PosixKqueue"
   | ANF.ChildState -> "ChildState"
   | ANF.ChildLaunch -> "ChildLaunch"
+  | ANF.FiberStackAlloc -> "FiberStackAlloc"
+  | ANF.FiberStackFree -> "FiberStackFree"
+  | ANF.FiberPrepare -> "FiberPrepare"
+  | ANF.FiberSwitch -> "FiberSwitch"
   | ANF.PosixWait4 -> "PosixWait4"
   | ANF.PosixKeventVnode -> "PosixKeventVnode"
 

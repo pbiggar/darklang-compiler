@@ -165,6 +165,7 @@ StdLib/HttpServer/Config.dark
 StdLib/HttpServer.dark
 StdLib/__Http1Server.dark
 StdLib/__Network.dark
+StdLib/__Task.dark
 StdLib/__Datagram.dark
 StdLib/__HttpWire.dark
 StdLib/__DnsWire.dark

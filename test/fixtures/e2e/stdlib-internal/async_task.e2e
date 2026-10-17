@@ -1,0 +1,78 @@
+// async_task.e2e - Cooperative fibers preserve ordinary native call stacks.
+
+let taskDigit (cell: RawPtr) (digit: Int64) : Unit =
+  __raw_write_word cell 0L ((__raw_get<Int64> cell 0L) * 10L + digit)
+
+let taskFirst (cell: RawPtr) (context: RawPtr) : Unit =
+  let _ = taskDigit cell 1L in
+  let _ = Stdlib.__Task.__yield context in
+  taskDigit cell 3L
+
+let taskSecond (cell: RawPtr) (context: RawPtr) : Unit =
+  let _ = taskDigit cell 2L in
+  let _ = Stdlib.__Task.__yield context in
+  taskDigit cell 4L
+
+let cell = __raw_alloc 8L in let _ = __raw_write_word cell 0L 0L in let _ = Stdlib.__Task.__run [(fun context -> taskFirst cell context), (fun context -> taskSecond cell context)] in let result = __raw_get<Int64> cell 0L in let _ = __raw_free cell in result = 1234L // round robin; leak_check
+
+let taskDeep (context: RawPtr) (depth: Int64) : Int64 =
+  let saved = Stdlib.Int64.toString depth in
+  if depth == 0L then
+    let _ = Stdlib.__Task.__yield context in
+    if saved == "0" then 1L else Builtin.crash "Lost suspended stack local"
+  else
+    let result = taskDeep context (depth - 1L) in
+    if saved == Stdlib.Int64.toString depth then result + (if depth < 10L then 1L else 2L)
+    else Builtin.crash "Lost suspended stack local"
+
+let cell = __raw_alloc 8L in let _ = Stdlib.__Task.__run [(fun context -> __raw_write_word cell 0L (taskDeep context 32L))] in let result = __raw_get<Int64> cell 0L in let _ = __raw_free cell in result = 56L // stack locals survive nested suspension; leak_check
+
+let taskWait (cell: RawPtr) (promise: Stdlib.__Async.__Promise<Int64>) (context: RawPtr) : Unit =
+  let value = Stdlib.__Task.__force context (Stdlib.__Async.__pending promise) in
+  __raw_write_word cell 0L value
+
+let cell = __raw_alloc 8L in let promise = Stdlib.__Async.__new<Int64> () in let _ = Stdlib.__Task.__run [(fun context -> taskWait cell promise context), (fun context -> Stdlib.__Task.__resolve context promise 42L)] in let result = __raw_get<Int64> cell 0L in let _ = __raw_free cell in result = 42L // completion wakes the parked task; leak_check
+
+let _ = Stdlib.__Task.__run [] in true = true // empty scheduler; leak_check
+
+let taskWaitDigit (cell: RawPtr) (promise: Stdlib.__Async.__Promise<Unit>) (digit: Int64) (context: RawPtr) : Unit =
+  let _ = Stdlib.__Task.__force context (Stdlib.__Async.__pending promise) in
+  taskDigit cell digit
+
+let cell = __raw_alloc 8L in let _ = __raw_write_word cell 0L 0L in let promise = Stdlib.__Async.__new<Unit> () in let _ = Stdlib.__Task.__run [(fun context -> taskWaitDigit cell promise 1L context), (fun context -> taskWaitDigit cell promise 2L context), (fun context -> Stdlib.__Task.__resolve context promise ())] in let result = __raw_get<Int64> cell 0L in let _ = __raw_free cell in result = 12L // all waiters wake in registration order; leak_check
+
+let taskTimers (cell: RawPtr) (context: RawPtr) : Unit =
+  let slow = Stdlib.__Task.__delay context 20L "slow" in
+  let fast = Stdlib.__Task.__delay context 0L "fast" in
+  let _ = taskDigit cell 1L in
+  let first = Stdlib.__Task.__force context fast in
+  let _ = if first == "fast" then taskDigit cell 3L else Builtin.crash "Wrong timer result" in
+  let second = Stdlib.__Task.__force context slow in
+  if second == "slow" then taskDigit cell 4L else Builtin.crash "Wrong timer result"
+
+let cell = __raw_alloc 8L in let _ = __raw_write_word cell 0L 0L in let _ = Stdlib.__Task.__run [(fun context -> taskTimers cell context), (fun _context -> taskDigit cell 2L)] in let result = __raw_get<Int64> cell 0L in let _ = __raw_free cell in result = 1234L // eager timers resume through the queue; leak_check
+
+let taskFloat (context: RawPtr) (left: Float) (right: Float) : Float =
+  let product = left * right in
+  let sum = left + right in
+  let _ = Stdlib.__Task.__yield context in
+  product + sum
+
+let cell = __raw_alloc 8L in let _ = Stdlib.__Task.__run [(fun context -> let value = taskFloat context 1.5 2.5 in __raw_write_word cell 0L (if value == 7.75 then 1L else 0L)), (fun context -> let _ = taskFloat context 100.0 30.0 in ())] in let result = __raw_get<Int64> cell 0L in let _ = __raw_free cell in result = 1L // floating point registers survive another task; leak_check
+
+let taskAllocate (context: RawPtr) (depth: Int64) : Int64 =
+  if depth == 0L then 0L
+  else
+    let saved = "stack-" ++ Stdlib.Int64.toString depth in
+    let _ = Stdlib.__Task.__yield context in
+    let result = taskAllocate context (depth - 1L) in
+    if saved == "stack-" ++ Stdlib.Int64.toString depth then result + 1L
+    else Builtin.crash "Suspended allocation overwritten"
+
+let cell = __raw_alloc 16L in let _ = Stdlib.__Task.__run [(fun context -> __raw_write_word cell 0L (taskAllocate context 64L)), (fun context -> __raw_write_word cell 8L (taskAllocate context 47L))] in let result = (__raw_get<Int64> cell 0L, __raw_get<Int64> cell 8L) in let _ = __raw_free cell in result = (64L, 47L) // shared allocator with many suspended owners; leak_check
+
+let expected = Stdlib.Cli.__argv 0L in let cell = __raw_alloc 8L in let _ = Stdlib.__Task.__run [(fun _context -> __raw_write_word cell 0L (if Stdlib.Cli.__argv 0L == expected then 1L else 0L))] in let result = __raw_get<Int64> cell 0L in let _ = __raw_free cell in result = 1L // fiber frame chain retains process startup arguments; leak_check
+
+let taskFailure () : Result<Int64, String> = Error ("ordinary" ++ " failure")
+
+let _ = Stdlib.__Task.__run [(fun context -> let unused = Stdlib.__Task.__delay context 0L (taskFailure ()) in ())] in true = true // producer owns an abandoned result until completion; leak_check

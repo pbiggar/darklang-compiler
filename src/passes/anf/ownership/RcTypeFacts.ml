@@ -289,6 +289,8 @@ let inferCExprType ctx expr =
   | A.Sleep _ | A.StdoutWrite _ -> Some AST.TUnit
   | A.CliNative (op, _) -> (
       match op with
+      | A.FiberStackAlloc -> Some AST.TInternalRawPtr
+      | A.FiberStackFree | A.FiberPrepare | A.FiberSwitch -> Some AST.TUnit
       | A.GetEnv | A.GetArgv ->
           Some (AST.TSum ("Darklang.Stdlib.Option.Option", [ AST.TString ]))
       | A.Kill -> posix AST.TUnit
@@ -309,13 +311,13 @@ let inferCExprType ctx expr =
       | A.PosixSetAttributesAt | A.PosixSymlinkAt | A.PosixReadlinkAt
       | A.PosixAccessAt | A.PosixFlock | A.PosixGetDents | A.PosixIoctl
       | A.PosixProcInfo | A.PosixCopyFileRange | A.PosixFtruncate
-      | A.PosixFchmod | A.PosixFstat | A.PosixPread
-      | A.PosixPwrite | A.PosixFclonefileat | A.PosixGetentropy | A.PosixUname
-      | A.PosixSysctl | A.PosixSchedGetaffinity | A.PosixFcntlGetPath
-      | A.PosixClockGettime | A.PosixGettimeofday | A.PosixNanosleep
-      | A.PosixMachTimebaseInfo | A.PosixInotifyInit1 | A.PosixInotifyAddWatch
-      | A.PosixPpoll | A.PosixPollDarwin | A.PosixKqueue | A.ChildLaunch
-      | A.PosixWait4 | A.PosixKeventVnode ->
+      | A.PosixFchmod | A.PosixFstat | A.PosixPread | A.PosixPwrite
+      | A.PosixFclonefileat | A.PosixGetentropy | A.PosixUname | A.PosixSysctl
+      | A.PosixSchedGetaffinity | A.PosixFcntlGetPath | A.PosixClockGettime
+      | A.PosixGettimeofday | A.PosixNanosleep | A.PosixMachTimebaseInfo
+      | A.PosixInotifyInit1 | A.PosixInotifyAddWatch | A.PosixPpoll
+      | A.PosixPollDarwin | A.PosixKqueue | A.ChildLaunch | A.PosixWait4
+      | A.PosixKeventVnode ->
           Some AST.TInt64)
   | A.IfValue (_, yes, _) -> atom yes
   | A.BorrowedCall (func, [ value ])

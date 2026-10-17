@@ -12,8 +12,9 @@ machines. Interpreter differences are not constraints on this implementation.
 `StdLib/__Async.dark` implements a private, typed promise object and an explicit
 ready/pending value carrier. Both are embedded in the compiler, using the existing
 typed raw-slot operations, sums and lifecycle owners. Implicit source-value
-lowering is not yet implemented. No language operation currently initiates
-asynchronous work, parks a task, or forces one of these cells.
+lowering is not yet implemented. The private `__Task` runtime connects these
+cells to native stack suspension and timer completions; ordinary source-level
+operations do not yet use it implicitly.
 
 `__Promise<a>` owns a mutable native cell and a reference-counted lifecycle owner.
 Its phantom parameter fixes the cell's payload type and release plan. Each cell
@@ -85,10 +86,42 @@ joins, aggregate fields, raw slots, ownership and native lowering. This migratio
 must not assume the current optimized sum and container layouts already support
 pending payloads.
 
-After carrier integration, add fixed-address VM-backed task stacks and a
-single-threaded runnable scheduler. Connect force to waiter registration and
-stack suspension, then validate a private timer before migrating HTTP. Do not
-discard suspended stacks: their locals still carry reference-count obligations.
+## Native tasks and explicit forcing
+
+`StdLib/__Task.dark` implements a private, single-threaded cooperative scheduler.
+`__run` accepts root closures and gives each one a borrowed task-context pointer.
+Ordinary calls below each root use its existing native stack. `__force` returns
+a ready payload immediately; otherwise it registers the task on the promise and
+switches to the scheduler. Completion enqueues registered tasks in FIFO order.
+The scheduler never repeatedly probes parked tasks. `__yield` returns a runnable
+task to the back of the queue.
+
+On Linux x64, each task has an 8 MiB fixed-address virtual-memory stack with a
+64 KiB inaccessible guard at each end. The native switch saves stack and frame
+pointers, allocatable callee-saved integer registers and floating-point
+registers. Normal native-effect call barriers preserve caller-owned registers.
+Heap and free-list cursors remain shared between tasks: restoring an old heap
+cursor would overwrite allocations made since suspension. The initial fiber
+frame links to the process root so argv/environment helpers retain access to
+startup arguments. ARM64 fiber intrinsics currently reject compilation.
+
+The scheduler owns every task until its explicit scope completes. A task may be
+destroyed before it starts or after it returns; dropping a runnable or parked
+stack is an invariant failure because its locals still own managed values.
+Task entry closures are normal managed closures, and stack mappings participate
+in native leak accounting.
+
+`__delay` starts a private monotonic timer eagerly and returns a pending carrier.
+The completion callback retains both the promise and its typed payload until
+the deadline. Timers land on the scheduler thread; when no task is runnable the
+scheduler sleeps until the earliest deadline. This explicit test/runtime scope
+drains all registered tasks and timers. It does not choose the production
+program's policy for unused outstanding I/O, cancellation or effect ordering.
+
+The next integration boundary is compiler carrier and demand lowering across
+signatures, joins, closures and aggregate storage, followed by automatic entry
+and real I/O initiation. The explicit runtime does not establish those source
+semantics by itself.
 
 ## Tests and validation boundary
 
@@ -97,6 +130,8 @@ transitions, idempotent waiter registration, late registration, multiple reads,
 typed payloads, consumer/producer ownership, managed result survival and payload
 disposal. `async_value.e2e` exercises explicit carriers, including scalar bits,
 pending storage, closure capture, return and consumer abandonment. These tests
-do not establish implicit propagation, overlap, scheduler progress, native stack
-suspension, transparent propagation or platform-specific I/O behavior. Those
-require the later end-to-end task and I/O slices.
+do not establish implicit propagation or platform-specific I/O behavior.
+`async_task.e2e` adds explicit native scheduling cases: round-robin progress,
+deep live stack locals, multiple promise waiters, timers, floating-point values,
+shared-heap allocation and startup arguments inside a fiber. These remain
+private runtime tests rather than evidence of transparent source propagation.

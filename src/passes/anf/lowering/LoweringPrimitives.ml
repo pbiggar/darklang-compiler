@@ -390,6 +390,10 @@ let tryCliIntrinsic name args =
   | _ ->
       let operation =
         match name with
+        | "__fiber_stack_alloc" -> Some ANF.FiberStackAlloc
+        | "__fiber_stack_free" -> Some ANF.FiberStackFree
+        | "__fiber_prepare" -> Some ANF.FiberPrepare
+        | "__fiber_switch" -> Some ANF.FiberSwitch
         | "Darklang.Stdlib.Cli.__hostOSCode" -> Some ANF.HostOS
         | "Darklang.Stdlib.Cli.__hostArchitectureCode" ->
             Some ANF.HostArchitecture
