@@ -99,10 +99,14 @@ structural physical type with updated field descriptors, so ownership sees each
 field's actual carrier type. Projecting one field preserves that field's carrier
 and does not inspect its siblings; explicit native result adapters materialize
 fields recursively and rebuild nominal records using their source descriptors.
-Aggregate transport across ordinary signatures, joins and captures, collection
-storage, and escaping callables whose argument
-or result interface changes still require coordinated rewriting and currently
-produce compilation diagnostics. The hooks are
+`AsyncTransport` merges these layouts across direct signatures, typed joins and
+closure captures, promoting concrete fields to ready carriers where call sites
+require a common layout. Concrete calls to synchronous functions keep their
+original representations. Collection and variant storage, untyped value
+selections, and escaping callables whose argument or result interface changes
+still produce compilation diagnostics. Combining a wholly pending container
+with independently pending fields in one inferred interface also remains
+unsupported: it requires a typed, demand-free mapping of the outer carrier. The hooks are
 compiler test interfaces, not public async APIs or automatic I/O lowering.
 
 | Operation | Demand |
@@ -251,3 +255,8 @@ records and tuples, record updates and abandoned fields. `async_callable.e2e`
 checks that passing or abandoning a pending function value does not demand it,
 while invocation does. `async_result.e2e` checks constructor demands across
 ordinary calls and preserves managed `Error` values as ordinary payloads.
+
+`async_storage_calls.e2e` checks tuple and record arguments and results, fields
+constructed in callees, unchanged concrete call sites, captured aggregates and
+typed branch joins. The caller resolves a promise after the ordinary call has
+returned, exposing early demands at those boundaries.
