@@ -18,24 +18,8 @@ let preambleError error =
 (* Build preamble with stdlib as base, returning extended context for test compilation.
    Preamble functions go through the full pipeline (parse → typecheck → mono → inline → lift → ANF → RC → TCO).
    The result is built once per file and reused for all tests in that file. *)
-let buildPreambleContext allowInternal (stdlib : X.stdlibResult) preamble
-    _sourceFile _funcLineMap recorder =
-  (* Handle empty preamble - return a context that just wraps stdlib. *)
-  if Text.trim preamble = "" then
-    Ok
-      ( stdlib,
-        {
-          X.context = stdlib.X.context;
-          anfFunctions = [];
-          typeMap = stdlib.X.stdlibTypeMap;
-          symbolicFunctions = [];
-          callGraphSummaries = FunctionIdMap.empty;
-          symbolicCallGraph = FunctionIdMap.empty;
-        } )
-  else
-    let* analysis =
-      PreambleAnalysis.analyzePreamble allowInternal stdlib preamble
-    in
+let buildCheckedContext (stdlib : X.stdlibResult)
+    (analysis : X.preambleAnalysis) recorder =
     let typed = analysis.X.typedAST in
     let env = analysis.X.typeCheckEnv in
     (* Extract generic function definitions from preamble. *)
@@ -123,6 +107,28 @@ let buildPreambleContext allowInternal (stdlib : X.stdlibResult) preamble
               (CheckedAST.functionIds context.X.symbols)
               symbolic;
         } )
+
+let buildPreambleContext allowInternal (stdlib : X.stdlibResult) preamble
+    _sourceFile _funcLineMap recorder =
+  if Text.trim preamble = "" then
+    Ok
+      ( stdlib,
+        {
+          X.context = stdlib.X.context;
+          anfFunctions = [];
+          typeMap = stdlib.X.stdlibTypeMap;
+          symbolicFunctions = [];
+          callGraphSummaries = FunctionIdMap.empty;
+          symbolicCallGraph = FunctionIdMap.empty;
+        } )
+  else
+    let* analysis = PreambleAnalysis.analyzePreamble allowInternal stdlib preamble in
+    buildCheckedContext stdlib analysis recorder
+
+(* Compile original, independently parsed package units without an entry expression. *)
+let buildPackageContext stdlib sources =
+  let* analysis = PreambleAnalysis.analyzeSources true stdlib sources in
+  buildCheckedContext stdlib analysis None
 
 (* Build preamble context from a typed preamble analysis and precomputed specializations. *)
 let buildPreambleContextFromAnalysis (stdlib : X.stdlibResult)

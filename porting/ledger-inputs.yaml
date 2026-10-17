@@ -2,24 +2,81 @@
 schema: 1
 features:
   - name: Async
-    status: not-assessed
-    sources: [src/frontend/WrittenExpressions.ml]
-    notes: Review the compiler revision being inventoried; async is also being implemented on a separate branch.
+    status: missing
+    sources: [src/frontend/WrittenExpressions.ml, src/frontend/interpreter/WrittenTypes.ml, src/AST.ml]
+    notes: This branch has no async expression or future runtime representation. Separate async branch work is not counted here.
   - name: Effects
-    status: not-assessed
-    sources: [src/frontend/interpreter/LibExecution_Effects.ml]
-    notes: Parsing annotations is distinct from implementing effects.
+    status: partial
+    sources: [src/frontend/interpreter/LibExecution_Effects.ml, src/frontend/interpreter/DeclarationSupport.ml, src/frontend/WrittenDeclarations.ml, src/frontend/WrittenSource.ml]
+    notes: Effect names and function annotations are parsed; the direct checker does not propagate or enforce permission ceilings.
   - name: Traits
-    status: not-assessed
-    sources: [src/frontend/WrittenDeclarations.ml]
-    notes: Track coarse implementation status here; behavior belongs in existing tests.
+    status: missing
+    sources: [src/frontend/interpreter/WrittenTypes.ml, src/frontend/WrittenSource.ml]
+    notes: No trait/impl declaration variants or trait dispatch in this branch. Ordinary generic functions are supported separately.
   - name: Named package tests
     status: partial
     sources: [src/frontend/NamedPackageTests.ml]
     notes: Parsing and extraction exist; Test helpers, test-local builtins and outcome execution remain unfinished.
+  - name: Primitive literals and numeric types
+    status: implemented
+    sources: [src/frontend/WrittenExpressions.ml, src/AST.ml]
+    notes: Coarse source assessment only; individual literal and numeric edge cases remain in the suite.
+  - name: Bindings, functions and closures
+    status: implemented
+    sources: [src/frontend/WrittenExpressions.ml, src/frontend/WrittenDeclarations.ml]
+    notes: Local bindings, module functions, first-class functions and lambda checking exist.
+  - name: Recursion
+    status: implemented
+    sources: [src/frontend/WrittenDeclarations.ml, src/frontend/checking/ResolveDeclarations.ml]
+    notes: Recursive function groups are collected and checked before lowering.
+  - name: Modules and name resolution
+    status: implemented
+    sources: [src/frontend/WrittenSource.ml, src/NameResolution.ml]
+    notes: File and nested modules with lexical/qualified lookup; detailed differences stay in existing compatibility tests.
+  - name: Generic functions and algebraic types
+    status: implemented
+    sources: [src/frontend/WrittenDeclarations.ml, src/frontend/WrittenTypeSupport.ml]
+    notes: Generic functions, records, sums and aliases are checked; trait bounds are not included in this status.
+  - name: Pattern matching
+    status: implemented
+    sources: [src/frontend/WrittenExpressions.ml, src/frontend/WrittenPatternSupport.ml]
+    notes: Ahead-of-time match checking and typed pattern lowering exist; individual patterns remain suite concerns.
+  - name: Lists, dictionaries and tuples
+    status: implemented
+    sources: [src/frontend/WrittenExpressions.ml, src/frontend/WrittenCollectionSupport.ml]
+    notes: Typed collection/tuple construction and access exist.
+  - name: Runtime reflection and dynamic evaluation
+    status: missing
+    sources: [src/frontend/WrittenApplicationSupport.ml, src/AST.ml]
+    notes: No interpreter-style runtime program evaluation/reflection implementation; compile-time metadata is not runtime reflection.
 source_mappings: {}
-parser_mappings: {}
-builtin_mappings: {}
+parser_mappings:
+  parser:backend/src/LibParser/Lexer.fs: [src/frontend/interpreter/Lexer.ml]
+  parser:backend/src/LibParser/Tokenizer.fs: [src/frontend/interpreter/Tokenizer.ml]
+  parser:backend/src/LibParser/Validation.fs: [src/frontend/interpreter/Validation.ml]
+  parser:backend/src/LibParser/WrittenTypes.fs: [src/frontend/interpreter/WrittenTypes.ml]
+  parser:backend/src/LibParser/Parser.fs:
+    - src/frontend/interpreter/Parser.ml
+    - src/frontend/interpreter/ParserSupport.ml
+    - src/frontend/interpreter/FileParser.ml
+    - src/frontend/interpreter/DeclarationParser.ml
+    - src/frontend/interpreter/DeclarationSupport.ml
+    - src/frontend/interpreter/BindingPatternParser.ml
+    - src/frontend/interpreter/ExpressionCollections.ml
+    - src/frontend/interpreter/ExpressionControl.ml
+    - src/frontend/interpreter/ExpressionInterpolation.ml
+    - src/frontend/interpreter/ExpressionPrecedence.ml
+    - src/frontend/interpreter/ExpressionPrimary.ml
+    - src/frontend/interpreter/TypeDefinitionParser.ml
+    - src/frontend/interpreter/TypeParser.ml
+    - src/frontend/interpreter/PatternParser.ml
+  parser:backend/src/LibParser/SourceFile.fs: [src/frontend/WrittenSource.ml]
+  parser:backend/src/LibParser/NameResolver.fs: [src/NameResolution.ml, src/frontend/checking/ResolveDeclarations.ml, src/frontend/WrittenTypeSupport.ml]
+  parser:backend/src/LibParser/WrittenTypesToProgramTypes.fs: [src/frontend/WrittenChecking.ml, src/frontend/WrittenDeclarations.ml, src/frontend/WrittenExpressions.ml]
+  parser:backend/src/LibParser/Package.fs: [src/packages/PackageManager.ml, src/driver/PackageCatalog.ml, src/frontend/NamedPackageTests.ml]
+builtin_mappings:
+  builtins:backend/src/Builtins/Builtins.Pure/Libs/Bool.fs#fn/boolNot/v0: [src/frontend/WrittenApplicationSupport.ml]
+  builtins:backend/src/Builtins/Builtins.Pure/Libs/NoModule.fs#fn/unwrap/v0: [src/frontend/WrittenApplicationSupport.ml]
 # Qualified declaration name -> existing test source paths, with an explanation.
 coverage: {}
 # Upstream source path -> explanation of an accepted source difference.
