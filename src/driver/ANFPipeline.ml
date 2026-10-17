@@ -95,14 +95,46 @@ let buildAnf ?(asyncDefinitions = StringOrder.Map.empty) ?asyncRuntime verbosity
         else StringOrder.Map.add name definition definitions)
       asyncDefinitions externalOptimizationFunctions
   in
+  (* Ownership uses one temporary-type map for the compilation unit. Separately
+     converted helper bodies must enter that same temporary namespace. *)
+  let freshenHelpers functions helpers =
+    let maximum =
+      List.fold_left
+        (fun maximum fn -> max maximum (ANF_to_MIR.maxTempIdInFunction fn))
+        0 functions
+    in
+    let helpers, _ =
+      List.fold_left
+        (fun (helpers, gen) (fn : ANF.functionDef) ->
+          let parameters, substitutions, gen =
+            List.fold_left
+              (fun (parameters, substitutions, gen) (parameter : ANF.typedParam)
+                 ->
+                let id, gen = ANF.freshVar gen in
+                ( { parameter with ANF.id } :: parameters,
+                  InliningCommon.TempMap.add parameter.ANF.id id substitutions,
+                  gen ))
+              ([], InliningCommon.TempMap.empty, gen)
+              fn.ANF.typedParams
+          in
+          let body, gen =
+            InliningCommon.renameExpr substitutions gen fn.ANF.body
+          in
+          ( { fn with ANF.typedParams = List.rev parameters; body } :: helpers,
+            gen ))
+        ([], ANF.VarGen (maximum + 1))
+        helpers
+    in
+    List.rev helpers
+  in
   let rec lowerAsync (registries : AST_to_ANF.registries) nextFunctionOrdinal
-      runtime functions =
+      runtime helperNames functions =
     match
       LowerAsyncDemands.lower registries.AST_to_ANF.funcReg
         registries.AST_to_ANF.functionNames registries.AST_to_ANF.functionIds
         nextFunctionOrdinal asyncDefinitions functions
     with
-    | Ok lowered -> Ok (lowered, registries)
+    | Ok lowered -> Ok (lowered, registries, helperNames)
     | Error (LowerAsyncDemands.Diagnostic message) -> Error message
     | Error (LowerAsyncDemands.MissingRuntimeSpecializations requested) -> (
         match runtime with
@@ -135,14 +167,24 @@ let buildAnf ?(asyncDefinitions = StringOrder.Map.empty) ?asyncRuntime verbosity
                   registry.AST_to_ANF.functionIds registry.AST_to_ANF.funcReg
                   (ANF.Program (helpers, ANF.Return ANF.UnitLiteral))
               in
+              let helperNames =
+                List.fold_left
+                  (fun names (fn : ANF.functionDef) -> F.add fn.ANF.id names)
+                  helperNames helpers
+              in
               lowerAsync registry
                 (CheckedAST.nextFunctionOrdinal
                    context.CompilationContexts.symbols)
                 (Some { runtime with context })
-                (functions @ helpers))
+                helperNames
+                (functions @ freshenHelpers functions helpers))
   in
-  let* lowered, registries =
-    lowerAsync registries nextFunctionOrdinal asyncRuntime functions
+  let* lowered, registries, helperNames =
+    lowerAsync registries nextFunctionOrdinal asyncRuntime F.empty functions
+  in
+  (* Match SourcePreparation's policy for late stdlib specializations. *)
+  let nonInlineableFunctionNames =
+    F.union nonInlineableFunctionNames helperNames
   in
   let functions = lowered.LowerAsyncDemands.functions in
   let nextFunctionOrdinal = lowered.LowerAsyncDemands.nextFunctionOrdinal in

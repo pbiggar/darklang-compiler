@@ -160,13 +160,13 @@ let __delayCurrent<'a> (delay: Int64) (value: a) : Stdlib.__Async.__Value<a> =
 let __delayValueCurrent<'a> (delay: Int64) (value: Stdlib.__Async.__Value<a>) : Stdlib.__Async.__Value<a> =
     Stdlib.__Task.__joinCurrent (Stdlib.__Task.__delayCurrent delay value)
 
-// Source-demand lowering replaces this typed hook before ownership. Runtime
+// Source-demand lowering replaces these typed hooks before ownership. Runtime
 // helper dependencies are requested from the compiler's specialization pipeline.
 let __transport<'a> (value: Stdlib.__Async.__Value<a>) : a =
     Builtin.crash "Transparent transport must be lowered by the compiler"
 
 let __delayTransparent<'a> (delay: Int64) (value: a) : a =
-    Stdlib.__Task.__forceCurrent (Stdlib.__Task.__delayValueCurrent delay (Stdlib.__Async.__ready value))
+    Builtin.crash "Transparent delay must be lowered by the compiler"
 
 let __landTimers (now: Int64) (timers: List<Stdlib.__Task.__Timer>) (keep: List<Stdlib.__Task.__Timer>) : List<Stdlib.__Task.__Timer> =
     match timers with

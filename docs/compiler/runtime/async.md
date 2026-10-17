@@ -109,6 +109,14 @@ with independently pending fields in one inferred interface also remains
 unsupported: it requires a typed, demand-free mapping of the outer carrier. The hooks are
 compiler test interfaces, not public async APIs or automatic I/O lowering.
 
+Runtime helper dependencies are requested explicitly by lowering. When a typed
+specialization is missing, the ANF pipeline materializes it from the retained
+stdlib generic definitions, converts and canonicalizes its body, and retries
+lowering with the extended function and symbol registries. Inserted helper bodies
+receive fresh ANF temporaries and the same inlining exclusions as other late
+stdlib specializations. The source hooks do
+not contain fallback force calls to cause incidental specialization.
+
 | Operation | Demand |
 |---|---|
 | Binding or returning a value | None |
@@ -260,3 +268,7 @@ ordinary calls and preserves managed `Error` values as ordinary payloads.
 constructed in callees, unchanged concrete call sites, captured aggregates and
 typed branch joins. The caller resolves a promise after the ordinary call has
 returned, exposing early demands at those boundaries.
+
+`async_runtime_helper.e2e` checks a custom record payload whose typed demand helper
+is independent of the root result type, including specialization while compiling
+a preamble and later use of its source functions.

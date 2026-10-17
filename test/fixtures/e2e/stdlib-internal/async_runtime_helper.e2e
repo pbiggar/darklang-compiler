@@ -1,5 +1,13 @@
 // async_runtime_helper.e2e - Demand helpers are generated for source payload types.
 
+type LateDemandHelperPayload = { floating: Float, text: String }
 type DemandHelperPayload = { number: Int64, text: String }
 
+let sourceHelperFetch (gate: Stdlib.__Async.__Promise<DemandHelperPayload>) : DemandHelperPayload =
+  Stdlib.__Task.__transport (Stdlib.__Async.__pending gate)
+
 Stdlib.__Task.__runMain (fun _unit -> let gate = Stdlib.__Async.__new<DemandHelperPayload> () in let value = Stdlib.__Task.__transport (Stdlib.__Async.__pending gate) in let _ = Stdlib.__Task.__resolve (__fiber_current ()) gate (DemandHelperPayload { number = 42L; text = "managed" ++ " payload" }) in value.number == 42L && value.text == "managed payload") = true // runtime helper specialization is independent of the root result type; leak_check
+
+Stdlib.__Task.__runMain (fun _unit -> let gate = Stdlib.__Async.__new<DemandHelperPayload> () in let value = sourceHelperFetch gate in let _ = Stdlib.__Task.__resolve (__fiber_current ()) gate (DemandHelperPayload { number = 42L; text = "managed" ++ " payload" }) in value.number == 42L && value.text == "managed payload") = true // preamble helper bodies and source definitions remain usable by callers; leak_check
+
+Stdlib.__Task.__runMain (fun _unit -> let gate = Stdlib.__Async.__new<LateDemandHelperPayload> () in let value = Stdlib.__Task.__transport (Stdlib.__Async.__pending gate) in let _ = Stdlib.__Task.__resolve (__fiber_current ()) gate (LateDemandHelperPayload { floating = 40.25; text = "late" ++ " payload" }) in value.floating + 2.0 == 42.25 && value.text == "late payload") = true // later helper conversion preserves the program temporary namespace; leak_check

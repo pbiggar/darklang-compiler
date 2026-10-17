@@ -46,6 +46,18 @@ let materialize recorder (context : X.pipelineContext) requested =
       P.convertTypedDeclarationsWithTrace recorder (Some context)
         (P.ReplaceTypeApps specs) program
     in
+    List.iter
+      (fun (fn : ANF.functionDef) ->
+        match
+          FunctionIdMap.tryFind fn.ANF.id
+            context.X.registries.AST_to_ANF.functionNames
+        with
+        | Some previous when previous <> fn.ANF.name ->
+            Crash.crash
+              ("Async helper function identity collision: " ^ previous ^ " / "
+             ^ fn.ANF.name)
+        | _ -> ())
+      converted.P.functions;
     let names = X.buildBaseFuncNames converted.P.registries in
     let returns =
       X.mergeReturnTypes context.X.returnTypes converted.P.localReturnTypes
