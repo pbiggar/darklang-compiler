@@ -139,6 +139,11 @@ let __delay<'a> (context: RawPtr) (delay: Int64) (value: a) : Stdlib.__Async.__V
         let _ = Stdlib.__Task.__registerTimer scheduler timer in
         Stdlib.__Async.__pending promise
 
+let __delayCurrent<'a> (delay: Int64) (value: a) : Stdlib.__Async.__Value<a> =
+    let context = __fiber_current () in
+    if __rawptr_to_word context == 0L then Builtin.crash "Cannot start a timer outside a native task"
+    else Stdlib.__Task.__delay context delay value
+
 let __landTimers (now: Int64) (timers: List<Stdlib.__Task.__Timer>) (keep: List<Stdlib.__Task.__Timer>) : List<Stdlib.__Task.__Timer> =
     match timers with
     | [] -> Stdlib.List.reverse keep
@@ -218,3 +223,12 @@ let __run (entries: List<RawPtr -> Unit>) : Unit =
     let _ = Stdlib.__Task.__loop scheduler (Stdlib.List.__length tasks) in
     let _ = __fiber_set_current previous in
     Stdlib.__Task.__disposeScheduler scheduler
+
+// Typed result ownership outlives the root's native stack. This explicit scope
+// retains __run's drain policy; automatic CLI entry remains a separate boundary.
+let __runMain<'a> (entry: Unit -> a) : a =
+    let result = Stdlib.__Async.__new<a> () in
+    let _ = Stdlib.__Task.__run [(fun context -> Stdlib.__Task.__resolve context result (entry ()))] in
+    match Stdlib.__Async.__poll result with
+    | Some value -> value
+    | None -> Builtin.crash "Native task entry returned without a result"

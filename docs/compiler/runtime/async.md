@@ -105,6 +105,13 @@ be forced outside a task; forcing a pending value there reports a runtime error.
 This helper is the entry point for future demand lowering, which is not yet
 inserted automatically.
 
+`__runMain` is a private typed entry adapter from an ordinary `Unit -> a` closure
+to a root task. Its promise retains the result after the root stack is released;
+the adapter returns an owned payload after the explicit scope drains. Together
+with `__delayCurrent`, it permits context-free runtime tests through normal Dark
+functions. It retains the explicit scope's drain policy and is not automatically
+applied to CLI programs.
+
 On Linux x64, each task has an 8 MiB fixed-address virtual-memory stack with a
 64 KiB inaccessible guard at each end. The native switch saves stack and frame
 pointers, allocatable callee-saved integer registers and floating-point
@@ -147,3 +154,5 @@ private runtime tests rather than evidence of transparent source propagation.
 `async_context.e2e` exercises implicit context lookup across deep calls, task
 switches, nested scopes and scheduler callbacks, including pending demands
 outside a task.
+`async_entry.e2e` checks typed entry results, managed aggregates and closures,
+ordinary `Result.Error` payloads, nested entries and leak accounting.
