@@ -325,7 +325,7 @@ let _legacyListTreeHelpers () =
 let lowerAtom (toANFCore : LoweringCallbacks.expressionLowerer)
     (toAtomCore : LoweringCallbacks.atomLowerer)
     (_toANFBoundAtomCore : LoweringCallbacks.boundAtomLowerer) functionIds sums
-    typeNames inert expr gen env registry variants functions names modules =
+    typeNames regions expr gen env registry variants functions names modules =
   let fieldIndex id =
     match R.tryFindFieldIndex id typeNames with
     | Some index -> index
@@ -353,7 +353,7 @@ let lowerAtom (toANFCore : LoweringCallbacks.expressionLowerer)
   in
   let functionNameIs id expected = functionName id = Some expected in
   let atom ?(env = env) expr gen =
-    toAtomCore sums typeNames inert expr gen env registry variants functions
+    toAtomCore sums typeNames regions expr gen env registry variants functions
       names modules
   in
   let infer expr =
@@ -975,7 +975,7 @@ let lowerAtom (toANFCore : LoweringCallbacks.expressionLowerer)
             gen)
   | C.Match (scrutinee, cases) ->
       let* _matchExpr, _gen =
-        toANFCore sums typeNames inert
+        toANFCore sums typeNames regions
           (C.Match (scrutinee, cases))
           gen env registry variants functions names modules
       in

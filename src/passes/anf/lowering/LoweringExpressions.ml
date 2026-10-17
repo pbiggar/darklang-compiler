@@ -7,7 +7,7 @@ module K = Continuations
 
 let ( let* ) = Result.bind
 
-let rec toANFCore ids sums typeNames inert expr gen env registry variants
+let rec toANFCore ids sums typeNames regions expr gen env registry variants
     functions names modules =
   let resolveFunction name =
     match StringOrder.Map.find_opt name ids with
@@ -26,7 +26,9 @@ let rec toANFCore ids sums typeNames inert expr gen env registry variants
       variants functions names modules
   in
   match
-    (match inert with
+    (match regions with
+    (* Scalar list regions erase callback and element interfaces before async
+       inference can widen them to carriers. Preserve those source values. *)
     | LoweringCallbacks.PreserveValues -> None
     | LoweringCallbacks.OptimizeLists scopes ->
         ExtractListRegions.tryExtract scopes names (R.typeEnvFromVarEnv env) infer
@@ -36,7 +38,7 @@ let rec toANFCore ids sums typeNames inert expr gen env registry variants
   with
   | Some region ->
       let lower value gen env =
-        toANFUnplannedCore ids sums typeNames inert value gen env registry
+        toANFUnplannedCore ids sums typeNames regions value gen env registry
           variants functions names modules
       in
       let* () = ListLiveness.verifyFunctional region in
@@ -44,19 +46,19 @@ let rec toANFCore ids sums typeNames inert expr gen env registry variants
         (ElaborateListOwnership.elaborateOwnership
            (SelectListStorage.selectStorage region))
   | None ->
-      toANFUnplannedCore ids sums typeNames inert expr gen env registry variants
+      toANFUnplannedCore ids sums typeNames regions expr gen env registry variants
         functions names modules
 
-and toANFUnplannedCore ids sums typeNames inert expr gen env registry variants
+and toANFUnplannedCore ids sums typeNames regions expr gen env registry variants
     functions names modules =
   ExpressionLowering.lowerExpression (toANFCore ids) (toAtomCore ids)
-    (toANFBoundAtomCore ids) ids sums typeNames inert expr gen env registry
+    (toANFBoundAtomCore ids) ids sums typeNames regions expr gen env registry
     variants functions names modules
 
-and toAtomCore ids sums typeNames inert expr gen env registry variants functions
+and toAtomCore ids sums typeNames regions expr gen env registry variants functions
     names modules =
   AtomLowering.lowerAtom (toANFCore ids) (toAtomCore ids)
-    (toANFBoundAtomCore ids) ids sums typeNames inert expr gen env registry
+    (toANFBoundAtomCore ids) ids sums typeNames regions expr gen env registry
     variants functions names modules
 
 (*
@@ -66,10 +68,10 @@ and toAtomCore ids sums typeNames inert expr gen env registry variants functions
    TypeMap even though checking established the match result type.
    Give each return path an explicit boundary type before it jumps.
 *)
-and toANFBoundAtomCore ids sums typeNames inert expr gen env registry variants
+and toANFBoundAtomCore ids sums typeNames regions expr gen env registry variants
     functions names modules =
   match
-    toAtomCore ids sums typeNames inert expr gen env registry variants functions
+    toAtomCore ids sums typeNames regions expr gen env registry variants functions
       names modules
   with
   | Ok (atom, bindings, gen) ->
@@ -78,7 +80,7 @@ and toANFBoundAtomCore ids sums typeNames inert expr gen env registry variants
       let lowerWithBranchLocalBinding () =
         let bound, gen = A.freshVar gen in
         let* expr, gen =
-          toANFCore ids sums typeNames inert expr gen env registry variants
+          toANFCore ids sums typeNames regions expr gen env registry variants
             functions names modules
         in
         Ok
@@ -97,7 +99,7 @@ and toANFBoundAtomCore ids sums typeNames inert expr gen env registry variants
           if K.isSupportedJoinArgumentType resultType then
             let bound, gen = A.freshVar gen in
             let* expr, gen =
-              toANFCore ids sums typeNames inert expr gen env registry variants
+              toANFCore ids sums typeNames regions expr gen env registry variants
                 functions names modules
             in
             let rec returnsToTypedJumps expr gen =

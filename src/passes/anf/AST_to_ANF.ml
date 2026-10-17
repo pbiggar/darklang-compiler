@@ -107,7 +107,7 @@ let toANFWithMetadata types expr gen env registry variants functions modules =
   LoweringExpressions.toANFCore
     (R.functionIdsFromNames names)
     (P.sumMetadataFromVariantLookup variants)
-    types (emptyScopes ()) expr gen env registry variants functions names
+    types (LoweringCallbacks.listRegions (R.functionIdsFromNames names) (emptyScopes ())) expr gen env registry variants functions names
     modules
 
 let toANF expr gen env registry variants functions modules =

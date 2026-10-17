@@ -352,7 +352,7 @@ let _legacyListTreeHelpers () =
 let lowerExpression (toANFCore : LoweringCallbacks.expressionLowerer)
     (toAtomCore : LoweringCallbacks.atomLowerer)
     (toANFBoundAtomCore : LoweringCallbacks.boundAtomLowerer) functionIds sums
-    typeNames inert expr gen env registry variants functions names modules =
+    typeNames regions expr gen env registry variants functions names modules =
   let fieldIndex id =
     match R.tryFindFieldIndex id typeNames with
     | Some index -> index
@@ -381,15 +381,15 @@ let lowerExpression (toANFCore : LoweringCallbacks.expressionLowerer)
   in
   let functionNameIs id expected = functionName id = Some expected in
   let anf ?(env = env) value gen =
-    toANFCore sums typeNames inert value gen env registry variants functions
+    toANFCore sums typeNames regions value gen env registry variants functions
       names modules
   in
   let atom value gen =
-    toAtomCore sums typeNames inert value gen env registry variants functions
+    toAtomCore sums typeNames regions value gen env registry variants functions
       names modules
   in
   let bound value gen =
-    toANFBoundAtomCore sums typeNames inert value gen env registry variants
+    toANFBoundAtomCore sums typeNames regions value gen env registry variants
       functions names modules
   in
   let infer value =
@@ -1199,7 +1199,7 @@ let lowerExpression (toANFCore : LoweringCallbacks.expressionLowerer)
           gen )
   | C.Match (value, cases) ->
       PatternLowering.lowerMatch toANFCore toAtomCore toANFBoundAtomCore
-        functionIds sums typeNames inert value
+        functionIds sums typeNames regions value
         (NonEmptyList.toList cases)
         gen env registry variants functions names modules
   | C.InterpolatedString parts -> (

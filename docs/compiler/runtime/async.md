@@ -120,7 +120,10 @@ values they inspect, and pending callback results remain stored in the mapped
 list. Known filter predicates use the same input interface; when a predicate
 returns a pending Boolean, a typed adapter demands that Boolean before the
 library chooses whether to retain the element. Unused input fields remain
-unresolved. Opaque callback interfaces still require diagnostics when their ABI would
+unresolved. Known fold steps share one physical accumulator interface with the
+initial value and every step result. Steps execute eagerly, but unused elements
+and intermediate pending accumulators are not demanded. Empty folds return the
+initial accumulator unchanged. Opaque callback interfaces still require diagnostics when their ABI would
 change. Native
 result adapters map typed demands over the list. List pattern bindings preserve
 element layouts; length and empty checks inspect only the spine, while literal

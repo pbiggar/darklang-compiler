@@ -620,6 +620,8 @@ let convertTypedDeclarationsWithTrace recorder baseContext mode typedProgram =
       registries (ANF.VarGen 0) resolvedFunctions
   in
   let* sourceFunctions =
+    (* A synchronous declaration can acquire pending parameters from a later
+       caller. Keep its value-level form as well as its optimized native body. *)
     match LoweringCallbacks.listRegions registries.functionIds registries.inertFunctionScopes with
     | LoweringCallbacks.PreserveValues -> Ok converted.AST_to_ANF.functions
     | LoweringCallbacks.OptimizeLists _ ->

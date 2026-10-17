@@ -285,7 +285,7 @@ type collectionMode = General | TupleBody | Guard | Nested
 let lowerMatch (toANFCore : LoweringCallbacks.expressionLowerer)
     (toAtomCore : LoweringCallbacks.atomLowerer)
     (toANFBoundAtomCore : LoweringCallbacks.boundAtomLowerer) functionIds sums
-    typeNames inert scrutinee cases gen env registry variants functions names
+    typeNames regions scrutinee cases gen env registry variants functions names
     modules =
   let constructorTag id =
     match R.tryFindConstructorTag id typeNames with
@@ -302,11 +302,11 @@ let lowerMatch (toANFCore : LoweringCallbacks.expressionLowerer)
           ("Pattern lowering function '" ^ name ^ "' is absent from registries")
   in
   let anf value gen env =
-    toANFCore sums typeNames inert value gen env registry variants functions
+    toANFCore sums typeNames regions value gen env registry variants functions
       names modules
   in
   let atom value gen env =
-    toAtomCore sums typeNames inert value gen env registry variants functions
+    toAtomCore sums typeNames regions value gen env registry variants functions
       names modules
   in
   let* scrutType =
@@ -316,7 +316,7 @@ let lowerMatch (toANFCore : LoweringCallbacks.expressionLowerer)
          (R.typeEnvFromVarEnv env) registry variants functions names modules)
   in
   let* scrutineeExpr, scrutineeAtom, gen =
-    toANFBoundAtomCore sums typeNames inert scrutinee gen env registry variants
+    toANFBoundAtomCore sums typeNames regions scrutinee gen env registry variants
       functions names modules
   in
   let hasNonEmptyListPattern =
