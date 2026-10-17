@@ -30,8 +30,8 @@ type failure =
   | MissingRuntimeSpecializations of SpecializationIdentity.SpecSet.t
 
 let carrier payload = AST.TSum ("Darklang.Stdlib.__Async.__Value", [ payload ])
-let transportName = "Darklang.Stdlib.__Task.__transport"
-let delayName = "Darklang.Stdlib.__Task.__delayTransparent"
+let transportName = AsyncSourceHooks.transportName
+let delayName = AsyncSourceHooks.delayName
 let specialized base name = String.starts_with ~prefix:(base ^ "_") name
 let lookup env = function A.Var id -> M.find_opt id env | _ -> None
 
@@ -241,7 +241,7 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
   let name id = F.tryFind id names in
   let producer id =
     match name id with
-    | Some name -> specialized transportName name || specialized delayName name
+    | Some name -> AsyncSourceHooks.isProducerName name
     | None -> false
   in
   if not (F.exists (fun id _ -> producer id) names) then

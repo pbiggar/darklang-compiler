@@ -86,6 +86,7 @@ type stdlibResult = {
   stdlibCallGraph : SpecializationIdentity.FunctionSet.t FunctionIdMap.t;
   stdlibAnfFunctions : ANF.functionDef StringOrder.Map.t;
   stdlibAnfOptimizationCandidates : ANF.functionDef StringOrder.Map.t;
+  stdlibAsyncDefinitions : ANF.functionDef StringOrder.Map.t;
   stdlibInlineCandidates : InliningCommon.functionInfo FunctionIdMap.t;
   stdlibAnfCallGraph : SpecializationIdentity.FunctionSet.t FunctionIdMap.t;
   stdlibTypeMap : ANF.typeMap;

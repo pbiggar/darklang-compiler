@@ -204,7 +204,7 @@ let convertFunction symbols func gen registry variants functions modules =
   let names = FunctionIdMap.map (fun _ (name, _) -> name) functions in
   convertFunctionWithSumTypeNames None symbols
     (P.sumMetadataFromVariantLookup variants)
-    (emptyScopes ()) func gen registry variants functions
+    (LoweringCallbacks.listRegions (R.functionIdsFromNames names) (emptyScopes ())) func gen registry variants functions
     (R.functionIdsFromNames names)
     names modules
 
@@ -565,15 +565,20 @@ let extendFunctionRegistryWithConverted registry functions =
         registry)
     registry functions
 
-let convertFunctionsWithOwnershipWithTrace recorder symbols
+let convertFunctionsWithOwnershipWithTrace ?listRegions recorder symbols
     (registries : registries) gen functions =
+  let regions =
+    match listRegions with
+    | Some regions -> regions
+    | None -> LoweringCallbacks.listRegions registries.functionIds registries.inertFunctionScopes
+  in
   let rec loop (conversionRegistries : registries) funcs gen acc =
     match funcs with
     | [] -> Ok (List.rev acc, gen)
     | (func : C.functionDef) :: rest ->
         let* func, gen =
           convertFunctionWithSumTypeNames recorder symbols
-            registries.sumMetadata registries.inertFunctionScopes func gen
+            registries.sumMetadata regions func gen
             registries.typeReg registries.variantLookup
             conversionRegistries.funcReg conversionRegistries.functionIds
             conversionRegistries.functionNames registries.moduleRegistry
@@ -664,7 +669,7 @@ let convertFunctions symbols registries gen functions =
 *)
 let convertExprToAnf (regs : registries) gen expr =
   LoweringExpressions.toANFCore regs.functionIds regs.sumMetadata regs.typeNames
-    regs.inertFunctionScopes expr gen R.BindingMap.empty regs.typeReg
+    (LoweringCallbacks.listRegions regs.functionIds regs.inertFunctionScopes) expr gen R.BindingMap.empty regs.typeReg
     regs.variantLookup regs.funcReg regs.functionNames regs.moduleRegistry
 
 (*

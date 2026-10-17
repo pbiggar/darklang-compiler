@@ -26,10 +26,13 @@ let rec toANFCore ids sums typeNames inert expr gen env registry variants
       variants functions names modules
   in
   match
-    ExtractListRegions.tryExtract inert names (R.typeEnvFromVarEnv env) infer
-      (fun value ->
-        ClosureAnalysis.freeVars value ClosureAnalysis.BindingSet.empty)
-      expr
+    (match inert with
+    | LoweringCallbacks.PreserveValues -> None
+    | LoweringCallbacks.OptimizeLists scopes ->
+        ExtractListRegions.tryExtract scopes names (R.typeEnvFromVarEnv env) infer
+          (fun value ->
+            ClosureAnalysis.freeVars value ClosureAnalysis.BindingSet.empty)
+          expr)
   with
   | Some region ->
       let lower value gen env =

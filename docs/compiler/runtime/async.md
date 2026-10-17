@@ -329,3 +329,11 @@ call sites, initiate producers eagerly, and retain mixed outer and field layouts
 `async_list_filter.e2e` covers ignored and inspected inputs, pending and delayed
 Boolean results, shared predicate layouts, tuple field projection, and managed
 elements retained or rejected without premature demands.
+
+`async_list_fold.e2e` covers ignored pending elements and initial accumulators,
+pending step results, independent float demands, record fields, empty folds,
+eager step invocation, managed ownership and shared callback interfaces. Source
+ANF is retained separately from synchronous list-region optimization, including
+preamble and standard-library definitions: a later async call must still see
+the list values and callback interface, not a scalar loop that erased them.
+Synchronous native compilation and inlining retain their optimized definitions.

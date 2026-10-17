@@ -76,10 +76,10 @@ let buildCompilePlan (request : X.compileRequest) =
     asyncDefinitions =
       List.fold_left
         (fun definitions (fn : ANF.functionDef) ->
-          if M.mem fn.ANF.name stdlib.X.stdlibAnfOptimizationCandidates then
+          if M.mem fn.ANF.name stdlib.X.stdlibAsyncDefinitions then
             definitions
           else M.add fn.ANF.name fn definitions)
-        M.empty sourceFunctions;
+        stdlib.X.stdlibAsyncDefinitions sourceFunctions;
     prebuiltSymbolicFunctions = symbolic;
     prebuiltCallGraphSummaries = summaries;
     prebuiltCallGraph = graph;

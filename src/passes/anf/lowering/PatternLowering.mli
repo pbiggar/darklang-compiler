@@ -6,7 +6,7 @@ val lowerMatch :
   TypeRegistries.functionIdRegistry ->
   LoweringPrimitives.sumMetadata ->
   TypeRegistries.typeNameRegistry ->
-  SpecializationIdentity.FunctionSet.t ->
+  LoweringCallbacks.listRegionPolicy ->
   CheckedAST.expr ->
   CheckedAST.matchCase list ->
   ANF.varGen ->

@@ -60,6 +60,7 @@ val buildRegistriesForProgram :
 type declarationConversion = {
   symbols : CheckedAST.symbols;
   functions : ANF.functionDef list;
+  sourceFunctions : ANF.functionDef list;
   registries : AST_to_ANF.registries;
   localReturnTypes : (string * AST.semanticType) FunctionIdMap.t;
 }

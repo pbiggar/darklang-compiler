@@ -166,6 +166,7 @@ val extendFunctionRegistryWithConverted :
   TypeRegistries.functionRegistry
 
 val convertFunctionsWithOwnershipWithTrace :
+  ?listRegions:LoweringCallbacks.listRegionPolicy ->
   (string -> float -> unit) option ->
   CheckedAST.symbols ->
   registries ->

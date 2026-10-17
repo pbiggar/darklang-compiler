@@ -85,7 +85,7 @@ let buildPreambleContext allowInternal (stdlib : X.stdlibResult) preamble
     in
     let* functions, ssa, typeMap =
       ANFPipeline.buildAnf
-        ~asyncDefinitions:stdlib.X.stdlibAnfOptimizationCandidates
+        ~asyncDefinitions:stdlib.X.stdlibAsyncDefinitions
         ~asyncRuntime:
           {
             ANFPipeline.context;
@@ -122,7 +122,7 @@ let buildPreambleContext allowInternal (stdlib : X.stdlibResult) preamble
       ( stdlib,
         {
           X.context;
-          sourceAnfFunctions = conversion.P.functions;
+          sourceAnfFunctions = conversion.P.sourceFunctions;
           anfFunctions = functions;
           typeMap;
           symbolicFunctions = symbolic;
@@ -201,7 +201,7 @@ let buildPreambleContextFromAnalysis (stdlib : X.stdlibResult)
   in
   let* functions, ssa, typeMap =
     ANFPipeline.buildAnf
-      ~asyncDefinitions:stdlib.X.stdlibAnfOptimizationCandidates
+      ~asyncDefinitions:stdlib.X.stdlibAsyncDefinitions
       ~asyncRuntime:
         {
           ANFPipeline.context;
@@ -237,7 +237,7 @@ let buildPreambleContextFromAnalysis (stdlib : X.stdlibResult)
     ( stdlib,
       {
         X.context;
-        sourceAnfFunctions = conversion.P.functions;
+        sourceAnfFunctions = conversion.P.sourceFunctions;
         anfFunctions = functions;
         typeMap;
         symbolicFunctions = symbolic;
