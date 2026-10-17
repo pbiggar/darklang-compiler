@@ -309,8 +309,8 @@ let compileUserWithPlan ?writtenSources (plan : P.userCompilePlan) =
           (select plan.P.stdlib.X.callGraphSummaries)
           (select plan.P.prebuiltCallGraphSummaries)
       in
-      let build registry candidates optimizations noInline funcs ownership early
-          =
+      let build ?(symbols = symbols) registry candidates optimizations noInline
+          funcs ownership early =
         ANFPipeline.buildAnf ~asyncDefinitions:plan.P.asyncDefinitions
           ~asyncRuntime:
             {
@@ -360,6 +360,16 @@ let compileUserWithPlan ?writtenSources (plan : P.userCompilePlan) =
                       known;
                 }
                 compileDependencies
+      in
+      let* allocatedDependencies, dependencySummaries = dependencyResult in
+      (* Native dependency compilation can generate functions after checked
+         declarations have reserved their IDs. Late async specializations and
+         adapters must allocate beyond those functions as well. *)
+      let programSymbols =
+        List.fold_left
+          (fun symbols (fn : LIR.functionDef) ->
+            CheckedAST.registerGeneratedFunction fn.LIR.name fn.LIR.id symbols)
+          symbols allocatedDependencies
       in
       let entry =
         R.synthesizeEntryFunction entryId entryName boundary user.R.mainExpr
@@ -418,12 +428,11 @@ let compileUserWithPlan ?writtenSources (plan : P.userCompilePlan) =
         if reserved then Error ("Function name '" ^ entryName ^ "' is reserved")
         else
           let* functions = prepare () in
-          build registry plan.P.externalInlineCandidates
+          build ~symbols:programSymbols registry plan.P.externalInlineCandidates
             plan.P.stdlib.X.stdlibAnfOptimizationCandidates
             user.R.nonInlineableFunctionNames (prune functions)
             user.R.ownershipContracts true
       in
-      let* allocatedDependencies, dependencySummaries = dependencyResult in
       let* _, ssa, programTypeMap = programResult in
       let through =
         merge

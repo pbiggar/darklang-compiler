@@ -129,7 +129,8 @@ Runtime helper dependencies are requested explicitly by lowering. When a typed
 specialization is missing, the ANF pipeline materializes it from the retained
 stdlib generic definitions, converts and canonicalizes its body, and retries
 lowering with the extended function and symbol registries. Inserted helper bodies
-receive fresh ANF temporaries and the same inlining exclusions as other late
+reserve identities allocated during native dependency compilation, then receive
+fresh ANF temporaries and the same inlining exclusions as other late
 stdlib specializations. The source hooks do
 not contain fallback force calls to cause incidental specialization.
 

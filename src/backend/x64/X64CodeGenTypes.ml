@@ -24,8 +24,9 @@ let functionName (ctx : funcCtx) functionId =
   | None ->
       Crash.crash
         (Printf.sprintf
-           "x64 code generation: missing function name for identity %s"
-           (Printf.sprintf "%Lu" (AST.functionIdValue functionId)))
+           "x64 code generation: missing function name for identity %s in %s"
+           (Printf.sprintf "%Lu" (AST.functionIdValue functionId))
+           ctx.functionName)
 
 let rcSumShapeRegistryFromVariantRegistry variantRegistry =
   StringOrder.Map.map
