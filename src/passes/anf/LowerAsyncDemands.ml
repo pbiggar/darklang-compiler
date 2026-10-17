@@ -11,14 +11,6 @@ module Names = StringOrder.Map
 let ( let* ) = Result.bind
 
 type pending = { payload : AST.semanticType; force : AST.functionId }
-
-type summary = {
-  parameters : bool list;
-  captures : bool list;
-  returnsPending : bool;
-  joins : T.t;
-}
-
 type version = { id : AST.functionId; name : string }
 type lowered = { functions : A.functionDef list; nextFunctionOrdinal : int64 }
 
@@ -32,10 +24,46 @@ let lookup env = function A.Var id -> M.find_opt id env | _ -> None
    structural physical type while local; native adapters rebuild their source
    descriptor after materializing fields. Ordinary aggregate interfaces still
    require a coordinated signature migration. *)
-type storageKind = TupleStorage | RecordStorage of A.recordDescriptor
+type storageKind = AsyncTransport.storageKind =
+  | TupleStorage
+  | RecordStorage of A.recordDescriptor
 
-type 'a storedSlot = PendingSlot of 'a | NestedStorage of 'a storage
-and 'a storage = { kind : storageKind; fields : 'a storedSlot option list }
+type 'a storedSlot = 'a AsyncTransport.storedSlot =
+  | PendingSlot of 'a
+  | NestedStorage of 'a storage
+
+and 'a storage = 'a AsyncTransport.storage = {
+  kind : storageKind;
+  fields : 'a storedSlot option list;
+}
+
+type mode = AsyncTransport.mode = Concrete | Pending | Stored of unit storage
+
+type summary = {
+  parameters : mode list;
+  captures : mode list;
+  result : mode;
+  joins : mode M.t;
+}
+
+let changed = AsyncTransport.changed
+
+let modeOf env stores atom =
+  match lookup env atom with
+  | Some _ -> Pending
+  | None -> (
+      match lookup stores atom with
+      | Some storage -> Stored (AsyncTransport.mapStorage (fun _ -> ()) storage)
+      | None -> Concrete)
+
+let bindMode transform env stores id typ = function
+  | Concrete -> Ok (M.remove id env, M.remove id stores)
+  | Pending ->
+      let* value = transform typ in
+      Ok (M.add id value env, M.remove id stores)
+  | Stored storage ->
+      let* storage = AsyncTransport.instantiateStorage transform storage typ in
+      Ok (M.remove id env, M.add id storage stores)
 
 let storageField storage index =
   match
@@ -76,11 +104,6 @@ let storageFacts env stores operation =
           | _ -> None)
       | None -> None)
   | _ -> None
-
-let bindStorage env stores id operation =
-  match storageFacts env stores operation with
-  | Some fields -> M.add id fields stores
-  | None -> M.remove id stores
 
 let rec fieldRepresentations storage types =
   if List.length types <> List.length storage.fields then
@@ -211,14 +234,14 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
       F.map
         (fun _ (fn : A.functionDef) ->
           {
-            parameters = List.map (fun _ -> false) fn.A.typedParams;
+            parameters = List.map (fun _ -> Concrete) fn.A.typedParams;
             captures =
               (match fn.A.typedParams with
               | { A.typ = AST.TTuple (AST.TInt64 :: fields); _ } :: _ ->
-                  List.map (fun _ -> false) fields
+                  List.map (fun _ -> Concrete) fields
               | _ -> []);
-            returnsPending = false;
-            joins = T.empty;
+            result = Concrete;
+            joins = M.empty;
           })
         definitions
     in
@@ -249,10 +272,10 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
       if S.equal current next then current else reach next
     in
     let startsAsync = reach starts in
-    let sourceCall env callee arguments =
+    let sourceCall env stores callee arguments =
       eligible callee
       && (S.mem callee startsAsync
-         || List.exists (fun atom -> Option.is_some (lookup env atom)) arguments
+         || List.exists (fun atom -> changed (modeOf env stores atom)) arguments
          )
     in
     let rec closureBindings bindings = function
@@ -282,137 +305,193 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
       | Some bindings -> target bindings atom
       | None -> Crash.crash "Async inference lost callable bindings"
     in
-    let captureType (fn : A.functionDef) state atom index =
-      match (fn.A.typedParams, atom) with
-      | { A.id; typ = AST.TTuple (_ :: fields) } :: _, A.Var source
-        when id = source && index > 0 ->
-          let modes = (summary state fn.A.id).captures in
-          if not (List.exists Fun.id modes) then None
-          else
-            List.combine fields modes
-            |> List.mapi (fun offset value -> (offset + 1, value))
-            |> List.find_map (fun (offset, (typ, pending)) ->
-                if offset = index && pending then Some typ else None)
-      | _ -> None
+    let seed (fn : A.functionDef) state modes transform =
+      let* env, stores =
+        List.fold_left2
+          (fun result (parameter : A.typedParam) mode ->
+            let* env, stores = result in
+            bindMode transform env stores parameter.A.id parameter.A.typ mode)
+          (Ok (M.empty, M.empty))
+          fn.A.typedParams modes
+      in
+      let captures = (summary state fn.A.id).captures in
+      if not (List.exists changed captures) then Ok (env, stores)
+      else
+        match fn.A.typedParams with
+        | ({ A.typ = AST.TTuple (_ :: fields); _ } as parameter) :: _
+          when List.length fields = List.length captures ->
+            let captureMode =
+              Stored
+                {
+                  kind = TupleStorage;
+                  fields = None :: List.map AsyncTransport.modeSlot captures;
+                }
+            in
+            let* mode =
+              AsyncTransport.merge
+                (modeOf env stores (A.Var parameter.A.id))
+                captureMode
+            in
+            bindMode transform env stores parameter.A.id parameter.A.typ mode
+        | _ ->
+            Crash.crash
+              "Async captured environment has an inconsistent source layout"
     in
     let rec infer (fn : A.functionDef) env stores body state =
       let update transform =
         let current = summary state fn.A.id in
-        F.add fn.A.id (transform current) state
+        let* current = transform current in
+        Ok (F.add fn.A.id current state)
+      in
+      let mergeActual callee actual =
+        let current = summary state callee in
+        let* parameters = AsyncTransport.mergeList current.parameters actual in
+        Ok (F.add callee { current with parameters } state)
       in
       match body with
       | A.Return atom ->
-          if Option.is_some (lookup env atom) then
-            update (fun current -> { current with returnsPending = true })
-          else state
+          update (fun current ->
+              let* result =
+                AsyncTransport.merge current.result (modeOf env stores atom)
+              in
+              Ok { current with result })
       | A.Jump (target, atom) ->
-          if Option.is_some (lookup env atom) then
-            update (fun current ->
-                { current with joins = T.add target current.joins })
-          else state
+          update (fun current ->
+              let previous =
+                match M.find_opt target current.joins with
+                | Some mode -> mode
+                | None -> Concrete
+              in
+              let* mode =
+                AsyncTransport.merge previous (modeOf env stores atom)
+              in
+              Ok { current with joins = M.add target mode current.joins })
       | A.If (_, yes, no) ->
-          infer fn env stores no (infer fn env stores yes state)
+          let* state = infer fn env stores yes state in
+          infer fn env stores no state
       | A.Join (parameter, continuation, entry) ->
-          let state = infer fn env stores entry state in
-          let env =
-            if T.mem parameter.A.id (summary state fn.A.id).joins then
-              M.add parameter.A.id parameter.A.typ env
-            else M.remove parameter.A.id env
+          let* state = infer fn env stores entry state in
+          let mode =
+            match M.find_opt parameter.A.id (summary state fn.A.id).joins with
+            | Some mode -> mode
+            | None -> Concrete
+          in
+          let* env, stores =
+            bindMode
+              (fun typ -> Ok typ)
+              env stores parameter.A.id parameter.A.typ mode
           in
           infer fn env stores continuation state
       | A.Let (id, operation, rest) ->
-          let state, result =
+          let projected atom index =
+            match lookup stores atom with
+            | Some storage -> (
+                match storageField storage index with
+                | Some (PendingSlot typ) -> Some typ
+                | _ -> None)
+            | None -> None
+          in
+          let ordinaryStore = storageFacts env stores operation in
+          let* () =
+            match (operation, ordinaryStore) with
+            | A.TypedAtom (_, typ), Some storage -> (
+                match (storage.kind, typ) with
+                | TupleStorage, AST.TTuple _ | RecordStorage _, AST.TRecord _ ->
+                    Ok ()
+                | _ ->
+                    Error
+                      "Async storage across a collection or variant layout is \
+                       not implemented")
+            | _ -> Ok ()
+          in
+          let* state, result, stored =
             match operation with
             | A.Call (callee, _) when producer callee ->
-                (state, Some (originalResult callee))
+                Ok (state, Some (originalResult callee), None)
             | A.ClosureAlloc (callee, captures) when eligible callee ->
                 let current = summary state callee in
-                let actual =
-                  List.map
-                    (fun atom -> Option.is_some (lookup env atom))
-                    captures
+                let* captures =
+                  AsyncTransport.mergeList current.captures
+                    (List.map (modeOf env stores) captures)
                 in
-                if List.length actual <> List.length current.captures then
-                  Crash.crash "Async closure capture layout is inconsistent";
-                let captures = List.map2 ( || ) actual current.captures in
-                (F.add callee { current with captures } state, None)
-            | A.TupleGet (atom, index) ->
-                ( state,
-                  match lookup stores atom with
-                  | Some fields -> (
-                      match storageField fields index with
-                      | Some (PendingSlot value) -> Some value
-                      | _ -> None)
-                  | None -> captureType fn state atom index )
-            | A.RecordGet (_, atom, index) ->
-                ( state,
-                  match lookup stores atom with
-                  | Some fields -> (
-                      match storageField fields index with
-                      | Some (PendingSlot value) -> Some value
-                      | _ -> None)
-                  | None -> None )
+                Ok (F.add callee { current with captures } state, None, None)
+            | A.TupleGet (atom, index) | A.RecordGet (_, atom, index) ->
+                Ok (state, projected atom index, ordinaryStore)
             | A.ClosureCall (closure, arguments) -> (
                 match callable fn closure with
                 | Some callee when eligible callee ->
-                    let current = summary state callee in
-                    let actual =
-                      false
-                      :: List.map
-                           (fun atom -> Option.is_some (lookup env atom))
-                           arguments
+                    let* state =
+                      mergeActual callee
+                        (Concrete :: List.map (modeOf env stores) arguments)
                     in
-                    if List.length actual <> List.length current.parameters then
-                      Crash.crash
-                        "Async closure argument layout is inconsistent";
-                    let parameters =
-                      List.map2 ( || ) actual current.parameters
+                    let mode =
+                      if S.mem callee nativeEntries then Concrete
+                      else (summary state callee).result
                     in
-                    ( F.add callee { current with parameters } state,
-                      if
-                        current.returnsPending
-                        && not (S.mem callee nativeEntries)
-                      then Some (originalResult callee)
-                      else None )
-                | _ -> (state, None))
-            | A.Atom atom -> (state, lookup env atom)
+                    let* result, stored =
+                      match mode with
+                      | Concrete -> Ok (None, None)
+                      | Pending -> Ok (Some (originalResult callee), None)
+                      | Stored storage ->
+                          let* storage =
+                            AsyncTransport.instantiateStorage
+                              (fun typ -> Ok typ)
+                              storage (originalResult callee)
+                          in
+                          Ok (None, Some storage)
+                    in
+                    Ok (state, result, stored)
+                | _ -> Ok (state, None, ordinaryStore))
+            | A.Atom atom -> Ok (state, lookup env atom, ordinaryStore)
             | A.TypedAtom (atom, typ) ->
-                ( state,
-                  match lookup env atom with
-                  | Some source when source = typ -> Some typ
-                  | _ -> None )
-            | A.IfValue (_, yes, no) ->
-                ( state,
-                  match lookup env yes with
-                  | Some _ as value -> value
-                  | None -> lookup env no )
+                Ok
+                  ( state,
+                    (match lookup env atom with
+                    | Some source when source = typ -> Some typ
+                    | _ -> None),
+                    ordinaryStore )
+            | A.IfValue (_, yes, no) -> (
+                let* mode =
+                  AsyncTransport.merge (modeOf env stores yes)
+                    (modeOf env stores no)
+                in
+                match mode with
+                | Concrete -> Ok (state, None, None)
+                | Pending ->
+                    Ok
+                      ( state,
+                        (match lookup env yes with
+                        | Some _ as value -> value
+                        | None -> lookup env no),
+                        None )
+                | Stored _ ->
+                    Error
+                      "Async storage across an untyped value selection is not \
+                       implemented")
             | A.Call (callee, arguments)
             | A.BorrowedCall (callee, arguments)
             | A.TailCall (callee, arguments)
-              when sourceCall env callee arguments ->
-                let calleeSummary = summary state callee in
-                let actual =
-                  List.map
-                    (fun atom -> Option.is_some (lookup env atom))
-                    arguments
+              when sourceCall env stores callee arguments -> (
+                let* state =
+                  mergeActual callee (List.map (modeOf env stores) arguments)
                 in
-                if List.length actual <> List.length calleeSummary.parameters
-                then
-                  Crash.crash
-                    "Async inference found an invalid direct-call arity";
-                let parameters =
-                  List.map2 ( || ) actual calleeSummary.parameters
-                in
-                let state =
-                  F.add callee { calleeSummary with parameters } state
-                in
-                ( state,
-                  if calleeSummary.returnsPending then
-                    Some (originalResult callee)
-                  else None )
-            | _ -> (state, None)
+                match (summary state callee).result with
+                | Concrete -> Ok (state, None, None)
+                | Pending -> Ok (state, Some (originalResult callee), None)
+                | Stored storage ->
+                    let* storage =
+                      AsyncTransport.instantiateStorage
+                        (fun typ -> Ok typ)
+                        storage (originalResult callee)
+                    in
+                    Ok (state, None, Some storage))
+            | _ -> Ok (state, None, ordinaryStore)
           in
-          let stores = bindStorage env stores id operation in
+          let stores =
+            match stored with
+            | Some storage -> M.add id storage stores
+            | None -> M.remove id stores
+          in
           let env =
             match result with
             | Some typ -> M.add id typ env
@@ -420,38 +499,28 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
           in
           infer fn env stores rest state
     in
-    let equal left right =
-      left.parameters = right.parameters
-      && left.captures = right.captures
-      && left.returnsPending = right.returnsPending
-      && T.equal left.joins right.joins
-    in
     let rec converge state =
-      let next =
+      let* next =
         F.fold
-          (fun state id fn ->
-            if not (eligible id) then state
+          (fun result id fn ->
+            let* state = result in
+            if not (eligible id) then Ok state
             else
-              let current = summary state id in
-              let env =
-                List.fold_left2
-                  (fun env (param : A.typedParam) pending ->
-                    if pending then M.add param.A.id param.A.typ env else env)
-                  M.empty fn.A.typedParams current.parameters
+              let* env, stores =
+                seed fn state (summary state id).parameters (fun typ -> Ok typ)
               in
-              infer fn env M.empty fn.A.body state)
-          state definitions
+              infer fn env stores fn.A.body state)
+          (Ok state) definitions
       in
-      if F.forall (fun id value -> equal value (summary state id)) next then
-        next
+      if F.forall (fun id value -> value = summary state id) next then Ok next
       else converge next
     in
-    let summaries = converge initial in
+    let* summaries = converge initial in
     let modeChanges id =
       let value = summary summaries id in
-      value.returnsPending
-      || List.exists Fun.id value.parameters
-      || List.exists Fun.id value.captures
+      changed value.result
+      || List.exists changed value.parameters
+      || List.exists changed value.captures
     in
     let local =
       List.fold_left
@@ -484,7 +553,7 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
             if
               boundary fn
               && ((imported && S.mem id startsAsync)
-                 || List.exists Fun.id (summary summaries id).captures)
+                 || List.exists changed (summary summaries id).captures)
             then
               let version =
                 {
@@ -509,10 +578,10 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
       | Some callee when eligible callee && not (S.mem callee nativeEntries)
         -> (
           let state = summary summaries callee in
-          state.returnsPending
+          changed state.result
           ||
           match state.parameters with
-          | _ :: values -> List.exists Fun.id values
+          | _ :: values -> List.exists changed values
           | [] -> false)
       | _ -> false
     in
@@ -530,6 +599,76 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
           (typed, A.TypedAtom (A.Var raw, carrier payload));
         ],
         gen )
+    in
+    let rec prepareValue expected source atom actual gen =
+      match (expected, actual) with
+      | left, right when left = right -> Ok (atom, [], gen)
+      | Pending, Concrete -> Ok (ready source atom gen)
+      | Stored expected, (Concrete | Stored _) ->
+          let types =
+            match (expected.kind, source) with
+            | TupleStorage, AST.TTuple types -> types
+            | RecordStorage descriptor, AST.TRecord _ ->
+                List.map snd descriptor.A.fields
+            | _ ->
+                Crash.crash "Async promotion has an inconsistent source layout"
+          in
+          let actualStorage =
+            match actual with Stored storage -> Some storage | _ -> None
+          in
+          let rec fields index types expectedSlots values before gen =
+            match (types, expectedSlots) with
+            | [], [] -> Ok (List.rev values, before, gen)
+            | typ :: types, slot :: expectedSlots ->
+                let projected, gen = A.freshVar gen in
+                let projection =
+                  match (actualStorage, expected.kind) with
+                  | (Some { kind = RecordStorage descriptor; _ } as storage), _
+                    -> (
+                      match storage with
+                      | Some storage ->
+                          A.RecordGet
+                            (storageDescriptor storage descriptor, atom, index)
+                      | None ->
+                          Crash.crash "Async promotion lost record storage")
+                  | None, RecordStorage descriptor ->
+                      A.RecordGet (descriptor, atom, index)
+                  | _ -> A.TupleGet (atom, index)
+                in
+                let actual =
+                  match actualStorage with
+                  | Some storage ->
+                      AsyncTransport.slotMode (storageField storage index)
+                  | None -> Concrete
+                in
+                let* value, added, gen =
+                  prepareValue
+                    (AsyncTransport.slotMode slot)
+                    typ (A.Var projected) actual gen
+                in
+                fields (index + 1) types expectedSlots (value :: values)
+                  (before @ [ (projected, projection) ] @ added)
+                  gen
+            | _ -> Crash.crash "Async promotion has an inconsistent field count"
+          in
+          let* values, before, gen = fields 0 types expected.fields [] [] gen in
+          let result, gen = A.freshVar gen in
+          let allocation =
+            match expected.kind with
+            | TupleStorage -> A.TupleAlloc values
+            | RecordStorage descriptor ->
+                A.RecordAlloc (storageDescriptor expected descriptor, values)
+          in
+          Ok (A.Var result, before @ [ (result, allocation) ], gen)
+      | _ ->
+          Error "Async inferred interface lost a pending value or field layout"
+    in
+    let storedResult mode typ =
+      match mode with
+      | Stored storage ->
+          Result.map Option.some
+            (AsyncTransport.instantiateStorage info storage typ)
+      | Concrete | Pending -> Ok None
     in
     let forceAtom env atom gen =
       match lookup env atom with
@@ -612,7 +751,7 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
     in
     let rec expression (fn : A.functionDef) nativeReturn env stores body gen =
       let signature = summary summaries fn.A.id in
-      let returnsCarrier = signature.returnsPending && not nativeReturn in
+
       let joinPayloads = joinTypes M.empty fn.A.body in
       let prepare payload atom gen =
         match lookup env atom with
@@ -620,76 +759,89 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
         | None -> ready payload atom gen
       in
       match body with
-      | A.Return atom -> (
-          if Option.is_some (lookup stores atom) then
-            match lookup stores atom with
-            | Some fields when nativeReturn ->
-                let atom, before, gen = materializeStorage fields atom gen in
-                Ok (wraps before (A.Return atom), gen)
-            | _ -> unsupported fn.A.name "an aggregate result interface"
-          else if changedCallable fn atom then
+      | A.Return atom ->
+          if changedCallable fn atom then
             unsupported fn.A.name "an escaping callable result"
-          else if returnsCarrier then
-            let atom, before, gen = prepare fn.A.returnType atom gen in
+          else if nativeReturn then
+            let atom, before, gen =
+              match lookup stores atom with
+              | Some storage -> materializeStorage storage atom gen
+              | None -> forceAtom env atom gen
+            in
             Ok (wraps before (A.Return atom), gen)
           else
-            match lookup env atom with
-            | None -> Ok (body, gen)
-            | Some _ when nativeReturn ->
-                let atom, before, gen = forceAtom env atom gen in
-                Ok (wraps before (A.Return atom), gen)
-            | Some _ -> Error "Async return inference lost a pending result")
+            let* atom, before, gen =
+              prepareValue signature.result fn.A.returnType atom
+                (modeOf env stores atom) gen
+            in
+            Ok (wraps before (A.Return atom), gen)
       | A.Jump (target, atom) ->
-          if Option.is_some (lookup stores atom) then
-            unsupported fn.A.name "an aggregate join"
-          else if changedCallable fn atom then
+          if changedCallable fn atom then
             unsupported fn.A.name "a callable join"
-          else if T.mem target signature.joins then
+          else
             let payload =
               match M.find_opt target joinPayloads with
               | Some typ -> typ
-              | None -> Crash.crash "Async join lost its parameter type"
+              | None -> Crash.crash "Async join lost its source type"
             in
-            let atom, before, gen = prepare payload atom gen in
+            let mode =
+              match M.find_opt target signature.joins with
+              | Some mode -> mode
+              | None -> Concrete
+            in
+            let* atom, before, gen =
+              prepareValue mode payload atom (modeOf env stores atom) gen
+            in
             Ok (wraps before (A.Jump (target, atom)), gen)
-          else if Option.is_some (lookup env atom) then
-            Error "Async join inference lost a pending argument"
-          else Ok (body, gen)
       | A.If (condition, yes, no) ->
           let condition, before, gen = forceAtom env condition gen in
           let* yes, gen = expression fn nativeReturn env stores yes gen in
           let* no, gen = expression fn nativeReturn env stores no gen in
           Ok (wraps before (A.If (condition, yes, no)), gen)
       | A.Join (parameter, continuation, entry) ->
-          let* value =
-            if T.mem parameter.A.id signature.joins then
-              Result.map Option.some (info parameter.A.typ)
-            else Ok None
+          let mode =
+            match M.find_opt parameter.A.id signature.joins with
+            | Some mode -> mode
+            | None -> Concrete
           in
-          let continuationEnv =
-            match value with
-            | Some value -> M.add parameter.A.id value env
-            | None -> M.remove parameter.A.id env
+          let* continuationEnv, continuationStores =
+            bindMode info env stores parameter.A.id parameter.A.typ mode
           in
           let* continuation, gen =
-            expression fn nativeReturn continuationEnv stores continuation gen
+            expression fn nativeReturn continuationEnv continuationStores
+              continuation gen
           in
           let* entry, gen = expression fn nativeReturn env stores entry gen in
           let parameter =
-            if Option.is_some value then
-              { parameter with A.typ = carrier parameter.A.typ }
-            else parameter
+            {
+              parameter with
+              A.typ = AsyncTransport.physicalType mode parameter.A.typ;
+            }
           in
           Ok (A.Join (parameter, continuation, entry), gen)
       | A.Let (id, operation, rest) ->
           let* () =
             let storageEscape =
               match operation with
-              | A.Call (_, args)
-              | A.BorrowedCall (_, args)
-              | A.TailCall (_, args)
-              | A.ClosureAlloc (_, args)
-              | A.ClosureCall (_, args)
+              | A.Call (callee, args)
+              | A.BorrowedCall (callee, args)
+              | A.TailCall (callee, args) ->
+                  (not (eligible callee))
+                  && List.exists
+                       (fun atom -> Option.is_some (lookup stores atom))
+                       args
+              | A.ClosureAlloc (callee, args) ->
+                  (not (eligible callee))
+                  && List.exists
+                       (fun atom -> Option.is_some (lookup stores atom))
+                       args
+              | A.ClosureCall (closure, args) -> (
+                  match callable fn closure with
+                  | Some callee when eligible callee -> false
+                  | _ ->
+                      List.exists
+                        (fun atom -> Option.is_some (lookup stores atom))
+                        args)
               | A.IndirectCall (_, args) ->
                   List.exists
                     (fun atom -> Option.is_some (lookup stores atom))
@@ -710,7 +862,23 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
               unsupported fn.A.name "an aggregate storage or call interface"
             else Ok ()
           in
-          let storedValue = storageFacts env stores operation in
+          let* storedValue =
+            match operation with
+            | A.Call (callee, args)
+            | A.BorrowedCall (callee, args)
+            | A.TailCall (callee, args)
+              when sourceCall env stores callee args ->
+                storedResult (summary summaries callee).result
+                  (originalResult callee)
+            | A.ClosureCall (closure, _) -> (
+                match callable fn closure with
+                | Some callee
+                  when eligible callee && not (S.mem callee nativeEntries) ->
+                    storedResult (summary summaries callee).result
+                      (originalResult callee)
+                | _ -> Ok (storageFacts env stores operation))
+            | _ -> Ok (storageFacts env stores operation)
+          in
           let* () =
             let escape =
               match operation with
@@ -762,7 +930,7 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
             | A.Call (callee, arguments)
             | A.BorrowedCall (callee, arguments)
             | A.TailCall (callee, arguments)
-              when sourceCall env callee arguments ->
+              when sourceCall env stores callee arguments ->
                 let calleeDefinition =
                   match F.tryFind callee definitions with
                   | Some definition -> definition
@@ -776,17 +944,13 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
                   | ( argument :: rest,
                       (parameter : A.typedParam) :: parameters,
                       mode :: modes ) ->
-                      if mode then
-                        let argument, added, gen =
-                          prepare parameter.A.typ argument gen
-                        in
-                        argumentsLoop rest parameters modes
-                          (argument :: reversed) (before @ added) gen
-                      else if Option.is_some (lookup env argument) then
-                        Error "Async call inference lost a pending parameter"
-                      else
-                        argumentsLoop rest parameters modes
-                          (argument :: reversed) before gen
+                      let* argument, added, gen =
+                        prepareValue mode parameter.A.typ argument
+                          (modeOf env stores argument)
+                          gen
+                      in
+                      argumentsLoop rest parameters modes (argument :: reversed)
+                        (before @ added) gen
                   | _ ->
                       Error
                         "Async direct call has an invalid argument interface"
@@ -801,7 +965,7 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
                   | None -> callee
                 in
                 let* value =
-                  if calleeSummary.returnsPending then
+                  if calleeSummary.result = Pending then
                     Result.map Option.some (info calleeDefinition.A.returnType)
                   else Ok None
                 in
@@ -819,19 +983,16 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
                       Crash.crash "Async closure has no environment parameter"
                 in
                 let modes = (summary summaries callee).captures in
-                let captures, before, gen =
+                let* captures, before, gen =
                   List.fold_left2
-                    (fun (values, before, gen) (atom, typ) mode ->
-                      let atom, added, gen =
-                        if mode then prepare typ atom gen else (atom, [], gen)
+                    (fun result (atom, typ) mode ->
+                      let* values, before, gen = result in
+                      let* atom, added, gen =
+                        prepareValue mode typ atom (modeOf env stores atom) gen
                       in
-                      (atom :: values, before @ added, gen))
-                    ([], [], gen)
-                    (if List.length captures = List.length fields then
-                       List.combine captures fields
-                     else
-                       Crash.crash
-                         ("Async capture count mismatch in " ^ definition.A.name))
+                      Ok (atom :: values, before @ added, gen))
+                    (Ok ([], [], gen))
+                    (List.combine captures fields)
                     modes
                 in
                 let versions =
@@ -894,16 +1055,11 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
                 match (value, lookup stores atom) with
                 | Some value, _ -> Ok (operation, [], Some value, gen)
                 | None, Some _ -> Ok (operation, [], None, gen)
-                | None, None -> (
-                    match captureType fn summaries atom index with
-                    | Some payload ->
-                        let* value = info payload in
-                        Ok (operation, [], Some value, gen)
-                    | None ->
-                        let operation, before, gen =
-                          forceUses env stores operation gen
-                        in
-                        Ok (operation, before, None, gen)))
+                | None, None ->
+                    let operation, before, gen =
+                      forceUses env stores operation gen
+                    in
+                    Ok (operation, before, None, gen))
             | A.Atom atom -> Ok (operation, [], lookup env atom, gen)
             | A.TypedAtom (atom, typ) when Option.is_some (lookup stores atom)
               ->
@@ -963,21 +1119,21 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
                       Crash.crash
                         "Async closure call has no environment parameter"
                 in
-                let arguments, before, gen =
+                let* arguments, before, gen =
                   List.fold_left2
-                    (fun (values, before, gen)
-                         (atom, (parameter : A.typedParam)) mode ->
-                      let atom, added, gen =
-                        if mode then prepare parameter.A.typ atom gen
-                        else (atom, [], gen)
+                    (fun result (atom, (parameter : A.typedParam)) mode ->
+                      let* values, before, gen = result in
+                      let* atom, added, gen =
+                        prepareValue mode parameter.A.typ atom
+                          (modeOf env stores atom) gen
                       in
-                      (atom :: values, before @ added, gen))
-                    ([], [], gen)
+                      Ok (atom :: values, before @ added, gen))
+                    (Ok ([], [], gen))
                     (List.combine arguments parameters)
                     modes
                 in
                 let* value =
-                  if state.returnsPending && not (S.mem callee nativeEntries)
+                  if state.result = Pending && not (S.mem callee nativeEntries)
                   then Result.map Option.some (info definition.A.returnType)
                   else Ok None
                 in
@@ -1056,17 +1212,8 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
           0 definitions
     in
     let rewrite (fn : A.functionDef) nativeReturn modes gen =
-      let* env =
-        List.fold_left2
-          (fun result (parameter : A.typedParam) mode ->
-            let* env = result in
-            if mode then
-              let* value = info parameter.A.typ in
-              Ok (M.add parameter.A.id value env)
-            else Ok env)
-          (Ok M.empty) fn.A.typedParams modes
-      in
-      expression fn nativeReturn env M.empty fn.A.body gen
+      let* env, stores = seed fn summaries modes info in
+      expression fn nativeReturn env stores fn.A.body gen
     in
     let* originals, gen =
       List.fold_left
@@ -1076,12 +1223,12 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
             nativeRuntime fn.A.name
             || modeChanges fn.A.id
                && ((not (boundary fn))
-                  || List.exists Fun.id (summary summaries fn.A.id).captures)
+                  || List.exists changed (summary summaries fn.A.id).captures)
           then Ok (fn :: values, gen)
           else
             let* body, gen =
               rewrite fn (boundary fn)
-                (List.map (fun _ -> false) fn.A.typedParams)
+                (List.map (fun _ -> Concrete) fn.A.typedParams)
                 gen
             in
             Ok ({ fn with A.body } :: values, gen))
@@ -1091,45 +1238,31 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
     let clone nativeReturn (fn : A.functionDef) (version : version) gen =
       let state = summary summaries fn.A.id in
       let modes =
-        if nativeReturn then List.map (fun _ -> false) state.parameters
+        if nativeReturn then List.map (fun _ -> Concrete) state.parameters
         else state.parameters
       in
       let* body, gen = rewrite fn nativeReturn modes gen in
+      let* parameterEnv, parameterStores =
+        seed fn summaries modes (fun typ -> Ok typ)
+      in
       let parameters, substitutions, gen =
-        List.fold_left2
-          (fun (parameters, substitutions, gen) (parameter : A.typedParam) mode
-             ->
+        List.fold_left
+          (fun (parameters, substitutions, gen) (parameter : A.typedParam) ->
             let id, gen = A.freshVar gen in
-            let typ =
-              if mode then carrier parameter.A.typ
-              else if
-                parameter.A.id
-                =
-                match fn.A.typedParams with
-                | first :: _ -> first.A.id
-                | [] -> Crash.crash "Async clone has no parameter"
-              then
-                match parameter.A.typ with
-                | AST.TTuple (code :: fields)
-                  when List.length fields = List.length state.captures ->
-                    AST.TTuple
-                      (code
-                      :: List.map2
-                           (fun typ pending ->
-                             if pending then carrier typ else typ)
-                           fields state.captures)
-                | typ -> typ
-              else parameter.A.typ
+            let mode =
+              modeOf parameterEnv parameterStores (A.Var parameter.A.id)
             in
+            let typ = AsyncTransport.physicalType mode parameter.A.typ in
             ( { A.id; typ } :: parameters,
               M.add parameter.A.id id substitutions,
               gen ))
-          ([], M.empty, gen) fn.A.typedParams modes
+          ([], M.empty, gen) fn.A.typedParams
       in
       let body, gen = InliningCommon.renameExpr substitutions gen body in
       let returnType =
-        if state.returnsPending && not nativeReturn then carrier fn.A.returnType
-        else fn.A.returnType
+        AsyncTransport.physicalType
+          (if nativeReturn then Concrete else state.result)
+          fn.A.returnType
       in
       Ok
         ( {
