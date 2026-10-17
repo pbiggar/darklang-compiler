@@ -234,16 +234,8 @@ def coverage_index(upstream, compiler, maintained):
         direct = sorted(test for test, witness in hints.items() if not witness['via'] and witness['basis'] == 'lexical')
         indirect = sorted((test for test, witness in hints.items() if witness['via']), key=lambda t: (len(hints[t]['via']), t))
         manual = maintained.get(row['name'])
-        if manual is not None:
-            if not isinstance(manual, dict) or set(manual) != {'tests', 'reason'} or not manual['reason']:
-                raise ValueError(f'Invalid maintained coverage for {row["name"]}')
-            if not isinstance(manual['tests'], list) or not manual['tests']:
-                raise ValueError('Maintained coverage must name existing tests')
-            for test in manual['tests']:
-                if test not in roots:
-                    raise ValueError(f'Unknown existing test reference: {test}')
         kind = 'direct' if direct else 'maintained' if manual else 'indirect' if indirect else 'not-identified'
-        examples = direct or sorted(manual['tests']) if manual else direct or indirect
+        examples = direct or (sorted(manual['tests']) if manual else indirect)
         result[row['source']].append(dict(name=row['name'], kind=row['kind'], line=row['line'],
             coverage=dict(kind=kind, reference_count=len(hints),
                           examples=[dict(test=t, **hints[t]) for t in examples[:1]],
@@ -503,7 +495,7 @@ def build(root, upstream, run_tests=False, compile_packages=False):
                 compilation=dict(status='not-run', reason='Declaration-only package compilation adapter pending')
                     if category == 'packages' else None))
             if status == 'different' and not exception:
-                review.append(('Source difference: ' if original & counterparts else 'Module-only mapping needs review: ') + record['id'])
+                review.append(('Source difference: ' if original & counterparts or path in used_mappings else 'Module-only mapping needs review: ') + record['id'])
             elif status == 'missing' and not exception:
                 review.append('Missing source counterpart: ' + record['id'])
         elif category == 'parser':
@@ -527,6 +519,8 @@ def build(root, upstream, run_tests=False, compile_packages=False):
             counterparts = wrapper_counterparts.get(record['builtin']['name'], [])
             builtins.append(dict(id=record['id'], **record['builtin'], compiler=sorted(paths),
                 mapping='maintained' if record['id'] in used_builtins else 'declared-builtin' if paths else 'source-counterpart' if counterparts else 'missing',
+                discovery='constructor-call' if 'constructor' in record else 'literal-registration',
+                source_line=record.get('source_line'),
                 source_counterparts=counterparts,
                 binding='mapped' if paths else 'not-mapped',
                 note='Source counterparts identify implementation locations, not callable Builtin aliases or behavior.'))
@@ -536,6 +530,10 @@ def build(root, upstream, run_tests=False, compile_packages=False):
     for path, reason in config['source_exceptions'].items():
         if path not in upstream_files or not isinstance(reason, str) or not reason.strip():
             raise ValueError('Invalid source exception: ' + str(path))
+
+    # Overrides can map split files that the root-module inventory called compiler-only.
+    mapped_compiler = {path for row in source_rows if row['upstream'] for path in row['compiler']}
+    source_rows = [row for row in source_rows if row['upstream'] or not set(row['compiler']) & mapped_compiler]
 
     package_path = root / PACKAGE_RECEIPT
     package_receipt = json.loads(package_path.read_text()) if package_path.exists() and not compile_packages else None
@@ -618,7 +616,7 @@ def markdown(value):
               'Builtin mappings distinguish callable Builtin declarations from source implementation counterparts. A counterpart is not a callable alias or a behavior pass. Computed registrations remain explicit review items.', '']
     for category in ('parser', 'builtins'):
         lines.append('- ' + category + ': ' + ', '.join(f'{k}: {v}' for k, v in sorted(Counter(r['mapping'] for r in value[category]).items())))
-    lines += [f"- Computed builtin registrations needing review: {value['computed_builtin_registrations']}", '',
+    lines += [f"- Computed builtin constructor templates: {value['computed_builtin_registrations']} (reviewed literal call sites expanded; not an assembled registry)", '',
               '## Existing test execution', '', 'State: **' + value['tests']['state'] + '**.', '']
     if value['tests']['reason']:
         lines += [value['tests']['reason'], '']

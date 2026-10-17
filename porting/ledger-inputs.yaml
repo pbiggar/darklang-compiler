@@ -61,7 +61,19 @@ features:
     status: missing
     sources: [src/frontend/WrittenApplicationSupport.ml, src/AST.ml]
     notes: No interpreter-style runtime program evaluation/reflection implementation; compile-time metadata is not runtime reflection.
-source_mappings: {}
+source_mappings:
+  # These share a root module with unrelated functions, but have no implementation here.
+  packages/darklang/stdlib/await.dark: []
+  packages/darklang/stdlib/traits.dark: []
+  # Upstream nested modules are split into separate compiler source files.
+  packages/darklang/stdlib/cli/host.dark:
+    - StdLib/Cli/OS.dark
+    - StdLib/Cli/Architecture.dark
+    - StdLib/Cli/Shell.dark
+    - StdLib/Cli/Host.dark
+  packages/darklang/prettyPrinter/runtimeError.dark:
+    - packages/Darklang/PrettyPrinter/RuntimeTypes.dark
+    - packages/Darklang/PrettyPrinter/RuntimeTypes/RuntimeError.dark
 parser_mappings:
   parser:backend/src/LibParser/Lexer.fs: [src/frontend/interpreter/Lexer.ml]
   parser:backend/src/LibParser/Tokenizer.fs: [src/frontend/interpreter/Tokenizer.ml]

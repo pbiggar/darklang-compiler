@@ -39,13 +39,16 @@ let run directory manifest report =
             member "dependencies" item |> to_list |> List.map to_string)
         in
         let result =
-          (* Parse the requested original first, but check dependency units first. *)
-          let* original = parseCached source in
-          let* sources = ResultList.traverse parseCached dependencies in
-          Result.map
-            (fun _ -> ())
-            (PreambleCompilation.buildPackageContext stdlib
-               (sources @ [ original ]))
+          try
+            (* Parse the requested original first, but check dependency units first. *)
+            let* original = parseCached source in
+            let* sources = ResultList.traverse parseCached dependencies in
+            Result.map
+              (fun _ -> ())
+              (PreambleCompilation.buildPackageContext stdlib
+                 (sources @ [ original ]))
+          with (Failure _ | Invalid_argument _) as error ->
+            Error ("Compiler exception: " ^ Printexc.to_string error)
         in
         let status, reason =
           match result with
