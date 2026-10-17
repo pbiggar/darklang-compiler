@@ -38,7 +38,7 @@ let __settings (data: Blob) (position: Int64) (seen: List<Int64>) (settings: Lis
     | Error _ -> Error "Truncated HTTP/3 setting"
     | Ok id ->
       if Stdlib.List.any seen (fun previous -> previous == id.value) then Error "Duplicate HTTP/3 setting"
-      else if id.value >= 2L && id.value <= 5L then Error "Forbidden HTTP/3 setting"
+      else if id.value == 0L || (id.value >= 2L && id.value <= 5L) then Error "Forbidden HTTP/3 setting"
       else
         match Stdlib.__QuicWire.parseInteger data id.next with
         | Error _ -> Error "Truncated HTTP/3 setting"
