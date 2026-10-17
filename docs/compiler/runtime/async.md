@@ -106,7 +106,9 @@ original representations. Literal lists retain their skew-tree representation wi
 widened consistently across each connected allocation component. List aliases,
 ordinary calls and captures carry the element layout; length and emptiness use
 library specializations for the physical element type without demanding elements.
-Native result adapters map typed demands over the list. Unmigrated list operations
+Head selection preserves the element layout without demanding the selected value;
+tail and reversal preserve that layout while changing only the spine. Native
+result adapters map typed demands over the list. Unmigrated list operations
 and patterns, dictionary and variant storage, untyped value selections, and
 escaping callables whose argument or result interface changes still produce
 compilation diagnostics. Outer pendingness also carries the inferred field layout. A generated mapper
@@ -286,4 +288,6 @@ nested fields and captures, abandonment, managed payloads, and native results.
 `async_list.e2e` checks pending elements in leaves, trees and connected digits,
 spine-only length and emptiness, native float results, abandonment, ordinary
 calls, captures, nested lists and mixed record elements. It also reconciles a
-wholly pending list with a list containing independently pending elements.
+wholly pending list with a list containing independently pending elements. Head
+selection defers demands until inspection, and tail and reversal leave unresolved
+elements alone, including managed payloads and records with pending fields.

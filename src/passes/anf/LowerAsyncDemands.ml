@@ -59,6 +59,20 @@ type mode = AsyncTransport.mode =
   | Stored of unit storage
   | PendingStored of unit storage
 
+type listResult = ListScalar | ListElement | ListRemainder
+
+let listResult storage = function
+  | ListScalar -> (None, None)
+  | ListRemainder -> (None, Some storage)
+  | ListElement -> (
+      match storage.fields with
+      | [ None ] -> (None, None)
+      | [ Some (PendingSlot value) ] -> (Some value, None)
+      | [ Some (NestedStorage fields) ] -> (None, Some fields)
+      | [ Some (PendingStorage (value, fields)) ] -> (Some value, Some fields)
+      | _ ->
+          Crash.crash "Async list selection has an inconsistent element layout")
+
 type summary = {
   parameters : mode list;
   captures : mode list;
@@ -294,36 +308,45 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
       | Some mode -> mode
       | None -> Concrete
     in
-    let listScalarCall stores callee arguments =
+    let listCall stores callee arguments =
       match (name callee, arguments) with
       | Some calleeName, list :: rest -> (
-          let bases =
+          let operations =
             [
-              "length";
-              "isEmpty";
-              "__length";
-              "__isEmpty";
-              "__isNull";
-              "__getTag";
+              ("length", ListScalar);
+              ("isEmpty", ListScalar);
+              ("__length", ListScalar);
+              ("__isEmpty", ListScalar);
+              ("__isNull", ListScalar);
+              ("__getTag", ListScalar);
+              ("__headUnsafe", ListElement);
+              ("__tail", ListRemainder);
+              ("reverse", ListRemainder);
+              ("__reverse", ListRemainder);
             ]
           in
-          let base =
+          let operation =
             List.find_opt
-              (fun base ->
+              (fun (base, _) ->
                 specialized ("Darklang.Stdlib.List." ^ base) calleeName)
-              bases
+              operations
           in
-          let base =
-            match base with
-            | Some _ as base -> base
-            | None ->
-                if calleeName = "Darklang.Stdlib.List.__lengthFloat" then
-                  Some "__length"
-                else None
+          let operation =
+            match operation with
+            | Some _ as operation -> operation
+            | None -> (
+                match calleeName with
+                | "Darklang.Stdlib.List.__lengthFloat" ->
+                    Some ("__length", ListScalar)
+                | "Darklang.Stdlib.List.__headUnsafeInt64"
+                | "Darklang.Stdlib.List.__headUnsafeFloat" ->
+                    Some ("__headUnsafe", ListElement)
+                | _ -> None)
           in
-          match (base, lookup stores list) with
-          | Some base, Some ({ kind = ListStorage _; _ } as storage) ->
-              Some ("Darklang.Stdlib.List." ^ base, list, rest, storage)
+          match (operation, lookup stores list) with
+          | Some (base, result), Some ({ kind = ListStorage _; _ } as storage)
+            ->
+              Some ("Darklang.Stdlib.List." ^ base, list, rest, storage, result)
           | _ -> None)
       | _ -> None
     in
@@ -557,8 +580,14 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
             | A.Call (callee, arguments)
             | A.BorrowedCall (callee, arguments)
             | A.TailCall (callee, arguments)
-              when Option.is_some (listScalarCall stores callee arguments) ->
-                Ok (state, None, None)
+              when Option.is_some (listCall stores callee arguments) ->
+                let storage, result =
+                  match listCall stores callee arguments with
+                  | Some (_, _, _, storage, result) -> (storage, result)
+                  | None -> Crash.crash "Async list call lost its source plan"
+                in
+                let value, stored = listResult storage result in
+                Ok (state, value, stored)
             | A.Call (callee, _) when producer callee ->
                 Ok (state, Some (originalResult callee), None)
             | A.ClosureAlloc (callee, captures) when eligible callee ->
@@ -1201,6 +1230,7 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
               | A.BorrowedCall (callee, args)
               | A.TailCall (callee, args) ->
                   (not (eligible callee))
+                  && Option.is_none (listCall stores callee args)
                   && List.exists
                        (fun atom -> Option.is_some (lookup stores atom))
                        args
@@ -1239,6 +1269,16 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
           in
           let* storedValue =
             match operation with
+            | A.Call (callee, args)
+            | A.BorrowedCall (callee, args)
+            | A.TailCall (callee, args)
+              when Option.is_some (listCall stores callee args) ->
+                let storage, result =
+                  match listCall stores callee args with
+                  | Some (_, _, _, storage, result) -> (storage, result)
+                  | None -> Crash.crash "Async list call lost its source plan"
+                in
+                Ok (snd (listResult storage result))
             | A.Call (callee, args)
             | A.BorrowedCall (callee, args)
             | A.TailCall (callee, args)
@@ -1292,9 +1332,9 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
             | A.Call (callee, arguments)
             | A.BorrowedCall (callee, arguments)
             | A.TailCall (callee, arguments)
-              when Option.is_some (listScalarCall stores callee arguments) ->
-                let base, list, rest, storage =
-                  match listScalarCall stores callee arguments with
+              when Option.is_some (listCall stores callee arguments) ->
+                let base, list, rest, storage, result =
+                  match listCall stores callee arguments with
                   | Some value -> value
                   | None ->
                       Crash.crash "Async list inspection lost its source plan"
@@ -1310,7 +1350,8 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
                 in
                 let* callee = helper base physical in
                 let list, before, gen = forceAtom env list gen in
-                Ok (A.Call (callee, list :: rest), before, None, gen)
+                let value, _ = listResult storage result in
+                Ok (A.Call (callee, list :: rest), before, value, gen)
             | A.RawSlotInit (pointer, offset, value, typ)
               when Option.is_some
                      (AsyncListStorage.slot (listPlan fn) pointer offset) ->
