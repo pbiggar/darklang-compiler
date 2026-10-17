@@ -59,6 +59,17 @@ type mode = AsyncTransport.mode =
   | Stored of unit storage
   | PendingStored of unit storage
 
+type listFolding = {
+  foldList : A.atom;
+  initial : A.atom;
+  step : A.atom;
+  stepTarget : AST.functionId;
+  elementType : AST.semanticType;
+  accumulatorType : AST.semanticType;
+  actualFoldElement : mode;
+  actualInitial : mode;
+}
+
 type listMappingKind = MapElements | FilterElements
 
 type listMapping = {
@@ -104,20 +115,28 @@ let modeOf env stores atom =
       Stored (AsyncTransport.mapStorage (fun _ -> ()) storage)
   | None, None -> Concrete
 
-let bindMode transform env stores id typ = function
-  | Concrete -> Ok (M.remove id env, M.remove id stores)
+let modeFacts transform typ = function
+  | Concrete -> Ok (None, None)
   | Pending ->
       let* value = transform typ in
-      Ok (M.add id value env, M.remove id stores)
+      Ok (Some value, None)
   | Stored storage ->
       let* storage = AsyncTransport.instantiateStorage transform storage typ in
-      Ok (M.remove id env, M.add id storage stores)
+      Ok (None, Some storage)
   | PendingStored storage ->
       let* value =
         transform (AsyncTransport.physicalType (Stored storage) typ)
       in
       let* storage = AsyncTransport.instantiateStorage transform storage typ in
-      Ok (M.add id value env, M.add id storage stores)
+      Ok (Some value, Some storage)
+
+let bindMode transform env stores id typ mode =
+  let* value, storage = modeFacts transform typ mode in
+  let bind map = function
+    | None -> M.remove id map
+    | Some value -> M.add id value map
+  in
+  Ok (bind env value, bind stores storage)
 
 let listMode element mode =
   if not (changed mode) then Concrete
@@ -573,6 +592,55 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
       in
       (element, listMode element mode)
     in
+    let foldingCall fn env stores state = function
+      | A.Call (callee, [ foldList; initial; step ])
+      | A.BorrowedCall (callee, [ foldList; initial; step ])
+      | A.TailCall (callee, [ foldList; initial; step ]) -> (
+          let isFold =
+            match name callee with
+            | Some name -> specialized "Darklang.Stdlib.List.fold" name
+            | None -> false
+          in
+          match (isFold, callable fn step) with
+          | true, Some target
+            when eligible target && not (S.mem target nativeEntries) -> (
+              match F.tryFind target definitions with
+              | Some { A.typedParams = [ _; accumulator; element ]; _ } ->
+                  let actualFoldElement =
+                    match modeOf env stores foldList with
+                    | Stored storage | PendingStored storage ->
+                        listElementMode storage
+                    | Concrete | Pending -> Concrete
+                  in
+                  let actualInitial = modeOf env stores initial in
+                  let current = summary state target in
+                  if
+                    changed actualFoldElement || changed actualInitial
+                    || changed current.result
+                    || List.exists changed current.parameters
+                  then
+                    Some
+                      {
+                        foldList;
+                        initial;
+                        step;
+                        stepTarget = target;
+                        elementType = element.A.typ;
+                        accumulatorType = accumulator.A.typ;
+                        actualFoldElement;
+                        actualInitial;
+                      }
+                  else None
+              | _ -> None)
+          | _ -> None)
+      | _ -> None
+    in
+    let foldingModes state folding =
+      let current = summary state folding.stepTarget in
+      match current.parameters with
+      | [ _; accumulator; element ] -> (accumulator, element, current.result)
+      | _ -> Crash.crash "Async fold callback has an inconsistent signature"
+    in
     let seed mapError (fn : A.functionDef) state modes transform =
       let* env, stores =
         List.fold_left2
@@ -654,6 +722,7 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
       | A.Let (id, operation, rest) ->
           let* builder = listBuildCall env stores operation in
           let mapping = mappingCall fn env stores state operation in
+          let folding = foldingCall fn env stores state operation in
           let* state =
             match operation with
             | A.RawSlotInit (pointer, offset, value, _) -> (
@@ -726,6 +795,33 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
           in
           let* state, result, stored =
             match operation with
+            | _ when Option.is_some folding ->
+                let folding =
+                  match folding with
+                  | Some folding -> folding
+                  | None -> Crash.crash "Async list fold lost its source plan"
+                in
+                let accumulator, _, result = foldingModes state folding in
+                let* accumulator =
+                  AsyncTransport.merge accumulator folding.actualInitial
+                in
+                let* accumulator = AsyncTransport.merge accumulator result in
+                let current = summary state folding.stepTarget in
+                let* parameters =
+                  AsyncTransport.mergeList current.parameters
+                    [ Concrete; accumulator; folding.actualFoldElement ]
+                in
+                let state =
+                  F.add folding.stepTarget
+                    { current with parameters; result = accumulator }
+                    state
+                in
+                let* value, storage =
+                  modeFacts
+                    (fun typ -> Ok typ)
+                    folding.accumulatorType accumulator
+                in
+                Ok (state, value, storage)
             | _ when Option.is_some mapping ->
                 let mapping =
                   match mapping with
@@ -1554,6 +1650,7 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
               (listBuildCall env stores operation)
           in
           let mapping = mappingCall fn env stores summaries operation in
+          let folding = foldingCall fn env stores summaries operation in
           let* () =
             let hasList =
               T.exists
@@ -1586,6 +1683,7 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
               | A.TailCall (callee, args) ->
                   (not (eligible callee))
                   && Option.is_none builder && Option.is_none mapping
+                  && Option.is_none folding
                   && Option.is_none (listCall stores callee args)
                   && List.exists
                        (fun atom -> Option.is_some (lookup stores atom))
@@ -1625,6 +1723,14 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
           in
           let* storedValue =
             match operation with
+            | _ when Option.is_some folding ->
+                let folding =
+                  match folding with
+                  | Some folding -> folding
+                  | None -> Crash.crash "Async list fold lost its source plan"
+                in
+                let accumulator, _, _ = foldingModes summaries folding in
+                storedResult accumulator folding.accumulatorType
             | _ when Option.is_some mapping ->
                 let mapping =
                   match mapping with
@@ -1685,6 +1791,14 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
           let* () =
             let escape =
               match operation with
+              | _ when Option.is_some folding ->
+                  let folding =
+                    match folding with
+                    | Some folding -> folding
+                    | None -> Crash.crash "Async list fold lost its source plan"
+                  in
+                  changedCallable fn folding.foldList
+                  || changedCallable fn folding.initial
               | _ when Option.is_some mapping ->
                   let mapping =
                     match mapping with
@@ -1712,6 +1826,56 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
           in
           let* operation, before, value, gen =
             match operation with
+            | _ when Option.is_some folding ->
+                let folding =
+                  match folding with
+                  | Some folding -> folding
+                  | None -> Crash.crash "Async list fold lost its source plan"
+                in
+                let accumulatorMode, elementMode, resultMode =
+                  foldingModes summaries folding
+                in
+                if accumulatorMode <> resultMode then
+                  Crash.crash
+                    "Async fold step and accumulator interfaces differ";
+                let elementType =
+                  AsyncTransport.physicalType elementMode folding.elementType
+                in
+                let accumulatorType =
+                  AsyncTransport.physicalType accumulatorMode
+                    folding.accumulatorType
+                in
+                let* callee =
+                  helperTypes "Darklang.Stdlib.List.fold"
+                    [ elementType; accumulatorType ]
+                in
+                let actual = modeOf env stores folding.foldList in
+                let values, before, gen = forceAtom env folding.foldList gen in
+                let actual =
+                  match actual with
+                  | Pending -> Concrete
+                  | PendingStored storage -> Stored storage
+                  | mode -> mode
+                in
+                let* values, added, gen =
+                  prepareValue
+                    (listMode folding.elementType elementMode)
+                    (AST.TList folding.elementType) values actual gen
+                in
+                let* initial, promoted, gen =
+                  prepareValue accumulatorMode folding.accumulatorType
+                    folding.initial
+                    (modeOf env stores folding.initial)
+                    gen
+                in
+                let* value, _ =
+                  modeFacts info folding.accumulatorType accumulatorMode
+                in
+                Ok
+                  ( A.Call (callee, [ values; initial; folding.step ]),
+                    before @ added @ promoted,
+                    value,
+                    gen )
             | _ when Option.is_some mapping ->
                 let mapping =
                   match mapping with
