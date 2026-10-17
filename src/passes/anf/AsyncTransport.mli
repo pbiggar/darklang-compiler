@@ -1,10 +1,18 @@
 (* AsyncTransport.mli - Describe concrete, pending and independently pending field interfaces. *)
 type storageKind = TupleStorage | RecordStorage of ANF.recordDescriptor
 
-type 'a storedSlot = PendingSlot of 'a | NestedStorage of 'a storage
+type 'a storedSlot =
+  | PendingSlot of 'a
+  | NestedStorage of 'a storage
+  | PendingStorage of 'a * 'a storage
+
 and 'a storage = { kind : storageKind; fields : 'a storedSlot option list }
 
-type mode = Concrete | Pending | Stored of unit storage
+type mode =
+  | Concrete
+  | Pending
+  | Stored of unit storage
+  | PendingStored of unit storage
 
 val changed : mode -> bool
 val slotMode : unit storedSlot option -> mode

@@ -130,6 +130,13 @@ let __joinCurrent<'a> (value: Stdlib.__Async.__Value<Stdlib.__Async.__Value<a>>)
     | Some inner -> inner
     | None -> Stdlib.__Async.__deferred (fun _unit -> Stdlib.__Task.__forceCurrent value)
 
+// Map only the concrete outer payload when demanded. The producer has already
+// started; deferred mapping never inspects fields or waits at the conversion.
+let __mapValueCurrent<'a, 'b> (map: a -> b) (value: Stdlib.__Async.__Value<a>) : Stdlib.__Async.__Value<b> =
+    match Stdlib.__Async.__pollValue value with
+    | Some ready -> Stdlib.__Async.__ready (map ready)
+    | None -> Stdlib.__Async.__deferred (fun _unit -> Stdlib.__Async.__ready (map (Stdlib.__Task.__forceCurrent value)))
+
 let __now () : Int64 =
     match Stdlib.__Network.monotonicMillis () with
     | Ok value -> value

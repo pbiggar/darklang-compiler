@@ -3,23 +3,36 @@
 
 type storageKind = TupleStorage | RecordStorage of ANF.recordDescriptor
 
-type 'a storedSlot = PendingSlot of 'a | NestedStorage of 'a storage
+type 'a storedSlot =
+  | PendingSlot of 'a
+  | NestedStorage of 'a storage
+  | PendingStorage of 'a * 'a storage
+
 and 'a storage = { kind : storageKind; fields : 'a storedSlot option list }
 
-type mode = Concrete | Pending | Stored of unit storage
+type mode =
+  | Concrete
+  | Pending
+  | Stored of unit storage
+  | PendingStored of unit storage
 
 let ( let* ) = Result.bind
-let changed = function Concrete -> false | Pending | Stored _ -> true
+
+let changed = function
+  | Concrete -> false
+  | Pending | Stored _ | PendingStored _ -> true
 
 let slotMode = function
   | None -> Concrete
   | Some (PendingSlot ()) -> Pending
   | Some (NestedStorage storage) -> Stored storage
+  | Some (PendingStorage ((), storage)) -> PendingStored storage
 
 let modeSlot = function
   | Concrete -> None
   | Pending -> Some (PendingSlot ())
   | Stored storage -> Some (NestedStorage storage)
+  | PendingStored storage -> Some (PendingStorage ((), storage))
 
 let compatibleKind left right =
   match (left, right) with
@@ -42,10 +55,18 @@ let rec merge left right =
           (List.map slotMode right.fields)
       in
       Ok (Stored { left with fields = List.map modeSlot fields })
-  | Pending, Stored _ | Stored _, Pending ->
-      Error
-        "Async transport combining a pending aggregate with independently \
-         pending fields is not implemented"
+  | Pending, Stored storage
+  | Stored storage, Pending
+  | Pending, PendingStored storage
+  | PendingStored storage, Pending ->
+      Ok (PendingStored storage)
+  | PendingStored left, Stored right
+  | Stored left, PendingStored right
+  | PendingStored left, PendingStored right -> (
+      let* value = merge (Stored left) (Stored right) in
+      match value with
+      | Stored storage -> Ok (PendingStored storage)
+      | _ -> Crash.crash "Async stored interface merge lost its field layout")
 
 and mergeList left right =
   match (left, right) with
@@ -61,7 +82,9 @@ let rec mapStorage transform storage =
     List.map
       (Option.map (function
         | PendingSlot value -> PendingSlot (transform value)
-        | NestedStorage storage -> NestedStorage (mapStorage transform storage)))
+        | NestedStorage storage -> NestedStorage (mapStorage transform storage)
+        | PendingStorage (value, storage) ->
+            PendingStorage (transform value, mapStorage transform storage)))
       storage.fields
   in
   { storage with fields }
@@ -77,6 +100,10 @@ let rec physicalType mode source =
   match mode with
   | Concrete -> source
   | Pending -> AST.TSum ("Darklang.Stdlib.__Async.__Value", [ source ])
+  | PendingStored storage ->
+      AST.TSum
+        ( "Darklang.Stdlib.__Async.__Value",
+          [ physicalType (Stored storage) source ] )
   | Stored storage ->
       let types = sourceFields storage source in
       if List.length types <> List.length storage.fields then
@@ -97,6 +124,10 @@ let rec instantiateStorage transform storage source =
           | None -> Ok None
           | Some (PendingSlot ()) ->
               Result.map (fun value -> Some (PendingSlot value)) (transform typ)
+          | Some (PendingStorage ((), storage)) ->
+              let* value = transform (physicalType (Stored storage) typ) in
+              let* storage = instantiateStorage transform storage typ in
+              Ok (Some (PendingStorage (value, storage)))
           | Some (NestedStorage storage) ->
               Result.map
                 (fun value -> Some (NestedStorage value))

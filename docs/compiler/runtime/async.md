@@ -104,9 +104,11 @@ closure captures, promoting concrete fields to ready carriers where call sites
 require a common layout. Concrete calls to synchronous functions keep their
 original representations. Collection and variant storage, untyped value
 selections, and escaping callables whose argument or result interface changes
-still produce compilation diagnostics. Combining a wholly pending container
-with independently pending fields in one inferred interface also remains
-unsupported: it requires a typed, demand-free mapping of the outer carrier. The hooks are
+still produce compilation diagnostics. Outer pendingness also carries the inferred field layout. A generated mapper
+promotes only concrete fields, and `__mapValueCurrent` applies it to an outer
+payload when demanded. This reconciles wholly pending containers and concrete
+containers with pending fields without waiting at calls, captures or returns.
+Native result adapters first demand the outer container, then materialize fields. The hooks are
 compiler test interfaces, not public async APIs or automatic I/O lowering.
 
 Runtime helper dependencies are requested explicitly by lowering. When a typed
@@ -272,3 +274,6 @@ returned, exposing early demands at those boundaries.
 `async_runtime_helper.e2e` checks a custom record payload whose typed demand helper
 is independent of the root result type, including specialization while compiling
 a preamble and later use of its source functions.
+
+`async_mixed_storage.e2e` checks mixed outer and field pendingness across calls,
+nested fields and captures, abandonment, managed payloads, and native results.
