@@ -797,7 +797,7 @@ let lowerExpression (toANFCore : LoweringCallbacks.expressionLowerer)
               A.Let
                 ( raw,
                   (if unboxed then A.Atom value
-                   else A.RawGet (value, int 8L, Some payloadType)),
+                   else P.sumPayloadExpr typ payloadType value sums.P.cases),
                   A.Let
                     ( typed,
                       A.TypedAtom (A.Var raw, payloadType),

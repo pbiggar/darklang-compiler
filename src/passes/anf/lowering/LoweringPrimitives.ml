@@ -178,7 +178,23 @@ let spareImmediateSumSentinel name args sums =
 
 let sumPayloadExpr source payloadType atom sums =
   let boxed () =
-    ANF.RawGet (atom, ANF.IntLiteral (ANF.Int64 8L), Some payloadType)
+    let name, args =
+      match source with
+      | AST.TSum (name, args) -> (name, args)
+      | _ -> Crash.crash "Sum payload projection requires a sum type"
+    in
+    (* Constructor arms share a fixed block layout, but their payload types
+       can differ. Keep the selected arm's field type on the projection. *)
+    ANF.RecordGet
+      ( {
+          ANF.sourceTypeName = name;
+          runtimeTypeName = name;
+          typeArgs = args;
+          fields = [ ("__tag", AST.TInt64); ("__payload", payloadType) ];
+          valueType = source;
+        },
+        atom,
+        1 )
   in
   match source with
   | AST.TSum (name, args) -> (
