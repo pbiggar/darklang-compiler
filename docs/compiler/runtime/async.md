@@ -112,6 +112,15 @@ with `__delayCurrent`, it permits context-free runtime tests through normal Dark
 functions. It retains the explicit scope's drain policy and is not automatically
 applied to CLI programs.
 
+`__startCurrent` enters a separate operation task immediately, returning its
+pending carrier when the caller next runs. The operation can park, yield or
+finish without waiting for its consumer. Started operations stay owned by the
+explicit scheduler scope even if their consumer is discarded. This is an
+operation boundary; ordinary calls below the operation use its native stack.
+Dynamic active-task accounting includes these operations. A switch back to the
+scheduler records the actual returning task, which can differ from the task the
+scheduler last entered when an operation starts another operation directly.
+
 On Linux x64, each task has an 8 MiB fixed-address virtual-memory stack with a
 64 KiB inaccessible guard at each end. The native switch saves stack and frame
 pointers, allocatable callee-saved integer registers and floating-point
@@ -177,3 +186,6 @@ The native `async_socket_regression.py` peer sends response B and requires its
 acknowledgement before sending response A. A single task starts both reads and
 consumes B first, proving eager initiation without an early wait on A. The
 regression also checks native leak accounting.
+`async_start.e2e` checks eager entry, nested operations, runnable ordering,
+producer ownership after consumer abandonment, managed results and startup
+arguments from child stacks.

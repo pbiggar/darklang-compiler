@@ -18,6 +18,7 @@ let __BACK () : Int64 = 224L
 let __TIMERS () : Int64 = 232L
 let __IO_QUEUE () : Int64 = 240L
 let __IO_COUNT () : Int64 = 248L
+let __ACTIVE () : Int64 = 256L
 
 let __set<'a> (cell: RawPtr) (offset: Int64) (value: a) : Unit =
     let previous = __raw_take<a> cell offset in
@@ -235,6 +236,27 @@ let __readTcpCurrent (connection: Stdlib.__Network.TcpConnection) : Stdlib.__Asy
         let _ = Stdlib.__Task.__readTcpStart (Stdlib.__Task.__scheduler context) connection promise in
         Stdlib.__Async.__pending promise
 
+// Only operation boundaries allocate tasks. The entry and every ordinary call
+// below it keep a normal native stack. Enter now, allowing the caller to resume
+// once the operation parks, yields or finishes; do not wait for its result.
+let __startCurrent<'a> (entry: Unit -> a) : Stdlib.__Async.__Value<a> =
+    let context = __fiber_current () in
+    if __rawptr_to_word context == 0L then Builtin.crash "Cannot start an operation outside a native task"
+    else
+        let scheduler = Stdlib.__Task.__scheduler context in
+        let promise = Stdlib.__Async.__new<a> () in
+        let task = Stdlib.__Task.__new scheduler (fun _context -> Stdlib.__Task.__completePromise scheduler promise (entry ())) in
+        let tasks = __raw_get<List<Stdlib.__Task.__Task>> scheduler (Stdlib.__Task.__TASKS ()) in
+        let parent = Stdlib.__Task.__find tasks (__rawptr_to_word context) in
+        let _ = Stdlib.__Task.__set scheduler (Stdlib.__Task.__TASKS ()) (Stdlib.List.push tasks task) in
+        let active = __raw_get<Int64> scheduler (Stdlib.__Task.__ACTIVE ()) in
+        let _ = __raw_write_word scheduler (Stdlib.__Task.__ACTIVE ()) (active + 1L) in
+        let _ = __raw_write_word context 64L 1L in
+        let _ = Stdlib.__Task.__enqueue scheduler parent in
+        let _ = __raw_write_word task.context 64L 2L in
+        let _ = __fiber_switch context task.context in
+        Stdlib.__Async.__pending promise
+
 let __landIO (scheduler: RawPtr) (entries: List<Stdlib.__Task.__IO>) (events: List<Stdlib.__Network.Ready>) (index: Int64) (keep: List<Stdlib.__Task.__IO>) : List<Stdlib.__Task.__IO> =
     match entries with
     | [] -> Stdlib.List.reverse keep
@@ -283,28 +305,36 @@ let __waitEvent (scheduler: RawPtr) : Unit =
             if delay > 0L then Stdlib.Cli.__sleep (Stdlib.Int64.toFloat delay) else ()
         else Stdlib.__Task.__pollIO scheduler delay
 
-let __loop (scheduler: RawPtr) (remaining: Int64) : Unit =
+let __loop (scheduler: RawPtr) : Unit =
     let _ = Stdlib.__Task.__pollTimers scheduler in
     let _ = Stdlib.__Task.__pollIO scheduler 0L in
     match Stdlib.__Task.__dequeue scheduler with
     | None ->
-        if remaining == 0L then
+        if __raw_get<Int64> scheduler (Stdlib.__Task.__ACTIVE ()) == 0L then
             if Stdlib.List.isEmpty (__raw_get<List<Stdlib.__Task.__Timer>> scheduler (Stdlib.__Task.__TIMERS ())) && Stdlib.List.isEmpty (__raw_get<List<Stdlib.__Task.__IO>> scheduler (Stdlib.__Task.__IO_QUEUE ())) then ()
             else
                 let _ = Stdlib.__Task.__waitEvent scheduler in
-                Stdlib.__Task.__loop scheduler remaining
+                Stdlib.__Task.__loop scheduler
         else
             let _ = Stdlib.__Task.__waitEvent scheduler in
-            Stdlib.__Task.__loop scheduler remaining
+            Stdlib.__Task.__loop scheduler
     | Some task ->
         let _ = __raw_write_word task.context 64L 2L in
         let _ = __fiber_switch scheduler task.context in
+        let returned = __raw_get<RawPtr> scheduler 40L in
+        let tasks = __raw_get<List<Stdlib.__Task.__Task>> scheduler (Stdlib.__Task.__TASKS ()) in
+        let task = Stdlib.__Task.__find tasks (__rawptr_to_word returned) in
         let state = Stdlib.__Task.__state task.context in
-        if state == 4L then Stdlib.__Task.__loop scheduler (remaining - 1L)
-        else if state == 3L then Stdlib.__Task.__loop scheduler remaining
+        if state == 4L then
+            let active = __raw_get<Int64> scheduler (Stdlib.__Task.__ACTIVE ()) in
+            if active <= 0L then Builtin.crash "Invalid native active task count"
+            else
+                let _ = __raw_write_word scheduler (Stdlib.__Task.__ACTIVE ()) (active - 1L) in
+                Stdlib.__Task.__loop scheduler
+        else if state == 3L then Stdlib.__Task.__loop scheduler
         else if state == 1L then
             let _ = Stdlib.__Task.__enqueue scheduler task in
-            Stdlib.__Task.__loop scheduler remaining
+            Stdlib.__Task.__loop scheduler
         else Builtin.crash "Invalid native task state after suspension"
 
 let __disposeScheduler (scheduler: RawPtr) : Unit =
@@ -320,7 +350,7 @@ let __disposeScheduler (scheduler: RawPtr) : Unit =
 // It does not decide the lifetime policy of an automatically compiled program.
 let __run (entries: List<RawPtr -> Unit>) : Unit =
     let previous = __fiber_current () in
-    let scheduler = __raw_alloc 256L in
+    let scheduler = __raw_alloc 264L in
     let _ = __raw_write_word scheduler 56L 0L in
     let _ = __raw_slot_init<List<Stdlib.__Task.__Task>> scheduler (Stdlib.__Task.__TASKS ()) [] in
     let _ = __raw_slot_init<List<Stdlib.__Task.__Task>> scheduler (Stdlib.__Task.__FRONT ()) [] in
@@ -331,7 +361,8 @@ let __run (entries: List<RawPtr -> Unit>) : Unit =
     let tasks = Stdlib.List.map entries (fun entry -> Stdlib.__Task.__new scheduler entry) in
     let _ = Stdlib.__Task.__set scheduler (Stdlib.__Task.__TASKS ()) tasks in
     let _ = Stdlib.__Task.__set scheduler (Stdlib.__Task.__FRONT ()) tasks in
-    let _ = Stdlib.__Task.__loop scheduler (Stdlib.List.__length tasks) in
+    let _ = __raw_write_word scheduler (Stdlib.__Task.__ACTIVE ()) (Stdlib.List.__length tasks) in
+    let _ = Stdlib.__Task.__loop scheduler in
     let _ = __fiber_set_current previous in
     Stdlib.__Task.__disposeScheduler scheduler
 

@@ -36,6 +36,7 @@ let guard = 65536
    LIR's normal native-effect call barrier preserves caller-owned GP values. *)
 let switch resume =
   let current = freshLabel "fiber_current_task" in
+  let incomingTask = freshLabel "fiber_incoming_task" in
   [
     X.MOV_reg (X.R10, X.RSI);
     X.LEA_rip (X.RAX, resume);
@@ -45,7 +46,13 @@ let switch resume =
        callbacks run there, and the task identity before its stack resumes. *)
     X.MOV_load (X.RAX, X.R10, 56l);
     X.TEST_reg (X.RAX, X.RAX);
-    X.Jcc (X.EQ, current);
+    X.Jcc (X.NE, incomingTask);
+    (* Eager operation starts may enter a child directly. Record the actual
+       returning task rather than assuming it was the scheduler's last pick.
+       Slot 40 is an entry closure in task contexts and borrowed here. *)
+    X.MOV_store (X.R10, 40l, X.RDI);
+    X.JMP current;
+    X.Label incomingTask;
     X.MOV_reg (X.RAX, X.R10);
     X.Label current;
     X.MOV_store (freeListBase, Int32.of_int currentTaskOffset, X.RAX);
