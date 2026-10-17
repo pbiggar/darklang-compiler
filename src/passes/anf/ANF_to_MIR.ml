@@ -767,8 +767,6 @@ let tupleGetDestType builder tempId aliasType tupleId index =
           | Some (AST.TList elem) | Some (AST.TFunction (_, AST.TList elem)) ->
               if index = 1 && elem = AST.TFloat64 then Some AST.TFloat64
               else None
-          | Some (AST.TSum (_, [ AST.TFloat64 ])) when index = 1 ->
-              Some AST.TFloat64
           | _ -> None))
 
 let inferSimpleCExprDestType builder tempId aliasType = function

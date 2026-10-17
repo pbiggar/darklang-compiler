@@ -124,6 +124,25 @@ let isHeapLikeForBitwiseTagging = function
 
 let starts prefix text = String.starts_with ~prefix text
 
+(* An unrefined sum projection has a type only when all payload-bearing arms
+   agree. A generic argument alone does not describe a constructor's field. *)
+let uniformSumPayloadType ctx name args =
+  match M.find_opt name ctx.sumShapeReg with
+  | Some info when List.length info.MemoryModel.typeParams = List.length args
+    -> (
+      let substitution =
+        M.of_list (List.combine info.MemoryModel.typeParams args)
+      in
+      match
+        List.filter_map
+          (fun (_, payload) ->
+            Option.map (TypeSubstitution.applySubstToType substitution) payload)
+          info.MemoryModel.payloads
+      with
+      | first :: rest when List.for_all (( = ) first) rest -> Some first
+      | [] | _ :: _ -> None)
+  | None | Some _ -> None
+
 (*
    Return types for monomorphized intrinsics that are not always present in FuncReg
 *)
@@ -451,10 +470,10 @@ let inferCExprType ctx expr =
               | 1 -> Some elem
               | 2 -> Some (AST.TList elem)
               | _ -> None)
-          | Some (AST.TSum (_, args)) -> (
-              match (index, args) with
-              | 0, _ -> Some AST.TInt64
-              | 1, [ typ ] -> Some typ
+          | Some (AST.TSum (name, args)) -> (
+              match index with
+              | 0 -> Some AST.TInt64
+              | 1 -> uniformSumPayloadType ctx name args
               | _ -> None)
           | Some (AST.TFunction _) -> Some AST.TInt64
           | _ -> None)
