@@ -1,7 +1,10 @@
 (* AsyncTransport.ml - Merge field interfaces without demanding their payloads. *)
 [@@@warning "-4"]
 
-type storageKind = TupleStorage | RecordStorage of ANF.recordDescriptor
+type storageKind =
+  | TupleStorage
+  | RecordStorage of ANF.recordDescriptor
+  | ListStorage of AST.semanticType
 
 type 'a storedSlot =
   | PendingSlot of 'a
@@ -37,6 +40,7 @@ let modeSlot = function
 let compatibleKind left right =
   match (left, right) with
   | TupleStorage, TupleStorage -> true
+  | ListStorage left, ListStorage right -> left = right
   | RecordStorage left, RecordStorage right ->
       left.ANF.valueType = right.ANF.valueType
       && left.ANF.fields = right.ANF.fields
@@ -92,6 +96,7 @@ let rec mapStorage transform storage =
 let sourceFields storage source =
   match (storage.kind, source) with
   | TupleStorage, AST.TTuple types -> types
+  | ListStorage _, AST.TList element -> [ element ]
   | RecordStorage descriptor, AST.TRecord _ ->
       List.map snd descriptor.ANF.fields
   | _ -> Crash.crash "Async transport source type does not match its storage"
@@ -104,14 +109,20 @@ let rec physicalType mode source =
       AST.TSum
         ( "Darklang.Stdlib.__Async.__Value",
           [ physicalType (Stored storage) source ] )
-  | Stored storage ->
+  | Stored storage -> (
       let types = sourceFields storage source in
       if List.length types <> List.length storage.fields then
         Crash.crash "Async transport storage has an inconsistent field count";
-      AST.TTuple
-        (List.map2
-           (fun typ slot -> physicalType (slotMode slot) typ)
-           types storage.fields)
+      let types =
+        List.map2
+          (fun typ slot -> physicalType (slotMode slot) typ)
+          types storage.fields
+      in
+      match (storage.kind, types) with
+      | ListStorage _, [ element ] -> AST.TList element
+      | ListStorage _, _ ->
+          Crash.crash "Async list storage has an inconsistent element layout"
+      | _ -> AST.TTuple types)
 
 let rec instantiateStorage transform storage source =
   let types = sourceFields storage source in

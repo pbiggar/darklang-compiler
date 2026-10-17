@@ -41,6 +41,7 @@ let lookup env = function A.Var id -> M.find_opt id env | _ -> None
 type storageKind = AsyncTransport.storageKind =
   | TupleStorage
   | RecordStorage of A.recordDescriptor
+  | ListStorage of AST.semanticType
 
 type 'a storedSlot = 'a AsyncTransport.storedSlot =
   | PendingSlot of 'a
@@ -63,6 +64,7 @@ type summary = {
   captures : mode list;
   result : mode;
   joins : mode M.t;
+  rawLists : mode M.t;
 }
 
 let changed = AsyncTransport.changed
@@ -90,6 +92,18 @@ let bindMode transform env stores id typ = function
       in
       let* storage = AsyncTransport.instantiateStorage transform storage typ in
       Ok (M.add id value env, M.add id storage stores)
+
+let listMode element mode =
+  if not (changed mode) then Concrete
+  else
+    Stored
+      { kind = ListStorage element; fields = [ AsyncTransport.modeSlot mode ] }
+
+let listElementMode storage =
+  let storage = AsyncTransport.mapStorage (fun _ -> ()) storage in
+  match (storage.kind, storage.fields) with
+  | ListStorage _, [ slot ] -> AsyncTransport.slotMode slot
+  | _ -> Crash.crash "Async list transport has an inconsistent element layout"
 
 let storageField storage index =
   match
@@ -147,11 +161,17 @@ and storageType storage source =
   let types =
     match (storage.kind, source) with
     | TupleStorage, AST.TTuple types -> types
+    | ListStorage _, AST.TList element -> [ element ]
     | RecordStorage descriptor, AST.TRecord _ ->
         List.map snd descriptor.A.fields
     | _ -> Crash.crash "Async storage source type does not match its layout"
   in
-  AST.TTuple (fieldRepresentations storage types)
+  let types = fieldRepresentations storage types in
+  match (storage.kind, types) with
+  | ListStorage _, [ element ] -> AST.TList element
+  | ListStorage _, _ ->
+      Crash.crash "Async list storage has an inconsistent element layout"
+  | _ -> AST.TTuple types
 
 let storageDescriptor storage (descriptor : A.recordDescriptor) =
   let types = fieldRepresentations storage (List.map snd descriptor.A.fields) in
@@ -261,6 +281,52 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
         (fun found _ fn -> entries M.empty found fn.A.body)
         S.empty definitions
     in
+    let listPlans =
+      F.map (fun _ fn -> AsyncListStorage.create fn) definitions
+    in
+    let listPlan (fn : A.functionDef) =
+      match F.tryFind fn.A.id listPlans with
+      | Some plan -> plan
+      | None -> Crash.crash "Async list analysis lost a source plan"
+    in
+    let rawListMode state (fn : A.functionDef) component =
+      match M.find_opt component (summary state fn.A.id).rawLists with
+      | Some mode -> mode
+      | None -> Concrete
+    in
+    let listScalarCall stores callee arguments =
+      match (name callee, arguments) with
+      | Some calleeName, list :: rest -> (
+          let bases =
+            [
+              "length";
+              "isEmpty";
+              "__length";
+              "__isEmpty";
+              "__isNull";
+              "__getTag";
+            ]
+          in
+          let base =
+            List.find_opt
+              (fun base ->
+                specialized ("Darklang.Stdlib.List." ^ base) calleeName)
+              bases
+          in
+          let base =
+            match base with
+            | Some _ as base -> base
+            | None ->
+                if calleeName = "Darklang.Stdlib.List.__lengthFloat" then
+                  Some "__length"
+                else None
+          in
+          match (base, lookup stores list) with
+          | Some base, Some ({ kind = ListStorage _; _ } as storage) ->
+              Some ("Darklang.Stdlib.List." ^ base, list, rest, storage)
+          | _ -> None)
+      | _ -> None
+    in
     let initial =
       F.map
         (fun _ (fn : A.functionDef) ->
@@ -273,6 +339,7 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
               | _ -> []);
             result = Concrete;
             joins = M.empty;
+            rawLists = M.empty;
           })
         definitions
     in
@@ -415,6 +482,36 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
           in
           infer fn env stores continuation state
       | A.Let (id, operation, rest) ->
+          let* state =
+            match operation with
+            | A.RawSlotInit (pointer, offset, value, _) -> (
+                match AsyncListStorage.slot (listPlan fn) pointer offset with
+                | None -> Ok state
+                | Some (component, slot) ->
+                    let* actual =
+                      match (slot, modeOf env stores value) with
+                      | AsyncListStorage.Element _, mode -> Ok mode
+                      | AsyncListStorage.Link _, Concrete -> Ok Concrete
+                      | AsyncListStorage.Link _, Stored storage ->
+                          Ok (listElementMode storage)
+                      | AsyncListStorage.Link _, (Pending | PendingStored _) ->
+                          Error "Async pending list spines are not implemented"
+                    in
+                    let* mode =
+                      AsyncTransport.merge
+                        (rawListMode state fn component)
+                        actual
+                    in
+                    let current = summary state fn.A.id in
+                    Ok
+                      (F.add fn.A.id
+                         {
+                           current with
+                           rawLists = M.add component mode current.rawLists;
+                         }
+                         state))
+            | _ -> Ok state
+          in
           let projected atom index =
             match lookup stores atom with
             | Some storage -> (
@@ -424,12 +521,30 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
                 | _ -> None)
             | None -> None
           in
-          let ordinaryStore = storageFacts env stores operation in
+          let* ordinaryStore =
+            match operation with
+            | A.TypedAtom (_, (AST.TList _ as typ)) -> (
+                match AsyncListStorage.root (listPlan fn) (A.Var id) with
+                | Some (component, AST.TList element) -> (
+                    match listMode element (rawListMode state fn component) with
+                    | Stored storage ->
+                        Result.map Option.some
+                          (AsyncTransport.instantiateStorage
+                             (fun typ -> Ok typ)
+                             storage typ)
+                    | Concrete -> Ok None
+                    | _ ->
+                        Crash.crash "Async literal list has outer pendingness")
+                | _ -> Ok (storageFacts env stores operation))
+            | _ -> Ok (storageFacts env stores operation)
+          in
           let* () =
             match (operation, ordinaryStore) with
             | A.TypedAtom (_, typ), Some storage -> (
                 match (storage.kind, typ) with
-                | TupleStorage, AST.TTuple _ | RecordStorage _, AST.TRecord _ ->
+                | TupleStorage, AST.TTuple _
+                | RecordStorage _, AST.TRecord _
+                | ListStorage _, AST.TList _ ->
                     Ok ()
                 | _ ->
                     Error
@@ -439,6 +554,11 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
           in
           let* state, result, stored =
             match operation with
+            | A.Call (callee, arguments)
+            | A.BorrowedCall (callee, arguments)
+            | A.TailCall (callee, arguments)
+              when Option.is_some (listScalarCall stores callee arguments) ->
+                Ok (state, None, None)
             | A.Call (callee, _) when producer callee ->
                 Ok (state, Some (originalResult callee), None)
             | A.ClosureAlloc (callee, captures) when eligible callee ->
@@ -662,6 +782,51 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
         ],
         gen )
     in
+    let mapper inputType outputType body gen =
+      let key =
+        SpecializationIdentity.specName "__dark_async_mapping"
+          [ inputType; outputType ]
+      in
+      match Names.find_opt key gen.mappers with
+      | Some mapper -> Ok (mapper, gen)
+      | None ->
+          let mapper =
+            {
+              id = AST.functionId gen.cursor;
+              name = "__dark_async_map_" ^ Int64.to_string gen.cursor;
+            }
+          in
+          let gen =
+            {
+              gen with
+              cursor = Int64.succ gen.cursor;
+              mappers = Names.add key mapper gen.mappers;
+            }
+          in
+          let environment, gen = freshVar gen in
+          let parameter, gen = freshVar gen in
+          let* value, before, gen = body (A.Var parameter) gen in
+          let definition =
+            {
+              A.id = mapper.id;
+              name = mapper.name;
+              typedParams =
+                [
+                  { A.id = environment; typ = AST.TTuple [ AST.TInt64 ] };
+                  { A.id = parameter; typ = inputType };
+                ];
+              returnType = outputType;
+              returnOwnership = A.OwnedReturn;
+              body = wraps before (A.Return value);
+            }
+          in
+          Ok
+            ( mapper,
+              {
+                gen with
+                generatedFunctions = definition :: gen.generatedFunctions;
+              } )
+    in
     let rec prepareValue expected source atom actual gen =
       match (expected, actual) with
       | left, right when left = right -> Ok (atom, [], gen)
@@ -689,57 +854,11 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
               helperTypes "Darklang.Stdlib.__Task.__mapValueCurrent"
                 [ inputType; outputType ]
             in
-            let key =
-              SpecializationIdentity.specName "__dark_async_mapping"
-                [ inputType; outputType ]
-            in
             let* mapper, gen =
-              match Names.find_opt key gen.mappers with
-              | Some mapper -> Ok (mapper, gen)
-              | None ->
-                  let mapper =
-                    {
-                      id = AST.functionId gen.cursor;
-                      name = "__dark_async_map_" ^ Int64.to_string gen.cursor;
-                    }
-                  in
-                  let gen =
-                    {
-                      gen with
-                      cursor = Int64.succ gen.cursor;
-                      mappers = Names.add key mapper gen.mappers;
-                    }
-                  in
-                  let environment, gen = freshVar gen in
-                  let parameter, gen = freshVar gen in
-                  let* value, before, gen =
-                    prepareValue (Stored expected) source (A.Var parameter)
-                      inputMode gen
-                  in
-                  let definition =
-                    {
-                      A.id = mapper.id;
-                      name = mapper.name;
-                      typedParams =
-                        [
-                          {
-                            A.id = environment;
-                            typ = AST.TTuple [ AST.TInt64 ];
-                          };
-                          { A.id = parameter; typ = inputType };
-                        ];
-                      returnType = outputType;
-                      returnOwnership = A.OwnedReturn;
-                      body = wraps before (A.Return value);
-                    }
-                  in
-                  Ok
-                    ( mapper,
-                      {
-                        gen with
-                        generatedFunctions =
-                          definition :: gen.generatedFunctions;
-                      } )
+              mapper inputType outputType
+                (fun atom gen ->
+                  prepareValue (Stored expected) source atom inputMode gen)
+                gen
             in
             let closure, gen = freshVar gen in
             let result, gen = freshVar gen in
@@ -748,6 +867,37 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
                 [
                   (closure, A.ClosureAlloc (mapper.id, []));
                   (result, A.Call (mapHelper, [ A.Var closure; atom ]));
+                ],
+                gen )
+      | ( Stored ({ kind = ListStorage element; _ } as expected),
+          (Concrete | Stored _) ) ->
+          let actualMode =
+            match actual with
+            | Stored storage -> listElementMode storage
+            | _ -> Concrete
+          in
+          let expectedMode = listElementMode expected in
+          let inputType = AsyncTransport.physicalType actualMode element in
+          let outputType = AsyncTransport.physicalType expectedMode element in
+          if inputType = outputType || atom = A.IntLiteral (A.Int64 0L) then
+            Ok (atom, [], gen)
+          else
+            let* mapHelper =
+              helperTypes "Darklang.Stdlib.List.map" [ inputType; outputType ]
+            in
+            let* mapper, gen =
+              mapper inputType outputType
+                (fun atom gen ->
+                  prepareValue expectedMode element atom actualMode gen)
+                gen
+            in
+            let closure, gen = freshVar gen in
+            let result, gen = freshVar gen in
+            Ok
+              ( A.Var result,
+                [
+                  (closure, A.ClosureAlloc (mapper.id, []));
+                  (result, A.Call (mapHelper, [ atom; A.Var closure ]));
                 ],
                 gen )
       | Stored expected, (Concrete | Stored _) ->
@@ -804,6 +954,9 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
             | TupleStorage -> A.TupleAlloc values
             | RecordStorage descriptor ->
                 A.RecordAlloc (storageDescriptor expected descriptor, values)
+            | ListStorage _ ->
+                Crash.crash
+                  "Async list promotion entered fixed-block allocation"
           in
           Ok (A.Var result, before @ [ (result, allocation) ], gen)
       | _ ->
@@ -825,72 +978,114 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
           let id, gen = freshVar gen in
           (A.Var id, [ (id, A.Call (value.force, [ atom ])) ], gen)
     in
-    let rec materializeStorage fields atom gen =
-      let values, before, gen =
-        List.fold_left
-          (fun (values, before, gen) (index, pending) ->
-            let projected, gen = freshVar gen in
-            let projection =
-              match fields.kind with
-              | TupleStorage -> A.TupleGet (atom, index)
-              | RecordStorage descriptor ->
-                  A.RecordGet (storageDescriptor fields descriptor, atom, index)
+    let rec materializeSlot slot atom gen =
+      match slot with
+      | None -> Ok (atom, [], gen)
+      | Some (PendingSlot value) ->
+          let id, gen = freshVar gen in
+          Ok (A.Var id, [ (id, A.Call (value.force, [ atom ])) ], gen)
+      | Some (NestedStorage storage) -> materializeStorage storage atom gen
+      | Some (PendingStorage (value, storage)) ->
+          let id, gen = freshVar gen in
+          let original = atom in
+          let* atom, before, gen = materializeStorage storage (A.Var id) gen in
+          Ok (atom, (id, A.Call (value.force, [ original ])) :: before, gen)
+    and materializeStorage storage atom gen =
+      match (storage.kind, storage.fields) with
+      | ListStorage element, [ slot ] ->
+          let mode =
+            AsyncTransport.slotMode
+              (Option.map
+                 (function
+                   | PendingSlot _ -> PendingSlot ()
+                   | NestedStorage storage ->
+                       NestedStorage
+                         (AsyncTransport.mapStorage (fun _ -> ()) storage)
+                   | PendingStorage (_, storage) ->
+                       PendingStorage
+                         ((), AsyncTransport.mapStorage (fun _ -> ()) storage))
+                 slot)
+          in
+          let inputType = AsyncTransport.physicalType mode element in
+          if inputType = element then Ok (atom, [], gen)
+          else
+            let* mapHelper =
+              helperTypes "Darklang.Stdlib.List.map" [ inputType; element ]
             in
-            let before = before @ [ (projected, projection) ] in
-            match pending with
-            | None -> (A.Var projected :: values, before, gen)
-            | Some (PendingSlot value) ->
-                let forced, gen = freshVar gen in
-                ( A.Var forced :: values,
-                  before
-                  @ [ (forced, A.Call (value.force, [ A.Var projected ])) ],
-                  gen )
-            | Some (PendingStorage (value, fields)) ->
-                let forced, gen = freshVar gen in
-                let atom, added, gen =
-                  materializeStorage fields (A.Var forced) gen
+            let* mapper, gen =
+              mapper inputType element
+                (fun atom gen -> materializeSlot slot atom gen)
+                gen
+            in
+            let closure, gen = freshVar gen in
+            let result, gen = freshVar gen in
+            Ok
+              ( A.Var result,
+                [
+                  (closure, A.ClosureAlloc (mapper.id, []));
+                  (result, A.Call (mapHelper, [ atom; A.Var closure ]));
+                ],
+                gen )
+      | ListStorage _, _ ->
+          Crash.crash "Async list demand has an inconsistent element layout"
+      | (TupleStorage | RecordStorage _), _ ->
+          let* values, before, gen =
+            List.fold_left
+              (fun result (index, slot) ->
+                let* values, before, gen = result in
+                let projected, gen = freshVar gen in
+                let projection =
+                  match storage.kind with
+                  | TupleStorage -> A.TupleGet (atom, index)
+                  | RecordStorage descriptor ->
+                      A.RecordGet
+                        (storageDescriptor storage descriptor, atom, index)
+                  | ListStorage _ ->
+                      Crash.crash
+                        "Async list demand entered fixed-block lowering"
                 in
-                ( atom :: values,
-                  before
-                  @ [ (forced, A.Call (value.force, [ A.Var projected ])) ]
-                  @ added,
-                  gen )
-            | Some (NestedStorage fields) ->
-                let value, added, gen =
-                  materializeStorage fields (A.Var projected) gen
+                let* value, added, gen =
+                  materializeSlot slot (A.Var projected) gen
                 in
-                (value :: values, before @ added, gen))
-          ([], [], gen)
-          (List.mapi (fun i value -> (i, value)) fields.fields)
-      in
-      let result, gen = freshVar gen in
-      let allocation =
-        match fields.kind with
-        | TupleStorage -> A.TupleAlloc (List.rev values)
-        | RecordStorage descriptor -> A.RecordAlloc (descriptor, List.rev values)
-      in
-      (A.Var result, before @ [ (result, allocation) ], gen)
+                Ok
+                  ( value :: values,
+                    before @ [ (projected, projection) ] @ added,
+                    gen ))
+              (Ok ([], [], gen))
+              (List.mapi (fun i value -> (i, value)) storage.fields)
+          in
+          let id, gen = freshVar gen in
+          let allocation =
+            match storage.kind with
+            | TupleStorage -> A.TupleAlloc (List.rev values)
+            | RecordStorage descriptor ->
+                A.RecordAlloc (descriptor, List.rev values)
+            | ListStorage _ ->
+                Crash.crash "Async list demand entered fixed-block allocation"
+          in
+          Ok (A.Var id, before @ [ (id, allocation) ], gen)
     in
     let forceUses env stores operation gen =
-      let substitutions, before, gen =
+      let* substitutions, before, gen =
         T.fold
-          (fun id (substitutions, before, gen) ->
-            let atom, added, gen =
+          (fun id result ->
+            let* substitutions, before, gen = result in
+            let* atom, added, gen =
               match M.find_opt id stores with
               | Some storage ->
                   let atom, outer, gen = forceAtom env (A.Var id) gen in
-                  let atom, inner, gen = materializeStorage storage atom gen in
-                  (atom, outer @ inner, gen)
-              | None -> forceAtom env (A.Var id) gen
+                  let* atom, inner, gen = materializeStorage storage atom gen in
+                  Ok (atom, outer @ inner, gen)
+              | None -> Ok (forceAtom env (A.Var id) gen)
             in
             match atom with
             | A.Var forced when forced <> id ->
-                (M.add id forced substitutions, before @ added, gen)
-            | _ -> (substitutions, before, gen))
+                Ok (M.add id forced substitutions, before @ added, gen)
+            | _ -> Ok (substitutions, before, gen))
           (ANFEffects.cexprTempUses operation)
-          (M.empty, [], gen)
+          (Ok (M.empty, [], gen))
       in
-      (InliningCommon.renameCExpr substitutions operation, before, gen)
+      Ok (InliningCommon.renameCExpr substitutions operation, before, gen)
     in
     let rec joinTypes types = function
       | A.Return _ | A.Jump _ -> types
@@ -917,13 +1112,13 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
           if changedCallable fn atom then
             unsupported fn.A.name "an escaping callable result"
           else if nativeReturn then
-            let atom, before, gen =
+            let* atom, before, gen =
               match lookup stores atom with
               | Some storage ->
                   let atom, outer, gen = forceAtom env atom gen in
-                  let atom, inner, gen = materializeStorage storage atom gen in
-                  (atom, outer @ inner, gen)
-              | None -> forceAtom env atom gen
+                  let* atom, inner, gen = materializeStorage storage atom gen in
+                  Ok (atom, outer @ inner, gen)
+              | None -> Ok (forceAtom env atom gen)
             in
             Ok (wraps before (A.Return atom), gen)
           else
@@ -978,6 +1173,28 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
           Ok (A.Join (parameter, continuation, entry), gen)
       | A.Let (id, operation, rest) ->
           let* () =
+            let hasList =
+              T.exists
+                (fun id ->
+                  match M.find_opt id stores with
+                  | Some { kind = ListStorage _; _ } -> true
+                  | _ -> false)
+                (ANFEffects.cexprTempUses operation)
+            in
+            let supported =
+              match operation with
+              | A.Atom _ | A.TypedAtom _ | A.Call _ | A.BorrowedCall _
+              | A.TailCall _ | A.ClosureAlloc _ | A.ClosureCall _
+              | A.TupleAlloc _ | A.RecordAlloc _ | A.RecordClone _
+              | A.RawSlotInit _ ->
+                  true
+              | _ -> false
+            in
+            if hasList && not supported then
+              unsupported fn.A.name "this list inspection"
+            else Ok ()
+          in
+          let* () =
             let storageEscape =
               match operation with
               | A.Call (callee, args)
@@ -1012,6 +1229,7 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
                   match (lookup stores atom, typ) with
                   | Some { kind = TupleStorage; _ }, AST.TTuple _ -> false
                   | Some { kind = RecordStorage _; _ }, AST.TRecord _ -> false
+                  | Some { kind = ListStorage _; _ }, AST.TList _ -> false
                   | _ -> true)
               | _ -> false
             in
@@ -1034,6 +1252,19 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
                     storedResult (summary summaries callee).result
                       (originalResult callee)
                 | _ -> Ok (storageFacts env stores operation))
+            | A.TypedAtom (_, (AST.TList _ as typ)) -> (
+                match AsyncListStorage.root (listPlan fn) (A.Var id) with
+                | Some (component, AST.TList element) -> (
+                    match
+                      listMode element (rawListMode summaries fn component)
+                    with
+                    | Stored storage ->
+                        Result.map Option.some
+                          (AsyncTransport.instantiateStorage info storage typ)
+                    | Concrete -> Ok None
+                    | _ ->
+                        Crash.crash "Async literal list has outer pendingness")
+                | _ -> Ok (storageFacts env stores operation))
             | _ -> Ok (storageFacts env stores operation)
           in
           let* () =
@@ -1044,8 +1275,10 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
               | A.TailCall (_, args)
               | A.ClosureAlloc (_, args)
               | A.TupleAlloc args
-              | A.RecordAlloc (_, args) ->
+              | A.RecordAlloc (_, args)
+              | A.RecordClone (_, _, args) ->
                   List.exists (changedCallable fn) args
+              | A.RawSlotInit (_, _, value, _) -> changedCallable fn value
               | A.IfValue (_, yes, no) ->
                   changedCallable fn yes || changedCallable fn no
               | _ -> false
@@ -1056,6 +1289,54 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
           in
           let* operation, before, value, gen =
             match operation with
+            | A.Call (callee, arguments)
+            | A.BorrowedCall (callee, arguments)
+            | A.TailCall (callee, arguments)
+              when Option.is_some (listScalarCall stores callee arguments) ->
+                let base, list, rest, storage =
+                  match listScalarCall stores callee arguments with
+                  | Some value -> value
+                  | None ->
+                      Crash.crash "Async list inspection lost its source plan"
+                in
+                let element =
+                  match storage.kind with
+                  | ListStorage element -> element
+                  | _ ->
+                      Crash.crash "Async list inspection has a non-list layout"
+                in
+                let physical =
+                  AsyncTransport.physicalType (listElementMode storage) element
+                in
+                let* callee = helper base physical in
+                let list, before, gen = forceAtom env list gen in
+                Ok (A.Call (callee, list :: rest), before, None, gen)
+            | A.RawSlotInit (pointer, offset, value, typ)
+              when Option.is_some
+                     (AsyncListStorage.slot (listPlan fn) pointer offset) ->
+                let component, slot =
+                  match AsyncListStorage.slot (listPlan fn) pointer offset with
+                  | Some value -> value
+                  | None -> Crash.crash "Async list write lost its source plan"
+                in
+                let mode = rawListMode summaries fn component in
+                let expected =
+                  match slot with
+                  | AsyncListStorage.Element _ -> mode
+                  | AsyncListStorage.Link (AST.TList element) ->
+                      listMode element mode
+                  | AsyncListStorage.Link _ ->
+                      Crash.crash "Async list link has a non-list source type"
+                in
+                let* value, before, gen =
+                  prepareValue expected typ value (modeOf env stores value) gen
+                in
+                let typ = AsyncTransport.physicalType expected typ in
+                Ok
+                  ( A.RawSlotInit (pointer, offset, value, typ),
+                    before,
+                    None,
+                    gen )
             | A.Call (callee, arguments) when producer callee ->
                 let* value = info (originalResult callee) in
                 let* operation, before, gen =
@@ -1234,23 +1515,26 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
                     let atom, before, gen = forceAtom env atom gen in
                     Ok (A.TupleGet (atom, index), before, None, gen)
                 | None, None ->
-                    let operation, before, gen =
+                    let* operation, before, gen =
                       forceUses env stores operation gen
                     in
                     Ok (operation, before, None, gen))
             | A.Atom atom -> Ok (operation, [], lookup env atom, gen)
-            | A.TypedAtom (atom, typ) when Option.is_some (lookup stores atom)
-              ->
-                let typ =
-                  AsyncTransport.physicalType (modeOf env stores atom) typ
+            | A.TypedAtom (atom, typ) when Option.is_some storedValue ->
+                let mode =
+                  match (modeOf env stores atom, storedValue) with
+                  | Concrete, Some storage ->
+                      Stored (AsyncTransport.mapStorage (fun _ -> ()) storage)
+                  | mode, _ -> mode
                 in
+                let typ = AsyncTransport.physicalType mode typ in
                 Ok (A.TypedAtom (atom, typ), [], lookup env atom, gen)
             | A.TypedAtom (atom, typ) -> (
                 match lookup env atom with
                 | Some value when typ = value.payload ->
                     Ok (A.TypedAtom (atom, carrier typ), [], Some value, gen)
                 | _ ->
-                    let operation, before, gen =
+                    let* operation, before, gen =
                       forceUses env stores operation gen
                     in
                     Ok (operation, before, None, gen))
@@ -1370,7 +1654,7 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
                         Ok ()
                     | _ -> unsupported fn.A.name "this call or storage boundary"
                   in
-                  let operation, before, gen =
+                  let* operation, before, gen =
                     forceUses env stores operation gen
                   in
                   Ok (operation, before, None, gen)

@@ -102,9 +102,14 @@ fields recursively and rebuild nominal records using their source descriptors.
 `AsyncTransport` merges these layouts across direct signatures, typed joins and
 closure captures, promoting concrete fields to ready carriers where call sites
 require a common layout. Concrete calls to synchronous functions keep their
-original representations. Collection and variant storage, untyped value
-selections, and escaping callables whose argument or result interface changes
-still produce compilation diagnostics. Outer pendingness also carries the inferred field layout. A generated mapper
+original representations. Literal lists retain their skew-tree representation with typed element slots
+widened consistently across each connected allocation component. List aliases,
+ordinary calls and captures carry the element layout; length and emptiness use
+library specializations for the physical element type without demanding elements.
+Native result adapters map typed demands over the list. Unmigrated list operations
+and patterns, dictionary and variant storage, untyped value selections, and
+escaping callables whose argument or result interface changes still produce
+compilation diagnostics. Outer pendingness also carries the inferred field layout. A generated mapper
 promotes only concrete fields, and `__mapValueCurrent` applies it to an outer
 payload when demanded. This reconciles wholly pending containers and concrete
 containers with pending fields without waiting at calls, captures or returns.
@@ -277,3 +282,8 @@ a preamble and later use of its source functions.
 
 `async_mixed_storage.e2e` checks mixed outer and field pendingness across calls,
 nested fields and captures, abandonment, managed payloads, and native results.
+
+`async_list.e2e` checks pending elements in leaves, trees and connected digits,
+spine-only length and emptiness, native float results, abandonment, ordinary
+calls, captures, nested lists and mixed record elements. It also reconciles a
+wholly pending list with a list containing independently pending elements.
