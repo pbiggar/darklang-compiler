@@ -1,0 +1,13 @@
+// async_calls.e2e - Ordinary calls propagate pending arguments and returns.
+
+let sourcePass (value: Int64) : Int64 = value
+let sourcePassAgain (value: Int64) : Int64 = sourcePass value
+let sourceInspect (value: Int64) : Int64 = value + 1L
+let sourceRecursivePass (depth: Int64) (value: Int64) : Int64 =
+  if depth == 0L then value else sourceRecursivePass (depth - 1L) value
+
+Stdlib.__Task.__runMain (fun _unit -> let gate = Stdlib.__Async.__new<Int64> () in let value = Stdlib.__Task.__transport (Stdlib.__Async.__pending gate) in let passed = sourcePass value in let _ = Stdlib.__Task.__resolve (__fiber_current ()) gate 42L in passed + 1L) = 43L // neither passing nor returning demands; leak_check
+Stdlib.__Task.__runMain (fun _unit -> let gate = Stdlib.__Async.__new<Int64> () in let value = Stdlib.__Task.__transport (Stdlib.__Async.__pending gate) in let first = sourcePass 1L in let second = sourcePass value in let _ = Stdlib.__Task.__resolve (__fiber_current ()) gate 42L in first + second) = 43L // concrete and pending calls share a coherent signature; leak_check
+Stdlib.__Task.__runMain (fun _unit -> let gate = Stdlib.__Async.__new<Int64> () in let value = Stdlib.__Task.__transport (Stdlib.__Async.__pending gate) in let passed = sourcePassAgain value in let _ = Stdlib.__Task.__resolve (__fiber_current ()) gate 42L in passed + 1L) = 43L // propagation crosses multiple ordinary calls; leak_check
+Stdlib.__Task.__runMain (fun _unit -> sourceInspect (Stdlib.__Task.__delayTransparent 0L 41L)) = 42L // the callee suspends only when inspecting; leak_check
+Stdlib.__Task.__runMain (fun _unit -> let gate = Stdlib.__Async.__new<Int64> () in let value = Stdlib.__Task.__transport (Stdlib.__Async.__pending gate) in let passed = sourceRecursivePass 32L value in let _ = Stdlib.__Task.__resolve (__fiber_current ()) gate 42L in passed + 1L) = 43L // recursive returns keep pending transport; leak_check
