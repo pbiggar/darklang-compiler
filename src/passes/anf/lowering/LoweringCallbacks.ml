@@ -4,7 +4,10 @@ type listRegionPolicy =
   | OptimizeLists of SpecializationIdentity.FunctionSet.t
 
 let listRegions ids inert =
-  if StringOrder.Map.exists (fun name _ -> AsyncSourceHooks.isProducerName name) ids
+  if
+    StringOrder.Map.exists
+      (fun name _ -> AsyncSourceHooks.isProducerName name)
+      ids
   then PreserveValues
   else OptimizeLists inert
 

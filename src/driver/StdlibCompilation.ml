@@ -122,8 +122,10 @@ let buildStdlibWithTrace target recorder =
         |> M.of_list;
       stdlibInlineCandidates = inline;
       stdlibAsyncDefinitions =
-        List.map (fun (func : ANF.functionDef) -> (func.ANF.name, func))
-          conversion.P.sourceFunctions |> M.of_list;
+        List.map
+          (fun (func : ANF.functionDef) -> (func.ANF.name, func))
+          conversion.P.sourceFunctions
+        |> M.of_list;
       stdlibAnfCallGraph = anfGraph;
       stdlibTypeMap = typeMap;
     }
@@ -319,7 +321,10 @@ let buildStdlibSpecializations (stdlib : X.stdlibResult) specs externalTypes
         AST_to_ANF.convertFunctions symbols registries (ANF.VarGen 0) functions
       in
       let* sourceAnf =
-        match LoweringCallbacks.listRegions registries.functionIds registries.inertFunctionScopes with
+        match
+          LoweringCallbacks.listRegions registries.AST_to_ANF.functionIds
+            registries.AST_to_ANF.inertFunctionScopes
+        with
         | LoweringCallbacks.PreserveValues -> Ok anf
         | LoweringCallbacks.OptimizeLists _ ->
             let* source =
@@ -421,7 +426,8 @@ let buildStdlibSpecializations (stdlib : X.stdlibResult) specs externalTypes
           stdlibAnfOptimizationCandidates = candidates;
           stdlibAsyncDefinitions =
             List.fold_left
-              (fun values (func : ANF.functionDef) -> M.add func.ANF.name func values)
+              (fun values (func : ANF.functionDef) ->
+                M.add func.ANF.name func values)
               stdlib.X.stdlibAsyncDefinitions sourceAnf;
           stdlibInlineCandidates = inline;
           stdlibAnfCallGraph = anfGraph;

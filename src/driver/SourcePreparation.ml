@@ -622,13 +622,17 @@ let convertTypedDeclarationsWithTrace recorder baseContext mode typedProgram =
   let* sourceFunctions =
     (* A synchronous declaration can acquire pending parameters from a later
        caller. Keep its value-level form as well as its optimized native body. *)
-    match LoweringCallbacks.listRegions registries.functionIds registries.inertFunctionScopes with
+    match
+      LoweringCallbacks.listRegions registries.AST_to_ANF.functionIds
+        registries.AST_to_ANF.inertFunctionScopes
+    with
     | LoweringCallbacks.PreserveValues -> Ok converted.AST_to_ANF.functions
     | LoweringCallbacks.OptimizeLists _ ->
         let* source =
           AST_to_ANF.convertFunctionsWithOwnershipWithTrace
             ~listRegions:LoweringCallbacks.PreserveValues (Some ownershipTiming)
-            (C.programSymbols liftedProgram) registries (ANF.VarGen 0) resolvedFunctions
+            (C.programSymbols liftedProgram)
+            registries (ANF.VarGen 0) resolvedFunctions
         in
         Ok source.AST_to_ANF.functions
   in

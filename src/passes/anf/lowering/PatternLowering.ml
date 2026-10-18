@@ -316,8 +316,8 @@ let lowerMatch (toANFCore : LoweringCallbacks.expressionLowerer)
          (R.typeEnvFromVarEnv env) registry variants functions names modules)
   in
   let* scrutineeExpr, scrutineeAtom, gen =
-    toANFBoundAtomCore sums typeNames regions scrutinee gen env registry variants
-      functions names modules
+    toANFBoundAtomCore sums typeNames regions scrutinee gen env registry
+      variants functions names modules
   in
   let hasNonEmptyListPattern =
     List.exists

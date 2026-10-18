@@ -107,8 +107,11 @@ let toANFWithMetadata types expr gen env registry variants functions modules =
   LoweringExpressions.toANFCore
     (R.functionIdsFromNames names)
     (P.sumMetadataFromVariantLookup variants)
-    types (LoweringCallbacks.listRegions (R.functionIdsFromNames names) (emptyScopes ())) expr gen env registry variants functions names
-    modules
+    types
+    (LoweringCallbacks.listRegions
+       (R.functionIdsFromNames names)
+       (emptyScopes ()))
+    expr gen env registry variants functions names modules
 
 let toANF expr gen env registry variants functions modules =
   toANFWithMetadata R.emptyTypeNames expr gen env registry variants functions
@@ -204,7 +207,10 @@ let convertFunction symbols func gen registry variants functions modules =
   let names = FunctionIdMap.map (fun _ (name, _) -> name) functions in
   convertFunctionWithSumTypeNames None symbols
     (P.sumMetadataFromVariantLookup variants)
-    (LoweringCallbacks.listRegions (R.functionIdsFromNames names) (emptyScopes ())) func gen registry variants functions
+    (LoweringCallbacks.listRegions
+       (R.functionIdsFromNames names)
+       (emptyScopes ()))
+    func gen registry variants functions
     (R.functionIdsFromNames names)
     names modules
 
@@ -570,7 +576,9 @@ let convertFunctionsWithOwnershipWithTrace ?listRegions recorder symbols
   let regions =
     match listRegions with
     | Some regions -> regions
-    | None -> LoweringCallbacks.listRegions registries.functionIds registries.inertFunctionScopes
+    | None ->
+        LoweringCallbacks.listRegions registries.functionIds
+          registries.inertFunctionScopes
   in
   let rec loop (conversionRegistries : registries) funcs gen acc =
     match funcs with
@@ -578,10 +586,10 @@ let convertFunctionsWithOwnershipWithTrace ?listRegions recorder symbols
     | (func : C.functionDef) :: rest ->
         let* func, gen =
           convertFunctionWithSumTypeNames recorder symbols
-            registries.sumMetadata regions func gen
-            registries.typeReg registries.variantLookup
-            conversionRegistries.funcReg conversionRegistries.functionIds
-            conversionRegistries.functionNames registries.moduleRegistry
+            registries.sumMetadata regions func gen registries.typeReg
+            registries.variantLookup conversionRegistries.funcReg
+            conversionRegistries.functionIds conversionRegistries.functionNames
+            registries.moduleRegistry
           |> Result.map_error (fun error ->
               "Function '" ^ func.C.name ^ "': " ^ error)
         in
@@ -669,8 +677,9 @@ let convertFunctions symbols registries gen functions =
 *)
 let convertExprToAnf (regs : registries) gen expr =
   LoweringExpressions.toANFCore regs.functionIds regs.sumMetadata regs.typeNames
-    (LoweringCallbacks.listRegions regs.functionIds regs.inertFunctionScopes) expr gen R.BindingMap.empty regs.typeReg
-    regs.variantLookup regs.funcReg regs.functionNames regs.moduleRegistry
+    (LoweringCallbacks.listRegions regs.functionIds regs.inertFunctionScopes)
+    expr gen R.BindingMap.empty regs.typeReg regs.variantLookup regs.funcReg
+    regs.functionNames regs.moduleRegistry
 
 (*
    Synthesize an entrypoint function from a main expression

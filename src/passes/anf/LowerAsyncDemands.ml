@@ -70,7 +70,14 @@ type listFolding = {
   actualInitial : mode;
 }
 
-type listMappingKind = MapElements | FilterElements
+type listPredicate =
+  | FilterPredicate
+  | AnyPredicate
+  | AllPredicate
+  | TakeWhilePredicate
+  | DropWhilePredicate
+
+type listMappingKind = MapElements | PredicateElements of listPredicate
 
 type listMapping = {
   mappingKind : listMappingKind;
@@ -82,11 +89,18 @@ type listMapping = {
   actualElement : mode;
 }
 
-type listResult = ListScalar | ListElement | ListRemainder
+type listPrefix = TakePrefix | DropPrefix
 
-let listResult storage = function
+type listResult =
+  | ListScalar
+  | ListElement
+  | ListRemainder
+  | ListPrefix of listPrefix
+
+let listResult outer storage = function
   | ListScalar -> (None, None)
-  | ListRemainder -> (None, Some storage)
+  | ListRemainder | ListPrefix TakePrefix -> (None, Some storage)
+  | ListPrefix DropPrefix -> (outer, Some storage)
   | ListElement -> (
       match storage.fields with
       | [ None ] -> (None, None)
@@ -354,6 +368,10 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
               ("__tail", ListRemainder);
               ("reverse", ListRemainder);
               ("__reverse", ListRemainder);
+              ("dropLast", ListRemainder);
+              ("__init", ListRemainder);
+              ("take", ListPrefix TakePrefix);
+              ("drop", ListPrefix DropPrefix);
             ]
           in
           let operation =
@@ -536,7 +554,17 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
                    || specialized "Darklang.Stdlib.List.__map" name ->
                 Some MapElements
             | Some name when specialized "Darklang.Stdlib.List.filter" name ->
-                Some FilterElements
+                Some (PredicateElements FilterPredicate)
+            | Some name when specialized "Darklang.Stdlib.List.any" name ->
+                Some (PredicateElements AnyPredicate)
+            | Some name when specialized "Darklang.Stdlib.List.all" name ->
+                Some (PredicateElements AllPredicate)
+            | Some name when specialized "Darklang.Stdlib.List.takeWhile" name
+              ->
+                Some (PredicateElements TakeWhilePredicate)
+            | Some name when specialized "Darklang.Stdlib.List.dropWhile" name
+              ->
+                Some (PredicateElements DropWhilePredicate)
             | _ -> None
           in
           match (kind, callable fn callback) with
@@ -585,12 +613,13 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
     in
     let mappingResult state mapping =
       let input, result = mappingModes state mapping in
-      let element, mode =
-        match mapping.mappingKind with
-        | MapElements -> (mapping.outputType, result)
-        | FilterElements -> (mapping.inputType, input)
-      in
-      (element, listMode element mode)
+      match mapping.mappingKind with
+      | MapElements ->
+          (AST.TList mapping.outputType, listMode mapping.outputType result)
+      | PredicateElements
+          (FilterPredicate | TakeWhilePredicate | DropWhilePredicate) ->
+          (AST.TList mapping.inputType, listMode mapping.inputType input)
+      | PredicateElements (AnyPredicate | AllPredicate) -> (AST.TBool, Concrete)
     in
     let foldingCall fn env stores state = function
       | A.Call (callee, [ foldList; initial; step ])
@@ -833,7 +862,7 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
                   mergeActual mapping.callbackTarget
                     [ Concrete; mapping.actualElement ]
                 in
-                let element, result = mappingResult state mapping in
+                let resultType, result = mappingResult state mapping in
                 let* storage =
                   match result with
                   | Concrete -> Ok None
@@ -841,7 +870,7 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
                       Result.map Option.some
                         (AsyncTransport.instantiateStorage
                            (fun typ -> Ok typ)
-                           storage (AST.TList element))
+                           storage resultType)
                   | _ ->
                       Crash.crash
                         "Async list mapping inferred outer pendingness"
@@ -873,12 +902,14 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
             | A.BorrowedCall (callee, arguments)
             | A.TailCall (callee, arguments)
               when Option.is_some (listCall stores callee arguments) ->
-                let storage, result =
+                let list, storage, result =
                   match listCall stores callee arguments with
-                  | Some (_, _, _, storage, result) -> (storage, result)
+                  | Some (_, list, _, storage, result) -> (list, storage, result)
                   | None -> Crash.crash "Async list call lost its source plan"
                 in
-                let value, stored = listResult storage result in
+                let value, stored =
+                  listResult (lookup env list) storage result
+                in
                 Ok (state, value, stored)
             | A.Call (callee, _) when producer callee ->
                 Ok (state, Some (originalResult callee), None)
@@ -1389,6 +1420,108 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
                 generatedFunctions = definition :: gen.generatedFunctions;
               } )
     in
+    let prefixBridge prefix physicalElement gen =
+      let physicalList = AST.TList physicalElement in
+      let inputType = carrier physicalList in
+      let operation =
+        match prefix with TakePrefix -> "take" | DropPrefix -> "drop"
+      in
+      let bridgeName = "__dark_async_" ^ operation in
+      let key = SpecializationIdentity.specName bridgeName [ inputType ] in
+      match Names.find_opt key gen.mappers with
+      | Some bridge -> Ok (bridge, gen)
+      | None ->
+          let* force =
+            helper "Darklang.Stdlib.__Task.__forceCurrent" physicalList
+          in
+          let* transform =
+            helper ("Darklang.Stdlib.List." ^ operation) physicalElement
+          in
+          let* zero = helperTypes "Darklang.Stdlib.Int.__zero" [] in
+          let* nonpositive =
+            helperTypes "Darklang.Stdlib.Int.__lessThanOrEqualTo" []
+          in
+          let bridge =
+            {
+              id = AST.functionId gen.cursor;
+              name = bridgeName ^ "_" ^ Int64.to_string gen.cursor;
+            }
+          in
+          let gen =
+            {
+              gen with
+              cursor = Int64.succ gen.cursor;
+              mappers = Names.add key bridge gen.mappers;
+            }
+          in
+          let values, gen = freshVar gen in
+          let count, gen = freshVar gen in
+          let zeroValue, gen = freshVar gen in
+          let condition, gen = freshVar gen in
+          (* A nonpositive count does not inspect the input spine. Keep the force
+             inside the positive branch rather than at the ordinary call boundary. *)
+          let* unchanged, gen =
+            match prefix with
+            | DropPrefix -> Ok (A.Return (A.Var values), gen)
+            | TakePrefix ->
+                let* empty =
+                  helper "Darklang.Stdlib.List.__empty" physicalElement
+                in
+                let emptyValue, gen = freshVar gen in
+                Ok
+                  ( wraps
+                      [ (emptyValue, A.Call (empty, [])) ]
+                      (A.Return (A.Var emptyValue)),
+                    gen )
+          in
+          let concrete, gen = freshVar gen in
+          let transformed, gen = freshVar gen in
+          let result, after, gen =
+            match prefix with
+            | TakePrefix -> (A.Var transformed, [], gen)
+            | DropPrefix -> ready physicalList (A.Var transformed) gen
+          in
+          let positive =
+            wraps
+              ([
+                 (concrete, A.Call (force, [ A.Var values ]));
+                 ( transformed,
+                   A.Call (transform, [ A.Var concrete; A.Var count ]) );
+               ]
+              @ after)
+              (A.Return result)
+          in
+          let definition =
+            {
+              A.id = bridge.id;
+              name = bridge.name;
+              typedParams =
+                [
+                  { A.id = values; typ = inputType };
+                  { A.id = count; typ = AST.TInt };
+                ];
+              returnType =
+                (match prefix with
+                | TakePrefix -> physicalList
+                | DropPrefix -> inputType);
+              returnOwnership = A.OwnedReturn;
+              body =
+                wraps
+                  [
+                    (zeroValue, A.Call (zero, []));
+                    ( condition,
+                      A.Call (nonpositive, [ A.Var count; A.Var zeroValue ]) );
+                  ]
+                  (A.If (A.Var condition, unchanged, positive));
+            }
+          in
+          Ok
+            ( bridge,
+              {
+                gen with
+                generatedFunctions = definition :: gen.generatedFunctions;
+              } )
+    in
     let predicateAdapter inputType gen =
       let key =
         SpecializationIdentity.specName "__dark_async_predicate" [ inputType ]
@@ -1738,8 +1871,8 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
                   | None ->
                       Crash.crash "Async list mapping lost its source plan"
                 in
-                let element, result = mappingResult summaries mapping in
-                storedResult result (AST.TList element)
+                let resultType, result = mappingResult summaries mapping in
+                storedResult result resultType
             | _ when Option.is_some builder ->
                 let element, storage =
                   match builder with
@@ -1754,12 +1887,12 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
             | A.BorrowedCall (callee, args)
             | A.TailCall (callee, args)
               when Option.is_some (listCall stores callee args) ->
-                let storage, result =
+                let list, storage, result =
                   match listCall stores callee args with
-                  | Some (_, _, _, storage, result) -> (storage, result)
+                  | Some (_, list, _, storage, result) -> (list, storage, result)
                   | None -> Crash.crash "Async list call lost its source plan"
                 in
-                Ok (snd (listResult storage result))
+                Ok (snd (listResult (lookup env list) storage result))
             | A.Call (callee, args)
             | A.BorrowedCall (callee, args)
             | A.TailCall (callee, args)
@@ -1898,9 +2031,17 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
                           [ inputType; outputType ]
                       in
                       Ok (callee, mapping.callback, [], gen)
-                  | FilterElements -> (
+                  | PredicateElements predicate -> (
+                      let operation =
+                        match predicate with
+                        | FilterPredicate -> "filter"
+                        | AnyPredicate -> "any"
+                        | AllPredicate -> "all"
+                        | TakeWhilePredicate -> "takeWhile"
+                        | DropWhilePredicate -> "dropWhile"
+                      in
                       let* callee =
-                        helper "Darklang.Stdlib.List.filter" inputType
+                        helper ("Darklang.Stdlib.List." ^ operation) inputType
                       in
                       match resultMode with
                       | Concrete -> Ok (callee, mapping.callback, [], gen)
@@ -2038,7 +2179,7 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
             | A.Call (callee, arguments)
             | A.BorrowedCall (callee, arguments)
             | A.TailCall (callee, arguments)
-              when Option.is_some (listCall stores callee arguments) ->
+              when Option.is_some (listCall stores callee arguments) -> (
                 let base, list, rest, storage, result =
                   match listCall stores callee arguments with
                   | Some value -> value
@@ -2055,9 +2196,26 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
                   AsyncTransport.physicalType (listElementMode storage) element
                 in
                 let* callee = helper base physical in
-                let list, before, gen = forceAtom env list gen in
-                let value, _ = listResult storage result in
-                Ok (A.Call (callee, list :: rest), before, value, gen)
+                let value, _ = listResult (lookup env list) storage result in
+                match (result, rest) with
+                | ListPrefix prefix, [ count ] -> (
+                    let count, before, gen = forceAtom env count gen in
+                    match lookup env list with
+                    | None ->
+                        Ok (A.Call (callee, [ list; count ]), before, value, gen)
+                    | Some _ ->
+                        let* bridge, gen = prefixBridge prefix physical gen in
+                        Ok
+                          ( A.Call (bridge.id, [ list; count ]),
+                            before,
+                            value,
+                            gen ))
+                | ListPrefix _, _ ->
+                    Crash.crash
+                      "Async list prefix has an inconsistent argument count"
+                | (ListScalar | ListElement | ListRemainder), _ ->
+                    let list, before, gen = forceAtom env list gen in
+                    Ok (A.Call (callee, list :: rest), before, value, gen))
             | A.RawSlotInit (pointer, offset, value, typ)
               when Option.is_some
                      (AsyncListStorage.slot (listPlan fn) pointer offset) ->

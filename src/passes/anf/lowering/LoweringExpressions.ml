@@ -26,15 +26,16 @@ let rec toANFCore ids sums typeNames regions expr gen env registry variants
       variants functions names modules
   in
   match
-    (match regions with
+    match regions with
     (* Scalar list regions erase callback and element interfaces before async
        inference can widen them to carriers. Preserve those source values. *)
     | LoweringCallbacks.PreserveValues -> None
     | LoweringCallbacks.OptimizeLists scopes ->
-        ExtractListRegions.tryExtract scopes names (R.typeEnvFromVarEnv env) infer
+        ExtractListRegions.tryExtract scopes names (R.typeEnvFromVarEnv env)
+          infer
           (fun value ->
             ClosureAnalysis.freeVars value ClosureAnalysis.BindingSet.empty)
-          expr)
+          expr
   with
   | Some region ->
       let lower value gen env =
@@ -46,8 +47,8 @@ let rec toANFCore ids sums typeNames regions expr gen env registry variants
         (ElaborateListOwnership.elaborateOwnership
            (SelectListStorage.selectStorage region))
   | None ->
-      toANFUnplannedCore ids sums typeNames regions expr gen env registry variants
-        functions names modules
+      toANFUnplannedCore ids sums typeNames regions expr gen env registry
+        variants functions names modules
 
 and toANFUnplannedCore ids sums typeNames regions expr gen env registry variants
     functions names modules =
@@ -55,8 +56,8 @@ and toANFUnplannedCore ids sums typeNames regions expr gen env registry variants
     (toANFBoundAtomCore ids) ids sums typeNames regions expr gen env registry
     variants functions names modules
 
-and toAtomCore ids sums typeNames regions expr gen env registry variants functions
-    names modules =
+and toAtomCore ids sums typeNames regions expr gen env registry variants
+    functions names modules =
   AtomLowering.lowerAtom (toANFCore ids) (toAtomCore ids)
     (toANFBoundAtomCore ids) ids sums typeNames regions expr gen env registry
     variants functions names modules
@@ -71,8 +72,8 @@ and toAtomCore ids sums typeNames regions expr gen env registry variants functio
 and toANFBoundAtomCore ids sums typeNames regions expr gen env registry variants
     functions names modules =
   match
-    toAtomCore ids sums typeNames regions expr gen env registry variants functions
-      names modules
+    toAtomCore ids sums typeNames regions expr gen env registry variants
+      functions names modules
   with
   | Ok (atom, bindings, gen) ->
       Ok (K.wrapBindings bindings (A.Return atom), atom, gen)
@@ -99,8 +100,8 @@ and toANFBoundAtomCore ids sums typeNames regions expr gen env registry variants
           if K.isSupportedJoinArgumentType resultType then
             let bound, gen = A.freshVar gen in
             let* expr, gen =
-              toANFCore ids sums typeNames regions expr gen env registry variants
-                functions names modules
+              toANFCore ids sums typeNames regions expr gen env registry
+                variants functions names modules
             in
             let rec returnsToTypedJumps expr gen =
               match expr with

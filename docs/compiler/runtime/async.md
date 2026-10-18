@@ -108,7 +108,12 @@ widened consistently across each connected allocation component. List aliases,
 ordinary calls and captures carry the element layout; length and emptiness use
 library specializations for the physical element type without demanding elements.
 Head selection preserves the element layout without demanding the selected value;
-tail and reversal preserve that layout while changing only the spine. Singleton,
+tail, reversal and dropLast preserve that layout while changing only the spine.
+Take and drop use physical element specializations without inspecting retained
+or removed elements. Counts use the ordinary arbitrary precision Int helpers.
+For an outer pending spine, a typed bridge tests the count before demanding the
+spine: nonpositive take returns an empty list, while nonpositive drop returns the
+original carrier. A positive count demands only the outer spine. Singleton,
 push, pushBack and append merge element layouts and promote concrete inputs
 without demanding pending elements. Builders inspect outer spines when their
 operation needs them. Append uses a typed bridge when its suffix has outer
@@ -117,14 +122,17 @@ prefix, and demands the suffix spine only for a nonempty prefix. List.map can
 coordinate a known local callback with the input element layout and the callback
 result layout. It invokes callbacks eagerly; callback bodies demand only the
 values they inspect, and pending callback results remain stored in the mapped
-list. Known filter predicates use the same input interface; when a predicate
-returns a pending Boolean, a typed adapter demands that Boolean before the
-library chooses whether to retain the element. Unused input fields remain
-unresolved. Known fold steps share one physical accumulator interface with the
-initial value and every step result. Steps execute eagerly, but unused elements
-and intermediate pending accumulators are not demanded. Empty folds return the
-initial accumulator unchanged. Opaque callback interfaces still require diagnostics when their ABI would
-change. Native
+list. Known filter, any, all, takeWhile and dropWhile predicates use the same
+input interface; when a predicate returns a pending Boolean, a typed adapter
+demands that Boolean before the library chooses whether to retain the element
+or continue traversal. Unused input fields remain unresolved. Any and all
+preserve left-to-right short circuiting; takeWhile and dropWhile stop at their
+first false decision. Empty lists never invoke the predicate. Already-started
+producers retain their normal runtime ownership. Known fold steps share one
+physical accumulator interface with the initial value and every step result.
+Steps execute eagerly, but unused elements and intermediate pending accumulators
+are not demanded. Empty folds return the initial accumulator unchanged. Opaque
+callback interfaces still require diagnostics when their ABI would change. Native
 result adapters map typed demands over the list. List pattern bindings preserve
 element layouts; length and empty checks inspect only the spine, while literal
 comparisons and guards demand the values they inspect. Unmigrated list operations,
@@ -325,6 +333,12 @@ that inner spine.
 `async_list_append.e2e` checks conditional suffix demands with ready and pending
 prefixes, abandonment, and native managed results.
 
+`async_list_spines.e2e` checks take and dropLast with pending elements, managed
+suffixes, floats, nested fields, mixed outer readiness, pending counts and
+arbitrary precision counts. `async_list_drop.e2e` checks the corresponding drop
+boundaries, including returning an unresolved outer carrier for nonpositive
+counts and demanding its spine only for positive counts.
+
 `async_list_map.e2e` checks known callbacks that ignore or inspect pending inputs,
 return pending values or records with pending fields, share ready and pending
 call sites, initiate producers eagerly, and retain mixed outer and field layouts.
@@ -332,6 +346,16 @@ call sites, initiate producers eagerly, and retain mixed outer and field layouts
 `async_list_filter.e2e` covers ignored and inspected inputs, pending and delayed
 Boolean results, shared predicate layouts, tuple field projection, and managed
 elements retained or rejected without premature demands.
+
+`async_list_predicates.e2e` checks any and all with ignored or inspected inputs,
+pending and delayed Boolean decisions, empty lists, shared predicate layouts,
+mixed outer readiness and short-circuiting. Callback side effects verify that
+later predicates are not invoked after a decisive result.
+
+`async_list_while.e2e` checks takeWhile and dropWhile with independently pending
+elements, nested fields, pending Boolean decisions, shared callback interfaces
+and outer pending lists. It also verifies empty inputs, suffix preservation and
+stopping before later predicate effects or unresolved element inspections.
 
 `async_list_fold.e2e` covers ignored pending elements and initial accumulators,
 pending step results, independent float demands, record fields, empty folds,
