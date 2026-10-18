@@ -12,8 +12,17 @@ let hoMap (values: List<Int64>) (callback: Int64 -> Int64) : List<Int64> =
       Stdlib.List.push (hoMap tail callback) mapped
 let hoBoth (first: Int64 -> Int64) (second: Int64 -> Int64) (value: Int64) : Int64 = second (first value)
 let hoString (callback: Unit -> String) : String = callback ()
+let hoFold (values: List<Int64>) (initial: Int64) (step: Int64 -> Int64 -> Int64) : Int64 =
+  match values with
+  | [] -> initial
+  | head :: tail ->
+      let next = step initial head in
+      hoFold tail next step
 
 Stdlib.__Task.__runMain (fun _unit -> hoApply (fun value -> Stdlib.__Task.__delayTransparent 0L value) 42L) = 42L // producers inside a callback return pending values through an ordinary helper; leak_check
+Stdlib.__Task.__runMain (fun _unit -> let gate = Stdlib.__Async.__new<Int64> () in let value = Stdlib.__Task.__transport (Stdlib.__Async.__pending gate) in hoFold [value, 2L] 0L (fun count ignored -> count + 1L)) = 2L // callbacks with multiple arguments demand only the arguments they inspect; leak_check
+Stdlib.__Task.__runMain (fun _unit -> let gate = Stdlib.__Async.__new<Int64> () in let initial = Stdlib.__Task.__transport (Stdlib.__Async.__pending gate) in hoFold [1L, 2L] initial (fun ignored item -> item)) = 2L // a user-defined fold may replace a pending accumulator without demanding it; leak_check
+Stdlib.__Task.__runMain (fun _unit -> let gate = Stdlib.__Async.__new<Int64> () in let value = Stdlib.__Task.__transport (Stdlib.__Async.__pending gate) in hoMap [] (fun ignored -> value)) = [] // an empty higher-order traversal never demands its callback result; leak_check
 
 Stdlib.__Task.__runMain (fun _unit -> let gate = Stdlib.__Async.__new<Int64> () in let value = Stdlib.__Task.__transport (Stdlib.__Async.__pending gate) in hoApply (fun ignored -> 42L) value) = 42L // an ordinary higher-order helper does not demand an ignored argument; leak_check
 Stdlib.__Task.__runMain (fun _unit -> let gate = Stdlib.__Async.__new<Int64> () in let value = Stdlib.__Task.__transport (Stdlib.__Async.__pending gate) in let result = hoApply (fun ignored -> value) 1L in let _ = Stdlib.__Task.__resolve (__fiber_current ()) gate 42L in result) = 42L // captured pending results cross ordinary higher-order helpers without waiting; leak_check

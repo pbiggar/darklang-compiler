@@ -364,8 +364,9 @@ mixed outer readiness and short-circuiting. Callback side effects verify that
 later predicates are not invoked after a decisive result.
 
 `async_higher_order.e2e` checks ordinary application helpers, recursion, a
-user-defined map, multiple callbacks, pending producers and results, managed and
-nested captures, eager callback invocation, shared concrete/pending calls, and
+user-defined map and fold, multiple callbacks and callback arguments, pending
+producers and results, managed and nested captures, eager callback invocation,
+shared concrete/pending calls, and
 operation with optional inlining disabled.
 
 `async_list_while.e2e` checks takeWhile and dropWhile with independently pending
