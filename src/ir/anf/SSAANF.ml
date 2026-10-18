@@ -307,7 +307,7 @@ let convertFunction maxSource typeMap (func : A.functionDef) =
    Type recovery is tied to each definition site, rather than the final
    program-wide TempId map produced by RC insertion.
 *)
-let convertFunctionBeforeRC maxSource ctx (func : A.functionDef) =
+let prepareFunctionBeforeRC maxSource ctx (func : A.functionDef) =
   let mapping, params, state =
     parameters true func.A.typedParams (initialRenaming maxSource func)
   in
@@ -318,4 +318,8 @@ let convertFunctionBeforeRC maxSource ctx (func : A.functionDef) =
   in
   let body = R.analyzeReturns M.empty M.empty func.A.body in
   let* body, state, _ = freshenTypedDefinitions mapping state ctx types body in
-  finishFunction func params state body
+  let* ssa = finishFunction func params state body in
+  Ok ({ func with A.typedParams = List.rev params; body }, ssa)
+
+let convertFunctionBeforeRC maxSource ctx func =
+  Result.map snd (prepareFunctionBeforeRC maxSource ctx func)

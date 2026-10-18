@@ -127,6 +127,67 @@ let buildAnf ?(asyncDefinitions = StringOrder.Map.empty) ?asyncRuntime verbosity
     in
     List.rev helpers
   in
+  let* callbacks =
+    AsyncCallableSpecialization.prepare registries.AST_to_ANF.functionIds
+      nextFunctionOrdinal
+      (fun () ->
+        RcTypeFacts.createContext
+          (buildConversionResult
+             (ANF.Program (functions, main))
+             registries ownershipContracts))
+      asyncDefinitions functions
+  in
+  let functions = callbacks.AsyncCallableSpecialization.functions in
+  let asyncDefinitions =
+    callbacks.AsyncCallableSpecialization.externalDefinitions
+  in
+  let nextFunctionOrdinal =
+    callbacks.AsyncCallableSpecialization.nextFunctionOrdinal
+  in
+  let generated =
+    List.filter
+      (fun (fn : ANF.functionDef) ->
+        not
+          (FunctionIdMap.containsKey fn.ANF.id
+             registries.AST_to_ANF.functionNames))
+      functions
+  in
+  let registries =
+    if generated = [] then registries
+    else
+      {
+        registries with
+        AST_to_ANF.funcReg =
+          AST_to_ANF.extendFunctionRegistryWithConverted
+            registries.AST_to_ANF.funcReg generated;
+        functionNames =
+          List.fold_left
+            (fun names (fn : ANF.functionDef) ->
+              FunctionIdMap.add fn.ANF.id fn.ANF.name names)
+            registries.AST_to_ANF.functionNames generated;
+        functionIds =
+          List.fold_left
+            (fun ids (fn : ANF.functionDef) ->
+              StringOrder.Map.add fn.ANF.name fn.ANF.id ids)
+            registries.AST_to_ANF.functionIds generated;
+      }
+  in
+  let asyncRuntime =
+    Option.map
+      (fun runtime ->
+        let symbols =
+          List.fold_left
+            (fun symbols (fn : ANF.functionDef) ->
+              CheckedAST.registerGeneratedFunction fn.ANF.name fn.ANF.id symbols)
+            runtime.context.CompilationContexts.symbols generated
+        in
+        {
+          runtime with
+          context =
+            { runtime.context with CompilationContexts.symbols; registries };
+        })
+      asyncRuntime
+  in
   let rec lowerAsync (registries : AST_to_ANF.registries) nextFunctionOrdinal
       runtime helperNames functions =
     match

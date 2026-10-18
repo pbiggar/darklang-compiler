@@ -40,6 +40,18 @@ type specialization = {
   cloneOrigins : AST.functionId FunctionIdMap.t;
 }
 
+type purpose =
+  | Optimization
+  | AsyncInterfaces of SpecializationIdentity.FunctionSet.t
+
+let optimization = function Optimization -> true | AsyncInterfaces _ -> false
+
+let helperAllowed purpose helper =
+  match purpose with
+  | Optimization -> true
+  | AsyncInterfaces helpers ->
+      SpecializationIdentity.FunctionSet.mem helper helpers
+
 let maxPairs = 16
 let maxHelperNodes = 256
 let maxTargetNodes = 32
@@ -324,7 +336,7 @@ let closureCallArity parameter helper =
       | _ -> None)
     (operations helper)
 
-let validArgument definitions (helper : S.functionDef) argument =
+let validArgument purpose definitions (helper : S.functionDef) argument =
   match
     ( tryItem argument.index helper.S.typedParams,
       FunctionIdMap.tryFind argument.callable.target definitions )
@@ -340,10 +352,11 @@ let validArgument definitions (helper : S.functionDef) argument =
                   target
             | None -> true
           in
-          addInt
-            (S.LabelMap.cardinal target.S.blocks)
-            (List.length (operations target))
-          <= maxTargetNodes
+          ((not (optimization purpose))
+          || addInt
+               (S.LabelMap.cardinal target.S.blocks)
+               (List.length (operations target))
+             <= maxTargetNodes)
           && targetOk
           && helperUsesOnlyCalls helper argument.index parameter.A.id
           && Option.fold ~none:false
@@ -352,12 +365,16 @@ let validArgument definitions (helper : S.functionDef) argument =
       | None -> false)
   | _ -> false
 
-let knownArguments definitions known helper args =
-  match FunctionIdMap.tryFind helper definitions with
+let knownArguments purpose definitions known helper args =
+  match
+    if helperAllowed purpose helper then
+      FunctionIdMap.tryFind helper definitions
+    else None
+  with
   | None -> []
   | Some helper ->
       List.filter
-        (validArgument definitions helper)
+        (validArgument purpose definitions helper)
         (List.filter_map
            (fun (index, atom) ->
              Option.map
@@ -408,7 +425,7 @@ let knownFor sites label id =
   Option.value ~default:M.empty
     (Option.bind (S.LabelMap.find_opt label sites) (M.find_opt id))
 
-let requestsInFunction definitions returns (func : S.functionDef) =
+let requestsInFunction purpose definitions returns (func : S.functionDef) =
   let sites = knownAtOperations definitions returns func in
   S.LabelMap.bindings func.S.blocks
   |> List.concat_map (fun (label, block) ->
@@ -418,7 +435,8 @@ let requestsInFunction definitions returns (func : S.functionDef) =
           | None -> None
           | Some (helper, args) -> (
               match
-                knownArguments definitions (knownFor sites label id) helper args
+                knownArguments purpose definitions (knownFor sites label id)
+                  helper args
               with
               | [] -> None
               | arguments -> Some { helper; arguments }))
@@ -617,8 +635,8 @@ let cloneHelper definitions names request =
    Closure allocations and aliases made dead by routing are removed by the
    following SSA cleanup. Preserve the ownership-visible operation order.
 *)
-let rewriteKnownCalls definitions returns names requests (func : S.functionDef)
-    =
+let rewriteKnownCalls purpose definitions returns names requests
+    (func : S.functionDef) =
   let sites = knownAtOperations definitions returns func in
   let specialized =
     Keys.of_list
@@ -644,7 +662,7 @@ let rewriteKnownCalls definitions returns names requests (func : S.functionDef)
                       | None -> operation
                       | Some (helper, args) -> (
                           let knownArgs =
-                            knownArguments definitions known helper args
+                            knownArguments purpose definitions known helper args
                           in
                           let request = { helper; arguments = knownArgs } in
                           match Keys.find_opt (key request) specialized with
@@ -672,16 +690,18 @@ let rewriteKnownCalls definitions returns names requests (func : S.functionDef)
           func.S.blocks;
     }
   in
-  SSADirectCallSpecialization.removeUnusedRematerializedValues
-    (FunctionIdMap.map (fun _ func -> func.S.name) definitions)
-    rewritten
+  if optimization purpose then
+    SSADirectCallSpecialization.removeUnusedRematerializedValues
+      (FunctionIdMap.map (fun _ func -> func.S.name) definitions)
+      rewritten
+  else rewritten
 
 (*
    Empty request sets still run rewriteKnownCalls for rematerialization cleanup.
    The forward catalog and allocation cursor avoid rebuilding global indexes.
 *)
-let specializeProgramWithExternalFunctionsAndNames reservedIds nextOrdinal
-    externals functions =
+let specializeProgramWithExternalFunctionsAndNames ?(purpose = Optimization)
+    reservedIds nextOrdinal externals functions =
   let definitions =
     FunctionIdMap.ofList
       (List.map
@@ -690,13 +710,14 @@ let specializeProgramWithExternalFunctionsAndNames reservedIds nextOrdinal
   in
   let returns = buildReturns definitions in
   let all =
-    List.concat_map (requestsInFunction definitions returns) functions
+    List.concat_map (requestsInFunction purpose definitions returns) functions
     |> List.filter (fun request ->
         let helper = required definitions request.helper in
-        addInt
-          (S.LabelMap.cardinal helper.S.blocks)
-          (List.length (operations helper))
-        <= maxHelperNodes)
+        (not (optimization purpose))
+        || addInt
+             (S.LabelMap.cardinal helper.S.blocks)
+             (List.length (operations helper))
+           <= maxHelperNodes)
   in
   let unique =
     List.fold_left
@@ -714,7 +735,7 @@ let specializeProgramWithExternalFunctionsAndNames reservedIds nextOrdinal
         else (remaining, retained))
       (maxPairs, []) unique
   in
-  let requests = List.rev requests in
+  let requests = if optimization purpose then List.rev requests else unique in
   let targetNames =
     StringOrder.Set.of_list
       (List.filter_map
@@ -784,7 +805,9 @@ let specializeProgramWithExternalFunctionsAndNames reservedIds nextOrdinal
   let targets = List.map (cloneTarget definitions names) targetCallables in
   let helpers = List.map (cloneHelper definitions names) usable in
   let rewritten =
-    List.map (rewriteKnownCalls definitions returns names usable) functions
+    List.map
+      (rewriteKnownCalls purpose definitions returns names usable)
+      functions
   in
   let origins =
     FunctionIdMap.ofList
