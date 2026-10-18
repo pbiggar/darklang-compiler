@@ -159,26 +159,29 @@ let prepare reservedIds nextFunctionOrdinal context externalDefinitions
       | None -> false
     in
     let rec reachable pending seen =
-      if Ids.is_empty pending then seen
-      else
-        let id = Ids.min_elt pending in
-        let pending = Ids.remove id pending in
-        if Ids.mem id seen || not (eligible id) then reachable pending seen
-        else
-          let fn =
-            match F.tryFind id definitions with
-            | Some fn -> fn
-            | None -> Crash.crash "Async callback traversal lost its definition"
-          in
-          let direct =
-            ANFDeadCodeElimination.getCalledFunctions fn
-            |> Ids.filter (fun id ->
-                match F.tryFind id definitions with
-                | Some fn -> sourceHelper fn
-                | None -> false)
-          in
-          let called = Ids.union direct (callbackTargets Ids.empty fn.A.body) in
-          reachable (Ids.union pending called) (Ids.add id seen)
+      match Ids.min_elt_opt pending with
+      | None -> seen
+      | Some id ->
+          let pending = Ids.remove id pending in
+          if Ids.mem id seen || not (eligible id) then reachable pending seen
+          else
+            let fn =
+              match F.tryFind id definitions with
+              | Some fn -> fn
+              | None ->
+                  Crash.crash "Async callback traversal lost its definition"
+            in
+            let direct =
+              ANFDeadCodeElimination.getCalledFunctions fn
+              |> Ids.filter (fun id ->
+                  match F.tryFind id definitions with
+                  | Some fn -> sourceHelper fn
+                  | None -> false)
+            in
+            let called =
+              Ids.union direct (callbackTargets Ids.empty fn.A.body)
+            in
+            reachable (Ids.union pending called) (Ids.add id seen)
     in
     let selected =
       reachable

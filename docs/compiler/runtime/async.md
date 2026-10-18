@@ -99,6 +99,17 @@ structural physical type with updated field descriptors, so ownership sees each
 field's actual carrier type. Projecting one field preserves that field's carrier
 and does not inspect its siblings; explicit native result adapters materialize
 fields recursively and rebuild nominal records using their source descriptors.
+Before transport inference, `AsyncCallableSpecialization` reuses known-callback
+specialization for ordinary source helpers. Callback captures become ordinary
+arguments, exposing their pending layouts and callback results to the existing
+inference. Direct callback invocation, self recursion and multiple callbacks are
+supported without naming the source helper in an async rule. This preparation
+runs independently of optional inlining and its size budgets. It preserves the
+structured source control flow, reserves generated function identities before
+runtime specialization, and leaves programs without async producers unchanged.
+Precompiled stdlib interfaces retain their existing adapters; arbitrary callback
+forwarding and unknown callback targets remain outside this preparation.
+
 `AsyncTransport` merges these layouts across direct signatures, typed joins and
 closure captures, promoting concrete fields to ready carriers where call sites
 require a common layout. Concrete calls to synchronous functions keep their
@@ -351,6 +362,11 @@ elements retained or rejected without premature demands.
 pending and delayed Boolean decisions, empty lists, shared predicate layouts,
 mixed outer readiness and short-circuiting. Callback side effects verify that
 later predicates are not invoked after a decisive result.
+
+`async_higher_order.e2e` checks ordinary application helpers, recursion, a
+user-defined map, multiple callbacks, pending producers and results, managed and
+nested captures, eager callback invocation, shared concrete/pending calls, and
+operation with optional inlining disabled.
 
 `async_list_while.e2e` checks takeWhile and dropWhile with independently pending
 elements, nested fields, pending Boolean decisions, shared callback interfaces
