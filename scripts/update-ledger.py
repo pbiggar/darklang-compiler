@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import argparse
 from collections import Counter, defaultdict, deque
+import gzip
+import io
 import json
 from pathlib import Path
 import re
@@ -22,6 +24,7 @@ INPUTS = 'porting/ledger-inputs.yaml'
 RECEIPT = 'porting/test-results.json'
 PACKAGE_RECEIPT = 'porting/package-results.json'
 OUTPUT = 'porting/generated/ledger.json'
+ARCHIVE = OUTPUT + '.gz'
 REPORT = 'docs/porting/generated/ledger.md'
 GAPS = 'docs/porting/generated/coverage-gaps.md'
 
@@ -661,7 +664,19 @@ def main():
         parser.error('--check does not execute tests or compilation')
     try:
         value = build(ROOT, args.upstream.resolve(), args.run_tests, args.compile_packages)
-        outputs = {OUTPUT: encoded(value), REPORT: markdown(value), GAPS: coverage_gaps(value)}
+        machine = encoded(value)
+        compressed = io.BytesIO()
+        with gzip.GzipFile(fileobj=compressed, mode='wb', filename='', mtime=0) as archive:
+            archive.write(machine.encode())
+        archive_path = ROOT / ARCHIVE
+        if args.check:
+            if not archive_path.exists() or archive_path.read_bytes() != compressed.getvalue():
+                raise ValueError('Ledger is stale: ' + ARCHIVE)
+        else:
+            archive_path.parent.mkdir(parents=True, exist_ok=True)
+            archive_path.write_bytes(compressed.getvalue())
+            (ROOT / OUTPUT).write_text(machine)
+        outputs = {REPORT: markdown(value), GAPS: coverage_gaps(value)}
         for name, contents in outputs.items():
             path = ROOT / name
             if args.check:

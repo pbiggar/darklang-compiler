@@ -9,6 +9,12 @@ Start with the [generated ledger](generated/ledger.md). Detailed mappings,
 declarations, coverage witnesses, and individual test outcomes are in
 `porting/generated/ledger.json`.
 
+Git stores the machine index as `porting/generated/ledger.json.gz`, compressed
+with a fixed header and no timestamp. Regeneration expands the ordinary JSON
+locally; `--check` compares the tracked archive and readable reports. The JSON
+contains the same facts as the archive and is ignored by Git. This keeps frequent
+checkpoints small while retaining the full index.
+
 ## Regenerate
 
 Install the pinned Python dependency from `scripts/porting-requirements.txt`.

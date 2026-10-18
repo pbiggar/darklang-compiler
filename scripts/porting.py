@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import io
 import re
 import subprocess
 import sys
@@ -256,10 +257,22 @@ def git_revision(path):
 
 def checked_files(upstream, revision):
     paths = subprocess.check_output(['git', '-C', str(upstream), 'ls-tree', '-r', '--name-only', revision], text=True)
+    selected = [path for path in paths.splitlines()
+                if path.endswith(('.dark', '.fs', '.md', '.fsproj'))
+                and path.startswith(('packages/', 'backend/src/', 'backend/tests/', 'backend/testfiles/'))]
+    requests = ''.join(f'{revision}:{path}\n' for path in selected).encode()
+    contents = io.BytesIO(subprocess.check_output(
+        ['git', '-C', str(upstream), 'cat-file', '--batch'], input=requests))
     result = {}
-    for path in paths.splitlines():
-        if path.endswith(('.dark', '.fs', '.md', '.fsproj')) and path.startswith(('packages/', 'backend/src/', 'backend/tests/', 'backend/testfiles/')):
-            result[path] = subprocess.check_output(['git', '-C', str(upstream), 'show', f'{revision}:{path}'])
+    for path in selected:
+        header = contents.readline().split()
+        if len(header) != 3 or header[1] != b'blob':
+            raise ValueError('Could not read pinned source blob: ' + path)
+        size = int(header[2])
+        body = contents.read(size)
+        if len(body) != size or contents.read(1) != b'\n':
+            raise ValueError('Incomplete pinned source blob: ' + path)
+        result[path] = body
     return result
 
 
