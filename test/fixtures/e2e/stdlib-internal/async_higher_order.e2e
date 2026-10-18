@@ -1,0 +1,19 @@
+// async_higher_order.e2e - Ordinary higher-order source helpers preserve pending values.
+
+let hoApply (callback: Int64 -> Int64) (value: Int64) : Int64 = callback value
+let hoApplyFloat (callback: Float -> Float) (value: Float) : Float = callback value
+let hoRepeat (count: Int64) (callback: Int64 -> Int64) (value: Int64) : Int64 =
+  if count == 0L then value else hoRepeat (count - 1L) callback (callback value)
+let hoMap (values: List<Int64>) (callback: Int64 -> Int64) : List<Int64> =
+  match values with
+  | [] -> []
+  | head :: tail -> Stdlib.List.push (hoMap tail callback) (callback head)
+let hoBoth (first: Int64 -> Int64) (second: Int64 -> Int64) (value: Int64) : Int64 = second (first value)
+
+Stdlib.__Task.__runMain (fun _unit -> let gate = Stdlib.__Async.__new<Int64> () in let value = Stdlib.__Task.__transport (Stdlib.__Async.__pending gate) in hoApply (fun ignored -> 42L) value) = 42L // an ordinary higher-order helper does not demand an ignored argument; leak_check
+Stdlib.__Task.__runMain (fun _unit -> let gate = Stdlib.__Async.__new<Int64> () in let value = Stdlib.__Task.__transport (Stdlib.__Async.__pending gate) in let result = hoApply (fun ignored -> value) 1L in let _ = Stdlib.__Task.__resolve (__fiber_current ()) gate 42L in result) = 42L // captured pending results cross ordinary higher-order helpers without waiting; leak_check
+Stdlib.__Task.__runMain (fun _unit -> let gate = Stdlib.__Async.__new<Float> () in let value = Stdlib.__Task.__transport (Stdlib.__Async.__pending gate) in let child = Stdlib.__Task.__startCurrent (fun _ -> let _ = Stdlib.__Task.__yield (__fiber_current ()) in Stdlib.__Task.__resolve (__fiber_current ()) gate 40.25) in hoApplyFloat (fun number -> number + 2.0) value) = 42.25 // the callback demands its own pending floating point argument; leak_check
+Stdlib.__Task.__runMain (fun _unit -> let gate = Stdlib.__Async.__new<Int64> () in let value = Stdlib.__Task.__transport (Stdlib.__Async.__pending gate) in let result = hoRepeat 3L (fun ignored -> value) 1L in let _ = Stdlib.__Task.__resolve (__fiber_current ()) gate 42L in result) = 42L // recursive helpers preserve a pending callback result between invocations; leak_check
+Stdlib.__Task.__runMain (fun _unit -> let gate = Stdlib.__Async.__new<Int64> () in let value = Stdlib.__Task.__transport (Stdlib.__Async.__pending gate) in let values = hoMap [value, 2L] (fun ignored -> 42L) in values) = [42L, 42L] // a user-defined map needs no name-specific async rule; leak_check
+Stdlib.__Task.__runMain (fun _unit -> let gate = Stdlib.__Async.__new<Int64> () in let value = Stdlib.__Task.__transport (Stdlib.__Async.__pending gate) in let result = hoBoth (fun ignored -> value) (fun ignored -> 42L) 1L in result) = 42L // multiple callback interfaces preserve ignored intermediate values; leak_check
+Stdlib.__Task.__runMain (fun _unit -> let gate = Stdlib.__Async.__new<String> () in let value = Stdlib.__Task.__transport (Stdlib.__Async.__pending gate) in hoApply (fun ignored -> let unused = value in 42L) 1L) = 42L // an unused managed capture is released without demanding it; leak_check
