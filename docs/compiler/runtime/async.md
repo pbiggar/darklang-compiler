@@ -107,6 +107,8 @@ supported without naming the source helper in an async rule. This preparation
 runs independently of optional inlining and its size budgets. It preserves the
 structured source control flow, reserves generated function identities before
 runtime specialization, and leaves programs without async producers unchanged.
+When a preamble already compiled a concrete callback version, later callers
+receive fresh identities for the logical versions needed by transport inference.
 Precompiled stdlib interfaces retain their existing adapters; arbitrary callback
 forwarding and unknown callback targets remain outside this preparation.
 

@@ -499,12 +499,15 @@ let required definitions id =
   | Some func -> func
   | None -> Crash.crash "Higher-order specialization lost a validated function"
 
-let generatedId names name =
+let generated names name =
   match StringOrder.Map.find_opt name names with
-  | Some id -> id
+  | Some identity -> identity
   | None ->
       Crash.crash
         ("Higher-order specialization lost generated name '" ^ name ^ "'")
+
+let generatedId names name = fst (generated names name)
+let generatedName names name = snd (generated names name)
 
 let cloneTarget definitions names (callable : callable) =
   let original = required definitions callable.target in
@@ -534,7 +537,7 @@ let cloneTarget definitions names (callable : callable) =
     {
       (mapOperations rewrite original) with
       S.id = generatedId names cloneName;
-      name = cloneName;
+      name = generatedName names cloneName;
       typedParams = captures @ targetShape.values;
     }
 
@@ -627,7 +630,7 @@ let cloneHelper definitions names request =
     {
       (mapOperations rewrite original) with
       S.id = cloneId;
-      name = cloneName;
+      name = generatedName names cloneName;
       typedParams = removeIndexes indexes original.S.typedParams @ captures;
     }
 
@@ -764,11 +767,11 @@ let specializeProgramWithExternalFunctionsAndNames ?(purpose = Optimization)
               else None)
             request.arguments
         in
-        (not (exists helper))
+        ((not (optimization purpose)) || not (exists helper))
         && (not (StringOrder.Set.mem helper targetNames))
         && List.for_all
              (fun target ->
-               (not (exists target))
+               ((not (optimization purpose)) || not (exists target))
                && not (StringOrder.Set.mem target helperNames))
              targets)
       requests
@@ -784,8 +787,45 @@ let specializeProgramWithExternalFunctionsAndNames ?(purpose = Optimization)
           if Int64.unsigned_compare nextOrdinal after >= 0 then nextOrdinal
           else after
       in
-      AST.allocateFunctionIdsFromOrdinal next
-        (StringOrder.Set.to_seq (StringOrder.Set.union targetNames helperNames))
+      let requested = StringOrder.Set.union targetNames helperNames in
+      (* Optional optimization may skip precompiled clones. Async interface
+         preparation must instead create a fresh logical version: the existing
+         native clone may have a concrete interface from an earlier unit. *)
+      let _, displays =
+        StringOrder.Set.fold
+          (fun key (used, displays) ->
+            let rec fresh index =
+              let candidate =
+                key ^ "__async_" ^ Int64.to_string next ^ "_"
+                ^ string_of_int index
+              in
+              if
+                exists candidate
+                || StringOrder.Set.mem candidate used
+                || StringOrder.Set.mem candidate requested
+              then fresh (addInt index 1)
+              else candidate
+            in
+            let display =
+              if optimization purpose || not (exists key) then key else fresh 0
+            in
+            ( StringOrder.Set.add display used,
+              StringOrder.Map.add key display displays ))
+          requested
+          (StringOrder.Set.empty, StringOrder.Map.empty)
+      in
+      let allocated =
+        AST.allocateFunctionIdsFromOrdinal next
+          (StringOrder.Map.to_seq displays |> Seq.map snd)
+      in
+      StringOrder.Map.map
+        (fun display ->
+          match StringOrder.Map.find_opt display allocated with
+          | Some id -> (id, display)
+          | None ->
+              Crash.crash
+                "Higher-order specialization lost an allocated display name")
+        displays
   in
   let _, targets =
     List.fold_left
