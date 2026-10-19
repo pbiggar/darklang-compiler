@@ -102,15 +102,17 @@ fields recursively and rebuild nominal records using their source descriptors.
 Before transport inference, `AsyncCallableSpecialization` reuses known-callback
 specialization for ordinary source helpers. Callback captures become ordinary
 arguments, exposing their pending layouts and callback results to the existing
-inference. Direct callback invocation, self recursion and multiple callbacks are
-supported without naming the source helper in an async rule. This preparation
+inference. Direct callback invocation, forwarding through direct source helper
+calls, self recursion and multiple callbacks are supported without naming the
+source helper in an async rule. Forwarding requests are discovered to a fixed
+point, including duplicated callbacks and recursive helper chains. This preparation
 runs independently of optional inlining and its size budgets. It preserves the
 structured source control flow, reserves generated function identities before
 runtime specialization, and leaves programs without async producers unchanged.
 When a preamble already compiled a concrete callback version, later callers
 receive fresh identities for the logical versions needed by transport inference.
-Precompiled stdlib interfaces retain their existing adapters; arbitrary callback
-forwarding and unknown callback targets remain outside this preparation.
+Precompiled stdlib interfaces retain their existing adapters; unknown callback
+targets and escaping changed callable interfaces remain outside this preparation.
 
 `AsyncTransport` merges these layouts across direct signatures, typed joins and
 closure captures, promoting concrete fields to ready carriers where call sites
@@ -370,6 +372,10 @@ user-defined map and fold, multiple callbacks and callback arguments, pending
 producers and results, managed and nested captures, eager callback invocation,
 shared concrete/pending calls, and
 operation with optional inlining disabled.
+
+`async_callback_forwarding.e2e` checks direct forwarding chains, recursive and
+duplicated callbacks, independent captures, managed results, named function
+callbacks, multiple arguments, and list storage without premature demands.
 
 `async_list_while.e2e` checks takeWhile and dropWhile with independently pending
 elements, nested fields, pending Boolean decisions, shared callback interfaces

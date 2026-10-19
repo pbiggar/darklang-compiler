@@ -8,6 +8,9 @@ type purpose =
   | Optimization
   | AsyncInterfaces of SpecializationIdentity.FunctionSet.t
 
+(* AsyncInterfaces follows direct callback forwarding through the supplied
+   source helpers independently of optional optimization budgets. *)
+
 val specializeProgramWithExternalFunctionsAndNames :
   ?purpose:purpose ->
   AST.functionId StringOrder.Map.t ->

@@ -341,59 +341,75 @@ let closureCallArity parameter helper =
    Visit parameter positions rather than paths so recursive forwarding cycles
    terminate without imposing an optimization budget on interface correctness. *)
 let helperUsesOnlyForwarding purpose definitions arity helper index =
-  let rec check seen (helper : S.functionDef) index =
-    match tryItem index helper.S.typedParams with
-    | None -> false
-    | Some parameter -> (
+  let rec check pending seen =
+    match pending with
+    | [] -> true
+    | ((helper : S.functionDef), index) :: pending -> (
         let visited =
           Option.value ~default:IntSet.empty
             (FunctionIdMap.tryFind helper.S.id seen)
         in
-        if IntSet.mem index visited then true
+        if IntSet.mem index visited then check pending seen
         else
-          match parameter.A.typ with
-          | AST.TFunction (arguments, _) when List.length arguments = arity ->
+          match tryItem index helper.S.typedParams with
+          | Some { A.typ = AST.TFunction (arguments, _); id = parameter }
+            when List.length arguments = arity -> (
               let seen =
                 FunctionIdMap.add helper.S.id (IntSet.add index visited) seen
               in
-              let allowed = function
+              let forward pending = function
                 | A.ClosureCall (A.Var id, args)
                 | A.ClosureTailCall (A.Var id, args)
-                  when id = parameter.A.id ->
-                    List.length args = arity
-                    && not (List.exists (atomUses parameter.A.id) args)
-                | (A.Call (callee, args)
+                  when id = parameter ->
+                    if
+                      List.length args = arity
+                      && not (List.exists (atomUses parameter) args)
+                    then Some pending
+                    else None
+                | ( A.Call (callee, args)
                   | A.BorrowedCall (callee, args)
-                  | A.TailCall (callee, args)) as operation
-                  when operationUses parameter.A.id operation -> (
+                  | A.TailCall (callee, args) ) as operation
+                  when operationUses parameter operation -> (
                     match FunctionIdMap.tryFind callee definitions with
                     | Some target
                       when helperAllowed purpose callee
                            && List.length args
                               = List.length target.S.typedParams ->
-                        List.for_all
-                          (fun (index, atom) ->
-                            if not (atomUses parameter.A.id atom) then true
-                            else
-                              match atom with
-                              | A.Var id when id = parameter.A.id ->
-                                  check seen target index
-                              | _ -> false)
+                        List.fold_left
+                          (fun pending (index, atom) ->
+                            Option.bind pending (fun pending ->
+                                if not (atomUses parameter atom) then
+                                  Some pending
+                                else
+                                  match atom with
+                                  | A.Var id when id = parameter ->
+                                      Some ((target, index) :: pending)
+                                  | _ -> None))
+                          (Some pending)
                           (List.mapi (fun index atom -> (index, atom)) args)
-                    | _ -> false)
+                    | _ -> None)
                 | operation ->
-                    not (operationUses parameter.A.id operation)
+                    if operationUses parameter operation then None
+                    else Some pending
               in
-              S.LabelMap.for_all
-                (fun _ block ->
-                  List.for_all
-                    (fun (_, operation) -> allowed operation)
-                    block.S.operations
-                  && not (terminatorUses parameter.A.id block.S.terminator))
-                helper.S.blocks
+              let pending =
+                S.LabelMap.fold
+                  (fun _ block pending ->
+                    if terminatorUses parameter block.S.terminator then None
+                    else
+                      List.fold_left
+                        (fun pending (_, operation) ->
+                          Option.bind pending (fun pending ->
+                              forward pending operation))
+                        pending block.S.operations)
+                  helper.S.blocks (Some pending)
+              in
+              match pending with
+              | None -> false
+              | Some pending -> check pending seen)
           | _ -> false)
   in
-  check FunctionIdMap.empty helper index
+  check [ (helper, index) ] FunctionIdMap.empty
 
 let validArgument purpose definitions (helper : S.functionDef) argument =
   match
@@ -501,8 +517,8 @@ let callableParameters (helper : S.functionDef) request =
           Crash.crash "Higher-order specialization lost a callback parameter")
     M.empty request.arguments
 
-let requestsInFunction ?(parameters = M.empty) ?(forwardedOnly = false)
-    purpose definitions returns (func : S.functionDef) =
+let requestsInFunction ?(parameters = M.empty) ?(forwardedOnly = false) purpose
+    definitions returns (func : S.functionDef) =
   let sites = knownAtOperations definitions returns func in
   S.LabelMap.bindings func.S.blocks
   |> List.concat_map (fun (label, block) ->
@@ -513,14 +529,12 @@ let requestsInFunction ?(parameters = M.empty) ?(forwardedOnly = false)
           | Some (helper, args)
             when (not forwardedOnly)
                  || List.exists
-                      (function
-                        | A.Var id -> M.mem id parameters
-                        | _ -> false)
+                      (function A.Var id -> M.mem id parameters | _ -> false)
                       args -> (
               match
                 knownArguments purpose definitions
-                  (mergeKnown parameters (knownFor sites label id)) helper
-                  args
+                  (mergeKnown parameters (knownFor sites label id))
+                  helper args
               with
               | [] -> None
               | arguments -> Some { helper; arguments })
@@ -547,14 +561,17 @@ let expandRequests purpose definitions returns requests =
           let dependencies =
             forwardedRequests purpose definitions returns request
           in
-          visit (List.fold_left add pending dependencies)
+          visit
+            (List.fold_left add pending dependencies)
             (Keys.add requestKey request discovered)
   in
   visit (List.fold_left add Keys.empty requests) Keys.empty
 
 let retainForwardingDependencies purpose definitions returns requests =
   let rec retain requests =
-    let keys = Keys.of_list (List.map (fun request -> (key request, ())) requests) in
+    let keys =
+      Keys.of_list (List.map (fun request -> (key request, ())) requests)
+    in
     let next =
       List.filter
         (fun request ->
@@ -732,12 +749,14 @@ let cloneHelper purpose definitions returns names requests request =
     M.map
       (fun (value : rewrittenCallable) ->
         ({
-          target = value.sourceTarget;
-          captures =
-            List.map (fun (param : A.typedParam) -> A.Var param.A.id)
-              value.captures;
-          convention = value.convention;
-        } : callable))
+           target = value.sourceTarget;
+           captures =
+             List.map
+               (fun (param : A.typedParam) -> A.Var param.A.id)
+               value.captures;
+           convention = value.convention;
+         }
+          : callable))
       rewritten
   in
   let sites =
@@ -771,17 +790,19 @@ let cloneHelper purpose definitions returns names requests request =
               | A.ClosureTailCall _ ->
                   A.TailCall (callable.target, captureArgs @ args)
               | _ -> A.Call (callable.target, captureArgs @ args)))
-      | (A.Call (callee, args)
-        | A.BorrowedCall (callee, args)
-        | A.TailCall (callee, args))
+      | A.Call (callee, args)
+      | A.BorrowedCall (callee, args)
+      | A.TailCall (callee, args)
         when not (optimization purpose) -> (
           let known = mergeKnown parameters (knownFor sites label id) in
           let arguments =
             knownArguments purpose definitions known callee args
           in
-          match Keys.find_opt (key { helper = callee; arguments }) specialized with
+          match
+            Keys.find_opt (key { helper = callee; arguments }) specialized
+          with
           | None -> operation
-          | Some target ->
+          | Some target -> (
               let indexes =
                 IntSet.of_list (List.map (fun arg -> arg.index) arguments)
               in
@@ -793,7 +814,7 @@ let cloneHelper purpose definitions returns names requests request =
               | A.Call _ -> A.Call (target, args)
               | A.BorrowedCall _ -> A.BorrowedCall (target, args)
               | A.TailCall _ -> A.TailCall (target, args)
-              | _ -> Crash.crash "Higher-order forwarding lost a direct call")
+              | _ -> Crash.crash "Higher-order forwarding lost a direct call"))
       | A.Call (name, args) when name = original.S.id ->
           A.Call (cloneId, removeIndexes indexes args @ appended)
       | A.BorrowedCall (name, args) when name = original.S.id ->
@@ -811,7 +832,10 @@ let cloneHelper purpose definitions returns names requests request =
       blocks =
         S.LabelMap.mapi
           (fun label block ->
-            { block with S.operations = List.map (rewrite label) block.S.operations })
+            {
+              block with
+              S.operations = List.map (rewrite label) block.S.operations;
+            })
           original.S.blocks;
     }
 
