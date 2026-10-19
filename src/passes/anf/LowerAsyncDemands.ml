@@ -2026,7 +2026,7 @@ let lower registry names ids sumShapes nextFunctionOrdinal externalDefinitions
               | A.Atom _ | A.TypedAtom _ | A.Call _ | A.BorrowedCall _
               | A.TailCall _ | A.ClosureAlloc _ | A.ClosureCall _
               | A.TupleAlloc _ | A.RecordAlloc _ | A.RecordClone _
-              | A.RawSlotInit _ ->
+              | A.SumAlloc _ | A.RawSlotInit _ ->
                   true
               | _ -> false
             in
