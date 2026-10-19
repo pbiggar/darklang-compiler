@@ -18,3 +18,11 @@ val physical :
 
 val representationIndex :
   MemoryModel.rcSumShapeRegistry -> LoweringPrimitives.sumRepresentationIndex
+
+val includePhysicalShapes :
+  into:MemoryModel.rcSumShapeRegistry ->
+  MemoryModel.rcSumShapeRegistry ->
+  (MemoryModel.rcSumShapeRegistry, string) result
+
+val physicalVariantLookup :
+  MemoryModel.rcSumShapeRegistry -> LoweringPrimitives.variantLookup

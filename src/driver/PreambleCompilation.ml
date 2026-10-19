@@ -83,7 +83,7 @@ let buildPreambleContext allowInternal (stdlib : X.stdlibResult) preamble
             analysis.X.writtenEnvironment;
       }
     in
-    let* functions, ssa, typeMap =
+    let* functions, ssa, typeMap, sumShapes =
       ANFPipeline.buildAnf ~asyncDefinitions:stdlib.X.stdlibAsyncDefinitions
         ~asyncRuntime:
           {
@@ -97,7 +97,10 @@ let buildPreambleContext allowInternal (stdlib : X.stdlibResult) preamble
         FunctionIdMap.empty false recorder
       |> Result.map_error preambleError
     in
-    let context = X.includeCompiledFunctions functions context in
+    let registries = { registries with AST_to_ANF.rcSumShapeReg = sumShapes } in
+    let context =
+      X.includeCompiledFunctions functions { context with X.registries }
+    in
     let* allocated, summaries =
       NativePipeline.lowerToAllocatedLirWithKnown stdlib.X.callGraphSummaries
         stdlib.X.context.X.target 0 options elapsed recorder None None
@@ -198,7 +201,7 @@ let buildPreambleContextFromAnalysis (stdlib : X.stdlibResult)
           analysis.X.writtenEnvironment;
     }
   in
-  let* functions, ssa, typeMap =
+  let* functions, ssa, typeMap, sumShapes =
     ANFPipeline.buildAnf ~asyncDefinitions:stdlib.X.stdlibAsyncDefinitions
       ~asyncRuntime:
         {
@@ -212,7 +215,10 @@ let buildPreambleContextFromAnalysis (stdlib : X.stdlibResult)
       FunctionIdMap.empty false recorder
     |> Result.map_error preambleError
   in
-  let context = X.includeCompiledFunctions functions context in
+  let registries = { registries with AST_to_ANF.rcSumShapeReg = sumShapes } in
+  let context =
+    X.includeCompiledFunctions functions { context with X.registries }
+  in
   let* allocated, summaries =
     NativePipeline.lowerToAllocatedLirWithKnown stdlib.X.callGraphSummaries
       stdlib.X.context.X.target 0 options elapsed recorder None None "preamble"

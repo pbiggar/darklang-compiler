@@ -80,7 +80,7 @@ let getReachableStdlibFunctionsFromStdlib (stdlib : X.stdlibResult) source =
       (entry :: user.R.userFunctions)
     |> Result.map_error (fun error -> "Print insertion error: " ^ error)
   in
-  let* functions, _, _ =
+  let* functions, _, _, _ =
     ANFPipeline.buildAnf 0 options elapsed registries
       (CheckedAST.nextFunctionOrdinal symbols)
       InliningCommon.defaultConfig FunctionIdMap.empty M.empty

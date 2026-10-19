@@ -331,20 +331,25 @@ let compileUserWithPlan ?writtenSources (plan : P.userCompilePlan) =
           ownership early plan.P.passTimingRecorder
       in
       let compileDependencies () =
-        let* _, ssa, typeMap =
+        let* _, ssa, typeMap, sumShapes =
           build registry plan.P.externalInlineCandidates
             plan.P.stdlib.X.stdlibAnfOptimizationCandidates
             user.R.nonInlineableFunctionNames dependencies
             user.R.ownershipContracts true
         in
-        NativePipeline.lowerToAllocatedLirWithKnown known
-          plan.P.baseContext.X.target plan.P.verbosity plan.P.options elapsed
-          plan.P.passTimingRecorder caches releaseCache
-          plan.P.labels.P.stageSuffix ssa typeMap registry (Some projected)
-          returns
+        let registry = { registry with AST_to_ANF.rcSumShapeReg = sumShapes } in
+        let* allocated, summaries =
+          NativePipeline.lowerToAllocatedLirWithKnown known
+            plan.P.baseContext.X.target plan.P.verbosity plan.P.options elapsed
+            plan.P.passTimingRecorder caches releaseCache
+            plan.P.labels.P.stageSuffix ssa typeMap registry (Some projected)
+            returns
+        in
+        Ok (allocated, summaries, sumShapes)
       in
       let dependencyResult =
-        if dependencies = [] then Ok ([], FunctionIdMap.empty)
+        if dependencies = [] then
+          Ok ([], FunctionIdMap.empty, registry.AST_to_ANF.rcSumShapeReg)
         else
           match plan.P.session with
           | None -> compileDependencies ()
@@ -361,7 +366,10 @@ let compileUserWithPlan ?writtenSources (plan : P.userCompilePlan) =
                 }
                 compileDependencies
       in
-      let* allocatedDependencies, dependencySummaries = dependencyResult in
+      let* allocatedDependencies, dependencySummaries, sumShapes =
+        dependencyResult
+      in
+      let registry = { registry with AST_to_ANF.rcSumShapeReg = sumShapes } in
       (* Native dependency compilation can generate functions after checked
          declarations have reserved their IDs. Late async specializations and
          adapters must allocate beyond those functions as well. *)
@@ -433,7 +441,8 @@ let compileUserWithPlan ?writtenSources (plan : P.userCompilePlan) =
             user.R.nonInlineableFunctionNames (prune functions)
             user.R.ownershipContracts true
       in
-      let* _, ssa, programTypeMap = programResult in
+      let* _, ssa, programTypeMap, sumShapes = programResult in
+      let registry = { registry with AST_to_ANF.rcSumShapeReg = sumShapes } in
       let through =
         merge
           (merge plan.P.stdlib.X.callGraphSummaries

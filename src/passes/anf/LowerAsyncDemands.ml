@@ -12,7 +12,12 @@ let ( let* ) = Result.bind
 
 type pending = { payload : AST.semanticType; force : AST.functionId }
 type version = { id : AST.functionId; name : string }
-type lowered = { functions : A.functionDef list; nextFunctionOrdinal : int64 }
+
+type lowered = {
+  functions : A.functionDef list;
+  nextFunctionOrdinal : int64;
+  sumShapes : MemoryModel.rcSumShapeRegistry;
+}
 
 type generation = {
   variables : A.varGen;
@@ -27,7 +32,8 @@ let freshVar gen =
 
 type failure =
   | Diagnostic of string
-  | MissingRuntimeSpecializations of SpecializationIdentity.SpecSet.t
+  | MissingRuntimeSpecializations of
+      SpecializationIdentity.SpecSet.t * MemoryModel.rcSumShapeRegistry
 
 let carrier payload = AST.TSum ("Darklang.Stdlib.__Async.__Value", [ payload ])
 let transportName = AsyncSourceHooks.transportName
@@ -251,7 +257,8 @@ let nativeRuntime name =
       "__dark_async_";
     ]
 
-let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
+let lower registry names ids sumShapes nextFunctionOrdinal externalDefinitions
+    functions =
   let name id = F.tryFind id names in
   let producer id =
     match name id with
@@ -259,7 +266,7 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
     | None -> false
   in
   if not (F.exists (fun id _ -> producer id) names) then
-    Ok { functions; nextFunctionOrdinal }
+    Ok { functions; nextFunctionOrdinal; sumShapes }
   else
     let definitions =
       Names.fold
@@ -277,20 +284,6 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
           match F.tryFind id registry with
           | Some (_, AST.TFunction (_, result)) -> result
           | _ -> Crash.crash "Async source operation has no typed signature")
-    in
-    let helperTypes base types =
-      let name = SpecializationIdentity.specName base types in
-      match Names.find_opt name ids with
-      | Some id -> Ok id
-      | None ->
-          Error
-            (MissingRuntimeSpecializations
-               (SpecializationIdentity.SpecSet.singleton (base, types)))
-    in
-    let helper base payload = helperTypes base [ payload ] in
-    let info payload =
-      let* force = helper "Darklang.Stdlib.__Task.__forceCurrent" payload in
-      Ok { payload; force }
     in
     let summary state id =
       match F.tryFind id state with
@@ -1048,6 +1041,21 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
     in
     let* summaries =
       Result.map_error (fun message -> Diagnostic message) (converge initial)
+    in
+    let helperTypes base types =
+      let name = SpecializationIdentity.specName base types in
+      match Names.find_opt name ids with
+      | Some id -> Ok id
+      | None ->
+          Error
+            (MissingRuntimeSpecializations
+               ( SpecializationIdentity.SpecSet.singleton (base, types),
+                 sumShapes ))
+    in
+    let helper base payload = helperTypes base [ payload ] in
+    let info payload =
+      let* force = helper "Darklang.Stdlib.__Task.__forceCurrent" payload in
+      Ok { payload; force }
     in
     let modeChanges id =
       let value = summary summaries id in
@@ -2681,4 +2689,4 @@ let lower registry names ids nextFunctionOrdinal externalDefinitions functions =
       ANFDeadCodeElimination.filterReachableFunctions local
         (List.rev originals @ cloned @ List.rev gen.generatedFunctions)
     in
-    Ok { functions; nextFunctionOrdinal = gen.cursor }
+    Ok { functions; nextFunctionOrdinal = gen.cursor; sumShapes }

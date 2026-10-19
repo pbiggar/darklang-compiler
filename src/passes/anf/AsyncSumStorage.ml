@@ -1,6 +1,10 @@
 (* AsyncSumStorage.ml - Preserve constructor-specific payload types across async interfaces. *)
+[@@@warning "-4"]
+
 module M = StringOrder.Map
 module A = ANF
+
+let physicalPrefix = "__dark_async_sum_"
 
 type layout = {
   source : A.sumDescriptor;
@@ -60,7 +64,7 @@ let physical layout types =
   let identity =
     SpecializationIdentity.specName "sum_payloads" (source :: types)
   in
-  let name = "__dark_async_sum_" ^ Digest.to_hex (Digest.string identity) in
+  let name = physicalPrefix ^ Digest.to_hex (Digest.string identity) in
   let payloads =
     List.map2 (fun (tag, _) typ -> (tag, Some typ)) layout.payloads types
     @ List.map (fun tag -> (tag, None)) layout.emptyTags
@@ -98,3 +102,46 @@ let representationIndex shapes =
             cases)
         M.empty shape.MemoryModel.payloads)
     shapes
+
+let includePhysicalShapes ~into shapes =
+  M.fold
+    (fun name shape result ->
+      Result.bind result (fun combined ->
+          if not (String.starts_with ~prefix:physicalPrefix name) then
+            Ok combined
+          else
+            match M.find_opt name combined with
+            | None -> Ok (M.add name shape combined)
+            | Some existing
+              when existing.MemoryModel.typeParams
+                   = shape.MemoryModel.typeParams
+                   && existing.MemoryModel.payloads = shape.MemoryModel.payloads
+                   && MemoryModel.IntSet.equal
+                        existing.MemoryModel.unaryPayloadTags
+                        shape.MemoryModel.unaryPayloadTags ->
+                Ok combined
+            | Some _ ->
+                Error
+                  ("Async sum physical layouts have conflicting metadata for "
+                 ^ name)))
+    shapes (Ok into)
+
+let physicalVariantLookup shapes =
+  let physical =
+    M.filter
+      (fun name _ -> String.starts_with ~prefix:physicalPrefix name)
+      shapes
+    |> representationIndex
+  in
+  M.fold
+    (fun owner cases lookup ->
+      M.fold
+        (fun name case lookup ->
+          M.add name
+            ( owner,
+              case.LoweringPrimitives.typeParams,
+              case.LoweringPrimitives.tag,
+              case.LoweringPrimitives.fields )
+            lookup)
+        cases lookup)
+    physical M.empty

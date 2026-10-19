@@ -356,6 +356,15 @@ let lowerToAllocatedLirWithKnownGroups externalSummaries target verbosity
       in
       if List.length mirFuncs <> List.length functionsToCompile then
         Crash.crash "ANF to MIR did not emit exactly one node per function";
+      let physicalVariants =
+        AsyncSumStorage.physicalVariantLookup registries.R.rcSumShapeReg
+        |> ANF_to_MIR.buildVariantRegistry
+      in
+      let variantRegistry =
+        M.union
+          (fun _ _ physical -> Some physical)
+          variantRegistry physicalVariants
+      in
       let duration = elapsed () -. mirStart in
       recordPassTiming passTimingRecorder "ANF -> MIR" duration;
       elapsedDetail verbosity duration;

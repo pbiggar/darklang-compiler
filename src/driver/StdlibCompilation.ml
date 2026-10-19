@@ -78,13 +78,16 @@ let buildStdlibWithTrace target recorder =
     }
   in
   let options = CompilerOptions.defaultOptions in
-  let* functions, ssa, typeMap =
+  let* functions, ssa, typeMap, sumShapes =
     ANFPipeline.buildAnf 0 options elapsed registries
       (CheckedAST.nextFunctionOrdinal conversion.P.symbols)
       ANFPipeline.stdlibInliningConfig FunctionIdMap.empty M.empty F.empty
       conversion.P.functions FunctionIdMap.empty false recorder
   in
-  let context = X.includeCompiledFunctions functions context in
+  let registries = { registries with AST_to_ANF.rcSumShapeReg = sumShapes } in
+  let context =
+    X.includeCompiledFunctions functions { context with X.registries }
+  in
   let anfMap =
     List.map (fun (func : ANF.functionDef) -> (func.ANF.name, func)) functions
     |> M.of_list
@@ -339,11 +342,14 @@ let buildStdlibSpecializations (stdlib : X.stdlibResult) specs externalTypes
       let elapsed () =
         (Int64.to_float (Mtime_clock.elapsed_ns ()) /. 1e6) -. start
       in
-      let* optimized, ssa, typeMap =
+      let* optimized, ssa, typeMap, sumShapes =
         ANFPipeline.buildAnf 0 options elapsed registries
           (CheckedAST.nextFunctionOrdinal symbols)
           ANFPipeline.stdlibInliningConfig FunctionIdMap.empty M.empty F.empty
           anf FunctionIdMap.empty false recorder
+      in
+      let registries =
+        { registries with AST_to_ANF.rcSumShapeReg = sumShapes }
       in
       let newMap =
         List.map

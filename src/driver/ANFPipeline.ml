@@ -193,11 +193,24 @@ let buildAnf ?(asyncDefinitions = StringOrder.Map.empty) ?asyncRuntime verbosity
     match
       LowerAsyncDemands.lower registries.AST_to_ANF.funcReg
         registries.AST_to_ANF.functionNames registries.AST_to_ANF.functionIds
-        nextFunctionOrdinal asyncDefinitions functions
+        registries.AST_to_ANF.rcSumShapeReg nextFunctionOrdinal asyncDefinitions
+        functions
     with
-    | Ok lowered -> Ok (lowered, registries, helperNames)
+    | Ok lowered ->
+        Ok
+          ( lowered,
+            {
+              registries with
+              AST_to_ANF.rcSumShapeReg = lowered.LowerAsyncDemands.sumShapes;
+            },
+            helperNames )
     | Error (LowerAsyncDemands.Diagnostic message) -> Error message
-    | Error (LowerAsyncDemands.MissingRuntimeSpecializations requested) -> (
+    | Error
+        (LowerAsyncDemands.MissingRuntimeSpecializations (requested, sumShapes))
+      -> (
+        let registries =
+          { registries with AST_to_ANF.rcSumShapeReg = sumShapes }
+        in
         match runtime with
         | None ->
             Error
@@ -208,6 +221,22 @@ let buildAnf ?(asyncDefinitions = StringOrder.Map.empty) ?asyncRuntime verbosity
               { runtime.context with CompilationContexts.registries }
             in
             let* context, helpers = runtime.materialize context requested in
+            let* sumShapes =
+              AsyncSumStorage.includePhysicalShapes
+                ~into:
+                  context.CompilationContexts.registries
+                    .AST_to_ANF.rcSumShapeReg sumShapes
+            in
+            let context =
+              {
+                context with
+                CompilationContexts.registries =
+                  {
+                    context.CompilationContexts.registries with
+                    AST_to_ANF.rcSumShapeReg = sumShapes;
+                  };
+              }
+            in
             let provided =
               SpecializationIdentity.SpecSet.for_all
                 (fun (name, types) ->
@@ -584,4 +613,4 @@ let buildAnf ?(asyncDefinitions = StringOrder.Map.empty) ?asyncRuntime verbosity
   let rcElapsed = elapsed () -. rcStart in
   recordPassTiming passTimingRecorder "Reference Count Insertion" rcElapsed;
   elapsedDetail true rcElapsed;
-  Ok (preRCFunctions, ssaAfterRC, typeMap)
+  Ok (preRCFunctions, ssaAfterRC, typeMap, registries.AST_to_ANF.rcSumShapeReg)
