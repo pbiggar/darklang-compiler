@@ -99,6 +99,18 @@ structural physical type with updated field descriptors, so ownership sees each
 field's actual carrier type. Projecting one field preserves that field's carrier
 and does not inspect its siblings; explicit native result adapters materialize
 fields recursively and rebuild nominal records using their source descriptors.
+Variants likewise retain an independent layout for each payload-bearing arm.
+Logical constructor operations survive until after async inference, so tag tests
+do not inherit a payload demand from an optimized nullable representation. A
+changed payload layout receives a private physical sum descriptor and matching
+ownership metadata; ordinary synchronous variants keep their existing layouts.
+Conversions branch on the tag and adapt only the selected arm. This supports
+nested variants, variants in list storage, managed payloads, and outer delayed
+variants. For example, matching `Some pendingValue` with `Some _` does not wait;
+adding to the selected integer payload does. A wildcard-only match on a
+single-constructor type requires no value inspection at all. Explicit native
+result adapters materialize only the selected payload before rebuilding its
+source constructor.
 Before transport inference, `AsyncCallableSpecialization` reuses known-callback
 specialization for ordinary source helpers. Callback captures become ordinary
 arguments, exposing their pending layouts and callback results to the existing
@@ -151,7 +163,7 @@ callback interfaces still require diagnostics when their ABI would change. Nativ
 result adapters map typed demands over the list. List pattern bindings preserve
 element layouts; length and empty checks inspect only the spine, while literal
 comparisons and guards demand the values they inspect. Unmigrated list operations,
-dictionary and variant storage, untyped value selections, and
+dictionary storage, regular recursive aggregate layouts, untyped value selections, and
 escaping callables whose argument or result interface changes still produce
 compilation diagnostics. Outer pendingness also carries the inferred field
 layout. A generated mapper
