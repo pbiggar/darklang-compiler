@@ -280,6 +280,24 @@ let rec declarationStructureIssues = function
       @ exprIssues fn.body
   | WT.DValue value -> exprIssues value.body
   | WT.DType _ -> []
+  | WT.DTrait trait_ ->
+      List.concat_map
+        (fun (method_ : WT.traitMethodDecl) ->
+          duplicateIssues
+            (List.filter_map
+               (function
+                 | WT.FPNormal (_, name, _, _, _, _, _) ->
+                     Some (name.name, name.range)
+                 | WT.FPUnit _ -> None)
+               method_.parameters)
+          @ List.concat_map exprIssues (Option.to_list method_.body))
+        trait_.methods
+  | WT.DImpl impl ->
+      List.concat_map
+        (function
+          | WT.IMethod fn -> declarationStructureIssues (WT.DFunction fn)
+          | WT.IAlias value -> exprIssues value.body)
+        impl.members
   | WT.DModule modul ->
       List.concat_map declarationStructureIssues modul.declarations
   | WT.DExpr expr -> exprIssues expr
@@ -312,9 +330,11 @@ let rec declarationPurposeIssues mode = function
       match mode with
       | Package -> []
       | Script | Test ->
-          [ issue test.range TestMode
-              "Named package tests are only allowed in package files" ])
-  | WT.DFunction _ | WT.DValue _ | WT.DType _ -> []
+          [
+            issue test.range TestMode
+              "Named package tests are only allowed in package files";
+          ])
+  | WT.DFunction _ | WT.DValue _ | WT.DType _ | WT.DTrait _ | WT.DImpl _ -> []
   | WT.DModule modul ->
       List.concat_map (declarationPurposeIssues mode) modul.declarations
   | WT.DExpr expr -> (

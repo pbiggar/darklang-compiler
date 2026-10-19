@@ -129,7 +129,7 @@ let buildStdlib target = buildStdlibWithTrace target None
 
 (* Build stdlib specializations for a spec set and merge them into the stdlib result. *)
 let buildStdlibSpecializations (stdlib : X.stdlibResult) specs externalTypes
-    externalVariants recorder =
+    externalVariants externalSymbols recorder =
   if Specs.is_empty specs then Ok stdlib
   else
     let base = stdlib.X.context in
@@ -141,9 +141,23 @@ let buildStdlibSpecializations (stdlib : X.stdlibResult) specs externalTypes
         (TypeRegistries.recordFieldsRegistry externalTypes)
     in
     let types = M.fold M.add indexed env.Types.indexedTypeReg in
+    let symbols =
+      CheckedAST.includeTypeMetadata externalSymbols base.X.symbols
+    in
+    let symbols =
+      M.fold
+        (fun name (info : Types.sumTypeInfo) symbols ->
+          List.fold_left
+            (fun symbols (variant : Types.sumVariantInfo) ->
+              snd
+                (CheckedAST.internConstructor name variant.Types.name
+                   variant.Types.tag symbols))
+            symbols info.Types.variants)
+        (Types.indexSumTypeRegistry variants)
+        symbols
+    in
     let specialization =
-      Monomorphization.specializeFromSpecs base.X.symbols base.X.genericFuncDefs
-        specs
+      Monomorphization.specializeFromSpecs symbols base.X.genericFuncDefs specs
     in
     let initialSpecs =
       P.mergeSpecRegistries base.X.specRegistry

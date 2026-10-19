@@ -427,6 +427,8 @@ let declarationRange = function
   | WT.DTest d -> d.WT.range
   | WT.DFunction d -> d.WT.range
   | WT.DValue d -> d.WT.range
+  | WT.DTrait d -> d.WT.range
+  | WT.DImpl d -> d.WT.range
   | WT.DType d | WT.DTypeDB d -> d.WT.range
   | WT.DModule d -> d.WT.range
   | WT.DExpr e -> WT.exprRange e
@@ -692,7 +694,8 @@ let buildSuiteContexts stdlib tests passTimingRecorder =
               (fun specialized -> (key, plan, specialized) :: acc)
               (StdlibCompilation.buildStdlibSpecializations stdlib
                  plan.stdlibSpecs plan.externalTypeReg
-                 plan.externalVariantLookup recorder))
+                 plan.externalVariantLookup plan.specialization.SI.symbols
+                 recorder))
           (Ok []) plans)
   in
   measure "Suite Context Preamble Build Overhead" (fun recorder ->

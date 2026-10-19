@@ -32,6 +32,13 @@ Posix, Sys and DateTime modules. Syscall and runtime Builtins are called directl
 there are no public forwarding packages for them. DateTime's clock block is
 shared while each engine retains its own DateTime representation implementation.
 
+Trait declarations and generic utilities in `StdLib/traits.dark` are unchanged
+from interpreter `a9d93efc853486244630dad693fe79f6f4882cf6`. Trait implementations
+live beside each type's existing functions, as upstream does. Their methods
+alias native compiler operations rather than duplicate the interpreter's F#
+builtin adapters. See [trait compatibility](../compatibility/language/traits.md)
+for static selection and hosted-package limitations.
+
 A `__` filename marks compiler support or a private implementation fragment.
 It does not rename the declared module or enforce language visibility: that
 is controlled by declaration names and the frontend's internal-mode checks.
@@ -46,6 +53,7 @@ fragments use `__` even where the interpreter also has private helpers.
 |---|---|---|
 | `StdLib/__Types.dark` | (root declarations) | Compiler representation of the interpreter’s root Uuid type (`backend/src/LibExecution/RuntimeTypes.fs`) |
 | `StdLib/Root.dark` | `Darklang.Stdlib`  | `packages/darklang/stdlib/noModule.dark` |
+| `StdLib/traits.dark` | `Darklang.Stdlib` | Unchanged `packages/darklang/stdlib/traits.dark` at `a9d93efc853486244630dad693fe79f6f4882cf6` |
 | `StdLib/Int8.dark` | `Darklang.Stdlib.Int8`  | `packages/darklang/stdlib/int8.dark` |
 | `StdLib/Int16.dark` | `Darklang.Stdlib.Int16`  | `packages/darklang/stdlib/int16.dark` |
 | `StdLib/Int32.dark` | `Darklang.Stdlib.Int32`  | `packages/darklang/stdlib/int32.dark` |

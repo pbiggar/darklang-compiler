@@ -209,6 +209,7 @@ type functionCatalog = {
    new body.
 *)
 type globalCatalog = {
+  traits : TraitCatalog.t;
   bindingNames : string BindingIdMap.t;
   valueIds : AST.bindingId StringOrder.Map.t;
   nextBindingOrdinal : int;
@@ -443,6 +444,7 @@ let emptySymbolsWithCatalogs (baseTypes : typeCatalog)
     (baseFunctions : functionCatalog) : symbols =
   let initial =
     {
+      traits = TraitCatalog.empty;
       bindingNames = BindingIdMap.empty;
       valueIds = StringOrder.Map.empty;
       nextBindingOrdinal = -1;
@@ -584,6 +586,7 @@ let includeAllocatedFunctionNames (allocated : symbols) (target : symbols) =
   in
   {
     included with
+    traits = TraitCatalog.merge allocated.traits target.traits;
     nextFunctionOrdinal =
       unsignedMax target.nextFunctionOrdinal allocated.nextFunctionOrdinal;
   }
@@ -728,6 +731,7 @@ let withProgramTopLevels topLevels (CheckedProgram (symbols, _)) =
 let catalogForCheckedUnit (symbols : symbols) =
   {
     (emptySymbols ()) with
+    traits = symbols.traits;
     nextBindingOrdinal = symbols.nextBindingOrdinal;
     functionOrdinals = symbols.functionOrdinals;
     functionNames = symbols.functionNames;
@@ -735,6 +739,8 @@ let catalogForCheckedUnit (symbols : symbols) =
     nextFunctionOrdinal = symbols.nextFunctionOrdinal;
   }
 
+let traitCatalog (symbols : symbols) = symbols.traits
+let withTraitCatalog traits (symbols : symbols) = { symbols with traits }
 let bindingCursor (symbols : symbols) = symbols.nextBindingOrdinal
 
 let includeBindingCursor cursor (symbols : symbols) =
@@ -785,6 +791,7 @@ let composeTopLevels (sourceCatalog : symbols) (targetCatalog : symbols)
   in
   let catalog : symbols =
     {
+      traits = TraitCatalog.merge sourceCatalog.traits targetCatalog.traits;
       bindingNames =
         BindingIdMap.fold
           (fun key value combined ->
@@ -859,6 +866,23 @@ let composeTopLevels (sourceCatalog : symbols) (targetCatalog : symbols)
     }
   in
   (catalog, topLevels)
+
+(* Share caller type identities without importing caller function or trait catalogs. *)
+let includeTypeMetadata (source : symbols) (target : symbols) =
+  let inherited =
+    {
+      target with
+      typeNames = source.typeNames;
+      typeIds = source.typeIds;
+      nextTypeOrdinal = source.nextTypeOrdinal;
+      constructorNames = source.constructorNames;
+      constructorIds = source.constructorIds;
+      fieldNames = source.fieldNames;
+      fieldIds = source.fieldIds;
+      constructorLookups = source.constructorLookups;
+    }
+  in
+  fst (composeTopLevels inherited target [])
 
 (*
    Import only declarations introduced by a checked unit. References in its

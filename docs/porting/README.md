@@ -118,8 +118,9 @@ It records direct references, indirect references through helpers, maintained
 coverage, or not-identified. Each declaration has a reference count and one
 deterministic witness; indirect witnesses use the shortest discovered path.
 This is a bounded source analysis, not proof a particular branch executed.
-Unknown headers, ambiguous declarations and unresolved source differences stay
-in the review queue instead of being guessed away.
+Unknown headers and ambiguous declarations stay in the review queue.
+Source differences and missing counterparts remain on the individual declaration
+rows instead of being reduced to file-level judgments.
 
 Trait/impl methods and escaped declaration names are included in the inventory.
 String interpolation expressions retain their references, while literal prose is
@@ -156,8 +157,9 @@ named counterparts are different. This is source comparison, not behavioral proo
 Helper/preamble equivalence is not inferred from matching assertion expressions.
 
 Enablement is derived from `E2EDiscovery.ml` whole-file and original-line gates,
-fixture skip attributes, and local expectation overrides. Named declarations
-remain disabled while the current runner does not select them. Every counterpart
+fixture skip attributes, and local expectation overrides. Named tests imported
+under the E2E fixture directory are selected by the existing named fixture adapter;
+declarations only present under package sources remain outside that selection. Every counterpart
 records its exclusion origin/reason and expectation override. Ordinary command-line
 filters used for individual test runs do not change the inventory.
 

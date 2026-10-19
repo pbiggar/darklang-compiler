@@ -5,7 +5,13 @@
 
 type config = { server : string; cachePath : string }
 type resolvedSource = { name : string; source : string }
-type itemKind = PackageType | PackageValue | PackageFunction
+
+type itemKind =
+  | PackageType
+  | PackageValue
+  | PackageFunction
+  | PackageTrait
+  | PackageImpl
 
 type locatedEntity = {
   kind : itemKind;
@@ -84,8 +90,11 @@ let kindPath = function
   | PackageType -> "type"
   | PackageValue -> "value"
   | PackageFunction -> "function"
+  | PackageTrait -> "trait"
+  | PackageImpl -> "impl"
 
-let allKinds = [ PackageType; PackageValue; PackageFunction ]
+let allKinds =
+  [ PackageType; PackageValue; PackageFunction; PackageTrait; PackageImpl ]
 
 let rec createDirectory path =
   if path <> "" && not (Sys.file_exists path) then (
@@ -471,7 +480,9 @@ let rec renderExpr parameters selfName element =
           else Error ("Invalid package argument index " ^ string_of_int index)
       | None -> Error "Invalid package argument index")
   | "ESelf", [ _ ] -> Ok selfName
-  | "EFnName", [ _; name ] | "EValue", [ _; name ] -> resolvedName name
+  | "EFnName", [ _; name ] | "EFnName", [ _; name; _ ] | "EValue", [ _; name ]
+    ->
+      resolvedName name
   | "EList", [ _; values ] ->
       let+ values = renderMany (arrayItems values) in
       "[" ^ String.concat ", " values ^ "]"
@@ -512,7 +523,7 @@ let rec renderExpr parameters selfName element =
   | "EApply", [ _; fn; typeArgs; args ] -> (
       let* name, fields = enumCase fn in
       match (name, fields) with
-      | "EFnName", [ _; name ] ->
+      | "EFnName", [ _; name ] | "EFnName", [ _; name; _ ] ->
           let* name = resolvedName name in
           application name typeArgs args
       | _ ->
@@ -609,9 +620,16 @@ let rec renderExpr parameters selfName element =
             let* op = infixText infix in
             let+ argument = recurse argument in
             "(" ^ op ^ ") (" ^ argument ^ ")"
-        | "EPipeFnCall", [ _; name; typeArgs; args ] ->
+        | "EPipeFnCall", [ _; name; typeArgs; args ]
+        | "EPipeFnCall", [ _; name; typeArgs; args; _ ] ->
             let* name = resolvedName name in
-            application name typeArgs args
+            if arrayItems args <> [] then application name typeArgs args
+            else
+              let+ types =
+                ResultList.mapResults renderType (arrayItems typeArgs)
+              in
+              name
+              ^ if types = [] then "" else "<" ^ String.concat ", " types ^ ">"
         | "EPipeEnum", [ _; name; caseName; values ] ->
             let* name = resolvedName name in
             let* leaf = stringValue caseName in
@@ -675,6 +693,85 @@ let dependencyRefs json =
     Ok (distinct (collect (parse json)))
   with ex -> Error ("Could not inspect package dependencies: " ^ message ex)
 
+let renderTraitRef value =
+  match (tryField "trait_" value, tryField "typeArgs" value) with
+  | Some trait_, Some args ->
+      let* name = resolvedName trait_ in
+      let+ args = ResultList.mapResults renderType (arrayItems args) in
+      name ^ if args = [] then "" else "<" ^ String.concat ", " args ^ ">"
+  | _ -> Error "Invalid package trait reference"
+
+let renderTypeParameters types bounds =
+  let* types = ResultList.mapResults stringValue (arrayItems types) in
+  let* bounds =
+    ResultList.mapResults
+      (fun bound ->
+        match (tryField "param" bound, tryField "trait_" bound) with
+        | Some param, Some trait_ ->
+            let* param = stringValue param in
+            let+ trait_ = renderTraitRef trait_ in
+            (param, trait_)
+        | _ -> Error "Invalid package trait bound")
+      (Option.fold ~none:[] ~some:arrayItems bounds)
+  in
+  if List.exists (fun (param, _) -> not (List.mem param types)) bounds then
+    Error "Package bound refers to an undeclared type parameter"
+  else
+    Ok
+      (if types = [] then ""
+       else
+         "<"
+         ^ String.concat ", "
+             (List.map
+                (fun param ->
+                  let constraints =
+                    List.filter_map
+                      (fun (name, trait_) ->
+                        if name = param then Some trait_ else None)
+                      bounds
+                  in
+                  "'" ^ param
+                  ^
+                  if constraints = [] then ""
+                  else ": " ^ String.concat " + " constraints)
+                types)
+         ^ ">")
+
+let renderParameters parameters =
+  ResultList.mapResults
+    (fun element ->
+      match (tryField "name" element, tryField "typ" element) with
+      | Some name, Some typ ->
+          let* name = stringValue name in
+          let name =
+            NameSyntax.formatIdentifier (NameSyntax.identifierFromText name)
+          in
+          let+ typ = renderType typ in
+          (name, "(" ^ name ^ ": " ^ typ ^ ")")
+      | _ -> Error "Invalid package function parameter")
+    (arrayItems parameters)
+
+(* Ceilings are trait identity data. Preserve them without enforcing a ceiling
+   against implementation effects, which remains outside this compiler scope. *)
+let renderTraitCeiling method_ =
+  match tryField "permissionCeiling" method_ with
+  | None -> Ok ""
+  | Some ceiling -> (
+      let* case, fields = enumCase ceiling in
+      match (case, fields) with
+      | "None", [] -> Ok ""
+      | "Some", [ effects ] ->
+          let+ effects =
+            ResultList.mapResults
+              (fun effect_ ->
+                let* name, fields = enumCase effect_ in
+                if fields = [] then Ok name
+                else Error "Invalid package trait effect")
+              (arrayItems effects)
+          in
+          "{" ^ String.concat ", " effects ^ "} "
+      | _ -> Error "Invalid package trait method ceiling")
+
 let renderEntity entity =
   try
     let root = parse entity.json in
@@ -692,14 +789,80 @@ let renderEntity entity =
                 source = "module " ^ moduleName ^ "\n" ^ body;
               }
             in
-            let typeDecl types =
-              if types = [] then ""
-              else
-                "<"
-                ^ String.concat ", " (List.map (fun t -> "'" ^ t) types)
-                ^ ">"
-            in
             match entity.kind with
+            | PackageTrait -> (
+                match
+                  (tryField "typeParams" value, tryField "methods" value)
+                with
+                | Some types, Some methods ->
+                    let* types =
+                      renderTypeParameters types (tryField "bounds" value)
+                    in
+                    let* methods =
+                      ResultList.mapResults
+                        (fun method_ ->
+                          match
+                            ( tryField "name" method_,
+                              tryField "typeParams" method_,
+                              tryField "parameters" method_,
+                              tryField "returnType" method_ )
+                          with
+                          | Some name, Some types, Some parameters, Some result
+                            ->
+                              let* name = stringValue name in
+                              let* types =
+                                renderTypeParameters types
+                                  (tryField "bounds" method_)
+                              in
+                              let* parameters = renderParameters parameters in
+                              let* ceiling = renderTraitCeiling method_ in
+                              let+ result = renderType result in
+                              "  let " ^ name ^ types ^ " "
+                              ^ String.concat " " (List.map snd parameters)
+                              ^ " : " ^ ceiling ^ result
+                          | _ -> Error "Invalid package trait method")
+                        (arrayItems methods)
+                    in
+                    Ok
+                      (prefix
+                         ("trait " ^ leaf ^ types ^ " =\n"
+                        ^ String.concat "\n" methods))
+                | _ -> Error ("Invalid package trait " ^ entity.location))
+            | PackageImpl -> (
+                match
+                  ( tryField "trait_" value,
+                    tryField "traitTypeArgs" value,
+                    tryField "self" value,
+                    tryField "typeParams" value,
+                    tryField "methods" value )
+                with
+                | Some trait_, Some args, Some self, Some types, Some methods ->
+                    let* trait_ = resolvedName trait_ in
+                    let* args =
+                      ResultList.mapResults renderType (arrayItems args)
+                    in
+                    let* self = renderType self in
+                    let* types =
+                      renderTypeParameters types (tryField "bounds" value)
+                    in
+                    let+ methods =
+                      ResultList.mapResults
+                        (fun method_ ->
+                          match arrayItems method_ with
+                          | [ name; target ] ->
+                              let* name = stringValue name in
+                              let+ target = resolvedName target in
+                              "  let " ^ name ^ " = " ^ target
+                          | _ -> Error "Invalid package implementation method")
+                        (arrayItems methods)
+                    in
+                    prefix
+                      ("impl" ^ types ^ " " ^ trait_
+                      ^ (if args = [] then ""
+                         else "<" ^ String.concat ", " args ^ ">")
+                      ^ " for (" ^ self ^ ") =\n" ^ String.concat "\n" methods)
+                | _ ->
+                    Error ("Invalid package implementation " ^ entity.location))
             | PackageFunction -> (
                 match
                   ( tryField "parameters" value,
@@ -727,14 +890,14 @@ let renderEntity entity =
                       ResultList.mapResults parameter (arrayItems parameters)
                     in
                     let* types =
-                      ResultList.mapResults stringValue (arrayItems typeParams)
+                      renderTypeParameters typeParams (tryField "bounds" value)
                     in
                     let* result = renderType returnType in
                     let+ body =
                       renderExpr (List.map fst parameters) entity.location body
                     in
                     prefix
-                      ("let " ^ leaf ^ typeDecl types ^ " "
+                      ("let " ^ leaf ^ types ^ " "
                       ^ String.concat " " (List.map snd parameters)
                       ^ " : " ^ result ^ " = " ^ body)
                 | _ -> Error ("Invalid package function " ^ entity.location))
@@ -754,11 +917,11 @@ let renderEntity entity =
                     with
                     | Some typeParams, Some definition -> (
                         let* types =
-                          ResultList.mapResults stringValue
-                            (arrayItems typeParams)
+                          renderTypeParameters typeParams
+                            (tryField "bounds" declaration)
                         in
                         let* name, fields = enumCase definition in
-                        let head = "type " ^ leaf ^ typeDecl types ^ " = " in
+                        let head = "type " ^ leaf ^ types ^ " = " in
                         match (name, fields) with
                         | "Alias", [ target ] ->
                             let+ typ = renderType target in
@@ -839,16 +1002,110 @@ let escapeDataString text =
     text;
   Buffer.contents escaped
 
-let resolveNames config resolutionEnv names =
+(* The upstream /:location module browser returns complete LocatedItems and
+   direct child modules, including traits and impls. Keep non-trait items in
+   the hash index for dependency loading, without importing unrelated bodies. *)
+let parseModuleInventory moduleName json =
+  try
+    let root = parse json in
+    match tryField "submodules" root with
+    | None -> Ok None
+    | Some modules ->
+        let* modules =
+          ResultList.mapResults
+            (fun parts ->
+              let* parts =
+                ResultList.mapResults stringValue (arrayItems parts)
+              in
+              let name = String.concat "." parts in
+              if String.starts_with ~prefix:(moduleName ^ ".") name then Ok name
+              else Error ("Invalid package child module '" ^ name ^ "'"))
+            (arrayItems modules)
+        in
+        let* entities =
+          ResultList.collectResults
+            (fun (field, kind) ->
+              ResultList.mapResults
+                (fun item ->
+                  match
+                    Option.bind (tryField "entity" item) (tryField "hash")
+                  with
+                  | None -> Error "Package inventory item is missing its hash"
+                  | Some hash ->
+                      let* hash = parseHashJson (Yojson.Raw.to_string hash) in
+                      parseLocatedEntity kind hash (Yojson.Raw.to_string item))
+                (Option.fold ~none:[] ~some:arrayItems (tryField field root)))
+            [
+              ("types", PackageType);
+              ("values", PackageValue);
+              ("fns", PackageFunction);
+              ("traits", PackageTrait);
+              ("impls", PackageImpl);
+            ]
+        in
+        Ok (Some (entities, modules))
+  with ex -> Error ("Invalid package module inventory: " ^ message ex)
+
+(* A browser leaf may shadow a module. Trait/impl leaves still carry their
+   complete body; the route itself supplies the canonical location. *)
+let parseBrowserTraitLeaf location json =
+  try
+    let root = parse json in
+    let kind =
+      if
+        Option.is_some (tryField "trait_" root)
+        && Option.is_some (tryField "self" root)
+      then Some PackageImpl
+      else if Option.is_some (tryField "methods" root) then Some PackageTrait
+      else None
+    in
+    match kind with
+    | None -> Ok []
+    | Some kind ->
+        let* hash =
+          match tryField "hash" root with
+          | None -> Error "Package browser trait item is missing its hash"
+          | Some hash -> parseHashJson (Yojson.Raw.to_string hash)
+        in
+        let parts = String.split_on_char '.' location in
+        let owner = List.hd parts in
+        let name = List.hd (List.rev parts) in
+        let modules = List.tl parts |> List.rev |> List.tl |> List.rev in
+        let located =
+          Yojson.Safe.to_string
+            (`Assoc
+               [
+                 ("owner", `String owner);
+                 ("modules", `List (List.map (fun name -> `String name) modules));
+                 ("name", `String name);
+               ])
+        in
+        let+ entity =
+          parseLocatedEntity kind hash
+            ("{\"entity\":" ^ json ^ ",\"location\":" ^ located ^ "}")
+        in
+        [ entity ]
+  with ex -> Error ("Invalid package browser trait item: " ^ message ex)
+
+let packageModule location =
+  let parts = String.split_on_char '.' location in
+  String.concat "." (List.take (min 2 (max 1 (List.length parts - 1))) parts)
+
+let resolveNames config resolutionEnv knownTraits names =
   let client = PackageIO.create () in
   Fun.protect
     ~finally:(fun () -> PackageIO.dispose client)
     (fun () ->
       let isKnownName name =
-        List.exists
-          (fun context ->
-            Result.is_ok (NameResolution.resolve context name resolutionEnv))
-          [ NameResolution.Type; NameResolution.Callable; NameResolution.Value ]
+        List.mem name knownTraits
+        || List.exists
+             (fun context ->
+               Result.is_ok (NameResolution.resolve context name resolutionEnv))
+             [
+               NameResolution.Type;
+               NameResolution.Callable;
+               NameResolution.Value;
+             ]
       in
       let fetchLocated kind hash =
         let path =
@@ -861,11 +1118,93 @@ let resolveNames config resolutionEnv names =
             let+ entity = parseLocatedEntity kind hash json in
             Some entity
       in
+      let shadowedModules = ref StringOrder.Set.empty in
+      let rec browse modules visited inventory =
+        match modules with
+        | [] ->
+            (* WrittenTypes.implMemberPath fixes impl locations as
+               <module>[.<Type>].<Trait>. Alias-only impls have no child
+               method module, so search's module list cannot reveal them. *)
+            let traitNames =
+              StringOrder.Map.bindings inventory
+              |> List.filter_map (fun (_, entity) ->
+                  if entity.kind = PackageTrait then Some entity.location
+                  else None)
+            in
+            let probes =
+              StringOrder.Set.elements !shadowedModules
+              |> List.concat_map (fun location ->
+                  List.map
+                    (fun trait ->
+                      let leaf =
+                        List.hd (List.rev (String.split_on_char '.' trait))
+                      in
+                      location ^ "." ^ leaf)
+                    (traitNames @ knownTraits))
+              |> distinct
+              |> List.filter (fun name ->
+                  not (StringOrder.Set.mem name visited))
+            in
+            if probes = [] then Ok (visited, inventory)
+            else browse probes visited inventory
+        | name :: rest when StringOrder.Set.mem name visited ->
+            browse rest visited inventory
+        | name :: rest -> (
+            let visited = StringOrder.Set.add name visited in
+            match findByName client config ("/" ^ escapeDataString name) with
+            | Error _ | Ok Missing -> browse rest visited inventory
+            | Ok (Found json) ->
+                let* parsed = parseModuleInventory name json in
+                let* entities, children =
+                  match parsed with
+                  | Some inventory -> Ok inventory
+                  | None ->
+                      let* entities = parseBrowserTraitLeaf name json in
+                      if entities = [] then
+                        shadowedModules :=
+                          StringOrder.Set.add name !shadowedModules;
+                      let path =
+                        "/search?modules=" ^ escapeDataString name
+                        ^ "&searchDepth=direct&entityTypes=module"
+                      in
+                      let* children =
+                        match findByName client config path with
+                        | Error _ | Ok Missing -> Ok []
+                        | Ok (Found json) -> (
+                            let+ inventory = parseModuleInventory name json in
+                            match inventory with
+                            | None -> []
+                            | Some (_, children) -> children)
+                      in
+                      let parent =
+                        String.split_on_char '.' name
+                        |> List.rev |> List.tl |> List.rev |> String.concat "."
+                      in
+                      Ok
+                        ( entities,
+                          children @ if parent = "" then [] else [ parent ] )
+                in
+                let* inventory =
+                  List.fold_left
+                    (fun result entity ->
+                      let* inventory = result in
+                      match StringOrder.Map.find_opt entity.hash inventory with
+                      | Some previous when previous.kind <> entity.kind ->
+                          Error
+                            ("Package hash has conflicting item kinds: "
+                           ^ entity.hash)
+                      | Some _ -> Ok inventory
+                      | None ->
+                          Ok (StringOrder.Map.add entity.hash entity inventory))
+                    (Ok inventory) entities
+                in
+                browse (children @ rest) visited inventory)
+      in
       let findRoots () =
-        let* roots =
-          ResultList.collectResults
+        let attempts =
+          List.concat_map
             (fun name ->
-              ResultList.collectResults
+              List.map
                 (fun kind ->
                   let path =
                     "/" ^ kindPath kind ^ "/find/" ^ escapeDataString name
@@ -881,65 +1220,130 @@ let resolveNames config resolutionEnv names =
                (fun name -> not (isKnownName name))
                (candidatePrefixes isKnownName names))
         in
-        Ok (distinct roots)
+        let roots =
+          List.concat_map
+            (function Ok values -> values | Error _ -> [])
+            attempts
+        in
+        if roots <> [] || List.for_all Result.is_ok attempts then
+          Ok (distinct roots)
+        else
+          match List.find_opt Result.is_error attempts with
+          | Some (Error error) -> Error error
+          | _ -> Ok []
       in
-      let rec load pending visited loaded =
+      let rec load pending visited browsed inventory loaded =
         match pending with
         | [] -> Ok (List.rev loaded)
-        | (_, hash) :: rest when StringOrder.Set.mem hash visited ->
-            load rest visited loaded
-        | (Some kind, hash) :: rest -> (
-            let* entity = fetchLocated kind hash in
+        | (_, hash, _) :: rest when StringOrder.Set.mem hash visited ->
+            load rest visited browsed inventory loaded
+        | (kind, hash, name) :: rest -> (
+            let* browsed, inventory =
+              match name with
+              | Some name when not (StringOrder.Map.mem hash inventory) ->
+                  browse [ packageModule name ] browsed inventory
+              | _ -> Ok (browsed, inventory)
+            in
+            let* entity =
+              match StringOrder.Map.find_opt hash inventory with
+              | Some entity -> Ok (Some entity)
+              | None -> (
+                  match kind with
+                  | Some kind -> fetchLocated kind hash
+                  | None ->
+                      let attempts =
+                        List.map (fun kind -> fetchLocated kind hash) allKinds
+                      in
+                      Ok
+                        (List.find_map
+                           (function
+                             | Ok (Some entity) -> Some entity | _ -> None)
+                           attempts))
+            in
             match entity with
-            | None ->
-                Error
-                  ("Package " ^ kindPath kind ^ " " ^ hash ^ " was not found")
+            | None -> Error ("Package dependency " ^ hash ^ " was not found")
             | Some entity ->
                 let* dependencies = dependencyRefs entity.json in
                 let next =
                   List.filter_map
                     (fun (hash, name) ->
-                      if isKnownName name then None else Some (None, hash))
+                      if isKnownName name then None
+                      else Some (None, hash, Some name))
                     dependencies
                 in
-                load (next @ rest)
-                  (StringOrder.Set.add hash visited)
-                  (entity :: loaded))
-        | (None, hash) :: rest -> (
-            let* attempts =
-              ResultList.mapResults
-                (fun kind ->
-                  let+ found = fetchLocated kind hash in
-                  (kind, found))
-                allKinds
-            in
-            match
-              List.find_map
-                (fun (kind, found) ->
-                  Option.map (fun entity -> (kind, entity)) found)
-                attempts
-            with
-            | None -> Error ("Package dependency " ^ hash ^ " was not found")
-            | Some (_, entity) ->
-                let* dependencies = dependencyRefs entity.json in
-                let next =
-                  List.filter_map
-                    (fun (hash, name) ->
-                      if isKnownName name then None else Some (None, hash))
-                    dependencies
+                let discovered =
+                  StringOrder.Map.bindings inventory
+                  |> List.filter_map (fun (hash, entity) ->
+                      if
+                        (entity.kind = PackageTrait || entity.kind = PackageImpl)
+                        && not (StringOrder.Set.mem hash visited)
+                      then Some (Some entity.kind, hash, Some entity.location)
+                      else None)
                 in
-                load (next @ rest)
+                load
+                  (next @ rest @ discovered)
                   (StringOrder.Set.add hash visited)
-                  (entity :: loaded))
+                  browsed inventory (entity :: loaded))
+      in
+      let candidates =
+        candidatePrefixes isKnownName names
+        |> List.filter (fun name -> not (isKnownName name))
+      in
+      let* browsed, inventory =
+        browse
+          (List.map packageModule candidates |> distinct)
+          StringOrder.Set.empty StringOrder.Map.empty
       in
       let* roots = findRoots () in
+      let inventoryRoots =
+        StringOrder.Map.bindings inventory
+        |> List.filter_map (fun (hash, entity) ->
+            if List.mem entity.location candidates then Some (entity.kind, hash)
+            else None)
+      in
+      let roots = distinct (roots @ inventoryRoots) in
+      let* rootEntities =
+        ResultList.mapResults
+          (fun (kind, hash) ->
+            let* entity =
+              match StringOrder.Map.find_opt hash inventory with
+              | Some entity -> Ok (Some entity)
+              | None -> fetchLocated kind hash
+            in
+            match entity with
+            | Some entity -> Ok entity
+            | None -> Error ("Package root was not found: " ^ hash))
+          roots
+      in
+      let modules =
+        List.map (fun entity -> packageModule entity.location) rootEntities
+        |> distinct
+      in
+      let* browsed, inventory = browse modules browsed inventory in
+      let inventory =
+        List.fold_left
+          (fun inventory entity ->
+            StringOrder.Map.add entity.hash entity inventory)
+          inventory rootEntities
+      in
+      let discovered =
+        StringOrder.Map.bindings inventory
+        |> List.filter_map (fun (hash, entity) ->
+            if entity.kind = PackageTrait || entity.kind = PackageImpl then
+              Some (Some entity.kind, hash, Some entity.location)
+            else None)
+      in
       let* entities =
         load
-          (List.map (fun (kind, hash) -> (Some kind, hash)) roots)
-          StringOrder.Set.empty []
+          (List.map
+             (fun entity ->
+               (Some entity.kind, entity.hash, Some entity.location))
+             rootEntities
+          @ discovered)
+          StringOrder.Set.empty browsed inventory []
       in
       ResultList.mapResults renderEntity entities)
 
-let resolveWritten config resolutionEnv units =
+let resolveWritten ?(knownTraits = []) config resolutionEnv units =
   let* names = WrittenSource.qualifiedNames units in
-  resolveNames config resolutionEnv names
+  resolveNames config resolutionEnv knownTraits names

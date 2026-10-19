@@ -23,6 +23,7 @@ type diagnosticSeverity = DiagError | DiagWarning
 
 module DiagnosticCode = struct
   let expected = "PARSE-EXPECTED"
+  let bound = "PARSE-BOUND"
   let unclosed = "PARSE-UNCLOSED"
   let escape = "PARSE-ESCAPE"
   let intRange = "PARSE-INT-RANGE"
@@ -176,10 +177,10 @@ let isIntLit = function
       true
   | TFloat _ | TStringLit _ | TCharLit _ | TInterpString | TTrue | TFalse
   | TPlus | TPlusPlus | TMinus | TStar | TStarStar | TSlash | TLParen | TRParen
-  | TLet | TVal | TIn | TIf | TElif | TThen | TElse | TType | TCons | TColon
-  | TComma | TSemicolon | TDot | TLBrace | TRBrace | TBar | TOf | TMatch | TWith
-  | TFun | TArrow | TUnderscore | TWhen | TLBracket | TRBracket | TEquals
-  | TEqEq | TNeq | TLt | TGt | TLte | TGte | TAnd | TOr | TNot | TPipe
+  | TLet | TVal | TIn | TIf | TElif | TThen | TElse | TType | TTrait | TImpl
+  | TCons | TColon | TComma | TSemicolon | TDot | TLBrace | TRBrace | TBar | TOf
+  | TMatch | TWith | TFun | TArrow | TUnderscore | TWhen | TLBracket | TRBracket
+  | TEquals | TEqEq | TNeq | TLt | TGt | TLte | TGte | TAnd | TOr | TNot | TPipe
   | TDotDotDot | TPercent | TShl | TShr | TBitAnd | TBitXor | TBitNot | TAt
   | TIdent _ | TEOF ->
       false
@@ -247,7 +248,7 @@ let closesOrSeparates token =
    declaration must survive a broken one before it)
 *)
 let isRecoveryBarrier token =
-  closesOrSeparates token || List.mem token [ TLet; TType; TVal ]
+  closesOrSeparates token || List.mem token [ TLet; TType; TTrait; TImpl; TVal ]
 
 let maxDepth = 512
 
@@ -607,55 +608,6 @@ let expectGt state index =
    declaration type parameters `<'a, 'b>` — collect the (tick-stripped) names
    so generic types/fns keep their params (needed for runtime type unification).
 *)
-let parseTypeParams state index =
-  if tok state index <> TLt then ([], index)
-  else begin
-    if
-      index > 0
-      && ((rng state index).start.row <> (rng state (index - 1)).end_.row
-         || (rng state index).start.column
-            <> (rng state (index - 1)).end_.column)
-    then
-      err state DiagnosticCode.expected index
-        "Generic type parameters must be adjacent to the declaration name";
-    let names = ref []
-    and next = ref (index + 1)
-    and expectingName = ref true in
-    while not (List.mem (tok state !next) [ TGt; TShr; TEOF ]) do
-      match (!expectingName, tok state !next) with
-      | true, TIdent name ->
-          if not (String.starts_with ~prefix:"'" (txt state !next)) then
-            err state DiagnosticCode.expected !next
-              "Declared type parameters must start with an apostrophe, such as \
-               'a";
-          names := (name, rng state !next) :: !names;
-          expectingName := false;
-          incr next
-      | false, TComma ->
-          expectingName := true;
-          incr next
-      | false, TIdent _ ->
-          errExpected state !next "a comma between type parameters";
-          expectingName := true
-      | _ ->
-          errExpected state !next "a type parameter";
-          incr next
-    done;
-    if !names = [] then
-      errExpected state (index + 1) "at least one type parameter"
-    else if !expectingName then
-      errExpected state !next "a type parameter after ','";
-    let stop =
-      if List.mem (tok state !next) [ TGt; TShr ] then !next + 1
-      else begin
-        errExpected state !next "'>' to close the type-parameter list";
-        !next
-      end
-    in
-    (List.rev !names, stop)
-  end
-[@@warning "-4"]
-
 (*
    --- offside scope stack ---
    One scope = `stmtCol` (the current statement's anchor column; -1 = none) +
@@ -734,7 +686,7 @@ let withStmtColExact state column run =
    declaration (`let broken = [1L;` must not eat the `let fine …` below it).
 *)
 let declBarrier state index =
-  List.mem (tok state index) [ TLet; TType; TVal ]
+  List.mem (tok state index) [ TLet; TType; TTrait; TImpl; TVal ]
   && state.declAnchor >= 0
   && (rng state index).start.column <= state.declAnchor
 

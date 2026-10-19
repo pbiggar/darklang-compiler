@@ -1,5 +1,7 @@
 # Maintained decisions only. Generated facts belong in generated/ledger.json.
 schema: 1
+# Exceptional upstream test IDs -> {compiler: [existing test IDs], reason: ...}.
+test_mappings: {}
 features:
   - name: Async
     reviewed_sha256: ca1967700ac5e14cce0a83f77a0f1581254c7755f9e1842803be9f0a63d56837
@@ -12,15 +14,15 @@ features:
     sources: [src/frontend/interpreter/LibExecution_Effects.ml, src/frontend/interpreter/DeclarationSupport.ml, src/frontend/WrittenDeclarations.ml, src/frontend/WrittenSource.ml]
     notes: Effect names and function annotations are parsed; the direct checker does not propagate or enforce permission ceilings.
   - name: Traits
-    reviewed_sha256: 03438f329a0eb3ebe30331627caa71f83d25c528955a61a5dc55fea238f53cb6
-    status: missing
-    sources: [src/frontend/interpreter/WrittenTypes.ml, src/frontend/WrittenSource.ml]
-    notes: No trait/impl declaration variants or trait dispatch in this branch. Ordinary generic functions are supported separately.
+    reviewed_sha256: c62819a569c2051cee1574c58197f8ce127468e50c43b387cb060612fd36cccb
+    status: implemented
+    sources: [src/frontend/interpreter/WrittenTypes.ml, src/frontend/WrittenSource.ml, src/TraitCatalog.ml, src/frontend/WrittenTraitSupport.ml, src/frontend/TraitResolution.ml]
+    notes: Static trait/impl checking, bounds, receiver/operator dispatch and specialization are implemented. Detailed compatibility remains in the existing suite.
   - name: Named package tests
     reviewed_sha256: 2f7543e0107953e3bb30e23f348daeae4395afa3b3670d592a5c1867245b28e6
     status: partial
     sources: [src/frontend/NamedPackageTests.ml]
-    notes: Parsing and extraction exist; Test helpers, test-local builtins and outcome execution remain unfinished.
+    notes: Parsing and extraction exist, and imported named fixtures have an assertion adapter. General package-test adoption and test-local infrastructure remain incomplete.
   - name: Primitive literals and numeric types
     reviewed_sha256: 24418d30308de4c0cf9b4d40d299a3c0116f5777c247e377af95571153ca5ce4
     status: implemented
@@ -62,9 +64,9 @@ features:
     sources: [src/frontend/WrittenApplicationSupport.ml, src/AST.ml]
     notes: No interpreter-style runtime program evaluation/reflection implementation; compile-time metadata is not runtime reflection.
 source_mappings:
-  # These share a root module with unrelated functions, but have no implementation here.
+  # Await shares a root module with unrelated functions, but has no implementation here.
   packages/darklang/stdlib/await.dark: []
-  packages/darklang/stdlib/traits.dark: []
+  packages/darklang/stdlib/traits.dark: [StdLib/traits.dark]
   # Upstream nested modules are split into separate compiler source files.
   packages/darklang/stdlib/cli/host.dark:
     - StdLib/Cli/OS.dark

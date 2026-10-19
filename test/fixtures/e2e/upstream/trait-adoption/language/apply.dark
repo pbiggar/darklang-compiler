@@ -1,0 +1,29 @@
+// Selected unchanged named test from darklang/dark a9d93efc853486244630dad693fe79f6f4882cf6
+// packages/darklang/tests/language/apply.dark
+module Darklang.Language.Tests.Apply
+
+test lambdasAndOperators =
+  Stdlib.Test.all
+    [ (let fn = (fun x -> x + 1L)
+       fn 6L)
+      |> Stdlib.Test.equal 7L
+      (let fn = (+)
+       fn 3L 4L)
+      |> Stdlib.Test.equal 7L
+      (let fn = (fun a b -> Stdlib.max a b)
+       fn 3L 7L)
+      |> Stdlib.Test.equal 7L
+      ([ 1L, 2L, 3L, 4L, 5L ]
+       |> Stdlib.List.map (fun x y -> x)
+       |> Stdlib.List.map (fun l -> l 1L))
+      |> Stdlib.Test.equal [ 1L, 2L, 3L, 4L, 5L ] ]
+
+// ---------------------------
+// DarkInternal tests are internal
+// ---------------------------
+// module DarkInternal =
+//   test schedulingRuleListRaises =
+//     Builtin.darkInternalInfraSchedulingRuleList () => raises "Unknown error"
+
+// The extra binding gives this function a distinct content hash, so runtime errors
+// consistently name this function rather than another name for the same body.

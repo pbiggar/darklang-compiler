@@ -97,3 +97,12 @@ let fromCodepoint (codepoint: Int) : Stdlib.Option.Option<Char> =
     | Some value ->
         if Stdlib.String.__Unicode.isScalar value then Some (Stdlib.Char.__asChar (Stdlib.String.__fromCodepoints ([value])))
         else None
+
+impl Stdlib.ToString for Char =
+  let toString = Stdlib.Char.toString
+
+impl Stdlib.Compare for Char =
+  let lessThan = Stdlib.Char.isLessThan
+  let lessThanOrEqualTo = Stdlib.Char.isLessThanOrEqualTo
+  let greaterThan = Stdlib.Char.isGreaterThan
+  let greaterThanOrEqualTo = Stdlib.Char.isGreaterThanOrEqualTo

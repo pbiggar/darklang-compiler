@@ -1,0 +1,36 @@
+// Selected unchanged named tests from darklang/dark a9d93efc853486244630dad693fe79f6f4882cf6
+// packages/darklang/tests/stdlib/ints/int128.dark
+module Darklang.Stdlib.Int128.Tests
+
+test abs =
+  Stdlib.Test.all
+    [ Stdlib.abs -5Q |> Stdlib.Test.equal 5Q
+      Stdlib.abs 5Q |> Stdlib.Test.equal 5Q
+      Stdlib.abs -170141183460469231731687303715884105728Q
+      |> Stdlib.Test.equal -170141183460469231731687303715884105728Q ]
+
+// `Stdlib.max`, `min` and `clamp` are one generic over `Compare`; these check
+// that it reaches this type and that the type's own comparison holds at its
+// extremes.
+
+test max =
+  Stdlib.max 170141183460469231731687303715884105727Q -170141183460469231731687303715884105728Q
+  |> Stdlib.Test.equal 170141183460469231731687303715884105727Q
+
+test min =
+  Stdlib.min 170141183460469231731687303715884105727Q -170141183460469231731687303715884105728Q
+  |> Stdlib.Test.equal -170141183460469231731687303715884105728Q
+
+test clamp =
+  Stdlib.clamp -100Q 0Q -1Q |> Stdlib.Test.equal -1Q
+
+test toString =
+  Stdlib.Test.all
+    [ Stdlib.toString 0Q |> Stdlib.Test.equal "0"
+      Stdlib.toString 1Q |> Stdlib.Test.equal "1"
+      Stdlib.toString -1Q |> Stdlib.Test.equal "-1"
+      Stdlib.toString -170141183460469231731687303715884105728Q
+      |> Stdlib.Test.equal "-170141183460469231731687303715884105728"
+      Stdlib.toString 170141183460469231731687303715884105727Q
+      |> Stdlib.Test.equal "170141183460469231731687303715884105727" ]
+

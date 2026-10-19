@@ -73,6 +73,13 @@ their original expectation and may put `#compileerror="message"` immediately
 before a test to override that expectation for the AOT compiler. The directive
 may override either an upstream success or error expectation.
 
+Upstream named tests (`test name =` with an indented body) retain their module
+scopes and shared declarations. `=> raises` records a language failure; use the
+same AOT directive when that case must fail during compilation. Positive named
+tests return `Stdlib.Test.Result`. The fixture-only adapter in
+`test/fixtures/support/named-test.dark` supports `equal` and `all`; it is not a
+production implementation of the upstream test runner or reflective diagnostics.
+
 ## Syntax fixtures
 
 Place `.syntax` files under `test/fixtures/syntax/`. A file can contain multiple

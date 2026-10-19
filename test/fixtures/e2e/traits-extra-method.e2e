@@ -1,0 +1,8 @@
+(
+trait ExtraMethodShow<'a> =
+  let show (value: 'a) : String
+impl ExtraMethodShow for Int64 =
+  let show (value: Int64) : String = "integer"
+  let unexpected (value: Int64) : String = "extra"
+0L
+) = compileerror="Extra trait method 'unexpected'"

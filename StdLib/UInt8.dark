@@ -102,3 +102,56 @@ let fromInt64 (value: Int64) : Stdlib.Option.Option<UInt8> = Stdlib.Int.toUInt8 
 let fromUInt64 (value: UInt64) : Stdlib.Option.Option<UInt8> = Stdlib.Int.toUInt8 (Stdlib.Int.fromUInt64 value)
 let fromInt128 (value: Int128) : Stdlib.Option.Option<UInt8> = Stdlib.Int.toUInt8 (Stdlib.Int.fromInt128 value)
 let fromUInt128 (value: UInt128) : Stdlib.Option.Option<UInt8> = Stdlib.Int.toUInt8 (Stdlib.Int.fromUInt128 value)
+
+// Trait implementations reuse the compiler's existing native operations.
+
+impl Stdlib.Add for UInt8 =
+  let add = Stdlib.UInt8.add
+
+impl Stdlib.Subtract for UInt8 =
+  let subtract = Stdlib.UInt8.subtract
+
+impl Stdlib.Multiply for UInt8 =
+  let multiply = Stdlib.UInt8.multiply
+
+impl Stdlib.Divide for UInt8 =
+  let divide = Stdlib.UInt8.divide
+
+impl Stdlib.Modulo for UInt8 =
+  let modulo = Stdlib.UInt8.mod
+
+impl Stdlib.Power for UInt8 =
+  let power = Stdlib.UInt8.power
+
+impl Stdlib.BitwiseAnd for UInt8 =
+  let bitwiseAnd = Stdlib.UInt8.bitwiseAnd
+
+impl Stdlib.BitwiseOr for UInt8 =
+  let bitwiseOr = Stdlib.UInt8.bitwiseOr
+
+impl Stdlib.BitwiseXor for UInt8 =
+  let bitwiseXor = Stdlib.UInt8.bitwiseXor
+
+impl Stdlib.BitwiseNot for UInt8 =
+  let bitwiseNot = Stdlib.UInt8.bitwiseNot
+
+impl Stdlib.ShiftLeft for UInt8 =
+  let shiftLeft = Stdlib.UInt8.shiftLeft
+
+impl Stdlib.ShiftRight for UInt8 =
+  let shiftRight = Stdlib.UInt8.shiftRight
+
+impl Stdlib.ToString for UInt8 =
+  let toString = Stdlib.UInt8.toString
+
+impl Stdlib.Compare for UInt8 =
+  let lessThan = Stdlib.UInt8.lessThan
+  let lessThanOrEqualTo = Stdlib.UInt8.lessThanOrEqualTo
+  let greaterThan = Stdlib.UInt8.greaterThan
+  let greaterThanOrEqualTo = Stdlib.UInt8.greaterThanOrEqualTo
+
+impl Stdlib.Zero for UInt8 =
+  let zero () : UInt8 = 0uy
+
+impl Stdlib.One for UInt8 =
+  let one () : UInt8 = 1uy

@@ -137,3 +137,59 @@ let fromUInt32 (value: UInt32) : Int64 = Stdlib.Int64.__fromIntUnchecked (Stdlib
 let fromUInt64 (value: UInt64) : Stdlib.Option.Option<Int64> = Stdlib.Int.toInt64 (Stdlib.Int.fromUInt64 value)
 let fromInt128 (value: Int128) : Stdlib.Option.Option<Int64> = Stdlib.Int.toInt64 (Stdlib.Int.fromInt128 value)
 let fromUInt128 (value: UInt128) : Stdlib.Option.Option<Int64> = Stdlib.Int.toInt64 (Stdlib.Int.fromUInt128 value)
+
+// Trait implementations reuse the compiler's existing native operations.
+
+impl Stdlib.Add for Int64 =
+  let add = Stdlib.Int64.add
+
+impl Stdlib.Subtract for Int64 =
+  let subtract = Stdlib.Int64.subtract
+
+impl Stdlib.Multiply for Int64 =
+  let multiply = Stdlib.Int64.multiply
+
+impl Stdlib.Divide for Int64 =
+  let divide = Stdlib.Int64.divide
+
+impl Stdlib.Modulo for Int64 =
+  let modulo = Stdlib.Int64.mod
+
+impl Stdlib.Power for Int64 =
+  let power = Stdlib.Int64.power
+
+impl Stdlib.Negate for Int64 =
+  let negate = Stdlib.Int64.negate
+
+impl Stdlib.BitwiseAnd for Int64 =
+  let bitwiseAnd = Stdlib.Int64.bitwiseAnd
+
+impl Stdlib.BitwiseOr for Int64 =
+  let bitwiseOr = Stdlib.Int64.bitwiseOr
+
+impl Stdlib.BitwiseXor for Int64 =
+  let bitwiseXor = Stdlib.Int64.bitwiseXor
+
+impl Stdlib.BitwiseNot for Int64 =
+  let bitwiseNot = Stdlib.Int64.bitwiseNot
+
+impl Stdlib.ShiftLeft for Int64 =
+  let shiftLeft = Stdlib.Int64.shiftLeft
+
+impl Stdlib.ShiftRight for Int64 =
+  let shiftRight = Stdlib.Int64.shiftRight
+
+impl Stdlib.ToString for Int64 =
+  let toString = Stdlib.Int64.toString
+
+impl Stdlib.Compare for Int64 =
+  let lessThan = Stdlib.Int64.lessThan
+  let lessThanOrEqualTo = Stdlib.Int64.lessThanOrEqualTo
+  let greaterThan = Stdlib.Int64.greaterThan
+  let greaterThanOrEqualTo = Stdlib.Int64.greaterThanOrEqualTo
+
+impl Stdlib.Zero for Int64 =
+  let zero () : Int64 = 0L
+
+impl Stdlib.One for Int64 =
+  let one () : Int64 = 1L

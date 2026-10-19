@@ -1,0 +1,38 @@
+// Selected unchanged named tests from darklang/dark a9d93efc853486244630dad693fe79f6f4882cf6
+// packages/darklang/tests/stdlib/ints/int.dark
+module Darklang.Stdlib.Int.Tests
+
+// Arbitrary-precision `Int` — the small/big representation split.
+//
+// `Int` is stored as a small (Int64-backed) value when it fits, and only
+// promotes to a big representation on overflow. Values are NORMALIZED: any
+// result that fits Int64 always uses the small representation. These tests
+// exercise the boundary, promotion, demotion, normalization, and finite/infinite
+// ordering — the properties that break if normalization is wrong. Literals use
+// the F# `I` suffix because these testfiles are parsed by the F# parser.
+//
+// The representation itself is not visible from Dark, so these check the VALUES
+// on both sides of the Int64 range, where a representation bug would show.
+
+// --- boundary: largest small value vs first big value ---
+test toStringAndParse =
+  Stdlib.Test.all
+    [ Stdlib.toString 5 |> Stdlib.Test.equal "5"
+      Stdlib.toString 9223372036854775808
+      |> Stdlib.Test.equal "9223372036854775808"
+      Stdlib.Int.parse "9223372036854775808"
+      |> Stdlib.Test.equal (Ok 9223372036854775808)
+      Stdlib.Int.parse "5" |> Stdlib.Test.equal (Ok 5)
+      Stdlib.Int.parse "not a number"
+      |> Stdlib.Test.equal (Error Stdlib.Int.ParseError.BadFormat)
+      Stdlib.Int.parse ""
+      |> Stdlib.Test.equal (Error Stdlib.Int.ParseError.BadFormat)
+      Stdlib.Int.parse "5.0"
+      |> Stdlib.Test.equal (Error Stdlib.Int.ParseError.BadFormat)
+      Stdlib.Int.parse "5_000"
+      |> Stdlib.Test.equal (Error Stdlib.Int.ParseError.BadFormat)
+      // arbitrary precision: a value past Int64.MinValue still parses
+      Stdlib.Int.parse "-9223372036854775809"
+      |> Stdlib.Test.equal (Ok -9223372036854775809) ]
+
+// toInt64 relies on the invariant: a small Int always fits, a big Int never does

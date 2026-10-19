@@ -6,6 +6,8 @@ type checkedExpression =
 
 type functionSignature = {
   id : AST.functionId;
+  traitMethod : (string * string) option;
+  bounds : TraitCatalog.obligation list;
   typeParams : string list;
   parameters : AST.semanticType list;
   return : AST.semanticType;
@@ -18,11 +20,35 @@ type typeEntry = {
   params : string list;
   path : string list;
   definition : WrittenTypes.typeDefinition;
+  bounds : WrittenTypes.typeParamBound list;
 }
 
 type typeInventory = typeEntry StringOrder.Map.t
 
+(* Traits occupy their own identity catalog, never the nominal type inventory. *)
+type traitSignature = {
+  identity : string;
+  methodOrder : string list;
+  methodEffects : string list option StringOrder.Map.t;
+  traitParams : string list;
+  requirements : TraitCatalog.obligation list;
+  methods : functionSignature StringOrder.Map.t;
+}
+
+type traitImplementation = {
+  identity : string;
+  traitName : string;
+  selfType : AST.semanticType;
+  typeParams : string list;
+  bounds : TraitCatalog.obligation list;
+  methodArguments : (AST.semanticType list * string list) StringOrder.Map.t;
+  traitArgs : AST.semanticType list;
+  methodFunctions : functionSignature StringOrder.Map.t;
+}
+
 type globals = {
+  traits : traitSignature StringOrder.Map.t;
+  implementations : traitImplementation list;
   functions : functionSignature StringOrder.Map.t;
   values : locals;
   types : typeInventory;
@@ -30,6 +56,7 @@ type globals = {
   allowInternal : bool;
   typeParams : StringOrder.Set.t;
   modulePath : string list;
+  bounds : TraitCatalog.obligation list;
   currentFunction : (AST.functionId * string * string list) option;
 }
 

@@ -199,10 +199,19 @@ type fnParam =
   | FPNormal of
       range * identifier * typeReference * range * range * range * string
 
+(* Each bound retains the qualified trait reference and its source range. *)
+type typeParamBound = {
+  range : range;
+  param : string;
+  trait_ : qualifiedTypeIdentifier;
+  symbolColon : range;
+}
+
 type fnDecl = {
   range : range;
   name : identifier;
   typeParams : (string * range) list;
+  bounds : typeParamBound list;
   parameters : fnParam list;
   effects : identifier list option;
   returnType : typeReference;
@@ -254,8 +263,50 @@ type typeDecl = {
   range : range;
   name : identifier;
   typeParams : (string * range) list;
+  bounds : typeParamBound list;
   definition : typeDefinition;
   keywordType : range;
+  symbolEquals : range;
+  description : string;
+}
+
+(* Trait signatures and implementation members mirror the interpreter grammar. *)
+type traitMethodDecl = {
+  range : range;
+  name : identifier;
+  typeParams : (string * range) list;
+  bounds : typeParamBound list;
+  parameters : fnParam list;
+  effects : identifier list option;
+  returnType : typeReference;
+  body : expr option;
+  keywordLet : range;
+  symbolColon : range;
+  description : string;
+}
+
+type traitDecl = {
+  range : range;
+  name : identifier;
+  typeParams : (string * range) list;
+  bounds : typeParamBound list;
+  methods : traitMethodDecl list;
+  keywordTrait : range;
+  symbolEquals : range;
+  description : string;
+}
+
+type implMember = IMethod of fnDecl | IAlias of valueDecl
+
+type implDecl = {
+  range : range;
+  typeParams : (string * range) list;
+  bounds : typeParamBound list;
+  trait_ : qualifiedTypeIdentifier;
+  forType : typeReference;
+  members : implMember list;
+  keywordImpl : range;
+  keywordFor : range;
   symbolEquals : range;
   description : string;
 }
@@ -289,6 +340,8 @@ and declaration =
   | DValue of valueDecl
   | DModule of moduleDecl
   | DType of typeDecl
+  | DTrait of traitDecl
+  | DImpl of implDecl
   | DExpr of expr
   | DTypeDB of typeDecl
   | DAssertion of assertion

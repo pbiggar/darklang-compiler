@@ -1,0 +1,3 @@
+trait MissingImplShow<'a> =
+  let show (value: 'a) : String
+MissingImplShow.show 42L = compileerror="No implementation of trait 'MissingImplShow'"

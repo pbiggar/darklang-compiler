@@ -291,10 +291,19 @@ type fnParam =
    `:{Http, Clock} String` Some [...] only these; anything else inside is denied
    preceding `///` doc comments
 *)
+(* Each bound retains the qualified trait reference and its source range. *)
+type typeParamBound = {
+  range : range;
+  param : string;
+  trait_ : qualifiedTypeIdentifier;
+  symbolColon : range;
+}
+
 type fnDecl = {
   range : range;
   name : identifier;
   typeParams : (string * range) list;
+  bounds : typeParamBound list;
   parameters : fnParam list;
   effects : identifier list option;
   returnType : typeReference;
@@ -364,6 +373,7 @@ type typeDecl = {
   range : range;
   name : identifier;
   typeParams : (string * range) list;
+  bounds : typeParamBound list;
   definition : typeDefinition;
   keywordType : range;
   symbolEquals : range;
@@ -373,6 +383,47 @@ type typeDecl = {
 (*
    A `module Name.Path` header.
 *)
+(* Trait signatures and implementation members mirror the interpreter grammar. *)
+type traitMethodDecl = {
+  range : range;
+  name : identifier;
+  typeParams : (string * range) list;
+  bounds : typeParamBound list;
+  parameters : fnParam list;
+  effects : identifier list option;
+  returnType : typeReference;
+  body : expr option;
+  keywordLet : range;
+  symbolColon : range;
+  description : string;
+}
+
+type traitDecl = {
+  range : range;
+  name : identifier;
+  typeParams : (string * range) list;
+  bounds : typeParamBound list;
+  methods : traitMethodDecl list;
+  keywordTrait : range;
+  symbolEquals : range;
+  description : string;
+}
+
+type implMember = IMethod of fnDecl | IAlias of valueDecl
+
+type implDecl = {
+  range : range;
+  typeParams : (string * range) list;
+  bounds : typeParamBound list;
+  trait_ : qualifiedTypeIdentifier;
+  forType : typeReference;
+  members : implMember list;
+  keywordImpl : range;
+  keywordFor : range;
+  symbolEquals : range;
+  description : string;
+}
+
 type moduleDecl = {
   range : range;
   name : range * string;
@@ -415,6 +466,8 @@ and declaration =
   | DValue of valueDecl
   | DModule of moduleDecl
   | DType of typeDecl
+  | DTrait of traitDecl
+  | DImpl of implDecl
   | DExpr of expr
   | DTypeDB of typeDecl
   | DAssertion of assertion

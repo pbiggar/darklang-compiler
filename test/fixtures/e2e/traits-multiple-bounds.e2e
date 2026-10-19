@@ -1,0 +1,10 @@
+trait BoundShow<'a> =
+  let show (value: 'a) : String
+trait BoundNumber<'a> =
+  let number (value: 'a) : Int64
+impl BoundShow for Int64 =
+  let show (value: Int64) : String = "integer"
+impl BoundNumber for Int64 =
+  let number (value: Int64) : Int64 = value
+let useBothBounds<'a: BoundShow + BoundNumber> (value: 'a) : (String * Int64) = (BoundShow.show value, BoundNumber.number value)
+useBothBounds 42L = ("integer", 42L)

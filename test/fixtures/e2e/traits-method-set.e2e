@@ -1,0 +1,8 @@
+(
+trait MethodSetShow<'a> =
+  let show (value: 'a) : String
+  let describe (value: 'a) : String
+impl MethodSetShow for Int64 =
+  let show (value: Int64) : String = "integer"
+0L
+) = compileerror="Missing trait method 'describe'"

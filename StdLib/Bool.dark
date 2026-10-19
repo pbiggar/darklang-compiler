@@ -13,3 +13,6 @@ let or (a: Bool) (b: Bool) : Bool = a || b
 let xor (a: Bool) (b: Bool) : Bool = if a then Stdlib.Bool.not b else b
 
 let toString (b: Bool) : String = if b then "true" else "false"
+
+impl Stdlib.ToString for Bool =
+  let toString = Stdlib.Bool.toString

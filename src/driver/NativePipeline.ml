@@ -761,8 +761,15 @@ let lowerToAllocatedLirWithKnownGroups externalSummaries target verbosity
                               = Some summary.C.purity
                             in
                             let constantMatches =
-                              FunctionIdMap.tryFind callee knownTypedConstants
-                              = summary.C.constantReturn
+                              Option.equal
+                                (fun (leftType, leftOperand)
+                                     (rightType, rightOperand) ->
+                                  leftType = rightType
+                                  && MIR_Optimize.sameReturnOperand leftOperand
+                                       rightOperand)
+                                (FunctionIdMap.tryFind callee
+                                   knownTypedConstants)
+                                summary.C.constantReturn
                             in
                             let writesMatch =
                               Option.value ~default:allWrites

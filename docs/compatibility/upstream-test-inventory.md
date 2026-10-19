@@ -4,7 +4,7 @@ Generated from `test/test-suite-tooling/E2EDiscovery.ml` (shared with the runner
 `test/fixtures/e2e/upstream/**/*.dark` files. Regenerate with
 `python3 scripts/audit-upstream-gates.py`; verify with `--check`.
 
-**105 files; 31 whole-file exclusions; 290 line-number entries
+**121 files; 31 whole-file exclusions; 290 line-number entries
 across 34 files.** A line entry is not a skipped-test count.
 The runner matches the `L<number>:` assertion name produced by the fixture
 parser. Declarations and multiline assertions require parser inspection;
@@ -53,6 +53,7 @@ Other skip metadata and runtime filters are outside this inventory.
 | [language/interpreter.dark](../../test/fixtures/e2e/upstream/language/interpreter.dark) | enabled | — |
 | [language/nested-fns.dark](../../test/fixtures/e2e/upstream/language/nested-fns.dark) | enabled | 55, 60 |
 | [language/runtime-to-programtypes.dark](../../test/fixtures/e2e/upstream/language/runtime-to-programtypes.dark) | disabled | — |
+| [language/traits.dark](../../test/fixtures/e2e/upstream/language/traits.dark) | enabled | — |
 | [scm/branch-identity.dark](../../test/fixtures/e2e/upstream/scm/branch-identity.dark) | enabled | 9, 20, 23, 27, 31, 32 |
 | [scm/commit-hash.dark](../../test/fixtures/e2e/upstream/scm/commit-hash.dark) | disabled | — |
 | [scm/conflicts.dark](../../test/fixtures/e2e/upstream/scm/conflicts.dark) | enabled | 51, 58, 64, 70, 79, 86, 92, 99, 105, 111, 129, 136, 144, 155, 161, 169, 175, 184, 194, 204, 220, 224, 228, 232, 233, 234, 236, 242, 243, 246, 251, 257, 258, 259, 263, 265, 266 |
@@ -118,6 +119,21 @@ Other skip metadata and runtime filters are outside this inventory.
 | [stdlib/tuple.dark](../../test/fixtures/e2e/upstream/stdlib/tuple.dark) | enabled | — |
 | [stdlib/uuid.dark](../../test/fixtures/e2e/upstream/stdlib/uuid.dark) | enabled | — |
 | [stdlib/x509.dark](../../test/fixtures/e2e/upstream/stdlib/x509.dark) | enabled | — |
+| [trait-adoption/language/apply.dark](../../test/fixtures/e2e/upstream/trait-adoption/language/apply.dark) | enabled | — |
+| [trait-adoption/language/pipe.dark](../../test/fixtures/e2e/upstream/trait-adoption/language/pipe.dark) | enabled | — |
+| [trait-adoption/stdlib/char.dark](../../test/fixtures/e2e/upstream/trait-adoption/stdlib/char.dark) | enabled | — |
+| [trait-adoption/stdlib/float.dark](../../test/fixtures/e2e/upstream/trait-adoption/stdlib/float.dark) | enabled | — |
+| [trait-adoption/stdlib/ints-int.dark](../../test/fixtures/e2e/upstream/trait-adoption/stdlib/ints-int.dark) | enabled | — |
+| [trait-adoption/stdlib/ints-int128.dark](../../test/fixtures/e2e/upstream/trait-adoption/stdlib/ints-int128.dark) | enabled | — |
+| [trait-adoption/stdlib/ints-int16.dark](../../test/fixtures/e2e/upstream/trait-adoption/stdlib/ints-int16.dark) | enabled | — |
+| [trait-adoption/stdlib/ints-int32.dark](../../test/fixtures/e2e/upstream/trait-adoption/stdlib/ints-int32.dark) | enabled | — |
+| [trait-adoption/stdlib/ints-int64.dark](../../test/fixtures/e2e/upstream/trait-adoption/stdlib/ints-int64.dark) | enabled | — |
+| [trait-adoption/stdlib/ints-int8.dark](../../test/fixtures/e2e/upstream/trait-adoption/stdlib/ints-int8.dark) | enabled | — |
+| [trait-adoption/stdlib/ints-uint128.dark](../../test/fixtures/e2e/upstream/trait-adoption/stdlib/ints-uint128.dark) | enabled | — |
+| [trait-adoption/stdlib/ints-uint16.dark](../../test/fixtures/e2e/upstream/trait-adoption/stdlib/ints-uint16.dark) | enabled | — |
+| [trait-adoption/stdlib/ints-uint32.dark](../../test/fixtures/e2e/upstream/trait-adoption/stdlib/ints-uint32.dark) | enabled | — |
+| [trait-adoption/stdlib/ints-uint64.dark](../../test/fixtures/e2e/upstream/trait-adoption/stdlib/ints-uint64.dark) | enabled | — |
+| [trait-adoption/stdlib/ints-uint8.dark](../../test/fixtures/e2e/upstream/trait-adoption/stdlib/ints-uint8.dark) | enabled | — |
 
 ## Blank and comment line entries
 

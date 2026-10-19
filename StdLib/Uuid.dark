@@ -4,6 +4,9 @@
 
 module Darklang.Stdlib.Uuid
 
+impl Stdlib.ToString for Uuid =
+  let toString = Stdlib.Uuid.toString
+
 // The canonical surface mirrors darklang/dark at
 // 04fbe9dcc995c6188757d583e273cbd30a3e2d3d. UUID is represented by the
 // root UUID(UInt128) sum rather than by a String alias.

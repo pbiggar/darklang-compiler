@@ -1,0 +1,14 @@
+trait ValueShow<'a> =
+  let show (value: 'a) : String
+impl ValueShow for Int64 =
+  let show (value: Int64) : String = "integer"
+let renderBoundValue<'a: ValueShow> (value: 'a) : String = ValueShow.show value
+let renderApplied<'a: ValueShow> (value: 'a) : String = let render = renderBoundValue<'a> in render value
+renderApplied 42L = "integer"
+
+(
+trait MissingValueShow<'a> =
+  let missingShow (value: 'a) : String
+let renderMissingValue<'a: MissingValueShow> (value: 'a) : String = MissingValueShow.missingShow value
+let render = renderMissingValue<Int64> in render 42L
+) = compileerror="No implementation of trait 'MissingValueShow'"

@@ -6,6 +6,15 @@
 
 module Darklang.Stdlib.DateTime
 
+impl Stdlib.ToString for DateTime =
+  let toString = Stdlib.DateTime.toString
+
+impl Stdlib.Compare for DateTime =
+  let lessThan = Stdlib.DateTime.lessThan
+  let lessThanOrEqualTo = Stdlib.DateTime.lessThanOrEqualTo
+  let greaterThan = Stdlib.DateTime.greaterThan
+  let greaterThanOrEqualTo = Stdlib.DateTime.greaterThanOrEqualTo
+
 let __ticksPerMillisecond () : Int64 = 10000L
 let __ticksPerSecond () : Int64 = 10000000L
 let __ticksPerMinute () : Int64 = 600000000L

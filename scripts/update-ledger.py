@@ -447,24 +447,11 @@ def build(root, upstream, compile_packages=False):
                      and c.endswith('.dark') and path and body == upstream_files[path]]
             if exact:
                 candidates = exact
-            identical = [c for c in candidates if path and compiler[c] == upstream_files[path]]
-            status = ('compiler-only' if path is None else 'identical' if identical else
-                      'different' if candidates else 'missing')
             exception = config['source_exceptions'].get(path)
-            original = {r['name'] for r in declarations(path, upstream_files[path].decode())[0]} if path else set()
-            counterparts = {r['name'] for c in candidates for r in declarations(c, compiler[c].decode())[0]}
             source_rows.append(dict(id=record['id'], category=category, upstream=path,
-                compiler=sorted(candidates), source_status=status, identical=sorted(identical),
-                mapping_basis='byte-identity' if identical else 'maintained' if path in used_mappings else 'declared-root-module' if candidates else 'none',
-                declaration_comparison=dict(shared=sorted(original & counterparts),
-                    upstream_only=sorted(original - counterparts), compiler_only=sorted(counterparts - original)),
-                exception=exception, declarations=coverage.get(path, []),
-                compilation=dict(status='not-run', reason='Declaration-only package compilation adapter pending')
+                compiler=sorted(candidates), exception=exception,
+                compilation=dict(status='not-run', reason='Run --compile-packages to collect source-unit compilation')
                     if category == 'packages' else None))
-            if status == 'different' and not exception:
-                review.append(('Source difference: ' if original & counterparts or path in used_mappings else 'Module-only mapping needs review: ') + record['id'])
-            elif status == 'missing' and not exception:
-                review.append('Missing source counterpart: ' + record['id'])
         elif category == 'parser':
             paths = config['parser_mappings'].get(record['id'], record['compiler'])
             if record['id'] in config['parser_mappings']:

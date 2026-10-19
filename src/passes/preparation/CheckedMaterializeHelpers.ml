@@ -72,7 +72,7 @@ let rec collectHelperTypes symbols aliases expr =
       let ordering =
         match (C.functionName id symbols, types) with
         | ( Some
-              ( "__compare" | "Darklang.Stdlib.List.sort"
+              ( "__compare" | "__sort_precedes" | "Darklang.Stdlib.List.sort"
               | "Darklang.Stdlib.List.unique" ),
             [ target ] )
         | Some "Darklang.Stdlib.List.uniqueBy", [ target; _ ] ->
