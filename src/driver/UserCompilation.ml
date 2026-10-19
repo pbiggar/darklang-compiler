@@ -324,6 +324,9 @@ let compileUserWithPlan ?writtenSources (plan : P.userCompilePlan) =
               materialize =
                 AsyncRuntimeMaterialization.materialize
                   plan.P.passTimingRecorder;
+              materializeSource =
+                AsyncRuntimeMaterialization.materializeSource
+                  plan.P.passTimingRecorder;
             }
           plan.P.verbosity plan.P.options elapsed registry
           (CheckedAST.nextFunctionOrdinal symbols)

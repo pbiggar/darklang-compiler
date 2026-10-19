@@ -7,7 +7,9 @@ module M = StringOrder.Map
 
 let ( let* ) = Result.bind
 
-let materialize recorder (context : X.pipelineContext) requested =
+type bodyKind = NativeRuntimeBodies | LogicalSourceBodies
+
+let materializeBodies kind recorder (context : X.pipelineContext) requested =
   let refreshed =
     X.buildContext context.X.target context.X.symbols context.X.typeCheckEnv
       context.X.checkedValues context.X.genericFuncDefs context.X.specRegistry
@@ -32,7 +34,10 @@ let materialize recorder (context : X.pipelineContext) requested =
   let functions =
     List.filter
       (fun (fn : C.functionDef) ->
-        not (M.mem fn.C.name context.X.registries.AST_to_ANF.functionIds))
+        match kind with
+        | NativeRuntimeBodies ->
+            not (M.mem fn.C.name context.X.registries.AST_to_ANF.functionIds)
+        | LogicalSourceBodies -> true)
       functions
   in
   if functions = [] then
@@ -70,4 +75,12 @@ let materialize recorder (context : X.pipelineContext) requested =
     let updated =
       { updated with X.writtenEnvironment = context.X.writtenEnvironment }
     in
-    Ok (updated, converted.P.functions)
+    let functions =
+      match kind with
+      | NativeRuntimeBodies -> converted.P.functions
+      | LogicalSourceBodies -> converted.P.sourceFunctions
+    in
+    Ok (updated, functions)
+
+let materialize = materializeBodies NativeRuntimeBodies
+let materializeSource = materializeBodies LogicalSourceBodies

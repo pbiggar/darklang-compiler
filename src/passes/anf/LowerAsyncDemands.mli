@@ -9,6 +9,8 @@ type failure =
   | Diagnostic of string
   | MissingRuntimeSpecializations of
       SpecializationIdentity.SpecSet.t * MemoryModel.rcSumShapeRegistry
+  | MissingSourceSpecializations of
+      SpecializationIdentity.SpecSet.t * MemoryModel.rcSumShapeRegistry
 
 val lower :
   TypeRegistries.functionRegistry ->

@@ -11,3 +11,4 @@ type result =
 type operation = { callee : string; arguments : argument list; result : result }
 
 val operation : string -> operation option
+val sourceConstructor : string -> string option

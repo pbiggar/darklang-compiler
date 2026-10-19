@@ -89,6 +89,8 @@ let buildPreambleContext allowInternal (stdlib : X.stdlibResult) preamble
           {
             ANFPipeline.context;
             materialize = AsyncRuntimeMaterialization.materialize recorder;
+            materializeSource =
+              AsyncRuntimeMaterialization.materializeSource recorder;
           }
         0 options elapsed registries
         (CheckedAST.nextFunctionOrdinal conversion.P.symbols)
@@ -207,6 +209,8 @@ let buildPreambleContextFromAnalysis (stdlib : X.stdlibResult)
         {
           ANFPipeline.context;
           materialize = AsyncRuntimeMaterialization.materialize recorder;
+          materializeSource =
+            AsyncRuntimeMaterialization.materializeSource recorder;
         }
       0 options elapsed registries
       (CheckedAST.nextFunctionOrdinal conversion.P.symbols)

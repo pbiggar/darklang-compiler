@@ -5,6 +5,10 @@ type asyncRuntime = {
     CompilationContexts.pipelineContext ->
     SpecializationIdentity.SpecSet.t ->
     (CompilationContexts.pipelineContext * ANF.functionDef list, string) result;
+  materializeSource :
+    CompilationContexts.pipelineContext ->
+    SpecializationIdentity.SpecSet.t ->
+    (CompilationContexts.pipelineContext * ANF.functionDef list, string) result;
 }
 
 val buildConversionResult :

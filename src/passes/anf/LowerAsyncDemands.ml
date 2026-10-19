@@ -34,6 +34,8 @@ type failure =
   | Diagnostic of string
   | MissingRuntimeSpecializations of
       SpecializationIdentity.SpecSet.t * MemoryModel.rcSumShapeRegistry
+  | MissingSourceSpecializations of
+      SpecializationIdentity.SpecSet.t * MemoryModel.rcSumShapeRegistry
 
 let carrier payload = AST.TSum ("Darklang.Stdlib.__Async.__Value", [ payload ])
 let transportName = AsyncSourceHooks.transportName
@@ -2480,9 +2482,10 @@ let lower registry names ids sumShapes nextFunctionOrdinal externalDefinitions
               && Option.is_none dictionaryMapping
               &&
               match operation with
-              | A.Call (callee, _)
-              | A.BorrowedCall (callee, _)
-              | A.TailCall (callee, _) -> (
+              | A.Call (callee, arguments)
+              | A.BorrowedCall (callee, arguments)
+              | A.TailCall (callee, arguments)
+                when not (sourceCall env stores callee arguments) -> (
                   match name callee with
                   | Some name ->
                       String.starts_with ~prefix:"Darklang.Stdlib.Dict." name
@@ -2538,7 +2541,46 @@ let lower registry names ids sumShapes nextFunctionOrdinal externalDefinitions
               | _ -> false
             in
             if storageEscape then
-              unsupported fn.A.name "an aggregate storage or call interface"
+              let boundary = "an aggregate storage or call interface" in
+              let boundary =
+                match operation with
+                | A.Call (callee, _)
+                | A.BorrowedCall (callee, _)
+                | A.TailCall (callee, _) ->
+                    Option.fold ~none:boundary
+                      ~some:(fun callee -> boundary ^ " to " ^ callee)
+                      (name callee)
+                | _ -> boundary
+              in
+              let source =
+                match operation with
+                | A.Call (callee, _)
+                | A.BorrowedCall (callee, _)
+                | A.TailCall (callee, _) -> (
+                    match
+                      Option.bind (name callee) AsyncDictCalls.sourceConstructor
+                    with
+                    | Some base -> (
+                        match F.tryFind callee registry with
+                        | Some
+                            ( _,
+                              AST.TFunction
+                                ([ AST.TList (AST.TTuple [ key; value ]) ], _)
+                            ) ->
+                            Some (base, [ key; value ])
+                        | _ ->
+                            Crash.crash
+                              "Dictionary entry constructor lost its source \
+                               signature")
+                    | None -> None)
+                | _ -> None
+              in
+              match source with
+              | Some spec ->
+                  Error
+                    (MissingSourceSpecializations
+                       (SpecializationIdentity.SpecSet.singleton spec, sumShapes))
+              | None -> unsupported fn.A.name boundary
             else Ok ()
           in
           let* storedValue =

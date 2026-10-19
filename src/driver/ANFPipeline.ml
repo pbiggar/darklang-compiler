@@ -13,6 +13,10 @@ type asyncRuntime = {
     CompilationContexts.pipelineContext ->
     SpecializationIdentity.SpecSet.t ->
     (CompilationContexts.pipelineContext * ANF.functionDef list, string) result;
+  materializeSource :
+    CompilationContexts.pipelineContext ->
+    SpecializationIdentity.SpecSet.t ->
+    (CompilationContexts.pipelineContext * ANF.functionDef list, string) result;
 }
 
 let buildConversionResult (ANF.Program (functions, _) as program)
@@ -207,11 +211,11 @@ let buildAnf ?(asyncDefinitions = StringOrder.Map.empty) ?asyncRuntime verbosity
     }
   in
   let rec lowerAsync (registries : AST_to_ANF.registries) nextFunctionOrdinal
-      runtime helperNames functions =
+      runtime helperNames definitions functions =
     match
       LowerAsyncDemands.lower registries.AST_to_ANF.funcReg
         registries.AST_to_ANF.functionNames registries.AST_to_ANF.functionIds
-        registries.AST_to_ANF.rcSumShapeReg nextFunctionOrdinal asyncDefinitions
+        registries.AST_to_ANF.rcSumShapeReg nextFunctionOrdinal definitions
         functions
     with
     | Ok lowered ->
@@ -220,6 +224,67 @@ let buildAnf ?(asyncDefinitions = StringOrder.Map.empty) ?asyncRuntime verbosity
             withAsyncSumShapes registries lowered.LowerAsyncDemands.sumShapes,
             helperNames )
     | Error (LowerAsyncDemands.Diagnostic message) -> Error message
+    | Error
+        (LowerAsyncDemands.MissingSourceSpecializations (requested, sumShapes))
+      -> (
+        match runtime with
+        | None ->
+            Error
+              "Async source specialization requires a source compilation \
+               context"
+        | Some runtime ->
+            let context =
+              {
+                runtime.context with
+                CompilationContexts.registries =
+                  withAsyncSumShapes registries sumShapes;
+              }
+            in
+            let* context, sources =
+              runtime.materializeSource context requested
+            in
+            let* sumShapes =
+              AsyncSumStorage.includePhysicalShapes
+                ~into:
+                  context.CompilationContexts.registries
+                    .AST_to_ANF.rcSumShapeReg sumShapes
+            in
+            let registry =
+              withAsyncSumShapes context.CompilationContexts.registries
+                sumShapes
+            in
+            let context =
+              { context with CompilationContexts.registries = registry }
+            in
+            let sources =
+              freshenHelpers
+                (functions @ List.map snd (StringOrder.Map.bindings definitions))
+                sources
+            in
+            let definitions =
+              List.fold_left
+                (fun definitions (fn : ANF.functionDef) ->
+                  StringOrder.Map.add fn.ANF.name fn definitions)
+                definitions sources
+            in
+            let provided =
+              SpecializationIdentity.SpecSet.for_all
+                (fun (name, types) ->
+                  StringOrder.Map.mem
+                    (SpecializationIdentity.specName name types)
+                    definitions)
+                requested
+            in
+            if not provided then
+              Error
+                "Async source specialization did not provide the requested \
+                 bodies"
+            else
+              lowerAsync registry
+                (CheckedAST.nextFunctionOrdinal
+                   context.CompilationContexts.symbols)
+                (Some { runtime with context })
+                helperNames definitions functions)
     | Error
         (LowerAsyncDemands.MissingRuntimeSpecializations (requested, sumShapes))
       -> (
@@ -277,11 +342,12 @@ let buildAnf ?(asyncDefinitions = StringOrder.Map.empty) ?asyncRuntime verbosity
                 (CheckedAST.nextFunctionOrdinal
                    context.CompilationContexts.symbols)
                 (Some { runtime with context })
-                helperNames
+                helperNames definitions
                 (functions @ freshenHelpers functions helpers))
   in
   let* lowered, registries, helperNames =
-    lowerAsync registries nextFunctionOrdinal asyncRuntime F.empty functions
+    lowerAsync registries nextFunctionOrdinal asyncRuntime F.empty
+      asyncDefinitions functions
   in
   (* Match SourcePreparation's policy for late stdlib specializations. *)
   let nonInlineableFunctionNames =

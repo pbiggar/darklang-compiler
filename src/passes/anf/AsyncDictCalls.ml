@@ -10,6 +10,14 @@ type result =
 
 type operation = { callee : string; arguments : argument list; result : result }
 
+let sourceConstructor name =
+  List.find_opt
+    (fun base -> String.starts_with ~prefix:(base ^ "_") name)
+    [
+      "Darklang.Stdlib.Dict.fromList";
+      "Darklang.Stdlib.Dict.fromListOverwritingDuplicates";
+    ]
+
 let operation name =
   let operations =
     [
