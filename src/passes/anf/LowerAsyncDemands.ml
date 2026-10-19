@@ -77,6 +77,16 @@ type dictionaryCall = {
   dictionarySourceResult : AST.semanticType;
 }
 
+type dictionaryMapping = {
+  mappedDictionary : A.atom;
+  dictionaryCallback : A.atom;
+  dictionaryCallbackTarget : AST.functionId;
+  mapKeyType : AST.semanticType;
+  mapInputType : AST.semanticType;
+  mapOutputType : AST.semanticType;
+  actualDictionaryValue : mode;
+}
+
 type listFolding = {
   foldList : A.atom;
   initial : A.atom;
@@ -739,6 +749,61 @@ let lower registry names ids sumShapes nextFunctionOrdinal externalDefinitions
       | Some bindings -> target bindings atom
       | None -> Crash.crash "Async inference lost callable bindings"
     in
+    let dictionaryMappingCall fn env stores state = function
+      | A.Call (callee, [ dict; callback ])
+      | A.BorrowedCall (callee, [ dict; callback ])
+      | A.TailCall (callee, [ dict; callback ]) -> (
+          let isMap =
+            match name callee with
+            | Some name ->
+                specialized "Darklang.Stdlib.Dict.map" name
+                || specialized "Darklang.Stdlib.Dict.__map" name
+            | None -> false
+          in
+          match (isMap, callable fn callback) with
+          | true, Some target
+            when eligible target && not (S.mem target nativeEntries) -> (
+              match F.tryFind target definitions with
+              | Some { A.typedParams = [ _; key; value ]; returnType; _ } ->
+                  let actualDictionaryValue =
+                    match modeOf env stores dict with
+                    | Stored storage | PendingStored storage ->
+                        dictionaryValueMode storage
+                    | Concrete | Pending -> Concrete
+                  in
+                  let current = summary state target in
+                  if
+                    changed actualDictionaryValue
+                    || changed current.result
+                    || List.exists changed current.parameters
+                  then
+                    Some
+                      {
+                        mappedDictionary = dict;
+                        dictionaryCallback = callback;
+                        dictionaryCallbackTarget = target;
+                        mapKeyType = key.A.typ;
+                        mapInputType = value.A.typ;
+                        mapOutputType = returnType;
+                        actualDictionaryValue;
+                      }
+                  else None
+              | _ -> None)
+          | _ -> None)
+      | _ -> None
+    in
+    let dictionaryMappingModes state mapping =
+      let current = summary state mapping.dictionaryCallbackTarget in
+      match current.parameters with
+      | [ _; key; value ] -> (key, value, current.result)
+      | _ ->
+          Crash.crash "Async dictionary callback has an inconsistent signature"
+    in
+    let dictionaryMappingResult state mapping =
+      let _, _, result = dictionaryMappingModes state mapping in
+      ( AST.TDict (mapping.mapKeyType, mapping.mapOutputType),
+        dictionaryMode mapping.mapKeyType mapping.mapOutputType result )
+    in
     let mappingCall fn env stores state = function
       | A.Call (callee, [ listValue; callback ])
       | A.BorrowedCall (callee, [ listValue; callback ])
@@ -947,6 +1012,9 @@ let lower registry names ids sumShapes nextFunctionOrdinal externalDefinitions
       | A.Let (id, operation, rest) ->
           let* builder = listBuildCall env stores operation in
           let* dictionary = dictionaryCall env stores operation in
+          let dictionaryMapping =
+            dictionaryMappingCall fn env stores state operation
+          in
           let mapping = mappingCall fn env stores state operation in
           let folding = foldingCall fn env stores state operation in
           let* state =
@@ -1023,6 +1091,21 @@ let lower registry names ids sumShapes nextFunctionOrdinal externalDefinitions
           in
           let* state, result, stored =
             match operation with
+            | _ when Option.is_some dictionaryMapping ->
+                let mapping =
+                  match dictionaryMapping with
+                  | Some value -> value
+                  | None ->
+                      Crash.crash
+                        "Async dictionary mapping lost its inference plan"
+                in
+                let* state =
+                  mergeActual mapping.dictionaryCallbackTarget
+                    [ Concrete; Concrete; mapping.actualDictionaryValue ]
+                in
+                let typ, mode = dictionaryMappingResult state mapping in
+                let* value, storage = modeFacts (fun typ -> Ok typ) typ mode in
+                Ok (state, value, storage)
             | _ when Option.is_some dictionary ->
                 let dictionary =
                   match dictionary with
@@ -2244,6 +2327,9 @@ let lower registry names ids sumShapes nextFunctionOrdinal externalDefinitions
               (fun message -> Diagnostic message)
               (dictionaryCall env stores operation)
           in
+          let dictionaryMapping =
+            dictionaryMappingCall fn env stores summaries operation
+          in
           let* builder =
             Result.map_error
               (fun message -> Diagnostic message)
@@ -2287,6 +2373,7 @@ let lower registry names ids sumShapes nextFunctionOrdinal externalDefinitions
             then unsupported fn.A.name "this dictionary inspection"
             else if
               hasDictionary && Option.is_none dictionary
+              && Option.is_none dictionaryMapping
               &&
               match operation with
               | A.Call (callee, _)
@@ -2310,6 +2397,7 @@ let lower registry names ids sumShapes nextFunctionOrdinal externalDefinitions
                   && (not (producer callee))
                   && Option.is_none builder && Option.is_none mapping
                   && Option.is_none folding && Option.is_none dictionary
+                  && Option.is_none dictionaryMapping
                   && Option.is_none (listCall stores callee args)
                   && List.exists
                        (fun atom -> Option.is_some (lookup stores atom))
@@ -2351,6 +2439,16 @@ let lower registry names ids sumShapes nextFunctionOrdinal externalDefinitions
           in
           let* storedValue =
             match operation with
+            | _ when Option.is_some dictionaryMapping ->
+                let mapping =
+                  match dictionaryMapping with
+                  | Some value -> value
+                  | None ->
+                      Crash.crash
+                        "Async dictionary mapping lost its result plan"
+                in
+                let typ, mode = dictionaryMappingResult summaries mapping in
+                storedResult mode typ
             | _ when Option.is_some dictionary ->
                 let dictionary =
                   match dictionary with
@@ -2431,6 +2529,15 @@ let lower registry names ids sumShapes nextFunctionOrdinal externalDefinitions
           let* () =
             let escape =
               match operation with
+              | _ when Option.is_some dictionaryMapping ->
+                  let mapping =
+                    match dictionaryMapping with
+                    | Some value -> value
+                    | None ->
+                        Crash.crash
+                          "Async dictionary mapping lost its callback plan"
+                  in
+                  changedCallable fn mapping.mappedDictionary
               | _ when Option.is_some folding ->
                   let folding =
                     match folding with
@@ -2467,6 +2574,56 @@ let lower registry names ids sumShapes nextFunctionOrdinal externalDefinitions
           in
           let* operation, before, value, gen =
             match operation with
+            | _ when Option.is_some dictionaryMapping ->
+                let mapping =
+                  match dictionaryMapping with
+                  | Some value -> value
+                  | None ->
+                      Crash.crash "Async dictionary mapping lost its call plan"
+                in
+                let keyMode, inputMode, outputMode =
+                  dictionaryMappingModes summaries mapping
+                in
+                let* () =
+                  if changed keyMode then
+                    unsupported fn.A.name "a dictionary callback key interface"
+                  else Ok ()
+                in
+                let inputType =
+                  AsyncTransport.physicalType inputMode mapping.mapInputType
+                in
+                let outputType =
+                  AsyncTransport.physicalType outputMode mapping.mapOutputType
+                in
+                let* callee =
+                  helperTypes "Darklang.Stdlib.Dict.map"
+                    [ mapping.mapKeyType; inputType; outputType ]
+                in
+                let actual = modeOf env stores mapping.mappedDictionary in
+                let dictionary, before, gen =
+                  forceAtom env mapping.mappedDictionary gen
+                in
+                let actual =
+                  match actual with
+                  | Pending -> Concrete
+                  | PendingStored storage -> Stored storage
+                  | mode -> mode
+                in
+                let* dictionary, added, gen =
+                  prepareValue
+                    (dictionaryMode mapping.mapKeyType mapping.mapInputType
+                       inputMode)
+                    (AST.TDict (mapping.mapKeyType, mapping.mapInputType))
+                    dictionary actual gen
+                in
+                let callback, forced, gen =
+                  forceAtom env mapping.dictionaryCallback gen
+                in
+                Ok
+                  ( A.Call (callee, [ dictionary; callback ]),
+                    before @ added @ forced,
+                    None,
+                    gen )
             | _ when Option.is_some dictionary ->
                 let dictionary =
                   match dictionary with
