@@ -345,9 +345,14 @@ let prepare stdlib recorder source =
   Ok (programType, converted, synthetic)
 
 let optimize (converted : AST_to_ANF.conversionResult) =
+  let program =
+    LowerSumRepresentations.lowerProgram
+      (AsyncSumStorage.representationIndex converted.AST_to_ANF.rcSumShapeReg)
+      converted.AST_to_ANF.program
+  in
   ANF_Optimize.optimizeProgramWithOptions
     (optimizeContextFromConversionResult converted)
-    ANFConstants.defaultOptimizeOptions converted.AST_to_ANF.program
+    ANFConstants.defaultOptimizeOptions program
 
 let getOptimizedANF stdlib recorder source =
   let* _, converted, synthetic = prepare stdlib recorder source in

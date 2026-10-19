@@ -23,7 +23,7 @@ let descriptor sum payloadType =
     valueType = sumType sum;
   }
 
-let lower representations functions =
+let lowerProgram representations (A.Program (functions, main)) =
   let transparent sum =
     P.transparentSumPayloadType sum.A.sumName sum.A.sumArgs representations
   in
@@ -130,12 +130,8 @@ let lower representations functions =
         (A.Join (parameter, continuation, entry), gen)
     | (A.Return _ | A.Jump _) as expression -> (expression, gen)
   in
-  let maximum =
-    List.fold_left
-      (fun maximum fn -> max maximum (ANF_to_MIR.maxTempIdInFunction fn))
-      0 functions
-  in
-  let functions, _ =
+  let maximum = ANF_to_MIR.maxTempIdInProgram (A.Program (functions, main)) in
+  let functions, gen =
     List.fold_left
       (fun (functions, gen) (fn : A.functionDef) ->
         let body, gen = body gen fn.A.body in
@@ -143,4 +139,11 @@ let lower representations functions =
       ([], A.VarGen (maximum + 1))
       functions
   in
-  List.rev functions
+  let main, _ = body gen main in
+  A.Program (List.rev functions, main)
+
+let lower representations functions =
+  let (A.Program (functions, _)) =
+    lowerProgram representations (A.Program (functions, A.Return A.UnitLiteral))
+  in
+  functions
