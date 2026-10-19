@@ -134,7 +134,17 @@ let rec physicalType mode source =
       | _ -> AST.TTuple types)
 
 let collectSumShapes ~into storage =
-  let rec collect into (storage : unit storage) =
+  let rec collect ancestors into (storage : unit storage) =
+    let* ancestors =
+      match storage.kind with
+      | SumStorage _ | RecordStorage _ ->
+          if List.exists (compatibleKind storage.kind) ancestors then
+            Error
+              "Async transport across a recursive aggregate layout is not \
+               implemented"
+          else Ok (storage.kind :: ancestors)
+      | TupleStorage | ListStorage _ -> Ok ancestors
+    in
     let* into =
       match storage.kind with
       | SumStorage layout ->
@@ -156,11 +166,11 @@ let collectSumShapes ~into storage =
         let* into = result in
         match slot with
         | Some (NestedStorage nested) | Some (PendingStorage ((), nested)) ->
-            collect into nested
+            collect ancestors into nested
         | None | Some (PendingSlot ()) -> Ok into)
       (Ok into) storage.fields
   in
-  collect into (mapStorage (fun _ -> ()) storage)
+  collect [] into (mapStorage (fun _ -> ()) storage)
 
 let rec instantiateStorage transform storage source =
   let types = sourceFields storage source in
