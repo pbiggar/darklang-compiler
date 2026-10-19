@@ -3,6 +3,7 @@ type storageKind =
   | TupleStorage
   | RecordStorage of ANF.recordDescriptor
   | ListStorage of AST.semanticType
+  | DictStorage of AST.semanticType * AST.semanticType
   | SumStorage of AsyncSumStorage.layout
 
 type 'a storedSlot =

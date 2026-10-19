@@ -5,6 +5,7 @@ type storageKind =
   | TupleStorage
   | RecordStorage of ANF.recordDescriptor
   | ListStorage of AST.semanticType
+  | DictStorage of AST.semanticType * AST.semanticType
   | SumStorage of AsyncSumStorage.layout
 
 type 'a storedSlot =
@@ -42,6 +43,8 @@ let compatibleKind left right =
   match (left, right) with
   | TupleStorage, TupleStorage -> true
   | ListStorage left, ListStorage right -> left = right
+  | DictStorage (leftKey, leftValue), DictStorage (rightKey, rightValue) ->
+      leftKey = rightKey && leftValue = rightValue
   | SumStorage left, SumStorage right -> left = right
   | RecordStorage left, RecordStorage right ->
       left.ANF.valueType = right.ANF.valueType
@@ -99,6 +102,9 @@ let sourceFields storage source =
   match (storage.kind, source) with
   | TupleStorage, AST.TTuple types -> types
   | ListStorage _, AST.TList element -> [ element ]
+  | DictStorage (expectedKey, expectedValue), AST.TDict (key, value)
+    when expectedKey = key && expectedValue = value ->
+      [ value ]
   | RecordStorage descriptor, AST.TRecord _ ->
       List.map snd descriptor.ANF.fields
   | SumStorage layout, AST.TSum (name, args)
@@ -131,6 +137,10 @@ let rec physicalType mode source =
       | ListStorage _, [ element ] -> AST.TList element
       | ListStorage _, _ ->
           Crash.crash "Async list storage has an inconsistent element layout"
+      | DictStorage (key, _), [ value ] -> AST.TDict (key, value)
+      | DictStorage _, _ ->
+          Crash.crash
+            "Async dictionary storage has an inconsistent value layout"
       | _ -> AST.TTuple types)
 
 let collectSumShapes ~into storage =
@@ -143,7 +153,7 @@ let collectSumShapes ~into storage =
               "Async transport across a recursive aggregate layout is not \
                implemented"
           else Ok (storage.kind :: ancestors)
-      | TupleStorage | ListStorage _ -> Ok ancestors
+      | TupleStorage | ListStorage _ | DictStorage _ -> Ok ancestors
     in
     let* into =
       match storage.kind with
@@ -159,7 +169,8 @@ let collectSumShapes ~into storage =
           let sum, shape = AsyncSumStorage.physical layout types in
           AsyncSumStorage.includePhysicalShapes ~into
             (StringOrder.Map.singleton sum.ANF.sumName shape)
-      | TupleStorage | RecordStorage _ | ListStorage _ -> Ok into
+      | TupleStorage | RecordStorage _ | ListStorage _ | DictStorage _ ->
+          Ok into
     in
     List.fold_left
       (fun result slot ->

@@ -48,6 +48,7 @@ type storageKind = AsyncTransport.storageKind =
   | TupleStorage
   | RecordStorage of A.recordDescriptor
   | ListStorage of AST.semanticType
+  | DictStorage of AST.semanticType * AST.semanticType
   | SumStorage of AsyncSumStorage.layout
 
 type 'a storedSlot = 'a AsyncTransport.storedSlot =
@@ -65,6 +66,16 @@ type mode = AsyncTransport.mode =
   | Pending
   | Stored of unit storage
   | PendingStored of unit storage
+
+type dictionaryCall = {
+  dictionaryOperation : AsyncDictCalls.operation;
+  dictionaryArguments : (AsyncDictCalls.argument * A.atom) list;
+  dictionaryKey : AST.semanticType;
+  dictionaryValue : AST.semanticType;
+  dictionaryValueMode : mode;
+  dictionaryResult : mode;
+  dictionarySourceResult : AST.semanticType;
+}
 
 type listFolding = {
   foldList : A.atom;
@@ -171,6 +182,22 @@ let listElementMode storage =
   match (storage.kind, storage.fields) with
   | ListStorage _, [ slot ] -> AsyncTransport.slotMode slot
   | _ -> Crash.crash "Async list transport has an inconsistent element layout"
+
+let dictionaryMode key value valueMode =
+  if not (changed valueMode) then Concrete
+  else
+    Stored
+      {
+        kind = DictStorage (key, value);
+        fields = [ AsyncTransport.modeSlot valueMode ];
+      }
+
+let dictionaryValueMode storage =
+  let storage = AsyncTransport.mapStorage (fun _ -> ()) storage in
+  match (storage.kind, storage.fields) with
+  | DictStorage _, [ slot ] -> AsyncTransport.slotMode slot
+  | _ ->
+      Crash.crash "Async dictionary transport has an inconsistent value layout"
 
 let storageField storage index =
   match
@@ -394,6 +421,133 @@ let lower registry names ids sumShapes nextFunctionOrdinal externalDefinitions
       | Some mode -> mode
       | None -> Concrete
     in
+    let dictionaryCall env stores operation =
+      match operation with
+      | A.Call (callee, arguments)
+      | A.BorrowedCall (callee, arguments)
+      | A.TailCall (callee, arguments) -> (
+          match Option.bind (name callee) AsyncDictCalls.operation with
+          | None -> Ok None
+          | Some operation ->
+              if
+                List.length arguments
+                <> List.length operation.AsyncDictCalls.arguments
+              then
+                Error
+                  "Async dictionary operation has an inconsistent argument \
+                   count"
+              else
+                let parameters, result =
+                  match F.tryFind callee registry with
+                  | Some (_, AST.TFunction (parameters, result)) ->
+                      (parameters, result)
+                  | _ ->
+                      Crash.crash
+                        "Async dictionary operation lost its source signature"
+                in
+                let key, value =
+                  match
+                    List.find_map
+                      (function
+                        | AST.TDict (key, value) -> Some (key, value)
+                        | _ -> None)
+                      (result :: parameters)
+                  with
+                  | Some types -> types
+                  | None ->
+                      Crash.crash
+                        "Async dictionary operation has no dictionary type"
+                in
+                let arguments =
+                  List.combine operation.AsyncDictCalls.arguments arguments
+                in
+                let* valueMode =
+                  List.fold_left
+                    (fun result (role, atom) ->
+                      let* mode = result in
+                      let actual = modeOf env stores atom in
+                      let valueMode =
+                        match (role, actual) with
+                        | AsyncDictCalls.Value, mode -> mode
+                        | ( AsyncDictCalls.Dictionary,
+                            (Stored storage | PendingStored storage) ) ->
+                            dictionaryValueMode storage
+                        | AsyncDictCalls.Dictionary, (Concrete | Pending)
+                        | AsyncDictCalls.Key, _ ->
+                            Concrete
+                      in
+                      AsyncTransport.merge mode valueMode)
+                    (Ok Concrete) arguments
+                in
+                if
+                  not
+                    (List.exists
+                       (fun (_, atom) -> changed (modeOf env stores atom))
+                       arguments)
+                then Ok None
+                else
+                  let* resultMode =
+                    match operation.AsyncDictCalls.result with
+                    | AsyncDictCalls.DictionaryResult ->
+                        Ok (dictionaryMode key value valueMode)
+                    | AsyncDictCalls.ScalarResult -> Ok Concrete
+                    | AsyncDictCalls.ValuesResult ->
+                        Ok (listMode value valueMode)
+                    | AsyncDictCalls.EntriesResult ->
+                        let entry = AST.TTuple [ key; value ] in
+                        let entryMode =
+                          if changed valueMode then
+                            Stored
+                              {
+                                kind = TupleStorage;
+                                fields =
+                                  [ None; AsyncTransport.modeSlot valueMode ];
+                              }
+                          else Concrete
+                        in
+                        Ok (listMode entry entryMode)
+                    | AsyncDictCalls.LookupResult -> (
+                        if not (changed valueMode) then Ok Concrete
+                        else
+                          let source =
+                            match result with
+                            | AST.TSum (sumName, sumArgs) ->
+                                { A.sumName; sumArgs }
+                            | _ ->
+                                Crash.crash
+                                  "Async dictionary lookup has a non-option \
+                                   result"
+                          in
+                          let* layout =
+                            AsyncSumStorage.layout sumShapes source
+                          in
+                          match layout.AsyncSumStorage.payloads with
+                          | [ (_, typ) ] when typ = value ->
+                              Ok
+                                (Stored
+                                   {
+                                     kind = SumStorage layout;
+                                     fields =
+                                       [ AsyncTransport.modeSlot valueMode ];
+                                   })
+                          | _ ->
+                              Crash.crash
+                                "Async dictionary lookup has an inconsistent \
+                                 option payload")
+                  in
+                  Ok
+                    (Some
+                       {
+                         dictionaryOperation = operation;
+                         dictionaryArguments = arguments;
+                         dictionaryKey = key;
+                         dictionaryValue = value;
+                         dictionaryValueMode = valueMode;
+                         dictionaryResult = resultMode;
+                         dictionarySourceResult = result;
+                       }))
+      | _ -> Ok None
+    in
     let listCall stores callee arguments =
       match (name callee, arguments) with
       | Some calleeName, list :: rest -> (
@@ -504,7 +658,7 @@ let lower registry names ids sumShapes nextFunctionOrdinal externalDefinitions
     let listEmptyCheck stores = function
       | A.Prim (((A.Eq | A.Neq) as op), list, A.IntLiteral (A.Int64 0L)) -> (
           match lookup stores list with
-          | Some { kind = ListStorage _; _ } -> Some (op, list)
+          | Some { kind = ListStorage _ | DictStorage _; _ } -> Some (op, list)
           | _ -> None)
       | _ -> None
     in
@@ -792,6 +946,7 @@ let lower registry names ids sumShapes nextFunctionOrdinal externalDefinitions
           infer fn env stores continuation state
       | A.Let (id, operation, rest) ->
           let* builder = listBuildCall env stores operation in
+          let* dictionary = dictionaryCall env stores operation in
           let mapping = mappingCall fn env stores state operation in
           let folding = foldingCall fn env stores state operation in
           let* state =
@@ -857,7 +1012,8 @@ let lower registry names ids sumShapes nextFunctionOrdinal externalDefinitions
                 | TupleStorage, AST.TTuple _
                 | RecordStorage _, AST.TRecord _
                 | SumStorage _, AST.TSum _
-                | ListStorage _, AST.TList _ ->
+                | ListStorage _, AST.TList _
+                | DictStorage _, AST.TDict _ ->
                     Ok ()
                 | _ ->
                     Error
@@ -867,6 +1023,21 @@ let lower registry names ids sumShapes nextFunctionOrdinal externalDefinitions
           in
           let* state, result, stored =
             match operation with
+            | _ when Option.is_some dictionary ->
+                let dictionary =
+                  match dictionary with
+                  | Some value -> value
+                  | None ->
+                      Crash.crash
+                        "Async dictionary inference lost its operation"
+                in
+                let* value, storage =
+                  modeFacts
+                    (fun typ -> Ok typ)
+                    dictionary.dictionarySourceResult
+                    dictionary.dictionaryResult
+                in
+                Ok (state, value, storage)
             | _ when Option.is_some folding ->
                 let folding =
                   match folding with
@@ -1233,12 +1404,14 @@ let lower registry names ids sumShapes nextFunctionOrdinal externalDefinitions
         ],
         gen )
     in
-    let mapperBody ~closure inputType outputType body gen =
+    let mapperBody ?leadingParameter ~closure inputType outputType body gen =
       let key =
         SpecializationIdentity.specName
-          (if closure then "__dark_async_mapping"
+          (if Option.is_some leadingParameter then
+             "__dark_async_dictionary_mapping"
+           else if closure then "__dark_async_mapping"
            else "__dark_async_sum_conversion")
-          [ inputType; outputType ]
+          (Option.to_list leadingParameter @ [ inputType; outputType ])
       in
       match Names.find_opt key gen.mappers with
       | Some mapper -> Ok (mapper, gen)
@@ -1266,13 +1439,20 @@ let lower registry names ids sumShapes nextFunctionOrdinal externalDefinitions
             else (None, gen)
           in
           let parameter, gen = freshVar gen in
+          let leading, gen =
+            match leadingParameter with
+            | None -> ([], gen)
+            | Some typ ->
+                let id, gen = freshVar gen in
+                ([ { A.id; typ } ], gen)
+          in
           let* body, gen = body (A.Var parameter) gen in
           let definition =
             {
               A.id = mapper.id;
               name = mapper.name;
               typedParams =
-                Option.to_list environment
+                Option.to_list environment @ leading
                 @ [ { A.id = parameter; typ = inputType } ];
               returnType = outputType;
               returnOwnership = A.OwnedReturn;
@@ -1286,8 +1466,8 @@ let lower registry names ids sumShapes nextFunctionOrdinal externalDefinitions
                 generatedFunctions = definition :: gen.generatedFunctions;
               } )
     in
-    let mapper inputType outputType emit gen =
-      mapperBody ~closure:true inputType outputType
+    let mapper ?leadingParameter inputType outputType emit gen =
+      mapperBody ?leadingParameter ~closure:true inputType outputType
         (fun atom gen ->
           let* value, before, gen = emit atom gen in
           Ok (wraps before (A.Return value), gen))
@@ -1394,6 +1574,38 @@ let lower registry names ids sumShapes nextFunctionOrdinal externalDefinitions
                 [
                   (closure, A.ClosureAlloc (mapper.id, []));
                   (result, A.Call (mapHelper, [ A.Var closure; atom ]));
+                ],
+                gen )
+      | ( Stored ({ kind = DictStorage (key, element); _ } as expected),
+          (Concrete | Stored _) ) ->
+          let actualMode =
+            match actual with
+            | Stored storage -> dictionaryValueMode storage
+            | _ -> Concrete
+          in
+          let expectedMode = dictionaryValueMode expected in
+          let inputType = AsyncTransport.physicalType actualMode element in
+          let outputType = AsyncTransport.physicalType expectedMode element in
+          if inputType = outputType || atom = A.IntLiteral (A.Int64 0L) then
+            Ok (atom, [], gen)
+          else
+            let* mapHelper =
+              helperTypes "Darklang.Stdlib.Dict.__map"
+                [ key; inputType; outputType ]
+            in
+            let* mapper, gen =
+              mapper ~leadingParameter:key inputType outputType
+                (fun atom gen ->
+                  prepareValue expectedMode element atom actualMode gen)
+                gen
+            in
+            let closure, gen = freshVar gen in
+            let result, gen = freshVar gen in
+            Ok
+              ( A.Var result,
+                [
+                  (closure, A.ClosureAlloc (mapper.id, []));
+                  (result, A.Call (mapHelper, [ atom; A.Var closure ]));
                 ],
                 gen )
       | ( Stored ({ kind = ListStorage element; _ } as expected),
@@ -1514,7 +1726,7 @@ let lower registry names ids sumShapes nextFunctionOrdinal externalDefinitions
             | TupleStorage -> A.TupleAlloc values
             | RecordStorage descriptor ->
                 A.RecordAlloc (storageDescriptor expected descriptor, values)
-            | ListStorage _ | SumStorage _ ->
+            | ListStorage _ | DictStorage _ | SumStorage _ ->
                 Crash.crash
                   "Async collection promotion entered fixed-block allocation"
           in
@@ -1805,6 +2017,28 @@ let lower registry names ids sumShapes nextFunctionOrdinal externalDefinitions
           Ok (atom, (id, A.Call (value.force, [ original ])) :: before, gen)
     and materializeStorage storage atom gen =
       match (storage.kind, storage.fields) with
+      | DictStorage (key, element), [ slot ] ->
+          let inputType = slotRepresentation element slot in
+          let* mapHelper =
+            helperTypes "Darklang.Stdlib.Dict.__map" [ key; inputType; element ]
+          in
+          let* mapper, gen =
+            mapper ~leadingParameter:key inputType element
+              (fun atom gen -> materializeSlot slot atom gen)
+              gen
+          in
+          let closure, gen = freshVar gen in
+          let result, gen = freshVar gen in
+          Ok
+            ( A.Var result,
+              [
+                (closure, A.ClosureAlloc (mapper.id, []));
+                (result, A.Call (mapHelper, [ atom; A.Var closure ]));
+              ],
+              gen )
+      | DictStorage _, _ ->
+          Crash.crash
+            "Async dictionary materialization has an inconsistent value layout"
       | ListStorage element, [ slot ] ->
           let mode =
             AsyncTransport.slotMode
@@ -1872,7 +2106,7 @@ let lower registry names ids sumShapes nextFunctionOrdinal externalDefinitions
                   | RecordStorage descriptor ->
                       A.RecordGet
                         (storageDescriptor storage descriptor, atom, index)
-                  | ListStorage _ | SumStorage _ ->
+                  | ListStorage _ | DictStorage _ | SumStorage _ ->
                       Crash.crash
                         "Async collection demand entered fixed-block lowering"
                 in
@@ -1892,7 +2126,7 @@ let lower registry names ids sumShapes nextFunctionOrdinal externalDefinitions
             | TupleStorage -> A.TupleAlloc (List.rev values)
             | RecordStorage descriptor ->
                 A.RecordAlloc (descriptor, List.rev values)
-            | ListStorage _ | SumStorage _ ->
+            | ListStorage _ | DictStorage _ | SumStorage _ ->
                 Crash.crash
                   "Async collection demand entered fixed-block allocation"
           in
@@ -2005,6 +2239,11 @@ let lower registry names ids sumShapes nextFunctionOrdinal externalDefinitions
           in
           Ok (A.Join (parameter, continuation, entry), gen)
       | A.Let (id, operation, rest) ->
+          let* dictionary =
+            Result.map_error
+              (fun message -> Diagnostic message)
+              (dictionaryCall env stores operation)
+          in
           let* builder =
             Result.map_error
               (fun message -> Diagnostic message)
@@ -2021,6 +2260,14 @@ let lower registry names ids sumShapes nextFunctionOrdinal externalDefinitions
                   | _ -> false)
                 (ANFEffects.cexprTempUses operation)
             in
+            let hasDictionary =
+              T.exists
+                (fun id ->
+                  match M.find_opt id stores with
+                  | Some { kind = DictStorage _; _ } -> true
+                  | _ -> false)
+                (ANFEffects.cexprTempUses operation)
+            in
             let supported =
               match operation with
               | A.Atom _ | A.TypedAtom _ | A.Call _ | A.BorrowedCall _
@@ -2034,6 +2281,23 @@ let lower registry names ids sumShapes nextFunctionOrdinal externalDefinitions
               hasList && (not supported)
               && Option.is_none (listEmptyCheck stores operation)
             then unsupported fn.A.name "this list inspection"
+            else if
+              hasDictionary && (not supported)
+              && Option.is_none (listEmptyCheck stores operation)
+            then unsupported fn.A.name "this dictionary inspection"
+            else if
+              hasDictionary && Option.is_none dictionary
+              &&
+              match operation with
+              | A.Call (callee, _)
+              | A.BorrowedCall (callee, _)
+              | A.TailCall (callee, _) -> (
+                  match name callee with
+                  | Some name ->
+                      String.starts_with ~prefix:"Darklang.Stdlib.Dict." name
+                  | None -> false)
+              | _ -> false
+            then unsupported fn.A.name "this dictionary operation"
             else Ok ()
           in
           let* () =
@@ -2045,7 +2309,7 @@ let lower registry names ids sumShapes nextFunctionOrdinal externalDefinitions
                   (not (eligible callee))
                   && (not (producer callee))
                   && Option.is_none builder && Option.is_none mapping
-                  && Option.is_none folding
+                  && Option.is_none folding && Option.is_none dictionary
                   && Option.is_none (listCall stores callee args)
                   && List.exists
                        (fun atom -> Option.is_some (lookup stores atom))
@@ -2076,6 +2340,7 @@ let lower registry names ids sumShapes nextFunctionOrdinal externalDefinitions
                   | Some { kind = TupleStorage; _ }, AST.TTuple _ -> false
                   | Some { kind = RecordStorage _; _ }, AST.TRecord _ -> false
                   | Some { kind = ListStorage _; _ }, AST.TList _ -> false
+                  | Some { kind = DictStorage _; _ }, AST.TDict _ -> false
                   | Some { kind = SumStorage _; _ }, AST.TSum _ -> false
                   | _ -> true)
               | _ -> false
@@ -2086,6 +2351,16 @@ let lower registry names ids sumShapes nextFunctionOrdinal externalDefinitions
           in
           let* storedValue =
             match operation with
+            | _ when Option.is_some dictionary ->
+                let dictionary =
+                  match dictionary with
+                  | Some value -> value
+                  | None ->
+                      Crash.crash
+                        "Async dictionary rewriting lost its operation"
+                in
+                storedResult dictionary.dictionaryResult
+                  dictionary.dictionarySourceResult
             | A.Call (callee, arguments) when producer callee ->
                 Ok (producerStorage stores callee arguments)
             | _ when Option.is_some folding ->
@@ -2192,6 +2467,76 @@ let lower registry names ids sumShapes nextFunctionOrdinal externalDefinitions
           in
           let* operation, before, value, gen =
             match operation with
+            | _ when Option.is_some dictionary ->
+                let dictionary =
+                  match dictionary with
+                  | Some value -> value
+                  | None ->
+                      Crash.crash "Async dictionary call lost its operation"
+                in
+                let* arguments, before, gen =
+                  List.fold_left
+                    (fun result (role, atom) ->
+                      let* arguments, before, gen = result in
+                      let actual = modeOf env stores atom in
+                      let* atom, added, gen =
+                        match role with
+                        | AsyncDictCalls.Key -> (
+                            let stored = lookup stores atom in
+                            let atom, outer, gen = forceAtom env atom gen in
+                            match stored with
+                            | Some storage ->
+                                let* atom, inner, gen =
+                                  materializeStorage storage atom gen
+                                in
+                                Ok (atom, outer @ inner, gen)
+                            | None -> Ok (atom, outer, gen))
+                        | AsyncDictCalls.Value ->
+                            prepareValue dictionary.dictionaryValueMode
+                              dictionary.dictionaryValue atom actual gen
+                        | AsyncDictCalls.Dictionary ->
+                            let atom, outer, gen = forceAtom env atom gen in
+                            let actual =
+                              match actual with
+                              | Pending -> Concrete
+                              | PendingStored storage -> Stored storage
+                              | mode -> mode
+                            in
+                            let* atom, inner, gen =
+                              prepareValue
+                                (dictionaryMode dictionary.dictionaryKey
+                                   dictionary.dictionaryValue
+                                   dictionary.dictionaryValueMode)
+                                (AST.TDict
+                                   ( dictionary.dictionaryKey,
+                                     dictionary.dictionaryValue ))
+                                atom actual gen
+                            in
+                            Ok (atom, outer @ inner, gen)
+                      in
+                      Ok (atom :: arguments, before @ added, gen))
+                    (Ok ([], [], gen))
+                    dictionary.dictionaryArguments
+                in
+                let physicalValue =
+                  AsyncTransport.physicalType dictionary.dictionaryValueMode
+                    dictionary.dictionaryValue
+                in
+                let* callee =
+                  helperTypes
+                    dictionary.dictionaryOperation.AsyncDictCalls.callee
+                    [ dictionary.dictionaryKey; physicalValue ]
+                in
+                let result, gen = freshVar gen in
+                let output =
+                  AsyncTransport.physicalType dictionary.dictionaryResult
+                    dictionary.dictionarySourceResult
+                in
+                Ok
+                  ( A.TypedAtom (A.Var result, output),
+                    before @ [ (result, A.Call (callee, List.rev arguments)) ],
+                    None,
+                    gen )
             | _ when Option.is_some folding ->
                 let folding =
                   match folding with
