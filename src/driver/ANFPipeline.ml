@@ -270,15 +270,19 @@ let buildAnf ?(asyncDefinitions = StringOrder.Map.empty) ?asyncRuntime verbosity
             let provided =
               SpecializationIdentity.SpecSet.for_all
                 (fun (name, types) ->
-                  StringOrder.Map.mem
-                    (SpecializationIdentity.specName name types)
-                    definitions)
+                  let name = SpecializationIdentity.specName name types in
+                  match StringOrder.Map.find_opt name definitions with
+                  | Some (fn : ANF.functionDef) ->
+                      StringOrder.Map.find_opt name
+                        registries.AST_to_ANF.functionIds
+                      = Some fn.ANF.id
+                  | None -> false)
                 requested
             in
             if not provided then
               Error
                 "Async source specialization did not provide the requested \
-                 bodies"
+                 bodies with their existing identities"
             else
               lowerAsync registry
                 (CheckedAST.nextFunctionOrdinal

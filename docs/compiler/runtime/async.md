@@ -177,6 +177,13 @@ retain the public library's traversal order. A typed callback adapter reconciles
 concrete dictionary keys with a shared callback's wider key interface. Private sum
 metadata is available before runtime-helper specialization so raw managed slots
 retain and release nested variant values using their actual sum representation.
+Entry-list constructors load their logical source specializations on demand when
+the precompiled native body cannot accept the entry layout. Ordinary signature
+inference then adapts the source loop, including independently pending tuple
+fields. The rejecting constructor stops at its first duplicate: it does not
+demand keys in later entries, and neither constructor demands unused values.
+Loading a logical body preserves the existing function identity; only its
+changed async version is emitted, leaving the synchronous ABI intact.
 
 Unmigrated list and dictionary operations,
 regular recursive aggregate layouts, untyped value selections, and
@@ -391,6 +398,9 @@ value demands, pending keys, updates, merges, lookup tags, managed values, neste
 storage, outer pending dictionaries and abandonment. `async_dict_map.e2e` and
 `async_dict_callbacks_edges.e2e` cover eager map invocation, pending callback
 results, filtering decisions, empty dictionaries and shared callback interfaces.
+`async_dict_from_list.e2e` covers rejecting and overwriting constructors, pending
+keys independent of values, early duplicate rejection, outer pending entries and
+managed result ownership.
 `async_captured_variant_ownership.e2e` checks captured pending values returned
 inside variants directly and through list callbacks, including leak checking.
 
