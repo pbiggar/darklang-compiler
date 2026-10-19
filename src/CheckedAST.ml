@@ -44,6 +44,15 @@ module NamePairMap = Map.Make (struct
     if first <> 0 then first else StringOrder.compare leftName rightName
 end)
 
+(* Catalog forks inherit constructor metadata. Keep one tag per owner/spelling,
+   including owner-qualified aliases, so composing a fork back into its parent
+   is idempotent rather than duplicating inherited lookup segments. *)
+let constructorTagsOfVariants variants =
+  StringOrder.Map.fold
+    (fun spelling (owner, _, tag, _) tags ->
+      NamePairMap.add (owner, spelling) tag tags)
+    variants NamePairMap.empty
+
 type letPattern =
   | LPUnit
   | LPWildcard
@@ -223,8 +232,7 @@ type globalCatalog = {
   nextTypeOrdinal : int;
   constructorNames : (string * string) ConstructorIdMap.t;
   constructorIds : AST.constructorId NamePairMap.t;
-  constructorLookups :
-    (string * string list * int * AST.semanticType list) StringOrder.Map.t list;
+  constructorTags : int NamePairMap.t;
   fieldNames : (string * string) FieldIdMap.t;
   fieldIds : AST.fieldId NamePairMap.t;
 }
@@ -458,7 +466,7 @@ let emptySymbolsWithCatalogs (baseTypes : typeCatalog)
       nextTypeOrdinal = baseTypes.nextOrdinal;
       constructorNames = ConstructorIdMap.empty;
       constructorIds = NamePairMap.empty;
-      constructorLookups = [];
+      constructorTags = NamePairMap.empty;
       fieldNames = FieldIdMap.empty;
       fieldIds = NamePairMap.empty;
     }
@@ -697,17 +705,14 @@ let tryFindConstructorId typeName name (symbols : symbols) =
   match NamePairMap.find_opt (typeName, name) symbols.constructorIds with
   | Some id -> Some id
   | None ->
-      List.find_map
-        (fun lookup ->
-          Option.bind
-            (StringOrder.Map.find_opt (typeName ^ "." ^ name) lookup)
-            (fun (owner, _, tag, _) ->
-              if owner = typeName then
-                Option.map
-                  (fun ownerId -> AST.constructorId ownerId name tag)
-                  (tryFindTypeId owner symbols)
-              else None))
-        symbols.constructorLookups
+      Option.bind
+        (NamePairMap.find_opt
+           (typeName, typeName ^ "." ^ name)
+           symbols.constructorTags)
+        (fun tag ->
+          Option.map
+            (fun ownerId -> AST.constructorId ownerId name tag)
+            (tryFindTypeId typeName symbols))
 
 let fieldInfo id (symbols : symbols) = FieldIdMap.find_opt id symbols.fieldNames
 let fieldIndex id (_symbols : symbols) = Some (AST.fieldRuntimeIndex id)
@@ -847,8 +852,10 @@ let composeTopLevels (sourceCatalog : symbols) (targetCatalog : symbols)
             | Some existing when existing = value -> combined
             | None | Some _ -> NamePairMap.add key value combined)
           sourceCatalog.constructorIds targetCatalog.constructorIds;
-      constructorLookups =
-        sourceCatalog.constructorLookups @ targetCatalog.constructorLookups;
+      constructorTags =
+        NamePairMap.union
+          (fun _ source _ -> Some source)
+          sourceCatalog.constructorTags targetCatalog.constructorTags;
       fieldNames =
         FieldIdMap.fold
           (fun key value combined ->
@@ -879,7 +886,7 @@ let includeTypeMetadata (source : symbols) (target : symbols) =
       constructorIds = source.constructorIds;
       fieldNames = source.fieldNames;
       fieldIds = source.fieldIds;
-      constructorLookups = source.constructorLookups;
+      constructorTags = source.constructorTags;
     }
   in
   fst (composeTopLevels inherited target [])
@@ -919,7 +926,7 @@ let composeDeclaredTopLevels (sourceCatalog : symbols) (targetCatalog : symbols)
       functionIds = newFunctionIds;
       functionOrdinals = newFunctionOrdinals;
       nextTypeOrdinal = sourceCatalog.nextTypeOrdinal;
-      constructorLookups = sourceCatalog.constructorLookups;
+      constructorTags = sourceCatalog.constructorTags;
     }
   in
   let declarations =
@@ -1623,7 +1630,7 @@ let convertFunctionWithEnvironment recordFieldCounts outerEnvironment symbols
 let ofTypedFunction variantLookup recordFieldCounts (symbols : symbols)
     definition =
   convertFunctionWithEnvironment recordFieldCounts StringOrder.Map.empty
-    { symbols with constructorLookups = [ variantLookup ] }
+    { symbols with constructorTags = constructorTagsOfVariants variantLookup }
     definition
 
 let ofTypedProgram variantLookup externalValueNames baseTypes baseFunctions
@@ -1667,7 +1674,10 @@ let ofTypedProgram variantLookup externalValueNames baseTypes baseFunctions
       initialSymbols topLevels
   in
   let initialSymbols =
-    { initialSymbols with constructorLookups = [ variantLookup ] }
+    {
+      initialSymbols with
+      constructorTags = constructorTagsOfVariants variantLookup;
+    }
   in
   let initialSymbols =
     List.fold_left

@@ -3,6 +3,11 @@ type testResult = (unit, string) result
 
 val testFunctionIdentitiesDoNotHashCollide : unit -> testResult
 val testFunctionIdentitiesComposeAcrossUnits : unit -> testResult
+val testConstructorCatalogCompositionIsIdempotent : unit -> testResult
+
+val testConstructorCatalogCompositionPreservesOwnerPrecedence :
+  unit -> testResult
+
 val testMirToLirSymbolicOperands : unit -> testResult
 val testMirToLirReportsMissingEntryBlock : unit -> testResult
 val testMirToLirUsesNativeInt64ShiftMask : unit -> testResult
