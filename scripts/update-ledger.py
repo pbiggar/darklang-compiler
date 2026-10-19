@@ -18,10 +18,10 @@ import sys
 import tempfile
 
 import porting as p
+import ledger_inventory as inventory
 
 ROOT = p.ROOT
 INPUTS = 'porting/ledger-inputs.yaml'
-RECEIPT = 'porting/test-results.json'
 PACKAGE_RECEIPT = 'porting/package-results.json'
 OUTPUT = 'porting/generated/ledger.json'
 ARCHIVE = OUTPUT + '.gz'
@@ -41,8 +41,9 @@ def source_path(value):
 
 def read_inputs(root):
     value = p.read_yaml(root / INPUTS)
+    value.setdefault('test_mappings', {})
     fields = {'schema', 'features', 'source_mappings', 'parser_mappings',
-              'builtin_mappings', 'coverage', 'source_exceptions'}
+              'builtin_mappings', 'coverage', 'source_exceptions', 'test_mappings'}
     if set(value) != fields or value['schema'] != 1 or not isinstance(value['features'], list):
         raise ValueError('Invalid ledger-inputs.yaml schema')
     for key in fields - {'schema', 'features'}:
@@ -61,14 +62,15 @@ def read_inputs(root):
     return value
 
 
-def declarations(path, text):
+def declarations(path, text, containers=False):
     """Bounded source index using the existing scanner's module/offside rules.
 
     References below are lexical coverage hints, not proof that a branch ran.
     Unknown declaration headers are returned for review instead of discarded.
     """
-    original_lines = text.splitlines()
+    original_lines = text.splitlines(keepends=True)
     clean = p.strip_comments(text, True).splitlines()
+    comment_lines = p.strip_comments(text).splitlines()
     root, modules, rows, review = (), [], [], []
     for number, line in enumerate(clean, 1):
         if not line.strip():
@@ -97,6 +99,17 @@ def declarations(path, text):
         scope = root + tuple(part for _, names, _ in modules for part in names)
         trait = re.match(r'trait\s+([\w\x27]+)(?:<[^>]*>)?\s*=\s*$', statement)
         impl = re.match(r'impl(?:<[^>]*>)?\s+([\w.]+)(?:<[^>]*>)?\s+for\s+([\w.]+)(?:<[^>]*>)?\s*=\s*$', statement)
+        if containers and (trait or impl):
+            end = number
+            while end < len(clean) and (not clean[end].strip() or len(clean[end]) - len(clean[end].lstrip()) > indent):
+                end += 1
+            while end > number and not comment_lines[end - 1].strip():
+                end -= 1
+            label = trait[1] if trait else re.sub(r'\s+', ' ', statement.removesuffix('=').strip())
+            name = '.'.join(scope + (label,))
+            rows.append(dict(id=path + '#' + name, name=name, source=path, line=number,
+                end_line=end, kind='trait' if trait else 'impl', scope=scope,
+                body=''.join(original_lines[number - 1:end])))
         if trait:
             modules.append((indent, (trait[1],), None))
             continue
@@ -113,10 +126,12 @@ def declarations(path, text):
         end = number
         while end < len(clean) and (not clean[end].strip() or len(clean[end]) - len(clean[end].lstrip()) > indent):
             end += 1
+        while end > number and not comment_lines[end - 1].strip():
+            end -= 1
         name = '.'.join(scope + (match[2] or match[3],))
         rows.append(dict(id=path + '#' + name, name=name, source=path, line=number,
                          kind={'let': 'function', 'val': 'value', 'type': 'type', 'test': 'test'}[match[1]],
-                         scope=scope, body='\n'.join(original_lines[number - 1:end])))
+                         scope=scope, end_line=end, body=''.join(original_lines[number - 1:end])))
     return rows, review
 
 
@@ -393,60 +408,9 @@ def context(root, upstream, records, compiler):
                 compiler_context_sha256=p.compiler_context(root, compiler))
 
 
-def execute_tests(root, expected_context):
-    """Execute the existing suite and consume actual per-case outcomes, not totals."""
-    executable = root / '_build/default/test/tests_main.exe'
-    if not executable.is_file():
-        return dict(context=expected_context, state='blocked',
-                    reason='Build the pinned native graph with ./build --ai first.', tests=[])
-    with tempfile.TemporaryDirectory(prefix='ledger-tests-') as temp:
-        raw, inventory = Path(temp) / 'results.json', Path(temp) / 'inventory.yaml'
-        log_dir = root / 'TestResults/porting'
-        log_dir.mkdir(parents=True, exist_ok=True)
-        log = log_dir / 'existing-tests.log'
-        with log.open('w') as output:
-            discovered = subprocess.run(['./run-tests', '--target=linux-x86_64',
-                '--inventory-upstream=' + str(inventory)], cwd=root, stdout=output, stderr=subprocess.STDOUT)
-            if discovered.returncode not in (0, 1) or not inventory.is_file():
-                return dict(context=expected_context, state='blocked', reason='Existing test discovery failed; see TestResults/porting/existing-tests.log.', tests=[])
-            discovery = p.read_yaml(inventory)
-            p.validate_runner_export(discovery)
-            run = subprocess.run(['./run-tests', '--ai', '--target=linux-x86_64',
-                '--results-json=' + str(raw)], cwd=root, stdout=output, stderr=subprocess.STDOUT)
-        if not raw.is_file():
-            return dict(context=expected_context, state='blocked', reason='Runner did not produce per-test outcomes; see TestResults/porting/existing-tests.log.', tests=[])
-        outcomes = json.loads(raw.read_text())
-        if (outcomes.get('schema') != 1 or outcomes.get('mode') != 'execution'
-                or outcomes.get('filter') != '' or outcomes.get('target') != expected_context['target']):
-            raise ValueError('Execution report has incompatible target, schema, or filter')
-        cases = {}
-        expected = {(row['source_file'], row['name']) for row in discovery['tests']}
-        for row in outcomes['tests']:
-            if not row['source_file'].startswith('test/fixtures/e2e/upstream/'):
-                continue
-            key = (row['source_file'], row['name'])
-            if key not in expected or key in cases or row['status'] not in ('pass', 'fail'):
-                raise ValueError('Duplicate or invalid executed test outcome')
-            cases[key] = row
-        tests = []
-        for row in discovery['tests']:
-            key = (row['source_file'], row['name'])
-            actual = cases.get(key)
-            if not row['eligible']:
-                if actual:
-                    raise ValueError('Excluded test unexpectedly appears in executed results')
-                status, reason = 'skipped', row['effective_skip']
-            elif actual:
-                status = actual['status']
-                reason = actual['message'].replace(str(root), '<compiler>').replace(str(Path(temp)), '<run>')
-            else:
-                status, reason = 'blocked', 'Selected test has no execution result'
-            tests.append(dict(source_file=row['source_file'], name=row['name'], status=status, reason=reason))
-        return dict(context=expected_context, state='recorded', suite_exit_code=run.returncode,
-                    parse_errors=discovery['parse_errors'], tests=tests)
 
 
-def build(root, upstream, run_tests=False, compile_packages=False):
+def build(root, upstream, compile_packages=False):
     config = read_inputs(root)
     sources = p.read_yaml(root / 'porting/sources.yaml')
     if p.git_revision(upstream) != sources['upstream_revision']:
@@ -558,39 +522,23 @@ def build(root, upstream, run_tests=False, compile_packages=False):
             row['compilation'] = results.get(row['upstream'], dict(status='not-applicable' if row['upstream'] is None else compilation_state,
                 reason='Compiler-only support file' if row['upstream'] is None else package_receipt.get('reason', '') if package_current else 'Run --compile-packages for current source inputs'))
 
-    receipt_path = root / RECEIPT
-    receipt = json.loads(receipt_path.read_text()) if receipt_path.exists() and not run_tests else None
-    if receipt is not None and (receipt.get('schema') != 1
-            or receipt.get('state') not in ('recorded', 'blocked')
-            or not isinstance(receipt.get('tests'), list)):
-        raise ValueError('Invalid test-results.json receipt')
-    if run_tests:
-        receipt = dict(schema=1, **execute_tests(root, provenance))
-        # Never attribute a run to inputs that changed while it was executing.
-        _, after = p.discover(root, upstream_files)
-        if context(root, upstream, records, after) != provenance:
-            raise ValueError('Inputs changed during test execution; previous results are unchanged')
-        receipt_path.write_text(encoded(receipt))
-    current = receipt is not None and receipt.get('context') == provenance
-    named = [dict(id=r['id'], source_file=r['upstream'], name=r['named_test'], status='blocked',
-                  reason='Named package test execution adapter is not implemented')
-             for r in records if 'named_test' in r]
-    named.sort(key=lambda r: r['id'])
-    tests = dict(state=receipt['state'] if current else 'stale' if receipt else 'not-run',
-                 reason=receipt.get('reason', '') if current else '',
-                 suite_exit_code=receipt.get('suite_exit_code') if current else None,
-                 outcomes=receipt.get('tests', []) if current else [],
-                 parse_errors=receipt.get('parse_errors', []) if current else [],
-                 named_tests=dict(count=len(named), cases=named, status='blocked',
-                     reason='Named package test execution is not implemented; no pass inferred from discovery.'))
+    declaration_rows, warnings = inventory.declaration_rows(upstream_files, compiler,
+        declarations, coverage, source_rows)
+    review.extend(warnings)
+    tests, warnings = inventory.test_inventory(root, upstream_files, compiler, declarations,
+                                              records, config['test_mappings'])
+    review.extend(warnings)
     builtin_sources = [r for r in records if r['category'] == 'builtins' and 'builtin_declaration_counts' in r]
     computed = [dict(source=path, **item) for path, body in sorted(upstream_files.items())
                 if path.startswith('backend/src/Builtins/') and path.endswith('.fs')
                 for item in p.builtin_declarations(body.decode())[1]]
-    return dict(schema=1, context=provenance, features=features, parser=parser, builtins=builtins,
+    return dict(schema=2, context=provenance, features=features, parser=parser, builtins=builtins,
                 computed_builtin_registrations=sum(r['builtin_declaration_counts']['computed'] for r in builtin_sources),
                 computed_builtin_review=computed,
-                sources=source_rows, tests=tests, compilation=dict(state=compilation_state,
+                declarations=declaration_rows,
+                files=[{key: row[key] for key in ('id', 'category', 'upstream', 'compiler', 'compilation', 'exception')}
+                       for row in source_rows],
+                tests=tests, compilation=dict(state=compilation_state,
                     reason=package_receipt.get('reason', '') if package_current else '',
                     stage='native-declarations'), review=sorted(set(review)))
 
@@ -602,32 +550,43 @@ def markdown(value):
              '## Language features', '', '| Feature | Status | Review needed |', '| --- | --- | --- |']
     for feature in value['features']:
         lines.append(f"| {p.cell(feature['name'])} | {feature['status']} | {'yes' if feature['review_required'] else 'no'} |")
-    lines += ['', '## Source equivalency', '', '| Ledger | Identical | Different | Missing | Compiler-only |', '| --- | ---: | ---: | ---: | ---: |']
+    lines += ['', '## Source equivalency by declaration', '',
+              'Counts are functions, values, types, traits and implementations. Named tests are in the test inventory. Packages include StdLib; file splits do not determine declaration matches. Identical means exact declaration source bytes, excluding surrounding comments/blank lines.', '',
+              '| Ledger | Identical | Different | Missing | Ambiguous | Compiler-only |', '| --- | ---: | ---: | ---: | ---: | ---: |']
     for category in ('stdlib', 'packages'):
-        counts = Counter(r['source_status'] for r in value['sources'] if r['category'] == category)
-        lines.append('| ' + category + ' | ' + ' | '.join(str(counts[k]) for k in ('identical', 'different', 'missing', 'compiler-only')) + ' |')
-    package_rows = [r for r in value['sources'] if r['category'] == 'packages' and r['upstream']]
-    counts = Counter(d['coverage']['kind'] for r in package_rows for d in r['declarations'])
+        counts = Counter(r['source_status'] for r in value['declarations'] if category in r['categories'])
+        lines.append('| ' + category + ' | ' + ' | '.join(str(counts[k]) for k in ('identical', 'different', 'missing', 'ambiguous', 'compiler-only')) + ' |')
+    package_rows = [r for r in value['declarations'] if r['upstream']]
+    counts = Counter(r['coverage']['kind'] for r in package_rows)
     lines += ['', '## Existing test references', '',
               'Lexical references are coverage hints, not evidence of execution. One deterministic witness (the shortest indirect path) and the total reference count per declaration are in `porting/generated/ledger.json`.', '',
               '| Direct | Indirect | Maintained | Not identified |', '| ---: | ---: | ---: | ---: |',
               '| ' + ' | '.join(str(counts[k]) for k in ('direct', 'indirect', 'maintained', 'not-identified')) + ' |', '',
-              'Package compilation state: **' + value['compilation']['state'] + '**. Original declarations are parsed, checked and lowered through the native preamble pipeline; no entry program is synthesized or linked.', '',
-              '| Compiled | Fail | Blocked | Stale | Not run |', '| ---: | ---: | ---: | ---: | ---: |',
+              'Package compilation state: **' + value['compilation']['state'] + '**. Each declaration links to its containing source-unit receipt. A failed unit does not establish that every declaration fails independently. Original units are parsed, checked and lowered through the native preamble pipeline.', '',
+              '| Declarations in compiled units | In failed units | In blocked units | Stale | Not run |', '| ---: | ---: | ---: | ---: | ---: |',
               '| ' + ' | '.join(str(Counter(r['compilation']['status'] for r in package_rows)[k]) for k in ('compiled', 'fail', 'blocked', 'stale', 'not-run')) + ' |', '',
               '## Parser and builtins', '',
               'Builtin mappings distinguish callable Builtin declarations from source implementation counterparts. A counterpart is not a callable alias or a behavior pass. Computed registrations remain explicit review items.', '']
     for category in ('parser', 'builtins'):
         lines.append('- ' + category + ': ' + ', '.join(f'{k}: {v}' for k, v in sorted(Counter(r['mapping'] for r in value[category]).items())))
     lines += [f"- Computed builtin constructor templates: {value['computed_builtin_registrations']} (reviewed literal call sites expanded; not an assembled registry)", '',
-              '## Existing test execution', '', 'State: **' + value['tests']['state'] + '**.', '']
-    if value['tests']['reason']:
-        lines += [value['tests']['reason'], '']
-    counts = Counter(t['status'] for t in value['tests']['outcomes'])
-    lines += ['Imported legacy cases with current execution receipts:', '',
-              '| Pass | Fail | Skipped | Blocked |', '| ---: | ---: | ---: | ---: |',
-              '| ' + ' | '.join(str(counts[k]) for k in ('pass', 'fail', 'skipped', 'blocked')) + ' |', '',
-              f"Named package tests: {value['tests']['named_tests']['count']} declarations, execution blocked (not silently skipped).", '',
+              '## Interpreter tests versus compiler tests', '',
+              'Source inventory only; enabled tests are assumed to pass. Compiler counterparts include existing upstream fixtures and named declarations. Recognizable named assertions and Test.all groups match legacy assertions by content; partial groups stay explicit. Helper-driven migrations require maintained mappings. Helper/preamble equivalence is not inferred from assertion content.', '',
+              '| Upstream format | Total | Identical | Adapted | Different | Partial | Missing | Enabled | Disabled | Ambiguous |',
+              '| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |']
+    for form in ('legacy', 'named'):
+        cases = [r for r in value['tests']['cases'] if r['upstream']['format'] == form]
+        equivalency = Counter(r['equivalency'] for r in cases)
+        states = Counter(r['status'] for r in cases)
+        # Ambiguous cases have no selected counterpart and are excluded from
+        # the definite missing count.
+        missing = sum(r['status'] == 'missing' for r in cases)
+        numbers = [len(cases), equivalency['identical'], equivalency['adapted'], equivalency['different'], equivalency['partial'],
+                   missing, states['enabled'], states['disabled'], states['ambiguous']]
+        lines.append('| ' + form + ' | ' + ' | '.join(map(str, numbers)) + ' |')
+    extras = value['tests']['compiler_only']
+    lines += ['', f"Unmatched compiler tests: {len(extras)} ({sum(r['enabled'] for r in extras)} enabled). Older imported fixtures absent from the current pin remain visible here; unmatched does not prove compiler authorship.", '',
+              'Whole-file gates, individual line gates, fixture skip metadata and compiler expectation overrides are recorded per counterpart. Overrides are never counted as identical. Source forms that could not be indexed: ' + str(len(value['tests']['unindexed'])) + '.', '',
               '## Review queue', '']
     lines += ['- ' + p.cell(item) for item in value['review']]
     return '\n'.join(lines) + '\n'
@@ -642,13 +601,14 @@ def coverage_gaps(value):
         'from an existing test. None is silently exempted or supplied with a new test.', '',
         'Remaining implicit dispatch, reflection, and unfamiliar syntax can require maintained references. '
         'References do not establish runtime execution.', '']
-    for row in value['sources']:
-        if row['category'] != 'packages' or not row['upstream']:
-            continue
-        gaps = [d for d in row['declarations'] if d['coverage']['kind'] == 'not-identified']
+    groups = defaultdict(list)
+    for row in value['declarations']:
+        if row['upstream'] and row['coverage']['kind'] == 'not-identified':
+            groups[row['upstream']['source']].append(row)
+    for path, gaps in sorted(groups.items()):
         if gaps:
-            lines += ['## ' + row['upstream'], '', '| Declaration | Kind | Line |', '| --- | --- | ---: |']
-            lines += [f"| {p.cell(d['name'])} | {d['kind']} | {d['line']} |" for d in gaps]
+            lines += ['## ' + path, '', '| Declaration | Kind | Line |', '| --- | --- | ---: |']
+            lines += [f"| {p.cell(d['name'])} | {d['kind']} | {d['upstream']['line']} |" for d in gaps]
             lines += ['']
     return '\n'.join(lines) + '\n'
 
@@ -656,14 +616,13 @@ def coverage_gaps(value):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--upstream', type=Path, required=True)
-    parser.add_argument('--run-tests', action='store_true', help='Execute existing tests; does not build the compiler')
     parser.add_argument('--compile-packages', action='store_true', help='Compile pinned original declarations; no probes and no test execution')
     parser.add_argument('--check', action='store_true', help='Compare deterministic generated outputs without writing')
     args = parser.parse_args()
-    if args.check and (args.run_tests or args.compile_packages):
-        parser.error('--check does not execute tests or compilation')
+    if args.check and args.compile_packages:
+        parser.error('--check does not execute compilation')
     try:
-        value = build(ROOT, args.upstream.resolve(), args.run_tests, args.compile_packages)
+        value = build(ROOT, args.upstream.resolve(), args.compile_packages)
         machine = encoded(value)
         compressed = io.BytesIO()
         with gzip.GzipFile(fileobj=compressed, mode='wb', filename='', mtime=0) as archive:
@@ -685,13 +644,9 @@ def main():
             else:
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_text(contents)
-        print('Ledger is current.' if args.check else 'Regenerated source/status/coverage ledgers; test execution state: ' + value['tests']['state'])
-        if args.run_tests and (value['tests']['state'] != 'recorded' or value['tests']['parse_errors']
-                or value['tests']['suite_exit_code'] != 0 or value['tests']['named_tests']['count'] > 0
-                or any(t['status'] in ('fail', 'blocked') for t in value['tests']['outcomes'])):
-            return 1
+        print('Ledger is current.' if args.check else 'Regenerated declaration, test inventory and coverage ledgers.')
         if args.compile_packages and (value['compilation']['state'] != 'recorded'
-                or any(row['compilation']['status'] != 'compiled' for row in value['sources']
+                or any(row['compilation']['status'] != 'compiled' for row in value['files']
                        if row['category'] == 'packages' and row['upstream'])):
             return 1
         return 0

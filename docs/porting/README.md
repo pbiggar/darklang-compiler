@@ -6,7 +6,7 @@ existing tests: no new compatibility probes, expected values, differential
 corpus, or runner-validation project.
 
 Start with the [generated ledger](generated/ledger.md). Detailed mappings,
-declarations, coverage witnesses, and individual test outcomes are in
+declarations, coverage witnesses, test counterparts and effective enablement are in
 `porting/generated/ledger.json`.
 
 Git stores the machine index as `porting/generated/ledger.json.gz`, compressed
@@ -27,23 +27,20 @@ python3 scripts/update-ledger.py --upstream /path/to/interpreter --check
 
 # After activating the pinned native environment:
 env -u LD_PRELOAD ./build --ai
-python3 scripts/update-ledger.py --upstream /path/to/interpreter --run-tests
 python3 scripts/update-ledger.py --upstream /path/to/interpreter --compile-packages
 ```
 
-The default command only reads sources and existing execution receipts.
+The default command reads sources and existing package compilation receipts.
 `--check` compares generated outputs without writing or executing tests.
-`--run-tests` executes the already-built compiler suite with its existing
-expectations, consumes individual outcomes, and refreshes the ledger. It does
-not build implicitly. A missing binary or unavailable result export is blocked,
-not a pass or a test failure.
+Test comparison uses source inventory and effective enabled/disabled metadata.
+Enabled tests are assumed to pass; pass/fail receipts are not part of this ledger.
 
 `--compile-packages` runs the already-built native declaration adapter, separately
 from test execution. Default regeneration consumes its receipt without compiling.
 
 `bash scripts/check-porting` runs the existing tooling/layout checks and checks
 the generated ledger using an isolated checkout of the pin. It does not execute
-the compiler suite; use `--run-tests` for that.
+the compiler suite.
 
 ## What each ledger records
 
@@ -52,13 +49,25 @@ the compiler suite; use `--run-tests` for that.
 | Language | A short feature list and hashes of its watched sources | Implemented, partial, missing, or not-assessed |
 | Parser | Source components, known mappings and unmapped components | Split/combined component mappings and remaining gaps |
 | Builtins | Literal upstream registrations, actual Builtin declarations and source implementation counterparts | Confirmed compiler builtin mappings |
-| StdLib | Exact byte identity, differing sources, missing mappings, compiler-only files | Source mappings and accepted differences |
-| Packages | Source identity, native declaration compilation and existing test references for functions/types | Exceptional mappings and otherwise unresolved coverage |
-| Tests | Actual pass/fail/skipped/blocked outcomes from existing imported tests | Existing exclusions and agreed AOT expectations stay in the test suite |
+| StdLib | Per-declaration byte identity, differences, missing/ambiguous counterparts and compiler-only declarations | Source mappings and accepted differences |
+| Packages | Per-declaration source identity, containing-unit compilation and existing test references | Exceptional mappings and otherwise unresolved coverage |
+| Tests | Every pinned named test/legacy assertion, compiler counterparts, source/expectation adaptations and enablement | Exceptional test mappings; existing exclusions and AOT expectations stay in the suite |
 
 Packages include StdLib sources; the two counts overlap. A root-module match is
 a mapping candidate, not proof of equivalent declarations. Source comparison
-is exact bytes, not normalized ASTs or concatenated approximations of split files.
+is exact declaration bytes, not normalized ASTs or concatenated approximations of
+split files. The declaration span excludes surrounding comments/blank lines but
+retains its indentation, internal comments and line endings. Functions, values,
+types, traits, implementations and their methods have separate identities;
+named test declarations belong in the test inventory. Trait/implementation spans
+include their methods, so declaration counts are not non-overlapping byte totals.
+Qualified kind/name matches work across file splits. Maintained file mappings
+disambiguate duplicate names; unresolved alternatives remain ambiguous.
+
+Machine schema 2 uses `declarations` as the primary inventory. Each row has its
+upstream span/hash, compiler counterpart spans/hashes, source status, coverage
+witness and compilation provenance. `files` retains supporting file mappings
+and compilation units; file totals are not the source-equivalency score.
 Builtin discovery does not invent registrations with computed names or claim
 that a same-name declaration proves an assembled runtime binding.
 
@@ -87,8 +96,10 @@ includes dependency paths and actual compiler diagnostics for every original fil
 
 `porting/package-results.json` records the upstream pin and source/build context.
 Changed inputs make receipts stale; missing executables or adapter-wide failures
-are blocked. Package errors are failures, not exclusions. Compilation never changes
-the source-identity or test-outcome scores. Full logs stay in ignored
+are blocked. Each declaration links to its containing-unit result. A compiled
+unit provides compilation evidence for its declarations; a failed unit does not
+identify which declarations fail independently. Compilation never changes source
+identity or test enablement. Full logs stay in ignored
 `TestResults/porting/package-compilation.log`.
 
 ## Maintained inputs and ChatGPT review
@@ -126,30 +137,46 @@ ChatGPT can inspect a review item and update these maintained decisions, with
 source/test references and an explanation. Ordinary regeneration requires no
 model call and keeps ordering, names and hashes deterministic.
 
-## Existing test execution
+## Interpreter tests versus compiler tests
 
-The native runner's `--results-json=PATH` exports E2E outcomes from the same
-callback that records existing individual and batched results. The update script
-also requests the existing parser/gate inventory, then reconciles cases by
-source path and full test name. It does not infer individual passes from timing
-records, suite totals, or eligibility.
+Each pinned named test and legacy execution assertion has one upstream row.
+Counterparts come from the compiler's existing E2E fixtures (including
+`test/fixtures/e2e/upstream/`) and named declarations. Qualified named identities
+match directly; recognizable single `Stdlib.Test.equal` assertions and `Test.all`
+groups can match older `source = expectation` fixtures. A group is fully mapped
+only when every indexed assertion has a counterpart. Partial groups retain their
+matched/total assertion counts. Duplicate candidates remain ambiguous. A missing
+row means no counterpart was identified, not proof no equivalent test exists.
 
-`porting/test-results.json` stores execution receipts with the upstream pin,
-target and compiler/test source context hash. Changed execution inputs make
-results stale. Timings, timestamps and temporary paths are not used as evidence;
-full diagnostics remain under `TestResults/porting/`.
+The existing upstream diff script supplies the established
+`Builtin.testDerrorMessage`/`error=` adaptation. Compiler `#compileerror` overrides
+remain visible and prevent an identical classification. Exact test spans are
+identical; recognized migrations/maintained adaptations are adapted; changed
+named counterparts are different. This is source comparison, not behavioral proof.
+Helper/preamble equivalence is not inferred from matching assertion expressions.
 
-Skipped cases retain their existing reason. An eligible case without an actual
-outcome is blocked. Parse errors remain explicit. Named package tests are
-currently blocked until their existing Test helpers, test-local builtins and
-execution adapter are implemented; discovery alone cannot mark them passing.
-Runs with failures, missing outcomes, parse errors, or unsupported named-test
-execution exit unsuccessfully.
+Enablement is derived from `E2EDiscovery.ml` whole-file and original-line gates,
+fixture skip attributes, and local expectation overrides. Named declarations
+remain disabled while the current runner does not select them. Every counterpart
+records its exclusion origin/reason and expectation override. Ordinary command-line
+filters used for individual test runs do not change the inventory.
 
-## Remaining implementation
+Optional `test_mappings` in `porting/ledger-inputs.yaml` maps an upstream test ID
+to existing compiler test IDs and a reason, for helper-driven or otherwise
+unrecognized migrations. IDs use `source#L<number>` for legacy assertions and
+`source#Qualified.Name` for named declarations. No new test programs are created.
+Unmatched compiler assertions are listed separately with imported/compiler origin;
+an old upstream fixture absent from the current pin is not assumed compiler-authored.
+Unindexed source forms remain explicit review items. Backend F# harness sources
+remain in the supporting inventory; this comparison covers Dark execution tests.
+
+No tests run during regeneration. The previous `--run-tests` ledger option and
+pass/fail receipts are superseded; existing runner exports remain independent tools.
+
+## Follow-up port work (not ledger merge requirements)
 
 - Finish current named-package test execution using the existing upstream tests.
-- Fix the compatibility gaps reported by source differences, missing mappings and compilation errors.
+- Prioritize compatibility gaps reported by declaration differences, missing mappings and compilation errors.
 - Expand maintained coverage references only where source analysis cannot resolve them.
 
 Behavioral details belong in the existing suite. Performance validation is not
