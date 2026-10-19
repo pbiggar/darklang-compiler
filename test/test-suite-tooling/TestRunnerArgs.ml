@@ -92,11 +92,25 @@ let parsePath flag args =
    Parse --timings-json=PATH option
 *)
 let parseTimingsJsonArg = parsePath "--timings-json"
+let parseResultsJsonArg = parsePath "--results-json"
 
 (*
    Parse --codegen-profile-json=PATH option
 *)
 let parseCodegenProfileJsonArg = parsePath "--codegen-profile-json"
+
+(* Discovery mode must export the whole corpus, not silently inherit a filter. *)
+let parseUpstreamInventoryArg args =
+  let values =
+    Array.to_list args
+    |> List.filter (String.starts_with ~prefix:"--inventory-upstream=")
+  in
+  match values with
+  | [] -> Ok None
+  | [ _ ] when Option.is_some (parseFilterArg args) ->
+      Error "--inventory-upstream cannot be combined with --filter"
+  | [ _ ] -> parsePath "--inventory-upstream" args
+  | _ -> Error "--inventory-upstream may be specified only once"
 
 (* The frozen runner's public batching limit; retain its value until the
    translated E2E runner owns the shared limit. *)

@@ -27,6 +27,18 @@ let testCodegenProfileJsonParsesPath () =
        [| "--codegen-profile-json=/tmp/codegen.json" |])
     (expectEqual (Some "/tmp/codegen.json"))
 
+let testUpstreamInventoryParsesPath () =
+  Result.bind (parseUpstreamInventoryArg [| "--inventory-upstream=inventory.yaml" |])
+    (expectEqual (Some "inventory.yaml"))
+
+let testUpstreamInventoryRejectsIncompleteOrAmbiguousRequests () =
+  let results = List.map parseUpstreamInventoryArg
+    [ [| "--inventory-upstream=" |];
+      [| "--inventory-upstream=a.yaml"; "--filter=tuple" |];
+      [| "--inventory-upstream=a.yaml"; "--inventory-upstream=b.yaml" |] ] in
+  if List.for_all Result.is_error results then Ok ()
+  else Error "Expected empty, filtered, or duplicate inventory requests to fail"
+
 let testE2EBatchSizeParsesBoundedSize () =
   Result.bind
     (parseE2EBatchSizeArg [| "--e2e-batch-size=8192" |])
@@ -68,6 +80,8 @@ let tests =
     ("timings JSON parses path", testTimingsJsonParsesPath);
     ("timings JSON rejects empty path", testTimingsJsonRejectsEmptyPath);
     ("codegen profile JSON parses path", testCodegenProfileJsonParsesPath);
+    ("upstream inventory parses path", testUpstreamInventoryParsesPath);
+    ("upstream inventory rejects incomplete or ambiguous requests", testUpstreamInventoryRejectsIncompleteOrAmbiguousRequests);
     ("E2E batch size parses a bounded size", testE2EBatchSizeParsesBoundedSize);
     ("E2E batch size defaults to batching", testE2EBatchSizeDefaultsToBatching);
     ( "E2E batch size rejects invalid values",

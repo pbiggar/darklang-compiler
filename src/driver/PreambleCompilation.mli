@@ -20,3 +20,10 @@ val buildPreambleContextFromAnalysis :
   ( CompilationContexts.stdlibResult * CompilationContexts.preambleContext,
     string )
   result
+
+val buildPackageContext :
+  CompilationContexts.stdlibResult ->
+  Validation.validatedSourceFile list ->
+  ( CompilationContexts.stdlibResult * CompilationContexts.preambleContext,
+    string )
+  result

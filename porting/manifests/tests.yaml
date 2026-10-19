@@ -1,6 +1,6 @@
 category: tests
 scope: ''
-current: Legacy upstream fixtures plus compiler-owned tests; file gates, line gates, and fixture metadata affect discovery.
+current: Current checked-in named tests have qualified source identities and file/module scopes. Legacy fixtures have a discovery-only YAML export using the real parser and shared execution gates; the export and native regressions have not run in this VM. Current named package tests are not yet adapted to the compiler runner.
 policy:
   source: identical-with-adapter
   behavior: identical-with-aot-rules
@@ -10,4 +10,14 @@ policy:
 questions:
   - Trial current named package tests and preserve their result and error expectations.
   - Export actual runner identities and effective exclusions; source discovery is not test execution.
-children: []
+children:
+  - scope: packages
+    current: The compiler represents named package tests as DTest/testDecl and legacy actual/expected assertions as DAssertion, matching the upstream distinction. NamedPackageTests.partition retains ordered qualified tests separately from validated declarations. NamedPackageTests.executable selects one unchanged body as a Script entry at its original module scope and declaration position, preserving its expected error separately and removing other test bodies. Both boundaries reject duplicate identities and non-Package source; selection rejects unknown qualified names. Native regressions are implemented but have not been type-checked or executed; setup remains blocked by pinned dependency downloads. Ordinary executable source flattening still rejects named tests. The current named suite also relies on Darklang.Stdlib.Test.Result and helpers, test-local builtin context and result/error interpretation, which remain unfinished.
+    reason: Source inspection of WrittenTypes, FileParser, WrittenSource and the checked-in Test module identifies prerequisites; this is not a behavioral exclusion.
+    depends_on:
+      - parser:backend/src/LibParser/WrittenTypes.fs
+      - parser:backend/src/LibParser/Parser.fs
+      - stdlib:packages/darklang/stdlib/test.dark
+    questions:
+      - Trial the named TestDecl path and unchanged Test.Result helper code before claiming named-suite execution support.
+      - Port test-local runtime-error and counter context according to upstream semantics; consult the user before accepting a new AOT difference.

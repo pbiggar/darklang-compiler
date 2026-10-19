@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import io
 import re
 import subprocess
 import sys
@@ -181,6 +182,60 @@ def module_names(text):
     return sorted(set(re.findall(r'^module\s+([\w.]+)', strip_comments(text, True), re.M)))
 
 
+def builtin_declarations(text):
+    """Enumerate literal registration candidates and expose computed-name gaps."""
+    clean = strip_comments(text, True)
+    literals, computed = [], []
+    for match in re.finditer(r'\bname\s*=\s*(fn|value)\b', clean):
+        literal = re.match(r'\s*"([^"\\\n]+)"\s+(\d+)\b', text[match.end():])
+        line = text.count('\n', 0, match.start()) + 1
+        if literal:
+            literals.append(dict(kind=match[1], name=literal[1], version=int(literal[2]), line=line))
+        else:
+            computed.append(dict(kind=match[1], line=line))
+    return literals, computed
+
+
+def named_tests(text):
+    """Discover source declarations, not runner cases, with indentation-scoped names.
+
+    Fail closed on unfamiliar headers: this bounded scanner must not silently
+    invent a module or lose a declaration when upstream syntax changes.
+    """
+    root, modules, result, seen = (), [], [], set()
+    for number, line in enumerate(strip_comments(text, True).splitlines(), 1):
+        if not line.strip():
+            continue
+        indent = len(line) - len(line.lstrip())
+        while modules and indent <= modules[-1][0]:
+            modules.pop()
+        if modules and modules[-1][2] is None:
+            column, names, _ = modules[-1]
+            modules[-1] = (column, names, indent)
+        declaration_indent = modules[-1][2] if modules else 0
+        statement = line.strip()
+        if indent == declaration_indent and re.match(r'module\b', statement):
+            match = re.fullmatch(r'module\s+([\w\x27]+(?:\.[\w\x27]+)*)(\s*=)?\s*', statement)
+            if not match or (not match[2] and indent):
+                raise ValueError(f'Unsupported module header at line {number}')
+            names = tuple(match[1].split('.'))
+            if match[2]:
+                modules.append((indent, names, None))
+            else:
+                root = names
+                modules.clear()
+        elif indent == declaration_indent and re.match(r'test\b', statement):
+            match = re.match(r'test\s+([\w\x27]+)\s*=', statement)
+            if not match:
+                raise ValueError(f'Unsupported named test header at line {number}')
+            name = '.'.join(root + tuple(part for _, names, _ in modules for part in names) + (match[1],))
+            if name in seen:
+                raise ValueError(f'Duplicate named test {name} at line {number}')
+            seen.add(name)
+            result.append(dict(name=name, line=number))
+    return result
+
+
 def variants(text, wanted):
     clean = strip_comments(text, True)
     matches = list(re.finditer(r'^(?:type|and)\s+(\w+)\b[^=\n]*=', clean, re.M))
@@ -202,10 +257,22 @@ def git_revision(path):
 
 def checked_files(upstream, revision):
     paths = subprocess.check_output(['git', '-C', str(upstream), 'ls-tree', '-r', '--name-only', revision], text=True)
+    selected = [path for path in paths.splitlines()
+                if path.endswith(('.dark', '.fs', '.md', '.fsproj'))
+                and path.startswith(('packages/', 'backend/src/', 'backend/tests/', 'backend/testfiles/'))]
+    requests = ''.join(f'{revision}:{path}\n' for path in selected).encode()
+    contents = io.BytesIO(subprocess.check_output(
+        ['git', '-C', str(upstream), 'cat-file', '--batch'], input=requests))
     result = {}
-    for path in paths.splitlines():
-        if path.endswith(('.dark', '.fs', '.md', '.fsproj')) and path.startswith(('packages/', 'backend/src/', 'backend/tests/', 'backend/testfiles/')):
-            result[path] = subprocess.check_output(['git', '-C', str(upstream), 'show', f'{revision}:{path}'])
+    for path in selected:
+        header = contents.readline().split()
+        if len(header) != 3 or header[1] != b'blob':
+            raise ValueError('Could not read pinned source blob: ' + path)
+        size = int(header[2])
+        body = contents.read(size)
+        if len(body) != size or contents.read(1) != b'\n':
+            raise ValueError('Incomplete pinned source blob: ' + path)
+        result[path] = body
     return result
 
 
@@ -219,6 +286,13 @@ def discover(root, upstream_files):
         if path.endswith('.dark') and path.startswith(('StdLib/', 'packages/')):
             for name in module_names(body.decode()):
                 modules.setdefault(name, []).append(path)
+    builtin_candidates = {}
+    for path in modules.get('Builtin', []):
+        for name in re.findall(r'^let\s+([\w\x27]+)\b', strip_comments(compiler_files[path].decode(), True), re.M):
+            builtin_candidates.setdefault(name, []).append(path)
+    registry = 'src/DarkStdlib.ml'
+    for name in re.findall(r'\bfn\s+"([^"\n]+)"', strip_comments(compiler_files.get(registry, b'').decode())):
+        builtin_candidates.setdefault(name, []).append(registry)
     def add(category, key, source, counterparts=(), observation='candidate mapping; review required', detail=''):
         counterparts = sorted(set(counterparts))
         source_hash = digest(upstream_files[source]) if source in upstream_files else None
@@ -243,11 +317,19 @@ def discover(root, upstream_files):
         # Package inventory includes StdLib and test sources, with cross-category references.
         if category == 'stdlib':
             add('packages', path, path, candidates, observation, 'Also listed in stdlib inventory')
-        clean = strip_comments(body.decode(), True)
-        tests = re.findall(r'^\s*test\s+([\w\x27]+)\s*=', clean, re.M)
+        try:
+            tests = named_tests(body.decode())
+        except ValueError as error:
+            raise ValueError(f'{path}: {error}') from error
         if tests:
             add('tests', path, path, (), 'named-test source; execution adapter unverified',
-                f'{len(tests)} declaration candidates: ' + ', '.join(tests))
+                f'{len(tests)} declaration candidates: ' + ', '.join(t['name'].split('.')[-1] for t in tests))
+            for test in tests:
+                add('tests', f'{path}#{test["name"]}', path, (),
+                    'named-test declaration; runtime discovery and execution unverified', test['name'])
+                records[-1].update(scope=f'{path}/named/' + test['name'].replace('.', '/'),
+                                   source_line=test['line'], named_test=test['name'],
+                                   source_group=f'tests:{path}')
     for path in sorted(set(p for p in compiler_files if p.endswith('.dark') and p.startswith(('StdLib/', 'packages/'))) - mapped):
         category = 'stdlib' if path.startswith('StdLib/') else 'packages'
         add(category, 'compiler/' + path, 'compiler/' + path, [path], 'compiler-only source; classify intended treatment')
@@ -289,31 +371,52 @@ def discover(root, upstream_files):
     for path, body in sorted(upstream_files.items()):
         if not path.startswith('backend/src/Builtins/') or not path.endswith('.fs'):
             continue
-        clean = strip_comments(body.decode())
-        declarations = re.findall(r'\bname\s*=\s*(fn|value)\s+"([^"\n]+)"\s+(\d+)', clean)
+        declarations, computed = builtin_declarations(body.decode())
         if declarations:
             add('builtins', path, path,
                 sorted(p for p in compiler_files if p.startswith('StdLib/Builtin') and p.endswith('.dark')) + ['src/DarkStdlib.ml'],
                 'builtin declaration source; assembled registry and signatures unverified',
-                f'{len(declarations)} declaration candidates: ' + ', '.join(f'{kind} {name}_v{version}' for kind, name, version in declarations))
+                f'{len(declarations)} literal declaration candidates: ' + ', '.join(f'{d["kind"]} {d["name"]}_v{d["version"]}' for d in declarations) +
+                f'; {len(computed)} computed registration constructors require assembled-registry discovery')
         else:
-            add('builtins', path, path, (), 'registration/support source; assembled registry export needed')
+            add('builtins', path, path, (), 'registration/support source; assembled registry export needed',
+                f'{len(computed)} computed registration constructors')
+        records[-1]['builtin_declaration_counts'] = dict(literal=len(declarations), computed=len(computed))
+        for declaration in declarations:
+            kind, name, version = declaration['kind'], declaration['name'], declaration['version']
+            counterparts = builtin_candidates.get(name, [])
+            add('builtins', f'{path}#{kind}/{name}/v{version}', path, counterparts,
+                'literal registration candidate; assembled binding, signature and behavior unverified',
+                f'Builtin.{name}_v{version}; compiler candidates use same-spelling declaration heuristics only')
+            records[-1].update(scope=f'{path}/declarations/{kind}/{name}/v{version}',
+                               source_line=declaration['line'], builtin=dict(kind=kind, name=name, version=version),
+                               source_group=f'builtins:{path}')
     # Retain all legacy imports and configuration observations, not inferred skip counts.
-    runner = compiler_files.get('test/test-suite-tooling/TestRunner.ml', b'').decode()
+    runner = compiler_files.get('test/test-suite-tooling/E2EDiscovery.ml', b'').decode()
     def gate_block(name):
         if not runner:
             return ''
         if f'let {name} =' not in runner:
             raise ValueError(f'Runner gate structure changed: {name}; update discovery')
-        return runner.split(f'let {name} =', 1)[1].split('\n    in', 1)[0]
-    disabled = set(re.findall(r'"(test/fixtures/e2e/upstream/[^"\n]+)"', gate_block('disabledUpstreamFiles')))
-    line_entries = {path: re.findall(r'\d+', numbers) for path, numbers in
-                    re.findall(r'\(\s*"([^"]+)"\s*,\s*\[([^]]*)\]\s*\)', gate_block('disabledUpstreamLines'))}
-    for path in sorted(p for p in compiler_files if p.startswith('test/fixtures/e2e/upstream/') and p.endswith('.dark')):
+        return runner.split(f'let {name} =', 1)[1].split('\nlet ', 1)[0]
+    disabled_paths = re.findall(r'"(test/fixtures/e2e/upstream/[^"\n]+)"', gate_block('disabledUpstreamFiles'))
+    disabled = set(disabled_paths)
+    raw_lines = re.findall(r'\(\s*"([^"]+)"\s*,\s*\[([^]]*)\]\s*\)', gate_block('disabledUpstreamLines'))
+    line_entries = {path: [int(n) for n in re.findall(r'\d+', numbers)] for path, numbers in raw_lines}
+    paths = sorted(p for p in compiler_files if p.startswith('test/fixtures/e2e/upstream/') and p.endswith('.dark'))
+    if len(disabled) != len(disabled_paths) or len(line_entries) != len(raw_lines):
+        raise ValueError('Duplicate configured runner gate paths')
+    if (disabled | set(line_entries)) - set(paths):
+        raise ValueError('Configured runner gate references an absent legacy fixture')
+    for path, numbers in line_entries.items():
+        if len(numbers) != len(set(numbers)) or any(n < 1 or n > len(compiler_files[path].decode().splitlines()) for n in numbers):
+            raise ValueError('Duplicate or out-of-range configured runner line gate')
+    for path in paths:
         add('tests', 'compiler/' + path, 'compiler/' + path, [path],
-            'legacy imported fixture; effective runner exclusions not yet exported',
-            f'Configured whole-file gate: {path in disabled}; line entries: ' + ', '.join(line_entries.get(path, [])) +
+            'legacy imported fixture; real parser/gate YAML export available but not executed here',
+            f'Configured whole-file gate: {path in disabled}; line entries: ' + ', '.join(map(str, line_entries.get(path, []))) +
             '; fixture metadata and runtime filters still require runner export')
+        records[-1]['configured_gates'] = dict(whole_file=path in disabled, lines=line_entries.get(path, []))
     ids = [r['id'] for r in records]
     if len(ids) != len(set(ids)):
         raise ValueError('Duplicate discovered identities')
@@ -337,7 +440,120 @@ def cell(value):
     return str(value).replace('|', '\\|').replace('\n', ' ')
 
 
-def build(root, upstream):
+def compiler_context(root, compiler_files):
+    """Hash source/build inputs, not timestamps, output artifacts or evidence."""
+    inputs = dict(compiler_files)
+    for directory in ('bin', 'scripts', 'src', 'test', 'tools', 'StdLib', 'packages'):
+        for path in (root / directory).rglob('*'):
+            if path.is_file() and (path.suffix in ('.ml', '.mli', '.c', '.h', '.S', '.s', '.sh', '.py') or path.name == 'dune'):
+                inputs[path.relative_to(root).as_posix()] = path.read_bytes()
+    for name in ('build', 'run-tests', 'dune-project', 'dune', 'dune-workspace',
+                 'library-sources.list', 'dependencies.lock', 'scripts/porting-requirements.txt',
+                 'porting/sources.yaml', 'porting/issues.yaml'):
+        path = root / name
+        if path.is_file():
+            inputs[name] = path.read_bytes()
+    for path in sorted((root / 'porting/manifests').glob('*.yaml')):
+        inputs[path.relative_to(root).as_posix()] = path.read_bytes()
+    context = hashlib.sha256()
+    for path, body in sorted(inputs.items()):
+        context.update(path.encode() + b'\0' + digest(body).encode() + b'\n')
+    return context.hexdigest()
+
+
+def validate_runner_export(value):
+    """Validate an actual discovery document without interpreting Dark source."""
+    fields = {'schema', 'target', 'mode', 'files', 'tests', 'parse_errors'}
+    if not isinstance(value, dict) or set(value) != fields or value['schema'] != 1 or value['target'] != 'linux-x64' or value['mode'] != 'discovery-only':
+        raise ValueError('Invalid runner export header')
+    for name in ('files', 'tests', 'parse_errors'):
+        if not isinstance(value[name], list):
+            raise ValueError(f'Invalid runner export {name}')
+    files = value['files']
+    if any(not isinstance(path, str) or not path.startswith('test/fixtures/e2e/upstream/') or
+           not path.endswith('.dark') or '\\' in path or any(part in ('', '.', '..') for part in path.split('/')) for path in files):
+        raise ValueError('Runner export paths must be canonical relative legacy fixture paths')
+    if len(files) != len(set(files)) or files != sorted(files):
+        raise ValueError('Runner export files must be unique and sorted')
+    tests, errors = set(), set()
+    for entry in value['tests']:
+        required = {'source_file', 'source_line', 'name', 'error_expectation', 'exclusion_origin', 'effective_skip', 'eligible'}
+        if not isinstance(entry, dict) or set(entry) != required or entry['source_file'] not in files:
+            raise ValueError('Invalid or orphaned runner case')
+        if type(entry['source_line']) is not int or entry['source_line'] < 1 or not isinstance(entry['name'], str) or not entry['name']:
+            raise ValueError('Invalid runner case identity')
+        identity = (entry['source_file'], entry['name'])
+        if identity in tests:
+            raise ValueError('Duplicate runner case')
+        tests.add(identity)
+        if entry['error_expectation'] not in (None, 'any-error', 'compile-error') or entry['exclusion_origin'] not in (None, 'fixture-metadata', 'whole-file-gate', 'line-gate'):
+            raise ValueError('Invalid runner expectation or exclusion origin')
+        reason = entry['effective_skip']
+        if (reason is not None and not isinstance(reason, str)) or type(entry['eligible']) is not bool or entry['eligible'] != (reason is None) or (entry['exclusion_origin'] is None) != (reason is None):
+            raise ValueError('Inconsistent runner eligibility and skip metadata')
+    for entry in value['parse_errors']:
+        if not isinstance(entry, dict) or set(entry) != {'source_file', 'message'} or entry['source_file'] not in files or not isinstance(entry['message'], str) or not entry['message']:
+            raise ValueError('Invalid runner parse error')
+        path = entry['source_file']
+        if path in errors or any(source == path for source, _ in tests):
+            raise ValueError('Duplicate parse error or cases in a failed fixture')
+        errors.add(path)
+
+
+def reconcile_runner(root, context_hash, revision, records, compiler_files, document=None):
+    document = read_yaml(root / 'porting/discovery.yaml') if document is None else document
+    if not isinstance(document, dict) or set(document) != {'schema', 'legacy_runner'} or document['schema'] != 1:
+        raise ValueError('Invalid discovery ledger')
+    captured = document['legacy_runner']
+    groups = [item for item in records if item['category'] == 'tests' and item['scope'].startswith('compiler/test/fixtures/e2e/upstream/')]
+    if captured is None:
+        for item in groups:
+            item['runner_discovery'] = {'status': 'unverified'}
+        return 'unverified'
+    if not isinstance(captured, dict) or set(captured) != {'compiler_context_sha256', 'upstream_revision', 'export'} or not re.fullmatch('[0-9a-f]{64}', str(captured['compiler_context_sha256'])) or not re.fullmatch('[0-9a-f]{40}', str(captured['upstream_revision'])):
+        raise ValueError('Invalid discovery provenance')
+    value = captured['export']
+    validate_runner_export(value)
+    current = captured['compiler_context_sha256'] == context_hash and captured['upstream_revision'] == revision
+    state = ('partial' if value['parse_errors'] else 'current') if current else 'stale'
+    paths = {item['compiler'][0] for item in groups}
+    if current and set(value['files']) != paths:
+        raise ValueError('Current runner export does not cover the complete legacy corpus')
+    by_file = {path: [] for path in value['files']}
+    for case in value['tests']:
+        by_file[case['source_file']].append(case)
+        if current and case['source_line'] > len(compiler_files[case['source_file']].decode().splitlines()):
+            raise ValueError('Runner case source line is outside its current fixture')
+    errors = {entry['source_file']: entry['message'] for entry in value['parse_errors']}
+    for item in groups:
+        path = item['compiler'][0]
+        cases = by_file.get(path, [])
+        parser_lines = {int(match[1]) for case in cases if (match := re.match(r'^L(\d+):', case['name']))}
+        item['runner_discovery'] = dict(status=state, reported_cases=len(cases),
+                                        reported_eligible=sum(case['eligible'] for case in cases),
+                                        reported_skipped=sum(not case['eligible'] for case in cases),
+                                        parse_error=errors.get(path),
+                                        unmatched_line_gates=sorted(set(item['configured_gates']['lines']) - parser_lines)
+                                          if current and path not in errors else None)
+    # Retain stale case selectors while their file exists; do not turn an input
+    # edit into orphaned decisions merely because recollection is unavailable.
+    group_by_file = {item['compiler'][0]: item for item in groups}
+    for case in value['tests']:
+        if case['source_file'] in group_by_file:
+            group = group_by_file[case['source_file']]
+            key = digest(case['name'].encode())
+            records.append(dict(id=group['id'] + '#runner/' + key, category='tests',
+                                scope=group['scope'] + '/runner/' + key, upstream=None,
+                                compiler=list(group['compiler']), upstream_sha256=None,
+                                compiler_sha256=dict(group['compiler_sha256']),
+                                observation=('actual' if current else 'stale') + ' legacy parser case; discovery is not execution',
+                                detail=case['name'], source_group=group['id'],
+                                runner_discovery=dict(status=state, **case)))
+    records.sort(key=lambda item: item['id'])
+    return state
+
+
+def build(root, upstream, discovery_override=None):
     sources = read_yaml(root / 'porting/sources.yaml')
     expected = {'schema', 'upstream_repository', 'upstream_revision', 'target', 'package_corpus',
                 'integration_destination', 'upstream_changes', 'ci_behavior_enforcement'}
@@ -349,16 +565,9 @@ def build(root, upstream):
     upstream_files = checked_files(upstream, revision)
     manifests, defaults = load_manifests(root)
     records, compiler_files = discover(root, upstream_files)
+    context_hash = compiler_context(root, compiler_files)
+    discovery_state = reconcile_runner(root, context_hash, revision, records, compiler_files, discovery_override)
     check_selectors(manifests, records)
-    context = hashlib.sha256()
-    # Conservative invalidation across the checked compiler/test surface, independent of HEAD.
-    inputs = dict(compiler_files)
-    for path in [root / 'library-sources.list', root / 'dependencies.lock', root / 'scripts/porting.py',
-                 root / 'scripts/porting-requirements.txt', root / 'porting/sources.yaml', root / 'porting/issues.yaml'] + sorted((root / 'porting/manifests').glob('*.yaml')):
-        inputs[path.relative_to(root).as_posix()] = path.read_bytes()
-    for path, body in sorted(inputs.items()):
-        context.update(path.encode() + b'\0' + digest(body).encode() + b'\n')
-    context_hash = context.hexdigest()
     evidence = read_yaml(root / 'porting/evidence.yaml')
     if set(evidence) != {'entries'} or not isinstance(evidence['entries'], list):
         raise ValueError('Invalid evidence document')
@@ -416,9 +625,42 @@ def build(root, upstream):
         lines = [f'# {category.capitalize()} porting inventory', '', '## Current section', '', node['current'], '', '## Intended section', '']
         lines += [f'- {key}: {value}' for key, value in defaults[category].items()]
         lines += ['', '## Open questions', ''] + [f'- {q}' for q in node.get('questions', [])]
+        if category == 'tests':
+            declarations = [r for r in items if 'named_test' in r]
+            groups = {r['source_group'] for r in declarations}
+            lines += ['', '## Named-test discovery', '',
+                      f'{len(declarations)} named source declarations in {len(groups)} checked-in files.',
+                      'The category total also includes file groups, backend sources/fixtures, and legacy imports; it is not an executable test count.',
+                      'IDs use file paths and qualified names, never line numbers. Links use current source lines.',
+                      'Module scopes use `FILE/named/Qualified/Module`; actual named-test runner discovery, support, and execution remain unverified.',
+                      f'Legacy runner discovery: **{discovery_state}**. This is separate from behavioral verification.',
+                      'Collect real parsed cases and effective skips with `python3 scripts/collect-upstream-discovery.py --upstream CHECKOUT`; the collector builds first and never invents an export.']
+            legacy = [r for r in items if 'runner_discovery' in r and 'source_group' not in r]
+            lines += ['', '## Legacy runner discovery', '',
+                      '| File group | Discovery | Reported cases | Eligible | Skipped | Unmatched line gates | Parse error |',
+                      '| --- | --- | ---: | ---: | ---: | --- | --- |']
+            for item in legacy:
+                observed = item['runner_discovery']
+                lines.append('| ' + ' | '.join(map(cell, [item['id'], observed['status'],
+                    observed.get('reported_cases', '—'), observed.get('reported_eligible', '—'),
+                    observed.get('reported_skipped', '—'),
+                    ', '.join(map(str, observed['unmatched_line_gates'])) if observed.get('unmatched_line_gates') is not None else '—',
+                    observed.get('parse_error') or '—'])) + ' |')
+            lines += ['', 'Stale counts describe an old export, not current selection. Eligible cases are not passing tests.',
+                      'Legacy case IDs hash actual parser names (which include line coordinates); unlike named-package IDs, they may change when lines move.']
+        if category == 'builtins':
+            declarations = [r for r in items if 'builtin' in r]
+            computed = sum(r.get('builtin_declaration_counts', {}).get('computed', 0) for r in items)
+            lines += ['', '## Registration discovery', '',
+                      f'{len(declarations)} literal function/value registration candidates; {computed} computed-name/version constructors remain explicit discovery gaps.',
+                      'These are not assembled registry counts. Constructors can be invoked repeatedly, renamed, filtered, or combined by host-specific registries.',
+                      'File policies cover all their declarations; nested scopes use `FILE/declarations/fn/NAME` or `FILE/declarations/value/NAME`.',
+                      'Same-spelling compiler declarations are only candidates, not proven bindings, compatible signatures, or working implementations.']
         lines += ['', '## Source observations', '', '| Identity | Upstream | Compiler candidates | Observation | Behavior | Source policy | Disposition |', '| --- | --- | --- | --- | --- | --- | --- |']
         for r in items:
             url = f'https://github.com/{sources["upstream_repository"]}/blob/{revision}/{r["upstream"]}' if r['upstream'] else None
+            if url and 'source_line' in r:
+                url += f'#L{r["source_line"]}'
             source = f'[{r["upstream"]}]({url})' if url else '—'
             cp = ', '.join(f'[{p}](../../../{p})' for p in r['compiler']) or '—'
             lines.append('| ' + ' | '.join(map(cell, [r['id'], source, cp, r['observation'], r['behavior'], r['policy']['source'], r['policy']['disposition']])) + ' |')
@@ -427,8 +669,8 @@ def build(root, upstream):
                  '- Packages/StdLib: all checked-in `.dark` files; root-module mappings are candidates, not declaration mappings.',
                  '- Language: written constructor names plus broad curated behavioral workstreams; full feature taxonomy still needs trials.',
                  '- Parser: upstream components and same-stem OCaml candidates; split components remain classified separately.',
-                 '- Tests: named-test source candidates, backend test sources/fixtures, and legacy imports. No runner identity or exclusion export yet.',
-                 '- Builtins: declaration/registration sources. Assembled registries, aliases, signatures, and compiler bindings are not yet compared.',
+                 '- Tests: qualified named-test source identities, backend sources/fixtures, and legacy imports. The real-parser/shared-gate export and fingerprinted collector are implemented; actual collection is unverified here and current named-test execution remains pending.',
+                 '- Builtins: registration sources plus literal function/value candidates; computed constructors remain counted gaps. Assembled registries, aliases, signatures, and compiler bindings are not yet compared.',
                  '- Only x64 Linux evidence is accepted. Inventory discovery does not establish execution support.', '']
     overview += ['## Recorded upstream bugs', '']
     overview += [f'- {issue["id"]}: {issue["decision"]}; upstream permission: {issue["upstream_permission"]}' for issue in issues['issues']] or ['None recorded.']

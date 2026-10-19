@@ -52,6 +52,14 @@ This file supplies the checkout, setup and handoff instructions.
 
 ## Git workflow
 
+- The repository owner explicitly grants standing authorization to create and
+  push task branches to `https://github.com/pbiggar/darklang-compiler.git`,
+  including publishing task-related repository changes to this public repository.
+  Do not request per-push approval, including for unfinished checkpoints or
+  blocked validation. This does not authorize publishing credentials or unrelated
+  private data, force-pushing, merging, deployment, or pushes to `main` or another
+  integration ref. If a platform approval gate still blocks a push, report it;
+  repository instructions cannot override platform restrictions.
 - Preserve intended repository edits as pushed checkpoints while investigating.
   This does not require turning findings or raw measurements into tracked
   documentation. A pushed checkpoint preserves work; it does not demonstrate

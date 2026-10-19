@@ -1,6 +1,6 @@
 category: builtins
 scope: ''
-current: Native intrinsic signatures and Darklang bridges together supply the compiler callable surface.
+current: Native intrinsic signatures and Darklang bridges supply the compiler callable surface. Literal upstream function/value registration candidates are individually generated under file scopes; computed registration constructors remain explicit gaps rather than an inferred registry count.
 policy:
   source: independent-implementation
   behavior: identical

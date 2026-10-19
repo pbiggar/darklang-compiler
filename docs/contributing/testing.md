@@ -132,6 +132,9 @@ Keep direct OCaml tests for internal helper APIs and programs that require riche
 binary layout or execution setup. Run all fixtures and unit tests with
 `./build --ai && ./run-tests --ai`.
 
+For discovery without execution, see the
+[legacy runner YAML export](../porting/README.md#actual-legacy-runner-discovery).
+
 ## Optimization fixtures
 
 Source-based `.opt` files under `test/fixtures/optimization/` compile Dark source

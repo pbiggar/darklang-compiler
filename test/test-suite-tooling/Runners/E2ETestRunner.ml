@@ -424,6 +424,7 @@ let expandRequiredPreambleFunctions dependencies initial =
   loop initial initial
 
 let declarationRange = function
+  | WT.DTest d -> d.WT.range
   | WT.DFunction d -> d.WT.range
   | WT.DValue d -> d.WT.range
   | WT.DTrait d -> d.WT.range
@@ -431,7 +432,7 @@ let declarationRange = function
   | WT.DType d | WT.DTypeDB d -> d.WT.range
   | WT.DModule d -> d.WT.range
   | WT.DExpr e -> WT.exprRange e
-  | WT.DTest d -> d.WT.range
+  | WT.DAssertion d -> d.WT.range
 
 let reducePreambleSource required source (p : WT.sourceFile) =
   let normalized = replace "\r\n" "\n" source in
@@ -440,7 +441,7 @@ let reducePreambleSource required source (p : WT.sourceFile) =
     (fun decl ->
       match decl with
       | WT.DFunction d when not (SS.mem d.WT.name.WT.name required) -> None
-      | WT.DExpr _ | WT.DTest _ -> None
+      | WT.DExpr _ | WT.DAssertion _ | WT.DTest _ -> None
       | _ ->
           let range = declarationRange decl in
           let start = sourceOffset normalized range.Tokenizer.start in

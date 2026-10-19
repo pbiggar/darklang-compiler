@@ -13,4 +13,4 @@ git -C "$porting_temp/upstream" fetch -q --depth 1 https://github.com/darklang/d
 git -C "$porting_temp/upstream" checkout -q --detach FETCH_HEAD
 "$porting_temp/venv/bin/python" scripts/test_porting.py
 "$porting_temp/venv/bin/python" scripts/trial-package-layout.py --upstream "$porting_temp/upstream"
-"$porting_temp/venv/bin/python" scripts/porting.py check --upstream "$porting_temp/upstream"
+"$porting_temp/venv/bin/python" scripts/update-ledger.py --check --upstream "$porting_temp/upstream"

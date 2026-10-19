@@ -319,7 +319,21 @@ type moduleDecl = {
 }
 
 and testExpected = TEExpr of expr | TEError of string | TESqlError of string
-and test = { range : range; actual : expr; expected : testExpected }
+and assertion = { range : range; actual : expr; expected : testExpected }
+
+and expectedError = RuntimeError of string
+
+and testDecl = {
+  range : range;
+  name : identifier;
+  body : expr;
+  expectedError : (range * expectedError) option;
+  keywordTest : range;
+  errorKindRange : range option;
+  symbolOutcome : range option;
+  symbolEquals : range;
+  description : string;
+}
 
 and declaration =
   | DFunction of fnDecl
@@ -330,7 +344,8 @@ and declaration =
   | DImpl of implDecl
   | DExpr of expr
   | DTypeDB of typeDecl
-  | DTest of test
+  | DAssertion of assertion
+  | DTest of testDecl
 
 type sourceFile = {
   range : range;
