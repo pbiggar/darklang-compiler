@@ -1,0 +1,1063 @@
+schema: 1
+# Human-maintained capability assessments. Existing tests own behavioral details.
+features:
+  - group: "Function calls"
+    name: "Builtin function calls"
+    status: implemented
+    notes: "Recognized Builtin operations use their checked intrinsic/native implementations."
+    sources: ["src/frontend/WrittenApplicationSupport.ml"]
+  - group: "Function calls"
+    name: "Immediate lambda application"
+    status: implemented
+    notes: "An anonymous function expression can be called directly."
+    sources: ["src/frontend/WrittenApplicationSupport.ml"]
+  - group: "Function calls"
+    name: "Immediate curried lambda application"
+    status: implemented
+    notes: "Extra arguments to an immediate lambda are applied to its returned function."
+    sources: ["src/frontend/WrittenApplicationSupport.ml", "test/fixtures/e2e/closures.e2e"]
+  - group: "Function calls"
+    name: "Named function overapplication"
+    status: missing
+    notes: "Named calls require the declared arity; call a returned function in a separate application step."
+    sources: ["src/frontend/WrittenCallSupport.ml"]
+  - group: "Function calls"
+    name: "Package function calls"
+    status: implemented
+    notes: "Imported package declarations participate in named function resolution."
+    sources: ["src/packages/PackageManager.ml", "src/frontend/WrittenCallSupport.ml"]
+  - group: "Builtin types"
+    name: "Unit"
+    status: implemented
+    notes: "Source type Unit is resolved and represented by the native compiler."
+    sources: ["src/frontend/WrittenTypeSupport.ml","src/AST.ml"]
+  - group: "Builtin types"
+    name: "Bool"
+    status: implemented
+    notes: "Source type Bool is resolved and represented by the native compiler."
+    sources: ["src/frontend/WrittenTypeSupport.ml","src/AST.ml"]
+  - group: "Builtin types"
+    name: "Int"
+    status: implemented
+    notes: "Arbitrary-precision integers; the unsuffixed integer type."
+    sources: ["src/frontend/WrittenTypeSupport.ml","src/AST.ml"]
+  - group: "Builtin types"
+    name: "Int8"
+    status: implemented
+    notes: "Source type Int8 is resolved and represented by the native compiler."
+    sources: ["src/frontend/WrittenTypeSupport.ml","src/AST.ml"]
+  - group: "Builtin types"
+    name: "UInt8"
+    status: implemented
+    notes: "Source type UInt8 is resolved and represented by the native compiler."
+    sources: ["src/frontend/WrittenTypeSupport.ml","src/AST.ml"]
+  - group: "Builtin types"
+    name: "Int16"
+    status: implemented
+    notes: "Source type Int16 is resolved and represented by the native compiler."
+    sources: ["src/frontend/WrittenTypeSupport.ml","src/AST.ml"]
+  - group: "Builtin types"
+    name: "UInt16"
+    status: implemented
+    notes: "Source type UInt16 is resolved and represented by the native compiler."
+    sources: ["src/frontend/WrittenTypeSupport.ml","src/AST.ml"]
+  - group: "Builtin types"
+    name: "Int32"
+    status: implemented
+    notes: "Source type Int32 is resolved and represented by the native compiler."
+    sources: ["src/frontend/WrittenTypeSupport.ml","src/AST.ml"]
+  - group: "Builtin types"
+    name: "UInt32"
+    status: implemented
+    notes: "Source type UInt32 is resolved and represented by the native compiler."
+    sources: ["src/frontend/WrittenTypeSupport.ml","src/AST.ml"]
+  - group: "Builtin types"
+    name: "Int64"
+    status: implemented
+    notes: "Source type Int64 is resolved and represented by the native compiler."
+    sources: ["src/frontend/WrittenTypeSupport.ml","src/AST.ml"]
+  - group: "Builtin types"
+    name: "UInt64"
+    status: implemented
+    notes: "Source type UInt64 is resolved and represented by the native compiler."
+    sources: ["src/frontend/WrittenTypeSupport.ml","src/AST.ml"]
+  - group: "Builtin types"
+    name: "Int128"
+    status: implemented
+    notes: "Source type Int128 is resolved and represented by the native compiler."
+    sources: ["src/frontend/WrittenTypeSupport.ml","src/AST.ml"]
+  - group: "Builtin types"
+    name: "UInt128"
+    status: implemented
+    notes: "Source type UInt128 is resolved and represented by the native compiler."
+    sources: ["src/frontend/WrittenTypeSupport.ml","src/AST.ml"]
+  - group: "Builtin types"
+    name: "Float"
+    status: implemented
+    notes: "Source type Float is resolved and represented by the native compiler."
+    sources: ["src/frontend/WrittenTypeSupport.ml","src/AST.ml"]
+  - group: "Builtin types"
+    name: "Char"
+    status: implemented
+    notes: "A Unicode extended grapheme cluster, represented as UTF-8."
+    sources: ["src/frontend/WrittenTypeSupport.ml","src/AST.ml"]
+  - group: "Builtin types"
+    name: "String"
+    status: implemented
+    notes: "Source type String is resolved and represented by the native compiler."
+    sources: ["src/frontend/WrittenTypeSupport.ml","src/AST.ml"]
+  - group: "Builtin types"
+    name: "Uuid"
+    status: implemented
+    notes: "Source type Uuid is resolved and represented by the native compiler."
+    sources: ["src/frontend/WrittenTypeSupport.ml","src/AST.ml"]
+  - group: "Builtin types"
+    name: "DateTime"
+    status: implemented
+    notes: "Source type DateTime is resolved and represented by the native compiler."
+    sources: ["src/frontend/WrittenTypeSupport.ml","src/AST.ml"]
+  - group: "Builtin types"
+    name: "Blob"
+    status: implemented
+    notes: "Source type Blob is resolved and represented by the native compiler."
+    sources: ["src/frontend/WrittenTypeSupport.ml","src/AST.ml"]
+  - group: "Builtin types"
+    name: "List<'a>"
+    status: implemented
+    notes: "Homogeneous lists, including generic element types."
+    sources: ["src/frontend/WrittenTypeSupport.ml","src/AST.ml"]
+  - group: "Builtin types"
+    name: "Dict<'key, 'value>"
+    status: implemented
+    notes: "Typed keys and values; supported key rules are checked by the compiler."
+    sources: ["src/frontend/WrittenTypeSupport.ml","src/AST.ml"]
+  - group: "Builtin types"
+    name: "Tuple types"
+    status: implemented
+    notes: "Two or more independently typed elements."
+    sources: ["src/frontend/WrittenTypeSupport.ml","src/AST.ml"]
+  - group: "Builtin types"
+    name: "Function types"
+    status: implemented
+    notes: "Parameter and return types for named functions and function values."
+    sources: ["src/frontend/WrittenTypeSupport.ml","src/AST.ml"]
+  - group: "Builtin types"
+    name: "Stream<'a>"
+    status: implemented
+    notes: "Resolved to the native stream type; lifecycle operations live in StdLib.Stream."
+    sources: ["src/frontend/WrittenTypeSupport.ml","src/AST.ml"]
+  - group: "Builtin types"
+    name: "DB<'a>"
+    status: missing
+    notes: "Interpreter database handles have no corresponding compiler source type."
+    sources: ["src/frontend/WrittenTypeSupport.ml","src/AST.ml"]
+  - group: "Literals"
+    name: "Unit literals"
+    status: implemented
+    notes: "The value ()."
+    sources: ["src/frontend/WrittenExpressions.ml","src/frontend/interpreter/WrittenTypes.ml"]
+  - group: "Literals"
+    name: "Boolean literals"
+    status: implemented
+    notes: "true and false."
+    sources: ["src/frontend/WrittenExpressions.ml","src/frontend/interpreter/WrittenTypes.ml"]
+  - group: "Literals"
+    name: "Unsuffixed integer literals"
+    status: implemented
+    notes: "Arbitrary-precision Int literals."
+    sources: ["src/frontend/WrittenExpressions.ml","src/frontend/interpreter/WrittenTypes.ml"]
+  - group: "Literals"
+    name: "Signed fixed-width integer literals"
+    status: implemented
+    notes: "Suffixes select Int8, Int16, Int32, Int64 or Int128."
+    sources: ["src/frontend/WrittenExpressions.ml","src/frontend/interpreter/WrittenTypes.ml"]
+  - group: "Literals"
+    name: "Unsigned integer literals"
+    status: implemented
+    notes: "Suffixes select UInt8, UInt16, UInt32, UInt64 or UInt128."
+    sources: ["src/frontend/WrittenExpressions.ml","src/frontend/interpreter/WrittenTypes.ml"]
+  - group: "Literals"
+    name: "Float literals"
+    status: implemented
+    notes: "Floating-point literal parsing and checking."
+    sources: ["src/frontend/WrittenExpressions.ml","src/frontend/interpreter/WrittenTypes.ml"]
+  - group: "Literals"
+    name: "Character literals"
+    status: implemented
+    notes: "Single grapheme literals and escapes."
+    sources: ["src/frontend/WrittenExpressions.ml","src/frontend/interpreter/WrittenTypes.ml"]
+  - group: "Literals"
+    name: "Literal type/range rejection"
+    status: implemented
+    notes: "Invalid literal representations are rejected before native lowering."
+    sources: ["src/frontend/WrittenExpressions.ml","src/frontend/interpreter/WrittenTypes.ml"]
+  - group: "Strings and interpolation"
+    name: "Ordinary quoted strings"
+    status: implemented
+    notes: "Quoted text and escape processing."
+    sources: ["src/frontend/interpreter/ExpressionInterpolation.ml","src/frontend/WrittenExpressions.ml","src/frontend/interpreter/Lexer.ml"]
+  - group: "Strings and interpolation"
+    name: "Triple-quoted strings"
+    status: implemented
+    notes: "Multiline string syntax."
+    sources: ["src/frontend/interpreter/ExpressionInterpolation.ml","src/frontend/WrittenExpressions.ml","src/frontend/interpreter/Lexer.ml"]
+  - group: "Strings and interpolation"
+    name: "Unicode string text"
+    status: implemented
+    notes: "Unicode text is preserved through parsing and native representation."
+    sources: ["src/frontend/interpreter/ExpressionInterpolation.ml","src/frontend/WrittenExpressions.ml","src/frontend/interpreter/Lexer.ml"]
+  - group: "Strings and interpolation"
+    name: "Escaped quotes and backslashes"
+    status: implemented
+    notes: "Escapes are recognized while scanning quoted strings."
+    sources: ["src/frontend/interpreter/ExpressionInterpolation.ml","src/frontend/WrittenExpressions.ml","src/frontend/interpreter/Lexer.ml"]
+  - group: "Strings and interpolation"
+    name: "String concatenation"
+    status: implemented
+    notes: "String concatenation expressions are checked and lowered."
+    sources: ["src/frontend/interpreter/ExpressionInterpolation.ml","src/frontend/WrittenExpressions.ml","src/frontend/interpreter/Lexer.ml"]
+  - group: "Strings and interpolation"
+    name: "Single-line interpolation"
+    status: implemented
+    notes: "Expressions inside $\"text {expression}\"."
+    sources: ["src/frontend/interpreter/ExpressionInterpolation.ml","src/frontend/WrittenExpressions.ml","src/frontend/interpreter/Lexer.ml"]
+  - group: "Strings and interpolation"
+    name: "Triple-quoted interpolation"
+    status: implemented
+    notes: "Expressions inside multiline interpolated strings."
+    sources: ["src/frontend/interpreter/ExpressionInterpolation.ml","src/frontend/WrittenExpressions.ml","src/frontend/interpreter/Lexer.ml"]
+  - group: "Strings and interpolation"
+    name: "Multiple interpolated expressions"
+    status: implemented
+    notes: "Literal segments can alternate with several expressions."
+    sources: ["src/frontend/interpreter/ExpressionInterpolation.ml","src/frontend/WrittenExpressions.ml","src/frontend/interpreter/Lexer.ml"]
+  - group: "Strings and interpolation"
+    name: "Nested interpolation"
+    status: implemented
+    notes: "An interpolation expression can itself contain an interpolated string; nesting is bounded."
+    sources: ["src/frontend/interpreter/ExpressionInterpolation.ml","src/frontend/WrittenExpressions.ml","src/frontend/interpreter/Lexer.ml"]
+  - group: "Strings and interpolation"
+    name: "Expressions inside interpolation"
+    status: implemented
+    notes: "Embedded expressions use the expression parser, including calls and record expressions."
+    sources: ["src/frontend/interpreter/ExpressionInterpolation.ml","src/frontend/WrittenExpressions.ml","src/frontend/interpreter/Lexer.ml"]
+  - group: "Strings and interpolation"
+    name: "Quotes inside interpolation expressions"
+    status: implemented
+    notes: "Quoted strings and characters do not terminate an embedded expression early."
+    sources: ["src/frontend/interpreter/ExpressionInterpolation.ml","src/frontend/WrittenExpressions.ml","src/frontend/interpreter/Lexer.ml"]
+  - group: "Strings and interpolation"
+    name: "Braces inside interpolation expressions"
+    status: implemented
+    notes: "Nested expression braces are scanned before finding the interpolation terminator."
+    sources: ["src/frontend/interpreter/ExpressionInterpolation.ml","src/frontend/WrittenExpressions.ml","src/frontend/interpreter/Lexer.ml"]
+  - group: "Strings and interpolation"
+    name: "Doubled literal braces"
+    status: implemented
+    notes: "{{ and }} produce literal braces."
+    sources: ["src/frontend/interpreter/ExpressionInterpolation.ml","src/frontend/WrittenExpressions.ml","src/frontend/interpreter/Lexer.ml"]
+  - group: "Strings and interpolation"
+    name: "Escaped literal braces"
+    status: implemented
+    notes: "Backslash brace escapes are handled in ordinary quoted strings."
+    sources: ["src/frontend/interpreter/ExpressionInterpolation.ml","src/frontend/WrittenExpressions.ml","src/frontend/interpreter/Lexer.ml"]
+  - group: "Strings and interpolation"
+    name: "Interpolation requires String"
+    status: implemented
+    notes: "Non-String embedded expressions are rejected by the type checker."
+    sources: ["src/frontend/interpreter/ExpressionInterpolation.ml","src/frontend/WrittenExpressions.ml","src/frontend/interpreter/Lexer.ml"]
+  - group: "Strings and interpolation"
+    name: "Interpolation source locations"
+    status: implemented
+    notes: "Nested parsing diagnostics retain locations in the enclosing source."
+    sources: ["src/frontend/interpreter/ExpressionInterpolation.ml","src/frontend/WrittenExpressions.ml","src/frontend/interpreter/Lexer.ml"]
+  - group: "Bindings and scope"
+    name: "Local let bindings"
+    status: implemented
+    notes: "Bind a value for later expressions."
+    sources: ["src/frontend/WrittenExpressions.ml","src/frontend/WrittenPatternSupport.ml","src/frontend/WrittenLetSupport.ml"]
+  - group: "Bindings and scope"
+    name: "Let/in expressions"
+    status: implemented
+    notes: "A binding can have an explicit continuation expression."
+    sources: ["src/frontend/WrittenExpressions.ml","src/frontend/WrittenPatternSupport.ml","src/frontend/WrittenLetSupport.ml"]
+  - group: "Bindings and scope"
+    name: "Wildcard bindings"
+    status: implemented
+    notes: "Discard a binding with _."
+    sources: ["src/frontend/WrittenExpressions.ml","src/frontend/WrittenPatternSupport.ml","src/frontend/WrittenLetSupport.ml"]
+  - group: "Bindings and scope"
+    name: "Unit binding patterns"
+    status: implemented
+    notes: "Match a Unit value in a binding."
+    sources: ["src/frontend/WrittenExpressions.ml","src/frontend/WrittenPatternSupport.ml","src/frontend/WrittenLetSupport.ml"]
+  - group: "Bindings and scope"
+    name: "Tuple destructuring bindings"
+    status: implemented
+    notes: "Bind several tuple elements, including nested patterns."
+    sources: ["src/frontend/WrittenExpressions.ml","src/frontend/WrittenPatternSupport.ml","src/frontend/WrittenLetSupport.ml"]
+  - group: "Bindings and scope"
+    name: "Lexical shadowing"
+    status: implemented
+    notes: "Inner bindings can shadow outer names."
+    sources: ["src/frontend/WrittenExpressions.ml","src/frontend/WrittenPatternSupport.ml","src/frontend/WrittenLetSupport.ml"]
+  - group: "Bindings and scope"
+    name: "Captured local values"
+    status: implemented
+    notes: "A closure retains the local values it references."
+    sources: ["src/frontend/WrittenExpressions.ml","src/frontend/WrittenPatternSupport.ml","src/frontend/WrittenLetSupport.ml"]
+  - group: "Bindings and scope"
+    name: "Module value declarations"
+    status: implemented
+    notes: "Module-scoped val declarations are checked."
+    sources: ["src/frontend/WrittenExpressions.ml","src/frontend/WrittenPatternSupport.ml","src/frontend/WrittenLetSupport.ml"]
+  - group: "Bindings and scope"
+    name: "Statement sequences"
+    status: implemented
+    notes: "Earlier statements must have Unit type; the final expression supplies the result."
+    sources: ["src/frontend/WrittenExpressions.ml","src/frontend/WrittenPatternSupport.ml","src/frontend/WrittenLetSupport.ml"]
+  - group: "Function calls"
+    name: "Direct positional calls"
+    status: implemented
+    notes: "Call a declared function with positional arguments."
+    sources: ["src/frontend/WrittenCallSupport.ml","src/frontend/WrittenApplicationSupport.ml","src/frontend/WrittenExpressions.ml"]
+  - group: "Function calls"
+    name: "Qualified function calls"
+    status: implemented
+    notes: "Resolve module-qualified function names."
+    sources: ["src/frontend/WrittenCallSupport.ml","src/frontend/WrittenApplicationSupport.ml","src/frontend/WrittenExpressions.ml"]
+  - group: "Function calls"
+    name: "Local function-value calls"
+    status: implemented
+    notes: "Invoke a function stored in a local binding."
+    sources: ["src/frontend/WrittenCallSupport.ml","src/frontend/WrittenApplicationSupport.ml","src/frontend/WrittenExpressions.ml"]
+  - group: "Function calls"
+    name: "Higher-order arguments"
+    status: implemented
+    notes: "Pass a function as an argument to another function."
+    sources: ["src/frontend/WrittenCallSupport.ml","src/frontend/WrittenApplicationSupport.ml","src/frontend/WrittenExpressions.ml"]
+  - group: "Function calls"
+    name: "Returned functions"
+    status: implemented
+    notes: "Return and subsequently call a function value."
+    sources: ["src/frontend/WrittenCallSupport.ml","src/frontend/WrittenApplicationSupport.ml","src/frontend/WrittenExpressions.ml"]
+  - group: "Function calls"
+    name: "Non-capturing lambdas"
+    status: implemented
+    notes: "Anonymous functions without captured values."
+    sources: ["src/frontend/WrittenCallSupport.ml","src/frontend/WrittenApplicationSupport.ml","src/frontend/WrittenExpressions.ml"]
+  - group: "Function calls"
+    name: "Capturing lambdas"
+    status: implemented
+    notes: "Anonymous functions with an environment of captured values."
+    sources: ["src/frontend/WrittenCallSupport.ml","src/frontend/WrittenApplicationSupport.ml","src/frontend/WrittenExpressions.ml"]
+  - group: "Function calls"
+    name: "Multiple lambda parameters"
+    status: implemented
+    notes: "Anonymous functions can bind multiple parameters."
+    sources: ["src/frontend/WrittenCallSupport.ml","src/frontend/WrittenApplicationSupport.ml","src/frontend/WrittenExpressions.ml"]
+  - group: "Function calls"
+    name: "Lambda tuple parameters"
+    status: implemented
+    notes: "A lambda parameter can destructure a tuple."
+    sources: ["src/frontend/WrittenCallSupport.ml","src/frontend/WrittenApplicationSupport.ml","src/frontend/WrittenExpressions.ml"]
+  - group: "Function calls"
+    name: "Unit function parameters"
+    status: implemented
+    notes: "Functions can explicitly accept ()."
+    sources: ["src/frontend/WrittenCallSupport.ml","src/frontend/WrittenApplicationSupport.ml","src/frontend/WrittenExpressions.ml"]
+  - group: "Function calls"
+    name: "Named function references"
+    status: implemented
+    notes: "Use a declared function as a value."
+    sources: ["src/frontend/WrittenCallSupport.ml","src/frontend/WrittenApplicationSupport.ml","src/frontend/WrittenExpressions.ml"]
+  - group: "Function calls"
+    name: "Partial application of named functions"
+    status: implemented
+    notes: "Supplying a prefix of arguments creates a function for the rest."
+    sources: ["src/frontend/WrittenCallSupport.ml","src/frontend/WrittenApplicationSupport.ml","src/frontend/WrittenExpressions.ml"]
+  - group: "Function calls"
+    name: "Partial application of function values"
+    status: implemented
+    notes: "Partial application also works for an indirect function target."
+    sources: ["src/frontend/WrittenCallSupport.ml","src/frontend/WrittenApplicationSupport.ml","src/frontend/WrittenExpressions.ml"]
+  - group: "Function calls"
+    name: "Generic partial application with explicit types"
+    status: implemented
+    notes: "Explicit type arguments can determine a generic partially applied function."
+    sources: ["src/frontend/WrittenCallSupport.ml","src/frontend/WrittenApplicationSupport.ml","src/frontend/WrittenExpressions.ml"]
+  - group: "Function calls"
+    name: "Generic partial application using inference alone"
+    status: partial
+    notes: "Some generic partial applications require explicit type arguments."
+    sources: ["src/frontend/WrittenCallSupport.ml","src/frontend/WrittenApplicationSupport.ml","src/frontend/WrittenExpressions.ml"]
+  - group: "Function calls"
+    name: "Recursive functions"
+    status: implemented
+    notes: "A declared function can call itself."
+    sources: ["src/frontend/WrittenCallSupport.ml","src/frontend/WrittenApplicationSupport.ml","src/frontend/WrittenExpressions.ml"]
+  - group: "Function calls"
+    name: "Mutually recursive functions"
+    status: implemented
+    notes: "Recursive declaration groups are resolved together."
+    sources: ["src/frontend/WrittenCallSupport.ml","src/frontend/WrittenApplicationSupport.ml","src/frontend/WrittenExpressions.ml"]
+  - group: "Function calls"
+    name: "Local recursion"
+    status: implemented
+    notes: "Local recursive functions are handled by local binding checking."
+    sources: ["src/frontend/WrittenCallSupport.ml","src/frontend/WrittenApplicationSupport.ml","src/frontend/WrittenExpressions.ml"]
+  - group: "Function calls"
+    name: "Polymorphic recursion"
+    status: missing
+    notes: "Recursive calls that change a generic function's type arguments are rejected."
+    sources: ["src/frontend/WrittenCallSupport.ml","src/frontend/WrittenApplicationSupport.ml","src/frontend/WrittenExpressions.ml"]
+  - group: "Function calls"
+    name: "Too many call arguments"
+    status: implemented
+    notes: "Call arity is checked before lowering."
+    sources: ["src/frontend/WrittenCallSupport.ml","src/frontend/WrittenApplicationSupport.ml","src/frontend/WrittenExpressions.ml"]
+  - group: "Function calls"
+    name: "Call argument and return types"
+    status: implemented
+    notes: "Calls enforce declared argument and return types."
+    sources: ["src/frontend/WrittenCallSupport.ml","src/frontend/WrittenApplicationSupport.ml","src/frontend/WrittenExpressions.ml"]
+  - group: "Pipelines"
+    name: "Pipe into a named function"
+    status: implemented
+    notes: "The piped value becomes the first function argument."
+    sources: ["src/frontend/WrittenPipeSupport.ml","src/frontend/WrittenExpressions.ml"]
+  - group: "Pipelines"
+    name: "Pipe into a qualified function"
+    status: implemented
+    notes: "Pipeline segments can use module-qualified names."
+    sources: ["src/frontend/WrittenPipeSupport.ml","src/frontend/WrittenExpressions.ml"]
+  - group: "Pipelines"
+    name: "Pipe into a function value"
+    status: implemented
+    notes: "A local function binding can be a pipeline target."
+    sources: ["src/frontend/WrittenPipeSupport.ml","src/frontend/WrittenExpressions.ml"]
+  - group: "Pipelines"
+    name: "Pipe into a lambda"
+    status: implemented
+    notes: "An anonymous function can consume the piped value."
+    sources: ["src/frontend/WrittenPipeSupport.ml","src/frontend/WrittenExpressions.ml"]
+  - group: "Pipelines"
+    name: "Pipe into an operator"
+    status: implemented
+    notes: "Operator pipeline segments are lowered to infix expressions."
+    sources: ["src/frontend/WrittenPipeSupport.ml","src/frontend/WrittenExpressions.ml"]
+  - group: "Pipelines"
+    name: "Pipe into an enum constructor"
+    status: implemented
+    notes: "The piped value supplies the first constructor field."
+    sources: ["src/frontend/WrittenPipeSupport.ml","src/frontend/WrittenExpressions.ml"]
+  - group: "Pipelines"
+    name: "Chained pipelines"
+    status: implemented
+    notes: "Several pipeline segments compose left to right."
+    sources: ["src/frontend/WrittenPipeSupport.ml","src/frontend/WrittenExpressions.ml"]
+  - group: "Pipelines"
+    name: "Generic pipeline inference"
+    status: implemented
+    notes: "Expected types and later segments contribute to type inference."
+    sources: ["src/frontend/WrittenPipeSupport.ml","src/frontend/WrittenExpressions.ml"]
+  - group: "Generics and declared types"
+    name: "Generic function declarations"
+    status: implemented
+    notes: "Functions can declare type parameters."
+    sources: ["src/frontend/WrittenTypeSupport.ml","src/frontend/WrittenDeclarations.ml","src/frontend/WrittenCallSupport.ml"]
+  - group: "Generics and declared types"
+    name: "Explicit function type arguments"
+    status: implemented
+    notes: "A caller can supply function type arguments."
+    sources: ["src/frontend/WrittenTypeSupport.ml","src/frontend/WrittenDeclarations.ml","src/frontend/WrittenCallSupport.ml"]
+  - group: "Generics and declared types"
+    name: "Inferred function type arguments"
+    status: implemented
+    notes: "The checker infers type arguments from call context."
+    sources: ["src/frontend/WrittenTypeSupport.ml","src/frontend/WrittenDeclarations.ml","src/frontend/WrittenCallSupport.ml"]
+  - group: "Generics and declared types"
+    name: "Generic function values"
+    status: implemented
+    notes: "Generic function references can be specialized as values."
+    sources: ["src/frontend/WrittenTypeSupport.ml","src/frontend/WrittenDeclarations.ml","src/frontend/WrittenCallSupport.ml"]
+  - group: "Generics and declared types"
+    name: "Native generic specialization"
+    status: implemented
+    notes: "Concrete uses are specialized for native compilation."
+    sources: ["src/frontend/WrittenTypeSupport.ml","src/frontend/WrittenDeclarations.ml","src/frontend/WrittenCallSupport.ml"]
+  - group: "Generics and declared types"
+    name: "Record type declarations"
+    status: implemented
+    notes: "Named record types with typed fields."
+    sources: ["src/frontend/WrittenTypeSupport.ml","src/frontend/WrittenDeclarations.ml","src/frontend/WrittenCallSupport.ml"]
+  - group: "Generics and declared types"
+    name: "Record construction"
+    status: implemented
+    notes: "Construct records with checked field names and types."
+    sources: ["src/frontend/WrittenTypeSupport.ml","src/frontend/WrittenDeclarations.ml","src/frontend/WrittenCallSupport.ml"]
+  - group: "Generics and declared types"
+    name: "Record field access"
+    status: implemented
+    notes: "Read a field from a record value."
+    sources: ["src/frontend/WrittenTypeSupport.ml","src/frontend/WrittenDeclarations.ml","src/frontend/WrittenCallSupport.ml"]
+  - group: "Generics and declared types"
+    name: "Record updates"
+    status: implemented
+    notes: "Create an updated record while retaining the remaining fields."
+    sources: ["src/frontend/WrittenTypeSupport.ml","src/frontend/WrittenDeclarations.ml","src/frontend/WrittenCallSupport.ml"]
+  - group: "Generics and declared types"
+    name: "Generic record types"
+    status: implemented
+    notes: "Record fields may contain type parameters."
+    sources: ["src/frontend/WrittenTypeSupport.ml","src/frontend/WrittenDeclarations.ml","src/frontend/WrittenCallSupport.ml"]
+  - group: "Generics and declared types"
+    name: "Enum type declarations"
+    status: implemented
+    notes: "Named sum types with multiple constructors."
+    sources: ["src/frontend/WrittenTypeSupport.ml","src/frontend/WrittenDeclarations.ml","src/frontend/WrittenCallSupport.ml"]
+  - group: "Generics and declared types"
+    name: "Nullary enum constructors"
+    status: implemented
+    notes: "Enum cases with no payload fields."
+    sources: ["src/frontend/WrittenTypeSupport.ml","src/frontend/WrittenDeclarations.ml","src/frontend/WrittenCallSupport.ml"]
+  - group: "Generics and declared types"
+    name: "Enum constructor payloads"
+    status: implemented
+    notes: "Enum cases can carry one or more typed values."
+    sources: ["src/frontend/WrittenTypeSupport.ml","src/frontend/WrittenDeclarations.ml","src/frontend/WrittenCallSupport.ml"]
+  - group: "Generics and declared types"
+    name: "Generic enum types"
+    status: implemented
+    notes: "Payloads can contain type parameters."
+    sources: ["src/frontend/WrittenTypeSupport.ml","src/frontend/WrittenDeclarations.ml","src/frontend/WrittenCallSupport.ml"]
+  - group: "Generics and declared types"
+    name: "Qualified constructors"
+    status: implemented
+    notes: "Constructor names can include the owning type/module."
+    sources: ["src/frontend/WrittenTypeSupport.ml","src/frontend/WrittenDeclarations.ml","src/frontend/WrittenCallSupport.ml"]
+  - group: "Generics and declared types"
+    name: "Type aliases"
+    status: implemented
+    notes: "Resolve an alias to its underlying type."
+    sources: ["src/frontend/WrittenTypeSupport.ml","src/frontend/WrittenDeclarations.ml","src/frontend/WrittenCallSupport.ml"]
+  - group: "Generics and declared types"
+    name: "Generic type aliases"
+    status: implemented
+    notes: "Aliases may have type parameters."
+    sources: ["src/frontend/WrittenTypeSupport.ml","src/frontend/WrittenDeclarations.ml","src/frontend/WrittenCallSupport.ml"]
+  - group: "Generics and declared types"
+    name: "Nested generic type arguments"
+    status: implemented
+    notes: "Generic types can be nested inside other generic types."
+    sources: ["src/frontend/WrittenTypeSupport.ml","src/frontend/WrittenDeclarations.ml","src/frontend/WrittenCallSupport.ml"]
+  - group: "Generics and declared types"
+    name: "Generic Option type"
+    status: implemented
+    notes: "StdLib Option has Some and None constructors."
+    sources: ["src/frontend/WrittenTypeSupport.ml","src/frontend/WrittenDeclarations.ml","src/frontend/WrittenCallSupport.ml"]
+  - group: "Generics and declared types"
+    name: "Generic Result type"
+    status: implemented
+    notes: "StdLib Result has Ok and Error constructors."
+    sources: ["src/frontend/WrittenTypeSupport.ml","src/frontend/WrittenDeclarations.ml","src/frontend/WrittenCallSupport.ml"]
+  - group: "Collections"
+    name: "Empty list literals"
+    status: implemented
+    notes: "The expected type can determine the element type of []."
+    sources: ["src/frontend/WrittenCollectionSupport.ml","src/frontend/WrittenTypeSupport.ml"]
+  - group: "Collections"
+    name: "Nonempty list literals"
+    status: implemented
+    notes: "All list elements must share a type."
+    sources: ["src/frontend/WrittenCollectionSupport.ml","src/frontend/WrittenTypeSupport.ml"]
+  - group: "Collections"
+    name: "Dictionary literals"
+    status: implemented
+    notes: "Typed key/value entries."
+    sources: ["src/frontend/WrittenCollectionSupport.ml","src/frontend/WrittenTypeSupport.ml"]
+  - group: "Collections"
+    name: "Empty dictionary inference"
+    status: implemented
+    notes: "Context can supply the key and value types."
+    sources: ["src/frontend/WrittenCollectionSupport.ml","src/frontend/WrittenTypeSupport.ml"]
+  - group: "Collections"
+    name: "Tuple construction"
+    status: implemented
+    notes: "Construct tuples with independently typed elements."
+    sources: ["src/frontend/WrittenCollectionSupport.ml","src/frontend/WrittenTypeSupport.ml"]
+  - group: "Collections"
+    name: "Tuple element access"
+    status: implemented
+    notes: "Read tuple elements by position."
+    sources: ["src/frontend/WrittenCollectionSupport.ml","src/frontend/WrittenTypeSupport.ml"]
+  - group: "Collections"
+    name: "Nested collection inference"
+    status: implemented
+    notes: "Expected types propagate through nested list/dictionary/tuple expressions."
+    sources: ["src/frontend/WrittenCollectionSupport.ml","src/frontend/WrittenTypeSupport.ml"]
+  - group: "Control flow"
+    name: "If/then/else"
+    status: implemented
+    notes: "Both value-producing branches are checked for compatible types."
+    sources: ["src/frontend/WrittenExpressions.ml"]
+  - group: "Control flow"
+    name: "If without else"
+    status: implemented
+    notes: "A missing else branch has Unit type."
+    sources: ["src/frontend/WrittenExpressions.ml"]
+  - group: "Control flow"
+    name: "Elif chains"
+    status: implemented
+    notes: "Conditional chains lower to nested conditionals."
+    sources: ["src/frontend/WrittenExpressions.ml"]
+  - group: "Control flow"
+    name: "Short-circuit boolean and"
+    status: implemented
+    notes: "The second operand is conditional on the first."
+    sources: ["src/frontend/WrittenExpressions.ml"]
+  - group: "Control flow"
+    name: "Short-circuit boolean or"
+    status: implemented
+    notes: "The second operand is conditional on the first."
+    sources: ["src/frontend/WrittenExpressions.ml"]
+  - group: "Control flow"
+    name: "Boolean condition checking"
+    status: implemented
+    notes: "Conditions and short-circuit operands must be Bool."
+    sources: ["src/frontend/WrittenExpressions.ml"]
+  - group: "Pattern matching"
+    name: "Wildcard match patterns"
+    status: implemented
+    notes: "_ matches without binding a name."
+    sources: ["src/frontend/WrittenPatternSupport.ml","src/frontend/WrittenExpressions.ml"]
+  - group: "Pattern matching"
+    name: "Variable match patterns"
+    status: implemented
+    notes: "A pattern can bind the matched value."
+    sources: ["src/frontend/WrittenPatternSupport.ml","src/frontend/WrittenExpressions.ml"]
+  - group: "Pattern matching"
+    name: "Unit match patterns"
+    status: implemented
+    notes: "Match ()."
+    sources: ["src/frontend/WrittenPatternSupport.ml","src/frontend/WrittenExpressions.ml"]
+  - group: "Pattern matching"
+    name: "Boolean match patterns"
+    status: implemented
+    notes: "Match true and false."
+    sources: ["src/frontend/WrittenPatternSupport.ml","src/frontend/WrittenExpressions.ml"]
+  - group: "Pattern matching"
+    name: "Arbitrary-precision integer patterns"
+    status: implemented
+    notes: "Match Int literal values."
+    sources: ["src/frontend/WrittenPatternSupport.ml","src/frontend/WrittenExpressions.ml"]
+  - group: "Pattern matching"
+    name: "Signed fixed-width integer patterns"
+    status: implemented
+    notes: "Match Int8/16/32/64/128 literals."
+    sources: ["src/frontend/WrittenPatternSupport.ml","src/frontend/WrittenExpressions.ml"]
+  - group: "Pattern matching"
+    name: "Unsigned integer patterns"
+    status: implemented
+    notes: "Match UInt8/16/32/64/128 literals."
+    sources: ["src/frontend/WrittenPatternSupport.ml","src/frontend/WrittenExpressions.ml"]
+  - group: "Pattern matching"
+    name: "Float match patterns"
+    status: implemented
+    notes: "Match floating-point literals."
+    sources: ["src/frontend/WrittenPatternSupport.ml","src/frontend/WrittenExpressions.ml"]
+  - group: "Pattern matching"
+    name: "String match patterns"
+    status: implemented
+    notes: "Match a complete string value."
+    sources: ["src/frontend/WrittenPatternSupport.ml","src/frontend/WrittenExpressions.ml"]
+  - group: "Pattern matching"
+    name: "Character match patterns"
+    status: implemented
+    notes: "Match a character/grapheme literal."
+    sources: ["src/frontend/WrittenPatternSupport.ml","src/frontend/WrittenExpressions.ml"]
+  - group: "Pattern matching"
+    name: "Tuple match patterns"
+    status: implemented
+    notes: "Destructure tuples, including nested payload patterns."
+    sources: ["src/frontend/WrittenPatternSupport.ml","src/frontend/WrittenExpressions.ml"]
+  - group: "Pattern matching"
+    name: "Empty-list patterns"
+    status: implemented
+    notes: "Match []."
+    sources: ["src/frontend/WrittenPatternSupport.ml","src/frontend/WrittenExpressions.ml"]
+  - group: "Pattern matching"
+    name: "Fixed-length list patterns"
+    status: implemented
+    notes: "Match a list's shape and element patterns."
+    sources: ["src/frontend/WrittenPatternSupport.ml","src/frontend/WrittenExpressions.ml"]
+  - group: "Pattern matching"
+    name: "Head/tail list patterns"
+    status: implemented
+    notes: "Match head :: tail."
+    sources: ["src/frontend/WrittenPatternSupport.ml","src/frontend/WrittenExpressions.ml"]
+  - group: "Pattern matching"
+    name: "Enum constructor patterns"
+    status: implemented
+    notes: "Match a constructor with its payload fields."
+    sources: ["src/frontend/WrittenPatternSupport.ml","src/frontend/WrittenExpressions.ml"]
+  - group: "Pattern matching"
+    name: "Nested constructor patterns"
+    status: implemented
+    notes: "Constructor fields can contain further patterns."
+    sources: ["src/frontend/WrittenPatternSupport.ml","src/frontend/WrittenExpressions.ml"]
+  - group: "Pattern matching"
+    name: "Or-pattern alternatives"
+    status: implemented
+    notes: "Alternative patterns share one match arm."
+    sources: ["src/frontend/WrittenPatternSupport.ml","src/frontend/WrittenExpressions.ml"]
+  - group: "Pattern matching"
+    name: "Binding consistency across alternatives"
+    status: implemented
+    notes: "Alternative patterns must bind compatible names and types."
+    sources: ["src/frontend/WrittenPatternSupport.ml","src/frontend/WrittenExpressions.ml"]
+  - group: "Pattern matching"
+    name: "Match guards"
+    status: implemented
+    notes: "A when expression restricts a pattern match."
+    sources: ["src/frontend/WrittenPatternSupport.ml","src/frontend/WrittenExpressions.ml"]
+  - group: "Pattern matching"
+    name: "Guard type checking"
+    status: implemented
+    notes: "A guard must produce Bool."
+    sources: ["src/frontend/WrittenPatternSupport.ml","src/frontend/WrittenExpressions.ml"]
+  - group: "Pattern matching"
+    name: "Exhaustiveness checking"
+    status: implemented
+    notes: "Missing match cases are diagnosed during compilation."
+    sources: ["src/frontend/WrittenPatternSupport.ml","src/frontend/WrittenExpressions.ml"]
+  - group: "Pattern matching"
+    name: "Constructor arity checking"
+    status: implemented
+    notes: "Patterns must supply the correct number of constructor fields."
+    sources: ["src/frontend/WrittenPatternSupport.ml","src/frontend/WrittenExpressions.ml"]
+  - group: "Pattern matching"
+    name: "Pattern/scrutinee type checking"
+    status: implemented
+    notes: "Patterns must be compatible with the matched value's type."
+    sources: ["src/frontend/WrittenPatternSupport.ml","src/frontend/WrittenExpressions.ml"]
+  - group: "Pattern matching"
+    name: "Match arm result types"
+    status: implemented
+    notes: "Arm bodies must have compatible result types."
+    sources: ["src/frontend/WrittenPatternSupport.ml","src/frontend/WrittenExpressions.ml"]
+  - group: "Trait mechanisms"
+    name: "Trait declarations"
+    status: implemented
+    notes: "Declare a trait separately from nominal record/enum types."
+    sources: ["src/frontend/WrittenTraitSupport.ml","src/frontend/TraitResolution.ml","src/TraitCatalog.ml"]
+  - group: "Trait mechanisms"
+    name: "Multiple trait methods"
+    status: implemented
+    notes: "A trait may declare more than one method."
+    sources: ["src/frontend/WrittenTraitSupport.ml","src/frontend/TraitResolution.ml","src/TraitCatalog.ml"]
+  - group: "Trait mechanisms"
+    name: "Implementation declarations"
+    status: implemented
+    notes: "An impl supplies methods for a concrete self type."
+    sources: ["src/frontend/WrittenTraitSupport.ml","src/frontend/TraitResolution.ml","src/TraitCatalog.ml"]
+  - group: "Trait mechanisms"
+    name: "Implementation method aliases"
+    status: implemented
+    notes: "An implementation method may reference an existing function."
+    sources: ["src/frontend/WrittenTraitSupport.ml","src/frontend/TraitResolution.ml","src/TraitCatalog.ml"]
+  - group: "Trait mechanisms"
+    name: "Generic implementations"
+    status: implemented
+    notes: "Implementations may introduce type parameters."
+    sources: ["src/frontend/WrittenTraitSupport.ml","src/frontend/TraitResolution.ml","src/TraitCatalog.ml"]
+  - group: "Trait mechanisms"
+    name: "Conditional implementations"
+    status: implemented
+    notes: "Implementation selection checks required bounds."
+    sources: ["src/frontend/WrittenTraitSupport.ml","src/frontend/TraitResolution.ml","src/TraitCatalog.ml"]
+  - group: "Trait mechanisms"
+    name: "Single trait bounds"
+    status: implemented
+    notes: "A type parameter can require one trait."
+    sources: ["src/frontend/WrittenTraitSupport.ml","src/frontend/TraitResolution.ml","src/TraitCatalog.ml"]
+  - group: "Trait mechanisms"
+    name: "Multiple trait bounds"
+    status: implemented
+    notes: "A type parameter can require several traits."
+    sources: ["src/frontend/WrittenTraitSupport.ml","src/frontend/TraitResolution.ml","src/TraitCatalog.ml"]
+  - group: "Trait mechanisms"
+    name: "Parameterized trait bounds"
+    status: implemented
+    notes: "Bounds can refer to parameterized traits."
+    sources: ["src/frontend/WrittenTraitSupport.ml","src/frontend/TraitResolution.ml","src/TraitCatalog.ml"]
+  - group: "Trait mechanisms"
+    name: "Bounds on declared types"
+    status: implemented
+    notes: "Bounds on generic types are checked when those types are used."
+    sources: ["src/frontend/WrittenTraitSupport.ml","src/frontend/TraitResolution.ml","src/TraitCatalog.ml"]
+  - group: "Trait mechanisms"
+    name: "Static trait method dispatch"
+    status: implemented
+    notes: "Resolve a trait method at compilation."
+    sources: ["src/frontend/WrittenTraitSupport.ml","src/frontend/TraitResolution.ml","src/TraitCatalog.ml"]
+  - group: "Trait mechanisms"
+    name: "Receiver method syntax"
+    status: implemented
+    notes: "Resolve method-like calls from a receiver's type."
+    sources: ["src/frontend/WrittenTraitSupport.ml","src/frontend/TraitResolution.ml","src/TraitCatalog.ml"]
+  - group: "Trait mechanisms"
+    name: "Receiver/record-field precedence"
+    status: implemented
+    notes: "A record function field and a trait receiver method are distinguished."
+    sources: ["src/frontend/WrittenTraitSupport.ml","src/frontend/TraitResolution.ml","src/TraitCatalog.ml"]
+  - group: "Trait mechanisms"
+    name: "Trait method function values"
+    status: implemented
+    notes: "A resolved trait method can be used as a function value."
+    sources: ["src/frontend/WrittenTraitSupport.ml","src/frontend/TraitResolution.ml","src/TraitCatalog.ml"]
+  - group: "Trait mechanisms"
+    name: "Trait operators"
+    status: implemented
+    notes: "Overloaded operators select a trait implementation."
+    sources: ["src/frontend/WrittenTraitSupport.ml","src/frontend/TraitResolution.ml","src/TraitCatalog.ml"]
+  - group: "Trait mechanisms"
+    name: "Bounded generic specialization"
+    status: implemented
+    notes: "Trait obligations are resolved during concrete generic specialization."
+    sources: ["src/frontend/WrittenTraitSupport.ml","src/frontend/TraitResolution.ml","src/TraitCatalog.ml"]
+  - group: "Trait mechanisms"
+    name: "Missing implementation rejection"
+    status: implemented
+    notes: "Reject a call when its required trait implementation is absent."
+    sources: ["src/frontend/WrittenTraitSupport.ml","src/frontend/TraitResolution.ml","src/TraitCatalog.ml"]
+  - group: "Trait mechanisms"
+    name: "Implementation method signature checking"
+    status: implemented
+    notes: "Implementation methods must have the required types."
+    sources: ["src/frontend/WrittenTraitSupport.ml","src/frontend/TraitResolution.ml","src/TraitCatalog.ml"]
+  - group: "Trait mechanisms"
+    name: "Competing implementation rejection"
+    status: implemented
+    notes: "Statically ambiguous implementations are rejected."
+    sources: ["src/frontend/WrittenTraitSupport.ml","src/frontend/TraitResolution.ml","src/TraitCatalog.ml"]
+  - group: "Trait mechanisms"
+    name: "Runtime trait lookup"
+    status: missing
+    notes: "Implementation selection must finish during compilation."
+    sources: ["src/frontend/WrittenTraitSupport.ml","src/frontend/TraitResolution.ml","src/TraitCatalog.ml"]
+  - group: "Trait mechanisms"
+    name: "Newest-implementation-wins dispatch"
+    status: missing
+    notes: "The compiler rejects ambiguous implementations instead of choosing the latest at runtime."
+    sources: ["src/frontend/WrittenTraitSupport.ml","src/frontend/TraitResolution.ml","src/TraitCatalog.ml"]
+  - group: "Trait mechanisms"
+    name: "Trait effect ceilings"
+    status: missing
+    notes: "Trait method permission ceilings are not enforced by the static trait model."
+    sources: ["src/frontend/WrittenTraitSupport.ml","src/frontend/TraitResolution.ml","src/TraitCatalog.ml"]
+  - group: "Standard traits"
+    name: "Darklang.Stdlib.Add"
+    status: implemented
+    notes: "Static trait and add method; implementations are tracked individually in the declaration ledger."
+    sources: ["StdLib/traits.dark","src/frontend/TraitResolution.ml"]
+  - group: "Standard traits"
+    name: "Darklang.Stdlib.Subtract"
+    status: implemented
+    notes: "Static trait and subtract method; implementations are tracked individually in the declaration ledger."
+    sources: ["StdLib/traits.dark","src/frontend/TraitResolution.ml"]
+  - group: "Standard traits"
+    name: "Darklang.Stdlib.Multiply"
+    status: implemented
+    notes: "Static trait and multiply method; implementations are tracked individually in the declaration ledger."
+    sources: ["StdLib/traits.dark","src/frontend/TraitResolution.ml"]
+  - group: "Standard traits"
+    name: "Darklang.Stdlib.Divide"
+    status: implemented
+    notes: "Static trait and divide method; implementations are tracked individually in the declaration ledger."
+    sources: ["StdLib/traits.dark","src/frontend/TraitResolution.ml"]
+  - group: "Standard traits"
+    name: "Darklang.Stdlib.Modulo"
+    status: implemented
+    notes: "Static trait and modulo method; implementations are tracked individually in the declaration ledger."
+    sources: ["StdLib/traits.dark","src/frontend/TraitResolution.ml"]
+  - group: "Standard traits"
+    name: "Darklang.Stdlib.Power"
+    status: implemented
+    notes: "Static trait and power method; implementations are tracked individually in the declaration ledger."
+    sources: ["StdLib/traits.dark","src/frontend/TraitResolution.ml"]
+  - group: "Standard traits"
+    name: "Darklang.Stdlib.Negate"
+    status: implemented
+    notes: "Static trait and negate method; implementations are tracked individually in the declaration ledger."
+    sources: ["StdLib/traits.dark","src/frontend/TraitResolution.ml"]
+  - group: "Standard traits"
+    name: "Darklang.Stdlib.Zero"
+    status: implemented
+    notes: "Static trait and zero method; implementations are tracked individually in the declaration ledger."
+    sources: ["StdLib/traits.dark","src/frontend/TraitResolution.ml"]
+  - group: "Standard traits"
+    name: "Darklang.Stdlib.One"
+    status: implemented
+    notes: "Static trait and one method; implementations are tracked individually in the declaration ledger."
+    sources: ["StdLib/traits.dark","src/frontend/TraitResolution.ml"]
+  - group: "Standard traits"
+    name: "Darklang.Stdlib.BitwiseAnd"
+    status: implemented
+    notes: "Static trait and bitwiseAnd method; implementations are tracked individually in the declaration ledger."
+    sources: ["StdLib/traits.dark","src/frontend/TraitResolution.ml"]
+  - group: "Standard traits"
+    name: "Darklang.Stdlib.BitwiseOr"
+    status: implemented
+    notes: "Static trait and bitwiseOr method; implementations are tracked individually in the declaration ledger."
+    sources: ["StdLib/traits.dark","src/frontend/TraitResolution.ml"]
+  - group: "Standard traits"
+    name: "Darklang.Stdlib.BitwiseXor"
+    status: implemented
+    notes: "Static trait and bitwiseXor method; implementations are tracked individually in the declaration ledger."
+    sources: ["StdLib/traits.dark","src/frontend/TraitResolution.ml"]
+  - group: "Standard traits"
+    name: "Darklang.Stdlib.BitwiseNot"
+    status: implemented
+    notes: "Static trait and bitwiseNot method; implementations are tracked individually in the declaration ledger."
+    sources: ["StdLib/traits.dark","src/frontend/TraitResolution.ml"]
+  - group: "Standard traits"
+    name: "Darklang.Stdlib.ShiftLeft"
+    status: implemented
+    notes: "Static trait and shiftLeft method; implementations are tracked individually in the declaration ledger."
+    sources: ["StdLib/traits.dark","src/frontend/TraitResolution.ml"]
+  - group: "Standard traits"
+    name: "Darklang.Stdlib.ShiftRight"
+    status: implemented
+    notes: "Static trait and shiftRight method; implementations are tracked individually in the declaration ledger."
+    sources: ["StdLib/traits.dark","src/frontend/TraitResolution.ml"]
+  - group: "Standard traits"
+    name: "Darklang.Stdlib.Compare"
+    status: implemented
+    notes: "Static trait and lessThan, lessThanOrEqualTo, greaterThan, greaterThanOrEqualTo methods; implementations are tracked individually in the declaration ledger."
+    sources: ["StdLib/traits.dark","src/frontend/TraitResolution.ml"]
+  - group: "Standard traits"
+    name: "Darklang.Stdlib.ToString"
+    status: implemented
+    notes: "Static trait and toString method; implementations are tracked individually in the declaration ledger."
+    sources: ["StdLib/traits.dark","src/frontend/TraitResolution.ml"]
+  - group: "Modules and names"
+    name: "File module declarations"
+    status: implemented
+    notes: "Declare the root module for a source file."
+    sources: ["src/frontend/WrittenSource.ml","src/NameResolution.ml"]
+  - group: "Modules and names"
+    name: "Nested modules"
+    status: implemented
+    notes: "Nested module declarations establish lexical scopes."
+    sources: ["src/frontend/WrittenSource.ml","src/NameResolution.ml"]
+  - group: "Modules and names"
+    name: "Qualified name resolution"
+    status: implemented
+    notes: "Resolve names using their module paths."
+    sources: ["src/frontend/WrittenSource.ml","src/NameResolution.ml"]
+  - group: "Modules and names"
+    name: "Lexical name resolution"
+    status: implemented
+    notes: "Resolve local and enclosing-module bindings."
+    sources: ["src/frontend/WrittenSource.ml","src/NameResolution.ml"]
+  - group: "Modules and names"
+    name: "Escaped identifiers"
+    status: implemented
+    notes: "Backtick-delimited identifiers can use otherwise reserved names."
+    sources: ["src/frontend/WrittenSource.ml","src/NameResolution.ml"]
+  - group: "Modules and names"
+    name: "Forward declaration references"
+    status: implemented
+    notes: "Resolve references to later declarations."
+    sources: ["src/frontend/WrittenSource.ml","src/NameResolution.ml"]
+  - group: "Modules and names"
+    name: "Package source loading"
+    status: implemented
+    notes: "Load checked package declarations into the compiler environment."
+    sources: ["src/frontend/WrittenSource.ml","src/NameResolution.ml"]
+  - group: "Effects"
+    name: "Effect names"
+    status: implemented
+    notes: "Recognize effect names in source annotations."
+    sources: ["src/frontend/interpreter/LibExecution_Effects.ml","src/frontend/interpreter/DeclarationSupport.ml","src/frontend/WrittenDeclarations.ml"]
+  - group: "Effects"
+    name: "Effect row annotations"
+    status: implemented
+    notes: "Parse function effect annotations."
+    sources: ["src/frontend/interpreter/LibExecution_Effects.ml","src/frontend/interpreter/DeclarationSupport.ml","src/frontend/WrittenDeclarations.ml"]
+  - group: "Effects"
+    name: "Empty effect rows"
+    status: implemented
+    notes: "The syntax for an explicitly empty effect set is parsed."
+    sources: ["src/frontend/interpreter/LibExecution_Effects.ml","src/frontend/interpreter/DeclarationSupport.ml","src/frontend/WrittenDeclarations.ml"]
+  - group: "Effects"
+    name: "Effect propagation through calls"
+    status: missing
+    notes: "Called-function effects are not propagated through the direct checker."
+    sources: ["src/frontend/interpreter/LibExecution_Effects.ml","src/frontend/interpreter/DeclarationSupport.ml","src/frontend/WrittenDeclarations.ml"]
+  - group: "Effects"
+    name: "Function permission ceilings"
+    status: missing
+    notes: "Declared effect ceilings are not enforced by the direct checker."
+    sources: ["src/frontend/interpreter/LibExecution_Effects.ml","src/frontend/interpreter/DeclarationSupport.ml","src/frontend/WrittenDeclarations.ml"]
+  - group: "Effects"
+    name: "Higher-order effect propagation"
+    status: missing
+    notes: "Effects through function values lack full propagation/enforcement."
+    sources: ["src/frontend/interpreter/LibExecution_Effects.ml","src/frontend/interpreter/DeclarationSupport.ml","src/frontend/WrittenDeclarations.ml"]
+  - group: "Async"
+    name: "Future value representation"
+    status: missing
+    notes: "The merged baseline does not represent futures in the native language pipeline."
+    sources: ["src/AST.ml","src/frontend/WrittenExpressions.ml"]
+  - group: "Async"
+    name: "Implicit await on value use"
+    status: missing
+    notes: "Future values are not resolved implicitly by this baseline."
+    sources: ["src/AST.ml","src/frontend/WrittenExpressions.ml"]
+  - group: "Async"
+    name: "Async function calls"
+    status: missing
+    notes: "Native future-producing function calls are not implemented in this baseline."
+    sources: ["src/AST.ml","src/frontend/WrittenExpressions.ml"]
+  - group: "Async"
+    name: "Async failures"
+    status: missing
+    notes: "Propagation of failures through futures is not implemented in this baseline."
+    sources: ["src/AST.ml","src/frontend/WrittenExpressions.ml"]
+  - group: "Reflection and dynamic execution"
+    name: "Runtime expression evaluation"
+    status: missing
+    notes: "No interpreter-style evaluation of arbitrary source/AST at runtime."
+    sources: ["src/frontend/WrittenApplicationSupport.ml","src/AST.ml"]
+  - group: "Reflection and dynamic execution"
+    name: "Runtime function lookup by name"
+    status: missing
+    notes: "No general runtime lookup and invocation of program functions by string name."
+    sources: ["src/frontend/WrittenApplicationSupport.ml","src/AST.ml"]
+  - group: "Reflection and dynamic execution"
+    name: "Runtime program reflection"
+    status: missing
+    notes: "The compiler's compile-time metadata is not an interpreter runtime program model."
+    sources: ["src/frontend/WrittenApplicationSupport.ml","src/AST.ml"]
+  - group: "Test declarations"
+    name: "Named test declaration parsing"
+    status: implemented
+    notes: "Parse named test declarations in package sources."
+    sources: ["src/frontend/NamedPackageTests.ml","test/test-suite-tooling/TestDSL/E2EFormat.ml"]
+  - group: "Test declarations"
+    name: "Named test extraction"
+    status: implemented
+    notes: "Separate test bodies from ordinary package declarations."
+    sources: ["src/frontend/NamedPackageTests.ml","test/test-suite-tooling/TestDSL/E2EFormat.ml"]
+  - group: "Test declarations"
+    name: "Imported named-test fixtures"
+    status: implemented
+    notes: "The existing E2E adapter selects named tests imported under the upstream fixture directory."
+    sources: ["src/frontend/NamedPackageTests.ml","test/test-suite-tooling/TestDSL/E2EFormat.ml"]
+  - group: "Test declarations"
+    name: "General named-package test adoption"
+    status: partial
+    notes: "Not every upstream named test has an enabled compiler counterpart."
+    sources: ["src/frontend/NamedPackageTests.ml","test/test-suite-tooling/TestDSL/E2EFormat.ml"]
