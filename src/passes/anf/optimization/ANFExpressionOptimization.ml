@@ -226,11 +226,11 @@ let tryCSEKey = function
            ^ " for record " ^ descriptor.runtimeTypeName))
   | Atom _ | TypedAtom _ | Call _ | BorrowedCall _ | TailCall _ | IndirectCall _
   | IndirectTailCall _ | ClosureAlloc _ | ClosureCall _ | ClosureTailCall _
-  | TupleAlloc _ | RecordAlloc _ | RecordClone _ | RecordReuse _
-  | StringConcat _ | CanonicalBufferEq _ | RefCountInc _ | RefCountDec _
-  | Print _ | StdoutWrite _ | StdinReadLine | RuntimeError _
-  | RuntimeErrorString _ | FileReadBlob _ | FileExists _ | FileWriteBlob _
-  | FileAppendText _ | FileDelete _ | FileCreateDirectory _
+  | TupleAlloc _ | RecordAlloc _ | RecordClone _ | RecordReuse _ | SumConstant _
+  | SumAlloc _ | SumTag _ | SumPayload _ | StringConcat _ | CanonicalBufferEq _
+  | RefCountInc _ | RefCountDec _ | Print _ | StdoutWrite _ | StdinReadLine
+  | RuntimeError _ | RuntimeErrorString _ | FileReadBlob _ | FileExists _
+  | FileWriteBlob _ | FileAppendText _ | FileDelete _ | FileCreateDirectory _
   | FileSetExecutable _ | FileWriteFromPtr _ | RawAlloc _ | MappedAlloc _
   | RawFree _ | MappedFree _ | RawGet _ | RawTake _ | RawGetByte _
   | RawWriteWord _ | RawWriteByte _ | RawSlotInit _ | StringToRawPtr _

@@ -431,6 +431,21 @@ and aNF_recordDescriptor (value : ANF.recordDescriptor) =
       ("ValueType", StructuralFormat.semanticValue value.ANF.valueType);
     ]
 
+and aNF_sumDescriptor (value : ANF.sumDescriptor) =
+  record "SumDescriptor"
+    [
+      ("SumName", text value.ANF.sumName);
+      ("SumArgs", list StructuralFormat.semanticValue value.ANF.sumArgs);
+    ]
+
+and aNF_variantDescriptor (value : ANF.variantDescriptor) =
+  record "VariantDescriptor"
+    [
+      ("Sum", aNF_sumDescriptor value.ANF.sum);
+      ("VariantTag", int32 value.ANF.variantTag);
+      ("PayloadType", StructuralFormat.semanticValue value.ANF.payloadType);
+    ]
+
 and aNF_cExpr (value : ANF.cExpr) =
   match value with
   | ANF.Atom field0 -> union "CExpr" "Atom" [ aNF_atom field0 ]
@@ -473,6 +488,15 @@ and aNF_cExpr (value : ANF.cExpr) =
       union "CExpr" "TupleAlloc" [ list (fun item -> aNF_atom item) field0 ]
   | ANF.TupleGet (field0, field1) ->
       union "CExpr" "TupleGet" [ aNF_atom field0; int32 field1 ]
+  | ANF.SumConstant (sum, tag) ->
+      union "CExpr" "SumConstant" [ aNF_sumDescriptor sum; int32 tag ]
+  | ANF.SumAlloc (variant, value) ->
+      union "CExpr" "SumAlloc" [ aNF_variantDescriptor variant; aNF_atom value ]
+  | ANF.SumTag (sum, value) ->
+      union "CExpr" "SumTag" [ aNF_sumDescriptor sum; aNF_atom value ]
+  | ANF.SumPayload (variant, value) ->
+      union "CExpr" "SumPayload"
+        [ aNF_variantDescriptor variant; aNF_atom value ]
   | ANF.RecordAlloc (field0, field1) ->
       union "CExpr" "RecordAlloc"
         [ aNF_recordDescriptor field0; list (fun item -> aNF_atom item) field1 ]

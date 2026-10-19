@@ -193,6 +193,9 @@ let analyzeCExpr operation analysis =
   | A.Atom atom
   | A.TypedAtom (atom, _)
   | A.UnaryPrim (_, atom)
+  | A.SumAlloc (_, atom)
+  | A.SumTag (_, atom)
+  | A.SumPayload (_, atom)
   | A.RefCountInc (atom, _, _, _)
   | A.RefCountDec (atom, _, _, _)
   | A.Print (atom, _)
@@ -270,7 +273,8 @@ let analyzeCExpr operation analysis =
   | A.RawWriteByte (first, second, third)
   | A.RawSlotInit (first, second, third, _) ->
       analyzeAtoms [ first; second; third ] analysis
-  | A.RandomInt64 | A.DateTimeNow | A.StdinReadLine | A.RuntimeError _ ->
+  | A.SumConstant _ | A.RandomInt64 | A.DateTimeNow | A.StdinReadLine
+  | A.RuntimeError _ ->
       analysis
 
 let scalarLiteralAtom = function

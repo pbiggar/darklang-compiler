@@ -1,4 +1,6 @@
 (* LowerSumRepresentations.ml - Select compact or boxed layouts from final sum payload types. *)
+[@@@warning "-4"]
+
 module A = ANF
 module P = LoweringPrimitives
 module M = StringOrder.Map
