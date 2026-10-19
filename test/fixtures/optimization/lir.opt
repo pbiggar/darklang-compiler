@@ -80,19 +80,19 @@ makeTransferChild:
   StackSize: 0
   UsedCalleeSaved: []
   Label "makeTransferChild_body":
-    v10006 <- Phi([(Reg v4000, makeTransferChild_entry), (Reg v10008, makeTransferChild_ssa_2)])
-    Cmp(v10006, Imm 0)
+    v10014 <- Phi([(Reg v4000, makeTransferChild_entry), (Reg v10016, makeTransferChild_ssa_2)])
+    Cmp(v10014, Imm 0)
     CondBranch(LE, Label "makeTransferChild_ssa_1", Label "makeTransferChild_ssa_2")
   Label "makeTransferChild_entry":
     Jump(Label "makeTransferChild_body")
   Label "makeTransferChild_ssa_1":
-    v10009 <- HeapAlloc(16)
-    HeapStore(v10009, 0, Imm 0)
-    HeapStore(v10009, 8, Imm 1)
-    X0 <- Mov(Reg v10009)
+    v10017 <- HeapAlloc(16)
+    HeapStore(v10017, 0, Imm 0)
+    HeapStore(v10017, 8, Imm 1)
+    X0 <- Mov(Reg v10017)
     Ret
   Label "makeTransferChild_ssa_2":
-    v10008 <- Sub(v10006, Imm 1)
+    v10016 <- Sub(v10014, Imm 1)
     Jump(Label "makeTransferChild_body")
 makeTransferEnvelope:
   StackSize: 0
@@ -134,19 +134,19 @@ makeDuplicateTransferChild:
   StackSize: 0
   UsedCalleeSaved: []
   Label "makeDuplicateTransferChild_body":
-    v10006 <- Phi([(Reg v4000, makeDuplicateTransferChild_entry), (Reg v10008, makeDuplicateTransferChild_ssa_2)])
-    Cmp(v10006, Imm 0)
+    v10012 <- Phi([(Reg v4000, makeDuplicateTransferChild_entry), (Reg v10014, makeDuplicateTransferChild_ssa_2)])
+    Cmp(v10012, Imm 0)
     CondBranch(LE, Label "makeDuplicateTransferChild_ssa_1", Label "makeDuplicateTransferChild_ssa_2")
   Label "makeDuplicateTransferChild_entry":
     Jump(Label "makeDuplicateTransferChild_body")
   Label "makeDuplicateTransferChild_ssa_1":
-    v10009 <- HeapAlloc(16)
-    HeapStore(v10009, 0, Imm 0)
-    HeapStore(v10009, 8, Imm 1)
-    X0 <- Mov(Reg v10009)
+    v10015 <- HeapAlloc(16)
+    HeapStore(v10015, 0, Imm 0)
+    HeapStore(v10015, 8, Imm 1)
+    X0 <- Mov(Reg v10015)
     Ret
   Label "makeDuplicateTransferChild_ssa_2":
-    v10008 <- Sub(v10006, Imm 1)
+    v10014 <- Sub(v10012, Imm 1)
     Jump(Label "makeDuplicateTransferChild_body")
 makeDuplicateTransferPair:
   StackSize: 0
@@ -182,19 +182,19 @@ makeReusedTransferChild:
   StackSize: 0
   UsedCalleeSaved: []
   Label "makeReusedTransferChild_body":
-    v10006 <- Phi([(Reg v4000, makeReusedTransferChild_entry), (Reg v10008, makeReusedTransferChild_ssa_2)])
-    Cmp(v10006, Imm 0)
+    v10014 <- Phi([(Reg v4000, makeReusedTransferChild_entry), (Reg v10016, makeReusedTransferChild_ssa_2)])
+    Cmp(v10014, Imm 0)
     CondBranch(LE, Label "makeReusedTransferChild_ssa_1", Label "makeReusedTransferChild_ssa_2")
   Label "makeReusedTransferChild_entry":
     Jump(Label "makeReusedTransferChild_body")
   Label "makeReusedTransferChild_ssa_1":
-    v10009 <- HeapAlloc(16)
-    HeapStore(v10009, 0, Imm 0)
-    HeapStore(v10009, 8, Imm 1)
-    X0 <- Mov(Reg v10009)
+    v10017 <- HeapAlloc(16)
+    HeapStore(v10017, 0, Imm 0)
+    HeapStore(v10017, 8, Imm 1)
+    X0 <- Mov(Reg v10017)
     Ret
   Label "makeReusedTransferChild_ssa_2":
-    v10008 <- Sub(v10006, Imm 1)
+    v10016 <- Sub(v10014, Imm 1)
     Jump(Label "makeReusedTransferChild_body")
 makeReusedTransferNested:
   StackSize: 0
@@ -488,17 +488,17 @@ choose:
   StackSize: 0
   UsedCalleeSaved: []
   Label "choose_entry":
-    v10007 <- HeapLoad(v0, 0)
-    BranchZero(v10007, Label "choose_ssa_1", Label "choose_ssa_2")
+    v10014 <- HeapLoad(v0, 0)
+    BranchZero(v10014, Label "choose_ssa_1", Label "choose_ssa_2")
   Label "choose_ssa_1":
     X0 <- Mov(Imm 1)
     Ret
   Label "choose_ssa_2":
-    Cmp(v10007, Imm 1)
+    Cmp(v10014, Imm 1)
     CondBranch(EQ, Label "choose_ssa_3", Label "choose_ssa_4")
   Label "choose_ssa_3":
-    v10010 <- HeapLoad(v0, 8)
-    X0 <- Mov(Reg v10010)
+    v10017 <- HeapLoad(v0, 8)
+    X0 <- Mov(Reg v10017)
     Ret
   Label "choose_ssa_4":
     X0 <- Mov(Imm 3)
@@ -507,14 +507,14 @@ choosePartial:
   StackSize: 0
   UsedCalleeSaved: []
   Label "choosePartial_entry":
-    v10015 <- HeapLoad(v10, 0)
-    BranchZero(v10015, Label "choosePartial_ssa_1", Label "choosePartial_ssa_2")
+    v10016 <- HeapLoad(v8, 0)
+    BranchZero(v10016, Label "choosePartial_ssa_1", Label "choosePartial_ssa_2")
   Label "choosePartial_ssa_1":
     X0 <- Mov(Imm 1)
     Ret
   Label "choosePartial_ssa_2":
-    v10017 <- HeapLoad(v10, 8)
-    X0 <- Mov(Reg v10017)
+    v10018 <- HeapLoad(v8, 8)
+    X0 <- Mov(Reg v10018)
     Ret
 
 ---NAME---
