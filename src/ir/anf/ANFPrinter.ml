@@ -227,8 +227,9 @@ let prettyPrintANFCExpr functionNames expression =
       "SumAlloc(" ^ variant.ANF.sum.ANF.sumName ^ ", "
       ^ string_of_int variant.ANF.variantTag
       ^ ", " ^ prettyPrintANFAtom value ^ ")"
-  | ANF.SumTag (sum, value) ->
-      "SumTag(" ^ sum.ANF.sumName ^ ", " ^ prettyPrintANFAtom value ^ ")"
+  | ANF.SumTest (sum, tag, value) ->
+      "SumTest(" ^ sum.ANF.sumName ^ ", " ^ string_of_int tag ^ ", "
+      ^ prettyPrintANFAtom value ^ ")"
   | ANF.SumPayload (variant, value) ->
       "SumPayload(" ^ variant.ANF.sum.ANF.sumName ^ ", "
       ^ string_of_int variant.ANF.variantTag

@@ -73,7 +73,7 @@ let substCExprValue env cexpr =
   | TupleGet (tuple, idx) -> TupleGet (s tuple, idx)
   | SumConstant _ -> cexpr
   | SumAlloc (variant, value) -> SumAlloc (variant, s value)
-  | SumTag (sum, value) -> SumTag (sum, s value)
+  | SumTest (sum, tag, value) -> SumTest (sum, tag, s value)
   | SumPayload (variant, value) -> SumPayload (variant, s value)
   | RecordAlloc (descriptor, fields) ->
       let fields' = substAtoms env fields in

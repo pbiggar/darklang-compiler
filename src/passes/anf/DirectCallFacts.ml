@@ -194,7 +194,7 @@ let analyzeCExpr operation analysis =
   | A.TypedAtom (atom, _)
   | A.UnaryPrim (_, atom)
   | A.SumAlloc (_, atom)
-  | A.SumTag (_, atom)
+  | A.SumTest (_, _, atom)
   | A.SumPayload (_, atom)
   | A.RefCountInc (atom, _, _, _)
   | A.RefCountDec (atom, _, _, _)

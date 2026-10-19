@@ -67,24 +67,22 @@ let recordDescriptor name args (info : R.recordTypeInfo) =
     valueType = AST.TRecord (name, args);
   }
 
-let boxedSumDescriptor name parameters args fields =
+let variantDescriptor name parameters args tag fields =
   if List.length parameters <> List.length args then
-    Error ("Boxed sum '" ^ name ^ "' has inconsistent type arguments")
+    Error ("Sum '" ^ name ^ "' has inconsistent type arguments")
   else
     let subst = M.of_list (List.combine parameters args) in
     let payload =
       match List.map (applySubstToType subst) fields with
-      | [] -> AST.TInt64
+      | [] -> Crash.crash "Payload constructor has no declared fields"
       | [ value ] -> value
       | values -> AST.TTuple values
     in
     Ok
       {
-        ANF.sourceTypeName = name;
-        runtimeTypeName = name;
-        typeArgs = args;
-        fields = [ ("$tag", AST.TInt64); ("$payload", payload) ];
-        valueType = AST.TSum (name, args);
+        ANF.sum = { ANF.sumName = name; sumArgs = args };
+        variantTag = tag;
+        payloadType = payload;
       }
 
 (*

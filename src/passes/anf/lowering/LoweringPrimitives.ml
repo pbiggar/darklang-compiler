@@ -176,43 +176,23 @@ let spareImmediateSumSentinel name args sums =
   | Some (AST.TList _) -> Some 4L
   | _ -> None
 
-let sumPayloadExpr source payloadType atom sums =
-  let boxed () =
-    let name, args =
-      match source with
-      | AST.TSum (name, args) -> (name, args)
-      | _ -> Crash.crash "Sum payload projection requires a sum type"
-    in
-    (* Constructor arms share a fixed block layout, but their payload types
-       can differ. Keep the selected arm's field type on the projection. *)
-    ANF.RecordGet
-      ( {
-          ANF.sourceTypeName = name;
-          runtimeTypeName = name;
-          typeArgs = args;
-          fields = [ ("__tag", AST.TInt64); ("__payload", payloadType) ];
-          valueType = source;
-        },
-        atom,
-        1 )
-  in
+let sumDescriptor = function
+  | AST.TSum (name, args) -> { ANF.sumName = name; sumArgs = args }
+  | _ -> Crash.crash "Sum operation requires a checked sum type"
+
+let sumTestExpr ~tag source atom sums =
+  let sum = sumDescriptor source in
   match source with
-  | AST.TSum (name, args) -> (
-      let payload =
-        match transparentSumPayloadType name args sums with
-        | Some _ as value -> value
-        | None -> (
-            match nullablePointerSumPayloadType name args sums with
-            | Some _ as value -> value
-            | None ->
-                if Option.is_some (spareImmediateSumSentinel name args sums)
-                then unaryPayloadOfTwoCaseSum name args sums
-                else None)
-      in
-      match payload with
-      | Some typ -> ANF.TypedAtom (atom, typ)
-      | None -> boxed ())
-  | _ -> boxed ()
+  | AST.TSum (name, _) -> (
+      match Option.map M.bindings (M.find_opt name sums) with
+      | Some [ (_, variant) ] -> ANF.Atom (ANF.BoolLiteral (variant.tag = tag))
+      | Some _ -> ANF.SumTest (sum, tag, atom)
+      | None -> Crash.crash "Sum tag inspection has no constructor metadata")
+  | _ -> Crash.crash "Sum tag inspection requires a checked sum type"
+
+let sumPayloadExpr ~tag source payloadType atom =
+  ANF.SumPayload
+    ({ ANF.sum = sumDescriptor source; variantTag = tag; payloadType }, atom)
 
 let sumTypeNamesFromVariantLookup variants =
   M.fold (fun _ (owner, _, _, _) names -> S.add owner names) variants S.empty

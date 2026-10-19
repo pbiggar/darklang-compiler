@@ -378,8 +378,9 @@ let maxTempIdInCExpr (cexpr : ANF.cExpr) =
   | ANF.TupleAlloc atoms -> maxTempIdInAtoms atoms
   | ANF.TupleGet (tuple, _) -> maxTempIdInAtom tuple
   | ANF.SumConstant _ -> -1
-  | ANF.SumAlloc (_, value) | ANF.SumTag (_, value) | ANF.SumPayload (_, value)
-    ->
+  | ANF.SumAlloc (_, value)
+  | ANF.SumTest (_, _, value)
+  | ANF.SumPayload (_, value) ->
       maxTempIdInAtom value
   | ANF.RecordAlloc (_, fields) -> maxTempIdInAtoms fields
   | ANF.RecordGet (_, record, _) -> maxTempIdInAtom record
@@ -952,7 +953,7 @@ let cexprDescription cexpr =
   | ANF.TupleGet _ -> "TupleGet"
   | ANF.SumConstant _ -> "SumConstant"
   | ANF.SumAlloc _ -> "SumAlloc"
-  | ANF.SumTag _ -> "SumTag"
+  | ANF.SumTest _ -> "SumTest"
   | ANF.SumPayload _ -> "SumPayload"
   | ANF.RecordAlloc (descriptor, _) ->
       "RecordAlloc " ^ descriptor.ANF.runtimeTypeName
@@ -1303,7 +1304,7 @@ let simpleCExprInstrs builder tempId destReg destType cexpr =
       let alloc = MIR.HeapAlloc (destReg, mulInt (List.length elems) 8) in
       let+ stores = storeFields elems in
       alloc :: stores
-  | ANF.SumConstant _ | ANF.SumAlloc _ | ANF.SumTag _ | ANF.SumPayload _ ->
+  | ANF.SumConstant _ | ANF.SumAlloc _ | ANF.SumTest _ | ANF.SumPayload _ ->
       Crash.crash
         "Logical sum operation reached MIR before representation lowering"
   | ANF.TupleGet (tuple, index) -> (

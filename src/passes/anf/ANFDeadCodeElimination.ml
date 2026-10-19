@@ -42,8 +42,9 @@ let extractFromCExpr cexpr =
   | ANF.TupleAlloc atoms -> extractFromAtoms atoms
   | ANF.TupleGet (tuple, _) -> extractFromAtom tuple
   | ANF.SumConstant _ -> []
-  | ANF.SumAlloc (_, value) | ANF.SumTag (_, value) | ANF.SumPayload (_, value)
-    ->
+  | ANF.SumAlloc (_, value)
+  | ANF.SumTest (_, _, value)
+  | ANF.SumPayload (_, value) ->
       extractFromAtom value
   | ANF.RecordAlloc (_, fields) -> extractFromAtoms fields
   | ANF.RecordGet (_, record, _) -> extractFromAtom record

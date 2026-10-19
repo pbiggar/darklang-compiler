@@ -337,33 +337,6 @@ let lowerMatch (toANFCore : LoweringCallbacks.expressionLowerer)
     | _ -> (scrutineeAtom, [], gen)
   in
   let variant id typ = P.tryFindVariantForTypeById id typ typeNames variants in
-  let hasPayload name =
-    M.exists
-      (fun _ (owner, _, _, fields) -> owner = name && fields <> [])
-      variants
-  in
-  let unboxed = function
-    | AST.TSum (name, args) ->
-        Option.is_some (P.nullablePointerSumPayloadType name args sums.P.cases)
-        || Option.is_some (P.spareImmediateSumSentinel name args sums.P.cases)
-    | _ -> false
-  in
-  let transparent = function
-    | AST.TSum (name, args) ->
-        P.transparentSumPayloadType name args sums.P.cases
-    | _ -> None
-  in
-  let absentWord = function
-    | AST.TSum (name, args) ->
-        Option.value ~default:0L
-          (P.spareImmediateSumSentinel name args sums.P.cases)
-    | _ -> 0L
-  in
-  let spare = function
-    | AST.TSum (name, args) ->
-        Option.is_some (P.spareImmediateSumSentinel name args sums.P.cases)
-    | _ -> false
-  in
   let resolveFields ?(records = true) ?(canonical = true) id typ =
     match variant id typ with
     | None ->
@@ -483,10 +456,10 @@ let lowerMatch (toANFCore : LoweringCallbacks.expressionLowerer)
               Ok (env, bindings, gen)
             else
               let pat, ptype = payload pats fields in
+              let tag = constructorTag id in
               let id, gen = A.freshVar gen in
               collect mode pat (A.Var id) ptype env
-                (append
-                   [ (id, P.sumPayloadExpr typ ptype source sums.P.cases) ])
+                (append [ (id, P.sumPayloadExpr ~tag typ ptype source) ])
                 gen)
     | C.PList pats | C.PListCons (pats, _) ->
         let isCons = match pat with C.PListCons _ -> true | _ -> false in
@@ -733,7 +706,9 @@ let lowerMatch (toANFCore : LoweringCallbacks.expressionLowerer)
                 Ok
                   ( K.wrapBindings
                       [
-                        (raw, P.sumPayloadExpr typ ptype source sums.P.cases);
+                        ( raw,
+                          P.sumPayloadExpr ~tag:(constructorTag id) typ ptype
+                            source );
                         (typed, A.TypedAtom (A.Var raw, ptype));
                       ]
                       body,
@@ -998,7 +973,7 @@ let lowerMatch (toANFCore : LoweringCallbacks.expressionLowerer)
             Error
               ("Unknown constructor tag in pattern: "
               ^ string_of_int (constructorTag id))
-        | Some (name, params, tag, fields) -> (
+        | Some (_, params, tag, fields) -> (
             let fields =
               match typ with
               | AST.TSum (_, args) when List.length params = List.length args ->
@@ -1016,50 +991,10 @@ let lowerMatch (toANFCore : LoweringCallbacks.expressionLowerer)
             in
             if List.length pats <> List.length fields then
               single (A.Atom (A.BoolLiteral false)) gen
-            else if unboxed typ then
-              let cmp, vg1 = A.freshVar gen in
-              let expression =
-                A.Prim
-                  ( (if pats = [] then A.Eq else A.Neq),
-                    source,
-                    int (absentWord typ) )
-              in
-              match pats with
-              | [] -> Ok (Some (A.Var cmp, [ (cmp, expression) ], vg1))
-              | [ pat ] -> (
-                  let value, bindings, gen =
-                    match ptype with
-                    | Some typ' when spare typ ->
-                        let id, gen = A.freshVar vg1 in
-                        (A.Var id, [ (id, A.TypedAtom (source, typ')) ], gen)
-                    | _ -> (source, [], vg1)
-                  in
-                  let* inner = buildPatternComparison pat value ptype gen in
-                  match inner with
-                  | None -> Ok (Some (A.Var cmp, [ (cmp, expression) ], vg1))
-                  | Some (condition, innerBindings, gen) ->
-                      let id, gen = A.freshVar gen in
-                      Ok
-                        (Some
-                           ( A.Var id,
-                             [ (cmp, expression) ]
-                             @ bindings @ innerBindings
-                             @ [ (id, A.Prim (A.And, A.Var cmp, condition)) ],
-                             gen )))
-              | _ ->
-                  Crash.crash "Unboxed two-case sum must have one payload field"
-            else if Option.is_some (transparent typ) then
-              match pats with
-              | [ pat ] -> buildPatternComparison pat source ptype gen
-              | _ -> Crash.crash "Transparent sum must have one field"
-            else if hasPayload name then
-              let tagId, gen = A.freshVar gen in
+            else
               let cmp, gen = A.freshVar gen in
               let bindings =
-                [
-                  (tagId, A.TupleGet (source, 0));
-                  (cmp, A.Prim (A.Eq, A.Var tagId, int (Int64.of_int tag)));
-                ]
+                [ (cmp, P.sumTestExpr ~tag typ source sums.P.cases) ]
               in
               match pats with
               | [] -> Ok (Some (A.Var cmp, bindings, gen))
@@ -1081,24 +1016,18 @@ let lowerMatch (toANFCore : LoweringCallbacks.expressionLowerer)
                              bindings
                              @ [
                                  ( value,
-                                   P.sumPayloadExpr typ
+                                   P.sumPayloadExpr ~tag typ
                                      (match ptype with
                                      | Some typ -> typ
                                      | None ->
                                          Crash.crash
                                            "Constructor payload pattern lost \
                                             its type")
-                                     source sums.P.cases );
+                                     source );
                                ]
                              @ innerBindings
                              @ [ (id, A.Prim (A.And, A.Var cmp, condition)) ],
-                             gen )))
-            else
-              match pats with
-              | [] -> single (A.Prim (A.Eq, source, int (Int64.of_int tag))) gen
-              | _ ->
-                  Error
-                    "Type checking accepted fields for a nullary constructor"))
+                             gen )))))
     | C.PTuple pats ->
         let rec andAll conditions gen bindings =
           match conditions with
@@ -1632,52 +1561,7 @@ let lowerMatch (toANFCore : LoweringCallbacks.expressionLowerer)
     | C.PConstructor (id, pats)
       when pats <> [] && not (List.for_all patternAlwaysMatches pats) -> (
         match variant id typ with
-        | Some (name, params, _, fields) when unboxed typ -> (
-            match pats with
-            | [ pat ] ->
-                let cmp, gen = A.freshVar gen in
-                let stage =
-                  ( [ (cmp, A.Prim (A.Neq, source, int (absentWord typ))) ],
-                    A.Var cmp )
-                in
-                let ptype =
-                  match typ with
-                  | AST.TSum (_, args) -> (
-                      match
-                        P.nullablePointerSumPayloadType name args sums.P.cases
-                      with
-                      | Some typ -> Some typ
-                      | None -> (
-                          match fields with
-                          | [ field ] when List.length params = List.length args
-                            ->
-                              Some
-                                (substituteTypeParams
-                                   (M.of_seq
-                                      (List.to_seq (List.combine params args)))
-                                   field)
-                          | _ ->
-                              Crash.crash
-                                "Unboxed two-case sum must have one payload \
-                                 field"))
-                  | _ -> None
-                in
-                let source, bindings, gen =
-                  match ptype with
-                  | Some ptype when spare typ ->
-                      let id, gen = A.freshVar gen in
-                      (A.Var id, [ (id, A.TypedAtom (source, ptype)) ], gen)
-                  | _ -> (source, [], gen)
-                in
-                let* inner, gen = buildPatternStages pat source ptype gen in
-                Ok (stage :: prependBindings bindings inner, gen)
-            | _ ->
-                Crash.crash "Unboxed two-case sum must have one payload field")
-        | Some _ when Option.is_some (transparent typ) -> (
-            match pats with
-            | [ pat ] -> buildPatternStages pat source (transparent typ) gen
-            | _ -> Crash.crash "Transparent sum must have one field")
-        | Some (name, params, tag, fields) when hasPayload name ->
+        | Some (_, params, tag, fields) ->
             let fields =
               match typ with
               | AST.TSum (_, args) when List.length params = List.length args ->
@@ -1688,15 +1572,10 @@ let lowerMatch (toANFCore : LoweringCallbacks.expressionLowerer)
               | _ -> fields
             in
             let inner, ptype = payload pats fields in
-            let tagId, gen = A.freshVar gen in
             let cmp, gen = A.freshVar gen in
             let value, gen = A.freshVar gen in
             let stage =
-              ( [
-                  (tagId, A.TupleGet (source, 0));
-                  (cmp, A.Prim (A.Eq, A.Var tagId, int (Int64.of_int tag)));
-                ],
-                A.Var cmp )
+              ([ (cmp, P.sumTestExpr ~tag typ source sums.P.cases) ], A.Var cmp)
             in
             if pats = [] then Ok ([ stage ], gen)
             else
@@ -1706,9 +1585,7 @@ let lowerMatch (toANFCore : LoweringCallbacks.expressionLowerer)
               Ok
                 ( stage
                   :: prependBindings
-                       [
-                         (value, P.sumPayloadExpr typ ptype source sums.P.cases);
-                       ]
+                       [ (value, P.sumPayloadExpr ~tag typ ptype source) ]
                        stages,
                   gen )
         | _ -> flat ())

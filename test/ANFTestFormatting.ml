@@ -492,8 +492,9 @@ and aNF_cExpr (value : ANF.cExpr) =
       union "CExpr" "SumConstant" [ aNF_sumDescriptor sum; int32 tag ]
   | ANF.SumAlloc (variant, value) ->
       union "CExpr" "SumAlloc" [ aNF_variantDescriptor variant; aNF_atom value ]
-  | ANF.SumTag (sum, value) ->
-      union "CExpr" "SumTag" [ aNF_sumDescriptor sum; aNF_atom value ]
+  | ANF.SumTest (sum, tag, value) ->
+      union "CExpr" "SumTest"
+        [ aNF_sumDescriptor sum; int32 tag; aNF_atom value ]
   | ANF.SumPayload (variant, value) ->
       union "CExpr" "SumPayload"
         [ aNF_variantDescriptor variant; aNF_atom value ]

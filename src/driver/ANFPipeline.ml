@@ -247,7 +247,12 @@ let buildAnf ?(asyncDefinitions = StringOrder.Map.empty) ?asyncRuntime verbosity
   let nonInlineableFunctionNames =
     F.union nonInlineableFunctionNames helperNames
   in
-  let functions = lowered.LowerAsyncDemands.functions in
+  let functions =
+    LowerSumRepresentations.lower
+      (LoweringPrimitives.sumRepresentationIndex
+         registries.AST_to_ANF.variantLookup)
+      lowered.LowerAsyncDemands.functions
+  in
   let nextFunctionOrdinal = lowered.LowerAsyncDemands.nextFunctionOrdinal in
   let registries =
     {

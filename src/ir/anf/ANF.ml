@@ -314,7 +314,7 @@ type cExpr =
   | TupleGet of atom * int
   | SumConstant of sumDescriptor * int
   | SumAlloc of variantDescriptor * atom
-  | SumTag of sumDescriptor * atom
+  | SumTest of sumDescriptor * int * atom
   | SumPayload of variantDescriptor * atom
   | RecordAlloc of recordDescriptor * atom list
   | RecordGet of recordDescriptor * atom * int

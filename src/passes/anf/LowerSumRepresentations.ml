@@ -77,10 +77,11 @@ let lower representations functions =
               (descriptor variant.A.sum variant.A.payloadType, value, 1)
         in
         ([ (id, expression) ], gen)
-    | A.SumTag (sum, value) -> (
+    | A.SumTest (sum, expected, value) -> (
         let variants = cases representations sum in
         match variants with
-        | [ variant ] -> ([ (id, A.Atom (tag variant.P.tag)) ], gen)
+        | [ variant ] ->
+            ([ (id, A.Atom (A.BoolLiteral (variant.P.tag = expected))) ], gen)
         | _ -> (
             match absent sum with
             | Some word -> (
@@ -89,25 +90,26 @@ let lower representations functions =
                     List.filter (fun case -> case.P.fields <> []) variants )
                 with
                 | [ empty ], [ present ] ->
-                    let condition, gen = A.freshVar gen in
-                    ( [
-                        (condition, A.Prim (A.Eq, value, integer word));
-                        ( id,
-                          A.IfValue
-                            (A.Var condition, tag empty.P.tag, tag present.P.tag)
-                        );
-                      ],
-                      gen )
+                    let expression =
+                      if expected = empty.P.tag then
+                        A.Prim (A.Eq, value, integer word)
+                      else if expected = present.P.tag then
+                        A.Prim (A.Neq, value, integer word)
+                      else A.Atom (A.BoolLiteral false)
+                    in
+                    ([ (id, expression) ], gen)
                 | _ ->
                     Crash.crash
                       "Compact sum has inconsistent constructor metadata")
             | None ->
-                let expression =
-                  if List.exists (fun case -> case.P.fields <> []) variants then
-                    A.TupleGet (value, 0)
-                  else A.TypedAtom (value, AST.TInt64)
-                in
-                ([ (id, expression) ], gen)))
+                if List.exists (fun case -> case.P.fields <> []) variants then
+                  let actual, gen = A.freshVar gen in
+                  ( [
+                      (actual, A.TupleGet (value, 0));
+                      (id, A.Prim (A.Eq, A.Var actual, tag expected));
+                    ],
+                    gen )
+                else ([ (id, A.Prim (A.Eq, value, tag expected)) ], gen)))
     | _ -> ([ (id, expression) ], gen)
   in
   let rec body gen = function

@@ -331,7 +331,7 @@ let renameCExpr mapping cexpr =
   | TupleGet (tuple, idx) -> TupleGet (r tuple, idx)
   | SumConstant _ -> cexpr
   | SumAlloc (variant, value) -> SumAlloc (variant, r value)
-  | SumTag (sum, value) -> SumTag (sum, r value)
+  | SumTest (sum, tag, value) -> SumTest (sum, tag, r value)
   | SumPayload (variant, value) -> SumPayload (variant, r value)
   | RecordAlloc (descriptor, fields) ->
       RecordAlloc (descriptor, List.map r fields)
