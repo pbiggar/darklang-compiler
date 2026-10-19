@@ -681,6 +681,9 @@ let lowerMatch (toANFCore : LoweringCallbacks.expressionLowerer)
         let id, gen = A.freshVar gen in
         let* body, gen = anf body gen (R.BindingMap.add name (id, typ) env) in
         Ok (A.Let (id, A.Atom source, body), gen)
+    | C.PConstructor (_, pats)
+      when not (List.exists patternBindsVariablesEarly pats) ->
+        anf body gen env
     | C.PConstructor (id, pats) -> (
         match pats with
         | [] -> anf body gen env

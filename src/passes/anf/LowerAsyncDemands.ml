@@ -303,6 +303,12 @@ let lower registry names ids sumShapes nextFunctionOrdinal externalDefinitions
     | Some name -> AsyncSourceHooks.isProducerName name
     | None -> false
   in
+  let producerStorage stores callee arguments =
+    match (name callee, arguments) with
+    | Some name, [ _; argument ] when specialized delayName name ->
+        lookup stores argument
+    | _ -> None
+  in
   if not (F.exists (fun id _ -> producer id) names) then
     Ok { functions; nextFunctionOrdinal; sumShapes }
   else
@@ -944,8 +950,14 @@ let lower registry names ids sumShapes nextFunctionOrdinal externalDefinitions
                   listResult (lookup env list) storage result
                 in
                 Ok (state, value, stored)
-            | A.Call (callee, _) when producer callee ->
-                Ok (state, Some (originalResult callee), None)
+            | A.Call (callee, arguments) when producer callee ->
+                let stored = producerStorage stores callee arguments in
+                let payload =
+                  match stored with
+                  | None -> originalResult callee
+                  | Some storage -> storageType storage (originalResult callee)
+                in
+                Ok (state, Some payload, stored)
             | A.ClosureAlloc (callee, captures) when eligible callee ->
                 let current = summary state callee in
                 let* captures =
@@ -2027,6 +2039,7 @@ let lower registry names ids sumShapes nextFunctionOrdinal externalDefinitions
               | A.BorrowedCall (callee, args)
               | A.TailCall (callee, args) ->
                   (not (eligible callee))
+                  && (not (producer callee))
                   && Option.is_none builder && Option.is_none mapping
                   && Option.is_none folding
                   && Option.is_none (listCall stores callee args)
@@ -2069,6 +2082,8 @@ let lower registry names ids sumShapes nextFunctionOrdinal externalDefinitions
           in
           let* storedValue =
             match operation with
+            | A.Call (callee, arguments) when producer callee ->
+                Ok (producerStorage stores callee arguments)
             | _ when Option.is_some folding ->
                 let folding =
                   match folding with
@@ -2457,7 +2472,13 @@ let lower registry names ids sumShapes nextFunctionOrdinal externalDefinitions
                     None,
                     gen )
             | A.Call (callee, arguments) when producer callee ->
-                let* value = info (originalResult callee) in
+                let source = originalResult callee in
+                let payload =
+                  match storedValue with
+                  | None -> source
+                  | Some storage -> storageType storage source
+                in
+                let* value = info payload in
                 let* operation, before, gen =
                   match (name callee, arguments) with
                   | Some name, [ argument ] when specialized transportName name
@@ -2472,8 +2493,17 @@ let lower registry names ids sumShapes nextFunctionOrdinal externalDefinitions
                   | Some name, [ delay; argument ]
                     when specialized delayName name ->
                       let delay, before, gen = forceAtom env delay gen in
-                      let argument, added, gen =
-                        prepare value.payload argument gen
+                      let expected =
+                        match storedValue with
+                        | None -> Pending
+                        | Some storage ->
+                            PendingStored
+                              (AsyncTransport.mapStorage (fun _ -> ()) storage)
+                      in
+                      let* argument, added, gen =
+                        prepareValue expected source argument
+                          (modeOf env stores argument)
+                          gen
                       in
                       let* delayHelper =
                         helper "Darklang.Stdlib.__Task.__delayValueCurrent"

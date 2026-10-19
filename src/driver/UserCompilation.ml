@@ -523,6 +523,7 @@ let compileUserWithPlan ?writtenSources (plan : P.userCompilePlan) =
       let startRegistry =
         { startRegistry with AST_to_ANF.rcSumShapeReg = sumShapes }
       in
+      let registry = { registry with AST_to_ANF.rcSumShapeReg = sumShapes } in
       let* allocated, summaries =
         NativePipeline.lowerToAllocatedLirWithKnownGroups through
           plan.P.baseContext.X.target plan.P.verbosity plan.P.options elapsed
@@ -720,6 +721,33 @@ let compileUserWithPlan ?writtenSources (plan : P.userCompilePlan) =
                   info.Types.variants;
             })
           env.Types.indexedSumTypeReg
+      in
+      let variants =
+        M.fold
+          (fun name (owner, typeParams, tag, fields) variants ->
+            let variant =
+              {
+                LIR.name;
+                tag;
+                payload =
+                  (match fields with
+                  | [] -> None
+                  | [ field ] -> Some field
+                  | fields -> Some (AST.TTuple fields));
+                fieldCount = List.length fields;
+              }
+            in
+            M.update owner
+              (fun existing ->
+                let previous =
+                  match existing with
+                  | None -> []
+                  | Some info -> info.LIR.variants
+                in
+                Some { LIR.typeParams; variants = variant :: previous })
+              variants)
+          (AsyncSumStorage.physicalVariantLookup registry.R.rcSumShapeReg)
+          variants
       in
       let allocatedProgram =
         LIR.Program (all, variants, registry.R.recordFieldsReg)
