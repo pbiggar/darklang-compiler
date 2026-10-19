@@ -77,7 +77,10 @@ type dictionaryCall = {
   dictionarySourceResult : AST.semanticType;
 }
 
+type dictionaryMappingKind = MapDictionaryValues | FilterDictionaryValues
+
 type dictionaryMapping = {
+  dictionaryMappingKind : dictionaryMappingKind;
   mappedDictionary : A.atom;
   dictionaryCallback : A.atom;
   dictionaryCallbackTarget : AST.functionId;
@@ -753,15 +756,21 @@ let lower registry names ids sumShapes nextFunctionOrdinal externalDefinitions
       | A.Call (callee, [ dict; callback ])
       | A.BorrowedCall (callee, [ dict; callback ])
       | A.TailCall (callee, [ dict; callback ]) -> (
-          let isMap =
+          let kind =
             match name callee with
-            | Some name ->
-                specialized "Darklang.Stdlib.Dict.map" name
-                || specialized "Darklang.Stdlib.Dict.__map" name
-            | None -> false
+            | Some name
+              when specialized "Darklang.Stdlib.Dict.map" name
+                   || specialized "Darklang.Stdlib.Dict.__map" name ->
+                Some MapDictionaryValues
+            | Some name
+              when specialized "Darklang.Stdlib.Dict.filter" name
+                   || specialized "Darklang.Stdlib.Dict.__filter" name ->
+                Some FilterDictionaryValues
+            | None -> None
+            | Some _ -> None
           in
-          match (isMap, callable fn callback) with
-          | true, Some target
+          match (kind, callable fn callback) with
+          | Some kind, Some target
             when eligible target && not (S.mem target nativeEntries) -> (
               match F.tryFind target definitions with
               | Some { A.typedParams = [ _; key; value ]; returnType; _ } ->
@@ -779,6 +788,7 @@ let lower registry names ids sumShapes nextFunctionOrdinal externalDefinitions
                   then
                     Some
                       {
+                        dictionaryMappingKind = kind;
                         mappedDictionary = dict;
                         dictionaryCallback = callback;
                         dictionaryCallbackTarget = target;
@@ -800,9 +810,14 @@ let lower registry names ids sumShapes nextFunctionOrdinal externalDefinitions
           Crash.crash "Async dictionary callback has an inconsistent signature"
     in
     let dictionaryMappingResult state mapping =
-      let _, _, result = dictionaryMappingModes state mapping in
-      ( AST.TDict (mapping.mapKeyType, mapping.mapOutputType),
-        dictionaryMode mapping.mapKeyType mapping.mapOutputType result )
+      let _, input, result = dictionaryMappingModes state mapping in
+      let valueType, valueMode =
+        match mapping.dictionaryMappingKind with
+        | MapDictionaryValues -> (mapping.mapOutputType, result)
+        | FilterDictionaryValues -> (mapping.mapInputType, input)
+      in
+      ( AST.TDict (mapping.mapKeyType, valueType),
+        dictionaryMode mapping.mapKeyType valueType valueMode )
     in
     let mappingCall fn env stores state = function
       | A.Call (callee, [ listValue; callback ])
@@ -2086,6 +2101,95 @@ let lower registry names ids sumShapes nextFunctionOrdinal externalDefinitions
                 generatedFunctions = definition :: gen.generatedFunctions;
               } )
     in
+    (* Dictionary keys stay concrete in HAMT storage, even when a shared
+       callback accepts a carrier elsewhere. Predicate decisions, unlike map
+       results, must be concrete before the library chooses an entry. *)
+    let dictionaryCallbackAdapter mapping keyMode inputType outputType gen =
+      let keyType = mapping.mapKeyType in
+      let callbackKeyType = AsyncTransport.physicalType keyMode keyType in
+      let returnType =
+        match mapping.dictionaryMappingKind with
+        | MapDictionaryValues -> outputType
+        | FilterDictionaryValues -> AST.TBool
+      in
+      let cacheKey =
+        SpecializationIdentity.specName "__dark_async_dictionary_callback"
+          [ keyType; callbackKeyType; inputType; outputType; returnType ]
+      in
+      match Names.find_opt cacheKey gen.mappers with
+      | Some adapter -> Ok (adapter, gen)
+      | None ->
+          let adapter =
+            {
+              id = AST.functionId gen.cursor;
+              name =
+                "__dark_async_dictionary_callback_" ^ Int64.to_string gen.cursor;
+            }
+          in
+          let gen =
+            {
+              gen with
+              cursor = Int64.succ gen.cursor;
+              mappers = Names.add cacheKey adapter gen.mappers;
+            }
+          in
+          let environment, gen = freshVar gen in
+          let key, gen = freshVar gen in
+          let value, gen = freshVar gen in
+          let callback, gen = freshVar gen in
+          let* preparedKey, before, gen =
+            prepareValue keyMode keyType (A.Var key) Concrete gen
+          in
+          let called, gen = freshVar gen in
+          let* result, after, gen =
+            if outputType = returnType then Ok (A.Var called, [], gen)
+            else
+              let* force =
+                helper "Darklang.Stdlib.__Task.__forceCurrent" AST.TBool
+              in
+              let result, gen = freshVar gen in
+              Ok
+                ( A.Var result,
+                  [ (result, A.Call (force, [ A.Var called ])) ],
+                  gen )
+          in
+          let callbackType =
+            AST.TFunction ([ callbackKeyType; inputType ], outputType)
+          in
+          let definition =
+            {
+              A.id = adapter.id;
+              name = adapter.name;
+              typedParams =
+                [
+                  {
+                    A.id = environment;
+                    typ = AST.TTuple [ AST.TInt64; callbackType ];
+                  };
+                  { A.id = key; typ = keyType };
+                  { A.id = value; typ = inputType };
+                ];
+              returnType;
+              returnOwnership = A.OwnedReturn;
+              body =
+                wraps
+                  (((callback, A.TupleGet (A.Var environment, 1)) :: before)
+                  @ [
+                      ( called,
+                        A.ClosureCall
+                          (A.Var callback, [ preparedKey; A.Var value ]) );
+                    ]
+                  @ after)
+                  (A.Return result);
+            }
+          in
+          Ok
+            ( adapter,
+              {
+                gen with
+                generatedFunctions = definition :: gen.generatedFunctions;
+              } )
+    in
     let rec materializeSlot slot atom gen =
       match slot with
       | None -> Ok (atom, [], gen)
@@ -2584,11 +2688,6 @@ let lower registry names ids sumShapes nextFunctionOrdinal externalDefinitions
                 let keyMode, inputMode, outputMode =
                   dictionaryMappingModes summaries mapping
                 in
-                let* () =
-                  if changed keyMode then
-                    unsupported fn.A.name "a dictionary callback key interface"
-                  else Ok ()
-                in
                 let inputType =
                   AsyncTransport.physicalType inputMode mapping.mapInputType
                 in
@@ -2596,8 +2695,13 @@ let lower registry names ids sumShapes nextFunctionOrdinal externalDefinitions
                   AsyncTransport.physicalType outputMode mapping.mapOutputType
                 in
                 let* callee =
-                  helperTypes "Darklang.Stdlib.Dict.map"
-                    [ mapping.mapKeyType; inputType; outputType ]
+                  match mapping.dictionaryMappingKind with
+                  | MapDictionaryValues ->
+                      helperTypes "Darklang.Stdlib.Dict.map"
+                        [ mapping.mapKeyType; inputType; outputType ]
+                  | FilterDictionaryValues ->
+                      helperTypes "Darklang.Stdlib.Dict.filter"
+                        [ mapping.mapKeyType; inputType ]
                 in
                 let actual = modeOf env stores mapping.mappedDictionary in
                 let dictionary, before, gen =
@@ -2619,9 +2723,30 @@ let lower registry names ids sumShapes nextFunctionOrdinal externalDefinitions
                 let callback, forced, gen =
                   forceAtom env mapping.dictionaryCallback gen
                 in
+                let* callback, adapterBindings, gen =
+                  let needsPredicateForce =
+                    match (mapping.dictionaryMappingKind, outputMode) with
+                    | FilterDictionaryValues, Pending -> true
+                    | FilterDictionaryValues, (Stored _ | PendingStored _) ->
+                        Crash.crash
+                          "Async dictionary predicate has a non-Boolean layout"
+                    | _ -> false
+                  in
+                  if changed keyMode || needsPredicateForce then
+                    let* adapter, gen =
+                      dictionaryCallbackAdapter mapping keyMode inputType
+                        outputType gen
+                    in
+                    let closure, gen = freshVar gen in
+                    Ok
+                      ( A.Var closure,
+                        [ (closure, A.ClosureAlloc (adapter.id, [ callback ])) ],
+                        gen )
+                  else Ok (callback, [], gen)
+                in
                 Ok
                   ( A.Call (callee, [ dictionary; callback ]),
-                    before @ added @ forced,
+                    before @ added @ forced @ adapterBindings,
                     None,
                     gen )
             | _ when Option.is_some dictionary ->
