@@ -1,0 +1,27 @@
+// async_callback_forwarding.e2e - Known callbacks retain demand semantics through source helper chains.
+
+let forwardedApply (callback: Int64 -> Int64) (value: Int64) : Int64 = callback value
+let forwardedOnce (callback: Int64 -> Int64) (value: Int64) : Int64 = forwardedApply callback value
+let forwardedChain (callback: Int64 -> Int64) (value: Int64) : Int64 = forwardedOnce callback (forwardedOnce callback value)
+let forwardedRepeat (count: Int64) (callback: Int64 -> Int64) (value: Int64) : Int64 =
+  if count == 0L then value else forwardedRepeat (count - 1L) callback (forwardedOnce callback value)
+let forwardedBoth (first: Int64 -> Int64) (second: Int64 -> Int64) (value: Int64) : Int64 = forwardedOnce second (forwardedOnce first value)
+let forwardedDuplicate (callback: Int64 -> Int64) (value: Int64) : Int64 = forwardedBoth callback callback value
+let forwardedStringApply (callback: Unit -> String) : String = callback ()
+let forwardedString (callback: Unit -> String) : String = forwardedStringApply callback
+let forwardedFloatApply (callback: Float -> Float) (value: Float) : Float = callback value
+let forwardedFloat (callback: Float -> Float) (value: Float) : Float = forwardedFloatApply callback value
+let forwardedMap (values: List<Int64>) (callback: Int64 -> Int64) : List<Int64> =
+  match values with
+  | [] -> []
+  | head :: tail -> Stdlib.List.push (forwardedMap tail callback) (forwardedOnce callback head)
+
+Stdlib.__Task.__runMain (fun _unit -> let gate = Stdlib.__Async.__new<Int64> () in let value = Stdlib.__Task.__transport (Stdlib.__Async.__pending gate) in forwardedOnce (fun ignored -> 42L) value) = 42L // forwarding does not demand an ignored pending argument; leak_check
+Stdlib.__Task.__runMain (fun _unit -> let gate = Stdlib.__Async.__new<Int64> () in let value = Stdlib.__Task.__transport (Stdlib.__Async.__pending gate) in let result = forwardedChain (fun ignored -> value) 1L in let _ = Stdlib.__Task.__resolve (__fiber_current ()) gate 42L in result) = 42L // pending captures and results cross multiple helper boundaries before resolution; leak_check
+Stdlib.__Task.__runMain (fun _unit -> let gate = Stdlib.__Async.__new<Int64> () in let value = Stdlib.__Task.__transport (Stdlib.__Async.__pending gate) in let result = forwardedRepeat 3L (fun ignored -> value) 1L in let _ = Stdlib.__Task.__resolve (__fiber_current ()) gate 42L in result) = 42L // recursive helpers forward a callback and retain pending intermediate results; leak_check
+Stdlib.__Task.__runMain (fun _unit -> let gate = Stdlib.__Async.__new<Int64> () in let value = Stdlib.__Task.__transport (Stdlib.__Async.__pending gate) in forwardedBoth (fun ignored -> value) (fun ignored -> 42L) 1L) = 42L // two forwarded callbacks need independent captures and demand interfaces; leak_check
+Stdlib.__Task.__runMain (fun _unit -> let gate = Stdlib.__Async.__new<Int64> () in let value = Stdlib.__Task.__transport (Stdlib.__Async.__pending gate) in let result = forwardedDuplicate (fun ignored -> value) 1L in let _ = Stdlib.__Task.__resolve (__fiber_current ()) gate 42L in result) = 42L // a callback can be forwarded into two parameters of the same helper; leak_check
+Stdlib.__Task.__runMain (fun _unit -> let gate = Stdlib.__Async.__new<String> () in let value = Stdlib.__Task.__transport (Stdlib.__Async.__pending gate) in let result = forwardedString (fun _ -> value) in let _ = Stdlib.__Task.__resolve (__fiber_current ()) gate "ready" in result) = "ready" // managed captures survive forwarding and release their references; leak_check
+Stdlib.__Task.__runMain (fun _unit -> let gate = Stdlib.__Async.__new<Float> () in let value = Stdlib.__Task.__transport (Stdlib.__Async.__pending gate) in let child = Stdlib.__Task.__startCurrent (fun _ -> Stdlib.__Task.__resolve (__fiber_current ()) gate 40.25) in forwardedFloat (fun number -> number + 2.0) value) = 42.25 // the final callback demands an inspected floating point input; leak_check
+Stdlib.__Task.__runMain (fun _unit -> let gate = Stdlib.__Async.__new<Int64> () in let value = Stdlib.__Task.__transport (Stdlib.__Async.__pending gate) in forwardedMap [] (fun ignored -> value)) = [] // empty recursive traversals never demand a forwarded callback result; leak_check
+Stdlib.__Task.__runMain (fun _unit -> let gate = Stdlib.__Async.__new<Int64> () in let value = Stdlib.__Task.__transport (Stdlib.__Async.__pending gate) in let callback = fun ignored -> 21L in forwardedOnce callback 1L + forwardedOnce callback value) = 42L // forwarding retains shared concrete and pending calls without optional inlining; disable_opt_inline=true; leak_check
