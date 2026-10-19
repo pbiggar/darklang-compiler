@@ -31,6 +31,7 @@ type shape = {
 
 type rewrittenCallable = {
   target : AST.functionId;
+  sourceTarget : AST.functionId;
   convention : convention;
   captures : A.typedParam list;
 }
@@ -336,6 +337,64 @@ let closureCallArity parameter helper =
       | _ -> None)
     (operations helper)
 
+(* A callback may be invoked, ignored, or forwarded to another source helper.
+   Visit parameter positions rather than paths so recursive forwarding cycles
+   terminate without imposing an optimization budget on interface correctness. *)
+let helperUsesOnlyForwarding purpose definitions arity helper index =
+  let rec check seen (helper : S.functionDef) index =
+    match tryItem index helper.S.typedParams with
+    | None -> false
+    | Some parameter -> (
+        let visited =
+          Option.value ~default:IntSet.empty
+            (FunctionIdMap.tryFind helper.S.id seen)
+        in
+        if IntSet.mem index visited then true
+        else
+          match parameter.A.typ with
+          | AST.TFunction (arguments, _) when List.length arguments = arity ->
+              let seen =
+                FunctionIdMap.add helper.S.id (IntSet.add index visited) seen
+              in
+              let allowed = function
+                | A.ClosureCall (A.Var id, args)
+                | A.ClosureTailCall (A.Var id, args)
+                  when id = parameter.A.id ->
+                    List.length args = arity
+                    && not (List.exists (atomUses parameter.A.id) args)
+                | (A.Call (callee, args)
+                  | A.BorrowedCall (callee, args)
+                  | A.TailCall (callee, args)) as operation
+                  when operationUses parameter.A.id operation -> (
+                    match FunctionIdMap.tryFind callee definitions with
+                    | Some target
+                      when helperAllowed purpose callee
+                           && List.length args
+                              = List.length target.S.typedParams ->
+                        List.for_all
+                          (fun (index, atom) ->
+                            if not (atomUses parameter.A.id atom) then true
+                            else
+                              match atom with
+                              | A.Var id when id = parameter.A.id ->
+                                  check seen target index
+                              | _ -> false)
+                          (List.mapi (fun index atom -> (index, atom)) args)
+                    | _ -> false)
+                | operation ->
+                    not (operationUses parameter.A.id operation)
+              in
+              S.LabelMap.for_all
+                (fun _ block ->
+                  List.for_all
+                    (fun (_, operation) -> allowed operation)
+                    block.S.operations
+                  && not (terminatorUses parameter.A.id block.S.terminator))
+                helper.S.blocks
+          | _ -> false)
+  in
+  check FunctionIdMap.empty helper index
+
 let validArgument purpose definitions (helper : S.functionDef) argument =
   match
     ( tryItem argument.index helper.S.typedParams,
@@ -358,10 +417,15 @@ let validArgument purpose definitions (helper : S.functionDef) argument =
                (List.length (operations target))
              <= maxTargetNodes)
           && targetOk
-          && helperUsesOnlyCalls helper argument.index parameter.A.id
-          && Option.fold ~none:false
-               ~some:(fun arity -> List.length shape.values = arity)
-               (closureCallArity parameter.A.id helper)
+          &&
+          if optimization purpose then
+            helperUsesOnlyCalls helper argument.index parameter.A.id
+            && Option.fold ~none:false
+                 ~some:(fun arity -> List.length shape.values = arity)
+                 (closureCallArity parameter.A.id helper)
+          else
+            helperUsesOnlyForwarding purpose definitions
+              (List.length shape.values) helper argument.index
       | None -> false)
   | _ -> false
 
@@ -425,7 +489,20 @@ let knownFor sites label id =
   Option.value ~default:M.empty
     (Option.bind (S.LabelMap.find_opt label sites) (M.find_opt id))
 
-let requestsInFunction purpose definitions returns (func : S.functionDef) =
+let mergeKnown parameters known =
+  M.union (fun _ parameter _ -> Some parameter) parameters known
+
+let callableParameters (helper : S.functionDef) request =
+  List.fold_left
+    (fun parameters argument ->
+      match tryItem argument.index helper.S.typedParams with
+      | Some parameter -> M.add parameter.A.id argument.callable parameters
+      | None ->
+          Crash.crash "Higher-order specialization lost a callback parameter")
+    M.empty request.arguments
+
+let requestsInFunction ?(parameters = M.empty) ?(forwardedOnly = false)
+    purpose definitions returns (func : S.functionDef) =
   let sites = knownAtOperations definitions returns func in
   S.LabelMap.bindings func.S.blocks
   |> List.concat_map (fun (label, block) ->
@@ -433,14 +510,62 @@ let requestsInFunction purpose definitions returns (func : S.functionDef) =
         (fun (id, operation) ->
           match directCall operation with
           | None -> None
-          | Some (helper, args) -> (
+          | Some (helper, args)
+            when (not forwardedOnly)
+                 || List.exists
+                      (function
+                        | A.Var id -> M.mem id parameters
+                        | _ -> false)
+                      args -> (
               match
-                knownArguments purpose definitions (knownFor sites label id)
-                  helper args
+                knownArguments purpose definitions
+                  (mergeKnown parameters (knownFor sites label id)) helper
+                  args
               with
               | [] -> None
-              | arguments -> Some { helper; arguments }))
+              | arguments -> Some { helper; arguments })
+          | Some _ -> None)
         block.S.operations)
+
+let forwardedRequests purpose definitions returns request =
+  match FunctionIdMap.tryFind request.helper definitions with
+  | Some helper ->
+      requestsInFunction
+        ~parameters:(callableParameters helper request)
+        ~forwardedOnly:true purpose definitions returns helper
+  | None -> Crash.crash "Higher-order forwarding lost a source helper"
+
+let expandRequests purpose definitions returns requests =
+  let add requests request = Keys.add (key request) request requests in
+  let rec visit pending discovered =
+    match Keys.min_binding_opt pending with
+    | None -> Keys.bindings discovered |> List.map snd
+    | Some (requestKey, request) ->
+        let pending = Keys.remove requestKey pending in
+        if Keys.mem requestKey discovered then visit pending discovered
+        else
+          let dependencies =
+            forwardedRequests purpose definitions returns request
+          in
+          visit (List.fold_left add pending dependencies)
+            (Keys.add requestKey request discovered)
+  in
+  visit (List.fold_left add Keys.empty requests) Keys.empty
+
+let retainForwardingDependencies purpose definitions returns requests =
+  let rec retain requests =
+    let keys = Keys.of_list (List.map (fun request -> (key request, ())) requests) in
+    let next =
+      List.filter
+        (fun request ->
+          List.for_all
+            (fun dependency -> Keys.mem (key dependency) keys)
+            (forwardedRequests purpose definitions returns request))
+        requests
+    in
+    if List.length next = List.length requests then requests else retain next
+  in
+  retain requests
 
 let name definitions id =
   match FunctionIdMap.tryFind id definitions with
@@ -541,7 +666,7 @@ let cloneTarget definitions names (callable : callable) =
       typedParams = captures @ targetShape.values;
     }
 
-let cloneHelper definitions names request =
+let cloneHelper purpose definitions returns names requests request =
   let original = required definitions request.helper in
   let indexed =
     List.map
@@ -585,7 +710,12 @@ let cloneHelper definitions names request =
               generatedId names (targetName definitions arg.callable.target)
         in
         let value : rewrittenCallable =
-          { target; convention = arg.callable.convention; captures = own }
+          {
+            target;
+            sourceTarget = arg.callable.target;
+            convention = arg.callable.convention;
+            captures = own;
+          }
         in
         (rest, M.add param.A.id value mapped))
       (captures, M.empty) indexed
@@ -598,7 +728,30 @@ let cloneHelper definitions names request =
   let appended =
     List.map (fun (param : A.typedParam) -> A.Var param.A.id) captures
   in
-  let rewrite (id, operation) =
+  let parameters =
+    M.map
+      (fun (value : rewrittenCallable) ->
+        ({
+          target = value.sourceTarget;
+          captures =
+            List.map (fun (param : A.typedParam) -> A.Var param.A.id)
+              value.captures;
+          convention = value.convention;
+        } : callable))
+      rewritten
+  in
+  let sites =
+    if optimization purpose then S.LabelMap.empty
+    else knownAtOperations definitions returns original
+  in
+  let specialized =
+    Keys.of_list
+      (List.map
+         (fun request ->
+           (key request, generatedId names (helperName definitions request)))
+         requests)
+  in
+  let rewrite label (id, operation) =
     ( id,
       match operation with
       | A.ClosureCall (A.Var param, args) | A.ClosureTailCall (A.Var param, args)
@@ -618,6 +771,29 @@ let cloneHelper definitions names request =
               | A.ClosureTailCall _ ->
                   A.TailCall (callable.target, captureArgs @ args)
               | _ -> A.Call (callable.target, captureArgs @ args)))
+      | (A.Call (callee, args)
+        | A.BorrowedCall (callee, args)
+        | A.TailCall (callee, args))
+        when not (optimization purpose) -> (
+          let known = mergeKnown parameters (knownFor sites label id) in
+          let arguments =
+            knownArguments purpose definitions known callee args
+          in
+          match Keys.find_opt (key { helper = callee; arguments }) specialized with
+          | None -> operation
+          | Some target ->
+              let indexes =
+                IntSet.of_list (List.map (fun arg -> arg.index) arguments)
+              in
+              let args =
+                removeIndexes indexes args
+                @ List.concat_map (fun arg -> arg.callable.captures) arguments
+              in
+              match operation with
+              | A.Call _ -> A.Call (target, args)
+              | A.BorrowedCall _ -> A.BorrowedCall (target, args)
+              | A.TailCall _ -> A.TailCall (target, args)
+              | _ -> Crash.crash "Higher-order forwarding lost a direct call")
       | A.Call (name, args) when name = original.S.id ->
           A.Call (cloneId, removeIndexes indexes args @ appended)
       | A.BorrowedCall (name, args) when name = original.S.id ->
@@ -628,10 +804,15 @@ let cloneHelper definitions names request =
   in
   appendTypes captures
     {
-      (mapOperations rewrite original) with
+      original with
       S.id = cloneId;
       name = generatedName names cloneName;
       typedParams = removeIndexes indexes original.S.typedParams @ captures;
+      blocks =
+        S.LabelMap.mapi
+          (fun label block ->
+            { block with S.operations = List.map (rewrite label) block.S.operations })
+          original.S.blocks;
     }
 
 (*
@@ -730,6 +911,10 @@ let specializeProgramWithExternalFunctionsAndNames ?(purpose = Optimization)
       Keys.empty all
     |> Keys.bindings |> List.map snd
   in
+  let unique =
+    if optimization purpose then unique
+    else expandRequests purpose definitions returns unique
+  in
   let _, requests =
     List.fold_left
       (fun (remaining, retained) request ->
@@ -775,6 +960,10 @@ let specializeProgramWithExternalFunctionsAndNames ?(purpose = Optimization)
                && not (StringOrder.Set.mem target helperNames))
              targets)
       requests
+  in
+  let usable =
+    if optimization purpose then usable
+    else retainForwardingDependencies purpose definitions returns usable
   in
   let names =
     if requests = [] then StringOrder.Map.empty
@@ -843,7 +1032,9 @@ let specializeProgramWithExternalFunctionsAndNames ?(purpose = Optimization)
   in
   let targetCallables = List.rev targets in
   let targets = List.map (cloneTarget definitions names) targetCallables in
-  let helpers = List.map (cloneHelper definitions names) usable in
+  let helpers =
+    List.map (cloneHelper purpose definitions returns names usable) usable
+  in
   let rewritten =
     List.map
       (rewriteKnownCalls purpose definitions returns names usable)
