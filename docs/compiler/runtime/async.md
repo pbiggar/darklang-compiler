@@ -162,8 +162,24 @@ are not demanded. Empty folds return the initial accumulator unchanged. Opaque
 callback interfaces still require diagnostics when their ABI would change. Native
 result adapters map typed demands over the list. List pattern bindings preserve
 element layouts; length and empty checks inspect only the spine, while literal
-comparisons and guards demand the values they inspect. Unmigrated list operations,
-dictionary storage, regular recursive aggregate layouts, untyped value selections, and
+comparisons and guards demand the values they inspect.
+
+Dictionary values likewise carry a physical field layout through literals,
+ordinary calls, captures, updates and merges. Keys remain concrete: insertion,
+membership and lookup demand the key before hashing, but do not demand unrelated
+values. Size, emptiness, keys, values and entry enumeration inspect only the
+dictionary structure; a lookup preserves its selected value's layout inside
+`Option`. Native result adapters materialize retained values. Known `Dict.map`
+callbacks execute eagerly and can leave their results pending. Known `Dict.filter`
+callbacks demand only their Boolean decision; unused value arguments remain
+unresolved, and empty dictionaries never invoke the callback. Both operations
+retain the public library's traversal order. A typed callback adapter reconciles
+concrete dictionary keys with a shared callback's wider key interface. Private sum
+metadata is available before runtime-helper specialization so raw managed slots
+retain and release nested variant values using their actual sum representation.
+
+Unmigrated list and dictionary operations,
+regular recursive aggregate layouts, untyped value selections, and
 escaping callables whose argument or result interface changes still produce
 compilation diagnostics. Outer pendingness also carries the inferred field
 layout. A generated mapper
@@ -369,6 +385,14 @@ counts and demanding its spine only for positive counts.
 `async_list_map.e2e` checks known callbacks that ignore or inspect pending inputs,
 return pending values or records with pending fields, share ready and pending
 call sites, initiate producers eagerly, and retain mixed outer and field layouts.
+
+`async_dict_storage.e2e` and `async_dict_storage_edges.e2e` cover independent
+value demands, pending keys, updates, merges, lookup tags, managed values, nested
+storage, outer pending dictionaries and abandonment. `async_dict_map.e2e` and
+`async_dict_callbacks_edges.e2e` cover eager map invocation, pending callback
+results, filtering decisions, empty dictionaries and shared callback interfaces.
+`async_captured_variant_ownership.e2e` checks captured pending values returned
+inside variants directly and through list callbacks, including leak checking.
 
 `async_list_filter.e2e` covers ignored and inspected inputs, pending and delayed
 Boolean results, shared predicate layouts, tuple field projection, and managed
