@@ -1,0 +1,20 @@
+// async_sum_storage.e2e - Variant tags and payload fields have independent async demands.
+
+type AsyncStoredChoice = AsyncStoredValue of Int64 | AsyncStoredEmpty
+type AsyncStoredPair = AsyncStoredPairValue of (Int64 * String) | AsyncStoredPairEmpty
+let asyncStoredTag (value: AsyncStoredChoice) : Int64 =
+  match value with | AsyncStoredValue _ -> 42L | AsyncStoredEmpty -> 0L
+let asyncStoredResultTag (value: Result<Int64, String>) : Int64 =
+  match value with | Ok _ -> 42L | Error _ -> 0L
+let asyncStoredWrap (value: Int64) : Option<Int64> = Some value
+let asyncStoredChoose (flag: Bool) (value: Int64) : AsyncStoredChoice =
+  if flag then AsyncStoredValue value else AsyncStoredEmpty
+
+Stdlib.__Task.__runMain (fun _unit -> let gate = Stdlib.__Async.__new<Int64> () in let value = Stdlib.__Task.__transport (Stdlib.__Async.__pending gate) in match Some value with | Some _ -> true | None -> false) = true // inspecting an option tag does not demand its pending scalar payload; leak_check
+Stdlib.__Task.__runMain (fun _unit -> let gate = Stdlib.__Async.__new<String> () in let value = Stdlib.__Task.__transport (Stdlib.__Async.__pending gate) in match Some value with | Some _ -> true | None -> false) = true // tag inspection also preserves demand semantics for compact pointer sums; leak_check
+Stdlib.__Task.__runMain (fun _unit -> let gate = Stdlib.__Async.__new<Int64> () in let value = Stdlib.__Task.__transport (Stdlib.__Async.__pending gate) in asyncStoredResultTag (Ok value)) = 42L // result arms keep independently typed pending payloads; leak_check
+Stdlib.__Task.__runMain (fun _unit -> let gate = Stdlib.__Async.__new<Int64> () in let value = Stdlib.__Task.__transport (Stdlib.__Async.__pending gate) in asyncStoredTag (AsyncStoredValue value)) = 42L // user-defined variant payloads cross ordinary source interfaces; leak_check
+Stdlib.__Task.__runMain (fun _unit -> let gate = Stdlib.__Async.__new<Int64> () in let value = Stdlib.__Task.__transport (Stdlib.__Async.__pending gate) in let child = Stdlib.__Task.__startCurrent (fun _ -> Stdlib.__Task.__resolve (__fiber_current ()) gate 40L) in match Some value with | Some number -> number + 2L | None -> 0L) = 42L // inspecting the selected scalar payload demands it at the arithmetic operation; leak_check
+Stdlib.__Task.__runMain (fun _unit -> let gate = Stdlib.__Async.__new<Int64> () in let value = Stdlib.__Task.__transport (Stdlib.__Async.__pending gate) in let result = asyncStoredWrap value in let _ = Stdlib.__Task.__resolve (__fiber_current ()) gate 42L in result) = Some 42L // pending variant payloads can return through a helper before resolution; leak_check
+Stdlib.__Task.__runMain (fun _unit -> let gate = Stdlib.__Async.__new<String> () in let value = Stdlib.__Task.__transport (Stdlib.__Async.__pending gate) in match AsyncStoredPairValue (42L, value) with | AsyncStoredPairValue (answer, _) -> answer | AsyncStoredPairEmpty -> 0L) = 42L // inspecting one field in a variant payload leaves its pending sibling untouched; leak_check
+Stdlib.__Task.__runMain (fun _unit -> let gate = Stdlib.__Async.__new<Int64> () in let value = Stdlib.__Task.__transport (Stdlib.__Async.__pending gate) in asyncStoredTag (asyncStoredChoose true value) + asyncStoredTag (asyncStoredChoose false 0L)) = 42L // constructor joins reconcile pending and empty arms without demanding payloads; leak_check
