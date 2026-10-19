@@ -312,6 +312,10 @@ let lower registry names ids sumShapes nextFunctionOrdinal externalDefinitions
   if not (F.exists (fun id _ -> producer id) names) then
     Ok { functions; nextFunctionOrdinal; sumShapes }
   else
+    let functions = List.map AsyncProjectionPruning.prune functions in
+    let externalDefinitions =
+      Names.map AsyncProjectionPruning.prune externalDefinitions
+    in
     let definitions =
       Names.fold
         (fun _ (fn : A.functionDef) map -> F.add fn.A.id fn map)
