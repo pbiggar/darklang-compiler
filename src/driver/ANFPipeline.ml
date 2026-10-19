@@ -249,8 +249,7 @@ let buildAnf ?(asyncDefinitions = StringOrder.Map.empty) ?asyncRuntime verbosity
   in
   let functions =
     LowerSumRepresentations.lower
-      (LoweringPrimitives.sumRepresentationIndex
-         registries.AST_to_ANF.variantLookup)
+      (AsyncSumStorage.representationIndex registries.AST_to_ANF.rcSumShapeReg)
       lowered.LowerAsyncDemands.functions
   in
   let nextFunctionOrdinal = lowered.LowerAsyncDemands.nextFunctionOrdinal in
