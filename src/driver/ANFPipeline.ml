@@ -188,6 +188,24 @@ let buildAnf ?(asyncDefinitions = StringOrder.Map.empty) ?asyncRuntime verbosity
         })
       asyncRuntime
   in
+  (* Runtime intrinsics recover slot types from specialized names. Publish
+     private variants before source helper conversion, not just to RC planning:
+     otherwise their nominal names are decoded as records and lose sum edges. *)
+  let withAsyncSumShapes (registries : AST_to_ANF.registries) sumShapes =
+    let physicalVariants = AsyncSumStorage.physicalVariantLookup sumShapes in
+    let variantLookup =
+      StringOrder.Map.union
+        (fun _ existing _ -> Some existing)
+        registries.AST_to_ANF.variantLookup physicalVariants
+    in
+    {
+      registries with
+      AST_to_ANF.rcSumShapeReg = sumShapes;
+      variantLookup;
+      sumMetadata =
+        LoweringPrimitives.sumMetadataFromVariantLookup variantLookup;
+    }
+  in
   let rec lowerAsync (registries : AST_to_ANF.registries) nextFunctionOrdinal
       runtime helperNames functions =
     match
@@ -199,18 +217,13 @@ let buildAnf ?(asyncDefinitions = StringOrder.Map.empty) ?asyncRuntime verbosity
     | Ok lowered ->
         Ok
           ( lowered,
-            {
-              registries with
-              AST_to_ANF.rcSumShapeReg = lowered.LowerAsyncDemands.sumShapes;
-            },
+            withAsyncSumShapes registries lowered.LowerAsyncDemands.sumShapes,
             helperNames )
     | Error (LowerAsyncDemands.Diagnostic message) -> Error message
     | Error
         (LowerAsyncDemands.MissingRuntimeSpecializations (requested, sumShapes))
       -> (
-        let registries =
-          { registries with AST_to_ANF.rcSumShapeReg = sumShapes }
-        in
+        let registries = withAsyncSumShapes registries sumShapes in
         match runtime with
         | None ->
             Error
@@ -231,10 +244,8 @@ let buildAnf ?(asyncDefinitions = StringOrder.Map.empty) ?asyncRuntime verbosity
               {
                 context with
                 CompilationContexts.registries =
-                  {
-                    context.CompilationContexts.registries with
-                    AST_to_ANF.rcSumShapeReg = sumShapes;
-                  };
+                  withAsyncSumShapes context.CompilationContexts.registries
+                    sumShapes;
               }
             in
             let provided =
