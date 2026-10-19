@@ -516,9 +516,12 @@ let compileUserWithPlan ?writtenSources (plan : P.userCompilePlan) =
           funcParams = M.add entryName [] registry.R.funcParams;
         }
       in
-      let* _, startSsa, startTypeMap =
+      let* _, startSsa, startTypeMap, sumShapes =
         build startRegistry FunctionIdMap.empty M.empty F.empty
           [ startFunction ] FunctionIdMap.empty false
+      in
+      let startRegistry =
+        { startRegistry with AST_to_ANF.rcSumShapeReg = sumShapes }
       in
       let* allocated, summaries =
         NativePipeline.lowerToAllocatedLirWithKnownGroups through

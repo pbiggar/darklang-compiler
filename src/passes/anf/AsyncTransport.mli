@@ -3,6 +3,7 @@ type storageKind =
   | TupleStorage
   | RecordStorage of ANF.recordDescriptor
   | ListStorage of AST.semanticType
+  | SumStorage of AsyncSumStorage.layout
 
 type 'a storedSlot =
   | PendingSlot of 'a
@@ -24,6 +25,11 @@ val merge : mode -> mode -> (mode, string) result
 val mergeList : mode list -> mode list -> (mode list, string) result
 val mapStorage : ('a -> 'b) -> 'a storage -> 'b storage
 val physicalType : mode -> AST.semanticType -> AST.semanticType
+
+val collectSumShapes :
+  into:MemoryModel.rcSumShapeRegistry ->
+  'a storage ->
+  (MemoryModel.rcSumShapeRegistry, string) result
 
 val instantiateStorage :
   (AST.semanticType -> ('a, 'error) result) ->

@@ -5,6 +5,7 @@ type storageKind =
   | TupleStorage
   | RecordStorage of ANF.recordDescriptor
   | ListStorage of AST.semanticType
+  | SumStorage of AsyncSumStorage.layout
 
 type 'a storedSlot =
   | PendingSlot of 'a
@@ -41,6 +42,7 @@ let compatibleKind left right =
   match (left, right) with
   | TupleStorage, TupleStorage -> true
   | ListStorage left, ListStorage right -> left = right
+  | SumStorage left, SumStorage right -> left = right
   | RecordStorage left, RecordStorage right ->
       left.ANF.valueType = right.ANF.valueType
       && left.ANF.fields = right.ANF.fields
@@ -99,6 +101,10 @@ let sourceFields storage source =
   | ListStorage _, AST.TList element -> [ element ]
   | RecordStorage descriptor, AST.TRecord _ ->
       List.map snd descriptor.ANF.fields
+  | SumStorage layout, AST.TSum (name, args)
+    when name = layout.AsyncSumStorage.source.ANF.sumName
+         && args = layout.AsyncSumStorage.source.ANF.sumArgs ->
+      List.map snd layout.AsyncSumStorage.payloads
   | _ -> Crash.crash "Async transport source type does not match its storage"
 
 let rec physicalType mode source =
@@ -119,10 +125,42 @@ let rec physicalType mode source =
           types storage.fields
       in
       match (storage.kind, types) with
+      | SumStorage layout, types ->
+          let sum, _ = AsyncSumStorage.physical layout types in
+          AST.TSum (sum.ANF.sumName, sum.ANF.sumArgs)
       | ListStorage _, [ element ] -> AST.TList element
       | ListStorage _, _ ->
           Crash.crash "Async list storage has an inconsistent element layout"
       | _ -> AST.TTuple types)
+
+let collectSumShapes ~into storage =
+  let rec collect into (storage : unit storage) =
+    let* into =
+      match storage.kind with
+      | SumStorage layout ->
+          let types = List.map snd layout.AsyncSumStorage.payloads in
+          if List.length types <> List.length storage.fields then
+            Crash.crash "Async sum storage has an inconsistent payload count";
+          let types =
+            List.map2
+              (fun typ slot -> physicalType (slotMode slot) typ)
+              types storage.fields
+          in
+          let sum, shape = AsyncSumStorage.physical layout types in
+          AsyncSumStorage.includePhysicalShapes ~into
+            (StringOrder.Map.singleton sum.ANF.sumName shape)
+      | TupleStorage | RecordStorage _ | ListStorage _ -> Ok into
+    in
+    List.fold_left
+      (fun result slot ->
+        let* into = result in
+        match slot with
+        | Some (NestedStorage nested) | Some (PendingStorage ((), nested)) ->
+            collect into nested
+        | None | Some (PendingSlot ()) -> Ok into)
+      (Ok into) storage.fields
+  in
+  collect into (mapStorage (fun _ -> ()) storage)
 
 let rec instantiateStorage transform storage source =
   let types = sourceFields storage source in

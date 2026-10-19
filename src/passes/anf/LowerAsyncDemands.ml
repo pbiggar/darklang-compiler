@@ -48,6 +48,7 @@ type storageKind = AsyncTransport.storageKind =
   | TupleStorage
   | RecordStorage of A.recordDescriptor
   | ListStorage of AST.semanticType
+  | SumStorage of AsyncSumStorage.layout
 
 type 'a storedSlot = 'a AsyncTransport.storedSlot =
   | PendingSlot of 'a
@@ -122,6 +123,7 @@ type summary = {
   result : mode;
   joins : mode M.t;
   rawLists : mode M.t;
+  physicalSumShapes : MemoryModel.rcSumShapeRegistry;
 }
 
 let changed = AsyncTransport.changed
@@ -179,27 +181,65 @@ let storageField storage index =
   | Some (_, field) -> field
   | None -> Crash.crash "Async storage projection is outside its layout"
 
-let storageFacts env stores operation =
+let sumField storage tag =
+  match storage.kind with
+  | SumStorage layout -> (
+      match AsyncSumStorage.payloadIndex layout tag with
+      | Some index -> storageField storage index
+      | None ->
+          Crash.crash "Async variant projection selected an empty constructor")
+  | _ -> Crash.crash "Async variant projection has a non-variant field layout"
+
+let pendingField = function
+  | Some (PendingSlot value) | Some (PendingStorage (value, _)) -> Some value
+  | None | Some (NestedStorage _) -> None
+
+let storageFacts sumShapes env stores operation =
+  let slot atom =
+    match (lookup env atom, lookup stores atom) with
+    | Some value, Some storage -> Some (PendingStorage (value, storage))
+    | Some value, None -> Some (PendingSlot value)
+    | None, Some storage -> Some (NestedStorage storage)
+    | None, None -> None
+  in
   let allocation kind values =
-    let fields =
-      List.map
-        (fun atom ->
-          match (lookup env atom, lookup stores atom) with
-          | Some value, Some storage -> Some (PendingStorage (value, storage))
-          | Some value, None -> Some (PendingSlot value)
-          | None, Some storage -> Some (NestedStorage storage)
-          | None, None -> None)
-        values
-    in
+    let fields = List.map slot values in
     if List.exists Option.is_some fields then Some { kind; fields } else None
   in
   match operation with
   | A.TupleAlloc values -> allocation TupleStorage values
+  | A.SumAlloc (variant, payload) -> (
+      match slot payload with
+      | None -> None
+      | Some value ->
+          let layout =
+            match AsyncSumStorage.layout sumShapes variant.A.sum with
+            | Ok layout -> layout
+            | Error message -> Crash.crash message
+          in
+          let fields =
+            List.map
+              (fun (tag, _) ->
+                if tag = variant.A.variantTag then Some value else None)
+              layout.AsyncSumStorage.payloads
+          in
+          if not (List.exists Option.is_some fields) then
+            Crash.crash
+              "Async payload constructor is absent from its sum metadata";
+          Some { kind = SumStorage layout; fields })
   | A.RecordAlloc (({ A.valueType = AST.TRecord _; _ } as descriptor), values)
   | A.RecordClone (({ A.valueType = AST.TRecord _; _ } as descriptor), _, values)
     ->
       allocation (RecordStorage descriptor) values
   | A.Atom atom | A.TypedAtom (atom, _) -> lookup stores atom
+  | A.SumPayload (variant, atom) -> (
+      match
+        Option.bind (lookup stores atom) (fun storage ->
+            sumField storage variant.A.variantTag)
+      with
+      | Some (NestedStorage fields) | Some (PendingStorage (_, fields)) ->
+          Some fields
+      | None | Some (PendingSlot _) -> None)
   | A.TupleGet (atom, index) | A.RecordGet (_, atom, index) -> (
       match lookup stores atom with
       | Some fields -> (
@@ -210,33 +250,31 @@ let storageFacts env stores operation =
       | None -> None)
   | _ -> None
 
-let rec fieldRepresentations storage types =
+let storageType storage source =
+  AsyncTransport.physicalType
+    (Stored (AsyncTransport.mapStorage (fun _ -> ()) storage))
+    source
+
+let slotRepresentation typ = function
+  | None -> typ
+  | Some (PendingSlot _) -> carrier typ
+  | Some (PendingStorage (_, storage)) -> carrier (storageType storage typ)
+  | Some (NestedStorage storage) -> storageType storage typ
+
+let fieldRepresentations storage types =
   if List.length types <> List.length storage.fields then
     Crash.crash "Async typed storage has an inconsistent layout";
-  List.map2
-    (fun typ slot ->
-      match slot with
-      | None -> typ
-      | Some (PendingSlot _) -> carrier typ
-      | Some (PendingStorage (_, storage)) -> carrier (storageType storage typ)
-      | Some (NestedStorage storage) -> storageType storage typ)
-    types storage.fields
+  List.map2 slotRepresentation types storage.fields
 
-and storageType storage source =
-  let types =
-    match (storage.kind, source) with
-    | TupleStorage, AST.TTuple types -> types
-    | ListStorage _, AST.TList element -> [ element ]
-    | RecordStorage descriptor, AST.TRecord _ ->
-        List.map snd descriptor.A.fields
-    | _ -> Crash.crash "Async storage source type does not match its layout"
-  in
-  let types = fieldRepresentations storage types in
-  match (storage.kind, types) with
-  | ListStorage _, [ element ] -> AST.TList element
-  | ListStorage _, _ ->
-      Crash.crash "Async list storage has an inconsistent element layout"
-  | _ -> AST.TTuple types
+let physicalSumDescriptor storage =
+  match storage.kind with
+  | SumStorage layout ->
+      let types =
+        fieldRepresentations storage
+          (List.map snd layout.AsyncSumStorage.payloads)
+      in
+      fst (AsyncSumStorage.physical layout types)
+  | _ -> Crash.crash "Async physical sum descriptor has a non-variant layout"
 
 let storageDescriptor storage (descriptor : A.recordDescriptor) =
   let types = fieldRepresentations storage (List.map snd descriptor.A.fields) in
@@ -473,6 +511,7 @@ let lower registry names ids sumShapes nextFunctionOrdinal externalDefinitions
             result = Concrete;
             joins = M.empty;
             rawLists = M.empty;
+            physicalSumShapes = Names.empty;
           })
         definitions
     in
@@ -798,8 +837,8 @@ let lower registry names ids sumShapes nextFunctionOrdinal externalDefinitions
                     | Concrete -> Ok None
                     | _ ->
                         Crash.crash "Async literal list has outer pendingness")
-                | _ -> Ok (storageFacts env stores operation))
-            | _ -> Ok (storageFacts env stores operation)
+                | _ -> Ok (storageFacts sumShapes env stores operation))
+            | _ -> Ok (storageFacts sumShapes env stores operation)
           in
           let* () =
             match (operation, ordinaryStore) with
@@ -807,6 +846,7 @@ let lower registry names ids sumShapes nextFunctionOrdinal externalDefinitions
                 match (storage.kind, typ) with
                 | TupleStorage, AST.TTuple _
                 | RecordStorage _, AST.TRecord _
+                | SumStorage _, AST.TSum _
                 | ListStorage _, AST.TList _ ->
                     Ok ()
                 | _ ->
@@ -915,6 +955,12 @@ let lower registry names ids sumShapes nextFunctionOrdinal externalDefinitions
                 Ok (F.add callee { current with captures } state, None, None)
             | A.TupleGet (atom, index) | A.RecordGet (_, atom, index) ->
                 Ok (state, projected atom index, ordinaryStore)
+            | A.SumPayload (variant, atom) ->
+                let value =
+                  Option.bind (lookup stores atom) (fun storage ->
+                      pendingField (sumField storage variant.A.variantTag))
+                in
+                Ok (state, value, ordinaryStore)
             | A.ClosureCall (closure, arguments) -> (
                 match callable fn closure with
                 | Some callee when eligible callee ->
@@ -1020,6 +1066,17 @@ let lower registry names ids sumShapes nextFunctionOrdinal externalDefinitions
             | Some typ -> M.add id typ env
             | None -> M.remove id env
           in
+          let* state =
+            match stored with
+            | None -> Ok state
+            | Some storage ->
+                let current = summary state fn.A.id in
+                let* physicalSumShapes =
+                  AsyncTransport.collectSumShapes
+                    ~into:current.physicalSumShapes storage
+                in
+                Ok (F.add fn.A.id { current with physicalSumShapes } state)
+          in
           infer fn env stores rest state
     in
     let rec converge state =
@@ -1033,6 +1090,15 @@ let lower registry names ids sumShapes nextFunctionOrdinal externalDefinitions
                 seed Fun.id fn state (summary state id).parameters (fun typ ->
                     Ok typ)
               in
+              let* physicalSumShapes =
+                M.fold
+                  (fun _ storage result ->
+                    let* shapes = result in
+                    AsyncTransport.collectSumShapes ~into:shapes storage)
+                  stores (Ok Names.empty)
+              in
+              let current = summary state id in
+              let state = F.add id { current with physicalSumShapes } state in
               infer fn env stores fn.A.body state)
           (Ok state) definitions
       in
@@ -1041,6 +1107,15 @@ let lower registry names ids sumShapes nextFunctionOrdinal externalDefinitions
     in
     let* summaries =
       Result.map_error (fun message -> Diagnostic message) (converge initial)
+    in
+    let* sumShapes =
+      F.fold
+        (fun result _ value ->
+          let* shapes = result in
+          AsyncSumStorage.includePhysicalShapes ~into:shapes
+            value.physicalSumShapes
+          |> Result.map_error (fun message -> Diagnostic message))
+        (Ok sumShapes) summaries
     in
     let helperTypes base types =
       let name = SpecializationIdentity.specName base types in
@@ -1142,9 +1217,11 @@ let lower registry names ids sumShapes nextFunctionOrdinal externalDefinitions
         ],
         gen )
     in
-    let mapper inputType outputType body gen =
+    let mapperBody ~closure inputType outputType body gen =
       let key =
-        SpecializationIdentity.specName "__dark_async_mapping"
+        SpecializationIdentity.specName
+          (if closure then "__dark_async_mapping"
+           else "__dark_async_sum_conversion")
           [ inputType; outputType ]
       in
       match Names.find_opt key gen.mappers with
@@ -1153,7 +1230,10 @@ let lower registry names ids sumShapes nextFunctionOrdinal externalDefinitions
           let mapper =
             {
               id = AST.functionId gen.cursor;
-              name = "__dark_async_map_" ^ Int64.to_string gen.cursor;
+              name =
+                (if closure then "__dark_async_map_"
+                 else "__dark_async_sum_convert_")
+                ^ Int64.to_string gen.cursor;
             }
           in
           let gen =
@@ -1163,21 +1243,24 @@ let lower registry names ids sumShapes nextFunctionOrdinal externalDefinitions
               mappers = Names.add key mapper gen.mappers;
             }
           in
-          let environment, gen = freshVar gen in
+          let environment, gen =
+            if closure then
+              let id, gen = freshVar gen in
+              (Some { A.id; typ = AST.TTuple [ AST.TInt64 ] }, gen)
+            else (None, gen)
+          in
           let parameter, gen = freshVar gen in
-          let* value, before, gen = body (A.Var parameter) gen in
+          let* body, gen = body (A.Var parameter) gen in
           let definition =
             {
               A.id = mapper.id;
               name = mapper.name;
               typedParams =
-                [
-                  { A.id = environment; typ = AST.TTuple [ AST.TInt64 ] };
-                  { A.id = parameter; typ = inputType };
-                ];
+                Option.to_list environment
+                @ [ { A.id = parameter; typ = inputType } ];
               returnType = outputType;
               returnOwnership = A.OwnedReturn;
-              body = wraps before (A.Return value);
+              body;
             }
           in
           Ok
@@ -1186,6 +1269,74 @@ let lower registry names ids sumShapes nextFunctionOrdinal externalDefinitions
                 gen with
                 generatedFunctions = definition :: gen.generatedFunctions;
               } )
+    in
+    let mapper inputType outputType emit gen =
+      mapperBody ~closure:true inputType outputType
+        (fun atom gen ->
+          let* value, before, gen = emit atom gen in
+          Ok (wraps before (A.Return value), gen))
+        gen
+    in
+    let sumBranches layout inputSum outputSum inputType outputType convert atom
+        gen =
+      let branch (tag, payload) gen =
+        let result, gen = freshVar gen in
+        match payload with
+        | None ->
+            Ok
+              ( A.Let
+                  ( result,
+                    A.SumConstant (outputSum, tag),
+                    A.Return (A.Var result) ),
+                gen )
+        | Some typ ->
+            let projected, gen = freshVar gen in
+            let* value, before, gen = convert tag typ (A.Var projected) gen in
+            let input =
+              {
+                A.sum = inputSum;
+                variantTag = tag;
+                payloadType = inputType tag typ;
+              }
+            in
+            let output =
+              {
+                A.sum = outputSum;
+                variantTag = tag;
+                payloadType = outputType tag typ;
+              }
+            in
+            Ok
+              ( wraps
+                  ((projected, A.SumPayload (input, atom)) :: before)
+                  (A.Let
+                     ( result,
+                       A.SumAlloc (output, value),
+                       A.Return (A.Var result) )),
+                gen )
+      in
+      let rec branches gen = function
+        | [] -> Crash.crash "Async sum conversion has no constructors"
+        | [ variant ] -> branch variant gen
+        | ((tag, _) as variant) :: rest ->
+            let condition, gen = freshVar gen in
+            let* yes, gen = branch variant gen in
+            let* no, gen = branches gen rest in
+            Ok
+              ( A.Let
+                  ( condition,
+                    A.SumTest (inputSum, tag, atom),
+                    A.If (A.Var condition, yes, no) ),
+                gen )
+      in
+      let variants =
+        List.map
+          (fun (tag, typ) -> (tag, Some typ))
+          layout.AsyncSumStorage.payloads
+        @ List.map (fun tag -> (tag, None)) layout.AsyncSumStorage.emptyTags
+        |> List.sort (fun (left, _) (right, _) -> Int.compare left right)
+      in
+      branches gen variants
     in
     let rec prepareValue expected source atom actual gen =
       match (expected, actual) with
@@ -1260,6 +1411,39 @@ let lower registry names ids sumShapes nextFunctionOrdinal externalDefinitions
                   (result, A.Call (mapHelper, [ atom; A.Var closure ]));
                 ],
                 gen )
+      | ( Stored ({ kind = SumStorage layout; _ } as expected),
+          (Concrete | Stored _) ) ->
+          let actualStorage =
+            match actual with Stored storage -> Some storage | _ -> None
+          in
+          let actualSlot tag =
+            Option.bind actualStorage (fun storage -> sumField storage tag)
+          in
+          let inputSum =
+            match actualStorage with
+            | Some storage -> physicalSumDescriptor storage
+            | None -> layout.AsyncSumStorage.source
+          in
+          let outputSum = physicalSumDescriptor expected in
+          let inputType = AsyncTransport.physicalType actual source in
+          let outputType =
+            AsyncTransport.physicalType (Stored expected) source
+          in
+          let* conversion, gen =
+            mapperBody ~closure:false inputType outputType
+              (sumBranches layout inputSum outputSum
+                 (fun tag typ -> slotRepresentation typ (actualSlot tag))
+                 (fun tag typ -> slotRepresentation typ (sumField expected tag))
+                 (fun tag typ atom gen ->
+                   prepareValue
+                     (AsyncTransport.slotMode (sumField expected tag))
+                     typ atom
+                     (AsyncTransport.slotMode (actualSlot tag))
+                     gen))
+              gen
+          in
+          let result, gen = freshVar gen in
+          Ok (A.Var result, [ (result, A.Call (conversion.id, [ atom ])) ], gen)
       | Stored expected, (Concrete | Stored _) ->
           let types =
             match (expected.kind, source) with
@@ -1314,9 +1498,9 @@ let lower registry names ids sumShapes nextFunctionOrdinal externalDefinitions
             | TupleStorage -> A.TupleAlloc values
             | RecordStorage descriptor ->
                 A.RecordAlloc (storageDescriptor expected descriptor, values)
-            | ListStorage _ ->
+            | ListStorage _ | SumStorage _ ->
                 Crash.crash
-                  "Async list promotion entered fixed-block allocation"
+                  "Async collection promotion entered fixed-block allocation"
           in
           Ok (A.Var result, before @ [ (result, allocation) ], gen)
       | _ ->
@@ -1641,6 +1825,25 @@ let lower registry names ids sumShapes nextFunctionOrdinal externalDefinitions
                 gen )
       | ListStorage _, _ ->
           Crash.crash "Async list demand has an inconsistent element layout"
+      | SumStorage layout, _ ->
+          let source = layout.AsyncSumStorage.source in
+          let inputType =
+            storageType storage (AST.TSum (source.A.sumName, source.A.sumArgs))
+          in
+          let outputType = AST.TSum (source.A.sumName, source.A.sumArgs) in
+          let* conversion, gen =
+            mapperBody ~closure:false inputType outputType
+              (sumBranches layout
+                 (physicalSumDescriptor storage)
+                 source
+                 (fun tag typ -> slotRepresentation typ (sumField storage tag))
+                 (fun _ typ -> typ)
+                 (fun tag _ atom gen ->
+                   materializeSlot (sumField storage tag) atom gen))
+              gen
+          in
+          let result, gen = freshVar gen in
+          Ok (A.Var result, [ (result, A.Call (conversion.id, [ atom ])) ], gen)
       | (TupleStorage | RecordStorage _), _ ->
           let* values, before, gen =
             List.fold_left
@@ -1653,9 +1856,9 @@ let lower registry names ids sumShapes nextFunctionOrdinal externalDefinitions
                   | RecordStorage descriptor ->
                       A.RecordGet
                         (storageDescriptor storage descriptor, atom, index)
-                  | ListStorage _ ->
+                  | ListStorage _ | SumStorage _ ->
                       Crash.crash
-                        "Async list demand entered fixed-block lowering"
+                        "Async collection demand entered fixed-block lowering"
                 in
                 let* value, added, gen =
                   materializeSlot slot (A.Var projected) gen
@@ -1673,8 +1876,9 @@ let lower registry names ids sumShapes nextFunctionOrdinal externalDefinitions
             | TupleStorage -> A.TupleAlloc (List.rev values)
             | RecordStorage descriptor ->
                 A.RecordAlloc (descriptor, List.rev values)
-            | ListStorage _ ->
-                Crash.crash "Async list demand entered fixed-block allocation"
+            | ListStorage _ | SumStorage _ ->
+                Crash.crash
+                  "Async collection demand entered fixed-block allocation"
           in
           Ok (A.Var id, before @ [ (id, allocation) ], gen)
     in
@@ -1855,6 +2059,7 @@ let lower registry names ids sumShapes nextFunctionOrdinal externalDefinitions
                   | Some { kind = TupleStorage; _ }, AST.TTuple _ -> false
                   | Some { kind = RecordStorage _; _ }, AST.TRecord _ -> false
                   | Some { kind = ListStorage _; _ }, AST.TList _ -> false
+                  | Some { kind = SumStorage _; _ }, AST.TSum _ -> false
                   | _ -> true)
               | _ -> false
             in
@@ -1913,7 +2118,7 @@ let lower registry names ids sumShapes nextFunctionOrdinal externalDefinitions
                   when eligible callee && not (S.mem callee nativeEntries) ->
                     storedResult (summary summaries callee).result
                       (originalResult callee)
-                | _ -> Ok (storageFacts env stores operation))
+                | _ -> Ok (storageFacts sumShapes env stores operation))
             | A.TypedAtom (_, (AST.TList _ as typ)) -> (
                 match AsyncListStorage.root (listPlan fn) (A.Var id) with
                 | Some (component, AST.TList element) -> (
@@ -1926,8 +2131,8 @@ let lower registry names ids sumShapes nextFunctionOrdinal externalDefinitions
                     | Concrete -> Ok None
                     | _ ->
                         Crash.crash "Async literal list has outer pendingness")
-                | _ -> Ok (storageFacts env stores operation))
-            | _ -> Ok (storageFacts env stores operation)
+                | _ -> Ok (storageFacts sumShapes env stores operation))
+            | _ -> Ok (storageFacts sumShapes env stores operation)
           in
           let* () =
             let escape =
@@ -1956,7 +2161,8 @@ let lower registry names ids sumShapes nextFunctionOrdinal externalDefinitions
               | A.RecordAlloc (_, args)
               | A.RecordClone (_, _, args) ->
                   List.exists (changedCallable fn) args
-              | A.RawSlotInit (_, _, value, _) -> changedCallable fn value
+              | A.SumAlloc (_, value) | A.RawSlotInit (_, _, value, _) ->
+                  changedCallable fn value
               | A.IfValue (_, yes, no) ->
                   changedCallable fn yes || changedCallable fn no
               | _ -> false
@@ -2369,6 +2575,54 @@ let lower registry names ids sumShapes nextFunctionOrdinal externalDefinitions
                 in
                 Ok
                   (A.ClosureAlloc (callee, List.rev captures), before, None, gen)
+            | A.SumAlloc (variant, value) when Option.is_some storedValue ->
+                let storage =
+                  match storedValue with
+                  | Some storage -> storage
+                  | None ->
+                      Crash.crash
+                        "Async variant allocation lost its payload layout"
+                in
+                let payloadType =
+                  slotRepresentation variant.A.payloadType
+                    (sumField storage variant.A.variantTag)
+                in
+                Ok
+                  ( A.SumAlloc
+                      ( {
+                          variant with
+                          A.sum = physicalSumDescriptor storage;
+                          payloadType;
+                        },
+                        value ),
+                    [],
+                    None,
+                    gen )
+            | A.SumTest (sum, tag, atom) ->
+                let sum =
+                  match lookup stores atom with
+                  | Some storage -> physicalSumDescriptor storage
+                  | None -> sum
+                in
+                let atom, before, gen = forceAtom env atom gen in
+                Ok (A.SumTest (sum, tag, atom), before, None, gen)
+            | A.SumPayload (variant, atom) ->
+                let variant, value =
+                  match lookup stores atom with
+                  | None -> (variant, None)
+                  | Some storage ->
+                      let slot = sumField storage variant.A.variantTag in
+                      ( {
+                          variant with
+                          A.sum = physicalSumDescriptor storage;
+                          payloadType =
+                            slotRepresentation variant.A.payloadType slot;
+                        },
+                        pendingField slot )
+                in
+                let atom, before, gen = forceAtom env atom gen in
+                Ok (A.SumPayload (variant, atom), before, value, gen)
+            | A.SumConstant _ | A.SumAlloc _ -> Ok (operation, [], None, gen)
             | A.RecordAlloc (descriptor, values)
             | A.RecordClone (descriptor, _, values)
               when Option.is_some storedValue ->
