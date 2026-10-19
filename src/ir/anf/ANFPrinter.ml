@@ -221,6 +221,18 @@ let prettyPrintANFCExpr functionNames expression =
       "(" ^ elemsStr ^ ")"
   | ANF.TupleGet (tupleAtom, index) ->
       prettyPrintANFAtom tupleAtom ^ "." ^ string_of_int index
+  | ANF.SumConstant (sum, tag) ->
+      "SumConstant(" ^ sum.ANF.sumName ^ ", " ^ string_of_int tag ^ ")"
+  | ANF.SumAlloc (variant, value) ->
+      "SumAlloc(" ^ variant.ANF.sum.ANF.sumName ^ ", "
+      ^ string_of_int variant.ANF.variantTag
+      ^ ", " ^ prettyPrintANFAtom value ^ ")"
+  | ANF.SumTag (sum, value) ->
+      "SumTag(" ^ sum.ANF.sumName ^ ", " ^ prettyPrintANFAtom value ^ ")"
+  | ANF.SumPayload (variant, value) ->
+      "SumPayload(" ^ variant.ANF.sum.ANF.sumName ^ ", "
+      ^ string_of_int variant.ANF.variantTag
+      ^ ", " ^ prettyPrintANFAtom value ^ ")"
   | ANF.RecordAlloc (descriptor, fields) ->
       let fieldsText = fields |> commaSeparated prettyPrintANFAtom in
       "RecordAlloc(" ^ descriptor.ANF.runtimeTypeName ^ ", [" ^ fieldsText

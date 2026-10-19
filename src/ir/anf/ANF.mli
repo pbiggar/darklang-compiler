@@ -150,6 +150,15 @@ type recordDescriptor = {
   valueType : AST.semanticType;
 }
 
+(* Sum layout selection follows async payload interface inference. *)
+type sumDescriptor = { sumName : string; sumArgs : AST.semanticType list }
+
+type variantDescriptor = {
+  sum : sumDescriptor;
+  variantTag : int;
+  payloadType : AST.semanticType;
+}
+
 type cExpr =
   | Atom of atom
   | TypedAtom of atom * AST.semanticType
@@ -166,6 +175,10 @@ type cExpr =
   | ClosureTailCall of atom * atom list
   | TupleAlloc of atom list
   | TupleGet of atom * int
+  | SumConstant of sumDescriptor * int
+  | SumAlloc of variantDescriptor * atom
+  | SumTag of sumDescriptor * atom
+  | SumPayload of variantDescriptor * atom
   | RecordAlloc of recordDescriptor * atom list
   | RecordGet of recordDescriptor * atom * int
   | RecordClone of recordDescriptor * atom * atom list

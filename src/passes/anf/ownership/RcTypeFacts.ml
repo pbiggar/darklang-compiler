@@ -423,6 +423,11 @@ let inferCExprType ctx expr =
             ("RefCountInsertion: ClosureAlloc target '" ^ ordinal
            ^ "' not found in function registry"))
   | A.ClosureCall (value, _) | A.ClosureTailCall (value, _) -> closure value
+  | A.SumConstant (sum, _) -> Some (AST.TSum (sum.A.sumName, sum.A.sumArgs))
+  | A.SumAlloc (variant, _) ->
+      Some (AST.TSum (variant.A.sum.A.sumName, variant.A.sum.A.sumArgs))
+  | A.SumTag _ -> Some AST.TInt64
+  | A.SumPayload (variant, _) -> Some variant.A.payloadType
   | A.TupleAlloc values ->
       Some
         (AST.TTuple

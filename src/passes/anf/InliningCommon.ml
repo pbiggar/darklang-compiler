@@ -329,6 +329,10 @@ let renameCExpr mapping cexpr =
       ClosureTailCall (r closure, List.map r args)
   | TupleAlloc elems -> TupleAlloc (List.map r elems)
   | TupleGet (tuple, idx) -> TupleGet (r tuple, idx)
+  | SumConstant _ -> cexpr
+  | SumAlloc (variant, value) -> SumAlloc (variant, r value)
+  | SumTag (sum, value) -> SumTag (sum, r value)
+  | SumPayload (variant, value) -> SumPayload (variant, r value)
   | RecordAlloc (descriptor, fields) ->
       RecordAlloc (descriptor, List.map r fields)
   | RecordGet (descriptor, record, idx) -> RecordGet (descriptor, r record, idx)
