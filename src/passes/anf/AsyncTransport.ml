@@ -15,6 +15,17 @@ type 'a storedSlot =
 
 and 'a storage = { kind : storageKind; fields : 'a storedSlot option list }
 
+let storage kind fields = { kind; fields }
+let kind storage = storage.kind
+let fields storage = storage.fields
+
+let field storage index =
+  let rec find offset = function
+    | [] -> Crash.crash "Async storage projection is outside its layout"
+    | value :: rest -> if offset = index then value else find (offset + 1) rest
+  in
+  find 0 storage.fields
+
 type mode =
   | Concrete
   | Pending

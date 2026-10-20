@@ -11,7 +11,14 @@ type 'a storedSlot =
   | NestedStorage of 'a storage
   | PendingStorage of 'a * 'a storage
 
-and 'a storage = { kind : storageKind; fields : 'a storedSlot option list }
+and 'a storage
+
+(* Inspect only one level: callers must not depend on the representation used
+   to share storage layouts or to close recursive nominal interfaces. *)
+val storage : storageKind -> 'a storedSlot option list -> 'a storage
+val kind : 'a storage -> storageKind
+val fields : 'a storage -> 'a storedSlot option list
+val field : 'a storage -> int -> 'a storedSlot option
 
 type mode =
   | Concrete

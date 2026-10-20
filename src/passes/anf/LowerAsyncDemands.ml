@@ -58,10 +58,7 @@ type 'a storedSlot = 'a AsyncTransport.storedSlot =
   | NestedStorage of 'a storage
   | PendingStorage of 'a * 'a storage
 
-and 'a storage = 'a AsyncTransport.storage = {
-  kind : storageKind;
-  fields : 'a storedSlot option list;
-}
+and 'a storage = 'a AsyncTransport.storage
 
 type mode = AsyncTransport.mode =
   | Concrete
@@ -135,7 +132,7 @@ let listResult outer storage = function
   | ListRemainder | ListPrefix TakePrefix -> (None, Some storage)
   | ListPrefix DropPrefix -> (outer, Some storage)
   | ListElement -> (
-      match storage.fields with
+      match AsyncTransport.fields storage with
       | [ None ] -> (None, None)
       | [ Some (PendingSlot value) ] -> (Some value, None)
       | [ Some (NestedStorage fields) ] -> (None, Some fields)
@@ -190,11 +187,12 @@ let listMode element mode =
   if not (changed mode) then Concrete
   else
     Stored
-      { kind = ListStorage element; fields = [ AsyncTransport.modeSlot mode ] }
+      (AsyncTransport.storage (ListStorage element)
+         [ AsyncTransport.modeSlot mode ])
 
 let listElementMode storage =
   let storage = AsyncTransport.mapStorage (fun _ -> ()) storage in
-  match (storage.kind, storage.fields) with
+  match (AsyncTransport.kind storage, AsyncTransport.fields storage) with
   | ListStorage _, [ slot ] -> AsyncTransport.slotMode slot
   | _ -> Crash.crash "Async list transport has an inconsistent element layout"
 
@@ -202,29 +200,20 @@ let dictionaryMode key value valueMode =
   if not (changed valueMode) then Concrete
   else
     Stored
-      {
-        kind = DictStorage (key, value);
-        fields = [ AsyncTransport.modeSlot valueMode ];
-      }
+      (AsyncTransport.storage (DictStorage (key, value))
+         [ AsyncTransport.modeSlot valueMode ])
 
 let dictionaryValueMode storage =
   let storage = AsyncTransport.mapStorage (fun _ -> ()) storage in
-  match (storage.kind, storage.fields) with
+  match (AsyncTransport.kind storage, AsyncTransport.fields storage) with
   | DictStorage _, [ slot ] -> AsyncTransport.slotMode slot
   | _ ->
       Crash.crash "Async dictionary transport has an inconsistent value layout"
 
-let storageField storage index =
-  match
-    List.find_opt
-      (fun (offset, _) -> offset = index)
-      (List.mapi (fun i field -> (i, field)) storage.fields)
-  with
-  | Some (_, field) -> field
-  | None -> Crash.crash "Async storage projection is outside its layout"
+let storageField = AsyncTransport.field
 
 let sumField storage tag =
-  match storage.kind with
+  match AsyncTransport.kind storage with
   | SumStorage layout -> (
       match AsyncSumStorage.payloadIndex layout tag with
       | Some index -> storageField storage index
@@ -246,7 +235,9 @@ let storageFacts sumShapes env stores operation =
   in
   let allocation kind values =
     let fields = List.map slot values in
-    if List.exists Option.is_some fields then Some { kind; fields } else None
+    if List.exists Option.is_some fields then
+      Some (AsyncTransport.storage kind fields)
+    else None
   in
   match operation with
   | A.TupleAlloc values -> allocation TupleStorage values
@@ -268,7 +259,7 @@ let storageFacts sumShapes env stores operation =
           if not (List.exists Option.is_some fields) then
             Crash.crash
               "Async payload constructor is absent from its sum metadata";
-          Some { kind = SumStorage layout; fields })
+          Some (AsyncTransport.storage (SumStorage layout) fields))
   | A.RecordAlloc (({ A.valueType = AST.TRecord _; _ } as descriptor), values)
   | A.RecordClone (({ A.valueType = AST.TRecord _; _ } as descriptor), _, values)
     ->
@@ -304,12 +295,12 @@ let slotRepresentation typ = function
   | Some (NestedStorage storage) -> storageType storage typ
 
 let fieldRepresentations storage types =
-  if List.length types <> List.length storage.fields then
+  if List.length types <> List.length (AsyncTransport.fields storage) then
     Crash.crash "Async typed storage has an inconsistent layout";
-  List.map2 slotRepresentation types storage.fields
+  List.map2 slotRepresentation types (AsyncTransport.fields storage)
 
 let physicalSumDescriptor storage =
-  match storage.kind with
+  match AsyncTransport.kind storage with
   | SumStorage layout ->
       let types =
         fieldRepresentations storage
@@ -513,11 +504,8 @@ let lower registry names ids sumShapes nextFunctionOrdinal externalDefinitions
                         let entryMode =
                           if changed valueMode then
                             Stored
-                              {
-                                kind = TupleStorage;
-                                fields =
-                                  [ None; AsyncTransport.modeSlot valueMode ];
-                              }
+                              (AsyncTransport.storage TupleStorage
+                                 [ None; AsyncTransport.modeSlot valueMode ])
                           else Concrete
                         in
                         Ok (listMode entry entryMode)
@@ -540,11 +528,8 @@ let lower registry names ids sumShapes nextFunctionOrdinal externalDefinitions
                           | [ (_, typ) ] when typ = value ->
                               Ok
                                 (Stored
-                                   {
-                                     kind = SumStorage layout;
-                                     fields =
-                                       [ AsyncTransport.modeSlot valueMode ];
-                                   })
+                                   (AsyncTransport.storage (SumStorage layout)
+                                      [ AsyncTransport.modeSlot valueMode ]))
                           | _ ->
                               Crash.crash
                                 "Async dictionary lookup has an inconsistent \
@@ -603,8 +588,10 @@ let lower registry names ids sumShapes nextFunctionOrdinal externalDefinitions
                 | _ -> None)
           in
           match (operation, lookup stores list) with
-          | Some (base, result), Some ({ kind = ListStorage _; _ } as storage)
-            ->
+          | Some (base, result), Some storage
+            when (match AsyncTransport.kind storage with
+                 | ListStorage _ -> true
+                 | _ -> false) ->
               Some ("Darklang.Stdlib.List." ^ base, list, rest, storage, result)
           | _ -> None)
       | _ -> None
@@ -672,8 +659,8 @@ let lower registry names ids sumShapes nextFunctionOrdinal externalDefinitions
     in
     let listEmptyCheck stores = function
       | A.Prim (((A.Eq | A.Neq) as op), list, A.IntLiteral (A.Int64 0L)) -> (
-          match lookup stores list with
-          | Some { kind = ListStorage _ | DictStorage _; _ } -> Some (op, list)
+          match Option.map AsyncTransport.kind (lookup stores list) with
+          | Some (ListStorage _ | DictStorage _) -> Some (op, list)
           | _ -> None)
       | _ -> None
     in
@@ -965,10 +952,8 @@ let lower registry names ids sumShapes nextFunctionOrdinal externalDefinitions
           when List.length fields = List.length captures ->
             let captureMode =
               Stored
-                {
-                  kind = TupleStorage;
-                  fields = None :: List.map AsyncTransport.modeSlot captures;
-                }
+                (AsyncTransport.storage TupleStorage
+                   (None :: List.map AsyncTransport.modeSlot captures))
             in
             let* mode =
               Result.map_error mapError
@@ -1093,7 +1078,7 @@ let lower registry names ids sumShapes nextFunctionOrdinal externalDefinitions
           let* () =
             match (operation, ordinaryStore) with
             | A.TypedAtom (_, typ), Some storage -> (
-                match (storage.kind, typ) with
+                match (AsyncTransport.kind storage, typ) with
                 | TupleStorage, AST.TTuple _
                 | RecordStorage _, AST.TRecord _
                 | SumStorage _, AST.TSum _
@@ -1676,8 +1661,9 @@ let lower registry names ids sumShapes nextFunctionOrdinal externalDefinitions
                   (result, A.Call (mapHelper, [ A.Var closure; atom ]));
                 ],
                 gen )
-      | ( Stored ({ kind = DictStorage (key, element); _ } as expected),
-          (Concrete | Stored _) ) ->
+      | Stored expected, (Concrete | Stored _) -> (
+          match AsyncTransport.kind expected with
+          | DictStorage (key, element) ->
           let actualMode =
             match actual with
             | Stored storage -> dictionaryValueMode storage
@@ -1708,8 +1694,7 @@ let lower registry names ids sumShapes nextFunctionOrdinal externalDefinitions
                   (result, A.Call (mapHelper, [ atom; A.Var closure ]));
                 ],
                 gen )
-      | ( Stored ({ kind = ListStorage element; _ } as expected),
-          (Concrete | Stored _) ) ->
+          | ListStorage element ->
           let actualMode =
             match actual with
             | Stored storage -> listElementMode storage
@@ -1739,8 +1724,7 @@ let lower registry names ids sumShapes nextFunctionOrdinal externalDefinitions
                   (result, A.Call (mapHelper, [ atom; A.Var closure ]));
                 ],
                 gen )
-      | ( Stored ({ kind = SumStorage layout; _ } as expected),
-          (Concrete | Stored _) ) ->
+          | SumStorage layout ->
           let actualStorage =
             match actual with Stored storage -> Some storage | _ -> None
           in
@@ -1772,9 +1756,9 @@ let lower registry names ids sumShapes nextFunctionOrdinal externalDefinitions
           in
           let result, gen = freshVar gen in
           Ok (A.Var result, [ (result, A.Call (conversion.id, [ atom ])) ], gen)
-      | Stored expected, (Concrete | Stored _) ->
+          | TupleStorage | RecordStorage _ ->
           let types =
-            match (expected.kind, source) with
+            match (AsyncTransport.kind expected, source) with
             | TupleStorage, AST.TTuple types -> types
             | RecordStorage descriptor, AST.TRecord _ ->
                 List.map snd descriptor.A.fields
@@ -1790,10 +1774,12 @@ let lower registry names ids sumShapes nextFunctionOrdinal externalDefinitions
             | typ :: types, slot :: expectedSlots ->
                 let projected, gen = freshVar gen in
                 let projection =
-                  match (actualStorage, expected.kind) with
-                  | (Some { kind = RecordStorage descriptor; _ } as storage), _
-                    -> (
-                      match storage with
+                  match
+                    (Option.map AsyncTransport.kind actualStorage,
+                     AsyncTransport.kind expected)
+                  with
+                  | Some (RecordStorage descriptor), _ -> (
+                      match actualStorage with
                       | Some storage ->
                           A.RecordGet
                             (storageDescriptor storage descriptor, atom, index)
@@ -1819,10 +1805,12 @@ let lower registry names ids sumShapes nextFunctionOrdinal externalDefinitions
                   gen
             | _ -> Crash.crash "Async promotion has an inconsistent field count"
           in
-          let* values, before, gen = fields 0 types expected.fields [] [] gen in
+          let* values, before, gen =
+            fields 0 types (AsyncTransport.fields expected) [] [] gen
+          in
           let result, gen = freshVar gen in
           let allocation =
-            match expected.kind with
+            match AsyncTransport.kind expected with
             | TupleStorage -> A.TupleAlloc values
             | RecordStorage descriptor ->
                 A.RecordAlloc (storageDescriptor expected descriptor, values)
@@ -1830,7 +1818,7 @@ let lower registry names ids sumShapes nextFunctionOrdinal externalDefinitions
                 Crash.crash
                   "Async collection promotion entered fixed-block allocation"
           in
-          Ok (A.Var result, before @ [ (result, allocation) ], gen)
+          Ok (A.Var result, before @ [ (result, allocation) ], gen))
       | _ ->
           Error
             (Diagnostic
@@ -2205,7 +2193,7 @@ let lower registry names ids sumShapes nextFunctionOrdinal externalDefinitions
           let* atom, before, gen = materializeStorage storage (A.Var id) gen in
           Ok (atom, (id, A.Call (value.force, [ original ])) :: before, gen)
     and materializeStorage storage atom gen =
-      match (storage.kind, storage.fields) with
+      match (AsyncTransport.kind storage, AsyncTransport.fields storage) with
       | DictStorage (key, element), [ slot ] ->
           let inputType = slotRepresentation element slot in
           let* mapHelper =
@@ -2290,7 +2278,7 @@ let lower registry names ids sumShapes nextFunctionOrdinal externalDefinitions
                 let* values, before, gen = result in
                 let projected, gen = freshVar gen in
                 let projection =
-                  match storage.kind with
+                  match AsyncTransport.kind storage with
                   | TupleStorage -> A.TupleGet (atom, index)
                   | RecordStorage descriptor ->
                       A.RecordGet
@@ -2307,11 +2295,12 @@ let lower registry names ids sumShapes nextFunctionOrdinal externalDefinitions
                     before @ [ (projected, projection) ] @ added,
                     gen ))
               (Ok ([], [], gen))
-              (List.mapi (fun i value -> (i, value)) storage.fields)
+              (List.mapi (fun i value -> (i, value))
+                 (AsyncTransport.fields storage))
           in
           let id, gen = freshVar gen in
           let allocation =
-            match storage.kind with
+            match AsyncTransport.kind storage with
             | TupleStorage -> A.TupleAlloc (List.rev values)
             | RecordStorage descriptor ->
                 A.RecordAlloc (descriptor, List.rev values)
@@ -2447,16 +2436,16 @@ let lower registry names ids sumShapes nextFunctionOrdinal externalDefinitions
             let hasList =
               T.exists
                 (fun id ->
-                  match M.find_opt id stores with
-                  | Some { kind = ListStorage _; _ } -> true
+                  match Option.map AsyncTransport.kind (M.find_opt id stores) with
+                  | Some (ListStorage _) -> true
                   | _ -> false)
                 (ANFEffects.cexprTempUses operation)
             in
             let hasDictionary =
               T.exists
                 (fun id ->
-                  match M.find_opt id stores with
-                  | Some { kind = DictStorage _; _ } -> true
+                  match Option.map AsyncTransport.kind (M.find_opt id stores) with
+                  | Some (DictStorage _) -> true
                   | _ -> false)
                 (ANFEffects.cexprTempUses operation)
             in
@@ -2531,12 +2520,12 @@ let lower registry names ids sumShapes nextFunctionOrdinal externalDefinitions
               | A.TypedAtom (atom, typ) -> (
                   Option.is_some (lookup stores atom)
                   &&
-                  match (lookup stores atom, typ) with
-                  | Some { kind = TupleStorage; _ }, AST.TTuple _ -> false
-                  | Some { kind = RecordStorage _; _ }, AST.TRecord _ -> false
-                  | Some { kind = ListStorage _; _ }, AST.TList _ -> false
-                  | Some { kind = DictStorage _; _ }, AST.TDict _ -> false
-                  | Some { kind = SumStorage _; _ }, AST.TSum _ -> false
+                  match (Option.map AsyncTransport.kind (lookup stores atom), typ) with
+                  | Some TupleStorage, AST.TTuple _ -> false
+                  | Some (RecordStorage _), AST.TRecord _ -> false
+                  | Some (ListStorage _), AST.TList _ -> false
+                  | Some (DictStorage _), AST.TDict _ -> false
+                  | Some (SumStorage _), AST.TSum _ -> false
                   | _ -> true)
               | _ -> false
             in
@@ -3089,7 +3078,7 @@ let lower registry names ids sumShapes nextFunctionOrdinal externalDefinitions
                       Crash.crash "Async list inspection lost its source plan"
                 in
                 let element =
-                  match storage.kind with
+                  match AsyncTransport.kind storage with
                   | ListStorage element -> element
                   | _ ->
                       Crash.crash "Async list inspection has a non-list layout"
