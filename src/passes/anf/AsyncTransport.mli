@@ -27,6 +27,7 @@ type mode =
   | PendingStored of unit storage
 
 val changed : mode -> bool
+
 (* Equality of inferred interfaces, independent of storage node identity. *)
 val equal : mode -> mode -> bool
 val slotMode : unit storedSlot option -> mode
@@ -37,7 +38,10 @@ val mapStorage : ('a -> 'b) -> 'a storage -> 'b storage
 val physicalType : mode -> AST.semanticType -> AST.semanticType
 val storageType : 'a storage -> AST.semanticType -> AST.semanticType
 val slotType : 'a storedSlot option -> AST.semanticType -> AST.semanticType
-val recordDescriptor : 'a storage -> ANF.recordDescriptor -> ANF.recordDescriptor
+
+val recordDescriptor :
+  'a storage -> ANF.recordDescriptor -> ANF.recordDescriptor
+
 val sumDescriptor : 'a storage -> ANF.sumDescriptor
 
 val collectSumShapes :

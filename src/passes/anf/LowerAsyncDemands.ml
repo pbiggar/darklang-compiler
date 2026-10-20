@@ -150,13 +150,13 @@ type summary = {
 }
 
 let equalSummary left right =
-  left == right ||
-  List.equal AsyncTransport.equal left.parameters right.parameters
-  && List.equal AsyncTransport.equal left.captures right.captures
-  && AsyncTransport.equal left.result right.result
-  && M.equal AsyncTransport.equal left.joins right.joins
-  && M.equal AsyncTransport.equal left.rawLists right.rawLists
-  && left.physicalSumShapes = right.physicalSumShapes
+  left == right
+  || List.equal AsyncTransport.equal left.parameters right.parameters
+     && List.equal AsyncTransport.equal left.captures right.captures
+     && AsyncTransport.equal left.result right.result
+     && M.equal AsyncTransport.equal left.joins right.joins
+     && M.equal AsyncTransport.equal left.rawLists right.rawLists
+     && left.physicalSumShapes = right.physicalSumShapes
 
 let changed = AsyncTransport.changed
 
@@ -209,7 +209,8 @@ let dictionaryMode key value valueMode =
   if not (changed valueMode) then Concrete
   else
     Stored
-      (AsyncTransport.storage (DictStorage (key, value))
+      (AsyncTransport.storage
+         (DictStorage (key, value))
          [ AsyncTransport.modeSlot valueMode ])
 
 let dictionaryValueMode storage =
@@ -293,9 +294,7 @@ let storageFacts sumShapes env stores operation =
   | _ -> None
 
 let storageType = AsyncTransport.storageType
-
 let slotRepresentation typ slot = AsyncTransport.slotType slot typ
-
 let physicalSumDescriptor = AsyncTransport.sumDescriptor
 let storageDescriptor = AsyncTransport.recordDescriptor
 
@@ -570,9 +569,9 @@ let lower registry names ids sumShapes nextFunctionOrdinal externalDefinitions
           in
           match (operation, lookup stores list) with
           | Some (base, result), Some storage
-            when (match AsyncTransport.kind storage with
+            when match AsyncTransport.kind storage with
                  | ListStorage _ -> true
-                 | _ -> false) ->
+                 | _ -> false ->
               Some ("Darklang.Stdlib.List." ^ base, list, rest, storage, result)
           | _ -> None)
       | _ -> None
@@ -1355,7 +1354,8 @@ let lower registry names ids sumShapes nextFunctionOrdinal externalDefinitions
               infer fn env stores fn.A.body state)
           (Ok state) definitions
       in
-      if F.forall (fun id value -> equalSummary value (summary state id)) next then Ok next
+      if F.forall (fun id value -> equalSummary value (summary state id)) next
+      then Ok next
       else converge next
     in
     let* summaries =
@@ -1645,159 +1645,174 @@ let lower registry names ids sumShapes nextFunctionOrdinal externalDefinitions
       | Stored expected, (Concrete | Stored _) -> (
           match AsyncTransport.kind expected with
           | DictStorage (key, element) ->
-          let actualMode =
-            match actual with
-            | Stored storage -> dictionaryValueMode storage
-            | _ -> Concrete
-          in
-          let expectedMode = dictionaryValueMode expected in
-          let inputType = AsyncTransport.physicalType actualMode element in
-          let outputType = AsyncTransport.physicalType expectedMode element in
-          if inputType = outputType || atom = A.IntLiteral (A.Int64 0L) then
-            Ok (atom, [], gen)
-          else
-            let* mapHelper =
-              helperTypes "Darklang.Stdlib.Dict.__map"
-                [ key; inputType; outputType ]
-            in
-            let* mapper, gen =
-              mapper ~leadingParameter:key inputType outputType
-                (fun atom gen ->
-                  prepareValue expectedMode element atom actualMode gen)
-                gen
-            in
-            let closure, gen = freshVar gen in
-            let result, gen = freshVar gen in
-            Ok
-              ( A.Var result,
-                [
-                  (closure, A.ClosureAlloc (mapper.id, []));
-                  (result, A.Call (mapHelper, [ atom; A.Var closure ]));
-                ],
-                gen )
+              let actualMode =
+                match actual with
+                | Stored storage -> dictionaryValueMode storage
+                | _ -> Concrete
+              in
+              let expectedMode = dictionaryValueMode expected in
+              let inputType = AsyncTransport.physicalType actualMode element in
+              let outputType =
+                AsyncTransport.physicalType expectedMode element
+              in
+              if inputType = outputType || atom = A.IntLiteral (A.Int64 0L) then
+                Ok (atom, [], gen)
+              else
+                let* mapHelper =
+                  helperTypes "Darklang.Stdlib.Dict.__map"
+                    [ key; inputType; outputType ]
+                in
+                let* mapper, gen =
+                  mapper ~leadingParameter:key inputType outputType
+                    (fun atom gen ->
+                      prepareValue expectedMode element atom actualMode gen)
+                    gen
+                in
+                let closure, gen = freshVar gen in
+                let result, gen = freshVar gen in
+                Ok
+                  ( A.Var result,
+                    [
+                      (closure, A.ClosureAlloc (mapper.id, []));
+                      (result, A.Call (mapHelper, [ atom; A.Var closure ]));
+                    ],
+                    gen )
           | ListStorage element ->
-          let actualMode =
-            match actual with
-            | Stored storage -> listElementMode storage
-            | _ -> Concrete
-          in
-          let expectedMode = listElementMode expected in
-          let inputType = AsyncTransport.physicalType actualMode element in
-          let outputType = AsyncTransport.physicalType expectedMode element in
-          if inputType = outputType || atom = A.IntLiteral (A.Int64 0L) then
-            Ok (atom, [], gen)
-          else
-            let* mapHelper =
-              helperTypes "Darklang.Stdlib.List.map" [ inputType; outputType ]
-            in
-            let* mapper, gen =
-              mapper inputType outputType
-                (fun atom gen ->
-                  prepareValue expectedMode element atom actualMode gen)
-                gen
-            in
-            let closure, gen = freshVar gen in
-            let result, gen = freshVar gen in
-            Ok
-              ( A.Var result,
-                [
-                  (closure, A.ClosureAlloc (mapper.id, []));
-                  (result, A.Call (mapHelper, [ atom; A.Var closure ]));
-                ],
-                gen )
+              let actualMode =
+                match actual with
+                | Stored storage -> listElementMode storage
+                | _ -> Concrete
+              in
+              let expectedMode = listElementMode expected in
+              let inputType = AsyncTransport.physicalType actualMode element in
+              let outputType =
+                AsyncTransport.physicalType expectedMode element
+              in
+              if inputType = outputType || atom = A.IntLiteral (A.Int64 0L) then
+                Ok (atom, [], gen)
+              else
+                let* mapHelper =
+                  helperTypes "Darklang.Stdlib.List.map"
+                    [ inputType; outputType ]
+                in
+                let* mapper, gen =
+                  mapper inputType outputType
+                    (fun atom gen ->
+                      prepareValue expectedMode element atom actualMode gen)
+                    gen
+                in
+                let closure, gen = freshVar gen in
+                let result, gen = freshVar gen in
+                Ok
+                  ( A.Var result,
+                    [
+                      (closure, A.ClosureAlloc (mapper.id, []));
+                      (result, A.Call (mapHelper, [ atom; A.Var closure ]));
+                    ],
+                    gen )
           | SumStorage layout ->
-          let actualStorage =
-            match actual with Stored storage -> Some storage | _ -> None
-          in
-          let actualSlot tag =
-            Option.bind actualStorage (fun storage -> sumField storage tag)
-          in
-          let inputSum =
-            match actualStorage with
-            | Some storage -> physicalSumDescriptor storage
-            | None -> layout.AsyncSumStorage.source
-          in
-          let outputSum = physicalSumDescriptor expected in
-          let inputType = AsyncTransport.physicalType actual source in
-          let outputType =
-            AsyncTransport.physicalType (Stored expected) source
-          in
-          let* conversion, gen =
-            mapperBody ~closure:false inputType outputType
-              (sumBranches layout inputSum outputSum
-                 (fun tag typ -> slotRepresentation typ (actualSlot tag))
-                 (fun tag typ -> slotRepresentation typ (sumField expected tag))
-                 (fun tag typ atom gen ->
-                   prepareValue
-                     (AsyncTransport.slotMode (sumField expected tag))
-                     typ atom
-                     (AsyncTransport.slotMode (actualSlot tag))
-                     gen))
-              gen
-          in
-          let result, gen = freshVar gen in
-          Ok (A.Var result, [ (result, A.Call (conversion.id, [ atom ])) ], gen)
-          | TupleStorage | RecordStorage _ ->
-          let types =
-            match (AsyncTransport.kind expected, source) with
-            | TupleStorage, AST.TTuple types -> types
-            | RecordStorage descriptor, AST.TRecord _ ->
-                List.map snd descriptor.A.fields
-            | _ ->
-                Crash.crash "Async promotion has an inconsistent source layout"
-          in
-          let actualStorage =
-            match actual with Stored storage -> Some storage | _ -> None
-          in
-          let rec fields index types expectedSlots values before gen =
-            match (types, expectedSlots) with
-            | [], [] -> Ok (List.rev values, before, gen)
-            | typ :: types, slot :: expectedSlots ->
-                let projected, gen = freshVar gen in
-                let projection =
-                  match actualStorage with
-                  | Some storage -> (
-                      match AsyncTransport.kind storage with
-                      | RecordStorage descriptor ->
-                          A.RecordGet
-                            (storageDescriptor storage descriptor, atom, index)
-                      | _ -> A.TupleGet (atom, index))
-                  | None -> (
-                      match AsyncTransport.kind expected with
-                      | RecordStorage descriptor ->
-                          A.RecordGet (descriptor, atom, index)
-                      | _ -> A.TupleGet (atom, index))
-                in
-                let actual =
-                  match actualStorage with
-                  | Some storage ->
-                      AsyncTransport.slotMode (storageField storage index)
-                  | None -> Concrete
-                in
-                let* value, added, gen =
-                  prepareValue
-                    (AsyncTransport.slotMode slot)
-                    typ (A.Var projected) actual gen
-                in
-                fields (index + 1) types expectedSlots (value :: values)
-                  (before @ [ (projected, projection) ] @ added)
+              let actualStorage =
+                match actual with Stored storage -> Some storage | _ -> None
+              in
+              let actualSlot tag =
+                Option.bind actualStorage (fun storage -> sumField storage tag)
+              in
+              let inputSum =
+                match actualStorage with
+                | Some storage -> physicalSumDescriptor storage
+                | None -> layout.AsyncSumStorage.source
+              in
+              let outputSum = physicalSumDescriptor expected in
+              let inputType = AsyncTransport.physicalType actual source in
+              let outputType =
+                AsyncTransport.physicalType (Stored expected) source
+              in
+              let* conversion, gen =
+                mapperBody ~closure:false inputType outputType
+                  (sumBranches layout inputSum outputSum
+                     (fun tag typ -> slotRepresentation typ (actualSlot tag))
+                     (fun tag typ ->
+                       slotRepresentation typ (sumField expected tag))
+                     (fun tag typ atom gen ->
+                       prepareValue
+                         (AsyncTransport.slotMode (sumField expected tag))
+                         typ atom
+                         (AsyncTransport.slotMode (actualSlot tag))
+                         gen))
                   gen
-            | _ -> Crash.crash "Async promotion has an inconsistent field count"
-          in
-          let* values, before, gen =
-            fields 0 types (AsyncTransport.fields expected) [] [] gen
-          in
-          let result, gen = freshVar gen in
-          let allocation =
-            match AsyncTransport.kind expected with
-            | TupleStorage -> A.TupleAlloc values
-            | RecordStorage descriptor ->
-                A.RecordAlloc (storageDescriptor expected descriptor, values)
-            | ListStorage _ | DictStorage _ | SumStorage _ ->
-                Crash.crash
-                  "Async collection promotion entered fixed-block allocation"
-          in
-          Ok (A.Var result, before @ [ (result, allocation) ], gen))
+              in
+              let result, gen = freshVar gen in
+              Ok
+                ( A.Var result,
+                  [ (result, A.Call (conversion.id, [ atom ])) ],
+                  gen )
+          | TupleStorage | RecordStorage _ ->
+              let types =
+                match (AsyncTransport.kind expected, source) with
+                | TupleStorage, AST.TTuple types -> types
+                | RecordStorage descriptor, AST.TRecord _ ->
+                    List.map snd descriptor.A.fields
+                | _ ->
+                    Crash.crash
+                      "Async promotion has an inconsistent source layout"
+              in
+              let actualStorage =
+                match actual with Stored storage -> Some storage | _ -> None
+              in
+              let rec fields index types expectedSlots values before gen =
+                match (types, expectedSlots) with
+                | [], [] -> Ok (List.rev values, before, gen)
+                | typ :: types, slot :: expectedSlots ->
+                    let projected, gen = freshVar gen in
+                    let projection =
+                      match actualStorage with
+                      | Some storage -> (
+                          match AsyncTransport.kind storage with
+                          | RecordStorage descriptor ->
+                              A.RecordGet
+                                ( storageDescriptor storage descriptor,
+                                  atom,
+                                  index )
+                          | _ -> A.TupleGet (atom, index))
+                      | None -> (
+                          match AsyncTransport.kind expected with
+                          | RecordStorage descriptor ->
+                              A.RecordGet (descriptor, atom, index)
+                          | _ -> A.TupleGet (atom, index))
+                    in
+                    let actual =
+                      match actualStorage with
+                      | Some storage ->
+                          AsyncTransport.slotMode (storageField storage index)
+                      | None -> Concrete
+                    in
+                    let* value, added, gen =
+                      prepareValue
+                        (AsyncTransport.slotMode slot)
+                        typ (A.Var projected) actual gen
+                    in
+                    fields (index + 1) types expectedSlots (value :: values)
+                      (before @ [ (projected, projection) ] @ added)
+                      gen
+                | _ ->
+                    Crash.crash
+                      "Async promotion has an inconsistent field count"
+              in
+              let* values, before, gen =
+                fields 0 types (AsyncTransport.fields expected) [] [] gen
+              in
+              let result, gen = freshVar gen in
+              let allocation =
+                match AsyncTransport.kind expected with
+                | TupleStorage -> A.TupleAlloc values
+                | RecordStorage descriptor ->
+                    A.RecordAlloc (storageDescriptor expected descriptor, values)
+                | ListStorage _ | DictStorage _ | SumStorage _ ->
+                    Crash.crash
+                      "Async collection promotion entered fixed-block \
+                       allocation"
+              in
+              Ok (A.Var result, before @ [ (result, allocation) ], gen))
       | _ ->
           Error
             (Diagnostic
@@ -2274,7 +2289,8 @@ let lower registry names ids sumShapes nextFunctionOrdinal externalDefinitions
                     before @ [ (projected, projection) ] @ added,
                     gen ))
               (Ok ([], [], gen))
-              (List.mapi (fun i value -> (i, value))
+              (List.mapi
+                 (fun i value -> (i, value))
                  (AsyncTransport.fields storage))
           in
           let id, gen = freshVar gen in
@@ -2415,7 +2431,9 @@ let lower registry names ids sumShapes nextFunctionOrdinal externalDefinitions
             let hasList =
               T.exists
                 (fun id ->
-                  match Option.map AsyncTransport.kind (M.find_opt id stores) with
+                  match
+                    Option.map AsyncTransport.kind (M.find_opt id stores)
+                  with
                   | Some (ListStorage _) -> true
                   | _ -> false)
                 (ANFEffects.cexprTempUses operation)
@@ -2423,7 +2441,9 @@ let lower registry names ids sumShapes nextFunctionOrdinal externalDefinitions
             let hasDictionary =
               T.exists
                 (fun id ->
-                  match Option.map AsyncTransport.kind (M.find_opt id stores) with
+                  match
+                    Option.map AsyncTransport.kind (M.find_opt id stores)
+                  with
                   | Some (DictStorage _) -> true
                   | _ -> false)
                 (ANFEffects.cexprTempUses operation)
@@ -2499,7 +2519,9 @@ let lower registry names ids sumShapes nextFunctionOrdinal externalDefinitions
               | A.TypedAtom (atom, typ) -> (
                   Option.is_some (lookup stores atom)
                   &&
-                  match (Option.map AsyncTransport.kind (lookup stores atom), typ) with
+                  match
+                    (Option.map AsyncTransport.kind (lookup stores atom), typ)
+                  with
                   | Some TupleStorage, AST.TTuple _ -> false
                   | Some (RecordStorage _), AST.TRecord _ -> false
                   | Some (ListStorage _), AST.TList _ -> false

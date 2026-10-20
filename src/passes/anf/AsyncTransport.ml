@@ -63,7 +63,8 @@ let compatibleKind left right =
   | _ -> false
 
 let rec equal left right =
-  left == right ||
+  left == right
+  ||
   match (left, right) with
   | Concrete, Concrete | Pending, Pending -> true
   | Stored left, Stored right | PendingStored left, PendingStored right ->
@@ -137,24 +138,23 @@ let sourceFields storage source =
 let carrier source = AST.TSum ("Darklang.Stdlib.__Async.__Value", [ source ])
 
 let rec storageType storage source =
-      let types = sourceFields storage source in
-      if List.length types <> List.length storage.fields then
-        Crash.crash "Async transport storage has an inconsistent field count";
-      let types =
-        List.map2 (fun typ slot -> slotType slot typ) types storage.fields
-      in
-      match (storage.kind, types) with
-      | SumStorage layout, types ->
-          let sum, _ = AsyncSumStorage.physical layout types in
-          AST.TSum (sum.ANF.sumName, sum.ANF.sumArgs)
-      | ListStorage _, [ element ] -> AST.TList element
-      | ListStorage _, _ ->
-          Crash.crash "Async list storage has an inconsistent element layout"
-      | DictStorage (key, _), [ value ] -> AST.TDict (key, value)
-      | DictStorage _, _ ->
-          Crash.crash
-            "Async dictionary storage has an inconsistent value layout"
-      | _ -> AST.TTuple types
+  let types = sourceFields storage source in
+  if List.length types <> List.length storage.fields then
+    Crash.crash "Async transport storage has an inconsistent field count";
+  let types =
+    List.map2 (fun typ slot -> slotType slot typ) types storage.fields
+  in
+  match (storage.kind, types) with
+  | SumStorage layout, types ->
+      let sum, _ = AsyncSumStorage.physical layout types in
+      AST.TSum (sum.ANF.sumName, sum.ANF.sumArgs)
+  | ListStorage _, [ element ] -> AST.TList element
+  | ListStorage _, _ ->
+      Crash.crash "Async list storage has an inconsistent element layout"
+  | DictStorage (key, _), [ value ] -> AST.TDict (key, value)
+  | DictStorage _, _ ->
+      Crash.crash "Async dictionary storage has an inconsistent value layout"
+  | _ -> AST.TTuple types
 
 and slotType slot typ =
   match slot with
@@ -185,8 +185,8 @@ let sumDescriptor storage =
   | SumStorage layout -> (
       let source =
         AST.TSum
-          (layout.AsyncSumStorage.source.ANF.sumName,
-           layout.AsyncSumStorage.source.ANF.sumArgs)
+          ( layout.AsyncSumStorage.source.ANF.sumName,
+            layout.AsyncSumStorage.source.ANF.sumArgs )
       in
       match storageType storage source with
       | AST.TSum (sumName, sumArgs) -> { ANF.sumName; sumArgs }
@@ -212,9 +212,7 @@ let collectSumShapes ~into storage =
           if List.length types <> List.length storage.fields then
             Crash.crash "Async sum storage has an inconsistent payload count";
           let types =
-            List.map2
-              (fun typ slot -> slotType slot typ)
-              types storage.fields
+            List.map2 (fun typ slot -> slotType slot typ) types storage.fields
           in
           let sum, shape = AsyncSumStorage.physical layout types in
           AsyncSumStorage.includePhysicalShapes ~into
