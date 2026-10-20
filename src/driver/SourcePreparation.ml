@@ -924,6 +924,22 @@ let convertTypedProgramToUserOnlyWithMode (baseContext : X.pipelineContext) mode
     measure recorder "AST -> ANF Expression Conversion" (fun () ->
         AST_to_ANF.convertExprToAnf registries converted.AST_to_ANF.varGen expr)
   in
+  let* sourceUserFunctions =
+    (* Native dependencies can later receive pending values from user code.
+       Retain their logical bodies before list-region lowering erases storage. *)
+    match
+      LoweringCallbacks.listRegions registries.AST_to_ANF.functionIds
+        registries.AST_to_ANF.inertFunctionScopes
+    with
+    | LoweringCallbacks.PreserveValues -> Ok converted.AST_to_ANF.functions
+    | LoweringCallbacks.OptimizeLists _ ->
+        let* source =
+          AST_to_ANF.convertFunctionsWithOwnershipWithTrace
+            ~listRegions:LoweringCallbacks.PreserveValues None symbols
+            registries (ANF.VarGen 0) resolvedFunctions
+        in
+        Ok source.AST_to_ANF.functions
+  in
   let convertedFuncReg =
     AST_to_ANF.extendFunctionRegistryWithConverted registries.AST_to_ANF.funcReg
       converted.AST_to_ANF.functions
@@ -945,6 +961,7 @@ let convertTypedProgramToUserOnlyWithMode (baseContext : X.pipelineContext) mode
     ( {
         AST_to_ANF.symbols;
         userFunctions = converted.AST_to_ANF.functions;
+        sourceUserFunctions;
         ownershipContracts = converted.AST_to_ANF.ownershipContracts;
         scopeContracts = registries.AST_to_ANF.scopeContracts;
         inertFunctionScopes = registries.AST_to_ANF.inertFunctionScopes;

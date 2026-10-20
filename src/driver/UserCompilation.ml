@@ -311,7 +311,9 @@ let compileUserWithPlan ?writtenSources (plan : P.userCompilePlan) =
       in
       let build ?(symbols = symbols) registry candidates optimizations noInline
           funcs ownership early =
-        ANFPipeline.buildAnf ~asyncDefinitions:plan.P.asyncDefinitions
+        ANFPipeline.buildAnf
+          ~asyncDefinitions:
+            (plan.P.asyncDefinitions @ user.R.sourceUserFunctions)
           ~asyncRuntime:
             {
               ANFPipeline.context =

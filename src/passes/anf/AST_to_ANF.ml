@@ -32,6 +32,7 @@ type userOnlyResult = {
   scopeContracts : Destruction.functionScopeContract FunctionIdMap.t;
   inertFunctionScopes : SpecializationIdentity.FunctionSet.t;
   userFunctions : ANF.functionDef list;
+  sourceUserFunctions : ANF.functionDef list;
   ownershipContracts : OwnedIR.callSignature FunctionIdMap.t;
   nonInlineableFunctionNames : SpecializationIdentity.FunctionSet.t;
   mainExpr : ANF.aExpr;
