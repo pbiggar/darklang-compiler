@@ -12,7 +12,7 @@ renderPairs [(1L, "one"), (2L, "two")] = ["1:one", "2:two"]
 (3L |> Some) = Some 3L
 (3L |> Ok) = Ok 3L
 
-type AliasInner<'a, 'b> = { first: 'a; second: 'b }
+type AliasInner<'a, 'b> = { first: 'a, second: 'b }
 type AliasOuter<'a> = AliasInner<String, 'a>
 let aliasSecond (value: AliasOuter<'a>): 'a = value.second
-aliasSecond (AliasOuter { first = "value"; second = 42L }) = 42L
+aliasSecond (AliasOuter { first = "value", second = 42L }) = 42L

@@ -8,8 +8,6 @@ from __future__ import annotations
 
 import argparse
 from collections import Counter, defaultdict, deque
-import gzip
-import io
 import json
 from pathlib import Path
 import re
@@ -24,13 +22,12 @@ ROOT = p.ROOT
 INPUTS = 'porting/ledger-inputs.yaml'
 PACKAGE_RECEIPT = 'porting/package-results.json'
 OUTPUT = 'porting/generated/ledger.json'
-ARCHIVE = OUTPUT + '.gz'
 REPORT = 'docs/porting/generated/ledger.md'
 GAPS = 'docs/porting/generated/coverage-gaps.md'
 
 
 def encoded(value):
-    return json.dumps(value, ensure_ascii=False, sort_keys=True, indent=2) + '\n'
+    return json.dumps(value, ensure_ascii=False, sort_keys=True, indent=1) + '\n'
 
 
 def source_path(value):
@@ -42,17 +39,23 @@ def source_path(value):
 def read_inputs(root):
     value = p.read_yaml(root / INPUTS)
     value.setdefault('test_mappings', {})
-    fields = {'schema', 'features', 'source_mappings', 'parser_mappings',
+    fields = {'schema', 'features_file', 'source_mappings', 'parser_mappings',
               'builtin_mappings', 'coverage', 'source_exceptions', 'test_mappings'}
-    if set(value) != fields or value['schema'] != 1 or not isinstance(value['features'], list):
+    if set(value) != fields or value['schema'] != 1:
         raise ValueError('Invalid ledger-inputs.yaml schema')
-    for key in fields - {'schema', 'features'}:
+    for key in fields - {'schema', 'features_file'}:
         if not isinstance(value[key], dict):
             raise ValueError(f'{key} must be a mapping')
+    language = p.read_yaml(root / source_path(value.pop('features_file')))
+    if set(language) != {'schema', 'features'} or language['schema'] != 1 or not isinstance(language['features'], list):
+        raise ValueError('Invalid language-features.yaml schema')
+    value['features'] = language['features']
     seen = set()
     for feature in value['features']:
-        if (not isinstance(feature, dict) or set(feature) - {'name', 'status', 'sources', 'notes', 'reviewed_sha256'}
+        if (not isinstance(feature, dict) or set(feature) != {'group', 'name', 'status', 'sources', 'notes'}
                 or feature.get('status') not in {'implemented', 'partial', 'missing', 'not-assessed'}
+                or not isinstance(feature.get('group'), str) or not feature['group']
+                or not isinstance(feature.get('notes'), str) or not feature['notes']
                 or not isinstance(feature.get('name'), str) or feature['name'] in seen
                 or not isinstance(feature.get('sources'), list) or not feature['sources']):
             raise ValueError('Invalid or duplicate maintained language feature')
@@ -404,8 +407,7 @@ def computed_builtin_calls(upstream):
 
 def context(root, upstream, records, compiler):
     source = p.read_yaml(root / 'porting/sources.yaml')
-    return dict(upstream_revision=source['upstream_revision'], target=source['target'],
-                compiler_context_sha256=p.compiler_context(root, compiler))
+    return dict(upstream_revision=source['upstream_revision'], target=source['target'])
 
 
 
@@ -422,14 +424,10 @@ def build(root, upstream, compile_packages=False):
     provenance = context(root, upstream, records, compiler)
     coverage, review = coverage_index(upstream_files, compiler, config['coverage'])
     native_names, wrapper_counterparts = builtin_counterparts(upstream_files, compiler)
-    features = []
-    for feature in sorted(config['features'], key=lambda f: f['name']):
-        hashes = {path: p.digest(compiler[path]) if path in compiler else None for path in feature['sources']}
-        source_hash = p.digest(encoded(hashes).encode())
-        changed = feature.get('reviewed_sha256') != source_hash
-        features.append(dict(feature, source_sha256=source_hash, review_required=changed))
-        if changed:
-            review.append('Review feature status: ' + feature['name'])
+    features = sorted(config['features'], key=lambda f: (f['group'], f['name']))
+    for feature in features:
+        if any(path not in compiler for path in feature['sources']):
+            raise ValueError('Unknown feature source: ' + feature['name'])
 
     source_rows, parser, builtins = [], [], []
     used_mappings = set()
@@ -491,17 +489,21 @@ def build(root, upstream, compile_packages=False):
 
     package_path = root / PACKAGE_RECEIPT
     package_receipt = json.loads(package_path.read_text()) if package_path.exists() and not compile_packages else None
+    # Compilation freshness is separate from declaration names/source comparison.
+    # Only compilation receipts need the compiler/dependency fingerprint.
+    compilation_context = (dict(**provenance, compiler_context_sha256=p.compiler_context(root, compiler))
+                           if compile_packages or package_receipt else None)
     if package_receipt is not None and (package_receipt.get('schema') != 1
             or package_receipt.get('state') not in ('recorded', 'blocked')
             or not isinstance(package_receipt.get('packages'), list)):
         raise ValueError('Invalid package-results.json receipt')
     if compile_packages:
-        package_receipt = dict(schema=1, **execute_packages(root, upstream_files, provenance))
+        package_receipt = dict(schema=1, **execute_packages(root, upstream_files, compilation_context))
         _, after = p.discover(root, upstream_files)
-        if context(root, upstream, records, after) != provenance:
+        if p.compiler_context(root, after) != compilation_context['compiler_context_sha256']:
             raise ValueError('Inputs changed during package compilation; previous results are unchanged')
         package_path.write_text(encoded(package_receipt))
-    package_current = package_receipt is not None and package_receipt.get('context') == provenance
+    package_current = package_receipt is not None and package_receipt.get('context') == compilation_context
     compilation_state = package_receipt['state'] if package_current else 'stale' if package_receipt else 'not-run'
     results = {row['source']: row for row in package_receipt['packages']} if package_current else {}
     for row in source_rows:
@@ -519,7 +521,7 @@ def build(root, upstream, compile_packages=False):
     computed = [dict(source=path, **item) for path, body in sorted(upstream_files.items())
                 if path.startswith('backend/src/Builtins/') and path.endswith('.fs')
                 for item in p.builtin_declarations(body.decode())[1]]
-    return dict(schema=2, context=provenance, features=features, parser=parser, builtins=builtins,
+    return dict(schema=3, context=provenance, features=features, parser=parser, builtins=builtins,
                 computed_builtin_registrations=sum(r['builtin_declaration_counts']['computed'] for r in builtin_sources),
                 computed_builtin_review=computed,
                 declarations=declaration_rows,
@@ -531,12 +533,30 @@ def build(root, upstream, compile_packages=False):
 
 
 def markdown(value):
+    feature_counts = Counter(f['status'] for f in value['features'])
     lines = ['# Repeatable compatibility ledger', '',
-             'Generated from pinned sources and maintained decisions. No compatibility probes or new tests are generated.', '',
+             'Current state of the compiler port. [Read what these measurements mean](../README.md).', '',
              'Upstream: `' + value['context']['upstream_revision'] + '`; target: `' + value['context']['target'] + '`.', '',
-             '## Language features', '', '| Feature | Status | Review needed |', '| --- | --- | --- |']
+             '## Current state', '',
+             '| Area | Recorded state |', '| --- | --- |',
+             '| Language capabilities | ' + ', '.join(f'{feature_counts[status]} {status}' for status in ('implemented', 'partial', 'missing', 'not-assessed')) + ' |']
+    for category in ('stdlib', 'packages'):
+        rows = [r for r in value['declarations'] if category in r['categories'] and r['upstream']]
+        counts = Counter(r['source_status'] for r in rows)
+        lines.append('| ' + ('StdLib declarations' if category == 'stdlib' else 'Package declarations (includes StdLib)') + ' | '
+                     + ', '.join(f'{counts[status]} {status}' for status in ('identical', 'different', 'missing', 'ambiguous')) + ' |')
+    states = Counter(r['status'] for r in value['tests']['cases'])
+    lines += ['| Upstream tests | ' + ', '.join(f'{states[status]} {status}' for status in ('enabled', 'disabled', 'partial', 'missing', 'ambiguous')) + ' |',
+              '| Package compilation | ' + value['compilation']['state'] + ' |', '',
+             'Counts are different measurements, not one overall compatibility score. Source comparisons use each declaration itself. Enabled tests are assumed to pass; this report does not run tests.', '',
+             '## Language features', '',
+             'Maintained assessments of specific language capabilities. See [how this ledger works](../README.md).', '']
+    group = None
     for feature in value['features']:
-        lines.append(f"| {p.cell(feature['name'])} | {feature['status']} | {'yes' if feature['review_required'] else 'no'} |")
+        if feature['group'] != group:
+            group = feature['group']
+            lines += ['', '### ' + group, '', '| Feature | Status | Scope / limitation |', '| --- | --- | --- |']
+        lines.append(f"| {p.cell(feature['name'])} | {feature['status']} | {p.cell(feature['notes'])} |")
     lines += ['', '## Source equivalency by declaration', '',
               'Counts are functions, values, types, traits and implementations. Named tests are in the test inventory. Packages include StdLib; file splits do not determine declaration matches. Identical means exact declaration source bytes, excluding surrounding comments/blank lines.', '',
               '| Ledger | Identical | Different | Missing | Ambiguous | Compiler-only |', '| --- | ---: | ---: | ---: | ---: | ---: |']
@@ -546,11 +566,11 @@ def markdown(value):
     package_rows = [r for r in value['declarations'] if r['upstream']]
     counts = Counter(r['coverage']['kind'] for r in package_rows)
     lines += ['', '## Existing test references', '',
-              'Lexical references are coverage hints, not evidence of execution. One deterministic witness (the shortest indirect path) and the total reference count per declaration are in `porting/generated/ledger.json`.', '',
+              'These counts show references from existing tests, including calls through helpers. Each declaration in `porting/generated/ledger.json` lists its reference count and an example test relationship.', '',
               '| Direct | Indirect | Maintained | Not identified |', '| ---: | ---: | ---: | ---: |',
               '| ' + ' | '.join(str(counts[k]) for k in ('direct', 'indirect', 'maintained', 'not-identified')) + ' |', '',
-              'Package compilation state: **' + value['compilation']['state'] + '**. Each declaration links to its containing source-unit receipt. A failed unit does not establish that every declaration fails independently. Original units are parsed, checked and lowered through the native preamble pipeline.', '',
-              '| Declarations in compiled units | In failed units | In blocked units | Stale | Not run |', '| ---: | ---: | ---: | ---: | ---: |',
+              'Package compilation state: **' + value['compilation']['state'] + '**. Results are recorded for each original source file. A file that compiles provides evidence for its declarations. A file that fails does not identify which declarations fail independently.', '',
+              '| Declarations in compiled files | In files that failed | In blocked files | Stale | Not run |', '| ---: | ---: | ---: | ---: | ---: |',
               '| ' + ' | '.join(str(Counter(r['compilation']['status'] for r in package_rows)[k]) for k in ('compiled', 'fail', 'blocked', 'stale', 'not-run')) + ' |', '',
               '## Parser and builtins', '',
               'Builtin mappings distinguish callable Builtin declarations from source implementation counterparts. A counterpart is not a callable alias or a behavior pass. Computed registrations remain explicit review items.', '']
@@ -573,7 +593,7 @@ def markdown(value):
         lines.append('| ' + form + ' | ' + ' | '.join(map(str, numbers)) + ' |')
     extras = value['tests']['compiler_only']
     lines += ['', f"Unmatched compiler tests: {len(extras)} ({sum(r['enabled'] for r in extras)} enabled). Older imported fixtures absent from the current pin remain visible here; unmatched does not prove compiler authorship.", '',
-              'Whole-file gates, individual line gates, fixture skip metadata and compiler expectation overrides are recorded per counterpart. Overrides are never counted as identical. Source forms that could not be indexed: ' + str(len(value['tests']['unindexed'])) + '.', '',
+              'Each counterpart records whole-file exclusions, individual exclusions, skip annotations and changed compiler expectations. Changed expectations are never counted as identical. Source statements needing manual review: ' + str(len(value['tests']['unindexed'])) + '.', '',
               '## Review queue', '']
     lines += ['- ' + p.cell(item) for item in value['review']]
     return '\n'.join(lines) + '\n'
@@ -611,17 +631,13 @@ def main():
     try:
         value = build(ROOT, args.upstream.resolve(), args.compile_packages)
         machine = encoded(value)
-        compressed = io.BytesIO()
-        with gzip.GzipFile(fileobj=compressed, mode='wb', filename='', mtime=0) as archive:
-            archive.write(machine.encode())
-        archive_path = ROOT / ARCHIVE
+        machine_path = ROOT / OUTPUT
         if args.check:
-            if not archive_path.exists() or archive_path.read_bytes() != compressed.getvalue():
-                raise ValueError('Ledger is stale: ' + ARCHIVE)
+            if not machine_path.exists() or machine_path.read_text() != machine:
+                raise ValueError('Ledger is stale: ' + OUTPUT)
         else:
-            archive_path.parent.mkdir(parents=True, exist_ok=True)
-            archive_path.write_bytes(compressed.getvalue())
-            (ROOT / OUTPUT).write_text(machine)
+            machine_path.parent.mkdir(parents=True, exist_ok=True)
+            machine_path.write_text(machine)
         outputs = {REPORT: markdown(value), GAPS: coverage_gaps(value)}
         for name, contents in outputs.items():
             path = ROOT / name

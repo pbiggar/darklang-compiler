@@ -33,3 +33,10 @@ commas and newlines remain accepted
 type Point = { x: Int, y: Int }
 Point { x = 1, y = 2 }
 ---ROUNDTRIP---
+
+---NAME---
+removed database attribute is rejected
+---SOURCE---
+[<DB>] type Counter = Int
+---EXPECT-ERROR---
+expected an expression, found '<'

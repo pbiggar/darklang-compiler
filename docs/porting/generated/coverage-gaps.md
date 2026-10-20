@@ -182,12 +182,12 @@ Remaining implicit dispatch, reflection, and unfamiliar syntax can require maint
 
 | Declaration | Kind | Line |
 | --- | --- | ---: |
-| Darklang.Cli.Commands.parseAndExecute | function | 587 |
-| Darklang.Cli.Registry.completionContextKey | function | 370 |
-| Darklang.Cli.Registry.formatCompactGroup | function | 293 |
-| Darklang.Cli.Registry.getCompactCommandList | function | 298 |
-| Darklang.Cli.Registry.getCompletionHintFromContext | function | 478 |
-| Darklang.Cli.Registry.getCompletionsForContext | function | 390 |
+| Darklang.Cli.Commands.parseAndExecute | function | 594 |
+| Darklang.Cli.Registry.completionContextKey | function | 377 |
+| Darklang.Cli.Registry.formatCompactGroup | function | 300 |
+| Darklang.Cli.Registry.getCompactCommandList | function | 305 |
+| Darklang.Cli.Registry.getCompletionHintFromContext | function | 485 |
+| Darklang.Cli.Registry.getCompletionsForContext | function | 397 |
 
 ## packages/darklang/cli/scm/conflicts.dark
 
@@ -315,15 +315,21 @@ Remaining implicit dispatch, reflection, and unfamiliar syntax can require maint
 
 | Declaration | Kind | Line |
 | --- | --- | ---: |
-| Darklang.LanguageTools.AtRestTypeChecker.Environment.loadClosure | function | 748 |
-| Darklang.LanguageTools.AtRestTypeChecker.Environment.pipeRefs | function | 706 |
+| Darklang.LanguageTools.AtRestTypeChecker.Environment.loadClosure | function | 745 |
+| Darklang.LanguageTools.AtRestTypeChecker.Environment.pipeRefs | function | 703 |
 
 ## packages/darklang/languageTools/atRestTypeChecker/solve.dark
 
 | Declaration | Kind | Line |
 | --- | --- | ---: |
-| Darklang.LanguageTools.AtRestTypeChecker.Solve.isNumeric | function | 2038 |
-| Darklang.LanguageTools.AtRestTypeChecker.Solve.isSignedNumeric | function | 2055 |
+| Darklang.LanguageTools.AtRestTypeChecker.Solve.isNumeric | function | 2036 |
+| Darklang.LanguageTools.AtRestTypeChecker.Solve.isSignedNumeric | function | 2053 |
+
+## packages/darklang/languageTools/common.dark
+
+| Declaration | Kind | Line |
+| --- | --- | ---: |
+| Darklang.LanguageTools.TLID | type | 7 |
 
 ## packages/darklang/languageTools/interpreterStats.dark
 
@@ -368,12 +374,11 @@ Remaining implicit dispatch, reflection, and unfamiliar syntax can require maint
 
 | Declaration | Kind | Line |
 | --- | --- | ---: |
-| Darklang.LanguageTools.ProgramTypes.DB | type | 1087 |
-| Darklang.LanguageTools.ProgramTypes.Deprecation | type | 382 |
-| Darklang.LanguageTools.ProgramTypes.PackageManager.withExtras | function | 878 |
-| Darklang.LanguageTools.ProgramTypes.Reference.fromHashAndKind | function | 657 |
-| Darklang.LanguageTools.ProgramTypes.SourceFile.Declaration | type | 1095 |
-| Darklang.LanguageTools.ProgramTypes.SourceFile.SourceFile | type | 1106 |
+| Darklang.LanguageTools.ProgramTypes.Deprecation | type | 381 |
+| Darklang.LanguageTools.ProgramTypes.PackageManager.withExtras | function | 877 |
+| Darklang.LanguageTools.ProgramTypes.Reference.fromHashAndKind | function | 656 |
+| Darklang.LanguageTools.ProgramTypes.SourceFile.Declaration | type | 1086 |
+| Darklang.LanguageTools.ProgramTypes.SourceFile.SourceFile | type | 1097 |
 
 ## packages/darklang/languageTools/runtimeErrors.dark
 
@@ -386,7 +391,7 @@ Remaining implicit dispatch, reflection, and unfamiliar syntax can require maint
 
 | Declaration | Kind | Line |
 | --- | --- | ---: |
-| Darklang.LanguageTools.RuntimeTypes.BuiltInParam | type | 331 |
+| Darklang.LanguageTools.RuntimeTypes.BuiltInParam | type | 328 |
 
 ## packages/darklang/languageTools/semanticTokens.dark
 
@@ -398,7 +403,7 @@ Remaining implicit dispatch, reflection, and unfamiliar syntax can require maint
 
 | Declaration | Kind | Line |
 | --- | --- | ---: |
-| Darklang.LanguageTools.WrittenTypes.Expr.range | function | 411 |
+| Darklang.LanguageTools.WrittenTypes.Expr.range | function | 404 |
 
 ## packages/darklang/languageTools/writtenTypesToProgramTypes.dark
 
@@ -406,10 +411,10 @@ Remaining implicit dispatch, reflection, and unfamiliar syntax can require maint
 | --- | --- | ---: |
 | Darklang.LanguageTools.WrittenTypesToProgramTypes.Identifiers.Fn.toPT | function | 186 |
 | Darklang.LanguageTools.WrittenTypesToProgramTypes.Identifiers.Value.toPT | function | 183 |
-| Darklang.LanguageTools.WrittenTypesToProgramTypes.declarationsToPT | function | 2139 |
+| Darklang.LanguageTools.WrittenTypesToProgramTypes.declarationsToPT | function | 2124 |
 | Darklang.LanguageTools.WrittenTypesToProgramTypes.fnHashBoundAt | function | 62 |
 | Darklang.LanguageTools.WrittenTypesToProgramTypes.gtlid | function | 29 |
-| Darklang.LanguageTools.WrittenTypesToProgramTypes.parsedFileAsSourceFile | function | 2245 |
+| Darklang.LanguageTools.WrittenTypesToProgramTypes.parsedFileAsSourceFile | function | 2230 |
 | Darklang.LanguageTools.WrittenTypesToProgramTypes.referenceBoundAt | function | 48 |
 | Darklang.LanguageTools.WrittenTypesToProgramTypes.typeHashBoundAt | function | 71 |
 | Darklang.LanguageTools.WrittenTypesToProgramTypes.valueHashBoundAt | function | 80 |
@@ -460,7 +465,7 @@ Remaining implicit dispatch, reflection, and unfamiliar syntax can require maint
 
 | Declaration | Kind | Line |
 | --- | --- | ---: |
-| Darklang.PrettyPrinter.ProgramTypes.BuiltinFn.signature | function | 1827 |
+| Darklang.PrettyPrinter.ProgramTypes.BuiltinFn.signature | function | 1805 |
 | Darklang.PrettyPrinter.ProgramTypes.Context.forMain | value | 122 |
 | Darklang.PrettyPrinter.ProgramTypes.FQFnName.Package.fullForReference | function | 283 |
 | Darklang.PrettyPrinter.ProgramTypes.FQFnName.fullForReference | function | 293 |
@@ -470,13 +475,12 @@ Remaining implicit dispatch, reflection, and unfamiliar syntax can require maint
 | Darklang.PrettyPrinter.ProgramTypes.FQValueName.Package.fullForReference | function | 236 |
 | Darklang.PrettyPrinter.ProgramTypes.FQValueName.fullForReference | function | 247 |
 | Darklang.PrettyPrinter.ProgramTypes.NameResolutionError.error | function | 63 |
-| Darklang.PrettyPrinter.ProgramTypes.TypeDeclaration.enumCase | function | 1438 |
-| Darklang.PrettyPrinter.ProgramTypes.TypeDeclaration.enumField | function | 1409 |
-| Darklang.PrettyPrinter.ProgramTypes.TypeDeclaration.recordField | function | 1389 |
-| Darklang.PrettyPrinter.ProgramTypes.customType | function | 1472 |
-| Darklang.PrettyPrinter.ProgramTypes.db | function | 1479 |
+| Darklang.PrettyPrinter.ProgramTypes.TypeDeclaration.enumCase | function | 1434 |
+| Darklang.PrettyPrinter.ProgramTypes.TypeDeclaration.enumField | function | 1405 |
+| Darklang.PrettyPrinter.ProgramTypes.TypeDeclaration.recordField | function | 1385 |
+| Darklang.PrettyPrinter.ProgramTypes.customType | function | 1468 |
 | Darklang.PrettyPrinter.ProgramTypes.packageName | function | 155 |
-| Darklang.PrettyPrinter.ProgramTypes.sourceOf | function | 1800 |
+| Darklang.PrettyPrinter.ProgramTypes.sourceOf | function | 1778 |
 
 ## packages/darklang/prettyPrinter/runtimeError.dark
 
@@ -489,9 +493,9 @@ Remaining implicit dispatch, reflection, and unfamiliar syntax can require maint
 
 | Declaration | Kind | Line |
 | --- | --- | ---: |
-| Darklang.PrettyPrinter.RuntimeTypes.Dval.declaredFieldOrder | function | 632 |
-| Darklang.PrettyPrinter.RuntimeTypes.Dval.inDeclaredOrder | function | 651 |
-| Darklang.PrettyPrinter.RuntimeTypes.Dval.makeSpaces | function | 671 |
+| Darklang.PrettyPrinter.RuntimeTypes.Dval.declaredFieldOrder | function | 629 |
+| Darklang.PrettyPrinter.RuntimeTypes.Dval.inDeclaredOrder | function | 648 |
+| Darklang.PrettyPrinter.RuntimeTypes.Dval.makeSpaces | function | 668 |
 | Darklang.PrettyPrinter.RuntimeTypes.caseNameStandsAlone | function | 105 |
 | Darklang.PrettyPrinter.RuntimeTypes.nameResolution | function | 22 |
 | Darklang.PrettyPrinter.RuntimeTypes.typeNameWith | function | 80 |
@@ -549,7 +553,7 @@ Remaining implicit dispatch, reflection, and unfamiliar syntax can require maint
 
 | Declaration | Kind | Line |
 | --- | --- | ---: |
-| Darklang.Stdlib.await | function | 7 |
+| Darklang.Stdlib.await | function | 8 |
 
 ## packages/darklang/stdlib/bool.dark
 
@@ -687,13 +691,6 @@ Remaining implicit dispatch, reflection, and unfamiliar syntax can require maint
 | Darklang.Stdlib.Cli.Posix.sigterm | value | 198 |
 | Darklang.Stdlib.Cli.Posix.symlink | function | 133 |
 | Darklang.Stdlib.Cli.Posix.utimesNow | function | 124 |
-
-## packages/darklang/stdlib/cli/powershell.dark
-
-| Declaration | Kind | Line |
-| --- | --- | ---: |
-| Darklang.Stdlib.Cli.PowerShell.addAlias | function | 53 |
-| Darklang.Stdlib.Cli.PowerShell.grantExecutePermission | function | 45 |
 
 ## packages/darklang/stdlib/cli/process.dark
 
@@ -897,8 +894,8 @@ Remaining implicit dispatch, reflection, and unfamiliar syntax can require maint
 
 | Declaration | Kind | Line |
 | --- | --- | ---: |
-| Darklang.Stdlib.Exec.awaitWithin | function | 134 |
-| Darklang.Stdlib.Exec.spawnDetached | function | 122 |
+| Darklang.Stdlib.Exec.awaitWithin | function | 135 |
+| Darklang.Stdlib.Exec.spawnDetached | function | 123 |
 
 ## packages/darklang/stdlib/execPolicy.dark
 
@@ -953,8 +950,8 @@ Remaining implicit dispatch, reflection, and unfamiliar syntax can require maint
 | Declaration | Kind | Line |
 | --- | --- | ---: |
 | Darklang.Stdlib.Html.Attribute | type | 47 |
-| Darklang.Stdlib.Html.a | function | 238 |
-| Darklang.Stdlib.Html.button | function | 308 |
+| Darklang.Stdlib.Html.a | function | 248 |
+| Darklang.Stdlib.Html.button | function | 318 |
 
 ## packages/darklang/stdlib/http.dark
 
@@ -1434,8 +1431,8 @@ Remaining implicit dispatch, reflection, and unfamiliar syntax can require maint
 | Darklang.ShadowingTest.matchWithShadowing | function | 47 |
 | Darklang.ShadowingTest.pipeWithShadowing | function | 87 |
 | Darklang.ShadowingTest.tupleMatchWithShadowing | function | 57 |
-| Darklang.ShadowingTest.valueShadowing | value | 97 |
 | Darklang.ShadowingTest.valueShadowing | function | 98 |
+| Darklang.ShadowingTest.valueShadowing | value | 97 |
 | Darklang.Test.factorial | function | 3 |
 | Darklang.Test.fibonacci | function | 10 |
 | Darklang.Test.sumUpTo | function | 17 |

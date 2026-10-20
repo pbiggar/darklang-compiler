@@ -1,0 +1,18 @@
+module Darklang.Stdlib.Math.Tests
+
+// Selected unchanged declarations from interpreter e76430be5.
+
+let near (actual: Float) (expected: Float) : Stdlib.Test.Result =
+  let tolerance = if expected == 0.0 then 0.000000000001 else 0.0000000001
+  (Stdlib.abs (actual - expected) < tolerance) |> Stdlib.Test.equal true
+
+test hyperbolic =
+  Stdlib.Test.all
+    [ Stdlib.Math.cosh 0.0 |> near 1.0
+      Stdlib.Math.sinh 0.0 |> near 0.0
+      Stdlib.Math.sinh 1.0 |> near 1.17520119364
+      Stdlib.Math.tanh 0.0 |> near 0.0
+      Stdlib.Math.tanh 1.0 |> near 0.761594155956
+      Stdlib.Math.tanh -1.0 |> near (-0.761594155956)
+      Stdlib.Math.tanh 20.0 |> near 1.0 ]
+

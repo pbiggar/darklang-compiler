@@ -147,7 +147,7 @@ let __receive (socket: Stdlib.__Datagram.Socket) (peer: Stdlib.__Datagram.Endpoi
 let __lookup (socket: Stdlib.__Datagram.Socket) (peer: Stdlib.__Datagram.Endpoint) (name: String)
   (port: Int64) (deadline: Int64) (visited: List<String>) (ttl: Int64)
   : Stdlib.Result.Result<Stdlib.__HttpsDns.Answer, String> =
-  if Stdlib.List.length visited >= 8 || Stdlib.List.member visited name then Error "HTTPS DNS alias chain too long"
+  if Stdlib.List.length visited >= 8 || Stdlib.List.contains visited name then Error "HTTPS DNS alias chain too long"
   else
     match Stdlib.Crypto.__secureRandomBytes 2L, Stdlib.__Network.monotonicMillis () with
     | Ok random, Ok now ->

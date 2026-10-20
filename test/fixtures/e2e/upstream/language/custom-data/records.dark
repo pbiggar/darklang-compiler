@@ -1,11 +1,11 @@
 type Cols1 = { col1: Int64 }
-type Cols2 = { col1: Int64; col2: Int64 }
+type Cols2 = { col1: Int64, col2: Int64 }
 
 type AnEnum = | A | B | C
 
-Cols2 { col1 = 1L; col2 = 3L } = Cols2 { col1 = 1L; col2 = 3L }
+Cols2 { col1 = 1L, col2 = 3L } = Cols2 { col1 = 1L, col2 = 3L }
 
-Cols2 { col1 = 2L; col2 = Builtin.testRuntimeError "test" } = error="Uncaught exception: test"
+Cols2 { col1 = 2L, col2 = Builtin.testRuntimeError "test" } = error="Uncaught exception: test"
 
 
 module WithTypeArgs =
@@ -25,19 +25,19 @@ module WithTypeArgs =
 
 module InvalidCols =
   #compileerror="Duplicate record field 'col1'"
-  Cols1 { col1 = 1L; col1 = 2L } = error="Duplicate field `col1`"
+  Cols1 { col1 = 1L, col1 = 2L } = error="Duplicate field `col1`"
 
   #compileerror="Unknown field '' on Cols2"
-  Cols2 { col1 = 2L; ___ = 3L } = error="Empty key in record creation"
+  Cols2 { col1 = 2L, ___ = 3L } = error="Empty key in record creation"
 
   #compileerror="record literal does not contain exactly the declared field slots"
   Cols2 { col1 = 2L } = error="Missing field `col2`"
 
   #compileerror="Unknown field 'other' on Cols2"
-  Cols2 { col1 = 2L; other = 3L } = error="No field named `other`"
+  Cols2 { col1 = 2L, other = 3L } = error="No field named `other`"
 
   #compileerror="Unknown field 'col3' on Cols2"
-  Cols2 { col1 = 2L; col2 = 3L; col3 = 4L } = error="No field named `col3`"
+  Cols2 { col1 = 2L, col2 = 3L, col3 = 4L } = error="No field named `col3`"
 
   #compileerror="Expected TInt64, got TString"
   Cols1 { col1 = "" } = error="Failed to create record. Expected Int64 for field `col1`, but got \"\" (a String)"
@@ -51,8 +51,8 @@ module InvalidType =
   AnEnum { col1 = 2L } = error="Expected a record, but AnEnum is not one"
 
 module Polymorphism =
-  type MyRecord<'a> = { col1: 'a; col2: Int64 }
-  (MyRecord { col1 = (); col2 = 1L }).col2 = 1L
+  type MyRecord<'a> = { col1: 'a, col2: Int64 }
+  (MyRecord { col1 = (), col2 = 1L }).col2 = 1L
 
   (MyRecord
     { col1 = Stdlib.Option.Option.Some(Stdlib.Result.Result.Ok 1L)
@@ -67,42 +67,42 @@ module Nested =
 
 
 module Update =
-  type RecordForUpdate = { x: Int64; y: Int64 }
-  type RecordForUpdateMultiple = { x: Int64; y: Int64; z: Int64 }
+  type RecordForUpdate = { x: Int64, y: Int64 }
+  type RecordForUpdateMultiple = { x: Int64, y: Int64, z: Int64 }
 
-  ({ RecordForUpdate { x = 4L; y = 1L } with y = 2L }) =
-    RecordForUpdate { x = 4L; y = 2L }
+  ({ RecordForUpdate { x = 4L, y = 1L } with y = 2L }) =
+    RecordForUpdate { x = 4L, y = 2L }
 
-  (let myRec = RecordForUpdate { x = 4L; y = 1L }
+  (let myRec = RecordForUpdate { x = 4L, y = 1L }
    { myRec with y = 2L }) =
-    RecordForUpdate { x = 4L; y = 2L }
+    RecordForUpdate { x = 4L, y = 2L }
 
   #compileerror="Duplicate record field 'y'"
-  (let myRec = RecordForUpdate { x = 4L; y = 1L }
-   { myRec with y = 22L; y = 42L }) =
-    RecordForUpdate { x = 4L; y = 42L }
+  (let myRec = RecordForUpdate { x = 4L, y = 1L }
+   { myRec with y = 22L, y = 42L }) =
+    RecordForUpdate { x = 4L, y = 42L }
 
-  (let myRec = RecordForUpdateMultiple { x = 4L; y = 1L; z = 0L }
-   { myRec with y = 2L; z = 42L }) =
-    (RecordForUpdateMultiple { x = 4L; y = 2L; z = 42L })
+  (let myRec = RecordForUpdateMultiple { x = 4L, y = 1L, z = 0L }
+   { myRec with y = 2L, z = 42L }) =
+    (RecordForUpdateMultiple { x = 4L, y = 2L, z = 42L })
 
-  (let myRec = RecordForUpdateMultiple { x = 4L; y = 1L; z = 0L }
-   { myRec with z = 3L; x = 42L }) =
-    (RecordForUpdateMultiple { x = 42L; y = 1L; z = 3L })
+  (let myRec = RecordForUpdateMultiple { x = 4L, y = 1L, z = 0L }
+   { myRec with z = 3L, x = 42L }) =
+    (RecordForUpdateMultiple { x = 42L, y = 1L, z = 3L })
 
-  (let myRec = RecordForUpdateMultiple { x = 4L; y = 1L; z = 0L }
-   { myRec with z = 3L; x = 42L; y = 11L }) =
-    (RecordForUpdateMultiple { x = 42L; y = 11L; z = 3L })
+  (let myRec = RecordForUpdateMultiple { x = 4L, y = 1L, z = 0L }
+   { myRec with z = 3L, x = 42L, y = 11L }) =
+    (RecordForUpdateMultiple { x = 42L, y = 11L, z = 3L })
 
   module Invalid =
     #compileerror="Unknown field 'p' on RecordForUpdateMultiple"
-    (let myRec = RecordForUpdateMultiple { x = 4L; y = 1L; z = 0L }
-     { myRec with z = 3L; x = 42L; y = 11L; p = 10L }) = error="No field named `p`"
+    (let myRec = RecordForUpdateMultiple { x = 4L, y = 1L, z = 0L }
+     { myRec with z = 3L, x = 42L, y = 11L, p = 10L }) = error="No field named `p`"
 
     #compileerror="Unknown field 'other' on RecordForUpdate"
-    (let myRec = RecordForUpdate { x = 4L; y = 1L }
+    (let myRec = RecordForUpdate { x = 4L, y = 1L }
      { myRec with other = 2L }) = error="No field named `other`"
 
     #compileerror="Expected TInt64, got TString"
-    (let myRec = RecordForUpdate { x = 4L; y = 1L }
+    (let myRec = RecordForUpdate { x = 4L, y = 1L }
      { myRec with y = "2" }) = error="Failed to create updated record. Expected Int64 for field `y`, but got \"2\" (a String)"

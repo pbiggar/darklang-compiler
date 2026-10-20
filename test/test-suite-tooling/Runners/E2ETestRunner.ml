@@ -429,7 +429,7 @@ let declarationRange = function
   | WT.DValue d -> d.WT.range
   | WT.DTrait d -> d.WT.range
   | WT.DImpl d -> d.WT.range
-  | WT.DType d | WT.DTypeDB d -> d.WT.range
+  | WT.DType d -> d.WT.range
   | WT.DModule d -> d.WT.range
   | WT.DExpr e -> WT.exprRange e
   | WT.DAssertion d -> d.WT.range

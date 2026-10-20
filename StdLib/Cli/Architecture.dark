@@ -5,7 +5,6 @@ type Architecture =
   | Aarch64
   | Arm
   | Arm64
-  | Armv7l
 
 let getArchitecture () : Stdlib.Result.Result<Architecture, String> =
   match Builtin.runtimeTargetArchitecture () with

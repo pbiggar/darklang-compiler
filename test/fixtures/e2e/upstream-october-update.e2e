@@ -2,12 +2,11 @@
 Stdlib.List.contains [1L, 2L, 3L] 2L = true
 Stdlib.List.contains [] 1L = false
 Stdlib.List.contains ["a", "b"] "c" = false
-let bits (value: Float) : UInt64 = Stdlib.Float.toBits value
-bits -0.0 = 9223372036854775808UL
-bits -1.0 = 13830554455654793216UL
-bits (1.0 / 0.0) = 9218868437227405312UL
-bits (-1.0 / 0.0) = 18442240474082181120UL
-bits 0.0 = 0UL
+Stdlib.Float.toBits -0.0 = 9223372036854775808UL
+Stdlib.Float.toBits -1.0 = 13830554455654793216UL
+Stdlib.Float.toBits (1.0 / 0.0) = 9218868437227405312UL
+Stdlib.Float.toBits (-1.0 / 0.0) = 18442240474082181120UL
+Stdlib.Float.toBits 0.0 = 0UL
 Stdlib.Html.nodeToString (Stdlib.Html.comment "---") = "<!-- - - - -->"
 Stdlib.Html.nodeToString (Stdlib.Html.comment "---->") = "<!-- - - - -> -->"
 Stdlib.Html.nodeToString (Stdlib.Html.comment ">tail") = "<!-- >tail -->"
@@ -20,4 +19,5 @@ Stdlib.Float.isNaN (Stdlib.Math.tanh (0.0 / 0.0)) = true
 Stdlib.Float.absoluteValue (Stdlib.Math.tanh 1.0 - 0.7615941559557649) < 0.000000000001 = true
 Stdlib.Float.absoluteValue (Stdlib.Math.tanh -1.0 + 0.7615941559557649) < 0.000000000001 = true
 Stdlib.Float.absoluteValue (Stdlib.Math.tanh 0.000000000001 - 0.000000000001) < 0.000000000000000001 = true
-bits (Stdlib.Math.tanh -0.0) = 9223372036854775808UL
+Stdlib.Float.toBits (Stdlib.Math.tanh -0.0) = 9223372036854775808UL
+let bits (value: Float) : UInt64 = Stdlib.Float.toBits value in bits -0.0 = 9223372036854775808UL

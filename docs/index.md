@@ -39,7 +39,7 @@ grouped by purpose; each subject has one canonical source.
 
 ## Compatibility and project status
 
-- [Incremental porting framework and workflow](porting/README.md)
+- [How to read and update the compiler compatibility ledger](porting/README.md)
 - [Repeatable compatibility ledger](porting/generated/ledger.md)
 - [Generated six-category porting inventory](porting/generated/index.md)
 - [Darklang compatibility overview](compatibility/overview.md)

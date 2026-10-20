@@ -292,7 +292,7 @@ and ensureDictItemsRenderer env keyType valueType (state : renderState) =
                 makeCase C.PWildcard
                   (concat withValueRenderer.symbols
                      [
-                       C.StringLiteral "; ";
+                       C.StringLiteral ", ";
                        call withValueRenderer.symbols name [ C.Local tailId ];
                      ]);
               ] )

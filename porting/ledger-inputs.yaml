@@ -2,67 +2,7 @@
 schema: 1
 # Exceptional upstream test IDs -> {compiler: [existing test IDs], reason: ...}.
 test_mappings: {}
-features:
-  - name: Async
-    reviewed_sha256: ca1967700ac5e14cce0a83f77a0f1581254c7755f9e1842803be9f0a63d56837
-    status: missing
-    sources: [src/frontend/WrittenExpressions.ml, src/frontend/interpreter/WrittenTypes.ml, src/AST.ml]
-    notes: This branch has no async expression or future runtime representation. Separate async branch work is not counted here.
-  - name: Effects
-    reviewed_sha256: d79b1588411e0b826c624c49456e9e1bdb923fc15e5db2bffd41acc83907901c
-    status: partial
-    sources: [src/frontend/interpreter/LibExecution_Effects.ml, src/frontend/interpreter/DeclarationSupport.ml, src/frontend/WrittenDeclarations.ml, src/frontend/WrittenSource.ml]
-    notes: Effect names and function annotations are parsed; the direct checker does not propagate or enforce permission ceilings.
-  - name: Traits
-    reviewed_sha256: c62819a569c2051cee1574c58197f8ce127468e50c43b387cb060612fd36cccb
-    status: implemented
-    sources: [src/frontend/interpreter/WrittenTypes.ml, src/frontend/WrittenSource.ml, src/TraitCatalog.ml, src/frontend/WrittenTraitSupport.ml, src/frontend/TraitResolution.ml]
-    notes: Static trait/impl checking, bounds, receiver/operator dispatch and specialization are implemented. Detailed compatibility remains in the existing suite.
-  - name: Named package tests
-    reviewed_sha256: 2f7543e0107953e3bb30e23f348daeae4395afa3b3670d592a5c1867245b28e6
-    status: partial
-    sources: [src/frontend/NamedPackageTests.ml]
-    notes: Parsing and extraction exist, and imported named fixtures have an assertion adapter. General package-test adoption and test-local infrastructure remain incomplete.
-  - name: Primitive literals and numeric types
-    reviewed_sha256: 24418d30308de4c0cf9b4d40d299a3c0116f5777c247e377af95571153ca5ce4
-    status: implemented
-    sources: [src/frontend/WrittenExpressions.ml, src/AST.ml]
-    notes: Coarse source assessment only; individual literal and numeric edge cases remain in the suite.
-  - name: Bindings, functions and closures
-    reviewed_sha256: 5389586c84e78ce5780d2ba1dbf082459d950aceaa920aad3d9272819df9e410
-    status: implemented
-    sources: [src/frontend/WrittenExpressions.ml, src/frontend/WrittenDeclarations.ml]
-    notes: Local bindings, module functions, first-class functions and lambda checking exist.
-  - name: Recursion
-    reviewed_sha256: 974334658437315d7a958cad3b03b5d2567a1fd9b28b63719a2a5d66d8222828
-    status: implemented
-    sources: [src/frontend/WrittenDeclarations.ml, src/frontend/checking/ResolveDeclarations.ml]
-    notes: Recursive function groups are collected and checked before lowering.
-  - name: Modules and name resolution
-    reviewed_sha256: 9d80d3bd29aa4e049cd57d43bf41d12f8c805c39da5e714f8fd4d02f5c556171
-    status: implemented
-    sources: [src/frontend/WrittenSource.ml, src/NameResolution.ml]
-    notes: File and nested modules with lexical/qualified lookup; detailed differences stay in existing compatibility tests.
-  - name: Generic functions and algebraic types
-    reviewed_sha256: 4d6a06463b3235caeb64dcc2164f646ef576a67ecc1b90d7b1ff455d4aa1aad8
-    status: implemented
-    sources: [src/frontend/WrittenDeclarations.ml, src/frontend/WrittenTypeSupport.ml]
-    notes: Generic functions, records, sums and aliases are checked; trait bounds are not included in this status.
-  - name: Pattern matching
-    reviewed_sha256: 4ef40d26d24f6ab6647d796f570ab8bc86adac6f8c87a9087cf2874f79f6a1e3
-    status: implemented
-    sources: [src/frontend/WrittenExpressions.ml, src/frontend/WrittenPatternSupport.ml]
-    notes: Ahead-of-time match checking and typed pattern lowering exist; individual patterns remain suite concerns.
-  - name: Lists, dictionaries and tuples
-    reviewed_sha256: 76a1c94c2e5af3dfb089cc5783cf655cc3b1d134dbdfa25c3475baaad9b16a21
-    status: implemented
-    sources: [src/frontend/WrittenExpressions.ml, src/frontend/WrittenCollectionSupport.ml]
-    notes: Typed collection/tuple construction and access exist.
-  - name: Runtime reflection and dynamic evaluation
-    reviewed_sha256: cc123ac32801364759323efd51e7726d6850ab3f6bdbe079b370002bc90a7022
-    status: missing
-    sources: [src/frontend/WrittenApplicationSupport.ml, src/AST.ml]
-    notes: No interpreter-style runtime program evaluation/reflection implementation; compile-time metadata is not runtime reflection.
+features_file: porting/language-features.yaml
 source_mappings:
   # Await shares a root module with unrelated functions, but has no implementation here.
   packages/darklang/stdlib/await.dark: []

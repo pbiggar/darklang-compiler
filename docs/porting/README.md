@@ -1,192 +1,169 @@
-# Repeatable compatibility ledger
+# Understanding the compiler port
 
-This ledger tracks the compiler port against the exact interpreter revision in
-`porting/sources.yaml`, initially on x64 Linux. It uses existing sources and
-existing tests: no new compatibility probes, expected values, differential
-corpus, or runner-validation project.
+This directory answers a practical question: **how much of the Darklang
+interpreter has been brought into the native compiler, and what is left?**
+It is written for people reviewing or working on the port. Coding agents use
+the same instructions.
 
-Start with the [generated ledger](generated/ledger.md). Detailed mappings,
-declarations, coverage witnesses, test counterparts and effective enablement are in
-`porting/generated/ledger.json`.
+The *compatibility ledger* is a generated list of language capabilities,
+standard-library and package declarations, builtin implementations, and tests.
+It compares the compiler with one recorded version of the interpreter. That
+version is in [sources.yaml](../../porting/sources.yaml), so the comparison
+does not change whenever the interpreter's main branch moves.
 
-Git stores the machine index as `porting/generated/ledger.json.gz`, compressed
-with a fixed header and no timestamp. Regeneration expands the ordinary JSON
-locally; `--check` compares the tracked archive and readable reports. The JSON
-contains the same facts as the archive and is ignored by Git. This keeps frequent
-checkpoints small while retaining the full index.
+## Find the current state
 
-## Regenerate
+Start with the [current port status](generated/ledger.md). Its opening summary
+shows the main counts. Below that are the specific language features, declaration
+comparisons, test references, compilation information, and test-suite comparison.
 
-Install the pinned Python dependency from `scripts/porting-requirements.txt`.
-Supply a local interpreter checkout at the exact upstream pin. Source discovery
-reads committed blobs, so dirty interpreter files cannot alter the comparison.
+For an individual function or type, search its full name in the plain-text
+[detailed ledger](../../porting/generated/ledger.json), for example
+`Darklang.Stdlib.List.map`. This file is committed as ordinary JSON and can be
+reviewed in a Git diff. It contains the source locations behind the summary.
+
+These are separate measurements; there is no single overall compatibility score.
+A function can have different source, compile successfully, and have an enabled
+test. Conversely, identical source can use a language feature the compiler lacks.
+
+The report is a snapshot. Run the check command below to find out whether it
+still agrees with the checked-out sources. Language assessments are maintained
+by people and need review when the corresponding implementation changes.
+
+## What the parts mean
+
+| Part | The question it answers | How it is maintained |
+| --- | --- | --- |
+| Language features | Does the compiler support this particular capability? | A reviewed list with implementation references and limitations. |
+| Parser | Where are the compiler counterparts of the interpreter's parser components? | Source-file discovery and explicit mappings for split or renamed components. |
+| Builtins | Where is each low-level interpreter operation implemented in the compiler? | Scan existing declarations and follow known source counterparts. |
+| StdLib | Which standard-library declarations have identical, changed, or missing compiler source? | Match declarations by qualified name and compare their own text. |
+| Packages | Which package declarations match, compile, and have existing tests? | The same declaration comparison, plus compilation results and test references. |
+| Tests | Which interpreter tests have compiler counterparts, and are those enabled? | Compare existing test sources and read the compiler's existing skip rules. |
+
+Packages include StdLib, so their totals overlap. Named test declarations belong
+to the test comparison rather than the function/type source counts.
+
+### Language features
+
+The [language list](../../porting/language-features.yaml) has a separate row for
+each capability: for example `Int128`, partial application of a function value,
+nested string interpolation, list-cons patterns, and the `Compare` trait.
+Related rows are grouped for browsing.
+
+`implemented` means the compiler has that capability. `partial` means the notes
+describe a remaining limitation. `missing` means it has not been implemented.
+`not-assessed` means the implementation has not yet been reviewed.
+Individual behavioral cases remain in the existing test suite.
+
+### StdLib and package declarations
+
+A declaration is a named function, value, type, trait, implementation, or method.
+Its identity is its qualified name, not a hash. Source paths and line numbers
+tell you which definition is being compared when a name occurs more than once.
+
+For example, moving `Darklang.Stdlib.List.map` into a different file does not
+make it a new function. Changing a helper used by `map` does not change the source
+comparison for `map`: only its own declaration text is compared.
+
+- **Identical:** the declaration text matches exactly.
+- **Different:** a counterpart exists but its text differs.
+- **Missing:** no counterpart has been identified.
+- **Ambiguous:** several possible counterparts need review.
+- **Compiler-only:** a compiler declaration has no identified upstream counterpart.
+
+The comparison preserves indentation, internal comments, and line endings;
+surrounding comments and blank lines are excluded. It does not compare behavior.
+Trait and implementation declarations include their methods, which also have
+their own rows; these counts are not a measurement of non-overlapping source bytes.
+
+Package rows also show existing test references. A *direct* reference means a
+test mentions the declaration. An *indirect* reference follows calls through
+other declarations: a test of a public function can cover its helper.
+A *maintained* reference is an explicitly recorded relationship to an existing
+test. *Not identified* means the source analysis found no such relationship.
+The [reference-gap list](generated/coverage-gaps.md) identifies these declarations.
+
+Compilation uses the original interpreter source files, with the dependencies
+needed to compile them. Each declaration links to the result for its containing
+file. If that file fails, the ledger does not claim that every declaration in it
+fails independently. `not-run`, `blocked`, and `stale` distinguish absent,
+unavailable, and outdated results.
+
+Saved compilation results have a separate compiler-input fingerprint so results
+from an older implementation are not presented as current. This is only about
+reusing compilation results; it is not a declaration ID or a dependency-based
+source comparison.
+
+### Interpreter tests and compiler tests
+
+The interpreter has newer named tests, such as:
+
+```dark
+test singleton =
+  Stdlib.List.singleton 1L |> Stdlib.Test.equal [ 1L ]
+```
+
+Many compiler imports still use the older assertion format:
+
+```dark
+Stdlib.List.singleton 1L = [ 1L ]
+```
+
+The ledger can match these by the existing assertion content. Named tests can
+also match by qualified name. For a named `Test.all` group, every assertion
+needs a counterpart for a complete match; otherwise the row shows a partial match.
+
+Each counterpart records whether it is enabled and the existing reason for
+disabling it. Whole-file exclusions, individual line exclusions, and fixture skip
+annotations all count. A compiler `#compileerror` expectation override is shown
+as an adaptation rather than an identical test.
+
+Enabled tests are assumed to pass. Regenerating the ledger does not execute them.
+An unmatched row means no counterpart was identified; helper-based tests or
+ambiguous matches may need a maintained mapping. Matching an assertion does not
+establish that surrounding helper definitions are identical.
+
+## Update the ledger
+
+You need Python, the dependency in `scripts/porting-requirements.txt`, and a local
+interpreter checkout at the revision recorded in `porting/sources.yaml`.
+Commands below run from the compiler repository root:
 
 ```bash
+python3 -m pip install -r scripts/porting-requirements.txt
 python3 scripts/update-ledger.py --upstream /path/to/interpreter
 python3 scripts/update-ledger.py --upstream /path/to/interpreter --check
+```
 
-# After activating the pinned native environment:
-env -u LD_PRELOAD ./build --ai
+The first update reads the pinned interpreter's committed files and the current
+compiler sources, then rewrites the JSON and Markdown reports. The check command
+reads the same inputs and reports whether the committed outputs need updating.
+Neither command builds the compiler or runs tests.
+
+To refresh compilation results, first build using the repository's native
+toolchain instructions, then run:
+
+```bash
 python3 scripts/update-ledger.py --upstream /path/to/interpreter --compile-packages
 ```
 
-The default command reads sources and existing package compilation receipts.
-`--check` compares generated outputs without writing or executing tests.
-Test comparison uses source inventory and effective enabled/disabled metadata.
-Enabled tests are assumed to pass; pass/fail receipts are not part of this ledger.
+Review and commit the changed reports. Missing declarations and disabled tests
+remain useful recorded work; they do not need fixing to update the ledger.
 
-`--compile-packages` runs the already-built native declaration adapter, separately
-from test execution. Default regeneration consumes its receipt without compiling.
+## Where to make corrections
 
-`bash scripts/check-porting` runs the existing tooling/layout checks and checks
-the generated ledger using an isolated checkout of the pin. It does not execute
-the compiler suite.
+- Edit `porting/language-features.yaml` for specific language assessments.
+- Edit `porting/ledger-inputs.yaml` for exceptional source/test mappings and
+  references to existing tests.
+- Change actual test enablement in the existing suite, then regenerate.
+- Correct discovery/comparison logic in `scripts/update-ledger.py` and
+  `scripts/ledger_inventory.py` when an existing source form is not recognized.
 
-## What each ledger records
+Human or ChatGPT review can resolve a mapping the scripts cannot determine.
+Record the decision and the existing source/test references, then regenerate;
+ordinary updates do not require a model.
 
-| Ledger | Generated facts | Maintained decisions |
-| --- | --- | --- |
-| Language | A short feature list and hashes of its watched sources | Implemented, partial, missing, or not-assessed |
-| Parser | Source components, known mappings and unmapped components | Split/combined component mappings and remaining gaps |
-| Builtins | Literal upstream registrations, actual Builtin declarations and source implementation counterparts | Confirmed compiler builtin mappings |
-| StdLib | Per-declaration byte identity, differences, missing/ambiguous counterparts and compiler-only declarations | Source mappings and accepted differences |
-| Packages | Per-declaration source identity, containing-unit compilation and existing test references | Exceptional mappings and otherwise unresolved coverage |
-| Tests | Every pinned named test/legacy assertion, compiler counterparts, source/expectation adaptations and enablement | Exceptional test mappings; existing exclusions and AOT expectations stay in the suite |
-
-Packages include StdLib sources; the two counts overlap. A root-module match is
-a mapping candidate, not proof of equivalent declarations. Source comparison
-is exact declaration bytes, not normalized ASTs or concatenated approximations of
-split files. The declaration span excludes surrounding comments/blank lines but
-retains its indentation, internal comments and line endings. Functions, values,
-types, traits, implementations and their methods have separate identities;
-named test declarations belong in the test inventory. Trait/implementation spans
-include their methods, so declaration counts are not non-overlapping byte totals.
-Qualified kind/name matches work across file splits. Maintained file mappings
-disambiguate duplicate names; unresolved alternatives remain ambiguous.
-
-Machine schema 2 uses `declarations` as the primary inventory. Each row has its
-upstream span/hash, compiler counterpart spans/hashes, source status, coverage
-witness and compilation provenance. `files` retains supporting file mappings
-and compilation units; file totals are not the source-equivalency score.
-Builtin discovery does not invent registrations with computed names or claim
-that a same-name declaration proves an assembled runtime binding.
-
-Builtin counterparts follow qualified upstream wrappers into the compiler's
-matching declaration. Numeric trait methods can map to the compiler's pre-trait
-type module (`Int64.Add.add` to `Int64.add`). These identify implementation
-locations, not callable `Builtin.int64Add` aliases. Generic intrinsic registrations
-with the same short name are no longer counted as builtin bindings. Computed
-constructors retain their source/line review entries; no runtime registry is built.
-
-## Original-source package compilation
-
-`tools/ledger/compile_packages.exe` uses the existing parser and native preamble
-pipeline: checking, generic handling, ANF/SSA and allocated native LIR. It compiles
-declarations, not a fabricated entry expression, and does not link or run them.
-Generic bodies are checked; only naturally demanded concrete instances are lowered.
-
-The update script materializes byte-identical pinned Git blobs in a temporary
-directory. Each original package file is compiled with its indexed transitive
-non-StdLib dependencies, against the embedded compiler StdLib. Named test bodies
-are separated using `NamedPackageTests.partition`, not rewritten. Test-only files
-can therefore have an empty declaration set; success says nothing about their tests.
-Dependency discovery is lexical: unresolved dynamic references or unfamiliar syntax
-remain limitations, not proof that a package's own body is defective. The receipt
-includes dependency paths and actual compiler diagnostics for every original file.
-
-`porting/package-results.json` records the upstream pin and source/build context.
-Changed inputs make receipts stale; missing executables or adapter-wide failures
-are blocked. Each declaration links to its containing-unit result. A compiled
-unit provides compilation evidence for its declarations; a failed unit does not
-identify which declarations fail independently. Compilation never changes source
-identity or test enablement. Full logs stay in ignored
-`TestResults/porting/package-compilation.log`.
-
-## Maintained inputs and ChatGPT review
-
-`porting/ledger-inputs.yaml` is the maintained input, not a generated report.
-It holds features, source/parser/builtin mappings, accepted source differences,
-and explicit references to existing tests.
-
-Feature source paths are the watched implementation files. After reviewing a
-feature, set its status and copy its generated `source_sha256` into
-`reviewed_sha256`. Changed watched files preserve the decision but flag it for
-review. Add newly introduced implementation paths to the maintained watch list.
-
-Coverage analysis follows lexical references between existing declarations.
-It records direct references, indirect references through helpers, maintained
-coverage, or not-identified. Each declaration has a reference count and one
-deterministic witness; indirect witnesses use the shortest discovered path.
-This is a bounded source analysis, not proof a particular branch executed.
-Unknown headers and ambiguous declarations stay in the review queue.
-Source differences and missing counterparts remain on the individual declaration
-rows instead of being reduced to file-level judgments.
-
-Trait/impl methods and escaped declaration names are included in the inventory.
-String interpolation expressions retain their references, while literal prose is
-masked. Maintained references also propagate indirectly to helpers. The generated
-[coverage-gap list](generated/coverage-gaps.md) lists every remaining unreferenced
-declaration. Archived helper copies and implicit operator dispatch are not silently
-counted as covered merely because a similarly named test exists.
-
-Maintained coverage names a qualified declaration and supplies `tests` and
-`reason`. Test references must be existing named-test IDs
-(`source-path#qualified-name`) or existing imported fixture paths. No dedicated
-helper tests need to be created.
-
-ChatGPT can inspect a review item and update these maintained decisions, with
-source/test references and an explanation. Ordinary regeneration requires no
-model call and keeps ordering, names and hashes deterministic.
-
-## Interpreter tests versus compiler tests
-
-Each pinned named test and legacy execution assertion has one upstream row.
-Counterparts come from the compiler's existing E2E fixtures (including
-`test/fixtures/e2e/upstream/`) and named declarations. Qualified named identities
-match directly; recognizable single `Stdlib.Test.equal` assertions and `Test.all`
-groups can match older `source = expectation` fixtures. A group is fully mapped
-only when every indexed assertion has a counterpart. Partial groups retain their
-matched/total assertion counts. Duplicate candidates remain ambiguous. A missing
-row means no counterpart was identified, not proof no equivalent test exists.
-
-The existing upstream diff script supplies the established
-`Builtin.testDerrorMessage`/`error=` adaptation. Compiler `#compileerror` overrides
-remain visible and prevent an identical classification. Exact test spans are
-identical; recognized migrations/maintained adaptations are adapted; changed
-named counterparts are different. This is source comparison, not behavioral proof.
-Helper/preamble equivalence is not inferred from matching assertion expressions.
-
-Enablement is derived from `E2EDiscovery.ml` whole-file and original-line gates,
-fixture skip attributes, and local expectation overrides. Named tests imported
-under the E2E fixture directory are selected by the existing named fixture adapter;
-declarations only present under package sources remain outside that selection. Every counterpart
-records its exclusion origin/reason and expectation override. Ordinary command-line
-filters used for individual test runs do not change the inventory.
-
-Optional `test_mappings` in `porting/ledger-inputs.yaml` maps an upstream test ID
-to existing compiler test IDs and a reason, for helper-driven or otherwise
-unrecognized migrations. IDs use `source#L<number>` for legacy assertions and
-`source#Qualified.Name` for named declarations. No new test programs are created.
-Unmatched compiler assertions are listed separately with imported/compiler origin;
-an old upstream fixture absent from the current pin is not assumed compiler-authored.
-Unindexed source forms remain explicit review items. Backend F# harness sources
-remain in the supporting inventory; this comparison covers Dark execution tests.
-
-No tests run during regeneration. The previous `--run-tests` ledger option and
-pass/fail receipts are superseded; existing runner exports remain independent tools.
-
-## Follow-up port work (not ledger merge requirements)
-
-- Finish current named-package test execution using the existing upstream tests.
-- Prioritize compatibility gaps reported by declaration differences, missing mappings and compilation errors.
-- Expand maintained coverage references only where source analysis cannot resolve them.
-
-Behavioral details belong in the existing suite. Performance validation is not
-part of this ledger work. New language differences require agreement; upstream
-bugs must not silently exempt tests. Record upstream issues and obtain explicit
-permission before changing `darklang/dark`.
-
-The older [policy/source inventory](generated/index.md), category manifests,
-`porting.py` and legacy discovery collector remain available as supporting
-migration tools. Their old generic verification counts are not the current
-ledger's completion metric and are not regenerated by the new command.
+The older [six-category policy inventory](generated/index.md) is supporting
+historical material. Use the current port-status report above for current ledger
+counts.

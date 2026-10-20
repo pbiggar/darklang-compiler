@@ -31,7 +31,7 @@ let __extensions (data: Blob) (position: Int64) (seen: List<Int64>) : Bool =
   else
     let kind = Stdlib.__Tls13.__read16 data position in
     let size = Stdlib.__Tls13.__read16 data (position + 2L) in
-    if position + 4L + size > length || Stdlib.List.member seen kind || (kind == 42L && size != 4L) then false
+    if position + 4L + size > length || Stdlib.List.contains seen kind || (kind == 42L && size != 4L) then false
     else Stdlib.__Tls13KeyUpdate.__extensions data (position + 4L + size) (Stdlib.List.push seen kind)
 
 let __ticket (body: Blob) : Bool =

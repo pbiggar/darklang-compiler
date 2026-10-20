@@ -147,7 +147,7 @@ module Editing =
 
 module TextField =
   let noMods () : Darklang.Stdlib.Cli.Stdin.Modifiers.Modifiers =
-    Darklang.Stdlib.Cli.Stdin.Modifiers.Modifiers { ctrl = false; shift = false; alt = false }
+    Darklang.Stdlib.Cli.Stdin.Modifiers.Modifiers { ctrl = false, shift = false, alt = false }
 
   // A paste arrives as one chunk. Moving the cursor by one per keypress is what made typing `abcdef` and
   // then `X` produce `aXbcdef`.
@@ -241,7 +241,7 @@ module Confirm =
   let key (c: String) : Darklang.Stdlib.Cli.UI.Widget.KeyPress =
     Darklang.Stdlib.Cli.UI.Widget.press
       Darklang.Stdlib.Cli.Stdin.Key.Key.None
-      (Darklang.Stdlib.Cli.Stdin.Modifiers.Modifiers { ctrl = false; shift = false; alt = false })
+      (Darklang.Stdlib.Cli.Stdin.Modifiers.Modifiers { ctrl = false, shift = false, alt = false })
       (Stdlib.Option.Option.Some c)
 
   (match Darklang.Stdlib.Cli.UI.Confirm.onKey (question ()) (key "y") with
@@ -263,7 +263,7 @@ module Confirm =
        (question ())
        (Darklang.Stdlib.Cli.UI.Widget.press
          Darklang.Stdlib.Cli.Stdin.Key.Key.Enter
-         (Darklang.Stdlib.Cli.Stdin.Modifiers.Modifiers { ctrl = false; shift = false; alt = false })
+         (Darklang.Stdlib.Cli.Stdin.Modifiers.Modifiers { ctrl = false, shift = false, alt = false })
          Stdlib.Option.Option.None)
    with
    | Emitted(_s, Declined) -> "declined"
@@ -352,7 +352,7 @@ module Persistence =
    let saved =
      Darklang.Cli.Outliner.Store.PersistedData
        { version = 2
-         documents = [ Darklang.Cli.Outliner.Document { id = 1; title = "T"; outline = outline } ]
+         documents = [ Darklang.Cli.Outliner.Document { id = 1, title = "T", outline = outline } ]
          activeDocId = 1
          nextDocId = 2 }
 
@@ -386,11 +386,11 @@ module Chrome =
 
   // The body gets what's left after the title and the hints.
   (Darklang.Stdlib.Cli.UI.Chrome.bodyRegion
-    (Darklang.Stdlib.Cli.Tui.Size { width = 80; height = 24 })).rows = 21
+    (Darklang.Stdlib.Cli.Tui.Size { width = 80, height = 24 })).rows = 21
 
   // A terminal too short for the whole frame gives up the blank line, then the hints, before the body.
   (Darklang.Stdlib.Cli.UI.Chrome.bodyRegion
-    (Darklang.Stdlib.Cli.Tui.Size { width = 80; height = 2 })).rows = 1
+    (Darklang.Stdlib.Cli.Tui.Size { width = 80, height = 2 })).rows = 1
 
 module Wrapping =
   // Long lines used to run off the right edge of the pane and stop existing.

@@ -163,17 +163,17 @@ type AliasRecord<'a> = { value: a }
 type AliasRecordView<'a> = AliasRecord<'a>
 AliasRecordView<String> { value = "alias" } == AliasRecord<String> { value = "alias" } = true
 
-type OrderedPresentation = { z: Int64; a: String }
-OrderedPresentation { z = 2L; a = "first" } = stdout="OrderedPresentation { a: \"first\", z: 2 }\n" stderr=""
+type OrderedPresentation = { z: Int64, a: String }
+OrderedPresentation { z = 2L, a = "first" } = stdout="OrderedPresentation { a: \"first\", z: 2 }\n" stderr=""
 
 type DuplicateConstruction = { value: Int64 }
-DuplicateConstruction { value = 1L; value = 2L } = compileerror="Duplicate record field 'value'"
+DuplicateConstruction { value = 1L, value = 2L } = compileerror="Duplicate record field 'value'"
 
-type MissingConstruction = { first: Int64; second: Int64 }
+type MissingConstruction = { first: Int64, second: Int64 }
 MissingConstruction { first = 1L } = compileerror="record literal does not contain exactly the declared field slots"
 
 type UnknownConstruction = { value: Int64 }
-UnknownConstruction { value = 1L; other = 2L } = compileerror="Unknown field 'other' on UnknownConstruction"
+UnknownConstruction { value = 1L, other = 2L } = compileerror="Unknown field 'other' on UnknownConstruction"
 
 type EmptyConstructionKey = { value: Int64 }
 EmptyConstructionKey { ___ = 1L } = compileerror="Unknown field '' on EmptyConstructionKey"
@@ -181,8 +181,8 @@ EmptyConstructionKey { ___ = 1L } = compileerror="Unknown field '' on EmptyConst
 type ExplicitArity<'a> = { value: a }
 ExplicitArity<Int64, String> { value = 1L } = compileerror="Type 'ExplicitArity' expects 1 arguments, got 2"
 
-type UpdateLastWins = { value: Int64; untouched: String }
-let original = UpdateLastWins { value = 1L; untouched = "kept" } in let updated = { original with value = 2L; value = 3L } in updated.value = compileerror="Duplicate record field 'value'"
+type UpdateLastWins = { value: Int64, untouched: String }
+let original = UpdateLastWins { value = 1L, untouched = "kept" } in let updated = { original with value = 2L, value = 3L } in updated.value = compileerror="Duplicate record field 'value'"
 
 type InvalidUpdateField = { value: Int64 }
 let original = InvalidUpdateField { value = 1L } in { original with other = 2L } = compileerror="Unknown field 'other' on InvalidUpdateField"
@@ -200,35 +200,35 @@ let nonRecord = 1L in nonRecord.value = compileerror="Field access requires a re
 
 // Projection-only scalar update chains remain correct when their intermediate
 // record allocations are removed before reference-count insertion.
-type ScalarEscapePoint = { x: Int64; y: Int64 }
-let start = ScalarEscapePoint { x = 10L; y = 20L } in let moved = { start with x = start.x + 5L } in moved.x + moved.y = 35L
+type ScalarEscapePoint = { x: Int64, y: Int64 }
+let start = ScalarEscapePoint { x = 10L, y = 20L } in let moved = { start with x = start.x + 5L } in moved.x + moved.y = 35L
 
 // Branch-local projections of one scalar record retain their values after
 // escape analysis crosses the SSA boundary.
-let scalarEscapeBranch (chooseX: Bool) : Int64 = let point = ScalarEscapePoint { x = 10L; y = 20L } in let alias = point in if chooseX then alias.x else point.y
+let scalarEscapeBranch (chooseX: Bool) : Int64 = let point = ScalarEscapePoint { x = 10L, y = 20L } in let alias = point in if chooseX then alias.x else point.y
 scalarEscapeBranch (true) = 10L
 scalarEscapeBranch (false) = 20L
 
 // A unique record update may reuse its fixed block while retaining the new
 // managed child and releasing the displaced child exactly once.
-type ManagedReuseRecord = { label: String; count: Int64 }
-let oldLabel = Stdlib.String.append "ol" "d" in let newLabel = Stdlib.String.append "ne" "w" in let original = ManagedReuseRecord { label = oldLabel; count = 1L } in let counted = { original with count = 2L } in let updated = { counted with label = newLabel; count = 3L } in oldLabel == "old" && updated.label == "new" && updated.count == 3L = true
+type ManagedReuseRecord = { label: String, count: Int64 }
+let oldLabel = Stdlib.String.append "ol" "d" in let newLabel = Stdlib.String.append "ne" "w" in let original = ManagedReuseRecord { label = oldLabel, count = 1L } in let counted = { original with count = 2L } in let updated = { counted with label = newLabel, count = 3L } in oldLabel == "old" && updated.label == "new" && updated.count == 3L = true
 
 // Composite fields with non-observable destruction retain the same ownership
 // ordering when their containing record block is reused.
-type CompositeReuseRecord = { items: List<Int64>; count: Int64 }
-let items = [1L, 2L, 3L] in let original = CompositeReuseRecord { items = items; count = 1L } in let counted = { original with count = 2L } in let updated = { counted with items = [4L, 5L]; count = 3L } in items == [1L, 2L, 3L] && updated.items == [4L, 5L] && updated.count == 3L = true
+type CompositeReuseRecord = { items: List<Int64>, count: Int64 }
+let items = [1L, 2L, 3L] in let original = CompositeReuseRecord { items = items, count = 1L } in let counted = { original with count = 2L } in let updated = { counted with items = [4L, 5L], count = 3L } in items == [1L, 2L, 3L] && updated.items == [4L, 5L] && updated.count == 3L = true
 
 // Nested records composed from safe fields can be displaced while a separate
 // alias keeps the old inner record alive.
 type NestedReuseInner = { items: List<Int64> }
-type NestedReuseOuter = { inner: NestedReuseInner; count: Int64 }
-let inner = NestedReuseInner { items = [1L, 2L, 3L] } in let original = NestedReuseOuter { inner = inner; count = 1L } in let counted = { original with count = 2L } in let updated = { counted with inner = NestedReuseInner { items = [4L, 5L] }; count = 3L } in inner.items == [1L, 2L, 3L] && updated.inner.items == [4L, 5L] && updated.count == 3L = true
+type NestedReuseOuter = { inner: NestedReuseInner, count: Int64 }
+let inner = NestedReuseInner { items = [1L, 2L, 3L] } in let original = NestedReuseOuter { inner = inner, count = 1L } in let counted = { original with count = 2L } in let updated = { counted with inner = NestedReuseInner { items = [4L, 5L] }, count = 3L } in inner.items == [1L, 2L, 3L] && updated.inner.items == [4L, 5L] && updated.count == 3L = true
 
 // Regular recursive records can reuse their unique outer block while an alias
 // keeps the displaced recursive child list alive.
-type RecursiveReuseNode = { value: Int64; children: List<RecursiveReuseNode> }
-let leaf = RecursiveReuseNode { value = 1L; children = [] } in let children = [leaf] in let original = RecursiveReuseNode { value = 2L; children = children } in let counted = { original with value = 3L } in let updated = { counted with children = []; value = 4L } in Stdlib.List.length children == 1 && Stdlib.List.length updated.children == 0 && updated.value == 4L = true
+type RecursiveReuseNode = { value: Int64, children: List<RecursiveReuseNode> }
+let leaf = RecursiveReuseNode { value = 1L, children = [] } in let children = [leaf] in let original = RecursiveReuseNode { value = 2L, children = children } in let counted = { original with value = 3L } in let updated = { counted with children = [], value = 4L } in Stdlib.List.length children == 1 && Stdlib.List.length updated.children == 0 && updated.value == 4L = true
 
-type LongRenderedRecord = { alpha: String; beta: String }
-LongRenderedRecord { alpha = "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz"; beta = "abcdefghijklmnopqrstuvwxyz" } = stdout="LongRenderedRecord {\n  alpha: \"abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz\",\n  beta: \"abcdefghijklmnopqrstuvwxyz\"\n}\n" stderr=""
+type LongRenderedRecord = { alpha: String, beta: String }
+LongRenderedRecord { alpha = "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz", beta = "abcdefghijklmnopqrstuvwxyz" } = stdout="LongRenderedRecord {\n  alpha: \"abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz\",\n  beta: \"abcdefghijklmnopqrstuvwxyz\"\n}\n" stderr=""

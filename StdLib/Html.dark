@@ -43,7 +43,7 @@ let __attributesToString (attrs: Stdlib.Html.Attributes) : String =
     Stdlib.String.join (Stdlib.List.map attrs Stdlib.Html.__attributeToString) " "
 
 let __isVoidElement (name: String) : Bool =
-    Stdlib.List.member Stdlib.Html.voidElements name
+    Stdlib.List.contains Stdlib.Html.voidElements name
 
 let nodeToString (node: Stdlib.Html.Node) : String =
     match node with
@@ -60,8 +60,13 @@ let nodeToString (node: Stdlib.Html.Node) : String =
                 Stdlib.String.join (Stdlib.List.map tag.children Stdlib.Html.nodeToString) "" in
             startTag ++ childHtml ++ "</" ++ tag.name ++ ">"
 
+let __commentText (value: String) : String =
+    if Stdlib.String.contains value "--" then
+        Stdlib.Html.__commentText (Stdlib.String.replaceAll value "--" "- -")
+    else value
+
 let comment (value: String) : Stdlib.Html.Node =
-    Stdlib.Html.stringNode ("<!-- " ++ Stdlib.String.replaceAll value "--" "- -" ++ " -->")
+    Stdlib.Html.stringNode ("<!-- " ++ Stdlib.Html.__commentText value ++ " -->")
 
 let classes (classList: List<String>) : (String * Stdlib.Option.Option<String>) =
     ("class", Some (Stdlib.String.join classList " "))

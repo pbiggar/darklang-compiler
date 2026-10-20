@@ -35,8 +35,7 @@ def declaration_rows(upstream, compiler, index, coverage, files):
     used, result = set(), []
 
     def location(row):
-        return dict(id=row['id'], source=row['source'], line=row['line'],
-                    end_line=row['end_line'], sha256=p.digest(row['body'].encode()))
+        return dict(source=row['source'], line=row['line'], end_line=row['end_line'])
 
     for row in originals:
         mapping = mappings[row['source']]
@@ -55,21 +54,21 @@ def declaration_rows(upstream, compiler, index, coverage, files):
         categories = ['packages']
         if row['source'].startswith('packages/darklang/stdlib/'):
             categories.append('stdlib')
-        result.append(dict(id=row['id'], name=row['name'], kind=row['kind'],
+        result.append(dict(id=row['name'], name=row['name'], kind=row['kind'],
             categories=categories, upstream=location(row), compiler=[location(r) for r in selected],
             source_status=status, source_exception=mapping['exception'],
             coverage=covered.get((row['source'], row['name'], row['line']),
                 dict(kind='not-identified', reference_count=0, examples=[], maintained=None)),
-            compilation=dict(**mapping['compilation'], basis='containing-source-unit',
+            compilation=dict(**mapping['compilation'], basis='containing-source-file',
                              source=row['source'])))
     for row in native:
         if row['id'] in used:
             continue
-        result.append(dict(id='compiler/' + row['id'], name=row['name'], kind=row['kind'],
+        result.append(dict(id=row['name'], name=row['name'], kind=row['kind'],
             categories=['packages'] + (['stdlib'] if row['source'].startswith('StdLib/') else []),
             upstream=None, compiler=[location(row)], source_status='compiler-only',
             coverage=None, compilation=None, source_exception=None))
-    return sorted(result, key=lambda r: r['id']), review
+    return sorted(result, key=lambda r: (r['name'], r['kind'], str(r['upstream']), str(r['compiler']))), review
 
 
 # Preserve string contents and token boundaries when comparing source formats.
@@ -270,7 +269,7 @@ def test_inventory(root, upstream, compiler, index, records, maintained):
             origin='imported-upstream' if row['source'].startswith('test/fixtures/e2e/upstream/') else 'compiler',
             exclusion_origin='outside-runner-fixtures' if not selectable else reason,
             reason='Source is outside the compiler runner fixture directories' if not selectable else row['metadata_skip'] if reason == 'fixture-metadata' else reason,
-            expectation_override=row['override'], sha256=p.digest(row['body'].encode()))
+            expectation_override=row['override'])
 
     used, result = set(), []
     for row in sorted(originals, key=lambda r: r['id']):

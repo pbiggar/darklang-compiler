@@ -15,7 +15,6 @@ let disabledUpstreamFiles =
     "test/fixtures/e2e/upstream/cli/permissions-grammar.dark";
     "test/fixtures/e2e/upstream/cli/tailscale.dark";
     "test/fixtures/e2e/upstream/cli/workbench-repl.dark";
-    "test/fixtures/e2e/upstream/cloud/db.dark";
     "test/fixtures/e2e/upstream/language/builtin-introspection.dark";
     "test/fixtures/e2e/upstream/language/effect-ceiling.dark";
     "test/fixtures/e2e/upstream/language/runtime-to-programtypes.dark";

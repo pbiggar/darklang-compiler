@@ -23,10 +23,10 @@ let __sum (values: List<Float>) (total: Float) : Float =
     | [] -> total
     | head :: tail -> Stdlib.Float.__sum tail (total + head)
 
-// Private native representation primitive; the public upstream API returns Int.
+// Private native representation primitive shared by public bit inspection.
 let __toBits (f: Float) : UInt64 = 0UL
 
-let toBits (value: Float) : Int = Stdlib.Int.fromInt64 (__uint64_to_int64_bits (Stdlib.Float.__toBits value))
+let toBits (value: Float) : UInt64 = Stdlib.Float.__toBits value
 let toInt (value: Float) : Int = Stdlib.Float.roundTowardsZero value
 
 let isNaN (value: Float) : Bool = value != value

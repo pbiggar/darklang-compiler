@@ -56,9 +56,6 @@ __pycache__/
 *.pyo
 scripts/.unicode_cache/
 
-# Regeneration expands the tracked deterministic archive for local inspection.
-/porting/generated/ledger.json
-
 # Local merge-train state and integration worktrees
 .mergetrain/
 
