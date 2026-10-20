@@ -1,4 +1,14 @@
 ; Native equivalence and allocation regression checks.
+(executable
+ (name async_storage_graph_regression)
+ (modules async_storage_graph_regression)
+ (libraries dark_compiler)
+ (flags (:standard -w @a -warn-error @a)))
+
+(rule
+ (alias runtest)
+ (action (run %{exe:async_storage_graph_regression.exe})))
+
 (rule
  (alias runtest)
  (deps async_socket_regression.py)
@@ -54,6 +64,7 @@
  (action (run python3 %{dep:terminal_size_regression.py} %{exe:../../bin/dark.exe})))
 (executables
  (names host_text_regression cache_regression component_regression literal_regression package_io_regression package_http_regression executable_path_compile)
+ (modules (:standard \ async_storage_graph_regression))
  (libraries dark_compiler tls-lwt x509)
  (flags (:standard -w @a -warn-error @a)))
 
