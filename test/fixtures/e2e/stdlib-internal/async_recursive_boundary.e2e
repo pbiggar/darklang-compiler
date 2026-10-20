@@ -1,4 +1,4 @@
-// async_recursive_boundary.e2e - Recursive async storage fails at compilation until graph layouts exist.
+// async_recursive_boundary.e2e - Ready and pending recursive values keep the same source behavior.
 
 type AsyncRecursiveBoundary = AsyncBoundaryLeaf of Int64 | AsyncBoundaryBranch of AsyncRecursiveBoundary
 let asyncBoundaryWrap (count: Int64) (value: Int64) : AsyncRecursiveBoundary =
@@ -6,4 +6,4 @@ let asyncBoundaryWrap (count: Int64) (value: Int64) : AsyncRecursiveBoundary =
   else AsyncBoundaryBranch (asyncBoundaryWrap (count - 1L) value)
 
 Stdlib.__Task.__runMain (fun _unit -> match asyncBoundaryWrap 2L 42L with | AsyncBoundaryBranch _ -> 42L | AsyncBoundaryLeaf _ -> 0L) = 42L // ordinary recursive variants retain the synchronous representation; leak_check
-Stdlib.__Task.__runMain (fun _unit -> let gate = Stdlib.__Async.__new<Int64> () in let value = Stdlib.__Task.__transport (Stdlib.__Async.__pending gate) in match asyncBoundaryWrap 2L value with | AsyncBoundaryBranch _ -> 42L | AsyncBoundaryLeaf _ -> 0L) = compileerror="a recursive aggregate layout" // pending recursive payload layouts must diagnose rather than grow inference indefinitely
+Stdlib.__Task.__runMain (fun _unit -> let gate = Stdlib.__Async.__new<Int64> () in let value = Stdlib.__Task.__transport (Stdlib.__Async.__pending gate) in match asyncBoundaryWrap 2L value with | AsyncBoundaryBranch _ -> 42L | AsyncBoundaryLeaf _ -> 0L) = 42L // pending recursive payload interfaces close without growing inference indefinitely; leak_check
