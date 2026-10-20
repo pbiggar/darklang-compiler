@@ -217,7 +217,7 @@ let collectSumShapes ~into storage =
         match slot with
         | Some (NestedStorage nested) | Some (PendingStorage (_, nested)) ->
             collect ancestors into nested
-        | None | Some (PendingSlot ()) -> Ok into)
+        | None | Some (PendingSlot _) -> Ok into)
       (Ok into) storage.fields
   in
   collect [] into storage

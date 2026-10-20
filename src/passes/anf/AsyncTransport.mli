@@ -27,6 +27,7 @@ type mode =
   | PendingStored of unit storage
 
 val changed : mode -> bool
+(* Equality of inferred interfaces, independent of storage node identity. *)
 val equal : mode -> mode -> bool
 val slotMode : unit storedSlot option -> mode
 val modeSlot : mode -> unit storedSlot option

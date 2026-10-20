@@ -1767,20 +1767,18 @@ let lower registry names ids sumShapes nextFunctionOrdinal externalDefinitions
             | typ :: types, slot :: expectedSlots ->
                 let projected, gen = freshVar gen in
                 let projection =
-                  match
-                    (Option.map AsyncTransport.kind actualStorage,
-                     AsyncTransport.kind expected)
-                  with
-                  | Some (RecordStorage descriptor), _ -> (
-                      match actualStorage with
-                      | Some storage ->
+                  match actualStorage with
+                  | Some storage -> (
+                      match AsyncTransport.kind storage with
+                      | RecordStorage descriptor ->
                           A.RecordGet
                             (storageDescriptor storage descriptor, atom, index)
-                      | None ->
-                          Crash.crash "Async promotion lost record storage")
-                  | None, RecordStorage descriptor ->
-                      A.RecordGet (descriptor, atom, index)
-                  | _ -> A.TupleGet (atom, index)
+                      | _ -> A.TupleGet (atom, index))
+                  | None -> (
+                      match AsyncTransport.kind expected with
+                      | RecordStorage descriptor ->
+                          A.RecordGet (descriptor, atom, index)
+                      | _ -> A.TupleGet (atom, index))
                 in
                 let actual =
                   match actualStorage with
