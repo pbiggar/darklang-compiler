@@ -76,7 +76,9 @@ let physicalNamed ~name layout types =
 
 let physical layout types =
   let source = AST.TSum (layout.source.A.sumName, layout.source.A.sumArgs) in
-  let identity = SpecializationIdentity.specName "sum_payloads" (source :: types) in
+  let identity =
+    SpecializationIdentity.specName "sum_payloads" (source :: types)
+  in
   let name = physicalPrefix ^ Digest.to_hex (Digest.string identity) in
   physicalNamed ~name layout types
 

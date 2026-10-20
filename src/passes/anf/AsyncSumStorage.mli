@@ -18,7 +18,9 @@ val physical :
 
 (* Recursive components reserve nominal identities before resolving payloads. *)
 val physicalNamed :
-  name:string -> layout -> AST.semanticType list ->
+  name:string ->
+  layout ->
+  AST.semanticType list ->
   ANF.sumDescriptor * MemoryModel.rcSumShapeInfo
 
 val representationIndex :

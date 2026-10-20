@@ -38,7 +38,8 @@ let reachable graph =
           match slot.nested with
           | None -> (seen, ordered)
           | Some child -> visit seen ordered child)
-        (seen, id :: ordered) (find graph.nodes id).slots
+        (seen, id :: ordered)
+        (find graph.nodes id).slots
   in
   let _, ordered = visit Nodes.empty [] graph.root in
   List.rev ordered
@@ -61,15 +62,22 @@ let copy transform graph start =
                 match slot.nested with
                 | None -> (None, mapped, output, next)
                 | Some id ->
-                    let id, mapped, output, next = visit mapped output next id in
+                    let id, mapped, output, next =
+                      visit mapped output next id
+                    in
                     (Some id, mapped, output, next)
               in
-              ({ pending = Option.map transform slot.pending; nested } :: slots,
-               mapped, output, next))
-            ([], mapped, output, next + 1) original.slots
+              ( { pending = Option.map transform slot.pending; nested } :: slots,
+                mapped,
+                output,
+                next ))
+            ([], mapped, output, next + 1)
+            original.slots
         in
         let output =
-          Nodes.add copied { kind = original.kind; slots = List.rev slots } output
+          Nodes.add copied
+            { kind = original.kind; slots = List.rev slots }
+            output
         in
         (copied, mapped, output, next)
   in
@@ -92,7 +100,8 @@ let assemble kind fields =
                 List.find_map
                   (fun (source, target) ->
                     if source.nodes == graph.nodes && source.root = graph.root
-                    then Some target else None)
+                    then Some target
+                    else None)
                   imported
               with
               | Some id -> (Some id, nodes, next, imported)
@@ -100,7 +109,8 @@ let assemble kind fields =
                   let id, copied, next = copy Fun.id graph next in
                   let nodes =
                     Nodes.union
-                      (fun _ _ _ -> Crash.crash "Async graph import reused an identity")
+                      (fun _ _ _ ->
+                        Crash.crash "Async graph import reused an identity")
                       nodes copied
                   in
                   (Some id, nodes, next, (graph, id) :: imported))
@@ -112,6 +122,7 @@ let assemble kind fields =
 
 module Pairs = Set.Make (struct
   type t = int * int
+
   let compare = Stdlib.compare
 end)
 
@@ -125,14 +136,14 @@ let equal ~kind left right =
       if not (kind left.kind right.kind) then (false, seen)
       else fields seen left.slots right.slots
   and fields seen left right =
-    match left, right with
+    match (left, right) with
     | [], [] -> (true, seen)
     | left :: lefts, right :: rights ->
         if Option.is_some left.pending <> Option.is_some right.pending then
           (false, seen)
         else
           let same, seen =
-            match left.nested, right.nested with
+            match (left.nested, right.nested) with
             | None, None -> (true, seen)
             | Some left, Some right -> visit seen left right
             | _ -> (false, seen)
@@ -153,15 +164,16 @@ let rec representative parents id =
    overwrite information discovered through a back edge. *)
 let unify ~compatible nodes constraints =
   let rec slots merged constraints left right =
-    match left, right with
+    match (left, right) with
     | [], [] -> (List.rev merged, constraints)
     | left :: lefts, right :: rights ->
         let pending =
           if Option.is_some left.pending || Option.is_some right.pending then
-            Some () else None
+            Some ()
+          else None
         in
         let nested, constraints =
-          match left.nested, right.nested with
+          match (left.nested, right.nested) with
           | None, value | value, None -> (value, constraints)
           | Some left, Some right -> (Some left, (left, right) :: constraints)
         in
@@ -175,15 +187,20 @@ let unify ~compatible nodes constraints =
         let right = representative parents right in
         if left = right then solve parents nodes rest
         else
-          let winner, loser = if left < right then (left, right) else (right, left) in
+          let winner, loser =
+            if left < right then (left, right) else (right, left)
+          in
           let left = find nodes winner in
           let right = find nodes loser in
           if not (compatible left.kind right.kind) then
             Crash.crash "Async graph join merged distinct source layouts";
           let merged, rest = slots [] rest left.slots right.slots in
-          solve (Nodes.add loser winner parents)
-            (Nodes.add winner { kind = left.kind; slots = merged }
-               (Nodes.remove loser nodes)) rest
+          solve
+            (Nodes.add loser winner parents)
+            (Nodes.add winner
+               { kind = left.kind; slots = merged }
+               (Nodes.remove loser nodes))
+            rest
   in
   solve Nodes.empty nodes constraints
 
@@ -191,10 +208,17 @@ let resolved ~root parents nodes =
   let nodes =
     Nodes.map
       (fun node ->
-        { node with slots =
+        {
+          node with
+          slots =
             List.map
-              (fun slot -> { slot with nested = Option.map (representative parents) slot.nested })
-              node.slots })
+              (fun slot ->
+                {
+                  slot with
+                  nested = Option.map (representative parents) slot.nested;
+                })
+              node.slots;
+        })
       nodes
   in
   map Fun.id (make ~root:(representative parents root) nodes)
@@ -207,7 +231,7 @@ let join ~compatible left right =
       (fun _ _ _ -> Crash.crash "Async graph join reused an imported identity")
       leftNodes rightNodes
   in
-  let parents, nodes = unify ~compatible combined [leftRoot, rightRoot] in
+  let parents, nodes = unify ~compatible combined [ (leftRoot, rightRoot) ] in
   resolved ~root:leftRoot parents nodes
 
 let close ~recursive ~compatible graph =
@@ -217,7 +241,8 @@ let close ~recursive ~compatible graph =
       let ancestor =
         if recursive node.kind then
           List.find_opt
-            (fun ancestor -> compatible node.kind (find graph.nodes ancestor).kind)
+            (fun ancestor ->
+              compatible node.kind (find graph.nodes ancestor).kind)
             ancestors
         else None
       in
@@ -225,7 +250,9 @@ let close ~recursive ~compatible graph =
       | Some ancestor -> (ancestor, id) :: constraints
       | None when Nodes.mem id seen -> constraints
       | None ->
-          let ancestors = if recursive node.kind then id :: ancestors else ancestors in
+          let ancestors =
+            if recursive node.kind then id :: ancestors else ancestors
+          in
           let seen = Nodes.add id () seen in
           List.fold_left
             (fun constraints slot ->

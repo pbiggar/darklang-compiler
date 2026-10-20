@@ -11,21 +11,20 @@ val nodes : ('kind, 'a) t -> ('kind, 'a) node Nodes.t
 val at : ('kind, 'a) t -> int -> ('kind, 'a) t
 val node : ('kind, 'a) t -> ('kind, 'a) node
 val reachable : ('kind, 'a) t -> int list
-
-val assemble :
-  'kind -> ('a option * ('kind, 'a) t option) list -> ('kind, 'a) t
-
+val assemble : 'kind -> ('a option * ('kind, 'a) t option) list -> ('kind, 'a) t
 val map : ('a -> 'b) -> ('kind, 'a) t -> ('kind, 'b) t
 
 val equal :
-  kind:('kind -> 'kind -> bool) ->
-  ('kind, unit) t -> ('kind, unit) t -> bool
+  kind:('kind -> 'kind -> bool) -> ('kind, unit) t -> ('kind, unit) t -> bool
 
 val join :
   compatible:('kind -> 'kind -> bool) ->
-  ('kind, unit) t -> ('kind, unit) t -> ('kind, unit) t
+  ('kind, unit) t ->
+  ('kind, unit) t ->
+  ('kind, unit) t
 
 val close :
   recursive:('kind -> bool) ->
   compatible:('kind -> 'kind -> bool) ->
-  ('kind, unit) t -> ('kind, unit) t
+  ('kind, unit) t ->
+  ('kind, unit) t
