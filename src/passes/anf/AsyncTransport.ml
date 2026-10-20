@@ -63,6 +63,7 @@ let compatibleKind left right =
   | _ -> false
 
 let rec equal left right =
+  left == right ||
   match (left, right) with
   | Concrete, Concrete | Pending, Pending -> true
   | Stored left, Stored right | PendingStored left, PendingStored right ->
@@ -168,6 +169,16 @@ let physicalType mode source =
   | Pending -> carrier source
   | Stored storage -> storageType storage source
   | PendingStored storage -> carrier (storageType storage source)
+
+let recordDescriptor storage (descriptor : ANF.recordDescriptor) =
+  if List.length descriptor.ANF.fields <> List.length storage.fields then
+    Crash.crash "Async typed storage has an inconsistent layout";
+  let fields =
+    List.map2
+      (fun (name, typ) slot -> (name, slotType slot typ))
+      descriptor.ANF.fields storage.fields
+  in
+  { descriptor with ANF.fields; valueType = AST.TTuple (List.map snd fields) }
 
 let sumDescriptor storage =
   match storage.kind with

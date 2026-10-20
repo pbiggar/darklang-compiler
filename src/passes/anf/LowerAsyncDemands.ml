@@ -150,6 +150,7 @@ type summary = {
 }
 
 let equalSummary left right =
+  left == right ||
   List.equal AsyncTransport.equal left.parameters right.parameters
   && List.equal AsyncTransport.equal left.captures right.captures
   && AsyncTransport.equal left.result right.result
@@ -295,21 +296,8 @@ let storageType = AsyncTransport.storageType
 
 let slotRepresentation typ slot = AsyncTransport.slotType slot typ
 
-let fieldRepresentations storage types =
-  if List.length types <> List.length (AsyncTransport.fields storage) then
-    Crash.crash "Async typed storage has an inconsistent layout";
-  List.map2 slotRepresentation types (AsyncTransport.fields storage)
-
 let physicalSumDescriptor = AsyncTransport.sumDescriptor
-
-let storageDescriptor storage (descriptor : A.recordDescriptor) =
-  let types = fieldRepresentations storage (List.map snd descriptor.A.fields) in
-  {
-    descriptor with
-    A.fields =
-      List.map2 (fun (name, _) typ -> (name, typ)) descriptor.A.fields types;
-    valueType = AST.TTuple types;
-  }
+let storageDescriptor = AsyncTransport.recordDescriptor
 
 let nativeRuntime name =
   List.exists

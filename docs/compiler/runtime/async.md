@@ -186,8 +186,8 @@ Loading a logical body preserves the existing function identity; only its
 changed async version is emitted, leaving the synchronous ABI intact.
 
 Storage layouts have an opaque interface in `AsyncTransport`: lowering inspects
-one level at a time, while mode equality and physical sum identities belong to
-the transport module. This separates call-interface inference from the layout
+one level at a time, while mode equality and physical aggregate descriptors
+belong to the transport module. This separates call-interface inference from the layout
 representation needed for recursive aggregates. A repeated generic owner with
 different instantiated arguments, such as `Option<Option<Int64>>`, is finite
 and must not be confused with a recursive nominal layout.
@@ -410,6 +410,8 @@ keys independent of values, early duplicate rejection, outer pending entries and
 managed result ownership.
 `async_captured_variant_ownership.e2e` checks captured pending values returned
 inside variants directly and through list callbacks, including leak checking.
+`async_sum_nested_generic.e2e` checks repeated generic owners at distinct
+instantiations, source-call joins and managed native results.
 
 `async_list_filter.e2e` covers ignored and inspected inputs, pending and delayed
 Boolean results, shared predicate layouts, tuple field projection, and managed

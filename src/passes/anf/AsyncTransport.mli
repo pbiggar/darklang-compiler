@@ -37,6 +37,7 @@ val mapStorage : ('a -> 'b) -> 'a storage -> 'b storage
 val physicalType : mode -> AST.semanticType -> AST.semanticType
 val storageType : 'a storage -> AST.semanticType -> AST.semanticType
 val slotType : 'a storedSlot option -> AST.semanticType -> AST.semanticType
+val recordDescriptor : 'a storage -> ANF.recordDescriptor -> ANF.recordDescriptor
 val sumDescriptor : 'a storage -> ANF.sumDescriptor
 
 val collectSumShapes :
