@@ -89,17 +89,17 @@ let resolve graph source =
     | Some keys -> keys
     | None -> Crash.crash "Async physical graph references an absent component"
   in
-  let rec slotTypes resolveType state slots =
+  let rec slotTypes ?(literal = Fun.id) resolveType state slots =
     match slots with
     | [] -> Ok ([], state)
     | slot :: rest ->
         let* typ, state =
           match slot.nested with
-          | None -> Ok (slot.source, state)
+          | None -> Ok (literal slot.source, state)
           | Some key -> resolveType state key
         in
         let typ = if slot.pending then carrier typ else typ in
-        let* rest, state = slotTypes resolveType state rest in
+        let* rest, state = slotTypes ~literal resolveType state rest in
         Ok (typ :: rest, state)
   in
   let includeShape state sum shape =
@@ -166,7 +166,7 @@ let resolve graph source =
           (fun index key -> key, AST.TSum ("__dark_async_cycle_ref_" ^ string_of_int index, []))
           anchors |> Keys.of_list
       in
-      let rec expand substitutions visiting state key =
+      let rec expand literal substitutions visiting state key =
         match Keys.find_opt key substitutions with
         | Some typ -> Ok (typ, state)
         | None -> (
@@ -177,18 +177,22 @@ let resolve graph source =
             | None ->
                 let node = find nodes key in
                 let* types, state =
-                  slotTypes (expand substitutions (Seen.add key visiting)) state node.slots
+                  slotTypes ~literal (expand literal substitutions (Seen.add key visiting)) state node.slots
                 in
                 let typ = rebuild node.kind types in
                 Ok (typ, { state with types = Keys.add key typ state.types }))
       in
+      (* Native types and back references occupy disjoint symbolic forms. A
+         user type whose spelling resembles a marker cannot alias a cycle. *)
+      let native typ = AST.TSum ("__dark_async_cycle_native", [typ]) in
+      let symbolicState = { state with types = Keys.map native state.types } in
       let* signature, _ =
         List.fold_left
           (fun result key ->
             let* signature, state = result in
-            let* types, state = slotTypes (expand symbolic Seen.empty) state (find nodes key).slots in
+            let* types, state = slotTypes ~literal:native (expand native symbolic Seen.empty) state (find nodes key).slots in
             Ok (signature @ [snd key; AST.TTuple types], state))
-          (Ok ([], state)) anchors
+          (Ok ([], symbolicState)) anchors
       in
       let identity = SpecializationIdentity.specName "recursive_sum_payloads" signature in
       let state =
@@ -202,7 +206,7 @@ let resolve graph source =
         List.fold_left
           (fun result key ->
             let* state = result in
-            Result.map snd (expand Keys.empty Seen.empty state key))
+            Result.map snd (expand Fun.id Keys.empty Seen.empty state key))
           (Ok state) members
       in
       List.fold_left
