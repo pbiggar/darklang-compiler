@@ -1,0 +1,35 @@
+// Upstream comma-only collection syntax; statement semicolons remain valid.
+---NAME---
+record semicolon is rejected
+---SOURCE---
+Point { x = 1; y = 2 }
+---EXPECT-ERROR---
+expected ',' between record fields, found ';'
+
+---NAME---
+dict semicolon is rejected
+---SOURCE---
+Dict { "x": 1; "y": 2 }
+---EXPECT-ERROR---
+expected ',' between dict entries, found ';'
+
+---NAME---
+record update semicolon is rejected
+---SOURCE---
+{ point with x = 1; y = 2 }
+---EXPECT-ERROR---
+expected ',' between record-update fields, found ';'
+
+---NAME---
+record type semicolon is rejected
+---SOURCE---
+type Point = { x: Int; y: Int }
+---EXPECT-ERROR---
+expected ',' between record-type fields, found ';'
+
+---NAME---
+commas and newlines remain accepted
+---SOURCE---
+type Point = { x: Int, y: Int }
+Point { x = 1, y = 2 }
+---ROUNDTRIP---
