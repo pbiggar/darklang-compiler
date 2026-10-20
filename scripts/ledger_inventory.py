@@ -59,7 +59,7 @@ def declaration_rows(upstream, compiler, index, coverage, files):
             source_status=status, source_exception=mapping['exception'],
             coverage=covered.get((row['source'], row['name'], row['line']),
                 dict(kind='not-identified', reference_count=0, examples=[], maintained=None)),
-            compilation=dict(**mapping['compilation'], basis='containing-source-unit',
+            compilation=dict(**mapping['compilation'], basis='containing-source-file',
                              source=row['source'])))
     for row in native:
         if row['id'] in used:
@@ -269,7 +269,7 @@ def test_inventory(root, upstream, compiler, index, records, maintained):
             origin='imported-upstream' if row['source'].startswith('test/fixtures/e2e/upstream/') else 'compiler',
             exclusion_origin='outside-runner-fixtures' if not selectable else reason,
             reason='Source is outside the compiler runner fixture directories' if not selectable else row['metadata_skip'] if reason == 'fixture-metadata' else reason,
-            expectation_override=row['override'], sha256=p.digest(row['body'].encode()))
+            expectation_override=row['override'])
 
     used, result = set(), []
     for row in sorted(originals, key=lambda r: r['id']):

@@ -1434,8 +1434,8 @@ Remaining implicit dispatch, reflection, and unfamiliar syntax can require maint
 | Darklang.ShadowingTest.matchWithShadowing | function | 47 |
 | Darklang.ShadowingTest.pipeWithShadowing | function | 87 |
 | Darklang.ShadowingTest.tupleMatchWithShadowing | function | 57 |
-| Darklang.ShadowingTest.valueShadowing | value | 97 |
 | Darklang.ShadowingTest.valueShadowing | function | 98 |
+| Darklang.ShadowingTest.valueShadowing | value | 97 |
 | Darklang.Test.factorial | function | 3 |
 | Darklang.Test.fibonacci | function | 10 |
 | Darklang.Test.sumUpTo | function | 17 |

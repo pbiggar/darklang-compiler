@@ -27,7 +27,7 @@ GAPS = 'docs/porting/generated/coverage-gaps.md'
 
 
 def encoded(value):
-    return json.dumps(value, ensure_ascii=False, sort_keys=True, indent=2) + '\n'
+    return json.dumps(value, ensure_ascii=False, sort_keys=True, indent=1) + '\n'
 
 
 def source_path(value):
@@ -555,7 +555,7 @@ def markdown(value):
     for feature in value['features']:
         if feature['group'] != group:
             group = feature['group']
-            lines += ['### ' + group, '', '| Feature | Status | Scope / limitation |', '| --- | --- | --- |']
+            lines += ['', '### ' + group, '', '| Feature | Status | Scope / limitation |', '| --- | --- | --- |']
         lines.append(f"| {p.cell(feature['name'])} | {feature['status']} | {p.cell(feature['notes'])} |")
     lines += ['', '## Source equivalency by declaration', '',
               'Counts are functions, values, types, traits and implementations. Named tests are in the test inventory. Packages include StdLib; file splits do not determine declaration matches. Identical means exact declaration source bytes, excluding surrounding comments/blank lines.', '',
@@ -566,11 +566,11 @@ def markdown(value):
     package_rows = [r for r in value['declarations'] if r['upstream']]
     counts = Counter(r['coverage']['kind'] for r in package_rows)
     lines += ['', '## Existing test references', '',
-              'Lexical references are coverage hints, not evidence of execution. One deterministic witness (the shortest indirect path) and the total reference count per declaration are in `porting/generated/ledger.json`.', '',
+              'These counts show references from existing tests, including calls through helpers. Each declaration in `porting/generated/ledger.json` lists its reference count and an example test relationship.', '',
               '| Direct | Indirect | Maintained | Not identified |', '| ---: | ---: | ---: | ---: |',
               '| ' + ' | '.join(str(counts[k]) for k in ('direct', 'indirect', 'maintained', 'not-identified')) + ' |', '',
-              'Package compilation state: **' + value['compilation']['state'] + '**. Each declaration links to its containing source-unit receipt. A failed unit does not establish that every declaration fails independently. Original units are parsed, checked and lowered through the native preamble pipeline.', '',
-              '| Declarations in compiled units | In failed units | In blocked units | Stale | Not run |', '| ---: | ---: | ---: | ---: | ---: |',
+              'Package compilation state: **' + value['compilation']['state'] + '**. Results are recorded for each original source file. A file that compiles provides evidence for its declarations. A file that fails does not identify which declarations fail independently.', '',
+              '| Declarations in compiled files | In files that failed | In blocked files | Stale | Not run |', '| ---: | ---: | ---: | ---: | ---: |',
               '| ' + ' | '.join(str(Counter(r['compilation']['status'] for r in package_rows)[k]) for k in ('compiled', 'fail', 'blocked', 'stale', 'not-run')) + ' |', '',
               '## Parser and builtins', '',
               'Builtin mappings distinguish callable Builtin declarations from source implementation counterparts. A counterpart is not a callable alias or a behavior pass. Computed registrations remain explicit review items.', '']
@@ -593,7 +593,7 @@ def markdown(value):
         lines.append('| ' + form + ' | ' + ' | '.join(map(str, numbers)) + ' |')
     extras = value['tests']['compiler_only']
     lines += ['', f"Unmatched compiler tests: {len(extras)} ({sum(r['enabled'] for r in extras)} enabled). Older imported fixtures absent from the current pin remain visible here; unmatched does not prove compiler authorship.", '',
-              'Whole-file gates, individual line gates, fixture skip metadata and compiler expectation overrides are recorded per counterpart. Overrides are never counted as identical. Source forms that could not be indexed: ' + str(len(value['tests']['unindexed'])) + '.', '',
+              'Each counterpart records whole-file exclusions, individual exclusions, skip annotations and changed compiler expectations. Changed expectations are never counted as identical. Source statements needing manual review: ' + str(len(value['tests']['unindexed'])) + '.', '',
               '## Review queue', '']
     lines += ['- ' + p.cell(item) for item in value['review']]
     return '\n'.join(lines) + '\n'
