@@ -1,7 +1,7 @@
 (* AsyncTransport.ml - Merge field interfaces without demanding their payloads. *)
 [@@@warning "-4"]
 
-type storageKind =
+type storageKind = AsyncStorageKind.t =
   | TupleStorage
   | RecordStorage of ANF.recordDescriptor
   | ListStorage of AST.semanticType
@@ -50,17 +50,7 @@ let modeSlot = function
   | Stored storage -> Some (NestedStorage storage)
   | PendingStored storage -> Some (PendingStorage ((), storage))
 
-let compatibleKind left right =
-  match (left, right) with
-  | TupleStorage, TupleStorage -> true
-  | ListStorage left, ListStorage right -> left = right
-  | DictStorage (leftKey, leftValue), DictStorage (rightKey, rightValue) ->
-      leftKey = rightKey && leftValue = rightValue
-  | SumStorage left, SumStorage right -> left = right
-  | RecordStorage left, RecordStorage right ->
-      left.ANF.valueType = right.ANF.valueType
-      && left.ANF.fields = right.ANF.fields
-  | _ -> false
+let compatibleKind = AsyncStorageKind.compatible
 
 let rec equal left right =
   left == right
@@ -121,19 +111,7 @@ let rec mapStorage transform storage =
   { storage with fields }
 
 let sourceFields storage source =
-  match (storage.kind, source) with
-  | TupleStorage, AST.TTuple types -> types
-  | ListStorage _, AST.TList element -> [ element ]
-  | DictStorage (expectedKey, expectedValue), AST.TDict (key, value)
-    when expectedKey = key && expectedValue = value ->
-      [ value ]
-  | RecordStorage descriptor, AST.TRecord _ ->
-      List.map snd descriptor.ANF.fields
-  | SumStorage layout, AST.TSum (name, args)
-    when name = layout.AsyncSumStorage.source.ANF.sumName
-         && args = layout.AsyncSumStorage.source.ANF.sumArgs ->
-      List.map snd layout.AsyncSumStorage.payloads
-  | _ -> Crash.crash "Async transport source type does not match its storage"
+  AsyncStorageKind.sourceFields storage.kind source
 
 let carrier source = AST.TSum ("Darklang.Stdlib.__Async.__Value", [ source ])
 

@@ -1,5 +1,5 @@
 (* AsyncTransport.mli - Describe concrete, pending and independently pending field interfaces. *)
-type storageKind =
+type storageKind = AsyncStorageKind.t =
   | TupleStorage
   | RecordStorage of ANF.recordDescriptor
   | ListStorage of AST.semanticType

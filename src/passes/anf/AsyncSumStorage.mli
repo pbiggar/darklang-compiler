@@ -16,6 +16,11 @@ val physical :
   AST.semanticType list ->
   ANF.sumDescriptor * MemoryModel.rcSumShapeInfo
 
+(* Recursive components reserve nominal identities before resolving payloads. *)
+val physicalNamed :
+  name:string -> layout -> AST.semanticType list ->
+  ANF.sumDescriptor * MemoryModel.rcSumShapeInfo
+
 val representationIndex :
   MemoryModel.rcSumShapeRegistry -> LoweringPrimitives.sumRepresentationIndex
 

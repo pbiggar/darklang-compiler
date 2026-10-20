@@ -57,14 +57,11 @@ let payloadIndex layout tag =
       if candidate = tag then Some index else None)
     (List.mapi (fun index payload -> (index, payload)) layout.payloads)
 
-let physical layout types =
+let physicalNamed ~name layout types =
   if List.length types <> List.length layout.payloads then
     Crash.crash "Async sum layout has an inconsistent payload count";
-  let source = AST.TSum (layout.source.A.sumName, layout.source.A.sumArgs) in
-  let identity =
-    SpecializationIdentity.specName "sum_payloads" (source :: types)
-  in
-  let name = physicalPrefix ^ Digest.to_hex (Digest.string identity) in
+  if not (String.starts_with ~prefix:physicalPrefix name) then
+    Crash.crash "Async sum layout has a non-private physical name";
   let payloads =
     List.map2 (fun (tag, _) typ -> (tag, Some typ)) layout.payloads types
     @ List.map (fun tag -> (tag, None)) layout.emptyTags
@@ -76,6 +73,12 @@ let physical layout types =
       payloads;
       unaryPayloadTags = MemoryModel.IntSet.of_list layout.unaryTags;
     } )
+
+let physical layout types =
+  let source = AST.TSum (layout.source.A.sumName, layout.source.A.sumArgs) in
+  let identity = SpecializationIdentity.specName "sum_payloads" (source :: types) in
+  let name = physicalPrefix ^ Digest.to_hex (Digest.string identity) in
+  physicalNamed ~name layout types
 
 let representationIndex shapes =
   M.mapi
