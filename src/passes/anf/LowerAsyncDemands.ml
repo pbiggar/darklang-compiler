@@ -162,11 +162,9 @@ let changed = AsyncTransport.changed
 
 let modeOf env stores atom =
   match (lookup env atom, lookup stores atom) with
-  | Some _, Some storage ->
-      PendingStored (AsyncTransport.mapStorage (fun _ -> ()) storage)
+  | Some _, Some storage -> PendingStored (AsyncTransport.interface storage)
   | Some _, None -> Pending
-  | None, Some storage ->
-      Stored (AsyncTransport.mapStorage (fun _ -> ()) storage)
+  | None, Some storage -> Stored (AsyncTransport.interface storage)
   | None, None -> Concrete
 
 let modeFacts transform typ = function
@@ -200,7 +198,7 @@ let listMode element mode =
          [ AsyncTransport.modeSlot mode ])
 
 let listElementMode storage =
-  let storage = AsyncTransport.mapStorage (fun _ -> ()) storage in
+  let storage = AsyncTransport.interface storage in
   match (AsyncTransport.kind storage, AsyncTransport.fields storage) with
   | ListStorage _, [ slot ] -> AsyncTransport.slotMode slot
   | _ -> Crash.crash "Async list transport has an inconsistent element layout"
@@ -214,7 +212,7 @@ let dictionaryMode key value valueMode =
          [ AsyncTransport.modeSlot valueMode ])
 
 let dictionaryValueMode storage =
-  let storage = AsyncTransport.mapStorage (fun _ -> ()) storage in
+  let storage = AsyncTransport.interface storage in
   match (AsyncTransport.kind storage, AsyncTransport.fields storage) with
   | DictStorage _, [ slot ] -> AsyncTransport.slotMode slot
   | _ ->
@@ -292,6 +290,25 @@ let storageFacts sumShapes env stores operation =
           | _ -> None)
       | None -> None)
   | _ -> None
+
+(* Closing a nominal cycle can widen a pending field's physical payload. Build
+   its typed force facts from the closed interface, not from the old tree node. *)
+let normalizeAllocation transform operation storage =
+  let source =
+    match operation with
+    | A.SumAlloc (variant, _) ->
+        Some (AST.TSum (variant.A.sum.A.sumName, variant.A.sum.A.sumArgs))
+    | A.RecordAlloc (descriptor, _) | A.RecordClone (descriptor, _, _) ->
+        Some descriptor.A.valueType
+    | _ -> None
+  in
+  match (storage, source) with
+  | Some storage, Some source ->
+      Result.map Option.some
+        (AsyncTransport.instantiateStorage transform
+           (AsyncTransport.interface storage)
+           source)
+  | _ -> Ok storage
 
 let storageType = AsyncTransport.storageType
 let slotRepresentation typ slot = AsyncTransport.slotType slot typ
@@ -1054,6 +1071,9 @@ let lower registry names ids sumShapes nextFunctionOrdinal externalDefinitions
                         Crash.crash "Async literal list has outer pendingness")
                 | _ -> Ok (storageFacts sumShapes env stores operation))
             | _ -> Ok (storageFacts sumShapes env stores operation)
+          in
+          let* ordinaryStore =
+            normalizeAllocation (fun typ -> Ok typ) operation ordinaryStore
           in
           let* () =
             match (operation, ordinaryStore) with
@@ -2217,11 +2237,9 @@ let lower registry names ids sumShapes nextFunctionOrdinal externalDefinitions
                  (function
                    | PendingSlot _ -> PendingSlot ()
                    | NestedStorage storage ->
-                       NestedStorage
-                         (AsyncTransport.mapStorage (fun _ -> ()) storage)
+                       NestedStorage (AsyncTransport.interface storage)
                    | PendingStorage (_, storage) ->
-                       PendingStorage
-                         ((), AsyncTransport.mapStorage (fun _ -> ()) storage))
+                       PendingStorage ((), AsyncTransport.interface storage))
                  slot)
           in
           let inputType = AsyncTransport.physicalType mode element in
@@ -2662,6 +2680,7 @@ let lower registry names ids sumShapes nextFunctionOrdinal externalDefinitions
                 | _ -> Ok (storageFacts sumShapes env stores operation))
             | _ -> Ok (storageFacts sumShapes env stores operation)
           in
+          let* storedValue = normalizeAllocation info operation storedValue in
           let* () =
             let escape =
               match operation with
@@ -3160,8 +3179,7 @@ let lower registry names ids sumShapes nextFunctionOrdinal externalDefinitions
                         match storedValue with
                         | None -> Pending
                         | Some storage ->
-                            PendingStored
-                              (AsyncTransport.mapStorage (fun _ -> ()) storage)
+                            PendingStored (AsyncTransport.interface storage)
                       in
                       let* argument, added, gen =
                         prepareValue expected source argument
@@ -3276,6 +3294,16 @@ let lower registry names ids sumShapes nextFunctionOrdinal externalDefinitions
                       Crash.crash
                         "Async variant allocation lost its payload layout"
                 in
+                let expected =
+                  sumField
+                    (AsyncTransport.interface storage)
+                    variant.A.variantTag
+                  |> AsyncTransport.slotMode
+                in
+                let* value, before, gen =
+                  prepareValue expected variant.A.payloadType value
+                    (modeOf env stores value) gen
+                in
                 let payloadType =
                   slotRepresentation variant.A.payloadType
                     (sumField storage variant.A.variantTag)
@@ -3288,7 +3316,7 @@ let lower registry names ids sumShapes nextFunctionOrdinal externalDefinitions
                           payloadType;
                         },
                         value ),
-                    [],
+                    before,
                     None,
                     gen )
             | A.SumTest (sum, tag, atom) ->
@@ -3325,9 +3353,33 @@ let lower registry names ids sumShapes nextFunctionOrdinal externalDefinitions
                   | None ->
                       Crash.crash "Async record allocation lost its layout"
                 in
+                let expected =
+                  AsyncTransport.fields (AsyncTransport.interface storage)
+                in
+                if
+                  List.length expected <> List.length values
+                  || List.length descriptor.A.fields <> List.length values
+                then
+                  Crash.crash
+                    "Async record promotion has inconsistent field arities";
+                let* values, before, gen =
+                  List.fold_left2
+                    (fun result ((_, source), value) slot ->
+                      let* values, before, gen = result in
+                      let* value, added, gen =
+                        prepareValue
+                          (AsyncTransport.slotMode slot)
+                          source value (modeOf env stores value) gen
+                      in
+                      Ok (value :: values, before @ added, gen))
+                    (Ok ([], [], gen))
+                    (List.combine descriptor.A.fields values)
+                    expected
+                in
                 Ok
-                  ( A.RecordAlloc (storageDescriptor storage descriptor, values),
-                    [],
+                  ( A.RecordAlloc
+                      (storageDescriptor storage descriptor, List.rev values),
+                    before,
                     None,
                     gen )
             | A.RecordClone (descriptor, original, values)
@@ -3384,7 +3436,7 @@ let lower registry names ids sumShapes nextFunctionOrdinal externalDefinitions
                 let mode =
                   match (modeOf env stores atom, storedValue) with
                   | Concrete, Some storage ->
-                      Stored (AsyncTransport.mapStorage (fun _ -> ()) storage)
+                      Stored (AsyncTransport.interface storage)
                   | mode, _ -> mode
                 in
                 let typ = AsyncTransport.physicalType mode typ in

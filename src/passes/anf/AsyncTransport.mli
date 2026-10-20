@@ -34,7 +34,9 @@ val slotMode : unit storedSlot option -> mode
 val modeSlot : mode -> unit storedSlot option
 val merge : mode -> mode -> (mode, string) result
 val mergeList : mode list -> mode list -> (mode list, string) result
-val mapStorage : ('a -> 'b) -> 'a storage -> 'b storage
+
+(* Forget helper metadata and close regular recursive sum interfaces. *)
+val interface : 'a storage -> unit storage
 val physicalType : mode -> AST.semanticType -> AST.semanticType
 val storageType : 'a storage -> AST.semanticType -> AST.semanticType
 val slotType : 'a storedSlot option -> AST.semanticType -> AST.semanticType

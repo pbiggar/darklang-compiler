@@ -29,6 +29,13 @@ let storage kind fields =
 
 let kind storage = (G.node storage).G.kind
 
+let normalize =
+  G.close
+    ~recursive:(function SumStorage _ -> true | _ -> false)
+    ~compatible:AsyncStorageKind.compatible
+
+let interface storage = normalize (G.map (fun _ -> ()) storage)
+
 let slot storage slot =
   match (slot.G.pending, slot.G.nested) with
   | None, None -> None
@@ -86,7 +93,10 @@ let merge left right =
     | Concrete, value | value, Concrete -> Ok value
     | Pending, Pending -> Ok Pending
     | Stored left, Stored right ->
-        Ok (Stored (G.join ~compatible:AsyncStorageKind.compatible left right))
+        Ok
+          (Stored
+             (normalize
+                (G.join ~compatible:AsyncStorageKind.compatible left right)))
     | Pending, Stored storage
     | Stored storage, Pending
     | Pending, PendingStored storage
@@ -97,7 +107,8 @@ let merge left right =
     | PendingStored left, PendingStored right ->
         Ok
           (PendingStored
-             (G.join ~compatible:AsyncStorageKind.compatible left right))
+             (normalize
+                (G.join ~compatible:AsyncStorageKind.compatible left right)))
 
 let rec mergeList left right =
   match (left, right) with
@@ -108,7 +119,6 @@ let rec mergeList left right =
       Ok (value :: values)
   | _ -> Crash.crash "Async transport merged inconsistent interface arities"
 
-let mapStorage = G.map
 let carrier source = AST.TSum ("Darklang.Stdlib.__Async.__Value", [ source ])
 
 let storageType storage source =
@@ -155,40 +165,47 @@ let sumDescriptor storage =
   | _ -> Crash.crash "Async physical sum descriptor has a non-variant layout"
 
 let collectSumShapes ~into storage =
-  let rec collect ancestors into storage =
-    let* ancestors =
-      match kind storage with
-      | SumStorage _ | RecordStorage _ ->
-          if List.exists (AsyncStorageKind.compatible (kind storage)) ancestors
-          then
-            Error
-              "Async transport across a recursive aggregate layout is not \
-               implemented"
-          else Ok (kind storage :: ancestors)
-      | TupleStorage | ListStorage _ | DictStorage _ -> Ok ancestors
-    in
-    let* into =
-      match kind storage with
-      | SumStorage layout ->
-          let source =
-            AST.TSum
-              ( layout.AsyncSumStorage.source.ANF.sumName,
-                layout.AsyncSumStorage.source.ANF.sumArgs )
-          in
-          let* _, shapes = AsyncGraphTypes.resolve storage source in
-          AsyncSumStorage.includePhysicalShapes ~into shapes
-      | _ -> Ok into
-    in
-    List.fold_left
-      (fun result slot ->
-        let* into = result in
-        match slot with
-        | Some (NestedStorage nested) | Some (PendingStorage (_, nested)) ->
-            collect ancestors into nested
-        | None | Some (PendingSlot _) -> Ok into)
-      (Ok into) (fields storage)
+  let rec collect seen ancestors into storage =
+    let id = G.root storage in
+    if G.Nodes.mem id seen then Ok (seen, into)
+    else
+      let seen = G.Nodes.add id () seen in
+      let* ancestors =
+        match kind storage with
+        | SumStorage _ -> Ok []
+        | RecordStorage _ ->
+            if
+              List.exists (AsyncStorageKind.compatible (kind storage)) ancestors
+            then
+              Error
+                "Async transport across a recursive aggregate layout without a \
+                 sum anchor is not implemented"
+            else Ok (kind storage :: ancestors)
+        | TupleStorage | ListStorage _ | DictStorage _ -> Ok ancestors
+      in
+      let* into =
+        match kind storage with
+        | SumStorage layout ->
+            let source =
+              AST.TSum
+                ( layout.AsyncSumStorage.source.ANF.sumName,
+                  layout.AsyncSumStorage.source.ANF.sumArgs )
+            in
+            let* _, shapes = AsyncGraphTypes.resolve storage source in
+            AsyncSumStorage.includePhysicalShapes ~into shapes
+        | _ -> Ok into
+      in
+      List.fold_left
+        (fun result slot ->
+          let* seen, into = result in
+          match slot with
+          | Some (NestedStorage nested) | Some (PendingStorage (_, nested)) ->
+              collect seen ancestors into nested
+          | None | Some (PendingSlot _) -> Ok (seen, into))
+        (Ok (seen, into))
+        (fields storage)
   in
-  collect [] into storage
+  Result.map snd (collect G.Nodes.empty [] into storage)
 
 module Typed = Map.Make (struct
   type t = int * AST.semanticType
