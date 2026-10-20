@@ -212,11 +212,30 @@ let buildAnf ?(asyncDefinitions = StringOrder.Map.empty) ?asyncRuntime verbosity
   in
   let rec lowerAsync (registries : AST_to_ANF.registries) nextFunctionOrdinal
       runtime helperNames definitions functions =
+    (* Preamble specializations may exist only as native code. Recover source
+       provenance from the specialization registry, never from mangled suffixes.
+       Stdlib operations retain their existing explicit storage adapters. *)
+    let sourceSpecializations =
+      match runtime with
+      | None -> StringOrder.Map.empty
+      | Some runtime ->
+          SpecializationIdentity.SpecMap.fold
+            (fun ((base, _) as spec) name found ->
+              if
+                StringOrder.Map.mem base
+                  runtime.context.CompilationContexts.genericFuncDefs
+                && (not (String.starts_with ~prefix:"Darklang.Stdlib." base))
+                && not (String.starts_with ~prefix:"__dark_" base)
+              then StringOrder.Map.add name spec found
+              else found)
+            runtime.context.CompilationContexts.specRegistry
+            StringOrder.Map.empty
+    in
     match
-      LowerAsyncDemands.lower registries.AST_to_ANF.funcReg
-        registries.AST_to_ANF.functionNames registries.AST_to_ANF.functionIds
-        registries.AST_to_ANF.rcSumShapeReg nextFunctionOrdinal definitions
-        functions
+      LowerAsyncDemands.lower sourceSpecializations
+        registries.AST_to_ANF.funcReg registries.AST_to_ANF.functionNames
+        registries.AST_to_ANF.functionIds registries.AST_to_ANF.rcSumShapeReg
+        nextFunctionOrdinal definitions functions
     with
     | Ok lowered ->
         Ok

@@ -325,8 +325,8 @@ let nativeRuntime name =
       "__dark_async_";
     ]
 
-let lower registry names ids sumShapes nextFunctionOrdinal externalDefinitions
-    functions =
+let lower sourceSpecializations registry names ids sumShapes nextFunctionOrdinal
+    externalDefinitions functions =
   let name id = F.tryFind id names in
   let producer id =
     match name id with
@@ -2445,6 +2445,27 @@ let lower registry names ids sumShapes nextFunctionOrdinal externalDefinitions
           in
           let mapping = mappingCall fn env stores summaries operation in
           let folding = foldingCall fn env stores summaries operation in
+          let* () =
+            match operation with
+            | A.Call (callee, arguments)
+            | A.BorrowedCall (callee, arguments)
+            | A.TailCall (callee, arguments)
+              when (not (eligible callee))
+                   && List.exists
+                        (fun atom -> changed (modeOf env stores atom))
+                        arguments -> (
+                match
+                  Option.bind (name callee) (fun name ->
+                      Names.find_opt name sourceSpecializations)
+                with
+                | Some spec ->
+                    Error
+                      (MissingSourceSpecializations
+                         ( SpecializationIdentity.SpecSet.singleton spec,
+                           sumShapes ))
+                | None -> Ok ())
+            | _ -> Ok ()
+          in
           let* () =
             let hasList =
               T.exists

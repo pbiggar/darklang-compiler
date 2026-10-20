@@ -13,6 +13,7 @@ type failure =
       SpecializationIdentity.SpecSet.t * MemoryModel.rcSumShapeRegistry
 
 val lower :
+  SpecializationIdentity.specKey StringOrder.Map.t ->
   TypeRegistries.functionRegistry ->
   TypeRegistries.functionNameRegistry ->
   TypeRegistries.functionIdRegistry ->
