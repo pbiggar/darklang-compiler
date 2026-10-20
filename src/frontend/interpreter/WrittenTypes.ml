@@ -440,13 +440,27 @@ and testExpected = TEExpr of expr | TEError of string | TESqlError of string
 (*
    A test assertion `actual = expected`; post-parse validation restricts it to Test source.
 *)
-and test = { range : range; actual : expr; expected : testExpected }
+and assertion = { range : range; actual : expr; expected : testExpected }
 
 (*
    A trailing expression inside a module body (`module M = … \n expr`).
    `[<DB>] type Name = AliasedType` — a Test-only user DB.
    `actual = expected` assertion accepted only by Test validation.
 *)
+and expectedError = RuntimeError of string
+
+and testDecl = {
+  range : range;
+  name : identifier;
+  body : expr;
+  expectedError : (range * expectedError) option;
+  keywordTest : range;
+  errorKindRange : range option;
+  symbolOutcome : range option;
+  symbolEquals : range;
+  description : string;
+}
+
 and declaration =
   | DFunction of fnDecl
   | DValue of valueDecl
@@ -456,7 +470,8 @@ and declaration =
   | DImpl of implDecl
   | DExpr of expr
   | DTypeDB of typeDecl
-  | DTest of test
+  | DAssertion of assertion
+  | DTest of testDecl
 
 (*
    The whole file: top-level declarations + trailing expressions to eval.

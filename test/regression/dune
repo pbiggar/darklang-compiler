@@ -49,7 +49,7 @@
  (deps terminal_size_regression.py)
  (action (run python3 %{dep:terminal_size_regression.py} %{exe:../../bin/dark.exe})))
 (executables
- (names host_text_regression cache_regression component_regression literal_regression package_io_regression package_http_regression executable_path_compile)
+ (names named_test_partition_regression named_test_parser_regression host_text_regression cache_regression component_regression literal_regression package_io_regression package_http_regression executable_path_compile)
  (libraries dark_compiler tls-lwt x509)
  (flags (:standard -w @a -warn-error @a)))
 
@@ -61,7 +61,9 @@
    (run %{exe:host_text_regression.exe})
    (run %{exe:literal_regression.exe})
    (run %{exe:cache_regression.exe})
-   (run %{exe:component_regression.exe}))))
+   (run %{exe:component_regression.exe})
+   (run %{exe:named_test_parser_regression.exe})
+   (run %{exe:named_test_partition_regression.exe}))))
 
 (rule
  (alias runtest)

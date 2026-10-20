@@ -1,10 +1,10 @@
 # Imported upstream test inventory
 
-Generated from `test/test-suite-tooling/TestRunner.ml` and the imported
+Generated from `test/test-suite-tooling/E2EDiscovery.ml` (shared with the runner) and the imported
 `test/fixtures/e2e/upstream/**/*.dark` files. Regenerate with
 `python3 scripts/audit-upstream-gates.py`; verify with `--check`.
 
-**123 files; 31 whole-file exclusions; 290 line-number entries
+**121 files; 31 whole-file exclusions; 290 line-number entries
 across 34 files.** A line entry is not a skipped-test count.
 The runner matches the `L<number>:` assertion name produced by the fixture
 parser. Declarations and multiline assertions require parser inspection;
@@ -134,8 +134,6 @@ Other skip metadata and runtime filters are outside this inventory.
 | [trait-adoption/stdlib/ints-uint32.dark](../../test/fixtures/e2e/upstream/trait-adoption/stdlib/ints-uint32.dark) | enabled | — |
 | [trait-adoption/stdlib/ints-uint64.dark](../../test/fixtures/e2e/upstream/trait-adoption/stdlib/ints-uint64.dark) | enabled | — |
 | [trait-adoption/stdlib/ints-uint8.dark](../../test/fixtures/e2e/upstream/trait-adoption/stdlib/ints-uint8.dark) | enabled | — |
-| [traits-pin-investigation/apply.dark](../../test/fixtures/e2e/upstream/traits-pin-investigation/apply.dark) | enabled | — |
-| [traits-pin-investigation/pipe.dark](../../test/fixtures/e2e/upstream/traits-pin-investigation/pipe.dark) | enabled | — |
 
 ## Blank and comment line entries
 

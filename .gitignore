@@ -65,3 +65,7 @@ scripts/.unicode_cache/
 
 # Interrupted mutation backups (restored automatically on exit)
 *.mutation_backup
+
+# Obsolete bulk ledger artifacts; compact YAML inventories are tracked instead.
+/porting/generated/ledger.json
+/porting/generated/ledger.json.gz

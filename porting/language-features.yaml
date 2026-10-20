@@ -1,0 +1,268 @@
+# Maintained language assessments; details belong in the compiler and test suite.
+schema: 2
+groups:
+  Function calls:
+    Builtin function calls: supported
+    Immediate lambda application: supported
+    Immediate curried lambda application: supported
+    Named function overapplication:
+      status: missing
+      notes: Named calls require the declared arity; call a returned function in a separate application step.
+    Package function calls: supported
+    Direct positional calls: supported
+    Qualified function calls: supported
+    Local function-value calls: supported
+    Higher-order arguments: supported
+    Returned functions: supported
+    Non-capturing lambdas: supported
+    Capturing lambdas: supported
+    Multiple lambda parameters: supported
+    Lambda tuple parameters: supported
+    Unit function parameters: supported
+    Named function references: supported
+    Partial application of named functions: supported
+    Partial application of function values: supported
+    Generic partial application with explicit types: supported
+    Generic partial application using inference alone:
+      status: partial
+      notes: Some generic partial applications require explicit type arguments.
+    Recursive functions: supported
+    Mutually recursive functions: supported
+    Local recursion: supported
+    Polymorphic recursion:
+      status: missing
+      notes: Recursive calls that change a generic function's type arguments are rejected.
+    Too many call arguments: supported
+    Call argument and return types: supported
+  Builtin types:
+    Unit: supported
+    Bool: supported
+    Int: supported
+    Int8: supported
+    UInt8: supported
+    Int16: supported
+    UInt16: supported
+    Int32: supported
+    UInt32: supported
+    Int64: supported
+    UInt64: supported
+    Int128: supported
+    UInt128: supported
+    Float: supported
+    Char: supported
+    String: supported
+    Uuid: supported
+    DateTime: supported
+    Blob: supported
+    List<'a>: supported
+    Dict<'key, 'value>: supported
+    Tuple types: supported
+    Function types: supported
+    Stream<'a>: supported
+    DB<'a>:
+      status: missing
+      notes: Interpreter database handles have no corresponding compiler source type.
+  Literals:
+    Unit literals: supported
+    Boolean literals: supported
+    Unsuffixed integer literals: supported
+    Signed fixed-width integer literals: supported
+    Unsigned integer literals: supported
+    Float literals: supported
+    Character literals: supported
+    Literal type/range rejection: supported
+  Strings and interpolation:
+    Ordinary quoted strings: supported
+    Triple-quoted strings: supported
+    Unicode string text: supported
+    Escaped quotes and backslashes: supported
+    String concatenation: supported
+    Single-line interpolation: supported
+    Triple-quoted interpolation: supported
+    Multiple interpolated expressions: supported
+    Nested interpolation: supported
+    Expressions inside interpolation: supported
+    Quotes inside interpolation expressions: supported
+    Braces inside interpolation expressions: supported
+    Doubled literal braces: supported
+    Escaped literal braces: supported
+    Interpolation requires String: supported
+    Interpolation source locations: supported
+  Bindings and scope:
+    Local let bindings: supported
+    Let/in expressions: supported
+    Wildcard bindings: supported
+    Unit binding patterns: supported
+    Tuple destructuring bindings: supported
+    Lexical shadowing: supported
+    Captured local values: supported
+    Module value declarations: supported
+    Statement sequences: supported
+  Pipelines:
+    Pipe into a named function: supported
+    Pipe into a qualified function: supported
+    Pipe into a function value: supported
+    Pipe into a lambda: supported
+    Pipe into an operator: supported
+    Pipe into an enum constructor: supported
+    Chained pipelines: supported
+    Generic pipeline inference: supported
+  Generics and declared types:
+    Generic function declarations: supported
+    Explicit function type arguments: supported
+    Inferred function type arguments: supported
+    Generic function values: supported
+    Native generic specialization: supported
+    Record type declarations: supported
+    Record construction: supported
+    Record field access: supported
+    Record updates: supported
+    Generic record types: supported
+    Enum type declarations: supported
+    Nullary enum constructors: supported
+    Enum constructor payloads: supported
+    Generic enum types: supported
+    Qualified constructors: supported
+    Type aliases: supported
+    Generic type aliases: supported
+    Nested generic type arguments: supported
+    Generic Option type: supported
+    Generic Result type: supported
+  Collections:
+    Empty list literals: supported
+    Nonempty list literals: supported
+    Dictionary literals: supported
+    Empty dictionary inference: supported
+    Tuple construction: supported
+    Tuple element access: supported
+    Nested collection inference: supported
+  Control flow:
+    If/then/else: supported
+    If without else: supported
+    Elif chains: supported
+    Short-circuit boolean and: supported
+    Short-circuit boolean or: supported
+    Boolean condition checking: supported
+  Pattern matching:
+    Wildcard match patterns: supported
+    Variable match patterns: supported
+    Unit match patterns: supported
+    Boolean match patterns: supported
+    Arbitrary-precision integer patterns: supported
+    Signed fixed-width integer patterns: supported
+    Unsigned integer patterns: supported
+    Float match patterns: supported
+    String match patterns: supported
+    Character match patterns: supported
+    Tuple match patterns: supported
+    Empty-list patterns: supported
+    Fixed-length list patterns: supported
+    Head/tail list patterns: supported
+    Enum constructor patterns: supported
+    Nested constructor patterns: supported
+    Or-pattern alternatives: supported
+    Binding consistency across alternatives: supported
+    Match guards: supported
+    Guard type checking: supported
+    Exhaustiveness checking: supported
+    Constructor arity checking: supported
+    Pattern/scrutinee type checking: supported
+    Match arm result types: supported
+  Trait mechanisms:
+    Trait declarations: supported
+    Multiple trait methods: supported
+    Implementation declarations: supported
+    Implementation method aliases: supported
+    Generic implementations: supported
+    Conditional implementations: supported
+    Single trait bounds: supported
+    Multiple trait bounds: supported
+    Parameterized trait bounds: supported
+    Bounds on declared types: supported
+    Static trait method dispatch: supported
+    Receiver method syntax: supported
+    Receiver/record-field precedence: supported
+    Trait method function values: supported
+    Trait operators: supported
+    Bounded generic specialization: supported
+    Missing implementation rejection: supported
+    Implementation method signature checking: supported
+    Competing implementation rejection: supported
+    Runtime trait lookup:
+      status: missing
+      notes: Implementation selection must finish during compilation.
+    Newest-implementation-wins dispatch:
+      status: missing
+      notes: The compiler rejects ambiguous implementations instead of choosing the latest at runtime.
+    Trait effect ceilings:
+      status: missing
+      notes: Trait method permission ceilings are not enforced by the static trait model.
+  Standard traits:
+    Darklang.Stdlib.Add: supported
+    Darklang.Stdlib.Subtract: supported
+    Darklang.Stdlib.Multiply: supported
+    Darklang.Stdlib.Divide: supported
+    Darklang.Stdlib.Modulo: supported
+    Darklang.Stdlib.Power: supported
+    Darklang.Stdlib.Negate: supported
+    Darklang.Stdlib.Zero: supported
+    Darklang.Stdlib.One: supported
+    Darklang.Stdlib.BitwiseAnd: supported
+    Darklang.Stdlib.BitwiseOr: supported
+    Darklang.Stdlib.BitwiseXor: supported
+    Darklang.Stdlib.BitwiseNot: supported
+    Darklang.Stdlib.ShiftLeft: supported
+    Darklang.Stdlib.ShiftRight: supported
+    Darklang.Stdlib.Compare: supported
+    Darklang.Stdlib.ToString: supported
+  Modules and names:
+    File module declarations: supported
+    Nested modules: supported
+    Qualified name resolution: supported
+    Lexical name resolution: supported
+    Escaped identifiers: supported
+    Forward declaration references: supported
+    Package source loading: supported
+  Effects:
+    Effect names: supported
+    Effect row annotations: supported
+    Empty effect rows: supported
+    Effect propagation through calls:
+      status: missing
+      notes: Called-function effects are not propagated through the direct checker.
+    Function permission ceilings:
+      status: missing
+      notes: Declared effect ceilings are not enforced by the direct checker.
+    Higher-order effect propagation:
+      status: missing
+      notes: Effects through function values lack full propagation/enforcement.
+  Async:
+    Future value representation:
+      status: missing
+      notes: The merged baseline does not represent futures in the native language pipeline.
+    Implicit await on value use:
+      status: missing
+      notes: Future values are not resolved implicitly by this baseline.
+    Async function calls:
+      status: missing
+      notes: Native future-producing function calls are not implemented in this baseline.
+    Async failures:
+      status: missing
+      notes: Propagation of failures through futures is not implemented in this baseline.
+  Reflection and dynamic execution:
+    Runtime expression evaluation:
+      status: missing
+      notes: No interpreter-style evaluation of arbitrary source/AST at runtime.
+    Runtime function lookup by name:
+      status: missing
+      notes: No general runtime lookup and invocation of program functions by string name.
+    Runtime program reflection:
+      status: missing
+      notes: The compiler's compile-time metadata is not an interpreter runtime program model.
+  Test declarations:
+    Named test declaration parsing: supported
+    Named test extraction: supported
+    Imported named-test fixtures: supported
+    General named-package test adoption:
+      status: partial
+      notes: Not every upstream named test has an enabled compiler counterpart.

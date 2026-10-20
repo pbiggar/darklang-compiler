@@ -131,6 +131,7 @@ let printHelp () =
        (default/max 8192; 1 disables)";
       "  --target=TARGET     Validate host (default) or linux-x86_64";
       "  --timings-json=PATH  Write machine-readable timing data to PATH";
+      "  --results-json=PATH  Write individual E2E outcomes for ledger updates";
       "  --codegen-profile-json=PATH  Write opt-in per-function ARM64 codegen \
        metrics";
       "  --quiet            Quiet mode: print 'success' or list failed tests";
@@ -589,6 +590,7 @@ let runTestsWithProgressReporter completedTestReporter args =
     and showAllTestTimings = TestRunnerArgs.hasAllTestTimingsArg args
     and verbose = TestRunnerArgs.hasVerboseArg args in
     let timingsJsonPath = get (TestRunnerArgs.parseTimingsJsonArg args)
+    and resultsJsonPath = get (TestRunnerArgs.parseResultsJsonArg args)
     and codegenProfileJsonPath =
       get (TestRunnerArgs.parseCodegenProfileJsonArg args)
     and e2eBatchSize = get (TestRunnerArgs.parseE2EBatchSizeArg args) in
@@ -797,6 +799,7 @@ let runTestsWithProgressReporter completedTestReporter args =
         { F.name = "Process Capture Tests"; tests = TestProcessTests.tests };
         { F.name = "Stdlib Source Tests"; tests = StdlibSourceTests.tests };
         { F.name = "Test Runner Args Tests"; tests = TestRunnerArgsTests.tests };
+        { F.name = "E2E Discovery Tests"; tests = E2EDiscoveryTests.tests };
         {
           F.name = "Type Checking Test Runner Tests";
           tests = TypeCheckingTestRunnerTests.tests;
@@ -916,6 +919,7 @@ let runTestsWithProgressReporter completedTestReporter args =
       { F.pass = "✓"; fail = "✗"; sectionPrefix = "└─" }
     in
     let runState = F.createStateWithProgressReporter completedTestReporter in
+    let e2eOutcomes = Queue.create () in
     let codegenMetrics = ref []
     and codegenLirOpMetrics = ref []
     and cacheCounts = ref M.empty in
@@ -1031,350 +1035,7 @@ let runTestsWithProgressReporter completedTestReporter args =
       in
       not (List.mem name (if isArm then x64 else arm64))
     in
-    (* Exclusions match the exhaustive 2026-10-08 compatibility test audit. *)
-    let disabledUpstreamFiles =
-      [
-        "test/fixtures/e2e/upstream/cli/app-service-safety.dark";
-        "test/fixtures/e2e/upstream/cli/command-completions.dark";
-        "test/fixtures/e2e/upstream/cli/deprecation-kinds.dark";
-        "test/fixtures/e2e/upstream/cli/include-parsing.dark";
-        "test/fixtures/e2e/upstream/cli/outliner.dark";
-        "test/fixtures/e2e/upstream/cli/permissions-display.dark";
-        "test/fixtures/e2e/upstream/cli/permissions-grammar.dark";
-        "test/fixtures/e2e/upstream/cli/tailscale.dark";
-        "test/fixtures/e2e/upstream/cli/workbench-repl.dark";
-        "test/fixtures/e2e/upstream/cloud/db.dark";
-        "test/fixtures/e2e/upstream/language/builtin-introspection.dark";
-        "test/fixtures/e2e/upstream/language/effect-ceiling.dark";
-        "test/fixtures/e2e/upstream/language/runtime-to-programtypes.dark";
-        "test/fixtures/e2e/upstream/scm/commit-hash.dark";
-        "test/fixtures/e2e/upstream/scm/constraint-kinds.dark";
-        "test/fixtures/e2e/upstream/scm/lww.dark";
-        "test/fixtures/e2e/upstream/scm/matter-routes.dark";
-        "test/fixtures/e2e/upstream/scm/propagation-policy.dark";
-        "test/fixtures/e2e/upstream/scm/removal-conflicts.dark";
-        "test/fixtures/e2e/upstream/scm/sync-seen-everything.dark";
-        "test/fixtures/e2e/upstream/scm/sync-wire.dark";
-        "test/fixtures/e2e/upstream/stachu/darklangParser.dark";
-        "test/fixtures/e2e/upstream/stachu/parser.dark";
-        "test/fixtures/e2e/upstream/stachu/tinyLang.dark";
-        "test/fixtures/e2e/upstream/stdlib/earg.dark";
-        "test/fixtures/e2e/upstream/stdlib/eself.dark";
-        "test/fixtures/e2e/upstream/stdlib/language-tools/parsedFileShape.dark";
-        "test/fixtures/e2e/upstream/stdlib/language-tools/pickLocation.dark";
-        "test/fixtures/e2e/upstream/stdlib/language-tools/semanticTokenization.dark";
-        "test/fixtures/e2e/upstream/stdlib/prettyPrinter.dark";
-        "test/fixtures/e2e/upstream/stdlib/sqlite.dark";
-      ]
-    in
-    let disabledUpstreamLines =
-      [
-        ("test/fixtures/e2e/upstream/stdlib/string.dark", [ 179 ]);
-        ("test/fixtures/e2e/upstream/language/apply/eapply.dark", [ 118 ]);
-        ("test/fixtures/e2e/upstream/language/apply/einfix.dark", [ 57; 58; 59 ]);
-        ("test/fixtures/e2e/upstream/language/basic/eand.dark", [ 5; 13 ]);
-        ( "test/fixtures/e2e/upstream/language/basic/elet.dark",
-          [ 1; 2; 19; 20; 45; 54; 60; 66; 71; 82 ] );
-        ("test/fixtures/e2e/upstream/language/basic/eor.dark", [ 18; 19 ]);
-        ("test/fixtures/e2e/upstream/language/collections/dlist.dark", [ 9; 10 ]);
-        ( "test/fixtures/e2e/upstream/language/collections/dtuple.dark",
-          [ 9; 11 ] );
-        ( "test/fixtures/e2e/upstream/language/custom-data/enums.dark",
-          [ 7; 9; 11; 74 ] );
-        ( "test/fixtures/e2e/upstream/language/custom-data/record-field-acess.dark",
-          [ 13 ] );
-        ("test/fixtures/e2e/upstream/language/custom-data/records.dark", [ 8 ]);
-        ( "test/fixtures/e2e/upstream/language/custom-data/values.dark",
-          [
-            5;
-            9;
-            13;
-            17;
-            21;
-            25;
-            29;
-            33;
-            37;
-            41;
-            45;
-            49;
-            53;
-            57;
-            61;
-            65;
-            76;
-            77;
-            78;
-            80;
-            81;
-            83;
-            84;
-            86;
-            87;
-            89;
-            90;
-            92;
-            93;
-            95;
-            96;
-            98;
-            99;
-            101;
-            102;
-            104;
-            105;
-            107;
-            108;
-            110;
-            111;
-            113;
-            114;
-            116;
-            117;
-            119;
-            120;
-            122;
-            123;
-            125;
-            126;
-            128;
-            129;
-          ] );
-        ( "test/fixtures/e2e/upstream/language/derror.dark",
-          [ 13; 14; 15; 16; 17; 18; 19; 20; 21; 22; 23; 25; 32 ] );
-        ( "test/fixtures/e2e/upstream/language/elambda.dark",
-          [ 13; 18; 21; 33; 35 ] );
-        ("test/fixtures/e2e/upstream/language/error-syntax.dark", [ 1 ]);
-        ( "test/fixtures/e2e/upstream/language/flow-control/eif.dark",
-          [ 3; 4; 5; 6; 10; 23; 26 ] );
-        ( "test/fixtures/e2e/upstream/language/flow-control/ematch.dark",
-          [ 656; 660; 663; 667; 672; 677; 681 ] );
-        ("test/fixtures/e2e/upstream/language/flow-control/epipe.dark", [ 11 ]);
-        ("test/fixtures/e2e/upstream/language/nested-fns.dark", [ 55; 60 ]);
-        ( "test/fixtures/e2e/upstream/scm/branch-identity.dark",
-          [ 9; 20; 23; 27; 31; 32 ] );
-        ( "test/fixtures/e2e/upstream/scm/conflicts.dark",
-          [
-            51;
-            58;
-            64;
-            70;
-            79;
-            86;
-            92;
-            99;
-            105;
-            111;
-            129;
-            136;
-            144;
-            155;
-            161;
-            169;
-            175;
-            184;
-            194;
-            204;
-            220;
-            224;
-            228;
-            232;
-            233;
-            234;
-            236;
-            242;
-            243;
-            246;
-            251;
-            257;
-            258;
-            259;
-            263;
-            265;
-            266;
-          ] );
-        ( "test/fixtures/e2e/upstream/stdlib/base64.dark",
-          [
-            7;
-            9;
-            10;
-            11;
-            12;
-            20;
-            21;
-            22;
-            23;
-            24;
-            25;
-            26;
-            27;
-            28;
-            29;
-            33;
-            34;
-            35;
-            36;
-            39;
-            40;
-            43;
-            44;
-            45;
-            46;
-            47;
-          ] );
-        ("test/fixtures/e2e/upstream/stdlib/dict.dark", [ 76; 93 ]);
-        ( "test/fixtures/e2e/upstream/stdlib/float.dark",
-          [
-            47;
-            55;
-            58;
-            59;
-            64;
-            65;
-            73;
-            76;
-            81;
-            89;
-            107;
-            110;
-            111;
-            125;
-            127;
-            134;
-            136;
-            160;
-            173;
-            176;
-            244;
-          ] );
-        ( "test/fixtures/e2e/upstream/stdlib/html.dark",
-          [ 42; 44; 66; 69; 72; 75; 83 ] );
-        ( "test/fixtures/e2e/upstream/stdlib/http.dark",
-          [
-            21;
-            27;
-            33;
-            48;
-            51;
-            57;
-            63;
-            102;
-            108;
-            110;
-            111;
-            114;
-            117;
-            122;
-            123;
-            124;
-            128;
-            129;
-            130;
-            131;
-            133;
-            137;
-            144;
-            149;
-            155;
-            161;
-          ] );
-        ( "test/fixtures/e2e/upstream/stdlib/httpclient.dark",
-          [ 71; 108; 111; 131; 132; 133; 134 ] );
-        ("test/fixtures/e2e/upstream/stdlib/httpserver.dark", [ 29; 33; 37 ]);
-        ("test/fixtures/e2e/upstream/stdlib/ints/int64.dark", [ 368 ]);
-        ("test/fixtures/e2e/upstream/stdlib/ints/int8.dark", [ 47 ]);
-        ( "test/fixtures/e2e/upstream/stdlib/json.dark",
-          [
-            722;
-            726;
-            728;
-            750;
-            751;
-            755;
-            932;
-            1071;
-            1076;
-            1178;
-            1180;
-            1236;
-            1239;
-            1243;
-            1248;
-            1268;
-            1330;
-            1388;
-            1392;
-            1402;
-            1406;
-            1408;
-            1411;
-          ] );
-        ( "test/fixtures/e2e/upstream/stdlib/list.dark",
-          [ 61; 65; 71; 75; 81; 157; 184; 238; 346 ] );
-        ("test/fixtures/e2e/upstream/stdlib/math.dark", [ 27; 30 ]);
-        ("test/fixtures/e2e/upstream/stdlib/nomodule.dark", [ 308 ]);
-      ]
-    in
-    let normalizePath path =
-      String.map (fun c -> if c = '\\' then '/' else c) path
-    in
-    let pathMatchesSourceFile source suffix =
-      Text.endsWith (normalizePath source) suffix
-    in
-    let isDisabledUpstreamFile source =
-      List.exists (pathMatchesSourceFile source) disabledUpstreamFiles
-    in
-    let disabledLinesForSourceFile source =
-      List.find_map
-        (fun (suffix, lines) ->
-          if pathMatchesSourceFile source suffix then Some lines else None)
-        disabledUpstreamLines
-    in
-    let tryParseTestLineNumber name =
-      if Text.startsWith name "L" then
-        match String.index_opt name ':' with
-        | Some colon when colon > 1 ->
-            Option.map Int32.to_int
-              (Text.tryParseInt32 (String.sub name 1 (colon - 1)))
-        | _ -> None
-      else None
-    in
-    let upstreamSkipReason (test : E.e2eTest) =
-      if
-        Text.contains test.E.source "Builtin.testRuntimeError"
-        || Text.contains test.E.preamble "Builtin.testRuntimeError"
-      then
-        "unsupported interpreter test infrastructure: Builtin.testRuntimeError"
-      else "pending upstream support"
-    in
-    let applyUpstreamEnablementGate (test : E.e2eTest) =
-      if Option.is_some test.E.skipReason then test
-      else if isDisabledUpstreamFile test.E.sourceFile then
-        { test with E.skipReason = Some (upstreamSkipReason test) }
-      else
-        match
-          ( disabledLinesForSourceFile test.E.sourceFile,
-            tryParseTestLineNumber test.E.name )
-        with
-        | Some lines, Some line when List.mem line lines ->
-            { test with E.skipReason = Some (upstreamSkipReason test) }
-        | _ -> test
-    in
-    let loadE2ETests files =
-      let tests, errors =
-        Array.fold_left
-          (fun (tests, errors) file ->
-            match E.parseE2ETestFile file with
-            | Ok parsed ->
-                ( List.rev_append
-                    (List.map applyUpstreamEnablementGate parsed)
-                    tests,
-                  errors )
-            | Error msg -> (tests, (file, msg) :: errors))
-          ([], []) files
-      in
-      (Array.of_list (List.rev tests), List.rev errors)
-    in
+    let loadE2ETests = E2EDiscovery.loadE2ETests in
     let matchesE2EFilter (test : E.e2eTest) =
       TestRunnerArgs.matchesFilter filter test.E.name
       || TestRunnerArgs.matchesFilter filter test.E.sourceFile
@@ -1516,6 +1177,13 @@ let runTestsWithProgressReporter completedTestReporter args =
             let recordLogicalResult index (test : E.e2eTest) result =
               let _, _, _, compile, runtime = unpack (fromResult result) in
               results.(index) <- Some (test, result);
+              if Option.is_some resultsJsonPath then Queue.add
+                ( RepositoryTestFiles.relativePath test.E.sourceFile,
+                  test.E.name,
+                  match result with
+                  | Ok _ -> ("pass", "")
+                  | Error failure -> ("fail", failure.R.message) )
+                e2eOutcomes;
               recordTiming
                 {
                   F.name = suiteName ^ ": " ^ test.E.name;
@@ -2123,6 +1791,27 @@ let runTestsWithProgressReporter completedTestReporter args =
       in
       writeJson false path (json_timingJsonPayload { summary; tests; passes })
     in
+    Option.iter
+      (fun path ->
+        let rows =
+          queueList e2eOutcomes
+          |> List.sort (fun (fileA, nameA, _) (fileB, nameB, _) ->
+              compare (fileA, nameA) (fileB, nameB))
+          |> List.map (fun (file, name, (status, message)) ->
+              JObject
+                [ ("source_file", JString file); ("name", JString name);
+                  ("status", JString status); ("message", JString message) ])
+        in
+        writeJson false path
+          (JObject
+             [ ("schema", JInt 1); ("mode", JString "execution");
+               ("target", JString (match target with
+                  | Platform.LinuxX86_64 -> "linux-x64"
+                  | Platform.ARM64Backend Platform.LinuxARM64 -> "linux-arm64"
+                  | Platform.ARM64Backend Platform.MacOSARM64 -> "macos-arm64"));
+               ("filter", JString (Option.value ~default:"" filter));
+               ("tests", JArray rows) ]))
+      resultsJsonPath;
     Option.iter
       (fun path ->
         writeTimingsJson path;

@@ -9,9 +9,9 @@ OUTPUT = ROOT / 'docs/compatibility/upstream-test-inventory.md'
 
 
 def render():
-    runner = (ROOT / 'test/test-suite-tooling/TestRunner.ml').read_text()
-    files_block = runner.split('let disabledUpstreamFiles =', 1)[1].split('\n    in', 1)[0]
-    lines_block = runner.split('let disabledUpstreamLines =', 1)[1].split('\n    in', 1)[0]
+    runner = (ROOT / 'test/test-suite-tooling/E2EDiscovery.ml').read_text()
+    files_block = runner.split('let disabledUpstreamFiles =', 1)[1].split('\nlet ', 1)[0]
+    lines_block = runner.split('let disabledUpstreamLines =', 1)[1].split('\nlet ', 1)[0]
     disabled = re.findall(r'"(test/fixtures/e2e/upstream/[^"\n]+)"', files_block)
     entries = re.findall(r'\(\s*"([^"]+)"\s*,\s*\[([^]]*)\]\s*\)', lines_block)
     lines = {path: [int(n) for n in re.findall(r'\d+', numbers)] for path, numbers in entries}
@@ -35,7 +35,7 @@ def render():
     total = sum(map(len, lines.values()))
     out = [
         '# Imported upstream test inventory', '',
-        'Generated from `test/test-suite-tooling/TestRunner.ml` and the imported',
+        'Generated from `test/test-suite-tooling/E2EDiscovery.ml` (shared with the runner) and the imported',
         '`test/fixtures/e2e/upstream/**/*.dark` files. Regenerate with',
         '`python3 scripts/audit-upstream-gates.py`; verify with `--check`.', '',
         f'**{len(paths)} files; {len(disabled)} whole-file exclusions; {total} line-number entries',

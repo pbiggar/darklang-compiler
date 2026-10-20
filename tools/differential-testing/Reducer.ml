@@ -146,7 +146,7 @@ let candidates source (parsed : W.sourceFile) =
              impl.W.members
     | W.DModule module_ -> List.concat_map declaration module_.declarations
     | W.DExpr value -> expression value
-    | W.DTest _ -> []
+    | W.DAssertion _ | W.DTest _ -> []
   in
   let candidates =
     List.concat_map declaration parsed.W.declarations

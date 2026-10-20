@@ -1,0 +1,26 @@
+# Syntax behavior, not parser implementation-file mappings. Unassessed means no separate syntax review.
+schema: 2
+groups:
+  Lexing:
+    Comments: unassessed
+    Identifiers and escaped identifiers: unassessed
+    Numeric literals: unassessed
+    Character literals: unassessed
+    Quoted strings: unassessed
+    Triple-quoted strings: unassessed
+  Expressions:
+    Function application and precedence: unassessed
+    Pipelines: unassessed
+    Collection literals: unassessed
+    Conditionals: unassessed
+    Match patterns and guards: unassessed
+    String interpolation and nesting: unassessed
+  Declarations:
+    Modules and nesting: unassessed
+    Function and value declarations: unassessed
+    Records and enums: unassessed
+    Traits and implementations: unassessed
+    Generic parameters and bounds: unassessed
+    Effect annotations: unassessed
+  Tests:
+    Named test declarations: supported

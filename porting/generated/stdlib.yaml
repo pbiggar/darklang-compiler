@@ -1,0 +1,2107 @@
+root: packages/darklang/stdlib/
+files:
+  alt-json.dark:
+    Darklang.Stdlib.AltJson.Builder.Fields: different
+    Darklang.Stdlib.AltJson.Builder.addArray: different
+    Darklang.Stdlib.AltJson.Builder.addBool: different
+    Darklang.Stdlib.AltJson.Builder.addFloat: missing
+    Darklang.Stdlib.AltJson.Builder.addInt: different
+    Darklang.Stdlib.AltJson.Builder.addJson: different
+    Darklang.Stdlib.AltJson.Builder.addOptionalArray: different
+    Darklang.Stdlib.AltJson.Builder.addOptionalBool: different
+    Darklang.Stdlib.AltJson.Builder.addOptionalFloat: missing
+    Darklang.Stdlib.AltJson.Builder.addOptionalInt: different
+    Darklang.Stdlib.AltJson.Builder.addOptionalJson: different
+    Darklang.Stdlib.AltJson.Builder.addOptionalString: different
+    Darklang.Stdlib.AltJson.Builder.addString: different
+    Darklang.Stdlib.AltJson.Builder.empty: different
+    Darklang.Stdlib.AltJson.Builder.toJson: different
+    Darklang.Stdlib.AltJson.Helpers.getArray: different
+    Darklang.Stdlib.AltJson.Helpers.getBool: different
+    Darklang.Stdlib.AltJson.Helpers.getFloat: missing
+    Darklang.Stdlib.AltJson.Helpers.getIntOption: different
+    Darklang.Stdlib.AltJson.Helpers.getIntOptionResult: missing
+    Darklang.Stdlib.AltJson.Helpers.getIntOr: missing
+    Darklang.Stdlib.AltJson.Helpers.getIntResult: missing
+    Darklang.Stdlib.AltJson.Helpers.getObject: different
+    Darklang.Stdlib.AltJson.Helpers.getString: different
+    Darklang.Stdlib.AltJson.Helpers.getValue: different
+    Darklang.Stdlib.AltJson.Json: different
+    Darklang.Stdlib.AltJson.ParseError.ParseError: different
+    Darklang.Stdlib.AltJson.ParseError.toString: different
+    Darklang.Stdlib.AltJson.format: different
+    Darklang.Stdlib.AltJson.parse: different
+    Darklang.Stdlib.AltJson.toFloat: missing
+    Darklang.Stdlib.AltJson.toInt: missing
+  await.dark:
+    Darklang.Stdlib.await: missing
+  base64.dark:
+    Darklang.Stdlib.Base64.decode: different
+    Darklang.Stdlib.Base64.encode: different
+    Darklang.Stdlib.Base64.urlEncode: different
+  blob.dark:
+    Darklang.Stdlib.Blob.concat: different
+    Darklang.Stdlib.Blob.empty: identical
+    Darklang.Stdlib.Blob.fromBase64: different
+    Darklang.Stdlib.Blob.fromHex: different
+    Darklang.Stdlib.Blob.fromList: different
+    Darklang.Stdlib.Blob.fromString: different
+    Darklang.Stdlib.Blob.length: different
+    Darklang.Stdlib.Blob.slice: different
+    Darklang.Stdlib.Blob.toBase64: different
+    Darklang.Stdlib.Blob.toHex: different
+    Darklang.Stdlib.Blob.toList: different
+    Darklang.Stdlib.Blob.toString: different
+  bool.dark:
+    Darklang.Stdlib.Bool.ToString.toString: different
+    Darklang.Stdlib.Bool.and: different
+    Darklang.Stdlib.Bool.impl ToString for Bool: missing
+    Darklang.Stdlib.Bool.not: missing
+    Darklang.Stdlib.Bool.or: different
+    Darklang.Stdlib.Bool.xor: identical
+  char.dark:
+    Darklang.Stdlib.Char.Compare.greaterThan: identical
+    Darklang.Stdlib.Char.Compare.greaterThanOrEqualTo: identical
+    Darklang.Stdlib.Char.Compare.lessThan: identical
+    Darklang.Stdlib.Char.Compare.lessThanOrEqualTo: identical
+    Darklang.Stdlib.Char.ToString.toString: different
+    Darklang.Stdlib.Char.fromCodepoint: different
+    Darklang.Stdlib.Char.impl Compare for Char: missing
+    Darklang.Stdlib.Char.impl ToString for Char: missing
+    Darklang.Stdlib.Char.isASCII: different
+    Darklang.Stdlib.Char.isASCIILetter: different
+    Darklang.Stdlib.Char.isAlphanumeric: different
+    Darklang.Stdlib.Char.isDigit: different
+    Darklang.Stdlib.Char.isGreaterThan: different
+    Darklang.Stdlib.Char.isGreaterThanOrEqualTo: different
+    Darklang.Stdlib.Char.isLessThan: different
+    Darklang.Stdlib.Char.isLessThanOrEqualTo: different
+    Darklang.Stdlib.Char.isLetter: different
+    Darklang.Stdlib.Char.isLowercase: different
+    Darklang.Stdlib.Char.isUppercase: different
+    Darklang.Stdlib.Char.isWhitespace: different
+    Darklang.Stdlib.Char.toAsciiCode: different
+    Darklang.Stdlib.Char.toCodepoint: different
+    Darklang.Stdlib.Char.toLowercase: different
+    Darklang.Stdlib.Char.toUppercase: different
+  cli/bash.dark:
+    Darklang.Stdlib.Cli.Bash.addAlias: missing
+    Darklang.Stdlib.Cli.Bash.addToPath: missing
+    Darklang.Stdlib.Cli.Bash.applyBashConfigChanges: missing
+    Darklang.Stdlib.Cli.Bash.deleteAlias: missing
+    Darklang.Stdlib.Cli.Bash.overwriteBashrc: missing
+    Darklang.Stdlib.Cli.Bash.readBashrc: missing
+  cli/curl.dark:
+    Darklang.Stdlib.Cli.Curl.downloadFileToPath: missing
+  cli/dir.dark:
+    Darklang.Stdlib.Cli.Dir.create: identical
+    Darklang.Stdlib.Cli.Dir.createRecursive: identical
+    Darklang.Stdlib.Cli.Dir.createTemp: identical
+    Darklang.Stdlib.Cli.Dir.current: identical
+    Darklang.Stdlib.Cli.Dir.delete: identical
+    Darklang.Stdlib.Cli.Dir.deleteRecursive: identical
+    Darklang.Stdlib.Cli.Dir.home: identical
+    Darklang.Stdlib.Cli.Dir.list: identical
+    Darklang.Stdlib.Cli.Dir.listFullPaths: identical
+    Darklang.Stdlib.Cli.Dir.listRecursive: identical
+    Darklang.Stdlib.Cli.Dir.setCurrent: identical
+    Darklang.Stdlib.Cli.Dir.size: identical
+    Darklang.Stdlib.Cli.Dir.walk: identical
+    Darklang.Stdlib.Cli.Dir.withTemp: identical
+  cli/env.dark:
+    Darklang.Stdlib.Cli.Env.get: identical
+    Darklang.Stdlib.Cli.Env.getOr: identical
+    Darklang.Stdlib.Cli.Env.home: identical
+  cli/execution.dark:
+    Darklang.Stdlib.Cli.ExecutionOutcome: identical
+    Darklang.Stdlib.Cli.execute: identical
+    Darklang.Stdlib.Cli.executeWithStdOutOrStdErr: identical
+    Darklang.Stdlib.Cli.executeWithUnitOrStdErr: identical
+  cli/file.dark:
+    Darklang.Stdlib.Cli.File.__copyBuffered: identical
+    Darklang.Stdlib.Cli.File.__copyCloneDestination: identical
+    Darklang.Stdlib.Cli.File.__copyCopy: identical
+    Darklang.Stdlib.Cli.File.__copyDescriptors: identical
+    Darklang.Stdlib.Cli.File.__copyFinish: identical
+    Darklang.Stdlib.Cli.File.__copyKernelCopy: identical
+    Darklang.Stdlib.Cli.File.__copyOpenDestination: identical
+    Darklang.Stdlib.Cli.File.__copyTransfer: identical
+    Darklang.Stdlib.Cli.File.__copyUnsupported: identical
+    Darklang.Stdlib.Cli.File.__copyWriteAt: identical
+    Darklang.Stdlib.Cli.File.__globBracket: identical
+    Darklang.Stdlib.Cli.File.__globClassChar: identical
+    Darklang.Stdlib.Cli.File.__globClassEnd: identical
+    Darklang.Stdlib.Cli.File.__globClassItems: identical
+    Darklang.Stdlib.Cli.File.__globKnownClass: identical
+    Darklang.Stdlib.Cli.File.__globMatchBytes: identical
+    Darklang.Stdlib.Cli.File.__globMatches: identical
+    Darklang.Stdlib.Cli.File.__globNamedClass: identical
+    Darklang.Stdlib.Cli.File.__watchCloseBoth: identical
+    Darklang.Stdlib.Cli.File.__watchDarwin: identical
+    Darklang.Stdlib.Cli.File.__watchDrain: identical
+    Darklang.Stdlib.Cli.File.__watchEvents: identical
+    Darklang.Stdlib.Cli.File.__watchHas: identical
+    Darklang.Stdlib.Cli.File.__watchLinux: identical
+    Darklang.Stdlib.Cli.File.__watchLoop: identical
+    Darklang.Stdlib.Cli.File.__watchVnodeEvents: identical
+    Darklang.Stdlib.Cli.File.__watchVnodeLoop: identical
+    Darklang.Stdlib.Cli.File.__writeBytes: identical
+    Darklang.Stdlib.Cli.File.appendText: identical
+    Darklang.Stdlib.Cli.File.areIdentical: identical
+    Darklang.Stdlib.Cli.File.copy: identical
+    Darklang.Stdlib.Cli.File.countNewlines: identical
+    Darklang.Stdlib.Cli.File.createSymlink: identical
+    Darklang.Stdlib.Cli.File.createTemp: identical
+    Darklang.Stdlib.Cli.File.delete: identical
+    Darklang.Stdlib.Cli.File.dropThroughFirstNewline: identical
+    Darklang.Stdlib.Cli.File.exists: identical
+    Darklang.Stdlib.Cli.File.getModifiedTime: identical
+    Darklang.Stdlib.Cli.File.getOwner: identical
+    Darklang.Stdlib.Cli.File.glob: identical
+    Darklang.Stdlib.Cli.File.globMatchSegments: identical
+    Darklang.Stdlib.Cli.File.move: identical
+    Darklang.Stdlib.Cli.File.readBytes: identical
+    Darklang.Stdlib.Cli.File.readFully: identical
+    Darklang.Stdlib.Cli.File.readLastLines: identical
+    Darklang.Stdlib.Cli.File.readLines: identical
+    Darklang.Stdlib.Cli.File.readSymlink: identical
+    Darklang.Stdlib.Cli.File.readTailChunks: identical
+    Darklang.Stdlib.Cli.File.readText: identical
+    Darklang.Stdlib.Cli.File.setPermissions: identical
+    Darklang.Stdlib.Cli.File.size: identical
+    Darklang.Stdlib.Cli.File.touch: identical
+    Darklang.Stdlib.Cli.File.transform: identical
+    Darklang.Stdlib.Cli.File.watch: identical
+    Darklang.Stdlib.Cli.File.watchLoop: identical
+    Darklang.Stdlib.Cli.File.withLock: identical
+    Darklang.Stdlib.Cli.File.withTemp: identical
+    Darklang.Stdlib.Cli.File.writeAtomic: identical
+    Darklang.Stdlib.Cli.File.writeText: identical
+  cli/fileSystem.dark:
+    Darklang.Stdlib.Cli.FileSystem.FileError: identical
+    Darklang.Stdlib.Cli.FileSystem.FileError.toString: different
+    Darklang.Stdlib.Cli.FileSystem.__expandPath: identical
+    Darklang.Stdlib.Cli.FileSystem.__fromPosixError: identical
+    Darklang.Stdlib.Cli.FileSystem.appendToFile: identical
+    Darklang.Stdlib.Cli.FileSystem.currentDirectory: identical
+    Darklang.Stdlib.Cli.FileSystem.deleteFile: identical
+    Darklang.Stdlib.Cli.FileSystem.getDirectoryContents: identical
+    Darklang.Stdlib.Cli.FileSystem.isDirectory: identical
+    Darklang.Stdlib.Cli.FileSystem.isDirectoryAtPath: identical
+    Darklang.Stdlib.Cli.FileSystem.listDirectory: identical
+    Darklang.Stdlib.Cli.FileSystem.overwriteFile: identical
+    Darklang.Stdlib.Cli.FileSystem.pathExists: identical
+    Darklang.Stdlib.Cli.FileSystem.readFile: identical
+    Darklang.Stdlib.Cli.FileSystem.readFileAsString: identical
+    Darklang.Stdlib.Cli.FileSystem.writeFile: identical
+  cli/fish.dark:
+    Darklang.Stdlib.Cli.Fish.addAlias: missing
+    Darklang.Stdlib.Cli.Fish.addToPath: missing
+    Darklang.Stdlib.Cli.Fish.deleteAlias: missing
+    Darklang.Stdlib.Cli.Fish.overwriteFishConfig: missing
+    Darklang.Stdlib.Cli.Fish.readFishConfig: missing
+  cli/host.dark:
+    Darklang.Stdlib.Cli.Architecture.Architecture: different
+    Darklang.Stdlib.Cli.Architecture.getArchitecture: different
+    Darklang.Stdlib.Cli.Host.Host: different
+    Darklang.Stdlib.Cli.Host.getRuntimeHost: different
+    Darklang.Stdlib.Cli.OS.OS: different
+    Darklang.Stdlib.Cli.OS.getOS: different
+    Darklang.Stdlib.Cli.Shell.Shell: different
+    Darklang.Stdlib.Cli.Shell.getDefaultShell: different
+  cli/log.dark:
+    Darklang.Stdlib.Cli.Log.debug: different
+    Darklang.Stdlib.Cli.Log.error: different
+    Darklang.Stdlib.Cli.Log.info: different
+    Darklang.Stdlib.Cli.Log.success: different
+    Darklang.Stdlib.Cli.Log.warn: different
+  cli/path.dark:
+    Darklang.Stdlib.Cli.Path.basename: different
+    Darklang.Stdlib.Cli.Path.extension: different
+    Darklang.Stdlib.Cli.Path.isAbsolute: different
+    Darklang.Stdlib.Cli.Path.join: different
+    Darklang.Stdlib.Cli.Path.normalize: different
+    Darklang.Stdlib.Cli.Path.parent: different
+    Darklang.Stdlib.Cli.Path.relativeTo: different
+    Darklang.Stdlib.Cli.Path.resolve: different
+    Darklang.Stdlib.Cli.Path.resolveToAbsolute: different
+    Darklang.Stdlib.Cli.Path.stripTrailing: different
+    Darklang.Stdlib.Cli.Path.withExtension: different
+  cli/posix.dark:
+    Darklang.Stdlib.Cli.Posix.Errno.eexist: different
+    Darklang.Stdlib.Cli.Posix.Errno.einval: different
+    Darklang.Stdlib.Cli.Posix.Errno.enoent: different
+    Darklang.Stdlib.Cli.Posix.Errno.eperm: different
+    Darklang.Stdlib.Cli.Posix.Errno.esrch: different
+    Darklang.Stdlib.Cli.Posix.Error: identical
+    Darklang.Stdlib.Cli.Posix.Modes.defaultDir: different
+    Darklang.Stdlib.Cli.Posix.Modes.defaultFile: different
+    Darklang.Stdlib.Cli.Posix.OpenFlags.append: different
+    Darklang.Stdlib.Cli.Posix.OpenFlags.creat: different
+    Darklang.Stdlib.Cli.Posix.OpenFlags.rdonly: different
+    Darklang.Stdlib.Cli.Posix.OpenFlags.rdwr: different
+    Darklang.Stdlib.Cli.Posix.OpenFlags.trunc: different
+    Darklang.Stdlib.Cli.Posix.OpenFlags.wronly: different
+    Darklang.Stdlib.Cli.Posix.StatMode.ifdir: different
+    Darklang.Stdlib.Cli.Posix.StatMode.ifmt: different
+    Darklang.Stdlib.Cli.Posix.StatResult: identical
+    Darklang.Stdlib.Cli.Posix.__KernelMetadata: identical
+    Darklang.Stdlib.Cli.Posix.__abiArm32: identical
+    Darklang.Stdlib.Cli.Posix.__abiDirectoryNameOffset: identical
+    Darklang.Stdlib.Cli.Posix.__abiMac: identical
+    Darklang.Stdlib.Cli.Posix.__abiOpenAppend: identical
+    Darklang.Stdlib.Cli.Posix.__abiOpenCreate: identical
+    Darklang.Stdlib.Cli.Posix.__abiOpenDirectory: identical
+    Darklang.Stdlib.Cli.Posix.__abiOpenExclusive: identical
+    Darklang.Stdlib.Cli.Posix.__abiOpenTruncate: identical
+    Darklang.Stdlib.Cli.Posix.__abiRemoveDirectory: identical
+    Darklang.Stdlib.Cli.Posix.__abiStatDeviceWidth: identical
+    Darklang.Stdlib.Cli.Posix.__abiStatInodeOffset: identical
+    Darklang.Stdlib.Cli.Posix.__abiStatModeOffset: identical
+    Darklang.Stdlib.Cli.Posix.__abiStatModeWidth: identical
+    Darklang.Stdlib.Cli.Posix.__abiStatMtimeOffset: identical
+    Darklang.Stdlib.Cli.Posix.__abiStatSizeOffset: identical
+    Darklang.Stdlib.Cli.Posix.__abiStatTimeWidth: identical
+    Darklang.Stdlib.Cli.Posix.__abiStatUidOffset: identical
+    Darklang.Stdlib.Cli.Posix.__abiX64: identical
+    Darklang.Stdlib.Cli.Posix.__accountFieldFromPasswd: identical
+    Darklang.Stdlib.Cli.Posix.__accountLookup: identical
+    Darklang.Stdlib.Cli.Posix.__decimal: identical
+    Darklang.Stdlib.Cli.Posix.__directoryList: identical
+    Darklang.Stdlib.Cli.Posix.__directoryReadAll: identical
+    Darklang.Stdlib.Cli.Posix.__fromErrno: identical
+    Darklang.Stdlib.Cli.Posix.__kernelEntries: identical
+    Darklang.Stdlib.Cli.Posix.__kernelEntriesWithLength: identical
+    Darklang.Stdlib.Cli.Posix.__kernelField: identical
+    Darklang.Stdlib.Cli.Posix.__kernelMetadata: identical
+    Darklang.Stdlib.Cli.Posix.__kernelSignedField: identical
+    Darklang.Stdlib.Cli.Posix.__kernelUnsigned: identical
+    Darklang.Stdlib.Cli.Posix.__macMessage: identical
+    Darklang.Stdlib.Cli.Posix.__pathCwdWith: identical
+    Darklang.Stdlib.Cli.Posix.__pathGetCwd: identical
+    Darklang.Stdlib.Cli.Posix.__pathPathText: identical
+    Darklang.Stdlib.Cli.Posix.__pathReadlink: identical
+    Darklang.Stdlib.Cli.Posix.__pathReadlinkWith: identical
+    Darklang.Stdlib.Cli.Posix.__tempCandidate: identical
+    Darklang.Stdlib.Cli.Posix.__tempDirectory: identical
+    Darklang.Stdlib.Cli.Posix.__tempEntropy: identical
+    Darklang.Stdlib.Cli.Posix.__tempFile: identical
+    Darklang.Stdlib.Cli.Posix.__tempRetry: identical
+    Darklang.Stdlib.Cli.Posix.__uname: identical
+    Darklang.Stdlib.Cli.Posix.__writeAll: identical
+    Darklang.Stdlib.Cli.Posix.chdir: identical
+    Darklang.Stdlib.Cli.Posix.chmod: identical
+    Darklang.Stdlib.Cli.Posix.fdClose: identical
+    Darklang.Stdlib.Cli.Posix.fdRead: identical
+    Darklang.Stdlib.Cli.Posix.fdReadAll: identical
+    Darklang.Stdlib.Cli.Posix.fdSeekFromStart: identical
+    Darklang.Stdlib.Cli.Posix.fdWrite: identical
+    Darklang.Stdlib.Cli.Posix.fileOwner: identical
+    Darklang.Stdlib.Cli.Posix.flock: identical
+    Darklang.Stdlib.Cli.Posix.getCwd: identical
+    Darklang.Stdlib.Cli.Posix.getenv: identical
+    Darklang.Stdlib.Cli.Posix.isDirectory: identical
+    Darklang.Stdlib.Cli.Posix.isProcessRunning: identical
+    Darklang.Stdlib.Cli.Posix.isSymlink: identical
+    Darklang.Stdlib.Cli.Posix.kill: identical
+    Darklang.Stdlib.Cli.Posix.listDir: identical
+    Darklang.Stdlib.Cli.Posix.mkdir: identical
+    Darklang.Stdlib.Cli.Posix.mkdirRecursive: identical
+    Darklang.Stdlib.Cli.Posix.mkdtemp: identical
+    Darklang.Stdlib.Cli.Posix.mkstemp: identical
+    Darklang.Stdlib.Cli.Posix.openFile: identical
+    Darklang.Stdlib.Cli.Posix.readlink: identical
+    Darklang.Stdlib.Cli.Posix.rename: identical
+    Darklang.Stdlib.Cli.Posix.rmdir: identical
+    Darklang.Stdlib.Cli.Posix.sigint: identical
+    Darklang.Stdlib.Cli.Posix.sigkill: identical
+    Darklang.Stdlib.Cli.Posix.sigterm: identical
+    Darklang.Stdlib.Cli.Posix.sleep: identical
+    Darklang.Stdlib.Cli.Posix.stat: identical
+    Darklang.Stdlib.Cli.Posix.symlink: identical
+    Darklang.Stdlib.Cli.Posix.uname: identical
+    Darklang.Stdlib.Cli.Posix.unlink: identical
+    Darklang.Stdlib.Cli.Posix.utimesNow: identical
+  cli/powershell.dark:
+    Darklang.Stdlib.Cli.PowerShell.Gzip.unzipToFile: missing
+    Darklang.Stdlib.Cli.PowerShell.addAlias: missing
+    Darklang.Stdlib.Cli.PowerShell.addToPath: missing
+    Darklang.Stdlib.Cli.PowerShell.copyFile: missing
+    Darklang.Stdlib.Cli.PowerShell.createFile: missing
+    Darklang.Stdlib.Cli.PowerShell.deleteAlias: missing
+    Darklang.Stdlib.Cli.PowerShell.ensureDirectoryExists: missing
+    Darklang.Stdlib.Cli.PowerShell.fileExists: missing
+    Darklang.Stdlib.Cli.PowerShell.getHomeDirectory: missing
+    Darklang.Stdlib.Cli.PowerShell.grantExecutePermission: missing
+    Darklang.Stdlib.Cli.PowerShell.removeFile: missing
+  cli/process.dark:
+    Darklang.Stdlib.Cli.Process.Output: identical
+    Darklang.Stdlib.Cli.Process.ProcessHandle: identical
+    Darklang.Stdlib.Cli.Process.__ChildBuffer: identical
+    Darklang.Stdlib.Cli.Process.__childAppend: identical
+    Darklang.Stdlib.Cli.Process.__childBytes: identical
+    Darklang.Stdlib.Cli.Process.__childCapture: identical
+    Darklang.Stdlib.Cli.Process.__childCloseChild: identical
+    Darklang.Stdlib.Cli.Process.__childCommunicate: identical
+    Darklang.Stdlib.Cli.Process.__childCommunicateLoop: identical
+    Darklang.Stdlib.Cli.Process.__childDescriptors: identical
+    Darklang.Stdlib.Cli.Process.__childDrain: identical
+    Darklang.Stdlib.Cli.Process.__childEmpty: identical
+    Darklang.Stdlib.Cli.Process.__childFinish: identical
+    Darklang.Stdlib.Cli.Process.__childInteractive: identical
+    Darklang.Stdlib.Cli.Process.__childKillChild: identical
+    Darklang.Stdlib.Cli.Process.__childNewline: identical
+    Darklang.Stdlib.Cli.Process.__childPoll: identical
+    Darklang.Stdlib.Cli.Process.__childPollChild: identical
+    Darklang.Stdlib.Cli.Process.__childRead: identical
+    Darklang.Stdlib.Cli.Process.__childRun: identical
+    Darklang.Stdlib.Cli.Process.__childSaveHistory: identical
+    Darklang.Stdlib.Cli.Process.__childTerminate: identical
+    Darklang.Stdlib.Cli.Process.__childWaitChild: identical
+    Darklang.Stdlib.Cli.Process.__childWrite: identical
+    Darklang.Stdlib.Cli.Process.__executionOutcome: identical
+    Darklang.Stdlib.Cli.Process.communicate: identical
+    Darklang.Stdlib.Cli.Process.exec: identical
+    Darklang.Stdlib.Cli.Process.forceKill: identical
+    Darklang.Stdlib.Cli.Process.isRunning: identical
+    Darklang.Stdlib.Cli.Process.kill: identical
+    Darklang.Stdlib.Cli.Process.pipe: identical
+    Darklang.Stdlib.Cli.Process.run: identical
+    Darklang.Stdlib.Cli.Process.runIn: identical
+    Darklang.Stdlib.Cli.Process.runInteractive: identical
+    Darklang.Stdlib.Cli.Process.runSilent: identical
+    Darklang.Stdlib.Cli.Process.runWithEnv: identical
+    Darklang.Stdlib.Cli.Process.runWithTimeout: identical
+    Darklang.Stdlib.Cli.Process.shellPipeline: identical
+    Darklang.Stdlib.Cli.Process.shellQuote: identical
+    Darklang.Stdlib.Cli.Process.spawn: identical
+    Darklang.Stdlib.Cli.Process.spawnAndWait: identical
+    Darklang.Stdlib.Cli.Process.terminate: identical
+    Darklang.Stdlib.Cli.Process.waitFor: identical
+  cli/stdin.dark:
+    Darklang.Stdlib.Cli.Stdin.Key.Key: different
+    Darklang.Stdlib.Cli.Stdin.Key.isControl: different
+    Darklang.Stdlib.Cli.Stdin.Key.isTextual: different
+    Darklang.Stdlib.Cli.Stdin.Key.toString: different
+    Darklang.Stdlib.Cli.Stdin.KeyRead.KeyRead: different
+    Darklang.Stdlib.Cli.Stdin.KeyRead.toString: different
+    Darklang.Stdlib.Cli.Stdin.Modifiers.Modifiers: different
+    Darklang.Stdlib.Cli.Stdin.Modifiers.toString: different
+    Darklang.Stdlib.Cli.Stdin.isInteractive: identical
+    Darklang.Stdlib.Cli.Stdin.readAll: different
+    Darklang.Stdlib.Cli.Stdin.readKey: different
+    Darklang.Stdlib.Cli.Stdin.readLine: different
+    Darklang.Stdlib.Cli.Stdin.readSecret: different
+  cli/sys.dark:
+    Darklang.Stdlib.Cli.Sys.__affinityWith: identical
+    Darklang.Stdlib.Cli.Sys.__countBits: identical
+    Darklang.Stdlib.Cli.Sys.__cpuCount: identical
+    Darklang.Stdlib.Cli.Sys.__sysctlText: identical
+    Darklang.Stdlib.Cli.Sys.__sysctlWith: identical
+    Darklang.Stdlib.Cli.Sys.__text: identical
+    Darklang.Stdlib.Cli.Sys.arch: identical
+    Darklang.Stdlib.Cli.Sys.cpuCount: identical
+    Darklang.Stdlib.Cli.Sys.currentExecutablePath: identical
+    Darklang.Stdlib.Cli.Sys.currentPid: identical
+    Darklang.Stdlib.Cli.Sys.currentUser: identical
+    Darklang.Stdlib.Cli.Sys.hostname: identical
+    Darklang.Stdlib.Cli.Sys.isRoot: identical
+    Darklang.Stdlib.Cli.Sys.os: identical
+  cli/tui/core.dark:
+    Darklang.Stdlib.Cli.Tui.Cursor: missing
+    Darklang.Stdlib.Cli.Tui.Size: missing
+    Darklang.Stdlib.Cli.Tui.View: missing
+    Darklang.Stdlib.Cli.Tui.ViewMode: missing
+  cli/tui/frame.dark:
+    Darklang.Stdlib.Cli.Tui.Frame.RowChange: missing
+    Darklang.Stdlib.Cli.Tui.Frame.changedRows: missing
+    Darklang.Stdlib.Cli.Tui.Frame.changedRowsFrom: missing
+    Darklang.Stdlib.Cli.Tui.Frame.fullRedrawRows: missing
+    Darklang.Stdlib.Cli.Tui.Frame.fullRedrawRowsFrom: missing
+    Darklang.Stdlib.Cli.Tui.Frame.renderAtWidth: missing
+    Darklang.Stdlib.Cli.Tui.Frame.renderCursor: missing
+    Darklang.Stdlib.Cli.Tui.Frame.renderFullAtWidth: missing
+    Darklang.Stdlib.Cli.Tui.Frame.renderRowChangeAtWidth: missing
+  cli/tui/inlineFrame.dark:
+    Darklang.Stdlib.Cli.Tui.InlineFrame.cursorRow: missing
+    Darklang.Stdlib.Cli.Tui.InlineFrame.finishAtCursor: missing
+    Darklang.Stdlib.Cli.Tui.InlineFrame.moveRows: missing
+    Darklang.Stdlib.Cli.Tui.InlineFrame.renderAtWidth: missing
+    Darklang.Stdlib.Cli.Tui.InlineFrame.renderContentAtWidth: missing
+    Darklang.Stdlib.Cli.Tui.InlineFrame.renderFullAtWidth: missing
+  cli/tui/layout.dark:
+    Darklang.Stdlib.Cli.Tui.Layout.blankRows: missing
+    Darklang.Stdlib.Cli.Tui.Layout.fitRows: missing
+    Darklang.Stdlib.Cli.Tui.Layout.viewport: missing
+  cli/tui/terminalSession.dark:
+    Darklang.Stdlib.Cli.Tui.TerminalSession.Ansi.beginSynchronizedOutput: different
+    Darklang.Stdlib.Cli.Tui.TerminalSession.Ansi.endSynchronizedOutput: different
+    Darklang.Stdlib.Cli.Tui.TerminalSession.Ansi.enterAlternateScreen: different
+    Darklang.Stdlib.Cli.Tui.TerminalSession.Ansi.exitAlternateScreen: different
+    Darklang.Stdlib.Cli.Tui.TerminalSession.Ansi.resetScrollRegion: different
+    Darklang.Stdlib.Cli.Tui.TerminalSession.Ansi.resetStyle: different
+    Darklang.Stdlib.Cli.Tui.TerminalSession.Ansi.restoreFullscreen: different
+    Darklang.Stdlib.Cli.Tui.TerminalSession.Ansi.restoreFullscreenModes: different
+    Darklang.Stdlib.Cli.Tui.TerminalSession.Ansi.restoreInline: different
+    Darklang.Stdlib.Cli.Tui.TerminalSession.Ansi.restoreInlineModes: different
+    Darklang.Stdlib.Cli.Tui.TerminalSession.Ansi.showCursor: different
+    Darklang.Stdlib.Cli.Tui.TerminalSession.Ansi.wrapUpdate: missing
+    Darklang.Stdlib.Cli.Tui.TerminalSession.Prepared: missing
+    Darklang.Stdlib.Cli.Tui.TerminalSession.State: missing
+    Darklang.Stdlib.Cli.Tui.TerminalSession.Status: missing
+    Darklang.Stdlib.Cli.Tui.TerminalSession.armRestoreGuard: missing
+    Darklang.Stdlib.Cli.Tui.TerminalSession.changesSurface: missing
+    Darklang.Stdlib.Cli.Tui.TerminalSession.currentSize: missing
+    Darklang.Stdlib.Cli.Tui.TerminalSession.disarmRestoreGuard: missing
+    Darklang.Stdlib.Cli.Tui.TerminalSession.init: missing
+    Darklang.Stdlib.Cli.Tui.TerminalSession.normalizeView: missing
+    Darklang.Stdlib.Cli.Tui.TerminalSession.preparePresentAtSize: missing
+    Darklang.Stdlib.Cli.Tui.TerminalSession.prepareStop: missing
+    Darklang.Stdlib.Cli.Tui.TerminalSession.prepareStopInlineWithView: missing
+    Darklang.Stdlib.Cli.Tui.TerminalSession.present: missing
+    Darklang.Stdlib.Cli.Tui.TerminalSession.presentAtSize: missing
+    Darklang.Stdlib.Cli.Tui.TerminalSession.restoreForMode: missing
+    Darklang.Stdlib.Cli.Tui.TerminalSession.resumed: missing
+    Darklang.Stdlib.Cli.Tui.TerminalSession.start: missing
+    Darklang.Stdlib.Cli.Tui.TerminalSession.startAtSize: missing
+    Darklang.Stdlib.Cli.Tui.TerminalSession.statusForMode: missing
+    Darklang.Stdlib.Cli.Tui.TerminalSession.stop: missing
+    Darklang.Stdlib.Cli.Tui.TerminalSession.stopInlineWithView: missing
+    Darklang.Stdlib.Cli.Tui.TerminalSession.transitionOutput: missing
+  cli/tui/terminalSupport.dark:
+    Darklang.Stdlib.Cli.Tui.TerminalSupport.Availability: identical
+    Darklang.Stdlib.Cli.Tui.TerminalSupport.Facts: identical
+    Darklang.Stdlib.Cli.Tui.TerminalSupport.current: identical
+    Darklang.Stdlib.Cli.Tui.TerminalSupport.currentFacts: identical
+    Darklang.Stdlib.Cli.Tui.TerminalSupport.evaluate: identical
+    Darklang.Stdlib.Cli.Tui.TerminalSupport.unavailableMessage: identical
+  cli/tui/text.dark:
+    Darklang.Stdlib.Cli.Tui.Text.addWord: missing
+    Darklang.Stdlib.Cli.Tui.Text.clipMarked: different
+    Darklang.Stdlib.Cli.Tui.Text.clipToWidth: different
+    Darklang.Stdlib.Cli.Tui.Text.fitToWidth: missing
+    Darklang.Stdlib.Cli.Tui.Text.inspect: identical
+    Darklang.Stdlib.Cli.Tui.Text.normalizeToWidth: missing
+    Darklang.Stdlib.Cli.Tui.Text.positionAfter: missing
+    Darklang.Stdlib.Cli.Tui.Text.splitLongWord: missing
+    Darklang.Stdlib.Cli.Tui.Text.stripSgr: missing
+    Darklang.Stdlib.Cli.Tui.Text.styledWidth: different
+    Darklang.Stdlib.Cli.Tui.Text.wrapAtColumn: missing
+    Darklang.Stdlib.Cli.Tui.Text.wrapAtWords: missing
+  cli/ui/box.dark:
+    Darklang.Stdlib.Cli.UI.Box.draw: missing
+    Darklang.Stdlib.Cli.UI.Box.inner: missing
+    Darklang.Stdlib.Cli.UI.Box.panel: missing
+  cli/ui/canvas.dark:
+    Darklang.Stdlib.Cli.UI.Canvas.Segment: missing
+    Darklang.Stdlib.Cli.UI.Canvas.compose: missing
+    Darklang.Stdlib.Cli.UI.Canvas.composeRow: missing
+    Darklang.Stdlib.Cli.UI.Canvas.overlay: missing
+    Darklang.Stdlib.Cli.UI.Canvas.renderSegments: missing
+    Darklang.Stdlib.Cli.UI.Canvas.toView: missing
+  cli/ui/chrome.dark:
+    Darklang.Stdlib.Cli.UI.Chrome.Frame: missing
+    Darklang.Stdlib.Cli.UI.Chrome.Tone: missing
+    Darklang.Stdlib.Cli.UI.Chrome.bar: missing
+    Darklang.Stdlib.Cli.UI.Chrome.bodyRegion: missing
+    Darklang.Stdlib.Cli.UI.Chrome.footBar: missing
+    Darklang.Stdlib.Cli.UI.Chrome.frame: missing
+    Darklang.Stdlib.Cli.UI.Chrome.helpRows: missing
+    Darklang.Stdlib.Cli.UI.Chrome.titleBar: missing
+    Darklang.Stdlib.Cli.UI.Chrome.titleRows: missing
+    Darklang.Stdlib.Cli.UI.Chrome.toneStyle: missing
+    Darklang.Stdlib.Cli.UI.Chrome.view: missing
+    Darklang.Stdlib.Cli.UI.Chrome.withBadgeTone: missing
+    Darklang.Stdlib.Cli.UI.Chrome.withError: missing
+    Darklang.Stdlib.Cli.UI.Chrome.withMessage: missing
+  cli/ui/colors.dark:
+    Darklang.Stdlib.Cli.UI.Colors.accent: different
+    Darklang.Stdlib.Cli.UI.Colors.argument: different
+    Darklang.Stdlib.Cli.UI.Colors.argumentColor: identical
+    Darklang.Stdlib.Cli.UI.Colors.bgBlack: identical
+    Darklang.Stdlib.Cli.UI.Colors.bgBlue: identical
+    Darklang.Stdlib.Cli.UI.Colors.bgCyan: identical
+    Darklang.Stdlib.Cli.UI.Colors.bgGreen: identical
+    Darklang.Stdlib.Cli.UI.Colors.bgMagenta: identical
+    Darklang.Stdlib.Cli.UI.Colors.bgRed: identical
+    Darklang.Stdlib.Cli.UI.Colors.bgWhite: identical
+    Darklang.Stdlib.Cli.UI.Colors.bgYellow: identical
+    Darklang.Stdlib.Cli.UI.Colors.black: identical
+    Darklang.Stdlib.Cli.UI.Colors.blue: identical
+    Darklang.Stdlib.Cli.UI.Colors.blueBg: different
+    Darklang.Stdlib.Cli.UI.Colors.blueText: different
+    Darklang.Stdlib.Cli.UI.Colors.bold: identical
+    Darklang.Stdlib.Cli.UI.Colors.boldText: different
+    Darklang.Stdlib.Cli.UI.Colors.brightBlack: identical
+    Darklang.Stdlib.Cli.UI.Colors.brightBlue: identical
+    Darklang.Stdlib.Cli.UI.Colors.brightCyan: identical
+    Darklang.Stdlib.Cli.UI.Colors.brightGreen: identical
+    Darklang.Stdlib.Cli.UI.Colors.brightMagenta: identical
+    Darklang.Stdlib.Cli.UI.Colors.brightRed: identical
+    Darklang.Stdlib.Cli.UI.Colors.brightWhite: identical
+    Darklang.Stdlib.Cli.UI.Colors.brightYellow: identical
+    Darklang.Stdlib.Cli.UI.Colors.brownBg: different
+    Darklang.Stdlib.Cli.UI.Colors.colorize: different
+    Darklang.Stdlib.Cli.UI.Colors.command: different
+    Darklang.Stdlib.Cli.UI.Colors.commandColor: identical
+    Darklang.Stdlib.Cli.UI.Colors.comment: different
+    Darklang.Stdlib.Cli.UI.Colors.commentColor: identical
+    Darklang.Stdlib.Cli.UI.Colors.completionSelection: different
+    Darklang.Stdlib.Cli.UI.Colors.cyan: identical
+    Darklang.Stdlib.Cli.UI.Colors.cyanText: different
+    Darklang.Stdlib.Cli.UI.Colors.dim: identical
+    Darklang.Stdlib.Cli.UI.Colors.dimText: different
+    Darklang.Stdlib.Cli.UI.Colors.error: different
+    Darklang.Stdlib.Cli.UI.Colors.errorColor: identical
+    Darklang.Stdlib.Cli.UI.Colors.faintGreenBg: different
+    Darklang.Stdlib.Cli.UI.Colors.faintRedBg: different
+    Darklang.Stdlib.Cli.UI.Colors.grayBg: different
+    Darklang.Stdlib.Cli.UI.Colors.grayText: different
+    Darklang.Stdlib.Cli.UI.Colors.green: identical
+    Darklang.Stdlib.Cli.UI.Colors.greenBg: different
+    Darklang.Stdlib.Cli.UI.Colors.greenText: different
+    Darklang.Stdlib.Cli.UI.Colors.hint: different
+    Darklang.Stdlib.Cli.UI.Colors.hintColor: identical
+    Darklang.Stdlib.Cli.UI.Colors.info: different
+    Darklang.Stdlib.Cli.UI.Colors.infoColor: identical
+    Darklang.Stdlib.Cli.UI.Colors.italic: identical
+    Darklang.Stdlib.Cli.UI.Colors.italicText: different
+    Darklang.Stdlib.Cli.UI.Colors.keyword: different
+    Darklang.Stdlib.Cli.UI.Colors.keywordColor: identical
+    Darklang.Stdlib.Cli.UI.Colors.lightPinkBg: different
+    Darklang.Stdlib.Cli.UI.Colors.logo: different
+    Darklang.Stdlib.Cli.UI.Colors.logoColor: identical
+    Darklang.Stdlib.Cli.UI.Colors.magenta: identical
+    Darklang.Stdlib.Cli.UI.Colors.magentaBg: different
+    Darklang.Stdlib.Cli.UI.Colors.magentaText: different
+    Darklang.Stdlib.Cli.UI.Colors.muted: different
+    Darklang.Stdlib.Cli.UI.Colors.mutedText: different
+    Darklang.Stdlib.Cli.UI.Colors.number: different
+    Darklang.Stdlib.Cli.UI.Colors.numberColor: identical
+    Darklang.Stdlib.Cli.UI.Colors.onBlue: different
+    Darklang.Stdlib.Cli.UI.Colors.onGreen: different
+    Darklang.Stdlib.Cli.UI.Colors.onRed: different
+    Darklang.Stdlib.Cli.UI.Colors.onYellow: different
+    Darklang.Stdlib.Cli.UI.Colors.orange: different
+    Darklang.Stdlib.Cli.UI.Colors.orangeBg: different
+    Darklang.Stdlib.Cli.UI.Colors.peachBg: different
+    Darklang.Stdlib.Cli.UI.Colors.pink: different
+    Darklang.Stdlib.Cli.UI.Colors.pinkBg: different
+    Darklang.Stdlib.Cli.UI.Colors.plain: identical
+    Darklang.Stdlib.Cli.UI.Colors.primary: different
+    Darklang.Stdlib.Cli.UI.Colors.prompt: different
+    Darklang.Stdlib.Cli.UI.Colors.promptColor: identical
+    Darklang.Stdlib.Cli.UI.Colors.purple: different
+    Darklang.Stdlib.Cli.UI.Colors.purpleBg: different
+    Darklang.Stdlib.Cli.UI.Colors.red: identical
+    Darklang.Stdlib.Cli.UI.Colors.redText: different
+    Darklang.Stdlib.Cli.UI.Colors.reset: identical
+    Darklang.Stdlib.Cli.UI.Colors.reverse: identical
+    Darklang.Stdlib.Cli.UI.Colors.salmonBg: different
+    Darklang.Stdlib.Cli.UI.Colors.selection: different
+    Darklang.Stdlib.Cli.UI.Colors.strikethroughText: different
+    Darklang.Stdlib.Cli.UI.Colors.string: different
+    Darklang.Stdlib.Cli.UI.Colors.stringColor: identical
+    Darklang.Stdlib.Cli.UI.Colors.success: different
+    Darklang.Stdlib.Cli.UI.Colors.successColor: identical
+    Darklang.Stdlib.Cli.UI.Colors.underline: identical
+    Darklang.Stdlib.Cli.UI.Colors.underlineText: different
+    Darklang.Stdlib.Cli.UI.Colors.warning: different
+    Darklang.Stdlib.Cli.UI.Colors.warningColor: identical
+    Darklang.Stdlib.Cli.UI.Colors.white: identical
+    Darklang.Stdlib.Cli.UI.Colors.whiteText: different
+    Darklang.Stdlib.Cli.UI.Colors.yellow: identical
+    Darklang.Stdlib.Cli.UI.Colors.yellowBg: different
+    Darklang.Stdlib.Cli.UI.Colors.yellowText: different
+  cli/ui/confirm.dark:
+    Darklang.Stdlib.Cli.UI.Confirm.Msg: missing
+    Darklang.Stdlib.Cli.UI.Confirm.State: missing
+    Darklang.Stdlib.Cli.UI.Confirm.ask: missing
+    Darklang.Stdlib.Cli.UI.Confirm.askDangerous: missing
+    Darklang.Stdlib.Cli.UI.Confirm.centred: missing
+    Darklang.Stdlib.Cli.UI.Confirm.onKey: missing
+    Darklang.Stdlib.Cli.UI.Confirm.view: missing
+  cli/ui/editor.dark:
+    Darklang.Stdlib.Cli.UI.Editor.Buf: missing
+    Darklang.Stdlib.Cli.UI.Editor.backspace: missing
+    Darklang.Stdlib.Cli.UI.Editor.clampCol: missing
+    Darklang.Stdlib.Cli.UI.Editor.currentLine: missing
+    Darklang.Stdlib.Cli.UI.Editor.deleteForward: missing
+    Darklang.Stdlib.Cli.UI.Editor.emptyBuf: missing
+    Darklang.Stdlib.Cli.UI.Editor.fromText: missing
+    Darklang.Stdlib.Cli.UI.Editor.insertChar: missing
+    Darklang.Stdlib.Cli.UI.Editor.insertText: missing
+    Darklang.Stdlib.Cli.UI.Editor.killToLineEnd: missing
+    Darklang.Stdlib.Cli.UI.Editor.moveDown: missing
+    Darklang.Stdlib.Cli.UI.Editor.moveLeft: missing
+    Darklang.Stdlib.Cli.UI.Editor.moveLineEnd: missing
+    Darklang.Stdlib.Cli.UI.Editor.moveLineStart: missing
+    Darklang.Stdlib.Cli.UI.Editor.moveRight: missing
+    Darklang.Stdlib.Cli.UI.Editor.moveUp: missing
+    Darklang.Stdlib.Cli.UI.Editor.newline: missing
+    Darklang.Stdlib.Cli.UI.Editor.setLine: missing
+    Darklang.Stdlib.Cli.UI.Editor.toText: missing
+  cli/ui/html.dark:
+    Darklang.Stdlib.Cli.UI.Html.className: missing
+    Darklang.Stdlib.Cli.UI.Html.escape: missing
+    Darklang.Stdlib.Cli.UI.Html.page: missing
+    Darklang.Stdlib.Cli.UI.Html.render: missing
+    Darklang.Stdlib.Cli.UI.Html.renderStatic: missing
+    Darklang.Stdlib.Cli.UI.Html.severityClass: missing
+  cli/ui/layout.dark:
+    Darklang.Stdlib.Cli.UI.Layout.Component: missing
+    Darklang.Stdlib.Cli.UI.Layout.Region: missing
+    Darklang.Stdlib.Cli.UI.Layout.SizeRequest: missing
+    Darklang.Stdlib.Cli.UI.Layout.Span: missing
+    Darklang.Stdlib.Cli.UI.Layout.at: missing
+    Darklang.Stdlib.Cli.UI.Layout.clearRegion: missing
+    Darklang.Stdlib.Cli.UI.Layout.distributeCols: missing
+    Darklang.Stdlib.Cli.UI.Layout.distributeRows: missing
+    Darklang.Stdlib.Cli.UI.Layout.fillRow: missing
+    Darklang.Stdlib.Cli.UI.Layout.fixedSize: missing
+    Darklang.Stdlib.Cli.UI.Layout.fixedWidth: missing
+    Darklang.Stdlib.Cli.UI.Layout.flex: missing
+    Darklang.Stdlib.Cli.UI.Layout.flexWidth: missing
+    Darklang.Stdlib.Cli.UI.Layout.greedy: missing
+    Darklang.Stdlib.Cli.UI.Layout.greedyWidth: missing
+    Darklang.Stdlib.Cli.UI.Layout.hstack: missing
+    Darklang.Stdlib.Cli.UI.Layout.vstack: missing
+  cli/ui/listview.dark:
+    Darklang.Stdlib.Cli.UI.ListView.render: missing
+  cli/ui/node.dark:
+    Darklang.Stdlib.Cli.UI.Node.Focused: missing
+    Darklang.Stdlib.Cli.UI.Node.InputSpec: missing
+    Darklang.Stdlib.Cli.UI.Node.Node: missing
+    Darklang.Stdlib.Cli.UI.Node.Severity: missing
+    Darklang.Stdlib.Cli.UI.Node.Style: missing
+    Darklang.Stdlib.Cli.UI.Node.band: missing
+    Darklang.Stdlib.Cli.UI.Node.bold: missing
+    Darklang.Stdlib.Cli.UI.Node.column: missing
+    Darklang.Stdlib.Cli.UI.Node.dim: missing
+    Darklang.Stdlib.Cli.UI.Node.findFocused: missing
+    Darklang.Stdlib.Cli.UI.Node.focusable: missing
+    Darklang.Stdlib.Cli.UI.Node.isNumericColumn: missing
+    Darklang.Stdlib.Cli.UI.Node.measure: missing
+    Darklang.Stdlib.Cli.UI.Node.paint: missing
+    Darklang.Stdlib.Cli.UI.Node.row: missing
+    Darklang.Stdlib.Cli.UI.Node.rowOf: missing
+    Darklang.Stdlib.Cli.UI.Node.severityCode: missing
+    Darklang.Stdlib.Cli.UI.Node.styleCode: missing
+    Darklang.Stdlib.Cli.UI.Node.styled: missing
+    Darklang.Stdlib.Cli.UI.Node.sub: missing
+    Darklang.Stdlib.Cli.UI.Node.table: missing
+    Darklang.Stdlib.Cli.UI.Node.tableRows: missing
+    Darklang.Stdlib.Cli.UI.Node.tableWidths: missing
+    Darklang.Stdlib.Cli.UI.Node.text: missing
+    Darklang.Stdlib.Cli.UI.Node.toLines: missing
+    Darklang.Stdlib.Cli.UI.Node.toRows: missing
+    Darklang.Stdlib.Cli.UI.Node.toSpans: missing
+  cli/ui/picker.dark:
+    Darklang.Stdlib.Cli.UI.Picker.Msg: missing
+    Darklang.Stdlib.Cli.UI.Picker.State: missing
+    Darklang.Stdlib.Cli.UI.Picker.count: missing
+    Darklang.Stdlib.Cli.UI.Picker.make: missing
+    Darklang.Stdlib.Cli.UI.Picker.moveDown: missing
+    Darklang.Stdlib.Cli.UI.Picker.moveTo: missing
+    Darklang.Stdlib.Cli.UI.Picker.moveToEnd: missing
+    Darklang.Stdlib.Cli.UI.Picker.moveToStart: missing
+    Darklang.Stdlib.Cli.UI.Picker.moveUp: missing
+    Darklang.Stdlib.Cli.UI.Picker.onKey: missing
+    Darklang.Stdlib.Cli.UI.Picker.rowFor: missing
+    Darklang.Stdlib.Cli.UI.Picker.scrolled: missing
+    Darklang.Stdlib.Cli.UI.Picker.view: missing
+    Darklang.Stdlib.Cli.UI.Picker.withLabels: missing
+  cli/ui/progress.dark:
+    Darklang.Stdlib.Cli.UI.Progress.bar: different
+  cli/ui/prompt.dark:
+    Darklang.Stdlib.Cli.UI.Prompt.ask: different
+    Darklang.Stdlib.Cli.UI.Prompt.confirm: different
+    Darklang.Stdlib.Cli.UI.Prompt.select: different
+  cli/ui/splitpane.dark:
+    Darklang.Stdlib.Cli.UI.SplitPane.Focus: missing
+    Darklang.Stdlib.Cli.UI.SplitPane.Orientation: missing
+    Darklang.Stdlib.Cli.UI.SplitPane.render: missing
+  cli/ui/table.dark:
+    Darklang.Stdlib.Cli.UI.Table.print: different
+  cli/ui/text.dark:
+    Darklang.Stdlib.Cli.UI.Text.lines: missing
+    Darklang.Stdlib.Cli.UI.Text.render: missing
+  cli/ui/textfield.dark:
+    Darklang.Stdlib.Cli.UI.TextField.Msg: different
+    Darklang.Stdlib.Cli.UI.TextField.State: different
+    Darklang.Stdlib.Cli.UI.TextField.backspace: missing
+    Darklang.Stdlib.Cli.UI.TextField.clampCursor: missing
+    Darklang.Stdlib.Cli.UI.TextField.deleteForward: missing
+    Darklang.Stdlib.Cli.UI.TextField.empty: different
+    Darklang.Stdlib.Cli.UI.TextField.fromText: missing
+    Darklang.Stdlib.Cli.UI.TextField.fromTextAtStart: missing
+    Darklang.Stdlib.Cli.UI.TextField.handleTextKey: missing
+    Darklang.Stdlib.Cli.UI.TextField.insert: missing
+    Darklang.Stdlib.Cli.UI.TextField.isTypeable: missing
+    Darklang.Stdlib.Cli.UI.TextField.killToEnd: missing
+    Darklang.Stdlib.Cli.UI.TextField.moveLeft: missing
+    Darklang.Stdlib.Cli.UI.TextField.moveRight: missing
+    Darklang.Stdlib.Cli.UI.TextField.moveToEnd: missing
+    Darklang.Stdlib.Cli.UI.TextField.moveToStart: missing
+    Darklang.Stdlib.Cli.UI.TextField.onKey: missing
+    Darklang.Stdlib.Cli.UI.TextField.renderInline: missing
+    Darklang.Stdlib.Cli.UI.TextField.renderMaybeFocused: missing
+    Darklang.Stdlib.Cli.UI.TextField.view: missing
+    Darklang.Stdlib.Cli.UI.TextField.windowFor: missing
+  cli/ui/widget.dark:
+    Darklang.Stdlib.Cli.UI.Widget.KeyPress: missing
+    Darklang.Stdlib.Cli.UI.Widget.Outcome: missing
+    Darklang.Stdlib.Cli.UI.Widget.isChar: missing
+    Darklang.Stdlib.Cli.UI.Widget.press: missing
+  cli/unix.dark:
+    Darklang.Stdlib.Cli.Unix.addAlias: missing
+    Darklang.Stdlib.Cli.Unix.addToPath: missing
+    Darklang.Stdlib.Cli.Unix.areFilesIdentical: missing
+    Darklang.Stdlib.Cli.Unix.copyFile: missing
+    Darklang.Stdlib.Cli.Unix.deleteAlias: missing
+    Darklang.Stdlib.Cli.Unix.ensureDirectoryExists: missing
+    Darklang.Stdlib.Cli.Unix.executeInDirectoryAndRedirectToFile: missing
+    Darklang.Stdlib.Cli.Unix.executeInDirectoryWithOutput: missing
+    Darklang.Stdlib.Cli.Unix.fileExists: missing
+    Darklang.Stdlib.Cli.Unix.findCommandPath: missing
+    Darklang.Stdlib.Cli.Unix.getAbsolutePath: missing
+    Darklang.Stdlib.Cli.Unix.getHomeDirectory: missing
+    Darklang.Stdlib.Cli.Unix.grantExecutePermission: missing
+    Darklang.Stdlib.Cli.Unix.isCommandAvailable: missing
+    Darklang.Stdlib.Cli.Unix.removeDirectory: missing
+    Darklang.Stdlib.Cli.Unix.removeFile: missing
+    Darklang.Stdlib.Cli.Unix.showDiff: missing
+  cli/zsh.dark:
+    Darklang.Stdlib.Cli.Zsh.addAlias: missing
+    Darklang.Stdlib.Cli.Zsh.addToPath: missing
+    Darklang.Stdlib.Cli.Zsh.applyZshConfigChanges: missing
+    Darklang.Stdlib.Cli.Zsh.deleteAlias: missing
+    Darklang.Stdlib.Cli.Zsh.overwriteZshrc: missing
+    Darklang.Stdlib.Cli.Zsh.readZshrc: missing
+  crypto.dark:
+    Darklang.Stdlib.Crypto.constantTimeEquals: missing
+    Darklang.Stdlib.Crypto.md5: different
+    Darklang.Stdlib.Crypto.sha1hmac: different
+    Darklang.Stdlib.Crypto.sha256: different
+    Darklang.Stdlib.Crypto.sha256hmac: different
+    Darklang.Stdlib.Crypto.sha384: different
+  dateTime.dark:
+    Darklang.Stdlib.DateTime.Compare.greaterThan: identical
+    Darklang.Stdlib.DateTime.Compare.greaterThanOrEqualTo: identical
+    Darklang.Stdlib.DateTime.Compare.lessThan: identical
+    Darklang.Stdlib.DateTime.Compare.lessThanOrEqualTo: identical
+    Darklang.Stdlib.DateTime.ToString.toString: different
+    Darklang.Stdlib.DateTime.__monotonicMilliseconds: identical
+    Darklang.Stdlib.DateTime.__monotonicNanoseconds: identical
+    Darklang.Stdlib.DateTime.__now: identical
+    Darklang.Stdlib.DateTime.__realtimeNanoseconds: identical
+    Darklang.Stdlib.DateTime.__sleepMilliseconds: identical
+    Darklang.Stdlib.DateTime.__sleepNanoseconds: identical
+    Darklang.Stdlib.DateTime.__sleepWith: identical
+    Darklang.Stdlib.DateTime.__timespec: identical
+    Darklang.Stdlib.DateTime.__today: identical
+    Darklang.Stdlib.DateTime.addMilliseconds: different
+    Darklang.Stdlib.DateTime.addSeconds: different
+    Darklang.Stdlib.DateTime.atStartOfDay: different
+    Darklang.Stdlib.DateTime.day: different
+    Darklang.Stdlib.DateTime.fromMilliseconds: different
+    Darklang.Stdlib.DateTime.fromSeconds: different
+    Darklang.Stdlib.DateTime.greaterThan: different
+    Darklang.Stdlib.DateTime.greaterThanOrEqualTo: different
+    Darklang.Stdlib.DateTime.hour: different
+    Darklang.Stdlib.DateTime.impl Compare for DateTime: missing
+    Darklang.Stdlib.DateTime.impl ToString for DateTime: missing
+    Darklang.Stdlib.DateTime.lessThan: different
+    Darklang.Stdlib.DateTime.lessThanOrEqualTo: different
+    Darklang.Stdlib.DateTime.millisecond: different
+    Darklang.Stdlib.DateTime.minute: different
+    Darklang.Stdlib.DateTime.month: different
+    Darklang.Stdlib.DateTime.now: identical
+    Darklang.Stdlib.DateTime.parse: different
+    Darklang.Stdlib.DateTime.second: different
+    Darklang.Stdlib.DateTime.subtract: different
+    Darklang.Stdlib.DateTime.subtractMilliseconds: different
+    Darklang.Stdlib.DateTime.subtractMs: different
+    Darklang.Stdlib.DateTime.subtractSeconds: different
+    Darklang.Stdlib.DateTime.toMilliseconds: different
+    Darklang.Stdlib.DateTime.toSeconds: different
+    Darklang.Stdlib.DateTime.toStringISO8601BasicDate: different
+    Darklang.Stdlib.DateTime.toStringISO8601BasicDateTime: different
+    Darklang.Stdlib.DateTime.today: identical
+    Darklang.Stdlib.DateTime.weekday: different
+    Darklang.Stdlib.DateTime.year: different
+  dict.dark:
+    Darklang.Stdlib.Dict.Zero.zero: missing
+    Darklang.Stdlib.Dict.empty: identical
+    Darklang.Stdlib.Dict.filter: different
+    Darklang.Stdlib.Dict.filterMap: different
+    Darklang.Stdlib.Dict.fromList: different
+    Darklang.Stdlib.Dict.fromListOverwritingDuplicates: different
+    Darklang.Stdlib.Dict.get: different
+    Darklang.Stdlib.Dict.impl Stdlib.Zero for Dict<'k, 'v>: missing
+    Darklang.Stdlib.Dict.isEmpty: different
+    Darklang.Stdlib.Dict.iter: different
+    Darklang.Stdlib.Dict.keys: different
+    Darklang.Stdlib.Dict.map: different
+    Darklang.Stdlib.Dict.member: different
+    Darklang.Stdlib.Dict.merge: different
+    Darklang.Stdlib.Dict.remove: different
+    Darklang.Stdlib.Dict.set: different
+    Darklang.Stdlib.Dict.setOverridingDuplicates: different
+    Darklang.Stdlib.Dict.singleton: different
+    Darklang.Stdlib.Dict.size: different
+    Darklang.Stdlib.Dict.toList: different
+    Darklang.Stdlib.Dict.values: different
+  diff.dark:
+    Darklang.Stdlib.Diff.DiffLine: different
+    Darklang.Stdlib.Diff.buildTable: different
+    Darklang.Stdlib.Diff.lines: different
+    Darklang.Stdlib.Diff.trace: different
+  duration.dark:
+    Darklang.Stdlib.Duration.parse: different
+  env.dark:
+    Darklang.Stdlib.Env.get: different
+    Darklang.Stdlib.Env.getAll: different
+  exec.dark:
+    Darklang.Stdlib.Exec.Detail: missing
+    Darklang.Stdlib.Exec.Entry: missing
+    Darklang.Stdlib.Exec.ExecutionPoint: missing
+    Darklang.Stdlib.Exec.Handle: missing
+    Darklang.Stdlib.Exec.MachineProcess: missing
+    Darklang.Stdlib.Exec.ParkedOn: missing
+    Darklang.Stdlib.Exec.Status: missing
+    Darklang.Stdlib.Exec.Summary: missing
+    Darklang.Stdlib.Exec.await: missing
+    Darklang.Stdlib.Exec.awaitWithin: missing
+    Darklang.Stdlib.Exec.cancel: missing
+    Darklang.Stdlib.Exec.inspect: missing
+    Darklang.Stdlib.Exec.list: missing
+    Darklang.Stdlib.Exec.machineList: missing
+    Darklang.Stdlib.Exec.select: missing
+    Darklang.Stdlib.Exec.spawn: missing
+    Darklang.Stdlib.Exec.spawnDetached: missing
+    Darklang.Stdlib.Exec.workers: missing
+  execPolicy.dark:
+    Darklang.Stdlib.Exec.Policy.leastRunFirst: missing
+    Darklang.Stdlib.Exec.Policy.roundRobin: missing
+    Darklang.Stdlib.Exec.Policy.youngestFirst: missing
+  float.dark:
+    Darklang.Stdlib.Float.Add.add: different
+    Darklang.Stdlib.Float.Compare.greaterThan: different
+    Darklang.Stdlib.Float.Compare.greaterThanOrEqualTo: different
+    Darklang.Stdlib.Float.Compare.lessThan: different
+    Darklang.Stdlib.Float.Compare.lessThanOrEqualTo: different
+    Darklang.Stdlib.Float.Divide.divide: different
+    Darklang.Stdlib.Float.Multiply.multiply: different
+    Darklang.Stdlib.Float.Negate.negate: different
+    Darklang.Stdlib.Float.One.one: identical
+    Darklang.Stdlib.Float.ParseError: identical
+    Darklang.Stdlib.Float.Power.power: different
+    Darklang.Stdlib.Float.Subtract.subtract: different
+    Darklang.Stdlib.Float.ToString.toString: different
+    Darklang.Stdlib.Float.Zero.zero: identical
+    Darklang.Stdlib.Float.ceiling: different
+    Darklang.Stdlib.Float.clampRefusingNaN: different
+    Darklang.Stdlib.Float.floor: different
+    Darklang.Stdlib.Float.impl Add for Float: missing
+    Darklang.Stdlib.Float.impl Compare for Float: missing
+    Darklang.Stdlib.Float.impl Divide for Float: missing
+    Darklang.Stdlib.Float.impl Multiply for Float: missing
+    Darklang.Stdlib.Float.impl Negate for Float: missing
+    Darklang.Stdlib.Float.impl One for Float: missing
+    Darklang.Stdlib.Float.impl Power for Float: missing
+    Darklang.Stdlib.Float.impl Subtract for Float: missing
+    Darklang.Stdlib.Float.impl ToString for Float: missing
+    Darklang.Stdlib.Float.impl Zero for Float: missing
+    Darklang.Stdlib.Float.isFinite: different
+    Darklang.Stdlib.Float.isNaN: different
+    Darklang.Stdlib.Float.parse: different
+    Darklang.Stdlib.Float.round: different
+    Darklang.Stdlib.Float.roundDown: different
+    Darklang.Stdlib.Float.roundTowardsZero: different
+    Darklang.Stdlib.Float.roundUp: different
+    Darklang.Stdlib.Float.sqrt: missing
+    Darklang.Stdlib.Float.toBits: different
+    Darklang.Stdlib.Float.toInt: different
+    Darklang.Stdlib.Float.truncate: different
+  fun.dark:
+    Darklang.Stdlib.Fun.identity: different
+  hostAwait.dark:
+    Darklang.Stdlib.Host.Event: missing
+    Darklang.Stdlib.Host.EventSpec: missing
+    Darklang.Stdlib.Host.RawEvent: missing
+    Darklang.Stdlib.Host.await: missing
+    Darklang.Stdlib.Host.begin: missing
+    Darklang.Stdlib.Host.currentWatch: missing
+    Darklang.Stdlib.Host.describeChange: missing
+    Darklang.Stdlib.Host.remember: missing
+  html.dark:
+    Darklang.Stdlib.Html.Attribute: different
+    Darklang.Stdlib.Html.Attributes: different
+    Darklang.Stdlib.Html.HtmlTag: different
+    Darklang.Stdlib.Html.Node: different
+    Darklang.Stdlib.Html.a: different
+    Darklang.Stdlib.Html.article: different
+    Darklang.Stdlib.Html.aside: different
+    Darklang.Stdlib.Html.audio: different
+    Darklang.Stdlib.Html.b: different
+    Darklang.Stdlib.Html.body: different
+    Darklang.Stdlib.Html.br: different
+    Darklang.Stdlib.Html.button: different
+    Darklang.Stdlib.Html.caption: different
+    Darklang.Stdlib.Html.classes: different
+    Darklang.Stdlib.Html.code: different
+    Darklang.Stdlib.Html.col: different
+    Darklang.Stdlib.Html.colgroup: different
+    Darklang.Stdlib.Html.comment: different
+    Darklang.Stdlib.Html.dataAttr: different
+    Darklang.Stdlib.Html.dd: different
+    Darklang.Stdlib.Html.del: different
+    Darklang.Stdlib.Html.details: different
+    Darklang.Stdlib.Html.dialog: different
+    Darklang.Stdlib.Html.div: different
+    Darklang.Stdlib.Html.dl: different
+    Darklang.Stdlib.Html.document: different
+    Darklang.Stdlib.Html.dt: different
+    Darklang.Stdlib.Html.em: different
+    Darklang.Stdlib.Html.escapeHtml: different
+    Darklang.Stdlib.Html.fieldset: different
+    Darklang.Stdlib.Html.figcaption: different
+    Darklang.Stdlib.Html.figure: different
+    Darklang.Stdlib.Html.footer: different
+    Darklang.Stdlib.Html.form: different
+    Darklang.Stdlib.Html.h1: different
+    Darklang.Stdlib.Html.h2: different
+    Darklang.Stdlib.Html.h3: different
+    Darklang.Stdlib.Html.h4: different
+    Darklang.Stdlib.Html.h5: different
+    Darklang.Stdlib.Html.h6: different
+    Darklang.Stdlib.Html.head: different
+    Darklang.Stdlib.Html.header: different
+    Darklang.Stdlib.Html.html: different
+    Darklang.Stdlib.Html.htmlTagNode: different
+    Darklang.Stdlib.Html.i: different
+    Darklang.Stdlib.Html.img: different
+    Darklang.Stdlib.Html.input: different
+    Darklang.Stdlib.Html.ins: different
+    Darklang.Stdlib.Html.label: different
+    Darklang.Stdlib.Html.legend: different
+    Darklang.Stdlib.Html.li: different
+    Darklang.Stdlib.Html.link: different
+    Darklang.Stdlib.Html.main: different
+    Darklang.Stdlib.Html.mark: different
+    Darklang.Stdlib.Html.meta: different
+    Darklang.Stdlib.Html.nav: different
+    Darklang.Stdlib.Html.nodeToString: different
+    Darklang.Stdlib.Html.ol: different
+    Darklang.Stdlib.Html.option: different
+    Darklang.Stdlib.Html.p: different
+    Darklang.Stdlib.Html.path: different
+    Darklang.Stdlib.Html.picture: different
+    Darklang.Stdlib.Html.pre: different
+    Darklang.Stdlib.Html.script: different
+    Darklang.Stdlib.Html.section: different
+    Darklang.Stdlib.Html.select: different
+    Darklang.Stdlib.Html.small: different
+    Darklang.Stdlib.Html.span: different
+    Darklang.Stdlib.Html.stringNode: different
+    Darklang.Stdlib.Html.strong: different
+    Darklang.Stdlib.Html.style: different
+    Darklang.Stdlib.Html.summary: different
+    Darklang.Stdlib.Html.svg: different
+    Darklang.Stdlib.Html.table: different
+    Darklang.Stdlib.Html.tbody: different
+    Darklang.Stdlib.Html.td: different
+    Darklang.Stdlib.Html.text: different
+    Darklang.Stdlib.Html.textarea: different
+    Darklang.Stdlib.Html.tfoot: different
+    Darklang.Stdlib.Html.th: different
+    Darklang.Stdlib.Html.thead: different
+    Darklang.Stdlib.Html.title: different
+    Darklang.Stdlib.Html.tr: different
+    Darklang.Stdlib.Html.u: different
+    Darklang.Stdlib.Html.ul: different
+    Darklang.Stdlib.Html.video: different
+    Darklang.Stdlib.Html.voidElements: different
+  http.dark:
+    Darklang.Stdlib.Http.Cookie: different
+    Darklang.Stdlib.Http.Request: different
+    Darklang.Stdlib.Http.Request.header: different
+    Darklang.Stdlib.Http.Request.queryParam: different
+    Darklang.Stdlib.Http.Request.queryParams: different
+    Darklang.Stdlib.Http.Response: different
+    Darklang.Stdlib.Http.badRequest: different
+    Darklang.Stdlib.Http.forbidden: different
+    Darklang.Stdlib.Http.notFound: different
+    Darklang.Stdlib.Http.parseHeaders: different
+    Darklang.Stdlib.Http.parseQueryString: different
+    Darklang.Stdlib.Http.redirectTo: different
+    Darklang.Stdlib.Http.response: different
+    Darklang.Stdlib.Http.responseWithHeaders: different
+    Darklang.Stdlib.Http.responseWithHtml: different
+    Darklang.Stdlib.Http.responseWithJson: different
+    Darklang.Stdlib.Http.responseWithText: different
+    Darklang.Stdlib.Http.serverError: different
+    Darklang.Stdlib.Http.success: different
+    Darklang.Stdlib.Http.unauthorized: different
+    Darklang.Stdlib.Http.urlDecode: different
+  httpclient.dark:
+    Darklang.Stdlib.HttpClient.BadHeader: identical
+    Darklang.Stdlib.HttpClient.BadUrlDetails: identical
+    Darklang.Stdlib.HttpClient.ContentType.form: different
+    Darklang.Stdlib.HttpClient.ContentType.html: different
+    Darklang.Stdlib.HttpClient.ContentType.json: different
+    Darklang.Stdlib.HttpClient.ContentType.plainText: different
+    Darklang.Stdlib.HttpClient.RequestError: different
+    Darklang.Stdlib.HttpClient.Response: identical
+    Darklang.Stdlib.HttpClient.Sse.Event: different
+    Darklang.Stdlib.HttpClient.Sse.ParseState: different
+    Darklang.Stdlib.HttpClient.Sse.applyLine: different
+    Darklang.Stdlib.HttpClient.Sse.parse: different
+    Darklang.Stdlib.HttpClient.Sse.pullNextEvent: different
+    Darklang.Stdlib.HttpClient.Sse.splitField: different
+    Darklang.Stdlib.HttpClient.Sse.tryEmitBlock: different
+    Darklang.Stdlib.HttpClient.StreamResponse: identical
+    Darklang.Stdlib.HttpClient.basicAuth: different
+    Darklang.Stdlib.HttpClient.bearerToken: different
+    Darklang.Stdlib.HttpClient.delete: different
+    Darklang.Stdlib.HttpClient.get: different
+    Darklang.Stdlib.HttpClient.head: different
+    Darklang.Stdlib.HttpClient.options: different
+    Darklang.Stdlib.HttpClient.post: different
+    Darklang.Stdlib.HttpClient.put: different
+    Darklang.Stdlib.HttpClient.read: missing
+    Darklang.Stdlib.HttpClient.request: different
+    Darklang.Stdlib.HttpClient.stream: different
+    Darklang.Stdlib.HttpClient.toString: missing
+  httpserver.dark:
+    Darklang.Stdlib.HttpServer.Config.Config: different
+    Darklang.Stdlib.HttpServer.Config.defaultMaxBodyBytes: different
+    Darklang.Stdlib.HttpServer.Config.defaults: different
+    Darklang.Stdlib.HttpServer.Handler: different
+    Darklang.Stdlib.HttpServer.RouteMatch: different
+    Darklang.Stdlib.HttpServer.RouteSegment: different
+    Darklang.Stdlib.HttpServer.findHandler: different
+    Darklang.Stdlib.HttpServer.get: different
+    Darklang.Stdlib.HttpServer.getMethod: different
+    Darklang.Stdlib.HttpServer.getPath: different
+    Darklang.Stdlib.HttpServer.getPathParam: different
+    Darklang.Stdlib.HttpServer.matchRoute: different
+    Darklang.Stdlib.HttpServer.matchRouteSegments: different
+    Darklang.Stdlib.HttpServer.matchSegment: different
+    Darklang.Stdlib.HttpServer.parseRouteSegments: different
+    Darklang.Stdlib.HttpServer.post: different
+    Darklang.Stdlib.HttpServer.routeRequest: different
+    Darklang.Stdlib.HttpServer.serve: different
+    Darklang.Stdlib.HttpServer.serveLive: missing
+    Darklang.Stdlib.HttpServer.splitPath: different
+  int.dark:
+    Darklang.Stdlib.Int.Add.add: different
+    Darklang.Stdlib.Int.BitwiseAnd.bitwiseAnd: different
+    Darklang.Stdlib.Int.BitwiseNot.bitwiseNot: different
+    Darklang.Stdlib.Int.BitwiseOr.bitwiseOr: different
+    Darklang.Stdlib.Int.BitwiseXor.bitwiseXor: different
+    Darklang.Stdlib.Int.Compare.greaterThan: different
+    Darklang.Stdlib.Int.Compare.greaterThanOrEqualTo: different
+    Darklang.Stdlib.Int.Compare.lessThan: different
+    Darklang.Stdlib.Int.Compare.lessThanOrEqualTo: different
+    Darklang.Stdlib.Int.Divide.divide: different
+    Darklang.Stdlib.Int.Modulo.modulo: different
+    Darklang.Stdlib.Int.Multiply.multiply: different
+    Darklang.Stdlib.Int.Negate.negate: different
+    Darklang.Stdlib.Int.One.one: identical
+    Darklang.Stdlib.Int.ParseError: identical
+    Darklang.Stdlib.Int.Power.power: different
+    Darklang.Stdlib.Int.ShiftLeft.shiftLeft: different
+    Darklang.Stdlib.Int.ShiftRight.shiftRight: different
+    Darklang.Stdlib.Int.Subtract.subtract: different
+    Darklang.Stdlib.Int.ToString.toString: different
+    Darklang.Stdlib.Int.Zero.zero: identical
+    Darklang.Stdlib.Int.fromFloat: different
+    Darklang.Stdlib.Int.fromInt128: different
+    Darklang.Stdlib.Int.fromInt16: different
+    Darklang.Stdlib.Int.fromInt32: different
+    Darklang.Stdlib.Int.fromInt64: different
+    Darklang.Stdlib.Int.fromInt8: different
+    Darklang.Stdlib.Int.fromUInt128: different
+    Darklang.Stdlib.Int.fromUInt16: different
+    Darklang.Stdlib.Int.fromUInt32: different
+    Darklang.Stdlib.Int.fromUInt64: different
+    Darklang.Stdlib.Int.fromUInt8: different
+    Darklang.Stdlib.Int.impl Add for Int: missing
+    Darklang.Stdlib.Int.impl BitwiseAnd for Int: missing
+    Darklang.Stdlib.Int.impl BitwiseNot for Int: missing
+    Darklang.Stdlib.Int.impl BitwiseOr for Int: missing
+    Darklang.Stdlib.Int.impl BitwiseXor for Int: missing
+    Darklang.Stdlib.Int.impl Compare for Int: missing
+    Darklang.Stdlib.Int.impl Divide for Int: missing
+    Darklang.Stdlib.Int.impl Modulo for Int: missing
+    Darklang.Stdlib.Int.impl Multiply for Int: missing
+    Darklang.Stdlib.Int.impl Negate for Int: missing
+    Darklang.Stdlib.Int.impl One for Int: missing
+    Darklang.Stdlib.Int.impl Power for Int: missing
+    Darklang.Stdlib.Int.impl ShiftLeft for Int: missing
+    Darklang.Stdlib.Int.impl ShiftRight for Int: missing
+    Darklang.Stdlib.Int.impl Subtract for Int: missing
+    Darklang.Stdlib.Int.impl ToString for Int: missing
+    Darklang.Stdlib.Int.impl Zero for Int: missing
+    Darklang.Stdlib.Int.parse: different
+    Darklang.Stdlib.Int.random: different
+    Darklang.Stdlib.Int.remainder: different
+    Darklang.Stdlib.Int.sqrt: different
+    Darklang.Stdlib.Int.toFloat: different
+    Darklang.Stdlib.Int.toInt128: different
+    Darklang.Stdlib.Int.toInt16: different
+    Darklang.Stdlib.Int.toInt32: different
+    Darklang.Stdlib.Int.toInt64: different
+    Darklang.Stdlib.Int.toInt8: different
+    Darklang.Stdlib.Int.toUInt128: different
+    Darklang.Stdlib.Int.toUInt16: different
+    Darklang.Stdlib.Int.toUInt32: different
+    Darklang.Stdlib.Int.toUInt64: different
+    Darklang.Stdlib.Int.toUInt8: different
+  int128.dark:
+    Darklang.Stdlib.Int128.Add.add: different
+    Darklang.Stdlib.Int128.BitwiseAnd.bitwiseAnd: different
+    Darklang.Stdlib.Int128.BitwiseNot.bitwiseNot: different
+    Darklang.Stdlib.Int128.BitwiseOr.bitwiseOr: different
+    Darklang.Stdlib.Int128.BitwiseXor.bitwiseXor: different
+    Darklang.Stdlib.Int128.Compare.greaterThan: different
+    Darklang.Stdlib.Int128.Compare.greaterThanOrEqualTo: different
+    Darklang.Stdlib.Int128.Compare.lessThan: different
+    Darklang.Stdlib.Int128.Compare.lessThanOrEqualTo: different
+    Darklang.Stdlib.Int128.Divide.divide: different
+    Darklang.Stdlib.Int128.Modulo.modulo: different
+    Darklang.Stdlib.Int128.Multiply.multiply: different
+    Darklang.Stdlib.Int128.Negate.negate: different
+    Darklang.Stdlib.Int128.One.one: identical
+    Darklang.Stdlib.Int128.ParseError: different
+    Darklang.Stdlib.Int128.Power.power: different
+    Darklang.Stdlib.Int128.ShiftLeft.shiftLeft: different
+    Darklang.Stdlib.Int128.ShiftRight.shiftRight: different
+    Darklang.Stdlib.Int128.Subtract.subtract: different
+    Darklang.Stdlib.Int128.ToString.toString: different
+    Darklang.Stdlib.Int128.Zero.zero: identical
+    Darklang.Stdlib.Int128.fromInt16: different
+    Darklang.Stdlib.Int128.fromInt32: different
+    Darklang.Stdlib.Int128.fromInt64: different
+    Darklang.Stdlib.Int128.fromInt8: different
+    Darklang.Stdlib.Int128.fromUInt16: different
+    Darklang.Stdlib.Int128.fromUInt32: different
+    Darklang.Stdlib.Int128.fromUInt64: different
+    Darklang.Stdlib.Int128.fromUInt8: different
+    Darklang.Stdlib.Int128.impl Add for Int128: missing
+    Darklang.Stdlib.Int128.impl BitwiseAnd for Int128: missing
+    Darklang.Stdlib.Int128.impl BitwiseNot for Int128: missing
+    Darklang.Stdlib.Int128.impl BitwiseOr for Int128: missing
+    Darklang.Stdlib.Int128.impl BitwiseXor for Int128: missing
+    Darklang.Stdlib.Int128.impl Compare for Int128: missing
+    Darklang.Stdlib.Int128.impl Divide for Int128: missing
+    Darklang.Stdlib.Int128.impl Modulo for Int128: missing
+    Darklang.Stdlib.Int128.impl Multiply for Int128: missing
+    Darklang.Stdlib.Int128.impl Negate for Int128: missing
+    Darklang.Stdlib.Int128.impl One for Int128: missing
+    Darklang.Stdlib.Int128.impl Power for Int128: missing
+    Darklang.Stdlib.Int128.impl ShiftLeft for Int128: missing
+    Darklang.Stdlib.Int128.impl ShiftRight for Int128: missing
+    Darklang.Stdlib.Int128.impl Subtract for Int128: missing
+    Darklang.Stdlib.Int128.impl ToString for Int128: missing
+    Darklang.Stdlib.Int128.impl Zero for Int128: missing
+    Darklang.Stdlib.Int128.parse: different
+    Darklang.Stdlib.Int128.remainder: different
+    Darklang.Stdlib.Int128.sqrt: different
+    Darklang.Stdlib.Int128.toFloat: different
+  int16.dark:
+    Darklang.Stdlib.Int16.Add.add: different
+    Darklang.Stdlib.Int16.BitwiseAnd.bitwiseAnd: different
+    Darklang.Stdlib.Int16.BitwiseNot.bitwiseNot: different
+    Darklang.Stdlib.Int16.BitwiseOr.bitwiseOr: different
+    Darklang.Stdlib.Int16.BitwiseXor.bitwiseXor: different
+    Darklang.Stdlib.Int16.Compare.greaterThan: different
+    Darklang.Stdlib.Int16.Compare.greaterThanOrEqualTo: different
+    Darklang.Stdlib.Int16.Compare.lessThan: different
+    Darklang.Stdlib.Int16.Compare.lessThanOrEqualTo: different
+    Darklang.Stdlib.Int16.Divide.divide: different
+    Darklang.Stdlib.Int16.Modulo.modulo: different
+    Darklang.Stdlib.Int16.Multiply.multiply: different
+    Darklang.Stdlib.Int16.Negate.negate: different
+    Darklang.Stdlib.Int16.One.one: identical
+    Darklang.Stdlib.Int16.ParseError: different
+    Darklang.Stdlib.Int16.Power.power: different
+    Darklang.Stdlib.Int16.ShiftLeft.shiftLeft: different
+    Darklang.Stdlib.Int16.ShiftRight.shiftRight: different
+    Darklang.Stdlib.Int16.Subtract.subtract: different
+    Darklang.Stdlib.Int16.ToString.toString: different
+    Darklang.Stdlib.Int16.Zero.zero: identical
+    Darklang.Stdlib.Int16.fromInt128: different
+    Darklang.Stdlib.Int16.fromInt32: different
+    Darklang.Stdlib.Int16.fromInt64: different
+    Darklang.Stdlib.Int16.fromInt8: different
+    Darklang.Stdlib.Int16.fromUInt128: different
+    Darklang.Stdlib.Int16.fromUInt16: different
+    Darklang.Stdlib.Int16.fromUInt32: different
+    Darklang.Stdlib.Int16.fromUInt64: different
+    Darklang.Stdlib.Int16.fromUInt8: different
+    Darklang.Stdlib.Int16.impl Add for Int16: missing
+    Darklang.Stdlib.Int16.impl BitwiseAnd for Int16: missing
+    Darklang.Stdlib.Int16.impl BitwiseNot for Int16: missing
+    Darklang.Stdlib.Int16.impl BitwiseOr for Int16: missing
+    Darklang.Stdlib.Int16.impl BitwiseXor for Int16: missing
+    Darklang.Stdlib.Int16.impl Compare for Int16: missing
+    Darklang.Stdlib.Int16.impl Divide for Int16: missing
+    Darklang.Stdlib.Int16.impl Modulo for Int16: missing
+    Darklang.Stdlib.Int16.impl Multiply for Int16: missing
+    Darklang.Stdlib.Int16.impl Negate for Int16: missing
+    Darklang.Stdlib.Int16.impl One for Int16: missing
+    Darklang.Stdlib.Int16.impl Power for Int16: missing
+    Darklang.Stdlib.Int16.impl ShiftLeft for Int16: missing
+    Darklang.Stdlib.Int16.impl ShiftRight for Int16: missing
+    Darklang.Stdlib.Int16.impl Subtract for Int16: missing
+    Darklang.Stdlib.Int16.impl ToString for Int16: missing
+    Darklang.Stdlib.Int16.impl Zero for Int16: missing
+    Darklang.Stdlib.Int16.parse: different
+    Darklang.Stdlib.Int16.random: different
+    Darklang.Stdlib.Int16.remainder: different
+    Darklang.Stdlib.Int16.sqrt: different
+    Darklang.Stdlib.Int16.toFloat: different
+  int32.dark:
+    Darklang.Stdlib.Int32.Add.add: different
+    Darklang.Stdlib.Int32.BitwiseAnd.bitwiseAnd: different
+    Darklang.Stdlib.Int32.BitwiseNot.bitwiseNot: different
+    Darklang.Stdlib.Int32.BitwiseOr.bitwiseOr: different
+    Darklang.Stdlib.Int32.BitwiseXor.bitwiseXor: different
+    Darklang.Stdlib.Int32.Compare.greaterThan: different
+    Darklang.Stdlib.Int32.Compare.greaterThanOrEqualTo: different
+    Darklang.Stdlib.Int32.Compare.lessThan: different
+    Darklang.Stdlib.Int32.Compare.lessThanOrEqualTo: different
+    Darklang.Stdlib.Int32.Divide.divide: different
+    Darklang.Stdlib.Int32.Modulo.modulo: different
+    Darklang.Stdlib.Int32.Multiply.multiply: different
+    Darklang.Stdlib.Int32.Negate.negate: different
+    Darklang.Stdlib.Int32.One.one: identical
+    Darklang.Stdlib.Int32.ParseError: different
+    Darklang.Stdlib.Int32.Power.power: different
+    Darklang.Stdlib.Int32.ShiftLeft.shiftLeft: different
+    Darklang.Stdlib.Int32.ShiftRight.shiftRight: different
+    Darklang.Stdlib.Int32.Subtract.subtract: different
+    Darklang.Stdlib.Int32.ToString.toString: different
+    Darklang.Stdlib.Int32.Zero.zero: identical
+    Darklang.Stdlib.Int32.fromInt128: different
+    Darklang.Stdlib.Int32.fromInt16: different
+    Darklang.Stdlib.Int32.fromInt64: different
+    Darklang.Stdlib.Int32.fromInt8: different
+    Darklang.Stdlib.Int32.fromUInt128: different
+    Darklang.Stdlib.Int32.fromUInt16: different
+    Darklang.Stdlib.Int32.fromUInt32: different
+    Darklang.Stdlib.Int32.fromUInt64: different
+    Darklang.Stdlib.Int32.fromUInt8: different
+    Darklang.Stdlib.Int32.impl Add for Int32: missing
+    Darklang.Stdlib.Int32.impl BitwiseAnd for Int32: missing
+    Darklang.Stdlib.Int32.impl BitwiseNot for Int32: missing
+    Darklang.Stdlib.Int32.impl BitwiseOr for Int32: missing
+    Darklang.Stdlib.Int32.impl BitwiseXor for Int32: missing
+    Darklang.Stdlib.Int32.impl Compare for Int32: missing
+    Darklang.Stdlib.Int32.impl Divide for Int32: missing
+    Darklang.Stdlib.Int32.impl Modulo for Int32: missing
+    Darklang.Stdlib.Int32.impl Multiply for Int32: missing
+    Darklang.Stdlib.Int32.impl Negate for Int32: missing
+    Darklang.Stdlib.Int32.impl One for Int32: missing
+    Darklang.Stdlib.Int32.impl Power for Int32: missing
+    Darklang.Stdlib.Int32.impl ShiftLeft for Int32: missing
+    Darklang.Stdlib.Int32.impl ShiftRight for Int32: missing
+    Darklang.Stdlib.Int32.impl Subtract for Int32: missing
+    Darklang.Stdlib.Int32.impl ToString for Int32: missing
+    Darklang.Stdlib.Int32.impl Zero for Int32: missing
+    Darklang.Stdlib.Int32.parse: different
+    Darklang.Stdlib.Int32.random: different
+    Darklang.Stdlib.Int32.remainder: different
+    Darklang.Stdlib.Int32.sqrt: different
+    Darklang.Stdlib.Int32.toFloat: different
+  int64.dark:
+    Darklang.Stdlib.Int64.Add.add: different
+    Darklang.Stdlib.Int64.BitwiseAnd.bitwiseAnd: different
+    Darklang.Stdlib.Int64.BitwiseNot.bitwiseNot: different
+    Darklang.Stdlib.Int64.BitwiseOr.bitwiseOr: different
+    Darklang.Stdlib.Int64.BitwiseXor.bitwiseXor: different
+    Darklang.Stdlib.Int64.Compare.greaterThan: different
+    Darklang.Stdlib.Int64.Compare.greaterThanOrEqualTo: different
+    Darklang.Stdlib.Int64.Compare.lessThan: different
+    Darklang.Stdlib.Int64.Compare.lessThanOrEqualTo: different
+    Darklang.Stdlib.Int64.Divide.divide: different
+    Darklang.Stdlib.Int64.Modulo.modulo: different
+    Darklang.Stdlib.Int64.Multiply.multiply: different
+    Darklang.Stdlib.Int64.Negate.negate: different
+    Darklang.Stdlib.Int64.One.one: identical
+    Darklang.Stdlib.Int64.ParseError: different
+    Darklang.Stdlib.Int64.Power.power: different
+    Darklang.Stdlib.Int64.ShiftLeft.shiftLeft: different
+    Darklang.Stdlib.Int64.ShiftRight.shiftRight: different
+    Darklang.Stdlib.Int64.Subtract.subtract: different
+    Darklang.Stdlib.Int64.ToString.toString: different
+    Darklang.Stdlib.Int64.Zero.zero: identical
+    Darklang.Stdlib.Int64.fromFloat: different
+    Darklang.Stdlib.Int64.fromFloatRounded: missing
+    Darklang.Stdlib.Int64.fromInt128: different
+    Darklang.Stdlib.Int64.fromInt16: different
+    Darklang.Stdlib.Int64.fromInt32: different
+    Darklang.Stdlib.Int64.fromInt8: different
+    Darklang.Stdlib.Int64.fromUInt128: different
+    Darklang.Stdlib.Int64.fromUInt16: different
+    Darklang.Stdlib.Int64.fromUInt32: different
+    Darklang.Stdlib.Int64.fromUInt64: different
+    Darklang.Stdlib.Int64.fromUInt8: different
+    Darklang.Stdlib.Int64.impl Add for Int64: missing
+    Darklang.Stdlib.Int64.impl BitwiseAnd for Int64: missing
+    Darklang.Stdlib.Int64.impl BitwiseNot for Int64: missing
+    Darklang.Stdlib.Int64.impl BitwiseOr for Int64: missing
+    Darklang.Stdlib.Int64.impl BitwiseXor for Int64: missing
+    Darklang.Stdlib.Int64.impl Compare for Int64: missing
+    Darklang.Stdlib.Int64.impl Divide for Int64: missing
+    Darklang.Stdlib.Int64.impl Modulo for Int64: missing
+    Darklang.Stdlib.Int64.impl Multiply for Int64: missing
+    Darklang.Stdlib.Int64.impl Negate for Int64: missing
+    Darklang.Stdlib.Int64.impl One for Int64: missing
+    Darklang.Stdlib.Int64.impl Power for Int64: missing
+    Darklang.Stdlib.Int64.impl ShiftLeft for Int64: missing
+    Darklang.Stdlib.Int64.impl ShiftRight for Int64: missing
+    Darklang.Stdlib.Int64.impl Subtract for Int64: missing
+    Darklang.Stdlib.Int64.impl ToString for Int64: missing
+    Darklang.Stdlib.Int64.impl Zero for Int64: missing
+    Darklang.Stdlib.Int64.parse: different
+    Darklang.Stdlib.Int64.random: different
+    Darklang.Stdlib.Int64.remainder: different
+    Darklang.Stdlib.Int64.sqrt: different
+    Darklang.Stdlib.Int64.toFloat: different
+  int8.dark:
+    Darklang.Stdlib.Int8.Add.add: different
+    Darklang.Stdlib.Int8.BitwiseAnd.bitwiseAnd: different
+    Darklang.Stdlib.Int8.BitwiseNot.bitwiseNot: different
+    Darklang.Stdlib.Int8.BitwiseOr.bitwiseOr: different
+    Darklang.Stdlib.Int8.BitwiseXor.bitwiseXor: different
+    Darklang.Stdlib.Int8.Compare.greaterThan: different
+    Darklang.Stdlib.Int8.Compare.greaterThanOrEqualTo: different
+    Darklang.Stdlib.Int8.Compare.lessThan: different
+    Darklang.Stdlib.Int8.Compare.lessThanOrEqualTo: different
+    Darklang.Stdlib.Int8.Divide.divide: different
+    Darklang.Stdlib.Int8.Modulo.modulo: different
+    Darklang.Stdlib.Int8.Multiply.multiply: different
+    Darklang.Stdlib.Int8.Negate.negate: different
+    Darklang.Stdlib.Int8.One.one: identical
+    Darklang.Stdlib.Int8.ParseError: different
+    Darklang.Stdlib.Int8.Power.power: different
+    Darklang.Stdlib.Int8.ShiftLeft.shiftLeft: different
+    Darklang.Stdlib.Int8.ShiftRight.shiftRight: different
+    Darklang.Stdlib.Int8.Subtract.subtract: different
+    Darklang.Stdlib.Int8.ToString.toString: different
+    Darklang.Stdlib.Int8.Zero.zero: identical
+    Darklang.Stdlib.Int8.fromInt128: different
+    Darklang.Stdlib.Int8.fromInt16: different
+    Darklang.Stdlib.Int8.fromInt32: different
+    Darklang.Stdlib.Int8.fromInt64: different
+    Darklang.Stdlib.Int8.fromUInt128: different
+    Darklang.Stdlib.Int8.fromUInt16: different
+    Darklang.Stdlib.Int8.fromUInt32: different
+    Darklang.Stdlib.Int8.fromUInt64: different
+    Darklang.Stdlib.Int8.fromUInt8: different
+    Darklang.Stdlib.Int8.impl Add for Int8: missing
+    Darklang.Stdlib.Int8.impl BitwiseAnd for Int8: missing
+    Darklang.Stdlib.Int8.impl BitwiseNot for Int8: missing
+    Darklang.Stdlib.Int8.impl BitwiseOr for Int8: missing
+    Darklang.Stdlib.Int8.impl BitwiseXor for Int8: missing
+    Darklang.Stdlib.Int8.impl Compare for Int8: missing
+    Darklang.Stdlib.Int8.impl Divide for Int8: missing
+    Darklang.Stdlib.Int8.impl Modulo for Int8: missing
+    Darklang.Stdlib.Int8.impl Multiply for Int8: missing
+    Darklang.Stdlib.Int8.impl Negate for Int8: missing
+    Darklang.Stdlib.Int8.impl One for Int8: missing
+    Darklang.Stdlib.Int8.impl Power for Int8: missing
+    Darklang.Stdlib.Int8.impl ShiftLeft for Int8: missing
+    Darklang.Stdlib.Int8.impl ShiftRight for Int8: missing
+    Darklang.Stdlib.Int8.impl Subtract for Int8: missing
+    Darklang.Stdlib.Int8.impl ToString for Int8: missing
+    Darklang.Stdlib.Int8.impl Zero for Int8: missing
+    Darklang.Stdlib.Int8.parse: different
+    Darklang.Stdlib.Int8.random: different
+    Darklang.Stdlib.Int8.remainder: different
+    Darklang.Stdlib.Int8.sqrt: different
+    Darklang.Stdlib.Int8.toFloat: different
+  json.dark:
+    Darklang.Stdlib.Json.ParseError.JsonPath.JsonPath: different
+    Darklang.Stdlib.Json.ParseError.JsonPath.Part.Part: different
+    Darklang.Stdlib.Json.ParseError.JsonPath.Part.toString: different
+    Darklang.Stdlib.Json.ParseError.JsonPath.toString: different
+    Darklang.Stdlib.Json.ParseError.ParseError: different
+    Darklang.Stdlib.Json.ParseError.toString: different
+    Darklang.Stdlib.Json.parse: different
+    Darklang.Stdlib.Json.serialize: different
+  list.dark:
+    Darklang.Stdlib.List.ChunkBySizeError: identical
+    Darklang.Stdlib.List.IndexError: different
+    Darklang.Stdlib.List.SortByComparatorHelpers.merge: different
+    Darklang.Stdlib.List.SortByComparatorHelpers.mergeSort: different
+    Darklang.Stdlib.List.SortByComparatorHelpers.splitList: different
+    Darklang.Stdlib.List.SortByComparatorHelpers.validate: different
+    Darklang.Stdlib.List.Zero.zero: missing
+    Darklang.Stdlib.List.all: different
+    Darklang.Stdlib.List.any: different
+    Darklang.Stdlib.List.append: different
+    Darklang.Stdlib.List.chunkBySize: different
+    Darklang.Stdlib.List.chunkBySizeHelper: different
+    Darklang.Stdlib.List.dedup: different
+    Darklang.Stdlib.List.drop: different
+    Darklang.Stdlib.List.dropLast: different
+    Darklang.Stdlib.List.dropWhile: different
+    Darklang.Stdlib.List.empty: identical
+    Darklang.Stdlib.List.filter: different
+    Darklang.Stdlib.List.filterMap: different
+    Darklang.Stdlib.List.findFirst: different
+    Darklang.Stdlib.List.findFirstIndex: different
+    Darklang.Stdlib.List.flatten: different
+    Darklang.Stdlib.List.fold: different
+    Darklang.Stdlib.List.getAt: different
+    Darklang.Stdlib.List.groupByWithKey: different
+    Darklang.Stdlib.List.head: different
+    Darklang.Stdlib.List.impl Stdlib.Zero for List<'a>: missing
+    Darklang.Stdlib.List.indexedMap: different
+    Darklang.Stdlib.List.interleave: different
+    Darklang.Stdlib.List.interpose: different
+    Darklang.Stdlib.List.isEmpty: different
+    Darklang.Stdlib.List.iter: different
+    Darklang.Stdlib.List.last: different
+    Darklang.Stdlib.List.length: different
+    Darklang.Stdlib.List.map: different
+    Darklang.Stdlib.List.map2: different
+    Darklang.Stdlib.List.map2shortest: different
+    Darklang.Stdlib.List.member: different
+    Darklang.Stdlib.List.parallelMap: missing
+    Darklang.Stdlib.List.partition: different
+    Darklang.Stdlib.List.push: different
+    Darklang.Stdlib.List.pushBack: different
+    Darklang.Stdlib.List.randomElement: different
+    Darklang.Stdlib.List.range: different
+    Darklang.Stdlib.List.repeat: different
+    Darklang.Stdlib.List.repeatUnsafe: different
+    Darklang.Stdlib.List.reverse: different
+    Darklang.Stdlib.List.setAt: different
+    Darklang.Stdlib.List.singleton: different
+    Darklang.Stdlib.List.sort: different
+    Darklang.Stdlib.List.sortBy: different
+    Darklang.Stdlib.List.sortByComparator: different
+    Darklang.Stdlib.List.splitLast: different
+    Darklang.Stdlib.List.tail: different
+    Darklang.Stdlib.List.take: different
+    Darklang.Stdlib.List.takeWhile: different
+    Darklang.Stdlib.List.unique: different
+    Darklang.Stdlib.List.uniqueBy: different
+    Darklang.Stdlib.List.unzip: different
+    Darklang.Stdlib.List.zip: different
+    Darklang.Stdlib.List.zipShortest: different
+  live.dark:
+    Darklang.Stdlib.Live.Change: missing
+    Darklang.Stdlib.Live.LastGood: missing
+    Darklang.Stdlib.Live.Observation: missing
+    Darklang.Stdlib.Live.Router.State: missing
+    Darklang.Stdlib.Live.Router.start: missing
+    Darklang.Stdlib.Live.Router.step: missing
+    Darklang.Stdlib.Live.Touched: missing
+    Darklang.Stdlib.Live.Values.Values: missing
+    Darklang.Stdlib.Live.Values.replay: missing
+    Darklang.Stdlib.Live.Values.replayWithin: missing
+    Darklang.Stdlib.Live.Watch: missing
+    Darklang.Stdlib.Live.affects: missing
+    Darklang.Stdlib.Live.applicable: missing
+    Darklang.Stdlib.Live.applicableByName: missing
+    Darklang.Stdlib.Live.apply: missing
+    Darklang.Stdlib.Live.atRestFailure: missing
+    Darklang.Stdlib.Live.call: missing
+    Darklang.Stdlib.Live.calleeDeclarations: missing
+    Darklang.Stdlib.Live.calleesAtMost: missing
+    Darklang.Stdlib.Live.dedupeTouched: missing
+    Darklang.Stdlib.Live.dependents: missing
+    Darklang.Stdlib.Live.describeAtMost: missing
+    Darklang.Stdlib.Live.diagnose: missing
+    Darklang.Stdlib.Live.diagnostic: missing
+    Darklang.Stdlib.Live.entryName: missing
+    Darklang.Stdlib.Live.frontier: missing
+    Darklang.Stdlib.Live.issueText: missing
+    Darklang.Stdlib.Live.kindOf: missing
+    Darklang.Stdlib.Live.locationOfName: missing
+    Darklang.Stdlib.Live.observe: missing
+    Darklang.Stdlib.Live.poll: missing
+    Darklang.Stdlib.Live.refresh: missing
+    Darklang.Stdlib.Live.reportText: missing
+    Darklang.Stdlib.Live.show: missing
+    Darklang.Stdlib.Live.showKey: missing
+    Darklang.Stdlib.Live.shown: missing
+    Darklang.Stdlib.Live.start: missing
+    Darklang.Stdlib.Live.touchedBy: missing
+    Darklang.Stdlib.Live.touchedNames: missing
+    Darklang.Stdlib.Live.touchingOnly: missing
+    Darklang.Stdlib.Live.transition: missing
+    Darklang.Stdlib.Live.unknownChange: missing
+    Darklang.Stdlib.Live.version: missing
+    Darklang.Stdlib.Live.versionsNewestFirst: missing
+    Darklang.Stdlib.Live.walkAtMost: missing
+    Darklang.Stdlib.Live.watch: missing
+  localStore.dark:
+    Darklang.Stdlib.LocalStore.backupTo: missing
+    Darklang.Stdlib.LocalStore.configGet: missing
+    Darklang.Stdlib.LocalStore.configSet: missing
+    Darklang.Stdlib.LocalStore.path: missing
+    Darklang.Stdlib.LocalStore.restoreFrom: missing
+  math.dark:
+    Darklang.Stdlib.Math.acos: different
+    Darklang.Stdlib.Math.asin: different
+    Darklang.Stdlib.Math.atan: different
+    Darklang.Stdlib.Math.atan2: different
+    Darklang.Stdlib.Math.cos: different
+    Darklang.Stdlib.Math.cosh: different
+    Darklang.Stdlib.Math.degrees: different
+    Darklang.Stdlib.Math.e: identical
+    Darklang.Stdlib.Math.pi: identical
+    Darklang.Stdlib.Math.radians: identical
+    Darklang.Stdlib.Math.sin: different
+    Darklang.Stdlib.Math.sinh: different
+    Darklang.Stdlib.Math.tan: different
+    Darklang.Stdlib.Math.tanh: different
+    Darklang.Stdlib.Math.tau: identical
+    Darklang.Stdlib.Math.turns: different
+  noModule.dark:
+    Darklang.Stdlib.equals: different
+    Darklang.Stdlib.notEquals: different
+    Darklang.Stdlib.toRepr: missing
+  option.dark:
+    Darklang.Stdlib.Option.Option: different
+    Darklang.Stdlib.Option.and: different
+    Darklang.Stdlib.Option.andThen: different
+    Darklang.Stdlib.Option.andThen2: different
+    Darklang.Stdlib.Option.andThen3: different
+    Darklang.Stdlib.Option.andThen4: different
+    Darklang.Stdlib.Option.combine: different
+    Darklang.Stdlib.Option.isNone: different
+    Darklang.Stdlib.Option.isSome: different
+    Darklang.Stdlib.Option.join: different
+    Darklang.Stdlib.Option.map: different
+    Darklang.Stdlib.Option.map2: different
+    Darklang.Stdlib.Option.map3: different
+    Darklang.Stdlib.Option.map4: different
+    Darklang.Stdlib.Option.map5: different
+    Darklang.Stdlib.Option.mapWithDefault: different
+    Darklang.Stdlib.Option.or: different
+    Darklang.Stdlib.Option.toList: different
+    Darklang.Stdlib.Option.toResult: different
+    Darklang.Stdlib.Option.values: different
+    Darklang.Stdlib.Option.withDefault: different
+  pretty.dark:
+    Darklang.Stdlib.Pretty.Doc: different
+    Darklang.Stdlib.Pretty.Mode: identical
+    Darklang.Stdlib.Pretty.breakLine: missing
+    Darklang.Stdlib.Pretty.concat: different
+    Darklang.Stdlib.Pretty.concatAll: different
+    Darklang.Stdlib.Pretty.concatLine: different
+    Darklang.Stdlib.Pretty.concatSpace: different
+    Darklang.Stdlib.Pretty.empty: different
+    Darklang.Stdlib.Pretty.fits: different
+    Darklang.Stdlib.Pretty.flushSuffixes: missing
+    Darklang.Stdlib.Pretty.group: different
+    Darklang.Stdlib.Pretty.hang: different
+    Darklang.Stdlib.Pretty.hardLine: different
+    Darklang.Stdlib.Pretty.hsep: different
+    Darklang.Stdlib.Pretty.join: different
+    Darklang.Stdlib.Pretty.line: different
+    Darklang.Stdlib.Pretty.lineSuffix: missing
+    Darklang.Stdlib.Pretty.nest: different
+    Darklang.Stdlib.Pretty.render: different
+    Darklang.Stdlib.Pretty.renderLoop: different
+    Darklang.Stdlib.Pretty.softLine: different
+    Darklang.Stdlib.Pretty.styled: different
+    Darklang.Stdlib.Pretty.text: different
+    Darklang.Stdlib.Pretty.vsep: different
+  print.dark:
+    Darklang.Stdlib.print: different
+    Darklang.Stdlib.printError: missing
+    Darklang.Stdlib.printErrorLine: missing
+    Darklang.Stdlib.printLine: different
+    Darklang.Stdlib.printLines: different
+  regex.dark:
+    Darklang.Stdlib.Regex.find: different
+    Darklang.Stdlib.Regex.findAll: different
+    Darklang.Stdlib.Regex.isMatch: different
+    Darklang.Stdlib.Regex.replace: different
+    Darklang.Stdlib.Regex.replaceAll: different
+    Darklang.Stdlib.Regex.split: different
+  result.dark:
+    Darklang.Stdlib.Result.Result: different
+    Darklang.Stdlib.Result.and: different
+    Darklang.Stdlib.Result.andThen: different
+    Darklang.Stdlib.Result.collect: different
+    Darklang.Stdlib.Result.combine: different
+    Darklang.Stdlib.Result.fromOption: different
+    Darklang.Stdlib.Result.isError: different
+    Darklang.Stdlib.Result.isOk: different
+    Darklang.Stdlib.Result.join: different
+    Darklang.Stdlib.Result.map: different
+    Darklang.Stdlib.Result.map2: different
+    Darklang.Stdlib.Result.map3: different
+    Darklang.Stdlib.Result.map4: different
+    Darklang.Stdlib.Result.map5: different
+    Darklang.Stdlib.Result.mapError: different
+    Darklang.Stdlib.Result.mapWithDefault: different
+    Darklang.Stdlib.Result.or: different
+    Darklang.Stdlib.Result.toList: different
+    Darklang.Stdlib.Result.toOption: different
+    Darklang.Stdlib.Result.values: different
+    Darklang.Stdlib.Result.withDefault: different
+  retry.dark:
+    Darklang.Stdlib.Retry.withBackoff: different
+    Darklang.Stdlib.Retry.withBackoffLoop: different
+    Darklang.Stdlib.Retry.withFixedDelay: different
+    Darklang.Stdlib.Retry.withFixedDelayLoop: different
+  sqlite.dark:
+    Darklang.Stdlib.Sqlite.Value: missing
+    Darklang.Stdlib.Sqlite.asBytes: missing
+    Darklang.Stdlib.Sqlite.asInt: missing
+    Darklang.Stdlib.Sqlite.asText: missing
+    Darklang.Stdlib.Sqlite.bytesField: missing
+    Darklang.Stdlib.Sqlite.column: missing
+    Darklang.Stdlib.Sqlite.columnP: missing
+    Darklang.Stdlib.Sqlite.exec: missing
+    Darklang.Stdlib.Sqlite.execBatch: missing
+    Darklang.Stdlib.Sqlite.execP: missing
+    Darklang.Stdlib.Sqlite.intField: missing
+    Darklang.Stdlib.Sqlite.mustExec: missing
+    Darklang.Stdlib.Sqlite.mustExecBatch: missing
+    Darklang.Stdlib.Sqlite.query: missing
+    Darklang.Stdlib.Sqlite.queryOne: missing
+    Darklang.Stdlib.Sqlite.queryOneP: missing
+    Darklang.Stdlib.Sqlite.queryP: missing
+    Darklang.Stdlib.Sqlite.rowsOrEmptyP: missing
+    Darklang.Stdlib.Sqlite.rowsP: missing
+    Darklang.Stdlib.Sqlite.scalarInt: missing
+    Darklang.Stdlib.Sqlite.scalarIntP: missing
+    Darklang.Stdlib.Sqlite.scalarTextP: missing
+    Darklang.Stdlib.Sqlite.textField: missing
+    Darklang.Stdlib.Sqlite.textOr: missing
+    Darklang.Stdlib.Sqlite.uuidField: missing
+  stream.dark:
+    Darklang.Stdlib.Stream.close: different
+    Darklang.Stdlib.Stream.concat: different
+    Darklang.Stdlib.Stream.filter: different
+    Darklang.Stdlib.Stream.fromList: different
+    Darklang.Stdlib.Stream.map: different
+    Darklang.Stdlib.Stream.next: different
+    Darklang.Stdlib.Stream.take: different
+    Darklang.Stdlib.Stream.toBlob: different
+    Darklang.Stdlib.Stream.toList: different
+    Darklang.Stdlib.Stream.unfold: different
+  string.dark:
+    Darklang.Stdlib.String.Add.add: missing
+    Darklang.Stdlib.String.Compare.greaterThan: missing
+    Darklang.Stdlib.String.Compare.greaterThanOrEqualTo: missing
+    Darklang.Stdlib.String.Compare.lessThan: missing
+    Darklang.Stdlib.String.Compare.lessThanOrEqualTo: missing
+    Darklang.Stdlib.String.ToString.toString: missing
+    Darklang.Stdlib.String.Zero.zero: missing
+    Darklang.Stdlib.String.append: different
+    Darklang.Stdlib.String.articleFor: different
+    Darklang.Stdlib.String.base64Decode: missing
+    Darklang.Stdlib.String.base64Encode: missing
+    Darklang.Stdlib.String.base64UrlEncode: missing
+    Darklang.Stdlib.String.charAt: different
+    Darklang.Stdlib.String.codepointLength: different
+    Darklang.Stdlib.String.compare: different
+    Darklang.Stdlib.String.digest: missing
+    Darklang.Stdlib.String.displayWidth: different
+    Darklang.Stdlib.String.dropFirst: different
+    Darklang.Stdlib.String.dropLast: different
+    Darklang.Stdlib.String.ellipsis: different
+    Darklang.Stdlib.String.endsWith: different
+    Darklang.Stdlib.String.first: different
+    Darklang.Stdlib.String.fromBlob: missing
+    Darklang.Stdlib.String.fromBlobWithReplacement: missing
+    Darklang.Stdlib.String.fromBytes: missing
+    Darklang.Stdlib.String.fromBytesWithReplacement: missing
+    Darklang.Stdlib.String.fromChar: different
+    Darklang.Stdlib.String.fromList: different
+    Darklang.Stdlib.String.getByteAt: different
+    Darklang.Stdlib.String.head: different
+    Darklang.Stdlib.String.htmlEscape: different
+    Darklang.Stdlib.String.impl Add for String: missing
+    Darklang.Stdlib.String.impl Compare for String: missing
+    Darklang.Stdlib.String.impl ToString for String: missing
+    Darklang.Stdlib.String.impl Zero for String: missing
+    Darklang.Stdlib.String.indexOf: different
+    Darklang.Stdlib.String.indexOfEgc: different
+    Darklang.Stdlib.String.isEmpty: different
+    Darklang.Stdlib.String.join: different
+    Darklang.Stdlib.String.last: different
+    Darklang.Stdlib.String.lastIndexOf: different
+    Darklang.Stdlib.String.lastIndexOfEgc: different
+    Darklang.Stdlib.String.length: different
+    Darklang.Stdlib.String.map: different
+    Darklang.Stdlib.String.newline: identical
+    Darklang.Stdlib.String.padEnd: different
+    Darklang.Stdlib.String.padEndToWidth: different
+    Darklang.Stdlib.String.padStart: different
+    Darklang.Stdlib.String.padStartToWidth: different
+    Darklang.Stdlib.String.pluralize: different
+    Darklang.Stdlib.String.prepend: different
+    Darklang.Stdlib.String.random: missing
+    Darklang.Stdlib.String.repeat: different
+    Darklang.Stdlib.String.replaceAll: different
+    Darklang.Stdlib.String.reverse: different
+    Darklang.Stdlib.String.slugify: missing
+    Darklang.Stdlib.String.split: different
+    Darklang.Stdlib.String.splitFirst: different
+    Darklang.Stdlib.String.splitN: different
+    Darklang.Stdlib.String.splitOnNewline: different
+    Darklang.Stdlib.String.startsWith: different
+    Darklang.Stdlib.String.toBlob: missing
+    Darklang.Stdlib.String.toBytes: missing
+    Darklang.Stdlib.String.toCodepoints: different
+    Darklang.Stdlib.String.toList: different
+    Darklang.Stdlib.String.toLowercase: different
+    Darklang.Stdlib.String.toOrdinal: different
+    Darklang.Stdlib.String.toUppercase: different
+    Darklang.Stdlib.String.trim: different
+    Darklang.Stdlib.String.trimEnd: different
+    Darklang.Stdlib.String.trimStart: different
+  test.dark:
+    Darklang.Stdlib.Test.Result: missing
+    Darklang.Stdlib.Test.all: missing
+    Darklang.Stdlib.Test.counterValue: missing
+    Darklang.Stdlib.Test.equal: missing
+    Darklang.Stdlib.Test.expect: missing
+    Darklang.Stdlib.Test.fail: missing
+    Darklang.Stdlib.Test.incrementCounter: missing
+    Darklang.Stdlib.Test.notEqual: missing
+    Darklang.Stdlib.Test.pass: missing
+    Darklang.Stdlib.Test.raiseRuntimeError: missing
+  testProcess.dark:
+    Darklang.Stdlib.Test.Process.Options: missing
+    Darklang.Stdlib.Test.Process.Output: missing
+    Darklang.Stdlib.Test.Process.defaults: missing
+    Darklang.Stdlib.Test.Process.run: missing
+  traits.dark:
+    Darklang.Stdlib.Add: identical
+    Darklang.Stdlib.Add.add: identical
+    Darklang.Stdlib.BitwiseAnd: identical
+    Darklang.Stdlib.BitwiseAnd.bitwiseAnd: identical
+    Darklang.Stdlib.BitwiseNot: identical
+    Darklang.Stdlib.BitwiseNot.bitwiseNot: identical
+    Darklang.Stdlib.BitwiseOr: identical
+    Darklang.Stdlib.BitwiseOr.bitwiseOr: identical
+    Darklang.Stdlib.BitwiseXor: identical
+    Darklang.Stdlib.BitwiseXor.bitwiseXor: identical
+    Darklang.Stdlib.Compare: identical
+    Darklang.Stdlib.Compare.greaterThan: identical
+    Darklang.Stdlib.Compare.greaterThanOrEqualTo: identical
+    Darklang.Stdlib.Compare.lessThan: identical
+    Darklang.Stdlib.Compare.lessThanOrEqualTo: identical
+    Darklang.Stdlib.Divide: identical
+    Darklang.Stdlib.Divide.divide: identical
+    Darklang.Stdlib.Modulo: identical
+    Darklang.Stdlib.Modulo.modulo: identical
+    Darklang.Stdlib.Multiply: identical
+    Darklang.Stdlib.Multiply.multiply: identical
+    Darklang.Stdlib.Negate: identical
+    Darklang.Stdlib.Negate.negate: identical
+    Darklang.Stdlib.One: identical
+    Darklang.Stdlib.One.one: identical
+    Darklang.Stdlib.Power: identical
+    Darklang.Stdlib.Power.power: identical
+    Darklang.Stdlib.ShiftLeft: identical
+    Darklang.Stdlib.ShiftLeft.shiftLeft: identical
+    Darklang.Stdlib.ShiftRight: identical
+    Darklang.Stdlib.ShiftRight.shiftRight: identical
+    Darklang.Stdlib.Subtract: identical
+    Darklang.Stdlib.Subtract.subtract: identical
+    Darklang.Stdlib.ToString: identical
+    Darklang.Stdlib.ToString.toString: identical
+    Darklang.Stdlib.Zero: identical
+    Darklang.Stdlib.Zero.zero: identical
+    Darklang.Stdlib.abs: identical
+    Darklang.Stdlib.clamp: identical
+    Darklang.Stdlib.max: identical
+    Darklang.Stdlib.min: identical
+    Darklang.Stdlib.product: identical
+    Darklang.Stdlib.sum: identical
+    Darklang.Stdlib.toString: identical
+  tuple2.dark:
+    Darklang.Stdlib.Tuple2.create: different
+    Darklang.Stdlib.Tuple2.first: different
+    Darklang.Stdlib.Tuple2.mapBoth: different
+    Darklang.Stdlib.Tuple2.mapFirst: different
+    Darklang.Stdlib.Tuple2.mapSecond: different
+    Darklang.Stdlib.Tuple2.second: different
+    Darklang.Stdlib.Tuple2.swap: different
+  tuple3.dark:
+    Darklang.Stdlib.Tuple3.create: different
+    Darklang.Stdlib.Tuple3.first: different
+    Darklang.Stdlib.Tuple3.mapAllThree: different
+    Darklang.Stdlib.Tuple3.mapFirst: different
+    Darklang.Stdlib.Tuple3.mapSecond: different
+    Darklang.Stdlib.Tuple3.mapThird: different
+    Darklang.Stdlib.Tuple3.second: different
+    Darklang.Stdlib.Tuple3.third: different
+  uint128.dark:
+    Darklang.Stdlib.UInt128.Add.add: different
+    Darklang.Stdlib.UInt128.BitwiseAnd.bitwiseAnd: different
+    Darklang.Stdlib.UInt128.BitwiseNot.bitwiseNot: different
+    Darklang.Stdlib.UInt128.BitwiseOr.bitwiseOr: different
+    Darklang.Stdlib.UInt128.BitwiseXor.bitwiseXor: different
+    Darklang.Stdlib.UInt128.Compare.greaterThan: different
+    Darklang.Stdlib.UInt128.Compare.greaterThanOrEqualTo: different
+    Darklang.Stdlib.UInt128.Compare.lessThan: different
+    Darklang.Stdlib.UInt128.Compare.lessThanOrEqualTo: different
+    Darklang.Stdlib.UInt128.Divide.divide: different
+    Darklang.Stdlib.UInt128.Modulo.modulo: different
+    Darklang.Stdlib.UInt128.Multiply.multiply: different
+    Darklang.Stdlib.UInt128.One.one: identical
+    Darklang.Stdlib.UInt128.ParseError: different
+    Darklang.Stdlib.UInt128.Power.power: different
+    Darklang.Stdlib.UInt128.ShiftLeft.shiftLeft: different
+    Darklang.Stdlib.UInt128.ShiftRight.shiftRight: different
+    Darklang.Stdlib.UInt128.Subtract.subtract: different
+    Darklang.Stdlib.UInt128.ToString.toString: different
+    Darklang.Stdlib.UInt128.Zero.zero: identical
+    Darklang.Stdlib.UInt128.fromUInt16: different
+    Darklang.Stdlib.UInt128.fromUInt32: different
+    Darklang.Stdlib.UInt128.fromUInt64: different
+    Darklang.Stdlib.UInt128.fromUInt8: different
+    Darklang.Stdlib.UInt128.impl Add for UInt128: missing
+    Darklang.Stdlib.UInt128.impl BitwiseAnd for UInt128: missing
+    Darklang.Stdlib.UInt128.impl BitwiseNot for UInt128: missing
+    Darklang.Stdlib.UInt128.impl BitwiseOr for UInt128: missing
+    Darklang.Stdlib.UInt128.impl BitwiseXor for UInt128: missing
+    Darklang.Stdlib.UInt128.impl Compare for UInt128: missing
+    Darklang.Stdlib.UInt128.impl Divide for UInt128: missing
+    Darklang.Stdlib.UInt128.impl Modulo for UInt128: missing
+    Darklang.Stdlib.UInt128.impl Multiply for UInt128: missing
+    Darklang.Stdlib.UInt128.impl One for UInt128: missing
+    Darklang.Stdlib.UInt128.impl Power for UInt128: missing
+    Darklang.Stdlib.UInt128.impl ShiftLeft for UInt128: missing
+    Darklang.Stdlib.UInt128.impl ShiftRight for UInt128: missing
+    Darklang.Stdlib.UInt128.impl Subtract for UInt128: missing
+    Darklang.Stdlib.UInt128.impl ToString for UInt128: missing
+    Darklang.Stdlib.UInt128.impl Zero for UInt128: missing
+    Darklang.Stdlib.UInt128.parse: different
+    Darklang.Stdlib.UInt128.sqrt: different
+    Darklang.Stdlib.UInt128.toFloat: different
+  uint16.dark:
+    Darklang.Stdlib.UInt16.Add.add: different
+    Darklang.Stdlib.UInt16.BitwiseAnd.bitwiseAnd: different
+    Darklang.Stdlib.UInt16.BitwiseNot.bitwiseNot: different
+    Darklang.Stdlib.UInt16.BitwiseOr.bitwiseOr: different
+    Darklang.Stdlib.UInt16.BitwiseXor.bitwiseXor: different
+    Darklang.Stdlib.UInt16.Compare.greaterThan: different
+    Darklang.Stdlib.UInt16.Compare.greaterThanOrEqualTo: different
+    Darklang.Stdlib.UInt16.Compare.lessThan: different
+    Darklang.Stdlib.UInt16.Compare.lessThanOrEqualTo: different
+    Darklang.Stdlib.UInt16.Divide.divide: different
+    Darklang.Stdlib.UInt16.Modulo.modulo: different
+    Darklang.Stdlib.UInt16.Multiply.multiply: different
+    Darklang.Stdlib.UInt16.One.one: identical
+    Darklang.Stdlib.UInt16.ParseError: different
+    Darklang.Stdlib.UInt16.Power.power: different
+    Darklang.Stdlib.UInt16.ShiftLeft.shiftLeft: different
+    Darklang.Stdlib.UInt16.ShiftRight.shiftRight: different
+    Darklang.Stdlib.UInt16.Subtract.subtract: different
+    Darklang.Stdlib.UInt16.ToString.toString: different
+    Darklang.Stdlib.UInt16.Zero.zero: identical
+    Darklang.Stdlib.UInt16.fromInt128: different
+    Darklang.Stdlib.UInt16.fromInt16: different
+    Darklang.Stdlib.UInt16.fromInt32: different
+    Darklang.Stdlib.UInt16.fromInt64: different
+    Darklang.Stdlib.UInt16.fromInt8: different
+    Darklang.Stdlib.UInt16.fromUInt128: different
+    Darklang.Stdlib.UInt16.fromUInt32: different
+    Darklang.Stdlib.UInt16.fromUInt64: different
+    Darklang.Stdlib.UInt16.fromUInt8: different
+    Darklang.Stdlib.UInt16.impl Add for UInt16: missing
+    Darklang.Stdlib.UInt16.impl BitwiseAnd for UInt16: missing
+    Darklang.Stdlib.UInt16.impl BitwiseNot for UInt16: missing
+    Darklang.Stdlib.UInt16.impl BitwiseOr for UInt16: missing
+    Darklang.Stdlib.UInt16.impl BitwiseXor for UInt16: missing
+    Darklang.Stdlib.UInt16.impl Compare for UInt16: missing
+    Darklang.Stdlib.UInt16.impl Divide for UInt16: missing
+    Darklang.Stdlib.UInt16.impl Modulo for UInt16: missing
+    Darklang.Stdlib.UInt16.impl Multiply for UInt16: missing
+    Darklang.Stdlib.UInt16.impl One for UInt16: missing
+    Darklang.Stdlib.UInt16.impl Power for UInt16: missing
+    Darklang.Stdlib.UInt16.impl ShiftLeft for UInt16: missing
+    Darklang.Stdlib.UInt16.impl ShiftRight for UInt16: missing
+    Darklang.Stdlib.UInt16.impl Subtract for UInt16: missing
+    Darklang.Stdlib.UInt16.impl ToString for UInt16: missing
+    Darklang.Stdlib.UInt16.impl Zero for UInt16: missing
+    Darklang.Stdlib.UInt16.parse: different
+    Darklang.Stdlib.UInt16.random: different
+    Darklang.Stdlib.UInt16.sqrt: different
+    Darklang.Stdlib.UInt16.toFloat: different
+  uint32.dark:
+    Darklang.Stdlib.UInt32.Add.add: different
+    Darklang.Stdlib.UInt32.BitwiseAnd.bitwiseAnd: different
+    Darklang.Stdlib.UInt32.BitwiseNot.bitwiseNot: different
+    Darklang.Stdlib.UInt32.BitwiseOr.bitwiseOr: different
+    Darklang.Stdlib.UInt32.BitwiseXor.bitwiseXor: different
+    Darklang.Stdlib.UInt32.Compare.greaterThan: different
+    Darklang.Stdlib.UInt32.Compare.greaterThanOrEqualTo: different
+    Darklang.Stdlib.UInt32.Compare.lessThan: different
+    Darklang.Stdlib.UInt32.Compare.lessThanOrEqualTo: different
+    Darklang.Stdlib.UInt32.Divide.divide: different
+    Darklang.Stdlib.UInt32.Modulo.modulo: different
+    Darklang.Stdlib.UInt32.Multiply.multiply: different
+    Darklang.Stdlib.UInt32.One.one: identical
+    Darklang.Stdlib.UInt32.ParseError: different
+    Darklang.Stdlib.UInt32.Power.power: different
+    Darklang.Stdlib.UInt32.ShiftLeft.shiftLeft: different
+    Darklang.Stdlib.UInt32.ShiftRight.shiftRight: different
+    Darklang.Stdlib.UInt32.Subtract.subtract: different
+    Darklang.Stdlib.UInt32.ToString.toString: different
+    Darklang.Stdlib.UInt32.Zero.zero: identical
+    Darklang.Stdlib.UInt32.fromInt128: different
+    Darklang.Stdlib.UInt32.fromInt16: different
+    Darklang.Stdlib.UInt32.fromInt32: different
+    Darklang.Stdlib.UInt32.fromInt64: different
+    Darklang.Stdlib.UInt32.fromInt8: different
+    Darklang.Stdlib.UInt32.fromUInt128: different
+    Darklang.Stdlib.UInt32.fromUInt16: different
+    Darklang.Stdlib.UInt32.fromUInt64: different
+    Darklang.Stdlib.UInt32.fromUInt8: different
+    Darklang.Stdlib.UInt32.impl Add for UInt32: missing
+    Darklang.Stdlib.UInt32.impl BitwiseAnd for UInt32: missing
+    Darklang.Stdlib.UInt32.impl BitwiseNot for UInt32: missing
+    Darklang.Stdlib.UInt32.impl BitwiseOr for UInt32: missing
+    Darklang.Stdlib.UInt32.impl BitwiseXor for UInt32: missing
+    Darklang.Stdlib.UInt32.impl Compare for UInt32: missing
+    Darklang.Stdlib.UInt32.impl Divide for UInt32: missing
+    Darklang.Stdlib.UInt32.impl Modulo for UInt32: missing
+    Darklang.Stdlib.UInt32.impl Multiply for UInt32: missing
+    Darklang.Stdlib.UInt32.impl One for UInt32: missing
+    Darklang.Stdlib.UInt32.impl Power for UInt32: missing
+    Darklang.Stdlib.UInt32.impl ShiftLeft for UInt32: missing
+    Darklang.Stdlib.UInt32.impl ShiftRight for UInt32: missing
+    Darklang.Stdlib.UInt32.impl Subtract for UInt32: missing
+    Darklang.Stdlib.UInt32.impl ToString for UInt32: missing
+    Darklang.Stdlib.UInt32.impl Zero for UInt32: missing
+    Darklang.Stdlib.UInt32.parse: different
+    Darklang.Stdlib.UInt32.random: different
+    Darklang.Stdlib.UInt32.sqrt: different
+    Darklang.Stdlib.UInt32.toFloat: different
+  uint64.dark:
+    Darklang.Stdlib.UInt64.Add.add: different
+    Darklang.Stdlib.UInt64.BitwiseAnd.bitwiseAnd: different
+    Darklang.Stdlib.UInt64.BitwiseNot.bitwiseNot: different
+    Darklang.Stdlib.UInt64.BitwiseOr.bitwiseOr: different
+    Darklang.Stdlib.UInt64.BitwiseXor.bitwiseXor: different
+    Darklang.Stdlib.UInt64.Compare.greaterThan: different
+    Darklang.Stdlib.UInt64.Compare.greaterThanOrEqualTo: different
+    Darklang.Stdlib.UInt64.Compare.lessThan: different
+    Darklang.Stdlib.UInt64.Compare.lessThanOrEqualTo: different
+    Darklang.Stdlib.UInt64.Divide.divide: different
+    Darklang.Stdlib.UInt64.Modulo.modulo: different
+    Darklang.Stdlib.UInt64.Multiply.multiply: different
+    Darklang.Stdlib.UInt64.One.one: identical
+    Darklang.Stdlib.UInt64.ParseError: different
+    Darklang.Stdlib.UInt64.Power.power: different
+    Darklang.Stdlib.UInt64.ShiftLeft.shiftLeft: different
+    Darklang.Stdlib.UInt64.ShiftRight.shiftRight: different
+    Darklang.Stdlib.UInt64.Subtract.subtract: different
+    Darklang.Stdlib.UInt64.ToString.toString: different
+    Darklang.Stdlib.UInt64.Zero.zero: identical
+    Darklang.Stdlib.UInt64.fromFloat: different
+    Darklang.Stdlib.UInt64.fromFloatRounded: missing
+    Darklang.Stdlib.UInt64.fromInt128: different
+    Darklang.Stdlib.UInt64.fromInt16: different
+    Darklang.Stdlib.UInt64.fromInt32: different
+    Darklang.Stdlib.UInt64.fromInt64: different
+    Darklang.Stdlib.UInt64.fromInt8: different
+    Darklang.Stdlib.UInt64.fromUInt128: different
+    Darklang.Stdlib.UInt64.fromUInt16: different
+    Darklang.Stdlib.UInt64.fromUInt32: different
+    Darklang.Stdlib.UInt64.fromUInt8: different
+    Darklang.Stdlib.UInt64.impl Add for UInt64: missing
+    Darklang.Stdlib.UInt64.impl BitwiseAnd for UInt64: missing
+    Darklang.Stdlib.UInt64.impl BitwiseNot for UInt64: missing
+    Darklang.Stdlib.UInt64.impl BitwiseOr for UInt64: missing
+    Darklang.Stdlib.UInt64.impl BitwiseXor for UInt64: missing
+    Darklang.Stdlib.UInt64.impl Compare for UInt64: missing
+    Darklang.Stdlib.UInt64.impl Divide for UInt64: missing
+    Darklang.Stdlib.UInt64.impl Modulo for UInt64: missing
+    Darklang.Stdlib.UInt64.impl Multiply for UInt64: missing
+    Darklang.Stdlib.UInt64.impl One for UInt64: missing
+    Darklang.Stdlib.UInt64.impl Power for UInt64: missing
+    Darklang.Stdlib.UInt64.impl ShiftLeft for UInt64: missing
+    Darklang.Stdlib.UInt64.impl ShiftRight for UInt64: missing
+    Darklang.Stdlib.UInt64.impl Subtract for UInt64: missing
+    Darklang.Stdlib.UInt64.impl ToString for UInt64: missing
+    Darklang.Stdlib.UInt64.impl Zero for UInt64: missing
+    Darklang.Stdlib.UInt64.parse: different
+    Darklang.Stdlib.UInt64.random: different
+    Darklang.Stdlib.UInt64.sqrt: different
+    Darklang.Stdlib.UInt64.toFloat: different
+  uint8.dark:
+    Darklang.Stdlib.UInt8.Add.add: different
+    Darklang.Stdlib.UInt8.BitwiseAnd.bitwiseAnd: different
+    Darklang.Stdlib.UInt8.BitwiseNot.bitwiseNot: different
+    Darklang.Stdlib.UInt8.BitwiseOr.bitwiseOr: different
+    Darklang.Stdlib.UInt8.BitwiseXor.bitwiseXor: different
+    Darklang.Stdlib.UInt8.Compare.greaterThan: different
+    Darklang.Stdlib.UInt8.Compare.greaterThanOrEqualTo: different
+    Darklang.Stdlib.UInt8.Compare.lessThan: different
+    Darklang.Stdlib.UInt8.Compare.lessThanOrEqualTo: different
+    Darklang.Stdlib.UInt8.Divide.divide: different
+    Darklang.Stdlib.UInt8.Modulo.modulo: different
+    Darklang.Stdlib.UInt8.Multiply.multiply: different
+    Darklang.Stdlib.UInt8.One.one: identical
+    Darklang.Stdlib.UInt8.ParseError: different
+    Darklang.Stdlib.UInt8.Power.power: different
+    Darklang.Stdlib.UInt8.ShiftLeft.shiftLeft: different
+    Darklang.Stdlib.UInt8.ShiftRight.shiftRight: different
+    Darklang.Stdlib.UInt8.Subtract.subtract: different
+    Darklang.Stdlib.UInt8.ToString.toString: different
+    Darklang.Stdlib.UInt8.Zero.zero: identical
+    Darklang.Stdlib.UInt8.fromInt128: different
+    Darklang.Stdlib.UInt8.fromInt16: different
+    Darklang.Stdlib.UInt8.fromInt32: different
+    Darklang.Stdlib.UInt8.fromInt64: different
+    Darklang.Stdlib.UInt8.fromInt8: different
+    Darklang.Stdlib.UInt8.fromUInt128: different
+    Darklang.Stdlib.UInt8.fromUInt16: different
+    Darklang.Stdlib.UInt8.fromUInt32: different
+    Darklang.Stdlib.UInt8.fromUInt64: different
+    Darklang.Stdlib.UInt8.impl Add for UInt8: missing
+    Darklang.Stdlib.UInt8.impl BitwiseAnd for UInt8: missing
+    Darklang.Stdlib.UInt8.impl BitwiseNot for UInt8: missing
+    Darklang.Stdlib.UInt8.impl BitwiseOr for UInt8: missing
+    Darklang.Stdlib.UInt8.impl BitwiseXor for UInt8: missing
+    Darklang.Stdlib.UInt8.impl Compare for UInt8: missing
+    Darklang.Stdlib.UInt8.impl Divide for UInt8: missing
+    Darklang.Stdlib.UInt8.impl Modulo for UInt8: missing
+    Darklang.Stdlib.UInt8.impl Multiply for UInt8: missing
+    Darklang.Stdlib.UInt8.impl One for UInt8: missing
+    Darklang.Stdlib.UInt8.impl Power for UInt8: missing
+    Darklang.Stdlib.UInt8.impl ShiftLeft for UInt8: missing
+    Darklang.Stdlib.UInt8.impl ShiftRight for UInt8: missing
+    Darklang.Stdlib.UInt8.impl Subtract for UInt8: missing
+    Darklang.Stdlib.UInt8.impl ToString for UInt8: missing
+    Darklang.Stdlib.UInt8.impl Zero for UInt8: missing
+    Darklang.Stdlib.UInt8.parse: different
+    Darklang.Stdlib.UInt8.random: different
+    Darklang.Stdlib.UInt8.sqrt: different
+    Darklang.Stdlib.UInt8.toFloat: different
+  uuid.dark:
+    Darklang.Stdlib.Uuid.ParseError: identical
+    Darklang.Stdlib.Uuid.ToString.toString: different
+    Darklang.Stdlib.Uuid.generate: different
+    Darklang.Stdlib.Uuid.impl ToString for Uuid: missing
+    Darklang.Stdlib.Uuid.parse: different
+  valueSearch.dark:
+    Darklang.Stdlib.ValueSearch.FoundValue: different
+    Darklang.Stdlib.ValueSearch.buildPathFromLocation: different
+    Darklang.Stdlib.ValueSearch.evaluate: missing
+    Darklang.Stdlib.ValueSearch.findByType: different
+    Darklang.Stdlib.ValueSearch.isValueInNamespace: different
+    Darklang.Stdlib.ValueSearch.parseNamespace: different
+  x509.dark:
+    Darklang.Stdlib.X509.pemCertificatePublicKey: different

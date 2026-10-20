@@ -268,6 +268,7 @@ let rec exprIssues expression =
       []
 
 let rec declarationStructureIssues = function
+  | WT.DTest test -> exprIssues test.body
   | WT.DFunction fn ->
       duplicateIssues
         (List.filter_map
@@ -305,7 +306,7 @@ let rec declarationStructureIssues = function
       | WT.TDAlias _ -> []
       | WT.TDRecord _ | WT.TDEnum _ ->
           [ issue typ.range DBShape "[<DB>] type must be a type alias" ])
-  | WT.DTest test -> (
+  | WT.DAssertion test -> (
       exprIssues test.actual
       @
       match test.expected with
@@ -325,6 +326,14 @@ let validateStructure (sourceFile : WT.sourceFile) =
    parser validates the block form while it still has that syntax detail.
 *)
 let rec declarationPurposeIssues mode = function
+  | WT.DTest test -> (
+      match mode with
+      | Package -> []
+      | Script | Test ->
+          [
+            issue test.range TestMode
+              "Named package tests are only allowed in package files";
+          ])
   | WT.DFunction _ | WT.DValue _ | WT.DType _ | WT.DTrait _ | WT.DImpl _ -> []
   | WT.DModule modul ->
       List.concat_map (declarationPurposeIssues mode) modul.declarations
@@ -349,7 +358,7 @@ let rec declarationPurposeIssues mode = function
             issue typ.range DBMode
               "[<DB>] declarations are only allowed in test files";
           ])
-  | WT.DTest test -> (
+  | WT.DAssertion test -> (
       match mode with
       | Test -> []
       | Script | Package ->
