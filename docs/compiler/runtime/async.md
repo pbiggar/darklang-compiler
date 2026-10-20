@@ -453,3 +453,9 @@ ANF is retained separately from synchronous list-region optimization, including
 preamble and standard-library definitions: a later async call must still see
 the list values and callback interface, not a scalar loop that erased them.
 Synchronous native compilation and inlining retain their optimized definitions.
+
+`async_recursive_sum.e2e` checks ignored and demanded recursive leaves, shared
+ready/pending calls, managed cleanup, native result conversion, distinct generic
+instantiations, tuple/list recursion and outer pending trees. The cases also run
+as one batch: independently optimized copies of a runtime specialization must
+not lose any dependency when tree shaking selects the emitted body.

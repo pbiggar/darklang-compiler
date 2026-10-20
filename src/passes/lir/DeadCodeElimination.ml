@@ -150,11 +150,16 @@ let requiresListDisplayHelpers (func : LIR.functionDef) =
    Build call graph from list of functions
 *)
 let buildCallGraph functionIds funcs =
-  FunctionIdMap.ofList
-    (List.map
-       (fun (func : LIR.functionDef) ->
-         (func.LIR.id, getCalledFunctions functionIds func))
-       funcs)
+  (* Independently compiled units can contain differently optimized copies of
+     one specialization. Emission may select either copy; retain every edge. *)
+  List.fold_left
+    (fun graph (func : LIR.functionDef) ->
+      let calls = getCalledFunctions functionIds func in
+      FunctionIdMap.change func.LIR.id
+        (function
+          | None -> Some calls | Some previous -> Some (FS.union previous calls))
+        graph)
+    FunctionIdMap.empty funcs
 
 (*
    Compute transitive closure of reachable functions.

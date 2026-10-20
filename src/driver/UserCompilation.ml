@@ -316,7 +316,8 @@ let compileUserWithPlan ?writtenSources (plan : P.userCompilePlan) =
             (List.fold_left
                (fun definitions (fn : ANF.functionDef) ->
                  if
-                   Text.startsWith fn.ANF.name "Darklang.Stdlib."
+                   (not (F.mem fn.ANF.id dependencyNames))
+                   || Text.startsWith fn.ANF.name "Darklang.Stdlib."
                    || Text.startsWith fn.ANF.name "Builtin."
                    || Text.startsWith fn.ANF.name "__dark_"
                  then definitions
