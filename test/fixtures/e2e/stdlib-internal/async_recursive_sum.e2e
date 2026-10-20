@@ -1,0 +1,8 @@
+// async_recursive_sum.e2e - Recursive variant transport does not demand inactive or ignored leaves.
+
+type AsyncRecursiveSum = AsyncRecursiveLeaf of Int64 | AsyncRecursiveBranch of AsyncRecursiveSum
+let asyncRecursiveSumWrap (depth: Int64) (value: Int64) : AsyncRecursiveSum =
+  if depth == 0L then AsyncRecursiveLeaf value
+  else AsyncRecursiveBranch (asyncRecursiveSumWrap (depth - 1L) value)
+
+Stdlib.__Task.__runMain (fun _unit -> let gate = Stdlib.__Async.__new<Int64> () in let value = Stdlib.__Task.__transport (Stdlib.__Async.__pending gate) in match asyncRecursiveSumWrap 2L value with | AsyncRecursiveBranch _ -> 42L | AsyncRecursiveLeaf _ -> 0L) = 42L // recursive interfaces preserve unresolved leaves when only the outer tag is needed; leak_check
