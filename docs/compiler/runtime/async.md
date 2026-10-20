@@ -188,12 +188,21 @@ changed async version is emitted, leaving the synchronous ABI intact.
 Storage layouts have an opaque interface in `AsyncTransport`: lowering inspects
 one level at a time, while mode equality and physical aggregate descriptors
 belong to the transport module. This separates call-interface inference from the layout
-representation needed for recursive aggregates. A repeated generic owner with
+representation needed for recursive aggregates. Storage interfaces are finite
+node graphs: equality is bisimulation, joins solve shared recursive constraints,
+and regular cycles close at fully instantiated sum descriptors. Private sum
+identities are reserved before resolving cyclic payload types. This supports
+recursive variants, including paths through tuple and list storage, without
+forcing ignored leaves. Allocation adapters reconcile widened recursive payload
+interfaces; native result adapters rebuild only the selected variant at each
+step. Generic specializations compiled as separate native dependencies retain
+their logical bodies for the same inference as ordinary functions.
+A repeated generic owner with
 different instantiated arguments, such as `Option<Option<Int64>>`, is finite
 and must not be confused with a recursive nominal layout.
 
 Unmigrated list and dictionary operations,
-regular recursive aggregate layouts, untyped value selections, and
+recursive aggregate layouts without a sum anchor, untyped value selections, and
 escaping callables whose argument or result interface changes still produce
 compilation diagnostics. Outer pendingness also carries the inferred field
 layout. A generated mapper

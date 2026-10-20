@@ -313,7 +313,15 @@ let compileUserWithPlan ?writtenSources (plan : P.userCompilePlan) =
           funcs ownership early =
         ANFPipeline.buildAnf
           ~asyncDefinitions:
-            (plan.P.asyncDefinitions @ user.R.sourceUserFunctions)
+            (List.fold_left
+               (fun definitions (fn : ANF.functionDef) ->
+                 if
+                   Text.startsWith fn.ANF.name "Darklang.Stdlib."
+                   || Text.startsWith fn.ANF.name "Builtin."
+                   || Text.startsWith fn.ANF.name "__dark_"
+                 then definitions
+                 else M.add fn.ANF.name fn definitions)
+               plan.P.asyncDefinitions user.R.sourceUserFunctions)
           ~asyncRuntime:
             {
               ANFPipeline.context =
@@ -550,7 +558,14 @@ let compileUserWithPlan ?writtenSources (plan : P.userCompilePlan) =
         if plan.P.options.O.disableFunctionTreeShaking then FunctionIdMap.empty
         else
           FunctionIdMap.fold
-            (fun graph id calls -> FunctionIdMap.add id calls graph)
+            (fun graph id calls ->
+              (* Emission may retain the prebuilt copy of a specialization.
+                 Keep dependencies of both bodies, not only the fresh one. *)
+              FunctionIdMap.change id
+                (function
+                  | None -> Some calls
+                  | Some previous -> Some (F.union previous calls))
+                graph)
             plan.P.prebuiltCallGraph
             (DeadCodeElimination.buildCallGraph user.R.functionIds allocatedUser)
       in
