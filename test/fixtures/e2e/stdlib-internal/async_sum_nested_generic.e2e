@@ -1,0 +1,9 @@
+// async_sum_nested_generic.e2e - Repeated generic owners are finite when their instantiated types differ.
+
+let asyncNestedOptionWrap (value: Option<Int64>) : Option<Option<Int64>> = Some value
+let asyncNestedOptionTag (value: Option<Option<Int64>>) : Int64 =
+  match value with | Some (Some _) -> 21L | Some None -> 21L | None -> 0L
+
+Stdlib.__Task.__runMain (fun _unit -> let gate = Stdlib.__Async.__new<Int64> () in let value = Stdlib.__Task.__transport (Stdlib.__Async.__pending gate) in match Some (Some value) with | Some (Some _) -> 42L | Some None -> 0L | None -> 0L) = 42L // repeating Option at different type arguments is not a recursive layout; leak_check
+Stdlib.__Task.__runMain (fun _unit -> let gate = Stdlib.__Async.__new<Int64> () in let value = Stdlib.__Task.__transport (Stdlib.__Async.__pending gate) in asyncNestedOptionTag (asyncNestedOptionWrap (Some value)) + asyncNestedOptionTag (asyncNestedOptionWrap None)) = 42L // source-call joins preserve both finite generic layers without demanding the leaf; leak_check
+Stdlib.__Task.__runMain (fun _unit -> let gate = Stdlib.__Async.__new<String> () in let value = Stdlib.__Task.__transport (Stdlib.__Async.__pending gate) in let result = Some (Some value) in let _ = Stdlib.__Task.__resolve (__fiber_current ()) gate "ready" in result) = Some (Some "ready") // native conversion traverses both managed payload layers; leak_check

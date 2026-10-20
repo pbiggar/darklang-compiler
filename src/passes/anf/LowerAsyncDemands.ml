@@ -149,6 +149,14 @@ type summary = {
   physicalSumShapes : MemoryModel.rcSumShapeRegistry;
 }
 
+let equalSummary left right =
+  List.equal AsyncTransport.equal left.parameters right.parameters
+  && List.equal AsyncTransport.equal left.captures right.captures
+  && AsyncTransport.equal left.result right.result
+  && M.equal AsyncTransport.equal left.joins right.joins
+  && M.equal AsyncTransport.equal left.rawLists right.rawLists
+  && left.physicalSumShapes = right.physicalSumShapes
+
 let changed = AsyncTransport.changed
 
 let modeOf env stores atom =
@@ -283,31 +291,16 @@ let storageFacts sumShapes env stores operation =
       | None -> None)
   | _ -> None
 
-let storageType storage source =
-  AsyncTransport.physicalType
-    (Stored (AsyncTransport.mapStorage (fun _ -> ()) storage))
-    source
+let storageType = AsyncTransport.storageType
 
-let slotRepresentation typ = function
-  | None -> typ
-  | Some (PendingSlot _) -> carrier typ
-  | Some (PendingStorage (_, storage)) -> carrier (storageType storage typ)
-  | Some (NestedStorage storage) -> storageType storage typ
+let slotRepresentation typ slot = AsyncTransport.slotType slot typ
 
 let fieldRepresentations storage types =
   if List.length types <> List.length (AsyncTransport.fields storage) then
     Crash.crash "Async typed storage has an inconsistent layout";
   List.map2 slotRepresentation types (AsyncTransport.fields storage)
 
-let physicalSumDescriptor storage =
-  match AsyncTransport.kind storage with
-  | SumStorage layout ->
-      let types =
-        fieldRepresentations storage
-          (List.map snd layout.AsyncSumStorage.payloads)
-      in
-      fst (AsyncSumStorage.physical layout types)
-  | _ -> Crash.crash "Async physical sum descriptor has a non-variant layout"
+let physicalSumDescriptor = AsyncTransport.sumDescriptor
 
 let storageDescriptor storage (descriptor : A.recordDescriptor) =
   let types = fieldRepresentations storage (List.map snd descriptor.A.fields) in
@@ -1374,7 +1367,7 @@ let lower registry names ids sumShapes nextFunctionOrdinal externalDefinitions
               infer fn env stores fn.A.body state)
           (Ok state) definitions
       in
-      if F.forall (fun id value -> value = summary state id) next then Ok next
+      if F.forall (fun id value -> equalSummary value (summary state id)) next then Ok next
       else converge next
     in
     let* summaries =
@@ -1621,7 +1614,7 @@ let lower registry names ids sumShapes nextFunctionOrdinal externalDefinitions
     in
     let rec prepareValue expected source atom actual gen =
       match (expected, actual) with
-      | left, right when left = right -> Ok (atom, [], gen)
+      | left, right when AsyncTransport.equal left right -> Ok (atom, [], gen)
       | Pending, Concrete -> Ok (ready source atom gen)
       | PendingStored expected, (Concrete | Stored _) ->
           let* value, before, gen =

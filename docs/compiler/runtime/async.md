@@ -185,6 +185,13 @@ demand keys in later entries, and neither constructor demands unused values.
 Loading a logical body preserves the existing function identity; only its
 changed async version is emitted, leaving the synchronous ABI intact.
 
+Storage layouts have an opaque interface in `AsyncTransport`: lowering inspects
+one level at a time, while mode equality and physical sum identities belong to
+the transport module. This separates call-interface inference from the layout
+representation needed for recursive aggregates. A repeated generic owner with
+different instantiated arguments, such as `Option<Option<Int64>>`, is finite
+and must not be confused with a recursive nominal layout.
+
 Unmigrated list and dictionary operations,
 regular recursive aggregate layouts, untyped value selections, and
 escaping callables whose argument or result interface changes still produce

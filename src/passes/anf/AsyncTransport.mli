@@ -27,12 +27,16 @@ type mode =
   | PendingStored of unit storage
 
 val changed : mode -> bool
+val equal : mode -> mode -> bool
 val slotMode : unit storedSlot option -> mode
 val modeSlot : mode -> unit storedSlot option
 val merge : mode -> mode -> (mode, string) result
 val mergeList : mode list -> mode list -> (mode list, string) result
 val mapStorage : ('a -> 'b) -> 'a storage -> 'b storage
 val physicalType : mode -> AST.semanticType -> AST.semanticType
+val storageType : 'a storage -> AST.semanticType -> AST.semanticType
+val slotType : 'a storedSlot option -> AST.semanticType -> AST.semanticType
+val sumDescriptor : 'a storage -> ANF.sumDescriptor
 
 val collectSumShapes :
   into:MemoryModel.rcSumShapeRegistry ->

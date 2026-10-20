@@ -62,6 +62,15 @@ let compatibleKind left right =
       && left.ANF.fields = right.ANF.fields
   | _ -> false
 
+let rec equal left right =
+  match (left, right) with
+  | Concrete, Concrete | Pending, Pending -> true
+  | Stored left, Stored right | PendingStored left, PendingStored right ->
+      left.kind = right.kind && List.equal equalSlot left.fields right.fields
+  | _ -> false
+
+and equalSlot left right = equal (slotMode left) (slotMode right)
+
 let rec merge left right =
   match (left, right) with
   | Concrete, value | value, Concrete -> Ok value
@@ -124,22 +133,14 @@ let sourceFields storage source =
       List.map snd layout.AsyncSumStorage.payloads
   | _ -> Crash.crash "Async transport source type does not match its storage"
 
-let rec physicalType mode source =
-  match mode with
-  | Concrete -> source
-  | Pending -> AST.TSum ("Darklang.Stdlib.__Async.__Value", [ source ])
-  | PendingStored storage ->
-      AST.TSum
-        ( "Darklang.Stdlib.__Async.__Value",
-          [ physicalType (Stored storage) source ] )
-  | Stored storage -> (
+let carrier source = AST.TSum ("Darklang.Stdlib.__Async.__Value", [ source ])
+
+let rec storageType storage source =
       let types = sourceFields storage source in
       if List.length types <> List.length storage.fields then
         Crash.crash "Async transport storage has an inconsistent field count";
       let types =
-        List.map2
-          (fun typ slot -> physicalType (slotMode slot) typ)
-          types storage.fields
+        List.map2 (fun typ slot -> slotType slot typ) types storage.fields
       in
       match (storage.kind, types) with
       | SumStorage layout, types ->
@@ -152,10 +153,37 @@ let rec physicalType mode source =
       | DictStorage _, _ ->
           Crash.crash
             "Async dictionary storage has an inconsistent value layout"
-      | _ -> AST.TTuple types)
+      | _ -> AST.TTuple types
+
+and slotType slot typ =
+  match slot with
+  | None -> typ
+  | Some (PendingSlot _) -> carrier typ
+  | Some (NestedStorage nested) -> storageType nested typ
+  | Some (PendingStorage (_, nested)) -> carrier (storageType nested typ)
+
+let physicalType mode source =
+  match mode with
+  | Concrete -> source
+  | Pending -> carrier source
+  | Stored storage -> storageType storage source
+  | PendingStored storage -> carrier (storageType storage source)
+
+let sumDescriptor storage =
+  match storage.kind with
+  | SumStorage layout -> (
+      let source =
+        AST.TSum
+          (layout.AsyncSumStorage.source.ANF.sumName,
+           layout.AsyncSumStorage.source.ANF.sumArgs)
+      in
+      match storageType storage source with
+      | AST.TSum (sumName, sumArgs) -> { ANF.sumName; sumArgs }
+      | _ -> Crash.crash "Async physical sum descriptor lost its nominal type")
+  | _ -> Crash.crash "Async physical sum descriptor has a non-variant layout"
 
 let collectSumShapes ~into storage =
-  let rec collect ancestors into (storage : unit storage) =
+  let rec collect ancestors into storage =
     let* ancestors =
       match storage.kind with
       | SumStorage _ | RecordStorage _ ->
@@ -174,7 +202,7 @@ let collectSumShapes ~into storage =
             Crash.crash "Async sum storage has an inconsistent payload count";
           let types =
             List.map2
-              (fun typ slot -> physicalType (slotMode slot) typ)
+              (fun typ slot -> slotType slot typ)
               types storage.fields
           in
           let sum, shape = AsyncSumStorage.physical layout types in
@@ -187,12 +215,12 @@ let collectSumShapes ~into storage =
       (fun result slot ->
         let* into = result in
         match slot with
-        | Some (NestedStorage nested) | Some (PendingStorage ((), nested)) ->
+        | Some (NestedStorage nested) | Some (PendingStorage (_, nested)) ->
             collect ancestors into nested
         | None | Some (PendingSlot ()) -> Ok into)
       (Ok into) storage.fields
   in
-  collect [] into (mapStorage (fun _ -> ()) storage)
+  collect [] into storage
 
 let rec instantiateStorage transform storage source =
   let types = sourceFields storage source in
