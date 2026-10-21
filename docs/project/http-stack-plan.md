@@ -344,6 +344,8 @@ mean the entire branch has passed its integration or performance gates.
     entropy reads and RSA scratch allocations to reusable storage on x86-64.
     Unaligned 4 KiB and 70 KB raw-buffer regressions exceed cumulative arena
     capacity, with small-size and live-register checks at the release boundary.
+    The independent TLS peer also completes sixty-four fresh connections with
+    70,001-byte echo bodies in one process and zero reported leaks.
   - [x] The remaining unsized standard-library raw releases are all 8-byte
     Stream cells, shutdown masks/state, single poll descriptors and socket options.
   - [ ] ARM64 needs the corresponding canonical/large-buffer recycling migration.
