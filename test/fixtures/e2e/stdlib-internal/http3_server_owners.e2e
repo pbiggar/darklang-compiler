@@ -90,9 +90,10 @@ let blockedReceiver (blocked: Bool) (reset: Bool) : Stdlib.Result.Result<Bool, S
     let waiting = Stdlib.__Http3Message.Waiting { bytes = Stdlib.Blob.empty, prefix = Stdlib.__QpackDecoder.Prefix { required = 1L, base = 1L, next = 0L } } in
     let message = { state.wire.message with waiting = if blocked then Some waiting else None } in
     let flow = state.wire.connection.flow in
-    let updated = if reset then
-      let size = match Stdlib.__QuicFlow.channel flow 0L with | None -> -1L | Some channel -> match channel.receive with | None -> -1L | Some receiver -> receiver.highest in
-      Stdlib.__QuicFlow.reset flow (Stdlib.__QuicApplication.Reset { id = 0L, code = 268L, finalSize = size })
+    let updated =
+      if reset then
+        let size = match Stdlib.__QuicFlow.channel flow 0L with | None -> -1L | Some channel -> match channel.receive with | None -> -1L | Some receiver -> receiver.highest in
+        Stdlib.__QuicFlow.reset flow (Stdlib.__QuicApplication.Reset { id = 0L, code = 268L, finalSize = size })
       else Ok flow in
     updated |> Stdlib.Result.andThen (fun flow ->
       Stdlib.__Http3.__drain { state.wire with message = message, connection = Stdlib.__QuicConnection.__flow state.wire.connection flow }
