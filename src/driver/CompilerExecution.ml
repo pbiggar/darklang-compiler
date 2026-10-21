@@ -285,10 +285,6 @@ let executeCapturedWithArguments target verbosity arguments input binary =
 let executeCaptured target verbosity input binary =
   executeCapturedWithArguments target verbosity [] input binary
 
-(* Backward-compatible captured execution with an already-closed stdin stream. *)
-let execute target verbosity binary =
-  executeCaptured target verbosity O.Closed binary
-
 (* Execute a compiled binary with stdin/stdout/stderr inherited from this process.
    This is the interactive run path: presentation bytes are visible immediately
    and the OS remains responsible for terminal and signal behavior. *)

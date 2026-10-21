@@ -23,7 +23,5 @@ val executeCaptured :
   bytes ->
   CompilerOptions.executionOutput
 
-val execute : Platform.target -> int -> bytes -> CompilerOptions.executionOutput
-
 val executeAttached :
   Platform.target -> int -> bytes -> CompilerOptions.executionOutput

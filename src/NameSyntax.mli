@@ -52,7 +52,6 @@ val concat : qualifiedName -> qualifiedName -> qualifiedName
 val segments : qualifiedName -> identifier list
 val trySplitLast : qualifiedName -> (qualifiedName * identifier) option
 val formatQualifiedName : qualifiedName -> string
-val toLegacySpelling : qualifiedName -> string
 val tryParseLegacySpelling : string -> qualifiedName option
 val scanOrdinary : string -> int -> identifier * int
 val scanQuoted : string -> int -> (identifier * int, string) result

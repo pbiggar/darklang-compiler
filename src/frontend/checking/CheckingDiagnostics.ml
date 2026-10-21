@@ -521,24 +521,6 @@ let formatPatternMismatchError scrutinee actualType expectedType override =
   "Cannot match " ^ typeToString actualType ^ " value " ^ valueText ^ " with "
   ^ expectedText ^ " pattern"
 
-let formatLegacyParamTypeError functionName paramIndex paramName expectedType
-    actualType actualExpr =
-  let ordinal =
-    match paramIndex with
-    | 1 -> "1st"
-    | 2 -> "2nd"
-    | 3 -> "3rd"
-    | _ -> string_of_int paramIndex ^ "th"
-  in
-  let actualValue =
-    Option.value
-      (tryFormatLiteralValue actualExpr)
-      ~default:(typeToString actualType)
-  in
-  functionName ^ "'s " ^ ordinal ^ " parameter `" ^ paramName ^ "` expects "
-  ^ typeToString expectedType ^ ", but got " ^ typeToString actualType ^ " ("
-  ^ actualValue ^ ")"
-
 (*
    Each invocation gets a fresh, structurally separate inference identity.
    The internal key cannot be a source type-variable spelling, so no caller

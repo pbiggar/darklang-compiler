@@ -620,12 +620,6 @@ let parseFor mode source =
         ]
 
 (*
-   Kept as a compatibility entrypoint. Test syntax has the same parse shape as
-   all other source; parseFor Validation.Test applies the Test purpose rules.
-*)
-let parseTestFile = parse
-
-(*
    Render a diagnostic for humans: code, position, message, a source snippet
    with caret markers, related locations, and the hint if any. E.g.
    error[PARSE-UNCLOSED] at 1:9: expected ']' to close the '[' at line 1:9, found end of file
