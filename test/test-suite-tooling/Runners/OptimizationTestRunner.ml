@@ -320,7 +320,13 @@ let ssaPipeline printResult recorder programType
       user.nonInlineableFunctionNames printed user.ownershipContracts true
       recorder
   in
-  Ok (functions, typeMap, registries.functionNames)
+  let names =
+    List.fold_left
+      (fun names (func : SSAANF.functionDef) ->
+        FunctionIdMap.add func.SSAANF.id func.SSAANF.name names)
+      registries.functionNames functions
+  in
+  Ok (functions, typeMap, names)
 
 let getOptimizedANF stdlib recorder source =
   let* typ, converted, synthetic = prepare stdlib recorder source in

@@ -161,22 +161,25 @@ let testStringByteIndexConversionFusesWithLookup () =
 let byteOptionMatch usePayload =
   let someBranch =
     if usePayload then
-      Let (TempId 5, TupleGet (Var (TempId 2), 1), Return (Var (TempId 5)))
+      Let
+        ( TempId 5,
+          TypedAtom (Var (TempId 2), AST.TUInt8),
+          Return (Var (TempId 5)) )
     else Return (IntLiteral (Int64 1L))
   in
+  let noneBranch =
+    Return (IntLiteral (if usePayload then UInt8 0 else Int64 0L))
+  in
+  (* UInt8 options reserve 256 for None; Some carries the byte directly. *)
   Let
     ( TempId 2,
       Call
         ( stdlibFunction "String.__getByteAtInt64",
           [ Var (TempId 0); Var (TempId 1) ] ),
       Let
-        ( TempId 3,
-          TupleGet (Var (TempId 2), 0),
-          Let
-            ( TempId 4,
-              Prim (Eq, Var (TempId 3), IntLiteral (Int64 0L)),
-              If (Var (TempId 4), someBranch, Return (IntLiteral (Int64 0L))) )
-        ) )
+        ( TempId 4,
+          Prim (Neq, Var (TempId 2), IntLiteral (Int64 256L)),
+          If (Var (TempId 4), someBranch, noneBranch) ) )
 
 let testDeadStringBytePayloadLowersToBoundsCheck () =
   let original = stdlibFunction "String.__getByteAtInt64"
@@ -202,7 +205,7 @@ let testLiveStringBytePayloadLowersToUncheckedLoad () =
   let* optimized =
     optimizeExpression
       (TM.of_list [ (TempId 0, AST.TString); (TempId 1, AST.TInt64) ])
-      AST.TInt64
+      AST.TUInt8
       (byteOptionMatch true)
   in
   let calls = expressionCalls optimized in
