@@ -5,9 +5,7 @@ open AllocationModel
 open RegisterPolicy
 open FloatAllocation
 
-(*
-   Linear Scan Register Allocation (kept for reference, not used)
-*)
+(* Look up a virtual register in the graph allocator's compact domain. *)
 let tryAllocation (allocation : allocationResult) vregId =
   let domain = allocation.AllocationModel.domain in
   let offset =

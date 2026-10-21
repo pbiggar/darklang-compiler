@@ -92,19 +92,28 @@ let testSerializeSection64Size () =
   else Ok ()
 
 let testCreateExecutableNonEmpty () =
-  let binary = createExecutable [| 0xd65f03c0l |] in
+  let binary =
+    createExecutableWithPools [| 0xd65f03c0l |] LiteralPool.emptyStringPool
+      LiteralPool.emptyFloatPool false
+  in
   if Bytes.length binary = 0 then Error "createExecutable: binary is empty"
   else Ok ()
 
 let testCreateExecutableMagic () =
   if
-    Bytes.sub (createExecutable [| 0xd65f03c0l |]) 0 4
+    Bytes.sub
+      (createExecutableWithPools [| 0xd65f03c0l |] LiteralPool.emptyStringPool
+         LiteralPool.emptyFloatPool false)
+      0 4
     <> Bytes.of_string "\xcf\xfa\xed\xfe"
   then Error "createExecutable: wrong magic bytes"
   else Ok ()
 
 let testCreateExecutableContainsCode () =
-  let binary = createExecutable [| 0xd65f03c0l |] in
+  let binary =
+    createExecutableWithPools [| 0xd65f03c0l |] LiteralPool.emptyStringPool
+      LiteralPool.emptyFloatPool false
+  in
   let retBytes = Bytes.of_string "\xc0\x03\x5f\xd6" in
   let rec found i =
     i + 4 <= Bytes.length binary
@@ -409,7 +418,11 @@ let testCompleteEncodingPipeline () =
   else if List.nth machineCode 1 <> 0xd65f03c0l then
     Error "Complete pipeline: wrong RET encoding"
   else
-    let binary = createExecutable (Array.of_list machineCode) in
+    let binary =
+      createExecutableWithPools
+        (Array.of_list machineCode)
+        LiteralPool.emptyStringPool LiteralPool.emptyFloatPool false
+    in
     if Bytes.length binary = 0 then Error "Complete pipeline: binary is empty"
     else if Bytes.sub binary 0 4 <> Bytes.of_string "\xcf\xfa\xed\xfe" then
       Error "Complete pipeline: wrong magic bytes"
@@ -430,7 +443,8 @@ let testExecuteLinuxElf () =
     |> Array.of_list
   in
   let binary =
-    Backend_Arm64_Binary_Generation_ELF.createExecutable machineCode
+    Backend_Arm64_Binary_Generation_ELF.createExecutableWithPools machineCode
+      LiteralPool.emptyStringPool LiteralPool.emptyFloatPool false
   in
   let tempPath = Filename.temp_file "dark-" "" in
   let outcome =

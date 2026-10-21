@@ -689,20 +689,6 @@ let createExecutableWithPools machineCode stringPool floatPool enableLeakCheck =
   createExecutableWithDataBytes machineCode dataBytes enableLeakCheck
 
 (*
-   Create a Mach-O executable with string data (legacy wrapper for backwards compatibility)
-*)
-let createExecutableWithStrings machineCode stringPool =
-  createExecutableWithPools machineCode stringPool LiteralPool.emptyFloatPool
-    false
-
-(*
-   Create a minimal Mach-O executable from ARM64 machine code (legacy, no data)
-*)
-let createExecutable machineCode =
-  createExecutableWithPools machineCode LiteralPool.emptyStringPool
-    LiteralPool.emptyFloatPool false
-
-(*
    Create a Mach-O executable with coverage data section
    For now, coverage data is included in the __const section
    TODO: Add proper __DATA segment for writable coverage data on macOS

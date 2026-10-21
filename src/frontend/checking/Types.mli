@@ -105,11 +105,3 @@ val indexTypeRegistry :
   indexedTypeRegistry
 
 val typesEqual : aliasRegistry -> AST.semanticType -> AST.semanticType -> bool
-
-val formatLegacyRecordFieldTypeError :
-  aliasRegistry ->
-  string ->
-  AST.semanticType ->
-  AST.semanticType ->
-  AST.expr ->
-  string
