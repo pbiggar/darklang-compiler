@@ -13,8 +13,12 @@ from pathlib import Path
 def main() -> int:
     root = Path(__file__).resolve().parents[1]
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--compiler", type=Path, default=root / "dark",
-                        help="Compiler executable to check (default: checkout's dark wrapper)")
+    parser.add_argument(
+        "--compiler",
+        type=Path,
+        default=root / "dark",
+        help="Compiler executable (default: checkout's dark launcher)",
+    )
     args = parser.parse_args()
     profiles = json.loads((root / "benchmarks/profiles.json").read_text())
     names = profiles["profiles"]["full"]

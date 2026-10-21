@@ -241,27 +241,34 @@ let[@warning "-4"] checkNamed checkExpression checkedLiteral globals locals
                globals.modulePath globals.typeParams)
             typeArgs
         in
-        let lookaheadTypeArgs =
-          if signature.typeParams = [] then None
+        let lookaheadTypeArgs, symbols =
+          if signature.typeParams = [] then (None, symbols)
           else
-            let pairs =
-              List.filter_map
-                (fun (arg, typ) ->
+            (* Keep the state that owns lookahead's fresh variables. Reusing
+               their ordinals in the real pass aliases unrelated constraints. *)
+            let pairs, symbols =
+              List.fold_left
+                (fun (pairs, symbols) (arg, typ) ->
                   match arg with
-                  | WT.ELambda _ -> None
+                  | WT.ELambda _ -> (pairs, symbols)
                   | _ -> (
                       match check symbols None arg with
-                      | Ok (actual, _, _) -> Some (typ, actual)
-                      | Error _ -> None))
+                      | Ok (actual, _, symbols) ->
+                          ((typ, actual) :: pairs, symbols)
+                      | Error _ -> (pairs, symbols)))
+                ([], symbols)
                 (List.combine normalizedArgs signature.parameters)
             in
-            match pairs with
-            | [] -> None
-            | pairs ->
-                Result.to_option
-                  (Unification.inferTypeArgs signature.typeParams
-                     (List.map fst pairs) (List.map snd pairs)
-                     (Some signature.return) expected)
+            let inferred =
+              match List.rev pairs with
+              | [] -> None
+              | pairs ->
+                  Result.to_option
+                    (Unification.inferTypeArgs signature.typeParams
+                       (List.map fst pairs) (List.map snd pairs)
+                       (Some signature.return) expected)
+            in
+            (inferred, symbols)
         in
         let rec checkArgs givenTypeArgs symbols reversed remaining =
           match remaining with

@@ -95,7 +95,7 @@ let tryTruncateFloatToInt64 f =
 (*
    Fold a binary operation on constants
 *)
-let foldBinOp op left right =
+let foldBinOp typeEnv op left right =
   match (op, left, right) with
   (* Int64 arithmetic (unchecked - overflow wraps) *)
   | Add, IntLiteral (Int64 a), IntLiteral (Int64 b) ->
@@ -272,7 +272,11 @@ let foldBinOp op left right =
   | Div, x, FloatLiteral floatConstant0 when floatConstant0 = -1.0 ->
       Some (FloatNeg x)
   (* Self-identities on integer operations. Float is excluded where NaN changes identity laws. *)
-  | Sub, Var a, Var b when a = b -> Some (Atom (IntLiteral (Int64 0L)))
+  | Sub, Var a, Var b when a = b -> (
+      match TempMap.find_opt a typeEnv with
+      | Some AST.TInt64 -> Some (Atom (IntLiteral (Int64 0L)))
+      | Some AST.TUInt64 -> Some (Atom (IntLiteral (UInt64 0L)))
+      | _ -> None)
   | BitAnd, Var a, Var b when a = b -> Some (Atom (Var a))
   | BitOr, Var a, Var b when a = b -> Some (Atom (Var a))
   | BitXor, Var a, Var b when a = b -> Some (Atom (IntLiteral (Int64 0L)))

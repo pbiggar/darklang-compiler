@@ -4,7 +4,9 @@
 
 module Darklang.Stdlib.Int8
 
-type ParseError = BadFormat | OutOfRange
+type ParseError =
+  | BadFormat
+  | OutOfRange
 
 // Stdlib.Int8 - Integer operations
 

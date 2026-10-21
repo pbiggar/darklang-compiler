@@ -9,17 +9,17 @@ parser:
   supported: 30
   partial: 1
 stdlib:
-  different: 946
-  missing: 598
-  identical: 452
+  different: 834
+  missing: 569
+  identical: 595
 packages:
   missing: 3709
   identical: 5
   different: 41
 builtins:
   present: 79
-  missing: 175
-  unassessed: 527
+  missing: 169
+  unassessed: 533
 tests:
   enabled: 554
   unmapped: 1589

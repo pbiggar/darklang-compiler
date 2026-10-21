@@ -27,7 +27,7 @@ let __sum (values: List<Float>) (total: Float) : Float =
 let __toBits (f: Float) : UInt64 = 0UL
 
 let toBits (value: Float) : UInt64 = Stdlib.Float.__toBits value
-let toInt (value: Float) : Int = Stdlib.Float.roundTowardsZero value
+let toInt (a: Float) : Int = Stdlib.Float.roundTowardsZero a
 
 let isNaN (value: Float) : Bool = value != value
 
@@ -87,17 +87,30 @@ let round (value: Float) : Int =
     else if Stdlib.Float.__isOdd lower then upper
     else lower
 
-let clampRefusingNaN (value: Float) (limitA: Float) (limitB: Float) : Stdlib.Result.Result<Float, String> =
-    if Stdlib.Float.isNaN limitA || Stdlib.Float.isNaN limitB then
-        Error "clampRefusingNaN requires limits that are numbers"
-    else
-        let lower = if limitA < limitB then limitA else limitB in
-        let upper = if limitA < limitB then limitB else limitA in
-        if value < lower then Ok lower
-        else if value > upper then Ok upper
-        else Ok value
+let clampRefusingNaN
+  (value: Float)
+  (limitA: Float)
+  (limitB: Float)
+  : Stdlib.Result.Result<Float, String> =
+  if Stdlib.Float.isNaN limitA || Stdlib.Float.isNaN limitB then
+    Stdlib.Result.Result.Error "clampRefusingNaN requires limits that are numbers"
+  else
+    let (lower, upper) =
+      if (limitA < limitB) then
+        (limitA, limitB)
+      else
+        (limitB, limitA)
 
-let isFinite (value: Float) : Bool = (value - value) == 0.0
+    if (value < lower) then
+      Stdlib.Result.Result.Ok lower
+    else if (value > upper) then
+      Stdlib.Result.Result.Ok upper
+    else
+      Stdlib.Result.Result.Ok value
+
+let isFinite (f: Float) : Bool =
+  // NaN and ±infinity give NaN here, which equals nothing
+  (f - f) == 0.0
 
 let __isDigit (byte: Int64) : Bool = byte >= 48L && byte <= 57L
 

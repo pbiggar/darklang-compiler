@@ -19,10 +19,10 @@ type BadUrlDetails =
   | InvalidRequest
 
 type RequestError =
-  | BadUrl of Stdlib.HttpClient.BadUrlDetails
+  | BadUrl of BadUrlDetails
   /// Occurs when the request is cancelled due to a timeout
   | Timeout
-  | BadHeader of Stdlib.HttpClient.BadHeader
+  | BadHeader of BadHeader
   /// Occurs when there's an issue connecting to the endpoint or an I/O error. eg. network error, DNS failure, certifivate validation error, etc.
   | NetworkError
   /// Occurs when the request method is not invalid.
@@ -58,8 +58,9 @@ let basicAuth
   if Stdlib.String.contains username "-" then
     Stdlib.Result.Result.Error "Username cannot contain a hyphen"
   else
-    let encoded = Stdlib.String.base64Encode (username + ":" + password) in
-    Stdlib.Result.Result.Ok(("authorization", "basic " + encoded))
+    let encoded = Stdlib.String.base64Encode $"{username}:{password}"
+
+    Stdlib.Result.Result.Ok(("authorization", $"basic {encoded}"))
 
 /// Returns an authorization header carrying `token`.
 let bearerToken (token: String) : (String * String) =
@@ -333,21 +334,25 @@ let get (url: String) (headers: List<(String * String)>)
   : Stdlib.Result.Result<Stdlib.HttpClient.Response, Stdlib.HttpClient.RequestError> =
   Stdlib.HttpClient.request "GET" url headers Stdlib.Blob.empty
 
-let post (url: String) (headers: List<(String * String)>) (body: Blob)
-  : Stdlib.Result.Result<Stdlib.HttpClient.Response, Stdlib.HttpClient.RequestError> =
-  Stdlib.HttpClient.request "POST" url headers body
+let post
+  (uri: String)
+  (headers: List<(String * String)>)
+  (body: Blob)
+  : Stdlib.Result.Result<Response, RequestError> =
+  request "POST" uri headers body
 
-let put (url: String) (headers: List<(String * String)>) (body: Blob)
-  : Stdlib.Result.Result<Stdlib.HttpClient.Response, Stdlib.HttpClient.RequestError> =
-  Stdlib.HttpClient.request "PUT" url headers body
+let put
+  (uri: String)
+  (headers: List<(String * String)>)
+  (body: Blob)
+  : Stdlib.Result.Result<Response, RequestError> =
+  request "PUT" uri headers body
 
-let options (url: String)
-  : Stdlib.Result.Result<Stdlib.HttpClient.Response, Stdlib.HttpClient.RequestError> =
-  Stdlib.HttpClient.request "OPTIONS" url [] Stdlib.Blob.empty
+let options (uri: String) : Stdlib.Result.Result<Response, RequestError> =
+  request "OPTIONS" uri [] Stdlib.Blob.empty
 
-let delete (url: String)
-  : Stdlib.Result.Result<Stdlib.HttpClient.Response, Stdlib.HttpClient.RequestError> =
-  Stdlib.HttpClient.request "DELETE" url [] Stdlib.Blob.empty
+let delete (uri: String) : Stdlib.Result.Result<Response, RequestError> =
+  request "DELETE" uri [] Stdlib.Blob.empty
 
 let head (url: String)
   : Stdlib.Result.Result<Stdlib.HttpClient.Response, Stdlib.HttpClient.RequestError> =
@@ -686,3 +691,19 @@ let __streamTrustedWithRoots (roots: List<Blob>) (method: String) (url: String)
   (headers: List<(String * String)>) (body: Blob)
   : Stdlib.Result.Result<Stdlib.HttpClient.StreamResponse, Stdlib.HttpClient.RequestError> =
   Stdlib.HttpClient.__stream true (Some roots) method url headers body
+
+let toString (e: RequestError) : String =
+  match e with
+  | BadUrl details ->
+    match details with
+    | UnsupportedProtocol -> "Unsupported protocol"
+    | InvalidHost -> "Invalid host"
+    | InvalidUri -> "Invalid URI"
+    | InvalidRequest -> "Invalid request"
+  | Timeout -> "Timeout"
+  | BadHeader details ->
+    match details with
+    | EmptyKey -> "Empty key"
+    | InvalidContentType -> "Invalid content-type header"
+  | NetworkError -> "Network Error"
+  | BadMethod -> "Bad Method"

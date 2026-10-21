@@ -1,5 +1,24 @@
 # Approved upstream adoption
 
+## Individual declaration sharing (2026-10-21)
+
+The current source pin in `porting/sources.yaml` is also used for individually
+shared functions and types. Engine-specific adapters remain native; SQLite
+sharing includes only cell values and pure field accessors, not database I/O.
+`Int64.fromFloat` and `UInt64.fromFloat` now use the interpreter's `Option`
+result: finite in-range values yield `Some`, and other inputs yield `None`.
+The corresponding rounded conversions use the same result contract.
+
+Four candidates retain their compiler implementations: dictionary-backed
+`List.uniqueBy` and `dedup` failed key-equality/inference regressions;
+`List.groupByWithKey` leaked in a compound-value check; `String.endsWith`
+materialized a large string as graphemes. Sharing `Float.isFinite` also required
+fixing an optimizer rule that applied the integer identity `x - x = 0` to Float
+operands, incorrectly accepting NaN/infinity as finite. Declaration checking alone
+does not establish that a source replacement is compatible.
+
+## Earlier adoption
+
 Review date: 2026-10-12. Interpreter source: `darklang/dark@07bafe2d8`.
 Compiler parent: `26a2a769276e24c0d8ab6b03e025a0ead2214aaa`.
 The approved work excludes traits, async/parallel List operations, effect

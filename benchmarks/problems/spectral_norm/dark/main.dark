@@ -63,4 +63,4 @@ let benchmarkArg (index: Int) : Int64 =
     | Ok value -> value
     | Error message -> Builtin.crash message
 
-Builtin.printLine (Stdlib.Int64.toString (Stdlib.Int64.fromFloat (spectralNorm (benchmarkArg 0) (benchmarkArg 1) * 1000000000.0)))
+Builtin.printLine (Stdlib.Int64.toString (Builtin.unwrap (Stdlib.Int64.fromFloat (spectralNorm (benchmarkArg 0) (benchmarkArg 1) * 1000000000.0))))

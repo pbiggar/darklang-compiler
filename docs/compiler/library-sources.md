@@ -13,6 +13,14 @@ general historical source baseline or establish compatibility with that pin.
 Option, Result, Tuple2, Tuple3, Fun, Duration, and Retry are also byte-identical
 to the interpreter revision in `porting/sources.yaml`, including their public
 documentation. These packages use the compiler's existing native dependencies.
+Individual portable functions and types in List, Dict, String, Char, numeric,
+HTTP, HTML, Diff, and JSON modules also track that pin; engine-specific adapters
+remain native. Sqlite contains only the shared cell type and pure accessors,
+not a database adapter. Nested public fragments retain upstream module nesting
+and declaration text. The declaration ledger records exact per-item identity.
+The native implementations of `List.uniqueBy`, `List.dedup`,
+`List.groupByWithKey`, and `String.endsWith` remain in place;
+their upstream replacements did not pass execution/resource checks.
 The compatibility ledgers own API coverage and behavioral differences; this
 inventory records source placement and origin, not complete API parity.
 
@@ -180,6 +188,7 @@ fragments use `__` even where the interpreter also has private helpers.
 | `packages/darklang/stdlib/string.dark` | `Darklang.Stdlib.String`  | `packages/darklang/stdlib/string.dark` |
 | `packages/darklang/stdlib/__hash.dark` | (root declarations) | Compiler hashing helpers |
 | `packages/darklang/stdlib/dict.dark` | `Darklang.Stdlib.Dict`  | `packages/darklang/stdlib/dict.dark` |
+| `packages/darklang/stdlib/sqlite.dark` | `Darklang.Stdlib.Sqlite` | `packages/darklang/stdlib/sqlite.dark`: Value and six pure accessors only; database operations remain unsupported |
 | `packages/darklang/stdlib/dict/__hamt.dark` | `Darklang.Stdlib.Dict`  | Compiler dictionary representation; package defined in `packages/darklang/stdlib/dict.dark` |
 | `packages/darklang/stdlib/uuid.dark` | `Darklang.Stdlib.Uuid`  | `packages/darklang/stdlib/uuid.dark` |
 | `packages/darklang/stdlib/diff.dark` | `Darklang.Stdlib.Diff`  | `packages/darklang/stdlib/diff.dark` |

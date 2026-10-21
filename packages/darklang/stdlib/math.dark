@@ -7,9 +7,11 @@ val tau = 6.283185307179586
 
 val e = 2.718281828459045
 let degrees (angleInDegrees: Float) : Float =
-    (angleInDegrees * Stdlib.Math.pi) / 180.0
+  (angleInDegrees * Stdlib.Math.pi)
+  |> (/) 180.0
 
-let turns (angleInTurns: Float) : Float = Stdlib.Math.tau * angleInTurns
+let turns (angleInTurns: Float) : Float =
+  Stdlib.Math.tau * angleInTurns
 let radians (angleInRadians: Float) : Float = angleInRadians
 
 let __sinKernel (value: Float) : Float =

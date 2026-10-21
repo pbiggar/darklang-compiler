@@ -17,4 +17,4 @@ let benchmarkArg (index: Int) : Int64 =
     | Ok value -> value
     | Error message -> Builtin.crash message
 
-Builtin.printLine (Stdlib.Int64.toString (Stdlib.Int64.fromFloat (leibnizPi (benchmarkArg 0) * 100000000.0)))
+Builtin.printLine (Stdlib.Int64.toString (Builtin.unwrap (Stdlib.Int64.fromFloat (leibnizPi (benchmarkArg 0) * 100000000.0))))

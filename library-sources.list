@@ -131,6 +131,7 @@ packages/darklang/stdlib/string/__unicode.dark
 packages/darklang/stdlib/string.dark
 packages/darklang/stdlib/__hash.dark
 packages/darklang/stdlib/dict.dark
+packages/darklang/stdlib/sqlite.dark
 packages/darklang/stdlib/dict/__hamt.dark
 packages/darklang/stdlib/uuid.dark
 packages/darklang/stdlib/diff.dark

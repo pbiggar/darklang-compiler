@@ -124,7 +124,8 @@ let tryFoldBinOp (op : binOp) left right typ =
   | Add, Int64Const 0L, x -> Some x
   | Add, x, Int64Const 0L -> Some x
   | Sub, x, Int64Const 0L -> Some x
-  | Sub, x, y when x = y -> Some (Int64Const 0L)
+  | Sub, x, y when x = y && isTotallyOrderedIntegerType typ ->
+      Some (Int64Const 0L)
   | Mul, Int64Const 1L, x -> Some x
   | Mul, x, Int64Const 1L -> Some x
   | Mul, Int64Const 0L, _ -> Some (Int64Const 0L)

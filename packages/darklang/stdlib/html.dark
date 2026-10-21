@@ -2,16 +2,22 @@
 
 module Darklang.Stdlib.Html
 
-type Attribute = List<(String * Stdlib.Option.Option<String>)>
-type Attributes = List<(String * Stdlib.Option.Option<String>)>
+type Attribute = List<String * Option.Option<String>>
+type Attributes = List<String * Option.Option<String>>
 
-type HtmlTag = {
-    name: String,
-    attrs: Stdlib.Html.Attributes,
-    children: List<Stdlib.Html.Node>
-}
+type HtmlTag =
+  { name: String
+    /// Attributes use `Option<String>` for values:
+    /// - `Some value` for attributes with values (e.g., `("href", Some "url")`)
+    /// - `None` for boolean attributes (e.g., `("required", None)`)
+    attrs: Attributes
+    children: List<Node> }
 
-type Node = String of String | HtmlTag of Stdlib.Html.HtmlTag
+type Node =
+  /// Raw text content, comments, or any string to include as-is
+  | String of String
+  /// A structured HTML element with attributes and children
+  | HtmlTag of HtmlTag
 
 val voidElements =
     [ "area", "base", "br", "col", "command", "embed", "hr", "img",

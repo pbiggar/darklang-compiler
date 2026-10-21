@@ -61,6 +61,7 @@ scripts/.unicode_cache/
 
 # Native Dune build and local opam switch
 /_build/
+/_build-*/
 /_opam/
 
 # Interrupted mutation backups (restored automatically on exit)

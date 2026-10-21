@@ -1,0 +1,40 @@
+// Stdlib.Sqlite - portable cell values and pure field accessors; no database adapter.
+
+module Darklang.Stdlib.Sqlite
+
+type Value =
+  | Null
+  | Int of Int64
+  | Real of Float
+  | Text of String
+  | Bytes of Blob
+
+let asText (v: Value) : Stdlib.Option.Option<String> =
+  match v with
+  | Text s -> Stdlib.Option.Option.Some s
+  | _ -> Stdlib.Option.Option.None
+
+let asInt (v: Value) : Stdlib.Option.Option<Int64> =
+  match v with
+  | Int i -> Stdlib.Option.Option.Some i
+  | _ -> Stdlib.Option.Option.None
+
+let asBytes (v: Value) : Stdlib.Option.Option<Blob> =
+  match v with
+  | Bytes b -> Stdlib.Option.Option.Some b
+  | _ -> Stdlib.Option.Option.None
+
+let textField (row: Dict<String, Value>) (col: String) : Stdlib.Option.Option<String> =
+  match Stdlib.Dict.get row col with
+  | Some v -> asText v
+  | None -> Stdlib.Option.Option.None
+
+let intField (row: Dict<String, Value>) (col: String) : Stdlib.Option.Option<Int64> =
+  match Stdlib.Dict.get row col with
+  | Some v -> asInt v
+  | None -> Stdlib.Option.Option.None
+
+let bytesField (row: Dict<String, Value>) (col: String) : Stdlib.Option.Option<Blob> =
+  match Stdlib.Dict.get row col with
+  | Some v -> asBytes v
+  | None -> Stdlib.Option.Option.None

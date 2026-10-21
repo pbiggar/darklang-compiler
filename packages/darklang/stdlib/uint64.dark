@@ -4,7 +4,9 @@
 
 module Darklang.Stdlib.UInt64
 
-type ParseError = BadFormat | OutOfRange
+type ParseError =
+  | BadFormat
+  | OutOfRange
 
 // Stdlib.UInt64 - Integer operations
 
@@ -92,7 +94,11 @@ let __fromIntUnchecked (value: Int) : UInt64 =
 let random (start: UInt64) (finish: UInt64) : UInt64 = Stdlib.UInt64.__fromIntUnchecked (Stdlib.Int.random (Stdlib.Int.fromUInt64 start) (Stdlib.Int.fromUInt64 finish))
 let toFloat (value: UInt64) : Float = Stdlib.Int.toFloat (Stdlib.Int.fromUInt64 value)
 let sqrt (value: UInt64) : Float = Stdlib.Float.sqrt (Stdlib.UInt64.toFloat value)
-let fromFloat (value: Float) : Stdlib.Option.Option<UInt64> = Stdlib.Int.toUInt64 (Stdlib.Float.round value)
+let fromFloat (a: Float) : Stdlib.Option.Option<UInt64> =
+  if Float.isFinite a then
+    a |> Stdlib.Int.fromFloat |> Stdlib.Int.toUInt64
+  else
+    Stdlib.Option.Option.None
 let parse (value: String) : Stdlib.Result.Result<UInt64, Stdlib.UInt64.ParseError> =
     match Stdlib.Int.parse value with
     | Error _ -> Error Stdlib.UInt64.ParseError.BadFormat
@@ -162,3 +168,9 @@ impl Stdlib.Zero for UInt64 =
 
 impl Stdlib.One for UInt64 =
   let one () : UInt64 = 1UL
+
+let fromFloatRounded (a: Float) : Stdlib.Option.Option<UInt64> =
+  if Float.isFinite a then
+    a |> Float.round |> Stdlib.Int.toUInt64
+  else
+    Stdlib.Option.Option.None
