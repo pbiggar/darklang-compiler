@@ -1,4 +1,4 @@
-(* RefCountInsertion.ml - Orchestrate function RC elaboration and verify complete type and join interfaces. *)
+(* RefCountInsertion.ml - Pre-SSA ownership proofs and legacy structured RC test support. *)
 [@@@warning "-4"]
 
 module A = ANF

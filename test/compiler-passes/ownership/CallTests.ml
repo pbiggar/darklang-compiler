@@ -250,7 +250,15 @@ let testProgramRcFreshTempsFollowExistingProgramTemps () =
       "SSA RC insertion reused an existing TempId"
   in
   require
-    (List.exists (fun (TempId id) -> id > 6000) definitions)
+    (SSAANF.LabelMap.exists
+       (fun _ (block : SSAANF.block) ->
+         List.exists
+           (function
+             | TempId id, RefCountDecString (Var source) ->
+                 source = high && id > 6000
+             | _ -> false)
+           block.SSAANF.operations)
+       transformed.SSAANF.blocks)
     "SSA RC insertion must allocate fresh temporaries beyond source t6000"
 
 let testProgramRcRejectsDriftedOwnershipContract () =

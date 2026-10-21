@@ -1,4 +1,4 @@
-(* RefCountInsertion.mli - Orchestrate function RC elaboration and verify complete type and join interfaces. *)
+(* RefCountInsertion.mli - Pre-SSA ownership proofs and legacy structured RC test support. *)
 val verifyOwnershipContracts :
   RcTypeFacts.typeContext ->
   OwnedIR.callSignature FunctionIdMap.t ->
