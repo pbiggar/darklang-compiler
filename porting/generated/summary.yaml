@@ -6,8 +6,9 @@ features:
   missing: 16
   partial: 2
 parser:
-  unassessed: 18
-  supported: 3
+  supported: 20
+  missing: 7
+  partial: 4
 stdlib:
   different: 1010
   missing: 598

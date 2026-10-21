@@ -29,6 +29,14 @@ syntax; language entries concern typing and execution. Replacing parser-file
 mappings does not establish syntax support: entries without a separate review
 are explicitly unassessed.
 
+The parser assessment covers current source acceptance and written syntax at
+the pin in `sources.yaml`. Ahead-of-time typing, name resolution, execution and
+source-unit composition differences are explicitly out of bounds and are not
+parser compatibility issues. Unicode source handling and positions, runtime
+parser APIs, and historical accounting are outside this review. A reviewed
+status can be based on source comparison and focused syntax evidence; it does
+not claim exhaustive differential execution of both parsers.
+
 **StdLib and packages:** `identical`, `different`, `missing`, or `ambiguous`.
 These compare each declaration's own text with a same-name compiler counterpart.
 They do not claim behavioral compatibility. Internal comments, whitespace and
