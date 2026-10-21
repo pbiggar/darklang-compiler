@@ -49,6 +49,35 @@ let parseParam state index =
         (span opening closing, name, typ, opening, colon, closing, description),
       after )
 
+(* Shared declaration parameter grammar and blank-name validation. *)
+let parseParams state index =
+  let parameters = RevBuffer.create ()
+  and stop = ref index
+  and more = ref true in
+  while !more && tok state !stop = TLParen do
+    let parameter, after = parseParam state !stop in
+    RevBuffer.add parameters parameter;
+    if after = !stop then more := false else stop := after
+  done;
+  List.iter
+    (function
+      | WT.FPNormal (_, name, _, _, _, _, _) when name.WT.name = "" ->
+          state.diagnostics :=
+            {
+              code = DiagnosticCode.pattern;
+              severity = DiagError;
+              range = name.WT.range;
+              message =
+                "Blank parameter '___' is not allowed in a package function";
+              related = [];
+              hint =
+                Some "use () for a unit parameter or give the parameter a name";
+            }
+            :: !(state.diagnostics)
+      | _ -> ())
+    (RevBuffer.toList parameters);
+  (RevBuffer.toList parameters, !stop)
+
 (*
    A declaration-scope function (`let f (p: T) … : R = body`) or value
    (`val x = body`). Legacy module-level `let x = body` also comes through here

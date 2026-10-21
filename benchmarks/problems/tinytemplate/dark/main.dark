@@ -120,11 +120,11 @@ let renderError (source: String) (position: Int64) (message: String) : TemplateE
 
 let errorMessage (error: TemplateError) : String =
     match error with
-    | ParseError ((message, line, column)) -> "parse " ++ Stdlib.Int64.toString line ++ ":" ++ Stdlib.Int64.toString column ++ ": " ++ message
-    | RenderError ((message, line, column)) -> "render " ++ Stdlib.Int64.toString line ++ ":" ++ Stdlib.Int64.toString column ++ ": " ++ message
+    | ParseError ((message, line, column)) -> "parse " + Stdlib.Int64.toString line + ":" + Stdlib.Int64.toString column + ": " + message
+    | RenderError ((message, line, column)) -> "render " + Stdlib.Int64.toString line + ":" + Stdlib.Int64.toString column + ": " + message
     | GenericError message -> message
-    | CalledTemplateError ((name, inner)) -> "template " ++ name ++ ": " ++ errorMessage inner
-    | CalledFormatterError ((name, inner)) -> "formatter " ++ name ++ ": " ++ errorMessage inner
+    | CalledTemplateError ((name, inner)) -> "template " + name + ": " + errorMessage inner
+    | CalledFormatterError ((name, inner)) -> "formatter " + name + ": " + errorMessage inner
 
 let parseUnsignedAt (text: String) (index: Int64) (total: Int64) : Stdlib.Option.Option<Int64> =
     if index == byteLength text then if index == 0L then None else Some total
@@ -164,15 +164,15 @@ let normalizeTag (text: String) (instructions: List<Instruction>) : (String * Li
 
 let scanText (source: String) (position: Int64) (accumulated: String) : (String * Int64) =
     match findFrom source "{" position with
-    | None -> (accumulated ++ slice source position (byteLength source), byteLength source)
+    | None -> (accumulated + slice source position (byteLength source), byteLength source)
     | Some open_ ->
         if open_ > position && byteAt source (open_ - 1L) == 92L then
-            scanText source (open_ + 1L) (accumulated ++ slice source position (open_ - 1L) ++ "{")
-        else (accumulated ++ slice source position open_, open_)
+            scanText source (open_ + 1L) (accumulated + slice source position (open_ - 1L) + "{")
+        else (accumulated + slice source position open_, open_)
 
 let closePosition (source: String) (position: Int64) (close: String) : Stdlib.Result.Result<Int64, TemplateError> =
     match findFrom source close position with
-    | None -> Error (parseError source position ("Expected closing '" ++ close ++ "'"))
+    | None -> Error (parseError source position ("Expected closing '" + close + "'"))
     | Some found ->
         match findFrom source "\n" position with
         | Some newline -> if newline < found then Error (parseError source position "Template tags may not cross a line") else Ok found
@@ -241,7 +241,7 @@ let closeFor (state: CompilerState) (target: Int64) : Stdlib.Result.Result<(Comp
 let compileIf (state: CompilerState) (next: Int64) (text: String) : Stdlib.Result.Result<CompilerState, TemplateError> =
     let negated = Stdlib.String.startsWith text "not " in
     let pathText = if negated then Stdlib.String.trim (slice text 4L (byteLength text)) else text in
-    if Stdlib.Bool.not (validPath pathText) then Error (parseError state.source state.position ("Invalid keyword name '" ++ pathText ++ "'"))
+    if Stdlib.Bool.not (validPath pathText) then Error (parseError state.source state.position ("Invalid keyword name '" + pathText + "'"))
     else
         let index = instructionCount state.reversed in
         let blocks = Stdlib.List.push state.blocks (BranchBlock index) in
@@ -275,7 +275,7 @@ let compileWith (state: CompilerState) (next: Int64) (text: String) : Stdlib.Res
     | None -> Error (parseError state.source state.position "Expected 'as <name>' in with block")
     | Some parts -> let (firstPart, secondPart) = parts in
         let path = Stdlib.String.trim (firstPart) in
-        if Stdlib.Bool.not (validPath path) then Error (parseError state.source state.position ("Invalid keyword name '" ++ path ++ "'"))
+        if Stdlib.Bool.not (validPath path) then Error (parseError state.source state.position ("Invalid keyword name '" + path + "'"))
         else
             let blocks = Stdlib.List.push state.blocks WithBlock in
             let nextState = moveCompiler state next state.reversed blocks state.trimNext in
@@ -299,7 +299,7 @@ let compileFor (state: CompilerState) (next: Int64) (text: String) : Stdlib.Resu
     | None -> Error (parseError state.source state.position "Unable to parse for block")
     | Some parts -> let (firstPart, secondPart) = parts in
         let path = Stdlib.String.trim (secondPart) in
-        if Stdlib.Bool.not (validPath path) then Error (parseError state.source state.position ("Invalid keyword name '" ++ path ++ "'"))
+        if Stdlib.Bool.not (validPath path) then Error (parseError state.source state.position ("Invalid keyword name '" + path + "'"))
         else
             let reference = (state.position + 2L, next - 2L) in
             let withContext = emit state (PushIterationContext reference) in
@@ -324,7 +324,7 @@ let compileCall (state: CompilerState) (next: Int64) (text: String) : Stdlib.Res
     | None -> Error (parseError state.source state.position "Unable to parse call block")
     | Some parts -> let (firstPart, secondPart) = parts in
         let path = Stdlib.String.trim (secondPart) in
-        if Stdlib.Bool.not (validPath path) then Error (parseError state.source state.position ("Invalid keyword name '" ++ path ++ "'"))
+        if Stdlib.Bool.not (validPath path) then Error (parseError state.source state.position ("Invalid keyword name '" + path + "'"))
         else
             let nextState = moveCompiler state next state.reversed state.blocks state.trimNext in
             let reference = (state.position + 2L, next - 2L) in
@@ -344,7 +344,7 @@ let compileBlock (state: CompilerState) (close: Int64) : Stdlib.Result.Result<Co
     | "for" -> compileFor normalizedState next (rest)
     | "endfor" -> compileEndFor normalizedState next (rest)
     | "call" -> compileCall normalizedState next (rest)
-    | unknown -> Error (parseError state.source state.position ("Unknown block type '" ++ unknown ++ "'"))
+    | unknown -> Error (parseError state.source state.position ("Unknown block type '" + unknown + "'"))
 
 let compileLoop (state: CompilerState) : Stdlib.Result.Result<CompilerState, TemplateError> =
     if state.position >= byteLength state.source then
@@ -391,7 +391,7 @@ let escapeParts (parts: List<Char>) (output: String) : String =
             | '\'' -> "&#39;"
             | '\"' -> "&quot;"
             | _ -> Stdlib.Char.toString part in
-        escapeParts rest (output ++ escaped)
+        escapeParts rest (output + escaped)
 
 let escape (value: String) : String = escapeParts (Stdlib.String.toList value) ""
 
@@ -412,7 +412,7 @@ let formatUnescaped (value: Value) : Stdlib.Result.Result<String, TemplateError>
 
 let formatCurrency (value: Value) : Stdlib.Result.Result<String, TemplateError> =
     match value with
-    | IntValue number -> Ok ("$" ++ Stdlib.Int64.toString number ++ ".00")
+    | IntValue number -> Ok ("$" + Stdlib.Int64.toString number + ".00")
     | _ -> format value
 
 let runFormatter (formatter: Formatter) (value: Value) : Stdlib.Result.Result<String, TemplateError> =
@@ -484,7 +484,7 @@ let lookupInAt (collections: List<(Int64 * Collection)>) (source: String) (fullP
     let head = pathHead path index in
     let step = match head with | FinalPathHead name -> name | NestedPathHead ((name, _)) -> name in
     match lookupStep collections value step with
-    | None -> Error (renderError source 0L ("Failed to find value from path '" ++ fullPath ++ "'."))
+    | None -> Error (renderError source 0L ("Failed to find value from path '" + fullPath + "'."))
     | Some next ->
         match head with
         | FinalPathHead _ -> Ok next
@@ -582,7 +582,7 @@ let renderIterationValue (instructions: List<Instruction>) (counter: Int64) (sco
                 else BoolValue (index == length - 1L) in
             (match runFormatter environment.defaultFormatter value with
              | Error error -> Error error
-             | Ok text -> renderProgram instructions (counter + 1L) scopes environment (output ++ text))
+             | Ok text -> renderProgram instructions (counter + 1L) scopes environment (output + text))
         | RootContext _ -> renderIterationValue instructions counter rest environment output keyword
         | NamedContext (_, _) -> renderIterationValue instructions counter rest environment output keyword
         | _ -> Error (GenericError "Malformed TinyTemplate context.")
@@ -597,7 +597,7 @@ let renderValueInstruction (instructions: List<Instruction>) (counter: Int64) (s
         | Ok value ->
             match runFormatter environment.defaultFormatter value with
             | Error error -> Error error
-            | Ok text -> renderProgram instructions (counter + 1L) scopes environment (output ++ text)
+            | Ok text -> renderProgram instructions (counter + 1L) scopes environment (output + text)
 
 let renderFormattedInstruction (instructions: List<Instruction>) (counter: Int64) (scopes: List<ContextElement>) (environment: RenderEnvironment) (output: String) (reference: SourceRef) : Stdlib.Result.Result<String, TemplateError> =
     match splitAt (referenceContent environment.source reference) "|" with
@@ -609,11 +609,11 @@ let renderFormattedInstruction (instructions: List<Instruction>) (counter: Int64
         | Error error -> Error error
         | Ok value ->
             match Stdlib.Dict.get environment.formatters name with
-            | None -> Error (renderError environment.source 0L ("Tried to call an unknown formatter '" ++ name ++ "'"))
+            | None -> Error (renderError environment.source 0L ("Tried to call an unknown formatter '" + name + "'"))
             | Some formatter ->
                 match runFormatter formatter value with
                 | Error error -> Error (CalledFormatterError ((name, error)))
-                | Ok text -> renderProgram instructions (counter + 1L) scopes environment (output ++ text)
+                | Ok text -> renderProgram instructions (counter + 1L) scopes environment (output + text)
 
 let renderBranchInstruction (instructions: List<Instruction>) (counter: Int64) (scopes: List<ContextElement>) (environment: RenderEnvironment) (output: String) (reference: SourceRef) (invert: Bool) (target: Int64) : Stdlib.Result.Result<String, TemplateError> =
     let text = blockRest environment.source reference in
@@ -662,7 +662,7 @@ let renderCallInstruction (instructions: List<Instruction>) (counter: Int64) (sc
         | Error error -> Error error
         | Ok value ->
             match templateGet environment.templates name with
-            | None -> Error (renderError environment.source 0L ("Tried to call an unknown template '" ++ name ++ "'"))
+            | None -> Error (renderError environment.source 0L ("Tried to call an unknown template '" + name + "'"))
             | Some template ->
                 let calledEnvironment = RenderEnvironment { source = template.source, templates = environment.templates, formatters = environment.formatters, defaultFormatter = environment.defaultFormatter, collections = environment.collections } in
                 match renderProgram template.instructions 0L ([RootContext value]) calledEnvironment output with
@@ -674,7 +674,7 @@ let renderProgram (instructions: List<Instruction>) (counter: Int64) (scopes: Li
     | None -> Ok output
     | Some instruction ->
         match instruction with
-        | Literal text -> renderProgram instructions (counter + 1L) scopes environment (output ++ text)
+        | Literal text -> renderProgram instructions (counter + 1L) scopes environment (output + text)
         | ValueInstruction reference ->
             if Stdlib.String.contains (referenceContent environment.source reference) "|" then
                 renderFormattedInstruction instructions counter scopes environment output reference
@@ -703,14 +703,14 @@ let renderProgram (instructions: List<Instruction>) (counter: Int64) (scopes: Li
         | Call reference -> renderCallInstruction instructions counter scopes environment output reference
 let render (engine: TinyTemplate) (name: String) (document: Document) : Stdlib.Result.Result<String, TemplateError> =
     match templateGet engine.templates name with
-    | None -> Error (GenericError ("Unknown template '" ++ name ++ "'"))
+    | None -> Error (GenericError ("Unknown template '" + name + "'"))
     | Some template ->
         let environment = RenderEnvironment { source = template.source, templates = engine.templates, formatters = engine.formatters, defaultFormatter = engine.defaultFormatter, collections = document.collections } in
         renderProgram template.instructions 0L ([RootContext document.root]) environment ""
 
 let padded3 (value: Int64) : String =
-    if value < 10L then "00" ++ Stdlib.Int64.toString value
-    else if value < 100L then "0" ++ Stdlib.Int64.toString value
+    if value < 10L then "00" + Stdlib.Int64.toString value
+    else if value < 100L then "0" + Stdlib.Int64.toString value
     else Stdlib.Int64.toString value
 
 let makeRows (index: Int64) (count: Int64) : (List<Value> * List<(Int64 * Collection)>) =
@@ -721,13 +721,13 @@ let makeRows (index: Int64) (count: Int64) : (List<Value> * List<(Int64 * Collec
         let tagsId = detailsId + 1L in
         let rowId = detailsId + 2L in
         let details = ObjectCollection ([("category", StringValue category), ("price", IntValue ((index + 1L) * 7L))]) in
-        let tags = ArrayCollection ([StringValue "stable", StringValue ("batch-" ++ Stdlib.Int64.toString (index % 4L)), StringValue "ready & tested"]) in
+        let tags = ArrayCollection ([StringValue "stable", StringValue ("batch-" + Stdlib.Int64.toString (index % 4L)), StringValue "ready & tested"]) in
         let row = ObjectCollection ([
-            ("name", StringValue ("Item <" ++ Stdlib.Int64.toString index ++ ">")),
+            ("name", StringValue ("Item <" + Stdlib.Int64.toString index + ">")),
             ("featured", BoolValue (index % 3L == 0L)),
             ("details", ObjectValue detailsId),
             ("tags", ArrayValue tagsId),
-            ("raw_html", StringValue ("<span>SKU-" ++ padded3 index ++ "</span>"))
+            ("raw_html", StringValue ("<span>SKU-" + padded3 index + "</span>"))
         ]) in
         let (restValues, restCollections) = makeRows (index + 1L) count in
         let values = Stdlib.List.push restValues (ObjectValue rowId) in

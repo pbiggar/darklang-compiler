@@ -64,7 +64,7 @@ let emitTextLines (parts: List<String>) (depth: Int64) (lines: List<String>) : L
         let trimmed = Stdlib.String.trim part in
         let next =
             if trimmed == "" then lines
-            else Stdlib.List.push lines (indent depth ++ trimmed) in
+            else Stdlib.List.push lines (indent depth + trimmed) in
         emitTextLines rest depth next
 
 let emitRawLines (parts: List<String>) (depth: Int64) (lines: List<String>) : List<String> =
@@ -73,7 +73,7 @@ let emitRawLines (parts: List<String>) (depth: Int64) (lines: List<String>) : Li
     | part :: rest ->
         let next =
             if part == "" then lines
-            else Stdlib.List.push lines (indent depth ++ part) in
+            else Stdlib.List.push lines (indent depth + part) in
         emitRawLines rest depth next
 
 let rawClose (html: String) (position: Int64) (name: String) : Int64 =
@@ -81,7 +81,7 @@ let rawClose (html: String) (position: Int64) (name: String) : Int64 =
     let length = byteLength html in
     let afterName = found + 2L + byteLength name in
     if found >= length || afterName > length then length
-    else if Stdlib.String.toLowercase (slice html found afterName) == "</" ++ name &&
+    else if Stdlib.String.toLowercase (slice html found afterName) == "</" + name &&
             (afterName == length || byteAt html afterName <= 32L ||
              byteAt html afterName == 47L || byteAt html afterName == 62L) then found
     else rawClose html (found + 1L) name
@@ -115,7 +115,7 @@ let formatFrom (html: String) (position: Int64) (depth: Int64)
                               Stdlib.String.startsWith tag "<?" || name == "" in
             let selfClosing = Stdlib.String.endsWith tag "/>" || voidTag name in
             let lineDepth = if closing && depth > 0L then depth - 1L else depth in
-            let next = Stdlib.List.push lines (indent lineDepth ++ tag) in
+            let next = Stdlib.List.push lines (indent lineDepth + tag) in
             let nextDepth =
                 if closing then lineDepth
                 else if declaration || selfClosing || depth >= 64L then depth
@@ -128,42 +128,42 @@ let formatFrom (html: String) (position: Int64) (depth: Int64)
 let formatHtml (html: String) : String =
     Stdlib.String.join (Stdlib.List.reverse (formatFrom html 0L 0L "" [])) "\n"
 
-let log (message: String) : Unit = Stdlib.printLine ("[http-fetch] " ++ message)
+let log (message: String) : Unit = Stdlib.printLine ("[http-fetch] " + message)
 
 let addressText (bytes: List<Int64>) : String =
     Stdlib.String.join (Stdlib.List.map bytes Stdlib.Int64.toString) "."
 
 let dnsError (error: Stdlib.__DnsWire.ResolveError) : String =
     match error with
-    | InvalidQuery message -> "invalid query: " ++ message
-    | NetworkError code -> "network errno " ++ Stdlib.Int64.toString code
-    | InvalidResponse message -> "invalid response: " ++ message
-    | ResolverConfig message -> "resolver configuration: " ++ message
+    | InvalidQuery message -> "invalid query: " + message
+    | NetworkError code -> "network errno " + Stdlib.Int64.toString code
+    | InvalidResponse message -> "invalid response: " + message
+    | ResolverConfig message -> "resolver configuration: " + message
 
 let printAddresses (family: String) (addresses: List<List<Int64>>) : Unit =
-    let _ = log (family ++ " answers: " ++ Stdlib.Int.toString (Stdlib.List.length addresses)) in
-    Stdlib.List.iter addresses (fun address -> log ("  " ++ addressText address))
+    let _ = log (family + " answers: " + Stdlib.Int.toString (Stdlib.List.length addresses)) in
+    Stdlib.List.iter addresses (fun address -> log ("  " + addressText address))
 
 let connect4 (addresses: List<List<Int64>>) (port: Int64) : Stdlib.Result.Result<Stdlib.__Network.TcpConnection, String> =
     match addresses with
     | [] -> Error "No IPv4 address connected"
     | address :: rest ->
-        let _ = log ("Connecting IPv4 " ++ addressText address ++ ":" ++ Stdlib.Int64.toString port) in
+        let _ = log ("Connecting IPv4 " + addressText address + ":" + Stdlib.Int64.toString port) in
         match Stdlib.__Network.connectTcp4 address port 1000L with
         | Ok connection -> Ok connection
         | Error code ->
-            let _ = log ("IPv4 connect failed: errno " ++ Stdlib.Int64.toString code) in
+            let _ = log ("IPv4 connect failed: errno " + Stdlib.Int64.toString code) in
             connect4 rest port
 
 let connect6 (addresses: List<List<Int64>>) (port: Int64) : Stdlib.Result.Result<Stdlib.__Network.TcpConnection, String> =
     match addresses with
     | [] -> Error "No IPv6 address connected"
     | address :: rest ->
-        let _ = log ("Connecting IPv6 bytes " ++ addressText address ++ ":" ++ Stdlib.Int64.toString port) in
+        let _ = log ("Connecting IPv6 bytes " + addressText address + ":" + Stdlib.Int64.toString port) in
         match Stdlib.__Network.connectTcp6 address port 1000L with
         | Ok connection -> Ok connection
         | Error code ->
-            let _ = log ("IPv6 connect failed: errno " ++ Stdlib.Int64.toString code) in
+            let _ = log ("IPv6 connect failed: errno " + Stdlib.Int64.toString code) in
             connect6 rest port
 
 let connectHost (host: String) (port: Int64) : Stdlib.Result.Result<Stdlib.__Network.TcpConnection, String> =
@@ -178,15 +178,15 @@ let connectHost (host: String) (port: Int64) : Stdlib.Result.Result<Stdlib.__Net
                 let _ = printAddresses "AAAA" addresses6 in
                 match connect6 addresses6 port with
                 | Ok connection -> Ok connection
-                | Error ipv6Error -> Error (ipv4Error ++ "; " ++ ipv6Error)
-            | Error error -> Error (ipv4Error ++ "; AAAA lookup failed: " ++ dnsError error)
+                | Error ipv6Error -> Error (ipv4Error + "; " + ipv6Error)
+            | Error error -> Error (ipv4Error + "; AAAA lookup failed: " + dnsError error)
     | Error error ->
-        let _ = log ("A lookup failed: " ++ dnsError error) in
+        let _ = log ("A lookup failed: " + dnsError error) in
         match Stdlib.__DnsWire.resolve host 28L with
         | Ok addresses6 ->
             let _ = printAddresses "AAAA" addresses6 in
             connect6 addresses6 port
-        | Error error6 -> Error ("AAAA lookup failed: " ++ dnsError error6)
+        | Error error6 -> Error ("AAAA lookup failed: " + dnsError error6)
 
 let readResponse (connection: Stdlib.__Network.TcpConnection) (buffer: Blob)
     : Stdlib.Result.Result<Stdlib.__HttpWire.ParsedResponse, String> =
@@ -196,41 +196,41 @@ let readResponse (connection: Stdlib.__Network.TcpConnection) (buffer: Blob)
         | Ok response -> Ok response
         | Error error ->
             match error with
-            | Invalid message -> Error ("HTTP framing error: " ++ message)
+            | Invalid message -> Error ("HTTP framing error: " + message)
             | Incomplete ->
                 match Stdlib.__Network.readTcp connection 4096L with
-                | Error code -> Error ("TCP read failed: errno " ++ Stdlib.Int64.toString code)
+                | Error code -> Error ("TCP read failed: errno " + Stdlib.Int64.toString code)
                 | Ok chunk ->
                     let length = Stdlib.Blob.length chunk in
-                    let _ = log ("Received " ++ Stdlib.Int.toString length ++ " bytes") in
+                    let _ = log ("Received " + Stdlib.Int.toString length + " bytes") in
                     if length == 0 then
                         match Stdlib.__HttpWire.parseResponse "GET" true buffer with
                         | Ok response -> Ok response
                         | Error errorAtEof ->
                             match errorAtEof with
-                            | Invalid message -> Error ("HTTP framing error at EOF: " ++ message)
+                            | Invalid message -> Error ("HTTP framing error at EOF: " + message)
                             | Incomplete -> Error "Response ended before the HTTP message was complete"
                     else readResponse connection (Stdlib.Blob.concat [buffer, chunk])
 
 let sendRequest (connectHostName: String) (connectPort: Int64)
     (target: String) (origin: Stdlib.__HttpWire.Url)
     : Stdlib.Result.Result<Stdlib.__HttpWire.ParsedResponse, String> =
-    let _ = log ("Resolving connection host " ++ connectHostName) in
+    let _ = log ("Resolving connection host " + connectHostName) in
     match connectHost connectHostName connectPort with
     | Error message -> Error message
     | Ok connection ->
-        let request = "GET " ++ target ++ " HTTP/1.1\r\n" ++
-                      "Host: " ++ origin.authority ++ "\r\n" ++
-                      "Accept: text/html\r\n" ++
+        let request = "GET " + target + " HTTP/1.1\r\n" +
+                      "Host: " + origin.authority + "\r\n" +
+                      "Accept: text/html\r\n" +
                       "Connection: close\r\n\r\n" in
-        let _ = log ("Request line: GET " ++ target ++ " HTTP/1.1") in
-        let _ = log ("Host header: " ++ origin.authority) in
+        let _ = log ("Request line: GET " + target + " HTTP/1.1") in
+        let _ = log ("Host header: " + origin.authority) in
         let _ = log "Accept header: text/html" in
         let _ = log "Connection header: close" in
-        let _ = log ("Sending " ++ Stdlib.Int64.toString (Stdlib.String.byteLength request) ++ " bytes") in
+        let _ = log ("Sending " + Stdlib.Int64.toString (Stdlib.String.byteLength request) + " bytes") in
         let result =
             match Stdlib.__Network.writeTcp connection (Stdlib.String.toBlob request) with
-            | Error code -> Error ("TCP write failed: errno " ++ Stdlib.Int64.toString code)
+            | Error code -> Error ("TCP write failed: errno " + Stdlib.Int64.toString code)
             | Ok () -> readResponse connection Stdlib.Blob.empty in
         let _ = Stdlib.__Network.closeTcp connection in
         let _ = log "Connection closed" in
@@ -238,31 +238,31 @@ let sendRequest (connectHostName: String) (connectPort: Int64)
 
 let sendSecureRequest (origin: Stdlib.__HttpWire.Url)
     : Stdlib.Result.Result<Stdlib.__HttpWire.ParsedResponse, String> =
-    let _ = log ("Resolving connection host " ++ origin.host) in
+    let _ = log ("Resolving connection host " + origin.host) in
     match connectHost origin.host origin.port with
     | Error message -> Error message
     | Ok connection ->
-        let request = "GET " ++ origin.target ++ " HTTP/1.1\r\n" ++
-                      "Host: " ++ origin.authority ++ "\r\n" ++
-                      "Accept: text/html\r\n" ++
+        let request = "GET " + origin.target + " HTTP/1.1\r\n" +
+                      "Host: " + origin.authority + "\r\n" +
+                      "Accept: text/html\r\n" +
                       "Connection: close\r\n\r\n" in
-        let _ = log ("Request line: GET " ++ origin.target ++ " HTTP/1.1") in
-        let _ = log ("Host header: " ++ origin.authority) in
-        let _ = log ("Sending " ++ Stdlib.Int64.toString (Stdlib.String.byteLength request) ++ " encrypted HTTP bytes") in
+        let _ = log ("Request line: GET " + origin.target + " HTTP/1.1") in
+        let _ = log ("Host header: " + origin.authority) in
+        let _ = log ("Sending " + Stdlib.Int64.toString (Stdlib.String.byteLength request) + " encrypted HTTP bytes") in
         let result =
             match Stdlib.__Tls13Client.loadSystemRoots () with
-            | Error message -> Error ("Trust store: " ++ message)
+            | Error message -> Error ("Trust store: " + message)
             | Ok roots ->
-                let _ = log ("Loaded " ++ Stdlib.Int.toString (Stdlib.List.length roots) ++ " system CA certificates") in
-                let _ = log ("Starting TLS 1.3 for " ++ origin.host) in
+                let _ = log ("Loaded " + Stdlib.Int.toString (Stdlib.List.length roots) + " system CA certificates") in
+                let _ = log ("Starting TLS 1.3 for " + origin.host) in
                 match Stdlib.__Tls13Client.exchange connection origin.host "GET"
                         roots (Stdlib.String.toBlob request) with
-                | Error message -> Error ("TLS: " ++ message)
+                | Error message -> Error ("TLS: " + message)
                 | Ok response ->
-                    let _ = log ("Authenticated response bytes: " ++ Stdlib.Int.toString (Stdlib.Blob.length response)) in
+                    let _ = log ("Authenticated response bytes: " + Stdlib.Int.toString (Stdlib.Blob.length response)) in
                     match Stdlib.__HttpWire.parseResponse "GET" true response with
                     | Ok parsed -> Ok parsed
-                    | Error (Invalid message) -> Error ("HTTP framing: " ++ message)
+                    | Error (Invalid message) -> Error ("HTTP framing: " + message)
                     | Error Incomplete -> Error "HTTP response is incomplete" in
         let _ = Stdlib.__Network.closeTcp connection in
         let _ = log "Connection closed" in
@@ -271,13 +271,13 @@ let sendSecureRequest (origin: Stdlib.__HttpWire.Url)
 let proxyRequest (origin: Stdlib.__HttpWire.Url) (proxyText: String)
     : Stdlib.Result.Result<Stdlib.__HttpWire.ParsedResponse, String> =
     match Stdlib.__HttpWire.parseUrl proxyText with
-    | Error message -> Error ("Invalid HTTP_PROXY URL: " ++ message)
+    | Error message -> Error ("Invalid HTTP_PROXY URL: " + message)
     | Ok proxy ->
         if proxy.scheme != "http" then Error "HTTP_PROXY must use plain http://"
         else
-            let _ = log ("Proxy: " ++ proxy.authority) in
-            let _ = log ("Proxy resolves the origin host " ++ origin.host) in
-            let absoluteTarget = origin.scheme ++ "://" ++ origin.authority ++ origin.target in
+            let _ = log ("Proxy: " + proxy.authority) in
+            let _ = log ("Proxy resolves the origin host " + origin.host) in
+            let absoluteTarget = origin.scheme + "://" + origin.authority + origin.target in
             sendRequest proxy.host proxy.port absoluteTarget origin
 
 let noProxyMatches (host: String) (entries: List<String>) : Bool =
@@ -301,14 +301,14 @@ let proxyFor (host: String) : Stdlib.Option.Option<String> =
         | None -> Stdlib.Cli.Env.get "http_proxy"
 
 let printHeaders (headers: List<(String * String)>) : Unit =
-    Stdlib.List.iter headers (fun (name, value) -> log ("Header: " ++ name ++ ": " ++ value))
+    Stdlib.List.iter headers (fun (name, value) -> log ("Header: " + name + ": " + value))
 
 let display (status: String) (headers: List<(String * String)>) (body: Blob) : Unit =
-    let _ = log ("Response status: " ++ status) in
+    let _ = log ("Response status: " + status) in
     let _ = printHeaders headers in
-    let _ = log ("Body bytes: " ++ Stdlib.Int.toString (Stdlib.Blob.length body)) in
+    let _ = log ("Body bytes: " + Stdlib.Int.toString (Stdlib.Blob.length body)) in
     match Stdlib.Blob.toString body with
-    | Error message -> log ("Body is not UTF-8: " ++ message)
+    | Error message -> log ("Body is not UTF-8: " + message)
     | Ok html ->
         let _ = log "Body follows (HTML indented):" in
         Stdlib.printLine (formatHtml html)
@@ -316,28 +316,28 @@ let display (status: String) (headers: List<(String * String)>) (body: Blob) : U
 match Stdlib.Cli.__Args.get 0 with
 | Error _ -> Stdlib.printLine "Usage: http-fetch <http://url|https://url>"
 | Ok url ->
-    let _ = log ("URL: " ++ url) in
+    let _ = log ("URL: " + url) in
     match Stdlib.__HttpWire.parseUrl url with
-    | Error message -> log ("URL parse failed: " ++ message)
+    | Error message -> log ("URL parse failed: " + message)
     | Ok parsed ->
-        let _ = log ("Scheme: " ++ parsed.scheme) in
-        let _ = log ("Host: " ++ parsed.host) in
-        let _ = log ("Port: " ++ Stdlib.Int64.toString parsed.port) in
-        let _ = log ("Request target: " ++ parsed.target) in
+        let _ = log ("Scheme: " + parsed.scheme) in
+        let _ = log ("Host: " + parsed.host) in
+        let _ = log ("Port: " + Stdlib.Int64.toString parsed.port) in
+        let _ = log ("Request target: " + parsed.target) in
         if parsed.scheme == "https" then
             let _ = log "Mode: direct Dark DNS/TCP/TLS 1.3 with system CA verification" in
             match sendSecureRequest parsed with
-            | Error message -> log ("FAILED: " ++ message)
+            | Error message -> log ("FAILED: " + message)
             | Ok response -> display (Stdlib.Int64.toString response.statusCode) response.headers response.body
         else
             match proxyFor parsed.host with
             | Some proxy ->
                 let _ = log "Mode: HTTP proxy" in
                 match proxyRequest parsed proxy with
-                | Error message -> log ("FAILED: " ++ message)
+                | Error message -> log ("FAILED: " + message)
                 | Ok response -> display (Stdlib.Int64.toString response.statusCode) response.headers response.body
             | None ->
                 let _ = log "Mode: direct Dark DNS/TCP" in
                 match sendRequest parsed.host parsed.port parsed.target parsed with
-                | Error message -> log ("FAILED: " ++ message)
+                | Error message -> log ("FAILED: " + message)
                 | Ok response -> display (Stdlib.Int64.toString response.statusCode) response.headers response.body

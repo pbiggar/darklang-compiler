@@ -41,14 +41,14 @@ let segmentsToString (branchId: Uuid) (segments: ErrorSegments) : String =
         | Ordinal value -> Stdlib.String.toOrdinal value
         | Count (count, singular, plural) ->
             let selected = if count == 1 then singular else plural in
-            Stdlib.Int.toString count ++ " " ++ Darklang.PrettyPrinter.RuntimeTypes.RuntimeError.segmentsToString branchId [selected]
+            Stdlib.Int.toString count + " " + Darklang.PrettyPrinter.RuntimeTypes.RuntimeError.segmentsToString branchId [selected]
         | IndefiniteArticle ->
             match Stdlib.List.head prevSegments with
             | None -> ""
-            | Some following -> Stdlib.String.articleFor following ++ " "
+            | Some following -> Stdlib.String.articleFor following + " "
         | FunctionName name -> Darklang.PrettyPrinter.RuntimeTypes.fnName branchId name
         | Description value -> value
-        | ParamName value -> "`" ++ value ++ "`"
+        | ParamName value -> "`" + value + "`"
         | InlineParamName value -> value
         | TypeName name -> Darklang.PrettyPrinter.RuntimeTypes.typeName branchId name
         | ShortTypeName name -> Darklang.PrettyPrinter.RuntimeTypes.shortTypeName branchId name
@@ -56,10 +56,10 @@ let segmentsToString (branchId: Uuid) (segments: ErrorSegments) : String =
         | TypeOfValue value -> Darklang.PrettyPrinter.RuntimeTypes.Dval.valueTypeName branchId value
         | ValueType typ -> Darklang.PrettyPrinter.RuntimeTypes.valueType branchId typ
         | DeclaredValueType (declared, typ) -> Darklang.PrettyPrinter.RuntimeTypes.declaredValueType branchId declared typ
-        | FieldName value -> "`" ++ value ++ "`"
+        | FieldName value -> "`" + value + "`"
         | InlineFieldName value -> value
         | ValueName name -> Darklang.PrettyPrinter.RuntimeTypes.valueName branchId name
-        | VarName value -> "`" ++ value ++ "`"
+        | VarName value -> "`" + value + "`"
         | InlineVarName value -> value
         | InlineValue value ->
             Darklang.PrettyPrinter.RuntimeTypes.dval branchId value

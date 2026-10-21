@@ -1,33 +1,42 @@
-# Syntax behavior, not parser implementation-file mappings.
+# Current syntax and structural validation against sources.yaml.
+# AOT checking/execution/composition, Unicode-source concerns and runtime parser APIs
+# are outside this assessment. Supported is scoped source parity plus focused native
+# regressions, not exhaustive execution of an interpreter differential corpus.
 schema: 2
 groups:
   Lexing:
-    Comments: unassessed
-    Identifiers and escaped identifiers: unassessed
-    Numeric literals: unassessed
-    Character literals: unassessed
-    Quoted strings: unassessed
-    Triple-quoted strings: unassessed
+    Comments: supported
+    Identifiers and escaped identifiers: supported
+    Numeric literals: supported
+    Character literals: supported
+    Quoted strings: supported
+    Triple-quoted strings: supported
   Expressions:
-    Function application and precedence: unassessed
-    Pipelines: unassessed
-    Collection literals: unassessed
-    Conditionals: unassessed
-    Match patterns and guards: unassessed
-    String interpolation and nesting: unassessed
-    Record and dictionary separators:
-      status: supported
-      notes: Records, record updates, record types and dictionaries use commas or newlines. Semicolons are rejected;
-        statement sequencing retains semicolons.
+    Function application and precedence: supported
+    Pipelines: supported
+    Collection literals: supported
+    Conditionals: supported
+    Match patterns and guards: supported
+    String interpolation and nesting: supported
+    Postfix unwrap: supported
+    Numeric tuple selectors: supported
+    Rejection of legacy concatenation operators: supported
+    Record and dictionary separators: supported
   Declarations:
-    Modules and nesting: unassessed
-    Function and value declarations: unassessed
-    Records and enums: unassessed
-    Traits and implementations: unassessed
-    Generic parameters and bounds: unassessed
-    Effect annotations: unassessed
-    Removed database attribute:
-      status: supported
-      notes: The obsolete [<DB>] declaration syntax is rejected, matching upstream removal of user datastore types.
+    Modules and nesting: supported
+    Function and value declarations: supported
+    Records and enums: supported
+    Traits and implementations: supported
+    Generic parameters and bounds: supported
+    Function types after nested generic closers: supported
+    Trait method parameter validation: supported
+    Trait method name uniqueness: supported
+    Implementation member name uniqueness: supported
+    Effect annotations: supported
+    Enum case capitalization: supported
+    Database attributes: supported
   Tests:
     Named test declarations: supported
+    Rejection of SQL-error assertion markers: supported
+  Limits:
+    Parser nesting limit: supported

@@ -1112,15 +1112,6 @@ let buildBatchSource tests =
       tests
     |> String.concat "\n\n"
   in
-  let resultBindings =
-    List.mapi
-      (fun i _ ->
-        let index = string_of_int i in
-        "let " ^ prefix ^ "Result" ^ index ^ " = " ^ prefix ^ "Check" ^ index
-        ^ " (0L) in")
-      tests
-    |> String.concat "\n"
-  in
   let rec chunks xs =
     if xs = [] then []
     else
@@ -1131,13 +1122,27 @@ let buildBatchSource tests =
     List.mapi (fun i t -> (i, t)) tests
     |> chunks
     |> List.map (fun chunk ->
-        List.map
-          (fun (i, _) ->
-            let bit = Int64.shift_left 1L (i mod batchResultChunkSize) in
-            "(if " ^ prefix ^ "Result" ^ string_of_int i ^ " then "
-            ^ Int64.to_string bit ^ "L else 0L)")
-          chunk
-        |> String.concat "\n+ ")
+        (* Bound each generated let chain by the result-word size, so a large
+           batch does not exceed the interpreter parser's nesting limit. *)
+        let bindings =
+          List.map
+            (fun (i, _) ->
+              let index = string_of_int i in
+              "let " ^ prefix ^ "Result" ^ index ^ " = " ^ prefix ^ "Check"
+              ^ index ^ " (0L) in")
+            chunk
+          |> String.concat "\n"
+        in
+        let mask =
+          List.map
+            (fun (i, _) ->
+              let bit = Int64.shift_left 1L (i mod batchResultChunkSize) in
+              "(if " ^ prefix ^ "Result" ^ string_of_int i ^ " then "
+              ^ Int64.to_string bit ^ "L else 0L)")
+            chunk
+          |> String.concat "\n+ "
+        in
+        bindings ^ "\n" ^ mask)
   in
   let vector =
     match masks with
@@ -1147,7 +1152,7 @@ let buildBatchSource tests =
         ^ String.concat ",\n" (List.map (fun mask -> "(" ^ mask ^ ")") masks)
         ^ ")"
   in
-  checkFunctions ^ "\n\n" ^ resultBindings ^ "\n" ^ vector
+  checkFunctions ^ "\n\n" ^ vector
 
 (* Parse the harness-only scaffolding, then insert each comparison tree into its
    result binding. User expressions and literal contents are never reprinted. *)

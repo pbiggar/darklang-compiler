@@ -353,7 +353,7 @@ let findAll (input: String) (pattern: String) : List<String> =
 let replace (input: String) (pattern: String) (replacement: String) : String =
     match Stdlib.Regex.__find input pattern with
     | None -> input
-    | Some found -> Stdlib.String.fromList found.before ++ replacement ++ Stdlib.String.fromList found.after
+    | Some found -> Stdlib.String.fromList found.before + replacement + Stdlib.String.fromList found.after
 
 let __captureAt (captures: List<String>) (index: Int64) : String =
     match captures with
@@ -364,33 +364,33 @@ let __expandReplacement (chars: List<Char>) (full: String) (captures: List<Strin
     match chars with
     | [] -> acc
     | char :: rest ->
-        if char != '$' then Stdlib.Regex.__expandReplacement rest full captures (acc ++ Stdlib.Char.toString char)
+        if char != '$' then Stdlib.Regex.__expandReplacement rest full captures (acc + Stdlib.Char.toString char)
         else
             match rest with
-            | [] -> acc ++ "$"
+            | [] -> acc + "$"
             | substitution :: after ->
-                if substitution == '&' then Stdlib.Regex.__expandReplacement after full captures (acc ++ full)
-                else if substitution == '$' then Stdlib.Regex.__expandReplacement after full captures (acc ++ "$")
+                if substitution == '&' then Stdlib.Regex.__expandReplacement after full captures (acc + full)
+                else if substitution == '$' then Stdlib.Regex.__expandReplacement after full captures (acc + "$")
                 else
                     match Stdlib.Char.toAsciiCode substitution with
                     | Some code ->
                         if code >= 49 && code <= 57 then
                             match Stdlib.Int.toInt64 code with
-                            | Some value -> Stdlib.Regex.__expandReplacement after full captures (acc ++ Stdlib.Regex.__captureAt captures (value - 48L))
-                            | None -> Stdlib.Regex.__expandReplacement after full captures (acc ++ "$" ++ Stdlib.Char.toString substitution)
-                        else Stdlib.Regex.__expandReplacement after full captures (acc ++ "$" ++ Stdlib.Char.toString substitution)
-                    | None -> Stdlib.Regex.__expandReplacement after full captures (acc ++ "$" ++ Stdlib.Char.toString substitution)
+                            | Some value -> Stdlib.Regex.__expandReplacement after full captures (acc + Stdlib.Regex.__captureAt captures (value - 48L))
+                            | None -> Stdlib.Regex.__expandReplacement after full captures (acc + "$" + Stdlib.Char.toString substitution)
+                        else Stdlib.Regex.__expandReplacement after full captures (acc + "$" + Stdlib.Char.toString substitution)
+                    | None -> Stdlib.Regex.__expandReplacement after full captures (acc + "$" + Stdlib.Char.toString substitution)
 
 let __replaceAll (input: List<Char>) (branches: List<List<Stdlib.Regex.__Piece>>) (replacement: String) (acc: String) : String =
     match Stdlib.Regex.__findFrom input branches true [] with
-    | None -> acc ++ Stdlib.String.fromList input
+    | None -> acc + Stdlib.String.fromList input
     | Some found ->
         let full = Stdlib.String.fromList found.value in
-        let next = acc ++ Stdlib.String.fromList found.before ++ Stdlib.Regex.__expandReplacement (Stdlib.String.toList replacement) full found.captures "" in
+        let next = acc + Stdlib.String.fromList found.before + Stdlib.Regex.__expandReplacement (Stdlib.String.toList replacement) full found.captures "" in
         if Stdlib.List.isEmpty found.value then
             match found.after with
             | [] -> next
-            | char :: rest -> Stdlib.Regex.__replaceAll rest branches replacement (next ++ Stdlib.Char.toString char)
+            | char :: rest -> Stdlib.Regex.__replaceAll rest branches replacement (next + Stdlib.Char.toString char)
         else Stdlib.Regex.__replaceAll found.after branches replacement next
 
 let replaceAll (input: String) (pattern: String) (replacement: String) : String =

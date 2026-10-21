@@ -4,7 +4,7 @@
 
 (let _ = Builtin.print "left" in let _ = Builtin.printLine "right" in ()) = stdout="leftright\n" stderr="" exact_bytes=true
 (let _ = Builtin.printLine "one" in let _ = Builtin.printLine "two" in ()) = stdout="one\ntwo\n" stderr="" exact_bytes=true disable_opt_anf=true disable_opt_mir=true disable_opt_lir=true
-(let first = Builtin.stdinReadLine (()) in let second = Builtin.stdinReadLine (()) in first ++ "|" ++ second) = stdout="\"one|two\"\n" stderr="" stdin="one\r\ntwo" exact_bytes=true
+(let first = Builtin.stdinReadLine (()) in let second = Builtin.stdinReadLine (()) in first + "|" + second) = stdout="\"one|two\"\n" stderr="" stdin="one\r\ntwo" exact_bytes=true
 
 // Public String-only presentation prelude. Final Unit values never add output.
 Stdlib.print "" = stdout="" stderr="" exact_bytes=true

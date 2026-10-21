@@ -252,6 +252,11 @@ groups:
       status: missing
       notes: Upstream await calls Builtin.runtimeForce; user function calls may pass pending arguments onward. The
         separate native async implementation is not merged into this baseline.
+  Early return:
+    Postfix unwrap propagation:
+      status: missing
+      notes: Postfix ? parses and validates like the interpreter, but native early-return lowering is not implemented.
+        It is not Builtin.unwrap, which raises on None/Error instead of returning them from the enclosing function.
   Reflection and dynamic execution:
     Runtime expression evaluation:
       status: missing

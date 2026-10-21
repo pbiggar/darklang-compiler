@@ -17,38 +17,14 @@ let parseDecl parseBlock state index =
   let typeParams, bounds, next =
     TypeParameterParser.parseTypeParams state (nameIndex + 1)
   in
-  if tok state next = TLParen then (
-    let parameters = RevBuffer.create ()
-    and stop = ref next
-    and more = ref true in
-    while !more && tok state !stop = TLParen do
-      let parameter, after = DeclarationSupport.parseParam state !stop in
-      RevBuffer.add parameters parameter;
-      if after = !stop then more := false else stop := after
-    done;
-    List.iter
-      (function
-        | WT.FPNormal (_, name, _, _, _, _, _) when name.WT.name = "" ->
-            state.diagnostics :=
-              {
-                code = DiagnosticCode.pattern;
-                severity = DiagError;
-                range = name.WT.range;
-                message =
-                  "Blank parameter '___' is not allowed in a package function";
-                related = [];
-                hint =
-                  Some
-                    "use () for a unit parameter or give the parameter a name";
-              }
-              :: !(state.diagnostics)
-        | _ -> ())
-      (RevBuffer.toList parameters);
+  if tok state next = TLParen then
+    let parameters, afterParams = DeclarationSupport.parseParams state next in
     let colon, next =
-      if tok state !stop = TColon then (rng state !stop, !stop + 1)
+      if tok state afterParams = TColon then
+        (rng state afterParams, afterParams + 1)
       else begin
-        errExpected state !stop "':' before the return type";
-        (zeroWidthAtEnd (rng state !stop), !stop)
+        errExpected state afterParams "':' before the return type";
+        (zeroWidthAtEnd (rng state afterParams), afterParams)
       end
     in
     let effects, next = DeclarationSupport.parseEffectRow state next in
@@ -67,7 +43,7 @@ let parseDecl parseBlock state index =
           name;
           typeParams;
           bounds;
-          parameters = RevBuffer.toList parameters;
+          parameters;
           effects;
           returnType;
           body;
@@ -76,7 +52,7 @@ let parseDecl parseBlock state index =
           symbolEquals = equals;
           description = docOf state index;
         },
-      after ))
+      after )
   else
     let next =
       if tok state next = TColon then begin

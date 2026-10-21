@@ -35,9 +35,9 @@ match Stdlib.Cli.__Args.int64 0, Stdlib.Blob.fromHex "@CA@" with
 SOURCE = '''// h3-session.dark - Repeated requests share QUIC and dynamic QPACK ownership.
 let check (session: Stdlib.HttpClientSession.Session) (index: Int64) : Bool =
   if index == @COUNT@L then true
-  else match session.request "GET" ("https://localhost/" ++ Stdlib.Int64.toString index) [("x-shared", "café ☃")] Stdlib.Blob.empty with
+  else match session.request "GET" ("https://localhost/" + Stdlib.Int64.toString index) [("x-shared", "café ☃")] Stdlib.Blob.empty with
   | Error _ -> false
-  | Ok response -> Stdlib.Blob.toHex response.body == Stdlib.Blob.toHex (Stdlib.String.toBlob ("/" ++ Stdlib.Int64.toString index)) && check session (index + 1L)
+  | Ok response -> Stdlib.Blob.toHex response.body == Stdlib.Blob.toHex (Stdlib.String.toBlob ("/" + Stdlib.Int64.toString index)) && check session (index + 1L)
 let run (port: Int64) (root: Blob) : Stdlib.Result.Result<Bool, String> =
   Stdlib.__QuicClient.connect (Stdlib.__Datagram.Endpoint { address = [127L, 0L, 0L, 1L], port = port }) "localhost" [root] 10000L |> Stdlib.Result.andThen (fun ready ->
     let origin = Stdlib.__HttpWire.Url { scheme = "https", host = "localhost", port = 443L, authority = "localhost", target = "/0" } in
@@ -91,7 +91,7 @@ match Stdlib.Cli.__Args.int64 0, Stdlib.Blob.fromHex "@CA@" with
 
 PUBLIC_MULTIPLEX = r'''// h3-session-batch.dark - Public batches use advertised QUIC without a TCP fallback.
 let request (path: String) : Stdlib.HttpClientSession.Request =
-  Stdlib.HttpClientSession.Request { method = "GET", url = "https://localhost" ++ path, headers = [("x-shared", "café ☃")], body = Stdlib.Blob.empty }
+  Stdlib.HttpClientSession.Request { method = "GET", url = "https://localhost" + path, headers = [("x-shared", "café ☃")], body = Stdlib.Blob.empty }
 let check (session: Stdlib.HttpClientSession.Session) (mode: String) : Bool =
   match session.requestMany [request "/one", request "/two"] with
   | Error _ -> false
@@ -110,7 +110,7 @@ let check (session: Stdlib.HttpClientSession.Session) (mode: String) : Bool =
 match Stdlib.Cli.__Args.int64 0, Stdlib.Blob.fromHex "@CA@", Stdlib.__Network.monotonicMillis () with
 | Ok port, Ok root, Ok now ->
   let origin = Stdlib.__HttpWire.Url { scheme = "https", host = "localhost", port = 443L, authority = "localhost", target = "/" } in
-  let cache = Stdlib.__AltSvcCache.learn Stdlib.__AltSvcCache.empty origin 200 [("alt-svc", "h3=\"127.0.0.1:" ++ Stdlib.Int64.toString port ++ "\"; ma=60")] now now 0L in
+  let cache = Stdlib.__AltSvcCache.learn Stdlib.__AltSvcCache.empty origin 200 [("alt-svc", "h3=\"127.0.0.1:" + Stdlib.Int64.toString port + "\"; ma=60")] now now 0L in
   let session = Stdlib.HttpClientSession.__createState (Stdlib.HttpClientSession.__State { cache = cache, pool = Stdlib.__Http1Pool.empty, http2 = Stdlib.__Http2Pool.empty, http3 = Stdlib.__Http3Pool.empty, epoch = 0L }) true (Some [root]) in
   let valid = check session @MODE@ in
   let _ = session.clear () in
@@ -146,7 +146,7 @@ def main():
         if args.stream:
             if args.multiplex:
                 parser.error("--stream requires sequential requests")
-            test_source = test_source.replace('session.request "GET"', 'session.stream "GET"').replace('Stdlib.Blob.toHex response.body == Stdlib.Blob.toHex (Stdlib.String.toBlob ("/" ++ Stdlib.Int64.toString index))', 'Stdlib.Blob.__byteLength (Stdlib.Stream.toBlob response.body) == 70000L')
+            test_source = test_source.replace('session.request "GET"', 'session.stream "GET"').replace('Stdlib.Blob.toHex response.body == Stdlib.Blob.toHex (Stdlib.String.toBlob ("/" + Stdlib.Int64.toString index))', 'Stdlib.Blob.__byteLength (Stdlib.Stream.toBlob response.body) == 70000L')
         source.write_text(test_source.replace("@CA@", ca.public_bytes(serialization.Encoding.DER).hex()).replace("@COUNT@", str(args.requests)))
         compiled = subprocess.run([str(args.compiler), str(source), "--allow-internal", "--leak-check", "-o", str(binary)], cwd=ROOT, capture_output=True, text=True, timeout=120)
         assert compiled.returncode == 0, compiled.stdout + compiled.stderr

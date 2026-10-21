@@ -32,7 +32,7 @@ def main():
         assert copied_version == version, copied_version
         source = directory / "input.dark"
         source.write_text('let length = Stdlib.String.length "hé🚀" in\n'
-                          'Stdlib.Int.toString length ++ "|" ++ Builtin.getBuildHash ()\n', encoding="utf-8")
+                          'Stdlib.Int.toString length + "|" + Builtin.getBuildHash ()\n', encoding="utf-8")
         output = directory / "program"
         result = subprocess.run(
             [str(binary), "-q", "--emit-result", str(source), "-o", str(output)],

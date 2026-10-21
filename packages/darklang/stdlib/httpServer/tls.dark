@@ -2,7 +2,7 @@
 module Darklang.Stdlib.HttpServer.Tls
 
 let __handler (handler: Stdlib.Http.Request -> Stdlib.Http.Response) (request: Stdlib.Http.Request) : Stdlib.Http.Response =
-  let url = if Stdlib.String.startsWith request.url "http://" then "https://" ++ Stdlib.String.dropFirst request.url 7 else request.url in
+  let url = if Stdlib.String.startsWith request.url "http://" then "https://" + Stdlib.String.dropFirst request.url 7 else request.url in
   handler (Stdlib.Http.Request { url = url, headers = request.headers, body = request.body })
 
 let __loop (config: Stdlib.HttpServer.Config.Config) (identity: Stdlib.TlsServerIdentity.Identity) (handler: Stdlib.Http.Request -> Stdlib.Http.Response) (signals: Stdlib.__Network.ShutdownSignals) (listener: Stdlib.__Network.TcpListener) (limit: Int64) : Stdlib.Result.Result<Unit, String> =

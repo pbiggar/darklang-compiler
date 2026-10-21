@@ -305,7 +305,7 @@ let __repeatInt64<'a> (count: Int64) (value: a) (acc: List<a>) : List<a> =
 // Repeat validates negative counts and preserves the interpreter's exact error.
 let repeat<'a> (count: Int) (value: a) : Stdlib.Result.Result<List<a>, String> =
     if count < 0 then
-        Error ("Expected `times` to be positive, but it was `" ++ Stdlib.Int.toString count ++ "`")
+        Error ("Expected `times` to be positive, but it was `" + Stdlib.Int.toString count + "`")
     else Ok (Stdlib.List.repeatUnsafe<a> count value)
 
 // Map with index: apply a function to each element along with its index - O(n)
@@ -500,7 +500,7 @@ let __int64sToStrings (list: List<Int64>) (acc: List<String>) : List<String> =
 
 let __toDisplayString_i64 (list: List<Int64>) : String =
     let strs = Stdlib.List.__int64sToStrings list (Stdlib.List.__empty ()) in
-    "[" ++ Stdlib.String.join strs ", " ++ "]"
+    "[" + Stdlib.String.join strs ", " + "]"
 
 let __intsToStrings (list: List<Int>) (acc: List<String>) : List<String> =
     if Stdlib.List.__isEmpty list then Stdlib.List.__reverse acc
@@ -513,7 +513,7 @@ let __intsToStrings (list: List<Int>) (acc: List<String>) : List<String> =
 
 let __toDisplayString_int (list: List<Int>) : String =
     let strs = Stdlib.List.__intsToStrings list (Stdlib.List.__empty ()) in
-    "[" ++ Stdlib.String.join strs ", " ++ "]"
+    "[" + Stdlib.String.join strs ", " + "]"
 
 let __i64ListsToStrings (list: List<List<Int64>>) (acc: List<String>) : List<String> =
     if Stdlib.List.__isEmpty list then Stdlib.List.__reverse acc
@@ -527,7 +527,7 @@ let __i64ListsToStrings (list: List<List<Int64>>) (acc: List<String>) : List<Str
 
 let __toDisplayString_list_i64 (list: List<List<Int64>>) : String =
     let strs = Stdlib.List.__i64ListsToStrings list (Stdlib.List.__empty ()) in
-    "[" ++ Stdlib.String.join strs ", " ++ "]"
+    "[" + Stdlib.String.join strs ", " + "]"
 
 // Helper to build string list from String list (with double quotes for display)
 let __stringsToStrings (list: List<String>) (acc: List<String>) : List<String> =
@@ -536,38 +536,38 @@ let __stringsToStrings (list: List<String>) (acc: List<String>) : List<String> =
         match Stdlib.List.__head list with
         | None -> Stdlib.List.__reverse acc
         | Some h ->
-            let quoted = "\"" ++ h ++ "\"" in
+            let quoted = "\"" + h + "\"" in
             let newAcc = Stdlib.List.__push acc quoted in
             Stdlib.List.__stringsToStrings (Stdlib.List.__tail list) newAcc
 
 let __quoteStringForDisplay (s: String) : String =
-    "\"" ++ s ++ "\""
+    "\"" + s + "\""
 
 let __stringsDisplayItems (list: List<String>) (first: Bool) : String =
     match list with
     | [] -> ""
     | [h] ->
         if first then Stdlib.List.__quoteStringForDisplay h
-        else ", " ++ Stdlib.List.__quoteStringForDisplay h
+        else ", " + Stdlib.List.__quoteStringForDisplay h
     | h :: t ->
         let item = Stdlib.List.__quoteStringForDisplay h in
         let rest = Stdlib.List.__stringsDisplayItems t false in
-        if first then item ++ rest else ", " ++ item ++ rest
+        if first then item + rest else ", " + item + rest
 
 let __toDisplayString_str (list: List<String>) : String =
-    "[" ++ Stdlib.List.__stringsDisplayItems list true ++ "]"
+    "[" + Stdlib.List.__stringsDisplayItems list true + "]"
 
 let __charsDisplayItems (list: List<Char>) (first: Bool) : String =
     match list with
     | [] -> ""
     | [h] ->
-        if first then Stdlib.Char.toString h else ", " ++ h
+        if first then Stdlib.Char.toString h else ", " + Stdlib.Char.toString h
     | h :: t ->
         let rest = Stdlib.List.__charsDisplayItems t false in
-        if first then h ++ rest else ", " ++ h ++ rest
+        if first then Stdlib.Char.toString h + rest else ", " + Stdlib.Char.toString h + rest
 
 let __toDisplayString_char (list: List<Char>) : String =
-    "[" ++ Stdlib.List.__charsDisplayItems list true ++ "]"
+    "[" + Stdlib.List.__charsDisplayItems list true + "]"
 
 // Helper to build string list from Bool list
 let __boolsToStrings (list: List<Bool>) (acc: List<String>) : List<String> =
@@ -582,7 +582,7 @@ let __boolsToStrings (list: List<Bool>) (acc: List<String>) : List<String> =
 
 let __toDisplayString_bool (list: List<Bool>) : String =
     let strs = Stdlib.List.__boolsToStrings list (Stdlib.List.__empty ()) in
-    "[" ++ Stdlib.String.join strs ", " ++ "]"
+    "[" + Stdlib.String.join strs ", " + "]"
 
 let __floatsDisplayItems (list: List<Float>) (first: Bool) : String =
     if Stdlib.List.__isEmpty list then ""
@@ -593,10 +593,10 @@ let __floatsDisplayItems (list: List<Float>) (first: Bool) : String =
             let item = Stdlib.Float.toString h in
             let tail = Stdlib.List.__tail list in
             let rest = Stdlib.List.__floatsDisplayItems tail false in
-            if first then item ++ rest else ", " ++ item ++ rest
+            if first then item + rest else ", " + item + rest
 
 let __toDisplayString_f64 (list: List<Float>) : String =
-    "[" ++ Stdlib.List.__floatsDisplayItems list true ++ "]"
+    "[" + Stdlib.List.__floatsDisplayItems list true + "]"
 
 let zip<'a, 'b> (list1: List<a>) (list2: List<b>) : Stdlib.Option.Option<List<(a * b)>> =
     if Stdlib.List.length<a> list1 != Stdlib.List.length<b> list2 then None

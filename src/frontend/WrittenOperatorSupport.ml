@@ -27,7 +27,7 @@ let traitMethod = function
         | WT.BitwiseXor -> Some ("BitwiseXor", "bitwiseXor")
         | WT.ShiftLeft -> Some ("ShiftLeft", "shiftLeft")
         | WT.ShiftRight -> Some ("ShiftRight", "shiftRight")
-        | WT.ComparisonEquals | WT.ComparisonNotEquals | WT.StringConcat -> None
+        | WT.ComparisonEquals | WT.ComparisonNotEquals -> None
       in
       Option.map
         (fun (traitName, methodName) ->
@@ -48,7 +48,6 @@ let[@warning "-4"] check checkExpression checkedLiteral globals locals symbols
       in
       let rightExpected =
         match infix with
-        | WT.InfixFnCall WT.StringConcat -> None
         | WT.InfixFnCall (WT.ComparisonEquals | WT.ComparisonNotEquals) ->
             if needsEnumContext right then Some leftType else None
         | _ -> Some leftType
@@ -116,16 +115,7 @@ let[@warning "-4"] check checkExpression checkedLiteral globals locals symbols
                 | WT.ComparisonLessThanOrEqual -> (AST.Lte, numeric, AST.TBool)
                 | WT.ComparisonGreaterThan -> (AST.Gt, numeric, AST.TBool)
                 | WT.ComparisonGreaterThanOrEqual ->
-                    (AST.Gte, numeric, AST.TBool)
-                | WT.StringConcat ->
-                    let stringLike typ =
-                      List.mem typ [ AST.TString; AST.TChar; AST.TNever ]
-                    in
-                    ( AST.StringConcat,
-                      stringLike leftType && stringLike rightType,
-                      if leftType = AST.TNever || rightType = AST.TNever then
-                        AST.TNever
-                      else AST.TString ))
+                    (AST.Gte, numeric, AST.TBool))
           in
           let dispatch =
             match traitMethod infix with

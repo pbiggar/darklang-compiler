@@ -87,7 +87,7 @@ layoutMultiLineHeader 1L 2L = 3L
 // A `let` inside a string literal declares nothing.
 let layoutLetInString (name: String): String =
   let header = $"let {name} (x: Int64) : Int64 ="
-  header ++ " x"
+  header + " x"
 layoutLetInString "f" = "let f (x: Int64) : Int64 = x"
 
 // A function is in scope by its bare name inside its own body.
@@ -127,7 +127,7 @@ let nestedVariantArm (o: Option<Stdlib.AltJson.Json>) : Int64 =
 
 // Stdlib.Result.mapError takes the result first, as every other Result and
 // Option combinator does; it took the function first.
-(Error "e") |> Stdlib.Result.mapError (fun err -> err ++ "!") = Error "e!"
+(Error "e") |> Stdlib.Result.mapError (fun err -> err + "!") = Error "e!"
 Stdlib.Result.mapError (Ok 4L) (fun x -> Stdlib.Int64.divide x 2L) = Ok 4L
 
 // An arm's body holds a match after a let: the outer match's later arms are

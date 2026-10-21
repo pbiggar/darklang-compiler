@@ -29,34 +29,34 @@ let __copyPath (path: List<Stdlib.Json.ParseError.JsonPath.Part.Part>) : List<St
         Stdlib.Json.ParseError.JsonPath.Part.Part> path (fun part -> Stdlib.Json.ParseError.__copyPathPart part)
 
 let __quotedCases (cases: List<String>) : List<String> =
-    Stdlib.List.map cases (fun caseName -> "`" ++ caseName ++ "`")
+    Stdlib.List.map cases (fun caseName -> "`" + caseName + "`")
 
 let toString (branchId: Uuid) (error: Stdlib.Json.ParseError.ParseError) : String =
     match error with
     | CantMatchWithType (typ, json, path) ->
         let renderedType = Darklang.PrettyPrinter.RuntimeTypes.typeReference branchId typ in
         let renderedPath = Stdlib.Json.ParseError.JsonPath.toString path in
-        "Can't parse JSON `" ++ json ++ "` as type `" ++ renderedType ++ "` at path: `" ++ renderedPath ++ "`"
+        "Can't parse JSON `" + json + "` as type `" + renderedType + "` at path: `" + renderedPath + "`"
     | EnumExtraField (rawJson, path) ->
         let renderedPath = Stdlib.Json.ParseError.JsonPath.toString path in
-        "Can't parse JSON due to an extra argument `" ++ rawJson ++ "` at path: `" ++ renderedPath ++ "`"
+        "Can't parse JSON due to an extra argument `" + rawJson + "` at path: `" + renderedPath + "`"
     | EnumMissingField (typ, index, path) ->
         let renderedType = Darklang.PrettyPrinter.RuntimeTypes.typeReference branchId typ in
         let renderedPath = Stdlib.Json.ParseError.JsonPath.toString path in
-        "Can't parse JSON because argument " ++ Stdlib.Int.toString index ++ " (`" ++ renderedType ++ "`) is missing at path: `" ++ renderedPath ++ "`"
+        "Can't parse JSON because argument " + Stdlib.Int.toString index + " (`" + renderedType + "`) is missing at path: `" + renderedPath + "`"
     | EnumInvalidCasename (typ, caseName, path) ->
         let renderedType = Darklang.PrettyPrinter.RuntimeTypes.typeReference branchId typ in
         let renderedPath = Stdlib.Json.ParseError.JsonPath.toString path in
-        "Can't parse JSON as `" ++ caseName ++ "` is not a known case of type `" ++ renderedType ++ "` at path: `" ++ renderedPath ++ "`"
+        "Can't parse JSON as `" + caseName + "` is not a known case of type `" + renderedType + "` at path: `" + renderedPath + "`"
     | EnumTooManyCases (typ, cases, path) ->
         let renderedType = Darklang.PrettyPrinter.RuntimeTypes.typeReference branchId typ in
         let renderedCases = Stdlib.String.join (Stdlib.Json.ParseError.__quotedCases cases) ", " in
         let renderedPath = Stdlib.Json.ParseError.JsonPath.toString path in
-        "Can't parse JSON with multiple fields (" ++ renderedCases ++ ") as type `" ++ renderedType ++ "` at path: `" ++ renderedPath ++ "`"
+        "Can't parse JSON with multiple fields (" + renderedCases + ") as type `" + renderedType + "` at path: `" + renderedPath + "`"
     | RecordMissingField (fieldName, path) ->
         let renderedPath = Stdlib.Json.ParseError.JsonPath.toString path in
-        "Can't parse JSON because `" ++ fieldName ++ "` field is not provided at path: `" ++ renderedPath ++ "`"
+        "Can't parse JSON because `" + fieldName + "` field is not provided at path: `" + renderedPath + "`"
     | RecordDuplicateField (fieldName, path) ->
         let renderedPath = Stdlib.Json.ParseError.JsonPath.toString path in
-        "Can't parse JSON because `" ++ fieldName ++ "` is defined more than once at path: `" ++ renderedPath ++ "`"
+        "Can't parse JSON because `" + fieldName + "` is defined more than once at path: `" + renderedPath + "`"
     | NotJson -> "Not JSON"

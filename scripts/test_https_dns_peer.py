@@ -17,8 +17,8 @@ let run () : Unit =
   | Ok port ->
     let peer = Stdlib.__Datagram.Endpoint { address = [127L,0L,0L,1L], port = port } in
     match Stdlib.__HttpsDns.lookup peer "example.com" 443L 500L with
-    | Error message -> Stdlib.printLine ("ERROR " ++ message)
-    | Ok answer -> Stdlib.printLine ("SERVICES " ++ Stdlib.Int.toString (Stdlib.List.length answer.services) ++ " TTL " ++ Stdlib.Int64.toString answer.ttl)
+    | Error message -> Stdlib.printLine ("ERROR " + message)
+    | Ok answer -> Stdlib.printLine ("SERVICES " + Stdlib.Int.toString (Stdlib.List.length answer.services) + " TTL " + Stdlib.Int64.toString answer.ttl)
 run ()
 '''
 

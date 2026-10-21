@@ -114,14 +114,14 @@ let __encode3Bytes (b0: Int64) (b1: Int64) (b2: Int64) (urlSafe: Bool) : String 
     let c2 = Stdlib.Int64.bitwiseOr (Stdlib.Int64.shiftLeft (Stdlib.Int64.bitwiseAnd b1 15L) 2L) (Stdlib.Int64.bitwiseAnd (Stdlib.Int64.shiftRight b2 6L) 3L) in
     let c3 = Stdlib.Int64.bitwiseAnd b2 63L in
     if urlSafe then
-        Stdlib.Base64.__encodeCharUrl c0 ++
-        Stdlib.Base64.__encodeCharUrl c1 ++
-        Stdlib.Base64.__encodeCharUrl c2 ++
+        Stdlib.Base64.__encodeCharUrl c0 +
+        Stdlib.Base64.__encodeCharUrl c1 +
+        Stdlib.Base64.__encodeCharUrl c2 +
         Stdlib.Base64.__encodeCharUrl c3
     else
-        Stdlib.Base64.__encodeChar c0 ++
-        Stdlib.Base64.__encodeChar c1 ++
-        Stdlib.Base64.__encodeChar c2 ++
+        Stdlib.Base64.__encodeChar c0 +
+        Stdlib.Base64.__encodeChar c1 +
+        Stdlib.Base64.__encodeChar c2 +
         Stdlib.Base64.__encodeChar c3
 
 // Encode 2 bytes to 3 base64 characters + 1 padding
@@ -130,24 +130,24 @@ let __encode2Bytes (b0: Int64) (b1: Int64) (urlSafe: Bool) : String =
     let c1 = Stdlib.Int64.bitwiseOr (Stdlib.Int64.shiftLeft (Stdlib.Int64.bitwiseAnd b0 3L) 4L) (Stdlib.Int64.bitwiseAnd (Stdlib.Int64.shiftRight b1 4L) 15L) in
     let c2 = Stdlib.Int64.shiftLeft (Stdlib.Int64.bitwiseAnd b1 15L) 2L in
     if urlSafe then
-        Stdlib.Base64.__encodeCharUrl c0 ++
-        Stdlib.Base64.__encodeCharUrl c1 ++
-        Stdlib.Base64.__encodeCharUrl c2 ++ "="
+        Stdlib.Base64.__encodeCharUrl c0 +
+        Stdlib.Base64.__encodeCharUrl c1 +
+        Stdlib.Base64.__encodeCharUrl c2 + "="
     else
-        Stdlib.Base64.__encodeChar c0 ++
-        Stdlib.Base64.__encodeChar c1 ++
-        Stdlib.Base64.__encodeChar c2 ++ "="
+        Stdlib.Base64.__encodeChar c0 +
+        Stdlib.Base64.__encodeChar c1 +
+        Stdlib.Base64.__encodeChar c2 + "="
 
 // Encode 1 byte to 2 base64 characters + 2 padding
 let __encode1Byte (b0: Int64) (urlSafe: Bool) : String =
     let c0 = Stdlib.Int64.bitwiseAnd (Stdlib.Int64.shiftRight b0 2L) 63L in
     let c1 = Stdlib.Int64.shiftLeft (Stdlib.Int64.bitwiseAnd b0 3L) 4L in
     if urlSafe then
-        Stdlib.Base64.__encodeCharUrl c0 ++
-        Stdlib.Base64.__encodeCharUrl c1 ++ "=="
+        Stdlib.Base64.__encodeCharUrl c0 +
+        Stdlib.Base64.__encodeCharUrl c1 + "=="
     else
-        Stdlib.Base64.__encodeChar c0 ++
-        Stdlib.Base64.__encodeChar c1 ++ "=="
+        Stdlib.Base64.__encodeChar c0 +
+        Stdlib.Base64.__encodeChar c1 + "=="
 
 // Encode bytes to base64 helper
 let __encodeHelper (b: Blob) (index: Int64) (len: Int64) (urlSafe: Bool) (acc: String) : String =
@@ -159,14 +159,14 @@ let __encodeHelper (b: Blob) (index: Int64) (len: Int64) (urlSafe: Bool) (acc: S
         let b1 = Stdlib.Blob.__getByte b (index + 1L) in
         let b2 = Stdlib.Blob.__getByte b (index + 2L) in
         let chunk = Stdlib.Base64.__encode3Bytes b0 b1 b2 urlSafe in
-        Stdlib.Base64.__encodeHelper b (index + 3L) len urlSafe (acc ++ chunk)
+        Stdlib.Base64.__encodeHelper b (index + 3L) len urlSafe (acc + chunk)
     else if remaining == 2L then
         let b0 = Stdlib.Blob.__getByte b index in
         let b1 = Stdlib.Blob.__getByte b (index + 1L) in
-        acc ++ Stdlib.Base64.__encode2Bytes b0 b1 urlSafe
+        acc + Stdlib.Base64.__encode2Bytes b0 b1 urlSafe
     else
         let b0 = Stdlib.Blob.__getByte b index in
-        acc ++ Stdlib.Base64.__encode1Byte b0 urlSafe
+        acc + Stdlib.Base64.__encode1Byte b0 urlSafe
 
 // Encode bytes to standard base64 string
 let encode (bytes: Blob) : String =
@@ -242,8 +242,8 @@ let decode (s: String) : Stdlib.Result.Result<Blob, String> =
     else
         // Base64 permits the final two- or three-character group to omit padding.
         let padded =
-            if remainder == 2L then s ++ "=="
-            else if remainder == 3L then s ++ "="
+            if remainder == 2L then s + "=="
+            else if remainder == 3L then s + "="
             else s in
         match Stdlib.Base64.__decodeHelper padded 0L (Stdlib.String.__byteLength padded) [] with
         | Ok byteList -> Ok (Stdlib.Blob.__fromInt64List byteList)

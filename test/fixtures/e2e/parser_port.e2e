@@ -1,0 +1,11 @@
+// Function arrows belong outside all closed generic arguments.
+type NestedListFunction = List<List<Int>> -> Int
+let nestedListLength (values: List<List<Int>>) : Int = Stdlib.List.length values
+let callNestedListFunction (f: NestedListFunction) : Int = f [[1], [2]]
+callNestedListFunction nestedListLength = 2
+
+// Numeric postfix selectors compose and can select callable values.
+((1, (2, 3)).2.1) = 2
+((fun x -> x + 1, 0).1 4) = 5
+((1, 2).0) = compileerror="Tuple index"
+((1, 2).3) = compileerror="Tuple index"

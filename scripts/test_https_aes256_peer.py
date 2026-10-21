@@ -93,7 +93,7 @@ def main() -> None:
       let response = Stdlib.__Tls13Client.exchange connection host "GET" roots request in
       let _ = Stdlib.__Network.closeTcp connection in
       match response with
-      | Error message -> Stdlib.printLine ("TLS failed: " ++ message)
+      | Error message -> Stdlib.printLine ("TLS failed: " + message)
       | Ok bytes ->
         match Stdlib.Blob.toString bytes with
         | Error _ -> Stdlib.printLine "Response is not text"

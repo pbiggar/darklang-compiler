@@ -5,7 +5,9 @@ open Tokenizer
 open ParserSupport
 module WT = WrittenTypes
 
-let upperName = NameSyntax.isUpperIdentifier
+let upperName name =
+  let chars = Text.scalars name in
+  Array.length chars > 0 && Text.isUpper chars.(0)
 
 (*
    `type Name [<'a>] = Definition`

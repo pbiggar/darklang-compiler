@@ -67,8 +67,8 @@ let __parameters (text: String) (position: Int64) (lifetime: Int64) (seenAge: Bo
         Stdlib.__AltSvc.__parameters text value.next age true (remaining - 1L))))
 
 let __authority (origin: String) (authority: String) (priority: Int64) : Stdlib.Result.Result<Stdlib.__HttpsService.Service, String> =
-  let host = if Stdlib.Option.isSome (Stdlib.__DnsWire.ipv6 origin) then "[" ++ origin ++ "]" else origin in
-  let full = if Stdlib.String.startsWith authority ":" then host ++ authority else authority in
+  let host = if Stdlib.Option.isSome (Stdlib.__DnsWire.ipv6 origin) then "[" + origin + "]" else origin in
+  let full = if Stdlib.String.startsWith authority ":" then host + authority else authority in
   Stdlib.__HttpWire.__parseAuthority full 0L |> Stdlib.Result.andThen (fun parsed ->
     let (target, port) = parsed in
     if port < 1L || port > 65535L then Error "Invalid Alt-Svc authority"

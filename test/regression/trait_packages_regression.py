@@ -114,7 +114,7 @@ def main():
             directory = Path(temporary)
             env = dict(os.environ, XDG_DATA_HOME=temporary)
             source = directory / "input.dark"
-            source.write_text('Hosted.describe 42L ++ "|" ++ Hosted.describePipe 42L ++ "|" ++ Hosted.stdlibDescribe 42L\n')
+            source.write_text('Hosted.describe 42L + "|" + Hosted.describePipe 42L + "|" + Hosted.stdlibDescribe 42L\n')
             program = directory / "program"
             result = subprocess.run([compiler, "-q", "--emit-result", "--package-server",
                 f"http://127.0.0.1:{server.server_port}", str(source), "-o", str(program)],

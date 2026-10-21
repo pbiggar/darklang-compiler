@@ -50,18 +50,13 @@ let parseTraitDecl parseBlock state index =
     let typeParams, bounds, next =
       TypeParameterParser.parseTypeParams state (start + 2)
     in
-    let parameters = RevBuffer.create () and afterParams = ref next in
-    while tok state !afterParams = TLParen do
-      let parameter, after = DeclarationSupport.parseParam state !afterParams in
-      RevBuffer.add parameters parameter;
-      afterParams := if after > !afterParams then after else !afterParams + 1
-    done;
+    let parameters, afterParams = DeclarationSupport.parseParams state next in
     let colon, next =
-      if tok state !afterParams = TColon then
-        (rng state !afterParams, !afterParams + 1)
+      if tok state afterParams = TColon then
+        (rng state afterParams, afterParams + 1)
       else begin
-        errExpected state !afterParams "':' before the method's return type";
-        (zeroWidthAtEnd (rng state !afterParams), !afterParams)
+        errExpected state afterParams "':' before the method's return type";
+        (zeroWidthAtEnd (rng state afterParams), afterParams)
       end
     in
     let effects, next = DeclarationSupport.parseEffectRow state next in
@@ -97,7 +92,7 @@ let parseTraitDecl parseBlock state index =
          name;
          typeParams;
          bounds;
-         parameters = RevBuffer.toList parameters;
+         parameters;
          effects;
          returnType;
          body;

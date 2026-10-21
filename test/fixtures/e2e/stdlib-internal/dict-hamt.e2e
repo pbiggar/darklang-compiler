@@ -257,7 +257,7 @@ Stdlib.Dict.__getOrDefault (setInt (emptyInt ()) 1L 42L) 1L (-1L) = 42L
 Stdlib.Dict.__getOrDefault (emptyInt ()) 1L (-1L) = -1L
 
 // The direct-default traversal preserves generic key equality and fallback behavior.
-let d = Stdlib.Dict.__setOverwriting (Stdlib.Dict.__empty<String, String> ()) "key" ("stor" ++ "ed") in Stdlib.Dict.__getOrDefaultHelper<String, String> d "key" (__hash<String> "key") 0L ("fall" ++ "back") ++ Stdlib.Dict.__getOrDefaultHelper<String, String> d "missing" (__hash<String> "missing") 0L ("fall" ++ "back") = "storedfallback"
+let d = Stdlib.Dict.__setOverwriting (Stdlib.Dict.__empty<String, String> ()) "key" ("stor" + "ed") in Stdlib.Dict.__getOrDefaultHelper<String, String> d "key" (__hash<String> "key") 0L ("fall" + "back") + Stdlib.Dict.__getOrDefaultHelper<String, String> d "missing" (__hash<String> "missing") 0L ("fall" + "back") = "storedfallback"
 
 // ========== Larger dictionary tests ==========
 
@@ -295,7 +295,7 @@ isNoneInt (getBool (setBool (emptyBool ()) true 42L) false) = true
 // ========== Dict with String values ==========
 // Regression: Dict value loads use RawGet + TypedAtom. The compiler must preserve
 // the typed alias instead of defaulting unknown RawGet temps to Stdlib.Int64.
-let s = (let d = Stdlib.Dict.__setOverwriting (Stdlib.Dict.__empty<Int64, String> ()) 1L "hello" in Stdlib.Dict.__getOrDefault d 1L "missing") in s ++ "!" = "hello!"
+let s = (let d = Stdlib.Dict.__setOverwriting (Stdlib.Dict.__empty<Int64, String> ()) 1L "hello" in Stdlib.Dict.__getOrDefault d 1L "missing") in s + "!" = "hello!"
 
 // ========== Dict with List values ==========
 // Tests to cover Dict<Int64, List<Int64>> monomorphizations

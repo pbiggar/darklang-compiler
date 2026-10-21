@@ -34,7 +34,7 @@ match Stdlib.Blob.fromHex "{parameters.hex()}", Stdlib.Blob.fromHex "{DESTINATIO
 | Ok parameters, Ok destination, Ok source, Ok pair, Ok random ->
   match Stdlib.__Tls13.quicClientHello "localhost" random pair.publicKey parameters, Stdlib.__QuicCrypto.initial destination with
   | Ok hello, Ok keys ->
-    let _ = Stdlib.printLine ("HELLO " ++ Stdlib.Blob.toHex hello) in
+    let _ = Stdlib.printLine ("HELLO " + Stdlib.Blob.toHex hello) in
     match Stdlib.__QuicWire.integer (match Stdlib.Int.toInt64 (Stdlib.Blob.length hello) with | Some size -> size | None -> 0L), Stdlib.Blob.fromHex "0600" with
     | Error message, _ -> Stdlib.printLine message
     | _, Error message -> Stdlib.printLine message
@@ -60,8 +60,8 @@ match Stdlib.Blob.fromHex "{parameters.hex()}", Stdlib.Blob.fromHex "{DESTINATIO
                 | Ok _ -> Error "Expected server Initial" in
         let _ = Stdlib.__Datagram.close connection in
         match result with
-        | Error message -> Stdlib.printLine ("ERROR " ++ message)
-        | Ok payload -> Stdlib.printLine ("SERVER " ++ Stdlib.Blob.toHex payload)
+        | Error message -> Stdlib.printLine ("ERROR " + message)
+        | Ok payload -> Stdlib.printLine ("SERVER " + Stdlib.Blob.toHex payload)
       | Error message, Ok connection -> let _ = Stdlib.__Datagram.close connection in Stdlib.printLine message
       | _, _ -> Stdlib.printLine "Initial setup failed"
   | _, _ -> Stdlib.printLine "TLS hello failed"

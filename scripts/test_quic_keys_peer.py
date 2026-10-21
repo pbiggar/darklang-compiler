@@ -16,13 +16,13 @@ let opened (state: Stdlib.__QuicKeys.State) (bytes: Blob) (now: Int64) (confirme
   Stdlib.__QuicKeys.openPacket state bytes 1L now 100L confirmed |> Stdlib.Result.map (fun opened -> opened.state)
 let report (result: Stdlib.Result.Result<Stdlib.__QuicKeys.State, String>) : Unit =
   match result with
-  | Error message -> Stdlib.printLine ("ERROR " ++ message)
+  | Error message -> Stdlib.printLine ("ERROR " + message)
   | Ok state ->
     let (boundary, oldLargest) = match state.previous with | None -> (-1L, -1L) | Some previous -> (previous.boundary, previous.largest) in
-    Stdlib.printLine ((if state.current.phase then "1" else "0") ++ "," ++ Stdlib.Int64.toString state.count ++ "," ++
-      Stdlib.Int64.toString state.first ++ "," ++ Stdlib.Int64.toString state.largest ++ "," ++
-      Stdlib.Int64.toString boundary ++ "," ++ Stdlib.Int64.toString oldLargest ++ "," ++
-      Stdlib.Blob.toHex state.current.secret ++ "," ++ Stdlib.Blob.toHex state.current.keys.hp ++ "," ++ (if state.acked then "1" else "0"))
+    Stdlib.printLine ((if state.current.phase then "1" else "0") + "," + Stdlib.Int64.toString state.count + "," +
+      Stdlib.Int64.toString state.first + "," + Stdlib.Int64.toString state.largest + "," +
+      Stdlib.Int64.toString boundary + "," + Stdlib.Int64.toString oldLargest + "," +
+      Stdlib.Blob.toHex state.current.secret + "," + Stdlib.Blob.toHex state.current.keys.hp + "," + (if state.acked then "1" else "0"))
 let check () : Unit =
 @CHECKS@
   ()

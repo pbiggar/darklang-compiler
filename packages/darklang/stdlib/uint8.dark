@@ -73,7 +73,7 @@ let __digitToString (n: UInt8) : String =
 // Convert an integer to its string representation
 let toString (n: UInt8) : String =
     if n < 10uy then Stdlib.UInt8.__digitToString n
-    else Stdlib.UInt8.toString (n / 10uy) ++ Stdlib.UInt8.__digitToString (n % 10uy)
+    else Stdlib.UInt8.toString (n / 10uy) + Stdlib.UInt8.__digitToString (n % 10uy)
 
 // Sum all integers in a list
 let sum (list: List<UInt8>) : UInt8 =

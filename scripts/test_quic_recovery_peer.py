@@ -23,13 +23,13 @@ let check (count: Int64) (ack: Stdlib.__QuicFrames.Ack) (now: Int64) : Unit =
   let result = Stdlib.__QuicRecovery.create 1200L |> Stdlib.Result.andThen (fun state -> sendPackets state 0L count)
     |> Stdlib.Result.andThen (fun state -> Stdlib.__QuicRecovery.acknowledge state ack now 0L 25L) in
   match result with
-  | Error message -> Stdlib.printLine ("ERROR " ++ message)
+  | Error message -> Stdlib.printLine ("ERROR " + message)
   | Ok update ->
     let numbers = Stdlib.List.map update.retransmit (fun packet -> Stdlib.Int64.toString packet.number) in
     let rtt = update.state.rtt in
-    Stdlib.printLine (Stdlib.Int64.toString update.state.congestion.window ++ " " ++
-      Stdlib.Int64.toString update.state.congestion.inFlight ++ " " ++ Stdlib.Int64.toString rtt.latest ++ " " ++
-      Stdlib.Int64.toString rtt.smoothed ++ " " ++ Stdlib.Int64.toString rtt.variance ++ " " ++ Stdlib.String.join numbers ",")
+    Stdlib.printLine (Stdlib.Int64.toString update.state.congestion.window + " " +
+      Stdlib.Int64.toString update.state.congestion.inFlight + " " + Stdlib.Int64.toString rtt.latest + " " +
+      Stdlib.Int64.toString rtt.smoothed + " " + Stdlib.Int64.toString rtt.variance + " " + Stdlib.String.join numbers ",")
 '''
 
 

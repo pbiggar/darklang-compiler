@@ -24,7 +24,7 @@ type tokenRange = { start : pos; end_ : pos }
    Char literal: 'x' (stores UTF-8 string for EGC support)
    Interpolated string `$"Hello {name}!"`. No payload: the parser re-reads the
    token's source text and re-scans the `{expr}` bodies itself.
-   ++ (string concatenation)
+   ++ (reserved token for the removed operator)
    ** (exponentiation)
    val (declaration-scope value; never a local let-expression)
    elif
@@ -130,6 +130,7 @@ type token =
   | TGte
   | TAnd
   | TOr
+  | TQuestion
   | TNot
   | TPipe
   | TDotDotDot

@@ -1095,7 +1095,7 @@ let __secureRandomBytes (length: Int64) : Stdlib.Result.Result<Blob, String> =
         let received = Stdlib.Crypto.__secureRandomFill buffer length in
         let result =
             if received < 0L then
-                Error ("OS entropy errno " ++ Stdlib.Int64.toString (0L - received))
+                Error ("OS entropy errno " + Stdlib.Int64.toString (0L - received))
             else if received != length then
                 Error "OS entropy returned fewer bytes than requested"
             else Ok (Stdlib.Crypto.__secureRandomRead buffer 0L length []) in

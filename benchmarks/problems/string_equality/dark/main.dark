@@ -40,19 +40,19 @@ let benchmarkArg (index: Int) : Int64 =
 
 let iterations = benchmarkArg 0 in
 let token = Stdlib.Int64.toString (benchmarkArg 1) in
-let shortLeft = "ab" ++ token ++ "cd" in
-let shortEqual = "a" ++ "b" ++ token ++ "cd" in
-let shortLengthMismatch = "ab" ++ token ++ "cdx" in
-let shortFirstMismatch = "xb" ++ token ++ "cd" in
-let shortLastMismatch = "ab" ++ token ++ "ce" in
+let shortLeft = "ab" + token + "cd" in
+let shortEqual = "a" + "b" + token + "cd" in
+let shortLengthMismatch = "ab" + token + "cdx" in
+let shortFirstMismatch = "xb" + token + "cd" in
+let shortLastMismatch = "ab" + token + "ce" in
 let longMiddle =
     "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-    ++ "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789" in
-let longLeft = "prefix:" ++ token ++ ":" ++ longMiddle ++ ":suffix" in
-let longEqual = "pre" ++ "fix:" ++ token ++ ":" ++ longMiddle ++ ":suffix" in
-let longLengthMismatch = "prefix:" ++ token ++ ":" ++ longMiddle ++ ":suffix!" in
-let longFirstMismatch = "xrefix:" ++ token ++ ":" ++ longMiddle ++ ":suffix" in
-let longLastMismatch = "prefix:" ++ token ++ ":" ++ longMiddle ++ ":suffiy" in
+    + "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789" in
+let longLeft = "prefix:" + token + ":" + longMiddle + ":suffix" in
+let longEqual = "pre" + "fix:" + token + ":" + longMiddle + ":suffix" in
+let longLengthMismatch = "prefix:" + token + ":" + longMiddle + ":suffix!" in
+let longFirstMismatch = "xrefix:" + token + ":" + longMiddle + ":suffix" in
+let longLastMismatch = "prefix:" + token + ":" + longMiddle + ":suffiy" in
 Builtin.printLine (
     Stdlib.Int64.toString (
         runApi iterations longLeft longEqual longLengthMismatch longFirstMismatch longLastMismatch (runOperator iterations shortLeft shortEqual shortLengthMismatch shortFirstMismatch shortLastMismatch 0L)))

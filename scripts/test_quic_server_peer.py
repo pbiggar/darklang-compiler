@@ -71,7 +71,7 @@ let run () : Unit =
       listen socket signals identity secret |> Stdlib.Result.andThen (fun ready -> exchange ready signals)) in
     Stdlib.__Datagram.close socket
     Stdlib.__Network.closeShutdownSignals signals
-    match result with | Ok () -> Stdlib.printLine "DONE" | Error message -> Stdlib.printLine ("ERROR " ++ message)
+    match result with | Ok () -> Stdlib.printLine "DONE" | Error message -> Stdlib.printLine ("ERROR " + message)
   | _ -> Stdlib.printLine "initialization failed"
 run ()
 '''

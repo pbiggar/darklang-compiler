@@ -42,7 +42,7 @@ let run (port: Int64) (mode: String) : Stdlib.Result.Result<Unit, String> =
           else if mode == "fill" then
             let bytes = Stdlib.String.toBlob (Stdlib.String.join (Stdlib.List.repeatUnsafe 16 (Stdlib.String.repeat "y" 1000)) "") in
             fill connection bytes now 0L 0L |> Stdlib.Result.andThen (fun total ->
-              if total == 0L then Error "Write made no progress" else let _ = Stdlib.printLine ("BLOCKED " ++ Stdlib.Int64.toString total) in Ok ())
+              if total == 0L then Error "Write made no progress" else let _ = Stdlib.printLine ("BLOCKED " + Stdlib.Int64.toString total) in Ok ())
           else Stdlib.__Network.pollWriteTcp connection (Stdlib.String.toBlob "HELLO") |> Stdlib.Result.mapError Stdlib.Int64.toString |> Stdlib.Result.andThen (fun sent ->
             if sent != Some 5L then Error "Small write failed"
             else readAll connection (now + 5000L) [] |> Stdlib.Result.andThen (fun bytes -> if Stdlib.Blob.toString bytes == Ok "packet" then Ok () else Error "Payload changed")))) in

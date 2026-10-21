@@ -108,7 +108,7 @@ let formatBinOp = function
   | BitAnd -> "&"
   | BitOr -> "|||"
   | BitXor -> "^"
-  | StringConcat -> "++"
+  | StringConcat -> "+"
   | Eq -> "=="
   | Neq -> "!="
   | Lt -> "<"

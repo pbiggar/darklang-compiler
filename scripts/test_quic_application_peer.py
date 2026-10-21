@@ -15,31 +15,31 @@ let number (value: Int64) : String = Stdlib.Int64.toString value
 let boolean (value: Bool) : String = if value then "true" else "false"
 let printFrame (frame: Stdlib.__QuicApplication.Frame) : Unit =
   match frame with
-  | Stream value -> Stdlib.printLine ("STREAM " ++ number value.id ++ " " ++ number value.offset ++ " " ++ boolean value.fin ++ " " ++ Stdlib.Blob.toHex value.bytes)
-  | ResetStream value -> Stdlib.printLine ("RESET " ++ number value.id ++ " " ++ number value.code ++ " " ++ number value.finalSize)
-  | StopSending value -> Stdlib.printLine ("STOP " ++ number value.id ++ " " ++ number value.value)
-  | MaxStreamData value -> Stdlib.printLine ("STREAMLIMIT " ++ number value.id ++ " " ++ number value.value)
-  | StreamDataBlocked value -> Stdlib.printLine ("STREAMBLOCKED " ++ number value.id ++ " " ++ number value.value)
-  | MaxData value -> Stdlib.printLine ("MAXDATA " ++ number value)
-  | MaxStreamsBidi value -> Stdlib.printLine ("BIDI " ++ number value)
-  | MaxStreamsUni value -> Stdlib.printLine ("UNI " ++ number value)
-  | DataBlocked value -> Stdlib.printLine ("DATABLOCKED " ++ number value)
-  | StreamsBlockedBidi value -> Stdlib.printLine ("BIDIBLOCKED " ++ number value)
-  | StreamsBlockedUni value -> Stdlib.printLine ("UNIBLOCKED " ++ number value)
-  | NewConnectionId value -> Stdlib.printLine ("CID " ++ number value.sequence ++ " " ++ number value.retirePriorTo ++ " " ++ Stdlib.Blob.toHex value.id ++ " " ++ Stdlib.Blob.toHex value.resetToken)
-  | RetireConnectionId value -> Stdlib.printLine ("RETIRE " ++ number value)
-  | PathChallenge value -> Stdlib.printLine ("CHALLENGE " ++ Stdlib.Blob.toHex value)
-  | PathResponse value -> Stdlib.printLine ("RESPONSE " ++ Stdlib.Blob.toHex value)
-  | NewToken value -> Stdlib.printLine ("TOKEN " ++ Stdlib.Blob.toHex value)
+  | Stream value -> Stdlib.printLine ("STREAM " + number value.id + " " + number value.offset + " " + boolean value.fin + " " + Stdlib.Blob.toHex value.bytes)
+  | ResetStream value -> Stdlib.printLine ("RESET " + number value.id + " " + number value.code + " " + number value.finalSize)
+  | StopSending value -> Stdlib.printLine ("STOP " + number value.id + " " + number value.value)
+  | MaxStreamData value -> Stdlib.printLine ("STREAMLIMIT " + number value.id + " " + number value.value)
+  | StreamDataBlocked value -> Stdlib.printLine ("STREAMBLOCKED " + number value.id + " " + number value.value)
+  | MaxData value -> Stdlib.printLine ("MAXDATA " + number value)
+  | MaxStreamsBidi value -> Stdlib.printLine ("BIDI " + number value)
+  | MaxStreamsUni value -> Stdlib.printLine ("UNI " + number value)
+  | DataBlocked value -> Stdlib.printLine ("DATABLOCKED " + number value)
+  | StreamsBlockedBidi value -> Stdlib.printLine ("BIDIBLOCKED " + number value)
+  | StreamsBlockedUni value -> Stdlib.printLine ("UNIBLOCKED " + number value)
+  | NewConnectionId value -> Stdlib.printLine ("CID " + number value.sequence + " " + number value.retirePriorTo + " " + Stdlib.Blob.toHex value.id + " " + Stdlib.Blob.toHex value.resetToken)
+  | RetireConnectionId value -> Stdlib.printLine ("RETIRE " + number value)
+  | PathChallenge value -> Stdlib.printLine ("CHALLENGE " + Stdlib.Blob.toHex value)
+  | PathResponse value -> Stdlib.printLine ("RESPONSE " + Stdlib.Blob.toHex value)
+  | NewToken value -> Stdlib.printLine ("TOKEN " + Stdlib.Blob.toHex value)
   | HandshakeDone -> Stdlib.printLine "DONE"
-  | ApplicationClose value -> Stdlib.printLine ("CLOSE " ++ number value.code ++ " " ++ Stdlib.Blob.toHex value.reason)
+  | ApplicationClose value -> Stdlib.printLine ("CLOSE " + number value.code + " " + Stdlib.Blob.toHex value.reason)
   | Handshake _ -> Stdlib.printLine "HANDSHAKE"
 let printFrames (frames: List<Stdlib.__QuicApplication.Frame>) : Unit =
   match frames with | [] -> () | frame :: rest -> let _ = printFrame frame in printFrames rest
 let assemble (state: Stdlib.__QuicStreams.Receive) (frames: List<Stdlib.__QuicApplication.Frame>) (chunks: List<Blob>)
   : Stdlib.Result.Result<String, String> =
   match frames with
-  | [] -> Ok (Stdlib.Blob.toHex (Stdlib.Blob.concat (Stdlib.List.reverse chunks)) ++ " " ++ boolean (Stdlib.__QuicStreams.complete state) ++ " " ++ number state.highest)
+  | [] -> Ok (Stdlib.Blob.toHex (Stdlib.Blob.concat (Stdlib.List.reverse chunks)) + " " + boolean (Stdlib.__QuicStreams.complete state) + " " + number state.highest)
   | Stream value :: rest ->
     match Stdlib.__QuicStreams.insert state value.offset value.bytes value.fin with
     | Error message -> Error message
@@ -49,17 +49,17 @@ let runCheck () : Unit =
   match Stdlib.Cli.__Args.get 0, Stdlib.Cli.__Args.get 1 |> Stdlib.Result.andThen Stdlib.Blob.fromHex with
   | Ok mode, Ok bytes ->
     match Stdlib.__QuicApplication.parse (mode != "client") bytes with
-    | Error message -> Stdlib.printLine ("ERROR " ++ message)
+    | Error message -> Stdlib.printLine ("ERROR " + message)
     | Ok frames ->
       if mode == "assemble" then
         match Stdlib.__QuicStreams.receiver 4096L |> Stdlib.Result.andThen (fun state -> assemble state frames []) with
-        | Error message -> Stdlib.printLine ("ERROR " ++ message)
+        | Error message -> Stdlib.printLine ("ERROR " + message)
         | Ok value -> Stdlib.printLine value
       else if mode == "encode" then
         match frames with
         | Stream value :: _ ->
           match Stdlib.__QuicApplication.stream value.id value.offset value.bytes value.fin with
-          | Error message -> Stdlib.printLine ("ERROR " ++ message)
+          | Error message -> Stdlib.printLine ("ERROR " + message)
           | Ok wire -> Stdlib.printLine (Stdlib.Blob.toHex wire)
         | _ -> Stdlib.printLine "ERROR No stream frame"
       else printFrames frames

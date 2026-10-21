@@ -17,7 +17,7 @@ match [] with | [x] -> x | [] -> 99L = 99L
 match [] with | [] -> true | [x] -> x | _ -> false = true
 
 // Empty list should not erase element types when cons'ing tuples
-let xs = [] in let ys = [("hi", "there")] @ xs in match ys with | [(a, b)] -> a ++ b | [] -> "" = compileerror="Non-exhaustive match expression"
+let xs = [] in let ys = [("hi", "there")] @ xs in match ys with | [(a, b)] -> a + b | [] -> "" = compileerror="Non-exhaustive match expression"
 
 // Nested Int64 list display should format inner lists, not read inner list pointers as integers.
 [[1L, 2L], [3L, 4L]] = stdout="[[1, 2], [3, 4]]\n" stderr=""
@@ -286,7 +286,7 @@ match [false, false, false, false, true, true, true, true] with | [a, b, c, d, e
 Stdlib.Option.withDefault (Stdlib.List.getAt ([true, false, true, false, true, false, true, false, true, false, true, false]) 10) false = true
 Stdlib.List.length ([true, false, true, false, true, false, true, false, true, false, true, false, true, false, true, false]) = 16
 // String lists (6+)
-match ["a", "b", "c", "d", "e", "f"] with | [a, b, c, d, e, f] -> a ++ f | _ -> "" = "af"
+match ["a", "b", "c", "d", "e", "f"] with | [a, b, c, d, e, f] -> a + f | _ -> "" = "af"
 Stdlib.Option.withDefault (Stdlib.List.getAt (["s1", "s2", "s3", "s4", "s5", "s6", "s7", "s8", "s9", "s10"]) 9) "" = "s10"
 Stdlib.Option.withDefault (Stdlib.List.getAt (["s1", "s2", "s3", "s4", "s5", "s6", "s7", "s8", "s9", "s10", "s11", "s12"]) 11) "" = "s12"
 Stdlib.Option.withDefault (Stdlib.List.getAt (["t1", "t2", "t3", "t4", "t5", "t6", "t7", "t8", "t9", "t10", "t11", "t12", "t13", "t14", "t15", "t16", "t17", "t18", "t19", "t20"]) 15) "" = "t16"
@@ -401,13 +401,13 @@ let table = [(97L, 0.27), (99L, 0.12), (103L, 0.12), (116L, 0.27)] in let cumula
 // =====================================================
 
 // List of strings - basic
-match ["hello", "world"] with | [a, b] -> a ++ " " ++ b | _ -> "" = "hello world"
+match ["hello", "world"] with | [a, b] -> a + " " + b | _ -> "" = "hello world"
 
 // Single string in list
 match ["test"] with | [s] -> s | _ -> "" = "test"
 
 // Three strings
-match ["a", "b", "c"] with | [x, y, z] -> x ++ y ++ z | _ -> "" = "abc"
+match ["a", "b", "c"] with | [x, y, z] -> x + y + z | _ -> "" = "abc"
 
 // =====================================================
 // Lists of Bools
@@ -427,7 +427,7 @@ match [true, false] with | [a, b] -> if a && b then 1L else 0L | _ -> -1L = 0L
 let sumFloats (xs: List<Float>) : Float = match xs with | [] -> 0.0 | h :: t -> h + sumFloats t; sumFloats ([1.0, 2.0, 3.0, 4.0]) = 10.0
 
 // Concatenate list of strings
-let concatStrings (xs: List<String>) : String = match xs with | [] -> "" | h :: t -> h ++ concatStrings t
+let concatStrings (xs: List<String>) : String = match xs with | [] -> "" | h :: t -> h + concatStrings t
 concatStrings (["a", "b", "c"]) = "abc"
 
 // =====================================================

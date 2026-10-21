@@ -31,8 +31,8 @@ Public behavior is an ordered heterogeneous tuple of two or more elements.
 `()` is primitive unit, `(value)` is grouping, singleton/trailing-comma input is
 rejected, nested tuple patterns destructure recursively, and equality is
 structural. Tuple allocation checks elements in source order and ANF preserves
-that left-to-right order. Tuple types use `A * B`; callers use destructuring or
-`Stdlib.Tuple2`/`Stdlib.Tuple3` for projection.
+that left-to-right order. Tuple types use `A * B`; projection accepts numeric postfix selectors such as
+`value.1` and `value.1.2`, destructuring, or `Stdlib.Tuple2`/`Stdlib.Tuple3`.
 
 Generated compiler AST retains `TupleAccess` as an AOT-only typed lowering
 operation used by compiler-owned sources. Multi-argument function types use

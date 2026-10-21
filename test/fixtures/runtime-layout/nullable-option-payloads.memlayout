@@ -9,7 +9,7 @@ root = word(0)
 ---NAME---
 Some Blob option shares its payload pointer
 ---INPUT---
-let original = Stdlib.Blob.fromString ("a" ++ "b") in (original, Some original)
+let original = Stdlib.Blob.fromString ("a" + "b") in (original, Some original)
 ---EXPECTED---
 root = tuple(shared_word, shared_word)
 

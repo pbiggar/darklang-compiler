@@ -74,13 +74,13 @@ let run () : Unit =
   match Stdlib.Blob.fromHex "@ROOT@", Stdlib.Cli.__Args.get 0 |> Stdlib.Result.andThen (fun value -> Stdlib.Int64.parse value |> Stdlib.Result.mapError (fun _error -> "port")) with
   | Ok root, Ok port ->
     match Stdlib.__QuicClient.connect (Stdlib.__Datagram.Endpoint { address = [127L,0L,0L,1L], port = port }) "localhost" [root] 8000L with
-    | Error message -> Stdlib.printLine ("ERROR " ++ message)
+    | Error message -> Stdlib.printLine ("ERROR " + message)
     | Ok ready ->
       let result = initialize ready |> Stdlib.Result.andThen (fun state ->
         match Stdlib.__Network.monotonicMillis () with | Error _ -> Error "Clock failed" | Ok now ->
           receive state (now + 10000L) (Stdlib.__Http3Message.create (Response false)) (Stdlib.__Http3Uni.create true)) in
       let _ = Stdlib.__QuicClient.close ready in
-      match result with | Error message -> Stdlib.printLine ("ERROR " ++ message) | Ok () -> Stdlib.printLine "DONE"
+      match result with | Error message -> Stdlib.printLine ("ERROR " + message) | Ok () -> Stdlib.printLine "DONE"
   | _ -> Stdlib.printLine "Bad arguments"
 run ()
 """
@@ -89,7 +89,7 @@ run ()
 HTTP_CLIENT_DARK = """// client.dark - Exercise lazy HTTP/3 response ownership and early close.
 let output (kind: Int64) (bytes: Blob) : Unit =
   match Stdlib.__Http3Wire.serialize kind bytes with
-  | Error message -> Stdlib.printLine ("ERROR " ++ message)
+  | Error message -> Stdlib.printLine ("ERROR " + message)
   | Ok wire -> Stdlib.printLine (Stdlib.Blob.toHex wire)
 let consume (body: Stream<UInt8>) (bytes: List<UInt8>) (count: Int) : Unit =
   if count == 512 then
@@ -108,13 +108,13 @@ let run () : Unit =
     Stdlib.Cli.__Args.get 0 |> Stdlib.Result.andThen (fun value -> Stdlib.Int64.parse value |> Stdlib.Result.mapError (fun _error -> "port")) with
   | Ok root, Ok url, Ok upload, Ok port ->
     match Stdlib.__QuicClient.connect (Stdlib.__Datagram.Endpoint { address = [127L,0L,0L,1L], port = port }) "localhost" [root] 8000L with
-    | Error message -> Stdlib.printLine ("ERROR " ++ message)
+    | Error message -> Stdlib.printLine ("ERROR " + message)
     | Ok ready ->
       match Stdlib.__Http3Client.stream ready (if Stdlib.Blob.length upload == 0 then "GET" else "POST") url [] upload 10000L with
-      | Error message -> Stdlib.printLine ("ERROR " ++ message)
+      | Error message -> Stdlib.printLine ("ERROR " + message)
       | Ok response ->
         let _ = match Stdlib.__Qpack.encode ([(":status", Stdlib.Int.toString response.statusCode)] @ response.headers) with
-          | Error message -> Stdlib.printLine ("ERROR " ++ message)
+          | Error message -> Stdlib.printLine ("ERROR " + message)
           | Ok wire -> output 1L wire in
         let _ = consume response.body [] 0 in
         let _ = Stdlib.Stream.close response.body in
@@ -131,11 +131,11 @@ let emit (bytes: Blob) (offset: Int) : Unit =
     emit bytes (offset + 512)
 let frame (kind: Int64) (bytes: Blob) : Unit =
   match Stdlib.__Http3Wire.serialize kind bytes with
-  | Error message -> Stdlib.printLine ("ERROR " ++ message)
+  | Error message -> Stdlib.printLine ("ERROR " + message)
   | Ok bytes -> emit bytes 0
 let fields (values: List<(String * String)>) : Unit =
   match Stdlib.__Qpack.encode values with
-  | Error message -> Stdlib.printLine ("ERROR " ++ message)
+  | Error message -> Stdlib.printLine ("ERROR " + message)
   | Ok bytes -> frame 1L bytes
 let event (value: Stdlib.__Http3Message.Event) : Unit =
   match value with
@@ -151,7 +151,7 @@ let run () : Unit =
   match Stdlib.Blob.fromHex "@ROOT@", Stdlib.Cli.__Args.get 0 |> Stdlib.Result.andThen (fun value -> Stdlib.Int64.parse value |> Stdlib.Result.mapError (fun _error -> "port")) with
   | Ok root, Ok port ->
     match Stdlib.__QuicClient.connect (Stdlib.__Datagram.Endpoint { address = [127L,0L,0L,1L], port = port }) "localhost" [root] 8000L with
-    | Error message -> Stdlib.printLine ("ERROR " ++ message)
+    | Error message -> Stdlib.printLine ("ERROR " + message)
     | Ok ready ->
       let result = Stdlib.__Http3.initialize ready false 10000L |> Stdlib.Result.andThen (fun state ->
         Stdlib.__Qpack.encode [(":method", "GET"), (":scheme", "https"), (":authority", "localhost"), (":path", "/streams")]
@@ -159,7 +159,7 @@ let run () : Unit =
           |> Stdlib.Result.andThen (fun request -> Stdlib.__Http3.write state request true)
           |> Stdlib.Result.andThen receive) in
       let _ = Stdlib.__QuicClient.close ready in
-      match result with | Error message -> Stdlib.printLine ("ERROR " ++ message) | Ok () -> Stdlib.printLine "DONE"
+      match result with | Error message -> Stdlib.printLine ("ERROR " + message) | Ok () -> Stdlib.printLine "DONE"
   | _ -> Stdlib.printLine "Bad arguments"
 run ()
 """

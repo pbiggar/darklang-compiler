@@ -75,7 +75,7 @@ let __digitToString (n: UInt16) : String =
 // Convert an integer to its string representation
 let toString (n: UInt16) : String =
     if n < 10us then Stdlib.UInt16.__digitToString n
-    else Stdlib.UInt16.toString (n / 10us) ++ Stdlib.UInt16.__digitToString (n % 10us)
+    else Stdlib.UInt16.toString (n / 10us) + Stdlib.UInt16.__digitToString (n % 10us)
 
 // Sum all integers in a list
 let sum (list: List<UInt16>) : UInt16 =

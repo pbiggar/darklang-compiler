@@ -14,7 +14,7 @@ type SpecializationMode = First | Second
 
 let stringSpecializedLoop (n: Int64) (suffix: String) (acc: String) : String =
     if n <= 0L then acc
-    else stringSpecializedLoop (n - 1L) suffix (acc ++ suffix)
+    else stringSpecializedLoop (n - 1L) suffix (acc + suffix)
 
 let stringComparisonSpecializedLoop (n: Int64) (value: String) : Bool =
     if n <= 0L then value == "x"
@@ -35,7 +35,7 @@ let wideSpecializedLoop (n: Int64) (value: Int128) : Int128 =
 let tupleSpecializedLoop (n: Int64) (value: (Int64 * Bool)) : (Int64 * Bool) =
     if n <= 0L then value else tupleSpecializedLoop (n - 1L) value
 
-stringSpecializedLoop 3L "x" "" ++ stringSpecializedLoop 2L "yz" "" = "xxxyzyz"
+stringSpecializedLoop 3L "x" "" + stringSpecializedLoop 2L "yz" "" = "xxxyzyz"
 stringComparisonSpecializedLoop 2L "x" = true
 stringComparisonSpecializedLoop 2L "y" = false
 charSpecializedLoop 2L 'a' = 'a'

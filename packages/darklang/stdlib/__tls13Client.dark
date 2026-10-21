@@ -128,7 +128,7 @@ let __pemLine (state: Stdlib.__Tls13Client.PemState) (line: String)
        Stdlib.String.__byteLength text > 8192L then
       Error "X.509 trust certificate exceeds size limit"
     else Ok (Stdlib.__Tls13Client.PemState {
-      line = [], lineLength = 0L, encoded = state.encoded ++ text, inside = true,
+      line = [], lineLength = 0L, encoded = state.encoded + text, inside = true,
       count = state.count, roots = state.roots })
   else Ok (Stdlib.__Tls13Client.PemState {
     line = [], lineLength = 0L, encoded = "", inside = false,

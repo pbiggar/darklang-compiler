@@ -308,11 +308,27 @@ let parsePrimary grammar state index =
         ("'" ^ txt state index
        ^ "' is reserved but not supported by the expression grammar");
       (WT.EError (rng state index), index + 1)
+  | TPlusPlus ->
+      err state DiagnosticCode.unexpected index
+        "'++' is not an operator; use '+' to join Strings";
+      (WT.EError (rng state index), index + 1)
   | _ ->
       if txt state index = "::" then
         err state DiagnosticCode.expected index
           "'::' is a pattern; to build a list in an expression use \
            `Stdlib.List.push` or a literal"
+      else if tok state index = TQuestion then
+        let spaced =
+          index = 0 || (rng state (index - 1)).end_ <> (rng state index).start
+        in
+        if spaced then
+          errFull state DiagnosticCode.unexpected index
+            "'?' must come directly after its operand, with no space" []
+            (Some "write `value?`, or `(f x)?` for a call")
+        else
+          errFull state DiagnosticCode.unexpected index
+            "'?' can't follow this expression directly" []
+            (Some "wrap what you want to unwrap in parentheses: `(expr)?`")
       else errExpected state index "an expression";
       let start = (rng state index).start in
       ( WT.EError { start; end_ = start },

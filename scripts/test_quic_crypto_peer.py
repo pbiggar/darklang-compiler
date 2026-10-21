@@ -26,12 +26,12 @@ match Stdlib.Cli.__Args.get 0, Stdlib.Cli.__Args.int64 1, Stdlib.Cli.__Args.int6
     let keys = if Stdlib.String.startsWith mode "client" then initial.client else initial.server in
     if Stdlib.String.endsWith mode "seal" then
       match Stdlib.__QuicCrypto.seal keys data payload number offset with
-      | Error message -> Stdlib.printLine ("ERROR: " ++ message)
+      | Error message -> Stdlib.printLine ("ERROR: " + message)
       | Ok packet -> Stdlib.printLine (Stdlib.Blob.toHex packet)
     else
       match Stdlib.__QuicCrypto.openPacket keys data offset number with
-      | Error message -> Stdlib.printLine ("ERROR: " ++ message)
-      | Ok opened -> Stdlib.printLine (Stdlib.Int64.toString opened.number ++ "|" ++ Stdlib.Blob.toHex opened.header ++ "|" ++ Stdlib.Blob.toHex opened.payload)
+      | Error message -> Stdlib.printLine ("ERROR: " + message)
+      | Ok opened -> Stdlib.printLine (Stdlib.Int64.toString opened.number + "|" + Stdlib.Blob.toHex opened.header + "|" + Stdlib.Blob.toHex opened.payload)
   | _, _, _ -> Stdlib.printLine "Invalid inputs"
 | _, _, _, _, _ -> Stdlib.printLine "Invalid arguments"
 '''

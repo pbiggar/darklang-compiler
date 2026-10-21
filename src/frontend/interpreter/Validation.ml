@@ -24,6 +24,8 @@ type issueCode =
   | PackageExpression
   | TestAssertion
   | TestMode
+  | ImplMethods
+  | UnwrapRequiresFunction
 
 module IssueCode = struct
   let toString = function
@@ -38,6 +40,8 @@ module IssueCode = struct
     | PackageExpression -> "VALIDATION-PACKAGE-EXPR"
     | TestAssertion -> "VALIDATION-TEST-ASSERTION"
     | TestMode -> "VALIDATION-TEST-MODE"
+    | ImplMethods -> "VALIDATION-IMPL-METHODS"
+    | UnwrapRequiresFunction -> "VALIDATION-UNWRAP-CONTEXT"
 end
 
 type issue = {
@@ -178,8 +182,8 @@ let rec structuralPatternIssues = function
 let patternIssues pattern =
   duplicatePatternIssues pattern @ structuralPatternIssues pattern
 
-let rec exprIssues expression =
-  let recurse = exprIssues in
+let rec exprIssues insideFunction expression =
+  let recurse = exprIssues insideFunction in
   let lambdaRequired range patterns =
     if patterns = [] then
       [ issue range EmptyLambda "A lambda must have at least one parameter" ]
@@ -191,7 +195,7 @@ let rec exprIssues expression =
   | WT.ELambda (range, patterns, body, _, _) ->
       lambdaRequired range patterns
       @ duplicateIssues (List.concat_map letBindings patterns)
-      @ recurse body
+      @ exprIssues true body
   | WT.ELet (_, pattern, value, body, _, _) ->
       duplicateIssues (letBindings pattern) @ recurse value @ recurse body
   | WT.EMatch (range, value, cases, _, _) ->
@@ -239,6 +243,14 @@ let rec exprIssues expression =
   | WT.EIf (_, condition, thenExpr, elseExpr, _, _, _) ->
       recurse condition @ recurse thenExpr
       @ Option.fold ~none:[] ~some:recurse elseExpr
+  | WT.EUnwrap (range, operand, _) ->
+      (if insideFunction then []
+       else
+         [
+           issue range UnwrapRequiresFunction
+             "Postfix ? requires an enclosing function or lambda";
+         ])
+      @ recurse operand
   | WT.ERecordFieldAccess (_, record, _, _) -> recurse record
   | WT.EDict (_, entries, _, _, _) ->
       List.concat_map
@@ -250,7 +262,7 @@ let rec exprIssues expression =
         | WT.EPipeLambda (range, patterns, body, _, _) ->
             lambdaRequired range patterns
             @ duplicateIssues (List.concat_map letBindings patterns)
-            @ recurse body
+            @ exprIssues true body
         | WT.EPipeInfix (_, _, value) -> recurse value
         | WT.EPipeFnCall (_, _, _, args) -> List.concat_map recurse args
         | WT.EPipeEnum (_, _, _, fields, _) -> List.concat_map recurse fields
@@ -264,7 +276,7 @@ let rec exprIssues expression =
       []
 
 let rec declarationStructureIssues = function
-  | WT.DTest test -> exprIssues test.body
+  | WT.DTest test -> exprIssues false test.body
   | WT.DFunction fn ->
       duplicateIssues
         (List.filter_map
@@ -273,43 +285,44 @@ let rec declarationStructureIssues = function
                  Some (name.name, name.range)
              | WT.FPUnit _ -> None)
            fn.parameters)
-      @ exprIssues fn.body
-  | WT.DValue value -> exprIssues value.body
+      @ exprIssues true fn.body
+  | WT.DValue value -> exprIssues false value.body
   | WT.DType _ -> []
   | WT.DTrait trait_ ->
-      List.concat_map
-        (fun (method_ : WT.traitMethodDecl) ->
-          duplicateIssues
-            (List.filter_map
-               (function
-                 | WT.FPNormal (_, name, _, _, _, _, _) ->
-                     Some (name.name, name.range)
-                 | WT.FPUnit _ -> None)
-               method_.parameters)
-          @ List.concat_map exprIssues (Option.to_list method_.body))
-        trait_.methods
+      duplicateIssues
+        (List.map
+           (fun (method_ : WT.traitMethodDecl) ->
+             (method_.name.name, method_.name.range))
+           trait_.methods)
   | WT.DImpl impl ->
-      List.concat_map
-        (function
-          | WT.IMethod fn -> declarationStructureIssues (WT.DFunction fn)
-          | WT.IAlias value -> exprIssues value.body)
-        impl.members
+      (duplicateIssues
+         (List.map
+            (function
+              | WT.IMethod fn -> (fn.WT.name.name, fn.name.range)
+              | WT.IAlias value -> (value.WT.name.name, value.name.range))
+            impl.members)
+      |> List.map (fun issue -> { issue with code = ImplMethods }))
+      @ List.concat_map
+          (function
+            | WT.IMethod fn -> declarationStructureIssues (WT.DFunction fn)
+            | WT.IAlias _ -> [])
+          impl.members
   | WT.DModule modul ->
       List.concat_map declarationStructureIssues modul.declarations
-  | WT.DExpr expr -> exprIssues expr
+  | WT.DExpr expr -> exprIssues false expr
   | WT.DAssertion test -> (
-      exprIssues test.actual
+      exprIssues false test.actual
       @
       match test.expected with
-      | WT.TEExpr expr -> exprIssues expr
-      | WT.TEError _ | WT.TESqlError _ -> [])
+      | WT.TEExpr expr -> exprIssues false expr
+      | WT.TEError _ -> [])
 
 (*
    Check mode-independent invariants required by WrittenTypes lowering.
 *)
 let validateStructure (sourceFile : WT.sourceFile) =
   List.concat_map declarationStructureIssues sourceFile.declarations
-  @ List.concat_map exprIssues sourceFile.exprsToEval
+  @ List.concat_map (exprIssues false) sourceFile.exprsToEval
 
 (*
    WrittenTypes does not distinguish a file module header (`module A.B`),

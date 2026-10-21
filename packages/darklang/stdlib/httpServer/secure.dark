@@ -4,7 +4,7 @@ module Darklang.Stdlib.HttpServer.Secure
 let __advertise (port: Int64) (handler: Stdlib.Http.Request -> Stdlib.Http.Response) (request: Stdlib.Http.Request) : Stdlib.Http.Response =
   let response = handler request in
   if response.statusCode == 421 || Stdlib.List.any response.headers (fun header -> let (name, _value) = header in Stdlib.String.toLowercase name == "alt-svc") then response
-  else { response with headers = Stdlib.List.push response.headers ("alt-svc", "h3=\":" ++ Stdlib.Int64.toString port ++ "\"; ma=3600") }
+  else { response with headers = Stdlib.List.push response.headers ("alt-svc", "h3=\":" + Stdlib.Int64.toString port + "\"; ma=3600") }
 
 let __loop (context: Stdlib.HttpServer.Quic.Context) (tls: Stdlib.__TlsServer.Context) (listener: Stdlib.__Network.TcpListener)
   (quic: Stdlib.HttpServer.Quic.__Runtime) (owners: List<Stdlib.__TlsServer.Owner>) : Stdlib.Result.Result<Unit, String> =

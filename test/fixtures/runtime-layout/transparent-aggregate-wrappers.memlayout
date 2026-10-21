@@ -107,7 +107,7 @@ Nested single-case sum wrapper shares its root
 ---INPUT---
 type InnerEnvelope = InnerEnvelope of String
 type OuterEnvelope = OuterEnvelope of InnerEnvelope
-let original = "a" ++ "b" in (InnerEnvelope original, OuterEnvelope (InnerEnvelope original))
+let original = "a" + "b" in (InnerEnvelope original, OuterEnvelope (InnerEnvelope original))
 ---EXPECTED---
 root = tuple(shared_word, shared_word)
 

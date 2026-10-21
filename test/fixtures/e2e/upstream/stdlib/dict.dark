@@ -40,7 +40,7 @@ module FilterMap =
       if value == "y" then
         Stdlib.Option.Option.None
       else
-        Stdlib.Option.Option.Some(key ++ value))
+        Stdlib.Option.Option.Some(key + value))
   ) = (Dict { "c": "cz", "a": "ax" })
 
   // CLEANUP figure out why this isn't failing on the `false` not being an option
@@ -112,7 +112,7 @@ module Map =
 
   (Stdlib.Dict.map
     (Dict { "key1": "val1", "key2": "val2" })
-    (fun k x -> k ++ x)
+    (fun k x -> k + x)
   ) = (Dict { "key2": "key2val2", "key1": "key1val1" })
 
   (Stdlib.Dict.map

@@ -320,7 +320,7 @@ let segmentCodepoints (codepoints: List<Int64>) (previous: List<Int64>) (current
         if Stdlib.String.__Unicode.__shouldBreak previous codepoint then
             Stdlib.String.__Unicode.segmentCodepoints rest ([codepoint]) scalar (Stdlib.List.push result current)
         else
-            Stdlib.String.__Unicode.segmentCodepoints rest (Stdlib.List.push previous codepoint) (if current == "" then scalar else current ++ scalar) result
+            Stdlib.String.__Unicode.segmentCodepoints rest (Stdlib.List.push previous codepoint) (if current == "" then scalar else current + scalar) result
 
 let segmentUtf8 (value: String) (index: Int64) (previous: List<Int64>) (current: String) (result: List<String>) : List<String> =
     if index == Stdlib.String.__byteLength value then
@@ -336,7 +336,7 @@ let segmentUtf8 (value: String) (index: Int64) (previous: List<Int64>) (current:
             if Stdlib.String.__Unicode.__shouldBreak previous codepoint then
                 Stdlib.String.__Unicode.segmentUtf8 value (index + width) ([codepoint]) scalar (Stdlib.List.push result current)
             else
-                Stdlib.String.__Unicode.segmentUtf8 value (index + width) (Stdlib.List.push previous codepoint) (if current == "" then scalar else current ++ scalar) result
+                Stdlib.String.__Unicode.segmentUtf8 value (index + width) (Stdlib.List.push previous codepoint) (if current == "" then scalar else current + scalar) result
 
 let graphemeCountUtf8 (value: String) (index: Int64) (previous: List<Int64>) (count: Int64) : Int64 =
     if index == Stdlib.String.__byteLength value then count

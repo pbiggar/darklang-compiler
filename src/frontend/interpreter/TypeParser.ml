@@ -55,12 +55,12 @@ let rec parseTypeRef state index =
 *)
 and parseFnType state index =
   let first, next = parseTupleType state index in
-  if tok state next <> TArrow then (first, next)
+  if tok state next <> TArrow || state.pendingGt > 0 then (first, next)
   else
     let args = RevBuffer.create ()
     and current = ref first
     and stop = ref next in
-    while tok state !stop = TArrow do
+    while tok state !stop = TArrow && state.pendingGt = 0 do
       RevBuffer.add args (!current, rng state !stop);
       let value, after = parseTupleType state (!stop + 1) in
       current := value;
