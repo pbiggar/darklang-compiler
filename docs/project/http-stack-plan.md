@@ -344,8 +344,10 @@ mean the entire branch has passed its integration or performance gates.
     entropy reads and RSA scratch allocations to reusable storage on x86-64.
     Unaligned 4 KiB and 70 KB raw-buffer regressions exceed cumulative arena
     capacity, with small-size and live-register checks at the release boundary.
-  - [ ] Remaining unsized raw callers need a size audit, and ARM64 needs the
-    corresponding canonical/large-buffer recycling migration. Large-block splitting
+  - [x] The remaining unsized standard-library raw releases are all 8-byte
+    Stream cells, shutdown masks/state, single poll descriptors and socket options.
+  - [ ] ARM64 needs the corresponding canonical/large-buffer recycling migration.
+    Large-block splitting
     and coalescing remain unsupported.
     Passing bounded churn cases does not establish an indefinitely reusable
     native heap. The secure-server fairness peer retains its separate scopes.
