@@ -32,10 +32,9 @@ def main():
     for name in names:
         path = Path(name)
         if (path.is_absolute() or ".." in path.parts or path.suffix != ".dark"
-                or path.parts[0] not in {"StdLib", "packages"}):
+                or path.parts[0] != "packages"):
             raise ValueError(f"Invalid standard-library source: {name}")
-    actual = {str(path.relative_to(root)) for directory in ("StdLib", "packages")
-              for path in (root / directory).rglob("*.dark")}
+    actual = {str(path.relative_to(root)) for path in (root / "packages").rglob("*.dark")}
     if set(names) != actual:
         raise ValueError(f"Source manifest mismatch: {sorted(set(names) ^ actual)}")
     with output.open("w", encoding="utf-8") as target:
@@ -43,7 +42,7 @@ def main():
         target.write("let sources = [\n")
         for name in names:
             content = (root / name).read_bytes()
-            if name == "StdLib/Builtin/__BuildInfo.dark":
+            if name == "packages/darklang/stdlib/__builtin/__buildInfo.dark":
                 marker = b"__COMPILER_BUILD_HASH__"
                 if content.count(marker) != 1:
                     raise ValueError("Expected one compiler build hash marker")

@@ -81,15 +81,15 @@ the ANF, MIR, and LIR definitions; intrinsic lowering lives in
 print instructions and participate in optimization, liveness, allocation, and
 IR printing as ordered effects.
 
-The root presentation source is `StdLib/Print.dark`, loaded immediately
+The root presentation source is `packages/darklang/stdlib/__print.dark`, loaded immediately
 after List by `src/driver/StdlibCompilation.ml`. Its `printLines` composition uses
-the portable ordered recursion at `StdLib/List.dark`; no native list
+the portable ordered recursion at `packages/darklang/stdlib/list.dark`; no native list
 traversal was added. The package load order is recorded in `src/CompilerLibrary.ml` and the
-adapted sources are `StdLib/Cli/UI/Color.dark`, `StdLib/Cli/Log.dark`, and the
+adapted sources are `packages/darklang/stdlib/cli/ui/Color.dark`, `packages/darklang/stdlib/cli/log.dark`, and the
 `Progress.dark`, `Prompt.dark`, `Spinner.dark`, and `Table.dark` files in
-`StdLib/Cli/UI/`. EGC measurement is
-routed through `StdLib/String.dark`; signed selection parsing is aligned at
-`StdLib/Int.dark`. Unit suppression is in
+`packages/darklang/stdlib/cli/ui/`. EGC measurement is
+routed through `packages/darklang/stdlib/string.dark`; signed selection parsing is aligned at
+`packages/darklang/stdlib/int.dark`. Unit suppression is in
 `src/passes/anf/PrintInsertion.ml`, and CLI execution is coordinated by
 `src/driver/CompilerExecution.ml` and `src/Program.ml`.
 

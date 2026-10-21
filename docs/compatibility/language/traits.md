@@ -83,7 +83,7 @@ diagnostic regressions for invalid primitive operators and stream ordering;
 these cases retain their previous diagnostics. Full host passed **13,448/13,448**
 (126.3 seconds).
 `dune runtest` passed, including package caches, HTTP/TLS, host/runtime and
-differential-tool regressions. `StdLib/traits.dark` is byte-identical to the
+differential-tool regressions. `packages/darklang/stdlib/traits.dark` is byte-identical to the
 pinned upstream source.
 
 M6 focused checks passed **87/87** (17.6 seconds). Primitive implementations

@@ -154,12 +154,12 @@ def runner_gates(compiler):
 def discover(root, upstream):
     """Locate package counterparts, builtin registrations and suite exclusions."""
     compiler = {path.relative_to(root).as_posix(): path.read_bytes()
-                for directory in ('src', 'StdLib', 'packages', 'test')
+                for directory in ('src', 'packages', 'test')
                 for path in (root / directory).rglob('*')
                 if path.is_file() and path.suffix in ('.ml', '.mli', '.dark', '.e2e', '.syntax')}
     modules = {}
     for path, body in compiler.items():
-        if path.endswith('.dark') and path.startswith(('StdLib/', 'packages/')):
+        if path.endswith('.dark') and path.startswith('packages/'):
             for name in module_names(body.decode()):
                 modules.setdefault(name, []).append(path)
     records = []
@@ -179,7 +179,7 @@ def discover(root, upstream):
 def compiler_context(root, compiler_files):
     """Fingerprint compilation inputs only when collecting a package run receipt."""
     inputs = dict(compiler_files)
-    for directory in ('bin', 'scripts', 'src', 'test', 'tools', 'StdLib', 'packages'):
+    for directory in ('bin', 'scripts', 'src', 'test', 'tools', 'packages'):
         for path in (root / directory).rglob('*'):
             if path.is_file() and (path.suffix in ('.ml', '.mli', '.c', '.h', '.S', '.s', '.sh', '.py') or path.name == 'dune'):
                 inputs[path.relative_to(root).as_posix()] = path.read_bytes()

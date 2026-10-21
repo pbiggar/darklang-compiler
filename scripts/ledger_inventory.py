@@ -15,7 +15,7 @@ def declaration_rows(upstream, compiler, index, files):
     native, originals, review = [], [], []
     for sources, target in ((upstream, originals), (compiler, native)):
         for path, body in sorted(sources.items()):
-            if not path.endswith('.dark') or not path.startswith(('packages/', 'StdLib/')):
+            if not path.endswith('.dark') or not path.startswith('packages/'):
                 continue
             found, warnings = index(path, body.decode(), containers=True)
             target.extend(row for row in found if row['kind'] != 'test')
@@ -208,7 +208,7 @@ def test_inventory(root, upstream, compiler, index, records, maintained):
                 target.append(row)
     for sources, target in ((upstream, originals), (compiler, native)):
         for path, raw in sorted(sources.items()):
-            if not path.startswith(('packages/', 'StdLib/')) or not path.endswith('.dark'):
+            if not path.startswith('packages/') or not path.endswith('.dark'):
                 continue
             found, warnings = index(path, raw.decode())
             review.extend(warnings)

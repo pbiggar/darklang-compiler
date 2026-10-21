@@ -16,9 +16,9 @@ The canonical interpreter declarations are
 `packages/darklang/stdlib/{char,string,regex}.dark`; their managed behavior is
 implemented by `backend/src/Builtins/Builtins.Pure/Libs/{Char,String,Regex}.fs`.
 The compiler surface is implemented in
-`StdLib/{Char,String,Regex}.dark`, with shared semantics in
-`StdLib/String/__Unicode.dark` and generated data under
-`StdLib/String/__Unicode/`. The generated source is split only
+`packages/darklang/stdlib/{Char,String,Regex}.dark`, with shared semantics in
+`packages/darklang/stdlib/string/__unicode.dark` and generated data under
+`packages/darklang/stdlib/string/__unicode/`. The generated source is split only
 to bound the recursive Dark lexer's stack use; the generator treats the shards
 as one versioned table set.
 

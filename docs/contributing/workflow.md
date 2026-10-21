@@ -29,7 +29,7 @@ For a new operator, update both the implementation and its `.mli` interface:
    dispatcher rather than adding a catch-all default.
 
 For a standard-library feature, add its Dark implementation to the package
-directory under `StdLib/` or `packages/` and register its repository-relative
+directory under `packages/darklang/stdlib/` or `packages/` and register its repository-relative
 path in `library-sources.list` in declaration order. See
 [the standard-library layout](../compiler/source-organization.md#standard-library-layout).
 The build embeds every registered source in the standalone compiler; no
