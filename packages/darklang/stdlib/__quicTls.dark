@@ -46,7 +46,7 @@ let __parameters (body: Blob) (position: Int64) (seen: List<Int64>) (parameters:
   else
     let kind = Stdlib.__Tls13.__read16 body position in
     let length = Stdlib.__Tls13.__read16 body (position + 2L) in
-    if Stdlib.List.member seen kind then Error "Duplicate QUIC TLS extension"
+    if Stdlib.List.contains seen kind then Error "Duplicate QUIC TLS extension"
     else if length > size - position - 4L then Error "Truncated QUIC TLS extension"
     else if kind == 57L && (length == 0L || length > 4096L) then Error "Invalid QUIC transport parameters length"
     else

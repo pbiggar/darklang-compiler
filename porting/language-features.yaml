@@ -59,9 +59,6 @@ groups:
     Tuple types: supported
     Function types: supported
     Stream<'a>: supported
-    DB<'a>:
-      status: missing
-      notes: Interpreter database handles have no corresponding compiler source type.
   Literals:
     Unit literals: supported
     Boolean literals: supported
@@ -136,6 +133,7 @@ groups:
     Tuple construction: supported
     Tuple element access: supported
     Nested collection inference: supported
+    Comma and newline collection separators: supported
   Control flow:
     If/then/else: supported
     If without else: supported
@@ -242,13 +240,18 @@ groups:
       notes: The merged baseline does not represent futures in the native language pipeline.
     Implicit await on value use:
       status: missing
-      notes: Future values are not resolved implicitly by this baseline.
+      notes: Future values are not resolved implicitly by this baseline. Upstream e76430be5 also carries pending
+        reads inside containers and closure captures without waiting at construction.
     Async function calls:
       status: missing
       notes: Native future-producing function calls are not implemented in this baseline.
     Async failures:
       status: missing
       notes: Propagation of failures through futures is not implemented in this baseline.
+    Explicit await forces a pending argument:
+      status: missing
+      notes: Upstream await calls Builtin.runtimeForce; user function calls may pass pending arguments onward. The
+        separate native async implementation is not merged into this baseline.
   Reflection and dynamic execution:
     Runtime expression evaluation:
       status: missing

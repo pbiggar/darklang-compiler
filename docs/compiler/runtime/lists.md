@@ -9,7 +9,7 @@ counting for every shared root, structural edge, and managed element payload.
 ```dark
 []                       // empty list
 [1, 2, 3]                // comma-separated literal
-[1; 2; 3;]               // semicolons and trailing separators are accepted
+[1, 2, 3,]               // a trailing comma is accepted
 [left] @ [middle, right]  // right-associative append
 Stdlib.List.push xs x   // prepend a value
 ```
@@ -18,7 +18,7 @@ Newlines may also separate literal elements. A line aligned with or outdented
 from the formatter's two-column list indent starts a new element when the
 previous line ends in a value; a deeper-indented line continues the current
 application. All separator forms normalize to one homogeneous `ListLiteral`;
-spread syntax is not part of the language.
+semicolons are rejected, and spread syntax is not part of the language.
 
 Pattern matching supports empty, exact-length, and head/tail forms:
 

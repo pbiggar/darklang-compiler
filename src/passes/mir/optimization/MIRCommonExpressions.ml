@@ -28,7 +28,9 @@ let compareOperand left right =
   match (left, right) with
   | Int64Const a, Int64Const b -> Int64.compare a b
   | BoolConst a, BoolConst b -> Bool.compare a b
-  | FloatSymbol a, FloatSymbol b -> Float.compare a b
+  | FloatSymbol a, FloatSymbol b ->
+      (* Pure calls may inspect the sign bit or NaN payload. *)
+      Int64.compare (Int64.bits_of_float a) (Int64.bits_of_float b)
   | StringSymbol a, StringSymbol b -> StringOrder.compare a b
   | Register (VReg a), Register (VReg b) -> Int.compare a b
   | FuncAddr a, FuncAddr b ->

@@ -50,7 +50,7 @@ Compiler evidence is anchored in:
 
 | Area | Interpreter contract and compiler result | Focused evidence | Classification |
 | --- | --- | --- | --- |
-| Literals | `[]` and populated literals accept comma, semicolon, or newline separators, including trailing separators, and normalize to `ListLiteral`. | Canonical parser fixtures and `list_language_parity.e2e`. | parity |
+| Literals | `[]` and populated literals accept comma or newline separators, including trailing separators, and normalize to `ListLiteral`. | Canonical parser fixtures and `list_language_parity.e2e`. | parity |
 | Cons patterns | `head :: tail` is pattern syntax, associates right, and chained heads normalize to one internal `PListCons` without reordering bindings. | Syntax fixtures and nested/list-tuple cases in `lists.e2e`. | parity; `PListCons` is internal only |
 | Append | `@` associates right at interpreter precedence and normalizes to `Stdlib.List.append`. Both operands are homogeneous lists. | Canonical parser fixtures, AST-shape tests, and type/value probes in `list_language_parity.e2e`. | parity |
 | Inference | `[]` uses contextual polymorphic inference. A nonempty literal establishes one element type; heterogeneous elements and non-list cons tails are rejected. An aborting element has type `Never` and does not displace the list's concrete element type. | `src/frontend/WrittenChecking.ml`; focused positive and compile-error probes, including upstream `dlist.dark`. | parity result, intentional AOT phase difference |
@@ -78,7 +78,7 @@ or native implementations are retained. Type variables below are polymorphic.
 | Contract group | Public signatures and behavior |
 | --- | --- |
 | Values and construction | `empty : List<a>` is a non-callable value; `singleton`, `push`, `pushBack`, and `append` retain order. `head`, `tail`, `last`, and `splitLast` return `Option` on empty input. |
-| Size and lookup | `length : List<a> -> Int`; `getAt : List<a> * Int -> Option<a>` returns `None` for negative, out-of-range, or non-native-sized indices; `isEmpty`, `member`, and `findFirst` match interpreter edge cases. |
+| Size and lookup | `length : List<a> -> Int`; `getAt : List<a> * Int -> Option<a>` returns `None` for negative, out-of-range, or non-native-sized indices; `isEmpty`, `contains`, and `findFirst` match interpreter edge cases. |
 | Traversal | `fold`, `map`, `indexedMap`, `filter`, `filterMap`, `flatten`, `reverse`, `interpose`, `interleave`, `drop`, `dropWhile`, `dropLast`, `take`, and `takeWhile` preserve interpreter results and callback order. Counts and indices are public `Int`. |
 | Predicates | `all` and `any` invoke callbacks left to right, once per visited element, and stop at the first decisive result. `findFirst` and `findFirstIndex` stop at the first match. |
 | Pairwise | `map2shortest` and `zipShortest` truncate; `map2` and `zip` return `None` on unequal lengths and `Some` on equal lengths; `unzip` preserves order. |

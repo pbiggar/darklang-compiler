@@ -82,7 +82,9 @@ let compareAtom a b =
     | IntLiteral a, IntLiteral b -> compareSizedInt a b
     | BoolLiteral a, BoolLiteral b -> Bool.compare a b
     | StringLiteral a, StringLiteral b -> StringOrder.compare a b
-    | FloatLiteral a, FloatLiteral b -> Float.compare a b
+    | FloatLiteral a, FloatLiteral b ->
+        (* Value-numbering keys preserve representations observable by Float.toBits. *)
+        Int64.compare (Int64.bits_of_float a) (Int64.bits_of_float b)
     | Var (TempId a), Var (TempId b) -> Int.compare a b
     | FuncRef a, FuncRef b ->
         Int64.unsigned_compare (AST.functionIdValue a) (AST.functionIdValue b)

@@ -415,7 +415,7 @@ let rec formatExpr (expr : expr) =
       text ^ "." ^ string_of_int index
   | DictLiteral (_, _, entries) ->
       "Dict { "
-      ^ join "; "
+      ^ join ", "
           (fun (key, value) -> formatExpr key ^ ": " ^ formatExpr value)
           entries
       ^ " }"

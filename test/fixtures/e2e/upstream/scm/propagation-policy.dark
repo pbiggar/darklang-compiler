@@ -11,7 +11,7 @@
 module Helpers =
   let loc (modules: List<String>) (name: String) : Darklang.LanguageTools.ProgramTypes.PackageLocation =
     Darklang.LanguageTools.ProgramTypes.PackageLocation
-      { owner = "Zz"; modules = modules; name = name }
+      { owner = "Zz", modules = modules, name = name }
 
   let choice
     (modules: String)

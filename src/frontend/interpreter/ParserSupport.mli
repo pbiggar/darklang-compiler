@@ -118,7 +118,7 @@ val withStmtColExact : parserState -> int -> (unit -> 'a) -> 'a
 val declBarrier : parserState -> int -> bool
 val offsideContinues : parserState -> int -> int -> bool
 val isNegLitArg : parserState -> int -> bool
-val errListSemicolon : parserState -> int -> string -> unit
+val errCollectionSemicolon : parserState -> int -> string -> unit
 
 val requireElementSeparator :
   parserState -> Tokenizer.tokenRange -> int -> string -> unit

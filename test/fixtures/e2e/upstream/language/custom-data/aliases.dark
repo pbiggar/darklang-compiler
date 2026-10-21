@@ -1,13 +1,13 @@
 // simple alias
 type Id = String
 
-type Something = { ID: Id; Data: String }
+type Something = { ID: Id, Data: String }
 
-Something { ID = "2"; Data = "test" } = Something { ID = "2"; Data = "test" }
+Something { ID = "2", Data = "test" } = Something { ID = "2", Data = "test" }
 
 // CELANUP: would be better if this noted that `Id` is an alias for `String`
 #compileerror="Expected TString, got TInt64"
-Something { ID = 2L; Data = "test" } = error="Failed to create record. Expected String for field `ID`, but got 2 (an Int64)"
+Something { ID = 2L, Data = "test" } = error="Failed to create record. Expected String for field `ID`, but got 2 (an Int64)"
 module SimpleRecordAlias =
   type Person = { name: String }
   type MyPerson = Person
@@ -73,45 +73,45 @@ module ResultAlias =
 
 
 module RecordWithTypeArgs =
-  type Inner<'a, 'b> = { a: 'a; b: 'b }
+  type Inner<'a, 'b> = { a: 'a, b: 'b }
 
   type Outer1<'a> = Inner<'a, Int64>
   type Outer2<'b> = Inner<String, 'b>
 
-  (Outer1 { a = "test"; b = 5L }) = (Inner { a = "test"; b = 5L })
-  (Outer1 { a = "test"; b = 5L }) = (Outer2 { a = "test"; b = 5L })
+  (Outer1 { a = "test", b = 5L }) = (Inner { a = "test", b = 5L })
+  (Outer1 { a = "test", b = 5L }) = (Outer2 { a = "test", b = 5L })
 
   let getInnerField (x: Inner<'a, 'b>) : 'b = x.b
-  getInnerField (Inner { a = "test"; b = 5L }) = 5L
-  getInnerField (Outer1 { a = "test"; b = 5L }) = 5L
-  getInnerField (Outer2 { a = "test"; b = 5L }) = 5L
+  getInnerField (Inner { a = "test", b = 5L }) = 5L
+  getInnerField (Outer1 { a = "test", b = 5L }) = 5L
+  getInnerField (Outer2 { a = "test", b = 5L }) = 5L
 
   // These tests aren't working because the _old_ parser doesn't support type args in record values
   // OK that's probably fine, but something to circle back to (CLEANUP) once we're over to the new parser.
   // Inner<String, Int64> { a = "test"; b = 5L } = Inner { a = "test"; b = 5L }
   // Inner<String, Int64> { a = "test"; b = "five" } = error="TODO: error message"
   #compileerror="Expected String, got Int64"
-  Outer2 { a = 5L; b = 6L } = error="Failed to create record. Expected String for field `a`, but got 5 (an Int64)"
+  Outer2 { a = 5L, b = 6L } = error="Failed to create record. Expected String for field `a`, but got 5 (an Int64)"
 
   #compileerror="Expected Int64, got String"
-  Outer1 { a = "a"; b = "b" } = error="Failed to create record. Expected Int64 for field `b`, but got \"b\" (a String)"
+  Outer1 { a = "a", b = "b" } = error="Failed to create record. Expected Int64 for field `b`, but got \"b\" (a String)"
 
 
 module RecordWithTypeArgsDifferentName =
-  type Inner<'a, 'b> = { a: 'a; b: 'b }
+  type Inner<'a, 'b> = { a: 'a, b: 'b }
   type LessInner<'b, 'a> = Inner<'a, 'b>
   type Outer<'x> = LessInner<'x, Int64> // { a: 'x; b: Int64 }
   type Outest<'y> = Outer<'y> // { a: 'y; b: Int64 }
   type MostOutest = Outest<String> // { a: Int64; b: String }
 
-  MostOutest { a = 5L; b = "string" } =
-    Inner { a = 5L; b = "string" }
+  MostOutest { a = 5L, b = "string" } =
+    Inner { a = 5L, b = "string" }
 
   #compileerror="Expected TInt64, got TString"
-  MostOutest { a = "not allowed"; b = "string" } = error="Failed to create record. Expected Int64 for field `a`, but got \"not allow... (a String)"
+  MostOutest { a = "not allowed", b = "string" } = error="Failed to create record. Expected Int64 for field `a`, but got \"not allow... (a String)"
 
   #compileerror="Expected TString, got TInt64"
-  MostOutest { a = 5L; b = 6L } = error="Failed to create record. Expected String for field `b`, but got 6 (an Int64)"
+  MostOutest { a = 5L, b = 6L } = error="Failed to create record. Expected String for field `b`, but got 6 (an Int64)"
 
 
 module RecordWithRecursiveTypeArgs =
@@ -121,17 +121,17 @@ module RecordWithRecursiveTypeArgs =
 
   type Alias<'x> = Inner<'x>
 
-  Inner { a = 5L; b = Stdlib.Result.Result.Ok(Inner { a = 6L; b = Stdlib.Result.Result.Ok(Inner { a = 7L; b = Stdlib.Result.Result.Error "test" }) }) } =
-    (Alias { a = 5L; b = Stdlib.Result.Result.Ok(Alias { a = 6L; b = Stdlib.Result.Result.Ok(Alias { a = 7L; b = Stdlib.Result.Result.Error "test" }) }) })
+  Inner { a = 5L, b = Stdlib.Result.Result.Ok(Inner { a = 6L, b = Stdlib.Result.Result.Ok(Inner { a = 7L, b = Stdlib.Result.Result.Error "test" }) }) } =
+    (Alias { a = 5L, b = Stdlib.Result.Result.Ok(Alias { a = 6L, b = Stdlib.Result.Result.Ok(Alias { a = 7L, b = Stdlib.Result.Result.Error "test" }) }) })
 
 
 module MultiNestedRecordAlias =
-  type Innest<'a, 'b, 'c> = { a: 'a; b: 'b; c: 'c }
+  type Innest<'a, 'b, 'c> = { a: 'a, b: 'b, c: 'c }
   type Nest1<'a, 'b> = Innest<'a, 'b, Int64>
   type Nest2<'a> = Nest1<'a, String>
   type Nest3 = Nest2<Int64>
 
-  Nest3 { a = 5L; b = "test"; c = 6L } = Innest { a = 5L; b = "test"; c = 6L }
+  Nest3 { a = 5L, b = "test", c = 6L } = Innest { a = 5L, b = "test", c = 6L }
 
 
 module EnumWithTypeArgs =

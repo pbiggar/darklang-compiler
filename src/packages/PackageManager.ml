@@ -499,7 +499,7 @@ let rec renderExpr parameters selfName element =
         | _ -> Error "Invalid package dictionary entry"
       in
       let+ entries = ResultList.mapResults entry (arrayItems entries) in
-      "Dict { " ^ String.concat "; " entries ^ " }"
+      "Dict { " ^ String.concat ", " entries ^ " }"
   | "ELet", [ _; pattern; value; body ] ->
       let* pattern = renderLetPattern pattern in
       let* value = recurse value in
@@ -550,7 +550,7 @@ let rec renderExpr parameters selfName element =
       let name =
         if types = [] then name else name ^ "<" ^ String.concat ", " types ^ ">"
       in
-      name ^ " { " ^ String.concat "; " fields ^ " }"
+      name ^ " { " ^ String.concat ", " fields ^ " }"
   | "ERecordFieldAccess", [ _; record; field ] ->
       let* record = recurse record in
       let+ field = stringValue field in
@@ -566,7 +566,7 @@ let rec renderExpr parameters selfName element =
       in
       let* record = recurse record in
       let+ updates = ResultList.mapResults update (arrayItems updates) in
-      "{ " ^ record ^ " with " ^ String.concat "; " updates ^ " }"
+      "{ " ^ record ^ " with " ^ String.concat ", " updates ^ " }"
   | "EEnum", [ _; name; _typeArgs; enumName; values ] ->
       let* name = resolvedName name in
       let* leaf = stringValue enumName in
@@ -941,7 +941,7 @@ let renderEntity entity =
                               ResultList.mapResults field (arrayItems fields)
                             in
                             prefix
-                              (head ^ "{ " ^ String.concat "; " fields ^ " }")
+                              (head ^ "{ " ^ String.concat ", " fields ^ " }")
                         | "Enum", [ cases ] ->
                             let case element =
                               match

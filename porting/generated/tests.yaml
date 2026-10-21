@@ -598,6 +598,11 @@ sources:
       status: enabled
       compiler: stdlib-internal/timestamp-syscall-primitives.e2e#L1
     L3: unmapped
+  packages/darklang/tests/cli/builtinGroups.dark:
+    Darklang.Cli.Tests.BuiltinGroups.everySubstantialPrefixHasADisplayName: unmapped
+    Darklang.Cli.Tests.BuiltinGroups.noDisplayNameIsStale: unmapped
+    Darklang.Cli.Tests.BuiltinGroups.noPrefixIsNamedTwice: unmapped
+    Darklang.Cli.Tests.BuiltinGroups.theBuiltinSetWasActuallyRead: unmapped
   packages/darklang/tests/cli/commandCompletions.dark:
     Darklang.Cli.Tests.CommandCompletions.mainIsAlwaysOffered: unmapped
     Darklang.Cli.Tests.CommandCompletions.noArgument:
@@ -631,6 +636,12 @@ sources:
       - upstream/cli/command-completions.dark#L43
       - upstream/cli/command-completions.dark#L44
       reason: whole-file-gate
+  packages/darklang/tests/cli/commandGroups.dark:
+    Darklang.Cli.Tests.CommandGroups.everyGroupNameIsUnique: unmapped
+    Darklang.Cli.Tests.CommandGroups.everyGroupedNameIsRegistered: unmapped
+    Darklang.Cli.Tests.CommandGroups.everyRegisteredCommandIsInAGroup: unmapped
+    Darklang.Cli.Tests.CommandGroups.noCommandIsInTwoGroups: unmapped
+    Darklang.Cli.Tests.CommandGroups.theRegistryWasActuallyRead: unmapped
   packages/darklang/tests/cli/deprecationKinds.dark:
     Darklang.Cli.Tests.DeprecationKinds.harmfulIsFnOnly: unmapped
     Darklang.Cli.Tests.DeprecationKinds.obsoleteAppliesToAll: unmapped
@@ -876,6 +887,8 @@ sources:
     Darklang.Cli.Tests.ReleaseAssets.AssetForPlatform.emptyAndNonGzAssets: unmapped
     Darklang.Cli.Tests.ReleaseAssets.AssetForPlatform.missingPlatform: unmapped
     Darklang.Cli.Tests.ReleaseAssets.AssetForPlatform.muslSuffix: unmapped
+    Darklang.Cli.Tests.ReleaseAssets.PlatformForHost.everySupportedHost: unmapped
+    Darklang.Cli.Tests.ReleaseAssets.PlatformForHost.unsupportedCombination: unmapped
   packages/darklang/tests/cli/searchRanking.dark:
     Darklang.Cli.Tests.SearchRanking.bestRankDecidesSection: unmapped
     Darklang.Cli.Tests.SearchRanking.itemTokenDecides: unmapped
@@ -2237,16 +2250,10 @@ sources:
       - upstream/language/runtime-to-programtypes.dark#L44
       reason: whole-file-gate
       notes: Only part of the upstream assertion group has a counterpart.
-    Darklang.Language.Tests.RuntimeToProgramTypes.recordsAndEnums:
-      status: partial
-      compiler: upstream/language/runtime-to-programtypes.dark#L103
-      reason: whole-file-gate
-      notes: Only part of the upstream assertion group has a counterpart.
+    Darklang.Language.Tests.RuntimeToProgramTypes.recordsAndEnums: unmapped
     Darklang.Language.Tests.RuntimeToProgramTypes.valuesWithoutLiteralSyntax:
       status: disabled
-      compiler:
-      - upstream/language/runtime-to-programtypes.dark#L113
-      - upstream/language/runtime-to-programtypes.dark#L115
+      compiler: upstream/language/runtime-to-programtypes.dark#L115
       reason: whole-file-gate
   packages/darklang/tests/language/semantics.dark:
     Darklang.Language.Tests.Semantics.areasAndFiltering: unmapped
@@ -2331,6 +2338,7 @@ sources:
     Darklang.Language.Tests.Traits.Rendering.clamp:
       status: enabled
       compiler: upstream/language/traits.dark#Darklang.Language.Tests.Traits.Rendering.clamp
+      notes: Matched by name; test bodies differ.
     Darklang.Language.Tests.Traits.Rendering.compareOnStringsAndChars:
       status: enabled
       compiler: upstream/language/traits.dark#Darklang.Language.Tests.Traits.Rendering.compareOnStringsAndChars
@@ -2658,6 +2666,7 @@ sources:
     Darklang.LanguageTools.Tests.BuiltinIntrospection.Documentation.registryIsNotEmpty: unmapped
     Darklang.LanguageTools.Tests.BuiltinIntrospection.Lookup.namedLookups: unmapped
   packages/darklang/tests/languageTools/parsedFileShape.dark:
+    Darklang.LanguageTools.Parser.Parse.Tests.dbAttributeIsNoLongerSpecial: unmapped
     Darklang.LanguageTools.Parser.Parse.Tests.mixedDeclarationsAndExpressions: unmapped
     Darklang.LanguageTools.Parser.Parse.Tests.moduleHeadedFiles: unmapped
     Darklang.LanguageTools.Parser.Parse.Tests.notDeclarations: unmapped
@@ -3818,20 +3827,11 @@ sources:
       status: enabled
       compiler: upstream/trait-adoption/stdlib/float.dark#Darklang.Stdlib.Float.Tests.sum
     Darklang.Stdlib.Float.Tests.toBits:
-      status: partial
-      compiler:
-      - upstream/stdlib/float.dark#L249
-      - upstream/stdlib/float.dark#L250
-      - upstream/stdlib/float.dark#L251
-      - upstream/stdlib/float.dark#L252
-      - upstream/stdlib/float.dark#L255
-      notes: Only part of the upstream assertion group has a counterpart.
+      status: enabled
+      compiler: upstream/october-adoption/stdlib/float.dark#Darklang.Stdlib.Float.Tests.toBits
     Darklang.Stdlib.Float.Tests.toBitsDistinguishesSignedZero:
-      status: partial
-      compiler:
-      - upstream/stdlib/float.dark#L256
-      - upstream/stdlib/float.dark#L257
-      notes: Only part of the upstream assertion group has a counterpart.
+      status: enabled
+      compiler: upstream/october-adoption/stdlib/float.dark#Darklang.Stdlib.Float.Tests.toBitsDistinguishesSignedZero
     Darklang.Stdlib.Float.Tests.toInt:
       status: partial
       compiler:
@@ -3919,12 +3919,11 @@ sources:
       - upstream/stdlib/html.dark#L171
       - upstream/stdlib/html.dark#L172
     Darklang.Stdlib.Html.Tests.comment:
-      status: disabled
-      compiler:
-      - upstream/stdlib/html.dark#L37
-      - upstream/stdlib/html.dark#L42
-      - upstream/stdlib/html.dark#L44
-      reason: line-gate
+      status: enabled
+      compiler: upstream/october-adoption/stdlib/html.dark#Darklang.Stdlib.Html.Tests.comment
+    Darklang.Stdlib.Html.Tests.commentNeverHoldsDoubleDash:
+      status: enabled
+      compiler: upstream/october-adoption/stdlib/html.dark#Darklang.Stdlib.Html.Tests.commentNeverHoldsDoubleDash
     Darklang.Stdlib.Html.Tests.definitionList: unmapped
     Darklang.Stdlib.Html.Tests.definitionListTags:
       status: enabled
@@ -5258,6 +5257,9 @@ sources:
     Darklang.Stdlib.List.Tests.comparatorRejectsFloatResult: unmapped
     Darklang.Stdlib.List.Tests.comparatorRejectsStringResult: unmapped
     Darklang.Stdlib.List.Tests.comparatorRejectsWrongArity: unmapped
+    Darklang.Stdlib.List.Tests.contains:
+      status: enabled
+      compiler: upstream/october-adoption/stdlib/list.dark#Darklang.Stdlib.List.Tests.contains
     Darklang.Stdlib.List.Tests.dedup: unmapped
     Darklang.Stdlib.List.Tests.dedupRejectsFunctionKeys: unmapped
     Darklang.Stdlib.List.Tests.dedupTreatsNanAsOneDictionaryKey: unmapped
@@ -5371,12 +5373,6 @@ sources:
       - upstream/stdlib/list.dark#L204
       - upstream/stdlib/list.dark#L205
       - upstream/stdlib/list.dark#L206
-    Darklang.Stdlib.List.Tests.member:
-      status: enabled
-      compiler:
-      - upstream/stdlib/list.dark#L208
-      - upstream/stdlib/list.dark#L209
-      - upstream/stdlib/list.dark#L210
     Darklang.Stdlib.List.Tests.parallelMap: unmapped
     Darklang.Stdlib.List.Tests.parallelMapOutlivesProcessTable: unmapped
     Darklang.Stdlib.List.Tests.parallelMapRunsConcurrently: unmapped
@@ -5483,7 +5479,9 @@ sources:
     Darklang.Stdlib.Math.Tests.atan2: unmapped
     Darklang.Stdlib.Math.Tests.constants: unmapped
     Darklang.Stdlib.Math.Tests.degreesAndRadians: unmapped
-    Darklang.Stdlib.Math.Tests.hyperbolic: unmapped
+    Darklang.Stdlib.Math.Tests.hyperbolic:
+      status: enabled
+      compiler: upstream/october-adoption/stdlib/math.dark#Darklang.Stdlib.Math.Tests.hyperbolic
     Darklang.Stdlib.Math.Tests.inverseTrigonometry: unmapped
     Darklang.Stdlib.Math.Tests.trigonometry: unmapped
     Darklang.Stdlib.Math.Tests.turns: unmapped

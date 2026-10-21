@@ -11,18 +11,6 @@ type grammar = {
 }
 
 (*
-   `[<DB>]` attribute prefix on a type decl: 5 tokens. Parsing represents it;
-   post-parse validation restricts it to Test source.
-   `[` `<` `DB` `>` `]`.
-*)
-let isDbAttr state index =
-  tok state index = TLBracket
-  && tok state (index + 1) = TLt
-  && tok state (index + 2) = TIdent "DB"
-  && tok state (index + 3) = TGt
-  && tok state (index + 4) = TRBracket
-
-(*
    Test-mode only: the expected side of an assertion `actual = expected`. Either
    an `error="msg"` / `sqlerror="msg"` marker (also the bare `error "msg"` shape)
    or a plain value expression. The message string is kept raw (the tokenizer has
@@ -164,21 +152,6 @@ and parseItemsBody grammar state itemScope start minColumn =
       setStmtCol state (rng state !stop).start.column;
       state.declAnchor <- (rng state !stop).start.column;
       (match (tok state !stop, tok state (!stop + 1)) with
-      | TLBracket, TLt
-        when isDbAttr state !stop && tok state (!stop + 5) = TType ->
-          let declaration, after =
-            TypeDefinitionParser.parseTypeDecl state (!stop + 5)
-          in
-          (match declaration with
-          | WT.DType typ ->
-              (match typ.WT.definition with
-              | WT.TDAlias _ -> ()
-              | _ ->
-                  err state DiagnosticCode.expected (!stop + 5)
-                    "[<DB>] type must be a type alias");
-              RevBuffer.add declarations (WT.DTypeDB typ)
-          | other -> RevBuffer.add declarations other);
-          stop := after
       | TVal, TIdent _ ->
           let declaration, after =
             DeclarationParser.parseDecl grammar.parseBlock state !stop

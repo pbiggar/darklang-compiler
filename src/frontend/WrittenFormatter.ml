@@ -608,7 +608,6 @@ and declaration (value : WrittenTypes.declaration) =
   | WrittenTypes.DTrait field0 -> union "DTrait" [ traitDecl field0 ]
   | WrittenTypes.DImpl field0 -> union "DImpl" [ implDecl field0 ]
   | WrittenTypes.DExpr field0 -> union "DExpr" [ expr field0 ]
-  | WrittenTypes.DTypeDB field0 -> union "DTypeDB" [ typeDecl field0 ]
   | WrittenTypes.DAssertion field0 -> union "DAssertion" [ assertion field0 ]
 
 and testDecl (value : WrittenTypes.testDecl) =

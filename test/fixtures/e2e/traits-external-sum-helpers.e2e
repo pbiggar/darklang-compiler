@@ -1,4 +1,4 @@
 type TraitExternalSum = Present | Missing of List<String>
 Stdlib.equals TraitExternalSum.Present TraitExternalSum.Present = true
-Stdlib.List.member [TraitExternalSum.Present] TraitExternalSum.Present = true
-Stdlib.List.member [TraitExternalSum.Missing ["b"]] (TraitExternalSum.Missing ["a"]) = false
+Stdlib.List.contains [TraitExternalSum.Present] TraitExternalSum.Present = true
+Stdlib.List.contains [TraitExternalSum.Missing ["b"]] (TraitExternalSum.Missing ["a"]) = false

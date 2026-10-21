@@ -8,6 +8,15 @@ a fresh test result for this revision.
 This document records the observable Float/Math contract implemented by the
 native compiler. It is a behavior comparison, not a performance comparison.
 
+## Current upstream changes
+
+At interpreter `e76430be5`, `Float.toBits` returns `UInt64`, and `Math.tanh`
+computes hyperbolic tangent. Negative zero has bits `9223372036854775808UL`;
+`tanh 1.0` is approximately `0.7615941559557649`. These supersede the historical
+signed-bit and sinh compatibility choices below. Optimizer expression keys
+preserve float bit patterns so `toBits` distinguishes both zero signs.
+See [upstream adoption](../upstream-adoption.md#interpreter-refresh-2026-10-20).
+
 ## Pinned evidence
 
 Every interpreter comparison in this change used:
@@ -107,10 +116,9 @@ functions preserve the tested NaN, infinity, quadrant, overflow, and signed-zero
 behavior.
 
 At `I@0b3888d8e4f30d48ecd738f5cbe5cc2b8d958460`, `mathTanh` calls
-`System.Math.Sinh` (`Math.fs:201-209`). This revision-specific anomaly is
-intentionally reproduced: `Math.tanh(1.0)` equals the sinh result, not the
-mathematical hyperbolic tangent. A nonzero E2E probe prevents accidental
-"correction" away from the compatibility baseline.
+`System.Math.Sinh` (`Math.fs:201-209`). That historical anomaly was
+reproduced before the 2026-10-20 refresh: `Math.tanh(1.0)` equals the sinh result, not the
+mathematical hyperbolic tangent. Current E2E tests instead require the corrected hyperbolic tangent.
 
 ## Error phase and focused probes
 
@@ -125,4 +133,4 @@ beyond Int64, nonfinite rounding failure, reversed/NaN clamp bounds, leading-dot
 and whitespace parsing, halfway/subnormal/overflow parsing, shortest bit
 round-trips, scalar/list/tuple rendering, power domains and signed zero,
 inverse-trigonometric Options, atan2 quadrants, hyperbolic overflow, and the
-nonzero tanh anomaly.
+nonzero hyperbolic tangent.

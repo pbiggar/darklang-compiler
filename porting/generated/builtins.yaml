@@ -567,6 +567,7 @@ files:
   Builtins.Pure/Libs/List.fs:
     listAny_v0: unassessed
     listAppend_v0: unassessed
+    listContains_v0: unassessed
     listFilter_v0: unassessed
     listFilterMap_v0: unassessed
     listFindFirst_v0: unassessed
@@ -578,7 +579,6 @@ files:
     listLength_v0: unassessed
     listMap_v0: unassessed
     listMap2shortest_v0: unassessed
-    listMember_v0: unassessed
     listPush_v0: unassessed
     listPushBack_v0: unassessed
     listRange_v0: unassessed
@@ -616,6 +616,7 @@ files:
     negate_v0: present
     notEquals_v0: unassessed
     power_v0: missing
+    runtimeForce_v0: missing
     shiftLeft_v0: missing
     shiftRight_v0: missing
     subtract_v0: missing

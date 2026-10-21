@@ -56,5 +56,5 @@ pairScore (3L, true) + pairScore (5L, false) + dynamicPairScore (8L, true) = 6L
 pairScoreMatch (3L, true) + pairScoreMatch (5L, false) = -2L
 
 // Float literal identities include the sign bit of zero.
-let specializedZeroBits (value: Float) : Int = Stdlib.Float.toBits value
+let specializedZeroBits (value: Float) : UInt64 = Stdlib.Float.toBits value
 specializedZeroBits (0.0) != specializedZeroBits (-0.0) = true

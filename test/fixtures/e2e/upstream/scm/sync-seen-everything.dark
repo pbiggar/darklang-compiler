@@ -8,7 +8,7 @@
 
 module Seen =
   let head (count: Int64) (ts: String) : Darklang.SCM.Wire.SyncHead =
-    Darklang.SCM.Wire.SyncHead { count = count; maxTs = ts }
+    Darklang.SCM.Wire.SyncHead { count = count, maxTs = ts }
 
   let check (seen: String) (theirCount: Int64) (myCount: Int64) : Bool =
     Darklang.SCM.Wire.seenEverything

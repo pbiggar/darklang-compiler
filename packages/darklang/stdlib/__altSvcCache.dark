@@ -24,7 +24,7 @@ let __httpDate (text: String) : Stdlib.Result.Result<Int64, String> =
   if Stdlib.String.__byteLength text != 29L || Stdlib.String.__byteSlice text 3L 5L != ", " ||
     Stdlib.String.__byteSlice text 7L 8L != " " || Stdlib.String.__byteSlice text 11L 12L != " " || Stdlib.String.__byteSlice text 16L 17L != " " ||
     Stdlib.String.__byteSlice text 25L 29L != " GMT" ||
-    Stdlib.Bool.not (Stdlib.List.member ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] (Stdlib.String.__byteSlice text 0L 3L)) then Error "Invalid response Date"
+    Stdlib.Bool.not (Stdlib.List.contains ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] (Stdlib.String.__byteSlice text 0L 3L)) then Error "Invalid response Date"
   else
     let months = [("Jan", "01"), ("Feb", "02"), ("Mar", "03"), ("Apr", "04"), ("May", "05"), ("Jun", "06"), ("Jul", "07"), ("Aug", "08"), ("Sep", "09"), ("Oct", "10"), ("Nov", "11"), ("Dec", "12")] in
     match Stdlib.List.findFirst months (fun pair -> let (name, _) = pair in name == Stdlib.String.__byteSlice text 8L 11L) with

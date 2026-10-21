@@ -1,0 +1,9 @@
+module Darklang.Stdlib.List.Tests
+
+// Selected unchanged declarations from interpreter e76430be5.
+
+test contains =
+  Stdlib.Test.all
+    [ Stdlib.List.contains [ 1L, 2L, 3L ] 2L |> Stdlib.Test.equal true
+      Stdlib.List.contains [ 1L, 2L, 3L ] 4L |> Stdlib.Test.equal false
+      Stdlib.List.contains [] 1L |> Stdlib.Test.equal false ]

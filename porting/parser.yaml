@@ -1,4 +1,4 @@
-# Syntax behavior, not parser implementation-file mappings. Unassessed means no separate syntax review.
+# Syntax behavior, not parser implementation-file mappings.
 schema: 2
 groups:
   Lexing:
@@ -15,6 +15,10 @@ groups:
     Conditionals: unassessed
     Match patterns and guards: unassessed
     String interpolation and nesting: unassessed
+    Record and dictionary separators:
+      status: supported
+      notes: Records, record updates, record types and dictionaries use commas or newlines. Semicolons are rejected;
+        statement sequencing retains semicolons.
   Declarations:
     Modules and nesting: unassessed
     Function and value declarations: unassessed
@@ -22,5 +26,8 @@ groups:
     Traits and implementations: unassessed
     Generic parameters and bounds: unassessed
     Effect annotations: unassessed
+    Removed database attribute:
+      status: supported
+      notes: The obsolete [<DB>] declaration syntax is rejected, matching upstream removal of user datastore types.
   Tests:
     Named test declarations: supported

@@ -368,7 +368,7 @@ let testRecursiveGroupsReceiveStableTypedIdentities () =
 
 let testWrittenRecordRejectsRepeatedField () =
   let source =
-    "type DuplicateDeclarationField = { value: Int64; value: String }\n1L"
+    "type DuplicateDeclarationField = { value: Int64, value: String }\n1L"
   in
   match WrittenParsing.parse Validation.Script source with
   | Error error -> Error ("Expected valid syntax, got: " ^ error)

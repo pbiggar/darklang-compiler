@@ -1,10 +1,10 @@
-type TraitSortDesc = { key: Int64; tag: String }
+type TraitSortDesc = { key: Int64, tag: String }
 impl Stdlib.Compare for TraitSortDesc =
   let lessThan (a: TraitSortDesc) (b: TraitSortDesc) : Bool = a.key > b.key
   let lessThanOrEqualTo (a: TraitSortDesc) (b: TraitSortDesc) : Bool = a.key >= b.key
   let greaterThan (a: TraitSortDesc) (b: TraitSortDesc) : Bool = a.key < b.key
   let greaterThanOrEqualTo (a: TraitSortDesc) (b: TraitSortDesc) : Bool = a.key <= b.key
-Stdlib.List.sort [TraitSortDesc { key = 1L; tag = "b" }, TraitSortDesc { key = 2L; tag = "x" }, TraitSortDesc { key = 1L; tag = "a" }] = [TraitSortDesc { key = 2L; tag = "x" }, TraitSortDesc { key = 1L; tag = "b" }, TraitSortDesc { key = 1L; tag = "a" }]
+Stdlib.List.sort [TraitSortDesc { key = 1L, tag = "b" }, TraitSortDesc { key = 2L, tag = "x" }, TraitSortDesc { key = 1L, tag = "a" }] = [TraitSortDesc { key = 2L, tag = "x" }, TraitSortDesc { key = 1L, tag = "b" }, TraitSortDesc { key = 1L, tag = "a" }]
 type TraitSortPlain = { key: Int64 }
 Stdlib.List.sort [TraitSortPlain { key = 2L }, TraitSortPlain { key = 1L }] = [TraitSortPlain { key = 1L }, TraitSortPlain { key = 2L }]
 Stdlib.List.sort [3L, 1L, 2L] = [1L, 2L, 3L]

@@ -126,7 +126,7 @@ let __packets (state: Stdlib.__QuicClient.Flight) (bytes: Blob) (now: Int64)
         next |> Stdlib.Result.andThen (fun next -> Stdlib.__QuicClient.__packets next packet.remaining now)
     | Ok (Retry packet) -> Stdlib.__QuicClient.__retry state packet now
     | Ok (VersionNegotiation packet) ->
-      if state.identity.observed || Stdlib.List.member packet.versions 1L ||
+      if state.identity.observed || Stdlib.List.contains packet.versions 1L ||
          Stdlib.Bool.not (Stdlib.__QuicClient.__same packet.destination state.identity.source) ||
          Stdlib.Bool.not (Stdlib.__QuicClient.__same packet.source state.identity.original) then Ok state
       else Error "Peer does not support QUIC v1"

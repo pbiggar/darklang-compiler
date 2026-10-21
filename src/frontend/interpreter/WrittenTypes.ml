@@ -444,7 +444,6 @@ and assertion = { range : range; actual : expr; expected : testExpected }
 
 (*
    A trailing expression inside a module body (`module M = … \n expr`).
-   `[<DB>] type Name = AliasedType` — a Test-only user DB.
    `actual = expected` assertion accepted only by Test validation.
 *)
 and expectedError = RuntimeError of string
@@ -469,7 +468,6 @@ and declaration =
   | DTrait of traitDecl
   | DImpl of implDecl
   | DExpr of expr
-  | DTypeDB of typeDecl
   | DAssertion of assertion
   | DTest of testDecl
 
@@ -539,10 +537,6 @@ module PackageFn = struct
     effects : string list option;
     description : string;
   }
-end
-
-module DB = struct
-  type t = { name : string; version : int; typ : typeReference }
 end
 
 let mpRange (p : matchPattern) =

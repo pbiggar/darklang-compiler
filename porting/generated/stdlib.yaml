@@ -322,18 +322,6 @@ files:
     Darklang.Stdlib.Cli.Posix.uname: identical
     Darklang.Stdlib.Cli.Posix.unlink: identical
     Darklang.Stdlib.Cli.Posix.utimesNow: identical
-  cli/powershell.dark:
-    Darklang.Stdlib.Cli.PowerShell.Gzip.unzipToFile: missing
-    Darklang.Stdlib.Cli.PowerShell.addAlias: missing
-    Darklang.Stdlib.Cli.PowerShell.addToPath: missing
-    Darklang.Stdlib.Cli.PowerShell.copyFile: missing
-    Darklang.Stdlib.Cli.PowerShell.createFile: missing
-    Darklang.Stdlib.Cli.PowerShell.deleteAlias: missing
-    Darklang.Stdlib.Cli.PowerShell.ensureDirectoryExists: missing
-    Darklang.Stdlib.Cli.PowerShell.fileExists: missing
-    Darklang.Stdlib.Cli.PowerShell.getHomeDirectory: missing
-    Darklang.Stdlib.Cli.PowerShell.grantExecutePermission: missing
-    Darklang.Stdlib.Cli.PowerShell.removeFile: missing
   cli/process.dark:
     Darklang.Stdlib.Cli.Process.Output: identical
     Darklang.Stdlib.Cli.Process.ProcessHandle: identical
@@ -1447,6 +1435,7 @@ files:
     Darklang.Stdlib.List.append: different
     Darklang.Stdlib.List.chunkBySize: different
     Darklang.Stdlib.List.chunkBySizeHelper: different
+    Darklang.Stdlib.List.contains: different
     Darklang.Stdlib.List.dedup: different
     Darklang.Stdlib.List.drop: different
     Darklang.Stdlib.List.dropLast: different
@@ -1472,7 +1461,6 @@ files:
     Darklang.Stdlib.List.map: different
     Darklang.Stdlib.List.map2: different
     Darklang.Stdlib.List.map2shortest: different
-    Darklang.Stdlib.List.member: different
     Darklang.Stdlib.List.parallelMap: missing
     Darklang.Stdlib.List.partition: different
     Darklang.Stdlib.List.push: different

@@ -14,5 +14,5 @@ Executed 10 assertions: **0 passed, 10 failed**.
 | [L30](../../../../test/fixtures/e2e/upstream/cli/command-completions.dark#L30) — CompletionSweep.sweep [ "a", "b", "c", "d" ] | Unknown function or value 'CompletionSweep.sweep' |
 | [L43](../../../../test/fixtures/e2e/upstream/cli/command-completions.dark#L43) — BranchCompletion.values [ "zzz-no-such-branch" ] | Unknown function or value 'BranchCompletion.values' |
 | [L44](../../../../test/fixtures/e2e/upstream/cli/command-completions.dark#L44) — BranchCompletion.values [ "switch", "zzz-no-such-branch" ] | Unknown function or value 'BranchCompletion.values' |
-| [L47](../../../../test/fixtures/e2e/upstream/cli/command-completions.dark#L47) — (BranchCompletion.values [ "switch", "mai" ]) \|> Stdlib.List.member "main" | Unknown function or value 'BranchCompletion.values' |
+| [L47](../../../../test/fixtures/e2e/upstream/cli/command-completions.dark#L47) — (BranchCompletion.values [ "switch", "mai" ]) \|> Stdlib.List.contains "main" | Unknown function or value 'BranchCompletion.values' |
 | [L50](../../../../test/fixtures/e2e/upstream/cli/command-completions.dark#L50) — BranchCompletion.values [ "list", "" ] | Unknown function or value 'BranchCompletion.values' |
