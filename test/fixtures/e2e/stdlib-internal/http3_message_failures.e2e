@@ -1,6 +1,6 @@
 // http3_message_failures.e2e - Typed message, framing, and QPACK wire-error boundaries before FIN.
 let bytes (hex: String) : Blob = Stdlib.Blob.fromHex hex |> Stdlib.Result.withDefault Stdlib.Blob.empty
-let error (result: Stdlib.Result.Result<Stdlib.__Http3Message.Received, Stdlib.__Http3Message.Failure>) : Stdlib.Result.Result<Unit, (Stdlib.__Http3Message.Scope * Int64)> = result |> Stdlib.Result.map (fun _received -> ()) |> Stdlib.Result.mapError (fun failure -> (failure.scope, failure.code))
+let error (result: Stdlib.Result.Result<Stdlib.__Http3Message.Received, Stdlib.__Http3Wire.Failure>) : Stdlib.Result.Result<Unit, (Stdlib.__Http3Wire.Scope * Int64)> = result |> Stdlib.Result.map (fun _received -> ()) |> Stdlib.Result.mapError (fun failure -> (failure.scope, failure.code))
 let response () : Stdlib.__Http3Message.State = Stdlib.__Http3Message.create (Response false)
 let body () : Stdlib.__Http3Message.State = let state = response () in { state with phase = Body, expected = Some 1L }
 error (Stdlib.__Http3Message.feed (body ()) (bytes "0002")) = Error ((Stream, 270L))

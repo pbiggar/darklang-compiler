@@ -136,6 +136,17 @@ def main():
     connection_errors = {"truncated": 262, "forbidden": 261, "qpack": 512, **critical_errors}
     if args.multiplex in connection_errors and args.public:
         parser.error("Connection-error peers require the standalone connection")
+
+    class PeerH3(H3Connection):
+        def _create_uni_stream(self, stream_type, push_id=None):
+            if args.multiplex == "duplicate-control" and stream_type == 2:
+                # Reserve one of the three permitted streams, but defer its type
+                # until requests arrive. A fourth stream would fail at QUIC first.
+                identifier = self._quic.get_next_available_stream_id(is_unidirectional=True)
+                self._quic.send_stream_data(identifier, b"")
+                return identifier
+            return super()._create_uni_stream(stream_type, push_id)
+
     key, leaf, ca = certificates()
     configuration = QuicConfiguration(is_client=False, alpn_protocols=["h3"])
     configuration.certificate, configuration.private_key = leaf, key
@@ -178,7 +189,7 @@ def main():
                             header = pull_quic_header(Buffer(data=packet), host_cid_length=8)
                             connection = QuicConnection(configuration=configuration, original_destination_connection_id=header.destination_cid)
                             connections.append(connection)
-                            http = H3Connection(connection)
+                            http = PeerH3(connection)
                         connection.receive_datagram(packet, address, now)
                     except socket.timeout:
                         pass
@@ -213,8 +224,7 @@ def main():
                                             if args.multiplex == "control-fin":
                                                 connection.send_stream_data(http._local_control_stream_id, b"", end_stream=True)
                                             elif args.multiplex == "duplicate-control":
-                                                identifier = connection.get_next_available_stream_id(is_unidirectional=True)
-                                                connection.send_stream_data(identifier, b"\x00")
+                                                connection.send_stream_data(http._local_encoder_stream_id, b"\x00")
                                             elif args.multiplex == "encoder-error":
                                                 # Set capacity to 4097, exceeding the client's advertised 4096.
                                                 connection.send_stream_data(http._local_encoder_stream_id, b"\x3f\xe2\x1f")

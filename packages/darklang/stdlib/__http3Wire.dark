@@ -1,6 +1,12 @@
 // __Http3Wire.dark - RFC 9114 frame and SETTINGS codecs; no transport side effects.
 module Darklang.Stdlib.__Http3Wire
 
+type Scope = Stream | Connection
+type Failure = { scope: Stdlib.__Http3Wire.Scope, code: Int64, message: String }
+
+let connectionFailure (code: Int64) (message: String) : Stdlib.__Http3Wire.Failure =
+  Stdlib.__Http3Wire.Failure { scope = Connection, code = code, message = message }
+
 type Frame = { kind: Int64, payload: Blob, remaining: Blob }
 
 let __forbidden (kind: Int64) : Bool = kind == 2L || kind == 6L || kind == 8L || kind == 9L
@@ -30,24 +36,24 @@ let parse (maximum: Int64) (data: Blob) : Stdlib.Result.Result<Stdlib.__Http3Wir
             remaining = Stdlib.__Http2Wire.__slice data (size.next + size.value) (Stdlib.Blob.__byteLength data - size.next - size.value) })
 
 let __settings (data: Blob) (position: Int64) (seen: List<Int64>) (settings: List<(Int64 * Int64)>)
-  : Stdlib.Result.Result<List<(Int64 * Int64)>, String> =
+  : Stdlib.Result.Result<List<(Int64 * Int64)>, Stdlib.__Http3Wire.Failure> =
   if position == Stdlib.Blob.__byteLength data then Ok (Stdlib.List.reverse settings)
-  else if Stdlib.List.length seen >= 64 then Error "Too many HTTP/3 settings"
+  else if Stdlib.List.length seen >= 64 then Error (Stdlib.__Http3Wire.connectionFailure 263L "Too many HTTP/3 settings")
   else
     match Stdlib.__QuicWire.parseInteger data position with
-    | Error _ -> Error "Truncated HTTP/3 setting"
+    | Error _ -> Error (Stdlib.__Http3Wire.connectionFailure 265L "Truncated HTTP/3 setting")
     | Ok id ->
-      if Stdlib.List.any seen (fun previous -> previous == id.value) then Error "Duplicate HTTP/3 setting"
-      else if id.value >= 2L && id.value <= 5L then Error "Forbidden HTTP/3 setting"
+      if Stdlib.List.any seen (fun previous -> previous == id.value) then Error (Stdlib.__Http3Wire.connectionFailure 265L "Duplicate HTTP/3 setting")
+      else if id.value >= 2L && id.value <= 5L then Error (Stdlib.__Http3Wire.connectionFailure 265L "Forbidden HTTP/3 setting")
       else
         match Stdlib.__QuicWire.parseInteger data id.next with
-        | Error _ -> Error "Truncated HTTP/3 setting"
+        | Error _ -> Error (Stdlib.__Http3Wire.connectionFailure 265L "Truncated HTTP/3 setting")
         | Ok value ->
-          if id.value == 8L && value.value > 1L then Error "Invalid HTTP/3 setting value"
+          if id.value == 8L && value.value > 1L then Error (Stdlib.__Http3Wire.connectionFailure 265L "Invalid HTTP/3 setting value")
           else Stdlib.__Http3Wire.__settings data value.next (Stdlib.List.push seen id.value) (Stdlib.List.push settings (id.value, value.value))
 
-let parseSettings (payload: Blob) : Stdlib.Result.Result<List<(Int64 * Int64)>, String> =
-  if Stdlib.Blob.__byteLength payload > 4096L then Error "HTTP/3 settings too large"
+let parseSettings (payload: Blob) : Stdlib.Result.Result<List<(Int64 * Int64)>, Stdlib.__Http3Wire.Failure> =
+  if Stdlib.Blob.__byteLength payload > 4096L then Error (Stdlib.__Http3Wire.connectionFailure 263L "HTTP/3 settings too large")
   else Stdlib.__Http3Wire.__settings payload 0L [] []
 
 // No dynamic-table references or blocked header streams in the initial profile.

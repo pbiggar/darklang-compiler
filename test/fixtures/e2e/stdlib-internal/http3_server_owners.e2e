@@ -161,7 +161,7 @@ malformedCompression () = Error "Invalid HPACK Huffman padding" // leak_check
 // Once any request-stream byte is written, only peer feedback releases it.
 let decoderFeedback (state: Stdlib.__Http3Server.State) (offset: Int64) (bytes: List<Int64>) : Stdlib.Result.Result<Stdlib.__Http3Server.State, String> =
   Stdlib.__QuicFlow.receive state.wire.connection.flow (Stdlib.__QuicApplication.StreamData { id = 10L, offset = offset, bytes = Stdlib.Blob.__fromInt64List bytes, fin = false }) |> Stdlib.Result.andThen (fun flow ->
-    Stdlib.__Http3.__controls { state.wire with connection = Stdlib.__QuicConnection.__flow state.wire.connection flow } |> Stdlib.Result.map (fun wire -> { state with wire = wire }))
+    Stdlib.__Http3.__controls { state.wire with connection = Stdlib.__QuicConnection.__flow state.wire.connection flow } |> Stdlib.Result.mapError Stdlib.__Http3.__failureMessage |> Stdlib.Result.map (fun wire -> { state with wire = wire }))
 let queuedQpackCancellation (credit: Int64) (cancelledByPeer: Bool) : Stdlib.Result.Result<(Int64 * Int64), String> =
   let initial = fixture () in
   let result = request initial 0L "" 0L true |> Stdlib.Result.andThen (fun state -> Stdlib.__Http3Server.admit state 1L) |> Stdlib.Result.andThen (fun state ->
@@ -217,3 +217,35 @@ let malformedBatch (declared: Int64) (finished: Bool) : Stdlib.Result.Result<(Li
   result
 malformedBatch 3L true = Ok (([false, true], true)) // leak_check
 malformedBatch 1L false = Ok (([false, true], true)) // leak_check
+
+// A critical-stream failure must release its owner, not just return a string.
+let criticalOwner (kind: Int64) (reset: Bool) : Stdlib.Result.Result<Bool, String> =
+  let seed = fixture () in
+  let bytes = Stdlib.Blob.__fromInt64List [kind] in
+  let result = Stdlib.__QuicFlow.receive seed.wire.connection.flow (Stdlib.__QuicApplication.StreamData { id = 2L, offset = 0L, bytes = bytes, fin = Stdlib.Bool.not reset }) |> Stdlib.Result.andThen (fun flow ->
+    let received = if reset then Stdlib.__QuicFlow.reset flow (Stdlib.__QuicApplication.Reset { id = 2L, code = 268L, finalSize = 1L }) else Ok flow in
+    received |> Stdlib.Result.map (fun flow ->
+      let state = { seed with wire = { seed.wire with connection = Stdlib.__QuicConnection.__flow seed.wire.connection flow } } in
+      let failed = Stdlib.Result.isError (Stdlib.__Http3Server.step (context ()) state 1L) in
+      failed && Stdlib.Option.isNone (Stdlib.Stream.next seed.wire.connection.transport.socket.lifecycle))) in
+  Stdlib.__Http3.close seed.wire
+  result
+criticalOwner 0L false = Ok true // leak_check
+criticalOwner 2L false = Ok true // leak_check
+criticalOwner 3L false = Ok true // leak_check
+criticalOwner 0L true = Ok true // leak_check
+criticalOwner 2L true = Ok true // leak_check
+criticalOwner 3L true = Ok true // leak_check
+
+// The error owns the state after read consumed bytes and granted receive credit.
+let criticalReadState () : Stdlib.Result.Result<Bool, String> =
+  let seed = fixture () in
+  let bytes = Stdlib.Blob.__fromInt64List [0L, 33L, 0L] in
+  let result = Stdlib.__QuicFlow.receive seed.wire.connection.flow (Stdlib.__QuicApplication.StreamData { id = 2L, offset = 0L, bytes = bytes, fin = false }) |> Stdlib.Result.map (fun flow ->
+    let wire = { seed.wire with connection = Stdlib.__QuicConnection.__flow seed.wire.connection flow } in
+    match Stdlib.__Http3.__controls wire with
+    | Error (Protocol ((owned, failure))) -> failure.code == 266L && failure.scope == Stdlib.__Http3Wire.Scope.Connection && owned.connection.flow.consumed == 3L
+    | _ -> false) in
+  Stdlib.__Http3.close seed.wire
+  result
+criticalReadState () = Ok true // leak_check

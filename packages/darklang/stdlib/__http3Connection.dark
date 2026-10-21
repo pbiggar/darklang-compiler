@@ -96,7 +96,7 @@ let __drain (streams: List<Stdlib.__Http3Connection.Active>) (work: Stdlib.__Htt
     else
       let wire = { work.connection.wire with stream = stream.id, message = stream.message } in
       match Stdlib.__Http3.__drain wire with
-      | Error (Protocol ((wire, error))) when error.scope == Stdlib.__Http3Message.Scope.Stream ->
+      | Error (Protocol ((wire, error))) when error.scope == Stdlib.__Http3Wire.Scope.Stream ->
         Stdlib.__Http3.__abortStream wire stream.id error.code |> Stdlib.Result.andThen (fun wire ->
           let work = Stdlib.__Http3Connection.__wire work wire in
           Stdlib.__Http3Connection.__drain rest (Stdlib.__Http3Connection.__done work stream (Error error.message)))
@@ -115,7 +115,7 @@ let __drain (streams: List<Stdlib.__Http3Connection.Active>) (work: Stdlib.__Htt
             Stdlib.__Http3Connection.__drain rest (Stdlib.__Http3Connection.__done work stream (Ok response)))
 
 let __run (work: Stdlib.__Http3Connection.Work) : Stdlib.Result.Result<Stdlib.__Http3Connection.Batch, String> =
-  Stdlib.__Http3.__controls work.connection.wire |> Stdlib.Result.andThen (fun wire ->
+  Stdlib.__Http3.__controls work.connection.wire |> Stdlib.Result.mapError Stdlib.__Http3.__reportFailure |> Stdlib.Result.andThen (fun wire ->
     let work = Stdlib.__Http3Connection.__wire work wire in
     let work = if Stdlib.Option.isNone wire.uni.control.goAway then work else
       { work with waiting = [], completed = Stdlib.List.fold work.waiting work.completed (fun completed pending ->
