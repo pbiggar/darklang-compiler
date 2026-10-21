@@ -1,11 +1,4 @@
 (* RcInsertExpression.mli - Elaborate ANF expression ownership using return and alias facts. *)
-val inferBindingType :
-  RcTypeFacts.typeContext ->
-  ANF.tempId ->
-  ANF.cExpr ->
-  RcReturnAnalysis.returnAnnotatedExpr ->
-  AST.semanticType
-
 val insertRCWithAnalysis :
   RcReturnAnalysis.TempSet.t RcTypeFacts.TempMap.t ->
   RcCleanup.returnDec list ->

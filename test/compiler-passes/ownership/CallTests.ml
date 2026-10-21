@@ -40,11 +40,7 @@ let functionWith name typedParams returnType body : ANF.functionDef =
     body;
   }
 
-let transform ctx func =
-  let transformed, _, _ =
-    RefCountInsertion.insertRCInFunction ctx func initialVarGen
-  in
-  transformed.ANF.body
+let transform = SSAOwnershipTestHelpers.transform
 
 let param id typ : ANF.typedParam = { ANF.id; typ }
 let int n = IntLiteral (Int64 n)
@@ -73,7 +69,7 @@ let testBorrowedCallMaterializesOwnedLocal () =
         BorrowedCall (TestIds.functionIdForName project, [ Var node; Var index ]),
         Let (measured, call measure [ Var child ], Return (Var measured)) )
   in
-  let body =
+  let* body =
     transform ctx
       (functionWith "consumer"
          [ param node nodeType; param index AST.TInt64 ]
@@ -81,12 +77,12 @@ let testBorrowedCallMaterializesOwnedLocal () =
   in
   let* () =
     require
-      (CleanupTests.hasRefCountIncForTemp child body)
+      (SSAOwnershipTestHelpers.hasRefCountIncForTemp child body)
       "BorrowedCall must retain its borrowed result when materializing a local \
        value"
   in
   require
-    (CleanupTests.hasRefCountDecForTemp child body)
+    (SSAOwnershipTestHelpers.hasRefCountDecForTemp child body)
     "Materialized BorrowedCall local must release its retained ownership edge"
 
 let testReturnedBorrowedCallMaterializesOwnership () =
@@ -106,10 +102,11 @@ let testReturnedBorrowedCallMaterializesOwnership () =
         BorrowedCall (TestIds.functionIdForName "borrowChild", [ Var node ]),
         Return (Var child) )
   in
+  let* transformed =
+    transform ctx (functionWith "project" [ param node nodeType ] nodeType body)
+  in
   require
-    (CleanupTests.hasRefCountIncForTemp child
-       (transform ctx
-          (functionWith "project" [ param node nodeType ] nodeType body)))
+    (SSAOwnershipTestHelpers.hasRefCountIncForTemp child transformed)
     "Returning a BorrowedCall result must retain it to materialize owned \
      return storage"
 
@@ -127,9 +124,9 @@ let testCallReturningClosureGetsAutoDecAfterUse () =
         Let (result, ClosureCall (Var closure, [ int 5L ]), Return (Var result))
       )
   in
+  let* transformed = transform ctx (functionWith "caller" [] AST.TInt64 body) in
   require
-    (CleanupTests.hasRefCountDecForTemp closure
-       (transform ctx (functionWith "caller" [] AST.TInt64 body)))
+    (SSAOwnershipTestHelpers.hasRefCountDecForTemp closure transformed)
     "Call result with function type should receive automatic closure \
      RefCountDec after use"
 
@@ -154,9 +151,9 @@ let testClosureCallReturningClosureGetsAutoDecAfterUse () =
             ClosureCall (Var maker, [ int 5L ]),
             Let (result, Atom (int 0L), Return (Var result)) ) )
   in
+  let* transformed = transform ctx (functionWith "caller" [] AST.TInt64 body) in
   require
-    (CleanupTests.hasRefCountDecForTemp returned
-       (transform ctx (functionWith "caller" [] AST.TInt64 body)))
+    (SSAOwnershipTestHelpers.hasRefCountDecForTemp returned transformed)
     "ClosureCall result with function return type should receive automatic \
      closure RefCountDec after use"
 
@@ -195,19 +192,20 @@ let enumBinding generic =
   let fixture =
     if generic then "genericPureEnumBinding" else "pureEnumBinding"
   in
-  (transform ctx (functionWith fixture [] AST.TInt64 body), enum)
+  let* transformed = transform ctx (functionWith fixture [] AST.TInt64 body) in
+  Ok (transformed, enum)
 
 let testPureEnumBindingDoesNotGetAutomaticDec () =
-  let body, enum = enumBinding false in
+  let* body, enum = enumBinding false in
   require
-    (not (CleanupTests.hasRefCountDecForTemp enum body))
+    (not (SSAOwnershipTestHelpers.hasRefCountDecForTemp enum body))
     "Pure enum binding should classify as immediate and must not get automatic \
      RefCountDec"
 
 let testGenericPureEnumBindingDoesNotGetAutomaticDec () =
-  let body, enum = enumBinding true in
+  let* body, enum = enumBinding true in
   require
-    (not (CleanupTests.hasRefCountDecForTemp enum body))
+    (not (SSAOwnershipTestHelpers.hasRefCountDecForTemp enum body))
     "Generic pure enum binding should classify from variant metadata and must \
      not get automatic RefCountDec"
 
@@ -237,31 +235,21 @@ let testProgramRcFreshTempsFollowExistingProgramTemps () =
       (functionWith "freshTempBoundary" [] AST.TUnit body)
       (functionRegistry [ ("makeString", AST.TFunction ([], AST.TString)) ])
   in
-  let rec definedTemps = function
-    | Return _ | Jump _ -> []
-    | Let (id, _, rest) -> id :: definedTemps rest
-    | Join (_, a, b) | If (_, a, b) -> definedTemps a @ definedTemps b
+  let func = functionWith "freshTempBoundary" [] AST.TUnit body in
+  let* transformed = transform (RcTypeFacts.createContext input) func in
+  let definitions =
+    SSAANF.LabelMap.bindings transformed.SSAANF.blocks
+    |> List.concat_map (fun (_, (block : SSAANF.block)) ->
+           List.map (fun (parameter : ANF.typedParam) -> parameter.id) block.parameters
+           @ List.map fst block.operations)
   in
-  match RefCountInsertion.insertRCInProgram input with
-  | Error err -> Error ("Expected RC insertion to succeed, got " ^ err)
-  | Ok (Program ([ transformed ], _), _) ->
-      let definitions = definedTemps transformed.ANF.body in
-      let distinct = TS.of_list definitions in
-      let greatest =
-        List.fold_left (fun a (TempId n) -> max a n) min_int definitions
-      in
-      if TS.cardinal distinct <> List.length definitions then
-        Error
-          ("RC insertion reused an existing TempId: "
-          ^ StructuralFormat.format
-              (StructuralFormat.Sequence
-                 (List.map ANFTestFormatting.aNF_tempId definitions)))
-      else if greatest <= 6000 then
-        Error
-          (Printf.sprintf
-             "Expected an RC temporary after t6000, greatest was t%d" greatest)
-      else Ok ()
-  | Ok _ -> Error "Expected the transformed program to contain one function"
+  let* () =
+    require (TS.cardinal (TS.of_list definitions) = List.length definitions)
+      "SSA RC insertion reused an existing TempId"
+  in
+  require
+    (List.exists (fun (TempId id) -> id > 6000) definitions)
+    "SSA RC insertion must allocate fresh temporaries beyond source t6000"
 
 let testProgramRcRejectsDriftedOwnershipContract () =
   let func =
@@ -287,7 +275,10 @@ let testProgramRcRejectsDriftedOwnershipContract () =
         FunctionIdMap.ofList [ (func.ANF.id, signature) ];
     }
   in
-  match RefCountInsertion.insertRCInProgram input with
+  match
+    RefCountInsertion.verifyOwnershipContracts (RcTypeFacts.createContext input)
+      input.ownershipContracts input.program
+  with
   | Error message
     when Text.contains message
            "Ownership contract parameter representation changed" ->
@@ -326,10 +317,10 @@ let testBareSumTypeRefsAreCanonicalizedForRcSourceTypes () =
     Let
       (dict, call "mkDict" [], Let (result, Atom (int 1L), Return (Var result)))
   in
-  match
-    CleanupTests.tryRefCountDecSourceTypeForTemp dict
-      (transform ctx (functionWith "canonicalBareSum" [] AST.TInt64 body))
-  with
+  let* transformed =
+    transform ctx (functionWith "canonicalBareSum" [] AST.TInt64 body)
+  in
+  match SSAOwnershipTestHelpers.tryRefCountDecSourceTypeForTemp dict transformed with
   | Some (AST.TDict (AST.TInt64, AST.TSum ("Payload", []))) -> Ok ()
   | Some other ->
       Error
