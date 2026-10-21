@@ -196,7 +196,7 @@ and parseItemsBody grammar state itemScope start minColumn =
             RevBuffer.add declarations declaration;
             stop := after
           end
-      | TTrait, _ ->
+      | TTrait, TIdent _ ->
           let declaration, after =
             TraitDeclarationParser.parseTraitDecl grammar.parseBlock state !stop
           in
