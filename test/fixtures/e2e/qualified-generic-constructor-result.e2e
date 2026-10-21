@@ -1,0 +1,10 @@
+// Qualified generic constructors must retain their contextual result representation.
+type QualifiedChoice<'a> = Present of 'a | Absent
+let qualifiedEmpty (unitArg: Unit): QualifiedChoice<'a> = QualifiedChoice.Absent
+let qualifiedChoiceIsEmpty (value: QualifiedChoice<String>): Bool = match value with | Absent -> true | Present _ -> false
+qualifiedChoiceIsEmpty (qualifiedEmpty ()) = true // leak_check
+let qualifiedOptionEmpty (unitArg: Unit): Stdlib.Option.Option<'a> = Stdlib.Option.Option.None
+Stdlib.Option.isNone (qualifiedOptionEmpty ()) = true // leak_check
+let qualifiedError (value: 'e): Stdlib.Result.Result<'a, 'e> = Stdlib.Result.Result.Error value
+let qualifiedStringError (value: String): Stdlib.Result.Result<String, String> = qualifiedError value
+match qualifiedStringError "error" with | Ok _ -> "wrong" | Error error -> error = "error" // leak_check

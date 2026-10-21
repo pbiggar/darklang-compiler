@@ -846,7 +846,7 @@ files:
     Darklang.Stdlib.Diff.lines: different
     Darklang.Stdlib.Diff.trace: different
   duration.dark:
-    Darklang.Stdlib.Duration.parse: different
+    Darklang.Stdlib.Duration.parse: identical
   env.dark:
     Darklang.Stdlib.Env.get: different
     Darklang.Stdlib.Env.getAll: different
@@ -913,7 +913,7 @@ files:
     Darklang.Stdlib.Float.toInt: different
     Darklang.Stdlib.Float.truncate: different
   fun.dark:
-    Darklang.Stdlib.Fun.identity: different
+    Darklang.Stdlib.Fun.identity: identical
   hostAwait.dark:
     Darklang.Stdlib.Host.Event: missing
     Darklang.Stdlib.Host.EventSpec: missing
@@ -1559,27 +1559,27 @@ files:
     Darklang.Stdlib.notEquals: different
     Darklang.Stdlib.toRepr: missing
   option.dark:
-    Darklang.Stdlib.Option.Option: different
-    Darklang.Stdlib.Option.and: different
-    Darklang.Stdlib.Option.andThen: different
-    Darklang.Stdlib.Option.andThen2: different
-    Darklang.Stdlib.Option.andThen3: different
-    Darklang.Stdlib.Option.andThen4: different
-    Darklang.Stdlib.Option.combine: different
-    Darklang.Stdlib.Option.isNone: different
-    Darklang.Stdlib.Option.isSome: different
-    Darklang.Stdlib.Option.join: different
-    Darklang.Stdlib.Option.map: different
-    Darklang.Stdlib.Option.map2: different
-    Darklang.Stdlib.Option.map3: different
-    Darklang.Stdlib.Option.map4: different
-    Darklang.Stdlib.Option.map5: different
-    Darklang.Stdlib.Option.mapWithDefault: different
-    Darklang.Stdlib.Option.or: different
-    Darklang.Stdlib.Option.toList: different
-    Darklang.Stdlib.Option.toResult: different
-    Darklang.Stdlib.Option.values: different
-    Darklang.Stdlib.Option.withDefault: different
+    Darklang.Stdlib.Option.Option: identical
+    Darklang.Stdlib.Option.and: identical
+    Darklang.Stdlib.Option.andThen: identical
+    Darklang.Stdlib.Option.andThen2: identical
+    Darklang.Stdlib.Option.andThen3: identical
+    Darklang.Stdlib.Option.andThen4: identical
+    Darklang.Stdlib.Option.combine: identical
+    Darklang.Stdlib.Option.isNone: identical
+    Darklang.Stdlib.Option.isSome: identical
+    Darklang.Stdlib.Option.join: identical
+    Darklang.Stdlib.Option.map: identical
+    Darklang.Stdlib.Option.map2: identical
+    Darklang.Stdlib.Option.map3: identical
+    Darklang.Stdlib.Option.map4: identical
+    Darklang.Stdlib.Option.map5: identical
+    Darklang.Stdlib.Option.mapWithDefault: identical
+    Darklang.Stdlib.Option.or: identical
+    Darklang.Stdlib.Option.toList: identical
+    Darklang.Stdlib.Option.toResult: identical
+    Darklang.Stdlib.Option.values: identical
+    Darklang.Stdlib.Option.withDefault: identical
   pretty.dark:
     Darklang.Stdlib.Pretty.Doc: different
     Darklang.Stdlib.Pretty.Mode: identical
@@ -1619,32 +1619,32 @@ files:
     Darklang.Stdlib.Regex.replaceAll: different
     Darklang.Stdlib.Regex.split: different
   result.dark:
-    Darklang.Stdlib.Result.Result: different
-    Darklang.Stdlib.Result.and: different
-    Darklang.Stdlib.Result.andThen: different
-    Darklang.Stdlib.Result.collect: different
-    Darklang.Stdlib.Result.combine: different
-    Darklang.Stdlib.Result.fromOption: different
-    Darklang.Stdlib.Result.isError: different
-    Darklang.Stdlib.Result.isOk: different
-    Darklang.Stdlib.Result.join: different
-    Darklang.Stdlib.Result.map: different
-    Darklang.Stdlib.Result.map2: different
-    Darklang.Stdlib.Result.map3: different
-    Darklang.Stdlib.Result.map4: different
-    Darklang.Stdlib.Result.map5: different
-    Darklang.Stdlib.Result.mapError: different
-    Darklang.Stdlib.Result.mapWithDefault: different
-    Darklang.Stdlib.Result.or: different
-    Darklang.Stdlib.Result.toList: different
-    Darklang.Stdlib.Result.toOption: different
-    Darklang.Stdlib.Result.values: different
-    Darklang.Stdlib.Result.withDefault: different
+    Darklang.Stdlib.Result.Result: identical
+    Darklang.Stdlib.Result.and: identical
+    Darklang.Stdlib.Result.andThen: identical
+    Darklang.Stdlib.Result.collect: identical
+    Darklang.Stdlib.Result.combine: identical
+    Darklang.Stdlib.Result.fromOption: identical
+    Darklang.Stdlib.Result.isError: identical
+    Darklang.Stdlib.Result.isOk: identical
+    Darklang.Stdlib.Result.join: identical
+    Darklang.Stdlib.Result.map: identical
+    Darklang.Stdlib.Result.map2: identical
+    Darklang.Stdlib.Result.map3: identical
+    Darklang.Stdlib.Result.map4: identical
+    Darklang.Stdlib.Result.map5: identical
+    Darklang.Stdlib.Result.mapError: identical
+    Darklang.Stdlib.Result.mapWithDefault: identical
+    Darklang.Stdlib.Result.or: identical
+    Darklang.Stdlib.Result.toList: identical
+    Darklang.Stdlib.Result.toOption: identical
+    Darklang.Stdlib.Result.values: identical
+    Darklang.Stdlib.Result.withDefault: identical
   retry.dark:
-    Darklang.Stdlib.Retry.withBackoff: different
-    Darklang.Stdlib.Retry.withBackoffLoop: different
-    Darklang.Stdlib.Retry.withFixedDelay: different
-    Darklang.Stdlib.Retry.withFixedDelayLoop: different
+    Darklang.Stdlib.Retry.withBackoff: identical
+    Darklang.Stdlib.Retry.withBackoffLoop: identical
+    Darklang.Stdlib.Retry.withFixedDelay: identical
+    Darklang.Stdlib.Retry.withFixedDelayLoop: identical
   sqlite.dark:
     Darklang.Stdlib.Sqlite.Value: missing
     Darklang.Stdlib.Sqlite.asBytes: missing
@@ -1816,22 +1816,22 @@ files:
     Darklang.Stdlib.sum: identical
     Darklang.Stdlib.toString: identical
   tuple2.dark:
-    Darklang.Stdlib.Tuple2.create: different
-    Darklang.Stdlib.Tuple2.first: different
-    Darklang.Stdlib.Tuple2.mapBoth: different
-    Darklang.Stdlib.Tuple2.mapFirst: different
-    Darklang.Stdlib.Tuple2.mapSecond: different
-    Darklang.Stdlib.Tuple2.second: different
-    Darklang.Stdlib.Tuple2.swap: different
+    Darklang.Stdlib.Tuple2.create: identical
+    Darklang.Stdlib.Tuple2.first: identical
+    Darklang.Stdlib.Tuple2.mapBoth: identical
+    Darklang.Stdlib.Tuple2.mapFirst: identical
+    Darklang.Stdlib.Tuple2.mapSecond: identical
+    Darklang.Stdlib.Tuple2.second: identical
+    Darklang.Stdlib.Tuple2.swap: identical
   tuple3.dark:
-    Darklang.Stdlib.Tuple3.create: different
-    Darklang.Stdlib.Tuple3.first: different
-    Darklang.Stdlib.Tuple3.mapAllThree: different
-    Darklang.Stdlib.Tuple3.mapFirst: different
-    Darklang.Stdlib.Tuple3.mapSecond: different
-    Darklang.Stdlib.Tuple3.mapThird: different
-    Darklang.Stdlib.Tuple3.second: different
-    Darklang.Stdlib.Tuple3.third: different
+    Darklang.Stdlib.Tuple3.create: identical
+    Darklang.Stdlib.Tuple3.first: identical
+    Darklang.Stdlib.Tuple3.mapAllThree: identical
+    Darklang.Stdlib.Tuple3.mapFirst: identical
+    Darklang.Stdlib.Tuple3.mapSecond: identical
+    Darklang.Stdlib.Tuple3.mapThird: identical
+    Darklang.Stdlib.Tuple3.second: identical
+    Darklang.Stdlib.Tuple3.third: identical
   uint128.dark:
     Darklang.Stdlib.UInt128.Add.add: different
     Darklang.Stdlib.UInt128.BitwiseAnd.bitwiseAnd: different

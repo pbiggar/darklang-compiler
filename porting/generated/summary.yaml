@@ -8,9 +8,9 @@ features:
 parser:
   supported: 31
 stdlib:
-  different: 1009
+  different: 946
   missing: 598
-  identical: 389
+  identical: 452
 packages:
   missing: 3709
   identical: 5
