@@ -3,6 +3,7 @@ let bytes (hex: String) : Blob = Stdlib.Blob.fromHex hex |> Stdlib.Result.withDe
 let first (maximum: Int64) (blocked: Int64) : Stdlib.Result.Result<Stdlib.__QpackEncoder.Encoded, String> =
   Stdlib.__QpackEncoder.create maximum blocked |> Stdlib.Result.andThen (fun state -> Stdlib.__QpackEncoder.encode state 0L [("x", "y")] 65536L)
 first 64L 1L |> Stdlib.Result.map (fun encoded -> (Stdlib.Blob.toHex encoded.instructions, Stdlib.Blob.toHex encoded.bytes)) = Ok (("3F2141780179", "020080"))
+first 64L 4611686018427387903L |> Stdlib.Result.map (fun encoded -> (Stdlib.Blob.toHex encoded.instructions, Stdlib.Blob.toHex encoded.bytes)) = Ok (("3F2141780179", "020080"))
 first 0L 1L |> Stdlib.Result.map (fun encoded -> (encoded.state.inserted, Stdlib.Blob.toHex encoded.instructions)) = Ok ((0L, ""))
 first 64L 0L |> Stdlib.Result.map (fun encoded -> (encoded.state.inserted, Stdlib.List.length encoded.state.sections)) = Ok ((1L, 0))
 first 64L 1L |> Stdlib.Result.andThen (fun encoded -> Stdlib.__QpackEncoder.feed encoded.state (bytes "80")) |> Stdlib.Result.map (fun state -> (state.known, Stdlib.List.length state.sections)) = Ok ((1L, 0))

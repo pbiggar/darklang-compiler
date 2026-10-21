@@ -8,7 +8,7 @@ import tempfile
 import time
 from pathlib import Path
 
-from aioquic.h3.connection import H3Connection
+from aioquic.h3.connection import H3Connection, Setting
 from aioquic.h3.events import DataReceived, HeadersReceived
 from aioquic.quic.configuration import QuicConfiguration
 from aioquic.quic.connection import QuicConnection
@@ -69,12 +69,22 @@ class ObservedDecoder:
 
 
 class DelayedQpack(H3Connection):
-    def __init__(self, connection):
+    def __init__(self, connection, blocked_streams=None):
+        self.advertised_blocked_streams = blocked_streams
         self.delayed = b""
         self.dynamic = False
         super().__init__(connection)
         self._encoder = ObservedEncoder(self._encoder)
         self._decoder = ObservedDecoder(self._decoder)
+
+    def _get_local_settings(self):
+        settings = super()._get_local_settings()
+        if self.advertised_blocked_streams is not None:
+            # This exchange opens exactly one request stream, so the decoder's
+            # normal local budget suffices even when the advertised upper bound
+            # exercises the full QUIC integer range.
+            settings[Setting.QPACK_BLOCKED_STREAMS] = self.advertised_blocked_streams
+        return settings
 
     def _encode_headers(self, stream_id, headers):
         # Prime ls-qpack's reuse policy without putting the first section on
@@ -88,11 +98,11 @@ class DelayedQpack(H3Connection):
         return block
 
 
-def exchange(port, ca, body):
+def exchange(port, ca, body, blocked_streams=None):
     configuration = QuicConfiguration(is_client=True, alpn_protocols=["h3"], server_name="localhost",
                                       cadata=ca.public_bytes(serialization.Encoding.PEM))
     client = QuicConnection(configuration=configuration)
-    http = DelayedQpack(client)
+    http = DelayedQpack(client, blocked_streams)
     client.connect(("127.0.0.1", port), time.monotonic())
     sent, authenticated, finished, released = False, False, False, False
     sent_at, release_at, position = 0, 0, 0
@@ -170,6 +180,7 @@ def main():
         try:
             exchange(port, ca, b"dynamic")
             exchange(port, ca, bytes(range(251)) * 279)
+            exchange(port, ca, b"full-range peer SETTINGS", blocked_streams=(1 << 62) - 1)
             stop(process)
         except Exception:
             if process.poll() is None:
@@ -181,7 +192,7 @@ def main():
             if process.poll() is None:
                 process.kill()
             process.communicate()
-    print("HTTP/3 dynamic headers delayed behind bytewise encoder instructions, Unicode, 70 KiB bodies, feedback and owned cleanup verified")
+    print("HTTP/3 dynamic headers delayed behind bytewise encoder instructions, Unicode, 70 KiB bodies, full-range peer SETTINGS, feedback and owned cleanup verified")
 
 
 if __name__ == "__main__":
