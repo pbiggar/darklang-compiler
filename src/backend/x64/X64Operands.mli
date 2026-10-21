@@ -12,6 +12,7 @@ val withPreservedFloatScratch :
 val heapPtr : X86_64.reg
 val freeListBase : X86_64.reg
 val freeListSize : int
+val largeBufferHeadOffset : int
 val processTableOffset : int
 val processTableSize : int
 val maxFreeListPayload : int
