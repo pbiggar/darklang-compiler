@@ -5,22 +5,25 @@
 # source handling/positions and runtime parser APIs are also outside this review.
 # Assessments use source comparison and existing focused syntax evidence; they
 # are not a claim of exhaustive differential execution.
+# Reviewed 2026-10-21. Structural validation that is shared with parsing is in
+# scope; later semantic checking is not. Specific gaps below qualify the
+# surrounding supported grammar, rather than making those gaps disappear.
 schema: 2
 groups:
   Lexing:
-    Comments: unassessed
-    Identifiers and escaped identifiers: unassessed
-    Numeric literals: unassessed
-    Character literals: unassessed
-    Quoted strings: unassessed
-    Triple-quoted strings: unassessed
+    Comments: supported
+    Identifiers and escaped identifiers: supported
+    Numeric literals: supported
+    Character literals: supported
+    Quoted strings: supported
+    Triple-quoted strings: supported
   Expressions:
-    Function application and precedence: unassessed
-    Pipelines: unassessed
-    Collection literals: unassessed
-    Conditionals: unassessed
-    Match patterns and guards: unassessed
-    String interpolation and nesting: unassessed
+    Function application and precedence: supported
+    Pipelines: supported
+    Collection literals: supported
+    Conditionals: supported
+    Match patterns and guards: supported
+    String interpolation and nesting: supported
     Postfix unwrap:
       status: missing
       notes: The interpreter parses value?, (f x)? and chained postfix access. The compiler has no question-mark
@@ -38,11 +41,33 @@ groups:
       notes: Records, record updates, record types and dictionaries use commas or newlines. Semicolons are rejected;
         statement sequencing retains semicolons.
   Declarations:
-    Modules and nesting: unassessed
-    Function and value declarations: unassessed
-    Records and enums: unassessed
-    Traits and implementations: unassessed
-    Generic parameters and bounds: unassessed
+    Modules and nesting: supported
+    Function and value declarations: supported
+    Records and enums: supported
+    Traits and implementations: supported
+    Generic parameters and bounds: supported
+    Function types after nested generic closers:
+      status: missing
+      notes: A pending > from a split >> does not stop the compiler's function-type parser. It reads
+        List<List<Int>> -> Int as List<(List<Int> -> Int)> instead of a function from List<List<Int>> to Int.
+        The same defect can absorb an arrow inside a function's return type. Tuple-type parsing already
+        respects pending closers; function-type parsing in the interpreter does too.
+    Trait method parameter validation:
+      status: partial
+      notes: The interpreter rejects blank ___ parameters in trait signatures; the compiler accepts them.
+        Conversely, the compiler's structural validator rejects duplicate usable parameter names within a
+        trait signature, while the interpreter's parser validator does not check those names. Ordinary
+        function declarations reject blank parameters and duplicate usable names on both sides.
+    Trait method name uniqueness:
+      status: missing
+      notes: The interpreter's parser validator rejects repeated usable method names in a trait. The compiler
+        checks each signature's parameter names instead and accepts repeated method names at this boundary.
+        Any later name or type checking is outside this parser assessment.
+    Implementation member name uniqueness:
+      status: missing
+      notes: The interpreter's parser validator rejects repeated usable impl member names, including aliases,
+        with VALIDATION-IMPL-METHODS. The compiler only validates individual method functions at this boundary.
+        Any later name or type checking is outside this parser assessment.
     Effect annotations:
       status: partial
       notes: Function and trait method effect rows parse, but Concurrency and Runtime are absent from the compiler's
@@ -65,4 +90,5 @@ groups:
     Parser nesting limit:
       status: partial
       notes: The compiler's parser-depth cap is 512 and the interpreter's is 200. Both retain a separate interpolation
-        nesting cap of 64. Available-stack protection is implementation-dependent and is not an AOT requirement.
+        nesting cap of 64. The interpreter additionally checks available stack space and returns a structured
+        depth failure; the compiler has no equivalent guard at parser entry points.
