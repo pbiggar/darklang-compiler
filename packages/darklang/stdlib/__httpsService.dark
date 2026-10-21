@@ -98,9 +98,9 @@ let parse (owner: String) (port: Int64) (data: Blob)
         let initial = Stdlib.__HttpsService.Parameters { seen = [], mandatory = [], h3 = false,
           port = port, ipv4 = [], ipv6 = [] } in
         Stdlib.__HttpsService.__parameters data position -1L initial |> Stdlib.Result.andThen (fun parameters ->
-          if Stdlib.List.any parameters.mandatory (fun key -> Stdlib.Bool.not (Stdlib.List.member parameters.seen key)) then
+          if Stdlib.List.any parameters.mandatory (fun key -> Stdlib.Bool.not (Stdlib.List.contains parameters.seen key)) then
             Error "Missing mandatory HTTPS service parameter"
-          else if Stdlib.List.member parameters.seen 2L && Stdlib.Bool.not (Stdlib.List.member parameters.seen 1L) then
+          else if Stdlib.List.contains parameters.seen 2L && Stdlib.Bool.not (Stdlib.List.contains parameters.seen 1L) then
             Error "HTTPS no-default-alpn without ALPN"
           else if parameters.h3 == false || parameters.port == 0L ||
             Stdlib.List.any parameters.mandatory (fun key -> key != 1L && key != 2L && key != 3L && key != 4L && key != 6L) then Ok None

@@ -320,7 +320,6 @@ type moduleDecl = {
 
 and testExpected = TEExpr of expr | TEError of string | TESqlError of string
 and assertion = { range : range; actual : expr; expected : testExpected }
-
 and expectedError = RuntimeError of string
 
 and testDecl = {
@@ -343,7 +342,6 @@ and declaration =
   | DTrait of traitDecl
   | DImpl of implDecl
   | DExpr of expr
-  | DTypeDB of typeDecl
   | DAssertion of assertion
   | DTest of testDecl
 
@@ -410,10 +408,6 @@ module PackageFn : sig
     effects : string list option;
     description : string;
   }
-end
-
-module DB : sig
-  type t = { name : string; version : int; typ : typeReference }
 end
 
 val synthRange : range

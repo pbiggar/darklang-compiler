@@ -5,10 +5,10 @@ module Darklang.Stdlib.HttpServer
 type Handler = { route: String, method: String, handler: Stdlib.Http.Request -> Stdlib.Http.Response }
 
 let get (route: String) (fn: Stdlib.Http.Request -> Stdlib.Http.Response) : Stdlib.HttpServer.Handler =
-    Stdlib.HttpServer.Handler { route = route; method = "GET"; handler = fn }
+    Stdlib.HttpServer.Handler { route = route, method = "GET", handler = fn }
 
 let post (route: String) (fn: Stdlib.Http.Request -> Stdlib.Http.Response) : Stdlib.HttpServer.Handler =
-    Stdlib.HttpServer.Handler { route = route; method = "POST"; handler = fn }
+    Stdlib.HttpServer.Handler { route = route, method = "POST", handler = fn }
 
 type RouteMatch = { matched: Bool, vars: List<(String * String)> }
 type RouteSegment =
@@ -38,12 +38,12 @@ let splitPath (path: String) : List<String> =
 let __matchSegments (routes: List<Stdlib.HttpServer.RouteSegment>) (paths: List<String>)
     (vars: List<(String * String)>) : Stdlib.HttpServer.RouteMatch =
     match routes, paths with
-    | [], [] -> Stdlib.HttpServer.RouteMatch { matched = true; vars = vars }
+    | [], [] -> Stdlib.HttpServer.RouteMatch { matched = true, vars = vars }
     | route :: moreRoutes, path :: morePaths ->
         match Stdlib.HttpServer.matchSegment route path [] with
-        | None -> Stdlib.HttpServer.RouteMatch { matched = false; vars = [] }
+        | None -> Stdlib.HttpServer.RouteMatch { matched = false, vars = [] }
         | Some newVars -> Stdlib.HttpServer.__matchSegments moreRoutes morePaths (Stdlib.List.append vars newVars)
-    | _, _ -> Stdlib.HttpServer.RouteMatch { matched = false; vars = [] }
+    | _, _ -> Stdlib.HttpServer.RouteMatch { matched = false, vars = [] }
 
 // Upstream requires equal segment counts, including wildcard routes.
 let matchRouteSegments (routes: List<Stdlib.HttpServer.RouteSegment>) (paths: List<String>) : Stdlib.HttpServer.RouteMatch =
@@ -113,7 +113,7 @@ let __standardHeaders (inject: Bool) (headers: List<(String * String)>) : List<(
 let __request (config: Stdlib.HttpServer.Config.Config) (parsed: Stdlib.__HttpWire.ParsedRequest)
     : Stdlib.Result.Result<Stdlib.Http.Request, String> =
     let headers = Stdlib.List.append [("x-http-method", parsed.method)] parsed.headers in
-    let temporary = Stdlib.Http.Request { url = ""; headers = headers; body = parsed.body } in
+    let temporary = Stdlib.Http.Request { url = "", headers = headers, body = parsed.body } in
     let authority = Stdlib.Http.Request.header temporary "host"
         |> Stdlib.Option.withDefault ("localhost:" ++ Stdlib.Int.toString config.port) in
     match Stdlib.__HttpWire.parseUrl ("http://" ++ authority ++ "/") with
@@ -124,7 +124,7 @@ let __request (config: Stdlib.HttpServer.Config.Config) (parsed: Stdlib.__HttpWi
                 Stdlib.String.toLowercase key == "x-forwarded-proto" && Stdlib.String.toLowercase value == "https") in
         let host = if Stdlib.String.contains url.host ":" then "[" ++ url.host ++ "]" else url.host in
         let prefix = if forwarded then "https://" ++ host else "http://" ++ authority in
-        Ok (Stdlib.Http.Request { url = prefix ++ parsed.target; headers = headers; body = parsed.body })
+        Ok (Stdlib.Http.Request { url = prefix ++ parsed.target, headers = headers, body = parsed.body })
 
 let __responseBytesFor (method: String) (config: Stdlib.HttpServer.Config.Config) (response: Stdlib.Http.Response) (persistent: Bool)
     : Stdlib.Result.Result<Blob, String> =

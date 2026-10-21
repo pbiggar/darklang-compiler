@@ -30,7 +30,7 @@ let root = Stdlib.Cli.Env.getOr "TMPDIR" "." in let segment = "aaaaaaaaaaaaaaaaa
 
 Stdlib.Cli.FileSystem.isDirectoryAtPath "." "src" = true
 
-Stdlib.List.member (Stdlib.Cli.FileSystem.getDirectoryContents ".") "src" = true
+Stdlib.List.contains (Stdlib.Cli.FileSystem.getDirectoryContents ".") "src" = true
 
 Stdlib.Cli.Env.getOr "DARK_ENV_MISSING_VALUE" "fallback" = "fallback"
 

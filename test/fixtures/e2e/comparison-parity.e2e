@@ -76,10 +76,10 @@ comparisonGenericEquals<List<(Int64 * String)>> ([(1L, "one")]) ([(1L, "one")]) 
 comparisonGenericEquals<ComparisonRecord> (ComparisonRecord { name = "r", values = [(1L, true)] }) (ComparisonRecord { name = "r", values = [(1L, true)] }) = true
 
 // Dict equality compares mappings, independently of insertion order and shape.
-Dict { "a": 1L; "b": 2L } == Dict { "b": 2L; "a": 1L } = true
-comparisonGenericEquals<Dict<String, List<Int64>>> (Dict { "a": [1L, 2L]; "b": [3L] }) (Dict { "b": [3L]; "a": [1L, 2L] }) = true
+Dict { "a": 1L, "b": 2L } == Dict { "b": 2L, "a": 1L } = true
+comparisonGenericEquals<Dict<String, List<Int64>>> (Dict { "a": [1L, 2L], "b": [3L] }) (Dict { "b": [3L], "a": [1L, 2L] }) = true
 Dict { "a": 1L } != Dict { "a": 2L } = true
-Stdlib.equals (Dict { "a": [1L, 2L]; "b": [3L] }) (Dict { "b": [3L]; "a": [1L, 2L] }) = true
+Stdlib.equals (Dict { "a": [1L, 2L], "b": [3L] }) (Dict { "b": [3L], "a": [1L, 2L] }) = true
 Stdlib.notEquals (Dict { "a": [1L, 2L] }) (Dict { "a": [1L, 3L] }) = true
 
 // Lambda identity is its source expression and deliberately ignores captures.

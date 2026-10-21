@@ -72,7 +72,7 @@ let __sample (rtt: Stdlib.__QuicRecovery.Rtt) (raw: Int64) (delay: Int64) : Stdl
       variance = rtt.variance + (difference - rtt.variance) / 4L }
 
 let __clear (packet: Stdlib.__QuicRecovery.Packet) (tokens: List<Int64>) : Stdlib.__QuicRecovery.Packet =
-  if Stdlib.List.member tokens packet.token then Stdlib.__QuicRecovery.Packet {
+  if Stdlib.List.contains tokens packet.token then Stdlib.__QuicRecovery.Packet {
     number = packet.number, at = packet.at, size = packet.size, token = packet.token, payload = Stdlib.Blob.empty }
   else packet
 

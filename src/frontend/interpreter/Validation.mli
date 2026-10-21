@@ -12,8 +12,6 @@ type issueCode =
   | EmptyRecordUpdate
   | PackageExpression
   | TestAssertion
-  | DBMode
-  | DBShape
   | TestMode
 
 module IssueCode : sig

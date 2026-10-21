@@ -3,11 +3,11 @@ module Darklang.Stdlib.Cli.OS
 type OS =
   | Linux
   | MacOS
-  | Windows
 
 let getOS () : Stdlib.Result.Result<OS, String> =
   match Builtin.runtimeTargetOS () with
   | "linux" -> Ok OS.OS.Linux
   | "darwin" -> Ok OS.OS.MacOS
-  | "windows" -> Ok OS.OS.Windows
+  | "windows" ->
+    Error "Dark does not support Windows. Linux and macOS only, including WSL."
   | _ -> Error "Unsupported operating system"

@@ -5,8 +5,8 @@ type ChainedAliasBox<'a> = NestedAliasBox<'a>
 let wrapAliasBox (value: NestedAliasBox<'a>) : ChainedAliasBox<NestedAliasBox<'a>> = ChainedAliasBox { value = value }
 (wrapAliasBox (NestedAliasBox { value = 42L })).value.value = 42L
 
-type AliasPair<'a, 'b> = { left: a; right: b }
+type AliasPair<'a, 'b> = { left: a, right: b }
 type FlippedAliasPair<'a, 'b> = AliasPair<'b, 'a>
-let flipAliasPair (value: AliasPair<'a, 'b>) : FlippedAliasPair<'a, 'b> = FlippedAliasPair { left = value.right; right = value.left }
-(flipAliasPair (AliasPair { left = 42L; right = "ok" })).left = "ok"
-(flipAliasPair (AliasPair { left = 42L; right = "ok" })).right = 42L
+let flipAliasPair (value: AliasPair<'a, 'b>) : FlippedAliasPair<'a, 'b> = FlippedAliasPair { left = value.right, right = value.left }
+(flipAliasPair (AliasPair { left = 42L, right = "ok" })).left = "ok"
+(flipAliasPair (AliasPair { left = 42L, right = "ok" })).right = 42L

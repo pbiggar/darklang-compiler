@@ -274,7 +274,7 @@ and parsePatternBaseInner state index =
           current := stop + 1
         end
         else if tok state stop = TSemicolon then begin
-          errListSemicolon state stop "list-pattern elements";
+          errCollectionSemicolon state stop "list-pattern elements";
           RevBuffer.add elements (pattern, Some (rng state stop));
           current := stop + 1
         end

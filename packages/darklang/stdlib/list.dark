@@ -161,7 +161,7 @@ let __uniqueUnsorted<'a> (remaining: List<a>) (uniqueValues: List<a>) : List<a> 
     match remaining with
     | [] -> uniqueValues
     | head :: tail ->
-        let next = if Stdlib.List.member<a> uniqueValues head then uniqueValues else Stdlib.List.push<a> uniqueValues head in
+        let next = if Stdlib.List.contains<a> uniqueValues head then uniqueValues else Stdlib.List.push<a> uniqueValues head in
         Stdlib.List.__uniqueUnsorted<a> tail next
 
 let uniqueBy<'a, 'b> (list: List<a>) (fn: a -> b) : List<a> =
@@ -349,10 +349,10 @@ let __findFirstIndexHelper<'a> (list: List<a>) (fn: (a) -> Bool) (index: Int) : 
     | [] -> None
     | head :: tail -> if fn head then Some index else Stdlib.List.__findFirstIndexHelper<a> tail fn (index + 1)
 
-let member<'a> (list: List<a>) (value: a) : Bool =
+let contains<'a> (list: List<a>) (value: a) : Bool =
     match list with
     | [] -> false
-    | head :: tail -> if head == value then true else Stdlib.List.member<a> tail value
+    | head :: tail -> if head == value then true else Stdlib.List.contains<a> tail value
 
 let interpose<'a> (list: List<a>) (separator: a) : List<a> =
     match list with

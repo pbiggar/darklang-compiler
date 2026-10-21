@@ -135,7 +135,7 @@ let candidates source (parsed : W.sourceFile) =
   let rec declaration = function
     | W.DFunction func -> replace func.range "" :: expression func.body
     | W.DValue value -> replace value.range "" :: expression value.body
-    | W.DType typ | W.DTypeDB typ -> [ replace typ.range "" ]
+    | W.DType typ -> [ replace typ.range "" ]
     | W.DTrait trait_ -> [ replace trait_.W.range "" ]
     | W.DImpl impl ->
         replace impl.W.range ""

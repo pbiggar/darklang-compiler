@@ -62,7 +62,7 @@ let tryEmitBlock
             let (d, e, i, h) = acc in
             Stdlib.HttpClient.Sse.applyLine d e i h line) in
     if hasData then
-        Some (Stdlib.HttpClient.Sse.Event { data = data; eventType = eventType; id = id })
+        Some (Stdlib.HttpClient.Sse.Event { data = data, eventType = eventType, id = id })
     else
         None
 
@@ -74,7 +74,7 @@ let __eventWithNextState
     : (Stdlib.HttpClient.Sse.Event * Stdlib.HttpClient.Sse.ParseState) =
     let nextState =
         Stdlib.HttpClient.Sse.ParseState
-            { lastId = event.id; currentLines = []; currentLine = [] } in
+            { lastId = event.id, currentLines = [], currentLine = [] } in
     (event, nextState)
 
 let __emitBlock
@@ -121,7 +121,7 @@ let pullNextEvent
                 | None ->
                     let nextState =
                         Stdlib.HttpClient.Sse.ParseState
-                            { lastId = state.lastId; currentLines = []; currentLine = [] } in
+                            { lastId = state.lastId, currentLines = [], currentLine = [] } in
                     Stdlib.HttpClient.Sse.pullNextEvent bytes nextState
             else
                 let nextState =
@@ -142,7 +142,7 @@ let pullNextEvent
 let parse (bytes: Stream<UInt8>) : Stream<Stdlib.HttpClient.Sse.Event> =
     let initial =
         Stdlib.HttpClient.Sse.ParseState
-            { lastId = ""; currentLines = []; currentLine = [] } in
+            { lastId = "", currentLines = [], currentLine = [] } in
     Stdlib.Stream.unfold<Stdlib.HttpClient.Sse.ParseState, Stdlib.HttpClient.Sse.Event>
         initial
         (fun state -> Stdlib.HttpClient.Sse.pullNextEvent bytes state)

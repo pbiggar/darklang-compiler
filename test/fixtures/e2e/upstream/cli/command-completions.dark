@@ -44,7 +44,7 @@ BranchCompletion.values [ "zzz-no-such-branch" ] = []
 BranchCompletion.values [ "switch", "zzz-no-such-branch" ] = []
 
 // `main` is always a legitimate target for the branch-taking subcommands
-(BranchCompletion.values [ "switch", "mai" ]) |> Stdlib.List.member "main" = true
+(BranchCompletion.values [ "switch", "mai" ]) |> Stdlib.List.contains "main" = true
 
 // a subcommand that takes no branch gets no branch names
 BranchCompletion.values [ "list", "" ] = []

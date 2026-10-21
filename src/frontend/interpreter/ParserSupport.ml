@@ -730,13 +730,8 @@ let isNegLitArg state index =
      || (rng state index).start.column > (rng state (index - 1)).end_.column)
 [@@warning "-4"]
 
-(*
-   `;` used to separate list elements and list-pattern elements; `,` is the only
-   separator now. Report it precisely and keep parsing as if it had been a `,`, so
-   a file written in the old style yields one diagnostic per `;` instead of a
-   cascade of recovery noise from the elements after it.
-*)
-let errListSemicolon state index what =
+(* Report a collection semicolon precisely and recover at the next element. *)
+let errCollectionSemicolon state index what =
   errFull state DiagnosticCode.expected index
     ("expected ',' between " ^ what ^ ", found ';'")
     [] (Some "use ',' instead")

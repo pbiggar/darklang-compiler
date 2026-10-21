@@ -93,15 +93,6 @@ type MyType = {
 }
 ```
 
-## DBs
-
-You can create a DB by making a type alias with a DB annotation:
-
-```fsharp
-[<DB>]
-type MyTypeDB = MyDB
-```
-
 ## Packages
 
 Packages should be defined in the packages directory, perhaps in the Darklang.Test namespace.

@@ -157,5 +157,17 @@ let sinh (value: Float) : Float =
         let result = (positive - 1.0 / positive) / 2.0 in
         if value < 0.0 then 0.0 - result else result
 
-// Compatibility with I@04fbe9: mathTanh dispatches to System.Math.Sinh.
-let tanh (value: Float) : Float = Stdlib.Math.sinh value
+// Saturation avoids overflow; the small-input series avoids cancellation.
+let tanh (value: Float) : Float =
+    if value == 0.0 || Stdlib.Float.isNaN value then value
+    else
+        let magnitude = Stdlib.Float.absoluteValue value in
+        let result =
+            if magnitude > 20.0 then 1.0
+            else if magnitude < 0.00001 then
+                let squared = magnitude * magnitude in
+                magnitude * (1.0 + squared * (-0.3333333333333333 + squared * 0.13333333333333333))
+            else
+                let negative = Stdlib.Float.__exp (0.0 - 2.0 * magnitude) in
+                (1.0 - negative) / (1.0 + negative) in
+        if value < 0.0 then 0.0 - result else result
