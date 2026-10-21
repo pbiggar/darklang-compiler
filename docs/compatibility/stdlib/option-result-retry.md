@@ -33,12 +33,19 @@ file is deliberately source-compatible with both implementations so argument
 order, distinct payloads, callback counts, termination, and result propagation
 can be compared without separate fixtures.
 
-The portable Dark source follows the interpreter control flow directly. Its
-`Stdlib.Int.add` and `Stdlib.Float.multiply` source spellings resolve to the
-canonical `Darklang.Stdlib` identities. In `Option.and`, the `None` arm constructs the
-same payload-free `None` value instead of returning `option1`, because the
-compiler statically distinguishes `Option<a>` from the declared `Option<b>`
-result. Neither adaptation changes an accepted program's observable value.
+Option, Result, and Retry now use byte-identical interpreter source from
+`e76430be5cd9f6b77ed255430dc34a1b58dd8fc4`, the revision in
+`porting/sources.yaml`. This removes the compiler's separate implementations,
+including explicit generic arguments and qualified arithmetic calls. The
+interpreter's current `Option.and` also constructs `None` in its empty arm,
+which is valid when the two option payload types differ. Native arithmetic
+and sleep implementations remain dependencies supplied by the compiler.
+
+Qualified generic constructors retain the contextual result type in their
+checked metadata, including parameters absent from their payload. This keeps
+the nullable representation of `Option<String>.None` consistent between its
+constructor and caller. `qualified-generic-constructor-result.e2e` covers a
+user-defined enum, Option, and Result across generic function boundaries.
 
 Enabling the exact upstream `Option.and(None, None)` case previously exposed a
 parser association error: the second nullary constructor was attached as a

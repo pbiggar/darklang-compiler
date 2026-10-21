@@ -201,8 +201,29 @@ let check checkExpression literal globals locals symbols expected
                               typeArgs = List.map C.checkedType args;
                             }
                           in
-                          literal expected symbols
-                            (AST.TSum (canonical, args))
-                            (C.Constructor (reference, List.map snd checked)))))
+                          (* Context can fill phantom parameters that payload
+                             inference leaves empty; lowering needs that same
+                             result type to choose the constructor layout. *)
+                          map
+                            (fun (typ, value, symbols) ->
+                              match (typ, value) with
+                              | ( AST.TSum (_, args),
+                                  C.Constructor (reference, fields) ) ->
+                                  ( typ,
+                                    C.Constructor
+                                      ( {
+                                          reference with
+                                          C.typeArgs =
+                                            List.map C.checkedType args;
+                                        },
+                                        fields ),
+                                    symbols )
+                              | _ ->
+                                  Crash.crash
+                                    "Checked constructor lost its enum result \
+                                     type")
+                            (literal expected symbols
+                               (AST.TSum (canonical, args))
+                               (C.Constructor (reference, List.map snd checked))))))
           )
       | _ -> Error ("Type '" ^ canonical ^ "' is not an enum"))

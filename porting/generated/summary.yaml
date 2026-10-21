@@ -9,9 +9,9 @@ parser:
   unassessed: 18
   supported: 3
 stdlib:
-  different: 1010
+  different: 947
   missing: 598
-  identical: 388
+  identical: 451
 packages:
   missing: 3709
   identical: 5
