@@ -156,3 +156,37 @@ let malformedCompression () : Stdlib.Result.Result<Unit, String> =
   Stdlib.__Http3.close initial.wire
   result
 malformedCompression () = Error "Invalid HPACK Huffman padding" // leak_check
+
+// Cancelling a never-written field section must not pin the shared table.
+// Once any request-stream byte is written, only peer feedback releases it.
+let decoderFeedback (state: Stdlib.__Http3Server.State) (offset: Int64) (bytes: List<Int64>) : Stdlib.Result.Result<Stdlib.__Http3Server.State, String> =
+  Stdlib.__QuicFlow.receive state.wire.connection.flow (Stdlib.__QuicApplication.StreamData { id = 10L, offset = offset, bytes = Stdlib.Blob.__fromInt64List bytes, fin = false }) |> Stdlib.Result.andThen (fun flow ->
+    Stdlib.__Http3.__controls { state.wire with connection = Stdlib.__QuicConnection.__flow state.wire.connection flow } |> Stdlib.Result.map (fun wire -> { state with wire = wire }))
+let queuedQpackCancellation (credit: Int64) (cancelledByPeer: Bool) : Stdlib.Result.Result<(Int64 * Int64), String> =
+  let initial = fixture () in
+  let result = request initial 0L "" 0L true |> Stdlib.Result.andThen (fun state -> Stdlib.__Http3Server.admit state 1L) |> Stdlib.Result.andThen (fun state ->
+    match state.streams with
+    | [active] ->
+      let response = Stdlib.Http.Response { statusCode = 200, headers = [("x", "y")], body = Stdlib.Blob.empty } in
+      Stdlib.__Http3Server.respond (context ()) state active "GET" response 1L |> Stdlib.Result.andThen (fun state ->
+        Stdlib.__QpackEncoder.create 64L 1L |> Stdlib.Result.andThen (fun outgoing ->
+          let channels = Stdlib.List.map state.wire.connection.flow.channels (fun channel ->
+            if channel.id != 0L then channel else { channel with send = Stdlib.Option.map channel.send (fun sender -> { sender with credit = credit }) }) in
+          let wire = { state.wire with uni = { state.wire.uni with outgoing = outgoing }, connection = Stdlib.__QuicConnection.__flow state.wire.connection { state.wire.connection.flow with channels = channels } } in
+          match state.streams with
+          | [active] -> Stdlib.__Http3Server.send { state with wire = wire } active 2L
+          | _ -> Error "Missing queued response"))
+    | _ -> Error "Missing request owner") |> Stdlib.Result.andThen (fun state ->
+      // The insertion arrived, but the field section was not acknowledged.
+      decoderFeedback state 0L [3L, 1L] |> Stdlib.Result.andThen (fun state -> Stdlib.__Http3Server.cancel state 0L 268L)) |> Stdlib.Result.andThen (fun state ->
+        let released = if cancelledByPeer then decoderFeedback state 2L [64L] else Ok state in
+        released |> Stdlib.Result.andThen (fun state -> Stdlib.__Http3.encodeHeaders state.wire 4L [("a", "b")]) |> Stdlib.Result.map (fun encoded ->
+          let instructions = match Stdlib.__QuicFlow.channel encoded.state.connection.flow 7L with
+            | None -> -1L
+            | Some channel -> match channel.send with | None -> -1L | Some sender -> sender.offset in
+          (instructions, Stdlib.Blob.__getByte encoded.bytes 2L))) in
+  Stdlib.__Http3.close initial.wire
+  result
+queuedQpackCancellation 0L false = Ok ((11L, 3L)) // leak_check
+queuedQpackCancellation 1L false = Ok ((7L, 0L)) // leak_check
+queuedQpackCancellation 1L true = Ok ((11L, 3L)) // leak_check
