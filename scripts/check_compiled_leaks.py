@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import argparse
 import json
 import subprocess
 import sys
@@ -11,12 +12,16 @@ from pathlib import Path
 
 def main() -> int:
     root = Path(__file__).resolve().parents[1]
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--compiler", type=Path, default=root / "dark",
+                        help="Compiler executable to check (default: checkout's dark wrapper)")
+    args = parser.parse_args()
     profiles = json.loads((root / "benchmarks/profiles.json").read_text())
     names = profiles["profiles"]["full"]
     artifacts = root / "TestResults/ai/compiled-leak-gate"
     binaries = artifacts / "binaries"
     binaries.mkdir(parents=True, exist_ok=True)
-    command = [str(root / "dark"), "--batch", "--allow-internal", "--leak-check", "--quiet", "--"]
+    command = [str(args.compiler.resolve()), "--batch", "--allow-internal", "--leak-check", "--quiet", "--"]
     for name in names:
         command.extend(
             [
