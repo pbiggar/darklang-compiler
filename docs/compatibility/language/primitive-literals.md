@@ -35,6 +35,20 @@ eval-boundary rendering implementation.
 
 ## Retained divergences
 
+Float literals preserve the decimal precision specified in the source. After
+conversion to binary64, rounding the exact stored value back to the source's
+last specified decimal place must recover the exact written decimal value.
+Both conversions use nearest, ties-to-even rounding. For example, `0.1` is
+accepted, but `10000000000000001.0` and `0.10000000000000000` are rejected.
+Trailing zeros specify precision; exponents shift its position. Overflow and
+nonzero underflow to zero are errors. Negative zero and qualifying subnormals
+are preserved. Validation and exponent-free normalization do not use host
+formatting or impose an arbitrary source-exponent limit. The policy applies to
+expression and pattern literals; runtime string parsing is unchanged.
+
+This intentional language change is implemented together with an interpreter
+PR. The interpreter revision currently pinned by the ledger predates it.
+
 Bare decimal literals lower to arbitrary-precision Int, matching the
 interpreter. Int128/UInt128 lower to managed fixed blocks containing two UInt64 limbs;
 this native representation is an AOT difference. Static type checking remains intentionally

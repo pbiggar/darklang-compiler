@@ -40,6 +40,16 @@ let rejects source text =
 let accepts source () = ignore (parsed source)
 
 let () =
+  run "generated binary64 integer boundary literals" (fun () ->
+      for offset = 0 to 255 do
+        let integer = Int64.add 9007199254740992L (Int64.of_int offset) in
+        List.iter
+          (fun sign ->
+            let source = sign ^ Int64.to_string integer ^ ".0" in
+            if offset mod 2 = 0 then ignore (parsed source)
+            else rejects source "Float literal loses precision specified in the source")
+          [ ""; "-" ]
+      done);
   run "float precision diagnostics cover expressions and patterns" (fun () ->
       List.iter
         (fun source ->

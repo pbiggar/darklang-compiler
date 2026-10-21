@@ -714,7 +714,7 @@ module Float =
   Stdlib.Json.parse<Float> "1e3" = Result.Ok 1000.0
   Stdlib.Json.parse<Float> "-1e3" = Result.Ok -1000.0
 
-  Stdlib.Json.serialize<Float> 3.14159265358979323846 = "3.141592653589793"
+  Stdlib.Json.serialize<Float> 3.141592653589793 = "3.141592653589793"
 
   Stdlib.Json.serialize<Float> 1.618033988749895 = "1.618033988749895"
 
