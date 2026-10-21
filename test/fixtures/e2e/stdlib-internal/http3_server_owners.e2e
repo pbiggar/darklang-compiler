@@ -223,11 +223,15 @@ let criticalOwner (kind: Int64) (reset: Bool) : Stdlib.Result.Result<Bool, Strin
   let seed = fixture () in
   let bytes = Stdlib.Blob.__fromInt64List [kind] in
   let result = Stdlib.__QuicFlow.receive seed.wire.connection.flow (Stdlib.__QuicApplication.StreamData { id = 2L, offset = 0L, bytes = bytes, fin = Stdlib.Bool.not reset }) |> Stdlib.Result.andThen (fun flow ->
-    let received = if reset then Stdlib.__QuicFlow.reset flow (Stdlib.__QuicApplication.Reset { id = 2L, code = 268L, finalSize = 1L }) else Ok flow in
-    received |> Stdlib.Result.map (fun flow ->
-      let state = { seed with wire = { seed.wire with connection = Stdlib.__QuicConnection.__flow seed.wire.connection flow } } in
+    let wire = { seed.wire with connection = Stdlib.__QuicConnection.__flow seed.wire.connection flow } in
+    // RESET discards unread payload, so identify the critical stream first.
+    let ready = if reset then Stdlib.__Http3.__controls wire |> Stdlib.Result.mapError Stdlib.__Http3.__failureMessage else Ok wire in
+    ready |> Stdlib.Result.andThen (fun wire ->
+      let received = if reset then Stdlib.__QuicFlow.reset wire.connection.flow (Stdlib.__QuicApplication.Reset { id = 2L, code = 268L, finalSize = 1L }) else Ok wire.connection.flow in
+      received |> Stdlib.Result.map (fun flow ->
+      let state = { seed with wire = { wire with connection = Stdlib.__QuicConnection.__flow wire.connection flow } } in
       let failed = Stdlib.Result.isError (Stdlib.__Http3Server.step (context ()) state 1L) in
-      failed && Stdlib.Option.isNone (Stdlib.Stream.next seed.wire.connection.transport.socket.lifecycle))) in
+      failed && Stdlib.Option.isNone (Stdlib.Stream.next seed.wire.connection.transport.socket.lifecycle)))) in
   Stdlib.__Http3.close seed.wire
   result
 criticalOwner 0L false = Ok true // leak_check
