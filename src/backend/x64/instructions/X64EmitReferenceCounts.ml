@@ -174,7 +174,9 @@ let emitRefCountDecBuffer ctx skipTagged str =
               X.TEST_reg (refValueReg, refValueReg);
               X.Jcc (X.NE, noFreeLabel);
             ]
-          (* String refcount hit zero - decrement leak counter *)
+          (* Tagged Int buffers have a signed limb-count layout, not a byte
+             length. Only canonical String/Blob buffers enter these classes. *)
+          @ (if skipTagged then [] else genSmallBufferRecycle refAddrReg)
           @ leakDec
           @ [ X.Label noFreeLabel; X.Label literalLabel; X.Label skipLabel ]
           @ restoreRegs)

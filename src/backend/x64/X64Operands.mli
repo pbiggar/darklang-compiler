@@ -27,3 +27,4 @@ val genOomJump : unit -> X86_64.instr list
 val genOomHandler : unit -> X86_64.instr list
 val genRuntimeErrorHandler : unit -> X86_64.instr list
 val freshLabel : string -> string
+val genSmallBufferRecycle : X86_64.reg -> X86_64.instr list

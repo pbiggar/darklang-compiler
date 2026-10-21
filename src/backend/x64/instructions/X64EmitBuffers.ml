@@ -249,7 +249,6 @@ let emitStringConcatBinary ctx dest left right =
       let done1 = freshLabel "strcat_d1" in
       let copy2 = freshLabel "strcat_c2" in
       let done2 = freshLabel "strcat_d2" in
-      let doneAllocation = freshLabel "strcat_alloc_ok" in
       let leftConflictReg =
         match left with
         | LIR.Reg reg -> (
@@ -289,18 +288,8 @@ let emitStringConcatBinary ctx dest left right =
               (* Allocate: use RBX to hold result ptr (callee-saved, safe across loops) *)
               (* Save RBX first *)
               @ [ X.PUSH X.RBX ]
-              @ [
-                  X.MOV_reg (X.RBX, heapPtr);
-                  X.MOV_reg (X.R10, X.RCX);
-                  X.ADD_imm (X.R10, 23l);
-                  X.AND_imm (X.R10, -8l);
-                  X.ADD_reg (heapPtr, X.R10);
-                  X.MOV_reg (scratch, heapPtr);
-                  X.SUB_reg (scratch, freeListBase);
-                  X.CMP_imm (scratch, Int64.to_int32 heapMmapSizeBytes);
-                  X.Jcc (X.LE, doneAllocation);
-                ]
-              @ genOomJump () @ [ X.Label doneAllocation ]
+              @ [ X.MOV_reg (X.R10, X.RCX); X.ADD_imm (X.R10, 16l) ]
+              @ X64EmitMemory.emitRawAllocResolved ctx X.RBX X.R10
               (* Store the fixed header. *)
               @ loadImm64 scratch 1L
               @ [
@@ -340,8 +329,6 @@ let emitStringConcatBinary ctx dest left right =
                   X.JMP copy2;
                   X.Label done2;
                 ]
-              (* Leak counter increment for string allocation *)
-              @ genLeakCounterInc ctx
               (* Move result to destReg, restore RBX *)
               (* If destReg IS RBX, we need to save result elsewhere first *)
               @ (if destReg = X.RBX then
@@ -411,20 +398,10 @@ let emitStringConcatMany ctx dest first second remaining =
                   ])
                 (List.init operandCount Fun.id)
           in
-          let allocationDone = freshLabel "strcat_many_alloc_ok" in
           let allocate =
-            [
-              X.MOV_reg (X.RBX, heapPtr);
-              X.MOV_reg (X.R10, X.RCX);
-              X.ADD_imm (X.R10, 23l);
-              X.AND_imm (X.R10, -8l);
-              X.ADD_reg (heapPtr, X.R10);
-              X.MOV_reg (scratch, heapPtr);
-              X.SUB_reg (scratch, freeListBase);
-              X.CMP_imm (scratch, Int64.to_int32 heapMmapSizeBytes);
-              X.Jcc (X.LE, allocationDone);
-            ]
-            @ genOomJump () @ [ X.Label allocationDone ] @ loadImm64 scratch 1L
+            [ X.MOV_reg (X.R10, X.RCX); X.ADD_imm (X.R10, 16l) ]
+            @ X64EmitMemory.emitRawAllocResolved ctx X.RBX X.R10
+            @ loadImm64 scratch 1L
             @ [
                 X.MOV_store (X.RBX, 0l, scratch);
                 X.MOV_store (X.RBX, 8l, X.RCX);
@@ -454,7 +431,6 @@ let emitStringConcatMany ctx dest first second remaining =
           in
           let copies = List.concat_map copy (List.init operandCount Fun.id) in
           save @ List.concat snapshots @ measure @ allocate @ copies
-          @ genLeakCounterInc ctx
           @ [
               X.MOV_reg (scratch, X.RBX);
               X.ADD_imm (X.RSP, Int32.mul (Int32.of_int operandCount) 16l);
