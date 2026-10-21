@@ -213,14 +213,14 @@ let __drain (state: Stdlib.__Http3.State) : Stdlib.Result.Result<Stdlib.__Http3.
       | None -> false
       | Some channel -> match channel.receive with | None -> false | Some receiver -> Stdlib.Option.isSome receiver.resetCode in
     if reset then Error (Fatal "HTTP/3 response stream reset")
-    else Stdlib.__Http3Message.resume current.uni.table current.stream current.message |> Stdlib.Result.mapError Stdlib.__Http3.__fatal |> Stdlib.Result.andThen (fun resumed ->
+    else Stdlib.__Http3Message.resume current.uni.table current.stream current.message |> Stdlib.Result.mapError (fun error -> Protocol ((current, error))) |> Stdlib.Result.andThen (fun resumed ->
       Stdlib.__Http3.__feedback { current with message = resumed.state } resumed.feedback |> Stdlib.Result.mapError Stdlib.__Http3.__fatal |> Stdlib.Result.andThen (fun current ->
     if current.connection.flow.role == Stdlib.__QuicFlow.Role.Client && Stdlib.__Http3.rejected current then Error (Fatal "HTTP/3 request rejected by GOAWAY")
     else if Stdlib.Option.isSome current.message.waiting || Stdlib.Option.isNone (Stdlib.__QuicFlow.channel current.connection.flow current.stream) then
       Stdlib.__QuicConnection.flush current.connection |> Stdlib.Result.mapError Stdlib.__Http3.__fatal |> Stdlib.Result.map (fun connection -> Stdlib.__Http3.Received { state = { current with connection = connection }, events = resumed.events, finished = false })
     else Stdlib.__QuicConnection.read current.connection current.stream |> Stdlib.Result.mapError Stdlib.__Http3.__fatal |> Stdlib.Result.andThen (fun read ->
       if Stdlib.Option.isSome read.reset then Error (Fatal "HTTP/3 response stream reset")
-      else Stdlib.__Http3Message.feedWithTable current.uni.table current.stream current.message read.bytes |> Stdlib.Result.mapError Stdlib.__Http3.__fatal |> Stdlib.Result.andThen (fun received ->
+      else Stdlib.__Http3Message.feedWithTable current.uni.table current.stream current.message read.bytes |> Stdlib.Result.mapError (fun error -> Protocol (({ current with connection = read.state }, error))) |> Stdlib.Result.andThen (fun received ->
         Stdlib.__Http3.__feedback { current with connection = read.state, message = received.state } received.feedback |> Stdlib.Result.mapError Stdlib.__Http3.__fatal |> Stdlib.Result.andThen (fun next ->
         let finished = read.finished && Stdlib.Option.isNone received.state.waiting in
         let complete = if finished then Stdlib.__Http3Message.finish received.state else Ok () in

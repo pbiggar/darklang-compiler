@@ -91,7 +91,7 @@ let __events (state: Stdlib.__Http3Control.State) (input: List<Stdlib.__Http3Str
 let feed (state: Stdlib.__Http3Control.State) (data: Blob)
   : Stdlib.Result.Result<Stdlib.__Http3Control.Received, String> =
   match Stdlib.__Http3Stream.feed state.framing data with
-  | Error message -> Error message
+  | Error failure -> Error failure.message
   | Ok received -> Stdlib.__Http3Control.__events { state with framing = received.state } received.events []
 
 // FIN or RESET of this stream is always fatal, even at a complete frame boundary.

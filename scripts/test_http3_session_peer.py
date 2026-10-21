@@ -125,15 +125,16 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--compiler", type=Path, default=ROOT / "dark")
     parser.add_argument("--requests", type=int, default=5)
-    parser.add_argument("--multiplex", choices=["interleave", "reset", "goaway", "malformed", "overflow", "truncated"])
+    parser.add_argument("--multiplex", choices=["interleave", "reset", "goaway", "malformed", "overflow", "truncated", "forbidden", "qpack"])
     parser.add_argument("--public", action="store_true")
     parser.add_argument("--stream", action="store_true", help="Drain lazy session bodies between requests")
     parser.add_argument("--blocked-reset", action="store_true", help="Reset a response before its QPACK instructions arrive")
     args = parser.parse_args()
     if args.blocked_reset and (args.multiplex or args.stream or args.public):
         parser.error("--blocked-reset requires the standalone receiver")
-    if args.multiplex == "truncated" and args.public:
-        parser.error("--multiplex truncated requires the standalone connection")
+    connection_errors = {"truncated": 262, "forbidden": 261, "qpack": 512}
+    if args.multiplex in connection_errors and args.public:
+        parser.error("Connection-error peers require the standalone connection")
     key, leaf, ca = certificates()
     configuration = QuicConfiguration(is_client=False, alpn_protocols=["h3"])
     configuration.certificate, configuration.private_key = leaf, key
@@ -145,14 +146,14 @@ def main():
         listener.settimeout(0.01)
         source, binary = Path(temporary) / "session.dark", Path(temporary) / "session"
         test_source = (PUBLIC_MULTIPLEX if args.public else MULTIPLEX).replace("@MODE@", '"' + args.multiplex + '"') if args.multiplex else SOURCE
-        if args.multiplex == "truncated":
+        if args.multiplex in connection_errors:
             # A malformed frame is a connection error, unlike a bad message.
             check = '''let check (state: Stdlib.__Http3Connection.State) (_mode: String) : Stdlib.Result.Result<Bool, String> =
   match Stdlib.__Http3Connection.requestMany state [request "/one", request "/two"] with
-  | Error message -> Ok (message == "Truncated HTTP/3 frame payload")
+  | Error _ -> Ok true
   | Ok batch -> let _ = Stdlib.__Http3.close batch.state.wire in Ok false
 '''
-            test_source = (MULTIPLEX[:MULTIPLEX.index("let check")] + check + MULTIPLEX[MULTIPLEX.index("match Stdlib.Cli.__Args"):]).replace("@MODE@", '"truncated"')
+            test_source = (MULTIPLEX[:MULTIPLEX.index("let check")] + check + MULTIPLEX[MULTIPLEX.index("match Stdlib.Cli.__Args"):]).replace("@MODE@", '"' + args.multiplex + '"')
         if args.blocked_reset:
             test_source = BLOCKED_RESET
         if args.stream:
@@ -219,6 +220,10 @@ def main():
                                                 http.send_headers(0, [(b":status", b"200"), (b"content-length", b"3")])
                                                 connection.send_stream_data(0, b"\x00\x03x", end_stream=True)
                                                 continue
+                                            if identifier == 0 and args.multiplex in ("forbidden", "qpack"):
+                                                payload = b"\x02\x00" if args.multiplex == "forbidden" else b"\x01\x01\xff"
+                                                connection.send_stream_data(0, payload)
+                                                continue
                                             length = b"70001" if identifier == 0 and args.multiplex == "malformed" else b"70000"
                                             overflow = identifier == 0 and args.multiplex == "overflow"
                                             if overflow:
@@ -242,7 +247,7 @@ def main():
         thread.start()
         try:
             result = subprocess.run([str(binary), str(listener.getsockname()[1])], cwd=ROOT, capture_output=True, text=True, timeout=60)
-            if args.multiplex == "truncated":
+            if args.multiplex in connection_errors:
                 assert terminated.wait(timeout=2), "Peer did not receive the connection wire error"
         finally:
             stopped.set()
@@ -254,10 +259,10 @@ def main():
             shutil.copy2(source, artifacts / "session.dark")
             shutil.copy2(binary, artifacts / "session")
         assert result.returncode == 0 and result.stdout == "OK\n" and not result.stderr, (result, streams)
-        expected = [0] if args.blocked_reset else (([0, 4] if args.multiplex in ("goaway", "truncated") else [0, 4, 8]) if args.multiplex else list(range(0, args.requests * 4, 4)))
+        expected = [0] if args.blocked_reset else (([0, 4] if args.multiplex == "goaway" or args.multiplex in connection_errors else [0, 4, 8]) if args.multiplex else list(range(0, args.requests * 4, 4)))
         assert len(connections) == 1 and streams == expected, streams
-        if args.multiplex == "truncated":
-            assert close_codes == [262], close_codes
+        if args.multiplex in connection_errors:
+            assert close_codes == [connection_errors[args.multiplex]], close_codes
     print(f"HTTP/3 {'blocked reset' if args.blocked_reset else args.multiplex or 'session'}: streams {streams}, shared Unicode QPACK and leak-free disposal passed")
 
 
