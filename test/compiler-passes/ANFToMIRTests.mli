@@ -6,6 +6,7 @@ val testBuildVariantRegistryRejectsInconsistentTypeParams : unit -> testResult
 val testRecordAllocationStartsFieldsAtOffsetZero : unit -> testResult
 val testNestedTerminalBranchesHaveNoInventedReturn : unit -> testResult
 val testPhiEdgesPreserveDistinctPredecessors : unit -> testResult
+val testSsaTailCallsCheckArgumentsBeforeUnreachableReturn : unit -> testResult
 val testPreRcSsaTypesBranchLocalDefinitions : unit -> testResult
 val testSsaReturnFlowAcrossJoinAndLoop : unit -> testResult
 val testSsaReturnFlowThroughSwappedParameters : unit -> testResult

@@ -12,30 +12,30 @@ Function loop:
   loop_entry:
     jump loop_body
   loop_body:
-    v14017 <- Phi([(v4000, loop_entry), (v14033, loop_ssa_2_unroll_second)]) : TInt64
-    v14018 <- Phi([(v4001, loop_entry), (v14034, loop_ssa_2_unroll_second)]) : TInt64
-    v14019 <- Phi([(v4002, loop_entry), (v14035, loop_ssa_2_unroll_second)]) : TFloat64
-    v14020 <- Phi([(v4003, loop_entry), (v14036, loop_ssa_2_unroll_second)]) : TFloat64
-    v14021 <- v14017 >= v14018 : TInt64
-    branch v14021 ? loop_ssa_1 : loop_ssa_2
+    v0 <- Phi([(v4000, loop_entry), (v4012, loop_ssa_2_unroll_second)]) : TInt64
+    v1 <- Phi([(v4001, loop_entry), (v4013, loop_ssa_2_unroll_second)]) : TInt64
+    v2 <- Phi([(v4002, loop_entry), (v4014, loop_ssa_2_unroll_second)]) : TFloat64
+    v3 <- Phi([(v4003, loop_entry), (v4015, loop_ssa_2_unroll_second)]) : TFloat64
+    v4 <- v0 >= v1 : TInt64
+    branch v4 ? loop_ssa_1 : loop_ssa_2
   loop_ssa_1:
-    ret v14019
+    ret v2
   loop_ssa_1_unroll_remainder:
-    ret v14023
+    ret v6
   loop_ssa_2:
-    v14022 <- v14017 + 1 : TInt64
-    v14023 <- v14019 + v14020 : TFloat64
-    v14024 <- FloatNeg(v14020)
-    v14029 <- v14022 >= v14018 : TInt64
-    branch v14029 ? loop_ssa_1_unroll_remainder : loop_ssa_2_unroll_second
+    v5 <- v0 + 1 : TInt64
+    v6 <- v2 + v3 : TFloat64
+    v7 <- FloatNeg(v3)
+    v4008 <- v5 >= v1 : TInt64
+    branch v4008 ? loop_ssa_1_unroll_remainder : loop_ssa_2_unroll_second
   loop_ssa_2_unroll_second:
-    v14030 <- v14022 + 1 : TInt64
-    v14031 <- v14023 + v14024 : TFloat64
-    v14032 <- FloatNeg(v14024)
-    v14033 <- v14030 : TInt64
-    v14034 <- v14018 : TInt64
-    v14035 <- v14031 : TFloat64
-    v14036 <- v14032 : TFloat64
+    v4009 <- v5 + 1 : TInt64
+    v4010 <- v6 + v7 : TFloat64
+    v4011 <- FloatNeg(v7)
+    v4012 <- v4009 : TInt64
+    v4013 <- v1 : TInt64
+    v4014 <- v4010 : TFloat64
+    v4015 <- v4011 : TFloat64
     jump loop_body
 
 ---NAME---
@@ -45,32 +45,34 @@ let fib (n: Int64) : Int64 =
     if n <= 1L then n else fib (n - 1L) + fib (n - 2L)
 fib (10L)
 ---EXPECTED---
+Function _start:
+  _start_body:
+    v7 <- Call(fib, [10])
+    Print(v7, type=TInt64)
+    ret v7
+
 Function fib:
   fib_entry:
     TailCall(fib$trmo, [v0, 0])
-    ret v11
+    ret v2004
+
 Function fib$trmo:
   fib$trmo_entry:
     jump fib$trmo_body
   fib$trmo_body:
-    v10016 <- Phi([(v4000, fib$trmo_entry), (v10021, fib$trmo_ssa_2)]) : TInt64
-    v10017 <- Phi([(v4001, fib$trmo_entry), (v10022, fib$trmo_ssa_2)]) : TInt64
-    v10018 <- v10016 <= 1 : TInt64
-    branch v10018 ? fib$trmo_ssa_1 : fib$trmo_ssa_2
+    v0 <- Phi([(v4000, fib$trmo_entry), (v4, fib$trmo_ssa_2)]) : TInt64
+    v2001 <- Phi([(v4001, fib$trmo_entry), (v2003, fib$trmo_ssa_2)]) : TInt64
+    v1 <- v0 <= 1 : TInt64
+    branch v1 ? fib$trmo_ssa_1 : fib$trmo_ssa_2
   fib$trmo_ssa_1:
-    v10023 <- v10017 + v10016 : TInt64
-    ret v10023
+    v2002 <- v2001 + v0 : TInt64
+    ret v2002
   fib$trmo_ssa_2:
-    v10019 <- v10016 - 1 : TInt64
-    v10020 <- Call(fib$trmo, [v10019, 0])
-    v10021 <- v10016 - 2 : TInt64
-    v10022 <- v10017 + v10020 : TInt64
+    v2 <- v0 - 1 : TInt64
+    v3 <- Call(fib$trmo, [v2, 0])
+    v4 <- v0 - 2 : TInt64
+    v2003 <- v2001 + v3 : TInt64
     jump fib$trmo_body
-Function _start:
-  _start_body:
-    v10007 <- Call(fib, [10])
-    Print(v10007, type=TInt64)
-    ret v10007
 
 ---NAME---
 tail_recursion_modulo_multiplication_forms_loop
@@ -79,29 +81,31 @@ let factorial (n: Int64) : Int64 =
     if n <= 1L then 1L else n * factorial (n - 1L)
 factorial (10L)
 ---EXPECTED---
+Function _start:
+  _start_body:
+    v5 <- Call(factorial, [10])
+    Print(v5, type=TInt64)
+    ret v5
+
 Function factorial:
   factorial_entry:
     TailCall(factorial$trmo, [v0, 1])
-    ret v9
+    ret v2004
+
 Function factorial$trmo:
   factorial$trmo_entry:
     jump factorial$trmo_body
   factorial$trmo_body:
-    v10012 <- Phi([(v4000, factorial$trmo_entry), (v10015, factorial$trmo_ssa_2)]) : TInt64
-    v10013 <- Phi([(v4001, factorial$trmo_entry), (v10016, factorial$trmo_ssa_2)]) : TInt64
-    v10014 <- v10012 <= 1 : TInt64
-    branch v10014 ? factorial$trmo_ssa_1 : factorial$trmo_ssa_2
+    v0 <- Phi([(v4000, factorial$trmo_entry), (v2, factorial$trmo_ssa_2)]) : TInt64
+    v2001 <- Phi([(v4001, factorial$trmo_entry), (v2003, factorial$trmo_ssa_2)]) : TInt64
+    v1 <- v0 <= 1 : TInt64
+    branch v1 ? factorial$trmo_ssa_1 : factorial$trmo_ssa_2
   factorial$trmo_ssa_1:
-    ret v10013
+    ret v2001
   factorial$trmo_ssa_2:
-    v10015 <- v10012 - 1 : TInt64
-    v10016 <- v10013 * v10012 : TInt64
+    v2 <- v0 - 1 : TInt64
+    v2003 <- v2001 * v0 : TInt64
     jump factorial$trmo_body
-Function _start:
-  _start_body:
-    v10005 <- Call(factorial, [10])
-    Print(v10005, type=TInt64)
-    ret v10005
 
 ---NAME---
 licm_hoists_recursive_effect_free_scalar_call
@@ -117,34 +121,36 @@ let repeat (n: Int64) (acc: Int64) : Int64 =
 Function factorial:
   factorial_entry:
     TailCall(factorial$trmo, [v0, 1])
-    ret v14
+    ret v2004
+
 Function factorial$trmo:
   factorial$trmo_entry:
     jump factorial$trmo_body
   factorial$trmo_body:
-    v10017 <- Phi([(v4000, factorial$trmo_entry), (v10020, factorial$trmo_ssa_2)]) : TInt64
-    v10018 <- Phi([(v4001, factorial$trmo_entry), (v10021, factorial$trmo_ssa_2)]) : TInt64
-    v10019 <- v10017 <= 1 : TInt64
-    branch v10019 ? factorial$trmo_ssa_1 : factorial$trmo_ssa_2
+    v0 <- Phi([(v4000, factorial$trmo_entry), (v2, factorial$trmo_ssa_2)]) : TInt64
+    v2001 <- Phi([(v4001, factorial$trmo_entry), (v2003, factorial$trmo_ssa_2)]) : TInt64
+    v1 <- v0 <= 1 : TInt64
+    branch v1 ? factorial$trmo_ssa_1 : factorial$trmo_ssa_2
   factorial$trmo_ssa_1:
-    ret v10018
+    ret v2001
   factorial$trmo_ssa_2:
-    v10020 <- v10017 - 1 : TInt64
-    v10021 <- v10018 * v10017 : TInt64
+    v2 <- v0 - 1 : TInt64
+    v2003 <- v2001 * v0 : TInt64
     jump factorial$trmo_body
+
 Function repeat:
   repeat_entry:
-    v10017 <- Call(factorial, [20])
+    v9 <- Call(factorial, [20])
     jump repeat_body
   repeat_body:
-    v10013 <- Phi([(v4000, repeat_entry), (v10016, repeat_ssa_2)]) : TInt64
-    v10014 <- Phi([(v4001, repeat_entry), (v10017, repeat_ssa_2)]) : TInt64
-    v10015 <- v10013 <= 0 : TInt64
-    branch v10015 ? repeat_ssa_1 : repeat_ssa_2
+    v5 <- Phi([(v4000, repeat_entry), (v8, repeat_ssa_2)]) : TInt64
+    v6 <- Phi([(v4001, repeat_entry), (v9, repeat_ssa_2)]) : TInt64
+    v7 <- v5 <= 0 : TInt64
+    branch v7 ? repeat_ssa_1 : repeat_ssa_2
   repeat_ssa_1:
-    ret v10014
+    ret v6
   repeat_ssa_2:
-    v10016 <- v10013 - 1 : TInt64
+    v8 <- v5 - 1 : TInt64
     jump repeat_body
 
 ---NAME---
@@ -162,44 +168,46 @@ let loop (n: Int64) (acc: Int64) : Int64 =
 ---EXPECTED---
 Function isEven:
   isEven_entry:
-    v10002 <- v0 <= 0 : TInt64
-    branch v10002 ? isEven_ssa_1 : isEven_ssa_2
+    v1 <- v0 <= 0 : TInt64
+    branch v1 ? isEven_ssa_1 : isEven_ssa_2
   isEven_ssa_1:
     ret true
   isEven_ssa_2:
-    v10003 <- v0 - 1 : TInt64
-    TailCall(isOdd, [v10003])
+    v2 <- v0 - 1 : TInt64
+    TailCall(isOdd, [v2])
     ret v3
+
 Function isOdd:
   isOdd_entry:
-    v10006 <- v4 <= 0 : TInt64
-    branch v10006 ? isOdd_ssa_1 : isOdd_ssa_2
+    v5 <- v4 <= 0 : TInt64
+    branch v5 ? isOdd_ssa_1 : isOdd_ssa_2
   isOdd_ssa_1:
     ret false
   isOdd_ssa_2:
-    v10007 <- v4 - 1 : TInt64
-    TailCall(isEven, [v10007])
+    v6 <- v4 - 1 : TInt64
+    TailCall(isEven, [v6])
     ret v7
+
 Function loop:
   loop_entry:
-    v14015 <- Call(isEven, [20])
+    v13 <- Call(isEven, [20])
     jump loop_body
   loop_body:
-    v14011 <- Phi([(v4001, loop_entry), (v14014, loop_ssa_3), (v14016, loop_ssa_4)]) : TInt64
-    v14012 <- Phi([(v4002, loop_entry), (v14018, loop_ssa_3), (v14017, loop_ssa_4)]) : TInt64
-    v14013 <- v14011 <= 0 : TInt64
-    branch v14013 ? loop_ssa_1 : loop_ssa_2
+    v8 <- Phi([(v4002, loop_entry), (v11, loop_ssa_3), (v4004, loop_ssa_4)]) : TInt64
+    v9 <- Phi([(v4003, loop_entry), (v14, loop_ssa_3), (v4005, loop_ssa_4)]) : TInt64
+    v10 <- v8 <= 0 : TInt64
+    branch v10 ? loop_ssa_1 : loop_ssa_2
   loop_ssa_1:
-    ret v14012
+    ret v9
   loop_ssa_2:
-    v14014 <- v14011 - 1 : TInt64
-    branch v14015 ? loop_ssa_3 : loop_ssa_4
+    v11 <- v8 - 1 : TInt64
+    branch v13 ? loop_ssa_3 : loop_ssa_4
   loop_ssa_3:
-    v14018 <- v14012 + 1 : TInt64
+    v14 <- v9 + 1 : TInt64
     jump loop_body
   loop_ssa_4:
-    v14016 <- v14014 : TInt64
-    v14017 <- v14012 : TInt64
+    v4004 <- v11 : TInt64
+    v4005 <- v9 : TInt64
     jump loop_body
 
 ---NAME---
@@ -217,28 +225,29 @@ Function readRandom:
   readRandom_entry:
     jump readRandom_body
   readRandom_body:
-    v10006 <- Phi([(v4000, readRandom_entry), (v10008, readRandom_ssa_2)]) : TInt64
-    v10007 <- v10006 <= 0 : TInt64
-    branch v10007 ? readRandom_ssa_1 : readRandom_ssa_2
+    v0 <- Phi([(v4000, readRandom_entry), (v3, readRandom_ssa_2)]) : TInt64
+    v1 <- v0 <= 0 : TInt64
+    branch v1 ? readRandom_ssa_1 : readRandom_ssa_2
   readRandom_ssa_1:
-    v10009 <- RandomInt64()
-    ret v10009
+    v2 <- RandomInt64()
+    ret v2
   readRandom_ssa_2:
-    v10008 <- v10006 - 1 : TInt64
+    v3 <- v0 - 1 : TInt64
     jump readRandom_body
+
 Function loop:
   loop_entry:
     jump loop_body
   loop_body:
-    v10013 <- Phi([(v4000, loop_entry), (v10016, loop_ssa_2)]) : TInt64
-    v10014 <- Phi([(v4001, loop_entry), (v10017, loop_ssa_2)]) : TInt64
-    v10015 <- v10013 <= 0 : TInt64
-    branch v10015 ? loop_ssa_1 : loop_ssa_2
+    v5 <- Phi([(v4000, loop_entry), (v8, loop_ssa_2)]) : TInt64
+    v6 <- Phi([(v4001, loop_entry), (v9, loop_ssa_2)]) : TInt64
+    v7 <- v5 <= 0 : TInt64
+    branch v7 ? loop_ssa_1 : loop_ssa_2
   loop_ssa_1:
-    ret v10014
+    ret v6
   loop_ssa_2:
-    v10016 <- v10013 - 1 : TInt64
-    v10017 <- Call(readRandom, [1])
+    v8 <- v5 - 1 : TInt64
+    v9 <- Call(readRandom, [1])
     jump loop_body
 
 ---NAME---
@@ -254,16 +263,16 @@ Function loop:
   loop_entry:
     jump loop_body
   loop_body:
-    v10011 <- Phi([(v4000, loop_entry), (v10015, loop_ssa_2)]) : TInt64
-    v10012 <- Phi([(v4001, loop_entry), (v10016, loop_ssa_2)]) : TInt64
-    v10013 <- v10011 < 1 : TInt64
-    branch v10013 ? loop_ssa_1 : loop_ssa_2
+    v0 <- Phi([(v4000, loop_entry), (v5, loop_ssa_2)]) : TInt64
+    v1 <- Phi([(v4001, loop_entry), (v6, loop_ssa_2)]) : TInt64
+    v2 <- v0 < 1 : TInt64
+    branch v2 ? loop_ssa_1 : loop_ssa_2
   loop_ssa_1:
-    ret v10012
+    ret v1
   loop_ssa_2:
-    v10014 <- Call(__hash_str, [str[hello]])
-    v10015 <- v10011 - 1 : TInt64
-    v10016 <- v10012 + v10014 : TInt64
+    v3 <- Call(__hash_str, [str[hello]])
+    v5 <- v0 - 1 : TInt64
+    v6 <- v1 + v3 : TInt64
     jump loop_body
 
 ---NAME---
@@ -277,9 +286,9 @@ Function loop:
   loop_entry:
     jump loop_body
   loop_body:
-    v10003 <- Phi([(v4000, loop_entry), (1, loop_ssa_2)]) : TInt64
-    v10004 <- v10003 < 1 : TInt64
-    branch v10004 ? loop_ssa_1 : loop_ssa_2
+    v0 <- Phi([(v4000, loop_entry), (1, loop_ssa_2)]) : TInt64
+    v1 <- v0 < 1 : TInt64
+    branch v1 ? loop_ssa_1 : loop_ssa_2
   loop_ssa_1:
     ret 0
   loop_ssa_2:
@@ -323,6 +332,7 @@ Function repeatFalse:
     ret 3
   repeatFalse_ssa_4:
     ret 2
+
 ---NAME---
 sccp_repeated_predicate_after_join
 ---INPUT---
@@ -343,6 +353,7 @@ Function knownAfterJoin:
     branch v1 ? knownAfterJoin_L0 : knownAfterJoin_L1
   knownAfterJoin_ssa_2:
     ret 0
+
 ---NAME---
 sccp_range_after_join
 ---INPUT---
@@ -354,8 +365,8 @@ let boundedAfterJoin (value: Int64) (choose: Bool) : Int64 =
 ---EXPECTED---
 Function boundedAfterJoin:
   boundedAfterJoin_entry:
-    v10005 <- v0 < 10 : TInt64
-    branch v10005 ? boundedAfterJoin_ssa_1 : boundedAfterJoin_ssa_2
+    v2 <- v0 < 10 : TInt64
+    branch v2 ? boundedAfterJoin_ssa_1 : boundedAfterJoin_ssa_2
   boundedAfterJoin_L0:
     ret 1
   boundedAfterJoin_L1:
@@ -364,6 +375,7 @@ Function boundedAfterJoin:
     branch v1 ? boundedAfterJoin_L0 : boundedAfterJoin_L1
   boundedAfterJoin_ssa_2:
     ret 3
+
 ---NAME---
 sccp_range_false_edge
 ---INPUT---
@@ -373,12 +385,13 @@ let rangeFalseEdge (value: Int64) : Int64 =
 ---EXPECTED---
 Function rangeFalseEdge:
   rangeFalseEdge_entry:
-    v10001 <- v0 < 10 : TInt64
-    branch v10001 ? rangeFalseEdge_ssa_1 : rangeFalseEdge_ssa_4
+    v1 <- v0 < 10 : TInt64
+    branch v1 ? rangeFalseEdge_ssa_1 : rangeFalseEdge_ssa_4
   rangeFalseEdge_ssa_1:
     ret 1
   rangeFalseEdge_ssa_4:
     ret 2
+
 ---NAME---
 sccp_unsigned_range_edge
 ---INPUT---
@@ -389,12 +402,13 @@ let unsignedBound (value: UInt8) : Int64 =
 ---EXPECTED---
 Function unsignedBound:
   unsignedBound_entry:
-    v10002 <- v0 < 10 : TUInt8
-    branch v10002 ? unsignedBound_ssa_4 : unsignedBound_ssa_2
+    v1 <- v0 < 10 : TUInt8
+    branch v1 ? unsignedBound_ssa_4 : unsignedBound_ssa_2
   unsignedBound_ssa_2:
     ret 2
   unsignedBound_ssa_4:
     ret 1
+
 ---NAME---
 sccp_join_weakens_boolean_fact
 ---INPUT---
@@ -410,13 +424,14 @@ Function preserveBoolean:
   preserveBoolean_L1:
     jump preserveBoolean_L2
   preserveBoolean_L2:
-    v10003 <- Phi([(20, preserveBoolean_L0), (22, preserveBoolean_L1)]) : TInt64
+    v1 <- Phi([(20, preserveBoolean_L0), (22, preserveBoolean_L1)]) : TInt64
     branch v0 ? preserveBoolean_ssa_1 : preserveBoolean_ssa_2
   preserveBoolean_ssa_1:
-    ret v10003
+    ret v1
   preserveBoolean_ssa_2:
-    v10004 <- v10003 + 1 : TInt64
-    ret v10004
+    v3 <- v1 + 1 : TInt64
+    ret v3
+
 ---NAME---
 sccp_join_weakens_range_fact
 ---INPUT---
@@ -426,20 +441,21 @@ let preserveRange (value: Int64) : Int64 =
 ---EXPECTED---
 Function preserveRange:
   preserveRange_entry:
-    v10005 <- v0 < 10 : TInt64
-    branch v10005 ? preserveRange_L0 : preserveRange_L1
+    v1 <- v0 < 10 : TInt64
+    branch v1 ? preserveRange_L0 : preserveRange_L1
   preserveRange_L0:
     jump preserveRange_L2
   preserveRange_L1:
     jump preserveRange_L2
   preserveRange_L2:
-    v10006 <- Phi([(20, preserveRange_L0), (22, preserveRange_L1)]) : TInt64
-    branch v10005 ? preserveRange_ssa_1 : preserveRange_ssa_2
+    v2 <- Phi([(20, preserveRange_L0), (22, preserveRange_L1)]) : TInt64
+    branch v1 ? preserveRange_ssa_1 : preserveRange_ssa_2
   preserveRange_ssa_1:
-    ret v10006
+    ret v2
   preserveRange_ssa_2:
-    v10007 <- v10006 + 1 : TInt64
-    ret v10007
+    v5 <- v2 + 1 : TInt64
+    ret v5
+
 ---NAME---
 sccp_and_true_edge_facts
 ---INPUT---
@@ -451,8 +467,8 @@ let andTrueFacts (first: Bool) (second: Bool) (choose: Bool) : Int64 =
 ---EXPECTED---
 Function andTrueFacts:
   andTrueFacts_entry:
-    v10004 <- v0 && v1 : TBool
-    branch v10004 ? andTrueFacts_ssa_1 : andTrueFacts_ssa_2
+    v3 <- v0 && v1 : TBool
+    branch v3 ? andTrueFacts_ssa_1 : andTrueFacts_ssa_2
   andTrueFacts_L0:
     ret 1
   andTrueFacts_L1:
@@ -473,8 +489,8 @@ let orFalseFacts (first: Bool) (second: Bool) (choose: Bool) : Int64 =
 ---EXPECTED---
 Function orFalseFacts:
   orFalseFacts_entry:
-    v10004 <- v0 || v1 : TBool
-    branch v10004 ? orFalseFacts_ssa_1 : orFalseFacts_ssa_2
+    v3 <- v0 || v1 : TBool
+    branch v3 ? orFalseFacts_ssa_1 : orFalseFacts_ssa_2
   orFalseFacts_L0:
     ret 1
   orFalseFacts_L1:
@@ -497,8 +513,8 @@ Function andFalseKnown:
   andFalseKnown_entry:
     branch v0 ? andFalseKnown_ssa_1 : andFalseKnown_ssa_2
   andFalseKnown_ssa_1:
-    v10002 <- v0 && v1 : TBool
-    branch v10002 ? andFalseKnown_ssa_3 : andFalseKnown_ssa_6
+    v2 <- v0 && v1 : TBool
+    branch v2 ? andFalseKnown_ssa_3 : andFalseKnown_ssa_6
   andFalseKnown_ssa_2:
     ret 2
   andFalseKnown_ssa_3:
@@ -519,8 +535,8 @@ Function orTrueKnown:
   orTrueKnown_ssa_1:
     ret 2
   orTrueKnown_ssa_2:
-    v10002 <- v0 || v1 : TBool
-    branch v10002 ? orTrueKnown_ssa_5 : orTrueKnown_ssa_4
+    v2 <- v0 || v1 : TBool
+    branch v2 ? orTrueKnown_ssa_5 : orTrueKnown_ssa_4
   orTrueKnown_ssa_4:
     ret 3
   orTrueKnown_ssa_5:
@@ -535,20 +551,20 @@ let derivedJoin (first: Bool) (second: Bool) : Int64 =
 ---EXPECTED---
 Function derivedJoin:
   derivedJoin_entry:
-    v10005 <- v0 && v1 : TBool
-    branch v10005 ? derivedJoin_L0 : derivedJoin_L1
+    v2 <- v0 && v1 : TBool
+    branch v2 ? derivedJoin_L0 : derivedJoin_L1
   derivedJoin_L0:
     jump derivedJoin_L2
   derivedJoin_L1:
     jump derivedJoin_L2
   derivedJoin_L2:
-    v10006 <- Phi([(10, derivedJoin_L0), (20, derivedJoin_L1)]) : TInt64
+    v3 <- Phi([(10, derivedJoin_L0), (20, derivedJoin_L1)]) : TInt64
     branch v0 ? derivedJoin_ssa_1 : derivedJoin_ssa_2
   derivedJoin_ssa_1:
-    ret v10006
+    ret v3
   derivedJoin_ssa_2:
-    v10007 <- v10006 + 1 : TInt64
-    ret v10007
+    v5 <- v3 + 1 : TInt64
+    ret v5
 
 ---NAME---
 sccp_or_true_keeps_ambiguous_operand
@@ -558,8 +574,8 @@ let orAmbiguous (first: Bool) (second: Bool) : Int64 =
 ---EXPECTED---
 Function orAmbiguous:
   orAmbiguous_entry:
-    v10002 <- v0 || v1 : TBool
-    branch v10002 ? orAmbiguous_ssa_1 : orAmbiguous_ssa_2
+    v2 <- v0 || v1 : TBool
+    branch v2 ? orAmbiguous_ssa_1 : orAmbiguous_ssa_2
   orAmbiguous_ssa_1:
     branch v0 ? orAmbiguous_ssa_3 : orAmbiguous_ssa_4
   orAmbiguous_ssa_2:
@@ -637,8 +653,8 @@ let pick (n: Float) : Int64 =
 ---EXPECTED---
 Function pick:
   pick_entry:
-    v10001 <- v0 == v0 : TFloat64
-    branch v10001 ? pick_ssa_1 : pick_ssa_2
+    v1 <- v0 == v0 : TFloat64
+    branch v1 ? pick_ssa_1 : pick_ssa_2
   pick_ssa_1:
     ret 1
   pick_ssa_2:
@@ -654,9 +670,9 @@ let pick (n: Int64) : Int64 =
 ---EXPECTED---
 Function pick:
   pick_entry:
-    v10004 <- v0 + 1 : TInt64
-    v10005 <- v10004 == v0 : TInt64
-    branch v10005 ? pick_ssa_1 : pick_ssa_2
+    v2 <- v0 + 1 : TInt64
+    v4 <- v2 == v0 : TInt64
+    branch v4 ? pick_ssa_1 : pick_ssa_2
   pick_ssa_1:
     ret 1
   pick_ssa_2:
@@ -670,8 +686,8 @@ let divideSelf (n: Int64) : Int64 =
 ---EXPECTED---
 Function divideSelf:
   divideSelf_entry:
-    v10001 <- v0 / v0 : TInt64
-    ret v10001
+    v1 <- v0 / v0 : TInt64
+    ret v1
 
 ---NAME---
 licm_hoist_tuple_load
@@ -684,20 +700,20 @@ let loop (n: Int64) (acc: Int64) (t: (Int64 * Int64)) : Int64 =
 ---EXPECTED---
 Function loop:
   loop_entry:
-    v14019 <- HeapLoad(v4002, 0)
+    v5 <- HeapLoad(v4002, 0)
     jump loop_body
   loop_body:
-    v14015 <- Phi([(v4000, loop_entry), (v14024, loop_ssa_2)]) : TInt64
-    v14016 <- Phi([(v4001, loop_entry), (v14025, loop_ssa_2)]) : TInt64
-    v14018 <- v14015 < 1 : TInt64
-    branch v14018 ? loop_ssa_1 : loop_ssa_2
+    v0 <- Phi([(v4000, loop_entry), (v4003, loop_ssa_2)]) : TInt64
+    v1 <- Phi([(v4001, loop_entry), (v4004, loop_ssa_2)]) : TInt64
+    v3 <- v0 < 1 : TInt64
+    branch v3 ? loop_ssa_1 : loop_ssa_2
   loop_ssa_1:
-    ret v14016
+    ret v1
   loop_ssa_2:
-    v14022 <- v14015 - 1 : TInt64
-    v14023 <- v14016 + v14019 : TInt64
-    v14024 <- v14022 : TInt64
-    v14025 <- v14023 : TInt64
+    v10 <- v0 - 1 : TInt64
+    v11 <- v1 + v5 : TInt64
+    v4003 <- v10 : TInt64
+    v4004 <- v11 : TInt64
     jump loop_body
 
 ---NAME---
@@ -711,34 +727,34 @@ let loop (i: Int64) (n: Int64) (total: Int64) : Int64 =
 ---EXPECTED---
 Function loop:
   loop_entry:
-    v14026 <- v4000 << 1 : TInt64
-    v14027 <- v14026 + 1 : TInt64
+    v4006 <- v4000 << 1 : TInt64
+    v4007 <- v4006 + 1 : TInt64
     jump loop_body
   loop_body:
-    v14015 <- Phi([(v4000, loop_entry), (v14035, loop_ssa_2_unroll_second)]) : TInt64
-    v14016 <- Phi([(v4001, loop_entry), (v14036, loop_ssa_2_unroll_second)]) : TInt64
-    v14017 <- Phi([(v4002, loop_entry), (v14037, loop_ssa_2_unroll_second)]) : TInt64
-    v14020 <- Phi([(v14027, loop_entry), (v14034, loop_ssa_2_unroll_second)]) : TInt64
-    v14018 <- v14015 >= v14016 : TInt64
-    branch v14018 ? loop_ssa_1 : loop_ssa_2
+    v0 <- Phi([(v4000, loop_entry), (v4015, loop_ssa_2_unroll_second)]) : TInt64
+    v1 <- Phi([(v4001, loop_entry), (v4016, loop_ssa_2_unroll_second)]) : TInt64
+    v2 <- Phi([(v4002, loop_entry), (v4017, loop_ssa_2_unroll_second)]) : TInt64
+    v5 <- Phi([(v4007, loop_entry), (v4014, loop_ssa_2_unroll_second)]) : TInt64
+    v3 <- v0 >= v1 : TInt64
+    branch v3 ? loop_ssa_1 : loop_ssa_2
   loop_ssa_1:
-    ret v14017
+    ret v2
   loop_ssa_1_unroll_remainder:
-    ret v14022
+    ret v8
   loop_ssa_2:
-    v14021 <- v14015 + 1 : TInt64
-    v14022 <- v14017 + v14020 : TInt64
-    v14028 <- v14020 + 2 : TInt64
-    v14030 <- v14021 >= v14016 : TInt64
-    branch v14030 ? loop_ssa_1_unroll_remainder : loop_ssa_2_unroll_second
+    v7 <- v0 + 1 : TInt64
+    v8 <- v2 + v5 : TInt64
+    v4008 <- v5 + 2 : TInt64
+    v4010 <- v7 >= v1 : TInt64
+    branch v4010 ? loop_ssa_1_unroll_remainder : loop_ssa_2_unroll_second
   loop_ssa_2_unroll_second:
-    v14031 <- v14021 + 1 : TInt64
-    v14032 <- v14022 + v14028 : TInt64
-    v14033 <- v14028 + 2 : TInt64
-    v14034 <- v14033 : TInt64
-    v14035 <- v14031 : TInt64
-    v14036 <- v14016 : TInt64
-    v14037 <- v14032 : TInt64
+    v4011 <- v7 + 1 : TInt64
+    v4012 <- v8 + v4008 : TInt64
+    v4013 <- v4008 + 2 : TInt64
+    v4014 <- v4013 : TInt64
+    v4015 <- v4011 : TInt64
+    v4016 <- v1 : TInt64
+    v4017 <- v4012 : TInt64
     jump loop_body
 
 ---NAME---
@@ -752,36 +768,36 @@ let loop (i: Int64) (n: Int64) (a: Int64) (total: Int64) : Int64 =
 ---EXPECTED---
 Function loop:
   loop_entry:
-    v14031 <- v4000 * v4002 : TInt64
-    v14032 <- v14031 + 3 : TInt64
+    v4008 <- v4000 * v4002 : TInt64
+    v4009 <- v4008 + 3 : TInt64
     jump loop_body
   loop_body:
-    v14018 <- Phi([(v4000, loop_entry), (v14040, loop_ssa_2_unroll_second)]) : TInt64
-    v14019 <- Phi([(v4001, loop_entry), (v14041, loop_ssa_2_unroll_second)]) : TInt64
-    v14020 <- Phi([(v4002, loop_entry), (v14042, loop_ssa_2_unroll_second)]) : TInt64
-    v14021 <- Phi([(v4003, loop_entry), (v14043, loop_ssa_2_unroll_second)]) : TInt64
-    v14024 <- Phi([(v14032, loop_entry), (v14039, loop_ssa_2_unroll_second)]) : TInt64
-    v14022 <- v14018 >= v14019 : TInt64
-    branch v14022 ? loop_ssa_1 : loop_ssa_2
+    v0 <- Phi([(v4000, loop_entry), (v4017, loop_ssa_2_unroll_second)]) : TInt64
+    v1 <- Phi([(v4001, loop_entry), (v4018, loop_ssa_2_unroll_second)]) : TInt64
+    v2 <- Phi([(v4002, loop_entry), (v4019, loop_ssa_2_unroll_second)]) : TInt64
+    v3 <- Phi([(v4003, loop_entry), (v4020, loop_ssa_2_unroll_second)]) : TInt64
+    v6 <- Phi([(v4009, loop_entry), (v4016, loop_ssa_2_unroll_second)]) : TInt64
+    v4 <- v0 >= v1 : TInt64
+    branch v4 ? loop_ssa_1 : loop_ssa_2
   loop_ssa_1:
-    ret v14021
+    ret v3
   loop_ssa_1_unroll_remainder:
-    ret v14026
+    ret v9
   loop_ssa_2:
-    v14025 <- v14018 + 1 : TInt64
-    v14026 <- v14021 + v14024 : TInt64
-    v14033 <- v14024 + v14020 : TInt64
-    v14035 <- v14025 >= v14019 : TInt64
-    branch v14035 ? loop_ssa_1_unroll_remainder : loop_ssa_2_unroll_second
+    v8 <- v0 + 1 : TInt64
+    v9 <- v3 + v6 : TInt64
+    v4010 <- v6 + v2 : TInt64
+    v4012 <- v8 >= v1 : TInt64
+    branch v4012 ? loop_ssa_1_unroll_remainder : loop_ssa_2_unroll_second
   loop_ssa_2_unroll_second:
-    v14036 <- v14025 + 1 : TInt64
-    v14037 <- v14026 + v14033 : TInt64
-    v14038 <- v14033 + v14020 : TInt64
-    v14039 <- v14038 : TInt64
-    v14040 <- v14036 : TInt64
-    v14041 <- v14019 : TInt64
-    v14042 <- v14020 : TInt64
-    v14043 <- v14037 : TInt64
+    v4013 <- v8 + 1 : TInt64
+    v4014 <- v9 + v4010 : TInt64
+    v4015 <- v4010 + v2 : TInt64
+    v4016 <- v4015 : TInt64
+    v4017 <- v4013 : TInt64
+    v4018 <- v1 : TInt64
+    v4019 <- v2 : TInt64
+    v4020 <- v4014 : TInt64
     jump loop_body
 
 ---NAME---
@@ -795,36 +811,36 @@ let loop (i: Int64) (n: Int64) (a: Int64) (total: Int64) : Int64 =
 ---EXPECTED---
 Function loop:
   loop_entry:
-    v14031 <- v4000 * v4002 : TInt64
-    v14032 <- v14031 - 7 : TInt64
+    v4008 <- v4000 * v4002 : TInt64
+    v4009 <- v4008 - 7 : TInt64
     jump loop_body
   loop_body:
-    v14018 <- Phi([(v4000, loop_entry), (v14040, loop_ssa_2_unroll_second)]) : TInt64
-    v14019 <- Phi([(v4001, loop_entry), (v14041, loop_ssa_2_unroll_second)]) : TInt64
-    v14020 <- Phi([(v4002, loop_entry), (v14042, loop_ssa_2_unroll_second)]) : TInt64
-    v14021 <- Phi([(v4003, loop_entry), (v14043, loop_ssa_2_unroll_second)]) : TInt64
-    v14024 <- Phi([(v14032, loop_entry), (v14039, loop_ssa_2_unroll_second)]) : TInt64
-    v14022 <- v14018 >= v14019 : TInt64
-    branch v14022 ? loop_ssa_1 : loop_ssa_2
+    v0 <- Phi([(v4000, loop_entry), (v4017, loop_ssa_2_unroll_second)]) : TInt64
+    v1 <- Phi([(v4001, loop_entry), (v4018, loop_ssa_2_unroll_second)]) : TInt64
+    v2 <- Phi([(v4002, loop_entry), (v4019, loop_ssa_2_unroll_second)]) : TInt64
+    v3 <- Phi([(v4003, loop_entry), (v4020, loop_ssa_2_unroll_second)]) : TInt64
+    v6 <- Phi([(v4009, loop_entry), (v4016, loop_ssa_2_unroll_second)]) : TInt64
+    v4 <- v0 >= v1 : TInt64
+    branch v4 ? loop_ssa_1 : loop_ssa_2
   loop_ssa_1:
-    ret v14021
+    ret v3
   loop_ssa_1_unroll_remainder:
-    ret v14026
+    ret v9
   loop_ssa_2:
-    v14025 <- v14018 + 1 : TInt64
-    v14026 <- v14021 + v14024 : TInt64
-    v14033 <- v14024 + v14020 : TInt64
-    v14035 <- v14025 >= v14019 : TInt64
-    branch v14035 ? loop_ssa_1_unroll_remainder : loop_ssa_2_unroll_second
+    v8 <- v0 + 1 : TInt64
+    v9 <- v3 + v6 : TInt64
+    v4010 <- v6 + v2 : TInt64
+    v4012 <- v8 >= v1 : TInt64
+    branch v4012 ? loop_ssa_1_unroll_remainder : loop_ssa_2_unroll_second
   loop_ssa_2_unroll_second:
-    v14036 <- v14025 + 1 : TInt64
-    v14037 <- v14026 + v14033 : TInt64
-    v14038 <- v14033 + v14020 : TInt64
-    v14039 <- v14038 : TInt64
-    v14040 <- v14036 : TInt64
-    v14041 <- v14019 : TInt64
-    v14042 <- v14020 : TInt64
-    v14043 <- v14037 : TInt64
+    v4013 <- v8 + 1 : TInt64
+    v4014 <- v9 + v4010 : TInt64
+    v4015 <- v4010 + v2 : TInt64
+    v4016 <- v4015 : TInt64
+    v4017 <- v4013 : TInt64
+    v4018 <- v1 : TInt64
+    v4019 <- v2 : TInt64
+    v4020 <- v4014 : TInt64
     jump loop_body
 
 ---NAME---
@@ -838,36 +854,36 @@ let loop (i: Int64) (n: Int64) (a: Int64) (total: Int64) : Int64 =
 ---EXPECTED---
 Function loop:
   loop_entry:
-    v14031 <- v4000 * v4002 : TInt64
-    v14032 <- v14031 + 1 : TInt64
+    v4008 <- v4000 * v4002 : TInt64
+    v4009 <- v4008 + 1 : TInt64
     jump loop_body
   loop_body:
-    v14018 <- Phi([(v4000, loop_entry), (v14040, loop_ssa_2_unroll_second)]) : TInt64
-    v14019 <- Phi([(v4001, loop_entry), (v14041, loop_ssa_2_unroll_second)]) : TInt64
-    v14020 <- Phi([(v4002, loop_entry), (v14042, loop_ssa_2_unroll_second)]) : TInt64
-    v14021 <- Phi([(v4003, loop_entry), (v14043, loop_ssa_2_unroll_second)]) : TInt64
-    v14024 <- Phi([(v14032, loop_entry), (v14039, loop_ssa_2_unroll_second)]) : TInt64
-    v14022 <- v14018 >= v14019 : TInt64
-    branch v14022 ? loop_ssa_1 : loop_ssa_2
+    v0 <- Phi([(v4000, loop_entry), (v4017, loop_ssa_2_unroll_second)]) : TInt64
+    v1 <- Phi([(v4001, loop_entry), (v4018, loop_ssa_2_unroll_second)]) : TInt64
+    v2 <- Phi([(v4002, loop_entry), (v4019, loop_ssa_2_unroll_second)]) : TInt64
+    v3 <- Phi([(v4003, loop_entry), (v4020, loop_ssa_2_unroll_second)]) : TInt64
+    v6 <- Phi([(v4009, loop_entry), (v4016, loop_ssa_2_unroll_second)]) : TInt64
+    v4 <- v0 >= v1 : TInt64
+    branch v4 ? loop_ssa_1 : loop_ssa_2
   loop_ssa_1:
-    ret v14021
+    ret v3
   loop_ssa_1_unroll_remainder:
-    ret v14026
+    ret v9
   loop_ssa_2:
-    v14025 <- v14018 + 1 : TInt64
-    v14026 <- v14021 + v14024 : TInt64
-    v14033 <- v14024 + v14020 : TInt64
-    v14035 <- v14025 >= v14019 : TInt64
-    branch v14035 ? loop_ssa_1_unroll_remainder : loop_ssa_2_unroll_second
+    v8 <- v0 + 1 : TInt64
+    v9 <- v3 + v6 : TInt64
+    v4010 <- v6 + v2 : TInt64
+    v4012 <- v8 >= v1 : TInt64
+    branch v4012 ? loop_ssa_1_unroll_remainder : loop_ssa_2_unroll_second
   loop_ssa_2_unroll_second:
-    v14036 <- v14025 + 1 : TInt64
-    v14037 <- v14026 + v14033 : TInt64
-    v14038 <- v14033 + v14020 : TInt64
-    v14039 <- v14038 : TInt64
-    v14040 <- v14036 : TInt64
-    v14041 <- v14019 : TInt64
-    v14042 <- v14020 : TInt64
-    v14043 <- v14037 : TInt64
+    v4013 <- v8 + 1 : TInt64
+    v4014 <- v9 + v4010 : TInt64
+    v4015 <- v4010 + v2 : TInt64
+    v4016 <- v4015 : TInt64
+    v4017 <- v4013 : TInt64
+    v4018 <- v1 : TInt64
+    v4019 <- v2 : TInt64
+    v4020 <- v4014 : TInt64
     jump loop_body
 
 ---NAME---
@@ -881,38 +897,38 @@ let loop (i: Int64) (n: Int64) (a: Int64) (total: Int64) : Int64 =
 ---EXPECTED---
 Function loop:
   loop_entry:
-    v14033 <- v4000 * v4002 : TInt64
-    v14034 <- v14033 + 1 : TInt64
+    v4008 <- v4000 * v4002 : TInt64
+    v4009 <- v4008 + 1 : TInt64
     jump loop_body
   loop_body:
-    v14019 <- Phi([(v4000, loop_entry), (v14043, loop_ssa_2_unroll_second)]) : TInt64
-    v14020 <- Phi([(v4001, loop_entry), (v14044, loop_ssa_2_unroll_second)]) : TInt64
-    v14021 <- Phi([(v4002, loop_entry), (v14045, loop_ssa_2_unroll_second)]) : TInt64
-    v14022 <- Phi([(v4003, loop_entry), (v14046, loop_ssa_2_unroll_second)]) : TInt64
-    v14025 <- Phi([(v14034, loop_entry), (v14042, loop_ssa_2_unroll_second)]) : TInt64
-    v14023 <- v14019 >= v14020 : TInt64
-    branch v14023 ? loop_ssa_1 : loop_ssa_2
+    v0 <- Phi([(v4000, loop_entry), (v4018, loop_ssa_2_unroll_second)]) : TInt64
+    v1 <- Phi([(v4001, loop_entry), (v4019, loop_ssa_2_unroll_second)]) : TInt64
+    v2 <- Phi([(v4002, loop_entry), (v4020, loop_ssa_2_unroll_second)]) : TInt64
+    v3 <- Phi([(v4003, loop_entry), (v4021, loop_ssa_2_unroll_second)]) : TInt64
+    v6 <- Phi([(v4009, loop_entry), (v4017, loop_ssa_2_unroll_second)]) : TInt64
+    v4 <- v0 >= v1 : TInt64
+    branch v4 ? loop_ssa_1 : loop_ssa_2
   loop_ssa_1:
-    ret v14022
+    ret v3
   loop_ssa_1_unroll_remainder:
-    ret v14028
+    ret v10
   loop_ssa_2:
-    v14026 <- v14019 + 1 : TInt64
-    v14027 <- v14022 + v14025 : TInt64
-    v14028 <- v14027 + v14025 : TInt64
-    v14035 <- v14025 + v14021 : TInt64
-    v14037 <- v14026 >= v14020 : TInt64
-    branch v14037 ? loop_ssa_1_unroll_remainder : loop_ssa_2_unroll_second
+    v8 <- v0 + 1 : TInt64
+    v9 <- v3 + v6 : TInt64
+    v10 <- v9 + v6 : TInt64
+    v4010 <- v6 + v2 : TInt64
+    v4012 <- v8 >= v1 : TInt64
+    branch v4012 ? loop_ssa_1_unroll_remainder : loop_ssa_2_unroll_second
   loop_ssa_2_unroll_second:
-    v14038 <- v14026 + 1 : TInt64
-    v14039 <- v14028 + v14035 : TInt64
-    v14040 <- v14039 + v14035 : TInt64
-    v14041 <- v14035 + v14021 : TInt64
-    v14042 <- v14041 : TInt64
-    v14043 <- v14038 : TInt64
-    v14044 <- v14020 : TInt64
-    v14045 <- v14021 : TInt64
-    v14046 <- v14040 : TInt64
+    v4013 <- v8 + 1 : TInt64
+    v4014 <- v10 + v4010 : TInt64
+    v4015 <- v4014 + v4010 : TInt64
+    v4016 <- v4010 + v2 : TInt64
+    v4017 <- v4016 : TInt64
+    v4018 <- v4013 : TInt64
+    v4019 <- v1 : TInt64
+    v4020 <- v2 : TInt64
+    v4021 <- v4015 : TInt64
     jump loop_body
 
 ---NAME---
@@ -928,23 +944,23 @@ Function loop:
   loop_entry:
     jump loop_body
   loop_body:
-    v14018 <- Phi([(v4000, loop_entry), (v14027, loop_ssa_2)]) : TInt64
-    v14019 <- Phi([(v4001, loop_entry), (v14028, loop_ssa_2)]) : TInt64
-    v14020 <- Phi([(v4002, loop_entry), (v14029, loop_ssa_2)]) : TInt64
-    v14021 <- Phi([(v4003, loop_entry), (v14030, loop_ssa_2)]) : TInt64
-    v14022 <- v14018 >= v14019 : TInt64
-    branch v14022 ? loop_ssa_1 : loop_ssa_2
+    v0 <- Phi([(v4000, loop_entry), (v4004, loop_ssa_2)]) : TInt64
+    v1 <- Phi([(v4001, loop_entry), (v4005, loop_ssa_2)]) : TInt64
+    v2 <- Phi([(v4002, loop_entry), (v4006, loop_ssa_2)]) : TInt64
+    v3 <- Phi([(v4003, loop_entry), (v4007, loop_ssa_2)]) : TInt64
+    v4 <- v0 >= v1 : TInt64
+    branch v4 ? loop_ssa_1 : loop_ssa_2
   loop_ssa_1:
-    ret v14021
+    ret v3
   loop_ssa_2:
-    v14023 <- v14020 * v14018 : TInt64
-    v14024 <- v14023 + 1 : TInt64
-    v14025 <- v14018 + 2 : TInt64
-    v14026 <- v14021 + v14024 : TInt64
-    v14027 <- v14025 : TInt64
-    v14028 <- v14019 : TInt64
-    v14029 <- v14020 : TInt64
-    v14030 <- v14026 : TInt64
+    v5 <- v2 * v0 : TInt64
+    v6 <- v5 + 1 : TInt64
+    v8 <- v0 + 2 : TInt64
+    v9 <- v3 + v6 : TInt64
+    v4004 <- v8 : TInt64
+    v4005 <- v1 : TInt64
+    v4006 <- v2 : TInt64
+    v4007 <- v9 : TInt64
     jump loop_body
 
 ---NAME---
@@ -958,28 +974,28 @@ let loop (i: Int8) (n: Int8) (a: Int8) (total: Int8) : Int8 =
 ---EXPECTED---
 Function loop:
   loop_entry:
-    v14031 <- v4000 * v4002 : TInt8
-    v14032 <- v14031 + 3 : TInt8
+    v4008 <- v4000 * v4002 : TInt8
+    v4009 <- v4008 + 3 : TInt8
     jump loop_body
   loop_body:
-    v14018 <- Phi([(v4000, loop_entry), (v14027, loop_ssa_2)]) : TInt8
-    v14019 <- Phi([(v4001, loop_entry), (v14028, loop_ssa_2)]) : TInt8
-    v14020 <- Phi([(v4002, loop_entry), (v14029, loop_ssa_2)]) : TInt8
-    v14021 <- Phi([(v4003, loop_entry), (v14030, loop_ssa_2)]) : TInt8
-    v14024 <- Phi([(v14032, loop_entry), (v14034, loop_ssa_2)]) : TInt8
-    v14022 <- v14018 >= v14019 : TInt8
-    branch v14022 ? loop_ssa_1 : loop_ssa_2
+    v0 <- Phi([(v4000, loop_entry), (v4004, loop_ssa_2)]) : TInt8
+    v1 <- Phi([(v4001, loop_entry), (v4005, loop_ssa_2)]) : TInt8
+    v2 <- Phi([(v4002, loop_entry), (v4006, loop_ssa_2)]) : TInt8
+    v3 <- Phi([(v4003, loop_entry), (v4007, loop_ssa_2)]) : TInt8
+    v6 <- Phi([(v4009, loop_entry), (v4011, loop_ssa_2)]) : TInt8
+    v4 <- v0 >= v1 : TInt8
+    branch v4 ? loop_ssa_1 : loop_ssa_2
   loop_ssa_1:
-    ret v14021
+    ret v3
   loop_ssa_2:
-    v14025 <- v14018 + 1 : TInt8
-    v14026 <- v14021 + v14024 : TInt8
-    v14033 <- v14024 + v14020 : TInt8
-    v14034 <- v14033 : TInt8
-    v14027 <- v14025 : TInt8
-    v14028 <- v14019 : TInt8
-    v14029 <- v14020 : TInt8
-    v14030 <- v14026 : TInt8
+    v8 <- v0 + 1 : TInt8
+    v9 <- v3 + v6 : TInt8
+    v4010 <- v6 + v2 : TInt8
+    v4011 <- v4010 : TInt8
+    v4004 <- v8 : TInt8
+    v4005 <- v1 : TInt8
+    v4006 <- v2 : TInt8
+    v4007 <- v9 : TInt8
     jump loop_body
 
 ---NAME---
@@ -993,28 +1009,28 @@ let loop (i: UInt8) (n: UInt8) (a: UInt8) (total: UInt8) : UInt8 =
 ---EXPECTED---
 Function loop:
   loop_entry:
-    v14031 <- v4000 * v4002 : TUInt8
-    v14032 <- v14031 + 3 : TUInt8
+    v4008 <- v4000 * v4002 : TUInt8
+    v4009 <- v4008 + 3 : TUInt8
     jump loop_body
   loop_body:
-    v14018 <- Phi([(v4000, loop_entry), (v14027, loop_ssa_2)]) : TUInt8
-    v14019 <- Phi([(v4001, loop_entry), (v14028, loop_ssa_2)]) : TUInt8
-    v14020 <- Phi([(v4002, loop_entry), (v14029, loop_ssa_2)]) : TUInt8
-    v14021 <- Phi([(v4003, loop_entry), (v14030, loop_ssa_2)]) : TUInt8
-    v14024 <- Phi([(v14032, loop_entry), (v14034, loop_ssa_2)]) : TUInt8
-    v14022 <- v14018 >= v14019 : TUInt8
-    branch v14022 ? loop_ssa_1 : loop_ssa_2
+    v0 <- Phi([(v4000, loop_entry), (v4004, loop_ssa_2)]) : TUInt8
+    v1 <- Phi([(v4001, loop_entry), (v4005, loop_ssa_2)]) : TUInt8
+    v2 <- Phi([(v4002, loop_entry), (v4006, loop_ssa_2)]) : TUInt8
+    v3 <- Phi([(v4003, loop_entry), (v4007, loop_ssa_2)]) : TUInt8
+    v6 <- Phi([(v4009, loop_entry), (v4011, loop_ssa_2)]) : TUInt8
+    v4 <- v0 >= v1 : TUInt8
+    branch v4 ? loop_ssa_1 : loop_ssa_2
   loop_ssa_1:
-    ret v14021
+    ret v3
   loop_ssa_2:
-    v14025 <- v14018 + 1 : TUInt8
-    v14026 <- v14021 + v14024 : TUInt8
-    v14033 <- v14024 + v14020 : TUInt8
-    v14034 <- v14033 : TUInt8
-    v14027 <- v14025 : TUInt8
-    v14028 <- v14019 : TUInt8
-    v14029 <- v14020 : TUInt8
-    v14030 <- v14026 : TUInt8
+    v8 <- v0 + 1 : TUInt8
+    v9 <- v3 + v6 : TUInt8
+    v4010 <- v6 + v2 : TUInt8
+    v4011 <- v4010 : TUInt8
+    v4004 <- v8 : TUInt8
+    v4005 <- v1 : TUInt8
+    v4006 <- v2 : TUInt8
+    v4007 <- v9 : TUInt8
     jump loop_body
 
 ---NAME---
@@ -1024,14 +1040,14 @@ let applyOnce (value: Int64) : Int64 =
   let increment = fun x -> x + 1L in
   increment (value)
 ---EXPECTED---
-Function __closure_20:
-  __closure_20_entry:
-    v10002 <- v1 + 1 : TInt64
-    ret v10002
+Function __closure_7:
+  __closure_7_entry:
+    v2 <- v1 + 1 : TInt64
+    ret v2
 
 Function applyOnce:
   applyOnce_entry:
-    TailCall(__closure_20, [0, v3])
+    TailCall(__closure_7, [0, v3])
     ret v6
 
 ---NAME---
@@ -1041,20 +1057,20 @@ let addOffset (value: Int64) (offset: Int64) : Int64 =
   let add = fun x -> x + offset in
   add (value)
 ---EXPECTED---
-Function __closure_20:
-  __closure_20_entry:
-    v10004 <- HeapLoad(v0, 8)
-    v10005 <- v1 + v10004 : TInt64
-    ret v10005
+Function __closure_7:
+  __closure_7_entry:
+    v2 <- HeapLoad(v0, 8)
+    v4 <- v1 + v2 : TInt64
+    ret v4
 
 Function addOffset:
   addOffset_entry:
-    v10009 <- HeapAlloc(16)
-    HeapStore(v10009, 0, &__closure_20)
-    HeapStore(v10009, 8, v6)
-    v10010 <- ClosureCall(v10009, [v5])
-    RefCountDec(v10009, size=0, kind=closure)
-    ret v10010
+    v7 <- HeapAlloc(16)
+    HeapStore(v7, 0, &__closure_7)
+    HeapStore(v7, 8, v6)
+    v9 <- ClosureCall(v7, [v5])
+    RefCountDec(v7, size=0, kind=closure)
+    ret v9
 
 ---NAME---
 closure_devirtualization_preserves_escaping_closure
@@ -1063,21 +1079,21 @@ let makeIncrement () : (Int64) -> Int64 =
   let increment = fun x -> x + 1L in
   increment
 ---EXPECTED---
-Function __closure_20:
-  __closure_20_entry:
-    v10002 <- v1 + 1 : TInt64
-    ret v10002
+Function __closure_7:
+  __closure_7_entry:
+    v2 <- v1 + 1 : TInt64
+    ret v2
 
-Function __closure_comparison_21:
-  __closure_comparison_21_entry:
+Function __closure_comparison_8:
+  __closure_comparison_8_entry:
     ret true
 
 Function makeIncrement:
   makeIncrement_entry:
-    v10006 <- HeapAlloc(16)
-    HeapStore(v10006, 0, &__closure_20)
-    HeapStore(v10006, 8, &__closure_comparison_21)
-    ret v10006
+    v6 <- HeapAlloc(16)
+    HeapStore(v6, 0, &__closure_7)
+    HeapStore(v6, 8, &__closure_comparison_8)
+    ret v6
 
 ---NAME---
 closure_devirtualization_reuses_local_closure
@@ -1087,13 +1103,13 @@ let applyTwice (value: Int64) : Int64 =
   let once = increment (value) in
   increment (once)
 ---EXPECTED---
-Function __closure_20:
-  __closure_20_entry:
-    v10002 <- v1 + 1 : TInt64
-    ret v10002
+Function __closure_7:
+  __closure_7_entry:
+    v2 <- v1 + 1 : TInt64
+    ret v2
 
 Function applyTwice:
   applyTwice_entry:
-    v10006 <- Call(__closure_20, [0, v3])
-    TailCall(__closure_20, [0, v10006])
+    v6 <- Call(__closure_7, [0, v3])
+    TailCall(__closure_7, [0, v6])
     ret v8

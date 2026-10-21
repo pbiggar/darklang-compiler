@@ -1,44 +1,7 @@
-(*
-   OptimizationTestRunner.mli - Test runner for optimization verification
-   Compiles source code, captures IR at specific stages, and compares
-   against expected output to verify optimizations work correctly.
-   Result of running an optimization test
-   Normalize IR output for comparison
-   - Trim whitespace
-   - Normalize line endings
-   - Remove trailing whitespace from each line
-   - Alpha-rename temporary IDs, which are allocation-order details shared
-   with unrelated functions in the compiled standard library.
-   - Alpha-rename generated closure IDs for the same reason.
-   Compile source and get ANF after optimization
-   Type check
-   Convert to ANF
-   Optimize ANF
-   Pretty-print the result
-   Compile source and get MIR after optimization
-   Type check
-   Convert to ANF
-   Optimize ANF
-   Generated output participates in reference-count insertion.
-   Convert to MIR
-   SSA construction
-   MIR optimization
-   SSA form is now preserved (phi resolution happens in register allocation)
-   Pretty-print the optimized MIR (still in SSA form)
-   Compile source and get LIR after optimization
-   Type check
-   Convert to ANF
-   Optimize ANF
-   Generated output participates in reference-count insertion.
-   Convert to MIR
-   SSA construction and optimization
-   SSA form is now preserved (phi resolution happens in register allocation)
-   Convert to LIR
-   LIR optimization
-   Pretty-print
-   Run a single optimization test
-   Load and run tests from a file
-*)
+(* OptimizationTestRunner.mli - Check optimization fixtures with stable IR formatting.
+   MIR/LIR source cases use production SSA optimization, ownership insertion,
+   tail-call detection and direct SSA MIR lowering. Structured ANF fixtures
+   remain isolated until their assertions migrate to SSA. *)
 open Dark_compiler
 
 type optimizationTestResult = TestOutcome.t = {

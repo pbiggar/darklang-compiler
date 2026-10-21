@@ -229,10 +229,76 @@ let testPhiEdgesPreserveDistinctPredecessors () =
   | Error message -> Error ("Expected invalid phi edge error, got " ^ message)
   | Ok () -> Error "Expected duplicate phi predecessor to be rejected"
 
-(*
-   Branch-local ANF identities can be reused with different value types.
-   The pre-RC SSA builder must type each definition before MIR lowering.
-*)
+(* Tail-call arguments are live; the structural return after the transfer is not. *)
+let testSsaTailCallsCheckArgumentsBeforeUnreachableReturn () =
+  let entry = M.Label "tail_entry" in
+  let parameter = M.VReg 0 in
+  let missing = M.Register (M.VReg 99) in
+  let target = AST.functionId 1L in
+  let definition instrs terminator : M.functionDef =
+    {
+      M.id = AST.functionId 2L;
+      name = "tail_source";
+      typedParams = [ { M.reg = parameter; typ = AST.TInt64 } ];
+      returnType = AST.TInt64;
+      cfg =
+        {
+          M.entry;
+          blocks =
+            M.LabelMap.singleton entry { M.label = entry; instrs; terminator };
+        };
+      floatRegs = M.IntSet.empty;
+    }
+  in
+  let tailCalls value =
+    [
+      M.TailCall (target, [ value ], [ AST.TInt64 ], AST.TInt64);
+      M.IndirectTailCall
+        (M.FuncAddr target, [ value ], [ AST.TInt64 ], AST.TInt64);
+      M.ClosureTailCall (M.FuncAddr target, [ value ], [ AST.TInt64 ]);
+    ]
+  in
+  let* _ =
+    ResultList.mapResults
+      (fun call ->
+        MIR_SSA_Verify.verifyFunction (definition [ call ] (M.Ret missing)))
+      (tailCalls (M.Register parameter))
+  in
+  let* _ =
+    ResultList.mapResults
+      (fun call ->
+        match
+          MIR_SSA_Verify.verifyFunction (definition [ call ] (M.Ret missing))
+        with
+        | Error message when contains message "undefined use" -> Ok ()
+        | Error message -> Error message
+        | Ok () ->
+            Error "SSA verification accepted an undefined tail-call argument")
+      (tailCalls missing)
+  in
+  let* _ =
+    ResultList.mapResults
+      (fun call ->
+        match
+          MIR_SSA_Verify.verifyFunction (definition [ call ] (M.Ret missing))
+        with
+        | Error message when contains message "undefined use" -> Ok ()
+        | Error message -> Error message
+        | Ok () ->
+            Error "SSA verification accepted an undefined tail-call target")
+      [
+        M.IndirectTailCall
+          (missing, [ M.Register parameter ], [ AST.TInt64 ], AST.TInt64);
+        M.ClosureTailCall (missing, [ M.Register parameter ], [ AST.TInt64 ]);
+      ]
+  in
+  match MIR_SSA_Verify.verifyFunction (definition [] (M.Ret missing)) with
+  | Error message when contains message "undefined use" -> Ok ()
+  | Error message -> Error message
+  | Ok () -> Error "SSA verification accepted an undefined ordinary return"
+
+(* Branch-local ANF identities can have different types. Recover each definition's
+   type before the SSA builder freshens those identities. *)
 let testPreRcSsaTypesBranchLocalDefinitions () =
   let name = "branchLocalTypes" in
   let identity = TestIds.functionIdForName name in
@@ -474,6 +540,8 @@ let tests =
       testNestedTerminalBranchesHaveNoInventedReturn );
     ( "phi edges preserve distinct predecessors",
       testPhiEdgesPreserveDistinctPredecessors );
+    ( "SSA tail-call arguments are checked before unreachable returns",
+      testSsaTailCallsCheckArgumentsBeforeUnreachableReturn );
     ( "pre-RC SSA types branch-local definitions",
       testPreRcSsaTypesBranchLocalDefinitions );
     ( "SSA return flow across joins and loops",

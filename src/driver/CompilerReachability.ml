@@ -56,25 +56,7 @@ let getReachableStdlibFunctionsFromStdlib (stdlib : X.stdlibResult) source =
   let entry =
     R.synthesizeEntryFunction entryId "_start" boundary user.R.mainExpr
   in
-  let registries =
-    {
-      R.scopeContracts = user.R.scopeContracts;
-      inertFunctionScopes = user.R.inertFunctionScopes;
-      typeReg = user.R.typeReg;
-      typeNames = user.R.typeNames;
-      recordFieldsReg = user.R.recordFieldsReg;
-      recordTypeParamsReg = user.R.recordTypeParamsReg;
-      variantLookup = user.R.variantLookup;
-      sumMetadata = user.R.sumMetadata;
-      rcSumShapeReg = user.R.rcSumShapeReg;
-      funcReg = user.R.funcReg;
-      functionIds = user.R.functionIds;
-      functionNames = user.R.functionNames;
-      funcParams = user.R.funcParams;
-      moduleRegistry = user.R.moduleRegistry;
-      recursiveMembers = user.R.recursiveMembers;
-    }
-  in
+  let registries = R.registriesOfUserOnly user in
   let* printed =
     PrintInsertion.insertPrintInEntry user.R.functionIds "_start" boundary
       (entry :: user.R.userFunctions)

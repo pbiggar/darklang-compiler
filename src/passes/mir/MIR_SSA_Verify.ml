@@ -161,11 +161,28 @@ let verifyFunction (func : functionDef) =
                       |> firstError)
                 block.instrs
             in
+            (* MIR tail calls are terminal instructions. Their structural Ret
+               carries the former call result, which has no definition because
+               control transfers directly to the callee. Arguments and targets
+               above still require valid dominating definitions. *)
+            let terminalTailCall =
+              match List.rev block.instrs with
+              | (TailCall _ | IndirectTailCall _ | ClosureTailCall _) :: _ ->
+                  true
+              | _ -> false
+            in
             let terminator =
-              F.foldTerminatorUses
-                (fun uses reg -> reg :: uses)
-                [] block.terminator
-              |> List.map (checkUse label 2147483647)
+              match (terminalTailCall, block.terminator) with
+              | true, Ret _ -> []
+              | true, _ ->
+                  [
+                    error "terminal tail call must end with a structural return";
+                  ]
+              | false, _ ->
+                  F.foldTerminatorUses
+                    (fun uses reg -> reg :: uses)
+                    [] block.terminator
+                  |> List.map (checkUse label 2147483647)
             in
             firstError (edges @ instructions @ terminator)
           in
