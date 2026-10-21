@@ -2,10 +2,7 @@
 [@@@warning "-4"]
 
 open ANF
-open ANFConstants
 open ANFEffects
-module TM = TempMap
-
 
 type scalarUnaryCSEOp =
   | PrimitiveUnary of unaryOp

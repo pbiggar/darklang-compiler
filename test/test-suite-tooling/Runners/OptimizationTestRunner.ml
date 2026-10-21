@@ -299,7 +299,8 @@ let ssaPipeline printResult recorder programType
   let* printed =
     if printResult then
       PrintInsertion.insertPrintInEntry registries.functionIds "_start"
-        programType (entry :: user.userFunctions)
+        programType
+        (entry :: user.userFunctions)
     else Ok (entry :: user.userFunctions)
   in
   let started = Mtime_clock.elapsed_ns () in
@@ -342,6 +343,7 @@ let getOptimizedANF stdlib recorder source =
       Ok (ANFPrinter.formatSSAFunctions names functions))
 
 let mirPipeline stdlib recorder programType (user : AST_to_ANF.userOnlyResult) =
+  let open AST_to_ANF in
   let* functions, typeMap, functionNames =
     ssaPipeline true recorder programType user
   in

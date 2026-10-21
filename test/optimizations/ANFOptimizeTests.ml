@@ -26,7 +26,8 @@ let ( let* ) = Result.bind
 
 let optimizeFunction context options (func : functionDef) =
   let* ssa =
-    SSAANF.convertFunction (ANF_to_MIR.maxTempIdInFunction func)
+    SSAANF.convertFunction
+      (ANF_to_MIR.maxTempIdInFunction func)
       ANF.TypeMap.empty func
   in
   match SSAOptimization.optimizeFunctions context options [ ssa ] with
@@ -156,7 +157,7 @@ let testStringByteIndexConversionFusesWithLookup () =
   else
     Error
       ("Expected index conversion and byte lookup to fuse, got "
-      ^ formatFunction optimized)
+     ^ formatFunction optimized)
 
 let byteOptionMatch usePayload =
   let someBranch =
@@ -187,16 +188,14 @@ let testDeadStringBytePayloadLowersToBoundsCheck () =
   let* optimized =
     optimizeExpression
       (TM.of_list [ (TempId 0, AST.TString); (TempId 1, AST.TInt64) ])
-      AST.TInt64
-      (byteOptionMatch false)
+      AST.TInt64 (byteOptionMatch false)
   in
   let calls = expressionCalls optimized in
   if FS.mem byteLength calls && not (FS.mem original calls) then Ok ()
   else
     Error
       ("Expected dead Option payload construction to lower to a bounds check, \
-        got "
-      ^ formatFunction optimized)
+        got " ^ formatFunction optimized)
 
 let testLiveStringBytePayloadLowersToUncheckedLoad () =
   let original = stdlibFunction "String.__getByteAtInt64"
@@ -205,8 +204,7 @@ let testLiveStringBytePayloadLowersToUncheckedLoad () =
   let* optimized =
     optimizeExpression
       (TM.of_list [ (TempId 0, AST.TString); (TempId 1, AST.TInt64) ])
-      AST.TUInt8
-      (byteOptionMatch true)
+      AST.TUInt8 (byteOptionMatch true)
   in
   let calls = expressionCalls optimized in
   if
@@ -216,8 +214,7 @@ let testLiveStringBytePayloadLowersToUncheckedLoad () =
   else
     Error
       ("Expected live Option payload construction to lower to a guarded \
-        unchecked load, got "
-      ^ formatFunction optimized)
+        unchecked load, got " ^ formatFunction optimized)
 
 let testLiteralFloatAbsoluteValueFolds () =
   let* optimized =
@@ -230,7 +227,7 @@ let testLiteralFloatAbsoluteValueFolds () =
   | _ ->
       Error
         ("Expected literal FloatAbs to fold to 3.5, got "
-        ^ formatFunction optimized)
+       ^ formatFunction optimized)
 
 let testLiteralFloatToInt64Folds () =
   let* optimized =
@@ -244,7 +241,7 @@ let testLiteralFloatToInt64Folds () =
   | _ ->
       Error
         ("Expected literal FloatToInt64 to truncate to -3, got "
-        ^ formatFunction optimized)
+       ^ formatFunction optimized)
 
 let testLiteralBitNotFolds () =
   let* optimized =
@@ -260,7 +257,7 @@ let testLiteralBitNotFolds () =
   | _ ->
       Error
         ("Expected literal BitNot to fold to -2, got "
-        ^ formatFunction optimized)
+       ^ formatFunction optimized)
 
 let testDceDropsUnusedPureGenericSumTypedAtom () =
   let markerType = AST.TSum ("Marker", [ AST.TString ]) in
@@ -272,9 +269,7 @@ let testDceDropsUnusedPureGenericSumTypedAtom () =
            Return UnitLiteral ))
   in
   let* block = singleBlock optimized in
-  match
-    (block.SSAANF.operations, block.SSAANF.terminator)
-  with
+  match (block.SSAANF.operations, block.SSAANF.terminator) with
   | [], SSAANF.Return UnitLiteral -> Ok ()
   | _ ->
       Error
@@ -291,9 +286,7 @@ let testDcePreservesUnusedHeapGenericSumTypedAtom () =
            Return UnitLiteral ))
   in
   let* block = singleBlock optimized in
-  match
-    (block.SSAANF.operations, block.SSAANF.terminator)
-  with
+  match (block.SSAANF.operations, block.SSAANF.terminator) with
   | [ (TempId 0, TypedAtom (_, typ)) ], SSAANF.Return UnitLiteral
     when typ = boxType ->
       Ok ()
@@ -361,7 +354,9 @@ let testCanonicalBufferSelfEqualityFoldsForBothRepresentations () =
               Return (Var (TempId 1)) );
       }
     in
-    let* optimized = optimizeFunction emptyContext defaultOptimizeOptions func in
+    let* optimized =
+      optimizeFunction emptyContext defaultOptimizeOptions func
+    in
     let* block = singleBlock optimized in
     match (block.SSAANF.operations, block.SSAANF.terminator) with
     | [], SSAANF.Return (BoolLiteral true) -> Ok ()

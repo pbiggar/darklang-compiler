@@ -19,5 +19,4 @@ type cSEKey =
 module CSEnv : Map.S with type key = cSEKey
 
 val tryCSEKey : ANF.cExpr -> cSEKey option
-
 val freshVarGenForProgram : ANF.program -> ANF.varGen

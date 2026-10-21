@@ -423,7 +423,8 @@ let formatSSAFunctions names functions =
   let label (SSAANF.Label id) = "block" ^ string_of_int id in
   let atom = prettyPrintANFAtomWithNames names in
   let parameter (param : ANF.typedParam) =
-    atom (ANF.Var param.ANF.id) ^ ": "
+    atom (ANF.Var param.ANF.id)
+    ^ ": "
     ^ StructuralFormat.semanticType param.ANF.typ
   in
   let terminator = function
@@ -442,19 +443,18 @@ let formatSSAFunctions names functions =
               ((label block.SSAANF.label ^ "("
                ^ commaSeparated parameter block.SSAANF.parameters
                ^ "):")
-              :: List.map
-                   (fun (id, operation) ->
-                     "let " ^ tempId id ^ " = "
-                     ^ prettyPrintANFCExpr names operation)
-                   block.SSAANF.operations
+               :: List.map
+                    (fun (id, operation) ->
+                      "let " ^ tempId id ^ " = "
+                      ^ prettyPrintANFCExpr names operation)
+                    block.SSAANF.operations
               @ [ terminator block.SSAANF.terminator ]))
       in
       "Function " ^ func.SSAANF.name ^ "("
       ^ commaSeparated parameter func.SSAANF.typedParams
       ^ "): "
       ^ StructuralFormat.semanticType func.SSAANF.returnType
-      ^ " [entry " ^ label func.SSAANF.entry ^ "]\n"
-      ^ String.concat "\n" blocks)
+      ^ " [entry " ^ label func.SSAANF.entry ^ "]\n" ^ String.concat "\n" blocks)
     functions
   |> String.concat "\n\n"
 
