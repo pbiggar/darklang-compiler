@@ -2,7 +2,9 @@
 open Dark_compiler
 
 val transform :
-  RcTypeFacts.typeContext -> ANF.functionDef -> (SSAANF.functionDef, string) result
+  RcTypeFacts.typeContext ->
+  ANF.functionDef ->
+  (SSAANF.functionDef, string) result
 
 val hasOperation : (ANF.cExpr -> bool) -> SSAANF.functionDef -> bool
 val hasRefCountIncForTemp : ANF.tempId -> SSAANF.functionDef -> bool

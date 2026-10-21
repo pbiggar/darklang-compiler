@@ -11,16 +11,3 @@ val insertRCWithAnalysis :
   (ANF.tempId * AST.semanticType * MemoryModel.rcShape) list ->
   AST.semanticType RcTypeFacts.TempMap.t ->
   ANF.aExpr * ANF.varGen * AST.semanticType RcTypeFacts.TempMap.t
-
-val insertRCInternal :
-  RcTypeFacts.typeContext ->
-  ANF.aExpr ->
-  ANF.varGen ->
-  AST.semanticType RcTypeFacts.TempMap.t ->
-  ANF.aExpr * ANF.varGen * AST.semanticType RcTypeFacts.TempMap.t
-
-val insertRC :
-  RcTypeFacts.typeContext ->
-  ANF.aExpr ->
-  ANF.varGen ->
-  ANF.aExpr * ANF.varGen * AST.semanticType RcTypeFacts.TempMap.t

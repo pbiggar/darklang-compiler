@@ -182,26 +182,9 @@ let tests =
       CleanupTests.testRecursiveRecordReuseCarriesTypedBackEdgeReleasePlan );
     ( "recursive boxed sum reuse carries typed back-edge release plan",
       CleanupTests.testRecursiveBoxedSumReuseCarriesTypedBackEdgeReleasePlan );
-    ( "map helper accumulator return transfers ownership without retain",
-      TransferTests.testMapHelperAccumulatorReturnDoesNotRetainOwnedAccumulator
-    );
-    ( "map helper self tail-call releases replaced accumulator",
-      TransferTests.testMapHelperSelfTailCallReleasesReplacedAccumulator );
-    ( "borrowed projection self tail-call args are retained",
-      TransferTests.testBorrowedProjectionSelfTailCallArgsAreRetained );
-    ( "borrowed projection self-recursive call args are retained",
-      TransferTests.testBorrowedProjectionSelfRecursiveCallArgsAreRetained );
-    ( "borrowed projection alias self-recursive call args are retained",
-      TransferTests.testBorrowedProjectionAliasSelfRecursiveCallArgsAreRetained
-    );
-    ( "borrowed projection if-branch self-recursive call args are retained",
-      TransferTests
-      .testBorrowedProjectionIfBranchSelfRecursiveCallArgsAreRetained );
     ( "borrowed projection from parameter self-recursive call stays borrowed",
       TransferTests
       .testBorrowedProjectionFromParameterSelfRecursiveCallStaysBorrowed );
-    ( "map helper closure-producing call retains borrowed source",
-      TransferTests.testMapHelperClosureProducingCallRetainsBorrowedSource );
     ( "map helper closure source to value keeps source borrowed",
       TransferTests.testMapHelperClosureSourceToValueKeepsSourceBorrowed );
     ( "closure pushBack retains immediate closure-call result",

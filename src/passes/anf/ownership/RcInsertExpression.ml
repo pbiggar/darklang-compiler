@@ -167,7 +167,9 @@ let rec insertRCWithAnalysis joinScopes inheritedBranchDecs ctx currentFunc expr
         in
         rebuild (C.insertReturnDecs returnDecs body gen types)
     | R.RLet (id, operation, bodyInfo, _) ->
-        let typ = RcBindingTypeInference.inferBindingType ctx id operation bodyInfo in
+        let typ =
+          RcBindingTypeInference.inferBindingType ctx id operation bodyInfo
+        in
         let typesWithBinding =
           match operation with
           | A.TypedAtom (A.Var source, aliasType) ->
@@ -477,18 +479,3 @@ let rec insertRCWithAnalysis joinScopes inheritedBranchDecs ctx currentFunc expr
   in
   descend ctxWithTypes expr gen returnDecs inheritedTransferable
     inheritedBranchDecs [] types
-
-(*
-   Insert reference counting operations into an AExpr
-   Returns (transformed expr, varGen, accumulated TempTypes)
-*)
-let insertRCInternal ctx expr gen types =
-  let ctx = F.withTempTypes ctx types in
-  let analyzed = R.analyzeReturns M.empty M.empty expr in
-  insertRCWithAnalysis M.empty [] ctx None analyzed gen [] [] [] types
-
-(*
-   Insert reference counting operations into an AExpr
-   Returns (transformed expr, varGen, accumulated TempTypes)
-*)
-let insertRC ctx expr gen = insertRCInternal ctx expr gen M.empty

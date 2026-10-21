@@ -133,43 +133,6 @@ let ownedDictionaryFrontierParams (func : A.functionDef) =
     validate
       (Set.of_list (List.map (fun (_, param) -> paramId param) candidates))
 
-type functionPhaseTimings = {
-  returnAnalysisMs : float;
-  parameterAnalysisMs : float;
-  bodyInsertionMs : float;
-  accumulatorCleanupMs : float;
-  cleanupPlanningMs : float;
-  cleanupRewriteMs : float;
-}
-
-let emptyFunctionPhaseTimings =
-  {
-    returnAnalysisMs = 0.;
-    parameterAnalysisMs = 0.;
-    bodyInsertionMs = 0.;
-    accumulatorCleanupMs = 0.;
-    cleanupPlanningMs = 0.;
-    cleanupRewriteMs = 0.;
-  }
-
-let addFunctionPhaseTimings left right =
-  {
-    returnAnalysisMs = left.returnAnalysisMs +. right.returnAnalysisMs;
-    parameterAnalysisMs = left.parameterAnalysisMs +. right.parameterAnalysisMs;
-    bodyInsertionMs = left.bodyInsertionMs +. right.bodyInsertionMs;
-    accumulatorCleanupMs =
-      left.accumulatorCleanupMs +. right.accumulatorCleanupMs;
-    cleanupPlanningMs = left.cleanupPlanningMs +. right.cleanupPlanningMs;
-    cleanupRewriteMs = left.cleanupRewriteMs +. right.cleanupRewriteMs;
-  }
-
-let measureFunctionPhase enabled work =
-  if enabled then
-    let started = Int64.to_float (Mtime_clock.elapsed_ns ()) /. 1e6 in
-    let result = work () in
-    (result, (Int64.to_float (Mtime_clock.elapsed_ns ()) /. 1e6) -. started)
-  else (work (), 0.)
-
 (*
    Insert RC operations into a function
    Returns (transformed function, varGen, accumulated TempTypes)
@@ -179,33 +142,29 @@ let measureFunctionPhase enabled work =
    replacement cleanup is not profitable.
    Process function body with return analysis
 *)
-let insertRCInFunctionInternal trace ctx (func : A.functionDef) gen types =
+let insertRCInFunction ctx (func : A.functionDef) gen =
   let typesWithParams =
     List.fold_left
       (fun types param -> M.add (paramId param) param.A.typ types)
-      types func.A.typedParams
+      M.empty func.A.typedParams
   in
   let ctxWithParams = F.withTempTypes ctx typesWithParams in
-  let bodyInfo, returnAnalysisMs =
-    measureFunctionPhase trace (fun () ->
-        R.analyzeReturns M.empty M.empty func.A.body)
-  in
-  let infos, parameterAnalysisMs =
-    measureFunctionPhase trace (fun () ->
-        List.mapi
-          (fun index param ->
-            let shape = S.rcShapeForType ctxWithParams param.A.typ in
-            let transfers =
-              C.functionParamReturnTransfersOwnedAccumulator ctxWithParams
-                func.A.id index param.A.typ
-            in
-            let kind =
-              if P.rcShapeNeedsBorrowedRetain shape then
-                C.internalOwnedTailParamKind func index param
-              else None
-            in
-            (index, param, shape, transfers, kind))
-          func.A.typedParams)
+  let bodyInfo = R.analyzeReturns M.empty M.empty func.A.body in
+  let infos =
+    List.mapi
+      (fun index param ->
+        let shape = S.rcShapeForType ctxWithParams param.A.typ in
+        let transfers =
+          C.functionParamReturnTransfersOwnedAccumulator ctxWithParams func.A.id
+            index param.A.typ
+        in
+        let kind =
+          if P.rcShapeNeedsBorrowedRetain shape then
+            C.internalOwnedTailParamKind func index param
+          else None
+        in
+        (index, param, shape, transfers, kind))
+      func.A.typedParams
   in
   let provisional =
     Set.of_list
@@ -297,146 +256,40 @@ let insertRCInFunctionInternal trace ctx (func : A.functionDef) gen types =
         | false, None -> None)
       infos
   in
-  let (body, gen, types), bodyInsertionMs =
-    measureFunctionPhase trace (fun () ->
-        I.insertRCWithAnalysis M.empty [] ctxWithParams (Some func.A.id)
-          bodyInfo gen [] [] paramIncs typesWithParams)
+  let body, gen, types =
+    I.insertRCWithAnalysis M.empty [] ctxWithParams (Some func.A.id) bodyInfo
+      gen [] [] paramIncs typesWithParams
   in
-  let (body, gen, types), accumulatorCleanupMs =
-    measureFunctionPhase trace (fun () ->
-        let body, gen, types =
-          if ownedDecs = [] then (body, gen, types)
-          else
-            C.insertOwnedAccumulatorDecsBeforeSelfTailCalls ctxWithParams
-              func.A.id ownedDecs body gen types
+  let body, gen, types =
+    let body, gen, types =
+      if ownedDecs = [] then (body, gen, types)
+      else
+        C.insertOwnedAccumulatorDecsBeforeSelfTailCalls ctxWithParams func.A.id
+          ownedDecs body gen types
+    in
+    List.fold_right
+      (fun (param, shape, _) (body, gen, types) ->
+        let dummy, gen = A.freshVar gen in
+        let retain =
+          C.retainExprForShape ctxWithParams (paramId param) param.A.typ shape
         in
-        List.fold_right
-          (fun (param, shape, _) (body, gen, types) ->
-            let dummy, gen = A.freshVar gen in
-            let retain =
-              C.retainExprForShape ctxWithParams (paramId param) param.A.typ
-                shape
-            in
-            (A.Let (dummy, retain, body), gen, M.add dummy AST.TUnit types))
-          internalParams (body, gen, types))
+        (A.Let (dummy, retain, body), gen, M.add dummy AST.TUnit types))
+      internalParams (body, gen, types)
   in
-  let (needsMap, needsTail), cleanupPlanningMs =
-    measureFunctionPhase trace (fun () ->
-        C.requiredFunctionCleanups ctx func.A.id body)
+  let needsMap, needsTail = C.requiredFunctionCleanups ctx func.A.id body in
+  let body, gen, types =
+    let body, gen, types =
+      if needsMap then
+        C.insertClosureMapSourceRetainsBeforeHelperCalls ctxWithParams func.A.id
+          body gen types
+      else (body, gen, types)
+    in
+    ( (if needsTail then C.moveDecsBeforeNonSelfTailCalls func.A.id body
+       else body),
+      gen,
+      types )
   in
-  let (body, gen, types), cleanupRewriteMs =
-    measureFunctionPhase trace (fun () ->
-        let body, gen, types =
-          if needsMap then
-            C.insertClosureMapSourceRetainsBeforeHelperCalls ctxWithParams
-              func.A.id body gen types
-          else (body, gen, types)
-        in
-        ( (if needsTail then C.moveDecsBeforeNonSelfTailCalls func.A.id body
-           else body),
-          gen,
-          types ))
-  in
-  ( { func with A.body },
-    gen,
-    types,
-    {
-      returnAnalysisMs;
-      parameterAnalysisMs;
-      bodyInsertionMs;
-      accumulatorCleanupMs;
-      cleanupPlanningMs;
-      cleanupRewriteMs;
-    } )
-
-(*
-   Insert RC operations into a function
-   Returns (transformed function, varGen, accumulated TempTypes)
-*)
-let insertRCInFunction ctx func gen =
-  let func, gen, types, _ =
-    insertRCInFunctionInternal false ctx func gen M.empty
-  in
-  (func, gen, types)
-
-(*
-   TypeMap Completeness Verification
-*)
-let isTempMissing typeMap id = Option.is_none (A.TypeMap.tryFind id typeMap)
-
-let rec collectMissingTempIdsInExpr typeMap expr acc =
-  match expr with
-  | A.Jump _ | A.Return _ -> acc
-  | A.Let (id, _, body) ->
-      collectMissingTempIdsInExpr typeMap body
-        (if isTempMissing typeMap id then id :: acc else acc)
-  | A.Join (param, continuation, entry) ->
-      let acc =
-        if isTempMissing typeMap (paramId param) then paramId param :: acc
-        else acc
-      in
-      collectMissingTempIdsInExpr typeMap entry
-        (collectMissingTempIdsInExpr typeMap continuation acc)
-  | A.If (_, yes, no) ->
-      collectMissingTempIdsInExpr typeMap no
-        (collectMissingTempIdsInExpr typeMap yes acc)
-
-let collectMissingTempIdsInFunction typeMap (func : A.functionDef) acc =
-  let acc =
-    List.fold_left
-      (fun acc param ->
-        if isTempMissing typeMap (paramId param) then paramId param :: acc
-        else acc)
-      acc func.A.typedParams
-  in
-  collectMissingTempIdsInExpr typeMap func.A.body acc
-
-(*
-   Find the greatest TempId defined by an ANF expression. ANF variables are
-   introduced only by function parameters and Let bindings, so definitions
-   are sufficient to place a fresh-variable generator beyond every use.
-*)
-let rec maxDefinedTempIdInExpr = function
-  | A.Jump _ | A.Return _ -> -1
-  | A.Let (A.TempId id, _, body) -> max id (maxDefinedTempIdInExpr body)
-  | A.Join (param, continuation, entry) ->
-      let (A.TempId id) = paramId param in
-      max id
-        (max
-           (maxDefinedTempIdInExpr continuation)
-           (maxDefinedTempIdInExpr entry))
-  | A.If (_, yes, no) ->
-      max (maxDefinedTempIdInExpr yes) (maxDefinedTempIdInExpr no)
-
-let maxDefinedTempIdInFunction (func : A.functionDef) =
-  max
-    (List.fold_left
-       (fun current param ->
-         let (A.TempId id) = paramId param in
-         max current id)
-       (-1) func.A.typedParams)
-    (maxDefinedTempIdInExpr func.A.body)
-
-let freshVarGenAfterProgram (A.Program (functions, main)) =
-  let maxId =
-    max
-      (List.fold_left
-         (fun current func -> max current (maxDefinedTempIdInFunction func))
-         (-1) functions)
-      (maxDefinedTempIdInExpr main)
-  in
-  A.VarGen (Int32.to_int (Int32.add (Int32.of_int maxId) 1l))
-
-(*
-   Verify that all defined TempIds have types in the TypeMap
-   Returns a list of TempIds that are missing from the TypeMap
-*)
-let verifyTypeMapCompleteness (A.Program (functions, main)) typeMap =
-  List.rev
-    (collectMissingTempIdsInExpr typeMap main
-       (List.fold_left
-          (fun acc func -> collectMissingTempIdsInFunction typeMap func acc)
-          [] functions))
+  ({ func with A.body }, gen, types)
 
 let tempText (A.TempId id) = "TempId " ^ string_of_int id
 
@@ -539,90 +392,3 @@ let verifyJoinInterfaces ctx (A.Program (functions, main)) =
       (Ok ()) functions
   in
   verify Set.empty main
-
-(*
-   Inlining and generated JSON helpers can produce thousands of existing
-   temporaries. A fixed starting value eventually collides with them, and
-   sibling-branch type state can then suppress a required retain.
-   Process all functions, accumulating types
-   Process main expression
-   Verify TypeMap completeness - all defined TempIds should have types
-*)
-let insertRCInProgramInternal recorder (result : AST_to_ANF.conversionResult) =
-  let start () =
-    Option.map
-      (fun _ -> Int64.to_float (Mtime_clock.elapsed_ns ()) /. 1e6)
-      recorder
-  in
-  let record name timer =
-    match (recorder, timer) with
-    | Some record, Some started ->
-        record name
-          ((Int64.to_float (Mtime_clock.elapsed_ns ()) /. 1e6) -. started)
-    | _ -> ()
-  in
-  let timer = start () in
-  let ctx = F.createContext result in
-  record "Reference Count Context" timer;
-  let (A.Program (functions, main)) = result.AST_to_ANF.program in
-  let ownershipVerification =
-    verifyOwnershipContracts ctx result.AST_to_ANF.ownershipContracts
-      result.AST_to_ANF.program
-  in
-  let gen = freshVarGenAfterProgram result.AST_to_ANF.program in
-  let rec process funcs gen acc types timings =
-    match funcs with
-    | [] -> (List.rev acc, gen, types, timings)
-    | func :: rest ->
-        let func, gen, localTypes, localTimings =
-          insertRCInFunctionInternal (Option.is_some recorder) ctx func gen
-            M.empty
-        in
-        let types =
-          M.fold (fun id typ acc -> M.add id typ acc) localTypes types
-        in
-        process rest gen (func :: acc) types
-          (addFunctionPhaseTimings timings localTimings)
-  in
-  let timer = start () in
-  let functions, gen, types, timings =
-    process functions gen [] M.empty emptyFunctionPhaseTimings
-  in
-  Option.iter
-    (fun record ->
-      record "Reference Count Return Analysis" timings.returnAnalysisMs;
-      record "Reference Count Parameter Analysis" timings.parameterAnalysisMs;
-      record "Reference Count Body Insertion" timings.bodyInsertionMs;
-      record "Reference Count Accumulator Cleanup" timings.accumulatorCleanupMs;
-      record "Reference Count Cleanup Planning" timings.cleanupPlanningMs;
-      record "Reference Count Cleanup Rewrite" timings.cleanupRewriteMs)
-    recorder;
-  record "Reference Count Functions" timer;
-  let timer = start () in
-  let main, _, types = I.insertRCInternal ctx main gen types in
-  record "Reference Count Main" timer;
-  let timer = start () in
-  let program = A.Program (functions, main) in
-  let frozen = A.TypeMap.ofSeq (M.to_seq types) in
-  let missing = verifyTypeMapCompleteness program frozen in
-  record "Reference Count Verification" timer;
-  if missing <> [] then
-    Crash.crash
-      ("RefCountInsertion: TypeMap incomplete - missing types for: "
-      ^ String.concat ", "
-          (List.map (fun (A.TempId id) -> "t" ^ string_of_int id) missing));
-  let* () = ownershipVerification in
-  let* () = verifyJoinInterfaces (F.withTempTypes ctx types) program in
-  Ok (program, frozen)
-
-(*
-   Insert RC operations into a program
-   Returns (ANF.Program, TypeMap) where TypeMap contains all TempId -> Type mappings
-*)
-let insertRCInProgram result = insertRCInProgramInternal None result
-
-(*
-   Insert RC operations while reporting nested phase timings.
-*)
-let insertRCInProgramWithTrace recorder result =
-  insertRCInProgramInternal recorder result

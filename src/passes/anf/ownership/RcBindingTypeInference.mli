@@ -5,4 +5,3 @@ val inferBindingType :
   ANF.cExpr ->
   RcReturnAnalysis.returnAnnotatedExpr ->
   AST.semanticType
-

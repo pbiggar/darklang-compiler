@@ -74,4 +74,3 @@ let inferBindingType ctx tempId cexpr bodyInfo =
           Option.value ~default:rawType (inferAliasedVarTypeFromUse id body)
       | A.RawGet (_, _, None), _ -> rawType
       | _ -> AST.TVar ("inferred_" ^ string_of_int index))
-

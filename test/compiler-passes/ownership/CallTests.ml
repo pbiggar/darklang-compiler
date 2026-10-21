@@ -41,7 +41,6 @@ let functionWith name typedParams returnType body : ANF.functionDef =
   }
 
 let transform = SSAOwnershipTestHelpers.transform
-
 let param id typ : ANF.typedParam = { ANF.id; typ }
 let int n = IntLiteral (Int64 n)
 let call name args = Call (TestIds.functionIdForName name, args)
@@ -240,11 +239,14 @@ let testProgramRcFreshTempsFollowExistingProgramTemps () =
   let definitions =
     SSAANF.LabelMap.bindings transformed.SSAANF.blocks
     |> List.concat_map (fun (_, (block : SSAANF.block)) ->
-           List.map (fun (parameter : ANF.typedParam) -> parameter.id) block.parameters
-           @ List.map fst block.operations)
+        List.map
+          (fun (parameter : ANF.typedParam) -> parameter.ANF.id)
+          block.SSAANF.parameters
+        @ List.map fst block.SSAANF.operations)
   in
   let* () =
-    require (TS.cardinal (TS.of_list definitions) = List.length definitions)
+    require
+      (TS.cardinal (TS.of_list definitions) = List.length definitions)
       "SSA RC insertion reused an existing TempId"
   in
   require
@@ -276,8 +278,9 @@ let testProgramRcRejectsDriftedOwnershipContract () =
     }
   in
   match
-    RefCountInsertion.verifyOwnershipContracts (RcTypeFacts.createContext input)
-      input.ownershipContracts input.program
+    RefCountInsertion.verifyOwnershipContracts
+      (RcTypeFacts.createContext input)
+      input.AST_to_ANF.ownershipContracts input.AST_to_ANF.program
   with
   | Error message
     when Text.contains message
@@ -320,7 +323,9 @@ let testBareSumTypeRefsAreCanonicalizedForRcSourceTypes () =
   let* transformed =
     transform ctx (functionWith "canonicalBareSum" [] AST.TInt64 body)
   in
-  match SSAOwnershipTestHelpers.tryRefCountDecSourceTypeForTemp dict transformed with
+  match
+    SSAOwnershipTestHelpers.tryRefCountDecSourceTypeForTemp dict transformed
+  with
   | Some (AST.TDict (AST.TInt64, AST.TSum ("Payload", []))) -> Ok ()
   | Some other ->
       Error
