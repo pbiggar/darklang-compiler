@@ -298,20 +298,6 @@ let createExecutableWithPools machineCode stringPool floatPool enableLeakCheck =
   binary
 
 (*
-   Create an ELF executable with string data (legacy wrapper for backwards compatibility)
-*)
-let createExecutableWithStrings machineCode stringPool =
-  createExecutableWithPools machineCode stringPool LiteralPool.emptyFloatPool
-    false
-
-(*
-   Create a minimal ELF executable from ARM64 machine code (legacy, no data)
-*)
-let createExecutable machineCode =
-  createExecutableWithPools machineCode LiteralPool.emptyStringPool
-    LiteralPool.emptyFloatPool false
-
-(*
    Create an ELF executable with coverage data section
    coverageExprCount: number of coverage expressions (each needs 8 bytes)
    The coverage data is placed after strings and initialized to zero
