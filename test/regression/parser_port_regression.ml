@@ -40,6 +40,71 @@ let rejects source text =
 let accepts source () = ignore (parsed source)
 
 let () =
+  run "float precision diagnostics cover expressions and patterns" (fun () ->
+      List.iter
+        (fun source ->
+          List.iter
+            (fun program ->
+              let result = Parser.parse program in
+              require
+                (List.exists
+                   (fun (d : ParserSupport.diagnostic) ->
+                     d.ParserSupport.code = "PARSE-FLOAT-PRECISION")
+                   result.ParserSupport.diagnostics)
+                ("Missing precision diagnostic: " ^ program))
+            [ source; "match x with | " ^ source ^ " -> 1 | _ -> 0" ])
+        [
+          "10000000000000001.0";
+          "10000000000000000.1";
+          "0.10000000000000000";
+          "9007199254740993.0";
+          "9007199254740995.0";
+          "1.7976931348623158e308";
+          "2.4703282292062328e-324";
+          "1.00000000000000011102230246251565404236316680908203125";
+          "1.00000000000000011102230246251565404236316680908203126";
+        ]);
+  run "float normalization preserves exact runtime bits" (fun () ->
+      List.iter
+        (fun (source, expected) ->
+          match (parsed source).WT.exprsToEval with
+          | [ WT.EFloat (_, negative, whole, fraction) ] ->
+              let value =
+                float_of_string
+                  ((if negative then "-" else "") ^ whole ^ "." ^ fraction)
+              in
+              require
+                (Int64.bits_of_float value = expected)
+                ("Incorrect float bits: " ^ source);
+              require
+                (whole = "0" || whole.[0] <> '0')
+                "Whole digits must be canonical"
+          | _ -> failwith ("Not a float: " ^ source))
+        [
+          ("0.1", 0x3fb999999999999aL);
+          ("0.10000000000000001", 0x3fb999999999999aL);
+          ("0.3", 0x3fd3333333333333L);
+          ("10000000000000002.0", 0x4341c37937e08001L);
+          ("1.7976931348623157e308", 0x7fefffffffffffffL);
+          ("2.2250738585072014e-308", 0x0010000000000000L);
+          ("2.225073858507201e-308", 0x000fffffffffffffL);
+          ("0.000001e1", 0x3ee4f8b588e368f1L);
+          ("0.00000001e1", 0x3e7ad7f29abcaf48L);
+          ("00.0000001", 0x3e7ad7f29abcaf48L);
+          ("5e-324", 1L);
+          ("-0.0", Int64.min_int);
+          ("0e999999999999999999999", 0L);
+          ("1" ^ String.make 417 '0' ^ "e-401", 0x4341c37937e08000L);
+          ("0." ^ String.make 416 '0' ^ "1e401", 0x3c9cd2b297d889bcL);
+        ]);
+  run "float range diagnostics are independent of exponent spelling" (fun () ->
+      List.iter
+        (fun source -> rejects source "Float literal overflows binary64")
+        [ "1e309"; "1e401"; "1e999999999999999999999" ];
+      List.iter
+        (fun source ->
+          rejects source "Nonzero float literal underflows to zero")
+        [ "2e-324"; "1e-401"; "-1e-401"; "1e-999999999999999999999" ]);
   run "aligned multiline package test outcome" (fun () ->
       let source =
         "test failing =\n\
