@@ -272,10 +272,6 @@ let parseForUnchecked mode source =
           };
         ]
 
-(*
-   Kept as a compatibility entrypoint. Test syntax has the same parse shape as
-   all other source; parseFor Validation.Test applies the Test purpose rules.
-*)
 let parse source =
   try parseUnchecked source
   with Stack_overflow ->
@@ -284,8 +280,6 @@ let parse source =
 let parseFor mode source =
   try parseForUnchecked mode source
   with Stack_overflow -> Error [ stackExhaustionDiagnostic () ]
-
-let parseTestFile = parse
 
 (*
    Render a diagnostic for humans: code, position, message, a source snippet

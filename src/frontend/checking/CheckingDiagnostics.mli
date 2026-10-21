@@ -57,15 +57,6 @@ val formatPatternMismatchValue : AST.expr -> string option
 val formatPatternMismatchError :
   AST.expr -> AST.semanticType -> AST.semanticType -> string option -> string
 
-val formatLegacyParamTypeError :
-  string ->
-  int ->
-  string ->
-  AST.semanticType ->
-  AST.semanticType ->
-  AST.expr ->
-  string
-
 val inferenceVarForKey : string -> AST.semanticType
 
 val freshenTypeParams :

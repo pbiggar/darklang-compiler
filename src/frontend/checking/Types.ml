@@ -542,25 +542,3 @@ let typesEqual aliases first second =
     (resolveType aliases first)
     (resolveType aliases second)
   = 0
-
-let truncateLegacyRecordValueText text =
-  let units = Text.scalars text in
-  if Array.length units > 10 then Text.ofScalars (Array.sub units 0 10) ^ "..."
-  else text
-
-let formatLegacyRecordFieldTypeError aliases name expected actual expr =
-  let expectedText =
-    CheckingDiagnostics.typeToString (resolveType aliases expected)
-  in
-  let actualText =
-    CheckingDiagnostics.typeToString (resolveType aliases actual)
-  in
-  let valueText =
-    match CheckingDiagnostics.tryFormatLiteralValue expr with
-    | Some value -> truncateLegacyRecordValueText value
-    | None -> actualText
-  in
-  Printf.sprintf
-    "Failed to create record. Expected %s for field `%s`, but got %s (%s)"
-    expectedText name valueText
-    (CheckingDiagnostics.withIndefiniteArticle actualText)

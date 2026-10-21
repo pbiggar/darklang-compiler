@@ -253,12 +253,6 @@ let ok (env : env) value =
 let error (env : env) value =
   constructor env "Darklang.Stdlib.Result.Result" "Error" (Some value)
 
-let _none (env : env) =
-  constructor env "Darklang.Stdlib.Option.Option" "None" None
-
-let _some (env : env) value =
-  constructor env "Darklang.Stdlib.Option.Option" "Some" (Some value)
-
 let jsonErrorType = AST.TSum ("Darklang.Stdlib.Json.ParseError.ParseError", [])
 let valueViewType = AST.TInt64
 

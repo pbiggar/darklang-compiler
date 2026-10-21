@@ -1504,18 +1504,12 @@ let lowerMatch (toANFCore : LoweringCallbacks.expressionLowerer)
            | C.PVariable _ | C.PWildcard -> true
            | _ -> false ->
         let notEmpty, gen = A.freshVar gen in
-        let tag, gen = A.freshVar gen in
         let ptr, gen = A.freshVar gen in
-        let isSingle, gen = A.freshVar gen in
-        let compileBranch isLegacy gen =
+        let compileBranch gen =
           let node, gen = A.freshVar gen in
           let value, _, bindings, gen =
             unwrapLeaf elem (A.Var node) gen
-              [
-                ( node,
-                  A.RawGet (A.Var ptr, int (if isLegacy then 0L else 16L), None)
-                );
-              ]
+              [ (node, A.RawGet (A.Var ptr, int 16L, None)) ]
           in
           let typedHead, gen = A.freshVar gen in
           let bindings =
@@ -1525,7 +1519,7 @@ let lowerMatch (toANFCore : LoweringCallbacks.expressionLowerer)
           let typedTail, gen = A.freshVar gen in
           let tailBindings =
             [
-              (rawTail, if isLegacy then A.Atom (int 0L) else tail source);
+              (rawTail, tail source);
               (typedTail, A.TypedAtom (A.Var rawTail, typ));
             ]
           in
@@ -1583,16 +1577,9 @@ let lowerMatch (toANFCore : LoweringCallbacks.expressionLowerer)
           in
           Ok (K.wrapBindings bindings (K.wrapBindings tupleBindings body), gen)
         in
-        let* single, gen = compileBranch true gen in
-        let* deep, gen = compileBranch false gen in
+        let* branch, gen = compileBranch gen in
         let inner =
-          K.wrapBindings
-            [
-              (tag, A.Prim (A.BitAnd, source, int 7L));
-              (ptr, A.Prim (A.BitAnd, source, int (-8L)));
-              (isSingle, A.Atom (A.BoolLiteral false));
-            ]
-            (A.If (A.Var isSingle, single, deep))
+          K.wrapBindings [ (ptr, A.Prim (A.BitAnd, source, int (-8L))) ] branch
         in
         Ok
           ( A.Let

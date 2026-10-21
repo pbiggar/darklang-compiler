@@ -312,6 +312,12 @@ mean the entire branch has passed its integration or performance gates.
   - [x] Outgoing dynamic encoding, peer feedback, reference tracking and
     pure stream-cancellation ownership.
   - [ ] Cancellation and table ownership across reusable multiplexed connections.
+    Cancelling a wholly queued outgoing section now releases its table references;
+    any written stream byte keeps them pinned until peer decoder feedback.
+    Encoder insertions remain committed and cancellation does not acknowledge them.
+    Server-owner and encoder fixtures cover eviction after cancellation and the
+    partial-write boundary. Abandoned lazy bodies still close their leased
+    connection; general cancellation and recoverable failure ownership remain.
 
 - [ ] Streaming client uploads, server requests and server responses.
 - [ ] Public received/sent trailer APIs.
