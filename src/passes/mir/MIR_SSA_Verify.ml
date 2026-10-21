@@ -5,7 +5,7 @@
 [@@@warning "-4"]
 
 open MIR
-module S = SSA_Construction
+module S = MIRGraphAnalysis
 module F = MIROptimizationFacts
 
 type definition = { block : label; position : int }

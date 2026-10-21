@@ -870,8 +870,8 @@ let runTestsWithProgressReporter completedTestReporter args =
         };
         { F.name = "Bitset Tests"; tests = BitsetTests.tests };
         {
-          F.name = "SSA Construction Tests";
-          tests = SSAConstructionTests.tests;
+          F.name = "MIR Graph Analysis Tests";
+          tests = MIRGraphAnalysisTests.tests;
         };
         { F.name = "SSA Liveness Tests"; tests = SSALivenessTests.tests };
         { F.name = "Phi Resolution Tests"; tests = PhiResolutionTests.tests };

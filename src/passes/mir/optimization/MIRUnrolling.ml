@@ -3,7 +3,7 @@
 
 open MIR
 module F = MIROptimizationFacts
-module S = SSA_Construction
+module S = MIRGraphAnalysis
 module T = MIRLoopTopology
 module I = MIRInduction
 

@@ -526,10 +526,167 @@ let testTypeInformationComposition () =
   then Error "Composition with an empty unit lost type information"
   else Ok ()
 
+let testSsaExpansionRegistersAvoidUnusedHighParameters () =
+  let check typ value =
+    let identity = AST.functionId 1L in
+    let parameter : A.typedParam = { A.id = A.TempId 10000; typ } in
+    let entry = S.Label 0 in
+    let func : S.functionDef =
+      {
+        S.id = identity;
+        name = "highParameter";
+        typedParams = [ parameter ];
+        returnType = typ;
+        returnOwnership = A.OwnedReturn;
+        entry;
+        freshValueTypes = RcTypeFacts.TempMap.singleton (A.TempId 9999) typ;
+        blocks =
+          S.LabelMap.singleton entry
+            {
+              S.label = entry;
+              parameters = [];
+              operations =
+                [
+                  (A.TempId 9999, A.Atom value);
+                  ( A.TempId 9998,
+                    A.TailCall (identity, [ A.Var (A.TempId 9999) ]) );
+                ];
+              terminator = S.Return (A.Var (A.TempId 9998));
+            };
+      }
+    in
+    let* lowered =
+      R.convertSSAANFFunction func A.TypeMap.empty StringOrder.Map.empty
+        (FunctionIdMap.ofList [ (identity, typ) ])
+        (FunctionIdMap.ofList [ (identity, func.S.name) ])
+        false
+    in
+    let* () = MIR_SSA_Verify.verifyFunction lowered in
+    match lowered.M.typedParams with
+    | [ { M.reg = M.VReg input; _ } ] when input > 10000 -> Ok ()
+    | _ -> Error "SSA lowering reused a source identity for a fresh loop input"
+  in
+  let* () = check AST.TInt64 (A.IntLiteral (A.Int64 7L)) in
+  check AST.TFloat64 (A.FloatLiteral 3.5)
+
+let testSsaPhiParametersPreserveEdgeValuesAndTypes () =
+  let identity = AST.functionId 1L in
+  let name = "typedPhiEdges" in
+  let parameter n typ : A.typedParam = { A.id = A.TempId n; typ } in
+  let block n parameters operations terminator : S.block =
+    { S.label = S.Label n; parameters; operations; terminator }
+  in
+  let func : S.functionDef =
+    {
+      S.id = identity;
+      name;
+      typedParams =
+        [
+          parameter 10000 AST.TBool;
+          parameter 10001 AST.TInt64;
+          parameter 10002 AST.TFloat64;
+        ];
+      returnType = AST.TFloat64;
+      returnOwnership = A.OwnedReturn;
+      entry = S.Label 0;
+      freshValueTypes = RcTypeFacts.TempMap.empty;
+      blocks =
+        S.LabelMap.of_list
+          [
+            ( S.Label 0,
+              block 0 [] []
+                (S.Branch (A.Var (A.TempId 10000), S.Label 1, S.Label 2)) );
+            ( S.Label 1,
+              block 1 [] []
+                (S.Jump
+                   ( S.Label 3,
+                     [ A.Var (A.TempId 10001); A.Var (A.TempId 10002) ] )) );
+            ( S.Label 2,
+              block 2 [] []
+                (S.Jump
+                   (S.Label 3, [ A.IntLiteral (A.Int64 7L); A.FloatLiteral 1.5 ]))
+            );
+            ( S.Label 3,
+              block 3
+                [ parameter 0 AST.TInt64; parameter 1 AST.TFloat64 ]
+                [
+                  (A.TempId 2, A.Int64ToFloat (A.Var (A.TempId 0)));
+                  ( A.TempId 3,
+                    A.Prim (A.Add, A.Var (A.TempId 2), A.Var (A.TempId 1)) );
+                ]
+                (S.Return (A.Var (A.TempId 3))) );
+          ];
+    }
+  in
+  let* lowered =
+    R.convertSSAANFFunction func A.TypeMap.empty StringOrder.Map.empty
+      (FunctionIdMap.ofList [ (identity, AST.TFloat64) ])
+      (FunctionIdMap.ofList [ (identity, name) ])
+      false
+  in
+  let* () = MIR_SSA_Verify.verifyFunction lowered in
+  let incoming destination typ expected =
+    M.LabelMap.exists
+      (fun _ (block : M.basicBlock) ->
+        List.exists
+          (function
+            | M.Phi (reg, sources, Some actualType)
+              when reg = M.VReg destination && actualType = typ ->
+                List.length sources = List.length expected
+                && List.for_all (fun pair -> List.mem pair sources) expected
+            | _ -> false)
+          block.M.instrs)
+      lowered.M.cfg.M.blocks
+  in
+  let left = M.Label (name ^ "_ssa_1") and right = M.Label (name ^ "_ssa_2") in
+  if
+    incoming 0 AST.TInt64
+      [ (M.Register (M.VReg 10001), left); (M.Int64Const 7L, right) ]
+    && incoming 1 AST.TFloat64
+         [ (M.Register (M.VReg 10002), left); (M.FloatSymbol 1.5, right) ]
+    && M.IntSet.mem 1 lowered.M.floatRegs
+    && M.IntSet.mem 10002 lowered.M.floatRegs
+  then Ok ()
+  else Error "SSA lowering changed phi edge values or Float register types"
+
+let testSsaVerifierRejectsMissingSuccessors () =
+  let entry = M.Label "entry" in
+  let check terminator =
+    let func : M.functionDef =
+      {
+        M.id = AST.functionId 1L;
+        name = "missingSuccessor";
+        typedParams = [];
+        returnType = AST.TInt64;
+        floatRegs = M.IntSet.empty;
+        cfg =
+          {
+            M.entry;
+            blocks =
+              M.LabelMap.singleton entry
+                { M.label = entry; instrs = []; terminator };
+          };
+      }
+    in
+    match MIR_SSA_Verify.verifyFunction func with
+    | Error message when contains message "missing target" -> Ok ()
+    | Error message -> Error message
+    | Ok () -> Error "SSA verification accepted a missing successor"
+  in
+  let missing = M.Label "missing" in
+  let* () = check (M.Jump missing) in
+  check (M.Branch (M.Int64Const 1L, entry, missing))
+
 let tests =
   [
     ( "type information composition preserves gaps and unit boundaries",
       testTypeInformationComposition );
+    ( "SSA expansion registers avoid unused high parameters",
+      testSsaExpansionRegistersAvoidUnusedHighParameters );
+    ( "SSA phi parameters preserve edge values and types",
+      testSsaPhiParametersPreserveEdgeValuesAndTypes );
+    ( "SSA verifier rejects missing successors",
+      testSsaVerifierRejectsMissingSuccessors );
     ( "raw_get intrinsic fallback crashes instead of defaulting to Int64",
       testRawGetIntrinsicReturnTypeDoesNotDefaultToInt64 );
     ( "variant registry rejects inconsistent type parameters",

@@ -11,4 +11,7 @@ val testPreRcSsaTypesBranchLocalDefinitions : unit -> testResult
 val testSsaReturnFlowAcrossJoinAndLoop : unit -> testResult
 val testSsaReturnFlowThroughSwappedParameters : unit -> testResult
 val testTypeInformationComposition : unit -> testResult
+val testSsaExpansionRegistersAvoidUnusedHighParameters : unit -> testResult
+val testSsaPhiParametersPreserveEdgeValuesAndTypes : unit -> testResult
+val testSsaVerifierRejectsMissingSuccessors : unit -> testResult
 val tests : (string * (unit -> testResult)) list
