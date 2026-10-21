@@ -112,6 +112,16 @@ let __feedback (state: Stdlib.__Http3.State) (bytes: Blob) : Stdlib.Result.Resul
         else Stdlib.__QuicConnection.write state.connection id (Stdlib.__Http2Wire.__slice pending 0L size) false
           |> Stdlib.Result.map (fun connection -> { state with connection = connection, feedback = Stdlib.__Http2Wire.__slice pending size (length - size) })
 
+// A reset discards queued HEADERS, but cannot release references that the peer
+// might already be decoding. Retain those until decoder feedback arrives.
+let __stopOutput (state: Stdlib.__Http3.State) (stream: Int64) (code: Int64) : Stdlib.Result.Result<Stdlib.__Http3.State, String> =
+  let unsent = match Stdlib.__QuicFlow.channel state.connection.flow stream with
+    | None -> false
+    | Some channel -> match channel.send with | None -> false | Some sender -> sender.offset == 0L in
+  Stdlib.__QuicFlow.stop state.connection.flow (Stdlib.__QuicApplication.StreamLimit { id = stream, value = code }) |> Stdlib.Result.andThen (fun stopped ->
+    Stdlib.__QuicConnection.__queue (Stdlib.__QuicConnection.__flow state.connection stopped.state) stopped.frames |> Stdlib.Result.map (fun connection ->
+      { state with connection = connection, uni = if unsent then { state.uni with outgoing = Stdlib.__QpackEncoder.discardUnsent state.uni.outgoing stream } else state.uni }))
+
 let __controls (state: Stdlib.__Http3.State) : Stdlib.Result.Result<Stdlib.__Http3.State, String> =
   Stdlib.List.fold state.connection.flow.channels (Ok state) (fun result channel ->
     if channel.id % 4L != (if state.connection.flow.role == Stdlib.__QuicFlow.Role.Client then 3L else 2L) then result

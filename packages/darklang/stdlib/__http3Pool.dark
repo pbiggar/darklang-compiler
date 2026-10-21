@@ -86,12 +86,11 @@ let __finishUpload (wire: Stdlib.__Http3.State) : Stdlib.Result.Result<Stdlib.__
   let stopped = match Stdlib.__QuicFlow.channel wire.connection.flow wire.stream with
     | None -> Error "Missing leased HTTP/3 stream"
     | Some channel -> match channel.send with
-      | None -> Ok wire.connection
+      | None -> Ok wire
       | Some sender ->
-        if sender.finished then Ok wire.connection
-        else Stdlib.__QuicFlow.stop wire.connection.flow (Stdlib.__QuicApplication.StreamLimit { id = wire.stream, value = 256L })
-          |> Stdlib.Result.andThen (fun stopped -> Stdlib.__QuicConnection.__queue (Stdlib.__QuicConnection.__flow wire.connection stopped.state) stopped.frames) in
-  stopped |> Stdlib.Result.andThen Stdlib.__QuicConnection.flush |> Stdlib.Result.map (fun connection -> { wire with connection = connection })
+        if sender.finished then Ok wire
+        else Stdlib.__Http3.__stopOutput wire wire.stream 256L in
+  stopped |> Stdlib.Result.andThen (fun wire -> Stdlib.__QuicConnection.flush wire.connection |> Stdlib.Result.map (fun connection -> { wire with connection = connection }))
 
 let __bodyNext (lease: Stdlib.__Http3Pool.BodyLease) : Stdlib.Option.Option<UInt8> =
   match Stdlib.Stream.next lease.lifecycle with | None -> None | Some _ -> Stdlib.__Http3Client.__bodyNext lease.cell
