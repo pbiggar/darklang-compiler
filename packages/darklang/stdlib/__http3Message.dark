@@ -3,6 +3,8 @@ module Darklang.Stdlib.__Http3Message
 
 type Mode = Request | Response of Bool
 type Phase = AwaitHead | Body | Trailers
+type Scope = Stream | Connection
+type Failure = { scope: Stdlib.__Http3Message.Scope, code: Int64, message: String }
 type Waiting = { bytes: Blob, prefix: Stdlib.__QpackDecoder.Prefix }
 type State = {
   framing: Stdlib.__Http3Stream.State,
@@ -162,13 +164,13 @@ let feed (state: Stdlib.__Http3Message.State) (data: Blob)
   : Stdlib.Result.Result<Stdlib.__Http3Message.Received, String> =
   Stdlib.__QpackDecoder.create 0L |> Stdlib.Result.andThen (fun table -> Stdlib.__Http3Message.feedWithTable table 0L state data)
 
-let finish (state: Stdlib.__Http3Message.State) : Stdlib.Result.Result<Unit, String> =
-  if Stdlib.Option.isSome state.waiting then Error "HTTP/3 headers are blocked"
+let finish (state: Stdlib.__Http3Message.State) : Stdlib.Result.Result<Unit, Stdlib.__Http3Message.Failure> =
+  if Stdlib.Option.isSome state.waiting then Error (Stdlib.__Http3Message.Failure { scope = Stream, code = 270L, message = "HTTP/3 headers are blocked" })
   else match Stdlib.__Http3Stream.finish state.framing with
-  | Error message -> Error message
+  | Error message -> Error (Stdlib.__Http3Message.Failure { scope = Connection, code = 262L, message = message })
   | Ok _ ->
-    if state.phase == AwaitHead then Error "HTTP/3 stream ended before final HEADERS"
+    if state.phase == AwaitHead then Error (Stdlib.__Http3Message.Failure { scope = Stream, code = if state.mode == Request then 269L else 270L, message = "HTTP/3 stream ended before final HEADERS" })
     else
       match state.expected with
-      | Some length -> if length != state.received then Error "HTTP/3 Content-Length mismatch" else Ok ()
+      | Some length -> if length != state.received then Error (Stdlib.__Http3Message.Failure { scope = Stream, code = 270L, message = "HTTP/3 Content-Length mismatch" }) else Ok ()
       | None -> Ok ()

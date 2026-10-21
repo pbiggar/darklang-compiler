@@ -78,10 +78,14 @@ let __parse (context: Stdlib.__Http3Server.Context) (state: Stdlib.__Http3Server
         Stdlib.__Http3Server.events { request with message = received.state } (resumed.events @ received.events) context.limit |> Stdlib.Result.andThen (fun request ->
           let finished = read.finished && Stdlib.Option.isNone request.message.waiting in
           let valid = if finished && Stdlib.Bool.not request.oversized then Stdlib.__Http3Message.finish request.message else Ok () in
-          valid |> Stdlib.Result.andThen (fun _unit ->
+          match valid with
+          | Error failure ->
+            if failure.scope == Stdlib.__Http3Message.Scope.Stream then Stdlib.__Http3Server.cancel { state with wire = wire } active.id failure.code
+            else let _ = Stdlib.__QuicConnection.reject wire.connection failure.code in Error failure.message
+          | Ok _unit ->
             let active = { active with message = Stdlib.__Http3Server.Message.RequestInput request } in
             let next = Stdlib.__Http3Server.__replace { state with wire = wire, deadline = if Stdlib.Blob.__byteLength read.bytes > 0L then now + 30000L else state.deadline } active in
-            if next.total > 104857600L then Error "HTTP/3 server retained body budget exceeded" else Stdlib.__Http3Server.__dispatch context next active request finished now)))))
+            if next.total > 104857600L then Error "HTTP/3 server retained body budget exceeded" else Stdlib.__Http3Server.__dispatch context next active request finished now))))
 
 let __read (context: Stdlib.__Http3Server.Context) (state: Stdlib.__Http3Server.State) (active: Stdlib.__Http3Server.Active) (now: Int64) : Stdlib.Result.Result<Stdlib.__Http3Server.State, String> =
   let blocked = match active.message with

@@ -342,6 +342,12 @@ mean the entire branch has passed its integration or performance gates.
   first ack-eliciting-send restart and the RTT-derived three-PTO floor.
 - [ ] Typed protocol failures with correct stream and connection wire errors,
   retaining the current packet-number/key state across recoverable failures.
+  HTTP/3 FIN validation now returns scoped failures with the latest receive
+  state. Content-Length mismatches fail only their batch stream and preserve
+  other responses and follow-up reuse. Truncated frames close the connection
+  with H3_FRAME_ERROR; incomplete requests use H3_REQUEST_INCOMPLETE. Closing
+  owners retain their error code for retransmission. Other parser, critical-
+  stream and transport failures still need the broader typed migration.
 - [ ] Sustained native TLS connection churn without exhausting the fixed heap.
   - [x] The parent fails the isolated thirty-two-connection TLS churn peer with
     `Out of heap memory`. Linux x86-64 now recycles canonical String/Blob/Int
