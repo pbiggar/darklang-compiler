@@ -81,9 +81,9 @@ let pixelColor (spheres: List<Sphere>) (light: Vec3) (size: Int64) (x: Int64) (y
     trace spheres (Ray { origin = camera, direction = direction }) light
 
 let addPixel (result: Int64) (index: Int64) (pixel: Color) : Int64 =
-    let red = Stdlib.Int64.fromFloat (pixel.red * 1000000.0) in
-    let green = Stdlib.Int64.fromFloat (pixel.green * 1000000.0) in
-    let blue = Stdlib.Int64.fromFloat (pixel.blue * 1000000.0) in
+    let red = Builtin.unwrap (Stdlib.Int64.fromFloat (pixel.red * 1000000.0)) in
+    let green = Builtin.unwrap (Stdlib.Int64.fromFloat (pixel.green * 1000000.0)) in
+    let blue = Builtin.unwrap (Stdlib.Int64.fromFloat (pixel.blue * 1000000.0)) in
     (result + (red * 3L + green * 5L + blue * 7L) * (index + 1L)) % 1000000007L
 
 let renderRow (spheres: List<Sphere>) (light: Vec3) (size: Int64) (y: Int64) (x: Int64) (result: Int64) : Int64 =

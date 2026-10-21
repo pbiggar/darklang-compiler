@@ -183,4 +183,4 @@ let benchmarkArg (index: Int) : Int64 =
 
 let system = offsetMomentum (initialSystem ()) in
 let finalSystem = advance system 0.01 (benchmarkArg 0) in
-Builtin.printLine (Stdlib.Int64.toString (Stdlib.Int64.fromFloat (energy finalSystem * 1000000.0)))
+Builtin.printLine (Stdlib.Int64.toString (Builtin.unwrap (Stdlib.Int64.fromFloat (energy finalSystem * 1000000.0))))
