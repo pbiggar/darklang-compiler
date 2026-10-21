@@ -234,6 +234,7 @@ let analyzeCExpr operation analysis =
       analyzeAtom atom analysis
   | A.StringConcat (first, second, remaining) ->
       analyzeAtoms (first :: second :: remaining) analysis
+  | A.RawFreeSized (ptr, size) -> analyzeAtoms [ ptr; size ] analysis
   | A.Prim (_, left, right)
   | A.CanonicalBufferEq (_, left, right)
   | A.FileWriteBlob (left, right)

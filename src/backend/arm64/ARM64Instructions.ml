@@ -165,6 +165,8 @@ let rec convertInstr (ctx : codeGenContext) (instr : LIR.instr) :
   | LIR.RawAlloc (dest, numBytes) ->
       ARM64EmitMemory.emitRawAlloc ctx dest numBytes
   | LIR.RawFree ptr -> ARM64EmitMemory.emitRawFree ctx ptr
+  | LIR.RawFreeSized (ptr, size) ->
+      ARM64EmitMemory.emitRawFreeSized ctx ptr size
   | LIR.RawGet (dest, ptr, byteOffset) ->
       ARM64EmitMemory.emitRawGet ctx dest ptr byteOffset
   | LIR.RawGetByte (dest, ptr, byteOffset) ->

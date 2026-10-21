@@ -1384,6 +1384,8 @@ let selectInstr arch instr variantRegistry recordRegistry printRcContext
           ],
         next )
   | M.RawFree ptr -> integerUnary (fun reg -> L.RawFree reg) ptr
+  | M.RawFreeSized (ptr, size) ->
+      integerBinary (fun p s -> L.RawFreeSized (p, s)) ptr size
   | M.MappedFree ptr ->
       let+ loads, reg, next = ensure ptr state in
       ( loads @ [ L.SaveRegs ([], []); L.MappedFree reg; L.RestoreRegs ([], []) ],
@@ -1649,6 +1651,8 @@ let maxVRegIdFromInstr instr currentMax =
   | MIR.RefCountIncBlob ptr
   | MIR.RefCountDecBlob ptr ->
       maxVRegIdFromOperand ptr currentMax
+  | MIR.RawFreeSized (ptr, size) ->
+      currentMax |> maxVRegIdFromOperand ptr |> maxVRegIdFromOperand size
   | MIR.RefCountIncInt ptr | MIR.RefCountDecInt ptr ->
       maxVRegIdFromOperand ptr currentMax
   | MIR.RawGet (dest, ptr, byteOffset, _)

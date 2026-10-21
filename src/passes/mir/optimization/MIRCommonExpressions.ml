@@ -464,7 +464,7 @@ let applyCSEWithEffectFreeCallsAndTopology existingTopology effectFreeFunctions
                 (clearHeapLoadAndDirectCallAvailability exprMap)
                 emptyExprAvailability
           | RefCountDec _ | RefCountDecString _ | RefCountDecBlob _
-          | RefCountDecInt _ | RawFree _ | MappedFree _ ->
+          | RefCountDecInt _ | RawFree _ | RawFreeSized _ | MappedFree _ ->
               retain emptyExprAvailability emptyExprAvailability
           | Mov (_, _, Some typ) when not (isCrossBlockCSEType typ) ->
               retain

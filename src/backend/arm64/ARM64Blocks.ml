@@ -200,6 +200,7 @@ let lirInstructionCaseNames =
     "CliNative";
     "FloatToString";
     "CoverageHit";
+    "RawFreeSized";
   |]
 
 let readLirInstructionTag = function
@@ -305,6 +306,7 @@ let readLirInstructionTag = function
   | LIR.RawAlloc _ -> 99
   | LIR.MappedAlloc _ -> 100
   | LIR.RawFree _ -> 101
+  | LIR.RawFreeSized _ -> 120
   | LIR.MappedFree _ -> 102
   | LIR.RawGet _ -> 103
   | LIR.RawGetByte _ -> 104

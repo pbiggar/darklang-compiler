@@ -406,7 +406,7 @@ let freshLabel prefix =
    fixed-block allocations. Logical length is a conservative capacity when a
    producer reserved extra bytes. Preserve every temporary: callers include
    iterative list destruction and nested record/closure release helpers. *)
-let genBufferRecycle pointer =
+let genSizedRecycle pointer loadSize =
   let count = if pointer = X86_64.RCX then X86_64.RAX else X86_64.RCX in
   let slot = if pointer = X86_64.RDX then X86_64.RSI else X86_64.RDX in
   let doneLabel = freshLabel "buffer_recycle_done" in
@@ -420,29 +420,46 @@ let genBufferRecycle pointer =
     X86_64.Jcc (X86_64.LT, doneLabel);
     X86_64.CMP_reg (pointer, heapPtr);
     X86_64.Jcc (X86_64.GE, doneLabel);
-    X86_64.MOV_load (count, pointer, 8l);
-    X86_64.CMP_imm (count, 0l);
-    X86_64.Jcc (X86_64.LT, doneLabel);
-    X86_64.CMP_imm (count, Int64.to_int32 (Int64.sub heapMmapSizeBytes 16L));
-    X86_64.Jcc (X86_64.GT, doneLabel);
-    (* aligned allocation = roundUp(length + 16, 8); class excludes 8 bytes. *)
-    X86_64.ADD_imm (count, 23l);
-    X86_64.AND_imm (count, -8l);
-    X86_64.CMP_imm (count, Int32.of_int freeListSize);
-    X86_64.Jcc (X86_64.GT, largeLabel);
-    X86_64.SUB_imm (count, 8l);
-    X86_64.MOV_reg (slot, freeListBase);
-    X86_64.ADD_reg (slot, count);
-    X86_64.MOV_load (count, slot, 0l);
-    X86_64.MOV_store (pointer, 0l, count);
-    X86_64.MOV_store (slot, 0l, pointer);
-    X86_64.JMP doneLabel;
-    X86_64.Label largeLabel;
-    X86_64.MOV_store (pointer, 8l, count);
-    X86_64.MOV_load (slot, freeListBase, Int32.of_int largeBufferHeadOffset);
-    X86_64.MOV_store (pointer, 0l, slot);
-    X86_64.MOV_store (freeListBase, Int32.of_int largeBufferHeadOffset, pointer);
-    X86_64.Label doneLabel;
-    X86_64.POP slot;
-    X86_64.POP count;
   ]
+  @ loadSize count doneLabel
+  @ [
+      X86_64.CMP_imm (count, 1l);
+      X86_64.Jcc (X86_64.LT, doneLabel);
+      X86_64.CMP_imm (count, Int64.to_int32 heapMmapSizeBytes);
+      X86_64.Jcc (X86_64.GT, doneLabel);
+      (* Aligned allocation = roundUp(size, 8); class excludes 8 bytes. *)
+      X86_64.ADD_imm (count, 7l);
+      X86_64.AND_imm (count, -8l);
+      X86_64.CMP_imm (count, Int32.of_int freeListSize);
+      X86_64.Jcc (X86_64.GT, largeLabel);
+      X86_64.SUB_imm (count, 8l);
+      X86_64.MOV_reg (slot, freeListBase);
+      X86_64.ADD_reg (slot, count);
+      X86_64.MOV_load (count, slot, 0l);
+      X86_64.MOV_store (pointer, 0l, count);
+      X86_64.MOV_store (slot, 0l, pointer);
+      X86_64.JMP doneLabel;
+      X86_64.Label largeLabel;
+      X86_64.MOV_store (pointer, 8l, count);
+      X86_64.MOV_load (slot, freeListBase, Int32.of_int largeBufferHeadOffset);
+      X86_64.MOV_store (pointer, 0l, slot);
+      X86_64.MOV_store
+        (freeListBase, Int32.of_int largeBufferHeadOffset, pointer);
+      X86_64.Label doneLabel;
+      X86_64.POP slot;
+      X86_64.POP count;
+    ]
+
+let genBufferRecycle pointer =
+  genSizedRecycle pointer (fun count doneLabel ->
+      [
+        X86_64.MOV_load (count, pointer, 8l);
+        X86_64.CMP_imm (count, 0l);
+        X86_64.Jcc (X86_64.LT, doneLabel);
+        X86_64.CMP_imm (count, Int64.to_int32 (Int64.sub heapMmapSizeBytes 16L));
+        X86_64.Jcc (X86_64.GT, doneLabel);
+        X86_64.ADD_imm (count, 16l);
+      ])
+
+let genRawRecycle pointer size =
+  genSizedRecycle pointer (fun count _ -> [ X86_64.MOV_reg (count, size) ])

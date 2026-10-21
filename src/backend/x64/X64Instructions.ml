@@ -145,6 +145,7 @@ let translateInstr comparisonContext (ctx : X64CodeGenTypes.funcCtx) instr =
   | LIR.RawAlloc (dest, numBytes) ->
       X64EmitMemory.emitRawAlloc ctx dest numBytes
   | LIR.RawFree ptr -> X64EmitMemory.emitRawFree ctx ptr
+  | LIR.RawFreeSized (ptr, size) -> X64EmitMemory.emitRawFreeSized ctx ptr size
   | LIR.RawGet (dest, ptr, byteOffset) ->
       X64EmitMemory.emitRawGet ctx dest ptr byteOffset
   | LIR.RawGetByte (dest, ptr, byteOffset) ->

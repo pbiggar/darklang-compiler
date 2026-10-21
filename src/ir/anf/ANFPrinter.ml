@@ -275,6 +275,9 @@ let prettyPrintANFCExpr functionNames expression =
   | ANF.MappedAlloc numBytes ->
       "MappedAlloc(" ^ prettyPrintANFAtom numBytes ^ ")"
   | ANF.RawFree ptr -> "RawFree(" ^ prettyPrintANFAtom ptr ^ ")"
+  | ANF.RawFreeSized (ptr, size) ->
+      "RawFreeSized(" ^ prettyPrintANFAtom ptr ^ ", " ^ prettyPrintANFAtom size
+      ^ ")"
   | ANF.MappedFree ptr -> "MappedFree(" ^ prettyPrintANFAtom ptr ^ ")"
   | ANF.RawGet (ptr, byteOffset, valueType) ->
       let baseText =

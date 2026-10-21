@@ -806,6 +806,7 @@ let foldRegUses folder state instr =
       folder state src
   | Add (_, left, right) | Sub (_, left, right) | Cmp (left, right) ->
       foldOperandRegUse folder (folder state left) right
+  | RawFreeSized (left, right) -> folder (folder state left) right
   | Mul (_, left, right)
   | Sdiv (_, left, right)
   | Udiv (_, left, right)

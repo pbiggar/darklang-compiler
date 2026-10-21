@@ -87,7 +87,7 @@ let __output (words: RawPtr) (position: Int64) (bytes: List<Int64>) : Blob =
     Stdlib.__RsaMontgomery.__output words (position - 1L) (Stdlib.List.push bytes byte)
 
 let __dispose (words: RawPtr) (count: Int64) : Unit =
-  let _ = Stdlib.__RsaMontgomery.__zero words 0L count in __raw_free words
+  let _ = Stdlib.__RsaMontgomery.__zero words 0L count in __raw_free_sized words (count * 8L)
 
 // Bound all allocations by the public modulus width, not intermediate products.
 // Callers validate RSA signature range and encoding before this operation.

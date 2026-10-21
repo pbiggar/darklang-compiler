@@ -322,6 +322,7 @@ type instr =
   | RawAlloc of reg * reg
   | MappedAlloc of reg * reg
   | RawFree of reg
+  | RawFreeSized of reg * reg
   | MappedFree of reg
   | RawGet of reg * reg * reg
   | RawGetByte of reg * reg * reg

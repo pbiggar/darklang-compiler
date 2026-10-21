@@ -25,7 +25,7 @@ let __send (fd: Int64) (ipv6: Bool) (lifecycle: Stream<Unit>)
       | Ok () ->
         let address = Stdlib.__Network.__socketAddress ipv6 peer.address peer.port in
         let sent = Stdlib.__Network.__sendToWithMode fd payload address (if ipv6 then 28L else 16L) (timeoutMs == 0L) in
-        let _ = __raw_free address in
+        let _ = __raw_free_sized address (if ipv6 then 32L else 16L) in
         if sent < 0L then Error (0L - sent)
         else if sent != Stdlib.Blob.__byteLength payload then Error 90L
         else Ok ()
@@ -68,8 +68,8 @@ let __receive (fd: Int64) (ipv6: Bool) (lifecycle: Stream<Unit>) (timeoutMs: Int
           if received < 0L then Error (0L - received)
           else if received > 4096L then Error 90L
           else Stdlib.__Datagram.__decode ipv6 peer buffer received in
-        let _ = __raw_free peer in
-        let _ = __raw_free buffer in
+        let _ = __raw_free_sized peer 40L in
+        let _ = __raw_free_sized buffer 4097L in
         result
 
 let __bind (ipv6: Bool) (address: List<Int64>) (port: Int64)
@@ -83,7 +83,7 @@ let __bind (ipv6: Bool) (address: List<Int64>) (port: Int64)
       let address = Stdlib.__Network.__socketAddress ipv6 address port in
       let marked = Stdlib.__Network.__cloexec fd in
       let bound = if marked < 0L then marked else if ipv6 then Stdlib.__Network.__bind6 fd address else Stdlib.__Network.__bind4 fd address in
-      let _ = __raw_free address in
+      let _ = __raw_free_sized address (if ipv6 then 32L else 16L) in
       if bound < 0L then
         let _ = Stdlib.Stream.close lifecycle in
         Error (0L - bound)

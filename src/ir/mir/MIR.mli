@@ -181,6 +181,7 @@ type instr =
   | RawAlloc of vReg * operand
   | MappedAlloc of vReg * operand
   | RawFree of operand
+  | RawFreeSized of operand * operand
   | MappedFree of operand
   | RawGet of vReg * operand * operand * AST.semanticType option
   | RawGetByte of vReg * operand * operand

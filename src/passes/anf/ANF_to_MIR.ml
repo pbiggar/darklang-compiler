@@ -405,6 +405,8 @@ let maxTempIdInCExpr (cexpr : ANF.cExpr) =
   | ANF.RawAlloc numBytes -> maxTempIdInAtom numBytes
   | ANF.MappedAlloc numBytes -> maxTempIdInAtom numBytes
   | ANF.RawFree ptr -> maxTempIdInAtom ptr
+  | ANF.RawFreeSized (ptr, size) ->
+      max (maxTempIdInAtom ptr) (maxTempIdInAtom size)
   | ANF.MappedFree ptr -> maxTempIdInAtom ptr
   | ANF.RawGet (ptr, offset, _) | ANF.RawTake (ptr, offset, _) ->
       max (maxTempIdInAtom ptr) (maxTempIdInAtom offset)
@@ -970,6 +972,7 @@ let cexprDescription cexpr =
   | ANF.RawAlloc _ -> "RawAlloc"
   | ANF.MappedAlloc _ -> "MappedAlloc"
   | ANF.RawFree _ -> "RawFree"
+  | ANF.RawFreeSized _ -> "RawFreeSized"
   | ANF.MappedFree _ -> "MappedFree"
   | ANF.RawGet _ -> "RawGet"
   | ANF.RawTake _ -> "RawTake"
@@ -1381,6 +1384,8 @@ let simpleCExprInstrs builder tempId destReg destType cexpr =
   | ANF.RawAlloc atom -> unary (fun op -> MIR.RawAlloc (destReg, op)) atom
   | ANF.MappedAlloc atom -> unary (fun op -> MIR.MappedAlloc (destReg, op)) atom
   | ANF.RawFree atom -> unary (fun op -> MIR.RawFree op) atom
+  | ANF.RawFreeSized (ptr, size) ->
+      binary (fun p s -> MIR.RawFreeSized (p, s)) ptr size
   | ANF.MappedFree atom -> unary (fun op -> MIR.MappedFree op) atom
   | ANF.RawGet (ptr, offset, typ) | ANF.RawTake (ptr, offset, typ) ->
       binary (fun p o -> MIR.RawGet (destReg, p, o, typ)) ptr offset
