@@ -1,4 +1,4 @@
-(* ANFPrinter.ml - Format ANF functions and scoped or summarized dumps. *)
+(* ANFPrinter.ml - Format structured ANF and its typed SSA control-flow form. *)
 [@@@warning "-4"]
 
 open IRPrinting
@@ -418,6 +418,45 @@ let formatANF (ANF.Program (functions, mainExpr)) =
 *)
 let formatANFFunction names (func : ANF.functionDef) =
   "Function " ^ func.ANF.name ^ ":\n" ^ prettyPrintANFExpr names func.ANF.body
+
+let formatSSAFunctions names functions =
+  let label (SSAANF.Label id) = "block" ^ string_of_int id in
+  let atom = prettyPrintANFAtomWithNames names in
+  let parameter (param : ANF.typedParam) =
+    atom (ANF.Var param.ANF.id) ^ ": "
+    ^ StructuralFormat.semanticType param.ANF.typ
+  in
+  let terminator = function
+    | SSAANF.Return value -> "return " ^ atom value
+    | SSAANF.Jump (target, arguments) ->
+        "jump " ^ label target ^ "(" ^ commaSeparated atom arguments ^ ")"
+    | SSAANF.Branch (condition, yes, no) ->
+        "branch " ^ atom condition ^ ", " ^ label yes ^ ", " ^ label no
+  in
+  List.map
+    (fun (func : SSAANF.functionDef) ->
+      let blocks =
+        SSAANF.LabelMap.bindings func.SSAANF.blocks
+        |> List.map (fun (_, (block : SSAANF.block)) ->
+            String.concat "\n"
+              ((label block.SSAANF.label ^ "("
+               ^ commaSeparated parameter block.SSAANF.parameters
+               ^ "):")
+              :: List.map
+                   (fun (id, operation) ->
+                     "let " ^ tempId id ^ " = "
+                     ^ prettyPrintANFCExpr names operation)
+                   block.SSAANF.operations
+              @ [ terminator block.SSAANF.terminator ]))
+      in
+      "Function " ^ func.SSAANF.name ^ "("
+      ^ commaSeparated parameter func.SSAANF.typedParams
+      ^ "): "
+      ^ StructuralFormat.semanticType func.SSAANF.returnType
+      ^ " [entry " ^ label func.SSAANF.entry ^ "]\n"
+      ^ String.concat "\n" blocks)
+    functions
+  |> String.concat "\n\n"
 
 (*
    Format only matching ANF functions, optionally as a compact inventory.

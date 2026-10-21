@@ -1,7 +1,6 @@
 (* OptimizationTestRunner.mli - Check optimization fixtures with stable IR formatting.
-   MIR/LIR source cases use production SSA optimization, ownership insertion,
-   tail-call detection and direct SSA MIR lowering. Structured ANF fixtures
-   remain isolated until their assertions migrate to SSA. *)
+   Source cases use production SSA optimization and ownership insertion;
+   MIR/LIR cases also run tail-call detection and direct SSA MIR lowering. *)
 open Dark_compiler
 
 type optimizationTestResult = TestOutcome.t = {

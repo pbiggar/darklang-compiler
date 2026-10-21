@@ -2,7 +2,7 @@
    These tests cover optimizer decisions that must agree with the RcShape
    metadata used by ownership insertion and backend helper selection.
 *)
-(* ANFOptimizeTests.ml - Unit tests for ANF optimizer ownership-sensitive DCE. *)
+(* ANFOptimizeTests.ml - Test shared expression rewrites and ownership-sensitive SSA optimization. *)
 [@@@warning "-4-42"]
 
 open Dark_compiler
@@ -22,12 +22,32 @@ let dceOnlyOptions =
     enableStrengthReduction = false;
   }
 
-let optimizeMain context expr =
-  let (Program (_, main)) =
-    ANF_Optimize.optimizeProgramWithOptions context dceOnlyOptions
-      (Program ([], expr))
+let ( let* ) = Result.bind
+
+let optimizeFunction context options (func : functionDef) =
+  let* ssa =
+    SSAANF.convertFunction (ANF_to_MIR.maxTempIdInFunction func)
+      ANF.TypeMap.empty func
   in
-  main
+  match SSAOptimization.optimizeFunctions context options [ ssa ] with
+  | [ optimized ] -> Ok optimized
+  | _ -> Error "SSA optimization changed the number of functions"
+
+let optimizeMain context expr =
+  optimizeFunction context dceOnlyOptions
+    {
+      id = AST.functionId 1L;
+      name = "dce";
+      typedParams = [];
+      returnType = AST.TUnit;
+      returnOwnership = OwnedReturn;
+      body = expr;
+    }
+
+let singleBlock (func : SSAANF.functionDef) =
+  match SSAANF.LabelMap.bindings func.SSAANF.blocks with
+  | [ (_, block) ] -> Ok block
+  | _ -> Error "Expected one optimized SSA block"
 
 let emptyContext : optimizeContext =
   {
@@ -224,34 +244,43 @@ let testLiteralBitNotFolds () =
 
 let testDceDropsUnusedPureGenericSumTypedAtom () =
   let markerType = AST.TSum ("Marker", [ AST.TString ]) in
-  match
+  let* optimized =
     optimizeMain markerContext
       (Let
          ( TempId 0,
            TypedAtom (IntLiteral (Int64 0L), markerType),
            Return UnitLiteral ))
+  in
+  let* block = singleBlock optimized in
+  match
+    (block.SSAANF.operations, block.SSAANF.terminator)
   with
-  | Return UnitLiteral -> Ok ()
-  | other ->
+  | [], SSAANF.Return UnitLiteral -> Ok ()
+  | _ ->
       Error
         ("Expected unused pure generic sum TypedAtom to be removed, got "
-        ^ ANFTestFormatting.expr other)
+        ^ ANFPrinter.formatSSAFunctions FunctionIdMap.empty [ optimized ])
 
 let testDcePreservesUnusedHeapGenericSumTypedAtom () =
   let boxType = AST.TSum ("Box", [ AST.TString ]) in
-  match
+  let* optimized =
     optimizeMain markerContext
       (Let
          ( TempId 0,
            TypedAtom (IntLiteral (Int64 0L), boxType),
            Return UnitLiteral ))
+  in
+  let* block = singleBlock optimized in
+  match
+    (block.SSAANF.operations, block.SSAANF.terminator)
   with
-  | Let (TempId 0, TypedAtom (_, typ), Return UnitLiteral) when typ = boxType ->
+  | [ (TempId 0, TypedAtom (_, typ)) ], SSAANF.Return UnitLiteral
+    when typ = boxType ->
       Ok ()
-  | other ->
+  | _ ->
       Error
         ("Expected heap generic sum TypedAtom to be preserved, got "
-        ^ ANFTestFormatting.expr other)
+        ^ ANFPrinter.formatSSAFunctions FunctionIdMap.empty [ optimized ])
 
 let testCseReusesFloatAbsoluteValue () =
   let parameter : typedParam = { id = TempId 0; typ = AST.TFloat64 } in
@@ -275,24 +304,14 @@ let testCseReusesFloatAbsoluteValue () =
                     Return (Var (TempId 3)) ) ) );
     }
   in
-  let (Program (functions, _)) =
-    ANF_Optimize.optimizeProgram emptyContext
-      (Program ([ func ], Return UnitLiteral))
-  in
-  match functions with
-  | [
-   {
-     body =
-       Let
-         ( TempId 1,
-           FloatAbs (Var (TempId 0)),
-           Let
-             ( TempId 3,
-               TupleAlloc [ Var left; Var right ],
-               Return (Var (TempId 3)) ) );
-     _;
-   };
-  ]
+  let* optimized = optimizeFunction emptyContext defaultOptimizeOptions func in
+  let* block = singleBlock optimized in
+  match (block.SSAANF.operations, block.SSAANF.terminator) with
+  | ( [
+        (TempId 1, FloatAbs (Var (TempId 0)));
+        (TempId 3, TupleAlloc [ Var left; Var right ]);
+      ],
+      SSAANF.Return (Var (TempId 3)) )
     when left = TempId 1 && right = TempId 1 ->
       Ok ()
   | _ ->
@@ -322,12 +341,10 @@ let testCanonicalBufferSelfEqualityFoldsForBothRepresentations () =
               Return (Var (TempId 1)) );
       }
     in
-    let (Program (functions, _)) =
-      ANF_Optimize.optimizeProgram emptyContext
-        (Program ([ func ], Return UnitLiteral))
-    in
-    match functions with
-    | [ { body = Return (BoolLiteral true); _ } ] -> Ok ()
+    let* optimized = optimizeFunction emptyContext defaultOptimizeOptions func in
+    let* block = singleBlock optimized in
+    match (block.SSAANF.operations, block.SSAANF.terminator) with
+    | [], SSAANF.Return (BoolLiteral true) -> Ok ()
     | _ ->
         let name =
           match kind with

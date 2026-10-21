@@ -1,7 +1,6 @@
 (* OptimizationTestRunner.ml - Check optimization fixtures with stable IR formatting.
-   MIR/LIR source cases use production SSA optimization, ownership insertion,
-   tail-call detection and direct SSA MIR lowering. Structured ANF fixtures
-   remain isolated until their assertions migrate to SSA. *)
+   Source cases use production SSA optimization and ownership insertion;
+   MIR/LIR cases also run tail-call detection and direct SSA MIR lowering. *)
 [@@@warning "-4-42"]
 
 open Dark_compiler
@@ -74,19 +73,6 @@ let convertTypedProgram (stdlib : CompilationContexts.stdlibResult) recorder
     typedAst =
   SourcePreparation.convertTypedProgramToUserOnlyWithTrace
     stdlib.CompilationContexts.context recorder typedAst
-
-let optimizeContextFromConversionResult (c : AST_to_ANF.conversionResult) =
-  {
-    ANFConstants.typeReg = c.AST_to_ANF.recordFieldsReg;
-    recordTypeParams = c.AST_to_ANF.recordTypeParamsReg;
-    sumShapeReg = c.AST_to_ANF.rcSumShapeReg;
-    functionNames =
-      FunctionIdMap.map (fun _ (name, _) -> name) c.AST_to_ANF.funcReg;
-    functionIds =
-      FunctionIdMap.toList c.AST_to_ANF.funcReg
-      |> List.map (fun (id, (name, _)) -> (name, id))
-      |> M.of_list;
-  }
 
 let normalizeIR ir =
   let units = Text.scalars ir in
@@ -241,16 +227,6 @@ let normalizeIR ir =
   closures 0;
   Text.ofScalars (Text.scalars (Buffer.contents output))
 
-let withoutSyntheticANFMain ir =
-  let suffix = "\n\nMain:\nreturn 0" in
-  if Filename.check_suffix ir suffix then
-    String.sub ir 0 (String.length ir - String.length suffix)
-  else ir
-
-let formatANFForOptimizationTest synthetic program =
-  let formatted = ANFPrinter.formatANF program in
-  if synthetic then withoutSyntheticANFMain formatted else formatted
-
 let removeSyntheticMIREntry (MIR.Program (functions, variants, records)) =
   MIR.Program
     ( List.filter (fun (f : MIR.functionDef) -> f.MIR.name <> "_start") functions,
@@ -292,27 +268,6 @@ let prepare stdlib recorder source =
   in
   Ok (programType, converted, synthetic)
 
-let optimize (user : AST_to_ANF.userOnlyResult) =
-  let open AST_to_ANF in
-  let converted =
-    ANFPipeline.buildConversionResult
-      (ANF.Program (user.userFunctions, user.mainExpr))
-      (AST_to_ANF.registriesOfUserOnly user)
-      user.ownershipContracts
-  in
-  ANF_Optimize.optimizeProgramWithOptions
-    (optimizeContextFromConversionResult converted)
-    ANFConstants.defaultOptimizeOptions converted.AST_to_ANF.program
-
-let getOptimizedANF stdlib recorder source =
-  let* _, converted, synthetic = prepare stdlib recorder source in
-  let optimized =
-    measure recorder "Optimization detail: ANF optimization" (fun () ->
-        optimize converted)
-  in
-  measure recorder "Optimization detail: IR formatting" (fun () ->
-      Ok (formatANFForOptimizationTest synthetic optimized))
-
 let getOptimizedStdlibANF (stdlib : CompilationContexts.stdlibResult) name =
   match M.find_opt name stdlib.CompilationContexts.stdlibAnfFunctions with
   | None -> Error ("Prebuilt stdlib ANF function not found: " ^ name)
@@ -324,7 +279,8 @@ let getOptimizedStdlibANF (stdlib : CompilationContexts.stdlibResult) name =
       in
       Ok (ANFPrinter.formatANFFunction names func)
 
-let mirPipeline stdlib recorder programType (user : AST_to_ANF.userOnlyResult) =
+let ssaPipeline printResult recorder programType
+    (user : AST_to_ANF.userOnlyResult) =
   let open AST_to_ANF in
   let entryId, symbols = CheckedAST.internFunction "_start" user.symbols in
   let registries = AST_to_ANF.registriesOfUserOnly user in
@@ -341,9 +297,10 @@ let mirPipeline stdlib recorder programType (user : AST_to_ANF.userOnlyResult) =
       user.mainExpr
   in
   let* printed =
-    PrintInsertion.insertPrintInEntry registries.functionIds "_start"
-      programType
-      (entry :: user.userFunctions)
+    if printResult then
+      PrintInsertion.insertPrintInEntry registries.functionIds "_start"
+        programType (entry :: user.userFunctions)
+    else Ok (entry :: user.userFunctions)
   in
   let started = Mtime_clock.elapsed_ns () in
   let elapsed () =
@@ -363,12 +320,31 @@ let mirPipeline stdlib recorder programType (user : AST_to_ANF.userOnlyResult) =
       user.nonInlineableFunctionNames printed user.ownershipContracts true
       recorder
   in
+  Ok (functions, typeMap, registries.functionNames)
+
+let getOptimizedANF stdlib recorder source =
+  let* typ, converted, synthetic = prepare stdlib recorder source in
+  let* functions, _, names = ssaPipeline false recorder typ converted in
+  let functions =
+    if synthetic then
+      List.filter
+        (fun (func : SSAANF.functionDef) -> func.SSAANF.name <> "_start")
+        functions
+    else functions
+  in
+  measure recorder "Optimization detail: IR formatting" (fun () ->
+      Ok (ANFPrinter.formatSSAFunctions names functions))
+
+let mirPipeline stdlib recorder programType (user : AST_to_ANF.userOnlyResult) =
+  let* functions, typeMap, functionNames =
+    ssaPipeline true recorder programType user
+  in
   let names, returns =
     List.fold_left
       (fun (names, returns) (func : SSAANF.functionDef) ->
         ( FunctionIdMap.add func.SSAANF.id func.SSAANF.name names,
           FunctionIdMap.add func.SSAANF.id func.SSAANF.returnType returns ))
-      ( registries.functionNames,
+      ( functionNames,
         FunctionIdMap.map (fun _ (_, typ) -> typ) (returnTypesFor stdlib) )
       functions
   in
