@@ -249,7 +249,10 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--compiler", type=Path, default=ROOT / "dark")
     parser.add_argument("--skip-owner-checks", action="store_true", help="Isolate the legacy HTTP/2 and handshake compatibility cases")
+    parser.add_argument("--churn", type=int, default=0, help="Run only this many fresh TLS connections against one serving process")
     args = parser.parse_args()
+    if args.churn < 0:
+        parser.error("--churn must be nonnegative")
     key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
     now = datetime.datetime.now(datetime.timezone.utc)
     name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "localhost")])
@@ -269,6 +272,16 @@ def main():
         assert compiled.returncode == 0, compiled.stdout + compiled.stderr
         process, port = start(binary)
         try:
+            if args.churn:
+                for index in range(args.churn):
+                    body = bytes([index % 251]) * 128
+                    with connect(port, certificate, ["http/1.1"]) as peer, peer.makefile("rb") as reader:
+                        peer.sendall(b"POST /echo HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\nContent-Length: 128\r\n\r\n" + body)
+                        assert http1_response(reader)[1] == body, index
+                        assert not reader.read(1), index
+                stop(process)
+                print(f"TLS server: {args.churn} fresh connections on one process, exact bodies and zero leaks", flush=True)
+                return
             if not args.skip_owner_checks:
                 http1_owners(port, certificate)
                 http2_owners(port, certificate)
