@@ -14,12 +14,4 @@ val createExecutableWithPools :
   bool ->
   bytes
 
-val createExecutableWithCoverage :
-  int32 array ->
-  LiteralPool.stringPool ->
-  LiteralPool.floatPool ->
-  int ->
-  bool ->
-  bytes
-
 val writeToFile : string -> bytes -> (unit, string) result
