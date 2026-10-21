@@ -82,6 +82,28 @@ let reset () : Stdlib.Result.Result<(List<(Int64 * String)> * Int64), String> =
   result
 reset () = Ok (([(4L, "responding")], 1L)) // leak_check
 
+// The single-stream receiver must also surface resets while QPACK is blocked.
+// Waiting for encoder instructions must not hide a terminal transport event.
+let blockedReceiver (blocked: Bool) (reset: Bool) : Stdlib.Result.Result<Bool, String> =
+  let initial = fixture () in
+  let result = request initial 0L "a" 2L false |> Stdlib.Result.andThen (fun state ->
+    let waiting = Stdlib.__Http3Message.Waiting { bytes = Stdlib.Blob.empty, prefix = Stdlib.__QpackDecoder.Prefix { required = 1L, base = 1L, next = 0L } } in
+    let message = { state.wire.message with waiting = if blocked then Some waiting else None } in
+    let flow = state.wire.connection.flow in
+    let updated =
+      if reset then
+        let size = match Stdlib.__QuicFlow.channel flow 0L with | None -> -1L | Some channel -> match channel.receive with | None -> -1L | Some receiver -> receiver.highest in
+        Stdlib.__QuicFlow.reset flow (Stdlib.__QuicApplication.Reset { id = 0L, code = 268L, finalSize = size })
+      else Ok flow in
+    updated |> Stdlib.Result.andThen (fun flow ->
+      Stdlib.__Http3.__drain { state.wire with message = message, connection = Stdlib.__QuicConnection.__flow state.wire.connection flow }
+        |> Stdlib.Result.map (fun received -> received.finished))) in
+  Stdlib.__Http3.close initial.wire
+  result
+blockedReceiver true false = Ok false // leak_check
+blockedReceiver false true = Error "HTTP/3 response stream reset" // leak_check
+blockedReceiver true true = Error "HTTP/3 response stream reset" // leak_check
+
 let timeout () : Stdlib.Result.Result<(String * Int64), String> =
   let initial = fixture () in
   let result = request initial 0L "a" 2L false |> Stdlib.Result.andThen (fun state -> Stdlib.__Http3Server.step (context ()) state 1L) |> Stdlib.Result.andThen (fun state -> Stdlib.__Http3Server.step (context ()) state 10001L) |> Stdlib.Result.map (fun state ->

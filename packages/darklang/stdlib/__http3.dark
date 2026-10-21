@@ -171,7 +171,13 @@ let nextRequest (state: Stdlib.__Http3.State) (stream: Int64) (headOnly: Bool) (
 // Drain before polling so response data and control credit already received cannot starve.
 let __drain (state: Stdlib.__Http3.State) : Stdlib.Result.Result<Stdlib.__Http3.Received, String> =
   Stdlib.__Http3.__controls state |> Stdlib.Result.andThen (fun current ->
-    Stdlib.__Http3Message.resume current.uni.table current.stream current.message |> Stdlib.Result.andThen (fun resumed ->
+    // A reset terminates the response even when its field section is waiting
+    // for encoder instructions that the peer might never send.
+    let reset = match Stdlib.__QuicFlow.channel current.connection.flow current.stream with
+      | None -> false
+      | Some channel -> match channel.receive with | None -> false | Some receiver -> Stdlib.Option.isSome receiver.resetCode in
+    if reset then Error "HTTP/3 response stream reset"
+    else Stdlib.__Http3Message.resume current.uni.table current.stream current.message |> Stdlib.Result.andThen (fun resumed ->
       Stdlib.__Http3.__feedback { current with message = resumed.state } resumed.feedback |> Stdlib.Result.andThen (fun current ->
     if current.connection.flow.role == Stdlib.__QuicFlow.Role.Client && Stdlib.__Http3.rejected current then Error "HTTP/3 request rejected by GOAWAY"
     else if Stdlib.Option.isSome current.message.waiting || Stdlib.Option.isNone (Stdlib.__QuicFlow.channel current.connection.flow current.stream) then

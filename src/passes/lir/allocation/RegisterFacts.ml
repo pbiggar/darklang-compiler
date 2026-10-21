@@ -140,6 +140,8 @@ let getUsedVRegs instr =
   | LIR.RawAlloc (_, numBytes) -> regToVReg numBytes |> Option.to_list
   | LIR.MappedAlloc (_, numBytes) -> regToVReg numBytes |> Option.to_list
   | LIR.RawFree ptr -> regToVReg ptr |> Option.to_list
+  | LIR.RawFreeSized (ptr, size) ->
+      (regToVReg ptr |> Option.to_list) @ (regToVReg size |> Option.to_list)
   | LIR.MappedFree ptr -> regToVReg ptr |> Option.to_list
   | LIR.RawGet (_, ptr, byteOffset) ->
       (regToVReg ptr |> Option.to_list)
@@ -245,6 +247,7 @@ let getDefinedVReg instr =
   | LIR.RawGet (dest, _, _) -> regToVReg dest
   | LIR.RawGetByte (dest, _, _) -> regToVReg dest
   | LIR.RawFree _ -> None
+  | LIR.RawFreeSized _ -> None
   | LIR.MappedFree _ -> None
   | LIR.RawWriteWord _ -> None
   | LIR.RawWriteByte _ -> None

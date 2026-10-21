@@ -254,6 +254,7 @@ let packageCatalogModule : AST.moduleDef =
    Fixed RC layout of the runtime list-array allocator's small branch.
    __raw_alloc : (Int64) -> RawPtr - allocate raw bytes
    __raw_free : (RawPtr) -> Unit - free an internal 8-byte raw cell
+   __raw_free_sized : (RawPtr, Int64) -> Unit - release a raw allocation with its original byte size
    __raw_get<v> : (RawPtr, Int64) -> v - read 8 bytes at offset, typed as v
    __raw_take<v> transfers a typed slot edge to the caller before it is cleared.
    __raw_write_word : (RawPtr, Int64, Int64) -> Unit - write 8 unmanaged bytes at offset
@@ -303,6 +304,7 @@ let rawMemoryIntrinsics =
     fn "__list_array_release_small" [] [ TInternalRawPtr ] TUnit;
     fn "__raw_alloc" [] [ TInt64 ] TInternalRawPtr;
     fn "__raw_free" [] [ TInternalRawPtr ] TUnit;
+    fn "__raw_free_sized" [] [ TInternalRawPtr; TInt64 ] TUnit;
     fn "__raw_get" [ "v" ] [ TInternalRawPtr; TInt64 ] (TVar "v");
     fn "__raw_take" [ "v" ] [ TInternalRawPtr; TInt64 ] (TVar "v");
     fn "__raw_write_word" [] [ TInternalRawPtr; TInt64; TInt64 ] TUnit;
