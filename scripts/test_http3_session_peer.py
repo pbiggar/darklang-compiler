@@ -227,8 +227,8 @@ def main():
                                                 # Set capacity to 4097, exceeding the client's advertised 4096.
                                                 connection.send_stream_data(http._local_encoder_stream_id, b"\x3f\xe2\x1f")
                                             elif args.multiplex == "decoder-error":
-                                                # Acknowledge a section with no outstanding dynamic references.
-                                                connection.send_stream_data(http._local_decoder_stream_id, b"\x80")
+                                                # Acknowledge an unopened stream, not the real dynamic section on 0.
+                                                connection.send_stream_data(http._local_decoder_stream_id, b"\xbc")
                                             elif args.multiplex == "duplicate-settings":
                                                 connection.send_stream_data(http._local_control_stream_id, encode_frame(4, b""))
                                             else:
