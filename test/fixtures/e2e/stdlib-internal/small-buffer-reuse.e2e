@@ -28,3 +28,44 @@ let stringChurn (remaining: Int64) (total: Int64) : Int64 =
   else stringChurn (remaining - 1L) (total + stringProbe remaining)
 
 stringChurn 2200000L 0L = stdout="383899930\n" stderr="" disable_opt_inline=true
+
+// Large Ints use a byte-capacity prefix before their signed used-limb count.
+let integerProbe (remaining: Int64) : Int64 =
+  let pointer = Stdlib.Int.__allocate false 3L 64L in
+  let _ = __raw_write_word pointer 24L (remaining % 100L) in
+  let _ = __raw_write_word pointer 32L 0L in
+  let _ = __raw_write_word pointer 40L 1L in
+  let value = Stdlib.Int.__adopt pointer false 3L in
+  Stdlib.Int.__limb value 0L + Stdlib.Int.__limb value 2L
+
+let integerChurn (remaining: Int64) (total: Int64) : Int64 =
+  if remaining == 0L then total
+  else integerChurn (remaining - 1L) (total + integerProbe remaining)
+
+integerChurn 1100000L 0L = stdout="55550000\n" stderr="" disable_opt_inline=true
+
+let largestBuffer () : Blob =
+  let pointer = __raw_alloc 8192L in
+  let _ = __raw_write_word pointer 0L 1L in
+  let _ = __raw_write_word pointer 8L 8176L in
+  let _ = __raw_write_byte pointer 16L 17L in
+  let _ = __raw_write_byte pointer 8191L 18L in
+  __rawptr_to_blob pointer
+
+let largestBufferChurn (remaining: Int64) (total: Int64) : Int64 =
+  if remaining == 0L then total
+  else
+    let bytes = largestBuffer () in
+    let value = Stdlib.Blob.__getByte bytes 0L + Stdlib.Blob.__getByte bytes 8175L in
+    largestBufferChurn (remaining - 1L) (total + value)
+
+largestBufferChurn 70000L 0L = stdout="2450000\n" stderr="" disable_opt_inline=true
+
+let retainedInteger (negative: Bool) (byte: Int64) : Int =
+  let pointer = Stdlib.Int.__allocate negative 3L 64L in
+  let _ = __raw_write_word pointer 24L byte in
+  let _ = __raw_write_word pointer 32L 0L in
+  let _ = __raw_write_word pointer 40L 1L in
+  Stdlib.Int.__adopt pointer negative 3L
+
+let first = retainedInteger false 41L in let second = retainedInteger true 42L in let aliases = (first, [second]) in let _ = integerChurn 10000L 0L in let (positive, rest) = aliases in Stdlib.Int.__limb positive 0L + (match rest with | [negative] -> Stdlib.Int.__limb negative 0L + Stdlib.Int.__signedCount negative | _ -> -1L) = stdout="80\n" stderr="" disable_opt_inline=true

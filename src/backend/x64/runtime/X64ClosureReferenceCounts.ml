@@ -151,8 +151,7 @@ let generateClosureRefCountDecHelper enableLeakCheck recordRegistry
         X.TEST_reg (X.RDX, X.RDX);
         X.Jcc (X.NE, doneLabel);
       ]
-    @ (if skipTagged then [] else genSmallBufferRecycle X.R10)
-    @ leakDec @ [ X.Label doneLabel ]
+    @ genBufferRecycle X.R10 @ leakDec @ [ X.Label doneLabel ]
   in
   let releaseHeapRootCapture fieldOffset helperLabel suffix =
     let doneLabel = label ("capture_root_done_" ^ suffix) in

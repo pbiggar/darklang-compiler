@@ -92,337 +92,103 @@ let lirRegToX86 = function
   | LIR.X15 -> X86_64.R11
   | LIR.X16 -> X86_64.R11
   | LIR.X17 -> X86_64.R11
-  | LIR.X19 -> X86_64.RBX
-  | LIR.X20 -> X86_64.R12
-  | LIR.X21 -> X86_64.R13
-  | LIR.X29 -> X86_64.RBP
-  | LIR.X30 -> X86_64.RAX
-  | LIR.SP -> X86_64.RSP
-  | (LIR.X22 | LIR.X23 | LIR.X24 | LIR.X25 | LIR.X26 | LIR.X27) as reg ->
-      Crash.crash ("lirRegToX86: invalid x64 physical register " ^ physName reg)
-
-let resolvePhysReg context reg =
-  match invalidX64PhysRegReason reg with
-  | Some reason ->
-      Error
-        (context ^ ": invalid x64 physical register " ^ physName reg ^ ": "
-       ^ reason)
-  | None -> Ok (lirRegToX86 reg)
-
-(*
-   Map LIR.FReg to x86-64 XMM register
-*)
-let lirFRegToX86 = function
-  | LIR.D0 -> X86_64.XMM0
-  | LIR.D1 -> X86_64.XMM1
-  | LIR.D2 -> X86_64.XMM2
-  | LIR.D3 -> X86_64.XMM3
-  | LIR.D4 -> X86_64.XMM4
-  | LIR.D5 -> X86_64.XMM5
-  | LIR.D6 -> X86_64.XMM6
-  | LIR.D7 -> X86_64.XMM7
-  | LIR.D8 -> X86_64.XMM8
-  | LIR.D9 -> X86_64.XMM9
-  | LIR.D10 -> X86_64.XMM10
-  | LIR.D11 -> X86_64.XMM11
-  | LIR.D12 -> X86_64.XMM12
-  | LIR.D13 -> X86_64.XMM13
-  | LIR.D14 -> X86_64.XMM14
-  | LIR.D15 -> X86_64.XMM15
-
-let[@warning "-32"] resolveFreg = function
-  | LIR.FPhysical fp -> Ok (lirFRegToX86 fp)
-  | LIR.FVirtual id ->
-      Error
-        (Printf.sprintf
-           "Unresolved virtual float register f%d in x86-64 codegen" id)
-
-(*
-   Resolve a LIR.Reg (Physical or Virtual) to x86-64 register.
-*)
-let resolveReg = function
-  | LIR.Physical phys -> resolvePhysReg "resolveReg" phys
-  | LIR.Virtual id ->
-      Error
-        (Printf.sprintf "Unresolved virtual register v%d in x86-64 codegen" id)
-
-(*
-   Load a 64-bit immediate into a register.
-*)
-let loadImm64 dest value =
-  if value = 0L then [ X86_64.XOR_reg (dest, dest) ]
-  else if
-    value >= Int64.of_int32 Int32.min_int
-    && value <= Int64.of_int32 Int32.max_int
-  then [ X86_64.MOV_imm32 (dest, Int64.to_int32 value) ]
-  else [ X86_64.MOV_imm (dest, value) ]
-
-(*
-   Scratch register for temporaries in codegen
-*)
-let scratch = X86_64.R11
-
-let arithmeticTempExcluding excluded =
-  let candidates =
-    [
-      X86_64.R11;
-      X86_64.RCX;
-      X86_64.R10;
-      X86_64.RAX;
-      X86_64.RDX;
-      X86_64.RDI;
-      X86_64.RSI;
-      X86_64.R8;
-      X86_64.R9;
-      X86_64.RBX;
-      X86_64.R12;
-      X86_64.R13;
-    ]
-  in
-  match
-    List.find_opt
-      (fun candidate -> not (List.mem candidate excluded))
-      candidates
-  with
-  | Some temp -> temp
-  | None ->
-      Crash.crash "x64 arithmetic lowering could not find a temporary register"
-
-let allFloatRegs =
-  [
-    X86_64.XMM0;
-    X86_64.XMM1;
-    X86_64.XMM2;
-    X86_64.XMM3;
-    X86_64.XMM4;
-    X86_64.XMM5;
-    X86_64.XMM6;
-    X86_64.XMM7;
-    X86_64.XMM8;
-    X86_64.XMM9;
-    X86_64.XMM10;
-    X86_64.XMM11;
-    X86_64.XMM12;
-    X86_64.XMM13;
-    X86_64.XMM14;
-    X86_64.XMM15;
-  ]
-
-(*
-   Borrow an XMM register for a short lowering sequence without reserving one
-   globally from allocation. The 16-byte slot preserves stack alignment.
-*)
-let withPreservedFloatScratch excluded build =
-  let temp =
-    match
-      List.find_opt
-        (fun candidate -> not (List.mem candidate excluded))
-        allFloatRegs
-    with
-    | Some temp -> temp
-    | None -> Crash.crash "x64 float lowering has no scratch register"
-  in
-  [
-    X86_64.SUB_imm (X86_64.RSP, 16l); X86_64.MOVSD_store (X86_64.RSP, 0l, temp);
-  ]
-  @ build temp
-  @ [
-      X86_64.MOVSD_load (temp, X86_64.RSP, 0l); X86_64.ADD_imm (X86_64.RSP, 16l);
-    ]
-
-(*
-   Heap bump pointer register (codegen-internal, reserved; not allocatable).
-*)
-let heapPtr = X86_64.R14
-
-(*
-   Free list base register (codegen-internal, reserved; not allocatable).
-*)
-let freeListBase = X86_64.R15
-
-(*
-   Size of free list heads area (32 size classes × 8 bytes = 256 bytes)
-*)
-let freeListSize = 256
-
-(*
-   The process table is raw runtime state, not a managed allocation. Keeping
-   it at a fixed address avoids aliasing a free-list head in batched programs.
-*)
-let processTableOffset = freeListSize
-let processTableSize = 4096
-
-(*
-   Max payload size class for free list reuse (freeListSize - 8)
-*)
-let maxFreeListPayload = sub freeListSize 8
-
-let[@warning "-32"] emitStringByteCopy valueReg destReg strBytes =
-  let len = Bytes.length strBytes in
-  if len = 0 then []
-  else
-    let chunks = add len 7 / 8 in
-    List.init (max 0 chunks) (fun i ->
-        let offset = add 16 (mul i 8) in
-        let chunkLen = min 8 (sub len (mul i 8)) in
-        let value =
-          List.fold_left
-            (fun acc j ->
-              let byteIdx = add (mul i 8) j in
-              if byteIdx < Bytes.length strBytes then
-                Int64.logor acc
-                  (Int64.shift_left
-                     (Int64.of_int (Char.code (Bytes.get strBytes byteIdx)))
-                     (j * 8))
-              else acc)
-            0L
-            (List.init (max 0 chunkLen) Fun.id)
+  | LIR.X19 -> X86_64…6534 tokens truncated…,
+             MemoryModel.GenericHeap,
+             ( MemoryModel.FixedBlockPayloadRelease _
+             | MemoryModel.BoxedSumPayloadRelease _ ) ) as releasePlan) ->
+        let release =
+          genRefCountDecGenericWithPlan helperCtx X.R9 payloadSize
+            (Some releasePlan)
         in
-        loadImm64 valueReg value
-        @ [ X86_64.MOV_store (destReg, Int32.of_int offset, valueReg) ])
+        [ X.MOV_load (X.R9, X.RAX, Int32.of_int fieldOffset); X.PUSH X.RAX ]
+        @ release @ [ X.POP X.RAX ]
+    | _ -> []
+  in
+  let releaseCaptureCases =
+    StringOrder.Map.bindings closureCaptureTypes
+    |> List.mapi (fun index (funcName, captureTypes) ->
+        let nextCase = label ("captures_next_" ^ string_of_int index) in
+        let releases =
+          List.mapi
+            (fun captureIndex captureType ->
+              let fieldOffset = mul (add captureIndex 1) 8 in
+              let suffix =
+                string_of_int index ^ "_" ^ string_of_int captureIndex
+              in
+              match captureType with
+              | AST.TString | AST.TChar | AST.TBlob ->
+                  releaseDynamicBufferCapture false fieldOffset suffix
+              | AST.TInt -> releaseDynamicBufferCapture true fieldOffset suffix
+              | AST.TList _ ->
+                  releaseHeapRootCapture fieldOffset
+                    (listDecHelperForType recordRegistry sumShapeRegistry
+                       captureType)
+                    (suffix ^ "_list")
+              | AST.TDict _ -> (
+                  match
+                    tryRcReleasePlanOfType recordRegistry sumShapeRegistry
+                      captureType
+                  with
+                  | Some releasePlan ->
+                      releaseHeapRootCapture fieldOffset
+                        (dictDecHelperForReleasePlan releasePlan)
+                        (suffix ^ "_dict")
+                  | None ->
+                      Crash.crash
+                        ("generateClosureRefCountDecHelper: missing RC \
+                          metadata for dict capture type "
+                        ^ StructuralFormat.semanticType captureType))
+              | AST.TFunction _ ->
+                  releaseHeapRootCapture fieldOffset
+                    closureRefCountDecHelperLabel (suffix ^ "_closure")
+              | AST.TStream _ ->
+                  releaseHeapRootCapture fieldOffset
+                    streamRefCountDecHelperLabel (suffix ^ "_stream")
+              | AST.TTuple _ | AST.TRecord _ | AST.TSum _ ->
+                  releaseAggregateCapture fieldOffset captureType suffix
+              | _ -> [])
+            captureTypes
+          |> List.concat
+        in
+        [
+          X.LEA_rip (X.R9, funcName);
+          X.CMP_reg (X.R8, X.R9);
+          X.Jcc (X.NE, nextCase);
+        ]
+        @ releases
+        @ [ X.JMP capturesReleased; X.Label nextCase ])
     |> List.concat
-
-(*
-   Load a string from the executable's immutable literal pool.
-*)
-let emitStringLiteral destReg value =
-  [ X86_64.LEA_rip (destReg, X86_64.stringLiteralLabel value) ]
-
-(*
-   File-operation path buffers use the canonical static buffer layout.
-*)
-let emitStringLiteralNoRefCount = emitStringLiteral
-
-(*
-   Heap size for mmap (512 MB)
-*)
-let heapMmapSizeBytes = Int64.mul (Int64.mul 512L 1024L) 1024L
-
-(*
-   Generate x86-64 write(fd, buf, len) syscall
-*)
-let genWriteSyscall =
-  loadImm64 X86_64.RAX (Int64.of_int syscalls.Platform.write)
-  @ [ X86_64.SYSCALL ]
-
-(*
-   Write a small compile-time byte sequence to stdout from a balanced stack
-   buffer. The generated syscall may clobber RAX, RCX, and R11.
-*)
-let genPrintChars bytes =
-  let len = List.length bytes in
-  if len = 0 then []
-  else
-    let padded = mul (add len 7 / 8) 8 in
-    let paddedBytes = bytes @ List.init (sub padded len) (fun _ -> '\000') in
-    let rec chunks acc = function
-      | [] -> List.rev acc
-      | values ->
-          let rec take n kept rest =
-            if n = 0 then (List.rev kept, rest)
-            else
-              match rest with
-              | [] -> (List.rev kept, [])
-              | x :: xs -> take (n - 1) (x :: kept) xs
-          in
-          let chunk, rest = take 8 [] values in
-          chunks (chunk :: acc) rest
-    in
-    let pushes =
-      chunks [] paddedBytes |> List.rev
-      |> List.concat_map (fun chunk ->
-          let value =
-            List.mapi
-              (fun index value ->
-                Int64.shift_left (Int64.of_int (Char.code value)) (index * 8))
-              chunk
-            |> List.fold_left Int64.logor 0L
-          in
-          loadImm64 scratch value @ [ X86_64.PUSH scratch ])
-    in
-    pushes
-    @ [
-        X86_64.MOV_imm32 (X86_64.RDI, 1l);
-        X86_64.MOV_reg (X86_64.RSI, X86_64.RSP);
-      ]
-    @ loadImm64 X86_64.RDX (Int64.of_int len)
-    @ genWriteSyscall
-    @ [ X86_64.ADD_imm (X86_64.RSP, Int32.of_int padded) ]
-
-(*
-   Generate x86-64 exit(code) syscall.
-   Exit code must already be in RDI.
-*)
-let genExitSyscall =
-  loadImm64 X86_64.RAX (Int64.of_int syscalls.Platform.exit)
-  @ [ X86_64.SYSCALL ]
-
-(*
-   Label for shared OOM handler (set per-program, not per-function)
-*)
-let oomHandlerLabel = "__heap_oom"
-let runtimeErrorHandlerLabel = "__dark_runtime_error"
-
-(*
-   Generate a jump to the shared OOM handler
-*)
-let genOomJump () = [ X86_64.JMP oomHandlerLabel ]
-
-(*
-   Generate the shared OOM handler code (placed once at end of program)
-*)
-let genOomHandler () =
-  [ X86_64.Label oomHandlerLabel ]
-  @ emitStringLiteral X86_64.R8 "Out of heap memory\n"
-  @ [ X86_64.JMP runtimeErrorHandlerLabel ]
-
-(*
-   Shared non-returning writer for canonical error-string buffers in R8.
-*)
-let genRuntimeErrorHandler () =
+  in
   [
-    X86_64.Label runtimeErrorHandlerLabel;
-    X86_64.MOV_load (X86_64.RDX, X86_64.R8, 8l);
-    X86_64.LEA (X86_64.RSI, X86_64.R8, 16l);
-    X86_64.MOV_imm32 (X86_64.RDI, 2l);
+    X.Label closureRefCountDecHelperLabel;
+    X.TEST_reg (X.RAX, X.RAX);
+    X.Jcc (X.EQ, helperRet);
+    X.MOV_load (X.RDX, X.RAX, 0l);
+    X.MOV_imm32 (X.RCX, 8l);
   ]
-  @ genWriteSyscall @ loadImm64 X86_64.RDI 1L @ genExitSyscall
-
-(*
-   Mutable counter for generating unique labels within a compilation
-*)
-let labelCounter = ref 0
-
-let freshLabel prefix =
-  labelCounter := add !labelCounter 1;
-  Printf.sprintf "__%s_%d" prefix !labelCounter
-
-(* A dead canonical String/Blob can enter the same size classes as raw and
-   fixed-block allocations. Logical length is a conservative capacity when a
-   producer reserved extra bytes. Preserve every temporary: callers include
-   iterative list destruction and nested record/closure release helpers. *)
-let genSmallBufferRecycle pointer =
-  let count = if pointer = X86_64.RCX then X86_64.RAX else X86_64.RCX in
-  let slot = if pointer = X86_64.RDX then X86_64.RSI else X86_64.RDX in
-  let doneLabel = freshLabel "buffer_recycle_done" in
-  [
-    X86_64.PUSH count;
-    X86_64.PUSH slot;
-    X86_64.MOV_load (count, pointer, 8l);
-    X86_64.CMP_imm (count, 0l);
-    X86_64.Jcc (X86_64.LT, doneLabel);
-    X86_64.CMP_imm (count, Int32.of_int (freeListSize - 16));
-    X86_64.Jcc (X86_64.GT, doneLabel);
-    (* aligned allocation = roundUp(length + 16, 8); class excludes 8 bytes. *)
-    X86_64.ADD_imm (count, 23l);
-    X86_64.AND_imm (count, -8l);
-    X86_64.SUB_imm (count, 8l);
-    X86_64.MOV_reg (slot, freeListBase);
-    X86_64.ADD_reg (slot, count);
-    X86_64.MOV_load (count, slot, 0l);
-    X86_64.MOV_store (pointer, 0l, count);
-    X86_64.MOV_store (slot, 0l, pointer);
-    X86_64.Label doneLabel;
-    X86_64.POP slot;
-    X86_64.POP count;
-  ]
+  @ payloadCases
+  @ [
+      X.Label payloadReady;
+      X.MOV_reg (X.RDI, X.RAX);
+      X.ADD_reg (X.RDI, X.RCX);
+      X.MOV_load (X.RDX, X.RDI, 0l);
+      X.SUB_imm (X.RDX, 1l);
+      X.MOV_store (X.RDI, 0l, X.RDX);
+      X.TEST_reg (X.RDX, X.RDX);
+      X.Jcc (X.NE, helperRet);
+      X.MOV_load (X.R8, X.RAX, 0l);
+    ]
+  @ releaseCaptureCases
+  @ [
+      X.Label capturesReleased;
+      X.CMP_imm (X.RCX, Int32.of_int freeListSize);
+      X.Jcc (X.GE, skipFreeList);
+      X.MOV_reg (X.RDI, freeListBase);
+      X.ADD_reg (X.RDI, X.RCX);
+      X.MOV_load (X.RDX, X.RDI, 0l);
+      X.MOV_store (X.RAX, 0l, X.RDX);
+      X.MOV_store (X.RDI, 0l, X.RAX);
+      X.Label skipFreeList;
+    ]
+  @ leakDec
+  @ [ X.Label helperRet; X.RET ]
