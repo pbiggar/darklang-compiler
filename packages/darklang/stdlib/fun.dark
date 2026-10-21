@@ -1,7 +1,4 @@
-// Stdlib.Fun.dark - Stdlib.Fun definitions
-//
-// Generic function helpers.
-
 module Darklang.Stdlib.Fun
 
-let identity<'t> (value: t) : t = value
+
+let identity (value: 'a) : 'a = value

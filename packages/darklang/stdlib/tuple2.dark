@@ -1,25 +1,45 @@
-// Stdlib.Tuple2.dark - Stdlib.Tuple2 definitions
-//
-// Split from stdlib.dark for modular stdlib loading.
-
 module Darklang.Stdlib.Tuple2
 
-// Stdlib.Tuple2 - 2-tuple operations
 
-let create<'a, 'b> (first: a) (second: b) : (a * b) = (first, second)
+/// Returns a pair with the given values
+let create (first: 'a) (second: 'b) : ('a * 'b) = (first, second)
 
-let first<'a, 'b> (t: (a * b)) : a = match t with | (x, y) -> x
 
-let second<'a, 'b> (t: (a * b)) : b = match t with | (x, y) -> y
+/// Returns the first value of a pair
+let first (tuple: ('a * 'b)) : 'a =
+  let (first, _) = tuple
+  first
 
-let swap<'a, 'b> (t: (a * b)) : (b * a) = match t with | (x, y) -> (y, x)
 
-let mapFirst<'a, 'b, 'c> (t: (a * b)) (fn: a -> c) : (c * b) =
-    match t with | (x, y) -> (fn x, y)
+/// Returns the second value of a pair
+let second (tuple: ('a * 'b)) : 'b =
+  let (_, second) = tuple
+  second
 
-let mapSecond<'a, 'b, 'c> (t: (a * b)) (fn: b -> c) : (a * c) =
-    match t with | (x, y) -> (x, fn y)
 
-let mapBoth<'a, 'b, 'c, 'd> (t: (a * b)) (fnFirst: a -> c) (fnSecond: b -> d) : (c * d) =
-    match t with | (x, y) -> (fnFirst x, fnSecond y)
+/// Returns a pair with the elements swapped
+let swap (tuple: ('a * 'b)) : ('b * 'a) =
+  let (first, second) = tuple
+  (second, first)
 
+
+/// Transform the first value in a pair
+let mapFirst (tuple: ('a * 'b)) (fn: 'a -> 'c) : ('c * 'b) =
+  let (first, second) = tuple
+  (fn first, second)
+
+
+/// Transform the second value in a pair
+let mapSecond (tuple: ('a * 'b)) (fn: 'b -> 'c) : ('a * 'c) =
+  let (first, second) = tuple
+  (first, fn second)
+
+
+/// Transform both values in a pair
+let mapBoth
+  (tuple: ('a * 'b))
+  (fnFirst: 'a -> 'c)
+  (fnSecond: 'b -> 'd)
+  : ('c * 'd) =
+  let (first, second) = tuple
+  (fnFirst first, fnSecond second)

@@ -1,28 +1,53 @@
-// Stdlib.Tuple3.dark - Stdlib.Tuple3 definitions
-//
-// Split from stdlib.dark for modular stdlib loading.
-
 module Darklang.Stdlib.Tuple3
 
-// Stdlib.Tuple3 - 3-tuple operations
 
-let create<'a, 'b, 'c> (first: a) (second: b) (third: c) : (a * b * c) = (first, second, third)
+/// Returns a triple with the given values
+let create (first: 'a) (second: 'b) (third: 'c) : ('a * 'b * 'c) =
+  (first, second, third)
 
-let first<'a, 'b, 'c> (t: (a * b * c)) : a = match t with | (x, y, z) -> x
 
-let second<'a, 'b, 'c> (t: (a * b * c)) : b = match t with | (x, y, z) -> y
+/// Returns the first value of a triple
+let first (tuple: ('a * 'b * 'c)) : 'a =
+  let (first, _, _) = tuple
+  first
 
-let third<'a, 'b, 'c> (t: (a * b * c)) : c = match t with | (x, y, z) -> z
 
-let mapFirst<'a, 'b, 'c, 'd> (t: (a * b * c)) (fn: a -> d) : (d * b * c) =
-    match t with | (x, y, z) -> (fn x, y, z)
+/// Returns the second value of a triple
+let second (tuple: ('a * 'b * 'c)) : 'b =
+  let (_, second, _) = tuple
+  second
 
-let mapSecond<'a, 'b, 'c, 'd> (t: (a * b * c)) (fn: b -> d) : (a * d * c) =
-    match t with | (x, y, z) -> (x, fn y, z)
 
-let mapThird<'a, 'b, 'c, 'd> (t: (a * b * c)) (fn: c -> d) : (a * b * d) =
-    match t with | (x, y, z) -> (x, y, fn z)
+/// Returns the third value of a triple
+let third (tuple: ('a * 'b * 'c)) : 'c =
+  let (_, _, third) = tuple
+  third
 
-let mapAllThree<'a, 'b, 'c, 'd, 'e, 'f> (t: (a * b * c)) (fnFirst: a -> d) (fnSecond: b -> e) (fnThird: c -> f) : (d * e * f) =
-    match t with | (x, y, z) -> (fnFirst x, fnSecond y, fnThird z)
 
+/// Transform the first value in a triple
+let mapFirst (tuple: ('a * 'b * 'c)) (fn: 'a -> 'd) : ('d * 'b * 'c) =
+  let (first, second, third) = tuple
+  (fn first, second, third)
+
+
+/// Transform the second value in a triple
+let mapSecond (tuple: ('a * 'b * 'c)) (fn: 'b -> 'd) : ('a * 'd * 'c) =
+  let (first, second, third) = tuple
+  (first, fn second, third)
+
+
+/// Transform the third value in a triple
+let mapThird (tuple: ('a * 'b * 'c)) (fn: 'c -> 'd) : ('a * 'b * 'd) =
+  let (first, second, third) = tuple
+  (first, second, fn third)
+
+
+/// Transform all values in a triple
+let mapAllThree
+  (tuple: ('a * 'b * 'c))
+  (fnFirst: 'a -> 'd)
+  (fnSecond: 'b -> 'e)
+  (fnThird: 'c -> 'f)
+  : ('d * 'e * 'f) =
+  let (first, second, third) = tuple
+  (fnFirst first, fnSecond second, fnThird third)

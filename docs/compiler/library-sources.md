@@ -10,6 +10,9 @@ the move preserves their source bytes and declaration order. Env, File, Process,
 Sys, and root Cli execution under `packages/darklang/stdlib/cli/` are byte-identical
 to the porting pin in `porting/sources.yaml`. Moving files does not advance the
 general historical source baseline or establish compatibility with that pin.
+Option, Result, Tuple2, Tuple3, Fun, Duration, and Retry are also byte-identical
+to the interpreter revision in `porting/sources.yaml`, including their public
+documentation. These packages use the compiler's existing native dependencies.
 The compatibility ledgers own API coverage and behavioral differences; this
 inventory records source placement and origin, not complete API parity.
 
