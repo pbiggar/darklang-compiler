@@ -103,8 +103,8 @@ def main():
     program = '''// parameters.dark - Independent QUIC transport-parameter vectors.
 let check (bytes: String) (sender: Stdlib.__QuicParameters.Sender) : Unit =
   match Stdlib.Blob.fromHex bytes |> Stdlib.Result.andThen (Stdlib.__QuicParameters.parse sender) with
-  | Error message -> Stdlib.printLine ("ERROR " ++ message)
-  | Ok p -> Stdlib.printLine ("OK " ++ Stdlib.String.join [@FIELDS@] "," ++ ":" ++ Stdlib.Blob.toHex p.initialSource ++ ":" ++ (if p.disableActiveMigration then "true" else "false"))
+  | Error message -> Stdlib.printLine ("ERROR " + message)
+  | Ok p -> Stdlib.printLine ("OK " + Stdlib.String.join [@FIELDS@] "," + ":" + Stdlib.Blob.toHex p.initialSource + ":" + (if p.disableActiveMigration then "true" else "false"))
 '''.replace("@FIELDS@", fields)
     program += "let runChecks () : Unit =\n"
     program += "\n".join('  let _ = check "' + data.hex() + '" Stdlib.__QuicParameters.Sender.' + ("Server" if role else "Client") + " in"

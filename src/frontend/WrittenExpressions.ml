@@ -65,6 +65,7 @@ let rec checkExpression (globals : globals) locals symbols expected expression =
       Error
         ("Internal identifier not allowed in user code: "
         ^ String.concat "." (qualifiedFnName name))
+  | WT.EUnwrap _ -> Error "Native postfix ? early return is not implemented"
   | WT.EUnit _ -> literal AST.TUnit C.UnitLiteral
   | WT.EBool (_, value) -> literal AST.TBool (C.BoolLiteral value)
   | WT.EInt (_, (_, value)) -> literal AST.TInt (C.BigIntLiteral value)

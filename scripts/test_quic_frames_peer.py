@@ -15,14 +15,14 @@ ROOT = Path(__file__).resolve().parents[1]
 DARK = """// frames.dark - Frame fields, owned ordered bytes, and independent codecs.
 let printFrame (frame: Stdlib.__QuicFrames.Frame) : Unit =
   match frame with
-  | Padding count -> Stdlib.printLine ("PAD " ++ Stdlib.Int64.toString count)
+  | Padding count -> Stdlib.printLine ("PAD " + Stdlib.Int64.toString count)
   | Ping -> Stdlib.printLine "PING"
-  | Crypto value -> Stdlib.printLine ("CRYPTO " ++ Stdlib.Int64.toString value.offset ++ " " ++ Stdlib.Blob.toHex value.bytes)
-  | Close value -> Stdlib.printLine ("CLOSE " ++ Stdlib.Int64.toString value.code ++ " " ++ Stdlib.Int64.toString value.kind ++ " " ++ Stdlib.Blob.toHex value.reason)
+  | Crypto value -> Stdlib.printLine ("CRYPTO " + Stdlib.Int64.toString value.offset + " " + Stdlib.Blob.toHex value.bytes)
+  | Close value -> Stdlib.printLine ("CLOSE " + Stdlib.Int64.toString value.code + " " + Stdlib.Int64.toString value.kind + " " + Stdlib.Blob.toHex value.reason)
   | Ack value ->
-    let ranges = Stdlib.List.map value.ranges (fun range -> Stdlib.Int64.toString range.smallest ++ ":" ++ Stdlib.Int64.toString range.largest) in
-    let ecn = match value.ecn with | None -> "-" | Some count -> Stdlib.Int64.toString count.ect0 ++ ":" ++ Stdlib.Int64.toString count.ect1 ++ ":" ++ Stdlib.Int64.toString count.ce in
-    Stdlib.printLine ("ACK " ++ Stdlib.Int64.toString value.delay ++ " " ++ Stdlib.String.join ranges "," ++ " " ++ ecn)
+    let ranges = Stdlib.List.map value.ranges (fun range -> Stdlib.Int64.toString range.smallest + ":" + Stdlib.Int64.toString range.largest) in
+    let ecn = match value.ecn with | None -> "-" | Some count -> Stdlib.Int64.toString count.ect0 + ":" + Stdlib.Int64.toString count.ect1 + ":" + Stdlib.Int64.toString count.ce in
+    Stdlib.printLine ("ACK " + Stdlib.Int64.toString value.delay + " " + Stdlib.String.join ranges "," + " " + ecn)
 let printFrames (frames: List<Stdlib.__QuicFrames.Frame>) : Unit =
   match frames with | [] -> () | frame :: rest -> let _ = printFrame frame in printFrames rest
 let assemble (state: Stdlib.__QuicReassembly.State) (frames: List<Stdlib.__QuicFrames.Frame>) (chunks: List<Blob>)
@@ -44,16 +44,16 @@ let checkFrames () : Unit =
         match Stdlib.__QuicWire.parseInteger data 0L with
         | Error _ -> Error "Invalid number"
         | Ok number -> Stdlib.__QuicFrames.acknowledge number.value in
-      match result with | Error message -> Stdlib.printLine ("ERROR " ++ message) | Ok ack -> Stdlib.printLine (Stdlib.Blob.toHex ack)
+      match result with | Error message -> Stdlib.printLine ("ERROR " + message) | Ok ack -> Stdlib.printLine (Stdlib.Blob.toHex ack)
     else
       let result = Stdlib.__QuicFrames.parseHandshake data in
       match result with
-      | Error message -> Stdlib.printLine ("ERROR " ++ message)
+      | Error message -> Stdlib.printLine ("ERROR " + message)
       | Ok frames ->
         if mode == "decode" then printFrames frames
         else
           let assembled = Stdlib.__QuicReassembly.create 4096L |> Stdlib.Result.andThen (fun state -> assemble state frames []) in
-          match assembled with | Error message -> Stdlib.printLine ("ERROR " ++ message) | Ok bytes -> Stdlib.printLine (Stdlib.Blob.toHex bytes)
+          match assembled with | Error message -> Stdlib.printLine ("ERROR " + message) | Ok bytes -> Stdlib.printLine (Stdlib.Blob.toHex bytes)
   | _ -> Stdlib.printLine "Bad arguments"
 checkFrames ()
 """

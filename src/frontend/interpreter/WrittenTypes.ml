@@ -52,7 +52,6 @@ and infixFnName =
   | ComparisonLessThanOrEqual
   | ComparisonEquals
   | ComparisonNotEquals
-  | StringConcat
 
 and binaryOperation = BinOpAnd | BinOpOr
 
@@ -225,6 +224,7 @@ and expr =
   | EList of range * (expr * range option) list * range * range
   | ETuple of range * expr * range * expr * (range * expr) list * range * range
   | EIf of range * expr * expr * expr option * range * range * range option
+  | EUnwrap of range * expr * range
   | ERecordFieldAccess of range * expr * (range * string) * range
   | ELambda of range * letPattern list * expr * range * range
   | ERecord of
@@ -435,7 +435,7 @@ type moduleDecl = {
    A test assertion's expected side: a value expression, or an expected
    runtime / SQL error message. Validation restricts it to Test source.
 *)
-and testExpected = TEExpr of expr | TEError of string | TESqlError of string
+and testExpected = TEExpr of expr | TEError of string
 
 (*
    A test assertion `actual = expected`; post-parse validation restricts it to Test source.
@@ -595,6 +595,7 @@ let exprRange (e : expr) =
   | EList (r, _, _, _)
   | ETuple (r, _, _, _, _, _, _)
   | EIf (r, _, _, _, _, _, _)
+  | EUnwrap (r, _, _)
   | ERecordFieldAccess (r, _, _, _)
   | ELambda (r, _, _, _, _)
   | ERecord (r, _, _, _, _)

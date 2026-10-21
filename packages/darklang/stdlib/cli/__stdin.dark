@@ -191,7 +191,7 @@ let __stdinCsi (state: RawPtr) (text: String) (remaining: Int64) : (Int64 * Int6
                 | _ -> if scalar == 90L then 1L else 0L in
             (key, 0L, modifiers)
         else if scalar < 0L then (27L, 0L, 0L)
-        else Stdlib.Cli.__Stdin.__stdinCsi state (text ++ Stdlib.String.__fromCodepointsRaw [scalar]) (remaining - 1L)
+        else Stdlib.Cli.__Stdin.__stdinCsi state (text + Stdlib.String.__fromCodepointsRaw [scalar]) (remaining - 1L)
 
 let __stdinEvent (state: RawPtr) : (Int64 * Int64 * Int64) =
     if Stdlib.Cli.__Stdin.__stdinWord state 56L > 0L then

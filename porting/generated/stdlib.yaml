@@ -1051,7 +1051,7 @@ files:
     Darklang.Stdlib.HttpClient.Sse.tryEmitBlock: different
     Darklang.Stdlib.HttpClient.StreamResponse: identical
     Darklang.Stdlib.HttpClient.basicAuth: different
-    Darklang.Stdlib.HttpClient.bearerToken: different
+    Darklang.Stdlib.HttpClient.bearerToken: identical
     Darklang.Stdlib.HttpClient.delete: different
     Darklang.Stdlib.HttpClient.get: different
     Darklang.Stdlib.HttpClient.head: different

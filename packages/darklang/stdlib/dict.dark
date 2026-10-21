@@ -39,7 +39,7 @@ let __renderGenericKey<'k> (key: k) : String =
 let set<'k, 'v> (dict: Dict<k, v>) (key: k) (value: v) : Dict<k, v> =
     if Stdlib.Dict.__contains<k, v> dict key then
         Builtin.crash
-            ("Cannot add two dictionary entries with the same key " ++ Stdlib.Dict.__renderGenericKey key)
+            ("Cannot add two dictionary entries with the same key " + Stdlib.Dict.__renderGenericKey key)
     else
         Stdlib.Dict.__setOverwriting<k, v> dict key value
 
@@ -88,8 +88,8 @@ let __isIdentifierAt (key: String) (index: Int64) : Bool =
 
 let __renderKey (key: String) : String =
     if key == "" then "___"
-    else if key != "___" && Stdlib.Dict.__isIdentifierStart (Stdlib.String.__byteAtUnchecked key 0L) && Stdlib.Dict.__isIdentifierAt key 1L then "" ++ key
-    else "``" ++ key ++ "``"
+    else if key != "___" && Stdlib.Dict.__isIdentifierStart (Stdlib.String.__byteAtUnchecked key 0L) && Stdlib.Dict.__isIdentifierAt key 1L then "" + key
+    else "``" + key + "``"
 
 let __copyKey (key: String) : String =
     Stdlib.String.__byteSlice key 0L (Stdlib.String.__byteLength key)

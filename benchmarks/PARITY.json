@@ -115,7 +115,7 @@
     },
     "myers_diff": {
       "status": "comparable",
-      "dark_sha256": "c2853456b21b2e65b4c0595cf41e803c61fc256b5f08bb312ff765f81f86e795",
+      "dark_sha256": "6ef6e4ee3605c48c0facb5e3b7add3d6c4a39b59c278d74d9ff9ad5d0765e419",
       "rust_sha256": "ff84da7f1f6c0ef68513522bd306a6368ace18732a036de14bc33108d0651ec9",
       "quick": {
         "status": "comparable"
@@ -195,7 +195,7 @@
     },
     "string_equality": {
       "status": "comparable",
-      "dark_sha256": "89f95fb130e2000f029f3aa72da0ab29211d1f196b34da0d6e6e0c7177030c64",
+      "dark_sha256": "24f553117e63a0d43de692d294294d87a23d5eb89e7fa3a50fd3f205aa01f76e",
       "rust_sha256": "e3647206e0f75b0fe53877a841977aaad39cbc501eb55228e83dfde179b58c62",
       "quick": {
         "status": "comparable"
@@ -219,7 +219,7 @@
     },
     "tinytemplate": {
       "status": "comparable",
-      "dark_sha256": "efd18c21cd9254347cc4f53be2d24a2ee5498f66b31ccfdb7da61fda9e8234ae",
+      "dark_sha256": "ae9b3a4c89f8d38fe4323b9769924ee92997e6002f1e4ce54dc061636d23266b",
       "rust_sha256": "8d48482f6e4d62cc12b31f79e9d713be8d94f1d392b7088c20eeb95261c474c1",
       "rust_tree_sha256": "227382068ebda723333d617219a416f34759e29d47d5ce12f43fcd093e088c71",
       "quick": {

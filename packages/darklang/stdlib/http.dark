@@ -22,7 +22,7 @@ let urlDecode (value: String) : String =
                         (Stdlib.List.append acc (Stdlib.Blob.toList blob))
                         (Stdlib.String.toBytes (Stdlib.String.dropFirst piece 2))
                 | Error _ ->
-                    Stdlib.List.append acc (Stdlib.String.toBytes ("%" ++ piece))) in
+                    Stdlib.List.append acc (Stdlib.String.toBytes ("%" + piece))) in
         Stdlib.String.fromBytesWithReplacement decodedBytes
 
 let __parseQueryParam (param: String) : Stdlib.Option.Option<(String * String)> =

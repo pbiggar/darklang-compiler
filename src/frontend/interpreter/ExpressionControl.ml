@@ -74,6 +74,10 @@ and parsePipe grammar state index =
         let rhs, stop = grammar.parseInfix state (!current + 1) in
         (match toPipeExpr rhs with
         | Some segment -> RevBuffer.add parts (pipeRange, segment)
+        | None when match rhs with WT.EUnwrap _ -> true | _ -> false ->
+            errFull state DiagnosticCode.pipeSegment (!current + 1)
+              "'?' cannot end a pipe segment" []
+              (Some "wrap the whole pipeline: `(value |> transform)?`")
         | None ->
             err state DiagnosticCode.pipeSegment (!current + 1)
               "unsupported pipe segment");

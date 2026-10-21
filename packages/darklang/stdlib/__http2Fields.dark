@@ -50,7 +50,7 @@ let request (fields: List<(String * String)>) : Stdlib.Result.Result<Stdlib.__Ht
          (scheme != "http" && scheme != "https") || Stdlib.Bool.not (Stdlib.String.startsWith path "/") then
         Error "Invalid HTTP/2 request pseudo-headers"
       else
-        let urlText = scheme ++ "://" ++ authority ++ path in
+        let urlText = scheme + "://" + authority + path in
         match Stdlib.__HttpWire.parseUrl urlText with
         | Error _ -> Error "Invalid HTTP/2 request URL"
         | Ok _ ->

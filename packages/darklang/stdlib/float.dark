@@ -130,7 +130,7 @@ let __scanMantissa (value: String) (index: Int64) (digits: String) (fractionalDi
         let byte = Stdlib.String.__byteAtUnchecked value index in
         if Stdlib.Float.__isDigit byte then
             let digit = Stdlib.String.__byteSlice value index (index + 1L) in
-            Stdlib.Float.__scanMantissa value (index + 1L) (digits ++ digit) (if sawDot then fractionalDigits + 1L else fractionalDigits) sawDot true
+            Stdlib.Float.__scanMantissa value (index + 1L) (digits + digit) (if sawDot then fractionalDigits + 1L else fractionalDigits) sawDot true
         else if byte == 46L && Stdlib.Bool.not sawDot then
             Stdlib.Float.__scanMantissa value (index + 1L) digits fractionalDigits true sawDigit
         else if (byte == 101L || byte == 69L) && sawDigit then
@@ -140,7 +140,7 @@ let __scanMantissa (value: String) (index: Int64) (digits: String) (fractionalDi
         else Error Stdlib.Float.ParseError.BadFormat
 
 let __pow10 (exponent: Int64) : Int =
-    Stdlib.Int.__value ("1" ++ Stdlib.String.repeat "0" (Stdlib.Int.fromInt64 exponent))
+    Stdlib.Int.__value ("1" + Stdlib.String.repeat "0" (Stdlib.Int.fromInt64 exponent))
 
 let __powerOfTwo (exponent: Int64) : Int =
     Stdlib.Int.__value (Stdlib.Float.__multiplyTextByDigit "1" 2L exponent)
@@ -219,7 +219,7 @@ let __decimalToFloat (digits: String) (decimalExponent: Int64) (negative: Bool) 
                 let integer = Stdlib.Int.__value normalized in
                 let numerator =
                     if decimalExponent >= 0L then
-                        Stdlib.Int.__value (normalized ++ Stdlib.String.repeat "0" (Stdlib.Int.fromInt64 decimalExponent))
+                        Stdlib.Int.__value (normalized + Stdlib.String.repeat "0" (Stdlib.Int.fromInt64 decimalExponent))
                     else integer in
                 let denominator = if decimalExponent < 0L then Stdlib.Float.__pow10 (0L - decimalExponent) else Stdlib.Int.fromInt64 1L in
                 Stdlib.Float.__ratioToFloat numerator denominator in
@@ -248,7 +248,7 @@ let __stripDecimalTrailingZeros (value: String) : String =
     else value
 
 let __signedExponent (exponent: Int64) : String =
-    if exponent >= 0L then "+" ++ Stdlib.Int64.toString exponent
+    if exponent >= 0L then "+" + Stdlib.Int64.toString exponent
     else Stdlib.Int64.toString exponent
 
 let __renderDecimalCandidate (digits: String) (decimalExponent: Int64) (negative: Bool) : String =
@@ -256,13 +256,13 @@ let __renderDecimalCandidate (digits: String) (decimalExponent: Int64) (negative
     if decimalExponent < -4L || decimalExponent >= 16L then
         let first = Stdlib.String.__byteTake digits 1L in
         let rest = Stdlib.String.__byteDrop digits 1L in
-        sign ++ first ++ (if rest == "" then "" else "." ++ rest) ++ "e" ++ Stdlib.Float.__signedExponent decimalExponent
+        sign + first + (if rest == "" then "" else "." + rest) + "e" + Stdlib.Float.__signedExponent decimalExponent
     else
         let point = decimalExponent + 1L in
         let length = Stdlib.String.__byteLength digits in
-        if point <= 0L then sign ++ "0." ++ Stdlib.String.repeat "0" (Stdlib.Int.fromInt64 (0L - point)) ++ digits
-        else if point >= length then sign ++ digits ++ Stdlib.String.repeat "0" (Stdlib.Int.fromInt64 (point - length)) ++ ".0"
-        else sign ++ Stdlib.String.__byteTake digits point ++ "." ++ Stdlib.String.__byteDrop digits point
+        if point <= 0L then sign + "0." + Stdlib.String.repeat "0" (Stdlib.Int.fromInt64 (0L - point)) + digits
+        else if point >= length then sign + digits + Stdlib.String.repeat "0" (Stdlib.Int.fromInt64 (point - length)) + ".0"
+        else sign + Stdlib.String.__byteTake digits point + "." + Stdlib.String.__byteDrop digits point
 
 let __hasNonzeroDigit (value: String) (index: Int64) : Bool =
     if index >= Stdlib.String.__byteLength value then false
@@ -272,7 +272,7 @@ let __hasNonzeroDigit (value: String) (index: Int64) : Bool =
 let __roundedSignificand (exactText: String) (precision: Int64) : String =
     let exactLength = Stdlib.String.__byteLength exactText in
     if exactLength <= precision then
-        exactText ++ Stdlib.String.repeat "0" (Stdlib.Int.fromInt64 (precision - exactLength))
+        exactText + Stdlib.String.repeat "0" (Stdlib.Int.fromInt64 (precision - exactLength))
     else
         let prefix = Stdlib.String.__byteTake exactText precision in
         let nextDigit = Stdlib.String.__byteAtUnchecked exactText precision - (48L) in
@@ -302,7 +302,7 @@ let __shortestCandidate (originalBits: UInt64) (exactText: String) (scale: Int64
             // A distance strictly inside half an ULP has the same bits;
             // a distance outside cannot. Ties still use the parser.
             let candidateText =
-                digits ++ Stdlib.String.repeat "0" (Stdlib.Int.fromInt64 decimalExponent) in
+                digits + Stdlib.String.repeat "0" (Stdlib.Int.fromInt64 decimalExponent) in
             let candidate = Stdlib.Int.__value candidateText in
             let exact = Stdlib.Int.__value exactText in
             let distance =

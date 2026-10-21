@@ -64,6 +64,7 @@ type token =
   | TGte
   | TAnd
   | TOr
+  | TQuestion
   | TNot
   | TPipe
   | TDotDotDot

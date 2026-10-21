@@ -20,22 +20,22 @@ let id (response: Stdlib.HttpClient.Response) : String =
   | Some header -> let (_name, value) = header in value
 let run (session: Stdlib.HttpClientSession.Session) (url: String) (path: String) (same: Bool) : Stdlib.Result.Result<Unit, String> =
   let method = if path == "/head" then "HEAD" else "GET" in
-  let first = session.request method (url ++ path) [] Stdlib.Blob.empty in
-  let second = session.request "GET" (url ++ "/fixed") [] Stdlib.Blob.empty in
+  let first = session.request method (url + path) [] Stdlib.Blob.empty in
+  let second = session.request "GET" (url + "/fixed") [] Stdlib.Blob.empty in
   let _ = session.clear () in
-  let third = session.request "GET" (url ++ "/big") [] Stdlib.Blob.empty in
+  let third = session.request "GET" (url + "/big") [] Stdlib.Blob.empty in
   let _ = session.close () in
   let _ = session.close () in
   match first, second, third, session.request "GET" url [] Stdlib.Blob.empty with
   | Ok first, Ok second, Ok third, Error _ ->
-    if id first == "" || id second == "" || (id first == id second) != same then Error ("Connection reuse failed: " ++ id first ++ ", " ++ id second)
+    if id first == "" || id second == "" || (id first == id second) != same then Error ("Connection reuse failed: " + id first + ", " + id second)
     else if id third == id second || Stdlib.Blob.__byteLength third.body != 70000L then Error "Clear or body framing failed"
     else Ok ()
   | _, _, _, _ -> Error "Session request or lifecycle failed"
 let dropped (session: Stdlib.HttpClientSession.Session) (url: String) : Stdlib.Result.Result<Unit, String> =
-  let warm = session.request "GET" (url ++ "/fixed") [] Stdlib.Blob.empty in
-  let failed = session.request "POST" (url ++ "/drop") [] (Stdlib.String.toBlob "do-not-replay") in
-  let recovered = session.request "GET" (url ++ "/fixed") [] Stdlib.Blob.empty in
+  let warm = session.request "GET" (url + "/fixed") [] Stdlib.Blob.empty in
+  let failed = session.request "POST" (url + "/drop") [] (Stdlib.String.toBlob "do-not-replay") in
+  let recovered = session.request "GET" (url + "/fixed") [] Stdlib.Blob.empty in
   let _ = session.close () in
   match warm, failed, recovered with
   | Ok warm, Error _error, Ok recovered -> if id warm != id recovered then Ok () else Error "Failed owner reused"

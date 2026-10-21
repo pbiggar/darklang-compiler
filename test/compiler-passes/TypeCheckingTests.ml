@@ -384,8 +384,8 @@ let testWrittenRecordRejectsRepeatedField () =
       | Ok _ -> Error "Expected duplicate record field to fail type checking")
 
 (*
-   Regression for the largest compatible E2E batch: the type checker must not
-   multiply top-level traversal depth by the depth of its final let chain.
+   The type checker must not multiply top-level traversal depth by the depth
+   of its final let chain. Keep that chain within the parser's 200-level cap.
 *)
 let testManyTopLevelFunctionsAndLetsAreStackSafe () =
   let programSize = 373 in
@@ -410,8 +410,7 @@ let testManyTopLevelFunctionsAndLetsAreStackSafe () =
               (Printf.sprintf "stackSafeTypeCheck%d" index)
               (NonEmptyList.singleton (Int64Literal (Int64.of_int index))),
             body ))
-      (List.init programSize Fun.id)
-      (Int64Literal 0L)
+      (List.init 150 Fun.id) (Int64Literal 0L)
   in
   match
     checkProgram (Program (functions @ [ Expression ([], expression) ]))

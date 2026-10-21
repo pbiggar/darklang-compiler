@@ -236,18 +236,18 @@ let now () : DateTime = Stdlib.DateTime.__now ()
 let today () : DateTime = Stdlib.DateTime.__today ()
 
 let __padZero2 (value: Int64) : String =
-    if value < 10L then "0" ++ Stdlib.Int64.toString value
+    if value < 10L then "0" + Stdlib.Int64.toString value
     else Stdlib.Int64.toString value
 
 let __padZero3 (value: Int64) : String =
-    if value < 10L then "00" ++ Stdlib.Int64.toString value
-    else if value < 100L then "0" ++ Stdlib.Int64.toString value
+    if value < 10L then "00" + Stdlib.Int64.toString value
+    else if value < 100L then "0" + Stdlib.Int64.toString value
     else Stdlib.Int64.toString value
 
 let __padZero4 (value: Int64) : String =
-    if value < 10L then "000" ++ Stdlib.Int64.toString value
-    else if value < 100L then "00" ++ Stdlib.Int64.toString value
-    else if value < 1000L then "0" ++ Stdlib.Int64.toString value
+    if value < 10L then "000" + Stdlib.Int64.toString value
+    else if value < 100L then "00" + Stdlib.Int64.toString value
+    else if value < 1000L then "0" + Stdlib.Int64.toString value
     else Stdlib.Int64.toString value
 
 let __calendarParts (date: DateTime) : (Int64 * Int64 * Int64) =
@@ -264,27 +264,27 @@ let toString (date: DateTime) : String =
     let second = (withinDay / Stdlib.DateTime.__ticksPerSecond ()) % 60L in
     let millisecond = (withinDay / Stdlib.DateTime.__ticksPerMillisecond ()) % 1000L in
     let dateAndTime =
-        Stdlib.DateTime.__padZero4 year ++ "-" ++
-        Stdlib.DateTime.__padZero2 month ++ "-" ++
-        Stdlib.DateTime.__padZero2 day ++ "T" ++
-        Stdlib.DateTime.__padZero2 hour ++ ":" ++
-        Stdlib.DateTime.__padZero2 minute ++ ":" ++
+        Stdlib.DateTime.__padZero4 year + "-" +
+        Stdlib.DateTime.__padZero2 month + "-" +
+        Stdlib.DateTime.__padZero2 day + "T" +
+        Stdlib.DateTime.__padZero2 hour + ":" +
+        Stdlib.DateTime.__padZero2 minute + ":" +
         Stdlib.DateTime.__padZero2 second in
-    if millisecond == 0L then dateAndTime ++ "Z"
-    else dateAndTime ++ "." ++ Stdlib.DateTime.__padZero3 millisecond ++ "Z"
+    if millisecond == 0L then dateAndTime + "Z"
+    else dateAndTime + "." + Stdlib.DateTime.__padZero3 millisecond + "Z"
 
 let toStringISO8601BasicDate (date: DateTime) : String =
     let parts = Stdlib.DateTime.__calendarParts date in
-    Stdlib.DateTime.__padZero4 (Stdlib.Tuple3.first parts) ++
-    Stdlib.DateTime.__padZero2 (Stdlib.Tuple3.second parts) ++
+    Stdlib.DateTime.__padZero4 (Stdlib.Tuple3.first parts) +
+    Stdlib.DateTime.__padZero2 (Stdlib.Tuple3.second parts) +
     Stdlib.DateTime.__padZero2 (Stdlib.Tuple3.third parts)
 
 let toStringISO8601BasicDateTime (date: DateTime) : String =
     let withinDay = Stdlib.DateTime.__ticksWithinDay date in
-    Stdlib.DateTime.toStringISO8601BasicDate date ++ "T" ++
-    Stdlib.DateTime.__padZero2 (withinDay / Stdlib.DateTime.__ticksPerHour ()) ++
-    Stdlib.DateTime.__padZero2 ((withinDay / Stdlib.DateTime.__ticksPerMinute ()) % 60L) ++
-    Stdlib.DateTime.__padZero2 ((withinDay / Stdlib.DateTime.__ticksPerSecond ()) % 60L) ++ "Z"
+    Stdlib.DateTime.toStringISO8601BasicDate date + "T" +
+    Stdlib.DateTime.__padZero2 (withinDay / Stdlib.DateTime.__ticksPerHour ()) +
+    Stdlib.DateTime.__padZero2 ((withinDay / Stdlib.DateTime.__ticksPerMinute ()) % 60L) +
+    Stdlib.DateTime.__padZero2 ((withinDay / Stdlib.DateTime.__ticksPerSecond ()) % 60L) + "Z"
 
 let __digitAt (value: String) (index: Int64) : Stdlib.Result.Result<Int64, String> =
     if index >= Stdlib.String.__byteLength value then Error "Invalid date format"

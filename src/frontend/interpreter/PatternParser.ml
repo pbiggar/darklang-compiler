@@ -1,5 +1,5 @@
 (* PatternParser.ml - Preserve or/tuple/cons precedence and literal pattern ranges. *)
-(* Fallback cases are the frozen parser's intentional recovery boundaries. *)
+(* Fallback cases are the interpreter parser's intentional recovery boundaries. *)
 [@@@warning "-4"]
 
 open Tokenizer
@@ -11,7 +11,9 @@ let last buffer =
   | Some value -> value
   | None -> Crash.crash "Empty pattern collector"
 
-let upperName = NameSyntax.isUpperIdentifier
+let upperName name =
+  let chars = Text.scalars name in
+  Array.length chars > 0 && Text.isUpper chars.(0)
 
 (*
    or-level: `p1 | p2 | …` (stops at `->` / `when`)

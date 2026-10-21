@@ -17,6 +17,8 @@ type effect_ =
   | PackageWrite
   | TraceRead
   | TraceWrite
+  | Concurrency
+  | Runtime
   | Native
 
 val name : effect_ -> string

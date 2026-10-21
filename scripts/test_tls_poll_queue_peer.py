@@ -54,7 +54,7 @@ let run (port: Int64) (mode: String) : Stdlib.Result.Result<Unit, String> =
         let bytes = Stdlib.String.toBlob (Stdlib.String.join (Stdlib.List.repeatUnsafe 16 (Stdlib.String.repeat "y" 1000)) "") in
         fill connection bytes 0L 0L |> Stdlib.Result.andThen (fun total ->
           let transport = Stdlib.__HttpTransport.secure connection (Stdlib.__Tls13Client.SecureKeys { client = keys, server = keys, clientSecret = secret, serverSecret = secret, pending = Stdlib.Blob.empty }) in
-          let _ = Stdlib.printLine ("BLOCKED " ++ Stdlib.Int64.toString total) in
+          let _ = Stdlib.printLine ("BLOCKED " + Stdlib.Int64.toString total) in
           let result = Stdlib.__Network.monotonicMillis () |> Stdlib.Result.mapError Stdlib.Int64.toString |> Stdlib.Result.andThen (fun started ->
             ready connection transport (started + 5000L) |> Stdlib.Result.andThen (fun _unit ->
               let _ = Stdlib.printLine "POLLED" in

@@ -21,7 +21,7 @@ let diagonalKey (value: Int64) : String = Stdlib.Int64.toString value
 let frontierGet (frontier: Dict<String, Int64>) (diagonal: Int64) : Int64 =
     match Stdlib.Dict.get frontier (diagonalKey diagonal) with
     | Some value -> value
-    | None -> Builtin.crash ("missing Myers frontier diagonal " ++ diagonalKey diagonal)
+    | None -> Builtin.crash ("missing Myers frontier diagonal " + diagonalKey diagonal)
 
 let snake (left: String) (right: String) (leftLength: Int64) (rightLength: Int64) (x: Int64) (y: Int64) : (Int64 * Int64) =
     if x >= leftLength || y >= rightLength then (x, y)
@@ -80,6 +80,6 @@ else
     let prefix = Stdlib.String.repeat unit (Stdlib.Int.fromInt64 blocks) in
     let suffix = Stdlib.String.repeat unit (Stdlib.Int.fromInt64 (blocks + 1L)) in
     let insertion = Stdlib.String.repeat "<changed-block>" (Stdlib.Int.fromInt64 insertions) in
-    let leftText = prefix ++ suffix in
-    let rightText = prefix ++ insertion ++ suffix in
+    let leftText = prefix + suffix in
+    let rightText = prefix + insertion + suffix in
     Builtin.printLine (Stdlib.Int64.toString (run repetitions leftText rightText 0L))

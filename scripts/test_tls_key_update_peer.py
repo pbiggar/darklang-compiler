@@ -43,7 +43,7 @@ let run () : Stdlib.Result.Result<Unit, String> =
       Stdlib.printLine (Stdlib.Int64.toString state.send.sequence)
       Stdlib.printLine (Stdlib.Int64.toString state.updates)
       Stdlib.printLine (Stdlib.Int64.toString state.tickets)
-      let _ = Stdlib.List.fold report.replies () (fun _unit bytes -> Stdlib.printLine ("REPLY " ++ Stdlib.Blob.toHex bytes)) in
+      let _ = Stdlib.List.fold report.replies () (fun _unit bytes -> Stdlib.printLine ("REPLY " + Stdlib.Blob.toHex bytes)) in
       Stdlib.printLine (Stdlib.Blob.toHex (Stdlib.Option.withDefault report.current.data Stdlib.Blob.empty)))
   | _, _ -> Error "keys"
 match run () with | Ok () -> () | Error _ -> Stdlib.printLine "ERROR"
@@ -56,7 +56,7 @@ let write (lifecycle: Stream<Unit>) (cell: RawPtr) (fail: Bool) (bytes: Blob) : 
   | Some () ->
     let count = Stdlib.Stream.__cellGet<Int64> cell in
     let _ = Stdlib.Stream.__cellSet cell (count + 1L) in
-    Stdlib.printLine ("WRITE " ++ Stdlib.Blob.toHex bytes)
+    Stdlib.printLine ("WRITE " + Stdlib.Blob.toHex bytes)
     if fail && count == 0L then Error 5L else Ok ()
 let run () : Unit =
   let fail = (Stdlib.Cli.__Args.get 0 |> Stdlib.Result.withDefault "") == "serverfail" in

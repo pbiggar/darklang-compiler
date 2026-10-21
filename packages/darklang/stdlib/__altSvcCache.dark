@@ -8,7 +8,7 @@ type Lookup = { state: Stdlib.__AltSvcCache.State, services: List<Stdlib.__Https
 val empty = Stdlib.__AltSvcCache.State { entries = [] }
 
 let origin (url: Stdlib.__HttpWire.Url) : String =
-  url.scheme ++ "://" ++ Stdlib.String.toLowercase url.host ++ ":" ++ Stdlib.Int64.toString url.port
+  url.scheme + "://" + Stdlib.String.toLowercase url.host + ":" + Stdlib.Int64.toString url.port
 
 let __trim (entries: List<Stdlib.__AltSvcCache.Entry>) (remaining: Int64) : List<Stdlib.__AltSvcCache.Entry> =
   if remaining == 0L then []
@@ -30,7 +30,7 @@ let __httpDate (text: String) : Stdlib.Result.Result<Int64, String> =
     match Stdlib.List.findFirst months (fun pair -> let (name, _) = pair in name == Stdlib.String.__byteSlice text 8L 11L) with
     | None -> Error "Invalid response Date"
     | Some ((_, month)) ->
-      let iso = Stdlib.String.__byteSlice text 12L 16L ++ "-" ++ month ++ "-" ++ Stdlib.String.__byteSlice text 5L 7L ++ "T" ++ Stdlib.String.__byteSlice text 17L 25L ++ "Z" in
+      let iso = Stdlib.String.__byteSlice text 12L 16L + "-" + month + "-" + Stdlib.String.__byteSlice text 5L 7L + "T" + Stdlib.String.__byteSlice text 17L 25L + "Z" in
       Stdlib.DateTime.parse iso |> Stdlib.Result.mapError (fun _error -> "Invalid response Date") |> Stdlib.Result.andThen (fun date ->
         match Stdlib.Int.toInt64 (Stdlib.DateTime.toSeconds date) with | None -> Error "Invalid response Date" | Some seconds -> Ok seconds)
 

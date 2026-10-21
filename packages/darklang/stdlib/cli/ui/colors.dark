@@ -68,7 +68,7 @@ val accent = "\u001b[93m"
 val selection = "\u001b[103;30m"
 val completionSelection = "\u001b[44;97m"
 
-let colorize (color: String) (text: String) : String = color ++ text ++ Stdlib.Cli.UI.Colors.reset
+let colorize (color: String) (text: String) : String = color + text + Stdlib.Cli.UI.Colors.reset
 let plain (text: String) : String = text
 let boldText (text: String) : String = Stdlib.Cli.UI.Colors.colorize Stdlib.Cli.UI.Colors.bold text
 let dimText (text: String) : String = Stdlib.Cli.UI.Colors.colorize Stdlib.Cli.UI.Colors.dim text

@@ -43,7 +43,7 @@ let applyLine
     else
         let (field, value) = Stdlib.HttpClient.Sse.splitField line in
         if field == "data" then
-            let newData = if hasData then data ++ "\n" ++ value else value in
+            let newData = if hasData then data + "\n" + value else value in
             (newData, eventType, id, true)
         else if field == "event" then
             (data, value, id, hasData)

@@ -81,8 +81,8 @@ let getPath (req: Stdlib.Http.Request) : String =
     | _ :: rest ->
         let path = Stdlib.String.join rest "/" in
         match Stdlib.String.splitFirst path "?" with
-        | None -> "/" ++ path
-        | Some ((before, _)) -> "/" ++ before
+        | None -> "/" + path
+        | Some ((before, _)) -> "/" + before
 
 let routeRequest (handlers: List<Stdlib.HttpServer.Handler>) (req: Stdlib.Http.Request) : Stdlib.Http.Response =
     match Stdlib.HttpServer.findHandler handlers (Stdlib.HttpServer.getMethod req) (Stdlib.HttpServer.getPath req) with
@@ -115,16 +115,16 @@ let __request (config: Stdlib.HttpServer.Config.Config) (parsed: Stdlib.__HttpWi
     let headers = Stdlib.List.append [("x-http-method", parsed.method)] parsed.headers in
     let temporary = Stdlib.Http.Request { url = "", headers = headers, body = parsed.body } in
     let authority = Stdlib.Http.Request.header temporary "host"
-        |> Stdlib.Option.withDefault ("localhost:" ++ Stdlib.Int.toString config.port) in
-    match Stdlib.__HttpWire.parseUrl ("http://" ++ authority ++ "/") with
+        |> Stdlib.Option.withDefault ("localhost:" + Stdlib.Int.toString config.port) in
+    match Stdlib.__HttpWire.parseUrl ("http://" + authority + "/") with
     | Error message -> Error message
     | Ok url ->
         let forwarded = config.canonicalizeFromForwardedProto &&
             Stdlib.List.any headers (fun pair -> let (key, value) = pair in
                 Stdlib.String.toLowercase key == "x-forwarded-proto" && Stdlib.String.toLowercase value == "https") in
-        let host = if Stdlib.String.contains url.host ":" then "[" ++ url.host ++ "]" else url.host in
-        let prefix = if forwarded then "https://" ++ host else "http://" ++ authority in
-        Ok (Stdlib.Http.Request { url = prefix ++ parsed.target, headers = headers, body = parsed.body })
+        let host = if Stdlib.String.contains url.host ":" then "[" + url.host + "]" else url.host in
+        let prefix = if forwarded then "https://" + host else "http://" + authority in
+        Ok (Stdlib.Http.Request { url = prefix + parsed.target, headers = headers, body = parsed.body })
 
 let __responseBytesFor (method: String) (config: Stdlib.HttpServer.Config.Config) (response: Stdlib.Http.Response) (persistent: Bool)
     : Stdlib.Result.Result<Blob, String> =
@@ -159,16 +159,16 @@ let __http2Handler (config: Stdlib.HttpServer.Config.Config)
         let forwarded = config.canonicalizeFromForwardedProto &&
             Stdlib.List.any headers (fun pair -> let (key, value) = pair in
                 key == "x-forwarded-proto" && Stdlib.String.toLowercase value == "https") in
-        let host = if Stdlib.String.contains url.host ":" then "[" ++ url.host ++ "]" else url.host in
-        let requestUrl = if forwarded then "https://" ++ host ++ url.target else request.url in
+        let host = if Stdlib.String.contains url.host ":" then "[" + url.host + "]" else url.host in
+        let requestUrl = if forwarded then "https://" + host + url.target else request.url in
         let req = Stdlib.Http.Request { url = requestUrl, headers = headers, body = request.body } in
         let started = Stdlib.__Network.monotonicMillis () in
         let response = handler req in
         let _ =
             if config.logRequests then
                 match started, Stdlib.__Network.monotonicMillis () with
-                | Ok begin_, Ok end_ -> Stdlib.printLine ("[HttpServer] " ++ Stdlib.HttpServer.getMethod req ++ " " ++ url.target ++ " " ++
-                    Stdlib.Int.toString response.statusCode ++ " " ++ Stdlib.Int64.toString (end_ - begin_) ++ "ms")
+                | Ok begin_, Ok end_ -> Stdlib.printLine ("[HttpServer] " + Stdlib.HttpServer.getMethod req + " " + url.target + " " +
+                    Stdlib.Int.toString response.statusCode + " " + Stdlib.Int64.toString (end_ - begin_) + "ms")
                 | _, _ -> ()
             else () in
         response
@@ -206,11 +206,11 @@ let __expectContinue (buffer: Blob) : Stdlib.Result.Result<Bool, String> =
 let __readRequest (transport: Stdlib.__HttpTransport.Transport) (signals: Stdlib.__Network.ShutdownSignals)
     (limit: Int64) (deadline: Int64) (continued: Bool) (buffer: Blob) : Stdlib.Result.Result<Stdlib.__HttpWire.ParsedRequest, Stdlib.HttpServer.__ReadError> =
     match Stdlib.__Network.shutdownRequested signals with
-    | Error code -> Error (Stdlib.HttpServer.__ReadError.Transport ("Shutdown check failed: " ++ Stdlib.Int64.toString code))
+    | Error code -> Error (Stdlib.HttpServer.__ReadError.Transport ("Shutdown check failed: " + Stdlib.Int64.toString code))
     | Ok true -> Error Stdlib.HttpServer.__ReadError.Shutdown
     | Ok false ->
         match Stdlib.__Network.monotonicMillis () with
-        | Error code -> Error (Stdlib.HttpServer.__ReadError.Transport ("Monotonic clock failed: " ++ Stdlib.Int64.toString code))
+        | Error code -> Error (Stdlib.HttpServer.__ReadError.Transport ("Monotonic clock failed: " + Stdlib.Int64.toString code))
         | Ok now ->
             if now >= deadline then Error (Stdlib.HttpServer.__statusError 408 buffer)
             else if Stdlib.Blob.__byteLength buffer > limit + 1048576L then Error (Stdlib.HttpServer.__statusError 413 buffer)
@@ -249,7 +249,7 @@ let __handleHttp1Transport (config: Stdlib.HttpServer.Config.Config) (handler: S
     (pending: Blob)
     : Stdlib.Result.Result<Bool, String> =
     match Stdlib.__Network.monotonicMillis () with
-    | Error code -> Error ("Monotonic clock failed: " ++ Stdlib.Int64.toString code)
+    | Error code -> Error ("Monotonic clock failed: " + Stdlib.Int64.toString code)
     | Ok started ->
         let parsed = Stdlib.HttpServer.__readRequest transport signals limit (started + 10000L) false pending in
         match parsed with
@@ -281,15 +281,15 @@ let __handleHttp1Transport (config: Stdlib.HttpServer.Config.Config) (handler: S
                 | Ok wire -> (wire, response.statusCode)
                 | Error _ ->
                     let head = "HTTP/1.1 500 Internal Server Error\r\nConnection: close\r\nContent-Length: 21\r\n\r\n" in
-                    let message = if method == "HEAD" then head else head ++ "Internal server error" in
+                    let message = if method == "HEAD" then head else head + "Internal server error" in
                     (Stdlib.String.toBlob message, 500) in
             let _ = transport.write bytes in
             let _ =
                 if config.logRequests then
                     match Stdlib.__Network.monotonicMillis () with
                     | Error _ -> ()
-                    | Ok finished -> Stdlib.printLine ("[HttpServer] " ++ method ++ " " ++ target ++ " " ++
-                        Stdlib.Int.toString status ++ " " ++ Stdlib.Int64.toString (finished - started) ++ "ms")
+                    | Ok finished -> Stdlib.printLine ("[HttpServer] " + method + " " + target + " " +
+                        Stdlib.Int.toString status + " " + Stdlib.Int64.toString (finished - started) + "ms")
                 else () in
             Ok false
 
@@ -369,14 +369,14 @@ let serveOn (address: List<Int64>) (config: Stdlib.HttpServer.Config.Config) (ha
         if port <= 0L || port > 65535L || limit < 0L || limit > 104857600L then Error "Invalid HTTP server configuration"
         else
             match Stdlib.__Network.monotonicMillis () with
-            | Error code -> Error ("Monotonic clock unavailable: " ++ Stdlib.Int64.toString code)
+            | Error code -> Error ("Monotonic clock unavailable: " + Stdlib.Int64.toString code)
             | Ok _ ->
                 match Stdlib.__Network.shutdownSignals () with
-                | Error code -> Error ("Shutdown setup failed: " ++ Stdlib.Int64.toString code)
+                | Error code -> Error ("Shutdown setup failed: " + Stdlib.Int64.toString code)
                 | Ok signals ->
                     let result =
                         match (if Stdlib.List.length address == 16 then Stdlib.__Network.listenTcp6 address port else Stdlib.__Network.listenTcp4 address port) with
-                        | Error code -> Error ("Cannot bind HTTP server: " ++ Stdlib.Int64.toString code)
+                        | Error code -> Error ("Cannot bind HTTP server: " + Stdlib.Int64.toString code)
                         | Ok listener ->
                             let _ = onListening () in
                             let result = Stdlib.__Http1Server.serve config handler signals listener limit in

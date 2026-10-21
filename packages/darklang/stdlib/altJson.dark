@@ -81,23 +81,23 @@ let __parseStringChars (source: String) (index: Int64) (length: Int64) (acc: Str
             let decoded = Stdlib.String.__decodeUtf8At source index in
             let codepoint = Stdlib.Tuple2.first decoded in
             let consumed = Stdlib.Tuple2.second decoded in
-            Stdlib.AltJson.__parseStringChars source (index + consumed) length (acc ++ Stdlib.String.__fromCodepoints ([codepoint]))
+            Stdlib.AltJson.__parseStringChars source (index + consumed) length (acc + Stdlib.String.__fromCodepoints ([codepoint]))
         else if index + 1L >= length then
             Stdlib.AltJson.__InternalParseStringResult.InvalidString
         else
             let escaped = Stdlib.String.__byteAtUnchecked source (index + 1L) in
             if escaped == 34L || escaped == 92L || escaped == 47L then
-                Stdlib.AltJson.__parseStringChars source (index + 2L) length (acc ++ Stdlib.String.__fromCodepoints ([escaped]))
+                Stdlib.AltJson.__parseStringChars source (index + 2L) length (acc + Stdlib.String.__fromCodepoints ([escaped]))
             else if escaped == 98L then
-                Stdlib.AltJson.__parseStringChars source (index + 2L) length (acc ++ Stdlib.String.__fromCodepoints ([8L]))
+                Stdlib.AltJson.__parseStringChars source (index + 2L) length (acc + Stdlib.String.__fromCodepoints ([8L]))
             else if escaped == 102L then
-                Stdlib.AltJson.__parseStringChars source (index + 2L) length (acc ++ Stdlib.String.__fromCodepoints ([12L]))
+                Stdlib.AltJson.__parseStringChars source (index + 2L) length (acc + Stdlib.String.__fromCodepoints ([12L]))
             else if escaped == 110L then
-                Stdlib.AltJson.__parseStringChars source (index + 2L) length (acc ++ "\n")
+                Stdlib.AltJson.__parseStringChars source (index + 2L) length (acc + "\n")
             else if escaped == 114L then
-                Stdlib.AltJson.__parseStringChars source (index + 2L) length (acc ++ "\r")
+                Stdlib.AltJson.__parseStringChars source (index + 2L) length (acc + "\r")
             else if escaped == 116L then
-                Stdlib.AltJson.__parseStringChars source (index + 2L) length (acc ++ "\t")
+                Stdlib.AltJson.__parseStringChars source (index + 2L) length (acc + "\t")
             else if escaped == 117L then
                 let first = Stdlib.AltJson.__hex4 source (index + 2L) length in
                 if first < 0L then Stdlib.AltJson.__InternalParseStringResult.InvalidString
@@ -112,11 +112,11 @@ let __parseStringChars (source: String) (index: Int64) (length: Int64) (acc: Str
                             Stdlib.AltJson.__InternalParseStringResult.InvalidString
                         else
                             let codepoint = 65536L + (first - 55296L) * 1024L + second - 56320L in
-                            Stdlib.AltJson.__parseStringChars source (index + 12L) length (acc ++ Stdlib.String.__fromCodepoints ([codepoint]))
+                            Stdlib.AltJson.__parseStringChars source (index + 12L) length (acc + Stdlib.String.__fromCodepoints ([codepoint]))
                 else if first >= 56320L && first <= 57343L then
                     Stdlib.AltJson.__InternalParseStringResult.InvalidString
                 else
-                    Stdlib.AltJson.__parseStringChars source (index + 6L) length (acc ++ Stdlib.String.__fromCodepoints ([first]))
+                    Stdlib.AltJson.__parseStringChars source (index + 6L) length (acc + Stdlib.String.__fromCodepoints ([first]))
             else Stdlib.AltJson.__InternalParseStringResult.InvalidString
 
 let __parseString (source: String) (index: Int64) (length: Int64) : Stdlib.AltJson.__InternalParseStringResult =
@@ -361,7 +361,7 @@ let __numberToFloat (text: String) : Stdlib.Option.Option<Float> =
     let fractionStart = if dot < 0L || dot > mantissaEnd then mantissaEnd else dot + 1L in
     let fractionDigits = mantissaEnd - fractionStart in
     let digits =
-        Stdlib.String.__byteSlice text start integerEnd ++
+        Stdlib.String.__byteSlice text start integerEnd +
         Stdlib.String.__byteSlice text fractionStart mantissaEnd in
     let exponentStart0 = if exponentMarker < 0L then length else exponentMarker + 1L in
     let exponentNegative = exponentStart0 < length && Stdlib.String.__byteAtUnchecked text exponentStart0 == 45L in
@@ -453,27 +453,27 @@ let __hexDigit (value: Int64) : String =
     | _ -> Builtin.crash "JSON hex digit out of range"
 
 let __escapeControl (byte: Int64) : String =
-    "\\u00" ++ Stdlib.AltJson.__hexDigit (byte / 16L) ++ Stdlib.AltJson.__hexDigit (byte % 16L)
+    "\\u00" + Stdlib.AltJson.__hexDigit (byte / 16L) + Stdlib.AltJson.__hexDigit (byte % 16L)
 
 let __escapeCodeUnit (value: Int64) : String =
-    "\\u" ++
-    Stdlib.AltJson.__hexDigit (Stdlib.Int64.bitwiseAnd (Stdlib.Int64.shiftRight value 12L) 15L) ++
-    Stdlib.AltJson.__hexDigit (Stdlib.Int64.bitwiseAnd (Stdlib.Int64.shiftRight value 8L) 15L) ++
-    Stdlib.AltJson.__hexDigit (Stdlib.Int64.bitwiseAnd (Stdlib.Int64.shiftRight value 4L) 15L) ++
+    "\\u" +
+    Stdlib.AltJson.__hexDigit (Stdlib.Int64.bitwiseAnd (Stdlib.Int64.shiftRight value 12L) 15L) +
+    Stdlib.AltJson.__hexDigit (Stdlib.Int64.bitwiseAnd (Stdlib.Int64.shiftRight value 8L) 15L) +
+    Stdlib.AltJson.__hexDigit (Stdlib.Int64.bitwiseAnd (Stdlib.Int64.shiftRight value 4L) 15L) +
     Stdlib.AltJson.__hexDigit (Stdlib.Int64.bitwiseAnd value 15L)
 
 let __escapeStringAt (value: String) (index: Int64) (length: Int64) (acc: String) : String =
     if index >= length then acc
     else
         let byte = Stdlib.String.__byteAtUnchecked value index in
-        if byte == 34L then Stdlib.AltJson.__escapeStringAt value (index + 1L) length (acc ++ "\\\"")
-        else if byte == 92L then Stdlib.AltJson.__escapeStringAt value (index + 1L) length (acc ++ "\\\\")
-        else if byte == 8L then Stdlib.AltJson.__escapeStringAt value (index + 1L) length (acc ++ "\\b")
-        else if byte == 9L then Stdlib.AltJson.__escapeStringAt value (index + 1L) length (acc ++ "\\t")
-        else if byte == 10L then Stdlib.AltJson.__escapeStringAt value (index + 1L) length (acc ++ "\\n")
-        else if byte == 12L then Stdlib.AltJson.__escapeStringAt value (index + 1L) length (acc ++ "\\f")
-        else if byte == 13L then Stdlib.AltJson.__escapeStringAt value (index + 1L) length (acc ++ "\\r")
-        else if byte < 32L then Stdlib.AltJson.__escapeStringAt value (index + 1L) length (acc ++ Stdlib.AltJson.__escapeControl byte)
+        if byte == 34L then Stdlib.AltJson.__escapeStringAt value (index + 1L) length (acc + "\\\"")
+        else if byte == 92L then Stdlib.AltJson.__escapeStringAt value (index + 1L) length (acc + "\\\\")
+        else if byte == 8L then Stdlib.AltJson.__escapeStringAt value (index + 1L) length (acc + "\\b")
+        else if byte == 9L then Stdlib.AltJson.__escapeStringAt value (index + 1L) length (acc + "\\t")
+        else if byte == 10L then Stdlib.AltJson.__escapeStringAt value (index + 1L) length (acc + "\\n")
+        else if byte == 12L then Stdlib.AltJson.__escapeStringAt value (index + 1L) length (acc + "\\f")
+        else if byte == 13L then Stdlib.AltJson.__escapeStringAt value (index + 1L) length (acc + "\\r")
+        else if byte < 32L then Stdlib.AltJson.__escapeStringAt value (index + 1L) length (acc + Stdlib.AltJson.__escapeControl byte)
         else
             let decoded = Stdlib.String.__decodeUtf8At value index in
             let codepoint = Stdlib.Tuple2.first decoded in
@@ -484,11 +484,11 @@ let __escapeStringAt (value: String) (index: Int64) (length: Int64) (acc: String
                     let supplementary = codepoint - 65536L in
                     let high = 55296L + Stdlib.Int64.shiftRight supplementary 10L in
                     let low = 56320L + Stdlib.Int64.bitwiseAnd supplementary 1023L in
-                    Stdlib.AltJson.__escapeCodeUnit high ++ Stdlib.AltJson.__escapeCodeUnit low in
-            Stdlib.AltJson.__escapeStringAt value (index + consumed) length (acc ++ escaped)
+                    Stdlib.AltJson.__escapeCodeUnit high + Stdlib.AltJson.__escapeCodeUnit low in
+            Stdlib.AltJson.__escapeStringAt value (index + consumed) length (acc + escaped)
 
 let __quote (value: String) : String =
-    "\"" ++ Stdlib.AltJson.__escapeStringAt value 0L (Stdlib.String.__byteLength value) "" ++ "\""
+    "\"" + Stdlib.AltJson.__escapeStringAt value 0L (Stdlib.String.__byteLength value) "" + "\""
 
 let __formatNumber (value: Float) : String =
     let rendered = Stdlib.Float.toString value in
@@ -500,8 +500,8 @@ let __formatArray (values: List<Stdlib.AltJson.Json>) (first: Bool) : String =
     match values with
     | [] -> ""
     | head :: tail ->
-        (if first then "" else ",") ++
-        Stdlib.AltJson.format head ++
+        (if first then "" else ",") +
+        Stdlib.AltJson.format head +
         Stdlib.AltJson.__formatArray tail false
 
 let __formatObject (values: List<(String * Stdlib.AltJson.Json)>) (first: Bool) : String =
@@ -510,8 +510,8 @@ let __formatObject (values: List<(String * Stdlib.AltJson.Json)>) (first: Bool) 
     | head :: tail ->
         let key = Stdlib.Tuple2.first head in
         let value = Stdlib.Tuple2.second head in
-        (if first then "" else ",") ++
-        Stdlib.AltJson.__quote key ++ ":" ++ Stdlib.AltJson.format value ++
+        (if first then "" else ",") +
+        Stdlib.AltJson.__quote key + ":" + Stdlib.AltJson.format value +
         Stdlib.AltJson.__formatObject tail false
 
 let format (json: Stdlib.AltJson.Json) : String =
@@ -520,5 +520,5 @@ let format (json: Stdlib.AltJson.Json) : String =
     | Bool value -> if value then "true" else "false"
     | Number value -> Stdlib.AltJson.__formatNumber value
     | String value -> Stdlib.AltJson.__quote value
-    | Array values -> "[" ++ Stdlib.AltJson.__formatArray values true ++ "]"
-    | Object values -> "{" ++ Stdlib.AltJson.__formatObject values true ++ "}"
+    | Array values -> "[" + Stdlib.AltJson.__formatArray values true + "]"
+    | Object values -> "{" + Stdlib.AltJson.__formatObject values true + "}"

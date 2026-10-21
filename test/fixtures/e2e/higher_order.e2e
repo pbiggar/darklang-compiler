@@ -116,10 +116,10 @@ let applyFloat (f: Float -> Float) (x: Float): Float = f x let doubleFloat (n: F
 let apply2Floats (f: Float -> Float -> Float) (a: Float) (b: Float): Float = f a b let addFloats (x: Float) (y: Float): Float = x + y; apply2Floats addFloats 3.5 4.5 = 8.0
 
 // FuncRef with String parameter and return type
-let applyStr (f: String -> String) (s: String): String = f s let addBang (s: String): String = s ++ "!" applyStr addBang "hello" = "hello!"
+let applyStr (f: String -> String) (s: String): String = f s let addBang (s: String): String = s + "!" applyStr addBang "hello" = "hello!"
 
 // Returning a named function as a first-class value must use the wrapper calling convention
-let choose (): String -> String = addBang let addBang (s: String): String = s ++ "!" let f = choose () in f "ok" = "ok!"
+let choose (): String -> String = addBang let addBang (s: String): String = s + "!" let f = choose () in f "ok" = "ok!"
 
 // FuncRef with mixed types (Int64 param, Bool return)
 let checkPositive (f: Int64 -> Bool) (n: Int64): Bool = f n let isPositive (x: Int64): Bool = x > 0L checkPositive isPositive 5L = true

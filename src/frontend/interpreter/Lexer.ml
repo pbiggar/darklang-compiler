@@ -34,6 +34,7 @@ type spannedToken = {
   range : tokenRange;
   docComment : string option;
   leadingTrivia : trivia list;
+  lexError : bool;
 }
 
 let units = Text.scalars
@@ -337,6 +338,7 @@ let operators =
     (".", TDot);
     ("=", TEquals);
     ("!", TNot);
+    ("?", TQuestion);
     ("<", TLt);
     (">", TGt);
     ("&", TBitAnd);
@@ -554,6 +556,7 @@ let tokenize text =
         range = { start = position; end_ = endPosition };
         docComment = !pendingDocComment;
         leadingTrivia = List.rev !pendingTrivia;
+        lexError = false;
       }
     in
     pendingDocComment := None;
@@ -852,5 +855,14 @@ let tokenize text =
           go (index + 1) nextPosition tokens
   in
   Result.map
-    (fun tokens -> (tokens, List.rev !diagnostics))
+    (fun tokens ->
+      let diagnosed = Hashtbl.create (List.length !diagnostics) in
+      List.iter
+        (fun (range, _) -> Hashtbl.replace diagnosed range ())
+        !diagnostics;
+      ( List.map
+          (fun (token : spannedToken) ->
+            { token with lexError = Hashtbl.mem diagnosed token.range })
+          tokens,
+        List.rev !diagnostics ))
     (go 0 { row = 0; column = 0 } [])

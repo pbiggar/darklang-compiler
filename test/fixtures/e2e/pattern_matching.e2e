@@ -105,7 +105,7 @@ match Right 7L with | Left x -> x | Right y -> y = 7L
 
 // Guard should use payload type for string equality
 type GuardWrap = GuardWrap of String | GuardEmpty
-match GuardWrap ("a" ++ "b") with | GuardWrap s when s == ("a" ++ "b") -> 1L | _ -> 0L = 1L
+match GuardWrap ("a" + "b") with | GuardWrap s when s == ("a" + "b") -> 1L | _ -> 0L = 1L
 
 // === Integer Literal Patterns ===
 
@@ -388,7 +388,7 @@ match 42L with | 0L | [_] -> 1L | _ -> 99L = compileerror="List pattern requires
 match (1L, 2L) with | (x, 0L) | ([x], _) -> x | _ -> 99L = compileerror="List pattern requires a list scrutinee"
 
 // Tuple alternatives with different arity are rejected before lowering.
-(match ("a" ++ "b", 1L) with | (x, _) | (x, _, _) -> x | _ -> "") == "ab" = compileerror="Tuple pattern does not match the scrutinee type"
+(match ("a" + "b", 1L) with | (x, _) | (x, _, _) -> x | _ -> "") == "ab" = compileerror="Tuple pattern does not match the scrutinee type"
 
 // Integer literal pattern on non-int scrutinee should be rejected
 match true with | 1L -> 42L | _ -> 0L = compileerror="Expected TInt64, got TBool"
@@ -448,7 +448,7 @@ match [(1L, 2L)] with | (a, b, c) :: rest -> 1L | _ -> 2L = compileerror="Tuple 
 
 // List-cons tuple head patterns must preserve unresolved tuple element bindings instead of dropping to TInt64/defaults.
 // Regression: when the list element type arrived as TVar from ANF inferType, this failed with `Undefined variable: a`.
-let x = (match false with | true -> [] | false -> [(("a" ++ ""), ("b" ++ ""))]) in match x with | (a, b) :: rest -> (match a with | _ -> 1L) | _ -> 2L = 1L
+let x = (match false with | true -> [] | false -> [(("a" + ""), ("b" + ""))]) in match x with | (a, b) :: rest -> (match a with | _ -> 1L) | _ -> 2L = 1L
 
 // Nested list-cons heads must not default unresolved inner element types to TInt64.
 // Regression: this produced 3.0 instead of 4.0 by lowering `a`/`b` as Int64 in ANF.
@@ -463,14 +463,14 @@ match [Some 5L, Some 6L] with | [None, _] -> 1L | [Some ((x, _)), _] -> 2L | _ -
 
 // Generic constructor payload tuple destructuring must preserve unresolved tuple element bindings.
 // Regression: lowering dropped tuple bindings for `TVar` payloads and failed with `Undefined variable: x`.
-let genericPayloadTupleBinding (v: Option<(String * Int64)>) : String = match v with | Some ((x, _)) -> x | _ -> "" genericPayloadTupleBinding (Some (("a" ++ "", 1L))) = "a"
+let genericPayloadTupleBinding (v: Option<(String * Int64)>) : String = match v with | Some ((x, _)) -> x | _ -> "" genericPayloadTupleBinding (Some (("a" + "", 1L))) = "a"
 
 // Generic top-level list patterns should allow unresolved scrutinee TVars.
 // Regression: type checking rejected list-pattern bindings on TVar scrutinees before lowering.
 let genericTopLevelListMatch<'t> (v: t) : Float = match v with | [a, b] -> 4.0 | _ -> 0.0; genericTopLevelListMatch<List<Float>> ([1.5, 2.5]) = 4.0
 
 // Generic tuple/list-cons patterns should preserve unresolved element bindings.
-let genericTupleListConsBinding<'t> (v: t) : String = match v with | (x :: _, _) -> x | _ -> ""; genericTupleListConsBinding<(List<String> * Int64)> ((["a" ++ ""], 1L)) = "a"
+let genericTupleListConsBinding<'t> (v: t) : String = match v with | (x :: _, _) -> x | _ -> ""; genericTupleListConsBinding<(List<String> * Int64)> ((["a" + ""], 1L)) = "a"
 
 // Single literal pattern
 match [13L] with | [13L] -> 1L | _ -> 0L = 1L
@@ -532,7 +532,7 @@ let a = [1L, 2L] in let b = [] in match (a, b) with | ([], _) -> 0L | (_, []) ->
 let a = [] in let b = [] in match (a, b) with | ([], _) -> 0L | (_, []) -> 1L | _ -> 99L = 0L
 
 // Record field access after a variable match preserves the field's String type.
-type PersonEq = { name: String } let p = PersonEq { name = "a" ++ "b" } in let extracted = match p with | value -> value.name in extracted == ("a" ++ "b") = true
+type PersonEq = { name: String } let p = PersonEq { name = "a" + "b" } in let extracted = match p with | value -> value.name in extracted == ("a" + "b") = true
 
 // Full pattern with list cons
 let a = [1L, 2L] in let b = [3L, 4L] in match (a, b) with | ([], _) -> 0L | (_, []) -> 1L | (x :: xs, y :: ys) -> x + y | _ -> 99L = 4L

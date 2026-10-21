@@ -23,4 +23,4 @@ let clipMarked (text: String) (maxWidth: Int) : String =
     else if maxWidth <= 1 then
         Stdlib.Cli.Tui.Text.clipToWidth text maxWidth
     else
-        Stdlib.Cli.Tui.Text.clipToWidth text (maxWidth - 1) ++ "…"
+        Stdlib.Cli.Tui.Text.clipToWidth text (maxWidth - 1) + "…"

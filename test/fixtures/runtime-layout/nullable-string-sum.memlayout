@@ -11,7 +11,7 @@ root = word(0)
 Some String sum shares its payload pointer
 ---INPUT---
 type NullableText = NullableTextNone | NullableTextValue of String
-let original = Stdlib.String.trim (" " ++ "ab" ++ " ") in (NullableTextValue original, original)
+let original = Stdlib.String.trim (" " + "ab" + " ") in (NullableTextValue original, original)
 ---EXPECTED---
 root = tuple(shared_word, shared_word)
 
@@ -19,6 +19,6 @@ root = tuple(shared_word, shared_word)
 String sum shares its payload pointer in the second tuple field
 ---INPUT---
 type NullableText = NullableTextNone | NullableTextValue of String
-let original = Stdlib.String.trim (" " ++ "cd" ++ " ") in (original, NullableTextValue original)
+let original = Stdlib.String.trim (" " + "cd" + " ") in (original, NullableTextValue original)
 ---EXPECTED---
 root = tuple(shared_word, shared_word)

@@ -58,12 +58,12 @@ let basicAuth
   if Stdlib.String.contains username "-" then
     Stdlib.Result.Result.Error "Username cannot contain a hyphen"
   else
-    let encoded = Stdlib.String.base64Encode (username ++ ":" ++ password) in
-    Stdlib.Result.Result.Ok(("authorization", "basic " ++ encoded))
+    let encoded = Stdlib.String.base64Encode (username + ":" + password) in
+    Stdlib.Result.Result.Ok(("authorization", "basic " + encoded))
 
 /// Returns an authorization header carrying `token`.
 let bearerToken (token: String) : (String * String) =
-  ("authorization", ("bearer " ++ token))
+  ("authorization", ("bearer " + token))
 
 // A single HTTP/1.1 exchange owns one connection. Closing after each response
 // keeps EOF framing unambiguous and avoids sharing a socket across callers.

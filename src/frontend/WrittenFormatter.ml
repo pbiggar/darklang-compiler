@@ -214,6 +214,7 @@ let rec expr (value : WrittenTypes.expr) =
           (fun _ -> "") field5;
           option (fun item -> (fun _ -> "") item) field6;
         ]
+  | WrittenTypes.EUnwrap (_, operand, _) -> union "EUnwrap" [ expr operand ]
   | WrittenTypes.ERecordFieldAccess (field0, field1, field2, field3) ->
       union "ERecordFieldAccess"
         [
@@ -588,7 +589,6 @@ and testExpected (value : WrittenTypes.testExpected) =
   match value with
   | WrittenTypes.TEExpr field0 -> union "TEExpr" [ expr field0 ]
   | WrittenTypes.TEError field0 -> union "TEError" [ quoted field0 ]
-  | WrittenTypes.TESqlError field0 -> union "TESqlError" [ quoted field0 ]
 
 and assertion (value : WrittenTypes.assertion) =
   record
@@ -944,7 +944,6 @@ and infixFnName (value : WrittenTypes.infixFnName) =
       union "ComparisonLessThanOrEqual" []
   | WrittenTypes.ComparisonEquals -> union "ComparisonEquals" []
   | WrittenTypes.ComparisonNotEquals -> union "ComparisonNotEquals" []
-  | WrittenTypes.StringConcat -> union "StringConcat" []
 
 and binaryOperation (value : WrittenTypes.binaryOperation) =
   match value with

@@ -417,7 +417,7 @@ let infixText element =
       | "ComparisonLessThanOrEqual" -> Ok "<="
       | "ComparisonEquals" -> Ok "=="
       | "ComparisonNotEquals" -> Ok "!="
-      | "StringConcat" -> Ok "++"
+      | "StringConcat" -> Ok "+"
       | _ -> Error ("Unsupported infix function " ^ name))
   | _ -> Error ("Unsupported infix " ^ name)
 

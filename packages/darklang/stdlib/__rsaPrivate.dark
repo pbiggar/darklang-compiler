@@ -77,8 +77,8 @@ let parsePkcs8 (data: Blob) : Stdlib.Result.Result<Stdlib.__RsaPrivate.Key, Stri
           else Stdlib.__RsaPrivate.parsePkcs1 (Stdlib.Blob.slice data (Stdlib.Int.fromInt64 keyStart) (Stdlib.Int.fromInt64 (keyEnd - keyStart)))
 
 let __pem (text: String) (label: String) (pkcs8: Bool) : Stdlib.Result.Result<Stdlib.__RsaPrivate.Key, String> =
-  let begin = "-----BEGIN " ++ label ++ "-----" in
-  let endMarker = "-----END " ++ label ++ "-----" in
+  let begin = "-----BEGIN " + label + "-----" in
+  let endMarker = "-----END " + label + "-----" in
   if Stdlib.Bool.not (Stdlib.String.startsWith text begin) || Stdlib.Bool.not (Stdlib.String.endsWith text endMarker) then Error "Invalid PEM private key"
   else
     let encoded = Stdlib.String.__byteSlice text (Stdlib.String.__byteLength begin) (Stdlib.String.__byteLength text - Stdlib.String.__byteLength endMarker) in

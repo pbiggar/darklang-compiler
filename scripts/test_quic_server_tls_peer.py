@@ -47,7 +47,7 @@ let run () : Stdlib.Result.Result<Unit, String> =
           print flight.secrets.applicationClient
           print flight.clientFinished
           finish handshake))))
-match run () with | Ok () -> () | Error message -> Stdlib.printLine ("ERROR " ++ message)
+match run () with | Ok () -> () | Error message -> Stdlib.printLine ("ERROR " + message)
 '''
 
 

@@ -8,6 +8,7 @@ type spannedToken = {
   range : Tokenizer.tokenRange;
   docComment : string option;
   leadingTrivia : trivia list;
+  lexError : bool;
 }
 
 val unescape : string -> string

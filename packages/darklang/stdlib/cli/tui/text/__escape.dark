@@ -9,7 +9,7 @@ let __isCsiFinal (cluster: Char) : Bool =
 
 let __isControl (cluster: Char) : Bool =
     match Stdlib.Char.toCodepoint cluster with
-    | None -> ("" ++ cluster) == "\r\n"
+    | None -> (Stdlib.Char.toString cluster) == "\r\n"
     | Some codepoint -> codepoint < 32 || (codepoint >= 127 && codepoint <= 159)
 
 let __isEscape (cluster: Char) : Bool =
@@ -27,14 +27,14 @@ let __scanCsi
     | cluster :: rest ->
         if Stdlib.Cli.Tui.Text.__isCsiFinal cluster then
             let sgr =
-                if cluster == 'm' && validParams then Some (sequence ++ cluster)
+                if cluster == 'm' && validParams then Some (sequence + Stdlib.Char.toString cluster)
                 else None in
             (rest, sgr)
         else
             let valid =
                 validParams &&
                 (Stdlib.Char.isDigit cluster || cluster == ';' || cluster == ':') in
-            Stdlib.Cli.Tui.Text.__scanCsi rest valid (sequence ++ cluster)
+            Stdlib.Cli.Tui.Text.__scanCsi rest valid (sequence + Stdlib.Char.toString cluster)
 
 let __skipEscape
     (escape: Char)
@@ -44,6 +44,6 @@ let __skipEscape
     | [] -> (remaining, None)
     | first :: rest ->
         if first == '[' then
-            Stdlib.Cli.Tui.Text.__scanCsi rest true ("" ++ escape ++ "[")
+            Stdlib.Cli.Tui.Text.__scanCsi rest true (Stdlib.Char.toString escape + "[")
         else
             (remaining, None)

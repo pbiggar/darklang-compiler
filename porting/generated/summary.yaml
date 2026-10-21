@@ -3,16 +3,14 @@ upstream:
   revision: e76430be5cd9f6b77ed255430dc34a1b58dd8fc4
 features:
   supported: 195
-  missing: 16
+  missing: 17
   partial: 2
 parser:
-  supported: 20
-  missing: 7
-  partial: 4
+  supported: 31
 stdlib:
-  different: 1010
+  different: 1009
   missing: 598
-  identical: 388
+  identical: 389
 packages:
   missing: 3709
   identical: 5
@@ -22,8 +20,8 @@ builtins:
   missing: 175
   unassessed: 527
 tests:
-  enabled: 552
-  unmapped: 1593
+  enabled: 554
+  unmapped: 1589
   ambiguous: 10
-  disabled: 82
-  partial: 122
+  disabled: 83
+  partial: 123

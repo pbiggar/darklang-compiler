@@ -80,7 +80,8 @@ let check checkExpression (globals : globals) locals symbols expected
           (orElse (inferredUsageType name condition) (fun () ->
                inferredUsageType name yes))
           (fun () -> Option.bind no (inferredUsageType name))
-    | WT.ERecordFieldAccess (_, record, _, _) -> inferredUsageType name record
+    | WT.EUnwrap (_, record, _) | WT.ERecordFieldAccess (_, record, _, _) ->
+        inferredUsageType name record
     | _ -> None
   in
   let valueExpected =
@@ -143,7 +144,8 @@ let check checkExpression (globals : globals) locals symbols expected
         List.exists (fun (element, _) -> referencesSelf name element) elements
     | WT.ETuple (_, first, _, second, rest, _, _) ->
         List.exists (referencesSelf name) (first :: second :: List.map snd rest)
-    | WT.ERecordFieldAccess (_, record, _, _) -> referencesSelf name record
+    | WT.EUnwrap (_, record, _) | WT.ERecordFieldAccess (_, record, _, _) ->
+        referencesSelf name record
     | WT.ERecord (_, _, fields, _, _) ->
         List.exists (fun (_, _, value) -> referencesSelf name value) fields
     | WT.EDict (_, entries, _, _, _) ->

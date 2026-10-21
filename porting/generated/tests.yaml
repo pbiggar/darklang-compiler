@@ -1067,7 +1067,10 @@ sources:
       - upstream/cli/workbench-repl.dark#L28
       reason: whole-file-gate
     Darklang.Cli.Tests.WorkbenchRepl.readCaptured: unmapped
-    Darklang.Cli.Tests.WorkbenchRepl.rebindKeepsPosition: unmapped
+    Darklang.Cli.Tests.WorkbenchRepl.rebindKeepsPosition:
+      status: disabled
+      compiler: upstream/cli/workbench-repl.dark#L76
+      reason: whole-file-gate
     Darklang.Cli.Tests.WorkbenchRepl.rhsKeepsEquals: unmapped
     Darklang.Cli.Tests.WorkbenchRepl.stringBrackets:
       status: disabled
@@ -1759,7 +1762,11 @@ sources:
       - upstream/language/elambda.dark#L38
       - upstream/language/elambda.dark#L39
       - upstream/language/elambda.dark#L41
-    Darklang.Language.Tests.Lambdas.dictMapPatterns: unmapped
+    Darklang.Language.Tests.Lambdas.dictMapPatterns:
+      status: enabled
+      compiler:
+      - upstream/language/elambda.dark#L89
+      - upstream/language/elambda.dark#L96
     Darklang.Language.Tests.Lambdas.foldRaisesCallbackArgError: unmapped
     Darklang.Language.Tests.Lambdas.foldRaisesCallbackBodyError: unmapped
     Darklang.Language.Tests.Lambdas.lambdaEquality: unmapped
@@ -1772,7 +1779,10 @@ sources:
       status: enabled
       compiler: upstream/language/elambda.dark#L28
     Darklang.Language.Tests.Lambdas.tuplePatternArityRaises: unmapped
-    Darklang.Language.Tests.Lambdas.tuplePatterns: unmapped
+    Darklang.Language.Tests.Lambdas.tuplePatterns:
+      status: partial
+      compiler: upstream/language/elambda.dark#L66
+      notes: Only part of the upstream assertion group has a counterpart.
   packages/darklang/tests/language/letBindings.dark:
     Darklang.Language.Tests.LetBindings.bindingErrorSkipsBody: unmapped
     Darklang.Language.Tests.LetBindings.nesting:
@@ -2049,6 +2059,7 @@ sources:
       status: partial
       compiler:
       - upstream/language/apply/einfix.dark#L1
+      - upstream/language/apply/einfix.dark#L2
       - upstream/language/apply/einfix.dark#L3
       notes: Only part of the upstream assertion group has a counterpart.
     Darklang.Language.Tests.Operators.associativity:
@@ -2159,7 +2170,9 @@ sources:
       - upstream/language/apply/einfix.dark#L136
       - upstream/language/apply/einfix.dark#L137
     Darklang.Language.Tests.Operators.shifts: unmapped
-    Darklang.Language.Tests.Operators.stringAdd: unmapped
+    Darklang.Language.Tests.Operators.stringAdd:
+      status: enabled
+      compiler: strings.e2e#L48
     Darklang.Language.Tests.Operators.stringSubtractRaises: unmapped
     Darklang.Language.Tests.Operators.unaryMinus: unmapped
   packages/darklang/tests/language/pipe.dark:
@@ -2246,6 +2259,8 @@ sources:
       - upstream/language/runtime-to-programtypes.dark#L24
       - upstream/language/runtime-to-programtypes.dark#L26
       - upstream/language/runtime-to-programtypes.dark#L30
+      - upstream/language/runtime-to-programtypes.dark#L32
+      - upstream/language/runtime-to-programtypes.dark#L38
       - upstream/language/runtime-to-programtypes.dark#L42
       - upstream/language/runtime-to-programtypes.dark#L44
       reason: whole-file-gate
@@ -5318,7 +5333,9 @@ sources:
     Darklang.Stdlib.List.Tests.flattenRejectsScalarElements: unmapped
     Darklang.Stdlib.List.Tests.fold:
       status: partial
-      compiler: upstream/stdlib/list.dark#L140
+      compiler:
+      - upstream/stdlib/list.dark#L138
+      - upstream/stdlib/list.dark#L140
       notes: Only part of the upstream assertion group has a counterpart.
     Darklang.Stdlib.List.Tests.getAt: unmapped
     Darklang.Stdlib.List.Tests.groupByWithKey:

@@ -36,7 +36,7 @@ let htmlTagNode (name: String) (attrs: Stdlib.Html.Attributes) (children: List<S
 
 let __attributeToString (attr: (String * Stdlib.Option.Option<String>)) : String =
     match attr with
-    | (key, Some value) -> key ++ "=\"" ++ Stdlib.Html.escapeHtml value ++ "\""
+    | (key, Some value) -> key + "=\"" + Stdlib.Html.escapeHtml value + "\""
     | (key, None) -> key
 
 let __attributesToString (attrs: Stdlib.Html.Attributes) : String =
@@ -51,14 +51,14 @@ let nodeToString (node: Stdlib.Html.Node) : String =
     | HtmlTag tag ->
         let attributesText = Stdlib.Html.__attributesToString tag.attrs in
         let startTag =
-            if attributesText == "" then "<" ++ tag.name ++ ">"
-            else "<" ++ tag.name ++ " " ++ attributesText ++ ">" in
+            if attributesText == "" then "<" + tag.name + ">"
+            else "<" + tag.name + " " + attributesText + ">" in
         if Stdlib.Html.__isVoidElement tag.name then
             startTag
         else
             let childHtml =
                 Stdlib.String.join (Stdlib.List.map tag.children Stdlib.Html.nodeToString) "" in
-            startTag ++ childHtml ++ "</" ++ tag.name ++ ">"
+            startTag + childHtml + "</" + tag.name + ">"
 
 let __commentText (value: String) : String =
     if Stdlib.String.contains value "--" then
@@ -66,13 +66,13 @@ let __commentText (value: String) : String =
     else value
 
 let comment (value: String) : Stdlib.Html.Node =
-    Stdlib.Html.stringNode ("<!-- " ++ Stdlib.Html.__commentText value ++ " -->")
+    Stdlib.Html.stringNode ("<!-- " + Stdlib.Html.__commentText value + " -->")
 
 let classes (classList: List<String>) : (String * Stdlib.Option.Option<String>) =
     ("class", Some (Stdlib.String.join classList " "))
 
 let __styleProperty (property: (String * String)) : String =
-    let (name, value) = property in name ++ ": " ++ value
+    let (name, value) = property in name + ": " + value
 
 let style (properties: List<(String * String)>) : (String * Stdlib.Option.Option<String>) =
     let rendered =
@@ -80,7 +80,7 @@ let style (properties: List<(String * String)>) : (String * Stdlib.Option.Option
     ("style", Some (Stdlib.String.join rendered "; "))
 
 let dataAttr (name: String) (value: String) : (String * Stdlib.Option.Option<String>) =
-    ("data-" ++ name, Some value)
+    ("data-" + name, Some value)
 
 let __emptyAttributes () : Stdlib.Html.Attributes = []
 
@@ -158,5 +158,5 @@ let summary (attrs: Stdlib.Html.Attributes) (children: List<Stdlib.Html.Node>) :
 let dialog (attrs: Stdlib.Html.Attributes) (children: List<Stdlib.Html.Node>) : Stdlib.Html.Node = Stdlib.Html.htmlTagNode "dialog" attrs children
 
 let document (nodes: List<Stdlib.Html.Node>) : String =
-    "<!DOCTYPE html>" ++
+    "<!DOCTYPE html>" +
     Stdlib.String.join (Stdlib.List.map nodes Stdlib.Html.nodeToString) ""

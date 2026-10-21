@@ -35,7 +35,7 @@ let _ = Builtin.print value in
             'split': '''let a = Builtin.stdinReadExactly 1 in
 let b = Builtin.stdinReadExactly 1 in
 let c = Builtin.stdinReadAll () in
-let _ = Stdlib.Cli.Posix.fdWrite 1 (Stdlib.String.toBlob (a ++ "|" ++ b ++ "|" ++ c)) in
+let _ = Stdlib.Cli.Posix.fdWrite 1 (Stdlib.String.toBlob (a + "|" + b + "|" + c)) in
 0L''',
             'invalid': 'let _ = Builtin.stdinReadExactly -1 in 0L',
             'overflow': 'let _ = Builtin.stdinReadExactly 2147483648 in 0L',

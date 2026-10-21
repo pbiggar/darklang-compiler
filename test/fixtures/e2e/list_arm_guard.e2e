@@ -15,7 +15,7 @@ guardedConsArm [] = "empty"
 let guardedConsAfterLiteralHead (rest: List<String>): String =
   match rest with
   | [] -> "empty"
-  | "--port" :: value :: _ -> "port " ++ value
+  | "--port" :: value :: _ -> "port " + value
   | flag :: _ when Stdlib.String.startsWith flag "--" -> "flag"
   | positional :: _ -> "positional"
 guardedConsAfterLiteralHead ["hello"] = "positional"

@@ -63,7 +63,7 @@ let hkdfExpand384 (pseudoRandomKey: Blob) (info: Blob) (length: Int64)
 
 let hkdfExpandLabel (secret: Blob) (label: String) (context: Blob) (length: Int64)
   : Stdlib.Result.Result<Blob, String> =
-  let fullLabel = "tls13 " ++ label in
+  let fullLabel = "tls13 " + label in
   let labelLength = Stdlib.String.__byteLength fullLabel in
   let contextLength = Stdlib.Blob.__byteLength context in
   if labelLength > 255L || contextLength > 255L then
@@ -79,7 +79,7 @@ let hkdfExpandLabel (secret: Blob) (label: String) (context: Blob) (length: Int6
 
 let hkdfExpandLabel384 (secret: Blob) (label: String) (context: Blob) (length: Int64)
   : Stdlib.Result.Result<Blob, String> =
-  let fullLabel = "tls13 " ++ label in
+  let fullLabel = "tls13 " + label in
   let labelLength = Stdlib.String.__byteLength fullLabel in
   let contextLength = Stdlib.Blob.__byteLength context in
   if labelLength > 255L || contextLength > 255L then

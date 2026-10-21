@@ -2444,7 +2444,7 @@ return t6
 ---NAME---
 identity_string_concat_empty_right
 ---INPUT---
-let f (x: String) : String = x ++ ""
+let f (x: String) : String = x + ""
 f ("dark")
 ---EXPECTED---
 Function f:
@@ -2567,21 +2567,21 @@ return t7
 ---NAME---
 const_fold_string_concat
 ---INPUT---
-"dark" ++ "lang"
+"dark" + "lang"
 ---EXPECTED---
 return "darklang"
 
 ---NAME---
 const_fold_string_concat_preserves_nfc
 ---INPUT---
-"e" ++ "\u0301"
+"e" + "\u0301"
 ---EXPECTED---
 return "é"
 
 ---NAME---
 identity_string_concat_empty_left
 ---INPUT---
-let f (x: String) : String = "" ++ x
+let f (x: String) : String = "" + x
 f ("dark")
 ---EXPECTED---
 Function f:

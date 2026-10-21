@@ -51,7 +51,7 @@ let outer = 10L in let inner = 20L in (fun x -> outer + inner + x) 12L = 42L
 let base = 20L in let bonus = base * 2L in (fun x -> x + bonus) 2L = 42L
 
 // Capture inferred string from conditional
-let flag = true in let word = if flag then "hi" else "bye" in (fun x -> word ++ "!") 0L = "hi!"// capture conditional string
+let flag = true in let word = if flag then "hi" else "bye" in (fun x -> word + "!") 0L = "hi!"// capture conditional string
 
 // =====================================================
 // Lambda with Booleans
@@ -174,10 +174,10 @@ let offset = 1.5 + 2.0 in let f = fun x -> x + offset in let g = f in g 1.0 = 4.
 // =====================================================
 
 // Capture string for concatenation
-let prefix = "Hello" in (fun s -> prefix ++ " " ++ s) "World" = "Hello World"
+let prefix = "Hello" in (fun s -> prefix + " " + s) "World" = "Hello World"
 
 // Capture multiple strings
-let a = "one" in let b = "two" in (fun x -> a ++ " " ++ b ++ " " ++ x) "three" = "one two three"
+let a = "one" in let b = "two" in (fun x -> a + " " + b + " " + x) "three" = "one two three"
 
 // =====================================================
 // Closures Capturing Tuples

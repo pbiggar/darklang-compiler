@@ -68,12 +68,12 @@ let __hexDigit (value: Int64) : String =
     Stdlib.String.__byteSlice "0123456789ABCDEF" value (value + 1L)
 
 let __byteToHex (byte: Int64) : String =
-    Stdlib.Blob.__hexDigit (byte / 16L) ++ Stdlib.Blob.__hexDigit (byte % 16L)
+    Stdlib.Blob.__hexDigit (byte / 16L) + Stdlib.Blob.__hexDigit (byte % 16L)
 
 let __hexEncode (blob: Blob) (index: Int64) (length: Int64) (acc: String) : String =
     if index >= length then acc
     else
-        Stdlib.Blob.__hexEncode blob (index + 1L) length (acc ++ Stdlib.Blob.__byteToHex (Stdlib.Blob.__getByte blob index))
+        Stdlib.Blob.__hexEncode blob (index + 1L) length (acc + Stdlib.Blob.__byteToHex (Stdlib.Blob.__getByte blob index))
 
 let __int64ToUInt8 (value: Int64) : UInt8 =
     match Stdlib.Int.toUInt8 (Stdlib.Int.fromInt64 value) with
@@ -186,8 +186,8 @@ let fromBase64 (value: String) : Stdlib.Result.Result<Blob, String> =
         Stdlib.String.replaceAll (Stdlib.String.replaceAll value "-" "+") "_" "/" in
     let remainder = Stdlib.String.__byteLength alphabetNormalized % 4L in
     let padded =
-        if remainder == 2L then alphabetNormalized ++ "=="
-        else if remainder == 3L then alphabetNormalized ++ "="
+        if remainder == 2L then alphabetNormalized + "=="
+        else if remainder == 3L then alphabetNormalized + "="
         else alphabetNormalized in
     let normalized = Stdlib.Blob.__removeBase64Whitespace padded in
     match Stdlib.Base64.__decodeHelper normalized 0L (Stdlib.String.__byteLength normalized) [] with
@@ -206,10 +206,10 @@ let __isContinuation (byte: Int64) : Bool =
     byte >= 128L && byte <= 191L
 
 let __invalidUtf8 (byte: Int64) (index: Int64) : String =
-    "Invalid UTF-8: Unable to translate bytes [" ++
-    Stdlib.Blob.__byteToHex byte ++
-    "] at index " ++
-    Stdlib.Int64.toString index ++
+    "Invalid UTF-8: Unable to translate bytes [" +
+    Stdlib.Blob.__byteToHex byte +
+    "] at index " +
+    Stdlib.Int64.toString index +
     " from specified code page to Unicode."
 
 // Returns the first invalid byte index, or -1 when the complete Blob is valid UTF-8.
