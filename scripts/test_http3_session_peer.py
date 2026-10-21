@@ -125,14 +125,15 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--compiler", type=Path, default=ROOT / "dark")
     parser.add_argument("--requests", type=int, default=5)
-    parser.add_argument("--multiplex", choices=["interleave", "reset", "goaway", "malformed", "overflow", "truncated", "forbidden", "qpack"])
+    parser.add_argument("--multiplex", choices=["interleave", "reset", "goaway", "malformed", "overflow", "truncated", "forbidden", "qpack", "control-fin", "duplicate-control", "encoder-error", "decoder-error", "duplicate-settings", "goaway-id"])
     parser.add_argument("--public", action="store_true")
     parser.add_argument("--stream", action="store_true", help="Drain lazy session bodies between requests")
     parser.add_argument("--blocked-reset", action="store_true", help="Reset a response before its QPACK instructions arrive")
     args = parser.parse_args()
     if args.blocked_reset and (args.multiplex or args.stream or args.public):
         parser.error("--blocked-reset requires the standalone receiver")
-    connection_errors = {"truncated": 262, "forbidden": 261, "qpack": 512}
+    critical_errors = {"control-fin": 260, "duplicate-control": 259, "encoder-error": 513, "decoder-error": 514, "duplicate-settings": 261, "goaway-id": 264}
+    connection_errors = {"truncated": 262, "forbidden": 261, "qpack": 512, **critical_errors}
     if args.multiplex in connection_errors and args.public:
         parser.error("Connection-error peers require the standalone connection")
     key, leaf, ca = certificates()
@@ -208,6 +209,23 @@ def main():
                                 elif args.multiplex and received.stream_id < 8:
                                     pending[received.stream_id] = body
                                     if len(pending) == 2:
+                                        if args.multiplex in critical_errors:
+                                            if args.multiplex == "control-fin":
+                                                connection.send_stream_data(http._local_control_stream_id, b"", end_stream=True)
+                                            elif args.multiplex == "duplicate-control":
+                                                identifier = connection.get_next_available_stream_id(is_unidirectional=True)
+                                                connection.send_stream_data(identifier, b"\x00")
+                                            elif args.multiplex == "encoder-error":
+                                                # Set capacity to 4097, exceeding the client's advertised 4096.
+                                                connection.send_stream_data(http._local_encoder_stream_id, b"\x3f\xe2\x1f")
+                                            elif args.multiplex == "decoder-error":
+                                                # Acknowledge a section with no outstanding dynamic references.
+                                                connection.send_stream_data(http._local_decoder_stream_id, b"\x80")
+                                            elif args.multiplex == "duplicate-settings":
+                                                connection.send_stream_data(http._local_control_stream_id, encode_frame(4, b""))
+                                            else:
+                                                connection.send_stream_data(http._local_control_stream_id, encode_frame(7, encode_uint_var(5)))
+                                            continue
                                         if args.multiplex == "goaway":
                                             connection.send_stream_data(http._local_control_stream_id, encode_frame(7, encode_uint_var(4)))
                                         for identifier in [4, 0]:
