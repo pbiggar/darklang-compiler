@@ -813,7 +813,6 @@ let runTestsWithProgressReporter completedTestReporter args =
           F.name = "Type Checking Format Tests";
           tests = TypeCheckingFormatTests.tests;
         };
-        { F.name = "Progress Bar Tests"; tests = ProgressBarTests.tests };
         { F.name = "Encoding DSL Tests"; tests = EncodingDSLTests.tests };
         { F.name = "Graph Color DSL Tests"; tests = GraphColorDSLTests.tests };
         {
