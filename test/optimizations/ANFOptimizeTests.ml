@@ -2,7 +2,7 @@
    These tests cover optimizer decisions that must agree with the RcShape
    metadata used by ownership insertion and backend helper selection.
 *)
-(* ANFOptimizeTests.ml - Test shared expression rewrites and ownership-sensitive SSA optimization. *)
+(* ANFOptimizeTests.ml - Test scalar and ownership-sensitive production SSA optimization. *)
 [@@@warning "-4-42"]
 
 open Dark_compiler
@@ -100,20 +100,31 @@ let markerContext : optimizeContext =
         ];
   }
 
-let optimizeExpression typeEnv expr =
-  fst
-    (ANFExpressionOptimization.optimizeAExpr markerContext
-       defaultOptimizeOptions TM.empty typeEnv expr)
+let optimizeExpression typeEnv returnType body =
+  optimizeFunction markerContext defaultOptimizeOptions
+    {
+      id = AST.functionId 1L;
+      name = "expression";
+      typedParams =
+        List.map (fun (id, typ) -> { id; typ }) (TM.bindings typeEnv);
+      returnType;
+      returnOwnership = OwnedReturn;
+      body;
+    }
 
-let rec expressionCalls = function
-  | Return _ | Jump _ -> FS.empty
-  | Let (_, cexpr, body) ->
-      let current =
-        match cexpr with Call (name, _) -> FS.singleton name | _ -> FS.empty
-      in
-      FS.union current (expressionCalls body)
-  | If (_, yes, no) | Join (_, yes, no) ->
-      FS.union (expressionCalls yes) (expressionCalls no)
+let expressionCalls (func : SSAANF.functionDef) =
+  SSAANF.LabelMap.fold
+    (fun _ (block : SSAANF.block) calls ->
+      List.fold_left
+        (fun calls (_, operation) ->
+          match operation with
+          | Call (name, _) -> FS.add name calls
+          | _ -> calls)
+        calls block.SSAANF.operations)
+    func.SSAANF.blocks FS.empty
+
+let formatFunction func =
+  ANFPrinter.formatSSAFunctions optimizationFunctionNames [ func ]
 
 let stdlibFunction name = TestIds.functionIdForName ("Darklang.Stdlib." ^ name)
 
@@ -130,9 +141,10 @@ let testStringByteIndexConversionFusesWithLookup () =
             Call (getByteAt, [ Var (TempId 1); Var (TempId 2) ]),
             Return (Var (TempId 3)) ) )
   in
-  let optimized =
+  let* optimized =
     optimizeExpression
       (TM.of_list [ (TempId 0, AST.TInt64); (TempId 1, AST.TString) ])
+      (AST.TSum ("Darklang.Stdlib.Option.Option", [ AST.TUInt8 ]))
       expr
   in
   let calls = expressionCalls optimized in
@@ -144,7 +156,7 @@ let testStringByteIndexConversionFusesWithLookup () =
   else
     Error
       ("Expected index conversion and byte lookup to fuse, got "
-      ^ ANFTestFormatting.expr optimized)
+      ^ formatFunction optimized)
 
 let byteOptionMatch usePayload =
   let someBranch =
@@ -169,9 +181,10 @@ let byteOptionMatch usePayload =
 let testDeadStringBytePayloadLowersToBoundsCheck () =
   let original = stdlibFunction "String.__getByteAtInt64"
   and byteLength = stdlibFunction "String.__byteLength" in
-  let optimized =
+  let* optimized =
     optimizeExpression
       (TM.of_list [ (TempId 0, AST.TString); (TempId 1, AST.TInt64) ])
+      AST.TInt64
       (byteOptionMatch false)
   in
   let calls = expressionCalls optimized in
@@ -180,15 +193,16 @@ let testDeadStringBytePayloadLowersToBoundsCheck () =
     Error
       ("Expected dead Option payload construction to lower to a bounds check, \
         got "
-      ^ ANFTestFormatting.expr optimized)
+      ^ formatFunction optimized)
 
 let testLiveStringBytePayloadLowersToUncheckedLoad () =
   let original = stdlibFunction "String.__getByteAtInt64"
   and byteLength = stdlibFunction "String.__byteLength"
   and uncheckedLoad = stdlibFunction "String.__byteAtUnchecked" in
-  let optimized =
+  let* optimized =
     optimizeExpression
       (TM.of_list [ (TempId 0, AST.TString); (TempId 1, AST.TInt64) ])
+      AST.TInt64
       (byteOptionMatch true)
   in
   let calls = expressionCalls optimized in
@@ -200,47 +214,50 @@ let testLiveStringBytePayloadLowersToUncheckedLoad () =
     Error
       ("Expected live Option payload construction to lower to a guarded \
         unchecked load, got "
-      ^ ANFTestFormatting.expr optimized)
+      ^ formatFunction optimized)
 
 let testLiteralFloatAbsoluteValueFolds () =
-  let optimized =
-    optimizeExpression TM.empty
+  let* optimized =
+    optimizeExpression TM.empty AST.TFloat64
       (Let (TempId 0, FloatAbs (FloatLiteral (-3.5)), Return (Var (TempId 0))))
   in
-  match optimized with
-  | Return (FloatLiteral value) when value = 3.5 -> Ok ()
+  let* block = singleBlock optimized in
+  match (block.SSAANF.operations, block.SSAANF.terminator) with
+  | [], SSAANF.Return (FloatLiteral value) when value = 3.5 -> Ok ()
   | _ ->
       Error
         ("Expected literal FloatAbs to fold to 3.5, got "
-        ^ ANFTestFormatting.expr optimized)
+        ^ formatFunction optimized)
 
 let testLiteralFloatToInt64Folds () =
-  let optimized =
-    optimizeExpression TM.empty
+  let* optimized =
+    optimizeExpression TM.empty AST.TInt64
       (Let
          (TempId 0, FloatToInt64 (FloatLiteral (-3.75)), Return (Var (TempId 0))))
   in
-  match optimized with
-  | Return (IntLiteral (Int64 -3L)) -> Ok ()
+  let* block = singleBlock optimized in
+  match (block.SSAANF.operations, block.SSAANF.terminator) with
+  | [], SSAANF.Return (IntLiteral (Int64 -3L)) -> Ok ()
   | _ ->
       Error
         ("Expected literal FloatToInt64 to truncate to -3, got "
-        ^ ANFTestFormatting.expr optimized)
+        ^ formatFunction optimized)
 
 let testLiteralBitNotFolds () =
-  let optimized =
-    optimizeExpression TM.empty
+  let* optimized =
+    optimizeExpression TM.empty AST.TInt64
       (Let
          ( TempId 0,
            UnaryPrim (BitNot, IntLiteral (Int64 1L)),
            Return (Var (TempId 0)) ))
   in
-  match optimized with
-  | Return (IntLiteral (Int64 -2L)) -> Ok ()
+  let* block = singleBlock optimized in
+  match (block.SSAANF.operations, block.SSAANF.terminator) with
+  | [], SSAANF.Return (IntLiteral (Int64 -2L)) -> Ok ()
   | _ ->
       Error
         ("Expected literal BitNot to fold to -2, got "
-        ^ ANFTestFormatting.expr optimized)
+        ^ formatFunction optimized)
 
 let testDceDropsUnusedPureGenericSumTypedAtom () =
   let markerType = AST.TSum ("Marker", [ AST.TString ]) in
@@ -375,7 +392,7 @@ let tests =
     ("Literal FloatAbs folds", testLiteralFloatAbsoluteValueFolds);
     ("Literal FloatToInt64 folds", testLiteralFloatToInt64Folds);
     ("Literal BitNot folds", testLiteralBitNotFolds);
-    ("ANF CSE reuses FloatAbs", testCseReusesFloatAbsoluteValue);
+    ("SSA CSE reuses FloatAbs", testCseReusesFloatAbsoluteValue);
     ( "Canonical buffer self-equality folds for String and Char storage",
       testCanonicalBufferSelfEqualityFoldsForBothRepresentations );
   ]

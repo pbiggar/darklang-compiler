@@ -101,9 +101,8 @@ signedDiv4 (-7L) = -1L
 // ===================================================================
 // Return Statement Constant Propagation
 // ===================================================================
-// These tests verify that the optimizer correctly tracks changes when
-// constant propagation occurs in Return statements. This exercises the
-// optimizeAExpr Return case at line 335 (atom' <> atom comparison).
+// Constants must propagate through returns, including branch results and
+// chains that require more than one simplification pass.
 
 // Simple return with propagated constant
 // The optimizer should propagate x=42 into the Return(x) -> Return(42)
@@ -124,9 +123,8 @@ let a = 1L in let b = a + 1L in let c = b + 1L in let d = c + 1L in let e = d + 
 // ===================================================================
 // If Statement Condition Optimization
 // ===================================================================
-// These tests verify that the optimizer correctly tracks changes when
-// substituting conditions in If statements. This exercises the
-// optimizeAExpr If case at line 383 (cond' <> cond comparison).
+// Aliased conditions must expose constant branches without losing nested
+// substitutions or changing the selected result.
 
 // If with aliased condition that gets substituted to a literal
 // The condition alias gets substituted with true, which then folds the if
