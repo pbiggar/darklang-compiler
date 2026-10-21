@@ -106,6 +106,8 @@ type listPredicate =
   | AllPredicate
   | TakeWhilePredicate
   | DropWhilePredicate
+  | FindFirstPredicate
+  | FindFirstIndexPredicate
 
 type listMappingKind = MapElements | PredicateElements of listPredicate
 
@@ -116,6 +118,7 @@ type listMapping = {
   callbackTarget : AST.functionId;
   inputType : AST.semanticType;
   outputType : AST.semanticType;
+  sourceResultType : AST.semanticType;
   actualElement : mode;
 }
 
@@ -827,6 +830,12 @@ let lower sourceSpecializations registry names ids sumShapes nextFunctionOrdinal
             | Some name when specialized "Darklang.Stdlib.List.dropWhile" name
               ->
                 Some (PredicateElements DropWhilePredicate)
+            | Some name when specialized "Darklang.Stdlib.List.findFirst" name
+              ->
+                Some (PredicateElements FindFirstPredicate)
+            | Some name
+              when specialized "Darklang.Stdlib.List.findFirstIndex" name ->
+                Some (PredicateElements FindFirstIndexPredicate)
             | _ -> None
           in
           match (kind, callable fn callback) with
@@ -849,8 +858,8 @@ let lower sourceSpecializations registry names ids sumShapes nextFunctionOrdinal
                           "Async mapping callback has an inconsistent signature"
                   in
                   if
-                    changed actualElement || changed parameterMode
-                    || changed current.result
+                    changed (modeOf env stores listValue)
+                    || changed parameterMode || changed current.result
                   then
                     Some
                       {
@@ -860,6 +869,7 @@ let lower sourceSpecializations registry names ids sumShapes nextFunctionOrdinal
                         callbackTarget = target;
                         inputType = parameter.A.typ;
                         outputType = returnType;
+                        sourceResultType = originalResult callee;
                         actualElement;
                       }
                   else None
@@ -877,11 +887,33 @@ let lower sourceSpecializations registry names ids sumShapes nextFunctionOrdinal
       let input, result = mappingModes state mapping in
       match mapping.mappingKind with
       | MapElements ->
-          (AST.TList mapping.outputType, listMode mapping.outputType result)
+          Ok (AST.TList mapping.outputType, listMode mapping.outputType result)
       | PredicateElements
           (FilterPredicate | TakeWhilePredicate | DropWhilePredicate) ->
-          (AST.TList mapping.inputType, listMode mapping.inputType input)
-      | PredicateElements (AnyPredicate | AllPredicate) -> (AST.TBool, Concrete)
+          Ok (AST.TList mapping.inputType, listMode mapping.inputType input)
+      | PredicateElements (AnyPredicate | AllPredicate) ->
+          Ok (AST.TBool, Concrete)
+      | PredicateElements FindFirstIndexPredicate ->
+          Ok (mapping.sourceResultType, Concrete)
+      | PredicateElements FindFirstPredicate -> (
+          if not (changed input) then Ok (mapping.sourceResultType, Concrete)
+          else
+            let source =
+              match mapping.sourceResultType with
+              | AST.TSum (sumName, sumArgs) -> { A.sumName; sumArgs }
+              | _ -> Crash.crash "Async element search has a non-option result"
+            in
+            let* layout = AsyncSumStorage.layout sumShapes source in
+            match layout.AsyncSumStorage.payloads with
+            | [ (_, typ) ] when typ = mapping.inputType ->
+                Ok
+                  ( mapping.sourceResultType,
+                    Stored
+                      (AsyncTransport.storage (SumStorage layout)
+                         [ AsyncTransport.modeSlot input ]) )
+            | _ ->
+                Crash.crash
+                  "Async element search has an inconsistent option payload")
     in
     let foldingCall fn env stores state = function
       | A.Call (callee, [ foldList; initial; step ])
@@ -1161,7 +1193,7 @@ let lower sourceSpecializations registry names ids sumShapes nextFunctionOrdinal
                   mergeActual mapping.callbackTarget
                     [ Concrete; mapping.actualElement ]
                 in
-                let resultType, result = mappingResult state mapping in
+                let* resultType, result = mappingResult state mapping in
                 let* storage =
                   match result with
                   | Concrete -> Ok None
@@ -2651,7 +2683,11 @@ let lower sourceSpecializations registry names ids sumShapes nextFunctionOrdinal
                   | None ->
                       Crash.crash "Async list mapping lost its source plan"
                 in
-                let resultType, result = mappingResult summaries mapping in
+                let* resultType, result =
+                  Result.map_error
+                    (fun message -> Diagnostic message)
+                    (mappingResult summaries mapping)
+                in
                 storedResult result resultType
             | _ when Option.is_some builder ->
                 let element, storage =
@@ -2971,6 +3007,8 @@ let lower sourceSpecializations registry names ids sumShapes nextFunctionOrdinal
                         | AllPredicate -> "all"
                         | TakeWhilePredicate -> "takeWhile"
                         | DropWhilePredicate -> "dropWhile"
+                        | FindFirstPredicate -> "findFirst"
+                        | FindFirstIndexPredicate -> "findFirstIndex"
                       in
                       let* callee =
                         helper ("Darklang.Stdlib.List." ^ operation) inputType
@@ -3008,9 +3046,22 @@ let lower sourceSpecializations registry names ids sumShapes nextFunctionOrdinal
                     (listMode mapping.inputType inputMode)
                     (AST.TList mapping.inputType) listValue actual gen
                 in
+                (* Search returns a native Option of the physical element.
+                   Its bits already match the private per-field sum layout;
+                   publish that layout without inspecting the chosen payload. *)
+                let* sourceResult, resultMode =
+                  Result.map_error
+                    (fun message -> Diagnostic message)
+                    (mappingResult summaries mapping)
+                in
+                let output =
+                  AsyncTransport.physicalType resultMode sourceResult
+                in
+                let result, gen = freshVar gen in
                 Ok
-                  ( A.Call (callee, [ listValue; callback ]),
-                    before @ added @ adapterBindings,
+                  ( A.TypedAtom (A.Var result, output),
+                    before @ added @ adapterBindings
+                    @ [ (result, A.Call (callee, [ listValue; callback ])) ],
                     None,
                     gen )
             | _ when Option.is_some builder -> (

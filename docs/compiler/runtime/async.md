@@ -149,12 +149,17 @@ prefix, and demands the suffix spine only for a nonempty prefix. List.map can
 coordinate a known local callback with the input element layout and the callback
 result layout. It invokes callbacks eagerly; callback bodies demand only the
 values they inspect, and pending callback results remain stored in the mapped
-list. Known filter, any, all, takeWhile and dropWhile predicates use the same
-input interface; when a predicate returns a pending Boolean, a typed adapter
+list. Known filter, any, all, takeWhile, dropWhile, findFirst and findFirstIndex
+predicates use the same input interface; when a predicate returns a pending Boolean, a typed adapter
 demands that Boolean before the library chooses whether to retain the element
 or continue traversal. Unused input fields remain unresolved. Any and all
 preserve left-to-right short circuiting; takeWhile and dropWhile stop at their
-first false decision. Empty lists never invoke the predicate. Already-started
+first false decision. Element and index searches stop at their first true
+decision. `findFirst` preserves the selected element's field layout inside
+`Option`, so inspecting the result's tag or another tuple field does not demand
+an ignored payload. The native result adapter materializes the selected payload
+when needed. These operations demand an outer pending list before traversing it.
+Empty lists never invoke the predicate. Already-started
 producers retain their normal runtime ownership. Known fold steps share one
 physical accumulator interface with the initial value and every step result.
 Steps execute eagerly, but unused elements and intermediate pending accumulators
@@ -430,6 +435,11 @@ elements retained or rejected without premature demands.
 pending and delayed Boolean decisions, empty lists, shared predicate layouts,
 mixed outer readiness and short-circuiting. Callback side effects verify that
 later predicates are not invoked after a decisive result.
+
+`async_list_search.e2e` checks element and index searches with ignored or demanded
+inputs, pending predicate decisions, selected tuple fields, shared callbacks,
+native managed results and outer pending lists. Empty searches and effects in
+later predicates check that traversal stops at the correct point.
 
 `async_higher_order.e2e` checks ordinary application helpers, recursion, a
 user-defined map and fold, multiple callbacks and callback arguments, pending
