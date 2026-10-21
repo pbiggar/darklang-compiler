@@ -10,6 +10,13 @@ import ledger_sources as sources
 
 
 class SourceDiscovery(unittest.TestCase):
+    def test_character_quotes_do_not_hide_following_declarations(self):
+        text = "let quote = '\"'\nlet apostrophe = '''\nlet next (value: 'a) : 'a = value\n"
+        masked = sources.strip_comments(text, True)
+        self.assertIn("let next (value: 'a) : 'a = value", masked)
+        self.assertEqual(text, sources.strip_comments(text))
+        self.assertNotIn("'\"'", masked)
+
     def test_duplicate_yaml_keys_fail(self):
         with self.assertRaisesRegex(ValueError, 'Duplicate YAML key'):
             yaml.load('status: missing\nstatus: supported\n', Loader=sources.UniqueLoader)

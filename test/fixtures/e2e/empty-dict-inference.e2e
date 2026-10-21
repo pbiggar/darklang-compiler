@@ -1,0 +1,5 @@
+// Empty dictionaries acquire key/value types from later arguments and fold bodies.
+let singletonViaEmpty (key: 'k) (value: 'v) : Dict<'k, 'v> = Stdlib.Dict.set (Dict { }) key value
+Stdlib.Dict.get (singletonViaEmpty "key" "value") "key" = Stdlib.Option.Option.Some "value" // leak_check
+Stdlib.List.dedup ["a", "b", "a"] = ["a", "b"] // leak_check
+Stdlib.List.groupByWithKey ["a", "bb", "c"] Stdlib.String.length = [(1, ["a", "c"]), (2, ["bb"])] // leak_check

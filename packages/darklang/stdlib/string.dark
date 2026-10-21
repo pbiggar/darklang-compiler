@@ -278,14 +278,7 @@ let __copyCharList (chars: List<Char>) (pointer: RawPtr) (offset: Int64) : Unit 
         Stdlib.String.__copyCharList rest pointer (offset + length)
 
 let fromList (lst: List<Char>) : String =
-    let resultLength = Stdlib.String.__charListByteLength lst 0L in
-    if resultLength == 0L then ""
-    else
-        let pointer = __raw_alloc (16L + Stdlib.String.__alignedDataSize resultLength) in
-        let _ = __raw_write_word pointer 0L 1L in
-        let _ = __raw_write_word pointer 8L resultLength in
-        let _ = Stdlib.String.__copyCharList lst pointer 16L in
-        Stdlib.String.__normalizeAfterConcat (__rawptr_to_string pointer)
+  join (List.map lst (fun c -> Stdlib.toString c)) ""
 
 let __isAsciiAt (value: String) (index: Int64) (length: Int64) : Bool =
     if index >= length then true
@@ -336,10 +329,10 @@ let byteIndexOfFrom (value: String) (search: String) (offset: Int64) : Stdlib.Op
 let __appendNormalized (left: String) (right: String) : String =
     Stdlib.String.__normalizeAfterConcat (__string_concat_raw left right)
 
-let fromChar (char: Char) : String = Stdlib.Char.toString char
+let fromChar (c: Char) : String = Stdlib.toString c
 
 let append (left: String) (right: String) : String = Stdlib.String.__appendNormalized left right
-let prepend (right: String) (left: String) : String = Stdlib.String.__appendNormalized left right
+let prepend (s1: String) (s2: String) : String = s2 + s1
 
 let __joinedByteLength (strings: List<String>) (separatorLength: Int64) (first: Bool) (total: Int64) : Int64 =
     match strings with
@@ -394,39 +387,51 @@ let slice (value: String) (start_: Int) (end_: Int) : String =
     let actualEnd = if boundedEnd < actualStart then actualStart else boundedEnd in
     Stdlib.String.__sliceGraphemes (Stdlib.String.__toGraphemes value) actualStart actualEnd
 
-let first (value: String) (count: Int) : String =
-    let zero = Stdlib.Int.fromInt64 0L in
-    if count < zero then "" else Stdlib.String.slice value zero count
+let first (string: String) (characterCount: Int) : String =
+  if characterCount < 0 then
+    ""
+  else if characterCount > String.length string then
+    string
+  else
+    String.slice string 0 characterCount
 
-let last (value: String) (count: Int) : String =
-    let zero = Stdlib.Int.fromInt64 0L in
-    let length = Stdlib.String.length value in
-    if count < zero then ""
-    else if count >= length then value
-    else Stdlib.String.slice value (length - count) length
+let last (string: String) (characterCount: Int) : String =
+  if characterCount < 0 then
+    ""
+  else if characterCount > String.length string then
+    string
+  else
+    String.slice
+      string
+      (String.length string - characterCount)
+      (String.length string)
 
 let dropFirst (value: String) (count: Int) : String =
     let zero = Stdlib.Int.fromInt64 0L in
     if count < zero then value else Stdlib.String.slice value count (Stdlib.String.length value)
 
-let dropLast (value: String) (count: Int) : String =
-    let zero = Stdlib.Int.fromInt64 0L in
-    let length = Stdlib.String.length value in
-    if count < zero then value
-    else if count >= length then ""
-    else Stdlib.String.slice value zero (length - count)
+let dropLast (string: String) (characterCount: Int) : String =
+  if characterCount < 0 then
+    string
+  else if characterCount > String.length string then
+    ""
+  else
+    String.slice
+      string
+      0
+      (String.length string - characterCount)
 
-let head (value: String) : Stdlib.Option.Option<Char> =
-    if Stdlib.String.isEmpty value then None
-    else Some (Stdlib.String.__asChar (Stdlib.String.first value (Stdlib.Int.fromInt64 1L)))
+let head (str: String) : Option.Option<Char> =
+  if str == "" then
+    Option.Option.None
+  else
+    str |> String.toList |> List.head
 
-let charAt (value: String) (index: Int) : Stdlib.Option.Option<Char> =
-    let zero = Stdlib.Int.fromInt64 0L in
-    if index < zero || index >= Stdlib.String.length value then None
-    else Some (Stdlib.String.__asChar (Stdlib.String.slice value index (index + Stdlib.Int.fromInt64 1L)))
+let charAt (str: String) (index: Int) : Option.Option<Char> =
+  str |> String.toList |> List.getAt index
 
-let map (value: String) (fn: Char -> Char) : String =
-    Stdlib.String.fromList (Stdlib.List.map (Stdlib.String.toList value) fn)
+let map (s: String) (fn: Char -> Char) : String =
+  s |> String.toList |> List.map fn |> String.fromList
 
 let reverse (value: String) : String =
     Stdlib.String.join (Stdlib.List.reverse (Stdlib.String.__toGraphemes value)) ""
@@ -538,22 +543,36 @@ let split (value: String) (separator: String) : List<String> =
     if Stdlib.String.isEmpty separator then Stdlib.String.__toGraphemes value
     else Stdlib.String.__splitGraphemes (Stdlib.String.__toGraphemes value) (Stdlib.String.__toGraphemes separator) [] []
 
-let splitFirst (value: String) (separator: String) : Stdlib.Option.Option<(String * String)> =
-    if Stdlib.String.isEmpty separator then None
-    else
-        match Stdlib.String.indexOfEgc value separator with
-        | None -> None
-        | Some index ->
-            Some ((Stdlib.String.first value index, Stdlib.String.dropFirst value (index + Stdlib.String.length separator)))
+let splitFirst
+  (string: String)
+  (separator: String)
+  : Option.Option<(String * String)> =
+  if separator == "" then
+    Option.Option.None
+  else
+    // indexOfEgc (not indexOf) because first / dropFirst / length are EGC-indexed.
+    match String.indexOfEgc string separator with
+    | None -> Option.Option.None
+    | Some i ->
+      let before = String.first string i
+      let after = String.dropFirst string (i + String.length separator)
+      Option.Option.Some((before, after))
 
-let splitN (value: String) (separator: String) (count: Int) : List<String> =
-    let one = Stdlib.Int.fromInt64 1L in
-    if count <= one || Stdlib.String.isEmpty separator then [value]
-    else
-        match Stdlib.String.splitFirst value separator with
-        | None -> [value]
-        | Some parts ->
-            Stdlib.List.push (Stdlib.String.splitN (Stdlib.Tuple2.second parts) separator (count - one)) (Stdlib.Tuple2.first parts)
+let splitN
+  (string: String)
+  (separator: String)
+  (n: Int)
+  : List<String> =
+  if n <= 1 || separator == "" then
+    [ string ]
+  else
+    // indexOfEgc (not indexOf) because first / dropFirst / length are EGC-indexed.
+    match String.indexOfEgc string separator with
+    | None -> [ string ]
+    | Some i ->
+      let before = String.first string i
+      let rest = String.dropFirst string (i + String.length separator)
+      List.push (String.splitN rest separator (n - 1)) before
 
 let __replaceEmpty (graphemes: List<String>) (replacement: String) (acc: String) : String =
     match graphemes with
@@ -617,70 +636,116 @@ let trim (value: String) : String =
         else Stdlib.String.__byteSlice value start_ end_
     | _ -> Stdlib.String.__fromCodepoints (Stdlib.String.__trimEndCodepoints (Stdlib.String.__trimStartCodepoints (Stdlib.String.__toCodepoints value)))
 
-let padStart (value: String) (padWith: String) (goalLength: Int) : Stdlib.Result.Result<String, String> =
-    if Stdlib.String.length padWith != Stdlib.Int.fromInt64 1L then
-        Error ("Expected `padWith` to be 1 character long, but it was `\"" + padWith + "\"`")
-    else if Stdlib.String.length value >= goalLength then Ok value
-    else Ok (Stdlib.String.repeat padWith (goalLength - Stdlib.String.length value) + value)
+let padStart
+  (string: String)
+  (padWith: String)
+  (goalLength: Int)
+  : Result.Result<String, String> =
+  if String.length padWith != 1 then
+    Result.Result.Error
+      $"Expected `padWith` to be 1 character long, but it was `\"{padWith}\"`"
+  else if String.length string >= goalLength then
+    Result.Result.Ok string
+  else
+    let padCount = goalLength - String.length string
+    let pad = String.repeat padWith padCount
+    Result.Result.Ok(pad + string)
 
-let padEnd (value: String) (padWith: String) (goalLength: Int) : Stdlib.Result.Result<String, String> =
-    if Stdlib.String.length padWith != Stdlib.Int.fromInt64 1L then
-        Error ("Expected `padWith` to be 1 character long, but it was `\"" + padWith + "\"`")
-    else if Stdlib.String.length value >= goalLength then Ok value
-    else Ok (value + Stdlib.String.repeat padWith (goalLength - Stdlib.String.length value))
+let padEnd
+  (string: String)
+  (padWith: String)
+  (goalLength: Int)
+  : Result.Result<String, String> =
+  if String.length padWith != 1 then
+    Result.Result.Error
+      $"Expected `padWith` to be 1 character long, but it was `\"{padWith}\"`"
+  else if String.length string >= goalLength then
+    Result.Result.Ok string
+  else
+    let padCount = goalLength - String.length string
+    let pad = String.repeat padWith padCount
+    Result.Result.Ok(string + pad)
 
 // Pad to display cells without clipping text that already meets the target width.
-let padStartToWidth (value: String) (width: Int) : String =
-    let padding = width - Stdlib.String.displayWidth value in
-    if padding <= 0 then value else Stdlib.String.repeat " " padding + value
+let padStartToWidth (s: String) (width: Int) : String =
+  let padding = width - (String.displayWidth s)
+  if padding <= 0 then s else (String.repeat " " padding) + s
 
-let padEndToWidth (value: String) (width: Int) : String =
-    let padding = width - Stdlib.String.displayWidth value in
-    if padding <= 0 then value else value + Stdlib.String.repeat " " padding
+let padEndToWidth (s: String) (width: Int) : String =
+  let padding = width - (String.displayWidth s)
+  if padding <= 0 then s else s + (String.repeat " " padding)
 
-let ellipsis (value: String) (goalLength: Int) : String =
-    if Stdlib.String.length value > goalLength then Stdlib.String.slice value (Stdlib.Int.fromInt64 0L) goalLength + "..."
-    else value
+let ellipsis (s: String) (length: Int) : String =
+  if String.length s > length then
+    (String.slice s 0 length) + "..."
+  else
+    s
 
 let articleFor (nextWord: String) : String =
-    match Stdlib.String.head nextWord with
-    | None -> ""
-    | Some char ->
-        if Stdlib.String.length nextWord > Stdlib.Int.fromInt64 1L && Stdlib.Bool.not (Stdlib.Char.isASCIILetter char) then
-            Stdlib.String.articleFor (Stdlib.String.dropFirst nextWord (Stdlib.Int.fromInt64 1L))
-        else if char == 'A' || char == 'E' || char == 'I' || char == 'O' || char == 'U' ||
-                char == 'a' || char == 'e' || char == 'i' || char == 'o' || char == 'u' then "an"
-        else "a"
+  let vowels = [ 'A', 'E', 'I', 'O', 'U', 'a', 'e', 'i', 'o', 'u' ]
+
+  match String.head nextWord with
+  | None -> ""
+  | Some c ->
+    if
+      String.length nextWord > 1
+      && (Bool.not (Char.isASCIILetter c))
+    then
+      articleFor (String.dropFirst nextWord 1)
+    else if List.contains vowels c then
+      "an"
+    else
+      "a"
 
 let pluralize (word: String) : String =
-    if Stdlib.String.endsWith word "ch" || Stdlib.String.endsWith word "sh" ||
-       Stdlib.String.endsWith word "s" || Stdlib.String.endsWith word "x" || Stdlib.String.endsWith word "z" then
-        word + "es"
-    else word + "s"
+  if (String.endsWith word "ch")
+     || (String.endsWith word "sh")
+     || (String.endsWith word "s")
+     || (String.endsWith word "x")
+     || (String.endsWith word "z") then
+    $"{word}es"
+  else
+    $"{word}s"
 
-let toOrdinal (value: Int) : String =
-    let remainder = value % Stdlib.Int.fromInt64 10L in
-    let suffix =
-        if remainder == Stdlib.Int.fromInt64 1L then "st"
-        else if remainder == Stdlib.Int.fromInt64 2L then "nd"
-        else if remainder == Stdlib.Int.fromInt64 3L then "rd"
-        else "th" in
-    Stdlib.Int.toString value + suffix
+let toOrdinal (n: Int) : String =
+  // `%` is Euclidean here (-1 % 10 = 9), so drop the sign first
+  let lastTwoDigits = (Stdlib.abs n) % 100
 
-let splitOnNewline (value: String) : List<String> =
-    if Stdlib.String.isEmpty value then [] else Stdlib.String.split value "\n"
+  let suffix =
+    if lastTwoDigits >= 11 && lastTwoDigits <= 13 then
+      "th"
+    else
+      match lastTwoDigits % 10 with
+      | 1 -> "st"
+      | 2 -> "nd"
+      | 3 -> "rd"
+      | _ -> "th"
 
-let htmlEscape (value: String) : String =
-    Stdlib.String.join (Stdlib.List.map (Stdlib.String.toList value) (fun char ->
-            if char == '<' then "&lt;"
-            else if char == '>' then "&gt;"
-            else if char == '&' then "&amp;"
-            else if char == '"' then "&quot;"
-            else if char == '\'' then "&#x27;"
-            else Stdlib.Char.toString char)) ""
+  (Stdlib.toString n) + suffix
+
+let splitOnNewline (str: String) : List<String> =
+  if str == "" then [] else String.split str "\n"
+
+let htmlEscape (html: String) : String =
+  html
+  |> String.toList
+  |> List.map (fun c ->
+    match c with
+    | '<' -> "&lt;"
+    | '>' -> "&gt;"
+    | '&' -> "&amp;"
+    // include these for html-attribute-escaping
+    // even though they're not strictly necessary
+    // for html-escaping proper.
+    | '"' -> "&quot;"
+    // &apos; doesn't work in IE....
+    | ''' -> "&#x27;"
+    | _ -> String.fromChar c)
+  |> String.join ""
 
 let toBlob (value: String) : Blob = Stdlib.Blob.fromString value
-let toBytes (value: String) : List<UInt8> = Stdlib.Blob.toList (Stdlib.String.toBlob value)
+let toBytes (str: String) : List<UInt8> =
+  Blob.toList (toBlob str)
 
 let fromBlob (blob: Blob) : Stdlib.Option.Option<String> =
     match Stdlib.Blob.toString blob with
@@ -720,38 +785,50 @@ let fromBytes (bytes: List<UInt8>) : Stdlib.Option.Option<String> =
     Stdlib.String.fromBlob (Stdlib.Blob.fromList bytes)
 
 let fromBytesWithReplacement (bytes: List<UInt8>) : String =
-    Stdlib.String.fromBlobWithReplacement (Stdlib.Blob.fromList bytes)
+  fromBlobWithReplacement (Blob.fromList bytes)
 
-let base64Encode (value: String) : String = Stdlib.Base64.encode (Stdlib.String.toBlob value)
+let base64Encode (s: String) : String =
+  // String.toBytes returns List<UInt8> for Http compatibility;
+  // Base64.encode takes Blob, so we go through Blob.fromString.
+  s |> Blob.fromString |> Base64.encode
 
-let base64UrlEncode (value: String) : String =
-    Stdlib.String.replaceAll (Stdlib.Base64.urlEncode (Stdlib.String.toBlob value)) "=" ""
+let base64UrlEncode (s: String) : String =
+  let encoded = s |> Blob.fromString |> Base64.urlEncode
 
-let base64Decode (value: String) : Stdlib.Result.Result<String, String> =
-    match Stdlib.Base64.decode value with
-    | Error error -> Error error
-    | Ok blob ->
-        match Stdlib.String.fromBlob blob with
-        | Some decoded -> Ok decoded
-        | None -> Error "Invalid UTF-8 string"
+  String.replaceAll encoded "=" ""
 
-let digest (value: String) : String =
-    Stdlib.Base64.urlEncode (Stdlib.Crypto.sha384 (Stdlib.String.toBlob value))
+let base64Decode (s: String) : Result.Result<String, String> =
+  match Base64.decode s with
+  | Ok blob ->
+    match Blob.toString blob with
+    | Ok str -> Result.Result.Ok str
+    | Error _ -> Result.Result.Error "Invalid UTF-8 string"
+  | Error err -> Result.Result.Error err
 
-let __random (length: Int) (acc: String) : String =
-    let zero = Stdlib.Int.fromInt64 0L in
-    if length <= zero then acc
-    else
-        let candidate = Stdlib.Int64.bitwiseAnd (Stdlib.Int64.random (-9223372036854775808L) 9223372036854775807L) 63L in
-        if candidate >= 62L then Stdlib.String.__random length acc
-        else
-            let alphabet = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789" in
-            Stdlib.String.__random (length - Stdlib.Int.fromInt64 1L) (acc + Stdlib.String.__byteSlice alphabet candidate (candidate + 1L))
+let digest (s: String) : String =
+  let sha384Hash = Crypto.sha384 (Blob.fromString s)
 
-let random (length: Int) : Stdlib.Result.Result<String, String> =
-    let zero = Stdlib.Int.fromInt64 0L in
-    if length < zero then Error ("Expected `length` to be positive, but it was `" + Stdlib.Int.toString length + "`")
-    else Ok (Stdlib.String.__random length "")
+  sha384Hash |> Base64.urlEncode
+
+let random (length: Int) : Result.Result<String, String> =
+  if length < 0 then
+    Result.Result.Error
+      $"Expected `length` to be positive, but it was `{length |> Stdlib.toString}`"
+  else
+    let characters =
+      "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+
+    let randomChar =
+      fun _ ->
+        (let index = Stdlib.Int.random 0 ((String.length characters) - 1)
+         String.slice characters index (index + 1))
+
+    let result =
+      (List.range 0 (length - 1))
+      |> List.map (fun _ -> randomChar ())
+      |> String.join ""
+
+    Result.Result.Ok result
 
 impl Stdlib.ToString for String =
   let toString (value: String) : String = value
@@ -767,3 +844,10 @@ impl Stdlib.Compare for String =
   let lessThanOrEqualTo (a: String) (b: String) : Bool = Stdlib.String.compare a b <= 0L
   let greaterThan (a: String) (b: String) : Bool = Stdlib.String.compare a b > 0L
   let greaterThanOrEqualTo (a: String) (b: String) : Bool = Stdlib.String.compare a b >= 0L
+
+let slugify (s: String) : String =
+  s
+  |> Stdlib.String.toLowercase
+  |> (fun lowered -> Stdlib.Regex.replaceAll lowered "([^a-z0-9\\s_-]|\\x0b)+" "")
+  |> Stdlib.String.trim
+  |> (fun trimmed -> Stdlib.Regex.replaceAll trimmed "[-_\\s]+" "-")

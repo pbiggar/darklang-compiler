@@ -3,9 +3,9 @@
 module Darklang.Stdlib.Diff
 
 type DiffLine =
-    Same of String
-    | Added of String
-    | Removed of String
+  | Same of String
+  | Added of String
+  | Removed of String
 
 // Safely index a two-dimensional table. Invalid public Int indices retain the
 // interpreter's out-of-range default through the canonical List.getAt boundary.

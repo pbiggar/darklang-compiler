@@ -2,38 +2,58 @@
 
 module Darklang.Stdlib.HttpServer
 
-type Handler = { route: String, method: String, handler: Stdlib.Http.Request -> Stdlib.Http.Response }
+type Handler =
+  { route: String
+    method: String
+    handler: Http.Request -> Http.Response }
 
-let get (route: String) (fn: Stdlib.Http.Request -> Stdlib.Http.Response) : Stdlib.HttpServer.Handler =
-    Stdlib.HttpServer.Handler { route = route, method = "GET", handler = fn }
+let get (route: String) (fn: Http.Request -> Http.Response) : Handler =
+  Handler { route = route, method = "GET", handler = fn }
 
-let post (route: String) (fn: Stdlib.Http.Request -> Stdlib.Http.Response) : Stdlib.HttpServer.Handler =
-    Stdlib.HttpServer.Handler { route = route, method = "POST", handler = fn }
+let post (route: String) (fn: Http.Request -> Http.Response) : Handler =
+  Handler { route = route, method = "POST", handler = fn }
 
-type RouteMatch = { matched: Bool, vars: List<(String * String)> }
+type RouteMatch =
+  { matched: Bool
+    vars: List<String * String> }
 type RouteSegment =
-    | Literal of String
-    | Variable of String
-    | Wildcard of String
+  | Literal of String
+  | Variable of String
+  | Wildcard of String
 
-let parseRouteSegments (route: String) : List<Stdlib.HttpServer.RouteSegment> =
-    Stdlib.List.filterMap (Stdlib.String.split route "/") (fun segment ->
-        if segment == "" then None
-        else if Stdlib.String.startsWith segment ":" then
-            Some (Stdlib.HttpServer.RouteSegment.Variable (Stdlib.String.dropFirst segment 1))
-        else if Stdlib.String.startsWith segment "*" then
-            Some (Stdlib.HttpServer.RouteSegment.Wildcard (Stdlib.String.dropFirst segment 1))
-        else Some (Stdlib.HttpServer.RouteSegment.Literal segment))
+let parseRouteSegments (route: String) : List<RouteSegment> =
+  let segments = String.split route "/"
 
-let matchSegment (route: Stdlib.HttpServer.RouteSegment) (path: String) (remaining: List<String>)
-    : Stdlib.Option.Option<List<(String * String)>> =
-    match route with
-    | Literal expected -> if expected == path then Some [] else None
-    | Variable name -> Some [(name, path)]
-    | Wildcard name -> Some [(name, Stdlib.String.join (Stdlib.List.append [path] remaining) "/")]
+  segments
+  |> List.filterMap (fun seg ->
+    if String.isEmpty seg then
+      Option.Option.None
+    else if String.startsWith seg ":" then
+      Option.Option.Some(RouteSegment.Variable (String.dropFirst seg 1))
+    else if String.startsWith seg "*" then
+      Option.Option.Some(RouteSegment.Wildcard (String.dropFirst seg 1))
+    else
+      Option.Option.Some(RouteSegment.Literal seg))
 
-let splitPath (path: String) : List<String> =
-    Stdlib.List.filter (Stdlib.String.split path "/") (fun segment -> segment != "")
+let matchSegment
+  (routeSeg: RouteSegment)
+  (pathSeg: String)
+  (remainingPath: List<String>)
+  : Option.Option<List<String * String>> =
+  match routeSeg with
+  | Literal expected ->
+    if expected == pathSeg then
+      Option.Option.Some []
+    else
+      Option.Option.None
+  | Variable name -> Option.Option.Some [ (name, pathSeg) ]
+  | Wildcard name ->
+    let fullPath = String.join (List.append [ pathSeg ] remainingPath) "/"
+    Option.Option.Some [ (name, fullPath) ]
+
+let splitPath (requestPath: String) : List<String> =
+  (String.split requestPath "/")
+  |> List.filter (fun s -> Bool.not (String.isEmpty s))
 
 let __matchSegments (routes: List<Stdlib.HttpServer.RouteSegment>) (paths: List<String>)
     (vars: List<(String * String)>) : Stdlib.HttpServer.RouteMatch =
@@ -46,11 +66,38 @@ let __matchSegments (routes: List<Stdlib.HttpServer.RouteSegment>) (paths: List<
     | _, _ -> Stdlib.HttpServer.RouteMatch { matched = false, vars = [] }
 
 // Upstream requires equal segment counts, including wildcard routes.
-let matchRouteSegments (routes: List<Stdlib.HttpServer.RouteSegment>) (paths: List<String>) : Stdlib.HttpServer.RouteMatch =
-    Stdlib.HttpServer.__matchSegments routes paths []
+let matchRouteSegments (routeSegs: List<RouteSegment>) (pathSegs: List<String>) : RouteMatch =
+  let routeLen = List.length routeSegs
+  let pathLen = List.length pathSegs
 
-let matchRoute (route: String) (path: String) : Stdlib.HttpServer.RouteMatch =
-    Stdlib.HttpServer.matchRouteSegments (Stdlib.HttpServer.parseRouteSegments route) (Stdlib.HttpServer.splitPath path)
+  if (routeLen == 0) && (pathLen == 0) then
+    RouteMatch { matched = true, vars = [] }
+  else if routeLen != pathLen then
+    RouteMatch { matched = false, vars = [] }
+  else
+    // Use zipShortest since we already checked lengths are equal
+    let zipped = List.zipShortest routeSegs pathSegs
+
+    let result =
+      zipped
+      |> List.fold
+        (Option.Option.Some [])
+        (fun acc pair ->
+          match acc with
+          | None -> Option.Option.None
+          | Some vars ->
+            let (routeSeg, pathSeg) = pair
+            match matchSegment routeSeg pathSeg [] with
+            | Some newVars ->
+              Option.Option.Some (List.append vars newVars)
+            | None -> Option.Option.None)
+
+    match result with
+    | Some vars -> RouteMatch { matched = true, vars = vars }
+    | None -> RouteMatch { matched = false, vars = [] }
+
+let matchRoute (routePattern: String) (requestPath: String) : RouteMatch =
+  matchRouteSegments (parseRouteSegments routePattern) (splitPath requestPath)
 
 let __findHandler (handlers: List<Stdlib.HttpServer.Handler>) (method: String) (paths: List<String>)
     : Stdlib.Option.Option<(Stdlib.HttpServer.Handler * Stdlib.HttpServer.RouteMatch)> =
@@ -63,41 +110,86 @@ let __findHandler (handlers: List<Stdlib.HttpServer.Handler>) (method: String) (
             else Stdlib.HttpServer.__findHandler rest method paths
         else Stdlib.HttpServer.__findHandler rest method paths
 
-let findHandler (handlers: List<Stdlib.HttpServer.Handler>) (method: String) (path: String)
-    : Stdlib.Option.Option<(Stdlib.HttpServer.Handler * Stdlib.HttpServer.RouteMatch)> =
-    Stdlib.HttpServer.__findHandler handlers method (Stdlib.HttpServer.splitPath path)
+let findHandler
+  (handlers: List<Handler>)
+  (method: String)
+  (path: String)
+  : Option.Option<Handler * RouteMatch> =
+  // Split once here rather than inside `matchRoute`, which runs per handler: the result is the
+  // same every time, so splitting there scales the work with handlers tested.
+  let pathSegs = splitPath path
 
-let getMethod (req: Stdlib.Http.Request) : String =
-    Stdlib.Http.Request.header req "x-http-method" |> Stdlib.Option.withDefault "GET"
+  let matchingHandler =
+    handlers
+    |> List.findFirst (fun h ->
+      // Method first. The route match is the expensive half, and a handler whose method cannot
+      // match never needs it -- the previous order computed it regardless.
+      if (h.method == method) || (h.method == "*") then
+        let routeMatch = matchRouteSegments (parseRouteSegments h.route) pathSegs
+        routeMatch.matched
+      else
+        false)
 
-let getPath (req: Stdlib.Http.Request) : String =
-    let withoutProtocol =
-        match Stdlib.String.split req.url "://" with
-        | [_, rest] -> rest
-        | _ -> req.url in
-    match Stdlib.String.split withoutProtocol "/" with
-    | [] -> "/"
-    | [_] -> "/"
-    | _ :: rest ->
-        let path = Stdlib.String.join rest "/" in
-        match Stdlib.String.splitFirst path "?" with
-        | None -> "/" + path
-        | Some ((before, _)) -> "/" + before
+  match matchingHandler with
+  | Some h ->
+    let routeMatch = matchRouteSegments (parseRouteSegments h.route) pathSegs
+    Option.Option.Some ((h, routeMatch))
+  | None -> Option.Option.None
 
-let routeRequest (handlers: List<Stdlib.HttpServer.Handler>) (req: Stdlib.Http.Request) : Stdlib.Http.Response =
-    match Stdlib.HttpServer.findHandler handlers (Stdlib.HttpServer.getMethod req) (Stdlib.HttpServer.getPath req) with
-    | Some ((handler, _)) -> handler.handler req
-    | None -> Stdlib.Http.notFound ()
+let getMethod (req: Http.Request) : String =
+  Http.Request.header req "x-http-method" |> Option.withDefault "GET"
 
-let getPathParam (req: Stdlib.Http.Request) (route: String) (name: String) : Stdlib.Option.Option<String> =
-    let pairs = Stdlib.List.zipShortest (Stdlib.HttpServer.parseRouteSegments route) (Stdlib.HttpServer.splitPath (Stdlib.HttpServer.getPath req)) in
-    match Stdlib.List.findFirst pairs (fun pair ->
-        let (segment, _) = pair in
-        match segment with
-        | Variable variable -> variable == name
-        | _ -> false) with
-    | None -> None
-    | Some ((_, value)) -> Some value
+let getPath (req: Http.Request) : String =
+  let parts = String.split req.url "://"
+
+  let urlWithoutProtocol =
+    match parts with
+    | [ _, rest ] -> rest
+    | _ -> req.url
+
+  let pathParts = String.split urlWithoutProtocol "/"
+
+  match pathParts with
+  | [] -> "/"
+  | [ _ ] -> "/"
+  | _ :: rest ->
+    let pathWithQuery = String.join rest "/"
+    let pathOnlyParts = String.split pathWithQuery "?"
+
+    match List.head pathOnlyParts with
+    | Some p -> "/" + p
+    | None -> "/"
+
+let routeRequest
+  (handlers: List<Handler>)
+  (req: Http.Request)
+  : Http.Response =
+  let method = getMethod req
+  let path = getPath req
+
+  match findHandler handlers method path with
+  | Some ((handler, _routeMatch)) -> handler.handler req
+  | None -> Http.notFound ()
+
+let getPathParam (req: Http.Request) (routePattern: String) (paramName: String) : Option.Option<String> =
+  let path = getPath req
+  let routeSegs = parseRouteSegments routePattern
+  let pathSegs =
+    (String.split path "/")
+    |> List.filter (fun s -> Bool.not (String.isEmpty s))
+
+  // Zip and find the matching variable
+  let zipped = List.zipShortest routeSegs pathSegs
+  zipped
+  |> List.findFirst (fun pair ->
+    let (routeSeg, _) = pair
+    match routeSeg with
+    | Variable name -> name == paramName
+    | _ -> false)
+  |> fun result ->
+    match result with
+    | Some ((_, pathValue)) -> Option.Option.Some pathValue
+    | None -> Option.Option.None
 
 let __hasHeader (headers: List<(String * String)>) (name: String) : Bool =
     Stdlib.List.any headers (fun pair -> let (key, _) = pair in Stdlib.String.toLowercase key == name)

@@ -10,6 +10,7 @@ import subprocess
 import yaml
 
 ROOT = Path(__file__).resolve().parent.parent
+CHAR_LITERAL = re.compile(r"'(?:\\.|[^'\\\n])'|'''")
 
 
 class UniqueLoader(yaml.SafeLoader):
@@ -66,6 +67,12 @@ def strip_comments(text, strings=False):
             end = text.find('\n', i)
             end = len(text) if end < 0 else end
             mask(i, end)
+            i = end
+        elif text[i] == "'" and (char := CHAR_LITERAL.match(text, i)):
+            # A quote character must not start a string spanning later declarations.
+            end = i + len(char[0])
+            if strings:
+                mask(i, end)
             i = end
         elif text[i] == '"':
             start = i

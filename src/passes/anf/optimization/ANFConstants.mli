@@ -29,7 +29,7 @@ val tryLog2 : int64 -> int64 option
 val tryLog2UInt64 : int64 -> int64 option
 val euclideanMod : int64 -> int64 -> int64
 val tryTruncateFloatToInt64 : float -> int64 option
-val foldBinOp : ANF.binOp -> ANF.atom -> ANF.atom -> ANF.cExpr option
+val foldBinOp : typeEnv -> ANF.binOp -> ANF.atom -> ANF.atom -> ANF.cExpr option
 val isInt64Atom : typeEnv -> ANF.atom -> bool
 val isIntegerAtom : typeEnv -> ANF.atom -> bool
 

@@ -36,6 +36,8 @@ instrumentation and runs their quick and full workloads. It requires the
 expected stdout, a zero exit code, and empty stderr for each run. The merge
 train blocks a failing `leaks` gate unless a human approves an exception for
 the exact candidate.
+For an isolated Dune build directory, pass its native compiler explicitly:
+`python3 scripts/check_compiled_leaks.py --compiler /absolute/build/default/bin/dark.exe`.
 
 The merge train runs `./run-tests --ai` to check the complete already-built
 host suite. Full-suite timing remains useful for diagnosis, but it is not a

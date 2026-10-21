@@ -4,7 +4,9 @@
 
 module Darklang.Stdlib.UInt32
 
-type ParseError = BadFormat | OutOfRange
+type ParseError =
+  | BadFormat
+  | OutOfRange
 
 // Stdlib.UInt32 - Integer operations
 

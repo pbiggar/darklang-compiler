@@ -12,24 +12,24 @@ let toUppercase (char: Char) : Char =
 let toLowercase (char: Char) : Char =
     Stdlib.Char.__asChar (Stdlib.String.__Unicode.lowercase (Stdlib.Char.toString char))
 
-let isLowercase (char: Char) : Bool =
-    Stdlib.Char.toLowercase char == char && Stdlib.Char.toUppercase char != char
+let isLowercase (c: Char) : Bool =
+  Stdlib.Char.toLowercase c == c && Stdlib.Char.toUppercase c != c
 
-let isUppercase (char: Char) : Bool =
-    Stdlib.Char.toLowercase char != char && Stdlib.Char.toUppercase char == char
+let isUppercase (c: Char) : Bool =
+  Stdlib.Char.toLowercase c != c && Stdlib.Char.toUppercase c == c
 
 let __firstCodepoint (char: Char) : Stdlib.Option.Option<Int64> =
     Stdlib.List.head (Stdlib.String.__toCodepoints (Stdlib.Char.toString char))
 
-let isDigit (char: Char) : Bool =
-    match Stdlib.Char.__firstCodepoint char with
-    | Some codepoint -> codepoint >= 48L && codepoint <= 57L
-    | None -> false
+let isDigit (c: Char) : Bool =
+  (Stdlib.Char.isGreaterThanOrEqualTo c '0')
+  && (Stdlib.Char.isLessThanOrEqualTo c '9')
 
-let isASCIILetter (char: Char) : Bool =
-    match Stdlib.Char.__firstCodepoint char with
-    | Some codepoint -> (codepoint >= 65L && codepoint <= 90L) || (codepoint >= 97L && codepoint <= 122L)
-    | None -> false
+let isASCIILetter (c: Char) : Bool =
+  (Stdlib.Char.isGreaterThanOrEqualTo c 'a')
+  && (Stdlib.Char.isLessThanOrEqualTo c 'z')
+  || (Stdlib.Char.isGreaterThanOrEqualTo c 'A')
+      && (Stdlib.Char.isLessThanOrEqualTo c 'Z')
 
 let isLetter (char: Char) : Bool =
     match Stdlib.Char.__firstCodepoint char with
@@ -57,10 +57,12 @@ let toAsciiCode (char: Char) : Stdlib.Option.Option<Int> =
         if codepoint >= 0L && codepoint < 128L then Some (Stdlib.Int.fromInt64 codepoint) else None
     | _ -> None
 
-let isASCII (char: Char) : Bool =
-    match Stdlib.Char.toAsciiCode char with
-    | Some code -> code <= Stdlib.Int.fromInt64 127L
-    | None -> false
+let isASCII (c: Char) : Bool =
+  let asciiCode = Stdlib.Char.toAsciiCode c
+
+  match asciiCode with
+  | Some ascii -> (ascii >= 0) && (ascii <= 127)
+  | None -> false
 
 let __utf16Units (codepoints: List<Int64>) (acc: List<Int64>) : List<Int64> =
     match codepoints with

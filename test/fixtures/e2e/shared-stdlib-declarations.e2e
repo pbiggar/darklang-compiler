@@ -1,0 +1,16 @@
+// Individually shared declarations preserve compound values and boundary results.
+Stdlib.Sqlite.asText (Stdlib.Sqlite.Value.Text "portable") = Stdlib.Option.Option.Some "portable" // leak_check
+Stdlib.Sqlite.asInt (Stdlib.Sqlite.Value.Int 42L) = Stdlib.Option.Option.Some 42L // leak_check
+Stdlib.Sqlite.asText (Stdlib.Sqlite.Value.Null) = Stdlib.Option.Option.None // leak_check
+Stdlib.Sqlite.asInt (Stdlib.Sqlite.Value.Text "42") = Stdlib.Option.Option.None // leak_check
+match Stdlib.Sqlite.asBytes (Stdlib.Sqlite.Value.Bytes (Stdlib.Blob.fromString "bytes")) with | Some bytes -> Stdlib.Blob.toString bytes | None -> Stdlib.Result.Result.Error "missing" = Stdlib.Result.Result.Ok "bytes" // leak_check
+Stdlib.Sqlite.textField (Stdlib.Dict.singleton "name" (Stdlib.Sqlite.Value.Text "portable")) "name" = Stdlib.Option.Option.Some "portable" // leak_check
+Stdlib.Sqlite.textField (Stdlib.Dict.singleton "name" (Stdlib.Sqlite.Value.Text "portable")) "missing" = Stdlib.Option.Option.None // leak_check
+Stdlib.Sqlite.intField (Stdlib.Dict.singleton "id" (Stdlib.Sqlite.Value.Int 42L)) "id" = Stdlib.Option.Option.Some 42L // leak_check
+match Stdlib.Sqlite.bytesField (Stdlib.Dict.singleton "body" (Stdlib.Sqlite.Value.Bytes (Stdlib.Blob.fromString "bytes"))) "body" with | Some bytes -> Stdlib.Blob.toString bytes | None -> Stdlib.Result.Result.Error "missing" = Stdlib.Result.Result.Ok "bytes" // leak_check
+Stdlib.Int64.fromFloatRounded 2.5 = Stdlib.Option.Option.Some 2L
+Stdlib.UInt64.fromFloatRounded -1.0 = Stdlib.Option.Option.None
+Stdlib.String.slugify " Hello World! " = "hello-world"
+Stdlib.List.SortByComparatorHelpers.mergeSort ["b", "a", "c"] (fun a b -> if a < b then -1 else if a > b then 1 else 0) = Stdlib.Result.Result.Ok ["a", "b", "c"] // leak_check
+Stdlib.List.partition ["a", "bb", "c"] (fun value -> Stdlib.String.length value == 1) = (["a", "c"], ["bb"]) // leak_check
+Stdlib.List.unzip [("a", "one"), ("b", "two")] = (["a", "b"], ["one", "two"]) // leak_check

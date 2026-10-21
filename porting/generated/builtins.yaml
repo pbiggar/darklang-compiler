@@ -643,12 +643,12 @@ files:
     stringAppend_v0: unassessed
     stringCodepointLength_v0: unassessed
     stringCompare_v0: unassessed
-    stringContains_v0: missing
+    stringContains_v0: unassessed
     stringDisplayWidth_v0: unassessed
     stringDropFirst_v0: unassessed
-    stringFromBlob_v0: missing
-    stringFromBlobWithReplacement_v0: missing
-    stringFromBytes_v0: missing
+    stringFromBlob_v0: unassessed
+    stringFromBlobWithReplacement_v0: unassessed
+    stringFromBytes_v0: unassessed
     stringGetByteAt_v0: unassessed
     stringIndexOf_v0: unassessed
     stringIndexOfEgc_v0: unassessed
@@ -660,10 +660,10 @@ files:
     stringRepeat_v0: unassessed
     stringReplaceAll_v0: unassessed
     stringReverse_v0: unassessed
-    stringSlice_v0: missing
+    stringSlice_v0: unassessed
     stringSplit_v0: unassessed
     stringStartsWith_v0: unassessed
-    stringToBlob_v0: missing
+    stringToBlob_v0: unassessed
     stringToCodepoints_v0: unassessed
     stringToList_v0: unassessed
     stringToLowercase_v0: unassessed

@@ -31,12 +31,13 @@ Stdlib.Float.toInt (-3.2) = -3
 Stdlib.Float.toInt 0.0 = 0
 Stdlib.Float.toInt 100.99 = 100
 
-Stdlib.Int64.fromFloat 3.9 = 3L
-Stdlib.Int64.fromFloat (-3.9) = -3L
-Stdlib.Int64.fromFloat (-9223372036854775808.0) = -9223372036854775808L
-Stdlib.Int64.fromFloat 9223372036854775808.0 = error="Encountered out-of-range value for type of Int64"
-Stdlib.Int64.fromFloat Builtin.testNan = error="Encountered out-of-range value for type of Int64"
-Stdlib.Int64.fromFloat Builtin.testInfinity = error="Encountered out-of-range value for type of Int64"
+// The shared interpreter API returns None for non-finite or out-of-range inputs.
+Stdlib.Int64.fromFloat 3.9 = Some 3L
+Stdlib.Int64.fromFloat (-3.9) = Some -3L
+Stdlib.Int64.fromFloat (-9223372036854775808.0) = Some -9223372036854775808L
+Stdlib.Int64.fromFloat 9223372036854775808.0 = None
+Stdlib.Int64.fromFloat Builtin.testNan = None
+Stdlib.Int64.fromFloat Builtin.testInfinity = None
 
 // Stdlib.Int64.toFloat
 Stdlib.Int64.toFloat 42L = 42.0

@@ -1,0 +1,10 @@
+// A repeated Float operand is not an integer subtraction identity.
+let selfDifference (value: Float) : Float = value - value
+Stdlib.Float.isNaN (selfDifference Builtin.testNan) = true
+Stdlib.Float.isNaN (selfDifference Builtin.testInfinity) = true
+Stdlib.Float.isNaN (selfDifference (-1.0 / 0.0)) = true
+selfDifference 1.5 = 0.0
+Stdlib.Int64.fromFloat Builtin.testNan = Stdlib.Option.Option.None
+Stdlib.UInt64.fromFloat Builtin.testInfinity = Stdlib.Option.Option.None
+Stdlib.Int64.fromFloatRounded Builtin.testInfinity = Stdlib.Option.Option.None
+Stdlib.UInt64.fromFloatRounded Builtin.testNan = Stdlib.Option.Option.None
