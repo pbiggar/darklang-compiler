@@ -49,10 +49,9 @@ let __stopUpload (state: Stdlib.__Http3Server.State) (id: Int64) (code: Int64) :
   Stdlib.__QuicApplication.streamLimit 5L id code |> Stdlib.Result.andThen (Stdlib.__QuicConnection.__queue state.wire.connection) |> Stdlib.Result.map (fun connection -> { state with wire = { state.wire with connection = connection } })
 
 let cancel (state: Stdlib.__Http3Server.State) (id: Int64) (code: Int64) : Stdlib.Result.Result<Stdlib.__Http3Server.State, String> =
-  Stdlib.__QuicFlow.stop state.wire.connection.flow (Stdlib.__QuicApplication.StreamLimit { id = id, value = code }) |> Stdlib.Result.andThen (fun stopped ->
-    Stdlib.__QuicConnection.__queue (Stdlib.__QuicConnection.__flow state.wire.connection stopped.state) stopped.frames |> Stdlib.Result.andThen (fun connection ->
-      Stdlib.__Http3.__feedback { state.wire with connection = connection } (Stdlib.__QpackDecoder.cancel id) |> Stdlib.Result.andThen (fun wire ->
-        Stdlib.__Http3Server.__stopUpload (Stdlib.__Http3Server.__remove { state with wire = wire } id) id code)))
+  Stdlib.__Http3.__stopOutput state.wire id code |> Stdlib.Result.andThen (fun wire ->
+    Stdlib.__Http3.__feedback wire (Stdlib.__QpackDecoder.cancel id) |> Stdlib.Result.andThen (fun wire ->
+      Stdlib.__Http3Server.__stopUpload (Stdlib.__Http3Server.__remove { state with wire = wire } id) id code))
 
 let respond (context: Stdlib.__Http3Server.Context) (state: Stdlib.__Http3Server.State) (active: Stdlib.__Http3Server.Active) (method: String) (response: Stdlib.Http.Response) (now: Int64) : Stdlib.Result.Result<Stdlib.__Http3Server.State, String> =
   let prepared = match Stdlib.__Http2Server.__response context.config method response with | Ok reply -> Ok reply | Error _ -> Stdlib.__Http2Server.__response context.config method (Stdlib.Http.responseWithText "Internal server error" 500) in

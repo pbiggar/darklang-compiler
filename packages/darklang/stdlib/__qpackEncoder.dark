@@ -115,6 +115,12 @@ let encode (state: Stdlib.__QpackEncoder.State) (stream: Int64) (fields: List<(S
         bytes = Stdlib.Blob.concat (Stdlib.List.push blocks (Stdlib.Blob.concat [Stdlib.__Hpack.encodeInteger 8L 0L count, Stdlib.__Hpack.encodeInteger 7L 0L 0L])),
         instructions = Stdlib.Blob.concat (Stdlib.List.reverse selected.instructions) })
 
+// Only the transport owner can establish that no stream byte was sent. The
+// encoder instructions remain committed; dropping a section cannot acknowledge
+// their insertions or make unconfirmed entries safe to evict.
+let discardUnsent (state: Stdlib.__QpackEncoder.State) (stream: Int64) : Stdlib.__QpackEncoder.State =
+  { state with sections = Stdlib.List.filter state.sections (fun section -> section.stream != stream) }
+
 let __ack (sections: List<Stdlib.__QpackEncoder.Section>) (stream: Int64)
   : Stdlib.Result.Result<(List<Stdlib.__QpackEncoder.Section> * Int64), String> =
   match sections with

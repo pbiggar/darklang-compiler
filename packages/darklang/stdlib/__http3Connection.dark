@@ -26,9 +26,8 @@ let __done (work: Stdlib.__Http3Connection.Work) (stream: Stdlib.__Http3Connecti
   { work with active = Stdlib.List.filter work.active (fun current -> current.id != stream.id), completed = Stdlib.List.push work.completed (Stdlib.__Http3Connection.Outcome { index = stream.index, response = response }) }
 
 let __stop (work: Stdlib.__Http3Connection.Work) (stream: Stdlib.__Http3Connection.Active) (code: Int64) : Stdlib.Result.Result<Stdlib.__Http3Connection.Work, String> =
-  Stdlib.__QuicFlow.stop work.connection.wire.connection.flow (Stdlib.__QuicApplication.StreamLimit { id = stream.id, value = code }) |> Stdlib.Result.andThen (fun stopped ->
-    Stdlib.__QuicConnection.__queue (Stdlib.__QuicConnection.__flow work.connection.wire.connection stopped.state) stopped.frames |> Stdlib.Result.map (fun connection ->
-      { work with connection = { work.connection with wire = { work.connection.wire with connection = connection } } }))
+  Stdlib.__Http3.__stopOutput work.connection.wire stream.id code |> Stdlib.Result.map (fun wire ->
+    { work with connection = { work.connection with wire = wire } })
 
 let __admit (work: Stdlib.__Http3Connection.Work) : Stdlib.Result.Result<Stdlib.__Http3Connection.Work, String> =
   if Stdlib.Option.isSome work.connection.wire.uni.control.goAway || Stdlib.List.length work.active >= 32 || work.connection.next / 4L >= work.connection.wire.connection.flow.peer.streamsBidi then Ok work
