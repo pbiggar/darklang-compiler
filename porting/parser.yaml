@@ -1,4 +1,10 @@
 # Syntax behavior, not parser implementation-file mappings.
+# Scope: current source acceptance and written syntax against sources.yaml.
+# AOT typing, resolution, execution and source-unit composition differences are
+# explicitly out of bounds and are not parser compatibility issues. Unicode
+# source handling/positions and runtime parser APIs are also outside this review.
+# Assessments use source comparison and existing focused syntax evidence; they
+# are not a claim of exhaustive differential execution.
 schema: 2
 groups:
   Lexing:
@@ -15,6 +21,18 @@ groups:
     Conditionals: unassessed
     Match patterns and guards: unassessed
     String interpolation and nesting: unassessed
+    Postfix unwrap:
+      status: missing
+      notes: The interpreter parses value?, (f x)? and chained postfix access. The compiler has no question-mark
+        token or written unwrap node.
+    Numeric tuple selectors:
+      status: missing
+      notes: The interpreter parses tuple.1 and splits tuple.1.2 into chained selectors. The compiler accepts
+        only identifier field names after a dot.
+    Rejection of legacy concatenation operators:
+      status: missing
+      notes: The interpreter rejects ++ in favor of +. The compiler still accepts infix ++, the (++) operator
+        section and pipeline operator sections.
     Record and dictionary separators:
       status: supported
       notes: Records, record updates, record types and dictionaries use commas or newlines. Semicolons are rejected;
@@ -25,9 +43,26 @@ groups:
     Records and enums: unassessed
     Traits and implementations: unassessed
     Generic parameters and bounds: unassessed
-    Effect annotations: unassessed
-    Removed database attribute:
+    Effect annotations:
+      status: partial
+      notes: Function and trait method effect rows parse, but Concurrency and Runtime are absent from the compiler's
+        recognized names. Effect enforcement is an AOT concern outside this syntax assessment.
+    Enum case capitalization:
+      status: partial
+      notes: The compiler treats names beginning with __ followed by an uppercase letter as uppercase in enum
+        declarations and match patterns; the interpreter requires an uppercase first character. This affects
+        compiler-private spellings such as __Case; public visibility checking is separate.
+    Database attributes:
       status: supported
-      notes: The obsolete [<DB>] declaration syntax is rejected, matching upstream removal of user datastore types.
+      notes: Both reject [<DB>] declarations.
   Tests:
     Named test declarations: supported
+    Rejection of SQL-error assertion markers:
+      status: missing
+      notes: The compiler still recognizes sqlerror="message" and sqlerror "message" as special expected outcomes.
+        The interpreter only recognizes error markers and otherwise parses an ordinary expected expression.
+  Limits:
+    Parser nesting limit:
+      status: partial
+      notes: The compiler's parser-depth cap is 512 and the interpreter's is 200. Both retain a separate interpolation
+        nesting cap of 64. Available-stack protection is implementation-dependent and is not an AOT requirement.
