@@ -83,7 +83,9 @@ and parseRecordDef state index =
             symbolColon = colon;
           }
         in
-        if tok state after = TSemicolon || tok state after = TComma then begin
+        if tok state after = TComma || tok state after = TSemicolon then begin
+          if tok state after = TSemicolon then
+            errCollectionSemicolon state after "record-type fields";
           RevBuffer.add fields (field, Some (rng state after));
           stop := after + 1
         end
@@ -92,7 +94,7 @@ and parseRecordDef state index =
           if tok state after <> TRBrace then
             requireElementSeparator state
               (WT.typeReferenceRange typ)
-              after "a comma, semicolon, or newline between record-type fields";
+              after "a comma or newline between record-type fields";
           stop := after
         end
         else more := false

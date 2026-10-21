@@ -4,7 +4,7 @@ Generated from `test/test-suite-tooling/E2EDiscovery.ml` (shared with the runner
 `test/fixtures/e2e/upstream/**/*.dark` files. Regenerate with
 `python3 scripts/audit-upstream-gates.py`; verify with `--check`.
 
-**121 files; 31 whole-file exclusions; 290 line-number entries
+**125 files; 30 whole-file exclusions; 290 line-number entries
 across 34 files.** A line entry is not a skipped-test count.
 The runner matches the `L<number>:` assertion name produced by the fixture
 parser. Declarations and multiline assertions require parser inspection;
@@ -23,7 +23,7 @@ Other skip metadata and runtime filters are outside this inventory.
 | [cli/permissions-grammar.dark](../../test/fixtures/e2e/upstream/cli/permissions-grammar.dark) | disabled | — |
 | [cli/tailscale.dark](../../test/fixtures/e2e/upstream/cli/tailscale.dark) | disabled | — |
 | [cli/workbench-repl.dark](../../test/fixtures/e2e/upstream/cli/workbench-repl.dark) | disabled | — |
-| [cloud/db.dark](../../test/fixtures/e2e/upstream/cloud/db.dark) | disabled | — |
+| [cloud/db.dark](../../test/fixtures/e2e/upstream/cloud/db.dark) | enabled | — |
 | [language/apply/eapply.dark](../../test/fixtures/e2e/upstream/language/apply/eapply.dark) | enabled | 118 |
 | [language/apply/einfix.dark](../../test/fixtures/e2e/upstream/language/apply/einfix.dark) | enabled | 57, 58, 59 |
 | [language/basic/dfloat.dark](../../test/fixtures/e2e/upstream/language/basic/dfloat.dark) | enabled | — |
@@ -54,6 +54,10 @@ Other skip metadata and runtime filters are outside this inventory.
 | [language/nested-fns.dark](../../test/fixtures/e2e/upstream/language/nested-fns.dark) | enabled | 55, 60 |
 | [language/runtime-to-programtypes.dark](../../test/fixtures/e2e/upstream/language/runtime-to-programtypes.dark) | disabled | — |
 | [language/traits.dark](../../test/fixtures/e2e/upstream/language/traits.dark) | enabled | — |
+| [october-adoption/stdlib/float.dark](../../test/fixtures/e2e/upstream/october-adoption/stdlib/float.dark) | enabled | — |
+| [october-adoption/stdlib/html.dark](../../test/fixtures/e2e/upstream/october-adoption/stdlib/html.dark) | enabled | — |
+| [october-adoption/stdlib/list.dark](../../test/fixtures/e2e/upstream/october-adoption/stdlib/list.dark) | enabled | — |
+| [october-adoption/stdlib/math.dark](../../test/fixtures/e2e/upstream/october-adoption/stdlib/math.dark) | enabled | — |
 | [scm/branch-identity.dark](../../test/fixtures/e2e/upstream/scm/branch-identity.dark) | enabled | 9, 20, 23, 27, 31, 32 |
 | [scm/commit-hash.dark](../../test/fixtures/e2e/upstream/scm/commit-hash.dark) | disabled | — |
 | [scm/conflicts.dark](../../test/fixtures/e2e/upstream/scm/conflicts.dark) | enabled | 51, 58, 64, 70, 79, 86, 92, 99, 105, 111, 129, 136, 144, 155, 161, 169, 175, 184, 194, 204, 220, 224, 228, 232, 233, 234, 236, 242, 243, 246, 251, 257, 258, 259, 263, 265, 266 |

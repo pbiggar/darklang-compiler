@@ -44,8 +44,8 @@ Stdlib.List.setAt ["a", "b", "c"] -1 "replacement" = Ok ["a", "b", "replacement"
 Stdlib.Float.isFinite (-1.0 / 0.0) = false
 Stdlib.Float.isFinite -0.0 = true
 Stdlib.Float.isNaN (Builtin.unwrap (Stdlib.Float.clampRefusingNaN (0.0 / 0.0) 1.0 2.0)) = true
-Stdlib.Float.toBits -0.0 = -9223372036854775808
-Stdlib.Float.toBits (-1.0) = -4616189618054758400
+Stdlib.Float.toBits -0.0 = 9223372036854775808UL
+Stdlib.Float.toBits (-1.0) = 13830554455654793216UL
 
 // Key equality is total, including NaNs nested inside comparable values.
 let nan = 0.0 / 0.0 in Stdlib.List.length (Stdlib.List.dedup [(nan, 1L), (nan, 1L)]) = 1

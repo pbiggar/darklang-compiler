@@ -2,18 +2,18 @@
 
 Records are nominal, immutable product types with named fields. Their public
 behavior follows darklang/dark revision
-`04fbe9dcc995c6188757d583e273cbd30a3e2d3d`.
+`e76430be5cd9f6b77ed255430dc34a1b58dd8fc4`.
 
 ## Grammar
 
 Declarations name the record and may declare ordered type parameters:
 
 ```dark
-type Point = { x: Int64; y: Int64 }
+type Point = { x: Int64, y: Int64 }
 type Box<'a> = { value: 'a }
 ```
 
-Declarations and constructions accept commas, semicolons, or newlines between
+Declarations and constructions accept commas or newlines between
 fields. A declaration must contain at least one field. Construction always has
 a type name and may carry explicit type arguments:
 
@@ -30,7 +30,7 @@ Postfix access composes normally (`outer.inner.value`). An update has at least
 one field:
 
 ```dark
-{ point with x = 3; y = 4 }
+{ point with x = 3, y = 4 }
 ```
 
 ## Identity and metadata

@@ -23,8 +23,6 @@ type issueCode =
   | EmptyRecordUpdate
   | PackageExpression
   | TestAssertion
-  | DBMode
-  | DBShape
   | TestMode
 
 module IssueCode = struct
@@ -39,8 +37,6 @@ module IssueCode = struct
     | EmptyRecordUpdate -> "VALIDATION-RECORD-UPDATE"
     | PackageExpression -> "VALIDATION-PACKAGE-EXPR"
     | TestAssertion -> "VALIDATION-TEST-ASSERTION"
-    | DBMode -> "VALIDATION-DB-MODE"
-    | DBShape -> "VALIDATION-DB-SHAPE"
     | TestMode -> "VALIDATION-TEST-MODE"
 end
 
@@ -301,11 +297,6 @@ let rec declarationStructureIssues = function
   | WT.DModule modul ->
       List.concat_map declarationStructureIssues modul.declarations
   | WT.DExpr expr -> exprIssues expr
-  | WT.DTypeDB typ -> (
-      match typ.definition with
-      | WT.TDAlias _ -> []
-      | WT.TDRecord _ | WT.TDEnum _ ->
-          [ issue typ.range DBShape "[<DB>] type must be a type alias" ])
   | WT.DAssertion test -> (
       exprIssues test.actual
       @
@@ -350,14 +341,6 @@ let rec declarationPurposeIssues mode = function
               "Test expressions must use 'actual = expected'";
           ]
       | Script -> [])
-  | WT.DTypeDB typ -> (
-      match mode with
-      | Test -> []
-      | Script | Package ->
-          [
-            issue typ.range DBMode
-              "[<DB>] declarations are only allowed in test files";
-          ])
   | WT.DAssertion test -> (
       match mode with
       | Test -> []

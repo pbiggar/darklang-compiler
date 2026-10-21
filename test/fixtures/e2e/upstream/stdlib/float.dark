@@ -246,13 +246,13 @@ Stdlib.Float.toInt Builtin.testNegativeInfinity =
 
 
 // IEEE 754 binary64 representations.
-Stdlib.Float.toBits 0.0 = 0
-Stdlib.Float.toBits 0.5 = 4602678819172646912
-Stdlib.Float.toBits 1.0 = 4607182418800017408
-Stdlib.Float.toBits 2.0 = 4611686018427387904
-Stdlib.Float.toBits Builtin.testInfinity = 9218868437227405312
+Stdlib.Float.toBits 0.0 = 0UL
+Stdlib.Float.toBits 0.5 = 4602678819172646912UL
+Stdlib.Float.toBits 1.0 = 4607182418800017408UL
+Stdlib.Float.toBits 2.0 = 4611686018427387904UL
+Stdlib.Float.toBits Builtin.testInfinity = 9218868437227405312UL
 // Bit equality distinguishes signed zero and is reflexive for a fixed NaN.
-Stdlib.Float.toBits -0.0 = -9223372036854775808
+Stdlib.Float.toBits -0.0 = 9223372036854775808UL
 (Stdlib.Float.toBits -0.0 == Stdlib.Float.toBits 0.0) = false
 (-0.0 == 0.0) = true
 (Stdlib.Float.toBits (Builtin.testNan)

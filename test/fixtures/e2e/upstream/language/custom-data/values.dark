@@ -65,8 +65,8 @@ module UserDefined =
   UserDefined.enumValue = Stdlib.Option.Option.Some 5L
 
   Ok 5L = Stdlib.Result.Result.Ok 5L
-  type MyRecord = { a: Bool; b: String }
-  val recordValue = MyRecord { a = true; b = "glasses" }
+  type MyRecord = { a: Bool, b: String }
+  val recordValue = MyRecord { a = true, b = "glasses" }
   (Stdlib.Bool.not recordValue.a) = false
 
 

@@ -1,6 +1,6 @@
 // Adapted native expectations from the unchanged upstream-reference/language/traits.dark.
 module UpstreamTraitShapes =
-  type Point = { x: Int; y: Int }
+  type Point = { x: Int, y: Int }
 
   trait Show<'a> =
     let show (value: 'a) : String
@@ -21,11 +21,11 @@ module UpstreamTraitShapes =
 
   let display<'a: Show> (v: 'a) : String = "value: " + Show.show v
 
-UpstreamTraitShapes.Point.Show.show (UpstreamTraitShapes.Point { x = 1; y = 2 }) = "(1, 2)"
-UpstreamTraitShapes.Show.show (UpstreamTraitShapes.Point { x = 5; y = 6 }) = "(5, 6)"
+UpstreamTraitShapes.Point.Show.show (UpstreamTraitShapes.Point { x = 1, y = 2 }) = "(1, 2)"
+UpstreamTraitShapes.Show.show (UpstreamTraitShapes.Point { x = 5, y = 6 }) = "(5, 6)"
 UpstreamTraitShapes.display [1, 2, 3] = "value: [1, 2, 3]"
 UpstreamTraitShapes.Show.show [[true], []] = "[[yes], []]"
 ([1, 2] |> Stdlib.List.map UpstreamTraitShapes.Show.show) = ["1", "2"]
-(UpstreamTraitShapes.Point { x = 1; y = 2 }).show = "(1, 2)"
+(UpstreamTraitShapes.Point { x = 1, y = 2 }).show = "(1, 2)"
 UpstreamTraitShapes.Show.show 3.5 = compileerror="No implementation of trait"
 Stdlib.Int64.ToString.toString 42L = "42"

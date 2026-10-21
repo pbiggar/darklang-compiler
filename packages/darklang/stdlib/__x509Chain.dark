@@ -191,7 +191,7 @@ let __extensions (data: Blob) (position: Int64) (end_: Int64)
         | Ok oid ->
           let encoded = Stdlib.Blob.toHex
                           (Stdlib.__X509Identity.__slice data oid.content oid.end_) in
-          if Stdlib.List.member seen encoded then Error "Duplicate X.509 extension"
+          if Stdlib.List.contains seen encoded then Error "Duplicate X.509 extension"
           else
             match Stdlib.__X509Chain.__extension data item state with
             | Error error -> Error error

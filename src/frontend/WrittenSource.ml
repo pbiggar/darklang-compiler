@@ -37,7 +37,6 @@ let rec flattenDeclaration path = function
         (moduleSegments (snd modul.WT.name))
         (fun segments ->
           flattenDeclarations (path @ segments) modul.WT.declarations)
-  | WT.DTypeDB _ -> Error "Test-only database declaration in executable source"
   | WT.DAssertion _ -> Error "Test assertion in executable source"
 
 and flattenDeclarations path declarations =

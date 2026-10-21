@@ -180,5 +180,6 @@ let () =
   try exit (main ()) with
   | Sys.Break -> exit 130
   | exception_ ->
-      Printf.eprintf "Differential testing failed: %s\n%!" (Printexc.to_string exception_);
+      Printf.eprintf "Differential testing failed: %s\n%!"
+        (Printexc.to_string exception_);
       exit 2

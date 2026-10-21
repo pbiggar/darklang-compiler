@@ -56,7 +56,7 @@ let __entries (sender: Stdlib.__QuicParameters.Sender) (data: Blob) (position: I
     match Stdlib.__QuicWire.parseInteger data position with
     | Error _ -> Error "Truncated QUIC transport parameter"
     | Ok id ->
-      if Stdlib.List.member seen id.value then Error "Duplicate QUIC transport parameter"
+      if Stdlib.List.contains seen id.value then Error "Duplicate QUIC transport parameter"
       else
         match Stdlib.__QuicWire.parseInteger data id.next with
         | Error _ -> Error "Truncated QUIC transport parameter"

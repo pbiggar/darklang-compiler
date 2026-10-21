@@ -7,7 +7,7 @@ let wrapCallback (callback: Int64 -> Int64) : Int64 -> Int64 = applyCallback cal
 (wrapCallback increment) 41L = 42L
 let first = wrapCallback increment in let second = wrapCallback increment in first == second = true
 let first = wrapCallback increment in let second = wrapCallback decrement in first == second = false
-Stdlib.List.member [wrapCallback increment] (wrapCallback decrement) = false
-Stdlib.List.member [wrapCallback increment] (wrapCallback increment) = true
+Stdlib.List.contains [wrapCallback increment] (wrapCallback decrement) = false
+Stdlib.List.contains [wrapCallback increment] (wrapCallback increment) = true
 let first = wrapCallback (offset 1L) in let second = wrapCallback (offset 1L) in first == second = true
 let first = wrapCallback (offset 1L) in let second = wrapCallback (offset 2L) in first == second = false

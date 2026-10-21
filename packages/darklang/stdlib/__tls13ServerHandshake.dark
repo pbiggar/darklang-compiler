@@ -23,7 +23,7 @@ let __certificateAlgorithms (certificates: List<Blob>) (algorithms: List<Int64>)
   | raw :: rest -> Stdlib.__X509Chain.parse raw |> Stdlib.Result.andThen (fun certificate ->
     let algorithm = if certificate.signatureHash == 256L then 1025L else if certificate.signatureHash == 384L then 1281L else 1027L in
     // Self-signed trust anchors do not authenticate another certificate.
-    if Stdlib.List.member algorithms algorithm || Stdlib.__X509Chain.__signedBy certificate certificate then Stdlib.__Tls13ServerHandshake.__certificateAlgorithms rest algorithms
+    if Stdlib.List.contains algorithms algorithm || Stdlib.__X509Chain.__signedBy certificate certificate then Stdlib.__Tls13ServerHandshake.__certificateAlgorithms rest algorithms
     else Error "TLS certificate signature algorithm not offered")
 
 let __identityAlgorithms (identity: Stdlib.TlsServerIdentity.Identity) (hello: Stdlib.__Tls13ServerHello.Hello) : Stdlib.Result.Result<Unit, String> =

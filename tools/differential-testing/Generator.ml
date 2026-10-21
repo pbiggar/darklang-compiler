@@ -9,7 +9,9 @@ let choose random = function
         List.nth_opt items (Random.State.int random (List.length items))
       with
       | Some item -> item
-      | None -> Crash.crash "Differential test generator choice index was outside its set")
+      | None ->
+          Crash.crash
+            "Differential test generator choice index was outside its set")
 
 let scalarTypes =
   [
@@ -47,7 +49,8 @@ let nonempty head tail = { NonEmptyList.head; tail }
 
 let call name arguments =
   match arguments with
-  | [] -> Crash.crash "Differential test generator emitted a call without arguments"
+  | [] ->
+      Crash.crash "Differential test generator emitted a call without arguments"
   | head :: tail -> Apply (Var name, [], nonempty head tail)
 
 let field = unresolvedRecordFieldReference

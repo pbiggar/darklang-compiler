@@ -23,8 +23,8 @@ countTrmcSum (buildTrmcSum 100000L) 0L = 100000L
 type TrmcRecord = { value: Int64, next: Option<TrmcRecord> }
 
 let buildTrmcRecord (remaining: Int64) : TrmcRecord =
-    if remaining <= 0L then TrmcRecord { value = 0L; next = None }
-    else TrmcRecord { value = remaining; next = Some (buildTrmcRecord (remaining - 1L)) }
+    if remaining <= 0L then TrmcRecord { value = 0L, next = None }
+    else TrmcRecord { value = remaining, next = Some (buildTrmcRecord (remaining - 1L)) }
 
 let countTrmcRecord (record: TrmcRecord) (count: Int64) : Int64 =
     match record.next with

@@ -4,12 +4,12 @@
 canonical record separators are accepted
 ---SOURCE---
 type Mixed = {
-  first: Int64;
+  first: Int64,
   second: String,
   third: Bool
 }
 Mixed {
-  third = true;
+  third = true,
   first = 1,
   second = "two"
 }

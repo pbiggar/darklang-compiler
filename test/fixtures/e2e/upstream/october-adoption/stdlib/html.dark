@@ -1,0 +1,43 @@
+module Darklang.Stdlib.Html.Tests
+
+// Selected unchanged declarations from interpreter e76430be5.
+
+type Node = Stdlib.Html.Node
+
+let nodeToString (node: Node) : String = Stdlib.Html.nodeToString node
+
+test comment =
+  Stdlib.Test.all
+    [ (Stdlib.Html.comment "hello") |> nodeToString
+      |> Stdlib.Test.equal "<!-- hello -->"
+      // Each `--` becomes `- -`, so text containing `-->` can't close the
+      // comment early.
+      (Stdlib.Html.comment "a --> b") |> nodeToString
+      |> Stdlib.Test.equal "<!-- a - -> b -->"
+      (Stdlib.Html.comment "<script>alert(1)</script> -- and more")
+      |> nodeToString
+      |> Stdlib.Test.equal "<!-- <script>alert(1)</script> - - and more -->"
+      // Three or more hyphens in a row.
+      (Stdlib.Html.comment "---><script>alert(1)</script>") |> nodeToString
+      |> Stdlib.Test.equal "<!-- - - -><script>alert(1)</script> -->"
+      (Stdlib.Html.comment "---") |> nodeToString
+      |> Stdlib.Test.equal "<!-- - - - -->"
+      (Stdlib.Html.comment "-----") |> nodeToString
+      |> Stdlib.Test.equal "<!-- - - - - - -->"
+      (Stdlib.Html.comment "a --!> b") |> nodeToString
+      |> Stdlib.Test.equal "<!-- a - -!> b -->" ]
+
+test commentNeverHoldsDoubleDash =
+  Stdlib.Test.all (
+    [ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16 ]
+    |> Stdlib.List.map (fun n ->
+      let dashes = Stdlib.String.repeat "-" n
+      let html = (Stdlib.Html.comment $"{dashes}>x") |> nodeToString
+
+      // Strip `<!-- ` and ` -->` to get the text inside.
+      let inner =
+        html
+        |> Stdlib.String.dropFirst 5
+        |> Stdlib.String.dropLast 4
+
+      Stdlib.String.contains inner "--" |> Stdlib.Test.equal false))

@@ -40,7 +40,7 @@ let __retransmit (packets: List<Stdlib.__QuicRecovery.Packet>) (items: List<Stdl
     Stdlib.__QuicSpace.__retransmit rest next probe
 
 let __updated (state: Stdlib.__QuicSpace.State) (update: Stdlib.__QuicRecovery.Update) : Stdlib.Result.Result<Stdlib.__QuicSpace.State, String> =
-  let queued = Stdlib.List.filter state.queued (fun item -> Stdlib.Bool.not (Stdlib.List.member update.acknowledged item.token)) in
+  let queued = Stdlib.List.filter state.queued (fun item -> Stdlib.Bool.not (Stdlib.List.contains update.acknowledged item.token)) in
   let retransmit = Stdlib.__QuicSpace.__retransmit update.retransmit [] update.probe in
   let queued = Stdlib.List.append retransmit (Stdlib.List.filter queued (fun item -> Stdlib.Bool.not (Stdlib.List.any retransmit (fun retry -> retry.token == item.token)))) in
   let queued = if update.probe then (match queued with | first :: rest -> Stdlib.List.push rest (Stdlib.__QuicSpace.Transmission { token = first.token, payload = first.payload, probe = true }) | [] -> []) else queued in

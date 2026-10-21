@@ -171,3 +171,32 @@ passed 58/58 clean workloads. Benchmark source integrity passed as well.
 measurement because the existing snapshot workload contract digest is
 incompatible. The user explicitly requested main integration with that
 previously reported limitation; no performance ratio is claimed.
+
+## Interpreter refresh (2026-10-20)
+
+The compatibility ledger now targets `darklang/dark@e76430be5`, following
+`a9d93efc8`. Its generated declaration and test comparisons include all upstream
+source changes, including interpreter-only infrastructure and removed APIs.
+
+| Surface | Current upstream behavior |
+| --- | --- |
+| Collections | Records, updates, record type fields and dictionaries accept commas or newlines; semicolon separators are rejected. Statement sequences retain semicolons. |
+| List | `contains` replaces `member`, including callers in the compiler library and imported tests. |
+| Float | `toBits` returns `UInt64`; negative zero is `9223372036854775808UL`. |
+| Math | `tanh` computes hyperbolic tangent, including saturation at infinities, rather than reproducing the former upstream `Sinh` bug. |
+| HTML | Comment sanitization repeatedly breaks double dashes so runs of three or more dashes cannot leave `--` inside the comment. |
+| Database syntax | Remove the obsolete `[<DB>]` declaration and parser representation, following upstream removal of user datastore types. The historical, wholly disabled DB corpus is removed with it. |
+| CLI host | Shared OS, shell and architecture declarations follow upstream removal of Windows, PowerShell and the unused Armv7l case. |
+
+The earlier signed-bit and `Math.tanh` compatibility decisions above describe
+historical pins and are superseded by this refresh. Existing native adapters
+remain compiler implementations; interpreter host transport, package-cache,
+release tooling, CLI workbench and SQL metadata changes are inventoried rather
+than copied into this compiler.
+
+Async remains a recorded implementation gap on this baseline. Upstream now
+passes pending reads through user calls, containers and closure captures, forces
+them at builtin boundaries, and implements explicit `await` with
+`Builtin.runtimeForce`. The separate native async implementation must adopt that
+contract before its ledger rows can be marked implemented. Updating the pin or
+regenerating the ledger does not establish async compatibility.

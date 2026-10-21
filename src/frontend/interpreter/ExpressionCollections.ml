@@ -164,7 +164,7 @@ let parseList parseExpr state index =
         end
         else if tok state after = TComma || tok state after = TSemicolon then begin
           if tok state after = TSemicolon then
-            errListSemicolon state after "list elements";
+            errCollectionSemicolon state after "list elements";
           RevBuffer.add elements (value, Some (rng state after));
           stop := after + 1
         end
@@ -182,7 +182,7 @@ let parseList parseExpr state index =
         after ))
 
 (*
-   `Type { name = value ; … }`. `i` is the `{`.
+   `Type { name = value, … }`. `i` is the `{`.
    record fields are offside-delimited in their own scope
    (else a field value swallows the next field name, e.g. inside `( … )`)
    each field is its own offside statement (value args don't grab the next field)
@@ -201,12 +201,15 @@ let parseRecord parseExpr state typeName nameRange index =
             let value, after = parseExpr state (!stop + 2) in
             RevBuffer.add fields
               (span nameRange (WT.exprRange value), (nameRange, name), value);
-            if tok state after = TSemicolon || tok state after = TComma then
+            if tok state after = TComma then stop := after + 1
+            else if tok state after = TSemicolon then begin
+              errCollectionSemicolon state after "record fields";
               stop := after + 1
+            end
             else if after > !stop then begin
               if tok state after <> TRBrace then
                 requireElementSeparator state (WT.exprRange value) after
-                  "a comma, semicolon, or newline between record fields";
+                  "a comma or newline between record fields";
               stop := after
             end
             else more := false
@@ -245,12 +248,15 @@ let parseDict parseExpr state keyword index =
           let value, after = parseExpr state (afterKey + 1) in
           RevBuffer.add entries
             (span (WT.exprRange key) (WT.exprRange value), key, colon, value);
-          if tok state after = TSemicolon || tok state after = TComma then
+          if tok state after = TComma then stop := after + 1
+          else if tok state after = TSemicolon then begin
+            errCollectionSemicolon state after "dict entries";
             stop := after + 1
+          end
           else if after > afterKey then begin
             if tok state after <> TRBrace then
               requireElementSeparator state (WT.exprRange value) after
-                "a comma, semicolon, or newline between dict entries";
+                "a comma or newline between dict entries";
             stop := after
           end
           else more := false
@@ -266,7 +272,7 @@ let parseDict parseExpr state keyword index =
         after ))
 
 (*
-   record update `{ expr with name = value ; … }`. `i` is the `{`.
+   record update `{ expr with name = value, … }`. `i` is the `{`.
    fields are offside-delimited, same as parseRecord — suspend paren relaxation
    and anchor each field value at its own column so it can't grab the next field.
    `{ r with }` updates nothing — reject it rather than lower a degenerate
@@ -294,12 +300,15 @@ let parseRecordUpdate parseExpr state index =
             setStmtCol state nameRange.start.column;
             let value, after = parseExpr state (!stop + 2) in
             RevBuffer.add updates ((nameRange, name), equals, value);
-            if tok state after = TSemicolon || tok state after = TComma then
+            if tok state after = TComma then stop := after + 1
+            else if tok state after = TSemicolon then begin
+              errCollectionSemicolon state after "record-update fields";
               stop := after + 1
+            end
             else if after > !stop then begin
               if tok state after <> TRBrace then
                 requireElementSeparator state (WT.exprRange value) after
-                  "a comma, semicolon, or newline between record-update fields";
+                  "a comma or newline between record-update fields";
               stop := after
             end
             else more := false

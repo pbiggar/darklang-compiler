@@ -157,16 +157,12 @@ files:
     Darklang.Cli.Docs.Enums.content: missing
   darklang/cli/docs/errors.dark:
     Darklang.Cli.Docs.Errors.content: missing
-  darklang/cli/docs/for-ai-internal.dark:
-    Darklang.Cli.Docs.ForAIInternal.content: missing
   darklang/cli/docs/for-ai.dark:
     Darklang.Cli.Docs.ForAI.content: missing
   darklang/cli/docs/functions.dark:
     Darklang.Cli.Docs.Functions.content: missing
   darklang/cli/docs/http-server.dark:
     Darklang.Cli.Docs.HttpServer.content: missing
-  darklang/cli/docs/interactive-testing.dark:
-    Darklang.Cli.Docs.InteractiveTesting.content: missing
   darklang/cli/docs/live.dark:
     Darklang.Cli.Docs.Live.content: missing
   darklang/cli/docs/operators.dark:
@@ -1779,6 +1775,7 @@ files:
     Darklang.GitHub.Releases.getDownloadUrl: missing
     Darklang.GitHub.Releases.getLatestReleaseBuildHash: missing
     Darklang.GitHub.Releases.getLatestReleaseTag: missing
+    Darklang.GitHub.Releases.platformId: missing
     Darklang.GitHub.darklangRepoBaseUrl: missing
     Darklang.GitHub.fetchString: missing
   darklang/languageTools/atRestTypeChecker.dark:
@@ -2367,7 +2364,6 @@ files:
     Darklang.LanguageTools.ProgramTypes.Bound: missing
     Darklang.LanguageTools.ProgramTypes.BranchEventKind: missing
     Darklang.LanguageTools.ProgramTypes.BranchID: missing
-    Darklang.LanguageTools.ProgramTypes.DB: missing
     Darklang.LanguageTools.ProgramTypes.DecisionKind: missing
     Darklang.LanguageTools.ProgramTypes.Definitions: missing
     Darklang.LanguageTools.ProgramTypes.Deprecation: missing
@@ -2748,7 +2744,6 @@ files:
     Darklang.PrettyPrinter.ProgramTypes.bodyExpr: missing
     Darklang.PrettyPrinter.ProgramTypes.customType: missing
     Darklang.PrettyPrinter.ProgramTypes.customTypeDoc: missing
-    Darklang.PrettyPrinter.ProgramTypes.db: missing
     Darklang.PrettyPrinter.ProgramTypes.docOfText: missing
     Darklang.PrettyPrinter.ProgramTypes.expr: missing
     Darklang.PrettyPrinter.ProgramTypes.exprDoc: missing
@@ -3277,11 +3272,20 @@ files:
     test8: missing
     test9: missing
     testList: missing
+  darklang/tests/cli/builtinGroups.dark:
+    Darklang.Cli.Tests.BuiltinGroups.BuiltinGroups.knownPrefixes: missing
+    Darklang.Cli.Tests.BuiltinGroups.BuiltinGroups.livePrefixes: missing
+    Darklang.Cli.Tests.BuiltinGroups.BuiltinGroups.substantial: missing
   darklang/tests/cli/commandCompletions.dark:
     Darklang.Cli.Tests.CommandCompletions.BranchCompletion.values: missing
     Darklang.Cli.Tests.CommandCompletions.CompletionSweep.forced: missing
     Darklang.Cli.Tests.CommandCompletions.CompletionSweep.sweep: missing
     Darklang.Cli.Tests.CommandCompletions.PermissionProfiles.values: missing
+  darklang/tests/cli/commandGroups.dark:
+    Darklang.Cli.Tests.CommandGroups.Groups.grouped: missing
+    Darklang.Cli.Tests.CommandGroups.Groups.phantom: missing
+    Darklang.Cli.Tests.CommandGroups.Groups.registered: missing
+    Darklang.Cli.Tests.CommandGroups.Groups.ungrouped: missing
   darklang/tests/cli/deprecationKinds.dark:
     Darklang.Cli.Tests.DeprecationKinds.Kinds.parse: missing
     Darklang.Cli.Tests.DeprecationKinds.Kinds.refusalText: missing
@@ -3358,6 +3362,8 @@ files:
   darklang/tests/cli/releaseAssets.dark:
     Darklang.Cli.Tests.ReleaseAssets.AssetForPlatform.asset: missing
     Darklang.Cli.Tests.ReleaseAssets.AssetForPlatform.assets: missing
+    Darklang.Cli.Tests.ReleaseAssets.PlatformForHost.host: missing
+    Darklang.Cli.Tests.ReleaseAssets.PlatformForHost.idFor: missing
   darklang/tests/cli/searchRanking.dark:
     Darklang.Cli.Tests.SearchRanking.Rank.fileFns: missing
     Darklang.Cli.Tests.SearchRanking.Rank.order: missing

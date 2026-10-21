@@ -7,33 +7,33 @@ module GetMethod =
   // so a client that capitalises it differently still gets its method honoured.
   (Stdlib.HttpServer.getMethod (
     Stdlib.Http.Request
-      { url = "/"; headers = [ ("x-http-method", "POST") ]; body = Stdlib.Blob.empty })) =
+      { url = "/", headers = [ ("x-http-method", "POST") ], body = Stdlib.Blob.empty })) =
     "POST"
 
   (Stdlib.HttpServer.getMethod (
     Stdlib.Http.Request
-      { url = "/"; headers = [ ("X-Http-Method", "DELETE") ]; body = Stdlib.Blob.empty })) =
+      { url = "/", headers = [ ("X-Http-Method", "DELETE") ], body = Stdlib.Blob.empty })) =
     "DELETE"
 
   // No header at all means GET, which is what a browser sends.
   (Stdlib.HttpServer.getMethod (
-    Stdlib.Http.Request { url = "/"; headers = []; body = Stdlib.Blob.empty })) = "GET"
+    Stdlib.Http.Request { url = "/", headers = [], body = Stdlib.Blob.empty })) = "GET"
 
   // An unrelated header is not the method.
   (Stdlib.HttpServer.getMethod (
     Stdlib.Http.Request
-      { url = "/"; headers = [ ("Accept", "text/html") ]; body = Stdlib.Blob.empty })) = "GET"
+      { url = "/", headers = [ ("Accept", "text/html") ], body = Stdlib.Blob.empty })) = "GET"
 
 module Routes =
   // `get`/`post` build the Handler a record literal would, so a route table reads as routes.
   ((Stdlib.HttpServer.get "/ping" (fun req ->
       Stdlib.Http.Response
-        { statusCode = 200L; headers = []; body = Stdlib.Blob.empty })).route) = "/ping"
+        { statusCode = 200L, headers = [], body = Stdlib.Blob.empty })).route) = "/ping"
 
   ((Stdlib.HttpServer.get "/ping" (fun req ->
       Stdlib.Http.Response
-        { statusCode = 200L; headers = []; body = Stdlib.Blob.empty })).method) = "GET"
+        { statusCode = 200L, headers = [], body = Stdlib.Blob.empty })).method) = "GET"
 
   ((Stdlib.HttpServer.post "/ops" (fun req ->
       Stdlib.Http.Response
-        { statusCode = 200L; headers = []; body = Stdlib.Blob.empty })).method) = "POST"
+        { statusCode = 200L, headers = [], body = Stdlib.Blob.empty })).method) = "POST"
