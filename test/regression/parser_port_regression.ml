@@ -40,6 +40,87 @@ let rejects source text =
 let accepts source () = ignore (parsed source)
 
 let () =
+  run "aligned multiline package test outcome" (fun () ->
+      let source =
+        "test failing =\n\
+        \  Builtin.crash \"boom\"\n\
+        \  => raises \"boom\"\n\
+         val following = 1"
+      in
+      (match (parsed source).WT.declarations with
+      | [ WT.DTest test; WT.DValue following ] ->
+          require
+            (match test.WT.expectedError with
+            | Some (_, WT.RuntimeError "boom") -> true
+            | _ -> false)
+            "Multiline expected outcome lost";
+          require
+            (match test.WT.body with WT.EApply _ -> true | _ -> false)
+            "Outcome consumed as a body statement";
+          require
+            (following.WT.name.WT.name = "following")
+            "Following declaration lost"
+      | _ -> failwith "Package test or following declaration changed");
+      match Parser.parseFor Validation.Package source with
+      | Ok _ -> ()
+      | Error _ -> failwith "Valid multiline package test rejected");
+  run "multiline outcome after a statement block" (fun () ->
+      ignore
+        (parsed
+           "module Example =\n\
+           \  test failing =\n\
+           \    let message = \"boom\"\n\
+           \    Builtin.crash message\n\
+           \    => raises \"boom\""));
+  run "spaced multiline outcome remains invalid" (fun () ->
+      require
+        ((Parser.parse "test failing =\n  1\n  = > raises \"boom\"")
+           .ParserSupport.diagnostics <> [])
+        "Non-adjacent outcome delimiter accepted");
+  run "malformed character stays one token in type contexts" (fun () ->
+      List.iter
+        (fun prefix ->
+          match Lexer.tokenize (prefix ^ " 'ab'") with
+          | Ok ([ _; { Lexer.token = Tokenizer.TCharLit "ab"; _ }; _ ], []) ->
+              ()
+          | _ -> failwith ("Character split after " ^ prefix))
+        [ "="; "("; "*"; "<"; ","; ":"; "->"; "of" ]);
+  run "malformed character recovery preserves following declaration" (fun () ->
+      let result = Parser.parse "val x = 'ab'\nval following = 1" in
+      require
+        (List.length result.ParserSupport.diagnostics = 1)
+        "Malformed character produced cascaded diagnostics";
+      match result.ParserSupport.parsed with
+      | Some
+          (WT.SourceFile
+             { WT.declarations = [ WT.DValue first; WT.DValue following ]; _ })
+        ->
+          require
+            (match first.WT.body with
+            | WT.EChar (_, Some (_, "ab"), _, _) -> true
+            | _ -> false)
+            "Malformed character became an application";
+          require
+            (following.WT.name.WT.name = "following")
+            "Following declaration lost"
+      | _ -> failwith "Character recovery changed declaration boundaries");
+  run "malformed trait uses expression recovery" (fun () ->
+      let result = Parser.parse "trait =\nval following = 1" in
+      require
+        (result.ParserSupport.diagnostics <> [])
+        "Malformed trait accepted";
+      match result.ParserSupport.parsed with
+      | Some
+          (WT.SourceFile
+             {
+               WT.declarations = [ WT.DValue following ];
+               exprsToEval = [ WT.EError _; WT.EError _ ];
+               _;
+             }) ->
+          require
+            (following.WT.name.WT.name = "following")
+            "Following declaration lost"
+      | _ -> failwith "Malformed trait fabricated a trait declaration");
   run "nested generic function arrow" (fun () ->
       match (parsed "type F = List<List<Int>> -> Int").WT.declarations with
       | [

@@ -7,8 +7,14 @@ groups:
   Lexing:
     Comments: supported
     Identifiers and escaped identifiers: supported
-    Numeric literals: supported
-    Character literals: supported
+    Numeric literals:
+      status: partial
+      notes: Float written-digit normalization and exponent acceptance can differ with host numeric formatting.
+        Float precision and exponent policy are deferred for a separate review.
+    Character literals:
+      status: supported
+      notes: Malformed quoted characters stay one token in type contexts; character validation reports the error
+        without fabricating an identifier or consuming the following declaration.
     Quoted strings: supported
     Triple-quoted strings: supported
   Expressions:
@@ -26,7 +32,9 @@ groups:
     Modules and nesting: supported
     Function and value declarations: supported
     Records and enums: supported
-    Traits and implementations: supported
+    Traits and implementations:
+      status: supported
+      notes: A trait declaration requires an identifier after the keyword; a missing name takes expression recovery.
     Generic parameters and bounds: supported
     Function types after nested generic closers: supported
     Trait method parameter validation: supported
@@ -36,7 +44,9 @@ groups:
     Enum case capitalization: supported
     Database attributes: supported
   Tests:
-    Named test declarations: supported
+    Named test declarations:
+      status: supported
+      notes: An adjacent => outcome delimiter ends the test body even on a new line aligned with body statements.
     Rejection of SQL-error assertion markers: supported
   Limits:
     Parser nesting limit: supported
