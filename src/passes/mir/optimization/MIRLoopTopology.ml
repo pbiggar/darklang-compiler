@@ -2,7 +2,7 @@
 [@@@warning "-4-30"]
 
 open MIR
-module S = SSA_Construction
+module S = MIRGraphAnalysis
 
 (*
    Get successors from a basic block terminator

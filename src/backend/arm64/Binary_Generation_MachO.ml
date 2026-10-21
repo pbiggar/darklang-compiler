@@ -688,52 +688,6 @@ let createExecutableWithPools machineCode stringPool floatPool enableLeakCheck =
   in
   createExecutableWithDataBytes machineCode dataBytes enableLeakCheck
 
-(*
-   Create a Mach-O executable with coverage data section
-   For now, coverage data is included in the __const section
-   TODO: Add proper __DATA segment for writable coverage data on macOS
-   For now, just include the coverage as zeros in the data section
-   This won't actually work for writing on macOS (need __DATA segment)
-   but allows the binary to be generated
-   Create float data
-   Create string data
-   Create coverage data (zeros)
-   This is a simplified approach - proper coverage on macOS needs __DATA segment
-*)
-let createExecutableWithCoverage machineCode stringPool floatPool
-    coverageExprCount enableLeakCheck =
-  let _codeBytes = machineCodeToBytes machineCode in
-  let floatBytes = createFloatData floatPool in
-  let stringBytes, _ = createStringData stringPool in
-  let coverageSize = align8Int (mul coverageExprCount 8) in
-  let coverageBytes = Bytes.make coverageSize '\000' in
-  let floatAndStringBytes = Bytes.cat floatBytes stringBytes in
-  let alignedCoverageStart = align8Int (Bytes.length floatAndStringBytes) in
-  let coveragePadding =
-    Bytes.make
-      (sub alignedCoverageStart (Bytes.length floatAndStringBytes))
-      '\000'
-  in
-  let afterCoverage = add alignedCoverageStart (Bytes.length coverageBytes) in
-  let leakBytes =
-    if enableLeakCheck then Bytes.make 8 '\000' else Bytes.empty
-  in
-  let leakStart = align8Int afterCoverage in
-  let leakPadding = Bytes.make (sub leakStart afterCoverage) '\000' in
-  let allDataBytes =
-    Bytes.concat Bytes.empty
-      (if enableLeakCheck then
-         [
-           floatAndStringBytes;
-           coveragePadding;
-           coverageBytes;
-           leakPadding;
-           leakBytes;
-         ]
-       else [ floatAndStringBytes; coveragePadding; coverageBytes ])
-  in
-  createExecutableWithDataBytes machineCode allDataBytes enableLeakCheck
-
 let ioMessage = function
   | Unix.Unix_error (error, _, _) -> Unix.error_message error
   | Sys_error message -> message

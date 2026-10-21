@@ -804,14 +804,6 @@ let tokenize text =
           index + 1 + Option.fold ~none:0 ~some:Text.length first
       in
       if
-        contentEnd < length && is source contentEnd '\''
-        && not (is source (index + 1) '\\')
-      then
-        push
-          (TCharLit
-             (unescape (substring source (index + 1) (contentEnd - index - 1))))
-          (contentEnd + 1) None
-      else if
         typeContext
         && index + 1 < length
         && (letter source.(index + 1) || is source (index + 1) '_')
@@ -821,11 +813,23 @@ let tokenize text =
             (fun scan -> letterOrDigit source.(scan) || is source scan '_')
             (index + 1)
         in
-        push
-          (TIdent (substring source (index + 1) (stop - index - 1)))
-          stop None
+        (* A closing quote after the scanned name keeps even a malformed
+           multi-character literal together for character validation. *)
+        if
+          (stop < length && is source stop '\'')
+          || (contentEnd < length && is source contentEnd '\'')
+        then quotedChar ()
+        else
+          push
+            (TIdent (substring source (index + 1) (stop - index - 1)))
+            stop None
       else if index + 1 < length && is source (index + 1) '\\' then
         quotedChar ()
+      else if contentEnd < length && is source contentEnd '\'' then
+        push
+          (TCharLit
+             (unescape (substring source (index + 1) (contentEnd - index - 1))))
+          (contentEnd + 1) None
       else
         let stop = min length (max (index + 1) contentEnd) in
         push

@@ -1,9 +1,4 @@
-(* ANFExpressionOptimization.mli - Propagate facts and common expressions through lexical ANF control flow. *)
-type optimizeAExprResult = {
-  expr : ANF.aExpr;
-  changed : bool;
-  uses : ANFEffects.TempSet.t;
-}
+(* ANFExpressionOptimization.mli - Value-numbering keys and fresh temporary allocation shared by SSA and ANF lowering. *)
 
 type scalarUnaryCSEOp =
   | PrimitiveUnary of ANF.unaryOp
@@ -24,32 +19,4 @@ type cSEKey =
 module CSEnv : Map.S with type key = cSEKey
 
 val tryCSEKey : ANF.cExpr -> cSEKey option
-
-val optimizeAExpr :
-  ANFConstants.optimizeContext ->
-  ANFConstants.optimizeOptions ->
-  ANFConstants.constEnv ->
-  ANFConstants.typeEnv ->
-  ANF.aExpr ->
-  ANF.aExpr * bool
-
-val optimizeFunction :
-  ANFConstants.optimizeContext ->
-  ANFConstants.optimizeOptions ->
-  ANFConstants.typeEnv ->
-  ANF.functionDef ->
-  ANF.functionDef * bool
-
-val optimizeToFixedPoint :
-  ANFConstants.optimizeContext ->
-  ANFConstants.optimizeOptions ->
-  ANF.functionDef ->
-  int ->
-  ANF.functionDef
-
-val unusedClosureEnvironments : ANF.functionDef list -> AST.functionId -> bool
-
-val devirtualizeCaptureFreeClosures :
-  (AST.functionId -> bool) -> ANF.aExpr -> ANF.aExpr
-
 val freshVarGenForProgram : ANF.program -> ANF.varGen

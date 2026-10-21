@@ -193,5 +193,7 @@ val convertExprToAnf :
   CheckedAST.expr ->
   (ANF.aExpr * ANF.varGen, string) result
 
+val registriesOfUserOnly : userOnlyResult -> registries
+
 val synthesizeEntryFunction :
   AST.functionId -> string -> AST.semanticType -> ANF.aExpr -> ANF.functionDef

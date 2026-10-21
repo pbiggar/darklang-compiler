@@ -515,8 +515,41 @@ let testRejectsDanglingCompileErrorDirective () =
       | Error msg -> Error ("Unexpected dangling-directive error: " ^ msg)
       | Ok _ -> Error "Expected dangling #compileerror rejection")
 
+let testSourceFileGroupsPreserveAssertions () =
+  one "1L = 1L" "Expected a template assertion" (fun test ->
+      let make file preamble name =
+        { test with sourceFile = file; preamble; name }
+      in
+      let input =
+        [|
+          make "a.dark" "first" "a1";
+          make "a.dark" "second" "a2";
+          make "b.dark" "first" "b1";
+          make "a.dark" "first" "a3";
+        |]
+      in
+      let groups = sourceFileGroups input in
+      let* () =
+        require
+          (List.map Array.length groups = [ 2; 1; 1 ])
+          "File boundaries or preamble variants changed"
+      in
+      let* () =
+        require
+          (Array.concat groups = input)
+          "Grouping lost, duplicated, reordered or modified assertions"
+      in
+      let* () =
+        require (sourceFileGroups [||] = []) "Empty suite created a group"
+      in
+      require
+        (sourceFileGroups [| test |] = [ [| test |] ])
+        "Singleton suite changed")
+
 let tests =
   [
+    ( "file context groups preserve every assertion",
+      testSourceFileGroupsPreserveAssertions );
     ( "parses multiline expectation on next line",
       testParsesMultilineExpectationOnNextLine );
     ("parses skip attribute", testParsesSkipAttribute);

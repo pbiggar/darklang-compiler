@@ -299,6 +299,23 @@ type preambleContextKey = string * string
 
 let preambleContextKeyForTest (test : e2eTest) = (test.sourceFile, test.preamble)
 
+(* Keep discovery order and every preamble variant within a file, while allowing
+   the host to release that file's compiled contexts before starting the next. *)
+let sourceFileGroups tests =
+  let length = Array.length tests in
+  let rec collect start groups =
+    if start = length then List.rev groups
+    else
+      let next = ref (start + 1) in
+      while
+        !next < length && tests.(!next).sourceFile = tests.(start).sourceFile
+      do
+        incr next
+      done;
+      collect !next (Array.sub tests start (!next - start) :: groups)
+  in
+  collect 0 []
+
 let comparePreambleContextKey (a, b) (c, d) =
   let n = StringOrder.compare a c in
   if n = 0 then StringOrder.compare b d else n

@@ -1,26 +1,5 @@
-(* Complete original ownership contracts. *)
-val testMapHelperAccumulatorReturnDoesNotRetainOwnedAccumulator :
-  unit -> (unit, string) result
-
-val testMapHelperSelfTailCallReleasesReplacedAccumulator :
-  unit -> (unit, string) result
-
-val testBorrowedProjectionSelfTailCallArgsAreRetained :
-  unit -> (unit, string) result
-
-val testBorrowedProjectionSelfRecursiveCallArgsAreRetained :
-  unit -> (unit, string) result
-
-val testBorrowedProjectionAliasSelfRecursiveCallArgsAreRetained :
-  unit -> (unit, string) result
-
-val testBorrowedProjectionIfBranchSelfRecursiveCallArgsAreRetained :
-  unit -> (unit, string) result
-
+(* Production SSA borrowed-parameter and closure-result ownership checks. *)
 val testBorrowedProjectionFromParameterSelfRecursiveCallStaysBorrowed :
-  unit -> (unit, string) result
-
-val testMapHelperClosureProducingCallRetainsBorrowedSource :
   unit -> (unit, string) result
 
 val testMapHelperClosureSourceToValueKeepsSourceBorrowed :

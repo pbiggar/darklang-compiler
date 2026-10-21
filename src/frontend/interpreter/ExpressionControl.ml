@@ -156,6 +156,11 @@ and hasNextStmt state column index =
   tok state index <> TEOF
   && (rng state index).start.column = column
   && tok state index <> TBar
+  (* An aligned package-test outcome ends the body, just as an inline one does. *)
+  && (not
+        (tok state index = TEquals
+        && tok state (index + 1) = TGt
+        && (rng state index).end_ = (rng state (index + 1)).start))
   && not (closesOrSeparates (tok state index))
 
 (*
