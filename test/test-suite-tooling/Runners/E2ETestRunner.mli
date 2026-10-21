@@ -65,6 +65,9 @@ type preambleContextKey = string * string
 
 val preambleContextKeyForTest : e2eTest -> preambleContextKey
 
+(* Contiguous file groups preserve discovery order, assertions and preambles. *)
+val sourceFileGroups : e2eTest array -> e2eTest array list
+
 module PreambleContextMap : Map.S with type key = preambleContextKey
 
 type suiteContext = {
