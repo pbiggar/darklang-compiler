@@ -5,7 +5,7 @@ open MIR
 module F = MIROptimizationFacts
 module C = MIRCopyPropagation
 module K = MIRConstants
-module S = SSA_Construction
+module S = MIRGraphAnalysis
 
 module EdgeOrder = struct
   type t = label * label

@@ -2,7 +2,7 @@
 [@@@warning "-4"]
 
 open MIR
-module S = SSA_Construction
+module S = MIRGraphAnalysis
 module T = MIRLoopTopology
 
 (*

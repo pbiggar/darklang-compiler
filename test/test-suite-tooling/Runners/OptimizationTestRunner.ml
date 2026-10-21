@@ -1,44 +1,6 @@
-(*
-   OptimizationTestRunner.ml - Test runner for optimization verification
-   Compiles source code, captures IR at specific stages, and compares
-   against expected output to verify optimizations work correctly.
-   Result of running an optimization test
-   Normalize IR output for comparison
-   - Trim whitespace
-   - Normalize line endings
-   - Remove trailing whitespace from each line
-   - Alpha-rename temporary IDs, which are allocation-order details shared
-   with unrelated functions in the compiled standard library.
-   - Alpha-rename generated closure IDs for the same reason.
-   Compile source and get ANF after optimization
-   Type check
-   Convert to ANF
-   Optimize ANF
-   Pretty-print the result
-   Compile source and get MIR after optimization
-   Type check
-   Convert to ANF
-   Optimize ANF
-   Generated output participates in reference-count insertion.
-   Convert to MIR
-   SSA construction
-   MIR optimization
-   SSA form is now preserved (phi resolution happens in register allocation)
-   Pretty-print the optimized MIR (still in SSA form)
-   Compile source and get LIR after optimization
-   Type check
-   Convert to ANF
-   Optimize ANF
-   Generated output participates in reference-count insertion.
-   Convert to MIR
-   SSA construction and optimization
-   SSA form is now preserved (phi resolution happens in register allocation)
-   Convert to LIR
-   LIR optimization
-   Pretty-print
-   Run a single optimization test
-   Load and run tests from a file
-*)
+(* OptimizationTestRunner.ml - Check optimization fixtures with stable IR formatting.
+   Source cases use production SSA optimization and ownership insertion;
+   MIR/LIR cases also run tail-call detection and direct SSA MIR lowering. *)
 [@@@warning "-4-42"]
 
 open Dark_compiler
@@ -111,34 +73,6 @@ let convertTypedProgram (stdlib : CompilationContexts.stdlibResult) recorder
     typedAst =
   SourcePreparation.convertTypedProgramToUserOnlyWithTrace
     stdlib.CompilationContexts.context recorder typedAst
-  |> Result.map (fun (c : AST_to_ANF.userOnlyResult) ->
-      {
-        AST_to_ANF.program =
-          ANF.Program (c.AST_to_ANF.userFunctions, c.AST_to_ANF.mainExpr);
-        ownershipContracts = c.AST_to_ANF.ownershipContracts;
-        recursiveMembers = c.AST_to_ANF.recursiveMembers;
-        typeReg = c.AST_to_ANF.typeReg;
-        recordFieldsReg = c.AST_to_ANF.recordFieldsReg;
-        recordTypeParamsReg = c.AST_to_ANF.recordTypeParamsReg;
-        variantLookup = c.AST_to_ANF.variantLookup;
-        rcSumShapeReg = c.AST_to_ANF.rcSumShapeReg;
-        funcReg = c.AST_to_ANF.funcReg;
-        funcParams = c.AST_to_ANF.funcParams;
-        moduleRegistry = c.AST_to_ANF.moduleRegistry;
-      })
-
-let optimizeContextFromConversionResult (c : AST_to_ANF.conversionResult) =
-  {
-    ANFConstants.typeReg = c.AST_to_ANF.recordFieldsReg;
-    recordTypeParams = c.AST_to_ANF.recordTypeParamsReg;
-    sumShapeReg = c.AST_to_ANF.rcSumShapeReg;
-    functionNames =
-      FunctionIdMap.map (fun _ (name, _) -> name) c.AST_to_ANF.funcReg;
-    functionIds =
-      FunctionIdMap.toList c.AST_to_ANF.funcReg
-      |> List.map (fun (id, (name, _)) -> (name, id))
-      |> M.of_list;
-  }
 
 let normalizeIR ir =
   let units = Text.scalars ir in
@@ -293,16 +227,6 @@ let normalizeIR ir =
   closures 0;
   Text.ofScalars (Text.scalars (Buffer.contents output))
 
-let withoutSyntheticANFMain ir =
-  let suffix = "\n\nMain:\nreturn 0" in
-  if Filename.check_suffix ir suffix then
-    String.sub ir 0 (String.length ir - String.length suffix)
-  else ir
-
-let formatANFForOptimizationTest synthetic program =
-  let formatted = ANFPrinter.formatANF program in
-  if synthetic then withoutSyntheticANFMain formatted else formatted
-
 let removeSyntheticMIREntry (MIR.Program (functions, variants, records)) =
   MIR.Program
     ( List.filter (fun (f : MIR.functionDef) -> f.MIR.name <> "_start") functions,
@@ -344,20 +268,6 @@ let prepare stdlib recorder source =
   in
   Ok (programType, converted, synthetic)
 
-let optimize (converted : AST_to_ANF.conversionResult) =
-  ANF_Optimize.optimizeProgramWithOptions
-    (optimizeContextFromConversionResult converted)
-    ANFConstants.defaultOptimizeOptions converted.AST_to_ANF.program
-
-let getOptimizedANF stdlib recorder source =
-  let* _, converted, synthetic = prepare stdlib recorder source in
-  let optimized =
-    measure recorder "Optimization detail: ANF optimization" (fun () ->
-        optimize converted)
-  in
-  measure recorder "Optimization detail: IR formatting" (fun () ->
-      Ok (formatANFForOptimizationTest synthetic optimized))
-
 let getOptimizedStdlibANF (stdlib : CompilationContexts.stdlibResult) name =
   match M.find_opt name stdlib.CompilationContexts.stdlibAnfFunctions with
   | None -> Error ("Prebuilt stdlib ANF function not found: " ^ name)
@@ -369,44 +279,117 @@ let getOptimizedStdlibANF (stdlib : CompilationContexts.stdlibResult) name =
       in
       Ok (ANFPrinter.formatANFFunction names func)
 
-let mirPipeline stdlib programType (converted : AST_to_ANF.conversionResult) =
-  let (ANF.Program (functions, mainExpr)) = optimize converted in
+let ssaPipeline printResult recorder programType
+    (user : AST_to_ANF.userOnlyResult) =
+  let open AST_to_ANF in
+  let entryId, symbols = CheckedAST.internFunction "_start" user.symbols in
+  let registries = AST_to_ANF.registriesOfUserOnly user in
+  let registries =
+    {
+      registries with
+      AST_to_ANF.functionIds = M.add "_start" entryId registries.functionIds;
+      functionNames =
+        FunctionIdMap.add entryId "_start" registries.functionNames;
+    }
+  in
+  let entry =
+    AST_to_ANF.synthesizeEntryFunction entryId "_start" programType
+      user.mainExpr
+  in
+  let* printed =
+    if printResult then
+      PrintInsertion.insertPrintInEntry registries.functionIds "_start"
+        programType
+        (entry :: user.userFunctions)
+    else Ok (entry :: user.userFunctions)
+  in
+  let started = Mtime_clock.elapsed_ns () in
+  let elapsed () =
+    Int64.to_float (Int64.sub (Mtime_clock.elapsed_ns ()) started) /. 1e6
+  in
+  (* Keep fixture function boundaries while using the production SSA passes. *)
+  let options =
+    {
+      CompilerOptions.defaultOptions with
+      CompilerOptions.disableInlining = true;
+    }
+  in
+  let* _, functions, typeMap =
+    ANFPipeline.buildAnf 0 options elapsed registries
+      (CheckedAST.nextFunctionOrdinal symbols)
+      InliningCommon.defaultConfig FunctionIdMap.empty M.empty
+      user.nonInlineableFunctionNames printed user.ownershipContracts true
+      recorder
+  in
   let names =
-    FunctionIdMap.map (fun _ (name, _) -> name) converted.AST_to_ANF.funcReg
+    List.fold_left
+      (fun names (func : SSAANF.functionDef) ->
+        FunctionIdMap.add func.SSAANF.id func.SSAANF.name names)
+      registries.functionNames functions
   in
-  let ids =
-    FunctionIdMap.toList names
-    |> List.map (fun (id, name) -> (name, id))
-    |> M.of_list
+  Ok (functions, typeMap, names)
+
+let getOptimizedANF stdlib recorder source =
+  let* typ, converted, synthetic = prepare stdlib recorder source in
+  let* functions, _, names = ssaPipeline false recorder typ converted in
+  let functions =
+    if synthetic then
+      List.filter
+        (fun (func : SSAANF.functionDef) -> func.SSAANF.name <> "_start")
+        functions
+    else functions
   in
-  let printed = PrintInsertion.insertPrint ids functions mainExpr programType in
-  let optimized = { converted with AST_to_ANF.program = printed } in
-  let* afterRC, typeMap =
-    RefCountInsertion.insertRCInProgram optimized
-    |> Result.map_error (fun e -> "RC insertion error: " ^ e)
+  measure recorder "Optimization detail: IR formatting" (fun () ->
+      Ok (ANFPrinter.formatSSAFunctions names functions))
+
+let mirPipeline stdlib recorder programType (user : AST_to_ANF.userOnlyResult) =
+  let open AST_to_ANF in
+  let* functions, typeMap, functionNames =
+    ssaPipeline true recorder programType user
   in
-  let afterTCO = TailCallDetection.detectTailCallsInProgram afterRC in
-  let* mir =
-    ANF_to_MIR.toMIR afterTCO typeMap M.empty programType
-      optimized.AST_to_ANF.variantLookup
-      (TypeRegistries.recordFieldsRegistry optimized.AST_to_ANF.typeReg)
-      false (returnTypesFor stdlib)
-      (FunctionIdMap.add (AST.functionId 0L) "_start" names)
-    |> Result.map_error (fun e -> "MIR conversion error: " ^ e)
+  let names, returns =
+    List.fold_left
+      (fun (names, returns) (func : SSAANF.functionDef) ->
+        ( FunctionIdMap.add func.SSAANF.id func.SSAANF.name names,
+          FunctionIdMap.add func.SSAANF.id func.SSAANF.returnType returns ))
+      ( functionNames,
+        FunctionIdMap.map (fun _ (_, typ) -> typ) (returnTypesFor stdlib) )
+      functions
   in
-  let ssa = SSA_Construction.convertToSSA mir in
-  Ok (MIR_Optimize.optimizeProgram ssa, names)
+  let* functions, variants, records =
+    ANF_to_MIR.toMIRSSAFunctionsOnlyWithTrace None None user.recursiveMembers
+      true functions typeMap user.funcParams user.variantLookup
+      user.recordFieldsReg false returns names
+    |> Result.map_error (fun error -> "MIR conversion error: " ^ error)
+  in
+  let* _ =
+    ResultList.mapResults MIR_SSA_Verify.verifyFunction functions
+    |> Result.map_error (fun error ->
+        "Before MIR optimization: " ^ error ^ "\n"
+        ^ MIRPrinter.formatMIRWithFunctionNames names
+            (MIR.Program (functions, variants, records)))
+  in
+  let (MIR.Program (optimizedFunctions, _, _) as optimized) =
+    MIR_Optimize.optimizeProgram (MIR.Program (functions, variants, records))
+  in
+  let* _ =
+    ResultList.mapResults MIR_SSA_Verify.verifyFunction optimizedFunctions
+    |> Result.map_error (fun error ->
+        "After MIR optimization: " ^ error ^ "\n"
+        ^ MIRPrinter.formatMIRWithFunctionNames names optimized)
+  in
+  Ok (optimized, names)
 
 let getOptimizedMIR stdlib recorder source =
   let* typ, converted, synthetic = prepare stdlib recorder source in
   measure recorder "Optimization detail: MIR pipeline" (fun () ->
-      let* mir, names = mirPipeline stdlib typ converted in
+      let* mir, names = mirPipeline stdlib recorder typ converted in
       Ok (formatMIRForOptimizationTest names synthetic mir))
 
 let getOptimizedLIR stdlib recorder source =
   let* typ, converted, synthetic = prepare stdlib recorder source in
   measure recorder "Optimization detail: LIR pipeline" (fun () ->
-      let* mir, _ = mirPipeline stdlib typ converted in
+      let* mir, _ = mirPipeline stdlib recorder typ converted in
       let* lir =
         MIR_to_LIR.toLIR mir
         |> Result.map_error (fun e -> "LIR conversion error: " ^ e)

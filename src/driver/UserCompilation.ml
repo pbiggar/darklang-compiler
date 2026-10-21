@@ -25,25 +25,6 @@ let roundOne value =
 let detail verbosity value =
   log verbosity 2 ("        " ^ FloatFormat.roundTrip (roundOne value) ^ "ms")
 
-let registries (user : R.userOnlyResult) =
-  {
-    R.scopeContracts = user.R.scopeContracts;
-    inertFunctionScopes = user.R.inertFunctionScopes;
-    typeReg = user.R.typeReg;
-    typeNames = user.R.typeNames;
-    recordFieldsReg = user.R.recordFieldsReg;
-    recordTypeParamsReg = user.R.recordTypeParamsReg;
-    variantLookup = user.R.variantLookup;
-    sumMetadata = user.R.sumMetadata;
-    rcSumShapeReg = user.R.rcSumShapeReg;
-    funcReg = user.R.funcReg;
-    functionIds = user.R.functionIds;
-    functionNames = user.R.functionNames;
-    funcParams = user.R.funcParams;
-    moduleRegistry = user.R.moduleRegistry;
-    recursiveMembers = user.R.recursiveMembers;
-  }
-
 (*
    Compile a user/test program against a prebuilt stdlib/preamble context
    Pass 1: Parse user code only
@@ -242,7 +223,7 @@ let compileUserWithPlan ?writtenSources (plan : P.userCompilePlan) =
           (fun (func : ANF.functionDef) -> func.ANF.name = entryName)
           functions
       in
-      let registry = registries user in
+      let registry = R.registriesOfUserOnly user in
       let returns =
         X.mergeReturnTypes plan.P.baseContext.X.returnTypes
           user.R.localReturnTypes

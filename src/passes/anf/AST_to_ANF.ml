@@ -667,9 +667,27 @@ let convertExprToAnf (regs : registries) gen expr =
     regs.inertFunctionScopes expr gen R.BindingMap.empty regs.typeReg
     regs.variantLookup regs.funcReg regs.functionNames regs.moduleRegistry
 
-(*
-   Synthesize an entrypoint function from a main expression
-*)
+(* Preserve the complete registry bundle when a lowered user unit is reused. *)
+let registriesOfUserOnly (user : userOnlyResult) : registries =
+  {
+    scopeContracts = user.scopeContracts;
+    inertFunctionScopes = user.inertFunctionScopes;
+    typeReg = user.typeReg;
+    typeNames = user.typeNames;
+    recordFieldsReg = user.recordFieldsReg;
+    recordTypeParamsReg = user.recordTypeParamsReg;
+    variantLookup = user.variantLookup;
+    sumMetadata = user.sumMetadata;
+    rcSumShapeReg = user.rcSumShapeReg;
+    funcReg = user.funcReg;
+    functionIds = user.functionIds;
+    functionNames = user.functionNames;
+    funcParams = user.funcParams;
+    moduleRegistry = user.moduleRegistry;
+    recursiveMembers = user.recursiveMembers;
+  }
+
+(* Synthesize an entrypoint function from a main expression. *)
 let synthesizeEntryFunction id name returnType body =
   {
     A.id;

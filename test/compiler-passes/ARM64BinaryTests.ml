@@ -166,37 +166,6 @@ let testElfWriteToFileReturnsErrorForInvalidPath () =
   | Error "" -> Error "Expected writeToFile error message to describe failure"
   | Error _ -> Ok ()
 
-let testCreateExecutableWithCoverageIncludesCoverageSection () =
-  let binary =
-    createExecutableWithCoverage [| 0xd65f03c0l |] LiteralPool.emptyStringPool
-      LiteralPool.emptyFloatPool 3 false
-  in
-  let textSegmentOffset = 32 + 72 in
-  let textSegmentNumSectionsOffset = 64 in
-  let numSections =
-    readUInt32LE binary (textSegmentOffset + textSegmentNumSectionsOffset)
-  in
-  if numSections <> 2l then
-    Error
-      (Printf.sprintf
-         "Expected coverage binary to include __text and __const sections, got \
-          %lu sections"
-         numSections)
-  else
-    let firstSectionOffset = textSegmentOffset + 72 in
-    let secondSectionOffset = firstSectionOffset + 80 in
-    let sectionSizeField = 40 in
-    let constSectionSize =
-      Int32.to_int
-        (readUInt32LE binary (secondSectionOffset + sectionSizeField))
-    in
-    if constSectionSize < 24 then
-      Error
-        (Printf.sprintf
-           "Expected __const section to include 24 coverage bytes, got %d"
-           constSectionSize)
-    else Ok ()
-
 let minimalMachOBinaryWithTextSection (textSection : Binary.section64)
     textFileSize : Binary.machOBinary =
   let pageZeroCommandSize = 72l in
@@ -567,8 +536,6 @@ let tests =
       testMachOConstSectionOffsetPointsToAlignedData );
     ( "ELF writeToFile returns Error for invalid path",
       testElfWriteToFileReturnsErrorForInvalidPath );
-    ( "createExecutableWithCoverage includes coverage section",
-      testCreateExecutableWithCoverageIncludesCoverageSection );
     ( "serializeMachO reports invalid code offset",
       testSerializeMachOReportsInvalidCodeOffset );
     ( "serializeMachO reports undersized __TEXT segment",

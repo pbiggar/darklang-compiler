@@ -13,7 +13,7 @@
    ---EXPECTED---
    exact IR output
    Stage of IR to verify
-   After ANF optimization
+   After production high-level SSA optimization and ownership insertion
    After MIR optimization (SSA-based)
    After LIR peephole optimization
    Direct symbolic LIR before and after the peephole pass
