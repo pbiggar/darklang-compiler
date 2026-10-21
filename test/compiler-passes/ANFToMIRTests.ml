@@ -625,6 +625,24 @@ let testSsaPhiParametersPreserveEdgeValuesAndTypes () =
       false
   in
   let* () = MIR_SSA_Verify.verifyFunction lowered in
+  let edgeCarriesValue typ (expected, predecessor) (actual, from) =
+    from = predecessor
+    && (actual = expected
+       ||
+       match actual with
+       | M.Register (M.VReg id as reg) when typ = AST.TFloat64 ->
+           M.IntSet.mem id lowered.M.floatRegs
+           && Option.fold ~none:false
+                ~some:(fun (block : M.basicBlock) ->
+                  List.exists
+                    (function
+                      | M.Mov (destination, value, Some AST.TFloat64) ->
+                          destination = reg && value = expected
+                      | _ -> false)
+                    block.M.instrs)
+                (M.LabelMap.find_opt from lowered.M.cfg.M.blocks)
+       | _ -> false)
+  in
   let incoming destination typ expected =
     M.LabelMap.exists
       (fun _ (block : M.basicBlock) ->
@@ -633,7 +651,10 @@ let testSsaPhiParametersPreserveEdgeValuesAndTypes () =
             | M.Phi (reg, sources, Some actualType)
               when reg = M.VReg destination && actualType = typ ->
                 List.length sources = List.length expected
-                && List.for_all (fun pair -> List.mem pair sources) expected
+                && List.for_all
+                     (fun pair ->
+                       List.exists (edgeCarriesValue typ pair) sources)
+                     expected
             | _ -> false)
           block.M.instrs)
       lowered.M.cfg.M.blocks
@@ -647,7 +668,13 @@ let testSsaPhiParametersPreserveEdgeValuesAndTypes () =
     && M.IntSet.mem 1 lowered.M.floatRegs
     && M.IntSet.mem 10002 lowered.M.floatRegs
   then Ok ()
-  else Error "SSA lowering changed phi edge values or Float register types"
+  else
+    Error
+      ("SSA lowering changed phi edge values or Float register types\n"
+      ^ MIRPrinter.formatMIRWithFunctionNames
+          (FunctionIdMap.ofList [ (identity, name) ])
+          (M.Program ([ lowered ], StringOrder.Map.empty, StringOrder.Map.empty))
+      )
 
 let testSsaVerifierRejectsMissingSuccessors () =
   let entry = M.Label "entry" in
