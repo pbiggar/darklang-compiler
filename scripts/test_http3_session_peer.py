@@ -19,6 +19,19 @@ from cryptography.hazmat.primitives import serialization
 from test_quic_tls_peer import certificates
 
 ROOT = Path(__file__).resolve().parents[1]
+BLOCKED_RESET = '''// h3-blocked-reset.dark - Reset must terminate a QPACK-blocked response.
+match Stdlib.Cli.__Args.int64 0, Stdlib.Blob.fromHex "@CA@" with
+| Ok port, Ok root ->
+  match Stdlib.__QuicClient.connect (Stdlib.__Datagram.Endpoint { address = [127L, 0L, 0L, 1L], port = port }) "localhost" [root] 10000L with
+  | Error message -> Stdlib.printLine message
+  | Ok ready ->
+    let url = Stdlib.__HttpWire.Url { scheme = "https", host = "localhost", port = 443L, authority = "localhost", target = "/reset" } in
+    match Stdlib.__Http3Client.stream ready "GET" url [("x-shared", "café ☃")] Stdlib.Blob.empty 3000L with
+    | Error message -> Stdlib.printLine (if message == "HTTP/3 response stream reset" then "OK" else message)
+    | Ok response -> let _ = Stdlib.Stream.close response.body in Stdlib.printLine "Unexpected response"
+| _, _ -> Stdlib.printLine "Bad arguments"
+'''
+
 SOURCE = '''// h3-session.dark - Repeated requests share QUIC and dynamic QPACK ownership.
 let check (session: Stdlib.HttpClientSession.Session) (index: Int64) : Bool =
   if index == @COUNT@L then true
@@ -114,7 +127,10 @@ def main():
     parser.add_argument("--multiplex", choices=["interleave", "reset", "goaway"])
     parser.add_argument("--public", action="store_true")
     parser.add_argument("--stream", action="store_true", help="Drain lazy session bodies between requests")
+    parser.add_argument("--blocked-reset", action="store_true", help="Reset a response before its QPACK instructions arrive")
     args = parser.parse_args()
+    if args.blocked_reset and (args.multiplex or args.stream or args.public):
+        parser.error("--blocked-reset requires the standalone receiver")
     key, leaf, ca = certificates()
     configuration = QuicConfiguration(is_client=False, alpn_protocols=["h3"])
     configuration.certificate, configuration.private_key = leaf, key
@@ -125,6 +141,8 @@ def main():
         listener.settimeout(0.01)
         source, binary = Path(temporary) / "session.dark", Path(temporary) / "session"
         test_source = (PUBLIC_MULTIPLEX if args.public else MULTIPLEX).replace("@MODE@", '"' + args.multiplex + '"') if args.multiplex else SOURCE
+        if args.blocked_reset:
+            test_source = BLOCKED_RESET
         if args.stream:
             if args.multiplex:
                 parser.error("--stream requires sequential requests")
@@ -136,6 +154,7 @@ def main():
         def peer():
             connection, http = None, None
             pending = {}
+            reset_at = None
             try:
                 while not stopped.is_set():
                     now = time.monotonic()
@@ -161,7 +180,16 @@ def main():
                                 fields = dict(received.headers)
                                 assert fields[b"x-shared"] == "café ☃".encode()
                                 body = fields[b":path"]
-                                if args.multiplex and received.stream_id < 8:
+                                if args.blocked_reset:
+                                    headers = [(b":status", b"200"), (b"x-blocked-reset", b"withheld encoder instructions")]
+                                    initial, _ = http._encoder.encode(received.stream_id, headers)
+                                    instructions, block = http._encoder.encode(received.stream_id, headers)
+                                    assert not initial and instructions and block[0], (initial, instructions, block)
+                                    # Send only the field section. Its required insert
+                                    # count cannot resolve because instructions stay local.
+                                    connection.send_stream_data(received.stream_id, encode_frame(1, block))
+                                    reset_at = now + 0.2
+                                elif args.multiplex and received.stream_id < 8:
                                     pending[received.stream_id] = body
                                     if len(pending) == 2:
                                         if args.multiplex == "goaway":
@@ -179,6 +207,9 @@ def main():
                                         body = b"s" * 70000
                                     http.send_headers(received.stream_id, [(b":status", b"200"), (b"content-length", str(len(body)).encode()), (b"x-shared", "café ☃".encode())])
                                     http.send_data(received.stream_id, body, end_stream=True)
+                    if reset_at is not None and now >= reset_at:
+                        connection.reset_stream(0, 268)
+                        reset_at = None
                     for data, address in connection.datagrams_to_send(now):
                         listener.sendto(data, address)
             except BaseException as error:
@@ -198,8 +229,9 @@ def main():
             shutil.copy2(source, artifacts / "session.dark")
             shutil.copy2(binary, artifacts / "session")
         assert result.returncode == 0 and result.stdout == "OK\n" and not result.stderr, (result, streams)
-        assert len(connections) == 1 and streams == (([0, 4] if args.multiplex == "goaway" else [0, 4, 8]) if args.multiplex else list(range(0, args.requests * 4, 4))), streams
-    print(f"HTTP/3 {args.multiplex or 'session'}: streams {streams}, shared Unicode QPACK and leak-free disposal passed")
+        expected = [0] if args.blocked_reset else (([0, 4] if args.multiplex == "goaway" else [0, 4, 8]) if args.multiplex else list(range(0, args.requests * 4, 4)))
+        assert len(connections) == 1 and streams == expected, streams
+    print(f"HTTP/3 {'blocked reset' if args.blocked_reset else args.multiplex or 'session'}: streams {streams}, shared Unicode QPACK and leak-free disposal passed")
 
 
 if __name__ == "__main__":
