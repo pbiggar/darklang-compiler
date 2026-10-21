@@ -1257,6 +1257,11 @@ self_comparison_bool_eq
 let f (x: Bool) : Bool = x == x
 f (true)
 ---EXPECTED---
+Function _start(): TBool [entry block0]
+block0():
+let TempId 1 = f(true)
+return t1
+
 Function f(t0: TBool): TBool [entry block0]
 block0():
 return true
@@ -1267,6 +1272,11 @@ self_comparison_bool_neq
 let f (x: Bool) : Bool = x != x
 f (true)
 ---EXPECTED---
+Function _start(): TBool [entry block0]
+block0():
+let TempId 1 = f(true)
+return t1
+
 Function f(t0: TBool): TBool [entry block0]
 block0():
 return false
