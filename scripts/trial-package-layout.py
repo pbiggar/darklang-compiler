@@ -12,7 +12,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-import porting
+import ledger_sources as porting
 
 ROOT = Path(__file__).resolve().parent.parent
 SAMPLES = {
