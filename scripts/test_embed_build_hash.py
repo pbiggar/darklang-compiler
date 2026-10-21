@@ -12,11 +12,10 @@ class BuildHashTests(unittest.TestCase):
     def test_reads_revision_and_refreshes_after_commit(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            source = root / "StdLib/Builtin/__BuildInfo.dark"
+            source = root / "packages/darklang/stdlib/__builtin/__buildInfo.dark"
             source.parent.mkdir(parents=True)
             source.write_text('module Builtin\nlet getBuildHash () : String = "__COMPILER_BUILD_HASH__"\n')
-            (root / "packages").mkdir()
-            (root / "library-sources.list").write_text("StdLib/Builtin/__BuildInfo.dark\n")
+            (root / "library-sources.list").write_text("packages/darklang/stdlib/__builtin/__buildInfo.dark\n")
             command = [sys.executable, str(Path(__file__).with_name("embed-stdlib.py")),
                        str(root), str(root / "EmbeddedStdlib.ml"), str(root / "BuildInfo.ml")]
             subprocess.run(["git", "init", "-q", str(root)], check=True)
@@ -39,11 +38,10 @@ class BuildHashTests(unittest.TestCase):
     def test_stamps_both_consumers_and_refreshes(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            source = root / "StdLib/Builtin/__BuildInfo.dark"
+            source = root / "packages/darklang/stdlib/__builtin/__buildInfo.dark"
             source.parent.mkdir(parents=True)
             source.write_text('module Builtin\nlet getBuildHash () : String = "__COMPILER_BUILD_HASH__"\n')
-            (root / "packages").mkdir()
-            (root / "library-sources.list").write_text("StdLib/Builtin/__BuildInfo.dark\n")
+            (root / "library-sources.list").write_text("packages/darklang/stdlib/__builtin/__buildInfo.dark\n")
             for argument, expected in [("0123456", "0123456"), ("abcd", "abcd"),
                                        ("abcdef0", "abcdef0"), ("a" * 64, "a" * 64), ("", "dev")]:
                 result = subprocess.run([sys.executable, str(Path(__file__).with_name("embed-stdlib.py")),

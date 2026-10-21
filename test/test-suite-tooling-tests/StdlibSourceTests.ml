@@ -11,10 +11,7 @@ let ( let* ) = Result.bind
 
 let stdlibFiles () =
   try
-    Ok
-      (Array.append
-         (R.filesUnder "StdLib" ".dark")
-         (R.filesUnder "packages" ".dark"))
+    Ok (R.filesUnder "packages" ".dark")
   with exn ->
     Error ("Failed to list embedded library files: " ^ Printexc.to_string exn)
 

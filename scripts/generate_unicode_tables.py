@@ -33,9 +33,9 @@ SOURCES = {
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 CACHE_DIR = SCRIPT_DIR / ".unicode_cache" / UNICODE_VERSION
-UNICODE_DIR = SCRIPT_DIR.parent / "StdLib" / "String" / "__Unicode"
-OUTPUT = UNICODE_DIR / "__Data.dark"
-SHARD_DIR = UNICODE_DIR / "__Data"
+UNICODE_DIR = SCRIPT_DIR.parent / "packages/darklang/stdlib/string/__unicode"
+OUTPUT = UNICODE_DIR / "__data.dark"
+SHARD_DIR = UNICODE_DIR / "__data"
 SHARD_COUNT = 64
 INDEX_SHARD_DIR = SHARD_DIR
 INDEX_SHARD_COUNT = 8
@@ -651,9 +651,9 @@ def main() -> int:
     output = suffix_dark_int64_literals(output)
     index_shards = [suffix_dark_int64_literals(shard) for shard in index_shards]
     shards = [suffix_dark_int64_literals(shard) for shard in shards]
-    expected_files = {SHARD_DIR / f"__Table{index:02d}.dark": shard for index, shard in enumerate(shards)}
+    expected_files = {SHARD_DIR / f"__table{index:02d}.dark": shard for index, shard in enumerate(shards)}
     expected_index_files = {
-        INDEX_SHARD_DIR / f"__Index{index:02d}.dark": shard
+        INDEX_SHARD_DIR / f"__index{index:02d}.dark": shard
         for index, shard in enumerate(index_shards)
     }
     if args.check:
@@ -673,9 +673,9 @@ def main() -> int:
 
     SHARD_DIR.mkdir(parents=True, exist_ok=True)
     INDEX_SHARD_DIR.mkdir(parents=True, exist_ok=True)
-    for old_path in SHARD_DIR.glob("__Table*.dark"):
+    for old_path in SHARD_DIR.glob("__table*.dark"):
         old_path.unlink()
-    for old_path in INDEX_SHARD_DIR.glob("__Index*.dark"):
+    for old_path in INDEX_SHARD_DIR.glob("__index*.dark"):
         old_path.unlink()
     OUTPUT.write_text(output, encoding="utf-8")
     for path, shard in expected_files.items():

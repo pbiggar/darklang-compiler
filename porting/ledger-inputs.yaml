@@ -3,15 +3,15 @@ schema: 2
 source_mappings:
   packages/darklang/stdlib/await.dark: []
   packages/darklang/stdlib/traits.dark:
-  - StdLib/traits.dark
+  - packages/darklang/stdlib/traits.dark
   packages/darklang/stdlib/cli/host.dark:
-  - StdLib/Cli/OS.dark
-  - StdLib/Cli/Architecture.dark
-  - StdLib/Cli/Shell.dark
-  - StdLib/Cli/Host.dark
+  - packages/darklang/stdlib/cli/os.dark
+  - packages/darklang/stdlib/cli/architecture.dark
+  - packages/darklang/stdlib/cli/shell.dark
+  - packages/darklang/stdlib/cli/host.dark
   packages/darklang/prettyPrinter/runtimeError.dark:
-  - packages/Darklang/PrettyPrinter/RuntimeTypes.dark
-  - packages/Darklang/PrettyPrinter/RuntimeTypes/RuntimeError.dark
+  - packages/darklang/prettyPrinter/runtimeTypes.dark
+  - packages/darklang/prettyPrinter/runtimeTypes/runtimeError.dark
 builtin_mappings:
   builtins:backend/src/Builtins/Builtins.Pure/Libs/Bool.fs#fn/boolNot/v0:
   - src/frontend/WrittenApplicationSupport.ml

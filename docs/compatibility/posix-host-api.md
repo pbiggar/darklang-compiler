@@ -26,8 +26,8 @@ units. Daemon is excluded.
 | `posixKill`, `posixUname`, `timeSleep` | Existing native signal, host and interrupt-resuming sleep operations |
 | `posixFnmatch` | C-locale byte matcher: wildcards, pathname flag, ranges, named classes, escapes and C-string termination |
 
-`StdLib/Builtin/__Posix.dark` adapts interpreter signatures to private native
-operations in `StdLib/Cli/__Posix.dark`. The 19 additional POSIX operations are
+`packages/darklang/stdlib/__builtin/__posix.dark` adapts interpreter signatures to private native
+operations in `packages/darklang/stdlib/cli/__posix.dark`. The 19 additional POSIX operations are
 explicit effects through ANF, MIR and LIR, emitted for Linux x86_64, Linux ARM64
 and macOS ARM64. These operations return a signed result or negative errno;
 Dark code builds the public Result and Error values. Checked Int narrowing

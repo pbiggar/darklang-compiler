@@ -22,7 +22,7 @@ SAMPLES = {
     'packages/darklang/stdlib/cli/sys.dark': ['packages/darklang/stdlib/cli/sys.dark'],
     'packages/darklang/stdlib/cli/execution.dark': ['packages/darklang/stdlib/cli/execution.dark'],
     'packages/darklang/stdlib/cli/fileSystem.dark': [
-        'StdLib/Cli/FileSystem.dark', 'StdLib/Cli/FileSystem/FileError.dark'],
+        'packages/darklang/stdlib/cli/fileSystem.dark', 'packages/darklang/stdlib/cli/fileSystem/fileError.dark'],
 }
 
 
@@ -55,7 +55,7 @@ def embedded_pairs(text):
 
 def source_snapshot():
     return {p.relative_to(ROOT).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
-            for directory in ('StdLib', 'packages') for p in (ROOT / directory).rglob('*.dark')}
+            for p in (ROOT / 'packages').rglob('*.dark')}
 
 
 class LayoutTrial(unittest.TestCase):
@@ -77,8 +77,7 @@ class LayoutTrial(unittest.TestCase):
                           if name not in removed or name in replacements]
         with tempfile.TemporaryDirectory(prefix='dark-package-layout-') as temp:
             stage = Path(temp)
-            for directory in ('StdLib', 'packages'):
-                shutil.copytree(ROOT / directory, stage / directory)
+            shutil.copytree(ROOT / 'packages', stage / 'packages')
             for name in removed:
                 (stage / name).unlink()
             for sample in selections:
@@ -109,7 +108,7 @@ class LayoutTrial(unittest.TestCase):
         sample = 'packages/darklang/stdlib/cli/env.dark'
         self.assertTrue((ROOT / sample).is_file(), 'Cli.Env is not at its upstream path.')
         self.assertEqual((ROOT / sample).read_bytes(), self.upstream_bytes(sample))
-        self.assertFalse((ROOT / 'StdLib/Cli/Env.dark').exists(), 'Old Env source would duplicate the module.')
+        self.assertFalse((ROOT / 'packages/darklang/stdlib/cli/Env.dark').exists(), 'Old Env source would duplicate the module.')
 
     def test_all_simple_production_copies_match_upstream(self):
         for name in ('env', 'file', 'process', 'sys', 'execution'):
@@ -117,8 +116,8 @@ class LayoutTrial(unittest.TestCase):
             with self.subTest(source=sample):
                 self.assertTrue((ROOT / sample).is_file(), 'Source has not reached the mirrored path.')
                 self.assertEqual((ROOT / sample).read_bytes(), self.upstream_bytes(sample))
-        for old in ('StdLib/Cli/Env.dark', 'StdLib/Cli/File.dark', 'StdLib/Cli/Process.dark',
-                    'StdLib/Cli/Sys.dark', 'StdLib/Cli.dark'):
+        for old in ('packages/darklang/stdlib/cli/Env.dark', 'packages/darklang/stdlib/cli/File.dark', 'packages/darklang/stdlib/cli/Process.dark',
+                    'packages/darklang/stdlib/cli/Sys.dark', 'packages/darklang/stdlib/Cli.dark'):
             self.assertFalse((ROOT / old).exists(), 'An old source duplicates a mirrored module.')
 
     def test_intact_nested_module_at_upstream_path(self):

@@ -1,2 +1,0 @@
-; Private package directories are source inputs, not Dune's ignored build dirs.
-(dirs :standard __Unicode)

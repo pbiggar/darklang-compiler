@@ -278,7 +278,7 @@ def builtin_counterparts(upstream, compiler):
     """
     native = defaultdict(set)
     for path, body in sorted(compiler.items()):
-        if path.startswith(('StdLib/', 'packages/')) and path.endswith('.dark'):
+        if path.startswith('packages/') and path.endswith('.dark'):
             for row in declarations(path, body.decode())[0]:
                 if row['kind'] in ('function', 'value'):
                     native[row['name']].add(path)
@@ -364,7 +364,7 @@ def build(root, upstream, compile_packages=False):
             if not isinstance(candidates, list) or any(not isinstance(c, str) or c not in compiler for c in candidates):
                 raise ValueError(f'Invalid source mapping: {path}')
             # Exact identity can recover moved files without a maintained guess.
-            exact = [c for c, body in compiler.items() if c.startswith(('StdLib/', 'packages/'))
+            exact = [c for c, body in compiler.items() if c.startswith('packages/')
                      and c.endswith('.dark') and path and body == upstream_files[path]]
             if exact:
                 candidates = exact

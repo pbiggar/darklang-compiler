@@ -69,3 +69,4 @@ scripts/.unicode_cache/
 # Obsolete bulk ledger artifacts; compact YAML inventories are tracked instead.
 /porting/generated/ledger.json
 /porting/generated/ledger.json.gz
+/porting/generated/inventory.yaml

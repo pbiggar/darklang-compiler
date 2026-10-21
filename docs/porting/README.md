@@ -88,3 +88,9 @@ maintained compatibility entries.
 
 Source discovery is limited to the inputs needed by these compact ledgers.
 There is no separate file-inventory generator, policy framework, or report CLI.
+
+Compiler libraries live under `packages/`, with StdLib under
+`packages/darklang/stdlib/`, following the interpreter's directory casing.
+Existing split modules and compiler-only helpers remain beside their packages.
+Directory moves update exceptional source mappings; they do not change the
+declaration statuses or add compiler paths to the generated ledgers.

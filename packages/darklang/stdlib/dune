@@ -1,0 +1,2 @@
+; Include compiler-only builtin adapters in the embedded package source tree.
+(dirs :standard __builtin)
