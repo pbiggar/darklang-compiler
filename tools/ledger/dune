@@ -1,4 +1,4 @@
-(executable
- (name compile_packages)
+(executables
+ (names compile_packages parse_sources)
  (libraries dark_compiler yojson)
  (flags (:standard -w @a-42 -warn-error +a-42)))
