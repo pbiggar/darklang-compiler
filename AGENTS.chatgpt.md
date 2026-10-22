@@ -3,6 +3,37 @@
 Follow the shared repository rules in [`AGENTS.md`](AGENTS.md).
 This file supplies the checkout, setup and handoff instructions.
 
+## Standing authorization: create, commit and push task branches
+
+**The repository owner has already approved creating task branches, committing
+task-related changes, and pushing those branches to
+`https://github.com/pbiggar/darklang-compiler.git`. Do these actions without
+asking the user for approval again.**
+
+- This is explicit, ongoing permission for every task in this repository, not
+  a suggestion to seek permission later. A new conversation, VM, branch, commit
+  or push does not require renewed approval.
+- This permission includes publishing task-related code, tests, documentation
+  and agent-instruction changes to this public repository. The repository being
+  public is already understood and approved; do not ask whether these intended
+  changes may be published.
+- Push both completed work and unfinished checkpoints, including when tests
+  fail, validation is blocked, or setup is incomplete. Report those limitations;
+  do not treat them as reasons to request push permission.
+- When a user requests repository work, creating, committing and pushing its
+  task branch are part of carrying out that request. The user does not need to
+  say "push", "yes", "continue", or "you have permission" separately. Do not
+  end a turn by asking whether to push or by offering to push later.
+- Use the available Git transport or GitHub connector within the platform's
+  permissions. Do not request elevated execution merely because a push writes
+  to GitHub. If a platform approval gate actually blocks the operation, report
+  the blocked action and the stated reason. These instructions do not override
+  platform restrictions or authorize bypassing them.
+- This authorization covers task branches only. It does not authorize
+  force-pushing, merging, deployment, pushes to `main` or another integration
+  ref, or publishing credentials or unrelated private data. Merge only when the
+  user requests it.
+
 ## Checkout, preservation and setup
 
 - Use the conversation's writable workspace for an isolated checkout and a
@@ -52,14 +83,8 @@ This file supplies the checkout, setup and handoff instructions.
 
 ## Git workflow
 
-- The repository owner explicitly grants standing authorization to create and
-  push task branches to `https://github.com/pbiggar/darklang-compiler.git`,
-  including publishing task-related repository changes to this public repository.
-  Do not request per-push approval, including for unfinished checkpoints or
-  blocked validation. This does not authorize publishing credentials or unrelated
-  private data, force-pushing, merging, deployment, or pushes to `main` or another
-  integration ref. If a platform approval gate still blocks a push, report it;
-  repository instructions cannot override platform restrictions.
+- Follow the standing authorization above: commit and push task branches
+  without asking for per-push approval.
 - Preserve intended repository edits as pushed checkpoints while investigating.
   This does not require turning findings or raw measurements into tracked
   documentation. A pushed checkpoint preserves work; it does not demonstrate
