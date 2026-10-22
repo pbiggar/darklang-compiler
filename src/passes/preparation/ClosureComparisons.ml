@@ -258,6 +258,8 @@ let rec rewriteRecursiveSelfReferences self closure expr =
       C.BoundaryRender (renderer, recurse value)
   | C.BinOp (operation, left, right) ->
       C.BinOp (operation, recurse left, recurse right)
+  | C.ReturnScope (target, typ, value) -> C.ReturnScope (target, typ, recurse value)
+  | C.EarlyReturn (target, value) -> C.EarlyReturn (target, recurse value)
   | C.UnaryOp (operation, value) -> C.UnaryOp (operation, recurse value)
   | C.If (condition, yes, no) ->
       C.If (recurse condition, recurse yes, recurse no)
@@ -337,6 +339,8 @@ let rec rewriteLiftedSelfCalls lifted closure captures expr =
       C.BoundaryRender (renderer, recurse value)
   | C.BinOp (operation, left, right) ->
       C.BinOp (operation, recurse left, recurse right)
+  | C.ReturnScope (target, typ, value) -> C.ReturnScope (target, typ, recurse value)
+  | C.EarlyReturn (target, value) -> C.EarlyReturn (target, recurse value)
   | C.UnaryOp (operation, value) -> C.UnaryOp (operation, recurse value)
   | C.If (condition, yes, no) ->
       C.If (recurse condition, recurse yes, recurse no)

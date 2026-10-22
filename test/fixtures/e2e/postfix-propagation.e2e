@@ -1,0 +1,12 @@
+// Postfix ? extracts success and returns failure from its nearest function.
+let next (v: Stdlib.Option.Option<Int64>) : Stdlib.Option.Option<Int64> = Some (v? + 1L)
+next (Some 4L) = Some 5L
+next None = None
+let stringify (v: Stdlib.Result.Result<Int64, String>) : Stdlib.Result.Result<String, String> = Ok (Stdlib.toString v?)
+stringify (Ok 4L) = Ok "4"
+stringify (Error "stop") = Error "stop"
+Stdlib.List.map [Some 1L, None, Some 3L] (fun v -> Some (v? + 1L)) = [Some 2L, None, Some 4L]
+let inner (v: Stdlib.Option.Option<Int64>) : Int64 = let f = fun () -> Some (v? + 1L) in match f () with | None -> 99L | Some n -> n
+inner None = 99L
+let skip (v: Stdlib.Option.Option<Int64>) : Stdlib.Option.Option<List<Int64>> = Some [v?, Builtin.unwrap None]
+skip None = None

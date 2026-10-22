@@ -1881,6 +1881,12 @@ let rec mapExpr rewrite symbols expr =
     | Closure (name, captures) ->
         let captures, next = mapList captures symbols in
         (Closure (name, captures), next)
+    | ReturnScope (target, typ, value) ->
+        let value, next = mapExpr rewrite symbols value in
+        (ReturnScope (target, typ, value), next)
+    | EarlyReturn (target, value) ->
+        let value, next = mapExpr rewrite symbols value in
+        (EarlyReturn (target, value), next)
     | BoundaryRender (renderer, value) ->
         let value, next = mapExpr rewrite symbols value in
         (BoundaryRender (renderer, value), next)
@@ -1913,6 +1919,7 @@ let rewriteProgramWithSession (session : planningSession option)
       | UnaryOp (_, a)
       | TupleAccess (a, _)
       | RecordAccess (a, _)
+      | ReturnScope (_, _, a) | EarlyReturn (_, a)
       | BoundaryRender (_, a) ->
           capture a collected
       | Let (_, a, b) | RecursiveLet (_, a, b) ->

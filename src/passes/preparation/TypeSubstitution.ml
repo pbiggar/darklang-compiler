@@ -221,6 +221,8 @@ let rec applySubstToExprWithCalls subst rewrite rewriteReference expr =
       C.BoundaryRender (renderer, recurse value)
   | C.BinOp (operation, left, right) ->
       C.BinOp (operation, recurse left, recurse right)
+  | C.ReturnScope (target, typ, value) -> C.ReturnScope (target, checked typ, recurse value)
+  | C.EarlyReturn (target, value) -> C.EarlyReturn (target, recurse value)
   | C.UnaryOp (operation, value) -> C.UnaryOp (operation, recurse value)
   | C.Let (pattern, value, body) -> C.Let (pattern, recurse value, recurse body)
   | C.RecursiveLet (recursion, value, body) ->

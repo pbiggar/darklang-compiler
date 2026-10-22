@@ -80,6 +80,7 @@ let rec directDependencies expr =
   | C.Call (id, values) | C.TypeApp (id, _, values) ->
       FunctionSet.add id (args values)
   | C.Closure (id, captures) -> FunctionSet.add id (combine captures)
+  | C.ReturnScope (_, _, value) | C.EarlyReturn (_, value)
   | C.UnaryOp (_, value) | C.TupleAccess (value, _) | C.RecordAccess (value, _)
     ->
       directDependencies value

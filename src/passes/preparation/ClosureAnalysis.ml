@@ -168,6 +168,7 @@ let rec freeVars expr bound =
       if BindingSet.mem id bound then BindingSet.empty
       else BindingSet.singleton id
   | C.BoundaryRender (_, value)
+  | C.ReturnScope (_, _, value) | C.EarlyReturn (_, value)
   | C.UnaryOp (_, value)
   | C.TupleAccess (value, _)
   | C.RecordAccess (value, _) ->
@@ -525,6 +526,8 @@ let rec simpleInferType expr typeEnv funcParams funcReturns genericDefs typeReg
       | AST.Or ->
           Some AST.TBool
       | AST.StringConcat -> Some AST.TString)
+  | C.ReturnScope (_, typ, _) -> Some (C.semanticType typ)
+  | C.EarlyReturn _ -> Some AST.TNever
   | C.UnaryOp (AST.Not, _) -> Some AST.TBool
   | C.UnaryOp ((AST.Neg | AST.BitNot), value) -> infer value
   | C.Call (id, arguments) ->

@@ -73,6 +73,12 @@ let rec mapExpr rewrite state expr =
     | C.BinOp (op, left, right) ->
         let left, right, next = mapPair left right state in
         (C.BinOp (op, left, right), next)
+    | C.ReturnScope (target, typ, value) ->
+        let value, next = mapExpr rewrite state value in
+        (C.ReturnScope (target, typ, value), next)
+    | C.EarlyReturn (target, value) ->
+        let value, next = mapExpr rewrite state value in
+        (C.EarlyReturn (target, value), next)
     | C.UnaryOp (op, value) ->
         let value, next = mapExpr rewrite state value in
         (C.UnaryOp (op, value), next)

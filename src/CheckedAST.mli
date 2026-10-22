@@ -105,6 +105,8 @@ and expr =
   | Closure of AST.functionId * expr list
   | RuntimeError of string
   | BoundaryRender of AST.functionId * expr
+  | ReturnScope of AST.bindingId * checkedType * expr
+  | EarlyReturn of AST.bindingId * expr
 
 and matchCase = {
   patterns : pattern NonEmptyList.t;

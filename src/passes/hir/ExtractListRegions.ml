@@ -71,6 +71,7 @@ let inertExpression infer callIsInert =
         recur value && recur body
     | C.If (condition, yes, no) -> recur condition && recur yes && recur no
     | C.BinOp (_, left, right) -> recur left && recur right
+    | C.ReturnScope (_, _, value) | C.EarlyReturn (_, value)
     | C.UnaryOp (_, value) | C.TupleAccess (value, _) -> recur value
     | C.Call (name, args) ->
         callIsInert name
@@ -106,6 +107,7 @@ let scopeContracts infer functions =
     | C.BinOp (_, value, body) ->
         many [ value; body ]
     | C.If (condition, yes, no) -> many [ condition; yes; no ]
+    | C.ReturnScope (_, _, value) | C.EarlyReturn (_, value)
     | C.UnaryOp (_, value) | C.TupleAccess (value, _) -> calls value
     | _ -> F.empty
   in

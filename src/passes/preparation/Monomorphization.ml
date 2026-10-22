@@ -103,6 +103,7 @@ let collectTypeApps symbols expr =
             | Ok (name, types) -> SS.add (name, types) specs
             | Error _ -> SS.add (name, types) specs))
     | C.BoundaryRender (_, value)
+    | C.ReturnScope (_, _, value) | C.EarlyReturn (_, value)
     | C.UnaryOp (_, value)
     | C.TupleAccess (value, _)
     | C.RecordAccess (value, _)
@@ -228,6 +229,7 @@ let rec collectCalledFunctions expr =
   | C.FuncRef id | C.GenericFuncRef (id, _, _) -> FS.singleton id
   | C.BoundaryRender (renderer, value) ->
       FS.add renderer (collectCalledFunctions value)
+  | C.ReturnScope (_, _, value) | C.EarlyReturn (_, value)
   | C.UnaryOp (_, value)
   | C.TupleAccess (value, _)
   | C.RecordAccess (value, _)
@@ -481,6 +483,8 @@ let replaceTypeAppsCore symbols registry expr =
         one value (fun value -> C.BoundaryRender (renderer, value))
     | C.BinOp (op, left, right) ->
         two left right (fun left right -> C.BinOp (op, left, right))
+    | C.ReturnScope (target, typ, value) -> one value (fun value -> C.ReturnScope (target, typ, value))
+    | C.EarlyReturn (target, value) -> one value (fun value -> C.EarlyReturn (target, value))
     | C.UnaryOp (op, value) -> one value (fun value -> C.UnaryOp (op, value))
     | C.Let (pattern, value, body) ->
         two value body (fun value body -> C.Let (pattern, value, body))
@@ -798,6 +802,8 @@ let materializeFunctionComparisons program =
         one value (fun value -> C.BoundaryRender (renderer, value))
     | C.BinOp (op, left, right) ->
         two left right (fun left right -> C.BinOp (op, left, right))
+    | C.ReturnScope (target, typ, value) -> one value (fun value -> C.ReturnScope (target, typ, value))
+    | C.EarlyReturn (target, value) -> one value (fun value -> C.EarlyReturn (target, value))
     | C.UnaryOp (op, value) -> one value (fun value -> C.UnaryOp (op, value))
     | C.Let (pattern, value, body) ->
         two value body (fun value body -> C.Let (pattern, value, body))
@@ -1057,6 +1063,7 @@ let programNeedsLambdaLowering _knownNames program =
     | C.BinOp (AST.Add, _, _) -> true
     | C.Local _ -> false
     | C.BoundaryRender (_, value)
+    | C.ReturnScope (_, _, value) | C.EarlyReturn (_, value)
     | C.UnaryOp (_, value)
     | C.TupleAccess (value, _)
     | C.RecordAccess (value, _) ->

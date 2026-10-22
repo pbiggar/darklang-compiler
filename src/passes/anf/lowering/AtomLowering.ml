@@ -202,6 +202,7 @@ let lowerAtom (toANFCore : LoweringCallbacks.expressionLowerer)
   | C.DictLiteral _ ->
       Error
         "Non-empty DictLiteral must be lowered during generic specialization"
+  | C.ReturnScope _ | C.EarlyReturn _ -> Error "Return control flow requires ANF lowering"
   | C.BoundaryRender _ -> Error "BoundaryRender must be lowered through toANF"
   | C.RuntimeError _ ->
       Error "Compiler-generated RuntimeError must be lowered through toANF"

@@ -232,6 +232,18 @@ let lowerExpression (toANFCore : LoweringCallbacks.expressionLowerer)
   | C.DictLiteral _ ->
       Error
         "Non-empty DictLiteral must be lowered during generic specialization"
+  | C.ReturnScope (target, typ, body) ->
+      let exit, gen = A.freshVar gen in
+      let typ = C.semanticType typ in
+      let env = R.BindingMap.add target (exit, typ) env in
+      let* body, gen = toANFCore sums typeNames inert body gen env registry variants functions names modules in
+      Ok (A.Join ({ A.id = exit; typ }, A.Return (A.Var exit),
+             K.bindReturns body (fun value -> A.Jump (exit, value))), gen)
+  | C.EarlyReturn (target, value) ->
+      let* value, gen = anf value gen in
+      (match R.BindingMap.find_opt target env with
+       | None -> Error "Early return lost its lexical scope during lowering"
+       | Some (exit, _) -> Ok (K.bindReturns value (fun value -> A.Jump (exit, value)), gen))
   | C.BoundaryRender (renderer, value) ->
       let* value, gen = anf value gen in
       let id, gen = A.freshVar gen in
