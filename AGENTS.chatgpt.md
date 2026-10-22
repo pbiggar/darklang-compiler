@@ -3,6 +3,33 @@
 Follow the shared repository rules in [`AGENTS.md`](AGENTS.md).
 This file supplies the checkout, setup and handoff instructions.
 
+## Track work and keep remote task branches synced
+
+**Keep repository work tracked in Git and synced to task-specific branches on
+`https://github.com/pbiggar/darklang-compiler.git`. The repository owner
+explicitly pre-authorizes creating those branches, committing task-related
+changes, and pushing them to this public repository.**
+
+- Tracking and syncing work are part of carrying out a repository task. This
+  standing permission applies across conversations, VMs, branches, commits and
+  pushes; no separate approval is needed for each operation.
+- Keep the remote task branch current after meaningful progress and before
+  ending a turn with repository changes. Push checkpoints before long setup,
+  build or test operations so work can be recovered if the VM disappears.
+- Sync both completed work and unfinished checkpoints, including when tests
+  fail, validation is blocked, or setup is incomplete. Label checkpoints and
+  report limitations accurately; syncing work does not establish readiness.
+- This permission includes publishing task-related code, tests, documentation
+  and agent-instruction changes to this public repository.
+- Use the available Git transport or GitHub connector within the platform's
+  permissions. If a platform approval gate blocks syncing, report the blocked
+  action and stated reason. These instructions do not override platform
+  restrictions or authorize bypassing them.
+- This authorization covers task branches only. It does not authorize
+  force-pushing, merging, deployment, pushes to `main` or another integration
+  ref, or publishing credentials or unrelated private data. Merge only when the
+  user requests it.
+
 ## Checkout, preservation and setup
 
 - Use the conversation's writable workspace for an isolated checkout and a
@@ -50,16 +77,25 @@ This file supplies the checkout, setup and handoff instructions.
   actual validation result and limitation. Do not describe a checkpoint as
   ready or merged.
 
+## Benchmark gate exception for ChatGPT Work
+
+- The benchmark gate does not work in ChatGPT Work. The shared requirement in
+  `AGENTS.md` to run
+  `./benchmarks/run_benchmarks.sh --verify-parent full` does not apply in this
+  environment.
+- Skip this gate rather than spending time trying to make it pass. It is not a
+  prerequisite for committing, pushing, declaring work ready, or carrying out
+  a user-requested merge. No additional approval is needed to skip it.
+- In validation reports, state that the benchmark gate is not applicable in
+  ChatGPT Work; do not list it as a blocker or remaining work. Run benchmarks
+  here only when the user explicitly requests benchmark investigation.
+- Build, correctness tests, and other applicable checks still apply. This
+  exception is specific to ChatGPT Work.
+
 ## Git workflow
 
-- The repository owner explicitly grants standing authorization to create and
-  push task branches to `https://github.com/pbiggar/darklang-compiler.git`,
-  including publishing task-related repository changes to this public repository.
-  Do not request per-push approval, including for unfinished checkpoints or
-  blocked validation. This does not authorize publishing credentials or unrelated
-  private data, force-pushing, merging, deployment, or pushes to `main` or another
-  integration ref. If a platform approval gate still blocks a push, report it;
-  repository instructions cannot override platform restrictions.
+- Keep work tracked and remote task branches synced under the standing
+  authorization above.
 - Preserve intended repository edits as pushed checkpoints while investigating.
   This does not require turning findings or raw measurements into tracked
   documentation. A pushed checkpoint preserves work; it does not demonstrate
