@@ -41,14 +41,14 @@ let assemble (state: Stdlib.__QuicStreams.Receive) (frames: List<Stdlib.__QuicAp
   match frames with
   | [] -> Ok (Stdlib.Blob.toHex (Stdlib.Blob.concat (Stdlib.List.reverse chunks)) + " " + boolean (Stdlib.__QuicStreams.complete state) + " " + number state.highest)
   | Stream value :: rest ->
-    match Stdlib.__QuicStreams.insert state value.offset value.bytes value.fin with
+    match Stdlib.__QuicStreams.insert state value.offset value.bytes value.fin |> Stdlib.Result.mapError Stdlib.__QuicWire.message with
     | Error message -> Error message
     | Ok next -> assemble (Stdlib.__QuicStreams.drain next) rest (Stdlib.List.push chunks (Stdlib.__QuicStreams.available next))
   | _ :: rest -> assemble state rest chunks
 let runCheck () : Unit =
   match Stdlib.Cli.__Args.get 0, Stdlib.Cli.__Args.get 1 |> Stdlib.Result.andThen Stdlib.Blob.fromHex with
   | Ok mode, Ok bytes ->
-    match Stdlib.__QuicApplication.parse (mode != "client") bytes with
+    match Stdlib.__QuicApplication.parse (mode != "client") bytes |> Stdlib.Result.map (fun frames -> Stdlib.List.map frames (fun received -> received.frame)) with
     | Error message -> Stdlib.printLine ("ERROR " + message)
     | Ok frames ->
       if mode == "assemble" then

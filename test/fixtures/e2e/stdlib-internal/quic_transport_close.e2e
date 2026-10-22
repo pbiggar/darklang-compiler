@@ -34,7 +34,7 @@ let transportClose (mode: Int64) : Bool =
     | [first, last] ->
       let decoded = match Stdlib.__QuicCrypto.openPacket keys first 9L -1L, Stdlib.__QuicCrypto.openPacket keys last 9L 0L with
       | Ok first, Ok last ->
-        first.number == 0L && last.number == 1L && (match Stdlib.__QuicApplication.parse true last.payload with
+        first.number == 0L && last.number == 1L && (match Stdlib.__QuicApplication.parse true last.payload |> Stdlib.Result.map (fun frames -> Stdlib.List.map frames (fun received -> received.frame)) with
         | Ok [Handshake (Close close)] -> close.code == (if mode == 0L then 6L else if mode == 1L || mode == 2L then 3L else if mode == 3L then 4L else 5L) && close.kind == (if mode == 0L then 15L else 14L)
         | _ -> false)
       | _, _ -> false in

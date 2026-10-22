@@ -62,7 +62,7 @@ let initialize (ready: Stdlib.__QuicClient.Ready) (headOnly: Bool) (timeout: Int
   | Error _ -> Error "HTTP/3 clock failed"
   | Ok now ->
     let deadline = now + timeout in
-    Stdlib.__QuicConnection.fromClient ready |> Stdlib.Result.andThen (fun connection ->
+    Stdlib.__QuicConnection.fromClient ready |> Stdlib.Result.mapError Stdlib.__QuicConnection.__reportFailure |> Stdlib.Result.andThen (fun connection ->
       Stdlib.__Http3.__capacity connection deadline |> Stdlib.Result.andThen (fun connection ->
       Stdlib.__QuicConnection.openStream connection 2L |> Stdlib.Result.andThen (fun connection ->
       Stdlib.__QuicConnection.openStream connection 6L |> Stdlib.Result.andThen (fun connection ->
@@ -81,7 +81,7 @@ let initializeServer (ready: Stdlib.__QuicServer.Ready) (signals: Stdlib.__Netwo
   | Error _ -> Error "HTTP/3 clock failed"
   | Ok now ->
     let deadline = now + timeout in
-    Stdlib.__QuicConnection.fromServer ready signals |> Stdlib.Result.andThen (fun connection ->
+    Stdlib.__QuicConnection.fromServer ready signals |> Stdlib.Result.mapError Stdlib.__QuicConnection.__reportFailure |> Stdlib.Result.andThen (fun connection ->
       Stdlib.__Http3.__capacity connection deadline |> Stdlib.Result.andThen (fun connection ->
       Stdlib.__QuicConnection.openStream connection 3L |> Stdlib.Result.andThen (fun connection ->
       Stdlib.__QuicConnection.openStream connection 7L |> Stdlib.Result.andThen (fun connection ->
@@ -123,7 +123,7 @@ let __stopOutput (state: Stdlib.__Http3.State) (stream: Int64) (code: Int64) : S
   let unsent = match Stdlib.__QuicFlow.channel state.connection.flow stream with
     | None -> false
     | Some channel -> match channel.send with | None -> false | Some sender -> sender.offset == 0L in
-  Stdlib.__QuicFlow.stop state.connection.flow (Stdlib.__QuicApplication.StreamLimit { id = stream, value = code }) |> Stdlib.Result.andThen (fun stopped ->
+  Stdlib.__QuicFlow.stop state.connection.flow (Stdlib.__QuicApplication.StreamLimit { id = stream, value = code }) |> Stdlib.Result.mapError Stdlib.__QuicWire.message |> Stdlib.Result.andThen (fun stopped ->
     Stdlib.__QuicConnection.__queue (Stdlib.__QuicConnection.__flow state.connection stopped.state) stopped.frames |> Stdlib.Result.map (fun connection ->
       { state with connection = connection, uni = if unsent then { state.uni with outgoing = Stdlib.__QpackEncoder.discardUnsent state.uni.outgoing stream } else state.uni }))
 

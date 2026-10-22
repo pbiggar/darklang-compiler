@@ -13,10 +13,10 @@ let checkClosingCache (mode: Int64) : Bool =
         else if mode != 7L then Ok ()
         else
           let valid = Stdlib.__QuicCrypto.openPacket keys packet 9L 9L |> Stdlib.Result.andThen (fun opened ->
-            Stdlib.__QuicApplication.parse true opened.payload |> Stdlib.Result.map (fun frames -> opened.number == 10L && Stdlib.List.any frames (fun frame -> match frame with | ApplicationClose close -> close.code == 262L | _ -> false))) in
+            Stdlib.__QuicApplication.parse true opened.payload |> Stdlib.Result.map (fun frames -> opened.number == 10L && Stdlib.List.any frames (fun frame -> match frame.frame with | ApplicationClose close -> close.code == 262L | _ -> false))) in
           if Stdlib.Result.withDefault valid false then Ok () else Error 5L in
       let socket = Stdlib.__Datagram.Socket { lifecycle = lifecycle, watch = None, send = send, receive = fun _timeout -> Ok (Stdlib.__Datagram.Message { peer = sender, payload = wire }) } in
-      let closing = Stdlib.__QuicConnection.Closing { code = if mode == 7L then 262L else 256L, peer = peer, source = source, destination = Stdlib.String.toBlob "clientid", keys = keys, phase = false, deadline = if mode == 3L then now - 1000L else now + 30000L, number = 10L, lastSent = if mode == 2L then now else now - 1000L } in
+      let closing = Stdlib.__QuicConnection.Closing { reason = Stdlib.__QuicConnection.CloseReason.ApplicationCloseReason (if mode == 7L then 262L else 256L), peer = peer, source = source, destination = Stdlib.String.toBlob "clientid", keys = keys, phase = false, deadline = if mode == 3L then now - 1000L else now + 30000L, number = 10L, lastSent = if mode == 2L then now else now - 1000L } in
       let recent = [Stdlib.HttpServer.Quic.Recent { source = source, expires = if mode == 6L then now - 1000L else now + 30000L, closing = Some closing }] in
       let identity = Stdlib.TlsServerIdentity.Identity { certificates = [], key = Stdlib.__RsaPrivate.Key { modulus = Stdlib.Blob.empty, exponent = Stdlib.Blob.empty, privateExponent = Stdlib.Blob.empty } } in
       let config = Stdlib.HttpServer.Config.Config { port = 1000, maxBodyBytes = 1024, injectStandardHeaders = false, canonicalizeFromForwardedProto = false, logRequests = false } in
