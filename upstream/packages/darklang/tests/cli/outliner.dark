@@ -30,20 +30,20 @@ module Outline =
   let depths (o: Darklang.Cli.Outliner.Outline) : List<Int> =
     Darklang.Cli.Outliner.flattenVisible o |> Stdlib.List.map (fun vn -> vn.depth)
 
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unknown function or value 'texts'" reason=upstream-dependency
   test sampleOutline =
     Stdlib.Test.all
       [ texts (sample ()) |> Stdlib.Test.equal [ "A", "B", "C", "D" ]
         depths (sample ()) |> Stdlib.Test.equal [ 0, 1, 1, 0 ] ]
 
   // Collapsing hides descendants but keeps the node itself.
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unknown function or value 'texts'" reason=upstream-dependency
   test collapseHidesDescendants =
     texts (Darklang.Cli.Outliner.setCollapsed (sample ()) 1 true)
     |> Stdlib.Test.equal [ "A", "D" ]
 
   // Parents are stored, not searched for.
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unknown function or value 'Darklang.Cli.Outliner.findParentId'" reason=upstream-dependency
   test parentsAreStored =
     Stdlib.Test.all
       [ Darklang.Cli.Outliner.findParentId (sample ()) 2
@@ -52,7 +52,7 @@ module Outline =
         |> Stdlib.Test.equal Stdlib.Option.Option.None ]
 
   // ... and `setChildren` keeps them honest in both directions.
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unknown function or value 'Darklang.Cli.Outliner.findParentId'" reason=upstream-dependency
   test setChildrenUpdatesParents =
     Darklang.Cli.Outliner.findParentId
       (Darklang.Cli.Outliner.setChildren (sample ()) (Stdlib.Option.Option.Some 4) [ 2 ])
@@ -60,18 +60,18 @@ module Outline =
     |> Stdlib.Test.equal (Stdlib.Option.Option.Some 4)
 
   // A collapsed branch reports everything underneath it, not just its immediate children.
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unknown function or value 'Darklang.Cli.Outliner.subtreeSize'" reason=upstream-dependency
   test collapsedSubtreeSize =
     Darklang.Cli.Outliner.subtreeSize (sample ()) 1 |> Stdlib.Test.equal 2
 
   // Deleting takes the subtree with it.
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unknown function or value 'texts'" reason=upstream-dependency
   test removeSubtree =
     texts (Darklang.Cli.Outliner.removeSubtree (sample ()) 1)
     |> Stdlib.Test.equal [ "D" ]
 
   // Marks cycle plain -> todo -> done -> plain.
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unknown function or value 'Darklang.Cli.Outliner.getMark'" reason=upstream-dependency
   test marksCycle =
     Stdlib.Test.all
       [ Darklang.Cli.Outliner.getMark (Darklang.Cli.Outliner.cycleMark (sample ()) 2) 2
@@ -85,7 +85,7 @@ module Outline =
 
 module ListEdits =
   // Insert after a member, as normal.
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unknown function or value 'Darklang.Cli.Outliner.insertIdAfter'" reason=upstream-dependency
   test insertAfterMember =
     Darklang.Cli.Outliner.insertIdAfter [ 1, 2, 3 ] 2 9
     |> Stdlib.Test.equal [ 1, 2, 9, 3 ]
@@ -93,7 +93,7 @@ module ListEdits =
   // Insert after something that isn't in the list. This used to return the list unchanged, which dropped
   // the new node: it stayed in the content dict with nothing pointing at it, invisible and unreachable,
   // and got written to disk on every save from then on.
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unknown function or value 'Darklang.Cli.Outliner.insertIdAfter'" reason=upstream-dependency
   test insertAfterMissingAppends =
     Stdlib.Test.all
       [ Darklang.Cli.Outliner.insertIdAfter [ 1, 2, 3 ] 7 9
@@ -102,7 +102,7 @@ module ListEdits =
 
   // Out-of-range swaps leave the list alone. They used to write a 0 into it (an id no node ever has),
   // via a `withDefault 0` on the lookup.
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unknown function or value 'Darklang.Cli.Outliner.swapAt'" reason=upstream-dependency
   test outOfRangeSwapIgnored =
     Stdlib.Test.all
       [ Darklang.Cli.Outliner.swapAt [ 1, 2, 3 ] 0 9 |> Stdlib.Test.equal [ 1, 2, 3 ]
@@ -123,7 +123,7 @@ module Editing =
     Darklang.Cli.Outliner.Editor.visible s |> Stdlib.List.map (fun vn -> vn.depth)
 
   // Indenting hangs a line off the sibling above it: C, the second of A's children, goes under B.
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unknown function or value 'depths'" reason=upstream-dependency
   test indentUnderSibling =
     ((Darklang.Cli.Outliner.Editor.indent
        (Darklang.Cli.Outliner.Editor.cursorToIndex (editorOn (Outline.sample ())) 2))
@@ -131,7 +131,7 @@ module Editing =
     |> Stdlib.Test.equal [ 0, 1, 2, 0 ]
 
   // Outdenting B puts it after A, which is where its remaining sibling C isn't.
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unknown function or value 'texts'" reason=upstream-dependency
   test outdentAfterParent =
     Stdlib.Test.all
       [ ((Darklang.Cli.Outliner.Editor.outdent
@@ -144,7 +144,7 @@ module Editing =
         |> Stdlib.Test.equal [ 0, 1, 0, 0 ] ]
 
   // Indent then outdent is the identity, which is the property the two have to keep between them.
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unknown function or value 'depths'" reason=upstream-dependency
   test indentOutdentIdentity =
     ((Darklang.Cli.Outliner.Editor.outdent
        (Darklang.Cli.Outliner.Editor.indent
@@ -153,7 +153,7 @@ module Editing =
     |> Stdlib.Test.equal [ 0, 1, 1, 0 ]
 
   // The first of a parent's children has nothing to indent under, so nothing happens.
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unknown function or value 'depths'" reason=upstream-dependency
   test firstChildCannotIndent =
     ((Darklang.Cli.Outliner.Editor.indent
        (Darklang.Cli.Outliner.Editor.moveDown (editorOn (Outline.sample ()))))
@@ -161,13 +161,13 @@ module Editing =
     |> Stdlib.Test.equal [ 0, 1, 1, 0 ]
 
   // Nor does the first line of the document.
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unknown function or value 'depths'" reason=upstream-dependency
   test firstLineCannotIndent =
     ((Darklang.Cli.Outliner.Editor.indent (editorOn (Outline.sample ()))) |> depths)
     |> Stdlib.Test.equal [ 0, 1, 1, 0 ]
 
   // Moving among siblings, and back.
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unknown function or value 'texts'" reason=upstream-dependency
   test moveAmongSiblings =
     Stdlib.Test.all
       [ ((Darklang.Cli.Outliner.Editor.moveWithin
@@ -184,7 +184,7 @@ module Editing =
         |> Stdlib.Test.equal [ "A", "B", "C", "D" ] ]
 
   // Undo restores what a change replaced.
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unknown function or value 'editorOn'" reason=upstream-dependency
   test undoRestores =
     (let editor = editorOn (Outline.sample ())
      let (undone, note) =
@@ -193,20 +193,20 @@ module Editing =
     |> Stdlib.Test.equal ([ "A", "B", "C", "D" ], "undo")
 
   // With nothing to undo it says so rather than doing something.
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unknown function or value 'Darklang.Cli.Outliner.Editor.undo'" reason=upstream-dependency
   test undoWithNothing =
     (let (_state, note) = Darklang.Cli.Outliner.Editor.undo (editorOn (Outline.sample ()))
      note)
     |> Stdlib.Test.equal "nothing to undo"
 
   // Search keeps the ancestors of a hit, so a match deep in the tree stays locatable.
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unknown function or value 'texts'" reason=upstream-dependency
   test filterKeepsAncestors =
     ((Darklang.Cli.Outliner.Editor.applyFilter (editorOn (Outline.sample ())) "B") |> texts)
     |> Stdlib.Test.equal [ "A", "B" ]
 
   // And clearing brings everything back.
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unknown function or value 'texts'" reason=upstream-dependency
   test clearFilterRestores =
     ((Darklang.Cli.Outliner.Editor.clearFilter
        (Darklang.Cli.Outliner.Editor.applyFilter (editorOn (Outline.sample ())) "B"))
@@ -219,7 +219,7 @@ module TextField =
 
   // A paste arrives as one chunk. Moving the cursor by one per keypress is what made typing `abcdef` and
   // then `X` produce `aXbcdef`.
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unknown function or value 'Darklang.Stdlib.Cli.UI.TextField.insert'" reason=upstream-dependency
   test pasteIsOneChunk =
     Stdlib.Test.all
       [ (let field = Darklang.Stdlib.Cli.UI.TextField.insert Darklang.Stdlib.Cli.UI.TextField.empty "abcdef"
@@ -231,7 +231,7 @@ module TextField =
         |> Stdlib.Test.equal ("hell", 4) ]
 
   // Backspace at the start does nothing, rather than going negative.
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unknown function or value 'Darklang.Stdlib.Cli.UI.TextField.backspace'" reason=upstream-dependency
   test backspaceAtStart =
     Stdlib.Test.all
       [ (Darklang.Stdlib.Cli.UI.TextField.backspace
@@ -246,7 +246,7 @@ module TextField =
         |> Stdlib.Test.equal "h" ]
 
   // The window follows the cursor, so a line longer than the box doesn't take the cursor off-screen.
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unknown function or value 'Darklang.Stdlib.Cli.UI.TextField.windowFor'" reason=upstream-dependency
   test windowFollowsCursor =
     Stdlib.Test.all
       [ Darklang.Stdlib.Cli.UI.TextField.windowFor
@@ -257,7 +257,7 @@ module TextField =
         |> Stdlib.Test.equal 0 ]
 
   // Tab is passed up rather than typed into the line: that's what lets the outliner indent while editing.
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unknown function or value 'Darklang.Stdlib.Cli.UI.TextField.onKey'" reason=upstream-dependency
   test tabPassedUp =
     (match
        Darklang.Stdlib.Cli.UI.TextField.onKey
@@ -273,7 +273,7 @@ module TextField =
     |> Stdlib.Test.equal "ignored"
 
   // Enter hands the text to the parent.
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unknown function or value 'Darklang.Stdlib.Cli.UI.TextField.onKey'" reason=upstream-dependency
   test enterHandsTextUp =
     (match
        Darklang.Stdlib.Cli.UI.TextField.onKey
@@ -292,7 +292,7 @@ module Picker =
   let three () : Darklang.Stdlib.Cli.UI.Picker.State =
     Darklang.Stdlib.Cli.UI.Picker.make [ "one", "two", "three" ]
 
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unknown function or value 'Darklang.Stdlib.Cli.UI.Picker.moveDown'" reason=upstream-dependency
   test pickerMoves =
     Stdlib.Test.all
       [ (Darklang.Stdlib.Cli.UI.Picker.moveDown (three ())).selected
@@ -303,13 +303,13 @@ module Picker =
         |> Stdlib.Test.equal 2 ]
 
   // Moving past the end stops at the end.
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unknown function or value 'Darklang.Stdlib.Cli.UI.Picker.moveTo'" reason=upstream-dependency
   test pickerStopsAtEnd =
     (Darklang.Stdlib.Cli.UI.Picker.moveTo (three ()) 99).selected
     |> Stdlib.Test.equal 2
 
   // The window moves only as far as it must to keep the selection visible.
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unknown function or value 'Darklang.Stdlib.Cli.UI.Picker.scrolled'" reason=upstream-dependency
   test pickerScrollsMinimally =
     Stdlib.Test.all
       [ (Darklang.Stdlib.Cli.UI.Picker.scrolled
@@ -319,7 +319,7 @@ module Picker =
         |> Stdlib.Test.equal 0 ]
 
   // Rebuilding with new labels keeps the cursor if the row still exists.
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unknown function or value 'Darklang.Stdlib.Cli.UI.Picker.withLabels'" reason=upstream-dependency
   test relabelKeepsCursor =
     (Darklang.Stdlib.Cli.UI.Picker.withLabels
       (Darklang.Stdlib.Cli.UI.Picker.moveToEnd (three ()))
@@ -327,7 +327,7 @@ module Picker =
     |> Stdlib.Test.equal 1
 
   // A selected row is marked, not just coloured: colour alone is invisible on a monochrome terminal.
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unknown function or value 'Darklang.Stdlib.Cli.UI.Picker.rowFor'" reason=upstream-dependency
   test selectedRowIsMarked =
     Stdlib.Test.all
       [ Stdlib.String.contains (Darklang.Stdlib.Cli.UI.Picker.rowFor "x" true) "> x"
@@ -350,7 +350,7 @@ module Confirm =
       (Darklang.Stdlib.Cli.Stdin.Modifiers.Modifiers { ctrl = false, shift = false, alt = false })
       (Stdlib.Option.Option.Some c)
 
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unknown function or value 'Darklang.Stdlib.Cli.UI.Confirm.onKey'" reason=upstream-dependency
   test confirmKeys =
     Stdlib.Test.all
       [ (match Darklang.Stdlib.Cli.UI.Confirm.onKey (question ()) (key "y") with
@@ -363,7 +363,7 @@ module Confirm =
         |> Stdlib.Test.equal "no" ]
 
   // Any other key is swallowed. A modal that let keys through would act on the thing being asked about.
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unknown function or value 'Darklang.Stdlib.Cli.UI.Confirm.onKey'" reason=upstream-dependency
   test otherKeysSwallowed =
     (match Darklang.Stdlib.Cli.UI.Confirm.onKey (question ()) (key "j") with
      | Handled _ -> "swallowed"
@@ -371,7 +371,7 @@ module Confirm =
     |> Stdlib.Test.equal "swallowed"
 
   // Enter declines a dangerous question: the safe answer is the easy one.
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unknown function or value 'Darklang.Stdlib.Cli.UI.Confirm.onKey'" reason=upstream-dependency
   test enterDeclines =
     (match
        Darklang.Stdlib.Cli.UI.Confirm.onKey
@@ -395,7 +395,7 @@ module Persistence =
     + "{\"nextId\":3,\"rootChildren\":[1],\"nodes\":{\"1\":{\"text\":\"parent\"},\"2\":{\"text\":\"child\"}},"
     + "\"structure\":{\"1\":{\"children\":[2],\"collapsed\":false},\"2\":{\"children\":[],\"collapsed\":false}}}}]}"
 
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unknown function or value 'Darklang.Cli.Outliner.Store.parse'" reason=upstream-dependency
   test storeLoadsV1 =
     (match Darklang.Cli.Outliner.Store.parse (v1 ()) with
      | Loaded data -> (Stdlib.List.length data.documents, data.version)
@@ -403,7 +403,7 @@ module Persistence =
     |> Stdlib.Test.equal (1, 2)
 
   // The migration rebuilds the parent pointers v1 didn't store.
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unknown function or value 'Darklang.Cli.Outliner.Store.parse'" reason=upstream-dependency
   test migrationRebuildsParents =
     (match Darklang.Cli.Outliner.Store.parse (v1 ()) with
      | Loaded data ->
@@ -414,7 +414,7 @@ module Persistence =
     |> Stdlib.Test.equal (Stdlib.Option.Option.Some 1)
 
   // Something genuinely broken is reported, not swallowed.
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unknown function or value 'Darklang.Cli.Outliner.Store.parse'" reason=upstream-dependency
   test brokenStoreReported =
     (match Darklang.Cli.Outliner.Store.parse "{ not json" with
      | Loaded _ -> "loaded"
@@ -424,7 +424,7 @@ module Persistence =
   // What we write is what we can read back. This is the canary for a schema change: add a field to a node,
   // a document or the file itself without thinking about the old shape, and this fails here rather than on
   // someone's documents.
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unknown type 'Darklang.Cli.Outliner.Store.PersistedData'" reason=upstream-dependency
   test writeReadRoundTrip =
     (let saved =
        Darklang.Cli.Outliner.Store.PersistedData
@@ -441,7 +441,7 @@ module Persistence =
     |> Stdlib.Test.equal true
 
   // Including the parts of a document that aren't its text: the fold state, the task marks, the tree.
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unknown function or value 'Darklang.Cli.Outliner.setCollapsed'" reason=upstream-dependency
   test foldMarksTreeRoundTrip =
     (let outline =
        Darklang.Cli.Outliner.setCollapsed
@@ -468,7 +468,7 @@ module Persistence =
 
 module Chrome =
   // The bar fills the width, so its background reaches the edge.
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unknown function or value 'Darklang.Stdlib.Cli.Tui.Text.stripSgr'" reason=upstream-dependency
   test barFillsWidth =
     Stdlib.String.length
       (Darklang.Stdlib.Cli.Tui.Text.stripSgr
@@ -476,7 +476,7 @@ module Chrome =
     |> Stdlib.Test.equal 20
 
   // A message replaces the hints for the frame it's shown on.
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unknown function or value 'Darklang.Stdlib.Cli.UI.Chrome.footBar'" reason=upstream-dependency
   test messageReplacesHints =
     Stdlib.String.contains
       (Darklang.Stdlib.Cli.UI.Chrome.footBar
@@ -488,14 +488,14 @@ module Chrome =
     |> Stdlib.Test.equal true
 
   // The body gets what's left after the title and the hints.
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unknown function or value 'Darklang.Stdlib.Cli.UI.Chrome.bodyRegion'" reason=upstream-dependency
   test bodyGetsRemainder =
     (Darklang.Stdlib.Cli.UI.Chrome.bodyRegion
       (Darklang.Stdlib.Cli.Tui.Size { width = 80, height = 24 })).rows
     |> Stdlib.Test.equal 21
 
   // A terminal too short for the whole frame gives up the blank line, then the hints, before the body.
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unknown function or value 'Darklang.Stdlib.Cli.UI.Chrome.bodyRegion'" reason=upstream-dependency
   test shortTerminal =
     (Darklang.Stdlib.Cli.UI.Chrome.bodyRegion
       (Darklang.Stdlib.Cli.Tui.Size { width = 80, height = 2 })).rows
@@ -503,19 +503,19 @@ module Chrome =
 
 module Wrapping =
   // Long lines used to run off the right edge of the pane and stop existing.
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unknown function or value 'Darklang.Stdlib.Cli.Tui.Text.wrapAtWords'" reason=upstream-dependency
   test longLinesWrap =
     Darklang.Stdlib.Cli.Tui.Text.wrapAtWords "the quick brown fox jumps over the lazy dog" 12
     |> Stdlib.Test.equal [ "the quick", "brown fox", "jumps over", "the lazy dog" ]
 
   // A word longer than the pane is split rather than dropped.
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unknown function or value 'Darklang.Stdlib.Cli.Tui.Text.wrapAtWords'" reason=upstream-dependency
   test longWordSplit =
     Darklang.Stdlib.Cli.Tui.Text.wrapAtWords "supercalifragilistic" 7
     |> Stdlib.Test.equal [ "superca", "lifragi", "listic" ]
 
   // Text that fits comes back as one line, and empty text as one empty line (a row is still a row).
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unknown function or value 'Darklang.Stdlib.Cli.Tui.Text.wrapAtWords'" reason=upstream-dependency
   test shortAndEmptyText =
     Stdlib.Test.all
       [ Darklang.Stdlib.Cli.Tui.Text.wrapAtWords "short" 20
@@ -523,7 +523,7 @@ module Wrapping =
         Darklang.Stdlib.Cli.Tui.Text.wrapAtWords "" 20 |> Stdlib.Test.equal [ "" ] ]
 
   // Wrapping is measured in columns, so a wide glyph takes the two it occupies.
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unknown function or value 'Darklang.Stdlib.Cli.Tui.Text.wrapAtWords'" reason=upstream-dependency
   test wideGlyphs =
     Darklang.Stdlib.Cli.Tui.Text.wrapAtWords "日本 語" 4
     |> Stdlib.Test.equal [ "日本", "語" ]

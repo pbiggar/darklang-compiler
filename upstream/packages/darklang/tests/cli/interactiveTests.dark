@@ -6,21 +6,21 @@ let expectFailure (result: Stdlib.Result.Result<String, String>) (message: Strin
   | Ok transcript -> Stdlib.Test.fail $"Expected failure, got success: {transcript}"
   | Error transcript -> Stdlib.Test.expect (Stdlib.String.contains transcript message) transcript
 
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Unknown function or value 'Instance.withInstance'" reason=upstream-dependency
 test missingMarkerTimesOut =
   Instance.withInstance (fun i ->
     Interactive.drive i [] [ Interactive.Step.Await "never-rendered-test-marker" ] 1
     |> expectFailure "TIMED OUT waiting for: never-rendered-test-marker")
 
 
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Unknown function or value 'Instance.withInstance'" reason=upstream-dependency
 test exitBeforeMarkerFails =
   Instance.withInstance (fun i ->
     Interactive.drive i [ "help" ] [ Interactive.Step.Await "never-rendered-test-marker" ] 10
     |> expectFailure "EXITED BEFORE: never-rendered-test-marker")
 
 
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Unknown function or value 'Instance.withInstance'" reason=upstream-dependency
 test literalTextAndArgumentsArePreserved =
   Instance.withInstance (fun i ->
     Interactive.expectSteps i
@@ -28,7 +28,7 @@ test literalTextAndArgumentsArePreserved =
       [ Interactive.Step.Await "literal [brackets] $variable * ?" ] 10)
 
 
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Unknown function or value 'Instance.withInstance'" reason=upstream-dependency
 test nonzeroExitFailsAfterMatching =
   Instance.withInstance (fun i ->
     Interactive.drive i [ "eval", "1 / 0" ]

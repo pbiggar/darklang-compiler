@@ -1,28 +1,23 @@
 module Darklang.Language.Tests.LetBindings
 
-// @compiler blocked: pending-validation
 test unusedBindingIsEvaluated =
   (let x = Stdlib.Test.raiseRuntimeError "a" in 5L)
   => raises "Uncaught exception: a"
 
-// @compiler blocked: pending-validation
 test bindingErrorSkipsBody =
   (let x = Stdlib.Test.raiseRuntimeError "a" in Stdlib.Test.raiseRuntimeError "b")
   => raises "Uncaught exception: a"
 
-// @compiler blocked: pending-validation
 test variables =
   (let x = 5L
    x)
   |> Stdlib.Test.equal 5L
 
-// @compiler blocked: pending-validation
 test unitPattern =
   (let () = Stdlib.Tuple2.first ((), 5L)
    5L)
   |> Stdlib.Test.equal 5L
 
-// @compiler blocked: pending-validation
 test tuples =
   Stdlib.Test.all
     [ (let (a, b) = (1L, 2L)
@@ -54,12 +49,10 @@ test tuples =
        cd)
       |> Stdlib.Test.equal (3L, 4L) ]
 
-// @compiler blocked: pending-validation
 test tupleEvaluatesIgnoredElements =
   (let (_, _, _) = (1L, 2L, Stdlib.Test.raiseRuntimeError "test") in 2L)
   => raises "Uncaught exception: test"
 
-// @compiler blocked: pending-validation
 test tupleRaisesFirstElementError =
   (let (_, _, _) =
     (Stdlib.Test.raiseRuntimeError "test1",
@@ -68,7 +61,6 @@ test tupleRaisesFirstElementError =
    2L)
   => raises "Uncaught exception: test1"
 
-// @compiler blocked: pending-validation
 test nesting =
   (let x =
     let y = 1L
@@ -78,7 +70,7 @@ test nesting =
    x)
   |> Stdlib.Test.equal 3L
 
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Non-exhaustive match expression" reason=compiler-gap
 test shadowing =
   Stdlib.Test.all
     [ (let x = 5L
@@ -114,7 +106,6 @@ test shadowing =
          | Ok(Ok x) -> let x = 9L in x + 2L))
       |> Stdlib.Test.equal [ 11L, 11L, 11L, 11L ] ]
 
-// @compiler blocked: pending-validation
 test wildcard =
   Stdlib.Test.all
     [ // Simple wildcard - should match any value without binding it
@@ -135,24 +126,23 @@ test wildcard =
       (let _ = [ 1L, 2L, 3L ] in "done") |> Stdlib.Test.equal "done" ]
 
 // Wildcard with side effects - the value should still be evaluated
-// @compiler blocked: pending-validation
 test wildcardValueIsEvaluated =
   (let _ = Stdlib.Test.raiseRuntimeError "test" in 10L)
   => raises "Uncaught exception: test"
 
 // The parser rejects _ in expression position because a wildcard does not bind a variable.
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Unknown function or value 'Darklang.LanguageTools.Parser.Parse.diagnostics'" reason=upstream-dependency
 test wildcardCannotBeRead =
   Darklang.LanguageTools.Parser.Parse.diagnostics "(let _ = 5L in _)"
   |> Stdlib.List.map (fun (_, message) -> message)
   |> Stdlib.Test.equal [ "expected an expression, found '_'" ]
 
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Tuple pattern does not match the value type" reason=compiler-gap
 test nonTupleDestructuringRaises =
   (let (a, _) = 1 in a)
   => raises "Could not deconstruct value 1 into pattern ([variable], _)"
 
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Tuple pattern does not match the value type" reason=compiler-gap
 test wrongTupleArityRaises =
   (let (a, _) = (1, 2, 3) in a)
   => raises

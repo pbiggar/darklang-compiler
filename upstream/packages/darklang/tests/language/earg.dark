@@ -48,33 +48,26 @@ let tupleMatchWithArgShadowing (data: (Int * String)) : String =
   | (1, data) -> data + "_modified"  // 'data' shadows the parameter
   | (data, text) -> Stdlib.toString data + "_" + text  // 'data' shadows parameter
 
-// @compiler blocked: pending-validation
 test addTwoArguments =
   addTwo 3 4 |> Stdlib.Test.equal 7
 
-// @compiler blocked: pending-validation
 test letShadowsArgument =
   shadowTest 999 |> Stdlib.Test.equal 42
 
-// @compiler blocked: pending-validation
 test argumentAndLocalVariable =
   argAndLocalVar 5 |> Stdlib.Test.equal 15
 
-// @compiler blocked: pending-validation
 test nestedLetShadowsArgument =
   nestedShadowing 1 2 |> Stdlib.Test.equal 103
 
-// @compiler blocked: pending-validation
 test lambdaParameterShadowsArgument =
   lambdaTest 10 |> Stdlib.Test.equal 21
 
-// @compiler blocked: pending-validation
 test matchPatternShadowsArgument =
   Stdlib.Test.all
     [ matchArgName 0 |> Stdlib.Test.equal 100
       matchArgName 5 |> Stdlib.Test.equal 10 ]
 
-// @compiler blocked: pending-validation
 test nestedMatchShadowing =
   Stdlib.Test.all
     [ matchWithNestedShadowing 0 42 |> Stdlib.Test.equal 42
@@ -83,7 +76,6 @@ test nestedMatchShadowing =
       matchWithNestedShadowing2 5 0 |> Stdlib.Test.equal 0
       matchWithNestedShadowing2 5 4 |> Stdlib.Test.equal 12 ]
 
-// @compiler blocked: pending-validation
 test tuplePatternShadowsArgument =
   Stdlib.Test.all
     [ tupleMatchWithArgShadowing (0, "hello") |> Stdlib.Test.equal "hello"

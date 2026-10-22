@@ -107,7 +107,6 @@ module ShadowingTest =
       let result = valueShadowingBase + 1
       (valueShadowing (x - 1)) + result
 
-// @compiler blocked: pending-validation
 test factorial =
   Stdlib.Test.all
     [ Darklang.Language.Tests.ArchivedSelf.Test.factorial 0 |> Stdlib.Test.equal 1
@@ -115,7 +114,6 @@ test factorial =
       Darklang.Language.Tests.ArchivedSelf.Test.factorial 5 |> Stdlib.Test.equal 120
       Darklang.Language.Tests.ArchivedSelf.Test.factorial 10 |> Stdlib.Test.equal 3628800 ]
 
-// @compiler blocked: pending-validation
 test fibonacci =
   Stdlib.Test.all
     [ Darklang.Language.Tests.ArchivedSelf.Test.fibonacci 0 |> Stdlib.Test.equal 0
@@ -123,7 +121,6 @@ test fibonacci =
       Darklang.Language.Tests.ArchivedSelf.Test.fibonacci 5 |> Stdlib.Test.equal 5
       Darklang.Language.Tests.ArchivedSelf.Test.fibonacci 10 |> Stdlib.Test.equal 55 ]
 
-// @compiler blocked: pending-validation
 test sumUpTo =
   Stdlib.Test.all
     [ Darklang.Language.Tests.ArchivedSelf.Test.sumUpTo 0 |> Stdlib.Test.equal 0
@@ -131,15 +128,12 @@ test sumUpTo =
       Darklang.Language.Tests.ArchivedSelf.Test.sumUpTo 5 |> Stdlib.Test.equal 15
       Darklang.Language.Tests.ArchivedSelf.Test.sumUpTo 10 |> Stdlib.Test.equal 55 ]
 
-// @compiler blocked: pending-validation
 test incrementWithShadowing =
   Darklang.Language.Tests.ArchivedSelf.ShadowingTest.incrementWithShadowing 3 5 |> Stdlib.Test.equal 28
 
-// @compiler blocked: pending-validation
 test factorialWithShadowing =
   Darklang.Language.Tests.ArchivedSelf.ShadowingTest.factorialWithShadowing 5 |> Stdlib.Test.equal ("shadowed", 120)
 
-// @compiler blocked: pending-validation
 test matchWithShadowing =
   Stdlib.Test.all
     [ Darklang.Language.Tests.ArchivedSelf.ShadowingTest.matchWithShadowing 0 |> Stdlib.Test.equal 0
@@ -147,7 +141,6 @@ test matchWithShadowing =
       Darklang.Language.Tests.ArchivedSelf.ShadowingTest.matchWithShadowing 2 |> Stdlib.Test.equal 8
       Darklang.Language.Tests.ArchivedSelf.ShadowingTest.matchWithShadowing 5 |> Stdlib.Test.equal 6 ]
 
-// @compiler blocked: pending-validation
 test tupleMatchWithShadowing =
   Stdlib.Test.all
     [ Darklang.Language.Tests.ArchivedSelf.ShadowingTest.tupleMatchWithShadowing (0, 10) |> Stdlib.Test.equal 0
@@ -155,13 +148,12 @@ test tupleMatchWithShadowing =
       Darklang.Language.Tests.ArchivedSelf.ShadowingTest.tupleMatchWithShadowing (2, 3) |> Stdlib.Test.equal 30
       Darklang.Language.Tests.ArchivedSelf.ShadowingTest.tupleMatchWithShadowing (4, 5) |> Stdlib.Test.equal 9 ]
 
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Unknown function or value 'Darklang.Language.Tests.ArchivedSelf.ShadowingTest.letBindingShadowing'" reason=upstream-dependency
 test letBindingShadowing =
   Stdlib.Test.all
     [ Darklang.Language.Tests.ArchivedSelf.ShadowingTest.letBindingShadowing 4 |> Stdlib.Test.equal [12, 10]
       Darklang.Language.Tests.ArchivedSelf.ShadowingTest.letBindingShadowing 5 |> Stdlib.Test.equal [15, 10] ]
 
-// @compiler blocked: pending-validation
 test conditionalShadowing =
   Stdlib.Test.all
     [ Darklang.Language.Tests.ArchivedSelf.ShadowingTest.conditionalShadowing 0 |> Stdlib.Test.equal 0
@@ -172,7 +164,6 @@ test conditionalShadowing =
       Darklang.Language.Tests.ArchivedSelf.ShadowingTest.conditionalShadowing 5 |> Stdlib.Test.equal 17
       Darklang.Language.Tests.ArchivedSelf.ShadowingTest.conditionalShadowing 6 |> Stdlib.Test.equal 23 ]
 
-// @compiler blocked: pending-validation
 test pipeWithShadowing =
   Stdlib.Test.all
     [ Darklang.Language.Tests.ArchivedSelf.ShadowingTest.pipeWithShadowing 0 |> Stdlib.Test.equal 0
@@ -180,7 +171,6 @@ test pipeWithShadowing =
       Darklang.Language.Tests.ArchivedSelf.ShadowingTest.pipeWithShadowing 2 |> Stdlib.Test.equal 12
       Darklang.Language.Tests.ArchivedSelf.ShadowingTest.pipeWithShadowing 5 |> Stdlib.Test.equal 10 ]
 
-// @compiler blocked: pending-validation
 test valueShadowing =
   Stdlib.Test.all
     [ Darklang.Language.Tests.ArchivedSelf.ShadowingTest.valueShadowing 0 |> Stdlib.Test.equal 10

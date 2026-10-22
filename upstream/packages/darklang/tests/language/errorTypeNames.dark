@@ -16,19 +16,19 @@ module AmbiguousHash =
   let returnsIntParseError (n: Int) : Darklang.Stdlib.Int.ParseError = n
 
   // One hash, three declarations, three names printed.
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Expected TSum (\"Darklang.Stdlib.Int.ParseError\", []), got TInt" reason=compiler-gap
   test intParamRaises =
     (takesIntParseError 5)
     => raises
       "Darklang.Language.Tests.ErrorTypeNames.AmbiguousHash.takesIntParseError's 1st parameter `e` expects Darklang.Stdlib.Int.ParseError, but got Int (5)"
 
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Expected TSum (\"Darklang.Stdlib.Uuid.ParseError\", []), got TInt" reason=compiler-gap
   test uuidParamRaises =
     (takesUuidParseError 5)
     => raises
       "Darklang.Language.Tests.ErrorTypeNames.AmbiguousHash.takesUuidParseError's 1st parameter `e` expects Darklang.Stdlib.Uuid.ParseError, but got Int (5)"
 
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unknown function or value 'returnsIntParseError'" reason=upstream-dependency
   test intReturnRaises =
     (returnsIntParseError 5)
     => raises
@@ -48,25 +48,25 @@ module NestedInTypeArguments =
     : Int =
     4
 
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Expected TList (TSum (\"Darklang.Stdlib.Int.ParseError\", [])), got TInt" reason=compiler-gap
   test listOfIntRaises =
     (takesListOfInt 5)
     => raises
       "Darklang.Language.Tests.ErrorTypeNames.NestedInTypeArguments.takesListOfInt's 1st parameter `x` expects List<Darklang.Stdlib.Int.ParseError>, but got Int (5)"
 
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Expected TList (TSum (\"Darklang.Stdlib.Uuid.ParseError\", [])), got TInt" reason=compiler-gap
   test listOfUuidRaises =
     (takesListOfUuid 5)
     => raises
       "Darklang.Language.Tests.ErrorTypeNames.NestedInTypeArguments.takesListOfUuid's 1st parameter `x` expects List<Darklang.Stdlib.Uuid.ParseError>, but got Int (5)"
 
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Expected TDict (TString, TList (TSum (\"Darklang.Stdlib.Uuid.ParseError\", []))), got TInt" reason=compiler-gap
   test deepRaises =
     (takesDeep 5)
     => raises
       "Darklang.Language.Tests.ErrorTypeNames.NestedInTypeArguments.takesDeep's 1st parameter `x` expects Dict<String, List<Darklang.Stdlib.Uuid.ParseError>>, but got Int (5)"
 
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Expected TTuple" reason=compiler-gap
   test pairRaises =
     (takesPair 5)
     => raises
@@ -92,25 +92,25 @@ module RecordAndEnumFields =
 
     { start with e = 5 }
 
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unknown function or value 'makeIntRecord'" reason=upstream-dependency
   test intRecordRaises =
     (makeIntRecord ())
     => raises
       "Failed to create record. Expected Darklang.Stdlib.Int.ParseError for field `e`, but got 5 (an Int)"
 
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unknown function or value 'makeUuidRecord'" reason=upstream-dependency
   test uuidRecordRaises =
     (makeUuidRecord ())
     => raises
       "Failed to create record. Expected List<Darklang.Stdlib.Uuid.ParseError> for field `es`, but got 5 (an Int)"
 
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unknown function or value 'makeEnum'" reason=upstream-dependency
   test enumRaises =
     (makeEnum ())
     => raises
       "Failed to create enum. Expected Darklang.Stdlib.Uuid.ParseError for field 0 in `Wrap`, but got Int (5)"
 
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unknown function or value 'updateIntRecord'" reason=upstream-dependency
   test updateRaises =
     (updateIntRecord ())
     => raises
@@ -121,7 +121,7 @@ module UnambiguousHash =
   // is printed however the author spelled it. Type arguments survive either way.
   let takesOption (o: Darklang.Stdlib.Option.Option<Int>) : Int = 1
 
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Expected TSum (\"Darklang.Stdlib.Option.Option\", [TInt]), got TInt" reason=compiler-gap
   test optionRaises =
     (takesOption 5)
     => raises
@@ -134,7 +134,7 @@ module LocallyDeclared =
 
   let describe (t: Celsius) : String = "ok"
 
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Expected TRecord (\"Darklang.Language.Tests.ErrorTypeNames.LocallyDeclared.Celsius\", []), got TInt" reason=compiler-gap
   test localTypeRaises =
     (describe 5)
     => raises

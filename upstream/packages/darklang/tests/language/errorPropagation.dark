@@ -1,7 +1,7 @@
 module Darklang.Language.Tests.ErrorPropagation
 
 module Error =
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Expected TSum (\"Darklang.Stdlib.Option.Option\", [TVar \"t$constraint_-24174_1\"]), got TString" reason=compiler-gap
   test map2WrongArgRaises =
     (Stdlib.Option.map2
       (Stdlib.Option.Option.Some 10L)
@@ -12,7 +12,7 @@ module Error =
 
 
 // Check we get previous errors before later ones
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Unknown function or value 'Stdlib.List.fakeFunction'" reason=upstream-dependency
 test earlierErrorFirst =
   (Stdlib.List.map [ 1L, 2L, 3L, 4L, 5L ] (fun x ->
     Stdlib.Test.raiseRuntimeError "X"))
@@ -20,63 +20,58 @@ test earlierErrorFirst =
   => raises "Uncaught exception: X"
 
 module ErrorPropagation =
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Expected TList (TVar \"t$constraint_-24174_0\"), got TInt64" reason=compiler-gap
   test fnArg =
     Stdlib.List.head (Stdlib.Test.raiseRuntimeError "test")
     => raises "Uncaught exception: test"
 
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Expected TBool, got TInt64" reason=compiler-gap
   test ifCondition =
     (if Stdlib.Test.raiseRuntimeError "test" then 5L else 6L)
     => raises "Uncaught exception: test"
 
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Expected TList (TVar \"t$constraint_-24174_0\"), got TInt64" reason=compiler-gap
   test fieldAccessTarget =
     (Stdlib.List.head (Stdlib.Test.raiseRuntimeError "test")).field
     => raises "Uncaught exception: test"
 
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Expected List<...>, got Int64" reason=compiler-gap
   test listElementCall =
     [ 5L, 6L, Stdlib.List.head (Stdlib.Test.raiseRuntimeError "test") ]
     => raises "Uncaught exception: test"
 
-  // @compiler blocked: pending-validation
   test listElement =
     [ 5L, 6L, Stdlib.Test.raiseRuntimeError "test" ]
     => raises "Uncaught exception: test"
 
-  // @compiler blocked: pending-validation
   test pipeStageThenMore =
     5L |> (+) (Stdlib.Test.raiseRuntimeError "test") |> (+) 3564L
     => raises "Uncaught exception: test"
 
-  // @compiler blocked: pending-validation
   test pipeStage =
     5L |> (+) (Stdlib.Test.raiseRuntimeError "test")
     => raises "Uncaught exception: test"
 
-  // @compiler blocked: pending-validation
   test pipeIntoRaise =
     ("test" |> Stdlib.Test.raiseRuntimeError)
     => raises "Uncaught exception: test"
 
-  // @compiler blocked: pending-validation
   test someArg =
     Stdlib.Option.Option.Some(Stdlib.Test.raiseRuntimeError "test")
     => raises "Uncaught exception: test"
 
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Compilation failed: Unresolved inference variable in value renderer: Ok$Darklang.Stdlib.Result.Result$0" reason=upstream-dependency
   test errorArg =
     Stdlib.Result.Result.Error(Stdlib.Test.raiseRuntimeError "test")
     => raises "Uncaught exception: test"
 
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Compilation failed: Unresolved inference variable in value renderer: Err$Darklang.Stdlib.Result.Result$1" reason=upstream-dependency
   test okArg =
     Stdlib.Result.Result.Ok(Stdlib.Test.raiseRuntimeError "test")
     => raises "Uncaught exception: test"
 
   // pipe into error
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Expected TInt64, got TString" reason=compiler-gap
   test pipeIntoRaiseThenMore =
     ("test" |> Stdlib.Test.raiseRuntimeError |> (+) "3")
     => raises "Uncaught exception: test"
@@ -87,7 +82,7 @@ module ErrorPropagation =
       j: Int64
       n: Int64 }
 
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Expected List<...>, got Int64" reason=compiler-gap
   test recordFirstFieldErrorFirst =
     EPRec
       { i = Stdlib.Test.raiseRuntimeError "1"
@@ -97,11 +92,11 @@ module ErrorPropagation =
     => raises "Uncaught exception: 1"
 
   // An operand's error propagates through +.
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Expected TString, got TInt64" reason=compiler-gap
   test stringAddOperand =
     "msg" + (1L / 0L) => raises "Cannot divide by 0"
 
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Field access requires a record value" reason=compiler-gap
 test fieldAccessOnRaise =
   (Stdlib.Test.raiseRuntimeError "error").fieldName
   => raises "Uncaught exception: error"

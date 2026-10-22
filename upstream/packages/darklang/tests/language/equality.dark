@@ -43,7 +43,6 @@ type EEnum2Int128 = EEnumInt128
 type EEnumUInt128 = | E1 | E2 | E3 of UInt128
 type EEnum2UInt128 = EEnumUInt128
 
-// @compiler blocked: pending-validation
 test scalars =
   Stdlib.Test.all
     [ (5Q == 5Q) |> Stdlib.Test.equal true
@@ -75,7 +74,6 @@ test scalars =
       (true != false) |> Stdlib.Test.equal true
       (() == ()) |> Stdlib.Test.equal true ]
 
-// @compiler blocked: pending-validation
 test lists =
   Stdlib.Test.all
     [ ([ 1L, 2L, 3L ] == [ 1L, 2L, 3L ]) |> Stdlib.Test.equal true
@@ -93,7 +91,6 @@ test lists =
       ([ 1uy, 2uy, 3uy ] == [ 1uy, 2uy, 3uy ]) |> Stdlib.Test.equal true
       ([ 1uy, 2uy, 3uy ] != [ 3uy, 2uy, 1uy ]) |> Stdlib.Test.equal true ]
 
-// @compiler blocked: pending-validation
 test bytesDatesAndUuids =
   Stdlib.Test.all
     [ ((Stdlib.String.toBytes "🧑🏽‍🦰🧑🏼‍💻🧑🏻‍🍼")
@@ -160,7 +157,7 @@ test bytesDatesAndUuids =
 // |> Stdlib.Test.equal false
 
 // Separately written lambdas are unequal. Comparing them does not execute their bodies.
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Unbound local variable 'y'" reason=compiler-gap
 test lambdas =
   Stdlib.Test.all
     [ ((fun x -> y) == (fun x -> y)) |> Stdlib.Test.equal false
@@ -201,7 +198,6 @@ test lambdas =
       ((fun x -> let y = 1uy in y) != (fun x -> let y = 2uy in x))
       |> Stdlib.Test.equal true ]
 
-// @compiler blocked: pending-validation
 test records =
   Stdlib.Test.all
     [ (ERecInt128 { x = 6Q, y = 7Q } == ERecInt128 { x = 6Q, y = 7Q })
@@ -283,7 +279,7 @@ test records =
       (ERecUInt8 { x = 6uy, y = 7uy } != ERecUInt8 { x = 7uy, y = 6uy })
       |> Stdlib.Test.equal true ]
 
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Unknown type 'EEnumInt128'" reason=upstream-dependency
 test enums =
   Stdlib.Test.all
     [ (EEnumInt128.E1 == EEnumInt128.E1) |> Stdlib.Test.equal true
@@ -322,7 +318,7 @@ test enums =
       (EEnumInt8.E3 5y != EEnumInt8.E3 6y) |> Stdlib.Test.equal true ]
 
 // aliases
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Unknown type 'EEnum2Int128'" reason=upstream-dependency
 test enumAliases =
   Stdlib.Test.all
     [ (EEnum2Int128.E1 == EEnumInt128.E1) |> Stdlib.Test.equal true
@@ -346,7 +342,6 @@ test enumAliases =
       (EEnum2UInt8.E1 == EEnumUInt8.E1) |> Stdlib.Test.equal true
       (EEnum2UInt8.E1 != EEnumUInt8.E2) |> Stdlib.Test.equal true ]
 
-// @compiler blocked: pending-validation
 test optionsAndResults =
   Stdlib.Test.all
     [ (Stdlib.Option.Option.None == Stdlib.Option.Option.None)
@@ -371,62 +366,59 @@ test optionsAndResults =
       (Stdlib.Result.Result.Ok 0L != Stdlib.Result.Result.Error 0L)
       |> Stdlib.Test.equal true ]
 
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Operator is unavailable for this type" reason=compiler-gap
 test floatEqualsInt64Raises =
   (5.7 != 6L) => raises "Cannot perform equality check on Float and Int64"
 
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Operator is unavailable for this type" reason=compiler-gap
 test floatEqualsSameValueInt64Raises =
   (5.7 != 5L) => raises "Cannot perform equality check on Float and Int64"
 
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Operator is unavailable for this type" reason=compiler-gap
 test uint16EqualsInt16Raises =
   (5us == 5s) => raises "Cannot perform equality check on UInt16 and Int16"
 
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Operator is unavailable for this type" reason=compiler-gap
 test int8EqualsInt32Raises =
   (5y == 5l) => raises "Cannot perform equality check on Int8 and Int32"
 
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Operator is unavailable for this type" reason=compiler-gap
 test int64EqualsInt32Raises =
   (5L == 5l) => raises "Cannot perform equality check on Int64 and Int32"
 
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Operator is unavailable for this type" reason=compiler-gap
 test uint16NotEqualsInt16Raises =
   (5us != 6s) => raises "Cannot perform equality check on UInt16 and Int16"
 
-// @compiler blocked: pending-validation
 test leftOperandErrorRaisesFirst =
   (Stdlib.Test.raiseRuntimeError "test"
    != Stdlib.Test.raiseRuntimeError "different msg")
   => raises "Uncaught exception: test"
 
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Expected TUnit, got TSum" reason=compiler-gap
 test unitEqualsOptionRaises =
   (() != Stdlib.Option.Option.None)
   => raises
     "Cannot perform equality check on Unit and Darklang.Stdlib.Option.Option<_>"
 
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Operator is unavailable for this type" reason=compiler-gap
 test unitEqualsBoolRaises =
   (() != false) => raises "Cannot perform equality check on Unit and Bool"
 
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Operator is unavailable for this type" reason=compiler-gap
 test unitEqualsInt32Raises =
   (() != 0l) => raises "Cannot perform equality check on Unit and Int32"
 
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Operator is unavailable for this type" reason=compiler-gap
 test unitEqualsFloatRaises =
   (() != 0.0) => raises "Cannot perform equality check on Unit and Float"
 // CLEANUP follow up here when DB references are fully resolved at parse-time
 
 // The left operand's error is raised before the right operand is evaluated.
-// @compiler blocked: pending-validation
 test leftOperandErrorRaisesBeforeRight =
   (1L / 0L) != (Builtin.unwrap None) => raises "Cannot divide by 0"
 
 // Other ways to call it
-// @compiler blocked: pending-validation
 test equalsForms =
   Stdlib.Test.all
     [ 1Q == 1Q |> Stdlib.Test.equal true
@@ -448,7 +440,6 @@ test equalsForms =
       1uy == 1uy |> Stdlib.Test.equal true
       (==) 1uy 1uy |> Stdlib.Test.equal true ]
 
-// @compiler blocked: pending-validation
 test stdlibEquals =
   Stdlib.Test.all
     [ Stdlib.equals 1Q 1Q |> Stdlib.Test.equal true
@@ -461,7 +452,6 @@ test stdlibEquals =
       Stdlib.equals 1y 1y |> Stdlib.Test.equal true
       Stdlib.equals 1uy 1uy |> Stdlib.Test.equal true ]
 
-// @compiler blocked: pending-validation
 test notEquals =
   Stdlib.Test.all
     [ 1Q != 1Q |> Stdlib.Test.equal false
@@ -494,7 +484,6 @@ test notEquals =
         (Stdlib.DateTime.parse "2019-07-28T22:42:36Z"))
       |> Stdlib.Test.equal true ]
 
-// @compiler blocked: pending-validation
 test stdlibNotEquals =
   Stdlib.Test.all
     [ Stdlib.notEquals 1Q 1Q |> Stdlib.Test.equal false
@@ -526,27 +515,24 @@ test stdlibNotEquals =
 // AWS.urlencode "表ポあA鷗ŒéＢ逍Üßªąñ丂㐀𠀀" = "%E8%A1%A8%E3%83%9D%E3%81%82A%E9%B7%97%C5%92%C3%A9%EF%BC%A2%E9%80%8D%C3%9C%C3%9F%C2%AA%C4%85%C3%B1%E4%B8%82%E3%90%80%F0%A0%80%80"
 // Twitter.urlencode "https://google.com?q=left shark&l=en" = "https%3A%2F%2Fgoogle.com%3Fq%3Dleft%20shark%26l%3Den" // URL percent encoding
 
-// @compiler blocked: pending-validation
 test unwrap =
   Stdlib.Test.all
     [ Stdlib.Option.Option.Some 5L |> Builtin.unwrap |> Stdlib.Test.equal 5L
       Stdlib.Result.Result.Ok true |> Builtin.unwrap |> Stdlib.Test.equal true ]
 
-// @compiler blocked: pending-validation
 test unwrapNoneRaises =
   Stdlib.Option.Option.None |> Builtin.unwrap => raises "Cannot unwrap None"
 
-// @compiler blocked: pending-validation
 test unwrapErrorRaises =
   Stdlib.Result.Result.Error 5L |> Builtin.unwrap
   => raises "Cannot unwrap Error: 5"
 
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Can only unwrap Options and Results, yet got TBool" reason=compiler-gap
 test unwrapNonOptionRaises =
   true |> Builtin.unwrap
   => raises "Can only unwrap Options and Results, yet got true"
 
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Builtin.unwrap expects 1 argument, got 2" reason=compiler-gap
 test unwrapWrongArgCountRaises =
   Builtin.unwrap 1 2
   => raises "Builtin.unwrap expects 1 argument, but got 2 arguments"

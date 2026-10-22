@@ -1,337 +1,172 @@
 // POSIX glob semantics, independent of libc availability.
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "" "" false = true
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "*" "" false = true
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "*" ".hidden" true = true
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "*" "a/b" false = true
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "*" "a/b" true = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "?" "/" true = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "[/]" "/" true = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "[/]" "/" false = true
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "a/**/x" "a/b/c/x" true = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "a/**/x" "a/b/c/x" false = true
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "a/**/x" "a/b/x" true = true
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "\\*" "*" false = true
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "\\?" "?" false = true
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "a\\" "a" false = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "[abc" "[abc" false = true
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "[]a]" "]" false = true
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "[a-]" "-" false = true
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "[-a]" "-" false = true
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "[a-c]" "b" false = true
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "[!a-c]" "b" false = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "[^a-c]" "z" false = true
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "[[:digit:]]" "5" false = true
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "[[:alpha:]]" "F" false = true
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "[[:xdigit:]]" "g" false = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "[[:space:]]" "\t" false = true
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "[![:bogus:]]" "a" false = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "[[.a.]]" "a" false = true
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "[[=a=]]" "a" false = true
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "[a-[.c.]]" "b" false = true
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "a\0b" "a" false = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "a" "a\0b" false = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "?" "\0" false = true
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "a\0b" "a\0b" false = true
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "?" "\0a" false = false
 // Like libc's default C locale, matching consumes UTF-8 bytes, not graphemes.
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "é" "é" false = true
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "?" "é" false = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "??" "é" false = true
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "***a***b***" "aaabbb" false = true
 
 // Compiler compatibility corpus, checked against libc's default C locale.
 // POSIX fnmatch outcomes checked against host libc in its default C locale.
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "**/x" "a" true = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "?" "z" true = true
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "[a-c]*" "F" true = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "[[:space:]]" "b" false = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "[a-c]" "F" true = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "" "b" false = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "\\?" " " false = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "a?c" "b" true = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "[a-c]" "z" true = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "[\\]]" "x" false = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "[[:alpha:]]" "5" true = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "\\?" "z" true = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "[[:xdigit:]]" "?" true = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "[a-]" "/" false = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "[[:alpha:]]" "-" false = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "[[:space:]]" "abc" false = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "[a-]" "abc" false = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "[a-]" "x" false = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "[a-c]" "x" true = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "a\\" "F" false = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "\\?" "-" true = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "" " " true = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "a?c" "?" true = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "[]a]" "]" false = true
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "[a-]" "5" true = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "[abc" "-" false = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "a?c" " " false = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "[\\]]" "a/b" false = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "*/*" "/" false = true
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "**/x" "abc" false = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "[[:alpha:]]" "" false = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "[[:xdigit:]]" "" true = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "[a-c]" "-" true = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "[" "-" true = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "**/x" "a" false = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "[abc" "z" false = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "a?c" "*" false = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "[a-]" "/" true = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "*" "abc" true = true
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "?" "" false = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "\\*" "F" false = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "\\*" "a/b" true = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "[a-c]" "a" false = true
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "[]a]" "a/x" false = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "[-a]" "a" false = true
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "[[:alpha:]]" " " false = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "[" "*" true = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "*" "?" true = true
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "[abc" "" true = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "a\\" "*" true = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "[abc" " " false = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "[a-c]*" "F" false = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "[!a-c]" "?" true = true
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "[abc" "a" false = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "a\\" "a" false = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "[a-]" "*" true = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "[[:bogus:]]" "5" false = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "?" "abc" true = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "[" "/" false = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "[a-c]*" "-" true = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "[[:bogus:]]" "x" true = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "[[:digit:]]" "a/b" true = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "[^a-c]" "]" false = true
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "[" "5" false = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "[\\]]" "*" true = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "[" "z" true = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "[^a-c]" "5" false = true
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "[!a-c]" "-" true = true
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "[\\]]" "b" true = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "[abc" "b" false = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "*/*" "b" false = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "[\\]]" "]" true = true
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "[-a]" "a/b" false = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "a?c" "z" true = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "[[:space:]]" "?" false = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "[a-c]*" "b" true = true
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "a?c" "b" false = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "?" "" true = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "[\\]]" "abc" true = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "a\\" "]" true = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "[abc" "?" true = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "[[:xdigit:]]" "*" false = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "[[:space:]]" "?" true = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "[abc" "F" false = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "[a-]" "*" false = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "a\\" "abc" false = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "*" "a/b" true = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "**/x" " " false = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "[a-]" "5" false = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "[\\]]" "?" false = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "**/x" "x" true = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "*/*" "b" true = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "[\\]]" "-" true = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "\\*" "*" false = true
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "[[:space:]]" "a" true = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "a\\" " " false = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "a\\" "b" true = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "[[:digit:]]" "*" true = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "a\\" "a/b" true = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "[[:bogus:]]" "z" false = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "[[:digit:]]" "F" false = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "[[:xdigit:]]" "a/x" true = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "[" "" false = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "[a-c]" "" false = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "[a-c]" "F" false = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "a\\" "x" false = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "**/x" "/" true = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "[" "?" true = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "[abc" "x" false = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "?" "a/b" true = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "a?c" " " true = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "a?c" "-" false = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "[[:space:]]" "*" true = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "?" "/" false = true
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "[-a]" "a" true = true
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "[[:bogus:]]" "?" true = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "[[:xdigit:]]" "a/x" false = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "[-a]" "abc" false = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "[-a]" "x" true = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "\\?" "]" false = false
 
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "[[.a.]]" "a" false = true
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "[[=a=]]" "a" false = true
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "[a-[.c.]]" "b" false = true
 
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "[![:bogus:]]" "a" false = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "[[:bogus:]]" "[[:bogus:]]" false = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "a\0b" "a" false = false
-// @compiler blocked: pending-validation
 Stdlib.Cli.File.__globMatches "?" "\0a" false = false

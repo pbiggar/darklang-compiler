@@ -41,27 +41,27 @@ module Groups =
 
 // The floor. Without it the two tests below pass over an empty registry, which is exactly
 // the shape of failure they exist to catch.
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Unknown function or value 'Groups.registered'" reason=upstream-dependency
 test theRegistryWasActuallyRead =
   (Stdlib.List.length (Groups.registered ()) > 40) |> Stdlib.Test.equal true
 
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Unknown function or value 'Darklang.Cli.Registry.commandGroups'" reason=upstream-dependency
 test everyGroupNameIsUnique =
   let names = Darklang.Cli.Registry.commandGroups () |> Stdlib.List.map (fun (n, _) -> n)
   (Stdlib.List.length (Stdlib.List.unique names)) |> Stdlib.Test.equal (Stdlib.List.length names)
 
 // A new command is registered and nobody adds it to a group. The failure names it.
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Unknown function or value 'Groups.ungrouped'" reason=upstream-dependency
 test everyRegisteredCommandIsInAGroup =
   Stdlib.List.sort (Groups.ungrouped ()) |> Stdlib.Test.equal []
 
 // A command is renamed or removed and its group row is left behind.
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Unknown function or value 'Groups.phantom'" reason=upstream-dependency
 test everyGroupedNameIsRegistered =
   Stdlib.List.sort (Groups.phantom ()) |> Stdlib.Test.equal []
 
 // One command, one group. Two groups claiming the same name prints it twice.
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Unknown function or value 'Groups.grouped'" reason=upstream-dependency
 test noCommandIsInTwoGroups =
   let g = Groups.grouped ()
   let dupes =

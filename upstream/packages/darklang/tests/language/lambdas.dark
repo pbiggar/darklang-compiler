@@ -1,7 +1,6 @@
 module Darklang.Language.Tests.Lambdas
 
 // Separately written lambdas are unequal; a lambda equals itself.
-// @compiler blocked: pending-validation
 test lambdaEquality =
   Stdlib.Test.all
     [ (Stdlib.List.push [] (fun x -> -4.611686018e+18)
@@ -11,7 +10,6 @@ test lambdaEquality =
        Stdlib.List.push [] fn == [ fn ])
       |> Stdlib.Test.equal true ]
 
-// @compiler blocked: pending-validation
 test mapAndApply =
   Stdlib.Test.all
     [ // Test that empty parameters are removed
@@ -29,23 +27,20 @@ test mapAndApply =
       (let y = (fun a b -> a * b) in Stdlib.List.fold [ 1L, 2L, 3L, 4L ] 1L y)
       |> Stdlib.Test.equal 24L ]
 
-// @compiler blocked: pending-validation
 test mapRaisesFirstCallbackError =
   (let y = (fun msg -> Stdlib.Test.raiseRuntimeError msg)
    Stdlib.List.map [ "1", "2", "3", "4" ] y)
   => raises "Uncaught exception: 1"
 
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Expected TFunction ([TInt64; TInt64], TInt64), got TInt64" reason=compiler-gap
 test foldRaisesCallbackArgError =
   (Stdlib.List.fold [ 4L ] 1L (Stdlib.Test.raiseRuntimeError "test"))
   => raises "Uncaught exception: test"
 
 // An error inside the fold callback's body propagates.
-// @compiler blocked: pending-validation
 test foldRaisesCallbackBodyError =
   Stdlib.List.fold [ 4 ] 1 (fun _ _ -> (1 / 0)) => raises "Cannot divide by 0"
 
-// @compiler blocked: pending-validation
 test capturedBindings =
   (let x = 5L
    let y = (fun c -> x + c)
@@ -53,7 +48,6 @@ test capturedBindings =
    [ 1L, 2L, 3L, 4L ] |> Stdlib.List.map y)
   |> Stdlib.Test.equal [ 6L, 7L, 8L, 9L ]
 
-// @compiler blocked: pending-validation
 test stringJoinOfMap =
   (Stdlib.String.join
     (Stdlib.List.map (Stdlib.String.toList "some string") (fun var ->
@@ -61,19 +55,16 @@ test stringJoinOfMap =
     "")
   |> Stdlib.Test.equal "SOME STRING"
 
-// @compiler blocked: pending-validation
 test mapRaisesWhenCallbackErrors =
   (let y = (fun c -> if c > 2L then Stdlib.Test.raiseRuntimeError "err" else 18L)
    [ 1L, 2L, 3L, 4L ] |> Stdlib.List.map y)
   => raises "Uncaught exception: err"
 
-// @compiler blocked: pending-validation
 test mapSkipsErrorBranch =
   (let y = (fun c -> if c > 2L then Stdlib.Test.raiseRuntimeError "err" else 18L)
    [ 1L, 2L ] |> Stdlib.List.map y)
   |> Stdlib.Test.equal [ 18L, 18L ]
 
-// @compiler blocked: pending-validation
 test closures =
   Stdlib.Test.all
     [ (let t = true in Stdlib.List.all [ 1L, 2L ] (fun _ -> t))
@@ -86,7 +77,6 @@ test closures =
        Stdlib.List.map [ 1L, 2L, 3L ] f)
       |> Stdlib.Test.equal [ 1L, 1L, 1L ] ]
 
-// @compiler blocked: pending-validation
 test tuplePatterns =
   Stdlib.Test.all
     [ (let pairs = [ (1L, "one"), (2L, "two"), (3L, "three") ]
@@ -124,7 +114,7 @@ test tuplePatterns =
        Stdlib.List.map triplets transformer)
       |> Stdlib.Test.equal [ "1:one:TRUE", "2:two:FALSE" ] ]
 
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Tuple pattern does not match the value type" reason=compiler-gap
 test tuplePatternArityRaises =
   (let triplets = [ (1L, "one", true), (2L, "two", false) ]
    let transformer = fun (num, str) -> $"{Stdlib.toString num}:{str}"
@@ -132,7 +122,6 @@ test tuplePatternArityRaises =
   => raises
     "Could not deconstruct value (1, \"one\", true) into pattern ([variable], [variable])"
 
-// @compiler blocked: pending-validation
 test dictMapPatterns =
   Stdlib.Test.all
     [ Stdlib.Dict.map
@@ -152,7 +141,6 @@ module LambdaInRecordField =
   type RecordWithFn = { fn: Int64 -> Int64 }
 
   // check: can we apply a function from a record field directly?
-  // @compiler blocked: pending-validation
   test applyRecordFieldFn =
     (let record = RecordWithFn { fn = fun x -> x + 1L }
      (record.fn 6L))
@@ -167,7 +155,7 @@ let nestedMapError () : Int64 =
   let _ = ys
   0L
 
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Unknown function or value 'Stdlib.Test.Process.run'" reason=upstream-dependency
 test nestedMapErrorKeepsBothLambdaFrames =
   match Stdlib.Test.Process.run (Stdlib.Test.Process.defaults ()) nestedMapError () with
   | Error message -> Stdlib.Test.fail message

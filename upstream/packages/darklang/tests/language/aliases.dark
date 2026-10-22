@@ -5,13 +5,12 @@ type Id = String
 
 type Something = { ID: Id, Data: String }
 
-// @compiler blocked: pending-validation
 test simpleAlias =
   Something { ID = "2", Data = "test" }
   |> Stdlib.Test.equal (Something { ID = "2", Data = "test" })
 
 // CELANUP: would be better if this noted that `Id` is an alias for `String`
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Expected TString, got TInt64" reason=compiler-gap
 test simpleAliasWrongTypeRaises =
   Something { ID = 2L, Data = "test" }
   => raises
@@ -24,7 +23,6 @@ module SimpleRecordAlias =
 
   let getName (p: MyPerson) : String = p.name
 
-  // @compiler blocked: pending-validation
   test recordAliases =
     Stdlib.Test.all
       [ (MyPerson { name = "test" } == Person { name = "test" })
@@ -40,7 +38,6 @@ module SimpleEnumAlias =
   type AdminRole = UserRole
   type GuestRole = UserRole
 
-  // @compiler blocked: pending-validation
   test enumAliases =
     (GuestRole.Guest == AdminRole.Guest) |> Stdlib.Test.equal true
 
@@ -58,7 +55,6 @@ module NestedAlias =
   type EmployeeProfile = UserProfile
   let getEmployeeName (profile: EmployeeProfile) : String = profile.name
 
-  // @compiler blocked: pending-validation
   test nestedAliases =
     Stdlib.Test.all
       [ getUserID (("Alice", "EMP123")) |> Stdlib.Test.equal "EMP123"
@@ -69,7 +65,7 @@ module NestedAlias =
         ))
         |> Stdlib.Test.equal "Alice" ]
 
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Expected TString, got TInt64" reason=compiler-gap
   test wrongTupleTypeRaises =
     getUserID (("Alice", 123L))
     => raises
@@ -80,7 +76,6 @@ module ListAlias =
 
   let isEmpty (il: IntegerList) : Bool = Stdlib.List.isEmpty il
 
-  // @compiler blocked: pending-validation
   test listAlias =
     Stdlib.Test.all
       [ isEmpty ([]) |> Stdlib.Test.equal true
@@ -91,7 +86,6 @@ module ResultAlias =
 
   let getIntResultValue (ir: IntResult) : Int64 = Stdlib.Result.withDefault ir 0L
 
-  // @compiler blocked: pending-validation
   test resultAlias =
     Stdlib.Test.all
       [ getIntResultValue (Stdlib.Result.Result.Ok 5L) |> Stdlib.Test.equal 5L
@@ -106,7 +100,6 @@ module RecordWithTypeArgs =
 
   let getInnerField (x: Inner<'a, 'b>) : 'b = x.b
 
-  // @compiler blocked: pending-validation
   test typeArgAliases =
     Stdlib.Test.all
       [ (Outer1 { a = "test", b = 5L })
@@ -118,24 +111,23 @@ module RecordWithTypeArgs =
         getInnerField (Outer2 { a = "test", b = 5L }) |> Stdlib.Test.equal 5L ]
 
   // Explicit record type arguments are accepted, and field types are checked.
-  // @compiler blocked: pending-validation
   test explicitTypeArgs =
     Inner<String, Int64> { a = "test", b = 5L }
     |> Stdlib.Test.equal (Inner { a = "test", b = 5L })
 
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Expected TInt64, got TString" reason=compiler-gap
   test explicitTypeArgMismatchRaises =
     Inner<String, Int64> { a = "test", b = "five" }
     => raises
       "Failed to create record. Expected Int64 for field `b`, but got \"five\" (a String)"
 
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Expected TString, got TInt64" reason=compiler-gap
   test outer2WrongFieldRaises =
     Outer2 { a = 5L, b = 6L }
     => raises
       "Failed to create record. Expected String for field `a`, but got 5 (an Int64)"
 
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Expected TInt64, got TString" reason=compiler-gap
   test outer1WrongFieldRaises =
     Outer1 { a = "a", b = "b" }
     => raises
@@ -148,18 +140,17 @@ module RecordWithTypeArgsDifferentName =
   type Outest<'y> = Outer<'y> // { a: 'y, b: Int64 }
   type MostOutest = Outest<String> // { a: Int64, b: String }
 
-  // @compiler blocked: pending-validation
   test reorderedTypeArgs =
     MostOutest { a = 5L, b = "string" }
     |> Stdlib.Test.equal (Inner { a = 5L, b = "string" })
 
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Expected TInt64, got TString" reason=compiler-gap
   test wrongFieldARaises =
     MostOutest { a = "not allowed", b = "string" }
     => raises
       "Failed to create record. Expected Int64 for field `a`, but got \"not allow... (a String)"
 
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Expected TString, got TInt64" reason=compiler-gap
   test wrongFieldBRaises =
     MostOutest { a = 5L, b = 6L }
     => raises
@@ -174,7 +165,7 @@ module RecordWithRecursiveTypeArgs =
   // @compiler blocked: missing-implementation
   type Alias<'x> = Inner<'x>
 
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unknown type 'Inner'" reason=upstream-dependency
   test recursiveAlias =
     Inner
       { a = 5L
@@ -207,7 +198,6 @@ module MultiNestedRecordAlias =
   type Nest2<'a> = Nest1<'a, String>
   type Nest3 = Nest2<Int64>
 
-  // @compiler blocked: pending-validation
   test multiNested =
     Nest3 { a = 5L, b = "test", c = 6L }
     |> Stdlib.Test.equal (Innest { a = 5L, b = "test", c = 6L })
@@ -225,7 +215,6 @@ module EnumWithTypeArgs =
     | A _ -> default'
     | B b -> b
 
-  // @compiler blocked: pending-validation
   test typeArgAliases =
     Stdlib.Test.all
       [ getInnerField (Inner.A 5L) 6L |> Stdlib.Test.equal 6L
@@ -239,13 +228,13 @@ module EnumWithTypeArgs =
         Outer2.A "str" |> Stdlib.Test.equal (Outer1.A "str")
         Outer2.B 5L |> Stdlib.Test.equal (Outer1.B 5L) ]
 
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Expected TString, got TInt64" reason=compiler-gap
   test outer2WrongPayloadRaises =
     Outer2.A 5L
     => raises
       "Failed to create enum. Expected String for field 0 in `A`, but got Int64 (5)"
 
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Expected TInt64, got TString" reason=compiler-gap
   test outer1WrongPayloadRaises =
     Outer1.B "b"
     => raises
@@ -261,19 +250,18 @@ module EnumWithTypeArgsDifferentName =
   type Outest<'y> = Outer<'y>
   type MostOutest = Outest<String> // effectively: `| A of Int64 | B of String`
 
-  // @compiler blocked: pending-validation
   test reorderedTypeArgs =
     Stdlib.Test.all
       [ MostOutest.A 5L |> Stdlib.Test.equal (Inner.A 5L)
         MostOutest.B "test" |> Stdlib.Test.equal (Inner.B "test") ]
 
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Expected TInt64, got TString" reason=compiler-gap
   test wrongPayloadARaises =
     MostOutest.A "not allowed"
     => raises
       "Failed to create enum. Expected Int64 for field 0 in `A`, but got String (\"not allowed\")"
 
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Expected TString, got TInt64" reason=compiler-gap
   test wrongPayloadBRaises =
     MostOutest.B 6L
     => raises
@@ -288,7 +276,7 @@ module EnumWithRecursiveTypeArgs =
   // @compiler blocked: missing-implementation
   type Alias<'x> = Inner<'x>
 
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unknown type 'Alias'" reason=upstream-dependency
   test recursiveAlias =
     Alias.B(Stdlib.Result.Result.Ok(Alias.A 5L))
     |> Stdlib.Test.equal (Inner.B(Stdlib.Result.Result.Ok(Inner.A 5L)))

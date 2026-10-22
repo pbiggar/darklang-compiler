@@ -10,7 +10,7 @@ module Darklang.Cli.Tests.TestSuite
 ///
 /// `branches` rather than `version`: `version` checks GitHub for a newer release, so it
 /// would make this a test of the network.
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Unknown function or value 'Instance.withInstance'" reason=upstream-dependency
 test instanceAnswers =
   Instance.withInstance (fun i -> Instance.expectExit i [ "branches" ] 0)
 
@@ -19,7 +19,7 @@ test instanceAnswers =
 ///
 /// A branch is the cheapest thing that is unmistakably a store write: no stdin, no
 /// authoring, and it shows up in a listing by name.
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Unknown function or value 'Instance.create'" reason=upstream-dependency
 test instancesAreIsolated =
   match Instance.create () with
   | Error e -> Stdlib.Test.fail $"first instance: {e}"
@@ -48,7 +48,7 @@ test instancesAreIsolated =
 
 
 /// Disposing an instance takes its store with it.
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Unknown function or value 'Instance.create'" reason=upstream-dependency
 test disposeRemovesTheStore =
   match Instance.create () with
   | Error e -> Stdlib.Test.fail e
@@ -72,7 +72,7 @@ test disposeRemovesTheStore =
 /// The only test here that needs a pty, which is the whole reason `Interactive` exists.
 /// Wait for the Home tab and the footer before sending q. These are part of
 /// every initial frame, including an instance that has already been set up.
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Unknown function or value 'Interactive.available'" reason=upstream-dependency
 test workbenchPaints =
   if Stdlib.Bool.not (Interactive.available ()) then
     Stdlib.Test.fail "expect is not installed, so the interactive tests cannot run"

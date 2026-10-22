@@ -1,11 +1,6 @@
 module Tests
-// @compiler blocked: pending-validation
 Stdlib.Cli.Sys.__countBits 255 = 8
-// @compiler blocked: pending-validation
 Stdlib.Cli.Sys.__countBits 0 = 0
-// @compiler blocked: pending-validation
 Stdlib.Cli.Sys.cpuCount () > 0 = true
-// @compiler blocked: pending-validation
 Stdlib.Cli.Sys.hostname () |> Stdlib.Result.map (fun name -> Stdlib.String.length name > 0) = Ok true
-// @compiler blocked: pending-validation
 Builtin.syscallSchedGetaffinity 0 0 = Error 22

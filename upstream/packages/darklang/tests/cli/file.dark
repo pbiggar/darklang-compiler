@@ -5,7 +5,6 @@ module WriteReadRoundtrip =
   let testContents () : String = "Test conrents"
 
   // Check the write result as well as the bytes read back.
-  // @compiler blocked: pending-validation
   test roundtrip =
     Stdlib.Cli.File.withTemp (fun filename ->
       let blob = Stdlib.Blob.fromString (testContents ())
@@ -20,7 +19,6 @@ module WriteReadRoundtrip =
 module MissingFile =
   // A missing file is `NotFound`, not `Other`: on Linux the open fails inside
   // libc, and the errno has to survive the trip through the host boundary.
-  // @compiler blocked: pending-validation
   test missingFileIsNotFound =
     Stdlib.Cli.File.withTemp (fun filename ->
       let missing = filename + "-does-not-exist"

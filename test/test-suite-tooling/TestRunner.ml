@@ -1720,7 +1720,10 @@ let runTestsWithProgressReporter completedTestReporter args =
                   | CompilerAnnotations.Excluded _
                   | CompilerAnnotations.Replace _ | CompilerAnnotations.Xfail _
                     ->
-                      test)
+                      {
+                        test with
+                        E.skipReason = Some "trial: already classified";
+                      })
                 allTests
             else allTests
           in

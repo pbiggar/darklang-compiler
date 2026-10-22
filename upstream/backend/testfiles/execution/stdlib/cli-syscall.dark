@@ -1,27 +1,14 @@
 module Tests
-// @compiler blocked: pending-validation
 Builtin.syscallRead (-1) 1 = Error 9
-// @compiler blocked: pending-validation
 Builtin.syscallRead (-1) (-1) = Error 22
-// @compiler blocked: pending-validation
 Builtin.syscallClose (-1) = Error 9
-// @compiler blocked: pending-validation
 Builtin.syscallLseek (-1) 0 0 = Error 9
-// @compiler blocked: pending-validation
 Builtin.syscallFlock (-1) 2 = Error 9
-// @compiler blocked: pending-validation
 Builtin.syscallGetpid () > 0 = true
-// @compiler blocked: pending-validation
 Builtin.syscallGetuid () >= 0 = true
-// @compiler blocked: pending-validation
 Stdlib.Cli.Posix.__decimal 0 = "0"
-// @compiler blocked: pending-validation
 Stdlib.Cli.Posix.__decimal (-1) = "-1"
-// @compiler blocked: pending-validation
 Stdlib.Cli.Posix.__macMessage 999 = "Unknown error: 999"
-// @compiler blocked: pending-validation
 Builtin.syscallUnlinkAt "/dark-syscall-missing-entry" 0 = Error 2
-// @compiler blocked: pending-validation
 Builtin.syscallUnlinkAt "/dark-syscall-missing-entry" 64 = Error 22
-// @compiler blocked: pending-validation
 Stdlib.Cli.Dir.withTemp (fun dir -> let path = Stdlib.String.append dir "/child" in let created = Stdlib.Cli.Posix.mkdir path 448 in let removed = Builtin.syscallUnlinkAt path (Stdlib.Cli.Posix.__abiRemoveDirectory ()) in (created, removed, Stdlib.Cli.File.exists path) == (Ok (), Ok (), false)) = Ok true

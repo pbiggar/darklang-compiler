@@ -1,6 +1,5 @@
 module Darklang.Language.Tests.Big
 
-// @compiler blocked: pending-validation
 test evaluatesMixedExpressions =
   (let str = "a string to be used as the test case"
    let blob = Stdlib.Blob.fromString str

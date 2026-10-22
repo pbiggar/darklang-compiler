@@ -28,7 +28,6 @@ module Ceiling =
     Stdlib.Stream.toList
       (Stdlib.Stream.map (Stdlib.Stream.fromList xs) (fun x -> x * 10L))
 
-  // @compiler blocked: pending-validation
   test ceilingsCoveringTheBody =
     Stdlib.Test.all
       [ Ceiling.pure 1L |> Stdlib.Test.equal 2L

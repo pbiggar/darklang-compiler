@@ -35,7 +35,7 @@ module Rank =
       ("Cli.Outliner.Store", "fromFile") ]
 
 // Plain words find the camelCase name they spell.
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Unknown function or value 'Rank.order'" reason=upstream-dependency
 test plainWordsFindCamelCase =
   Stdlib.Test.all
     [ Rank.order "read file" (Rank.fileFns ())
@@ -46,7 +46,7 @@ test plainWordsFindCamelCase =
 
 // A section's best rank decides where it prints: a function spelled by the words beats a type that
 // only starts with them.
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Unknown function or value 'Darklang.Cli.Packages.Search.nameRank'" reason=upstream-dependency
 test bestRankDecidesSection =
   Stdlib.Test.all
     [ Darklang.Cli.Packages.Search.nameRank "read file" "readFile"
@@ -55,7 +55,7 @@ test bestRankDecidesSection =
       |> Stdlib.Test.equal 2 ]
 
 // Verb then noun, where the name is the verb: `parse json` elaborates `parse`.
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Unknown function or value 'Darklang.Cli.Packages.Search.nameRank'" reason=upstream-dependency
 test verbThenNoun =
   Stdlib.Test.all
     [ Darklang.Cli.Packages.Search.nameRank "parse json" "parse"
@@ -64,7 +64,7 @@ test verbThenNoun =
       |> Stdlib.Test.equal 3 ]
 
 // Already right, and unchanged: the item token still decides a one-word or dotted query.
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Unknown function or value 'Rank.order'" reason=upstream-dependency
 test itemTokenDecides =
   Stdlib.Test.all
     [ Rank.order "List.map" [ ("Stdlib.List", "map2"), ("Stdlib.List", "map"), ("Stdlib.List", "filterMap") ]
@@ -76,7 +76,7 @@ test itemTokenDecides =
         [ "readFile", "readFileAsString", "overwriteFile", "fromFile" ] ]
 
 // A one-word query joins to itself, so nameRank is matchRank there.
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Unknown function or value 'Darklang.Cli.Packages.Search.nameRank'" reason=upstream-dependency
 test oneWordQuery =
   Stdlib.Test.all
     [ Darklang.Cli.Packages.Search.nameRank "map" "map"

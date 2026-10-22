@@ -1,6 +1,5 @@
 module Darklang.Language.Tests.Apply
 
-// @compiler blocked: pending-validation
 test lambdasAndOperators =
   Stdlib.Test.all
     [ (let fn = (fun x -> x + 1L)
@@ -67,7 +66,6 @@ let polyFn (a: X<'a>) : X<'a> = a
 let strFn (a: X<String>) : X<String> = a
 let definedPolyFn<'a> (a: X<'a>) : X<'a> = a
 
-// @compiler blocked: pending-validation
 test userFunctions =
   Stdlib.Test.all
     [ stringFn "string" |> Stdlib.Test.equal "string appended string"
@@ -88,7 +86,6 @@ test userFunctions =
       strFn (X.B "str") |> Stdlib.Test.equal (X.B "str") ]
 
 // Inferred type arguments agree with explicit ones.
-// @compiler blocked: pending-validation
 test definedPolyFnInfersTypeArgs =
   Stdlib.Test.all
     [ definedPolyFn<String> (X.A 5L) |> Stdlib.Test.equal (definedPolyFn (X.A 5L))
@@ -96,65 +93,64 @@ test definedPolyFnInfersTypeArgs =
       |> Stdlib.Test.equal (definedPolyFn (X.B "str")) ]
 
 module InvalidFnCalls =
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unknown function or value 'functionWhichDoesntExist'" reason=upstream-dependency
   test missingFunctionRaises =
     (functionWhichDoesntExist 6L)
     => raises "There is no variable named: functionWhichDoesntExist"
 
   // errors around type args. Calling with 0 type args is allowed —
   // inference fills `'a` in from the actual arg's ValueType.
-  // @compiler blocked: pending-validation
   test zeroTypeArgsAreInferred =
     fnWithTypeArgAndOneParam 1L |> Stdlib.Test.equal 1L
 
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Function 'fnWithTypeArgAndOneParam' expects 1 type arguments" reason=compiler-gap
   test tooManyTypeArgsRaises =
     fnWithTypeArgAndOneParam<Int64, String> 1L
     => raises
       "Darklang.Language.Tests.Apply.fnWithTypeArgAndOneParam expects 1 type argument, but got 2 type arguments"
 
   // errors around args
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Function 'stringFn' expects 1 arguments" reason=compiler-gap
   test tooManyArgsRaises =
     stringFn "str1" "str2"
     => raises
       "Darklang.Language.Tests.Apply.stringFn expects 1 argument, but got 2 arguments"
 
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Expected TString, got TInt64" reason=compiler-gap
   test wrongArgTypeRaises =
     stringFn 5L
     => raises
       "Darklang.Language.Tests.Apply.stringFn's 1st parameter `key` expects String, but got Int64 (5)"
 
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Expected TInt64, got TString" reason=compiler-gap
   test argTypeFollowsTypeArgRaises =
     fnWithTypeArgAndOneParam<Int64> "str2"
     => raises
       "Darklang.Language.Tests.Apply.fnWithTypeArgAndOneParam's 1st parameter `arg` expects Int64, but got String (\"str2\")"
 
   // errors around return value
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unknown function or value 'shouldReturnStringButDoesNot'" reason=upstream-dependency
   test wrongReturnTypeRaises =
     (shouldReturnStringButDoesNot ())
     => raises
       "Darklang.Language.Tests.Apply.shouldReturnStringButDoesNot's return value expects String, but got Int64 (5)"
 
   // A function must return the type chosen by its type argument.
-  // @compiler blocked: pending-validation
+  // @compiler blocked: compiler-crash
   test wrongTypedReturnRaises =
     fnWithTypedReturn<String> ()
     => raises
       "Darklang.Language.Tests.Apply.fnWithTypedReturn's return value expects String, but got Int64 (5)"
 
   // errors around type args take priority over ones about args
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Function 'fnWithTypeArgAndOneParam' expects 1 type arguments" reason=compiler-gap
   test typeArgErrorComesFirst =
     fnWithTypeArgAndOneParam<Int64, String> 1L "str"
     => raises
       "Darklang.Language.Tests.Apply.fnWithTypeArgAndOneParam expects 1 type argument, but got 2 type arguments"
 
   // misc errors
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unknown function or value 'derrorFn'" reason=upstream-dependency
   test runtimeErrorPropagates =
     derrorFn "msg" => raises "Uncaught exception: msg"
   // test throwsExceptionRaises =
@@ -164,7 +160,6 @@ module InvalidFnCalls =
 // contexts. specifically, that if `'x` is resolved in one place, it won't be
 // used in another unless appropriate
 module GenericTypeArgsAreOK =
-  // @compiler blocked: pending-validation
   test segmentsToString =
     (let segments =
       [ (Darklang.PrettyPrinter.RuntimeTypes.RuntimeError.ErrorSegment.String "a")
@@ -182,7 +177,6 @@ module GenericTypeArgsAreOK =
     let ignored = inner<String, Bool> "hi" true
     x
 
-  // @compiler blocked: pending-validation
   test innerAndOuter =
     Stdlib.Test.all
       [ (inner<Bool, String> true "ignored") |> Stdlib.Test.equal true

@@ -1,6 +1,6 @@
 module Darklang.Language.Tests.Conditionals
 
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Expected TString, got TInt64" reason=compiler-gap
 test ifElse =
   Stdlib.Test.all
     [ (if true then "correct" else 0L) |> Stdlib.Test.equal "correct"
@@ -10,32 +10,30 @@ test ifElse =
       |> Stdlib.Test.equal 0L
       (if false then "" else "correct") |> Stdlib.Test.equal "correct" ]
 
-// @compiler blocked: pending-validation
 test thenErrorRaises =
   (if true then Stdlib.Test.raiseRuntimeError "a" else 0L)
   => raises "Uncaught exception: a"
 
-// @compiler blocked: pending-validation
 test elseErrorRaises =
   (if false then 0L else Stdlib.Test.raiseRuntimeError "a")
   => raises "Uncaught exception: a"
 
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Expected TBool, got TUnit" reason=compiler-gap
 test unitConditionRaises =
   (if () then "" else "")
   => raises "Encountered a condition that must be a Bool, but got an Unit (())"
 
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Expected TBool, got TInt64" reason=compiler-gap
 test conditionErrorRaises =
   (if Stdlib.Test.raiseRuntimeError "msg" then "" else "")
   => raises "Uncaught exception: msg"
 
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Expected TBool, got TInt64" reason=compiler-gap
 test int64ConditionRaises =
   (if 5L then "" else "")
   => raises "Encountered a condition that must be a Bool, but got an Int64 (5)"
 
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Expected TUnit, got TInt64" reason=compiler-gap
 test ifWithoutElse =
   Stdlib.Test.all
     [ (if true then ()) |> Stdlib.Test.equal ()
@@ -43,17 +41,17 @@ test ifWithoutElse =
       (if 1L < 3L then 4L) |> Stdlib.Test.equal 4L
       (if 1L < 3L then "msg") |> Stdlib.Test.equal "msg" ]
 
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Expected TBool, got TUnit" reason=compiler-gap
 test ifWithoutElseUnitConditionRaises =
   (if () then "msg")
   => raises "Encountered a condition that must be a Bool, but got an Unit (())"
 
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Expected TInt64, got TUnit" reason=compiler-gap
 test ifWithoutElseThenErrorRaises =
   (if true then Stdlib.Test.raiseRuntimeError "a")
   => raises "Uncaught exception: a"
 
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Expected TBool, got TInt64" reason=compiler-gap
 test ifWithoutElseConditionErrorRaises =
   (if Stdlib.Test.raiseRuntimeError "msg" then "")
   => raises "Uncaught exception: msg"

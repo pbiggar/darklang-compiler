@@ -12,7 +12,7 @@ let completionPickerState (itemCount: Int) : CompletionPicker.State =
   CompletionPicker.create "" items
 
 
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Unknown type 'Stdlib.Cli.Tui.Size'" reason=upstream-dependency
 test completionPickerTwoRows =
   let size = Stdlib.Cli.Tui.Size { width = 80, height = 2 }
   let state = completionPickerState 3
@@ -34,7 +34,7 @@ test completionPickerTwoRows =
     Stdlib.Test.fail "Two-row picker should include a help row"
 
 
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Unknown function or value 'CompletionPicker.minimumWidth'" reason=upstream-dependency
 test completionPickerNarrowHelp =
   let width = CompletionPicker.minimumWidth
   let help = CompletionPicker.helpTextAtWidth width
@@ -52,7 +52,7 @@ test completionPickerNarrowHelp =
       "Narrow picker should use an untruncated minimum help row"
 
 
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Unknown type 'Stdlib.Cli.Tui.Size'" reason=upstream-dependency
 test completionPickerLongList =
   let size = Stdlib.Cli.Tui.Size { width = 80, height = 3 }
   let state = completionPickerState 5
@@ -69,7 +69,7 @@ test completionPickerLongList =
       "Long picker should reserve rows for its indicator and help"
 
 
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Unknown function or value 'Stdlib.Cli.Tui.Frame.renderRowChangeAtWidth'" reason=upstream-dependency
 test fullscreenRowCancelsDeferredWrap =
   let output =
     Stdlib.Cli.Tui.Frame.renderRowChangeAtWidth

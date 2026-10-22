@@ -168,7 +168,7 @@ val goldenviewExpected =
     "-- end of golden view --"
     "" ]
 
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Unknown function or value 'compare'" reason=upstream-dependency
 test goldenview =
   compare goldenviewRender goldenviewExpected
 
@@ -705,6 +705,6 @@ val goldenkeysExpected =
     "-- golden keys done --"
     "" ]
 
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Unknown function or value 'compare'" reason=upstream-dependency
 test goldenkeys =
   compare goldenkeysRender goldenkeysExpected

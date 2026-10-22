@@ -69,7 +69,7 @@ must also pass the complete selection check before its annotation is removed:
 constructor identities and other constraints can conflict across files.
 
 When `--trial-upstream` and `--results-json=PATH` are supplied together, the
-runner also flushes each completed outcome to `PATH.jsonl` and logs the current
+runner runs only pending imported tests, and flushes each completed outcome to `PATH.jsonl` and logs the current
 test before compiling it. These are execution receipts for investigation, not a
 maintained ledger. They preserve completed results if an unsupported test hangs
 or terminates the compiler process.

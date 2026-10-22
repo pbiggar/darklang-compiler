@@ -6,7 +6,6 @@ module Darklang.Language.Tests.MatchExpressions
 // dval. (The error checking in the interpreter tests is at the pattern side, not
 // the dval side)
 
-// @compiler blocked: pending-validation
 test int64Patterns =
   Stdlib.Test.all
     [ (match 6L with
@@ -30,7 +29,7 @@ test int64Patterns =
        | 999999999999999L -> "pass")
       |> Stdlib.Test.equal "pass" ]
 
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Non-exhaustive match expression" reason=compiler-gap
 test uint64Patterns =
   Stdlib.Test.all
     [ (match 6UL with
@@ -53,7 +52,7 @@ test uint64Patterns =
        | 18446744073709551615UL -> "pass")
       |> Stdlib.Test.equal "pass" ]
 
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Non-exhaustive match expression" reason=compiler-gap
 test int8Patterns =
   Stdlib.Test.all
     [ (match 6y with
@@ -77,7 +76,7 @@ test int8Patterns =
        | 127y -> "pass")
       |> Stdlib.Test.equal "pass" ]
 
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Non-exhaustive match expression" reason=compiler-gap
 test uint8Patterns =
   Stdlib.Test.all
     [ (match 6uy with
@@ -100,7 +99,7 @@ test uint8Patterns =
        | 255uy -> "pass")
       |> Stdlib.Test.equal "pass" ]
 
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Non-exhaustive match expression" reason=compiler-gap
 test int16Patterns =
   Stdlib.Test.all
     [ (match 6s with
@@ -124,7 +123,7 @@ test int16Patterns =
        | 32767s -> "pass")
       |> Stdlib.Test.equal "pass" ]
 
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Non-exhaustive match expression" reason=compiler-gap
 test uint16Patterns =
   Stdlib.Test.all
     [ (match 6us with
@@ -147,7 +146,7 @@ test uint16Patterns =
        | 65535us -> "pass")
       |> Stdlib.Test.equal "pass" ]
 
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Non-exhaustive match expression" reason=compiler-gap
 test int32Patterns =
   Stdlib.Test.all
     [ (match 6l with
@@ -171,7 +170,7 @@ test int32Patterns =
        | 2147483647l -> "pass")
       |> Stdlib.Test.equal "pass" ]
 
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Non-exhaustive match expression" reason=compiler-gap
 test uint32Patterns =
   Stdlib.Test.all
     [ (match 6ul with
@@ -194,7 +193,7 @@ test uint32Patterns =
        | 4294967295ul -> "pass")
       |> Stdlib.Test.equal "pass" ]
 
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Non-exhaustive match expression" reason=compiler-gap
 test int128Patterns =
   Stdlib.Test.all
     [ (match 6Q with
@@ -218,7 +217,7 @@ test int128Patterns =
        | 170141183460469231731687303715884105727Q -> "pass")
       |> Stdlib.Test.equal "pass" ]
 
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Non-exhaustive match expression" reason=compiler-gap
 test uint128Patterns =
   Stdlib.Test.all
     [ (match 6Z with
@@ -241,7 +240,6 @@ test uint128Patterns =
        | 340282366920938463463374607431768211455Z -> "pass")
       |> Stdlib.Test.equal "pass" ]
 
-// @compiler blocked: pending-validation
 test stringPatterns =
   Stdlib.Test.all
     [ (match "x" with
@@ -262,7 +260,6 @@ test stringPatterns =
        | "y" -> "fail")
       |> Stdlib.Test.equal "pass: x" ]
 
-// @compiler blocked: pending-validation
 test boolPatterns =
   Stdlib.Test.all
     [ (match true with
@@ -291,7 +288,6 @@ test boolPatterns =
        | true -> "fail")
       |> Stdlib.Test.equal "pass" ]
 
-// @compiler blocked: pending-validation
 test floatPatterns =
   Stdlib.Test.all
     [ (match 6.5 with
@@ -328,7 +324,7 @@ test floatPatterns =
       |> Stdlib.Test.equal "pass: -4.7" ]
 
 // Float patterns use numeric equality, so either signed zero matches the first zero pattern.
-// @compiler blocked: pending-validation
+// @compiler xfail runtime: "assertion 1: Values differ" reason=compiler-gap
 test signedZeroPatterns =
   Stdlib.Test.all
     [ (match 0.0 with
@@ -342,7 +338,6 @@ test signedZeroPatterns =
        | _ -> "neither")
       |> Stdlib.Test.equal "positive pattern first" ]
 
-// @compiler blocked: pending-validation
 test unitPatterns =
   Stdlib.Test.all
     [ (match () with
@@ -354,7 +349,6 @@ test unitPatterns =
        | () -> "fail")
       |> Stdlib.Test.equal "pass" ]
 
-// @compiler blocked: pending-validation
 test charPatterns =
   Stdlib.Test.all
     [ (match 'a' with
@@ -383,7 +377,6 @@ test charPatterns =
        | 'd' -> "fail")
       |> Stdlib.Test.equal "pass" ]
 
-// @compiler blocked: pending-validation
 test listPatterns =
   Stdlib.Test.all
     [ (match [ 1L, 2L, 3L ] with
@@ -424,7 +417,7 @@ test listPatterns =
        | [] -> "pass")
       |> Stdlib.Test.equal "pass" ]
 
-// @compiler blocked: pending-validation
+// @compiler blocked: compiler-timeout
 test nestedListPatterns =
   Stdlib.Test.all
     [ (match [ [ 1L, 2L ], [ 3L, 4L ] ] with

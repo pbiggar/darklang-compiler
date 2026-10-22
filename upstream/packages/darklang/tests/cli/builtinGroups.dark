@@ -32,12 +32,12 @@ module BuiltinGroups =
 
 
 // The floor, so neither test below can pass over an empty builtin set.
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Unknown function or value 'BuiltinGroups.livePrefixes'" reason=upstream-dependency
 test theBuiltinSetWasActuallyRead =
   (Stdlib.List.length (BuiltinGroups.livePrefixes ()) > 400) |> Stdlib.Test.equal true
 
 // A new family of builtins lands and nobody names it. The failure names the prefix.
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Unknown function or value 'BuiltinGroups.knownPrefixes'" reason=upstream-dependency
 test everySubstantialPrefixHasADisplayName =
   let known = BuiltinGroups.knownPrefixes ()
   BuiltinGroups.substantial 3
@@ -46,7 +46,7 @@ test everySubstantialPrefixHasADisplayName =
   |> Stdlib.Test.equal []
 
 // A family is renamed or removed and its row is left behind, taking a slot in the display order.
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Unknown function or value 'BuiltinGroups.livePrefixes'" reason=upstream-dependency
 test noDisplayNameIsStale =
   let live = Stdlib.List.unique (BuiltinGroups.livePrefixes ())
   BuiltinGroups.knownPrefixes ()
@@ -54,7 +54,7 @@ test noDisplayNameIsStale =
   |> Stdlib.List.sort
   |> Stdlib.Test.equal []
 
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Unknown function or value 'BuiltinGroups.knownPrefixes'" reason=upstream-dependency
 test noPrefixIsNamedTwice =
   let known = BuiltinGroups.knownPrefixes ()
   (Stdlib.List.length (Stdlib.List.unique known)) |> Stdlib.Test.equal (Stdlib.List.length known)

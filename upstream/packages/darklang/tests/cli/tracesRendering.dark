@@ -10,7 +10,7 @@ module Darklang.Cli.Tests.TracesRendering
 module IdWidth =
   // The shortest prefix that tells THESE ids apart. Eight unless two of them collide, which is
   // what makes a table narrow without ever being ambiguous.
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unknown function or value 'Darklang.Cli.TraceVerbs.idWidth'" reason=upstream-dependency
   test shortestDistinctPrefix =
     Stdlib.Test.all
       [ Darklang.Cli.TraceVerbs.idWidth
@@ -24,21 +24,21 @@ module IdWidth =
         |> Stdlib.Test.equal 16 ]
 
   // One id is unique by definition, and none is not a question.
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unknown function or value 'Darklang.Cli.TraceVerbs.idWidth'" reason=upstream-dependency
   test singleOrNoIds =
     Stdlib.Test.all
       [ Darklang.Cli.TraceVerbs.idWidth [ "aaaaaaaaaaaaaaaa" ] |> Stdlib.Test.equal 8
         Darklang.Cli.TraceVerbs.idWidth [] |> Stdlib.Test.equal 8 ]
 
   // Ids that agree past every width in the ladder fall back to the whole uuid.
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unknown function or value 'Darklang.Cli.TraceVerbs.idWidth'" reason=upstream-dependency
   test wholeUuidFallback =
     Darklang.Cli.TraceVerbs.idWidth
       [ "aaaaaaaaaaaaaaaaaaaaaaaaa1", "aaaaaaaaaaaaaaaaaaaaaaaaa2" ]
     |> Stdlib.Test.equal 36
 
 module Status =
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unknown function or value 'Darklang.Cli.TraceVerbs.statusText'" reason=upstream-dependency
   test statusText =
     Stdlib.Test.all
       [ Darklang.Cli.TraceVerbs.statusText Darklang.Tracing.Status.Running
@@ -51,20 +51,20 @@ module Status =
         |> Stdlib.Test.equal "suspended" ]
 
 module ShortId =
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unknown function or value 'Darklang.Cli.Text.shortIdText'" reason=upstream-dependency
   test shortId =
     Darklang.Cli.Text.shortIdText "5db5d5be-ebc1-445c-b989-cb964b48e26d"
     |> Stdlib.Test.equal "5db5d5be"
 
   // Shorter than eight is all of it, rather than a raise.
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unknown function or value 'Darklang.Cli.Text.shortIdText'" reason=upstream-dependency
   test shortIdOfShortText =
     Darklang.Cli.Text.shortIdText "abc" |> Stdlib.Test.equal "abc"
 
 module OneLine =
   // A table cell must not break the row, so a long value is cut with an ellipsis and a newline
   // becomes a space.
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unknown function or value 'Darklang.Cli.Text.oneLineAt'" reason=upstream-dependency
   test oneLineCell =
     Stdlib.Test.all
       [ Darklang.Cli.Text.oneLineAt 10 "short" |> Stdlib.Test.equal "short"
@@ -73,7 +73,7 @@ module OneLine =
         Darklang.Cli.Text.oneLineAt 20 "two\nlines" |> Stdlib.Test.equal "two lines" ]
 
 module Plural =
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unknown function or value 'Darklang.Cli.Text.plural'" reason=upstream-dependency
   test plural =
     Stdlib.Test.all
       [ Darklang.Cli.Text.plural 1 "call" |> Stdlib.Test.equal "1 call"
@@ -103,7 +103,7 @@ module TheLog =
       [ call "httpClientGet" 120 0L, call "printLine" 0 1L ]
 
   // A trace that did nothing outside itself says so, rather than printing an empty block.
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unknown function or value 'Darklang.Cli.Tracing.formatFnCalls'" reason=upstream-dependency
   test noCalls =
     Darklang.Cli.Tracing.formatFnCalls
       Darklang.Cli.Tracing.defaultViewOptions
@@ -113,14 +113,14 @@ module TheLog =
 
   // The log is a sequence: one line per call, in the order they completed, with the position
   // `fork --at` takes and the time it took.
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unknown function or value 'render'" reason=upstream-dependency
   test logIsSequence =
     render Darklang.Cli.Tracing.defaultViewOptions
     |> Stdlib.Test.equal
       "      0  httpClientGet() -> ()  (120ms)\n      1  printLine() -> ()"
 
   // `--filter` and `--exclude` narrow the list by name, case-insensitively.
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unknown function or value 'render'" reason=upstream-dependency
   test filterAndExclude =
     Stdlib.Test.all
       [ render
@@ -133,7 +133,7 @@ module TheLog =
         |> Stdlib.Test.equal "      0  httpClientGet() -> ()  (120ms)" ]
 
   // `--slow` is only meaningful because impure calls carry a real duration now.
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unknown function or value 'render'" reason=upstream-dependency
   test slowCalls =
     render
       { Darklang.Cli.Tracing.defaultViewOptions with
@@ -141,7 +141,7 @@ module TheLog =
     |> Stdlib.Test.equal "      0  httpClientGet() -> ()  (120ms)"
 
   // A filter that matches nothing says THAT, rather than looking like a run that did nothing.
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unknown function or value 'render'" reason=upstream-dependency
   test filterMatchesNothing =
     render
       { Darklang.Cli.Tracing.defaultViewOptions with
@@ -187,7 +187,7 @@ module TheLogIsCut =
       (Stdlib.List.map (Stdlib.List.range 1 count) (fun _ -> one))
 
   // Forty fit.
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unknown function or value 'logOf'" reason=upstream-dependency
   test fortyFit =
     logOf 40 Darklang.Cli.Tracing.defaultViewOptions |> Stdlib.Test.equal 40
 
@@ -195,7 +195,7 @@ module TheLogIsCut =
   // Counted at 100 rather than 41: at 41 the capped form is also 41 lines, so `= 41` there
   // holds whether or not the cap works. At 100 it still prints forty plus one summary line,
   // which is the same 41 and is now a number the uncapped form cannot produce.
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unknown function or value 'logOf'" reason=upstream-dependency
   test capAtForty =
     Stdlib.Test.all
       [ logOf 100 Darklang.Cli.Tracing.defaultViewOptions |> Stdlib.Test.equal 41
@@ -205,7 +205,7 @@ module TheLogIsCut =
         |> Stdlib.Test.equal true ]
 
   // And it says what to type for the rest.
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unknown function or value 'textOf'" reason=upstream-dependency
   test capSaysHowToSeeRest =
     Stdlib.String.contains
       (textOf 41 Darklang.Cli.Tracing.defaultViewOptions)
@@ -215,7 +215,7 @@ module TheLogIsCut =
   // `--all` prints every one. Counting LINES at 41 proves nothing on its own: the capped
   // form prints forty plus a "... 1 more" line, so it is 41 lines either way. What tells
   // them apart at this size is that the uncapped one has no "more" line at all.
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unknown function or value 'textOf'" reason=upstream-dependency
   test allPrintsEvery =
     Stdlib.Test.all
       [ Stdlib.String.contains
@@ -228,7 +228,7 @@ module TheLogIsCut =
 module ViewFlags =
   // The flags that only meant something for a tree of every call are refused by name, so a
   // script that still passes one is told what changed instead of quietly getting everything.
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unknown function or value 'Darklang.Cli.Tracing.parseViewOptions'" reason=upstream-dependency
   test removedFlagsRefused =
     Stdlib.Test.all
       [ (match
@@ -249,7 +249,7 @@ module ViewFlags =
         |> Stdlib.Test.equal true ]
 
   // `--all` turns the cut off.
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unknown function or value 'Darklang.Cli.Tracing.parseViewOptions'" reason=upstream-dependency
   test allTurnsCutOff =
     (match
       Darklang.Cli.Tracing.parseViewOptions
@@ -261,7 +261,7 @@ module ViewFlags =
     |> Stdlib.Test.equal true
 
   // The ones that still mean something still work.
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unknown function or value 'Darklang.Cli.Tracing.parseViewOptions'" reason=upstream-dependency
   test remainingFlagsWork =
     (match
       Darklang.Cli.Tracing.parseViewOptions
@@ -279,7 +279,7 @@ module WatchCursor =
   val ids = [ "newest", "middle", "oldest" ]
 
   // Following a run: the cursor goes to wherever that run is now.
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unknown function or value 'Darklang.Cli.TraceWatch.pickCursor'" reason=upstream-dependency
   test followRun =
     Darklang.Cli.TraceWatch.pickCursor
       ids
@@ -288,7 +288,7 @@ module WatchCursor =
     |> Stdlib.Test.equal 2
 
   // A run that arrived at the top pushes the one being read down, and the cursor goes with it.
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unknown function or value 'Darklang.Cli.TraceWatch.pickCursor'" reason=upstream-dependency
   test newRunPushesDown =
     Darklang.Cli.TraceWatch.pickCursor
       [ "brand-new", "newest", "middle", "oldest" ]
@@ -297,7 +297,7 @@ module WatchCursor =
     |> Stdlib.Test.equal 1
 
   // The run being read is gone (retention dropped it): keep the position, clamped.
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unknown function or value 'Darklang.Cli.TraceWatch.pickCursor'" reason=upstream-dependency
   test vanishedRunClamps =
     Darklang.Cli.TraceWatch.pickCursor
       ids
@@ -306,7 +306,7 @@ module WatchCursor =
     |> Stdlib.Test.equal 2
 
   // Not following anything -- a key press -- is a plain clamp.
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unknown function or value 'Darklang.Cli.TraceWatch.pickCursor'" reason=upstream-dependency
   test plainClamp =
     Stdlib.Test.all
       [ Darklang.Cli.TraceWatch.pickCursor ids 1 Stdlib.Option.Option.None
@@ -317,7 +317,7 @@ module WatchCursor =
         |> Stdlib.Test.equal 0 ]
 
   // No runs at all: there is nowhere to be but zero.
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unknown function or value 'Darklang.Cli.TraceWatch.pickCursor'" reason=upstream-dependency
   test noRuns =
     Darklang.Cli.TraceWatch.pickCursor [] 4 Stdlib.Option.Option.None
     |> Stdlib.Test.equal 0

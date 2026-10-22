@@ -110,7 +110,6 @@ module ShadowingTest =
       let result = valueShadowingBase + 1
       (valueShadowing (x - 1)) + result
 
-// @compiler blocked: pending-validation
 test factorial =
   Stdlib.Test.all
     [ ESelfTests.factorial 0 |> Stdlib.Test.equal 1
@@ -118,7 +117,6 @@ test factorial =
       ESelfTests.factorial 5 |> Stdlib.Test.equal 120
       ESelfTests.factorial 10 |> Stdlib.Test.equal 3628800 ]
 
-// @compiler blocked: pending-validation
 test fibonacci =
   Stdlib.Test.all
     [ ESelfTests.fibonacci 0 |> Stdlib.Test.equal 0
@@ -126,7 +124,6 @@ test fibonacci =
       ESelfTests.fibonacci 5 |> Stdlib.Test.equal 5
       ESelfTests.fibonacci 10 |> Stdlib.Test.equal 55 ]
 
-// @compiler blocked: pending-validation
 test sumUpTo =
   Stdlib.Test.all
     [ ESelfTests.sumUpTo 0 |> Stdlib.Test.equal 0
@@ -134,20 +131,17 @@ test sumUpTo =
       ESelfTests.sumUpTo 5 |> Stdlib.Test.equal 15
       ESelfTests.sumUpTo 10 |> Stdlib.Test.equal 55 ]
 
-// @compiler blocked: pending-validation
 test factorialWithShadowing =
   ShadowingTest.factorialWithShadowing 5 |> Stdlib.Test.equal ("shadowed", 120)
 
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Unknown function or value 'ShadowingTest.factorialWithShadowingError'" reason=upstream-dependency
 test shadowedStringIsNotCallable =
   ShadowingTest.factorialWithShadowingError 5
   => raises "Expected something we could apply to, such as a lambda or function, but got a String (\"shadowed\")"
 
-// @compiler blocked: pending-validation
 test incrementWithShadowing =
   ShadowingTest.incrementWithShadowing 3 1 |> Stdlib.Test.equal 6
 
-// @compiler blocked: pending-validation
 test matchWithShadowing =
   Stdlib.Test.all
     [ ShadowingTest.matchWithShadowing 0 |> Stdlib.Test.equal 0
@@ -155,7 +149,6 @@ test matchWithShadowing =
       ShadowingTest.matchWithShadowing 2 |> Stdlib.Test.equal 8
       ShadowingTest.matchWithShadowing 5 |> Stdlib.Test.equal 6 ]
 
-// @compiler blocked: pending-validation
 test tupleMatchWithShadowing =
   Stdlib.Test.all
     [ ShadowingTest.tupleMatchWithShadowing (0, 10) |> Stdlib.Test.equal 0
@@ -163,13 +156,12 @@ test tupleMatchWithShadowing =
       ShadowingTest.tupleMatchWithShadowing (2, 3) |> Stdlib.Test.equal 30
       ShadowingTest.tupleMatchWithShadowing (4, 5) |> Stdlib.Test.equal 9 ]
 
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Unknown function or value 'ShadowingTest.letBindingShadowing'" reason=upstream-dependency
 test letBindingShadowing =
   Stdlib.Test.all
     [ ShadowingTest.letBindingShadowing 4 |> Stdlib.Test.equal [ 12, 10 ]
       ShadowingTest.letBindingShadowing 5 |> Stdlib.Test.equal [ 15, 10 ] ]
 
-// @compiler blocked: pending-validation
 test conditionalShadowing =
   Stdlib.Test.all
     [ ShadowingTest.conditionalShadowing 0 |> Stdlib.Test.equal 0
@@ -180,7 +172,6 @@ test conditionalShadowing =
       ShadowingTest.conditionalShadowing 5 |> Stdlib.Test.equal 17
       ShadowingTest.conditionalShadowing 6 |> Stdlib.Test.equal 23 ]
 
-// @compiler blocked: pending-validation
 test pipeWithShadowing =
   Stdlib.Test.all
     [ ShadowingTest.pipeWithShadowing 0 |> Stdlib.Test.equal 0
@@ -188,7 +179,6 @@ test pipeWithShadowing =
       ShadowingTest.pipeWithShadowing 2 |> Stdlib.Test.equal 12
       ShadowingTest.pipeWithShadowing 5 |> Stdlib.Test.equal 10 ]
 
-// @compiler blocked: pending-validation
 test valueShadowing =
   Stdlib.Test.all
     [ ShadowingTest.valueShadowing 0 |> Stdlib.Test.equal 10
