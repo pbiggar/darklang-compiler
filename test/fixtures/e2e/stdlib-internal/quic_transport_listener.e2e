@@ -15,7 +15,7 @@ let listenerClose () : Bool =
   let wire = match Stdlib.__QuicPacket.sealShort keys connection.transport.source false payload 0L with | Ok wire -> wire | Error _ -> Builtin.crash "Test packet" in
   let now = match Stdlib.__Network.monotonicMillis () with | Ok now -> now | Error _ -> Builtin.crash "Test clock" in
   let identity = Stdlib.TlsServerIdentity.Identity { certificates = [], key = Stdlib.__RsaPrivate.Key { modulus = Stdlib.Blob.empty, exponent = Stdlib.Blob.empty, privateExponent = Stdlib.Blob.empty } } in
-  let parent = Stdlib.__Datagram.Socket { lifecycle = life, watch = None, send = fun _peer _bytes _timeout -> Ok (), receive = fun _timeout -> Error 11L } in
+  let parent = Stdlib.__Datagram.Socket { lifecycle = life, watch = Some (Stdlib.__Network.Watch { descriptor = -1L, lifecycle = life }), send = fun _peer _bytes _timeout -> Ok (), receive = fun _timeout -> Error 11L } in
   let context = Stdlib.HttpServer.Quic.Context { config = Stdlib.HttpServer.Config.defaults 443, identity = identity, signals = Stdlib.__Network.ShutdownSignals { lifecycle = life }, socket = parent, secret = secret, limit = 1024L } in
   let owner = Stdlib.HttpServer.Quic.__Owner { source = connection.transport.source, peer = peer, socket = socket, outbox = outbox,
     phase = Stdlib.HttpServer.Quic.__Phase.Initializing (Stdlib.HttpServer.Quic.__Bootstrap { connection = connection, opened = false, index = 0L, offset = 0L, deadline = now + 10000L }) } in
