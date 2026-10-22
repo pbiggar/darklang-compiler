@@ -309,6 +309,15 @@ before resolving the payload. No task is created for this operation. EOF is an
 ordinary empty Blob and socket errors are ordinary `Result.Error` payloads.
 This private chunk-read primitive does not yet replace public HTTP calls.
 
+`__writeTcpCurrent` attempts nonblocking sends immediately and returns a typed
+pending `Result<Unit, Int64>`. It advances through bounded chunks and partial
+sends, registering a writable callback only when the socket would block. The
+callback retains the original payload, offset, connection and producer promise
+until every byte is accepted or an ordinary socket error resolves the result.
+Discarding the consumer does not discard the remaining write. Empty writes
+still validate their connection. Like the read primitive, it requires an
+explicit scheduler scope and does not yet replace public HTTP calls.
+
 Timers and socket events land on the scheduler thread. Runnable tasks permit
 nonblocking readiness probes; with no runnable task, the scheduler waits in the
 OS for registered descriptors or the earliest timer deadline. Interrupted waits

@@ -1,0 +1,12 @@
+// async_write.e2e - Native write failures remain ordinary results, including empty payloads.
+
+let unavailableWriter () : Stdlib.__Network.TcpConnection =
+  Stdlib.__Network.TcpConnection {
+    lifecycle = Stdlib.Stream.__new (fun _unit -> None) (fun _unit -> ()),
+    watch = None,
+    read = (fun _length -> Error 9L),
+    write = (fun _bytes -> Error 9L)
+  }
+
+Stdlib.__Task.__runMain (fun _unit -> Stdlib.__Task.__forceCurrent (Stdlib.__Task.__writeTcpCurrent (unavailableWriter ()) (Stdlib.String.toBlob "payload"))) = Error 9L // unavailable writes resolve ordinary errors; leak_check
+Stdlib.__Task.__runMain (fun _unit -> Stdlib.__Task.__forceCurrent (Stdlib.__Task.__writeTcpCurrent (unavailableWriter ()) (Stdlib.String.toBlob ""))) = Error 9L // empty writes still validate their connection; leak_check

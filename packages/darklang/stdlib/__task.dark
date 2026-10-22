@@ -260,6 +260,41 @@ let __readTcpCurrent (connection: Stdlib.__Network.TcpConnection) : Stdlib.__Asy
         let _ = Stdlib.__Task.__readTcpStart (Stdlib.__Task.__scheduler context) connection promise in
         Stdlib.__Async.__pending promise
 
+// A write owns its connection and original payload until the complete Blob has
+// been accepted. Partial sends advance the offset; EAGAIN retains that offset
+// in a readiness callback rather than blocking the scheduler or creating a task.
+let __writeTcpStart (scheduler: RawPtr) (connection: Stdlib.__Network.TcpConnection) (payload: Blob) (offset: Int64) (promise: Stdlib.__Async.__Promise<Stdlib.Result.Result<Unit, Int64>>) : Unit =
+    let remaining = Stdlib.Blob.__byteLength payload - offset in
+    let size = if remaining > 16384L then 16384L else remaining in
+    let chunk = Stdlib.Blob.__fromBuffer (__blob_to_rawptr payload) (16L + offset) size in
+    match Stdlib.__Network.pollWriteTcp connection chunk with
+    | Error code -> Stdlib.__Task.__completePromise scheduler promise (Error code)
+    | Ok available ->
+        match available with
+        | Some sent ->
+            if sent == remaining then Stdlib.__Task.__completePromise scheduler promise (Ok ())
+            else Stdlib.__Task.__writeTcpStart scheduler connection payload (offset + sent) promise
+        | None ->
+            match connection.watch with
+            | None -> Stdlib.__Task.__completePromise scheduler promise (Error 22L)
+            | Some watch ->
+                let entry = Stdlib.__Task.__IO {
+                    interest = Stdlib.__Network.Interest { watch = watch, readable = false, writable = true },
+                    complete = (fun result ->
+                        match result with
+                        | Error code -> Stdlib.__Task.__completePromise scheduler promise (Error code)
+                        | Ok _ -> Stdlib.__Task.__writeTcpStart scheduler connection payload offset promise)
+                } in
+                Stdlib.__Task.__registerIO scheduler entry
+
+let __writeTcpCurrent (connection: Stdlib.__Network.TcpConnection) (payload: Blob) : Stdlib.__Async.__Value<Stdlib.Result.Result<Unit, Int64>> =
+    let context = __fiber_current () in
+    if __rawptr_to_word context == 0L then Builtin.crash "Cannot start a socket write outside a native task"
+    else
+        let promise = Stdlib.__Async.__new<Stdlib.Result.Result<Unit, Int64>> () in
+        let _ = Stdlib.__Task.__writeTcpStart (Stdlib.__Task.__scheduler context) connection payload 0L promise in
+        Stdlib.__Async.__pending promise
+
 // Only operation boundaries allocate tasks. The entry and every ordinary call
 // below it keep a normal native stack. Enter now, allowing the caller to resume
 // once the operation parks, yields or finishes; do not wait for its result.
