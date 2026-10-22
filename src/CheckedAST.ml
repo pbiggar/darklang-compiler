@@ -153,6 +153,8 @@ and expr =
   | Closure of AST.functionId * expr list
   | RuntimeError of string
   | BoundaryRender of AST.functionId * expr
+  (* Lexical exits stay expression-local when a lambda is inlined. The scope
+     supplies the return representation; an exit never resumes its expression. *)
   | ReturnScope of AST.bindingId * checkedType * expr
   | EarlyReturn of AST.bindingId * expr
 

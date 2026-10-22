@@ -88,7 +88,7 @@ let rec returnHint globals expression =
         else
           match List.filter_map (fun (owner, entry) ->
             match entry.definition with
-            | WrittenTypes.TDEnum cases when List.exists (fun (_, item) -> snd item.WrittenTypes.name = caseName) cases -> Some owner
+            | WrittenTypes.TDEnum cases when List.exists (fun (_, (item : WrittenTypes.enumCaseSyntax)) -> snd item.WrittenTypes.name = caseName) cases -> Some owner
             | _ -> None) (StringOrder.Map.bindings globals.types) with
           | [owner] -> Some owner
           | _ -> None
