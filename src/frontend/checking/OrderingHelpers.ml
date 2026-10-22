@@ -269,16 +269,12 @@ let buildCompareHelperExpr aliases registry _lookup sums mode typ left right =
         and rightName = "__dark_compare_sum_right"
         and leftRank = "__dark_compare_sum_left_rank"
         and rightRank = "__dark_compare_sum_right_rank" in
+        (* Keep rank dispatch out of this function: lowering a match-valued
+           let would duplicate the remaining dispatch into every branch. *)
         let rank value =
-          Match
-            ( value,
-              List.mapi
-                (fun index (caseName, tag, fields) ->
-                  case
-                    (constructor caseName tag
-                       (List.map (fun _ -> PWildcard) fields))
-                    (comparisonResultLiteral (Int64.of_int index)))
-                variants )
+          call
+            (ComparisonPlanning.compareHelperName resolved ^ "_rank")
+            [ value ]
         in
         let equalRank =
           Match (Var leftName, List.map (sameVariant true) variants)

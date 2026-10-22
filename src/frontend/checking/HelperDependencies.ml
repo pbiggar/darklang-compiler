@@ -217,9 +217,49 @@ let rec ensureCompareHelperForType aliases registry lookup sums typ
         recursion = None;
       }
     in
+    let generated =
+      match resolved with
+      | TSum (name, _) -> (
+          match M.find_opt name sums with
+          | Some (info : Types.sumTypeInfo)
+            when List.length info.Types.variants >= 4 ->
+              let parameter = "__dark_compare_rank_value" in
+              let cases =
+                List.stable_sort
+                  (fun (a : Types.sumVariantInfo) (b : Types.sumVariantInfo) ->
+                    StringOrder.compare a.Types.name b.Types.name)
+                  info.Types.variants
+                |> List.mapi (fun rank (variant : Types.sumVariantInfo) ->
+                    EqualityHelpers.makeSimpleMatchCase
+                      (PResolvedConstructor
+                         ( name,
+                           variant.Types.name,
+                           variant.Types.tag,
+                           List.map (fun _ -> PWildcard) variant.Types.fields ))
+                      (Int64Literal (Int64.of_int rank)))
+              in
+              let rank : AST.functionDef =
+                {
+                  name = helper ^ "_rank";
+                  typeParams = [];
+                  params = NonEmptyList.singleton (parameter, resolved);
+                  returnType = TInt64;
+                  body = Match (Var parameter, cases);
+                  recursion = None;
+                }
+              in
+              M.add rank.name rank state.generated
+          | _ -> state.generated)
+      | TInt8 | TInt16 | TInt32 | TInt64 | TInt128 | TInt | TUInt8 | TUInt16
+      | TUInt32 | TUInt64 | TUInt128 | TBool | TFloat64 | TString | TBlob
+      | TChar | TDateTime | TUnit | TNever | TInternalRawPtr | TVar _
+      | TInferenceVar _ | TFunction _ | TStream _ | TList _ | TDict _ | TTuple _
+      | TRecord _ ->
+          state.generated
+    in
     {
       inProgress = S.remove helper state.inProgress;
-      generated = M.add helper definition state.generated;
+      generated = M.add helper definition generated;
     }
 
 type helperKind = Equality | Compare
