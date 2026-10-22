@@ -625,11 +625,11 @@ let tryParseMangledTypeWithSumTypeNames sumNames mangled =
             values
         in
         let parameters = complete (parseTupleElems parameters)
-        and results = complete (parseType result) in
+        and results = parseType result in
         List.concat_map
           (fun parameters ->
             List.map
-              (fun result -> (AST.TFunction (parameters, result), []))
+              (fun (result, rest) -> (AST.TFunction (parameters, result), rest))
               results)
           parameters
   in

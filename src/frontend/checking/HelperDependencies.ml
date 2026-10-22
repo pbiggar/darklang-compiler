@@ -268,7 +268,7 @@ let rec collectHelperTypes kind aliases expr =
           let selected =
             (match (func, args) with
             | ( Var
-                  ( "__compare" | "__sort_precedes"
+                  ( "__compare" | "__key_eq" | "__sort_precedes"
                   | "Darklang.Stdlib.List.sort" | "Darklang.Stdlib.List.unique"
                     ),
                 [ typ ] )

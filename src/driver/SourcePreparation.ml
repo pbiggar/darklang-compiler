@@ -703,6 +703,8 @@ let convertTypedProgramToUserOnlyWithMode (baseContext : X.pipelineContext) mode
         C.composeDeclaredTopLevels sourceSymbols baseContext.X.symbols
           (C.programTopLevels typedProgram))
   in
+  let* () = DictionaryFunctionKeys.check baseContext.X.keyFunctions symbols typeCheckEnv.Types.aliasReg
+    typeCheckEnv.Types.indexedTypeReg typeCheckEnv.Types.indexedSumTypeReg topLevels in
   let symbols, topLevels =
     CheckedMaterializeHelpers.materializeEqHelpersInTopLevelsWithIndexedSums
       symbols typeCheckEnv.Types.aliasReg typeCheckEnv.Types.indexedTypeReg

@@ -143,6 +143,9 @@ let dict checkExpression literal globals locals symbols expected entries =
       in
       match typ with
       | AST.TDict (key, value) ->
+          let checkKey, symbols = WrittenCheckingState.internFunction "__dict_check_key" symbols in
+          let entries = List.map (fun (entryKey, entryValue) ->
+            (C.TypeApp (checkKey, [C.checkedType key], NonEmptyList.singleton entryKey), entryValue)) entries in
           literal expected symbols typ
             (C.DictLiteral (C.checkedType key, C.checkedType value, entries))
       | _ -> Crash.crash "Fresh dictionary type is not a dictionary")

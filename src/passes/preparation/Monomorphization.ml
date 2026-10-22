@@ -152,14 +152,9 @@ let collectTypeApps symbols expr =
           if variables then specs else SS.add (name, types) specs
         else if S.isGenericKeyIntrinsicName name then
           match types with
-          | [ typ ] when (not variables) && hasPredefinedKeyIntrinsic typ ->
+          | [ typ ] when name <> "__dict_check_key" && (not variables) && hasPredefinedKeyIntrinsic typ ->
               SS.add (name, types) specs
           | _ -> specs
-        else if
-          (name = "Darklang.Stdlib.Dict.fromList" || name = "Dict.fromList")
-          && args = [ C.ListLiteral [] ]
-          && not variables
-        then SS.add ("Darklang.Stdlib.Dict.empty", types) specs
         else SS.add (name, types) specs
     | C.TupleLiteral values -> many specs (C.tupleElementsToList values)
     | C.ListLiteral values | C.Constructor (_, values) -> many specs values
@@ -427,7 +422,12 @@ let replaceTypeAppsCore symbols registry expr =
       | "__hash", [ _ ] -> Ok (wrap args (C.Int64Literal 0L))
       | "__key_eq", [ typ ] when hasPredefinedKeyIntrinsic typ ->
           Ok (call (S.specName name types) args)
-      | "__key_eq", [ typ ] -> materialize typ args
+      | "__key_eq", [ typ ] ->
+          Ok
+            (C.BinOp
+               ( AST.Eq,
+                 call (ComparisonPlanning.compareHelperName typ) args,
+                 C.Int64Literal 0L ))
       | _ -> (
           match registry with
           | None ->
@@ -543,15 +543,9 @@ let replaceTypeAppsCore symbols registry expr =
               in
               let variables = List.exists S.containsTypeVar types in
               let args = NonEmptyList.toList arguments in
-              let emptyDict =
-                (name = "Darklang.Stdlib.Dict.fromList"
-                || name = "Dict.fromList")
-                && args = [ C.ListLiteral [] ]
-                && not variables
-              in
               let genericKey = S.isGenericKeyIntrinsicName name in
               let unresolvedKey args =
-                wrap args
+                if name = "__dict_check_key" then (match args with [key] -> key | _ -> Crash.crash "Public key check arity") else wrap args
                   (S.unresolvedKeyIntrinsicTypeArgErrorExpr
                      (resolved "Builtin.crash") name)
               in
@@ -584,8 +578,6 @@ let replaceTypeAppsCore symbols registry expr =
                              (ComparisonPlanning.compareHelperName typ)
                              [ left; right ])
                     | _ -> Ok (polymorphicComparison args)
-                  else if emptyDict then
-                    Ok (call (S.specName "Darklang.Stdlib.Dict.empty" types) [])
                   else if genericKey && variables then
                     let* args = many args in
                     Ok (unresolvedKey args)
@@ -618,9 +610,6 @@ let replaceTypeAppsCore symbols registry expr =
                     else if genericKey || isIntrinsicTypeAppName name then
                       Ok (S.specName name types)
                     else
-                      let name =
-                        if emptyDict then "Darklang.Stdlib.Dict.empty" else name
-                      in
                       match SM.find_opt (name, types) registry with
                       | Some specialized -> Ok specialized
                       | None -> Error (missingSpecMessage name types)
@@ -649,10 +638,8 @@ let replaceTypeAppsCore symbols registry expr =
                     materialize target args
                   else
                     let* specialized = resolvedName in
-                    if emptyDict then Ok (call specialized [])
-                    else
-                      let* args = many args in
-                      Ok (call specialized args)))
+                    let* args = many args in
+                    Ok (call specialized args)))
     | C.TupleLiteral values ->
         let* values = many (C.tupleElementsToList values) in
         Ok (C.TupleLiteral (C.tupleElementsOfList values))
@@ -735,7 +722,6 @@ let replaceTypeAppsCore symbols registry expr =
 (*
    Replace TypeApp with Call using specialized name in an expression
    Replace with a regular Call to the specialized name
-   Optimization: avoid building a Dict from an empty list when types are concrete.
 *)
 let replaceTypeApps symbols expr =
   match replaceTypeAppsCore symbols None expr with
