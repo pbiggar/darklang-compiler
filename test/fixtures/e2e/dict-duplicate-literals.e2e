@@ -1,0 +1,18 @@
+// Literal construction rejects equal keys after evaluating entries in source order.
+type DuplicateLiteralKey = { number: Int64, label: String }
+let duplicateLiteral<'key> (first: key) (second: key) : Dict<key, Int64> = Dict { first: 10L, second: 20L }
+let duplicateTrace<'a> (label: String) (value: a) : a = let _ = Builtin.print label in value
+let duplicateLateValue () : Int64 = Builtin.crash "later value"
+
+Dict { 1L: 10L, 1L: 20L } = error="Cannot add two dictionary entries with the same key"
+let key = "d" + "ynamic" in Dict { key: 10L, "dynamic": 20L } = error="Cannot add two dictionary entries with the same key"
+Dict { [1L, 2L]: "first", [1L, 2L]: "second" } = error="Cannot add two dictionary entries with the same key"
+Dict { DuplicateLiteralKey { number = 1L, label = "a" }: 10L, DuplicateLiteralKey { number = 1L, label = "a" }: 20L } = error="Cannot add two dictionary entries with the same key"
+Dict { 0.0: "first", -0.0: "second" } = error="Cannot add two dictionary entries with the same key"
+let n = Stdlib.Float.sqrt -1.0 in Dict { [n, 0.0]: 10L, [n, -0.0]: 20L } = error="Cannot add two dictionary entries with the same key"
+duplicateLiteral 1L 1L = error="Cannot add two dictionary entries with the same key"
+Stdlib.Dict.size (duplicateLiteral 1L 2L) = 2
+Stdlib.Dict.size (Dict { [1L]: 10L, [2L]: 20L }) = 2
+Dict { 1L: 10L, 1L: 20L, 2L: duplicateLateValue () } = error="later value"
+Dict { (duplicateTrace "a" 1L): duplicateTrace "b" 10L, (duplicateTrace "c" 1L): duplicateTrace "d" 20L, (duplicateTrace "e" 2L): duplicateTrace "f" 30L } = exit=1 stdout="abcdef" stderr="Uncaught exception: Cannot add two dictionary entries with the same key 1\n" exact_bytes=true
+Stdlib.Dict.size (Dict { (duplicateTrace "a" 1L): duplicateTrace "b" 10L, (duplicateTrace "c" 2L): duplicateTrace "d" 20L }) = stdout="abcd2\n" stderr="" exact_bytes=true

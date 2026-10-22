@@ -19,3 +19,5 @@ let genericKey<'key> (key: key) : Dict<key, Int64> = Dict { key: 1L }
 genericKey (fun x -> x + 1L) = compileerror="Functions cannot be used as dictionary keys"
 let maker = genericKey<(Int64 -> Int64)> in maker (fun x -> x + 1L) = compileerror="Functions cannot be used as dictionary keys"
 let maker = Stdlib.Dict.singleton<(Int64 -> Int64), String> in maker (fun x -> x + 1L) "bad" = compileerror="Functions cannot be used as dictionary keys"
+let propagationKey<'key> (key: key) : Stdlib.Option.Option<Dict<key, Int64>> = let _ = (Some ())? in Some (Dict { key: 1L })
+propagationKey (fun x -> x + 1L) = compileerror="Functions cannot be used as dictionary keys"

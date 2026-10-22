@@ -2427,21 +2427,32 @@ sources:
   packages/darklang/tests/language/unwrap.dark:
     Darklang.Language.Tests.Unwrap.EvaluationCounts.errorSkipsLaterEffect: unmapped
     Darklang.Language.Tests.Unwrap.EvaluationCounts.okRunsBothEffects: unmapped
-    Darklang.Language.Tests.Unwrap.beforeBranch: unmapped
+    Darklang.Language.Tests.Unwrap.beforeBranch:
+      status: partial
+      compiler: postfix-propagation.e2e#L59
+      notes: Only part of the upstream assertion group has a counterpart.
     Darklang.Language.Tests.Unwrap.branchesAndGuards: unmapped
     Darklang.Language.Tests.Unwrap.chained: unmapped
     Darklang.Language.Tests.Unwrap.differentSuccessType: unmapped
     Darklang.Language.Tests.Unwrap.discardedLambdaResult: unmapped
     Darklang.Language.Tests.Unwrap.errorSkipsRestOfBody: unmapped
     Darklang.Language.Tests.Unwrap.errorThroughUnknownReturn: unmapped
-    Darklang.Language.Tests.Unwrap.extractedFunction: unmapped
+    Darklang.Language.Tests.Unwrap.extractedFunction:
+      status: partial
+      compiler: postfix-propagation.e2e#L37
+      notes: Only part of the upstream assertion group has a counterpart.
     Darklang.Language.Tests.Unwrap.inExpressions: unmapped
     Darklang.Language.Tests.Unwrap.innerLambdaResult: unmapped
     Darklang.Language.Tests.Unwrap.intOperandRaises: unmapped
     Darklang.Language.Tests.Unwrap.lambdaBoundaries: unmapped
     Darklang.Language.Tests.Unwrap.libraryCallAfterUnwrap: unmapped
     Darklang.Language.Tests.Unwrap.listCallbacks: unmapped
-    Darklang.Language.Tests.Unwrap.nestedAndFields: unmapped
+    Darklang.Language.Tests.Unwrap.nestedAndFields:
+      status: partial
+      compiler:
+      - postfix-propagation.e2e#L83
+      - postfix-propagation.e2e#L84
+      notes: Only part of the upstream assertion group has a counterpart.
     Darklang.Language.Tests.Unwrap.okInOptionLambdaRaises: unmapped
     Darklang.Language.Tests.Unwrap.optionInMatchResultLambdaRaises: unmapped
     Darklang.Language.Tests.Unwrap.optionInResultLambdaRaises: unmapped
@@ -2454,8 +2465,14 @@ sources:
     Darklang.Language.Tests.Unwrap.resultUnwrap: unmapped
     Darklang.Language.Tests.Unwrap.returnedErrorWithOtherResults: unmapped
     Darklang.Language.Tests.Unwrap.skipsLaterArguments: unmapped
-    Darklang.Language.Tests.Unwrap.statements: unmapped
-    Darklang.Language.Tests.Unwrap.tuplesAndInterpolation: unmapped
+    Darklang.Language.Tests.Unwrap.statements:
+      status: partial
+      compiler: postfix-propagation.e2e#L63
+      notes: Only part of the upstream assertion group has a counterpart.
+    Darklang.Language.Tests.Unwrap.tuplesAndInterpolation:
+      status: partial
+      compiler: postfix-propagation.e2e#L41
+      notes: Only part of the upstream assertion group has a counterpart.
     Darklang.Language.Tests.Unwrap.wrongKindErrorRaises: unmapped
     Darklang.Language.Tests.Unwrap.wrongKindOkRaises: unmapped
   packages/darklang/tests/language/values.dark:

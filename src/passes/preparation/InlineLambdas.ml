@@ -30,6 +30,8 @@ let rec varOccursInExpr name expr =
       false
   | C.Local id -> same id name
   | C.BoundaryRender (_, value)
+  | C.ReturnScope (_, _, value)
+  | C.EarlyReturn (_, value)
   | C.UnaryOp (_, value)
   | C.TupleAccess (value, _)
   | C.RecordAccess (value, _) ->
@@ -107,6 +109,9 @@ let rec inlineLambdas expr environment =
       C.BoundaryRender (renderer, recurse value)
   | C.BinOp (operation, left, right) ->
       C.BinOp (operation, recurse left, recurse right)
+  | C.ReturnScope (target, typ, value) ->
+      C.ReturnScope (target, typ, recurse value)
+  | C.EarlyReturn (target, value) -> C.EarlyReturn (target, recurse value)
   | C.UnaryOp (operation, value) -> C.UnaryOp (operation, recurse value)
   | C.Let (pattern, value, body) ->
       let value = recurse value in
