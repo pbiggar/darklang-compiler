@@ -315,7 +315,9 @@ sends, registering a writable callback only when the socket would block. The
 callback retains the original payload, offset, connection and producer promise
 until every byte is accepted or an ordinary socket error resolves the result.
 Discarding the consumer does not discard the remaining write. Empty writes
-still validate their connection. Like the read primitive, it requires an
+still validate their connection. Callers must serialize writes sharing a
+connection; this primitive does not maintain a per-connection operation queue.
+Like the read primitive, it requires an
 explicit scheduler scope and does not yet replace public HTTP calls.
 
 Timers and socket events land on the scheduler thread. Runnable tasks permit
