@@ -22,9 +22,12 @@ selectors use `compiler_root`. A rare `repo:` selector is repository-relative.
 
 ## What the statuses mean
 
-**Language and parser:** `supported`, `partial`, `missing`, or `unassessed`.
-These are maintained assessments, not inferred test outcomes. Partial and missing
-entries explain their gaps. Parser entries concern accepting and interpreting
+**Language and parser:** `supported`, `partial`, `missing`, `unassessed`, or `excluded`.
+These are maintained assessments, not inferred test outcomes. Excluded capabilities
+are intentional compiler differences, not pending porting work. Partial, missing,
+and excluded entries must explain their gap or decision. Runtime trait dispatch
+and runtime reflection/dynamic execution are excluded from the compiler's language model.
+Parser entries concern accepting and interpreting
 syntax; language entries concern typing and execution. Replacing parser-file
 mappings does not establish syntax support: entries without a separate review
 are explicitly unassessed.

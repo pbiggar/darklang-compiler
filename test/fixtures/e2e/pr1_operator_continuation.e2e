@@ -1,0 +1,21 @@
+// PR #1 df9d492: an operator-leading line continues a binding initializer.
+// Current syntax anchors continuation indentation at the initializer itself.
+
+let layoutOperatorContinuation (a: Int64) (b: Int64): Int64 =
+  let total =
+    a
+    + b
+  total * 2L
+
+layoutOperatorContinuation 1L 2L = 6L
+
+// An inline initializer can also continue when the operator aligns with it.
+(let total = 1L
+             + 2L
+ total * 2L) = 6L
+
+// The original F# fixture put '+' left of the initializer's anchor. The
+// current interpreter grammar rejects that spelling before native compilation.
+(let total = 1L
+    + 2L
+ total * 2L) = compileerror="expected an expression, found '+'"

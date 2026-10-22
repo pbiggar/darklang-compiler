@@ -5,7 +5,8 @@ Polymorphic-recursion correction: 2026-10-22, against interpreter
 interpreter rejects type-changing recursive calls was incorrect. Same-source
 probes during that investigation accepted concrete resets, parameter swaps,
 mutual calls, and terminating constructor-growing calls. The native compiler
-supports finite specialization; unbounded specialization remains an AOT gap.
+supports finite specialization; unbounded specialization is intentionally excluded
+from the compiler's language model.
 
 The rest of the source review dates from 2026-10-07 at
 `7154b0ea9c1a3f53d30984ed17b9e0cc5d8f0dce`.
@@ -47,7 +48,7 @@ binding syntax corpus, and native completion cases remain in `tailcall.e2e`.
 | Alias-only type cycle | rejected deterministically | expansion could recurse late | shared rejection; declaration validation uses an explicit visiting state |
 | Nominal recursive ADT | accepted | accepted | shared; delayed nominal payload references are not alias edges |
 | Recursive generic ADT | accepts one nominal identity through construction and higher-order folds | accepts with expected-type-aware constructor freshening | shared; pinned `RBTree<'k, 'v>` construction and `List.fold` cases |
-| Type-changing self or mutual call | the historical rejection claim was incorrect; terminating probes accept at `e76430be` | the old blanket self-call restriction rejected finite cases and did not cover every mutual cycle | corrected below: finite native specialization is supported; unbounded specialization is an AOT gap |
+| Type-changing self or mutual call | the historical rejection claim was incorrect; terminating probes accept at `e76430be` | the old blanket self-call restriction rejected finite cases and did not cover every mutual cycle | corrected below: finite native specialization is supported; unbounded specialization is intentionally excluded |
 | Completed generic function used at two types | accepts | accepts | shared; generalization occurs outside the active recursive group |
 | Deep tail recursion | eventually exhausts the execution stack at sufficient depth | native executable completes | intentional AOT completion divergence; compiler failure where the interpreter completes remains a parity defect |
 
@@ -139,8 +140,10 @@ interpreter observations are not claims of fresh execution on later revisions.
 
 The AOT compiler reports unresolved references, ambiguous declarations,
 invalid cycles, and unbounded native specialization before execution. Unbounded
-specialization is a language-support gap, not merely earlier timing of an
-interpreter error: the interpreter can complete the terminating example above.
+specialization is intentionally excluded from the compiler's language model,
+not pending implementation work. This is a behavioral difference, not merely
+earlier timing of an interpreter error: the interpreter can complete the
+terminating example above. Finite polymorphic recursion remains supported.
 Genuinely underdetermined
 lambda and declaration types may also receive an early AOT diagnostic because
 native code requires a concrete representation. These are intentional timing
