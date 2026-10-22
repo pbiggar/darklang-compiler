@@ -135,6 +135,7 @@ def main():
     parser.add_argument('--upstream', type=Path, help='Also verify source bodies against the pinned Git blobs')
     parser.add_argument('--check', action='store_true')
     args = parser.parse_args()
+    subprocess.run([str(ROOT / args.build_dir / 'default/tools/ledger/check_sources.exe'), str(ROOT)], check=True, cwd=ROOT)
     rows = inventory(ROOT, args.build_dir)
     if args.upstream:
         verify_pin(ROOT, args.upstream.resolve(), rows)

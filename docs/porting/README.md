@@ -60,3 +60,16 @@ capabilities require explanatory notes. Interpreter host builtin assessments
 and their explicit binding locations remain separately maintained in
 [`builtins.yaml`](../../porting/builtins.yaml); host-language F# tests are outside
 this Dark source import.
+
+The native `check_sources` tool validates the selected original bodies and all
+replacement contracts together; it runs as part of ledger updates and Dune
+regression checks. `probe_helpers` can check blocked test functions, types and
+values against the current library to identify portable candidates. A candidate
+must also pass the complete selection check before its annotation is removed:
+constructor identities and other constraints can conflict across files.
+
+When `--trial-upstream` and `--results-json=PATH` are supplied together, the
+runner also flushes each completed outcome to `PATH.jsonl` and logs the current
+test before compiling it. These are execution receipts for investigation, not a
+maintained ledger. They preserve completed results if an unsupported test hangs
+or terminates the compiler process.

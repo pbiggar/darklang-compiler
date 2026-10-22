@@ -3,8 +3,10 @@
  (alias runtest)
  (deps ../../scripts/test_imported_sources.py ../../scripts/update-ledger.py ../../scripts/ledger_sources.py
   (source_tree ../../upstream) (source_tree ../../porting))
- (action (run python3 %{dep:../../scripts/test_imported_sources.py}
-  %{exe:../../tools/ledger/parse_sources.exe} %{exe:../../tools/ledger/inventory_tests.exe} ../..)))
+ (action (progn
+  (run %{exe:../../tools/ledger/check_sources.exe} ../..)
+  (run python3 %{dep:../../scripts/test_imported_sources.py}
+   %{exe:../../tools/ledger/parse_sources.exe} %{exe:../../tools/ledger/inventory_tests.exe} ../..))))
 (rule
  (alias runtest)
  (deps ../../scripts/test_ledger.py ../../scripts/test_ledger_sources.py ../../scripts/update-ledger.py ../../scripts/ledger_sources.py)

@@ -20,6 +20,7 @@ type Colour =
 
 type ColourAlias = Colour
 
+// @compiler blocked: compiler-gap
 val valDict = Dict { 1L: "a", 2L: "b" }
 
 // @compiler blocked: pending-validation

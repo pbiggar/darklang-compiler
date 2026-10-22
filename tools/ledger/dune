@@ -1,6 +1,6 @@
 (executables
- (names parse_sources probe_helpers)
- (modules parse_sources probe_helpers)
+ (names parse_sources probe_helpers check_sources)
+ (modules parse_sources probe_helpers check_sources)
  (libraries dark_compiler yojson)
  (flags (:standard -w @a-42 -warn-error +a-42)))
 

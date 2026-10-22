@@ -669,7 +669,13 @@ let runTestsWithProgressReporter completedTestReporter args =
           line <> "" && not (String.starts_with ~prefix:"#" line))
       |> List.map (fun path ->
           RepositoryTestFiles.scriptPath ("upstream/" ^ path))
-      |> Array.of_list |> filterUpstreamDarkPaths
+      |> Array.of_list
+      |> fun paths ->
+      match filter with
+      | None -> paths
+      | Some _ ->
+          let matched = filterUpstreamDarkPaths paths in
+          if Array.length matched = 0 then paths else matched
     in
     let e2eTestFiles =
       Array.concat [ e2eFiles; includeUpstreamDarkPathsForE2E; importedFiles ]
@@ -933,6 +939,15 @@ let runTestsWithProgressReporter completedTestReporter args =
     in
     let runState = F.createStateWithProgressReporter completedTestReporter in
     let e2eOutcomes = Queue.create () in
+    let trialReceiptsPath =
+      if trialUpstream then
+        Option.map (fun path -> path ^ ".jsonl") resultsJsonPath
+      else None
+    in
+    Option.iter
+      (fun path -> Out_channel.with_open_bin path (fun _ -> ()))
+      trialReceiptsPath;
+
     let codegenMetrics = ref []
     and codegenLirOpMetrics = ref []
     and cacheCounts = ref M.empty in
@@ -1197,29 +1212,51 @@ let runTestsWithProgressReporter completedTestReporter args =
               let run = fromResult result in
               let exitCode, stdout, stderr, compile, runtime = unpack run in
               results.(index) <- Some (test, result);
+              let outcome =
+                ( RepositoryTestFiles.relativePath test.E.sourceFile,
+                  test.E.name,
+                  let status, message =
+                    match result with
+                    | Ok _ -> ("pass", "")
+                    | Error failure -> ("fail", failure.R.message)
+                  in
+                  [
+                    ("status", JString status);
+                    ("message", JString message);
+                    ("source_line", JInt test.E.sourceLine);
+                    ( "phase",
+                      JString
+                        (match run with
+                        | R.CompileFailed _ -> "compile"
+                        | R.Ran _ -> "runtime") );
+                    ("exit_code", JInt exitCode);
+                    ("stdout", JString stdout);
+                    ("stderr", JString stderr);
+                  ] )
+              in
               if Option.is_some resultsJsonPath then
-                Queue.add
-                  ( RepositoryTestFiles.relativePath test.E.sourceFile,
-                    test.E.name,
-                    let status, message =
-                      match result with
-                      | Ok _ -> ("pass", "")
-                      | Error failure -> ("fail", failure.R.message)
-                    in
-                    [
-                      ("status", JString status);
-                      ("message", JString message);
-                      ("source_line", JInt test.E.sourceLine);
-                      ( "phase",
-                        JString
-                          (match run with
-                          | R.CompileFailed _ -> "compile"
-                          | R.Ran _ -> "runtime") );
-                      ("exit_code", JInt exitCode);
-                      ("stdout", JString stdout);
-                      ("stderr", JString stderr);
-                    ] )
-                  e2eOutcomes;
+                Queue.add outcome e2eOutcomes;
+              Option.iter
+                (fun path ->
+                  let file, name, outcome = outcome in
+                  let channel =
+                    open_out_gen
+                      [ Open_wronly; Open_append; Open_binary ]
+                      0o600 path
+                  in
+                  Fun.protect
+                    ~finally:(fun () -> close_out channel)
+                    (fun () ->
+                      output_string channel
+                        (serializeJson false 0
+                           (JObject
+                              ([
+                                 ("source_file", JString file);
+                                 ("name", JString name);
+                               ]
+                              @ outcome))
+                        ^ "\n")))
+                trialReceiptsPath;
               recordTiming
                 {
                   F.name = suiteName ^ ": " ^ test.E.name;
@@ -1253,6 +1290,13 @@ let runTestsWithProgressReporter completedTestReporter args =
             List.iter
               (function
                 | Single (index, test, prepared) ->
+                    if trialUpstream then
+                      println
+                        ("[trial] "
+                        ^ RepositoryTestFiles.relativePath test.E.sourceFile
+                        ^ ":"
+                        ^ string_of_int test.E.sourceLine
+                        ^ " " ^ test.E.name);
                     let result, delta =
                       match tryPreambleContext test with
                       | Error message -> (preambleFailure test message, 0L)
