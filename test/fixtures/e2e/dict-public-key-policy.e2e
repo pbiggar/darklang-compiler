@@ -17,3 +17,4 @@ Stdlib.Dict.singleton (fun x -> x + 1L) "bad" = compileerror="Functions cannot b
 Stdlib.Dict.singleton (Some (fun x -> x + 1L)) "bad" = compileerror="Functions cannot be used as dictionary keys"
 let genericKey<'key> (key: key) : Dict<key, Int64> = Dict { key: 1L }
 genericKey (fun x -> x + 1L) = compileerror="Functions cannot be used as dictionary keys"
+let maker = genericKey<(Int64 -> Int64)> in maker (fun x -> x + 1L) = compileerror="Functions cannot be used as dictionary keys"
