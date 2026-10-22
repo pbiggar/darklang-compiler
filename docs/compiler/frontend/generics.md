@@ -17,6 +17,21 @@ let identity<'T> (x: T) : T = x
 let swap<'A, 'B> (pair: (A * B)) : (B * A) = let (first, second) = pair in (second, first)
 ```
 
+Quoted variables in a top-level function signature also declare implicit type
+parameters:
+
+```dark
+let wrap (value: 'a) : List<'a> = [value]
+```
+
+The parser collects these variables from parameter and return annotations
+in first-occurrence order, retaining explicitly declared parameters first.
+The resulting declaration uses the same generic call inference and
+monomorphization as an explicit declaration. This ties input and result
+constraints together: passing `wrap "one"` to a function requiring
+`List<Int64>` is a compile-time error. Focused coverage lives in
+`src/Tests/e2e/generic_call_constraints.e2e`.
+
 ### 2. Type Application (Call Sites)
 
 When calling a generic function, type arguments are provided:

@@ -189,36 +189,6 @@ let rec internal applyTypeArguments (subst: Substitution) (typ: Type) : Type =
     | TUInt8 | TUInt16 | TUInt32 | TUInt64 | TUInt128
     | TBool | TFloat64 | TString | TBlob | TChar | TDateTime | TUnit | TRuntimeError | TRawPtr -> typ
 
-/// Collect type variable names in first-seen order.
-let rec collectTypeVarsInType (typ: Type) (acc: string list) : string list =
-    let add name =
-        if List.contains name acc then acc else acc @ [name]
-
-    match typ with
-    | TVar name -> add name
-    | TFunction (paramTypes, returnType) ->
-        let withParams = paramTypes |> List.fold (fun a t -> collectTypeVarsInType t a) acc
-        collectTypeVarsInType returnType withParams
-    | TTuple elemTypes ->
-        elemTypes |> List.fold (fun a t -> collectTypeVarsInType t a) acc
-    | TEnumFields fieldTypes ->
-        fieldTypes |> List.fold (fun a t -> collectTypeVarsInType t a) acc
-    | TRecord (_, typeArgs) ->
-        typeArgs |> List.fold (fun a t -> collectTypeVarsInType t a) acc
-    | TSum (_, typeArgs) ->
-        typeArgs |> List.fold (fun a t -> collectTypeVarsInType t a) acc
-    | TList elemType ->
-        collectTypeVarsInType elemType acc
-    | TStream elemType ->
-        collectTypeVarsInType elemType acc
-    | TDict (keyType, valueType) ->
-        let withKey = collectTypeVarsInType keyType acc
-        collectTypeVarsInType valueType withKey
-    | TInt8 | TInt16 | TInt32 | TInt64 | TInt128 | TInt
-    | TUInt8 | TUInt16 | TUInt32 | TUInt64 | TUInt128
-    | TBool | TFloat64 | TString | TBlob | TChar | TDateTime | TUnit | TRuntimeError | TRawPtr ->
-        acc
-
 let private recordTypeInfo (typeParams: string list) (fields: (string * Type) list) : RecordTypeInfo =
     let (firstDeclaredFieldsRev, firstDeclaredFieldTypes) =
         fields

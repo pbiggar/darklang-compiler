@@ -409,20 +409,25 @@ let buildStdlibSpecializations
                             stdlib.Context.Registries
                             preparedTypeDefs
                             preparedFunctions
-                    let registries = {
-                        registries with
-                            TypeReg =
-                                Map.fold
-                                    (fun acc name recordInfo -> Map.add name recordInfo acc)
-                                    registries.TypeReg
-                                    externalTypeReg
-                            VariantLookup =
-                                Map.fold (fun acc k v -> Map.add k v acc) registries.VariantLookup externalVariantLookup
-                            SumTypeNames =
-                                Set.union
-                                    registries.SumTypeNames
-                                    (LoweringPrimitives.sumTypeNamesFromVariantLookup externalVariantLookup)
+                    // Specializations can own user-defined values (for example a
+                    // fold accumulator). Carry their complete layout metadata
+                    // into ownership planning as well as expression lowering.
+                    let externalRegistries =
+                        AST_to_ANF.buildOverlayRegistries
+                            registries.ModuleRegistry
+                            []
+                            Map.empty
+                            []
+                    let externalRegistries = {
+                        externalRegistries with
+                            TypeReg = externalTypeReg
+                            RecordFieldsReg = TypeRegistries.recordFieldsRegistry externalTypeReg
+                            RecordTypeParamsReg = TypeRegistries.recordTypeParamsRegistry externalTypeReg
+                            VariantLookup = externalVariantLookup
+                            SumTypeNames = LoweringPrimitives.sumTypeNamesFromVariantLookup externalVariantLookup
+                            RcSumShapeReg = TypeRegistries.rcSumShapeRegistryFromVariantLookup externalVariantLookup
                     }
+                    let registries = AST_to_ANF.mergeRegistries registries externalRegistries
                     let localReturnTypes = extractReturnTypes localRegistries.FuncReg
                     let varGen = ANF.VarGen 0
                     AST_to_ANF.convertFunctions registries varGen resolvedFunctions

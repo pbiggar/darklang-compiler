@@ -60,6 +60,20 @@ type Type =
     // String-keyed and renders only the value component as Dict<Value>.
     | TDict of keyType:Type * valueType:Type
 
+/// Collect type variable names in first-seen order.
+let rec collectTypeVarsInType (typ: Type) (acc: string list) : string list =
+    let collect types = List.fold (fun names t -> collectTypeVarsInType t names) acc types
+    match typ with
+    | TVar name -> if List.contains name acc then acc else acc @ [name]
+    | TFunction (parameters, result) -> collect (parameters @ [result])
+    | TTuple types | TEnumFields types
+    | TRecord (_, types) | TSum (_, types) -> collect types
+    | TList element | TStream element -> collectTypeVarsInType element acc
+    | TDict (key, value) -> collect [key; value]
+    | TInt8 | TInt16 | TInt32 | TInt64 | TInt128 | TInt
+    | TUInt8 | TUInt16 | TUInt32 | TUInt64 | TUInt128
+    | TBool | TFloat64 | TString | TBlob | TChar | TDateTime | TUnit | TRuntimeError | TRawPtr -> acc
+
 /// Nominal identity carried by record construction from parsing onward.
 /// SourceTypeName preserves an alias spelling for diagnostics, while
 /// ResolvedTypeName is filled with the canonical declaration identity during

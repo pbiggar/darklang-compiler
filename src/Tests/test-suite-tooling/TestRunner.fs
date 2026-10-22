@@ -592,7 +592,6 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
                 "src/Tests/e2e/upstream/language/builtin-introspection.dark"
                 "src/Tests/e2e/upstream/language/collections/edict.dark"
                 "src/Tests/e2e/upstream/language/custom-data/aliases.dark"
-                "src/Tests/e2e/upstream/language/custom-data/enums.dark"
                 "src/Tests/e2e/upstream/language/custom-data/values.dark"
                 "src/Tests/e2e/upstream/language/effect-ceiling.dark"
                 "src/Tests/e2e/upstream/language/error-type-names.dark"
@@ -642,6 +641,9 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
                 ("src/Tests/e2e/upstream/language/basic/eor.dark", Set.ofList [ 6; 16; 17 ])
                 ("src/Tests/e2e/upstream/language/basic/estring.dark", Set.ofList [ 11; 17; 21; 28 ])
                 ("src/Tests/e2e/upstream/language/basic/evariable.dark", Set.ofList [ 3 ])
+                // Recursive construction/folding now runs; retain independent
+                // enum arity, match, rendering, and helper-linking gaps.
+                ("src/Tests/e2e/upstream/language/custom-data/enums.dark", Set.ofList [ 7; 11; 15; 17; 22; 23; 24; 26; 27; 28; 30; 45; 65; 67; 69; 74; 84; 101; 104; 109 ])
                 ("src/Tests/e2e/upstream/language/derror.dark", Set.ofList [ 2; 10; 13; 15; 16; 18; 19; 22; 23; 32 ])
                 ("src/Tests/e2e/upstream/language/flow-control/eif.dark", Set.ofList [ 1; 12; 13; 14; 20 ])
                 ("src/Tests/e2e/upstream/language/nested-fns.dark", Set.ofList [ 55; 60 ])

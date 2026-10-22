@@ -1224,6 +1224,13 @@ let flattenParamGroups (paramGroupsRev: (string * Type) list list) : (string * T
 /// Parse a function declaration after `let` has been normalized to the private
 /// TFunctionDeclaration marker. Declaration names are unqualified.
 let parseFunctionDef (tokens: Token list) (parseExpr: Token list -> Result<Expr * Token list, string>) : Result<FunctionDef * Token list, string> =
+    // Quoted variables in source annotations bind implicit generic parameters.
+    // Do this at the syntax boundary: generated functions can also contain type
+    // variables, but those are inference placeholders rather than binders.
+    let signatureTypeParams declared parameters returnType =
+        parameters
+        |> List.fold (fun names (_, typ) -> collectTypeVarsInType typ names) declared
+        |> collectTypeVarsInType returnType
     let rec parseAdditionalParamGroups
         (parseGroup: Token list -> Result<(string * Type) list * Token list, string>)
         (paramGroupsRev: (string * Type) list list)
@@ -1293,7 +1300,7 @@ let parseFunctionDef (tokens: Token list) (parseExpr: Token list -> Result<Expr 
                                         |> Result.map (fun (body, remaining'') ->
                                             let funcDef = {
                                                 Name = name
-                                                TypeParams = typeParams
+                                                TypeParams = signatureTypeParams typeParams allParameters returnType
                                                 Params = NonEmptyList.fromList allParameters
                                                 ReturnType = returnType
                                                 Body = body
@@ -1308,7 +1315,7 @@ let parseFunctionDef (tokens: Token list) (parseExpr: Token list -> Result<Expr 
                             | _ -> Error "Expected ':' after function parameters"))
                 | _ -> Error "Expected '(' after type parameters")
         | TLParen :: rest' ->
-            // Non-generic function declaration
+            // Function declaration without an explicit type parameter list
             let paramsResult =
                 match rest' with
                 | TRParen :: _ -> Ok ([], rest')
@@ -1335,7 +1342,7 @@ let parseFunctionDef (tokens: Token list) (parseExpr: Token list -> Result<Expr 
                                 |> Result.map (fun (body, remaining'') ->
                                     let funcDef = {
                                         Name = name
-                                        TypeParams = []
+                                        TypeParams = signatureTypeParams [] allParameters returnType
                                         Params = NonEmptyList.fromList allParameters
                                         ReturnType = returnType
                                         Body = body

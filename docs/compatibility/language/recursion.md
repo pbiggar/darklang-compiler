@@ -14,6 +14,15 @@ copied from `backend/testfiles/execution/language/nested-fns.dark` where the
 syntax can remain identical. Parser-only rejection cases live beside the
 binding syntax corpus, and native completion cases remain in `tailcall.e2e`.
 
+Additional recursive generic sum coverage lives in
+`src/Tests/e2e/recursive_generic_sums.e2e` and the unchanged upstream
+`language/custom-data/enums.dark` red-black-tree case. The 2026-10-22 fix lets a
+nullary generic constructor constrain an unknown fold accumulator and carries
+user sum ownership layouts into stdlib specializations. It covers integer and
+String trees, non-generic recursive sums, empty folds, recursive traversal, and
+nominal/type-argument rejections; it does not change recursive binding or
+polymorphic recursion rules.
+
 ## Matrix
 
 | Same-source case | Interpreter `04fbe9d` | Compiler `b2e1f3d` | Current classification and evidence |

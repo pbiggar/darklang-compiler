@@ -18,7 +18,6 @@ resource representation. It also excludes performance and diagnostic wording.
 | Effect ceilings | Function return annotations may contain permission ceilings such as `:{}` and `:{Clock}` | Effect-row syntax and permission-ceiling enforcement are absent | `upstream/language/effect-ceiling.dark` fails while parsing the return annotation |
 | Qualified user values | A `val` declared in a module is available both bare inside the module and by its qualified module name | Unqualified top-level values work, but the imported nested-module value corpus cannot resolve names such as `UserDefined.stringValue`; package values exist only when explicitly catalogued | `upstream/language/custom-data/values.dark`: 19/72 cases pass when enabled, with qualified user and package values accounting for the failures |
 | Generic aliases | Aliases preserve the structure and type arguments of the aliased record, tuple, list, or sum | A generic record alias is not recognized as a record during field access | `upstream/language/custom-data/aliases.dark` fails on `Inner<'a, 'b>.b` while building its preamble |
-| Recursive generic sums | Recursive generic ADTs retain one nominal identity through construction, folds, and recursion | Some recursive generic uses acquire incompatible identities that render identically | `upstream/language/custom-data/enums.dark` reports `expected RBTree<a>, got RBTree<a>` in `ofList` |
 | Application grouping | Space application remains left-associative when a bare value argument is followed by a parenthesized argument: `f value (g x)` | Some such calls are grouped as though `value` were applied to the parenthesized expression | The unchanged Crypto AWS chain reports `signing is not a function`; Stream transforms report `s is not a function` |
 | Layout-separated list elements | Newline-separated list elements do not require commas | Some adjacent applications in a newline-separated list are consumed as additional arguments | The Blob concat case in `upstream/stdlib/bytes.dark` reports that `Blob.fromString` received five arguments; the other 17 cases pass |
 | Module environments | Opened modules and content-addressed packages participate in interpreter name resolution | Module-open environments and live content-addressed package loading are absent; compilation uses explicit units and snapshots | The identifier and name-resolution ledgers document this boundary |
@@ -27,6 +26,18 @@ resource representation. It also excludes performance and diagnostic wording.
 The application-grouping and layout-list rows are frontend gaps, not Crypto,
 Stream, or Blob algorithm differences. Focused compiler-authored tests that use
 unambiguous parentheses exercise those implementations successfully.
+
+The recursive generic sum entry from the pinned audit was closed on
+2026-10-22. Its apparently identical `RBTree<a>` types came from a misleading
+return-type diagnostic: a generic nullary constructor rejected the still-unknown
+fold accumulator type. Nullary constructors now unify with that context. Stdlib
+specializations also retain user sum ownership layouts, fixing the subsequent
+ownership-planning crash. The unchanged red-black-tree case in
+`upstream/language/custom-data/enums.dark` now runs by default, alongside focused
+integer/String tree construction, folding, recursive traversal, and rejection
+coverage in `recursive_generic_sums.e2e`. Other enum cases remain individually
+disabled for independent arity, match, rendering, and helper-linking gaps; this
+closure does not claim full enum parity.
 
 ## Standard-library differences
 

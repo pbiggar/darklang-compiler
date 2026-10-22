@@ -1319,31 +1319,20 @@ let rec internal checkExprWithParamNamesAndSumTypeNames
             |> Result.bind (fun (expectedPayload, payload) ->
             match expectedPayload, payload with
             | None, None ->
-                // Variant without payload, no payload provided - OK
-                if List.isEmpty typeParams then
-                    // Non-generic type - simple case
-                    let sumType = TSum (typeName, [])
-                    match expectedType with
-                    | Some expected when expected <> sumType ->
-                        Error (TypeMismatch (expected, sumType, $"constructor {variantName}"))
-                    | _ -> Ok (sumType, resolvedExpr None)
-                else
-                    // Generic type with nullary constructor (e.g., None in Option<t>)
-                    // Try to get type arguments from expectedType
+                // Keep contextual type arguments when available. Otherwise a
+                // nullary constructor must constrain an unknown context (such
+                // as a fold accumulator), just like a payload constructor.
+                let sumType =
                     match expectedType with
                     | Some (TSum (expectedName, args)) when expectedName = typeName && List.length args = List.length typeParams ->
-                        // Use type args from expected type
-                        let sumType = TSum (typeName, args)
-                        Ok (sumType, resolvedExpr None)
-                    | Some expected ->
-                        // Expected type doesn't match - error
-                        let sumTypeWithVars = TSum (typeName, typeParams |> List.map TVar)
-                        Error (TypeMismatch (expected, sumTypeWithVars, $"constructor {variantName}"))
-                    | None ->
-                        // No expected type - return type with unresolved type variables
-                        // This allows type inference to resolve them later from context
-                        let sumType = TSum (typeName, typeParams |> List.map TVar)
-                        Ok (sumType, resolvedExpr None)
+                        TSum (typeName, args)
+                    | _ -> TSum (typeName, typeParams |> List.map TVar)
+                match expectedType with
+                | Some expected ->
+                    match reconcileTypes (Some aliasReg) expected sumType with
+                    | Some reconciledType -> Ok (reconciledType, resolvedExpr None)
+                    | None -> Error (TypeMismatch (expected, sumType, $"constructor {variantName}"))
+                | None -> Ok (sumType, resolvedExpr None)
             | None, Some _ ->
                 // Variant doesn't take payload but one was provided
                 Error (GenericError $"Constructor {variantName} does not take a payload")
