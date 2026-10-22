@@ -23,9 +23,7 @@ groups:
     Partial application of named functions: supported
     Partial application of function values: supported
     Generic partial application with explicit types: supported
-    Generic partial application using inference alone:
-      status: partial
-      notes: Some generic partial applications require explicit type arguments.
+    Generic partial application using inference alone: supported
     Recursive functions: supported
     Mutually recursive functions: supported
     Local recursion: supported
