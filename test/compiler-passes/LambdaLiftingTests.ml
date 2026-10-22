@@ -10,7 +10,7 @@ let ( let* ) = Result.bind
 
 let convertProgramToAnf typedAst =
   let moduleRegistry = DarkStdlib.buildModuleRegistry () in
-  let monomorphized = PrepareFunctions.monomorphize typedAst in
+  let* monomorphized = PrepareFunctions.monomorphize typedAst in
   let inlined = InlineLambdas.inlineLambdasInProgram monomorphized in
   let catalog : LiftFunctions.functionCatalog =
     {

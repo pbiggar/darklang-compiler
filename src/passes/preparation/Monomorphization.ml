@@ -326,6 +326,12 @@ let resolveSpecializedTraits symbols body =
     body
 
 let specializeFromSpecs symbols definitions initial =
+  let* () =
+    SpecializationGrowth.check definitions
+      (fun (artifact : S.genericFunctionArtifact) ->
+        collectTypeAppsFromFunc artifact.S.symbols artifact.S.func)
+      initial
+  in
   let rec iterate pending processed functions registry externalSpecs symbols =
     let fresh = SS.diff pending processed in
     if SS.is_empty fresh then
@@ -388,7 +394,7 @@ let specializeFromSpecs symbols definitions initial =
       iterate pending (SS.union processed fresh) (newFunctions @ functions)
         registry externalSpecs symbols
   in
-  iterate initial SS.empty [] SM.empty SS.empty symbols
+  Ok (iterate initial SS.empty [] SM.empty SS.empty symbols)
 
 let isIntrinsicTypeAppName = function
   | "__raw_get" | "__raw_take" | "__raw_slot_init" | "__stream_to_rawptr"
@@ -1025,7 +1031,7 @@ let registryWithExternalSpecs (specialization : S.specializationResult) =
 let monomorphizeWithGenericFuncDefs definitions program =
   let program = StaticCallReduction.reduce definitions program in
   let specs = collectInitialMonomorphizationSpecs program in
-  let specialization =
+  let* specialization =
     specializeFromSpecs (C.programSymbols program) definitions specs
   in
   let symbols, functions =
@@ -1037,13 +1043,9 @@ let monomorphizeWithGenericFuncDefs definitions program =
     @ C.programTopLevels program
   in
   let program = C.programFromCheckedParts (symbols, tops) in
-  match
-    replaceTypeAppsInProgramWithRegistry
-      (registryWithExternalSpecs specialization)
-      program
-  with
-  | Ok program -> program
-  | Error message -> Crash.crash ("monomorphizeWithGenericFuncDefs: " ^ message)
+  replaceTypeAppsInProgramWithRegistry
+    (registryWithExternalSpecs specialization)
+    program
 
 (*
    Check if a program needs lambda lowering (lambda inlining + lifting)

@@ -372,21 +372,6 @@ let[@warning "-4"] checkNamed checkExpression checkedLiteral globals locals
                       in
                       let inferred =
                         bind inferred (fun types ->
-                            match globals.currentFunction with
-                            | Some (currentId, currentName, currentParams)
-                              when currentId = signature.id
-                                   && types
-                                      <> List.map
-                                           (fun name -> AST.TVar name)
-                                           currentParams ->
-                                Error
-                                  ("Polymorphic recursion is not supported \
-                                    inside recursive group member: "
-                                 ^ currentName)
-                            | _ -> Ok types)
-                      in
-                      let inferred =
-                        bind inferred (fun types ->
                             let key =
                               match (qualifiedFnName name, types) with
                               | [ "Stdlib"; "List"; "dedup" ], [ key ] ->

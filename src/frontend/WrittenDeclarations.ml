@@ -372,8 +372,6 @@ let checkFunction (checkExpression : expressionChecker) globals symbols path
                        modulePath = path;
                        typeParams = S.of_list signature.typeParams;
                        bounds = signature.bounds;
-                       currentFunction =
-                         Some (signature.id, name, signature.typeParams);
                      }
                      locals symbols (Some signature.return) fn.WT.body)))
 
@@ -550,7 +548,6 @@ let checkItems (checkExpression : expressionChecker) baseEnvironment
                   allowInternal;
                   modulePath = [];
                   typeParams = S.empty;
-                  currentFunction = None;
                 }
               in
               bind (WrittenTraitSupport.prepareBounds initialGlobals items)

@@ -6,7 +6,7 @@ Interpreter revision: `e76430be5cd9f6b77ed255430dc34a1b58dd8fc4`.
 
 | Area | Status counts |
 | --- | --- |
-| [features](../../../porting/language-features.yaml) | 197 supported, 16 missing, 1 partial |
+| [features](../../../porting/language-features.yaml) | 197 supported, 15 missing, 2 partial |
 | [parser](../../../porting/parser.yaml) | 30 supported, 1 partial |
 | [stdlib](../../../porting/generated/stdlib.yaml) | 834 different, 569 missing, 595 identical |
 | [packages](../../../porting/generated/packages.yaml) | 3709 missing, 5 identical, 41 different |

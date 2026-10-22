@@ -3,8 +3,8 @@ upstream:
   revision: e76430be5cd9f6b77ed255430dc34a1b58dd8fc4
 features:
   supported: 197
-  missing: 16
-  partial: 1
+  missing: 15
+  partial: 2
 parser:
   supported: 30
   partial: 1
