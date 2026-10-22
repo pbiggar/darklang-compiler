@@ -45,8 +45,11 @@ val nullablePointerSumPayloadType :
 val spareImmediateSumSentinel :
   string -> AST.semanticType list -> sumRepresentationIndex -> int64 option
 
+val sumTestExpr :
+  tag:int -> AST.semanticType -> ANF.atom -> sumRepresentationIndex -> ANF.cExpr
+
 val sumPayloadExpr :
-  AST.semanticType -> ANF.atom -> sumRepresentationIndex -> ANF.cExpr
+  tag:int -> AST.semanticType -> AST.semanticType -> ANF.atom -> ANF.cExpr
 
 val sumTypeNamesFromVariantLookup : variantLookup -> StringOrder.Set.t
 val sumMetadataFromVariantLookup : variantLookup -> sumMetadata

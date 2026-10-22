@@ -212,6 +212,8 @@ fragments use `__` even where the interpreter also has private helpers.
 | `packages/darklang/stdlib/duration.dark` | `Darklang.Stdlib.Duration`  | `packages/darklang/stdlib/duration.dark` |
 | `packages/darklang/stdlib/blob.dark` | `Darklang.Stdlib.Blob`  | `packages/darklang/stdlib/blob.dark` |
 | `packages/darklang/stdlib/stream.dark` | `Darklang.Stdlib.Stream`  | `packages/darklang/stdlib/stream.dark` |
+| `packages/darklang/stdlib/__async.dark` | `Darklang.Stdlib.__Async` | Compiler support: typed native promise cells, reference-counted lifecycle ownership, and waiter handoff |
+| `packages/darklang/stdlib/__task.dark` | `Darklang.Stdlib.__Task` | Compiler support: private cooperative task scheduler, promise forcing and timer producers |
 | `packages/darklang/stdlib/html.dark` | `Darklang.Stdlib.Html`  | `packages/darklang/stdlib/html.dark` |
 | `packages/darklang/stdlib/http.dark` | `Darklang.Stdlib.Http`  | `packages/darklang/stdlib/http.dark` |
 | `packages/darklang/stdlib/http/request.dark` | `Darklang.Stdlib.Http.Request`  | `packages/darklang/stdlib/http.dark` |

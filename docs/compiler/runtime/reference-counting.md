@@ -46,6 +46,8 @@ live in `src/memory/MemoryPlanning.ml`, and stable keys in
 Important current rules:
 
 - calls are treated as returning owned values
+- `RawTake<T>` transfers the raw slot's existing owning edge to its result;
+  discarding that result releases the edge, including for function values
 - owned temporaries are released at scope exit unless returned or otherwise
   retained
 - local aliases and projections are treated as borrowed

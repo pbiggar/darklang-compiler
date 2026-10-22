@@ -1,0 +1,4 @@
+// async_captured_variant_ownership.e2e - Captured carriers survive returns through nested variant representations.
+
+Stdlib.__Task.__runMain (fun _unit -> let gate = Stdlib.__Async.__new<Int64> () in let value = Stdlib.__Task.__transport (Stdlib.__Async.__pending gate) in let make = fun ignored -> Some value in let result = make () in let _ = Stdlib.__Task.__resolve (__fiber_current ()) gate 42L in result) = Some 42L // a returned variant retains a captured pending payload; leak_check
+Stdlib.__Task.__runMain (fun _unit -> let gate = Stdlib.__Async.__new<Int64> () in let value = Stdlib.__Task.__transport (Stdlib.__Async.__pending gate) in let result = Stdlib.List.map [1L] (fun ignored -> Some value) in let _ = Stdlib.__Task.__resolve (__fiber_current ()) gate 42L in result) = [Some 42L] // list callbacks retain variants that alias captured carriers; leak_check

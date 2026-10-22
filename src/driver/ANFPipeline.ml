@@ -7,6 +7,18 @@ module F = SpecializationIdentity.FunctionSet
 
 let ( let* ) = Result.bind
 
+type asyncRuntime = {
+  context : CompilationContexts.pipelineContext;
+  materialize :
+    CompilationContexts.pipelineContext ->
+    SpecializationIdentity.SpecSet.t ->
+    (CompilationContexts.pipelineContext * ANF.functionDef list, string) result;
+  materializeSource :
+    CompilationContexts.pipelineContext ->
+    SpecializationIdentity.SpecSet.t ->
+    (CompilationContexts.pipelineContext * ANF.functionDef list, string) result;
+}
+
 let buildConversionResult (ANF.Program (functions, _) as program)
     (registries : AST_to_ANF.registries) ownershipContracts =
   let funcReg =
@@ -43,11 +55,11 @@ let stdlibInliningConfig =
   }
 
 (* Lower accumulator helpers, construct SSA, then optimize and elaborate ownership. *)
-let buildAnf verbosity (options : compilerOptions) elapsed
-    (registries : AST_to_ANF.registries) nextFunctionOrdinal inliningConfig
-    externalInlineCandidates externalOptimizationFunctions
-    nonInlineableFunctionNames functions ownershipContracts
-    specializeInternalSignatures passTimingRecorder =
+let buildAnf ?(asyncDefinitions = StringOrder.Map.empty) ?asyncRuntime verbosity
+    (options : compilerOptions) elapsed (registries : AST_to_ANF.registries)
+    nextFunctionOrdinal inliningConfig externalInlineCandidates
+    externalOptimizationFunctions nonInlineableFunctionNames functions
+    ownershipContracts specializeInternalSignatures passTimingRecorder =
   let elapsedDetail enabled duration =
     if verbosity >= 2 && enabled then
       let scaled = duration *. 10. in
@@ -79,6 +91,316 @@ let buildAnf verbosity (options : compilerOptions) elapsed
       registries.AST_to_ANF.funcReg
       (ANF.Program (functions, ANF.Return ANF.UnitLiteral))
   in
+  let (ANF.Program (functions, main)) = anfProgram in
+  let asyncDefinitions =
+    StringOrder.Map.fold
+      (fun name definition definitions ->
+        if StringOrder.Map.mem name definitions then definitions
+        else StringOrder.Map.add name definition definitions)
+      asyncDefinitions externalOptimizationFunctions
+  in
+  (* Ownership uses one temporary-type map for the compilation unit. Separately
+     converted helper bodies must enter that same temporary namespace. *)
+  let freshenHelpers functions helpers =
+    let maximum =
+      List.fold_left
+        (fun maximum fn -> max maximum (ANF_to_MIR.maxTempIdInFunction fn))
+        0 functions
+    in
+    let helpers, _ =
+      List.fold_left
+        (fun (helpers, gen) (fn : ANF.functionDef) ->
+          let parameters, substitutions, gen =
+            List.fold_left
+              (fun (parameters, substitutions, gen) (parameter : ANF.typedParam)
+                 ->
+                let id, gen = ANF.freshVar gen in
+                ( { parameter with ANF.id } :: parameters,
+                  InliningCommon.TempMap.add parameter.ANF.id id substitutions,
+                  gen ))
+              ([], InliningCommon.TempMap.empty, gen)
+              fn.ANF.typedParams
+          in
+          let body, gen =
+            InliningCommon.renameExpr substitutions gen fn.ANF.body
+          in
+          ( { fn with ANF.typedParams = List.rev parameters; body } :: helpers,
+            gen ))
+        ([], ANF.VarGen (maximum + 1))
+        helpers
+    in
+    List.rev helpers
+  in
+  let* callbacks =
+    AsyncCallableSpecialization.prepare registries.AST_to_ANF.functionIds
+      nextFunctionOrdinal
+      (fun () ->
+        RcTypeFacts.createContext
+          (buildConversionResult
+             (ANF.Program (functions, main))
+             registries ownershipContracts))
+      asyncDefinitions functions
+  in
+  let functions = callbacks.AsyncCallableSpecialization.functions in
+  let asyncDefinitions =
+    callbacks.AsyncCallableSpecialization.externalDefinitions
+  in
+  let nextFunctionOrdinal =
+    callbacks.AsyncCallableSpecialization.nextFunctionOrdinal
+  in
+  let generated =
+    List.filter
+      (fun (fn : ANF.functionDef) ->
+        not
+          (FunctionIdMap.containsKey fn.ANF.id
+             registries.AST_to_ANF.functionNames))
+      functions
+  in
+  let registries =
+    if generated = [] then registries
+    else
+      {
+        registries with
+        AST_to_ANF.funcReg =
+          AST_to_ANF.extendFunctionRegistryWithConverted
+            registries.AST_to_ANF.funcReg generated;
+        functionNames =
+          List.fold_left
+            (fun names (fn : ANF.functionDef) ->
+              FunctionIdMap.add fn.ANF.id fn.ANF.name names)
+            registries.AST_to_ANF.functionNames generated;
+        functionIds =
+          List.fold_left
+            (fun ids (fn : ANF.functionDef) ->
+              StringOrder.Map.add fn.ANF.name fn.ANF.id ids)
+            registries.AST_to_ANF.functionIds generated;
+      }
+  in
+  let asyncRuntime =
+    Option.map
+      (fun runtime ->
+        let symbols =
+          List.fold_left
+            (fun symbols (fn : ANF.functionDef) ->
+              CheckedAST.registerGeneratedFunction fn.ANF.name fn.ANF.id symbols)
+            runtime.context.CompilationContexts.symbols generated
+        in
+        {
+          runtime with
+          context =
+            { runtime.context with CompilationContexts.symbols; registries };
+        })
+      asyncRuntime
+  in
+  (* Runtime intrinsics recover slot types from specialized names. Publish
+     private variants before source helper conversion, not just to RC planning:
+     otherwise their nominal names are decoded as records and lose sum edges. *)
+  let withAsyncSumShapes (registries : AST_to_ANF.registries) sumShapes =
+    let physicalVariants = AsyncSumStorage.physicalVariantLookup sumShapes in
+    let variantLookup =
+      StringOrder.Map.union
+        (fun _ existing _ -> Some existing)
+        registries.AST_to_ANF.variantLookup physicalVariants
+    in
+    {
+      registries with
+      AST_to_ANF.rcSumShapeReg = sumShapes;
+      variantLookup;
+      sumMetadata =
+        LoweringPrimitives.sumMetadataFromVariantLookup variantLookup;
+    }
+  in
+  let rec lowerAsync (registries : AST_to_ANF.registries) nextFunctionOrdinal
+      runtime helperNames definitions functions =
+    (* Preamble specializations may exist only as native code. Recover source
+       provenance from the specialization registry, never from mangled suffixes.
+       Stdlib operations retain their existing explicit storage adapters. *)
+    let sourceSpecializations =
+      match runtime with
+      | None -> StringOrder.Map.empty
+      | Some runtime ->
+          SpecializationIdentity.SpecMap.fold
+            (fun ((base, _) as spec) name found ->
+              if
+                StringOrder.Map.mem base
+                  runtime.context.CompilationContexts.genericFuncDefs
+                && (not (String.starts_with ~prefix:"Darklang.Stdlib." base))
+                && not (String.starts_with ~prefix:"__dark_" base)
+              then StringOrder.Map.add name spec found
+              else found)
+            runtime.context.CompilationContexts.specRegistry
+            StringOrder.Map.empty
+    in
+    match
+      LowerAsyncDemands.lower sourceSpecializations
+        registries.AST_to_ANF.funcReg registries.AST_to_ANF.functionNames
+        registries.AST_to_ANF.functionIds registries.AST_to_ANF.rcSumShapeReg
+        nextFunctionOrdinal definitions functions
+    with
+    | Ok lowered ->
+        Ok
+          ( lowered,
+            withAsyncSumShapes registries lowered.LowerAsyncDemands.sumShapes,
+            helperNames )
+    | Error (LowerAsyncDemands.Diagnostic message) -> Error message
+    | Error
+        (LowerAsyncDemands.MissingSourceSpecializations (requested, sumShapes))
+      -> (
+        match runtime with
+        | None ->
+            Error
+              "Async source specialization requires a source compilation \
+               context"
+        | Some runtime ->
+            let context =
+              {
+                runtime.context with
+                CompilationContexts.registries =
+                  withAsyncSumShapes registries sumShapes;
+              }
+            in
+            let* context, sources =
+              runtime.materializeSource context requested
+            in
+            let* sumShapes =
+              AsyncSumStorage.includePhysicalShapes
+                ~into:
+                  context.CompilationContexts.registries
+                    .AST_to_ANF.rcSumShapeReg sumShapes
+            in
+            let registry =
+              withAsyncSumShapes context.CompilationContexts.registries
+                sumShapes
+            in
+            let context =
+              { context with CompilationContexts.registries = registry }
+            in
+            let sources =
+              freshenHelpers
+                (functions @ List.map snd (StringOrder.Map.bindings definitions))
+                sources
+            in
+            let definitions =
+              List.fold_left
+                (fun definitions (fn : ANF.functionDef) ->
+                  StringOrder.Map.add fn.ANF.name fn definitions)
+                definitions sources
+            in
+            let provided =
+              SpecializationIdentity.SpecSet.for_all
+                (fun (name, types) ->
+                  let name = SpecializationIdentity.specName name types in
+                  match StringOrder.Map.find_opt name definitions with
+                  | Some (fn : ANF.functionDef) ->
+                      StringOrder.Map.find_opt name
+                        registries.AST_to_ANF.functionIds
+                      = Some fn.ANF.id
+                  | None -> false)
+                requested
+            in
+            if not provided then
+              Error
+                "Async source specialization did not provide the requested \
+                 bodies with their existing identities"
+            else
+              lowerAsync registry
+                (CheckedAST.nextFunctionOrdinal
+                   context.CompilationContexts.symbols)
+                (Some { runtime with context })
+                helperNames definitions functions)
+    | Error
+        (LowerAsyncDemands.MissingRuntimeSpecializations (requested, sumShapes))
+      -> (
+        let registries = withAsyncSumShapes registries sumShapes in
+        match runtime with
+        | None ->
+            Error
+              "Async runtime specialization requires a source compilation \
+               context"
+        | Some runtime ->
+            let context =
+              { runtime.context with CompilationContexts.registries }
+            in
+            let* context, helpers = runtime.materialize context requested in
+            let* sumShapes =
+              AsyncSumStorage.includePhysicalShapes
+                ~into:
+                  context.CompilationContexts.registries
+                    .AST_to_ANF.rcSumShapeReg sumShapes
+            in
+            let context =
+              {
+                context with
+                CompilationContexts.registries =
+                  withAsyncSumShapes context.CompilationContexts.registries
+                    sumShapes;
+              }
+            in
+            let provided =
+              SpecializationIdentity.SpecSet.for_all
+                (fun (name, types) ->
+                  StringOrder.Map.mem
+                    (SpecializationIdentity.specName name types)
+                    context.CompilationContexts.registries
+                      .AST_to_ANF.functionIds)
+                requested
+            in
+            if not provided then
+              Error
+                "Async runtime specialization did not provide the requested \
+                 helpers"
+            else
+              let registry = context.CompilationContexts.registries in
+              let (ANF.Program (helpers, _)) =
+                ANF_Intrinsics.canonicalizeProgram
+                  registry.AST_to_ANF.functionIds registry.AST_to_ANF.funcReg
+                  (ANF.Program (helpers, ANF.Return ANF.UnitLiteral))
+              in
+              let helperNames =
+                List.fold_left
+                  (fun names (fn : ANF.functionDef) -> F.add fn.ANF.id names)
+                  helperNames helpers
+              in
+              lowerAsync registry
+                (CheckedAST.nextFunctionOrdinal
+                   context.CompilationContexts.symbols)
+                (Some { runtime with context })
+                helperNames definitions
+                (functions @ freshenHelpers functions helpers))
+  in
+  let* lowered, registries, helperNames =
+    lowerAsync registries nextFunctionOrdinal asyncRuntime F.empty
+      asyncDefinitions functions
+  in
+  (* Match SourcePreparation's policy for late stdlib specializations. *)
+  let nonInlineableFunctionNames =
+    F.union nonInlineableFunctionNames helperNames
+  in
+  let functions =
+    LowerSumRepresentations.lower
+      (AsyncSumStorage.representationIndex registries.AST_to_ANF.rcSumShapeReg)
+      lowered.LowerAsyncDemands.functions
+  in
+  let nextFunctionOrdinal = lowered.LowerAsyncDemands.nextFunctionOrdinal in
+  let registries =
+    {
+      registries with
+      AST_to_ANF.funcReg =
+        AST_to_ANF.extendFunctionRegistryWithConverted
+          registries.AST_to_ANF.funcReg functions;
+      functionNames =
+        List.fold_left
+          (fun names (fn : ANF.functionDef) ->
+            FunctionIdMap.add fn.ANF.id fn.ANF.name names)
+          registries.AST_to_ANF.functionNames functions;
+      functionIds =
+        List.fold_left
+          (fun ids (fn : ANF.functionDef) ->
+            StringOrder.Map.add fn.ANF.name fn.ANF.id ids)
+          registries.AST_to_ANF.functionIds functions;
+    }
+  in
+  let anfProgram = ANF.Program (functions, main) in
   if shouldDumpIR verbosity options.dumpANF then
     printANFProgram options "=== ANF (before optimization) ===" anfProgram;
   let anfLoweringStart = elapsed () in
@@ -391,4 +713,4 @@ let buildAnf verbosity (options : compilerOptions) elapsed
   let rcElapsed = elapsed () -. rcStart in
   recordPassTiming passTimingRecorder "Reference Count Insertion" rcElapsed;
   elapsedDetail true rcElapsed;
-  Ok (preRCFunctions, ssaAfterRC, typeMap)
+  Ok (preRCFunctions, ssaAfterRC, typeMap, registries.AST_to_ANF.rcSumShapeReg)

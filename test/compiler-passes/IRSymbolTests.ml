@@ -35,6 +35,68 @@ let testFunctionIdentitiesComposeAcrossUnits () =
   else
     Error "Threaded function allocation did not preserve and advance identities"
 
+let constructorCatalog variants baseTypes =
+  Result.map CheckedAST.programSymbols
+    (CheckedAST.ofTypedProgram variants StringOrder.Set.empty baseTypes
+       CheckedAST.emptyFunctionCatalog
+       (fun _ -> None)
+       (AST.Program []))
+
+let testConstructorCatalogCompositionIsIdempotent () =
+  let owner = "Catalog.Choice" in
+  let ownerId, seed =
+    CheckedAST.internType owner (CheckedAST.emptySymbols ())
+  in
+  let variants =
+    StringOrder.Map.singleton (owner ^ ".Present") (owner, [], 7, [ AST.TInt64 ])
+  in
+  Result.bind
+    (constructorCatalog variants (CheckedAST.typeCatalog seed))
+    (fun symbols ->
+      let rec compose remaining symbols =
+        if remaining = 0 then symbols
+        else
+          let combined, _ = CheckedAST.composeTopLevels symbols symbols [] in
+          compose (remaining - 1) combined
+      in
+      let composed = compose 64 symbols in
+      let included = CheckedAST.includeTypeMetadata composed symbols in
+      let expected = Some (AST.constructorId ownerId "Present" 7) in
+      if CheckedAST.tryFindConstructorId owner "Present" included = expected
+      then Ok ()
+      else Error "Repeated catalog composition changed a constructor identity")
+
+let testConstructorCatalogCompositionPreservesOwnerPrecedence () =
+  let owner = "Catalog.Choice" in
+  let ownerId, seed =
+    CheckedAST.internType owner (CheckedAST.emptySymbols ())
+  in
+  let _, seed = CheckedAST.internType "Catalog.Other" seed in
+  let baseTypes = CheckedAST.typeCatalog seed in
+  let catalog declaredOwner tag =
+    constructorCatalog
+      (StringOrder.Map.singleton (owner ^ ".Present")
+         (declaredOwner, [], tag, []))
+      baseTypes
+  in
+  Result.bind (catalog owner 7) (fun target ->
+      Result.bind (catalog "Catalog.Other" 19) (fun alias ->
+          let combined, _ = CheckedAST.composeTopLevels alias target [] in
+          if
+            CheckedAST.tryFindConstructorId owner "Present" combined
+            <> Some (AST.constructorId ownerId "Present" 7)
+          then Error "A different owner's alias hid the target constructor"
+          else
+            Result.bind (catalog owner 11) (fun source ->
+                let combined, _ =
+                  CheckedAST.composeTopLevels source target []
+                in
+                if
+                  CheckedAST.tryFindConstructorId owner "Present" combined
+                  = Some (AST.constructorId ownerId "Present" 11)
+                then Ok ()
+                else Error "Constructor composition lost source precedence")))
+
 let instructions func =
   L.LabelMap.bindings func.L.cfg.L.blocks
   |> List.concat_map (fun (_, block) -> block.L.instrs)
@@ -279,6 +341,10 @@ let tests =
       testFunctionIdentitiesDoNotHashCollide );
     ( "function identities compose across units",
       testFunctionIdentitiesComposeAcrossUnits );
+    ( "constructor catalogs compose idempotently",
+      testConstructorCatalogCompositionIsIdempotent );
+    ( "constructor catalogs preserve owner precedence",
+      testConstructorCatalogCompositionPreservesOwnerPrecedence );
     ("mir → lir symbolic operands", testMirToLirSymbolicOperands);
     ( "mir → lir reports missing entry block",
       testMirToLirReportsMissingEntryBlock );

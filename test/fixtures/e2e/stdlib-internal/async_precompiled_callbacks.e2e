@@ -1,0 +1,7 @@
+// async_precompiled_callbacks.e2e - Known callbacks survive precompiled source reuse.
+
+let reusedApply (callback: Int64 -> Int64) (value: Int64) : Int64 = callback value
+let reusedCapture (value: Int64) : Int64 = reusedApply (fun ignored -> value) 1L
+let reusedProducer (gate: Stdlib.__Async.__Promise<Int64>) : Int64 = Stdlib.__Task.__transport (Stdlib.__Async.__pending gate)
+
+Stdlib.__Task.__runMain (fun _unit -> let gate = Stdlib.__Async.__new<Int64> () in let value = Stdlib.__Task.__transport (Stdlib.__Async.__pending gate) in let result = reusedCapture value in let _ = Stdlib.__Task.__resolve (__fiber_current ()) gate 42L in result) = 42L // a precompiled wrapper may return a pending captured result without demanding it; leak_check

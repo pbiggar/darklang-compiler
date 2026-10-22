@@ -1,0 +1,36 @@
+// async_recursive_sum.e2e - Recursive variant transport does not demand inactive or ignored leaves.
+
+type AsyncRecursiveSum = AsyncRecursiveLeaf of Int64 | AsyncRecursiveBranch of AsyncRecursiveSum
+let asyncRecursiveSumWrap (depth: Int64) (value: Int64) : AsyncRecursiveSum =
+  if depth == 0L then AsyncRecursiveLeaf value
+  else AsyncRecursiveBranch (asyncRecursiveSumWrap (depth - 1L) value)
+
+let asyncRecursiveSumRead (tree: AsyncRecursiveSum) : Int64 =
+  match tree with
+  | AsyncRecursiveLeaf value -> value + 2L
+  | AsyncRecursiveBranch child -> asyncRecursiveSumRead child
+
+type AsyncRecursiveText = AsyncRecursiveTextLeaf of String | AsyncRecursiveTextBranch of AsyncRecursiveText
+let asyncRecursiveTextWrap (depth: Int64) (value: String) : AsyncRecursiveText =
+  if depth == 0L then AsyncRecursiveTextLeaf value
+  else AsyncRecursiveTextBranch (asyncRecursiveTextWrap (depth - 1L) value)
+
+type AsyncRecursiveGeneric<'a> = AsyncGenericLeaf of a | AsyncGenericBranch of AsyncRecursiveGeneric<a>
+let asyncRecursiveGenericWrap<'a> (depth: Int64) (value: a) : AsyncRecursiveGeneric<a> =
+  if depth == 0L then AsyncGenericLeaf value
+  else AsyncGenericBranch (asyncRecursiveGenericWrap (depth - 1L) value)
+
+type AsyncRecursiveChildren = AsyncRecursiveChildren of (Int64 * List<AsyncRecursiveChildren>)
+let asyncRecursiveChildrenWrap (depth: Int64) (value: Int64) : AsyncRecursiveChildren =
+  if depth == 0L then AsyncRecursiveChildren ((value, []))
+  else AsyncRecursiveChildren ((0L, [asyncRecursiveChildrenWrap (depth - 1L) value]))
+
+Stdlib.__Task.__runMain (fun _unit -> let gate = Stdlib.__Async.__new<Int64> () in let value = Stdlib.__Task.__transport (Stdlib.__Async.__pending gate) in match asyncRecursiveSumWrap 2L value with | AsyncRecursiveBranch _ -> 42L | AsyncRecursiveLeaf _ -> 0L) = 42L // recursive interfaces preserve unresolved leaves when only the outer tag is needed; leak_check
+Stdlib.__Task.__runMain (fun _unit -> let gate = Stdlib.__Async.__new<Int64> () in let value = Stdlib.__Task.__transport (Stdlib.__Async.__pending gate) in let child = Stdlib.__Task.__startCurrent (fun _ -> Stdlib.__Task.__resolve (__fiber_current ()) gate 40L) in asyncRecursiveSumRead (asyncRecursiveSumWrap 3L value)) = 42L // recursive projections demand the selected leaf and yield to its producer; leak_check
+Stdlib.__Task.__runMain (fun _unit -> let gate = Stdlib.__Async.__new<Int64> () in let value = Stdlib.__Task.__transport (Stdlib.__Async.__pending gate) in let child = Stdlib.__Task.__startCurrent (fun _ -> Stdlib.__Task.__resolve (__fiber_current ()) gate 19L) in asyncRecursiveSumRead (asyncRecursiveSumWrap 2L value) + asyncRecursiveSumRead (asyncRecursiveSumWrap 0L 19L)) = 42L // shared concrete and pending recursive call interfaces agree; leak_check
+Stdlib.__Task.__runMain (fun _unit -> let gate = Stdlib.__Async.__new<String> () in let value = Stdlib.__Task.__transport (Stdlib.__Async.__pending gate) in match asyncRecursiveTextWrap 30L value with | AsyncRecursiveTextBranch _ -> 42L | AsyncRecursiveTextLeaf _ -> 0L) = 42L // abandoning a recursive tree releases managed pending leaves without forcing them; leak_check
+let tree = Stdlib.__Task.__runMain (fun _unit -> let gate = Stdlib.__Async.__new<String> () in let value = Stdlib.__Task.__transport (Stdlib.__Async.__pending gate) in let tree = asyncRecursiveTextWrap 2L value in let _ = Stdlib.__Task.__resolve (__fiber_current ()) gate "ready" in tree) in match tree with | AsyncRecursiveTextBranch (AsyncRecursiveTextBranch (AsyncRecursiveTextLeaf text)) -> text == "ready" | _ -> false = true // native result conversion rebuilds recursive managed sums; leak_check
+Stdlib.__Task.__runMain (fun _unit -> let gate = Stdlib.__Async.__new<Int64> () in let value = Stdlib.__Task.__transport (Stdlib.__Async.__pending gate) in match asyncRecursiveGenericWrap 2L value with | AsyncGenericBranch _ -> 42L | AsyncGenericLeaf _ -> 0L) = 42L // regular generic recursion closes at its instantiated type; leak_check
+Stdlib.__Task.__runMain (fun _unit -> let gate = Stdlib.__Async.__new<String> () in let value = Stdlib.__Task.__transport (Stdlib.__Async.__pending gate) in match asyncRecursiveGenericWrap 2L value with | AsyncGenericBranch _ -> 42L | AsyncGenericLeaf _ -> 0L) = 42L // distinct recursive generic instantiations retain their own managed layouts; leak_check
+Stdlib.__Task.__runMain (fun _unit -> let gate = Stdlib.__Async.__new<Int64> () in let value = Stdlib.__Task.__transport (Stdlib.__Async.__pending gate) in match asyncRecursiveChildrenWrap 2L value with | AsyncRecursiveChildren ((_, children)) -> Stdlib.List.length children) = 1 // recursion through tuple and list storage leaves payloads unresolved; leak_check
+let tree = Stdlib.__Task.__runMain (fun _unit -> let gate = Stdlib.__Async.__new<String> () in let value = Stdlib.__Task.__transport (Stdlib.__Async.__pending gate) in let tree = Stdlib.__Task.__delayTransparent 0L (asyncRecursiveTextWrap 2L value) in let _ = Stdlib.__Task.__resolve (__fiber_current ()) gate "ready" in tree) in match tree with | AsyncRecursiveTextBranch (AsyncRecursiveTextBranch (AsyncRecursiveTextLeaf text)) -> text == "ready" | _ -> false = true // outer pendingness preserves a recursive storage interface; leak_check

@@ -65,15 +65,26 @@ let buildCheckedContext (stdlib : X.stdlibResult)
           analysis.X.writtenEnvironment;
     }
   in
-  let* functions, ssa, typeMap =
-    ANFPipeline.buildAnf 0 options elapsed registries
+  let* functions, ssa, typeMap, sumShapes =
+    ANFPipeline.buildAnf ~asyncDefinitions:stdlib.X.stdlibAsyncDefinitions
+      ~asyncRuntime:
+        {
+          ANFPipeline.context;
+          materialize = AsyncRuntimeMaterialization.materialize recorder;
+          materializeSource =
+            AsyncRuntimeMaterialization.materializeSource recorder;
+        }
+      0 options elapsed registries
       (CheckedAST.nextFunctionOrdinal conversion.P.symbols)
       InliningCommon.defaultConfig FunctionIdMap.empty M.empty
       SpecializationIdentity.FunctionSet.empty conversion.P.functions
       FunctionIdMap.empty false recorder
     |> Result.map_error preambleError
   in
-  let context = X.includeCompiledFunctions functions context in
+  let registries = { registries with AST_to_ANF.rcSumShapeReg = sumShapes } in
+  let context =
+    X.includeCompiledFunctions functions { context with X.registries }
+  in
   let* allocated, summaries =
     NativePipeline.lowerToAllocatedLirWithKnown stdlib.X.callGraphSummaries
       stdlib.X.context.X.target 0 options elapsed recorder None None "preamble"
@@ -97,6 +108,7 @@ let buildCheckedContext (stdlib : X.stdlibResult)
     ( stdlib,
       {
         X.context;
+        sourceAnfFunctions = conversion.P.sourceFunctions;
         anfFunctions = functions;
         typeMap;
         symbolicFunctions = symbolic;
@@ -114,6 +126,7 @@ let buildPreambleContext allowInternal (stdlib : X.stdlibResult) preamble
       ( stdlib,
         {
           X.context = stdlib.X.context;
+          sourceAnfFunctions = [];
           anfFunctions = [];
           typeMap = stdlib.X.stdlibTypeMap;
           symbolicFunctions = [];
@@ -214,15 +227,26 @@ let buildPreambleContextFromAnalysis (stdlib : X.stdlibResult)
           analysis.X.writtenEnvironment;
     }
   in
-  let* functions, ssa, typeMap =
-    ANFPipeline.buildAnf 0 options elapsed registries
+  let* functions, ssa, typeMap, sumShapes =
+    ANFPipeline.buildAnf ~asyncDefinitions:stdlib.X.stdlibAsyncDefinitions
+      ~asyncRuntime:
+        {
+          ANFPipeline.context;
+          materialize = AsyncRuntimeMaterialization.materialize recorder;
+          materializeSource =
+            AsyncRuntimeMaterialization.materializeSource recorder;
+        }
+      0 options elapsed registries
       (CheckedAST.nextFunctionOrdinal conversion.P.symbols)
       InliningCommon.defaultConfig FunctionIdMap.empty M.empty
       SpecializationIdentity.FunctionSet.empty conversion.P.functions
       FunctionIdMap.empty false recorder
     |> Result.map_error preambleError
   in
-  let context = X.includeCompiledFunctions functions context in
+  let registries = { registries with AST_to_ANF.rcSumShapeReg = sumShapes } in
+  let context =
+    X.includeCompiledFunctions functions { context with X.registries }
+  in
   let* allocated, summaries =
     NativePipeline.lowerToAllocatedLirWithKnown stdlib.X.callGraphSummaries
       stdlib.X.context.X.target 0 options elapsed recorder None None "preamble"
@@ -245,6 +269,7 @@ let buildPreambleContextFromAnalysis (stdlib : X.stdlibResult)
     ( stdlib,
       {
         X.context;
+        sourceAnfFunctions = conversion.P.sourceFunctions;
         anfFunctions = functions;
         typeMap;
         symbolicFunctions = symbolic;

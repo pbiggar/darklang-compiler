@@ -1,0 +1,12 @@
+// async_returns.e2e - A source producer can return without inspecting its result.
+
+let sourceFetch (gate: Stdlib.__Async.__Promise<Int64>) : Int64 =
+  Stdlib.__Task.__transport (Stdlib.__Async.__pending gate)
+let sourceFetchDeep (depth: Int64) (gate: Stdlib.__Async.__Promise<Int64>) : Int64 =
+  if depth == 0L then sourceFetch gate else sourceFetchDeep (depth - 1L) gate
+let sourceChoose (condition: Bool) (left: Int64) (right: Int64) : Int64 =
+  if condition then left else right
+
+Stdlib.__Task.__runMain (fun _unit -> let gate = Stdlib.__Async.__new<Int64> () in let value = sourceFetch gate in let _ = Stdlib.__Task.__resolve (__fiber_current ()) gate 42L in value + 1L) = 43L // source return starts no wait; leak_check
+Stdlib.__Task.__runMain (fun _unit -> let gate = Stdlib.__Async.__new<Int64> () in let value = sourceFetchDeep 32L gate in let _ = Stdlib.__Task.__resolve (__fiber_current ()) gate 42L in value + 1L) = 43L // deep ordinary return chain; leak_check
+Stdlib.__Task.__runMain (fun _unit -> let gate = Stdlib.__Async.__new<Int64> () in let value = sourceFetch gate in sourceChoose false value 42L) = 42L // unselected pending argument is never forced; leak_check

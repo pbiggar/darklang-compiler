@@ -1,0 +1,20 @@
+// async_sum_storage_edges.e2e - Nested variant transport and selected-arm ownership.
+
+type AsyncOnlyPayload = AsyncOnlyPayload of String
+let asyncEdgeWrap (value: String) : Option<String> = Some value
+let asyncEdgeChoose (flag: Bool) (value: String) : Option<String> =
+  if flag then Some value else None
+let asyncEdgeResult (flag: Bool) (value: Int64) : Result<Int64, String> =
+  if flag then Ok value else Error "ready"
+let asyncEdgeResultTag (value: Result<Int64, String>) : Int64 =
+  match value with | Ok _ -> 21L | Error _ -> 21L
+
+Stdlib.__Task.__runMain (fun _unit -> let gate = Stdlib.__Async.__new<String> () in let value = Stdlib.__Task.__transport (Stdlib.__Async.__pending gate) in let result = asyncEdgeWrap value in let _ = Stdlib.__Task.__resolve (__fiber_current ()) gate "ready" in result) = Some "ready" // managed payloads survive source returns and root materialization; leak_check
+Stdlib.__Task.__runMain (fun _unit -> let gate = Stdlib.__Async.__new<Int64> () in let value = Stdlib.__Task.__transport (Stdlib.__Async.__pending gate) in match Some (Ok value) with | Some (Ok _) -> 42L | Some (Error _) -> 0L | None -> 0L) = 42L // nested option and result tags do not demand the innermost payload; leak_check
+Stdlib.__Task.__runMain (fun _unit -> let gate = Stdlib.__Async.__new<Int64> () in let value = Stdlib.__Task.__transport (Stdlib.__Async.__pending gate) in asyncEdgeResultTag (asyncEdgeResult true value) + asyncEdgeResultTag (asyncEdgeResult false 0L)) = 42L // mixed constructor joins convert only the selected arm; leak_check
+Stdlib.__Task.__runMain (fun _unit -> let gate = Stdlib.__Async.__new<String> () in let value = Stdlib.__Task.__transport (Stdlib.__Async.__pending gate) in let result = asyncEdgeChoose false value in result) = None // materializing an empty arm does not demand another arm's payload; leak_check
+Stdlib.__Task.__runMain (fun _unit -> let gate = Stdlib.__Async.__new<String> () in let value = Stdlib.__Task.__transport (Stdlib.__Async.__pending gate) in let result = Stdlib.__Task.__delayTransparent 0L (Some value) in let _ = Stdlib.__Task.__resolve (__fiber_current ()) gate "ready" in result) = Some "ready" // an outer pending value retains its inner managed variant storage; leak_check
+Stdlib.__Task.__runMain (fun _unit -> let gate = Stdlib.__Async.__new<Int64> () in let value = Stdlib.__Task.__transport (Stdlib.__Async.__pending gate) in let values = [Some value, None] in Stdlib.List.length values) = 2 // list storage can contain variants with pending payloads; leak_check
+Stdlib.__Task.__runMain (fun _unit -> let gate = Stdlib.__Async.__new<AsyncOnlyPayload> () in let value = Stdlib.__Task.__transport (Stdlib.__Async.__pending gate) in match value with | AsyncOnlyPayload _ -> 42L) = 42L // a single-constructor wildcard needs neither an outer value nor its payload; leak_check
+Stdlib.__Task.__runMain (fun _unit -> let gate = Stdlib.__Async.__new<AsyncOnlyPayload> () in let value = Stdlib.__Task.__transport (Stdlib.__Async.__pending gate) in match value with | AsyncOnlyPayload ignored -> 42L) = 42L // an unused constructor binding does not demand an outer pending value; leak_check
+Stdlib.__Task.__runMain (fun _unit -> let gate = Stdlib.__Async.__new<Int64> () in let value = Stdlib.__Task.__transport (Stdlib.__Async.__pending gate) in let values = [value] in match Some values with | Some items -> Stdlib.List.length items | None -> 0) = 1 // variant payloads preserve nested list storage without demanding its elements; leak_check

@@ -1,0 +1,24 @@
+// raw_closure_ownership.e2e - Taking a raw slot transfers an owned closure edge.
+
+let rawOwnAndDrop<'a> (value: a) : Unit =
+  let slot = __raw_alloc 8L in
+  let _ = __raw_slot_init<a> slot 0L value in
+  let moved = __raw_take<a> slot 0L in
+  let _ = __raw_write_word slot 0L 0L in
+  let _ = __raw_free slot in
+  ()
+
+let rawOwnAndReturn<'a> (value: a) : a =
+  let slot = __raw_alloc 8L in
+  let _ = __raw_slot_init<a> slot 0L value in
+  let moved = __raw_take<a> slot 0L in
+  let _ = __raw_write_word slot 0L 0L in
+  let _ = __raw_free slot in
+  moved
+
+let rawClosureStatic (value: Int64) : Int64 = value + 1L
+
+rawOwnAndDrop rawClosureStatic = () // leak_check
+let text = "capture" ++ " value" in rawOwnAndDrop (fun _unit -> text) = () // leak_check
+let fn = rawOwnAndReturn rawClosureStatic in fn 41L = 42L // leak_check
+let text = "capture" ++ " value" in let fn = rawOwnAndReturn (fun _unit -> text) in fn () = "capture value" // leak_check

@@ -257,6 +257,7 @@ let buildContext target symbols (typeCheckEnv : Types.typeCheckEnv)
 *)
 type preambleContext = {
   context : pipelineContext;
+  sourceAnfFunctions : ANF.functionDef list;
   anfFunctions : ANF.functionDef list;
   typeMap : ANF.typeMap;
   symbolicFunctions : LIR.functionDef list;
@@ -293,6 +294,7 @@ type stdlibResult = {
   stdlibCallGraph : F.t FunctionIdMap.t;
   stdlibAnfFunctions : ANF.functionDef M.t;
   stdlibAnfOptimizationCandidates : ANF.functionDef M.t;
+  stdlibAsyncDefinitions : ANF.functionDef M.t;
   stdlibInlineCandidates : InliningCommon.functionInfo FunctionIdMap.t;
   stdlibAnfCallGraph : F.t FunctionIdMap.t;
   stdlibTypeMap : ANF.typeMap;

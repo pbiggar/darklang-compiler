@@ -1,0 +1,14 @@
+// sum_mixed_float.e2e - Variant fields retain their own type and register class.
+
+type MixedFloatPayload = { number: Float }
+type MixedFloat<'a> = | MixedImmediate of a | MixedRecord of MixedFloatPayload | MixedCallable of (Unit -> Float)
+
+let inspectMixedFloat (value: MixedFloat<Float>) : Float =
+  match value with
+  | MixedImmediate number -> number
+  | MixedRecord payload -> payload.number
+  | MixedCallable invoke -> invoke ()
+
+inspectMixedFloat (MixedImmediate 42.25) = 42.25
+inspectMixedFloat (MixedRecord (MixedFloatPayload { number = 42.25 })) = 42.25
+inspectMixedFloat (MixedCallable (fun _unit -> 42.25)) = 42.25

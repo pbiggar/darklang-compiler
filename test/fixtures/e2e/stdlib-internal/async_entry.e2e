@@ -1,0 +1,20 @@
+// async_entry.e2e - Context-free native entry and managed result transfer.
+
+Stdlib.__Task.__runMain (fun _unit -> 42L) = 42L
+Stdlib.__Task.__runMain (fun _unit -> "native" ++ " entry") = "native entry" // leak_check
+Stdlib.__Task.__runMain (fun _unit -> (1.5, ["one", "two"])) = (1.5, ["one", "two"]) // leak_check
+
+let entryDeep (depth: Int64) (value: Stdlib.__Async.__Value<Int64>) : Int64 =
+  if depth == 0L then Stdlib.__Task.__forceCurrent value
+  else 1L + entryDeep (depth - 1L) value
+
+Stdlib.__Task.__runMain (fun _unit -> entryDeep 32L (Stdlib.__Task.__delayCurrent 0L 42L)) = 74L // leak_check
+let entryFailure () : Result<Int64, String> = Error ("ordinary" ++ " error")
+Stdlib.__Task.__runMain (fun _unit -> Stdlib.__Task.__forceCurrent (Stdlib.__Task.__delayCurrent 0L (entryFailure ()))) = Error "ordinary error" // leak_check
+let returned = Stdlib.__Task.__runMain (fun _unit -> Stdlib.__Task.__forceCurrent (Stdlib.__Task.__delayCurrent 0L (fun value -> value + 1L))) in returned 41L = 42L // leak_check
+let entryCapture (text: String) : String -> String = fun suffix -> text ++ suffix
+let returned = Stdlib.__Task.__runMain (fun _unit -> entryCapture ("returned" ++ " closure")) in returned "!" = "returned closure!" // leak_check
+Stdlib.__Task.__runMain (fun _unit -> let unused = Stdlib.__Task.__delayCurrent 0L ("producer" ++ " payload") in "root" ++ " result") = "root result" // leak_check
+Stdlib.__Task.__runMain (fun _unit -> let outer = __rawptr_to_word (__fiber_current ()) in let inner = Stdlib.__Task.__runMain (fun _unit -> __rawptr_to_word (__fiber_current ())) in (outer != inner, outer == __rawptr_to_word (__fiber_current ()))) = (true, true) // leak_check
+
+Stdlib.__Task.__delayCurrent 0L 42L = error="Uncaught exception: Cannot start a timer outside a native task"

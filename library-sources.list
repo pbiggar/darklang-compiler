@@ -155,6 +155,7 @@ packages/darklang/stdlib/dateTime.dark
 packages/darklang/stdlib/duration.dark
 packages/darklang/stdlib/blob.dark
 packages/darklang/stdlib/stream.dark
+packages/darklang/stdlib/__async.dark
 packages/darklang/stdlib/html.dark
 packages/darklang/stdlib/http.dark
 packages/darklang/stdlib/http/request.dark
@@ -165,6 +166,7 @@ packages/darklang/stdlib/httpServer/config.dark
 packages/darklang/stdlib/httpserver.dark
 packages/darklang/stdlib/__http1Server.dark
 packages/darklang/stdlib/__network.dark
+packages/darklang/stdlib/__task.dark
 packages/darklang/stdlib/__datagram.dark
 packages/darklang/stdlib/__httpWire.dark
 packages/darklang/stdlib/__dnsWire.dark

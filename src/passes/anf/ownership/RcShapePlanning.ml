@@ -73,14 +73,17 @@ let shapeNeedsManagedAliasRootPreservation ctx typ =
     (rcShapeForType ctx typ)
 
 (*
-   Calls return owned function values. Standard-library wrappers preserve that
-   obligation just like user functions; only projections and aliases borrow it.
+   Calls and RawTake return owned function values. Standard-library wrappers
+   preserve that obligation just like user functions; only projections and
+   aliases borrow it. A discarded RawTake must release the transferred edge
+   even though ordinary raw reads of function values remain borrowed.
 *)
 let bindingNeedsShapeAutomaticDec _ctx expr typ shape =
   MemoryPlanning.rcShapeNeedsAutomaticBindingDec shape
   ||
   match (typ, expr) with
-  | AST.TFunction _, (ANF.ClosureAlloc _ | ANF.Call _ | ANF.ClosureCall _) ->
+  | ( AST.TFunction _,
+      (ANF.ClosureAlloc _ | ANF.Call _ | ANF.ClosureCall _ | ANF.RawTake _) ) ->
       true
   | _ -> false
 

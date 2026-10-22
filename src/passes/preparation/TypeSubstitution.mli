@@ -15,12 +15,13 @@ val recordDescriptor :
   TypeRegistries.recordTypeInfo ->
   ANF.recordDescriptor
 
-val boxedSumDescriptor :
+val variantDescriptor :
   string ->
   string list ->
   AST.semanticType list ->
+  int ->
   AST.semanticType list ->
-  (ANF.recordDescriptor, string) result
+  (ANF.variantDescriptor, string) result
 
 val matchTypePattern :
   AST.semanticType ->

@@ -1,4 +1,16 @@
 (* ANFPipeline.mli - Construct and optimize SSA after ANF helper lowering. *)
+type asyncRuntime = {
+  context : CompilationContexts.pipelineContext;
+  materialize :
+    CompilationContexts.pipelineContext ->
+    SpecializationIdentity.SpecSet.t ->
+    (CompilationContexts.pipelineContext * ANF.functionDef list, string) result;
+  materializeSource :
+    CompilationContexts.pipelineContext ->
+    SpecializationIdentity.SpecSet.t ->
+    (CompilationContexts.pipelineContext * ANF.functionDef list, string) result;
+}
+
 val buildConversionResult :
   ANF.program ->
   AST_to_ANF.registries ->
@@ -7,8 +19,11 @@ val buildConversionResult :
 
 val stdlibInliningConfig : InliningCommon.inliningConfig
 
-(* The elapsed callback supplies the caller-owned stopwatch's milliseconds. *)
+(* The elapsed callback supplies the caller-owned stopwatch's milliseconds.
+   Reusable callers retain the returned sum shapes for physical async layouts. *)
 val buildAnf :
+  ?asyncDefinitions:ANF.functionDef StringOrder.Map.t ->
+  ?asyncRuntime:asyncRuntime ->
   int ->
   CompilerOptions.compilerOptions ->
   (unit -> float) ->
@@ -22,4 +37,9 @@ val buildAnf :
   OwnedIR.callSignature FunctionIdMap.t ->
   bool ->
   CompilerOptions.passTimingRecorder option ->
-  (ANF.functionDef list * SSAANF.functionDef list * ANF.typeMap, string) result
+  ( ANF.functionDef list
+    * SSAANF.functionDef list
+    * ANF.typeMap
+    * MemoryModel.rcSumShapeRegistry,
+    string )
+  result

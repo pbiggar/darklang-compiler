@@ -1,0 +1,52 @@
+// async_start.e2e - Eager native operation tasks retain ordinary call stacks.
+
+Stdlib.__Task.__runMain (fun _unit -> Stdlib.__Task.__forceCurrent (Stdlib.__Task.__startCurrent (fun _unit -> 42L))) = 42L // leak_check
+
+let startEager (cell: RawPtr) : Int64 * Int64 =
+  let gate = Stdlib.__Async.__new<Int64> () in
+  let pending = Stdlib.__Task.__startCurrent (fun _unit -> let _ = __raw_write_word cell 0L 1L in Stdlib.__Task.__forceCurrent (Stdlib.__Async.__pending gate)) in
+  let started = __raw_get<Int64> cell 0L in
+  let _ = Stdlib.__Task.__resolve (__fiber_current ()) gate 42L in
+  (started, Stdlib.__Task.__forceCurrent pending)
+
+let cell = __raw_alloc 8L in let _ = __raw_write_word cell 0L 0L in let result = Stdlib.__Task.__runMain (fun _unit -> startEager cell) in let _ = __raw_free cell in result = (1L, 42L) // start runs before returning its pending carrier; leak_check
+
+let startOverlap () : Int64 * Int64 =
+  let gate = Stdlib.__Async.__new<Int64> () in
+  let first = Stdlib.__Task.__startCurrent (fun _unit -> Stdlib.__Task.__forceCurrent (Stdlib.__Async.__pending gate)) in
+  let second = Stdlib.__Task.__startCurrent (fun _unit -> 2L) in
+  let secondValue = Stdlib.__Task.__forceCurrent second in
+  let _ = Stdlib.__Task.__resolve (__fiber_current ()) gate 1L in
+  (secondValue, Stdlib.__Task.__forceCurrent first)
+
+Stdlib.__Task.__runMain (fun _unit -> startOverlap ()) = (2L, 1L) // leak_check
+
+let startDepth (depth: Int64) : Int64 =
+  if depth == 0L then 1L
+  else Stdlib.__Task.__forceCurrent (Stdlib.__Task.__startCurrent (fun _unit -> 1L + startDepth (depth - 1L)))
+
+Stdlib.__Task.__runMain (fun _unit -> startDepth 8L) = 9L // nested eager starts; leak_check
+
+let startClosure (prefix: String) : String -> String = fun suffix -> prefix ++ suffix
+let returned = Stdlib.__Task.__runMain (fun _unit -> Stdlib.__Task.__forceCurrent (Stdlib.__Task.__startCurrent (fun _unit -> startClosure ("owned" ++ " closure")))) in returned "!" = "owned closure!" // leak_check
+
+let startAbandoned (cell: RawPtr) : Unit =
+  let gate = Stdlib.__Async.__new<Int64> () in
+  let unused = Stdlib.__Task.__startCurrent (fun _unit -> let value = Stdlib.__Task.__forceCurrent (Stdlib.__Async.__pending gate) in __raw_write_word cell 0L value) in
+  Stdlib.__Task.__resolve (__fiber_current ()) gate 9L
+
+let cell = __raw_alloc 8L in let _ = __raw_write_word cell 0L 0L in let _ = Stdlib.__Task.__runMain (fun _unit -> startAbandoned cell) in let result = __raw_get<Int64> cell 0L in let _ = __raw_free cell in result = 9L // producer runs after consumer is discarded; leak_check
+
+Stdlib.__Task.__startCurrent (fun _unit -> 42L) = error="Uncaught exception: Cannot start an operation outside a native task"
+
+let startDigit (cell: RawPtr) (digit: Int64) : Unit = __raw_write_word cell 0L ((__raw_get<Int64> cell 0L) * 10L + digit)
+let startFifo (cell: RawPtr) (gate: Stdlib.__Async.__Promise<Int64>) : Unit =
+  let pending = Stdlib.__Task.__startCurrent (fun _unit -> let _ = startDigit cell 1L in let _ = Stdlib.__Task.__forceCurrent (Stdlib.__Async.__pending gate) in startDigit cell 3L) in
+  Stdlib.__Task.__forceCurrent pending
+
+let cell = __raw_alloc 8L in let _ = __raw_write_word cell 0L 0L in let gate = Stdlib.__Async.__new<Int64> () in let _ = Stdlib.__Task.__run [(fun _context -> startFifo cell gate), (fun context -> let _ = startDigit cell 2L in Stdlib.__Task.__resolve context gate 1L)] in let result = __raw_get<Int64> cell 0L in let _ = __raw_free cell in result = 123L // eager entry preserves runnable FIFO order; leak_check
+
+let startFailure () : Result<Int64, String> = Error ("ordinary" ++ " failure")
+Stdlib.__Task.__runMain (fun _unit -> Stdlib.__Task.__forceCurrent (Stdlib.__Task.__startCurrent (fun _unit -> startFailure ()))) = Error "ordinary failure" // leak_check
+
+let expected = Stdlib.Cli.__argv 0L in Stdlib.__Task.__runMain (fun _unit -> Stdlib.__Task.__forceCurrent (Stdlib.__Task.__startCurrent (fun _unit -> Stdlib.Cli.__argv 0L))) == expected = true // child stack retains process arguments; leak_check

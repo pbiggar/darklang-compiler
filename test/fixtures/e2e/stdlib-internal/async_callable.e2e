@@ -1,0 +1,11 @@
+// async_callable.e2e - Pending callable values are demanded only when invoked.
+
+let sourceCallablePass (callback: Int64 -> Int64) : Int64 -> Int64 = callback
+let sourceInvoke (callback: Int64 -> Int64) : Int64 = callback 41L
+
+Stdlib.__Task.__runMain (fun _unit -> let gate = Stdlib.__Async.__new<Int64 -> Int64> () in let callback = Stdlib.__Task.__transport (Stdlib.__Async.__pending gate) in let passed = sourceCallablePass callback in let _ = Stdlib.__Task.__resolve (__fiber_current ()) gate (fun value -> value + 1L) in passed 41L) = 42L // passing a pending callable does not invoke or demand it; leak_check
+Stdlib.__Task.__runMain (fun _unit -> sourceInvoke (Stdlib.__Task.__delayTransparent 0L (fun value -> value + 1L))) = 42L // invocation in an ordinary callee demands the callable; leak_check
+Stdlib.__Task.__runMain (fun _unit -> let gate = Stdlib.__Async.__new<Int64 -> Int64> () in let unused = sourceCallablePass (Stdlib.__Task.__transport (Stdlib.__Async.__pending gate)) in 42L) = 42L // abandoning a callable never waits; leak_check
+Stdlib.__Task.__runMain (fun _unit -> let gate = Stdlib.__Async.__new<Int64> () in let value = Stdlib.__Task.__transport (Stdlib.__Async.__pending gate) in let pending = fun _ -> value in let concrete = fun _ -> 42L in let selected = if true then pending else concrete in let result = selected () in let _ = Stdlib.__Task.__resolve (__fiber_current ()) gate 42L in result + 1L) = compileerror="an escaping callable interface" // callable selections cannot silently mix result representations
+Stdlib.__Task.__runMain (fun _unit -> let gate = Stdlib.__Async.__new<Int64> () in let value = Stdlib.__Task.__transport (Stdlib.__Async.__pending gate) in let callback = fun _ -> value in let values = [callback] in 42L) = compileerror="an escaping callable interface" // list slots cannot silently erase a changed callable result interface
+Stdlib.__Task.__runMain (fun _unit -> let gate = Stdlib.__Async.__new<Int64> () in let value = Stdlib.__Task.__transport (Stdlib.__Async.__pending gate) in let callback = fun _ -> value in let values = Stdlib.List.singleton callback in 42L) = compileerror="an escaping callable interface" // builders cannot erase a changed callable result interface

@@ -78,7 +78,7 @@ let testNeedsLambdaLoweringDetectsLambda () =
   else Error "Expected lambda to trigger lambda lowering"
 
 let testMangledTypePreservesFreshenedTypeVariables () =
-  match LoweringPrimitives.tryParseMangledType M.empty "k$0" with
+  match LoweringPrimitives.tryParseMangledType M.empty "var_k$0" with
   | Ok (AST.TVar "k$0") -> Ok ()
   | Ok other ->
       Error

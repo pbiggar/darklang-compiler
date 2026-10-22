@@ -34,3 +34,11 @@ val convertFunctionBeforeRC :
   RcTypeFacts.typeContext ->
   ANF.functionDef ->
   (functionDef, string) result
+
+(* Keep the structured source with exactly the same fresh value identities as
+   its SSA view, for transformations that preserve the control-flow graph. *)
+val prepareFunctionBeforeRC :
+  int ->
+  RcTypeFacts.typeContext ->
+  ANF.functionDef ->
+  (ANF.functionDef * functionDef, string) result

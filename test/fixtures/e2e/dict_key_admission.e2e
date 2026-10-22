@@ -1,0 +1,5 @@
+// dict_key_admission.e2e - Reject executable payloads before native dictionary lowering.
+Dict { (fun x -> x): 1L } = compileerror="cannot be used as a Dict key"
+Dict { [(fun x -> x)]: 1L } = compileerror="cannot be used as a Dict key"
+Dict { (1L, (fun x -> x)): 1L } = compileerror="cannot be used as a Dict key"
+Dict { Some (fun x -> x): 1L } = compileerror="cannot be used as a Dict key"

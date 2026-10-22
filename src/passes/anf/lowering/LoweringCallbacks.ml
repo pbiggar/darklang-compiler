@@ -1,8 +1,20 @@
 (* LoweringCallbacks.ml - Typed recursive entry points shared by expression-family handlers. *)
+type listRegionPolicy =
+  | PreserveValues
+  | OptimizeLists of SpecializationIdentity.FunctionSet.t
+
+let listRegions ids inert =
+  if
+    StringOrder.Map.exists
+      (fun name _ -> AsyncSourceHooks.isProducerName name)
+      ids
+  then PreserveValues
+  else OptimizeLists inert
+
 type expressionLowerer =
   LoweringPrimitives.sumMetadata ->
   TypeRegistries.typeNameRegistry ->
-  SpecializationIdentity.FunctionSet.t ->
+  listRegionPolicy ->
   CheckedAST.expr ->
   ANF.varGen ->
   TypeRegistries.varEnv ->
@@ -16,7 +28,7 @@ type expressionLowerer =
 type atomLowerer =
   LoweringPrimitives.sumMetadata ->
   TypeRegistries.typeNameRegistry ->
-  SpecializationIdentity.FunctionSet.t ->
+  listRegionPolicy ->
   CheckedAST.expr ->
   ANF.varGen ->
   TypeRegistries.varEnv ->
@@ -30,7 +42,7 @@ type atomLowerer =
 type boundAtomLowerer =
   LoweringPrimitives.sumMetadata ->
   TypeRegistries.typeNameRegistry ->
-  SpecializationIdentity.FunctionSet.t ->
+  listRegionPolicy ->
   CheckedAST.expr ->
   ANF.varGen ->
   TypeRegistries.varEnv ->

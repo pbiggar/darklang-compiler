@@ -299,6 +299,12 @@ let packageCatalogModule : AST.moduleDef =
 *)
 let rawMemoryIntrinsics =
   [
+    fn "__fiber_stack_alloc" [] [ TInt64 ] TInternalRawPtr;
+    fn "__fiber_stack_free" [] [ TInternalRawPtr; TInt64 ] TUnit;
+    fn "__fiber_prepare" [] [ TInternalRawPtr; TInternalRawPtr; TInt64 ] TUnit;
+    fn "__fiber_switch" [] [ TInternalRawPtr; TInternalRawPtr ] TUnit;
+    fn "__fiber_current" [] [ TUnit ] TInternalRawPtr;
+    fn "__fiber_set_current" [] [ TInternalRawPtr ] TUnit;
     fn "__mapped_alloc" [] [ TInt64 ] TInternalRawPtr;
     fn "__mapped_free" [] [ TInternalRawPtr ] TUnit;
     fn "__list_array_release_small" [] [ TInternalRawPtr ] TUnit;

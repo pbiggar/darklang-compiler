@@ -195,7 +195,9 @@ class compilationSession ?(collectCodegenMetrics = false) () =
         (config : C.compiledDependencyConfig)
         (compile :
           unit ->
-          ( LIR.functionDef list * C.functionSummary FunctionIdMap.t,
+          ( LIR.functionDef list
+            * C.functionSummary FunctionIdMap.t
+            * MemoryModel.rcSumShapeRegistry,
             string )
           result) =
       if disposed || config.C.options.CompilerOptions.enableCoverage then

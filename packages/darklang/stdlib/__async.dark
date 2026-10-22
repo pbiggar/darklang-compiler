@@ -1,0 +1,113 @@
+// __Async.dark - Native promise cells for the single-threaded async runtime.
+//
+// These are the promise object and explicit carrier, not implicit source-value
+// lowering. The phantom payload type fixes each cell's read/release plan.
+// The existing lifecycle owner provides last-reference cleanup of the typed raw
+// cell, as it does for native network owners. Producer queues and parked tasks
+// must keep ordinary owning references; dropping a consumer cannot cancel I/O.
+// Waiter IDs are non-owning scheduler identities. Only the scheduler thread may
+// mutate these cells. There is deliberately no public await/cancel/close API.
+
+module Darklang.Stdlib.__Async
+
+type __Promise<'a> = { cell: RawPtr, lifecycle: Stream<Unit> }
+
+// A boxed sum carries the discriminant separately from all payload bits. These
+// are private runtime types, not Future/Promise types in user programs. Compiler
+// transport lowering will select carriers; ordinary concrete values stay on
+// their existing representation until that lowering is implemented.
+type __Value<'a> =
+    | ValueReady of a
+    | ValuePending of Stdlib.__Async.__Promise<a>
+    | ValueDeferred of (Unit -> Stdlib.__Async.__Value<a>)
+
+let __STATE () : Int64 = 0L
+let __PAYLOAD () : Int64 = 8L
+let __WAITERS () : Int64 = 16L
+let __SIZE () : Int64 = 24L
+
+let __cellIsReady (ptr: RawPtr) : Bool =
+    let state = __raw_get<Int64> ptr (Stdlib.__Async.__STATE ()) in
+    if state == 0L then false
+    else if state == 1L then true
+    else Builtin.crash "Invalid async promise state"
+
+let __disposePayload<'a> (ptr: RawPtr) : Unit =
+    if Stdlib.__Async.__cellIsReady ptr then
+        let payload = __raw_take<a> ptr (Stdlib.__Async.__PAYLOAD ()) in
+        let _ = __raw_write_word ptr (Stdlib.__Async.__PAYLOAD ()) 0L in
+        ()
+    else ()
+
+let __disposeCell<'a> (ptr: RawPtr) : Unit =
+    let waiters = __raw_take<List<Int64>> ptr (Stdlib.__Async.__WAITERS ()) in
+    if Stdlib.List.isEmpty waiters then
+        let _ = __raw_write_word ptr (Stdlib.__Async.__WAITERS ()) 0L in
+        let _ = Stdlib.__Async.__disposePayload<a> ptr in
+        let _ = __raw_free ptr in
+        ()
+    else Builtin.crash "Async promise still has waiting tasks"
+
+let __new<'a> () : Stdlib.__Async.__Promise<a> =
+    let ptr = __raw_alloc (Stdlib.__Async.__SIZE ()) in
+    let _ = __raw_write_word ptr (Stdlib.__Async.__STATE ()) 0L in
+    let _ = __raw_write_word ptr (Stdlib.__Async.__PAYLOAD ()) 0L in
+    let _ = __raw_slot_init<List<Int64>> ptr (Stdlib.__Async.__WAITERS ()) [] in
+    let lifecycle = Stdlib.Stream.__new (fun _unit -> None) (fun _unit -> Stdlib.__Async.__disposeCell<a> ptr) in
+    Stdlib.__Async.__Promise { cell = ptr; lifecycle = lifecycle }
+
+let __isReady<'a> (promise: Stdlib.__Async.__Promise<a>) : Bool =
+    Stdlib.__Async.__cellIsReady promise.cell
+
+// Returning a borrowed payload establishes an ordinary owned result through
+// existing typed raw-slot/projection RC. No special failure or exception slot:
+// a failed I/O operation stores its ordinary Result.Error value here.
+let __poll<'a> (promise: Stdlib.__Async.__Promise<a>) : Stdlib.Option.Option<a> =
+    if Stdlib.__Async.__isReady promise then
+        Some (__raw_get<a> promise.cell (Stdlib.__Async.__PAYLOAD ()))
+    else None
+
+// False means completion already happened; the caller must not park. In the
+// single-threaded scheduler the state check and insertion cannot race completion.
+// Registration is idempotent so completion never enqueues one task twice.
+let __wait<'a> (promise: Stdlib.__Async.__Promise<a>) (task: Int64) : Bool =
+    if Stdlib.__Async.__isReady promise then false
+    else
+        let ptr = promise.cell in
+        let waiters = __raw_get<List<Int64>> ptr (Stdlib.__Async.__WAITERS ()) in
+        if Stdlib.List.member waiters task then true
+        else
+            let next = Stdlib.List.push waiters task in
+            let previous = __raw_take<List<Int64>> ptr (Stdlib.__Async.__WAITERS ()) in
+            let _ = __raw_slot_init<List<Int64>> ptr (Stdlib.__Async.__WAITERS ()) next in
+            true
+
+// Publish the retained payload before handing the waiter IDs to the scheduler.
+// Taking and clearing the waiter slot transfers its ownership out of the cell.
+// Enqueueing happens after this function, never by reentering a parked task here.
+let __resolve<'a> (promise: Stdlib.__Async.__Promise<a>) (value: a) : List<Int64> =
+    if Stdlib.__Async.__isReady promise then
+        Builtin.crash "Async promise resolved more than once"
+    else
+        let ptr = promise.cell in
+        let _ = __raw_slot_init<a> ptr (Stdlib.__Async.__PAYLOAD ()) value in
+        let waiters = __raw_take<List<Int64>> ptr (Stdlib.__Async.__WAITERS ()) in
+        let _ = __raw_write_word ptr (Stdlib.__Async.__WAITERS ()) 0L in
+        let _ = __raw_write_word ptr (Stdlib.__Async.__STATE ()) 1L in
+        Stdlib.List.reverse waiters
+
+let __ready<'a> (value: a) : Stdlib.__Async.__Value<a> = ValueReady value
+
+let __pending<'a> (promise: Stdlib.__Async.__Promise<a>) : Stdlib.__Async.__Value<a> = ValuePending promise
+
+// A join retains an already-started producer. Its closure follows the outer
+// result only when demanded; creating or storing the join never starts work.
+let __deferred<'a> (follow: Unit -> Stdlib.__Async.__Value<a>) : Stdlib.__Async.__Value<a> = ValueDeferred follow
+
+// A nonblocking probe of the carrier, useful independently of task suspension.
+// The eventual force primitive must park on a pending promise, not poll in a loop.
+let __pollValue<'a> (value: Stdlib.__Async.__Value<a>) : Stdlib.Option.Option<a> =
+    match value with
+    | ValueReady payload -> Some payload
+    | ValuePending promise -> Stdlib.__Async.__poll promise
+    | ValueDeferred _ -> None
