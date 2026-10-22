@@ -1,0 +1,14 @@
+// PR #1 b9bf507: a source module may redeclare a non-Stdlib function carried
+// by the prebuilt library. Exercise the observable result through E2E.
+
+module Darklang.LanguageTools.PackageManager =
+  let countMatchingPrefix (a: List<String>) (b: List<String>) : Int =
+    match (a, b) with
+    | (aHead :: aTail, bHead :: bTail) ->
+      if aHead == bHead then
+        1 + (countMatchingPrefix aTail bTail)
+      else
+        0
+    | _ -> 0
+
+Darklang.LanguageTools.PackageManager.countMatchingPrefix ["a", "b", "c"] ["a", "b", "x"] = 2
