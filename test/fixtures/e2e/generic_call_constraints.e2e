@@ -8,12 +8,12 @@ let first (left: 'a) (right: 'a) : 'a = left
 let empty () : List<'a> = []
 let countInts (values: List<Int64>) : Int64 = match values with | [] -> 0L | _ -> 1L
 
-requireIntBox (wrap "one") = compileerror="conflicting inferences"
+requireIntBox (wrap "one") = compileerror="Expected TInt64, got TString"
 requireIntBox (wrap 1L) = 0L
 unbox (wrap "one") = "one"
-requireIntBox (explicitWrap "one") = compileerror="conflicting inferences"
-first 1L "one" = compileerror="expected Int64, got String"
+requireIntBox (explicitWrap "one") = compileerror="Expected TInt64, got TString"
+first 1L "one" = compileerror="Expected TInt64, got TString"
 first "one" "two" = "one"
-first [1L] ["one"] = compileerror="expected Int64, got String"
+first [1L] ["one"] = compileerror="Expected TInt64, got TString"
 countInts (empty ()) = 0L
 (unbox (wrap 1L), unbox (wrap "one")) = (1L, "one")

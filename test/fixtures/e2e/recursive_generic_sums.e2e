@@ -7,7 +7,7 @@ let prepend (tree: Tree<'a>) (value: 'a) : Tree<'a> = Tree.Node(tree, value, Tre
 let ofList (values: List<'a>) : Tree<'a> = Stdlib.List.fold values Tree.Empty (fun tree value -> prepend tree value)
 let count (tree: Tree<'a>) : Int64 = match tree with | Empty -> 0L | Node(left, _, right) -> 1L + count left + count right
 let total (tree: Tree<Int64>) : Int64 = match tree with | Empty -> 0L | Node(left, value, right) -> total left + value + total right
-let words (tree: Tree<String>) : String = match tree with | Empty -> "" | Node(left, value, right) -> words left ++ value ++ words right
+let words (tree: Tree<String>) : String = match tree with | Empty -> "" | Node(left, value, right) -> words left + value + words right
 
 count (ofList [1L, 2L, 3L]) = 3L
 count (ofList ["one", "two"]) = 2L
@@ -27,8 +27,8 @@ Stdlib.List.fold [1L, 2L] Stdlib.Option.Option.None (fun _ value -> Stdlib.Optio
 // Inference must retain nominal identity and concrete type arguments.
 let requireOption (value: Stdlib.Option.Option<Int64>) : Int64 = 0L
 let requireIntTree (value: Tree<Int64>) : Int64 = 0L
-requireOption Tree.Empty = compileerror="expects Stdlib.Option.Option<Int64>, but got Tree<a>"
-requireIntTree (Tree.Node(Tree.Empty, "one", Tree.Empty)) = compileerror="expects Tree<Int64>, but got Tree<String>"
+requireOption Tree.Empty = compileerror="Expected TSum (\"Darklang.Stdlib.Option.Option\", [TInt64]), got TSum (\"Tree\""
+requireIntTree (Tree.Node(Tree.Empty, "one", Tree.Empty)) = compileerror="Expected TInt64, got TString"
 
 // A generic call must satisfy its input and contextual result constraints together.
-requireIntTree (ofList ["one"]) = compileerror="conflicting inferences"
+requireIntTree (ofList ["one"]) = compileerror="Expected TInt64, got TString"
