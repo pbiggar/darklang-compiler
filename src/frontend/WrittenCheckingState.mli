@@ -3,7 +3,10 @@ type t
 
 val create : CheckedAST.symbols -> t
 val markEarlyReturn : AST.bindingId -> t -> t
-val returnScope : AST.bindingId -> AST.semanticType -> CheckedAST.expr -> t -> CheckedAST.expr
+
+val returnScope :
+  AST.bindingId -> AST.semanticType -> CheckedAST.expr -> t -> CheckedAST.expr
+
 val symbols : t -> CheckedAST.symbols
 val resolve : t -> AST.semanticType -> AST.semanticType
 val resolveExpression : t -> CheckedAST.expr -> CheckedAST.expr

@@ -181,7 +181,8 @@ let rec containsIndirectApply expr =
       false
   | C.Local _ -> false
   | C.BoundaryRender (_, value)
-  | C.ReturnScope (_, _, value) | C.EarlyReturn (_, value)
+  | C.ReturnScope (_, _, value)
+  | C.EarlyReturn (_, value)
   | C.UnaryOp (_, value)
   | C.TupleAccess (value, _)
   | C.RecordAccess (value, _) ->
@@ -344,9 +345,11 @@ let collectFuncRefsInExpr expr known =
     | C.If (condition, yes, no) -> many [ condition; yes; no ]
     | C.Sequence (first, next) | C.BinOp (_, first, next) ->
         many [ first; next ]
-    | C.ReturnScope (_, _, value) | C.EarlyReturn (_, value)
-    | C.UnaryOp (_, value) | C.TupleAccess (value, _) | C.RecordAccess (value, _)
-      ->
+    | C.ReturnScope (_, _, value)
+    | C.EarlyReturn (_, value)
+    | C.UnaryOp (_, value)
+    | C.TupleAccess (value, _)
+    | C.RecordAccess (value, _) ->
         child value
     | C.TupleLiteral values -> many (C.tupleElementsToList values)
     | C.ListLiteral values | C.Constructor (_, values) | C.Closure (_, values)
@@ -442,7 +445,8 @@ let replaceInExpr wrappers expr =
         C.BoundaryRender (renderer, recurse value)
     | C.BinOp (operation, left, right) ->
         C.BinOp (operation, recurse left, recurse right)
-    | C.ReturnScope (target, typ, value) -> C.ReturnScope (target, typ, recurse value)
+    | C.ReturnScope (target, typ, value) ->
+        C.ReturnScope (target, typ, recurse value)
     | C.EarlyReturn (target, value) -> C.EarlyReturn (target, recurse value)
     | C.UnaryOp (operation, value) -> C.UnaryOp (operation, recurse value)
     | C.If (condition, yes, no) ->

@@ -29,8 +29,13 @@ let markEarlyReturn target state =
   { state with earlyReturns = target :: state.earlyReturns }
 
 let returnScope target typ body state =
-  if List.exists (fun id -> AST.compareBindingId id target = 0) state.earlyReturns then
-    CheckedAST.ReturnScope (target, CheckedAST.checkedType (resolve state typ), body)
+  if
+    List.exists
+      (fun id -> AST.compareBindingId id target = 0)
+      state.earlyReturns
+  then
+    CheckedAST.ReturnScope
+      (target, CheckedAST.checkedType (resolve state typ), body)
   else body
 
 let symbols state = state.symbols

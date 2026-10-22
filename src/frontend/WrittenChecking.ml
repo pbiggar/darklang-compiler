@@ -30,7 +30,8 @@ let checkExpression globals locals symbols expected expression =
     (fun (typ, expression, state) ->
       let expression =
         match globals.WrittenTypeSupport.returnBoundary with
-        | Some (target, returned) -> WrittenCheckingState.returnScope target returned expression state
+        | Some (target, returned) ->
+            WrittenCheckingState.returnScope target returned expression state
         | None -> expression
       in
       ( WrittenCheckingState.resolve state typ,

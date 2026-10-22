@@ -210,8 +210,10 @@ let reduce definitions program =
         two bound body (fun bound body -> C.RecursiveLet (member, bound, body))
     | C.BoundaryRender (id, child) ->
         one child (fun child -> C.BoundaryRender (id, child))
-    | C.ReturnScope (target, typ, child) -> one child (fun child -> C.ReturnScope (target, typ, child))
-    | C.EarlyReturn (target, child) -> one child (fun child -> C.EarlyReturn (target, child))
+    | C.ReturnScope (target, typ, child) ->
+        one child (fun child -> C.ReturnScope (target, typ, child))
+    | C.EarlyReturn (target, child) ->
+        one child (fun child -> C.EarlyReturn (target, child))
     | C.UnaryOp (op, child) -> one child (fun child -> C.UnaryOp (op, child))
     | C.TupleAccess (child, index) ->
         one child (fun child -> C.TupleAccess (child, index))

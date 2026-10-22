@@ -1,7 +1,7 @@
 // Invalid propagation is rejected ahead of time, even on a successful operand.
-let f (v: Int64) : Stdlib.Option.Option<Int64> = Some v? in f 4L = compileerror="Expected"
-let f (v: Stdlib.Result.Result<Int64, String>) : Stdlib.Option.Option<Int64> = Some v? in f (Ok 1L) = compileerror="Expected"
-let f (v: Stdlib.Option.Option<Int64>) : Stdlib.Result.Result<Int64, String> = Ok v? in f (Some 1L) = compileerror="Expected"
-let f (v: Stdlib.Result.Result<Int64, String>) : Stdlib.Result.Result<Int64, Bool> = Ok v? in f (Error "e") = compileerror="Expected"
-let f (v: Stdlib.Option.Option<Int64>) : Int64 = v? in f (Some 1L) = compileerror="matching Option or Result return type"
+let f (v: Int64) : Stdlib.Option.Option<Int64> = Some v?; f 4L = compileerror="Expected"
+let f (v: Stdlib.Result.Result<Int64, String>) : Stdlib.Option.Option<Int64> = Some v?; f (Ok 1L) = compileerror="Expected"
+let f (v: Stdlib.Option.Option<Int64>) : Stdlib.Result.Result<Int64, String> = Ok v?; f (Some 1L) = compileerror="Expected"
+let f (v: Stdlib.Result.Result<Int64, String>) : Stdlib.Result.Result<Int64, Bool> = Ok v?; f (Error "e") = compileerror="Expected"
+let f (v: Stdlib.Option.Option<Int64>) : Int64 = v?; f (Some 1L) = compileerror="matching Option or Result return type"
 Some 1L? = compileerror="requires an enclosing function or lambda"

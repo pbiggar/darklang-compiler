@@ -1919,7 +1919,8 @@ let rewriteProgramWithSession (session : planningSession option)
       | UnaryOp (_, a)
       | TupleAccess (a, _)
       | RecordAccess (a, _)
-      | ReturnScope (_, _, a) | EarlyReturn (_, a)
+      | ReturnScope (_, _, a)
+      | EarlyReturn (_, a)
       | BoundaryRender (_, a) ->
           capture a collected
       | Let (_, a, b) | RecursiveLet (_, a, b) ->

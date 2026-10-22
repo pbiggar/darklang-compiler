@@ -411,9 +411,11 @@ and privateExpr (value : expr) =
       observationUnion "Expr" "BinOp"
         [ privateBinOp field0; privateExpr field1; privateExpr field2 ]
   | ReturnScope (target, typ, body) ->
-      observationUnion "Expr" "ReturnScope" [ privateBinding target; privateCheckedType typ; privateExpr body ]
+      observationUnion "Expr" "ReturnScope"
+        [ privateBinding target; privateCheckedType typ; privateExpr body ]
   | EarlyReturn (target, body) ->
-      observationUnion "Expr" "EarlyReturn" [ privateBinding target; privateExpr body ]
+      observationUnion "Expr" "EarlyReturn"
+        [ privateBinding target; privateExpr body ]
   | UnaryOp (field0, field1) ->
       observationUnion "Expr" "UnaryOp"
         [ privateUnaryOp field0; privateExpr field1 ]
@@ -839,9 +841,15 @@ and observationExpr (value : expr) =
           observationExpr field2;
         ]
   | ReturnScope (target, typ, body) ->
-      observationUnion "Expr" "ReturnScope" [ observationBinding target; observationCheckedType typ; observationExpr body ]
+      observationUnion "Expr" "ReturnScope"
+        [
+          observationBinding target;
+          observationCheckedType typ;
+          observationExpr body;
+        ]
   | EarlyReturn (target, body) ->
-      observationUnion "Expr" "EarlyReturn" [ observationBinding target; observationExpr body ]
+      observationUnion "Expr" "EarlyReturn"
+        [ observationBinding target; observationExpr body ]
   | UnaryOp (field0, field1) ->
       observationUnion "Expr" "UnaryOp"
         [ observationUnaryOp field0; observationExpr field1 ]

@@ -168,7 +168,8 @@ let rec freeVars expr bound =
       if BindingSet.mem id bound then BindingSet.empty
       else BindingSet.singleton id
   | C.BoundaryRender (_, value)
-  | C.ReturnScope (_, _, value) | C.EarlyReturn (_, value)
+  | C.ReturnScope (_, _, value)
+  | C.EarlyReturn (_, value)
   | C.UnaryOp (_, value)
   | C.TupleAccess (value, _)
   | C.RecordAccess (value, _) ->

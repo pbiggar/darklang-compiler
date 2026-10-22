@@ -349,7 +349,9 @@ let checkFunction (checkExpression : expressionChecker) globals symbols path
             match NonEmptyList.tryFromList (List.rev reversed) with
             | None -> Error ("Function '" ^ name ^ "' requires a parameter")
             | Some params ->
-                let returnTarget, symbols = C.allocateBinding "?return" symbols in
+                let returnTarget, symbols =
+                  C.allocateBinding "?return" symbols
+                in
                 map
                   (fun (_, body, symbols) ->
                     ( ({
@@ -631,8 +633,7 @@ let checkItems (checkExpression : expressionChecker) baseEnvironment
                                                   resolveFunction
                                                     {
                                                       globals with
-                                                      returnBoundary = Some (returnTarget, signature.return);
-                       modulePath = path;
+                                                      modulePath = path;
                                                     }
                                                     source
                                                 with
@@ -684,8 +685,7 @@ let checkItems (checkExpression : expressionChecker) baseEnvironment
                                                 (checkExpression
                                                    {
                                                      globals with
-                                                     returnBoundary = Some (returnTarget, signature.return);
-                       modulePath = path;
+                                                     modulePath = path;
                                                    }
                                                    M.empty symbols None
                                                    value.WT.body))
@@ -706,8 +706,7 @@ let checkItems (checkExpression : expressionChecker) baseEnvironment
                                                 (checkExpression
                                                    {
                                                      globals with
-                                                     returnBoundary = Some (returnTarget, signature.return);
-                       modulePath = path;
+                                                     modulePath = path;
                                                    }
                                                    M.empty symbols None expr))
                                       | WS.Trait _ | WS.Impl _ ->

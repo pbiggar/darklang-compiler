@@ -33,7 +33,8 @@ let rec collectHelperTypes symbols aliases expr =
   | C.GenericFuncRef _ | C.RuntimeError _ ->
       empty
   | C.BoundaryRender (_, value)
-  | C.ReturnScope (_, _, value) | C.EarlyReturn (_, value)
+  | C.ReturnScope (_, _, value)
+  | C.EarlyReturn (_, value)
   | C.UnaryOp (_, value)
   | C.TupleAccess (value, _)
   | C.RecordAccess (value, _) ->
@@ -136,7 +137,8 @@ let rec rewriteHelperCalls symbols aliases variants expr =
   | C.BoundaryRender (renderer, value) ->
       C.BoundaryRender (renderer, recurse value)
   | C.BinOp (op, left, right) -> C.BinOp (op, recurse left, recurse right)
-  | C.ReturnScope (target, typ, value) -> C.ReturnScope (target, typ, recurse value)
+  | C.ReturnScope (target, typ, value) ->
+      C.ReturnScope (target, typ, recurse value)
   | C.EarlyReturn (target, value) -> C.EarlyReturn (target, recurse value)
   | C.UnaryOp (op, value) -> C.UnaryOp (op, recurse value)
   | C.Let (pattern, value, body) -> C.Let (pattern, recurse value, recurse body)
