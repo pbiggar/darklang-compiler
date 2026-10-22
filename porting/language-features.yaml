@@ -27,9 +27,12 @@ groups:
     Recursive functions: supported
     Mutually recursive functions: supported
     Local recursion: supported
-    Polymorphic recursion:
-      status: partial
-      notes: Finite specialization supports concrete type resets and type-parameter permutations, including mutual calls and function values. Reachable constructor-growing type-flow cycles are rejected because native compilation would require infinitely many instances; the interpreter can execute terminating calls of this form.
+    Finite polymorphic recursion:
+      status: supported
+      notes: Finite specialization supports concrete type resets and type-parameter permutations, including mutual calls and function values.
+    Unbounded polymorphic specialization:
+      status: excluded
+      notes: Intentionally unsupported. Reachable constructor-growing type-flow cycles are rejected because native compilation would require infinitely many instances, even when a particular interpreter execution terminates.
     Too many call arguments: supported
     Call argument and return types: supported
   Builtin types:
