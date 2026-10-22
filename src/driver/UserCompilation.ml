@@ -298,11 +298,14 @@ let compileUserWithPlan ?writtenSources (plan : P.userCompilePlan) =
           ownership early plan.P.passTimingRecorder
       in
       let compileDependencies () =
+        (* The entry and its calls are compiled separately. Their absence here
+           must not make a recursive dependency's arguments appear uniform:
+           shrinking its signature would change the ABI used by those callers. *)
         let* _, ssa, typeMap =
           build registry plan.P.externalInlineCandidates
             plan.P.stdlib.X.stdlibAnfOptimizationCandidates
             user.R.nonInlineableFunctionNames dependencies
-            user.R.ownershipContracts true
+            user.R.ownershipContracts false
         in
         NativePipeline.lowerToAllocatedLirWithKnown known
           plan.P.baseContext.X.target plan.P.verbosity plan.P.options elapsed

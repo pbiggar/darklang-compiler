@@ -31,6 +31,7 @@ tailSwapEq 1L 1L (Stdlib.String.append "hel" "lo") (Stdlib.String.append "h" "el
 tailSwapEq 1L 1L (Stdlib.String.append "hel" "lo") (Stdlib.String.append "world" "!") 1000L = false
 settleTypes true "hello" 3L = 3L
 mutualLeft 1L 3L = 3L
+(let _ = Builtin.print (Stdlib.Int64.toString (mutualLeft 1L 3L)) in mutualLeft 1L 3L) = stdout="33\n"
 resetViaValue<Int64> 1L 3L = 3L
 resetViaPartial 1L 3L = 3L
 inferredPartialReset 1L 3L = 3L

@@ -668,8 +668,7 @@ let analyzePreambleForPlan stdlib (spec : preambleBuildSpec) tests =
 
 let buildPreamblePlan (stdlib : CC.stdlibResult) (spec : preambleBuildSpec)
     tests =
-  Result.bind
-    (analyzePreambleForPlan stdlib spec tests)
+  Result.bind (analyzePreambleForPlan stdlib spec tests)
     (fun (analysis : CC.preambleAnalysis option) ->
       let preambleSpecs =
         match analysis with
@@ -709,27 +708,29 @@ let buildPreamblePlan (stdlib : CC.stdlibResult) (spec : preambleBuildSpec)
       in
       let* specialization =
         if SM.is_empty generic then
-          Ok {
-            SI.specializedFuncs = [];
-            specRegistry = SI.SpecMap.empty;
-            externalSpecs = SI.SpecSet.empty;
-            symbols;
-          }
+          Ok
+            {
+              SI.specializedFuncs = [];
+              specRegistry = SI.SpecMap.empty;
+              externalSpecs = SI.SpecSet.empty;
+              symbols;
+            }
         else Monomorphization.specializeFromSpecs symbols generic ownSpecs
       in
       let stdlibSpecs =
         SI.SpecSet.union stdlibSpecsFromPreamble
           (filterSpecsByDefs stdlibGeneric specialization.SI.externalSpecs)
       in
-      Ok {
-        spec;
-        tests;
-        analysis;
-        specialization;
-        stdlibSpecs;
-        externalTypeReg;
-        externalVariantLookup;
-      })
+      Ok
+        {
+          spec;
+          tests;
+          analysis;
+          specialization;
+          stdlibSpecs;
+          externalTypeReg;
+          externalVariantLookup;
+        })
 
 let buildSuiteContexts stdlib tests passTimingRecorder =
   let recordTiming name elapsed =
