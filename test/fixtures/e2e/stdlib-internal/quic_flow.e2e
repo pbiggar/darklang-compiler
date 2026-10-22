@@ -1,9 +1,9 @@
 // quic_flow.e2e - Client/server stream permissions and connection-wide credit including reset final sizes.
-let receiveFrame (state: Stdlib.__QuicFlow.State) (frame: Stdlib.__QuicApplication.StreamData) =
+let receiveFrame (state: Stdlib.__QuicFlow.State) (frame: Stdlib.__QuicApplication.StreamData) : Stdlib.Result.Result<Stdlib.__QuicFlow.State, String> =
   Stdlib.__QuicFlow.receive state frame |> Stdlib.Result.mapError Stdlib.__QuicWire.message
-let resetFrame (state: Stdlib.__QuicFlow.State) (frame: Stdlib.__QuicApplication.Reset) =
+let resetFrame (state: Stdlib.__QuicFlow.State) (frame: Stdlib.__QuicApplication.Reset) : Stdlib.Result.Result<Stdlib.__QuicFlow.State, String> =
   Stdlib.__QuicFlow.reset state frame |> Stdlib.Result.mapError Stdlib.__QuicWire.message
-let creditFrame (state: Stdlib.__QuicFlow.State) (frame: Stdlib.__QuicApplication.StreamLimit) =
+let creditFrame (state: Stdlib.__QuicFlow.State) (frame: Stdlib.__QuicApplication.StreamLimit) : Stdlib.Result.Result<Stdlib.__QuicFlow.State, String> =
   Stdlib.__QuicFlow.maxStreamData state frame |> Stdlib.Result.mapError Stdlib.__QuicWire.message
 let limits = Stdlib.__QuicFlow.Limits { data = 10L, bidiLocal = 8L, bidiRemote = 6L, uni = 4L, streamsBidi = 1L, streamsUni = 3L } in Stdlib.__QuicFlow.create Stdlib.__QuicFlow.Role.Client limits limits |> Stdlib.Result.andThen (fun state -> Stdlib.__QuicFlow.openStream state 1L) = Error "Cannot locally open a peer QUIC stream"
 let limits = Stdlib.__QuicFlow.Limits { data = 10L, bidiLocal = 8L, bidiRemote = 6L, uni = 4L, streamsBidi = 1L, streamsUni = 3L } in Stdlib.__QuicFlow.create Stdlib.__QuicFlow.Role.Client limits limits |> Stdlib.Result.andThen (fun state -> Stdlib.__QuicFlow.openStream state 4L) = Error "QUIC stream concurrency limit exceeded"

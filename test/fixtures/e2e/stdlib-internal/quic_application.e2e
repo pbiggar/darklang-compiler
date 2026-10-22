@@ -1,9 +1,9 @@
 // quic_application.e2e - Application STREAM/control framing and final-size/flow-credit invariants.
-let insertBytes (state: Stdlib.__QuicStreams.Receive) (offset: Int64) (bytes: Blob) (fin: Bool) =
+let insertBytes (state: Stdlib.__QuicStreams.Receive) (offset: Int64) (bytes: Blob) (fin: Bool) : Stdlib.Result.Result<Stdlib.__QuicStreams.Receive, String> =
   Stdlib.__QuicStreams.insert state offset bytes fin |> Stdlib.Result.mapError Stdlib.__QuicWire.message
-let resetBytes (state: Stdlib.__QuicStreams.Receive) (size: Int64) (code: Int64) =
+let resetBytes (state: Stdlib.__QuicStreams.Receive) (size: Int64) (code: Int64) : Stdlib.Result.Result<Stdlib.__QuicStreams.Receive, String> =
   Stdlib.__QuicStreams.reset state size code |> Stdlib.Result.mapError Stdlib.__QuicWire.message
-let parseFrames (server: Bool) (bytes: Blob) =
+let parseFrames (server: Bool) (bytes: Blob) : Stdlib.Result.Result<List<Stdlib.__QuicApplication.Frame>, String> =
   Stdlib.__QuicApplication.parse server bytes |> Stdlib.Result.map (fun frames -> Stdlib.List.map frames (fun received -> received.frame))
 Stdlib.Blob.fromHex "0F0000036162631E" |> Stdlib.Result.andThen (parseFrames true) |> Stdlib.Result.map (fun frames -> Stdlib.List.length frames) = Ok 2
 Stdlib.Blob.fromHex "0800616263" |> Stdlib.Result.andThen (parseFrames true) |> Stdlib.Result.map (fun frames -> match frames with | Stream value :: _ -> (value.id, value.offset, value.fin, Stdlib.Blob.toHex value.bytes) | _ -> (-1L, -1L, false, "")) = Ok ((0L, 0L, false, "616263"))
