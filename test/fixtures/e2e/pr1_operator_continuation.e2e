@@ -1,0 +1,9 @@
+// Preserve PR #1 df9d492's operator-leading continuation without letting a
+// failing shared preamble obscure the other layout regressions.
+
+let layoutOperatorContinuation (a: Int64) (b: Int64): Int64 =
+  let total = a
+    + b
+  total * 2L
+
+layoutOperatorContinuation 1L 2L = 6L
