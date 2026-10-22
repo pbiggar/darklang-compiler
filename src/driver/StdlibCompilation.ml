@@ -78,13 +78,16 @@ let buildStdlibWithTrace target recorder =
     }
   in
   let options = CompilerOptions.defaultOptions in
-  let* functions, ssa, typeMap =
+  let* functions, ssa, typeMap, sumShapes =
     ANFPipeline.buildAnf 0 options elapsed registries
       (CheckedAST.nextFunctionOrdinal conversion.P.symbols)
       ANFPipeline.stdlibInliningConfig FunctionIdMap.empty M.empty F.empty
       conversion.P.functions FunctionIdMap.empty false recorder
   in
-  let context = X.includeCompiledFunctions functions context in
+  let registries = { registries with AST_to_ANF.rcSumShapeReg = sumShapes } in
+  let context =
+    X.includeCompiledFunctions functions { context with X.registries }
+  in
   let anfMap =
     List.map (fun (func : ANF.functionDef) -> (func.ANF.name, func)) functions
     |> M.of_list
@@ -121,6 +124,11 @@ let buildStdlibWithTrace target recorder =
           conversion.P.functions
         |> M.of_list;
       stdlibInlineCandidates = inline;
+      stdlibAsyncDefinitions =
+        List.map
+          (fun (func : ANF.functionDef) -> (func.ANF.name, func))
+          conversion.P.sourceFunctions
+        |> M.of_list;
       stdlibAnfCallGraph = anfGraph;
       stdlibTypeMap = typeMap;
     }
@@ -315,16 +323,33 @@ let buildStdlibSpecializations (stdlib : X.stdlibResult) specs externalTypes
       let* anf, _ =
         AST_to_ANF.convertFunctions symbols registries (ANF.VarGen 0) functions
       in
+      let* sourceAnf =
+        match
+          LoweringCallbacks.listRegions registries.AST_to_ANF.functionIds
+            registries.AST_to_ANF.inertFunctionScopes
+        with
+        | LoweringCallbacks.PreserveValues -> Ok anf
+        | LoweringCallbacks.OptimizeLists _ ->
+            let* source =
+              AST_to_ANF.convertFunctionsWithOwnershipWithTrace
+                ~listRegions:LoweringCallbacks.PreserveValues None symbols
+                registries (ANF.VarGen 0) functions
+            in
+            Ok source.AST_to_ANF.functions
+      in
       let options = CompilerOptions.defaultOptions in
       let start = Int64.to_float (Mtime_clock.elapsed_ns ()) /. 1e6 in
       let elapsed () =
         (Int64.to_float (Mtime_clock.elapsed_ns ()) /. 1e6) -. start
       in
-      let* optimized, ssa, typeMap =
+      let* optimized, ssa, typeMap, sumShapes =
         ANFPipeline.buildAnf 0 options elapsed registries
           (CheckedAST.nextFunctionOrdinal symbols)
           ANFPipeline.stdlibInliningConfig FunctionIdMap.empty M.empty F.empty
           anf FunctionIdMap.empty false recorder
+      in
+      let registries =
+        { registries with AST_to_ANF.rcSumShapeReg = sumShapes }
       in
       let newMap =
         List.map
@@ -405,6 +430,11 @@ let buildStdlibSpecializations (stdlib : X.stdlibResult) specs externalTypes
           stdlibCallGraph = callGraph;
           stdlibAnfFunctions = anfMap;
           stdlibAnfOptimizationCandidates = candidates;
+          stdlibAsyncDefinitions =
+            List.fold_left
+              (fun values (func : ANF.functionDef) ->
+                M.add func.ANF.name func values)
+              stdlib.X.stdlibAsyncDefinitions sourceAnf;
           stdlibInlineCandidates = inline;
           stdlibAnfCallGraph = anfGraph;
           stdlibTypeMap = typeMap;

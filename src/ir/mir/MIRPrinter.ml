@@ -163,6 +163,12 @@ let cliOperation = function
   | MIR.PosixKqueue -> "PosixKqueue"
   | MIR.ChildState -> "ChildState"
   | MIR.ChildLaunch -> "ChildLaunch"
+  | MIR.FiberStackAlloc -> "FiberStackAlloc"
+  | MIR.FiberStackFree -> "FiberStackFree"
+  | MIR.FiberPrepare -> "FiberPrepare"
+  | MIR.FiberSwitch -> "FiberSwitch"
+  | MIR.FiberCurrent -> "FiberCurrent"
+  | MIR.FiberSetCurrent -> "FiberSetCurrent"
   | MIR.PosixWait4 -> "PosixWait4"
   | MIR.PosixKeventVnode -> "PosixKeventVnode"
 

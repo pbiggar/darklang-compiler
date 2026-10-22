@@ -199,6 +199,12 @@ let prettyPrintCliOperation = function
   | LIR.PosixKqueue -> "PosixKqueue"
   | LIR.ChildState -> "ChildState"
   | LIR.ChildLaunch -> "ChildLaunch"
+  | LIR.FiberStackAlloc -> "FiberStackAlloc"
+  | LIR.FiberStackFree -> "FiberStackFree"
+  | LIR.FiberPrepare -> "FiberPrepare"
+  | LIR.FiberSwitch -> "FiberSwitch"
+  | LIR.FiberCurrent -> "FiberCurrent"
+  | LIR.FiberSetCurrent -> "FiberSetCurrent"
   | LIR.PosixWait4 -> "PosixWait4"
   | LIR.PosixKeventVnode -> "PosixKeventVnode"
 

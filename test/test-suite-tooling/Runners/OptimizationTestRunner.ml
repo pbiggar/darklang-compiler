@@ -314,7 +314,7 @@ let ssaPipeline printResult recorder programType
       CompilerOptions.disableInlining = true;
     }
   in
-  let* _, functions, typeMap =
+  let* _, functions, typeMap, _ =
     ANFPipeline.buildAnf 0 options elapsed registries
       (CheckedAST.nextFunctionOrdinal symbols)
       InliningCommon.defaultConfig FunctionIdMap.empty M.empty

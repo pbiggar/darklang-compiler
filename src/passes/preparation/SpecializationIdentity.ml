@@ -182,7 +182,8 @@ let mangleNamedTypeName name =
     (String.split_on_char '_'
        (String.concat "%25" (String.split_on_char '%' name)))
 
-(* Convert a type to a string for name mangling *)
+(* Type constructor arities make nested payloads self-delimiting. Tag variables
+   separately so source parameter names cannot collide with constructor tokens. *)
 let rec typeToMangledName = function
   | AST.TInt8 -> "i8"
   | AST.TInt16 -> "i16"
@@ -204,25 +205,30 @@ let rec typeToMangledName = function
   | AST.TUnit -> "unit"
   | AST.TNever -> "runtime_error"
   | AST.TFunction (params, ret) ->
-      "fn_"
+      "fn"
+      ^ string_of_int (List.length params)
+      ^ "_"
       ^ String.concat "_" (List.map typeToMangledName params)
-      ^ "_to_" ^ typeToMangledName ret
+      ^ (if params = [] then "" else "_")
+      ^ typeToMangledName ret
   | AST.TTuple types ->
       "tup"
       ^ string_of_int (List.length types)
       ^ "_"
       ^ String.concat "_" (List.map typeToMangledName types)
-  | AST.TRecord (name, []) | AST.TSum (name, []) -> mangleNamedTypeName name
   | AST.TRecord (name, args) | AST.TSum (name, args) ->
-      mangleNamedTypeName name ^ "_"
+      "named"
+      ^ string_of_int (List.length args)
+      ^ "_" ^ mangleNamedTypeName name
+      ^ (if args = [] then "" else "_")
       ^ String.concat "_" (List.map typeToMangledName args)
   | AST.TList typ -> "list_" ^ typeToMangledName typ
   | AST.TStream typ -> "stream_" ^ typeToMangledName typ
   | AST.TDict (key, value) ->
       "dict_" ^ typeToMangledName key ^ "_" ^ typeToMangledName value
   | AST.TVar name ->
-      mangleTypeVarName name (* Should not appear after monomorphization *)
-  | AST.TInferenceVar (displayName, _) -> mangleTypeVarName displayName
+      "var_" ^ mangleTypeVarName name (* Generic raw intrinsic templates. *)
+  | AST.TInferenceVar (displayName, _) -> "var_" ^ mangleTypeVarName displayName
   | AST.TInternalRawPtr -> "rawptr" (* Internal raw pointer type *)
 
 (* Check if a type contains any type variables *)

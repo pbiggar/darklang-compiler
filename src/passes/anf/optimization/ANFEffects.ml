@@ -49,6 +49,7 @@ let mustPreserveEvaluation (context : ANFConstants.optimizeContext) cexpr =
   | IfValue _ -> false
   | TupleAlloc _ -> false
   | TupleGet _ -> false
+  | SumConstant _ | SumAlloc _ | SumTest _ | SumPayload _ -> false
   | RecordAlloc _ -> false
   | RecordGet _ -> false
   | RecordClone _ -> false
@@ -157,6 +158,9 @@ let foldCExprTempIds add cexpr uses =
       uses |> addAtomUse closure |> addAtomUses args
   | TupleAlloc elems -> addAtomUses elems uses
   | TupleGet (tuple, _) -> addAtomUse tuple uses
+  | SumConstant _ -> uses
+  | SumAlloc (_, atom) | SumTest (_, _, atom) | SumPayload (_, atom) ->
+      addAtomUse atom uses
   | RecordAlloc (_, fields) -> addAtomUses fields uses
   | RecordGet (_, record, _) -> addAtomUse record uses
   | RecordClone (_, record, fields) | RecordReuse (_, _, record, fields) ->
@@ -244,6 +248,9 @@ let cexprUsesTemp tid cexpr =
   | TypedAtom (atom, _)
   | UnaryPrim (_, atom)
   | TupleGet (atom, _)
+  | SumAlloc (_, atom)
+  | SumTest (_, _, atom)
+  | SumPayload (_, atom)
   | RecordGet (_, atom, _)
   | RefCountInc (atom, _, _, _)
   | RefCountDec (atom, _, _, _)
@@ -316,5 +323,7 @@ let cexprUsesTemp tid cexpr =
   | ClosureCall (first, rest)
   | ClosureTailCall (first, rest) ->
       used first || anyUsed rest
-  | RandomInt64 | DateTimeNow | StdinReadLine | RuntimeError _ -> false
+  | SumConstant _ | RandomInt64 | DateTimeNow | StdinReadLine | RuntimeError _
+    ->
+      false
   | RuntimeErrorString atom -> used atom

@@ -121,7 +121,7 @@ let displayId describe id = StructuralFormat.format (describe id)
 let lowerAtom (toANFCore : LoweringCallbacks.expressionLowerer)
     (toAtomCore : LoweringCallbacks.atomLowerer)
     (_toANFBoundAtomCore : LoweringCallbacks.boundAtomLowerer) functionIds sums
-    typeNames inert expr gen env registry variants functions names modules =
+    typeNames regions expr gen env registry variants functions names modules =
   let fieldIndex id =
     match R.tryFindFieldIndex id typeNames with
     | Some index -> index
@@ -149,7 +149,7 @@ let lowerAtom (toANFCore : LoweringCallbacks.expressionLowerer)
   in
   let functionNameIs id expected = functionName id = Some expected in
   let atom ?(env = env) expr gen =
-    toAtomCore sums typeNames inert expr gen env registry variants functions
+    toAtomCore sums typeNames regions expr gen env registry variants functions
       names modules
   in
   let infer expr =
@@ -675,21 +675,11 @@ let lowerAtom (toANFCore : LoweringCallbacks.expressionLowerer)
           | None -> Error ("Unknown constructor tag: " ^ string_of_int tag)
           | Some (name, params, tag, variantFields) -> (
               let args = C.semanticTypeArgs reference.C.typeArgs in
-              let nullable =
-                Option.is_some
-                  (P.nullablePointerSumPayloadType name args sums.P.cases)
-              in
-              let spare = P.spareImmediateSumSentinel name args sums.P.cases in
-              let payloadVariants =
-                M.exists
-                  (fun _ (owner, _, _, fields) -> owner = name && fields <> [])
-                  variants
-              in
               let descriptor () =
                 let* typ = infer expr in
                 match typ with
                 | AST.TSum (inferred, args) when inferred = name ->
-                    T.boxedSumDescriptor name params args variantFields
+                    T.variantDescriptor name params args tag variantFields
                 | typ ->
                     Error
                       ("Constructor '" ^ name ^ "' inferred unexpected type '"
@@ -697,31 +687,11 @@ let lowerAtom (toANFCore : LoweringCallbacks.expressionLowerer)
                       ^ "'")
               in
               match fields with
-              | [ value ]
-                when Option.is_some
-                       (P.transparentSumPayloadType name args sums.P.cases)
-                     || nullable || Option.is_some spare ->
-                  let* value, bindings, gen = atom value gen in
-                  bind
-                    (fun id -> A.Var id)
-                    bindings gen
-                    (A.TypedAtom (value, AST.TSum (name, args)))
-              | [] when nullable || Option.is_some spare ->
-                  bind
-                    (fun id -> A.Var id)
-                    [] gen
-                    (A.TypedAtom
-                       ( int (Option.value spare ~default:0L),
-                         AST.TSum (name, args) ))
-              | [] when not payloadVariants ->
-                  Ok (int (Int64.of_int tag), [], gen)
               | [] ->
-                  let* descriptor = descriptor () in
                   bind
                     (fun id -> A.Var id)
                     [] gen
-                    (A.RecordAlloc
-                       (descriptor, [ int (Int64.of_int tag); int 0L ]))
+                    (A.SumConstant ({ A.sumName = name; sumArgs = args }, tag))
               | _ ->
                   let payload =
                     match fields with
@@ -733,8 +703,7 @@ let lowerAtom (toANFCore : LoweringCallbacks.expressionLowerer)
                   bind
                     (fun id -> A.Var id)
                     bindings gen
-                    (A.RecordAlloc
-                       (descriptor, [ int (Int64.of_int tag); payload ])))))
+                    (A.SumAlloc (descriptor, payload)))))
   | C.ListLiteral elements ->
       if elements = [] then Ok (int 0L, [], gen)
       else
@@ -773,7 +742,7 @@ let lowerAtom (toANFCore : LoweringCallbacks.expressionLowerer)
             gen)
   | C.Match (scrutinee, cases) ->
       let* _matchExpr, _gen =
-        toANFCore sums typeNames inert
+        toANFCore sums typeNames regions
           (C.Match (scrutinee, cases))
           gen env registry variants functions names modules
       in

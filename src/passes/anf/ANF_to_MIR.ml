@@ -315,6 +315,12 @@ let convertCliOperation (operation : ANF.cliOperation) =
   | ANF.PosixKqueue -> MIR.PosixKqueue
   | ANF.ChildState -> MIR.ChildState
   | ANF.ChildLaunch -> MIR.ChildLaunch
+  | ANF.FiberStackAlloc -> MIR.FiberStackAlloc
+  | ANF.FiberStackFree -> MIR.FiberStackFree
+  | ANF.FiberPrepare -> MIR.FiberPrepare
+  | ANF.FiberSwitch -> MIR.FiberSwitch
+  | ANF.FiberCurrent -> MIR.FiberCurrent
+  | ANF.FiberSetCurrent -> MIR.FiberSetCurrent
   | ANF.PosixWait4 -> MIR.PosixWait4
   | ANF.PosixKeventVnode -> MIR.PosixKeventVnode
 
@@ -371,6 +377,11 @@ let maxTempIdInCExpr (cexpr : ANF.cExpr) =
   | ANF.IndirectTailCall (func, args) -> maxTempIdWithAtoms func args
   | ANF.TupleAlloc atoms -> maxTempIdInAtoms atoms
   | ANF.TupleGet (tuple, _) -> maxTempIdInAtom tuple
+  | ANF.SumConstant _ -> -1
+  | ANF.SumAlloc (_, value)
+  | ANF.SumTest (_, _, value)
+  | ANF.SumPayload (_, value) ->
+      maxTempIdInAtom value
   | ANF.RecordAlloc (_, fields) -> maxTempIdInAtoms fields
   | ANF.RecordGet (_, record, _) -> maxTempIdInAtom record
   | ANF.RecordClone (_, record, fields) | ANF.RecordReuse (_, _, record, fields)
@@ -763,8 +774,6 @@ let tupleGetDestType builder tempId aliasType tupleId index =
           | Some (AST.TList elem) | Some (AST.TFunction (_, AST.TList elem)) ->
               if index = 1 && elem = AST.TFloat64 then Some AST.TFloat64
               else None
-          | Some (AST.TSum (_, [ AST.TFloat64 ])) when index = 1 ->
-              Some AST.TFloat64
           | _ -> None))
 
 let inferSimpleCExprDestType builder tempId aliasType = function
@@ -915,6 +924,12 @@ let cliOperationName = function
   | ANF.PosixKqueue -> "PosixKqueue"
   | ANF.ChildState -> "ChildState"
   | ANF.ChildLaunch -> "ChildLaunch"
+  | ANF.FiberStackAlloc -> "FiberStackAlloc"
+  | ANF.FiberStackFree -> "FiberStackFree"
+  | ANF.FiberPrepare -> "FiberPrepare"
+  | ANF.FiberSwitch -> "FiberSwitch"
+  | ANF.FiberCurrent -> "FiberCurrent"
+  | ANF.FiberSetCurrent -> "FiberSetCurrent"
   | ANF.PosixWait4 -> "PosixWait4"
   | ANF.PosixKeventVnode -> "PosixKeventVnode"
 
@@ -938,6 +953,10 @@ let cexprDescription cexpr =
   | ANF.ClosureTailCall _ -> "ClosureTailCall"
   | ANF.TupleAlloc _ -> "TupleAlloc"
   | ANF.TupleGet _ -> "TupleGet"
+  | ANF.SumConstant _ -> "SumConstant"
+  | ANF.SumAlloc _ -> "SumAlloc"
+  | ANF.SumTest _ -> "SumTest"
+  | ANF.SumPayload _ -> "SumPayload"
   | ANF.RecordAlloc (descriptor, _) ->
       "RecordAlloc " ^ descriptor.ANF.runtimeTypeName
   | ANF.RecordGet (descriptor, _, _) ->
@@ -1288,6 +1307,9 @@ let simpleCExprInstrs builder tempId destReg destType cexpr =
       let alloc = MIR.HeapAlloc (destReg, mulInt (List.length elems) 8) in
       let+ stores = storeFields elems in
       alloc :: stores
+  | ANF.SumConstant _ | ANF.SumAlloc _ | ANF.SumTest _ | ANF.SumPayload _ ->
+      Crash.crash
+        "Logical sum operation reached MIR before representation lowering"
   | ANF.TupleGet (tuple, index) -> (
       match tuple with
       | ANF.Var tid ->

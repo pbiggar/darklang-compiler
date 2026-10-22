@@ -32,6 +32,7 @@ type userOnlyResult = {
   scopeContracts : Destruction.functionScopeContract FunctionIdMap.t;
   inertFunctionScopes : SpecializationIdentity.FunctionSet.t;
   userFunctions : ANF.functionDef list;
+  sourceUserFunctions : ANF.functionDef list;
   ownershipContracts : OwnedIR.callSignature FunctionIdMap.t;
   nonInlineableFunctionNames : SpecializationIdentity.FunctionSet.t;
   mainExpr : ANF.aExpr;
@@ -107,8 +108,11 @@ let toANFWithMetadata types expr gen env registry variants functions modules =
   LoweringExpressions.toANFCore
     (R.functionIdsFromNames names)
     (P.sumMetadataFromVariantLookup variants)
-    types (emptyScopes ()) expr gen env registry variants functions names
-    modules
+    types
+    (LoweringCallbacks.listRegions
+       (R.functionIdsFromNames names)
+       (emptyScopes ()))
+    expr gen env registry variants functions names modules
 
 let toANF expr gen env registry variants functions modules =
   toANFWithMetadata R.emptyTypeNames expr gen env registry variants functions
@@ -204,7 +208,10 @@ let convertFunction symbols func gen registry variants functions modules =
   let names = FunctionIdMap.map (fun _ (name, _) -> name) functions in
   convertFunctionWithSumTypeNames None symbols
     (P.sumMetadataFromVariantLookup variants)
-    (emptyScopes ()) func gen registry variants functions
+    (LoweringCallbacks.listRegions
+       (R.functionIdsFromNames names)
+       (emptyScopes ()))
+    func gen registry variants functions
     (R.functionIdsFromNames names)
     names modules
 
@@ -565,18 +572,25 @@ let extendFunctionRegistryWithConverted registry functions =
         registry)
     registry functions
 
-let convertFunctionsWithOwnershipWithTrace recorder symbols
+let convertFunctionsWithOwnershipWithTrace ?listRegions recorder symbols
     (registries : registries) gen functions =
+  let regions =
+    match listRegions with
+    | Some regions -> regions
+    | None ->
+        LoweringCallbacks.listRegions registries.functionIds
+          registries.inertFunctionScopes
+  in
   let rec loop (conversionRegistries : registries) funcs gen acc =
     match funcs with
     | [] -> Ok (List.rev acc, gen)
     | (func : C.functionDef) :: rest ->
         let* func, gen =
           convertFunctionWithSumTypeNames recorder symbols
-            registries.sumMetadata registries.inertFunctionScopes func gen
-            registries.typeReg registries.variantLookup
-            conversionRegistries.funcReg conversionRegistries.functionIds
-            conversionRegistries.functionNames registries.moduleRegistry
+            registries.sumMetadata regions func gen registries.typeReg
+            registries.variantLookup conversionRegistries.funcReg
+            conversionRegistries.functionIds conversionRegistries.functionNames
+            registries.moduleRegistry
           |> Result.map_error (fun error ->
               "Function '" ^ func.C.name ^ "': " ^ error)
         in
@@ -664,8 +678,9 @@ let convertFunctions symbols registries gen functions =
 *)
 let convertExprToAnf (regs : registries) gen expr =
   LoweringExpressions.toANFCore regs.functionIds regs.sumMetadata regs.typeNames
-    regs.inertFunctionScopes expr gen R.BindingMap.empty regs.typeReg
-    regs.variantLookup regs.funcReg regs.functionNames regs.moduleRegistry
+    (LoweringCallbacks.listRegions regs.functionIds regs.inertFunctionScopes)
+    expr gen R.BindingMap.empty regs.typeReg regs.variantLookup regs.funcReg
+    regs.functionNames regs.moduleRegistry
 
 (* Preserve the complete registry bundle when a lowered user unit is reused. *)
 let registriesOfUserOnly (user : userOnlyResult) : registries =

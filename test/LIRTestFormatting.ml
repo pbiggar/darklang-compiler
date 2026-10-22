@@ -122,6 +122,12 @@ and rcKind (value : LIR.rcKind) =
 
 and cliOperation (value : LIR.cliOperation) =
   match value with
+  | LIR.FiberStackAlloc -> union "CliOperation" "FiberStackAlloc" []
+  | LIR.FiberStackFree -> union "CliOperation" "FiberStackFree" []
+  | LIR.FiberPrepare -> union "CliOperation" "FiberPrepare" []
+  | LIR.FiberSwitch -> union "CliOperation" "FiberSwitch" []
+  | LIR.FiberCurrent -> union "CliOperation" "FiberCurrent" []
+  | LIR.FiberSetCurrent -> union "CliOperation" "FiberSetCurrent" []
   | LIR.StartupStack -> union "CliOperation" "StartupStack" []
   | LIR.ExecutableState -> union "CliOperation" "ExecutableState" []
   | LIR.HostOS -> union "CliOperation" "HostOS" []

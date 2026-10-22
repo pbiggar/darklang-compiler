@@ -165,6 +165,12 @@ let cliOperation = function
   | ANF.PosixKqueue -> "PosixKqueue"
   | ANF.ChildState -> "ChildState"
   | ANF.ChildLaunch -> "ChildLaunch"
+  | ANF.FiberStackAlloc -> "FiberStackAlloc"
+  | ANF.FiberStackFree -> "FiberStackFree"
+  | ANF.FiberPrepare -> "FiberPrepare"
+  | ANF.FiberSwitch -> "FiberSwitch"
+  | ANF.FiberCurrent -> "FiberCurrent"
+  | ANF.FiberSetCurrent -> "FiberSetCurrent"
   | ANF.PosixWait4 -> "PosixWait4"
   | ANF.PosixKeventVnode -> "PosixKeventVnode"
 
@@ -215,6 +221,19 @@ let prettyPrintANFCExpr functionNames expression =
       "(" ^ elemsStr ^ ")"
   | ANF.TupleGet (tupleAtom, index) ->
       prettyPrintANFAtom tupleAtom ^ "." ^ string_of_int index
+  | ANF.SumConstant (sum, tag) ->
+      "SumConstant(" ^ sum.ANF.sumName ^ ", " ^ string_of_int tag ^ ")"
+  | ANF.SumAlloc (variant, value) ->
+      "SumAlloc(" ^ variant.ANF.sum.ANF.sumName ^ ", "
+      ^ string_of_int variant.ANF.variantTag
+      ^ ", " ^ prettyPrintANFAtom value ^ ")"
+  | ANF.SumTest (sum, tag, value) ->
+      "SumTest(" ^ sum.ANF.sumName ^ ", " ^ string_of_int tag ^ ", "
+      ^ prettyPrintANFAtom value ^ ")"
+  | ANF.SumPayload (variant, value) ->
+      "SumPayload(" ^ variant.ANF.sum.ANF.sumName ^ ", "
+      ^ string_of_int variant.ANF.variantTag
+      ^ ", " ^ prettyPrintANFAtom value ^ ")"
   | ANF.RecordAlloc (descriptor, fields) ->
       let fieldsText = fields |> commaSeparated prettyPrintANFAtom in
       "RecordAlloc(" ^ descriptor.ANF.runtimeTypeName ^ ", [" ^ fieldsText

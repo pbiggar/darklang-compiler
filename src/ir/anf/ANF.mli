@@ -133,6 +133,12 @@ type cliOperation =
   | PosixKqueue
   | ChildState
   | ChildLaunch
+  | FiberStackAlloc
+  | FiberStackFree
+  | FiberPrepare
+  | FiberSwitch
+  | FiberCurrent
+  | FiberSetCurrent
   | PosixWait4
   | PosixKeventVnode
 
@@ -142,6 +148,15 @@ type recordDescriptor = {
   typeArgs : AST.semanticType list;
   fields : (string * AST.semanticType) list;
   valueType : AST.semanticType;
+}
+
+(* Sum layout selection follows async payload interface inference. *)
+type sumDescriptor = { sumName : string; sumArgs : AST.semanticType list }
+
+type variantDescriptor = {
+  sum : sumDescriptor;
+  variantTag : int;
+  payloadType : AST.semanticType;
 }
 
 type cExpr =
@@ -160,6 +175,10 @@ type cExpr =
   | ClosureTailCall of atom * atom list
   | TupleAlloc of atom list
   | TupleGet of atom * int
+  | SumConstant of sumDescriptor * int
+  | SumAlloc of variantDescriptor * atom
+  | SumTest of sumDescriptor * int * atom
+  | SumPayload of variantDescriptor * atom
   | RecordAlloc of recordDescriptor * atom list
   | RecordGet of recordDescriptor * atom * int
   | RecordClone of recordDescriptor * atom * atom list

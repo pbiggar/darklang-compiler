@@ -181,6 +181,12 @@ type cliOperation =
   | PosixKqueue
   | ChildState
   | ChildLaunch
+  | FiberStackAlloc
+  | FiberStackFree
+  | FiberPrepare
+  | FiberSwitch
+  | FiberCurrent
+  | FiberSetCurrent
   | PosixWait4
   | PosixKeventVnode
 

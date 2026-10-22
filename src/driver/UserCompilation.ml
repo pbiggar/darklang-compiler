@@ -290,9 +290,37 @@ let compileUserWithPlan ?writtenSources (plan : P.userCompilePlan) =
           (select plan.P.stdlib.X.callGraphSummaries)
           (select plan.P.prebuiltCallGraphSummaries)
       in
-      let build registry candidates optimizations noInline funcs ownership early
-          =
-        ANFPipeline.buildAnf plan.P.verbosity plan.P.options elapsed registry
+      let build ?(symbols = symbols) registry candidates optimizations noInline
+          funcs ownership early =
+        ANFPipeline.buildAnf
+          ~asyncDefinitions:
+            (List.fold_left
+               (fun definitions (fn : ANF.functionDef) ->
+                 if
+                   (not (F.mem fn.ANF.id dependencyNames))
+                   || Text.startsWith fn.ANF.name "Darklang.Stdlib."
+                   || Text.startsWith fn.ANF.name "Builtin."
+                   || Text.startsWith fn.ANF.name "__dark_"
+                 then definitions
+                 else M.add fn.ANF.name fn definitions)
+               plan.P.asyncDefinitions user.R.sourceUserFunctions)
+          ~asyncRuntime:
+            {
+              ANFPipeline.context =
+                {
+                  plan.P.baseContext with
+                  X.symbols;
+                  registries = registry;
+                  typeCheckEnv = env;
+                };
+              materialize =
+                AsyncRuntimeMaterialization.materialize
+                  plan.P.passTimingRecorder;
+              materializeSource =
+                AsyncRuntimeMaterialization.materializeSource
+                  plan.P.passTimingRecorder;
+            }
+          plan.P.verbosity plan.P.options elapsed registry
           (CheckedAST.nextFunctionOrdinal symbols)
           InliningCommon.defaultConfig candidates optimizations noInline funcs
           ownership early plan.P.passTimingRecorder
@@ -301,20 +329,25 @@ let compileUserWithPlan ?writtenSources (plan : P.userCompilePlan) =
         (* The entry and its calls are compiled separately. Their absence here
            must not make a recursive dependency's arguments appear uniform:
            shrinking its signature would change the ABI used by those callers. *)
-        let* _, ssa, typeMap =
+        let* _, ssa, typeMap, sumShapes =
           build registry plan.P.externalInlineCandidates
             plan.P.stdlib.X.stdlibAnfOptimizationCandidates
             user.R.nonInlineableFunctionNames dependencies
             user.R.ownershipContracts false
         in
-        NativePipeline.lowerToAllocatedLirWithKnown known
-          plan.P.baseContext.X.target plan.P.verbosity plan.P.options elapsed
-          plan.P.passTimingRecorder caches releaseCache
-          plan.P.labels.P.stageSuffix ssa typeMap registry (Some projected)
-          returns
+        let registry = { registry with AST_to_ANF.rcSumShapeReg = sumShapes } in
+        let* allocated, summaries =
+          NativePipeline.lowerToAllocatedLirWithKnown known
+            plan.P.baseContext.X.target plan.P.verbosity plan.P.options elapsed
+            plan.P.passTimingRecorder caches releaseCache
+            plan.P.labels.P.stageSuffix ssa typeMap registry (Some projected)
+            returns
+        in
+        Ok (allocated, summaries, sumShapes)
       in
       let dependencyResult =
-        if dependencies = [] then Ok ([], FunctionIdMap.empty)
+        if dependencies = [] then
+          Ok ([], FunctionIdMap.empty, registry.AST_to_ANF.rcSumShapeReg)
         else
           match plan.P.session with
           | None -> compileDependencies ()
@@ -330,6 +363,19 @@ let compileUserWithPlan ?writtenSources (plan : P.userCompilePlan) =
                       known;
                 }
                 compileDependencies
+      in
+      let* allocatedDependencies, dependencySummaries, sumShapes =
+        dependencyResult
+      in
+      let registry = { registry with AST_to_ANF.rcSumShapeReg = sumShapes } in
+      (* Native dependency compilation can generate functions after checked
+         declarations have reserved their IDs. Late async specializations and
+         adapters must allocate beyond those functions as well. *)
+      let programSymbols =
+        List.fold_left
+          (fun symbols (fn : LIR.functionDef) ->
+            CheckedAST.registerGeneratedFunction fn.LIR.name fn.LIR.id symbols)
+          symbols allocatedDependencies
       in
       let entry =
         R.synthesizeEntryFunction entryId entryName boundary user.R.mainExpr
@@ -388,13 +434,13 @@ let compileUserWithPlan ?writtenSources (plan : P.userCompilePlan) =
         if reserved then Error ("Function name '" ^ entryName ^ "' is reserved")
         else
           let* functions = prepare () in
-          build registry plan.P.externalInlineCandidates
+          build ~symbols:programSymbols registry plan.P.externalInlineCandidates
             plan.P.stdlib.X.stdlibAnfOptimizationCandidates
             user.R.nonInlineableFunctionNames (prune functions)
             user.R.ownershipContracts true
       in
-      let* allocatedDependencies, dependencySummaries = dependencyResult in
-      let* _, ssa, programTypeMap = programResult in
+      let* _, ssa, programTypeMap, sumShapes = programResult in
+      let registry = { registry with AST_to_ANF.rcSumShapeReg = sumShapes } in
       let through =
         merge
           (merge plan.P.stdlib.X.callGraphSummaries
@@ -468,10 +514,14 @@ let compileUserWithPlan ?writtenSources (plan : P.userCompilePlan) =
           funcParams = M.add entryName [] registry.R.funcParams;
         }
       in
-      let* _, startSsa, startTypeMap =
+      let* _, startSsa, startTypeMap, sumShapes =
         build startRegistry FunctionIdMap.empty M.empty F.empty
           [ startFunction ] FunctionIdMap.empty false
       in
+      let startRegistry =
+        { startRegistry with AST_to_ANF.rcSumShapeReg = sumShapes }
+      in
+      let registry = { registry with AST_to_ANF.rcSumShapeReg = sumShapes } in
       let* allocated, summaries =
         NativePipeline.lowerToAllocatedLirWithKnownGroups through
           plan.P.baseContext.X.target plan.P.verbosity plan.P.options elapsed
@@ -493,7 +543,14 @@ let compileUserWithPlan ?writtenSources (plan : P.userCompilePlan) =
         if plan.P.options.O.disableFunctionTreeShaking then FunctionIdMap.empty
         else
           FunctionIdMap.fold
-            (fun graph id calls -> FunctionIdMap.add id calls graph)
+            (fun graph id calls ->
+              (* Emission may retain the prebuilt copy of a specialization.
+                 Keep dependencies of both bodies, not only the fresh one. *)
+              FunctionIdMap.change id
+                (function
+                  | None -> Some calls
+                  | Some previous -> Some (F.union previous calls))
+                graph)
             plan.P.prebuiltCallGraph
             (DeadCodeElimination.buildCallGraph user.R.functionIds allocatedUser)
       in
@@ -669,6 +726,33 @@ let compileUserWithPlan ?writtenSources (plan : P.userCompilePlan) =
                   info.Types.variants;
             })
           env.Types.indexedSumTypeReg
+      in
+      let variants =
+        M.fold
+          (fun name (owner, typeParams, tag, fields) variants ->
+            let variant =
+              {
+                LIR.name;
+                tag;
+                payload =
+                  (match fields with
+                  | [] -> None
+                  | [ field ] -> Some field
+                  | fields -> Some (AST.TTuple fields));
+                fieldCount = List.length fields;
+              }
+            in
+            M.update owner
+              (fun existing ->
+                let previous =
+                  match existing with
+                  | None -> []
+                  | Some info -> info.LIR.variants
+                in
+                Some { LIR.typeParams; variants = variant :: previous })
+              variants)
+          (AsyncSumStorage.physicalVariantLookup registry.R.rcSumShapeReg)
+          variants
       in
       let allocatedProgram =
         LIR.Program (all, variants, registry.R.recordFieldsReg)

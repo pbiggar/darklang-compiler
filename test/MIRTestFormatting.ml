@@ -77,6 +77,12 @@ and rcKind (value : MIR.rcKind) =
 
 and cliOperation (value : MIR.cliOperation) =
   match value with
+  | MIR.FiberStackAlloc -> union "CliOperation" "FiberStackAlloc" []
+  | MIR.FiberStackFree -> union "CliOperation" "FiberStackFree" []
+  | MIR.FiberPrepare -> union "CliOperation" "FiberPrepare" []
+  | MIR.FiberSwitch -> union "CliOperation" "FiberSwitch" []
+  | MIR.FiberCurrent -> union "CliOperation" "FiberCurrent" []
+  | MIR.FiberSetCurrent -> union "CliOperation" "FiberSetCurrent" []
   | MIR.StartupStack -> union "CliOperation" "StartupStack" []
   | MIR.ExecutableState -> union "CliOperation" "ExecutableState" []
   | MIR.HostOS -> union "CliOperation" "HostOS" []

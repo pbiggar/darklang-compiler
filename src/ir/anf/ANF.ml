@@ -187,6 +187,12 @@ type cliOperation =
   | PosixKqueue
   | ChildState
   | ChildLaunch
+  | FiberStackAlloc
+  | FiberStackFree
+  | FiberPrepare
+  | FiberSwitch
+  | FiberCurrent
+  | FiberSetCurrent
   | PosixWait4
   | PosixKeventVnode
 
@@ -280,6 +286,16 @@ type recordDescriptor = {
    Float to String conversion
    Convert Float to heap String
 *)
+(* Sum operations retain constructor identity until transport inference has
+   selected physical payload types. Compact encodings are chosen afterwards. *)
+type sumDescriptor = { sumName : string; sumArgs : AST.semanticType list }
+
+type variantDescriptor = {
+  sum : sumDescriptor;
+  variantTag : int;
+  payloadType : AST.semanticType;
+}
+
 type cExpr =
   | Atom of atom
   | TypedAtom of atom * AST.semanticType
@@ -296,6 +312,10 @@ type cExpr =
   | ClosureTailCall of atom * atom list
   | TupleAlloc of atom list
   | TupleGet of atom * int
+  | SumConstant of sumDescriptor * int
+  | SumAlloc of variantDescriptor * atom
+  | SumTest of sumDescriptor * int * atom
+  | SumPayload of variantDescriptor * atom
   | RecordAlloc of recordDescriptor * atom list
   | RecordGet of recordDescriptor * atom * int
   | RecordClone of recordDescriptor * atom * atom list

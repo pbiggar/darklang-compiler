@@ -71,6 +71,10 @@ let substCExprValue env cexpr =
       let elems' = substAtoms env elems in
       if elems' == elems then cexpr else TupleAlloc elems'
   | TupleGet (tuple, idx) -> TupleGet (s tuple, idx)
+  | SumConstant _ -> cexpr
+  | SumAlloc (variant, value) -> SumAlloc (variant, s value)
+  | SumTest (sum, tag, value) -> SumTest (sum, tag, s value)
+  | SumPayload (variant, value) -> SumPayload (variant, s value)
   | RecordAlloc (descriptor, fields) ->
       let fields' = substAtoms env fields in
       if fields' == fields then cexpr else RecordAlloc (descriptor, fields')

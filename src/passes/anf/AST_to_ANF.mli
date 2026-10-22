@@ -20,6 +20,8 @@ type userOnlyResult = {
   scopeContracts : Destruction.functionScopeContract FunctionIdMap.t;
   inertFunctionScopes : SpecializationIdentity.FunctionSet.t;
   userFunctions : ANF.functionDef list;
+  (* Logical bodies, including dependencies compiled separately as native code. *)
+  sourceUserFunctions : ANF.functionDef list;
   ownershipContracts : OwnedIR.callSignature FunctionIdMap.t;
   nonInlineableFunctionNames : SpecializationIdentity.FunctionSet.t;
   mainExpr : ANF.aExpr;
@@ -166,6 +168,7 @@ val extendFunctionRegistryWithConverted :
   TypeRegistries.functionRegistry
 
 val convertFunctionsWithOwnershipWithTrace :
+  ?listRegions:LoweringCallbacks.listRegionPolicy ->
   (string -> float -> unit) option ->
   CheckedAST.symbols ->
   registries ->

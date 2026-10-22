@@ -150,7 +150,7 @@ let displayId describe id = StructuralFormat.format (describe id)
 let lowerExpression (toANFCore : LoweringCallbacks.expressionLowerer)
     (toAtomCore : LoweringCallbacks.atomLowerer)
     (toANFBoundAtomCore : LoweringCallbacks.boundAtomLowerer) functionIds sums
-    typeNames inert expr gen env registry variants functions names modules =
+    typeNames regions expr gen env registry variants functions names modules =
   let fieldIndex id =
     match R.tryFindFieldIndex id typeNames with
     | Some index -> index
@@ -179,15 +179,15 @@ let lowerExpression (toANFCore : LoweringCallbacks.expressionLowerer)
   in
   let functionNameIs id expected = functionName id = Some expected in
   let anf ?(env = env) value gen =
-    toANFCore sums typeNames inert value gen env registry variants functions
+    toANFCore sums typeNames regions value gen env registry variants functions
       names modules
   in
   let atom value gen =
-    toAtomCore sums typeNames inert value gen env registry variants functions
+    toAtomCore sums typeNames regions value gen env registry variants functions
       names modules
   in
   let bound value gen =
-    toANFBoundAtomCore sums typeNames inert value gen env registry variants
+    toANFBoundAtomCore sums typeNames regions value gen env registry variants
       functions names modules
   in
   let infer value =
@@ -579,7 +579,7 @@ let lowerExpression (toANFCore : LoweringCallbacks.expressionLowerer)
                 Some payload
             | _ -> None
           in
-          let build successTag payloadType unboxed absent failure =
+          let build successTag payloadType failure =
             let* setup, value, gen = bound argument gen in
             let value, bindings, gen =
               match value with
@@ -588,16 +588,11 @@ let lowerExpression (toANFCore : LoweringCallbacks.expressionLowerer)
                   let id, gen = A.freshVar gen in
                   (A.Var id, [ (id, A.Atom value) ], gen)
             in
-            let tag, gen = A.freshVar gen in
             let success, gen = A.freshVar gen in
             let tagBindings =
-              if unboxed then [ (success, A.Prim (A.Neq, value, int absent)) ]
-              else
-                [
-                  (tag, A.TupleGet (value, 0));
-                  ( success,
-                    A.Prim (A.Eq, A.Var tag, int (Int64.of_int successTag)) );
-                ]
+              [
+                (success, P.sumTestExpr ~tag:successTag typ value sums.P.cases);
+              ]
             in
             let payloadType =
               if SpecializationIdentity.containsTypeVar payloadType then
@@ -609,7 +604,7 @@ let lowerExpression (toANFCore : LoweringCallbacks.expressionLowerer)
             let yes =
               A.Let
                 ( raw,
-                  (if unboxed then A.Atom value else A.TupleGet (value, 1)),
+                  P.sumPayloadExpr ~tag:successTag typ payloadType value,
                   A.Let
                     ( typed,
                       A.TypedAtom (A.Var raw, payloadType),
@@ -643,32 +638,21 @@ let lowerExpression (toANFCore : LoweringCallbacks.expressionLowerer)
           match typ with
           | AST.TSum (name, [ value ]) when name = optionName ->
               let* tag, _ = lookup optionName "Some" in
-              let nullable =
-                Option.is_some
-                  (P.nullablePointerSumPayloadType optionName [ value ]
-                     sums.P.cases)
-              in
-              let spare =
-                P.spareImmediateSumSentinel optionName [ value ] sums.P.cases
-              in
-              build tag value
-                (nullable || Option.is_some spare)
-                (Option.value spare ~default:0L)
-                "Cannot unwrap None"
+              build tag value "Cannot unwrap None"
           | AST.TSum (name, []) when name = optionName ->
               let* tag, fields = lookup optionName "Some" in
               let* typ = inferredPayload optionName "Some" fields in
-              build tag typ false 0L "Cannot unwrap None"
+              build tag typ "Cannot unwrap None"
           | AST.TSum (name, [ ok; _ ]) when name = resultName ->
               let* tag, _ = lookup resultName "Ok" in
               let message = errorMessage () in
-              build tag ok false 0L message
+              build tag ok message
           | AST.TSum (name, []) when name = resultName ->
               let* tag, fields = lookup resultName "Ok" in
               let payloadTypeResult = inferredPayload resultName "Ok" fields in
               let message = errorMessage () in
               let* typ = payloadTypeResult in
-              build tag typ false 0L message
+              build tag typ message
           | _ ->
               Error
                 ("Internal error: Builtin.unwrap should have been typechecked \
@@ -928,21 +912,11 @@ let lowerExpression (toANFCore : LoweringCallbacks.expressionLowerer)
           | None -> Error ("Unknown constructor tag: " ^ string_of_int tag)
           | Some (name, params, tag, variantFields) -> (
               let args = C.semanticTypeArgs reference.C.typeArgs in
-              let nullable =
-                Option.is_some
-                  (P.nullablePointerSumPayloadType name args sums.P.cases)
-              in
-              let spare = P.spareImmediateSumSentinel name args sums.P.cases in
-              let hasPayload =
-                M.exists
-                  (fun _ (owner, _, _, fields) -> owner = name && fields <> [])
-                  variants
-              in
               let descriptor () =
                 let* typ = infer expr in
                 match typ with
                 | AST.TSum (owner, args) when owner = name ->
-                    T.boxedSumDescriptor name params args variantFields
+                    T.variantDescriptor name params args tag variantFields
                 | typ ->
                     Error
                       ("Constructor '" ^ name ^ "' inferred unexpected type '"
@@ -950,29 +924,10 @@ let lowerExpression (toANFCore : LoweringCallbacks.expressionLowerer)
                       ^ "'")
               in
               match fields with
-              | [ field ]
-                when Option.is_some
-                       (P.transparentSumPayloadType name args sums.P.cases)
-                     || nullable || Option.is_some spare ->
-                  let* setup, value, gen = bound field gen in
-                  let body, gen =
-                    finish gen (A.TypedAtom (value, AST.TSum (name, args)))
-                  in
-                  Ok (K.bindReturns setup (fun _ -> body), gen)
-              | [] when nullable || Option.is_some spare ->
-                  Ok
-                    (finish gen
-                       (A.TypedAtom
-                          ( int (Option.value spare ~default:0L),
-                            AST.TSum (name, args) )))
-              | [] when not hasPayload ->
-                  Ok (A.Return (int (Int64.of_int tag)), gen)
               | [] ->
-                  let* descriptor = descriptor () in
                   Ok
                     (finish gen
-                       (A.RecordAlloc
-                          (descriptor, [ int (Int64.of_int tag); int 0L ])))
+                       (A.SumConstant ({ A.sumName = name; sumArgs = args }, tag)))
               | _ ->
                   let payload =
                     match fields with
@@ -981,11 +936,7 @@ let lowerExpression (toANFCore : LoweringCallbacks.expressionLowerer)
                   in
                   let* descriptor = descriptor () in
                   let* setup, value, gen = bound payload gen in
-                  let body, gen =
-                    finish gen
-                      (A.RecordAlloc
-                         (descriptor, [ int (Int64.of_int tag); value ]))
-                  in
+                  let body, gen = finish gen (A.SumAlloc (descriptor, value)) in
                   Ok (K.bindReturns setup (fun _ -> body), gen))))
   | C.ListLiteral [] -> Ok (A.Return (int 0L), gen)
   | C.ListLiteral values ->
