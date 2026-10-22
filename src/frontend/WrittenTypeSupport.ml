@@ -64,7 +64,6 @@ type globals = {
   typeParams : S.t;
   modulePath : string list;
   bounds : TraitCatalog.obligation list;
-  currentFunction : (AST.functionId * string * string list) option;
   returnBoundary : (AST.bindingId * AST.semanticType) option;
 }
 
@@ -80,7 +79,6 @@ let emptyGlobals =
     typeParams = S.empty;
     modulePath = [];
     bounds = [];
-    currentFunction = None;
     returnBoundary = None;
   }
 

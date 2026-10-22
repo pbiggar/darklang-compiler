@@ -668,7 +668,8 @@ let analyzePreambleForPlan stdlib (spec : preambleBuildSpec) tests =
 
 let buildPreamblePlan (stdlib : CC.stdlibResult) (spec : preambleBuildSpec)
     tests =
-  Result.map
+  Result.bind
+    (analyzePreambleForPlan stdlib spec tests)
     (fun (analysis : CC.preambleAnalysis option) ->
       let preambleSpecs =
         match analysis with
@@ -706,9 +707,9 @@ let buildPreamblePlan (stdlib : CC.stdlibResult) (spec : preambleBuildSpec)
         | Some a -> CheckedAST.programSymbols a.CC.typedAST
         | None -> stdlib.CC.context.CC.symbols
       in
-      let specialization =
+      let* specialization =
         if SM.is_empty generic then
-          {
+          Ok {
             SI.specializedFuncs = [];
             specRegistry = SI.SpecMap.empty;
             externalSpecs = SI.SpecSet.empty;
@@ -720,7 +721,7 @@ let buildPreamblePlan (stdlib : CC.stdlibResult) (spec : preambleBuildSpec)
         SI.SpecSet.union stdlibSpecsFromPreamble
           (filterSpecsByDefs stdlibGeneric specialization.SI.externalSpecs)
       in
-      {
+      Ok {
         spec;
         tests;
         analysis;
@@ -729,7 +730,6 @@ let buildPreamblePlan (stdlib : CC.stdlibResult) (spec : preambleBuildSpec)
         externalTypeReg;
         externalVariantLookup;
       })
-    (analyzePreambleForPlan stdlib spec tests)
 
 let buildSuiteContexts stdlib tests passTimingRecorder =
   let recordTiming name elapsed =
@@ -858,7 +858,7 @@ let buildSuiteContexts stdlib tests passTimingRecorder =
                        (fun key _ acc -> SI.SpecSet.add key acc)
                        plan.specialization.SI.specRegistry SI.SpecSet.empty
                    in
-                   let specialization =
+                   let* specialization =
                      Monomorphization.specializeFromSpecs
                        (CheckedAST.programSymbols analysis.CC.typedAST)
                        analysis.CC.genericFuncDefs specs

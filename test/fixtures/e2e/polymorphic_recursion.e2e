@@ -8,8 +8,8 @@ let swapTypes<'a, 'b> (x: a) (y: b) (n: Int64) : Int64 =
 let swapRoundTrip<'a, 'b> (x: a) (y: b) (n: Int64) : (a * b) =
   if n <= 0L then (x, y) else
     let (nextY, nextX) = swapRoundTrip y x (n - 1L) in (nextX, nextY)
-let tailSwapEq<'a, 'b> (x: a) (y: b) (n: Int64) : Bool =
-  if n <= 0L then x == x && y == y else tailSwapEq y x (n - 1L)
+let tailSwapEq<'a, 'b> (x: a) (otherX: a) (y: b) (otherY: b) (n: Int64) : Bool =
+  if n <= 0L then x == otherX && y == otherY else tailSwapEq y otherY x otherX (n - 1L)
 let settleTypes<'a, 'b> (_x: a) (y: b) (n: Int64) : Int64 =
   if n <= 0L then 0L else 1L + settleTypes [y] 1L (n - 1L)
 let mutualLeft<'a> (_value: a) (n: Int64) : Int64 =
@@ -27,8 +27,8 @@ resetType<Int64> 1L 3L = 3L
 inferredReset 1L 3L = 3L
 swapTypes 1L "hello" 3L = 3L
 swapRoundTrip 1L (Stdlib.String.append "hel" "lo") 3L = (1L, "hello")
-tailSwapEq 1L (Stdlib.String.append "hel" "lo") 1001L = true
-tailSwapEq (Stdlib.String.append "a" "b") 2L 1000L = true
+tailSwapEq 1L 1L (Stdlib.String.append "hel" "lo") (Stdlib.String.append "h" "ello") 1001L = true
+tailSwapEq 1L 1L (Stdlib.String.append "hel" "lo") (Stdlib.String.append "world" "!") 1000L = false
 settleTypes true "hello" 3L = 3L
 mutualLeft 1L 3L = 3L
 resetViaValue<Int64> 1L 3L = 3L

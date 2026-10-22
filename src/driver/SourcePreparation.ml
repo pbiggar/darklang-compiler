@@ -388,9 +388,9 @@ let prepareProgramForAnf mode baseTypeReg baseVariantLookup baseFuncNames
   let monomorphizedResult =
     measure recorder "AST -> ANF Preparation: Monomorphization" (fun () ->
         match mode with
-        | Monomorphize None -> Ok (PrepareFunctions.monomorphize program)
+        | Monomorphize None -> PrepareFunctions.monomorphize program
         | Monomorphize (Some defs) ->
-            Ok (PrepareFunctions.monomorphizeWithExternalDefs defs program)
+            PrepareFunctions.monomorphizeWithExternalDefs defs program
         | ReplaceTypeApps registry ->
             Monomorphization.replaceTypeAppsInProgramWithRegistry registry
               program
@@ -403,7 +403,7 @@ let prepareProgramForAnf mode baseTypeReg baseVariantLookup baseFuncNames
                 program
             else
               let localSpecs = collectLocalSpecs genericDefs program in
-              let specialization =
+              let* specialization =
                 Monomorphization.specializeFromSpecs (C.programSymbols program)
                   genericDefs localSpecs
               in
@@ -718,7 +718,7 @@ let convertTypedProgramToUserOnlyWithMode (baseContext : X.pipelineContext) mode
   (* Late AOT plans (notably Json) may introduce concrete calls to generic
     stdlib functions after the suite preamble registry was built. Materialize
     just those missing specializations into the user compilation unit. *)
-  let typedProgram, mode, nonInlineableFunctionNames =
+  let* typedProgram, mode, nonInlineableFunctionNames =
     measure recorder "AST -> ANF Dependency Planning" (fun () ->
         let addMissing baseRegistry rebuildMode =
           (* A local generic function's body may instantiate a stdlib generic
@@ -731,18 +731,21 @@ let convertTypedProgramToUserOnlyWithMode (baseContext : X.pipelineContext) mode
           let localGenericDefs =
             SpecializationIdentity.extractGenericFuncDefs typedProgram
           in
-          let reachedThroughLocalGenerics =
-            if M.is_empty localGenericDefs then K.empty
+          let* reachedThroughLocalGenerics =
+            if M.is_empty localGenericDefs then Ok K.empty
             else
               let localSpecs =
                 collectLocalSpecs localGenericDefs typedProgram
               in
-              (Monomorphization.specializeFromSpecs
-                 (C.programSymbols typedProgram)
-                 localGenericDefs localSpecs)
-                .SpecializationIdentity.externalSpecs
-              |> K.filter (fun (name, _) ->
-                  M.mem name baseContext.X.genericFuncDefs)
+              let* specialization =
+                Monomorphization.specializeFromSpecs
+                  (C.programSymbols typedProgram)
+                  localGenericDefs localSpecs
+              in
+              Ok
+                (K.filter
+                   (fun (name, _) -> M.mem name baseContext.X.genericFuncDefs)
+                   specialization.SpecializationIdentity.externalSpecs)
           in
           let requested =
             K.union
@@ -766,9 +769,9 @@ let convertTypedProgramToUserOnlyWithMode (baseContext : X.pipelineContext) mode
                   not (SpecializationIdentity.SpecMap.mem key registry))
                 pending
             in
-            if K.is_empty missing then (registry, accFunctions, symbols)
+            if K.is_empty missing then Ok (registry, accFunctions, symbols)
             else
-              let specialization =
+              let* specialization =
                 Monomorphization.specializeFromSpecs symbols
                   baseContext.X.genericFuncDefs missing
               in
@@ -816,7 +819,7 @@ let convertTypedProgramToUserOnlyWithMode (baseContext : X.pipelineContext) mode
               materialize symbols combined nextNames nextSpecs
                 (accFunctions @ newFunctions)
           in
-          let combined, newFunctions, symbols =
+          let* combined, newFunctions, symbols =
             materialize initialSymbols baseRegistry localNames requested []
           in
           let program =
@@ -828,7 +831,7 @@ let convertTypedProgramToUserOnlyWithMode (baseContext : X.pipelineContext) mode
             List.map (fun (fn : C.functionDef) -> fn.C.id) newFunctions
             |> F.of_list
           in
-          (program, rebuildMode combined, names)
+          Ok (program, rebuildMode combined, names)
         in
         match mode with
         | ReplaceTypeApps registry ->
@@ -836,7 +839,7 @@ let convertTypedProgramToUserOnlyWithMode (baseContext : X.pipelineContext) mode
         | SpecializeLocalAndReplace registry ->
             addMissing registry (fun registry ->
                 SpecializeLocalAndReplace registry)
-        | Monomorphize _ -> (typedProgram, mode, F.empty))
+        | Monomorphize _ -> Ok (typedProgram, mode, F.empty))
   in
   let typedProgram =
     ValueRendering.rewriteDictionaryKeyRenderers
