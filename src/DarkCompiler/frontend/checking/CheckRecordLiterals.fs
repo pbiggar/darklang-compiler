@@ -164,7 +164,8 @@ let internal check (checkExpr: ExpressionChecker) (env: TypeEnv) (typeReg: Index
                                     | TRecord (expectedName, expectedArgs)
                                         when resolveTypeName aliasReg expectedName = resolvedTypeName
                                              && List.length expectedArgs = List.length recordInfo.TypeParams ->
-                                        expectedArgs
+                                        List.map2 (fun inferred expected ->
+                                            reconcileTypes (Some aliasReg) inferred expected |> Option.defaultValue inferred) inferredTypeArgs expectedArgs
                                     | _ -> inferredTypeArgs
                                 | None -> inferredTypeArgs
                             let inferredRecordType = TRecord (resolvedTypeName, inferredTypeArgs)

@@ -103,7 +103,7 @@ let specName (funcName: string) (typeArgs: AST.Type list) : string =
         $"{funcName}_{typeStr}"
 
 let internal isGenericKeyIntrinsicName (funcName: string) : bool =
-    funcName = "__hash" || funcName = "__key_eq"
+    funcName = "__hash" || funcName = "__key_eq" || funcName = "__dict_key_string" || funcName = "__dict_validate_key"
 
 let internal exprArgsToList (args: AST.NonEmptyList<AST.Expr>) : AST.Expr list =
     AST.NonEmptyList.toList args
@@ -188,10 +188,14 @@ let internal normalizeSyntheticNullaryArgAtoms
     | _ -> argAtoms
 
 let internal unresolvedKeyIntrinsicTypeArgErrorExpr (funcName: string) : AST.Expr =
-    AST.Call (
-        "Builtin.testRuntimeError",
-        AST.NonEmptyList.singleton (AST.StringLiteral $"Internal error: unresolved type arguments for {funcName}")
-    )
+    let helper =
+        match funcName with
+        | "__hash" -> "__unsupported_key_hash"
+        | "__key_eq" -> "__unsupported_key_equal"
+        | "__dict_key_string" -> "__unsupported_key_string"
+        | "__dict_validate_key" -> "__unsupported_key_validate"
+        | _ -> Crash.crash $"Unknown dictionary key intrinsic: {funcName}"
+    AST.Call (helper, AST.NonEmptyList.singleton AST.UnitLiteral)
 
 /// Preserve left-to-right argument evaluation before forcing a runtime error.
 let internal wrapWithIgnoredArgEvaluations (args: AST.Expr list) (body: AST.Expr) : AST.Expr =

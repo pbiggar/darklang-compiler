@@ -78,7 +78,7 @@ let internal generateDictRefCountIncHelper () : X86_64.Instr list =
 
 let internal generateDictRefCountDecHelper
     (helperLabel: string)
-    (releaseLeafDynamicKey: bool)
+    (keyReleasePlan: MemoryModel.RcReleasePlan)
     (releaseLeafDynamicValue: bool)
     (releaseLeafListValue: bool)
     (releaseLeafDictValueHelper: string option)
@@ -186,10 +186,15 @@ let internal generateDictRefCountDecHelper
         @ [X86_64.Label skipLabel]
 
     let releaseDynamicBufferKeyInstrs baseReg skipLabel =
-        if releaseLeafDynamicKey then
-            releaseDynamicBufferFieldInstrs baseReg 0 skipLabel
-        else
-            []
+        match keyReleasePlan with
+        | MemoryModel.NoReleasePlan -> []
+        | _ ->
+            let saveRegs = [X86_64.RAX; X86_64.RCX; X86_64.RDX; X86_64.RDI; X86_64.RSI; X86_64.R8; X86_64.R9; X86_64.R10; X86_64.R11; scratch]
+            (saveRegs |> List.map X86_64.PUSH)
+            @ [X86_64.MOV_reg (X86_64.RDX, baseReg)]
+            @ genFieldReleases helperCtx [MemoryModel.FieldRelease (0, keyReleasePlan)]
+            @ (saveRegs |> List.rev |> List.map X86_64.POP)
+            @ [X86_64.Label skipLabel]
 
     let releaseDynamicBufferValueInstrs baseReg skipLabel =
         if releaseLeafDynamicValue then
@@ -252,7 +257,7 @@ let internal generateDictRefCountDecHelper
         releaseDynamicBufferKeyInstrs baseReg skipLeafDynamicKeyRelease @ releaseDynamicBufferValueInstrs baseReg skipLeafDynamicValueRelease @ listValueInstrs @ dictValueInstrs @ closureValueInstrs @ streamValueInstrs @ fixedBlockValueInstrs
 
     let hasPayloadRelease =
-        releaseLeafDynamicKey
+        keyReleasePlan <> MemoryModel.NoReleasePlan
         || releaseLeafDynamicValue
         || releaseLeafListValue
         || Option.isSome releaseLeafDictValueHelper
@@ -406,12 +411,6 @@ let internal generatePlannedDictRefCountDecHelper
 
     match releasePlan with
     | MemoryModel.RootRelease (_, MemoryModel.DictHeap, MemoryModel.DictPayloadRelease (keyRelease, valueRelease)) ->
-        let releaseLeafDynamicKey =
-            match keyRelease with
-            | MemoryModel.NoReleasePlan -> false
-            | MemoryModel.DynamicBufferRelease _ -> true
-            | other -> unsupported "key" other
-
         let releaseLeafDynamicValue, releaseLeafListValue, releaseLeafDictValueHelper, releaseLeafClosureValue, releaseLeafStreamValue, leafFixedBlockValueRelease =
             match valueRelease with
             | MemoryModel.NoReleasePlan ->
@@ -433,7 +432,7 @@ let internal generatePlannedDictRefCountDecHelper
 
         generateDictRefCountDecHelper
             helperLabel
-            releaseLeafDynamicKey
+            keyRelease
             releaseLeafDynamicValue
             releaseLeafListValue
             releaseLeafDictValueHelper

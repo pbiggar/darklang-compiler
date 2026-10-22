@@ -147,10 +147,7 @@ let chordalFloatAllocation (cfg: LIR.CFG) (additionalVRegs: int list) : FAllocat
 let applyFloatAllocationToFReg (floatAllocation: FAllocationResult) (freg: LIR.FReg) : LIR.FReg =
     match freg with
     | LIR.FPhysical _ -> freg  // Already physical
-    | LIR.FVirtual 1000 -> freg  // Fixed temp - keep as is, CodeGen handles it
-    | LIR.FVirtual 1001 -> freg  // Fixed temp
-    | LIR.FVirtual 2000 -> freg  // Fixed temp
-    | LIR.FVirtual n when n >= 3000 && n < 4000 -> freg  // Call arg temps - fixed
+    | LIR.FParallelMoveTemp -> freg  // Fixed temp
     | LIR.FVirtual id ->
         match tryIndexOf floatAllocation.Domain id with
         | Some idx ->
@@ -205,6 +202,7 @@ let applyFloatAllocationToInstr (floatAllocation: FAllocationResult) (instr: LIR
                     | LIR.D12 -> LIR.X12 | LIR.D13 -> LIR.X13 | LIR.D14 -> LIR.X14 | LIR.D15 -> LIR.X15
                 LIR.Physical physReg
             | LIR.FVirtual n -> LIR.Virtual n
+            | LIR.FParallelMoveTemp -> Crash.crash "Parallel-move temporary cannot be a stored float value"
         LIR.HeapStore (addr, offset, LIR.Reg allocatedReg, Some AST.TFloat64)
     | _ -> instr  // Non-float instructions unchanged
 

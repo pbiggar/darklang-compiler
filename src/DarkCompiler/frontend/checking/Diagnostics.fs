@@ -84,7 +84,7 @@ let rec typeToString (t: Type) : string =
     | TStream elemType -> $"Stream<{typeToString elemType}>"
     | TVar name -> name  // Type variable (for generics)
     | TRawPtr -> "RawPtr"  // Internal raw pointer type
-    | TDict (_, valueType) -> $"Dict<{typeToString valueType}>"
+    | TDict (keyType, valueType) -> $"Dict<{typeToString keyType}, {typeToString valueType}>"
 
 /// Pretty-print a type error
 let typeErrorToString (err: TypeError) : string =
@@ -222,7 +222,7 @@ let rec internal substituteInterpolationLiteral (name: string) (literal: Expr) (
     | TypeApp (functionName, typeArgs, callArgs) -> TypeApp (functionName, typeArgs, NonEmptyList.map recurse callArgs)
     | TupleLiteral elements -> TupleLiteral (List.map recurse elements)
     | TupleAccess (tuple, index) -> TupleAccess (recurse tuple, index)
-    | DictLiteral (valueType, entries) -> DictLiteral (valueType, entries |> List.map (fun (key, value) -> (key, recurse value)))
+    | DictLiteral (keyType, valueType, entries) -> DictLiteral (keyType, valueType, entries |> List.map (fun (key, value) -> (recurse key, recurse value)))
     | RecordLiteral (typeName, fields) -> RecordLiteral (typeName, fields |> List.map (fun (field, value) -> (field, recurse value)))
     | RecordUpdate (record, updates) -> RecordUpdate (recurse record, updates |> List.map (fun (field, value) -> (field, recurse value)))
     | RecordAccess (record, field) -> RecordAccess (recurse record, field)

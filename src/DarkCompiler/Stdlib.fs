@@ -207,6 +207,8 @@ let rawMemoryIntrinsics : ModuleFunc list = [
     // __rawptr_to_dict<k, v> : (RawPtr, Int64) -> Dict<k, v> - create dict from pointer + tag
     { Name = "__rawptr_to_dict"; TypeParams = ["k"; "v"]; ParamTypes = [TRawPtr; TInt64]; ReturnType = TDict(TVar "k", TVar "v") }
 
+    { Name = "__dict_validate_key"; TypeParams = ["k"]; ParamTypes = [TVar "k"]; ReturnType = TUnit }
+    { Name = "__dict_key_string"; TypeParams = ["k"]; ParamTypes = [TVar "k"]; ReturnType = TString }
     // Key intrinsics - for generic key hashing and comparison
     // __hash<k> : (k) -> Int64 - hash any key type
     { Name = "__hash"; TypeParams = ["k"]; ParamTypes = [TVar "k"]; ReturnType = TInt64 }

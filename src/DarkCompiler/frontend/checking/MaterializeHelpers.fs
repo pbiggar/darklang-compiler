@@ -12,10 +12,12 @@ open HelperDependencies
 let rec private materializeHelperCallsInExpr
     (includeEquality: bool)
     (aliasReg: AliasRegistry)
+    (typeReg: IndexedTypeRegistry)
+    (indexedSumTypeReg: IndexedSumTypeRegistry)
     (variantLookup: VariantLookup)
     (expr: Expr)
     : Expr =
-    let recurse = materializeHelperCallsInExpr includeEquality aliasReg variantLookup
+    let recurse = materializeHelperCallsInExpr includeEquality aliasReg typeReg indexedSumTypeReg variantLookup
 
     match expr with
     | BoundaryRender (renderer, value) -> BoundaryRender (renderer, recurse value)
@@ -47,6 +49,24 @@ let rec private materializeHelperCallsInExpr
                 TypeApp (funcName, typeArgs, NonEmptyList.fromList [recurse leftExpr; recurse rightExpr])
         | _ ->
             match funcName, typeArgs with
+            | "__dict_validate_key", [targetType] when not (containsTVar targetType) ->
+                let key = recurse args.Head
+                if DictionaryKeyHelpers.keyMayContainBlob aliasReg typeReg indexedSumTypeReg targetType then
+                    Sequence (Call (DictionaryKeyHelpers.hashHelperNameWithPolicy false targetType, NonEmptyList.singleton key), UnitLiteral)
+                else Let (LPWildcard, key, UnitLiteral)
+            | "__key_eq", [TBlob] -> Call ("__key_eq_blob", NonEmptyList.map recurse args)
+            | "__hash", [targetType] when not (containsTVar targetType) ->
+                Call (DictionaryKeyHelpers.hashHelperName (resolveType aliasReg targetType), NonEmptyList.map recurse args)
+            | "__key_eq", [(TString | TInt64 | TBool)] ->
+                match NonEmptyList.toList args with
+                | [left; right] -> BinOp (Eq, recurse left, recurse right)
+                | _ -> Crash.crash "Dictionary key equality requires two arguments"
+            | "__key_eq", [targetType] when not (containsTVar targetType) ->
+                BinOp (Eq, Call (compareHelperName (resolveType aliasReg targetType), NonEmptyList.map recurse args), Int64Literal 0L)
+            | "__dict_key_string", [TString] -> args.Head |> recurse
+            | "__dict_key_string", [targetType] when not (containsTVar targetType) ->
+                // Key renderers use the same stable type identity as result renderers.
+                Call (DictionaryKeyHelpers.hashHelperName targetType + "_render", NonEmptyList.map recurse args)
             | "__compare", [targetType] when not (containsTVar targetType) ->
                 let helperType = resolveType aliasReg targetType
                 Call (compareHelperName helperType, NonEmptyList.map recurse args)
@@ -55,8 +75,8 @@ let rec private materializeHelperCallsInExpr
         TupleLiteral (List.map recurse elements)
     | TupleAccess (tupleExpr, index) ->
         TupleAccess (recurse tupleExpr, index)
-    | DictLiteral (valueType, entries) ->
-        DictLiteral (valueType, entries |> List.map (fun (key, value) -> (key, recurse value)))
+    | DictLiteral (keyType, valueType, entries) ->
+        DictLiteral (keyType, valueType, entries |> List.map (fun (key, value) -> (recurse key, recurse value)))
     | RecordLiteral (typeName, fields) ->
         RecordLiteral (typeName, fields |> List.map (fun (name, fieldExpr) -> (name, recurse fieldExpr)))
     | RecordUpdate (recordExpr, updates) ->
@@ -130,14 +150,14 @@ let private materializeHelpersInTopLevels
         | FunctionDef funcDef when List.isEmpty funcDef.TypeParams ->
             FunctionDef {
                 funcDef with
-                    Body = materializeHelperCallsInExpr includeEquality aliasReg variantLookup funcDef.Body
+                    Body = materializeHelperCallsInExpr includeEquality aliasReg typeReg indexedSumTypeReg variantLookup funcDef.Body
             }
         | FunctionDef _ ->
             topLevel
         | Expression expr ->
-            Expression (materializeHelperCallsInExpr includeEquality aliasReg variantLookup expr)
+            Expression (materializeHelperCallsInExpr includeEquality aliasReg typeReg indexedSumTypeReg variantLookup expr)
         | ValueDef valueDef ->
-            let body = materializeHelperCallsInExpr includeEquality aliasReg variantLookup (valueDefBody valueDef)
+            let body = materializeHelperCallsInExpr includeEquality aliasReg typeReg indexedSumTypeReg variantLookup (valueDefBody valueDef)
             match valueDef with
             | UncheckedValueDef (name, _) -> ValueDef (UncheckedValueDef (name, body))
             | CheckedValueDef (name, typ, _) -> ValueDef (CheckedValueDef (name, typ, body))
@@ -157,7 +177,39 @@ let private materializeHelpersInTopLevels
         |> List.map collectCompareFromTopLevel
         |> List.fold Set.union Set.empty
 
-    let rewrittenTopLevels = topLevels |> List.map rewriteTopLevel
+    let concreteBodies =
+        topLevels
+        |> List.choose (function
+            | FunctionDef fn when List.isEmpty fn.TypeParams -> Some fn.Body
+            | Expression expr -> Some expr
+            | ValueDef value -> Some (valueDefBody value)
+            | _ -> None)
+    let collectTypes collector = concreteBodies |> List.map (collector aliasReg) |> List.fold Set.union Set.empty
+    let hashTypes = collectTypes collectHashHelperTypesFromExpr
+    let renderTypes = collectTypes collectKeyRenderTypesFromExpr
+    let hashHelpers = DictionaryKeyHelpers.generateHashHelpers true aliasReg typeReg indexedSumTypeReg hashTypes
+    let keyRenderHelpers =
+        renderTypes
+        |> Set.fold (fun helpers typ ->
+            if typ = TString then helpers
+            else
+                let renderer, generated = ValueRendering.keyStringRenderer typeReg indexedSumTypeReg typ
+                let wrapper : FunctionDef = {
+                    Name = DictionaryKeyHelpers.hashHelperName typ + "_render"
+                    TypeParams = []; Params = NonEmptyList.singleton ("__key", typ); ReturnType = TString
+                    Body = Call (renderer, NonEmptyList.singleton (Var "__key")); Recursion = None
+                }
+                (wrapper :: generated) |> List.fold (fun acc fn -> Map.add fn.Name fn acc) helpers) Map.empty
+    let publicHashTypes =
+        collectTypes collectKeyValidationTypesFromExpr
+        |> Set.filter (DictionaryKeyHelpers.keyMayContainBlob aliasReg typeReg indexedSumTypeReg)
+    let publicHashHelpers = DictionaryKeyHelpers.generateHashHelpers false aliasReg typeReg indexedSumTypeReg publicHashTypes
+    let hashHelpers = Map.fold (fun acc name fn -> Map.add name fn acc) hashHelpers publicHashHelpers
+    let keyHelpers = Map.fold (fun acc name fn -> Map.add name fn acc) hashHelpers keyRenderHelpers
+    let expandedTopLevels = (keyHelpers |> Map.toList |> List.map (snd >> FunctionDef)) @ topLevels
+    let compareHelperTypes =
+        expandedTopLevels |> List.map collectCompareFromTopLevel |> List.fold Set.union compareHelperTypes
+    let rewrittenTopLevels = expandedTopLevels |> List.map rewriteTopLevel
 
     if Set.isEmpty helperTypes && Set.isEmpty compareHelperTypes then
         rewrittenTopLevels

@@ -5,69 +5,41 @@ HAMT that implements it.
 
 ## Parity baseline
 
-The public contract was revalidated against these exact revisions:
+The generic key contract follows darklang/dark `main` at
+`e76430be5cd9f6b77ed255430dc34a1b58dd8fc4` (2026-10-19). Compiler regression
+coverage is in `src/Tests/e2e/generic-dictionary-keys.e2e` and the existing
+`dict_parity.e2e` String-key cases. The earlier String-only contract was pinned
+to interpreter `04fbe9dcc995c6188757d583e273cbd30a3e2d3d`.
 
-- current compiler comparison point:
-  `9cf0799fc485a2edc1eb19551826745705cf695e` (the exact `main` HEAD onto which
-  this evidence and focused test were rebased)
-- darklang/dark interpreter:
-  `04fbe9dcc995c6188757d583e273cbd30a3e2d3d`
-- historical compiler starting point:
-  `51093e0a8e31fe45a9aa79a317fbefd6b74fbcc3`, specifically
-  `src/DarkCompiler/stdlib/Dict.dark`, `__HAMT.dark`, and
-  `src/DarkCompiler/Stdlib.fs:150-166`
-- DCB1 report `8a402797` was starting evidence only; retained findings were
-  checked again against the current compiler and interpreter revisions above.
-
-The historical and current compiler source blobs are not identical, so the
-historical revision was not treated as proof of current behavior. The relevant
-`Dict.dark`, `__HAMT.dark`, and `Stdlib.fs` blobs at the current compiler point
-are identical to the earlier pre-rebase repair point
-`6366204f670c906bbf4cd6b22b53786098c92a03`. The rebased candidate changes
-only parity documentation, focused E2E coverage, and append-only benchmark
-history; the compiler behavior compared here is therefore exactly the behavior
-at `9cf0799fc485a2edc1eb19551826745705cf695e`.
-
-The interpreter's F# Builtins Dict module and packaged `dict.dark` define the
-language-visible contract. Ahead-of-time compilation and the HAMT layout are
-compiler implementation details.
-
-Current source evidence at the compiler comparison point is
-`src/DarkCompiler/stdlib/Dict.dark:9-216` for the public wrappers and ordered
-higher-order operations, `src/DarkCompiler/stdlib/__HAMT.dark:10-60` for the
-private generic storage boundary, `src/DarkCompiler/frontend/Parser.fs:2034-2035`
-for the empty value, `src/DarkCompiler/frontend/checking/EqualityHelpers.fs`
-for content equality, `src/DarkCompiler/frontend/ValueRendering.fs`
-for canonical rendering, and `src/DarkCompiler/Stdlib.fs:145-166` for the raw
-internal intrinsics. Interpreter evidence at the pinned revision is
-`packages/darklang/stdlib/dict.dark:4-127`,
-`backend/src/Builtins/Builtins.Pure/Libs/Dict.fs:18-306`, and
-`backend/testfiles/execution/stdlib/dict.dark:1-176`. The focused compiler cases
-are in `src/Tests/e2e/dict_parity.e2e`, including an error-producing `iter`
-callback that makes first-visited-key order observable.
+The public wrappers live in `src/DarkCompiler/stdlib/Dict.dark`, storage in
+`__HAMT.dark`, and structural key hashes in
+`frontend/checking/DictionaryKeyHelpers.fs`. Canonical comparison, equality,
+and rendering are generated from the concrete key and value types.
 
 ## Public type and literals
 
-Source programs expose only a String-keyed, one-parameter type:
+Source programs expose `Dict<key, value>`:
 
 ```dark
-Dict<Int64>
+Dict<Int64, String>
 ```
 
-`Dict<K, V>`, non-String public keys, and two-type-argument Dict calls are
-compile-time errors. The compiler retains `TDict(keyType, valueType)` internally
-because native HAMT helpers are monomorphized over both components.
+The older `Dict<value>` shorthand still means `Dict<String, value>`. Both
+components are retained throughout type checking, specialization, and ownership
+planning.
 
 Dictionary literals are distinct from records:
 
 ```dark
 Dict { }
 Dict { name = "dark"; ``Content-Length`` = "0"; ___ = "empty key" }
+Dict { 1L: "one", (1L + 1L): "two" }
 ```
 
 Backticks quote non-identifier keys and `___` spells the empty String key.
-Literal entries are evaluated in source order. Duplicate literal keys and mixed
-value types are rejected statically.
+Literal keys and values are evaluated in source order. Duplicate static String
+keys are rejected during checking; expression keys use strict runtime insertion.
+Mixed key or value types are rejected during checking.
 
 ## Public `Stdlib.Dict` surface
 
@@ -75,24 +47,24 @@ value types are rejected statically.
 public callable surface is:
 
 ```dark
-let isEmpty (dict: Dict<a>) : Bool
-let singleton (key: String) (value: a) : Dict<a>
-let size (dict: Dict<a>) : Int
-let get (dict: Dict<a>) (key: String) : Option<a>
-let set (dict: Dict<a>) (key: String) (value: a) : Dict<a>
-let setOverridingDuplicates (dict: Dict<a>) (key: String) (value: a) : Dict<a>
-let remove (dict: Dict<a>) (key: String) : Dict<a>
-let merge (left: Dict<a>) (right: Dict<a>) : Dict<a>
-let keys (dict: Dict<a>) : List<String>
-let values (dict: Dict<a>) : List<a>
-let toList (dict: Dict<a>) : List<(String * a)>
-let fromListOverwritingDuplicates (entries: List<(String * a)>) : Dict<a>
-let fromList (entries: List<(String * a)>) : Option<Dict<a>>
-let member (dict: Dict<a>) (key: String) : Bool
-let map (dict: Dict<a>) (fn: String -> a -> b) : Dict<b>
-let iter (dict: Dict<a>) (fn: String -> a -> Unit) : Unit
-let filter (dict: Dict<a>) (fn: String -> a -> Bool) : Dict<a>
-let filterMap (dict: Dict<a>) (fn: String -> a -> Option<b>) : Dict<b>
+let isEmpty (dict: Dict<k, a>) : Bool
+let singleton (key: k) (value: a) : Dict<k, a>
+let size (dict: Dict<k, a>) : Int
+let get (dict: Dict<k, a>) (key: k) : Option<a>
+let set (dict: Dict<k, a>) (key: k) (value: a) : Dict<k, a>
+let setOverridingDuplicates (dict: Dict<k, a>) (key: k) (value: a) : Dict<k, a>
+let remove (dict: Dict<k, a>) (key: k) : Dict<k, a>
+let merge (left: Dict<k, a>) (right: Dict<k, a>) : Dict<k, a>
+let keys (dict: Dict<k, a>) : List<k>
+let values (dict: Dict<k, a>) : List<a>
+let toList (dict: Dict<k, a>) : List<(k * a)>
+let fromListOverwritingDuplicates (entries: List<(k * a)>) : Dict<k, a>
+let fromList (entries: List<(k * a)>) : Option<Dict<k, a>>
+let member (dict: Dict<k, a>) (key: k) : Bool
+let map (dict: Dict<k, a>) (fn: k -> a -> b) : Dict<k, b>
+let iter (dict: Dict<k, a>) (fn: k -> a -> Unit) : Unit
+let filter (dict: Dict<k, a>) (fn: k -> a -> Bool) : Dict<k, a>
+let filterMap (dict: Dict<k, a>) (fn: k -> a -> Option<b>) : Dict<k, b>
 ```
 
 The former compiler-only public names `entries`, `fold`, and `getOrDefault`
@@ -110,23 +82,28 @@ compiler needs them.
 - `merge` is right-biased; removing an absent key is a no-op.
 - `get` returns `Some(value)` or `None`.
 - traversal, rendering, equality, and higher-order callbacks all use the same
-  ordinal String-key ordering. HAMT bitmap shape, collision layout, insertion
+  canonical key ordering (ordinal UTF-16 ordering for Strings). HAMT bitmap shape, collision layout, insertion
   history, and structural sharing are not observable.
-- equality compares entry counts, String key sets, and values using the
+- equality compares entry counts, key sets under canonical key equality, and values using the
   concrete value type's existing equality semantics.
-- rendering produces `Dict { key = renderedValue; ... }`, including for empty
-  and nested dictionaries.
+- String-key rendering retains `Dict { key = renderedValue; ... }`; other keys
+  render as `Dict { renderedKey: renderedValue; ... }`.
+- NaNs identify one key and signed zeros identify one key. Values still use
+  ordinary language equality.
+- functions, streams, and blobs, including nested occurrences, are rejected as
+  public keys. The compiler removes public validation for types that cannot
+  contain Blobs; possible Blob occurrences are checked by walking the value.
 
 The compiler intentionally reports statically knowable key, value, generic
 arity, and callback-shape errors during AOT type checking. This differs from
 the interpreter's runtime diagnostic timing and wording. Duplicate `set` with
-a dynamic key remains language-visible at runtime and is emitted safely on
-both native architectures.
+a dynamic key remains a language-visible runtime failure.
 
 ## Private generic HAMT
 
 `src/DarkCompiler/stdlib/__HAMT.dark` remains a generic persistent Hash Array
-Mapped Trie. Compiler-owned consumers such as Unicode tables use private
+Mapped Trie. Its private operations retain Blob identity keys for compiler-owned
+storage and lifetime testing; this capability is not exposed by the public API. Compiler-owned consumers such as Unicode tables use private
 `Stdlib.Dict.__*` helpers for Int64 and other key types. User code cannot name
 these helpers.
 

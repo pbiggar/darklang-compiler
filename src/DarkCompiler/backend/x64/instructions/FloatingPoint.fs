@@ -16,7 +16,8 @@ let internal emitFArgMoves (ctx: FuncCtx) (moves: (LIR.PhysFPReg * LIR.FReg) lis
             | LIR.FPhysical srcPhys ->
                 (lirFRegToX86 destPhys, lirFRegToX86 srcPhys)
             | LIR.FVirtual id ->
-                Crash.crash $"Unresolved virtual float register f{id} in FArgMoves")
+                Crash.crash $"Unresolved virtual float register f{id} in FArgMoves"
+            | LIR.FParallelMoveTemp -> Crash.crash "Parallel-move float temporary used as a call argument")
 
     let getSrcReg (srcReg: X86_64.FReg) : X86_64.FReg option = Some srcReg
     ParallelMoves.resolve resolvedMoves getSrcReg
@@ -35,14 +36,14 @@ let internal emitFPhi (ctx: FuncCtx) : Result<X86_64.Instr list, string> =
     Ok []
 
 let internal emitFMov (ctx: FuncCtx) (dest: LIR.FReg) (src: LIR.FReg) : Result<X86_64.Instr list, string> =
-    // Register allocation represents a parallel-move cycle temp as f2000.
+    // The allocator uses a distinct parallel-move cycle temporary.
     // Keep that value on the stack so every XMM register remains allocatable.
     match dest, src with
-    | LIR.FVirtual 2000, LIR.FPhysical srcPhys ->
+    | LIR.FParallelMoveTemp, LIR.FPhysical srcPhys ->
         let s = lirFRegToX86 srcPhys
         Ok [ X86_64.SUB_imm (X86_64.RSP, 16)
              X86_64.MOVSD_store (X86_64.RSP, 0, s) ]
-    | LIR.FPhysical destPhys, LIR.FVirtual 2000 ->
+    | LIR.FPhysical destPhys, LIR.FParallelMoveTemp ->
         let d = lirFRegToX86 destPhys
         Ok [ X86_64.MOVSD_load (d, X86_64.RSP, 0)
              X86_64.ADD_imm (X86_64.RSP, 16) ]
@@ -50,7 +51,7 @@ let internal emitFMov (ctx: FuncCtx) (dest: LIR.FReg) (src: LIR.FReg) : Result<X
         let d = lirFRegToX86 destPhys
         let s = lirFRegToX86 srcPhys
         Ok (if d = s then [] else [X86_64.MOVSD_reg (d, s)])
-    | _ -> Error "FMov with unresolved virtual FP register"
+    | _ -> Error $"FMov with unresolved virtual FP register in {ctx.FunctionName}: {dest} <- {src}"
 
 let internal emitFLoad (ctx: FuncCtx) (dest: LIR.FReg) (value: float) : Result<X86_64.Instr list, string> =
     match dest with

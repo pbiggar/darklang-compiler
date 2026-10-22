@@ -45,8 +45,8 @@ let rec inferTypeCore (sumTypeNames: Set<string>) (expr: AST.Expr) (typeEnv: Map
                 match Stdlib.tryGetFunction moduleRegistry name with
                 | Some (moduleFunc, _) -> Ok (Stdlib.getFunctionType moduleFunc)
                 | None -> Error $"Cannot infer type: undefined variable '{name}'"
-    | AST.DictLiteral (valueType, _) ->
-        Ok (AST.TDict (AST.TString, valueType))
+    | AST.DictLiteral (keyType, valueType, _) ->
+        Ok (AST.TDict (keyType, valueType))
     | AST.RecordLiteral (reference, fields) ->
             let typeName = reference.ResolvedTypeName
             match Map.tryFind typeName typeReg with

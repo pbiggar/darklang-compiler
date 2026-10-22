@@ -115,9 +115,16 @@ let rec liftLambdasInExpr (expr: AST.Expr) (state: LiftState) : Result<AST.Expr 
     | AST.TupleAccess (tuple, index) ->
         liftLambdasInExpr tuple state
         |> Result.map (fun (tuple', state') -> (AST.TupleAccess (tuple', index), state'))
-    | AST.DictLiteral (valueType, entries) ->
-        liftLambdasInFields entries state
-        |> Result.map (fun (entries', state') -> (AST.DictLiteral (valueType, entries'), state'))
+    | AST.DictLiteral (keyType, valueType, entries) ->
+        let rec liftEntries remaining currentState acc =
+            match remaining with
+            | [] -> Ok (AST.DictLiteral (keyType, valueType, List.rev acc), currentState)
+            | (key, value) :: tail ->
+                liftLambdasInExpr key currentState
+                |> Result.bind (fun (key', keyState) ->
+                    liftLambdasInExpr value keyState
+                    |> Result.bind (fun (value', nextState) -> liftEntries tail nextState ((key', value') :: acc)))
+        liftEntries entries state []
     | AST.RecordLiteral (typeName, fields) ->
         liftLambdasInFields fields state
         |> Result.map (fun (fields', state') -> (AST.RecordLiteral (typeName, fields'), state'))

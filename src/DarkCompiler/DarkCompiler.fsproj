@@ -40,13 +40,14 @@
     <Compile Include="frontend/checking/EqualityHelpers.fs" />
     <Compile Include="frontend/checking/OrderingHelpers.fs" />
     <Compile Include="frontend/checking/HelperDependencies.fs" />
+    <Compile Include="frontend/ValueRendering.fs" />
+    <Compile Include="frontend/checking/DictionaryKeyHelpers.fs" />
     <Compile Include="frontend/checking/MaterializeHelpers.fs" />
     <Compile Include="frontend/checking/Functions.fs" />
     <Compile Include="frontend/checking/ResolveDeclarations.fs" />
     <Compile Include="frontend/checking/Declarations.fs" />
     <Compile Include="frontend/checking/ResolvedProgram.fs" />
     <Compile Include="frontend/TypeChecking.fs" />
-    <Compile Include="frontend/ValueRendering.fs" />
     <Compile Include="frontend/JsonPlanning.fs" />
 
     <!-- AST -> ANF -->

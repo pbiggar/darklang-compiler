@@ -1221,6 +1221,16 @@ let private ensureParamGroupNonEmpty (paramIndex: int) (parameters: (string * Ty
 let flattenParamGroups (paramGroupsRev: (string * Type) list list) : (string * Type) list =
     paramGroupsRev |> List.rev |> List.concat
 
+/// Implicit signature variables bind the function, just like explicit binders.
+let rec private signatureTypeVariables typ =
+    match typ with
+    | TVar name -> [name]
+    | TFunction (parameters, result) -> (parameters @ [result]) |> List.collect signatureTypeVariables
+    | TTuple types | TEnumFields types | TRecord (_, types) | TSum (_, types) -> List.collect signatureTypeVariables types
+    | TList element | TStream element -> signatureTypeVariables element
+    | TDict (key, value) -> signatureTypeVariables key @ signatureTypeVariables value
+    | _ -> []
+
 /// Parse a function declaration after `let` has been normalized to the private
 /// TFunctionDeclaration marker. Declaration names are unqualified.
 let parseFunctionDef (tokens: Token list) (parseExpr: Token list -> Result<Expr * Token list, string>) : Result<FunctionDef * Token list, string> =
@@ -1335,7 +1345,7 @@ let parseFunctionDef (tokens: Token list) (parseExpr: Token list -> Result<Expr 
                                 |> Result.map (fun (body, remaining'') ->
                                     let funcDef = {
                                         Name = name
-                                        TypeParams = []
+                                        TypeParams = ((allParameters |> List.map snd) @ [returnType]) |> List.collect signatureTypeVariables |> List.distinct
                                         Params = NonEmptyList.fromList allParameters
                                         ReturnType = returnType
                                         Body = body
@@ -2537,27 +2547,31 @@ let parse (tokens: Token list) : Result<NameSyntax.ParsedSource, string> =
                 | _ -> Error "Expected ',' or '}' after record field value")
         | _ -> Error "Expected field name in record literal"
 
-    and parseDictLiteralFields (toks: Token list) (acc: (string * Expr) list) : Result<Expr * Token list, string> =
-        let publicKey name = if name = "___" then "" else name
+    and parseDictLiteralFields (toks: Token list) (acc: (Expr * Expr) list) : Result<Expr * Token list, string> =
+        let finish entries rest =
+            Ok (DictLiteral (TVar "dictKey", TVar "dictValue", List.rev entries), rest)
         match toks with
-        | TRBrace :: rest -> Ok (DictLiteral (TVar "dictValue", List.rev acc), rest)
-        // Canonical source uses identifier keys with `=`, while imported
-        // interpreter tests retain string keys with `:`.
-        | TIdent keyName :: TEquals :: rest
-        | TStringLit keyName :: TColon :: rest ->
-            parseExpr rest
-            |> Result.bind (fun (value, remaining) ->
-                let entry = (publicKey keyName, value)
-                match remaining with
-                | (TComma | TSemicolon) :: rest' ->
-                    parseDictLiteralFields rest' (entry :: acc)
-                | TIdent _ :: TEquals :: _ ->
-                    parseDictLiteralFields remaining (entry :: acc)
-                | TStringLit _ :: TColon :: _ ->
-                    parseDictLiteralFields remaining (entry :: acc)
-                | TRBrace :: rest' -> Ok (DictLiteral (TVar "dictValue", List.rev (entry :: acc)), rest')
-                | _ -> Error "Expected ',' or '}' after dictionary entry value")
-        | _ -> Error "Expected dictionary key in Dict literal"
+        | TRBrace :: rest -> finish acc rest
+        | _ ->
+            let keyResult =
+                match toks with
+                | TIdent name :: TEquals :: rest ->
+                    Ok (StringLiteral (if name = "___" then "" else name), rest)
+                | _ ->
+                    parseExpr toks
+                    |> Result.bind (fun (key, remaining) ->
+                        match remaining with
+                        | TColon :: rest -> Ok (key, rest)
+                        | _ -> Error "Expected ':' after dictionary key expression")
+            keyResult
+            |> Result.bind (fun (key, rest) ->
+                parseExpr rest
+                |> Result.bind (fun (value, remaining) ->
+                    let entries = (key, value) :: acc
+                    match remaining with
+                    | (TComma | TSemicolon) :: rest' -> parseDictLiteralFields rest' entries
+                    | TRBrace :: rest' -> finish entries rest'
+                    | _ -> parseDictLiteralFields remaining entries))
 
     and parseRecordUpdateFields (toks: Token list) (acc: (string * Expr) list) : Result<(string * Expr) list * Token list, string> =
         // Parse record update fields: field = expr, field = expr, ... }
@@ -2828,8 +2842,8 @@ let rec private validateExpr (expr: Expr) : Result<unit, string> =
     | TupleLiteral elems ->
         elems |> List.fold (fun acc e -> Result.bind (fun () -> validateExpr e) acc) (Ok ())
     | TupleAccess (tupleExpr, _) -> validateExpr tupleExpr
-    | DictLiteral (_, entries) ->
-        entries |> List.fold (fun acc (_, e) -> Result.bind (fun () -> validateExpr e) acc) (Ok ())
+    | DictLiteral (_, _, entries) ->
+        entries |> List.fold (fun acc (key, e) -> acc |> Result.bind (fun () -> validateExpr key) |> Result.bind (fun () -> validateExpr e)) (Ok ())
     | RecordLiteral (_, fields) ->
         fields |> List.fold (fun acc (_, e) -> Result.bind (fun () -> validateExpr e) acc) (Ok ())
     | RecordUpdate (recordExpr, updates) ->
@@ -2902,25 +2916,6 @@ let private validateNoInternalIdentifiers (Program items) : Result<Program, stri
     items
     |> List.fold (fun acc item -> Result.bind (fun () -> validateTopLevel item) acc) (Ok ())
     |> Result.map (fun () -> Program items)
-
-let private validatePublicDictTypeArity (tokens: Token list) : Result<unit, string> =
-    let rec containsTopLevelComma depth remaining =
-        match remaining with
-        | [] -> false
-        | TLt :: rest -> containsTopLevelComma (depth + 1) rest
-        | TGt :: _ when depth = 1 -> false
-        | TGt :: rest -> containsTopLevelComma (depth - 1) rest
-        | TDoubleRightAngle :: _ when depth <= 2 -> false
-        | TDoubleRightAngle :: rest -> containsTopLevelComma (depth - 2) rest
-        | TComma :: _ when depth = 1 -> true
-        | _ :: rest -> containsTopLevelComma depth rest
-    let rec validate remaining =
-        match remaining with
-        | [] -> Ok ()
-        | TIdent "Dict" :: TLt :: rest when containsTopLevelComma 1 rest ->
-            Error "Dict expects exactly one type argument"
-        | _ :: rest -> validate rest
-    validate tokens
 
 /// Parse a string directly to AST
 type private TopLevelFunctionLayout =
@@ -3143,9 +3138,7 @@ let parseSourceString (allowInternal: bool) (input: string) : Result<NameSyntax.
         |> insertTopLevelValueLayoutSeparators
         |> preserveIndentedMatchBoundaries
     lex sourceBody
-    |> Result.bind (fun tokens ->
-        if allowInternal then parse tokens
-        else validatePublicDictTypeArity tokens |> Result.bind (fun () -> parse tokens))
+    |> Result.bind parse
     |> Result.map (NameSyntax.wrapModules sourceModules)
 
 /// Cross an already-parsed source tree to the compiler-AST boundary.

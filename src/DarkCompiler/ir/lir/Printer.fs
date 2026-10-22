@@ -37,6 +37,7 @@ let private prettyPrintLIRPhysFPReg = function
 let private prettyPrintLIRFReg = function
     | LIR.FPhysical pr -> prettyPrintLIRPhysFPReg pr
     | LIR.FVirtual n -> $"fv{n}"
+    | LIR.FParallelMoveTemp -> "fp-cycle-temp"
 
 /// Pretty-print LIR operand
 let private prettyPrintLIROperand = function

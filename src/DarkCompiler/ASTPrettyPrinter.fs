@@ -515,12 +515,15 @@ let rec private formatExpr (expr: Expr) : string =
             | _ ->
                 parenthesizeTupleBaseIfNeeded tupleExpr tupleBaseText
         $"{tupleText}.{index}"
-    | DictLiteral (_, entries) ->
+    | DictLiteral (_, _, entries) ->
         let fieldsText =
             entries
             |> List.map (fun (key, value) ->
-                let keyText = if key = "" then "___" else formatIdentifierSegment key
-                $"{keyText} = {formatExpr value}")
+                match key with
+                | StringLiteral name when name <> "___" ->
+                    let keyText = if name = "" then "___" else formatIdentifierSegment name
+                    $"{keyText} = {formatExpr value}"
+                | _ -> $"{formatExpr key}: {formatExpr value}")
             |> String.concat "; "
         $"Dict {{ {fieldsText} }}"
     | RecordLiteral (reference, fields) ->

@@ -692,46 +692,46 @@ let translateProgram (LIR.Program (functions, variantRegistry, recordRegistry)) 
                || needsDictRcDecDynamicKeyDictValueHelper
                || needsDictRcDecTupleStringListDictValueHelper
                || needsDictRcDecDynamicKeyTupleStringListDictValueHelper
-               || not (Map.isEmpty neededPlannedDictDecHelpers) then generateDictRefCountDecHelper dictRefCountDecHelperLabel false false false None false false None enableLeakCheck recordRegistry sumShapeRegistry
+               || not (Map.isEmpty neededPlannedDictDecHelpers) then generateDictRefCountDecHelper dictRefCountDecHelperLabel MemoryModel.NoReleasePlan false false None false false None enableLeakCheck recordRegistry sumShapeRegistry
             else []
         let dictDecDynamicKeyHelper =
-            if needsDictRcDecDynamicKeyHelper then generateDictRefCountDecHelper dictRefCountDecDynamicKeyHelperLabel true false false None false false None enableLeakCheck recordRegistry sumShapeRegistry
+            if needsDictRcDecDynamicKeyHelper then generateDictRefCountDecHelper dictRefCountDecDynamicKeyHelperLabel (MemoryModel.DynamicBufferRelease MemoryModel.DynamicStringBuffer) false false None false false None enableLeakCheck recordRegistry sumShapeRegistry
             else []
         let dictDecDynamicValueHelper =
-            if needsDictRcDecDynamicValueHelper then generateDictRefCountDecHelper dictRefCountDecDynamicValueHelperLabel false true false None false false None enableLeakCheck recordRegistry sumShapeRegistry
+            if needsDictRcDecDynamicValueHelper then generateDictRefCountDecHelper dictRefCountDecDynamicValueHelperLabel MemoryModel.NoReleasePlan true false None false false None enableLeakCheck recordRegistry sumShapeRegistry
             else []
         let dictDecDynamicKeyValueHelper =
-            if needsDictRcDecDynamicKeyValueHelper then generateDictRefCountDecHelper dictRefCountDecDynamicKeyValueHelperLabel true true false None false false None enableLeakCheck recordRegistry sumShapeRegistry
+            if needsDictRcDecDynamicKeyValueHelper then generateDictRefCountDecHelper dictRefCountDecDynamicKeyValueHelperLabel (MemoryModel.DynamicBufferRelease MemoryModel.DynamicStringBuffer) true false None false false None enableLeakCheck recordRegistry sumShapeRegistry
             else []
         let dictDecDynamicKeyListValueHelper =
-            if needsDictRcDecDynamicKeyListValueHelper then generateDictRefCountDecHelper dictRefCountDecDynamicKeyListValueHelperLabel true false true None false false None enableLeakCheck recordRegistry sumShapeRegistry
+            if needsDictRcDecDynamicKeyListValueHelper then generateDictRefCountDecHelper dictRefCountDecDynamicKeyListValueHelperLabel (MemoryModel.DynamicBufferRelease MemoryModel.DynamicStringBuffer) false true None false false None enableLeakCheck recordRegistry sumShapeRegistry
             else []
         let dictDecDynamicKeyDictValueHelper =
-            if needsDictRcDecDynamicKeyDictValueHelper then generateDictRefCountDecHelper dictRefCountDecDynamicKeyDictValueHelperLabel true false false (Some dictRefCountDecHelperLabel) false false None enableLeakCheck recordRegistry sumShapeRegistry
+            if needsDictRcDecDynamicKeyDictValueHelper then generateDictRefCountDecHelper dictRefCountDecDynamicKeyDictValueHelperLabel (MemoryModel.DynamicBufferRelease MemoryModel.DynamicStringBuffer) false false (Some dictRefCountDecHelperLabel) false false None enableLeakCheck recordRegistry sumShapeRegistry
             else []
         let dictDecDynamicKeyDictListValueHelper =
-            if needsDictRcDecDynamicKeyDictListValueHelper then generateDictRefCountDecHelper dictRefCountDecDynamicKeyDictListValueHelperLabel true false false (Some dictRefCountDecListValueHelperLabel) false false None enableLeakCheck recordRegistry sumShapeRegistry
+            if needsDictRcDecDynamicKeyDictListValueHelper then generateDictRefCountDecHelper dictRefCountDecDynamicKeyDictListValueHelperLabel (MemoryModel.DynamicBufferRelease MemoryModel.DynamicStringBuffer) false false (Some dictRefCountDecListValueHelperLabel) false false None enableLeakCheck recordRegistry sumShapeRegistry
             else []
         let dictDecListValueHelper =
-            if needsDictRcDecListValueHelper || needsDictRcDecDictListValueHelper || needsDictRcDecDynamicKeyDictListValueHelper || selectedListHelpersNeedDictListValueDecHelper then generateDictRefCountDecHelper dictRefCountDecListValueHelperLabel false false true None false false None enableLeakCheck recordRegistry sumShapeRegistry
+            if needsDictRcDecListValueHelper || needsDictRcDecDictListValueHelper || needsDictRcDecDynamicKeyDictListValueHelper || selectedListHelpersNeedDictListValueDecHelper then generateDictRefCountDecHelper dictRefCountDecListValueHelperLabel MemoryModel.NoReleasePlan false true None false false None enableLeakCheck recordRegistry sumShapeRegistry
             else []
         let dictDecDictValueHelper =
-            if needsDictRcDecDictValueHelper then generateDictRefCountDecHelper dictRefCountDecDictValueHelperLabel false false false (Some dictRefCountDecHelperLabel) false false None enableLeakCheck recordRegistry sumShapeRegistry
+            if needsDictRcDecDictValueHelper then generateDictRefCountDecHelper dictRefCountDecDictValueHelperLabel MemoryModel.NoReleasePlan false false (Some dictRefCountDecHelperLabel) false false None enableLeakCheck recordRegistry sumShapeRegistry
             else []
         let dictDecDictListValueHelper =
-            if needsDictRcDecDictListValueHelper then generateDictRefCountDecHelper dictRefCountDecDictListValueHelperLabel false false false (Some dictRefCountDecListValueHelperLabel) false false None enableLeakCheck recordRegistry sumShapeRegistry
+            if needsDictRcDecDictListValueHelper then generateDictRefCountDecHelper dictRefCountDecDictListValueHelperLabel MemoryModel.NoReleasePlan false false (Some dictRefCountDecListValueHelperLabel) false false None enableLeakCheck recordRegistry sumShapeRegistry
             else []
         let dictDecTupleStringListValueHelper =
-            if needsDictRcDecTupleStringListValueHelper then generateDictRefCountDecHelper dictRefCountDecTupleStringListValueHelperLabel false false false None false false (Some (16, dictTupleStringListValueReleasePlan)) enableLeakCheck recordRegistry sumShapeRegistry
+            if needsDictRcDecTupleStringListValueHelper then generateDictRefCountDecHelper dictRefCountDecTupleStringListValueHelperLabel MemoryModel.NoReleasePlan false false None false false (Some (16, dictTupleStringListValueReleasePlan)) enableLeakCheck recordRegistry sumShapeRegistry
             else []
         let dictDecTupleStringListDictValueHelper =
-            if needsDictRcDecTupleStringListDictValueHelper then generateDictRefCountDecHelper dictRefCountDecTupleStringListDictValueHelperLabel false false false None false false (Some (24, dictTupleStringListDictValueReleasePlan)) enableLeakCheck recordRegistry sumShapeRegistry
+            if needsDictRcDecTupleStringListDictValueHelper then generateDictRefCountDecHelper dictRefCountDecTupleStringListDictValueHelperLabel MemoryModel.NoReleasePlan false false None false false (Some (24, dictTupleStringListDictValueReleasePlan)) enableLeakCheck recordRegistry sumShapeRegistry
             else []
         let dictDecDynamicKeyTupleStringListDictValueHelper =
-            if needsDictRcDecDynamicKeyTupleStringListDictValueHelper then generateDictRefCountDecHelper dictRefCountDecDynamicKeyTupleStringListDictValueHelperLabel true false false None false false (Some (24, dictTupleStringListDictValueReleasePlan)) enableLeakCheck recordRegistry sumShapeRegistry
+            if needsDictRcDecDynamicKeyTupleStringListDictValueHelper then generateDictRefCountDecHelper dictRefCountDecDynamicKeyTupleStringListDictValueHelperLabel (MemoryModel.DynamicBufferRelease MemoryModel.DynamicStringBuffer) false false None false false (Some (24, dictTupleStringListDictValueReleasePlan)) enableLeakCheck recordRegistry sumShapeRegistry
             else []
         let dictDecSumStringValueHelper =
-            if needsDictRcDecSumStringValueHelper then generateDictRefCountDecHelper dictRefCountDecSumStringValueHelperLabel false false false None false false (Some (16, dictSumStringValueReleasePlan)) enableLeakCheck recordRegistry sumShapeRegistry
+            if needsDictRcDecSumStringValueHelper then generateDictRefCountDecHelper dictRefCountDecSumStringValueHelperLabel MemoryModel.NoReleasePlan false false None false false (Some (16, dictSumStringValueReleasePlan)) enableLeakCheck recordRegistry sumShapeRegistry
             else []
         let closureDecHelper =
             if emitClosureRcDecHelper then

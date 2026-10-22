@@ -23,11 +23,7 @@ let generateFloatMoveInstrsWithAllocation
         let fregToPhysId (freg: LIR.FReg) : int =
             match freg with
             | LIR.FPhysical p -> physFPRegToInt p
-            | LIR.FVirtual 1000 -> 18  // D18 (left temp for binary ops) - fixed
-            | LIR.FVirtual 1001 -> 17  // D17 (right temp for binary ops) - fixed
-            | LIR.FVirtual 2000 -> 16  // D16 (cycle resolution temp) - fixed
-            | LIR.FVirtual n when n >= 3000 && n < 4000 ->
-                19 + ((n - 3000) % 8)  // D19-D26 (call arg temps) - fixed
+            | LIR.FParallelMoveTemp -> 16  // D16 (cycle resolution temp) - fixed
             | LIR.FVirtual id ->
                 // Look up in allocation
                 match tryFloatAllocation floatAllocation id with
@@ -68,7 +64,7 @@ let generateFloatMoveInstrsWithAllocation
             | ParallelMoves.SaveToTemp physId ->
                 if physId >= 0 && physId < srcMap.Length then
                     match srcMap.[physId] with
-                    | Some srcFreg -> [LIR.FMov (LIR.FVirtual 2000, srcFreg)]
+                    | Some srcFreg -> [LIR.FMov (LIR.FParallelMoveTemp, srcFreg)]
                     | None -> []
                 else
                     []
@@ -82,7 +78,7 @@ let generateFloatMoveInstrsWithAllocation
             | ParallelMoves.MoveFromTemp destPhysId ->
                 if destPhysId >= 0 && destPhysId < destMap.Length then
                     match destMap.[destPhysId] with
-                    | Some destFreg -> [LIR.FMov (destFreg, LIR.FVirtual 2000)]
+                    | Some destFreg -> [LIR.FMov (destFreg, LIR.FParallelMoveTemp)]
                     | None -> []
                 else
                     [])

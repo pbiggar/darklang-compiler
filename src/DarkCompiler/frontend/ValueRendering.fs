@@ -197,12 +197,13 @@ and private ensureListItemsRenderer
 
 and private ensureDictItemsRenderer
     (env: RenderEnv)
+    (keyType: Type)
     (valueType: Type)
     (state: RenderState)
     : string * RenderState =
-    let entryType = TTuple [TString; valueType]
+    let entryType = TTuple [keyType; valueType]
     let listType = TList entryType
-    let name = dictItemsRendererName (TDict (TString, valueType))
+    let name = dictItemsRendererName (TDict (keyType, valueType))
     match Map.tryFind name state.Functions with
     | Some _ -> (name, state)
     | None ->
@@ -217,12 +218,12 @@ and private ensureDictItemsRenderer
         let reserved = { state with Functions = Map.add name placeholder state.Functions }
         let entryValue = TupleAccess (Var "__entry", 1)
         let (renderedValue, withValueRenderer) = renderCall env valueType entryValue reserved
+        let renderedKey, withKeyRenderer =
+            if keyType = TString then
+                (call "Stdlib.Dict.__renderKey" [TupleAccess (Var "__entry", 0)], withValueRenderer)
+            else renderCall env keyType (TupleAccess (Var "__entry", 0)) withValueRenderer
         let renderedEntry =
-            concat [
-                call "Stdlib.Dict.__renderKey" [TupleAccess (Var "__entry", 0)]
-                StringLiteral " = "
-                renderedValue
-            ]
+            concat [renderedKey; StringLiteral (if keyType = TString then " = " else ": "); renderedValue]
         let tailBody =
             Match (
                 Var "__tail",
@@ -238,7 +239,7 @@ and private ensureDictItemsRenderer
                       (concat [renderedEntry; tailBody]) ]
             )
         let completed = { placeholder with Body = body }
-        (name, { withValueRenderer with Functions = Map.add name completed withValueRenderer.Functions })
+        (name, { withKeyRenderer with Functions = Map.add name completed withKeyRenderer.Functions })
 
 and private renderBody
     (env: RenderEnv)
@@ -290,10 +291,10 @@ and private renderBody
         (StringLiteral "<stream>", state)
     // An unconstrained Dict value can only be the polymorphic empty literal;
     // no value renderer is needed because there are no entries to inspect.
-    | TDict (TString, TVar _) -> (StringLiteral "Dict { }", state)
-    | TDict (TString, valueType) ->
-        let (itemsName, nextState) = ensureDictItemsRenderer env valueType state
-        let entries = TypeApp ("Stdlib.Dict.toList", [valueType], NonEmptyList.singleton value)
+    | TDict (_, TVar _) -> (StringLiteral "Dict { }", state)
+    | TDict (keyType, valueType) ->
+        let (itemsName, nextState) = ensureDictItemsRenderer env keyType valueType state
+        let entries = TypeApp ("Stdlib.Dict.toList", [keyType; valueType], NonEmptyList.singleton value)
         let body =
             Let (
                 LPVariable "__dict_entries",
@@ -417,8 +418,6 @@ and private renderBody
         (StringLiteral "<Blob: ephemeral>", state)
     | TRawPtr ->
         (call "Stdlib.Int64.toString" [value], state)
-    | TDict (keyType, _) ->
-        Crash.crash $"Public Dict renderer received non-String key type {CheckingDiagnostics.typeToString keyType}"
     | TRuntimeError -> (StringLiteral "()", state)
     | TVar name -> Crash.crash $"Unresolved type variable in value renderer: {name}"
 
@@ -501,3 +500,9 @@ let rewriteProgram
         |> List.map (function Expression expr -> rewriteExpression expr | other -> other)
     let generatedFunctions = state.Functions |> Map.toList |> List.map (snd >> FunctionDef)
     Program (generatedFunctions @ rewrittenTopLevels)
+
+/// Generate an owned String representation for a concrete dictionary-key diagnostic.
+let internal keyStringRenderer records sums typ =
+    let env = { Records = lazy records; Sums = lazy sums }
+    let name, state = ensureRenderer env typ { Functions = Map.empty }
+    name, (state.Functions |> Map.toList |> List.map snd)

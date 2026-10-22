@@ -107,20 +107,10 @@ let rec internal buildEqHelperExpr
     | _, TInt ->
         Call ("Stdlib.Int.__equals", NonEmptyList.fromList [leftExpr; rightExpr])
 
-    | ExpandCurrent, TDict (TString, valueType) ->
-        let entryType = TTuple [TString; resolveType aliasReg valueType]
-        let listType = TList entryType
-        let leftEntries = TypeApp ("Stdlib.Dict.toList", [valueType], NonEmptyList.singleton leftExpr)
-        let rightEntries = TypeApp ("Stdlib.Dict.toList", [valueType], NonEmptyList.singleton rightExpr)
-        buildEqHelperExpr
-            aliasReg
-            typeReg
-            variantLookup
-            indexedSumTypeReg
-            UseHelperCall
-            listType
-            leftEntries
-            rightEntries
+    | ExpandCurrent, TDict (keyType, valueType) ->
+        let leftEntries = TypeApp ("Stdlib.Dict.toList", [keyType; valueType], NonEmptyList.singleton leftExpr)
+        let rightEntries = TypeApp ("Stdlib.Dict.toList", [keyType; valueType], NonEmptyList.singleton rightExpr)
+        TypeApp ("Stdlib.Dict.__entriesEqual", [keyType; valueType], NonEmptyList.fromList [leftEntries; rightEntries])
 
     | ExpandCurrent, TTuple elemTypes ->
         let leftTupleVar = "__dark_eq_helper_tuple_left"

@@ -1,0 +1,90 @@
+// Public dictionaries accept expression keys and preserve both type arguments.
+Stdlib.Dict.get (Dict { 1L: "one", 2L: "two" }) 2L = Some "two"
+Stdlib.Dict.get (Stdlib.Dict.singleton 1L "one") 1L = Some "one"
+let numericDict (d: Dict<Int64, String>) : String = Stdlib.Option.withDefault (Stdlib.Dict.get d 2L) "missing"
+numericDict (Dict { 2L: "two" }) = "two"
+let key = 1L + 1L in Stdlib.Dict.get (Dict { key: "two" }) 2L = Some "two"
+Stdlib.Dict.keys (Dict { 3L: "c", 1L: "a", 2L: "b" }) = [1L, 2L, 3L]
+Stdlib.Dict.fromList ([(1L, "a"), (1L, "b")]) = None
+Stdlib.Dict.get (Stdlib.Dict.setOverridingDuplicates (Dict { 1L: "a" }) 1L "b") 1L = Some "b"
+Dict { 1L: "a" } == Dict { 1L: "a" } = true
+// Every public operation carries the key type through callbacks and reconstruction.
+Stdlib.Dict.values (Dict { 2L: "b", 1L: "a" }) = ["a", "b"]
+Stdlib.Dict.toList (Dict { 2L: "b", 1L: "a" }) = [(1L, "a"), (2L, "b")]
+Stdlib.Dict.get (Stdlib.Dict.map (Dict { 1L: 2L }) (fun key value -> key + value)) 1L = Some 3L
+Stdlib.Dict.filter (Dict { 1L: "a", 2L: "b" }) (fun key value -> key == 2L) = Dict { 2L: "b" }
+Stdlib.Dict.filterMap (Dict { 1L: 2L, 2L: 3L }) (fun key value -> if key == 1L then Some (value + 1L) else None) = Dict { 1L: 3L }
+Stdlib.Dict.merge (Dict { 1L: "a" }) (Dict { 1L: "b", 2L: "c" }) = Dict { 1L: "b", 2L: "c" }
+Stdlib.Dict.remove (Dict { 1L: "a", 2L: "b" }) 1L = Dict { 2L: "b" }
+Stdlib.Dict.get (Stdlib.Dict.fromListOverwritingDuplicates ([(1L, "a"), (1L, "b")])) 1L = Some "b"
+Stdlib.Dict.get (Dict { (1L, "a"): "tuple" }) (1L, "a") = Some "tuple"
+Stdlib.Dict.get (Dict { [1L, 2L]: "list" }) [1L, 2L] = Some "list"
+Stdlib.Dict.keys (Dict { [2L]: 1L, [1L, 9L]: 2L, []: 3L }) = [[], [1L, 9L], [2L]]
+type DictionaryPoint = { x: Int64; y: Int64 }
+Stdlib.Dict.get (Dict { DictionaryPoint { x = 1L; y = 2L }: "point" }) (DictionaryPoint { y = 2L; x = 1L }) = Some "point"
+Stdlib.Dict.get (Dict { Some 1L: "some", None: "none" }) (Some 1L) = Some "some"
+Stdlib.Dict.get (Dict { Dict { 1L: "inner" }: "outer" }) (Dict { 1L: "inner" }) = Some "outer"
+Stdlib.Dict.get (Dict { 0.0: "zero" }) (-0.0) = Some "zero"
+let nan = Stdlib.Float.sqrt -1.0 in Stdlib.Dict.get (Dict { nan: "nan" }) nan = Some "nan"
+let nan = Stdlib.Float.sqrt -1.0 in Stdlib.Dict.size (Stdlib.Dict.setOverridingDuplicates (Dict { nan: "a" }) nan "b") = 1
+let nan = Stdlib.Float.sqrt -1.0 in Dict { nan: "a" } == Dict { nan: "a" } = true
+let nan = Stdlib.Float.sqrt -1.0 in Dict { 1L: nan } == Dict { 1L: nan } = false
+let nan = Stdlib.Float.sqrt -1.0 in Stdlib.Dict.get (Dict { [nan, 0.0]: "nested" }) [nan, -0.0] = Some "nested"
+// Duplicate expression keys reject instead of silently replacing an entry.
+Dict { 1L: "a", 1L: "b" } = error="Cannot add two dictionary entries with the same key"
+Dict { 1L: "a", "two": "b" } = compileerror="expected Int64"
+Stdlib.Dict.get (Dict { 1L: "a" }) "one" = compileerror="expected Int64"
+let key = 2L in let get = fun () -> Stdlib.Dict.get (Dict { key: "captured" }) key in get () = Some "captured"
+Stdlib.Dict.singleton (fun x -> x + 1L) "bad" = error="Unsupported dictionary key type"
+Stdlib.Dict.singleton (Stdlib.Blob.fromString "bad") "bad" = error="Unsupported dictionary key type"
+// Hash collisions preserve distinct structural keys and persistent versions.
+let d = Dict { (1L, 32L): "a", (2L, 1L): "b" } in (Stdlib.Dict.get d (1L, 32L), Stdlib.Dict.get d (2L, 1L)) = (Some "a", Some "b")
+let d = Dict { (1L, 32L): "a", (2L, 1L): "b" } in Stdlib.Dict.get (Stdlib.Dict.remove d (1L, 32L)) (2L, 1L) = Some "b"
+let before = Dict { [1L, 2L]: "a" } in let after = Stdlib.Dict.setOverridingDuplicates before [1L, 2L] "b" in (Stdlib.Dict.get before [1L, 2L], Stdlib.Dict.get after [1L, 2L]) = (Some "a", Some "b")
+let buildDictionary<'k> (key: k) : Dict<k, Int64> = Dict { key: 42L }
+Stdlib.Dict.get (buildDictionary (1L, "generic")) (1L, "generic") = Some 42L
+Stdlib.Dict.get (Dict { []: "empty", [1L]: "one" }) [] = Some "empty"
+Stdlib.Dict.get (Dict { Dict { }: "empty", Dict { 1L: "inner" }: "one" }) (Dict { }) = Some "empty"
+Stdlib.Dict.keys (Dict { true: 1L, false: 2L }) = [false, true]
+Stdlib.Dict.keys (Dict { 'c': 1L, 'a': 2L }) = ['a', 'c']
+Stdlib.Dict.keys (Dict { 9223372036854775808: 1L, 0: 2L }) = [0, 9223372036854775808]
+let nan = Stdlib.Float.sqrt -1.0 in Stdlib.Dict.values (Dict { (1.0 / 0.0): "positive", (-1.0 / 0.0): "negative", 0.0: "zero", nan: "nan" }) = ["nan", "negative", "zero", "positive"]
+Stdlib.Dict.singleton () "unit" = Dict { (): "unit" }
+Stdlib.Dict.singleton (Some (fun x -> x + 1L)) "bad" = error="Unsupported dictionary key type"
+Stdlib.Dict.get (Dict { 1y: "i8" }) 1y = Some "i8"
+Stdlib.Dict.get (Dict { 1uy: "u8" }) 1uy = Some "u8"
+Stdlib.Dict.get (Dict { 1s: "i16" }) 1s = Some "i16"
+Stdlib.Dict.get (Dict { 1us: "u16" }) 1us = Some "u16"
+Stdlib.Dict.get (Dict { 1l: "i32" }) 1l = Some "i32"
+Stdlib.Dict.get (Dict { 1ul: "u32" }) 1ul = Some "u32"
+Stdlib.Dict.get (Dict { 1UL: "u64" }) 1UL = Some "u64"
+Stdlib.Dict.get (Dict { 1Q: "i128" }) 1Q = Some "i128"
+Stdlib.Dict.get (Dict { 1Z: "u128" }) 1Z = Some "u128"
+let u = Builtin.unwrap (Stdlib.Uuid.parse "3700adbc-7a46-4ff4-81d3-45afb03f6e2d") in Stdlib.Dict.get (Dict { u: "uuid" }) u = Some "uuid"
+let d = Builtin.unwrap (Stdlib.DateTime.parse "2026-08-31T00:00:00Z") in Stdlib.Dict.get (Dict { d: "datetime" }) d = Some "datetime"
+Stdlib.Dict.get (Dict { ["dynamic" ++ " key"]: "value" }) ["dynamic key"] = Some "value"
+type DictionaryNode = | DictionaryLeaf of Int64 | DictionaryBranch of (DictionaryNode * DictionaryNode)
+Stdlib.Dict.get (Dict { DictionaryBranch ((DictionaryLeaf 1L, DictionaryLeaf 2L)): "tree" }) (DictionaryBranch ((DictionaryLeaf 1L, DictionaryLeaf 2L))) = Some "tree"
+// Rejection depends on values present, so empty containers remain valid keys.
+let absentFunctionKey () : Stdlib.Option.Option<(Int64 -> Int64)> = None
+Stdlib.Dict.get (Dict { (absentFunctionKey ()): "absent" }) (absentFunctionKey ()) = Some "absent"
+let emptyFunctionListKey () : List<(Int64 -> Int64)> = []
+Stdlib.Dict.get (Dict { (emptyFunctionListKey ()): "empty" }) (emptyFunctionListKey ()) = Some "empty"
+Stdlib.Dict.get (Dict { "___": "literal", "": "empty" }) "___" = Some "literal"
+let key = "a" ++ "" in Dict { key: 1L, "a": 2L } = error="Cannot add two dictionary entries with the same key"
+Stdlib.Dict.keys (Dict { 2L: "positive", -3L: "negative", 0L: "zero" }) = [-3L, 0L, 2L]
+Stdlib.Dict.empty = Dict { }
+Stdlib.Dict.fromListOverwritingDuplicates [] = Dict { }
+Stdlib.Dict.fromList [] = Some (Dict { })
+Stdlib.Dict.toList (Dict { }) = []
+Stdlib.Dict.singleton (fun x -> x) "bad" = error="Unsupported dictionary key type"
+let emptyDictionaryFromList () : Stdlib.Option.Option<Dict<Int64, String>> = Stdlib.Dict.fromList []
+emptyDictionaryFromList () = Some (Dict { })
+Stdlib.Dict.singleton (Stdlib.Stream.fromList [1L]) "bad" = error="Unsupported dictionary key type"
+type DictionaryMulti = | DictionaryMulti of number: Int64 * label: String
+Stdlib.Dict.get (Dict { DictionaryMulti (1L, "field"): "multi" }) (DictionaryMulti (1L, "field")) = Some "multi"
+Stdlib.Dict.get (Dict { DictionaryMulti (1L, "field"): "multi" }) (DictionaryMulti (2L, "field")) = None
+Stdlib.Dict.singleton [Stdlib.Blob.fromString "bad"] "bad" = error="Unsupported dictionary key type"
+Stdlib.Dict.fromList [(Stdlib.Blob.fromString "bad", "bad")] = error="Unsupported dictionary key type"
+let absentBlobKey () : Stdlib.Option.Option<Blob> = None
+Stdlib.Dict.get (Dict { (absentBlobKey ()): "absent" }) (absentBlobKey ()) = Some "absent"

@@ -157,7 +157,7 @@ let eqHelperName (typ: Type) : string =
 
 /// Name for a concrete canonical three-way comparison helper.
 let compareHelperName (typ: Type) : string =
-    let typeText = typeToString typ
+    let typeText = typ |> canonicalEqualityType Map.empty |> typeToString
     let prefix = sanitizeHelperNamePrefix typeText
     let hash = stableHelperNameHash typeText
     $"__dark_compare_{prefix}_{hash:x16}"
@@ -305,7 +305,7 @@ let internal canonicalSortableType
             | TEnumFields elementTypes -> List.forall recurse elementTypes
             | TList elementType -> recurse elementType
             | TStream _ -> false
-            | TDict (TString, valueType) -> recurse valueType
+            | TDict (keyType, valueType) -> recurse keyType && recurse valueType
             | TRecord (recordName, typeArgs) ->
                 match Map.tryFind recordName typeReg with
                 | None -> false
@@ -329,7 +329,7 @@ let internal canonicalSortableType
                         variant.Payload
                         |> Option.map (fun payload -> recurse (applySubst subst payload))
                         |> Option.defaultValue true)
-            | TDict _ | TFunction _ | TBlob | TRawPtr | TRuntimeError -> false
+            | TFunction _ | TBlob | TRawPtr | TRuntimeError -> false
 
     sortable Set.empty typ
 

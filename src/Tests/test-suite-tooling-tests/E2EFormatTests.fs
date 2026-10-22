@@ -16,7 +16,7 @@ let private withTempFileNamed (fileName: string) (contents: string) (f: string -
     let tempPath = Path.Combine(tempDir, fileName)
 
     try
-        Directory.CreateDirectory(tempDir) |> ignore
+        Directory.CreateDirectory(Path.GetDirectoryName tempPath) |> ignore
         File.WriteAllText(tempPath, contents)
         f tempPath
     finally
@@ -617,7 +617,29 @@ let testRejectsDanglingCompileErrorDirective () : TestResult =
         | Error msg -> Error $"Unexpected dangling-directive error: {msg}"
         | Ok tests -> Error $"Expected dangling #compileerror rejection, got: {tests}")
 
+let testUpstreamModulePreamblesHaveLexicalScope () : TestResult =
+    let source =
+        "type Root = String\n"
+        + "module First =\n"
+        + "  type Inner<'a> = { first: 'a }\n"
+        + "  Inner { first = 1L } = Inner { first = 1L }\n"
+        + "module Second =\n"
+        + "  type Inner<'a, 'b> = { second: 'a; other: 'b }\n"
+        + "  Inner { second = 1L; other = true } = Inner { second = 1L; other = true }\n"
+    withTempFileNamed (Path.Combine("e2e", "upstream", "scopes.dark")) source (fun path ->
+        match parseE2ETestFile path with
+        | Ok [first; second] when
+            first.Preamble.Contains("type Root")
+            && second.Preamble.Contains("type Root")
+            && first.Preamble.Contains("first:")
+            && not (first.Preamble.Contains("second:"))
+            && second.Preamble.Contains("second:")
+            && not (second.Preamble.Contains("first:")) -> Ok ()
+        | Ok tests -> Error $"Expected independent module preambles, got {tests}"
+        | Error error -> Error error)
+
 let tests = [
+    ("upstream module preambles have lexical scope", testUpstreamModulePreamblesHaveLexicalScope)
     ("parses multiline expectation on next line", testParsesMultilineExpectationOnNextLine)
     ("parses skip attribute", testParsesSkipAttribute)
     ("parses indented multiline .dark tests inside module", testParsesIndentedMultilineDarkTestsInsideModule)

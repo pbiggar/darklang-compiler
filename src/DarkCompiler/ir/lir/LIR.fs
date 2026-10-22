@@ -32,6 +32,7 @@ type Reg =
 type FReg =
     | FPhysical of PhysFPReg
     | FVirtual of int
+    | FParallelMoveTemp  // Distinct from every ordinary virtual-register identity.
 
 /// Parameter with register and type bundled (makes invalid states unrepresentable)
 type TypedLIRParam = { Reg: Reg; Type: AST.Type }

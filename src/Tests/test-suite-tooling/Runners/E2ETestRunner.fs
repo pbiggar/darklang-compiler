@@ -411,9 +411,9 @@ let rec private collectExprReferencedPreambleFuncsWithBound
         |> combineMany
     | TupleAccess (tupleExpr, _index) ->
         collectExprReferencedPreambleFuncsWithBound knownPreambleFunctions boundVars tupleExpr
-    | DictLiteral (_, entries) ->
+    | DictLiteral (_, _, entries) ->
         entries
-        |> List.map snd
+        |> List.collect (fun (key, value) -> [key; value])
         |> List.map (collectExprReferencedPreambleFuncsWithBound knownPreambleFunctions boundVars)
         |> combineMany
     | RecordLiteral (_typeName, fields) ->

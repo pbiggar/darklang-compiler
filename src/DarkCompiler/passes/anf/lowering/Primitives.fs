@@ -320,13 +320,10 @@ let internal tryParseMangledTypeWithSumTypeNames
                 parseTupleElems paramTokens
                 |> List.filter (fun (_, rem) -> rem = [])
                 |> List.map fst
-            let retParses =
-                parseType retTokens
-                |> List.filter (fun (_, rem) -> rem = [])
-                |> List.map fst
+            let retParses = parseType retTokens
             paramParses
             |> List.collect (fun paramTypes ->
-                retParses |> List.map (fun ret -> (AST.TFunction (paramTypes, ret), [])))
+                retParses |> List.map (fun (ret, remaining) -> (AST.TFunction (paramTypes, ret), remaining)))
 
     match parseType tokens |> List.filter (fun (_, rem) -> rem = []) with
     | [ (typ, _) ] -> Ok typ

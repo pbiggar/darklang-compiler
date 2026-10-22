@@ -2,9 +2,9 @@
 // Historical compiler evidence started at 51093e0a8e31fe45a9aa79a317fbefd6b74fbcc3.
 // Current compiler behavior was compared at rebased main 9cf0799fc485a2edc1eb19551826745705cf695e.
 
-// Public typing is String-keyed and exposes exactly one value type parameter.
+// Historical String-keyed shorthand remains accepted beside Dict<key, value>.
 let dictIdentity<'a> (dict: Dict<a>): Dict<a> = dict; dictIdentity<Int64> (Dict { answer = 42L }) = Dict { answer = 42L }
-Stdlib.Dict.singleton 1L "one" = error="expected String"
+Stdlib.Dict.singleton 1L "one" = Dict { 1L: "one" }
 
 // Empty and non-empty literals are distinct from records. Keys support escaped
 // spelling, with ___ reserved by the public syntax for the empty key.

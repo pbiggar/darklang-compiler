@@ -8,6 +8,17 @@ open LoweringPrimitives
 open SpecializationIdentity
 open TypeSubstitution
 
+/// String literal duplicates were rejected during checking; expression keys need strict insertion.
+let private dictLiteralSetter entries =
+    if entries |> List.forall (function AST.StringLiteral _, _ -> true | _ -> false) then
+        "Stdlib.Dict.__setOverwriting"
+    else "Stdlib.Dict.set"
+
+let private isPrimitiveKeyValidation name types =
+    match name, types with
+    | "__dict_validate_key", [typ] -> DictionaryKeyHelpers.isPrimitivePublicKey typ
+    | _ -> false
+
 let collectTypeApps (expr: AST.Expr) : Set<SpecKey> =
     let rec visit (specs: Set<SpecKey>) (current: AST.Expr) : Set<SpecKey> =
         match current with
@@ -38,25 +49,20 @@ let collectTypeApps (expr: AST.Expr) : Set<SpecKey> =
             let hasTypeVars = List.exists containsTypeVar typeArgs
             if funcName = eqHelperDispatchMarker || funcName = "__compare" then
                 argSpecs
-            elif hasTypeVars && (funcName = "__hash" || funcName = "__key_eq") then
+            elif hasTypeVars && isGenericKeyIntrinsicName funcName then
                 argSpecs
-            elif (funcName = "Stdlib.Dict.fromList" || funcName = "Dict.fromList")
-                 && exprArgsToList args = [AST.ListLiteral []]
-                 && not hasTypeVars then
-                // Optimization: avoid building a Dict from an empty list when types are concrete.
-                Set.add ("Stdlib.Dict.empty", typeArgs) argSpecs
             else
                 Set.add (funcName, typeArgs) argSpecs
         | AST.TupleLiteral elements
         | AST.ListLiteral elements ->
             visitMany specs elements
-        | AST.DictLiteral (valueType, entries) ->
+        | AST.DictLiteral (keyType, valueType, entries) ->
             let entrySpecs =
-                entries |> List.fold (fun acc (_, value) -> visit acc value) specs
+                entries |> List.fold (fun acc (key, value) -> visit (visit acc key) value) specs
             if List.isEmpty entries then entrySpecs
             else
                 Set.add
-                    ("Stdlib.Dict.__setOverwriting", [AST.TString; valueType])
+                    (dictLiteralSetter entries, [keyType; valueType])
                     entrySpecs
         | AST.RecordLiteral (_, fields) ->
             fields |> List.fold (fun acc (_, value) -> visit acc value) specs
@@ -120,7 +126,7 @@ let rec collectCalledFunctions (expr: AST.Expr) : Set<string> =
         Set.add name (combine (exprArgsToList args))
     | AST.TupleLiteral elements
     | AST.ListLiteral elements -> combine elements
-    | AST.DictLiteral (_, entries) -> entries |> List.map snd |> combine
+    | AST.DictLiteral (_, _, entries) -> entries |> List.collect (fun (key, value) -> [key; value]) |> combine
     | AST.RecordLiteral (_, fields) -> fields |> List.map snd |> combine
     | AST.RecordUpdate (record, fields) ->
         combine (record :: (fields |> List.map snd))
@@ -219,6 +225,8 @@ let rec replaceTypeApps (expr: AST.Expr) : AST.Expr =
                 match args |> exprArgsToList |> List.map replaceTypeApps with
                 | [leftExpr; rightExpr] -> AST.BinOp (AST.Eq, leftExpr, rightExpr)
                 | _ -> Crash.crash "Comparison plan expected exactly two operands"
+        elif isPrimitiveKeyValidation funcName typeArgs then
+            wrapWithIgnoredArgEvaluations (args |> exprArgsToList |> List.map replaceTypeApps) AST.UnitLiteral
         elif funcName = "__compare" then
             let replacedArgs = args |> exprArgsToList |> List.map replaceTypeApps
             match typeArgs, replacedArgs with
@@ -230,13 +238,7 @@ let rec replaceTypeApps (expr: AST.Expr) : AST.Expr =
             | _, evaluatedArgs ->
                 wrapWithIgnoredArgEvaluations
                     evaluatedArgs
-                    (AST.RuntimeError "Canonical comparison remained polymorphic after monomorphization")
-        elif (funcName = "Stdlib.Dict.fromList" || funcName = "Dict.fromList")
-           && exprArgsToList args = [AST.ListLiteral []]
-           && not hasTypeVars then
-            // Optimization: avoid building a Dict from an empty list when types are concrete.
-            let specializedName = specName "Stdlib.Dict.empty" typeArgs
-            AST.Call (specializedName, exprArgsFromList [])
+                    (AST.Call ("__unresolved_compare", AST.NonEmptyList.singleton AST.UnitLiteral))
         elif isGenericKeyIntrinsicName funcName && hasTypeVars then
             let replacedArgs = args |> exprArgsToList |> List.map replaceTypeApps
             wrapWithIgnoredArgEvaluations replacedArgs (unresolvedKeyIntrinsicTypeArgErrorExpr funcName)
@@ -247,17 +249,17 @@ let rec replaceTypeApps (expr: AST.Expr) : AST.Expr =
         AST.TupleLiteral (List.map replaceTypeApps elements)
     | AST.TupleAccess (tuple, index) ->
         AST.TupleAccess (replaceTypeApps tuple, index)
-    | AST.DictLiteral (valueType, entries) ->
+    | AST.DictLiteral (keyType, valueType, entries) ->
         match entries with
         | [] -> expr
         | _ ->
-            let empty = AST.DictLiteral (valueType, [])
+            let empty = AST.DictLiteral (keyType, valueType, [])
             entries
             |> List.fold (fun dictExpr (key, value) ->
                 AST.TypeApp (
-                    "Stdlib.Dict.__setOverwriting",
-                    [AST.TString; valueType],
-                    AST.NonEmptyList.fromList [dictExpr; AST.StringLiteral key; value]
+                    dictLiteralSetter entries,
+                    [keyType; valueType],
+                    AST.NonEmptyList.fromList [dictExpr; key; value]
                 )) empty
             |> replaceTypeApps
     | AST.RecordLiteral (typeName, fields) ->
@@ -377,9 +379,6 @@ let replaceTypeAppsWithRegistry (specRegistry: SpecRegistry) (expr: AST.Expr) : 
             |> Result.map (fun args' -> AST.Call (funcName, exprArgsFromList args'))
         | AST.TypeApp (funcName, typeArgs, args) ->
             let hasTypeVars = List.exists containsTypeVar typeArgs
-            let emptyDictSpec = (funcName = "Stdlib.Dict.fromList" || funcName = "Dict.fromList")
-                                && exprArgsToList args = [AST.ListLiteral []]
-                                && not hasTypeVars
             let unresolvedKeyIntrinsicSpec = isGenericKeyIntrinsicName funcName && hasTypeVars
             let resolvedNameResult =
                 if funcName = eqHelperDispatchMarker then
@@ -394,17 +393,15 @@ let replaceTypeAppsWithRegistry (specRegistry: SpecRegistry) (expr: AST.Expr) : 
                     Ok (specName funcName typeArgs)
                 elif isIntrinsicTypeAppName funcName then
                     Ok (specName funcName typeArgs)
-                elif emptyDictSpec then
-                    let key = ("Stdlib.Dict.empty", typeArgs)
-                    match Map.tryFind key specRegistry with
-                    | Some name -> Ok name
-                    | None -> Error (missingSpecMessage "Stdlib.Dict.empty" typeArgs)
                 else
                     match Map.tryFind (funcName, typeArgs) specRegistry with
                     | Some name -> Ok name
                     | None -> Error (missingSpecMessage funcName typeArgs)
 
-            if unresolvedKeyIntrinsicSpec then
+            if isPrimitiveKeyValidation funcName typeArgs then
+                mapResult replace (exprArgsToList args)
+                |> Result.map (fun args' -> wrapWithIgnoredArgEvaluations args' AST.UnitLiteral)
+            elif unresolvedKeyIntrinsicSpec then
                 mapResult replace (exprArgsToList args)
                 |> Result.map (fun args' ->
                     wrapWithIgnoredArgEvaluations args' (unresolvedKeyIntrinsicTypeArgErrorExpr funcName))
@@ -422,7 +419,7 @@ let replaceTypeAppsWithRegistry (specRegistry: SpecRegistry) (expr: AST.Expr) : 
                     else
                         wrapWithIgnoredArgEvaluations
                             args'
-                            (AST.RuntimeError "Canonical comparison remained polymorphic after monomorphization"))
+                            (AST.Call ("__unresolved_compare", AST.NonEmptyList.singleton AST.UnitLiteral)))
             else
                 if funcName = eqHelperDispatchMarker && not hasTypeVars then
                     mapResult replace (exprArgsToList args)
@@ -431,17 +428,14 @@ let replaceTypeAppsWithRegistry (specRegistry: SpecRegistry) (expr: AST.Expr) : 
                 else
                     resolvedNameResult
                     |> Result.bind (fun resolvedName ->
-                        if emptyDictSpec then
-                            Ok (AST.Call (resolvedName, exprArgsFromList []))
-                        else
-                            mapResult replace (exprArgsToList args)
-                            |> Result.map (fun args' -> AST.Call (resolvedName, exprArgsFromList args')))
+                        mapResult replace (exprArgsToList args)
+                        |> Result.map (fun args' -> AST.Call (resolvedName, exprArgsFromList args')))
         | AST.TupleLiteral elements ->
             mapResult replace elements
             |> Result.map AST.TupleLiteral
         | AST.TupleAccess (tuple, index) ->
             replace tuple |> Result.map (fun tuple' -> AST.TupleAccess (tuple', index))
-        | AST.DictLiteral (valueType, entries) ->
+        | AST.DictLiteral (keyType, valueType, entries) ->
             match entries with
             | [] -> Ok expr'
             | _ ->
@@ -449,10 +443,10 @@ let replaceTypeAppsWithRegistry (specRegistry: SpecRegistry) (expr: AST.Expr) : 
                     entries
                     |> List.fold (fun dictExpr (key, value) ->
                         AST.TypeApp (
-                            "Stdlib.Dict.__setOverwriting",
-                            [AST.TString; valueType],
-                            AST.NonEmptyList.fromList [dictExpr; AST.StringLiteral key; value]
-                        )) (AST.DictLiteral (valueType, []))
+                            dictLiteralSetter entries,
+                            [keyType; valueType],
+                            AST.NonEmptyList.fromList [dictExpr; key; value]
+                        )) (AST.DictLiteral (keyType, valueType, []))
                 replace lowered
         | AST.RecordLiteral (typeName, fields) ->
             fields

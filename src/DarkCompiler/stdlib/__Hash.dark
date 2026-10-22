@@ -50,3 +50,20 @@ let __key_eq_blob (left: Blob) (right: Blob) : Bool = __blob_eq left right
 
 // Unresolved generic __hash/__key_eq calls are handled in compiler lowering by
 // emitting explicit runtime errors before codegen; no unknown fallback stubs live here.
+
+// Unreachable polymorphic templates retain typed failure results. In particular,
+// an empty dictionary's traversal must compile without knowing its absent keys.
+let __unresolved_compare () : Int64 =
+    Builtin.testRuntimeError "Canonical comparison remained polymorphic after monomorphization"
+
+let __unsupported_key_hash () : Int64 =
+    Builtin.testRuntimeError "Unsupported dictionary key type"
+
+let __unsupported_key_equal () : Bool =
+    Builtin.testRuntimeError "Unsupported dictionary key type"
+
+let __unsupported_key_string () : String =
+    Builtin.testRuntimeError "Unsupported dictionary key type"
+
+let __unsupported_key_validate () : Unit =
+    Builtin.testRuntimeError "Unsupported dictionary key type"

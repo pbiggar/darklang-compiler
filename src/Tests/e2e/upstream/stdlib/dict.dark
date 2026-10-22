@@ -18,6 +18,7 @@ val valDict = Dict { 1L: "a"; 2L: "b" }
 module ValDict =
   Stdlib.Dict.keys valDict = [ 1L, 2L ]
 
+  #compileerror="expected Int64"
   Stdlib.Dict.set valDict "notAnInt" "c" = error="Darklang.Stdlib.Dict.set's 2nd parameter `key` expects Int64, but got String (\"notAnInt\")"
 
 
@@ -26,9 +27,12 @@ module Empty =
 
 
 module ConstructionErrors =
+  #compileerror="same key"
   Dict { "a": 1; "a": 2 } = error="Cannot add two dictionary entries with the same key \"a\""
+  #compileerror="dict values must have one type"
   Dict { "a": 1l; "b": "two" } = error="Cannot add a String (\"two\") to a dict of Int32. Failed at key \"b\"."
 module FilterMap =
+  #compileerror="Type mismatch"
   Stdlib.Dict.filterMap (Dict { }) (fun key value -> 0L) = (Dict { })
 
   (Stdlib.Dict.filterMap
@@ -56,8 +60,10 @@ module Filter =
   Stdlib.Dict.filter (Dict { "key1": 1L; "key2": 3L }) (fun k v -> v < 2L) =
     (Dict { "key1": 1L })
 
+  #compileerror="Type mismatch"
   Stdlib.Dict.filter (Dict { }) (fun k v -> 0L) = (Dict { })
 
+  #compileerror="Type mismatch"
   Stdlib.Dict.filter (Dict { "a": 1L; "b": 2L; "c": 3L }) (fun k v -> 2L) = error="Encountered a condition that must be a Bool, but got an Int64 (2)"
 module FromListOverwritingDuplicates =
   Stdlib.Dict.fromListOverwritingDuplicates [] = (Dict { })
@@ -71,6 +77,7 @@ module FromListOverwritingDuplicates =
   Stdlib.Dict.fromListOverwritingDuplicates [ Builtin.testRuntimeError "err" ] = error="Uncaught exception: err"
   Stdlib.Dict.fromListOverwritingDuplicates [ (1L, 2L) ] = Dict { 1L: 2L }
 
+  #compileerror="Type mismatch"
   Stdlib.Dict.fromListOverwritingDuplicates [ 1L ] = error="Darklang.Stdlib.Dict.fromListOverwritingDuplicates's 1st parameter `entries` expects List<(_ * _)>, but got List<Int64> ([1])"
 module FromList =
   Stdlib.Dict.fromList [] = Stdlib.Option.Option.Some(Dict { })
@@ -143,7 +150,9 @@ module Set =
 
   Stdlib.Dict.set (Dict { "key1": "val1before" }) "key1" "val1after" = error="Cannot add two dictionary entries with the same key \"key1\""
   Stdlib.Dict.set (Dict { "key1": "val1"; "key2": "val2" }) "key2" "newVal2" = error="Cannot add two dictionary entries with the same key \"key2\""
+  #compileerror="dict values must have one type"
   Dict { "key1": "val1"; "key2": 2L } = error="Cannot add an Int64 (2) to a dict of String. Failed at key \"key2\"."
+  #compileerror="expected String"
   Stdlib.Dict.set (Dict { "key1": "val1" }) "key2" 2L = error="Darklang.Stdlib.Dict.set's 3rd parameter `val` expects String, but got Int64 (2)"
   Stdlib.Dict.set (Dict { }) "key1" "val1" =
     (Dict { "key1": "val1" })
@@ -156,6 +165,7 @@ module SetOverridingDuplicates =
   Stdlib.Dict.setOverridingDuplicates (Dict { "key1": "val1" }) "key2" "val2" =
     (Dict { "key1": "val1"; "key2": "val2" })
 
+  #compileerror="expected String"
   Stdlib.Dict.setOverridingDuplicates (Dict { "key1": "val1" }) "key2" 2L = error="Darklang.Stdlib.Dict.setOverridingDuplicates's 3rd parameter `val` expects String, but got Int64 (2)"
   // (where this differs from .set)
   Stdlib.Dict.setOverridingDuplicates (Dict { "key1": "val1before" }) "key1" "val1after" =
@@ -319,18 +329,22 @@ module NonStringKeys =
       [ [], [ 1L, 9L ], [ 2L ] ]
 
   module FromListInfersTypes =
+    #compileerror="expected Int64"
     Stdlib.Dict.set
       (Builtin.unwrap (Stdlib.Dict.fromList [ (1L, "a") ]))
       "b"
       "c" = error="Darklang.Stdlib.Dict.set's 2nd parameter `key` expects Int64, but got String (\"b\")"
 
+    #compileerror="expected Int64"
     Stdlib.Dict.set
       (Stdlib.Dict.fromListOverwritingDuplicates [ (1L, "a") ])
       "b"
       "c" = error="Darklang.Stdlib.Dict.set's 2nd parameter `key` expects Int64, but got String (\"b\")"
 
+    #compileerror="expected String"
     Stdlib.Dict.set (Builtin.unwrap (Stdlib.Dict.fromList [ (1L, "a") ])) 2L 3L = error="Darklang.Stdlib.Dict.set's 3rd parameter `val` expects String, but got Int64 (3)"
 
+    #compileerror="Type mismatch"
     Stdlib.Dict.fromList [ (1L, "a"), ((fun x -> x), "b") ] = error="Cannot use (lambda) as a dict key. Functions, streams, database references, blobs, and values containing them cannot be keys."
 
     Stdlib.Dict.fromList [ (1L, "a"), (1L, "b") ] = Stdlib.Option.Option.None
@@ -354,6 +368,7 @@ module NonStringKeys =
       (Dict { Point { x = 1L; y = 2L }: "p" })
       (SameShape { x = 1L; y = 2L }) = true
 
+    #compileerror="Cannot perform equality check"
     (Point { x = 1L; y = 2L }) == (DifferentShape { a = 1L; b = 2L }) = error="Cannot perform equality check on SameShape and DifferentShape"
 
   module RecordFieldOrder =
@@ -391,18 +406,24 @@ module NonStringKeys =
     Dict { (Stdlib.Option.Option.Some (fun x -> x)): 1L } = error="Cannot use Some((lambda)) as a dict key. Functions, streams, database references, blobs, and values containing them cannot be keys."
 
   module Errors =
+    #compileerror="expected Int64"
     Dict { 1L: "a"; "b": "c" } = error="This dict uses keys of type Int64, but \"b\" has type String."
 
     (Dict { (fun x -> x): 1L }) = error="Cannot use (lambda) as a dict key. Functions, streams, database references, blobs, and values containing them cannot be keys."
 
+    #compileerror="Type mismatch"
     Stdlib.Dict.get (Dict { 1L: "a" }) (fun x -> x) = error="Cannot use (lambda) as a dict key. Functions, streams, database references, blobs, and values containing them cannot be keys."
 
     Stdlib.Dict.set (Dict { }) (fun x -> x) 1L = error="Cannot use (lambda) as a dict key. Functions, streams, database references, blobs, and values containing them cannot be keys."
 
+    #compileerror="Type mismatch"
     Stdlib.Dict.set (Dict { 1L: "a" }) (fun x -> x) "b" = error="Cannot use (lambda) as a dict key. Functions, streams, database references, blobs, and values containing them cannot be keys."
 
+    #compileerror="Type mismatch"
     Stdlib.Dict.setOverridingDuplicates (Dict { 1L: "a" }) (fun x -> x) "b" = error="Cannot use (lambda) as a dict key. Functions, streams, database references, blobs, and values containing them cannot be keys."
 
+    #compileerror="Type mismatch"
     Stdlib.Dict.``member`` (Dict { 1L: "a" }) (fun x -> x) = error="Cannot use (lambda) as a dict key. Functions, streams, database references, blobs, and values containing them cannot be keys."
 
+    #compileerror="Type mismatch"
     Stdlib.Dict.remove (Dict { 1L: "a" }) (fun x -> x) = error="Cannot use (lambda) as a dict key. Functions, streams, database references, blobs, and values containing them cannot be keys."

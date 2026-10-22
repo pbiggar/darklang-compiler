@@ -36,6 +36,7 @@ module NestedAlias =
 
   getUserID (("Alice", "EMP123")) = "EMP123"
 
+  #compileerror="credential"
   getUserID (("Alice", 123L)) = error="NestedAlias.getUserID's 1st parameter `credential` expects (String * String), but got (String * Int64) ((\"Alice\", 123))"
 
   type UserProfile =
@@ -154,8 +155,10 @@ module EnumWithTypeArgs =
   Outer2.A "str" = Outer1.A "str"
   Outer2.B 5L = Outer1.B 5L
 
+  #compileerror="Type mismatch in constructor A"
   Outer2.A 5L = error="Failed to create enum. Expected String for field 0 in `A`, but got Int64 (5)"
 
+  #compileerror="Type mismatch in constructor B"
   Outer1.B "b" = error="Failed to create enum. Expected Int64 for field 0 in `B`, but got String (\"b\")"
 
 
@@ -172,8 +175,10 @@ module EnumWithTypeArgsDifferentName =
   MostOutest.A 5L = Inner.A 5L
   MostOutest.B "test" = Inner.B "test"
 
+  #compileerror="Type mismatch in constructor A"
   MostOutest.A "not allowed" = error="Failed to create enum. Expected Int64 for field 0 in `A`, but got String (\"not allowed\")"
 
+  #compileerror="Type mismatch in constructor B"
   MostOutest.B 6L = error="Failed to create enum. Expected String for field 0 in `B`, but got Int64 (6)"
 
 

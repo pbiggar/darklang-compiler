@@ -44,6 +44,8 @@ let sameFReg (r1: FReg) (r2: FReg) : bool =
     match r1, r2 with
     | LIR.FPhysical p1, LIR.FPhysical p2 -> p1 = p2
     | LIR.FVirtual v1, LIR.FVirtual v2 -> v1 = v2
+    | LIR.FParallelMoveTemp, LIR.FParallelMoveTemp -> true
+    | LIR.FParallelMoveTemp, _ | _, LIR.FParallelMoveTemp -> false
     | LIR.FPhysical _, LIR.FVirtual _
     | LIR.FVirtual _, LIR.FPhysical _ -> false
 

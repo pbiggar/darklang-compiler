@@ -101,6 +101,7 @@ let private resolveFreg (freg: LIR.FReg) : Result<X86_64.FReg, string> =
     match freg with
     | LIR.FPhysical fp -> Ok (lirFRegToX86 fp)
     | LIR.FVirtual id -> Error $"Unresolved virtual float register f{id} in x86-64 codegen"
+    | LIR.FParallelMoveTemp -> Error "Parallel-move float temporary used outside a move"
 
 /// Resolve a LIR.Reg (Physical or Virtual) to x86-64 register.
 let resolveReg (reg: LIR.Reg) : Result<X86_64.Reg, string> =

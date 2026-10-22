@@ -82,7 +82,7 @@ let collectFPhiSourceMovePairs (blocks: LIR.BasicBlock array) : (int * int) list
                     |> List.fold (fun acc (src, _) ->
                         match src with
                         | LIR.FVirtual srcId -> Set.add srcId acc
-                        | LIR.FPhysical _ -> acc) acc
+                        | LIR.FPhysical _ | LIR.FParallelMoveTemp -> acc) acc
                 | _ -> acc) acc) Set.empty
     blocks
     |> Array.fold (fun acc block ->

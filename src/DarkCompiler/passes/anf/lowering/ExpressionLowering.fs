@@ -20,7 +20,7 @@ open LoweringCallbacks
 let lowerExpression (toANFCore: ExpressionLowerer) (toAtomCore: AtomLowerer) (toANFBoundAtomCore: BoundAtomLowerer) (sumTypeNames: Set<string>) (inertScopes: Set<string>) (expr: AST.Expr) (varGen: ANF.VarGen) (env: VarEnv) (typeReg: TypeRegistry) (variantLookup: VariantLookup) (funcReg: FunctionRegistry) (moduleRegistry: AST.ModuleRegistry) : Result<ANF.AExpr * ANF.VarGen, string> =
     match expr with
     | AST.RecursiveLet _ -> Error "RecursiveLet must be lowered during lambda lifting"
-    | AST.DictLiteral (_, []) ->
+    | AST.DictLiteral (_, _, []) ->
         Ok (ANF.Return (ANF.IntLiteral (ANF.Int64 0L)), varGen)
     | AST.DictLiteral _ -> Error "Non-empty DictLiteral must be lowered during generic specialization"
     | AST.BoundaryRender (renderer, value) ->

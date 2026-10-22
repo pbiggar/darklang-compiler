@@ -590,8 +590,6 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
                 "src/Tests/e2e/upstream/cloud/db.dark"
                 "src/Tests/e2e/upstream/language/big.dark"
                 "src/Tests/e2e/upstream/language/builtin-introspection.dark"
-                "src/Tests/e2e/upstream/language/collections/edict.dark"
-                "src/Tests/e2e/upstream/language/custom-data/aliases.dark"
                 "src/Tests/e2e/upstream/language/custom-data/enums.dark"
                 "src/Tests/e2e/upstream/language/custom-data/values.dark"
                 "src/Tests/e2e/upstream/language/effect-ceiling.dark"
@@ -614,7 +612,6 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
                 "src/Tests/e2e/upstream/stdlib/char.dark"
                 "src/Tests/e2e/upstream/stdlib/cli-tui-text.dark"
                 "src/Tests/e2e/upstream/stdlib/crypto.dark"
-                "src/Tests/e2e/upstream/stdlib/dict.dark"
                 "src/Tests/e2e/upstream/stdlib/earg.dark"
                 "src/Tests/e2e/upstream/stdlib/eself.dark"
                 "src/Tests/e2e/upstream/stdlib/http.dark"
@@ -646,6 +643,9 @@ let private runTestsWithProgressReporter (completedTestReporter: (int -> unit) o
                 ("src/Tests/e2e/upstream/language/flow-control/eif.dark", Set.ofList [ 1; 12; 13; 14; 20 ])
                 ("src/Tests/e2e/upstream/language/nested-fns.dark", Set.ofList [ 55; 60 ])
                 ("src/Tests/e2e/upstream/stdlib/base64.dark", Set.ofList [ 7; 9; 10; 11; 12; 20; 21; 22; 23; 24; 25; 26; 27; 28; 29; 33; 34; 35; 36; 39; 40; 43; 44; 45; 46; 47 ])
+                // Dict keys are supported. These retain diagnostic-only, frontend,
+                // content-identity, historical NaN, and unconstrained-lambda boundaries.
+                ("src/Tests/e2e/upstream/stdlib/dict.dark", Set.ofList [ 151; 152; 247; 261; 289; 292; 365; 367; 402; 404; 406; 412; 417 ])
                 ("src/Tests/e2e/upstream/stdlib/float.dark", Set.ofList [ 45; 47; 51; 55; 58; 59; 64; 65; 71; 73; 76; 79; 81; 87; 89; 106; 107; 110; 111; 113; 124; 125; 127; 133; 134; 136; 160; 173; 176; 179; 203; 225; 227; 236; 238 ])
                 ("src/Tests/e2e/upstream/stdlib/html.dark", Set.ofList [ 42; 44; 66; 69; 72; 75; 83 ])
                 ("src/Tests/e2e/upstream/stdlib/ints/int32.dark", Set.ofList [ 126 ])

@@ -6,7 +6,7 @@ open X64Operands
 open X64CodeGenTypes
 open X64ReleaseSelection
 
-let rec private genFieldReleases (ctx: FuncCtx) (fieldReleases: MemoryModel.RcFieldRelease list) : X86_64.Instr list =
+let rec internal genFieldReleases (ctx: FuncCtx) (fieldReleases: MemoryModel.RcFieldRelease list) : X86_64.Instr list =
     fieldReleases
     |> List.collect (function
         | MemoryModel.FieldRelease (fieldOffset, fieldReleasePlan) ->

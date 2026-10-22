@@ -216,10 +216,11 @@ let rec applySubstToExpr (subst: Substitution) (expr: AST.Expr) : AST.Expr =
         AST.TupleLiteral (List.map (applySubstToExpr subst) elements)
     | AST.TupleAccess (tuple, index) ->
         AST.TupleAccess (applySubstToExpr subst tuple, index)
-    | AST.DictLiteral (valueType, entries) ->
+    | AST.DictLiteral (keyType, valueType, entries) ->
         AST.DictLiteral (
+            applySubstToType subst keyType,
             applySubstToType subst valueType,
-            entries |> List.map (fun (key, value) -> (key, applySubstToExpr subst value))
+            entries |> List.map (fun (key, value) -> (applySubstToExpr subst key, applySubstToExpr subst value))
         )
     | AST.RecordLiteral (reference, fields) ->
         AST.RecordLiteral (

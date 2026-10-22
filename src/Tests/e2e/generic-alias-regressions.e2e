@@ -1,0 +1,24 @@
+// Alias substitutions are simultaneous, including permuted and recursive binders.
+type AliasInner<'a, 'b> = { first: 'a; second: 'b }
+type AliasSwapped<'b, 'a> = AliasInner<'a, 'b>
+type AliasOuter<'x> = AliasSwapped<'x, Int64>
+type AliasConcrete = AliasOuter<String>
+let aliasSecond (x: AliasInner<'a, 'b>) : 'b = x.second
+aliasSecond (AliasConcrete { first = 5L; second = "value" }) = "value"
+AliasConcrete { first = 5L; second = "value" } = AliasInner { first = 5L; second = "value" }
+type AliasRecursiveInner<'a> = { value: 'a; next: Stdlib.Option.Option<AliasRecursive<'a>> }
+type AliasRecursive<'x> = AliasRecursiveInner<'x>
+AliasRecursive { value = 1L; next = Some (AliasRecursive { value = 2L; next = None }) } = AliasRecursiveInner { value = 1L; next = Some (AliasRecursiveInner { value = 2L; next = None }) }
+type AliasSumInner<'a, 'b> = | AliasFirst of 'a | AliasSecond of 'b
+type AliasSumOuter<'x> = AliasSumInner<Int64, 'x>
+type AliasSumConcrete = AliasSumOuter<String>
+AliasSumOuter.AliasFirst 5L = AliasSumInner.AliasFirst 5L
+AliasSumConcrete.AliasSecond "value" = AliasSumInner.AliasSecond "value"
+AliasSumConcrete.AliasFirst "bad" = compileerror="Int64"
+AliasSumConcrete.AliasSecond 5L = compileerror="String"
+type AliasTuple<'a> = ('a * List<'a>)
+let aliasTupleFirst (x: AliasTuple<'a>) : 'a = x.0
+aliasTupleFirst ((3L, [4L])) = 3L
+type AliasList<'a> = List<'a>
+let aliasListHead (xs: AliasList<'a>) : Stdlib.Option.Option<'a> = Stdlib.List.head xs
+aliasListHead [1L, 2L] = Some 1L

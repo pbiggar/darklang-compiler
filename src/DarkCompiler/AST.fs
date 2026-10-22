@@ -56,8 +56,7 @@ type Type =
     | TStream of Type                  // Stream<T> - opaque, lazy, single-consumer handle
     | TVar of string                  // type variable: T, A, B, etc. (for generics)
     | TRawPtr                         // Raw pointer to unmanaged memory (internal, for HAMT)
-    // Native HAMT machinery retains both components. Public source syntax is
-    // String-keyed and renders only the value component as Dict<Value>.
+    // Dictionaries retain both key and value types throughout compilation.
     | TDict of keyType:Type * valueType:Type
 
 /// Nominal identity carried by record construction from parsing onward.
@@ -79,10 +78,12 @@ let unresolvedRecordReference (sourceTypeName: string) (typeArgs: Type list) : R
 type ConstructorReference =
     | UnresolvedConstructor of declaringType:string option
     | ResolvedConstructor of declaringModule:string list * declaringType:string
+    | ResolvedAliasConstructor of sourceAlias:string * canonicalTypeName:string
 
 let constructorReferenceTypeName (reference: ConstructorReference) : string option =
     match reference with
     | UnresolvedConstructor declaringType -> declaringType
+    | ResolvedAliasConstructor (_, canonicalTypeName) -> Some canonicalTypeName
     | ResolvedConstructor (declaringModule, declaringType) ->
         Some (String.concat "." (declaringModule @ [declaringType]))
 
@@ -431,7 +432,7 @@ and Expr =
     | TypeApp of funcName:string * typeArgs:Type list * args:NonEmptyList<Expr>  // Generic call: funcName<T, U>(args)
     | TupleLiteral of Expr list              // Tuple literal: (1, 2, 3)
     | TupleAccess of tuple:Expr * index:int  // Tuple access: t.0, t.1, etc.
-    | DictLiteral of valueType:Type * entries:(string * Expr) list  // Dict { key = value; ... }
+    | DictLiteral of keyType:Type * valueType:Type * entries:(Expr * Expr) list  // Dict { key: value, ... }
     | RecordLiteral of reference:RecordReference * fields:(string * Expr) list
     | RecordUpdate of record:Expr * updates:(string * Expr) list      // { record with x = 1, y = 2 }
     | RecordAccess of record:Expr * fieldName:string                  // p.x, p.y

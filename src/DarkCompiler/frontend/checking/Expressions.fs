@@ -123,7 +123,7 @@ let rec internal checkExprWithParamNamesAndSumTypeNames
         | TypeApp (_, _, args) -> args |> NonEmptyList.toList |> tryChildren
         | TupleLiteral elements
         | ListLiteral elements -> tryChildren elements
-        | DictLiteral (_, entries) -> entries |> List.map snd |> tryChildren
+        | DictLiteral (_, _, entries) -> entries |> List.collect (fun (key, value) -> [key; value]) |> tryChildren
         | RecordLiteral (_, fields) -> fields |> List.map snd |> tryChildren
         | RecordUpdate (record, fields) -> record :: (fields |> List.map snd) |> tryChildren
         | Constructor (_, _, payload) -> payload |> Option.bind (tryFindCallArguments targetName)
@@ -220,7 +220,7 @@ let rec internal checkExprWithParamNamesAndSumTypeNames
         | BinOp (_, left, right) | Sequence (left, right) -> tryChildren [left; right]
         | If (condition, thenBranch, elseBranch) -> tryChildren [condition; thenBranch; elseBranch]
         | TupleLiteral elements | ListLiteral elements -> tryChildren elements
-        | DictLiteral (_, entries) -> entries |> List.map snd |> tryChildren
+        | DictLiteral (_, _, entries) -> entries |> List.collect (fun (key, value) -> [key; value]) |> tryChildren
         | RecordLiteral (_, fields) -> fields |> List.map snd |> tryChildren
         | RecordUpdate (record, fields) -> record :: (fields |> List.map snd) |> tryChildren
         | Constructor (_, _, payload) -> payload |> Option.bind (tryFindFunctionValueExpectation targetName)
@@ -1244,6 +1244,12 @@ let rec internal checkExprWithParamNamesAndSumTypeNames
                 Error (GenericError $"Attempting to access field '{fieldName}' on non-record type {typeToString other}"))
 
     | Constructor (constructorReference, variantName, payload) ->
+        let expectedType =
+            match constructorReference with
+            | ResolvedAliasConstructor (sourceAlias, _) ->
+                let aliasType = resolveAliasTargetType aliasReg (TRecord (sourceAlias, []))
+                Some (expectedType |> Option.bind (fun expected -> reconcileTypes (Some aliasReg) aliasType expected) |> Option.defaultValue aliasType)
+            | _ -> expectedType
         // Look up the variant to find its type and expected payload
         let expectedVariant =
             match constructorReference, expectedType with
@@ -1424,52 +1430,44 @@ let rec internal checkExprWithParamNamesAndSumTypeNames
     | Match (scrutinee, cases) ->
         CheckMatches.check checkExpr sumTypeNames indexedSumTypeReg env typeReg variantLookup genericFuncReg warningSettings moduleRegistry aliasReg expectedType scrutinee cases
 
-    | DictLiteral (_, entries) ->
-        let duplicateKey =
+    | DictLiteral (_, _, entries) ->
+        let duplicateStringKey =
             entries
-            |> List.fold (fun (seen, duplicate) (key, _) ->
-                match duplicate with
-                | Some _ -> (seen, duplicate)
-                | None when Set.contains key seen -> (seen, Some key)
-                | None -> (Set.add key seen, None)) (Set.empty, None)
-            |> snd
-
-        match duplicateKey with
-        | Some key ->
-            Error (GenericError $"Cannot add two dictionary entries with the same key `{key}`")
+            |> List.choose (function StringLiteral key, _ -> Some key | _ -> None)
+            |> List.countBy id
+            |> List.tryPick (fun (key, count) -> if count > 1 then Some key else None)
+        match duplicateStringKey with
+        | Some key -> Error (GenericError $"Cannot add two dictionary entries with the same key `{key}`")
         | None ->
-            let expectedValueType =
-                match expectedType with
-                | Some (TDict (TString, valueType)) -> Some valueType
-                | _ -> None
-
-            let finish valueType checkedEntries =
-                let dictType = TDict (TString, valueType)
-                match expectedType with
-                | Some expected ->
-                    match reconcileTypes (Some aliasReg) expected dictType with
-                    | Some reconciled -> Ok (reconciled, DictLiteral (valueType, checkedEntries))
-                    | None -> Error (TypeMismatch (expected, dictType, "Dict literal"))
-                | None -> Ok (dictType, DictLiteral (valueType, checkedEntries))
-
-            match entries with
-            | [] ->
-                finish (Option.defaultValue (TVar "dictValue") expectedValueType) []
-            | (firstKey, firstValue) :: rest ->
-                checkExpr firstValue env typeReg variantLookup genericFuncReg warningSettings moduleRegistry aliasReg expectedValueType
-                |> Result.bind (fun (valueType, checkedFirst) ->
-                    let rec checkRemaining remaining acc =
-                        match remaining with
-                        | [] -> Ok (List.rev acc)
-                        | (key, value) :: tail ->
-                            checkExpr value env typeReg variantLookup genericFuncReg warningSettings moduleRegistry aliasReg None
-                            |> Result.bind (fun (actualType, checkedValue) ->
-                                match reconcileTypes (Some aliasReg) valueType actualType with
-                                | Some _ -> checkRemaining tail ((key, checkedValue) :: acc)
-                                | None ->
-                                    Error (GenericError $"dict values must have one type: key `{key}` has {typeToString actualType}, expected {typeToString valueType}"))
-                    checkRemaining rest [(firstKey, checkedFirst)]
-                    |> Result.bind (finish valueType))
+            let initialKey, initialValue =
+                match expectedType |> Option.map (resolveType aliasReg) with
+                | Some (TDict (key, value)) -> key, value
+                | _ -> TVar "dictKey", TVar "dictValue"
+            let check value expected =
+                let hint = match expected with TVar _ -> None | _ -> Some expected
+                checkExpr value env typeReg variantLookup genericFuncReg warningSettings moduleRegistry aliasReg hint
+            let rec checkEntries keyType valueType remaining checkedEntries =
+                match remaining with
+                | [] ->
+                    let dictType = TDict (keyType, valueType)
+                    match expectedType with
+                    | Some expected when Option.isNone (reconcileTypes (Some aliasReg) expected dictType) ->
+                        Error (TypeMismatch (expected, dictType, "Dict literal"))
+                    | _ -> Ok (dictType, DictLiteral (keyType, valueType, List.rev checkedEntries))
+                | (key, value) :: tail ->
+                    check key keyType
+                    |> Result.bind (fun (actualKey, checkedKey) ->
+                        check value valueType
+                        |> Result.mapError (fun error ->
+                            match error with
+                            | TypeMismatch _ -> GenericError "dict values must have one type"
+                            | _ -> error)
+                        |> Result.bind (fun (actualValue, checkedValue) ->
+                            match reconcileTypes (Some aliasReg) keyType actualKey, reconcileTypes (Some aliasReg) valueType actualValue with
+                            | Some nextKey, Some nextValue -> checkEntries nextKey nextValue tail ((checkedKey, checkedValue) :: checkedEntries)
+                            | None, _ -> Error (GenericError "dict keys must have one type")
+                            | _, None -> Error (GenericError "dict values must have one type")))
+            checkEntries initialKey initialValue entries []
 
     | ListLiteral elements ->
         // Type-check elements and infer element type from first element
