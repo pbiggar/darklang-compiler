@@ -185,11 +185,11 @@ groups:
     Implementation method signature checking: supported
     Competing implementation rejection: supported
     Runtime trait lookup:
-      status: missing
-      notes: Implementation selection must finish during compilation.
+      status: excluded
+      notes: Intentionally unsupported. Trait implementation selection finishes during compilation; runtime dispatch is outside the compiler's language model.
     Newest-implementation-wins dispatch:
-      status: missing
-      notes: The compiler rejects ambiguous implementations instead of choosing the latest at runtime.
+      status: excluded
+      notes: Intentionally unsupported. The compiler rejects ambiguous implementations; it does not select the newest implementation at runtime.
     Trait effect ceilings:
       status: missing
       notes: Trait method permission ceilings are not enforced by the static trait model.
@@ -258,14 +258,14 @@ groups:
         types may differ. Result error types must match; Builtin.unwrap retains its separate raising behavior.
   Reflection and dynamic execution:
     Runtime expression evaluation:
-      status: missing
-      notes: No interpreter-style evaluation of arbitrary source/AST at runtime.
+      status: excluded
+      notes: Intentionally unsupported. The compiler does not evaluate arbitrary source or AST at runtime.
     Runtime function lookup by name:
-      status: missing
-      notes: No general runtime lookup and invocation of program functions by string name.
+      status: excluded
+      notes: Intentionally unsupported. The compiler does not provide general runtime lookup and invocation of program functions by string name.
     Runtime program reflection:
-      status: missing
-      notes: The compiler's compile-time metadata is not an interpreter runtime program model.
+      status: excluded
+      notes: Intentionally unsupported. The compiler does not expose a runtime program reflection model; its metadata is used during compilation.
   Test declarations:
     Named test declaration parsing: supported
     Named test extraction: supported

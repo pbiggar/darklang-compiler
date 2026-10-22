@@ -61,6 +61,21 @@ class CompactLedger(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'Explain capability gap'):
             ledger.compact(self.value, self.root)
 
+    def test_excluded_capabilities_are_counted_separately_from_missing(self):
+        path = self.root / 'porting/language-features.yaml'
+        path.write_text(yaml.safe_dump(dict(schema=2, groups=dict(runtime=dict(
+            reflection=dict(status='excluded', notes='Intentionally unsupported.'),
+            async_calls=dict(status='missing', notes='Not implemented yet.'))))))
+        outputs = ledger.compact(self.value, self.root)
+        self.assertEqual(outputs[ledger.OUTPUT]['features'], {'excluded': 1, 'missing': 1})
+        self.assertIn('1 excluded', ledger.markdown(outputs[ledger.OUTPUT]))
+
+    def test_excluded_capability_requires_explanation(self):
+        path = self.root / 'porting/language-features.yaml'
+        path.write_text(yaml.safe_dump(dict(schema=2, groups=dict(runtime=dict(reflection='excluded')))))
+        with self.assertRaisesRegex(ValueError, 'Explain capability gap'):
+            ledger.compact(self.value, self.root)
+
 
 if __name__ == '__main__':
     unittest.main()

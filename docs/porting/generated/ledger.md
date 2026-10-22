@@ -6,11 +6,11 @@ Interpreter revision: `e76430be5cd9f6b77ed255430dc34a1b58dd8fc4`.
 
 | Area | Status counts |
 | --- | --- |
-| [features](../../../porting/language-features.yaml) | 197 supported, 15 missing, 2 partial |
+| [features](../../../porting/language-features.yaml) | 197 supported, 10 missing, 2 partial, 5 excluded |
 | [parser](../../../porting/parser.yaml) | 30 supported, 1 partial |
 | [stdlib](../../../porting/generated/stdlib.yaml) | 834 different, 569 missing, 595 identical |
 | [packages](../../../porting/generated/packages.yaml) | 3709 missing, 5 identical, 41 different |
 | [builtins](../../../porting/generated/builtins.yaml) | 79 present, 169 missing, 533 unassessed |
 | [tests](../../../porting/generated/tests.yaml) | 554 enabled, 1584 unmapped, 10 ambiguous, 83 disabled, 128 partial |
 
-StdLib and package states compare declaration source, not behavior. Builtin presence identifies a binding, not behavioral parity. Enabled tests have not necessarily been executed in this checkout. Packages exclude StdLib; all counts refer to upstream items only.
+Excluded capabilities are intentional compiler differences, not pending porting work. StdLib and package states compare declaration source, not behavior. Builtin presence identifies a binding, not behavioral parity. Enabled tests have not necessarily been executed in this checkout. Packages exclude StdLib; all counts refer to upstream items only.
