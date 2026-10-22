@@ -443,11 +443,11 @@ def capability_rows(root, filename):
     for group, rows in value['groups'].items():
         for name, row in rows.items():
             state = row if isinstance(row, str) else row.get('status')
-            if state not in {'supported', 'partial', 'missing', 'unassessed'}:
+            if state not in {'supported', 'partial', 'missing', 'unassessed', 'excluded'}:
                 raise ValueError('Invalid capability status: ' + name)
             if isinstance(row, dict) and (set(row) - {'status', 'notes'} or not row.get('notes')):
                 raise ValueError('Invalid capability notes: ' + name)
-            if state in {'partial', 'missing'} and not isinstance(row, dict):
+            if state in {'partial', 'missing', 'excluded'} and not isinstance(row, dict):
                 raise ValueError('Explain capability gap: ' + name)
     return value['groups']
 
@@ -546,7 +546,8 @@ def markdown(summary):
         if name in ('features', 'parser'):
             path = '../../../porting/' + ('language-features.yaml' if name == 'features' else 'parser.yaml')
         lines.append('| [' + name + '](' + path + ') | ' + ', '.join(str(n) + ' ' + state for state, n in summary[name].items()) + ' |')
-    lines += ['', 'StdLib and package states compare declaration source, not behavior. '
+    lines += ['', 'Excluded capabilities are intentional compiler differences, not pending porting work. '
+              'StdLib and package states compare declaration source, not behavior. '
               'Builtin presence identifies a binding, not behavioral parity. '
               'Enabled tests have not necessarily been executed in this checkout. '
               'Packages exclude StdLib; all counts refer to upstream items only.', '']
