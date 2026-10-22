@@ -28,6 +28,125 @@ let rec drop count list =
     | _ :: tail -> drop (count - 1) tail
     | [] -> Crash.crash "Function prefix exceeds its argument count"
 
+(* Allocate every callee parameter, including parameters absent from its value
+   signature. The shared state keeps partial-call variables connected to later
+   uses and gives separate applications independent identities. *)
+let[@warning "-4"] instantiateSignature (signature : functionSignature) symbols
+    =
+  if signature.typeParams = [] then (signature, symbols)
+  else
+    let variables, symbols =
+      WrittenCheckingState.freshenType StringOrder.Set.empty
+        (AST.TTuple (List.map (fun name -> AST.TVar name) signature.typeParams))
+        symbols
+    in
+    let variables =
+      match variables with
+      | AST.TTuple variables -> variables
+      | _ -> Crash.crash "Freshening changed the signature parameter tuple"
+    in
+    let substitution =
+      M.of_list (List.combine signature.typeParams variables)
+    in
+    let apply = Types.applySubst substitution in
+    let typeParams =
+      List.map
+        (function
+          | AST.TInferenceVar (_, name) -> name
+          | _ -> Crash.crash "Callee parameter was not freshened")
+        variables
+    in
+    ( {
+        signature with
+        typeParams;
+        parameters = List.map apply signature.parameters;
+        return = apply signature.return;
+        bounds =
+          List.map
+            (fun (name, args) -> (name, List.map apply args))
+            signature.bounds;
+      },
+      symbols )
+
+let makeCall id types args =
+  if types = [] then C.Call (id, args)
+  else C.TypeApp (id, C.checkedTypeArgs types, args)
+
+(* Supplied expressions run once, in order, when the partial is constructed. *)
+let buildPartial id types remaining return arguments symbols =
+  let captures, symbols =
+    List.fold_left
+      (fun (reversed, symbols) (index, argument) ->
+        let id, symbols =
+          WrittenCheckingState.allocateBinding
+            ("__partial_capture_" ^ string_of_int index)
+            symbols
+        in
+        ((id, argument) :: reversed, symbols))
+      ([], symbols)
+      (List.mapi (fun index argument -> (index, argument)) arguments)
+  in
+  let captures = List.rev captures in
+  let parameters, symbols =
+    List.fold_left
+      (fun (reversed, symbols) (index, typ) ->
+        let id, symbols =
+          WrittenCheckingState.allocateBinding
+            ("__partial_arg_" ^ string_of_int index)
+            symbols
+        in
+        let parameter : C.lambdaParameter =
+          { C.pattern = C.LPVariable id; typ = C.checkedType typ }
+        in
+        ((id, parameter) :: reversed, symbols))
+      ([], symbols)
+      (List.mapi (fun index typ -> (index, typ)) remaining)
+  in
+  let parameters = List.rev parameters in
+  let body =
+    makeCall id types
+      (NonEmptyList.fromList
+         (List.map (fun (id, _) -> C.Local id) captures
+         @ List.map (fun (id, _) -> C.Local id) parameters))
+  in
+  let lambda =
+    C.Lambda
+      ( NonEmptyList.fromList (List.map snd parameters),
+        Some (C.checkedType return),
+        body )
+  in
+  ( List.fold_right
+      (fun (id, argument) body -> C.Let (C.LPVariable id, argument, body))
+      captures lambda,
+    symbols )
+
+(* A later use can fix a partial's remaining type arguments. Concrete bounds
+   are checked now; the retained TypeApp checks every bound at specialization. *)
+let checkPartialBounds (globals : globals) symbols
+    (signature : functionSignature) types =
+  let substitution = M.of_list (List.combine signature.typeParams types) in
+  List.fold_left
+    (fun result (name, args) ->
+      bind result (fun () ->
+          let args =
+            List.map
+              (fun typ ->
+                WrittenCheckingState.resolve symbols
+                  (Types.applySubst substitution typ))
+              args
+          in
+          let variables =
+            List.fold_left
+              (fun acc typ -> Types.collectTypeVarsInType typ acc)
+              [] args
+          in
+          if List.exists Unification.isInferenceVar variables then Ok ()
+          else
+            TraitResolution.check
+              (C.traitCatalog (WrittenCheckingState.symbols symbols))
+              globals.bounds (name, args)))
+    (Ok ()) signature.bounds
+
 let[@warning "-4"] checkNamed checkExpression checkedLiteral globals locals
     symbols expected range (name : WT.qualifiedFnIdentifier) typeArgs args =
   let check symbols expected expr =
@@ -56,152 +175,8 @@ let[@warning "-4"] checkNamed checkExpression checkedLiteral globals locals
             checkedLiteral expected symbols typ
               (C.GenericFuncRef
                  (signature.id, C.checkedTypeArgs types, C.checkedType typ)))
-  | Some signature
-    when args <> [] && List.length args < List.length signature.parameters ->
-      let givenTypeArgs =
-        if typeArgs = [] && Option.is_some signature.traitMethod then
-          bind
-            (ResultList.traverse
-               (fun arg ->
-                 map (fun (typ, _, _) -> typ) (check symbols None arg))
-               args)
-            (fun actual ->
-              Unification.inferTypeArgs signature.typeParams
-                (take (List.length args) signature.parameters)
-                actual
-                (Some
-                   (AST.TFunction
-                      ( drop (List.length args) signature.parameters,
-                        signature.return )))
-                expected)
-        else
-          ResultList.traverse
-            (resolveWrittenType globals.allowInternal globals.types
-               globals.modulePath globals.typeParams)
-            typeArgs
-      in
-      bind givenTypeArgs (fun givenTypeArgs ->
-          if List.length givenTypeArgs <> List.length signature.typeParams then
-            Error
-              ("Partial application of generic function '" ^ name.WT.fn.WT.name
-             ^ "' requires explicit type arguments")
-          else
-            let substitution =
-              M.of_list (List.combine signature.typeParams givenTypeArgs)
-            in
-            let concreteParameters =
-              List.map (Types.applySubst substitution) signature.parameters
-            and concreteReturn =
-              Types.applySubst substitution signature.return
-            in
-            let arguments =
-              List.fold_left
-                (fun result (arg, typ) ->
-                  bind result (fun (reversed, symbols) ->
-                      map
-                        (fun (_, arg, symbols) -> (arg :: reversed, symbols))
-                        (check symbols (Some typ) arg)))
-                (Ok ([], symbols))
-                (List.combine args (take (List.length args) concreteParameters))
-            in
-            bind arguments (fun (reversed, symbols) ->
-                let captured, symbols =
-                  List.fold_left
-                    (fun (reversed, symbols) (index, argument) ->
-                      let id, symbols =
-                        WrittenCheckingState.allocateBinding
-                          ("__partial_capture_" ^ string_of_int index)
-                          symbols
-                      in
-                      ((id, argument) :: reversed, symbols))
-                    ([], symbols)
-                    (List.mapi
-                       (fun index value -> (index, value))
-                       (List.rev reversed))
-                in
-                let captured = List.rev captured
-                and remainingTypes =
-                  drop (List.length args) concreteParameters
-                in
-                let parameters, symbols =
-                  List.fold_left
-                    (fun (reversed, symbols) (index, typ) ->
-                      let id, symbols =
-                        WrittenCheckingState.allocateBinding
-                          ("__partial_arg_" ^ string_of_int index)
-                          symbols
-                      in
-                      let param : C.lambdaParameter =
-                        { C.pattern = C.LPVariable id; typ = C.checkedType typ }
-                      in
-                      ((id, param) :: reversed, symbols))
-                    ([], symbols)
-                    (List.mapi
-                       (fun index value -> (index, value))
-                       remainingTypes)
-                in
-                let parameters = List.rev parameters in
-                match NonEmptyList.tryFromList (List.map snd parameters) with
-                | None ->
-                    Error "Partial application requires remaining parameters"
-                | Some lambdaParameters ->
-                    let arguments =
-                      NonEmptyList.fromList
-                        (List.map (fun (id, _) -> C.Local id) captured
-                        @ List.map (fun (id, _) -> C.Local id) parameters)
-                    in
-                    let body =
-                      if signature.typeParams = [] then
-                        C.Call (signature.id, arguments)
-                      else
-                        C.TypeApp
-                          ( signature.id,
-                            List.map C.checkedType givenTypeArgs,
-                            arguments )
-                    in
-                    let lambda =
-                      C.Lambda
-                        ( lambdaParameters,
-                          Some (C.checkedType concreteReturn),
-                          body )
-                    in
-                    let partial =
-                      List.fold_right
-                        (fun (id, argument) expr ->
-                          C.Let (C.LPVariable id, argument, expr))
-                        captured lambda
-                    in
-                    checkedLiteral expected symbols
-                      (AST.TFunction (remainingTypes, concreteReturn))
-                      partial))
   | Some signature ->
-      let signature =
-        if signature.typeParams = [] then signature
-        else
-          let scope = String.concat "." (qualifiedFnName name) in
-          let freshParams, renaming =
-            CheckingDiagnostics.freshenTypeParams (Some scope)
-              signature.typeParams
-          in
-          {
-            signature with
-            typeParams = freshParams;
-            parameters =
-              List.map
-                (CheckingDiagnostics.applyTypeVarRenaming renaming)
-                signature.parameters;
-            return =
-              CheckingDiagnostics.applyTypeVarRenaming renaming signature.return;
-            bounds =
-              List.map
-                (fun (name, args) ->
-                  ( name,
-                    List.map
-                      (CheckingDiagnostics.applyTypeVarRenaming renaming)
-                      args ))
-                signature.bounds;
-          }
-      in
+      let signature, symbols = instantiateSignature signature symbols in
       let normalizedArgs =
         match (signature.parameters, args) with
         | [], [ WT.EUnit _ ] -> []
@@ -228,13 +203,22 @@ let[@warning "-4"] checkNamed checkExpression checkedLiteral globals locals
           ("Function '" ^ name.WT.fn.WT.name ^ "' expects "
           ^ string_of_int (List.length signature.typeParams)
           ^ " type arguments")
-      else if List.length normalizedArgs <> List.length signature.parameters
-      then
+      else if List.length normalizedArgs > List.length signature.parameters then
         Error
           ("Function '" ^ name.WT.fn.WT.name ^ "' expects "
           ^ string_of_int (List.length signature.parameters)
           ^ " arguments")
       else
+        let suppliedParameters =
+          take (List.length normalizedArgs) signature.parameters
+        and remainingParameters =
+          drop (List.length normalizedArgs) signature.parameters
+        in
+        let applicationReturn =
+          match remainingParameters with
+          | [] -> signature.return
+          | remaining -> AST.TFunction (remaining, signature.return)
+        in
         let explicitArgs =
           ResultList.traverse
             (resolveWrittenType globals.allowInternal globals.types
@@ -257,7 +241,7 @@ let[@warning "-4"] checkNamed checkExpression checkedLiteral globals locals
                           ((typ, actual) :: pairs, symbols)
                       | Error _ -> (pairs, symbols)))
                 ([], symbols)
-                (List.combine normalizedArgs signature.parameters)
+                (List.combine normalizedArgs suppliedParameters)
             in
             let inferred =
               match List.rev pairs with
@@ -266,7 +250,7 @@ let[@warning "-4"] checkNamed checkExpression checkedLiteral globals locals
                   Result.to_option
                     (Unification.inferTypeArgs signature.typeParams
                        (List.map fst pairs) (List.map snd pairs)
-                       (Some signature.return) expected)
+                       (Some applicationReturn) expected)
             in
             (inferred, symbols)
         in
@@ -296,7 +280,7 @@ let[@warning "-4"] checkNamed checkExpression checkedLiteral globals locals
                   let inferredPrefix =
                     Unification.inferTypeArgs signature.typeParams
                       (take (List.length prefix) signature.parameters)
-                      prefix (Some signature.return) expected
+                      prefix (Some applicationReturn) expected
                   in
                   let inferred =
                     match (inferredPrefix, lookaheadTypeArgs) with
@@ -334,7 +318,7 @@ let[@warning "-4"] checkNamed checkExpression checkedLiteral globals locals
             else
               bind
                 (checkArgs givenTypeArgs symbols []
-                   (List.combine normalizedArgs signature.parameters))
+                   (List.combine normalizedArgs suppliedParameters))
                 (fun (checkedArgs, symbols) ->
                   let rec abortingArgument preceding = function
                     | [] -> None
@@ -383,8 +367,8 @@ let[@warning "-4"] checkNamed checkExpression checkedLiteral globals locals
                         else if givenTypeArgs <> [] then Ok givenTypeArgs
                         else
                           Unification.inferTypeArgs signature.typeParams
-                            signature.parameters inferenceTypes
-                            (Some signature.return) expected
+                            suppliedParameters inferenceTypes
+                            (Some applicationReturn) expected
                       in
                       let inferred =
                         bind inferred (fun types ->
@@ -430,9 +414,13 @@ let[@warning "-4"] checkNamed checkExpression checkedLiteral globals locals
                               signature inferredTypeArgs
                           in
                           bind
-                            (WrittenTraitSupport.checkSignatureBounds globals
-                               (WrittenCheckingState.symbols symbols)
-                               signature inferredTypeArgs)
+                            (if remainingParameters <> [] then
+                               checkPartialBounds globals symbols signature
+                                 inferredTypeArgs
+                             else
+                               WrittenTraitSupport.checkSignatureBounds globals
+                                 (WrittenCheckingState.symbols symbols)
+                                 signature inferredTypeArgs)
                             (fun () ->
                               let substitution =
                                 M.of_list
@@ -442,9 +430,9 @@ let[@warning "-4"] checkNamed checkExpression checkedLiteral globals locals
                               let parameterTypes =
                                 List.map
                                   (Types.applySubst substitution)
-                                  signature.parameters
+                                  suppliedParameters
                               and returnType =
-                                Types.applySubst substitution signature.return
+                                Types.applySubst substitution applicationReturn
                               in
                               let pairs =
                                 List.mapi
@@ -532,7 +520,12 @@ let[@warning "-4"] checkNamed checkExpression checkedLiteral globals locals
                                                        trait_.traitParams)
                                                     inferredTypeArgs
                                                 in
-                                                if
+                                                if remainingParameters <> []
+                                                then
+                                                  Ok
+                                                    ( signature.id,
+                                                      inferredTypeArgs )
+                                                else if
                                                   List.exists
                                                     Unification.containsTVar
                                                     traitArgs
@@ -556,15 +549,21 @@ let[@warning "-4"] checkNamed checkExpression checkedLiteral globals locals
                                                     inferredTypeArgs)
                                       in
                                       bind target (fun (id, typeArgs) ->
-                                          let call =
-                                            if typeArgs = [] then
-                                              C.Call (id, args)
-                                            else
-                                              C.TypeApp
-                                                ( id,
-                                                  List.map C.checkedType
-                                                    typeArgs,
-                                                  args )
+                                          let call, symbols =
+                                            match remainingParameters with
+                                            | [] ->
+                                                ( makeCall id typeArgs args,
+                                                  symbols )
+                                            | remaining ->
+                                                buildPartial id typeArgs
+                                                  (List.map
+                                                     (Types.applySubst
+                                                        substitution)
+                                                     remaining)
+                                                  (Types.applySubst substitution
+                                                     signature.return)
+                                                  (NonEmptyList.toList args)
+                                                  symbols
                                           in
                                           checkedLiteral expected symbols
                                             returnType call))))))

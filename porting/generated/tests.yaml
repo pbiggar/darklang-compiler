@@ -2501,7 +2501,6 @@ sources:
       - upstream/language/custom-data/values.dark#L57
       - upstream/language/custom-data/values.dark#L60
       - upstream/language/custom-data/values.dark#L61
-      reason: line-gate
       notes: Only part of the upstream assertion group has a counterpart.
   packages/darklang/tests/languageTools/atRestTypeChecker.dark:
     Darklang.LanguageTools.AtRestTypeChecker.Tests.Ambiguity.discardedEmptyListChecks: unmapped

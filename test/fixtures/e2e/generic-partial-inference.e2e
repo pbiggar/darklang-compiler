@@ -1,0 +1,53 @@
+// Named generic partials share inference with their remaining function type.
+let partialKeep<'a> (x: a) (_y: a) : a = x
+let partialFirst<'a, 'b> (x: a) (_y: b) : a = x
+let partialUse (fn: Int64 -> Int64) : Int64 = fn 2L
+let partialUsePair (fn: (Int64 * Int64) -> Int64) : Int64 = fn (1L, 2L)
+let partialTuple<'a, 'b> (fn: a -> b) (value: a) : b = fn value
+let partialThree<'a> (x: a) (_y: a) (_z: a) : a = x
+let partialWithin<'a> (value: a) : a = let fn = partialKeep value in fn value
+let partialTrace<'a> (label: String) (value: a) : a =
+  let _ = Builtin.print label in value
+let partialApply<'a, 'b> (fn: a -> b) (value: a) : b = fn value
+let partialNeedsString (fn: String -> Int64) : Int64 = fn "hello"
+let partialReturning () : (Int64 -> Int64) = partialKeep 1L
+let partialPhantom<'a, 'b> (x: a) (_y: a) : a = x
+
+trait PartialShow<'a> =
+  let describe (value: a) : String
+impl PartialShow for Int64 =
+  let describe (value: Int64) : String = "integer"
+let partialBound<'a: PartialShow> (_seed: Int64) (value: a) : String = PartialShow.describe value
+let partialBoundWithin<'a: PartialShow> (value: a) : String =
+  let fn = partialBound 0L in fn value
+
+(let fn = partialKeep 1L in fn 2L) = 1L
+partialUse (partialKeep 1L) = 1L
+(let fn = partialFirst 1L in fn "hello") = 1L
+(let fn = partialKeep<Int64> 1L in fn 2L) = 1L
+(let a = partialKeep 1L in let b = partialKeep "x" in (a 2L, b "y")) = (1L, "x")
+(let fn = partialThree 1L in let next = fn 2L in next 3L) = 1L
+(let fn = partialKeep [] in fn [1L]) = []
+partialWithin "hello" = "hello"
+(partialReturning ()) 2L = 1L
+partialUsePair (partialTuple (fun (a, b) -> a + b)) = 3L
+(let fn = partialApply partialReturning in let next = fn () in next 2L) = 1L
+(let fn = Stdlib.List.map [1L, 2L] in fn (fun x -> x + 1L)) = [2L, 3L]
+(let fn = Stdlib.List.map [] in fn (fun x -> x + 1L)) = []
+(let fn = partialBound 0L in fn 1L) = "integer"
+partialBoundWithin 1L = "integer"
+(let fn = Stdlib.Add.add 1L in fn 2L) = 3L
+(let target = partialKeep in let fn = target 1L in fn 2L) = 1L
+(let fn = partialThree (partialTrace "a" 1L) (partialTrace "b" 2L) in let _ = partialTrace "c" 0L in (fn 3L, fn 4L)) = stdout="abc(1, 1)\n" stderr="" exact_bytes=true
+
+(let fn = partialKeep 1L in fn "wrong") = compileerror="Expected TInt64, got TString"
+(let fn = partialKeep<Int64> "wrong" in fn 1L) = compileerror="Expected TInt64, got TString"
+(let fn = partialKeep<Int64, String> 1L in fn 2L) = compileerror="expects 1 type arguments"
+partialNeedsString (partialKeep 1L) = compileerror="conflicting inferences: Int64 vs String"
+(let fn = partialBound 0L in fn "wrong") = compileerror="No implementation of trait"
+(let fn = partialBound<String> 0L in fn "wrong") = compileerror="No implementation of trait"
+(let fn = partialPhantom<Int64> 1L in fn 2L) = compileerror="expects 2 type arguments"
+
+module PartialQualified
+let keep<'a> (x: a) (_y: a) : a = x
+(let fn = PartialQualified.keep 1L in fn 2L) = 1L
