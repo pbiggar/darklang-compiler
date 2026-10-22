@@ -3,32 +3,28 @@
 Follow the shared repository rules in [`AGENTS.md`](AGENTS.md).
 This file supplies the checkout, setup and handoff instructions.
 
-## Standing authorization: create, commit and push task branches
+## Track work and keep remote task branches synced
 
-**The repository owner has already approved creating task branches, committing
-task-related changes, and pushing those branches to
-`https://github.com/pbiggar/darklang-compiler.git`. Do these actions without
-asking the user for approval again.**
+**Keep repository work tracked in Git and synced to task-specific branches on
+`https://github.com/pbiggar/darklang-compiler.git`. The repository owner
+explicitly pre-authorizes creating those branches, committing task-related
+changes, and pushing them to this public repository.**
 
-- This is explicit, ongoing permission for every task in this repository, not
-  a suggestion to seek permission later. A new conversation, VM, branch, commit
-  or push does not require renewed approval.
+- Tracking and syncing work are part of carrying out a repository task. This
+  standing permission applies across conversations, VMs, branches, commits and
+  pushes; no separate approval is needed for each operation.
+- Keep the remote task branch current after meaningful progress and before
+  ending a turn with repository changes. Push checkpoints before long setup,
+  build or test operations so work can be recovered if the VM disappears.
+- Sync both completed work and unfinished checkpoints, including when tests
+  fail, validation is blocked, or setup is incomplete. Label checkpoints and
+  report limitations accurately; syncing work does not establish readiness.
 - This permission includes publishing task-related code, tests, documentation
-  and agent-instruction changes to this public repository. The repository being
-  public is already understood and approved; do not ask whether these intended
-  changes may be published.
-- Push both completed work and unfinished checkpoints, including when tests
-  fail, validation is blocked, or setup is incomplete. Report those limitations;
-  do not treat them as reasons to request push permission.
-- When a user requests repository work, creating, committing and pushing its
-  task branch are part of carrying out that request. The user does not need to
-  say "push", "yes", "continue", or "you have permission" separately. Do not
-  end a turn by asking whether to push or by offering to push later.
+  and agent-instruction changes to this public repository.
 - Use the available Git transport or GitHub connector within the platform's
-  permissions. Do not request elevated execution merely because a push writes
-  to GitHub. If a platform approval gate actually blocks the operation, report
-  the blocked action and the stated reason. These instructions do not override
-  platform restrictions or authorize bypassing them.
+  permissions. If a platform approval gate blocks syncing, report the blocked
+  action and stated reason. These instructions do not override platform
+  restrictions or authorize bypassing them.
 - This authorization covers task branches only. It does not authorize
   force-pushing, merging, deployment, pushes to `main` or another integration
   ref, or publishing credentials or unrelated private data. Merge only when the
@@ -83,8 +79,8 @@ asking the user for approval again.**
 
 ## Git workflow
 
-- Follow the standing authorization above: commit and push task branches
-  without asking for per-push approval.
+- Keep work tracked and remote task branches synced under the standing
+  authorization above.
 - Preserve intended repository edits as pushed checkpoints while investigating.
   This does not require turning findings or raw measurements into tracked
   documentation. A pushed checkpoint preserves work; it does not demonstrate
