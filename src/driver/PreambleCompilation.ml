@@ -152,8 +152,12 @@ let buildPreambleContextFromAnalysis (stdlib : X.stdlibResult)
   let tops =
     List.map (fun func -> CheckedAST.FunctionDef func) functions @ items
   in
-  let* () = DictionaryFunctionKeys.check stdlib.X.context.X.keyFunctions symbols analysis.X.typeCheckEnv.Types.aliasReg
-    analysis.X.typeCheckEnv.Types.indexedTypeReg analysis.X.typeCheckEnv.Types.indexedSumTypeReg tops in
+  let* () =
+    DictionaryFunctionKeys.check stdlib.X.context.X.keyFunctions symbols
+      analysis.X.typeCheckEnv.Types.aliasReg
+      analysis.X.typeCheckEnv.Types.indexedTypeReg
+      analysis.X.typeCheckEnv.Types.indexedSumTypeReg tops
+  in
   let symbols, tops =
     CheckedMaterializeHelpers.materializeEqHelpersInTopLevelsWithIndexedSums
       symbols analysis.X.typeCheckEnv.Types.aliasReg
@@ -193,10 +197,17 @@ let buildPreambleContextFromAnalysis (stdlib : X.stdlibResult)
   let context =
     {
       context with
-      X.keyFunctions = List.fold_left (fun functions -> function
-        | CheckedAST.FunctionDef fn when not (String.starts_with ~prefix:"Darklang.Stdlib." fn.CheckedAST.name) ->
-            FunctionIdMap.add fn.CheckedAST.id fn functions
-        | _ -> functions) stdlib.X.context.X.keyFunctions items;
+      X.keyFunctions =
+        List.fold_left
+          (fun functions -> function
+            | CheckedAST.FunctionDef fn
+              when not
+                     (String.starts_with ~prefix:"Darklang.Stdlib."
+                        fn.CheckedAST.name) ->
+                FunctionIdMap.add fn.CheckedAST.id fn functions
+            | CheckedAST.FunctionDef _ | CheckedAST.TypeDef _
+            | CheckedAST.Expression _ | CheckedAST.ValueDef _ -> functions)
+          stdlib.X.context.X.keyFunctions items;
       X.writtenEnvironment =
         Option.map
           (WrittenChecking.includeAllocatedFunctions conversion.P.symbols)

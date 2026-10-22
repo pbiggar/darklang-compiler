@@ -238,7 +238,9 @@ let specName name types =
   if types = [] then name
   else name ^ "_" ^ String.concat "_" (List.map typeToMangledName types)
 
-let isGenericKeyIntrinsicName name = name = "__hash" || name = "__key_eq" || name = "__dict_check_key"
+let isGenericKeyIntrinsicName name =
+  name = "__hash" || name = "__key_eq" || name = "__dict_check_key"
+
 let exprArgsToList = NonEmptyList.toList
 
 let exprArgsFromList args =

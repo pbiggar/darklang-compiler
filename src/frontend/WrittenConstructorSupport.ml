@@ -90,9 +90,17 @@ let check checkExpression literal globals locals symbols expected
                   match types with
                   | None -> Ok None
                   | Some types ->
-                      let context, symbols = WrittenCheckingState.freshenType S.empty (AST.TTuple types) symbols in
-                      let contexts = match context with AST.TTuple values -> values | _ -> Crash.crash "Constructor context tuple" in
-                      bind (checkFields symbols fields contexts) (fun (checked, _) ->
+                      let context, symbols =
+                        WrittenCheckingState.freshenType S.empty
+                          (AST.TTuple types) symbols
+                      in
+                      let contexts =
+                        match context with
+                        | AST.TTuple values -> values
+                        | _ -> Crash.crash "Constructor context tuple"
+                      in
+                      bind (checkFields symbols fields contexts)
+                        (fun (checked, _) ->
                           map Option.some
                             (inferArgs canonical entry.params types checked))))
       in
@@ -130,8 +138,15 @@ let check checkExpression literal globals locals symbols expected
                         ^ " fields")
                   | Some (_, variant) ->
                       bind (variantTypes entry variant) (fun types ->
-                          let context, symbols = WrittenCheckingState.freshenType S.empty (AST.TTuple types) symbols in
-                          let contexts = match context with AST.TTuple values -> values | _ -> Crash.crash "Constructor context tuple" in
+                          let context, symbols =
+                            WrittenCheckingState.freshenType S.empty
+                              (AST.TTuple types) symbols
+                          in
+                          let contexts =
+                            match context with
+                            | AST.TTuple values -> values
+                            | _ -> Crash.crash "Constructor context tuple"
+                          in
                           bind (checkFields symbols fields contexts)
                             (fun (checked, _) ->
                               map

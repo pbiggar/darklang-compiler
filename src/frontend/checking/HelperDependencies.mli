@@ -12,6 +12,7 @@ type compareHelperGenerationState = {
 }
 
 val ensureEqHelperForType :
+  ?key:bool ->
   Types.aliasRegistry ->
   Types.indexedTypeRegistry ->
   Types.variantLookup ->

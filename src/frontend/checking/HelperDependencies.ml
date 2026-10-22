@@ -69,7 +69,7 @@ let sumFields sums name args =
           List.map (Types.applySubst subst) variant.Types.fields)
         info.Types.variants
 
-let collectDirectEqHelperDeps aliases registry lookup sums typ =
+let collectDirectEqHelperDeps ~key aliases registry lookup sums typ =
   let canonical typ =
     ComparisonPlanning.canonicalEqualityType lookup
       (Types.resolveType aliases typ)
@@ -83,8 +83,10 @@ let collectDirectEqHelperDeps aliases registry lookup sums typ =
   let deps =
     match canonical typ with
     | TList inner -> List.filter_map add [ inner ]
-    | TDict (key, value) ->
-        List.filter_map add [ TList (TTuple [ key; value ]) ]
+    | TDict (keyType, value) ->
+        List.filter_map add
+          (if key then [ keyType; value ]
+           else [ TList (TTuple [ keyType; value ]) ])
     | TTuple args -> List.filter_map add args
     | TRecord (name, args) ->
         List.filter_map add (recordFields aliases registry name args)
@@ -97,7 +99,7 @@ let collectDirectEqHelperDeps aliases registry lookup sums typ =
   in
   distinctBy ComparisonPlanning.eqHelperName deps
 
-let rec ensureEqHelperForType aliases registry lookup sums typ
+let rec ensureEqHelperForType ?(key = false) aliases registry lookup sums typ
     (state : eqHelperGenerationState) : eqHelperGenerationState =
   let canonical typ =
     ComparisonPlanning.canonicalEqualityType lookup
@@ -119,11 +121,16 @@ let rec ensureEqHelperForType aliases registry lookup sums typ
         true
   in
   if
-    (not (ComparisonPlanning.needsEqHelperForResolvedType lookup resolved))
+    (not key)
+    && not (ComparisonPlanning.needsEqHelperForResolvedType lookup resolved)
     || not (known resolved)
   then state
   else
-    let helper = ComparisonPlanning.eqHelperName resolved in
+    let helper =
+      (if key then ComparisonPlanning.keyEqHelperName
+       else ComparisonPlanning.eqHelperName)
+        resolved
+    in
     if M.mem helper state.generated || S.mem helper state.inProgress then state
     else
       let state : eqHelperGenerationState =
@@ -132,13 +139,13 @@ let rec ensureEqHelperForType aliases registry lookup sums typ
       let state =
         List.fold_left
           (fun state typ ->
-            ensureEqHelperForType aliases registry lookup sums typ state)
+            ensureEqHelperForType ~key aliases registry lookup sums typ state)
           state
-          (collectDirectEqHelperDeps aliases registry lookup sums resolved)
+          (collectDirectEqHelperDeps ~key aliases registry lookup sums resolved)
       in
       let left = "__dark_eq_left" and right = "__dark_eq_right" in
       let body =
-        EqualityHelpers.buildEqHelperExpr aliases registry lookup sums
+        EqualityHelpers.buildEqHelperExpr ~key aliases registry lookup sums
           EqualityHelpers.ExpandCurrent resolved (Var left) (Var right)
       in
       let definition : AST.functionDef =
@@ -268,7 +275,7 @@ let rec collectHelperTypes kind aliases expr =
           let selected =
             (match (func, args) with
             | ( Var
-                  ( "__compare" | "__key_eq" | "__sort_precedes"
+                  ( "__compare" | "__sort_precedes"
                   | "Darklang.Stdlib.List.sort" | "Darklang.Stdlib.List.unique"
                     ),
                 [ typ ] )

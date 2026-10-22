@@ -1,5 +1,7 @@
 // Empty containers are keys even when their unoccupied slots have function types.
 let absentFunction () : Stdlib.Option.Option<(Int64 -> Int64)> = None
 let emptyFunctions () : List<(Int64 -> Int64)> = []
+let emptyHigherOrderFunctions () : List<((Int64 -> Int64) -> Int64)> = []
 Stdlib.Dict.get (Dict { (absentFunction ()): "none" }) (absentFunction ()) = Some "none"
 Stdlib.Dict.get (Stdlib.Dict.singleton (emptyFunctions ()) "empty") (emptyFunctions ()) = Some "empty"
+Stdlib.Dict.get (Stdlib.Dict.singleton (emptyHigherOrderFunctions ()) "higher") (emptyHigherOrderFunctions ()) = Some "higher"

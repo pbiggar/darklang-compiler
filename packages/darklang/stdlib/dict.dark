@@ -17,13 +17,27 @@ let __equals<'k, 'v> (left: Dict<k, v>) (right: Dict<k, v>) : Bool =
             true
             (fun equal key value ->
                 if equal then
-                    match Stdlib.Dict.get<k, v> right key with
+                    match Stdlib.Dict.__get<k, v> right key with
                     | None -> false
                     | Some rightValue -> value == rightValue
                 else false)
 
 let singleton (key: 'k) (value: 'v) : Dict<'k, 'v> =
   Stdlib.Dict.set (Dict { }) key value
+
+// A dictionary used as a key compares both its keys and values with key equality.
+let __keyEquals<'k, 'v> (left: Dict<k, v>) (right: Dict<k, v>) : Bool =
+    if Stdlib.Dict.__size<k, v> left != Stdlib.Dict.__size<k, v> right then false
+    else
+        Stdlib.Dict.__foldHelper<k, v, Bool>
+            left
+            true
+            (fun equal key value ->
+                if equal then
+                    match Stdlib.Dict.__get<k, v> right key with
+                    | None -> false
+                    | Some rightValue -> __key_eq<v> value rightValue
+                else false)
 
 let size<'k, 'v> (dict: Dict<k, v>) : Int =
     Stdlib.Int.fromInt64 (Stdlib.Dict.__size<k, v> dict)

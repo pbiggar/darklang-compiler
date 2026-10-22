@@ -1,6 +1,7 @@
 # Dict parity
 
-Current compiler source review: 2026-10-07 at `7154b0ea9c1a3f53d30984ed17b9e0cc5d8f0dce`.
+Dictionary key and value semantics reviewed on 2026-10-22 against interpreter
+`e76430be5cd9f6b77ed255430dc34a1b58dd8fc4`.
 See the [current audit](../current-audit.md) for post-port status and validation.
 Older revision pairs and executed counts below are historical evidence, not
 a fresh test result for this revision.
@@ -14,17 +15,22 @@ which implies `String` keys, and the interpreter-compatible
 ## Key contract
 
 Primitive values, tuples, lists, records, sums, and Dicts can be keys when
-their complete recursive shape is admissible. Functions, streams, Blobs,
-native opaque references, internal raw pointers, and containers that contain
-them are excluded by the Dict key policy. Explicit `RuntimeTypes.Dval` trees
+their occupied payloads are admissible. Public operations reject streams,
+Blobs and containers that contain them. Empty lists and payloadless enum cases
+remain valid even when their type arguments mention a forbidden payload.
+Actual function keys remain an AOT error: function-bearing containers must
+be provably free of functions, including through reusable preamble helpers.
+Explicit `RuntimeTypes.Dval` trees
 are ordinary sums and records and can be structural keys; see
-`dval_dict_lookup.e2e`. Keys use typed structural
-equality. Canonical key ordering drives `toList`, `keys`, rendering, and the
+`dval_dict_lookup.e2e`. Key comparison recursively treats NaNs as the same key
+and equates positive and negative zero. Dictionary values retain ordinary
+equality, so dictionaries with NaN values compare unequal.
+Canonical key ordering drives `toList`, `keys`, rendering, and the
 public traversal functions, so their result does not depend on HAMT shape.
 
 The native HAMT retains scalar hash implementations for `Int64`, `Bool`,
 `String`, and `Blob` internally. Other admitted key types use the collision
-path with structural equality; this preserves results while leaving composite
+path with canonical recursive key comparison; this preserves results while leaving composite
 hashing as a performance opportunity. Both native backends carry the concrete
 key release plan through Dict ownership helpers.
 
@@ -33,8 +39,9 @@ key release plan through Dict ownership helpers.
 `empty`, `singleton`, `isEmpty`, `size`, `get`, `set`,
 `setOverridingDuplicates`, `remove`, `member`, `toList`, `keys`, `values`,
 `fromList`, `fromListOverwritingDuplicates`, `merge`, `map`, `iter`, `filter`,
-and `filterMap` preserve their key type. Dict equality compares the ordered `(key, value)` view recursively; canonical
-key ordering supplies deterministic traversal. Public numeric ordering
+and `filterMap` preserve their key type. Dict equality checks key membership
+with key comparison and compares the corresponding values with ordinary equality.
+Canonical key ordering supplies deterministic traversal. Public numeric ordering
 operators reject Dict operands. JSON object conversion remains
 String-keyed by definition and rejects other Dict key types at compile time.
 

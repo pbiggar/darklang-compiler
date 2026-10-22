@@ -612,13 +612,13 @@ let tryParseMangledTypeWithSumTypeNames sumNames mangled =
       (parseType tokens)
   and parseFunction tokens =
     let rec split accumulated = function
-      | [] -> None
-      | "to" :: rest -> Some (List.rev accumulated, rest)
+      | [] -> []
+      | "to" :: rest ->
+          (List.rev accumulated, rest) :: split ("to" :: accumulated) rest
       | token :: rest -> split (token :: accumulated) rest
     in
-    match split [] tokens with
-    | None -> []
-    | Some (parameters, result) ->
+    List.concat_map
+      (fun (parameters, result) ->
         let complete values =
           List.filter_map
             (fun (value, rest) -> if rest = [] then Some value else None)
@@ -631,7 +631,8 @@ let tryParseMangledTypeWithSumTypeNames sumNames mangled =
             List.map
               (fun (result, rest) -> (AST.TFunction (parameters, result), rest))
               results)
-          parameters
+          parameters)
+      (split [] tokens)
   in
   match
     List.filter

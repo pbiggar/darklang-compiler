@@ -24,6 +24,18 @@ let hasPredefinedKeyIntrinsic = function
   | AST.TInt64 | AST.TBool | AST.TFloat64 | AST.TString | AST.TBlob -> true
   | _ -> false
 
+let rec intrinsicallySafeKeyType = function
+  | AST.TUnit | AST.TBool | AST.TInt8 | AST.TInt16 | AST.TInt32 | AST.TInt64
+  | AST.TInt128 | AST.TInt | AST.TUInt8 | AST.TUInt16 | AST.TUInt32
+  | AST.TUInt64 | AST.TUInt128 | AST.TFloat64 | AST.TString | AST.TChar
+  | AST.TDateTime ->
+      true
+  | AST.TTuple types -> List.for_all intrinsicallySafeKeyType types
+  | AST.TList typ -> intrinsicallySafeKeyType typ
+  | AST.TDict (key, value) ->
+      intrinsicallySafeKeyType key && intrinsicallySafeKeyType value
+  | _ -> false
+
 let ordinal id =
   let bits = AST.functionIdValue id in
   Z.to_string
@@ -152,7 +164,9 @@ let collectTypeApps symbols expr =
           if variables then specs else SS.add (name, types) specs
         else if S.isGenericKeyIntrinsicName name then
           match types with
-          | [ typ ] when name <> "__dict_check_key" && (not variables) && hasPredefinedKeyIntrinsic typ ->
+          | [ typ ]
+            when name <> "__dict_check_key" && (not variables)
+                 && hasPredefinedKeyIntrinsic typ ->
               SS.add (name, types) specs
           | _ -> specs
         else SS.add (name, types) specs
@@ -417,17 +431,21 @@ let replaceTypeAppsCore symbols registry expr =
     let wrap = S.wrapWithIgnoredArgEvaluations in
     let key name types args =
       match (name, types) with
+      | "__dict_check_key", [ typ ] when intrinsicallySafeKeyType typ -> (
+          match args with
+          | [ key ] -> Ok key
+          | _ -> Error "Public key check arity")
+      | "__dict_check_key", [ typ ] ->
+          Error
+            ("Public key validation was not materialized: "
+            ^ StructuralFormat.semanticType typ)
       | "__hash", [ typ ] when hasPredefinedKeyIntrinsic typ ->
           Ok (call (S.specName name types) args)
       | "__hash", [ _ ] -> Ok (wrap args (C.Int64Literal 0L))
       | "__key_eq", [ typ ] when hasPredefinedKeyIntrinsic typ ->
           Ok (call (S.specName name types) args)
       | "__key_eq", [ typ ] ->
-          Ok
-            (C.BinOp
-               ( AST.Eq,
-                 call (ComparisonPlanning.compareHelperName typ) args,
-                 C.Int64Literal 0L ))
+          Ok (call (ComparisonPlanning.keyEqHelperName typ) args)
       | _ -> (
           match registry with
           | None ->
@@ -545,9 +563,14 @@ let replaceTypeAppsCore symbols registry expr =
               let args = NonEmptyList.toList arguments in
               let genericKey = S.isGenericKeyIntrinsicName name in
               let unresolvedKey args =
-                if name = "__dict_check_key" then (match args with [key] -> key | _ -> Crash.crash "Public key check arity") else wrap args
-                  (S.unresolvedKeyIntrinsicTypeArgErrorExpr
-                     (resolved "Builtin.crash") name)
+                if name = "__dict_check_key" then
+                  match args with
+                  | [ key ] -> key
+                  | _ -> Crash.crash "Public key check arity"
+                else
+                  wrap args
+                    (S.unresolvedKeyIntrinsicTypeArgErrorExpr
+                       (resolved "Builtin.crash") name)
               in
               let polymorphicComparison args =
                 if name = P.eqHelperDispatchMarker then

@@ -193,6 +193,7 @@ let helperName prefix typ =
    independently of how user-facing diagnostics are formatted.
 *)
 let eqHelperName typ = helperName "__dark_eq_" typ
+let keyEqHelperName typ = helperName "__dark_key_eq_" typ
 
 (*
    Name for a concrete canonical three-way comparison helper.
