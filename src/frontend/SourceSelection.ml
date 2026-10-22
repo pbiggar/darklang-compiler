@@ -91,7 +91,7 @@ let require selected name =
         ^ (if item.excluded then "excluded: " else "blocked: ")
         ^ item.reason ^ ")")
 
-let select ~context ~roots ~sources =
+let select ~context ~roots ~supplements ~sources =
   let rec unique seen = function
     | [] -> Ok ()
     | (path, _) :: rest ->
@@ -100,6 +100,7 @@ let select ~context ~roots ~sources =
   in
   let* () = unique S.empty sources in
   let* () = unique S.empty (List.map (fun path -> (path, ())) roots) in
+  let* () = unique S.empty (List.map (fun path -> (path, ())) supplements) in
   let lookup path =
     match List.assoc_opt path sources with
     | Some source -> Ok source
@@ -244,6 +245,25 @@ let select ~context ~roots ~sources =
   let* chosen, unavailable, contracts, targetFiles =
     selectNodes [] [] [] S.empty originals
   in
+  let claimed =
+    List.fold_left
+      (fun names node -> S.add (kind node.declaration ^ ":" ^ node.name) names)
+      S.empty chosen
+  in
+  let* supplementalSources = ResultList.traverse lookup supplements in
+  let supplementalNodes =
+    List.map2 nodes supplements supplementalSources
+    |> List.concat
+    |> List.filter (fun node ->
+        not (S.mem (kind node.declaration ^ ":" ^ node.name) claimed))
+  in
+  let* supplemental, supplementalUnavailable, supplementalContracts, _ =
+    selectNodes [] [] [] S.empty supplementalNodes
+  in
+  let* () =
+    if supplementalContracts = [] then Ok ()
+    else Error "Supplemental declarations cannot redirect replacements"
+  in
   (* Replacement files may carry compiler-only helpers. Public siblings remain
      owned by their imported declarations and are never pulled in implicitly. *)
   let privateNode (node : node) =
@@ -263,7 +283,8 @@ let select ~context ~roots ~sources =
                    (S.mem
                       (kind node.declaration ^ ":" ^ node.name)
                       originalNames))))
-      (S.elements targetFiles)
+      (S.elements targetFiles
+      |> List.filter (fun file -> not (List.mem file supplements)))
   in
   let* support, supportUnavailable, supportContracts, _ =
     selectNodes [] [] [] S.empty (List.concat support)
@@ -273,7 +294,7 @@ let select ~context ~roots ~sources =
       "Compiler-only replacement helpers cannot themselves have replacement \
        annotations"
   else
-    let chosen = chosen @ support in
+    let chosen = chosen @ supplemental @ support in
     let rec checkNames seen = function
       | [] -> Ok ()
       | (node : node) :: rest ->
@@ -319,4 +340,8 @@ let select ~context ~roots ~sources =
     let* () =
       SourceContracts.check ~context ~sources:(List.map snd units) contracts
     in
-    Ok { units; unavailable = unavailable @ supportUnavailable }
+    Ok
+      {
+        units;
+        unavailable = unavailable @ supplementalUnavailable @ supportUnavailable;
+      }

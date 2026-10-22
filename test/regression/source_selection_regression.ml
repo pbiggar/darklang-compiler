@@ -11,7 +11,7 @@ let source text = require (SourceInventory.parse ~reasons text)
 
 let select original replacement =
   Selection.select ~context:SourceContracts.emptyContext
-    ~roots:[ "upstream.dark" ]
+    ~roots:[ "upstream.dark" ] ~supplements:[]
     ~sources:
       [
         ("upstream.dark", source original); ("compiler.dark", source replacement);
@@ -45,6 +45,26 @@ let decode (input: Int64) : Int64 = __increment input
 |}
 
 let () =
+  let supplemented =
+    require
+      (Selection.select ~context:SourceContracts.emptyContext
+         ~roots:[ "upstream.dark" ] ~supplements:[ "compiler.dark" ]
+         ~sources:
+           [
+             ("upstream.dark", source original);
+             ( "compiler.dark",
+               source
+                 (replacement ^ "\nlet compilerOnly () : Int64 = decode seed")
+             );
+           ])
+  in
+  let useSupplement =
+    require (WrittenParsing.parse Validation.Script "Example.compilerOnly ()")
+  in
+  ignore
+    (require
+       (WrittenChecking.checkSourceUnits true false
+          (List.map snd supplemented.Selection.units @ [ useSupplement ])));
   let selected = require (select original replacement) in
   error "runtime-reflection" (Selection.require selected "Example.reflect");
   require (Selection.require selected "Example.decode");

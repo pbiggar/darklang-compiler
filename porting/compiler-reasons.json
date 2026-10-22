@@ -3,5 +3,11 @@
   "runtime-reflection": "The declaration requires runtime program reflection, function lookup or arbitrary expression evaluation excluded from the compiler language model.",
   "sqlite-runtime": "The compiler does not yet supply the SQLite runtime binding required by this item.",
   "test-counter": "The test requires per-test evaluation counter support that is not yet implemented.",
-  "annotation-probe": "A controlled failure in a regression fixture used to verify the compiler annotation runner."
+  "annotation-probe": "A controlled failure in a regression fixture used to verify the compiler annotation runner.",
+  "compiler-implementation": "The compiler supplies a separately maintained implementation with a compatible public contract.",
+  "compiler-contract": "The existing compiler implementation has a different public contract or the upstream contract cannot yet be established.",
+  "container-adaptation": "This trait, implementation or member still needs adaptation to the compiler.",
+  "missing-implementation": "The compiler does not yet provide an implementation for this imported item.",
+  "pending-validation": "This test is imported but has not yet been classified by execution.",
+  "upstream-dependency": "The test depends on an imported declaration that is not yet available to the compiler."
 }

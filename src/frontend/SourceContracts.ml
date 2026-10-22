@@ -175,6 +175,17 @@ let check ~context ~sources contracts =
               found)
         context.traits items
     in
+    let valueContext =
+      lazy
+        (match sources with
+        | [] -> Ok context
+        | _ ->
+            let* _, _, environment =
+              WrittenChecking.checkSourceUnitsWithBase context.environment true
+                false sources
+            in
+            Ok { context with environment = Some environment })
+    in
     let check (path, original, replacement) =
       let mismatch name =
         Error
@@ -191,15 +202,14 @@ let check ~context ~sources contracts =
           let* actual = typeContract types traits path replacement in
           if expected = actual then Ok () else mismatch original.W.name.W.name
       | W.DValue original, W.DValue replacement ->
+          let* context = Lazy.force valueContext in
           let* expected =
-            initializerType context sources path original.W.body
+            initializerType context [] path original.W.body
             |> Result.map_error (fun message ->
                 "Cannot establish upstream val contract for "
                 ^ original.W.name.W.name ^ ": " ^ message)
           in
-          let* actual =
-            initializerType context sources path replacement.W.body
-          in
+          let* actual = initializerType context [] path replacement.W.body in
           if expected = actual then Ok () else mismatch original.W.name.W.name
       | ( ( W.DFunction _ | W.DType _ | W.DValue _ | W.DTrait _ | W.DImpl _
           | W.DModule _ | W.DExpr _ | W.DAssertion _ | W.DTest _ ),
@@ -209,4 +219,13 @@ let check ~context ~sources contracts =
             "Replacements currently require a function, type or val of the \
              same kind"
     in
-    ResultList.traverse check contracts |> Result.map (fun _ -> ())
+    let isValue (_, original, _) =
+      match original with
+      | W.DValue _ -> true
+      | W.DFunction _ | W.DType _ | W.DTrait _ | W.DImpl _ | W.DModule _
+      | W.DExpr _ | W.DAssertion _ | W.DTest _ ->
+          false
+    in
+    let values, declarations = List.partition isValue contracts in
+    ResultList.traverse check (declarations @ values)
+    |> Result.map (fun _ -> ())
