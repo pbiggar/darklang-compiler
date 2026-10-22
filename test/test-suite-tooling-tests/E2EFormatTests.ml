@@ -573,6 +573,18 @@ let testCompilerXfailStrictness () =
              [ unrelated; wrongPhase; passed ])
           "Unexpected pass, error or phase satisfied xfail"
       in
+      let negative =
+        {
+          test with
+          errorExpectation = Some CompileError;
+          expectedErrorMessage = Some "known missing function";
+        }
+      in
+      let* () =
+        require
+          (Result.is_error (evaluateExpectations negative unrelated))
+          "Quoted expected diagnostic satisfied xfail without actual evidence"
+      in
       require
         (Option.is_none (tryPrepareBatchTest test))
         "Expected failure was batched")

@@ -1044,10 +1044,7 @@ let evaluateExpectations (test : e2eTest) run =
             | CompilerAnnotations.Runtime, CompileFailed _ ->
                 false
           in
-          let output =
-            failure.message ^ "\n" ^ stderrFromRun run ^ "\n"
-            ^ stdoutFromRun run
-          in
+          let output = stderrFromRun run ^ "\n" ^ stdoutFromRun run in
           if phaseMatches && Text.contains output diagnostic then Ok run
           else
             failRun run
