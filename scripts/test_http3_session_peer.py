@@ -124,7 +124,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--compiler", type=Path, default=ROOT / "dark")
     parser.add_argument("--requests", type=int, default=5)
-    parser.add_argument("--multiplex", choices=["interleave", "reset", "goaway", "malformed", "overflow", "truncated", "forbidden", "qpack", "control-fin", "duplicate-control", "encoder-error", "decoder-error", "duplicate-settings", "goaway-id"])
+    parser.add_argument("--multiplex", choices=["interleave", "reset", "goaway", "malformed", "overflow", "truncated", "forbidden", "qpack", "control-fin", "duplicate-control", "encoder-error", "decoder-error", "duplicate-settings", "goaway-id", "transport-truncated", "transport-phase", "transport-ack", "transport-type"])
     parser.add_argument("--public", action="store_true")
     parser.add_argument("--stream", action="store_true", help="Drain lazy session bodies between requests")
     parser.add_argument("--blocked-reset", action="store_true", help="Reset a response before its QPACK instructions arrive")
@@ -132,7 +132,15 @@ def main():
     if args.blocked_reset and (args.multiplex or args.stream or args.public):
         parser.error("--blocked-reset requires the standalone receiver")
     critical_errors = {"control-fin": 260, "duplicate-control": 259, "encoder-error": 513, "decoder-error": 514, "duplicate-settings": 261, "goaway-id": 264}
-    connection_errors = {"truncated": 262, "forbidden": 261, "qpack": 512, **critical_errors}
+    # Actual QUIC frame bodies, deliberately bypassing aioquic's valid encoders.
+    transport_errors = {
+        "transport-truncated": (7, 15, b"\x00\x00\x02a"),
+        "transport-phase": (7, 15, b"\x00\x00\x02a"),
+        "transport-ack": (7, 2, b"\x00\x00\x00\x01"),
+        "transport-type": (7, 77, b""),
+    }
+    connection_errors = {"truncated": 262, "forbidden": 261, "qpack": 512, **critical_errors,
+                         **{mode: error[0] for mode, error in transport_errors.items()}}
     if args.multiplex in connection_errors and args.public:
         parser.error("Connection-error peers require the standalone connection")
 
@@ -148,19 +156,32 @@ def main():
     configuration = QuicConfiguration(is_client=False, alpn_protocols=["h3"])
     configuration.certificate, configuration.private_key = leaf, key
     errors, streams, connections, close_codes, close_types = [], [], [], [], []
+    close_triggers = []
     stopped = threading.Event()
     wire_closed = threading.Event()
 
     class PeerQuic(QuicConnection):
+        _transport_pending = False
+
+        def _write_connection_limits(self, builder, space):
+            super()._write_connection_limits(builder, space)
+            if self._transport_pending:
+                _code, kind, body = transport_errors[args.multiplex]
+                buf = builder.start_frame(kind, capacity=len(encode_uint_var(kind)) + len(body))
+                buf.push_bytes(body)
+                self._transport_pending = False
+
         def _handle_connection_close_frame(self, context, frame_type, buf):
             # Observe the authenticated wire frame, not ConnectionTerminated:
             # aioquic delays that event until its three-PTO drain completes.
             position = buf.tell()
             code = buf.pull_uint_var()
+            trigger = buf.pull_uint_var() if frame_type == QuicFrameType.TRANSPORT_CLOSE else None
             buf.seek(position)
             super()._handle_connection_close_frame(context, frame_type, buf)
             close_codes.append(code)
             close_types.append(frame_type)
+            close_triggers.append(trigger)
             wire_closed.set()
 
     with tempfile.TemporaryDirectory(prefix="h3-session-") as temporary, socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as listener:
@@ -227,6 +248,11 @@ def main():
                                 elif args.multiplex and received.stream_id < 8:
                                     pending[received.stream_id] = body
                                     if len(pending) == 2:
+                                        if args.multiplex in transport_errors:
+                                            if args.multiplex == "transport-phase":
+                                                connection.request_key_update()
+                                            connection._transport_pending = True
+                                            continue
                                         if args.multiplex in critical_errors:
                                             if args.multiplex == "control-fin":
                                                 connection.send_stream_data(http._local_control_stream_id, b"", end_stream=True)
@@ -298,7 +324,12 @@ def main():
         assert len(connections) == 1 and streams == expected, streams
         if args.multiplex in connection_errors:
             assert close_codes == [connection_errors[args.multiplex]], close_codes
-            assert close_types == [QuicFrameType.APPLICATION_CLOSE], close_types
+            if args.multiplex in transport_errors:
+                assert close_types == [QuicFrameType.TRANSPORT_CLOSE], close_types
+                assert close_triggers == [transport_errors[args.multiplex][1]], close_triggers
+            else:
+                assert close_types == [QuicFrameType.APPLICATION_CLOSE], close_types
+                assert close_triggers == [None], close_triggers
     print(f"HTTP/3 {'blocked reset' if args.blocked_reset else args.multiplex or 'session'}: streams {streams}, shared Unicode QPACK and leak-free disposal passed")
 
 
