@@ -71,18 +71,6 @@ let length s = Array.length (Text.scalars s)
 let slice s first count =
   Text.ofScalars (Array.sub (Text.scalars s) first count)
 
-let trimEnd s =
-  let us = Text.scalars s in
-  let rec last i =
-    if
-      i >= 0
-      && Uchar.is_valid us.(i)
-      && Uucp.White.is_white_space (Uchar.of_int us.(i))
-    then last (i - 1)
-    else i
-  in
-  Text.ofScalars (Array.sub us 0 (last (Array.length us - 1) + 1))
-
 let isInternalTestFile path =
   let path = replace "\\" "/" path in
   Text.contains path "/stdlib-internal/" || Text.contains path "/verification/"
@@ -415,31 +403,87 @@ let isUpstreamDarkTestFile file =
 
 let parsePreambleAsProgram _allowInternal preamble = parseWritten preamble
 
-let preambleFunctionDefs (p : WT.sourceFile) =
-  List.filter_map
-    (function WT.DFunction d -> Some d | _ -> None)
-    p.WT.declarations
+let moduleSegments (modul : WT.moduleDecl) =
+  match WrittenSource.moduleSegments (snd modul.WT.name) with
+  | Ok parts -> parts
+  | Error error -> Crash.crash error
 
-let referencedPreambleFunctions known expr =
-  SS.inter known (SS.of_list (WrittenSource.expressionNames expr))
-
-let collectProgramReferencedPreambleFuncs known (p : WT.sourceFile) =
-  let decls =
-    List.filter_map
+let preambleFunctionDefs (program : WT.sourceFile) =
+  let rec collect path declarations =
+    List.concat_map
       (function
-        | WT.DFunction d -> Some d.WT.body
-        | WT.DValue d -> Some d.WT.body
-        | _ -> None)
-      p.WT.declarations
+        | WT.DFunction definition ->
+            [
+              ( String.concat "." (path @ [ definition.WT.name.WT.name ]),
+                path,
+                definition );
+            ]
+        | WT.DModule modul ->
+            collect (path @ moduleSegments modul) modul.WT.declarations
+        | _ -> [])
+      declarations
   in
-  List.fold_left
-    (fun acc e -> SS.union acc (referencedPreambleFunctions known e))
-    SS.empty (decls @ p.WT.exprsToEval)
+  collect [] program.WT.declarations
+
+let referencedPreambleFunctions known path expr =
+  let rec resolve name path =
+    let candidate = String.concat "." (path @ [ name ]) in
+    if SS.mem candidate known then Some candidate
+    else
+      match List.rev path with
+      | [] -> None
+      | _ :: parent -> resolve name (List.rev parent)
+  in
+  WrittenSource.expressionNames expr
+  |> List.filter_map (fun name -> resolve name path)
+  |> SS.of_list
+
+let collectProgramReferencedPreambleFuncs known (program : WT.sourceFile) =
+  let rec collect path declarations =
+    List.fold_left
+      (fun refs declaration ->
+        let found =
+          match declaration with
+          | WT.DFunction definition ->
+              referencedPreambleFunctions known path definition.WT.body
+          | WT.DValue definition ->
+              referencedPreambleFunctions known path definition.WT.body
+          | WT.DExpr expr -> referencedPreambleFunctions known path expr
+          | WT.DModule modul ->
+              collect (path @ moduleSegments modul) modul.WT.declarations
+          | _ -> SS.empty
+        in
+        SS.union refs found)
+      SS.empty declarations
+  in
+  SS.union
+    (collect [] program.WT.declarations)
+    (List.fold_left
+       (fun refs expr ->
+         SS.union refs (referencedPreambleFunctions known [] expr))
+       SS.empty program.WT.exprsToEval)
+
+let preambleValueDependencies known (program : WT.sourceFile) =
+  let rec collect path declarations =
+    List.fold_left
+      (fun refs declaration ->
+        let found =
+          match declaration with
+          | WT.DValue definition ->
+              referencedPreambleFunctions known path definition.WT.body
+          | WT.DModule modul ->
+              collect (path @ moduleSegments modul) modul.WT.declarations
+          | _ -> SS.empty
+        in
+        SS.union refs found)
+      SS.empty declarations
+  in
+  collect [] program.WT.declarations
 
 let buildPreambleFunctionDependencyMap known defs =
   List.map
-    (fun (d : WT.fnDecl) ->
-      (d.WT.name.WT.name, referencedPreambleFunctions known d.WT.body))
+    (fun (name, path, (definition : WT.fnDecl)) ->
+      (name, referencedPreambleFunctions known path definition.WT.body))
     defs
   |> SM.of_list
 
@@ -470,32 +514,67 @@ let declarationRange = function
   | WT.DExpr e -> WT.exprRange e
   | WT.DAssertion d -> d.WT.range
 
-let reducePreambleSource required source (p : WT.sourceFile) =
+(* Remove unused declarations by source range, retaining module headers and
+   untouched literal text. Invalid, unused helper bodies must not poison a test
+   in another module or a separately checked error expectation. *)
+let reducePreambleSource required source (program : WT.sourceFile) =
   let normalized = replace "\r\n" "\n" source in
   let lines = String.split_on_char '\n' normalized in
-  List.filter_map
-    (fun decl ->
-      match decl with
-      | WT.DFunction d when not (SS.mem d.WT.name.WT.name required) -> None
-      | WT.DExpr _ | WT.DAssertion _ | WT.DTest _ -> None
-      | _ ->
-          let range = declarationRange decl in
-          let start = sourceOffset normalized range.Tokenizer.start in
-          let last =
-            min range.Tokenizer.end_.Tokenizer.row (List.length lines - 1)
-          in
-          let finish =
-            min (length normalized)
-              (List.fold_left
-                 (fun sum line -> sum + length line + 1)
-                 0
-                 (List.take (last + 1) lines))
-          in
-          if finish > start then
-            Some (trimEnd (slice normalized start (finish - start)))
-          else None)
-    p.WT.declarations
-  |> String.concat "\n\n"
+  let interval declaration =
+    let range = declarationRange declaration in
+    let start =
+      sourceOffset normalized
+        { range.Tokenizer.start with Tokenizer.column = 0 }
+    in
+    let last = min range.Tokenizer.end_.Tokenizer.row (List.length lines - 1) in
+    let finish =
+      min (length normalized)
+        (List.fold_left
+           (fun sum line -> sum + length line + 1)
+           0
+           (List.take (last + 1) lines))
+    in
+    (start, finish)
+  in
+  let rec removals path declarations =
+    List.fold_left
+      (fun (kept, ranges) declaration ->
+        let remove =
+          match declaration with
+          | WT.DFunction definition ->
+              not
+                (SS.mem
+                   (String.concat "." (path @ [ definition.WT.name.WT.name ]))
+                   required)
+          | WT.DExpr _ | WT.DAssertion _ | WT.DTest _ -> true
+          | _ -> false
+        in
+        if remove then (kept, interval declaration :: ranges)
+        else
+          match declaration with
+          | WT.DModule modul ->
+              let childKept, childRanges =
+                removals (path @ moduleSegments modul) modul.WT.declarations
+              in
+              if childKept then (true, childRanges @ ranges)
+              else (kept, interval declaration :: ranges)
+          | _ -> (true, ranges))
+      (false, []) declarations
+  in
+  let _, ranges = removals [] program.WT.declarations in
+  let ranges = List.sort compare ranges in
+  let rec retain offset pieces = function
+    | [] ->
+        String.concat ""
+          (List.rev
+             (slice normalized offset (length normalized - offset) :: pieces))
+    | (first, last) :: rest ->
+        let first = max offset first in
+        retain (max offset last)
+          (slice normalized offset (first - offset) :: pieces)
+          rest
+  in
+  retain 0 [] ranges
 
 let countLeadingSpaces line =
   let rec loop i =
@@ -536,9 +615,7 @@ let analyzePreambleWithReducedFunctionSet stdlib (spec : preambleBuildSpec)
   in
   let* program = parseResult in
   let defs = preambleFunctionDefs program in
-  let names =
-    SS.of_list (List.map (fun (d : WT.fnDecl) -> d.WT.name.WT.name) defs)
-  in
+  let names = SS.of_list (List.map (fun (name, _, _) -> name) defs) in
   let dependencies = buildPreambleFunctionDependencyMap names defs in
   let runnable =
     List.filter
@@ -546,7 +623,11 @@ let analyzePreambleWithReducedFunctionSet stdlib (spec : preambleBuildSpec)
         t.errorExpectation <> Some CompileError && Option.is_none t.skipReason)
       tests
   in
-  let testProgram t = sourceToExecute spec.allowInternal t in
+  let testProgram t =
+    Result.map
+      (programInModule t.modulePath)
+      (sourceToExecute spec.allowInternal t)
+  in
   let unparsable =
     List.exists (fun t -> Result.is_error (testProgram t)) runnable
   in
@@ -561,7 +642,8 @@ let analyzePreambleWithReducedFunctionSet stdlib (spec : preambleBuildSpec)
         SS.empty runnable
   in
   let required =
-    SS.filter (fun name -> SS.mem name names) seeds
+    SS.union seeds (preambleValueDependencies names program)
+    |> SS.filter (fun name -> SS.mem name names)
     |> expandRequiredPreambleFunctions dependencies
   in
   PreambleAnalysis.analyzePreamble spec.allowInternal stdlib
@@ -1442,13 +1524,12 @@ let tryBuildReducedPreambleForTest allowInternal preamble testSource =
   | Ok preambleProgram ->
       let testProgram = testSource in
       let defs = preambleFunctionDefs preambleProgram in
-      let names =
-        SS.of_list (List.map (fun (d : WT.fnDecl) -> d.WT.name.WT.name) defs)
-      in
+      let names = SS.of_list (List.map (fun (name, _, _) -> name) defs) in
       let dependencies = buildPreambleFunctionDependencyMap names defs in
       let seeds = collectProgramReferencedPreambleFuncs names testProgram in
       let required =
-        SS.filter (fun name -> SS.mem name names) seeds
+        SS.union seeds (preambleValueDependencies names preambleProgram)
+        |> SS.filter (fun name -> SS.mem name names)
         |> expandRequiredPreambleFunctions dependencies
       in
       Some (reducePreambleSource required preamble preambleProgram)
@@ -1500,7 +1581,8 @@ let runE2ETestSourceWithPreambleContext stdlib preambleCtx session
   else
     let fallbackPreamble =
       Option.value ~default:test.preamble
-        (tryBuildReducedPreambleForTest allowInternal test.preamble program)
+        (tryBuildReducedPreambleForTest allowInternal test.preamble
+           (programInModule test.modulePath program))
     in
     let request =
       {
