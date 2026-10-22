@@ -130,4 +130,3 @@ val convertStructuralRecord :
   WrittenCheckingState.t ->
   (CheckedAST.expr * WrittenCheckingState.t, string) result
 
-val dictKeyAdmissibleType : globals -> AST.semanticType -> bool

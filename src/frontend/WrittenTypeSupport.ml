@@ -389,57 +389,6 @@ let[@warning "-4"] recordFields allowInternal types entry args =
         fields
   | _ -> Error "Expected a record type"
 
-module KeyTypeSet = Set.Make (struct
-  type t = AST.semanticType
-
-  let compare = AST.compareSemanticType
-end)
-
-let[@warning "-4"] dictKeyAdmissibleType globals typ =
-  let rec check seen typ =
-    if KeyTypeSet.mem typ seen then true
-    else
-      let seen = KeyTypeSet.add typ seen in
-      let all = List.for_all (check seen) in
-      match typ with
-      | AST.TFunction _ | AST.TBlob | AST.TStream _ | AST.TInternalRawPtr
-      | AST.TNever ->
-          false
-      | AST.TList inner -> check seen inner
-      | AST.TTuple args -> all args
-      | AST.TDict (key, value) -> all [ key; value ]
-      | AST.TRecord (name, args) | AST.TSum (name, args) -> (
-          match M.find_opt name globals.types with
-          | None -> false
-          | Some entry -> (
-              let fields =
-                match entry.definition with
-                | WT.TDRecord _ ->
-                    Result.map (List.map snd)
-                      (recordFields globals.allowInternal globals.types entry
-                         args)
-                | WT.TDEnum cases ->
-                    let subst = M.of_list (List.combine entry.params args) in
-                    ResultList.traverse
-                      (fun (field : WT.enumFieldSyntax) ->
-                        Result.map
-                          (Types.applyTypeArguments subst)
-                          (resolveWrittenType globals.allowInternal
-                             globals.types entry.path (S.of_list entry.params)
-                             field.WT.typ))
-                      (List.concat_map
-                         (fun (_, (case : WT.enumCaseSyntax)) -> case.WT.fields)
-                         cases)
-                | WT.TDAlias target ->
-                    Result.map
-                      (fun typ -> [ typ ])
-                      (resolveWrittenType globals.allowInternal globals.types
-                         entry.path (S.of_list entry.params) target)
-              in
-              match fields with Ok fields -> all fields | Error _ -> false))
-      | _ -> true
-  in
-  check KeyTypeSet.empty typ
 
 module TypePairSet = Set.Make (struct
   type t = AST.semanticType * AST.semanticType
