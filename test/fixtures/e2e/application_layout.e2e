@@ -1,0 +1,70 @@
+// Local binding layout must preserve application arguments before its body.
+
+let applicationLayoutPair (a: Int64) (b: Int64) : (Int64 * Int64) = (a, b)
+
+(let result = Stdlib.String.append Stdlib.String.newline ("x")
+ result) = "\nx"
+
+// A dedented else still belongs to the initializer's conditional.
+(let value = 20L
+ let result = if true then
+     let extra = 22L in
+     value + extra
+ else
+     0L
+ in
+ result) = 42L
+
+(let result =
+     Stdlib.String.append Stdlib.String.newline ("x")
+ in
+ result) = "\nx"
+
+(let value = 20L
+ let result = Stdlib.Int64.add value (Stdlib.Int64.add 21L 1L)
+ result) = 42L
+
+(let value = 20L
+ let result = Stdlib.Int64.add value (Stdlib.Int64.add 21L 1L)
+ result + 1L) = 43L
+
+(let values = [1L; 2L; 3L]
+ let result = Stdlib.List.map values (fun n -> n * 2L)
+ result) = [2L; 4L; 6L]
+
+// An explicit `in` inside the initializer belongs to its nested binding.
+(let values = [1L; 2L; 3L]
+ let result = Stdlib.List.map values (fun n -> let increment = 1L in n + increment)
+ result) = [2L; 3L; 4L]
+
+// Tuple bindings use the same initializer/body boundary.
+(let value = 20L
+ let (a, b) = applicationLayoutPair value (22L)
+ a + b) = 42L
+
+// More-indented application arguments continue the initializer.
+(let value = 20L
+ let result = Stdlib.Int64.add value
+     (Stdlib.Int64.add 21L 1L)
+ result) = 42L
+
+// Explicit `in` and comments retain the same binding boundary.
+(let value = 20L
+ let result = Stdlib.Int64.add value (Stdlib.Int64.add 21L 1L) in
+ result) = 42L
+
+(let value = 20L
+ let result = Stdlib.Int64.add value (Stdlib.Int64.add 21L 1L)
+ // The body starts after this comment.
+ result) = 42L
+
+// An initializer can begin on the following indented line.
+(let value = 20L
+ let result =
+     Stdlib.Int64.add value (Stdlib.Int64.add 21L 1L)
+ result) = 42L
+
+(let values = [1L; 2L; 3L]
+ let result =
+     Stdlib.List.map values (fun n -> n * 2L)
+ result) = [2L; 4L; 6L]
