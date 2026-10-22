@@ -5,12 +5,9 @@ module Darklang.Stdlib.Json.Tests
 // None of these are supported as <> type args in the parser,
 // so do we really have to do anything here?
 // It feels like a "no" to me - ignoring for now.
-// @compiler blocked: missing-implementation
 type Person = { Name: String, Age: Int64 }
 
-// @compiler blocked: missing-implementation
 type Result<'ok, 'err> = Stdlib.Result.Result<'ok, 'err>
-// @compiler blocked: missing-implementation
 type Option<'t> = Stdlib.Option.Option<'t>
 
 let err
@@ -1348,7 +1345,6 @@ module BadTypes =
     => raises "Cannot serialize (lambda) into JSON"
 
 module List =
-  // @compiler blocked: missing-implementation
   type MyString = String
 
   // @compiler blocked: pending-validation
@@ -1657,12 +1653,10 @@ module Dict =
 
 module UserDefinedEnums =
   // TODO: more nesting...
-  // @compiler blocked: missing-implementation
   type PrettyLikely =
     | Yeah
     | Enh of reason: String * Int64
 
-  // @compiler blocked: missing-implementation
   type PrettyLikely2 =
     | PrettyLikely of PrettyLikely
     | Yes
@@ -1834,12 +1828,10 @@ module UserDefinedRecords =
                         e2 = 5L } }
             )) ]
 
-  // @compiler blocked: missing-implementation
   type People =
     { GroupName: String
       People: List<Person> }
 
-  // @compiler blocked: missing-implementation
   type Combo<'e1, 'e2> = { e1: 'e1, e2: 'e2 }
 
   module Errors =
@@ -1861,7 +1853,6 @@ module UserDefinedRecords =
 
 
 module UserDefinedAliases =
-  // @compiler blocked: missing-implementation
   type MyInt = Int64
 
   // @compiler blocked: pending-validation
@@ -1896,18 +1887,13 @@ module UserDefinedAliases =
             UserDefinedEnums.PrettyLikely.Enh("printer broke", 7L)
           )) ]
 
-  // @compiler blocked: missing-implementation
   type MyPerson = Person
 
-  // @compiler blocked: missing-implementation
   type MyPrettyLikely = UserDefinedEnums.PrettyLikely
 
-  // @compiler blocked: missing-implementation
   type Person1 = { Name: String, Age: Int64 }
-  // @compiler blocked: missing-implementation
   type Person2 = { Name: String, Age: Int64 }
 
-  // @compiler blocked: missing-implementation
   type StringResult<'a> = Result<'a, String>
 
   // This test currently slips by the typechecker, and so we get an internal
@@ -2060,9 +2046,7 @@ module Package =
 
 // Nested lists, tuples, records and enums.
 module RestoredArchive =
-  // @compiler blocked: missing-implementation
   type Counter = { v: Int64 }
-  // @compiler blocked: missing-implementation
   type NamedError =
     | InvalidPackageName of List<String>
     | MissingEnumModuleName of String

@@ -627,7 +627,6 @@ test workbenchRunTestsAreLastInInspect =
 // ── Workbench: the nav walks ──
 
 /// What the workbench dispatcher decided to do with a simulated keypress.
-// @compiler blocked: missing-implementation
 type WbAction =
   | Continued
   | Exited

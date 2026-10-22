@@ -103,9 +103,7 @@ let nested
   : Stdlib.Result.Result<Int, String> =
   Ok (value?? + 1)
 
-// @compiler blocked: missing-implementation
 type Container = { item: Stdlib.Option.Option<Int> }
-// @compiler blocked: upstream-dependency
 let fields (value: Stdlib.Option.Option<Container>) : Stdlib.Option.Option<Int> =
   Some value?.item?
 
@@ -281,9 +279,7 @@ let inRecord
   : Stdlib.Option.Option<Dict<String, Int>> =
   Some (Dict { "a": v? })
 
-// @compiler blocked: missing-implementation
 type R = { a: Int, b: Int }
-// @compiler blocked: upstream-dependency
 let inUpdate (r: R) (v: Stdlib.Option.Option<Int>) : Stdlib.Option.Option<R> =
   Some { r with b = v? }
 
@@ -295,9 +291,7 @@ let notted (v: Stdlib.Option.Option<Bool>) : Stdlib.Option.Option<Bool> =
 let literals (v: Stdlib.Option.Option<String>) : Stdlib.Option.Option<String> =
   Some (v? + "what?" + (Stdlib.toString '?'))
 
-// @compiler blocked: missing-implementation
 type AliasR = Stdlib.Result.Result<Int, String>
-// @compiler blocked: upstream-dependency
 let viaAlias (v: AliasR) : Stdlib.Result.Result<Int, String> = Ok (v? + 1)
 
 // @compiler blocked: pending-validation

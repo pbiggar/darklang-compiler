@@ -45,28 +45,23 @@ test basicAuthRejectsHyphenInUsername =
 // Tests that try to make requests to the internet
 
 // ... but first, some helpers
-// @compiler blocked: missing-implementation
 type GetResult =
   Stdlib.Result.Result<Stdlib.HttpClient.Response, Stdlib.HttpClient.RequestError>
 
-// @compiler blocked: upstream-dependency
 let get (url: String) (headers: List<String * String>) : GetResult =
   Stdlib.HttpClient.get url headers
 
 // Build custom values in functions so their types stay current across package reloads.
-// @compiler blocked: upstream-dependency
 let errInvalidHost () : GetResult =
   Error(
     Stdlib.HttpClient.RequestError.BadUrl(Stdlib.HttpClient.BadUrlDetails.InvalidHost)
   )
 
-// @compiler blocked: upstream-dependency
 let errInvalidUri () : GetResult =
   Error(
     Stdlib.HttpClient.RequestError.BadUrl(Stdlib.HttpClient.BadUrlDetails.InvalidUri)
   )
 
-// @compiler blocked: upstream-dependency
 let errInvalidRequest () : GetResult =
   Error(
     Stdlib.HttpClient.RequestError.BadUrl(
@@ -74,20 +69,16 @@ let errInvalidRequest () : GetResult =
     )
   )
 
-// @compiler blocked: upstream-dependency
 let errNetworkError () : GetResult =
   Error(Stdlib.HttpClient.RequestError.NetworkError)
 
-// @compiler blocked: upstream-dependency
 let errBadHeaderEmptyKey () : GetResult =
   Error(
     Stdlib.HttpClient.RequestError.BadHeader(Stdlib.HttpClient.BadHeader.EmptyKey)
   )
 
-// @compiler blocked: upstream-dependency
 let errBadMethod () : GetResult = Error(Stdlib.HttpClient.RequestError.BadMethod)
 
-// @compiler blocked: upstream-dependency
 let errUnsupportedProtocol () : GetResult =
   Error(
     Stdlib.HttpClient.RequestError.BadUrl(

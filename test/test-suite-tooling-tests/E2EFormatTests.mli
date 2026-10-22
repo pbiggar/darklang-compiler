@@ -57,3 +57,4 @@ val testCompilerXfailStrictness : unit -> testResult
 val testCompilerRuntimeXfailStrictness : unit -> testResult
 val testExpectedLanguageErrorIsNotAnXfail : unit -> testResult
 val testPreservesLegacyModuleScopes : unit -> testResult
+val testCanonicalNamedResultReporter : unit -> testResult

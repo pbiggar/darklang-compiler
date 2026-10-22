@@ -85,7 +85,6 @@ test emptyFieldNameRaises =
 
 // Resolve the package value before accessing its elements.
 module TupleVal =
-  // @compiler blocked: missing-implementation
   val pair = (1L, ("a", true))
 
   // @compiler blocked: pending-validation

@@ -90,7 +90,6 @@ let goldenviewRender () : Unit =
 
   Stdlib.printLine "-- end of golden view --"
 
-// @compiler blocked: missing-implementation
 val goldenviewExpected =
   [ "120x40 0|  \u001b[1m\u001b[38;5;141mmain\u001b[0m\u001b[2m    perf-instance\u001b[0m\u001b[0m"
     "120x40 1| \u001b[48;5;61m\u001b[37m\u001b[1m 1 Home \u001b[0m   \u001b[2m2 \u001b[0m\u001b[2mCode\u001b[0m    \u001b[2m3 \u001b[0m\u001b[2mChanges\u001b[0m    \u001b[2m4 \u001b[0m\u001b[2mREPL\u001b[0m    \u001b[2m5 \u001b[0m\u001b[2mTraces\u001b[0m    \u001b[2m6 \u001b[0m\u001b[2mDocs\u001b[0m \u001b[0m"
@@ -262,7 +261,6 @@ let goldenkeysRender () : Unit =
 
   Stdlib.printLine "-- golden keys done --"
 
-// @compiler blocked: missing-implementation
 val goldenkeysExpected =
   [ "start 0|  \u001b[1m\u001b[38;5;141mmain\u001b[0m\u001b[2m    perf-instance\u001b[0m\u001b[0m"
     "start 1| \u001b[48;5;61m\u001b[37m\u001b[1m 1 Home \u001b[0m   \u001b[2m2 \u001b[0m\u001b[2mCode\u001b[0m    \u001b[2m3 \u001b[0m\u001b[2mChanges\u001b[0m    \u001b[2m4 \u001b[0m\u001b[2mREPL\u001b[0m    \u001b[2m5 \u001b[0m\u001b[2mTraces\u001b[0m    \u001b[2m6 \u001b[0m\u001b[2mDocs\u001b[0m \u001b[0m"

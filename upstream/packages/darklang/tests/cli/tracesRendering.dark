@@ -276,7 +276,6 @@ module WatchCursor =
   // Where the cursor lands after the panel reloads. A new run arrives at the TOP, so following
   // the INDEX would move you onto a different run while you were reading it.
 
-  // @compiler blocked: missing-implementation
   val ids = [ "newest", "middle", "oldest" ]
 
   // Following a run: the cursor goes to wherever that run is now.

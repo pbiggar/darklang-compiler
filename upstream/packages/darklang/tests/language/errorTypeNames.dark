@@ -74,11 +74,8 @@ module NestedInTypeArguments =
 
 module RecordAndEnumFields =
   // Same rule, reached through the other messages that print a declared type.
-  // @compiler blocked: missing-implementation
   type HasIntParseError = { e: Darklang.Stdlib.Int.ParseError }
-  // @compiler blocked: missing-implementation
   type HasUuidParseErrors = { es: List<Darklang.Stdlib.Uuid.ParseError> }
-  // @compiler blocked: missing-implementation
   type WrapsUuidParseError = | Wrap of Darklang.Stdlib.Uuid.ParseError
 
   // @compiler blocked: upstream-dependency
@@ -133,10 +130,8 @@ module UnambiguousHash =
 module LocallyDeclared =
   // This type has no package name, so the declaration supplies its display name.
   // The unusual field name keeps its content hash distinct from other types in the suite.
-  // @compiler blocked: missing-implementation
   type Celsius = { portedCelsiusDegrees: Int }
 
-  // @compiler blocked: upstream-dependency
   let describe (t: Celsius) : String = "ok"
 
   // @compiler blocked: pending-validation

@@ -61,14 +61,10 @@ let fnWithTypeArgs<'a, 'b> (a: 'a) (b: 'b) : 'a = a
 
 let fnWithTypedReturn<'a> () : 'a = 5L // errors unless Int64 passed for 'a
 
-// @compiler blocked: missing-implementation
 type X<'a> = | A of Int64 | B of 'a
 
-// @compiler blocked: upstream-dependency
 let polyFn (a: X<'a>) : X<'a> = a
-// @compiler blocked: upstream-dependency
 let strFn (a: X<String>) : X<String> = a
-// @compiler blocked: upstream-dependency
 let definedPolyFn<'a> (a: X<'a>) : X<'a> = a
 
 // @compiler blocked: pending-validation

@@ -149,7 +149,6 @@ test dictMapPatterns =
 
 // Regression check: applying a function directly from a record field.
 module LambdaInRecordField =
-  // @compiler blocked: missing-implementation
   type RecordWithFn = { fn: Int64 -> Int64 }
 
   // check: can we apply a function from a record field directly?

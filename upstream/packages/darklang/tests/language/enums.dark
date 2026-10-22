@@ -39,7 +39,6 @@ module Errors =
 
   module User =
     // Distinct enum cases give this type its own content hash for stable error names.
-    // @compiler blocked: missing-implementation
     type MyEnum = | PortedFixtureA | B | C of String
 
     // @compiler blocked: pending-validation
@@ -87,7 +86,6 @@ module Errors =
         "Failed to create enum. Expected String for field 0 in `C`, but got Int64 (5)"
 
 module Simple =
-  // @compiler blocked: missing-implementation
   type AorB = | A | B
 
   // @compiler blocked: pending-validation
@@ -107,7 +105,6 @@ module Simple =
         |> Stdlib.Test.equal [ AorB.A, AorB.B ] ]
 
   module EnumReference =
-    // @compiler blocked: missing-implementation
     type CorD =
       | C of Int64
       | D of AorB
@@ -119,7 +116,6 @@ module Simple =
           (CorD.D AorB.A == CorD.D AorB.A) |> Stdlib.Test.equal true ]
 
 module MixedCases =
-  // @compiler blocked: missing-implementation
   type EnumOfMixedCases =
     | W
     | X of String
@@ -185,7 +181,6 @@ module MixedCases =
         |> Stdlib.Test.equal [ "a simple W", "X testX", "Y 5", "Z testZ" ] ]
 
 module TuplesVsNonTuples =
-  // @compiler blocked: missing-implementation
   type Tuples =
     | NotTuple of String * Int64
     | Tuple of (String * Int64)
@@ -213,7 +208,6 @@ module TuplesVsNonTuples =
       "Expected 1 fields in Darklang.Language.Tests.Enums.TuplesVsNonTuples.Tuples.`Tuple`, but got 2"
 
 module Recursive =
-  // @compiler blocked: missing-implementation
   type Tree =
     | Leaf
     | Node of Tree * Tree
@@ -229,19 +223,15 @@ module Recursive =
 
 module Polymorphism =
   // Define a red-black tree
-  // @compiler blocked: missing-implementation
   type Color = | Red | Black
 
-  // @compiler blocked: missing-implementation
   type RBTree<'a> =
     | Empty
     | Node of color: Color * left: RBTree<'a> * value: 'a * right: RBTree<'a>
 
-  // @compiler blocked: upstream-dependency
   let singleton (value: 'a) : RBTree<'a> =
     RBTree.Node(Color.Red, RBTree.Empty, value, RBTree.Empty)
 
-  // @compiler blocked: upstream-dependency
   let insert'
     (tree: RBTree<'a>)
     (value: 'a)
@@ -261,7 +251,6 @@ module Polymorphism =
       else
         RBTree.Node(color, left, value, right)
 
-  // @compiler blocked: upstream-dependency
   let insert
     (tree: RBTree<'a>)
     (value: 'a)
@@ -269,18 +258,15 @@ module Polymorphism =
     : RBTree<'a> =
     insert' tree value cmp
 
-  // @compiler blocked: upstream-dependency
   let ofList (values: List<'a>) (cmp: ('a * 'a) -> Int64) : RBTree<'a> =
     Stdlib.List.fold values RBTree.Empty (fun tree value -> insert tree value cmp)
 
-  // @compiler blocked: upstream-dependency
   let toList' (tree: RBTree<'a>) (acc: List<'a>) : List<'a> =
     match tree with
     | Empty -> acc
     | Node(_, left, value, right) ->
       toList' left (Stdlib.List.push (toList' right acc) value)
 
-  // @compiler blocked: upstream-dependency
   let toList (tree: RBTree<'a>) : List<'a> = toList' tree []
 
   // @compiler blocked: pending-validation

@@ -45,11 +45,8 @@ test nonFunctionStageRaises =
     "Expected something we could apply to, such as a lambda or function, but got an Int64 (1)"
 
 // dict
-// @compiler blocked: missing-implementation
 type Z = { a: List<Int64> }
-// @compiler blocked: missing-implementation
 type Y = { z: Z }
-// @compiler blocked: missing-implementation
 type X = { y: Y }
 
 // @compiler blocked: pending-validation
@@ -58,7 +55,6 @@ test recordFields =
    (x.y.z.a |> Stdlib.List.length))
   |> Stdlib.Test.equal 5
 
-// @compiler blocked: missing-implementation
 type MyEnum = A of Int64 * Int64 * Int64
 
 // @compiler blocked: pending-validation

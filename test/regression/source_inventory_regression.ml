@@ -1,4 +1,6 @@
 (* source_inventory_regression.ml - Count complete test groups and declarations without typing them. *)
+[@@@warning "-42"]
+
 open Dark_compiler
 module I = SourceInventory
 module A = CompilerAnnotations
@@ -14,14 +16,16 @@ let () =
   let named = parse "test grouped = (\n  Stdlib.Test.pass ()\n)\n" in
   require
     (match named.I.tree.WrittenTypes.declarations with
-    | [ WrittenTypes.DTest test ] ->
+    | [ WrittenTypes.DTest (test : WrittenTypes.testDecl) ] ->
         test.WrittenTypes.range.Tokenizer.end_.Tokenizer.row = 2
         && test.WrittenTypes.range.Tokenizer.end_.Tokenizer.column = 1
     | []
-    | (WrittenTypes.DFunction _ | WrittenTypes.DValue _ | WrittenTypes.DType _
+    | ( WrittenTypes.DFunction _ | WrittenTypes.DValue _ | WrittenTypes.DType _
       | WrittenTypes.DTrait _ | WrittenTypes.DImpl _ | WrittenTypes.DModule _
-      | WrittenTypes.DAssertion _ | WrittenTypes.DExpr _) :: _
-    | WrittenTypes.DTest _ :: _ :: _ -> false)
+      | WrittenTypes.DAssertion _ | WrittenTypes.DExpr _ )
+      :: _
+    | WrittenTypes.DTest _ :: _ :: _ ->
+        false)
     "Named test range omitted its closing parenthesis";
   let grouped =
     parse

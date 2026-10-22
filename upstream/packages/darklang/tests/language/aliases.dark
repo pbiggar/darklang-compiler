@@ -1,10 +1,8 @@
 module Darklang.Language.Tests.Aliases
 
 // simple alias
-// @compiler blocked: missing-implementation
 type Id = String
 
-// @compiler blocked: missing-implementation
 type Something = { ID: Id, Data: String }
 
 // @compiler blocked: pending-validation
@@ -20,14 +18,10 @@ test simpleAliasWrongTypeRaises =
     "Failed to create record. Expected String for field `ID`, but got 2 (an Int64)"
 
 module SimpleRecordAlias =
-  // @compiler blocked: missing-implementation
   type Person = { name: String }
-  // @compiler blocked: missing-implementation
   type MyPerson = Person
-  // @compiler blocked: missing-implementation
   type MyPerson2 = Person
 
-  // @compiler blocked: upstream-dependency
   let getName (p: MyPerson) : String = p.name
 
   // @compiler blocked: pending-validation
@@ -40,13 +34,10 @@ module SimpleRecordAlias =
         getName (MyPerson { name = "test" }) |> Stdlib.Test.equal "test" ]
 
 module SimpleEnumAlias =
-  // @compiler blocked: missing-implementation
   type UserRole =
     | Admin | User | Guest
 
-  // @compiler blocked: missing-implementation
   type AdminRole = UserRole
-  // @compiler blocked: missing-implementation
   type GuestRole = UserRole
 
   // @compiler blocked: pending-validation
@@ -54,23 +45,17 @@ module SimpleEnumAlias =
     (GuestRole.Guest == AdminRole.Guest) |> Stdlib.Test.equal true
 
 module NestedAlias =
-  // @compiler blocked: missing-implementation
   type UserCredential = (String * Id)
-  // @compiler blocked: missing-implementation
   type EmployeeCredential = UserCredential
 
-  // @compiler blocked: upstream-dependency
   let getUserID (credential: UserCredential) : Id =
     credential |> Stdlib.Tuple2.second
 
-  // @compiler blocked: missing-implementation
   type UserProfile =
     { credential: UserCredential
       name: String }
 
-  // @compiler blocked: missing-implementation
   type EmployeeProfile = UserProfile
-  // @compiler blocked: upstream-dependency
   let getEmployeeName (profile: EmployeeProfile) : String = profile.name
 
   // @compiler blocked: pending-validation
@@ -91,10 +76,8 @@ module NestedAlias =
       "Darklang.Language.Tests.Aliases.NestedAlias.getUserID's 1st parameter `credential` expects (String * String), but got (String * Int64) ((\"Alice\", 123))"
 
 module ListAlias =
-  // @compiler blocked: missing-implementation
   type IntegerList = List<Int64>
 
-  // @compiler blocked: upstream-dependency
   let isEmpty (il: IntegerList) : Bool = Stdlib.List.isEmpty il
 
   // @compiler blocked: pending-validation
@@ -104,10 +87,8 @@ module ListAlias =
         isEmpty ([ 1L, 2L, 3L ]) |> Stdlib.Test.equal false ]
 
 module ResultAlias =
-  // @compiler blocked: missing-implementation
   type IntResult = Stdlib.Result.Result<Int64, String>
 
-  // @compiler blocked: upstream-dependency
   let getIntResultValue (ir: IntResult) : Int64 = Stdlib.Result.withDefault ir 0L
 
   // @compiler blocked: pending-validation
@@ -118,15 +99,11 @@ module ResultAlias =
         |> Stdlib.Test.equal 0L ]
 
 module RecordWithTypeArgs =
-  // @compiler blocked: missing-implementation
   type Inner<'a, 'b> = { a: 'a, b: 'b }
 
-  // @compiler blocked: missing-implementation
   type Outer1<'a> = Inner<'a, Int64>
-  // @compiler blocked: missing-implementation
   type Outer2<'b> = Inner<String, 'b>
 
-  // @compiler blocked: upstream-dependency
   let getInnerField (x: Inner<'a, 'b>) : 'b = x.b
 
   // @compiler blocked: pending-validation
@@ -165,15 +142,10 @@ module RecordWithTypeArgs =
       "Failed to create record. Expected Int64 for field `b`, but got \"b\" (a String)"
 
 module RecordWithTypeArgsDifferentName =
-  // @compiler blocked: missing-implementation
   type Inner<'a, 'b> = { a: 'a, b: 'b }
-  // @compiler blocked: missing-implementation
   type LessInner<'b, 'a> = Inner<'a, 'b>
-  // @compiler blocked: missing-implementation
   type Outer<'x> = LessInner<'x, Int64> // { a: 'x, b: Int64 }
-  // @compiler blocked: missing-implementation
   type Outest<'y> = Outer<'y> // { a: 'y, b: Int64 }
-  // @compiler blocked: missing-implementation
   type MostOutest = Outest<String> // { a: Int64, b: String }
 
   // @compiler blocked: pending-validation
@@ -230,13 +202,9 @@ module RecordWithRecursiveTypeArgs =
     )
 
 module MultiNestedRecordAlias =
-  // @compiler blocked: missing-implementation
   type Innest<'a, 'b, 'c> = { a: 'a, b: 'b, c: 'c }
-  // @compiler blocked: missing-implementation
   type Nest1<'a, 'b> = Innest<'a, 'b, Int64>
-  // @compiler blocked: missing-implementation
   type Nest2<'a> = Nest1<'a, String>
-  // @compiler blocked: missing-implementation
   type Nest3 = Nest2<Int64>
 
   // @compiler blocked: pending-validation
@@ -245,17 +213,13 @@ module MultiNestedRecordAlias =
     |> Stdlib.Test.equal (Innest { a = 5L, b = "test", c = 6L })
 
 module EnumWithTypeArgs =
-  // @compiler blocked: missing-implementation
   type Inner<'a, 'b> =
     | A of 'a
     | B of 'b
 
-  // @compiler blocked: missing-implementation
   type Outer1<'a> = Inner<'a, Int64>
-  // @compiler blocked: missing-implementation
   type Outer2<'b> = Inner<String, 'b>
 
-  // @compiler blocked: upstream-dependency
   let getInnerField (x: Inner<'a, 'b>) (default': 'b) : 'b =
     match x with
     | A _ -> default'
@@ -288,18 +252,13 @@ module EnumWithTypeArgs =
       "Failed to create enum. Expected Int64 for field 0 in `B`, but got String (\"b\")"
 
 module EnumWithTypeArgsDifferentName =
-  // @compiler blocked: missing-implementation
   type Inner<'a, 'b> =
     | A of 'a
     | B of 'b
 
-  // @compiler blocked: missing-implementation
   type LessInner<'b, 'a> = Inner<'a, 'b>
-  // @compiler blocked: missing-implementation
   type Outer<'x> = LessInner<'x, Int64>
-  // @compiler blocked: missing-implementation
   type Outest<'y> = Outer<'y>
-  // @compiler blocked: missing-implementation
   type MostOutest = Outest<String> // effectively: `| A of Int64 | B of String`
 
   // @compiler blocked: pending-validation

@@ -13,7 +13,6 @@
 module Darklang.Cli.Tests.Interactive
 
 /// One step of an interaction.
-// @compiler blocked: missing-implementation
 type Step =
   /// Wait for this text to appear, or fail the whole run.
   | Await of String
@@ -37,7 +36,6 @@ let quoted (s: String) : String =
   q + (escape s) + q
 
 
-// @compiler blocked: upstream-dependency
 let stepLine (step: Step) : String =
   match step with
   | Await text ->

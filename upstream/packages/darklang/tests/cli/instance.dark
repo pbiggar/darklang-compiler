@@ -8,7 +8,6 @@
 module Darklang.Cli.Tests.Instance
 
 /// A running instance's identity: where it lives and what binary drives it.
-// @compiler blocked: missing-implementation
 type T =
   { dir: String
     cli: String }
@@ -87,7 +86,6 @@ let dispose (i: T) : Unit =
 /// database name to it directly. `HOME` moves anything that looks under the home
 /// directory; `DARK_CONFIG_DB_NAME` is named rather than inherited, since a caller with
 /// it already set would otherwise point the instance at a file it has no copy of.
-// @compiler blocked: upstream-dependency
 let env (i: T) : List<(String * String)> =
   [ ("DARK_CONFIG_RUNDIR", $"{i.dir}/")
     ("DARK_CONFIG_DB_NAME", "data.db")
@@ -96,7 +94,6 @@ let env (i: T) : List<(String * String)> =
 
 
 /// Run one command in this instance and return everything it said.
-// @compiler blocked: upstream-dependency
 let run (i: T) (args: List<String>) : Stdlib.Result.Result<Stdlib.Cli.Process.Output, String> =
   Stdlib.Cli.Process.runWithEnv i.cli args (env i)
 
@@ -106,7 +103,6 @@ let run (i: T) (args: List<String>) : Stdlib.Result.Result<Stdlib.Cli.Process.Ou
 /// Same rule as `TestSuite.callOutput`, because the reason is the same: a refused command
 /// exits nonzero and explains itself on stdout, so dropping stdout on a failure hides
 /// exactly the text a test wants to read.
-// @compiler blocked: upstream-dependency
 let output (i: T) (args: List<String>) : String =
   match run i args with
   | Error e -> $"ERROR: {e}"
@@ -133,7 +129,6 @@ let withInstance (f: T -> Stdlib.Test.Result) : Stdlib.Test.Result =
 
 
 /// Asserts a command's output contains `needle`.
-// @compiler blocked: upstream-dependency
 let expectContains (i: T) (args: List<String>) (needle: String) : Stdlib.Test.Result =
   let out = output i args
   if Stdlib.String.contains out needle then
@@ -144,7 +139,6 @@ let expectContains (i: T) (args: List<String>) (needle: String) : Stdlib.Test.Re
 
 
 /// Asserts a command's exit code.
-// @compiler blocked: upstream-dependency
 let expectExit (i: T) (args: List<String>) (expected: Int) : Stdlib.Test.Result =
   let cmd = Stdlib.String.join args " "
 

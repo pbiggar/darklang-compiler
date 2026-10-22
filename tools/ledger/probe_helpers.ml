@@ -45,16 +45,22 @@ let main root manifest output =
         S.nodes file source
         |> List.filter (fun node ->
             match node.S.declaration with
-            | W.DFunction _ ->
-                (match node.S.disposition with
+            | W.DFunction _ | W.DType _ | W.DValue _ -> (
+                match node.S.disposition with
                 | CompilerAnnotations.Blocked reason ->
                     List.mem reason
-                      [ "missing-implementation"; "upstream-dependency";
-                        "compiler-gap"; "missing-intrinsic"; "test-counter" ]
+                      [
+                        "missing-implementation";
+                        "upstream-dependency";
+                        "compiler-gap";
+                        "missing-intrinsic";
+                        "test-counter";
+                      ]
                 | CompilerAnnotations.Run | CompilerAnnotations.Excluded _
-                | CompilerAnnotations.Replace _ | CompilerAnnotations.Xfail _ -> false)
-            | W.DValue _ | W.DType _ | W.DTrait _ | W.DImpl _ | W.DModule _
-            | W.DTest _ | W.DAssertion _ | W.DExpr _ ->
+                | CompilerAnnotations.Replace _ | CompilerAnnotations.Xfail _ ->
+                    false)
+            | W.DTrait _ | W.DImpl _ | W.DModule _ | W.DTest _ | W.DAssertion _
+            | W.DExpr _ ->
                 false))
   in
   let target = Platform.detectHostTarget () |> require in
@@ -88,9 +94,11 @@ let main root manifest output =
     let line =
       match node.S.declaration with
       | W.DFunction fn -> fn.W.keywordLet.Tokenizer.start.Tokenizer.row + 1
-      | W.DValue _ | W.DType _ | W.DTrait _ | W.DImpl _ | W.DModule _
-      | W.DTest _ | W.DAssertion _ | W.DExpr _ ->
-          Crash.crash "Non-function helper candidate"
+      | W.DType typ -> typ.W.keywordType.Tokenizer.start.Tokenizer.row + 1
+      | W.DValue value -> value.W.keywordVal.Tokenizer.start.Tokenizer.row + 1
+      | W.DTrait _ | W.DImpl _ | W.DModule _ | W.DTest _ | W.DAssertion _
+      | W.DExpr _ ->
+          Crash.crash "Non-helper candidate"
     in
     `Assoc
       [

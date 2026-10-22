@@ -1,84 +1,44 @@
 module Darklang.Language.Tests.Equality
 
-// @compiler blocked: missing-implementation
 type ERec = { x: Int64, y: Int64 }
-// @compiler blocked: missing-implementation
 type ERec2 = ERec
-// @compiler blocked: missing-implementation
 type ERecUInt64 = { x: UInt64, y: UInt64 }
-// @compiler blocked: missing-implementation
 type ERec2UInt64 = ERecUInt64
-// @compiler blocked: missing-implementation
 type ERecInt8 = { x: Int8, y: Int8 }
-// @compiler blocked: missing-implementation
 type ERec2Int8 = ERecInt8
-// @compiler blocked: missing-implementation
 type ERecUInt8 = { x: UInt8, y: UInt8 }
-// @compiler blocked: missing-implementation
 type ERec2UInt8 = ERecUInt8
-// @compiler blocked: missing-implementation
 type ERecInt16 = { x: Int16, y: Int16 }
-// @compiler blocked: missing-implementation
 type ERec2Int16 = ERecInt16
-// @compiler blocked: missing-implementation
 type ERecUInt16 = { x: UInt16, y: UInt16 }
-// @compiler blocked: missing-implementation
 type ERec2UInt16 = ERecUInt16
-// @compiler blocked: missing-implementation
 type ERecInt32 = { x: Int32, y: Int32 }
-// @compiler blocked: missing-implementation
 type ERec2Int32 = ERecInt32
-// @compiler blocked: missing-implementation
 type ERecUInt32 = { x: UInt32, y: UInt32 }
-// @compiler blocked: missing-implementation
 type ERec2UInt32 = ERecUInt32
-// @compiler blocked: missing-implementation
 type ERecInt128 = { x: Int128, y: Int128 }
-// @compiler blocked: missing-implementation
 type ERec2Int128 = ERecInt128
-// @compiler blocked: missing-implementation
 type ERecUInt128 = { x: UInt128, y: UInt128 }
-// @compiler blocked: missing-implementation
 type ERec2UInt128 = ERecUInt128
-// @compiler blocked: missing-implementation
 type EEnumInt8 = | E1 | E2 | E3 of Int8
-// @compiler blocked: missing-implementation
 type EEnum2Int8 = EEnumInt8
-// @compiler blocked: missing-implementation
 type EEnumUInt8 = | E1 | E2 | E3 of UInt8
-// @compiler blocked: missing-implementation
 type EEnum2UInt8 = EEnumUInt8
-// @compiler blocked: missing-implementation
 type EEnumInt16 = | E1 | E2 | E3 of Int16
-// @compiler blocked: missing-implementation
 type EEnum2Int16 = EEnumInt16
-// @compiler blocked: missing-implementation
 type EEnumUInt16 = | E1 | E2 | E3 of UInt16
-// @compiler blocked: missing-implementation
 type EEnum2UInt16 = EEnumUInt16
-// @compiler blocked: missing-implementation
 type EEnumInt32 = | E1 | E2 | E3 of Int32
-// @compiler blocked: missing-implementation
 type EEnum2Int32 = EEnumInt32
-// @compiler blocked: missing-implementation
 type EEnumUInt32 = | E1 | E2 | E3 of UInt32
-// @compiler blocked: missing-implementation
 type EEnum2UInt32 = EEnumUInt32
-// @compiler blocked: missing-implementation
 type EEnum = | E1 | E2 | E3 of Int64
-// @compiler blocked: missing-implementation
 type EEnum2 = EEnum
-// @compiler blocked: missing-implementation
 type EEnumUIn64 = | E1 | E2 | E3 of UInt64
-// @compiler blocked: missing-implementation
 type EEnum2UIn64 = EEnumUIn64
-// @compiler blocked: missing-implementation
 type EEnumInt128 = | E1 | E2 | E3 of Int128
-// @compiler blocked: missing-implementation
 type EEnum2Int128 = EEnumInt128
-// @compiler blocked: missing-implementation
 type EEnumUInt128 = | E1 | E2 | E3 of UInt128
-// @compiler blocked: missing-implementation
 type EEnum2UInt128 = EEnumUInt128
 
 // @compiler blocked: pending-validation

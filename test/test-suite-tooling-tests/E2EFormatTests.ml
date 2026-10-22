@@ -679,81 +679,112 @@ let testPreservesLegacyModuleScopes () =
             "Different module scopes shared a batch"
       | _ -> Error "Scoped equality assertions were not batch eligible")
 
+let testCanonicalNamedResultReporter () =
+  withTempFile "test grouped = (\n  Stdlib.Test.pass ()\n)\n" (fun path ->
+      let directory = Filename.concat (Filename.dirname path) "upstream" in
+      Unix.mkdir directory 0o700;
+      let imported = Filename.concat directory "test.dark" in
+      Unix.rename path imported;
+      Fun.protect
+        ~finally:(fun () ->
+          Unix.rename imported path;
+          Unix.rmdir directory)
+        (fun () ->
+          match parseE2ETestFile imported with
+          | Error message -> Error message
+          | Ok [ test ] ->
+              let* () =
+                parsesBatch test.source "imported named test reporter"
+              in
+              let* () =
+                require
+                  (Text.contains test.source "Stdlib.Test.pass ()\n  )")
+                  "Named test body lost its closing parenthesis"
+              in
+              require
+                (Text.contains test.source "Imported test failed")
+                "Named test reporter lost the failure diagnostic"
+          | Ok _ -> Error "Expected exactly one canonical named test"))
+
 let tests =
-  [
-    ( "compiler annotations preserve inventory",
-      testCompilerAnnotationsPreserveInventory );
-    ( "compiler annotations reject unknown reason tags",
-      testCompilerAnnotationUnknownTag );
-    ( "compiler annotations coexist with expectation overrides",
-      testCompilerAnnotationOverrideOrdering );
-    ( "compiler xfail requires the known compile failure",
-      testCompilerXfailStrictness );
-    ( "compiler xfail requires the known runtime failure",
-      testCompilerRuntimeXfailStrictness );
-    ( "passing negative tests cannot satisfy xfail",
-      testExpectedLanguageErrorIsNotAnXfail );
-    ("preserves legacy module scopes", testPreservesLegacyModuleScopes);
-    ( "file context groups preserve every assertion",
-      testSourceFileGroupsPreserveAssertions );
-    ( "parses multiline expectation on next line",
-      testParsesMultilineExpectationOnNextLine );
-    ("parses skip attribute", testParsesSkipAttribute);
-    ( "parses indented multiline .dark tests inside module",
-      testParsesIndentedMultilineDarkTestsInsideModule );
-    ( "parses multiline with inner double equals",
-      testParsesMultilineWithInnerDoubleEquals );
-    ( "parses multiline with inner let binding",
-      testParsesMultilineWithInnerLetBinding );
-    ( "parses indented multiline let without module indent leak",
-      testParsesIndentedMultilineLetWithoutModuleIndentLeak );
-    ( "parses expectation with keyword inside quoted message",
-      testParsesExpectationWithKeywordInsideQuotedMessage );
-    ( "parses multiline function-head expectation with next-line arg",
-      testParsesMultilineExpectationWithFunctionHeadAndNextLineArg );
-    ( "parses bare .e2e rhs as value expression",
-      testParsesBareE2ERightHandSideAsValueExpression );
-    ( "parses indented rhs continuation without preamble leakage",
-      testParsesIndentedRhsContinuationWithoutLeakingIntoPreamble );
-    ( "parses dotted rhs continuation after bare identifier head",
-      testParsesDottedRhsContinuationAfterBareIdentifierHead );
-    ( "parses multiline pipe before separator",
-      testParsesMultilinePipeBeforeSeparator );
-    ( "parses multiline without leading paren",
-      testParsesMultilineWithoutLeadingParen );
-    ( "parses multiline list rhs continuation",
-      testParsesMultilineListRhsContinuation );
-    ( "parses single-line dotted rhs without consuming next test",
-      testParsesSingleLineDottedRhsWithoutConsumingNextTest );
-    ( "parses multiline Dict rhs without preamble leakage",
-      testParsesMultilineDictExpectationWithoutPreambleLeakage );
-    ( "parses sqlerror shorthand expectation",
-      testParsesSqlErrorExpectationShorthand );
-    ( "parses escaped backslash before n as literal text",
-      testParsesEscapedBackslashBeforeNAsLiteralText );
-    ( "parses repeated process arguments in order",
-      testParsesRepeatedProcessArgumentsInOrder );
-    ( "builds parseable universal batch source",
-      testBuildsParseableUniversalBatchSource );
-    ( "builds parseable multi-chunk batch source",
-      testBuildsParseableMultiChunkBatchSource );
-    ("builds parseable large batch source", testBuildsParseableLargeBatchSource);
-    ("parses batch bitmask results", testParsesBatchBitmaskResults);
-    ( "parses multi-chunk batch bitmask results",
-      testParsesMultiChunkBatchBitmaskResults );
-    ( "rejects invalid batch bitmask results",
-      testRejectsInvalidBatchBitmaskResults );
-    ( "rejects invalid multi-chunk batch bitmask results",
-      testRejectsInvalidMultiChunkBatchBitmaskResults );
-    ( "does not batch tests with process inputs",
-      testDoesNotBatchTestsWithProcessInputs );
-    ("does not batch explicitly isolated tests", testDoesNotBatchIsolatedTests);
-    ( "batches equality inside explicit result binding",
-      testBatchesEqualityInsideExplicitResultBinding );
-    ( "compile-error directive overrides any upstream expectation",
-      testCompileErrorDirectiveOverridesAnyUpstreamExpectation );
-    ( "compile-error expectation requires compile failure",
-      testCompileErrorExpectationRequiresCompileFailure );
-    ( "rejects dangling compile-error directive",
-      testRejectsDanglingCompileErrorDirective );
-  ]
+  ( "canonical named result reporter parses and preserves the body",
+    testCanonicalNamedResultReporter )
+  :: [
+       ( "compiler annotations preserve inventory",
+         testCompilerAnnotationsPreserveInventory );
+       ( "compiler annotations reject unknown reason tags",
+         testCompilerAnnotationUnknownTag );
+       ( "compiler annotations coexist with expectation overrides",
+         testCompilerAnnotationOverrideOrdering );
+       ( "compiler xfail requires the known compile failure",
+         testCompilerXfailStrictness );
+       ( "compiler xfail requires the known runtime failure",
+         testCompilerRuntimeXfailStrictness );
+       ( "passing negative tests cannot satisfy xfail",
+         testExpectedLanguageErrorIsNotAnXfail );
+       ("preserves legacy module scopes", testPreservesLegacyModuleScopes);
+       ( "file context groups preserve every assertion",
+         testSourceFileGroupsPreserveAssertions );
+       ( "parses multiline expectation on next line",
+         testParsesMultilineExpectationOnNextLine );
+       ("parses skip attribute", testParsesSkipAttribute);
+       ( "parses indented multiline .dark tests inside module",
+         testParsesIndentedMultilineDarkTestsInsideModule );
+       ( "parses multiline with inner double equals",
+         testParsesMultilineWithInnerDoubleEquals );
+       ( "parses multiline with inner let binding",
+         testParsesMultilineWithInnerLetBinding );
+       ( "parses indented multiline let without module indent leak",
+         testParsesIndentedMultilineLetWithoutModuleIndentLeak );
+       ( "parses expectation with keyword inside quoted message",
+         testParsesExpectationWithKeywordInsideQuotedMessage );
+       ( "parses multiline function-head expectation with next-line arg",
+         testParsesMultilineExpectationWithFunctionHeadAndNextLineArg );
+       ( "parses bare .e2e rhs as value expression",
+         testParsesBareE2ERightHandSideAsValueExpression );
+       ( "parses indented rhs continuation without preamble leakage",
+         testParsesIndentedRhsContinuationWithoutLeakingIntoPreamble );
+       ( "parses dotted rhs continuation after bare identifier head",
+         testParsesDottedRhsContinuationAfterBareIdentifierHead );
+       ( "parses multiline pipe before separator",
+         testParsesMultilinePipeBeforeSeparator );
+       ( "parses multiline without leading paren",
+         testParsesMultilineWithoutLeadingParen );
+       ( "parses multiline list rhs continuation",
+         testParsesMultilineListRhsContinuation );
+       ( "parses single-line dotted rhs without consuming next test",
+         testParsesSingleLineDottedRhsWithoutConsumingNextTest );
+       ( "parses multiline Dict rhs without preamble leakage",
+         testParsesMultilineDictExpectationWithoutPreambleLeakage );
+       ( "parses sqlerror shorthand expectation",
+         testParsesSqlErrorExpectationShorthand );
+       ( "parses escaped backslash before n as literal text",
+         testParsesEscapedBackslashBeforeNAsLiteralText );
+       ( "parses repeated process arguments in order",
+         testParsesRepeatedProcessArgumentsInOrder );
+       ( "builds parseable universal batch source",
+         testBuildsParseableUniversalBatchSource );
+       ( "builds parseable multi-chunk batch source",
+         testBuildsParseableMultiChunkBatchSource );
+       ( "builds parseable large batch source",
+         testBuildsParseableLargeBatchSource );
+       ("parses batch bitmask results", testParsesBatchBitmaskResults);
+       ( "parses multi-chunk batch bitmask results",
+         testParsesMultiChunkBatchBitmaskResults );
+       ( "rejects invalid batch bitmask results",
+         testRejectsInvalidBatchBitmaskResults );
+       ( "rejects invalid multi-chunk batch bitmask results",
+         testRejectsInvalidMultiChunkBatchBitmaskResults );
+       ( "does not batch tests with process inputs",
+         testDoesNotBatchTestsWithProcessInputs );
+       ( "does not batch explicitly isolated tests",
+         testDoesNotBatchIsolatedTests );
+       ( "batches equality inside explicit result binding",
+         testBatchesEqualityInsideExplicitResultBinding );
+       ( "compile-error directive overrides any upstream expectation",
+         testCompileErrorDirectiveOverridesAnyUpstreamExpectation );
+       ( "compile-error expectation requires compile failure",
+         testCompileErrorExpectationRequiresCompileFailure );
+       ( "rejects dangling compile-error directive",
+         testRejectsDanglingCompileErrorDirective );
+     ]

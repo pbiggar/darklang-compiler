@@ -97,9 +97,7 @@ module ShadowingTest =
 
 
   // The value and function need different names because a package location holds one item.
-  // @compiler blocked: missing-implementation
   val valueShadowingBase = 120
-  // @compiler blocked: compiler-gap
   let valueShadowing (x: Int) : Int =
     if x <= 0 then
       10

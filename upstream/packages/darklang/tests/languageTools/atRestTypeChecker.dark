@@ -647,7 +647,6 @@ module Basics =
 // ----------------------------------------------------------------------------------
 
 module Constructors =
-  // @compiler blocked: missing-implementation
   val pair = "type Pair = | None | Some of (Int * String)"
 
   // Pair.Some takes one tuple field. Some(1, "url") supplies two fields;
@@ -819,7 +818,6 @@ module Declarations =
           "f"
         |> Stdlib.Test.equal "checked:" ]
 
-  // @compiler blocked: missing-implementation
   val pair = "type Pair<'a, 'b> = { first: 'a, second: 'b }"
 
   // @compiler blocked: pending-validation
@@ -883,10 +881,8 @@ module DictKeys =
       (src (Stdlib.List.append declarations [ $"let f (x: Dict<{keyType}, String>) : Unit = ()" ]))
       "f"
 
-  // @compiler blocked: missing-implementation
   val rejected = "failed:UnsupportedDictKeyType"
 
-  // @compiler blocked: missing-implementation
   val accepted = "checked:"
 
   // @compiler blocked: pending-validation
@@ -2359,7 +2355,6 @@ module Lets =
     |> Stdlib.Test.equal "checked:"
 
   // Defer checking record.count until getCount is called with the Counted type.
-  // @compiler blocked: missing-implementation
   val counted = "type Counted = { count: Int }"
 
   // @compiler blocked: pending-validation
@@ -3098,7 +3093,6 @@ module Invariants =
   // Check both expression orders. Use x + x rather than x + 1 so x's exact numeric
   // type stays unknown and the test exercises checks that must wait for more
   // information.
-  // @compiler blocked: missing-implementation
   val shapePairs =
     [ ("x.field", "x 1")
       ("{ x with field = 1 }", "x 1")
@@ -3149,7 +3143,6 @@ module Invariants =
   // field, enum payload, or alias. Infer this from how those contents are used.
   // A phantom type argument stores no payload, so using its container as a key
   // must not impose key restrictions on that unused argument.
-  // @compiler blocked: missing-implementation
   val badKeys =
     [ "(x 1, Dict { [x]: 1 })"
       "(x.field 1, Dict { x: 1 })"

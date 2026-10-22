@@ -1731,8 +1731,7 @@ let parseCanonicalE2ETestFile path raw (inventory : SourceInventory.source) =
                             (String.split_on_char '\n' declaration)))
                   ^ "\n" ^ "match "
                   ^ String.concat "." (scope @ [ name ])
-                  ^ " () with\n" ^ "| Stdlib.Test.Result.Pass -> true\n"
-                  ^ "| Stdlib.Test.Result.Fail messages ->\n"
+                  ^ " () with\n" ^ "| Pass -> true\n" ^ "| Fail messages ->\n"
                   ^ "  let _ = Stdlib.printLine \"Imported test failed\" in\n"
                   ^ "  let _ = Stdlib.List.iter messages Stdlib.printLine in\n"
                   ^ "  false",

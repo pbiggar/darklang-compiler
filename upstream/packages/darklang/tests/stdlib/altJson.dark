@@ -11,23 +11,18 @@ module Darklang.Stdlib.AltJson.Tests
 // should we bother taking the formatter out of Builtin land? enh
 
 // aliases and helpers
-// @compiler blocked: missing-implementation
 type Json = Stdlib.AltJson.Json
 
-// @compiler blocked: missing-implementation
 type ParseError = Stdlib.AltJson.ParseError.ParseError
 
 // <helpers>
-// @compiler blocked: upstream-dependency
 let parse (text: String) : Stdlib.Result.Result<Json, ParseError> =
   Stdlib.AltJson.parse text
 
 let format (value: Json) : String = Stdlib.AltJson.format value
 
-// @compiler blocked: upstream-dependency
 let parsedOk (value: Json) : Stdlib.Result.Result<Json, ParseError> = Ok value
 
-// @compiler blocked: upstream-dependency
 let parseError (error: ParseError) : Stdlib.Result.Result<Json, ParseError> =
   Error error
 // </helpers>

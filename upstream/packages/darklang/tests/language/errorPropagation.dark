@@ -81,7 +81,6 @@ module ErrorPropagation =
     ("test" |> Stdlib.Test.raiseRuntimeError |> (+) "3")
     => raises "Uncaught exception: test"
 
-  // @compiler blocked: missing-implementation
   type EPRec =
     { i: Int64
       m: Int64

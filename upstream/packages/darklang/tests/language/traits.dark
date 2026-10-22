@@ -5,7 +5,6 @@ module Darklang.Language.Tests.Traits
 // (`'a: Show`) are checked when a fn is entered.
 
 module Shapes =
-  // @compiler blocked: missing-implementation
   type Point = { x: Int, y: Int }
 
   // @compiler blocked: container-adaptation
@@ -116,7 +115,6 @@ module Shapes =
       "Float has no implementation of Darklang.Language.Tests.Traits.Shapes.Show. Write `impl Show for Float = ...`, or run `dark impls Show` to see which types do"
 
 module Multi =
-  // @compiler blocked: missing-implementation
   type Vec = { dx: Int, dy: Int }
 
   // The operators are the stdlib traits: `+` is `Stdlib.Add.add`. A user impl
@@ -211,7 +209,6 @@ module MethodBounds =
   // A method may declare its own type params and bounds, on top of the trait's bound
   // on the self type. They are discharged where the method is CALLED, since a method
   // has no body of its own to check them in.
-  // @compiler blocked: missing-implementation
   type Box = { n: Int64 }
 
   // @compiler blocked: container-adaptation
@@ -254,7 +251,6 @@ module SortOrder =
   // `List.sort` orders a type that has its own `Compare` the way `<` does. This
   // one's order is the reverse of its structural order, and the tag is ignored by
   // `Compare`.
-  // @compiler blocked: missing-implementation
   type Desc = { descKey: Int64, descTag: String }
 
   // @compiler blocked: container-adaptation
@@ -297,7 +293,6 @@ module SortOrder =
         SortOrder.Desc { descKey = 1L, descTag = "a" } ]
 
   // A type with no `Compare` of its own sorts structurally, as before.
-  // @compiler blocked: missing-implementation
   type Plain = { plainKey: Int64 }
 
   // @compiler blocked: pending-validation
@@ -313,10 +308,8 @@ module Equality =
   // `==` is NOT a trait: equality is structural, for every value, always. A type
   // cannot say what equal means for it, which is what keeps `List.contains`,
   // `List.unique`, `List.sort` and dict keys meaning the same thing as `==`.
-  // @compiler blocked: missing-implementation
   type User = { id: Int64, name: String }
 
-  // @compiler blocked: missing-implementation
   type Holder = { user: User }
 
   // Every field counts, including the one a custom equality would have ignored.
@@ -438,7 +431,6 @@ module Identities =
 
 module Rendering =
   // `ToString` is the trait behind every builtin type's `toString`
-  // @compiler blocked: missing-implementation
   type Point = { x: Int64, y: Int64 }
 
   // @compiler blocked: container-adaptation

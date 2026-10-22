@@ -100,9 +100,7 @@ module ShadowingTest =
   // `fn valueShadowing` would be one name bound twice, and the second binding
   // replaces the first, in the store and in the in-memory package manager alike. So
   // the val has its own name.
-  // @compiler blocked: missing-implementation
   val valueShadowingBase = 120
-  // @compiler blocked: compiler-gap
   let valueShadowing (x: Int) : Int =
     if x <= 0 then
       10

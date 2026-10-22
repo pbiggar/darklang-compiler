@@ -762,7 +762,6 @@ module Errors =
 
 module TypeErrors =
   // Distinct enum cases give this type its own content hash for stable error names.
-  // @compiler blocked: missing-implementation
   type TestType =
     | NoArgs
     | OneArg of Int64

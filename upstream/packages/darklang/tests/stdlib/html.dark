@@ -1,9 +1,7 @@
 module Darklang.Stdlib.Html.Tests
 
 // aliases and helpers
-// @compiler blocked: missing-implementation
 type HtmlTag = Stdlib.Html.HtmlTag
-// @compiler blocked: missing-implementation
 type Node = Stdlib.Html.Node
 
 let nodeToString (node: Node) : String = Stdlib.Html.nodeToString node

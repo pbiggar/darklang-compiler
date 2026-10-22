@@ -1,16 +1,13 @@
 /// Combined runtime cases. Ported from a by-hand perf check, which this replaced.
 module Darklang.Language.Tests.Semantics
 
-// @compiler blocked: missing-implementation
 type Shape =
   | Circle of Float
   | Rect of Float * Float
   | Named of name: String * inner: Shape
 
-// @compiler blocked: missing-implementation
 type Acct = { id: Int64, name: String, tags: List<String> }
 
-// @compiler blocked: upstream-dependency
 let area (s: Shape) : Float =
   match s with
   | Circle r -> 3.14159 * r * r
@@ -20,7 +17,6 @@ let area (s: Shape) : Float =
 let fib (n: Int64) : Int64 =
   if n < 2L then n else (fib (n - 1L)) + (fib (n - 2L))
 
-// @compiler blocked: upstream-dependency
 let shapes () : List<Shape> =
   [ Shape.Circle 2.0
     Shape.Rect (3.0, 4.0)

@@ -1,37 +1,21 @@
 module Darklang.Language.Tests.Values
 
 module UserDefined =
-  // @compiler blocked: missing-implementation
   val stringValue = "test"
-  // @compiler blocked: missing-implementation
   val int64Value = 5L
-  // @compiler blocked: missing-implementation
   val intValue = 5
-  // @compiler blocked: missing-implementation
   val uint64Value = 5UL
-  // @compiler blocked: missing-implementation
   val int32Value = 5l
-  // @compiler blocked: missing-implementation
   val uint32Value = 5ul
-  // @compiler blocked: missing-implementation
   val int16Value = 5s
-  // @compiler blocked: missing-implementation
   val uint16Value = 5us
-  // @compiler blocked: missing-implementation
   val int8Value = 5y
-  // @compiler blocked: missing-implementation
   val uint8Value = 5uy
-  // @compiler blocked: missing-implementation
   val floatValue = 5.6
-  // @compiler blocked: missing-implementation
   val boolValue = true
-  // @compiler blocked: missing-implementation
   val tupleValue = (1L, 2L, 3L)
-  // @compiler blocked: missing-implementation
   val charValue = 'c'
-  // @compiler blocked: missing-implementation
   val unitValue = ()
-  // @compiler blocked: missing-implementation
   val enumValue = Stdlib.Option.Option.Some 5L
 
   // @compiler blocked: pending-validation
@@ -72,9 +56,7 @@ module UserDefined =
         UserDefined.enumValue |> Stdlib.Test.equal (Stdlib.Option.Option.Some 5L)
         Ok 5L |> Stdlib.Test.equal (Stdlib.Result.Result.Ok 5L) ]
 
-  // @compiler blocked: missing-implementation
   type MyRecord = { a: Bool, b: String }
-  // @compiler blocked: missing-implementation
   val recordValue = MyRecord { a = true, b = "glasses" }
 
   // @compiler blocked: pending-validation
