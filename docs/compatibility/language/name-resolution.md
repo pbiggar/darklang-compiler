@@ -113,10 +113,12 @@ name`, and `Ambiguous <context> reference`.
   are referenced without `()`. Qualified values declared in nested user modules
   are inventoried by qualified name in `WrittenDeclarations.ml` and resolved
   through `WrittenTypeSupport.resolveValue`. Values are checked in source
-  order. The fresh upstream values probe passes 19/72; its 53 failures reference
-  missing interpreter test-package values such as `UserDefined.stringValue`.
-  The invocation supplies no upstream package server, so it does not test
-  hosted loading. See the current audit for scope and results.
+  order. The legacy assertion importer now retains module headers and each
+  assertion's module path instead of flattening those declarations. Its 35
+  user-value checks pass; the 37 package-fixture checks remain disabled and
+  package loading is outside this follow-up. Focused coverage is in
+  `test/fixtures/e2e/module-values.e2e` and `E2EFormatTests.ml`.
+
 - Repeated flattened type declarations with the same canonical type identity
   are identity-deduplicated. This preserves existing module-adapter behavior;
   distinct type identities and distinct constructor owners remain ambiguous.

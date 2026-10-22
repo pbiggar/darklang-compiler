@@ -95,11 +95,11 @@ module Update =
     (RecordForUpdateMultiple { x = 42L, y = 11L, z = 3L })
 
   module Invalid =
-    #compileerror="Unknown field 'p' on RecordForUpdateMultiple"
+    #compileerror="Unknown field 'p' on Update.RecordForUpdateMultiple"
     (let myRec = RecordForUpdateMultiple { x = 4L, y = 1L, z = 0L }
      { myRec with z = 3L, x = 42L, y = 11L, p = 10L }) = error="No field named `p`"
 
-    #compileerror="Unknown field 'other' on RecordForUpdate"
+    #compileerror="Unknown field 'other' on Update.RecordForUpdate"
     (let myRec = RecordForUpdate { x = 4L, y = 1L }
      { myRec with other = 2L }) = error="No field named `other`"
 

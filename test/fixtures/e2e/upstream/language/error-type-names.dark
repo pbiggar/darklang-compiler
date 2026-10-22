@@ -100,5 +100,5 @@ module LocallyDeclared =
 
   let describe (t: Celsius) : String = "ok"
 
-  #compileerror="Expected TRecord (\"Celsius\", []), got TInt"
+  #compileerror="Expected TRecord (\"LocallyDeclared.Celsius\", []), got TInt"
   (describe 5) = error="LocallyDeclared.describe's 1st parameter `t` expects LocallyDeclared.Celsius, but got Int (5)"

@@ -9,6 +9,7 @@ type e2eTest = {
   name : string;
   sourceLine : int;
   source : string;
+  modulePath : string list;
   expectedValueExpr : string option;
   preamble : string;
   expectedStdout : string option;
