@@ -4,6 +4,7 @@ type eqHelperExprMode = ExpandCurrent | UseHelperCall
 val makeSimpleMatchCase : AST.pattern -> AST.expr -> AST.matchCase
 
 val buildEqHelperExpr :
+  ?key:bool ->
   Types.aliasRegistry ->
   Types.indexedTypeRegistry ->
   Types.variantLookup ->

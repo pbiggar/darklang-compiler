@@ -17,25 +17,40 @@ let __equals<'k, 'v> (left: Dict<k, v>) (right: Dict<k, v>) : Bool =
             true
             (fun equal key value ->
                 if equal then
-                    match Stdlib.Dict.get<k, v> right key with
+                    match Stdlib.Dict.__get<k, v> right key with
                     | None -> false
-                    | Some rightValue -> __key_eq<v> value rightValue
+                    | Some rightValue -> value == rightValue
                 else false)
 
 let singleton (key: 'k) (value: 'v) : Dict<'k, 'v> =
   Stdlib.Dict.set (Dict { }) key value
 
+// A dictionary used as a key compares both its keys and values with key equality.
+let __keyEquals<'k, 'v> (left: Dict<k, v>) (right: Dict<k, v>) : Bool =
+    if Stdlib.Dict.__size<k, v> left != Stdlib.Dict.__size<k, v> right then false
+    else
+        Stdlib.Dict.__foldHelper<k, v, Bool>
+            left
+            true
+            (fun equal key value ->
+                if equal then
+                    match Stdlib.Dict.__get<k, v> right key with
+                    | None -> false
+                    | Some rightValue -> __key_eq<v> value rightValue
+                else false)
+
 let size<'k, 'v> (dict: Dict<k, v>) : Int =
     Stdlib.Int.fromInt64 (Stdlib.Dict.__size<k, v> dict)
 
 let get<'k, 'v> (dict: Dict<k, v>) (key: k) : Stdlib.Option.Option<v> =
-    Stdlib.Dict.__get<k, v> dict key
+    Stdlib.Dict.__get<k, v> dict (__dict_check_key key)
 
 // Concrete specializations receive the shared value renderer before ANF.
 let __renderGenericKey<'k> (key: k) : String =
     Builtin.crash "Dictionary key renderer was not specialized"
 
 let set<'k, 'v> (dict: Dict<k, v>) (key: k) (value: v) : Dict<k, v> =
+    let key = __dict_check_key key in
     if Stdlib.Dict.__contains<k, v> dict key then
         Builtin.crash
             ("Cannot add two dictionary entries with the same key " + Stdlib.Dict.__renderGenericKey key)
@@ -43,10 +58,10 @@ let set<'k, 'v> (dict: Dict<k, v>) (key: k) (value: v) : Dict<k, v> =
         Stdlib.Dict.__setOverwriting<k, v> dict key value
 
 let setOverridingDuplicates<'k, 'v> (dict: Dict<k, v>) (key: k) (value: v) : Dict<k, v> =
-    Stdlib.Dict.__setOverwriting<k, v> dict key value
+    Stdlib.Dict.__setOverwriting<k, v> dict (__dict_check_key key) value
 
 let remove<'k, 'v> (dict: Dict<k, v>) (key: k) : Dict<k, v> =
-    Stdlib.Dict.__remove<k, v> dict key
+    Stdlib.Dict.__remove<k, v> dict (__dict_check_key key)
 
 let __toUtf16Units (codepoints: List<Int64>) : List<Int64> =
     match codepoints with
@@ -130,7 +145,7 @@ let __fromListOverwritingPublic<'k, 'v> (entries: List<(k * v)>) (dict: Dict<k, 
     match entries with
     | [] -> dict
     | (key, value) :: tail ->
-        Stdlib.Dict.__fromListOverwritingPublic<k, v> tail (Stdlib.Dict.__setOverwriting dict key value)
+        Stdlib.Dict.__fromListOverwritingPublic<k, v> tail (Stdlib.Dict.__setOverwriting dict (__dict_check_key key) value)
 
 let fromListOverwritingDuplicates<'k, 'v> (entries: List<(k * v)>) : Dict<k, v> =
     Stdlib.Dict.__fromListOverwritingPublic<k, v> entries (Stdlib.Dict.__empty<k, v> ())
@@ -139,6 +154,7 @@ let __fromListRejecting<'k, 'v> (entries: List<(k * v)>) (dict: Dict<k, v>) : St
     match entries with
     | [] -> Some dict
     | (key, value) :: tail ->
+        let key = __dict_check_key key in
         if Stdlib.Dict.__contains dict key then None
         else
             Stdlib.Dict.__fromListRejecting<k, v> tail (Stdlib.Dict.__setOverwriting dict key value)
@@ -147,7 +163,7 @@ let fromList<'k, 'v> (entries: List<(k * v)>) : Stdlib.Option.Option<Dict<k, v>>
     Stdlib.Dict.__fromListRejecting<k, v> entries (Stdlib.Dict.__empty<k, v> ())
 
 let member<'k, 'v> (dict: Dict<k, v>) (key: k) : Bool =
-    Stdlib.Dict.__contains<k, v> dict key
+    Stdlib.Dict.__contains<k, v> dict (__dict_check_key key)
 
 let __mergeEntries<'k, 'v> (entries: List<(k * v)>) (result: Dict<k, v>) : Dict<k, v> =
     match entries with

@@ -15,20 +15,26 @@ let makeSimpleMatchCase pattern body : AST.matchCase =
    after the operational code pointer. The comparator is fixed during
    specialization, so generic function equality requires no type dispatch.
 *)
-let rec buildEqHelperExpr aliases registry lookup sums mode typ left right =
+let rec buildEqHelperExpr ?(key = false) aliases registry lookup sums mode typ
+    left right =
+  let helperName =
+    if key then ComparisonPlanning.keyEqHelperName
+    else ComparisonPlanning.eqHelperName
+  in
   let resolved =
     ComparisonPlanning.canonicalEqualityType lookup
       (Types.resolveType aliases typ)
   in
   let call name args = AST.applyNamed name (NonEmptyList.fromList args) in
   let recurse typ left right =
-    buildEqHelperExpr aliases registry lookup sums UseHelperCall typ left right
+    buildEqHelperExpr ~key aliases registry lookup sums UseHelperCall typ left
+      right
   in
   let chain = ComparisonPlanning.chainAndExpr in
   (match (mode, resolved) with
   | UseHelperCall, typ
     when ComparisonPlanning.needsEqHelperForResolvedType lookup typ ->
-      call (ComparisonPlanning.eqHelperName typ) [ left; right ]
+      call (helperName typ) [ left; right ]
   | ExpandCurrent, TFunction _ ->
       let leftName = "__dark_eq_helper_fn_left"
       and rightName = "__dark_eq_helper_fn_right" in
@@ -54,11 +60,7 @@ let rec buildEqHelperExpr aliases registry lookup sums mode typ left right =
       let rightHead = "__dark_eq_helper_list_right_head"
       and rightTail = "__dark_eq_helper_list_right_tail" in
       let heads = recurse inner (Var leftHead) (Var rightHead) in
-      let tails =
-        call
-          (ComparisonPlanning.eqHelperName resolved)
-          [ Var leftTail; Var rightTail ]
-      in
+      let tails = call (helperName resolved) [ Var leftTail; Var rightTail ] in
       let empty =
         makeSimpleMatchCase (PTuple [ PList []; PList [] ]) (BoolLiteral true)
       in
@@ -77,13 +79,18 @@ let rec buildEqHelperExpr aliases registry lookup sums mode typ left right =
         )
   | UseHelperCall, TList inner ->
       call
-        (ComparisonPlanning.eqHelperName
-           (TList (Types.resolveType aliases inner)))
+        (helperName (TList (Types.resolveType aliases inner)))
         [ left; right ]
   | _, TString -> BinOp (Eq, left, right)
+  | _, TFloat64 when key ->
+      AST.applyNamedWithTypes "__key_eq" [ TFloat64 ]
+        (NonEmptyList.fromList [ left; right ])
   | _, TInt -> call "Darklang.Stdlib.Int.__equals" [ left; right ]
-  | ExpandCurrent, TDict (key, value) ->
-      AST.applyNamedWithTypes "Darklang.Stdlib.Dict.__equals" [ key; value ]
+  | ExpandCurrent, TDict (keyType, value) ->
+      AST.applyNamedWithTypes
+        (if key then "Darklang.Stdlib.Dict.__keyEquals"
+         else "Darklang.Stdlib.Dict.__equals")
+        [ keyType; value ]
         (NonEmptyList.fromList [ left; right ])
   | ExpandCurrent, TTuple args ->
       let leftName = "__dark_eq_helper_tuple_left"

@@ -12,10 +12,14 @@ module S = HelperDependencies.TypeSet
 module M = StringOrder.Map
 module Names = StringOrder.Set
 
-let empty = (S.empty, S.empty)
+let empty = (S.empty, S.empty, S.empty, S.empty)
 
-let union (eq, compare) (childEq, childCompare) =
-  (S.union eq childEq, S.union compare childCompare)
+let union (eq, compare, validation, keyEq)
+    (childEq, childCompare, childValidation, childKeyEq) =
+  ( S.union eq childEq,
+    S.union compare childCompare,
+    S.union validation childValidation,
+    S.union keyEq childKeyEq )
 
 let rec collectHelperTypes symbols aliases expr =
   let collect = collectHelperTypes symbols aliases in
@@ -91,7 +95,17 @@ let rec collectHelperTypes symbols aliases expr =
             if Unification.containsTVar pair then S.empty else S.singleton pair
         | _ -> S.empty
       in
-      union (equality, ordering) (combine arguments)
+      let validation =
+        match C.functionName id symbols with
+        | Some "__dict_check_key" -> concrete
+        | _ -> S.empty
+      in
+      let keyEquality =
+        match C.functionName id symbols with
+        | Some "__key_eq" -> concrete
+        | _ -> S.empty
+      in
+      union (equality, ordering, validation, keyEquality) (combine arguments)
   | C.TupleLiteral values -> combine (C.tupleElementsToList values)
   | C.ListLiteral values | C.Constructor (_, values) -> combine values
   | C.DictLiteral (_, _, entries) ->
@@ -116,8 +130,8 @@ let rec collectHelperTypes symbols aliases expr =
            (function C.StringExpr expr -> Some expr | C.StringText _ -> None)
            parts)
 
-let rec rewriteHelperCalls symbols aliases variants expr =
-  let recurse = rewriteHelperCalls symbols aliases variants in
+let rec rewriteHelperCalls symbols aliases records sums variants expr =
+  let recurse = rewriteHelperCalls symbols aliases records sums variants in
   let args = NonEmptyList.map recurse in
   let resolved name =
     match C.tryFindFunctionId name symbols with
@@ -164,6 +178,15 @@ let rec rewriteHelperCalls symbols aliases variants expr =
             (ComparisonPlanning.compareHelperName
                (Types.resolveType aliases (C.semanticType target))),
           args values )
+  | C.TypeApp (id, [ target ], { NonEmptyList.head = key; tail = [] })
+    when C.functionName id symbols = Some "__dict_check_key"
+         && not (Unification.containsTVar (C.semanticType target)) ->
+      let typ = Types.resolveType aliases (C.semanticType target) in
+      if DictionaryKeyValidation.needsValidation aliases records sums typ then
+        C.Call
+          ( resolved (DictionaryKeyValidation.name typ),
+            NonEmptyList.singleton (recurse key) )
+      else recurse key
   | C.TypeApp (id, types, values) -> C.TypeApp (id, types, args values)
   | C.TupleLiteral values -> C.TupleLiteral (C.mapTupleElements recurse values)
   | C.TupleAccess (value, index) -> C.TupleAccess (recurse value, index)
@@ -227,7 +250,7 @@ let materializeEqHelpersInTopLevelsWithIndexedSums symbols aliases typeReg
         | C.FunctionDef _ | C.TypeDef _ -> None)
       topLevels
   in
-  let equality, ordering =
+  let equality, ordering, validation, keyEquality =
     List.fold_left
       (fun combined expr ->
         union combined (collectHelperTypes symbols aliases expr))
@@ -249,6 +272,14 @@ let materializeEqHelpersInTopLevelsWithIndexedSums symbols aliases typeReg
       ({ HelperDependencies.inProgress = Names.empty; generated = M.empty }
         : HelperDependencies.compareHelperGenerationState)
   in
+  let keyEqualityState =
+    S.fold
+      (HelperDependencies.ensureEqHelperForType ~key:true aliases typeReg
+         variants indexedSums)
+      keyEquality
+      ({ HelperDependencies.inProgress = Names.empty; generated = M.empty }
+        : HelperDependencies.eqHelperGenerationState)
+  in
   let existing =
     List.filter_map
       (function C.FunctionDef func -> Some func.C.name | _ -> None)
@@ -260,6 +291,13 @@ let materializeEqHelpersInTopLevelsWithIndexedSums symbols aliases typeReg
       (fun _ _ newer -> Some newer)
       equalityState.HelperDependencies.generated
       orderingState.HelperDependencies.generated
+    |> M.union
+         (fun _ _ newer -> Some newer)
+         keyEqualityState.HelperDependencies.generated
+    |> M.union
+         (fun _ _ newer -> Some newer)
+         (DictionaryKeyValidation.generate aliases typeReg indexedSums
+            validation)
     |> M.bindings |> List.map snd
     |> List.filter (fun (func : AST.functionDef) ->
         not (Names.mem func.AST.name existing))
@@ -280,16 +318,21 @@ let materializeEqHelpersInTopLevelsWithIndexedSums symbols aliases typeReg
             C.FunctionDef
               {
                 func with
-                C.body = rewriteHelperCalls symbols aliases variants func.C.body;
+                C.body =
+                  rewriteHelperCalls symbols aliases typeReg indexedSums
+                    variants func.C.body;
               }
         | C.Expression expr ->
-            C.Expression (rewriteHelperCalls symbols aliases variants expr)
+            C.Expression
+              (rewriteHelperCalls symbols aliases typeReg indexedSums variants
+                 expr)
         | C.ValueDef value ->
             C.ValueDef
               {
                 value with
                 C.body =
-                  rewriteHelperCalls symbols aliases variants value.C.body;
+                  rewriteHelperCalls symbols aliases typeReg indexedSums
+                    variants value.C.body;
               }
         | other -> other)
       topLevels

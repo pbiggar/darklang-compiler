@@ -90,7 +90,17 @@ let check checkExpression literal globals locals symbols expected
                   match types with
                   | None -> Ok None
                   | Some types ->
-                      bind (checkFields symbols fields []) (fun (checked, _) ->
+                      let context, symbols =
+                        WrittenCheckingState.freshenType S.empty
+                          (AST.TTuple types) symbols
+                      in
+                      let contexts =
+                        match context with
+                        | AST.TTuple values -> values
+                        | _ -> Crash.crash "Constructor context tuple"
+                      in
+                      bind (checkFields symbols fields contexts)
+                        (fun (checked, _) ->
                           map Option.some
                             (inferArgs canonical entry.params types checked))))
       in
@@ -128,7 +138,16 @@ let check checkExpression literal globals locals symbols expected
                         ^ " fields")
                   | Some (_, variant) ->
                       bind (variantTypes entry variant) (fun types ->
-                          bind (checkFields symbols fields [])
+                          let context, symbols =
+                            WrittenCheckingState.freshenType S.empty
+                              (AST.TTuple types) symbols
+                          in
+                          let contexts =
+                            match context with
+                            | AST.TTuple values -> values
+                            | _ -> Crash.crash "Constructor context tuple"
+                          in
+                          bind (checkFields symbols fields contexts)
                             (fun (checked, _) ->
                               map
                                 (fun args -> (canonical, entry, args))

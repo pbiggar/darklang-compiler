@@ -87,10 +87,14 @@ let record check literal globals locals symbols expected
                               ("Unknown field '" ^ fieldName ^ "' on "
                              ^ canonical)
                         | Some pattern ->
+                            let context, symbols =
+                              WrittenCheckingState.freshenType S.empty pattern
+                                symbols
+                            in
                             map
                               (fun (actual, _, symbols) ->
                                 (pattern :: patterns, actual :: actuals, symbols))
-                              (check globals locals symbols None value)))
+                              (check globals locals symbols (Some context) value)))
                   (Ok ([], [], symbols))
                   fields
               in

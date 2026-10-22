@@ -703,6 +703,11 @@ let convertTypedProgramToUserOnlyWithMode (baseContext : X.pipelineContext) mode
         C.composeDeclaredTopLevels sourceSymbols baseContext.X.symbols
           (C.programTopLevels typedProgram))
   in
+  let* () =
+    DictionaryFunctionKeys.check baseContext.X.keyFunctions symbols
+      typeCheckEnv.Types.aliasReg typeCheckEnv.Types.indexedTypeReg
+      typeCheckEnv.Types.indexedSumTypeReg topLevels
+  in
   let symbols, topLevels =
     CheckedMaterializeHelpers.materializeEqHelpersInTopLevelsWithIndexedSums
       symbols typeCheckEnv.Types.aliasReg typeCheckEnv.Types.indexedTypeReg
@@ -790,6 +795,16 @@ let convertTypedProgramToUserOnlyWithMode (baseContext : X.pipelineContext) mode
                     not (isKnown localNames fn.C.name))
                   specializedFunctions
                 |> List.map (fun fn -> C.FunctionDef fn)
+              in
+              (* Rendering a duplicate key can itself instantiate collection
+                 operations. Discover those dependencies in the same closure
+                 as the insertion specialization that requested the renderer. *)
+              let symbols, specializedTopLevels =
+                C.programFromCheckedParts (symbols, specializedTopLevels)
+                |> ValueRendering.rewriteDictionaryKeyRenderers
+                     typeCheckEnv.Types.indexedTypeReg
+                     typeCheckEnv.Types.indexedSumTypeReg
+                |> C.viewProgram
               in
               let symbols, materializedTopLevels =
                 CheckedMaterializeHelpers

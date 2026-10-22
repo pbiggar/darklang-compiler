@@ -206,64 +206,95 @@ let buildCompareHelperExpr aliases registry _lookup sums mode typ left right =
             |> List.stable_sort (fun (name, _, _) (other, _, _) ->
                 StringOrder.compare name other)
       in
-      let cases =
-        List.concat_map
-          (fun (leftCase, leftTag, leftFields) ->
-            List.map
-              (fun (rightCase, rightTag, rightFields) ->
-                let order = StringOrder.compare leftCase rightCase in
-                let leftConstructor fields =
-                  PResolvedConstructor (name, leftCase, leftTag, fields)
-                and rightConstructor fields =
-                  PResolvedConstructor (name, rightCase, rightTag, fields)
-                in
-                if leftFields = [] && rightFields = [] && order = 0 then
-                  case
-                    (PTuple [ leftConstructor []; rightConstructor [] ])
-                    (comparisonResultLiteral 0L)
-                else if order = 0 then
-                  let leftNames =
-                    List.mapi
-                      (fun index _ ->
-                        "__dark_compare_sum_left_field_" ^ string_of_int index)
-                      leftFields
-                  in
-                  let rightNames =
-                    List.mapi
-                      (fun index _ ->
-                        "__dark_compare_sum_right_field_" ^ string_of_int index)
-                      leftFields
-                  in
-                  let comparisons =
-                    List.map2
-                      (fun (typ, left) right ->
-                        callHelper typ (Var left) (Var right))
-                      (List.combine leftFields leftNames)
-                      rightNames
-                  in
-                  case
-                    (PTuple
-                       [
-                         leftConstructor
-                           (List.map (fun name -> PVar name) leftNames);
-                         rightConstructor
-                           (List.map (fun name -> PVar name) rightNames);
-                       ])
-                    (chainCompareExprs comparisons)
-                else
-                  case
-                    (PTuple
-                       [
-                         leftConstructor
-                           (List.map (fun _ -> PWildcard) leftFields);
-                         rightConstructor
-                           (List.map (fun _ -> PWildcard) rightFields);
-                       ])
-                    (comparisonResultLiteral (if order < 0 then -1L else 1L)))
-              variants)
-          variants
+      let constructor caseName tag fields =
+        PResolvedConstructor (name, caseName, tag, fields)
       in
-      Match (TupleLiteral [ left; right ], cases)
+      let sameVariant nested (caseName, tag, fields) =
+        let fieldNames side =
+          List.mapi
+            (fun index _ ->
+              "__dark_compare_sum_" ^ side ^ "_field_" ^ string_of_int index)
+            fields
+        in
+        let leftNames = fieldNames "left" and rightNames = fieldNames "right" in
+        let comparisons =
+          List.map2
+            (fun (typ, left) right -> callHelper typ (Var left) (Var right))
+            (List.combine fields leftNames)
+            rightNames
+        in
+        let leftPattern =
+          constructor caseName tag (List.map (fun name -> PVar name) leftNames)
+        and rightPattern =
+          constructor caseName tag (List.map (fun name -> PVar name) rightNames)
+        in
+        let body = chainCompareExprs comparisons in
+        if nested then
+          case leftPattern
+            (Match
+               ( Var "__dark_compare_sum_right",
+                 [
+                   case rightPattern body;
+                   case PWildcard
+                     (RuntimeError "Invalid canonical enum comparison");
+                 ] ))
+        else case (PTuple [ leftPattern; rightPattern ]) body
+      in
+      if List.length variants < 4 then
+        let cases =
+          List.concat_map
+            (fun ((leftCase, leftTag, leftFields) as leftVariant) ->
+              List.map
+                (fun (rightCase, rightTag, rightFields) ->
+                  let order = StringOrder.compare leftCase rightCase in
+                  if order = 0 then sameVariant false leftVariant
+                  else
+                    case
+                      (PTuple
+                         [
+                           constructor leftCase leftTag
+                             (List.map (fun _ -> PWildcard) leftFields);
+                           constructor rightCase rightTag
+                             (List.map (fun _ -> PWildcard) rightFields);
+                         ])
+                      (comparisonResultLiteral (if order < 0 then -1L else 1L)))
+                variants)
+            variants
+        in
+        Match (TupleLiteral [ left; right ], cases)
+      else
+        (* A rank preserves case-name order without emitting every pair of
+           variants. Only equal ranks need structural payload comparison. *)
+        let leftName = "__dark_compare_sum_left"
+        and rightName = "__dark_compare_sum_right"
+        and leftRank = "__dark_compare_sum_left_rank"
+        and rightRank = "__dark_compare_sum_right_rank" in
+        (* Keep rank dispatch out of this function: lowering a match-valued
+           let would duplicate the remaining dispatch into every branch. *)
+        let rank value =
+          call
+            (ComparisonPlanning.compareHelperName resolved ^ "_rank")
+            [ value ]
+        in
+        let equalRank =
+          Match (Var leftName, List.map (sameVariant true) variants)
+        in
+        Let
+          ( LPVariable leftName,
+            left,
+            Let
+              ( LPVariable rightName,
+                right,
+                Let
+                  ( LPVariable leftRank,
+                    rank (Var leftName),
+                    Let
+                      ( LPVariable rightRank,
+                        rank (Var rightName),
+                        If
+                          ( BinOp (Eq, Var leftRank, Var rightRank),
+                            equalRank,
+                            native (Var leftRank) (Var rightRank) ) ) ) ) )
   | EqualityHelpers.ExpandCurrent, _ ->
       RuntimeError
         ("Canonical sorting is not supported for type "

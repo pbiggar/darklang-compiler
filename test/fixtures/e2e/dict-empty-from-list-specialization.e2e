@@ -1,0 +1,4 @@
+// Empty fromList specializations preserve their Option result through function calls.
+let emptyFromList () : Stdlib.Option.Option<Dict<Int64, String>> = Stdlib.Dict.fromList []
+emptyFromList () = Some (Dict { })
+match emptyFromList () with | Some dict -> Stdlib.Dict.isEmpty dict | None -> false = true

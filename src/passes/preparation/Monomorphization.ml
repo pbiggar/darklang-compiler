@@ -24,6 +24,18 @@ let hasPredefinedKeyIntrinsic = function
   | AST.TInt64 | AST.TBool | AST.TFloat64 | AST.TString | AST.TBlob -> true
   | _ -> false
 
+let rec intrinsicallySafeKeyType = function
+  | AST.TUnit | AST.TBool | AST.TInt8 | AST.TInt16 | AST.TInt32 | AST.TInt64
+  | AST.TInt128 | AST.TInt | AST.TUInt8 | AST.TUInt16 | AST.TUInt32
+  | AST.TUInt64 | AST.TUInt128 | AST.TFloat64 | AST.TString | AST.TChar
+  | AST.TDateTime ->
+      true
+  | AST.TTuple types -> List.for_all intrinsicallySafeKeyType types
+  | AST.TList typ -> intrinsicallySafeKeyType typ
+  | AST.TDict (key, value) ->
+      intrinsicallySafeKeyType key && intrinsicallySafeKeyType value
+  | _ -> false
+
 let ordinal id =
   let bits = AST.functionIdValue id in
   Z.to_string
@@ -154,14 +166,11 @@ let collectTypeApps symbols expr =
           if variables then specs else SS.add (name, types) specs
         else if S.isGenericKeyIntrinsicName name then
           match types with
-          | [ typ ] when (not variables) && hasPredefinedKeyIntrinsic typ ->
+          | [ typ ]
+            when name <> "__dict_check_key" && (not variables)
+                 && hasPredefinedKeyIntrinsic typ ->
               SS.add (name, types) specs
           | _ -> specs
-        else if
-          (name = "Darklang.Stdlib.Dict.fromList" || name = "Dict.fromList")
-          && args = [ C.ListLiteral [] ]
-          && not variables
-        then SS.add ("Darklang.Stdlib.Dict.empty", types) specs
         else SS.add (name, types) specs
     | C.TupleLiteral values -> many specs (C.tupleElementsToList values)
     | C.ListLiteral values | C.Constructor (_, values) -> many specs values
@@ -174,7 +183,7 @@ let collectTypeApps symbols expr =
         if entries = [] then specs
         else
           SS.add
-            ( "Darklang.Stdlib.Dict.__setOverwriting",
+            ( "Darklang.Stdlib.Dict.set",
               C.semanticTypeArgs [ keyType; valueType ] )
             specs
     | C.RecordLiteral (_, fields) ->
@@ -432,12 +441,21 @@ let replaceTypeAppsCore symbols registry expr =
     let wrap = S.wrapWithIgnoredArgEvaluations in
     let key name types args =
       match (name, types) with
+      | "__dict_check_key", [ typ ] when intrinsicallySafeKeyType typ -> (
+          match args with
+          | [ key ] -> Ok key
+          | _ -> Error "Public key check arity")
+      | "__dict_check_key", [ typ ] ->
+          Error
+            ("Public key validation was not materialized: "
+            ^ StructuralFormat.semanticType typ)
       | "__hash", [ typ ] when hasPredefinedKeyIntrinsic typ ->
           Ok (call (S.specName name types) args)
       | "__hash", [ _ ] -> Ok (wrap args (C.Int64Literal 0L))
       | "__key_eq", [ typ ] when hasPredefinedKeyIntrinsic typ ->
           Ok (call (S.specName name types) args)
-      | "__key_eq", [ typ ] -> materialize typ args
+      | "__key_eq", [ typ ] ->
+          Ok (call (ComparisonPlanning.keyEqHelperName typ) args)
       | _ -> (
           match registry with
           | None ->
@@ -557,17 +575,16 @@ let replaceTypeAppsCore symbols registry expr =
               in
               let variables = List.exists S.containsTypeVar types in
               let args = NonEmptyList.toList arguments in
-              let emptyDict =
-                (name = "Darklang.Stdlib.Dict.fromList"
-                || name = "Dict.fromList")
-                && args = [ C.ListLiteral [] ]
-                && not variables
-              in
               let genericKey = S.isGenericKeyIntrinsicName name in
               let unresolvedKey args =
-                wrap args
-                  (S.unresolvedKeyIntrinsicTypeArgErrorExpr
-                     (resolved "Builtin.crash") name)
+                if name = "__dict_check_key" then
+                  match args with
+                  | [ key ] -> key
+                  | _ -> Crash.crash "Public key check arity"
+                else
+                  wrap args
+                    (S.unresolvedKeyIntrinsicTypeArgErrorExpr
+                       (resolved "Builtin.crash") name)
               in
               let polymorphicComparison args =
                 if name = P.eqHelperDispatchMarker then
@@ -598,8 +615,6 @@ let replaceTypeAppsCore symbols registry expr =
                              (ComparisonPlanning.compareHelperName typ)
                              [ left; right ])
                     | _ -> Ok (polymorphicComparison args)
-                  else if emptyDict then
-                    Ok (call (S.specName "Darklang.Stdlib.Dict.empty" types) [])
                   else if genericKey && variables then
                     let* args = many args in
                     Ok (unresolvedKey args)
@@ -632,9 +647,6 @@ let replaceTypeAppsCore symbols registry expr =
                     else if genericKey || isIntrinsicTypeAppName name then
                       Ok (S.specName name types)
                     else
-                      let name =
-                        if emptyDict then "Darklang.Stdlib.Dict.empty" else name
-                      in
                       match SM.find_opt (name, types) registry with
                       | Some specialized -> Ok specialized
                       | None -> Error (missingSpecMessage name types)
@@ -663,10 +675,8 @@ let replaceTypeAppsCore symbols registry expr =
                     materialize target args
                   else
                     let* specialized = resolvedName in
-                    if emptyDict then Ok (call specialized [])
-                    else
-                      let* args = many args in
-                      Ok (call specialized args)))
+                    let* args = many args in
+                    Ok (call specialized args)))
     | C.TupleLiteral values ->
         let* values = many (C.tupleElementsToList values) in
         Ok (C.TupleLiteral (C.tupleElementsOfList values))
@@ -680,7 +690,7 @@ let replaceTypeAppsCore symbols registry expr =
               List.fold_left
                 (fun dict (keyExpr, valueExpr) ->
                   C.TypeApp
-                    ( resolved "Darklang.Stdlib.Dict.__setOverwriting",
+                    ( resolved "Darklang.Stdlib.Dict.set",
                       [ key; value ],
                       NonEmptyList.fromList [ dict; keyExpr; valueExpr ] ))
                 (C.DictLiteral (key, value, []))
@@ -749,7 +759,6 @@ let replaceTypeAppsCore symbols registry expr =
 (*
    Replace TypeApp with Call using specialized name in an expression
    Replace with a regular Call to the specialized name
-   Optimization: avoid building a Dict from an empty list when types are concrete.
 *)
 let replaceTypeApps symbols expr =
   match replaceTypeAppsCore symbols None expr with
@@ -790,7 +799,9 @@ let mapFold transform state values =
   in
   (List.rev reversed, state)
 
-let materializeFunctionComparisons program =
+(* Bind literal entries before insertion so duplicate detection cannot skip a
+   later key or value. The same pass binds function-comparison operands once. *)
+let materializeEvaluationBindings program =
   let rec rewrite symbols expr =
     let one value build =
       let value, symbols = rewrite symbols value in
@@ -857,15 +868,32 @@ let materializeFunctionComparisons program =
     | C.TupleAccess (value, index) ->
         one value (fun value -> C.TupleAccess (value, index))
     | C.DictLiteral (key, value, entries) ->
-        let entries, symbols =
+        let bindings, symbols =
           mapFold
             (fun symbols (key, value) ->
               let key, symbols = rewrite symbols key in
               let value, symbols = rewrite symbols value in
-              ((key, value), symbols))
+              let keyId, symbols = C.allocateBinding "__dict_key" symbols in
+              let valueId, symbols = C.allocateBinding "__dict_value" symbols in
+              ((keyId, key, valueId, value), symbols))
             symbols entries
         in
-        (C.DictLiteral (key, value, entries), symbols)
+        let entries =
+          List.map
+            (fun (key, _, value, _) -> (C.Local key, C.Local value))
+            bindings
+        in
+        let body =
+          List.fold_right
+            (fun (keyId, key, valueId, value) body ->
+              C.Let
+                ( C.LPVariable keyId,
+                  key,
+                  C.Let (C.LPVariable valueId, value, body) ))
+            bindings
+            (C.DictLiteral (key, value, entries))
+        in
+        (body, symbols)
     | C.RecordLiteral (reference, fields) ->
         let fields, symbols = C.mapFoldRecordFields rewrite symbols fields in
         (C.RecordLiteral (reference, fields), symbols)
@@ -953,7 +981,7 @@ let materializeFunctionComparisons program =
    Replace TypeApp with Call across a program using a registry (drops generic defs)
 *)
 let replaceTypeAppsInProgramWithRegistry registry program =
-  let program = materializeFunctionComparisons program in
+  let program = materializeEvaluationBindings program in
   let initialSymbols = C.programSymbols program in
   let tops = C.programTopLevels program in
   let specs =
