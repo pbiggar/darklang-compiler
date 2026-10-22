@@ -77,6 +77,21 @@ changes, and pushing them to this public repository.**
   actual validation result and limitation. Do not describe a checkpoint as
   ready or merged.
 
+## Benchmark gate exception for ChatGPT Work
+
+- The benchmark gate does not work in ChatGPT Work. The shared requirement in
+  `AGENTS.md` to run
+  `./benchmarks/run_benchmarks.sh --verify-parent full` does not apply in this
+  environment.
+- Skip this gate rather than spending time trying to make it pass. It is not a
+  prerequisite for committing, pushing, declaring work ready, or carrying out
+  a user-requested merge. No additional approval is needed to skip it.
+- In validation reports, state that the benchmark gate is not applicable in
+  ChatGPT Work; do not list it as a blocker or remaining work. Run benchmarks
+  here only when the user explicitly requests benchmark investigation.
+- Build, correctness tests, and other applicable checks still apply. This
+  exception is specific to ChatGPT Work.
+
 ## Git workflow
 
 - Keep work tracked and remote task branches synced under the standing
