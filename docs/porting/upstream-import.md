@@ -1,6 +1,6 @@
 # Importing the pinned upstream corpus
 
-The import is being migrated to a direct inventory of upstream source items.
+The import uses a direct inventory of upstream source items.
 Parsing and inventory discovery do not require type checking or executing their
 bodies. The source pin remains in `porting/sources.yaml`.
 
@@ -32,7 +32,7 @@ test evaluatesOnce =
 // @compiler excluded: runtime-reflection
 let inspect ... = ...
 
-// @compiler replace: compiler/base64.dark#decode reason=interpreter-intrinsic
+// @compiler replace: packages/darklang/stdlib/base64.dark#Darklang.Stdlib.Base64.decode reason=interpreter-intrinsic
 let decode ... = ...
 
 // @compiler xfail compile: "Unknown function" reason=test-counter

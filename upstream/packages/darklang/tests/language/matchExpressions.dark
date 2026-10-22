@@ -472,7 +472,7 @@ let complexSum (list: List<List<Int64>>) : Int64 =
   | (a :: ar) :: (b :: brest) :: rest -> a + b
   | _ -> 0L
 
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Non-exhaustive match expression" reason=compiler-gap
 test consPatterns =
   Stdlib.Test.all
     [ (match [ 1L, 2L, 3L ] with
@@ -544,7 +544,7 @@ test consPatterns =
        | 1L :: a :: rest -> a * 2L)
       |> Stdlib.Test.equal 4L ]
 
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Tuple pattern does not match the scrutinee type" reason=compiler-gap
 test tuplePatterns =
   Stdlib.Test.all
     [ (match (1L, 'a') with
@@ -575,7 +575,6 @@ test tuplePatterns =
        | (true, [ 1L, 2L ]) -> "pass")
       |> Stdlib.Test.equal "pass" ]
 
-// @compiler blocked: pending-validation
 test nestedTuplePatterns =
   Stdlib.Test.all
     [ (match ((1L, 'a'), (true, 2.0)) with
@@ -610,7 +609,7 @@ test nestedTuplePatterns =
        | _ -> "fail")
       |> Stdlib.Test.equal "pass" ]
 
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Non-exhaustive match expression" reason=compiler-gap
 test resultPatterns =
   Stdlib.Test.all
     [ (match Stdlib.Result.Result.Ok 5L with
@@ -651,7 +650,7 @@ test resultPatterns =
        | _ -> "fail")
       |> Stdlib.Test.equal "pass" ]
 
-// @compiler blocked: pending-validation
+// @compiler blocked: compiler-timeout
 test optionPatterns =
   Stdlib.Test.all
     [ (match Stdlib.Option.Option.Some 5L with

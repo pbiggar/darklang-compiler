@@ -2,7 +2,7 @@
 /// Run without tracing, as in the original check.
 module Darklang.Language.Tests.FastOps
 
-// @compiler blocked: compiler-gap
+// @compiler blocked: value-specialization
 val d = Stdlib.Dict.fromListOverwritingDuplicates [ ("a", 1), ("b", 2) ]
 
 let check (label: String) (actual: String) (expected: String) : Stdlib.Test.Result =

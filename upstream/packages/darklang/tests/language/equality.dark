@@ -36,7 +36,7 @@ type EEnum = | E1 | E2 | E3 of Int64
 type EEnum2 = EEnum
 type EEnumUIn64 = | E1 | E2 | E3 of UInt64
 type EEnum2UIn64 = EEnumUIn64
-// @compiler blocked: compiler-gap
+// @compiler blocked: constructor-identity
 type EEnumInt128 = | E1 | E2 | E3 of Int128
 // @compiler blocked: upstream-dependency
 type EEnum2Int128 = EEnumInt128
