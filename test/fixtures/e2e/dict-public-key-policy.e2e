@@ -1,0 +1,13 @@
+// Public keys reject present opaque values while private HAMTs retain Blob identity keys.
+Stdlib.Dict.singleton (Stdlib.Blob.fromString "bad") "value" = error="Unsupported dictionary key type"
+Stdlib.Dict.singleton (Stdlib.Stream.fromList [1L]) "value" = error="Unsupported dictionary key type"
+Stdlib.Dict.singleton [Stdlib.Blob.fromString "bad"] "value" = error="Unsupported dictionary key type"
+Stdlib.Dict.fromList [(Stdlib.Blob.fromString "bad", "value")] = error="Unsupported dictionary key type"
+Stdlib.Dict.fromListOverwritingDuplicates [(Stdlib.Blob.fromString "bad", "value")] = error="Unsupported dictionary key type"
+Stdlib.Dict.get (Dict { (Stdlib.Blob.fromString "bad"): "value" }) (Stdlib.Blob.fromString "bad") = error="Unsupported dictionary key type"
+let absentBlob () : Stdlib.Option.Option<Blob> = None
+Stdlib.Dict.get (Stdlib.Dict.singleton (absentBlob ()) "empty") (absentBlob ()) = Some "empty"
+let absentStream () : List<Stdlib.Stream.Stream<Int64>> = []
+Stdlib.Dict.get (Stdlib.Dict.singleton (absentStream ()) "empty") (absentStream ()) = Some "empty"
+Stdlib.Dict.singleton (fun x -> x + 1L) "bad" = compileerror=""
+Stdlib.Dict.singleton (Some (fun x -> x + 1L)) "bad" = compileerror=""

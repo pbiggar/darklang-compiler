@@ -1,0 +1,5 @@
+// Nested record inference passes its field context to payloadless constructors.
+type ContextNodeInner<'a> = { value: 'a, next: Stdlib.Option.Option<ContextNode<'a>> }
+type ContextNode<'a> = ContextNodeInner<'a>
+let contextNode () : ContextNode<Int64> = ContextNode { value = 1L, next = Some (ContextNode { value = 2L, next = None }) }
+contextNode () = ContextNodeInner { value = 1L, next = Some (ContextNodeInner { value = 2L, next = None }) }
