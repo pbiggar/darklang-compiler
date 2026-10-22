@@ -14,8 +14,7 @@ from aioquic.h3.connection import H3Connection, encode_frame
 from aioquic.h3.events import HeadersReceived
 from aioquic.quic.configuration import QuicConfiguration
 from aioquic.quic.connection import QuicConnection
-from aioquic.quic.events import ConnectionTerminated
-from aioquic.quic.packet import pull_quic_header
+from aioquic.quic.packet import QuicFrameType, pull_quic_header
 from cryptography.hazmat.primitives import serialization
 from test_quic_tls_peer import certificates
 
@@ -148,9 +147,22 @@ def main():
     key, leaf, ca = certificates()
     configuration = QuicConfiguration(is_client=False, alpn_protocols=["h3"])
     configuration.certificate, configuration.private_key = leaf, key
-    errors, streams, connections, close_codes = [], [], [], []
+    errors, streams, connections, close_codes, close_types = [], [], [], [], []
     stopped = threading.Event()
-    terminated = threading.Event()
+    wire_closed = threading.Event()
+
+    class PeerQuic(QuicConnection):
+        def _handle_connection_close_frame(self, context, frame_type, buf):
+            # Observe the authenticated wire frame, not ConnectionTerminated:
+            # aioquic delays that event until its three-PTO drain completes.
+            position = buf.tell()
+            code = buf.pull_uint_var()
+            buf.seek(position)
+            super()._handle_connection_close_frame(context, frame_type, buf)
+            close_codes.append(code)
+            close_types.append(frame_type)
+            wire_closed.set()
+
     with tempfile.TemporaryDirectory(prefix="h3-session-") as temporary, socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as listener:
         listener.bind(("127.0.0.1", 0))
         listener.settimeout(0.01)
@@ -185,7 +197,7 @@ def main():
                         packet, address = listener.recvfrom(8192)
                         if connection is None:
                             header = pull_quic_header(Buffer(data=packet), host_cid_length=8)
-                            connection = QuicConnection(configuration=configuration, original_destination_connection_id=header.destination_cid)
+                            connection = PeerQuic(configuration=configuration, original_destination_connection_id=header.destination_cid)
                             connections.append(connection)
                             http = PeerH3(connection)
                         connection.receive_datagram(packet, address, now)
@@ -197,9 +209,6 @@ def main():
                     if timer is not None and timer <= now:
                         connection.handle_timer(now)
                     while (event := connection.next_event()) is not None:
-                        if isinstance(event, ConnectionTerminated):
-                            close_codes.append(event.error_code)
-                            terminated.set()
                         for received in http.handle_event(event):
                             if isinstance(received, HeadersReceived):
                                 streams.append(received.stream_id)
@@ -274,7 +283,7 @@ def main():
         try:
             result = subprocess.run([str(binary), str(listener.getsockname()[1])], cwd=ROOT, capture_output=True, text=True, timeout=60)
             if args.multiplex in connection_errors:
-                assert terminated.wait(timeout=2), "Peer did not receive the connection wire error"
+                assert wire_closed.wait(timeout=2), ("Peer did not receive the connection wire error", result, streams, close_codes, errors)
         finally:
             stopped.set()
             thread.join(timeout=2)
@@ -289,6 +298,7 @@ def main():
         assert len(connections) == 1 and streams == expected, streams
         if args.multiplex in connection_errors:
             assert close_codes == [connection_errors[args.multiplex]], close_codes
+            assert close_types == [QuicFrameType.APPLICATION_CLOSE], close_types
     print(f"HTTP/3 {'blocked reset' if args.blocked_reset else args.multiplex or 'session'}: streams {streams}, shared Unicode QPACK and leak-free disposal passed")
 
 
