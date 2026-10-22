@@ -183,7 +183,7 @@ let collectTypeApps symbols expr =
         if entries = [] then specs
         else
           SS.add
-            ( "Darklang.Stdlib.Dict.__setOverwriting",
+            ( "Darklang.Stdlib.Dict.set",
               C.semanticTypeArgs [ keyType; valueType ] )
             specs
     | C.RecordLiteral (_, fields) ->
@@ -684,7 +684,7 @@ let replaceTypeAppsCore symbols registry expr =
               List.fold_left
                 (fun dict (keyExpr, valueExpr) ->
                   C.TypeApp
-                    ( resolved "Darklang.Stdlib.Dict.__setOverwriting",
+                    ( resolved "Darklang.Stdlib.Dict.set",
                       [ key; value ],
                       NonEmptyList.fromList [ dict; keyExpr; valueExpr ] ))
                 (C.DictLiteral (key, value, []))
@@ -793,7 +793,9 @@ let mapFold transform state values =
   in
   (List.rev reversed, state)
 
-let materializeFunctionComparisons program =
+(* Bind literal entries before insertion so duplicate detection cannot skip a
+   later key or value. The same pass binds function-comparison operands once. *)
+let materializeEvaluationBindings program =
   let rec rewrite symbols expr =
     let one value build =
       let value, symbols = rewrite symbols value in
@@ -860,15 +862,32 @@ let materializeFunctionComparisons program =
     | C.TupleAccess (value, index) ->
         one value (fun value -> C.TupleAccess (value, index))
     | C.DictLiteral (key, value, entries) ->
-        let entries, symbols =
+        let bindings, symbols =
           mapFold
             (fun symbols (key, value) ->
               let key, symbols = rewrite symbols key in
               let value, symbols = rewrite symbols value in
-              ((key, value), symbols))
+              let keyId, symbols = C.allocateBinding "__dict_key" symbols in
+              let valueId, symbols = C.allocateBinding "__dict_value" symbols in
+              ((keyId, key, valueId, value), symbols))
             symbols entries
         in
-        (C.DictLiteral (key, value, entries), symbols)
+        let entries =
+          List.map
+            (fun (key, _, value, _) -> (C.Local key, C.Local value))
+            bindings
+        in
+        let body =
+          List.fold_right
+            (fun (keyId, key, valueId, value) body ->
+              C.Let
+                ( C.LPVariable keyId,
+                  key,
+                  C.Let (C.LPVariable valueId, value, body) ))
+            bindings
+            (C.DictLiteral (key, value, entries))
+        in
+        (body, symbols)
     | C.RecordLiteral (reference, fields) ->
         let fields, symbols = C.mapFoldRecordFields rewrite symbols fields in
         (C.RecordLiteral (reference, fields), symbols)
@@ -956,7 +975,7 @@ let materializeFunctionComparisons program =
    Replace TypeApp with Call across a program using a registry (drops generic defs)
 *)
 let replaceTypeAppsInProgramWithRegistry registry program =
-  let program = materializeFunctionComparisons program in
+  let program = materializeEvaluationBindings program in
   let initialSymbols = C.programSymbols program in
   let tops = C.programTopLevels program in
   let specs =

@@ -53,6 +53,7 @@ let check knownFunctions symbols aliases records sums tops =
       | C.Let (pattern, value, body) ->
           safe seen (bindPattern env pattern value) typ body
       | C.Sequence (_, body) -> same body
+      | C.ReturnScope (_, _, body) -> same body
       | C.If (_, yes, no) -> same yes && same no
       | C.TypeApp (id, _, args)
         when C.functionName id symbols = Some "__dict_check_key" -> (
@@ -254,6 +255,8 @@ let check knownFunctions symbols aliases records sums tops =
     | C.BinOp (_, a, b) | C.Sequence (a, b) | C.RecursiveLet (_, a, b) ->
         many [ a; b ]
     | C.UnaryOp (_, value)
+    | C.ReturnScope (_, _, value)
+    | C.EarlyReturn (_, value)
     | C.TupleAccess (value, _)
     | C.RecordAccess (value, _)
     | C.BoundaryRender (_, value) ->

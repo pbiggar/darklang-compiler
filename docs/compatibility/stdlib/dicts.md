@@ -25,6 +25,11 @@ are ordinary sums and records and can be structural keys; see
 `dval_dict_lookup.e2e`. Key comparison recursively treats NaNs as the same key
 and equates positive and negative zero. Dictionary values retain ordinary
 equality, so dictionaries with NaN values compare unequal.
+Literals reject duplicate keys under that same canonical key equality. Known
+duplicate String literals fail during checking; computed and structural
+duplicates raise the ordinary duplicate-key error after all entry expressions
+have been evaluated once in source order. Explicit overwriting APIs retain
+their last-value-wins behavior.
 Canonical key ordering drives `toList`, `keys`, rendering, and the
 public traversal functions, so their result does not depend on HAMT shape.
 

@@ -3,7 +3,9 @@ let absentFunction () : Stdlib.Option.Option<(Int64 -> Int64)> = None
 let emptyFunctions () : List<(Int64 -> Int64)> = []
 let emptyHigherOrderFunctions () : List<((Int64 -> Int64) -> Int64)> = []
 let genericEmptyKeys<'a> () : Dict<List<a>, String> = Dict { []: "empty" }
+let absentPropagatedFunction () : Stdlib.Option.Option<(Int64 -> Int64)> = let _ = (Some ())? in None
 Stdlib.Dict.get (Dict { (absentFunction ()): "none" }) (absentFunction ()) = Some "none"
 Stdlib.Dict.get (Stdlib.Dict.singleton (emptyFunctions ()) "empty") (emptyFunctions ()) = Some "empty"
 Stdlib.Dict.get (Stdlib.Dict.singleton (emptyHigherOrderFunctions ()) "higher") (emptyHigherOrderFunctions ()) = Some "higher"
 let maker = genericEmptyKeys<(Int64 -> Int64)> in Stdlib.Dict.get (maker ()) [] = Some "empty"
+Stdlib.Dict.get (Dict { (absentPropagatedFunction ()): "empty" }) (absentPropagatedFunction ()) = Some "empty"

@@ -1,5 +1,6 @@
 // Literal construction rejects equal keys after evaluating entries in source order.
 type DuplicateLiteralKey = { number: Int64, label: String }
+type DuplicateLiteralOrder = | Z | A of Int64 | M of String | B of Bool
 let duplicateLiteral<'key> (first: key) (second: key) : Dict<key, Int64> = Dict { first: 10L, second: 20L }
 let duplicateTrace<'a> (label: String) (value: a) : a = let _ = Builtin.print label in value
 let duplicateLateValue () : Int64 = Builtin.crash "later value"
@@ -13,6 +14,9 @@ let n = Stdlib.Float.sqrt -1.0 in Dict { [n, 0.0]: 10L, [n, -0.0]: 20L } = error
 duplicateLiteral 1L 1L = error="Cannot add two dictionary entries with the same key"
 Stdlib.Dict.size (duplicateLiteral 1L 2L) = 2
 Stdlib.Dict.size (Dict { [1L]: 10L, [2L]: 20L }) = 2
+Stdlib.Dict.keys (Dict { Z: 1L, A 2L: 2L, A 1L: 3L, M "b": 4L, M "a": 5L, B true: 6L, B false: 7L }) = [A 1L, A 2L, B false, B true, M "a", M "b", Z]
+Dict { Dict { 1L: "a" }: 10L, Dict { 1L: "a" }: 20L } = error="Cannot add two dictionary entries with the same key"
+Dict { Darklang.LanguageTools.RuntimeTypes.Dval.DString "a": 10L, Darklang.LanguageTools.RuntimeTypes.Dval.DString "a": 20L } = error="Cannot add two dictionary entries with the same key"
 Dict { 1L: 10L, 1L: 20L, 2L: duplicateLateValue () } = error="later value"
 Dict { (duplicateTrace "a" 1L): duplicateTrace "b" 10L, (duplicateTrace "c" 1L): duplicateTrace "d" 20L, (duplicateTrace "e" 2L): duplicateTrace "f" 30L } = exit=1 stdout="abcdef" stderr="Uncaught exception: Cannot add two dictionary entries with the same key 1\n" exact_bytes=true
 Stdlib.Dict.size (Dict { (duplicateTrace "a" 1L): duplicateTrace "b" 10L, (duplicateTrace "c" 2L): duplicateTrace "d" 20L }) = stdout="abcd2\n" stderr="" exact_bytes=true

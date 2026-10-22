@@ -29,7 +29,10 @@ as `Expected TString, got TInt64` or its reverse, matching the ordinary checker.
 Only the `#compileerror` directives changed; the upstream expressions and runtime
 expectations remain intact. The alias fixture passes 42/42 and the dictionary
 selection passes 526/526, including the new key-policy, NaN and empty-container
-regressions. Duplicate literal handling remains outside this change.
+regressions. Duplicate literal handling now rejects computed and structural
+duplicates with the ordinary duplicate-key error, preserving source-order
+evaluation of all entries before construction. Postfix return scopes retain
+the AOT function-key proof, including its empty-container successes.
 
 A follow-up against `36002414730437e871b7d457e76b79f859935fb1` recovered `Builtin.unwrap` payload types during lambda lifting. Individual ungated runs passed 191/220 List assertions and 263/264 Int64 assertions. List L161 and Int64 L90 are now enabled; List L162 initially still failed before lambda lifting on an empty list.
 
