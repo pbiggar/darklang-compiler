@@ -1,0 +1,5 @@
+// async_raw_release.e2e - Sized raw releases demand their original byte size before allocator reuse.
+
+Stdlib.__Task.__runMain (fun _unit -> let size = Stdlib.__Task.__delayTransparent 0L 32L in let pointer = __raw_alloc 32L in let _ = __raw_free_sized pointer size in 42L) = 42L // a pending small-allocation size is demanded before release; leak_check
+Stdlib.__Task.__runMain (fun _unit -> let size = Stdlib.__Task.__delayTransparent 0L 16384L in let pointer = __raw_alloc 16384L in let _ = __raw_free_sized pointer size in 42L) = 42L // a pending large-allocation size uses the large-buffer release path; leak_check
+Stdlib.__Task.__runMain (fun _unit -> let pointer = __raw_alloc 32L in let _ = __raw_free_sized pointer 32L in Stdlib.__Task.__delayTransparent 0L 42L) = 42L // concrete release preserves the active scheduler context; leak_check
