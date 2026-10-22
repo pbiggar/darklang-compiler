@@ -3,6 +3,13 @@ module W = WrittenTypes
 module M = StringOrder.Map
 module S = StringOrder.Set
 
+type context = {
+  types : WrittenTypeSupport.typeInventory;
+  traits : S.t;
+  environment : WrittenChecking.environment option;
+}
+
+let emptyContext = { types = M.empty; traits = S.empty; environment = None }
 let ( let* ) = Result.bind
 
 let parameters declared references =
@@ -36,6 +43,10 @@ let bounds types traits path names bounds =
     Ok (normalize names typ)
   in
   let traitName name =
+    let name =
+      if String.starts_with ~prefix:"Stdlib." name then "Darklang." ^ name
+      else name
+    in
     let rec candidates path =
       let candidate =
         String.concat "." (path @ String.split_on_char '.' name)
@@ -45,10 +56,6 @@ let bounds types traits path names bounds =
         match List.rev path with
         | [] -> name
         | _ :: rest -> candidates (List.rev rest)
-    in
-    let name =
-      if String.starts_with ~prefix:"Stdlib." name then "Darklang." ^ name
-      else name
     in
     candidates path
   in
@@ -121,7 +128,7 @@ let typeContract types traits path (declaration : W.typeDecl) =
   let* bounds = bounds types traits path names declaration.W.bounds in
   Ok (List.length names, shape, bounds)
 
-let initializerType sources path body =
+let initializerType context sources path body =
   let expression = W.DExpr body in
   let declarations =
     if path = [] then [ expression ]
@@ -141,18 +148,20 @@ let initializerType sources path body =
     Validation.validate Validation.Script tree
     |> Result.map_error (fun _ -> "Invalid value contract expression")
   in
-  let* typ, _ =
-    WrittenChecking.checkSourceUnits true false (sources @ [ unit_ ])
+  let* typ, _, _ =
+    WrittenChecking.checkSourceUnitsWithBase context.environment true false
+      (sources @ [ unit_ ])
   in
   Ok typ
 
-let check ~sources contracts =
+let check ~context ~sources contracts =
   if contracts = [] then Ok ()
   else
     let* items =
       ResultList.traverse WrittenSource.items sources |> Result.map List.concat
     in
-    let* types = WrittenDeclarations.predeclareTypes items in
+    let* selectedTypes = WrittenDeclarations.predeclareTypes items in
+    let types = M.fold M.add selectedTypes context.types in
     let traits =
       List.fold_left
         (fun found -> function
@@ -164,7 +173,7 @@ let check ~sources contracts =
           | WrittenSource.Type _ | WrittenSource.Impl _
           | WrittenSource.Expression _ ->
               found)
-        S.empty items
+        context.traits items
     in
     let check (path, original, replacement) =
       let mismatch name =
@@ -183,12 +192,14 @@ let check ~sources contracts =
           if expected = actual then Ok () else mismatch original.W.name.W.name
       | W.DValue original, W.DValue replacement ->
           let* expected =
-            initializerType sources path original.W.body
+            initializerType context sources path original.W.body
             |> Result.map_error (fun message ->
                 "Cannot establish upstream val contract for "
                 ^ original.W.name.W.name ^ ": " ^ message)
           in
-          let* actual = initializerType sources path replacement.W.body in
+          let* actual =
+            initializerType context sources path replacement.W.body
+          in
           if expected = actual then Ok () else mismatch original.W.name.W.name
       | ( ( W.DFunction _ | W.DType _ | W.DValue _ | W.DTrait _ | W.DImpl _
           | W.DModule _ | W.DExpr _ | W.DAssertion _ | W.DTest _ ),

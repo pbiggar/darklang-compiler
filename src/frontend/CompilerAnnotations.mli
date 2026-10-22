@@ -18,4 +18,5 @@ val read :
   (annotation list, string) result
 
 val at : annotation list -> Tokenizer.pos -> disposition
+val parseReasons : string -> (string list, string) result
 val readReasons : string -> (string list, string) result

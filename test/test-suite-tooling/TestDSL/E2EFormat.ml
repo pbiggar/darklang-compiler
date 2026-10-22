@@ -163,6 +163,7 @@ type e2eTest = {
   errorExpectation : errorExpectation option;
   expectedErrorMessage : string option;
   skipReason : string option;
+  compilerDisposition : CompilerAnnotations.disposition;
   disableFreeList : bool;
   disableANFOpt : bool;
   disableANFConstFolding : bool;
@@ -936,6 +937,7 @@ let parseTestLineWithPreamble line lineNumber filePath preamble funcLineMap =
               errorExpectation;
               expectedErrorMessage;
               skipReason;
+              compilerDisposition = CompilerAnnotations.Run;
               disableFreeList = flags.disableFreeList;
               disableANFOpt = flags.disableANFOpt;
               disableANFConstFolding = flags.disableANFConstFolding;
@@ -1042,31 +1044,40 @@ let parseCompileErrorDirective lineNumber line =
       ("Line " ^ string_of_int lineNumber ^ ": Invalid #compileerror directive")
 
 let collectCompileErrorOverrides lines =
+  let rec afterComments index =
+    if
+      index < Array.length lines
+      && String.starts_with ~prefix:"//" (trim lines.(index))
+    then afterComments (index + 1)
+    else index
+  in
   let rec loop i overrides directives =
     if i >= Array.length lines then Ok (overrides, directives)
     else
       let s = trim lines.(i) in
       if not (String.starts_with ~prefix:"#compileerror" s) then
         loop (i + 1) overrides directives
-      else if
-        i + 1 >= Array.length lines
-        ||
-        let next = trim lines.(i + 1) in
-        next = ""
-        || String.starts_with ~prefix:"//" next
-        || String.starts_with ~prefix:"#" next
-      then
-        Error
-          ("Line "
-          ^ string_of_int (i + 1)
-          ^ ": #compileerror must immediately precede a test")
       else
-        Result.bind
-          (parseCompileErrorDirective (i + 1) s)
-          (fun msg ->
-            loop (i + 1)
-              (IntMap.add (i + 2) msg overrides)
-              (IntSet.add (i + 1) directives))
+        let nextIndex = afterComments (i + 1) in
+        if
+          nextIndex >= Array.length lines
+          ||
+          let next = trim lines.(nextIndex) in
+          next = ""
+          || String.starts_with ~prefix:"//" next
+          || String.starts_with ~prefix:"#" next
+        then
+          Error
+            ("Line "
+            ^ string_of_int (i + 1)
+            ^ ": #compileerror must immediately precede a test")
+        else
+          Result.bind
+            (parseCompileErrorDirective (i + 1) s)
+            (fun msg ->
+              loop (i + 1)
+                (IntMap.add (nextIndex + 1) msg overrides)
+                (IntSet.add (i + 1) directives))
   in
   loop 0 IntMap.empty IntSet.empty
 
@@ -1568,7 +1579,7 @@ let parseNamedE2ETestFile path raw =
                })
          !tests)
 
-let parseE2ETestFile path =
+let parseE2ETestFileUnannotated path =
   if FileIO.exists path && String.ends_with ~suffix:".dark" (lowerAscii path)
   then
     let raw = readLines path in
@@ -1576,6 +1587,71 @@ let parseE2ETestFile path =
       parseNamedE2ETestFile path raw
     else parseLegacyE2ETestFile path
   else parseLegacyE2ETestFile path
+
+let parseE2ETestFile path =
+  let ( let* ) = Result.bind in
+  let* tests = parseE2ETestFileUnannotated path in
+  let raw = readLines path in
+  let text = String.concat "\n" (Array.to_list raw) in
+  if not (Text.contains text "// @compiler") then Ok tests
+  else
+    let* reasons =
+      CompilerAnnotations.parseReasons EmbeddedStdlib.compilerReasons
+    in
+    (* Expectation overrides belong to the fixture grammar. Mask their text while
+     retaining positions so annotations can precede or follow an override. *)
+    let text =
+      Array.map
+        (fun line ->
+          if String.starts_with ~prefix:"#compileerror" (trim line) then
+            String.make (String.length line) ' '
+          else line)
+        raw
+      |> Array.to_list |> String.concat "\n"
+    in
+    let items =
+      List.map
+        (fun test ->
+          {
+            CompilerAnnotations.position =
+              {
+                Tokenizer.row = test.sourceLine - 1;
+                column = countLeadingSpaces raw.(test.sourceLine - 1);
+              };
+            isTest = true;
+          })
+        tests
+    in
+    let* annotations = CompilerAnnotations.read ~reasons ~items text in
+    ResultList.traverse
+      (fun test ->
+        let position =
+          {
+            Tokenizer.row = test.sourceLine - 1;
+            column = countLeadingSpaces raw.(test.sourceLine - 1);
+          }
+        in
+        let compilerDisposition = CompilerAnnotations.at annotations position in
+        match compilerDisposition with
+        | CompilerAnnotations.Run | CompilerAnnotations.Xfail _ ->
+            Ok { test with compilerDisposition }
+        | CompilerAnnotations.Blocked reason ->
+            Ok
+              {
+                test with
+                compilerDisposition;
+                skipReason = Some ("blocked: " ^ reason);
+              }
+        | CompilerAnnotations.Excluded reason ->
+            Ok
+              {
+                test with
+                compilerDisposition;
+                skipReason = Some ("excluded: " ^ reason);
+              }
+        | CompilerAnnotations.Replace _ ->
+            Error "Tests cannot have replacement implementations")
+      tests
 
 let parseE2ETest _path =
   Error "Old format no longer supported - use parseE2ETestFile instead"

@@ -79,85 +79,78 @@ let parse reasons text =
   else Error ("Unknown compiler annotation: " ^ text)
 
 let read ~reasons ~items source =
-  let* tokens, diagnostics = Lexer.tokenize source in
-  if diagnostics <> [] then
-    Error "Cannot attach annotations to lexically invalid source"
-  else
-    let lines = Array.of_list (String.split_on_char '\n' source) in
-    let rec scan annotations = function
-      | [] -> Ok (List.rev annotations)
-      | (token : Lexer.spannedToken) :: rest ->
-          let rec comments annotations = function
-            | [] -> scan annotations rest
-            | (comment : Lexer.trivia) :: remaining -> (
-                let text = String.trim comment.Lexer.text in
-                if
-                  comment.Lexer.kind <> Lexer.LineComment
-                  || not (String.starts_with ~prefix:"// @compiler" text)
-                then comments annotations remaining
+  let* tokens, _ = Lexer.tokenize source in
+  let lines = Array.of_list (String.split_on_char '\n' source) in
+  let rec scan annotations = function
+    | [] -> Ok (List.rev annotations)
+    | (token : Lexer.spannedToken) :: rest ->
+        let rec comments annotations = function
+          | [] -> scan annotations rest
+          | (comment : Lexer.trivia) :: remaining -> (
+              let text = String.trim comment.Lexer.text in
+              if
+                comment.Lexer.kind <> Lexer.LineComment
+                || not (String.starts_with ~prefix:"// @compiler" text)
+              then comments annotations remaining
+              else
+                let position = token.Lexer.range.T.start in
+                let fail message =
+                  Error
+                    (Printf.sprintf "Line %d: %s"
+                       (comment.Lexer.range.T.start.T.row + 1)
+                       message)
+                in
+                if not (String.starts_with ~prefix:"// @compiler " text) then
+                  fail "Expected a per-item // @compiler annotation"
                 else
-                  let position = token.Lexer.range.T.start in
-                  let fail message =
-                    Error
-                      (Printf.sprintf "Line %d: %s"
-                         (comment.Lexer.range.T.start.T.row + 1)
-                         message)
-                  in
-                  if not (String.starts_with ~prefix:"// @compiler " text) then
-                    fail "Expected a per-item // @compiler annotation"
-                  else
-                    match
-                      List.find_opt
-                        (fun (item : item) -> item.position = position)
-                        items
-                    with
-                    | None ->
+                  match
+                    List.find_opt
+                      (fun (item : item) -> item.position = position)
+                      items
+                  with
+                  | None ->
+                      fail
+                        "Compiler annotation must precede a declaration or test"
+                  | Some item -> (
+                      let prefix =
+                        String.sub
+                          lines.(comment.Lexer.range.T.start.T.row)
+                          0 comment.Lexer.range.T.start.T.column
+                      in
+                      if
+                        String.trim prefix <> ""
+                        || comment.Lexer.range.T.start.T.column
+                           <> position.T.column
+                        || comment.Lexer.range.T.end_.T.row >= position.T.row
+                      then
                         fail
-                          "Compiler annotation must precede a declaration or \
-                           test"
-                    | Some item -> (
-                        let prefix =
-                          String.sub
-                            lines.(comment.Lexer.range.T.start.T.row)
-                            0 comment.Lexer.range.T.start.T.column
+                          "Compiler annotation must be on its own line at the \
+                           item's indentation"
+                      else if
+                        List.exists
+                          (fun (entry : annotation) ->
+                            entry.position = position)
+                          annotations
+                      then
+                        fail "Conflicting compiler annotations on the same item"
+                      else
+                        let* disposition =
+                          parse reasons
+                            (String.sub text 13 (String.length text - 13))
                         in
-                        if
-                          String.trim prefix <> ""
-                          || comment.Lexer.range.T.start.T.column
-                             <> position.T.column
-                          || comment.Lexer.range.T.end_.T.row >= position.T.row
-                        then
-                          fail
-                            "Compiler annotation must be on its own line at \
-                             the item's indentation"
-                        else if
-                          List.exists
-                            (fun (entry : annotation) ->
-                              entry.position = position)
-                            annotations
-                        then
-                          fail
-                            "Conflicting compiler annotations on the same item"
-                        else
-                          let* disposition =
-                            parse reasons
-                              (String.sub text 13 (String.length text - 13))
-                          in
-                          match disposition with
-                          | Xfail _ when not item.isTest ->
-                              fail "Expected failures apply only to tests"
-                          | Replace _ when item.isTest ->
-                              fail
-                                "Tests cannot have replacement implementations"
-                          | Run | Blocked _ | Excluded _ | Replace _ | Xfail _
-                            ->
-                              comments
-                                ({ position; disposition } :: annotations)
-                                remaining))
-          in
-          comments annotations token.Lexer.leadingTrivia
-    in
-    scan [] tokens
+                        match disposition with
+                        | Xfail _ when not item.isTest ->
+                            fail "Expected failures apply only to tests"
+                        | Replace _ when item.isTest ->
+                            fail "Tests cannot have replacement implementations"
+                        | Run | Blocked _ | Excluded _ | Replace _ | Xfail _ ->
+                            comments
+                              ({ position; disposition } :: annotations)
+                              remaining))
+        in
+        comments annotations token.Lexer.leadingTrivia
+  in
+  scan [] tokens
 
 let at annotations position =
   match
@@ -168,9 +161,9 @@ let at annotations position =
   | Some entry -> entry.disposition
   | None -> Run
 
-let readReasons path =
+let parseReasons source =
   try
-    match Yojson.Basic.from_file path with
+    match Yojson.Basic.from_string source with
     | `Assoc entries ->
         let rec validate seen = function
           | [] -> Ok (List.rev seen)
@@ -191,3 +184,7 @@ let readReasons path =
         validate [] entries
     | _ -> Error "Reason glossary must be a JSON object"
   with Yojson.Json_error message | Sys_error message -> Error message
+
+let readReasons path =
+  try In_channel.with_open_bin path In_channel.input_all |> parseReasons
+  with Sys_error message -> Error message

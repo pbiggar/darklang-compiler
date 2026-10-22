@@ -48,9 +48,37 @@ Expected failures apply only to tests and require a nonempty diagnostic matcher
 and a compile/runtime phase. Replacement targets are repository-relative
 `path#declaration` references and require a reason.
 
-The annotation reader and source inventory are implemented first. Replacement
-selection, contract checking, execution of expected failures, the complete
-annotated source import and replacement of the old ledger are subsequent parts
-of this migration. The existing test runner and ledger remain authoritative
-until those parts are integrated; this parse-only report is not an execution
-receipt.
+The existing fixture runner reads these annotations in both execution tests and
+named package tests. Blocked and excluded tests remain discovered and are
+skipped before preamble compilation. Expected failures run individually: an
+ordinary passing test is an unexpected pass, even when the original test is a
+negative test. A failure must match its phase and diagnostic; a signal cannot
+satisfy a runtime expected failure. Compiler expectation overrides remain
+separate from expected failures and can coexist with an annotation.
+
+## Selecting declarations
+
+`SourceSelection.select` receives parsed source files, root paths and a contract
+context. It discards blocked/excluded bodies and resolves replacement targets
+before body checking. Targets must preserve the original public identity and
+provide a concrete implementation of the same declaration kind. Missing,
+ambiguous and duplicate definitions are errors. Compiler-only `__` helpers in
+replacement files are included without implicitly importing public siblings.
+
+Function contracts compare resolved argument and return types, generic arity,
+bounds and declared effect rows. Generic binder names can differ. Type
+replacements preserve public record fields, enum cases and payloads, aliases
+and bounds. `val`s have no declared type: their original initializer must have
+a type the checker can establish in the supplied context. An unsupported
+intrinsic initializer cannot be accepted by assuming its replacement's type.
+
+Unavailable declarations retain their names and reason tags in the selection.
+An unavailable trait/implementation member makes its container unavailable;
+it never leaves a partially implemented container. Member and whole-container
+replacements are not enabled yet; the supported replacement kinds are
+functions, types and `val`s.
+
+The complete annotated source import, production adoption and replacement of
+the old ledger remain subsequent parts of this migration. The old ledger is
+still authoritative until that import is integrated; the parse-only report
+is not an execution receipt.

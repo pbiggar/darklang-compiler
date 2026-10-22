@@ -1,6 +1,5 @@
 (* source_selection_regression.ml - Execute replacements and reject changed public contracts. *)
 open Dark_compiler
-module W = WrittenTypes
 module C = CompilationContexts
 module O = CompilerOptions
 module Selection = SourceSelection
@@ -11,7 +10,8 @@ let reasons = [ "interpreter-intrinsic"; "runtime-reflection" ]
 let source text = require (SourceInventory.parse ~reasons text)
 
 let select original replacement =
-  Selection.select ~roots:[ "upstream.dark" ]
+  Selection.select ~context:SourceContracts.emptyContext
+    ~roots:[ "upstream.dark" ]
     ~sources:
       [
         ("upstream.dark", source original); ("compiler.dark", source replacement);

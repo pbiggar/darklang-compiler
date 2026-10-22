@@ -515,6 +515,98 @@ let testRejectsDanglingCompileErrorDirective () =
       | Error msg -> Error ("Unexpected dangling-directive error: " ^ msg)
       | Ok _ -> Error "Expected dangling #compileerror rejection")
 
+let testCompilerAnnotationsPreserveInventory () =
+  withTempFile
+    "// @compiler blocked: test-counter\n\
+     Unknown.first () = 1L\n\
+     // @compiler excluded: runtime-reflection\n\
+     Unknown.second () = 2L\n\
+     3L = 3L\n" (fun path ->
+      let* tests = parseE2ETestFile path in
+      match tests with
+      | [ first; second; third ] ->
+          require
+            (first.skipReason = Some "blocked: test-counter"
+            && second.skipReason = Some "excluded: runtime-reflection"
+            && third.skipReason = None)
+            "Per-test statuses leaked or tests disappeared"
+      | _ -> Error "Annotated tests were not all discovered")
+
+let testCompilerAnnotationUnknownTag () =
+  withTempFile "// @compiler blocked: typo\n1L = 1L" (fun path ->
+      match parseE2ETestFile path with
+      | Error message when Text.contains message "Unknown compiler reason tag"
+        ->
+          Ok ()
+      | Error message -> Error message
+      | Ok _ -> Error "Unknown reason tag was accepted")
+
+let testCompilerAnnotationOverrideOrdering () =
+  one
+    "#compileerror=\"unknown\"\n\
+     // @compiler excluded: runtime-reflection\n\
+     Unknown.fn () = 1L"
+    "Expected annotation after an override" (fun test ->
+      require
+        (test.skipReason = Some "excluded: runtime-reflection"
+        && test.errorExpectation = Some CompileError)
+        "Override or annotation lost")
+
+let testCompilerXfailStrictness () =
+  one
+    "// @compiler xfail compile: \"known missing function\" reason=test-counter\n\
+     Unknown.fn () = 1L"
+    "Expected compile xfail" (fun test ->
+      let expected = CompileFailed (1, "known missing function", 0L) in
+      let unrelated = CompileFailed (1, "unrelated failure", 0L) in
+      let wrongPhase = Ran (1, "", "known missing function", 0L, 0L) in
+      let passed = Ran (0, "true\n", "", 0L, 0L) in
+      let* () =
+        require
+          (Result.is_ok (evaluateExpectations test expected))
+          "Known failure was not accepted"
+      in
+      let* () =
+        require
+          (List.for_all
+             (fun run -> Result.is_error (evaluateExpectations test run))
+             [ unrelated; wrongPhase; passed ])
+          "Unexpected pass, error or phase satisfied xfail"
+      in
+      require
+        (Option.is_none (tryPrepareBatchTest test))
+        "Expected failure was batched")
+
+let testCompilerRuntimeXfailStrictness () =
+  one
+    "// @compiler xfail runtime: \"known runtime failure\" \
+     reason=annotation-probe\n\
+     Builtin.crash \"known runtime failure\" = 1L"
+    "Expected runtime xfail" (fun test ->
+      let expected = Ran (1, "", "known runtime failure", 0L, 0L) in
+      let signal = Ran (139, "", "known runtime failure", 0L, 0L) in
+      let wrongPhase = CompileFailed (1, "known runtime failure", 0L) in
+      require
+        (Result.is_ok (evaluateExpectations test expected)
+        && Result.is_error (evaluateExpectations test signal)
+        && Result.is_error (evaluateExpectations test wrongPhase))
+        "Runtime xfail accepted an unrelated phase or signal")
+
+let testExpectedLanguageErrorIsNotAnXfail () =
+  one
+    "// @compiler xfail runtime: \"known runtime failure\" \
+     reason=annotation-probe\n\
+     Builtin.crash \"known runtime failure\" = error=\"known runtime failure\""
+    "Expected ordinary negative test" (fun test ->
+      match
+        evaluateExpectations test (Ran (1, "", "known runtime failure", 0L, 0L))
+      with
+      | Error failure when Text.contains failure.message "Unexpected pass" ->
+          Ok ()
+      | _ ->
+          Error
+            "A passing negative test incorrectly counted as an expected failure")
+
 let testSourceFileGroupsPreserveAssertions () =
   one "1L = 1L" "Expected a template assertion" (fun test ->
       let make file preamble name =
@@ -575,6 +667,18 @@ let testPreservesLegacyModuleScopes () =
 
 let tests =
   [
+    ( "compiler annotations preserve inventory",
+      testCompilerAnnotationsPreserveInventory );
+    ( "compiler annotations reject unknown reason tags",
+      testCompilerAnnotationUnknownTag );
+    ( "compiler annotations coexist with expectation overrides",
+      testCompilerAnnotationOverrideOrdering );
+    ( "compiler xfail requires the known compile failure",
+      testCompilerXfailStrictness );
+    ( "compiler xfail requires the known runtime failure",
+      testCompilerRuntimeXfailStrictness );
+    ( "passing negative tests cannot satisfy xfail",
+      testExpectedLanguageErrorIsNotAnXfail );
     ("preserves legacy module scopes", testPreservesLegacyModuleScopes);
     ( "file context groups preserve every assertion",
       testSourceFileGroupsPreserveAssertions );

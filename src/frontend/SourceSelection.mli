@@ -7,6 +7,7 @@ type selected = {
 }
 
 val select :
+  context:SourceContracts.context ->
   roots:string list ->
   sources:(string * SourceInventory.source) list ->
   (selected, string) result

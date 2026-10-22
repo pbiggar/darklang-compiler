@@ -83,6 +83,11 @@ tests return `Stdlib.Test.Result`. The fixture-only adapter in
 `test/fixtures/support/named-test.dark` supports `equal` and `all`; it is not a
 production implementation of the upstream test runner or reflective diagnostics.
 
+Per-test compiler annotations are supported in both fixture formats. See the
+[upstream import](../porting/upstream-import.md) for reason tags, expected-failure
+semantics and declaration selection. An unexpected pass or unrelated failure
+fails the suite; expected failures are not batched with passing assertions.
+
 ## Syntax fixtures
 
 Place `.syntax` files under `test/fixtures/syntax/`. A file can contain multiple

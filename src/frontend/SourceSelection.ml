@@ -49,7 +49,8 @@ let nodes file (source : I.source) =
       (function
         | W.DModule modul ->
             collect (path @ W.moduleNameParts modul) modul.W.declarations
-        | declaration -> (
+        | ( W.DFunction _ | W.DValue _ | W.DType _ | W.DTrait _ | W.DImpl _
+          | W.DExpr _ | W.DAssertion _ | W.DTest _ ) as declaration -> (
             let entry =
               List.find_opt
                 (fun (entry : I.entry) ->
@@ -73,9 +74,16 @@ let nodes file (source : I.source) =
       declarations
   in
   collect [] source.I.tree.W.declarations
+  @ List.concat_map
+      (fun expression -> collect [] [ W.DExpr expression ])
+      source.I.tree.W.exprsToEval
 
 let require selected name =
-  match List.find_opt (fun item -> item.name = name) selected.unavailable with
+  match
+    List.find_opt
+      (fun (item : unavailable) -> item.name = name)
+      selected.unavailable
+  with
   | None -> Ok ()
   | Some item ->
       Error
@@ -83,7 +91,7 @@ let require selected name =
         ^ (if item.excluded then "excluded: " else "blocked: ")
         ^ item.reason ^ ")")
 
-let select ~roots ~sources =
+let select ~context ~roots ~sources =
   let rec unique seen = function
     | [] -> Ok ()
     | (path, _) :: rest ->
@@ -108,9 +116,12 @@ let select ~roots ~sources =
     List.concat_map (fun (path, source) -> nodes path source) originalSources
   in
   let originalNames =
-    List.fold_left (fun names node -> S.add node.name names) S.empty originals
+    List.fold_left
+      (fun names (node : node) ->
+        S.add (kind node.declaration ^ ":" ^ node.name) names)
+      S.empty originals
   in
-  let replacement node target =
+  let replacement (node : node) target =
     match String.split_on_char '#' target with
     | [ file; name ] -> (
         let* source = lookup file in
@@ -158,7 +169,7 @@ let select ~roots ~sources =
           []
     in
     let rec find = function
-      | [] -> Ok None
+      | [] -> Ok []
       | position :: rest -> (
           match
             List.find_opt
@@ -170,9 +181,15 @@ let select ~roots ~sources =
               match entry.I.disposition with
               | A.Run -> find rest
               | A.Blocked reason ->
-                  Ok (Some { name = entry.I.name; reason; excluded = false })
+                  let* following = find rest in
+                  Ok
+                    ({ name = entry.I.name; reason; excluded = false }
+                    :: following)
               | A.Excluded reason ->
-                  Ok (Some { name = entry.I.name; reason; excluded = true })
+                  let* following = find rest in
+                  Ok
+                    ({ name = entry.I.name; reason; excluded = true }
+                    :: following)
               | A.Replace _ ->
                   Error
                     ("Member replacement requires a replacement for its \
@@ -193,12 +210,13 @@ let select ~roots ~sources =
             | A.Run -> (
                 let* blocked = memberBlock node in
                 match blocked with
-                | None ->
+                | [] ->
                     selectNodes (node :: kept) unavailable contracts targets
                       rest
-                | Some member ->
+                | member :: _ ->
                     selectNodes kept
-                      ({ member with name = node.name } :: member :: unavailable)
+                      (({ member with name = node.name } :: blocked)
+                      @ unavailable)
                       contracts targets rest)
             | A.Blocked reason | A.Excluded reason ->
                 let excluded =
@@ -228,7 +246,7 @@ let select ~roots ~sources =
   in
   (* Replacement files may carry compiler-only helpers. Public siblings remain
      owned by their imported declarations and are never pulled in implicitly. *)
-  let privateNode node =
+  let privateNode (node : node) =
     List.exists
       (String.starts_with ~prefix:"__")
       (String.split_on_char '.' node.name)
@@ -240,7 +258,11 @@ let select ~roots ~sources =
         Ok
           (nodes file source
           |> List.filter (fun node ->
-              privateNode node && not (S.mem node.name originalNames))))
+              privateNode node
+              && not
+                   (S.mem
+                      (kind node.declaration ^ ":" ^ node.name)
+                      originalNames))))
       (S.elements targetFiles)
   in
   let* support, supportUnavailable, supportContracts, _ =
@@ -254,14 +276,14 @@ let select ~roots ~sources =
     let chosen = chosen @ support in
     let rec checkNames seen = function
       | [] -> Ok ()
-      | node :: rest ->
+      | (node : node) :: rest ->
           let key = kind node.declaration ^ ":" ^ node.name in
           if S.mem key seen then
             Error ("Duplicate selected declaration: " ^ node.name)
           else checkNames (S.add key seen) rest
     in
     let* () = checkNames S.empty chosen in
-    let wrap node =
+    let wrap (node : node) =
       if node.path = [] then node.declaration
       else
         W.DModule
@@ -294,5 +316,7 @@ let select ~roots ~sources =
           Ok (node.file, unit_))
         chosen
     in
-    let* () = SourceContracts.check ~sources:(List.map snd units) contracts in
+    let* () =
+      SourceContracts.check ~context ~sources:(List.map snd units) contracts
+    in
     Ok { units; unavailable = unavailable @ supportUnavailable }

@@ -1088,8 +1088,14 @@ let runTestsWithProgressReporter completedTestReporter args =
               | Ok run -> run
               | Error failure -> failure.R.run
             in
-            let preambleFailure message =
-              Error { R.run = R.CompileFailed (1, message, 0L); message }
+            let preambleFailure test message =
+              match test.E.compilerDisposition with
+              | CompilerAnnotations.Xfail _ ->
+                  R.evaluateExpectations test (R.CompileFailed (1, message, 0L))
+              | CompilerAnnotations.Run | CompilerAnnotations.Blocked _
+              | CompilerAnnotations.Excluded _ | CompilerAnnotations.Replace _
+                ->
+                  Error { R.run = R.CompileFailed (1, message, 0L); message }
             in
             let collectExitCodeDetails (test : E.e2eTest) run =
               let code, _, _, _, _ = unpack run in
@@ -1219,7 +1225,7 @@ let runTestsWithProgressReporter completedTestReporter args =
                 | Single (index, test, prepared) ->
                     let result, delta =
                       match tryPreambleContext test with
-                      | Error message -> (preambleFailure message, 0L)
+                      | Error message -> (preambleFailure test message, 0L)
                       | Ok (stdlib, ctx) ->
                           stats.executions <- stats.executions + 1;
                           let before = passTimingTotal () in
@@ -1245,7 +1251,7 @@ let runTestsWithProgressReporter completedTestReporter args =
                         let batchCount = List.length indexedBatch in
                         match tryPreambleContext firstTest with
                         | Error message ->
-                            let result = preambleFailure message in
+                            let result = preambleFailure firstTest message in
                             recordPhysicalTiming (fromResult result) 0L;
                             List.iter
                               (fun (index, prepared) ->
@@ -1644,7 +1650,9 @@ let runTestsWithProgressReporter completedTestReporter args =
               println
                 (C.gray
                 ^ Printf.sprintf
-                    "  Skipping %d test(s) marked with skip=\"...\"" skipped
+                    "  Skipping %d test(s) marked with skip or compiler \
+                     annotations"
+                    skipped
                 ^ C.reset);
             if Array.length tests > 0 then begin
               if showStdlib then

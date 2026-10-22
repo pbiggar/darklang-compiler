@@ -2,5 +2,6 @@
   "interpreter-intrinsic": "The interpreter implementation calls a host intrinsic; the compiler supplies its own implementation.",
   "runtime-reflection": "The declaration requires runtime program reflection, function lookup or arbitrary expression evaluation excluded from the compiler language model.",
   "sqlite-runtime": "The compiler does not yet supply the SQLite runtime binding required by this item.",
-  "test-counter": "The test requires per-test evaluation counter support that is not yet implemented."
+  "test-counter": "The test requires per-test evaluation counter support that is not yet implemented.",
+  "annotation-probe": "A controlled failure in a regression fixture used to verify the compiler annotation runner."
 }
