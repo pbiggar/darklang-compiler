@@ -26,15 +26,15 @@ let chainStart () : Int64 =
 
 Stdlib.__Task.__runMain (fun _unit -> chainStart ()) = 42L // operation return does not force its pending result; leak_check
 
-Stdlib.__Task.__runMain (fun _unit -> let result = Stdlib.__Task.__delayValueCurrent 0L (Stdlib.__Async.__ready ("managed" ++ " payload")) in (Stdlib.__Task.__forceCurrent result, Stdlib.__Task.__forceCurrent result)) = ("managed payload", "managed payload") // repeat demands retain owned results; leak_check
+Stdlib.__Task.__runMain (fun _unit -> let result = Stdlib.__Task.__delayValueCurrent 0L (Stdlib.__Async.__ready ("managed" + " payload")) in (Stdlib.__Task.__forceCurrent result, Stdlib.__Task.__forceCurrent result)) = ("managed payload", "managed payload") // repeat demands retain owned results; leak_check
 
-let outside = Stdlib.__Task.__runMain (fun _unit -> Stdlib.__Task.__delayValueCurrent 0L (Stdlib.__Async.__ready ("after" ++ " scope"))) in Stdlib.__Task.__forceCurrent outside = "after scope" // resolved joins can be forced outside a task; leak_check
+let outside = Stdlib.__Task.__runMain (fun _unit -> Stdlib.__Task.__delayValueCurrent 0L (Stdlib.__Async.__ready ("after" + " scope"))) in Stdlib.__Task.__forceCurrent outside = "after scope" // resolved joins can be forced outside a task; leak_check
 
-Stdlib.__Task.__runMain (fun _unit -> let unused = Stdlib.__Task.__delayValueCurrent 0L (Stdlib.__Async.__ready ("unused" ++ " payload")) in 42L) = 42L // dropping a join preserves producer ownership; leak_check
+Stdlib.__Task.__runMain (fun _unit -> let unused = Stdlib.__Task.__delayValueCurrent 0L (Stdlib.__Async.__ready ("unused" + " payload")) in 42L) = 42L // dropping a join preserves producer ownership; leak_check
 
 type ChainBox = { value: Stdlib.__Async.__Value<String> }
 let chainStorage () : List<Stdlib.__Async.__Value<String>> * ChainBox * (Unit -> Stdlib.__Async.__Value<String>) =
-  let value = Stdlib.__Task.__delayValueCurrent 0L (Stdlib.__Async.__ready ("stored" ++ " payload")) in
+  let value = Stdlib.__Task.__delayValueCurrent 0L (Stdlib.__Async.__ready ("stored" + " payload")) in
   ([value], ChainBox { value = value }, fun _unit -> value)
 
 let stored = Stdlib.__Task.__runMain (fun _unit -> chainStorage ()) in let (items, box, captured) = stored in let first = match items with | [] -> "missing" | head :: _tail -> Stdlib.__Task.__forceCurrent head in (first, Stdlib.__Task.__forceCurrent box.value, Stdlib.__Task.__forceCurrent (captured ())) = ("stored payload", "stored payload", "stored payload") // stored joins survive scope cleanup; leak_check

@@ -19,6 +19,6 @@ let rawOwnAndReturn<'a> (value: a) : a =
 let rawClosureStatic (value: Int64) : Int64 = value + 1L
 
 rawOwnAndDrop rawClosureStatic = () // leak_check
-let text = "capture" ++ " value" in rawOwnAndDrop (fun _unit -> text) = () // leak_check
+let text = "capture" + " value" in rawOwnAndDrop (fun _unit -> text) = () // leak_check
 let fn = rawOwnAndReturn rawClosureStatic in fn 41L = 42L // leak_check
-let text = "capture" ++ " value" in let fn = rawOwnAndReturn (fun _unit -> text) in fn () = "capture value" // leak_check
+let text = "capture" + " value" in let fn = rawOwnAndReturn (fun _unit -> text) in fn () = "capture value" // leak_check

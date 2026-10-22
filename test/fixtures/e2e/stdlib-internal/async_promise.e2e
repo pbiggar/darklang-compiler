@@ -31,10 +31,10 @@ promiseReady false = Some false // leak_check
 promiseReady () = Some () // leak_check
 promiseReady<Option<Int64>> None = Some None // leak_check
 promiseReady<List<Int64>> [] = Some [] // leak_check
-promiseReady ("dynamic" ++ " payload") = Some "dynamic payload" // leak_check
-promiseReady ["one" ++ "!", "two" ++ "!"] = Some ["one!", "two!"] // leak_check
-promiseReady (("tuple" ++ " value"), [1L, 2L]) = Some (("tuple value", [1L, 2L])) // leak_check
-promiseReady<Result<Int64, String>> (Error ("network" ++ " failure")) = Some (Error "network failure") // leak_check
+promiseReady ("dynamic" + " payload") = Some "dynamic payload" // leak_check
+promiseReady ["one" + "!", "two" + "!"] = Some ["one!", "two!"] // leak_check
+promiseReady (("tuple" + " value"), [1L, 2L]) = Some (("tuple value", [1L, 2L])) // leak_check
+promiseReady<Result<Int64, String>> (Error ("network" + " failure")) = Some (Error "network failure") // leak_check
 
 let promiseAbandon () : Unit =
   let promise = Stdlib.__Async.__new<String> () in
@@ -45,14 +45,14 @@ promiseAbandon () = () // leak_check
 let promiseProducer () : Unit -> Option<String> =
   let promise = Stdlib.__Async.__new<String> () in
   fun _unit ->
-    let _ = Stdlib.__Async.__resolve promise ("producer" ++ " alive") in
+    let _ = Stdlib.__Async.__resolve promise ("producer" + " alive") in
     Stdlib.__Async.__poll promise
 
 let producer = promiseProducer () in producer () = Some "producer alive" // leak_check
 
 let promiseSharedPayload () : (Option<String> * Option<String>) =
   let promise = Stdlib.__Async.__new<String> () in
-  let _ = Stdlib.__Async.__resolve promise ("shared" ++ " payload") in
+  let _ = Stdlib.__Async.__resolve promise ("shared" + " payload") in
   let first = Stdlib.__Async.__poll promise in
   let second = Stdlib.__Async.__poll promise in
   (first, second)
@@ -67,7 +67,7 @@ let promiseDropPayload (counter: RawPtr) : Unit =
 let counter = __raw_alloc 8L in let _ = __raw_write_word counter 0L 0L in let _ = promiseDropPayload counter in let result = __raw_get<Int64> counter 0L in let _ = __raw_free counter in result = 1L // leak_check
 
 let promiseClosure () : String =
-  let text = "captured" ++ " value" in
+  let text = "captured" + " value" in
   match promiseReady (fun _unit -> text) with
   | None -> "missing"
   | Some fn -> fn ()

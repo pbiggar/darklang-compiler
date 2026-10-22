@@ -63,17 +63,17 @@ let cell = __raw_alloc 8L in let _ = Stdlib.__Task.__run [(fun context -> let va
 let taskAllocate (context: RawPtr) (depth: Int64) : Int64 =
   if depth == 0L then 0L
   else
-    let saved = "stack-" ++ Stdlib.Int64.toString depth in
+    let saved = "stack-" + Stdlib.Int64.toString depth in
     let _ = Stdlib.__Task.__yield context in
     let result = taskAllocate context (depth - 1L) in
-    if saved == "stack-" ++ Stdlib.Int64.toString depth then result + 1L
+    if saved == "stack-" + Stdlib.Int64.toString depth then result + 1L
     else Builtin.crash "Suspended allocation overwritten"
 
 let cell = __raw_alloc 16L in let _ = Stdlib.__Task.__run [(fun context -> __raw_write_word cell 0L (taskAllocate context 64L)), (fun context -> __raw_write_word cell 8L (taskAllocate context 47L))] in let result = (__raw_get<Int64> cell 0L, __raw_get<Int64> cell 8L) in let _ = __raw_free cell in result = (64L, 47L) // shared allocator with many suspended owners; leak_check
 
 let expected = Stdlib.Cli.__argv 0L in let cell = __raw_alloc 8L in let _ = Stdlib.__Task.__run [(fun _context -> __raw_write_word cell 0L (if Stdlib.Cli.__argv 0L == expected then 1L else 0L))] in let result = __raw_get<Int64> cell 0L in let _ = __raw_free cell in result = 1L // fiber frame chain retains process startup arguments; leak_check
 
-let taskFailure () : Result<Int64, String> = Error ("ordinary" ++ " failure")
+let taskFailure () : Result<Int64, String> = Error ("ordinary" + " failure")
 
 let _ = Stdlib.__Task.__run [(fun context -> let unused = Stdlib.__Task.__delay context 0L (taskFailure ()) in ())] in true = true // producer owns an abandoned result until completion; leak_check
 

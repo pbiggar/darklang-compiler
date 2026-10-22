@@ -6,5 +6,5 @@ let sourceResultInspect (value: Stdlib.Result.Result<Int64, String>) : Int64 =
   | Ok number -> number + 1L
   | Error _ -> 0L
 
-Stdlib.__Task.__runMain (fun _unit -> let gate = Stdlib.__Async.__new<Stdlib.Result.Result<Int64, String>> () in let value = Stdlib.__Task.__transport (Stdlib.__Async.__pending gate) in let passed = sourceResultPass value in let _ = Stdlib.__Task.__resolve (__fiber_current ()) gate (Error ("ordinary" ++ " error")) in match passed with | Ok _ -> "unexpected" | Error message -> message) = "ordinary error" // Error is an ordinary managed result payload; leak_check
+Stdlib.__Task.__runMain (fun _unit -> let gate = Stdlib.__Async.__new<Stdlib.Result.Result<Int64, String>> () in let value = Stdlib.__Task.__transport (Stdlib.__Async.__pending gate) in let passed = sourceResultPass value in let _ = Stdlib.__Task.__resolve (__fiber_current ()) gate (Error ("ordinary" + " error")) in match passed with | Ok _ -> "unexpected" | Error message -> message) = "ordinary error" // Error is an ordinary managed result payload; leak_check
 Stdlib.__Task.__runMain (fun _unit -> sourceResultInspect (Stdlib.__Task.__delayTransparent 0L (Ok 41L))) = 42L // constructor inspection is a demand in the callee; leak_check

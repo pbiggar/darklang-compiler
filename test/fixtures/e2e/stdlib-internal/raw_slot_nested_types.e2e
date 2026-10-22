@@ -10,14 +10,14 @@ let nativeRoundTrip<'a> (value: a) : a =
   let _ = __raw_free cell in
   result
 
-let nativeResult () : Result<NativePayload, Int64> = Ok (NativePayload { message = "nested" ++ " payload" })
+let nativeResult () : Result<NativePayload, Int64> = Ok (NativePayload { message = "nested" + " payload" })
 nativeRoundTrip (nativeResult ()) = Ok (NativePayload { message = "nested payload" }) // leak_check
 
-let nativeNested () : Result<NativeBox<NativePayload>, List<NativePayload>> = Ok (NativeBox { value = NativePayload { message = "boxed" ++ " payload" } })
+let nativeNested () : Result<NativeBox<NativePayload>, List<NativePayload>> = Ok (NativeBox { value = NativePayload { message = "boxed" + " payload" } })
 nativeRoundTrip (nativeNested ()) = Ok (NativeBox { value = NativePayload { message = "boxed payload" } }) // leak_check
 
-let nativeClosure (prefix: String) : Int64 -> String = fun value -> prefix ++ Stdlib.Int64.toString value
-let closure = nativeRoundTrip (NativeBox { value = nativeClosure ("value" ++ ":") }) in closure.value 42L = "value:42" // leak_check
+let nativeClosure (prefix: String) : Int64 -> String = fun value -> prefix + Stdlib.Int64.toString value
+let closure = nativeRoundTrip (NativeBox { value = nativeClosure ("value" + ":") }) in closure.value 42L = "value:42" // leak_check
 
 let nativeHigherOrder (f: Int64 -> String) : (String -> Int64) -> String = fun next -> f (next "argument")
 let higher = nativeRoundTrip (nativeHigherOrder (nativeClosure "result:")) in higher (fun _text -> 42L) = "result:42" // leak_check

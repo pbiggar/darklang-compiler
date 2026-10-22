@@ -6,5 +6,5 @@ Stdlib.__Task.__runMain (fun _unit -> let gate = Stdlib.__Async.__new<Int64> () 
 Stdlib.__Task.__runMain (fun _unit -> let gate = Stdlib.__Async.__new<Bool> () in let condition = Stdlib.__Task.__transport (Stdlib.__Async.__pending gate) in let _ = Stdlib.__Task.__resolve (__fiber_current ()) gate false in if condition then 1L else 2L) = 2L // branch inspection demands Bool; leak_check
 Stdlib.__Task.__runMain (fun _unit -> let value = Stdlib.__Task.__delayTransparent 0L 40L in value + 2L) = 42L // timer returns an ordinary Int64 source value; leak_check
 Stdlib.__Task.__runMain (fun _unit -> let value = Stdlib.__Task.__delayTransparent 0L 40.25 in value + 2.0) = 42.25 // float demand keeps its register class; leak_check
-Stdlib.__Task.__runMain (fun _unit -> let value = Stdlib.__Task.__delayTransparent 0L ("managed" ++ " result") in value) = "managed result" // native entry demands its result; leak_check
+Stdlib.__Task.__runMain (fun _unit -> let value = Stdlib.__Task.__delayTransparent 0L ("managed" + " result") in value) = "managed result" // native entry demands its result; leak_check
 Stdlib.__Task.__runMain (fun _unit -> let gate = Stdlib.__Async.__new<Bool> () in let condition = Stdlib.__Task.__transport (Stdlib.__Async.__pending gate) in if false then condition else false) = false // unselected branch does not demand; leak_check

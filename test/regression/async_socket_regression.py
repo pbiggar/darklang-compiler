@@ -43,7 +43,7 @@ let result = Stdlib.__Task.__runMain (fun _unit ->
   let firstBytes = Builtin.unwrap (Stdlib.__Task.__forceCurrent pendingFirst) in
   let _ = Stdlib.__Network.closeTcp first in
   let _ = Stdlib.__Network.closeTcp second in
-  (Builtin.unwrap (Stdlib.Blob.toString firstBytes)) ++ "|" ++ (Builtin.unwrap (Stdlib.Blob.toString secondBytes))) in
+  (Builtin.unwrap (Stdlib.Blob.toString firstBytes)) + "|" + (Builtin.unwrap (Stdlib.Blob.toString secondBytes))) in
 let _ = Builtin.print result in
 0L
 '''.replace("PORTL", f"{port}L")

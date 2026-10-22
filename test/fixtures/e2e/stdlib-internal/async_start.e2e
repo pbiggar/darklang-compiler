@@ -27,8 +27,8 @@ let startDepth (depth: Int64) : Int64 =
 
 Stdlib.__Task.__runMain (fun _unit -> startDepth 8L) = 9L // nested eager starts; leak_check
 
-let startClosure (prefix: String) : String -> String = fun suffix -> prefix ++ suffix
-let returned = Stdlib.__Task.__runMain (fun _unit -> Stdlib.__Task.__forceCurrent (Stdlib.__Task.__startCurrent (fun _unit -> startClosure ("owned" ++ " closure")))) in returned "!" = "owned closure!" // leak_check
+let startClosure (prefix: String) : String -> String = fun suffix -> prefix + suffix
+let returned = Stdlib.__Task.__runMain (fun _unit -> Stdlib.__Task.__forceCurrent (Stdlib.__Task.__startCurrent (fun _unit -> startClosure ("owned" + " closure")))) in returned "!" = "owned closure!" // leak_check
 
 let startAbandoned (cell: RawPtr) : Unit =
   let gate = Stdlib.__Async.__new<Int64> () in
@@ -46,7 +46,7 @@ let startFifo (cell: RawPtr) (gate: Stdlib.__Async.__Promise<Int64>) : Unit =
 
 let cell = __raw_alloc 8L in let _ = __raw_write_word cell 0L 0L in let gate = Stdlib.__Async.__new<Int64> () in let _ = Stdlib.__Task.__run [(fun _context -> startFifo cell gate), (fun context -> let _ = startDigit cell 2L in Stdlib.__Task.__resolve context gate 1L)] in let result = __raw_get<Int64> cell 0L in let _ = __raw_free cell in result = 123L // eager entry preserves runnable FIFO order; leak_check
 
-let startFailure () : Result<Int64, String> = Error ("ordinary" ++ " failure")
+let startFailure () : Result<Int64, String> = Error ("ordinary" + " failure")
 Stdlib.__Task.__runMain (fun _unit -> Stdlib.__Task.__forceCurrent (Stdlib.__Task.__startCurrent (fun _unit -> startFailure ()))) = Error "ordinary failure" // leak_check
 
 let expected = Stdlib.Cli.__argv 0L in Stdlib.__Task.__runMain (fun _unit -> Stdlib.__Task.__forceCurrent (Stdlib.__Task.__startCurrent (fun _unit -> Stdlib.Cli.__argv 0L))) == expected = true // child stack retains process arguments; leak_check
