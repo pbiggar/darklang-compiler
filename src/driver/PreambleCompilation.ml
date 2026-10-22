@@ -65,7 +65,7 @@ let buildCheckedContext (stdlib : X.stdlibResult)
           analysis.X.writtenEnvironment;
     }
   in
-  let* functions, ssa, typeMap, sumShapes =
+  let* functions, ssa, typeMap, registries =
     ANFPipeline.buildAnf ~asyncDefinitions:stdlib.X.stdlibAsyncDefinitions
       ~asyncRuntime:
         {
@@ -81,7 +81,6 @@ let buildCheckedContext (stdlib : X.stdlibResult)
       FunctionIdMap.empty false recorder
     |> Result.map_error preambleError
   in
-  let registries = { registries with AST_to_ANF.rcSumShapeReg = sumShapes } in
   let context =
     X.includeCompiledFunctions functions { context with X.registries }
   in
@@ -228,7 +227,7 @@ let buildPreambleContextFromAnalysis (stdlib : X.stdlibResult)
           analysis.X.writtenEnvironment;
     }
   in
-  let* functions, ssa, typeMap, sumShapes =
+  let* functions, ssa, typeMap, registries =
     ANFPipeline.buildAnf ~asyncDefinitions:stdlib.X.stdlibAsyncDefinitions
       ~asyncRuntime:
         {
@@ -244,7 +243,6 @@ let buildPreambleContextFromAnalysis (stdlib : X.stdlibResult)
       FunctionIdMap.empty false recorder
     |> Result.map_error preambleError
   in
-  let registries = { registries with AST_to_ANF.rcSumShapeReg = sumShapes } in
   let context =
     X.includeCompiledFunctions functions { context with X.registries }
   in

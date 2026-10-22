@@ -715,7 +715,10 @@ let directCallReturnType builder funcName =
         match FunctionIdMap.tryFind funcName builder.functionNames with
         | Some name -> name
         | None ->
-            Crash.crash "MIR lowering lost direct-call function name metadata"
+            Crash.crash
+              ("MIR lowering lost direct-call function name metadata for "
+              ^ Int64.to_string (AST.functionIdValue funcName)
+              ^ " in " ^ builder.funcName)
       in
       match tryGetIntrinsicReturnType name with
       | Some typ -> typ

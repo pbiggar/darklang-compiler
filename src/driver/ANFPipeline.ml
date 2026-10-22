@@ -713,4 +713,4 @@ let buildAnf ?(asyncDefinitions = StringOrder.Map.empty) ?asyncRuntime verbosity
   let rcElapsed = elapsed () -. rcStart in
   recordPassTiming passTimingRecorder "Reference Count Insertion" rcElapsed;
   elapsedDetail true rcElapsed;
-  Ok (preRCFunctions, ssaAfterRC, typeMap, registries.AST_to_ANF.rcSumShapeReg)
+  Ok (preRCFunctions, ssaAfterRC, typeMap, registries)

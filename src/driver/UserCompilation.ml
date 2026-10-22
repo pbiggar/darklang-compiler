@@ -329,13 +329,12 @@ let compileUserWithPlan ?writtenSources (plan : P.userCompilePlan) =
         (* The entry and its calls are compiled separately. Their absence here
            must not make a recursive dependency's arguments appear uniform:
            shrinking its signature would change the ABI used by those callers. *)
-        let* _, ssa, typeMap, sumShapes =
+        let* _, ssa, typeMap, registry =
           build registry plan.P.externalInlineCandidates
             plan.P.stdlib.X.stdlibAnfOptimizationCandidates
             user.R.nonInlineableFunctionNames dependencies
             user.R.ownershipContracts false
         in
-        let registry = { registry with AST_to_ANF.rcSumShapeReg = sumShapes } in
         let* allocated, summaries =
           NativePipeline.lowerToAllocatedLirWithKnown known
             plan.P.baseContext.X.target plan.P.verbosity plan.P.options elapsed
@@ -343,11 +342,10 @@ let compileUserWithPlan ?writtenSources (plan : P.userCompilePlan) =
             plan.P.labels.P.stageSuffix ssa typeMap registry (Some projected)
             returns
         in
-        Ok (allocated, summaries, sumShapes)
+        Ok (allocated, summaries, registry)
       in
       let dependencyResult =
-        if dependencies = [] then
-          Ok ([], FunctionIdMap.empty, registry.AST_to_ANF.rcSumShapeReg)
+        if dependencies = [] then Ok ([], FunctionIdMap.empty, registry)
         else
           match plan.P.session with
           | None -> compileDependencies ()
@@ -364,18 +362,24 @@ let compileUserWithPlan ?writtenSources (plan : P.userCompilePlan) =
                 }
                 compileDependencies
       in
-      let* allocatedDependencies, dependencySummaries, sumShapes =
+      let* allocatedDependencies, dependencySummaries, dependencyRegistry =
         dependencyResult
       in
-      let registry = { registry with AST_to_ANF.rcSumShapeReg = sumShapes } in
+      let registry = R.mergeRegistries registry dependencyRegistry in
       (* Native dependency compilation can generate functions after checked
          declarations have reserved their IDs. Late async specializations and
          adapters must allocate beyond those functions as well. *)
       let programSymbols =
+        FunctionIdMap.fold
+          (fun symbols id name ->
+            CheckedAST.registerGeneratedFunction name id symbols)
+          symbols registry.R.functionNames
+      in
+      let programSymbols =
         List.fold_left
           (fun symbols (fn : LIR.functionDef) ->
             CheckedAST.registerGeneratedFunction fn.LIR.name fn.LIR.id symbols)
-          symbols allocatedDependencies
+          programSymbols allocatedDependencies
       in
       let entry =
         R.synthesizeEntryFunction entryId entryName boundary user.R.mainExpr
@@ -439,8 +443,7 @@ let compileUserWithPlan ?writtenSources (plan : P.userCompilePlan) =
             user.R.nonInlineableFunctionNames (prune functions)
             user.R.ownershipContracts true
       in
-      let* _, ssa, programTypeMap, sumShapes = programResult in
-      let registry = { registry with AST_to_ANF.rcSumShapeReg = sumShapes } in
+      let* _, ssa, programTypeMap, registry = programResult in
       let through =
         merge
           (merge plan.P.stdlib.X.callGraphSummaries
@@ -514,14 +517,11 @@ let compileUserWithPlan ?writtenSources (plan : P.userCompilePlan) =
           funcParams = M.add entryName [] registry.R.funcParams;
         }
       in
-      let* _, startSsa, startTypeMap, sumShapes =
+      let* _, startSsa, startTypeMap, startRegistry =
         build startRegistry FunctionIdMap.empty M.empty F.empty
           [ startFunction ] FunctionIdMap.empty false
       in
-      let startRegistry =
-        { startRegistry with AST_to_ANF.rcSumShapeReg = sumShapes }
-      in
-      let registry = { registry with AST_to_ANF.rcSumShapeReg = sumShapes } in
+      let registry = startRegistry in
       let* allocated, summaries =
         NativePipeline.lowerToAllocatedLirWithKnownGroups through
           plan.P.baseContext.X.target plan.P.verbosity plan.P.options elapsed

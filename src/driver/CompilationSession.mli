@@ -12,19 +12,19 @@ class compilationSession : ?collectCodegenMetrics:bool -> unit -> object
     (unit -> (AST_to_ANF.functionConversion, string) result) ->
     (AST_to_ANF.functionConversion * Obj.t, string) result
 
-  (* Native dependency results carry the sum layouts needed by later callers. *)
+  (* Native dependency results carry late helper identities and storage layouts. *)
   method compileDependencies :
     Obj.t ->
     CompilationCacheIdentity.compiledDependencyConfig ->
     (unit ->
     ( LIR.functionDef list
       * CompilationCacheIdentity.functionSummary FunctionIdMap.t
-      * MemoryModel.rcSumShapeRegistry,
+      * AST_to_ANF.registries,
       string )
     result) ->
     ( LIR.functionDef list
       * CompilationCacheIdentity.functionSummary FunctionIdMap.t
-      * MemoryModel.rcSumShapeRegistry,
+      * AST_to_ANF.registries,
       string )
     result
 

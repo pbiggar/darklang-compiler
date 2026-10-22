@@ -197,7 +197,7 @@ class compilationSession ?(collectCodegenMetrics = false) () =
           unit ->
           ( LIR.functionDef list
             * C.functionSummary FunctionIdMap.t
-            * MemoryModel.rcSumShapeRegistry,
+            * AST_to_ANF.registries,
             string )
           result) =
       if disposed || config.C.options.CompilerOptions.enableCoverage then

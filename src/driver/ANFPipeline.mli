@@ -20,7 +20,8 @@ val buildConversionResult :
 val stdlibInliningConfig : InliningCommon.inliningConfig
 
 (* The elapsed callback supplies the caller-owned stopwatch's milliseconds.
-   Reusable callers retain the returned sum shapes for physical async layouts. *)
+   Callers retain the returned registries, including late async helper identities
+   and physical storage layouts. *)
 val buildAnf :
   ?asyncDefinitions:ANF.functionDef StringOrder.Map.t ->
   ?asyncRuntime:asyncRuntime ->
@@ -40,6 +41,6 @@ val buildAnf :
   ( ANF.functionDef list
     * SSAANF.functionDef list
     * ANF.typeMap
-    * MemoryModel.rcSumShapeRegistry,
+    * AST_to_ANF.registries,
     string )
   result
