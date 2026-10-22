@@ -1,6 +1,14 @@
 # Recursion parity
 
-Current compiler source review: 2026-10-07 at `7154b0ea9c1a3f53d30984ed17b9e0cc5d8f0dce`.
+Polymorphic-recursion correction: 2026-10-22, against interpreter
+`e76430be5cd9f6b77ed255430dc34a1b58dd8fc4`. The earlier claim that the
+interpreter rejects type-changing recursive calls was incorrect. Same-source
+probes during that investigation accepted concrete resets, parameter swaps,
+mutual calls, and terminating constructor-growing calls. The native compiler
+supports finite specialization; unbounded specialization remains an AOT gap.
+
+The rest of the source review dates from 2026-10-07 at
+`7154b0ea9c1a3f53d30984ed17b9e0cc5d8f0dce`.
 See the [current audit](../current-audit.md) for post-port status and validation.
 Older revision pairs and executed counts below are historical evidence, not
 a fresh test result for this revision.
@@ -39,7 +47,7 @@ binding syntax corpus, and native completion cases remain in `tailcall.e2e`.
 | Alias-only type cycle | rejected deterministically | expansion could recurse late | shared rejection; declaration validation uses an explicit visiting state |
 | Nominal recursive ADT | accepted | accepted | shared; delayed nominal payload references are not alias edges |
 | Recursive generic ADT | accepts one nominal identity through construction and higher-order folds | accepts with expected-type-aware constructor freshening | shared; pinned `RBTree<'k, 'v>` construction and `List.fold` cases |
-| Type-changing self or mutual call | rejected; active group assumptions are monomorphic | could enter specialization late | shared rejection with an AOT-specific `Polymorphic recursion` diagnostic |
+| Type-changing self or mutual call | the historical rejection claim was incorrect; terminating probes accept at `e76430be` | the old blanket self-call restriction rejected finite cases and did not cover every mutual cycle | corrected below: finite native specialization is supported; unbounded specialization is an AOT gap |
 | Completed generic function used at two types | accepts | accepts | shared; generalization occurs outside the active recursive group |
 | Deep tail recursion | eventually exhausts the execution stack at sufficient depth | native executable completes | intentional AOT completion divergence; compiler failure where the interpreter completes remains a parity defect |
 
@@ -66,8 +74,9 @@ a completed generalized group. Local candidates receive singleton self
 availability only after parameter, outer-binder, and package-collision rules
 have selected the same new binder.
 
-Type checking holds active recursive references to one monomorphic group
-assumption and rejects a type-changing `TypeApp` before specialization.
+Named generic references instantiate their declared signatures independently,
+including inside recursive bodies. Argument and return checking still enforce
+those signatures; changing type arguments does not permit ill-typed calls.
 Completed and imported groups retain ordinary instantiation. Lambda lifting
 uses binding identity to construct a fixed closure environment, rewrites self
 calls to the lifted code reference, and does not capture an ordinary closure
@@ -76,14 +85,66 @@ and group-environment index beside ANF. Tail ownership transfer compares those
 binding identities; native symbol strings are presentation keys, not recursion
 markers.
 
+## Polymorphic recursion and finite specialization
+
+This is valid and needs only `reset<Int64>` and `reset<Bool>`:
+
+```dark
+let reset<'a> (_value: a) (n: Int64) : Int64 =
+  if n <= 0L then 0L else 1L + reset true (n - 1L)
+reset 1L 3L
+```
+
+It returns `3L` in both implementations. Parameter permutations are also
+finite: `(a, b) -> (b, a)` alternates between at most two instances. Mutual
+calls, specialized function values, and explicit or inferred partial
+applications follow the same rule. Native tests also return tuples and
+tail-call between scalar/string instances to exercise concrete callee selection
+and ownership transfer.
+
+By contrast, this terminating execution returns `3L` in the interpreter but
+cannot be expanded into a finite set of native function bodies:
+
+```dark
+let grow<'a> (x: a) (n: Int64) : Int64 =
+  if n <= 0L then 0L else 1L + grow [x] (n - 1L)
+grow 1L 3L
+```
+
+Every native instance references another: `Int64`, `List<Int64>`,
+`List<List<Int64>>`, and so on. Before enumerating instances, the compiler
+examines reachable generic bodies. Graph vertices are function/type-parameter
+slots; edges carry a parameter into a callee's type argument. An edge is marked
+growing when the parameter occurs beneath a type constructor. A cycle containing
+a growing edge produces `Unbounded generic specialization`. This covers direct,
+mutual, swapped, and first-class generic references without an arbitrary depth
+limit. Unused generic definitions do not require native bodies.
+
+Not every constructor is a problem. `(a, b) -> (List<b>, Int64)` settles after
+two transitions because the growing flow `b -> a` has no path back. A constant
+reset contributes no parameter-flow edge. Rejecting every changed argument, or
+every constructor occurrence within a recursive function group, would reject
+these finite programs unnecessarily.
+
+There are also interpreter function-value issues distinct from this native
+limit. At the pinned revision, bare `f<Bool>` is treated as a Unit application
+rather than a specialized function value. Explicit partial application is a
+portable alternative for the finite reset probe. A constructor-growing recursive
+partial probe instead produced an interpreter nested-type mismatch. Neither
+issue justifies rejecting finite recursion in the compiler. The compiler
+regressions live in `test/fixtures/e2e/polymorphic_recursion.e2e`; historical
+interpreter observations are not claims of fresh execution on later revisions.
+
 ## Intentional compiler differences
 
 The AOT compiler reports unresolved references, ambiguous declarations,
-invalid cycles, and polymorphic recursion before execution. The interpreter
-may phrase or time the same rejection differently. Genuinely underdetermined
+invalid cycles, and unbounded native specialization before execution. Unbounded
+specialization is a language-support gap, not merely earlier timing of an
+interpreter error: the interpreter can complete the terminating example above.
+Genuinely underdetermined
 lambda and declaration types may also receive an early AOT diagnostic because
 native code requires a concrete representation. These are intentional timing
-or diagnostic differences, not different scope or recursion semantics.
+or diagnostic differences when the same program is otherwise rejected.
 
 Compiler-only internal declarations and native intrinsics can participate as
 imported completed groups. They are extensions of the ahead-of-time target,
@@ -93,8 +154,11 @@ not public recursion syntax.
 
 - Parsing: `src/frontend/interpreter/Parser.ml`
 - Stable parsed identities: `src/NameSyntax.ml`
-- Resolution, SCCs, monomorphic checking, and diagnostics:
+- Resolution, SCCs, signature instantiation, and diagnostics:
   `src/frontend/WrittenChecking.ml`
+- Generic call inference: `src/frontend/WrittenCallSupport.ml`
+- Constructor-growth analysis: `src/passes/preparation/SpecializationGrowth.ml`
+- Reachable native instances: `src/passes/preparation/Monomorphization.ml`
 - Closure identity and lowered group layout: `src/passes/anf/AST_to_ANF.ml`
 - Identity-safe self-tail ownership: `src/passes/anf/TailCallDetection.ml`
 - Existing behavioral coverage: `functions.e2e`, `tailcall.e2e`,

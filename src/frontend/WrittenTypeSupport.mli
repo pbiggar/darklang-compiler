@@ -57,7 +57,6 @@ type globals = {
   typeParams : StringOrder.Set.t;
   modulePath : string list;
   bounds : TraitCatalog.obligation list;
-  currentFunction : (AST.functionId * string * string list) option;
   returnBoundary : (AST.bindingId * AST.semanticType) option;
 }
 

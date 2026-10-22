@@ -8,7 +8,6 @@ type typeError =
   | InvalidOperation of string * AST.semanticType list
   | IncompatibleEqualityOperands of AST.semanticType * AST.semanticType
   | IncompatibleOrderingOperands of AST.semanticType * AST.semanticType
-  | PolymorphicRecursion of string
   | ResolutionFailure of NameResolution.resolutionError
   | GenericError of string
 
