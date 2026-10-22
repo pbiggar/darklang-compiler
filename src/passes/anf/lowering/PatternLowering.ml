@@ -344,7 +344,6 @@ type collectionMode = General | TupleBody | Guard | Nested
    Pattern match + guard: if pattern matches, bind, check guard
 *)
 let lowerMatch (toANFCore : LoweringCallbacks.expressionLowerer)
-    (toAtomCore : LoweringCallbacks.atomLowerer)
     (toANFBoundAtomCore : LoweringCallbacks.boundAtomLowerer) functionIds sums
     typeNames inert scrutinee cases gen env registry variants functions names
     modules =
@@ -364,10 +363,6 @@ let lowerMatch (toANFCore : LoweringCallbacks.expressionLowerer)
   in
   let anf value gen env =
     toANFCore sums typeNames inert value gen env registry variants functions
-      names modules
-  in
-  let atom value gen env =
-    toAtomCore sums typeNames inert value gen env registry variants functions
       names modules
   in
   let* scrutType =
@@ -993,11 +988,15 @@ let lowerMatch (toANFCore : LoweringCallbacks.expressionLowerer)
     if patternDefinitelyCannotMatchType pat typ then Ok (elseExpr, gen)
     else
       let* env, bindings, gen = collect Guard pat source typ env [] gen in
-      let* condition, guardBindings, gen = atom guard gen env in
+      let* guardExpression, condition, gen =
+        toANFBoundAtomCore sums typeNames inert guard gen env registry variants
+          functions names modules
+      in
       let* body, gen = anf body gen env in
       Ok
         ( K.wrapBindings (List.rev bindings)
-            (K.wrapBindings guardBindings (A.If (condition, body, elseExpr))),
+            (K.bindReturns guardExpression (fun _ ->
+                 A.If (condition, body, elseExpr))),
           gen )
   in
   let rec buildPatternComparison pat source patType gen =

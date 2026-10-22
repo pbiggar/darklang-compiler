@@ -349,6 +349,9 @@ let checkFunction (checkExpression : expressionChecker) globals symbols path
             match NonEmptyList.tryFromList (List.rev reversed) with
             | None -> Error ("Function '" ^ name ^ "' requires a parameter")
             | Some params ->
+                let returnTarget, symbols =
+                  C.allocateBinding "?return" symbols
+                in
                 map
                   (fun (_, body, symbols) ->
                     ( ({
@@ -365,6 +368,7 @@ let checkFunction (checkExpression : expressionChecker) globals symbols path
                   (checkExpression
                      {
                        globals with
+                       returnBoundary = Some (returnTarget, signature.return);
                        modulePath = path;
                        typeParams = S.of_list signature.typeParams;
                        bounds = signature.bounds;

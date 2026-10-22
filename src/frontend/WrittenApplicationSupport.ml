@@ -135,10 +135,30 @@ let indirect checkExpression literal globals locals symbols expected range
              [],
              drop (List.length patterns) args ))
   | WT.ELambda (_, patterns, _, _, _), []
-    when List.length patterns = List.length args ->
-      bind
-        (checkArgs symbols args (List.map (fun _ -> None) args))
-        (fun (arguments, symbols) ->
+    when List.length patterns = List.length args -> (
+      let arguments = checkArgs symbols args (List.map (fun _ -> None) args) in
+      let inferredFromBody original =
+        let inferred =
+          bind (check symbols None target) (fun (typ, target, symbols) ->
+              match typ with
+              | AST.TFunction (parameters, result)
+                when List.length parameters = List.length args ->
+                  bind
+                    (checkArgs symbols args (List.map Option.some parameters))
+                    (fun (arguments, symbols) ->
+                      literal expected symbols result
+                        (C.Apply
+                           ( target,
+                             NonEmptyList.fromList (List.map snd arguments) )))
+              | _ -> Error original)
+        in
+        match inferred with
+        | Ok _ as result -> result
+        | Error _ -> Error original
+      in
+      match arguments with
+      | Error message -> inferredFromBody message
+      | Ok (arguments, symbols) ->
           let returnType =
             Option.value expected
               ~default:

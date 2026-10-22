@@ -252,9 +252,10 @@ groups:
         separate native async implementation is not merged into this baseline.
   Early return:
     Postfix unwrap propagation:
-      status: missing
-      notes: Postfix ? parses and validates like the interpreter, but native early-return lowering is not implemented.
-        It is not Builtin.unwrap, which raises on None/Error instead of returning them from the enclosing function.
+      status: supported
+      notes: Option/Result propagation is checked ahead of time and lowered to lexical exit joins. Failures return
+        from the nearest function or lambda, including pipeline lambdas, while success and enclosing return payload
+        types may differ. Result error types must match; Builtin.unwrap retains its separate raising behavior.
   Reflection and dynamic execution:
     Runtime expression evaluation:
       status: missing

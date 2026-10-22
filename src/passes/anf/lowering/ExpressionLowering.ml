@@ -210,13 +210,6 @@ let lowerExpression (toANFCore : LoweringCallbacks.expressionLowerer)
         let* setup, value, gen = bound value gen in
         convertBound rest gen ((setup, value) :: acc)
   in
-  let rec convertAtoms remaining gen acc =
-    match remaining with
-    | [] -> Ok (List.rev acc, gen)
-    | value :: rest ->
-        let* value, bindings, gen = atom value gen in
-        convertAtoms rest gen ((value, bindings) :: acc)
-  in
   let rec captures remaining gen acc =
     match remaining with
     | [] -> Ok (List.rev acc, gen)
@@ -232,6 +225,28 @@ let lowerExpression (toANFCore : LoweringCallbacks.expressionLowerer)
   | C.DictLiteral _ ->
       Error
         "Non-empty DictLiteral must be lowered during generic specialization"
+  | C.ReturnScope (target, typ, body) ->
+      let exit, gen = A.freshVar gen in
+      let typ = C.semanticType typ in
+      let env = R.BindingMap.add target (exit, typ) env in
+      let* body, gen =
+        toANFCore sums typeNames inert body gen env registry variants functions
+          names modules
+      in
+      Ok
+        ( A.Join
+            ( { A.id = exit; typ },
+              A.Return (A.Var exit),
+              K.bindReturns body (fun value -> A.Jump (exit, value)) ),
+          gen )
+  | C.EarlyReturn (target, value) -> (
+      let* value, gen = anf value gen in
+      match R.BindingMap.find_opt target env with
+      | None ->
+          Crash.crash
+            "Checked early return lost its lexical scope during lowering"
+      | Some (exit, _) ->
+          Ok (K.bindReturns value (fun value -> A.Jump (exit, value)), gen))
   | C.BoundaryRender (renderer, value) ->
       let* value, gen = anf value gen in
       let id, gen = A.freshVar gen in
@@ -565,13 +580,13 @@ let lowerExpression (toANFCore : LoweringCallbacks.expressionLowerer)
             | _ -> None
           in
           let build successTag payloadType unboxed absent failure =
-            let* value, bindings, gen = atom argument gen in
+            let* setup, value, gen = bound argument gen in
             let value, bindings, gen =
               match value with
-              | A.Var _ -> (value, bindings, gen)
+              | A.Var _ -> (value, [], gen)
               | _ ->
                   let id, gen = A.freshVar gen in
-                  (A.Var id, bindings @ [ (id, A.Atom value) ], gen)
+                  (A.Var id, [ (id, A.Atom value) ], gen)
             in
             let tag, gen = A.freshVar gen in
             let success, gen = A.freshVar gen in
@@ -605,8 +620,9 @@ let lowerExpression (toANFCore : LoweringCallbacks.expressionLowerer)
               A.Let (print, A.RuntimeError failure, A.Return A.UnitLiteral)
             in
             Ok
-              ( K.wrapBindings (bindings @ tagBindings)
-                  (A.If (A.Var success, yes, no)),
+              ( K.bindReturns setup (fun _ ->
+                    K.wrapBindings (bindings @ tagBindings)
+                      (A.If (A.Var success, yes, no))),
                 gen )
           in
           let optionName = "Darklang.Stdlib.Option.Option" in
@@ -675,7 +691,7 @@ let lowerExpression (toANFCore : LoweringCallbacks.expressionLowerer)
                       A.Return A.UnitLiteral ),
                   gen )
           | None ->
-              let* value, bindings, gen = atom message gen in
+              let* setup, value, gen = bound message gen in
               let full, gen = A.freshVar gen in
               let id, gen = A.freshVar gen in
               let body =
@@ -688,7 +704,7 @@ let lowerExpression (toANFCore : LoweringCallbacks.expressionLowerer)
                         A.RuntimeErrorString (A.Var full),
                         A.Return A.UnitLiteral ) )
               in
-              Ok (K.wrapBindings bindings body, gen))
+              Ok (K.bindReturns setup (fun _ -> body), gen))
       | values ->
           Error
             ("Internal error: "
@@ -995,8 +1011,8 @@ let lowerExpression (toANFCore : LoweringCallbacks.expressionLowerer)
         ( sequence (List.map (fun (setup, _, _) -> setup) results) allocation,
           gen )
   | C.Match (value, cases) ->
-      PatternLowering.lowerMatch toANFCore toAtomCore toANFBoundAtomCore
-        functionIds sums typeNames inert value
+      PatternLowering.lowerMatch toANFCore toANFBoundAtomCore functionIds sums
+        typeNames inert value
         (NonEmptyList.toList cases)
         gen env registry variants functions names modules
   | C.InterpolatedString parts -> (
@@ -1016,12 +1032,12 @@ let lowerExpression (toANFCore : LoweringCallbacks.expressionLowerer)
   | C.Lambda _ ->
       Error "Lambda expressions (closures) are not yet fully implemented"
   | C.IndirectApply (callee, args) ->
-      let* callee, bindings, gen = atom callee gen in
-      let* results, gen = convertAtoms (NonEmptyList.toList args) gen [] in
-      let values = List.map fst results in
-      let bindings = bindings @ List.concat_map snd results in
-      let body, gen = finish gen (A.IndirectCall (callee, values)) in
-      Ok (K.wrapBindings bindings body, gen)
+      let* setup, callee, gen = bound callee gen in
+      let* results, gen = convertBound (NonEmptyList.toList args) gen [] in
+      let body, gen =
+        finish gen (A.IndirectCall (callee, List.map snd results))
+      in
+      Ok (sequence (setup :: List.map fst results) body, gen)
   | C.Apply (callee, args) -> (
       let argsList = NonEmptyList.toList args in
       let lets body parameters values =
@@ -1052,11 +1068,11 @@ let lowerExpression (toANFCore : LoweringCallbacks.expressionLowerer)
                 ^ displayId AST.DiagnosticFormatting.binding name
                 ^ "' as function - variable not in scope")
           | Some (id, _) ->
-              let* results, gen = convertAtoms argsList gen [] in
-              let values = List.map fst results in
-              let bindings = List.concat_map snd results in
-              let body, gen = finish gen (A.ClosureCall (A.Var id, values)) in
-              Ok (K.wrapBindings bindings body, gen))
+              let* results, gen = convertBound argsList gen [] in
+              let body, gen =
+                finish gen (A.ClosureCall (A.Var id, List.map snd results))
+              in
+              Ok (sequence (List.map fst results) body, gen))
       | C.Apply _ -> (
           let rec flatten value args =
             match value with
@@ -1088,14 +1104,12 @@ let lowerExpression (toANFCore : LoweringCallbacks.expressionLowerer)
               in
               anf (desugar base argLists) gen
           | _ ->
-              let full =
-                List.fold_left
-                  (fun value args ->
-                    C.Apply (value, NonEmptyList.fromList args))
-                  base argLists
+              let* setup, callee, gen = bound callee gen in
+              let* results, gen = convertBound argsList gen [] in
+              let body, gen =
+                finish gen (A.ClosureCall (callee, List.map snd results))
               in
-              let* value, bindings, gen = atom full gen in
-              Ok (K.wrapBindings bindings (A.Return value), gen))
+              Ok (sequence (setup :: List.map fst results) body, gen))
       | C.Let (name, value, body) ->
           anf (C.Let (name, value, C.Apply (body, args))) gen
       | C.Closure (callee, values) ->
@@ -1111,9 +1125,9 @@ let lowerExpression (toANFCore : LoweringCallbacks.expressionLowerer)
           let body = sequence (List.map fst results) body in
           Ok (K.wrapBindings bindings (A.Let (closure, alloc, body)), gen)
       | _ ->
-          let* callee, bindings, gen = atom callee gen in
-          let* results, gen = convertAtoms argsList gen [] in
-          let values = List.map fst results in
-          let bindings = bindings @ List.concat_map snd results in
-          let body, gen = finish gen (A.ClosureCall (callee, values)) in
-          Ok (K.wrapBindings bindings body, gen))
+          let* setup, callee, gen = bound callee gen in
+          let* results, gen = convertBound argsList gen [] in
+          let body, gen =
+            finish gen (A.ClosureCall (callee, List.map snd results))
+          in
+          Ok (sequence (setup :: List.map fst results) body, gen))
