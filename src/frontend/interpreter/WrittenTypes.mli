@@ -26,7 +26,6 @@ and infixFnName =
   | ComparisonLessThanOrEqual
   | ComparisonEquals
   | ComparisonNotEquals
-  | StringConcat
 
 and binaryOperation = BinOpAnd | BinOpOr
 
@@ -154,6 +153,7 @@ and expr =
   | EList of range * (expr * range option) list * range * range
   | ETuple of range * expr * range * expr * (range * expr) list * range * range
   | EIf of range * expr * expr * expr option * range * range * range option
+  | EUnwrap of range * expr * range
   | ERecordFieldAccess of range * expr * (range * string) * range
   | ELambda of range * letPattern list * expr * range * range
   | ERecord of
@@ -318,7 +318,7 @@ type moduleDecl = {
   keywordModule : range;
 }
 
-and testExpected = TEExpr of expr | TEError of string | TESqlError of string
+and testExpected = TEExpr of expr | TEError of string
 and assertion = { range : range; actual : expr; expected : testExpected }
 and expectedError = RuntimeError of string
 

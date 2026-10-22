@@ -146,7 +146,8 @@ let rec expressionNames expression =
   | WT.EList (_, elements, _, _) -> many (List.map fst elements)
   | WT.ETuple (_, first, _, second, rest, _, _) ->
       many (first :: second :: List.map snd rest)
-  | WT.ERecordFieldAccess (_, record, _, _) -> expressionNames record
+  | WT.EUnwrap (_, record, _) | WT.ERecordFieldAccess (_, record, _, _) ->
+      expressionNames record
   | WT.ELambda (_, _, body, _, _) -> expressionNames body
   | WT.ERecord (_, name, fields, _, _) ->
       qualifiedType name

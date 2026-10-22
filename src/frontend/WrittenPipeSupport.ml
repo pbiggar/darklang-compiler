@@ -12,8 +12,6 @@ let lower range first segments =
             (range, WT.EFnName (name.range, name), typeArgs, input :: args)
       | WT.EPipeEnum (_, name, caseName, fields, dot) ->
           WT.EEnum (range, name, caseName, input :: fields, dot)
-      | WT.EPipeLambda (_, [ pattern ], body, keyword, arrow) ->
-          WT.ELet (range, pattern, input, body, keyword, arrow)
       | WT.EPipeLambda (_, patterns, body, keyword, arrow) ->
           WT.EApply
             ( range,

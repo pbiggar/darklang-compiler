@@ -31,20 +31,20 @@ match Stdlib.Cli.__Args.get 0, Stdlib.Cli.__Args.get 1, Stdlib.Cli.__Args.get 2 
     match Stdlib.__Tls13Client.parsePemBundle pem with
     | Error message -> Stdlib.printLine message
     | Ok roots ->
-      let url = "https://localhost:" ++ port ++ "/" ++ mode in
+      let url = "https://localhost:" + port + "/" + mode in
       let method = if mode == "head" then "HEAD" else "POST" in
       let requestBody = Stdlib.String.toBlob (Stdlib.String.join (Stdlib.List.repeatUnsafe 70 (Stdlib.String.repeat "x" 1000)) "") in
       if mode == "buffered" || mode == "early-buffered" then
         match Stdlib.HttpClient.__requestTrustedWithRoots roots method url [] requestBody with
         | Error _ -> Stdlib.printLine "REQUEST ERROR"
-        | Ok response -> Stdlib.printLine (Stdlib.Int.toString response.statusCode ++ "|" ++ Stdlib.Int.toString (Stdlib.Blob.length response.body) ++ "|" ++ Stdlib.Int.toString (Stdlib.List.length response.headers))
+        | Ok response -> Stdlib.printLine (Stdlib.Int.toString response.statusCode + "|" + Stdlib.Int.toString (Stdlib.Blob.length response.body) + "|" + Stdlib.Int.toString (Stdlib.List.length response.headers))
       else
         match Stdlib.HttpClient.__streamTrustedWithRoots roots method url [] requestBody with
         | Error _ -> Stdlib.printLine "REQUEST ERROR"
         | Ok response ->
           let bytes = if mode == "abandon" then Stdlib.Blob.empty else Stdlib.Stream.toBlob response.body in
           let _ = Stdlib.Stream.close response.body in
-          Stdlib.printLine (Stdlib.Int.toString response.statusCode ++ "|" ++ Stdlib.Int.toString (Stdlib.Blob.length bytes) ++ "|" ++ Stdlib.Int.toString (Stdlib.List.length response.headers))
+          Stdlib.printLine (Stdlib.Int.toString response.statusCode + "|" + Stdlib.Int.toString (Stdlib.Blob.length bytes) + "|" + Stdlib.Int.toString (Stdlib.List.length response.headers))
 | _, _, _ -> Stdlib.printLine "Invalid arguments"
 '''
 

@@ -87,10 +87,14 @@ let record check literal globals locals symbols expected
                               ("Unknown field '" ^ fieldName ^ "' on "
                              ^ canonical)
                         | Some pattern ->
+                            let context, symbols =
+                              WrittenCheckingState.freshenType S.empty pattern
+                                symbols
+                            in
                             map
                               (fun (actual, _, symbols) ->
                                 (pattern :: patterns, actual :: actuals, symbols))
-                              (check globals locals symbols None value)))
+                              (check globals locals symbols (Some context) value)))
                   (Ok ([], [], symbols))
                   fields
               in
@@ -135,6 +139,15 @@ let record check literal globals locals symbols expected
 let access check literal globals locals symbols expected record fieldName =
   bind (check globals locals symbols None record) (fun (typ, record, symbols) ->
       match typ with
+      | AST.TTuple fields -> (
+          match int_of_string_opt fieldName with
+          | Some index when index > 0 && index <= List.length fields -> (
+              match List.nth_opt fields (index - 1) with
+              | Some fieldType ->
+                  literal expected symbols fieldType
+                    (C.TupleAccess (record, index - 1))
+              | None -> Crash.crash "Validated tuple index has no field")
+          | _ -> Error ("Tuple index '" ^ fieldName ^ "' is out of bounds"))
       | AST.TRecord (canonical, args) -> (
           match M.find_opt canonical globals.types with
           | None -> Error ("Unknown record type '" ^ canonical ^ "'")

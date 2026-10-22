@@ -6,7 +6,9 @@
 
 module Darklang.Stdlib.UInt128
 
-type ParseError = BadFormat | OutOfRange
+type ParseError =
+  | BadFormat
+  | OutOfRange
 
 let __low (value: UInt128) : UInt64 = __raw_get<UInt64> (__uint128_to_rawptr value) 0L
 let __high (value: UInt128) : UInt64 = __raw_get<UInt64> (__uint128_to_rawptr value) 8L

@@ -444,7 +444,7 @@ according to the backend's calling convention and reserved-register rules.
 | `src/ir/lir/LIR.ml` | LIR types |
 | `src/passes/anf/ANF_to_MIR.ml` | ANF → MIR |
 | `src/passes/mir/MIR_to_LIR.ml` | MIR → LIR |
-| `src/passes/mir/SSA_Construction.ml` | SSA form |
+| `src/passes/mir/MIRGraphAnalysis.ml` | Control-flow and dominance analyses |
 | `src/passes/mir/MIR_Optimize.ml` | MIR optimizations |
 | `src/passes/lir/RegisterAllocation.ml` | Register allocation and phi resolution |
 

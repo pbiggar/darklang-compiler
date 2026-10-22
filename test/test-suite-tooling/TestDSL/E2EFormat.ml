@@ -149,6 +149,7 @@ type e2eTest = {
   name : string;
   sourceLine : int;
   source : string;
+  modulePath : string list;
   expectedValueExpr : string option;
   preamble : string;
   expectedStdout : string option;
@@ -921,6 +922,7 @@ let parseTestLineWithPreamble line lineNumber filePath preamble funcLineMap =
               name = "L" ^ string_of_int lineNumber ^ ": " ^ display;
               sourceLine = lineNumber;
               source;
+              modulePath = [];
               expectedValueExpr;
               preamble;
               expectedStdout;
@@ -1162,8 +1164,27 @@ let parseLegacyE2ETestFile path =
       pendingShift := 0;
       multiline := false
     in
+    let modulePath () = List.rev !scopes |> List.concat_map snd in
+    let preambleText reversed =
+      List.fold_left
+        (fun kept line ->
+          let text = trim line in
+          if starts text "module " && String.ends_with ~suffix:"=" text then
+            match
+              List.find_opt
+                (fun next -> trim next <> "" && not (starts (trim next) "//"))
+                kept
+            with
+            | Some next when countLeadingSpaces next > countLeadingSpaces line
+              ->
+                line :: kept
+            | _ -> kept
+          else line :: kept)
+        [] reversed
+      |> String.concat "\n"
+    in
     let record = function
-      | Ok test -> tests := test :: !tests
+      | Ok test -> tests := { test with modulePath = modulePath () } :: !tests
       | Error e -> errors := e :: !errors
     in
     for i = 0 to Array.length lines - 1 do
@@ -1192,13 +1213,13 @@ let parseLegacyE2ETestFile path =
             in
             if (closing || complete) && not continuation then
               let full = String.concat "\n" (List.rev !pending)
-              and preamble = String.concat "\n" (List.rev !preambleLines) in
+              and preamble = preambleText !preambleLines in
               match
                 parseMultilineTest full !pendingStart path preamble
                   !functionLineMap
               with
               | Ok test ->
-                  tests := test :: !tests;
+                  tests := { test with modulePath = modulePath () } :: !tests;
                   reset ()
               | Error _ when complete && not closing -> ()
               | Error e ->
@@ -1206,20 +1227,18 @@ let parseLegacyE2ETestFile path =
                   reset ())
           else
             let without = stripComment s and indent = countLeadingSpaces line in
-            let rec pop ss ps fs =
-              match ss with
-              | (moduleIndent, parentPreamble, parentFunctions) :: rest
-                when indent <= moduleIndent ->
-                  pop rest parentPreamble parentFunctions
-              | _ -> (ss, ps, fs)
+            let rec pop = function
+              | (moduleIndent, _) :: rest when indent <= moduleIndent ->
+                  pop rest
+              | remaining -> remaining
             in
-            let ss, ps, fs = pop !scopes !preambleLines !functionLineMap in
-            scopes := ss;
-            preambleLines := ps;
-            functionLineMap := fs;
+            scopes := pop !scopes;
             let us = units line in
             let top = Array.length us > 0 && not (white us.(0)) in
-            let shift = List.length !scopes * 2 in
+            let shift =
+              List.length (List.filter (fun (indent, _) -> indent >= 0) !scopes)
+              * 2
+            in
             let mayTest = top || (allowIndented && indent = shift) in
             let isTest = isTestLine without in
             if mayTest && (not isTest) && not (definitionStart without) then (
@@ -1232,7 +1251,7 @@ let parseLegacyE2ETestFile path =
               pendingStart := number;
               multiline := true)
             else if mayTest && isTest then
-              let preamble = String.concat "\n" (List.rev !preambleLines) in
+              let preamble = preambleText !preambleLines in
               let incomplete =
                 allowIndented
                 &&
@@ -1282,11 +1301,18 @@ let parseLegacyE2ETestFile path =
                   (parseTestLineWithPreamble s number path preamble
                      !functionLineMap)
             else if allowIndented && (starts s "module " || starts s "module\t")
-            then scopes := (indent, !preambleLines, !functionLineMap) :: !scopes
-            else
-              let normalized =
-                if allowIndented then trimLeadingSpaces shift line else line
+            then begin
+              let name = trim (tail without 7) in
+              let nested = String.ends_with ~suffix:"=" name in
+              let name =
+                if nested then trim (slice name 0 (length name - 1)) else name
               in
+              let parts = String.split_on_char '.' name in
+              scopes := ((if nested then indent else -1), parts) :: !scopes;
+              preambleLines := line :: !preambleLines
+            end
+            else
+              let normalized = line in
               preambleLines := normalized :: !preambleLines;
               match extractFuncName normalized with
               | Some name ->
@@ -1301,7 +1327,7 @@ let parseLegacyE2ETestFile path =
         :: !errors;
     if !errors <> [] then Error (String.concat "\n" (List.rev !errors))
     else
-      let preamble = String.concat "\n" (List.rev !preambleLines) in
+      let preamble = preambleText !preambleLines in
       let normalizedPath =
         String.map (fun c -> if c = '\\' then '/' else c) path
       in

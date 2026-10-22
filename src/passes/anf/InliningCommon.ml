@@ -470,16 +470,6 @@ let isScalarRawReadReturnType = function
   | AST.TStream _ | AST.TVar _ | AST.TInferenceVar _ ->
       false
 
-let rec _countCallsToNames names = function
-  | Let (_, (Call (name, _) | BorrowedCall (name, _)), body) ->
-      (if FS.mem name names then 1 else 0) + _countCallsToNames names body
-  | Let (_, _, body) -> _countCallsToNames names body
-  | Jump _ | Return _ -> 0
-  | Join (_, continuation, entry) ->
-      _countCallsToNames names continuation + _countCallsToNames names entry
-  | If (_, yes, no) ->
-      _countCallsToNames names yes + _countCallsToNames names no
-
 let shouldUseExternalCandidate (info : functionInfo) config =
   shouldInline info config 0 && FS.is_empty info.calls
   && (isSimpleExternalExpr info.func.body

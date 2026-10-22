@@ -140,8 +140,6 @@ let formatQualifiedName name =
    boundary. Keep quoted segment delimiters in that string so embedded dots are
    lossless; NameResolution parses this representation back into segments.
 *)
-let toLegacySpelling = formatQualifiedName
-
 let tryParseLegacySpelling spelling =
   let units = Text.scalars spelling in
   let length = Array.length units in

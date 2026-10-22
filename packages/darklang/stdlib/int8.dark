@@ -4,7 +4,9 @@
 
 module Darklang.Stdlib.Int8
 
-type ParseError = BadFormat | OutOfRange
+type ParseError =
+  | BadFormat
+  | OutOfRange
 
 // Stdlib.Int8 - Integer operations
 
@@ -90,10 +92,10 @@ let toString (n: Int8) : String =
     if n < 0y then
         if n < -9y then
             let quotient = n / 10y in
-            Stdlib.Int8.toString quotient ++ Stdlib.Int8.__digitToString (0y - (n - (quotient * 10y)))
-        else "-" ++ Stdlib.Int8.__digitToString (0y - n)
+            Stdlib.Int8.toString quotient + Stdlib.Int8.__digitToString (0y - (n - (quotient * 10y)))
+        else "-" + Stdlib.Int8.__digitToString (0y - n)
     else if n < 10y then Stdlib.Int8.__digitToString n
-    else Stdlib.Int8.toString (n / 10y) ++ Stdlib.Int8.__digitToString (n % 10y)
+    else Stdlib.Int8.toString (n / 10y) + Stdlib.Int8.__digitToString (n % 10y)
 
 // Sum all integers in a list
 let sum (list: List<Int8>) : Int8 =

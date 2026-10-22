@@ -813,7 +813,6 @@ let runTestsWithProgressReporter completedTestReporter args =
           F.name = "Type Checking Format Tests";
           tests = TypeCheckingFormatTests.tests;
         };
-        { F.name = "Progress Bar Tests"; tests = ProgressBarTests.tests };
         { F.name = "Encoding DSL Tests"; tests = EncodingDSLTests.tests };
         { F.name = "Graph Color DSL Tests"; tests = GraphColorDSLTests.tests };
         {
@@ -870,8 +869,8 @@ let runTestsWithProgressReporter completedTestReporter args =
         };
         { F.name = "Bitset Tests"; tests = BitsetTests.tests };
         {
-          F.name = "SSA Construction Tests";
-          tests = SSAConstructionTests.tests;
+          F.name = "MIR Graph Analysis Tests";
+          tests = MIRGraphAnalysisTests.tests;
         };
         { F.name = "SSA Liveness Tests"; tests = SSALivenessTests.tests };
         { F.name = "Phi Resolution Tests"; tests = PhiResolutionTests.tests };
@@ -1058,7 +1057,7 @@ let runTestsWithProgressReporter completedTestReporter args =
         errors
     in
 
-    let runE2ESuite baseStdlib suiteName progressLabel testsArray =
+    let runE2EFile baseStdlib suiteName progressLabel testsArray =
       let numTests = Array.length testsArray in
       if numTests > 0 then begin
         let session =
@@ -1177,13 +1176,14 @@ let runTestsWithProgressReporter completedTestReporter args =
             let recordLogicalResult index (test : E.e2eTest) result =
               let _, _, _, compile, runtime = unpack (fromResult result) in
               results.(index) <- Some (test, result);
-              if Option.is_some resultsJsonPath then Queue.add
-                ( RepositoryTestFiles.relativePath test.E.sourceFile,
-                  test.E.name,
-                  match result with
-                  | Ok _ -> ("pass", "")
-                  | Error failure -> ("fail", failure.R.message) )
-                e2eOutcomes;
+              if Option.is_some resultsJsonPath then
+                Queue.add
+                  ( RepositoryTestFiles.relativePath test.E.sourceFile,
+                    test.E.name,
+                    match result with
+                    | Ok _ -> ("pass", "")
+                    | Error failure -> ("fail", failure.R.message) )
+                  e2eOutcomes;
               recordTiming
                 {
                   F.name = suiteName ^ ": " ^ test.E.name;
@@ -1361,6 +1361,15 @@ let runTestsWithProgressReporter completedTestReporter args =
                 ]
             end)
       end
+    in
+
+    let runE2ESuite baseStdlib suiteName progressLabel testsArray =
+      (* Contexts and the compilation session are file-scoped. Retaining every
+         specialized preamble for the complete suite costs gigabytes before the
+         first assertion runs, and keeps unrelated codegen caches alive. *)
+      List.iter
+        (runE2EFile baseStdlib suiteName progressLabel)
+        (R.sourceFileGroups testsArray)
     in
 
     let runPassTestFile load run path = Result.map run (load path) in
@@ -1799,18 +1808,28 @@ let runTestsWithProgressReporter completedTestReporter args =
               compare (fileA, nameA) (fileB, nameB))
           |> List.map (fun (file, name, (status, message)) ->
               JObject
-                [ ("source_file", JString file); ("name", JString name);
-                  ("status", JString status); ("message", JString message) ])
+                [
+                  ("source_file", JString file);
+                  ("name", JString name);
+                  ("status", JString status);
+                  ("message", JString message);
+                ])
         in
         writeJson false path
           (JObject
-             [ ("schema", JInt 1); ("mode", JString "execution");
-               ("target", JString (match target with
-                  | Platform.LinuxX86_64 -> "linux-x64"
-                  | Platform.ARM64Backend Platform.LinuxARM64 -> "linux-arm64"
-                  | Platform.ARM64Backend Platform.MacOSARM64 -> "macos-arm64"));
+             [
+               ("schema", JInt 1);
+               ("mode", JString "execution");
+               ( "target",
+                 JString
+                   (match target with
+                   | Platform.LinuxX86_64 -> "linux-x64"
+                   | Platform.ARM64Backend Platform.LinuxARM64 -> "linux-arm64"
+                   | Platform.ARM64Backend Platform.MacOSARM64 -> "macos-arm64")
+               );
                ("filter", JString (Option.value ~default:"" filter));
-               ("tests", JArray rows) ]))
+               ("tests", JArray rows);
+             ]))
       resultsJsonPath;
     Option.iter
       (fun path ->

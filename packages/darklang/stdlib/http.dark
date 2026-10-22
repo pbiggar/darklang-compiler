@@ -2,7 +2,10 @@
 
 module Darklang.Stdlib.Http
 
-type Request = { url: String, headers: List<(String * String)>, body: Blob }
+type Request =
+  { url: String
+    headers: List<String * String>
+    body: Blob }
 
 // Decode URL form fields at the byte level, matching upstream PR #5727.
 // '+' represents a space; invalid percent escapes are preserved verbatim.
@@ -22,7 +25,7 @@ let urlDecode (value: String) : String =
                         (Stdlib.List.append acc (Stdlib.Blob.toList blob))
                         (Stdlib.String.toBytes (Stdlib.String.dropFirst piece 2))
                 | Error _ ->
-                    Stdlib.List.append acc (Stdlib.String.toBytes ("%" ++ piece))) in
+                    Stdlib.List.append acc (Stdlib.String.toBytes ("%" + piece))) in
         Stdlib.String.fromBytesWithReplacement decodedBytes
 
 let __parseQueryParam (param: String) : Stdlib.Option.Option<(String * String)> =
@@ -79,7 +82,10 @@ let parseHeaders (value: String) : Dict<String, String> =
     let lines = Stdlib.String.split (Stdlib.String.replaceAll value "\r\n" "\n") "\n" in
     Stdlib.Http.__headerLinesToDict lines Stdlib.Dict.empty
 
-type Response = { statusCode: Int, headers: List<(String * String)>, body: Blob }
+type Response =
+  { statusCode: Int
+    headers: List<String * String>
+    body: Blob }
 
 let response (body: Blob) (statusCode: Int) : Stdlib.Http.Response =
     Stdlib.Http.Response { statusCode = statusCode, headers = [], body = body }
@@ -117,12 +123,11 @@ let forbidden () : Stdlib.Http.Response =
 let serverError (error: String) : Stdlib.Http.Response =
     Stdlib.Http.response (Stdlib.String.toBlob error) 500
 
-type Cookie = {
-    expires: DateTime,
-    maxAge: Int,
-    domain: String,
-    path: String,
-    secure: Bool,
-    httpOnly: Bool,
-    sameSite: String
-}
+type Cookie =
+  { expires: DateTime
+    maxAge: Int
+    domain: String
+    path: String
+    secure: Bool
+    httpOnly: Bool
+    sameSite: String }

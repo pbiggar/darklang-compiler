@@ -9,14 +9,24 @@ module Darklang.Stdlib.List
 
 type ChunkBySizeError = | SizeMustBeGreaterThanZero
 
-type IndexError = | IndexOutOfBounds
+type IndexError =
+  /// The resolved index was outside the bounds of the list.
+  | IndexOutOfBounds
 
-let setAt<'a> (list: List<a>) (index: Int) (value: a) : Stdlib.Result.Result<List<a>, Stdlib.List.IndexError> =
-    let length = Stdlib.List.length list in
-    let resolvedIndex = if index < 0 then length + index else index in
-    if resolvedIndex < 0 || resolvedIndex >= length then
-        Error Stdlib.List.IndexError.IndexOutOfBounds
-    else Ok (Stdlib.List.indexedMap list (fun i element -> if i == resolvedIndex then value else element))
+let setAt
+  (list: List<'a>)
+  (index: Int)
+  (value: 'a)
+  : Result.Result<List<'a>, IndexError> =
+  let listLength = length list
+  let resolvedIndex = if index < 0 then listLength + index else index
+
+  if resolvedIndex < 0 || resolvedIndex >= listLength then
+    Result.Result.Error IndexError.IndexOutOfBounds
+  else
+    Result.Result.Ok(
+      indexedMap list (fun i v -> if i == resolvedIndex then value else v)
+    )
 
 val empty = []
 
@@ -29,8 +39,8 @@ let length<'t> (list: List<t>) : Int =
     Stdlib.Int.fromInt64 (Stdlib.List.__length<t> list)
 
 // Create a single-element list - O(1)
-let singleton<'t> (value: t) : List<t> =
-    Stdlib.List.__singleton<t> value
+let singleton (value: 'a) : List<'a> =
+  [ value ]
 
 // Prepend an element to a list - O(1) worst case
 let push<'t> (list: List<t>) (value: t) : List<t> =
@@ -121,8 +131,11 @@ let __reverseByIndexHelper<'a> (list: List<a>) (index: Int64) (acc: List<a>) : L
         | Some v ->
             Stdlib.List.__reverseByIndexHelper<a> list (index - 1L) (Stdlib.List.__pushBack<a> acc v)
 
-let sortByComparator<'a> (list: List<a>) (comparator: a -> a -> Int) : Stdlib.Result.Result<List<a>, String> =
-    Stdlib.List.SortByComparatorHelpers.mergeSort list comparator
+let sortByComparator
+  (list: List<'a>)
+  (fn: 'a -> 'a -> Int)
+  : Result.Result<List<'a>, String> =
+  SortByComparatorHelpers.mergeSort list fn
 
 // Canonical interpreter ordering is synthesized per concrete AOT type.
 let sort<'a> (list: List<a>) : List<a> =
@@ -203,8 +216,10 @@ let fold<'a, 'b> (list: List<a>) (init: b) (fn: b -> a -> b) : b =
             Stdlib.List.fold<a, b> (Stdlib.List.__tail<a> list) newInit fn
 
 // Get head of list or return None - O(1)
-let head<'a> (list: List<a>) : Stdlib.Option.Option<a> =
-    Stdlib.List.__head<a> list
+let head (list: List<'a>) : Option.Option<'a> =
+  match list with
+  | [] -> Option.Option.None
+  | head :: _ -> Option.Option.Some head
 
 // Internal: get head without option wrapper (caller must ensure non-empty)
 // This forces monomorphization of headUnsafe_i64 for pattern matching
@@ -223,9 +238,10 @@ let __getAtFloat (list: List<Float>) (idx: Int64) : Stdlib.Option.Option<Float> 
     Stdlib.List.__getAt list idx
 
 // Get tail of list or return None - O(1) worst case
-let tail<'a> (list: List<a>) : Stdlib.Option.Option<List<a>> =
-    if Stdlib.List.__isEmpty<a> list then None
-    else Some (Stdlib.List.__tail<a> list)
+let tail (list: List<'a>) : Option.Option<List<'a>> =
+  match list with
+  | [] -> Option.Option.None
+  | _ :: tail -> Option.Option.Some tail
 
 // Get element at an arbitrary-precision index (0-based) - O(log n)
 let getAt<'a> (list: List<a>) (index: Int) : Stdlib.Option.Option<a> =
@@ -258,10 +274,13 @@ let __takeHelper<'a> (list: List<a>) (n: Int) (acc: List<a>) : List<a> =
             Stdlib.List.__takeHelper<a> (Stdlib.List.__tail<a> list) (n - 1) newAcc
 
 // Drop first n elements - O(n)
-let drop<'a> (list: List<a>) (n: Int) : List<a> =
-    if n <= 0 then list
-    else if Stdlib.List.__isEmpty<a> list then list
-    else Stdlib.List.drop<a> (Stdlib.List.__tail<a> list) (n - 1)
+let drop (list: List<'a>) (count: Int) : List<'a> =
+  if count <= 0 then
+    list
+  else
+    match list with
+    | [] -> []
+    | _ :: tail -> drop tail (count - 1)
 
 // Check if any element satisfies a predicate - O(n)
 let any<'a> (list: List<a>) (fn: (a) -> Bool) : Bool =
@@ -274,12 +293,22 @@ let any<'a> (list: List<a>) (fn: (a) -> Bool) : Bool =
             else Stdlib.List.any<a> (Stdlib.List.__tail<a> list) fn
 
 // Get the last element of a list, or None if empty - O(log n)
-let last<'a> (list: List<a>) : Stdlib.Option.Option<a> =
-    Stdlib.List.__last<a> list
+let last (list: List<'a>) : Option.Option<'a> =
+  match list with
+  | [] -> Option.Option.None
+  | head :: tail ->
+    match tail with
+    | [] -> Option.Option.Some head
+    | _ -> last tail
 
 // Remove the last element from a list - O(n)
-let dropLast<'a> (list: List<a>) : List<a> =
-    Stdlib.List.__init<a> list
+let dropLast (list: List<'a>) : List<'a> =
+  match list with
+  | [] -> []
+  | head :: tail ->
+    match tail with
+    | [] -> []
+    | _ -> push (dropLast tail) head
 
 // Generate every Int from the lower through the upper bound, inclusively.
 let range (start: Int) (end_: Int) : List<Int> =
@@ -289,8 +318,11 @@ let __rangeHelper (current: Int) (end_: Int) (acc: List<Int>) : List<Int> =
     if current > end_ then Stdlib.List.__reverse acc
     else Stdlib.List.__rangeHelper (current + 1) end_ (Stdlib.List.__push acc current)
 
-let repeatUnsafe<'a> (count: Int) (value: a) : List<a> =
-    Stdlib.List.__repeatHelper<a> count value (Stdlib.List.__empty<a> ())
+let repeatUnsafe (times: Int) (value: 'a) : List<'a> =
+  if times <= 0 then
+    []
+  else
+    push (repeatUnsafe (times - 1) value) value
 
 let __repeatHelper<'a> (count: Int) (value: a) (acc: List<a>) : List<a> =
     if count <= 0 then acc
@@ -303,10 +335,15 @@ let __repeatInt64<'a> (count: Int64) (value: a) (acc: List<a>) : List<a> =
     else Stdlib.List.__repeatInt64<a> (count - 1L) value (Stdlib.List.__push<a> acc value)
 
 // Repeat validates negative counts and preserves the interpreter's exact error.
-let repeat<'a> (count: Int) (value: a) : Stdlib.Result.Result<List<a>, String> =
-    if count < 0 then
-        Error ("Expected `times` to be positive, but it was `" ++ Stdlib.Int.toString count ++ "`")
-    else Ok (Stdlib.List.repeatUnsafe<a> count value)
+let repeat
+  (times: Int)
+  (value: 'a)
+  : Result.Result<List<'a>, String> =
+  if times < 0 then
+    Result.Result.Error
+      $"Expected `times` to be positive, but it was `{times |> Stdlib.toString}`"
+  else
+    Result.Result.Ok(repeatUnsafe times value)
 
 // Map with index: apply a function to each element along with its index - O(n)
 let indexedMap<'a, 'b> (list: List<a>) (fn: Int -> a -> b) : List<b> =
@@ -323,26 +360,29 @@ let __indexedMapHelper<'a, 'b> (list: List<a>) (fn: Int -> a -> b) (index: Int) 
 
 // Partition a list into two lists based on a predicate
 // Returns (elements where predicate is true, elements where predicate is false)
-let partition<'a> (list: List<a>) (fn: (a) -> Bool) : (List<a> * List<a>) =
-    match list with
-    | [] -> ([], [])
-    | head :: tail ->
-        match Stdlib.List.partition<a> tail fn with
-        | (trueList, falseList) ->
-            if fn head then
-                (Stdlib.List.push<a> trueList head, falseList)
-            else
-                (trueList, Stdlib.List.push<a> falseList head)
+let partition (ls: List<'a>) (f: 'a -> Bool) : (List<'a> * List<'a>) =
+  match ls with
+  | [] -> ([], [])
+  | head :: tail ->
+    let (trueList, falseList) = partition tail f
+
+    if (f head) then
+      (push trueList head, falseList)
+    else
+      (trueList, push falseList head)
 
 // Check if all elements satisfy a predicate, short-circuiting left-to-right.
-let all<'a> (list: List<a>) (fn: (a) -> Bool) : Bool =
-    match list with
-    | [] -> true
-    | head :: tail -> if fn head then Stdlib.List.all<a> tail fn else false
+let all (list: List<'a>) (fn: 'a -> Bool) : Bool =
+  match list with
+  | [] -> true
+  | head :: tail -> if (fn head) then all tail fn else false
 
 // Collection helpers ported from darklang/dark packages/darklang/stdlib/list.dark.
-let findFirstIndex<'a> (list: List<a>) (fn: (a) -> Bool) : Stdlib.Option.Option<Int> =
-    Stdlib.List.__findFirstIndexHelper<a> list fn 0
+let findFirstIndex (list: List<'a>) (fn: 'a -> Bool) : Option.Option<Int> =
+  list
+  |> indexedMap (fun i item -> (i, item))
+  |> findFirst (fun (_i, item) -> fn item)
+  |> Stdlib.Option.map (fun (i, _item) -> i)
 
 let __findFirstIndexHelper<'a> (list: List<a>) (fn: (a) -> Bool) (index: Int) : Stdlib.Option.Option<Int> =
     match list with
@@ -354,19 +394,25 @@ let contains<'a> (list: List<a>) (value: a) : Bool =
     | [] -> false
     | head :: tail -> if head == value then true else Stdlib.List.contains<a> tail value
 
-let interpose<'a> (list: List<a>) (separator: a) : List<a> =
-    match list with
-    | [] -> []
-    | [single] -> [single]
-    | head :: tail -> [head, separator] @ Stdlib.List.interpose<a> tail separator
+let interpose (list: List<'a>) (sep: 'a) : List<'a> =
+  match list with
+  | [] -> []
+  | [ single ] -> [ single ]
+  | head :: tail ->
+    (interpose tail sep)
+    |> push sep
+    |> push head
 
-let interleave<'a> (listA: List<a>) (listB: List<a>) : List<a> =
-    match listA with
-    | [] -> listB
-    | headA :: tailA ->
-        match listB with
-        | [] -> listA
-        | headB :: tailB -> [headA, headB] @ Stdlib.List.interleave<a> tailA tailB
+let interleave (lA: List<'a>) (lB: List<'a>) : List<'a> =
+  match lA with
+  | [] -> lB
+  | aHead :: aTail ->
+    match lB with
+    | [] -> lA
+    | bHead :: bTail ->
+      (interleave aTail bTail)
+      |> push bHead
+      |> push aHead
 
 let filterMap<'a, 'b> (list: List<a>) (fn: a -> Stdlib.Option.Option<b>) : List<b> =
     match list with
@@ -376,15 +422,19 @@ let filterMap<'a, 'b> (list: List<a>) (fn: a -> Stdlib.Option.Option<b>) : List<
         | Some value -> Stdlib.List.push<b> (Stdlib.List.filterMap<a, b> tail fn) value
         | None -> Stdlib.List.filterMap<a, b> tail fn
 
-let dropWhile<'a> (list: List<a>) (fn: (a) -> Bool) : List<a> =
-    match list with
-    | [] -> []
-    | head :: tail -> if fn head then Stdlib.List.dropWhile<a> tail fn else list
+let dropWhile (list: List<'a>) (fn: 'a -> Bool) : List<'a> =
+  match list with
+  | [] -> []
+  | head :: tail -> if (fn head) then dropWhile tail fn else list
 
-let takeWhile<'a> (list: List<a>) (fn: (a) -> Bool) : List<a> =
-    match list with
-    | [] -> []
-    | head :: tail -> if fn head then Stdlib.List.push<a> (Stdlib.List.takeWhile<a> tail fn) head else []
+let takeWhile (list: List<'a>) (fn: 'a -> Bool) : List<'a> =
+  match list with
+  | [] -> []
+  | head :: tail ->
+    if (fn head) then
+      push (takeWhile tail fn) head
+    else
+      []
 
 let map2shortest<'a, 'b, 'c> (listA: List<a>) (listB: List<b>) (fn: a -> b -> c) : List<c> =
     match (listA, listB) with
@@ -393,9 +443,15 @@ let map2shortest<'a, 'b, 'c> (listA: List<a>) (listB: List<b>) (fn: a -> b -> c)
     | (headA :: tailA, headB :: tailB) ->
         Stdlib.List.push (Stdlib.List.map2shortest tailA tailB fn) (fn headA headB)
 
-let map2<'a, 'b, 'c> (listA: List<a>) (listB: List<b>) (fn: a -> b -> c) : Stdlib.Option.Option<List<c>> =
-    if Stdlib.List.length<a> listA != Stdlib.List.length<b> listB then None
-    else Some (Stdlib.List.map2shortest<a, b, c> listA listB fn)
+let map2
+  (as_: List<'a>)
+  (bs: List<'b>)
+  (fn: 'a -> 'b -> 'c)
+  : Option.Option<List<'c>> =
+  if (length as_) != (length bs) then
+    Option.Option.None
+  else
+    Option.Option.Some(map2shortest as_ bs fn)
 
 let zipShortest<'a, 'b> (listA: List<a>) (listB: List<b>) : List<(a * b)> =
     match (listA, listB) with
@@ -403,17 +459,18 @@ let zipShortest<'a, 'b> (listA: List<a>) (listB: List<b>) : List<(a * b)> =
     | (_, []) -> []
     | (headA :: tailA, headB :: tailB) -> Stdlib.List.push<(a * b)> (Stdlib.List.zipShortest<a, b> tailA tailB) ((headA, headB))
 
-let unzip<'a, 'b> (pairs: List<(a * b)>) : (List<a> * List<b>) =
-    match pairs with
-    | [] -> ([], [])
-    | (first, second) :: tail ->
-        match Stdlib.List.unzip<a, b> tail with
-        | (firsts, seconds) -> (Stdlib.List.push<a> firsts first, Stdlib.List.push<b> seconds second)
+let unzip (pairs: List<('a * 'b)>) : (List<'a> * List<'b>) =
+  match pairs with
+  | [] -> ([], [])
+  | (a, b) :: tail ->
+    let (firsts, seconds) = unzip tail
 
-let splitLast<'a> (list: List<a>) : Stdlib.Option.Option<(List<a> * a)> =
-    match Stdlib.List.reverse<a> list with
-    | [] -> None
-    | last :: reversedInit -> Some ((Stdlib.List.reverse<a> reversedInit, last))
+    (push firsts a, push seconds b)
+
+let splitLast (l: List<'a>) : Option.Option<(List<'a> * 'a)> =
+  match reverse l with
+  | [] -> Option.Option.None
+  | head :: tail -> Option.Option.Some((reverse tail, head))
 
 let groupByWithKey<'a, 'b> (list: List<a>) (fn: a -> b) : List<(b * List<a>)> =
     Stdlib.List.__groupByWithKeyHelper list fn []
@@ -449,12 +506,12 @@ let __groupByWithKeyHelper<'a, 'b> (remaining: List<a>) (fn: a -> b) (groups: Li
                 Stdlib.List.__groupByWithKeyHelper<a, b> tail fn (Stdlib.List.pushBack<(b * List<a>)> rootedGroups ((rootedKey, [rootedElement])))
             | _ -> Builtin.crash "groupByWithKey retained state was empty"
 
-let iter<'a> (list: List<a>) (fn: (a) -> Unit) : Unit =
-    match list with
-    | [] -> ()
-    | head :: tail ->
-        let _ = fn head in
-        Stdlib.List.iter<a> tail fn
+let iter (list: List<'a>) (f: 'a -> Unit) : Unit =
+  match list with
+  | [] -> ()
+  | head :: tail ->
+    f head
+    iter tail f
 
 let __randomIndex (bound: Int64) : Int64 =
     let sample = Stdlib.Int64.bitwiseAnd (Stdlib.Int64.random (-9223372036854775808L) 9223372036854775807L) 9223372036854775807L in
@@ -466,18 +523,34 @@ let randomElement<'a> (list: List<a>) : Stdlib.Option.Option<a> =
     if length == 0L then None
     else Stdlib.List.__getAt<a> list (Stdlib.List.__randomIndex length)
 
-let chunkBySizeHelper<'a> (currentList: List<a>) (size: Int) (accum: List<List<a>>) : List<List<a>> =
-    match currentList with
-    | [] -> Stdlib.List.reverse<List<a>> accum
-    | _ ->
-        let taken = Stdlib.List.take<a> currentList size in
-        let rest = Stdlib.List.drop<a> currentList size in
-        let next = if Stdlib.List.isEmpty<a> taken then accum else Stdlib.List.push<List<a>> accum taken in
-        Stdlib.List.chunkBySizeHelper rest size next
+let chunkBySizeHelper
+  (currentList: List<'a>)
+  (size: Int)
+  (accum: List<List<'a>>)
+  : List<List<'a>> =
+  match currentList with
+  | [] -> reverse accum
+  | _ ->
+    let taken = take currentList size
+    let rest = drop currentList size
 
-let chunkBySize<'a> (list: List<a>) (size: Int) : Stdlib.Result.Result<List<List<a>>, Stdlib.List.ChunkBySizeError> =
-    if size <= 0 then Error Stdlib.List.ChunkBySizeError.SizeMustBeGreaterThanZero
-    else Ok (Stdlib.List.chunkBySizeHelper list size [])
+    let newAccum =
+      if isEmpty taken then
+        accum
+      else
+        push accum taken
+
+    chunkBySizeHelper rest size newAccum
+
+let chunkBySize
+  (list: List<'a>)
+  (size: Int)
+  : Result.Result<List<List<'a>>, ChunkBySizeError> =
+  if size <= 0 then
+    Result.Result.Error
+      ChunkBySizeError.SizeMustBeGreaterThanZero
+  else
+    Result.Result.Ok(chunkBySizeHelper list size [])
 
 // Convert list to display string representation: "[elem1, elem2, ...]"
 // Note: Generic version disabled due to function reference bug
@@ -500,7 +573,7 @@ let __int64sToStrings (list: List<Int64>) (acc: List<String>) : List<String> =
 
 let __toDisplayString_i64 (list: List<Int64>) : String =
     let strs = Stdlib.List.__int64sToStrings list (Stdlib.List.__empty ()) in
-    "[" ++ Stdlib.String.join strs ", " ++ "]"
+    "[" + Stdlib.String.join strs ", " + "]"
 
 let __intsToStrings (list: List<Int>) (acc: List<String>) : List<String> =
     if Stdlib.List.__isEmpty list then Stdlib.List.__reverse acc
@@ -513,7 +586,7 @@ let __intsToStrings (list: List<Int>) (acc: List<String>) : List<String> =
 
 let __toDisplayString_int (list: List<Int>) : String =
     let strs = Stdlib.List.__intsToStrings list (Stdlib.List.__empty ()) in
-    "[" ++ Stdlib.String.join strs ", " ++ "]"
+    "[" + Stdlib.String.join strs ", " + "]"
 
 let __i64ListsToStrings (list: List<List<Int64>>) (acc: List<String>) : List<String> =
     if Stdlib.List.__isEmpty list then Stdlib.List.__reverse acc
@@ -527,7 +600,7 @@ let __i64ListsToStrings (list: List<List<Int64>>) (acc: List<String>) : List<Str
 
 let __toDisplayString_list_i64 (list: List<List<Int64>>) : String =
     let strs = Stdlib.List.__i64ListsToStrings list (Stdlib.List.__empty ()) in
-    "[" ++ Stdlib.String.join strs ", " ++ "]"
+    "[" + Stdlib.String.join strs ", " + "]"
 
 // Helper to build string list from String list (with double quotes for display)
 let __stringsToStrings (list: List<String>) (acc: List<String>) : List<String> =
@@ -536,38 +609,38 @@ let __stringsToStrings (list: List<String>) (acc: List<String>) : List<String> =
         match Stdlib.List.__head list with
         | None -> Stdlib.List.__reverse acc
         | Some h ->
-            let quoted = "\"" ++ h ++ "\"" in
+            let quoted = "\"" + h + "\"" in
             let newAcc = Stdlib.List.__push acc quoted in
             Stdlib.List.__stringsToStrings (Stdlib.List.__tail list) newAcc
 
 let __quoteStringForDisplay (s: String) : String =
-    "\"" ++ s ++ "\""
+    "\"" + s + "\""
 
 let __stringsDisplayItems (list: List<String>) (first: Bool) : String =
     match list with
     | [] -> ""
     | [h] ->
         if first then Stdlib.List.__quoteStringForDisplay h
-        else ", " ++ Stdlib.List.__quoteStringForDisplay h
+        else ", " + Stdlib.List.__quoteStringForDisplay h
     | h :: t ->
         let item = Stdlib.List.__quoteStringForDisplay h in
         let rest = Stdlib.List.__stringsDisplayItems t false in
-        if first then item ++ rest else ", " ++ item ++ rest
+        if first then item + rest else ", " + item + rest
 
 let __toDisplayString_str (list: List<String>) : String =
-    "[" ++ Stdlib.List.__stringsDisplayItems list true ++ "]"
+    "[" + Stdlib.List.__stringsDisplayItems list true + "]"
 
 let __charsDisplayItems (list: List<Char>) (first: Bool) : String =
     match list with
     | [] -> ""
     | [h] ->
-        if first then Stdlib.Char.toString h else ", " ++ h
+        if first then Stdlib.Char.toString h else ", " + Stdlib.Char.toString h
     | h :: t ->
         let rest = Stdlib.List.__charsDisplayItems t false in
-        if first then h ++ rest else ", " ++ h ++ rest
+        if first then Stdlib.Char.toString h + rest else ", " + Stdlib.Char.toString h + rest
 
 let __toDisplayString_char (list: List<Char>) : String =
-    "[" ++ Stdlib.List.__charsDisplayItems list true ++ "]"
+    "[" + Stdlib.List.__charsDisplayItems list true + "]"
 
 // Helper to build string list from Bool list
 let __boolsToStrings (list: List<Bool>) (acc: List<String>) : List<String> =
@@ -582,7 +655,7 @@ let __boolsToStrings (list: List<Bool>) (acc: List<String>) : List<String> =
 
 let __toDisplayString_bool (list: List<Bool>) : String =
     let strs = Stdlib.List.__boolsToStrings list (Stdlib.List.__empty ()) in
-    "[" ++ Stdlib.String.join strs ", " ++ "]"
+    "[" + Stdlib.String.join strs ", " + "]"
 
 let __floatsDisplayItems (list: List<Float>) (first: Bool) : String =
     if Stdlib.List.__isEmpty list then ""
@@ -593,11 +666,15 @@ let __floatsDisplayItems (list: List<Float>) (first: Bool) : String =
             let item = Stdlib.Float.toString h in
             let tail = Stdlib.List.__tail list in
             let rest = Stdlib.List.__floatsDisplayItems tail false in
-            if first then item ++ rest else ", " ++ item ++ rest
+            if first then item + rest else ", " + item + rest
 
 let __toDisplayString_f64 (list: List<Float>) : String =
-    "[" ++ Stdlib.List.__floatsDisplayItems list true ++ "]"
+    "[" + Stdlib.List.__floatsDisplayItems list true + "]"
 
-let zip<'a, 'b> (list1: List<a>) (list2: List<b>) : Stdlib.Option.Option<List<(a * b)>> =
-    if Stdlib.List.length<a> list1 != Stdlib.List.length<b> list2 then None
-    else Some (Stdlib.List.zipShortest<a, b> list1 list2)
+let zip (l1: List<'a>) (l2: List<'b>) : Option.Option<List<('a * 'b)>> =
+  // The lengths once, then one native zip, rather than recursing and measuring both lengths
+  // again at every level, which is quadratic in the length.
+  if (length l1) != (length l2) then
+    Option.Option.None
+  else
+    Option.Option.Some(zipShortest l1 l2)

@@ -1,19 +1,19 @@
 // Concrete String options must retain ordinary Option behavior across generic calls.
 let identity (value: Stdlib.Option.Option<String>): Stdlib.Option.Option<String> = value
 Stdlib.Option.isNone (identity None) = true // leak_check
-Stdlib.Option.isSome (identity (Some ("a" ++ "b"))) = true
-Stdlib.Option.withDefault (identity (Some ("a" ++ "b"))) "missing" = "ab" // leak_check
+Stdlib.Option.isSome (identity (Some ("a" + "b"))) = true
+Stdlib.Option.withDefault (identity (Some ("a" + "b"))) "missing" = "ab" // leak_check
 Stdlib.Option.withDefault (identity None) "fallback" = "fallback"
-Stdlib.Option.withDefault (Stdlib.Option.map (Some "ab") (fun value -> value ++ "c")) "missing" = "abc" // leak_check
-Stdlib.Option.isNone (Stdlib.Option.map (identity None) (fun value -> value ++ "c")) = true
-Some ("a" ++ "b") == Some "ab" = true
+Stdlib.Option.withDefault (Stdlib.Option.map (Some "ab") (fun value -> value + "c")) "missing" = "abc" // leak_check
+Stdlib.Option.isNone (Stdlib.Option.map (identity None) (fun value -> value + "c")) = true
+Some ("a" + "b") == Some "ab" = true
 identity None != Some "" = true
-let values = (identity None, identity (Some ("a" ++ "b"))) in match values with | (None, Some value) -> value | _ -> "missing" = "ab" // leak_check
-let selected = match true with | true -> None | false -> Some ("a" ++ "b") in Stdlib.Option.isNone selected = true // leak_check
-let selected = match false with | true -> None | false -> Some ("a" ++ "b") in Stdlib.Option.withDefault selected "missing" = "ab" // leak_check
+let values = (identity None, identity (Some ("a" + "b"))) in match values with | (None, Some value) -> value | _ -> "missing" = "ab" // leak_check
+let selected = match true with | true -> None | false -> Some ("a" + "b") in Stdlib.Option.isNone selected = true // leak_check
+let selected = match false with | true -> None | false -> Some ("a" + "b") in Stdlib.Option.withDefault selected "missing" = "ab" // leak_check
 type OptionHolder = { value: Stdlib.Option.Option<String> }
 let holder = OptionHolder { value = None } in Stdlib.Option.isNone holder.value = true // leak_check
-let holder = OptionHolder { value = Some ("a" ++ "b") } in Stdlib.Option.withDefault holder.value "missing" = "ab" // leak_check
+let holder = OptionHolder { value = Some ("a" + "b") } in Stdlib.Option.withDefault holder.value "missing" = "ab" // leak_check
 let firstIsNone (pair: (Stdlib.Option.Option<String> * Stdlib.Option.Option<String>)): Bool = match pair with | (None, Some _) -> true | _ -> false
 let absent = identity None in firstIsNone (absent, Some "present") = true // leak_check
 let absent = identity None in let pair = (absent, Some "present") in firstIsNone pair = true // leak_check

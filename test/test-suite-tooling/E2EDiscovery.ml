@@ -1,5 +1,6 @@
 (* E2EDiscovery.ml - Load fixtures with the suite's upstream enablement gates. *)
 [@@@warning "-4-42"]
+
 open Dark_compiler
 module E = E2EFormat
 
@@ -37,6 +38,7 @@ let disabledUpstreamFiles =
     "test/fixtures/e2e/upstream/stdlib/prettyPrinter.dark";
     "test/fixtures/e2e/upstream/stdlib/sqlite.dark";
   ]
+
 let disabledUpstreamLines =
   [
     ("test/fixtures/e2e/upstream/stdlib/string.dark", [ 179 ]);
@@ -47,8 +49,7 @@ let disabledUpstreamLines =
       [ 1; 2; 19; 20; 45; 54; 60; 66; 71; 82 ] );
     ("test/fixtures/e2e/upstream/language/basic/eor.dark", [ 18; 19 ]);
     ("test/fixtures/e2e/upstream/language/collections/dlist.dark", [ 9; 10 ]);
-    ( "test/fixtures/e2e/upstream/language/collections/dtuple.dark",
-      [ 9; 11 ] );
+    ("test/fixtures/e2e/upstream/language/collections/dtuple.dark", [ 9; 11 ]);
     ( "test/fixtures/e2e/upstream/language/custom-data/enums.dark",
       [ 7; 9; 11; 74 ] );
     ( "test/fixtures/e2e/upstream/language/custom-data/record-field-acess.dark",
@@ -56,22 +57,6 @@ let disabledUpstreamLines =
     ("test/fixtures/e2e/upstream/language/custom-data/records.dark", [ 8 ]);
     ( "test/fixtures/e2e/upstream/language/custom-data/values.dark",
       [
-        5;
-        9;
-        13;
-        17;
-        21;
-        25;
-        29;
-        33;
-        37;
-        41;
-        45;
-        49;
-        53;
-        57;
-        61;
-        65;
         76;
         77;
         78;
@@ -112,8 +97,7 @@ let disabledUpstreamLines =
       ] );
     ( "test/fixtures/e2e/upstream/language/derror.dark",
       [ 13; 14; 15; 16; 17; 18; 19; 20; 21; 22; 23; 25; 32 ] );
-    ( "test/fixtures/e2e/upstream/language/elambda.dark",
-      [ 13; 18; 21; 33; 35 ] );
+    ("test/fixtures/e2e/upstream/language/elambda.dark", [ 13; 18; 21; 33; 35 ]);
     ("test/fixtures/e2e/upstream/language/error-syntax.dark", [ 1 ]);
     ( "test/fixtures/e2e/upstream/language/flow-control/eif.dark",
       [ 3; 4; 5; 6; 10; 23; 26 ] );
@@ -284,17 +268,21 @@ let disabledUpstreamLines =
     ("test/fixtures/e2e/upstream/stdlib/math.dark", [ 27; 30 ]);
     ("test/fixtures/e2e/upstream/stdlib/nomodule.dark", [ 308 ]);
   ]
-let normalizePath path =
-  String.map (fun c -> if c = '\\' then '/' else c) path
+
+let normalizePath path = String.map (fun c -> if c = '\\' then '/' else c) path
+
 let pathMatchesSourceFile source suffix =
   Text.endsWith (normalizePath source) suffix
+
 let isDisabledUpstreamFile source =
   List.exists (pathMatchesSourceFile source) disabledUpstreamFiles
+
 let disabledLinesForSourceFile source =
   List.find_map
     (fun (suffix, lines) ->
       if pathMatchesSourceFile source suffix then Some lines else None)
     disabledUpstreamLines
+
 let tryParseTestLineNumber name =
   if Text.startsWith name "L" then
     match String.index_opt name ':' with
@@ -303,13 +291,14 @@ let tryParseTestLineNumber name =
           (Text.tryParseInt32 (String.sub name 1 (colon - 1)))
     | _ -> None
   else None
+
 let upstreamSkipReason (test : E.e2eTest) =
   if
     Text.contains test.E.source "Builtin.testRuntimeError"
     || Text.contains test.E.preamble "Builtin.testRuntimeError"
-  then
-    "unsupported interpreter test infrastructure: Builtin.testRuntimeError"
+  then "unsupported interpreter test infrastructure: Builtin.testRuntimeError"
   else "pending upstream support"
+
 let applyUpstreamEnablementGate (test : E.e2eTest) =
   if Option.is_some test.E.skipReason then test
   else if isDisabledUpstreamFile test.E.sourceFile then
@@ -322,18 +311,16 @@ let applyUpstreamEnablementGate (test : E.e2eTest) =
     | Some lines, Some line when List.mem line lines ->
         { test with E.skipReason = Some (upstreamSkipReason test) }
     | _ -> test
+
 let loadE2ETests files =
   let tests, errors =
     Array.fold_left
       (fun (tests, errors) file ->
         match E.parseE2ETestFile file with
         | Ok parsed ->
-            ( List.rev_append
-                (List.map applyUpstreamEnablementGate parsed)
-                tests,
+            ( List.rev_append (List.map applyUpstreamEnablementGate parsed) tests,
               errors )
         | Error msg -> (tests, (file, msg) :: errors))
       ([], []) files
   in
   (Array.of_list (List.rev tests), List.rev errors)
-

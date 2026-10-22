@@ -113,7 +113,7 @@ let rec freshenDefinitions typeMap mapping state = function
 let rec freshenTypedDefinitions mapping state ctx types = function
   | R.RLet (id, operation, rest, _) ->
       let typ =
-        RcInsertExpression.inferBindingType
+        RcBindingTypeInference.inferBindingType
           (F.withTempTypes ctx types)
           id operation rest
       in

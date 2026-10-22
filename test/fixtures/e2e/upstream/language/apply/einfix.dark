@@ -1,5 +1,5 @@
 5L + 3L = 8L
-"xx" ++ "yy" = "xxyy"
+"xx" + "yy" = "xxyy"
 (5L + (3L)) = 8L
 Stdlib.Int64.add 5L 3L = 8L
 

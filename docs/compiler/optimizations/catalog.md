@@ -76,9 +76,11 @@ plain-text cases in `test/fixtures/ssa-optimization/ssa.opt`. These cover:
   uses; and
 - capture-free local closure devirtualization.
 
-The older structured ANF optimizer remains a test oracle for shared scalar
-rewrites. Accumulator helper generation is a separate pre-SSA lowering step
-in `src/passes/anf/ANFAccumulatorLowering.ml`.
+Source-based high-level fixtures in `test/fixtures/optimization/anf.opt` also
+run the production SSA pipeline, including ownership insertion, with inlining
+disabled to preserve fixture function boundaries. There is no separate
+structured-ANF optimization oracle. Accumulator helper generation remains a
+pre-SSA lowering step in `src/passes/anf/ANFAccumulatorLowering.ml`.
 
 Floating-point rewrites retain NaN, signed-zero, rounding, overflow, and
 evaluation-order restrictions. Managed-value forwarding retains ownership

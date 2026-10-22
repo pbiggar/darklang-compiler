@@ -5,7 +5,7 @@
 Stdlib.String.length "é" = 1
 
 // String-producing boundaries preserve the NFC invariant.
-"a" ++ "̂" = "â"
+"a" + "̂" = "â"
 
 // Canonical Char values and indexing operate on complete EGCs.
 Stdlib.Char.toString '👩‍👩‍👧‍👦' = "👩‍👩‍👧‍👦"

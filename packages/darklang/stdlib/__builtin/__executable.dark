@@ -22,7 +22,7 @@ let __launchExecfn (ptr: RawPtr) (offset: Int64) : String =
     else Builtin.__launchExecfn ptr (offset + 16L)
 
 let __executablePartsPath (parts: List<String>) : String =
-    "/" ++ Stdlib.String.join (Stdlib.List.reverse parts) "/"
+    "/" + Stdlib.String.join (Stdlib.List.reverse parts) "/"
 
 let __executableReadlink (path: String) : Stdlib.Result.Result<String, Int64> =
     let buffer = __mapped_alloc 8192L in
@@ -73,13 +73,13 @@ let __resolveExecutableCandidate (candidate: String) (cwd: String) : Stdlib.Opti
     if candidate == "" then None
     else if Stdlib.String.startsWith candidate "/" then Builtin.__executableWalk [] (Stdlib.String.split candidate "/") 0L
     else if cwd == "" then None
-    else Builtin.__executableWalk [] (Stdlib.String.split (cwd ++ "/" ++ candidate) "/") 0L
+    else Builtin.__executableWalk [] (Stdlib.String.split (cwd + "/" + candidate) "/") 0L
 
 let __searchExecutablePath (name: String) (directories: List<String>) (cwd: String) : Stdlib.Option.Option<String> =
     match directories with
     | [] -> None
     | directory :: rest ->
-        let candidate = if directory == "" then name else directory ++ "/" ++ name in
+        let candidate = if directory == "" then name else directory + "/" + name in
         match Builtin.__resolveExecutableCandidate candidate cwd with
         | Some path -> Some path
         | None -> Builtin.__searchExecutablePath name rest cwd
@@ -133,7 +133,7 @@ let __executablePathError (errno: Int64) : String =
     let error = Stdlib.Cli.__Posix.__error errno in
     match Builtin.__cachedExecutablePath () with
     | Some path -> path
-    | None -> Builtin.crash ("current executable path failed: " ++ error.message ++ "; no launch-path fallback available")
+    | None -> Builtin.crash ("current executable path failed: " + error.message + "; no launch-path fallback available")
 
 let __linuxExecutablePath (capacity: Int64) : String =
     let buffer = __mapped_alloc capacity in

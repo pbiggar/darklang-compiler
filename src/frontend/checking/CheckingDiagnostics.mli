@@ -8,7 +8,6 @@ type typeError =
   | InvalidOperation of string * AST.semanticType list
   | IncompatibleEqualityOperands of AST.semanticType * AST.semanticType
   | IncompatibleOrderingOperands of AST.semanticType * AST.semanticType
-  | PolymorphicRecursion of string
   | ResolutionFailure of NameResolution.resolutionError
   | GenericError of string
 
@@ -56,15 +55,6 @@ val formatPatternMismatchValue : AST.expr -> string option
 
 val formatPatternMismatchError :
   AST.expr -> AST.semanticType -> AST.semanticType -> string option -> string
-
-val formatLegacyParamTypeError :
-  string ->
-  int ->
-  string ->
-  AST.semanticType ->
-  AST.semanticType ->
-  AST.expr ->
-  string
 
 val inferenceVarForKey : string -> AST.semanticType
 

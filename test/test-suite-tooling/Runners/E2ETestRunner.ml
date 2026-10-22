@@ -71,18 +71,6 @@ let length s = Array.length (Text.scalars s)
 let slice s first count =
   Text.ofScalars (Array.sub (Text.scalars s) first count)
 
-let trimEnd s =
-  let us = Text.scalars s in
-  let rec last i =
-    if
-      i >= 0
-      && Uchar.is_valid us.(i)
-      && Uucp.White.is_white_space (Uchar.of_int us.(i))
-    then last (i - 1)
-    else i
-  in
-  Text.ofScalars (Array.sub us 0 (last (Array.length us - 1) + 1))
-
 let isInternalTestFile path =
   let path = replace "\\" "/" path in
   Text.contains path "/stdlib-internal/" || Text.contains path "/verification/"
@@ -202,6 +190,25 @@ let rewriteParenthesizedStatements source =
 
 (* Build comparisons from the original trees: adding source parentheses would
    move only the first line and change indentation-sensitive applications. *)
+(* Put the untouched assertion trees back into their fixture namespace. This
+   applies equally to a single assertion and the synthesized batch harness. *)
+let programInModule path (program : WT.sourceFile) =
+  match path with
+  | [] -> program
+  | _ ->
+      let range = program.WT.range in
+      let modul : WT.moduleDecl =
+        {
+          WT.range;
+          name = (range, String.concat "." path);
+          declarations =
+            program.WT.declarations
+            @ List.map (fun expr -> WT.DExpr expr) program.WT.exprsToEval;
+          keywordModule = range;
+        }
+      in
+      { program with WT.declarations = [ WT.DModule modul ]; exprsToEval = [] }
+
 let sourceToExecute _allowInternal (test : e2eTest) =
   let parsed =
     match parseWritten test.source with
@@ -299,6 +306,23 @@ type preambleContextKey = string * string
 
 let preambleContextKeyForTest (test : e2eTest) = (test.sourceFile, test.preamble)
 
+(* Keep discovery order and every preamble variant within a file, while allowing
+   the host to release that file's compiled contexts before starting the next. *)
+let sourceFileGroups tests =
+  let length = Array.length tests in
+  let rec collect start groups =
+    if start = length then List.rev groups
+    else
+      let next = ref (start + 1) in
+      while
+        !next < length && tests.(!next).sourceFile = tests.(start).sourceFile
+      do
+        incr next
+      done;
+      collect !next (Array.sub tests start (!next - start) :: groups)
+  in
+  collect 0 []
+
 let comparePreambleContextKey (a, b) (c, d) =
   let n = StringOrder.compare a c in
   if n = 0 then StringOrder.compare b d else n
@@ -379,31 +403,87 @@ let isUpstreamDarkTestFile file =
 
 let parsePreambleAsProgram _allowInternal preamble = parseWritten preamble
 
-let preambleFunctionDefs (p : WT.sourceFile) =
-  List.filter_map
-    (function WT.DFunction d -> Some d | _ -> None)
-    p.WT.declarations
+let moduleSegments (modul : WT.moduleDecl) =
+  match WrittenSource.moduleSegments (snd modul.WT.name) with
+  | Ok parts -> parts
+  | Error error -> Crash.crash error
 
-let referencedPreambleFunctions known expr =
-  SS.inter known (SS.of_list (WrittenSource.expressionNames expr))
-
-let collectProgramReferencedPreambleFuncs known (p : WT.sourceFile) =
-  let decls =
-    List.filter_map
+let preambleFunctionDefs (program : WT.sourceFile) =
+  let rec collect path declarations =
+    List.concat_map
       (function
-        | WT.DFunction d -> Some d.WT.body
-        | WT.DValue d -> Some d.WT.body
-        | _ -> None)
-      p.WT.declarations
+        | WT.DFunction definition ->
+            [
+              ( String.concat "." (path @ [ definition.WT.name.WT.name ]),
+                path,
+                definition );
+            ]
+        | WT.DModule modul ->
+            collect (path @ moduleSegments modul) modul.WT.declarations
+        | _ -> [])
+      declarations
   in
-  List.fold_left
-    (fun acc e -> SS.union acc (referencedPreambleFunctions known e))
-    SS.empty (decls @ p.WT.exprsToEval)
+  collect [] program.WT.declarations
+
+let referencedPreambleFunctions known path expr =
+  let rec resolve name path =
+    let candidate = String.concat "." (path @ [ name ]) in
+    if SS.mem candidate known then Some candidate
+    else
+      match List.rev path with
+      | [] -> None
+      | _ :: parent -> resolve name (List.rev parent)
+  in
+  WrittenSource.expressionNames expr
+  |> List.filter_map (fun name -> resolve name path)
+  |> SS.of_list
+
+let collectProgramReferencedPreambleFuncs known (program : WT.sourceFile) =
+  let rec collect path declarations =
+    List.fold_left
+      (fun refs declaration ->
+        let found =
+          match declaration with
+          | WT.DFunction definition ->
+              referencedPreambleFunctions known path definition.WT.body
+          | WT.DValue definition ->
+              referencedPreambleFunctions known path definition.WT.body
+          | WT.DExpr expr -> referencedPreambleFunctions known path expr
+          | WT.DModule modul ->
+              collect (path @ moduleSegments modul) modul.WT.declarations
+          | _ -> SS.empty
+        in
+        SS.union refs found)
+      SS.empty declarations
+  in
+  SS.union
+    (collect [] program.WT.declarations)
+    (List.fold_left
+       (fun refs expr ->
+         SS.union refs (referencedPreambleFunctions known [] expr))
+       SS.empty program.WT.exprsToEval)
+
+let preambleValueDependencies known (program : WT.sourceFile) =
+  let rec collect path declarations =
+    List.fold_left
+      (fun refs declaration ->
+        let found =
+          match declaration with
+          | WT.DValue definition ->
+              referencedPreambleFunctions known path definition.WT.body
+          | WT.DModule modul ->
+              collect (path @ moduleSegments modul) modul.WT.declarations
+          | _ -> SS.empty
+        in
+        SS.union refs found)
+      SS.empty declarations
+  in
+  collect [] program.WT.declarations
 
 let buildPreambleFunctionDependencyMap known defs =
   List.map
-    (fun (d : WT.fnDecl) ->
-      (d.WT.name.WT.name, referencedPreambleFunctions known d.WT.body))
+    (fun (name, path, (definition : WT.fnDecl)) ->
+      (name, referencedPreambleFunctions known path definition.WT.body))
     defs
   |> SM.of_list
 
@@ -434,32 +514,67 @@ let declarationRange = function
   | WT.DExpr e -> WT.exprRange e
   | WT.DAssertion d -> d.WT.range
 
-let reducePreambleSource required source (p : WT.sourceFile) =
+(* Remove unused declarations by source range, retaining module headers and
+   untouched literal text. Invalid, unused helper bodies must not poison a test
+   in another module or a separately checked error expectation. *)
+let reducePreambleSource required source (program : WT.sourceFile) =
   let normalized = replace "\r\n" "\n" source in
   let lines = String.split_on_char '\n' normalized in
-  List.filter_map
-    (fun decl ->
-      match decl with
-      | WT.DFunction d when not (SS.mem d.WT.name.WT.name required) -> None
-      | WT.DExpr _ | WT.DAssertion _ | WT.DTest _ -> None
-      | _ ->
-          let range = declarationRange decl in
-          let start = sourceOffset normalized range.Tokenizer.start in
-          let last =
-            min range.Tokenizer.end_.Tokenizer.row (List.length lines - 1)
-          in
-          let finish =
-            min (length normalized)
-              (List.fold_left
-                 (fun sum line -> sum + length line + 1)
-                 0
-                 (List.take (last + 1) lines))
-          in
-          if finish > start then
-            Some (trimEnd (slice normalized start (finish - start)))
-          else None)
-    p.WT.declarations
-  |> String.concat "\n\n"
+  let interval declaration =
+    let range = declarationRange declaration in
+    let start =
+      sourceOffset normalized
+        { range.Tokenizer.start with Tokenizer.column = 0 }
+    in
+    let last = min range.Tokenizer.end_.Tokenizer.row (List.length lines - 1) in
+    let finish =
+      min (length normalized)
+        (List.fold_left
+           (fun sum line -> sum + length line + 1)
+           0
+           (List.take (last + 1) lines))
+    in
+    (start, finish)
+  in
+  let rec removals path declarations =
+    List.fold_left
+      (fun (kept, ranges) declaration ->
+        let remove =
+          match declaration with
+          | WT.DFunction definition ->
+              not
+                (SS.mem
+                   (String.concat "." (path @ [ definition.WT.name.WT.name ]))
+                   required)
+          | WT.DExpr _ | WT.DAssertion _ | WT.DTest _ -> true
+          | _ -> false
+        in
+        if remove then (kept, interval declaration :: ranges)
+        else
+          match declaration with
+          | WT.DModule modul ->
+              let childKept, childRanges =
+                removals (path @ moduleSegments modul) modul.WT.declarations
+              in
+              if childKept then (true, childRanges @ ranges)
+              else (kept, interval declaration :: ranges)
+          | _ -> (true, ranges))
+      (false, []) declarations
+  in
+  let _, ranges = removals [] program.WT.declarations in
+  let ranges = List.sort compare ranges in
+  let rec retain offset pieces = function
+    | [] ->
+        String.concat ""
+          (List.rev
+             (slice normalized offset (length normalized - offset) :: pieces))
+    | (first, last) :: rest ->
+        let first = max offset first in
+        retain (max offset last)
+          (slice normalized offset (first - offset) :: pieces)
+          rest
+  in
+  retain 0 [] ranges
 
 let countLeadingSpaces line =
   let rec loop i =
@@ -500,9 +615,7 @@ let analyzePreambleWithReducedFunctionSet stdlib (spec : preambleBuildSpec)
   in
   let* program = parseResult in
   let defs = preambleFunctionDefs program in
-  let names =
-    SS.of_list (List.map (fun (d : WT.fnDecl) -> d.WT.name.WT.name) defs)
-  in
+  let names = SS.of_list (List.map (fun (name, _, _) -> name) defs) in
   let dependencies = buildPreambleFunctionDependencyMap names defs in
   let runnable =
     List.filter
@@ -510,7 +623,11 @@ let analyzePreambleWithReducedFunctionSet stdlib (spec : preambleBuildSpec)
         t.errorExpectation <> Some CompileError && Option.is_none t.skipReason)
       tests
   in
-  let testProgram t = sourceToExecute spec.allowInternal t in
+  let testProgram t =
+    Result.map
+      (programInModule t.modulePath)
+      (sourceToExecute spec.allowInternal t)
+  in
   let unparsable =
     List.exists (fun t -> Result.is_error (testProgram t)) runnable
   in
@@ -525,7 +642,8 @@ let analyzePreambleWithReducedFunctionSet stdlib (spec : preambleBuildSpec)
         SS.empty runnable
   in
   let required =
-    SS.filter (fun name -> SS.mem name names) seeds
+    SS.union seeds (preambleValueDependencies names program)
+    |> SS.filter (fun name -> SS.mem name names)
     |> expandRequiredPreambleFunctions dependencies
   in
   PreambleAnalysis.analyzePreamble spec.allowInternal stdlib
@@ -550,7 +668,7 @@ let analyzePreambleForPlan stdlib (spec : preambleBuildSpec) tests =
 
 let buildPreamblePlan (stdlib : CC.stdlibResult) (spec : preambleBuildSpec)
     tests =
-  Result.map
+  Result.bind (analyzePreambleForPlan stdlib spec tests)
     (fun (analysis : CC.preambleAnalysis option) ->
       let preambleSpecs =
         match analysis with
@@ -588,30 +706,31 @@ let buildPreamblePlan (stdlib : CC.stdlibResult) (spec : preambleBuildSpec)
         | Some a -> CheckedAST.programSymbols a.CC.typedAST
         | None -> stdlib.CC.context.CC.symbols
       in
-      let specialization =
+      let* specialization =
         if SM.is_empty generic then
-          {
-            SI.specializedFuncs = [];
-            specRegistry = SI.SpecMap.empty;
-            externalSpecs = SI.SpecSet.empty;
-            symbols;
-          }
+          Ok
+            {
+              SI.specializedFuncs = [];
+              specRegistry = SI.SpecMap.empty;
+              externalSpecs = SI.SpecSet.empty;
+              symbols;
+            }
         else Monomorphization.specializeFromSpecs symbols generic ownSpecs
       in
       let stdlibSpecs =
         SI.SpecSet.union stdlibSpecsFromPreamble
           (filterSpecsByDefs stdlibGeneric specialization.SI.externalSpecs)
       in
-      {
-        spec;
-        tests;
-        analysis;
-        specialization;
-        stdlibSpecs;
-        externalTypeReg;
-        externalVariantLookup;
-      })
-    (analyzePreambleForPlan stdlib spec tests)
+      Ok
+        {
+          spec;
+          tests;
+          analysis;
+          specialization;
+          stdlibSpecs;
+          externalTypeReg;
+          externalVariantLookup;
+        })
 
 let buildSuiteContexts stdlib tests passTimingRecorder =
   let recordTiming name elapsed =
@@ -740,7 +859,7 @@ let buildSuiteContexts stdlib tests passTimingRecorder =
                        (fun key _ acc -> SI.SpecSet.add key acc)
                        plan.specialization.SI.specRegistry SI.SpecSet.empty
                    in
-                   let specialization =
+                   let* specialization =
                      Monomorphization.specializeFromSpecs
                        (CheckedAST.programSymbols analysis.CC.typedAST)
                        analysis.CC.genericFuncDefs specs
@@ -1046,6 +1165,7 @@ let canBatchTogether left right =
     (preambleContextKeyForTest left.test)
     (preambleContextKeyForTest right.test)
   = 0
+  && left.test.modulePath = right.test.modulePath
   && isInternalTestFile left.test.sourceFile
      = isInternalTestFile right.test.sourceFile
   && buildCompilerOptions left.test = buildCompilerOptions right.test
@@ -1112,15 +1232,6 @@ let buildBatchSource tests =
       tests
     |> String.concat "\n\n"
   in
-  let resultBindings =
-    List.mapi
-      (fun i _ ->
-        let index = string_of_int i in
-        "let " ^ prefix ^ "Result" ^ index ^ " = " ^ prefix ^ "Check" ^ index
-        ^ " (0L) in")
-      tests
-    |> String.concat "\n"
-  in
   let rec chunks xs =
     if xs = [] then []
     else
@@ -1131,13 +1242,27 @@ let buildBatchSource tests =
     List.mapi (fun i t -> (i, t)) tests
     |> chunks
     |> List.map (fun chunk ->
-        List.map
-          (fun (i, _) ->
-            let bit = Int64.shift_left 1L (i mod batchResultChunkSize) in
-            "(if " ^ prefix ^ "Result" ^ string_of_int i ^ " then "
-            ^ Int64.to_string bit ^ "L else 0L)")
-          chunk
-        |> String.concat "\n+ ")
+        (* Bound each generated let chain by the result-word size, so a large
+           batch does not exceed the interpreter parser's nesting limit. *)
+        let bindings =
+          List.map
+            (fun (i, _) ->
+              let index = string_of_int i in
+              "let " ^ prefix ^ "Result" ^ index ^ " = " ^ prefix ^ "Check"
+              ^ index ^ " (0L) in")
+            chunk
+          |> String.concat "\n"
+        in
+        let mask =
+          List.map
+            (fun (i, _) ->
+              let bit = Int64.shift_left 1L (i mod batchResultChunkSize) in
+              "(if " ^ prefix ^ "Result" ^ string_of_int i ^ " then "
+              ^ Int64.to_string bit ^ "L else 0L)")
+            chunk
+          |> String.concat "\n+ "
+        in
+        bindings ^ "\n" ^ mask)
   in
   let vector =
     match masks with
@@ -1147,7 +1272,7 @@ let buildBatchSource tests =
         ^ String.concat ",\n" (List.map (fun mask -> "(" ^ mask ^ ")") masks)
         ^ ")"
   in
-  checkFunctions ^ "\n\n" ^ resultBindings ^ "\n" ^ vector
+  checkFunctions ^ "\n\n" ^ vector
 
 (* Parse the harness-only scaffolding, then insert each comparison tree into its
    result binding. User expressions and literal contents are never reprinted. *)
@@ -1351,7 +1476,9 @@ let runE2ETestBatchWithPreambleContext stdlib preambleCtx session tests
         match buildBatchProgram tests with
         | Error error -> CompileFailed (1, error, 0L)
         | Ok program ->
-            compileAndRun ~writtenSources:[ program ] [] [] Closed request
+            compileAndRun
+              ~writtenSources:[ programInModule first.test.modulePath program ]
+              [] [] Closed request
       in
       let results =
         match aggregateRun with
@@ -1398,13 +1525,12 @@ let tryBuildReducedPreambleForTest allowInternal preamble testSource =
   | Ok preambleProgram ->
       let testProgram = testSource in
       let defs = preambleFunctionDefs preambleProgram in
-      let names =
-        SS.of_list (List.map (fun (d : WT.fnDecl) -> d.WT.name.WT.name) defs)
-      in
+      let names = SS.of_list (List.map (fun (name, _, _) -> name) defs) in
       let dependencies = buildPreambleFunctionDependencyMap names defs in
       let seeds = collectProgramReferencedPreambleFuncs names testProgram in
       let required =
-        SS.filter (fun name -> SS.mem name names) seeds
+        SS.union seeds (preambleValueDependencies names preambleProgram)
+        |> SS.filter (fun name -> SS.mem name names)
         |> expandRequiredPreambleFunctions dependencies
       in
       Some (reducePreambleSource required preamble preambleProgram)
@@ -1436,8 +1562,9 @@ let runE2ETestSourceWithPreambleContext stdlib preambleCtx session
     }
   in
   let run =
-    compileAndRun ~writtenSources:[ program ] test.arguments test.environment
-      test.stdin request
+    compileAndRun
+      ~writtenSources:[ programInModule test.modulePath program ]
+      test.arguments test.environment test.stdin request
   in
   let primary = evaluateExpectations test run in
   let fallback =
@@ -1455,7 +1582,8 @@ let runE2ETestSourceWithPreambleContext stdlib preambleCtx session
   else
     let fallbackPreamble =
       Option.value ~default:test.preamble
-        (tryBuildReducedPreambleForTest allowInternal test.preamble program)
+        (tryBuildReducedPreambleForTest allowInternal test.preamble
+           (programInModule test.modulePath program))
     in
     let request =
       {
@@ -1488,8 +1616,10 @@ let runE2ETestSourceWithPreambleContext stdlib preambleCtx session
       match parsePreambleAsProgram allowInternal fallbackPreamble with
       | Error error -> CompileFailed (1, error, 0L)
       | Ok preamble ->
-          compileAndRun ~writtenSources:[ preamble; program ] test.arguments
-            test.environment test.stdin request
+          compileAndRun
+            ~writtenSources:
+              [ preamble; programInModule test.modulePath program ]
+            test.arguments test.environment test.stdin request
     in
     match evaluateExpectations test run with
     | Ok _ as success -> success

@@ -19,14 +19,14 @@ root = word(0)
 Generic user sum with String payload shares its pointer
 ---INPUT---
 type Maybe<'t> = Missing | Present of t
-let original = Stdlib.String.trim (" " ++ "ef" ++ " ") in (original, Present original)
+let original = Stdlib.String.trim (" " + "ef" + " ") in (original, Present original)
 ---EXPECTED---
 root = tuple(shared_word, shared_word)
 
 ---NAME---
 Some String option shares its payload pointer
 ---INPUT---
-let original = Stdlib.String.trim (" " ++ "ab" ++ " ") in (original, Some original)
+let original = Stdlib.String.trim (" " + "ab" + " ") in (original, Some original)
 ---EXPECTED---
 root = tuple(shared_word, shared_word)
 
@@ -40,6 +40,6 @@ root = word(0)
 ---NAME---
 Mapped String option shares its payload pointer
 ---INPUT---
-let original = Stdlib.String.trim (" " ++ "cd" ++ " ") in (original, Stdlib.Option.map (Some original) (fun value -> value))
+let original = Stdlib.String.trim (" " + "cd" + " ") in (original, Stdlib.Option.map (Some original) (fun value -> value))
 ---EXPECTED---
 root = tuple(shared_word, shared_word)

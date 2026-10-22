@@ -20,7 +20,7 @@ let original = skewBuildFront 1L 15L (Stdlib.List.__empty ()) in let once = Stdl
 let original = skewBuildFront 1L 31L (Stdlib.List.__empty ()) in let changed = Stdlib.List.__setAt original 16L 999L in let oldValue = Stdlib.Option.withDefault (Stdlib.List.__getAt original 16L) (-1L) in let newValue = Stdlib.Option.withDefault (Stdlib.List.__getAt changed 16L) (-1L) in let neighbor = Stdlib.Option.withDefault (Stdlib.List.__getAt changed 17L) (-1L) in oldValue * 100000L + newValue * 100L + neighbor = 1599914L
 
 // Managed payloads retained by shared paths are released without leaks.
-let skewDynamicString (value: String) : String = value ++ "!"
+let skewDynamicString (value: String) : String = value + "!"
 let first = skewDynamicString "first" in let second = skewDynamicString "second" in let original = Stdlib.List.__push (Stdlib.List.__push (Stdlib.List.__empty ()) second) first in let changed = Stdlib.List.__setAt original 1L (skewDynamicString "replacement") in Stdlib.String.length (Stdlib.List.__headUnsafe changed) = stdout="6\n" stderr=""
 
 // Recursive indexed updates exercise the inlined bounds-check path used by

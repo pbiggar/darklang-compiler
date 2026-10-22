@@ -108,7 +108,7 @@ let formatBinOp = function
   | BitAnd -> "&"
   | BitOr -> "|||"
   | BitXor -> "^"
-  | StringConcat -> "++"
+  | StringConcat -> "+"
   | Eq -> "=="
   | Neq -> "!="
   | Lt -> "<"
@@ -262,10 +262,6 @@ let rec formatExpr (expr : expr) =
   let rec formatAppArgs = function
     | [] -> []
     | [ last ] -> [ formatAppArg last ]
-    | current :: (UnitLiteral as next) :: rest ->
-        (* `f x ()` can be reparsed as applying unit to `x`.
-     Parenthesize the preceding argument to preserve argument boundaries. *)
-        wrap (formatAppArg current) :: formatAppArgs (next :: rest)
     | current :: (TupleLiteral _ as next) :: rest ->
         (* `f g (a, b)` can be reparsed as applying `g` to tuple elements.
      Parenthesize the preceding argument to keep tuple as a separate argument. *)

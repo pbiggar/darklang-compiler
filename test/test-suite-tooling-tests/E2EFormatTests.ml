@@ -515,8 +515,69 @@ let testRejectsDanglingCompileErrorDirective () =
       | Error msg -> Error ("Unexpected dangling-directive error: " ^ msg)
       | Ok _ -> Error "Expected dangling #compileerror rejection")
 
+let testSourceFileGroupsPreserveAssertions () =
+  one "1L = 1L" "Expected a template assertion" (fun test ->
+      let make file preamble name =
+        { test with sourceFile = file; preamble; name }
+      in
+      let input =
+        [|
+          make "a.dark" "first" "a1";
+          make "a.dark" "second" "a2";
+          make "b.dark" "first" "b1";
+          make "a.dark" "first" "a3";
+        |]
+      in
+      let groups = sourceFileGroups input in
+      let* () =
+        require
+          (List.map Array.length groups = [ 2; 1; 1 ])
+          "File boundaries or preamble variants changed"
+      in
+      let* () =
+        require
+          (Array.concat groups = input)
+          "Grouping lost, duplicated, reordered or modified assertions"
+      in
+      let* () =
+        require (sourceFileGroups [||] = []) "Empty suite created a group"
+      in
+      require
+        (sourceFileGroups [| test |] = [ [| test |] ])
+        "Singleton suite changed")
+
+let testPreservesLegacyModuleScopes () =
+  two
+    "module First =\n\
+    \  val number = 40L\n\
+    \  First.number = 40L\n\
+     module Second =\n\
+    \  val number = 2L\n\
+    \  number = 2L\n"
+    "Expected scoped legacy assertions" (fun first second ->
+      let* () =
+        require
+          (first.modulePath = [ "First" ] && second.modulePath = [ "Second" ])
+          "Legacy module paths were flattened"
+      in
+      let* () =
+        require
+          (Text.contains second.preamble "module First ="
+          && Text.contains second.preamble "module Second =")
+          "Legacy preamble lost module declarations"
+      in
+      match (tryPrepareBatchTest first, tryPrepareBatchTest second) with
+      | Some a, Some b ->
+          require
+            (not (canBatchTogether a b))
+            "Different module scopes shared a batch"
+      | _ -> Error "Scoped equality assertions were not batch eligible")
+
 let tests =
   [
+    ("preserves legacy module scopes", testPreservesLegacyModuleScopes);
+    ( "file context groups preserve every assertion",
+      testSourceFileGroupsPreserveAssertions );
     ( "parses multiline expectation on next line",
       testParsesMultilineExpectationOnNextLine );
     ("parses skip attribute", testParsesSkipAttribute);

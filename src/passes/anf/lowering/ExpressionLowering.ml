@@ -17,208 +17,6 @@ let ( let* ) = Result.bind
 let int value = A.IntLiteral (A.Int64 value)
 let displayId describe id = StructuralFormat.format (describe id)
 
-let add left right =
-  Int32.to_int (Int32.add (Int32.of_int left) (Int32.of_int right))
-
-let _legacyListTreeHelpers () =
-  let _listNode = AST.TList (AST.TVar "a") in
-  let _listNodeType = Some _listNode in
-  let tagRawPtrAsList listNode tag ptr gen bindings =
-    let raw, gen = A.freshVar gen in
-    let tagExpr = A.Prim (A.BitOr, A.Var ptr, int tag) in
-    let typed, gen = A.freshVar gen in
-    let typedExpr = A.TypedAtom (A.Var raw, listNode) in
-    (A.Var typed, bindings @ [ (raw, tagExpr); (typed, typedExpr) ], gen)
-  in
-  let _allocLeaf atom typ gen bindings =
-    let ptr, gen = A.freshVar gen in
-    let set, gen = A.freshVar gen in
-    let rc, gen = A.freshVar gen in
-    let bindings =
-      bindings
-      @ [
-          (ptr, A.RawAlloc (int 16L));
-          (set, A.RawSlotInit (A.Var ptr, int 0L, atom, typ));
-          (rc, A.RawWriteWord (A.Var ptr, int 8L, int 1L));
-        ]
-    in
-    tagRawPtrAsList (AST.TList typ) 5L ptr gen bindings
-  in
-  let allocSingle listNode node gen bindings =
-    let ptr, gen = A.freshVar gen in
-    let set, gen = A.freshVar gen in
-    let rc, gen = A.freshVar gen in
-    let bindings =
-      bindings
-      @ [
-          (ptr, A.RawAlloc (int 16L));
-          (set, A.RawSlotInit (A.Var ptr, int 0L, node, listNode));
-          (rc, A.RawWriteWord (A.Var ptr, int 8L, int 1L));
-        ]
-    in
-    tagRawPtrAsList listNode 1L ptr gen bindings
-  in
-  let allocDeep listNode measure prefix middle suffix gen bindings =
-    let prefixCount = List.length prefix in
-    let suffixCount = List.length suffix in
-    let ptr, gen = A.freshVar gen in
-    let alloc = A.RawAlloc (int 104L) in
-    let setAt offset value typ gen bindings =
-      let id, gen = A.freshVar gen in
-      let expr =
-        match typ with
-        | Some typ ->
-            A.RawSlotInit (A.Var ptr, int (Int64.of_int offset), value, typ)
-        | None -> A.RawWriteWord (A.Var ptr, int (Int64.of_int offset), value)
-      in
-      (gen, bindings @ [ (id, expr) ])
-    in
-    let gen, bindings =
-      setAt 0 (int (Int64.of_int measure)) None gen (bindings @ [ (ptr, alloc) ])
-    in
-    let gen, bindings =
-      setAt 8 (int (Int64.of_int prefixCount)) None gen bindings
-    in
-    let rec setPrefix nodes offset gen bindings =
-      match nodes with
-      | [] -> (gen, bindings)
-      | node :: rest ->
-          let gen, bindings = setAt offset node (Some listNode) gen bindings in
-          setPrefix rest (add offset 8) gen bindings
-    in
-    let gen, bindings = setPrefix prefix 16 gen bindings in
-    let gen, bindings = setAt 48 middle (Some listNode) gen bindings in
-    let gen, bindings =
-      setAt 56 (int (Int64.of_int suffixCount)) None gen bindings
-    in
-    let gen, bindings = setPrefix suffix 64 gen bindings in
-    let gen, bindings = setAt 96 (int 1L) None gen bindings in
-    tagRawPtrAsList listNode 2L ptr gen bindings
-  in
-  let emptyTree = int 0L in
-  let nodeAtom = fst in
-  let nodeMeasure = snd in
-  let allocNode2 listNode left right gen bindings =
-    let ptr, gen = A.freshVar gen in
-    let alloc = A.RawAlloc (int 32L) in
-    let set0, gen = A.freshVar gen in
-    let expr0 = A.RawSlotInit (A.Var ptr, int 0L, nodeAtom left, listNode) in
-    let set1, gen = A.freshVar gen in
-    let expr1 = A.RawSlotInit (A.Var ptr, int 8L, nodeAtom right, listNode) in
-    let measure = add (nodeMeasure left) (nodeMeasure right) in
-    let set2, gen = A.freshVar gen in
-    let expr2 =
-      A.RawWriteWord (A.Var ptr, int 16L, int (Int64.of_int measure))
-    in
-    let rc, gen = A.freshVar gen in
-    let rcExpr = A.RawWriteWord (A.Var ptr, int 24L, int 1L) in
-    let node, bindings, gen =
-      tagRawPtrAsList listNode 3L ptr gen
-        (bindings
-        @ [
-            (ptr, alloc);
-            (set0, expr0);
-            (set1, expr1);
-            (set2, expr2);
-            (rc, rcExpr);
-          ])
-    in
-    ((node, measure), bindings, gen)
-  in
-  let allocNode3 listNode first second third gen bindings =
-    let ptr, gen = A.freshVar gen in
-    let alloc = A.RawAlloc (int 40L) in
-    let set0, gen = A.freshVar gen in
-    let expr0 = A.RawSlotInit (A.Var ptr, int 0L, nodeAtom first, listNode) in
-    let set1, gen = A.freshVar gen in
-    let expr1 = A.RawSlotInit (A.Var ptr, int 8L, nodeAtom second, listNode) in
-    let set2, gen = A.freshVar gen in
-    let expr2 = A.RawSlotInit (A.Var ptr, int 16L, nodeAtom third, listNode) in
-    let measure =
-      add (add (nodeMeasure first) (nodeMeasure second)) (nodeMeasure third)
-    in
-    let set3, gen = A.freshVar gen in
-    let expr3 =
-      A.RawWriteWord (A.Var ptr, int 24L, int (Int64.of_int measure))
-    in
-    let rc, gen = A.freshVar gen in
-    let rcExpr = A.RawWriteWord (A.Var ptr, int 32L, int 1L) in
-    let node, bindings, gen =
-      tagRawPtrAsList listNode 4L ptr gen
-        (bindings
-        @ [
-            (ptr, alloc);
-            (set0, expr0);
-            (set1, expr1);
-            (set2, expr2);
-            (set3, expr3);
-            (rc, rcExpr);
-          ])
-    in
-    ((node, measure), bindings, gen)
-  in
-  let splitAt count nodes =
-    let rec loop remaining acc rest =
-      match (remaining, rest) with
-      | 0, _ -> Ok (List.rev acc, rest)
-      | _, [] -> Error "List literal: not enough nodes for split"
-      | n, x :: xs -> loop (add n (-1)) (x :: acc) xs
-    in
-    loop count [] nodes
-  in
-  let groupSizes count =
-    if count < 2 then Error "List literal: middle spine needs at least 2 nodes"
-    else
-      match count mod 3 with
-      | 0 -> Ok (List.init (count / 3) (fun _ -> 3))
-      | 1 ->
-          if count < 4 then Error "List literal: invalid middle spine size"
-          else Ok (2 :: 2 :: List.init ((count - 4) / 3) (fun _ -> 3))
-      | _ -> Ok (2 :: List.init ((count - 2) / 3) (fun _ -> 3))
-  in
-  let rec buildGroupedNodes listNode sizes nodes gen bindings acc =
-    match sizes with
-    | [] -> Ok (List.rev acc, bindings, gen)
-    | size :: rest -> (
-        let* group, remaining = splitAt size nodes in
-        match (size, group) with
-        | 2, [ a; b ] ->
-            let node, bindings, gen = allocNode2 listNode a b gen bindings in
-            buildGroupedNodes listNode rest remaining gen bindings (node :: acc)
-        | 3, [ a; b; c ] ->
-            let node, bindings, gen = allocNode3 listNode a b c gen bindings in
-            buildGroupedNodes listNode rest remaining gen bindings (node :: acc)
-        | _ ->
-            Error ("List literal: unexpected group size " ^ string_of_int size))
-  in
-  let rec buildTree listNode nodes gen bindings =
-    let count = List.length nodes in
-    let total () =
-      List.fold_left (fun sum node -> add sum (nodeMeasure node)) 0 nodes
-    in
-    match nodes with
-    | [] -> Ok (emptyTree, bindings, gen)
-    | [ single ] -> Ok (allocSingle listNode (nodeAtom single) gen bindings)
-    | first :: rest when count <= 5 ->
-        Ok
-          (allocDeep listNode (total ())
-             [ nodeAtom first ]
-             emptyTree (List.map nodeAtom rest) gen bindings)
-    | _ ->
-        let* prefix, rest = splitAt 2 nodes in
-        let middleCount = List.length rest - 2 in
-        let* middle, suffix = splitAt middleCount rest in
-        let* sizes = groupSizes (List.length middle) in
-        let* grouped, bindings, gen =
-          buildGroupedNodes listNode sizes middle gen bindings []
-        in
-        let* middle, bindings, gen = buildTree listNode grouped gen bindings in
-        Ok
-          (allocDeep listNode (total ()) (List.map nodeAtom prefix) middle
-             (List.map nodeAtom suffix) gen bindings)
-  in
-  buildTree
-
 (*
    Unit literal becomes return of unit value (represented as 0)
    Integer literal (default Int64)
@@ -412,13 +210,6 @@ let lowerExpression (toANFCore : LoweringCallbacks.expressionLowerer)
         let* setup, value, gen = bound value gen in
         convertBound rest gen ((setup, value) :: acc)
   in
-  let rec convertAtoms remaining gen acc =
-    match remaining with
-    | [] -> Ok (List.rev acc, gen)
-    | value :: rest ->
-        let* value, bindings, gen = atom value gen in
-        convertAtoms rest gen ((value, bindings) :: acc)
-  in
   let rec captures remaining gen acc =
     match remaining with
     | [] -> Ok (List.rev acc, gen)
@@ -434,6 +225,28 @@ let lowerExpression (toANFCore : LoweringCallbacks.expressionLowerer)
   | C.DictLiteral _ ->
       Error
         "Non-empty DictLiteral must be lowered during generic specialization"
+  | C.ReturnScope (target, typ, body) ->
+      let exit, gen = A.freshVar gen in
+      let typ = C.semanticType typ in
+      let env = R.BindingMap.add target (exit, typ) env in
+      let* body, gen =
+        toANFCore sums typeNames inert body gen env registry variants functions
+          names modules
+      in
+      Ok
+        ( A.Join
+            ( { A.id = exit; typ },
+              A.Return (A.Var exit),
+              K.bindReturns body (fun value -> A.Jump (exit, value)) ),
+          gen )
+  | C.EarlyReturn (target, value) -> (
+      let* value, gen = anf value gen in
+      match R.BindingMap.find_opt target env with
+      | None ->
+          Crash.crash
+            "Checked early return lost its lexical scope during lowering"
+      | Some (exit, _) ->
+          Ok (K.bindReturns value (fun value -> A.Jump (exit, value)), gen))
   | C.BoundaryRender (renderer, value) ->
       let* value, gen = anf value gen in
       let id, gen = A.freshVar gen in
@@ -767,13 +580,13 @@ let lowerExpression (toANFCore : LoweringCallbacks.expressionLowerer)
             | _ -> None
           in
           let build successTag payloadType unboxed absent failure =
-            let* value, bindings, gen = atom argument gen in
+            let* setup, value, gen = bound argument gen in
             let value, bindings, gen =
               match value with
-              | A.Var _ -> (value, bindings, gen)
+              | A.Var _ -> (value, [], gen)
               | _ ->
                   let id, gen = A.freshVar gen in
-                  (A.Var id, bindings @ [ (id, A.Atom value) ], gen)
+                  (A.Var id, [ (id, A.Atom value) ], gen)
             in
             let tag, gen = A.freshVar gen in
             let success, gen = A.freshVar gen in
@@ -807,8 +620,9 @@ let lowerExpression (toANFCore : LoweringCallbacks.expressionLowerer)
               A.Let (print, A.RuntimeError failure, A.Return A.UnitLiteral)
             in
             Ok
-              ( K.wrapBindings (bindings @ tagBindings)
-                  (A.If (A.Var success, yes, no)),
+              ( K.bindReturns setup (fun _ ->
+                    K.wrapBindings (bindings @ tagBindings)
+                      (A.If (A.Var success, yes, no))),
                 gen )
           in
           let optionName = "Darklang.Stdlib.Option.Option" in
@@ -877,7 +691,7 @@ let lowerExpression (toANFCore : LoweringCallbacks.expressionLowerer)
                       A.Return A.UnitLiteral ),
                   gen )
           | None ->
-              let* value, bindings, gen = atom message gen in
+              let* setup, value, gen = bound message gen in
               let full, gen = A.freshVar gen in
               let id, gen = A.freshVar gen in
               let body =
@@ -890,7 +704,7 @@ let lowerExpression (toANFCore : LoweringCallbacks.expressionLowerer)
                         A.RuntimeErrorString (A.Var full),
                         A.Return A.UnitLiteral ) )
               in
-              Ok (K.wrapBindings bindings body, gen))
+              Ok (K.bindReturns setup (fun _ -> body), gen))
       | values ->
           Error
             ("Internal error: "
@@ -1197,8 +1011,8 @@ let lowerExpression (toANFCore : LoweringCallbacks.expressionLowerer)
         ( sequence (List.map (fun (setup, _, _) -> setup) results) allocation,
           gen )
   | C.Match (value, cases) ->
-      PatternLowering.lowerMatch toANFCore toAtomCore toANFBoundAtomCore
-        functionIds sums typeNames inert value
+      PatternLowering.lowerMatch toANFCore toANFBoundAtomCore functionIds sums
+        typeNames inert value
         (NonEmptyList.toList cases)
         gen env registry variants functions names modules
   | C.InterpolatedString parts -> (
@@ -1218,12 +1032,12 @@ let lowerExpression (toANFCore : LoweringCallbacks.expressionLowerer)
   | C.Lambda _ ->
       Error "Lambda expressions (closures) are not yet fully implemented"
   | C.IndirectApply (callee, args) ->
-      let* callee, bindings, gen = atom callee gen in
-      let* results, gen = convertAtoms (NonEmptyList.toList args) gen [] in
-      let values = List.map fst results in
-      let bindings = bindings @ List.concat_map snd results in
-      let body, gen = finish gen (A.IndirectCall (callee, values)) in
-      Ok (K.wrapBindings bindings body, gen)
+      let* setup, callee, gen = bound callee gen in
+      let* results, gen = convertBound (NonEmptyList.toList args) gen [] in
+      let body, gen =
+        finish gen (A.IndirectCall (callee, List.map snd results))
+      in
+      Ok (sequence (setup :: List.map fst results) body, gen)
   | C.Apply (callee, args) -> (
       let argsList = NonEmptyList.toList args in
       let lets body parameters values =
@@ -1254,11 +1068,11 @@ let lowerExpression (toANFCore : LoweringCallbacks.expressionLowerer)
                 ^ displayId AST.DiagnosticFormatting.binding name
                 ^ "' as function - variable not in scope")
           | Some (id, _) ->
-              let* results, gen = convertAtoms argsList gen [] in
-              let values = List.map fst results in
-              let bindings = List.concat_map snd results in
-              let body, gen = finish gen (A.ClosureCall (A.Var id, values)) in
-              Ok (K.wrapBindings bindings body, gen))
+              let* results, gen = convertBound argsList gen [] in
+              let body, gen =
+                finish gen (A.ClosureCall (A.Var id, List.map snd results))
+              in
+              Ok (sequence (List.map fst results) body, gen))
       | C.Apply _ -> (
           let rec flatten value args =
             match value with
@@ -1290,14 +1104,12 @@ let lowerExpression (toANFCore : LoweringCallbacks.expressionLowerer)
               in
               anf (desugar base argLists) gen
           | _ ->
-              let full =
-                List.fold_left
-                  (fun value args ->
-                    C.Apply (value, NonEmptyList.fromList args))
-                  base argLists
+              let* setup, callee, gen = bound callee gen in
+              let* results, gen = convertBound argsList gen [] in
+              let body, gen =
+                finish gen (A.ClosureCall (callee, List.map snd results))
               in
-              let* value, bindings, gen = atom full gen in
-              Ok (K.wrapBindings bindings (A.Return value), gen))
+              Ok (sequence (setup :: List.map fst results) body, gen))
       | C.Let (name, value, body) ->
           anf (C.Let (name, value, C.Apply (body, args))) gen
       | C.Closure (callee, values) ->
@@ -1313,9 +1125,9 @@ let lowerExpression (toANFCore : LoweringCallbacks.expressionLowerer)
           let body = sequence (List.map fst results) body in
           Ok (K.wrapBindings bindings (A.Let (closure, alloc, body)), gen)
       | _ ->
-          let* callee, bindings, gen = atom callee gen in
-          let* results, gen = convertAtoms argsList gen [] in
-          let values = List.map fst results in
-          let bindings = bindings @ List.concat_map snd results in
-          let body, gen = finish gen (A.ClosureCall (callee, values)) in
-          Ok (K.wrapBindings bindings body, gen))
+          let* setup, callee, gen = bound callee gen in
+          let* results, gen = convertBound argsList gen [] in
+          let body, gen =
+            finish gen (A.ClosureCall (callee, List.map snd results))
+          in
+          Ok (sequence (setup :: List.map fst results) body, gen))

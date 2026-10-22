@@ -24,15 +24,15 @@ let id (response: Stdlib.HttpClient.Response) : String =
   | None -> ""
   | Some header -> let (_name, value) = header in value
 let run (session: Stdlib.HttpClientSession.Session) (url: String) : String =
-  let first = session.request "GET" (url ++ "/a") [] Stdlib.Blob.empty in
-  let second = session.request "GET" (url ++ "/b") [] Stdlib.Blob.empty in
+  let first = session.request "GET" (url + "/a") [] Stdlib.Blob.empty in
+  let second = session.request "GET" (url + "/b") [] Stdlib.Blob.empty in
   let _ = session.clear () in
-  let third = session.request "GET" (url ++ "/c") [] Stdlib.Blob.empty in
+  let third = session.request "GET" (url + "/c") [] Stdlib.Blob.empty in
   let _ = session.close () in
   match first, second, third with
   | Ok first, Ok second, Ok third ->
     if id first != "" && id first == id second && id third != id second && Stdlib.Blob.toHex first.body == "2F61" && Stdlib.Blob.toHex second.body == "2F62" then "OK"
-    else "FAILED: " ++ id first ++ "," ++ id second ++ "," ++ id third ++ "|" ++ Stdlib.Blob.toHex first.body ++ "|" ++ Stdlib.Blob.toHex second.body
+    else "FAILED: " + id first + "," + id second + "," + id third + "|" + Stdlib.Blob.toHex first.body + "|" + Stdlib.Blob.toHex second.body
   | _, _, _ -> "Request failed"
 let roots = Stdlib.Blob.fromHex "@CA@" |> Stdlib.Result.andThen Stdlib.__Tls13Client.parsePemBundle
 let url = Stdlib.Cli.__Args.get 0 |> Stdlib.Result.withDefault ""
@@ -84,7 +84,7 @@ let request (url: String) (upload: Bool) : Stdlib.HttpClientSession.Request =
   Stdlib.HttpClientSession.Request { method = if upload then "POST" else "GET", url = url, headers = [], body = body }
 let check (session: Stdlib.HttpClientSession.Session) (url: String) (mode: String) : Bool =
   let upload = mode == "upload" || mode == "early" in
-  match session.requestMany [request (url ++ "/one") upload, request (url ++ "/two") upload] with
+  match session.requestMany [request (url + "/one") upload, request (url + "/two") upload] with
   | Error _ -> false
   | Ok outcomes ->
     let valid = match outcomes with
@@ -94,14 +94,14 @@ let check (session: Stdlib.HttpClientSession.Session) (url: String) (mode: Strin
       | Error _, Ok second -> mode == "reset" && Stdlib.Blob.__byteLength second.body == 70000L
       | _, _ -> false)
     | _ -> false in
-    let after = session.request "GET" (url ++ "/after") [] Stdlib.Blob.empty in
+    let after = session.request "GET" (url + "/after") [] Stdlib.Blob.empty in
     valid && (match after with | Ok response -> Stdlib.Blob.toHex response.body == "2F6166746572" | Error _ -> false)
 let roots = Stdlib.Blob.fromHex "@CA@" |> Stdlib.Result.andThen Stdlib.__Tls13Client.parsePemBundle
 let mode = Stdlib.Cli.__Args.get 1 |> Stdlib.Result.withDefault "multiplex"
 match Stdlib.Cli.__Args.int64 0, roots with
 | Ok port, Ok roots ->
   let session = Stdlib.HttpClientSession.createTrustedWithRoots roots in
-  let valid = check session ("https://localhost:" ++ Stdlib.Int64.toString port) mode in
+  let valid = check session ("https://localhost:" + Stdlib.Int64.toString port) mode in
   let _ = session.close () in
   if valid then Stdlib.printLine "OK" else Stdlib.printLine "FAILED"
 | _, _ -> Stdlib.printLine "Invalid arguments"

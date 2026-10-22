@@ -4,7 +4,7 @@ module Darklang.Stdlib.Cli.UI.Table
 
 let __pad (value: String) (width: Int) : String =
     let padding = width - Stdlib.String.length value in
-    if padding <= 0 then value else value ++ Stdlib.String.repeat " " padding
+    if padding <= 0 then value else value + Stdlib.String.repeat " " padding
 
 let __maxCellLength (rows: List<List<String>>) (index: Int) (current: Int) : Int =
     match rows with
@@ -29,8 +29,8 @@ let __headerLine (columns: List<String>) (widths: List<Int>) : String =
     | ([], _) -> ""
     | ([header], [width]) -> Stdlib.Cli.UI.Table.__pad header width
     | (header :: restHeaders, width :: restWidths) ->
-        Stdlib.Cli.UI.Table.__pad header width ++
-        "  " ++
+        Stdlib.Cli.UI.Table.__pad header width +
+        "  " +
         Stdlib.Cli.UI.Table.__headerLine restHeaders restWidths
     | _ -> ""
 
@@ -39,7 +39,7 @@ let __separatorLine (widths: List<Int>) : String =
     | [] -> ""
     | [width] -> Stdlib.String.repeat "-" width
     | width :: rest ->
-        Stdlib.String.repeat "-" width ++ "  " ++ Stdlib.Cli.UI.Table.__separatorLine rest
+        Stdlib.String.repeat "-" width + "  " + Stdlib.Cli.UI.Table.__separatorLine rest
 
 let __rowLine (columns: List<String>) (widths: List<Int>) (row: List<String>) : String =
     match (columns, widths, row) with
@@ -47,12 +47,12 @@ let __rowLine (columns: List<String>) (widths: List<Int>) (row: List<String>) : 
     | ([_header], [width], []) -> Stdlib.Cli.UI.Table.__pad "" width
     | ([_header], [width], cell :: _surplus) -> Stdlib.Cli.UI.Table.__pad cell width
     | (_header :: restHeaders, width :: restWidths, []) ->
-        Stdlib.Cli.UI.Table.__pad "" width ++
-        "  " ++
+        Stdlib.Cli.UI.Table.__pad "" width +
+        "  " +
         Stdlib.Cli.UI.Table.__rowLine restHeaders restWidths []
     | (_header :: restHeaders, width :: restWidths, cell :: restCells) ->
-        Stdlib.Cli.UI.Table.__pad cell width ++
-        "  " ++
+        Stdlib.Cli.UI.Table.__pad cell width +
+        "  " +
         Stdlib.Cli.UI.Table.__rowLine restHeaders restWidths restCells
     | _ -> ""
 

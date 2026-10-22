@@ -35,7 +35,7 @@ let __output (context: Stdlib.__Http1Server.Context) (owner: Stdlib.__Http1Serve
     | Ok bytes -> (bytes, response.statusCode, after)
     | Error _ ->
       let head = "HTTP/1.1 500 Internal Server Error\r\nConnection: close\r\nContent-Length: 21\r\n\r\n" in
-      (Stdlib.String.toBlob (if method == "HEAD" then head else head ++ "Internal server error"), 500, Stdlib.__Http1Server.After.Close) in
+      (Stdlib.String.toBlob (if method == "HEAD" then head else head + "Internal server error"), 500, Stdlib.__Http1Server.After.Close) in
   let log = Stdlib.__Http1Server.Log { method = method, target = target, status = status, started = owner.started } in
   { owner with phase = Stdlib.__Http1Server.Phase.Output (Stdlib.__Http1Server.Output { bytes = bytes, offset = 0L, after = after, log = Some log }), deadline = now + 30000L }
 
@@ -89,7 +89,7 @@ let __read (context: Stdlib.__Http1Server.Context) (owner: Stdlib.__Http1Server.
 
 let __written (context: Stdlib.__Http1Server.Context) (owner: Stdlib.__Http1Server.Owner) (now: Int64) (output: Stdlib.__Http1Server.Output) : Stdlib.__Http1Server.Step =
     let _ = match output.log with
-      | Some log when context.config.logRequests -> Stdlib.printLine ("[HttpServer] " ++ log.method ++ " " ++ log.target ++ " " ++ Stdlib.Int.toString log.status ++ " " ++ Stdlib.Int64.toString (now - log.started) ++ "ms")
+      | Some log when context.config.logRequests -> Stdlib.printLine ("[HttpServer] " + log.method + " " + log.target + " " + Stdlib.Int.toString log.status + " " + Stdlib.Int64.toString (now - log.started) + "ms")
       | _ -> () in
     match output.after with
     | Close -> Stdlib.__Http1Server.__close owner

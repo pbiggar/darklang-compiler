@@ -147,7 +147,7 @@ let __target (suffix: String) : String =
         | None -> suffix
         | Some ((before, _)) -> before in
     if withoutFragment == "" then "/"
-    else if Stdlib.String.startsWith withoutFragment "?" then "/" ++ withoutFragment
+    else if Stdlib.String.startsWith withoutFragment "?" then "/" + withoutFragment
     else withoutFragment
 
 let parseUrl (value: String) : Stdlib.Result.Result<Stdlib.__HttpWire.Url, String> =
@@ -547,7 +547,7 @@ let __writeHeaders (headers: List<(String * String)>) (acc: String) : Stdlib.Res
             Error "Invalid HTTP header value"
         else if lower == "host" || lower == "content-length" || lower == "transfer-encoding" then
             Error "Managed HTTP header cannot be overridden"
-        else Stdlib.__HttpWire.__writeHeaders rest (acc ++ name ++ ": " ++ value ++ "\r\n")
+        else Stdlib.__HttpWire.__writeHeaders rest (acc + name + ": " + value + "\r\n")
 
 let serializeRequest (method: String) (url: Stdlib.__HttpWire.Url) (headers: List<(String * String)>) (body: Blob) : Stdlib.Result.Result<Blob, String> =
     if method == "" || Stdlib.Bool.not (Stdlib.__HttpWire.__tokenValid method 0L (Stdlib.String.__byteLength method)) then
@@ -558,9 +558,9 @@ let serializeRequest (method: String) (url: Stdlib.__HttpWire.Url) (headers: Lis
         | Error message -> Error message
         | Ok extra ->
             let head =
-                method ++ " " ++ url.target ++ " HTTP/1.1\r\n" ++
-                "Host: " ++ url.authority ++ "\r\n" ++ extra ++
-                "Content-Length: " ++ Stdlib.Int64.toString (Stdlib.Blob.__byteLength body) ++ "\r\n\r\n" in
+                method + " " + url.target + " HTTP/1.1\r\n" +
+                "Host: " + url.authority + "\r\n" + extra +
+                "Content-Length: " + Stdlib.Int64.toString (Stdlib.Blob.__byteLength body) + "\r\n\r\n" in
             Ok (Stdlib.Blob.concat [Stdlib.String.toBlob head, body])
 
 let __reason (status: Int64) : String =
@@ -589,8 +589,8 @@ let serializeResponse (status: Int64) (headers: List<(String * String)>) (body: 
         | Ok extra ->
             let contentLength =
                 if status < 200L || status == 204L then ""
-                else "Content-Length: " ++ Stdlib.Int64.toString (Stdlib.Blob.__byteLength body) ++ "\r\n" in
+                else "Content-Length: " + Stdlib.Int64.toString (Stdlib.Blob.__byteLength body) + "\r\n" in
             let head =
-                "HTTP/1.1 " ++ Stdlib.Int64.toString status ++ " " ++ Stdlib.__HttpWire.__reason status ++ "\r\n" ++
-                extra ++ contentLength ++ "\r\n" in
+                "HTTP/1.1 " + Stdlib.Int64.toString status + " " + Stdlib.__HttpWire.__reason status + "\r\n" +
+                extra + contentLength + "\r\n" in
             Ok (Stdlib.Blob.concat [Stdlib.String.toBlob head, body])

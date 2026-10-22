@@ -6,16 +6,16 @@ val buildSuccessors : MIR.cfg -> MIR.label list MIR.LabelMap.t
 val cfgHasReachableCycle : MIR.cfg -> bool
 
 val dominates :
-  MIR.label -> SSA_Construction.dominators -> MIR.label -> MIR.label -> bool
+  MIR.label -> MIRGraphAnalysis.dominators -> MIR.label -> MIR.label -> bool
 
 type loopTopology = {
   loops : MIR.LabelSet.t MIR.LabelMap.t;
-  predecessors : SSA_Construction.predecessors;
+  predecessors : MIRGraphAnalysis.predecessors;
 }
 
 type dominatorTopology = {
-  predecessors : SSA_Construction.predecessors;
-  immediateDominators : SSA_Construction.dominators;
+  predecessors : MIRGraphAnalysis.predecessors;
+  immediateDominators : MIRGraphAnalysis.dominators;
 }
 
 val buildDominatorTopology : MIR.cfg -> dominatorTopology

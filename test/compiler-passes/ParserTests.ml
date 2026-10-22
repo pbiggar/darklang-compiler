@@ -28,7 +28,7 @@ let tupleLet () =
     (parseSource
        "let pairsToStrings (pairs: List<(String * String)>) : List<String> =\n\
        \    Stdlib.List.map<(String * String), String> pairs (fun pair -> let \
-        (key, value) = pair in key ++ value)\n\
+        (key, value) = pair in key + value)\n\
         let identity (value: String) : String = value") (fun parsed ->
       match parsed.WT.declarations with
       | [ WT.DFunction _; WT.DFunction _ ] -> Ok ()

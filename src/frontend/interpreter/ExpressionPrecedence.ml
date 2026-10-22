@@ -16,7 +16,7 @@ type grammar = {
    Binding powers, loosest → tightest (higher binds tighter); a right-assoc
    op recurses at its own power so it nests to the right.
    1 `||`   2 `&&`   3 `== != < > <= >=`   4 `|`   5 `^`   6 `&`
-   7 `<< >>`   8 `@` (right)   9 `+ - ++`   10 `* / %`   11 `**` (right)
+   7 `<< >>`   8 `@` (right)   9 `+ -`   10 `* / %`   11 `**` (right)
    The bitwise levels follow Python's order rather than C's: they bind TIGHTER
    than the comparisons, so `a & b == c` is `(a & b) == c` and not C's
    `a & (b == c)`. Every pre-existing operator keeps its relative position.
@@ -32,7 +32,7 @@ let infixBindingPower = function
   | TBitAnd -> Some (6, false)
   | TShl | TShr -> Some (7, false)
   | TAt -> Some (8, true)
-  | TPlus | TMinus | TPlusPlus -> Some (9, false)
+  | TPlus | TMinus -> Some (9, false)
   | TStar | TSlash | TPercent -> Some (10, false)
   | TStarStar -> Some (11, true)
   | _ -> None
@@ -46,7 +46,7 @@ let rec parseInfix grammar state index =
    operand's end, or inside parens, or an indented continuation. Otherwise
    a following statement that starts with a prefix operator (`1L\n-8L …`)
    would be wrongly glued on as `1L - 8L …`. On a new line, a pure infix
-   operator at the statement column continues (`x\n++ y` — `++` can't start
+   operator at the statement column continues (`x\n* y` — `*` can't start
    a statement), but `-` there begins a new statement (a negative literal),
    so it must be indented PAST it. This rule is identical for every caller.
    A `|` belonging to an enclosing match is that match's arm separator, not
@@ -176,8 +176,8 @@ and parseApp grammar state index =
   | _ -> ());
   let accepts =
     match callee with
-    | WT.EVariable _ | WT.EFnName _ | WT.EApply _ | WT.ERecordFieldAccess _
-    | WT.ELambda _
+    | WT.EVariable _ | WT.EFnName _ | WT.EApply _ | WT.EUnwrap _
+    | WT.ERecordFieldAccess _ | WT.ELambda _
     | WT.EEnum (_, _, _, [], _) ->
         true
     | _ -> false
@@ -220,17 +220,77 @@ and parseApp grammar state index =
 
 and parseAtom grammar state index =
   let value, next = grammar.parsePrimary state index in
-  parsePostfix state value next
+  if tok state index = TFun then (value, next)
+  else parsePostfix state value next
 
 (*
    postfix `.field` record access (left-assoc, chains)
 *)
 and parsePostfix state value index =
+  let access dot field name =
+    WT.ERecordFieldAccess
+      (span (WT.exprRange value) field, value, (field, name), dot)
+  in
+  let digits text =
+    text <> "" && String.for_all (fun c -> c >= '0' && c <= '9') text
+  in
   match (tok state index, tok state (index + 1)) with
+  | TQuestion, _ ->
+      let question = rng state index in
+      if (rng state (index - 1)).end_ <> question.start then
+        errFull state DiagnosticCode.unexpected index
+          "'?' must come directly after its operand, with no space" []
+          (Some "write `value?`, or `(f x)?` for a call");
+      parsePostfix state
+        (WT.EUnwrap (span (WT.exprRange value) question, value, question))
+        (index + 1)
   | TDot, TIdent name ->
       let dot = rng state index and field = rng state (index + 1) in
       parsePostfix state
         (WT.ERecordFieldAccess
            (span (WT.exprRange value) field, value, (field, name), dot))
+        (index + 2)
+  | TDot, TInt _ when digits (txt state (index + 1)) ->
+      parsePostfix state
+        (access (rng state index)
+           (rng state (index + 1))
+           (txt state (index + 1)))
+        (index + 2)
+  | TDot, TFloat _
+    when match String.split_on_char '.' (txt state (index + 1)) with
+         | [ a; b ] -> digits a && digits b
+         | _ -> false ->
+      let text = txt state (index + 1) in
+      let first = String.index text '.' in
+      let a = String.sub text 0 first
+      and b = String.sub text (first + 1) (String.length text - first - 1) in
+      let range = rng state (index + 1) in
+      let at col = { range.start with column = range.start.column + col } in
+      let aRange = { start = range.start; end_ = at first } in
+      let dot = { start = at first; end_ = at (first + 1) } in
+      let bRange = { start = at (first + 1); end_ = range.end_ } in
+      let inner = access (rng state index) aRange a in
+      parsePostfix state
+        (WT.ERecordFieldAccess
+           (span (WT.exprRange inner) bRange, inner, (bRange, b), dot))
+        (index + 2)
+  | ( TDot,
+      ( TInt _ | TInt64 _ | TInt128 _ | TInt8 _ | TInt16 _ | TInt32 _ | TUInt8 _
+      | TUInt16 _ | TUInt32 _ | TUInt64 _ | TUInt128 _ | TFloat _ ) ) ->
+      let text = txt state (index + 1) in
+      if not state.toks.(index + 1).Lexer.lexError then
+        errFull state DiagnosticCode.expected (index + 1)
+          ("expected a tuple element number after '.', found '" ^ text ^ "'")
+          [] (Some "tuple elements are plain numbers counting from 1: t.1, t.2");
+      let stop = ref 0 in
+      while
+        !stop < String.length text && text.[!stop] >= '0' && text.[!stop] <= '9'
+      do
+        incr stop
+      done;
+      parsePostfix state
+        (access (rng state index)
+           (rng state (index + 1))
+           (String.sub text 0 !stop))
         (index + 2)
   | _ -> (value, index)

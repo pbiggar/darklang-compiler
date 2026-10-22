@@ -8,4 +8,4 @@ let toString (modifiers: Stdlib.Cli.Stdin.Modifiers.Modifiers) : String =
     let alt = if modifiers.alt then "ALT+" else "" in
     let ctrl = if modifiers.ctrl then "CTRL+" else "" in
     let shift = if modifiers.shift then "SHIFT+" else "" in
-    alt ++ ctrl ++ shift
+    alt + ctrl + shift

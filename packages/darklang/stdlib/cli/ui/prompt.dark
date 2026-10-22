@@ -3,11 +3,11 @@
 module Darklang.Stdlib.Cli.UI.Prompt
 
 let ask (question: String) : String =
-    let _ = Builtin.print (question ++ " ") in
+    let _ = Builtin.print (question + " ") in
     Builtin.stdinReadLine (())
 
 let confirm (question: String) : Bool =
-    let _ = Builtin.print (question ++ " [y/N] ") in
+    let _ = Builtin.print (question + " [y/N] ") in
     let answer = Stdlib.String.toLowercase (Builtin.stdinReadLine (())) in
     answer == "y" || answer == "yes"
 
@@ -16,9 +16,9 @@ let select (question: String) (choices: List<String>) : String =
     let _ =
         Stdlib.List.indexedMap choices (fun i choice ->
             Builtin.printLine (
-                "  " ++
-                Stdlib.Cli.UI.Colors.boldText (Stdlib.Int.toString (i + 1)) ++
-                ". " ++ choice)) in
+                "  " +
+                Stdlib.Cli.UI.Colors.boldText (Stdlib.Int.toString (i + 1)) +
+                ". " + choice)) in
     let _ = Builtin.print "Enter number: " in
     let input = Builtin.stdinReadLine (()) in
     let parsed = Stdlib.Int.parse input in

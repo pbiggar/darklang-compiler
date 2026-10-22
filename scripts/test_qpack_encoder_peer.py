@@ -19,7 +19,7 @@ let run (state: Stdlib.__QpackEncoder.State) (index: Int64) (count: Int64) : Std
   else
     let fields = [(":status", "200"), ("x-name", Stdlib.Int64.toString (index / 2L)), ("x-utf8", "café ☃"), ("set-cookie", "a=1"), ("set-cookie", "b=2")] in
     Stdlib.__QpackEncoder.encode state (index * 4L) fields 65536L |> Stdlib.Result.andThen (fun encoded ->
-      let _ = Stdlib.printLine ((Stdlib.Blob.toHex encoded.instructions) ++ "|" ++ (Stdlib.Blob.toHex encoded.bytes)) in
+      let _ = Stdlib.printLine ((Stdlib.Blob.toHex encoded.instructions) + "|" + (Stdlib.Blob.toHex encoded.bytes)) in
       Stdlib.Blob.fromHex (Stdlib.Cli.Stdin.readLine ()) |> Stdlib.Result.andThen (fun bytes -> feed encoded.state bytes 0L) |> Stdlib.Result.andThen (fun next -> run next (index + 1L) count))
 let maximum = Stdlib.Cli.__Args.get 0 |> Stdlib.Result.withDefault "4096" |> Stdlib.Int64.parse |> Stdlib.Result.withDefault 0L
 let count = Stdlib.Cli.__Args.get 1 |> Stdlib.Result.withDefault "560" |> Stdlib.Int64.parse |> Stdlib.Result.withDefault 0L

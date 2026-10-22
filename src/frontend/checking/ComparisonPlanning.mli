@@ -28,6 +28,7 @@ val needsEqHelperForResolvedType :
   Types.variantLookup -> AST.semanticType -> bool
 
 val eqHelperName : AST.semanticType -> string
+val keyEqHelperName : AST.semanticType -> string
 val compareHelperName : AST.semanticType -> string
 val chainAndExpr : AST.expr list -> AST.expr
 

@@ -32,7 +32,7 @@ let run () : Unit =
     | Error message -> Stdlib.printLine message
     | Ok roots ->
       let session = Stdlib.HttpClientSession.createTrustedWithRoots roots in
-      let url = "https://localhost:" ++ port ++ "/session" in
+      let url = "https://localhost:" + port + "/session" in
       let result = session.request "GET" url [] Stdlib.Blob.empty |> Stdlib.Result.andThen (fun first ->
         if first.statusCode != 200 || Stdlib.Blob.length first.body != 3 then Error Stdlib.HttpClient.RequestError.NetworkError
         else let _ = @CLEAR@ in session.request "GET" url [] Stdlib.Blob.empty |> Stdlib.Result.andThen (fun second ->

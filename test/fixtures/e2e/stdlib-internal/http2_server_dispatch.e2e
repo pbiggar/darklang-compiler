@@ -2,7 +2,7 @@
 let handler (request: Stdlib.Http.Request) : Stdlib.Http.Response =
   let method = Stdlib.__Http2Fields.__find request.headers "x-http-method" |> Stdlib.Option.withDefault "missing" in
   let body = Stdlib.Blob.toString request.body |> Stdlib.Result.withDefault "invalid" in
-  Stdlib.Http.responseWithText (method ++ ":" ++ body) 200
+  Stdlib.Http.responseWithText (method + ":" + body) 200
 let context () : Stdlib.__Http2Server.Context =
   let config = { Stdlib.HttpServer.Config.defaults 80 with injectStandardHeaders = false, logRequests = false } in
   Stdlib.__Http2Server.Context { config = config, handler = handler, limit = 4L }

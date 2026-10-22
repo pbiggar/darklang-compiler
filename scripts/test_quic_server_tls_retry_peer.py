@@ -51,13 +51,13 @@ let exchange (socket: Stdlib.__Datagram.Socket) : Stdlib.Result.Result<Unit, Str
                   Stdlib.printLine "DONE"
                   Ok ()))))))
 let emit (_peer: Stdlib.__Datagram.Endpoint) (packet: Blob) (_timeout: Int64) : Stdlib.Result.Result<Unit, Int64> =
-  Stdlib.printLine ("PACKET " ++ Stdlib.Blob.toHex packet)
+  Stdlib.printLine ("PACKET " + Stdlib.Blob.toHex packet)
   Ok ()
 let lifecycle = Stdlib.Stream.__new (fun _unit -> Some ()) (fun _unit -> ())
 let socket = Stdlib.__Datagram.Socket { lifecycle = lifecycle, watch = None, receive = fun _timeout -> Error 11L, send = emit }
 let result = exchange socket
 Stdlib.__Datagram.close socket
-match result with | Ok () -> () | Error message -> Stdlib.printLine ("ERROR " ++ message)
+match result with | Ok () -> () | Error message -> Stdlib.printLine ("ERROR " + message)
 '''
 
 

@@ -253,12 +253,6 @@ let ok (env : env) value =
 let error (env : env) value =
   constructor env "Darklang.Stdlib.Result.Result" "Error" (Some value)
 
-let _none (env : env) =
-  constructor env "Darklang.Stdlib.Option.Option" "None" None
-
-let _some (env : env) value =
-  constructor env "Darklang.Stdlib.Option.Option" "Some" (Some value)
-
 let jsonErrorType = AST.TSum ("Darklang.Stdlib.Json.ParseError.ParseError", [])
 let valueViewType = AST.TInt64
 
@@ -1887,6 +1881,12 @@ let rec mapExpr rewrite symbols expr =
     | Closure (name, captures) ->
         let captures, next = mapList captures symbols in
         (Closure (name, captures), next)
+    | ReturnScope (target, typ, value) ->
+        let value, next = mapExpr rewrite symbols value in
+        (ReturnScope (target, typ, value), next)
+    | EarlyReturn (target, value) ->
+        let value, next = mapExpr rewrite symbols value in
+        (EarlyReturn (target, value), next)
     | BoundaryRender (renderer, value) ->
         let value, next = mapExpr rewrite symbols value in
         (BoundaryRender (renderer, value), next)
@@ -1919,6 +1919,8 @@ let rewriteProgramWithSession (session : planningSession option)
       | UnaryOp (_, a)
       | TupleAccess (a, _)
       | RecordAccess (a, _)
+      | ReturnScope (_, _, a)
+      | EarlyReturn (_, a)
       | BoundaryRender (_, a) ->
           capture a collected
       | Let (_, a, b) | RecursiveLet (_, a, b) ->

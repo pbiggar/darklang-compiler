@@ -74,6 +74,10 @@ and parsePipe grammar state index =
         let rhs, stop = grammar.parseInfix state (!current + 1) in
         (match toPipeExpr rhs with
         | Some segment -> RevBuffer.add parts (pipeRange, segment)
+        | None when match rhs with WT.EUnwrap _ -> true | _ -> false ->
+            errFull state DiagnosticCode.pipeSegment (!current + 1)
+              "'?' cannot end a pipe segment" []
+              (Some "wrap the whole pipeline: `(value |> transform)?`")
         | None ->
             err state DiagnosticCode.pipeSegment (!current + 1)
               "unsupported pipe segment");
@@ -152,6 +156,11 @@ and hasNextStmt state column index =
   tok state index <> TEOF
   && (rng state index).start.column = column
   && tok state index <> TBar
+  (* An aligned package-test outcome ends the body, just as an inline one does. *)
+  && (not
+        (tok state index = TEquals
+        && tok state (index + 1) = TGt
+        && (rng state index).end_ = (rng state (index + 1)).start))
   && not (closesOrSeparates (tok state index))
 
 (*

@@ -42,30 +42,6 @@ let uint64ToBytes value =
         (Int64.to_int
            (Int64.logand (Int64.shift_right_logical value (i * 8)) 0xffL)))
 
-(*
-   Convert machine code words to little-endian bytes without per-word arrays
-*)
-let machineCodeToBytes machineCode =
-  let bytes = Bytes.make (mul (Array.length machineCode) 4) '\000' in
-  Array.iteri
-    (fun index word ->
-      let offset = mul index 4 in
-      Bytes.set bytes offset (Char.chr (Int32.to_int (Int32.logand word 0xffl)));
-      Bytes.set bytes (add offset 1)
-        (Char.chr
-           (Int32.to_int
-              (Int32.logand (Int32.shift_right_logical word 8) 0xffl)));
-      Bytes.set bytes (add offset 2)
-        (Char.chr
-           (Int32.to_int
-              (Int32.logand (Int32.shift_right_logical word 16) 0xffl)));
-      Bytes.set bytes (add offset 3)
-        (Char.chr
-           (Int32.to_int
-              (Int32.logand (Int32.shift_right_logical word 24) 0xffl))))
-    machineCode;
-  bytes
-
 let align8Int value = mul (add value 7 / 8) 8
 let align8UInt64 value = Int64.logand (Int64.add value 7L) (Int64.lognot 7L)
 
@@ -228,20 +204,6 @@ let executableSegmentFlags enableLeakCheck =
   if enableLeakCheck then Int32.logor (Int32.logor ELF.pf_R ELF.pf_W) ELF.pf_X
   else Int32.logor ELF.pf_R ELF.pf_X
 
-let createBinary codeBytes dataBytes segmentFlags : ELF.elfBinary =
-  {
-    ELF.header = createElfHeader codeEntryVAddr;
-    programHeaders =
-      [
-        createLoadSegment
-          (Int64.of_int (Bytes.length codeBytes))
-          (Int64.of_int (Bytes.length dataBytes))
-          segmentFlags;
-      ];
-    machineCode = codeBytes;
-    stringData = dataBytes;
-  }
-
 (*
    Create an ELF executable with float and string data
    Create float data (goes after code, before strings)
@@ -296,74 +258,6 @@ let createExecutableWithPools machineCode stringPool floatPool enableLeakCheck =
     (add dataStart (Bytes.length floatBytes))
     (Bytes.length stringBytes);
   binary
-
-(*
-   Create an ELF executable with string data (legacy wrapper for backwards compatibility)
-*)
-let createExecutableWithStrings machineCode stringPool =
-  createExecutableWithPools machineCode stringPool LiteralPool.emptyFloatPool
-    false
-
-(*
-   Create a minimal ELF executable from ARM64 machine code (legacy, no data)
-*)
-let createExecutable machineCode =
-  createExecutableWithPools machineCode LiteralPool.emptyStringPool
-    LiteralPool.emptyFloatPool false
-
-(*
-   Create an ELF executable with coverage data section
-   coverageExprCount: number of coverage expressions (each needs 8 bytes)
-   The coverage data is placed after strings and initialized to zero
-   Uses a single RWX segment for simplicity (code + data + coverage)
-   Create float data (goes after code, before strings)
-   Create string data
-   Create coverage data (zeros, 8 bytes per expression, 8-byte aligned)
-   Single segment: RWX (code + read-only data + coverage data)
-   Note: RWX is not ideal for security but simplifies the implementation
-*)
-let createExecutableWithCoverage machineCode stringPool floatPool
-    coverageExprCount enableLeakCheck =
-  let codeBytes = machineCodeToBytes machineCode in
-  let floatBytes = createFloatData floatPool in
-  let stringBytes = createStringData stringPool in
-  let coverageSize = align8Int (mul coverageExprCount 8) in
-  let coverageBytes = Bytes.make coverageSize '\000' in
-  let floatAndStringBytes = Bytes.cat floatBytes stringBytes in
-  let alignedCoverageStart = align8Int (Bytes.length floatAndStringBytes) in
-  let coveragePadding =
-    Bytes.make
-      (sub alignedCoverageStart (Bytes.length floatAndStringBytes))
-      '\000'
-  in
-  let afterCoverage = add alignedCoverageStart (Bytes.length coverageBytes) in
-  let dataBytes =
-    if enableLeakCheck then
-      let leakBytes = Bytes.make 8 '\000' in
-      let dataStart =
-        align8Int (add (Int64.to_int codeFileOffset) (Bytes.length codeBytes))
-      in
-      let leakStart =
-        sub
-          (RuntimeDataLayout.elfCounterOffset (add dataStart afterCoverage))
-          dataStart
-      in
-      let leakPadding = Bytes.make (sub leakStart afterCoverage) '\000' in
-      Bytes.concat Bytes.empty
-        [
-          floatAndStringBytes;
-          coveragePadding;
-          coverageBytes;
-          leakPadding;
-          leakBytes;
-        ]
-    else
-      Bytes.concat Bytes.empty
-        [ floatAndStringBytes; coveragePadding; coverageBytes ]
-  in
-  serializeElf
-    (createBinary codeBytes dataBytes
-       (Int32.logor (Int32.logor ELF.pf_R ELF.pf_W) ELF.pf_X))
 
 let tryWriteAllBytes path bytes =
   Result.map_error

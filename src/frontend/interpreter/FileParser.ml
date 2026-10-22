@@ -19,10 +19,7 @@ type grammar = {
 let parseTestExpected grammar state index =
   match (tok state index, tok state (index + 1), tok state (index + 2)) with
   | TIdent "error", TEquals, TStringLit text -> (WT.TEError text, index + 3)
-  | TIdent "sqlerror", TEquals, TStringLit text ->
-      (WT.TESqlError text, index + 3)
   | TIdent "error", TStringLit text, _ -> (WT.TEError text, index + 2)
-  | TIdent "sqlerror", TStringLit text, _ -> (WT.TESqlError text, index + 2)
   | _ ->
       let value, next = grammar.parseExpr state index in
       (WT.TEExpr value, next)
@@ -199,7 +196,7 @@ and parseItemsBody grammar state itemScope start minColumn =
             RevBuffer.add declarations declaration;
             stop := after
           end
-      | TTrait, _ ->
+      | TTrait, TIdent _ ->
           let declaration, after =
             TraitDeclarationParser.parseTraitDecl grammar.parseBlock state !stop
           in

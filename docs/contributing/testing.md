@@ -8,8 +8,9 @@ every input.
 ## Optimization fixtures
 
 Place before/after compiler fixtures in `test/fixtures/optimization/`. The file
-name selects ANF, MIR, or LIR, and each case compiles `INPUT` before pinning the
-complete optimized IR in `EXPECTED`:
+name selects high-level SSA (`anf`), MIR, or LIR, and each case compiles `INPUT`
+through the production passes before pinning the complete optimized IR in
+`EXPECTED`. Source fixtures disable inlining to keep function boundaries stable:
 
 ```text
 ---NAME---
@@ -17,10 +18,12 @@ constant integer addition
 ---INPUT---
 1L + 2L
 ---EXPECTED---
+Function _start(): TInt64 [entry block0]
+block0():
 return 3
 ```
 
-The production high-level optimizer runs on SSA. Its focused cases live in
+Additional focused cases for the production high-level optimizer live in
 `test/fixtures/ssa-optimization/ssa.opt` and use typed functions with operation
 counts instead of exact ANF snapshots:
 
@@ -138,8 +141,10 @@ For discovery without execution, see the
 ## Optimization fixtures
 
 Source-based `.opt` files under `test/fixtures/optimization/` compile Dark source
-through the stage named by the filename (`anf`, `mir`, or `lir`) and compare
-the complete optimized IR. Use them when a source construct and the normal
+through the stage named by the filename (`anf` for typed SSA, `mir`, or `lir`)
+and compare the complete optimized IR. The `STDLIB-FUNCTION` form inspects an
+embedded structured-ANF function before the SSA pipeline; it does not run a
+separate optimizer. Use source fixtures when a source construct and the normal
 pipeline are important parts of the proof.
 
 Three direct formats use the same repeatable `NAME`, `INPUT`, and `EXPECTED`

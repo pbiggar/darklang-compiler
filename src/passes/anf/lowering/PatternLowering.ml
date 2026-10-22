@@ -344,7 +344,6 @@ type collectionMode = General | TupleBody | Guard | Nested
    Pattern match + guard: if pattern matches, bind, check guard
 *)
 let lowerMatch (toANFCore : LoweringCallbacks.expressionLowerer)
-    (toAtomCore : LoweringCallbacks.atomLowerer)
     (toANFBoundAtomCore : LoweringCallbacks.boundAtomLowerer) functionIds sums
     typeNames inert scrutinee cases gen env registry variants functions names
     modules =
@@ -364,10 +363,6 @@ let lowerMatch (toANFCore : LoweringCallbacks.expressionLowerer)
   in
   let anf value gen env =
     toANFCore sums typeNames inert value gen env registry variants functions
-      names modules
-  in
-  let atom value gen env =
-    toAtomCore sums typeNames inert value gen env registry variants functions
       names modules
   in
   let* scrutType =
@@ -993,11 +988,15 @@ let lowerMatch (toANFCore : LoweringCallbacks.expressionLowerer)
     if patternDefinitelyCannotMatchType pat typ then Ok (elseExpr, gen)
     else
       let* env, bindings, gen = collect Guard pat source typ env [] gen in
-      let* condition, guardBindings, gen = atom guard gen env in
+      let* guardExpression, condition, gen =
+        toANFBoundAtomCore sums typeNames inert guard gen env registry variants
+          functions names modules
+      in
       let* body, gen = anf body gen env in
       Ok
         ( K.wrapBindings (List.rev bindings)
-            (K.wrapBindings guardBindings (A.If (condition, body, elseExpr))),
+            (K.bindReturns guardExpression (fun _ ->
+                 A.If (condition, body, elseExpr))),
           gen )
   in
   let rec buildPatternComparison pat source patType gen =
@@ -1504,18 +1503,12 @@ let lowerMatch (toANFCore : LoweringCallbacks.expressionLowerer)
            | C.PVariable _ | C.PWildcard -> true
            | _ -> false ->
         let notEmpty, gen = A.freshVar gen in
-        let tag, gen = A.freshVar gen in
         let ptr, gen = A.freshVar gen in
-        let isSingle, gen = A.freshVar gen in
-        let compileBranch isLegacy gen =
+        let compileBranch gen =
           let node, gen = A.freshVar gen in
           let value, _, bindings, gen =
             unwrapLeaf elem (A.Var node) gen
-              [
-                ( node,
-                  A.RawGet (A.Var ptr, int (if isLegacy then 0L else 16L), None)
-                );
-              ]
+              [ (node, A.RawGet (A.Var ptr, int 16L, None)) ]
           in
           let typedHead, gen = A.freshVar gen in
           let bindings =
@@ -1525,7 +1518,7 @@ let lowerMatch (toANFCore : LoweringCallbacks.expressionLowerer)
           let typedTail, gen = A.freshVar gen in
           let tailBindings =
             [
-              (rawTail, if isLegacy then A.Atom (int 0L) else tail source);
+              (rawTail, tail source);
               (typedTail, A.TypedAtom (A.Var rawTail, typ));
             ]
           in
@@ -1583,16 +1576,9 @@ let lowerMatch (toANFCore : LoweringCallbacks.expressionLowerer)
           in
           Ok (K.wrapBindings bindings (K.wrapBindings tupleBindings body), gen)
         in
-        let* single, gen = compileBranch true gen in
-        let* deep, gen = compileBranch false gen in
+        let* branch, gen = compileBranch gen in
         let inner =
-          K.wrapBindings
-            [
-              (tag, A.Prim (A.BitAnd, source, int 7L));
-              (ptr, A.Prim (A.BitAnd, source, int (-8L)));
-              (isSingle, A.Atom (A.BoolLiteral false));
-            ]
-            (A.If (A.Var isSingle, single, deep))
+          K.wrapBindings [ (ptr, A.Prim (A.BitAnd, source, int (-8L))) ] branch
         in
         Ok
           ( A.Let

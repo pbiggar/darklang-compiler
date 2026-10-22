@@ -1,12 +1,12 @@
-// String addition adopts upstream NFC concatenation while retaining legacy ++.
+// String addition adopts upstream NFC concatenation with the interpreter operator.
 "hello" + " world" = "hello world"
 "e" + "́" = "é"
 let left = "e" in let right = "́" in left + right = "é"
 let identity (value: String) : String = value in identity "e" + identity "́" = "é"
 let appendAccent (value: String) : String = value + "́" in "e" |> appendAccent = "é"
 ("e" + "́") + "!" = "é!"
-"e" ++ "́" = "é"
-"a" ++ ("b" + "c") = "abc"
+"e" + "́" = "é"
+"a" + ("b" + "c") = "abc"
 let append (left: String) (right: String) : String = left + right in append "" "é" = "é"
 let add<'a> (left: a) (right: a) : a = left + right; add "e" "́" = "é"
 "a" + 1L = compileerror="Expected"
@@ -17,12 +17,12 @@ let add<'a> (left: a) (right: a) : a = left + right; add true false = compileerr
 let combine = (fun left right -> left + right) in combine "e" "́" = "é"
 ('a' + 'b') = compileerror="Operator is unavailable for this type"
 "a" + 'b' = compileerror="Expected TString, got TChar"
-'a' ++ "b" = "ab"
+Stdlib.Char.toString 'a' + "b" = "ab"
 
 let add<'a> (a: a) (b: a) (c: a) (d: a) : a = (a + b) + (c + d); add "e" "́" "!" "?" = "é!?"
 let add<'a> (left: a) (right: a) : a = let values = (left, right) in let (a, b) = values in a + b; add "e" "́" = "é"
 let add<'a> (left: a) (right: a) : a = left + right; (add "e" "́", add 2L 3L) = ("é", 5L)
-(fun value -> value ++ "!") "é" + "?" = "é!?"
+(fun value -> value + "!") "é" + "?" = "é!?"
 let prefix = "e" in (fun value -> prefix + value) "́" + "!" = "é!"
 // A long specialized chain must fuse without repeated subtree inference.
 let chain<'a> (left: a) (right: a) : a = left + right + left + right + left + right + left + right + left + right + left + right + left + right + left + right + left + right + left + right + left + right + left + right + left + right + left + right + left + right + left + right + left + right + left + right + left + right + left + right + left + right + left + right + left + right + left + right + left + right + left + right + left + right + left + right + left + right + left + right + left + right + left + right + left + right + left + right + left + right + left + right + left + right + left + right + left + right + left + right + left + right + left + right + left + right + left + right + left + right + left + right + left + right + left + right + left + right + left + right + left + right + left + right + left + right + left + right + left + right + left + right + left + right + left + right + left + right + left + right + left + right + left + right + left + right + left + right; chain "e" "́" = "éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé"

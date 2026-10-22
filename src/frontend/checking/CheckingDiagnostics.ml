@@ -16,7 +16,6 @@ type typeError =
   | InvalidOperation of string * AST.semanticType list
   | IncompatibleEqualityOperands of AST.semanticType * AST.semanticType
   | IncompatibleOrderingOperands of AST.semanticType * AST.semanticType
-  | PolymorphicRecursion of string
   | ResolutionFailure of NameResolution.resolutionError
   | GenericError of string
 
@@ -125,9 +124,6 @@ let typeErrorToString = function
   | IncompatibleOrderingOperands (left, right) ->
       "Cannot perform numeric operation on " ^ typeToString left ^ " and "
       ^ typeToString right
-  | PolymorphicRecursion name ->
-      "Polymorphic recursion is not supported inside recursive group member: "
-      ^ name
   | ResolutionFailure error -> NameResolution.errorToString error
   | GenericError msg -> msg
 
@@ -520,24 +516,6 @@ let formatPatternMismatchError scrutinee actualType expectedType override =
   in
   "Cannot match " ^ typeToString actualType ^ " value " ^ valueText ^ " with "
   ^ expectedText ^ " pattern"
-
-let formatLegacyParamTypeError functionName paramIndex paramName expectedType
-    actualType actualExpr =
-  let ordinal =
-    match paramIndex with
-    | 1 -> "1st"
-    | 2 -> "2nd"
-    | 3 -> "3rd"
-    | _ -> string_of_int paramIndex ^ "th"
-  in
-  let actualValue =
-    Option.value
-      (tryFormatLiteralValue actualExpr)
-      ~default:(typeToString actualType)
-  in
-  functionName ^ "'s " ^ ordinal ^ " parameter `" ^ paramName ^ "` expects "
-  ^ typeToString expectedType ^ ", but got " ^ typeToString actualType ^ " ("
-  ^ actualValue ^ ")"
 
 (*
    Each invocation gets a fresh, structurally separate inference identity.

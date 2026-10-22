@@ -14,4 +14,4 @@ Stdlib.String.trimStart "\u00a0x\r\n" = "x\r\n"
 Stdlib.String.trimEnd "\r\nx\u00a0" = "\r\nx"
 Stdlib.String.trim "\t\r\nx\r\n\t" = "x"
 Stdlib.String.trim "" = ""
-let value = "\u00a0" ++ "👩‍👩‍👧‍👦\r\n\u00a0" in (Stdlib.String.trim value, value) = ("👩‍👩‍👧‍👦", "\u00a0👩‍👩‍👧‍👦\r\n\u00a0")
+let value = "\u00a0" + "👩‍👩‍👧‍👦\r\n\u00a0" in (Stdlib.String.trim value, value) = ("👩‍👩‍👧‍👦", "\u00a0👩‍👩‍👧‍👦\r\n\u00a0")

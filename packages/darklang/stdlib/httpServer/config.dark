@@ -1,22 +1,26 @@
 // HttpServerConfig.dark - Upstream HTTP serving configuration and defaults.
 
-module Darklang.Stdlib.HttpServer.Config
+module Darklang.Stdlib.HttpServer
 
-type Config = {
-    port: Int,
-    maxBodyBytes: Int,
-    injectStandardHeaders: Bool,
-    canonicalizeFromForwardedProto: Bool,
-    logRequests: Bool
-}
+module Config =
 
-val defaultMaxBodyBytes = 31457280
+  type Config =
+    { port: Int
+      /// Maximum request body size in bytes (over-limit → 413).
+      maxBodyBytes: Int
+      /// Auto-add `Server: darklang` + HSTS unless the handler set them.
+      injectStandardHeaders: Bool
+      /// Rewrite request.url to https:// when X-Forwarded-Proto: https is present.
+      canonicalizeFromForwardedProto: Bool
+      /// Emit a per-request stdout line + telemetry event.
+      logRequests: Bool }
 
-let defaults (port: Int) : Stdlib.HttpServer.Config.Config =
-    Stdlib.HttpServer.Config.Config {
-        port = port,
-        maxBodyBytes = Stdlib.HttpServer.Config.defaultMaxBodyBytes,
-        injectStandardHeaders = true,
-        canonicalizeFromForwardedProto = true,
-        logRequests = true
-    }
+  val defaultMaxBodyBytes = 31457280
+
+  let defaults (port: Int) : Config =
+    Config
+      { port = port
+        maxBodyBytes = defaultMaxBodyBytes
+        injectStandardHeaders = true
+        canonicalizeFromForwardedProto = true
+        logRequests = true }

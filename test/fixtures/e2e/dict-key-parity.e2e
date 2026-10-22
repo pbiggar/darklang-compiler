@@ -1,0 +1,16 @@
+// Dictionary key comparison canonicalizes NaNs recursively; value equality does not.
+type ParityKey = { number: Float, label: String }
+type ParitySum = | ParitySum of number: Float * label: String
+let nanValue () : Float = Stdlib.Float.sqrt -1.0
+let n = nanValue () in Dict { 1L: n } == Dict { 1L: n } = false
+let n = nanValue () in Dict { 1L: [n] } == Dict { 1L: [n] } = false
+let n = nanValue () in Dict { n: "value" } == Dict { n: "value" } = true
+let n = nanValue () in Stdlib.Dict.get (Dict { [n, 0.0]: "list" }) [n, -0.0] = Some "list"
+let n = nanValue () in Stdlib.Dict.get (Dict { (n, 0.0): "tuple" }) (n, -0.0) = Some "tuple"
+let n = nanValue () in Stdlib.Dict.get (Dict { ParityKey { number = n, label = "key" }: "record" }) (ParityKey { number = n, label = "key" }) = Some "record"
+let n = nanValue () in Stdlib.Dict.get (Dict { ParitySum (n, "key"): "sum" }) (ParitySum (n, "key")) = Some "sum"
+let n = nanValue () in Stdlib.Dict.get (Dict { Some n: "option" }) (Some n) = Some "option"
+let n = nanValue () in Stdlib.Dict.get (Dict { Dict { 1L: n }: "dict" }) (Dict { 1L: n }) = Some "dict"
+let n = nanValue () in Stdlib.Dict.size (Stdlib.Dict.setOverridingDuplicates (Dict { [n]: "before" }) [n] "after") = 1
+let n = nanValue () in Stdlib.Dict.get (Stdlib.Dict.remove (Dict { [n]: "value" }) [n]) [n] = None
+Stdlib.Dict.get (Dict { [1.0]: "one" }) [2.0] = None

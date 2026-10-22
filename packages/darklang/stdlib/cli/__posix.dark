@@ -195,7 +195,7 @@ let __macError (errno: Int64) : String =
     else if errno == 106L then "Interface output queue is full"
     else if errno == 107L then "Capabilities insufficient"
     else if errno == 107L then "Must be equal largest errno"
-    else "Unknown error: " ++ Stdlib.Int64.toString errno
+    else "Unknown error: " + Stdlib.Int64.toString errno
 
 let __error (errno: Int64) : Stdlib.Cli.Posix.Error =
     let message =
@@ -331,7 +331,7 @@ let __error (errno: Int64) : Stdlib.Cli.Posix.Error =
         else if errno == 131L then "State not recoverable"
         else if errno == 132L then "Operation not possible due to RF-kill"
         else if errno == 133L then "Memory page has hardware error"
-        else "Unknown error " ++ Stdlib.Int64.toString errno in
+        else "Unknown error " + Stdlib.Int64.toString errno in
     Stdlib.Cli.Posix.Error { errno = Stdlib.Int.fromInt64 errno, message = message }
 
 let __unitResult (rc: Int64) : Stdlib.Result.Result<Unit, Stdlib.Cli.Posix.Error> =
@@ -366,7 +366,7 @@ let __absolute (path: String) : Stdlib.Result.Result<String, Stdlib.Cli.Posix.Er
     else
         match Stdlib.Cli.__Posix.__getCurrentDirectory () with
         | Error e -> Error e
-        | Ok cwd -> Ok (cwd ++ "/" ++ path)
+        | Ok cwd -> Ok (cwd + "/" + path)
 
 // The walk owns its descriptor and closes each ancestor before continuing.
 let __walkParent (fd: Int64) (parts: List<String>) (fn: Int64 -> String -> Stdlib.Result.Result<'a, Stdlib.Cli.Posix.Error>) : Stdlib.Result.Result<'a, Stdlib.Cli.Posix.Error> =
@@ -450,7 +450,7 @@ let __metadataPath (path: String) (fn: Int64 -> String -> Stdlib.Result.Result<'
             let result =
                 if rc < 0L then Error (Stdlib.Cli.__Posix.__error (0L - rc))
                 else if Stdlib.Int64.bitwiseAnd (Stdlib.Cli.__Posix.__statMode ptr) 61440L == 40960L then Error (Stdlib.Cli.__Posix.__error 40L)
-                else fn fd ("/proc/self/fd/" ++ Stdlib.Int64.toString fd) in
+                else fn fd ("/proc/self/fd/" + Stdlib.Int64.toString fd) in
             let _ = __mapped_free ptr in
             let _ = Stdlib.Cli.__Posix.__close fd in
             result)

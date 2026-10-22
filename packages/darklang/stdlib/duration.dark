@@ -1,21 +1,28 @@
-// Stdlib.Duration.dark - Portable canonical short-duration suffix parser.
-
+/// Short-duration parsing. Suffix-based ("30s", "5m", "1h", "2d") so
+/// callers always state intent. Returns the duration in seconds.
 module Darklang.Stdlib.Duration
 
-let parse (value: String) : Stdlib.Result.Result<Int, String> =
-    let length = Stdlib.String.__byteLength value in
-    if length < 2L then
-        Error ($"Duration too short: '{value}'; need a number + unit (s/m/h/d), e.g. 5m")
-    else
-        let unit = Stdlib.String.__byteSlice value (length - 1L) length in
-        let numberPart = Stdlib.String.__byteTake value (length - 1L) in
-        match Stdlib.Int.parse numberPart with
-        | Error _ ->
-            Error ($"Invalid duration '{value}'; need a number + unit (s/m/h/d), e.g. 5m")
-        | Ok number ->
-            match unit with
-            | "s" -> Ok number
-            | "m" -> Ok (Stdlib.Int.multiply number (Stdlib.Int.fromInt64 60L))
-            | "h" -> Ok (Stdlib.Int.multiply number (Stdlib.Int.fromInt64 3600L))
-            | "d" -> Ok (Stdlib.Int.multiply number (Stdlib.Int.fromInt64 86400L))
-            | _ -> Error ($"Unknown unit '{unit}' in '{value}'; use s, m, h, or d")
+
+/// Parse a short duration string ("30s", "5m", "1h", "2d") into seconds.
+/// Bare numbers are rejected — every duration must end with a unit.
+let parse (s: String) : Stdlib.Result.Result<Int, String> =
+  let len = Stdlib.String.length s
+  if len < 2 then
+    Stdlib.Result.Result.Error
+      $"Duration too short: '{s}'; need a number + unit (s/m/h/d), e.g. 5m"
+  else
+    let unit = Stdlib.String.last s 1
+    let numPart = Stdlib.String.dropLast s 1
+    match Stdlib.Int.parse numPart with
+    | Error _ ->
+      Stdlib.Result.Result.Error
+        $"Invalid duration '{s}'; need a number + unit (s/m/h/d), e.g. 5m"
+    | Ok n ->
+      match unit with
+      | "s" -> Stdlib.Result.Result.Ok n
+      | "m" -> Stdlib.Result.Result.Ok(n * 60)
+      | "h" -> Stdlib.Result.Result.Ok(n * 3600)
+      | "d" -> Stdlib.Result.Result.Ok(n * 86400)
+      | _ ->
+        Stdlib.Result.Result.Error
+          $"Unknown unit '{unit}' in '{s}'; use s, m, h, or d"

@@ -34,6 +34,7 @@ type pipelineContext = {
   typeCheckEnv : Types.typeCheckEnv;
   writtenEnvironment : WrittenChecking.environment option;
   checkedValues : checkedValueArtifact StringOrder.Map.t;
+  keyFunctions : CheckedAST.functionDef FunctionIdMap.t;
   genericFuncDefs : SpecializationIdentity.genericFuncDefs;
   specRegistry : SpecializationIdentity.specRegistry;
   registries : AST_to_ANF.registries;

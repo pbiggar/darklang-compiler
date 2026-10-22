@@ -19,7 +19,7 @@ let handler (req: Stdlib.Http.Request) : Stdlib.Http.Response =
     let path = Stdlib.HttpServer.getPath req in
     if path == "/echo" then Stdlib.Http.success req.body
     else if path == "/inspect" then
-        Stdlib.Http.responseWithText (req.url ++ "|" ++ Stdlib.HttpServer.getMethod req) 200
+        Stdlib.Http.responseWithText (req.url + "|" + Stdlib.HttpServer.getMethod req) 200
     else if path == "/headers" then
         Stdlib.Http.responseWithHeaders (Stdlib.String.toBlob "headers")
             [("sErVeR", "custom"), ("strict-transport-security", "custom-hsts"),

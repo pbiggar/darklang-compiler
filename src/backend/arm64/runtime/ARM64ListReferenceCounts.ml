@@ -4,7 +4,6 @@
 [@@@warning "-4"]
 
 let isEmpty xs = xs = []
-let mul a b = Int32.to_int (Int32.mul (Int32.of_int a) (Int32.of_int b))
 
 let int16 value =
   let low = value land 65535 in
@@ -86,8 +85,8 @@ let generateListRefCountDecHelperWith (helperLabel : string)
     (ctx : codeGenContext) (leafGenericPayloadSize : int option)
     (leafGenericReleasePlan : MemoryModel.rcReleasePlan option)
     (releaseLeafDynamicBufferPayload : bool) (releaseLeafListPayload : bool)
-    (releaseLeafDictPayload : bool) (releaseLeafClosurePayload : bool)
-    (managedLeafFieldTypes : AST.semanticType list) : Symbolic.instr list =
+    (releaseLeafDictPayload : bool) (releaseLeafClosurePayload : bool) :
+    Symbolic.instr list =
   let label (name : string) : string =
     Printf.sprintf "%s_%s" helperLabel name
   in
@@ -539,33 +538,10 @@ let generateListRefCountDecHelperWith (helperLabel : string)
         releasePlanBoxedSumVariantFieldsFrom Symbolic.X8 "root" variants
     | _ -> []
   in
-  let managedLeafFieldReleasePlan (fieldType : AST.semanticType) :
-      MemoryModel.rcReleasePlan option =
-    match fieldType with
-    | AST.TRecord (name, _)
-      when not (StringOrder.Map.mem name ctx.recordRegistry) ->
-        None
-    | _ ->
-        Some
-          (MemoryPlanning.rcReleasePlanOfTypeWithSums ctx.recordRegistry
-             ctx.sumShapeRegistry fieldType)
-  in
-  let releaseManagedLeafFields =
-    managedLeafFieldTypes
-    |> List.mapi (fun index fieldType ->
-        let fieldOffset = mul index 8 in
-        match managedLeafFieldReleasePlan fieldType with
-        | Some fieldReleasePlan ->
-            releasePlanFieldFrom Symbolic.X8 fieldOffset
-              (Printf.sprintf "legacy_%d" index)
-              fieldReleasePlan
-        | None -> [])
-    |> List.concat
-  in
   let releaseLeafFieldPayloads =
     match leafGenericReleasePlan with
     | Some releasePlan -> releaseManagedLeafFieldsFromPlan releasePlan
-    | None -> releaseManagedLeafFields
+    | None -> []
   in
   let releaseLeafPayload =
     match
@@ -862,19 +838,19 @@ let generateNeededListRefCountDecHelpers (ctx : codeGenContext)
         if StringOrder.Set.mem spec.label neededHelperLabels then
           generateListRefCountDecHelperWith spec.label ctx None None false
             spec.releaseLeafListPayload spec.releaseLeafDictPayload
-            spec.releaseLeafClosurePayload []
+            spec.releaseLeafClosurePayload
         else []))
     @ (if
          StringOrder.Set.mem listRefCountDecStringHelperLabel neededHelperLabels
        then
          generateListRefCountDecHelperWith listRefCountDecStringHelperLabel ctx
-           None None true false false false []
+           None None true false false false
        else [])
     @
     if StringOrder.Set.mem listRefCountDecBlobHelperLabel neededHelperLabels
     then
       generateListRefCountDecHelperWith listRefCountDecBlobHelperLabel ctx None
-        None true false false false []
+        None true false false false
     else []
   in
   let plannedHelpers =
@@ -890,7 +866,7 @@ let generateNeededListRefCountDecHelpers (ctx : codeGenContext)
             | _ -> Some payloadSize
           in
           generateListRefCountDecHelperWith helperLabel ctx plannedPayloadSize
-            (Some releasePlan) false false false false []
+            (Some releasePlan) false false false false
         else [])
   in
   staticHelpers @ plannedHelpers

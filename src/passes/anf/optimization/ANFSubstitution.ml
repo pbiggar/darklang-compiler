@@ -186,7 +186,7 @@ let optimizeCExpr (context : optimizeContext) (options : optimizeOptions) env
     if not options.enableConstFolding then None
     else
       match cexpr' with
-      | Prim (op, left, right) -> foldBinOp op left right
+      | Prim (op, left, right) -> foldBinOp typeEnv op left right
       | UnaryPrim (op, src) -> foldUnaryOp op src
       | FloatNeg (FloatLiteral f) -> Some (Atom (FloatLiteral (-.f)))
       | FloatAbs (FloatLiteral f) -> Some (Atom (FloatLiteral (abs_float f)))

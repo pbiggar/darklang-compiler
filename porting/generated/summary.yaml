@@ -2,27 +2,27 @@ upstream:
   repository: darklang/dark
   revision: e76430be5cd9f6b77ed255430dc34a1b58dd8fc4
 features:
-  supported: 195
-  missing: 16
+  supported: 197
+  missing: 15
   partial: 2
 parser:
-  unassessed: 18
-  supported: 3
+  supported: 30
+  partial: 1
 stdlib:
-  different: 1010
-  missing: 598
-  identical: 388
+  different: 834
+  missing: 569
+  identical: 595
 packages:
   missing: 3709
   identical: 5
   different: 41
 builtins:
   present: 79
-  missing: 175
-  unassessed: 527
+  missing: 169
+  unassessed: 533
 tests:
-  enabled: 552
-  unmapped: 1593
+  enabled: 554
+  unmapped: 1584
   ambiguous: 10
-  disabled: 82
-  partial: 122
+  disabled: 83
+  partial: 128

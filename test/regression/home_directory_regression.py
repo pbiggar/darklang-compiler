@@ -22,7 +22,7 @@ def main():
         binary = root / "home"
         source.write_text('''let report =
   match Stdlib.Cli.Env.home () with
-  | Some home -> "some:" ++ home
+  | Some home -> "some:" + home
   | None -> "none"
 in let _ = Builtin.print report in 0L
 ''', encoding="utf-8")

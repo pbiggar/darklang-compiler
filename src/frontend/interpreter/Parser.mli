@@ -15,5 +15,4 @@ val parseFor :
   string ->
   (Validation.validatedSourceFile, ParserSupport.diagnostic list) result
 
-val parseTestFile : string -> ParserSupport.parseResult
 val renderDiagnostic : string -> ParserSupport.diagnostic -> string

@@ -34,17 +34,17 @@ let loop (connection: Stdlib.__Datagram.Socket) (remaining: Int64) : Unit =
   else
     let _ =
       match Stdlib.__Datagram.receive connection 1000L with
-      | Error code -> Stdlib.printLine ("ERROR " ++ Stdlib.Int64.toString code)
+      | Error code -> Stdlib.printLine ("ERROR " + Stdlib.Int64.toString code)
       | Ok message ->
-        let _ = Stdlib.printLine ("PEER " ++ Stdlib.Int64.toString message.peer.port ++ " " ++ Stdlib.Blob.toHex message.payload) in
+        let _ = Stdlib.printLine ("PEER " + Stdlib.Int64.toString message.peer.port + " " + Stdlib.Blob.toHex message.payload) in
         if message.peer.address != {address} then Stdlib.printLine "BAD ADDRESS"
         else
           match Stdlib.__Datagram.send connection message.peer message.payload 1000L with
-          | Error code -> Stdlib.printLine ("SEND ERROR " ++ Stdlib.Int64.toString code)
+          | Error code -> Stdlib.printLine ("SEND ERROR " + Stdlib.Int64.toString code)
           | Ok () -> () in
     loop connection (remaining - 1L)
 match Stdlib.__Datagram.{bind} {address} {port}L with
-| Error code -> Stdlib.printLine ("BIND ERROR " ++ Stdlib.Int64.toString code)
+| Error code -> Stdlib.printLine ("BIND ERROR " + Stdlib.Int64.toString code)
 | Ok connection ->
   let _ =
     match Stdlib.__Datagram.{bind} {address} {port}L with

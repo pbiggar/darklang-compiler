@@ -3,7 +3,7 @@
 module Darklang.Stdlib.Cli.UI.Spinner
 
 let run<'a> (message: String) (fn: (Unit) -> a) : a =
-    let _ = Builtin.print (message ++ "... ") in
+    let _ = Builtin.print (message + "... ") in
     let result = fn (()) in
     let _ = Builtin.printLine (Stdlib.Cli.UI.Colors.greenText "done") in
     result

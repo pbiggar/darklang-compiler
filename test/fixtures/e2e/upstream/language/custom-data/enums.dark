@@ -21,13 +21,13 @@ module Errors =
   module User =
     type MyEnum = | A | B | C of String
 
-    MyEnum.D = compileerror="Unknown constructor 'MyEnum.D'"
-    MyEnum.C = compileerror="Constructor 'MyEnum.C' expects 1 fields"
-    MyEnum.B 5L = compileerror="Constructor 'MyEnum.B' expects 0 fields"
+    MyEnum.D = compileerror="Unknown constructor 'Errors.User.MyEnum.D'"
+    MyEnum.C = compileerror="Constructor 'Errors.User.MyEnum.C' expects 1 fields"
+    MyEnum.B 5L = compileerror="Constructor 'Errors.User.MyEnum.B' expects 0 fields"
     (match MyEnum.C "test" with | C v -> v | _ -> "unmatched") = "test"
-    (match MyEnum.C "test" with | 5 -> "unmatched because it's not an int" | C v -> v) = compileerror="Expected TInt, got TSum (\"MyEnum\", [])"
-    (match MyEnum.C "test" with | C -> "unmatched because we didn't provide a space for the field") = compileerror="Constructor pattern 'MyEnum.C' has wrong field count"
-    (match MyEnum.C "test" with | D -> "unmatched because case name does not exist" | C _ -> 2) = compileerror="Unknown constructor 'MyEnum.D' in pattern"
+    (match MyEnum.C "test" with | 5 -> "unmatched because it's not an int" | C v -> v) = compileerror="Expected TInt, got TSum (\"Errors.User.MyEnum\", [])"
+    (match MyEnum.C "test" with | C -> "unmatched because we didn't provide a space for the field") = compileerror="Constructor pattern 'Errors.User.MyEnum.C' has wrong field count"
+    (match MyEnum.C "test" with | D -> "unmatched because case name does not exist" | C _ -> 2) = compileerror="Unknown constructor 'Errors.User.MyEnum.D' in pattern"
 
     (MyEnum.C 5L) = compileerror="Expected TString, got TInt64"
 module Simple =
@@ -68,7 +68,7 @@ module MixedCases =
 
   EnumOfMixedCases.Y "test" = compileerror="Expected TInt64, got TString"
 
-  EnumOfMixedCases.Z 1L = compileerror="Constructor 'EnumOfMixedCases.Z' expects 2 fields"
+  EnumOfMixedCases.Z 1L = compileerror="Constructor 'MixedCases.EnumOfMixedCases.Z' expects 2 fields"
 
   // Test ordering of evaluation
   EnumOfMixedCases.Z(Builtin.testRuntimeError "1", Builtin.testRuntimeError "2") = error="Uncaught exception: 1"
@@ -89,9 +89,9 @@ module MixedCases =
      EnumOfMixedCases.Z("testZ", 2L) ]
   |> Stdlib.List.map (fun v ->
     match v with
-    | X s -> "X " ++ s
-    | Z(s, _i) -> "Z " ++ s
-    | Y y -> "Y " ++ (Stdlib.Int64.toString y)
+    | X s -> "X " + s
+    | Z(s, _i) -> "Z " + s
+    | Y y -> "Y " + (Stdlib.Int64.toString y)
     | W -> "a simple W")) = [ "a simple W", "X testX", "Y 5", "Z testZ" ]
 
 
@@ -103,14 +103,14 @@ module TuplesVsNonTuples =
   (match Tuples.NotTuple("printer broke", 7L) with
    | NotTuple(reason, 7L) -> reason) = compileerror="Non-exhaustive match expression"
 
-  #compileerror="Constructor 'Tuples.NotTuple' expects 2 fields"
+  #compileerror="Constructor 'TuplesVsNonTuples.Tuples.NotTuple' expects 2 fields"
   (Tuples.NotTuple(("printer broke", 7L))) = error="Expected 2 fields in TuplesVsNonTuples.Tuples.`NotTuple`, but got 1"
 
   (match Tuples.Tuple(("printer broke", 7L)) with
    | Tuple((reason, 7L)) -> reason
    | _ -> "unmatched") = "printer broke"
 
-  #compileerror="Constructor 'Tuples.Tuple' expects 1 fields"
+  #compileerror="Constructor 'TuplesVsNonTuples.Tuples.Tuple' expects 1 fields"
   Tuples.Tuple("printer broke", 7L) = error="Expected 1 fields in TuplesVsNonTuples.Tuples.`Tuple`, but got 2"
 
 

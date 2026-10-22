@@ -121,6 +121,7 @@ type pipelineContext = {
   typeCheckEnv : Types.typeCheckEnv;
   writtenEnvironment : WrittenChecking.environment option;
   checkedValues : checkedValueArtifact M.t;
+  keyFunctions : CheckedAST.functionDef FunctionIdMap.t;
   genericFuncDefs : SpecializationIdentity.genericFuncDefs;
   specRegistry : SpecializationIdentity.specRegistry;
   registries : AST_to_ANF.registries;
@@ -228,6 +229,7 @@ let buildContext target symbols (typeCheckEnv : Types.typeCheckEnv)
       };
     writtenEnvironment = None;
     checkedValues;
+    keyFunctions = FunctionIdMap.empty;
     genericFuncDefs;
     specRegistry;
     registries;

@@ -152,7 +152,7 @@ let runExchange () : Unit =
       let peer = Stdlib.__Datagram.Endpoint { address = [127L, 0L, 0L, 1L], port = port } in
       let result = exchange connection peer state source (if mode == "untrusted" then [] else [root]) (if mode == "hostname" then "wrong.example.com" else "localhost") in
       let _ = Stdlib.__Datagram.close connection in
-      match result with | Ok () -> Stdlib.printLine "AUTHENTICATED" | Error message -> Stdlib.printLine ("ERROR " ++ message)
+      match result with | Ok () -> Stdlib.printLine "AUTHENTICATED" | Error message -> Stdlib.printLine ("ERROR " + message)
     | _, _, _, Ok connection -> let _ = Stdlib.__Datagram.close connection in Stdlib.printLine "Setup failed"
     | _, _, _, _ -> Stdlib.printLine "Setup failed"
   | _ -> Stdlib.printLine "Bad arguments"

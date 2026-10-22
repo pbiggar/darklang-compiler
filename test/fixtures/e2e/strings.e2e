@@ -3,7 +3,7 @@
 // Tests for string literal parsing, type checking, and printing
 
 let joinFusionChunk (n: Int64) (value: String): String =
-  if n == 0L then value else joinFusionChunk (n - 1L) (value ++ value)
+  if n == 0L then value else joinFusionChunk (n - 1L) (value + value)
 let repeatChunk (n: Int64) (chunk: String) (chunks: List<String>): List<String> =
   if n == 0L then chunks else repeatChunk (n - 1L) chunk (Stdlib.List.push chunks chunk)
 
@@ -44,14 +44,14 @@ let repeatChunk (n: Int64) (chunk: String) (chunks: List<String>): List<String> 
 // =============================================================================
 
 // Basic concatenation
-"hello" ++ " world" = "hello world"
-"a" ++ "b" = "ab"
-"foo" ++ "bar" = "foobar"
+"hello" + " world" = "hello world"
+"a" + "b" = "ab"
+"foo" + "bar" = "foobar"
 
 // Empty string concatenation
-"" ++ "test" = "test"
-"test" ++ "" = "test"
-"" ++ "" = ""
+"" + "test" = "test"
+"test" + "" = "test"
+"" + "" = ""
 
 // Byte-oriented parser helpers retain UTF-8 validity and avoid suffix copies.
 Stdlib.String.byteLength "aéz" = 4L
@@ -61,20 +61,20 @@ Stdlib.String.byteIndexOfFrom "abcabc" "bc" 3L = Some 4L
 Stdlib.String.byteSlice "é" 1L 2L = exit=1 stderr="Uncaught exception: String byte index is not a UTF-8 scalar boundary"
 
 // Chained concatenation (left associative)
-"a" ++ "b" ++ "c" = "abc"
-"hello" ++ " " ++ "world" = "hello world"
+"a" + "b" + "c" = "abc"
+"hello" + " " + "world" = "hello world"
 
 // Variables with concatenation
-let x = "hello" in x ++ " world" = "hello world"
-let x = "a" in let y = "b" in x ++ y = "ab"
+let x = "hello" in x + " world" = "hello world"
+let x = "a" in let y = "b" in x + y = "ab"
 
 // Chained concatenation with multiple variables (regression test for known bug)
-let x = "one" in let y = "two" in x ++ " and " ++ y = "one and two"
-let a = "hello" in let b = "world" in let c = "!" in a ++ " " ++ b ++ c = "hello world!"
+let x = "one" in let y = "two" in x + " and " + y = "one and two"
+let a = "hello" in let b = "world" in let c = "!" in a + " " + b + c = "hello world!"
 
 // A nonconstant ASCII concat tree allocates only its final buffer. The unfused
 // left-associated form exhausts the fixed heap by copying every prefix.
-let concatFusionChunk (n: Int64) (value: String): String = if n == 0L then value else concatFusionChunk (n - 1L) (value ++ value); let chunk = concatFusionChunk 20L "x" in Stdlib.String.getByteAt (chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk ++ chunk) 34603007 = stdout="Darklang.Stdlib.Option.Option<UInt8>.Some(120)\n" stderr="" isolated=true
+let concatFusionChunk (n: Int64) (value: String): String = if n == 0L then value else concatFusionChunk (n - 1L) (value + value); let chunk = concatFusionChunk 20L "x" in Stdlib.String.getByteAt (chunk + chunk + chunk + chunk + chunk + chunk + chunk + chunk + chunk + chunk + chunk + chunk + chunk + chunk + chunk + chunk + chunk + chunk + chunk + chunk + chunk + chunk + chunk + chunk + chunk + chunk + chunk + chunk + chunk + chunk + chunk + chunk + chunk) 34603007 = stdout="Darklang.Stdlib.Option.Option<UInt8>.Some(120)\n" stderr="" isolated=true
 
 // Joining dynamic chunks must allocate the final string once. Repeatedly
 // concatenating the growing prefix exhausts the fixed heap for this workload.
@@ -85,13 +85,13 @@ Stdlib.String.join (["e", "\u0301"]) "" = "é"
 let repeatJoinChar (n: Int64) (chars: List<Char>): List<Char> = if n == 0L then chars else repeatJoinChar (n - 1L) (Stdlib.List.push chars 'x'); let chars = repeatJoinChar 1000L [] in Stdlib.String.byteLength (Stdlib.String.fromList chars) = 1000L
 
 // Concatenation in let binding
-let result = "foo" ++ "bar" in result = "foobar"
+let result = "foo" + "bar" in result = "foobar"
 
 // Longer strings
-"this is a" ++ " longer test" = "this is a longer test"
+"this is a" + " longer test" = "this is a longer test"
 
 // Single character concatenation
-"a" ++ "b" ++ "c" ++ "d" = "abcd"
+"a" + "b" + "c" + "d" = "abcd"
 
 // =============================================================================
 // Stdlib.Int64.toString Tests
@@ -119,15 +119,15 @@ Stdlib.Int64.toString 1000000L = "1000000"
 Stdlib.Int64.toString 2147483647L = "2147483647"
 
 // Concatenation with toString
-"Value: " ++ Stdlib.Int64.toString 42L = "Value: 42"
-"Answer is " ++ Stdlib.Int64.toString 42L ++ "!" = "Answer is 42!"
+"Value: " + Stdlib.Int64.toString 42L = "Value: 42"
+"Answer is " + Stdlib.Int64.toString 42L + "!" = "Answer is 42!"
 
 // =============================================================================
 // Stdlib.Bool.toString Tests
 // =============================================================================
 
-"The answer is " ++ Stdlib.Bool.toString true = "The answer is true"
-"Flag: " ++ Stdlib.Bool.toString (1L > 0L) = "Flag: true"
+"The answer is " + Stdlib.Bool.toString true = "The answer is true"
+"Flag: " + Stdlib.Bool.toString (1L > 0L) = "Flag: true"
 
 // =============================================================================
 // String Interpolation Tests
@@ -154,7 +154,7 @@ $"{"hello"}" = "hello"
 $"Say: {"hi"}" = "Say: hi"
 
 // Expression with operators (string concat inside interpolation)
-$"{"a" ++ "b"}" = "ab"
+$"{"a" + "b"}" = "ab"
 
 // Nested braces in interpolation - record literal inside expression
 // Tests depth tracking for matching braces in collectExprChars
@@ -238,7 +238,7 @@ Stdlib.String.endsWith "👱🏻" "🏻" = false
 Stdlib.String.endsWith "x\r\n" "\n" = false
 
 // Prefix and suffix checks must not materialize the complete input as graphemes.
-let boundaryCheckChunk (remaining: Int64) (value: String): String = if remaining == 0L then value else boundaryCheckChunk (remaining - 1L) (value ++ value); let value = boundaryCheckChunk 24L "x" in Stdlib.String.startsWith value "x" && Stdlib.String.endsWith value "x" = stdout="true\n" stderr="" isolated=true
+let boundaryCheckChunk (remaining: Int64) (value: String): String = if remaining == 0L then value else boundaryCheckChunk (remaining - 1L) (value + value); let value = boundaryCheckChunk 24L "x" in Stdlib.String.startsWith value "x" && Stdlib.String.endsWith value "x" = stdout="true\n" stderr="" isolated=true
 
 // =============================================================================
 // Stdlib.String.indexOf Tests
@@ -259,7 +259,7 @@ Stdlib.String.indexOf "hello" "" = Some 0
 Stdlib.String.indexOf "" "" = Some 0
 
 // Index conversion must not allocate a prefix string and one list node per codepoint.
-let utf16IndexChunk (remaining: Int64) (value: String): String = if remaining == 0L then value else utf16IndexChunk (remaining - 1L) (value ++ value); let value = utf16IndexChunk 24L "x" ++ "y" in Stdlib.String.indexOf value "y" = stdout="Darklang.Stdlib.Option.Option<Int>.Some(16777216)\n" stderr="" isolated=true
+let utf16IndexChunk (remaining: Int64) (value: String): String = if remaining == 0L then value else utf16IndexChunk (remaining - 1L) (value + value); let value = utf16IndexChunk 24L "x" + "y" in Stdlib.String.indexOf value "y" = stdout="Darklang.Stdlib.Option.Option<Int>.Some(16777216)\n" stderr="" isolated=true
 
 // =============================================================================
 // Stdlib.String.contains Tests

@@ -13,7 +13,6 @@ val testCreateExecutableMagic : unit -> testResult
 val testCreateExecutableContainsCode : unit -> testResult
 val testMachOConstSectionOffsetPointsToAlignedData : unit -> testResult
 val testElfWriteToFileReturnsErrorForInvalidPath : unit -> testResult
-val testCreateExecutableWithCoverageIncludesCoverageSection : unit -> testResult
 val testSerializeMachOReportsInvalidCodeOffset : unit -> testResult
 val testSerializeMachOReportsTextSegmentTooSmall : unit -> testResult
 val testCompleteEncodingPipeline : unit -> testResult

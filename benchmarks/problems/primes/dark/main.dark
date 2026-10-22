@@ -13,7 +13,7 @@ let isPrime (n: Int64) : Bool =
     else if n == 2L then true
     else if n % 2L == 0L then false
     else
-        let limit = Stdlib.Int64.fromFloat (Stdlib.Float.sqrt (Stdlib.Int64.toFloat n)) in
+        let limit = Builtin.unwrap (Stdlib.Int64.fromFloat (Stdlib.Float.sqrt (Stdlib.Int64.toFloat n))) in
         if isDivisible n 3L limit then false else true
 
 let countPrimes (n: Int64) (count: Int64) : Int64 =

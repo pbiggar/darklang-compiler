@@ -68,7 +68,7 @@ let runtimeChildStart (program: String) (args: List<String>) (inheritTerminal: B
                        else
                          let path = match Stdlib.Cli.Env.get "PATH" with | Some path -> path | None -> "/bin:/usr/bin" in
                          Stdlib.List.map (Stdlib.String.split path ":") (fun directory ->
-                             if directory == "" then program else directory ++ "/" ++ program) in
+                             if directory == "" then program else directory + "/" + program) in
         Builtin.__syscallIntResult (Builtin.__childCandidates programs args inheritTerminal slot)
 
 let runtimeChildDescriptors (handle: Int) : Stdlib.Result.Result<List<Int>, Int> =

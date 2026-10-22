@@ -21,7 +21,7 @@ let run () : Unit =
   | Ok root ->
     let session = Stdlib.HttpClientSession.createTrustedWithRoots [root] in
     let body = Stdlib.String.join (Stdlib.List.repeatUnsafe 70 (Stdlib.String.repeat "x" 1000)) "" |> Stdlib.String.toBlob in
-    let url = "https://localhost:" ++ (Stdlib.Cli.__Args.get 0 |> Stdlib.Result.withDefault "0") ++ "/echo" in
+    let url = "https://localhost:" + (Stdlib.Cli.__Args.get 0 |> Stdlib.Result.withDefault "0") + "/echo" in
     let result = session.request "POST" url [] body |> Stdlib.Result.andThen (fun first ->
       if first.statusCode != 200 || Stdlib.Blob.toList first.body != Stdlib.Blob.toList body then Error Stdlib.HttpClient.RequestError.NetworkError
       else session.request "POST" url [] body |> Stdlib.Result.andThen (fun second ->

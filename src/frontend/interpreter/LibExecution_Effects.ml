@@ -36,6 +36,8 @@ type effect_ =
   | PackageWrite
   | TraceRead
   | TraceWrite
+  | Concurrency
+  | Runtime
   | Native
 
 let name = function
@@ -56,6 +58,8 @@ let name = function
   | PackageWrite -> "package-write"
   | TraceRead -> "trace-read"
   | TraceWrite -> "trace-write"
+  | Concurrency -> "concurrency"
+  | Runtime -> "runtime"
   | Native -> "native"
 
 (*
@@ -80,6 +84,8 @@ let all =
     PackageWrite;
     TraceRead;
     TraceWrite;
+    Concurrency;
+    Runtime;
     Native;
   ]
 
@@ -97,7 +103,7 @@ let isScoped = function
   | DbWrite | Process ->
       true
   | Stdin | Stdout | Clock | Random | PackageRead | PackageWrite | TraceRead
-  | TraceWrite | Native ->
+  | TraceWrite | Concurrency | Runtime | Native ->
       false
 
 (* Declared effect rows use the canonical effect constructor names. *)
@@ -119,4 +125,6 @@ let caseName = function
   | PackageWrite -> "PackageWrite"
   | TraceRead -> "TraceRead"
   | TraceWrite -> "TraceWrite"
+  | Concurrency -> "Concurrency"
+  | Runtime -> "Runtime"
   | Native -> "Native"

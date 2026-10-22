@@ -16,7 +16,7 @@ let __join (parts: List<String>) (acc: String) : String =
             if part == "" then acc
             else if Stdlib.String.startsWith part "/" then part
             else if acc == "" then part
-            else Stdlib.Cli.Path.stripTrailing acc ++ "/" ++ part in
+            else Stdlib.Cli.Path.stripTrailing acc + "/" + part in
         Stdlib.Cli.Path.__join rest next
 
 let join (parts: List<String>) : String =
@@ -59,7 +59,7 @@ let withExtension (path: String) (extension: String) : String =
     let name = Stdlib.Cli.Path.basename path in
     let dot = Stdlib.Cli.Path.__lastDot name 0L (-1L) in
     let stem = if dot > 0L then Stdlib.String.__byteSlice name 0L dot else name in
-    let newName = stem ++ extension in
+    let newName = stem + extension in
     if dir == "." then newName else Stdlib.Cli.Path.join ([dir, newName])
 
 let isAbsolute (path: String) : Bool =
@@ -88,7 +88,7 @@ let normalize (path: String) : String =
     let absolute = Stdlib.Cli.Path.isAbsolute path in
     let parts = Stdlib.Cli.Path.__normalizeParts (Stdlib.String.split path "/") absolute [] in
     let joined = Stdlib.String.join parts "/" in
-    if absolute then "/" ++ joined else if joined == "" then "." else joined
+    if absolute then "/" + joined else if joined == "" then "." else joined
 
 // Absolute paths do not consult process state. Relative-path resolution is
 // implemented by the native POSIX layer added with the remaining CLI effects.

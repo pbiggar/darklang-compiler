@@ -1,0 +1,209 @@
+// Scalar identities, live intermediate values, and branch behavior.
+// Keep value checks independent of optional optimizer selections. Disable
+// inlining and include wraparound and signed-zero boundaries.
+
+// branch_on_single_use_bool_negation
+let branch_on_single_use_bool_negation (cond: Bool) : Int64 = if Stdlib.Bool.not cond then 1L else 2L
+branch_on_single_use_bool_negation true = 2L disable_opt_inline=true
+branch_on_single_use_bool_negation false = 1L disable_opt_inline=true
+
+// negated_integer_comparison_uses_complement
+let negated_integer_comparison_uses_complement (left: Int64) (right: Int64) : Bool = Stdlib.Bool.not (left < right)
+negated_integer_comparison_uses_complement 1L 2L = false disable_opt_inline=true
+negated_integer_comparison_uses_complement 2L 2L = true disable_opt_inline=true
+negated_integer_comparison_uses_complement 9223372036854775807L (-9223372036854775808L) = true disable_opt_inline=true
+
+// identity_bitand_absorption
+let identity_bitand_absorption (x: Int64) (y: Int64) : Int64 = Stdlib.Int64.bitwiseAnd x (Stdlib.Int64.bitwiseOr x y)
+identity_bitand_absorption 5L 10L = 5L disable_opt_inline=true
+identity_bitand_absorption (-9223372036854775808L) (-1L) = -9223372036854775808L disable_opt_inline=true
+
+// identity_bitor_absorption
+let identity_bitor_absorption (x: Int64) (y: Int64) : Int64 = Stdlib.Int64.bitwiseOr x (Stdlib.Int64.bitwiseAnd x y)
+identity_bitor_absorption 5L 10L = 5L disable_opt_inline=true
+identity_bitor_absorption (-9223372036854775808L) (-1L) = -9223372036854775808L disable_opt_inline=true
+
+// identity_bool_and_absorption_left
+let identity_bool_and_absorption_left (x: Bool) (y: Bool) : Bool = x && (x || y)
+identity_bool_and_absorption_left true true = true disable_opt_inline=true
+identity_bool_and_absorption_left true false = true disable_opt_inline=true
+identity_bool_and_absorption_left false true = false disable_opt_inline=true
+identity_bool_and_absorption_left false false = false disable_opt_inline=true
+
+// identity_bool_or_absorption_left
+let identity_bool_or_absorption_left (x: Bool) (y: Bool) : Bool = x || (x && y)
+identity_bool_or_absorption_left true true = true disable_opt_inline=true
+identity_bool_or_absorption_left true false = true disable_opt_inline=true
+identity_bool_or_absorption_left false true = false disable_opt_inline=true
+identity_bool_or_absorption_left false false = false disable_opt_inline=true
+
+// identity_bool_double_not
+let identity_bool_double_not (x: Bool) : Bool = Stdlib.Bool.not (Stdlib.Bool.not x)
+identity_bool_double_not true = true disable_opt_inline=true
+identity_bool_double_not false = false disable_opt_inline=true
+
+// identity_bool_and_complement_right
+let identity_bool_and_complement_right (x: Bool) : Bool = x && Stdlib.Bool.not x
+identity_bool_and_complement_right true = false disable_opt_inline=true
+identity_bool_and_complement_right false = false disable_opt_inline=true
+
+// identity_bool_or_complement_right
+let identity_bool_or_complement_right (x: Bool) : Bool = x || Stdlib.Bool.not x
+identity_bool_or_complement_right true = true disable_opt_inline=true
+identity_bool_or_complement_right false = true disable_opt_inline=true
+
+// identity_bitwise_double_not
+let identity_bitwise_double_not (x: Int64) : Int64 = Stdlib.Int64.bitwiseNot (Stdlib.Int64.bitwiseNot x)
+identity_bitwise_double_not 42L = 42L disable_opt_inline=true
+identity_bitwise_double_not (-9223372036854775808L) = -9223372036854775808L disable_opt_inline=true
+
+// bitwise_complement_and_right
+let bitwise_complement_and_right (x: Int64) : Int64 = Stdlib.Int64.bitwiseAnd x (Stdlib.Int64.bitwiseNot x)
+bitwise_complement_and_right 42L = 0L disable_opt_inline=true
+bitwise_complement_and_right (-9223372036854775808L) = 0L disable_opt_inline=true
+
+// bitwise_complement_and_left
+let bitwise_complement_and_left (x: Int64) : Int64 = Stdlib.Int64.bitwiseAnd (Stdlib.Int64.bitwiseNot x) x
+bitwise_complement_and_left 42L = 0L disable_opt_inline=true
+bitwise_complement_and_left (-9223372036854775808L) = 0L disable_opt_inline=true
+
+// bitwise_complement_or_right
+let bitwise_complement_or_right (x: Int64) : Int64 = Stdlib.Int64.bitwiseOr x (Stdlib.Int64.bitwiseNot x)
+bitwise_complement_or_right 42L = -1L disable_opt_inline=true
+bitwise_complement_or_right (-9223372036854775808L) = -1L disable_opt_inline=true
+
+// bitwise_complement_or_left
+let bitwise_complement_or_left (x: Int64) : Int64 = Stdlib.Int64.bitwiseOr (Stdlib.Int64.bitwiseNot x) x
+bitwise_complement_or_left 42L = -1L disable_opt_inline=true
+bitwise_complement_or_left (-9223372036854775808L) = -1L disable_opt_inline=true
+
+// bitwise_complement_xor_right
+let bitwise_complement_xor_right (x: Int64) : Int64 = Stdlib.Int64.bitwiseXor x (Stdlib.Int64.bitwiseNot x)
+bitwise_complement_xor_right 42L = -1L disable_opt_inline=true
+bitwise_complement_xor_right (-9223372036854775808L) = -1L disable_opt_inline=true
+
+// bitwise_complement_xor_left
+let bitwise_complement_xor_left (x: Int64) : Int64 = Stdlib.Int64.bitwiseXor (Stdlib.Int64.bitwiseNot x) x
+bitwise_complement_xor_left 42L = -1L disable_opt_inline=true
+bitwise_complement_xor_left (-9223372036854775808L) = -1L disable_opt_inline=true
+
+// bitwise_complement_preserves_reused_not
+let bitwise_complement_preserves_reused_not (x: Int64) : (Int64 * Int64) =
+  let complemented = Stdlib.Int64.bitwiseNot x in
+  (Stdlib.Int64.bitwiseAnd x complemented, complemented)
+bitwise_complement_preserves_reused_not 42L = (0L, -43L) disable_opt_inline=true
+bitwise_complement_preserves_reused_not (-9223372036854775808L) = (0L, 9223372036854775807L) disable_opt_inline=true
+
+// identity_integer_double_negation
+let identity_integer_double_negation (x: Int64) : Int64 = -(-x)
+identity_integer_double_negation 42L = 42L disable_opt_inline=true
+identity_integer_double_negation (-9223372036854775808L) = -9223372036854775808L disable_opt_inline=true
+
+// identity_float_double_negation
+let identity_float_double_negation (x: Float) : Float = -(-x)
+identity_float_double_negation (-3.5) = -3.5 disable_opt_inline=true
+Stdlib.Float.toBits (identity_float_double_negation (-0.0)) = 9223372036854775808UL disable_opt_inline=true
+Stdlib.Float.toBits (identity_float_double_negation 0.0) = 0UL disable_opt_inline=true
+
+// combine_add_single_use_int64_negation_right
+let combine_add_single_use_int64_negation_right (x: Int64) (y: Int64) : Int64 = x + (-y)
+combine_add_single_use_int64_negation_right 42L 7L = 35L disable_opt_inline=true
+combine_add_single_use_int64_negation_right (-9223372036854775808L) 1L = 9223372036854775807L disable_opt_inline=true
+
+// combine_add_single_use_int64_negation_left
+let combine_add_single_use_int64_negation_left (x: Int64) (y: Int64) : Int64 = (-y) + x
+combine_add_single_use_int64_negation_left 42L 7L = 35L disable_opt_inline=true
+combine_add_single_use_int64_negation_left (-9223372036854775808L) 1L = 9223372036854775807L disable_opt_inline=true
+
+// reassociate_integer_add_constants
+let reassociate_integer_add_constants (x: Int64) : Int64 = (x + 2L) + 3L
+reassociate_integer_add_constants 37L = 42L disable_opt_inline=true
+reassociate_integer_add_constants 9223372036854775807L = -9223372036854775804L disable_opt_inline=true
+
+// reassociate_int64_multiply_constants
+let reassociate_int64_multiply_constants (x: Int64) : Int64 = (x * 3L) * 5L
+reassociate_int64_multiply_constants 3L = 45L disable_opt_inline=true
+reassociate_int64_multiply_constants 9223372036854775807L = 9223372036854775793L disable_opt_inline=true
+
+// reassociate_int64_multiply_constants_with_wrapping
+let reassociate_int64_multiply_constants_with_wrapping (x: Int64) : Int64 = (x * 4000000000L) * 4000000000L
+reassociate_int64_multiply_constants_with_wrapping 1L = -2446744073709551616L disable_opt_inline=true
+reassociate_int64_multiply_constants_with_wrapping (-1L) = 2446744073709551616L disable_opt_inline=true
+
+// factor_shared_int64_mul_add_product_left
+let factor_shared_int64_mul_add_product_left (x: Int64) : Int64 = (x * 3L) + x
+factor_shared_int64_mul_add_product_left 7L = 28L disable_opt_inline=true
+factor_shared_int64_mul_add_product_left 9223372036854775807L = -4L disable_opt_inline=true
+
+// factor_shared_int64_mul_add_addend_left
+let factor_shared_int64_mul_add_addend_left (x: Int64) : Int64 = x + (x * 3L)
+factor_shared_int64_mul_add_addend_left 7L = 28L disable_opt_inline=true
+factor_shared_int64_mul_add_addend_left 9223372036854775807L = -4L disable_opt_inline=true
+
+// factor_shared_int64_mul_add_commuted_product_left
+let factor_shared_int64_mul_add_commuted_product_left (x: Int64) : Int64 = (3L * x) + x
+factor_shared_int64_mul_add_commuted_product_left 7L = 28L disable_opt_inline=true
+factor_shared_int64_mul_add_commuted_product_left 9223372036854775807L = -4L disable_opt_inline=true
+
+// factor_shared_int64_mul_add_commuted_addend_left
+let factor_shared_int64_mul_add_commuted_addend_left (x: Int64) : Int64 = x + (3L * x)
+factor_shared_int64_mul_add_commuted_addend_left 7L = 28L disable_opt_inline=true
+factor_shared_int64_mul_add_commuted_addend_left 9223372036854775807L = -4L disable_opt_inline=true
+
+// cancel_integer_add_then_subtract
+let cancel_integer_add_then_subtract (x: Int64) (y: Int64) : Int64 = (x + y) - y
+cancel_integer_add_then_subtract 42L 7L = 42L disable_opt_inline=true
+cancel_integer_add_then_subtract 9223372036854775807L 1L = 9223372036854775807L disable_opt_inline=true
+
+// commuted_int64_cancellation_subtract_left_addend
+let commuted_int64_cancellation_subtract_left_addend (x: Int64) (y: Int64) : Int64 = (x + y) - x
+commuted_int64_cancellation_subtract_left_addend 42L 7L = 7L disable_opt_inline=true
+commuted_int64_cancellation_subtract_left_addend 9223372036854775807L 1L = 1L disable_opt_inline=true
+
+// cancel_integer_subtract_then_add
+let cancel_integer_subtract_then_add (x: Int64) (y: Int64) : Int64 = (x - y) + y
+cancel_integer_subtract_then_add 42L 7L = 42L disable_opt_inline=true
+cancel_integer_subtract_then_add (-9223372036854775808L) 1L = -9223372036854775808L disable_opt_inline=true
+
+// commuted_int64_cancellation_add_difference_left
+let commuted_int64_cancellation_add_difference_left (x: Int64) (y: Int64) : Int64 = y + (x - y)
+commuted_int64_cancellation_add_difference_left 42L 7L = 42L disable_opt_inline=true
+commuted_int64_cancellation_add_difference_left (-9223372036854775808L) 1L = -9223372036854775808L disable_opt_inline=true
+
+// integer_add_subtract_cancellation_preserves_live_intermediate
+let integer_add_subtract_cancellation_preserves_live_intermediate (x: Int64) (y: Int64) : (Int64 * Int64) =
+  let sum = x + y in
+  let cancelled = sum - y in
+  (sum, cancelled)
+integer_add_subtract_cancellation_preserves_live_intermediate 42L 7L = (49L, 42L) disable_opt_inline=true
+integer_add_subtract_cancellation_preserves_live_intermediate 9223372036854775807L 1L = (-9223372036854775808L, 9223372036854775807L) disable_opt_inline=true
+
+// commuted_int64_cancellation_preserves_live_intermediate
+let commuted_int64_cancellation_preserves_live_intermediate (x: Int64) (y: Int64) : (Int64 * Int64) =
+  let sum = x + y in
+  let cancelled = sum - x in
+  (sum, cancelled)
+commuted_int64_cancellation_preserves_live_intermediate 42L 7L = (49L, 7L) disable_opt_inline=true
+commuted_int64_cancellation_preserves_live_intermediate 9223372036854775807L 1L = (-9223372036854775808L, 1L) disable_opt_inline=true
+
+// integer_subtract_add_cancellation_preserves_live_intermediate
+let integer_subtract_add_cancellation_preserves_live_intermediate (x: Int64) (y: Int64) : (Int64 * Int64) =
+  let difference = x - y in
+  let cancelled = difference + y in
+  (difference, cancelled)
+integer_subtract_add_cancellation_preserves_live_intermediate 42L 7L = (35L, 42L) disable_opt_inline=true
+integer_subtract_add_cancellation_preserves_live_intermediate (-9223372036854775808L) 1L = (9223372036854775807L, -9223372036854775808L) disable_opt_inline=true
+
+// hoist_identical_pure_leading_branch_binding
+let hoist_identical_pure_leading_branch_binding (x: Int64) : Int64 =
+  if x > 0L then
+    let shared = x * 3L in
+    shared + 1L
+  else
+    let shared = x * 3L in
+    shared - 1L
+hoist_identical_pure_leading_branch_binding 2L = 7L disable_opt_inline=true
+hoist_identical_pure_leading_branch_binding (-2L) = -7L disable_opt_inline=true
+hoist_identical_pure_leading_branch_binding 0L = -1L disable_opt_inline=true
+hoist_identical_pure_leading_branch_binding (-9223372036854775808L) = 9223372036854775807L disable_opt_inline=true
+

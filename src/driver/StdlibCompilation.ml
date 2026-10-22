@@ -156,7 +156,7 @@ let buildStdlibSpecializations (stdlib : X.stdlibResult) specs externalTypes
         (Types.indexSumTypeRegistry variants)
         symbols
     in
-    let specialization =
+    let* specialization =
       Monomorphization.specializeFromSpecs symbols base.X.genericFuncDefs specs
     in
     let initialSpecs =
@@ -205,7 +205,7 @@ let buildStdlibSpecializations (stdlib : X.stdlibResult) specs externalTypes
         |> List.fold_left Specs.union Specs.empty
         |> Specs.filter (fun (name, _) -> M.mem name base.X.genericFuncDefs)
       in
-      let helper =
+      let* helper =
         Monomorphization.specializeFromSpecs symbols base.X.genericFuncDefs
           helperSpecs
       in

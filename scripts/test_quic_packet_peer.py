@@ -25,20 +25,20 @@ let inspect (keys: Stdlib.__QuicCrypto.Keys) (data: Blob) : Unit =
   if Stdlib.Blob.length data == 0 then ()
   else
     match Stdlib.__QuicPacket.parse 8L data with
-    | Error message -> Stdlib.printLine ("ERROR " ++ message)
+    | Error message -> Stdlib.printLine ("ERROR " + message)
     | Ok packet ->
       match packet with
       | Protected value ->
         let kind = match value.kind with | Initial -> "0" | ZeroRtt -> "1" | Handshake -> "2" | OneRtt -> "3" in
-        let _ = Stdlib.printLine ("P " ++ kind ++ " " ++ Stdlib.Blob.toHex value.destination ++ " " ++ Stdlib.Blob.toHex value.source ++ " " ++ Stdlib.Blob.toHex value.token ++ " " ++ Stdlib.Int64.toString value.numberOffset ++ " " ++ Stdlib.Int.toString (Stdlib.Blob.length value.bytes)) in
+        let _ = Stdlib.printLine ("P " + kind + " " + Stdlib.Blob.toHex value.destination + " " + Stdlib.Blob.toHex value.source + " " + Stdlib.Blob.toHex value.token + " " + Stdlib.Int64.toString value.numberOffset + " " + Stdlib.Int.toString (Stdlib.Blob.length value.bytes)) in
         let _ =
           match Stdlib.__QuicCrypto.openPacket keys value.bytes value.numberOffset 1073741824L with
-          | Error message -> Stdlib.printLine ("OPEN ERROR " ++ message)
-          | Ok opened -> Stdlib.printLine ("OPEN " ++ Stdlib.Int64.toString opened.number ++ " " ++ Stdlib.Blob.toHex opened.payload) in
+          | Error message -> Stdlib.printLine ("OPEN ERROR " + message)
+          | Ok opened -> Stdlib.printLine ("OPEN " + Stdlib.Int64.toString opened.number + " " + Stdlib.Blob.toHex opened.payload) in
         inspect keys value.remaining
-      | Retry value -> Stdlib.printLine ("R " ++ Stdlib.Blob.toHex value.destination ++ " " ++ Stdlib.Blob.toHex value.source ++ " " ++ Stdlib.Blob.toHex value.token)
-      | VersionNegotiation value -> Stdlib.printLine ("V " ++ Stdlib.Blob.toHex value.destination ++ " " ++ Stdlib.Blob.toHex value.source ++ " " ++ Stdlib.String.join (Stdlib.List.map value.versions Stdlib.Int64.toString) ",")
-      | UnsupportedVersion value -> Stdlib.printLine ("U " ++ Stdlib.Int64.toString value.version)
+      | Retry value -> Stdlib.printLine ("R " + Stdlib.Blob.toHex value.destination + " " + Stdlib.Blob.toHex value.source + " " + Stdlib.Blob.toHex value.token)
+      | VersionNegotiation value -> Stdlib.printLine ("V " + Stdlib.Blob.toHex value.destination + " " + Stdlib.Blob.toHex value.source + " " + Stdlib.String.join (Stdlib.List.map value.versions Stdlib.Int64.toString) ",")
+      | UnsupportedVersion value -> Stdlib.printLine ("U " + Stdlib.Int64.toString value.version)
 let checkPackets () : Unit =
   match Stdlib.Blob.fromHex "000102030405060708090A0B0C0D0E0F101112131415161718191A1B1C1D1E1F" |> Stdlib.Result.andThen Stdlib.__QuicCrypto.derive,
         Stdlib.Blob.fromHex "0001020304050607", Stdlib.Blob.fromHex "08090A",
@@ -55,7 +55,7 @@ let checkPackets () : Unit =
           else if code == "3" then Stdlib.__QuicPacket.sealShort keys destination false data 1073741825L
           else Stdlib.__QuicPacket.sealLong kind keys destination source (if code == "0" then Stdlib.String.toBlob "token" else Stdlib.Blob.empty) data 1073741825L in
         match result with
-        | Error message -> Stdlib.printLine ("ERROR " ++ message)
+        | Error message -> Stdlib.printLine ("ERROR " + message)
         | Ok packet -> Stdlib.printLine (Stdlib.Blob.toHex packet)
   | _ -> Stdlib.printLine "Bad arguments"
 checkPackets ()

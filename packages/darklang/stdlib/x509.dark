@@ -82,11 +82,11 @@ let __pemLines (base64: String) (offset: Int64) (acc: String) : String =
     if offset >= Stdlib.String.__byteLength base64 then acc
     else
         let end_ = Stdlib.Int64.min (offset + 64L) (Stdlib.String.__byteLength base64) in
-        Stdlib.X509.__pemLines base64 end_ (acc ++ Stdlib.String.__byteSlice base64 offset end_ ++ "\n")
+        Stdlib.X509.__pemLines base64 end_ (acc + Stdlib.String.__byteSlice base64 offset end_ + "\n")
 
 let __publicKeyPem (spki: Blob) : String =
-    "-----BEGIN PUBLIC KEY-----\n" ++
-    Stdlib.X509.__pemLines (Stdlib.Base64.encode spki) 0L "" ++
+    "-----BEGIN PUBLIC KEY-----\n" +
+    Stdlib.X509.__pemLines (Stdlib.Base64.encode spki) 0L "" +
     "-----END PUBLIC KEY-----\n"
 
 let pemCertificatePublicKey (pemCertificate: String) : Stdlib.Result.Result<String, String> =

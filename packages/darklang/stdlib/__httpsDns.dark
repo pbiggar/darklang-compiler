@@ -36,7 +36,7 @@ let originName (host: String) (port: Int64) : Stdlib.Result.Result<String, Strin
   if port < 1L || port > 65535L then Error "Invalid HTTPS DNS port"
   else Stdlib.__DnsWire.query 0L host 1L |> Stdlib.Result.andThen (fun _question ->
     let canonical = Stdlib.String.toLowercase (if Stdlib.String.endsWith host "." then Stdlib.String.__byteSlice host 0L (Stdlib.String.__byteLength host - 1L) else host) in
-    let name = if port == 443L then canonical else "_" ++ Stdlib.Int64.toString port ++ "._https." ++ canonical in
+    let name = if port == 443L then canonical else "_" + Stdlib.Int64.toString port + "._https." + canonical in
     if Stdlib.String.__byteLength name > 253L then Error "HTTPS DNS question name too long" else Ok name)
 
 let __labels (labels: List<String>) (pieces: List<Blob>) : Stdlib.Result.Result<Blob, String> =

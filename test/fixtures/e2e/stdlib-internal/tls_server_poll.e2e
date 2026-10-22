@@ -2,11 +2,11 @@
 let identity () : Stdlib.TlsServerIdentity.Identity = Stdlib.TlsServerIdentity.Identity { certificates = [], key = Stdlib.__RsaPrivate.Key { modulus = Stdlib.Blob.empty, exponent = Stdlib.Blob.empty, privateExponent = Stdlib.Blob.empty } }
 let describe (state: Stdlib.__Tls13ServerPoll.State) : String =
   match state with
-  | Output output -> "output:" ++ Stdlib.Int64.toString output.offset
+  | Output output -> "output:" + Stdlib.Int64.toString output.offset
   | Input input -> match input with
-    | Hello hello -> "hello:" ++ Stdlib.Int64.toString (Stdlib.Blob.__byteLength hello.pending) ++ ":" ++ Stdlib.Int64.toString (Stdlib.Blob.__byteLength hello.handshake) ++ ":" ++ Stdlib.Int64.toString hello.records
-    | Finished finished -> "finished:" ++ Stdlib.Int64.toString (Stdlib.Blob.__byteLength finished.message) ++ ":" ++ Stdlib.Int64.toString finished.keys.sequence
-  | Ready ready -> "ready:" ++ Stdlib.Int64.toString (Stdlib.Blob.__byteLength ready.pending)
+    | Hello hello -> "hello:" + Stdlib.Int64.toString (Stdlib.Blob.__byteLength hello.pending) + ":" + Stdlib.Int64.toString (Stdlib.Blob.__byteLength hello.handshake) + ":" + Stdlib.Int64.toString hello.records
+    | Finished finished -> "finished:" + Stdlib.Int64.toString (Stdlib.Blob.__byteLength finished.message) + ":" + Stdlib.Int64.toString finished.keys.sequence
+  | Ready ready -> "ready:" + Stdlib.Int64.toString (Stdlib.Blob.__byteLength ready.pending)
 let initialRead (bytes: Stdlib.Option.Option<Blob>) : Stdlib.Result.Result<String, String> =
   Stdlib.__Tls13ServerPoll.step (identity ()) (Stdlib.__Tls13ServerPoll.initial ()) (fun _unit -> Ok bytes) (fun _bytes -> Builtin.crash "Unexpected write") |> Stdlib.Result.map describe
 initialRead None = Ok "hello:0:0:0" // leak_check

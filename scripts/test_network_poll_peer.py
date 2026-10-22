@@ -22,7 +22,7 @@ let run (tcpPort: Int64) (udpPort: Int64) : Stdlib.Result.Result<Unit, String> =
           Stdlib.__Network.Interest { watch = watch, readable = true, writable = false }] in
         Stdlib.__Network.waitSockets entries 5000L |> Stdlib.Result.mapError Stdlib.Int64.toString |> Stdlib.Result.andThen (fun events ->
           let ready = Stdlib.List.map events (fun event -> Stdlib.Int64.toString event.index) in
-          Stdlib.printLine ("READY " ++ Stdlib.String.join ready ",")
+          Stdlib.printLine ("READY " + Stdlib.String.join ready ",")
           if Stdlib.List.any events (fun event -> event.failed || event.closed || Stdlib.Bool.not event.readable) then Error "Invalid readiness"
           else if Stdlib.List.any events (fun event -> event.index == 1L) then
             Stdlib.__Datagram.receive udp 1000L |> Stdlib.Result.mapError Stdlib.Int64.toString |> Stdlib.Result.andThen (fun message ->
@@ -46,7 +46,7 @@ let run (tcpPort: Int64) (udpPort: Int64) : Stdlib.Result.Result<Unit, String> =
     result)
 match Stdlib.Cli.__Args.get 0 |> Stdlib.Result.mapError (fun _message -> ()) |> Stdlib.Result.andThen (fun text -> Stdlib.Int64.parse text |> Stdlib.Result.mapError (fun _error -> ())),
   Stdlib.Cli.__Args.get 1 |> Stdlib.Result.mapError (fun _message -> ()) |> Stdlib.Result.andThen (fun text -> Stdlib.Int64.parse text |> Stdlib.Result.mapError (fun _error -> ())) with
-| Ok tcpPort, Ok udpPort -> match run tcpPort udpPort with | Ok () -> Stdlib.printLine "DONE" | Error message -> Stdlib.printLine ("ERROR " ++ message)
+| Ok tcpPort, Ok udpPort -> match run tcpPort udpPort with | Ok () -> Stdlib.printLine "DONE" | Error message -> Stdlib.printLine ("ERROR " + message)
 | _, _ -> Stdlib.printLine "ERROR ports"
 '''
 

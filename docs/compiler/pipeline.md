@@ -350,8 +350,9 @@ representation changes are outside the current scope.
 - **Preserve loop inputs**: Put self-tail-call values on loop-header phi edges
 - **Literal lowering**: Keep string and float constants symbolic until needed
 
-`src/passes/mir/SSA_Construction.ml` remains available for MIR analysis and independent
-validation. The production pipeline does not run MIR SSA reconstruction.
+`src/passes/mir/MIRGraphAnalysis.ml` supplies control-flow and dominance analyses
+to optimization and verification. MIR is built directly in SSA form; there is
+no separate reconstruction pass.
 
 ---
 

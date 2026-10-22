@@ -29,7 +29,7 @@ Stdlib.Dict.setOverridingDuplicates (Dict { "a": 1L }) "a" 2L = Dict { "a": 2L }
 
 // Rejecting and overwriting paths are observably separate.
 Stdlib.Dict.set (Dict { "a": 1L }) "a" 2L = exit=1 stderr="Uncaught exception: Cannot add two dictionary entries with the same key \"a\"\n"
-let key = "d" ++ "ynamic" in Stdlib.Dict.set (Dict { "dynamic": 1L }) key 2L = exit=1 stderr="Uncaught exception: Cannot add two dictionary entries with the same key \"dynamic\"\n"
+let key = "d" + "ynamic" in Stdlib.Dict.set (Dict { "dynamic": 1L }) key 2L = exit=1 stderr="Uncaught exception: Cannot add two dictionary entries with the same key \"dynamic\"\n"
 Stdlib.Dict.fromList ([("a", 1L), ("b", 2L)]) = Some (Dict { "a": 1L, "b": 2L })
 Stdlib.Dict.fromList ([("a", 1L), ("a", 2L)]) = None
 Stdlib.Dict.fromListOverwritingDuplicates ([("a", 1L), ("b", 2L), ("a", 3L)]) = Dict { "a": 3L, "b": 2L }
@@ -39,7 +39,7 @@ Stdlib.Dict.keys (Dict { "c": 3L, "a": 1L, "b": 2L }) = ["a", "b", "c"]
 Stdlib.Dict.values (Dict { "c": 3L, "a": 1L, "b": 2L }) = [1L, 2L, 3L]
 Stdlib.Dict.toList (Dict { "c": 3L, "a": 1L, "b": 2L }) = [("a", 1L), ("b", 2L), ("c", 3L)]
 Stdlib.Dict.keys (Dict { "𐀀": 1L, "": 2L }) = ["𐀀", ""]
-Stdlib.Dict.map (Dict { "b": 2L, "a": 1L }) (fun key value -> key ++ Stdlib.Int64.toString value) = Dict { "a": "a1", "b": "b2" }
+Stdlib.Dict.map (Dict { "b": 2L, "a": 1L }) (fun key value -> key + Stdlib.Int64.toString value) = Dict { "a": "a1", "b": "b2" }
 Stdlib.Dict.filter (Dict { "b": 2L, "a": 1L }) (fun key value -> key == "b") = Dict { "b": 2L }
 Stdlib.Dict.filterMap (Dict { "b": 2L, "a": 1L }) (fun key value -> if key == "a" then Some (value + 10L) else None) = Dict { "a": 11L }
 let observed = Stdlib.Dict.iter (Dict { "b": 2L, "a": 1L }) (fun key value -> ()) in observed = ()

@@ -4,7 +4,9 @@
 
 module Darklang.Stdlib.Int16
 
-type ParseError = BadFormat | OutOfRange
+type ParseError =
+  | BadFormat
+  | OutOfRange
 
 // Stdlib.Int16 - Integer operations
 
@@ -93,10 +95,10 @@ let toString (n: Int16) : String =
     if n < 0s then
         if n < -9s then
             let quotient = n / 10s in
-            Stdlib.Int16.toString quotient ++ Stdlib.Int16.__digitToString (0s - (n - (quotient * 10s)))
-        else "-" ++ Stdlib.Int16.__digitToString (0s - n)
+            Stdlib.Int16.toString quotient + Stdlib.Int16.__digitToString (0s - (n - (quotient * 10s)))
+        else "-" + Stdlib.Int16.__digitToString (0s - n)
     else if n < 10s then Stdlib.Int16.__digitToString n
-    else Stdlib.Int16.toString (n / 10s) ++ Stdlib.Int16.__digitToString (n % 10s)
+    else Stdlib.Int16.toString (n / 10s) + Stdlib.Int16.__digitToString (n % 10s)
 
 // Sum all integers in a list
 let sum (list: List<Int16>) : Int16 =

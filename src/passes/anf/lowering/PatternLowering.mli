@@ -1,7 +1,6 @@
 (* PatternLowering.mli - Lower ordered match alternatives and typed pattern projections. *)
 val lowerMatch :
   LoweringCallbacks.expressionLowerer ->
-  LoweringCallbacks.atomLowerer ->
   LoweringCallbacks.boundAtomLowerer ->
   TypeRegistries.functionIdRegistry ->
   LoweringPrimitives.sumMetadata ->

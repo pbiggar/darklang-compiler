@@ -176,7 +176,7 @@ let tuple3_id<'t> (x: t) : t = x; let tuple = (1L, 2L, 3L) in let (a, b, c) = tu
 
 // Match scrutinee from explicit TypeApp preserves payload type (string equality)
 let gen_match_string<'t> (x: t) : t = x
-match gen_match_string<String> "hello" with | s -> if s == ("he" ++ "llo") then 1L else 0L = 1L
+match gen_match_string<String> "hello" with | s -> if s == ("he" + "llo") then 1L else 0L = 1L
 
 // =====================================================
 // Mutation #131: Generic Pattern Variable Type Substitution

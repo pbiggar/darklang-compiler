@@ -13,6 +13,8 @@ type issueCode =
   | PackageExpression
   | TestAssertion
   | TestMode
+  | ImplMethods
+  | UnwrapRequiresFunction
 
 module IssueCode : sig
   val toString : issueCode -> string

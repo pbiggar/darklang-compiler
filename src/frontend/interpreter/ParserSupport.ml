@@ -146,7 +146,6 @@ let infixOf = function
   | TStar -> Some (WT.InfixFnCall WT.ArithmeticMultiply)
   | TSlash -> Some (WT.InfixFnCall WT.ArithmeticDivide)
   | TPercent -> Some (WT.InfixFnCall WT.ArithmeticModulo)
-  | TPlusPlus -> Some (WT.InfixFnCall WT.StringConcat)
   | TEqEq -> Some (WT.InfixFnCall WT.ComparisonEquals)
   | TNeq -> Some (WT.InfixFnCall WT.ComparisonNotEquals)
   | TLt -> Some (WT.InfixFnCall WT.ComparisonLessThan)
@@ -180,9 +179,9 @@ let isIntLit = function
   | TLet | TVal | TIn | TIf | TElif | TThen | TElse | TType | TTrait | TImpl
   | TCons | TColon | TComma | TSemicolon | TDot | TLBrace | TRBrace | TBar | TOf
   | TMatch | TWith | TFun | TArrow | TUnderscore | TWhen | TLBracket | TRBracket
-  | TEquals | TEqEq | TNeq | TLt | TGt | TLte | TGte | TAnd | TOr | TNot | TPipe
-  | TDotDotDot | TPercent | TShl | TShr | TBitAnd | TBitXor | TBitNot | TAt
-  | TIdent _ | TEOF ->
+  | TEquals | TEqEq | TNeq | TLt | TGt | TLte | TGte | TAnd | TOr | TQuestion
+  | TNot | TPipe | TDotDotDot | TPercent | TShl | TShr | TBitAnd | TBitXor
+  | TBitNot | TAt | TIdent _ | TEOF ->
       false
 
 (*
@@ -250,7 +249,7 @@ let closesOrSeparates token =
 let isRecoveryBarrier token =
   closesOrSeparates token || List.mem token [ TLet; TType; TTrait; TImpl; TVal ]
 
-let maxDepth = 512
+let maxDepth = 200
 
 let tok state index =
   if index < state.tokenCount then state.toks.(index).token else TEOF

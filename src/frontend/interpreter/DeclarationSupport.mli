@@ -3,3 +3,6 @@ val parseParam : ParserSupport.parserState -> int -> WrittenTypes.fnParam * int
 
 val parseEffectRow :
   ParserSupport.parserState -> int -> WrittenTypes.identifier list option * int
+
+val parseParams :
+  ParserSupport.parserState -> int -> WrittenTypes.fnParam list * int

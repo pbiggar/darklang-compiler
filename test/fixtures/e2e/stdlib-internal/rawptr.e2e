@@ -2,7 +2,7 @@
 // These tests rely on internal runtime helpers.
 
 let __stringRefcount (s: String): Int64 = __raw_get<Int64> (__string_to_rawptr s) 0L
-let dynamicString (s: String): String = s ++ "b"
+let dynamicString (s: String): String = s + "b"
 
 // Raw float load should preserve float type through if-join
 let rawPtr = __raw_alloc 8L in let _ = __raw_slot_init<Float> rawPtr 0L 1.5 in let rawVal = __raw_get<Float> rawPtr 0L in let _ = __raw_free rawPtr in if true then rawVal else 2.5 = 1.5
@@ -26,7 +26,7 @@ let p = __raw_alloc 8L in let _ = __raw_slot_init<Float> p 0L 1.5 in let rawVal 
 let p = __raw_alloc 16L in let s = dynamicString "a" in let _ = __raw_slot_init<String> p 0L s in let count = __stringRefcount s in let field = __raw_take<String> p 0L in let _ = __raw_free p in count = stdout="2\n" // RawSlotInit<String> retains typed slot edge
 
 // Structured values expose RawPtr views without routing through Stdlib.Int64.
-let s = "a" ++ "b" in __raw_get<Int64> (__string_to_rawptr s) 8L = 2L
+let s = "a" + "b" in __raw_get<Int64> (__string_to_rawptr s) 8L = 2L
 let b = Stdlib.Blob.__createZeroed 3L in __raw_get<Int64> (__blob_to_rawptr b) 8L = 3L
 let p = __raw_alloc 24L in let _ = __raw_write_word p 0L 1L in let _ = __raw_write_word p 8L 1L in let _ = __raw_write_byte p 16L 90L in Stdlib.String.__byteAtUnchecked (__rawptr_to_string p) 0L = 90L
 let p = __raw_alloc 24L in let _ = __raw_write_word p 0L 1L in let _ = __raw_write_word p 8L 1L in let _ = __raw_write_byte p 16L 91L in Stdlib.Blob.__getByte (__rawptr_to_blob p) 0L = 91L

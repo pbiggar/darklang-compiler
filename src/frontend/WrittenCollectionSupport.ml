@@ -133,12 +133,32 @@ let dict checkExpression literal globals locals symbols expected entries =
                                value types")))
   in
   bind (entriesLoop symbols types [] entries) (fun (types, entries, symbols) ->
-      let key, value =
-        Option.value types ~default:(AST.TVar "dictKey", AST.TVar "dictValue")
+      let typ, symbols =
+        match types with
+        | Some (key, value) -> (AST.TDict (key, value), symbols)
+        | None ->
+            WrittenCheckingState.freshenType StringOrder.Set.empty
+              (AST.TDict (AST.TVar "dictKey", AST.TVar "dictValue"))
+              symbols
       in
-      literal expected symbols
-        (AST.TDict (key, value))
-        (C.DictLiteral (C.checkedType key, C.checkedType value, entries)))
+      match typ with
+      | AST.TDict (key, value) ->
+          let checkKey, symbols =
+            WrittenCheckingState.internFunction "__dict_check_key" symbols
+          in
+          let entries =
+            List.map
+              (fun (entryKey, entryValue) ->
+                ( C.TypeApp
+                    ( checkKey,
+                      [ C.checkedType key ],
+                      NonEmptyList.singleton entryKey ),
+                  entryValue ))
+              entries
+          in
+          literal expected symbols typ
+            (C.DictLiteral (C.checkedType key, C.checkedType value, entries))
+      | _ -> Crash.crash "Fresh dictionary type is not a dictionary")
 
 let matchExpression checkExpression literal globals locals symbols expected
     scrutinee cases =

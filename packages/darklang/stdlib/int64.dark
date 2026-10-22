@@ -4,7 +4,9 @@
 
 module Darklang.Stdlib.Int64
 
-type ParseError = BadFormat | OutOfRange
+type ParseError =
+  | BadFormat
+  | OutOfRange
 
 // Stdlib.Int64 - Integer operations
 
@@ -124,10 +126,11 @@ let parse (value: String) : Stdlib.Result.Result<Int64, Stdlib.Int64.ParseError>
         match Stdlib.Int.toInt64 parsed with
         | None -> Error Stdlib.Int64.ParseError.OutOfRange
         | Some result -> Ok result
-let fromFloat (value: Float) : Int64 =
-    if Stdlib.Float.isNaN value || value >= 9223372036854775808.0 || value < -9223372036854775808.0 then
-        Builtin.crash "Encountered out-of-range value for type of Int64"
-    else Stdlib.Float.__toInt64Unchecked value
+let fromFloat (a: Float) : Stdlib.Option.Option<Int64> =
+  if Float.isFinite a then
+    a |> Stdlib.Int.fromFloat |> Stdlib.Int.toInt64
+  else
+    Stdlib.Option.Option.None
 let fromInt8 (value: Int8) : Int64 = Stdlib.Int64.__fromIntUnchecked (Stdlib.Int.fromInt8 value)
 let fromUInt8 (value: UInt8) : Int64 = Stdlib.Int64.__fromIntUnchecked (Stdlib.Int.fromUInt8 value)
 let fromInt16 (value: Int16) : Int64 = Stdlib.Int64.__fromIntUnchecked (Stdlib.Int.fromInt16 value)
@@ -193,3 +196,9 @@ impl Stdlib.Zero for Int64 =
 
 impl Stdlib.One for Int64 =
   let one () : Int64 = 1L
+
+let fromFloatRounded (a: Float) : Stdlib.Option.Option<Int64> =
+  if Float.isFinite a then
+    a |> Float.round |> Stdlib.Int.toInt64
+  else
+    Stdlib.Option.Option.None

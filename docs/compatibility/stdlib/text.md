@@ -176,8 +176,8 @@ for generic addition specialized to String. For example, `"e" + "́"` returns
 Specialized additions resolve bottom-up during preparation, before ANF
 conversion. ANF flattens the resolved `StringConcat` tree without repeatedly
 inferring subtree types. Numeric addition keeps its existing implementation. Mixed operand types,
-Bool addition and Char addition are rejected during compilation; legacy `++`
-continues to accept its existing String/Char operands.
+Bool addition and Char addition are rejected during compilation. `++` is rejected
+by the parser; use `+` for Strings and explicitly convert Char operands.
 
 `test/fixtures/e2e/string-plus.e2e` covers literals, variables, function calls,
 pipelines, chained operands, inferred lambdas, explicit generic functions,

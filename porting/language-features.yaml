@@ -23,15 +23,13 @@ groups:
     Partial application of named functions: supported
     Partial application of function values: supported
     Generic partial application with explicit types: supported
-    Generic partial application using inference alone:
-      status: partial
-      notes: Some generic partial applications require explicit type arguments.
+    Generic partial application using inference alone: supported
     Recursive functions: supported
     Mutually recursive functions: supported
     Local recursion: supported
     Polymorphic recursion:
-      status: missing
-      notes: Recursive calls that change a generic function's type arguments are rejected.
+      status: partial
+      notes: Finite specialization supports concrete type resets and type-parameter permutations, including mutual calls and function values. Reachable constructor-growing type-flow cycles are rejected because native compilation would require infinitely many instances; the interpreter can execute terminating calls of this form.
     Too many call arguments: supported
     Call argument and return types: supported
   Builtin types:
@@ -252,6 +250,12 @@ groups:
       status: missing
       notes: Upstream await calls Builtin.runtimeForce; user function calls may pass pending arguments onward. The
         separate native async implementation is not merged into this baseline.
+  Early return:
+    Postfix unwrap propagation:
+      status: supported
+      notes: Option/Result propagation is checked ahead of time and lowered to lexical exit joins. Failures return
+        from the nearest function or lambda, including pipeline lambdas, while success and enclosing return payload
+        types may differ. Result error types must match; Builtin.unwrap retains its separate raising behavior.
   Reflection and dynamic execution:
     Runtime expression evaluation:
       status: missing

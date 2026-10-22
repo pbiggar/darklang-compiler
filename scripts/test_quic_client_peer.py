@@ -26,7 +26,7 @@ let run () : Unit =
     let peer = Stdlib.__Datagram.Endpoint { address = [127L,0L,0L,1L], port = port } in
     match Stdlib.__QuicClient.connect peer (if mode == "hostname" then "wrong.example.com" else "localhost")
       (if mode == "untrusted" then [] else [root]) 8000L with
-    | Error message -> Stdlib.printLine ("ERROR " ++ message)
+    | Error message -> Stdlib.printLine ("ERROR " + message)
     | Ok ready -> let _ = Stdlib.__QuicClient.close ready in Stdlib.printLine "AUTHENTICATED"
   | _ -> Stdlib.printLine "Bad arguments"
 run ()
