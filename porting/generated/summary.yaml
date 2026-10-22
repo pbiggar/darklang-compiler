@@ -2,9 +2,9 @@ upstream:
   repository: darklang/dark
   revision: e76430be5cd9f6b77ed255430dc34a1b58dd8fc4
 features:
-  supported: 195
+  supported: 196
   missing: 17
-  partial: 2
+  partial: 1
 parser:
   supported: 30
   partial: 1
