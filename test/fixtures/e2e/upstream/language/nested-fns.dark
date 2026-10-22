@@ -52,11 +52,13 @@
 // it's an error rather than silently picking one
 let sumDown (x: Int64) : Int64 = x + 100L
 
+// @compiler blocked: compiler-gap
 (let sumDown (n: Int64) : Int64 =
    if n <= 0L then 0L else n + (sumDown (n - 1L))
  sumDown 3L) = error="Nested function name `sumDown` (a function or value with this name already exists in scope) is not a valid name"
 
 // mutually recursive nested fns aren't supported - clear error, not "variable not found"
+// @compiler blocked: compiler-gap
 (let isEven (n: Int64) : Bool =
    if n == 0L then true else isOdd (n - 1L)
  let isOdd (n: Int64) : Bool =

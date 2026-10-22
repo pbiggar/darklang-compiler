@@ -1,0 +1,309 @@
+// TODO:
+//alias PT = LanguageTools.ProgramTypes
+//alias RT = Stdlib.RuntimeTypes
+
+module Darklang.PrettyPrinter
+
+
+// @compiler blocked: missing-implementation
+let indent (s: String) : String =
+  s
+  |> Stdlib.String.split "\n"
+  |> Stdlib.List.map (fun line ->
+    match line with
+    | "" -> ""
+    | line -> "  " + line)
+  |> Stdlib.String.join "\n"
+
+// @compiler blocked: missing-implementation
+let indentByLevel (level: Int) (s: String) : String =
+  let indentStr = Stdlib.String.repeat "  " level
+
+  s
+  |> Stdlib.String.split "\n"
+  |> Stdlib.List.map (fun line ->
+    match line with
+    | "" -> ""
+    | line -> indentStr + line)
+  |> Stdlib.String.join "\n"
+
+// @compiler blocked: missing-implementation
+let sign (s: LanguageTools.Sign) : String =
+  match s with
+  | Positive -> ""
+  | Negative -> "-"
+
+// One-hex-digit (0-15) to its source character.
+// @compiler blocked: missing-implementation
+let hexDigitChar (n: Int) : String =
+  Stdlib.String.slice "0123456789ABCDEF" n (n + 1)
+
+// Escape backslashes and ASCII controls within a grapheme, preserving the
+// remaining text. The caller handles quotes for string and char literals.
+// @compiler blocked: missing-implementation
+let encodeChar (c: Char) : String =
+  match Stdlib.Char.toAsciiCode c with
+  | None ->
+    // Multi-unit graphemes can contain a backslash plus combining marks, or
+    // CRLF. Escape those without dropping the rest of the grapheme. Escape
+    // backslashes first so the escapes added for CR and LF stay intact.
+    c
+    |> Stdlib.toString
+    |> Stdlib.String.replaceAll "\\" "\\\\"
+    |> Stdlib.String.replaceAll "\r" "\\r"
+    |> Stdlib.String.replaceAll "\n" "\\n"
+  | Some code ->
+    if code == 92 then "\\\\"
+    else if code == 7 then "\\a"
+    else if code == 8 then "\\b"
+    else if code == 9 then "\\t"
+    else if code == 10 then "\\n"
+    else if code == 11 then "\\v"
+    else if code == 12 then "\\f"
+    else if code == 13 then "\\r"
+    else if code < 32 || code == 127 then
+      let hi = code / 16
+      let lo = code % 16
+      $"\\x{hexDigitChar hi}{hexDigitChar lo}"
+    else
+      Stdlib.toString c
+
+// Encode special characters back to source-form. Symmetric with the parser's
+// `decodeStringContent`. Quote escapes are added per quote style — `"` for
+// string literals, `'` for char literals — so the common path skips them.
+// @compiler blocked: missing-implementation
+let escapeCommon (s: String) : String =
+  s
+  |> Stdlib.String.toList
+  |> Stdlib.List.map encodeChar
+  |> Stdlib.String.join ""
+
+/// Escape for `"..."` string literals: common specials plus the closing `"`.
+// @compiler blocked: missing-implementation
+let escapeSpecialCharacters (s: String) : String =
+  (escapeCommon s) |> Stdlib.String.replaceAll "\"" "\\\""
+
+/// Escape for `'...'` char literals: common specials plus the closing `'`.
+// @compiler blocked: missing-implementation
+let escapeCharLiteral (s: String) : String =
+  (escapeCommon s) |> Stdlib.String.replaceAll "'" "\\'"
+
+/// Format a record/dict field name for source output.
+/// Two reasons a field name needs backticks:
+///  - its shape: a bare identifier is a letter or `_` followed by letters,
+///    digits, `_`, or `'`; a hyphen, a leading digit, or an empty name breaks that.
+///  - it's a reserved word: keywords and `_` lex as their own tokens, so a field
+///    literally named `type` or `match` needs backticks even though its shape is fine.
+/// Current syntax has no escape inside double-backtick identifiers, so names
+/// containing a newline or closing backticks are not source-round-trippable.
+// @compiler blocked: missing-implementation
+let formatFieldName (name: String) : String =
+  let isStart (c: Char) : Bool = (Stdlib.Char.isASCIILetter c) || (c == '_')
+  let isCont (c: Char) : Bool =
+    (Stdlib.Char.isASCIILetter c)
+    || (Stdlib.Char.isDigit c)
+    || (c == '_')
+    || (c == '\'')
+  let hasBareShape =
+    match Stdlib.String.toList name with
+    | [] -> false
+    | first :: rest -> (isStart first) && (rest |> Stdlib.List.all isCont)
+
+  // Keep this list in sync with the lexer's `keyword` function
+  // (backend/src/LibParser/Lexer.fs). `def` is intentionally not reserved.
+  let reserved =
+    [ "let", "val", "in", "if", "elif", "then", "else", "type", "trait", "impl", "of"
+      "match", "with", "fun", "when", "true", "false", "_" ]
+  let isReserved =
+    reserved |> Stdlib.List.findFirst (fun k -> k == name) |> Stdlib.Option.isSome
+
+  // An empty name has no valid quoted form either -- `````` is four backticks, not an empty identifier --
+  // so quoting it adds noise without adding validity. Left as-is, like the other names this comment says
+  // aren't source-round-trippable.
+  if name == "" then
+    name
+  else if hasBareShape && (Stdlib.Bool.not isReserved) then
+    name
+  else
+    $"``{name}``"
+
+/// Print numeric field names without backticks for tuple access such as `t.1`.
+// @compiler blocked: missing-implementation
+let formatAccessedFieldName (name: String) : String =
+  let isDigits =
+    (Stdlib.Bool.not (Stdlib.String.isEmpty name))
+    && (name |> Stdlib.String.toList |> Stdlib.List.all Stdlib.Char.isDigit)
+  if isDigits then name else formatFieldName name
+
+/// The fraction of a float literal with its trailing zeros dropped (`1.50` -> `1.5`), by parsing and
+/// reprinting it. Only trusted when that comes back as a plain `0.xxx` decimal: `00001` reprints as
+/// `1e-5`, and cutting two characters off that gave `0.-5`.
+// @compiler blocked: missing-implementation
+let processRemainder (remainder: String) : String =
+  match $".{remainder}" |> Stdlib.Float.parse with
+  | Ok floatValue ->
+    let printed = Stdlib.toString floatValue
+    let isPlainDecimal =
+      printed
+      |> Stdlib.String.toList
+      |> Stdlib.List.all (fun c -> Stdlib.Char.isDigit c || (Stdlib.toString c) == ".")
+    if isPlainDecimal && (Stdlib.String.startsWith printed "0.") then
+      Stdlib.String.dropFirst printed 2
+    else
+      remainder
+  | Error _ ->
+    remainder
+
+/// Shorten a fully-qualified package name for display from inside `currentModule`.
+///
+/// The rule mirrors how names are actually resolved, which is the only rule that produces output the
+/// parser will accept back. `LibDB.NameLookup.namesToTry` tries the given name with progressively
+/// shorter prefixes of the current module glued on the front: from
+/// `Darklang.LanguageTools.ProgramTypes.PackageFn`, a bare `TypeReference` is tried as
+/// `…PackageFn.TypeReference`, then `…ProgramTypes.TypeReference` (a hit), then `Darklang.TypeReference`,
+/// then bare. So the shortest spelling that still resolves is the target's path with its longest common
+/// prefix with the current module removed, and that is what this returns.
+///
+/// Two rules on top, both of which exist because `namesToTry` has them:
+///  - `Option` and `Result` resolve unqualified from anywhere, so they are never qualified here.
+///  - A path starting `Stdlib` resolves with `Darklang` implied, so the owner comes off.
+///
+/// Caveat: a name is shortened, not verified. If the current module happened to contain something that
+/// captures the short spelling first, the resolver would pick that instead. Checking would mean walking
+/// every candidate against the package store for every name printed, which is far too expensive for a
+/// listing; the parser round-trip suite is what catches it.
+// @compiler blocked: missing-implementation
+let shortenName
+  (currentModule: List<String>)
+  (owner: String)
+  (modules: List<String>)
+  (name: String)
+  : String =
+  let fullPath = Stdlib.List.push modules owner
+
+  // `Option` / `Result` and nothing else: the resolver gives these an unconditional stdlib fallback.
+  let isAlwaysBare =
+    (fullPath == [ "Darklang", "Stdlib", "Option" ] && name == "Option")
+    || (fullPath == [ "Darklang", "Stdlib", "Result" ] && name == "Result")
+
+  if isAlwaysBare then
+    name
+  else
+    let shared =
+      Darklang.LanguageTools.PackageManager.countMatchingPrefix currentModule fullPath
+
+    let remaining = Stdlib.List.drop fullPath shared
+
+    // Nothing shared: the resolver implies `Darklang.` in front of `Stdlib.` and nothing else, so
+    // that is the one real owner that can come off -- `Darklang.LanguageTools.X` printed as
+    // `LanguageTools.X` resolves only when parsed back with owner Darklang. `Tests`, `CliScript`
+    // and `""` come off for a different reason: they are scaffolding the parser stamped on, not
+    // names anything can be reached by, so printing them tells the reader nothing.
+    let scaffoldingOwner = owner == "Tests" || owner == "CliScript" || owner == ""
+
+    let remaining =
+      match fullPath with
+      | "Darklang" :: "Stdlib" :: _ when shared == 0 -> Stdlib.List.drop fullPath 1
+      | _ when shared == 0 && scaffoldingOwner -> Stdlib.List.drop fullPath 1
+      | _ -> remaining
+
+    match remaining with
+    | [] -> name
+    | segments -> (Stdlib.String.join segments ".") + "." + name
+
+
+/// How to paint the pieces of a rendered value.
+///
+/// The printer knows what KIND each piece is; the caller decides how it looks. That keeps terminal
+/// escapes out of `PrettyPrinter`, which has no business knowing about `Cli.Colors`, and means the same
+/// value can be painted for a terminal, left plain for a pipe, or styled some other way entirely
+/// without the printer changing.
+// @compiler blocked: missing-implementation
+type Palette =
+  { string_: String
+    number: String
+    typeName: String
+    caseName: String
+    keyword: String
+    /// Emitted after every painted piece, so it has to end whatever the others start.
+    reset: String }
+
+module Palette =
+  /// No decoration at all. The default, because a printer's output is text until someone says otherwise.
+  // @compiler blocked: missing-implementation
+  val plain =
+    Palette
+      { string_ = ""
+        number = ""
+        typeName = ""
+        caseName = ""
+        keyword = ""
+        reset = "" }
+
+
+/// How to render something, threaded through the printers rather than read from anywhere.
+///
+/// No printer looks up the terminal, a config file, or a global. Everything that varies with where the
+/// output is going lives here and comes from the caller, so the same value can be printed for a 60-column
+/// pane, a piped stdout and a test with the only difference being the record passed in. That is also what
+/// makes the printers safely nestable: an inner call cannot disagree with its caller about the rules.
+// @compiler blocked: missing-implementation
+type DisplayOptions =
+  {
+    /// Columns available for the whole line, counted from column 0. A printer that starts partway
+    /// along a line accounts for that itself; this is the page width, not the room remaining.
+    width: Int
+
+    /// The module the reader is standing in, owner-first. Names are spelled relative to it.
+    currentModule: List<String>
+
+    /// Print type arguments on enum and record values (`Option<Int>.Some(1)`). Off is usually right for
+    /// a person reading a value, since the payload shows the type; on is useful when the type is the
+    /// question being asked.
+    showTypeArgs: Bool
+
+    /// How to paint each kind of piece. `Palette.plain` for none.
+    palette: Palette
+
+    /// Stop descending past this depth and print a marker instead. `None` means print it all. Traces and
+    /// error messages want a shallow cap; `eval` generally doesn't.
+    maxDepth: Stdlib.Option.Option<Int>
+  }
+
+module DisplayOptions =
+  /// The defaults every existing caller gets. 80 columns because that is what the printers assumed
+  /// before this record existed, not because it is a good width; callers that know better should say so.
+  // @compiler blocked: missing-implementation
+  val default =
+    DisplayOptions
+      { width = 80
+        currentModule = []
+        showTypeArgs = true
+        // Written out rather than `Palette.plain`, which is the same value one line up. A package
+        // `val` whose body references another `val` evaluates that reference to Unit under the test
+        // harness -- the field is present and correctly typed, and reading it still yields Unit. Every
+        // other field here is a literal, which is why this was the only one affected.
+        palette =
+          Palette
+            { string_ = ""
+              number = ""
+              typeName = ""
+              caseName = ""
+              keyword = ""
+              reset = "" }
+        maxDepth = Stdlib.Option.Option.None }
+
+  /// The defaults, printed from inside `path`.
+  // @compiler blocked: missing-implementation
+  let inModule (path: List<String>) : DisplayOptions =
+    { DisplayOptions.default with currentModule = path }
+
+  /// The defaults, painted with `p`.
+  // @compiler blocked: missing-implementation
+  let painted (p: Palette) : DisplayOptions =
+    { DisplayOptions.default with palette = p }
+
+  /// The defaults at a given width.
+  // @compiler blocked: missing-implementation
+  let atWidth (width: Int) : DisplayOptions =
+    { DisplayOptions.default with width = width }

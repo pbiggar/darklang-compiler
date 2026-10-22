@@ -1,0 +1,271 @@
+/// Width-aware layout, in the Wadler/Leijen tradition.
+///
+/// A `Doc` is not text; it is a description of the ways some text *could* be laid out. Nothing decides
+/// between them until `render`, which is given a width and picks. That is the whole point: a printer
+/// that returns a `String` has already committed, so its caller can't lay it out against the room that
+/// actually turned out to be available. A printer that returns a `Doc` leaves the choice where the
+/// information is.
+///
+/// The two combinators that matter are `nest`, which says "indent the inside of this if it breaks", and
+/// `group`, which says "put this on one line if it fits, otherwise break every soft line in it". Groups
+/// nest, and each decides independently, so a long outer structure can break while a short inner one
+/// stays flat.
+module Darklang.Stdlib.Pretty
+
+/// A document: text plus the places it may be broken.
+// @compiler blocked: compiler-contract
+type Doc =
+  /// Renders to nothing.
+  | Empty
+
+  /// Literal text. Never broken, so it can exceed the width if a single token is wider than the page.
+  | Text of String
+
+  /// A soft break: a space when the enclosing group fits on one line, a newline plus the current
+  /// indentation when it doesn't.
+  | Line
+
+  /// A break that is always a newline, and which forces every enclosing group to break.
+  | HardLine
+
+  /// A break that is nothing at all when the enclosing group fits, and a newline plus indentation when
+  /// it doesn't. The difference from `Line` is what separates `[1, 2]` from `[ 1, 2 ]`: use this where a
+  /// delimiter shouldn't gain a space just because everything fit.
+  | SoftLine
+
+  /// Two documents, one after the other, with nothing between them.
+  | Concat of Doc * Doc
+
+  /// Indent everything inside by `n` columns, applied after each break rather than once at the front.
+  | Nest of Int * Doc
+
+  /// Try to fit the inside on one line.
+  | Group of Doc
+
+  /// Text with something wrapped around it that occupies no columns -- a terminal escape, typically.
+  /// Only the middle is measured, which is the entire point: decoration must not change where a
+  /// document breaks, and it silently would if the escapes were part of a `Text`.
+  | Styled of opening: String * text: String * closing: String
+
+  /// Text held back until the line ends: it is emitted just before the next newline (or at the
+  /// end), after whatever else is laid out on that line. Zero columns wide, so it never changes
+  /// where anything breaks. A trailing `// comment` needs this, or a `)` or `,` printed after it
+  /// on the same line would land inside the comment.
+  | LineSuffix of String
+
+
+/// Whether we are currently rendering a group flat or broken.
+// @compiler replace: packages/darklang/stdlib/pretty.dark#Darklang.Stdlib.Pretty.Mode reason=compiler-implementation
+type Mode =
+  | Flat
+  | Break
+
+
+// @compiler replace: packages/darklang/stdlib/pretty.dark#Darklang.Stdlib.Pretty.empty reason=compiler-implementation
+val empty = Doc.Empty
+
+// @compiler replace: packages/darklang/stdlib/pretty.dark#Darklang.Stdlib.Pretty.line reason=compiler-implementation
+val line = Doc.Line
+
+// @compiler replace: packages/darklang/stdlib/pretty.dark#Darklang.Stdlib.Pretty.hardLine reason=compiler-implementation
+val hardLine = Doc.HardLine
+
+// @compiler replace: packages/darklang/stdlib/pretty.dark#Darklang.Stdlib.Pretty.softLine reason=compiler-implementation
+val softLine = Doc.SoftLine
+
+// @compiler replace: packages/darklang/stdlib/pretty.dark#Darklang.Stdlib.Pretty.text reason=compiler-implementation
+let text (s: String) : Doc = Doc.Text s
+
+/// `text`, wrapped in zero-width decoration. `opening`/`closing` are emitted but never measured.
+// @compiler replace: packages/darklang/stdlib/pretty.dark#Darklang.Stdlib.Pretty.styled reason=compiler-implementation
+let styled (opening: String) (t: String) (closing: String) : Doc = Doc.Styled(opening, t, closing)
+
+/// See `Doc.LineSuffix`.
+// @compiler blocked: missing-implementation
+let lineSuffix (s: String) : Doc = Doc.LineSuffix s
+
+// @compiler replace: packages/darklang/stdlib/pretty.dark#Darklang.Stdlib.Pretty.concat reason=compiler-implementation
+let concat (a: Doc) (b: Doc) : Doc = Doc.Concat(a, b)
+
+// @compiler replace: packages/darklang/stdlib/pretty.dark#Darklang.Stdlib.Pretty.concatAll reason=compiler-implementation
+let concatAll (ds: List<Doc>) : Doc =
+  Stdlib.List.fold ds Doc.Empty (fun acc d -> Doc.Concat(acc, d))
+
+// @compiler replace: packages/darklang/stdlib/pretty.dark#Darklang.Stdlib.Pretty.concatSpace reason=compiler-implementation
+let concatSpace (a: Doc) (b: Doc) : Doc = Doc.Concat(a, Doc.Concat(Doc.Text " ", b))
+
+// @compiler replace: packages/darklang/stdlib/pretty.dark#Darklang.Stdlib.Pretty.concatLine reason=compiler-implementation
+let concatLine (a: Doc) (b: Doc) : Doc = Doc.Concat(a, Doc.Concat(Doc.Line, b))
+
+// @compiler replace: packages/darklang/stdlib/pretty.dark#Darklang.Stdlib.Pretty.nest reason=compiler-implementation
+let nest (n: Int) (d: Doc) : Doc = Doc.Nest(n, d)
+
+// @compiler replace: packages/darklang/stdlib/pretty.dark#Darklang.Stdlib.Pretty.group reason=compiler-implementation
+let group (d: Doc) : Doc = Doc.Group d
+
+
+/// Join with spaces.
+// @compiler replace: packages/darklang/stdlib/pretty.dark#Darklang.Stdlib.Pretty.hsep reason=compiler-implementation
+let hsep (ds: List<Doc>) : Doc =
+  match ds with
+  | [] -> Doc.Empty
+  | first :: rest -> Stdlib.List.fold rest first (fun acc d -> Pretty.concatSpace acc d)
+
+/// Join with soft breaks: one line if the group fits, one per item if it doesn't.
+// @compiler replace: packages/darklang/stdlib/pretty.dark#Darklang.Stdlib.Pretty.vsep reason=compiler-implementation
+let vsep (ds: List<Doc>) : Doc =
+  match ds with
+  | [] -> Doc.Empty
+  | first :: rest -> Stdlib.List.fold rest first (fun acc d -> Pretty.concatLine acc d)
+
+/// Hang `items` from `head`, breaking and indenting them when needed.
+// @compiler replace: packages/darklang/stdlib/pretty.dark#Darklang.Stdlib.Pretty.hang reason=compiler-implementation
+let hang (indent: Int) (head: Doc) (items: List<Doc>) : Doc =
+  Doc.Group(
+    Doc.Concat(
+      head,
+      Doc.Nest(
+        indent,
+        Pretty.concatAll (items |> Stdlib.List.map (fun d -> Doc.Concat(Doc.Line, d))))))
+
+
+/// Join with `sep` between items.
+///
+/// Subject first, so it pipes: `docs |> Pretty.join sep`.
+// @compiler replace: packages/darklang/stdlib/pretty.dark#Darklang.Stdlib.Pretty.join reason=compiler-implementation
+let join (ds: List<Doc>) (sep: Doc) : Doc =
+  match ds with
+  | [] -> Doc.Empty
+  | first :: rest ->
+    Stdlib.List.fold rest first (fun acc d ->
+      Doc.Concat(acc, Doc.Concat(sep, d)))
+
+
+/// Would the rest of this line fit in `room` columns?
+///
+/// Walks the pending work until it reaches a break that ends the line (at which point everything so far
+/// fits) or runs out of room. `HardLine` answers no, which is what makes a group containing one always
+/// break. The pending items after the group are included, so a group isn't kept flat only to have the
+/// text that follows it overflow anyway.
+// @compiler replace: packages/darklang/stdlib/pretty.dark#Darklang.Stdlib.Pretty.fits reason=compiler-implementation
+let fits (room: Int) (items: List<(Int * Mode * Doc)>) : Bool =
+  if room < 0 then
+    false
+  else
+    match items with
+    | [] -> true
+    | (i, m, d) :: rest ->
+      match d with
+      | Empty -> Pretty.fits room rest
+      | Text s -> Pretty.fits (room - (Stdlib.String.displayWidth s)) rest
+      | Styled(_, t, _) -> Pretty.fits (room - (Stdlib.String.displayWidth t)) rest
+      | LineSuffix _ -> Pretty.fits room rest
+
+      // Inside the group being tested (Flat) a hard line means it cannot be one line, so it doesn't
+      // fit. After the group (Break) it simply ends the line, so everything measured so far does fit.
+      // Answering `false` in both cases made every group followed by a hard line break -- which is
+      // every match arm, since the arms are hard-lined apart.
+      | HardLine ->
+        match m with
+        | Flat -> false
+        | Break -> true
+      | Line ->
+        match m with
+        | Flat -> Pretty.fits (room - 1) rest
+        | Break -> true
+      | SoftLine ->
+        match m with
+        | Flat -> Pretty.fits room rest
+        | Break -> true
+      | Concat(a, b) ->
+        Pretty.fits room (Stdlib.List.push (Stdlib.List.push rest ((i, m, b))) ((i, m, a)))
+      | Nest(j, x) -> Pretty.fits room (Stdlib.List.push rest ((i + j, m, x)))
+      | Group x -> Pretty.fits room (Stdlib.List.push rest ((i, m, x)))
+
+
+/// The output with the held-back line suffixes emitted, for where a line ends.
+// @compiler blocked: missing-implementation
+let flushSuffixes (acc: List<String>) (pending: List<String>) : List<String> =
+  match pending with
+  | [] -> acc
+  | _ -> Stdlib.List.fold pending acc (fun a s -> Stdlib.List.push a s)
+
+/// End the line: the held-back suffixes, the newline, then the next line's indentation.
+// @compiler blocked: missing-implementation
+let breakLine (acc: List<String>) (pending: List<String>) (indent: Int) : List<String> =
+  Stdlib.List.push
+    (Stdlib.List.push (Pretty.flushSuffixes acc pending) "\n")
+    (Stdlib.String.repeat " " indent)
+
+
+/// The rendering loop: walk the pending work, emitting text and deciding each group as it is reached.
+///
+/// `acc` is the output so far as a reversed list of chunks; `render` joins it once at the end.
+/// Appending to a string per node would copy the whole output each time, quadratic in its length.
+/// `pending` is the line suffixes waiting for the line to end, in order.
+// @compiler blocked: compiler-contract
+let renderLoop
+  (width: Int)
+  (col: Int)
+  (acc: List<String>)
+  (pending: List<String>)
+  (items: List<(Int * Mode * Doc)>)
+  : List<String> =
+  match items with
+  | [] -> Pretty.flushSuffixes acc pending
+  | (i, m, d) :: rest ->
+    match d with
+    | Empty -> Pretty.renderLoop width col acc pending rest
+
+    | LineSuffix s -> Pretty.renderLoop width col acc (Stdlib.List.pushBack pending s) rest
+
+    | Text s ->
+      Pretty.renderLoop width (col + (Stdlib.String.displayWidth s)) (Stdlib.List.push acc s) pending rest
+
+    | Styled(opening, t, closing) ->
+      Pretty.renderLoop
+        width
+        (col + (Stdlib.String.displayWidth t))
+        (Stdlib.List.push (Stdlib.List.push (Stdlib.List.push acc opening) t) closing)
+        pending
+        rest
+
+    | HardLine -> Pretty.renderLoop width i (Pretty.breakLine acc pending i) [] rest
+
+    | Line ->
+      match m with
+      | Flat -> Pretty.renderLoop width (col + 1) (Stdlib.List.push acc " ") pending rest
+      | Break -> Pretty.renderLoop width i (Pretty.breakLine acc pending i) [] rest
+
+    | SoftLine ->
+      match m with
+      | Flat -> Pretty.renderLoop width col acc pending rest
+      | Break -> Pretty.renderLoop width i (Pretty.breakLine acc pending i) [] rest
+
+    | Concat(a, b) ->
+      Pretty.renderLoop
+        width
+        col
+        acc
+        pending
+        (Stdlib.List.push (Stdlib.List.push rest ((i, m, b))) ((i, m, a)))
+
+    | Nest(j, x) ->
+      Pretty.renderLoop width col acc pending (Stdlib.List.push rest ((i + j, m, x)))
+
+    | Group x ->
+      // The one decision this whole module exists to make.
+      let flat = Stdlib.List.push rest ((i, Mode.Flat, x))
+
+      if Pretty.fits (width - col) flat then
+        Pretty.renderLoop width col acc pending flat
+      else
+        Pretty.renderLoop width col acc pending (Stdlib.List.push rest ((i, Mode.Break, x)))
+
+
+/// Lay out `doc` for a page `width` columns wide.
+// @compiler replace: packages/darklang/stdlib/pretty.dark#Darklang.Stdlib.Pretty.render reason=compiler-implementation
+let render (width: Int) (doc: Doc) : String =
+  Pretty.renderLoop width 0 [] [] [ ((0, Mode.Break, doc)) ]
+  |> Stdlib.List.reverse
+  |> Stdlib.String.join ""

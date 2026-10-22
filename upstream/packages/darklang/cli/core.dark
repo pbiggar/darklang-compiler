@@ -1,0 +1,298 @@
+/// The CLI's core: the page/state model, startup, and the pieces every other file leans on.
+///
+/// This module is split across files (Dark merges same-named modules):
+///   core.dark        the model, startup, and error/view helpers
+///   registry.dark    the command table and completion
+///   loop.dark        key handling, the prompt region, and the interactive loop
+///   entry.dark       argument parsing and the process entry point
+module Darklang.Cli
+
+// @compiler blocked: missing-implementation
+type SubAppAction =
+  | Continue
+  | Save
+  | Exit
+  /// Hand off to another command (e.g. a browser launching a foreground app), replacing this page.
+  | LaunchCommand of String
+  /// Drop to the classic prompt, pushing this page so `quit` there returns here instead of leaving the CLI.
+  | LaunchPrompt
+
+// @compiler blocked: missing-implementation
+type SubApp =
+  { onKey: Stdlib.Cli.Stdin.Key.Key -> Stdlib.Cli.Stdin.Modifiers.Modifiers -> Stdlib.Option.Option<String> -> (SubAppAction * SubApp)
+    onDisplay: Unit -> Unit
+    /// Persist, and return the app as it stands afterwards.
+    ///
+    /// Returns a `SubApp` rather than `Unit` because saving can fail (a full disk, a read-only home) and
+    /// the only place that can say so is the app itself, on the frame after the write.
+    onSave: Unit -> SubApp
+    /// Restore the app's terminal surface when the CLI exits on Ctrl-C,
+    /// bypassing the app's own exit action. Safe when already stopped.
+    onTerminate: Unit -> Unit
+    /// Re-take the terminal after another page owned it (see `pageStack`).
+    ///
+    /// The returned SubApp must hold a freshly started terminal session: the retained one is stale, because
+    /// whatever ran on top tore the surface down when it stopped. Diffing against that stale view would
+    /// paint garbage, so resuming repaints from scratch.
+    onResume: Unit -> SubApp
+    /// The package store changed under the page (an edit from another process, a pull). The page
+    /// re-reads what it shows, or ignores it, and presents.
+    onStoreChanged: Stdlib.Live.Change -> SubApp }
+
+// @compiler blocked: missing-implementation
+type Page =
+  | MainPrompt
+  | InteractiveNav of Packages.NavInteractive.Session
+  | CompletionPicker of CompletionPicker.Session
+  | SubApp of SubApp
+
+// @compiler blocked: missing-implementation
+type AppState =
+  { isExiting: Bool
+    prompt: Prompt.State
+    packageData: Packages.State
+    currentPage: Page
+    /// Pages to return to, innermost first. A SubApp that launches another page (e.g. the workbench opening a
+    /// foreground app) pushes itself here; when the launched page exits, we pop back instead of quitting.
+    pageStack: List<Page>
+    /// The branch this session is on, `SCM.Branch.mainBranchId` for main. A NAME is what you type; the
+    /// entry point resolves it once.
+    currentBranchId: Uuid
+    accountID: Stdlib.Option.Option<Uuid>
+    /// Retained presentation state while the main prompt owns an inline region.
+    promptTerminal: Stdlib.Option.Option<Stdlib.Cli.Tui.TerminalSession.State>
+    /// True when invoked from the command line (not the interactive REPL)
+    nonInteractive: Bool
+    /// Cached completion hint — skip recompute when prompt text unchanged
+    cachedHintInput: String
+    cachedHintValue: String
+    /// Completion results for the current *context* (command + completed args), which is what an expensive
+    /// completion actually depends on. Keyed by `Registry.completionContextKey`, so it survives every
+    /// keystroke of the word being typed rather than being thrown away on each character.
+    cachedCompletionKey: String
+    cachedCompletionItems: List<Completion.CompletionItem>
+    /// The last partial token filtered and what it produced, so the next keystroke can narrow from it
+    /// instead of re-filtering the whole context list. Empty partial means "no usable base".
+    cachedFilterPartial: String
+    cachedFilterItems: List<Completion.CompletionItem>
+    /// Cached command list and option strings — built once at startup
+    allCommandsCache: List<Registry.CommandHandler>
+    commandOptionsCache: List<String>
+    /// When true, write telemetry to rundir/logs/telemetry.jsonl
+    telemetryEnabled: Bool
+    /// What the process exits with in non-interactive use. 0 unless a command sets it: an unknown
+    /// command, a failed `eval`, and the `--json` failure paths do, so scripts and agents can
+    /// branch on the exit rather than parse prose. (Most commands still report failure in prose
+    /// only; they set this as they are touched.)
+    exitCode: Int }
+
+/// What the prompt shows to your left: where you are in the package tree, and WHICH BRANCH, when you're on
+/// one.
+///
+/// The branch belongs in the prompt rather than in a status bar. The bar this replaced was positioned
+/// absolutely at the bottom of the terminal, which the frame-based renderer has no place for -- it owns the
+/// screen and composes views out of rows. The prompt is a row, it's already showing you context, and both
+/// the styled output and the cursor math derive from this one string, so the cursor stays correct for free.
+///
+/// Only when you're on a branch. Everyone is on main almost all the time, and a prompt that says so every
+/// line is noise you learn to stop reading.
+// @compiler blocked: missing-implementation
+let locationStr (state: AppState) : String =
+  let where = Packages.formatLocation state.packageData.currentLocation
+
+  match state.currentBranchId with
+  | id when SCM.Branch.isMain id -> where
+  | id -> $"{where} @{SCM.PackageOps.branchName id}"
+
+/// Refuse a dash-led argument where a name belongs.
+///
+/// A leading dash means someone mistyped a flag; it is never a name anyone meant
+/// to use. Taken as one it creates a branch called `--frce` that then has to be
+/// found and archived.
+// @compiler blocked: missing-implementation
+let refuseDashLedName (kind: String) (name: String) : Bool =
+  if Stdlib.String.startsWith name "-" then
+    printErr $"\"{name}\" starts with a dash, so it's a flag rather than a {kind} name."
+
+    true
+  else
+    false
+
+
+// One colored line each: the shared voice of the SCM-era commands' output.
+//
+// Which stream: would someone piping this command into another program want the line? An error or a
+// hint never is, so those go to stderr.
+// @compiler blocked: missing-implementation
+let printOk (msg: String) : Unit = Stdlib.printLine (Stdlib.Cli.UI.Colors.success msg)
+// @compiler blocked: missing-implementation
+let printErr (msg: String) : Unit = Stdlib.printErrorLine (Stdlib.Cli.UI.Colors.error msg)
+// @compiler blocked: missing-implementation
+let printHint (msg: String) : Unit = Stdlib.printErrorLine (Stdlib.Cli.UI.Colors.hint msg)
+
+/// A line of the ANSWER in hint colour. Not `printHint`, which would take it off stdout.
+// @compiler blocked: missing-implementation
+let printQuiet (msg: String) : Unit = Stdlib.printLine (Stdlib.Cli.UI.Colors.hint msg)
+
+module Stderr =
+  // @compiler blocked: missing-implementation
+  let line (msg: String) : Unit = Stdlib.printErrorLine msg
+  // @compiler blocked: missing-implementation
+  let ok (msg: String) : Unit = Stdlib.printErrorLine (Stdlib.Cli.UI.Colors.success msg)
+  // @compiler blocked: missing-implementation
+  let hint (msg: String) : Unit = Stdlib.printErrorLine (Stdlib.Cli.UI.Colors.hint msg)
+
+/// The state a command hands back, given whether it did what it was asked.
+///
+/// A refusal that prints a reason and then reports success is invisible to everything that is
+/// not a person reading the screen: a shell `&&`, a CI step, an agent. The exit code is the only
+/// part of a failure those can read, so a command that printed a reason says so here.
+///
+/// An empty ANSWER is not a refusal: a command asked a question and told the truth about it
+/// succeeded, however little there was to say.
+// @compiler blocked: missing-implementation
+let exitWith (state: AppState) (ok: Bool) : AppState =
+  if ok then state else { state with exitCode = 1 }
+
+
+/// First 8 hex chars of a hash, for human-readable display.
+// @compiler blocked: missing-implementation
+let shortHash (h: LanguageTools.ProgramTypes.Hash) : String =
+  LanguageTools.ProgramTypes.hashToString h |> Stdlib.String.slice 0 8
+
+
+/// Escape a string for a hand-assembled JSON body. Backslash first, or it would
+/// re-escape the ones the quote pass just wrote.
+// @compiler blocked: missing-implementation
+let jsonEscape (x: String) : String =
+  x
+  |> Stdlib.String.replaceAll "\\" "\\\\"
+  |> Stdlib.String.replaceAll "\"" "\\\""
+
+/// A JSON string literal: escaped and wrapped in quotes.
+// @compiler blocked: missing-implementation
+let jsonStr (s: String) : String =
+  let escaped = jsonEscape s
+  $"\"{escaped}\""
+
+
+/// Takes the command list rather than calling `Registry.allCommands ()` itself: `initState` needs both the
+/// list and the options, and building the list is 60 records of 6 fields including 3 fn refs each. Calling it
+/// twice per process start was pure duplicate work, on every invocation including `dark version`.
+// @compiler blocked: missing-implementation
+let commandOptions (commands: List<Registry.CommandHandler>) : List<String> =
+  let allNames = Stdlib.List.map commands (fun cmd -> cmd.name)
+  let allAliases = Stdlib.List.fold commands [] (fun acc cmd -> Stdlib.List.append acc cmd.aliases)
+  Stdlib.List.append allNames allAliases
+
+/// The branch this run starts on, `SCM.Branch.mainBranchId` for main.
+///
+/// The three-tier resolution (`--branch` for this command, `DARK_BRANCH` for this shell, the
+/// `current_branch` config for this machine) happens in the CLI entry point before any Dark runs, so all
+/// that is left here is to read the answer.
+///
+/// Two readers of that answer, and they are not interchangeable. `AppState.currentBranchId` is the
+/// REPL's: one long-lived process where `switch` moves you mid-session, so the state has to move with it
+/// and a command that renders (`status`, `commit`, the workbench) reads it from there.
+/// `SCM.PackageOps.currentBranch ()` is the process's, and it is what the verbs that MUTATE the store use
+/// -- `branch`, `merge`, `discard`, `push` -- because the ops they author route by the process overlay,
+/// and a state that had drifted from it would report one branch while writing to another.
+// @compiler blocked: missing-implementation
+let resolveStartingBranch () : Uuid = SCM.PackageOps.currentBranch ()
+
+
+// @compiler blocked: missing-implementation
+let initState () : AppState =
+  // No accounts: approval scoping is the only thing that still takes one, and it takes None.
+  let accountID = Stdlib.Option.Option.None
+  let branchId = resolveStartingBranch ()
+  let commands = Registry.allCommands ()
+  AppState
+    { isExiting = false
+      prompt = Prompt.initState ()
+      packageData = Packages.initState ()
+      currentPage = Page.MainPrompt
+      pageStack = []
+      currentBranchId = branchId
+      accountID = accountID
+      promptTerminal = Stdlib.Option.Option.None
+      nonInteractive = false
+      cachedHintInput = ""
+      cachedHintValue = ""
+      cachedCompletionKey = ""
+      cachedCompletionItems = []
+      cachedFilterPartial = ""
+      cachedFilterItems = []
+      allCommandsCache = commands
+      commandOptionsCache = commandOptions commands
+      telemetryEnabled = (Stdlib.Env.get "DARK_TELEMETRY") == Stdlib.Option.Option.Some "1"
+      exitCode = 0 }
+
+// @compiler blocked: missing-implementation
+type Msg =
+  | ProcessInput of String
+  | KeyPressed of key: Stdlib.Cli.Stdin.Key.Key * modifiers: Stdlib.Cli.Stdin.Modifiers.Modifiers * keyChar: Stdlib.Option.Option<String>
+  | Exit
+
+
+module ExecutionError =
+  /// Host-side exception that escaped the normal error path. `metadata` is
+  /// a string map; the F# host pre-stringifies values since `Exception.toMetadata`
+  /// only ever produces strings.
+  // @compiler blocked: missing-implementation
+  type Unhandled =
+    { message: String
+      metadata: List<(String * String)> }
+
+  /// A run that ended on a permission denial by the instance policy: the
+  /// error as the guest saw it, what was attempted, and the exact
+  /// `permissions allow` rule that would cover it when one exists.
+  // @compiler blocked: missing-implementation
+  type PermissionDenied =
+    { error: LanguageTools.RuntimeTypes.RuntimeError.Error
+      resource: String
+      rule: Stdlib.Option.Option<String>
+      /// The rendered call stack, printed when the denial stands.
+      callStack: String }
+
+  /// Boundary type for CLI command failures. Each variant carries its own
+  /// structured payload — no flattening to strings at the boundary.
+  // @compiler blocked: missing-implementation
+  type ExecutionError =
+    | Parse of LanguageTools.Parser.CliScript.ParseError
+    | TypeCheck of LanguageTools.AtRestTypeChecker.Report
+    | Runtime of LanguageTools.RuntimeTypes.RuntimeError.Error
+    | Denied of PermissionDenied
+    | Unhandled of Unhandled
+
+  // @compiler blocked: missing-implementation
+  let toString (branchId: Uuid) (err: ExecutionError) : String =
+    match err with
+    | Parse pe -> LanguageTools.Parser.CliScript.ParseError.toString pe
+    | TypeCheck report -> Packages.AtRestCheck.scriptReport branchId report
+    | Runtime rte ->
+      PrettyPrinter.RuntimeTypes.RuntimeError.toString branchId rte
+    | Denied denied ->
+      PrettyPrinter.RuntimeTypes.RuntimeError.toString branchId denied.error
+    | Unhandled u ->
+      match u.metadata with
+      | [] -> $"Internal error: {u.message}"
+      | _ ->
+        let lines =
+          u.metadata
+          |> Stdlib.List.map (fun (k, v) -> $"  {k}: {v}")
+          |> Stdlib.String.join "\n"
+        $"Internal error: {u.message}\n{lines}"
+
+
+module View =
+  // @compiler blocked: missing-implementation
+  let formatError (message: String) : String =
+    Stdlib.Cli.UI.Colors.error ("Error: " + message)
+
+  // @compiler blocked: missing-implementation
+  let formatSuccess (message: String) : String =
+    Stdlib.Cli.UI.Colors.success message
+
+  // @compiler blocked: missing-implementation
+  let formatWelcome () : String = Registry.getCompactCommandList ()

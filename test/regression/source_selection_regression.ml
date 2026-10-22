@@ -45,6 +45,25 @@ let decode (input: Int64) : Int64 = __increment input
 |}
 
 let () =
+  let ordered =
+    require
+      (Selection.select ~context:SourceContracts.emptyContext
+         ~roots:[ "order-upstream.dark" ] ~supplements:[ "order-compiler.dark" ]
+         ~sources:
+           [
+             ( "order-upstream.dark",
+               source
+                 "module Ready\n\
+                  // @compiler replace: order-compiler.dark#read \
+                  reason=interpreter-intrinsic\n\
+                  let read () : Int64 = Missing.intrinsic ()" );
+             ( "order-compiler.dark",
+               source
+                 "module Ready\n\
+                  val constant = 42L\n\
+                  let read () : Int64 = constant" );
+           ])
+  in
   let supplemented =
     require
       (Selection.select ~context:SourceContracts.emptyContext
@@ -68,7 +87,9 @@ let () =
   let selected = require (select original replacement) in
   error "runtime-reflection" (Selection.require selected "Example.reflect");
   require (Selection.require selected "Example.decode");
-  let units = List.map snd selected.Selection.units in
+  let units =
+    List.map snd selected.Selection.units @ List.map snd ordered.Selection.units
+  in
   ignore (require (WrittenChecking.checkSourceUnits true false units));
   let generic body =
     "module Example\n\
@@ -148,8 +169,8 @@ let () =
   let entry =
     require
       (WrittenParsing.parse Validation.Script
-         "if Example.decode 5L == 7L then 42L else Builtin.crash \"Wrong \
-          replacement\"")
+         "if Example.decode 5L == 7L && Ready.read () == 42L then 42L else \
+          Builtin.crash \"Wrong replacement\"")
   in
   let entryTree = Validation.ValidatedSourceFile.toWrittenTypes entry in
   let trees =

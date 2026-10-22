@@ -1,4 +1,11 @@
 (executables
- (names compile_packages parse_sources classify_sources)
+ (names parse_sources probe_helpers)
+ (modules parse_sources probe_helpers)
  (libraries dark_compiler yojson)
+ (flags (:standard -w @a-42 -warn-error +a-42)))
+
+(executable
+ (name inventory_tests)
+ (modules inventory_tests)
+ (libraries runner_support dark_compiler yojson)
  (flags (:standard -w @a-42 -warn-error +a-42)))

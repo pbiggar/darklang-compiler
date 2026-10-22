@@ -79,9 +79,9 @@ may override either an upstream success or error expectation.
 Upstream named tests (`test name =` with an indented body) retain their module
 scopes and shared declarations. `=> raises` records a language failure; use the
 same AOT directive when that case must fail during compilation. Positive named
-tests return `Stdlib.Test.Result`. The fixture-only adapter in
-`test/fixtures/support/named-test.dark` supports `equal` and `all`; it is not a
-production implementation of the upstream test runner or reflective diagnostics.
+tests return `Stdlib.Test.Result`. The imported `Stdlib.Test` definitions provide
+assertion values and aggregation. Compiler-specific implementations are selected
+through the annotations in those definitions; no fixture-only assertion adapter is injected.
 
 Per-test compiler annotations are supported in both fixture formats. See the
 [upstream import](../porting/upstream-import.md) for reason tags, expected-failure
@@ -140,8 +140,11 @@ Keep direct OCaml tests for internal helper APIs and programs that require riche
 binary layout or execution setup. Run all fixtures and unit tests with
 `./build --ai && ./run-tests --ai`.
 
-For discovery without execution, see the
-[legacy runner YAML export](../porting/README.md#actual-legacy-runner-discovery).
+Canonical upstream discovery uses the native parsed AST, including declaration
+scopes and source ranges. See the [source-owned ledger](../porting/README.md)
+for counts and byte-preserving source verification. `--trial-upstream` is an
+initial-triage mode that executes pending imported tests; a ready ledger rejects
+all pending classifications.
 
 ## Optimization fixtures
 

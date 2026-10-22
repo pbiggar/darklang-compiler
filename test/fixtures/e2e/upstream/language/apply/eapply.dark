@@ -115,6 +115,7 @@ module InvalidFnCalls =
   #compileerror="Function 'fnWithTypeArgAndOneParam' expects 1 type arguments"
   fnWithTypeArgAndOneParam<Int64, String> 1L "str" = error="fnWithTypeArgAndOneParam expects 1 type argument, but got 2 type arguments"
   // misc errors
+  // @compiler blocked: compiler-gap
   derrorFn "msg" = error="Uncaught exception: msg"
   // (let _ = Builtin.testSetExpectedExceptionCount 1L
   //  throwsException ()) =

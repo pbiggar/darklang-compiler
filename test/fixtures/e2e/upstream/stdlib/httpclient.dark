@@ -68,6 +68,7 @@ Stdlib.HttpClient.request "get" "" [] Stdlib.Blob.empty = Stdlib.Result.Result.E
 Stdlib.HttpClient.request "post" "{ ] nonsense ^#( :" [] Stdlib.Blob.empty = Stdlib.Result.Result.Error(Stdlib.HttpClient.RequestError.BadUrl(Stdlib.HttpClient.BadUrlDetails.InvalidUri))
 
 // URLs we can't actually communicate with
+// @compiler blocked: compiler-gap
 Stdlib.HttpClient.request "get" "http://google.com:79" [] Stdlib.Blob.empty = Stdlib.Result.Result.Error(Stdlib.HttpClient.RequestError.Timeout)
 
 
@@ -105,9 +106,11 @@ module Disallowed =
   (get "http://[0000:0000:0000:0000:0000:ffff:c0a8:0101]" []) = errInvalidHost
 
   // invalid uri
+  // @compiler blocked: compiler-gap
   (get "localhost" []) = errInvalidUri
 
   // network error
+  // @compiler blocked: compiler-gap
   (get "http://[0:0:0:0:0:0:0:0]" []) = errNetworkError
 
   // Sneaky banned urls: a hostname that looks fine but resolves somewhere banned.
@@ -128,9 +131,13 @@ module Disallowed =
 
   // invalid headers
   // (we just happen to know that google will fail this way if we provide these headers..)
+  // @compiler blocked: compiler-gap
   (get "http://google.com" [ ("Metadata-Flavor", "Google") ]) = errInvalidRequest
+  // @compiler blocked: compiler-gap
   (get "http://google.com" [ ("metadata-flavor", "Google") ]) = errInvalidRequest
+  // @compiler blocked: compiler-gap
   (get "http://google.com" [ ("Metadata-Flavor", " Google ") ]) = errInvalidRequest
+  // @compiler blocked: compiler-gap
   (get "http://google.com" [ ("X-Google-Metadata-Request", " True ") ]) = errInvalidRequest
   (get "http://google.com" [ (" x-Google-metaData-Request", " True ") ]) = errInvalidRequest
 

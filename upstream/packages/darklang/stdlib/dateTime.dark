@@ -1,0 +1,271 @@
+module Darklang.Stdlib.DateTime
+
+
+/// Parses a string representing a date and time in the ISO 8601 format exactly {{" + ISO8601Format+ "}}
+/// (for example: 2019-09-07T22:44:25Z) and returns the {{Date}} wrapped in a {{Result}}.
+// @compiler replace: packages/darklang/stdlib/dateTime.dark#Darklang.Stdlib.DateTime.parse reason=compiler-implementation
+let parse (s: String) : Stdlib.Result.Result<DateTime, String> =
+  Builtin.dateTimeParse s
+
+
+// @compiler blocked: container-adaptation
+impl ToString for DateTime =
+  /// Stringify <param date> to the ISO 8601 format {{YYYY-MM-DD'T'hh:mm:ss'Z'}}
+  // @compiler blocked: container-adaptation
+  let toString (date: DateTime) : String = Builtin.dateTimeToString date
+
+
+/// Stringify <param date> to the ISO 8601 basic format {{YYYYMMDD'T'hhmmss'Z'}}
+// @compiler replace: packages/darklang/stdlib/dateTime.dark#Darklang.Stdlib.DateTime.toStringISO8601BasicDateTime reason=compiler-implementation
+let toStringISO8601BasicDateTime (date: DateTime) : String =
+  Builtin.dateTimeToStringISO8601BasicDateTime date
+
+
+/// Stringify <param date> to the ISO 8601 basic format YYYYMMDD
+// @compiler replace: packages/darklang/stdlib/dateTime.dark#Darklang.Stdlib.DateTime.toStringISO8601BasicDate reason=compiler-implementation
+let toStringISO8601BasicDate (date: DateTime) : String =
+  Builtin.dateTimeToStringISO8601BasicDate date
+
+
+/// Returns the current time
+// @compiler replace: packages/darklang/stdlib/dateTime.dark#Darklang.Stdlib.DateTime.now reason=compiler-implementation
+let now () : DateTime = Stdlib.DateTime.__now ()
+
+
+/// Returns the <type DateTime> with the time set to midnight
+// @compiler replace: packages/darklang/stdlib/dateTime.dark#Darklang.Stdlib.DateTime.today reason=compiler-implementation
+let today () : DateTime = Stdlib.DateTime.__today ()
+
+
+/// Returns a <type DateTime> <param seconds> seconds after <param d>
+// @compiler replace: packages/darklang/stdlib/dateTime.dark#Darklang.Stdlib.DateTime.addSeconds reason=compiler-implementation
+let addSeconds (d: DateTime) (seconds: Int) : DateTime =
+  Builtin.dateTimeAddSeconds d seconds
+
+
+/// Returns a <type DateTime> <param seconds> seconds before <param d>
+// @compiler replace: packages/darklang/stdlib/dateTime.dark#Darklang.Stdlib.DateTime.subtractSeconds reason=compiler-implementation
+let subtractSeconds (d: DateTime) (seconds: Int) : DateTime =
+  Builtin.dateTimeSubtractSeconds d seconds
+
+
+/// Returns whether {{<param d1> > <param d2>}}
+// @compiler replace: packages/darklang/stdlib/dateTime.dark#Darklang.Stdlib.DateTime.greaterThan reason=compiler-implementation
+let greaterThan (d1: DateTime) (d2: DateTime) : Bool =
+  Builtin.dateTimeGreaterThan d1 d2
+
+
+/// Returns whether {{<param d1> < <param d2>}}
+// @compiler replace: packages/darklang/stdlib/dateTime.dark#Darklang.Stdlib.DateTime.lessThan reason=compiler-implementation
+let lessThan (d1: DateTime) (d2: DateTime) : Bool =
+  Builtin.dateTimeLessThan d1 d2
+
+
+/// Returns whether {{<param d1> >= <param d2>}}
+// @compiler replace: packages/darklang/stdlib/dateTime.dark#Darklang.Stdlib.DateTime.greaterThanOrEqualTo reason=compiler-implementation
+let greaterThanOrEqualTo (d1: DateTime) (d2: DateTime) : Bool =
+  Builtin.dateTimeGreaterThanOrEqualTo d1 d2
+
+
+/// Returns whether {{<param d1> <= <param d2>}}
+// @compiler replace: packages/darklang/stdlib/dateTime.dark#Darklang.Stdlib.DateTime.lessThanOrEqualTo reason=compiler-implementation
+let lessThanOrEqualTo (d1: DateTime) (d2: DateTime) : Bool =
+  Builtin.dateTimeLessThanOrEqualTo d1 d2
+
+/// `d1 < d2` on DateTimes, by the four comparisons above.
+// @compiler blocked: container-adaptation
+impl Compare for DateTime =
+  // @compiler blocked: container-adaptation
+  let lessThan = Stdlib.DateTime.lessThan
+  // @compiler blocked: container-adaptation
+  let lessThanOrEqualTo = Stdlib.DateTime.lessThanOrEqualTo
+  // @compiler blocked: container-adaptation
+  let greaterThan = Stdlib.DateTime.greaterThan
+  // @compiler blocked: container-adaptation
+  let greaterThanOrEqualTo = Stdlib.DateTime.greaterThanOrEqualTo
+
+
+/// Converts <param date> to an <type Int> representing seconds since the Unix epoch
+// @compiler replace: packages/darklang/stdlib/dateTime.dark#Darklang.Stdlib.DateTime.toSeconds reason=compiler-implementation
+let toSeconds (date: DateTime) : Int = Builtin.dateTimeToSeconds date
+
+
+/// Converts an <type Int> representing seconds since the Unix epoch into a <type DateTime>
+// @compiler replace: packages/darklang/stdlib/dateTime.dark#Darklang.Stdlib.DateTime.fromSeconds reason=compiler-implementation
+let fromSeconds (seconds: Int) : DateTime =
+  Builtin.dateTimeFromSeconds seconds
+
+
+/// Returns the year portion of <param date> as an <type Int>
+// @compiler replace: packages/darklang/stdlib/dateTime.dark#Darklang.Stdlib.DateTime.year reason=compiler-implementation
+let year (date: DateTime) : Int = Builtin.dateTimeYear date
+
+
+/// Returns the month portion of <param date> as an <type Int> between {{1}} and {{12}}
+// @compiler replace: packages/darklang/stdlib/dateTime.dark#Darklang.Stdlib.DateTime.month reason=compiler-implementation
+let month (date: DateTime) : Int = Builtin.dateTimeMonth date
+
+
+/// Returns the day portion of <param date> as an <type Int>
+// @compiler replace: packages/darklang/stdlib/dateTime.dark#Darklang.Stdlib.DateTime.day reason=compiler-implementation
+let day (date: DateTime) : Int = Builtin.dateTimeDay date
+
+
+/// Returns the weekday of <param date> as an <type Int>. Monday = {{1}}, Tuesday = {{2}}, ... Sunday = {{7}} (in accordance with ISO 8601
+// @compiler replace: packages/darklang/stdlib/dateTime.dark#Darklang.Stdlib.DateTime.weekday reason=compiler-implementation
+let weekday (date: DateTime) : Int = Builtin.dateTimeWeekday date
+
+
+/// Returns the hour portion of <param date> as an <type Int>
+// @compiler replace: packages/darklang/stdlib/dateTime.dark#Darklang.Stdlib.DateTime.hour reason=compiler-implementation
+let hour (date: DateTime) : Int = Builtin.dateTimeHour date
+
+
+/// Returns the minute portion of <param date> as an <type Int>
+// @compiler replace: packages/darklang/stdlib/dateTime.dark#Darklang.Stdlib.DateTime.minute reason=compiler-implementation
+let minute (date: DateTime) : Int = Builtin.dateTimeMinute date
+
+
+/// Returns the second portion of <param date> as an <type Int>
+// @compiler replace: packages/darklang/stdlib/dateTime.dark#Darklang.Stdlib.DateTime.second reason=compiler-implementation
+let second (date: DateTime) : Int = Builtin.dateTimeSecond date
+
+
+/// Returns <type date> with the time set to midnight
+// @compiler replace: packages/darklang/stdlib/dateTime.dark#Darklang.Stdlib.DateTime.atStartOfDay reason=compiler-implementation
+let atStartOfDay (date: DateTime) : DateTime =
+  Builtin.dateTimeAtStartOfDay date
+
+
+/// Returns the difference of the two dates, in seconds
+// @compiler replace: packages/darklang/stdlib/dateTime.dark#Darklang.Stdlib.DateTime.subtract reason=compiler-implementation
+let subtract (d1: DateTime) (d2: DateTime) : Int =
+  Builtin.dateTimeSubtract d1 d2
+
+
+/// Converts <param date> to an <type Int> representing milliseconds since the Unix epoch
+// @compiler replace: packages/darklang/stdlib/dateTime.dark#Darklang.Stdlib.DateTime.toMilliseconds reason=compiler-implementation
+let toMilliseconds (date: DateTime) : Int =
+  Builtin.dateTimeToMilliseconds date
+
+
+/// Converts an <type Int> representing milliseconds since the Unix epoch into a <type DateTime>
+// @compiler replace: packages/darklang/stdlib/dateTime.dark#Darklang.Stdlib.DateTime.fromMilliseconds reason=compiler-implementation
+let fromMilliseconds (milliseconds: Int) : DateTime =
+  Builtin.dateTimeFromMilliseconds milliseconds
+
+
+/// Returns a <type DateTime> <param milliseconds> milliseconds after <param d>
+// @compiler replace: packages/darklang/stdlib/dateTime.dark#Darklang.Stdlib.DateTime.addMilliseconds reason=compiler-implementation
+let addMilliseconds (d: DateTime) (milliseconds: Int) : DateTime =
+  Builtin.dateTimeAddMilliseconds d milliseconds
+
+
+/// Returns a <type DateTime> <param milliseconds> milliseconds before <param d>
+// @compiler replace: packages/darklang/stdlib/dateTime.dark#Darklang.Stdlib.DateTime.subtractMilliseconds reason=compiler-implementation
+let subtractMilliseconds (d: DateTime) (milliseconds: Int) : DateTime =
+  Builtin.dateTimeSubtractMilliseconds d milliseconds
+
+
+/// Returns the millisecond portion of <param date> as an <type Int> between {{0}} and {{999}}
+// @compiler replace: packages/darklang/stdlib/dateTime.dark#Darklang.Stdlib.DateTime.millisecond reason=compiler-implementation
+let millisecond (date: DateTime) : Int =
+  Builtin.dateTimeMillisecond date
+
+
+/// Returns the difference of the two dates, in milliseconds
+// @compiler replace: packages/darklang/stdlib/dateTime.dark#Darklang.Stdlib.DateTime.subtractMs reason=compiler-implementation
+let subtractMs (d1: DateTime) (d2: DateTime) : Int =
+  Builtin.dateTimeSubtractMs d1 d2
+
+
+// Shared clock implementation.
+/// Clock record decoding, scaling and interrupted-sleep retries in shared Dark.
+
+// @compiler replace: packages/darklang/stdlib/dateTime.dark#Darklang.Stdlib.DateTime.__timespec reason=compiler-implementation
+let __timespec (bytes: Blob) : Result.Result<(Int * Int), Int> =
+  let width = if Stdlib.Cli.Posix.__abiArm32 () then 4 else 8
+  let record = Stdlib.Blob.toList bytes
+  Stdlib.Cli.Posix.__kernelSignedField record 0 width
+  |> Stdlib.Result.andThen (fun seconds ->
+    Stdlib.Cli.Posix.__kernelSignedField record width width
+    |> Stdlib.Result.map (fun nanos -> (seconds, nanos)))
+
+// @compiler replace: packages/darklang/stdlib/dateTime.dark#Darklang.Stdlib.DateTime.__realtimeNanoseconds reason=compiler-implementation
+let __realtimeNanoseconds () : Result.Result<(Int * Int), Int> =
+  if Builtin.runtimeTargetOS () == "browser" then
+    let ticks = Builtin.runtimeRealtimeTicks ()
+    Ok ((ticks / 10000000, (ticks % 10000000) * 100))
+  else if Stdlib.Cli.Posix.__abiMac () then
+    Builtin.syscallGettimeofday ()
+    |> Stdlib.Result.andThen (fun bytes ->
+      let record = Stdlib.Blob.toList bytes
+      Stdlib.Cli.Posix.__kernelSignedField record 0 8
+      |> Stdlib.Result.andThen (fun seconds ->
+        Stdlib.Cli.Posix.__kernelSignedField record 8 4
+        |> Stdlib.Result.map (fun micros -> (seconds, micros * 1000))))
+  else Builtin.syscallClockGettime 0 |> Stdlib.Result.andThen __timespec
+
+// @compiler replace: packages/darklang/stdlib/dateTime.dark#Darklang.Stdlib.DateTime.__monotonicNanoseconds reason=compiler-implementation
+let __monotonicNanoseconds () : Result.Result<(Int * Int), Int> =
+  if Builtin.runtimeTargetOS () == "browser" then
+    let (ticks, frequency) = Builtin.runtimeMonotonicCounter ()
+    if frequency <= 0 then Error 5
+    else Ok ((ticks / frequency, ((ticks % frequency) * 1000000000) / frequency))
+  else if Stdlib.Cli.Posix.__abiMac () then
+    Builtin.syscallMachAbsoluteTime ()
+    |> Stdlib.Result.andThen (fun bytes ->
+      Stdlib.Cli.Posix.__kernelField (Stdlib.Blob.toList bytes) 0 8
+      |> Stdlib.Result.andThen (fun ticks ->
+        Builtin.syscallMachTimebaseInfo ()
+        |> Stdlib.Result.andThen (fun base ->
+          let record = Stdlib.Blob.toList base
+          Stdlib.Cli.Posix.__kernelField record 0 4
+          |> Stdlib.Result.andThen (fun numerator ->
+            Stdlib.Cli.Posix.__kernelField record 4 4
+            |> Stdlib.Result.andThen (fun denominator ->
+              if denominator == 0 then Error 5
+              else
+                let nanos = (ticks / denominator) * numerator + ((ticks % denominator) * numerator) / denominator
+                Ok ((nanos / 1000000000, nanos % 1000000000)))))))
+  else Builtin.syscallClockGettime 1 |> Stdlib.Result.andThen __timespec
+
+// @compiler replace: packages/darklang/stdlib/dateTime.dark#Darklang.Stdlib.DateTime.__monotonicMilliseconds reason=compiler-implementation
+let __monotonicMilliseconds () : Int =
+  match __monotonicNanoseconds () with
+  | Ok ((seconds, nanos)) -> seconds * 1000 + nanos / 1000000
+  | Error e -> Builtin.unwrap (Error e)
+
+// @compiler replace: packages/darklang/stdlib/dateTime.dark#Darklang.Stdlib.DateTime.__now reason=compiler-implementation
+let __now () : DateTime =
+  match __realtimeNanoseconds () with
+  | Ok ((seconds, nanos)) -> Builtin.dateTimeFromUnixTicks (seconds * 10000000 + nanos / 100)
+  | Error e -> Builtin.unwrap (Error e)
+
+// @compiler replace: packages/darklang/stdlib/dateTime.dark#Darklang.Stdlib.DateTime.__today reason=compiler-implementation
+let __today () : DateTime =
+  let seconds = Stdlib.DateTime.toSeconds (__now ())
+  let remainder = seconds % 86400
+  let start = if remainder < 0 then seconds - remainder - 86400 else seconds - remainder
+  Stdlib.DateTime.fromSeconds start
+
+// @compiler replace: packages/darklang/stdlib/dateTime.dark#Darklang.Stdlib.DateTime.__sleepWith reason=compiler-implementation
+let __sleepWith (sleep: Int -> Int -> (Int * Blob)) (seconds: Int) (nanos: Int)
+  : Result.Result<Unit, Int> =
+  let (rc, remaining) = sleep seconds nanos
+  if rc == 0 then Ok ()
+  else if rc == -4 then
+    __timespec remaining |> Stdlib.Result.andThen (fun pair ->
+      let (seconds, nanos) = pair
+      __sleepWith sleep seconds nanos)
+  else Error (0 - rc)
+
+// @compiler replace: packages/darklang/stdlib/dateTime.dark#Darklang.Stdlib.DateTime.__sleepNanoseconds reason=compiler-implementation
+let __sleepNanoseconds (seconds: Int) (nanos: Int) : Result.Result<Unit, Int> =
+  __sleepWith Builtin.syscallNanosleep seconds nanos
+
+// @compiler replace: packages/darklang/stdlib/dateTime.dark#Darklang.Stdlib.DateTime.__sleepMilliseconds reason=compiler-implementation
+let __sleepMilliseconds (milliseconds: Float) : Unit =
+  let nanos = Stdlib.Float.toInt (milliseconds * 1000000.0)
+  if Builtin.runtimeTargetOS () == "browser" then Builtin.runtimeDelayTicks (nanos / 100)
+  else __sleepNanoseconds (nanos / 1000000000) (nanos % 1000000000) |> Builtin.unwrap

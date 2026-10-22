@@ -1,0 +1,16 @@
+module Darklang.Stdlib.ValueSearch.Tests
+
+// pmFindValuesByValueType returns empty list for unknown type
+// @compiler blocked: pending-validation
+test unknownValueTypeFindsNoValues =
+  Darklang.LanguageTools.PackageManager.Value.findByValueType
+    Darklang.LanguageTools.RuntimeTypes.ValueType.Unknown
+  |> Stdlib.Test.equal []
+
+// pmEvaluateValue returns None for unknown value
+// @compiler blocked: pending-validation
+test missingValueEvaluatesToNone =
+  Darklang.Stdlib.ValueSearch.evaluate
+    (Darklang.LanguageTools.ProgramTypes.Hash.Hash
+      "0000000000000000000000000000000000000000000000000000000000000000")
+  |> Stdlib.Test.equal None

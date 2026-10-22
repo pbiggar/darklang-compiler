@@ -1,0 +1,86 @@
+module Darklang.Internal.Test
+
+// @compiler blocked: missing-implementation
+type WTTest =
+  { name: String
+    lineNumber: Int
+    actual: LanguageTools.WrittenTypes.Expr
+    expected: LanguageTools.WrittenTypes.Expr }
+
+// @compiler blocked: missing-implementation
+type PTTest =
+  { name: String
+    lineNumber: Int
+    actual: LanguageTools.ProgramTypes.Expr
+    expected: LanguageTools.ProgramTypes.Expr }
+
+// @compiler blocked: missing-implementation
+let parseTest
+  (pf: LanguageTools.WrittenTypes.ParsedFile)
+  : Stdlib.Result.Result<WTTest, String> =
+  let exprsToEval =
+    match pf with
+    | SourceFile s -> s.exprsToEval
+    | _ -> []
+
+  match exprsToEval with
+  | [] -> Stdlib.Result.Result.Error "no exprs to eval"
+  | _ :: _ :: _ -> Stdlib.Result.Result.Error "expected exactly one expr to eval"
+  | [ e ] ->
+    match e with
+    | EInfix(r, _, actual, expected) ->
+      (WTTest
+        { name = "test"
+          lineNumber = r.start.row
+          actual = actual
+          expected = expected })
+      |> Stdlib.Result.Result.Ok
+
+    | _ -> Stdlib.Result.Result.Error "expected x = y format"
+
+// @compiler blocked: missing-implementation
+let parseSingleTestFromFile
+  (filename: String)
+  (testSource: String)
+  : Stdlib.Result.Result<PTTest, String> =
+  match testSource |> LanguageTools.Parser.Parse.initialParse with
+  | Error e -> Stdlib.Result.Result.Error e
+  | Ok parsedFile ->
+    match Test.parseTest parsedFile with
+    | Error e -> Stdlib.Result.Result.Error e
+    | Ok wtTest ->
+      let lineNumber = wtTest.lineNumber
+      let pm = LanguageTools.PackageManager.pm ()
+
+      let ctx =
+        LanguageTools.NameResolver.NRContext
+          { onMissing = LanguageTools.NameResolver.OnMissing.ThrowError
+            pm = pm
+            branchId = Darklang.SCM.Branch.mainBranchId
+            owner = ""
+            currentModule = [] }
+
+      let context =
+        LanguageTools.WrittenTypesToProgramTypes.Context
+          { currentFnName = Stdlib.Option.Option.None
+            argMap = Stdlib.Dict.empty
+            localBindings = [] }
+
+      let (actual, _unres) =
+        LanguageTools.WrittenTypesToProgramTypes.Expr.toPT
+          ctx
+          context
+          wtTest.actual
+
+      let (expected, _unres) =
+        LanguageTools.WrittenTypesToProgramTypes.Expr.toPT
+          ctx
+          context
+          wtTest.expected
+
+      (PTTest
+        { name = "test"
+          lineNumber = lineNumber
+          actual = actual
+          expected = expected })
+      |> Stdlib.Result.Result.Ok

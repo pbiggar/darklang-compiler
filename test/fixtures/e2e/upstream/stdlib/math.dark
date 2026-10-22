@@ -24,9 +24,11 @@ Stdlib.Math.atan 1.0 = 0.785398163397
 
 
 Stdlib.Math.asin 0.0 = Stdlib.Option.Option.Some 0.0
+// @compiler blocked: compiler-gap
 Stdlib.Math.asin 1.0 = Stdlib.Option.Option.Some 1.57079632679
 Stdlib.Math.asin 5.0 = Stdlib.Option.Option.None
 
+// @compiler blocked: compiler-gap
 Stdlib.Math.acos -1.0 = Stdlib.Option.Option.Some 3.14159265359
 Stdlib.Math.acos 1.0 = Stdlib.Option.Option.Some 0.0
 Stdlib.Math.acos 5.0 = Stdlib.Option.Option.None

@@ -73,7 +73,10 @@ let slice s first count =
 
 let isInternalTestFile path =
   let path = replace "\\" "/" path in
-  Text.contains path "/stdlib-internal/" || Text.contains path "/verification/"
+  Text.contains path "/stdlib-internal/"
+  || Text.contains path "/verification/"
+  || Text.contains path "/upstream/packages/"
+  || Text.contains path "/upstream/backend/testfiles/execution/"
 
 let sourceOffset source (position : Tokenizer.pos) =
   let lines = String.split_on_char '\n' source in
@@ -399,7 +402,9 @@ let filterSpecsByDefs defs specs =
 
 let isUpstreamDarkTestFile file =
   let file = replace "\\" "/" file in
-  Text.contains file "/e2e/upstream/"
+  (Text.contains file "/e2e/upstream/"
+  || Text.contains file "/upstream/packages/"
+  || Text.contains file "/upstream/backend/testfiles/execution/")
   && String.ends_with ~suffix:".dark" (String.lowercase_ascii file)
 
 let parsePreambleAsProgram _allowInternal preamble = parseWritten preamble
@@ -1045,7 +1050,13 @@ let evaluateExpectations (test : e2eTest) run =
                 false
           in
           let output = stderrFromRun run ^ "\n" ^ stdoutFromRun run in
-          if phaseMatches && Text.contains output diagnostic then Ok run
+          if
+            phaseMatches
+            && (not
+                  (String.starts_with ~prefix:"Compiled program leaked:"
+                     failure.message))
+            && Text.contains output diagnostic
+          then Ok run
           else
             failRun run
               ("Compiler xfail did not match its phase and diagnostic ("

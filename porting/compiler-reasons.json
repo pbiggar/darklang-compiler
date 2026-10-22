@@ -9,5 +9,11 @@
   "container-adaptation": "This trait, implementation or member still needs adaptation to the compiler.",
   "missing-implementation": "The compiler does not yet provide an implementation for this imported item.",
   "pending-validation": "This test is imported but has not yet been classified by execution.",
-  "upstream-dependency": "The test depends on an imported declaration that is not yet available to the compiler."
+  "upstream-dependency": "The test depends on an imported declaration that is not yet available to the compiler.",
+  "compiler-gap": "The compiler behavior for this case still differs from the interpreter.",
+  "compiler-crash": "The compiler or generated program currently terminates abnormally for this case.",
+  "interpreter-fixture": "This case requires interpreter-specific host fixtures that are not provided by the native test runner.",
+  "test-diagnostics": "The compiler assertion implementation does not yet render arbitrary values in failure messages.",
+  "missing-intrinsic": "The test requires an interpreter host intrinsic that the compiler does not yet implement.",
+  "compiler-leak": "The compiled program currently reports leaked allocations for this case."
 }

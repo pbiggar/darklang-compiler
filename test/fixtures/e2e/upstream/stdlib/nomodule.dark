@@ -305,6 +305,7 @@ module Equals =
     (5L == 5l) = error="Cannot perform equality check on Int64 and Int32"
 #compileerror="Operator is unavailable for this type"
     (5us != 6s) = error="Cannot perform equality check on UInt16 and Int16"
+    // @compiler blocked: compiler-gap
     (Builtin.testRuntimeError "test" != Builtin.testRuntimeError "different msg") = error="Uncaught exception: test"
 
 #compileerror="Expected TUnit, got TSum\n(\"Darklang.Stdlib.Option.Option\","

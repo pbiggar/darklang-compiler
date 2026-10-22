@@ -88,50 +88,66 @@ module TinyLang =
 
 module Literals =
   // Integer literals
+  // @compiler blocked: compiler-gap
   (Stachu.Parser.parse (TinyLang.intLiteral ()) "42") = Stachu.Parser.ParseResult.Success(TinyLang.Expr.EInt 42L, "")
 
+  // @compiler blocked: compiler-gap
   (Stachu.Parser.parse (TinyLang.intLiteral ()) "0") = Stachu.Parser.ParseResult.Success(TinyLang.Expr.EInt 0L, "")
 
+  // @compiler blocked: compiler-gap
   (Stachu.Parser.parse (TinyLang.intLiteral ()) "-123 rest") = Stachu.Parser.ParseResult.Success(TinyLang.Expr.EInt(-123L), " rest")
 
   // Boolean literals
+  // @compiler blocked: compiler-gap
   (Stachu.Parser.parse (TinyLang.boolLiteral ()) "true") = Stachu.Parser.ParseResult.Success(TinyLang.Expr.EBool true, "")
 
+  // @compiler blocked: compiler-gap
   (Stachu.Parser.parse (TinyLang.boolLiteral ()) "false") = Stachu.Parser.ParseResult.Success(TinyLang.Expr.EBool false, "")
 
   // Variable names
+  // @compiler blocked: compiler-gap
   (Stachu.Parser.parse (TinyLang.varName ()) "foo") = Stachu.Parser.ParseResult.Success("foo", "")
 
+  // @compiler blocked: compiler-gap
   (Stachu.Parser.parse (TinyLang.varName ()) "myVar123") = Stachu.Parser.ParseResult.Success("myVar123", "")
 
+  // @compiler blocked: compiler-gap
   (Stachu.Parser.parse (TinyLang.varName ()) "x rest") = Stachu.Parser.ParseResult.Success("x", " rest")
 
   // Variable expressions
+  // @compiler blocked: compiler-gap
   (Stachu.Parser.parse (TinyLang.varExpr ()) "count") = Stachu.Parser.ParseResult.Success(TinyLang.Expr.EVar "count", "")
 
 
 module Operators =
   // Binary operators
+  // @compiler blocked: compiler-gap
   (Stachu.Parser.parse (TinyLang.binOp ()) "+") = Stachu.Parser.ParseResult.Success(TinyLang.BinOp.Add, "")
 
+  // @compiler blocked: compiler-gap
   (Stachu.Parser.parse (TinyLang.binOp ()) "-") = Stachu.Parser.ParseResult.Success(TinyLang.BinOp.Sub, "")
 
+  // @compiler blocked: compiler-gap
   (Stachu.Parser.parse (TinyLang.binOp ()) "*") = Stachu.Parser.ParseResult.Success(TinyLang.BinOp.Mul, "")
 
+  // @compiler blocked: compiler-gap
   (Stachu.Parser.parse (TinyLang.binOp ()) "/") = Stachu.Parser.ParseResult.Success(TinyLang.BinOp.Div, "")
 
 
 module SimpleBinOp =
   // Parse "1 + 2" manually step by step
   // First, parse the left operand
+  // @compiler blocked: compiler-gap
   (Stachu.Parser.parse (TinyLang.intLiteral ()) "1 + 2") = Stachu.Parser.ParseResult.Success(TinyLang.Expr.EInt 1L, " + 2")
 
   // Parse operator with surrounding whitespace
+  // @compiler blocked: compiler-gap
   (Stachu.Parser.parse
     (Stachu.Parser.between (TinyLang.ws ()) (TinyLang.ws ()) (TinyLang.binOp ()))
     " + 2") = Stachu.Parser.ParseResult.Success(TinyLang.BinOp.Add, "2")
 
   // Combined: parse "left op right" pattern for "1 + 2"
+  // @compiler blocked: compiler-gap
   (Stachu.Parser.parse
     (Stachu.Parser.andThen
       (TinyLang.intLiteral ())
@@ -141,6 +157,7 @@ module SimpleBinOp =
     "1 + 2") = Stachu.Parser.ParseResult.Success((TinyLang.Expr.EInt 1L, (TinyLang.BinOp.Add, TinyLang.Expr.EInt 2L)), "")
 
   // Build full BinOp expression using map
+  // @compiler blocked: compiler-gap
   (Stachu.Parser.parse
     (Stachu.Parser.map
       (fun result ->
@@ -154,6 +171,7 @@ module SimpleBinOp =
     "1 + 2") = Stachu.Parser.ParseResult.Success(TinyLang.Expr.EBinOp(TinyLang.Expr.EInt 1L, TinyLang.BinOp.Add, TinyLang.Expr.EInt 2L), "")
 
   // More binary operations
+  // @compiler blocked: compiler-gap
   (Stachu.Parser.parse
     (Stachu.Parser.map
       (fun result ->
@@ -166,6 +184,7 @@ module SimpleBinOp =
           (TinyLang.intLiteral ()))))
     "10 * 5") = Stachu.Parser.ParseResult.Success(TinyLang.Expr.EBinOp(TinyLang.Expr.EInt 10L, TinyLang.BinOp.Mul, TinyLang.Expr.EInt 5L), "")
 
+  // @compiler blocked: compiler-gap
   (Stachu.Parser.parse
     (Stachu.Parser.map
       (fun result ->
@@ -181,6 +200,7 @@ module SimpleBinOp =
 
 module VarBinOp =
   // Variable in binary op: "x + 1"
+  // @compiler blocked: compiler-gap
   (Stachu.Parser.parse
     (Stachu.Parser.map
       (fun result ->
@@ -194,6 +214,7 @@ module VarBinOp =
     "x + 1") = Stachu.Parser.ParseResult.Success(TinyLang.Expr.EBinOp(TinyLang.Expr.EVar "x", TinyLang.BinOp.Add, TinyLang.Expr.EInt 1L), "")
 
   // "a * b"
+  // @compiler blocked: compiler-gap
   (Stachu.Parser.parse
     (Stachu.Parser.map
       (fun result ->
@@ -209,6 +230,7 @@ module VarBinOp =
 
 module ListExpr =
   // Empty list
+  // @compiler blocked: compiler-gap
   (Stachu.Parser.parse
     (Stachu.Parser.map
       (fun items -> TinyLang.Expr.EList items)
@@ -221,6 +243,7 @@ module ListExpr =
     "[]") = Stachu.Parser.ParseResult.Success(TinyLang.Expr.EList [], "")
 
   // Single element list
+  // @compiler blocked: compiler-gap
   (Stachu.Parser.parse
     (Stachu.Parser.map
       (fun items -> TinyLang.Expr.EList items)
@@ -233,6 +256,7 @@ module ListExpr =
     "[42]") = Stachu.Parser.ParseResult.Success(TinyLang.Expr.EList [ TinyLang.Expr.EInt 42L ], "")
 
   // Multiple element list
+  // @compiler blocked: compiler-gap
   (Stachu.Parser.parse
     (Stachu.Parser.map
       (fun items -> TinyLang.Expr.EList items)
@@ -247,6 +271,7 @@ module ListExpr =
 
 module BoolListExpr =
   // List of booleans
+  // @compiler blocked: compiler-gap
   (Stachu.Parser.parse
     (Stachu.Parser.map
       (fun items -> TinyLang.Expr.EList items)
@@ -261,12 +286,16 @@ module BoolListExpr =
 
 module Keywords =
   // Test keyword parsing (would be used for if/let)
+  // @compiler blocked: compiler-gap
   (Stachu.Parser.parse (TinyLang.keyword "if") "if x") = Stachu.Parser.ParseResult.Success("if", "x")
 
+  // @compiler blocked: compiler-gap
   (Stachu.Parser.parse (TinyLang.keyword "then") "then 1") = Stachu.Parser.ParseResult.Success("then", "1")
 
+  // @compiler blocked: compiler-gap
   (Stachu.Parser.parse (TinyLang.keyword "else") "else 2") = Stachu.Parser.ParseResult.Success("else", "2")
 
+  // @compiler blocked: compiler-gap
   (Stachu.Parser.parse (TinyLang.keyword "let") "let x") = Stachu.Parser.ParseResult.Success("let", "x")
 
 
@@ -274,16 +303,21 @@ module RegexPatterns =
   // Test regex patterns useful for language parsing
 
   // Identifier pattern
+  // @compiler blocked: compiler-gap
   (Stachu.Parser.parse (Stachu.Parser.regex "[a-z][a-zA-Z0-9_]*") "myVariable123 rest") = Stachu.Parser.ParseResult.Success("myVariable123", " rest")
 
   // Integer pattern with optional sign
+  // @compiler blocked: compiler-gap
   (Stachu.Parser.parse (Stachu.Parser.regex "-?[0-9]+") "-42 rest") = Stachu.Parser.ParseResult.Success("-42", " rest")
 
   // Whitespace pattern
+  // @compiler blocked: compiler-gap
   (Stachu.Parser.parse (Stachu.Parser.regex "[ \\t\\n]+") "   \t\n  text") = Stachu.Parser.ParseResult.Success("   \t\n  ", "text")
 
   // String content (non-greedy, no quotes)
+  // @compiler blocked: compiler-gap
   (Stachu.Parser.parse (Stachu.Parser.regex "[^\"]*") "hello world\" rest") = Stachu.Parser.ParseResult.Success("hello world", "\" rest")
 
   // Operator characters
+  // @compiler blocked: compiler-gap
   (Stachu.Parser.parse (Stachu.Parser.regex "[+\\-*/]") "+ 1") = Stachu.Parser.ParseResult.Success("+", " 1")

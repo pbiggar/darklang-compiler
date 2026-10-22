@@ -116,55 +116,94 @@ module ShadowingTest =
       (valueShadowing (x - 1)) + result
 
 
+// @compiler blocked: compiler-gap
 ESelfTests.factorial 0 = 1
+// @compiler blocked: compiler-gap
 ESelfTests.factorial 1 = 1
+// @compiler blocked: compiler-gap
 ESelfTests.factorial 5 = 120
+// @compiler blocked: compiler-gap
 ESelfTests.factorial 10 = 3628800
 
 
+// @compiler blocked: compiler-gap
 ESelfTests.fibonacci 0 = 0
+// @compiler blocked: compiler-gap
 ESelfTests.fibonacci 1 = 1
+// @compiler blocked: compiler-gap
 ESelfTests.fibonacci 5 = 5
+// @compiler blocked: compiler-gap
 ESelfTests.fibonacci 10 = 55
 
 
+// @compiler blocked: compiler-gap
 ESelfTests.sumUpTo 0 = 0
+// @compiler blocked: compiler-gap
 ESelfTests.sumUpTo 1 = 1
+// @compiler blocked: compiler-gap
 ESelfTests.sumUpTo 5 = 15
+// @compiler blocked: compiler-gap
 ESelfTests.sumUpTo 10 = 55
 
 
 
+// @compiler blocked: compiler-gap
 ShadowingTest.factorialWithShadowing 5 = ("shadowed", 120)
+// @compiler blocked: compiler-gap
 ShadowingTest.factorialWithShadowingError 5 = error="""Expected something we could apply to, such as a lambda or function, but got a String ("shadowed")"""
+// @compiler blocked: compiler-gap
 ShadowingTest.incrementWithShadowing 3 1 = 6
 
+// @compiler blocked: compiler-gap
 ShadowingTest.matchWithShadowing 0 = 0
+// @compiler blocked: compiler-gap
 ShadowingTest.matchWithShadowing 1 = 0
+// @compiler blocked: compiler-gap
 ShadowingTest.matchWithShadowing 2 = 8
+// @compiler blocked: compiler-gap
 ShadowingTest.matchWithShadowing 5 = 6
 
+// @compiler blocked: compiler-gap
 ShadowingTest.tupleMatchWithShadowing (0, 10) = 0
+// @compiler blocked: compiler-gap
 ShadowingTest.tupleMatchWithShadowing (1, 20) = 0
+// @compiler blocked: compiler-gap
 ShadowingTest.tupleMatchWithShadowing (2, 3) = 30
+// @compiler blocked: compiler-gap
 ShadowingTest.tupleMatchWithShadowing (4, 5) = 9
 
+// @compiler blocked: compiler-gap
 ShadowingTest.letBindingShadowing 4 = [12, 10]
+// @compiler blocked: compiler-gap
 ShadowingTest.letBindingShadowing 5 = [15, 10]
 
+// @compiler blocked: compiler-gap
 ShadowingTest.conditionalShadowing 0 = 0
+// @compiler blocked: compiler-gap
 ShadowingTest.conditionalShadowing 1 = 7
+// @compiler blocked: compiler-gap
 ShadowingTest.conditionalShadowing 2 = 12
+// @compiler blocked: compiler-gap
 ShadowingTest.conditionalShadowing 3 = 9
+// @compiler blocked: compiler-gap
 ShadowingTest.conditionalShadowing 4 = 12
+// @compiler blocked: compiler-gap
 ShadowingTest.conditionalShadowing 5 = 17
+// @compiler blocked: compiler-gap
 ShadowingTest.conditionalShadowing 6 = 23
 
+// @compiler blocked: compiler-gap
 ShadowingTest.pipeWithShadowing 0 = 0
+// @compiler blocked: compiler-gap
 ShadowingTest.pipeWithShadowing 1 = 0
+// @compiler blocked: compiler-gap
 ShadowingTest.pipeWithShadowing 2 = 12
+// @compiler blocked: compiler-gap
 ShadowingTest.pipeWithShadowing 5 = 10
 
+// @compiler blocked: compiler-gap
 ShadowingTest.valueShadowing 0 = 10
+// @compiler blocked: compiler-gap
 ShadowingTest.valueShadowing 1 = 11
+// @compiler blocked: compiler-gap
 ShadowingTest.valueShadowing 5 = 495

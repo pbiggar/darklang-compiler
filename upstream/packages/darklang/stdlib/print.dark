@@ -1,0 +1,29 @@
+module Darklang.Stdlib
+
+
+// @compiler replace: packages/darklang/stdlib/__print.dark#Darklang.Stdlib.print reason=compiler-implementation
+let print (str: String): Unit =
+  Builtin.print str
+
+
+// @compiler replace: packages/darklang/stdlib/__print.dark#Darklang.Stdlib.printLine reason=compiler-implementation
+let printLine (str: String): Unit =
+  Builtin.printLine str
+
+
+/// Print <param str> to stderr, followed by a newline: for everything that is not the answer to what
+/// was asked, so `dark cmd | next` carries only the answer.
+// @compiler blocked: missing-implementation
+let printErrorLine (str: String): Unit =
+  Builtin.printErrorLine str
+
+
+// @compiler blocked: missing-implementation
+let printError (str: String): Unit =
+  Builtin.printError str
+
+
+// @compiler replace: packages/darklang/stdlib/__print.dark#Darklang.Stdlib.printLines reason=compiler-implementation
+let printLines (lines: List<String>): Unit =
+  lines
+  |> List.iter(fun l -> printLine l)

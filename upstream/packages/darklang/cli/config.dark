@@ -1,0 +1,193 @@
+module Darklang.Cli.Config
+
+// The config lives next to this instance's store (`localDbPath`), so the path is absolute and its
+// directory always exists -- independent of the process CWD and of install mode. A CWD-relative
+// path here makes `login` silently persist nothing.
+// @compiler blocked: missing-implementation
+let configFilePath () : String =
+  let dbPath = Stdlib.LocalStore.path ()
+  let dir = Stdlib.String.join (Stdlib.List.dropLast (Stdlib.String.split dbPath "/")) "/"
+  $"{dir}/cli-config.json"
+
+// @compiler blocked: missing-implementation
+let readConfig () : Dict<String, String> =
+  match Stdlib.Cli.FileSystem.pathExists (configFilePath ()) with
+  | true ->
+    match Stdlib.Cli.FileSystem.readFile (configFilePath ()) with
+    | Ok bytes ->
+      let contents = Stdlib.String.fromBlobWithReplacement bytes
+
+      match Stdlib.Json.parse<Dict<String, String>> contents with
+      | Ok config -> config
+      | Error _ -> Dict {}
+
+    | Error _ -> Dict {}
+
+  | false -> Dict {}
+
+
+// @compiler blocked: missing-implementation
+let writeConfig (config: Dict<String, String>) : Unit =
+  let json = Stdlib.Json.serialize<Dict<String, String>> config
+  let jsonBytes = Stdlib.String.toBlob json
+  let _ = Stdlib.Cli.FileSystem.overwriteFile (configFilePath ()) jsonBytes
+  ()
+
+
+// @compiler blocked: missing-implementation
+let get (key: String) : Stdlib.Option.Option<String> =
+  let config = readConfig ()
+  Stdlib.Dict.get config key
+
+// A single Int config value, falling back to `default_` when absent or unparseable.
+// @compiler blocked: missing-implementation
+let getInt (key: String) (default_: Int) : Int =
+  match get key with
+  | Some s -> Stdlib.Result.withDefault (Stdlib.Int.parse s) default_
+  | None -> default_
+
+
+/// The keys the F# boot reads before any Dark runs (`exec.workers` sizes the scheduler's
+/// worker pool, `trace.keep` the retention), so they live in the store's config rather than
+/// in the json file.
+// @compiler blocked: missing-implementation
+let isStoreKey (key: String) : Bool =
+  (Stdlib.String.startsWith key "exec.")
+  || (Stdlib.String.startsWith key "http.")
+  || (Stdlib.String.startsWith key "trace.")
+
+/// What a value must look like, or `None` for anything goes: the boot falls back silently on a
+/// value it cannot read, so the refusal has to happen here.
+// @compiler blocked: missing-implementation
+let checkValue (key: String) (value: String) : Stdlib.Option.Option<String> =
+  let numeric =
+    [ "exec.workers"
+      "exec.maxInstructions"
+      "exec.maxBytes"
+      "exec.storePollMs"
+      "http.requestTimeoutMs"
+      "trace.keep"
+      "trace.maxMb" ]
+  if Stdlib.List.contains numeric key then
+    match Stdlib.Int.parse value with
+    // The boot ignores a poll under 10 ms (`Cli.fs`), so refuse it here rather than store it.
+    | Ok n when key == "exec.storePollMs" && n < 10 ->
+      Stdlib.Option.Option.Some $"{key} takes a whole number of ms, 10 or more, not {value}"
+    | Ok n when n >= 0 -> Stdlib.Option.Option.None
+    | _ -> Stdlib.Option.Option.Some $"{key} takes a whole number (0 = none), not {value}"
+  else if
+    Stdlib.List.contains [ "trace.record", "http.loopback", "http.private" ] key
+  then
+    if (value == "on") || (value == "off") then Stdlib.Option.Option.None
+    else Stdlib.Option.Option.Some $"{key} is on or off"
+  else
+    Stdlib.Option.Option.None
+
+// @compiler blocked: missing-implementation
+let execute (state: Cli.AppState) (args: List<String>) : Cli.AppState =
+  match args with
+  | ["get", key] when isStoreKey key ->
+    let value = Stdlib.LocalStore.configGet key
+    if value == "" then
+      Stdlib.printLine $"{key} is not set (the default applies; `config list` has it)"
+    else
+      Stdlib.printLine $"{key} = {value}"
+    state
+
+  | ["set", key, value] when isStoreKey key ->
+    match checkValue key value with
+    | Some problem ->
+      Stdlib.printLine (Stdlib.Cli.UI.Colors.error problem)
+      { state with exitCode = 1 }
+    | None ->
+      let _ = Stdlib.LocalStore.configSet key value
+      Stdlib.printLine (Stdlib.Cli.UI.Colors.success $"Set {key} = {value}")
+      state
+
+  | ["get", key] ->
+    let config = readConfig ()
+    match Stdlib.Dict.get config key with
+    | Some value ->
+      Stdlib.printLine $"{key} = {value}"
+      state
+
+    | None ->
+      Stdlib.printLine (Stdlib.Cli.UI.Colors.error $"Configuration key not found: {key}")
+      state
+
+  | ["set", key, value] when Stdlib.Option.isSome (checkValue key value) ->
+    Stdlib.printLine (Stdlib.Cli.UI.Colors.error (Stdlib.Option.withDefault (checkValue key value) ""))
+    { state with exitCode = 1 }
+
+  | ["set", key, value] ->
+    let config = readConfig ()
+    let updatedConfig = Stdlib.Dict.setOverridingDuplicates config key value
+    writeConfig updatedConfig
+    Stdlib.printLine (Stdlib.Cli.UI.Colors.success $"Set {key} = {value}")
+
+    state
+
+  | ["list"] ->
+    // List all common config keys
+    [ "Common configuration keys:"
+      ""
+      "  exec.workers             - Scheduler worker threads (default: one per core)"
+      "  exec.policy              - Expert: a Dark fn picking the next process (default: round robin)"
+      "  exec.maxInstructions     - Expert: stop a process past this many instructions (default: none)"
+      "  exec.maxBytes            - Expert: stop a process past this many bytes allocated (default: none)"
+      "  exec.storePollMs         - How often a --live view looks for a change (default: 25; minimum 10)"
+      "  http.requestTimeoutMs    - serve cancels a handler past this and answers 504 (default: 30000; 0 = none)"
+      "  trace.record             - Keep a record of every run (on/off; default: off)"
+      "  http.loopback            - let your code reach 127.0.0.1 (on/off; default: off)"
+      "  http.private             - let your code reach private network addresses (on/off; default: off)"
+      "  trace.keep               - How many traces to keep (a served request is one; default: 200; 0 = all)"
+      "  trace.maxMb              - How many MB traces may hold, logs and captured bodies (default: 256; 0 = all)"
+      ""
+      "Use 'config get <key>' to read a value"
+      "Use 'config set <key> <value>' to set a value" ]
+    |> Stdlib.printLines
+    state
+
+  | _ ->
+    Stdlib.printLine (Stdlib.Cli.UI.Colors.error "Invalid arguments")
+    Stdlib.printLine ""
+    Stdlib.printLine (help state)
+    { state with exitCode = 1 }
+
+
+// @compiler blocked: missing-implementation
+let complete (_state: Cli.AppState) (args: List<String>) : List<Cli.Completion.CompletionItem> =
+  let configKeys =
+    [ "exec.workers"
+      "exec.policy"
+      "exec.maxInstructions"
+      "exec.maxBytes"
+      "exec.storePollMs"
+      "trace.record"
+      "http.loopback"
+      "http.private"
+      "trace.keep"
+      "trace.maxMb"
+      "http.requestTimeoutMs" ]
+
+  match args with
+  | [] ->
+    ["get", "set", "list"] |> Stdlib.List.map Cli.Completion.simple
+  | ["get"] | ["set"] ->
+    configKeys |> Stdlib.List.map Cli.Completion.simple
+  | _ -> []
+
+
+// @compiler blocked: missing-implementation
+let help (_state: Cli.AppState) : String =
+  [ "Usage:"
+    "  config get <key>           - Get a configuration value"
+    "  config set <key> <value>   - Set a configuration value"
+    "  config list                - List common configuration keys"
+    ""
+    "Examples:"
+    "  config set trace.record on"
+    "  config get exec.workers"
+    ""
+    "`config list` names every key this reads, with its default." ]
+  |> Stdlib.String.join "\n"

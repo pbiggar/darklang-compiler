@@ -1,0 +1,635 @@
+/// For interacting with the "dark matter",
+/// where package items (types, values, fns, etc) are maintained.
+/// i.e. the packages + manager
+///
+/// Of note, this is the Dev-time PackageManager, not the Runtime PackageManager.
+module Darklang.LanguageTools.PackageManager
+
+
+/// Context for choosing among multiple locations that share the same hash.
+/// When a hash maps to multiple named locations (e.g. Person and Person2 are
+/// structurally identical), we use context to pick the best display name.
+// @compiler blocked: compiler-contract
+type PickContext =
+  { currentModule: List<String>
+
+    /// Which name to pick when the hash has several, if this is one of them.
+    ///
+    /// A hash can be bound to more than one location -- two items with identical
+    /// bodies are one item -- and the scoring below cannot tell those apart. It
+    /// scores by module prefix, which is right for a name appearing inside someone
+    /// else's code and arbitrary for the item a caller is displaying: without this,
+    /// `dark view Zz.alpha` prints a definition headed `Zz.beta`.
+    ///
+    /// Ignored when it is not among the candidates, so a caller can set it whenever
+    /// it knows which location it is displaying, without checking first.
+    preferredLocation: Stdlib.Option.Option<ProgramTypes.PackageLocation> }
+
+module PickContext =
+  // @compiler blocked: compiler-contract
+  val empty =
+    PickContext { currentModule = [], preferredLocation = Stdlib.Option.Option.None }
+
+/// Count how many leading segments of two lists match.
+// @compiler replace: packages/darklang/languageTools/packageManager.dark#Darklang.LanguageTools.PackageManager.countMatchingPrefix reason=compiler-implementation
+let countMatchingPrefix (a: List<String>) (b: List<String>) : Int =
+  match (a, b) with
+  | (aHead :: aTail, bHead :: bTail) ->
+    if aHead == bHead then
+      1 + (countMatchingPrefix aTail bTail)
+    else
+      0
+  | _ -> 0
+
+/// Given a list of locations for a hash, pick the best one using context.
+/// Scoring: most matching prefix segments with currentModule, then shortest path,
+/// then original ordering (SQL order: branch priority, commit status, recency).
+// @compiler replace: packages/darklang/languageTools/packageManager.dark#Darklang.LanguageTools.PackageManager.pickLocation reason=compiler-implementation
+let pickLocation
+  (ctx: PickContext)
+  (locations: List<ProgramTypes.PackageLocation>)
+  : Stdlib.Option.Option<ProgramTypes.PackageLocation> =
+  // The asked-for name wins outright when it is one of the candidates. Only then: a
+  // preference for a name this hash is not bound to would be a lie, and the scoring
+  // below is right for every other case.
+  let asked =
+    match ctx.preferredLocation with
+    | Some p ->
+      locations
+      |> Stdlib.List.findFirst (fun l ->
+        (l.owner == p.owner) && (l.modules == p.modules) && (l.name == p.name))
+    | None -> Stdlib.Option.Option.None
+
+  match asked with
+  | Some a -> Stdlib.Option.Option.Some a
+  | None ->
+
+  match locations with
+  | [] -> Stdlib.Option.Option.None
+  | [ single ] -> Stdlib.Option.Option.Some single
+  | first :: rest ->
+    let firstPath = Stdlib.List.push first.modules first.owner
+    let firstScore = countMatchingPrefix ctx.currentModule firstPath
+    let firstLen = Stdlib.List.length firstPath
+
+    let (_, _, bestLoc) =
+      Stdlib.List.fold rest (firstScore, firstLen, first) (fun acc loc ->
+        let (bestScore, bestLen, bestLoc) = acc
+        let locPath = Stdlib.List.push loc.modules loc.owner
+        let score = countMatchingPrefix ctx.currentModule locPath
+        let len = Stdlib.List.length locPath
+
+        if score > bestScore then
+          (score, len, loc)
+        else if score == bestScore && len < bestLen then
+          (score, len, loc)
+        else
+          (bestScore, bestLen, bestLoc))
+
+    Stdlib.Option.Option.Some bestLoc
+
+
+module Type =
+  // @compiler blocked: missing-implementation
+  let find
+    (branchId: Uuid)
+    (location: ProgramTypes.PackageLocation)
+    : Stdlib.Option.Option<ProgramTypes.FQTypeName.Package> =
+    Builtin.pmFindType branchId location
+
+  // @compiler blocked: missing-implementation
+  let get
+    (hash: ProgramTypes.FQTypeName.Package)
+    : Stdlib.Option.Option<ProgramTypes.PackageType.PackageType> =
+    Builtin.pmGetType hash
+
+  /// Every name this type is bound to on <param branchId>. More than one
+  /// when structurally identical types share a hash.
+  // @compiler blocked: missing-implementation
+  let locations
+    (branchId: Uuid)
+    (hash: ProgramTypes.FQTypeName.Package)
+    : List<ProgramTypes.PackageLocation> =
+    Builtin.pmGetLocationsByType branchId hash
+
+  // @compiler blocked: missing-implementation
+  let getWithLocation
+    (branchId: Uuid)
+    (hash: ProgramTypes.FQTypeName.Package)
+    : Stdlib.Option.Option<
+      ProgramTypes.LocatedItem<ProgramTypes.PackageType.PackageType>> =
+    match get hash with
+    | Some entity ->
+      match PackageManager.pickLocation PackageManager.PickContext.empty (locations branchId hash) with
+      | Some location ->
+        Stdlib.Option.Option.Some(
+          ProgramTypes.LocatedItem { entity = entity, location = location }
+        )
+      | None -> Stdlib.Option.Option.None
+    | None -> Stdlib.Option.Option.None
+
+
+module Trait =
+  // @compiler blocked: missing-implementation
+  let find
+    (branchId: Uuid)
+    (location: ProgramTypes.PackageLocation)
+    : Stdlib.Option.Option<ProgramTypes.FQTraitName.Package> =
+    Builtin.pmFindTrait branchId location
+
+  // @compiler blocked: missing-implementation
+  let get
+    (hash: ProgramTypes.FQTraitName.Package)
+    : Stdlib.Option.Option<ProgramTypes.Trait.Trait> =
+    Builtin.pmGetTrait hash
+
+  /// Every name this trait is bound to on <param branchId>.
+  // @compiler blocked: missing-implementation
+  let locations
+    (branchId: Uuid)
+    (hash: ProgramTypes.FQTraitName.Package)
+    : List<ProgramTypes.PackageLocation> =
+    Builtin.pmGetLocationsByTrait branchId hash
+
+  /// The impls of a trait bound on <param branchId>: what `Trait.method x` can
+  /// dispatch to.
+  // @compiler blocked: missing-implementation
+  let impls
+    (branchId: Uuid)
+    (traitHash: ProgramTypes.FQTraitName.Package)
+    : List<RuntimeTypes.ImplCandidate> =
+    Builtin.pmImplCandidates branchId traitHash
+
+  /// The trait an operator is, the method it maps to, and the impls bound on <param branchId>.
+  ///
+  /// None for an operator that is not a trait: `==` and `!=` are structural equality for
+  /// every value, and `++` is no longer in the language.
+  ///
+  /// The operator-to-trait table is not duplicated here on purpose. It lives once in F#
+  /// (`NumericTraits.ofInfix`), which is also what the lowering uses, so the checker and the
+  /// runtime cannot come to disagree about what `+` means.
+  // @compiler blocked: missing-implementation
+  let forInfix
+    (branchId: Uuid)
+    (operation: ProgramTypes.InfixFnName)
+    : Stdlib.Option.Option<(ProgramTypes.FQTraitName.Package * String * List<RuntimeTypes.ImplCandidate>)> =
+    Builtin.pmInfixImplCandidates branchId operation
+
+  /// The same for unary minus, which `InfixFnName` has no case for because it is not infix.
+  // @compiler blocked: missing-implementation
+  let forNegate
+    (branchId: Uuid)
+    : Stdlib.Option.Option<(ProgramTypes.FQTraitName.Package * String * List<RuntimeTypes.ImplCandidate>)> =
+    Builtin.pmNegateImplCandidates branchId
+
+  /// And for `~x`.
+  // @compiler blocked: missing-implementation
+  let forBitwiseNot
+    (branchId: Uuid)
+    : Stdlib.Option.Option<(ProgramTypes.FQTraitName.Package * String * List<RuntimeTypes.ImplCandidate>)> =
+    Builtin.pmBitwiseNotImplCandidates branchId
+
+
+module TraitImpl =
+  // @compiler blocked: missing-implementation
+  let find
+    (branchId: Uuid)
+    (location: ProgramTypes.PackageLocation)
+    : Stdlib.Option.Option<ProgramTypes.Hash> =
+    Builtin.pmFindTraitImpl branchId location
+
+  // @compiler blocked: missing-implementation
+  let get (hash: ProgramTypes.Hash) : Stdlib.Option.Option<ProgramTypes.TraitImpl.TraitImpl> =
+    Builtin.pmGetTraitImpl hash
+
+  /// Every name this impl is bound to on <param branchId>.
+  // @compiler blocked: missing-implementation
+  let locations
+    (branchId: Uuid)
+    (hash: ProgramTypes.Hash)
+    : List<ProgramTypes.PackageLocation> =
+    Builtin.pmGetLocationsByTraitImpl branchId hash
+
+
+module Value =
+  /// Find stored values whose runtime value type matches exactly.
+  // @compiler blocked: missing-implementation
+  let findByValueType
+    (valueType: RuntimeTypes.ValueType)
+    : List<ProgramTypes.Hash> =
+    Builtin.pmFindValuesByValueType valueType
+
+  // @compiler blocked: missing-implementation
+  let find
+    (branchId: Uuid)
+    (location: ProgramTypes.PackageLocation)
+    : Stdlib.Option.Option<ProgramTypes.FQValueName.Package> =
+    Builtin.pmFindValue branchId location
+
+  // @compiler blocked: missing-implementation
+  let get
+    (hash: ProgramTypes.FQValueName.Package)
+    : Stdlib.Option.Option<ProgramTypes.PackageValue.PackageValue> =
+    Builtin.pmGetValue hash
+
+  /// Every name this value is bound to on <param branchId>.
+  // @compiler blocked: missing-implementation
+  let locations
+    (branchId: Uuid)
+    (hash: ProgramTypes.FQValueName.Package)
+    : List<ProgramTypes.PackageLocation> =
+    Builtin.pmGetLocationsByValue branchId hash
+
+  // @compiler blocked: missing-implementation
+  let getWithLocation
+    (branchId: Uuid)
+    (hash: ProgramTypes.FQValueName.Package)
+    : Stdlib.Option.Option<
+      ProgramTypes.LocatedItem<ProgramTypes.PackageValue.PackageValue>> =
+    match get hash with
+    | Some entity ->
+      match PackageManager.pickLocation PackageManager.PickContext.empty (locations branchId hash) with
+      | Some location ->
+        Stdlib.Option.Option.Some(
+          ProgramTypes.LocatedItem { entity = entity, location = location }
+        )
+      | None -> Stdlib.Option.Option.None
+    | None -> Stdlib.Option.Option.None
+
+
+module Function =
+  // @compiler blocked: missing-implementation
+  let find
+    (branchId: Uuid)
+    (location: ProgramTypes.PackageLocation)
+    : Stdlib.Option.Option<ProgramTypes.FQFnName.Package> =
+    Builtin.pmFindFn branchId location
+
+  // @compiler blocked: missing-implementation
+  let get
+    (hash: ProgramTypes.FQFnName.Package)
+    : Stdlib.Option.Option<ProgramTypes.PackageFn.PackageFn> =
+    Builtin.pmGetFn hash
+
+  /// The fn at <param hash> with its body replaced by `()`, for a caller that only reads the
+  /// signature. Cheaper than `get`: the body is never converted into Dark values.
+  // @compiler blocked: missing-implementation
+  let getSignature
+    (hash: ProgramTypes.FQFnName.Package)
+    : Stdlib.Option.Option<ProgramTypes.PackageFn.PackageFn> =
+    Builtin.pmGetFnSignature hash
+
+  /// Every name this fn is bound to on <param branchId>.
+  // @compiler blocked: missing-implementation
+  let locations
+    (branchId: Uuid)
+    (hash: ProgramTypes.FQFnName.Package)
+    : List<ProgramTypes.PackageLocation> =
+    Builtin.pmGetLocationsByFn branchId hash
+
+  // @compiler blocked: missing-implementation
+  let getWithLocation
+    (branchId: Uuid)
+    (hash: ProgramTypes.FQFnName.Package)
+    : Stdlib.Option.Option<
+      ProgramTypes.LocatedItem<ProgramTypes.PackageFn.PackageFn>> =
+    match get hash with
+    | Some entity ->
+      match PackageManager.pickLocation PackageManager.PickContext.empty (locations branchId hash) with
+      | Some location ->
+        Stdlib.Option.Option.Some(
+          ProgramTypes.LocatedItem { entity = entity, location = location }
+        )
+      | None -> Stdlib.Option.Option.None
+    | None -> Stdlib.Option.Option.None
+
+
+module Test =
+  /// Valid only inside the withStoreSnapshot callback that created it.
+  // @compiler blocked: missing-implementation
+  type Run = { id: Uuid }
+
+  /// Share a starting store across the tests executed by <param run>. Every
+  /// test still gets a private writable copy and a fresh process. Cached-only
+  /// runs create no snapshot; cleanup also runs if the callback fails.
+  // @compiler blocked: missing-implementation
+  let withStoreSnapshot (run: Run -> 'a) : 'a =
+    Builtin.pmTestWithStoreSnapshot (fun id -> run (Run { id = id }))
+
+  /// Conservative proof that a passing result is reusable. Dynamic calls and
+  /// branch-dependent rendering are not treated as cache-safe.
+  // @compiler blocked: missing-implementation
+  let isCacheSafe (hash: ProgramTypes.Hash) : Bool =
+    Builtin.pmTestIsCacheSafe hash
+
+  /// The result type as this branch currently binds it. Judging an ordinary
+  /// test depends on this binding, even when the test's own hash is unchanged.
+  // @compiler blocked: missing-implementation
+  let resultTypeHash (branchId: Uuid) : Stdlib.Option.Option<ProgramTypes.Hash> =
+    Type.find
+      branchId
+      (ProgramTypes.PackageLocation
+        { owner = "Darklang"
+          modules = [ "Stdlib", "Test" ]
+          name = "Result" })
+
+  // @compiler blocked: missing-implementation
+  let find
+    (branchId: Uuid)
+    (location: ProgramTypes.PackageLocation)
+    : Stdlib.Option.Option<ProgramTypes.Hash> =
+    Builtin.pmFindTest branchId location
+
+  // @compiler blocked: missing-implementation
+  let get
+    (hash: ProgramTypes.Hash)
+    : Stdlib.Option.Option<ProgramTypes.PackageTest.PackageTest> =
+    Builtin.pmGetTest hash
+
+  // @compiler blocked: missing-implementation
+  let locations
+    (branchId: Uuid)
+    (hash: ProgramTypes.Hash)
+    : List<ProgramTypes.PackageLocation> =
+    Builtin.pmGetLocationsByTest branchId hash
+
+  /// Run this test's body with an allow-all test instance policy and ordinary
+  /// called-function approvals and ceilings: what it evaluated to,
+  /// reflected, or the error it raised. Nothing is judged here; see `execute`.
+  // @compiler blocked: missing-implementation
+  let executeBody
+    (run: Run)
+    (branchId: Uuid)
+    (hash: ProgramTypes.Hash)
+    : Stdlib.Result.Result<LanguageTools.RuntimeTypes.Dval, LanguageTools.RuntimeTypes.RuntimeError.Error> =
+    // Keep the worker in the dependency graph, just like the result checker.
+    Builtin.pmExecuteTest run.id branchId hash Worker.main
+
+  /// <param value> as a `Stdlib.Test.Result`, or None if it is anything else. The
+  /// enum's type is checked by hash, as <param branchId> sees `Stdlib.Test.Result`,
+  /// so a look-alike `Pass`/`Fail` enum from elsewhere is not taken for one.
+  // @compiler blocked: missing-implementation
+  let asTestResult
+    (branchId: Uuid)
+    (value: LanguageTools.RuntimeTypes.Dval)
+    : Stdlib.Option.Option<Stdlib.Test.Result> =
+    let testType = resultTypeHash branchId
+    match value, testType with
+    | DEnum(Package(Hash actual), _, [], caseName, fields), Some(Hash expected) ->
+      if actual == expected then
+        // `caseName` is matched on its own: a string literal inside a tuple
+        // pattern can silently fall through.
+        match caseName with
+        | "Pass" ->
+          match fields with
+          | [] -> Stdlib.Option.Option.Some Stdlib.Test.Result.Pass
+          | _ -> Stdlib.Option.Option.None
+        | "Fail" ->
+          match fields with
+          | [ DList(_, messages) ] ->
+            let strings =
+              Stdlib.List.filterMap messages (fun m ->
+                match m with
+                | DString s -> Stdlib.Option.Option.Some s
+                | _ -> Stdlib.Option.Option.None)
+            if Stdlib.List.length strings == Stdlib.List.length messages then
+              Stdlib.Option.Option.Some(Stdlib.Test.Result.Fail strings)
+            else
+              Stdlib.Option.Option.None
+          | _ -> Stdlib.Option.Option.None
+        | _ -> Stdlib.Option.Option.None
+      else
+        Stdlib.Option.Option.None
+    | _ -> Stdlib.Option.Option.None
+
+  /// Run this test and judge it. A declaration-level error expectation
+  /// compares either the rendered runtime error or the SQL compiler detail;
+  /// otherwise the body must return a
+  /// `Stdlib.Test.Result`. An Error is a test that could not be judged (missing,
+  /// refused an effect, raised unexpectedly, returned a non-test value), not
+  /// a failing assertion. <param branchId> is the branch names in error
+  /// messages are resolved against.
+  // @compiler blocked: missing-implementation
+  let executeInRun
+    (run: Run)
+    (branchId: Uuid)
+    (hash: ProgramTypes.Hash)
+    : Stdlib.Result.Result<Stdlib.Test.Result, LanguageTools.RuntimeTypes.RuntimeError.Error> =
+    let expected =
+      Stdlib.Option.andThen (get hash) (fun test -> test.expectedError)
+    match expected, executeBody run branchId hash with
+    | Some expected, Ok value ->
+      let actual = PrettyPrinter.RuntimeTypes.dval branchId value
+      let expectedText =
+        match expected with
+        | RuntimeError message -> $"error `{message}`"
+      Stdlib.Result.Result.Ok(
+        Stdlib.Test.fail $"expected the {expectedText}, got the value {actual}"
+      )
+    | Some expected, Error error ->
+      let actual =
+        PrettyPrinter.RuntimeTypes.RuntimeError.toString branchId error
+      match expected with
+      | RuntimeError message ->
+        if actual == message then
+          Stdlib.Result.Result.Ok(Stdlib.Test.pass ())
+        else
+          Stdlib.Result.Result.Ok(
+            Stdlib.Test.fail $"expected the error `{message}`, got `{actual}`"
+          )
+    | None, Ok value ->
+      match asTestResult branchId value with
+      | Some result -> Stdlib.Result.Result.Ok result
+      | None ->
+        Stdlib.Result.Result.Error(
+          LanguageTools.RuntimeTypes.RuntimeError.Error.UncaughtException(
+            "the test body did not return a Stdlib.Test.Result",
+            []
+          )
+        )
+    | None, Error error -> Stdlib.Result.Result.Error error
+
+  /// Run one test without keeping a starting snapshot for subsequent tests.
+  // @compiler blocked: missing-implementation
+  let execute
+    (branchId: Uuid)
+    (hash: ProgramTypes.Hash)
+    : Stdlib.Result.Result<Stdlib.Test.Result, LanguageTools.RuntimeTypes.RuntimeError.Error> =
+    withStoreSnapshot (fun run -> executeInRun run branchId hash)
+
+
+/// Replace provisional hashes with SCC-aware content hashes, including references
+/// between items in the batch.
+// @compiler blocked: missing-implementation
+let stabilizeHashes
+  (ops: List<ProgramTypes.PackageOp>)
+  : List<ProgramTypes.PackageOp> =
+  Builtin.pmStabilizeHashes ops
+
+
+/// Write onto each trait-method call the implementation it resolves to, so a saved item goes on
+/// running what it was written against, and a newer implementation arrives as an ordinary
+/// repoint instead of changing the call underneath it.
+///
+/// Before `stabilizeHashes`, so a pin at a placeholder hash moves with everything else. A call
+/// whose self type is only known at run time (inside a bounded generic) comes back unchanged.
+// @compiler blocked: missing-implementation
+let resolveTraitCalls
+  (ops: List<ProgramTypes.PackageOp>)
+  : List<ProgramTypes.PackageOp> =
+  Builtin.pmResolveTraitCalls ops
+
+
+/// Duplicate declaration names in <param ops>, formatted as
+/// `"fn Owner.Module.name"`. Reject before `stabilizeHashes`, which keys by name.
+// @compiler blocked: missing-implementation
+let duplicateDeclarations
+  (ops: List<ProgramTypes.PackageOp>)
+  : List<String> =
+  Builtin.pmDuplicateDeclarations ops
+
+
+/// Find any item (type, fn, value, trait or impl) at a location.
+/// Returns the hash and what kind of item it is.
+// @compiler blocked: missing-implementation
+let findAny
+  (branchId: Uuid)
+  (location: ProgramTypes.PackageLocation)
+  : Stdlib.Option.Option<(ProgramTypes.Hash * ProgramTypes.ItemKind)> =
+  match Type.find branchId location with
+  | Some hash ->
+    Stdlib.Option.Option.Some((hash, ProgramTypes.ItemKind.Type))
+  | None ->
+    match Function.find branchId location with
+    | Some hash ->
+      Stdlib.Option.Option.Some((hash, ProgramTypes.ItemKind.Fn))
+    | None ->
+      match Value.find branchId location with
+      | Some hash ->
+        Stdlib.Option.Option.Some((hash, ProgramTypes.ItemKind.Value))
+      | None ->
+        match Trait.find branchId location with
+        | Some hash ->
+          Stdlib.Option.Option.Some((hash, ProgramTypes.ItemKind.Trait))
+        | None ->
+          match TraitImpl.find branchId location with
+          | Some hash ->
+            Stdlib.Option.Option.Some((hash, ProgramTypes.ItemKind.TraitImpl))
+          | None ->
+            match Test.find branchId location with
+            | Some hash ->
+              Stdlib.Option.Option.Some((hash, ProgramTypes.ItemKind.Test))
+            | None -> Stdlib.Option.Option.None
+
+
+/// Whether <param owner> has any listed item at all.
+///
+/// `searchNames` would answer the same question, but it scans `locations` in full whatever it finds;
+/// this is an equality seek on the owner index.
+// @compiler blocked: missing-implementation
+let ownerHasItems (branchId: Uuid) (owner: String) : Bool =
+  Builtin.pmOwnerHasItems branchId owner
+
+
+/// The deprecation IN EFFECT for this item on <param branchId>, if any: its
+/// kind and its message.
+///
+/// `None` covers both "never deprecated" and "deprecated and then
+/// undeprecated", which is the distinction a caller usually does NOT want; it
+/// is the current state, not the history.
+///
+/// Deprecation keys on CONTENT, so this answers about the hash rather than
+/// about a name: every name bound to that content shares the answer.
+// @compiler blocked: missing-implementation
+let currentDeprecation
+  (branchId: Uuid)
+  (hash: ProgramTypes.Hash)
+  (itemKind: ProgramTypes.ItemKind)
+  : Stdlib.Option.Option<ProgramTypes.DeprecationKind * String> =
+  Builtin.pmGetCurrentDeprecation branchId hash itemKind
+
+
+module Search =
+  // @compiler blocked: missing-implementation
+  let search
+    (branchId: Uuid)
+    (query: ProgramTypes.Search.SearchQuery)
+    : ProgramTypes.Search.SearchResults =
+    let searchResults = Builtin.pmSearch branchId query
+
+    ProgramTypes.Search.SearchResults
+      { submodules = searchResults.submodules
+        types = searchResults.types
+        values = searchResults.values
+        fns = searchResults.fns
+        traits = searchResults.traits
+        impls = searchResults.impls
+        tests = searchResults.tests }
+
+
+  /// The submodules a READER should see.
+  ///
+  /// An impl's method fns live in a module named for the trait, so every impl leaves a submodule
+  /// beside it with the same name. The impl is already a row of its own, and a numeric type has
+  /// seventeen of them, which buries the functions somebody came to read. Every listing asks here
+  /// -- `dark ls`, `dark tree`, `dark view`, the workbench and the editor's tree view -- so what
+  /// counts as a submodule is decided once rather than five times. It lives beside `search`
+  /// because it is a fact about search results, and because the editor cannot reach into the CLI.
+  // @compiler blocked: missing-implementation
+  let readerSubmodules (submodules: List<String>) (implNames: List<String>) : List<String> =
+    submodules
+    |> Stdlib.List.filter (fun name ->
+      Stdlib.Bool.not (Stdlib.List.contains implNames name))
+
+
+  /// Search returning only names: (direct submodules, types, values, fns, traits, impls,
+  /// tests).
+  ///
+  /// `search` converts every matched item's full definition, parameters and body AST included, into Dark
+  /// values. Completion reads `.location.name` and throws the rest away, which is most of a millisecond
+  /// per item. Submodules come back already reduced to the direct children of the query's module, because
+  /// doing that reduction in Dark means walking every module path under the store root.
+
+  // @compiler blocked: missing-implementation
+  let searchNames
+    (branchId: Uuid)
+    (query: ProgramTypes.Search.SearchQuery)
+    : (List<String> * List<String> * List<String> * List<String> * List<String> * List<String> * List<String>) =
+    Builtin.pmSearchNames branchId query
+
+
+  /// Like `searchNames`, but keeps each item's hash. Listings need it for the deprecation mark; completion
+  /// doesn't, and pays nothing for it.
+  // @compiler blocked: missing-implementation
+  let searchNamesAndHashes
+    (branchId: Uuid)
+    (query: ProgramTypes.Search.SearchQuery)
+    : (List<String> *
+       List<(String * ProgramTypes.Hash)> *
+       List<(String * ProgramTypes.Hash)> *
+       List<(String * ProgramTypes.Hash)> *
+       List<(String * ProgramTypes.Hash)> *
+       List<(String * ProgramTypes.Hash)> *
+       List<(String * ProgramTypes.Hash)>) =
+    Builtin.pmSearchNamesAndHashes branchId query
+
+/// Create a PackageManager
+// @compiler blocked: missing-implementation
+let pm () : ProgramTypes.PackageManager.PackageManager =
+  ProgramTypes.PackageManager.PackageManager
+    { findType =
+        fun (branchId, location) -> PackageManager.Type.find branchId location
+      findValue =
+        fun (branchId, location) -> PackageManager.Value.find branchId location
+      findFn =
+        fun (branchId, location) -> PackageManager.Function.find branchId location
+      findTrait =
+        fun (branchId, location) -> PackageManager.Trait.find branchId location
+
+      getFn = PackageManager.Function.get
+      getValue = PackageManager.Value.get
+      getType = PackageManager.Type.get
+      getTrait = PackageManager.Trait.get
+
+      search =
+        fun (branchId, query) -> PackageManager.Search.search branchId query }

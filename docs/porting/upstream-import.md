@@ -78,7 +78,21 @@ it never leaves a partially implemented container. Member and whole-container
 replacements are not enabled yet; the supported replacement kinds are
 functions, types and `val`s.
 
-The complete annotated source import, production adoption and replacement of
-the old ledger remain subsequent parts of this migration. The old ledger is
-still authoritative until that import is integrated; the parse-only report
-is not an execution receipt.
+The complete corpus is imported under `upstream/` and embedded alongside the
+compiler implementation sources. Root declarations select their replacements;
+explicit compiler supplements retain APIs and helpers that are outside the
+pinned interpreter contract. Compiler replacements preserve the source order of
+those implementation files so constants remain available to their callers.
+
+Both execution assertions and named tests are discovered from the parsed AST.
+Documentation examples in string literals are never tests. A named test is
+wrapped only for execution; its body and expected error remain unchanged. A
+failed named assertion reports its upstream failure messages before returning a
+failed comparison. The imported `Stdlib.Test` package supplies assertion values
+and aggregation; the compiler replacements for value-rendering diagnostics are
+marked explicitly with `test-diagnostics`.
+
+The ledger now reads these sources directly. It has no per-item YAML test or
+declaration mapping and no central exclusion table. Its readiness check rejects
+pending test classifications. Compilation and execution receipts remain separate
+from the source dispositions.

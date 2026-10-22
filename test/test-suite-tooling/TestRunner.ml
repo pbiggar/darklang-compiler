@@ -132,6 +132,8 @@ let printHelp () =
       "  --target=TARGET     Validate host (default) or linux-x86_64";
       "  --timings-json=PATH  Write machine-readable timing data to PATH";
       "  --results-json=PATH  Write individual E2E outcomes for ledger updates";
+      "  --trial-upstream  Run pending imported tests to classify their actual \
+       outcomes";
       "  --codegen-profile-json=PATH  Write opt-in per-function ARM64 codegen \
        metrics";
       "  --quiet            Quiet mode: print 'success' or list failed tests";
@@ -589,6 +591,7 @@ let runTestsWithProgressReporter completedTestReporter args =
     let roundtripAllDark = TestRunnerArgs.hasRoundtripAllDarkArg args
     and showAllTestTimings = TestRunnerArgs.hasAllTestTimingsArg args
     and verbose = TestRunnerArgs.hasVerboseArg args in
+    let trialUpstream = Array.exists (( = ) "--trial-upstream") args in
     let timingsJsonPath = get (TestRunnerArgs.parseTimingsJsonArg args)
     and resultsJsonPath = get (TestRunnerArgs.parseResultsJsonArg args)
     and codegenProfileJsonPath =
@@ -659,7 +662,18 @@ let runTestsWithProgressReporter completedTestReporter args =
       else includeUpstreamDarkPathsForE2E
     in
     let e2eFiles = getTestFiles "e2e" "e2e" in
-    let e2eTestFiles = Array.append e2eFiles includeUpstreamDarkPathsForE2E in
+    let importedFiles =
+      FileIO.readText (RepositoryTestFiles.scriptPath "upstream/sources.list")
+      |> String.split_on_char '\n'
+      |> List.filter (fun line ->
+          line <> "" && not (String.starts_with ~prefix:"#" line))
+      |> List.map (fun path ->
+          RepositoryTestFiles.scriptPath ("upstream/" ^ path))
+      |> Array.of_list |> filterUpstreamDarkPaths
+    in
+    let e2eTestFiles =
+      Array.concat [ e2eFiles; includeUpstreamDarkPathsForE2E; importedFiles ]
+    in
     let _roundtripCorpusTestFiles =
       Array.append e2eFiles includeUpstreamDarkPathsForRoundtrip
     in
@@ -1180,15 +1194,31 @@ let runTestsWithProgressReporter completedTestReporter args =
               recordNonPassTiming F.testRuntimeTimingName runtime
             in
             let recordLogicalResult index (test : E.e2eTest) result =
-              let _, _, _, compile, runtime = unpack (fromResult result) in
+              let run = fromResult result in
+              let exitCode, stdout, stderr, compile, runtime = unpack run in
               results.(index) <- Some (test, result);
               if Option.is_some resultsJsonPath then
                 Queue.add
                   ( RepositoryTestFiles.relativePath test.E.sourceFile,
                     test.E.name,
-                    match result with
-                    | Ok _ -> ("pass", "")
-                    | Error failure -> ("fail", failure.R.message) )
+                    let status, message =
+                      match result with
+                      | Ok _ -> ("pass", "")
+                      | Error failure -> ("fail", failure.R.message)
+                    in
+                    [
+                      ("status", JString status);
+                      ("message", JString message);
+                      ("source_line", JInt test.E.sourceLine);
+                      ( "phase",
+                        JString
+                          (match run with
+                          | R.CompileFailed _ -> "compile"
+                          | R.Ran _ -> "runtime") );
+                      ("exit_code", JInt exitCode);
+                      ("stdout", JString stdout);
+                      ("stderr", JString stderr);
+                    ] )
                   e2eOutcomes;
               recordTiming
                 {
@@ -1631,6 +1661,25 @@ let runTestsWithProgressReporter completedTestReporter args =
           println (C.cyan ^ title ^ C.reset);
           let parseStart = now () in
           let allTests, parseErrors = loadE2ETests files in
+          let allTests =
+            if trialUpstream then
+              Array.map
+                (fun test ->
+                  match test.E.compilerDisposition with
+                  | CompilerAnnotations.Blocked "pending-validation" ->
+                      {
+                        test with
+                        E.compilerDisposition = CompilerAnnotations.Run;
+                        skipReason = None;
+                      }
+                  | CompilerAnnotations.Run | CompilerAnnotations.Blocked _
+                  | CompilerAnnotations.Excluded _
+                  | CompilerAnnotations.Replace _ | CompilerAnnotations.Xfail _
+                    ->
+                      test)
+                allTests
+            else allTests
+          in
           recordNonPassTiming parseTiming (elapsed parseStart);
           reportParseErrors suite parseErrors;
           if Array.length allTests > 0 then begin
@@ -1814,14 +1863,10 @@ let runTestsWithProgressReporter completedTestReporter args =
           queueList e2eOutcomes
           |> List.sort (fun (fileA, nameA, _) (fileB, nameB, _) ->
               compare (fileA, nameA) (fileB, nameB))
-          |> List.map (fun (file, name, (status, message)) ->
+          |> List.map (fun (file, name, outcome) ->
               JObject
-                [
-                  ("source_file", JString file);
-                  ("name", JString name);
-                  ("status", JString status);
-                  ("message", JString message);
-                ])
+                ([ ("source_file", JString file); ("name", JString name) ]
+                @ outcome))
         in
         writeJson false path
           (JObject

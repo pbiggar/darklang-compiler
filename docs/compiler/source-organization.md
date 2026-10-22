@@ -23,7 +23,8 @@ matching `.ml` implementation and `.mli` interface. The Dune graph groups module
 | `src/backend/x64/` | Linux x64 selection, encoding and runtime |
 | `src/backend/binary/` | Shared binary structures and literal pools |
 | `src/driver/` | Compilation contexts, caches, sessions and pipeline orchestration |
-| `packages/` | Dark library packages and compiler support embedded at build time |
+| `packages/` | Compiler replacements and supplemental library implementations embedded at build time |
+| `upstream/` | Complete pinned interpreter package and execution-test sources, with per-item compiler annotations |
 | `tools/differential-testing/` | Typed generation, oracle comparison and syntax reduction |
 | `tools/process/` | Captured process execution shared by tests and differential testing |
 | `test/` | Production unit checks, DSL tooling and suite runner |
@@ -37,7 +38,13 @@ runs through `./run-tests --ai` after `./build --ai`.
 
 ## Standard-library layout
 
-All embedded Dark sources live under `packages/`, matching the interpreter's
+Original imported package sources live under `upstream/packages/`; the complete
+manifest is `upstream/sources.list`. Imported execution tests live under
+`upstream/backend/testfiles/execution/`. Original declarations are selected or
+replaced by their own annotations, and named tests and assertion tests are
+discovered directly from the parsed syntax tree.
+
+Compiler replacement and supplemental sources live under `packages/`, matching the interpreter's
 owner directories and lower-camel-case source paths. The standard library lives
 under `packages/darklang/stdlib/`; other Darklang packages include
 `languageTools/`, `prettyPrinter/` and `scm/`. For example,

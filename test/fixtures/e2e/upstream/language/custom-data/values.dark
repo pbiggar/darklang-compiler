@@ -73,58 +73,95 @@ module UserDefined =
 
 
 module Package =
+  // @compiler blocked: compiler-gap
   Darklang.Test.Values.stringValue = "test"
+  // @compiler blocked: compiler-gap
   "test" = Darklang.Test.Values.stringValue
+  // @compiler blocked: compiler-gap
   Darklang.Test.Values.stringValue = "test"
 
+  // @compiler blocked: compiler-gap
   Darklang.Test.Values.int128Value = 5Q
+  // @compiler blocked: compiler-gap
   Darklang.Test.Values.int128Value = 5Q
 
+  // @compiler blocked: compiler-gap
   Darklang.Test.Values.uint128Value = 5Z
+  // @compiler blocked: compiler-gap
   Darklang.Test.Values.uint128Value = 5Z
 
+  // @compiler blocked: compiler-gap
   Darklang.Test.Values.int64Value = 5L
+  // @compiler blocked: compiler-gap
   Darklang.Test.Values.int64Value = 5L
 
+  // @compiler blocked: compiler-gap
   Darklang.Test.Values.intValue = 5
+  // @compiler blocked: compiler-gap
   Darklang.Test.Values.intValue = 5
 
+  // @compiler blocked: compiler-gap
   Darklang.Test.Values.uint64Value = 5UL
+  // @compiler blocked: compiler-gap
   Darklang.Test.Values.uint64Value = 5UL
 
+  // @compiler blocked: compiler-gap
   Darklang.Test.Values.int32Value = 5l
+  // @compiler blocked: compiler-gap
   Darklang.Test.Values.int32Value = 5l
 
+  // @compiler blocked: compiler-gap
   Darklang.Test.Values.uint32Value = 5ul
+  // @compiler blocked: compiler-gap
   Darklang.Test.Values.uint32Value = 5ul
 
+  // @compiler blocked: compiler-gap
   Darklang.Test.Values.int16Value = 5s
+  // @compiler blocked: compiler-gap
   Darklang.Test.Values.int16Value = 5s
 
+  // @compiler blocked: compiler-gap
   Darklang.Test.Values.uint16Value = 5us
+  // @compiler blocked: compiler-gap
   Darklang.Test.Values.uint16Value = 5us
 
+  // @compiler blocked: compiler-gap
   Darklang.Test.Values.int8Value = 5y
+  // @compiler blocked: compiler-gap
   Darklang.Test.Values.int8Value = 5y
 
+  // @compiler blocked: compiler-gap
   Darklang.Test.Values.uint8Value = 5uy
+  // @compiler blocked: compiler-gap
   Darklang.Test.Values.uint8Value = 5uy
 
+  // @compiler blocked: compiler-gap
   Darklang.Test.Values.floatValue = 5.6
+  // @compiler blocked: compiler-gap
   Darklang.Test.Values.floatValue = 5.6
 
+  // @compiler blocked: compiler-gap
   Darklang.Test.Values.boolValue = true
+  // @compiler blocked: compiler-gap
   Darklang.Test.Values.boolValue = true
 
+  // @compiler blocked: compiler-gap
   Darklang.Test.Values.tupleValue = (1L, 2L, 3L)
+  // @compiler blocked: compiler-gap
   Darklang.Test.Values.tupleValue = (1L, 2L, 3L)
 
+  // @compiler blocked: compiler-gap
   Darklang.Test.Values.charValue = 'c'
+  // @compiler blocked: compiler-gap
   Darklang.Test.Values.charValue = 'c'
 
+  // @compiler blocked: compiler-gap
   Darklang.Test.Values.unitValue = ()
+  // @compiler blocked: compiler-gap
   Darklang.Test.Values.unitValue = ()
 
+  // @compiler blocked: compiler-gap
   Darklang.Test.Values.enumValue = Stdlib.Option.Option.Some 5L
+  // @compiler blocked: compiler-gap
   Darklang.Test.Values.enumValue = Stdlib.Option.Option.Some 5L
 

@@ -1122,10 +1122,9 @@ let definitionStart s =
       "[<";
     ]
 
-let parseLegacyE2ETestFile path =
+let parseLegacyE2ETestFile path raw =
   if not (FileIO.exists path) then Error ("Test file not found: " ^ path)
   else
-    let raw = readLines path in
     let allowIndented = String.ends_with ~suffix:".dark" (lowerAscii path) in
     let overrides, directives, directiveErrors =
       match collectCompileErrorOverrides raw with
@@ -1528,19 +1527,6 @@ let parseNamedE2ETestFile path raw =
     Error "A #compileerror directive must immediately precede a named test"
   else if !errors <> [] then Error (String.concat "\n" (List.rev !errors))
   else
-    let rec adapterPath directory =
-      let candidate = Filename.concat directory "support/named-test.dark" in
-      if FileIO.exists candidate then Ok candidate
-      else
-        let parent = Filename.dirname directory in
-        if parent = directory then
-          Error "Named fixture assertion adapter was not found"
-        else adapterPath parent
-    in
-    let* adapterPath =
-      adapterPath (FileIO.absolutePath (Filename.dirname path))
-    in
-    let adapter = FileIO.readText adapterPath in
     (* Removing named tests can leave an empty nested module. Drop its header
        so preamble parsing does not fall back to discarding scoped declarations. *)
     let _, preamble =
@@ -1559,7 +1545,7 @@ let parseNamedE2ETestFile path raw =
           else (Some indent, line :: kept))
         (List.rev !preamble) (None, [])
     in
-    let preamble = adapter ^ "\n" ^ String.concat "\n" preamble in
+    let preamble = String.concat "\n" preamble in
     Ok
       (List.rev_map
          (fun test ->
@@ -1579,79 +1565,275 @@ let parseNamedE2ETestFile path raw =
                })
          !tests)
 
-let parseE2ETestFileUnannotated path =
+let parseE2ETestFileUnannotated path raw =
   if FileIO.exists path && String.ends_with ~suffix:".dark" (lowerAscii path)
   then
-    let raw = readLines path in
     if Array.exists (fun line -> starts (trim line) "test ") raw then
       parseNamedE2ETestFile path raw
-    else parseLegacyE2ETestFile path
-  else parseLegacyE2ETestFile path
+    else parseLegacyE2ETestFile path raw
+  else parseLegacyE2ETestFile path raw
+
+(* Imported files use parsed declaration ranges: examples in strings are data,
+   and each named test remains one case even when it contains many assertions. *)
+let parseCanonicalE2ETestFile path raw (inventory : SourceInventory.source) =
+  let ( let* ) = Result.bind in
+  let module W = WrittenTypes in
+  let module T = Tokenizer in
+  let sourceText (range : T.tokenRange) =
+    List.init
+      (range.T.end_.T.row - range.T.start.T.row + 1)
+      (fun offset ->
+        let row = range.T.start.T.row + offset in
+        let line = if row < Array.length raw then raw.(row) else "" in
+        let first = if offset = 0 then range.T.start.T.column else 0 in
+        let last =
+          if row = range.T.end_.T.row then range.T.end_.T.column
+          else length line
+        in
+        slice line first (max 0 (min (length line) last - first)))
+    |> String.concat "\n"
+  in
+  let nodes = SourceSelection.nodes path inventory in
+  let tokens =
+    match Lexer.tokenize (String.concat "\n" (Array.to_list raw)) with
+    | Ok (tokens, _) -> tokens
+    | Error _ -> []
+  in
+  let declarationRange = function
+    | W.DFunction fn -> Some fn.W.range
+    | W.DValue value -> Some value.W.range
+    | W.DType typ -> Some typ.W.range
+    | W.DTrait trait_ -> Some trait_.W.range
+    | W.DImpl impl -> Some impl.W.range
+    | W.DExpr _ | W.DModule _ | W.DTest _ | W.DAssertion _ -> None
+  in
+  let preamble =
+    if Text.contains path "upstream/packages/" then ""
+    else
+      nodes
+      |> List.filter_map (fun node ->
+          match
+            ( node.SourceSelection.disposition,
+              declarationRange node.SourceSelection.declaration )
+          with
+          | CompilerAnnotations.Run, Some range ->
+              let text = sourceText range in
+              let lines =
+                String.split_on_char '\n' text
+                |> List.mapi (fun i line ->
+                    if i = 0 then line
+                    else trimLeadingSpaces range.T.start.T.column line)
+              in
+              Some
+                (if node.SourceSelection.path = [] then String.concat "\n" lines
+                 else
+                   "module "
+                   ^ String.concat "." node.SourceSelection.path
+                   ^ " =\n"
+                   ^ String.concat "\n" (List.map (( ^ ) "  ") lines))
+          | ( ( CompilerAnnotations.Blocked _ | CompilerAnnotations.Excluded _
+              | CompilerAnnotations.Replace _ | CompilerAnnotations.Xfail _ ),
+              _ )
+          | CompilerAnnotations.Run, None ->
+              None)
+      |> String.concat "\n"
+  in
+  let make (node : SourceSelection.node) position source expectation modulePath
+      =
+    let* test =
+      parseTestLineWithPreamble ("0L = " ^ expectation) (position.T.row + 1)
+        path preamble StringMap.empty
+    in
+    Ok
+      {
+        test with
+        source;
+        modulePath;
+        name =
+          "L"
+          ^ string_of_int (position.T.row + 1)
+          ^ ": " ^ node.SourceSelection.name;
+      }
+  in
+  ResultList.traverse
+    (fun node ->
+      match node.SourceSelection.declaration with
+      | W.DAssertion assertion -> (
+          let ending = (W.exprRange assertion.W.actual).T.end_ in
+          let separator =
+            List.find_opt
+              (fun (token : Lexer.spannedToken) ->
+                token.Lexer.token = T.TEquals
+                && token.Lexer.range.T.start >= ending
+                && token.Lexer.range.T.start < assertion.W.range.T.end_)
+              tokens
+          in
+          match separator with
+          | None -> Error "Parsed assertion has no expectation separator"
+          | Some separator ->
+              let actual =
+                sourceText
+                  {
+                    T.start = assertion.W.range.T.start;
+                    end_ = separator.Lexer.range.T.start;
+                  }
+              in
+              let expected =
+                sourceText
+                  {
+                    T.start = separator.Lexer.range.T.end_;
+                    end_ = assertion.W.range.T.end_;
+                  }
+              in
+              make node assertion.W.range.T.start actual expected
+                node.SourceSelection.path
+              |> Result.map Option.some)
+      | W.DTest test ->
+          let ending =
+            match test.W.symbolOutcome with
+            | Some range -> range.T.start
+            | None -> test.W.range.T.end_
+          in
+          let body =
+            sourceText { T.start = test.W.symbolEquals.T.end_; end_ = ending }
+            |> String.split_on_char '\n'
+            |> List.mapi (fun i line ->
+                if i = 0 then trim line
+                else
+                  trimLeadingSpaces
+                    (test.W.keywordTest.T.start.T.column + 2)
+                    line)
+            |> String.concat "\n" |> trim
+          in
+          let scope = node.SourceSelection.path in
+          let source, expectation =
+            match test.W.expectedError with
+            | Some (_, W.RuntimeError message) ->
+                ( (if scope = [] then ""
+                   else "module " ^ String.concat "." scope ^ "\n")
+                  ^ body,
+                  "error=" ^ Yojson.Basic.to_string (`String message) )
+            | None ->
+                let name =
+                  "__upstreamTest_"
+                  ^ string_of_int (test.W.keywordTest.T.start.T.row + 1)
+                in
+                let declaration =
+                  "let " ^ name ^ " () : Stdlib.Test.Result =\n"
+                  ^ String.concat "\n"
+                      (List.map (( ^ ) "  ") (String.split_on_char '\n' body))
+                in
+                ( (if scope = [] then declaration
+                   else
+                     "module " ^ String.concat "." scope ^ " =\n"
+                     ^ String.concat "\n"
+                         (List.map (( ^ ) "  ")
+                            (String.split_on_char '\n' declaration)))
+                  ^ "\n" ^ "match "
+                  ^ String.concat "." (scope @ [ name ])
+                  ^ " () with\n" ^ "| Stdlib.Test.Result.Pass -> true\n"
+                  ^ "| Stdlib.Test.Result.Fail messages ->\n"
+                  ^ "  let _ = Stdlib.printLine \"Imported test failed\" in\n"
+                  ^ "  let _ = Stdlib.List.iter messages Stdlib.printLine in\n"
+                  ^ "  false",
+                  "true" )
+          in
+          make node test.W.keywordTest.T.start source expectation []
+          |> Result.map Option.some
+      | W.DFunction _ | W.DValue _ | W.DType _ | W.DTrait _ | W.DImpl _
+      | W.DExpr _ | W.DModule _ ->
+          Ok None)
+    nodes
+  |> Result.map (List.filter_map Fun.id)
 
 let parseE2ETestFile path =
   let ( let* ) = Result.bind in
-  let* tests = parseE2ETestFileUnannotated path in
   let raw = readLines path in
-  let text = String.concat "\n" (Array.to_list raw) in
-  if not (Text.contains text "// @compiler") then Ok tests
-  else
-    let* reasons =
-      CompilerAnnotations.parseReasons EmbeddedStdlib.compilerReasons
-    in
-    (* Expectation overrides belong to the fixture grammar. Mask their text while
-     retaining positions so annotations can precede or follow an override. *)
-    let text =
-      Array.map
-        (fun line ->
-          if String.starts_with ~prefix:"#compileerror" (trim line) then
-            String.make (String.length line) ' '
-          else line)
-        raw
-      |> Array.to_list |> String.concat "\n"
-    in
-    let items =
-      List.map
-        (fun test ->
-          {
-            CompilerAnnotations.position =
-              {
-                Tokenizer.row = test.sourceLine - 1;
-                column = countLeadingSpaces raw.(test.sourceLine - 1);
-              };
-            isTest = true;
-          })
-        tests
-    in
-    let* annotations = CompilerAnnotations.read ~reasons ~items text in
-    ResultList.traverse
-      (fun test ->
-        let position =
-          {
-            Tokenizer.row = test.sourceLine - 1;
-            column = countLeadingSpaces raw.(test.sourceLine - 1);
-          }
-        in
-        let compilerDisposition = CompilerAnnotations.at annotations position in
-        match compilerDisposition with
-        | CompilerAnnotations.Run | CompilerAnnotations.Xfail _ ->
-            Ok { test with compilerDisposition }
-        | CompilerAnnotations.Blocked reason ->
-            Ok
-              {
-                test with
-                compilerDisposition;
-                skipReason = Some ("blocked: " ^ reason);
-              }
-        | CompilerAnnotations.Excluded reason ->
-            Ok
-              {
-                test with
-                compilerDisposition;
-                skipReason = Some ("excluded: " ^ reason);
-              }
-        | CompilerAnnotations.Replace _ ->
-            Error "Tests cannot have replacement implementations")
-      tests
+  let canonical =
+    Text.contains
+      (String.map (fun c -> if c = '\\' then '/' else c) path)
+      "upstream/"
+    && not (Text.contains path "e2e/upstream/")
+  in
+  let* reasons =
+    CompilerAnnotations.parseReasons EmbeddedStdlib.compilerReasons
+  in
+  let text =
+    Array.map
+      (fun line ->
+        if String.starts_with ~prefix:"#compileerror" (trim line) then
+          String.make (String.length line) ' '
+        else line)
+      raw
+    |> Array.to_list |> String.concat "\n"
+  in
+  let* inventory =
+    if canonical then
+      SourceInventory.parse ~reasons text |> Result.map Option.some
+    else Ok None
+  in
+  let* tests =
+    match inventory with
+    | Some inventory -> parseCanonicalE2ETestFile path raw inventory
+    | None -> parseE2ETestFileUnannotated path raw
+  in
+  let items =
+    match inventory with
+    | Some inventory ->
+        List.map
+          (fun entry ->
+            {
+              CompilerAnnotations.position = entry.SourceInventory.position;
+              isTest = SourceInventory.isTest entry.SourceInventory.kind;
+            })
+          inventory.SourceInventory.entries
+    | None ->
+        List.map
+          (fun test ->
+            {
+              CompilerAnnotations.position =
+                {
+                  Tokenizer.row = test.sourceLine - 1;
+                  column = countLeadingSpaces raw.(test.sourceLine - 1);
+                };
+              isTest = true;
+            })
+          tests
+  in
+  let* annotations =
+    if Text.contains text "// @compiler" then
+      CompilerAnnotations.read ~reasons ~items text
+    else Ok []
+  in
+  ResultList.traverse
+    (fun test ->
+      let position =
+        {
+          Tokenizer.row = test.sourceLine - 1;
+          column = countLeadingSpaces raw.(test.sourceLine - 1);
+        }
+      in
+      let compilerDisposition = CompilerAnnotations.at annotations position in
+      match compilerDisposition with
+      | CompilerAnnotations.Run | CompilerAnnotations.Xfail _ ->
+          Ok { test with compilerDisposition }
+      | CompilerAnnotations.Blocked reason ->
+          Ok
+            {
+              test with
+              compilerDisposition;
+              skipReason = Some ("blocked: " ^ reason);
+            }
+      | CompilerAnnotations.Excluded reason ->
+          Ok
+            {
+              test with
+              compilerDisposition;
+              skipReason = Some ("excluded: " ^ reason);
+            }
+      | CompilerAnnotations.Replace _ ->
+          Error "Tests cannot have replacement implementations")
+    tests
 
 let parseE2ETest _path =
   Error "Old format no longer supported - use parseE2ETestFile instead"

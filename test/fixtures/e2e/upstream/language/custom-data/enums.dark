@@ -4,10 +4,13 @@ Stdlib.Option.Option.None = Stdlib.Option.Option.None
 
 (Stdlib.List.head []) = Stdlib.Option.Option.None
 
+// @compiler blocked: compiler-gap
 Stdlib.Result.Result.Ok(Builtin.testRuntimeError "err") = error="Uncaught exception: err"
 
+// @compiler blocked: compiler-gap
 Stdlib.Option.Option.Some(Builtin.testRuntimeError "err") = error="Uncaught exception: err"
 
+// @compiler blocked: compiler-gap
 Stdlib.Result.Result.Error(Builtin.testRuntimeError "err") = error="Uncaught exception: err"
 
 module Errors =
@@ -71,6 +74,7 @@ module MixedCases =
   EnumOfMixedCases.Z 1L = compileerror="Constructor 'MixedCases.EnumOfMixedCases.Z' expects 2 fields"
 
   // Test ordering of evaluation
+  // @compiler blocked: compiler-gap
   EnumOfMixedCases.Z(Builtin.testRuntimeError "1", Builtin.testRuntimeError "2") = error="Uncaught exception: 1"
 
   (let values =

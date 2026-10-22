@@ -598,9 +598,11 @@ let testCompilerRuntimeXfailStrictness () =
       let expected = Ran (1, "", "known runtime failure", 0L, 0L) in
       let signal = Ran (139, "", "known runtime failure", 0L, 0L) in
       let wrongPhase = CompileFailed (1, "known runtime failure", 0L) in
+      let leaked = Ran (1, "", "known runtime failure\nleaks: 1\n", 0L, 0L) in
       require
         (Result.is_ok (evaluateExpectations test expected)
         && Result.is_error (evaluateExpectations test signal)
+        && Result.is_error (evaluateExpectations test leaked)
         && Result.is_error (evaluateExpectations test wrongPhase))
         "Runtime xfail accepted an unrelated phase or signal")
 

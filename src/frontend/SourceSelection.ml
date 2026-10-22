@@ -251,9 +251,11 @@ let select ~context ~roots ~supplements ~sources =
       S.empty chosen
   in
   let* supplementalSources = ResultList.traverse lookup supplements in
+  let compilerOrder =
+    List.map2 nodes supplements supplementalSources |> List.concat
+  in
   let supplementalNodes =
-    List.map2 nodes supplements supplementalSources
-    |> List.concat
+    compilerOrder
     |> List.filter (fun node ->
         not (S.mem (kind node.declaration ^ ":" ^ node.name) claimed))
   in
@@ -294,7 +296,25 @@ let select ~context ~roots ~supplements ~sources =
       "Compiler-only replacement helpers cannot themselves have replacement \
        annotations"
   else
-    let chosen = chosen @ supplemental @ support in
+    let order =
+      List.mapi
+        (fun index node -> (kind node.declaration ^ ":" ^ node.name, index))
+        compilerOrder
+      |> StringOrder.Map.of_list
+    in
+    let rank node =
+      Option.value ~default:max_int
+        (StringOrder.Map.find_opt
+           (kind node.declaration ^ ":" ^ node.name)
+           order)
+    in
+    (* Values are inferred in source order. Preserve the order of explicitly
+       supplied compiler implementation files when selecting replacements. *)
+    let chosen =
+      chosen @ supplemental @ support
+      |> List.stable_sort (fun left right ->
+          Int.compare (rank left) (rank right))
+    in
     let rec checkNames seen = function
       | [] -> Ok ()
       | (node : node) :: rest ->

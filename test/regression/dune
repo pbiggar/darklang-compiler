@@ -1,6 +1,17 @@
 ; Native equivalence and allocation regression checks.
 (rule
  (alias runtest)
+ (deps ../../scripts/test_imported_sources.py ../../scripts/update-ledger.py ../../scripts/ledger_sources.py
+  (source_tree ../../upstream) (source_tree ../../porting))
+ (action (run python3 %{dep:../../scripts/test_imported_sources.py}
+  %{exe:../../tools/ledger/parse_sources.exe} %{exe:../../tools/ledger/inventory_tests.exe} ../..)))
+(rule
+ (alias runtest)
+ (deps ../../scripts/test_ledger.py ../../scripts/test_ledger_sources.py ../../scripts/update-ledger.py ../../scripts/ledger_sources.py)
+ (action (progn (run python3 %{dep:../../scripts/test_ledger.py})
+                (run python3 %{dep:../../scripts/test_ledger_sources.py}))))
+(rule
+ (alias runtest)
  (deps ../../scripts/test_upstream_parsing.py ../../scripts/check-upstream-parsing.py ../../scripts/ledger_sources.py)
  (action (run python3 %{dep:../../scripts/test_upstream_parsing.py} %{exe:../../tools/ledger/parse_sources.exe})))
 (rule

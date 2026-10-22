@@ -1,0 +1,348 @@
+module Darklang.Stdlib.Http
+
+
+// @compiler replace: packages/darklang/stdlib/http.dark#Darklang.Stdlib.Http.Request reason=compiler-implementation
+type Request =
+  { url: String
+    headers: List<String * String>
+    body: Blob }
+
+
+/// Parse the query-string portion of a URL into a Dict. Duplicates resolve
+/// to the last-wins value (matches `Stdlib.Http.Request.queryParams`'s
+/// last-wins join when used with `Dict.fromListOverwritingDuplicates`).
+// @compiler replace: packages/darklang/stdlib/http.dark#Darklang.Stdlib.Http.parseQueryString reason=compiler-implementation
+let parseQueryString (url: String) : Dict<String, String> =
+  match Stdlib.String.split url "?" with
+  | [] -> Stdlib.Dict.empty
+  | [_] -> Stdlib.Dict.empty
+  | _ :: queryParts ->
+    (Stdlib.String.join queryParts "?")
+    |> Stdlib.String.split "&"
+    |> Stdlib.List.filterMap (fun param ->
+      if param == "" then
+        Stdlib.Option.Option.None
+      else
+        // Decoded, like `Request.queryParams`: a caller reading `?q=List+map`
+        // wants the two words, not the plus sign that carried the space.
+        match Stdlib.String.split param "=" with
+        | [] -> Stdlib.Option.Option.None
+        | key :: rest ->
+          // `?a=b=c` gives key="a", value="b=c"
+          Stdlib.Option.Option.Some(
+            (Stdlib.Http.urlDecode key,
+             Stdlib.Http.urlDecode (Stdlib.String.join rest "="))))
+    |> Stdlib.Dict.fromListOverwritingDuplicates
+
+
+/// Parse a string of HTTP header lines (one `Name: value` per line, CR/LF or
+/// LF separated) into a Dict. Duplicates resolve to the last-wins value.
+/// Header names are kept verbatim — case-insensitive lookup is the caller's
+/// responsibility (see `String.equalsCaseInsensitive`).
+// @compiler replace: packages/darklang/stdlib/http.dark#Darklang.Stdlib.Http.parseHeaders reason=compiler-implementation
+let parseHeaders (s: String) : Dict<String, String> =
+  s
+  |> Stdlib.String.replaceAll "\r\n" "\n"
+  |> Stdlib.String.split "\n"
+  |> Stdlib.List.filterMap (fun line ->
+    let trimmed = Stdlib.String.trim line
+    if trimmed == "" then
+      Stdlib.Option.Option.None
+    else
+      match Stdlib.String.split trimmed ":" with
+      | [] -> Stdlib.Option.Option.None
+      | [ _ ] -> Stdlib.Option.Option.None
+      | name :: rest ->
+        let value = (Stdlib.String.join rest ":") |> Stdlib.String.trim
+        Stdlib.Option.Option.Some((Stdlib.String.trim name, value)))
+  |> Stdlib.Dict.fromListOverwritingDuplicates
+
+
+/// Percent-decoding for one query-string field.
+///
+/// Decodes at the BYTE level and only reads the result back as text at the end,
+/// because an escape is a BYTE and a non-ASCII character is several of them:
+/// `%C3%A9` is one `e-acute`, not two characters. Decoding per character produces
+/// mojibake for every name that is not plain ASCII.
+///
+/// `+` is a space. That is not decoration: an HTML form doing a GET encodes a
+/// space that way, so a two-word search from a form field arrives as `a+b`.
+///
+/// A `%` that does not start two hex digits is passed through as itself rather
+/// than dropped. A search box is allowed to contain a percent sign.
+// @compiler replace: packages/darklang/stdlib/http.dark#Darklang.Stdlib.Http.urlDecode reason=compiler-implementation
+let urlDecode (s: String) : String =
+  match Stdlib.String.split (Stdlib.String.replaceAll s "+" " ") "%" with
+  | [] -> ""
+  | first :: rest ->
+    rest
+    |> Stdlib.List.fold (Stdlib.String.toBytes first) (fun acc piece ->
+      let hex = Stdlib.String.slice piece 0 2
+
+      // The length check is not redundant: `Blob.fromHex ""` succeeds, so a `%`
+      // at the very end of the string decodes to no bytes at all and vanishes.
+      match
+        (if (Stdlib.String.length hex) == 2 then
+           Stdlib.Blob.fromHex hex
+         else
+           Stdlib.Result.Result.Error "not an escape")
+      with
+      | Ok b ->
+        Stdlib.List.append
+          (Stdlib.List.append acc (Stdlib.Blob.toList b))
+          (Stdlib.String.toBytes (Stdlib.String.dropFirst piece 2))
+      | Error _ -> Stdlib.List.append acc (Stdlib.String.toBytes ("%" + piece)))
+    |> Stdlib.String.fromBytesWithReplacement
+
+
+module Request =
+  /// The query string, decoded.
+  ///
+  /// Splits each field at its FIRST `=` only. A value is allowed to contain one
+  /// (base64 padding and any nested query string do), and requiring exactly two
+  /// pieces dropped the whole field on the floor: `?q=a=b` read as though `q`
+  /// had never been sent.
+  // @compiler replace: packages/darklang/stdlib/http/request.dark#Darklang.Stdlib.Http.Request.queryParams reason=compiler-implementation
+  let queryParams (req: Stdlib.Http.Request) : List<String * String> =
+    match req.url |> Stdlib.String.split "?" with
+    | [] -> []
+    | _ :: queryParts ->
+      (Stdlib.String.join queryParts "?")
+      |> Stdlib.String.split "&"
+      |> Stdlib.List.map (fun param ->
+        match Stdlib.String.split param "=" with
+        | [] -> ("", "")
+        | key :: valueParts ->
+          (Stdlib.Http.urlDecode key,
+           Stdlib.Http.urlDecode (Stdlib.String.join valueParts "=")))
+
+  /// The value of <param key>, matched case-INSENSITIVELY, as HTTP requires: a client
+  /// may send `Authorization`, `authorization` or `AUTHORIZATION` and all three mean the
+  /// same header. A case-sensitive lookup reads as "the client didn't send it", which for
+  /// an auth check refuses a request that was perfectly well formed.
+  ///
+  /// The first match wins. A repeated header is legal and means a list, which no caller
+  /// here wants yet; taking the first is the same choice <fn queryParam> makes.
+  // @compiler replace: packages/darklang/stdlib/http/request.dark#Darklang.Stdlib.Http.Request.header reason=compiler-implementation
+  let header
+    (req: Stdlib.Http.Request)
+    (key: String)
+    : Stdlib.Option.Option<String> =
+    let wanted = Stdlib.String.toLowercase key
+
+    req.headers
+    |> Stdlib.List.filterMap (fun pair ->
+      let (k, v) = pair
+
+      if (Stdlib.String.toLowercase k) == wanted then
+        Stdlib.Option.Option.Some v
+      else
+        Stdlib.Option.Option.None)
+    |> Stdlib.List.head
+
+  // @compiler replace: packages/darklang/stdlib/http/request.dark#Darklang.Stdlib.Http.Request.queryParam reason=compiler-implementation
+  let queryParam
+    (req: Stdlib.Http.Request)
+    (key: String)
+    : Stdlib.Option.Option<String> =
+    let found =
+      (Stdlib.Http.Request.queryParams req)
+      |> Stdlib.List.filterMap (fun pair ->
+        match pair with
+        | (k, v) ->
+          if k == key then
+            Stdlib.Option.Option.Some v
+          else
+            Stdlib.Option.Option.None
+        | _ -> Stdlib.Option.Option.None)
+
+    match found with
+    | [] -> Stdlib.Option.Option.None
+    | [ v ] -> Stdlib.Option.Option.Some v
+    // TODO: something else?
+    | items -> Stdlib.Option.Option.Some(Stdlib.String.join items ",")
+
+
+// @compiler replace: packages/darklang/stdlib/http.dark#Darklang.Stdlib.Http.Response reason=compiler-implementation
+type Response =
+  { statusCode: Int
+    headers: List<String * String>
+    body: Blob }
+
+/// Returns a <type Response> that can be returned from an HTTP handler to
+/// respond with HTTP status <param code> and <param response> body.
+// @compiler replace: packages/darklang/stdlib/http.dark#Darklang.Stdlib.Http.response reason=compiler-implementation
+let response (body: Blob) (statusCode: Int) : Stdlib.Http.Response =
+  Stdlib.Http.Response
+    { statusCode = statusCode
+      headers = []
+      body = body }
+
+/// Returns a <type Response> that can be returned from an HTTP handler to
+/// respond with HTTP status <param code>, <param response> body and
+/// <param headers>.
+// @compiler replace: packages/darklang/stdlib/http.dark#Darklang.Stdlib.Http.responseWithHeaders reason=compiler-implementation
+let responseWithHeaders
+  (body: Blob)
+  (headers: List<String * String>)
+  (statusCode: Int)
+  : Stdlib.Http.Response =
+  Stdlib.Http.Response
+    { statusCode = statusCode
+      headers = headers
+      body = body }
+
+/// Returns a <type Response> that can be returned from an HTTP handler to
+/// respond with HTTP status 200 and <param response> body.
+// @compiler replace: packages/darklang/stdlib/http.dark#Darklang.Stdlib.Http.success reason=compiler-implementation
+let success (body: Blob) : Stdlib.Http.Response =
+  Stdlib.Http.Response
+    { statusCode = 200
+      headers = []
+      body = body }
+
+/// Returns a <type Response> that can be returned from an HTTP handler to
+/// respond with HTTP status 200, <param response> body, with the
+/// Content-Type header set to "text/html; charset=utf-8".
+// @compiler replace: packages/darklang/stdlib/http.dark#Darklang.Stdlib.Http.responseWithHtml reason=compiler-implementation
+let responseWithHtml
+  (body: String)
+  (statusCode: Int)
+  : Stdlib.Http.Response =
+  Stdlib.Http.Response
+    { statusCode = statusCode
+      headers = [ ("Content-Type", "text/html; charset=utf-8") ]
+      body = body |> Stdlib.String.toBlob }
+
+
+/// Returns a <type Response> that can be returned from an HTTP handler to
+/// respond with HTTP status 200, <param response> body, with the
+/// Content-Type header set to "text/plain; charset=utf-8".
+// @compiler replace: packages/darklang/stdlib/http.dark#Darklang.Stdlib.Http.responseWithText reason=compiler-implementation
+let responseWithText
+  (text: String)
+  (statusCode: Int)
+  : Stdlib.Http.Response =
+  Stdlib.Http.Response
+    { statusCode = statusCode
+      headers = [ ("Content-Type", "text/plain; charset=utf-8") ]
+      body = Stdlib.String.toBlob text }
+
+/// Returns a <type Response> that can be returned from an HTTP handler to
+/// respond with HTTP status 200, <param response> body, with the
+/// Content-Type header set to "application/json".
+// @compiler replace: packages/darklang/stdlib/http.dark#Darklang.Stdlib.Http.responseWithJson reason=compiler-implementation
+let responseWithJson
+  (json: String)
+  (statusCode: Int)
+  : Stdlib.Http.Response =
+  Stdlib.Http.Response
+    { statusCode = statusCode
+      headers = [ ("Content-Type", "application/json") ]
+      body = Stdlib.String.toBlob json }
+
+/// Returns a <type Response> that can be returned from an HTTP handler to
+/// respond with {{302}} status code and redirect to <param url>.
+// @compiler replace: packages/darklang/stdlib/http.dark#Darklang.Stdlib.Http.redirectTo reason=compiler-implementation
+let redirectTo (url: String) : Stdlib.Http.Response =
+  Stdlib.Http.Response
+    { statusCode = 302
+      headers = [ ("Location", url) ]
+      body = Stdlib.Blob.empty }
+
+/// Returns a <type Response> that can be returned from an HTTP handler to
+/// respond with {{400}} status code and <param response> body.
+// @compiler replace: packages/darklang/stdlib/http.dark#Darklang.Stdlib.Http.badRequest reason=compiler-implementation
+let badRequest (error: String) : Stdlib.Http.Response =
+  Stdlib.Http.Response
+    { statusCode = 400
+      headers = []
+      body = Stdlib.String.toBlob error }
+
+/// Returns a <type Response> that can be returned from an HTTP handler to
+/// respond with {{404}} status code.
+// @compiler replace: packages/darklang/stdlib/http.dark#Darklang.Stdlib.Http.notFound reason=compiler-implementation
+let notFound () : Stdlib.Http.Response =
+  Stdlib.Http.Response
+    { statusCode = 404
+      headers = []
+      body = Stdlib.Blob.empty }
+
+/// Returns a <type Response> that can be returned from an HTTP handler to
+/// respond with {{401}} status code.
+// @compiler replace: packages/darklang/stdlib/http.dark#Darklang.Stdlib.Http.unauthorized reason=compiler-implementation
+let unauthorized () : Stdlib.Http.Response =
+  Stdlib.Http.Response
+    { statusCode = 401
+      headers = []
+      body = Stdlib.Blob.empty }
+
+/// Returns a <type Response> that can be returned from an HTTP handler to
+/// respond with {{403}} status code.
+// @compiler replace: packages/darklang/stdlib/http.dark#Darklang.Stdlib.Http.forbidden reason=compiler-implementation
+let forbidden () : Stdlib.Http.Response =
+  Stdlib.Http.Response
+    { statusCode = 403
+      headers = []
+      body = Stdlib.Blob.empty }
+
+/// Returns a <type Response> that can be returned from an HTTP handler to
+/// respond with {{500}} status code and <param error> body.
+// @compiler replace: packages/darklang/stdlib/http.dark#Darklang.Stdlib.Http.serverError reason=compiler-implementation
+let serverError (error: String) : Stdlib.Http.Response =
+  Stdlib.Http.Response
+    { statusCode = 500
+      headers = []
+      body = Stdlib.String.toBlob error }
+
+// @compiler replace: packages/darklang/stdlib/http.dark#Darklang.Stdlib.Http.Cookie reason=compiler-implementation
+type Cookie =
+  { expires: DateTime
+    maxAge: Int
+    domain: String
+    path: String
+    secure: Bool
+    httpOnly: Bool
+    sameSite: String }
+
+// TODO: this references several things that don't actually exist
+// (e.g. Stdlib.DateTime.dayOfWeek)
+// /// Returns an HTTP Set-Cookie header <type (String*String)> suitable for use with <fn
+// /// Http.responseWithHeaders>, given a cookie <param name>, a <type String>
+// /// <param value> for it, and a <type Dict> of Set-Cookie <param params>
+// /// ({{Expires}}, {{Max-Age}}, {{Domain}}, {{Path}}, {{Secure}}, {{HttpOnly}},
+// /// and/or {{SameSite}}).
+// let cookie
+//   (name: String)
+//   (value: String)
+//   (cookie: Cookie)
+//   : Stdlib.Result.Result<(String * String), String> =
+//   if
+//     not (
+//       Stdlib.List.contains
+//         [ "strict", "lax", "none" ]
+//         (Stdlib.String.toLowercase cookie.sameSite)
+//     )
+//   then
+//     Error "SameSite must be either \"Strict\" or \"Lax\" or \"None\""
+//   else
+//     let expires =
+//       let e = cookie.expires
+//       $"{Stdlib.DateTime.dayOfWeek e}, {Stdlib.DateTime.day e} {Stdlib.DateTime.month e} {Stdlib.DateTime.year e} {Stdlib.DateTime.hour e}:{Stdlib.DateTime.minute e}:{Stdlib.DateTime.second} GMT"
+
+//     let cookie =
+//       [ ("Expires", expires)
+//         ("Max-Age", cookie.maxAge |> Stdlib.toString)
+//         ("Domain", cookie.domain)
+//         ("Path", cookie.path)
+//         ("Secure", cookie.secure |> Stdlib.toString)
+//         ("HttpOnly", cookie.httpOnly |> Stdlib.toString)
+//         ("SameSite", cookie.sameSite) ]
+//       |> Stdlib.List.filterMap (fun (k, v) -> if v == "" then Stdlib.Option.Option.None else Stdlib.Option.Option.Some(k, v))
+//       |> Stdlib.List.map (fun (k, v) -> k + "=" + v)
+//       |> Stdlib.String.join "; "
+
+//     if cookie == "" then
+//       Error "Cookie must have at least one parameter"
+//     else
+//       Ok("Set-Cookie", name + "=" + value + "; " + cookie)

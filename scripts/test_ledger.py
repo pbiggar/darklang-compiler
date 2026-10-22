@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Check compact ledgers preserve port gaps and exceptional test decisions."""
+"""Regressions for the source-owned ledger and byte-preserving pin verification."""
 import importlib.util
 from pathlib import Path
 import tempfile
 import unittest
-
+from unittest.mock import patch
 import yaml
 
 spec = importlib.util.spec_from_file_location('ledger', Path(__file__).with_name('update-ledger.py'))
@@ -12,69 +12,69 @@ ledger = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(ledger)
 
 
-class CompactLedger(unittest.TestCase):
+class SourceLedger(unittest.TestCase):
     def setUp(self):
-        self.temp = tempfile.TemporaryDirectory()
-        self.addCleanup(self.temp.cleanup)
-        self.root = Path(self.temp.name)
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
         (self.root / 'porting').mkdir()
         for name in ('language-features', 'parser'):
             (self.root / ('porting/' + name + '.yaml')).write_text('schema: 2\ngroups: {}\n')
-        self.value = dict(context=dict(upstream_revision='pinned'), declarations=[], builtins=[], tests=dict(cases=[]))
+        (self.root / 'porting/sources.yaml').write_text('upstream_revision: pin\n')
+        (self.root / 'porting/builtins.yaml').write_text('files: {}\n')
 
-    def test_declaration_name_collisions_do_not_drop_entries(self):
-        self.value['declarations'] = [dict(name='Acme.same', kind=kind,
-            upstream=dict(source='packages/acme/main.dark', line=line),
-            source_status=status, source_exception=None)
-            for kind, line, status in [('type', 1, 'identical'), ('value', 4, 'different'), ('value', 8, 'missing')]]
-        rows = ledger.compact(self.value, self.root)['porting/generated/packages.yaml']['files']['acme/main.dark']
-        self.assertEqual(list(rows.values()), ['identical', 'different', 'missing'])
-        self.assertEqual(len(rows), 3)
+    def row(self, *items):
+        return [{'source': 'upstream/packages/example.dark', 'items': list(items)}]
 
-    def test_wrapper_counterpart_does_not_claim_builtin_binding(self):
-        self.value['builtins'] = [dict(id='builtins:backend/src/Builtins/Example.fs#fn/f/v0',
-            name='f', version=0, kind='fn', binding='not-mapped', source_counterparts=['Acme.f'])]
-        rows = ledger.compact(self.value, self.root)['porting/generated/builtins.yaml']['files']
-        self.assertEqual(rows['Example.fs']['f_v0'], 'unassessed')
+    def item(self, kind='function', line=1, status='run', **extra):
+        return dict(name='Example.same', kind=kind, line=line, column=0, compiler=dict(status=status, **extra))
 
-    def test_partial_test_keeps_disabled_counterpart_and_expectation(self):
-        self.value['tests']['cases'] = [dict(upstream=dict(source='packages/acme/tests.dark', name='Acme.group'),
-            status='partial', equivalency='partial', reason=None,
-            compiler=[dict(id='test/fixtures/e2e/upstream/acme.dark#L3', enabled=False,
-                           reason='unsupported async', expectation_override='#compileerror=unsupported')])]
-        row = ledger.compact(self.value, self.root)['porting/generated/tests.yaml']['sources']['packages/acme/tests.dark']['Acme.group']
-        self.assertEqual(row['status'], 'partial')
-        self.assertEqual(row['reason'], 'unsupported async')
-        self.assertEqual(row['expectation'], '#compileerror=unsupported')
-        self.assertEqual(row['compiler'], 'upstream/acme.dark#L3')
+    def test_every_native_entry_counts_without_counterpart_matching(self):
+        summary = ledger.summarize(self.root, self.row(self.item(), self.item('type'), self.item(line=2),
+            self.item('named-test', status='blocked', reason='missing-dependency')))
+        self.assertEqual(summary['dispositions'], {'packages': {'run': 3}, 'tests': {'blocked': 1}})
+        self.assertEqual(summary['kinds']['named-test'], 1)
 
-    def test_duplicate_test_identity_is_rejected_instead_of_overwritten(self):
-        case = dict(upstream=dict(source='packages/acme/tests.dark', name='Acme.same'),
-                    status='missing', equivalency='missing', compiler=[], reason=None)
-        self.value['tests']['cases'] = [case, case]
-        with self.assertRaisesRegex(ValueError, 'Repeated ledger identity'):
-            ledger.compact(self.value, self.root)
+    def test_duplicate_native_entries_are_rejected(self):
+        with self.assertRaisesRegex(ValueError, 'Duplicate native inventory'):
+            ledger.summarize(self.root, self.row(self.item(), self.item()))
 
-    def test_capability_gap_requires_explanation(self):
+    def test_pending_test_cannot_enter_the_final_ledger(self):
+        with self.assertRaisesRegex(ValueError, 'Unclassified imported test'):
+            ledger.summarize(self.root, self.row(self.item('named-test', status='blocked', reason='pending-validation')))
+
+    def test_exclusion_is_a_separate_assessment_requiring_notes(self):
         path = self.root / 'porting/parser.yaml'
-        path.write_text(yaml.safe_dump(dict(schema=2, groups=dict(syntax=dict(interpolation='partial')))))
-        with self.assertRaisesRegex(ValueError, 'Explain capability gap'):
-            ledger.compact(self.value, self.root)
-
-    def test_excluded_capabilities_are_counted_separately_from_missing(self):
-        path = self.root / 'porting/language-features.yaml'
-        path.write_text(yaml.safe_dump(dict(schema=2, groups=dict(runtime=dict(
-            reflection=dict(status='excluded', notes='Intentionally unsupported.'),
-            async_calls=dict(status='missing', notes='Not implemented yet.'))))))
-        outputs = ledger.compact(self.value, self.root)
-        self.assertEqual(outputs[ledger.OUTPUT]['features'], {'excluded': 1, 'missing': 1})
-        self.assertIn('1 excluded', ledger.markdown(outputs[ledger.OUTPUT]))
-
-    def test_excluded_capability_requires_explanation(self):
-        path = self.root / 'porting/language-features.yaml'
         path.write_text(yaml.safe_dump(dict(schema=2, groups=dict(runtime=dict(reflection='excluded')))))
         with self.assertRaisesRegex(ValueError, 'Explain capability gap'):
-            ledger.compact(self.value, self.root)
+            ledger.summarize(self.root, [])
+        path.write_text(yaml.safe_dump(dict(schema=2, groups=dict(runtime=dict(
+            reflection=dict(status='excluded', notes='Intentionally excluded.'))))))
+        self.assertEqual(ledger.summarize(self.root, [])['parser'], {'excluded': 1})
+
+    def test_only_lexer_identified_annotation_lines_are_removed(self):
+        original = b'module Example\nval text = """\n// @compiler blocked: literal\n"""\n'
+        path = self.root / 'upstream/packages/example.dark'
+        path.parent.mkdir(parents=True)
+        path.write_bytes(b'// @compiler blocked: missing-implementation\n' + original)
+        rows = [{'source': 'upstream/packages/example.dark', 'annotation_lines': [1]}]
+        with patch.object(ledger.sources, 'checked_files', return_value={'packages/example.dark': original}):
+            ledger.verify_pin(self.root, self.root, rows)
+            path.write_bytes(path.read_bytes().replace(b'module Example', b'module Altered'))
+            with self.assertRaisesRegex(ValueError, 'differs from the pin'):
+                ledger.verify_pin(self.root, self.root, rows)
+
+    def test_manifest_cannot_hide_or_duplicate_a_file(self):
+        directory = self.root / 'upstream/packages'
+        directory.mkdir(parents=True)
+        (directory / 'example.dark').write_text('val example = 1')
+        manifest = self.root / 'upstream/sources.list'
+        manifest.write_text('')
+        with self.assertRaisesRegex(ValueError, 'complete source tree'):
+            ledger.imported_paths(self.root)
+        manifest.write_text('packages/example.dark\npackages/example.dark\n')
+        with self.assertRaisesRegex(ValueError, 'unique and sorted'):
+            ledger.imported_paths(self.root)
 
 
 if __name__ == '__main__':

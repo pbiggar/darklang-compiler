@@ -14,13 +14,26 @@ let ( let* ) = Result.bind
 (* Parse the embedded standard-library sources, including Unicode tables.
    Returns validated interpreter source units in declaration order. *)
 let loadStdlib () =
+  let* reasons =
+    CompilerAnnotations.parseReasons EmbeddedStdlib.compilerReasons
+  in
   let load (filename, text) =
-    WrittenParsing.parse Validation.Script
-      (ContentEncoding.decodeContent None text)
+    SourceInventory.parse ~reasons (ContentEncoding.decodeContent None text)
     |> Result.map_error (fun error ->
         "Error parsing " ^ filename ^ ": " ^ error)
+    |> Result.map (fun source -> (filename, source))
   in
-  ResultList.traverse load EmbeddedStdlib.sources
+  let* sources =
+    ResultList.traverse load
+      (EmbeddedStdlib.upstreamSources @ EmbeddedStdlib.sources)
+  in
+  let* selected =
+    SourceSelection.select ~context:SourceContracts.emptyContext
+      ~roots:(List.map fst EmbeddedStdlib.upstreamSources)
+      ~supplements:(List.map fst EmbeddedStdlib.sources)
+      ~sources
+  in
+  Ok (List.map snd selected.SourceSelection.units)
 
 (* Build stdlib in isolation, returning reusable result.
    This can be called once and the result reused for multiple user program compilations. *)

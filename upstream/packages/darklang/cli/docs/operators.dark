@@ -1,0 +1,83 @@
+module Darklang.Cli.Docs.Operators
+
+// @compiler blocked: missing-implementation
+let content () : String =
+  """# Operators
+
+## Comparison
+  == != < > <= >=
+  `==` and `!=` are structural on every type and are not traits, so no type can
+  change what they mean. `< > <= >=` are `Stdlib.Compare`: every numeric type
+  implements it, and so can yours. `docs traits` has how.
+
+## Boolean
+  && ||   and unary !x
+  `!x` is Stdlib.Bool.not; `!x && y` is `(!x) && y`.
+
+## Unwrap
+  value?   (call arg)?
+  Extract Ok/Some, or return Error/None from the nearest function/lambda.
+  Success must still be wrapped in Ok/Some; error types must agree.
+  No whitespace before ?. `f x?` means `f (x?)`.
+
+## Numeric (all int types + Float)
+  + - * / % **   and unary -x
+  Each is a trait: `+` is `Stdlib.Add`, then Subtract, Multiply, Divide, Modulo, Power, and `-x`
+  is `Negate`. Both operands must be the same type: `1 + 2`, `1.0 + 2.0` and
+  `1y * 2y` all work; `1L + 2.0` is "Cannot perform numeric operation on Int64
+  and Float". `"a" + "b"` is `"ab"`, since String implements Add.
+  A type of your own joins with `impl Add for Vec = ...`.
+  `/` is integer division on ints, float division on floats.
+  `%` is integer-only (the modulus must be > 0). Float has no Modulo implementation.
+  `**` (power) works on every integer type and Float, and nests right:
+  `2 ** 3 ** 2` is `2 ** (3 ** 2)`.
+  Unary `-x` negates signed ints and Float; an unsigned type has no Negate
+  implementation, and `-x` on one says so.
+  A fixed-width integer WRAPS on overflow, it does not raise: `9223372036854775807L + 1L`
+  is `-9223372036854775808L`, and `-x` on a type's minimum is that minimum again.
+  `Int` is arbitrary-precision and does not wrap. Dividing by zero raises.
+  Float arithmetic follows IEEE (overflow -> infinity).
+
+## Bitwise (every integer type; Float has no implementation)
+  & | ^ << >>   and unary ~x
+  `&` and, `|` or, `^` xor, `<<`/`>>` shift, `~x` NOT (two's complement).
+  Traits like the rest: `&` is `BitwiseAnd`, `|` `BitwiseOr`, `^` `BitwiseXor`, `~` `BitwiseNot`,
+  `<<` `ShiftLeft`, `>>` `ShiftRight`, so your own type can implement them.
+  Both operands must be the same integer type, including the shift count:
+  `1L << 4L`, not `1L << 4`.
+  Fixed-width results wrap. `Int` is arbitrary-precision, so a shift count
+  that is negative or too large to be an Int32 raises instead.
+
+  `|` is also the match-arm separator, and inside a `match` the arm wins.
+  Parenthesize to mean bitwise-or there:
+    match x with
+    | A -> (a | b)
+
+## String
+  +    concat
+  NO @ operator
+
+## List
+  NO operators -> Stdlib.List.append
+
+## Pipe
+  value |> fn
+  (complex expr) |> fn   // parens needed
+
+## Precedence
+  Loosest to tightest. `**` and `@` nest right; everything else groups left.
+    ||
+    &&
+    == != < > <= >=
+    |
+    ^
+    &
+    << >>
+    @
+    + -
+    * / %
+    **
+    f a b           (application)
+    x.field  x?     (postfix, tightest)
+  Note the bitwise levels bind TIGHTER than the comparisons, as in Python:
+  `a & b == c` is `(a & b) == c`."""

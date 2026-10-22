@@ -16,28 +16,37 @@ let shape (source: String) : (Int * Int) =
 
 module RealDeclarations =
   // The ordinary cases are untouched: one declaration, no trailing expressions.
+  // @compiler blocked: compiler-gap
   (shape "val v = 1") = (1, 0)
 
+  // @compiler blocked: compiler-gap
   (shape "let f (x: Int): Int = x") = (1, 0)
 
+  // @compiler blocked: compiler-gap
   (shape "type T = Unit") = (1, 0)
 
+  // @compiler blocked: compiler-gap
   (shape "module M =\n  val v = 1") = (1, 0)
 
 module NotDeclarations =
   // A bare expression belongs in exprsToEval, not declarations.
+  // @compiler blocked: compiler-gap
   (shape "1 + 1") = (0, 1)
 
   // `actual = expected` parses as a test assertion. Both sides come back as expressions rather than raising.
+  // @compiler blocked: compiler-gap
   (shape "valoops = 1") = (0, 2)
 
+  // @compiler blocked: compiler-gap
   (shape "x = 1") = (0, 2)
 
   // A plain string on the right is just an expression, so both sides lift - despite reading like an error.
+  // @compiler blocked: compiler-gap
   (shape "someCall () = \"Error: nope\"") = (0, 2)
 
   // An expected-ERROR assertion has only the actual side to lift; `error` is the literal keyword that makes
   // it one (a plain string on the right is just an expression, as above).
+  // @compiler blocked: compiler-gap
   (shape "someCall () = error \"nope\"") = (0, 1)
 
 module ModuleHeaded =
@@ -45,14 +54,18 @@ module ModuleHeaded =
   // the file into a DModule, which is the shape of every package file on disk, and the serializer for a
   // module's declarations raised on the same cases. The authoring editor strips the module line before
   // parsing, so only the LSP and the highlighter hit this.
+  // @compiler blocked: compiler-gap
   (shape "module Darklang.Foo\n\nvaloops = 1") = (1, 0)
 
+  // @compiler blocked: compiler-gap
   (shape "module Darklang.Foo\n\nlet f (x: Int): Int = x") = (1, 0)
 
   // `[<DB>] type X = ...` is a Test-only declaration that a real file can still contain.
+  // @compiler blocked: compiler-gap
   (shape "module Darklang.Foo\n\n[<DB>] type Counter = Int") = (1, 0)
 
 module Mixed =
   // A real declaration alongside an assignment-shaped line: the declaration survives, the assertion's two
   // sides join exprsToEval.
+  // @compiler blocked: compiler-gap
   (shape "val v = 1\noops = 2") = (1, 2)

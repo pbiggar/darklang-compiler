@@ -176,6 +176,7 @@ module Map =
 
 
   // Check that map executes the right number of times
+  // @compiler blocked: compiler-gap
   (let v =
     Stdlib.String.map "a string" (fun x ->
       let _ = Builtin.testIncrementSideEffectCounter false in 'c')
