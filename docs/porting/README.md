@@ -4,6 +4,9 @@ This ledger answers: what exists in the pinned Darklang interpreter, what has
 been ported to the native compiler, and what remains? Start with the
 [current status](generated/ledger.md), then open the relevant YAML file.
 
+The [upstream source import](upstream-import.md) documents the migration to
+per-item compiler annotations and the complete pinned-corpus parsing check.
+
 | Area | Entries |
 | --- | --- |
 | [Language](../../porting/language-features.yaml) | Specific capabilities and known limitations. |

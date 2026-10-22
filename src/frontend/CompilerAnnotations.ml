@@ -92,7 +92,7 @@ let read ~reasons ~items source =
             | (comment : Lexer.trivia) :: remaining -> (
                 let text = String.trim comment.Lexer.text in
                 if
-                  comment.kind <> Lexer.LineComment
+                  comment.Lexer.kind <> Lexer.LineComment
                   || not (String.starts_with ~prefix:"// @compiler" text)
                 then comments annotations remaining
                 else
@@ -100,7 +100,7 @@ let read ~reasons ~items source =
                   let fail message =
                     Error
                       (Printf.sprintf "Line %d: %s"
-                         (comment.range.T.start.T.row + 1)
+                         (comment.Lexer.range.T.start.T.row + 1)
                          message)
                   in
                   if not (String.starts_with ~prefix:"// @compiler " text) then
@@ -118,13 +118,14 @@ let read ~reasons ~items source =
                     | Some item -> (
                         let prefix =
                           String.sub
-                            lines.(comment.range.T.start.T.row)
-                            0 comment.range.T.start.T.column
+                            lines.(comment.Lexer.range.T.start.T.row)
+                            0 comment.Lexer.range.T.start.T.column
                         in
                         if
                           String.trim prefix <> ""
-                          || comment.range.T.start.T.column <> position.T.column
-                          || comment.range.T.end_.T.row >= position.T.row
+                          || comment.Lexer.range.T.start.T.column
+                             <> position.T.column
+                          || comment.Lexer.range.T.end_.T.row >= position.T.row
                         then
                           fail
                             "Compiler annotation must be on its own line at \
@@ -148,12 +149,13 @@ let read ~reasons ~items source =
                           | Replace _ when item.isTest ->
                               fail
                                 "Tests cannot have replacement implementations"
-                          | _ ->
+                          | Run | Blocked _ | Excluded _ | Replace _ | Xfail _
+                            ->
                               comments
                                 ({ position; disposition } :: annotations)
                                 remaining))
           in
-          comments annotations token.leadingTrivia
+          comments annotations token.Lexer.leadingTrivia
     in
     scan [] tokens
 

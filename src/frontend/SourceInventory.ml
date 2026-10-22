@@ -47,7 +47,7 @@ let entries tokens (tree : W.sourceFile) =
     List.filter
       (fun (token : Lexer.spannedToken) ->
         token.Lexer.range.T.start >= range.T.start
-        && token.range.T.end_ <= range.T.end_)
+        && token.Lexer.range.T.end_ <= range.T.end_)
       tokens
     |> List.map (fun (token : Lexer.spannedToken) -> token.Lexer.text)
     |> String.concat ""
@@ -136,7 +136,7 @@ let parse ~reasons source =
                 { entry with disposition = A.at annotations entry.position })
               entries;
         }
-  | diagnostics, _ ->
+  | diagnostics, (None | Some (W.SourceFile _)) ->
       Error
         (String.concat "\n"
            (List.map (Parser.renderDiagnostic source) diagnostics))

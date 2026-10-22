@@ -14,6 +14,7 @@ import ledger_sources as sources
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--upstream', required=True, type=Path)
+    parser.add_argument('--build-dir', type=Path, default=Path('_build'))
     parser.add_argument('--report', type=Path, default=Path('TestResults/porting/parsing.json'))
     args = parser.parse_args()
     root = sources.ROOT
@@ -21,7 +22,7 @@ def main():
     blobs = sources.checked_files(args.upstream.resolve(), pin)
     paths = sorted(path for path in blobs if path.endswith('.dark')
                    and path.startswith(('packages/', 'backend/testfiles/execution/')))
-    executable = root / '_build/default/tools/ledger/parse_sources.exe'
+    executable = root / args.build_dir / 'default/tools/ledger/parse_sources.exe'
     if not executable.is_file():
         parser.error('Build the native parser adapter with ./build --ai first.')
     report = args.report.resolve()
