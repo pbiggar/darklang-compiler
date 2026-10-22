@@ -16,7 +16,7 @@ def main():
     compiler = str(pathlib.Path(sys.argv[1]).resolve())
     for transparent in (False, True):
         run_reads(compiler, transparent)
-    for mode in ("explicit", "transparent", "abandoned"):
+    for mode in ("explicit", "transparent", "abandoned", "error"):
         run_writes(compiler, mode)
     print("Eager socket reads and writes overlap, survive backpressure and retain abandoned producers")
 
@@ -92,6 +92,8 @@ let _ = Builtin.print result in
 
 def run_writes(compiler, mode):
     size = 8 * 1024 * 1024
+    pattern = bytes(range(251))
+    expected = (pattern * ((size + 250) // 251))[:size]
     with tempfile.TemporaryDirectory(prefix="dark-async-write-") as directory:
         root = pathlib.Path(directory)
         with socket.socket() as listener:
@@ -102,12 +104,18 @@ def run_writes(compiler, mode):
             port = listener.getsockname()[1]
             source = root / "writes.dark"
             binary = root / "writes"
-            program = '''let connect () : Stdlib.__Network.TcpConnection =
+            program = '''let fillPayload (bytes: Blob) (index: Int64) (length: Int64) : Blob =
+  if index >= length then bytes
+  else
+    let _ = __raw_write_byte (__blob_to_rawptr bytes) (16L + index) (index % 251L) in
+    fillPayload bytes (index + 1L) length
+let connect () : Stdlib.__Network.TcpConnection =
   Builtin.unwrap (Stdlib.__Network.connectTcp4 [127L, 0L, 0L, 1L] PORTL 1000L)
 let result = Stdlib.__Task.__runMain (fun _unit ->
   let first = connect () in
   let second = connect () in
-  let pendingFirst = Stdlib.__Task.__writeTcpCurrent first (Stdlib.Blob.__createZeroed SIZEL) in
+  let _ = Builtin.unwrap (Stdlib.__Task.__forceCurrent (Stdlib.__Task.__writeTcpCurrent first (Stdlib.String.toBlob ""))) in
+  let pendingFirst = Stdlib.__Task.__writeTcpCurrent first (fillPayload (Stdlib.Blob.__createZeroed SIZEL) 0L SIZEL) in
   let pendingSecond = Stdlib.__Task.__writeTcpCurrent second (Stdlib.String.toBlob "go") in
   let _ = Builtin.unwrap (Stdlib.__Task.__forceCurrent pendingSecond) in
   let acknowledgment = Builtin.unwrap (Stdlib.__Task.__forceCurrent (Stdlib.__Task.__readTcpCurrent second)) in
@@ -123,8 +131,8 @@ let _ = Builtin.print result in
                     "let sourceWrite (connection: Stdlib.__Network.TcpConnection) (bytes: Blob) : Stdlib.Result.Result<Unit, Int64> =\n"
                     "  Stdlib.__Task.__transport (Stdlib.__Task.__writeTcpCurrent connection bytes)\n"
                     "let passWrite (result: Stdlib.Result.Result<Unit, Int64>) : Stdlib.Result.Result<Unit, Int64> = result\n"
-                    + program.replace("Stdlib.__Task.__writeTcpCurrent first (Stdlib.Blob.__createZeroed SIZEL)",
-                                      "passWrite (sourceWrite first (Stdlib.Blob.__createZeroed SIZEL))")
+                    + program.replace("Stdlib.__Task.__writeTcpCurrent first (fillPayload (Stdlib.Blob.__createZeroed SIZEL) 0L SIZEL)",
+                                      "passWrite (sourceWrite first (fillPayload (Stdlib.Blob.__createZeroed SIZEL) 0L SIZEL))")
                     .replace("Stdlib.__Task.__writeTcpCurrent second (Stdlib.String.toBlob \"go\")",
                              "passWrite (sourceWrite second (Stdlib.String.toBlob \"go\"))")
                     .replace("(Stdlib.__Task.__forceCurrent pendingFirst)", "pendingFirst")
@@ -134,6 +142,10 @@ let _ = Builtin.print result in
                 program = program.replace(
                     "  let _ = Builtin.unwrap (Stdlib.__Task.__forceCurrent pendingFirst) in\n"
                     "  let _ = Stdlib.__Network.closeTcp first in\n", "")
+            elif mode == "error":
+                program = program.replace(
+                    "Builtin.unwrap (Stdlib.__Task.__forceCurrent pendingFirst)",
+                    '(match Stdlib.__Task.__forceCurrent pendingFirst with | Error _ -> () | Ok () -> Builtin.crash "Expected a write error")')
             source.write_text(program.replace("PORTL", f"{port}L").replace("SIZEL", f"{size}L"), encoding="utf-8")
             subprocess.run([compiler, "-q", "--allow-internal", "--leak-check",
                             str(source), "-o", str(binary)], check=True, timeout=120)
@@ -152,12 +164,16 @@ let _ = Builtin.print result in
                             assert chunk, "Second write ended before its command"
                             command += chunk
                         assert command == b"go"
+                        if mode == "error":
+                            first.close()
+                            second.sendall(b"K")
+                            return
                         second.sendall(b"K")
                         received = 0
                         while received < size:
                             chunk = first.recv(65536)
                             assert chunk, f"Write ended after {received}/{size} bytes"
-                            assert not any(chunk), "Write payload was corrupted"
+                            assert chunk == expected[received:received + len(chunk)], "Write payload was corrupted"
                             received += len(chunk)
                         assert first.recv(1) == b"", "Write sent extra bytes or retained its socket"
                 except Exception as error:

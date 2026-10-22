@@ -355,6 +355,12 @@ consumes B first, proving eager initiation without an early wait on A. The
 regression also checks native leak accounting. It runs both explicit runtime
 carriers and ordinary source `Result<Blob, Int64>` values passed through helper
 functions; the latter relies on compiler-inserted demands.
+The write cases prevent a peer from draining an 8 MiB patterned payload until a
+second connection receives its command. They check complete byte ordering under
+backpressure, explicit and source-typed results, ordinary errors after peer
+closure, empty writes, and producer ownership after consumer abandonment.
+`async_write.e2e` checks that unavailable connections resolve ordinary errors,
+including for empty payloads.
 `async_start.e2e` checks eager entry, nested operations, runnable ordering,
 producer ownership after consumer abandonment, managed results and startup
 arguments from child stacks.
