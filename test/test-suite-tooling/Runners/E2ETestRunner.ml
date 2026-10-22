@@ -202,6 +202,25 @@ let rewriteParenthesizedStatements source =
 
 (* Build comparisons from the original trees: adding source parentheses would
    move only the first line and change indentation-sensitive applications. *)
+(* Put the untouched assertion trees back into their fixture namespace. This
+   applies equally to a single assertion and the synthesized batch harness. *)
+let programInModule path (program : WT.sourceFile) =
+  match path with
+  | [] -> program
+  | _ ->
+      let range = program.WT.range in
+      let modul : WT.moduleDecl =
+        {
+          WT.range;
+          name = (range, String.concat "." path);
+          declarations =
+            program.WT.declarations
+            @ List.map (fun expr -> WT.DExpr expr) program.WT.exprsToEval;
+          keywordModule = range;
+        }
+      in
+      { program with WT.declarations = [ WT.DModule modul ]; exprsToEval = [] }
+
 let sourceToExecute _allowInternal (test : e2eTest) =
   let parsed =
     match parseWritten test.source with
@@ -1063,6 +1082,7 @@ let canBatchTogether left right =
     (preambleContextKeyForTest left.test)
     (preambleContextKeyForTest right.test)
   = 0
+  && left.test.modulePath = right.test.modulePath
   && isInternalTestFile left.test.sourceFile
      = isInternalTestFile right.test.sourceFile
   && buildCompilerOptions left.test = buildCompilerOptions right.test
@@ -1373,7 +1393,9 @@ let runE2ETestBatchWithPreambleContext stdlib preambleCtx session tests
         match buildBatchProgram tests with
         | Error error -> CompileFailed (1, error, 0L)
         | Ok program ->
-            compileAndRun ~writtenSources:[ program ] [] [] Closed request
+            compileAndRun
+              ~writtenSources:[ programInModule first.test.modulePath program ]
+              [] [] Closed request
       in
       let results =
         match aggregateRun with
@@ -1458,8 +1480,9 @@ let runE2ETestSourceWithPreambleContext stdlib preambleCtx session
     }
   in
   let run =
-    compileAndRun ~writtenSources:[ program ] test.arguments test.environment
-      test.stdin request
+    compileAndRun
+      ~writtenSources:[ programInModule test.modulePath program ]
+      test.arguments test.environment test.stdin request
   in
   let primary = evaluateExpectations test run in
   let fallback =
@@ -1510,8 +1533,10 @@ let runE2ETestSourceWithPreambleContext stdlib preambleCtx session
       match parsePreambleAsProgram allowInternal fallbackPreamble with
       | Error error -> CompileFailed (1, error, 0L)
       | Ok preamble ->
-          compileAndRun ~writtenSources:[ preamble; program ] test.arguments
-            test.environment test.stdin request
+          compileAndRun
+            ~writtenSources:
+              [ preamble; programInModule test.modulePath program ]
+            test.arguments test.environment test.stdin request
     in
     match evaluateExpectations test run with
     | Ok _ as success -> success

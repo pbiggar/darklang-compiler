@@ -50,3 +50,4 @@ val testCompileErrorDirectiveOverridesAnyUpstreamExpectation :
 val testCompileErrorExpectationRequiresCompileFailure : unit -> testResult
 val testRejectsDanglingCompileErrorDirective : unit -> testResult
 val tests : (string * (unit -> testResult)) list
+val testPreservesLegacyModuleScopes : unit -> testResult

@@ -546,8 +546,36 @@ let testSourceFileGroupsPreserveAssertions () =
         (sourceFileGroups [| test |] = [ [| test |] ])
         "Singleton suite changed")
 
+let testPreservesLegacyModuleScopes () =
+  two
+    "module First =\n\
+    \  val number = 40L\n\
+    \  First.number = 40L\n\
+     module Second =\n\
+    \  val number = 2L\n\
+    \  number = 2L\n"
+    "Expected scoped legacy assertions" (fun first second ->
+      let* () =
+        require
+          (first.modulePath = [ "First" ] && second.modulePath = [ "Second" ])
+          "Legacy module paths were flattened"
+      in
+      let* () =
+        require
+          (Text.contains second.preamble "module First ="
+          && Text.contains second.preamble "module Second =")
+          "Legacy preamble lost module declarations"
+      in
+      match (tryPrepareBatchTest first, tryPrepareBatchTest second) with
+      | Some a, Some b ->
+          require
+            (not (canBatchTogether a b))
+            "Different module scopes shared a batch"
+      | _ -> Error "Scoped equality assertions were not batch eligible")
+
 let tests =
   [
+    ("preserves legacy module scopes", testPreservesLegacyModuleScopes);
     ( "file context groups preserve every assertion",
       testSourceFileGroupsPreserveAssertions );
     ( "parses multiline expectation on next line",
