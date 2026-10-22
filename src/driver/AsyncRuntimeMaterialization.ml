@@ -43,10 +43,52 @@ let materializeBodies kind recorder (context : X.pipelineContext) requested =
   if functions = [] then
     Error "Async runtime specialization produced no missing helper bodies"
   else
-    let program =
-      C.programFromCheckedParts
-        (symbols, List.map (fun fn -> C.FunctionDef fn) functions)
+    let env = context.X.typeCheckEnv in
+    let rec prepare specs symbols topLevels =
+      let symbols, topLevels =
+        CheckedMaterializeHelpers.materializeEqHelpersInTopLevelsWithIndexedSums
+          symbols env.Types.aliasReg env.Types.indexedTypeReg
+          env.Types.variantLookup env.Types.indexedSumTypeReg topLevels
+      in
+      let program = C.programFromCheckedParts (symbols, topLevels) in
+      let missing =
+        P.collectLocalSpecs context.X.genericFuncDefs program
+        |> I.SpecSet.filter (fun spec -> not (I.SpecMap.mem spec specs))
+      in
+      if I.SpecSet.is_empty missing then Ok (specs, symbols, topLevels)
+      else
+        let* specialization =
+          Monomorphization.specializeFromSpecs symbols context.X.genericFuncDefs
+            missing
+        in
+        let specs = P.mergeSpecRegistries specs specialization.I.specRegistry in
+        let symbols, generated =
+          I.importSpecializedFunctions specialization.I.symbols
+            specialization.I.specializedFuncs
+        in
+        let existing =
+          List.fold_left
+            (fun names -> function
+              | C.FunctionDef fn -> M.add fn.C.name () names
+              | C.TypeDef _ | C.ValueDef _ | C.Expression _ -> names)
+            M.empty topLevels
+        in
+        let generated =
+          List.filter_map
+            (fun (fn : C.functionDef) ->
+              if
+                M.mem fn.C.name existing
+                || M.mem fn.C.name context.X.registries.AST_to_ANF.functionIds
+              then None
+              else Some (C.FunctionDef fn))
+            generated
+        in
+        prepare specs symbols (topLevels @ generated)
     in
+    let* specs, symbols, topLevels =
+      prepare specs symbols (List.map (fun fn -> C.FunctionDef fn) functions)
+    in
+    let program = C.programFromCheckedParts (symbols, topLevels) in
     let* converted =
       P.convertTypedDeclarationsWithTrace recorder (Some context)
         (P.ReplaceTypeApps specs) program

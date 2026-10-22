@@ -1,0 +1,6 @@
+// async_late_dictionary_helpers.e2e - Late dictionary specializations retain generated equality helpers across source reuse.
+
+let lateDictionaryIsEmpty (value: String) : Bool = Stdlib.Dict.isEmpty (Stdlib.Dict.singleton "answer" value)
+
+Stdlib.__Task.__runMain (fun _unit -> let gate = Stdlib.__Async.__new<String> () in let value = Stdlib.__Task.__transport (Stdlib.__Async.__pending gate) in lateDictionaryIsEmpty value) = false // a reused wrapper inspects dictionary emptiness without demanding its managed value; leak_check
+lateDictionaryIsEmpty "ready" = false // concrete callers keep the same source behavior; leak_check
