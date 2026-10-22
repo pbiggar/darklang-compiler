@@ -47,7 +47,7 @@ let __new (scheduler: RawPtr) (entry: RawPtr -> Unit) : Stdlib.__Task.__Task =
     let _ = __raw_write_word context 64L 0L in
     let _ = __fiber_prepare context mapping (Stdlib.__Task.__STACK_BYTES ()) in
     let lifecycle = Stdlib.Stream.__new (fun _unit -> None) (fun _unit -> Stdlib.__Task.__disposeTask context) in
-    Stdlib.__Task.__Task { context = context; lifecycle = lifecycle }
+    Stdlib.__Task.__Task { context = context, lifecycle = lifecycle }
 
 let __enqueue (scheduler: RawPtr) (task: Stdlib.__Task.__Task) : Unit =
     let back = __raw_get<List<Stdlib.__Task.__Task>> scheduler (Stdlib.__Task.__BACK ()) in
@@ -155,7 +155,7 @@ let __delay<'a> (context: RawPtr) (delay: Int64) (value: a) : Stdlib.__Async.__V
     else
         let scheduler = Stdlib.__Task.__scheduler context in
         let promise = Stdlib.__Async.__new<a> () in
-        let timer = Stdlib.__Task.__Timer { deadline = now + delay; complete = (fun _unit -> Stdlib.__Task.__completePromise scheduler promise value) } in
+        let timer = Stdlib.__Task.__Timer { deadline = now + delay, complete = (fun _unit -> Stdlib.__Task.__completePromise scheduler promise value) } in
         let _ = Stdlib.__Task.__registerTimer scheduler timer in
         Stdlib.__Async.__pending promise
 
@@ -226,7 +226,7 @@ let __watchCurrent (interest: Stdlib.__Network.Interest) : Stdlib.__Async.__Valu
             Stdlib.__Async.__ready (Error 22L)
         else
             let promise = Stdlib.__Async.__new<Stdlib.Result.Result<Stdlib.__Network.Ready, Int64>> () in
-            let entry = Stdlib.__Task.__IO { interest = interest; complete = (fun result -> Stdlib.__Task.__wake scheduler (Stdlib.__Async.__resolve promise result)) } in
+            let entry = Stdlib.__Task.__IO { interest = interest, complete = (fun result -> Stdlib.__Task.__wake scheduler (Stdlib.__Async.__resolve promise result)) } in
             let _ = Stdlib.__Task.__registerIO scheduler entry in
             Stdlib.__Async.__pending promise
 
@@ -244,7 +244,7 @@ let __readTcpStart (scheduler: RawPtr) (connection: Stdlib.__Network.TcpConnecti
             | None -> Stdlib.__Task.__completePromise scheduler promise (Error 22L)
             | Some watch ->
                 let entry = Stdlib.__Task.__IO {
-                    interest = Stdlib.__Network.Interest { watch = watch; readable = true; writable = false },
+                    interest = Stdlib.__Network.Interest { watch = watch, readable = true, writable = false },
                     complete = (fun result ->
                         match result with
                         | Error code -> Stdlib.__Task.__completePromise scheduler promise (Error code)

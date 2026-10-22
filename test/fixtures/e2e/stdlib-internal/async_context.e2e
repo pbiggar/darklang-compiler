@@ -30,7 +30,7 @@ let contextNested (cell: RawPtr) (outer: RawPtr) : Unit =
 let cell = __raw_alloc 8L in let _ = Stdlib.__Task.__run [(fun context -> contextNested cell context)] in let result = (__raw_get<Int64> cell 0L, __rawptr_to_word (__fiber_current ())) in let _ = __raw_free cell in result = (1L, 0L)
 
 let contextCallback (cell: RawPtr) (context: RawPtr) : Unit =
-  let timer = Stdlib.__Task.__Timer { deadline = 0L; complete = (fun _unit -> __raw_write_word cell 0L (__rawptr_to_word (__fiber_current ()))) } in
+  let timer = Stdlib.__Task.__Timer { deadline = 0L, complete = (fun _unit -> __raw_write_word cell 0L (__rawptr_to_word (__fiber_current ()))) } in
   Stdlib.__Task.__registerTimer (Stdlib.__Task.__scheduler context) timer
 
 let cell = __raw_alloc 8L in let _ = __raw_write_word cell 0L 1L in let _ = Stdlib.__Task.__run [(fun context -> contextCallback cell context)] in let result = __raw_get<Int64> cell 0L in let _ = __raw_free cell in result = 0L

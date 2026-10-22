@@ -17,7 +17,7 @@ let ioTimerClose () : Result<Bool, Int64> =
   Stdlib.__Network.listenTcp4 [127L, 0L, 0L, 1L] 0L |> Stdlib.Result.map (fun listener ->
     Stdlib.__Task.__runMain (fun _unit ->
       let scheduler = Stdlib.__Task.__scheduler (__fiber_current ()) in
-      let timer = Stdlib.__Task.__Timer { deadline = Stdlib.__Task.__now () + 2L; complete = (fun _unit -> Stdlib.__Network.closeListener listener) } in
+      let timer = Stdlib.__Task.__Timer { deadline = Stdlib.__Task.__now () + 2L, complete = (fun _unit -> Stdlib.__Network.closeListener listener) } in
       let _ = Stdlib.__Task.__registerTimer scheduler timer in
       match Stdlib.__Task.__forceCurrent (Stdlib.__Task.__watchCurrent (ioInterest listener)) with
       | Error _ -> false
@@ -27,7 +27,7 @@ ioTimerClose () = Ok true // leak_check
 
 let ioInvalid () : Bool =
   let lifecycle = Stdlib.Stream.__new (fun _unit -> Some ()) (fun _unit -> ()) in
-  let interest = Stdlib.__Network.Interest { watch = Stdlib.__Network.Watch { descriptor = 2147483647L; lifecycle = lifecycle }, readable = true, writable = false } in
+  let interest = Stdlib.__Network.Interest { watch = Stdlib.__Network.Watch { descriptor = 2147483647L, lifecycle = lifecycle }, readable = true, writable = false } in
   Stdlib.__Task.__runMain (fun _unit ->
     match Stdlib.__Task.__forceCurrent (Stdlib.__Task.__watchCurrent interest) with
     | Error _ -> false
@@ -37,7 +37,7 @@ ioInvalid () = true // leak_check
 
 let ioOutputInterest () : Stdlib.__Network.Interest =
   let lifecycle = Stdlib.Stream.__new (fun _unit -> Some ()) (fun _unit -> ()) in
-  Stdlib.__Network.Interest { watch = Stdlib.__Network.Watch { descriptor = 1L; lifecycle = lifecycle }, readable = false, writable = true }
+  Stdlib.__Network.Interest { watch = Stdlib.__Network.Watch { descriptor = 1L, lifecycle = lifecycle }, readable = false, writable = true }
 
 Stdlib.__Task.__runMain (fun _unit -> match Stdlib.__Task.__forceCurrent (Stdlib.__Task.__watchCurrent (ioOutputInterest ())) with | Error _ -> false | Ok event -> event.writable) = true // kernel descriptor readiness; leak_check
 
@@ -54,8 +54,8 @@ Stdlib.__Task.__runMain (fun _unit -> let unused = Stdlib.__Task.__watchCurrent 
 let ioChain (cell: RawPtr) : Unit =
   let scheduler = Stdlib.__Task.__scheduler (__fiber_current ()) in
   let interest = ioOutputInterest () in
-  let second = Stdlib.__Task.__IO { interest = interest; complete = (fun _result -> __raw_write_word cell 0L ((__raw_get<Int64> cell 0L) * 10L + 2L)) } in
-  let first = Stdlib.__Task.__IO { interest = interest; complete = (fun _result -> let _ = __raw_write_word cell 0L 1L in Stdlib.__Task.__registerIO scheduler second) } in
+  let second = Stdlib.__Task.__IO { interest = interest, complete = (fun _result -> __raw_write_word cell 0L ((__raw_get<Int64> cell 0L) * 10L + 2L)) } in
+  let first = Stdlib.__Task.__IO { interest = interest, complete = (fun _result -> let _ = __raw_write_word cell 0L 1L in Stdlib.__Task.__registerIO scheduler second) } in
   Stdlib.__Task.__registerIO scheduler first
 
 let cell = __raw_alloc 8L in let _ = __raw_write_word cell 0L 0L in let _ = Stdlib.__Task.__runMain (fun _unit -> ioChain cell) in let result = __raw_get<Int64> cell 0L in let _ = __raw_free cell in result = 12L // callbacks can register a new readiness producer; leak_check
@@ -63,7 +63,7 @@ let cell = __raw_alloc 8L in let _ = __raw_write_word cell 0L 0L in let _ = Stdl
 let ioFill (scheduler: RawPtr) (interest: Stdlib.__Network.Interest) (count: Int64) (cell: RawPtr) : Unit =
   if count == 0L then ()
   else
-    let entry = Stdlib.__Task.__IO { interest = interest; complete = (fun result -> match result with | Ok _ -> __raw_write_word cell 0L ((__raw_get<Int64> cell 0L) + 1L) | Error code -> __raw_write_word cell 8L (if code == 22L then (__raw_get<Int64> cell 8L) + 1L else -100L)) } in
+    let entry = Stdlib.__Task.__IO { interest = interest, complete = (fun result -> match result with | Ok _ -> __raw_write_word cell 0L ((__raw_get<Int64> cell 0L) + 1L) | Error code -> __raw_write_word cell 8L (if code == 22L then (__raw_get<Int64> cell 8L) + 1L else -100L)) } in
     let _ = Stdlib.__Task.__registerIO scheduler entry in
     ioFill scheduler interest (count - 1L) cell
 
@@ -72,7 +72,7 @@ let cell = __raw_alloc 16L in let _ = __raw_write_word cell 0L 0L in let _ = __r
 let ioVirtual (closed: Bool) : Stdlib.__Network.TcpConnection =
   let lifecycle = Stdlib.Stream.__new (fun _unit -> Some ()) (fun _unit -> ()) in
   let _ = if closed then Stdlib.Stream.close lifecycle else () in
-  Stdlib.__Network.TcpConnection { lifecycle = lifecycle; watch = None; read = (fun _length -> Error 22L); write = (fun _bytes -> Error 22L) }
+  Stdlib.__Network.TcpConnection { lifecycle = lifecycle, watch = None, read = (fun _length -> Error 22L), write = (fun _bytes -> Error 22L) }
 
 Stdlib.__Task.__runMain (fun _unit -> Stdlib.__Task.__forceCurrent (Stdlib.__Task.__readTcpCurrent (ioVirtual true))) = Error 9L // closed input is an ordinary payload; leak_check
 Stdlib.__Task.__runMain (fun _unit -> Stdlib.__Task.__forceCurrent (Stdlib.__Task.__readTcpCurrent (ioVirtual false))) = Error 22L // native reads reject virtual transports; leak_check

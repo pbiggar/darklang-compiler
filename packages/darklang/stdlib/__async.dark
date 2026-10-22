@@ -54,7 +54,7 @@ let __new<'a> () : Stdlib.__Async.__Promise<a> =
     let _ = __raw_write_word ptr (Stdlib.__Async.__PAYLOAD ()) 0L in
     let _ = __raw_slot_init<List<Int64>> ptr (Stdlib.__Async.__WAITERS ()) [] in
     let lifecycle = Stdlib.Stream.__new (fun _unit -> None) (fun _unit -> Stdlib.__Async.__disposeCell<a> ptr) in
-    Stdlib.__Async.__Promise { cell = ptr; lifecycle = lifecycle }
+    Stdlib.__Async.__Promise { cell = ptr, lifecycle = lifecycle }
 
 let __isReady<'a> (promise: Stdlib.__Async.__Promise<a>) : Bool =
     Stdlib.__Async.__cellIsReady promise.cell
@@ -75,7 +75,7 @@ let __wait<'a> (promise: Stdlib.__Async.__Promise<a>) (task: Int64) : Bool =
     else
         let ptr = promise.cell in
         let waiters = __raw_get<List<Int64>> ptr (Stdlib.__Async.__WAITERS ()) in
-        if Stdlib.List.member waiters task then true
+        if Stdlib.List.contains waiters task then true
         else
             let next = Stdlib.List.push waiters task in
             let previous = __raw_take<List<Int64>> ptr (Stdlib.__Async.__WAITERS ()) in
