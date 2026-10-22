@@ -10,13 +10,14 @@ let checkClosingCache (mode: Int64) : Bool =
       let lifecycle = Stdlib.Stream.__new (fun _unit -> Some ()) (fun _unit -> ()) in
       let send = fun _peer packet _timeout ->
         if mode == 1L then Error 5L
-        else if mode != 7L then Ok ()
+        else if mode != 7L && mode != 8L then Ok ()
         else
           let valid = Stdlib.__QuicCrypto.openPacket keys packet 9L 9L |> Stdlib.Result.andThen (fun opened ->
-            Stdlib.__QuicApplication.parse true opened.payload |> Stdlib.Result.map (fun frames -> opened.number == 10L && Stdlib.List.any frames (fun frame -> match frame.frame with | ApplicationClose close -> close.code == 262L | _ -> false))) in
+            Stdlib.__QuicApplication.parse true opened.payload |> Stdlib.Result.map (fun frames -> opened.number == 10L && Stdlib.List.any frames (fun frame -> match frame.frame with | ApplicationClose close -> mode == 7L && close.code == 262L | Handshake (Close close) -> mode == 8L && close.code == 6L && close.kind == 15L | _ -> false))) in
           if Stdlib.Result.withDefault valid false then Ok () else Error 5L in
       let socket = Stdlib.__Datagram.Socket { lifecycle = lifecycle, watch = None, send = send, receive = fun _timeout -> Ok (Stdlib.__Datagram.Message { peer = sender, payload = wire }) } in
-      let closing = Stdlib.__QuicConnection.Closing { reason = Stdlib.__QuicConnection.CloseReason.ApplicationCloseReason (if mode == 7L then 262L else 256L), peer = peer, source = source, destination = Stdlib.String.toBlob "clientid", keys = keys, phase = false, deadline = if mode == 3L then now - 1000L else now + 30000L, number = 10L, lastSent = if mode == 2L then now else now - 1000L } in
+      let reason = if mode == 8L then Stdlib.__QuicConnection.CloseReason.TransportCloseReason ((6L, 15L)) else Stdlib.__QuicConnection.CloseReason.ApplicationCloseReason (if mode == 7L then 262L else 256L) in
+      let closing = Stdlib.__QuicConnection.Closing { reason = reason, peer = peer, source = source, destination = Stdlib.String.toBlob "clientid", keys = keys, phase = false, deadline = if mode == 3L then now - 1000L else now + 30000L, number = 10L, lastSent = if mode == 2L then now else now - 1000L } in
       let recent = [Stdlib.HttpServer.Quic.Recent { source = source, expires = if mode == 6L then now - 1000L else now + 30000L, closing = Some closing }] in
       let identity = Stdlib.TlsServerIdentity.Identity { certificates = [], key = Stdlib.__RsaPrivate.Key { modulus = Stdlib.Blob.empty, exponent = Stdlib.Blob.empty, privateExponent = Stdlib.Blob.empty } } in
       let config = Stdlib.HttpServer.Config.Config { port = 1000, maxBodyBytes = 1024, injectStandardHeaders = false, canonicalizeFromForwardedProto = false, logRequests = false } in
@@ -28,7 +29,7 @@ let checkClosingCache (mode: Int64) : Bool =
       | Ok step ->
         match step.state.recent with
         | [] -> mode == 6L && Stdlib.Bool.not step.stopped
-        | [entry] -> Stdlib.Bool.not step.stopped && (match entry.closing with | Some next -> next.number == (if mode == 0L || mode == 7L then 11L else 10L) && mode != 1L && mode != 3L | None -> mode == 1L || mode == 3L)
+        | [entry] -> Stdlib.Bool.not step.stopped && (match entry.closing with | Some next -> next.reason == reason && next.number == (if mode == 0L || mode == 7L || mode == 8L then 11L else 10L) && mode != 1L && mode != 3L | None -> mode == 1L || mode == 3L)
         | _ -> false) in
     Stdlib.__Network.closeShutdownSignals signals
     Stdlib.Result.withDefault result false
@@ -41,3 +42,4 @@ checkClosingCache 4L = true
 checkClosingCache 5L = true
 checkClosingCache 6L = true
 checkClosingCache 7L = true
+checkClosingCache 8L = true
