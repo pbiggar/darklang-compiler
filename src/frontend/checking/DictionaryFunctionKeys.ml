@@ -140,12 +140,13 @@ let check knownFunctions symbols aliases records sums tops =
           | _ -> false)
       | _ -> false
   in
+  let functionKeyError =
+    "Functions cannot be used as dictionary keys; function-bearing \
+     containers must be provably empty of functions"
+  in
   let require env typ value =
     if safe S.empty env typ value then Ok ()
-    else
-      Error
-        "Functions cannot be used as dictionary keys; function-bearing \
-         containers must be provably empty of functions"
+    else Error functionKeyError
   in
   let rec visit active subst env expr =
     let many values =
@@ -156,6 +157,36 @@ let check knownFunctions symbols aliases records sums tops =
     | C.Let (pattern, value, body) ->
         let* () = visit active subst env value in
         visit active subst (bindPattern env pattern value) body
+    | C.GenericFuncRef (id, typeArgs, _) -> (
+        let types =
+          List.map (Types.applyTypeArguments subst)
+            (C.semanticTypeArgs typeArgs)
+        in
+        match FunctionIdMap.tryFind id functions with
+        | Some fn
+          when fn.C.typeParams <> []
+               && not (S.mem fn.C.name active)
+               && not
+                    (String.starts_with ~prefix:"Darklang.Stdlib." fn.C.name)
+               && List.length fn.C.typeParams = List.length types ->
+            (* No arguments are known for a first-class function value. Any
+               function-bearing key it constructs must be empty independently
+               of those arguments, just as in an explicitly typed function. *)
+            visit (S.add fn.C.name active)
+              (M.of_list (List.combine fn.C.typeParams types))
+              env fn.C.body
+        | _ -> (
+            match (C.functionName id symbols, types) with
+            | ( Some
+                  ( "Darklang.Stdlib.Dict.singleton" | "Dict.singleton"
+                  | "Darklang.Stdlib.Dict.get" | "Darklang.Stdlib.Dict.set"
+                  | "Darklang.Stdlib.Dict.setOverridingDuplicates"
+                  | "Darklang.Stdlib.Dict.remove" | "Darklang.Stdlib.Dict.member"
+                  | "Darklang.Stdlib.Dict.fromList"
+                  | "Darklang.Stdlib.Dict.fromListOverwritingDuplicates" ),
+                key :: _ )
+              when hasFunction key -> Error functionKeyError
+            | _ -> Ok ()))
     | C.TypeApp (id, types, args) -> (
         let name = Option.value (C.functionName id symbols) ~default:"" in
         let types =
