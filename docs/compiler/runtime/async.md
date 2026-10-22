@@ -441,6 +441,11 @@ inputs, pending predicate decisions, selected tuple fields, shared callbacks,
 native managed results and outer pending lists. Empty searches and effects in
 later predicates check that traversal stops at the correct point.
 
+`async_raw_release.e2e` covers sized raw releases with pending byte counts for
+small and large allocations. Release demands the original byte count before
+choosing the allocator path; the concrete-size case also exercises release
+within an active task context.
+
 `async_higher_order.e2e` checks ordinary application helpers, recursion, a
 user-defined map and fold, multiple callbacks and callback arguments, pending
 producers and results, managed and nested captures, eager callback invocation,

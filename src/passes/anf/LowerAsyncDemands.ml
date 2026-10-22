@@ -3624,11 +3624,11 @@ let lower sourceSpecializations registry names ids sumShapes nextFunctionOrdinal
                     | A.FloatAbs _ | A.FloatNeg _ | A.Int64ToFloat _
                     | A.FloatToInt64 _ | A.FloatToBits _ | A.FloatToString _
                     | A.RawAlloc _ | A.MappedAlloc _ | A.RawFree _
-                    | A.MappedFree _ | A.RawGet _ | A.RawTake _ | A.RawGetByte _
-                    | A.RawWriteWord _ | A.RawWriteByte _ | A.StringToRawPtr _
-                    | A.RawPtrToString _ | A.BlobToRawPtr _ | A.RawPtrToBlob _
-                    | A.RawPtrToInt128 _ | A.RawPtrToUInt128 _
-                    | A.DictToRawPtr _ | A.ListToRawPtr _
+                    | A.RawFreeSized _ | A.MappedFree _ | A.RawGet _
+                    | A.RawTake _ | A.RawGetByte _ | A.RawWriteWord _
+                    | A.RawWriteByte _ | A.StringToRawPtr _ | A.RawPtrToString _
+                    | A.BlobToRawPtr _ | A.RawPtrToBlob _ | A.RawPtrToInt128 _
+                    | A.RawPtrToUInt128 _ | A.DictToRawPtr _ | A.ListToRawPtr _
                     | A.FixedBlockToRawPtr _ | A.RawPtrToDict _
                     | A.RawPtrToList _ | A.Sleep _ | A.CliNative _
                     | A.FileReadBlob _ | A.FileExists _ | A.FileWriteBlob _

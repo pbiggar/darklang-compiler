@@ -888,8 +888,8 @@ let lowerMatch (toANFCore : LoweringCallbacks.expressionLowerer)
     else
       let* env, bindings, gen = collect Guard pat source typ env [] gen in
       let* guardExpression, condition, gen =
-        toANFBoundAtomCore sums typeNames inert guard gen env registry variants
-          functions names modules
+        toANFBoundAtomCore sums typeNames regions guard gen env registry
+          variants functions names modules
       in
       let* body, gen = anf body gen env in
       Ok

@@ -219,7 +219,8 @@ let buildPreambleContextFromAnalysis (stdlib : X.stdlibResult)
                         fn.CheckedAST.name) ->
                 FunctionIdMap.add fn.CheckedAST.id fn functions
             | CheckedAST.FunctionDef _ | CheckedAST.TypeDef _
-            | CheckedAST.Expression _ | CheckedAST.ValueDef _ -> functions)
+            | CheckedAST.Expression _ | CheckedAST.ValueDef _ ->
+                functions)
           stdlib.X.context.X.keyFunctions items;
       X.writtenEnvironment =
         Option.map

@@ -20,7 +20,7 @@ let materializeBodies kind recorder (context : X.pipelineContext) requested =
   let context =
     { refreshed with X.writtenEnvironment = context.X.writtenEnvironment }
   in
-  let specialization =
+  let* specialization =
     Monomorphization.specializeFromSpecs context.X.symbols
       context.X.genericFuncDefs requested
   in

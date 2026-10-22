@@ -230,8 +230,8 @@ let lowerExpression (toANFCore : LoweringCallbacks.expressionLowerer)
       let typ = C.semanticType typ in
       let env = R.BindingMap.add target (exit, typ) env in
       let* body, gen =
-        toANFCore sums typeNames inert body gen env registry variants functions
-          names modules
+        toANFCore sums typeNames regions body gen env registry variants
+          functions names modules
       in
       Ok
         ( A.Join
@@ -963,7 +963,7 @@ let lowerExpression (toANFCore : LoweringCallbacks.expressionLowerer)
           gen )
   | C.Match (value, cases) ->
       PatternLowering.lowerMatch toANFCore toANFBoundAtomCore functionIds sums
-        typeNames inert value
+        typeNames regions value
         (NonEmptyList.toList cases)
         gen env registry variants functions names modules
   | C.InterpolatedString parts -> (
