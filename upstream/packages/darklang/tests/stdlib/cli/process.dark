@@ -1,7 +1,6 @@
 module Darklang.Stdlib.Cli.Process.Tests
 
 // Process.shellQuote
-// @compiler blocked: pending-validation
 test shellQuote =
   Stdlib.Test.all
     [ Stdlib.Cli.Process.shellQuote "hello" |> Stdlib.Test.equal "'hello'"
@@ -20,7 +19,6 @@ test shellQuote =
       |> Stdlib.Test.equal "'`backtick`'" ]
 
 
-// @compiler blocked: pending-validation
 test capturesOutputAndExit =
   (match Stdlib.Cli.Process.run "/bin/sh"
      [ "-c", "printf out; printf err >&2; exit 7" ] with
@@ -28,32 +26,27 @@ test capturesOutputAndExit =
    | Error _ -> (-1, "", ""))
   |> Stdlib.Test.equal (7, "out", "err")
 
-// @compiler blocked: pending-validation
 test closesStdin =
   (match Stdlib.Cli.Process.run "/bin/cat" [] with
    | Ok output -> (output.exitCode, output.stdout)
    | Error _ -> (-1, ""))
   |> Stdlib.Test.equal (0, "")
 
-// @compiler blocked: pending-validation
 test missingExecutable =
   (match Stdlib.Cli.Process.run "/definitely/not/a/dark/executable" [] with
    | Error error -> error.errno
    | Ok _ -> 0)
   |> Stdlib.Test.equal 2
 
-// @compiler blocked: pending-validation
 test rejectsInvalidTimeout =
   Stdlib.Cli.Process.runWithTimeout 0 "/bin/true" []
   |> Stdlib.Test.equal (Error "timeoutMs must be positive")
 
-// @compiler blocked: pending-validation
 test timesOut =
   Stdlib.Cli.Process.runWithTimeout 5 "/bin/sh" [ "-c", "sleep 1" ]
   |> Stdlib.Test.equal (Error "Process timed out")
 
 
-// @compiler blocked: pending-validation
 test interactiveRoundTrip =
   let handle =
     Stdlib.Cli.Process.spawn
@@ -65,7 +58,6 @@ test interactiveRoundTrip =
   |> Stdlib.Test.equal (("reply:one\n", "reply:two\n", "reply:one\nreply:two\n"))
 
 
-// @compiler blocked: pending-validation
 test collectsChunkedOutput =
   let handle =
     Stdlib.Cli.Process.spawn
@@ -76,7 +68,6 @@ test collectsChunkedOutput =
   |> Stdlib.Test.equal ("reply:chunked\n")
 
 
-// @compiler blocked: pending-validation
 test emptyInputDoesNotBlock =
   let handle =
     Stdlib.Cli.Process.spawn
@@ -87,31 +78,26 @@ test emptyInputDoesNotBlock =
   |> Stdlib.Test.equal (("", ""))
 
 
-// @compiler blocked: pending-validation
 test invalidChildPoll =
   Builtin.runtimeChildPoll (-1)
   |> Stdlib.Test.equal (Error 9)
 
 
-// @compiler blocked: pending-validation
 test invalidChildDescriptors =
   Builtin.runtimeChildDescriptors (-1)
   |> Stdlib.Test.equal (Error 9)
 
 
-// @compiler blocked: pending-validation
 test invalidChildClose =
   Builtin.runtimeChildClose (-1)
   |> Stdlib.Test.equal (Error 9)
 
 
-// @compiler blocked: pending-validation
 test reportsOS =
   Stdlib.Cli.OS.getOS ()
   |> Stdlib.Test.equal (Ok Stdlib.Cli.OS.OS.Linux)
 
 
-// @compiler blocked: pending-validation
 test reportsRuntimeHost =
   (match Stdlib.Cli.Host.getRuntimeHost () with
    | Ok host -> host.os == Stdlib.Cli.OS.OS.Linux
@@ -119,7 +105,6 @@ test reportsRuntimeHost =
   |> Stdlib.Test.equal (true)
 
 
-// @compiler blocked: pending-validation
 test closedStdinReturnsFailure =
   let handle =
     Stdlib.Cli.Process.spawn

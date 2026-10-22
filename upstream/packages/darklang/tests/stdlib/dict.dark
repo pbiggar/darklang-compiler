@@ -23,30 +23,29 @@ type ColourAlias = Colour
 // @compiler blocked: value-specialization
 val valDict = Dict { 1L: "a", 2L: "b" }
 
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Unbound local variable 'valDict'" reason=compiler-gap
 test valDictKeys =
   Stdlib.Dict.keys valDict |> Stdlib.Test.equal [ 1L, 2L ]
 
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Unbound local variable 'valDict'" reason=compiler-gap
 test valDictSetRejectsWrongKeyType =
   Stdlib.Dict.set valDict "notAnInt" "c"
   => raises "Darklang.Stdlib.Dict.set's 2nd parameter `key` expects Int64, but got String (\"notAnInt\")"
 
-// @compiler blocked: pending-validation
 test empty =
   Stdlib.Dict.empty |> Stdlib.Test.equal (Dict { })
 
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Duplicate dictionary key \"a\"" reason=compiler-gap
 test literalRejectsDuplicateKeys =
   Dict { "a": 1, "a": 2 }
   => raises "Cannot add two dictionary entries with the same key \"a\""
 
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Expected TInt32, got TString" reason=compiler-gap
 test literalRejectsMixedValueTypes =
   Dict { "a": 1l, "b": "two" }
   => raises "Cannot add a String (\"two\") to a dict of Int32. Failed at key \"b\"."
 
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Expected TSum" reason=compiler-gap
 test filterMap =
   Stdlib.Test.all
     [ Stdlib.Dict.filterMap (Dict { }) (fun key value -> 0L)
@@ -71,7 +70,7 @@ test filterMap =
 //   => raises
 //     "Darklang.Stdlib.Option.map's 1st argument (`option`) should be a Darklang.Stdlib.Option.Option<'a>. However, a Bool (false) was passed instead."
 
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Expected TBool, got TInt64" reason=compiler-gap
 test filter =
   Stdlib.Test.all
     [ Stdlib.Dict.filter
@@ -82,12 +81,11 @@ test filter =
       |> Stdlib.Test.equal (Dict { "key1": 1L })
       Stdlib.Dict.filter (Dict { }) (fun k v -> 0L) |> Stdlib.Test.equal (Dict { }) ]
 
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Expected TBool, got TInt64" reason=compiler-gap
 test filterRejectsNonBoolPredicate =
   Stdlib.Dict.filter (Dict { "a": 1L, "b": 2L, "c": 3L }) (fun k v -> 2L)
   => raises "Encountered a condition that must be a Bool, but got an Int64 (2)"
 
-// @compiler blocked: pending-validation
 test fromListOverwritingDuplicates =
   Stdlib.Test.all
     [ Stdlib.Dict.fromListOverwritingDuplicates [] |> Stdlib.Test.equal (Dict { })
@@ -99,12 +97,11 @@ test fromListOverwritingDuplicates =
       Stdlib.Dict.fromListOverwritingDuplicates [ (1L, 2L) ]
       |> Stdlib.Test.equal (Dict { 1L: 2L }) ]
 
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Expected TList (TTuple [TVar \"t$constraint_-24174_0\"; TVar \"t$constraint_-24174_1\"]), got TList TInt64" reason=compiler-gap
 test fromListOverwritingDuplicatesRejectsNonTuples =
   Stdlib.Dict.fromListOverwritingDuplicates [ 1L ]
   => raises "Darklang.Stdlib.Dict.fromListOverwritingDuplicates's 1st parameter `entries` expects List<(_ * _)>, but got List<Int64> ([1])"
 
-// @compiler blocked: pending-validation
 test fromList =
   Stdlib.Test.all
     [ Stdlib.Dict.fromList [] |> Stdlib.Test.equal Some(Dict { })
@@ -118,24 +115,20 @@ test fromList =
       |> Stdlib.Test.equal Some(Dict { "Content-Length": "0", "Server": "dark" })
       Stdlib.Dict.fromList [ (1L, 1L) ] |> Stdlib.Test.equal Some(Dict { 1L: 1L }) ]
 
-// @compiler blocked: pending-validation
 test get =
   Stdlib.Test.all
     [ Stdlib.Dict.get (Dict { "key1": "val1" }) "key1"
       |> Stdlib.Test.equal (Some "val1")
       Stdlib.Dict.get (Dict { "key1": "val1" }) "" |> Stdlib.Test.equal None ]
 
-// @compiler blocked: pending-validation
 test isEmpty =
   Stdlib.Test.all
     [ Stdlib.Dict.isEmpty (Dict { "a": 1L }) |> Stdlib.Test.equal false
       Stdlib.Dict.isEmpty (Dict { }) |> Stdlib.Test.equal true ]
 
-// @compiler blocked: pending-validation
 test keys =
   Stdlib.Dict.keys (Dict { "key1": "val1" }) |> Stdlib.Test.equal [ "key1" ]
 
-// @compiler blocked: pending-validation
 test map =
   Stdlib.Test.all
     [ Stdlib.Dict.map (Dict { }) (fun key value -> 0L)
@@ -155,7 +148,6 @@ test map =
       Stdlib.Dict.map (Dict { "a": 1L, "b": 2L }) (fun k x -> x + 1L)
       |> Stdlib.Test.equal (Dict { "b": 3L, "a": 2L }) ]
 
-// @compiler blocked: pending-validation
 test member =
   Stdlib.Test.all
     [ Stdlib.Dict.member (Dict { "otherKey": 5L, "someKey": 5L }) "someKey"
@@ -163,7 +155,6 @@ test member =
       Stdlib.Dict.member (Dict { "otherKey": 5L }) "someKey"
       |> Stdlib.Test.equal false ]
 
-// @compiler blocked: pending-validation
 test merge =
   Stdlib.Test.all
     [ Stdlib.Dict.merge (Dict { }) (Dict { }) |> Stdlib.Test.equal (Dict { })
@@ -172,7 +163,6 @@ test merge =
       Stdlib.Dict.merge (Dict { "key1": "val_l" }) (Dict { "key1": "val_r" })
       |> Stdlib.Test.equal (Dict { "key1": "val_r" }) ]
 
-// @compiler blocked: pending-validation
 test set =
   Stdlib.Test.all
     [ Stdlib.Dict.set (Dict { "key1": "val1" }) "key2" "val2"
@@ -182,27 +172,26 @@ test set =
       Stdlib.Dict.set (Dict { }) "key1" 2L
       |> Stdlib.Test.equal (Dict { "key1": 2L }) ]
 
-// @compiler blocked: pending-validation
+// @compiler xfail runtime: "Uncaught exception: Dictionary key renderer was not specialized" reason=compiler-gap
 test setRejectsExistingKey =
   Stdlib.Dict.set (Dict { "key1": "val1before" }) "key1" "val1after"
   => raises "Cannot add two dictionary entries with the same key \"key1\""
 
-// @compiler blocked: pending-validation
+// @compiler xfail runtime: "Uncaught exception: Dictionary key renderer was not specialized" reason=compiler-gap
 test setRejectsExistingKeyAmongOthers =
   Stdlib.Dict.set (Dict { "key1": "val1", "key2": "val2" }) "key2" "newVal2"
   => raises "Cannot add two dictionary entries with the same key \"key2\""
 
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Expected TString, got TInt64" reason=compiler-gap
 test literalRejectsValueOfAnotherType =
   Dict { "key1": "val1", "key2": 2L }
   => raises "Cannot add an Int64 (2) to a dict of String. Failed at key \"key2\"."
 
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Expected TString, got TInt64" reason=compiler-gap
 test setRejectsWrongValueType =
   Stdlib.Dict.set (Dict { "key1": "val1" }) "key2" 2L
   => raises "Darklang.Stdlib.Dict.set's 3rd parameter `val` expects String, but got Int64 (2)"
 
-// @compiler blocked: pending-validation
 test setOverridingDuplicates =
   Stdlib.Test.all
     [ Stdlib.Dict.setOverridingDuplicates (Dict { "key1": "val1" }) "key2" "val2"
@@ -219,36 +208,31 @@ test setOverridingDuplicates =
         "newVal2"
       |> Stdlib.Test.equal (Dict { "key1": "val1", "key2": "newVal2" }) ]
 
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Expected TString, got TInt64" reason=compiler-gap
 test setOverridingDuplicatesRejectsWrongValueType =
   Stdlib.Dict.setOverridingDuplicates (Dict { "key1": "val1" }) "key2" 2L
   => raises "Darklang.Stdlib.Dict.setOverridingDuplicates's 3rd parameter `val` expects String, but got Int64 (2)"
 
-// @compiler blocked: pending-validation
 test singleton =
   Stdlib.Test.all
     [ Stdlib.Dict.singleton "one" 1L |> Stdlib.Test.equal (Dict { "one": 1L })
       Stdlib.Dict.singleton "Content-Length" 1L
       |> Stdlib.Test.equal (Dict { "Content-Length": 1L }) ]
 
-// @compiler blocked: pending-validation
 test size =
   Stdlib.Test.all
     [ Stdlib.Dict.size (Dict { "a": 3L, "b": 1L, "c": 1L }) |> Stdlib.Test.equal 3
       Stdlib.Dict.size (Dict { }) |> Stdlib.Test.equal 0 ]
 
-// @compiler blocked: pending-validation
 test toList =
   Stdlib.Test.all
     [ Stdlib.Dict.toList (Dict { }) |> Stdlib.Test.equal []
       Stdlib.Dict.toList (Dict { "a": 1L, "b": 2L, "c": 3L })
       |> Stdlib.Test.equal [ ("a", 1L), ("b", 2L), ("c", 3L) ] ]
 
-// @compiler blocked: pending-validation
 test values =
   Stdlib.Dict.values (Dict { "key1": "val1" }) |> Stdlib.Test.equal [ "val1" ]
 
-// @compiler blocked: pending-validation
 test remove =
   Stdlib.Test.all
     [ Stdlib.Dict.remove (Dict { "key1": "val1", "key2": "val2" }) "key1"
@@ -259,7 +243,6 @@ test remove =
       |> Stdlib.Test.equal (Dict { "key1": "val1" })
       Stdlib.Dict.remove (Dict { }) "key1" |> Stdlib.Test.equal (Dict { }) ]
 
-// @compiler blocked: pending-validation
 test nonStringKeysInt =
   Stdlib.Test.all
     [ Stdlib.Dict.get (Dict { 1L: "one", 2L: "two" }) 2L
@@ -271,7 +254,6 @@ test nonStringKeysInt =
       Stdlib.Dict.keys (Dict { 2L: "two", 1L: "one" })
       |> Stdlib.Test.equal [ 1L, 2L ] ]
 
-// @compiler blocked: pending-validation
 test nonStringKeysTuple =
   Stdlib.Test.all
     [ Stdlib.Dict.get (Dict { (1L, "a"): "first" }) ((1L, "a"))
@@ -279,24 +261,20 @@ test nonStringKeysTuple =
       Stdlib.Dict.get (Dict { (1L, "a"): "first" }) ((1L, "b"))
       |> Stdlib.Test.equal None ]
 
-// @compiler blocked: pending-validation
 test nonStringKeysList =
   Stdlib.Dict.get (Dict { [ 1L, 2L ]: "onetwo" }) [ 1L, 2L ]
   |> Stdlib.Test.equal (Some "onetwo")
 
-// @compiler blocked: pending-validation
 test nonStringKeysEnum =
   Stdlib.Dict.get
     (Dict { Some 1L: "some" })
     (Some 1L)
   |> Stdlib.Test.equal (Some "some")
 
-// @compiler blocked: pending-validation
 test nonStringKeysOrdering =
   Stdlib.Dict.keys (Dict { 10L: "a", 9L: "b", 100L: "c" })
   |> Stdlib.Test.equal [ 9L, 10L, 100L ]
 
-// @compiler blocked: pending-validation
 test nonStringKeysComputedKeys =
   Stdlib.Test.all
     [ Stdlib.Dict.get (Dict { (1L + 1L): "two" }) 2L
@@ -308,7 +286,6 @@ test nonStringKeysComputedKeys =
        Stdlib.Dict.keys (Dict { ``type``: 1L }))
       |> Stdlib.Test.equal [ "a value" ] ]
 
-// @compiler blocked: pending-validation
 test nonStringKeysFloatKeys =
   Stdlib.Test.all
     [ Stdlib.Dict.get (Dict { 0.0: "zero" }) -0.0 |> Stdlib.Test.equal (Some "zero")
@@ -339,7 +316,6 @@ test nonStringKeysFloatKeys =
       |> Stdlib.Test.equal
         [ "nan", "negative infinity", "zero", "positive infinity" ] ]
 
-// @compiler blocked: pending-validation
 test nonStringKeysEveryKeyType =
   Stdlib.Test.all
     [ Stdlib.Dict.get (Dict { (): "unit" }) () |> Stdlib.Test.equal (Some "unit")
@@ -388,7 +364,6 @@ test nonStringKeysEveryKeyType =
         (Dict { 1L: "inner" })
       |> Stdlib.Test.equal (Some "dict") ]
 
-// @compiler blocked: pending-validation
 test nonStringKeysKeyOrdering =
   Stdlib.Test.all
     [ Stdlib.Dict.keys (Dict { true: 1L, false: 2L })
@@ -404,14 +379,13 @@ test nonStringKeysKeyOrdering =
       Stdlib.Dict.keys (Dict { [ 2L ]: 1L, [ 1L, 9L ]: 2L, []: 3L })
       |> Stdlib.Test.equal [ [], [ 1L, 9L ], [ 2L ] ] ]
 
-// @compiler blocked: pending-validation
 test nonStringKeysFromListInfersTypes =
   Stdlib.Test.all
     [ Stdlib.Dict.fromList [ (1L, "a"), (1L, "b") ] |> Stdlib.Test.equal None
       Stdlib.Dict.fromList [ (2L, "b"), (1L, "a") ]
       |> Stdlib.Test.equal Some(Dict { 1L: "a", 2L: "b" }) ]
 
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Expected TInt64, got TString" reason=compiler-gap
 test nonStringKeysFromListInfersKeyType =
   Stdlib.Dict.set
     (Builtin.unwrap (Stdlib.Dict.fromList [ (1L, "a") ]))
@@ -419,7 +393,7 @@ test nonStringKeysFromListInfersKeyType =
     "c"
   => raises "Darklang.Stdlib.Dict.set's 2nd parameter `key` expects Int64, but got String (\"b\")"
 
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Expected TInt64, got TString" reason=compiler-gap
 test nonStringKeysFromListOverwritingDuplicatesInfersKeyType =
   Stdlib.Dict.set
     (Stdlib.Dict.fromListOverwritingDuplicates [ (1L, "a") ])
@@ -427,17 +401,16 @@ test nonStringKeysFromListOverwritingDuplicatesInfersKeyType =
     "c"
   => raises "Darklang.Stdlib.Dict.set's 2nd parameter `key` expects Int64, but got String (\"b\")"
 
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Expected TString, got TInt64" reason=compiler-gap
 test nonStringKeysFromListInfersValueType =
   Stdlib.Dict.set (Builtin.unwrap (Stdlib.Dict.fromList [ (1L, "a") ])) 2L 3L
   => raises "Darklang.Stdlib.Dict.set's 3rd parameter `val` expects String, but got Int64 (3)"
 
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Lambda requires an expected function type" reason=compiler-gap
 test nonStringKeysFromListRejectsLambdaKey =
   Stdlib.Dict.fromList [ (1L, "a"), ((fun x -> x), "b") ]
   => raises "Cannot use (lambda) as a dict key. Functions, streams, database references, blobs, and values containing them cannot be keys."
 
-// @compiler blocked: pending-validation
 test nonStringKeysIdentityMatchesEquality =
   Stdlib.Test.all
     [ (Point { px = 1L, py = 2L }) == (PointAlias { px = 1L, py = 2L })
@@ -456,12 +429,11 @@ test nonStringKeysIdentityMatchesEquality =
         (SameShape { px = 1L, py = 2L })
       |> Stdlib.Test.equal true ]
 
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Operator is unavailable for this type" reason=compiler-gap
 test nonStringKeysDifferentShapesCannotBeCompared =
   (Point { px = 1L, py = 2L }) == (DifferentShape { a = 1L, b = 2L })
   => raises "Cannot perform equality check on Darklang.Stdlib.Dict.Tests.SameShape and Darklang.Stdlib.Dict.Tests.DifferentShape"
 
-// @compiler blocked: pending-validation
 test nonStringKeysRecordFieldOrder =
   Stdlib.Test.all
     [ (Point { px = 1L, py = 2L }) == (Point { py = 2L, px = 1L })
@@ -471,7 +443,6 @@ test nonStringKeysRecordFieldOrder =
         (Point { py = 2L, px = 1L })
       |> Stdlib.Test.equal true ]
 
-// @compiler blocked: pending-validation
 test nonStringKeysNestedDictOrder =
   Stdlib.Dict.``member``
     (Dict {
@@ -479,7 +450,6 @@ test nonStringKeysNestedDictOrder =
     (Stdlib.Dict.set (Stdlib.Dict.set Stdlib.Dict.empty "b" 2L) "a" 1L)
   |> Stdlib.Test.equal true
 
-// @compiler blocked: pending-validation
 test nonStringKeysDeepComposites =
   Stdlib.Test.all
     [ Stdlib.Dict.``member``
@@ -497,75 +467,75 @@ test nonStringKeysDeepComposites =
       Stdlib.Dict.keys (Dict { [ [ 2L ] ]: 1L, [ [ 1L ], [ 3L ] ]: 2L })
       |> Stdlib.Test.equal [ [ [ 1L ], [ 3L ] ], [ [ 2L ] ] ] ]
 
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "ANF conversion error: Functions cannot be used as dictionary keys; function-bearing containers must be provably empty of functions" reason=compiler-gap
 test nonStringKeysRejectsLambdaInList =
   Dict { [ (fun x -> x) ]: 1L }
   => raises "Cannot use [(lambda)] as a dict key. Functions, streams, database references, blobs, and values containing them cannot be keys."
 
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "ANF conversion error: Functions cannot be used as dictionary keys; function-bearing containers must be provably empty of functions" reason=compiler-gap
 test nonStringKeysRejectsLambdaInTuple =
   Dict { (1L, (fun x -> x)): 1L }
   => raises "Cannot use (1, (lambda)) as a dict key. Functions, streams, database references, blobs, and values containing them cannot be keys."
 
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "ANF conversion error: Functions cannot be used as dictionary keys; function-bearing containers must be provably empty of functions" reason=compiler-gap
 test nonStringKeysRejectsLambdaInEnum =
   Dict { (Stdlib.Option.Option.Some (fun x -> x)): 1L }
   => raises "Cannot use Some((lambda)) as a dict key. Functions, streams, database references, blobs, and values containing them cannot be keys."
 
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Expected TInt64, got TString" reason=compiler-gap
 test nonStringKeysLiteralRejectsMixedKeyTypes =
   Dict { 1L: "a", "b": "c" }
   => raises "This dict uses keys of type Int64, but \"b\" has type String."
 
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "ANF conversion error: Functions cannot be used as dictionary keys; function-bearing containers must be provably empty of functions" reason=compiler-gap
 test nonStringKeysLiteralRejectsLambdaKey =
   Dict { (fun x -> x): 1L }
   => raises "Cannot use (lambda) as a dict key. Functions, streams, database references, blobs, and values containing them cannot be keys."
 
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Lambda requires an expected function type" reason=compiler-gap
 test nonStringKeysGetRejectsLambdaKey =
   Stdlib.Dict.get (Dict { 1L: "a" }) (fun x -> x)
   => raises "Cannot use (lambda) as a dict key. Functions, streams, database references, blobs, and values containing them cannot be keys."
 
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "ANF conversion error: Functions cannot be used as dictionary keys; function-bearing containers must be provably empty of functions" reason=compiler-gap
 test nonStringKeysSetRejectsLambdaKeyOnEmptyDict =
   Stdlib.Dict.set (Dict { }) (fun x -> x) 1L
   => raises "Cannot use (lambda) as a dict key. Functions, streams, database references, blobs, and values containing them cannot be keys."
 
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Lambda requires an expected function type" reason=compiler-gap
 test nonStringKeysSetRejectsLambdaKey =
   Stdlib.Dict.set (Dict { 1L: "a" }) (fun x -> x) "b"
   => raises "Cannot use (lambda) as a dict key. Functions, streams, database references, blobs, and values containing them cannot be keys."
 
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Lambda requires an expected function type" reason=compiler-gap
 test nonStringKeysSetOverridingDuplicatesRejectsLambdaKey =
   Stdlib.Dict.setOverridingDuplicates (Dict { 1L: "a" }) (fun x -> x) "b"
   => raises "Cannot use (lambda) as a dict key. Functions, streams, database references, blobs, and values containing them cannot be keys."
 
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Lambda requires an expected function type" reason=compiler-gap
 test nonStringKeysMemberRejectsLambdaKey =
   Stdlib.Dict.``member`` (Dict { 1L: "a" }) (fun x -> x)
   => raises "Cannot use (lambda) as a dict key. Functions, streams, database references, blobs, and values containing them cannot be keys."
 
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Lambda requires an expected function type" reason=compiler-gap
 test nonStringKeysRemoveRejectsLambdaKey =
   Stdlib.Dict.remove (Dict { 1L: "a" }) (fun x -> x)
   => raises "Cannot use (lambda) as a dict key. Functions, streams, database references, blobs, and values containing them cannot be keys."
 
 // Supply the dict so the callback executes and its invalid Bool result is rejected.
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Expected TBool, got TSum (\"Darklang.Stdlib.Option.Option\", [TString])" reason=compiler-gap
 test filterMapRejectsNonOptionResult =
   Stdlib.Dict.filterMap
     (Dict { "a": "x", "b": "y", "c": "z" })
     (fun key value -> if value == "y" then false else Some(key + value))
   => raises "No matching case found for value false in match expression"
 
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Expected TList (TTuple [TVar \"t$constraint_-24174_0\"; TVar \"t$constraint_-24174_1\"]), got TList TInt64" reason=compiler-gap
 test fromListOverwritingDuplicatesPropagatesElementError =
   Stdlib.Dict.fromListOverwritingDuplicates [ Stdlib.Test.raiseRuntimeError "err" ]
   => raises "Uncaught exception: err"
 
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Expected TList (TTuple [TVar \"t$constraint_-24174_0\"; TVar \"t$constraint_-24174_1\"]), got TList TInt64" reason=compiler-gap
 test fromListPropagatesElementError =
   Stdlib.Dict.fromList [ Stdlib.Test.raiseRuntimeError "err" ]
   => raises "Uncaught exception: err"

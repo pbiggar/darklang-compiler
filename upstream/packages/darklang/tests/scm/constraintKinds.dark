@@ -13,7 +13,7 @@ module Darklang.SCM.Tests.ConstraintKinds
 
 module Resolutions =
   // A stale usage has an automatic answer.
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unknown function or value 'Darklang.SCM.Constraints.resolutionsFor'" reason=upstream-dependency
   test staleUsageHasAnswer =
     Darklang.SCM.Constraints.resolutionsFor
       Darklang.SCM.Constraints.Kind.StaleUsage
@@ -21,14 +21,14 @@ module Resolutions =
 
   // A kind change has none. Following it means rewriting the usage to call a function where it read a
   // value, which is a change to what the code MEANS, not to which version it points at.
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unknown function or value 'Darklang.SCM.Constraints.resolutionsFor'" reason=upstream-dependency
   test kindChangeHasNone =
     Darklang.SCM.Constraints.resolutionsFor
       Darklang.SCM.Constraints.Kind.KindChanged
     |> Stdlib.Test.equal []
 
   // So `resolve --as repoint` must refuse a kind change rather than doing it.
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unknown function or value 'Darklang.SCM.Constraints.offersResolution'" reason=upstream-dependency
   test repointRefusesKindChange =
     Stdlib.Test.all
       [ Darklang.SCM.Constraints.offersResolution
@@ -43,7 +43,7 @@ module Resolutions =
 module Naming =
   // The wire name round-trips both ways. Acks are stored by kind string, so a kind that serialises to
   // something `kindFromString` can't read back would lose every ack given against it.
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unknown function or value 'Darklang.SCM.Constraints.kindToString'" reason=upstream-dependency
   test wireNameRoundTrips =
     Stdlib.Test.all
       [ Darklang.SCM.Constraints.kindToString

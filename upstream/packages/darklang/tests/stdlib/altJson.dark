@@ -35,7 +35,6 @@ let parseInt (text: String) : Stdlib.Option.Option<Int> =
   | Error _ -> None
 
 // tests
-// @compiler blocked: pending-validation
 test nullValues =
   Stdlib.Test.all
     [ format Json.Null |> Stdlib.Test.equal "null"
@@ -46,7 +45,6 @@ test nullValues =
       parse "()" |> Stdlib.Test.equal (parseError ParseError.NotJson)
       parse "" |> Stdlib.Test.equal (parseError ParseError.NotJson) ]
 
-// @compiler blocked: pending-validation
 test boolValues =
   Stdlib.Test.all
     [ format (Json.Bool true) |> Stdlib.Test.equal "true"
@@ -58,7 +56,7 @@ test boolValues =
       parse "True" |> Stdlib.Test.equal (parseError ParseError.NotJson)
       parse "t" |> Stdlib.Test.equal (parseError ParseError.NotJson) ]
 
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Unknown constructor 'Darklang.Stdlib.AltJson.Json.Integer'" reason=compiler-gap
 test numberValues =
   Stdlib.Test.all
     [ format (Json.Integer 0) |> Stdlib.Test.equal "0"
@@ -76,7 +74,7 @@ test numberValues =
       parse "1e0" |> Stdlib.Test.equal (parsedOk (Json.Float 1.0))
       parse "1.0000000000000001" |> Stdlib.Test.equal (parsedOk (Json.Float 1.0)) ]
 
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Unknown constructor 'Darklang.Stdlib.AltJson.Json.Integer'" reason=compiler-gap
 test intBuilder =
   Stdlib.Test.all
     [ Stdlib.AltJson.Builder.addInt [] "n" 9007199254740993
@@ -93,7 +91,7 @@ test intBuilder =
 
 /// Only an integer-valued JSON number is an Int: a float form is not, even when
 /// its value is whole.
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Unknown function or value 'Stdlib.AltJson.toInt'" reason=upstream-dependency
 test toInt =
   Stdlib.Test.all
     [ Stdlib.AltJson.toInt (Json.Integer 42) |> Stdlib.Test.equal (Some 42)
@@ -111,7 +109,7 @@ test toInt =
 
 /// Reading a named field as an Int (or a Float): a missing field, a null, and a
 /// non-integer value each answer differently.
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Unknown constructor 'Darklang.Stdlib.AltJson.Json.Integer'" reason=compiler-gap
 test intFieldHelpers =
   Stdlib.Test.all
     [ Stdlib.AltJson.Helpers.getIntOption "a" [ ("a", Json.Integer 3) ]
@@ -163,7 +161,7 @@ test intFieldHelpers =
 /// This replaces a set of cases that drove the same reader through the Anthropic and OpenAI
 /// clients, which moved to `later/`. The reader is the subject either way, and the round trip
 /// through text below is the part those cases could not reach.
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Unknown function or value 'Stdlib.AltJson.Helpers.getIntResult'" reason=upstream-dependency
 test largeIntegerFields =
   Stdlib.Test.all
     [ Stdlib.AltJson.Helpers.getIntResult "a" [ ("a", Json.Integer 9007199254740993) ]
@@ -179,7 +177,6 @@ test largeIntegerFields =
 // TODO:
 // - strings with quotes in them
 // - ' instead of "
-// @compiler blocked: pending-validation
 test stringValues =
   Stdlib.Test.all
     [ format (Json.String "hi") |> Stdlib.Test.equal "\"hi\""
@@ -188,7 +185,6 @@ test stringValues =
       parse "\'hi\'" |> Stdlib.Test.equal (parseError ParseError.NotJson) ]
 
 // Strings containing either kind of quote must round-trip.
-// @compiler blocked: pending-validation
 test quotedStrings =
   Stdlib.Test.all
     [ parse (format (Json.String "\"")) |> Stdlib.Test.equal (Ok(Json.String "\""))
@@ -203,7 +199,7 @@ test quotedStrings =
 
 // TODO:
 // - huge arrays
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Unknown constructor 'Darklang.Stdlib.AltJson.Json.Integer'" reason=compiler-gap
 test arrayValues =
   Stdlib.Test.all
     [ // empty
@@ -270,13 +266,12 @@ test arrayValues =
       |> Stdlib.Test.equal (parsedOk (Json.Array [ Json.Null, Json.Float 1.2 ])) ]
 
 // Check a large array.
-// @compiler blocked: pending-validation
 test largeArrayRoundTrip =
   let value =
     Json.Array(Stdlib.List.repeat 10000 (Json.String "large") |> Builtin.unwrap)
   parse (format value) |> Stdlib.Test.equal (Ok value)
 
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Unknown constructor 'Darklang.Stdlib.AltJson.Json.Integer'" reason=compiler-gap
 test objectValues =
   Stdlib.Test.all
     [ // blank
@@ -307,7 +302,6 @@ test objectValues =
 // |> Stdlib.Test.equal (parsedOk (Json.Object [ ("a\nb", Json.Null) ]))
 
 // An escaped newline round-trips; a raw newline is not valid JSON.
-// @compiler blocked: pending-validation
 test newlineInPropertyName =
   let value = Json.Object [ ("a\nb", Json.Null) ]
   Stdlib.Test.all
@@ -315,7 +309,6 @@ test newlineInPropertyName =
       parse "{\"a\\nb\":null}" |> Stdlib.Test.equal (Ok value)
       parse "{\"a\nb\":null}" |> Stdlib.Test.equal (parseError ParseError.NotJson) ]
 
-// @compiler blocked: pending-validation
 test parseErrors =
   Stdlib.Test.all
     [ // names must be strings

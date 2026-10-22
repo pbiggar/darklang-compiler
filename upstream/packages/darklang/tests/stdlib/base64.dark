@@ -11,7 +11,6 @@ let bytesOf (text: String) : List<UInt8> =
   Stdlib.Blob.toList (Stdlib.Blob.fromString text)
 
 // Base64.decode
-// @compiler blocked: pending-validation
 test decode =
   Stdlib.Test.all
     [ decodeBytes "" |> Stdlib.Test.equal (Ok (bytesOf ""))
@@ -24,7 +23,6 @@ test decode =
       |> Stdlib.Test.equal (Ok (bytesOf "/*-+(&@98521")) ]
 
 // some failures
-// @compiler blocked: pending-validation
 test decodeFailures =
   Stdlib.Test.all
     [ decodeBytes "illegal-chars&@:"
@@ -33,7 +31,6 @@ test decodeFailures =
 
 // empty case
 // Test cases from the spec with padding added
-// @compiler blocked: pending-validation
 test decodeSpecCases =
   Stdlib.Test.all
     [ decodeBytes "Zg" |> Stdlib.Test.equal (Ok (bytesOf "f"))
@@ -49,7 +46,6 @@ test decodeSpecCases =
 
 // "Impossible cases" from apache
 // https://commons.apache.org/proper/commons-codec/xref-test/org/apache/commons/codec/binary/Base64Test.html
-// @compiler blocked: pending-validation
 test decodeImpossibleCases =
   Stdlib.Test.all
     [ decodeBytes "ZE==" |> Stdlib.Test.equal (Ok (bytesOf "d"))
@@ -58,7 +54,6 @@ test decodeImpossibleCases =
       decodeBytes "Zm9vYmC=" |> Stdlib.Test.equal (Ok (bytesOf "foob`")) ]
 
 // longer tests
-// @compiler blocked: pending-validation
 test decodeLongInputs =
   Stdlib.Test.all
     [ decodeBytes
@@ -70,7 +65,6 @@ test decodeLongInputs =
       |> Stdlib.Test.equal (Ok (bytesOf "👱👱🏻👱🏼👱🏽👱🏾👱🏿")) ]
 
 // These produce strings of bytes which are technically legal it seems
-// @compiler blocked: pending-validation
 test decodeRawBytes =
   Stdlib.Test.all
     [ decodeBytes "-p" |> Stdlib.Test.equal (Ok [ 250uy ])
@@ -80,7 +74,6 @@ test decodeRawBytes =
       decodeBytes "_w" |> Stdlib.Test.equal (Ok [ 255uy ]) ]
 
 // Check decoding with incorrect padding.
-// @compiler blocked: pending-validation
 test decodeRejectsIncorrectPadding =
   Stdlib.Test.all
     [ decodeBytes "=" |> Stdlib.Test.equal (Error "Not a valid base64 string")
@@ -92,7 +85,6 @@ test decodeRejectsIncorrectPadding =
       decodeBytes "A===" |> Stdlib.Test.equal (Error "Not a valid base64 string") ]
 
 // Base64.encode
-// @compiler blocked: pending-validation
 test encode =
   Stdlib.Test.all
     [ Stdlib.Base64.encode (Stdlib.Blob.fromString "abcdef")
@@ -112,7 +104,6 @@ test encode =
       |> Stdlib.Test.equal
         "8J+RqOKAjeKdpO+4j+KAjfCfkovigI3wn5Go8J+RqeKAjfCfkanigI3wn5Gn4oCN8J+RpvCfj7PvuI/igI3imqfvuI/wn4e18J+Htw==" ]
 
-// @compiler blocked: pending-validation
 test urlEncode =
   Stdlib.Test.all
     [ Stdlib.Base64.urlEncode (Stdlib.Blob.fromString "abcdef")

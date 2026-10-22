@@ -1,6 +1,5 @@
 module Darklang.Language.Tests.Operators
 
-// @compiler blocked: pending-validation
 test addition =
   Stdlib.Test.all
     [ 5L + 3L |> Stdlib.Test.equal 8L
@@ -9,7 +8,6 @@ test addition =
       (5L + 3L) |> Stdlib.Test.equal 8L ]
 
 // Numeric operators are polymorphic over numeric types at runtime
-// @compiler blocked: pending-validation
 test numericTypes =
   Stdlib.Test.all
     [ 1.0 + 2.0 |> Stdlib.Test.equal 3.0
@@ -28,7 +26,7 @@ test numericTypes =
       2y > 1y |> Stdlib.Test.equal true ]
 
 // `%` is integer-only: Float has no Modulo implementation, deliberately
-// @compiler blocked: pending-validation
+// @compiler xfail runtime: "1.5" reason=compiler-gap
 test floatModuloRaises =
   7.5 % 2.0
   => raises
@@ -36,26 +34,24 @@ test floatModuloRaises =
 
 // Mixed operand types are a type error (no implicit coercion), said before
 // dispatch so the message is the operator's, not the impl fn's
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Expected TInt64, got TBool" reason=compiler-gap
 test int64PlusBoolRaises =
   5L + true => raises "Cannot perform numeric operation on Int64 and Bool"
 
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Expected TInt64, got TFloat64" reason=compiler-gap
 test int64PlusFloatRaises =
   1L + 2.0 => raises "Cannot perform numeric operation on Int64 and Float"
 
 // String implements Add but no other arithmetic trait
-// @compiler blocked: pending-validation
 test stringAdd =
   "a" + "b" |> Stdlib.Test.equal "ab"
 
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Operator is unavailable for this type" reason=compiler-gap
 test stringSubtractRaises =
   "a" - "b"
   => raises
     "String has no implementation of Darklang.Stdlib.Subtract. Write `impl Subtract for String = ...`, or run `dark impls Subtract` to see which types do"
 
-// @compiler blocked: pending-validation
 test overflow =
   Stdlib.Test.all
     [ // Integer +,-,* overflow wraps around (two's complement)
@@ -74,17 +70,15 @@ test overflow =
       (-9223372036854775808L) ** 64L |> Stdlib.Test.equal 0L ]
 
 // Integer division by zero raises a clean RTE
-// @compiler blocked: pending-validation
 test divideByZeroRaises =
   10L / 0L => raises "Cannot divide by 0"
 
 // Float overflow produces infinity, following IEEE arithmetic.
-// @compiler blocked: pending-validation
 test floatOverflowIsInfinity =
   2.0 ** 100000.0 |> Stdlib.Test.equal (1.0 / 0.0)
 
 // `**` (power) works on every numeric type, the 128-bit ints included
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Cannot perform numeric operation on Int128 and Int128" reason=compiler-gap
 test power =
   Stdlib.Test.all
     [ 2y ** 3y |> Stdlib.Test.equal 8y
@@ -96,23 +90,19 @@ test power =
       2Z ** 128Z |> Stdlib.Test.equal 0Z ]
 
 // unary `-` works on every signed integer type and Float
-// @compiler blocked: pending-validation
 test unaryMinus =
   Stdlib.Test.all
     [ -(2y + 3y) |> Stdlib.Test.equal -5y
       -(1.0 + 1.5) |> Stdlib.Test.equal -2.5 ]
 
-// @compiler blocked: pending-validation
 test rightOperandErrorRaises =
   5L + (Stdlib.Test.raiseRuntimeError "error")
   => raises "Uncaught exception: error"
 
-// @compiler blocked: pending-validation
 test leftOperandErrorRaises =
   (Stdlib.Test.raiseRuntimeError "error") + 5L
   => raises "Uncaught exception: error"
 
-// @compiler blocked: pending-validation
 test leftOperandErrorRaisesFirst =
   (Stdlib.Test.raiseRuntimeError "one") + (Stdlib.Test.raiseRuntimeError "two")
   => raises "Uncaught exception: one"
@@ -122,7 +112,6 @@ test leftOperandErrorRaisesFirst =
 // ---------------------------------------------------------------------------
 
 // polymorphic over every integer type; both operands must be the same type
-// @compiler blocked: pending-validation
 test bitwise =
   Stdlib.Test.all
     [ 12L & 10L |> Stdlib.Test.equal 8L
@@ -141,7 +130,6 @@ test bitwise =
       12 | 10 |> Stdlib.Test.equal 14
       12 ^ 10 |> Stdlib.Test.equal 6 ]
 
-// @compiler blocked: pending-validation
 test shifts =
   Stdlib.Test.all
     [ // the shift COUNT is the same type as the value
@@ -156,16 +144,13 @@ test shifts =
       1uy << 8uy |> Stdlib.Test.equal 1uy ]
 
 // `Int` has no width to mask a count against, so an unusable one raises
-// @compiler blocked: pending-validation
 test negativeLeftShiftRaises =
   1 << -1 => raises "Encountered out-of-range value for type of Int"
 
-// @compiler blocked: pending-validation
 test negativeRightShiftRaises =
   1 >> -1 => raises "Encountered out-of-range value for type of Int"
 
 // unary `~` is two's complement on every integer type
-// @compiler blocked: pending-validation
 test bitwiseNot =
   Stdlib.Test.all
     [ ~0L |> Stdlib.Test.equal -1L
@@ -177,36 +162,35 @@ test bitwiseNot =
 
 // bitwise operators are traits like every other operator, so a Float says what
 // is missing
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Operator is unavailable for this type" reason=compiler-gap
 test floatBitwiseAndRaises =
   1.0 & 2.0
   => raises
     "Float has no implementation of Darklang.Stdlib.BitwiseAnd. Write `impl BitwiseAnd for Float = ...`, or run `dark impls BitwiseAnd` to see which types do"
 
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Operator is unavailable for this type" reason=compiler-gap
 test floatShiftLeftRaises =
   1.0 << 2.0
   => raises
     "Float has no implementation of Darklang.Stdlib.ShiftLeft. Write `impl ShiftLeft for Float = ...`, or run `dark impls ShiftLeft` to see which types do"
 
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Unary operator is unavailable for TFloat64" reason=compiler-gap
 test floatBitwiseNotRaises =
   ~1.0
   => raises
     "Float has no implementation of Darklang.Stdlib.BitwiseNot. Write `impl BitwiseNot for Float = ...`, or run `dark impls BitwiseNot` to see which types do"
 
 // mixed widths are a type error, exactly as for the arithmetic operators
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Expected TInt64, got TInt8" reason=compiler-gap
 test mixedBitwiseWidthsRaises =
   1L & 2y => raises "Cannot perform numeric operation on Int64 and Int8"
 
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Expected TInt64, got TInt" reason=compiler-gap
 test mixedShiftWidthsRaises =
   1L << 2 => raises "Cannot perform numeric operation on Int64 and Int"
 
 // precedence: bitwise binds TIGHTER than the comparisons (Python's order, not
 // C's), and looser than the arithmetic operators
-// @compiler blocked: pending-validation
 test bitwisePrecedence =
   Stdlib.Test.all
     [ (12L & 10L) == 8L |> Stdlib.Test.equal true
@@ -218,14 +202,12 @@ test bitwisePrecedence =
       ~0L & 255L |> Stdlib.Test.equal 255L ]
 
 // left-associative, unlike `**`
-// @compiler blocked: pending-validation
 test associativity =
   Stdlib.Test.all
     [ 8L >> 1L >> 1L |> Stdlib.Test.equal 2L
       2 ** 3 ** 2 |> Stdlib.Test.equal 512 ]
 
 // operator sections
-// @compiler blocked: pending-validation
 test sections =
   Stdlib.Test.all
     [ 12L |> (&) 10L |> Stdlib.Test.equal 8L
@@ -235,7 +217,6 @@ test sections =
 // ---------------------------------------------------------------------------
 // unary `!` is boolean not
 // ---------------------------------------------------------------------------
-// @compiler blocked: pending-validation
 test booleanNot =
   Stdlib.Test.all
     [ !true |> Stdlib.Test.equal false
@@ -249,7 +230,6 @@ test booleanNot =
 // ---------------------------------------------------------------------------
 // `|` vs the match-arm separator: inside a match, the ARM wins
 // ---------------------------------------------------------------------------
-// @compiler blocked: pending-validation
 test barInMatch =
   Stdlib.Test.all
     [ (match 14L with

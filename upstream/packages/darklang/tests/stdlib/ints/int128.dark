@@ -1,6 +1,5 @@
 module Darklang.Stdlib.Int128.Tests
 
-// @compiler blocked: pending-validation
 test abs =
   Stdlib.Test.all
     [ Stdlib.abs -5Q |> Stdlib.Test.equal 5Q
@@ -12,21 +11,17 @@ test abs =
 // that it reaches this type and that the type's own comparison holds at its
 // extremes.
 
-// @compiler blocked: pending-validation
 test max =
   Stdlib.max 170141183460469231731687303715884105727Q -170141183460469231731687303715884105728Q
   |> Stdlib.Test.equal 170141183460469231731687303715884105727Q
 
-// @compiler blocked: pending-validation
 test min =
   Stdlib.min 170141183460469231731687303715884105727Q -170141183460469231731687303715884105728Q
   |> Stdlib.Test.equal -170141183460469231731687303715884105728Q
 
-// @compiler blocked: pending-validation
 test clamp =
   Stdlib.clamp -100Q 0Q -1Q |> Stdlib.Test.equal -1Q
 
-// @compiler blocked: pending-validation
 test negate =
   Stdlib.Test.all
     [ (--5Q) |> Stdlib.Test.equal 5Q
@@ -38,7 +33,6 @@ test negate =
 
 /// A Result: the sign follows the dividend, and it is an Error only when the
 /// divisor is 0.
-// @compiler blocked: pending-validation
 test remainder =
   Stdlib.Test.all
     [ Stdlib.Int128.remainder 15Q 6Q |> Stdlib.Test.equal (Ok 3Q)
@@ -52,7 +46,6 @@ test remainder =
       |> Stdlib.Test.equal (Error "Cannot divide by 0") ]
 
 /// Wraps on overflow.
-// @compiler blocked: pending-validation
 test add =
   Stdlib.Test.all
     [ (10Q + 9Q) |> Stdlib.Test.equal 19Q
@@ -66,7 +59,6 @@ test add =
       |> Stdlib.Test.equal -170141183460469231731687303715884105726Q ]
 
 /// Wraps on overflow.
-// @compiler blocked: pending-validation
 test subtract =
   Stdlib.Test.all
     [ (10Q - 9Q) |> Stdlib.Test.equal 1Q
@@ -78,13 +70,11 @@ test subtract =
       |> Stdlib.Test.equal 170141183460469231731687303715884105675Q ]
 
 /// Wraps on overflow.
-// @compiler blocked: pending-validation
 test multiply =
   Stdlib.Test.all
     [ (8Q * 8Q) |> Stdlib.Test.equal 64Q
       (1Q * 0Q) |> Stdlib.Test.equal 0Q ]
 
-// @compiler blocked: pending-validation
 test divide =
   Stdlib.Test.all
     [ (10Q / 5Q) |> Stdlib.Test.equal 2Q
@@ -94,18 +84,15 @@ test divide =
       (-170141183460469231731687303715884105728Q / -1Q)
       |> Stdlib.Test.equal -170141183460469231731687303715884105728Q ]
 
-// @compiler blocked: pending-validation
 test divideOfOneRejectsZero =
   (1Q / 0Q)
   => raises "Cannot divide by 0"
 
-// @compiler blocked: pending-validation
 test greaterThan =
   Stdlib.Test.all
     [ (20Q > 1Q) |> Stdlib.Test.equal true
       (20Q > 170141183460469231731687303715884105727Q) |> Stdlib.Test.equal false ]
 
-// @compiler blocked: pending-validation
 test greaterThanOrEqualTo =
   Stdlib.Test.all
     [ (0Q >= 1Q) |> Stdlib.Test.equal false
@@ -118,7 +105,6 @@ test greaterThanOrEqualTo =
       (-170141183460469231731687303715884105728Q >= -20Q)
       |> Stdlib.Test.equal false ]
 
-// @compiler blocked: pending-validation
 test lessThanOrEqualTo =
   Stdlib.Test.all
     [ (6Q <= 8Q) |> Stdlib.Test.equal true
@@ -126,7 +112,6 @@ test lessThanOrEqualTo =
       (0Q <= 1Q) |> Stdlib.Test.equal true
       (1Q <= 0Q) |> Stdlib.Test.equal false ]
 
-// @compiler blocked: pending-validation
 test lessThan =
   Stdlib.Test.all
     [ (-170141183460469231731687303715884105728Q < 170141183460469231731687303715884105727Q)
@@ -136,7 +121,6 @@ test lessThan =
       (0Q < 1Q) |> Stdlib.Test.equal true
       (1Q < 0Q) |> Stdlib.Test.equal false ]
 
-// @compiler blocked: pending-validation
 test toString =
   Stdlib.Test.all
     [ Stdlib.toString 0Q |> Stdlib.Test.equal "0"
@@ -147,7 +131,6 @@ test toString =
       Stdlib.toString 170141183460469231731687303715884105727Q
       |> Stdlib.Test.equal "170141183460469231731687303715884105727" ]
 
-// @compiler blocked: pending-validation
 test toFloat =
   Stdlib.Test.all
     [ Stdlib.Int128.toFloat 2Q |> Stdlib.Test.equal 2.0
@@ -157,7 +140,6 @@ test toFloat =
       |> Stdlib.Test.equal -170141183460469231731687303715884105728.0
       Stdlib.Int128.toFloat -10Q |> Stdlib.Test.equal -10.0 ]
 
-// @compiler blocked: pending-validation
 test sqrt =
   Stdlib.Test.all
     [ Stdlib.Int128.sqrt 4Q |> Stdlib.Test.equal 2.0
@@ -165,7 +147,6 @@ test sqrt =
       Stdlib.Int128.sqrt 86Q |> Stdlib.Test.equal 9.273618495495704 ]
 
 /// `%` wraps into [0, b), and raises when b <= 0.
-// @compiler blocked: pending-validation
 test modulo =
   Stdlib.Test.all
     [ (15Q % 5Q) |> Stdlib.Test.equal 0Q
@@ -175,17 +156,14 @@ test modulo =
       (-128Q % 53Q) |> Stdlib.Test.equal 31Q
       (127Q % 3Q) |> Stdlib.Test.equal 1Q ]
 
-// @compiler blocked: pending-validation
 test moduloRejectsZero =
   (5Q % 0Q)
   => raises "Cannot evaluate modulus against 0"
 
-// @compiler blocked: pending-validation
 test moduloRejectsNegativeDivisor =
   (5Q % -5Q)
   => raises "Cannot evaluate modulus against a negative number"
 
-// @compiler blocked: pending-validation
 test parse =
   Stdlib.Test.all
     [ // parse OK
@@ -204,7 +182,6 @@ test parse =
       Stdlib.Int128.parse "-170141183460469231731687303715884105728"
       |> Stdlib.Test.equal (Ok -170141183460469231731687303715884105728Q) ]
 
-// @compiler blocked: pending-validation
 test parseOutOfRange =
   Stdlib.Test.all
     [ // out of range
@@ -213,7 +190,6 @@ test parseOutOfRange =
       Stdlib.Int128.parse "-170141183460469231731687303715884105729"
       |> Stdlib.Test.equal (Error Stdlib.Int128.ParseError.OutOfRange) ]
 
-// @compiler blocked: pending-validation
 test parseBadFormat =
   Stdlib.Test.all
     [ // bad format
@@ -244,7 +220,6 @@ test parseBadFormat =
       Stdlib.Int128.parse "XQV"
       |> Stdlib.Test.equal (Error Stdlib.Int128.ParseError.BadFormat) ]
 
-// @compiler blocked: pending-validation
 test fromInt8 =
   Stdlib.Test.all
     [ Stdlib.Int128.fromInt8 0y |> Stdlib.Test.equal 0Q
@@ -252,14 +227,12 @@ test fromInt8 =
       Stdlib.Int128.fromInt8 127y |> Stdlib.Test.equal 127Q
       Stdlib.Int128.fromInt8 -128y |> Stdlib.Test.equal -128Q ]
 
-// @compiler blocked: pending-validation
 test fromUInt8 =
   Stdlib.Test.all
     [ Stdlib.Int128.fromUInt8 0uy |> Stdlib.Test.equal 0Q
       Stdlib.Int128.fromUInt8 1uy |> Stdlib.Test.equal 1Q
       Stdlib.Int128.fromUInt8 255uy |> Stdlib.Test.equal 255Q ]
 
-// @compiler blocked: pending-validation
 test fromInt16 =
   Stdlib.Test.all
     [ Stdlib.Int128.fromInt16 0s |> Stdlib.Test.equal 0Q
@@ -267,14 +240,12 @@ test fromInt16 =
       Stdlib.Int128.fromInt16 32767s |> Stdlib.Test.equal 32767Q
       Stdlib.Int128.fromInt16 -32768s |> Stdlib.Test.equal -32768Q ]
 
-// @compiler blocked: pending-validation
 test fromUInt16 =
   Stdlib.Test.all
     [ Stdlib.Int128.fromUInt16 0us |> Stdlib.Test.equal 0Q
       Stdlib.Int128.fromUInt16 1us |> Stdlib.Test.equal 1Q
       Stdlib.Int128.fromUInt16 65535us |> Stdlib.Test.equal 65535Q ]
 
-// @compiler blocked: pending-validation
 test fromInt32 =
   Stdlib.Test.all
     [ Stdlib.Int128.fromInt32 0l |> Stdlib.Test.equal 0Q
@@ -282,14 +253,12 @@ test fromInt32 =
       Stdlib.Int128.fromInt32 2147483647l |> Stdlib.Test.equal 2147483647Q
       Stdlib.Int128.fromInt32 -2147483648l |> Stdlib.Test.equal -2147483648Q ]
 
-// @compiler blocked: pending-validation
 test fromUInt32 =
   Stdlib.Test.all
     [ Stdlib.Int128.fromUInt32 0ul |> Stdlib.Test.equal 0Q
       Stdlib.Int128.fromUInt32 1ul |> Stdlib.Test.equal 1Q
       Stdlib.Int128.fromUInt32 4294967295ul |> Stdlib.Test.equal 4294967295Q ]
 
-// @compiler blocked: pending-validation
 test fromInt64 =
   Stdlib.Test.all
     [ Stdlib.Int128.fromInt64 0L |> Stdlib.Test.equal 0Q
@@ -299,7 +268,6 @@ test fromInt64 =
       Stdlib.Int128.fromInt64 -9223372036854775808L
       |> Stdlib.Test.equal -9223372036854775808Q ]
 
-// @compiler blocked: pending-validation
 test fromUInt64 =
   Stdlib.Test.all
     [ Stdlib.Int128.fromUInt64 0UL |> Stdlib.Test.equal 0Q
@@ -307,7 +275,6 @@ test fromUInt64 =
       Stdlib.Int128.fromUInt64 18446744073709551615UL
       |> Stdlib.Test.equal 18446744073709551615Q ]
 
-// @compiler blocked: pending-validation
 test bitwiseAnd =
   Stdlib.Test.all
     [ (12Q & 10Q) |> Stdlib.Test.equal 8Q
@@ -315,28 +282,24 @@ test bitwiseAnd =
       ((-1Q) & 0Q) |> Stdlib.Test.equal 0Q
       ((-1Q) & (-1Q)) |> Stdlib.Test.equal -1Q ]
 
-// @compiler blocked: pending-validation
 test bitwiseOr =
   Stdlib.Test.all
     [ (12Q | 10Q) |> Stdlib.Test.equal 14Q
       (0Q | 0Q) |> Stdlib.Test.equal 0Q
       ((-1Q) | 0Q) |> Stdlib.Test.equal -1Q ]
 
-// @compiler blocked: pending-validation
 test bitwiseXor =
   Stdlib.Test.all
     [ (12Q ^ 10Q) |> Stdlib.Test.equal 6Q
       (0Q ^ 0Q) |> Stdlib.Test.equal 0Q
       ((-1Q) ^ (-1Q)) |> Stdlib.Test.equal 0Q ]
 
-// @compiler blocked: pending-validation
 test bitwiseNot =
   Stdlib.Test.all
     [ (~0Q) |> Stdlib.Test.equal -1Q
       (~(-1Q)) |> Stdlib.Test.equal 0Q
       (~1Q) |> Stdlib.Test.equal -2Q ]
 
-// @compiler blocked: pending-validation
 test shiftLeft =
   Stdlib.Test.all
     [ (1Q << 2Q) |> Stdlib.Test.equal 4Q
@@ -344,7 +307,6 @@ test shiftLeft =
       (1Q << 0Q) |> Stdlib.Test.equal 1Q
       (5Q << 3Q) |> Stdlib.Test.equal 40Q ]
 
-// @compiler blocked: pending-validation
 test shiftRight =
   Stdlib.Test.all
     [ (8Q >> 2Q) |> Stdlib.Test.equal 2Q

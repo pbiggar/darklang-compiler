@@ -2,7 +2,6 @@
 module Darklang.Stdlib.HttpClient.Tests
 
 // Tests that don't use the internet
-// @compiler blocked: pending-validation
 test contentTypes =
   Stdlib.Test.all
     [ Stdlib.HttpClient.ContentType.form
@@ -14,12 +13,10 @@ test contentTypes =
       Stdlib.HttpClient.ContentType.html
       |> Stdlib.Test.equal ("content-type", "text/html; charset=utf-8") ]
 
-// @compiler blocked: pending-validation
 test bearerToken =
   Stdlib.HttpClient.bearerToken "YWxhZGRpbjpvcGVuc2VzYW1l"
   |> Stdlib.Test.equal ("authorization", "bearer YWxhZGRpbjpvcGVuc2VzYW1l")
 
-// @compiler blocked: pending-validation
 test basicAuth =
   Stdlib.Test.all
     [ Stdlib.HttpClient.basicAuth "username" "password"
@@ -37,7 +34,6 @@ test basicAuth =
       Stdlib.HttpClient.basicAuth "hello" "world?"
       |> Stdlib.Test.equal (Ok(("authorization", "basic aGVsbG86d29ybGQ/"))) ]
 
-// @compiler blocked: pending-validation
 test basicAuthRejectsHyphenInUsername =
   Stdlib.HttpClient.basicAuth "-" ""
   |> Stdlib.Test.equal (Error "Username cannot contain a hyphen")
@@ -102,18 +98,16 @@ let errUnsupportedProtocol () : GetResult =
 // Expected: (headers: List<(String * String)>)
 // Actual: a List<Int64>: [\n  1\n]"""
 
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Expected TTuple [TString; TString], got TInt64" reason=compiler-gap
 test rejectsWrongHeaderType =
   Stdlib.HttpClient.request "get" "https://darklang.com" [1L] Stdlib.Blob.empty
   => raises "Darklang.Stdlib.HttpClient.request's 3rd parameter `headers` expects List<(String * String)>, but got List<Int64> ([1])"
 
-// @compiler blocked: pending-validation
 test rejectsEmptyHeaderKey =
   get "https://darklang.com" [ ("", "") ]
   |> Stdlib.Test.equal (errBadHeaderEmptyKey ())
 
 // type errors for bad `method` are OK
-// @compiler blocked: pending-validation
 test rejectsBadMethods =
   Stdlib.Test.all
     [ Stdlib.HttpClient.request "" "https://darklang.com" [] Stdlib.Blob.empty
@@ -124,7 +118,6 @@ test rejectsBadMethods =
       |> Stdlib.Test.equal (errBadMethod ()) ]
 
 // unsupported protocols
-// @compiler blocked: pending-validation
 test rejectsUnsupportedProtocols =
   Stdlib.Test.all
     [ Stdlib.HttpClient.request "get" "ftp://darklang.com" [] Stdlib.Blob.empty
@@ -135,7 +128,6 @@ test rejectsUnsupportedProtocols =
       |> Stdlib.Test.equal (errUnsupportedProtocol ()) ]
 
 // totally bogus URLs
-// @compiler blocked: pending-validation
 test rejectsBogusUrls =
   Stdlib.Test.all
     [ Stdlib.HttpClient.request "get" "" [] Stdlib.Blob.empty
@@ -159,7 +151,6 @@ test rejectsBogusUrls =
 // (see Builtins.Http.Client.Libs.HttpClient.LocalAccess + strictConfig).
 
 // invalid host
-// @compiler blocked: pending-validation
 test disallowedHosts =
   Stdlib.Test.all
     [ get "http://0.0.0.0" [] |> Stdlib.Test.equal (errInvalidHost ())
@@ -207,12 +198,12 @@ test disallowedHosts =
       |> Stdlib.Test.equal (errInvalidHost ()) ]
 
 // invalid uri
-// @compiler blocked: pending-validation
+// @compiler xfail runtime: "Values differ" reason=compiler-gap
 test disallowedUri =
   get "localhost" [] |> Stdlib.Test.equal (errInvalidUri ())
 
 // network error
-// @compiler blocked: pending-validation
+// @compiler xfail runtime: "Values differ" reason=compiler-gap
 test unspecifiedAddressIsNetworkError =
   get "http://[0:0:0:0:0:0:0:0]" [] |> Stdlib.Test.equal (errNetworkError ())
 
@@ -228,7 +219,6 @@ test unspecifiedAddressIsNetworkError =
 // those /etc/hosts entries these three pass without testing anything. That was
 // true of the third-party version too. Nothing in the public API distinguishes
 // "blocked at connect" from "never resolved".
-// @compiler blocked: pending-validation
 test sneakyBannedHosts =
   Stdlib.Test.all
     [ // 127.0.0.1
@@ -242,7 +232,7 @@ test sneakyBannedHosts =
 
 // invalid headers (we just happen to know that google will fail this way if we
 // provide these headers..)
-// @compiler blocked: pending-validation
+// @compiler xfail runtime: "assertion 1: Values differ" reason=compiler-gap
 test disallowedHeaders =
   Stdlib.Test.all
     [ get "http://google.com" [ ("Metadata-Flavor", "Google") ]
@@ -258,7 +248,6 @@ test disallowedHeaders =
 
 // `.test` cannot resolve publicly. Depending on the DNS environment, that is
 // reported immediately as NetworkError or when the request times out.
-// @compiler blocked: pending-validation
 test missingHostFails =
   (match get "http://no-such-host.dark.test" [] with
    | Error NetworkError -> true

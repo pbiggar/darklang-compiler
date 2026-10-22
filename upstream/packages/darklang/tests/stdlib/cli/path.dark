@@ -1,7 +1,6 @@
 module Darklang.Stdlib.Cli.Path.Tests
 
 // Path.basename
-// @compiler blocked: pending-validation
 test basename =
   Stdlib.Test.all
     [ Stdlib.Cli.Path.basename "/home/user/file.txt" |> Stdlib.Test.equal "file.txt"
@@ -11,7 +10,6 @@ test basename =
       Stdlib.Cli.Path.basename "/home/" |> Stdlib.Test.equal "home" ]
 
 // Path.parent
-// @compiler blocked: pending-validation
 test parent =
   Stdlib.Test.all
     [ Stdlib.Cli.Path.parent "/home/user/file.txt" |> Stdlib.Test.equal "/home/user"
@@ -22,7 +20,6 @@ test parent =
       Stdlib.Cli.Path.parent "a/b/" |> Stdlib.Test.equal "a" ]
 
 // Path.extension
-// @compiler blocked: pending-validation
 test extension =
   Stdlib.Test.all
     [ Stdlib.Cli.Path.extension "photo.jpg" |> Stdlib.Test.equal (Some ".jpg")
@@ -31,7 +28,6 @@ test extension =
       Stdlib.Cli.Path.extension ".hidden" |> Stdlib.Test.equal None ]
 
 // Path.withExtension
-// @compiler blocked: pending-validation
 test withExtension =
   Stdlib.Test.all
     [ Stdlib.Cli.Path.withExtension "file.txt" ".md" |> Stdlib.Test.equal "file.md"
@@ -40,7 +36,6 @@ test withExtension =
       |> Stdlib.Test.equal "/home/user/file.md" ]
 
 // Path.isAbsolute
-// @compiler blocked: pending-validation
 test isAbsolute =
   Stdlib.Test.all
     [ Stdlib.Cli.Path.isAbsolute "/home/user" |> Stdlib.Test.equal true
@@ -49,7 +44,6 @@ test isAbsolute =
       Stdlib.Cli.Path.isAbsolute "" |> Stdlib.Test.equal false ]
 
 // Path.join
-// @compiler blocked: pending-validation
 test join =
   Stdlib.Test.all
     [ Stdlib.Cli.Path.join [ "home", "user", "file.txt" ]
@@ -61,7 +55,6 @@ test join =
       Stdlib.Cli.Path.join [ "a/", "b" ] |> Stdlib.Test.equal "a/b" ]
 
 // Path.normalize
-// @compiler blocked: pending-validation
 test normalize =
   Stdlib.Test.all
     [ Stdlib.Cli.Path.normalize "/home/../lib/./foo" |> Stdlib.Test.equal "/lib/foo"
@@ -73,7 +66,6 @@ test normalize =
       Stdlib.Cli.Path.normalize "../../a/b" |> Stdlib.Test.equal "../../a/b" ]
 
 // Path.relativeTo
-// @compiler blocked: pending-validation
 test relativeTo =
   Stdlib.Test.all
     [ Stdlib.Cli.Path.relativeTo "/home/user" "/home/lib"
@@ -84,6 +76,5 @@ test relativeTo =
       |> Stdlib.Test.equal (Ok "../..") ]
 
 // Path.resolve — absolute paths returned as-is (normalized)
-// @compiler blocked: pending-validation
 test resolveAbsolutePath =
   Stdlib.Cli.Path.resolve "/home/../tmp" |> Stdlib.Test.equal (Ok "/tmp")

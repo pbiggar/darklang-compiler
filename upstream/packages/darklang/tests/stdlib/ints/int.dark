@@ -13,7 +13,6 @@ module Darklang.Stdlib.Int.Tests
 // on both sides of the Int64 range, where a representation bug would show.
 
 // --- boundary: largest small value vs first big value ---
-// @compiler blocked: pending-validation
 test int64Boundary =
   Stdlib.Test.all
     [ // Int64.MAX stays small
@@ -27,7 +26,6 @@ test int64Boundary =
       |> Stdlib.Test.equal true ]
 
 // --- demotion: a big-arithmetic result that fits Int64 collapses to small ---
-// @compiler blocked: pending-validation
 test bigResultsBackInInt64Range =
   Stdlib.Test.all
     [ (9223372036854775808 - 1) |> Stdlib.Test.equal 9223372036854775807
@@ -40,7 +38,6 @@ test bigResultsBackInInt64Range =
       |> Stdlib.Test.equal true ]
 
 // --- equality and ordering across representations ---
-// @compiler blocked: pending-validation
 test equalityAndOrdering =
   Stdlib.Test.all
     [ ((2 ** 64) == (2 ** 64)) |> Stdlib.Test.equal true
@@ -49,7 +46,6 @@ test equalityAndOrdering =
       (9223372036854775808 == 5) |> Stdlib.Test.equal false ]
 
 // --- arithmetic correctness at scale ---
-// @compiler blocked: pending-validation
 test largePowers =
   Stdlib.Test.all
     [ (2 ** 64) |> Stdlib.Test.equal 18446744073709551616
@@ -57,7 +53,6 @@ test largePowers =
       |> Stdlib.Test.equal 1606938044258990275541962092341162602522202993782792835301376 ]
 
 // --- round-trips (stringify / parse / Int64 conversions) ---
-// @compiler blocked: pending-validation
 test toStringAndParse =
   Stdlib.Test.all
     [ Stdlib.toString 5 |> Stdlib.Test.equal "5"
@@ -79,7 +74,6 @@ test toStringAndParse =
       |> Stdlib.Test.equal (Ok -9223372036854775809) ]
 
 // toInt64 relies on the invariant: a small Int always fits, a big Int never does
-// @compiler blocked: pending-validation
 test int64Conversions =
   Stdlib.Test.all
     [ Stdlib.Int.fromInt64 5L |> Stdlib.Test.equal 5
@@ -87,7 +81,6 @@ test int64Conversions =
       Stdlib.Int.toInt64 9223372036854775808 |> Stdlib.Test.equal None ]
 
 // --- conversions from the fixed-width types (always succeed) ---
-// @compiler blocked: pending-validation
 test fromFixedWidth =
   Stdlib.Test.all
     [ Stdlib.Int.fromInt8 127y |> Stdlib.Test.equal 127
@@ -101,7 +94,6 @@ test fromFixedWidth =
       |> Stdlib.Test.equal 340282366920938463463374607431768211455 ]
 
 // --- conversions into the fixed-width types (Some if it fits, else None) ---
-// @compiler blocked: pending-validation
 test toFixedWidth =
   Stdlib.Test.all
     [ Stdlib.Int.toInt8 100 |> Stdlib.Test.equal (Some 100y)
@@ -114,7 +106,6 @@ test toFixedWidth =
       Stdlib.Int.toUInt128 (2 ** 200) |> Stdlib.Test.equal None ]
 
 // --- fromFloat: truncates toward zero; NaN/Infinity have no Int, so OutOfRange ---
-// @compiler blocked: pending-validation
 test fromFloatTruncatesTowardZero =
   Stdlib.Test.all
     [ Stdlib.Int.fromFloat 3.9 |> Stdlib.Test.equal 3
@@ -122,24 +113,20 @@ test fromFloatTruncatesTowardZero =
 
 // NaN and the infinities have no Int, so they are out of range.
 
-// @compiler blocked: pending-validation
 test fromFloatRejectsNaN =
   Stdlib.Int.fromFloat (0.0 / 0.0)
   => raises "Encountered out-of-range value for type of Int"
 
-// @compiler blocked: pending-validation
 test fromFloatRejectsInfinity =
   Stdlib.Int.fromFloat (1.0 / 0.0)
   => raises "Encountered out-of-range value for type of Int"
 
-// @compiler blocked: pending-validation
 test fromFloatRejectsNegativeInfinity =
   Stdlib.Int.fromFloat (-1.0 / 0.0)
   => raises "Encountered out-of-range value for type of Int"
 
 // --- remainder: Result<Int>; sign follows the dividend; Error only if divisor
 // is 0 ---
-// @compiler blocked: pending-validation
 test remainder =
   Stdlib.Test.all
     [ Stdlib.Int.remainder 15 6 |> Stdlib.Test.equal (Ok 3)
@@ -152,7 +139,6 @@ test remainder =
       Stdlib.Int.remainder (2 ** 100) 7 |> Stdlib.Test.equal (Ok 2) ]
 
 // The % operator dispatches to mod, which wraps into [0, b) and rejects b <= 0.
-// @compiler blocked: pending-validation
 test modulo =
   Stdlib.Test.all
     [ (15 % 5) |> Stdlib.Test.equal 0
@@ -162,30 +148,25 @@ test modulo =
       (-754 % 53) |> Stdlib.Test.equal 41
       ((2 ** 100) % 7) |> Stdlib.Test.equal 2 ]
 
-// @compiler blocked: pending-validation
 test moduloRejectsZero =
   (5 % 0)
   => raises "Cannot evaluate modulus against 0"
 
-// @compiler blocked: pending-validation
 test moduloRejectsNegativeDivisor =
   (5 % -5)
   => raises "Cannot evaluate modulus against a negative number"
 
 // --- shiftLeft / shiftRight: count must fit Int32, else OutOfRange ---
-// @compiler blocked: pending-validation
 test shifts =
   Stdlib.Test.all
     [ (1 << 4) |> Stdlib.Test.equal 16
       (1 << 64) |> Stdlib.Test.equal 18446744073709551616
       (256 >> 4) |> Stdlib.Test.equal 16 ]
 
-// @compiler blocked: pending-validation
 test shiftLeftRejectsHugeCount =
   (1 << (2 ** 40))
   => raises "Encountered out-of-range value for type of Int"
 
-// @compiler blocked: pending-validation
 test shiftRightRejectsHugeCount =
   (1 >> (2 ** 40))
   => raises "Encountered out-of-range value for type of Int"

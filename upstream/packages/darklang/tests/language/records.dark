@@ -7,12 +7,10 @@ type Cols2 = { col1: Int64, col2: Int64 }
 // so the runtime error has a stable type name.
 type AnEnum = | RecordTestA | RecordTestB | RecordTestC
 
-// @compiler blocked: pending-validation
 test construction =
   Cols2 { col1 = 1L, col2 = 3L }
   |> Stdlib.Test.equal (Cols2 { col1 = 1L, col2 = 3L })
 
-// @compiler blocked: pending-validation
 test fieldErrorRaises =
   Cols2 { col1 = 2L, col2 = Stdlib.Test.raiseRuntimeError "test" }
   => raises "Uncaught exception: test"
@@ -21,7 +19,6 @@ module WithTypeArgs =
   type Owner<'a> = { item: 'a }
   type CoOwner<'a> = Owner<'a>
 
-  // @compiler blocked: pending-validation
   test aliasWithTypeArg =
     Owner { item = 5L } |> Stdlib.Test.equal (CoOwner { item = 5L })
 
@@ -31,32 +28,31 @@ module WithTypeArgs =
 
   let getC (a: A<Int64>) : Int64 = a.b.c.v
 
-  // @compiler blocked: pending-validation
   test nestedTypeArgs =
     getC (A { b = B { c = C { v = 5L } } }) |> Stdlib.Test.equal 5L
 
 module InvalidCols =
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Duplicate record field 'col1'" reason=compiler-gap
   test duplicateFieldRaises =
     Cols1 { col1 = 1L, col1 = 2L } => raises "Duplicate field `col1`"
 
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unknown field '' on Darklang.Language.Tests.Records.Cols2" reason=compiler-gap
   test emptyKeyRaises =
     Cols2 { col1 = 2L, ___ = 3L } => raises "Empty key in record creation"
 
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "record literal does not contain exactly the declared field slots" reason=compiler-gap
   test missingFieldRaises =
     Cols2 { col1 = 2L } => raises "Missing field `col2`"
 
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unknown field 'other' on Darklang.Language.Tests.Records.Cols2" reason=compiler-gap
   test unknownFieldRaises =
     Cols2 { col1 = 2L, other = 3L } => raises "No field named `other`"
 
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unknown field 'col3' on Darklang.Language.Tests.Records.Cols2" reason=compiler-gap
   test extraFieldRaises =
     Cols2 { col1 = 2L, col2 = 3L, col3 = 4L } => raises "No field named `col3`"
 
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Expected TInt64, got TString" reason=compiler-gap
   test wrongFieldTypeRaises =
     Cols1 { col1 = "" }
     => raises
@@ -65,7 +61,7 @@ module InvalidCols =
 module InvalidType =
   // Evaluate the unresolved name from source at run time so it does not prevent
   // the package from loading. Check both the error branch and its message.
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unknown function or value 'Darklang.SCM.PackageOps.currentBranch'" reason=upstream-dependency
   test unknownTypeRaises =
     let branch = Darklang.SCM.PackageOps.currentBranch ()
     let source = "MyNonExistantType { col1 = 2L }"
@@ -75,7 +71,7 @@ module InvalidType =
       |> Stdlib.Test.equal "MyNonExistantType not found"
     | _ -> Stdlib.Test.fail "expected a runtime error for an unknown record type"
 
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Expected a record type" reason=compiler-gap
   test enumIsNotRecordRaises =
     AnEnum { col1 = 2L }
     => raises
@@ -84,7 +80,6 @@ module InvalidType =
 module Polymorphism =
   type MyRecord<'a> = { col1: 'a, col2: Int64 }
 
-  // @compiler blocked: pending-validation
   test typeArgFields =
     Stdlib.Test.all
       [ (MyRecord { col1 = (), col2 = 1L }).col2 |> Stdlib.Test.equal 1L
@@ -99,7 +94,6 @@ module Nested =
   type NestedRecordA = { col1: Int64 }
   type NestedRecordB = { col1: NestedRecordA }
 
-  // @compiler blocked: pending-validation
   test nestedFieldAccess =
     (NestedRecordB { col1 = NestedRecordA { col1 = 1L } }).col1.col1
     |> Stdlib.Test.equal 1L
@@ -108,7 +102,7 @@ module Update =
   type RecordForUpdate = { x: Int64, y: Int64 }
   type RecordForUpdateMultiple = { x: Int64, y: Int64, z: Int64 }
 
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Duplicate record field 'y'" reason=compiler-gap
   test updates =
     Stdlib.Test.all
       [ ({ RecordForUpdate { x = 4L, y = 1L } with y = 2L })
@@ -141,24 +135,23 @@ module Update =
 
     let viaGeneric<'a> (xs: List<'a>) : UpdBox<String> = emptyUpdBox ()
 
-    // @compiler blocked: pending-validation
     test genericCallerKeepsOwnTypeArg =
       Stdlib.List.length (viaGeneric [ 1L ]).updItems |> Stdlib.Test.equal 0
 
   module Invalid =
-    // @compiler blocked: pending-validation
+    // @compiler xfail compile: "Unknown field 'p' on Darklang.Language.Tests.Records.Update.RecordForUpdateMultiple" reason=compiler-gap
     test unknownFieldRaises =
       (let myRec = RecordForUpdateMultiple { x = 4L, y = 1L, z = 0L }
        { myRec with z = 3L, x = 42L, y = 11L, p = 10L })
       => raises "No field named `p`"
 
-    // @compiler blocked: pending-validation
+    // @compiler xfail compile: "Unknown field 'other' on Darklang.Language.Tests.Records.Update.RecordForUpdate" reason=compiler-gap
     test otherFieldRaises =
       (let myRec = RecordForUpdate { x = 4L, y = 1L }
        { myRec with other = 2L })
       => raises "No field named `other`"
 
-    // @compiler blocked: pending-validation
+    // @compiler xfail compile: "Expected TInt64, got TString" reason=compiler-gap
     test wrongFieldTypeRaises =
       (let myRec = RecordForUpdate { x = 4L, y = 1L }
        { myRec with y = "2" })
@@ -168,23 +161,22 @@ module Update =
 module FieldAccess =
   type MyRecord = { col1: Int64 }
 
-  // @compiler blocked: pending-validation
   test fieldAccess =
     (let x = MyRecord { col1 = 1L } in x.col1) |> Stdlib.Test.equal 1L
 
   module Errors =
-    // @compiler blocked: pending-validation
+    // @compiler xfail compile: "Unknown field '' on Darklang.Language.Tests.Records.FieldAccess.MyRecord" reason=compiler-gap
     test emptyFieldNameRaises =
       (let x = MyRecord { col1 = 1L } in x.___) => raises "Field name is empty"
 
-    // @compiler blocked: pending-validation
+    // @compiler xfail compile: "Unknown field 'fieldName' on Darklang.Language.Tests.Records.FieldAccess.MyRecord" reason=compiler-gap
     test missingFieldRaises =
       (let x = MyRecord { col1 = 1L } in x.fieldName)
       => raises "Tried to access field `fieldName`, but it doesn't exist"
 
     // `(Builtin.testRuntimeError "error").fieldName` is in errorPropagation.dark.
 
-    // @compiler blocked: pending-validation
+    // @compiler xfail compile: "Field access requires a record value" reason=compiler-gap
     test accessOnInt64Raises =
       (let x = 6L in x.fieldName)
       => raises

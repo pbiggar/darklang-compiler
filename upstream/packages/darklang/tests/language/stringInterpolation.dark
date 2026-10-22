@@ -1,6 +1,5 @@
 module Darklang.Language.Tests.StringInterpolation
 
-// @compiler blocked: pending-validation
 test interpolation =
   Stdlib.Test.all
     [ $"test {"1"}" |> Stdlib.Test.equal "test 1"
@@ -12,25 +11,24 @@ test interpolation =
       (let one = 1L in $"test {Stdlib.toString one}")
       |> Stdlib.Test.equal "test 1" ]
 
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Expected String in string interpolation, got TFloat64" reason=compiler-gap
 test floatInterpolationRaises =
   (let one = 1.0 in $"test {one}")
   => raises
     "Expected String in string interpolation, got a Float (1.0) instead. Try wrapping it with `Stdlib.toString`."
 
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Expected String in string interpolation, got TInt64" reason=compiler-gap
 test int64InterpolationRaises =
   (let one = 1L in $"test {one}")
   => raises
     "Expected String in string interpolation, got an Int64 (1) instead. Try wrapping it with `Stdlib.toString`."
 
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Unbound local variable 'one'" reason=compiler-gap
 test unboundVariableRaises =
   (let two = 2L in "test 1" == $"test {one}")
   => raises "There is no variable named: one"
 
 // --- interpolation scanner and brace escapes ---
-// @compiler blocked: pending-validation
 test bracesAndEscapes =
   Stdlib.Test.all
     [ // A brace inside a char literal in an interpolation should not end the

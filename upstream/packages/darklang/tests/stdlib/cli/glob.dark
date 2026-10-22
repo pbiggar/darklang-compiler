@@ -1,7 +1,6 @@
 module Darklang.Stdlib.Cli.File.Tests
 
 // File.globMatchSegments — basic matching
-// @compiler blocked: pending-validation
 test basicMatching =
   Stdlib.Test.all
     [ Stdlib.Cli.File.globMatchSegments [ "*.ts" ] [ "foo.ts" ]
@@ -14,7 +13,6 @@ test basicMatching =
       |> Stdlib.Test.equal false ]
 
 // File.globMatchSegments — single ** segment
-// @compiler blocked: pending-validation
 test singleDoubleStar =
   Stdlib.Test.all
     [ Stdlib.Cli.File.globMatchSegments [ "**", "*.ts" ] [ "foo.ts" ]
@@ -39,7 +37,6 @@ test singleDoubleStar =
       |> Stdlib.Test.equal false ]
 
 // File.globMatchSegments — multiple ** segments
-// @compiler blocked: pending-validation
 test multipleDoubleStars =
   Stdlib.Test.all
     [ Stdlib.Cli.File.globMatchSegments
@@ -68,7 +65,6 @@ test multipleDoubleStars =
       |> Stdlib.Test.equal false ]
 
 // File.globMatchSegments — trailing **
-// @compiler blocked: pending-validation
 test trailingDoubleStar =
   Stdlib.Test.all
     [ Stdlib.Cli.File.globMatchSegments [ "src", "**" ] [ "src" ]
@@ -79,7 +75,6 @@ test trailingDoubleStar =
       |> Stdlib.Test.equal true ]
 
 // File.globMatchSegments — ** matches zero segments
-// @compiler blocked: pending-validation
 test doubleStarMatchesZeroSegments =
   Stdlib.Cli.File.globMatchSegments
     [ "**", "test", "**", "*.ts" ]
@@ -87,7 +82,6 @@ test doubleStarMatchesZeroSegments =
   |> Stdlib.Test.equal true
 
 // File.globMatchSegments — empty pattern/path
-// @compiler blocked: pending-validation
 test emptyPatternOrPath =
   Stdlib.Test.all
     [ Stdlib.Cli.File.globMatchSegments [] [] |> Stdlib.Test.equal true
@@ -95,7 +89,6 @@ test emptyPatternOrPath =
       Stdlib.Cli.File.globMatchSegments [] [ "a" ] |> Stdlib.Test.equal false ]
 
 // File.globMatchSegments — ? wildcard
-// @compiler blocked: pending-validation
 test questionMarkWildcard =
   Stdlib.Test.all
     [ Stdlib.Cli.File.globMatchSegments [ "?.ts" ] [ "a.ts" ]

@@ -4,7 +4,6 @@
 module Darklang.Stdlib.Cli.Tui.Text.Tests
 
 // A line that fits is untouched, marker and all.
-// @compiler blocked: pending-validation
 test clipMarkedLeavesFittingLines =
   Stdlib.Test.all
     [ Stdlib.Cli.Tui.Text.clipMarked "short" 30 |> Stdlib.Test.equal "short"
@@ -13,7 +12,6 @@ test clipMarkedLeavesFittingLines =
 
 // A line that does not fit ends in an ellipsis, so it reads as truncated rather than
 // as a shorter label that happens to end there.
-// @compiler blocked: pending-validation
 test clipMarkedEndsInEllipsis =
   Stdlib.Test.all
     [ Stdlib.Cli.Tui.Text.clipMarked "Interactive tree outliner (full)" 30
@@ -22,7 +20,6 @@ test clipMarkedEndsInEllipsis =
 
 // Below two columns there is no room to say anything, so it degrades to a plain clip
 // rather than spending the only column on a marker.
-// @compiler blocked: pending-validation
 test clipMarkedBelowTwoColumns =
   Stdlib.Test.all
     [ Stdlib.Cli.Tui.Text.clipMarked "abcdef" 1 |> Stdlib.Test.equal "a"
@@ -30,7 +27,6 @@ test clipMarkedBelowTwoColumns =
 
 // Cells, not characters. Three CJK characters are six columns, so they fit exactly
 // in six and clip to two plus the marker in five.
-// @compiler blocked: pending-validation
 test widthsAreDisplayCells =
   Stdlib.Test.all
     [ Stdlib.Cli.Tui.Text.styledWidth "日本語" |> Stdlib.Test.equal 6

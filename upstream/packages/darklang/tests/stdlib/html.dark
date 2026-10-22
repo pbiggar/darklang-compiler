@@ -23,7 +23,6 @@ let tidyHtml (html: String) : String =
   |> Stdlib.String.join ""
 
 // -- basic testing of low-level fns
-// @compiler blocked: pending-validation
 test htmlTagNode =
   Stdlib.Test.all
     [ (htmlTag "div" [] []) |> nodeToString |> Stdlib.Test.equal "<div></div>"
@@ -37,7 +36,6 @@ test htmlTagNode =
       |> Stdlib.Test.equal "<div><button>click me</button></div>" ]
 
 // -- testing of simple html node helpers
-// @compiler blocked: pending-validation
 test comment =
   Stdlib.Test.all
     [ (Stdlib.Html.comment "hello") |> nodeToString
@@ -61,7 +59,6 @@ test comment =
 
 // However many hyphens there are, the text inside the comment never ends up
 // with `--` in it.
-// @compiler blocked: pending-validation
 test commentNeverHoldsDoubleDash =
   Stdlib.Test.all (
     [ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16 ]
@@ -78,7 +75,6 @@ test commentNeverHoldsDoubleDash =
       Stdlib.String.contains inner "--" |> Stdlib.Test.equal false))
 
 // -- testing HTML escaping
-// @compiler blocked: pending-validation
 test escapeHtml =
   Stdlib.Test.all
     [ Stdlib.Html.escapeHtml "<script>alert('xss')</script>"
@@ -87,13 +83,11 @@ test escapeHtml =
       Stdlib.Html.escapeHtml "\"quoted\"" |> Stdlib.Test.equal "&quot;quoted&quot;" ]
 
 // text() should escape HTML
-// @compiler blocked: pending-validation
 test textEscapes =
   (Stdlib.Html.text "<script>bad</script>")
   |> nodeToString |> Stdlib.Test.equal "&lt;script&gt;bad&lt;/script&gt;"
 
 // stringNode() should NOT escape HTML (for trusted content)
-// @compiler blocked: pending-validation
 test stringNodeDoesNotEscape =
   (Stdlib.Html.stringNode "<script>trusted</script>")
   |> nodeToString |> Stdlib.Test.equal "<script>trusted</script>"
@@ -102,7 +96,6 @@ test stringNodeDoesNotEscape =
 //
 // The quote is the one that matters: an unescaped `"` closes the attribute, and
 // everything after it is parsed as markup rather than as part of the value.
-// @compiler blocked: pending-validation
 test attributeValuesAreEscaped =
   Stdlib.Test.all
     [ (htmlTag "a" [ ("href", Some "\" onmouseover=\"alert(1)") ] [])
@@ -124,7 +117,6 @@ test attributeValuesAreEscaped =
       |> Stdlib.Test.equal "<div data-note=\"a &quot;quoted&quot; one\"></div>" ]
 
 // Using text() with div to prevent XSS
-// @compiler blocked: pending-validation
 test textInsideElementIsEscaped =
   (Stdlib.Html.div
     []
@@ -133,7 +125,6 @@ test textInsideElementIsEscaped =
   |> Stdlib.Test.equal "<div>User said: &lt;script&gt;alert(&#x27;xss&#x27;)&lt;/script&gt;</div>"
 
 // -- testing attribute helpers
-// @compiler blocked: pending-validation
 test attributeHelpers =
   Stdlib.Test.all
     [ Stdlib.Html.classes [ "btn", "btn-primary" ]
@@ -144,7 +135,6 @@ test attributeHelpers =
       |> Stdlib.Test.equal ("data-user-id", Some "123") ]
 
 // Using attribute helpers with tags
-// @compiler blocked: pending-validation
 test attributeHelpersOnTags =
   Stdlib.Test.all
     [ (Stdlib.Html.div
@@ -159,7 +149,6 @@ test attributeHelpersOnTags =
       |> nodeToString
       |> Stdlib.Test.equal "<span style=\"color: blue; font-weight: bold\">styled text</span>" ]
 
-// @compiler blocked: pending-validation
 test basicTags =
   Stdlib.Test.all
     [ (Stdlib.Html.br ()) |> nodeToString |> Stdlib.Test.equal "<br>"
@@ -225,7 +214,6 @@ test basicTags =
       |> Stdlib.Test.equal "<section></section>" ]
 
 // code
-// @compiler blocked: pending-validation
 test codeTags =
   Stdlib.Test.all
     [ (Stdlib.Html.code [] []) |> nodeToString |> Stdlib.Test.equal "<code></code>"
@@ -235,7 +223,6 @@ test codeTags =
       |> Stdlib.Test.equal "<footer></footer>" ]
 
 // Semantic HTML5 tags
-// @compiler blocked: pending-validation
 test semanticTags =
   Stdlib.Test.all
     [ (Stdlib.Html.article [] []) |> nodeToString
@@ -251,7 +238,6 @@ test semanticTags =
       |> Stdlib.Test.equal "<figcaption></figcaption>" ]
 
 // Media tags
-// @compiler blocked: pending-validation
 test mediaTags =
   Stdlib.Test.all
     [ (Stdlib.Html.video [] []) |> nodeToString
@@ -262,7 +248,6 @@ test mediaTags =
       |> Stdlib.Test.equal "<picture></picture>" ]
 
 // Text formatting tags
-// @compiler blocked: pending-validation
 test textFormattingTags =
   Stdlib.Test.all
     [ (Stdlib.Html.strong [] []) |> nodeToString
@@ -277,7 +262,6 @@ test textFormattingTags =
       (Stdlib.Html.ins [] []) |> nodeToString |> Stdlib.Test.equal "<ins></ins>" ]
 
 // Definition list tags
-// @compiler blocked: pending-validation
 test definitionListTags =
   Stdlib.Test.all
     [ (Stdlib.Html.dl [] []) |> nodeToString |> Stdlib.Test.equal "<dl></dl>"
@@ -285,7 +269,6 @@ test definitionListTags =
       (Stdlib.Html.dd [] []) |> nodeToString |> Stdlib.Test.equal "<dd></dd>" ]
 
 // Form elements
-// @compiler blocked: pending-validation
 test formTags =
   Stdlib.Test.all
     [ (Stdlib.Html.textarea [] []) |> nodeToString
@@ -300,7 +283,6 @@ test formTags =
       |> Stdlib.Test.equal "<legend></legend>" ]
 
 // Interactive elements
-// @compiler blocked: pending-validation
 test interactiveTags =
   Stdlib.Test.all
     [ (Stdlib.Html.details [] []) |> nodeToString
@@ -313,7 +295,6 @@ test interactiveTags =
 // -- test whitespace handling between inline elements This demonstrates the
 // whitespace issue: when you want spaces between inline elements You need to
 // explicitly add whitespace nodes
-// @compiler blocked: pending-validation
 test whitespaceBetweenInlineElements =
   Stdlib.Test.all
     [ (Stdlib.Html.div
@@ -332,7 +313,6 @@ test whitespaceBetweenInlineElements =
       |> Stdlib.Test.equal "<div><span>foo</span><span>bar</span></div>" ]
 
 // Form with new elements
-// @compiler blocked: pending-validation
 test formWithNestedElements =
   (Stdlib.Html.form
     []
@@ -350,7 +330,6 @@ test formWithNestedElements =
      + "<label>Bio:</label><textarea></textarea></fieldset></form>")
 
 // Definition list
-// @compiler blocked: pending-validation
 test definitionList =
   (Stdlib.Html.dl
     []
@@ -359,7 +338,6 @@ test definitionList =
   |> nodeToString |> Stdlib.Test.equal "<dl><dt>Term</dt><dd>Definition</dd></dl>"
 
 // Text formatting
-// @compiler blocked: pending-validation
 test textFormatting =
   (Stdlib.Html.p
     []
@@ -372,7 +350,6 @@ test textFormatting =
   |> Stdlib.Test.equal "<p>This is <strong>bold</strong> and this is <em>italic</em>.</p>"
 
 // Semantic article structure
-// @compiler blocked: pending-validation
 test articleStructure =
   (Stdlib.Html.article
     []
@@ -385,7 +362,6 @@ test articleStructure =
      + "<p>Article content</p><footer>By Author</footer></article>")
 
 // -- test writing out a full document
-// @compiler blocked: pending-validation
 test document =
   ([ Stdlib.Html.html
        []
@@ -403,7 +379,6 @@ test document =
      |> tidyHtml)
 
 // -- test creating a complete webpage with DOCTYPE
-// @compiler blocked: pending-validation
 test documentStartsWithDoctype =
   ([ Stdlib.Html.html [] [] ]
    |> Stdlib.Html.document

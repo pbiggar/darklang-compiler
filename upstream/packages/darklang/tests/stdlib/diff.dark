@@ -116,16 +116,13 @@ let matchesOnEdit () : Bool =
     Stdlib.String.join [ genText 5 25, "x", genText 6 30, genText 5 10 ] "\n"
   Stdlib.Diff.lines before after == refLines before after
 
-// @compiler blocked: pending-validation
 test matchesReferenceOnAllShortPairs =
   compareAll () |> Stdlib.Test.equal (324, 0)
 
 // Longer, mostly shared texts, the shape of an edited function body.
-// @compiler blocked: pending-validation
 test matchesReferenceOnEditedText =
   matchesOnEdit () |> Stdlib.Test.equal true
 
-// @compiler blocked: pending-validation
 test lines =
   Stdlib.Test.all
     [ Stdlib.Diff.lines "a\nb\nc" "a\nb\nc"

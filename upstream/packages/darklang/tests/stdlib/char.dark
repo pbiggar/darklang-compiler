@@ -13,7 +13,6 @@ let eCombiningAcute () : Char =
 let family () : Char =
   "👩‍👩‍👧‍👦" |> Stdlib.String.head |> Builtin.unwrap
 
-// @compiler blocked: pending-validation
 test toLowercase =
   Stdlib.Test.all
     [ Stdlib.Char.toLowercase 'A' |> Stdlib.Test.equal 'a'
@@ -28,7 +27,6 @@ test toLowercase =
       Stdlib.Char.toLowercase 'Ჾ' |> Stdlib.Test.equal 'ჾ'
       Stdlib.Char.toLowercase 'ჾ' |> Stdlib.Test.equal 'ჾ' ]
 
-// @compiler blocked: pending-validation
 test toUppercase =
   Stdlib.Test.all
     [ Stdlib.Char.toUppercase 'a' |> Stdlib.Test.equal 'A'
@@ -43,7 +41,6 @@ test toUppercase =
       Stdlib.Char.toUppercase 'ჾ' |> Stdlib.Test.equal 'Ჾ'
       Stdlib.Char.toUppercase 'Ჾ' |> Stdlib.Test.equal 'Ჾ' ]
 
-// @compiler blocked: pending-validation
 test isLowercase =
   Stdlib.Test.all
     [ Stdlib.Char.isLowercase 'a' |> Stdlib.Test.equal true
@@ -62,7 +59,6 @@ test isLowercase =
       Stdlib.Char.isLowercase 'ჾ' |> Stdlib.Test.equal true
       Stdlib.Char.isLowercase 'Ჾ' |> Stdlib.Test.equal false ]
 
-// @compiler blocked: pending-validation
 test isUppercase =
   Stdlib.Test.all
     [ Stdlib.Char.isUppercase 'a' |> Stdlib.Test.equal false
@@ -81,7 +77,6 @@ test isUppercase =
       Stdlib.Char.isUppercase 'ჾ' |> Stdlib.Test.equal false
       Stdlib.Char.isUppercase 'Ჾ' |> Stdlib.Test.equal true ]
 
-// @compiler blocked: pending-validation
 test isDigit =
   Stdlib.Test.all
     [ Stdlib.Char.isDigit 'a' |> Stdlib.Test.equal false
@@ -111,7 +106,6 @@ test isDigit =
       Stdlib.Char.isDigit ' ' |> Stdlib.Test.equal false
       Stdlib.Char.isDigit '\t' |> Stdlib.Test.equal false ]
 
-// @compiler blocked: pending-validation
 test isASCIILetter =
   Stdlib.Test.all
     [ Stdlib.Char.isASCIILetter 'a' |> Stdlib.Test.equal true
@@ -133,7 +127,6 @@ test isASCIILetter =
       Stdlib.Char.isASCIILetter ' ' |> Stdlib.Test.equal false
       Stdlib.Char.isASCIILetter '\t' |> Stdlib.Test.equal false ]
 
-// @compiler blocked: pending-validation
 test isASCII =
   Stdlib.Test.all
     [ Stdlib.Char.isASCII 'a' |> Stdlib.Test.equal true
@@ -155,7 +148,6 @@ test isASCII =
       Stdlib.Char.isASCII '\t' |> Stdlib.Test.equal true
       Stdlib.Char.isASCII (eCombiningAcute ()) |> Stdlib.Test.equal false ]
 
-// @compiler blocked: pending-validation
 test toAsciiCode =
   Stdlib.Test.all
     [ Stdlib.Char.toAsciiCode 'a' |> Stdlib.Test.equal (Some 97)
@@ -181,7 +173,6 @@ test toAsciiCode =
       Stdlib.Char.toAsciiCode ' ' |> Stdlib.Test.equal (Some 32)
       Stdlib.Char.toAsciiCode '\t' |> Stdlib.Test.equal (Some 9) ]
 
-// @compiler blocked: pending-validation
 test isLessThan =
   Stdlib.Test.all
     [ Stdlib.Char.isLessThan 'a' 'b' |> Stdlib.Test.equal true
@@ -202,7 +193,6 @@ test isLessThan =
       Stdlib.Char.isLessThan 'a' (family ()) |> Stdlib.Test.equal true
       Stdlib.Char.isLessThan (smiley ()) (hand ()) |> Stdlib.Test.equal false ]
 
-// @compiler blocked: pending-validation
 test isGreaterThan =
   Stdlib.Test.all
     [ Stdlib.Char.isGreaterThan 'a' 'b' |> Stdlib.Test.equal false
@@ -223,7 +213,6 @@ test isGreaterThan =
       Stdlib.Char.isGreaterThan 'a' (family ()) |> Stdlib.Test.equal false
       Stdlib.Char.isGreaterThan (smiley ()) (hand ()) |> Stdlib.Test.equal true ]
 
-// @compiler blocked: pending-validation
 test toString =
   Stdlib.Test.all
     [ Stdlib.toString 'A' |> Stdlib.Test.equal "A"
@@ -238,7 +227,6 @@ test toString =
       Stdlib.toString 'Ჾ' |> Stdlib.Test.equal "Ჾ"
       Stdlib.toString 'ჾ' |> Stdlib.Test.equal "ჾ" ]
 
-// @compiler blocked: pending-validation
 test fromCodepoint =
   Stdlib.Test.all
     [ // Valid codepoints
@@ -256,7 +244,6 @@ test fromCodepoint =
       Stdlib.Char.fromCodepoint -1 |> Stdlib.Test.equal None
       Stdlib.Char.fromCodepoint -1000 |> Stdlib.Test.equal None ]
 
-// @compiler blocked: pending-validation
 test isLetter =
   Stdlib.Test.all
     [ Stdlib.Char.isLetter 'a' |> Stdlib.Test.equal true
@@ -272,7 +259,6 @@ test isLetter =
       Stdlib.Char.isLetter (hand ()) |> Stdlib.Test.equal false
       Stdlib.Char.isLetter (family ()) |> Stdlib.Test.equal false ]
 
-// @compiler blocked: pending-validation
 test isWhitespace =
   Stdlib.Test.all
     [ Stdlib.Char.isWhitespace ' ' |> Stdlib.Test.equal true
@@ -285,7 +271,6 @@ test isWhitespace =
       Stdlib.Char.isWhitespace '0' |> Stdlib.Test.equal false
       Stdlib.Char.isWhitespace (smiley ()) |> Stdlib.Test.equal false ]
 
-// @compiler blocked: pending-validation
 test isAlphanumeric =
   Stdlib.Test.all
     [ Stdlib.Char.isAlphanumeric 'a' |> Stdlib.Test.equal true
@@ -298,7 +283,6 @@ test isAlphanumeric =
       Stdlib.Char.isAlphanumeric ' ' |> Stdlib.Test.equal false
       Stdlib.Char.isAlphanumeric (smiley ()) |> Stdlib.Test.equal false ]
 
-// @compiler blocked: pending-validation
 test toCodepoint =
   Stdlib.Test.all
     [ // Single-scalar Chars return their codepoint.

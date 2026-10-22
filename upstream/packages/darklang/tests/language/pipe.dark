@@ -3,7 +3,6 @@ module Darklang.Language.Tests.Pipe
 // function
 let userFn () : Int64 = 6L
 
-// @compiler blocked: pending-validation
 test functions =
   Stdlib.Test.all
     [ (() |> userFn) |> Stdlib.Test.equal 6L
@@ -12,13 +11,11 @@ test functions =
       ([] |> Stdlib.List.push (1L + (1L + 3L))) |> Stdlib.Test.equal [ 5L ]
       ([] |> Stdlib.List.push (1L + ((+) 1L 3L))) |> Stdlib.Test.equal [ 5L ] ]
 
-// @compiler blocked: pending-validation
 test argErrorRaises =
   ([] |> Stdlib.List.push (Stdlib.Test.raiseRuntimeError "err"))
   => raises "Uncaught exception: err"
 
 // general
-// @compiler blocked: pending-validation
 test general =
   Stdlib.Test.all
     [ (4L |> (-) 3L) |> Stdlib.Test.equal 1L
@@ -38,7 +35,7 @@ test general =
       |> Stdlib.Test.equal 8L ]
 
 // only lambda might be placed into the variable used in the middle of the pipe
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Expression is not callable" reason=compiler-gap
 test nonFunctionStageRaises =
   (let x = 1L in (5L |> x |> (+) 3L))
   => raises
@@ -49,7 +46,6 @@ type Z = { a: List<Int64> }
 type Y = { z: Z }
 type X = { y: Y }
 
-// @compiler blocked: pending-validation
 test recordFields =
   (let x = X { y = Y { z = Z { a = [ 1L, 2L, 3L, 4L, 5L ] } } }
    (x.y.z.a |> Stdlib.List.length))
@@ -57,7 +53,6 @@ test recordFields =
 
 type MyEnum = A of Int64 * Int64 * Int64
 
-// @compiler blocked: pending-validation
 test constructorsAndOptions =
   Stdlib.Test.all
     [ (33L |> MyEnum.A 21L 42L) |> Stdlib.Test.equal (MyEnum.A 33L 21L 42L)
@@ -106,7 +101,6 @@ test constructorsAndOptions =
       |> Stdlib.Test.equal (Stdlib.Result.Result.Error "test") ]
 
 module FnName =
-  // @compiler blocked: pending-validation
   test pipeIntoBoundFn =
     Stdlib.Test.all
       [ (let fn = (fun x -> x + 1L)

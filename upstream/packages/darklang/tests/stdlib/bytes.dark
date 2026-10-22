@@ -1,7 +1,6 @@
 module Darklang.Stdlib.Blob.Tests
 
 // hex round of various UTF-8 strings (Arabic / emoji / long mixed).
-// @compiler blocked: pending-validation
 test toHexOfUtf8 =
   Stdlib.Test.all
     [ Stdlib.Blob.fromString "اختبار النص" |> Stdlib.Blob.toHex
@@ -16,7 +15,6 @@ test toHexOfUtf8 =
         "646C6B6A6B64333239383233333333333333333333666A6669646A73667564736468737D7B7C7C217C217C217C212124255E265E26EFB7BDEFB7BDEFB7BDEFB7BDEFB7BDEFB7BDEFB7BDEFB7BDEFB7BDEFB7BDEFB7BDEFB7BDEFB7BDEFB7BDEFB7BDEFB7BD" ]
 
 // length
-// @compiler blocked: pending-validation
 test length =
   Stdlib.Test.all
     [ Stdlib.Blob.fromString "hi" |> Stdlib.Blob.length |> Stdlib.Test.equal 2
@@ -24,33 +22,28 @@ test length =
       Stdlib.Blob.empty |> Stdlib.Blob.length |> Stdlib.Test.equal 0 ]
 
 // fromString / toString roundtrip
-// @compiler blocked: pending-validation
 test stringRoundTrip =
   Stdlib.Blob.fromString "hello" |> Stdlib.Blob.toString
   |> Stdlib.Test.equal (Ok "hello")
 
 // fromHex returns Result<Blob,String>; length of decoded deadbeef = 4 bytes
-// @compiler blocked: pending-validation
 test fromHex =
   Stdlib.Blob.fromHex "deadbeef" |> Stdlib.Result.map Stdlib.Blob.length
   |> Stdlib.Test.equal (Ok 4)
 
 // hex roundtrip via wrapper
-// @compiler blocked: pending-validation
 test hexRoundTrip =
   Stdlib.Blob.fromHex "48656c6c6f"
   |> Stdlib.Result.andThen Stdlib.Blob.toString
   |> Stdlib.Test.equal (Ok "Hello")
 
 // toHex roundtrip (uppercase output)
-// @compiler blocked: pending-validation
 test toHex =
   Stdlib.Test.all
     [ Stdlib.Blob.fromString "ok" |> Stdlib.Blob.toHex |> Stdlib.Test.equal "6F6B"
       Stdlib.Blob.fromString "Hi" |> Stdlib.Blob.toHex |> Stdlib.Test.equal "4869" ]
 
 // base64 roundtrip
-// @compiler blocked: pending-validation
 test base64RoundTrip =
   Stdlib.Test.all
     [ Stdlib.Blob.fromBase64 "aGVsbG8="
@@ -60,7 +53,6 @@ test base64RoundTrip =
       |> Stdlib.Test.equal "aGVsbG8=" ]
 
 // concat
-// @compiler blocked: pending-validation
 test concat =
   [ Stdlib.Blob.fromString "foo"
     Stdlib.Blob.fromString "-"
@@ -70,14 +62,12 @@ test concat =
   |> Stdlib.Test.equal (Ok "foo-bar")
 
 // slice (middle three bytes of "abcdef" = "cde")
-// @compiler blocked: pending-validation
 test slice =
   Stdlib.Blob.slice (Stdlib.Blob.fromString "abcdef") 2 3
   |> Stdlib.Blob.toString
   |> Stdlib.Test.equal (Ok "cde")
 
 // toList/fromList escape hatches
-// @compiler blocked: pending-validation
 test listConversions =
   Stdlib.Test.all
     [ Stdlib.Blob.fromString "abc" |> Stdlib.Blob.toList
@@ -91,12 +81,10 @@ test listConversions =
 // sides via `Blob.promote` first if you need byte-equality.
 // (Stdlib.Blob.fromString "hi" == Stdlib.Blob.fromString "hi")
 // |> Stdlib.Test.equal true
-// @compiler blocked: pending-validation
 test differentBytesAreNotEqual =
   (Stdlib.Blob.fromString "hi" == Stdlib.Blob.fromString "bye")
   |> Stdlib.Test.equal false
 
-// @compiler blocked: pending-validation
 test equalityUsesIdentity =
   let blob = Stdlib.Blob.fromString "hi"
   Stdlib.Test.all

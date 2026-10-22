@@ -692,14 +692,13 @@ test optionPatterns =
       |> Stdlib.Test.equal "pass" ]
 
 module Errors =
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Non-exhaustive match expression" reason=compiler-gap
   test noMatchingCaseRaises =
     (match "nothing matches" with
      | "not this" -> "fail")
     => raises
       "No matching case found for value \"nothing matches\" in match expression"
 
-  // @compiler blocked: pending-validation
   test subjectErrorRaises =
     (match Stdlib.Test.raiseRuntimeError "cond is error" with
      | 5L -> "fail"
@@ -707,14 +706,13 @@ module Errors =
      | var -> "fail")
     => raises "Uncaught exception: cond is error"
 
-  // @compiler blocked: pending-validation
   test subjectErrorWithWildcardRaises =
     (match Stdlib.Test.raiseRuntimeError "cond is error, wildcard" with
      | 5L -> 5L
      | _ -> 6L)
     => raises "Uncaught exception: cond is error, wildcard"
 
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Expected TInt64, got TString" reason=compiler-gap
   test selectedFirstArmErrorRaises =
     (match 1L with
      | 1L -> Stdlib.Test.raiseRuntimeError "a"
@@ -722,7 +720,7 @@ module Errors =
      | var -> "fail")
     => raises "Uncaught exception: a"
 
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Expected TString, got TInt64" reason=compiler-gap
   test unselectedArmErrorsSkipped =
     Stdlib.Test.all
       [ (match 1L with
@@ -736,7 +734,7 @@ module Errors =
          | var -> "fail")
         |> Stdlib.Test.equal "pass" ]
 
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Expected TString, got TInt64" reason=compiler-gap
   test selectedLaterArmErrorRaises =
     (match 1L with
      | 2L -> "pass"
@@ -744,7 +742,7 @@ module Errors =
      | var -> "fail")
     => raises "Uncaught exception: a"
 
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Expected TString, got TInt64" reason=compiler-gap
   test fallbackArmSkipsError =
     (match 3L with
      | 2L -> "pass"
@@ -760,7 +758,7 @@ module TypeErrors =
     | PortedTwoArgs of Int64 * Int64
 
   // enum with more pattern params than actual args
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Constructor pattern 'Darklang.Language.Tests.MatchExpressions.TypeErrors.TestType.NoArgs' has wrong field count" reason=compiler-gap
   test tooManyPatternParamsRaises =
     (match TestType.NoArgs with
      | NoArgs _ -> "wrong number")
@@ -768,7 +766,7 @@ module TypeErrors =
       "No matching case found for value Darklang.Language.Tests.MatchExpressions.TypeErrors.TestType.NoArgs in match expression"
 
   // enum with fewer pattern params than actual args
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Constructor pattern 'Darklang.Language.Tests.MatchExpressions.TypeErrors.TestType.OneArg' has wrong field count" reason=compiler-gap
   test tooFewPatternParamsRaises =
     (match TestType.OneArg 1L with
      | OneArg -> "wrong number")
@@ -776,21 +774,21 @@ module TypeErrors =
       "No matching case found for value Darklang.Language.Tests.MatchExpressions.TypeErrors.TestType.OneArg(1) in match expression"
 
   // A single wildcard does not match several fields; (_, _) matches both fields.
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Constructor pattern 'Darklang.Language.Tests.MatchExpressions.TypeErrors.TestType.PortedTwoArgs' has wrong field count" reason=compiler-gap
   test singleWildcardForTwoFieldsRaises =
     (match TestType.PortedTwoArgs(1L, 2L) with
      | PortedTwoArgs _ -> "wildcards allowed")
     => raises
       "No matching case found for value Darklang.Language.Tests.MatchExpressions.TypeErrors.TestType.PortedTwoArgs(1, 2) in match expression"
 
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Non-exhaustive match expression" reason=compiler-gap
   test oneWildcardPerField =
     (match TestType.PortedTwoArgs(1L, 2L) with
      | PortedTwoArgs(_, _) -> "wildcards allowed")
     |> Stdlib.Test.equal "wildcards allowed"
 
 module GuardClause =
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Expected TString, got TBool" reason=compiler-gap
   test guardClauses =
     Stdlib.Test.all
       [ (match 5L with
@@ -830,14 +828,14 @@ module GuardClause =
          | _ -> "fail")
         |> Stdlib.Test.equal "pass" ]
 
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unbound local variable 'y'" reason=compiler-gap
   test unboundGuardVariableRaises =
     (match -5L with
      | x when y > 0L -> true
      | _ -> false)
     => raises "There is no variable named: y"
 
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unbound local variable 'y'" reason=compiler-gap
   test guardEdgeCases =
     Stdlib.Test.all
       [ (match 5L with
@@ -857,7 +855,7 @@ module GuardClause =
          | Error _ -> true)
         |> Stdlib.Test.equal true ]
 
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unbound local variable 'x'" reason=compiler-gap
   test noArmMatchesRaises =
     (match 5L with
      | 2L when x > 2L -> false
@@ -865,7 +863,7 @@ module GuardClause =
     => raises "No matching case found for value 5 in match expression"
 
 module PatternGrouping =
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Or-pattern binding 'y' has inconsistent types" reason=compiler-gap
   test orPatterns =
     Stdlib.Test.all
       [ (match (1L,2L) with

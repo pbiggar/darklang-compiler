@@ -20,7 +20,7 @@ let shape (source: String) : (Int * Int) =
   | None -> (-1, -1)
 
 // The ordinary cases are untouched: one declaration, no trailing expressions.
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Unknown function or value 'shape'" reason=upstream-dependency
 test realDeclarations =
   Stdlib.Test.all
     [ shape "val v = 1" |> Stdlib.Test.equal (1, 0)
@@ -28,7 +28,7 @@ test realDeclarations =
       shape "type T = Unit" |> Stdlib.Test.equal (1, 0)
       shape "module M =\n  val v = 1" |> Stdlib.Test.equal (1, 0) ]
 
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Unknown function or value 'shape'" reason=upstream-dependency
 test notDeclarations =
   Stdlib.Test.all
     [ // A bare expression belongs in exprsToEval, not declarations.
@@ -50,7 +50,7 @@ test notDeclarations =
 // of every package file on disk, and the serializer for a module's declarations
 // raised on the same cases. The authoring editor strips the module line before
 // parsing, so only the highlighter hits this.
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Unknown function or value 'shape'" reason=upstream-dependency
 test moduleHeadedFiles =
   Stdlib.Test.all
     [ shape "module Darklang.Foo\n\nvaloops = 1" |> Stdlib.Test.equal (1, 0)
@@ -66,7 +66,7 @@ test moduleHeadedFiles =
 // `[<DB>]` is not a form any more. Asserting equivalence with a nonsense attribute rather
 // than a fixed diagnostic count, because the count belongs to how the recovery happens to
 // work and would make this test fail for the wrong reason the next time that changes.
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Unknown function or value 'Darklang.LanguageTools.Parser.Parse.diagnostics'" reason=upstream-dependency
 test dbAttributeIsNoLongerSpecial =
   let dbDiags =
     Darklang.LanguageTools.Parser.Parse.diagnostics
@@ -86,6 +86,6 @@ test dbAttributeIsNoLongerSpecial =
 
 // A real declaration alongside an assignment-shaped line: the declaration
 // survives, the assertion's two sides join exprsToEval.
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Unknown function or value 'shape'" reason=upstream-dependency
 test mixedDeclarationsAndExpressions =
   shape "val v = 1\noops = 2" |> Stdlib.Test.equal (1, 2)

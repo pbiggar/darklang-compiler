@@ -18,7 +18,6 @@ module UserDefined =
   val unitValue = ()
   val enumValue = Stdlib.Option.Option.Some 5L
 
-  // @compiler blocked: pending-validation
   test values =
     Stdlib.Test.all
       [ stringValue |> Stdlib.Test.equal "test"
@@ -59,12 +58,11 @@ module UserDefined =
   type MyRecord = { a: Bool, b: String }
   val recordValue = MyRecord { a = true, b = "glasses" }
 
-  // @compiler blocked: pending-validation
   test recordValueField =
     (Stdlib.Bool.not recordValue.a) |> Stdlib.Test.equal false
 
 module Package =
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unknown function or value 'Darklang.Test.Values.stringValue'" reason=upstream-dependency
   test values =
     Stdlib.Test.all
       [ Darklang.Test.Values.stringValue |> Stdlib.Test.equal "test"

@@ -27,24 +27,20 @@ let sms (datestr: String) (milliseconds: Int) : DateTime =
 let sMs (first: String) (second: String) : Int =
   Stdlib.DateTime.subtractMs (d first) (d second)
 
-// @compiler blocked: pending-validation
 test parse =
   Stdlib.Test.all
     [ p "2019-07-28T22:42:36Z" |> Stdlib.Test.equal (Ok "2019-07-28T22:42:36Z")
       p "asd" |> Stdlib.Test.equal (Error "Invalid date format") ]
 
 // Parse in both
-// @compiler blocked: pending-validation
 test parseInBoth =
   p "2018-09-24T18:01:24Z" |> Stdlib.Test.equal (Ok "2018-09-24T18:01:24Z")
 
 // Lowercase `z` aren't allowed
-// @compiler blocked: pending-validation
 test parseRejectsLowercaseZ =
   p "2023-09-23T18:01:24z" |> Stdlib.Test.equal (Error "Invalid date format")
 
 // Time zones aren't allowed
-// @compiler blocked: pending-validation
 test parseRejectsTimeZones =
   Stdlib.Test.all
     [ // special cased in F#
@@ -55,7 +51,6 @@ test parseRejectsTimeZones =
       p "2008-09-15T09:30:41EST" |> Stdlib.Test.equal (Error "Invalid date format") ]
 
 // Fail in both
-// @compiler blocked: pending-validation
 test parseFailInBoth =
   Stdlib.Test.all
     [ p "2000-11-22 09:10:15" |> Stdlib.Test.equal (Error "Invalid date format")
@@ -187,7 +182,6 @@ test parseFailInBoth =
       p "2008-09-15T09:30.456" |> Stdlib.Test.equal (Error "Invalid date format") ]
 
 // while space isn't allowed
-// @compiler blocked: pending-validation
 test parseRejectsSurroundingWhitespace =
   Stdlib.Test.all
     [ p " 2006-06-09T10:20:30.040+02:00"
@@ -197,7 +191,6 @@ test parseRejectsSurroundingWhitespace =
       p " 2006-06-09T10:20:30.040+02:00 "
       |> Stdlib.Test.equal (Error "Invalid date format") ]
 
-// @compiler blocked: pending-validation
 test lessThan =
   Stdlib.Test.all
     [ Stdlib.DateTime.lessThan
@@ -209,7 +202,6 @@ test lessThan =
         (d "2020-11-26T04:37:46Z")
       |> Stdlib.Test.equal true ]
 
-// @compiler blocked: pending-validation
 test lessThanOrEqualTo =
   Stdlib.Test.all
     [ Stdlib.DateTime.lessThanOrEqualTo
@@ -221,7 +213,6 @@ test lessThanOrEqualTo =
         (d "2020-11-26T04:37:46Z")
       |> Stdlib.Test.equal true ]
 
-// @compiler blocked: pending-validation
 test greaterThan =
   Stdlib.Test.all
     [ Stdlib.DateTime.greaterThan
@@ -233,7 +224,6 @@ test greaterThan =
         (d "2019-07-28T22:42:36Z")
       |> Stdlib.Test.equal true ]
 
-// @compiler blocked: pending-validation
 test greaterThanOrEqualTo =
   Stdlib.Test.all
     [ Stdlib.DateTime.greaterThanOrEqualTo
@@ -245,7 +235,6 @@ test greaterThanOrEqualTo =
         (d "2020-11-26T04:37:46Z")
       |> Stdlib.Test.equal true ]
 
-// @compiler blocked: pending-validation
 test fields =
   Stdlib.Test.all
     [ Stdlib.DateTime.year (d "2019-07-28T22:42:36Z") |> Stdlib.Test.equal 2019
@@ -263,7 +252,6 @@ test fields =
       Stdlib.DateTime.weekday (d "2019-07-27T22:42:36Z") |> Stdlib.Test.equal 6
       Stdlib.DateTime.weekday (d "2019-07-28T22:42:36Z") |> Stdlib.Test.equal 7 ]
 
-// @compiler blocked: pending-validation
 test fieldsIn1919 =
   Stdlib.Test.all
     [ Stdlib.DateTime.year (d "1919-07-28T22:42:36Z") |> Stdlib.Test.equal 1919
@@ -274,7 +262,6 @@ test fieldsIn1919 =
       Stdlib.DateTime.minute (d "1919-07-28T22:42:36Z") |> Stdlib.Test.equal 42
       Stdlib.DateTime.second (d "1919-07-28T22:42:36Z") |> Stdlib.Test.equal 36 ]
 
-// @compiler blocked: pending-validation
 test fieldsIn1969 =
   Stdlib.Test.all
     [ Stdlib.DateTime.year (d "1969-07-28T22:42:36Z") |> Stdlib.Test.equal 1969
@@ -285,7 +272,6 @@ test fieldsIn1969 =
       Stdlib.DateTime.minute (d "1969-07-28T22:42:36Z") |> Stdlib.Test.equal 42
       Stdlib.DateTime.second (d "1969-07-28T22:42:36Z") |> Stdlib.Test.equal 36 ]
 
-// @compiler blocked: pending-validation
 test fieldsIn1970 =
   Stdlib.Test.all
     [ Stdlib.DateTime.year (d "1970-07-28T22:42:36Z") |> Stdlib.Test.equal 1970
@@ -298,17 +284,14 @@ test fieldsIn1970 =
       Stdlib.DateTime.second (d "1970-07-28T22:42:36Z") |> Stdlib.Test.equal 36
       Stdlib.DateTime.second (d "1970-07-28T22:42:36Z") |> Stdlib.Test.equal 36 ]
 
-// @compiler blocked: pending-validation
 test toString =
   Stdlib.toString (d "2019-07-28T22:42:36Z")
   |> Stdlib.Test.equal "2019-07-28T22:42:36Z"
 
-// @compiler blocked: pending-validation
 test atStartOfDay =
   Stdlib.DateTime.atStartOfDay (d "2019-07-28T22:42:36Z")
   |> Stdlib.Test.equal (d "2019-07-28T00:00:00Z")
 
-// @compiler blocked: pending-validation
 test toSeconds =
   Stdlib.Test.all
     [ Stdlib.DateTime.toSeconds (d "2019-07-28T22:42:36Z")
@@ -316,7 +299,6 @@ test toSeconds =
       Stdlib.DateTime.toSeconds (d "2075-11-14T11:01:35Z")
       |> Stdlib.Test.equal 3340954895 ]
 
-// @compiler blocked: pending-validation
 test toStringISO8601BasicDateTime =
   Stdlib.Test.all
     [ Stdlib.DateTime.toStringISO8601BasicDateTime (d "2019-07-28T22:42:36Z")
@@ -324,7 +306,6 @@ test toStringISO8601BasicDateTime =
       Stdlib.DateTime.toStringISO8601BasicDateTime (d "1919-07-28T22:42:36Z")
       |> Stdlib.Test.equal "19190728T224236Z" ]
 
-// @compiler blocked: pending-validation
 test toStringISO8601BasicDate =
   Stdlib.Test.all
     [ Stdlib.DateTime.toStringISO8601BasicDate (d "2019-07-28T22:42:36Z")
@@ -332,7 +313,6 @@ test toStringISO8601BasicDate =
       Stdlib.DateTime.toStringISO8601BasicDate (d "1069-07-28T22:42:36Z")
       |> Stdlib.Test.equal "10690728" ]
 
-// @compiler blocked: pending-validation
 test secondsRoundTrip =
   Stdlib.Test.all
     [ 1095379198 |> Stdlib.DateTime.fromSeconds |> Stdlib.DateTime.toSeconds
@@ -347,24 +327,20 @@ test secondsRoundTrip =
       |> Stdlib.Test.equal "2019-07-28T22:42:36Z" ]
 
 // seconds past Int64 range can't be represented; surface a Dark error
-// @compiler blocked: pending-validation
 test fromSecondsPastInt64Raises =
   (2 ** 63) |> Stdlib.DateTime.fromSeconds
   => raises "Encountered out-of-range value for type of Int"
 
 // Int64.MaxValue fits int64 but is past NodaTime's instant range; the host
 // exception is turned into a Dark error rather than escaping
-// @compiler blocked: pending-validation
 test fromSecondsPastInstantRangeRaises =
   9223372036854775807 |> Stdlib.DateTime.fromSeconds
   => raises "Encountered out-of-range value for type of Int"
 
-// @compiler blocked: pending-validation
 test addSecondsPastInstantRangeRaises =
   Stdlib.DateTime.addSeconds (Stdlib.DateTime.fromSeconds 0) 9223372036854775807
   => raises "Encountered out-of-range value for type of Int"
 
-// @compiler blocked: pending-validation
 test todayIsCurrentUtcMidnight =
   let before = Stdlib.DateTime.atStartOfDay (Stdlib.DateTime.now ())
   let today = Stdlib.DateTime.today ()
@@ -373,7 +349,6 @@ test todayIsCurrentUtcMidnight =
     [ (today == before || today == after) |> Stdlib.Test.equal true
       Stdlib.DateTime.atStartOfDay today |> Stdlib.Test.equal today ]
 
-// @compiler blocked: pending-validation
 test addSeconds =
   Stdlib.Test.all
     [ a "2020-11-26T04:37:46Z" 0 |> Stdlib.Test.equal (d "2020-11-26T04:37:46Z")
@@ -383,7 +358,6 @@ test addSeconds =
       |> Stdlib.Test.equal (d "2020-12-07T18:24:26Z")
       a "2020-11-26T04:37:46Z" -10 |> Stdlib.Test.equal (d "2020-11-26T04:37:36Z") ]
 
-// @compiler blocked: pending-validation
 test subtractSeconds =
   Stdlib.Test.all
     [ sub "2020-11-26T04:37:46Z" 0 |> Stdlib.Test.equal (d "2020-11-26T04:37:46Z")
@@ -394,7 +368,6 @@ test subtractSeconds =
       sub "2020-11-26T04:37:46Z" -10
       |> Stdlib.Test.equal (d "2020-11-26T04:37:56Z") ]
 
-// @compiler blocked: pending-validation
 test subtract =
   Stdlib.Test.all
     [ s "2020-11-26T04:37:46Z" "2020-11-26T04:37:46Z" |> Stdlib.Test.equal 0
@@ -409,7 +382,6 @@ test subtract =
       |> Stdlib.Test.equal 3155760000 ]
 
 // Fractional seconds are now accepted
-// @compiler blocked: pending-validation
 test parseMilliseconds =
   Stdlib.Test.all
     [ p "2019-07-28T22:42:36.123Z"
@@ -427,7 +399,6 @@ test parseMilliseconds =
       p "2019-07-28T22:42:36.1234Z"
       |> Stdlib.Test.equal (Error "Invalid date format") ]
 
-// @compiler blocked: pending-validation
 test toMilliseconds =
   Stdlib.Test.all
     [ Stdlib.DateTime.toMilliseconds (d "2019-07-28T22:42:36Z")
@@ -435,7 +406,6 @@ test toMilliseconds =
       Stdlib.DateTime.toMilliseconds (d "1970-01-01T00:00:00Z")
       |> Stdlib.Test.equal 0 ]
 
-// @compiler blocked: pending-validation
 test fromMilliseconds =
   Stdlib.Test.all
     [ 1564353756000
@@ -452,7 +422,6 @@ test fromMilliseconds =
       -1000 |> Stdlib.DateTime.fromMilliseconds |> Stdlib.DateTime.toMilliseconds
       |> Stdlib.Test.equal -1000 ]
 
-// @compiler blocked: pending-validation
 test millisecond =
   Stdlib.Test.all
     [ Stdlib.DateTime.millisecond (dMs "2019-07-28T22:42:36.456Z")
@@ -465,7 +434,6 @@ test millisecond =
       Stdlib.DateTime.millisecond (dMs "2019-07-28T22:42:36.999Z")
       |> Stdlib.Test.equal 999 ]
 
-// @compiler blocked: pending-validation
 test addMilliseconds =
   Stdlib.Test.all
     [ ams "2020-11-26T04:37:46Z" 0 |> Stdlib.Test.equal (d "2020-11-26T04:37:46Z")
@@ -477,7 +445,6 @@ test addMilliseconds =
       (ams "2020-11-26T04:37:46Z" -500) |> Stdlib.toString
       |> Stdlib.Test.equal "2020-11-26T04:37:45.500Z" ]
 
-// @compiler blocked: pending-validation
 test subtractMilliseconds =
   Stdlib.Test.all
     [ sms "2020-11-26T04:37:46Z" 0 |> Stdlib.Test.equal (d "2020-11-26T04:37:46Z")
@@ -487,7 +454,6 @@ test subtractMilliseconds =
       (sms "2020-11-26T04:37:46Z" -500) |> Stdlib.toString
       |> Stdlib.Test.equal "2020-11-26T04:37:46.500Z" ]
 
-// @compiler blocked: pending-validation
 test subtractMs =
   Stdlib.Test.all
     [ sMs "2020-11-26T04:37:46Z" "2020-11-26T04:37:46Z" |> Stdlib.Test.equal 0

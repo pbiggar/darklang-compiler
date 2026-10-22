@@ -7,7 +7,7 @@ module Darklang.SCM.Tests.BranchIdentity
 let currentIsMain () : Bool =
   Darklang.SCM.PackageOps.currentBranch () == Darklang.SCM.Branch.mainBranchId
 
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Unknown function or value 'Stdlib.Test.Process.defaults'" reason=upstream-dependency
 test mainIdIsCurrentBranch =
   let defaults = Stdlib.Test.Process.defaults ()
   let options = { defaults with branch = Some Darklang.SCM.Branch.mainBranchId }
@@ -18,39 +18,37 @@ test mainIdIsCurrentBranch =
 // An ID is not a NAME. That is the property the type carries: while an id spells the same as a name,
 // passing one where the other belongs is correct by accident. With a uuid, anything printing the id
 // where it means the name reads as a raw uuid, visibly.
-// @compiler blocked: pending-validation
 test idIsNotName =
   (Stdlib.toString Darklang.SCM.Branch.mainBranchId == Darklang.SCM.Branch.mainBranchName)
   |> Stdlib.Test.equal false
 
 // ...and it is a Uuid, which is a different TYPE from a name, not merely a differently-shaped string.
-// @compiler blocked: pending-validation
 test idIsUuid =
   Stdlib.String.length (Stdlib.toString Darklang.SCM.Branch.mainBranchId)
   |> Stdlib.Test.equal 36
 
 // Main is not a row in `branches`: it needs no registration, so `get` finds nothing for it.
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Unknown function or value 'Darklang.SCM.Branch.get'" reason=upstream-dependency
 test mainHasNoRow =
   Darklang.SCM.Branch.get Darklang.SCM.Branch.mainBranchId
   |> Stdlib.Test.equal Stdlib.Option.Option.None
 
 // A branch id that isn't main has no overlay ops on main, and asking about main yields none either.
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Unknown function or value 'Darklang.SCM.PackageOps.visibleParams'" reason=upstream-dependency
 test mainHasNoOverlayOps =
   Darklang.SCM.PackageOps.visibleParams Darklang.SCM.Branch.mainBranchId
   |> Stdlib.Test.equal []
 
 // Main still DISPLAYS as "main". It has no `branches` row, so the name lookup has to know about it
 // specially or it falls back to showing the id.
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Unknown function or value 'Darklang.SCM.PackageOps.branchName'" reason=upstream-dependency
 test mainDisplaysAsMain =
   Darklang.SCM.PackageOps.branchName Darklang.SCM.Branch.mainBranchId
   |> Stdlib.Test.equal "main"
 
 // And it resolves by name, from both boundaries, since neither the `branches` table nor an id-prefix
 // search can find a branch that has no row.
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Unknown function or value 'Darklang.Cli.Branch.lookupRef'" reason=upstream-dependency
 test mainResolvesByName =
   Stdlib.Test.all
     [ Darklang.Cli.Branch.lookupRef "main"

@@ -65,7 +65,6 @@ let request
   Stdlib.Http.Request { url = url, headers = headers, body = Stdlib.Blob.empty }
 
 // Compare response builders with their expected fields.
-// @compiler blocked: pending-validation
 test responseBuilders =
   Stdlib.Test.all
     [ Stdlib.Http.badRequest "Your request resulted in an error"
@@ -106,7 +105,6 @@ test responseBuilders =
       |> Stdlib.Test.equal
         (200, [ ("Content-Type", "application/json") ], Ok "test") ]
 
-// @compiler blocked: pending-validation
 test redirectTo =
   Stdlib.Test.all
     [ Stdlib.Http.redirectTo ""
@@ -124,7 +122,6 @@ test redirectTo =
       |> Stdlib.Test.equal (302, [ ("Location", "/relativeUrl") ], Ok "") ]
 
 // parseQueryString: ports the old _middleware.dark fixture.
-// @compiler blocked: pending-validation
 test parseQueryString =
   Stdlib.Test.all
     [ Stdlib.Http.parseQueryString "https://darklang.com?x=6&x=7&myString=todo"
@@ -151,7 +148,6 @@ test parseQueryString =
         (Stdlib.Dict.fromListOverwritingDuplicates
           [ ("q", "List map"), ("n", "A/B") ]) ]
 
-// @compiler blocked: pending-validation
 test urlDecode =
   Stdlib.Test.all
     [ // What an HTML form sends for a space in a GET.
@@ -179,7 +175,6 @@ test urlDecode =
       Stdlib.Http.urlDecode "50%zz" |> Stdlib.Test.equal "50%zz"
       Stdlib.Http.urlDecode "" |> Stdlib.Test.equal "" ]
 
-// @compiler blocked: pending-validation
 test queryParams =
   Stdlib.Test.all
     [ Stdlib.Http.Request.queryParams (request "/s?q=List+map&n=A%2FB" [])
@@ -202,7 +197,6 @@ test queryParams =
       Stdlib.Http.Request.queryParam (request "/s?q=a%3Db" []) "q"
       |> Stdlib.Test.equal (Some "a=b") ]
 
-// @compiler blocked: pending-validation
 test requestHeader =
   Stdlib.Test.all
     [ // Case-insensitive, as HTTP requires: one stored casing, three asked-for
@@ -226,7 +220,6 @@ test requestHeader =
         "Accept"
       |> Stdlib.Test.equal (Some "one") ]
 
-// @compiler blocked: pending-validation
 test parseHeaders =
   Stdlib.Test.all
     [ Stdlib.Http.parseHeaders "x: y"

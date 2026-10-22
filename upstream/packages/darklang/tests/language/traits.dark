@@ -41,7 +41,7 @@ module Shapes =
   let neverCalls<'a: Show> (v: 'a) : String = if false then Show.show v else "never"
 
   // The impl's method is an ordinary fn under <Type>.<Trait>
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unknown function or value 'Shapes.Point.Show.show'" reason=upstream-dependency
   test implMethodIsFn =
     Shapes.Point.Show.show (Shapes.Point { x = 1, y = 2 })
     |> Stdlib.Test.equal "(1, 2)"
@@ -50,7 +50,7 @@ module Shapes =
   // beneath it
   //
   // Dispatch by the argument's type
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unknown function or value 'Shapes.Show.show'" reason=upstream-dependency
   test dispatchByArgType =
     Stdlib.Test.all
       [ Shapes.Show.show (Shapes.Point { x = 5, y = 6 })
@@ -59,7 +59,7 @@ module Shapes =
         Shapes.Show.show true |> Stdlib.Test.equal "yes" ]
 
   // Inside a bounded generic fn
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unknown function or value 'Shapes.display'" reason=upstream-dependency
   test boundedGenericFn =
     Stdlib.Test.all
       [ Shapes.display (Shapes.Point { x = 1, y = 2 })
@@ -67,7 +67,7 @@ module Shapes =
         Shapes.display 5 |> Stdlib.Test.equal "value: 5" ]
 
   // Conditional impls dispatch on the head, then on the elements lazily
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unknown function or value 'Shapes.display'" reason=upstream-dependency
   test conditionalImpls =
     Stdlib.Test.all
       [ Shapes.display [ 1, 2, 3 ] |> Stdlib.Test.equal "value: [1, 2, 3]"
@@ -76,7 +76,7 @@ module Shapes =
         |> Stdlib.Test.equal "value: [(1, 2)]" ]
 
   // As a function value, and piped
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unknown function or value 'Shapes.Show.show'" reason=upstream-dependency
   test functionValueAndPipe =
     Stdlib.Test.all
       [ ([ 1, 2 ] |> Stdlib.List.map Shapes.Show.show)
@@ -85,30 +85,29 @@ module Shapes =
         |> Stdlib.Test.equal "(7, 8)" ]
 
   // Receiver calls: `x.method` is the whole call for a one-argument method
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unknown field 'show' on Darklang.Language.Tests.Traits.Shapes.Point" reason=compiler-gap
   test receiverCalls =
     Stdlib.Test.all
       [ (Shapes.Point { x = 1, y = 2 }).show |> Stdlib.Test.equal "(1, 2)"
         (9).show |> Stdlib.Test.equal "9" ]
 
   // A real field always wins over a method of the same name
-  // @compiler blocked: pending-validation
   test fieldBeatsMethod =
     (Shapes.Point { x = 1, y = 2 }).x |> Stdlib.Test.equal 1
 
   // A direct call reports the missing implementation at the method call.
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unknown function or value 'Shapes.Show.show'" reason=upstream-dependency
   test noImplForDirectCallRaises =
     Shapes.Show.show 3.5
     => raises
       "Float has no implementation of Darklang.Language.Tests.Traits.Shapes.Show. Write `impl Show for Float = ...`, or run `dark impls Show` to see which types do"
 
   // No impl: at the CALL of a bounded fn, before its body runs
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unknown function or value 'Shapes.neverCalls'" reason=upstream-dependency
   test boundedCallWithImpl =
     Shapes.neverCalls 5 |> Stdlib.Test.equal "never"
 
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unknown function or value 'Shapes.neverCalls'" reason=upstream-dependency
   test noImplForBoundedCallRaises =
     Shapes.neverCalls 3.5
     => raises
@@ -126,7 +125,7 @@ module Multi =
 
   let sum<'a: Stdlib.Add> (a: 'a) (b: 'a) (c: 'a) : 'a = a + b + c
 
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "No implementation of trait 'Darklang.Stdlib.Add'" reason=compiler-gap
   test operatorTraits =
     Stdlib.Test.all
       [ (Multi.Vec { dx = 1, dy = 2 } + Multi.Vec { dx = 10, dy = 20 })
@@ -144,7 +143,7 @@ module Multi =
         |> Stdlib.Test.equal (Multi.Vec { dx = 6, dy = 6 })
         Multi.sum "a" "b" "c" |> Stdlib.Test.equal "abc" ]
 
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "No implementation of trait 'Darklang.Stdlib.Add'" reason=compiler-gap
   test boolHasNoAddRaises =
     Multi.sum true false true
     => raises
@@ -155,7 +154,7 @@ module Multi =
   // would be a second impl for Int and every `1 + 2` an ambiguity.
   //
   // Receiver call on a two-argument method is a partial application
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unknown field 'add' on Darklang.Language.Tests.Traits.Multi.Vec" reason=compiler-gap
   test receiverPartialApplication =
     Stdlib.Test.all
       [ ((Multi.Vec { dx = 1, dy = 2 }).add (Multi.Vec { dx = 1, dy = 1 }))
@@ -192,14 +191,14 @@ module Ambiguity =
     let describe (n: Int) : String = "labelled"
 
   // Naming the trait disambiguates
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unknown function or value 'Ambiguity.Describe.describe'" reason=upstream-dependency
   test namedTraitDisambiguates =
     Stdlib.Test.all
       [ Ambiguity.Describe.describe 1 |> Stdlib.Test.equal "described"
         Ambiguity.Label.describe 1 |> Stdlib.Test.equal "labelled" ]
 
   // A receiver call cannot pick between two traits with the same method name
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Field access requires a record value" reason=compiler-gap
   test ambiguousReceiverRaises =
     (1).describe
     => raises
@@ -226,7 +225,7 @@ module MethodBounds =
   // constant `false`, so a test built on it passes whether or not the bound is
   // discharged against the right trait. These four cannot: a swap turns the first
   // two red, and no constant satisfies both.
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unknown function or value 'MethodBounds.Pair.pair'" reason=upstream-dependency
   test methodBounds =
     Stdlib.Test.all
       [ MethodBounds.Pair.pair (MethodBounds.Box { n = 1L }) 1L 2L
@@ -236,7 +235,7 @@ module MethodBounds =
         MethodBounds.Pair.pair (MethodBounds.Box { n = 1L }) "a" "b"
         |> Stdlib.Test.equal true ]
 
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unknown function or value 'MethodBounds.Pair.pair'" reason=upstream-dependency
   test methodBoundOnBoolRaises =
     MethodBounds.Pair.pair (MethodBounds.Box { n = 1L }) true true
     => raises
@@ -264,7 +263,7 @@ module SortOrder =
     // @compiler blocked: container-adaptation
     let greaterThanOrEqualTo (a: Desc) (b: Desc) : Bool = a.descKey <= b.descKey
 
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "No implementation of trait 'Darklang.Stdlib.Compare'" reason=compiler-gap
   test customCompareOrder =
     Stdlib.Test.all
       [ (SortOrder.Desc { descKey = 1L, descTag = "" }
@@ -281,7 +280,7 @@ module SortOrder =
 
   // Stable: values equal under `Compare` keep the order they came in, whatever their
   // structure.
-  // @compiler blocked: pending-validation
+  // @compiler xfail runtime: "Values differ" reason=compiler-gap
   test stableSort =
     Stdlib.List.sort
       [ SortOrder.Desc { descKey = 1L, descTag = "b" }
@@ -295,7 +294,6 @@ module SortOrder =
   // A type with no `Compare` of its own sorts structurally, as before.
   type Plain = { plainKey: Int64 }
 
-  // @compiler blocked: pending-validation
   test structuralSort =
     Stdlib.List.sort
       [ SortOrder.Plain { plainKey = 2L }
@@ -313,7 +311,6 @@ module Equality =
   type Holder = { user: User }
 
   // Every field counts, including the one a custom equality would have ignored.
-  // @compiler blocked: pending-validation
   test structuralEquality =
     Stdlib.Test.all
       [ (Equality.User { id = 1L, name = "a" }
@@ -332,14 +329,13 @@ module Equality =
         (Stdlib.Option.Option.Some 1 == Stdlib.Option.Option.Some 1)
         |> Stdlib.Test.equal true ]
 
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Operator is unavailable for this type" reason=compiler-gap
   test intVsStringEqualityRaises =
     (1 == "a")
     => raises "Cannot perform equality check on Int and String"
 
   // Containers compare element by element, structurally, and agree with the
   // elements.
-  // @compiler blocked: pending-validation
   test containerEquality =
     Stdlib.Test.all
       [ ([ Equality.User { id = 1L, name = "a" } ]
@@ -353,13 +349,11 @@ module Equality =
         |> Stdlib.Test.equal true ]
 
   // lengths first
-  // @compiler blocked: pending-validation
   test lengthsFirst =
     ([ Equality.User { id = 1L, name = "a" } ] == []) |> Stdlib.Test.equal false
 
   // the same one level down: a tuple slot, a dict value, an Option payload, a record
   // field
-  // @compiler blocked: pending-validation
   test nestedEquality =
     Stdlib.Test.all
       [ ((1L, Equality.User { id = 1L, name = "a" })
@@ -387,7 +381,6 @@ module Equality =
         |> Stdlib.Test.equal false ]
 
   // a list of builtin values, unchanged throughout
-  // @compiler blocked: pending-validation
   test builtinListEquality =
     Stdlib.Test.all
       [ ([ 1L, 2L ] == [ 1L, 2L ]) |> Stdlib.Test.equal true
@@ -397,13 +390,12 @@ module Equality =
 module Identities =
   // `Zero`/`One` dispatch from an explicit type arg or a caller's bound: there is
   // no argument to read the type from.
-  // @compiler blocked: pending-validation
   test explicitTypeArg =
     Stdlib.Test.all
       [ Stdlib.Zero.zero<Int64> () |> Stdlib.Test.equal 0L
         Stdlib.One.one<Float> () |> Stdlib.Test.equal 1.0 ]
 
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "No implementation of trait 'Darklang.Stdlib.Zero'" reason=compiler-gap
   test zeroWithoutTypeRaises =
     Stdlib.Zero.zero ()
     => raises
@@ -411,14 +403,13 @@ module Identities =
 
   let zeroOf<'a: Stdlib.Zero + Stdlib.Add> (x: 'a) : 'a = Stdlib.Zero.zero () + x
 
-  // @compiler blocked: pending-validation
   test boundedZero =
     Stdlib.Test.all
       [ Identities.zeroOf 5L |> Stdlib.Test.equal 5L
         Identities.zeroOf 2.5 |> Stdlib.Test.equal 2.5 ]
 
   // `sum` and `product` take a seed, so `[]` never has to ask
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "No implementation of trait 'Darklang.Stdlib.Add'" reason=compiler-gap
   test seededSumAndProduct =
     Stdlib.Test.all
       [ Stdlib.sum 0L [ 1L, 2L, 3L ] |> Stdlib.Test.equal 6L
@@ -439,7 +430,7 @@ module Rendering =
     let toString (p: Point) : String =
       $"({Stdlib.toString p.x}, {Stdlib.toString p.y})"
 
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unknown field 'toString' on Darklang.Language.Tests.Traits.Rendering.Point" reason=compiler-gap
   test toStringTrait =
     Stdlib.Test.all
       [ (Rendering.Point { x = 1L, y = 2L }).toString |> Stdlib.Test.equal "(1, 2)"
@@ -452,14 +443,12 @@ module Rendering =
         Stdlib.max 3L 9L |> Stdlib.Test.equal 9L ]
 
   // String, Char and DateTime implement Compare, so the generics cover them too
-  // @compiler blocked: pending-validation
   test compareOnStringsAndChars =
     Stdlib.Test.all
       [ Stdlib.min "apple" "banana" |> Stdlib.Test.equal "apple"
         Stdlib.max 'a' 'z' |> Stdlib.Test.equal 'z' ]
 
   // Limits in either order; a value outside them comes back as the nearer one
-  // @compiler blocked: pending-validation
   test clamp =
     Stdlib.Test.all
       [ Stdlib.clamp 15 20 10 |> Stdlib.Test.equal 15
@@ -467,14 +456,13 @@ module Rendering =
         Stdlib.clamp 5 10 20 |> Stdlib.Test.equal 10 ]
 
   // A type with no Compare implementation is what the bound refuses
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "No implementation of trait 'Darklang.Stdlib.Compare'" reason=compiler-gap
   test minOnBoolRaises =
     Stdlib.min true false
     => raises
       "Bool has no implementation of Darklang.Stdlib.Compare. Write `impl Compare for Bool = ...`, or run `dark impls Compare` to see which types do"
 
   // `abs` needs three traits at once: compare, negate, and a zero to compare against
-  // @compiler blocked: pending-validation
   test abs =
     Stdlib.Test.all
       [ Stdlib.abs -5L |> Stdlib.Test.equal 5L
@@ -482,7 +470,7 @@ module Rendering =
         Stdlib.abs 0 |> Stdlib.Test.equal 0 ]
 
   // an unsigned type has no Negate implementation, so it has no abs either
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "No implementation of trait 'Darklang.Stdlib.Negate'" reason=compiler-gap
   test absOfUnsignedRaises =
     Stdlib.abs 5uy
     => raises

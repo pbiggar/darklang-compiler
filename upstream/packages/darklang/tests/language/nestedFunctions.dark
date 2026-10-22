@@ -5,7 +5,6 @@ module Darklang.Language.Tests.NestedFunctions
 // self-recursive - the function may call itself by name in its own body - via
 // the `selfRegister` mechanism in ProgramTypesToRuntimeTypes + Interpreter.
 
-// @compiler blocked: pending-validation
 test definitionsAndRecursion =
   Stdlib.Test.all
     [ // non-recursive nested fn with type annotations
@@ -32,7 +31,6 @@ test definitionsAndRecursion =
        rev [ "a", "b", "c" ] [])
       |> Stdlib.Test.equal [ "c", "b", "a" ] ]
 
-// @compiler blocked: pending-validation
 test closuresAndShadowing =
   Stdlib.Test.all
     [ // nested fn closes over an outer let binding AND recurses
@@ -62,7 +60,7 @@ test closuresAndShadowing =
 // it's an error rather than silently picking one
 let sumDown (x: Int64) : Int64 = x + 100L
 
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Nested function name 'sumDown' is ambiguous" reason=compiler-gap
 test nameCollisionRaises =
   (let sumDown (n: Int64) : Int64 =
      if n <= 0L then 0L else n + (sumDown (n - 1L))
@@ -72,7 +70,7 @@ test nameCollisionRaises =
 
 // mutually recursive nested fns aren't supported - clear error, not "variable
 // not found"
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Unknown function or value 'isOdd'" reason=upstream-dependency
 test mutualRecursionRaises =
   (let isEven (n: Int64) : Bool =
      if n == 0L then true else isOdd (n - 1L)
@@ -82,7 +80,6 @@ test mutualRecursionRaises =
   => raises
     "`isOdd` (forward calls between nested functions aren't supported; use top-level functions instead) not found"
 
-// @compiler blocked: pending-validation
 test earlierAndShadowedNames =
   Stdlib.Test.all
     [ // but a nested fn CAN call one defined before it (plain closure capture)

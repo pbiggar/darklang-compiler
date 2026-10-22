@@ -4,7 +4,6 @@
 // alongside the `boldText`/`dimText` that were already there.
 module Darklang.Stdlib.Cli.UI.Colors.Tests
 
-// @compiler blocked: pending-validation
 test foregroundColors =
   Stdlib.Test.all
     [ Stdlib.Cli.UI.Colors.redText "hi" |> Stdlib.Test.equal "\u001b[31mhi\u001b[0m"
@@ -21,7 +20,6 @@ test foregroundColors =
       Stdlib.Cli.UI.Colors.grayText "hi"
       |> Stdlib.Test.equal "\u001b[90mhi\u001b[0m" ]
 
-// @compiler blocked: pending-validation
 test textStyles =
   Stdlib.Test.all
     [ Stdlib.Cli.UI.Colors.boldText "hi" |> Stdlib.Test.equal "\u001b[1mhi\u001b[0m"
@@ -33,7 +31,6 @@ test textStyles =
       Stdlib.Cli.UI.Colors.strikethroughText "hi"
       |> Stdlib.Test.equal "\u001b[9mhi\u001b[0m" ]
 
-// @compiler blocked: pending-validation
 test backgroundColors =
   Stdlib.Test.all
     [ Stdlib.Cli.UI.Colors.onRed "hi" |> Stdlib.Test.equal "\u001b[41mhi\u001b[0m"
@@ -41,6 +38,5 @@ test backgroundColors =
       Stdlib.Cli.UI.Colors.onYellow "hi" |> Stdlib.Test.equal "\u001b[43mhi\u001b[0m"
       Stdlib.Cli.UI.Colors.onBlue "hi" |> Stdlib.Test.equal "\u001b[44mhi\u001b[0m" ]
 
-// @compiler blocked: pending-validation
 test emptyText =
   Stdlib.Cli.UI.Colors.redText "" |> Stdlib.Test.equal "\u001b[31m\u001b[0m"

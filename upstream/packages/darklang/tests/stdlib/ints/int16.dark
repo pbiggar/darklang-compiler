@@ -1,6 +1,5 @@
 module Darklang.Stdlib.Int16.Tests
 
-// @compiler blocked: pending-validation
 test abs =
   Stdlib.Test.all
     [ Stdlib.abs -5s |> Stdlib.Test.equal 5s
@@ -11,20 +10,16 @@ test abs =
 // that it reaches this type and that the type's own comparison holds at its
 // extremes.
 
-// @compiler blocked: pending-validation
 test max =
   Stdlib.max 32767s -32768s |> Stdlib.Test.equal 32767s
 
-// @compiler blocked: pending-validation
 test min =
   Stdlib.min 32767s -32768s |> Stdlib.Test.equal -32768s
 
-// @compiler blocked: pending-validation
 test clamp =
   Stdlib.clamp -100s 0s -1s |> Stdlib.Test.equal -1s
 
 /// Wraps on overflow.
-// @compiler blocked: pending-validation
 test add =
   Stdlib.Test.all
     [ (10s + 9s) |> Stdlib.Test.equal 19s
@@ -38,7 +33,6 @@ test add =
       (30000s + 2768s) |> Stdlib.Test.equal -32768s ]
 
 /// Wraps on overflow.
-// @compiler blocked: pending-validation
 test subtract =
   Stdlib.Test.all
     [ (10s - 9s) |> Stdlib.Test.equal 1s
@@ -49,7 +43,6 @@ test subtract =
       (-2769s - 30000s) |> Stdlib.Test.equal 32767s ]
 
 /// Wraps on overflow.
-// @compiler blocked: pending-validation
 test multiply =
   Stdlib.Test.all
     [ (8s * 8s) |> Stdlib.Test.equal 64s
@@ -57,7 +50,6 @@ test multiply =
       (5145s * 5145s) |> Stdlib.Test.equal -5519s ]
 
 /// Wraps on overflow.
-// @compiler blocked: pending-validation
 test power =
   Stdlib.Test.all
     [ (2s ** 3s) |> Stdlib.Test.equal 8s
@@ -71,27 +63,22 @@ test power =
       (2s ** 15s) |> Stdlib.Test.equal -32768s
       (120s ** 20s) |> Stdlib.Test.equal 0s ]
 
-// @compiler blocked: pending-validation
 test powerRejectsNegativeExponent =
   (2s ** -3s)
   => raises "Cannot raise integer to a negative exponent"
 
-// @compiler blocked: pending-validation
 test powerOfZeroRejectsNegativeExponent =
   (0s ** -1s)
   => raises "Cannot raise integer to a negative exponent"
 
-// @compiler blocked: pending-validation
 test powerOfOneRejectsNegativeExponent =
   (1s ** -5s)
   => raises "Cannot raise integer to a negative exponent"
 
-// @compiler blocked: pending-validation
 test powerOfMinusOneRejectsNegativeExponent =
   (-1s ** -3s)
   => raises "Cannot raise integer to a negative exponent"
 
-// @compiler blocked: pending-validation
 test divide =
   Stdlib.Test.all
     [ (10s / 5s) |> Stdlib.Test.equal 2s
@@ -101,12 +88,10 @@ test divide =
       (-32768s / -1s) |> Stdlib.Test.equal -32768s
       (-32768s / 1s) |> Stdlib.Test.equal -32768s ]
 
-// @compiler blocked: pending-validation
 test divideOfOneRejectsZero =
   (1s / 0s)
   => raises "Cannot divide by 0"
 
-// @compiler blocked: pending-validation
 test negate =
   Stdlib.Test.all
     [ (--5s) |> Stdlib.Test.equal 5s
@@ -117,7 +102,6 @@ test negate =
 
 /// A Result: the sign follows the dividend, and it is an Error only when the
 /// divisor is 0.
-// @compiler blocked: pending-validation
 test remainder =
   Stdlib.Test.all
     [ Stdlib.Int16.remainder 15s 6s |> Stdlib.Test.equal (Ok 3s)
@@ -127,13 +111,11 @@ test remainder =
       Stdlib.Int16.remainder 5s 0s
       |> Stdlib.Test.equal (Error "Cannot divide by 0") ]
 
-// @compiler blocked: pending-validation
 test greaterThan =
   Stdlib.Test.all
     [ (20s > 1s) |> Stdlib.Test.equal true
       (20s > 130s) |> Stdlib.Test.equal false ]
 
-// @compiler blocked: pending-validation
 test greaterThanOrEqualTo =
   Stdlib.Test.all
     [ (0s >= 1s) |> Stdlib.Test.equal false
@@ -145,7 +127,6 @@ test greaterThanOrEqualTo =
       (-20s >= -20s) |> Stdlib.Test.equal true
       (-130s >= -20s) |> Stdlib.Test.equal false ]
 
-// @compiler blocked: pending-validation
 test lessThan =
   Stdlib.Test.all
     [ (6s < 8s) |> Stdlib.Test.equal true
@@ -156,7 +137,6 @@ test lessThan =
       (-999s < -9999s) |> Stdlib.Test.equal false
       (-8888s < -8888s) |> Stdlib.Test.equal false ]
 
-// @compiler blocked: pending-validation
 test lessThanOrEqualTo =
   Stdlib.Test.all
     [ (6s <= 8s) |> Stdlib.Test.equal true
@@ -167,7 +147,6 @@ test lessThanOrEqualTo =
       (-999s <= -9999s) |> Stdlib.Test.equal false
       (-8888s <= -8888s) |> Stdlib.Test.equal true ]
 
-// @compiler blocked: pending-validation
 test toString =
   Stdlib.Test.all
     [ Stdlib.toString 0s |> Stdlib.Test.equal "0"
@@ -178,14 +157,12 @@ test toString =
       // Int16 upper limit
       Stdlib.toString 32767s |> Stdlib.Test.equal "32767" ]
 
-// @compiler blocked: pending-validation
 test toFloat =
   Stdlib.Test.all
     [ Stdlib.Int16.toFloat 2s |> Stdlib.Test.equal 2.0
       Stdlib.Int16.toFloat -10s |> Stdlib.Test.equal -10.0 ]
 
 /// Every result lands inside the bounds, whichever order they are given in.
-// @compiler blocked: pending-validation
 test randomStaysWithinBounds =
   Stdlib.Test.all
     [ ((Stdlib.List.range 1 5)
@@ -206,7 +183,6 @@ test randomStaysWithinBounds =
       |> Stdlib.Test.equal ([ true, true, true, true, true ]) ]
 
 /// Both ends of the range are reachable.
-// @compiler blocked: pending-validation
 test randomReachesEveryValue =
   Stdlib.Test.all
     [ (((Stdlib.List.range 1 100)
@@ -218,7 +194,6 @@ test randomReachesEveryValue =
        |> Stdlib.List.unique))
       |> Stdlib.Test.equal ([ 0s, 1s, 2s ]) ]
 
-// @compiler blocked: pending-validation
 test parse =
   Stdlib.Test.all
     [ Stdlib.Int16.parse "0" |> Stdlib.Test.equal (Ok 0s)
@@ -234,7 +209,6 @@ test parse =
       Stdlib.Int16.parse "32767" |> Stdlib.Test.equal (Ok 32767s)
       Stdlib.Int16.parse "-32768" |> Stdlib.Test.equal (Ok -32768s) ]
 
-// @compiler blocked: pending-validation
 test parseOutOfRange =
   Stdlib.Test.all
     [ // out of range
@@ -243,7 +217,6 @@ test parseOutOfRange =
       Stdlib.Int16.parse "-32769"
       |> Stdlib.Test.equal (Error Stdlib.Int16.ParseError.OutOfRange) ]
 
-// @compiler blocked: pending-validation
 test parseBadFormat =
   Stdlib.Test.all
     [ Stdlib.Int16.parse "1 2 3"
@@ -273,7 +246,6 @@ test parseBadFormat =
       Stdlib.Int16.parse "XIV"
       |> Stdlib.Test.equal (Error Stdlib.Int16.ParseError.BadFormat) ]
 
-// @compiler blocked: pending-validation
 test fromInt8 =
   Stdlib.Test.all
     [ Stdlib.Int16.fromInt8 0y |> Stdlib.Test.equal 0s
@@ -282,21 +254,18 @@ test fromInt8 =
       Stdlib.Int16.fromInt8 (-1y) |> Stdlib.Test.equal -1s
       Stdlib.Int16.fromInt8 (-128y) |> Stdlib.Test.equal -128s ]
 
-// @compiler blocked: pending-validation
 test fromUInt8 =
   Stdlib.Test.all
     [ Stdlib.Int16.fromUInt8 0uy |> Stdlib.Test.equal 0s
       Stdlib.Int16.fromUInt8 1uy |> Stdlib.Test.equal 1s
       Stdlib.Int16.fromUInt8 255uy |> Stdlib.Test.equal 255s ]
 
-// @compiler blocked: pending-validation
 test fromUInt16 =
   Stdlib.Test.all
     [ Stdlib.Int16.fromUInt16 0us |> Stdlib.Test.equal (Some 0s)
       Stdlib.Int16.fromUInt16 1us |> Stdlib.Test.equal (Some 1s)
       Stdlib.Int16.fromUInt16 32767us |> Stdlib.Test.equal (Some 32767s) ]
 
-// @compiler blocked: pending-validation
 test fromInt32 =
   Stdlib.Test.all
     [ Stdlib.Int16.fromInt32 0l |> Stdlib.Test.equal (Some 0s)
@@ -307,7 +276,6 @@ test fromInt32 =
       Stdlib.Int16.fromInt32 (-32768l) |> Stdlib.Test.equal (Some -32768s)
       Stdlib.Int16.fromInt32 (-32769l) |> Stdlib.Test.equal None ]
 
-// @compiler blocked: pending-validation
 test fromUInt32 =
   Stdlib.Test.all
     [ Stdlib.Int16.fromUInt32 0ul |> Stdlib.Test.equal (Some 0s)
@@ -315,7 +283,6 @@ test fromUInt32 =
       Stdlib.Int16.fromUInt32 32767ul |> Stdlib.Test.equal (Some 32767s)
       Stdlib.Int16.fromUInt32 32768ul |> Stdlib.Test.equal None ]
 
-// @compiler blocked: pending-validation
 test fromInt64 =
   Stdlib.Test.all
     [ Stdlib.Int16.fromInt64 0L |> Stdlib.Test.equal (Some 0s)
@@ -326,7 +293,6 @@ test fromInt64 =
       Stdlib.Int16.fromInt64 (-32768L) |> Stdlib.Test.equal (Some -32768s)
       Stdlib.Int16.fromInt64 (-32769L) |> Stdlib.Test.equal None ]
 
-// @compiler blocked: pending-validation
 test fromUInt64 =
   Stdlib.Test.all
     [ Stdlib.Int16.fromUInt64 0UL |> Stdlib.Test.equal (Some 0s)
@@ -334,7 +300,6 @@ test fromUInt64 =
       Stdlib.Int16.fromUInt64 32767UL |> Stdlib.Test.equal (Some 32767s)
       Stdlib.Int16.fromUInt64 32768UL |> Stdlib.Test.equal None ]
 
-// @compiler blocked: pending-validation
 test fromInt128 =
   Stdlib.Test.all
     [ Stdlib.Int16.fromInt128 0Q |> Stdlib.Test.equal (Some 0s)
@@ -345,7 +310,6 @@ test fromInt128 =
       Stdlib.Int16.fromInt128 (-32768Q) |> Stdlib.Test.equal (Some -32768s)
       Stdlib.Int16.fromInt128 (-32769Q) |> Stdlib.Test.equal None ]
 
-// @compiler blocked: pending-validation
 test fromUInt128 =
   Stdlib.Test.all
     [ Stdlib.Int16.fromUInt128 0Z |> Stdlib.Test.equal (Some 0s)
@@ -353,7 +317,6 @@ test fromUInt128 =
       Stdlib.Int16.fromUInt128 32767Z |> Stdlib.Test.equal (Some 32767s)
       Stdlib.Int16.fromUInt128 32768Z |> Stdlib.Test.equal None ]
 
-// @compiler blocked: pending-validation
 test bitwiseAnd =
   Stdlib.Test.all
     [ (12s & 10s) |> Stdlib.Test.equal 8s
@@ -364,7 +327,6 @@ test bitwiseAnd =
       (32767s & (-32768s)) |> Stdlib.Test.equal 0s
       ((-1s) & (-1s)) |> Stdlib.Test.equal -1s ]
 
-// @compiler blocked: pending-validation
 test bitwiseOr =
   Stdlib.Test.all
     [ (12s | 10s) |> Stdlib.Test.equal 14s
@@ -374,7 +336,6 @@ test bitwiseOr =
       ((-32768s) | 0s) |> Stdlib.Test.equal -32768s
       (32767s | (-32768s)) |> Stdlib.Test.equal -1s ]
 
-// @compiler blocked: pending-validation
 test bitwiseXor =
   Stdlib.Test.all
     [ (12s ^ 10s) |> Stdlib.Test.equal 6s
@@ -384,7 +345,6 @@ test bitwiseXor =
       ((-32768s) ^ (-1s)) |> Stdlib.Test.equal 32767s
       (32767s ^ 32767s) |> Stdlib.Test.equal 0s ]
 
-// @compiler blocked: pending-validation
 test bitwiseNot =
   Stdlib.Test.all
     [ (~0s) |> Stdlib.Test.equal -1s
@@ -393,7 +353,6 @@ test bitwiseNot =
       (~(-32768s)) |> Stdlib.Test.equal 32767s
       (~1s) |> Stdlib.Test.equal -2s ]
 
-// @compiler blocked: pending-validation
 test shiftLeft =
   Stdlib.Test.all
     [ (1s << 2s) |> Stdlib.Test.equal 4s
@@ -402,7 +361,6 @@ test shiftLeft =
       (1s << 14s) |> Stdlib.Test.equal 16384s
       (5s << 3s) |> Stdlib.Test.equal 40s ]
 
-// @compiler blocked: pending-validation
 test shiftRight =
   Stdlib.Test.all
     [ (8s >> 2s) |> Stdlib.Test.equal 2s

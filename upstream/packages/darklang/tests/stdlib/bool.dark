@@ -1,6 +1,5 @@
 module Darklang.Stdlib.Bool.Tests
 
-// @compiler blocked: pending-validation
 test andTruthTable =
   Stdlib.Test.all
     [ Stdlib.Bool.and false false |> Stdlib.Test.equal false
@@ -14,13 +13,11 @@ test andTruthTable =
       (true && true) |> Stdlib.Test.equal true
       ((8L >= 5L) && (6L <= 8L)) |> Stdlib.Test.equal true ]
 
-// @compiler blocked: pending-validation
 test notTruthTable =
   Stdlib.Test.all
     [ Stdlib.Bool.not false |> Stdlib.Test.equal true
       Stdlib.Bool.not true |> Stdlib.Test.equal false ]
 
-// @compiler blocked: pending-validation
 test orTruthTable =
   Stdlib.Test.all
     [ Stdlib.Bool.or false false |> Stdlib.Test.equal false
@@ -32,7 +29,6 @@ test orTruthTable =
       (false || true) |> Stdlib.Test.equal true
       (true || true) |> Stdlib.Test.equal true ]
 
-// @compiler blocked: pending-validation
 test xorTruthTable =
   Stdlib.Test.all
     [ Stdlib.Bool.xor false false |> Stdlib.Test.equal false
@@ -40,7 +36,6 @@ test xorTruthTable =
       Stdlib.Bool.xor true false |> Stdlib.Test.equal true
       Stdlib.Bool.xor true true |> Stdlib.Test.equal false ]
 
-// @compiler blocked: pending-validation
 test toString =
   Stdlib.Test.all
     [ Stdlib.toString true |> Stdlib.Test.equal "true"

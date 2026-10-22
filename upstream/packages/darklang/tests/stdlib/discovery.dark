@@ -1,14 +1,14 @@
 module Darklang.Stdlib.ValueSearch.Tests
 
 // pmFindValuesByValueType returns empty list for unknown type
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Unknown function or value 'Darklang.LanguageTools.PackageManager.Value.findByValueType'" reason=upstream-dependency
 test unknownValueTypeFindsNoValues =
   Darklang.LanguageTools.PackageManager.Value.findByValueType
     Darklang.LanguageTools.RuntimeTypes.ValueType.Unknown
   |> Stdlib.Test.equal []
 
 // pmEvaluateValue returns None for unknown value
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Unknown function or value 'Darklang.Stdlib.ValueSearch.evaluate'" reason=upstream-dependency
 test missingValueEvaluatesToNone =
   Darklang.Stdlib.ValueSearch.evaluate
     (Darklang.LanguageTools.ProgramTypes.Hash.Hash

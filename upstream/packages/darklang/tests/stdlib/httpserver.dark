@@ -2,7 +2,6 @@
 // backend/testfiles/http-server exercise serve end to end.
 module Darklang.Stdlib.HttpServer.Tests
 
-// @compiler blocked: pending-validation
 test getMethod =
   Stdlib.Test.all
     [ // The method rides in `x-http-method`, and the header name is matched
@@ -34,7 +33,6 @@ test getMethod =
 
 // `get`/`post` build the Handler a record literal would, so a route table reads as
 // routes.
-// @compiler blocked: pending-validation
 test routes =
   Stdlib.Test.all
     [ (Stdlib.HttpServer.get "/ping" (fun req ->

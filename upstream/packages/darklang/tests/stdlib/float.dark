@@ -4,11 +4,9 @@ let nan () : Float = 0.0 / 0.0
 let infinity () : Float = 1.0 / 0.0
 let negativeInfinity () : Float = -1.0 / 0.0
 
-// @compiler blocked: pending-validation
 test add =
   (1.2 + 1.3) |> Stdlib.Test.equal 2.5
 
-// @compiler blocked: pending-validation
 test ceiling =
   Stdlib.Test.all
     [ Stdlib.Float.ceiling 1.3 |> Stdlib.Test.equal 2
@@ -19,7 +17,6 @@ test ceiling =
       Stdlib.Float.ceiling 0.0 |> Stdlib.Test.equal 0
       Stdlib.Float.ceiling 17.55042081 |> Stdlib.Test.equal 18 ]
 
-// @compiler blocked: pending-validation
 test roundUp =
   Stdlib.Test.all
     [ Stdlib.Float.roundUp 1.3 |> Stdlib.Test.equal 2
@@ -29,7 +26,6 @@ test roundUp =
       Stdlib.Float.roundUp 0000000.1 |> Stdlib.Test.equal 1
       Stdlib.Float.roundUp 0.0 |> Stdlib.Test.equal 0 ]
 
-// @compiler blocked: pending-validation
 test floor =
   Stdlib.Test.all
     [ Stdlib.Float.floor 1.8 |> Stdlib.Test.equal 1
@@ -39,7 +35,6 @@ test floor =
       Stdlib.Float.floor 0000000.1 |> Stdlib.Test.equal 0
       Stdlib.Float.floor 0.0 |> Stdlib.Test.equal 0 ]
 
-// @compiler blocked: pending-validation
 test roundDown =
   Stdlib.Test.all
     [ Stdlib.Float.roundDown 1.8 |> Stdlib.Test.equal 1
@@ -49,14 +44,12 @@ test roundDown =
       Stdlib.Float.roundDown 0000000.1 |> Stdlib.Test.equal 0
       Stdlib.Float.roundDown 0.0 |> Stdlib.Test.equal 0 ]
 
-// @compiler blocked: pending-validation
 test round =
   Stdlib.Test.all
     [ Stdlib.Float.round -2147483647.8 |> Stdlib.Test.equal -2147483648
       Stdlib.Float.round 0000000.1 |> Stdlib.Test.equal 0
       Stdlib.Float.round 2147483647.000009 |> Stdlib.Test.equal 2147483647 ]
 
-// @compiler blocked: pending-validation
 test truncate =
   Stdlib.Test.all
     [ Stdlib.Float.truncate -2367.9267 |> Stdlib.Test.equal -2367
@@ -66,42 +59,34 @@ test truncate =
       Stdlib.Float.truncate 2147483647.000009 |> Stdlib.Test.equal 2147483647 ]
 
 // NaN / Infinity have no Int representation -> Dark error, not a host crash
-// @compiler blocked: pending-validation
 test ceilingRejectsNan =
   Stdlib.Float.ceiling (nan ())
   => raises "Encountered out-of-range value for type of Int"
 
-// @compiler blocked: pending-validation
 test roundUpRejectsInfinity =
   Stdlib.Float.roundUp (infinity ())
   => raises "Encountered out-of-range value for type of Int"
 
-// @compiler blocked: pending-validation
 test floorRejectsNegativeInfinity =
   Stdlib.Float.floor (negativeInfinity ())
   => raises "Encountered out-of-range value for type of Int"
 
-// @compiler blocked: pending-validation
 test roundDownRejectsNan =
   Stdlib.Float.roundDown (nan ())
   => raises "Encountered out-of-range value for type of Int"
 
-// @compiler blocked: pending-validation
 test roundRejectsInfinity =
   Stdlib.Float.round (infinity ())
   => raises "Encountered out-of-range value for type of Int"
 
-// @compiler blocked: pending-validation
 test truncateRejectsNan =
   Stdlib.Float.truncate (nan ())
   => raises "Encountered out-of-range value for type of Int"
 
-// @compiler blocked: pending-validation
 test roundTowardsZeroRejectsNegativeInfinity =
   Stdlib.Float.roundTowardsZero (negativeInfinity ())
   => raises "Encountered out-of-range value for type of Int"
 
-// @compiler blocked: pending-validation
 test isFinite =
   Stdlib.Test.all
     [ Stdlib.Float.isFinite 0.0 |> Stdlib.Test.equal true
@@ -110,7 +95,6 @@ test isFinite =
       Stdlib.Float.isFinite (infinity ()) |> Stdlib.Test.equal false
       Stdlib.Float.isFinite (negativeInfinity ()) |> Stdlib.Test.equal false ]
 
-// @compiler blocked: pending-validation
 test absoluteValue =
   Stdlib.Test.all
     [ Stdlib.abs (negativeInfinity ())
@@ -121,7 +105,6 @@ test absoluteValue =
       Stdlib.abs -5.6 |> Stdlib.Test.equal 5.6
       Stdlib.abs -0.0 |> Stdlib.Test.equal 0.0 ]
 
-// @compiler blocked: pending-validation
 test negate =
   Stdlib.Test.all
     [ // NaN never equals itself; check it with isNaN.
@@ -132,7 +115,6 @@ test negate =
       (-0.0) |> Stdlib.Test.equal -0.0
       (--0.0) |> Stdlib.Test.equal 0.0 ]
 
-// @compiler blocked: pending-validation
 test clamp =
   Stdlib.Test.all
     [ Stdlib.Float.clampRefusingNaN (infinity ()) -1.0 0.5
@@ -168,7 +150,6 @@ test clamp =
       Stdlib.Float.clampRefusingNaN 3.0 0.0 2.0
       |> Stdlib.Test.equal (Ok 2.0) ]
 
-// @compiler blocked: pending-validation
 test divide =
   Stdlib.Test.all
     [ (9.0 / 2.0) |> Stdlib.Test.equal 4.5
@@ -176,7 +157,6 @@ test divide =
       (9.0 / (-0.0)) |> Stdlib.Test.equal (negativeInfinity ()) ]
 
 // Compare the exact floating-point results.
-// @compiler blocked: pending-validation
 test divisionOperator =
   Stdlib.Test.all
     [ 9.0 / 2.0 |> Stdlib.Test.equal 4.5
@@ -185,7 +165,6 @@ test divisionOperator =
       0.0 / 1.0 |> Stdlib.Test.equal 0.0
       1.0 / 0.0 |> Stdlib.Test.equal (infinity ()) ]
 
-// @compiler blocked: pending-validation
 test comparisons =
   Stdlib.Test.all
     [ (0.1 >= 0.1) |> Stdlib.Test.equal true
@@ -193,7 +172,6 @@ test comparisons =
       (0.1 <= 0.1) |> Stdlib.Test.equal true
       (0.2 < 0.1) |> Stdlib.Test.equal false ]
 
-// @compiler blocked: pending-validation
 test max =
   Stdlib.Test.all
     [ Stdlib.max (infinity ()) 1.0 |> Stdlib.Test.equal (infinity ())
@@ -207,7 +185,6 @@ test max =
       Stdlib.max 2147483647.0 00000000.000
       |> Stdlib.Test.equal 2147483647.0 ]
 
-// @compiler blocked: pending-validation
 test min =
   Stdlib.Test.all
     [ Stdlib.min (infinity ()) 1.0 |> Stdlib.Test.equal 1.0
@@ -222,11 +199,9 @@ test min =
       |> Stdlib.Test.equal -2147483647.8
       Stdlib.min 2147483647.0 00000000.000 |> Stdlib.Test.equal 0.0 ]
 
-// @compiler blocked: pending-validation
 test multiply =
   (26.0 * 0.5) |> Stdlib.Test.equal 13.0
 
-// @compiler blocked: pending-validation
 test parse =
   Stdlib.Test.all
     [ Stdlib.Float.parse "1.5" |> Stdlib.Test.equal (Ok 1.5)
@@ -255,13 +230,11 @@ test parse =
       Stdlib.Float.parse "1.8E+308"
       |> Stdlib.Test.equal (Ok (infinity ())) ]
 
-// @compiler blocked: pending-validation
 test power =
   Stdlib.Test.all
     [ (4.0 ** (-0.5)) |> Stdlib.Test.equal 0.5
       (4.0 ** 0.5) |> Stdlib.Test.equal 2.0 ]
 
-// @compiler blocked: pending-validation
 test roundTowardsZero =
   Stdlib.Test.all
     [ Stdlib.Float.roundTowardsZero -2367.9267 |> Stdlib.Test.equal -2367
@@ -271,29 +244,23 @@ test roundTowardsZero =
       Stdlib.Float.roundTowardsZero 2147483647.000009
       |> Stdlib.Test.equal 2147483647 ]
 
-// @compiler blocked: pending-validation
 test sqrt =
   Stdlib.Test.all
     [ Stdlib.Float.sqrt 25.0 |> Stdlib.Test.equal 5.0
       Stdlib.Float.sqrt 0.0 |> Stdlib.Test.equal 0.0 ]
 
-// @compiler blocked: pending-validation
 test subtract =
   (1.0 - 0.2) |> Stdlib.Test.equal 0.8
 
-// @compiler blocked: pending-validation
 test sum =
   Stdlib.sum 0.0 [ 1.0, 0.2 ] |> Stdlib.Test.equal 1.2
 
-// @compiler blocked: pending-validation
 test nanEqualityIsFalse =
   ((nan ()) == (nan ())) |> Stdlib.Test.equal false
 
-// @compiler blocked: pending-validation
 test nanInequalityIsTrue =
   ((nan ()) != (nan ())) |> Stdlib.Test.equal true
 
-// @compiler blocked: pending-validation
 test toString =
   Stdlib.Test.all
     [ Stdlib.toString 1.5 |> Stdlib.Test.equal "1.5"
@@ -322,7 +289,6 @@ test toString =
       Stdlib.toString 123456789012345678.0
       |> Stdlib.Test.equal "1.2345678901234568e+17" ]
 
-// @compiler blocked: pending-validation
 test toStringRoundTrips =
   Stdlib.Test.all
     [ Stdlib.Float.parse (Stdlib.toString (1.0 / 3.0))
@@ -336,7 +302,6 @@ test toStringRoundTrips =
       |> Stdlib.Test.equal (Ok "5e-324") ]
 
 // toInt truncates toward zero.
-// @compiler blocked: pending-validation
 test toInt =
   Stdlib.Test.all
     [ Stdlib.Float.toInt 3.0 |> Stdlib.Test.equal 3
@@ -354,30 +319,25 @@ test toInt =
       |> Stdlib.Test.equal (Stdlib.Float.roundTowardsZero -2.5) ]
 
 // NaN and infinities cannot become Ints.
-// @compiler blocked: pending-validation
 test toIntRejectsNan =
   Stdlib.Float.toInt (nan ())
   => raises "Encountered out-of-range value for type of Int"
 
-// @compiler blocked: pending-validation
 test toIntRejectsInfinity =
   Stdlib.Float.toInt (infinity ())
   => raises "Encountered out-of-range value for type of Int"
 
-// @compiler blocked: pending-validation
 test toIntRejectsNegativeInfinity =
   Stdlib.Float.toInt (negativeInfinity ())
   => raises "Encountered out-of-range value for type of Int"
 
 // Truncation and floor differ for negative values.
-// @compiler blocked: pending-validation
 test toIntTruncatesWhereFloorRoundsDown =
   Stdlib.Test.all
     [ Stdlib.Float.toInt -1.5 |> Stdlib.Test.equal -1
       Stdlib.Float.floor -1.5 |> Stdlib.Test.equal -2 ]
 
 // IEEE 754 binary64 representations.
-// @compiler blocked: pending-validation
 test toBits =
   Stdlib.Test.all
     [ Stdlib.Float.toBits 0.0 |> Stdlib.Test.equal 0UL
@@ -389,7 +349,6 @@ test toBits =
       Stdlib.Float.toBits -1.0 |> Stdlib.Test.equal 13830554455654793216UL ]
 
 // Bit equality distinguishes signed zero and is reflexive for a fixed NaN.
-// @compiler blocked: pending-validation
 test toBitsDistinguishesSignedZero =
   Stdlib.Test.all
     [ (Stdlib.Float.toBits -0.0 == Stdlib.Float.toBits 0.0)
@@ -399,7 +358,6 @@ test toBitsDistinguishesSignedZero =
       |> Stdlib.Test.equal true ]
 
 // Check parsing a hexadecimal float.
-// @compiler blocked: pending-validation
 test parseRejectsHexadecimalNotation =
   Stdlib.Float.parse "0xffffffffffffffff"
   |> Stdlib.Test.equal (Error Stdlib.Float.ParseError.BadFormat)
