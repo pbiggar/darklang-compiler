@@ -5,9 +5,9 @@ groups:
     Builtin function calls: supported
     Immediate lambda application: supported
     Immediate curried lambda application: supported
-    Named function overapplication:
-      status: missing
-      notes: Named calls require the declared arity; call a returned function in a separate application step.
+    Named function overapplication rejection:
+      status: supported
+      notes: The interpreter rejects excess arguments to named functions with TooManyArgsForFn; the compiler rejects them ahead of time. Call a returned function in a separate application step. Automatic application of excess arguments is not an interpreter capability or a compiler porting gap.
     Package function calls: supported
     Direct positional calls: supported
     Qualified function calls: supported
