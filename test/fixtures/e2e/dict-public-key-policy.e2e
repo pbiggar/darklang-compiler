@@ -13,7 +13,7 @@ Stdlib.Dict.get (Stdlib.Dict.singleton (absentBlob ()) "empty") (absentBlob ()) 
 let emptyBlobList = if false then [Stdlib.Blob.fromString "bad"] else [] in Stdlib.Dict.get (Stdlib.Dict.singleton emptyBlobList "empty") emptyBlobList = Some "empty"
 let absentStream () : List<Stream<Int64>> = []
 Stdlib.Dict.get (Stdlib.Dict.singleton (absentStream ()) "empty") (absentStream ()) = Some "empty"
-Stdlib.Dict.singleton (fun x -> x + 1L) "bad" = compileerror=""
-Stdlib.Dict.singleton (Some (fun x -> x + 1L)) "bad" = compileerror=""
+Stdlib.Dict.singleton (fun x -> x + 1L) "bad" = compileerror="Functions cannot be used as dictionary keys"
+Stdlib.Dict.singleton (Some (fun x -> x + 1L)) "bad" = compileerror="Functions cannot be used as dictionary keys"
 let genericKey<'key> (key: key) : Dict<key, Int64> = Dict { key: 1L }
 genericKey (fun x -> x + 1L) = compileerror="Functions cannot be used as dictionary keys"

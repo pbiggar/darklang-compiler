@@ -90,10 +90,10 @@ module RecordWithTypeArgs =
   // OK that's probably fine, but something to circle back to (CLEANUP) once we're over to the new parser.
   // Inner<String, Int64> { a = "test"; b = 5L } = Inner { a = "test"; b = 5L }
   // Inner<String, Int64> { a = "test"; b = "five" } = error="TODO: error message"
-  #compileerror="Expected String, got Int64"
+  #compileerror="Expected TString, got TInt64"
   Outer2 { a = 5L, b = 6L } = error="Failed to create record. Expected String for field `a`, but got 5 (an Int64)"
 
-  #compileerror="Expected Int64, got String"
+  #compileerror="Expected TInt64, got TString"
   Outer1 { a = "a", b = "b" } = error="Failed to create record. Expected Int64 for field `b`, but got \"b\" (a String)"
 
 
@@ -160,10 +160,10 @@ module EnumWithTypeArgs =
   Outer2.A "str" = Outer1.A "str"
   Outer2.B 5L = Outer1.B 5L
 
-  #compileerror="Expected String, got Int64"
+  #compileerror="Expected TString, got TInt64"
   Outer2.A 5L = error="Failed to create enum. Expected String for field 0 in `A`, but got Int64 (5)"
 
-  #compileerror="Expected Int64, got String"
+  #compileerror="Expected TInt64, got TString"
   Outer1.B "b" = error="Failed to create enum. Expected Int64 for field 0 in `B`, but got String (\"b\")"
 
 
