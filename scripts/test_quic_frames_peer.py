@@ -87,7 +87,7 @@ def main():
             rangeset = RangeSet(ranges)
             buf = Buffer(capacity=4096)
             buf.push_uint8(2)
-            push_ack_frame(buf, rangeset, delay=12345)
+            push_ack_frame(buf, rangeset, delay=12345, capacity=4095)
             decoded, delay = pull_ack_frame(Buffer(data=buf.data[1:]))
             expected = ",".join(f"{item.start}:{item.stop - 1}" for item in reversed(list(decoded)))
             assert run("decode", buf.data) == f"ACK {delay} {expected} -"
