@@ -359,9 +359,12 @@ mean the entire branch has passed its integration or performance gates.
   Transport closes preserve the triggering frame type, packet/key state and
   close reason on retransmission. Listener rejection retains its sealed outbox
   until flush; direct owners send once and release even after a failed send.
-  Frame parsing, ACK/recovery, CRYPTO/reassembly, connection-ID and key-validation
-  failures still need the broader typed migration; opaque failures are not
-  guessed into transport codes.
+  Frame decoders now retain typed transport failures and the decoded triggering
+  type, including unknown multi-byte types. Application owners retain newly
+  authenticated key phases before decoding and send malformed-frame closes with
+  those keys. Local parser resource limits remain opaque, not guessed into peer
+  encoding errors. ACK/recovery, CRYPTO/reassembly, connection-ID, key-validation
+  and handshake-owner wire failures still need the broader typed migration.
 - [ ] Sustained native TLS connection churn without exhausting the fixed heap.
   - [x] The parent fails the isolated thirty-two-connection TLS churn peer with
     `Out of heap memory`. Linux x86-64 now recycles canonical String/Blob/Int

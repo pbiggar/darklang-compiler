@@ -142,6 +142,15 @@ let __frames (state: Stdlib.__QuicConnection.State) (frames: List<Stdlib.__QuicA
     | Error (LocalFailure message) -> Error (Stdlib.__QuicConnection.Failure.OpaqueFailure message)
     | Ok next -> Stdlib.__QuicConnection.__frames next rest now
 
+let __decodeFailure (state: Stdlib.__QuicConnection.State) (error: Stdlib.__QuicWire.FrameFailure)
+  : Stdlib.__QuicConnection.Failure =
+  match error.failure with
+  | LocalFailure message -> Stdlib.__QuicConnection.Failure.OpaqueFailure message
+  | TransportViolation failure ->
+    // RFC 9000 uses frame type zero when the triggering type is unknown.
+    let kind = match error.kind with | None -> 0L | Some kind -> kind in
+    Stdlib.__QuicConnection.Failure.TransportFailure ((state, kind, failure))
+
 let __application (state: Stdlib.__QuicConnection.State) (packet: Stdlib.__QuicPacket.Protected) (now: Int64)
   : Stdlib.Result.Result<Stdlib.__QuicConnection.State, Stdlib.__QuicConnection.Failure> =
   Stdlib.__QuicRecovery.pto state.space.recovery state.transport.parameters.maxAckDelay |> Stdlib.Result.mapError Stdlib.__QuicConnection.__opaque |> Stdlib.Result.andThen (fun pto ->
@@ -152,17 +161,22 @@ let __application (state: Stdlib.__QuicConnection.State) (packet: Stdlib.__QuicP
         ({ state.meta with invalid = state.meta.invalid + 1L })) packet.bytes |> Stdlib.Result.mapError Stdlib.__QuicConnection.__opaque
     | Error message -> Error (Stdlib.__QuicConnection.Failure.OpaqueFailure message)
     | Ok opened ->
-      Stdlib.__QuicApplication.parse (state.flow.role == Stdlib.__QuicFlow.Role.Client) opened.packet.payload |> Stdlib.Result.mapError Stdlib.__QuicConnection.__opaque |> Stdlib.Result.andThen (fun frames ->
-        let eliciting = Stdlib.List.any frames (fun frame -> match frame.frame with | Handshake (Padding _) -> false | Handshake (Ack _) -> false | Handshake (Close _) -> false | ApplicationClose _ -> false | _ -> true) in
-        Stdlib.__QuicSpace.receive state.space opened.packet.number eliciting |> Stdlib.Result.mapError Stdlib.__QuicConnection.__opaque |> Stdlib.Result.andThen (fun receipt ->
-          let sending =
-            if opened.updated && state.sending.generation.phase != opened.state.current.phase then
-              Stdlib.__QuicKeys.__next state.sending.generation |> Stdlib.Result.mapError Stdlib.__QuicConnection.__opaque |> Stdlib.Result.map (fun generation -> Stdlib.__QuicConnection.Sending {
-                generation = generation, first = state.space.recovery.largestSent + 1L, count = 0L, acked = false })
-            else Ok state.sending in
-          sending |> Stdlib.Result.andThen (fun sending ->
-            let next = Stdlib.__QuicConnection.__copy state receipt.state state.flow opened.state sending state.ids { state.meta with idle = Stdlib.__QuicIdle.received state.meta.idle now } in
-            if receipt.fresh then Stdlib.__QuicConnection.__frames next frames now else Ok next))))
+      let sending =
+        if opened.updated && state.sending.generation.phase != opened.state.current.phase then
+          Stdlib.__QuicKeys.__next state.sending.generation |> Stdlib.Result.mapError Stdlib.__QuicConnection.__opaque |> Stdlib.Result.map (fun generation -> Stdlib.__QuicConnection.Sending {
+            generation = generation, first = state.space.recovery.largestSent + 1L, count = 0L, acked = false })
+        else Ok state.sending in
+      sending |> Stdlib.Result.andThen (fun sending ->
+        // Commit authenticated keys before decoding: even a malformed payload
+        // can be the first packet in a new phase. The close must use that phase.
+        let authenticated = Stdlib.__QuicConnection.__copy state state.space state.flow opened.state sending state.ids { state.meta with idle = Stdlib.__QuicIdle.received state.meta.idle now } in
+        Stdlib.__QuicApplication.parse (state.flow.role == Stdlib.__QuicFlow.Role.Client) opened.packet.payload
+          |> Stdlib.Result.mapError (Stdlib.__QuicConnection.__decodeFailure authenticated)
+          |> Stdlib.Result.andThen (fun frames ->
+            let eliciting = Stdlib.List.any frames (fun frame -> match frame.frame with | Handshake (Padding _) -> false | Handshake (Ack _) -> false | Handshake (Close _) -> false | ApplicationClose _ -> false | _ -> true) in
+            Stdlib.__QuicSpace.receive authenticated.space opened.packet.number eliciting |> Stdlib.Result.mapError Stdlib.__QuicConnection.__opaque |> Stdlib.Result.andThen (fun receipt ->
+              let next = Stdlib.__QuicConnection.__copy authenticated receipt.state authenticated.flow authenticated.receiveKeys authenticated.sending authenticated.ids authenticated.meta in
+              if receipt.fresh then Stdlib.__QuicConnection.__frames next frames now else Ok next))))
 
 let __packets (state: Stdlib.__QuicConnection.State) (bytes: Blob) (now: Int64)
   : Stdlib.Result.Result<Stdlib.__QuicConnection.State, Stdlib.__QuicConnection.Failure> =

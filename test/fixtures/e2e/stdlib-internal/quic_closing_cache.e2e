@@ -13,7 +13,7 @@ let checkClosingCache (mode: Int64) : Bool =
         else if mode != 7L && mode != 8L then Ok ()
         else
           let valid = Stdlib.__QuicCrypto.openPacket keys packet 9L 9L |> Stdlib.Result.andThen (fun opened ->
-            Stdlib.__QuicApplication.parse true opened.payload |> Stdlib.Result.map (fun frames -> opened.number == 10L && Stdlib.List.any frames (fun frame -> match frame.frame with | ApplicationClose close -> mode == 7L && close.code == 262L | Handshake (Close close) -> mode == 8L && close.code == 6L && close.kind == 15L | _ -> false))) in
+            Stdlib.__QuicApplication.parse true opened.payload |> Stdlib.Result.mapError Stdlib.__QuicWire.frameMessage |> Stdlib.Result.map (fun frames -> opened.number == 10L && Stdlib.List.any frames (fun frame -> match frame.frame with | ApplicationClose close -> mode == 7L && close.code == 262L | Handshake (Close close) -> mode == 8L && close.code == 6L && close.kind == 15L | _ -> false))) in
           if Stdlib.Result.withDefault valid false then Ok () else Error 5L in
       let socket = Stdlib.__Datagram.Socket { lifecycle = lifecycle, watch = None, send = send, receive = fun _timeout -> Ok (Stdlib.__Datagram.Message { peer = sender, payload = wire }) } in
       let reason = if mode == 8L then Stdlib.__QuicConnection.CloseReason.TransportCloseReason ((6L, 15L)) else Stdlib.__QuicConnection.CloseReason.ApplicationCloseReason (if mode == 7L then 262L else 256L) in

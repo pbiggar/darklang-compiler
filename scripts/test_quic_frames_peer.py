@@ -46,7 +46,7 @@ let checkFrames () : Unit =
         | Ok number -> Stdlib.__QuicFrames.acknowledge number.value in
       match result with | Error message -> Stdlib.printLine ("ERROR " + message) | Ok ack -> Stdlib.printLine (Stdlib.Blob.toHex ack)
     else
-      let result = Stdlib.__QuicFrames.parseHandshake data in
+      let result = Stdlib.__QuicFrames.parseHandshake data |> Stdlib.Result.mapError Stdlib.__QuicWire.frameMessage in
       match result with
       | Error message -> Stdlib.printLine ("ERROR " + message)
       | Ok frames ->
