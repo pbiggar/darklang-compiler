@@ -29,7 +29,8 @@ let check checkExpression literal globals locals symbols expected
           modules =
             List.map
               (fun name ->
-                (({ range = typeName.range; name } : WT.identifier), typeName.range))
+                ( ({ range = typeName.range; name } : WT.identifier),
+                  typeName.range ))
               [ "Stdlib"; owner ];
           typ = { typeName.typ with name = owner };
         }
