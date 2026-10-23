@@ -1,0 +1,6 @@
+// __testAssertions.dark - Native implementation of the imported assertion self-test helper.
+module Darklang.Stdlib.Test.Tests
+
+let is (actual: Stdlib.Test.Result) (expected: Stdlib.Test.Result) : Stdlib.Test.Result =
+  if actual == expected then Stdlib.Test.Result.Pass
+  else Stdlib.Test.Result.Fail ["Assertion results differ"]

@@ -294,3 +294,5 @@ packages/darklang/stdlib/json/parseError/jsonPath/part.dark
 packages/darklang/stdlib/json/parseError/jsonPath.dark
 packages/darklang/stdlib/json/parseError.dark
 packages/darklang/stdlib/json.dark
+packages/darklang/stdlib/test.dark
+packages/darklang/stdlib/__testAssertions.dark

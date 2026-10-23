@@ -515,6 +515,112 @@ let testRejectsDanglingCompileErrorDirective () =
       | Error msg -> Error ("Unexpected dangling-directive error: " ^ msg)
       | Ok _ -> Error "Expected dangling #compileerror rejection")
 
+let testCompilerAnnotationsPreserveInventory () =
+  withTempFile
+    "// @compiler blocked: test-counter\n\
+     Unknown.first () = 1L\n\
+     // @compiler excluded: runtime-reflection\n\
+     Unknown.second () = 2L\n\
+     3L = 3L\n" (fun path ->
+      let* tests = parseE2ETestFile path in
+      match tests with
+      | [ first; second; third ] ->
+          require
+            (first.skipReason = Some "blocked: test-counter"
+            && second.skipReason = Some "excluded: runtime-reflection"
+            && third.skipReason = None)
+            "Per-test statuses leaked or tests disappeared"
+      | _ -> Error "Annotated tests were not all discovered")
+
+let testCompilerAnnotationUnknownTag () =
+  withTempFile "// @compiler blocked: typo\n1L = 1L" (fun path ->
+      match parseE2ETestFile path with
+      | Error message when Text.contains message "Unknown compiler reason tag"
+        ->
+          Ok ()
+      | Error message -> Error message
+      | Ok _ -> Error "Unknown reason tag was accepted")
+
+let testCompilerAnnotationOverrideOrdering () =
+  one
+    "#compileerror=\"unknown\"\n\
+     // @compiler excluded: runtime-reflection\n\
+     Unknown.fn () = 1L"
+    "Expected annotation after an override" (fun test ->
+      require
+        (test.skipReason = Some "excluded: runtime-reflection"
+        && test.errorExpectation = Some CompileError)
+        "Override or annotation lost")
+
+let testCompilerXfailStrictness () =
+  one
+    "// @compiler xfail compile: \"known missing function\" reason=test-counter\n\
+     Unknown.fn () = 1L"
+    "Expected compile xfail" (fun test ->
+      let expected = CompileFailed (1, "known missing function", 0L) in
+      let unrelated = CompileFailed (1, "unrelated failure", 0L) in
+      let wrongPhase = Ran (1, "", "known missing function", 0L, 0L) in
+      let passed = Ran (0, "true\n", "", 0L, 0L) in
+      let* () =
+        require
+          (Result.is_ok (evaluateExpectations test expected))
+          "Known failure was not accepted"
+      in
+      let* () =
+        require
+          (List.for_all
+             (fun run -> Result.is_error (evaluateExpectations test run))
+             [ unrelated; wrongPhase; passed ])
+          "Unexpected pass, error or phase satisfied xfail"
+      in
+      let negative =
+        {
+          test with
+          errorExpectation = Some CompileError;
+          expectedErrorMessage = Some "known missing function";
+        }
+      in
+      let* () =
+        require
+          (Result.is_error (evaluateExpectations negative unrelated))
+          "Quoted expected diagnostic satisfied xfail without actual evidence"
+      in
+      require
+        (Option.is_none (tryPrepareBatchTest test))
+        "Expected failure was batched")
+
+let testCompilerRuntimeXfailStrictness () =
+  one
+    "// @compiler xfail runtime: \"known runtime failure\" \
+     reason=annotation-probe\n\
+     Builtin.crash \"known runtime failure\" = 1L"
+    "Expected runtime xfail" (fun test ->
+      let expected = Ran (1, "", "known runtime failure", 0L, 0L) in
+      let signal = Ran (139, "", "known runtime failure", 0L, 0L) in
+      let wrongPhase = CompileFailed (1, "known runtime failure", 0L) in
+      let leaked = Ran (1, "", "known runtime failure\nleaks: 1\n", 0L, 0L) in
+      require
+        (Result.is_ok (evaluateExpectations test expected)
+        && Result.is_error (evaluateExpectations test signal)
+        && Result.is_error (evaluateExpectations test leaked)
+        && Result.is_error (evaluateExpectations test wrongPhase))
+        "Runtime xfail accepted an unrelated phase or signal")
+
+let testExpectedLanguageErrorIsNotAnXfail () =
+  one
+    "// @compiler xfail runtime: \"known runtime failure\" \
+     reason=annotation-probe\n\
+     Builtin.crash \"known runtime failure\" = error=\"known runtime failure\""
+    "Expected ordinary negative test" (fun test ->
+      match
+        evaluateExpectations test (Ran (1, "", "known runtime failure", 0L, 0L))
+      with
+      | Error failure when Text.contains failure.message "Unexpected pass" ->
+          Ok ()
+      | _ ->
+          Error
+            "A passing negative test incorrectly counted as an expected failure")
+
 let testSourceFileGroupsPreserveAssertions () =
   one "1L = 1L" "Expected a template assertion" (fun test ->
       let make file preamble name =
@@ -573,69 +679,112 @@ let testPreservesLegacyModuleScopes () =
             "Different module scopes shared a batch"
       | _ -> Error "Scoped equality assertions were not batch eligible")
 
+let testCanonicalNamedResultReporter () =
+  withTempFile "test grouped = (\n  Stdlib.Test.pass ()\n)\n" (fun path ->
+      let directory = Filename.concat (Filename.dirname path) "upstream" in
+      Unix.mkdir directory 0o700;
+      let imported = Filename.concat directory "test.dark" in
+      Unix.rename path imported;
+      Fun.protect
+        ~finally:(fun () ->
+          Unix.rename imported path;
+          Unix.rmdir directory)
+        (fun () ->
+          match parseE2ETestFile imported with
+          | Error message -> Error message
+          | Ok [ test ] ->
+              let* () =
+                parsesBatch test.source "imported named test reporter"
+              in
+              let* () =
+                require
+                  (Text.contains test.source "Stdlib.Test.pass ()\n  )")
+                  "Named test body lost its closing parenthesis"
+              in
+              require
+                (Text.contains test.source "Imported test failed")
+                "Named test reporter lost the failure diagnostic"
+          | Ok _ -> Error "Expected exactly one canonical named test"))
+
 let tests =
-  [
-    ("preserves legacy module scopes", testPreservesLegacyModuleScopes);
-    ( "file context groups preserve every assertion",
-      testSourceFileGroupsPreserveAssertions );
-    ( "parses multiline expectation on next line",
-      testParsesMultilineExpectationOnNextLine );
-    ("parses skip attribute", testParsesSkipAttribute);
-    ( "parses indented multiline .dark tests inside module",
-      testParsesIndentedMultilineDarkTestsInsideModule );
-    ( "parses multiline with inner double equals",
-      testParsesMultilineWithInnerDoubleEquals );
-    ( "parses multiline with inner let binding",
-      testParsesMultilineWithInnerLetBinding );
-    ( "parses indented multiline let without module indent leak",
-      testParsesIndentedMultilineLetWithoutModuleIndentLeak );
-    ( "parses expectation with keyword inside quoted message",
-      testParsesExpectationWithKeywordInsideQuotedMessage );
-    ( "parses multiline function-head expectation with next-line arg",
-      testParsesMultilineExpectationWithFunctionHeadAndNextLineArg );
-    ( "parses bare .e2e rhs as value expression",
-      testParsesBareE2ERightHandSideAsValueExpression );
-    ( "parses indented rhs continuation without preamble leakage",
-      testParsesIndentedRhsContinuationWithoutLeakingIntoPreamble );
-    ( "parses dotted rhs continuation after bare identifier head",
-      testParsesDottedRhsContinuationAfterBareIdentifierHead );
-    ( "parses multiline pipe before separator",
-      testParsesMultilinePipeBeforeSeparator );
-    ( "parses multiline without leading paren",
-      testParsesMultilineWithoutLeadingParen );
-    ( "parses multiline list rhs continuation",
-      testParsesMultilineListRhsContinuation );
-    ( "parses single-line dotted rhs without consuming next test",
-      testParsesSingleLineDottedRhsWithoutConsumingNextTest );
-    ( "parses multiline Dict rhs without preamble leakage",
-      testParsesMultilineDictExpectationWithoutPreambleLeakage );
-    ( "parses sqlerror shorthand expectation",
-      testParsesSqlErrorExpectationShorthand );
-    ( "parses escaped backslash before n as literal text",
-      testParsesEscapedBackslashBeforeNAsLiteralText );
-    ( "parses repeated process arguments in order",
-      testParsesRepeatedProcessArgumentsInOrder );
-    ( "builds parseable universal batch source",
-      testBuildsParseableUniversalBatchSource );
-    ( "builds parseable multi-chunk batch source",
-      testBuildsParseableMultiChunkBatchSource );
-    ("builds parseable large batch source", testBuildsParseableLargeBatchSource);
-    ("parses batch bitmask results", testParsesBatchBitmaskResults);
-    ( "parses multi-chunk batch bitmask results",
-      testParsesMultiChunkBatchBitmaskResults );
-    ( "rejects invalid batch bitmask results",
-      testRejectsInvalidBatchBitmaskResults );
-    ( "rejects invalid multi-chunk batch bitmask results",
-      testRejectsInvalidMultiChunkBatchBitmaskResults );
-    ( "does not batch tests with process inputs",
-      testDoesNotBatchTestsWithProcessInputs );
-    ("does not batch explicitly isolated tests", testDoesNotBatchIsolatedTests);
-    ( "batches equality inside explicit result binding",
-      testBatchesEqualityInsideExplicitResultBinding );
-    ( "compile-error directive overrides any upstream expectation",
-      testCompileErrorDirectiveOverridesAnyUpstreamExpectation );
-    ( "compile-error expectation requires compile failure",
-      testCompileErrorExpectationRequiresCompileFailure );
-    ( "rejects dangling compile-error directive",
-      testRejectsDanglingCompileErrorDirective );
-  ]
+  ( "canonical named result reporter parses and preserves the body",
+    testCanonicalNamedResultReporter )
+  :: [
+       ( "compiler annotations preserve inventory",
+         testCompilerAnnotationsPreserveInventory );
+       ( "compiler annotations reject unknown reason tags",
+         testCompilerAnnotationUnknownTag );
+       ( "compiler annotations coexist with expectation overrides",
+         testCompilerAnnotationOverrideOrdering );
+       ( "compiler xfail requires the known compile failure",
+         testCompilerXfailStrictness );
+       ( "compiler xfail requires the known runtime failure",
+         testCompilerRuntimeXfailStrictness );
+       ( "passing negative tests cannot satisfy xfail",
+         testExpectedLanguageErrorIsNotAnXfail );
+       ("preserves legacy module scopes", testPreservesLegacyModuleScopes);
+       ( "file context groups preserve every assertion",
+         testSourceFileGroupsPreserveAssertions );
+       ( "parses multiline expectation on next line",
+         testParsesMultilineExpectationOnNextLine );
+       ("parses skip attribute", testParsesSkipAttribute);
+       ( "parses indented multiline .dark tests inside module",
+         testParsesIndentedMultilineDarkTestsInsideModule );
+       ( "parses multiline with inner double equals",
+         testParsesMultilineWithInnerDoubleEquals );
+       ( "parses multiline with inner let binding",
+         testParsesMultilineWithInnerLetBinding );
+       ( "parses indented multiline let without module indent leak",
+         testParsesIndentedMultilineLetWithoutModuleIndentLeak );
+       ( "parses expectation with keyword inside quoted message",
+         testParsesExpectationWithKeywordInsideQuotedMessage );
+       ( "parses multiline function-head expectation with next-line arg",
+         testParsesMultilineExpectationWithFunctionHeadAndNextLineArg );
+       ( "parses bare .e2e rhs as value expression",
+         testParsesBareE2ERightHandSideAsValueExpression );
+       ( "parses indented rhs continuation without preamble leakage",
+         testParsesIndentedRhsContinuationWithoutLeakingIntoPreamble );
+       ( "parses dotted rhs continuation after bare identifier head",
+         testParsesDottedRhsContinuationAfterBareIdentifierHead );
+       ( "parses multiline pipe before separator",
+         testParsesMultilinePipeBeforeSeparator );
+       ( "parses multiline without leading paren",
+         testParsesMultilineWithoutLeadingParen );
+       ( "parses multiline list rhs continuation",
+         testParsesMultilineListRhsContinuation );
+       ( "parses single-line dotted rhs without consuming next test",
+         testParsesSingleLineDottedRhsWithoutConsumingNextTest );
+       ( "parses multiline Dict rhs without preamble leakage",
+         testParsesMultilineDictExpectationWithoutPreambleLeakage );
+       ( "parses sqlerror shorthand expectation",
+         testParsesSqlErrorExpectationShorthand );
+       ( "parses escaped backslash before n as literal text",
+         testParsesEscapedBackslashBeforeNAsLiteralText );
+       ( "parses repeated process arguments in order",
+         testParsesRepeatedProcessArgumentsInOrder );
+       ( "builds parseable universal batch source",
+         testBuildsParseableUniversalBatchSource );
+       ( "builds parseable multi-chunk batch source",
+         testBuildsParseableMultiChunkBatchSource );
+       ( "builds parseable large batch source",
+         testBuildsParseableLargeBatchSource );
+       ("parses batch bitmask results", testParsesBatchBitmaskResults);
+       ( "parses multi-chunk batch bitmask results",
+         testParsesMultiChunkBatchBitmaskResults );
+       ( "rejects invalid batch bitmask results",
+         testRejectsInvalidBatchBitmaskResults );
+       ( "rejects invalid multi-chunk batch bitmask results",
+         testRejectsInvalidMultiChunkBatchBitmaskResults );
+       ( "does not batch tests with process inputs",
+         testDoesNotBatchTestsWithProcessInputs );
+       ( "does not batch explicitly isolated tests",
+         testDoesNotBatchIsolatedTests );
+       ( "batches equality inside explicit result binding",
+         testBatchesEqualityInsideExplicitResultBinding );
+       ( "compile-error directive overrides any upstream expectation",
+         testCompileErrorDirectiveOverridesAnyUpstreamExpectation );
+       ( "compile-error expectation requires compile failure",
+         testCompileErrorExpectationRequiresCompileFailure );
+       ( "rejects dangling compile-error directive",
+         testRejectsDanglingCompileErrorDirective );
+     ]

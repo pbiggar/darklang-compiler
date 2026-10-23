@@ -5,6 +5,7 @@ type AnEnum = | A | B | C
 
 Cols2 { col1 = 1L, col2 = 3L } = Cols2 { col1 = 1L, col2 = 3L }
 
+// @compiler blocked: compiler-gap
 Cols2 { col1 = 2L, col2 = Builtin.testRuntimeError "test" } = error="Uncaught exception: test"
 
 

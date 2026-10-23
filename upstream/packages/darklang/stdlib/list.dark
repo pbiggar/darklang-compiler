@@ -1,0 +1,677 @@
+module Darklang.Stdlib.List
+
+
+/// Returns an empty list
+// @compiler replace: packages/darklang/stdlib/list.dark#Darklang.Stdlib.List.empty reason=compiler-implementation
+val empty = []
+
+/// The empty list is what `+` starts from, as `0` is for a number
+// @compiler blocked: container-adaptation
+impl Stdlib.Zero for List<'a> =
+  // @compiler blocked: container-adaptation
+  let zero () : List<'a> = []
+
+/// Returns a one-element list containing the given <param val>
+// @compiler replace: packages/darklang/stdlib/list.dark#Darklang.Stdlib.List.singleton reason=compiler-implementation
+let singleton (value: 'a) : List<'a> =
+  [ value ]
+
+
+/// Returns {{Some}} the head (first value) of a list.
+/// Returns {{None}} if the list is empty.
+// @compiler replace: packages/darklang/stdlib/list.dark#Darklang.Stdlib.List.head reason=compiler-implementation
+let head (list: List<'a>) : Option.Option<'a> =
+  match list with
+  | [] -> Option.Option.None
+  | head :: _ -> Option.Option.Some head
+
+
+/// If <param list> contains at least one value, returns {{Some}} with a list of
+/// every value other than the first. Otherwise, returns {{None}}.
+// @compiler replace: packages/darklang/stdlib/list.dark#Darklang.Stdlib.List.tail reason=compiler-implementation
+let tail (list: List<'a>) : Option.Option<List<'a>> =
+  match list with
+  | [] -> Option.Option.None
+  | _ :: tail -> Option.Option.Some tail
+
+
+/// Returns a new list with all values in <param as> followed by all values in <param bs>,
+/// preserving the order
+// @compiler replace: packages/darklang/stdlib/list.dark#Darklang.Stdlib.List.append reason=compiler-implementation
+let append (as_: List<'a>) (bs: List<'a>) : List<'a> =
+  Builtin.listAppend as_ bs
+
+
+/// Add element <param value> to front of <type list> <param list>
+// @compiler replace: packages/darklang/stdlib/list.dark#Darklang.Stdlib.List.push reason=compiler-implementation
+let push (list: List<'a>) (value: 'a) : List<'a> =
+  Builtin.listPush list value
+
+
+/// Add element <param val> to back of <type list> <param list>
+// @compiler replace: packages/darklang/stdlib/list.dark#Darklang.Stdlib.List.pushBack reason=compiler-implementation
+let pushBack (list: List<'a>) (value: 'a) : List<'a> =
+  Builtin.listPushBack list value
+
+
+/// Returns the last value in <param list>, wrapped in an option (<paramNone> if the list is empty)
+// @compiler replace: packages/darklang/stdlib/list.dark#Darklang.Stdlib.List.last reason=compiler-implementation
+let last (list: List<'a>) : Option.Option<'a> =
+  match list with
+  | [] -> Option.Option.None
+  | head :: tail ->
+    match tail with
+    | [] -> Option.Option.Some head
+    | _ -> last tail
+
+
+/// Returns a reversed copy of <param list>
+// @compiler replace: packages/darklang/stdlib/list.dark#Darklang.Stdlib.List.reverse reason=compiler-implementation
+let reverse (list: List<'a>) : List<'a> =
+  Builtin.listReverse list
+
+
+/// Returns {{Some firstMatch}} where <var firstMatch> is the first value of the
+/// list for which <param fn> returns {{true}}. Returns {{None}} if no such
+/// value exists
+// @compiler replace: packages/darklang/stdlib/list.dark#Darklang.Stdlib.List.findFirst reason=compiler-implementation
+let findFirst (list: List<'a>) (fn: 'a -> Bool) : Option.Option<'a> =
+  Builtin.listFindFirst list fn
+
+
+/// Returns the index of the first element in <param list> for which <param fn>
+/// returns true. Returns {{None}} if no such element exists.
+// @compiler replace: packages/darklang/stdlib/list.dark#Darklang.Stdlib.List.findFirstIndex reason=compiler-implementation
+let findFirstIndex (list: List<'a>) (fn: 'a -> Bool) : Option.Option<Int> =
+  list
+  |> indexedMap (fun i item -> (i, item))
+  |> findFirst (fun (_i, item) -> fn item)
+  |> Stdlib.Option.map (fun (i, _item) -> i)
+
+
+/// Returns {{true}} if <param value> is in the list
+// @compiler replace: packages/darklang/stdlib/list.dark#Darklang.Stdlib.List.contains reason=compiler-implementation
+let contains (list: List<'a>) (value: 'a) : Bool =
+  Builtin.listContains list value
+
+
+// TODO: inline as a nested helper fn once Dark supports local function definitions
+// @compiler replace: packages/darklang/stdlib/list.dark#Darklang.Stdlib.List.repeatUnsafe reason=compiler-implementation
+let repeatUnsafe (times: Int) (value: 'a) : List<'a> =
+  if times <= 0 then
+    []
+  else
+    push (repeatUnsafe (times - 1) value) value
+
+
+/// Returns a list containing <param val> repeated <param times> times
+// @compiler replace: packages/darklang/stdlib/list.dark#Darklang.Stdlib.List.repeat reason=compiler-implementation
+let repeat
+  (times: Int)
+  (value: 'a)
+  : Result.Result<List<'a>, String> =
+  if times < 0 then
+    Result.Result.Error
+      $"Expected `times` to be positive, but it was `{times |> Stdlib.toString}`"
+  else
+    Result.Result.Ok(repeatUnsafe times value)
+
+
+/// Returns the number of values in <param list>
+// @compiler replace: packages/darklang/stdlib/list.dark#Darklang.Stdlib.List.length reason=compiler-implementation
+let ``length`` (list: List<'a>) : Int =
+  Builtin.listLength list
+
+
+/// Returns a list of numbers where each element is {{1}} larger than the
+/// previous. You provide the <param lowest> and <param highest> numbers in the list.
+// @compiler replace: packages/darklang/stdlib/list.dark#Darklang.Stdlib.List.range reason=compiler-implementation
+let range (lowest: Int) (highest: Int) : List<Int> =
+  Builtin.listRange lowest highest
+
+
+/// Folds <param list> into a single value, by calling <param fn> on each element with the value
+/// built so far.
+///
+/// Native, unlike most of this module, because it is the loop everything else here is written on:
+/// `map`, `filter` and the rest fold. Written in Dark it cost a package call and a match per element
+/// on top of the lambda; the builtin walks the list in F# and applies the lambda directly.
+// @compiler replace: packages/darklang/stdlib/list.dark#Darklang.Stdlib.List.fold reason=compiler-implementation
+let fold (list: List<'a>) (init: 'b) (fn: 'b -> 'a -> 'b) : 'b =
+  Builtin.listFold list init fn
+
+
+/// Returns a single list containing the values of every list directly in <paramlist>
+/// (does not recursively flatten nested lists)
+// @compiler replace: packages/darklang/stdlib/list.dark#Darklang.Stdlib.List.flatten reason=compiler-implementation
+let flatten (list: List<List<'a>>) : List<'a> =
+  Builtin.listFlatten list
+
+
+/// Returns a single list containing the values of <param list> separated by <param sep>
+// @compiler replace: packages/darklang/stdlib/list.dark#Darklang.Stdlib.List.interpose reason=compiler-implementation
+let interpose (list: List<'a>) (sep: 'a) : List<'a> =
+  match list with
+  | [] -> []
+  | [ single ] -> [ single ]
+  | head :: tail ->
+    (interpose tail sep)
+    |> push sep
+    |> push head
+
+
+/// Returns a list with the first value from <param l1> then the first value
+/// from <param l2>, then the second value from <param l1> then the second value
+/// other list.
+// @compiler replace: packages/darklang/stdlib/list.dark#Darklang.Stdlib.List.interleave reason=compiler-implementation
+let interleave (lA: List<'a>) (lB: List<'a>) : List<'a> =
+  match lA with
+  | [] -> lB
+  | aHead :: aTail ->
+    match lB with
+    | [] -> lA
+    | bHead :: bTail ->
+      (interleave aTail bTail)
+      |> push bHead
+      |> push aHead
+
+
+/// Returns the passed list, with only unique values, where uniqueness is based
+/// on the result of <param fn>. Only one of each value will be returned, and the
+/// result is sorted, so the input order is not maintained.
+///
+/// Keeps what it has seen in a <type Dict> keyed on {{fn value}} rather than
+/// scanning a list per element, so this is O(n log n) and not quadratic.
+/// Uniqueness is therefore decided by <type Dict> key comparison rather than by
+/// {{==}}: see <fn dedup> for where the two disagree.
+// @compiler replace: packages/darklang/stdlib/list.dark#Darklang.Stdlib.List.uniqueBy reason=compiler-implementation
+let uniqueBy (list: List<'a>) (fn: 'a -> 'b) : List<'a> =
+  list
+  |> fold ([], Dict { }) (fun (unique, seen) value ->
+    let uniqueValue = fn value
+
+    if Stdlib.Dict.``member`` seen uniqueValue then
+      (unique, seen)
+    else
+      (push unique value,
+       Stdlib.Dict.setOverridingDuplicates seen uniqueValue true))
+  |> fun (uniqueValues, _) -> uniqueValues
+  |> sort
+
+
+/// Returns the passed list, with only unique values.
+/// Only one of each value will be returned, but the
+/// order will not be maintained.
+// @compiler replace: packages/darklang/stdlib/list.dark#Darklang.Stdlib.List.unique reason=compiler-implementation
+let unique (list: List<'a>) : List<'a> = Builtin.listUnique list
+
+
+/// Returns <param list> with duplicates removed, KEEPING THE ORDER: the first occurrence
+/// of each value stays where it was.
+///
+/// <fn unique> sorts and <fn uniqueBy> does not maintain order, so neither can be used
+/// where the order carries meaning. A sequence in hash order looks exactly like one in
+/// authoring order, so getting that wrong surfaces much later, as a caller reading the
+/// wrong element.
+///
+/// Keeps what it has seen in a <type Dict> rather than scanning what it has kept per
+/// value, and pushes onto the front instead of the back, so it is O(n log n) rather
+/// than quadratic in both compares and copies.
+///
+/// That makes <type Dict> key comparison, not {{==}}, the notion of equality. Two
+/// differences, both narrow: {{NaN}} equals itself as a key and so collapses, where
+/// {{==}} reports it unequal and keeps both; and a value no <type Dict> can key (a
+/// lambda, a blob, a stream, a DB) raises rather than comparing by identity.
+// @compiler replace: packages/darklang/stdlib/list.dark#Darklang.Stdlib.List.dedup reason=compiler-implementation
+let dedup (list: List<'a>) : List<'a> =
+  list
+  |> fold ([], Dict { }) (fun (acc, seen) value ->
+    if Stdlib.Dict.``member`` seen value then
+      (acc, seen)
+    else
+      (push acc value, Stdlib.Dict.setOverridingDuplicates seen value true))
+  |> fun (acc, _) -> acc
+  |> reverse
+
+
+/// Returns true if <param list> has no values
+// @compiler replace: packages/darklang/stdlib/list.dark#Darklang.Stdlib.List.isEmpty reason=compiler-implementation
+let isEmpty (list: List<'a>) : Bool = Builtin.listIsEmpty list
+
+
+/// Returns a copy of <param list> with every value sorted in ascending order.
+/// A type with its own `Compare` implementation is ordered the way `<` orders it, and values
+/// equal under it keep their order; every other value is sorted structurally.
+/// Consider <fn sortBy> or <fn sortByComparator> if you need more
+/// control over the sorting process.
+// @compiler replace: packages/darklang/stdlib/list.dark#Darklang.Stdlib.List.sort reason=compiler-implementation
+let sort (list: List<'a>) : List<'a> = Builtin.listSort list
+
+
+/// Returns a copy of <param list>, sorted in ascending order, as if each value
+/// evaluated to {{fn val}}.
+/// For example, {{sortBy ["x", "jkl", "ab"] (fun v -> String.length v)}}
+/// returns {{["x", "ab", "jkl"]}}.
+/// Consider <fn sort> if the list values can be directly compared, or <fn
+/// sortByComparator> if you want more control over the sorting process.
+// @compiler replace: packages/darklang/stdlib/list.dark#Darklang.Stdlib.List.sortBy reason=compiler-implementation
+let sortBy (list: List<'a>) (fn: 'a -> 'b) : List<'a> =
+  Builtin.listSortBy list fn
+
+
+/// Helper functions for sortByComparator
+///
+/// This is a bit much. CLEANUP tidy this up
+module SortByComparatorHelpers =
+  // @compiler replace: packages/darklang/stdlib/list/sortByComparatorHelpers.dark#Darklang.Stdlib.List.SortByComparatorHelpers.validate reason=compiler-implementation
+  let validate
+    (x: 'a)
+    (y: 'a)
+    (comparator: 'a -> 'a -> Int)
+    : Result.Result<Int, String> =
+    let result = comparator x y
+
+    if result == -1 || result == 0 || result == 1 then
+      Result.Result.Ok result
+    else
+      Result.Result.Error
+        $"Expected comparator function to return -1, 0, or 1, but it returned {Stdlib.toString result}"
+
+  // @compiler replace: packages/darklang/stdlib/list/sortByComparatorHelpers.dark#Darklang.Stdlib.List.SortByComparatorHelpers.merge reason=compiler-implementation
+  let merge
+    (left: List<'a>)
+    (right: List<'a>)
+    (comparator: 'a -> 'a -> Int)
+    : Result.Result<List<'a>, String> =
+    match (left, right) with
+    | ([], _) -> Result.Result.Ok right
+    | (_, []) -> Result.Result.Ok left
+    | (x :: xs, y :: ys) ->
+      match validate x y comparator with
+      | Error msg -> Result.Result.Error msg
+      | Ok result ->
+        if result <= 0 then
+          match merge xs right comparator with
+          | Error msg -> Result.Result.Error msg
+          | Ok merged -> Result.Result.Ok(push merged x)
+        else
+          match merge left ys comparator with
+          | Error msg -> Result.Result.Error msg
+          | Ok merged -> Result.Result.Ok(push merged y)
+
+  // @compiler replace: packages/darklang/stdlib/list/sortByComparatorHelpers.dark#Darklang.Stdlib.List.SortByComparatorHelpers.splitList reason=compiler-implementation
+  let splitList (lst: List<'a>) : (List<'a> * List<'a>) =
+    match lst with
+    | [] -> ([], [])
+    | [ x ] -> ([ x ], [])
+    | x :: y :: xs ->
+      let (left, right) = splitList xs
+      (push left x, push right y)
+
+  // @compiler replace: packages/darklang/stdlib/list/sortByComparatorHelpers.dark#Darklang.Stdlib.List.SortByComparatorHelpers.mergeSort reason=compiler-implementation
+  let mergeSort
+    (lst: List<'a>)
+    (comparator: 'a -> 'a -> Int)
+    : Result.Result<List<'a>, String> =
+    match lst with
+    | [] -> Result.Result.Ok []
+    | [ x ] -> Result.Result.Ok [ x ]
+    | lst ->
+      let (left, right) = splitList lst
+
+      match mergeSort left comparator with
+      | Error msg -> Result.Result.Error msg
+      | Ok sortedLeft ->
+        match mergeSort right comparator with
+        | Error msg -> Result.Result.Error msg
+        | Ok sortedRight -> merge sortedLeft sortedRight comparator
+
+/// Returns a copy of <param list>, sorted using {{fn a b}} to compare values
+/// <var a> and <var b>.
+/// <param f> must return {{-1}} if <var a> should appear before <var b>, {{1}}
+/// if <var a> should appear after <var b>, and {{0}} if the order of <var a>
+/// and <var b> doesn't matter.
+/// Consider <fn sort> or <fn sortBy> if you don't need this level
+/// of control.
+// @compiler replace: packages/darklang/stdlib/list.dark#Darklang.Stdlib.List.sortByComparator reason=compiler-implementation
+let sortByComparator
+  (list: List<'a>)
+  (fn: 'a -> 'a -> Int)
+  : Result.Result<List<'a>, String> =
+  SortByComparatorHelpers.mergeSort list fn
+
+
+
+
+/// Return {{true}} if all elements in the list meet the function's criteria, else {{false}}
+// @compiler replace: packages/darklang/stdlib/list.dark#Darklang.Stdlib.List.all reason=compiler-implementation
+let all (list: List<'a>) (fn: 'a -> Bool) : Bool =
+  match list with
+  | [] -> true
+  | head :: tail -> if (fn head) then all tail fn else false
+
+
+/// Return {{true}} if any elements in the list meet the function's criteria, else {{false}}
+// @compiler replace: packages/darklang/stdlib/list.dark#Darklang.Stdlib.List.any reason=compiler-implementation
+let any (list: List<'a>) (fn: 'a -> Bool) : Bool =
+  Builtin.listAny list fn
+
+
+/// Calls <param f> on every <var val> in <param list>, returning a list of only
+/// those values for which {{fn val}} returns {{true}}.
+/// Preserves the order of values that were not dropped. Consider <fn
+/// filterMap> if you also want to transform the values.
+// @compiler replace: packages/darklang/stdlib/list.dark#Darklang.Stdlib.List.filter reason=compiler-implementation
+let filter (list: List<'a>) (f: 'a -> Bool) : List<'a> =
+  Builtin.listFilter list f
+
+
+/// Calls <param fn> on every <var val> in <param list>, returning a list that
+/// drops some values (filter) and transforms others (map).
+/// If {{fn val}} returns {{None}}, drops <var val> from the list.
+/// If {{fn val}} returns {{Some newValue}}, replaces <var val> with <var newValue>.
+/// Preserves the order of values that were not dropped.
+/// This function combines <fn filter> and <fn map>.
+// @compiler replace: packages/darklang/stdlib/list.dark#Darklang.Stdlib.List.filterMap reason=compiler-implementation
+let filterMap
+  (list: List<'a>)
+  (fn: 'a -> Option.Option<'b>)
+  : List<'b> =
+  Builtin.listFilterMap list fn
+
+
+/// Drops the first <param count> values from <param list>
+// @compiler replace: packages/darklang/stdlib/list.dark#Darklang.Stdlib.List.drop reason=compiler-implementation
+let drop (list: List<'a>) (count: Int) : List<'a> =
+  if count <= 0 then
+    list
+  else
+    match list with
+    | [] -> []
+    | _ :: tail -> drop tail (count - 1)
+
+
+/// Drops the longest prefix of <param list> which satisfies the predicate <param val>
+// @compiler replace: packages/darklang/stdlib/list.dark#Darklang.Stdlib.List.dropWhile reason=compiler-implementation
+let dropWhile (list: List<'a>) (fn: 'a -> Bool) : List<'a> =
+  match list with
+  | [] -> []
+  | head :: tail -> if (fn head) then dropWhile tail fn else list
+
+
+/// Drops the last value from <param list>
+// @compiler replace: packages/darklang/stdlib/list.dark#Darklang.Stdlib.List.dropLast reason=compiler-implementation
+let dropLast (list: List<'a>) : List<'a> =
+  match list with
+  | [] -> []
+  | head :: tail ->
+    match tail with
+    | [] -> []
+    | _ -> push (dropLast tail) head
+
+
+/// Drops all but the first <param count> values from <param list>
+// @compiler replace: packages/darklang/stdlib/list.dark#Darklang.Stdlib.List.take reason=compiler-implementation
+let take (list: List<'a>) (count: Int) : List<'a> =
+  Builtin.listTake list count
+
+
+/// Return the longest prefix of <param list> which satisfies the predicate <param fn>
+// @compiler replace: packages/darklang/stdlib/list.dark#Darklang.Stdlib.List.takeWhile reason=compiler-implementation
+let takeWhile (list: List<'a>) (fn: 'a -> Bool) : List<'a> =
+  match list with
+  | [] -> []
+  | head :: tail ->
+    if (fn head) then
+      push (takeWhile tail fn) head
+    else
+      []
+
+
+/// Calls <param fn> on every <var val> in <param list>, returning a list of the
+/// results of those calls.
+/// Consider <fn filterMap> if you also want to drop some of the values.
+// @compiler replace: packages/darklang/stdlib/list.dark#Darklang.Stdlib.List.map reason=compiler-implementation
+let map (list: List<'a>) (fn: 'a -> 'b) : List<'b> =
+  Builtin.listMap list fn
+
+
+/// <fn map>, with every call of <param fn> as a process of its own, spread across the cores,
+/// and the results in order. For work that computes; reads run concurrently under plain
+/// <fn map> already. Built on <fn Stdlib.Exec.spawn>.
+// @compiler blocked: missing-implementation
+let parallelMap (list: List<'a>) (fn: 'a -> 'b) : List<'b> =
+  list
+  |> Stdlib.List.map (fun x -> Stdlib.Exec.spawn (fun () -> fn x))
+  |> Stdlib.List.map (fun handle -> Stdlib.Exec.await handle)
+
+
+/// Calls <fn fn> on every <var val> and its <var index> in <param list>,
+/// returning a list of the results of those calls.
+/// Consider <fn map> if you don't need the index.
+// @compiler replace: packages/darklang/stdlib/list.dark#Darklang.Stdlib.List.indexedMap reason=compiler-implementation
+let indexedMap (list: List<'a>) (fn: Int -> 'a -> 'b) : List<'b> =
+  Builtin.listIndexedMap list fn
+
+
+// Helper function for map2shortest
+/// Maps <param fn> over <param as> and <param bs> in parallel, calling {{fn a
+/// b}} on every pair of values from <param as> and <param bs>.
+/// If the lists differ in length, values from the longer list are dropped.
+/// For example, if <param as> is {{[1,2]}} and <param bs> is
+/// {{["x", "y", "z"]}}, returns {{[fn 1 "x", fn 2 "y"]}}.
+/// Use <fn map2> if you want to enforce equivalent lengths for <param as>
+/// and <param bs>.
+// @compiler replace: packages/darklang/stdlib/list.dark#Darklang.Stdlib.List.map2shortest reason=compiler-implementation
+let map2shortest
+  (as_: List<'a>)
+  (bs: List<'b>)
+  (fn: 'a -> 'b -> 'c)
+  : List<'c> =
+  Builtin.listMap2shortest as_ bs fn
+
+
+/// If the lists are the same length, returns {{Some list}} formed by mapping
+/// <param fn> over <param as> and <param bs> in parallel, calling {{fn a b}} on
+/// every pair of values from <param as> and <param bs>.
+/// For example, if <param as> is {{[1,2,3]}} and <param bs> is
+/// {{["x", "y", "z"]}}, returns {{Some [fn 1 "x", fn 2 "y", fn 3 "z"]}}.
+/// If the lists differ in length, returns {{None}} (consider <fn
+/// map2shortest> if you want to drop values from the longer list
+/// instead).
+// @compiler replace: packages/darklang/stdlib/list.dark#Darklang.Stdlib.List.map2 reason=compiler-implementation
+let map2
+  (as_: List<'a>)
+  (bs: List<'b>)
+  (fn: 'a -> 'b -> 'c)
+  : Option.Option<List<'c>> =
+  if (length as_) != (length bs) then
+    Option.Option.None
+  else
+    Option.Option.Some(map2shortest as_ bs fn)
+
+
+/// Returns a list of parallel pairs from <param as> and <param bs>.
+/// If the lists differ in length, values from the longer list are dropped.
+/// For example, if <param as> is {{[1,2]}} and <param bs> is
+/// {{["x", "y", "z"]}}, returns {{[(1, "x"), (2, "y")]}}.
+/// Use <fn zip> if you want to enforce equivalent lengths for <param as>
+/// and <param bs>.
+/// See <fn unzip> if you want to deconstruct the result into <param as>
+/// and <param bs> again.
+// @compiler replace: packages/darklang/stdlib/list.dark#Darklang.Stdlib.List.zipShortest reason=compiler-implementation
+let zipShortest (as_: List<'a>) (bs: List<'b>) : List<('a * 'b)> =
+  Builtin.listZipShortest as_ bs
+
+
+/// If the lists have the same length, returns {{Some list of tuples}} formed from
+/// parallel pairs in <param l1> and <param l2>.
+/// For example, if <param l1> is {{[1,2,3]}} and <param l2> is
+/// {{["x", "y", "z"]}}, returns {{Some [(1, "x"), (2, "y"), (3, "z")]}}.
+/// See <fn unzip> if you want to deconstruct <var list> into <param l1>
+/// and <param l2> again.
+/// If the lists differ in length, returns {{None}} (consider
+/// <fn zipShortest> if you want to drop values from the longer list
+/// instead).
+// @compiler replace: packages/darklang/stdlib/list.dark#Darklang.Stdlib.List.zip reason=compiler-implementation
+let zip (l1: List<'a>) (l2: List<'b>) : Option.Option<List<('a * 'b)>> =
+  // The lengths once, then one native zip, rather than recursing and measuring both lengths
+  // again at every level, which is quadratic in the length.
+  if (length l1) != (length l2) then
+    Option.Option.None
+  else
+    Option.Option.Some(zipShortest l1 l2)
+
+
+/// Given a <param pairs> list where each value is a tuple of two values (such
+/// lists are constructed by <fn zip> and <fn zipShortest>), returns
+/// a tuple of two lists, one with every first value, and one with every second
+/// value.
+/// For example, if <param pairs> is {{[(1, "x"), (2, "y"), (3, "z")]}}, returns
+/// {{([1, 2, 3], ["x", "y", "z"])}}.
+// @compiler replace: packages/darklang/stdlib/list.dark#Darklang.Stdlib.List.unzip reason=compiler-implementation
+let unzip (pairs: List<('a * 'b)>) : (List<'a> * List<'b>) =
+  match pairs with
+  | [] -> ([], [])
+  | (a, b) :: tail ->
+    let (firsts, seconds) = unzip tail
+
+    (push firsts a, push seconds b)
+
+
+/// Returns {{Some value}} at <param index> in <param list> if <param index> is
+/// less than the length of the list otherwise returns {{None}}.
+// @compiler replace: packages/darklang/stdlib/list.dark#Darklang.Stdlib.List.getAt reason=compiler-implementation
+let getAt (list: List<'a>) (index: Int) : Option.Option<'a> =
+  Builtin.listGetAt list index
+
+
+// @compiler replace: packages/darklang/stdlib/list.dark#Darklang.Stdlib.List.IndexError reason=compiler-implementation
+type IndexError =
+  /// The resolved index was outside the bounds of the list.
+  | IndexOutOfBounds
+
+/// Returns {{Ok}} <param list> with the value at <param index> replaced by
+/// <param value>. Negative indexes count backward from the end of the list, so
+/// {{-1}} replaces the last value and {{-2}} replaces the second-to-last value.
+/// Returns {{Error IndexOutOfBounds}} if the resolved index is outside the list.
+// @compiler replace: packages/darklang/stdlib/list.dark#Darklang.Stdlib.List.setAt reason=compiler-implementation
+let setAt
+  (list: List<'a>)
+  (index: Int)
+  (value: 'a)
+  : Result.Result<List<'a>, IndexError> =
+  let listLength = length list
+  let resolvedIndex = if index < 0 then listLength + index else index
+
+  if resolvedIndex < 0 || resolvedIndex >= listLength then
+    Result.Result.Error IndexError.IndexOutOfBounds
+  else
+    Result.Result.Ok(
+      indexedMap list (fun i v -> if i == resolvedIndex then value else v)
+    )
+
+
+/// Returns {{Some <var randomValue>}}, where <var randomValue> is a randomly
+/// selected value in <param list>. Returns {{None}} if <param list> is
+/// empty.
+// @compiler replace: packages/darklang/stdlib/list.dark#Darklang.Stdlib.List.randomElement reason=compiler-implementation
+let randomElement (list: List<'a>) : Option.Option<'a> =
+  Builtin.listRandomElement list
+
+
+/// Groups <param list> into tuples (key, elements), where the key is computed by applying
+/// <param fn> to each element in the list.
+/// For example, if <param list> is {{[1, 2, 3, 4, 5]}} and <param fn>
+/// is {{fn item -> item % 2}}, returns {{[(1, [1, 3, 5]), (0, [2, 4])]}}.
+/// Preserves the order of values and of the keys.
+// @compiler replace: packages/darklang/stdlib/list.dark#Darklang.Stdlib.List.groupByWithKey reason=compiler-implementation
+let groupByWithKey (list: List<'a>) (fn: 'a -> 'b) : List<('b * List<'a>)> =
+  // Each group is looked up in a Dict rather than scanned for, and built back to front; the
+  // keys are kept separately, in the order first seen, since a Dict lists its own sorted.
+  let (groups, keys) =
+    fold list (Dict { }, []) (fun (groups, keys) element ->
+      let key = fn element
+
+      match Stdlib.Dict.get groups key with
+      | Some elements ->
+        (Stdlib.Dict.setOverridingDuplicates groups key (push elements element), keys)
+      | None -> (Stdlib.Dict.set groups key [ element ], push keys key))
+
+  keys
+  |> reverse
+  |> map (fun key ->
+    match Stdlib.Dict.get groups key with
+    | Some elements -> (key, reverse elements)
+    | None -> (key, []))
+
+
+/// Calls <param f> on every <var val> in <param list>, splitting the list into
+/// two - those values for which {{fn val}} returns {{true}}, and those that
+/// return {{false}}
+// @compiler replace: packages/darklang/stdlib/list.dark#Darklang.Stdlib.List.partition reason=compiler-implementation
+let partition (ls: List<'a>) (f: 'a -> Bool) : (List<'a> * List<'a>) =
+  match ls with
+  | [] -> ([], [])
+  | head :: tail ->
+    let (trueList, falseList) = partition tail f
+
+    if (f head) then
+      (push trueList head, falseList)
+    else
+      (trueList, push falseList head)
+
+
+/// Applies the given function <param fn> to each element of the <param list>.
+// @compiler replace: packages/darklang/stdlib/list.dark#Darklang.Stdlib.List.iter reason=compiler-implementation
+let iter (list: List<'a>) (f: 'a -> Unit) : Unit =
+  match list with
+  | [] -> ()
+  | head :: tail ->
+    f head
+    iter tail f
+
+
+/// Helper function for chunkBySize. Recursively divides a list into chunks of a given size.
+// @compiler replace: packages/darklang/stdlib/list.dark#Darklang.Stdlib.List.chunkBySizeHelper reason=compiler-implementation
+let chunkBySizeHelper
+  (currentList: List<'a>)
+  (size: Int)
+  (accum: List<List<'a>>)
+  : List<List<'a>> =
+  match currentList with
+  | [] -> reverse accum
+  | _ ->
+    let taken = take currentList size
+    let rest = drop currentList size
+
+    let newAccum =
+      if isEmpty taken then
+        accum
+      else
+        push accum taken
+
+    chunkBySizeHelper rest size newAccum
+
+// @compiler replace: packages/darklang/stdlib/list.dark#Darklang.Stdlib.List.ChunkBySizeError reason=compiler-implementation
+type ChunkBySizeError = | SizeMustBeGreaterThanZero
+
+/// Chunks <param list> into sublists of specified maximum <param size>.
+/// If <param size> is less than or equal to zero, returns an error
+// @compiler replace: packages/darklang/stdlib/list.dark#Darklang.Stdlib.List.chunkBySize reason=compiler-implementation
+let chunkBySize
+  (list: List<'a>)
+  (size: Int)
+  : Result.Result<List<List<'a>>, ChunkBySizeError> =
+  if size <= 0 then
+    Result.Result.Error
+      ChunkBySizeError.SizeMustBeGreaterThanZero
+  else
+    Result.Result.Ok(chunkBySizeHelper list size [])
+
+
+// @compiler replace: packages/darklang/stdlib/list.dark#Darklang.Stdlib.List.splitLast reason=compiler-implementation
+let splitLast (l: List<'a>) : Option.Option<(List<'a> * 'a)> =
+  match reverse l with
+  | [] -> Option.Option.None
+  | head :: tail -> Option.Option.Some((reverse tail, head))

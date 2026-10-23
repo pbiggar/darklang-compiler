@@ -1,0 +1,16 @@
+// Per-test annotation probes: unavailable tests are retained without running;
+// known failures must match their phase and diagnostic.
+
+// @compiler blocked: test-counter
+Stdlib.Test.incrementCounter 1L = 1L
+
+// @compiler excluded: runtime-reflection
+RuntimeReflection.lookup "anything" = 1L
+
+// @compiler xfail compile: "Unknown function or value" reason=test-counter
+Stdlib.Test.incrementCounter 1L = 1L
+
+// @compiler xfail runtime: "annotation runtime probe" reason=annotation-probe
+Builtin.crash "annotation runtime probe" = 1L
+
+40L + 2L = 42L

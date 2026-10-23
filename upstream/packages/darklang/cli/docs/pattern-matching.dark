@@ -1,0 +1,47 @@
+module Darklang.Cli.Docs.PatternMatching
+
+// @compiler blocked: missing-implementation
+let content () : String =
+  """# Pattern Matching
+
+## Basic
+  match x with
+  | 0 -> "zero"
+  | n -> $"other: {n}"
+
+## Enums (no type prefix)
+  | Some v -> v
+  | None -> default
+  | Ok data -> data
+  | Error e -> handle e
+
+## Tuples
+  | (a, b) -> a + b
+
+## Constructor patterns
+Bare or parenthesized both parse, nested or not: `| (Ok x, Ok y) ->` and
+`| (Ok(x), Ok(y)) ->` are the same pattern. The one real trap is a TUPLE
+payload: `Some((a, b))` needs its inner parens -- `Some(a, b)` parses and
+then silently matches nothing, a runtime surprise rather than a parse error.
+  | (Ok x, Ok y) -> x + y
+  | Some(Ok v) -> v
+  | Some((a, b)) -> a + b       # NOT Some(a, b), which never matches
+
+## Lists
+  | [] -> "empty"
+  | [x] -> "one"
+  | head :: tail -> "many"
+
+## Records
+  Records can't be destructured in match. Use a variable and access fields:
+  | user -> user.name
+
+## Wildcard
+  | _ -> default
+
+## Nested
+  | Some(Ok v) -> v             # bare or parenthesized, spaced or not: all parse
+
+## Constructor wrapping a tuple
+  | Some((a, b)) -> a + b       # Ctor((tuple)): the inner parens are the pattern
+  # NOT: | Some(a, b) ->        # parses, then silently never matches"""

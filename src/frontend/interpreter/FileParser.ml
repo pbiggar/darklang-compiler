@@ -77,7 +77,13 @@ let parseTestDecl grammar state index =
       | _ ->
           errExpected state (afterBody + 2) "'raises' after '=>'";
           (Some outcome, None, None, afterBody + 2, outcome))
-    else (None, None, None, afterBody, WT.exprRange body)
+    else
+      ( None,
+        None,
+        None,
+        afterBody,
+        if afterBody > afterEquals then rng state (afterBody - 1)
+        else WT.exprRange body )
   in
   ( WT.DTest
       {
@@ -270,7 +276,7 @@ and parseItemsBody grammar state itemScope start minColumn =
             RevBuffer.add declarations
               (WT.DAssertion
                  {
-                   WT.range = span (WT.exprRange expression) ending;
+                   WT.range = span (rng state before) ending;
                    actual = expression;
                    expected;
                  });

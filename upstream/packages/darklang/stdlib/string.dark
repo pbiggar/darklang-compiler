@@ -1,0 +1,671 @@
+module Darklang.Stdlib.String
+
+
+/// Returns a string containing a single '\n'
+// @compiler replace: packages/darklang/stdlib/string.dark#Darklang.Stdlib.String.newline reason=compiler-implementation
+val newline = "\n"
+
+
+/// Truncates the string <param s> to the specified <param length> and appends an ellipsis ("...")
+/// to it if the original string exceeds the given length. Otherwise, returns the original string.
+// @compiler replace: packages/darklang/stdlib/string.dark#Darklang.Stdlib.String.ellipsis reason=compiler-implementation
+let ellipsis (s: String) (length: Int) : String =
+  if String.length s > length then
+    (String.slice s 0 length) + "..."
+  else
+    s
+
+
+/// Returns 'a' or 'an' (the indefinite article) for a string, based on
+/// whether it begins with a vowel
+// @compiler replace: packages/darklang/stdlib/string.dark#Darklang.Stdlib.String.articleFor reason=compiler-implementation
+let articleFor (nextWord: String) : String =
+  let vowels = [ 'A', 'E', 'I', 'O', 'U', 'a', 'e', 'i', 'o', 'u' ]
+
+  match String.head nextWord with
+  | None -> ""
+  | Some c ->
+    if
+      String.length nextWord > 1
+      && (Bool.not (Char.isASCIILetter c))
+    then
+      articleFor (String.dropFirst nextWord 1)
+    else if List.contains vowels c then
+      "an"
+    else
+      "a"
+
+
+/// Returns {{true}} if <param s> is the empty string {{""}}
+// @compiler replace: packages/darklang/stdlib/string.dark#Darklang.Stdlib.String.isEmpty reason=compiler-implementation
+let isEmpty (s: String) : Bool = Builtin.stringIsEmpty s
+
+
+/// Iterate over each Char (EGC, not byte) in the string, performing the
+/// operation in <param fn> on each one.
+// @compiler replace: packages/darklang/stdlib/string.dark#Darklang.Stdlib.String.map reason=compiler-implementation
+let map (s: String) (fn: Char -> Char) : String =
+  s |> String.toList |> List.map fn |> String.fromList
+
+
+/// Returns the list of Characters (EGC, not byte) in the string
+// @compiler replace: packages/darklang/stdlib/string.dark#Darklang.Stdlib.String.toList reason=compiler-implementation
+let toList (s: String) : List<Char> = Builtin.stringToList s
+
+
+/// Replace all instances on <param searchFor> in <param s> with <param replaceWith>
+// @compiler replace: packages/darklang/stdlib/string.dark#Darklang.Stdlib.String.replaceAll reason=compiler-implementation
+let replaceAll (s: String) (searchFor: String) (replaceWith: String) : String =
+  Builtin.stringReplaceAll s searchFor replaceWith
+
+
+/// Returns the string, uppercased
+// @compiler replace: packages/darklang/stdlib/string.dark#Darklang.Stdlib.String.toUppercase reason=compiler-implementation
+let toUppercase (s: String) : String = Builtin.stringToUppercase s
+
+
+/// Returns the string, lowercased
+// @compiler replace: packages/darklang/stdlib/string.dark#Darklang.Stdlib.String.toLowercase reason=compiler-implementation
+let toLowercase (s: String) : String = Builtin.stringToLowercase s
+
+
+// TODO: UInt?
+/// Returns the length of the string
+// @compiler replace: packages/darklang/stdlib/string.dark#Darklang.Stdlib.String.length reason=compiler-implementation
+let length (s: String) : Int = Builtin.stringLength s
+
+
+/// Return the Unicode codepoints in <param s>.
+// @compiler replace: packages/darklang/stdlib/string.dark#Darklang.Stdlib.String.toCodepoints reason=compiler-implementation
+let toCodepoints (s: String) : List<Int> = Builtin.stringToCodepoints s
+
+
+/// Return the number of Unicode codepoints in <param s>.
+// @compiler replace: packages/darklang/stdlib/string.dark#Darklang.Stdlib.String.codepointLength reason=compiler-implementation
+let codepointLength (s: String) : Int = Builtin.stringCodepointLength s
+
+
+/// How many cells <param s> occupies in a fixed-width grid.
+///
+/// A different question from <fn length>, which counts characters: `界` is one character two cells
+/// wide, and so is a ZWJ emoji. Ask this one for anything positional (laying out, padding, deciding
+/// whether something fits) and <fn length> for "how many characters is this".
+///
+/// A property of the text rather than of any one medium, so the answer is the same in a terminal, a
+/// monospaced buffer or a fixed-width report. Plain text only: escape sequences aren't text, and
+/// `Cli.Tui.Text` handles rows that carry them.
+// @compiler replace: packages/darklang/stdlib/string.dark#Darklang.Stdlib.String.displayWidth reason=compiler-implementation
+let displayWidth (s: String) : Int =
+  Builtin.stringDisplayWidth s
+
+
+/// Concatenates the two strings by appending <param s2> to <param s1> and returns the joined string.
+///
+/// Names the builtin rather than interpolating, because this is what `"a" + "b"` runs through
+/// (`impl Add for String` below) and the interpreter answers the builtin without a call.
+// @compiler replace: packages/darklang/stdlib/string.dark#Darklang.Stdlib.String.append reason=compiler-implementation
+let append (s1: String) (s2: String) : String = Builtin.stringAppend s1 s2
+
+/// `"a" + "b"` is `"ab"`
+// @compiler blocked: container-adaptation
+impl Add for String =
+  // @compiler blocked: container-adaptation
+  let add = Stdlib.String.append
+
+/// ...and the empty string is what `+` starts from
+// @compiler blocked: container-adaptation
+impl Zero for String =
+  // @compiler blocked: container-adaptation
+  let zero () : String = ""
+
+
+/// Concatenates the two strings by prepending <param s2> to <param s1> and
+/// returns the joined string
+// @compiler replace: packages/darklang/stdlib/string.dark#Darklang.Stdlib.String.prepend reason=compiler-implementation
+let prepend (s1: String) (s2: String) : String = s2 + s1
+
+
+/// Turns a string into a prettified slug: lowercase roman alphanumerics joined by hyphens.
+///
+/// Deliberately limited to a-z and 0-9, so the result is safe in a URL whatever went in. Anything
+/// else -- accents, emoji, combining marks, control characters -- is dropped rather than
+/// transliterated, and runs of spaces, underscores and hyphens collapse to one hyphen.
+///
+/// Was a builtin until `Stdlib.Regex` existed; its own comment had said for years that this
+/// belonged here. The vertical tab is called out separately because `\s` does not cover it.
+// @compiler replace: packages/darklang/stdlib/string.dark#Darklang.Stdlib.String.slugify reason=compiler-implementation
+let slugify (s: String) : String =
+  s
+  |> Stdlib.String.toLowercase
+  |> (fun lowered -> Stdlib.Regex.replaceAll lowered "([^a-z0-9\\s_-]|\\x0b)+" "")
+  |> Stdlib.String.trim
+  |> (fun trimmed -> Stdlib.Regex.replaceAll trimmed "[-_\\s]+" "-")
+
+
+/// Reverses <param string>
+// @compiler replace: packages/darklang/stdlib/string.dark#Darklang.Stdlib.String.reverse reason=compiler-implementation
+let reverse (string: String) : String = Builtin.stringReverse string
+
+
+/// Splits a string at the separator, returning a list of strings without the separator.
+/// If the separator is not present, returns a list containing only the initial string.
+// @compiler replace: packages/darklang/stdlib/string.dark#Darklang.Stdlib.String.split reason=compiler-implementation
+let split (string: String) (separator: String) : List<String> =
+  Builtin.stringSplit string separator
+
+
+/// Splits <param string> at the **first** occurrence of <param separator>, returning
+/// {{Some (before, after)}}. Unlike {{split}}, the {{after}} half retains any further
+/// occurrences of the separator — useful for parsing `key=value` rows where the value
+/// may itself contain `=`. Returns {{None}} if the separator is empty or not found.
+// @compiler replace: packages/darklang/stdlib/string.dark#Darklang.Stdlib.String.splitFirst reason=compiler-implementation
+let splitFirst
+  (string: String)
+  (separator: String)
+  : Option.Option<(String * String)> =
+  if separator == "" then
+    Option.Option.None
+  else
+    // indexOfEgc (not indexOf) because first / dropFirst / length are EGC-indexed.
+    match String.indexOfEgc string separator with
+    | None -> Option.Option.None
+    | Some i ->
+      let before = String.first string i
+      let after = String.dropFirst string (i + String.length separator)
+      Option.Option.Some((before, after))
+
+
+/// Splits <param string> at <param separator> into **at most** <param n> pieces.
+/// The last piece retains any further occurrences of the separator intact —
+/// useful for parsing rows of structured data where the value field may contain
+/// the separator. If <param n> <= 1, the separator is empty, or the separator
+/// is not found, returns {{[string]}} unchanged.
+// @compiler replace: packages/darklang/stdlib/string.dark#Darklang.Stdlib.String.splitN reason=compiler-implementation
+let splitN
+  (string: String)
+  (separator: String)
+  (n: Int)
+  : List<String> =
+  if n <= 1 || separator == "" then
+    [ string ]
+  else
+    // indexOfEgc (not indexOf) because first / dropFirst / length are EGC-indexed.
+    match String.indexOfEgc string separator with
+    | None -> [ string ]
+    | Some i ->
+      let before = String.first string i
+      let rest = String.dropFirst string (i + String.length separator)
+      List.push (String.splitN rest separator (n - 1)) before
+
+
+/// Combines a list of strings with the provided separator
+// @compiler replace: packages/darklang/stdlib/string.dark#Darklang.Stdlib.String.join reason=compiler-implementation
+let join (l: List<String>) (separator: String) : String =
+  Builtin.stringJoin l separator
+
+
+/// Returns the list of characters as a string
+// @compiler replace: packages/darklang/stdlib/string.dark#Darklang.Stdlib.String.fromList reason=compiler-implementation
+let fromList (lst: List<Char>) : String =
+  join (List.map lst (fun c -> Stdlib.toString c)) ""
+
+
+/// Converts a <type Char> to a <type String>
+// @compiler replace: packages/darklang/stdlib/string.dark#Darklang.Stdlib.String.fromChar reason=compiler-implementation
+let fromChar (c: Char) : String = Stdlib.toString c
+
+
+/// URLBase64 encodes a string without padding. Uses URL-safe encoding with
+/// {{-}} and {{_}} instead of {{+}} and {{/}}, as defined in
+/// [RFC 4648 section 5](https://www.rfc-editor.org/rfc/rfc4648.html#section-5)
+// @compiler replace: packages/darklang/stdlib/string.dark#Darklang.Stdlib.String.base64UrlEncode reason=compiler-implementation
+let base64UrlEncode (s: String) : String =
+  let encoded = s |> Blob.fromString |> Base64.urlEncode
+
+  String.replaceAll encoded "=" ""
+
+/// Base64 encodes a string. Uses {{-}} and {{_}} instead of {{+}} and {{/}}, as defined in
+/// [RFC 4648 section 4](https://www.rfc-editor.org/rfc/rfc4648.html#section-4) with padding.
+// @compiler replace: packages/darklang/stdlib/string.dark#Darklang.Stdlib.String.base64Encode reason=compiler-implementation
+let base64Encode (s: String) : String =
+  // String.toBytes returns List<UInt8> for Http compatibility;
+  // Base64.encode takes Blob, so we go through Blob.fromString.
+  s |> Blob.fromString |> Base64.encode
+
+
+/// Base64 decodes a string. The returned value is wrapped in {{Result}}.
+/// Works with both the URL-safe and standard Base64
+/// alphabets defined in [RFC 4648
+/// sections](https://www.rfc-editor.org/rfc/rfc4648.html)
+/// [4](https://www.rfc-editor.org/rfc/rfc4648.html#section-4) and
+/// [5](https://www.rfc-editor.org/rfc/rfc4648.html#section-5).
+// @compiler replace: packages/darklang/stdlib/string.dark#Darklang.Stdlib.String.base64Decode reason=compiler-implementation
+let base64Decode (s: String) : Result.Result<String, String> =
+  match Base64.decode s with
+  | Ok blob ->
+    match Blob.toString blob with
+    | Ok str -> Result.Result.Ok str
+    | Error _ -> Result.Result.Error "Invalid UTF-8 string"
+  | Error err -> Result.Result.Error err
+
+
+/// Take a string and hash it to a cryptographically-secure digest.
+/// Don't rely on either the size or the algorithm.
+// @compiler replace: packages/darklang/stdlib/string.dark#Darklang.Stdlib.String.digest reason=compiler-implementation
+let digest (s: String) : String =
+  let sha384Hash = Crypto.sha384 (Blob.fromString s)
+
+  sha384Hash |> Base64.urlEncode
+
+
+/// Generate a random alphanumeric <type String> of length <param length>.
+/// Charset is {{[A-Za-z0-9]}} (62 chars). Errors if <param length> is negative.
+// @compiler replace: packages/darklang/stdlib/string.dark#Darklang.Stdlib.String.random reason=compiler-implementation
+let random (length: Int) : Result.Result<String, String> =
+  if length < 0 then
+    Result.Result.Error
+      $"Expected `length` to be positive, but it was `{length |> Stdlib.toString}`"
+  else
+    let characters =
+      "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+
+    let randomChar =
+      fun _ ->
+        (let index = Stdlib.Int.random 0 ((String.length characters) - 1)
+         String.slice characters index (index + 1))
+
+    let result =
+      (List.range 0 (length - 1))
+      |> List.map (fun _ -> randomChar ())
+      |> String.join ""
+
+    Result.Result.Ok result
+
+
+/// Escape an untrusted string in order to include it safely in HTML output
+// @compiler replace: packages/darklang/stdlib/string.dark#Darklang.Stdlib.String.htmlEscape reason=compiler-implementation
+let htmlEscape (html: String) : String =
+  html
+  |> String.toList
+  |> List.map (fun c ->
+    match c with
+    | '<' -> "&lt;"
+    | '>' -> "&gt;"
+    | '&' -> "&amp;"
+    // include these for html-attribute-escaping
+    // even though they're not strictly necessary
+    // for html-escaping proper.
+    | '"' -> "&quot;"
+    // &apos; doesn't work in IE....
+    | ''' -> "&#x27;"
+    | _ -> String.fromChar c)
+  |> String.join ""
+
+
+/// Checks if <param lookingIn> contains <param searchingFor>.
+//
+// Uses the dedicated `stringContains` builtin (returns Bool, compiles to
+// `INSTR(...) > 0`) rather than `indexOf != -1`, so it stays SQL-queryable
+// independent of `indexOf`'s now arbitrary-precision `Int` return.
+// @compiler replace: packages/darklang/stdlib/string.dark#Darklang.Stdlib.String.contains reason=compiler-implementation
+let contains (lookingIn: String) (searchingFor: String) : Bool =
+  Builtin.stringContains lookingIn searchingFor
+
+
+/// Returns the substring of <param string> between the <param from> and <param to> indices.
+/// Negative indices start counting from the end of <param string>.
+// @compiler replace: packages/darklang/stdlib/string.dark#Darklang.Stdlib.String.slice reason=compiler-implementation
+let slice (string: String) (from: Int) (``to``: Int) : String =
+  Builtin.stringSlice string from ``to``
+
+
+/// Returns the first <param characterCount> characters of <param string>, as a Builtin.String.
+/// If <param characterCount> is longer than <param string>, returns <param string>.
+/// If <param characterCount> is negative, returns the empty string."
+// @compiler replace: packages/darklang/stdlib/string.dark#Darklang.Stdlib.String.first reason=compiler-implementation
+let first (string: String) (characterCount: Int) : String =
+  if characterCount < 0 then
+    ""
+  else if characterCount > String.length string then
+    string
+  else
+    String.slice string 0 characterCount
+
+
+/// Returns the last <param characterCount> characters of <param string>, as a Builtin.String.
+/// If <param characterCount> is longer than <param string>, returns <param string>.
+/// If <param characterCount> is negative, returns the empty string.
+// @compiler replace: packages/darklang/stdlib/string.dark#Darklang.Stdlib.String.last reason=compiler-implementation
+let last (string: String) (characterCount: Int) : String =
+  if characterCount < 0 then
+    ""
+  else if characterCount > String.length string then
+    string
+  else
+    String.slice
+      string
+      (String.length string - characterCount)
+      (String.length string)
+
+
+/// Returns all but the last <param characterCount> characters of <param string>, as a Builtin.String.
+/// If <param characterCount> is longer than <param string>, returns the empty string.
+/// If <param characterCount> is negative, returns <param string>.
+// @compiler replace: packages/darklang/stdlib/string.dark#Darklang.Stdlib.String.dropLast reason=compiler-implementation
+let dropLast (string: String) (characterCount: Int) : String =
+  if characterCount < 0 then
+    string
+  else if characterCount > String.length string then
+    ""
+  else
+    String.slice
+      string
+      0
+      (String.length string - characterCount)
+
+
+/// Returns all but the first <param characterCount> characters of <param string>, as a <type String>.
+/// If <param characterCount> is longer than <param string>, returns the empty string.
+/// If <param characterCount> is negative, returns <param string>.
+// @compiler replace: packages/darklang/stdlib/string.dark#Darklang.Stdlib.String.dropFirst reason=compiler-implementation
+let dropFirst (string: String) (characterCount: Int) : String =
+  Builtin.stringDropFirst string characterCount
+
+
+/// If <param string> is shorter than <param goalLength> characters, returns a
+/// copy of <param string> starting with enough copies of <param padWith> for the
+/// result have <param goalLength>. A returning value is wrapped in a {{Result}}.
+/// If the <param string> is longer than <param goalLength>, returns an unchanged copy of <param string>
+///
+/// Counts characters, not display cells. To line up columns of text, use <fn padStartToWidth>.
+// @compiler replace: packages/darklang/stdlib/string.dark#Darklang.Stdlib.String.padStart reason=compiler-implementation
+let padStart
+  (string: String)
+  (padWith: String)
+  (goalLength: Int)
+  : Result.Result<String, String> =
+  if String.length padWith != 1 then
+    Result.Result.Error
+      $"Expected `padWith` to be 1 character long, but it was `\"{padWith}\"`"
+  else if String.length string >= goalLength then
+    Result.Result.Ok string
+  else
+    let padCount = goalLength - String.length string
+    let pad = String.repeat padWith padCount
+    Result.Result.Ok(pad + string)
+
+
+/// If <param string> is shorter than <param goalLength> characters, returns a
+/// copy of <param string> ending with enough copies of <param padWith> for the
+/// result have <param goalLength>. A returning value is wrapped in a {{Result}}.
+/// If the <param string> is longer than <param goalLength>, returns an unchanged copy of <param string>.
+///
+/// Counts characters, not display cells. To line up columns of text, use <fn padEndToWidth>.
+// @compiler replace: packages/darklang/stdlib/string.dark#Darklang.Stdlib.String.padEnd reason=compiler-implementation
+let padEnd
+  (string: String)
+  (padWith: String)
+  (goalLength: Int)
+  : Result.Result<String, String> =
+  if String.length padWith != 1 then
+    Result.Result.Error
+      $"Expected `padWith` to be 1 character long, but it was `\"{padWith}\"`"
+  else if String.length string >= goalLength then
+    Result.Result.Ok string
+  else
+    let padCount = goalLength - String.length string
+    let pad = String.repeat padWith padCount
+    Result.Result.Ok(string + pad)
+
+
+/// Pad <param s> with leading spaces to at least <param width> display cells.
+///
+/// This is the padding that lines up columns: `界` is one character two cells wide, so <fn padStart>
+/// leaves them ragged. Longer text comes back unclipped; styled text wants `Cli.Tui.Text.fitToWidth`.
+// @compiler replace: packages/darklang/stdlib/string.dark#Darklang.Stdlib.String.padStartToWidth reason=compiler-implementation
+let padStartToWidth (s: String) (width: Int) : String =
+  let padding = width - (String.displayWidth s)
+  if padding <= 0 then s else (String.repeat " " padding) + s
+
+
+/// Pad <param s> with trailing spaces to at least <param width> display cells.
+/// See <fn padStartToWidth> for why this measures cells.
+// @compiler replace: packages/darklang/stdlib/string.dark#Darklang.Stdlib.String.padEndToWidth reason=compiler-implementation
+let padEndToWidth (s: String) (width: Int) : String =
+  let padding = width - (String.displayWidth s)
+  if padding <= 0 then s else s + (String.repeat " " padding)
+
+
+// TODO: re-write in dark
+/// Returns a copy of <param str> with all leading and trailing whitespace
+/// removed. 'whitespace' here means all Unicode characters with the
+/// {{White_Space}} property, which includes {{" "}}, {{"\t"}} and
+/// {{"\n"}}.
+// @compiler replace: packages/darklang/stdlib/string.dark#Darklang.Stdlib.String.trim reason=compiler-implementation
+let trim (str: String) : String = Builtin.stringTrim str
+
+
+// TODO: re-write in dark
+/// Returns a copy of <param str> with all leading whitespace removed. 'whitespace'
+/// here means all Unicode characters with the {{White_Space}} property, which
+/// includes {{" "}}, {{"\t"}} and {{"\n"}}.
+// @compiler replace: packages/darklang/stdlib/string.dark#Darklang.Stdlib.String.trimStart reason=compiler-implementation
+let trimStart (str: String) : String = Builtin.stringTrimStart str
+
+
+// TODO: re-write in dark
+/// Returns a copy of <param str> with all trailing whitespace removed.
+/// 'whitespace' here means all Unicode characters with the {{White_Space}}
+/// property, which includes {{" "}}, {{"\t"}} and {{"\n"}}.
+// @compiler replace: packages/darklang/stdlib/string.dark#Darklang.Stdlib.String.trimEnd reason=compiler-implementation
+let trimEnd (str: String) : String = Builtin.stringTrimEnd str
+
+
+// TODO retype these three to Blob (drop the List<UInt8> bridges) once
+// the Http server, CLI file ops, and the LSP logger no longer require
+// the byte-list shape. Prefer `Stdlib.String.toBlob` / the Blob-based
+// stringFromBlob{,WithReplacement} for new code.
+
+/// Converts the given unicode string to a UTF8-encoded byte sequence.
+// @compiler replace: packages/darklang/stdlib/string.dark#Darklang.Stdlib.String.toBytes reason=compiler-implementation
+let toBytes (str: String) : List<UInt8> =
+  Blob.toList (toBlob str)
+
+
+/// Converts the UTF8-encoded byte sequence into a string. Errors will be ignored by replacing invalid characters.
+// @compiler replace: packages/darklang/stdlib/string.dark#Darklang.Stdlib.String.fromBytesWithReplacement reason=compiler-implementation
+let fromBytesWithReplacement (bytes: List<UInt8>) : String =
+  fromBlobWithReplacement (Blob.fromList bytes)
+
+
+/// Converts the UTF8-encoded byte sequence into a string
+// @compiler replace: packages/darklang/stdlib/string.dark#Darklang.Stdlib.String.fromBytes reason=compiler-implementation
+let fromBytes (bytes: List<UInt8>) : Option.Option<String> =
+  Builtin.stringFromBytes bytes
+
+
+/// Converts the given unicode string to a UTF8-encoded Blob.
+// @compiler replace: packages/darklang/stdlib/string.dark#Darklang.Stdlib.String.toBlob reason=compiler-implementation
+let toBlob (str: String) : Blob = Builtin.stringToBlob str
+
+
+/// Converts a UTF8-encoded Blob into a string. Invalid sequences are
+/// replaced.
+// @compiler replace: packages/darklang/stdlib/string.dark#Darklang.Stdlib.String.fromBlobWithReplacement reason=compiler-implementation
+let fromBlobWithReplacement (blob: Blob) : String =
+  Builtin.stringFromBlobWithReplacement blob
+
+
+/// Converts a UTF8-encoded Blob into a string. Returns None if the
+/// bytes aren't valid UTF-8.
+// @compiler replace: packages/darklang/stdlib/string.dark#Darklang.Stdlib.String.fromBlob reason=compiler-implementation
+let fromBlob (blob: Blob) : Option.Option<String> = Builtin.stringFromBlob blob
+
+
+/// Return the byte at <param index> in <param str>'s UTF-8 encoding.
+/// Returns {{None}} when <param index> is outside the encoding.
+// @compiler replace: packages/darklang/stdlib/string.dark#Darklang.Stdlib.String.getByteAt reason=compiler-implementation
+let getByteAt (str: String) (index: Int) : Option.Option<UInt8> =
+  Builtin.stringGetByteAt str index
+
+
+/// Checks if <param subject> starts with <param prefix>
+// @compiler replace: packages/darklang/stdlib/string.dark#Darklang.Stdlib.String.startsWith reason=compiler-implementation
+let startsWith (subject: String) (prefix: String) : Bool =
+  Builtin.stringStartsWith subject prefix
+
+
+/// Checks if <param subject> ends with <param suffix>
+// @compiler replace: packages/darklang/stdlib/string.dark#Darklang.Stdlib.String.endsWith reason=compiler-implementation
+let endsWith (subject: String) (suffix: String) : Bool =
+  String.slice subject (String.length subject - String.length suffix) (String.length subject) == suffix
+
+
+/// Returns the plural form of <param word> by a simple English rule: words ending
+/// in -ch, -sh, -s, -x, or -z take "es" ({{branch}} -> {{branches}}); everything else
+/// takes "s" ({{instance}} -> {{instances}}). Does not handle irregulars ({{mouse}},
+/// {{child}}) or the -y -> -ies rule.
+// @compiler replace: packages/darklang/stdlib/string.dark#Darklang.Stdlib.String.pluralize reason=compiler-implementation
+let pluralize (word: String) : String =
+  if (String.endsWith word "ch")
+     || (String.endsWith word "sh")
+     || (String.endsWith word "s")
+     || (String.endsWith word "x")
+     || (String.endsWith word "z") then
+    $"{word}es"
+  else
+    $"{word}s"
+
+
+/// Returns {{Some index}} of the first occurrence of <param searchFor> in <param str>,
+/// measured in UTF-16 code units. Returns {{None}} if <param searchFor> does not occur.
+/// The returned index is **not** suitable for arithmetic with {{first}}, {{dropFirst}},
+/// or {{slice}}, which are all EGC-indexed — for that, use {{indexOfEgc}}.
+// @compiler replace: packages/darklang/stdlib/string.dark#Darklang.Stdlib.String.indexOf reason=compiler-implementation
+let indexOf (str: String) (searchFor: String) : Option.Option<Int> =
+  let idx = Builtin.stringIndexOf str searchFor
+  if idx == -1 then Option.Option.None else Option.Option.Some idx
+
+
+/// Returns {{Some index}} of the first occurrence of <param searchFor> in <param str>,
+/// measured in extended grapheme clusters (consistent with {{length}}, {{slice}},
+/// {{first}}, and {{dropFirst}}). Returns {{None}} if <param searchFor> does not occur.
+/// The match must begin and end on EGC boundaries — searching for a partial grapheme
+/// (e.g. a base codepoint inside a ZWJ sequence) will not match.
+// @compiler replace: packages/darklang/stdlib/string.dark#Darklang.Stdlib.String.indexOfEgc reason=compiler-implementation
+let indexOfEgc (str: String) (searchFor: String) : Option.Option<Int> =
+  let idx = Builtin.stringIndexOfEgc str searchFor
+  if idx == -1 then Option.Option.None else Option.Option.Some idx
+
+
+/// Returns {{Some index}} of the last occurrence of <param searchFor> in <param str>,
+/// measured in UTF-16 code units. Returns {{None}} if <param searchFor> does not occur.
+/// For an EGC-indexed result, use {{lastIndexOfEgc}}.
+// @compiler replace: packages/darklang/stdlib/string.dark#Darklang.Stdlib.String.lastIndexOf reason=compiler-implementation
+let lastIndexOf
+  (str: String)
+  (searchFor: String)
+  : Option.Option<Int> =
+  let lastIndex = Builtin.stringLastIndexOf str searchFor
+
+  if lastIndex == -1 then
+    Option.Option.None
+  else
+    Option.Option.Some(lastIndex)
+
+
+/// Returns {{Some index}} of the last occurrence of <param searchFor> in <param str>,
+/// measured in extended grapheme clusters. Returns {{None}} if <param searchFor>
+/// does not occur. The match must begin and end on EGC boundaries.
+// @compiler replace: packages/darklang/stdlib/string.dark#Darklang.Stdlib.String.lastIndexOfEgc reason=compiler-implementation
+let lastIndexOfEgc
+  (str: String)
+  (searchFor: String)
+  : Option.Option<Int> =
+  let lastIndex = Builtin.stringLastIndexOfEgc str searchFor
+
+  if lastIndex == -1 then
+    Option.Option.None
+  else
+    Option.Option.Some(lastIndex)
+
+
+/// Returns the <param string> repeated for a specified <param count> times.
+/// If <param count> is less than or equal to 0, returns an empty string.
+// @compiler replace: packages/darklang/stdlib/string.dark#Darklang.Stdlib.String.repeat reason=compiler-implementation
+let repeat (string: String) (count: Int) : String =
+  Builtin.stringRepeat string count
+
+
+/// Converts an integer <param n> to its ordinal representation as a string.
+// @compiler replace: packages/darklang/stdlib/string.dark#Darklang.Stdlib.String.toOrdinal reason=compiler-implementation
+let toOrdinal (n: Int) : String =
+  // `%` is Euclidean here (-1 % 10 = 9), so drop the sign first
+  let lastTwoDigits = (Stdlib.abs n) % 100
+
+  let suffix =
+    if lastTwoDigits >= 11 && lastTwoDigits <= 13 then
+      "th"
+    else
+      match lastTwoDigits % 10 with
+      | 1 -> "st"
+      | 2 -> "nd"
+      | 3 -> "rd"
+      | _ -> "th"
+
+  (Stdlib.toString n) + suffix
+
+
+/// Splits the given <param str> at each newline character and returns a list of substrings.
+/// If the <param str> is empty, it returns an empty list.
+// @compiler replace: packages/darklang/stdlib/string.dark#Darklang.Stdlib.String.splitOnNewline reason=compiler-implementation
+let splitOnNewline (str: String) : List<String> =
+  if str == "" then [] else String.split str "\n"
+
+
+/// Returns {{Some char}} of the first character of <param str>, or returns {{None}} if <param str> is empty.
+// @compiler replace: packages/darklang/stdlib/string.dark#Darklang.Stdlib.String.head reason=compiler-implementation
+let head (str: String) : Option.Option<Char> =
+  if str == "" then
+    Option.Option.None
+  else
+    str |> String.toList |> List.head
+
+
+/// Returns {{Some c}} for the character at <param index> (0-based, EGC, not
+/// byte), or {{None}} if <param index> is negative or past the end.
+// @compiler replace: packages/darklang/stdlib/string.dark#Darklang.Stdlib.String.charAt reason=compiler-implementation
+let charAt (str: String) (index: Int) : Option.Option<Char> =
+  str |> String.toList |> List.getAt index
+
+
+/// Orders two strings: negative when <param a> sorts first, 0 when they are equal, positive
+/// when <param b> does. Only the sign is meaningful. Ordinal rather than language-aware, so
+/// two machines order the same pair the same way.
+// @compiler replace: packages/darklang/stdlib/string.dark#Darklang.Stdlib.String.compare reason=compiler-implementation
+let compare (a: String) (b: String) : Int64 = Builtin.stringCompare a b
+
+
+/// `"a" < "b"`, and with it `Stdlib.max`, `min` and `clamp` on Strings.
+// @compiler blocked: container-adaptation
+impl Compare for String =
+  // @compiler blocked: container-adaptation
+  let lessThan (a: String) (b: String) : Bool = (Stdlib.String.compare a b) < 0L
+
+  // @compiler blocked: container-adaptation
+  let lessThanOrEqualTo (a: String) (b: String) : Bool =
+    (Stdlib.String.compare a b) <= 0L
+
+  // @compiler blocked: container-adaptation
+  let greaterThan (a: String) (b: String) : Bool = (Stdlib.String.compare a b) > 0L
+
+  // @compiler blocked: container-adaptation
+  let greaterThanOrEqualTo (a: String) (b: String) : Bool =
+    (Stdlib.String.compare a b) >= 0L
+
+
+/// A String is already text
+// @compiler blocked: container-adaptation
+impl ToString for String =
+  // @compiler blocked: container-adaptation
+  let toString (s: String) : String = s

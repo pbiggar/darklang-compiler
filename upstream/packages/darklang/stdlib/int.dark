@@ -1,0 +1,257 @@
+module Darklang.Stdlib.Int
+
+// `Int` is the default, arbitrary-precision integer (a bare literal like `1`).
+// The operators (`+`, `-`, `<`, ...) work on it; this
+// module provides the same operations as named functions, plus parse/stringify
+// and conversions to/from the fixed-width integer types.
+//
+// Note: because this file is parsed by the F# host parser, every `Int` literal
+// below needs the `I` suffix (a bare `1` would be an `Int32` here).
+
+// @compiler replace: packages/darklang/stdlib/int.dark#Darklang.Stdlib.Int.ParseError reason=compiler-implementation
+type ParseError = | BadFormat
+
+
+// @compiler blocked: container-adaptation
+impl Modulo for Int =
+  /// Returns the result of wrapping <param a> around so that {{0 <= res < b}}.
+  /// The modulus <param b> must be greater than 0.
+  /// Use <fn Int.remainder> if you want the remainder after division, which has
+  /// a different behavior for negative numbers.
+  // @compiler blocked: container-adaptation
+  let modulo (a: Int) (b: Int) : Int = Builtin.intMod a b
+
+
+/// Returns the integer remainder left over after dividing <param value> by
+/// <param divisor>, as a <type Result>.
+/// For example, {{Int.remainder 15 6 == Ok 3}}. The remainder will be
+/// negative only if {{<var value> < 0}}.
+/// The sign of <param divisor> doesn't influence the outcome.
+/// Returns an {{Error}} if <param divisor> is {{0}}.
+// @compiler replace: packages/darklang/stdlib/int.dark#Darklang.Stdlib.Int.remainder reason=compiler-implementation
+let remainder (value: Int) (divisor: Int) : Stdlib.Result.Result<Int, String> =
+  Builtin.intRemainder value divisor
+
+
+// @compiler blocked: container-adaptation
+impl Add for Int =
+  /// Adds two integers together
+  // @compiler blocked: container-adaptation
+  let add (a: Int) (b: Int) : Int = Builtin.intAdd a b
+
+
+// @compiler blocked: container-adaptation
+impl Subtract for Int =
+  /// Subtracts two integers
+  // @compiler blocked: container-adaptation
+  let subtract (a: Int) (b: Int) : Int = Builtin.intSubtract a b
+
+
+// @compiler blocked: container-adaptation
+impl Multiply for Int =
+  /// Multiplies two integers
+  // @compiler blocked: container-adaptation
+  let multiply (a: Int) (b: Int) : Int = Builtin.intMultiply a b
+
+
+// @compiler blocked: container-adaptation
+impl Divide for Int =
+  /// Divides two integers, rounding towards zero
+  // @compiler blocked: container-adaptation
+  let divide (a: Int) (b: Int) : Int = Builtin.intDivide a b
+
+
+// @compiler blocked: container-adaptation
+impl Power for Int =
+  /// Raise <param base> to the power of <param exponent>.
+  /// Raises an error if <param exponent> is negative.
+  // @compiler blocked: container-adaptation
+  let power (``base``: Int) (exponent: Int) : Int =
+    Builtin.intPower ``base`` exponent
+
+
+// @compiler blocked: container-adaptation
+impl Negate for Int =
+  /// Returns the negation of <param a>, {{-a}}
+  // @compiler blocked: container-adaptation
+  let negate (a: Int) : Int = Builtin.intNegate a
+
+
+// @compiler blocked: container-adaptation
+impl Compare for Int =
+  /// Returns {{true}} if <param a> is less than <param b>
+  // @compiler blocked: container-adaptation
+  let lessThan (a: Int) (b: Int) : Bool = Builtin.intLessThan a b
+  /// Returns {{true}} if <param a> is less than or equal to <param b>
+  // @compiler blocked: container-adaptation
+  let lessThanOrEqualTo (a: Int) (b: Int) : Bool = Builtin.intLessThanOrEqualTo a b
+  /// Returns {{true}} if <param a> is greater than <param b>
+  // @compiler blocked: container-adaptation
+  let greaterThan (a: Int) (b: Int) : Bool = Builtin.intGreaterThan a b
+  /// Returns {{true}} if <param a> is greater than or equal to <param b>
+  // @compiler blocked: container-adaptation
+  let greaterThanOrEqualTo (a: Int) (b: Int) : Bool =
+    Builtin.intGreaterThanOrEqualTo a b
+
+
+/// Get the square root of an <type Int>
+// @compiler replace: packages/darklang/stdlib/int.dark#Darklang.Stdlib.Int.sqrt reason=compiler-implementation
+let sqrt (a: Int) : Float = Builtin.intSqrt a
+
+
+/// Converts an <type Int> to a <type Float>
+// @compiler replace: packages/darklang/stdlib/int.dark#Darklang.Stdlib.Int.toFloat reason=compiler-implementation
+let toFloat (a: Int) : Float = Builtin.intToFloat a
+
+
+/// Converts a <type Float> to an <type Int>, truncating toward zero.
+// @compiler replace: packages/darklang/stdlib/int.dark#Darklang.Stdlib.Int.fromFloat reason=compiler-implementation
+let fromFloat (a: Float) : Int = Builtin.intFromFloat a
+
+
+/// Returns the <type Int> value of a <type String>. Because <type Int> is
+/// arbitrary-precision, the only failure is a badly-formatted string.
+// @compiler replace: packages/darklang/stdlib/int.dark#Darklang.Stdlib.Int.parse reason=compiler-implementation
+let parse (s: String) : Stdlib.Result.Result<Int, ParseError> =
+  Builtin.intParse s
+
+
+// Conversions from the fixed-width integer types into `Int` (always succeed).
+
+/// Converts an <type Int8> to an arbitrary-precision <type Int>
+// @compiler replace: packages/darklang/stdlib/int.dark#Darklang.Stdlib.Int.fromInt8 reason=compiler-implementation
+let fromInt8 (a: Int8) : Int = Builtin.intFromInt8 a
+
+/// Converts a <type UInt8> to an arbitrary-precision <type Int>
+// @compiler replace: packages/darklang/stdlib/int.dark#Darklang.Stdlib.Int.fromUInt8 reason=compiler-implementation
+let fromUInt8 (a: UInt8) : Int = Builtin.intFromUInt8 a
+
+/// Converts an <type Int16> to an arbitrary-precision <type Int>
+// @compiler replace: packages/darklang/stdlib/int.dark#Darklang.Stdlib.Int.fromInt16 reason=compiler-implementation
+let fromInt16 (a: Int16) : Int = Builtin.intFromInt16 a
+
+/// Converts a <type UInt16> to an arbitrary-precision <type Int>
+// @compiler replace: packages/darklang/stdlib/int.dark#Darklang.Stdlib.Int.fromUInt16 reason=compiler-implementation
+let fromUInt16 (a: UInt16) : Int = Builtin.intFromUInt16 a
+
+/// Converts an <type Int32> to an arbitrary-precision <type Int>
+// @compiler replace: packages/darklang/stdlib/int.dark#Darklang.Stdlib.Int.fromInt32 reason=compiler-implementation
+let fromInt32 (a: Int32) : Int = Builtin.intFromInt32 a
+
+/// Converts a <type UInt32> to an arbitrary-precision <type Int>
+// @compiler replace: packages/darklang/stdlib/int.dark#Darklang.Stdlib.Int.fromUInt32 reason=compiler-implementation
+let fromUInt32 (a: UInt32) : Int = Builtin.intFromUInt32 a
+
+/// Converts an <type Int64> to an arbitrary-precision <type Int>
+// @compiler replace: packages/darklang/stdlib/int.dark#Darklang.Stdlib.Int.fromInt64 reason=compiler-implementation
+let fromInt64 (a: Int64) : Int = Builtin.intFromInt64 a
+
+/// Converts a <type UInt64> to an arbitrary-precision <type Int>
+// @compiler replace: packages/darklang/stdlib/int.dark#Darklang.Stdlib.Int.fromUInt64 reason=compiler-implementation
+let fromUInt64 (a: UInt64) : Int = Builtin.intFromUInt64 a
+
+/// Converts an <type Int128> to an arbitrary-precision <type Int>
+// @compiler replace: packages/darklang/stdlib/int.dark#Darklang.Stdlib.Int.fromInt128 reason=compiler-implementation
+let fromInt128 (a: Int128) : Int = Builtin.intFromInt128 a
+
+/// Converts a <type UInt128> to an arbitrary-precision <type Int>
+// @compiler replace: packages/darklang/stdlib/int.dark#Darklang.Stdlib.Int.fromUInt128 reason=compiler-implementation
+let fromUInt128 (a: UInt128) : Int = Builtin.intFromUInt128 a
+
+
+// Conversions from `Int` into the fixed-width integer types, returning {{None}}
+// if the value doesn't fit the target range.
+
+/// Converts an <type Int> to an <type Int8>, returning {{None}} if it doesn't fit
+// @compiler replace: packages/darklang/stdlib/int.dark#Darklang.Stdlib.Int.toInt8 reason=compiler-implementation
+let toInt8 (a: Int) : Stdlib.Option.Option<Int8> = Builtin.intToInt8 a
+
+/// Converts an <type Int> to a <type UInt8>, returning {{None}} if it doesn't fit
+// @compiler replace: packages/darklang/stdlib/int.dark#Darklang.Stdlib.Int.toUInt8 reason=compiler-implementation
+let toUInt8 (a: Int) : Stdlib.Option.Option<UInt8> = Builtin.intToUInt8 a
+
+/// Converts an <type Int> to an <type Int16>, returning {{None}} if it doesn't fit
+// @compiler replace: packages/darklang/stdlib/int.dark#Darklang.Stdlib.Int.toInt16 reason=compiler-implementation
+let toInt16 (a: Int) : Stdlib.Option.Option<Int16> = Builtin.intToInt16 a
+
+/// Converts an <type Int> to a <type UInt16>, returning {{None}} if it doesn't fit
+// @compiler replace: packages/darklang/stdlib/int.dark#Darklang.Stdlib.Int.toUInt16 reason=compiler-implementation
+let toUInt16 (a: Int) : Stdlib.Option.Option<UInt16> = Builtin.intToUInt16 a
+
+/// Converts an <type Int> to an <type Int32>, returning {{None}} if it doesn't fit
+// @compiler replace: packages/darklang/stdlib/int.dark#Darklang.Stdlib.Int.toInt32 reason=compiler-implementation
+let toInt32 (a: Int) : Stdlib.Option.Option<Int32> = Builtin.intToInt32 a
+
+/// Converts an <type Int> to a <type UInt32>, returning {{None}} if it doesn't fit
+// @compiler replace: packages/darklang/stdlib/int.dark#Darklang.Stdlib.Int.toUInt32 reason=compiler-implementation
+let toUInt32 (a: Int) : Stdlib.Option.Option<UInt32> = Builtin.intToUInt32 a
+
+/// Converts an <type Int> to an <type Int64>, returning {{None}} if it doesn't
+/// fit the 64-bit range
+// @compiler replace: packages/darklang/stdlib/int.dark#Darklang.Stdlib.Int.toInt64 reason=compiler-implementation
+let toInt64 (a: Int) : Stdlib.Option.Option<Int64> = Builtin.intToInt64 a
+
+/// Converts an <type Int> to a <type UInt64>, returning {{None}} if it doesn't fit
+// @compiler replace: packages/darklang/stdlib/int.dark#Darklang.Stdlib.Int.toUInt64 reason=compiler-implementation
+let toUInt64 (a: Int) : Stdlib.Option.Option<UInt64> = Builtin.intToUInt64 a
+
+/// Converts an <type Int> to an <type Int128>, returning {{None}} if it doesn't fit
+// @compiler replace: packages/darklang/stdlib/int.dark#Darklang.Stdlib.Int.toInt128 reason=compiler-implementation
+let toInt128 (a: Int) : Stdlib.Option.Option<Int128> = Builtin.intToInt128 a
+
+/// Converts an <type Int> to a <type UInt128>, returning {{None}} if it doesn't fit
+// @compiler replace: packages/darklang/stdlib/int.dark#Darklang.Stdlib.Int.toUInt128 reason=compiler-implementation
+let toUInt128 (a: Int) : Stdlib.Option.Option<UInt128> = Builtin.intToUInt128 a
+
+
+// @compiler blocked: container-adaptation
+impl BitwiseAnd for Int =
+  // @compiler blocked: container-adaptation
+  let bitwiseAnd (a: Int) (b: Int) : Int = Builtin.intBitwiseAnd a b
+
+// @compiler blocked: container-adaptation
+impl BitwiseOr for Int =
+  // @compiler blocked: container-adaptation
+  let bitwiseOr (a: Int) (b: Int) : Int = Builtin.intBitwiseOr a b
+
+// @compiler blocked: container-adaptation
+impl BitwiseXor for Int =
+  // @compiler blocked: container-adaptation
+  let bitwiseXor (a: Int) (b: Int) : Int = Builtin.intBitwiseXor a b
+
+// @compiler blocked: container-adaptation
+impl BitwiseNot for Int =
+  // @compiler blocked: container-adaptation
+  let bitwiseNot (a: Int) : Int = Builtin.intBitwiseNot a
+
+// @compiler blocked: container-adaptation
+impl ShiftLeft for Int =
+  // @compiler blocked: container-adaptation
+  let shiftLeft (a: Int) (b: Int) : Int = Builtin.intShiftLeft a b
+
+// @compiler blocked: container-adaptation
+impl ShiftRight for Int =
+  // @compiler blocked: container-adaptation
+  let shiftRight (a: Int) (b: Int) : Int = Builtin.intShiftRight a b
+
+
+/// Returns a random integer between <param start> and <param end> (inclusive)
+// @compiler replace: packages/darklang/stdlib/int.dark#Darklang.Stdlib.Int.random reason=compiler-implementation
+let random (start: Int) (``end``: Int) : Int =
+  Builtin.intRandom start ``end``
+
+// @compiler blocked: container-adaptation
+impl ToString for Int =
+  /// Stringify <param int>
+  // @compiler blocked: container-adaptation
+  let toString (int: Int) : String = Builtin.intToString int
+
+// @compiler blocked: container-adaptation
+impl Zero for Int =
+  // @compiler blocked: container-adaptation
+  let zero () : Int = 0
+
+// @compiler blocked: container-adaptation
+impl One for Int =
+  // @compiler blocked: container-adaptation
+  let one () : Int = 1

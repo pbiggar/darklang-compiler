@@ -1,0 +1,12 @@
+/// Shared `Range`/`Point` types for source positions. Structured parsing lives
+/// in the F# `LibParser`.
+module Darklang.LanguageTools.Parser
+
+
+// TODO: these should be UInts of some size
+// (UInt8 might even be enough - how many lines are over 255chars?)
+// @compiler blocked: missing-implementation
+type Point = { row: Int, column: Int }
+
+// @compiler blocked: missing-implementation
+type Range = { start: Point, end_: Point }

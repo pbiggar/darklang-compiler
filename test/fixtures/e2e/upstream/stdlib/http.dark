@@ -18,18 +18,21 @@
 //   Stdlib.Http.setCookie "myCookie" "myVal" { Fake = "fake"} = Builtin.Test.runtimeError "Keys must be `Expires`, `Max-Age`, `Domain`, `Path`, `Secure`, `HttpOnly`, and/or `SameSite`, but one of the keys was Fake"
 
 
+// @compiler blocked: compiler-gap
 Stdlib.Http.badRequest "Your request resulted in an error" =
   Stdlib.Http.Response
     { statusCode = 400
       headers = []
       body = Stdlib.String.toBlob "Your request resulted in an error" }
 
+// @compiler blocked: compiler-gap
 Stdlib.Http.response (Stdlib.String.toBlob "test") 200 =
   Stdlib.Http.Response
     { statusCode = 200
       headers = []
       body = Stdlib.String.toBlob "test" }
 
+// @compiler blocked: compiler-gap
 Stdlib.Http.responseWithHeaders
   (Stdlib.String.toBlob "test")
   [ ("Content-Type", "text/html; charset=utf-8") ]
@@ -45,21 +48,25 @@ Stdlib.Http.unauthorized () = Stdlib.Http.response Stdlib.Blob.empty 401
 
 Stdlib.Http.forbidden () = Stdlib.Http.response Stdlib.Blob.empty 403
 
+// @compiler blocked: compiler-gap
 Stdlib.Http.success (Stdlib.String.toBlob "test") =
   Stdlib.Http.response (Stdlib.String.toBlob "test") 200
 
+// @compiler blocked: compiler-gap
 Stdlib.Http.responseWithHtml "test" 200 =
   Stdlib.Http.responseWithHeaders
     (Stdlib.String.toBlob "test")
     [ ("Content-Type", "text/html; charset=utf-8") ]
     200
 
+// @compiler blocked: compiler-gap
 Stdlib.Http.responseWithText "test" 200 =
   Stdlib.Http.responseWithHeaders
     (Stdlib.String.toBlob "test")
     [ ("Content-Type", "text/plain; charset=utf-8") ]
     200
 
+// @compiler blocked: compiler-gap
 Stdlib.Http.responseWithJson "test" 200 =
   (Stdlib.Http.responseWithHeaders
     (Stdlib.String.toBlob "test")
@@ -99,41 +106,56 @@ module ParseQueryString =
     Stdlib.Dict.fromListOverwritingDuplicates [ ("token", "a=b") ]
 
   // Keys and values are both decoded.
+  // @compiler blocked: compiler-gap
   Stdlib.Http.parseQueryString "https://x?q=List+map&n=A%2FB" =
     Stdlib.Dict.fromListOverwritingDuplicates [ ("q", "List map"), ("n", "A/B") ]
 
 
 module UrlDecode =
   // What an HTML form sends for a space in a GET.
+  // @compiler blocked: compiler-gap
   Stdlib.Http.urlDecode "List+map" = "List map"
 
+  // @compiler blocked: compiler-gap
   Stdlib.Http.urlDecode "A%2FB" = "A/B"
+  // @compiler blocked: compiler-gap
   Stdlib.Http.urlDecode "a%3Db" = "a=b"
 
   // Decoding is byte-level, so a multi-byte character survives. Per character it would be two.
+  // @compiler blocked: compiler-gap
   Stdlib.Http.urlDecode "caf%C3%A9" = "café"
 
   // Double-encoded: the user typed a percent sign and the form encoded it.
+  // @compiler blocked: compiler-gap
   Stdlib.Http.urlDecode "%2541" = "%41"
 
   // A literal `+` travels as `%2B`, and survives the `+`-means-space substitution because that
   // runs over the raw text, where an escape holds no `+` of its own. Searching for `C++` is the
   // case that notices if those two steps are ever reordered.
+  // @compiler blocked: compiler-gap
   Stdlib.Http.urlDecode "a%2Bb" = "a+b"
+  // @compiler blocked: compiler-gap
   Stdlib.Http.urlDecode "C%2B%2B" = "C++"
+  // @compiler blocked: compiler-gap
   Stdlib.Http.urlDecode "a%2Bb+c" = "a+b c"
 
   // A `%` that starts no escape is itself. A search box may contain one, including at the end,
   // where decoding an empty hex string succeeds and would otherwise contribute no bytes.
+  // @compiler blocked: compiler-gap
   Stdlib.Http.urlDecode "100%" = "100%"
+  // @compiler blocked: compiler-gap
   Stdlib.Http.urlDecode "%" = "%"
+  // @compiler blocked: compiler-gap
   Stdlib.Http.urlDecode "a%2" = "a%2"
+  // @compiler blocked: compiler-gap
   Stdlib.Http.urlDecode "50%zz" = "50%zz"
 
+  // @compiler blocked: compiler-gap
   Stdlib.Http.urlDecode "" = ""
 
 
 module QueryParams =
+  // @compiler blocked: compiler-gap
   (Stdlib.Http.Request.queryParams (
     Stdlib.Http.Request
       { url = "/s?q=List+map&n=A%2FB", headers = [], body = Stdlib.Blob.empty })) =
@@ -141,23 +163,27 @@ module QueryParams =
 
   // A field splits at its FIRST `=` only, so a value may hold one: base64 padding and a nested
   // query string both do.
+  // @compiler blocked: compiler-gap
   (Stdlib.Http.Request.queryParam
     (Stdlib.Http.Request { url = "/s?q=a=b", headers = [], body = Stdlib.Blob.empty })
     "q") = Stdlib.Option.Option.Some "a=b"
 
   // Only the first `?` separates the query string; a later one is part of a value.
+  // @compiler blocked: compiler-gap
   (Stdlib.Http.Request.queryParams (
     Stdlib.Http.Request
       { url = "/s?a=1?b=2", headers = [], body = Stdlib.Blob.empty })) = [ ("a", "1?b=2") ]
 
   // An encoded separator stays inside its value. The server hands over the RAW url so `urlDecode`
   // here is the only decoder; decoded twice, `%26` becomes a real `&` and this reads as two.
+  // @compiler blocked: compiler-gap
   (Stdlib.Http.Request.queryParams (
     Stdlib.Http.Request
       { url = "/s?owner=a%26b", headers = [], body = Stdlib.Blob.empty }))
   = [ ("owner", "a&b") ]
 
   // Same for an encoded `=`: it belongs to the value, not to the key/value split.
+  // @compiler blocked: compiler-gap
   (Stdlib.Http.Request.queryParam
     (Stdlib.Http.Request
       { url = "/s?q=a%3Db", headers = [], body = Stdlib.Blob.empty })

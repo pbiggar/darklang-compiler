@@ -1,0 +1,397 @@
+/// Data shared by the at-rest type checker's stages.
+/// Generate turns syntax into requirements that types must satisfy. Solve checks
+/// those requirements using the available declarations and inferred types.
+/// Items uses the errors, warnings, and remaining unknowns to decide each verdict.
+module Darklang.LanguageTools.AtRestTypeChecker.Model
+
+/// Distinguish the different unknown types associated with one syntax node.
+/// For example, a lambda needs separate unknowns for its parameters and return type.
+// @compiler blocked: missing-implementation
+type Role =
+  /// The type of the value produced or matched by this node.
+  | Result
+  /// The type of one component, identified by its zero-based position: a lambda
+  /// parameter, call argument, constructor field, or tuple-pattern element.
+  | Part of Int
+  /// The lambda's return type, also used to check early returns from ?.
+  | Return
+  /// The element type shared by a list's values or a list pattern's elements.
+  | Element
+  /// The key type shared by a dictionary literal's entries.
+  | DictKey
+  /// The value type shared by a dictionary literal's entries.
+  | DictValue
+  /// The type of the function being called. Keep it separate from Result when
+  /// the same syntax node represents both the function lookup and its call.
+  | Callee
+
+/// The identity of a type that the solver has not determined yet.
+///
+/// Generate combines a syntax-node ID with a Role: list node 17 always uses
+/// Of(17, Element) for its element type, without needing a shared counter.
+/// Solve uses a separate counter to give each use of a generic type fresh unknowns.
+// @compiler blocked: missing-implementation
+type Var =
+  /// An unknown identified by the syntax node that introduced it and its role there.
+  | Of of Int64 * Role
+  /// A new unknown allocated by Solve, including when a generic type is used.
+  | Fresh of Int
+
+/// Types represented inside the checker, including declared type parameters,
+/// types still being inferred, and placeholders for previously reported problems.
+// @compiler blocked: missing-implementation
+type Ty =
+  | TUnit
+  | TBool
+  | TInt8
+  | TUInt8
+  | TInt16
+  | TUInt16
+  | TInt32
+  | TUInt32
+  | TInt64
+  | TUInt64
+  | TInt128
+  | TUInt128
+  | TInt
+  | TFloat
+  | TChar
+  | TString
+  | TUuid
+  | TDateTime
+  | TBlob
+  | TStream of Ty
+  | TList of Ty
+  | TTuple of Ty * Ty * List<Ty>
+  | TDict of Ty * Ty
+  | TCustom of LanguageTools.ProgramTypes.Hash * List<Ty>
+  | TFn of List<Ty> * Ty
+  /// A declared type parameter such as 'a. While checking a generic definition,
+  /// it must remain generic; the solver cannot choose a concrete type for it.
+  | TRigid of String
+  /// An unknown whose type the solver may determine from its uses.
+  | TVar of Var
+  /// A type that cannot be checked because of an already reported problem.
+  /// Suppress extra diagnostics that would depend on knowing this type.
+  | TError
+
+/// An error or warning collected before the final report is built.
+/// Types.isWarning classifies the issue code. An error that still depends on
+/// unresolved types may also become a warning when Items decides the verdict.
+// @compiler blocked: missing-implementation
+type Finding =
+  { code: IssueCode
+    /// The syntax-node ID to report, or None for a declaration-wide finding.
+    at: Stdlib.Option.Option<Int64>
+    expected: Stdlib.Option.Option<Ty>
+    actual: Stdlib.Option.Option<Ty>
+    /// True when resolving the remaining unknown types cannot remove this error.
+    /// Such a finding can be reported as definite even if its displayed types
+    /// still contain unknowns.
+    definite: Bool
+    context: Context }
+
+/// How the checker obtains the type of a local variable when it is used.
+// @compiler blocked: missing-implementation
+type Binder =
+  /// Every use shares one type; information learned from one use constrains the others.
+  | Mono of Ty
+  /// The binding's pattern ID identifies a saved Scheme. Each use gets fresh
+  /// unknowns for that scheme's generic parts, allowing uses at different types.
+  | Poly of Int64
+
+/// A requirement generated from syntax for Solve to check.
+/// Order matters: establish a called function's type before checking its arguments,
+/// so a lambda passed as an argument can use the expected parameter types.
+// @compiler blocked: missing-implementation
+type Constraint =
+  /// Process the enclosed requirements in their listed order.
+  | All of List<Constraint>
+  /// Require actual and expected to be compatible, filling in unknowns where possible.
+  /// Use at and site to identify where a mismatch occurred in the diagnostic.
+  | Equal of at: Int64 * site: Site * expected: Ty * actual: Ty
+  /// Record a problem already found while inspecting syntax, such as an unknown variable.
+  | Report of Finding
+  /// Determine target from the named function's signature, using the supplied
+  /// type arguments or fresh unknowns for omitted type arguments.
+  | UseFunction of
+    at: Int64 *
+    name: LanguageTools.ProgramTypes.FQFnName.FQFnName *
+    typeArgs: List<Ty> *
+    target: Ty
+  /// Determine target from the named package or builtin value's type.
+  /// For a generic package value, give this use its own type unknowns.
+  | UseValue of
+    at: Int64 *
+    name: LanguageTools.ProgramTypes.FQValueName.FQValueName *
+    target: Ty
+  /// Determine target from the local Scheme saved under binder's pattern ID,
+  /// with fresh unknowns and the saved requirements for this particular use.
+  | UseLocal of at: Int64 * binder: Int64 * target: Ty
+  /// Check a call using callee's type, the argument types and their diagnostic
+  /// contexts, and the required result type. Arguments may partially apply a
+  /// function or continue into a function returned by the first call.
+  | Apply of at: Int64 * callee: Ty * args: List<(Ty * Site)> * result: Ty
+  /// Check that the named type is a record, that the supplied fields match its
+  /// declaration, and that result is the constructed record's type.
+  | NewRecord of
+    at: Int64 *
+    typeName: LanguageTools.ProgramTypes.Hash *
+    typeArgs: List<Ty> *
+    fields: List<(String * Ty)> *
+    result: Ty
+  /// Check that the named enum case exists and its fields match the supplied
+  /// types. Set result to the constructed enum's type.
+  | NewEnum of
+    at: Int64 *
+    typeName: LanguageTools.ProgramTypes.Hash *
+    typeArgs: List<Ty> *
+    caseName: String *
+    fields: List<(Ty * Site)> *
+    result: Ty
+  /// Check a record field or tuple-element access and determine result's type.
+  /// Defer the check if record's type is not yet known.
+  | GetField of at: Int64 * record: Ty * field: String * result: Ty
+  /// Check that record has each updated field and that its declared type accepts
+  /// the new value. Defer the check if record's type is not yet known.
+  | UpdateRecord of at: Int64 * record: Ty * fields: List<(String * Ty)>
+  /// Check an enum-case pattern against scrutinee, the type of the matched value.
+  /// Validate the case name and field types once scrutinee's type is known.
+  | EnumPattern of at: Int64 * scrutinee: Ty * caseName: String * fields: List<Ty>
+  /// Require an operand type supported by this operator. Defer the check while
+  /// the type is unknown; subject describes the unresolved requirement in warnings.
+  | Operand of
+    at: Int64 *
+    operation: LanguageTools.ProgramTypes.InfixFnName *
+    operand: Ty *
+    subject: AmbiguousSubject
+  /// What a CALL owes for one of the callee's bounds: the callee's parameter <param param>
+  /// owes <param trait_>, and <param supplied> is the type this call gave it.
+  ///
+  /// Deferred like the others, because the supplied type is often an unknown the arguments
+  /// have not filled in. Resolving it is what makes a call into a bounded generic static: the
+  /// callee's body defers to its parameter and this says what the parameter meant here.
+  | CallerBound of
+    at: Int64 *
+    param: String *
+    trait_: LanguageTools.ProgramTypes.Hash *
+    supplied: Ty
+  /// A named trait method call (`Show.show p`), as opposed to an operator.
+  ///
+  /// Deferred for the same reason `Operand` is: which implementation applies depends on the
+  /// self type, and at the point the call is generated that type is an unknown the arguments
+  /// have not filled in yet. `self` is the type the trait's own self parameter took at this
+  /// use, so resolving it is what identifies the implementation.
+  | TraitCall of
+    at: Int64 *
+    trait_: LanguageTools.ProgramTypes.Hash *
+    method_: String *
+    self: Ty
+  /// Require a signed integer or Float for unary minus. Defer while its type is unknown.
+  | Negate of at: Int64 * operand: Ty
+  /// Require an integer for bitwise NOT. Defer while its type is unknown.
+  | BitwiseNot of at: Int64 * operand: Ty
+  /// Require a valid dictionary key type, including all values it can contain.
+  /// For example, a key cannot contain a function. Defer checks that still need
+  /// type information from the dictionary's entries or their later uses.
+  | DictKey of at: Int64 * key: Ty
+  /// Determine Builtin.unwrap's result from an Option's Some payload or a Result's
+  /// Ok payload. Defer the check while arg's type is unknown.
+  | Unwrap of
+    at: Int64 *
+    fn: LanguageTools.ProgramTypes.FQFnName.FQFnName *
+    arg: Ty *
+    result: Ty
+  /// Check postfix ?: operand must be an Option or Result containing inner.
+  /// The enclosing function or lambda's returned type must use the same container
+  /// and, for Result, the same error type. Either operand or returned can supply
+  /// the type information needed to continue the check.
+  | Propagate of at: Int64 * operand: Ty * inner: Ty * returned: Ty
+  /// Save a reusable Scheme for binder. Unknowns in typ that are independent of
+  /// the surrounding scope may vary between uses; unknowns tied to surrounding
+  /// bindings must stay shared. Save deferred requirements with the scheme too.
+  | Generalize of binder: Int64 * typ: Ty * scope: List<Binder>
+  /// Check whether the match cases cover every value of scrutinee's type.
+  /// Run after type inference. Skip this check if the matched type or patterns
+  /// already have problems that would make coverage diagnostics misleading.
+  | Covers of
+    at: Int64 *
+    scrutinee: Ty *
+    cases: List<LanguageTools.ProgramTypes.MatchCase> *
+    patternIds: List<Int64>
+  /// Validate typ and the declarations it references: types must exist, receive
+  /// the required number of type arguments, and be valid in their positions.
+  /// This includes checking types used as dictionary keys.
+  | WellFormed of at: Stdlib.Option.Option<Int64> * typ: Ty
+
+/// A reusable inferred type. Each use replaces quantified variables with fresh
+/// unknowns and must satisfy the saved constraints for those new types.
+// @compiler blocked: missing-implementation
+type Scheme =
+  { /// Variables allowed to have a different type at each use.
+    quantified: List<Var>
+    typ: Ty
+    /// Deferred typing and match-coverage checks to repeat for each use.
+    constraints: List<Constraint> }
+
+/// Which implementation a trait call resolved to, at one syntax node.
+///
+/// Accumulated the way coverage is: worked out during inference, consumed after it by
+/// whoever asked for the check rather than by the solver itself. The declaration's
+/// verdict does not depend on any of this; a call nobody could resolve is not an error,
+/// because the runtime can still dispatch on the value it is handed.
+///
+/// Four cases, because a call can be answered outright, or deferred to one of the
+/// item's own type parameters for its caller to decide, and because a call that NAMES a
+/// bounded function also reports what that function's bound turned into, which is itself
+/// either answered or deferred.
+// @compiler blocked: missing-implementation
+type Resolution =
+  /// A trait method call: the method, and the implementations that apply to it. One
+  /// implementation is the answer; several are an ordering question for the store, which
+  /// knows which is newer, and none leaves the call to resolve at run time.
+  | Call of
+    at: Int64 *
+    method_: String *
+    impls: List<LanguageTools.ProgramTypes.Hash>
+
+  /// The call's self type is one of the item's own type parameters, so this item cannot
+  /// decide: it records which parameter, and the caller supplies the rest.
+  | Deferred of at: Int64 * param: String
+
+  /// This call names a function with a bound, and here is what the bound came to for the
+  /// type argument supplied. One of these per bound on the callee.
+  | CallerBound of
+    at: Int64 *
+    param: String *
+    trait_: LanguageTools.ProgramTypes.Hash *
+    impls: List<LanguageTools.ProgramTypes.Hash>
+
+  /// The same, except the type argument is one of THIS item's parameters, so the bound is
+  /// passed along rather than discharged. This is what threads a bound through a generic
+  /// that calls another generic.
+  | CallerBoundDeferred of
+    at: Int64 *
+    param: String *
+    trait_: LanguageTools.ProgramTypes.Hash *
+    fromParam: String
+
+/// Whether a named function has a signature the checker can use.
+// @compiler blocked: missing-implementation
+type Callable =
+  /// A converted signature, ready to be used with this call's type arguments.
+  | Declared of Template
+  /// A builtin whose signature does not describe its behavior precisely enough
+  /// for checking. The reason explains why its use is Incomplete.
+  | Untrusted of UntrustedBuiltin
+  /// No usable signature could be obtained for this function.
+  | Unavailable
+
+/// A function signature converted to the checker's Ty representation and cached
+/// for this batch. Type parameters are stored as TRigid names; each use replaces
+/// them with explicit type arguments or fresh unknowns.
+// @compiler blocked: missing-implementation
+type Template =
+  { typeParams: List<String>
+    parameters: List<Ty>
+    returnType: Ty
+    /// True when a call requires explicit type arguments to determine its result type.
+    needsTypeArgs: Bool
+    /// Types used as dictionary keys in the signature or its dependencies.
+    /// Substitute the call's type arguments and check key validity as their types
+    /// become known during inference.
+    dictKeyTypes: List<Ty>
+    /// Problems found while converting or validating the signature. Report them
+    /// at each call that relies on this signature.
+    problems: List<Finding>
+    /// What this function's type parameters owe. A CALL has to record which implementation
+    /// each one turned out to mean, because the callee's body defers to the parameter and
+    /// cannot know. Discarded before this existed, which is why a bounded call recorded
+    /// nothing at save.
+    bounds: List<LanguageTools.ProgramTypes.Bound> }
+
+/// A function's parameter and return types before conversion to the checker's Ty
+/// representation. Package and builtin functions both supply signatures in this form.
+// @compiler blocked: missing-implementation
+type Signature =
+  { typeParams: List<String>
+    parameters: List<LanguageTools.ProgramTypes.TypeReference>
+    returnType: LanguageTools.ProgramTypes.TypeReference
+    /// True when the caller must supply explicit type arguments to determine the
+    /// result type, as required for Builtin.jsonParse.
+    needsTypeArgs: Bool
+    /// What the function's type parameters owe, carried through to the template.
+    bounds: List<LanguageTools.ProgramTypes.Bound> }
+
+/// A type declaration's validation problems and the types it directly references.
+/// Cache this information so other declarations in the batch can reuse it.
+// @compiler blocked: missing-implementation
+type DeclarationFacts =
+  { /// Store findings without a use-site node ID. When another declaration uses
+    /// this type, attach that use's node ID to the findings reported there.
+    problems: List<Finding>
+    references: List<LanguageTools.ProgramTypes.Hash> }
+
+
+/// Type information shared while checking a batch of declarations.
+/// It contains loaded types, function signatures, inferred value types, and cached
+/// validation results. Checking returns an updated copy when it learns more.
+// @compiler blocked: missing-implementation
+type Environment =
+  { /// The branch whose bindings decide which implementations are visible.
+    ///
+    /// The only branch-dependent thing the checker needs. Everything else it loads is
+    /// content-addressed, so it needs no branch to find a type or a signature by hash; but
+    /// "which implementations of `Add` exist" is a question about what is BOUND, and two
+    /// branches answer it differently.
+    branchId: Uuid
+    types: Dict<LanguageTools.ProgramTypes.Hash, LanguageTools.ProgramTypes.TypeDeclaration.TypeDeclaration>
+    /// Declared signatures for package functions. Builtin signatures are looked up separately.
+    functions: Dict<LanguageTools.ProgramTypes.FQFnName.FQFnName, Signature>
+    /// Reusable inferred types for package values that received a Checked verdict.
+    values: Dict<LanguageTools.ProgramTypes.Hash, Scheme>
+    /// Cached validation problems and direct references for types already inspected.
+    declarationFacts: Dict<LanguageTools.ProgramTypes.Hash, DeclarationFacts>
+    /// Every visible trait's implementations, with each self type converted to the checker's
+    /// own types once and reused. Keyed by the trait's hash as a string.
+    ///
+    /// Filled for the whole BATCH, which is the point: a declaration gets a fresh solver
+    /// state, so a cache that filled itself on first use would reset at every declaration and
+    /// almost never be read twice. Converting a candidate's self type per CALL NODE rather
+    /// than per trait is most of what a whole-tree check costs.
+    ///
+    /// There are a handful of traits and the underlying read is cached per (branch, trait),
+    /// so taking all of them up front is cheaper than deciding which ones will be needed.
+    traitImpls: Dict<String, List<(Ty * LanguageTools.ProgramTypes.Hash)>>
+
+    /// The traits this batch declares, keyed by hash as a string. A trait is otherwise read
+    /// from the store, which does not hold a batch's own items until after the check: without
+    /// these, a call to a trait saved in the same batch had no signature, and the whole batch
+    /// went unchecked and unpinned.
+    batchTraits: Dict<String, LanguageTools.ProgramTypes.Trait.Trait>
+
+    /// Which trait and method each operator IS, keyed by the operator. `None` for one that is
+    /// not a trait: `==` and `!=` are structural equality for every value, and `++` is no
+    /// longer in the language. Also `None` while the trait hashes are not generated, which is
+    /// what stops a tree whose refs are missing from reporting every operator as an error.
+    infixTrait: Dict<String, Stdlib.Option.Option<(LanguageTools.ProgramTypes.Hash * String)>>
+    /// Parameters whose type arguments can appear in a stored field or payload.
+    /// Excludes phantom parameters that appear only in type names and store no value.
+    valueTypeParameters: Dict<LanguageTools.ProgramTypes.Hash, List<String>>
+    /// Parameters whose type arguments must be valid dictionary key types because
+    /// the declaration uses them in keys, directly or through other declarations.
+    dictKeyParameters: Dict<LanguageTools.ProgramTypes.Hash, List<String>>
+    /// Cached signature lookups, including converted signatures and the reasons
+    /// other signatures are unavailable or unsuitable for checking.
+    callables: Dict<LanguageTools.ProgramTypes.FQFnName.FQFnName, Callable>
+    /// Problems in each type declaration and all declarations it depends on.
+    /// Compute these in advance or on first use, then attach the current use's
+    /// node ID when reporting them.
+    declarationProblems: Dict<LanguageTools.ProgramTypes.Hash, List<Finding>>
+    /// Each declared DB by name, as the `DB<row>` a body naming it reads. A local of the same
+    /// name shadows one, as it does at run time.
+    dbs: Dict<String, Ty>
+    /// The standard Option type's hash, used to recognize it in unwrap and ? checks.
+    optionType: LanguageTools.ProgramTypes.Hash
+    /// The standard Result type's hash, used to recognize it in unwrap and ? checks.
+    resultType: LanguageTools.ProgramTypes.Hash }

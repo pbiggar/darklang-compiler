@@ -1,0 +1,686 @@
+/// The command table: every CLI command, its aliases, help, and completion.
+///
+/// Part of `Darklang.Cli`.
+module Darklang.Cli
+
+module Registry =
+  // @compiler blocked: missing-implementation
+  type CommandHandler =
+    { name: String
+      description: String
+      aliases: List<String>
+      /// What it takes on the command line, checked before `execute` is called (see `Accepts`). A
+      /// function, not a value: every start builds this table, and only the command being run should
+      /// pay for building its declaration.
+      accepts: Unit -> Accepts.Accepts
+      execute: AppState -> List<String> -> AppState
+      /// Pure: returns the help text; callers decide where it goes.
+      help: AppState -> String
+      complete: AppState -> List<String> -> List<Completion.CompletionItem> }
+
+  // What each command takes on the command line, one function per command, referenced by its row in
+  // `allCommands` the way `execute`, `help` and `complete` are. Functions rather than values, because
+  // every start builds the table and only the command being run should pay for its declaration.
+  // @compiler blocked: missing-implementation
+  let acceptsQuit () : Accepts.Accepts = Accepts.nothing ()
+  // @compiler blocked: missing-implementation
+  let acceptsHelp () : Accepts.Accepts = Accepts.textBetween 0 1
+  // @compiler blocked: missing-implementation
+  let acceptsConfig () : Accepts.Accepts = (Accepts.subcommands [ ("get", Accepts.between 1 1 []), ("set", Accepts.textBetween 2 2), ("list", Accepts.nothing ()) ] (Accepts.nothing ()))
+  // @compiler blocked: missing-implementation
+  let acceptsInstall () : Accepts.Accepts = Accepts.flagsOnly [ "-y", "--yes", "--uninstall-if-installed" ]
+  // @compiler blocked: missing-implementation
+  let acceptsUpdate () : Accepts.Accepts = (Accepts.withValues [ "--to" ] (Accepts.flagsOnly [ "-y", "--yes" ]))
+  // @compiler blocked: missing-implementation
+  let acceptsUninstall () : Accepts.Accepts = Accepts.flagsOnly [ "-y", "--yes" ]
+  // @compiler blocked: missing-implementation
+  let acceptsInstallStatus () : Accepts.Accepts = Accepts.nothing ()
+  // @compiler blocked: missing-implementation
+  let acceptsVersion () : Accepts.Accepts = Accepts.flagsOnly [ "--local" ]
+  // @compiler blocked: missing-implementation
+  let acceptsNav () : Accepts.Accepts = Accepts.upTo 1 []
+  // @compiler blocked: missing-implementation
+  let acceptsLs () : Accepts.Accepts = Accepts.upTo 1 [ "--include-deprecated", "--versions" ]
+  // @compiler blocked: missing-implementation
+  let acceptsBack () : Accepts.Accepts = Accepts.nothing ()
+  // @compiler blocked: missing-implementation
+  let acceptsClear () : Accepts.Accepts = Accepts.nothing ()
+  // @compiler blocked: missing-implementation
+  let acceptsRunScript () : Accepts.Accepts = Accepts.text 1
+  // @compiler blocked: missing-implementation
+  let acceptsEval () : Accepts.Accepts = Accepts.text 1
+  // @compiler blocked: missing-implementation
+  let acceptsView () : Accepts.Accepts = Accepts.upTo 1 [ "--raw", "--ast", "--instructions", "--instrs", "--include-tests" ]
+  // @compiler blocked: missing-implementation
+  let acceptsTree () : Accepts.Accepts = (Accepts.withValues [ "--depth" ] (Accepts.upTo 1 [ "--toc", "--include-deprecated" ]))
+  // @compiler blocked: missing-implementation
+  let acceptsSearch () : Accepts.Accepts = Accepts.freeText 0 [ "--type", "--fn", "--function", "--val", "--value", "--trait", "--impl", "--test", "--include-tests", "--batch", "--exact", "--shallow", "--with-docs", "--include-deprecated", "--json" ]
+  // @compiler blocked: missing-implementation
+  let acceptsTypecheck () : Accepts.Accepts = Accepts.upTo 1 [ "--failed", "--incomplete", "--all", "--json" ]
+  // @compiler blocked: missing-implementation
+  let acceptsTest () : Accepts.Accepts = Accepts.subcommands [ ("run", Accepts.withValues [ "--jobs" ] (Accepts.freeText 0 [ "--force" ])), ("add", Accepts.text 2) ] (Accepts.nothing ())
+  // @compiler blocked: missing-implementation
+  let acceptsDeps () : Accepts.Accepts = (Accepts.everywhere [ "--json", "--deep", "--all" ] [] ((Accepts.subcommands [ ("uses", Accepts.between 1 1 []), ("usedby", Accepts.between 1 1 []) ] (Accepts.between 1 1 []))))
+  // @compiler blocked: missing-implementation
+  let acceptsVal () : Accepts.Accepts = Accepts.text 2
+  // @compiler blocked: missing-implementation
+  let acceptsFn () : Accepts.Accepts = Accepts.text 2
+  // @compiler blocked: missing-implementation
+  let acceptsType () : Accepts.Accepts = Accepts.text 2
+  // @compiler blocked: missing-implementation
+  let acceptsTrait () : Accepts.Accepts = Accepts.text 2
+  // @compiler blocked: missing-implementation
+  let acceptsImpl () : Accepts.Accepts = Accepts.text 2
+  // @compiler blocked: missing-implementation
+  let acceptsModule () : Accepts.Accepts = Accepts.between 2 2 []
+  // @compiler blocked: missing-implementation
+  let acceptsEdit () : Accepts.Accepts = Accepts.between 1 2 []
+  // @compiler blocked: missing-implementation
+  let acceptsRename () : Accepts.Accepts = Accepts.between 2 2 []
+  // @compiler blocked: missing-implementation
+  let acceptsHash () : Accepts.Accepts = Accepts.between 1 1 [ "--long", "--full" ]
+  // @compiler blocked: missing-implementation
+  let acceptsStatus () : Accepts.Accepts = Accepts.flagsOnly [ "--json" ]
+  // @compiler blocked: missing-implementation
+  let acceptsCommits () : Accepts.Accepts = Accepts.upTo 1 [ "--json", "--detailed", "--all" ]
+  // @compiler blocked: missing-implementation
+  let acceptsCommit () : Accepts.Accepts = (Accepts.withValues [ "--include" ] (Accepts.freeText 0 [ "-y", "--yes", "-m", "--message", "--allow-unresolved", "--allow-type-errors", "--json" ]))
+  // @compiler blocked: missing-implementation
+  let acceptsDiscard () : Accepts.Accepts = Accepts.upTo 1 [ "-y", "--yes" ]
+  // @compiler blocked: missing-implementation
+  let acceptsShow () : Accepts.Accepts = Accepts.between 1 1 []
+  // @compiler blocked: missing-implementation
+  let acceptsBranch () : Accepts.Accepts = (Accepts.subcommands [ ("list", Accepts.flagsOnly [ "--all" ]), ("current", Accepts.nothing ()), ("switch", Accepts.between 1 1 []), ("new", Accepts.between 1 1 []), ("create", Accepts.between 1 1 []), ("archive", Accepts.between 1 1 [ "-y", "--yes" ]), ("rename", Accepts.between 2 2 []), ("diff", Accepts.between 1 1 [ "--source" ]), ("log", Accepts.between 1 1 []), ("merge", Accepts.between 1 1 [ "-y", "--yes", "--allow-type-errors", "--dry-run" ]), ("rebase", Accepts.between 1 1 []), ("resolve", Accepts.between 3 3 []) ] (Accepts.upTo 1 []))
+  // @compiler blocked: missing-implementation
+  let acceptsRebase () : Accepts.Accepts = Accepts.upTo 1 [ "--dry-run" ]
+  // @compiler blocked: missing-implementation
+  let acceptsMerge () : Accepts.Accepts = Accepts.upTo 1 [ "-y", "--yes", "--allow-type-errors", "--dry-run" ]
+  // @compiler blocked: missing-implementation
+  let acceptsBranches () : Accepts.Accepts = Accepts.flagsOnly [ "--all", "--json" ]
+  // @compiler blocked: missing-implementation
+  let acceptsSwitch () : Accepts.Accepts = Accepts.upTo 1 []
+  // @compiler blocked: missing-implementation
+  let acceptsDiff () : Accepts.Accepts = Accepts.upTo 1 [ "--source", "--json" ]
+  // @compiler blocked: missing-implementation
+  let acceptsLog () : Accepts.Accepts = Accepts.upTo 1 [ "--json" ]
+  // @compiler blocked: missing-implementation
+  let acceptsResolve () : Accepts.Accepts = Accepts.between 3 3 []
+  // @compiler blocked: missing-implementation
+  let acceptsConstraints () : Accepts.Accepts = (Accepts.subcommands [ ("resolve", (Accepts.withValues [ "--as" ] (Accepts.freeText 0 [ "--all", "--why" ]))), ("ack", Accepts.freeText 0 [ "--all", "--why" ]) ] ((Accepts.withValues [ "--kind" ] (Accepts.flagsOnly [ "--json" ]))))
+  // @compiler blocked: missing-implementation
+  let acceptsAck () : Accepts.Accepts = Accepts.freeText 0 [ "--all", "--why" ]
+  // @compiler blocked: missing-implementation
+  let acceptsUndeprecate () : Accepts.Accepts = Accepts.between 1 1 [ "-y", "--yes" ]
+  // @compiler blocked: missing-implementation
+  let acceptsBackups () : Accepts.Accepts = (Accepts.subcommands [ ("list", Accepts.nothing ()), ("now", Accepts.nothing ()), ("prune", Accepts.between 1 1 [ "-y", "--yes" ]), ("restore", Accepts.between 1 1 [ "-y", "--yes" ]) ] (Accepts.nothing ()))
+  // @compiler blocked: missing-implementation
+  let acceptsBuiltins () : Accepts.Accepts = Accepts.upTo 1 [ "--with-sigs", "--with-purity" ]
+  // @compiler blocked: missing-implementation
+  let acceptsFindValues () : Accepts.Accepts = Accepts.between 1 2 []
+  // @compiler blocked: missing-implementation
+  let acceptsImpls () : Accepts.Accepts = Accepts.between 1 1 [ "--json" ]
+  // @compiler blocked: missing-implementation
+  let acceptsServe () : Accepts.Accepts = (Accepts.withValues [ "--port", "--max-body-bytes" ] (Accepts.between 1 1 [ "--live", "--no-live", "--dev" ]))
+  // @compiler blocked: missing-implementation
+  let acceptsDocs () : Accepts.Accepts = (Accepts.subcommands [ ("signatures", (Accepts.withValues [ "--module" ] (Accepts.upTo 1 [ "--types", "--include-deprecated", "--all" ]))), ("sigs", (Accepts.withValues [ "--module" ] (Accepts.upTo 1 [ "--types", "--include-deprecated", "--all" ]))), ("api", (Accepts.withValues [ "--module" ] (Accepts.upTo 1 [ "--types", "--include-deprecated", "--all" ]))), ("stdlib", Accepts.nothing ()), ("lib", Accepts.nothing ()) ] (Accepts.upTo 1 []))
+  // @compiler blocked: missing-implementation
+  let acceptsUndo () : Accepts.Accepts = Accepts.between 1 1 []
+  // @compiler blocked: missing-implementation
+  let acceptsDeprecate () : Accepts.Accepts = (Accepts.withValues [ "--kind", "--replacement", "--message", "-m" ] (Accepts.between 1 2 [ "-y", "--yes", "--dry-run" ]))
+  // @compiler blocked: missing-implementation
+  let acceptsDelete () : Accepts.Accepts = (Accepts.withValues [ "--message", "-m" ] (Accepts.between 1 2 [ "-y", "--yes", "--ignore-dependents", "--force", "--dry-run" ]))
+  // @compiler blocked: missing-implementation
+  let acceptsOutliner () : Accepts.Accepts = (Accepts.subcommands [ ("ls", Accepts.nothing ()), ("show", Accepts.between 1 1 []), ("add", Accepts.text 2) ] (Accepts.nothing ()))
+  // @compiler blocked: missing-implementation
+  let acceptsExportSeed () : Accepts.Accepts = Accepts.upTo 1 []
+  // @compiler blocked: missing-implementation
+  let acceptsTraces () : Accepts.Accepts = (Accepts.everywhere [ "-y", "--yes", "--json", "--inspect", "--full" ] [ "--iteration" ] ((Accepts.subcommands [ ("list", (Accepts.withValues [ "--fn", "--route" ] (Accepts.upTo 1 []))), ("follow", (Accepts.withValues [ "--route" ] (Accepts.nothing ()))), ("stats", Accepts.upTo 1 []), ("tail", (Accepts.withValues [ "--route" ] (Accepts.upTo 1 []))), ("find", Accepts.text 1), ("fns", Accepts.upTo 1 [ "--all" ]), ("hotspots", Accepts.upTo 1 []), ("view", Accepts.between 1 2 [ "--watch" ]), ("details", (Accepts.withValues [ "--filter", "--exclude", "--slow-ms", "--depth" ] (Accepts.between 1 1 [ "--all", "--slow", "-d", "--no-builtins", "--no-stdlib" ]))), ("log", Accepts.text 0), ("record", Accepts.upTo 1 []), ("inspect", (Accepts.withValues [ "--filter", "--exclude", "--slow-ms", "--depth" ] (Accepts.between 1 1 [ "--all", "--slow", "-d", "--no-builtins", "--no-stdlib" ]))), ("resume", Accepts.between 1 1 []), ("fork", (Accepts.withValues [ "--at" ] (Accepts.between 1 1 []))), ("pin", Accepts.between 1 1 []), ("unpin", Accepts.between 1 1 []), ("calls", Accepts.between 1 1 []), ("show", Accepts.between 1 2 [ "--watch" ]), ("values", Accepts.text 0), ("rerun", Accepts.between 1 1 []), ("delete", (Accepts.withValues [ "--keep", "--before" ] (Accepts.upTo 1 [ "--all" ]))) ] (Accepts.nothing ()))))
+  // @compiler blocked: missing-implementation
+  let acceptsConflicts () : Accepts.Accepts = (Accepts.everywhere [ "--json" ] [] ((Accepts.subcommands [ ("list", Accepts.nothing ()), ("walk", Accepts.nothing ()), ("show", Accepts.between 1 1 []), ("ack", Accepts.freeText 1 []), ("override", Accepts.between 2 2 []), ("branch", Accepts.between 1 1 []) ] (Accepts.nothing ()))))
+  // @compiler blocked: missing-implementation
+  let acceptsPermissions () : Accepts.Accepts = (Accepts.subcommands [ ("list", Accepts.nothing ()), ("profile", Accepts.upTo 2 [ "-y", "--yes" ]), ("allow", Accepts.text 1), ("deny", Accepts.text 1), ("remove", Accepts.text 1), ("clear", Accepts.nothing ()), ("set", Accepts.text 1), ("approve", Accepts.text 1), ("update", Accepts.text 1), ("unapprove", Accepts.between 1 1 []), ("requirements", Accepts.between 1 1 []), ("show", Accepts.between 1 1 []), ("revoke-package", Accepts.between 1 1 []), ("approved", Accepts.nothing ()), ("approvals", Accepts.nothing ()) ] (Accepts.nothing ()))
+  // @compiler blocked: missing-implementation
+  let acceptsOps () : Accepts.Accepts = (Accepts.subcommands [ ("list", Accepts.upTo 1 []), ("show", Accepts.between 1 1 []) ] (Accepts.upTo 1 []))
+  // @compiler blocked: missing-implementation
+  let acceptsPs () : Accepts.Accepts = (Accepts.everywhere [ "--json" ] [] ((Accepts.subcommands [ ("show", Accepts.between 1 1 [ "--full" ]), ("cancel", Accepts.between 1 1 []), ("kill", Accepts.between 1 1 []) ] (Accepts.flagsOnly [ "--watch" ]))))
+  // @compiler blocked: missing-implementation
+  let acceptsWorkbench () : Accepts.Accepts = Accepts.flagsOnly [ "--live" ]
+
+  // @compiler blocked: missing-implementation
+  let allCommands () : List<CommandHandler> =
+    [ ("quit", "Exit the CLI", [ "exit", "q" ], acceptsQuit, Quit.execute, Quit.help, Quit.complete)
+      ("help", "Show help for commands", [ "commands", "?", "--help", "-h" ], acceptsHelp, Help.execute, Help.help, Help.complete)
+      ("config", "Manage CLI configuration", [], acceptsConfig, Config.execute, Config.help, Config.complete)
+      ("install", "Install CLI globally", [], acceptsInstall, Installation.Install.execute, Installation.Install.help, Installation.Install.complete)
+      ("update", "Update CLI to latest version", [ "upgrade" ], acceptsUpdate, Installation.Update.execute, Installation.Update.help, Installation.Update.complete)
+      ("uninstall", "Remove CLI installation", [], acceptsUninstall, Installation.Uninstall.execute, Installation.Uninstall.help, Installation.Uninstall.complete)
+      ("install-status", "Show installation status", [], acceptsInstallStatus, Installation.Status.execute, Installation.Status.help, Installation.Status.complete)
+      ("version", "Display CLI version", [ "--version", "-v" ], acceptsVersion, Installation.Version.execute, Installation.Version.help, Installation.Version.complete)
+      ("nav", "Navigate between owners, modules, and items", [ "cd" ], acceptsNav, Packages.Nav.execute, Packages.Nav.help, Packages.Nav.complete)
+      ("ls", "List package contents", [ "dir" ], acceptsLs, Packages.Listing.execute, Packages.Listing.help, Packages.Listing.complete)
+      ("back", "Go back to previous location", [], acceptsBack, Packages.Back.execute, Packages.Back.help, Packages.Back.complete)
+      ("clear", "Clear the screen", [ "cls" ], acceptsClear, Cli.Clear.execute, Cli.Clear.help, Cli.Clear.complete)
+      ("run-script", "Run a Dark script file", [ "run" ], acceptsRunScript, Cli.Run.execute, Cli.Run.help, Cli.Run.complete)
+      ("eval", "Evaluate a Dark expression", [], acceptsEval, Cli.Eval.execute, Cli.Eval.help, Cli.Eval.complete)
+      ("view", "View details of a module, type, value, fn, trait, impl or test", [], acceptsView, Packages.View.execute, Packages.View.help, Packages.View.complete)
+      ("tree", "Display package hierarchy in tree format", [ "packages" ], acceptsTree, Packages.Tree.execute, Packages.Tree.help, Packages.Tree.complete)
+      ("search", "Search modules, types, functions, values, traits, impls and tests", [], acceptsSearch, Packages.Search.execute, Packages.Search.help, Packages.Search.complete)
+      ("typecheck", "Audit package declarations without changing them", [], acceptsTypecheck, Packages.Typecheck.execute, Packages.Typecheck.help, Packages.Typecheck.complete)
+      ("test", "Run package tests", [ "tests" ], acceptsTest, Packages.Test.execute, Packages.Test.help, Packages.Test.complete)
+      ("deps", "Show dependencies and dependents", [ "dependencies" ], acceptsDeps, Cli.Deps.execute, Cli.Deps.help, Cli.Deps.complete)
+      ("val", "Create a new value", [ "let" ], acceptsVal, Packages.Value.execute, Packages.Value.help, Packages.Value.complete)
+      ("fn", "Create a new function", [ "function" ], acceptsFn, Packages.Fn.execute, Packages.Fn.help, Packages.Fn.complete)
+      ("type", "Create a new type", [], acceptsType, Packages.Type.execute, Packages.Type.help, Packages.Type.complete)
+      ("trait", "Create a new trait", [], acceptsTrait, Packages.TraitCommand.execute, Packages.TraitCommand.help, Packages.TraitCommand.complete)
+      ("impl", "Implement a trait for a type", [], acceptsImpl, Packages.ImplCommand.execute, Packages.ImplCommand.help, Packages.ImplCommand.complete)
+      ("module", "Define multiple package declarations", [], acceptsModule, Packages.ModuleCommand.execute, Packages.ModuleCommand.help, Packages.ModuleCommand.complete)
+      ("edit", "Change an item without retyping it", [], acceptsEdit, Packages.Edit.execute, Packages.Edit.help, Packages.Edit.complete)
+      ("rename", "Give an item a different name (its content and callers are untouched)", [], acceptsRename, Packages.Rename.execute, Packages.Rename.help, Packages.Rename.complete)
+      ("hash", "Show hash of a package item", [], acceptsHash, Packages.Hash.execute, Packages.Hash.help, Packages.Hash.complete)
+      // SCM commands
+      ("status", "What's in your draft, in one line", [ "wip", "changes" ], acceptsStatus, Cli.Status.execute, Cli.Status.help, Cli.Status.complete)
+      // `commits`, not `log`: every noun in this CLI says what it lists (`ops`, `branches`, `conflicts`), and
+      // `log` only reads as "commits" if you've used git. `log` is its own command, meaning whichever
+      // history you're standing in.
+      ("commits", "Your commits, newest first", [ "history" ], acceptsCommits, Cli.Commits.execute, Cli.Commits.help, Cli.Commits.complete)
+      ("commit", "Review your draft, propagate, and commit it", [], acceptsCommit, Cli.Commit.execute, Cli.Commit.help, Cli.Commit.complete)
+      ("discard", "Drop your draft: everything authored since the last commit", [ "reset" ], acceptsDiscard, Cli.Discard.execute, Cli.Discard.help, Cli.Discard.complete)
+      ("show", "Show what a commit contains, or what one op does", [], acceptsShow, Cli.Commits.executeShow, Cli.Commits.helpShow, Cli.Commits.complete)
+      ("branch", "Work on an isolated line of work (create / switch / inspect)", [ "br" ], acceptsBranch, Cli.Branch.execute, Cli.Branch.help, Cli.Branch.complete)
+      ("rebase", "Accept the parent's changes into a branch", [], acceptsRebase, Cli.Branch.executeRebaseCmd, Cli.Branch.help, Cli.Branch.complete)
+      ("merge", "Merge a branch into its parent", [], acceptsMerge, Cli.Branch.executeMergeCmd, Cli.Branch.mergeHelp, Cli.Branch.complete)
+      ("branches", "List your branches", [], acceptsBranches, Cli.Branch.executeBranchesCmd, Cli.Branch.help, Cli.Branch.complete)
+      ("switch", "Move onto a branch (`switch main` returns)", [ "checkout" ], acceptsSwitch, Cli.Branch.executeSwitchCmd, Cli.Branch.help, Cli.Branch.complete)
+      ("diff", "What a branch changes vs its parent", [], acceptsDiff, Cli.Branch.executeDiffCmd, Cli.Branch.help, Cli.Branch.complete)
+      ("log", "History: commits on main, a branch's ops on a branch", [], acceptsLog, Cli.Branch.executeLogCmd, Cli.Branch.help, Cli.Branch.complete)
+      ("resolve", "Settle one conflicted name on a branch", [], acceptsResolve, Cli.Branch.executeResolveCmd, Cli.Branch.help, Cli.Branch.complete)
+      ("constraints", "Standing findings about the store: stale usages, kind changes, superseded overrides, rival implementations", [], acceptsConstraints, Cli.ConstraintsCmd.execute, Cli.ConstraintsCmd.help, Cli.ConstraintsCmd.complete)
+      ("ack", "Leave a constraint finding for now (`dark ack --all`)", [], acceptsAck, Cli.ConstraintsCmd.executeAckCmd, Cli.ConstraintsCmd.help, Cli.ConstraintsCmd.complete)
+      ("undeprecate", "Put a deprecated fn/type/value/trait/impl/test back on the shelf", [ "restore" ], acceptsUndeprecate, Packages.Deprecate.executeUndeprecate, Packages.Deprecate.undeprecateHelp, Packages.Deprecate.complete)
+      ("backups", "Copies of the store: what exists, take one, prune", [], acceptsBackups, Cli.Backups.execute, Cli.Backups.help, Cli.Backups.complete)
+      ("builtins", "List all builtin functions", [], acceptsBuiltins, Builtins.execute, Builtins.help, Builtins.complete)
+      ("find-values", "Find values of a given type", [], acceptsFindValues, Packages.FindValues.execute, Packages.FindValues.help, Packages.FindValues.complete)
+      ("impls", "List the implementations of a trait on this branch", [], acceptsImpls, Packages.Impls.execute, Packages.Impls.help, Packages.Impls.complete)
+      ("serve", "Start an HTTP server", [ "http-server" ], acceptsServe, Http.Serve.execute, Http.Serve.help, Http.Serve.complete)
+      ("docs", "Browse in-CLI documentation", [ "doc", "man" ], acceptsDocs, Docs.Command.execute, Docs.Command.help, Docs.Command.complete)
+      ("undo", "Step an item back to its previous version", [], acceptsUndo, Cli.Undo.execute, Cli.Undo.help, Cli.Undo.complete)
+      ("deprecate", "Mark a fn/type/value/trait/impl/test as deprecated", [], acceptsDeprecate, Packages.Deprecate.execute, Packages.Deprecate.help, Packages.Deprecate.complete)
+      ("delete", "Take a fn/type/value/trait/impl/test off the shelf (sugar for deprecate --kind obsolete)", [], acceptsDelete, Packages.Delete.execute, Packages.Delete.help, Packages.Delete.complete)
+      ("outliner", "Interactive tree outliner", [ "tree-exp" ], acceptsOutliner, Outliner.App.execute, Outliner.App.help, Outliner.App.complete)
+      ("export-seed", "Export minimal seed.db from current database", [], acceptsExportSeed, ExportSeed.execute, ExportSeed.help, ExportSeed.complete)
+      ("traces", "The runs this instance has kept: what ran, what it did, and resuming one", [ "trace", "exec", "runs" ], acceptsTraces, Tracing.execute, Tracing.help, Tracing.complete)
+      ("conflicts", "Review what a merge or rebase auto-resolved", [], acceptsConflicts, Conflicts.execute, Conflicts.help, Conflicts.complete)
+      ("permissions", "Review effects and runtime permission policies", [ "perms" ], acceptsPermissions, Permissions.Command.execute, Permissions.Command.help, Permissions.Command.complete)
+      ("ops", "Read this instance's op log", [], acceptsOps, Ops.execute, Ops.help, Ops.complete)
+      ("ps", "What is running: this instance's own processes, then every other Dark on this machine", [ "processes" ], acceptsPs, Cli.Ps.execute, Cli.Ps.help, Cli.Ps.complete)
+      ("workbench", "Open the workbench -- a framed, navigable package tree (CLI-UX redesign)", [ "wb" ], acceptsWorkbench, Workbench.execute, Workbench.help, Workbench.complete) ]
+    |> Stdlib.List.map(
+      // CLEANUP nitpicky: swap help and complete
+      fun (name, desc, aliases, accepts, execute, help, complete) ->
+        CommandHandler
+          { name = name
+            description = desc
+            aliases = aliases
+            accepts = accepts
+            execute = execute
+            help = help
+            complete = complete }
+      )
+
+
+  // @compiler blocked: missing-implementation
+  let findCommandIn (commands: List<CommandHandler>) (name: String) : CommandHandler =
+
+    let allMatches = // CLEANUP use a Set?
+      let nameMatches =
+        commands
+        |> Stdlib.List.filter  (fun cmd -> cmd.name == name)
+
+      let aliasMatches =
+        commands
+        |> Stdlib.List.filter (fun cmd ->
+          Stdlib.List.any cmd.aliases (fun alias -> alias == name))
+
+      Stdlib.List.append nameMatches aliasMatches
+
+    match allMatches with
+    | [handler] -> handler
+    | handler :: _ -> handler // CLEANUP?
+    | [] ->
+      CommandHandler
+        { name = name
+          description = "Unknown command"
+          aliases = []
+          // Any words, so the name itself is what gets refused, below.
+          accepts = fun () -> Accepts.text 0
+          execute = fun state args ->
+            Stdlib.printErrorLine (View.formatError $"Unknown command: {name}")
+            Stdlib.printErrorLine "Use 'help' to see available commands."
+            { state with exitCode = 1 }
+          help = fun _state -> $"No help available for command: {name}"
+          complete = fun _state _args -> [] }
+
+  // @compiler blocked: missing-implementation
+  let executeCommand (name: String) (state: AppState) (args: List<String>) : AppState =
+    let handler = findCommandIn state.allCommandsCache name
+
+    // A bare `help` as the FIRST argument means `--help`. Handled here rather than per-command, because
+    // left to them `help` is read as the argument that command wanted: `dark fn help` answers "Function
+    // body required", `dark delete help` answers "'help' is not a valid item kind".
+    //
+    // First argument only. The cost is `dark search help`, which shows help rather than searching.
+    let firstIsHelp =
+      match Stdlib.List.head args with
+      | Some "help" -> true
+      | _ -> false
+
+    let asksForHelp =
+      (Stdlib.List.contains args "--help")
+      || (Stdlib.List.contains args "-h")
+      || firstIsHelp
+
+    if asksForHelp then
+      executeCommandHelp name state
+    else
+      // What the command takes is declared beside it (`accepts`), and checked here, once, before it
+      // runs: a flag it does not have, a word past the last it takes, or nothing where it needs
+      // something. A refusal exits 1 and the command never sees the arguments. The usage is not
+      // repeated here; `--help` has it.
+      let accepts = handler.accepts
+      match Accepts.check name (accepts ()) args with
+      | Some why ->
+        Cli.printErr why
+        Cli.printHint $"  `dark {name} --help` shows what it takes."
+        { state with exitCode = 1 }
+      | None ->
+        let ex = handler.execute
+        ex state args
+
+  // @compiler blocked: missing-implementation
+  let executeCommandHelp (name: String) (state: AppState) : AppState =
+    let handler = findCommandIn state.allCommandsCache name
+    let helpFn = handler.help
+    let aliasSuffix =
+      match handler.aliases with
+      | [] -> ""
+      | aliases -> "\n\nAliases: " + (Stdlib.String.join aliases ", ")
+
+    let body = helpFn state
+
+    // Every `--help` opens with what the command IS. Some help texts are shared by a family
+    // (`branch` and `branches` share one) and some open on `Usage:`, so without
+    // this you learn about a group, or about syntax, before purpose. Every command has a registry
+    // description, and that is the sentence.
+    let firstLine =
+      Stdlib.String.splitOnNewline body
+      |> Stdlib.List.head
+      |> Stdlib.Option.withDefault ""
+      |> Stdlib.String.trim
+
+    let alreadySummarised =
+      (firstLine != "")
+      && (Stdlib.Bool.not (Stdlib.String.startsWith firstLine "Usage:"))
+      && (Stdlib.Bool.not (Stdlib.String.startsWith firstLine "dark "))
+
+    let summarised =
+      if alreadySummarised then
+        body
+      else
+        $"{handler.description}\n{body}"
+
+    Stdlib.printLine (summarised + aliasSuffix)
+    state
+
+  // Command groups organized by category (shared between compact and detailed views).
+  //
+  // Every registered command belongs to exactly one group. A command in none of them is
+  // swept into an unnamed "Other:" bucket by `getDetailedCommandList`, which reads as a
+  // rendering accident rather than a category, and `getCompactCommandList` -- the welcome
+  // screen -- does not show it at all. `tests/cli/commandGroups.dark` fails when a newly
+  // registered command is in no group, and when a group names a command that is not.
+  // @compiler blocked: missing-implementation
+  let commandGroups () : List<(String * List<String>)> =
+    [ ("Packages", [ "nav", "ls", "view", "tree", "back", "search", "typecheck", "test", "find-values", "deps", "val", "fn", "type", "trait", "impl", "impls", "module", "edit", "rename", "hash", "deprecate", "delete", "undeprecate" ])
+      ("Changes",
+       [ "status", "commit", "commits", "show", "discard", "undo", "conflicts", "constraints", "ack", "ops" ])
+      ("Branches", [ "branch", "branches", "switch", "merge", "rebase", "diff", "log", "resolve" ])
+      ("Execution", [ "run-script", "eval", "ps", "traces", "serve" ])
+      ("Installation", [ "install", "update", "uninstall", "version", "install-status" ])
+      ("Security", [ "permissions" ])
+      ("Utilities",
+       [ "clear", "help", "docs", "quit", "builtins", "export-seed", "workbench", "outliner", "backups", "config" ]) ]
+
+  // @compiler blocked: missing-implementation
+  let formatCommandGroup (groupName: String) (commandNames: List<String>) (commands: List<CommandHandler>) : String =
+    let formattedCommands =
+      commandNames
+      |> Stdlib.List.filterMap (fun name ->
+        match Stdlib.List.findFirst commands (fun cmd -> cmd.name == name) with
+        | Some cmd ->
+          match cmd.aliases with
+          | [] -> Stdlib.Option.Option.Some $"  {cmd.name} - {cmd.description}"
+          | aliases ->
+            let aliasText = Stdlib.String.join aliases ", "
+            Stdlib.Option.Option.Some $"  {cmd.name} ({aliasText}) - {cmd.description}"
+        | None -> Stdlib.Option.Option.None)
+    let commandLines = Stdlib.String.join formattedCommands "\n"
+    $"{groupName}:\n{commandLines}"
+
+  // @compiler blocked: missing-implementation
+  let formatCompactGroup (groupName: String) (cmdNames: List<String>) : String =
+    let namesList = Stdlib.String.join cmdNames ", "
+    $"{groupName}: {namesList}"
+
+  // Compact command list for welcome screen (with logo, minimal text)
+  // @compiler blocked: missing-implementation
+  let getCompactCommandList () : String =
+    let groups = commandGroups ()
+
+    let formattedGroups =
+      groups
+      |> Stdlib.List.map (fun (groupName, cmdNames) ->
+        formatCompactGroup groupName cmdNames)
+
+    let welcome = "Welcome to Darklang!"
+    let availableCommands = "Commands:"
+
+    let groupsWithFooter =
+      Stdlib.List.append formattedGroups [ "", "Type 'help' for detailed command info" ]
+
+    let allLines =
+      Stdlib.List.append [ welcome, "", availableCommands, "" ] groupsWithFooter
+
+    Logo.combineLogoAndText Logo.logo allLines Stdlib.Cli.UI.Colors.logoColor
+
+  // Detailed command list for help command (no logo, full details)
+  // @compiler blocked: missing-implementation
+  let getDetailedCommandList () : String =
+    let commands = allCommands ()
+    let groups = commandGroups ()
+
+    let formattedGroups =
+      groups
+      |> Stdlib.List.map (fun (groupName, cmdNames) ->
+        formatCommandGroup groupName cmdNames commands)
+
+    let allGroupedCommands =
+      groups
+      |> Stdlib.List.map (fun (_groupName, cmdNames) -> cmdNames)
+      |> Stdlib.List.flatten
+    let ungroupedCommands =
+      commands
+      |> Stdlib.List.filter (fun cmd ->
+        match Stdlib.List.findFirst allGroupedCommands (fun name -> name == cmd.name) with
+        | Some _ -> false
+        | None -> true)
+      |> Stdlib.List.map (fun cmd ->
+        match cmd.aliases with
+        | [] -> $"  {cmd.name} - {cmd.description}"
+        | aliases ->
+          let aliasText = Stdlib.String.join aliases ", "
+          $"  {cmd.name} ({aliasText}) - {cmd.description}")
+
+    let finalGroups =
+      if Stdlib.List.isEmpty ungroupedCommands then
+        formattedGroups
+      else
+        let ungroupedGroup =
+          let ungroupedLines = Stdlib.String.join ungroupedCommands "\n"
+          $"Other:\n{ungroupedLines}"
+        Stdlib.List.append formattedGroups [ungroupedGroup]
+
+    let groupsText = Stdlib.String.join finalGroups "\n\n"
+
+    // At the TOP, not the bottom. This list is ~100 lines, so a footer is the last thing a new reader
+    // gets to and the first thing they needed: what the loop is, and where an agent should go instead of
+    // reading a hundred command names.
+    let header =
+      "Workflow: fn Me.Demo.f <body> → eval 'Me.Demo.f 2' → status → commit\nhelp <command> for details. AI agents: docs for-ai"
+
+    header + "\n\n" + groupsText
+
+
+  /// Identifies what a completion request depends on, *ignoring* the partial token the user is mid-way
+  /// through typing. Typing "Sta" one key at a time produces three different prompt strings but the same
+  /// context: command `nav`, no completed args. That's the point; see `getCompletionsForContext`.
+  /// `loc` is the caller's already-formatted location string. It's part of the key because `nav`/`ls`
+  /// complete against wherever you are, so the same command with the same completed args means something
+  /// different after a `cd`. Taken as a parameter rather than recomputed, because the loop already has it.
+  // @compiler blocked: missing-implementation
+  let completionContextKey (loc: String) (input: String) : String =
+    let parsed = Completion.parseInput input
+    if parsed.isCompletingCommand then
+      // Command-name completion reads `state.commandOptionsCache`, which is already built once at startup,
+      // so there's nothing expensive to key on. One constant bucket.
+      "cmd\u0000" + loc
+    else
+      let completedArgs =
+        match Stdlib.List.last parsed.args with
+        | Some _ -> Stdlib.List.dropLast parsed.args
+        | None -> []
+      // \u0000 can't occur in a typed token, so joining is unambiguous.
+      Stdlib.String.join
+        (Stdlib.List.append [ loc, parsed.commandName ] completedArgs)
+        "\u0000"
+
+  /// The half of completion that depends only on the command and its *completed* arguments. For `nav`/`ls`
+  /// that means a package DB query, which is far too expensive to repeat per keystroke -- and a cache keyed
+  /// on the whole prompt text misses on every character of a word. The partial token filters this result
+  /// afterwards, and filtering a list is cheap.
+  // @compiler blocked: missing-implementation
+  let getCompletionsForContext
+    (state: AppState)
+    (input: String)
+    : List<Completion.CompletionItem> =
+    let parsed = Completion.parseInput input
+    if parsed.isCompletingCommand then
+      state.commandOptionsCache |> Stdlib.List.map Completion.simple
+    else
+      let handler = findCommandIn state.allCommandsCache parsed.commandName
+      let completedArgs =
+        match Stdlib.List.last parsed.args with
+        | Some _ -> Stdlib.List.dropLast parsed.args
+        | None -> []
+      handler.complete state completedArgs
+
+  // @compiler blocked: missing-implementation
+  let getCompletions (state: AppState) (input: String) : List<Completion.CompletionItem> =
+    let parsed = Completion.parseInput input
+
+    if parsed.isCompletingCommand then
+      // Completing command name
+      let partial = Completion.getPartialCompletion parsed
+
+      let options = state.commandOptionsCache
+
+      let filtered =
+        if Stdlib.String.isEmpty partial then
+          options
+        else
+          Stdlib.List.filter options (fun name -> Stdlib.String.startsWith name partial)
+
+      filtered |> Stdlib.List.map Completion.simple
+    else
+      // Completing command arguments
+      let handler = findCommandIn state.allCommandsCache parsed.commandName
+      let completeFunc = handler.complete
+
+      // Split args into completed args and partial (last arg)
+      // parseInput appends "" for trailing space, so this always works:
+      //   "branch switch " → args=["switch",""], completedArgs=["switch"], partial=""
+      //   "branch sw"      → args=["sw"],        completedArgs=[],         partial="sw"
+      //   "branch "        → args=[],             completedArgs=[],         partial=""
+      let (completedArgs, partial) =
+        match Stdlib.List.last parsed.args with
+        | Some lastArg -> (Stdlib.List.dropLast parsed.args, lastArg)
+        | None -> ([], "")
+
+      let completions = completeFunc state completedArgs
+
+      if Stdlib.String.isEmpty partial then
+        completions
+      else
+        let filtered =
+          completions
+          |> Stdlib.List.filter (fun item ->
+            Stdlib.String.startsWith item.value partial)
+
+        // If centralized filtering found nothing, try direct call as fallback
+        // (supports commands with smart matching like path traversal)
+        match filtered with
+        | _ :: _ -> filtered
+        | [] -> completeFunc state parsed.args
+
+  // @compiler blocked: missing-implementation
+  let hintFromCompletions
+    (input: String)
+    (completions: List<Completion.CompletionItem>)
+    : String =
+    let parsed = Completion.parseInput input
+
+    let partial =
+      if parsed.isCompletingCommand then
+        parsed.commandName
+      else
+        match Stdlib.List.last parsed.args with
+        | Some lastArg -> lastArg
+        | None -> ""
+
+    let completionValues = completions |> Stdlib.List.map (fun item -> item.value)
+    Completion.getHintFromCompletions partial completionValues
+
+  /// The hint, given an already-computed context result. This is what the interactive loop calls on each
+  /// keystroke, passing its cached context.
+  /// Returns `(hint, partialUsed, filteredItems)`. The caller keeps the last two so the *next* keystroke can
+  /// narrow from them instead of re-filtering the whole context list: typing `c` then `cd` filters the ~8
+  /// survivors rather than all ~120 command names. Prefix filtering is transitive, so narrowing from the
+  /// previous result gives exactly the same answer as filtering the full list.
+  ///
+  /// Parses `input` once and does both halves rather than composing a context lookup with
+  /// `hintFromCompletions`, which each re-parse; this runs on every keystroke.
+  // @compiler blocked: missing-implementation
+  let getCompletionHintFromContext
+    (state: AppState)
+    (input: String)
+    (contextCompletions: List<Completion.CompletionItem>)
+    (prevPartial: String)
+    (prevItems: List<Completion.CompletionItem>)
+    : (String * String * List<Completion.CompletionItem>) =
+    let parsed = Completion.parseInput input
+
+    let (filterPartial, hintPartial) =
+      if parsed.isCompletingCommand then
+        (Completion.getPartialCompletion parsed, parsed.commandName)
+      else
+        let lastArg =
+          match Stdlib.List.last parsed.args with
+          | Some lastArg -> lastArg
+          | None -> ""
+        (lastArg, lastArg)
+
+    let hintOf (items: List<Completion.CompletionItem>) : String =
+      Completion.getHintFromCompletions
+        hintPartial
+        (items |> Stdlib.List.map (fun item -> item.value))
+
+    if Stdlib.String.isEmpty filterPartial then
+      (hintOf contextCompletions, "", contextCompletions)
+    else
+      // Narrow from the previous result only when this partial extends it and it was non-empty. An empty
+      // previous result is unusable as a base, and so is a fallback result (see below), which is why the
+      // fallback reports "" back to the caller.
+      let canNarrow =
+        (Stdlib.Bool.not (Stdlib.String.isEmpty prevPartial))
+        && (Stdlib.String.startsWith filterPartial prevPartial)
+        && (match prevItems with
+            | _ :: _ -> true
+            | [] -> false)
+
+      let narrowBase = if canNarrow then prevItems else contextCompletions
+
+      let filtered =
+        narrowBase
+        |> Stdlib.List.filter (fun item ->
+          Stdlib.String.startsWith item.value filterPartial)
+
+      match filtered with
+      | _ :: _ -> (hintOf filtered, filterPartial, filtered)
+      | [] ->
+        // Centralized filtering found nothing, so re-ask the handler with the full args. This supports
+        // commands with smart matching (path traversal), genuinely depends on the partial, and its result
+        // is not a prefix-filtered subset -- so it must not become a narrowing base.
+        let fallback =
+          if parsed.isCompletingCommand then
+            []
+          else
+            let handler = findCommandIn state.allCommandsCache parsed.commandName
+            handler.complete state parsed.args
+        (hintOf fallback, "", [])
+
+  // @compiler blocked: missing-implementation
+  let getCompletionHint (state: AppState) (input: String) : String =
+    hintFromCompletions input (getCompletions state input)
+
+
+module Registry =
+  /// Commands that read stdin as part of a normal interactive run -- a question flow, a y/N
+  /// confirm, a secret, or an external $EDITOR. The workbench's `:` bar captures stdout, so
+  /// running one of these captured leaves a person answering a prompt they cannot see; the bar
+  /// hands the terminal off instead (inline, vim-`:!` style) and returns on exit. An entry is a
+  /// canonical command name, or name + first argument where only one verb prompts.
+  // @compiler blocked: missing-implementation
+  val promptsForInput =
+    [ "install"
+      "uninstall"
+      "update"
+      "backups restore"
+      "backups prune"
+      "discard"
+      "commit"
+      "merge"
+      "branch archive"
+      "deprecate"
+      "delete"
+      "traces delete"
+      "conflicts"
+      "edit" ]
+
+  /// Full-screen TUIs. Capturing one dumps its alternate-screen escapes into a pane, so the bar
+  /// launches it as a page instead. Canonical names; aliases resolve before matching. `apps` is
+  /// handled in `takesScreen` because it is a TUI only when bare.
+  // @compiler blocked: missing-implementation
+  val screenCommands = [ "outliner" ]
+
+  /// Should the workbench run this command line on the real terminal instead of captured?
+  /// `-y`/`--yes` is the universal "don't ask", so a line carrying it never needs the handoff.
+  // @compiler blocked: missing-implementation
+  let needsTerminal (commands: List<CommandHandler>) (cmd: String) (args: List<String>) : Bool =
+    if (Stdlib.List.contains args "-y") || (Stdlib.List.contains args "--yes") then
+      false
+    else
+      let canonical = (findCommandIn commands cmd).name
+      let withFirst =
+        match Stdlib.List.head args with
+        | Some first -> canonical + " " + first
+        | None -> canonical
+      (Stdlib.List.contains promptsForInput canonical)
+      || (Stdlib.List.contains promptsForInput withFirst)
+
+  /// Does this command line own the whole screen (a full-screen TUI)?
+  // @compiler blocked: missing-implementation
+  let takesScreen (commands: List<CommandHandler>) (cmd: String) (args: List<String>) : Bool =
+    let canonical = (findCommandIn commands cmd).name
+    Stdlib.List.contains screenCommands canonical
+
+module Commands =
+  // @compiler blocked: missing-implementation
+  let parseAndExecute (state: AppState) (input: String) : AppState =
+    let trimmed = Stdlib.String.trim input
+    let parts =
+      (Stdlib.String.split trimmed " ")
+      |> Stdlib.List.filter (fun s -> s != "")
+
+    match parts with
+    | [] -> state
+    | commandName :: args ->
+      Registry.executeCommand commandName state args

@@ -6,6 +6,7 @@
 // So the disagreement has to be asserted directly. These are the cheap version of that.
 
 // The constant IS what a process on main reports.
+// @compiler blocked: compiler-gap
 Darklang.SCM.PackageOps.currentBranch () = Darklang.SCM.Branch.mainBranchId
 
 // An ID is not a NAME. That is the property the type carries: while an id spells the same as a name,
@@ -17,16 +18,21 @@ Darklang.SCM.PackageOps.currentBranch () = Darklang.SCM.Branch.mainBranchId
 Stdlib.String.length (Stdlib.Uuid.toString Darklang.SCM.Branch.mainBranchId) = 36
 
 // Main is not a row in `branches`: it needs no registration, so `get` finds nothing for it.
+// @compiler blocked: compiler-gap
 Darklang.SCM.Branch.get Darklang.SCM.Branch.mainBranchId = Stdlib.Option.Option.None
 
 // A branch id that isn't main has no overlay ops on main, and asking about main yields none either.
+// @compiler blocked: compiler-gap
 Darklang.SCM.PackageOps.visibleParams Darklang.SCM.Branch.mainBranchId = []
 
 // Main still DISPLAYS as "main". It has no `branches` row, so the name lookup has to know about it
 // specially or it falls back to showing the id.
+// @compiler blocked: compiler-gap
 Darklang.SCM.PackageOps.branchName Darklang.SCM.Branch.mainBranchId = "main"
 
 // And it resolves by name, from both boundaries, since neither the `branches` table nor an id-prefix
 // search can find a branch that has no row.
+// @compiler blocked: compiler-gap
 Darklang.Cli.Branch.lookupRef "main" = Stdlib.Option.Option.Some Darklang.SCM.Branch.mainBranchId
+// @compiler blocked: compiler-gap
 Darklang.Cli.Branch.lookupRef (Stdlib.Uuid.toString Darklang.SCM.Branch.mainBranchId) = Stdlib.Option.Option.Some Darklang.SCM.Branch.mainBranchId

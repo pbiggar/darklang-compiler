@@ -1,0 +1,274 @@
+module Darklang.SCM.Propagation
+
+// Every edit propagates to all callers on its branch.
+
+
+/// Resolve a binding on an explicit branch, including package tests.
+// @compiler blocked: missing-implementation
+let hashOn
+  (branchId: Uuid)
+  (loc: LanguageTools.ProgramTypes.PackageLocation)
+  (kind: LanguageTools.ProgramTypes.ItemKind)
+  : Stdlib.Option.Option<LanguageTools.ProgramTypes.Hash> =
+  match kind with
+  | Fn -> LanguageTools.PackageManager.Function.find branchId loc
+  | Type -> LanguageTools.PackageManager.Type.find branchId loc
+  | Value -> LanguageTools.PackageManager.Value.find branchId loc
+  | Trait -> LanguageTools.PackageManager.Trait.find branchId loc
+  | TraitImpl -> LanguageTools.PackageManager.TraitImpl.find branchId loc
+  | Test -> LanguageTools.PackageManager.Test.find branchId loc
+
+/// Rebind exactly this branch, including when it is not the process's branch.
+// @compiler blocked: missing-implementation
+let rebindOn
+  (branchId: Uuid)
+  (loc: LanguageTools.ProgramTypes.PackageLocation)
+  (kind: LanguageTools.ProgramTypes.ItemKind)
+  (hash: LanguageTools.ProgramTypes.Hash)
+  : Stdlib.Result.Result<Unit, String> =
+  Builtin.pmSetName branchId loc kind hash
+
+/// Reassert a binding only when replaying an existing op did not move it.
+// @compiler blocked: missing-implementation
+let ensureBindings
+  (branchId: Uuid)
+  (moved: List<LanguageTools.ProgramTypes.PropagateRepoint>)
+  : Stdlib.Result.Result<Unit, String> =
+  moved
+  |> Stdlib.List.fold (Stdlib.Result.Result.Ok ()) (fun result r ->
+    let _ = result?
+    let hash = LanguageTools.ProgramTypes.Reference.hash r.toRef
+    let kind = LanguageTools.ProgramTypes.Reference.kind r.toRef
+    match hashOn branchId r.location kind with
+    | Some now when now == hash -> Stdlib.Result.Result.Ok ()
+    | _ -> rebindOn branchId r.location kind hash)
+
+/// Repoint every caller of one of <param previousHashes> at <param currentHash>, on <param branchId>,
+/// and say which names moved. The cascade behind every edit, and the one place the builtin is named.
+///
+/// Lives here rather than in the CLI because a RESOLUTION needs it too: overriding a conflict rebinds
+/// a name, and a rebind that does not repoint its callers leaves the name saying one thing and
+/// everything that calls it doing another.
+// @compiler blocked: missing-implementation
+let repointDependents
+  (branchId: Uuid)
+  (location: LanguageTools.ProgramTypes.PackageLocation)
+  (itemKind: LanguageTools.ProgramTypes.ItemKind)
+  (previousHashes: List<LanguageTools.ProgramTypes.Hash>)
+  (currentHash: LanguageTools.ProgramTypes.Hash)
+  : Stdlib.Result.Result<List<LanguageTools.ProgramTypes.PropagateRepoint>, String> =
+  let moved = (Builtin.pmPropagate branchId location itemKind previousHashes currentHash)?
+  let _ = (ensureBindings branchId moved)?
+  Stdlib.Result.Result.Ok moved
+
+// @compiler blocked: missing-implementation
+let modulesOf (loc: LanguageTools.ProgramTypes.PackageLocation) : String =
+  Stdlib.String.join loc.modules "."
+
+
+// @compiler blocked: missing-implementation
+let rebind
+  (loc: LanguageTools.ProgramTypes.PackageLocation)
+  (kind: LanguageTools.ProgramTypes.ItemKind)
+  (hash: LanguageTools.ProgramTypes.Hash)
+  : Stdlib.Result.Result<Unit, String> =
+  rebindOn (SCM.PackageOps.currentBranch ()) loc kind hash
+
+
+/// What kind of item lives at this name, if anything does. The CLI takes an FQN from a human, who does not
+/// type "fn" after it.
+// @compiler blocked: missing-implementation
+let kindAt
+  (loc: LanguageTools.ProgramTypes.PackageLocation)
+  : Stdlib.Option.Option<LanguageTools.ProgramTypes.ItemKind> =
+  SCM.PackageOps.liveBindingAt loc
+  |> Stdlib.Option.map (fun b -> Deps.kindOf b.itemType)
+
+
+/// The hash currently live at this name, on the branch you're on.
+// @compiler blocked: missing-implementation
+let currentHash
+  (loc: LanguageTools.ProgramTypes.PackageLocation)
+  : Stdlib.Option.Option<LanguageTools.ProgramTypes.Hash> =
+  SCM.PackageOps.liveBindingAt loc
+  |> Stdlib.Option.map (fun b -> LanguageTools.ProgramTypes.Hash.Hash b.hash)
+
+
+/// The version this branch inherited when it first changed this name.
+// @compiler blocked: missing-implementation
+let forkBaseOf
+  (branchId: Uuid)
+  (loc: LanguageTools.ProgramTypes.PackageLocation)
+  : Stdlib.Option.Option<String> =
+  if SCM.Branch.isMain branchId then
+    Stdlib.Option.Option.None
+  else
+    SCM.Conflicts.branchBases branchId
+    |> Stdlib.List.findFirst (fun b ->
+      (b.owner == loc.owner) && (b.modules == modulesOf loc) && (b.name == loc.name))
+    |> Stdlib.Option.map (fun b -> b.baseHash)
+
+
+/// The versions created for this name, oldest first, including propagated versions.
+///
+/// `locations` accumulates a row per binding; rebinds (undo or a conflict override) are
+/// marked `source = 'resolution'`. Authored and propagated versions both belong in
+/// the sequence, so propagated changes can be undone too.
+///
+/// Undo needs "where am I in the sequence", not "what was most recently unlisted", which after an undo is
+/// the version just stepped off.
+// @compiler blocked: missing-implementation
+let authoringOrder
+  (loc: LanguageTools.ProgramTypes.PackageLocation)
+  : List<String> =
+  let fromMain =
+    // main-scoped: main's half of the sequence, cut at the fork below when on a branch.
+    Stdlib.Sqlite.columnP
+      (localDb ())
+      "SELECT item_hash FROM locations
+       WHERE owner = @p0 AND modules = @p1 AND name = @p2 AND source IN ('op', 'propagation')
+       ORDER BY rowid"
+      [ loc.owner, modulesOf loc, loc.name ]
+      "item_hash"
+
+  // On a branch the sequence CONTINUES into the branch's own ops: main's rows UP TO THE FORK are the
+  // history you forked from, the branch's edits are what you did after. Stopping at the fork leaves a
+  // branch-authored version with nowhere to step back to; running past it makes `undo` step onto a
+  // version main authored after you forked, which the branch never had.
+  match SCM.PackageOps.currentBranch () with
+  | id when SCM.Branch.isMain id -> fromMain
+  | branch ->
+    let fromBranch =
+      SCM.PackageOps.branchHashHistoryFor branch loc.owner (modulesOf loc) loc.name
+
+    let mainUpToFork =
+      match forkBaseOf branch loc with
+      | None -> fromMain
+      | Some base ->
+        // Through the LAST occurrence of the base: a name can return to a hash it held before.
+        let lastAt =
+          fromMain
+          |> Stdlib.List.indexedMap (fun i h -> (i, h))
+          |> Stdlib.List.filter (fun (_, h) -> h == base)
+          |> Stdlib.List.last
+          |> Stdlib.Option.map (fun (i, _) -> i)
+
+        match lastAt with
+        | Some i -> Stdlib.List.take fromMain (i + 1)
+        | None -> fromMain
+
+    Stdlib.List.append
+      mainUpToFork
+      (fromBranch |> Stdlib.List.filter (fun h -> Stdlib.Bool.not (Stdlib.List.contains mainUpToFork h)))
+
+
+/// The version authored immediately before the one that's live now. None at the start of the sequence.
+///
+/// Works however many times you step back, because it locates the CURRENT hash within the authoring order
+/// rather than asking what changed most recently. Undoing to v2 then asking again correctly yields v1.
+// @compiler blocked: missing-implementation
+let previousAuthored
+  (loc: LanguageTools.ProgramTypes.PackageLocation)
+  : Stdlib.Option.Option<LanguageTools.ProgramTypes.Hash> =
+  match currentHash loc with
+  | None -> Stdlib.Option.Option.None
+  | Some live ->
+    let liveStr = LanguageTools.ProgramTypes.hashToString live
+    let versions = authoringOrder loc
+
+    match Stdlib.List.findFirstIndex versions (fun h -> h == liveStr) with
+    | None ->
+      // The live binding isn't in the authored sequence at all -- it came from somewhere else entirely
+      // (a merge, a synced peer's version). Stepping "back" has no defined meaning there.
+      Stdlib.Option.Option.None
+    | Some 0 -> Stdlib.Option.Option.None
+    | Some i ->
+      match Stdlib.List.getAt versions (i - 1) with
+      | Some h -> Stdlib.Option.Option.Some(LanguageTools.ProgramTypes.Hash.Hash h)
+      | None -> Stdlib.Option.Option.None
+
+
+/// Every hash that has ever been bound at <param loc> on MAIN, newest first.
+///
+/// Grouped by hash, ordered by when each stopped being live -- the one still live sorts first because a
+/// NULL `unlisted_at` stands in as a date past every real one. A name that has been rebound and rebound
+/// again has a row per binding, and the caller wants the versions, not the rebinds.
+///
+/// Main only, and the caller is expected to know it: `locations` has no `branch_id`, so on a branch this
+/// is the history you FORKED FROM. `Cli.Packages.Propagate.getAllPreviousHashes` appends the branch's own
+/// versions to it.
+// @compiler blocked: missing-implementation
+let everBoundHashes
+  (loc: LanguageTools.ProgramTypes.PackageLocation)
+  (itemKind: LanguageTools.ProgramTypes.ItemKind)
+  : List<LanguageTools.ProgramTypes.Hash> =
+  let itemType = LanguageTools.ProgramTypes.ItemKind.toString itemKind
+
+  everBoundHashesFor [ (loc, itemKind) ]
+  |> Stdlib.Dict.get (everBoundKey loc.owner (modulesOf loc) loc.name itemType)
+  |> Stdlib.Option.withDefault []
+
+
+/// The key <fn everBoundHashesFor> answers under.
+// @compiler blocked: missing-implementation
+let everBoundKey
+  (owner: String)
+  (modules: String)
+  (name: String)
+  (itemType: String)
+  : String =
+  $"{SCM.Conflicts.bindingKey owner modules name}/{itemType}"
+
+
+/// <fn everBoundHashes> for many names in one query, keyed by <fn everBoundKey>; a name that was never
+/// bound is absent.
+// @compiler blocked: missing-implementation
+let everBoundHashesFor
+  (names:
+    List<(LanguageTools.ProgramTypes.PackageLocation * LanguageTools.ProgramTypes.ItemKind)>)
+  : Dict<String, List<LanguageTools.ProgramTypes.Hash>> =
+  let keys =
+    names
+    |> Stdlib.List.map (fun (loc, kind) ->
+      [ loc.owner
+        modulesOf loc
+        loc.name
+        LanguageTools.ProgramTypes.ItemKind.toString kind ])
+    |> Stdlib.List.unique
+
+  if Stdlib.List.isEmpty keys then
+    Dict {}
+  else
+    // main-scoped, on purpose: every hash ever bound on MAIN is this fn's contract.
+    Stdlib.Sqlite.rowsOrEmptyP
+      (localDb ())
+      "SELECT l.owner, l.modules, l.name, l.item_type, l.item_hash
+       FROM json_each(@p0) j
+       JOIN locations l
+         ON l.owner = json_extract(j.value, '$[0]')
+        AND l.modules = json_extract(j.value, '$[1]')
+        AND l.name = json_extract(j.value, '$[2]')
+        AND l.item_type = json_extract(j.value, '$[3]')
+       WHERE l.source <> 'unbind'
+       GROUP BY l.owner, l.modules, l.name, l.item_type, l.item_hash
+       ORDER BY l.owner, l.modules, l.name, l.item_type,
+         MAX(CASE WHEN l.unlisted_at IS NULL THEN '9999-12-31' ELSE l.unlisted_at END) DESC"
+      [ Stdlib.Json.serialize<List<List<String>>> keys ]
+    |> Stdlib.List.filterMap (fun row ->
+      match
+        (Stdlib.Sqlite.textField row "owner",
+         Stdlib.Sqlite.textField row "modules",
+         Stdlib.Sqlite.textField row "name",
+         Stdlib.Sqlite.textField row "item_type",
+         Stdlib.Sqlite.textField row "item_hash")
+      with
+      | (Some owner, Some modules, Some name, Some itemType, Some hash) ->
+        Stdlib.Option.Option.Some(
+          (everBoundKey owner modules name itemType,
+           LanguageTools.ProgramTypes.Hash.Hash hash)
+        )
+      | _ -> Stdlib.Option.Option.None)
+    |> Stdlib.List.groupByWithKey (fun (key, _) -> key)
+    |> Stdlib.List.map (fun (key, rows) ->
+      (key, rows |> Stdlib.List.map (fun (_, hash) -> hash)))
+    |> Stdlib.Dict.fromListOverwritingDuplicates

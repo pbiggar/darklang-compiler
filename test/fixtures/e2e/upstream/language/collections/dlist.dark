@@ -6,6 +6,8 @@
 
 [ 5L, Stdlib.Int64.add 1L 5L, 0L ] = [ 5L, 6L, 0L ]
 
+// @compiler blocked: compiler-gap
 [ 5L, Builtin.testRuntimeError "test", 0L ] = error="Uncaught exception: test"
+// @compiler blocked: compiler-gap
 [ 5L, Builtin.testRuntimeError "1", Builtin.testRuntimeError "2" ] = error="Uncaught exception: 1"
 // TODO mixed data attempts

@@ -8,30 +8,39 @@
 module Entrypoint =
   // Goes inside `<launcher> eval '<entrypoint> "<slug>"'`. A quote closes the eval string and
   // everything after it is a fresh command.
+  // @compiler blocked: compiler-gap
   (Darklang.Cli.Apps.Model.isValidEntrypoint
     "Darklang.Cli.Apps.Examples.heartbeat") = true
 
+  // @compiler blocked: compiler-gap
   (Darklang.Cli.Apps.Model.isValidEntrypoint "x'; touch /tmp/pwned; echo '") = false
 
+  // @compiler blocked: compiler-gap
   (Darklang.Cli.Apps.Model.isValidEntrypoint "x\"; id; \"") = false
 
+  // @compiler blocked: compiler-gap
   (Darklang.Cli.Apps.Model.isValidEntrypoint "") = false
 
 
 module AppName =
   // Goes into a systemd `Description=`, which is newline-delimited.
+  // @compiler blocked: compiler-gap
   (Darklang.Cli.Apps.Model.isValidAppName "Dark Packages HTTP Server") = true
 
+  // @compiler blocked: compiler-gap
   (Darklang.Cli.Apps.Model.isValidAppName
     "evil\nExecStartPre=/bin/sh -c id") = false
 
+  // @compiler blocked: compiler-gap
   (Darklang.Cli.Apps.Model.isValidAppName "") = false
 
 
 module Targets =
   // A foreground app writes no unit file, so it has no entrypoint to constrain.
+  // @compiler blocked: compiler-gap
   (Darklang.Cli.Apps.Model.isValidEntrypointOf
     (Darklang.Cli.Apps.Model.Target.Foreground "anything at all")) = true
 
+  // @compiler blocked: compiler-gap
   (Darklang.Cli.Apps.Model.isValidEntrypointOf
     (Darklang.Cli.Apps.Model.Target.Daemon "x'; id; '")) = false

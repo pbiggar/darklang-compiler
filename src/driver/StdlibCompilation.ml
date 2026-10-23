@@ -13,18 +13,33 @@ let ( let* ) = Result.bind
 
 (* Parse the embedded standard-library sources, including Unicode tables.
    Returns validated interpreter source units in declaration order. *)
-let loadStdlib () =
+let loadStdlib includeTests =
+  let* reasons =
+    CompilerAnnotations.parseReasons EmbeddedStdlib.compilerReasons
+  in
   let load (filename, text) =
-    WrittenParsing.parse Validation.Script
-      (ContentEncoding.decodeContent None text)
+    SourceInventory.parse ~reasons (ContentEncoding.decodeContent None text)
     |> Result.map_error (fun error ->
         "Error parsing " ^ filename ^ ": " ^ error)
+    |> Result.map (fun source -> (filename, source))
   in
-  ResultList.traverse load EmbeddedStdlib.sources
+  let upstream =
+    List.filter
+      (fun (path, _) -> includeTests || not (Text.contains path "/tests/"))
+      EmbeddedStdlib.upstreamSources
+  in
+  let* sources = ResultList.traverse load (upstream @ EmbeddedStdlib.sources) in
+  let* selected =
+    SourceSelection.select ~context:SourceContracts.emptyContext
+      ~roots:(List.map fst upstream)
+      ~supplements:(List.map fst EmbeddedStdlib.sources)
+      ~sources
+  in
+  Ok (List.map snd selected.SourceSelection.units)
 
 (* Build stdlib in isolation, returning reusable result.
    This can be called once and the result reused for multiple user program compilations. *)
-let buildStdlibWithTrace target recorder =
+let buildSelectedStdlibWithTrace includeTests target recorder =
   let measure name operation =
     let start = Int64.to_float (Mtime_clock.elapsed_ns ()) /. 1e6 in
     let result = operation () in
@@ -33,7 +48,8 @@ let buildStdlibWithTrace target recorder =
     result
   in
   let* sources =
-    measure "Stdlib detail: Source loading and parsing" loadStdlib
+    measure "Stdlib detail: Source loading and parsing" (fun () ->
+        loadStdlib includeTests)
   in
   let* _, checked, written =
     measure "Stdlib detail: Type checking" (fun () ->
@@ -124,6 +140,12 @@ let buildStdlibWithTrace target recorder =
       stdlibAnfCallGraph = anfGraph;
       stdlibTypeMap = typeMap;
     }
+
+let buildStdlibWithTrace target recorder =
+  buildSelectedStdlibWithTrace false target recorder
+
+let buildImportedTestStdlibWithTrace target recorder =
+  buildSelectedStdlibWithTrace true target recorder
 
 let buildStdlib target = buildStdlibWithTrace target None
 

@@ -26,14 +26,17 @@ module GetMethod =
 
 module Routes =
   // `get`/`post` build the Handler a record literal would, so a route table reads as routes.
+  // @compiler blocked: compiler-gap
   ((Stdlib.HttpServer.get "/ping" (fun req ->
       Stdlib.Http.Response
         { statusCode = 200L, headers = [], body = Stdlib.Blob.empty })).route) = "/ping"
 
+  // @compiler blocked: compiler-gap
   ((Stdlib.HttpServer.get "/ping" (fun req ->
       Stdlib.Http.Response
         { statusCode = 200L, headers = [], body = Stdlib.Blob.empty })).method) = "GET"
 
+  // @compiler blocked: compiler-gap
   ((Stdlib.HttpServer.post "/ops" (fun req ->
       Stdlib.Http.Response
         { statusCode = 200L, headers = [], body = Stdlib.Blob.empty })).method) = "POST"

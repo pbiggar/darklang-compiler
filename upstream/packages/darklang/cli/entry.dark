@@ -1,0 +1,88 @@
+/// Process entry: the --branch flag, and the split between a one-shot command and the interactive CLI.
+///
+/// Part of `Darklang.Cli`.
+module Darklang.Cli
+
+/// Pull `--<flag> value` or `--<flag>=value` out of `args`, returning the value and the args without it.
+/// First occurrence wins; later ones are left alone as ordinary args.
+///
+/// `Some ""` means the flag was there with nothing after it, which is a caller's error to report rather than
+/// something to silently ignore. Either way the flag is consumed, so it can't fall through and be read as
+/// the command.
+// @compiler blocked: missing-implementation
+let takeFlagValue (args: List<String>) (flag: String) : (Stdlib.Option.Option<String> * List<String>) =
+  let long = "--" + flag
+  let eq = long + "="
+  let (found, _takingNext, kept) =
+    args
+    |> Stdlib.List.fold (Stdlib.Option.Option.None, false, []) (fun state arg ->
+      let (found, takingNext, kept) = state
+      if takingNext then
+        (Stdlib.Option.Option.Some arg, false, kept)
+      else
+        match found with
+        | Some _ -> (found, false, Stdlib.List.pushBack kept arg)
+        | None ->
+          if arg == long then
+            (Stdlib.Option.Option.Some "", true, kept)
+          else if Stdlib.String.startsWith arg eq then
+            (Stdlib.Option.Option.Some(Stdlib.String.dropFirst arg (Stdlib.String.length eq)), false, kept)
+          else
+            (found, false, Stdlib.List.pushBack kept arg))
+  (found, kept)
+
+/// Strip a `--branch` that reached here, WITHOUT interpreting it.
+///
+/// `--branch` is resolved and consumed before Dark runs (`Cli.fs`: the flag, then `DARK_BRANCH`, then the
+/// stored branch, through `LibDB.BranchSelection`, which takes a name, a full id or an id prefix and
+/// refuses an ambiguous one). By the time argv reaches this fn the flag is gone, and `initState` reads the
+/// answer off the process.
+///
+/// So this only fires when something calls the Dark entry point directly -- in practice the test
+/// harness. Deliberately not acted on: resolving it here would be a second branch rule that can
+/// disagree with the F# one. A caller that wants a branch calls `switch`.
+// @compiler blocked: missing-implementation
+let parseBranchFlag (args: List<String>) : (Stdlib.Option.Option<Uuid> * List<String>) =
+  let (_ignored, rest) = takeFlagValue args "branch"
+  (Stdlib.Option.Option.None, rest)
+
+
+// @compiler blocked: missing-implementation
+let executeCliCommand (args: List<String>) : Int =
+  let (_unused, remainingArgs) = parseBranchFlag args
+  let initialState = initState ()
+
+  match remainingArgs with
+  | [] ->
+    if initialState.telemetryEnabled then
+      Telemetry.logSessionStart ()
+      let _ = LanguageTools.InterpreterStats.reset ()
+      ()
+
+    // `dark` with no args opens the workbench — that's the experience now, no chooser. DARK_CLASSIC=1 is the
+    // one hidden escape hatch back to the classic prompt (scripts / muscle memory); everything else lands in
+    // the workbench.
+    //
+    // No screen clear or scroll region: the prompt is an inline Tui region that keeps scrollback,
+    // and the workbench owns the alternate screen through its own terminal session.
+    let classic =
+      match Stdlib.Env.get "DARK_CLASSIC" with
+      | Some "1" -> true
+      | _ -> false
+
+    if classic then
+      Stdlib.printLine (View.formatWelcome ())
+      runInteractiveLoop initialState
+    else
+      let workbenchState = Workbench.execute initialState []
+      runInteractiveLoop workbenchState
+  // Otherwise, execute command directly (shell already split args correctly)
+  | commandName :: commandArgs ->
+    let nonInteractiveState = { initialState with nonInteractive = true }
+    let resultState = Registry.executeCommand commandName nonInteractiveState commandArgs
+
+    // If the command launched a full-screen SubApp (a TUI like `apps` / `outliner`), hand off to the
+    // interactive loop so it actually runs, instead of exiting the instant the command returns.
+    match resultState.currentPage with
+    | SubApp _ -> runInteractiveLoop resultState
+    | _ -> resultState.exitCode

@@ -1,0 +1,143 @@
+/// Eval command - evaluate Dark expressions
+module Darklang.Cli.Eval
+
+
+/// Evaluate `expr`, keeping the failure structured. `Ok (Some printed)` for a value, `Ok None` for
+/// something that printed nothing. The one call into the host evaluator - the db commands, the workbench
+/// loaders and trace replay all come through here; <fn evaluate> is this with the error rendered.
+// @compiler blocked: missing-implementation
+let evaluateRaw
+  (accountID: Stdlib.Option.Option<Uuid>)
+  (branchId: Uuid)
+  (expr: String)
+  (currentModule: List<String>)
+  (allowHarmful: Bool)
+  : Stdlib.Result.Result<
+      Stdlib.Option.Option<String>,
+      ExecutionError.ExecutionError> =
+  // Width and color are decided here rather than inside the builtin. They are facts about the process
+  // the output is headed for, and `Cli.Terminal` is what owns them; having the host reach across into
+  // another builtin's terminal code to ask would be the wrong way round. Both fall back sanely when
+  // there is no terminal (80 columns, no color), so the callers that never print are unaffected.
+  let (width, _rows) = Terminal.getSize ()
+  let color = Terminal.colorEnabled ()
+
+  Builtin.cliEvaluateExpression
+    accountID
+    branchId
+    expr
+    currentModule
+    width
+    color
+    allowHarmful
+
+
+/// Evaluate `expr` and hand back what it produced: `Ok (Some printed)` for a value, `Ok None` for something
+/// that printed nothing, `Error message` for a failure. What the `eval`/REPL path uses - `execute` prints
+/// what this returns, and the workbench REPL keeps it as state. Takes the whole expression as one string,
+/// so a multi-line let-chain survives.
+// @compiler blocked: missing-implementation
+let evaluate
+  (state: AppState)
+  (expr: String)
+  (allowHarmful: Bool)
+  : Stdlib.Result.Result<Stdlib.Option.Option<String>, String> =
+  // Where the user is standing, so the printed value spells names the way they would.
+  let currentModule =
+    Packages.Traversal.getCurrentModulePath state.packageData.currentLocation
+
+  match
+    evaluateRaw state.accountID state.currentBranchId expr currentModule allowHarmful
+  with
+  | Ok result -> Stdlib.Result.Result.Ok result
+  | Error err ->
+    Stdlib.Result.Result.Error(ExecutionError.toString state.currentBranchId err)
+
+
+// @compiler blocked: missing-implementation
+let execute (state: AppState) (args: List<String>) : AppState =
+  let allowHarmful =
+    Stdlib.List.contains args "--allow-harmful"
+  // What the expression cost, net of the measuring harness itself: see Perf.floor.
+  let wantStats =
+    Stdlib.List.contains args "--stats"
+  let args =
+    args
+    |> Stdlib.List.filter (fun a -> (a != "--allow-harmful") && (a != "--stats"))
+
+  match args with
+  | [] ->
+    Stdlib.printLine (help state)
+    state
+  | _ ->
+    // Special case: a single "-" arg means "read expression from stdin" so
+    // callers can pipe multi-line expressions via heredoc without quoting.
+    let expr =
+      match args with
+      | [ "-" ] -> Stdlib.Cli.Stdin.readAll ()
+      | parts -> Stdlib.String.join parts " "
+    let (stats, outcome) =
+      if wantStats then
+        let harness = LanguageTools.Perf.floor ()
+
+        let (raw, result) =
+          LanguageTools.Perf.measure (fun () -> evaluate state expr allowHarmful)
+
+        (Stdlib.Option.Option.Some(LanguageTools.Perf.minus raw harness), result)
+      else
+        (Stdlib.Option.Option.None, evaluate state expr allowHarmful)
+
+    let newState =
+      match outcome with
+      | Ok (Some s) ->
+        Stdlib.printLine s
+        state
+      | Ok None -> state
+      | Error message ->
+        Stdlib.printLine $"Error: {message}"
+        { state with exitCode = 1 }
+
+    match stats with
+    | Some m ->
+      let _ = Stdlib.printLine ""
+      let _ = Stdlib.printLine (LanguageTools.Perf.render m)
+      // TODO: report the phases instead of warning about them. `cliEvaluateExpression` already
+      // splits `parseCliExpr` from `execute`, so bracketing each would turn this line into two
+      // rows. F# on the eval path, so it wants its own change and its own measurement.
+      let _ =
+        Stdlib.printLine
+          "  (includes parsing and name resolution; Perf.measure in a script brackets execution alone)"
+
+      newState
+    | None -> newState
+
+
+// @compiler blocked: missing-implementation
+let complete (_state: AppState) (_args: List<String>) : List<Completion.CompletionItem> =
+  []
+
+
+// @compiler blocked: missing-implementation
+let help (_state: AppState) : String =
+  [
+    "Usage: eval <expression>"
+    "       eval -    (read expression from stdin, for multi-line input)"
+    "Evaluate a Dark expression and display the result."
+    ""
+    "  --stats   also report what it cost: allocation, time, instructions, calls and"
+    "            frame pushes, net of the measuring harness, tagged with the build they"
+    "            came from. Inside a script, call Perf.measure instead: it measures the"
+    "            work rather than the whole process."
+    ""
+    "Examples:"
+    "  eval 1 + 2                     - Arithmetic operations"
+    "  eval \"hello\" + \"world\"         - String concatenation"
+    "  eval [1, 2, 3] |> List.length  - List operations"
+    "  eval Stdlib.String.length \"test\" - Function calls"
+    ""
+    "  # Multi-line expression via stdin (run from shell, not the REPL):"
+    "  ./scripts/run-cli eval - <<'EOF'"
+    "  let xs = [1, 2, 3]"
+    "  Stdlib.List.length xs"
+    "  EOF"
+  ] |> Stdlib.String.join "\n"

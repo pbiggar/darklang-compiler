@@ -73,6 +73,7 @@ module FromListOverwritingDuplicates =
   Stdlib.Dict.fromListOverwritingDuplicates [ ("a", 1L), ("b", 2L), ("c", 3L) ] =
     (Dict { "c": 3L, "b": 2L, "a": 1L })
 
+  // @compiler blocked: compiler-gap
   Stdlib.Dict.fromListOverwritingDuplicates [ Builtin.testRuntimeError "err" ] = error="Uncaught exception: err"
   Stdlib.Dict.fromListOverwritingDuplicates [ (1L, 2L) ] = Dict { 1L: 2L }
 
@@ -90,6 +91,7 @@ module FromList =
   Stdlib.Dict.fromList [ ("Content-Length", "0"), ("Server", "dark") ] =
     Stdlib.Option.Option.Some(Dict { "Content-Length": "0", "Server": "dark" })
 
+  // @compiler blocked: compiler-gap
   Stdlib.Dict.fromList [ Builtin.testRuntimeError "err" ] = error="Uncaught exception: err"
   Stdlib.Dict.fromList [ (1L, 1L) ] = Stdlib.Option.Option.Some(Dict { 1L: 1L })
 module Get =

@@ -1,0 +1,247 @@
+module Darklang.Stdlib.Int64
+
+
+// @compiler replace: packages/darklang/stdlib/int64.dark#Darklang.Stdlib.Int64.ParseError reason=compiler-implementation
+type ParseError =
+  | BadFormat
+  | OutOfRange
+
+
+// @compiler blocked: container-adaptation
+impl Modulo for Int64 =
+  /// Returns the result of wrapping <param a> around so that {{0 <= res < b}}.
+  /// The modulus <param b> must be greater than 0
+  /// Use <fn Int64.remainder> if you want the remainder after division, which has
+  /// a different behavior for negative numbers.
+  // @compiler blocked: container-adaptation
+  let modulo (a: Int64) (b: Int64) : Int64 = Builtin.int64Mod a b
+
+
+/// Returns the integer remainder left over after dividing <param value> by
+/// <param divisor>, as a <type Result>.
+/// For example, {{Int64.remainder 15 6 == Ok 3}}. The remainder will be
+/// negative only if {{<var value> < 0}}.
+/// The sign of <param divisor> doesn't influence the outcome.
+/// Returns an {{Error}} if <param divisor> is {{0}}.
+// @compiler replace: packages/darklang/stdlib/int64.dark#Darklang.Stdlib.Int64.remainder reason=compiler-implementation
+let remainder
+  (value: Int64)
+  (divisor: Int64)
+  : Stdlib.Result.Result<Int64, String> =
+  Builtin.int64Remainder value divisor
+
+
+// @compiler blocked: container-adaptation
+impl Add for Int64 =
+  /// Adds two integers together (wraps on overflow)
+  // @compiler blocked: container-adaptation
+  let add (a: Int64) (b: Int64) : Int64 = Builtin.int64Add a b
+
+
+// @compiler blocked: container-adaptation
+impl Subtract for Int64 =
+  /// Subtracts two integers (wraps on overflow)
+  // @compiler blocked: container-adaptation
+  let subtract (a: Int64) (b: Int64) : Int64 = Builtin.int64Subtract a b
+
+
+// @compiler blocked: container-adaptation
+impl Multiply for Int64 =
+  /// Multiplies two integers (wraps on overflow)
+  // @compiler blocked: container-adaptation
+  let multiply (a: Int64) (b: Int64) : Int64 = Builtin.int64Multiply a b
+
+
+// @compiler blocked: container-adaptation
+impl Divide for Int64 =
+  /// Divides two integers
+  // @compiler blocked: container-adaptation
+  let divide (a: Int64) (b: Int64) : Int64 = Builtin.int64Divide a b
+
+
+// @compiler blocked: container-adaptation
+impl Power for Int64 =
+  /// Raise <param base> to the power of <param exponent>.
+  /// Overflow wraps around.
+  /// Raises an error if <param exponent> is negative.
+  // @compiler blocked: container-adaptation
+  let power (``base``: Int64) (exponent: Int64) : Int64 =
+    Builtin.int64Power ``base`` exponent
+
+
+// @compiler blocked: container-adaptation
+impl Negate for Int64 =
+  /// Returns the negation of <param a>, {{-a}}. Negating the minimum value wraps back to itself.
+  // @compiler blocked: container-adaptation
+  let negate (a: Int64) : Int64 = Builtin.int64Negate a
+
+
+// @compiler blocked: container-adaptation
+impl Compare for Int64 =
+  /// Returns {{true}} if <param a> is less than <param b>
+  // @compiler blocked: container-adaptation
+  let lessThan (a: Int64) (b: Int64) : Bool = Builtin.int64LessThan a b
+  /// Returns {{true}} if <param a> is less than or equal to <param b>
+  // @compiler blocked: container-adaptation
+  let lessThanOrEqualTo (a: Int64) (b: Int64) : Bool =
+    Builtin.int64LessThanOrEqualTo a b
+  /// Returns {{true}} if <param a> is greater than <param b>
+  // @compiler blocked: container-adaptation
+  let greaterThan (a: Int64) (b: Int64) : Bool = Builtin.int64GreaterThan a b
+  /// Returns {{true}} if <param a> is greater than or equal to <param b>
+  // @compiler blocked: container-adaptation
+  let greaterThanOrEqualTo (a: Int64) (b: Int64) : Bool =
+    Builtin.int64GreaterThanOrEqualTo a b
+
+
+/// Returns a random integer between <param start> and <param end> (inclusive)
+// @compiler replace: packages/darklang/stdlib/int64.dark#Darklang.Stdlib.Int64.random reason=compiler-implementation
+let random (start: Int64) (``end``: Int64) : Int64 =
+  Builtin.int64Random start ``end``
+
+
+/// Get the square root of an <type Int64>
+// @compiler replace: packages/darklang/stdlib/int64.dark#Darklang.Stdlib.Int64.sqrt reason=compiler-implementation
+let sqrt (a: Int64) : Float = Builtin.int64Sqrt a
+
+
+/// Converts an <type Int64> to a <type Float>
+// @compiler replace: packages/darklang/stdlib/int64.dark#Darklang.Stdlib.Int64.toFloat reason=compiler-implementation
+let toFloat (a: Int64) : Float = Builtin.int64ToFloat a
+
+
+/// Converts a <type Float> to an <type Int64>, truncating toward zero like
+/// <fn Int.fromFloat>. Returns {{None}} for NaN, infinity, or a result that
+/// doesn't fit.
+// @compiler replace: packages/darklang/stdlib/int64.dark#Darklang.Stdlib.Int64.fromFloat reason=compiler-implementation
+let fromFloat (a: Float) : Stdlib.Option.Option<Int64> =
+  if Float.isFinite a then
+    a |> Stdlib.Int.fromFloat |> Stdlib.Int.toInt64
+  else
+    Stdlib.Option.Option.None
+
+
+/// Converts a <type Float> to an <type Int64>, rounding to the nearest integer
+/// (ties to even). Returns {{None}} for NaN, infinity, or a result that
+/// doesn't fit.
+// @compiler replace: packages/darklang/stdlib/int64.dark#Darklang.Stdlib.Int64.fromFloatRounded reason=compiler-implementation
+let fromFloatRounded (a: Float) : Stdlib.Option.Option<Int64> =
+  if Float.isFinite a then
+    a |> Float.round |> Stdlib.Int.toInt64
+  else
+    Stdlib.Option.Option.None
+
+
+/// Parses a <type String> into an <type Int64>, returning {{Ok}} with the
+/// parsed value on success, or {{Error}} with a <type ParseError> ({{BadFormat}}
+/// if the string isn't a valid integer, {{OutOfRange}} if it's outside the
+/// <type Int64> range).
+// @compiler replace: packages/darklang/stdlib/int64.dark#Darklang.Stdlib.Int64.parse reason=compiler-implementation
+let parse (s: String) : Stdlib.Result.Result<Int64, Stdlib.Int64.ParseError> =
+  Builtin.int64Parse s
+
+
+/// Converts an <type Int8> to an <type Int64>.
+// @compiler replace: packages/darklang/stdlib/int64.dark#Darklang.Stdlib.Int64.fromInt8 reason=compiler-implementation
+let fromInt8 (i: Int8) : Int64 = Builtin.int64FromInt8 i
+
+
+/// Converts a <type UInt8> to an <type Int64>.
+// @compiler replace: packages/darklang/stdlib/int64.dark#Darklang.Stdlib.Int64.fromUInt8 reason=compiler-implementation
+let fromUInt8 (i: UInt8) : Int64 = Builtin.int64FromUInt8 i
+
+
+/// Converts an <type Int16> to an <type Int64>.
+// @compiler replace: packages/darklang/stdlib/int64.dark#Darklang.Stdlib.Int64.fromInt16 reason=compiler-implementation
+let fromInt16 (i: Int16) : Int64 = Builtin.int64FromInt16 i
+
+
+/// Converts a <type UInt16> to an <type Int64>.
+// @compiler replace: packages/darklang/stdlib/int64.dark#Darklang.Stdlib.Int64.fromUInt16 reason=compiler-implementation
+let fromUInt16 (i: UInt16) : Int64 = Builtin.int64FromUInt16 i
+
+
+/// Converts an <type Int32> to an <type Int64>.
+// @compiler replace: packages/darklang/stdlib/int64.dark#Darklang.Stdlib.Int64.fromInt32 reason=compiler-implementation
+let fromInt32 (i: Int32) : Int64 = Builtin.int64FromInt32 i
+
+
+/// Converts a <type UInt32> to an <type Int64>.
+// @compiler replace: packages/darklang/stdlib/int64.dark#Darklang.Stdlib.Int64.fromUInt32 reason=compiler-implementation
+let fromUInt32 (i: UInt32) : Int64 = Builtin.int64FromUInt32 i
+
+
+/// Converts a <type UInt64> to an <type Int64>. Returns {{None}} if the value is greater than 9223372036854775807
+// @compiler replace: packages/darklang/stdlib/int64.dark#Darklang.Stdlib.Int64.fromUInt64 reason=compiler-implementation
+let fromUInt64 (i: UInt64) : Stdlib.Option.Option<Int64> =
+  Builtin.int64FromUInt64 i
+
+
+/// Converts an <type Int128> to an <type Int64>. Returns {{None}} if the value is less than -9223372036854775808 or greater than 9223372036854775807
+// @compiler replace: packages/darklang/stdlib/int64.dark#Darklang.Stdlib.Int64.fromInt128 reason=compiler-implementation
+let fromInt128 (i: Int128) : Stdlib.Option.Option<Int64> =
+  Builtin.int64FromInt128 i
+
+
+/// Converts a <type UInt128> to an <type Int64>. Returns {{None}} if the value is greater than 9223372036854775807
+// @compiler replace: packages/darklang/stdlib/int64.dark#Darklang.Stdlib.Int64.fromUInt128 reason=compiler-implementation
+let fromUInt128 (i: UInt128) : Stdlib.Option.Option<Int64> =
+  Builtin.int64FromUInt128 i
+
+
+// @compiler blocked: container-adaptation
+impl BitwiseAnd for Int64 =
+  /// Bitwise AND on two <type Int64> values
+  // @compiler blocked: container-adaptation
+  let bitwiseAnd (a: Int64) (b: Int64) : Int64 = Builtin.int64BitwiseAnd a b
+
+
+// @compiler blocked: container-adaptation
+impl BitwiseOr for Int64 =
+  /// Bitwise OR on two <type Int64> values
+  // @compiler blocked: container-adaptation
+  let bitwiseOr (a: Int64) (b: Int64) : Int64 = Builtin.int64BitwiseOr a b
+
+
+// @compiler blocked: container-adaptation
+impl BitwiseXor for Int64 =
+  /// Bitwise XOR on two <type Int64> values
+  // @compiler blocked: container-adaptation
+  let bitwiseXor (a: Int64) (b: Int64) : Int64 = Builtin.int64BitwiseXor a b
+
+
+// @compiler blocked: container-adaptation
+impl BitwiseNot for Int64 =
+  /// Bitwise NOT on an <type Int64> value
+  // @compiler blocked: container-adaptation
+  let bitwiseNot (a: Int64) : Int64 = Builtin.int64BitwiseNot a
+
+
+// @compiler blocked: container-adaptation
+impl ShiftLeft for Int64 =
+  /// Bitwise left shift of an <type Int64> value
+  // @compiler blocked: container-adaptation
+  let shiftLeft (a: Int64) (b: Int64) : Int64 = Builtin.int64ShiftLeft a b
+
+
+// @compiler blocked: container-adaptation
+impl ShiftRight for Int64 =
+  /// Bitwise right shift of an <type Int64> value
+  // @compiler blocked: container-adaptation
+  let shiftRight (a: Int64) (b: Int64) : Int64 = Builtin.int64ShiftRight a b
+
+// @compiler blocked: container-adaptation
+impl ToString for Int64 =
+  /// Stringify <param int>
+  // @compiler blocked: container-adaptation
+  let toString (int: Int64) : String = Builtin.int64ToString int
+
+// @compiler blocked: container-adaptation
+impl Zero for Int64 =
+  // @compiler blocked: container-adaptation
+  let zero () : Int64 = 0L
+
+// @compiler blocked: container-adaptation
+impl One for Int64 =
+  // @compiler blocked: container-adaptation
+  let one () : Int64 = 1L

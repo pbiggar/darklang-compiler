@@ -50,4 +50,11 @@ val testCompileErrorDirectiveOverridesAnyUpstreamExpectation :
 val testCompileErrorExpectationRequiresCompileFailure : unit -> testResult
 val testRejectsDanglingCompileErrorDirective : unit -> testResult
 val tests : (string * (unit -> testResult)) list
+val testCompilerAnnotationsPreserveInventory : unit -> testResult
+val testCompilerAnnotationUnknownTag : unit -> testResult
+val testCompilerAnnotationOverrideOrdering : unit -> testResult
+val testCompilerXfailStrictness : unit -> testResult
+val testCompilerRuntimeXfailStrictness : unit -> testResult
+val testExpectedLanguageErrorIsNotAnXfail : unit -> testResult
 val testPreservesLegacyModuleScopes : unit -> testResult
+val testCanonicalNamedResultReporter : unit -> testResult

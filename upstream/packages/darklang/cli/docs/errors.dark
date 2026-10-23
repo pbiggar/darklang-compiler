@@ -1,0 +1,44 @@
+module Darklang.Cli.Docs.Errors
+
+// @compiler blocked: missing-implementation
+let content () : String =
+  """# Common Errors
+
+## Parse errors -> CHECK INDENTATION FIRST
+
+## "Unsupported expression"
+  - Nested function definition
+  - Bad indentation
+  - { left of type name in record
+
+## Type mismatch
+  - Wrong literal suffix (5 vs 5.0)
+  - Param order wrong
+  - Missing `Some` wrapper
+  - Missing list wrapper [x]
+
+## "Function not found"
+  - Use full path: Stdlib.List.map
+  - Check spelling/case
+  - Never prefix a source name with `PACKAGE.`; remove it. Prefer `Stdlib.*`
+    for standard-library names.
+
+## Operator errors
+  - Numeric operators require matching numeric operand types
+  - Integer / and ** can raise out-of-range runtime errors
+  - Bitwise operators (& | ^ << >> ~) are traits; a Float operand says no implementation
+  - Inside a match arm, `|` is the arm separator: write `| A -> (a | b)`
+  - List concat: use Stdlib.List.append
+
+## Enum errors
+  - Option/Result expressions use bare `Some`, `None`, `Ok`, and `Error`
+  - Other enum expressions use `TypeName.Case`
+  - Matching: just Case (no prefix)
+
+## Some + tuple
+  - Use `Some ((a, b))` with double parens
+
+## Debug
+  1. Simplify expression
+  2. Use eval to test pieces
+  3. Check packages.log"""

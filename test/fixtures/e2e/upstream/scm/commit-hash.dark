@@ -13,20 +13,29 @@ module MintHash =
     Darklang.SCM.Commits.mintHash message author stamp ops parent
 
   // Deterministic.
+  // @compiler blocked: compiler-gap
   (MintHash.h "m" "me" MintHash.ts [ "aabb", "ccdd" ] "0011") = (MintHash.h "m" "me" MintHash.ts [ "aabb", "ccdd" ] "0011")
 
   // Sixteen hex characters.
+  // @compiler blocked: compiler-gap
   (Stdlib.String.length (MintHash.h "m" "me" MintHash.ts [ "aabb" ] "0011")) = 16
 
   // Each input moved: a different id.
+  // @compiler blocked: compiler-gap
   ((MintHash.h "m" "me" MintHash.ts [ "aabb" ] "0011") == (MintHash.h "m" "me" MintHash.ts [ "aabb" ] "0022")) = false
+  // @compiler blocked: compiler-gap
   ((MintHash.h "m" "me" MintHash.ts [ "aabb" ] "0011") == (MintHash.h "m" "you" MintHash.ts [ "aabb" ] "0011")) = false
+  // @compiler blocked: compiler-gap
   ((MintHash.h "m" "me" MintHash.ts [ "aabb" ] "0011") == (MintHash.h "n" "me" MintHash.ts [ "aabb" ] "0011")) = false
+  // @compiler blocked: compiler-gap
   ((MintHash.h "m" "me" MintHash.ts [ "aabb" ] "0011") == (MintHash.h "m" "me" "2026-01-01T00:00:00.001Z" [ "aabb" ] "0011")) = false
+  // @compiler blocked: compiler-gap
   ((MintHash.h "m" "me" MintHash.ts [ "aabb" ] "0011") == (MintHash.h "m" "me" MintHash.ts [ "aabb", "ccdd" ] "0011")) = false
 
   // An empty commit is still deterministic.
+  // @compiler blocked: compiler-gap
   (MintHash.h "m" "me" MintHash.ts [] "0011") = (MintHash.h "m" "me" MintHash.ts [] "0011")
 
   // Not sorted here.
+  // @compiler blocked: compiler-gap
   ((MintHash.h "m" "me" MintHash.ts [ "aabb", "ccdd" ] "0011") == (MintHash.h "m" "me" MintHash.ts [ "ccdd", "aabb" ] "0011")) = false

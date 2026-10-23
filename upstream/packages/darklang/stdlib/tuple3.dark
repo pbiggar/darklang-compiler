@@ -1,0 +1,61 @@
+module Darklang.Stdlib.Tuple3
+
+
+/// Returns a triple with the given values
+// @compiler replace: packages/darklang/stdlib/tuple3.dark#Darklang.Stdlib.Tuple3.create reason=compiler-implementation
+let create (first: 'a) (second: 'b) (third: 'c) : ('a * 'b * 'c) =
+  (first, second, third)
+
+
+/// Returns the first value of a triple
+// @compiler replace: packages/darklang/stdlib/tuple3.dark#Darklang.Stdlib.Tuple3.first reason=compiler-implementation
+let first (tuple: ('a * 'b * 'c)) : 'a =
+  let (first, _, _) = tuple
+  first
+
+
+/// Returns the second value of a triple
+// @compiler replace: packages/darklang/stdlib/tuple3.dark#Darklang.Stdlib.Tuple3.second reason=compiler-implementation
+let second (tuple: ('a * 'b * 'c)) : 'b =
+  let (_, second, _) = tuple
+  second
+
+
+/// Returns the third value of a triple
+// @compiler replace: packages/darklang/stdlib/tuple3.dark#Darklang.Stdlib.Tuple3.third reason=compiler-implementation
+let third (tuple: ('a * 'b * 'c)) : 'c =
+  let (_, _, third) = tuple
+  third
+
+
+/// Transform the first value in a triple
+// @compiler replace: packages/darklang/stdlib/tuple3.dark#Darklang.Stdlib.Tuple3.mapFirst reason=compiler-implementation
+let mapFirst (tuple: ('a * 'b * 'c)) (fn: 'a -> 'd) : ('d * 'b * 'c) =
+  let (first, second, third) = tuple
+  (fn first, second, third)
+
+
+/// Transform the second value in a triple
+// @compiler replace: packages/darklang/stdlib/tuple3.dark#Darklang.Stdlib.Tuple3.mapSecond reason=compiler-implementation
+let mapSecond (tuple: ('a * 'b * 'c)) (fn: 'b -> 'd) : ('a * 'd * 'c) =
+  let (first, second, third) = tuple
+  (first, fn second, third)
+
+
+/// Transform the third value in a triple
+// @compiler replace: packages/darklang/stdlib/tuple3.dark#Darklang.Stdlib.Tuple3.mapThird reason=compiler-implementation
+let mapThird (tuple: ('a * 'b * 'c)) (fn: 'c -> 'd) : ('a * 'b * 'd) =
+  let (first, second, third) = tuple
+  (first, second, fn third)
+
+
+/// Transform all values in a triple
+// @compiler replace: packages/darklang/stdlib/tuple3.dark#Darklang.Stdlib.Tuple3.mapAllThree reason=compiler-implementation
+let mapAllThree
+  (tuple: ('a * 'b * 'c))
+  (fnFirst: 'a -> 'd)
+  (fnSecond: 'b -> 'e)
+  (fnThird: 'c -> 'f)
+  : ('d * 'e * 'f) =
+  let (first, second, third) = tuple
+  (fnFirst first, fnSecond second, fnThird third)

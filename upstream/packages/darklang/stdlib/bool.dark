@@ -1,0 +1,25 @@
+module Darklang.Stdlib.Bool
+
+
+/// Returns the inverse of <param b>: {{true}} if <param b>
+/// is {{false}} and {{false}} if <param b> is {{true}}
+// @compiler blocked: missing-implementation
+let not (b: Bool) : Bool = Builtin.boolNot b
+
+/// Returns {{true}} if both <param a> and <param b> are {{true}}
+// @compiler replace: packages/darklang/stdlib/bool.dark#Darklang.Stdlib.Bool.and reason=compiler-implementation
+let ``and`` (a: Bool) (b: Bool) : Bool = a && b
+
+/// Returns {{true}} if either <param a> is true or <param b> is {{true}}
+// @compiler replace: packages/darklang/stdlib/bool.dark#Darklang.Stdlib.Bool.or reason=compiler-implementation
+let ``or`` (a: Bool) (b: Bool) : Bool = a || b
+
+/// Returns {{true}} if exactly one of <param a> and <param b> is {{true}}. Returns {{false}} if both are {{true}} or neither is {{true}}
+// @compiler replace: packages/darklang/stdlib/bool.dark#Darklang.Stdlib.Bool.xor reason=compiler-implementation
+let xor (a: Bool) (b: Bool) : Bool = if a then Stdlib.Bool.not b else b
+
+// @compiler blocked: container-adaptation
+impl ToString for Bool =
+  /// Returns {{"true"}} or {{"false"}}
+  // @compiler blocked: container-adaptation
+  let toString (b: Bool) : String = if b then "true" else "false"

@@ -1,8 +1,12 @@
-# Remaining compatibility failures
+# Remaining compatibility work
 
-The [test failure ledger](current-audit.md) is the canonical list of test files
-and individual tests that do not work. It records executed results, including
-failures caused by a shared preamble or missing test dependencies.
+The [source ledger](../porting/README.md) is the current inventory of imported
+items. Per-item annotations in `upstream/` record blocked declarations and tests,
+intentional exclusions, compiler replacements and phase-specific expected
+failures. [Aggregate counts](../porting/generated/ledger.md) come from the native
+parser and those source annotations.
 
-The [gate inventory](upstream-test-inventory.md) lists configured exclusions;
-passing excluded tests are not compatibility failures.
+The [historical failure audit](current-audit.md) preserves earlier execution
+results for adapted fixtures. Current source dispositions do not claim an
+execution receipt; the native test suite checks ordinary expectations and strict
+expected failures on every run.

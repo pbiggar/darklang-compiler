@@ -1,0 +1,561 @@
+/// HTML generation module for creating HTML documents programmatically.
+///
+/// This module provides a type-safe way to generate HTML by constructing a tree
+/// of `Node` values that can be rendered to HTML strings.
+///
+/// ## Basic Usage
+///
+/// Create HTML elements using tag helper functions:
+/// ```
+/// Html.div [] [Html.stringNode "Hello, World!"]
+/// ```
+///
+/// ## Attributes
+///
+/// Attributes are specified as a list of tuples where each tuple is (name, value).
+/// The value is an `Option<String>` - use `Some` for attributes with values,
+/// or `None` for boolean attributes:
+/// ```
+/// Html.input [("type", Some "text"), ("required", None)]
+/// ```
+///
+/// ## Whitespace
+///
+/// Whitespace between elements must be explicit. Use `stringNode " "` to add spaces:
+/// ```
+/// Html.div [] [
+///   Html.span [] [stringNode "foo"]
+///   stringNode " "
+///   Html.span [] [stringNode "bar"]
+/// ]
+/// ```
+///
+/// ## Rendering
+///
+/// Use `nodeToString` to render individual nodes, or `document` to create a
+/// complete HTML document with DOCTYPE:
+/// ```
+/// Html.document [Html.html [] [Html.body [] [...]]]
+/// ```
+///
+/// TODO think more on the organization of these
+/// - should the 'tag' helpers be in some Tag submodule?
+/// - should nodeToString be in a Node module, with HtmlTag and Node moved there?
+module Darklang.Stdlib.Html
+
+
+// @compiler replace: packages/darklang/stdlib/html.dark#Darklang.Stdlib.Html.Attribute reason=compiler-implementation
+type Attribute = List<String * Option.Option<String>>
+// @compiler replace: packages/darklang/stdlib/html.dark#Darklang.Stdlib.Html.Attributes reason=compiler-implementation
+type Attributes = List<String * Option.Option<String>>
+
+/// Represents an HTML tag with its name, attributes, and children.
+// @compiler replace: packages/darklang/stdlib/html.dark#Darklang.Stdlib.Html.HtmlTag reason=compiler-implementation
+type HtmlTag =
+  { name: String
+    /// Attributes use `Option<String>` for values:
+    /// - `Some value` for attributes with values (e.g., `("href", Some "url")`)
+    /// - `None` for boolean attributes (e.g., `("required", None)`)
+    attrs: Attributes
+    children: List<Node> }
+
+/// Represents a node in the HTML tree.
+// @compiler replace: packages/darklang/stdlib/html.dark#Darklang.Stdlib.Html.Node reason=compiler-implementation
+type Node =
+  /// Raw text content, comments, or any string to include as-is
+  | String of String
+  /// A structured HTML element with attributes and children
+  | HtmlTag of HtmlTag
+
+
+/// Void elements in HTML - self-closing tags that cannot have children.
+///
+/// These elements are rendered without a closing tag (e.g., `<br>` not `<br></br>`).
+/// The HTML spec defines these elements as void, meaning they cannot contain any content.
+// @compiler replace: packages/darklang/stdlib/html.dark#Darklang.Stdlib.Html.voidElements reason=compiler-implementation
+val voidElements =
+  [ "area"
+    "base"
+    "br"
+    "col"
+    "command"
+    "embed"
+    "hr"
+    "img"
+    "input"
+    "keygen"
+    "link"
+    "meta"
+    "param"
+    "source"
+    "track"
+    "wbr" ]
+
+
+/// Escapes special HTML characters.
+// @compiler replace: packages/darklang/stdlib/html.dark#Darklang.Stdlib.Html.escapeHtml reason=compiler-implementation
+let escapeHtml (str: String) : String =
+  str
+  |> Stdlib.String.replaceAll "&" "&amp;"
+  |> Stdlib.String.replaceAll "<" "&lt;"
+  |> Stdlib.String.replaceAll ">" "&gt;"
+  |> Stdlib.String.replaceAll "\"" "&quot;"
+  |> Stdlib.String.replaceAll "'" "&#x27;"
+
+
+/// Creates a text node from a string with HTML escaping.
+///
+/// This is the safe version that escapes HTML special characters to prevent XSS.
+/// Use this for user-generated content or any untrusted input.
+// @compiler replace: packages/darklang/stdlib/html.dark#Darklang.Stdlib.Html.text reason=compiler-implementation
+let text (str: String) : Node = Node.String(escapeHtml str)
+
+
+/// Creates a text node from a string without any escaping.
+///
+/// Use this for raw text content, HTML comments, or any string that should be
+/// included as-is in the output without being treated as an HTML tag.
+///
+/// WARNING: Only use this with trusted content. For user input, use `text` instead.
+///
+/// Example:
+/// ```
+/// stringNode "Hello, World!"
+/// stringNode "<!-- This is a comment -->"
+/// ```
+// @compiler replace: packages/darklang/stdlib/html.dark#Darklang.Stdlib.Html.stringNode reason=compiler-implementation
+let stringNode (str: String) : Node = Node.String str
+
+
+/// Creates an HTML tag node with the given name, attributes, and children.
+///
+/// This is the low-level constructor used by all tag helper functions.
+/// In most cases, you should use the specific tag helpers (div, span, etc.)
+/// instead of calling this directly.
+// @compiler replace: packages/darklang/stdlib/html.dark#Darklang.Stdlib.Html.htmlTagNode reason=compiler-implementation
+let htmlTagNode
+  (name: String)
+  (attrs: Attributes)
+  (children: List<Node>)
+  : Node =
+  (HtmlTag
+    { name = name
+      attrs = attrs
+      children = children })
+  |> Node.HtmlTag
+
+
+/// Converts a Node to its HTML string representation.
+///
+/// Handles both text nodes and HTML tags, properly rendering:
+/// - Attributes with values as `name="value"`, with the value escaped
+/// - Boolean attributes (None value) as just `name`
+/// - Void elements without closing tags
+/// - Regular elements with proper opening and closing tags
+/// - Nested children recursively
+// @compiler replace: packages/darklang/stdlib/html.dark#Darklang.Stdlib.Html.nodeToString reason=compiler-implementation
+let nodeToString (node: Node) : String =
+  match node with
+  | String str -> str
+  | HtmlTag tag ->
+    let attributesText =
+      tag.attrs
+      |> List.map (fun (key, valueOpt) ->
+        match valueOpt with
+        // Escaped like text is. An attribute value is the easier injection: a `"` in an
+        // unescaped one closes the attribute and everything after it is markup. Callers
+        // pass raw values -- a url, a name, a class -- and do not pre-escape.
+        | Some value -> $"{key}=\"{escapeHtml value}\""
+        | None -> key)
+      |> String.join " "
+
+    if (Stdlib.List.contains voidElements tag.name) then
+      match attributesText with
+      | "" -> $"<{tag.name}>"
+      | text -> $"<{tag.name} {text}>"
+
+    else
+      match tag.children with
+      | [] ->
+        match attributesText with
+        | "" -> $"<{tag.name}></{tag.name}>"
+        | text -> $"<{tag.name} {text}></{tag.name}>"
+
+      | children ->
+        let childHtml =
+          children |> List.map (fun c -> Html.nodeToString c) |> String.join ""
+
+        let startTag =
+          match attributesText with
+          | "" -> $"<{tag.name}>"
+          | text -> $"<{tag.name} {text}>"
+
+        let endTag = $"</{tag.name}>"
+
+        startTag + childHtml + endTag
+
+
+/// Creates an HTML comment node.
+///
+/// Example: `comment "This is a comment"` produces `<!-- This is a comment -->`
+///
+/// Text containing `--` could close the comment early, so each `--` is turned
+/// into `- -`. For example, `comment "a --> b"` produces `<!-- a - -> b -->`.
+// @compiler replace: packages/darklang/stdlib/html.dark#Darklang.Stdlib.Html.comment reason=compiler-implementation
+let comment (s: String) : Node =
+  // Keep replacing until no `--` is left. One pass isn't enough: `---` becomes
+  // `- --`, which still has a `--` in it.
+  let breakDashes (t: String) : String =
+    if Stdlib.String.contains t "--" then
+      breakDashes (Stdlib.String.replaceAll t "--" "- -")
+    else
+      t
+
+  let safe = breakDashes s
+
+  // Don't remove the spaces. `<!-->` on its own is a complete comment, so text
+  // starting with `>` would end it immediately.
+  stringNode $"<!-- {safe} -->"
+
+
+// Helper functions for common attribute patterns
+
+/// Creates a class attribute from a list of class names.
+///
+/// Example: `classes ["btn", "btn-primary"]` produces `("class", Some "btn btn-primary")`
+// @compiler replace: packages/darklang/stdlib/html.dark#Darklang.Stdlib.Html.classes reason=compiler-implementation
+let classes (classList: List<String>) : (String * Option.Option<String>) =
+  ("class", Stdlib.Option.Option.Some(Stdlib.String.join classList " "))
+
+
+/// Creates a style attribute from a list of CSS property-value pairs.
+// @compiler replace: packages/darklang/stdlib/html.dark#Darklang.Stdlib.Html.style reason=compiler-implementation
+let style (properties: List<(String * String)>) : (String * Option.Option<String>) =
+  let styleString =
+    properties
+    |> Stdlib.List.map (fun (prop, value) -> $"{prop}: {value}")
+    |> Stdlib.String.join "; "
+
+  ("style", Stdlib.Option.Option.Some styleString)
+
+
+/// Creates a data attribute with the given name and value.
+// @compiler replace: packages/darklang/stdlib/html.dark#Darklang.Stdlib.Html.dataAttr reason=compiler-implementation
+let dataAttr (name: String) (value: String) : (String * Option.Option<String>) =
+  ($"data-{name}", Stdlib.Option.Option.Some value)
+
+
+// @compiler replace: packages/darklang/stdlib/html.dark#Darklang.Stdlib.Html.br reason=compiler-implementation
+let br () : Node = htmlTagNode "br" [] []
+
+// @compiler replace: packages/darklang/stdlib/html.dark#Darklang.Stdlib.Html.html reason=compiler-implementation
+let html (attrs: Attributes) (c: List<Node>) : Node =
+  htmlTagNode "html" attrs c
+
+// @compiler replace: packages/darklang/stdlib/html.dark#Darklang.Stdlib.Html.body reason=compiler-implementation
+let body (attrs: Attributes) (c: List<Node>) : Node =
+  htmlTagNode "body" attrs c
+
+// @compiler replace: packages/darklang/stdlib/html.dark#Darklang.Stdlib.Html.head reason=compiler-implementation
+let head (attrs: Attributes) (c: List<Node>) : Node =
+  htmlTagNode "head" attrs c
+
+// @compiler replace: packages/darklang/stdlib/html.dark#Darklang.Stdlib.Html.title reason=compiler-implementation
+let title (attrs: Attributes) (c: List<Node>) : Node =
+  htmlTagNode "title" attrs c
+
+// @compiler replace: packages/darklang/stdlib/html.dark#Darklang.Stdlib.Html.a reason=compiler-implementation
+let a (attrs: Attributes) (c: List<Node>) : Node =
+  htmlTagNode "a" attrs c
+
+// same for div, span, etc.:
+// @compiler replace: packages/darklang/stdlib/html.dark#Darklang.Stdlib.Html.div reason=compiler-implementation
+let div (attrs: Attributes) (c: List<Node>) : Node =
+  htmlTagNode "div" attrs c
+
+// @compiler replace: packages/darklang/stdlib/html.dark#Darklang.Stdlib.Html.span reason=compiler-implementation
+let span (attrs: Attributes) (c: List<Node>) : Node =
+  htmlTagNode "span" attrs c
+
+// @compiler replace: packages/darklang/stdlib/html.dark#Darklang.Stdlib.Html.h1 reason=compiler-implementation
+let h1 (attrs: Attributes) (c: List<Node>) : Node =
+  htmlTagNode "h1" attrs c
+
+// @compiler replace: packages/darklang/stdlib/html.dark#Darklang.Stdlib.Html.h2 reason=compiler-implementation
+let h2 (attrs: Attributes) (c: List<Node>) : Node =
+  htmlTagNode "h2" attrs c
+
+// @compiler replace: packages/darklang/stdlib/html.dark#Darklang.Stdlib.Html.h3 reason=compiler-implementation
+let h3 (attrs: Attributes) (c: List<Node>) : Node =
+  htmlTagNode "h3" attrs c
+
+// @compiler replace: packages/darklang/stdlib/html.dark#Darklang.Stdlib.Html.h4 reason=compiler-implementation
+let h4 (attrs: Attributes) (c: List<Node>) : Node =
+  htmlTagNode "h4" attrs c
+
+// @compiler replace: packages/darklang/stdlib/html.dark#Darklang.Stdlib.Html.h5 reason=compiler-implementation
+let h5 (attrs: Attributes) (c: List<Node>) : Node =
+  htmlTagNode "h5" attrs c
+
+// @compiler replace: packages/darklang/stdlib/html.dark#Darklang.Stdlib.Html.h6 reason=compiler-implementation
+let h6 (attrs: Attributes) (c: List<Node>) : Node =
+  htmlTagNode "h6" attrs c
+
+// @compiler replace: packages/darklang/stdlib/html.dark#Darklang.Stdlib.Html.p reason=compiler-implementation
+let p (attrs: Attributes) (c: List<Node>) : Node =
+  htmlTagNode "p" attrs c
+
+// @compiler replace: packages/darklang/stdlib/html.dark#Darklang.Stdlib.Html.ul reason=compiler-implementation
+let ul (attrs: Attributes) (c: List<Node>) : Node =
+  htmlTagNode "ul" attrs c
+
+// @compiler replace: packages/darklang/stdlib/html.dark#Darklang.Stdlib.Html.ol reason=compiler-implementation
+let ol (attrs: Attributes) (c: List<Node>) : Node =
+  htmlTagNode "ol" attrs c
+
+// @compiler replace: packages/darklang/stdlib/html.dark#Darklang.Stdlib.Html.li reason=compiler-implementation
+let li (attrs: Attributes) (c: List<Node>) : Node =
+  htmlTagNode "li" attrs c
+
+// @compiler replace: packages/darklang/stdlib/html.dark#Darklang.Stdlib.Html.table reason=compiler-implementation
+let table (attrs: Attributes) (c: List<Node>) : Node =
+  htmlTagNode "table" attrs c
+
+// @compiler replace: packages/darklang/stdlib/html.dark#Darklang.Stdlib.Html.tr reason=compiler-implementation
+let tr (attrs: Attributes) (c: List<Node>) : Node =
+  htmlTagNode "tr" attrs c
+
+// @compiler replace: packages/darklang/stdlib/html.dark#Darklang.Stdlib.Html.td reason=compiler-implementation
+let td (attrs: Attributes) (c: List<Node>) : Node =
+  htmlTagNode "td" attrs c
+
+// @compiler replace: packages/darklang/stdlib/html.dark#Darklang.Stdlib.Html.th reason=compiler-implementation
+let th (attrs: Attributes) (c: List<Node>) : Node =
+  htmlTagNode "th" attrs c
+
+// @compiler replace: packages/darklang/stdlib/html.dark#Darklang.Stdlib.Html.tbody reason=compiler-implementation
+let tbody (attrs: Attributes) (c: List<Node>) : Node =
+  htmlTagNode "tbody" attrs c
+
+// @compiler replace: packages/darklang/stdlib/html.dark#Darklang.Stdlib.Html.thead reason=compiler-implementation
+let thead (attrs: Attributes) (c: List<Node>) : Node =
+  htmlTagNode "thead" attrs c
+
+// @compiler replace: packages/darklang/stdlib/html.dark#Darklang.Stdlib.Html.tfoot reason=compiler-implementation
+let tfoot (attrs: Attributes) (c: List<Node>) : Node =
+  htmlTagNode "tfoot" attrs c
+
+// @compiler replace: packages/darklang/stdlib/html.dark#Darklang.Stdlib.Html.caption reason=compiler-implementation
+let caption (attrs: Attributes) (c: List<Node>) : Node =
+  htmlTagNode "caption" attrs c
+
+// @compiler replace: packages/darklang/stdlib/html.dark#Darklang.Stdlib.Html.colgroup reason=compiler-implementation
+let colgroup (attrs: Attributes) (c: List<Node>) : Node =
+  htmlTagNode "colgroup" attrs c
+
+// @compiler replace: packages/darklang/stdlib/html.dark#Darklang.Stdlib.Html.col reason=compiler-implementation
+let col (attrs: Attributes) (c: List<Node>) : Node =
+  htmlTagNode "col" attrs c
+
+// @compiler replace: packages/darklang/stdlib/html.dark#Darklang.Stdlib.Html.button reason=compiler-implementation
+let button (attrs: Attributes) (c: List<Node>) : Node =
+  htmlTagNode "button" attrs c
+
+// @compiler replace: packages/darklang/stdlib/html.dark#Darklang.Stdlib.Html.img reason=compiler-implementation
+let img (attrs: Attributes) : Node =
+  htmlTagNode "img" attrs []
+
+// @compiler replace: packages/darklang/stdlib/html.dark#Darklang.Stdlib.Html.svg reason=compiler-implementation
+let svg (attrs: Attributes) (c: List<Node>) : Node =
+  htmlTagNode "svg" attrs c
+
+// @compiler replace: packages/darklang/stdlib/html.dark#Darklang.Stdlib.Html.path reason=compiler-implementation
+let path (attrs: Attributes) : Node =
+  htmlTagNode "path" attrs []
+
+// @compiler replace: packages/darklang/stdlib/html.dark#Darklang.Stdlib.Html.meta reason=compiler-implementation
+let meta (attrs: Attributes) : Node =
+  htmlTagNode "meta" attrs []
+
+// @compiler replace: packages/darklang/stdlib/html.dark#Darklang.Stdlib.Html.link reason=compiler-implementation
+let link (attrs: Attributes) : Node =
+  htmlTagNode "link" attrs []
+
+// @compiler replace: packages/darklang/stdlib/html.dark#Darklang.Stdlib.Html.script reason=compiler-implementation
+let script (attrs: Attributes) (c: List<Node>) : Node =
+  htmlTagNode "script" attrs c
+
+// @compiler replace: packages/darklang/stdlib/html.dark#Darklang.Stdlib.Html.input reason=compiler-implementation
+let input (attrs: Attributes) : Node =
+  htmlTagNode "input" attrs []
+
+// @compiler replace: packages/darklang/stdlib/html.dark#Darklang.Stdlib.Html.label reason=compiler-implementation
+let label (attrs: Attributes) (c: List<Node>) : Node =
+  htmlTagNode "label" attrs c
+
+// @compiler replace: packages/darklang/stdlib/html.dark#Darklang.Stdlib.Html.form reason=compiler-implementation
+let form (attrs: Attributes) (c: List<Node>) : Node =
+  htmlTagNode "form" attrs c
+
+// @compiler replace: packages/darklang/stdlib/html.dark#Darklang.Stdlib.Html.section reason=compiler-implementation
+let section (attrs: Attributes) (c: List<Node>) : Node =
+  htmlTagNode "section" attrs c
+
+// @compiler replace: packages/darklang/stdlib/html.dark#Darklang.Stdlib.Html.i reason=compiler-implementation
+let i (attrs: Attributes) (c: List<Node>) : Node =
+  htmlTagNode "i" attrs c
+
+// @compiler replace: packages/darklang/stdlib/html.dark#Darklang.Stdlib.Html.code reason=compiler-implementation
+let code (attrs: Attributes) (c: List<Node>) : Node =
+  htmlTagNode "code" attrs c
+
+// @compiler replace: packages/darklang/stdlib/html.dark#Darklang.Stdlib.Html.pre reason=compiler-implementation
+let pre (attrs: Attributes) (c: List<Node>) : Node =
+  htmlTagNode "pre" attrs c
+
+// @compiler replace: packages/darklang/stdlib/html.dark#Darklang.Stdlib.Html.nav reason=compiler-implementation
+let nav (attrs: Attributes) (c: List<Node>) : Node =
+  htmlTagNode "nav" attrs c
+
+// @compiler replace: packages/darklang/stdlib/html.dark#Darklang.Stdlib.Html.footer reason=compiler-implementation
+let footer (attrs: Attributes) (c: List<Node>) : Node =
+  htmlTagNode "footer" attrs c
+
+// Semantic HTML5 tags
+// @compiler replace: packages/darklang/stdlib/html.dark#Darklang.Stdlib.Html.article reason=compiler-implementation
+let article (attrs: Attributes) (c: List<Node>) : Node =
+  htmlTagNode "article" attrs c
+
+// @compiler replace: packages/darklang/stdlib/html.dark#Darklang.Stdlib.Html.aside reason=compiler-implementation
+let aside (attrs: Attributes) (c: List<Node>) : Node =
+  htmlTagNode "aside" attrs c
+
+// @compiler replace: packages/darklang/stdlib/html.dark#Darklang.Stdlib.Html.header reason=compiler-implementation
+let header (attrs: Attributes) (c: List<Node>) : Node =
+  htmlTagNode "header" attrs c
+
+// @compiler replace: packages/darklang/stdlib/html.dark#Darklang.Stdlib.Html.main reason=compiler-implementation
+let main (attrs: Attributes) (c: List<Node>) : Node =
+  htmlTagNode "main" attrs c
+
+// @compiler replace: packages/darklang/stdlib/html.dark#Darklang.Stdlib.Html.figure reason=compiler-implementation
+let figure (attrs: Attributes) (c: List<Node>) : Node =
+  htmlTagNode "figure" attrs c
+
+// @compiler replace: packages/darklang/stdlib/html.dark#Darklang.Stdlib.Html.figcaption reason=compiler-implementation
+let figcaption (attrs: Attributes) (c: List<Node>) : Node =
+  htmlTagNode "figcaption" attrs c
+
+// Media tags
+// @compiler replace: packages/darklang/stdlib/html.dark#Darklang.Stdlib.Html.video reason=compiler-implementation
+let video (attrs: Attributes) (c: List<Node>) : Node =
+  htmlTagNode "video" attrs c
+
+// @compiler replace: packages/darklang/stdlib/html.dark#Darklang.Stdlib.Html.audio reason=compiler-implementation
+let audio (attrs: Attributes) (c: List<Node>) : Node =
+  htmlTagNode "audio" attrs c
+
+// @compiler replace: packages/darklang/stdlib/html.dark#Darklang.Stdlib.Html.picture reason=compiler-implementation
+let picture (attrs: Attributes) (c: List<Node>) : Node =
+  htmlTagNode "picture" attrs c
+
+// Text formatting tags
+// @compiler replace: packages/darklang/stdlib/html.dark#Darklang.Stdlib.Html.strong reason=compiler-implementation
+let strong (attrs: Attributes) (c: List<Node>) : Node =
+  htmlTagNode "strong" attrs c
+
+// @compiler replace: packages/darklang/stdlib/html.dark#Darklang.Stdlib.Html.em reason=compiler-implementation
+let em (attrs: Attributes) (c: List<Node>) : Node =
+  htmlTagNode "em" attrs c
+
+// @compiler replace: packages/darklang/stdlib/html.dark#Darklang.Stdlib.Html.b reason=compiler-implementation
+let b (attrs: Attributes) (c: List<Node>) : Node =
+  htmlTagNode "b" attrs c
+
+// @compiler replace: packages/darklang/stdlib/html.dark#Darklang.Stdlib.Html.u reason=compiler-implementation
+let u (attrs: Attributes) (c: List<Node>) : Node =
+  htmlTagNode "u" attrs c
+
+// @compiler replace: packages/darklang/stdlib/html.dark#Darklang.Stdlib.Html.small reason=compiler-implementation
+let small (attrs: Attributes) (c: List<Node>) : Node =
+  htmlTagNode "small" attrs c
+
+// @compiler replace: packages/darklang/stdlib/html.dark#Darklang.Stdlib.Html.mark reason=compiler-implementation
+let mark (attrs: Attributes) (c: List<Node>) : Node =
+  htmlTagNode "mark" attrs c
+
+// @compiler replace: packages/darklang/stdlib/html.dark#Darklang.Stdlib.Html.del reason=compiler-implementation
+let del (attrs: Attributes) (c: List<Node>) : Node =
+  htmlTagNode "del" attrs c
+
+// @compiler replace: packages/darklang/stdlib/html.dark#Darklang.Stdlib.Html.ins reason=compiler-implementation
+let ins (attrs: Attributes) (c: List<Node>) : Node =
+  htmlTagNode "ins" attrs c
+
+// Definition list tags
+// @compiler replace: packages/darklang/stdlib/html.dark#Darklang.Stdlib.Html.dl reason=compiler-implementation
+let dl (attrs: Attributes) (c: List<Node>) : Node =
+  htmlTagNode "dl" attrs c
+
+// @compiler replace: packages/darklang/stdlib/html.dark#Darklang.Stdlib.Html.dt reason=compiler-implementation
+let dt (attrs: Attributes) (c: List<Node>) : Node =
+  htmlTagNode "dt" attrs c
+
+// @compiler replace: packages/darklang/stdlib/html.dark#Darklang.Stdlib.Html.dd reason=compiler-implementation
+let dd (attrs: Attributes) (c: List<Node>) : Node =
+  htmlTagNode "dd" attrs c
+
+// Form elements
+// @compiler replace: packages/darklang/stdlib/html.dark#Darklang.Stdlib.Html.textarea reason=compiler-implementation
+let textarea (attrs: Attributes) (c: List<Node>) : Node =
+  htmlTagNode "textarea" attrs c
+
+// @compiler replace: packages/darklang/stdlib/html.dark#Darklang.Stdlib.Html.select reason=compiler-implementation
+let select (attrs: Attributes) (c: List<Node>) : Node =
+  htmlTagNode "select" attrs c
+
+// @compiler replace: packages/darklang/stdlib/html.dark#Darklang.Stdlib.Html.option reason=compiler-implementation
+let option (attrs: Attributes) (c: List<Node>) : Node =
+  htmlTagNode "option" attrs c
+
+// @compiler replace: packages/darklang/stdlib/html.dark#Darklang.Stdlib.Html.fieldset reason=compiler-implementation
+let fieldset (attrs: Attributes) (c: List<Node>) : Node =
+  htmlTagNode "fieldset" attrs c
+
+// @compiler replace: packages/darklang/stdlib/html.dark#Darklang.Stdlib.Html.legend reason=compiler-implementation
+let legend (attrs: Attributes) (c: List<Node>) : Node =
+  htmlTagNode "legend" attrs c
+
+// Interactive elements
+// @compiler replace: packages/darklang/stdlib/html.dark#Darklang.Stdlib.Html.details reason=compiler-implementation
+let details (attrs: Attributes) (c: List<Node>) : Node =
+  htmlTagNode "details" attrs c
+
+// @compiler replace: packages/darklang/stdlib/html.dark#Darklang.Stdlib.Html.summary reason=compiler-implementation
+let summary (attrs: Attributes) (c: List<Node>) : Node =
+  htmlTagNode "summary" attrs c
+
+// @compiler replace: packages/darklang/stdlib/html.dark#Darklang.Stdlib.Html.dialog reason=compiler-implementation
+let dialog (attrs: Attributes) (c: List<Node>) : Node =
+  htmlTagNode "dialog" attrs c
+
+
+/// Creates a complete HTML document with DOCTYPE declaration.
+///
+/// Takes a list of nodes (typically a single `html` node) and prepends
+/// the HTML5 DOCTYPE declaration.
+///
+/// Example:
+/// ```
+/// document [
+///   html [] [
+///     head [] [title [] [stringNode "My Page"]]
+///     body [] [h1 [] [stringNode "Hello!"]]
+///   ]
+/// ]
+/// ```
+// @compiler replace: packages/darklang/stdlib/html.dark#Darklang.Stdlib.Html.document reason=compiler-implementation
+let document (nodes: List<Node>) : String =
+  let htmlDocHeader = "<!DOCTYPE html>"
+  let theRest = nodes |> List.map (fun n -> nodeToString n) |> String.join ""
+  htmlDocHeader + theRest

@@ -1,0 +1,444 @@
+/// Workbench state, the view registry's shape, and the small helpers everything else leans on.
+///
+/// Part of `Darklang.Cli.Workbench`, split across files (see app.dark for the overview).
+module Darklang.Cli.Workbench
+
+
+/// The most of the Matter body the tree pane may take, as a percent.
+///
+/// A ceiling rather than the split itself: `matterSplitFor` narrows it to what the names actually need.
+/// A flat 45 gave eight short names 117 columns on a wide terminal while the pane that was clipping got
+/// the smaller half.
+// @compiler blocked: missing-implementation
+val matterSplitMaxPct = 45
+
+/// The least of it, so the tree doesn't collapse to nothing in a narrow window.
+// @compiler blocked: missing-implementation
+val matterSplitMinPct = 18
+
+/// One row of a list. `desc` is the dim one-liner after the name - a
+/// signature, `= value`, `record · 3 fields`, a timestamp - which is how a
+/// row says what it is without an icon. "" for rows that have nothing to add.
+// @compiler blocked: missing-implementation
+type BodyItem =
+  { name: String
+    kind: String
+    isModule: Bool
+    desc: String }
+
+/// A search result the user can jump to: the containing module path (owner + modules), the leaf name, its kind,
+/// and a pre-formatted display line.
+// @compiler blocked: missing-implementation
+type SearchHit =
+  { modules: List<String>
+    name: String
+    kind: String
+    display: String }
+
+/// What the Matter view is showing: the whole tree, or values only (the Values lens, `L`).
+// @compiler blocked: missing-implementation
+type Lens =
+  | WholeTree
+  | ValuesOnly
+  /// Just what the draft has touched. Like `ValuesOnly` its items are FULL paths rather than leaves,
+  /// because what changed is not confined to where you are standing.
+  | Changed
+
+// @compiler blocked: missing-implementation
+type MatterState =
+  { lens: Lens }
+
+/// Put the workbench on <param branchId>: the state's own field AND the process overlay.
+///
+/// The workbench is one long-lived process that changes branch without restarting, which is what
+/// `selectBranch` exists for. Both have to move together: the header and the item list read
+/// `state.branchId`, while `SCM.Draft.read ()` resolves through the process overlay and backs the
+/// Changes list, the conflict counts and Home's wip section. Move one without the other and the
+/// screen describes one branch while `x` discards the draft of another. EVERY switch goes through
+/// here.
+// @compiler blocked: missing-implementation
+let onBranch (state: State) (branchId: Uuid) : State =
+  let _ = SCM.PackageOps.selectBranch branchId
+  { state with branchId = branchId }
+
+
+// @compiler blocked: missing-implementation
+let emptyMatter () : MatterState =
+  MatterState { lens = Lens.WholeTree }
+
+/// The next lens the toggle key moves to. Three lenses, so it cycles rather than flipping.
+// @compiler blocked: missing-implementation
+let otherLens (lens: Lens) : Lens =
+  match lens with
+  | WholeTree -> Lens.ValuesOnly
+  | ValuesOnly -> Lens.Changed
+  | Changed -> Lens.WholeTree
+
+
+/// The search-results mode: a jumpable list of matches, and the cursor into it. Enter navigates to the
+/// hit's location. No hits means it isn't open.
+// @compiler blocked: missing-implementation
+type SearchState =
+  { hits: List<SearchHit>
+    selected: Int }
+
+// @compiler blocked: missing-implementation
+let emptySearch () : SearchState =
+  SearchState { hits = [], selected = 0 }
+
+
+/// Where you were, in enough detail to put you back there: the view, the tree
+/// location and lens, the cursor and the filter. What esc walks back through.
+/// A forward move is spelled the same way: take `returnPointOf`, change what
+/// differs, `moveToPoint` it.
+// @compiler blocked: missing-implementation
+type ReturnPoint =
+  { view: Int
+    location: Packages.PackageLocation
+    lens: Lens
+    selected: Int
+    filter: String }
+
+/// A target the nav can open: a view and its section within that view. Coarser
+/// than a `ReturnPoint`, which is everything needed to land back exactly.
+/// `section` is meaningful for SCM and AI; it is zero for other views.
+// @compiler blocked: missing-implementation
+type Dest = { view: Int, section: Int }
+
+
+/// What's drawn over the frame, and holding the keyboard while it is.
+///
+/// One field avoids representing two overlays as open at once. The navbar is
+/// tracked by `State.focus`, because it is also a permanent column when wide.
+// @compiler blocked: missing-implementation
+type BranchChoice = { id: Uuid, name: String, detail: String }
+
+// @compiler blocked: missing-implementation
+type BranchPicker =
+  { choices: List<BranchChoice>
+    field: Stdlib.Cli.UI.TextField.State
+    selected: Int }
+
+// @compiler blocked: missing-implementation
+type Overlay =
+  | NoOverlay
+  /// The `?` keymap, drawn centred with its interior cleared. Any key closes it.
+  | Keymap
+  /// Searchable branch list. Selection is by id, never by a decorated label.
+  | Branches of BranchPicker
+
+
+/// The REPL view's state: what's been run, what's bound, and what's half-typed.
+// @compiler blocked: missing-implementation
+type ReplState =
+  { /// The eval log, newest last, each entry already rendered (the `> expr` and its result lines).
+    log: List<String>
+    /// Session bindings, in the order they were first bound. `let x = ...` at the REPL records one, and
+    /// every later expression is evaluated with them in scope (see `Darklang.Cli.Repl`). Session-lived:
+    /// they go away when the CLI exits.
+    bindings: List<Darklang.Cli.Repl.Binding>
+    /// The result of the last expression, unstyled - what the session pane shows under "last result".
+    /// Held rather than scraped back out of `log`, which is display text.
+    last: String
+    /// Lines of a multi-line statement typed so far, each ended with a `\`. Empty except while one is being
+    /// assembled; the next unbackslashed line completes it and the whole thing runs as one statement.
+    pending: String }
+
+// @compiler blocked: missing-implementation
+let emptyRepl () : ReplState =
+  ReplState { log = [], bindings = [], last = "", pending = "" }
+
+
+/// What the footer's message reports. Its own value rather than read off the text: the footer used
+/// to pick its mark by substring ("fail", "conflict"), so "need at least owner.Module", "no matches
+/// for ..." and "no relay yet" all went out behind a green tick. Not `Ok`, which would collide with
+/// `Result`'s case in a bare pattern.
+// @compiler blocked: missing-implementation
+type MessageKind =
+  /// It did what was asked.
+  | Succeeded
+  /// It did not, by design, and the message says why: nothing selected, nothing found, a name too short.
+  | Refused
+  /// It tried and something went wrong.
+  | Failed
+
+/// What the Code view's item page was built from. Everything it reads, and nothing a keystroke
+/// moves without moving the page: scrolling, focus, the command bar and the overlays are absent.
+// @compiler blocked: missing-implementation
+type PreviewKey =
+  { view: Int
+    lens: Lens
+    branchId: Uuid
+    location: Packages.PackageLocation
+    items: List<BodyItem>
+    selected: Int
+    accountId: Stdlib.Option.Option<Uuid>
+    liveValues: Dict<String, String>
+    renderPeek: String
+    width: Int
+    /// The draft's op count, so your own save, discard or deprecation rebuilds the page.
+    draftOps: Int64 }
+
+// @compiler blocked: missing-implementation
+type PreviewCache =
+  { key: PreviewKey
+    lines: List<String> }
+
+// @compiler blocked: missing-implementation
+type State =
+  { activeView: Int
+    /// `--live`: reload when something changes the store under you. Off, nothing is said and
+    /// nothing moves until you press `R`, which is the difference
+    /// between a viewer telling you something happened and a viewer rearranging itself while
+    /// you read it.
+    live: Bool
+    location: Packages.PackageLocation
+    items: List<BodyItem>
+    selected: Int
+    /// Which content pane has focus. `Neither` while the navbar does.
+    focus: Stdlib.Cli.UI.SplitPane.Focus
+    detailScroll: Int
+    /// When Some, a full-body reader is open (e.g. a Docs topic); its text scrolls via detailScroll.
+    reading: Stdlib.Option.Option<String>
+    /// Whether the open reader's content is Dark code (so it gets syntax-highlighted). False for docs/help/
+    /// search/ops which aren't code.
+    readingIsCode: Bool
+    /// When Some, a single-line text prompt is open (e.g. a commit message).
+    input: Stdlib.Option.Option<InputState>
+    /// When Some, the multiline editor is open (authoring a fn body).
+    editing: Stdlib.Option.Option<EditingState>
+    accountId: Stdlib.Option.Option<Uuid>
+    /// This instance's human name for the context line - config `instance.name` if set, else the machine
+    /// hostname. Each instance also registers a UUID (`instance.id`) in config on first run.
+    instanceName: String
+    /// A transient status message (e.g. "committed", "saved foo") shown in the footer after a write action,
+    /// then cleared on the next keypress. "" = nothing to show.
+    message: String
+    /// What <field message> reports, which decides its mark in the footer.
+    messageKind: MessageKind
+    /// The search-results mode: open when it has hits, with its own cursor.
+    search: SearchState
+    /// The overlay drawn over the frame, if any.
+    overlay: Overlay
+    /// The navbar cursor, as a position into `navbarRows`. `focus ==
+    /// Neither` means the navbar owns the keyboard.
+    navbarSel: Int
+    /// The last destination visited in each workspace.
+    wsLast: List<(Int * Dest)>
+    /// Where you have been, most recent first: what esc returns to. Every move
+    /// - a view switch, entering a module, a jump from search - pushes the place
+    /// it left. Capped, so a long session cannot grow it without bound.
+    back: List<ReturnPoint>
+    /// `:` command bar: which completion in the dropdown is highlighted (↑↓ move, tab accepts it). Reset to 0
+    /// whenever the text changes.
+    completionSel: Int
+    /// Names of items with uncommitted edits, and of deprecated items in the current module.
+    ///
+    /// Cached rather than read in the renderer. Both are DB reads, the renderer runs on every keypress, and
+    /// rendering has to stay a pure function of state for frame diffing to be sound. Refreshed on transitions
+    /// by `refreshBadges`.
+    wipNames: List<String>
+    deprecatedNames: List<String>
+    /// The whole SCM picture, read once per transition rather than per surface.
+    scmStatus: ScmStatus
+    /// The tree-native view peek: the captured output of the selected `render` fn, or "" when the selection
+    /// isn't one.
+    ///
+    /// Cached for the same reason as the badges above, and more urgently: this one runs *user code*, and the
+    /// renderer has to stay a pure function of state for frame diffing to be sound. Refreshed on transitions
+    /// by `refreshPeek`.
+    renderPeek: String
+    /// Live values for the selected fn: what each call in it produced the last time it ran, keyed
+    /// by the call's expression id, rendered. Runs user code, so it is refreshed on transitions
+    /// (`refreshLiveValues`) and read by the printer, never computed while drawing.
+    liveValues: Dict<String, String>
+    /// The fn and draft op count `liveValues` were built for, so a key that moves neither does not
+    /// replay again. "" whenever the store may have moved under them.
+    liveFor: String
+    /// Why a fn with a recorded run shows no values (`Values.skipped`); "" otherwise.
+    liveNote: String
+    /// The REPL view's own state. Everything in here belongs to that one view, so it lives in one field
+    /// rather than as four more on the workbench: a view you can hand a record to is a view you could mount
+    /// somewhere else, and the parent stops being the place every view keeps its things.
+    repl: ReplState
+    matter: MatterState
+    /// In-view find-as-you-type filter (`f`); "" = no filter. Narrows the current list by substring.
+    filter: String
+    /// The Code view's item page, built on the transition (`refreshPreview`). It reads the store
+    /// several times over, so building it per frame cost every scroll and command-bar key the
+    /// same as moving to a new item. `None` whenever the store may have moved under it.
+    preview: Stdlib.Option.Option<PreviewCache>
+    branchId: Uuid }
+
+/// A single-line text entry. `action` tags what Enter does (e.g. "commit").
+// @compiler blocked: missing-implementation
+type InputState =
+  { prompt: String
+    /// The text being typed, as a `Stdlib.Cli.UI.TextField`: a cursor you can move, rather than a string you could
+    /// only append to and backspace off the end of.
+    field: Stdlib.Cli.UI.TextField.State
+    action: String }
+
+/// The multiline editor's state: the item kind ("fn"/"type"/"value"), the fully-qualified name being
+/// authored, the text buffer, and a last-error line.
+// @compiler blocked: missing-implementation
+type EditingState =
+  { kind: String
+    nameStr: String
+    /// The module (owner.Module...) the item saves into - from the tree location, or asked for when you're too
+    /// shallow to have one. Lets you author from anywhere, not just inside a module.
+    targetModule: List<String>
+    buf: Stdlib.Cli.UI.Editor.Buf
+    err: String }
+
+// @compiler blocked: missing-implementation
+type Step =
+  | Continue of State
+  | Exit of State
+  /// Hand off to a foreground command (e.g. a full-screen app opened from the Apps view). The CLI pushes the
+  /// workbench and returns to it when that command's page exits. Carries the workbench State to return to.
+  | Launch of State * String
+  /// Drop to the classic prompt (`:classic`), pushing the workbench so `quit` there returns here.
+  | ToPrompt of State
+
+/// Keyboard and scrolling behavior, independent of a view's drawing style.
+// @compiler blocked: missing-implementation
+type ViewBehavior =
+  /// A list beside a detail pane: ←→ and Tab move between them, and ↑↓
+  /// follow whichever has focus. E.g. Code: modules left, source right.
+  | Split
+  /// One pane with a cursor over its rows and nothing to the right of it.
+  | List
+  /// A `List` whose rows include section headers, which the cursor skips.
+  /// E.g. Home: "Branches", "History" and the rows under each.
+  | SectionedList
+
+/// Everything needed to load and render an extension view. Navigation
+/// grouping is defined separately by `workspaces`.
+// @compiler blocked: missing-implementation
+type ViewDef =
+  { /// Stable slug, independent of its numeric view index.
+    id: String
+    /// navbar label
+    name: String
+    behavior: ViewBehavior
+    /// the selectable rows (for the shared cursor + list pane); Unit-in since extension views are self-contained
+    loadItems: Unit -> List<BodyItem>
+    /// the body's spans for the region (returned, not printed, so frames can be diffed)
+    render: State -> Stdlib.Cli.UI.Layout.Region -> List<Stdlib.Cli.UI.Layout.Span>
+    /// preview/detail lines for the selected row
+    detail: State -> List<String>
+    /// context key-hints for the footer
+    hints: State -> List<(String * String)> }
+
+
+// ── View indices; built-in labels match Frame.viewNames. ──
+//
+// Nothing persists one of these and no key names one: a number key picks a
+// position in `Navbar.workspaces`, and everything else goes through the names
+// below. So they are free to move, and four holes left for views that are now
+// in later/ (Inspect, Devices, AI, Apps) have been closed.
+// @compiler blocked: missing-implementation
+val vHome = 0
+// @compiler blocked: missing-implementation
+val vMatter = 1
+// @compiler blocked: missing-implementation
+val vScratch = 2
+// @compiler blocked: missing-implementation
+val vSCM = 3
+// @compiler blocked: missing-implementation
+val vTraces = 4
+// @compiler blocked: missing-implementation
+val vDocs = 5
+// Extension indices are `baseViewCount + position in extensionViews`.
+// @compiler blocked: missing-implementation
+val baseViewCount = 6
+
+/// Built-in view indices. Extension views are appended by `viewSpecs`.
+// @compiler blocked: missing-implementation
+val baseViewSpecs = [ vHome, vMatter, vScratch, vSCM, vTraces, vDocs ]
+
+/// Every view as `(absolute index, label, gate key)`, used for visibility and
+/// label lookup. `workspaces` separately defines navbar placement.
+// @compiler blocked: missing-implementation
+val viewSpecs =
+  let base = baseViewSpecs |> Stdlib.List.map (fun i -> (i, Frame.viewName i))
+  let exts =
+    extensionViews ()
+    |> Stdlib.List.indexedMap (fun i vd -> (baseViewCount + i, vd.name))
+  Stdlib.List.append base exts
+
+/// The extension `ViewDef` at an absolute view index (None for a built-in, or out of range).
+// @compiler blocked: missing-implementation
+let extensionViewAt (idx: Int) : Stdlib.Option.Option<ViewDef> =
+  if idx < baseViewCount then
+    Stdlib.Option.Option.None
+  else
+    Stdlib.List.getAt (extensionViews ()) (idx - baseViewCount)
+
+/// Single-column views never give focus to an invisible second pane.
+// @compiler blocked: missing-implementation
+let viewBehavior (view: Int) : ViewBehavior =
+  if view == vHome then ViewBehavior.SectionedList
+  else
+    match extensionViewAt view with
+    | Some vd -> vd.behavior
+    | None -> ViewBehavior.Split
+
+// @compiler blocked: missing-implementation
+let hasDetailPane (state: State) : Bool =
+  viewBehavior state.activeView == ViewBehavior.Split
+
+/// Does the list have section headers the cursor must step over?
+// @compiler blocked: missing-implementation
+let isSectioned (state: State) : Bool =
+  viewBehavior state.activeView == ViewBehavior.SectionedList
+
+/// The display label for any view index.
+// @compiler blocked: missing-implementation
+let viewLabel (idx: Int) : String =
+  match extensionViewAt idx with
+  | Some vd -> vd.name
+  | None -> Frame.viewName idx
+
+/// The view indices the navbar may show, in `viewSpecs` order.
+// @compiler blocked: missing-implementation
+let visibleViews (state: State) : List<Int> =
+  viewSpecs |> Stdlib.List.map (fun spec -> Stdlib.Tuple2.first spec)
+
+
+/// Run `f` with anything it writes to stdout captured, and hand back both its value and that output. The
+/// single place `Builtin.stdoutCapture*` is used, so the many "run a command, show its output inside the
+/// frame" sites go through one wrapper instead of each touching the builtins directly.
+///
+/// Capturing is not optional in here. The workbench owns the whole screen, so a stray `printLine` from
+/// inside a command scrolls the alternate screen, and every frame after it lands that many rows off - which
+/// looks like two overlapping copies of the UI, not like a missing line. `cliEvaluateExpression` prints a
+/// three-line call-stack header on any runtime error, so this is reachable by typing a typo at the REPL.
+// @compiler blocked: missing-implementation
+let captureOutputAnd (f: Unit -> 'a) : ('a * String) =
+  // `stdoutCaptureStart` returns false when a capture is ALREADY open, and deliberately changes nothing in
+  // that case - so we don't own the buffer and must not stop it. Calling stop regardless would hand the
+  // outer capture's collected output to the inner caller and clear the flag, so everything the outer one
+  // was collecting would print straight onto the alternate screen: exactly the corruption capturing exists
+  // to prevent. Nothing nests today, but this is a one-line guard against a hard-to-see failure.
+  let owned = Builtin.stdoutCaptureStart ()
+  let value = f ()
+  if owned then (value, Builtin.stdoutCaptureStop ()) else (value, "")
+
+/// `captureOutputAnd` when only the output matters (running a classic command for its printed result).
+// @compiler blocked: missing-implementation
+let captureOutput (f: Unit -> 'a) : String =
+  let (_value, output) = captureOutputAnd f
+  output
+
+
+/// A throwaway classic-CLI AppState carrying just this workbench's identity (branch + account) for handing to
+/// the classic command Registry (executeCommand / getCompletions / getCompletionHint). Everything else is the
+/// init default; the workbench only ever needs those three fields to run a command on the right branch as you.
+// @compiler blocked: missing-implementation
+let classicState (state: State) : Darklang.Cli.AppState =
+  { (Darklang.Cli.initState ()) with
+      currentBranchId = state.branchId
+      accountID = state.accountId
+      }

@@ -1,0 +1,29 @@
+module Darklang.Cli.Docs.Records
+
+// @compiler blocked: missing-implementation
+let content () : String =
+  """# Records
+
+Fields use commas or newlines. Semicolons are a parse error.
+
+## Define
+  type Person = { name: String, age: Int }
+
+## Construct (alignment matters!)
+  Person { name = "Jo", age = 30 }    # OK
+  Person                                # OK
+    { name = "Jo"
+      age = 30 }
+  Person
+  { name = "Jo" }                       # WRONG - { left of type
+
+## Access
+  person.name
+
+## Update
+  { person with name = "Jane", age = 31 }
+
+## No pattern matching
+  Records can't be destructured in match. Use a variable and access fields:
+  match p with
+  | person -> person.name"""

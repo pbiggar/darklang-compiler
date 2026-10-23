@@ -48,54 +48,71 @@ module PermissionsGrammar =
               Darklang.LanguageTools.Permissions.Scope.Only args })
 
   // Basic rule forms accepted by `permissions allow`.
+  // @compiler blocked: compiler-gap
   (Darklang.LanguageTools.Permissions.parseRule [ "file", "read", "/tmp/x" ]) = Stdlib.Option.Option.Some
     [ Darklang.LanguageTools.Permissions.Rule.FileRead(only "/tmp/x") ]
 
+  // @compiler blocked: compiler-gap
   (Darklang.LanguageTools.Permissions.parseRule [ "file", "write", "/tmp/x" ]) = Stdlib.Option.Option.Some
     [ Darklang.LanguageTools.Permissions.Rule.FileWrite(only "/tmp/x") ]
 
+  // @compiler blocked: compiler-gap
   (Darklang.LanguageTools.Permissions.parseRule [ "file", "read+write", "/tmp/x" ]) = Stdlib.Option.Option.Some
     [ Darklang.LanguageTools.Permissions.Rule.FileRead(only "/tmp/x")
       Darklang.LanguageTools.Permissions.Rule.FileWrite(only "/tmp/x") ]
 
   // No target means every target.
+  // @compiler blocked: compiler-gap
   (Darklang.LanguageTools.Permissions.parseRule [ "file", "read" ]) = Stdlib.Option.Option.Some
     [ Darklang.LanguageTools.Permissions.Rule.FileRead
         Darklang.LanguageTools.Permissions.Scope.All ]
 
+  // @compiler blocked: compiler-gap
   (Darklang.LanguageTools.Permissions.parseRule [ "env", "read", "HOME" ]) = Stdlib.Option.Option.Some
     [ Darklang.LanguageTools.Permissions.Rule.EnvRead(only "HOME") ]
 
+  // @compiler blocked: compiler-gap
   (Darklang.LanguageTools.Permissions.parseRule [ "env", "write", "PATH" ]) = Stdlib.Option.Option.Some
     [ Darklang.LanguageTools.Permissions.Rule.EnvWrite(only "PATH") ]
 
+  // @compiler blocked: compiler-gap
   (Darklang.LanguageTools.Permissions.parseRule [ "db", "read", "t" ]) = Stdlib.Option.Option.Some
     [ Darklang.LanguageTools.Permissions.Rule.DbRead(only "t") ]
 
   // The store effects are not resource-scoped: bare effect names only.
+  // @compiler blocked: compiler-gap
   (Darklang.LanguageTools.Permissions.parseRule [ "package-read" ]) = Stdlib.Option.Option.Some
     [ Darklang.LanguageTools.Permissions.Rule.Effect Darklang.LanguageTools.Permissions.Effect.PackageRead ]
 
+  // @compiler blocked: compiler-gap
   (Darklang.LanguageTools.Permissions.parseRule [ "package", "read", "p" ]) = Stdlib.Option.Option.None
 
+  // @compiler blocked: compiler-gap
   (Darklang.LanguageTools.Permissions.parseRule [ "trace", "read", "t" ]) = Stdlib.Option.Option.None
 
   // Unknown access, unknown kind, unknown effect: never a wildcard.
+  // @compiler blocked: compiler-gap
   (Darklang.LanguageTools.Permissions.parseRule [ "file", "execute", "/x" ]) = Stdlib.Option.Option.None
 
+  // @compiler blocked: compiler-gap
   (Darklang.LanguageTools.Permissions.parseRule [ "disk", "read", "/x" ]) = Stdlib.Option.Option.None
 
+  // @compiler blocked: compiler-gap
   (Darklang.LanguageTools.Permissions.parseRule [ "teleport" ]) = Stdlib.Option.Option.None
 
+  // @compiler blocked: compiler-gap
   (Darklang.LanguageTools.Permissions.parseRule [ "http", "GET", "ftp://h/p" ]) = Stdlib.Option.Option.None
 
+  // @compiler blocked: compiler-gap
   (Darklang.LanguageTools.Permissions.parseRuleText "http GET https://h:65536/p") = Stdlib.Option.Option.None
 
   // Representative forms emitted by the F# denial hint (`Request.suggestRule`).
+  // @compiler blocked: compiler-gap
   (Darklang.LanguageTools.Permissions.parseRuleText "http GET https://h:443/p?q") = Stdlib.Option.Option.Some
     [ exactHttp () ]
 
   // A query with no path: the host must not swallow the query.
+  // @compiler blocked: compiler-gap
   (Darklang.LanguageTools.Permissions.parseRuleText "http GET https://h?x=1") = Stdlib.Option.Option.Some
     [ Darklang.LanguageTools.Permissions.Rule.Http(
         Darklang.LanguageTools.Permissions.HttpRule
@@ -106,29 +123,37 @@ module PermissionsGrammar =
             pathPrefix = Darklang.LanguageTools.Permissions.Scope.All
             query = only "?x=1" }) ]
 
+  // @compiler blocked: compiler-gap
   (Darklang.LanguageTools.Permissions.parseRuleText "process /bin/x") = Stdlib.Option.Option.Some
     [ process "/bin/x" [] ]
 
   // A relative executable would name a different program per working
   // directory; only `*` or an absolute path is a rule.
+  // @compiler blocked: compiler-gap
   (Darklang.LanguageTools.Permissions.parseRuleText "process ./tool") = Stdlib.Option.Option.None
+  // @compiler blocked: compiler-gap
   (Darklang.LanguageTools.Permissions.parseRuleText "process tool --x") = Stdlib.Option.Option.None
 
+  // @compiler blocked: compiler-gap
   (Darklang.LanguageTools.Permissions.parseRuleText "env read") = Stdlib.Option.Option.Some
     [ Darklang.LanguageTools.Permissions.Rule.EnvRead
         Darklang.LanguageTools.Permissions.Scope.All ]
 
+  // @compiler blocked: compiler-gap
   (Darklang.LanguageTools.Permissions.parseRuleText "db read") = Stdlib.Option.Option.Some
     [ Darklang.LanguageTools.Permissions.Rule.DbRead
         Darklang.LanguageTools.Permissions.Scope.All ]
 
+  // @compiler blocked: compiler-gap
   (Darklang.LanguageTools.Permissions.parseRuleText "file read /tmp/x") = Stdlib.Option.Option.Some
     [ Darklang.LanguageTools.Permissions.Rule.FileRead(only "/tmp/x") ]
 
+  // @compiler blocked: compiler-gap
   (Darklang.LanguageTools.Permissions.parseRuleText "http-server 8080") = Stdlib.Option.Option.Some
     [ Darklang.LanguageTools.Permissions.Rule.HttpServer(
         Darklang.LanguageTools.Permissions.Scope.Only 8080) ]
 
+  // @compiler blocked: compiler-gap
   ([ "stdin", "stdout", "clock", "random"
      "package-read", "package-write", "trace-read", "trace-write" ]
    |> Stdlib.List.all (fun name ->
@@ -139,6 +164,7 @@ module PermissionsGrammar =
 
   // A bare `http`, `http-server` or `process` is the whole effect, never the
   // scoped rule's broad spelling: each text names exactly one Rule.
+  // @compiler blocked: compiler-gap
   ([ "http", "http-server", "process" ]
    |> Stdlib.List.all (fun name ->
      (Darklang.LanguageTools.Permissions.parseRuleText name)
@@ -147,47 +173,60 @@ module PermissionsGrammar =
            [ Darklang.LanguageTools.Permissions.Rule.Effect effect ])))) = true
 
   // `*` is the wildcard executable, not an executable literally named `*`.
+  // @compiler blocked: compiler-gap
   (Darklang.LanguageTools.Permissions.parseRuleText "process *") = Stdlib.Option.Option.Some
     [ Darklang.LanguageTools.Permissions.Rule.Process(
         Darklang.LanguageTools.Permissions.ProcessRule
           { executable = Darklang.LanguageTools.Permissions.Scope.All
             args = Darklang.LanguageTools.Permissions.Scope.All }) ]
 
+  // @compiler blocked: compiler-gap
   (Darklang.LanguageTools.Permissions.parseRuleText "http-server *") = Stdlib.Option.Option.Some
     [ Darklang.LanguageTools.Permissions.Rule.HttpServer
         Darklang.LanguageTools.Permissions.Scope.All ]
 
+  // @compiler blocked: compiler-gap
   (Darklang.LanguageTools.Permissions.parseRuleText "effect clock") = Stdlib.Option.Option.None
 
   // Render/parse round trips.
+  // @compiler blocked: compiler-gap
   (roundTrips Darklang.LanguageTools.Permissions.Rule.All) = true
 
+  // @compiler blocked: compiler-gap
   (roundTrips (Darklang.LanguageTools.Permissions.Rule.Effect Darklang.LanguageTools.Permissions.Effect.Clock)) = true
 
   // The three effects that also have scoped rule forms.
+  // @compiler blocked: compiler-gap
   (roundTrips (Darklang.LanguageTools.Permissions.Rule.Effect Darklang.LanguageTools.Permissions.Effect.Http)) = true
 
+  // @compiler blocked: compiler-gap
   (roundTrips (Darklang.LanguageTools.Permissions.Rule.Effect Darklang.LanguageTools.Permissions.Effect.HttpServer)) = true
 
+  // @compiler blocked: compiler-gap
   (roundTrips (Darklang.LanguageTools.Permissions.Rule.Effect Darklang.LanguageTools.Permissions.Effect.Process)) = true
 
+  // @compiler blocked: compiler-gap
   (roundTrips
     (Darklang.LanguageTools.Permissions.Rule.Process(
       Darklang.LanguageTools.Permissions.ProcessRule
         { executable = Darklang.LanguageTools.Permissions.Scope.All
           args = Darklang.LanguageTools.Permissions.Scope.All }))) = true
 
+  // @compiler blocked: compiler-gap
   (roundTrips
     (Darklang.LanguageTools.Permissions.Rule.Process(
       Darklang.LanguageTools.Permissions.ProcessRule
         { executable = Darklang.LanguageTools.Permissions.Scope.All
           args = Darklang.LanguageTools.Permissions.Scope.Only [ "a" ] }))) = true
 
+  // @compiler blocked: compiler-gap
   (roundTrips (exactHttp ())) = true
 
+  // @compiler blocked: compiler-gap
   (roundTrips (broadHttp ())) = true
 
   // A query must not be dropped when rendering a broad HTTP rule.
+  // @compiler blocked: compiler-gap
   (Stdlib.String.contains
     (Darklang.LanguageTools.Permissions.renderRule
       (Darklang.LanguageTools.Permissions.Rule.Http(
@@ -200,40 +239,53 @@ module PermissionsGrammar =
             query = only "?token=secret" })))
     "?token=secret") = true
 
+  // @compiler blocked: compiler-gap
   (roundTrips
     (Darklang.LanguageTools.Permissions.Rule.HttpServer
       Darklang.LanguageTools.Permissions.Scope.All)) = true
 
+  // @compiler blocked: compiler-gap
   (roundTrips
     (Darklang.LanguageTools.Permissions.Rule.HttpServer(
       Darklang.LanguageTools.Permissions.Scope.Only 8080))) = true
 
+  // @compiler blocked: compiler-gap
   (roundTrips (Darklang.LanguageTools.Permissions.Rule.FileRead(only "/tmp/x"))) = true
 
+  // @compiler blocked: compiler-gap
   (roundTrips (Darklang.LanguageTools.Permissions.Rule.FileWrite(only "/tmp/x"))) = true
 
+  // @compiler blocked: compiler-gap
   (roundTrips (Darklang.LanguageTools.Permissions.Rule.EnvRead(only "HOME"))) = true
 
+  // @compiler blocked: compiler-gap
   (roundTrips (Darklang.LanguageTools.Permissions.Rule.EnvWrite(only "PATH"))) = true
 
+  // @compiler blocked: compiler-gap
   (roundTrips (Darklang.LanguageTools.Permissions.Rule.DbRead(only "t"))) = true
 
+  // @compiler blocked: compiler-gap
   (roundTrips (Darklang.LanguageTools.Permissions.Rule.DbWrite(only "t"))) = true
 
+  // @compiler blocked: compiler-gap
   (roundTrips (process "/bin/x" [])) = true
 
+  // @compiler blocked: compiler-gap
   (roundTrips (process "/bin/x" [ "a", "b" ])) = true
 
   // Rendered guest-controlled fields are quoted: spaces, apostrophes and
   // shell metacharacters survive the round trip as data, never syntax.
+  // @compiler blocked: compiler-gap
   (roundTrips
     (Darklang.LanguageTools.Permissions.Rule.FileRead(
       only "/tmp/O'Brien files/$HOME"))) = true
 
+  // @compiler blocked: compiler-gap
   (roundTrips
     (process "/opt/My Tool/bin/run" [ "two words", "'quoted'", "$HOME" ])) = true
 
   // IPv6 hosts use brackets in text but the typed rule stores the host itself.
+  // @compiler blocked: compiler-gap
   (roundTrips
     (Darklang.LanguageTools.Permissions.Rule.Http(
       Darklang.LanguageTools.Permissions.HttpRule
@@ -245,6 +297,7 @@ module PermissionsGrammar =
           query = Darklang.LanguageTools.Permissions.Scope.All }))) = true
 
   // The whole policy renders and parses back, deny rules included.
+  // @compiler blocked: compiler-gap
   (Darklang.LanguageTools.Permissions.parse
     (Darklang.LanguageTools.Permissions.render
       (Darklang.LanguageTools.Permissions.Policy

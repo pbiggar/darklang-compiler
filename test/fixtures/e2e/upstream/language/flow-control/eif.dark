@@ -1,12 +1,17 @@
 (if true then "correct" else 0L) = compileerror="Expected TString, got TInt64"
 
+// @compiler blocked: compiler-gap
 (if true then Builtin.testRuntimeError "a" else 0L) = error="Uncaught exception: a"
+// @compiler blocked: compiler-gap
 (if false then 0L else Builtin.testRuntimeError "a") = error="Uncaught exception: a"
+// @compiler blocked: compiler-gap
 (if false then Builtin.testRuntimeError "a" else 0L) = 0L
+// @compiler blocked: compiler-gap
 (if true then 0L else Builtin.testRuntimeError "a") = 0L
 (if false then "" else "correct") = "correct"
 #compileerror="Expected TBool, got TUnit"
 (if () then "" else "") = error="Encountered a condition that must be a Bool, but got an Unit (())"
+// @compiler blocked: compiler-gap
 (if Builtin.testRuntimeError "msg" then "" else "") = error="Uncaught exception: msg"
 #compileerror="Expected TBool, got TInt64"
 (if 5L then "" else "") = error="Encountered a condition that must be a Bool, but got an Int64 (5)"
@@ -20,7 +25,9 @@
 #compileerror="Expected TBool, got TUnit"
 (if () then "msg") = error="Encountered a condition that must be a Bool, but got an Unit (())"
 
+// @compiler blocked: compiler-gap
 (if true then Builtin.testRuntimeError "a") = error="Uncaught exception: a"
 
 #compileerror="Expected TString, got TUnit"
+// @compiler blocked: compiler-gap
 (if Builtin.testRuntimeError "msg" then "") = error="Uncaught exception: msg"

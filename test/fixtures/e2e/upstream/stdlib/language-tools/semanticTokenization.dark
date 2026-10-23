@@ -16,108 +16,126 @@ let tokenize
 
 
 module TokenizeTypeReference =
+  // @compiler blocked: compiler-gap
   ("type MyUnit = Unit" |> tokenize) =
     [ (TokenType.Keyword, (0, 0), (0, 4))
       (TokenType.TypeName, (0, 5), (0, 11))
       (TokenType.Symbol, (0, 12), (0, 13))
       (TokenType.TypeName, (0, 14), (0, 18)) ]
 
+  // @compiler blocked: compiler-gap
   ("type MyBool = Bool" |> tokenize) =
     [ (TokenType.Keyword, (0, 0), (0, 4))
       (TokenType.TypeName, (0, 5), (0, 11))
       (TokenType.Symbol, (0, 12), (0, 13))
       (TokenType.TypeName, (0, 14), (0, 18)) ]
 
+  // @compiler blocked: compiler-gap
   ("type MyInt8 = Int8" |> tokenize) =
     [ (TokenType.Keyword, (0, 0), (0, 4))
       (TokenType.TypeName, (0, 5), (0, 11))
       (TokenType.Symbol, (0, 12), (0, 13))
       (TokenType.TypeName, (0, 14), (0, 18)) ]
 
+  // @compiler blocked: compiler-gap
   ("type MyUInt8 = UInt8" |> tokenize) =
     [ (TokenType.Keyword, (0, 0), (0, 4))
       (TokenType.TypeName, (0, 5), (0, 12))
       (TokenType.Symbol, (0, 13), (0, 14))
       (TokenType.TypeName, (0, 15), (0, 20)) ]
 
+  // @compiler blocked: compiler-gap
   ("type MyInt16 = Int16" |> tokenize) =
     [ (TokenType.Keyword, (0, 0), (0, 4))
       (TokenType.TypeName, (0, 5), (0, 12))
       (TokenType.Symbol, (0, 13), (0, 14))
       (TokenType.TypeName, (0, 15), (0, 20)) ]
 
+  // @compiler blocked: compiler-gap
   ("type MyUInt16 = UInt16" |> tokenize) =
     [ (TokenType.Keyword, (0, 0), (0, 4))
       (TokenType.TypeName, (0, 5), (0, 13))
       (TokenType.Symbol, (0, 14), (0, 15))
       (TokenType.TypeName, (0, 16), (0, 22)) ]
 
+  // @compiler blocked: compiler-gap
   ("type MyInt32 = Int32" |> tokenize) =
     [ (TokenType.Keyword, (0, 0), (0, 4))
       (TokenType.TypeName, (0, 5), (0, 12))
       (TokenType.Symbol, (0, 13), (0, 14))
       (TokenType.TypeName, (0, 15), (0, 20)) ]
 
+  // @compiler blocked: compiler-gap
   ("type MyUInt32 = UInt32" |> tokenize) =
     [ (TokenType.Keyword, (0, 0), (0, 4))
       (TokenType.TypeName, (0, 5), (0, 13))
       (TokenType.Symbol, (0, 14), (0, 15))
       (TokenType.TypeName, (0, 16), (0, 22)) ]
 
+  // @compiler blocked: compiler-gap
   ("type MyInt64 = Int64" |> tokenize) =
     [ (TokenType.Keyword, (0, 0), (0, 4))
       (TokenType.TypeName, (0, 5), (0, 12))
       (TokenType.Symbol, (0, 13), (0, 14))
       (TokenType.TypeName, (0, 15), (0, 20)) ]
 
+  // @compiler blocked: compiler-gap
   ("type MyUInt64 = UInt64" |> tokenize) =
     [ (TokenType.Keyword, (0, 0), (0, 4))
       (TokenType.TypeName, (0, 5), (0, 13))
       (TokenType.Symbol, (0, 14), (0, 15))
       (TokenType.TypeName, (0, 16), (0, 22)) ]
 
+  // @compiler blocked: compiler-gap
   ("type MyInt128 = Int128" |> tokenize) =
     [ (TokenType.Keyword, (0, 0), (0, 4))
       (TokenType.TypeName, (0, 5), (0, 13))
       (TokenType.Symbol, (0, 14), (0, 15))
       (TokenType.TypeName, (0, 16), (0, 22)) ]
 
+  // @compiler blocked: compiler-gap
   ("type MyUInt128 = UInt128" |> tokenize) =
     [ (TokenType.Keyword, (0, 0), (0, 4))
       (TokenType.TypeName, (0, 5), (0, 14))
       (TokenType.Symbol, (0, 15), (0, 16))
       (TokenType.TypeName, (0, 17), (0, 24)) ]
 
+  // @compiler blocked: compiler-gap
   ("type MyFloat = Float" |> tokenize) =
     [ (TokenType.Keyword, (0, 0), (0, 4))
       (TokenType.TypeName, (0, 5), (0, 12))
       (TokenType.Symbol, (0, 13), (0, 14))
       (TokenType.TypeName, (0, 15), (0, 20)) ]
 
+  // @compiler blocked: compiler-gap
   ("type MyChar = Char" |> tokenize) =
     [ (TokenType.Keyword, (0, 0), (0, 4))
       (TokenType.TypeName, (0, 5), (0, 11))
       (TokenType.Symbol, (0, 12), (0, 13))
       (TokenType.TypeName, (0, 14), (0, 18)) ]
 
+  // @compiler blocked: compiler-gap
   ("type MyString = String" |> tokenize) =
     [ (TokenType.Keyword, (0, 0), (0, 4))
       (TokenType.TypeName, (0, 5), (0, 13))
       (TokenType.Symbol, (0, 14), (0, 15))
       (TokenType.TypeName, (0, 16), (0, 22)) ]
 
+  // @compiler blocked: compiler-gap
   ("type MyUUID = UUID" |> tokenize) =
     [ (TokenType.Keyword, (0, 0), (0, 4))
       (TokenType.TypeName, (0, 5), (0, 11))
       (TokenType.Symbol, (0, 12), (0, 13))
       (TokenType.TypeName, (0, 14), (0, 18)) ]
 
+  // @compiler blocked: compiler-gap
   ("type MyDateTime = DateTime" |> tokenize) =
     [ (TokenType.Keyword, (0, 0), (0, 4))
       (TokenType.TypeName, (0, 5), (0, 15))
       (TokenType.Symbol, (0, 16), (0, 17))
       (TokenType.TypeName, (0, 18), (0, 26)) ]
 
+  // @compiler blocked: compiler-gap
   ("type MyList = List<String>" |> tokenize) =
     [ (TokenType.Keyword, (0, 0), (0, 4))
       (TokenType.TypeName, (0, 5), (0, 11))
@@ -127,6 +145,7 @@ module TokenizeTypeReference =
       (TokenType.TypeName, (0, 19), (0, 25))
       (TokenType.Symbol, (0, 25), (0, 26)) ]
 
+  // @compiler blocked: compiler-gap
   ("type MyDict = Dict<String, Int64>" |> tokenize) =
     [ (TokenType.Keyword, (0, 0), (0, 4))
       (TokenType.TypeName, (0, 5), (0, 11))
@@ -138,6 +157,7 @@ module TokenizeTypeReference =
       (TokenType.TypeName, (0, 27), (0, 32))
       (TokenType.Symbol, (0, 32), (0, 33)) ]
 
+  // @compiler blocked: compiler-gap
   ("type MyTuple2 = (String * Int64)" |> tokenize) =
     [ (TokenType.Keyword, (0, 0), (0, 4))
       (TokenType.TypeName, (0, 5), (0, 13))
@@ -148,6 +168,7 @@ module TokenizeTypeReference =
       (TokenType.TypeName, (0, 26), (0, 31))
       (TokenType.Symbol, (0, 31), (0, 32)) ]
 
+  // @compiler blocked: compiler-gap
   ("type MyTuple3 = (String * Int64 * Bool)" |> tokenize) =
     [ (TokenType.Keyword, (0, 0), (0, 4))
       (TokenType.TypeName, (0, 5), (0, 13))
@@ -160,6 +181,7 @@ module TokenizeTypeReference =
       (TokenType.TypeName, (0, 34), (0, 38))
       (TokenType.Symbol, (0, 38), (0, 39)) ]
 
+  // @compiler blocked: compiler-gap
   ("type MyFn = 'a -> String" |> tokenize) =
     [ (TokenType.Keyword, (0, 0), (0, 4))
       (TokenType.TypeName, (0, 5), (0, 9))
@@ -169,6 +191,7 @@ module TokenizeTypeReference =
       (TokenType.Symbol, (0, 15), (0, 17))
       (TokenType.TypeName, (0, 18), (0, 24)) ]
 
+  // @compiler blocked: compiler-gap
   ("type MyDB = DB<'a>" |> tokenize) =
     [ (TokenType.Keyword, (0, 0), (0, 4))
       (TokenType.TypeName, (0, 5), (0, 9))
@@ -177,6 +200,7 @@ module TokenizeTypeReference =
       (TokenType.Symbol, (0, 15), (0, 16))
       (TokenType.TypeName, (0, 16), (0, 17)) ]
 
+  // @compiler blocked: compiler-gap
   ("type MyVar = 'a" |> tokenize) =
     [ (TokenType.Keyword, (0, 0), (0, 4))
       (TokenType.TypeName, (0, 5), (0, 10))
@@ -184,6 +208,7 @@ module TokenizeTypeReference =
       (TokenType.Symbol, (0, 13), (0, 14))
       (TokenType.TypeName, (0, 14), (0, 15)) ]
 
+  // @compiler blocked: compiler-gap
   ("type MyFullyQualifiedTypeAlias = Stdlib.Option.Option" |> tokenize) =
     [ (TokenType.Keyword, (0, 0), (0, 4))
       (TokenType.TypeName, (0, 5), (0, 30))
@@ -194,12 +219,14 @@ module TokenizeTypeReference =
 
 
 module TokenizeTypeDeclaration =
+  // @compiler blocked: compiler-gap
   ("type MyAlias = Int64" |> tokenize) =
     [ (TokenType.Keyword, (0, 0), (0, 4))
       (TokenType.TypeName, (0, 5), (0, 12))
       (TokenType.Symbol, (0, 13), (0, 14))
       (TokenType.TypeName, (0, 15), (0, 20)) ]
 
+  // @compiler blocked: compiler-gap
   ("type MyType<'a> = List<'a>" |> tokenize) =
     [ (TokenType.Keyword, (0, 0), (0, 4))
       (TokenType.TypeName, (0, 5), (0, 11))
@@ -212,6 +239,7 @@ module TokenizeTypeDeclaration =
       (TokenType.Symbol, (0, 25), (0, 26)) ]
 
 
+  // @compiler blocked: compiler-gap
   ("type MyRecord = { x: Int64; y: String }" |> tokenize) =
     [ (TokenType.Keyword, (0, 0), (0, 4))
       (TokenType.TypeName, (0, 5), (0, 13))
@@ -225,6 +253,7 @@ module TokenizeTypeDeclaration =
       (TokenType.TypeName, (0, 31), (0, 37)) ]
 
 
+  // @compiler blocked: compiler-gap
   ("type MyEnum =\n  | A of Int64\n  | B of y: String" |> tokenize) =
     [ (TokenType.Keyword, (0, 0), (0, 4))
       (TokenType.TypeName, (0, 5), (0, 11))
@@ -242,6 +271,7 @@ module TokenizeTypeDeclaration =
 
 
 module TokenizeFunctionDeclaration =
+  // @compiler blocked: compiler-gap
   ("let myFn () : Int64 = 1L" |> tokenize) =
     [ (TokenType.Keyword, (0, 0), (0, 3))
       (TokenType.FunctionName, (0, 4), (0, 8))
@@ -252,6 +282,7 @@ module TokenizeFunctionDeclaration =
       (TokenType.Number, (0, 22), (0, 23))
       (TokenType.Symbol, (0, 23), (0, 24)) ]
 
+  // @compiler blocked: compiler-gap
   ("let myFn (a: Int64) : Int64 = a" |> tokenize) =
     [ (TokenType.Keyword, (0, 0), (0, 3))
       (TokenType.FunctionName, (0, 4), (0, 8))
@@ -265,6 +296,7 @@ module TokenizeFunctionDeclaration =
       (TokenType.Symbol, (0, 28), (0, 29))
       (TokenType.VariableName, (0, 30), (0, 31)) ]
 
+  // @compiler blocked: compiler-gap
   ("let add (a: Int64) (b: Int64) : Int64 = (a + b)" |> tokenize) =
     [ (TokenType.Keyword, (0, 0), (0, 3))
       (TokenType.FunctionName, (0, 4), (0, 7))
@@ -286,6 +318,7 @@ module TokenizeFunctionDeclaration =
       (TokenType.VariableName, (0, 45), (0, 46)) ]
 
 
+  // @compiler blocked: compiler-gap
   ("let myFn<'a, 'b> (paramOne: 'a) (paramTwo: 'b): Unit = ()" |> tokenize) =
     [ (TokenType.Keyword, (0, 0), (0, 3))
       (TokenType.FunctionName, (0, 4), (0, 8))
@@ -310,12 +343,14 @@ module TokenizeFunctionDeclaration =
 
 
 module TokenizeValueDeclaration =
+  // @compiler blocked: compiler-gap
   ("val unitValue = ()" |> tokenize) =
     [ (TokenType.Keyword, (0, 0), (0, 3))
       (TokenType.VariableName, (0, 4), (0, 13))
       (TokenType.Symbol, (0, 14), (0, 15))
       (TokenType.Symbol, (0, 16), (0, 18)) ]
 
+  // @compiler blocked: compiler-gap
   ("val myIntValue = 1L" |> tokenize) =
     [ (TokenType.Keyword, (0, 0), (0, 3))
       (TokenType.VariableName, (0, 4), (0, 14))
@@ -323,12 +358,14 @@ module TokenizeValueDeclaration =
       (TokenType.Number, (0, 17), (0, 18))
       (TokenType.Symbol, (0, 18), (0, 19)) ]
 
+  // @compiler blocked: compiler-gap
   ("val boolValue = true" |> tokenize) =
     [ (TokenType.Keyword, (0, 0), (0, 3))
       (TokenType.VariableName, (0, 4), (0, 13))
       (TokenType.Symbol, (0, 14), (0, 15))
       (TokenType.Keyword, (0, 16), (0, 20)) ]
 
+  // @compiler blocked: compiler-gap
   ("val stringValue = \"hello\"" |> tokenize) =
     [ (TokenType.Keyword, (0, 0), (0, 3))
       (TokenType.VariableName, (0, 4), (0, 15))
@@ -337,6 +374,7 @@ module TokenizeValueDeclaration =
       (TokenType.String, (0, 19), (0, 24))
       (TokenType.Symbol, (0, 24), (0, 25)) ]
 
+  // @compiler blocked: compiler-gap
   ("val charValue = 'a'" |> tokenize) =
     [ (TokenType.Keyword, (0, 0), (0, 3))
       (TokenType.VariableName, (0, 4), (0, 13))
@@ -345,12 +383,14 @@ module TokenizeValueDeclaration =
       (TokenType.String, (0, 17), (0, 18))
       (TokenType.Symbol, (0, 18), (0, 19)) ]
 
+  // @compiler blocked: compiler-gap
   ("val floatValue = 1.0" |> tokenize) =
     [ (TokenType.Keyword, (0, 0), (0, 3))
       (TokenType.VariableName, (0, 4), (0, 14))
       (TokenType.Symbol, (0, 15), (0, 16))
       (TokenType.Number, (0, 17), (0, 20)) ]
 
+  // @compiler blocked: compiler-gap
   ("val listValue = [1L, 2L, 3L]" |> tokenize) =
     [ (TokenType.Keyword, (0, 0), (0, 3))
       (TokenType.VariableName, (0, 4), (0, 13))
@@ -364,6 +404,7 @@ module TokenizeValueDeclaration =
       (TokenType.Symbol, (0, 26), (0, 27))
       (TokenType.Symbol, (0, 27), (0, 28)) ]
 
+  // @compiler blocked: compiler-gap
   ("val tupleValue = (1L, 2L, 3L)" |> tokenize) =
     [ (TokenType.Keyword, (0, 0), (0, 3))
       (TokenType.VariableName, (0, 4), (0, 14))
@@ -379,6 +420,7 @@ module TokenizeValueDeclaration =
       (TokenType.Symbol, (0, 27), (0, 28))
       (TokenType.Symbol, (0, 28), (0, 29)) ]
 
+  // @compiler blocked: compiler-gap
   ("val dictValue = Dict { \"a\": 1L; \"b\": 2L }" |> tokenize) =
     [ (TokenType.Keyword, (0, 0), (0, 3))
       (TokenType.VariableName, (0, 4), (0, 13))
@@ -399,6 +441,7 @@ module TokenizeValueDeclaration =
       (TokenType.Symbol, (0, 38), (0, 39))
       (TokenType.Symbol, (0, 40), (0, 41)) ]
 
+  // @compiler blocked: compiler-gap
   ("val enumValue = Stdlib.Option.Option.Some(1L)" |> tokenize) =
     [ (TokenType.Keyword, (0, 0), (0, 3))
       (TokenType.VariableName, (0, 4), (0, 13))
@@ -411,6 +454,7 @@ module TokenizeValueDeclaration =
       (TokenType.Number, (0, 42), (0, 43))
       (TokenType.Symbol, (0, 43), (0, 44)) ]
 
+  // @compiler blocked: compiler-gap
   ("val enumValue = MyEnum.A(1L, 2L)" |> tokenize) =
     [ (TokenType.Keyword, (0, 0), (0, 3))
       (TokenType.VariableName, (0, 4), (0, 13))
@@ -425,52 +469,69 @@ module TokenizeValueDeclaration =
 
 
 module TokenizeExpression =
+  // @compiler blocked: compiler-gap
   ("()" |> tokenize) = [ (TokenType.Symbol, (0, 0), (0, 2)) ]
+  // @compiler blocked: compiler-gap
   ("true" |> tokenize) = [ (TokenType.Keyword, (0, 0), (0, 4)) ]
 
+  // @compiler blocked: compiler-gap
   ("1y" |> tokenize) = [ (TokenType.Number, (0, 0), (0, 1))
                          (TokenType.Symbol, (0, 1), (0, 2)) ]
 
+  // @compiler blocked: compiler-gap
   ("1uy" |> tokenize) = [ (TokenType.Number, (0, 0), (0, 1))
                           (TokenType.Symbol, (0, 1), (0, 3)) ]
 
+  // @compiler blocked: compiler-gap
   ("1s" |> tokenize) = [ (TokenType.Number, (0, 0), (0, 1))
                          (TokenType.Symbol, (0, 1), (0, 2)) ]
 
+  // @compiler blocked: compiler-gap
   ("1us" |> tokenize) = [ (TokenType.Number, (0, 0), (0, 1))
                           (TokenType.Symbol, (0, 1), (0, 3)) ]
 
+  // @compiler blocked: compiler-gap
   ("1l" |> tokenize) = [ (TokenType.Number, (0, 0), (0, 1))
                          (TokenType.Symbol, (0, 1), (0, 2)) ]
 
+  // @compiler blocked: compiler-gap
   ("1ul" |> tokenize) = [ (TokenType.Number, (0, 0), (0, 1))
                           (TokenType.Symbol, (0, 1), (0, 3)) ]
 
+  // @compiler blocked: compiler-gap
   ("1L" |> tokenize) = [ (TokenType.Number, (0, 0), (0, 1))
                          (TokenType.Symbol, (0, 1), (0, 2)) ]
 
+  // @compiler blocked: compiler-gap
   ("1UL" |> tokenize) = [ (TokenType.Number, (0, 0), (0, 1))
                           (TokenType.Symbol, (0, 1), (0, 3)) ]
 
+  // @compiler blocked: compiler-gap
   ("1Q" |> tokenize) = [ (TokenType.Number, (0, 0), (0, 1))
                          (TokenType.Symbol, (0, 1), (0, 2)) ]
 
+  // @compiler blocked: compiler-gap
   ("1Z" |> tokenize) = [ (TokenType.Number, (0, 0), (0, 1))
                          (TokenType.Symbol, (0, 1), (0, 2)) ]
 
   // suffixless Int literal: just a Number token, no suffix Symbol
+  // @compiler blocked: compiler-gap
   ("1" |> tokenize) = [ (TokenType.Number, (0, 0), (0, 1)) ]
 
+  // @compiler blocked: compiler-gap
   ("12345678901234567890" |> tokenize) =
     [ (TokenType.Number, (0, 0), (0, 20)) ]
 
+  // @compiler blocked: compiler-gap
   ("1.0" |> tokenize) = [ (TokenType.Number, (0, 0), (0, 3)) ]
 
+  // @compiler blocked: compiler-gap
   ("\"hello\"" |> tokenize) =
     [ (TokenType.Symbol, (0, 0), (0, 1))
       (TokenType.String, (0, 1), (0, 6))
       (TokenType.Symbol, (0, 6), (0, 7)) ]
 
+  // @compiler blocked: compiler-gap
   ("$\"hello {name}\"" |> tokenize) =
     [ (TokenType.Symbol, (0, 0), (0, 1))
       (TokenType.Symbol, (0, 1), (0, 2))
@@ -480,6 +541,7 @@ module TokenizeExpression =
       (TokenType.Symbol, (0, 13), (0, 14))
       (TokenType.Symbol, (0, 14), (0, 15)) ]
 
+  // @compiler blocked: compiler-gap
   ("$\"Name: {name}, Age: {age}\"" |> tokenize) =
     [ (TokenType.Symbol, (0, 0), (0, 1))
       (TokenType.Symbol, (0, 1), (0, 2))
@@ -494,6 +556,7 @@ module TokenizeExpression =
       (TokenType.Symbol, (0, 26), (0, 27)) ]
 
 
+  // @compiler blocked: compiler-gap
   ("[true, false, true]" |> tokenize) =
     [ (TokenType.Symbol, (0, 0), (0, 1))
       (TokenType.Keyword, (0, 1), (0, 5))
@@ -502,6 +565,7 @@ module TokenizeExpression =
       (TokenType.Symbol, (0, 18), (0, 19)) ]
 
 
+  // @compiler blocked: compiler-gap
   ("Dict { \"a\": 1L; \"b\": 2L }" |> tokenize) =
     [ (TokenType.Keyword, (0, 0), (0, 4))
       (TokenType.Symbol, (0, 5), (0, 6))
@@ -520,6 +584,7 @@ module TokenizeExpression =
       (TokenType.Symbol, (0, 24), (0, 25)) ]
 
 
+  // @compiler blocked: compiler-gap
   ("(true, false, true)" |> tokenize) =
     [ (TokenType.Symbol, (0, 0), (0, 1))
       (TokenType.Keyword, (0, 1), (0, 5))
@@ -533,6 +598,7 @@ module TokenizeExpression =
 
   // Record/record-update tokenization regression coverage.
   // A previous .range-related RTE in this area makes this worth keeping explicit.
+  // @compiler blocked: compiler-gap
   ("MyRecord {fieldOne = 1L; fieldTwo = 2L} " |> tokenize) =
     [ (TokenType.TypeName, (0, 0), (0, 8))
       (TokenType.Symbol, (0, 9), (0, 10))
@@ -546,6 +612,7 @@ module TokenizeExpression =
       (TokenType.Symbol, (0, 37), (0, 38))
       (TokenType.Symbol, (0, 38), (0, 39)) ]
 
+  // @compiler blocked: compiler-gap
   ("{ RecordForUpdate { x = true; y = false } with y = true }" |> tokenize) =
     [ (TokenType.TypeName, (0, 2), (0, 17))
       (TokenType.Symbol, (0, 18), (0, 19))
@@ -561,6 +628,7 @@ module TokenizeExpression =
       (TokenType.Symbol, (0, 49), (0, 50))
       (TokenType.Keyword, (0, 51), (0, 55)) ]
 
+  // @compiler blocked: compiler-gap
   ("MyEnum.A(1L)" |> tokenize) =
     [ (TokenType.TypeName, (0, 0), (0, 6))
       (TokenType.Symbol, (0, 6), (0, 7))
@@ -568,6 +636,7 @@ module TokenizeExpression =
       (TokenType.Number, (0, 9), (0, 10))
       (TokenType.Symbol, (0, 10), (0, 11)) ]
 
+  // @compiler blocked: compiler-gap
   ("let x = true\n  x" |> tokenize) =
     [ (TokenType.Keyword, (0, 0), (0, 3))
       (TokenType.VariableName, (0, 4), (0, 5))
@@ -575,14 +644,17 @@ module TokenizeExpression =
       (TokenType.Keyword, (0, 8), (0, 12))
       (TokenType.VariableName, (1, 2), (1, 3)) ]
 
+  // @compiler blocked: compiler-gap
   ("myVar" |> tokenize) =
     [ (TokenType.VariableName, (0, 0), (0, 5)) ]
 
+  // @compiler blocked: compiler-gap
   ("myRecordVar.field" |> tokenize) =
     [ (TokenType.VariableName, (0, 0), (0, 11))
       (TokenType.Symbol, (0, 11), (0, 12))
       (TokenType.Property, (0, 12), (0, 17)) ]
 
+  // @compiler blocked: compiler-gap
   ("1L + 2L" |> tokenize) =
     [ (TokenType.Number, (0, 0), (0, 1))
       (TokenType.Symbol, (0, 1), (0, 2))
@@ -590,12 +662,14 @@ module TokenizeExpression =
       (TokenType.Number, (0, 5), (0, 6))
       (TokenType.Symbol, (0, 6), (0, 7)) ]
 
+  // @compiler blocked: compiler-gap
   ("fun x -> x" |> tokenize) =
     [ (TokenType.Keyword, (0, 0), (0, 3))
       (TokenType.VariableName, (0, 4), (0, 5))
       (TokenType.Symbol, (0, 6), (0, 8))
       (TokenType.VariableName, (0, 9), (0, 10)) ]
 
+  // @compiler blocked: compiler-gap
   ("Stdlib.Bool.and true false" |> tokenize) =
     [ (TokenType.ModuleName, (0, 0), (0, 6))
       (TokenType.ModuleName, (0, 7), (0, 11))
@@ -604,6 +678,7 @@ module TokenizeExpression =
       (TokenType.Keyword, (0, 21), (0, 26)) ]
 
   // call-site type args (`<Bool>`) tokenize between the fn name and the args
+  // @compiler blocked: compiler-gap
   ("Builtin.jsonParse<Bool> \"true\"" |> tokenize) =
     [ (TokenType.ModuleName, (0, 0), (0, 7))
       (TokenType.FunctionName, (0, 8), (0, 17))
@@ -612,6 +687,7 @@ module TokenizeExpression =
       (TokenType.String, (0, 25), (0, 29))
       (TokenType.Symbol, (0, 29), (0, 30)) ]
 
+  // @compiler blocked: compiler-gap
   ("if true then true else false" |> tokenize) =
     [ (TokenType.Keyword, (0, 0), (0, 2))
       (TokenType.Keyword, (0, 3), (0, 7))
@@ -620,6 +696,7 @@ module TokenizeExpression =
       (TokenType.Keyword, (0, 18), (0, 22))
       (TokenType.Keyword, (0, 23), (0, 28)) ]
 
+  // @compiler blocked: compiler-gap
   ("match true with\n| true -> true" |> tokenize) =
     [ (TokenType.Keyword, (0, 0), (0, 5))
       (TokenType.Keyword, (0, 6), (0, 10))
@@ -629,6 +706,7 @@ module TokenizeExpression =
       (TokenType.Symbol, (1, 7), (1, 9))
       (TokenType.Keyword, (1, 10), (1, 14)) ]
 
+  // @compiler blocked: compiler-gap
   ("Stdlib.List.empty" |> tokenize) =
     [ (TokenType.ModuleName, (0, 0), (0, 6))
       (TokenType.ModuleName, (0, 7), (0, 11))
@@ -636,6 +714,7 @@ module TokenizeExpression =
 
 
 module TokenizePipeExpression =
+  // @compiler blocked: compiler-gap
   ("1L |> (+) 2L" |> tokenize) =
     [ (TokenType.Number, (0, 0), (0, 1))
       (TokenType.Symbol, (0, 1), (0, 2))
@@ -644,6 +723,7 @@ module TokenizePipeExpression =
       (TokenType.Number, (0, 10), (0, 11))
       (TokenType.Symbol, (0, 11), (0, 12)) ]
 
+  // @compiler blocked: compiler-gap
   ("1L |> (fun x -> x + 1L)" |> tokenize) =
     [ (TokenType.Number, (0, 0), (0, 1))
       (TokenType.Symbol, (0, 1), (0, 2))
@@ -656,6 +736,7 @@ module TokenizePipeExpression =
       (TokenType.Number, (0, 20), (0, 21))
       (TokenType.Symbol, (0, 21), (0, 22)) ]
 
+  // @compiler blocked: compiler-gap
   ("1L |> MyEnum.A" |> tokenize) =
     [ (TokenType.Number, (0, 0), (0, 1))
       (TokenType.Symbol, (0, 1), (0, 2))
@@ -664,6 +745,7 @@ module TokenizePipeExpression =
       (TokenType.Symbol, (0, 12), (0, 13))
       (TokenType.EnumMember, (0, 13), (0, 14)) ]
 
+  // @compiler blocked: compiler-gap
   ("1L |> Stdlib.Result.Result.Ok" |> tokenize) =
     [ (TokenType.Number, (0, 0), (0, 1))
       (TokenType.Symbol, (0, 1), (0, 2))
@@ -674,6 +756,7 @@ module TokenizePipeExpression =
       (TokenType.Symbol, (0, 26), (0, 27))
       (TokenType.EnumMember, (0, 27), (0, 29)) ]
 
+  // @compiler blocked: compiler-gap
   ("1L |> Stdlib.Int64.add 2L" |> tokenize) =
     [ (TokenType.Number, (0, 0), (0, 1))
       (TokenType.Symbol, (0, 1), (0, 2))
@@ -684,6 +767,7 @@ module TokenizePipeExpression =
       (TokenType.Number, (0, 23), (0, 24))
       (TokenType.Symbol, (0, 24), (0, 25)) ]
 
+  // @compiler blocked: compiler-gap
   ("\"true\" |> Builtin.jsonParse<Bool>" |> tokenize) =
     [ (TokenType.Symbol, (0, 0), (0, 1))
       (TokenType.String, (0, 1), (0, 5))
@@ -693,6 +777,7 @@ module TokenizePipeExpression =
       (TokenType.FunctionName, (0, 18), (0, 27))
       (TokenType.TypeName, (0, 28), (0, 32)) ]
 
+  // @compiler blocked: compiler-gap
   ("1L |> x" |> tokenize) =
     [ (TokenType.Number, (0, 0), (0, 1))
       (TokenType.Symbol, (0, 1), (0, 2))
@@ -701,6 +786,7 @@ module TokenizePipeExpression =
 
 
 module TokenizeMatchExpression =
+  // @compiler blocked: compiler-gap
   ("match () with\n| () -> true" |> tokenize) =
     [ (TokenType.Keyword, (0, 0), (0, 5))
       (TokenType.Symbol, (0, 6), (0, 8))
@@ -710,6 +796,7 @@ module TokenizeMatchExpression =
       (TokenType.Symbol, (1, 5), (1, 7))
       (TokenType.Keyword, (1, 8), (1, 12)) ]
 
+  // @compiler blocked: compiler-gap
   ("match x with\n| x -> 1L" |> tokenize) =
     [ (TokenType.Keyword, (0, 0), (0, 5))
       (TokenType.VariableName, (0, 6), (0, 7))
@@ -721,6 +808,7 @@ module TokenizeMatchExpression =
       (TokenType.Symbol, (1, 8), (1, 9)) ]
 
   // suffixless Int in both pattern and rhs: Number tokens with no suffix Symbol
+  // @compiler blocked: compiler-gap
   ("match x with\n| 1 -> 2" |> tokenize) =
     [ (TokenType.Keyword, (0, 0), (0, 5))
       (TokenType.VariableName, (0, 6), (0, 7))
@@ -730,6 +818,7 @@ module TokenizeMatchExpression =
       (TokenType.Symbol, (1, 4), (1, 6))
       (TokenType.Number, (1, 7), (1, 8)) ]
 
+  // @compiler blocked: compiler-gap
   ("match 1L with\n| 1L -> 1L" |> tokenize) =
     [ (TokenType.Keyword, (0, 0), (0, 5))
       (TokenType.Number, (0, 6), (0, 7))
@@ -742,6 +831,7 @@ module TokenizeMatchExpression =
       (TokenType.Number, (1, 8), (1, 9))
       (TokenType.Symbol, (1, 9), (1, 10)) ]
 
+  // @compiler blocked: compiler-gap
   ("match 1.0 with\n| 1.0 -> 1.0" |> tokenize) =
     [ (TokenType.Keyword, (0, 0), (0, 5))
       (TokenType.Number, (0, 6), (0, 9))
@@ -751,6 +841,7 @@ module TokenizeMatchExpression =
       (TokenType.Symbol, (1, 6), (1, 8))
       (TokenType.Number, (1, 9), (1, 12)) ]
 
+  // @compiler blocked: compiler-gap
   ("match true with\n| true -> true\n| false -> false" |> tokenize) =
     [ (TokenType.Keyword, (0, 0), (0, 5))
       (TokenType.Keyword, (0, 6), (0, 10))
@@ -764,6 +855,7 @@ module TokenizeMatchExpression =
       (TokenType.Symbol, (2, 8), (2, 10))
       (TokenType.Keyword, (2, 11), (2, 16)) ]
 
+  // @compiler blocked: compiler-gap
   ("match \"str\" with\n| \"str\" -> true" |> tokenize) =
     [ (TokenType.Keyword, (0, 0), (0, 5))
       (TokenType.Symbol, (0, 6), (0, 7))
@@ -777,6 +869,7 @@ module TokenizeMatchExpression =
       (TokenType.Symbol, (1, 8), (1, 10))
       (TokenType.Keyword, (1, 11), (1, 15)) ]
 
+  // @compiler blocked: compiler-gap
   ("match 'a' with\n| 'a' -> true" |> tokenize) =
     [ (TokenType.Keyword, (0, 0), (0, 5))
       (TokenType.Symbol, (0, 6), (0, 7))
@@ -790,6 +883,7 @@ module TokenizeMatchExpression =
       (TokenType.Symbol, (1, 6), (1, 8))
       (TokenType.Keyword, (1, 9), (1, 13)) ]
 
+  // @compiler blocked: compiler-gap
   ("match [true, false] with\n| [true, false] -> true" |> tokenize) =
     [ (TokenType.Keyword, (0, 0), (0, 5))
       (TokenType.Symbol, (0, 6), (0, 7))
@@ -805,6 +899,7 @@ module TokenizeMatchExpression =
       (TokenType.Symbol, (1, 16), (1, 18))
       (TokenType.Keyword, (1, 19), (1, 23)) ]
 
+  // @compiler blocked: compiler-gap
   ("match [1L, 2L] with\n| head :: tail -> true" |> tokenize) =
     [ (TokenType.Keyword, (0, 0), (0, 5))
       (TokenType.Symbol, (0, 6), (0, 7))
@@ -821,6 +916,7 @@ module TokenizeMatchExpression =
       (TokenType.Symbol, (1, 15), (1, 17))
       (TokenType.Keyword, (1, 18), (1, 22)) ]
 
+  // @compiler blocked: compiler-gap
   ("match (true, false) with\n| (true, false) -> true" |> tokenize) =
     [ (TokenType.Keyword, (0, 0), (0, 5))
       (TokenType.Symbol, (0, 6), (0, 7))
@@ -838,6 +934,7 @@ module TokenizeMatchExpression =
       (TokenType.Symbol, (1, 16), (1, 18))
       (TokenType.Keyword, (1, 19), (1, 23)) ]
 
+  // @compiler blocked: compiler-gap
   ("match Stdlib.Result.Result.Ok(5L) with\n| Ok(5L) -> true\n| Error(e) -> false" |> tokenize) =
     [ (TokenType.Keyword, (0, 0), (0, 5))
       (TokenType.ModuleName, (0, 6), (0, 12))
@@ -862,6 +959,7 @@ module TokenizeMatchExpression =
 
 
 
+  // @compiler blocked: compiler-gap
   ("match x with\n| 1L | 2L | 3L -> true \n| _ -> false" |> tokenize) =
     [ (TokenType.Keyword, (0, 0), (0, 5))
       (TokenType.VariableName, (0, 6), (0, 7))
@@ -881,6 +979,7 @@ module TokenizeMatchExpression =
       (TokenType.Keyword, (2, 7), (2, 12)) ]
 
 
+  // @compiler blocked: compiler-gap
   ("Builtin.printLine \"hey\"\n0L" |> tokenize) =
     [ (TokenType.ModuleName, (0, 0), (0, 7))
       (TokenType.FunctionName, (0, 8), (0, 17))
@@ -892,6 +991,7 @@ module TokenizeMatchExpression =
 
 
 module TokenizeModuleDeclaration =
+  // @compiler blocked: compiler-gap
   ("module MyModule =\n  type ID = Int64" |> tokenize) =
     [ (TokenType.Keyword, (0, 0), (0, 6))
       (TokenType.ModuleName, (0, 7), (0, 15))
@@ -900,6 +1000,7 @@ module TokenizeModuleDeclaration =
       (TokenType.Symbol, (1, 10), (1, 11))
       (TokenType.TypeName, (1, 12), (1, 17)) ]
 
+  // @compiler blocked: compiler-gap
   ("""module MyModule =
   type ID = Int64
   let myFn (i: Int64): Int64 = 1L
@@ -933,6 +1034,7 @@ module TokenizeModuleDeclaration =
       (TokenType.Symbol, (4, 3), (4, 4)) ]
 
 
+  // @compiler blocked: compiler-gap
   ("""module MyModule1 =
   module MyModule2 =
     module MyModule3 =

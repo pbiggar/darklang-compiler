@@ -1,0 +1,19 @@
+module Darklang.Cli.Packages.Display
+
+/// Icon for an entity type. The glyphs themselves live in `Cli.Glyphs`, which is the single vocabulary
+/// shared with the workbench; this is just the `EntityType` spelling of the same question.
+// @compiler blocked: missing-implementation
+let getIcon (entityType: EntityType) : String =
+  match entityType with
+  | Module -> Glyphs.module_
+  | Function -> Glyphs.fn
+  | Type -> Glyphs.type_
+  | Value -> Glyphs.value
+  | Trait -> Glyphs.trait_
+  | Impl -> Glyphs.impl_
+  | Test -> Glyphs.test
+
+
+/// Section header with icon for an entity type.
+// @compiler blocked: missing-implementation
+let getSectionHeader (entityType: String) : String = Glyphs.sectionHeader entityType

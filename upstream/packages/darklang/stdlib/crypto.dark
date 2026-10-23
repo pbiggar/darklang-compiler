@@ -1,0 +1,35 @@
+module Darklang.Stdlib.Crypto
+
+
+/// Computes the SHA-256 digest of the given <param data>
+// @compiler replace: packages/darklang/stdlib/crypto.dark#Darklang.Stdlib.Crypto.sha256 reason=compiler-implementation
+let sha256 (data: Blob) : Blob = Builtin.cryptoSha256 data
+
+
+/// Computes the SHA-384 digest of the given <param data>
+// @compiler replace: packages/darklang/stdlib/crypto.dark#Darklang.Stdlib.Crypto.sha384 reason=compiler-implementation
+let sha384 (data: Blob) : Blob = Builtin.cryptoSha384 data
+
+
+/// Computes the md5 digest of the given <param data>. NOTE: There are multiple security problems with md5, see https://en.wikipedia.org/wiki/MD5#Security
+// @compiler replace: packages/darklang/stdlib/crypto.dark#Darklang.Stdlib.Crypto.md5 reason=compiler-implementation
+let md5 (data: Blob) : Blob = Builtin.cryptoMd5 data
+
+
+/// Computes the SHA-256 HMAC (hash-based message authentication code) digest of the given <param key> and <param data>.
+// @compiler replace: packages/darklang/stdlib/crypto.dark#Darklang.Stdlib.Crypto.sha256hmac reason=compiler-implementation
+let sha256hmac (key: Blob) (data: Blob) : Blob =
+  Builtin.cryptoSha256hmac key data
+
+
+/// Computes the SHA1-HMAC (hash-based message authentication code) digest of the given <param key> and <param data>.
+// @compiler replace: packages/darklang/stdlib/crypto.dark#Darklang.Stdlib.Crypto.sha1hmac reason=compiler-implementation
+let sha1hmac (key: Blob) (data: Blob) : Blob = Builtin.cryptoSha1hmac key data
+
+
+/// Whether <param presented> equals <param expected>, in time that does not depend on where they first
+/// differ. Use this, never `==`, to check a secret or token against what a request sent: `==` stops at
+/// the first mismatch, so how long it took says how many leading characters were right.
+// @compiler blocked: missing-implementation
+let constantTimeEquals (presented: String) (expected: String) : Bool =
+  Builtin.cryptoConstantTimeEquals presented expected

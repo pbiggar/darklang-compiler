@@ -1,8 +1,8 @@
 (include_subdirs unqualified)
 (rule
  (targets EmbeddedStdlib.ml BuildInfo.ml)
- (deps (universe) ../scripts/embed-stdlib.py ../library-sources.list
-  (source_tree ../packages))
+ (deps (universe) ../scripts/embed-stdlib.py ../library-sources.list ../porting/compiler-reasons.json
+  (source_tree ../packages) (source_tree ../upstream))
  (action (run python3 %{dep:../scripts/embed-stdlib.py} .. EmbeddedStdlib.ml BuildInfo.ml)))
 (rule
  (target BuildPlatform.ml)

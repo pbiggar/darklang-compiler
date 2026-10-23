@@ -1,0 +1,329 @@
+module Darklang.Stdlib.AltJson
+
+
+// @compiler blocked: compiler-contract
+type Json =
+  | Null
+  | Bool of Bool
+  // These were originally flattened as a single Number case, to match JSON spec
+  // CLEANUP there may be benefits to flattening back to a `Number of JsonNumber` case, where `JsonNumber = | Integer of Int | Float of Float`. Not sure if there's a benefit or not, but there was _some_ reason we kept it to the strict single Number case to start.
+  | Integer of Int
+  | Float of Float
+  | String of String
+  | Array of List<Json>
+  | Object of List<(String * Json)>
+
+
+module ParseError =
+  // @compiler replace: packages/darklang/stdlib/altJson/parseError.dark#Darklang.Stdlib.AltJson.ParseError.ParseError reason=compiler-implementation
+  type ParseError = | NotJson
+
+  // @compiler replace: packages/darklang/stdlib/altJson/parseError.dark#Darklang.Stdlib.AltJson.ParseError.toString reason=compiler-implementation
+  let toString (e: ParseError) : String =
+    match e with
+    | NotJson -> "Not JSON"
+
+
+// @compiler replace: packages/darklang/stdlib/altJson.dark#Darklang.Stdlib.AltJson.format reason=compiler-implementation
+let format (j: Json) : String = Builtin.altJsonFormat j
+
+// @compiler replace: packages/darklang/stdlib/altJson.dark#Darklang.Stdlib.AltJson.parse reason=compiler-implementation
+let parse (jsonString: String) : Result.Result<Json, ParseError.ParseError> =
+  Builtin.altJsonParse jsonString
+
+
+/// Reads an exact JSON integer. A Float value is never silently truncated or
+/// reinterpreted as an integer, even if its current value is whole.
+// @compiler blocked: missing-implementation
+let toInt (j: Json) : Option.Option<Int> =
+  match j with
+  | Integer i -> Option.Option.Some i
+  | _ -> Option.Option.None
+
+
+/// Read a JSON number as Float only when the conversion is exact.
+// @compiler blocked: missing-implementation
+let toFloat (j: Json) : Option.Option<Float> =
+  match j with
+  | Float n -> Option.Option.Some n
+  | Integer i ->
+    let n = Int.toFloat i
+    if Float.isFinite n && Int.fromFloat n == i then
+      Option.Option.Some n
+    else
+      Option.Option.None
+  | _ -> Option.Option.None
+
+
+// ---------------------------------------------------------------------------
+// HELPERS
+// Utilities for parsing JSON objects from API responses
+// ---------------------------------------------------------------------------
+
+module Helpers =
+
+  /// Get a string value from a JSON object's fields
+  // @compiler replace: packages/darklang/stdlib/altJson/helpers.dark#Darklang.Stdlib.AltJson.Helpers.getString reason=compiler-implementation
+  let getString
+    (key: String)
+    (fields: List<(String * Json)>)
+    : Option.Option<String> =
+    let found = List.findFirst fields (fun (k, _) -> k == key)
+
+    match found with
+    | Some pair ->
+      match Tuple2.second pair with
+      | String s -> Option.Option.Some s
+      | _ -> Option.Option.None
+    | None -> Option.Option.None
+
+
+  /// Get a boolean value from a JSON object's fields
+  // @compiler replace: packages/darklang/stdlib/altJson/helpers.dark#Darklang.Stdlib.AltJson.Helpers.getBool reason=compiler-implementation
+  let getBool
+    (key: String)
+    (fields: List<(String * Json)>)
+    : Option.Option<Bool> =
+    let found = List.findFirst fields (fun (k, _) -> k == key)
+
+    match found with
+    | Some pair ->
+      match Tuple2.second pair with
+      | Bool b -> Option.Option.Some b
+      | _ -> Option.Option.None
+    | None -> Option.Option.None
+
+
+  /// Get a raw JSON value from a JSON object's fields
+  // @compiler replace: packages/darklang/stdlib/altJson/helpers.dark#Darklang.Stdlib.AltJson.Helpers.getValue reason=compiler-implementation
+  let getValue
+    (key: String)
+    (fields: List<(String * Json)>)
+    : Option.Option<Json> =
+    let found = List.findFirst fields (fun (k, _) -> k == key)
+
+    match found with
+    | Some pair -> Option.Option.Some(Tuple2.second pair)
+    | None -> Option.Option.None
+
+
+  /// Get an integer value from a JSON object's fields. {{None}} if the key is
+  /// missing or its value isn't exactly an integer (see <fn toInt>).
+  // @compiler replace: packages/darklang/stdlib/altJson/helpers.dark#Darklang.Stdlib.AltJson.Helpers.getIntOption reason=compiler-implementation
+  let getIntOption
+    (key: String)
+    (fields: List<(String * Json)>)
+    : Option.Option<Int> =
+    let found = List.findFirst fields (fun (k, _) -> k == key)
+
+    match found with
+    | Some pair -> toInt (Tuple2.second pair)
+    | None -> Option.Option.None
+
+
+  /// Read an optional integer while distinguishing an absent or null field
+  /// from a present value that cannot be converted exactly.
+  // @compiler blocked: missing-implementation
+  let getIntOptionResult
+    (key: String)
+    (fields: List<(String * Json)>)
+    : Result.Result<Option.Option<Int>, String> =
+    match getValue key fields with
+    | None -> Result.Result.Ok Option.Option.None
+    | Some Null -> Result.Result.Ok Option.Option.None
+    | Some value ->
+      match toInt value with
+      | Some i -> Result.Result.Ok(Option.Option.Some i)
+      | None -> Result.Result.Error($"Invalid JSON integer field: {key}")
+
+
+  /// Get a required integer field. The error distinguishes a missing field
+  /// from a field whose value cannot be converted exactly.
+  // @compiler blocked: missing-implementation
+  let getIntResult
+    (key: String)
+    (fields: List<(String * Json)>)
+    : Result.Result<Int, String> =
+    match getValue key fields with
+    | None -> Result.Result.Error($"Missing JSON integer field: {key}")
+    | Some value ->
+      match toInt value with
+      | Some i -> Result.Result.Ok i
+      | None -> Result.Result.Error($"Invalid JSON integer field: {key}")
+
+
+  /// Get an integer field that may be left out. {{Ok}} <param default_> if the
+  /// key is missing or null, {{Error}} if it's present but isn't exactly an
+  /// integer (see <fn toInt>).
+  // @compiler blocked: missing-implementation
+  let getIntOr
+    (key: String)
+    (default_: Int)
+    (fields: List<(String * Json)>)
+    : Result.Result<Int, String> =
+    match getValue key fields with
+    | None -> Result.Result.Ok default_
+    | Some Null -> Result.Result.Ok default_
+    | Some value ->
+      match toInt value with
+      | Some i -> Result.Result.Ok i
+      | None -> Result.Result.Error($"Invalid JSON integer field: {key}")
+
+
+  /// Get a Float field. An integer is converted only if Float can hold it
+  /// exactly; use <fn getIntOption> for arbitrary-size integers.
+  // @compiler blocked: missing-implementation
+  let getFloat
+    (key: String)
+    (fields: List<(String * Json)>)
+    : Option.Option<Float> =
+    let found = List.findFirst fields (fun (k, _) -> k == key)
+
+    match found with
+    | Some pair -> toFloat (Tuple2.second pair)
+    | None -> Option.Option.None
+
+
+  /// Get an array value from a JSON object's fields (returns [] if not found)
+  // @compiler replace: packages/darklang/stdlib/altJson/helpers.dark#Darklang.Stdlib.AltJson.Helpers.getArray reason=compiler-implementation
+  let getArray (key: String) (fields: List<(String * Json)>) : List<Json> =
+    let found = List.findFirst fields (fun (k, _) -> k == key)
+
+    match found with
+    | Some pair ->
+      match Tuple2.second pair with
+      | Array items -> items
+      | _ -> []
+    | None -> []
+
+
+  /// Get a nested object's fields from a JSON object (returns [] if not found)
+  // @compiler replace: packages/darklang/stdlib/altJson/helpers.dark#Darklang.Stdlib.AltJson.Helpers.getObject reason=compiler-implementation
+  let getObject
+    (key: String)
+    (fields: List<(String * Json)>)
+    : List<(String * Json)> =
+    let found = List.findFirst fields (fun (k, _) -> k == key)
+
+    match found with
+    | Some pair ->
+      match Tuple2.second pair with
+      | Object nestedFields -> nestedFields
+      | _ -> []
+    | None -> []
+
+
+// ---------------------------------------------------------------------------
+// BUILDER
+// Utilities for building JSON objects with optional fields.
+// Fields-first parameter order for pipe-friendly usage.
+// ---------------------------------------------------------------------------
+
+module Builder =
+  // @compiler replace: packages/darklang/stdlib/altJson/builder.dark#Darklang.Stdlib.AltJson.Builder.Fields reason=compiler-implementation
+  type Fields = List<(String * Json)>
+
+  /// Start with an empty JSON object
+  // @compiler replace: packages/darklang/stdlib/altJson/builder.dark#Darklang.Stdlib.AltJson.Builder.empty reason=compiler-implementation
+  val empty = []
+
+  /// Add a required string field
+  // @compiler replace: packages/darklang/stdlib/altJson/builder.dark#Darklang.Stdlib.AltJson.Builder.addString reason=compiler-implementation
+  let addString (fields: Fields) (key: String) (value: String) : Fields =
+    List.append fields [ (key, Json.String value) ]
+
+  /// Add a floating-point field
+  // @compiler blocked: missing-implementation
+  let addFloat (fields: Fields) (key: String) (value: Float) : Fields =
+    List.append fields [ (key, Json.Float value) ]
+
+  /// Add an integer field without converting it to Float
+  // @compiler replace: packages/darklang/stdlib/altJson/builder.dark#Darklang.Stdlib.AltJson.Builder.addInt reason=compiler-implementation
+  let addInt (fields: Fields) (key: String) (value: Int) : Fields =
+    List.append fields [ (key, Json.Integer value) ]
+
+  /// Add a required bool field
+  // @compiler replace: packages/darklang/stdlib/altJson/builder.dark#Darklang.Stdlib.AltJson.Builder.addBool reason=compiler-implementation
+  let addBool (fields: Fields) (key: String) (value: Bool) : Fields =
+    List.append fields [ (key, Json.Bool value) ]
+
+  /// Add a required JSON value field
+  // @compiler replace: packages/darklang/stdlib/altJson/builder.dark#Darklang.Stdlib.AltJson.Builder.addJson reason=compiler-implementation
+  let addJson (fields: Fields) (key: String) (value: Json) : Fields =
+    List.append fields [ (key, value) ]
+
+  /// Add a required array field
+  // @compiler replace: packages/darklang/stdlib/altJson/builder.dark#Darklang.Stdlib.AltJson.Builder.addArray reason=compiler-implementation
+  let addArray (fields: Fields) (key: String) (value: List<Json>) : Fields =
+    List.append fields [ (key, Json.Array value) ]
+
+  /// Add an optional string field (only adds if Some)
+  // @compiler replace: packages/darklang/stdlib/altJson/builder.dark#Darklang.Stdlib.AltJson.Builder.addOptionalString reason=compiler-implementation
+  let addOptionalString
+    (fields: Fields)
+    (key: String)
+    (value: Option.Option<String>)
+    : Fields =
+    match value with
+    | Some v -> List.append fields [ (key, Json.String v) ]
+    | None -> fields
+
+  /// Add an optional Float field (only adds if Some)
+  // @compiler blocked: missing-implementation
+  let addOptionalFloat
+    (fields: Fields)
+    (key: String)
+    (value: Option.Option<Float>)
+    : Fields =
+    match value with
+    | Some v -> List.append fields [ (key, Json.Float v) ]
+    | None -> fields
+
+  /// Add an optional integer field (only adds if Some)
+  // @compiler replace: packages/darklang/stdlib/altJson/builder.dark#Darklang.Stdlib.AltJson.Builder.addOptionalInt reason=compiler-implementation
+  let addOptionalInt
+    (fields: Fields)
+    (key: String)
+    (value: Option.Option<Int>)
+    : Fields =
+    match value with
+    | Some v -> addInt fields key v
+    | None -> fields
+
+  /// Add an optional bool field (only adds if Some)
+  // @compiler replace: packages/darklang/stdlib/altJson/builder.dark#Darklang.Stdlib.AltJson.Builder.addOptionalBool reason=compiler-implementation
+  let addOptionalBool
+    (fields: Fields)
+    (key: String)
+    (value: Option.Option<Bool>)
+    : Fields =
+    match value with
+    | Some v -> List.append fields [ (key, Json.Bool v) ]
+    | None -> fields
+
+  /// Add an optional JSON value field (only adds if Some)
+  // @compiler replace: packages/darklang/stdlib/altJson/builder.dark#Darklang.Stdlib.AltJson.Builder.addOptionalJson reason=compiler-implementation
+  let addOptionalJson
+    (fields: Fields)
+    (key: String)
+    (value: Option.Option<Json>)
+    : Fields =
+    match value with
+    | Some v -> List.append fields [ (key, v) ]
+    | None -> fields
+
+  /// Add an optional array field (only adds if Some)
+  // @compiler replace: packages/darklang/stdlib/altJson/builder.dark#Darklang.Stdlib.AltJson.Builder.addOptionalArray reason=compiler-implementation
+  let addOptionalArray
+    (fields: Fields)
+    (key: String)
+    (value: Option.Option<List<Json>>)
+    : Fields =
+    match value with
+    | Some v -> List.append fields [ (key, Json.Array v) ]
+    | None -> fields
+
+  /// Convert fields to a JSON object
+  // @compiler replace: packages/darklang/stdlib/altJson/builder.dark#Darklang.Stdlib.AltJson.Builder.toJson reason=compiler-implementation
+  let toJson (fields: Fields) : Json =
+    Json.Object fields
