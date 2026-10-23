@@ -122,7 +122,9 @@ let[@warning "-4"] check checkExpression checkedLiteral globals locals symbols
             | None -> None
             | Some (traitName, methodName) ->
                 let fast =
-                  integer || leftType = AST.TFloat64
+                  integer
+                  || leftType = AST.TFloat64
+                     && infix <> WT.InfixFnCall WT.ArithmeticModulo
                   || leftType = AST.TString
                      && infix = WT.InfixFnCall WT.ArithmeticPlus
                 in

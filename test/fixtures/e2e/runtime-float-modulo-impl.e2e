@@ -1,0 +1,6 @@
+// An explicit trait implementation makes Float modulo available in its scope.
+impl Stdlib.Modulo for Float =
+  let modulo (a: Float) (b: Float) : Float = Stdlib.Float.mod a b + 10.0
+let traitRemainder<'a: Stdlib.Modulo> (a: 'a) (b: 'a) : 'a = a % b
+7.5 % 2.0 = 11.5
+traitRemainder 7.5 2.0 = 11.5
