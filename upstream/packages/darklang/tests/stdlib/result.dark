@@ -11,7 +11,6 @@ test andThen =
       Stdlib.Result.andThen (Ok 5L) (fun x -> Ok (1L + x))
       |> Stdlib.Test.equal (Ok 6L) ]
 
-// @compiler xfail compile: "Compilation failed: Could not recover List type from intrinsic '__rawptr_to_list_Darklang.Stdlib.Result.Result_Darklang.Stdlib.Result.Result_t$empty_Err$Darklang.Stdlib.Result.Result$1_Err$Darklang.Stdlib.Result.Result$1'" class=missing-support reason=compiler-gap
 test collect =
   Stdlib.Test.all
     [ Stdlib.Result.collect [ Ok 5L, Ok 6L, Ok 7L ]
@@ -227,7 +226,6 @@ test join =
       Stdlib.Result.join (Error "test")
       |> Stdlib.Test.equal (Error "test") ]
 
-// @compiler xfail compile: "Compilation failed: Could not recover List type from intrinsic '__rawptr_to_list_Darklang.Stdlib.Result.Result_Darklang.Stdlib.Result.Result_t$empty_Err$Darklang.Stdlib.Result.Result$1_Err$Darklang.Stdlib.Result.Result$1'" class=missing-support reason=compiler-gap
 test combine =
   Stdlib.Test.all
     [ Stdlib.Result.combine [ Ok 1L, Ok 2L, Ok 3L ]
@@ -239,7 +237,6 @@ test combine =
       Stdlib.Result.combine []
       |> Stdlib.Test.equal (Ok []) ]
 
-// @compiler xfail compile: "Compilation failed: Could not recover List type from intrinsic '__rawptr_to_list_Darklang.Stdlib.Result.Result_Darklang.Stdlib.Result.Result_t$empty_Err$Darklang.Stdlib.Result.Result$1_Err$Darklang.Stdlib.Result.Result$1'" class=missing-support reason=compiler-gap
 test values =
   Stdlib.Test.all
     [ Stdlib.Result.values [ Ok 1L, Ok 2L, Ok 3L ]

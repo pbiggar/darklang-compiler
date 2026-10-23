@@ -38,8 +38,8 @@ dispositions:
     replace: 1142
     run: 5
   tests:
-    run: 1514
-    xfail: 845
+    run: 1517
+    xfail: 842
 reasons:
   packages:
     compiler-contract: 12
@@ -69,7 +69,7 @@ reasons:
     aot-match-error: 26
     aot-name-error: 11
     aot-type-error: 142
-    compiler-gap: 35
+    compiler-gap: 32
     test-counter: 7
     upstream-dependency: 587
 expected_failures:
@@ -113,10 +113,10 @@ expected_failures:
       upstream/packages/darklang/tests/stdlib/string.dark: 2
   missing-support:
     phases:
-      compile: 620
+      compile: 617
       runtime: 9
     reasons:
-      compiler-gap: 35
+      compiler-gap: 32
       test-counter: 7
       upstream-dependency: 587
     sources:
@@ -182,6 +182,5 @@ expected_failures:
       upstream/packages/darklang/tests/stdlib/list.dark: 9
       upstream/packages/darklang/tests/stdlib/live.dark: 2
       upstream/packages/darklang/tests/stdlib/pretty.dark: 1
-      upstream/packages/darklang/tests/stdlib/result.dark: 3
       upstream/packages/darklang/tests/stdlib/sqlite.dark: 7
       upstream/packages/darklang/tests/stdlib/string.dark: 2

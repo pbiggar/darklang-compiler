@@ -12,7 +12,7 @@ A run disposition means selected, not a passing execution receipt. Replacement c
 | --- | --- |
 | packages | 3,235 blocked, 2 excluded, 35 replace, 431 run |
 | stdlib | 848 blocked, 3 excluded, 1,142 replace, 5 run |
-| tests | 1,514 run, 845 xfail |
+| tests | 1,517 run, 842 xfail |
 
 ## Expected test failures
 
@@ -22,7 +22,7 @@ Missing support includes compiler bugs, unavailable dependencies and test-runner
 | Class | Compile | Runtime | Total |
 | --- | ---: | ---: | ---: |
 | `aot-rejection` | 216 | 0 | 216 |
-| `missing-support` | 620 | 9 | 629 |
+| `missing-support` | 617 | 9 | 626 |
 
 | Class | Reason | Tests |
 | --- | --- | ---: |
@@ -32,7 +32,7 @@ Missing support includes compiler bugs, unavailable dependencies and test-runner
 | `aot-rejection` | `aot-match-error` | 26 |
 | `aot-rejection` | `aot-name-error` | 11 |
 | `aot-rejection` | `aot-type-error` | 142 |
-| `missing-support` | `compiler-gap` | 35 |
+| `missing-support` | `compiler-gap` | 32 |
 | `missing-support` | `test-counter` | 7 |
 | `missing-support` | `upstream-dependency` | 587 |
 
@@ -104,7 +104,6 @@ Each row links to the authoritative per-test annotations. A named test remains o
 | [packages/darklang/tests/stdlib/list.dark](../../../upstream/packages/darklang/tests/stdlib/list.dark) | 9 |
 | [packages/darklang/tests/stdlib/live.dark](../../../upstream/packages/darklang/tests/stdlib/live.dark) | 2 |
 | [packages/darklang/tests/stdlib/pretty.dark](../../../upstream/packages/darklang/tests/stdlib/pretty.dark) | 1 |
-| [packages/darklang/tests/stdlib/result.dark](../../../upstream/packages/darklang/tests/stdlib/result.dark) | 3 |
 | [packages/darklang/tests/stdlib/sqlite.dark](../../../upstream/packages/darklang/tests/stdlib/sqlite.dark) | 7 |
 | [packages/darklang/tests/stdlib/string.dark](../../../upstream/packages/darklang/tests/stdlib/string.dark) | 2 |
 
@@ -151,7 +150,7 @@ Tags are defined in [the glossary](../../../porting/compiler-reasons.json).
 | tests | `aot-match-error` | 26 |
 | tests | `aot-name-error` | 11 |
 | tests | `aot-type-error` | 142 |
-| tests | `compiler-gap` | 35 |
+| tests | `compiler-gap` | 32 |
 | tests | `test-counter` | 7 |
 | tests | `upstream-dependency` | 587 |
 
