@@ -5,7 +5,8 @@ let parseClose (mode: Int64) : Bool =
   let hex = if mode == 0L then "0F00000261" else if mode == 1L then "1E"
     else if mode == 2L then "180001" else if mode == 3L then "0200000001"
     else if mode == 4L then "4001" else if mode == 5L then "404D"
-    else if mode == 6L then "40" else if mode == 7L then "01" else "" in
+    else if mode == 6L then "40" else if mode == 7L then "01"
+    else if mode == 9L then "020000410000" else "" in
   let payload = match Stdlib.Blob.fromHex hex with | Ok bytes -> bytes | Error _ -> Builtin.crash "Test payload" in
   let expected = if mode == 0L then "1C070F00" else if mode == 1L then "1C0A1E00"
     else if mode == 2L then "1C071800" else if mode == 3L then "1C070200"
@@ -28,7 +29,7 @@ let parseClose (mode: Int64) : Bool =
   let sent = Stdlib.Stream.__cellGet<List<Blob>> packets in
   let closed = Stdlib.Option.isNone (Stdlib.Stream.next life) in
   let valid =
-    if mode == 7L then Stdlib.Result.isOk result && Stdlib.Bool.not closed && Stdlib.List.length sent == 1
+    if mode == 7L || mode == 9L then (if mode == 7L then Stdlib.Result.isOk result else Stdlib.Result.isError result) && Stdlib.Bool.not closed && Stdlib.List.length sent == 1
     else match sent with
     | [first, last] ->
       let decoded = match Stdlib.__QuicCrypto.openPacket keys first 9L -1L, Stdlib.__QuicCrypto.openPacket keys last 9L 0L with
@@ -49,3 +50,4 @@ parseClose 5L = true // leak_check
 parseClose 6L = true // leak_check
 parseClose 7L = true // leak_check
 parseClose 8L = true // leak_check
+parseClose 9L = true // leak_check
