@@ -89,7 +89,9 @@ let parse reasons text =
       | "class=aot-rejection", Runtime ->
           Error "An AOT rejection must require a compile failure"
       | _, (Compile | Runtime) ->
-          Error "Expected class=aot-rejection, class=missing-support or class=upstream-bug"
+          Error
+            "Expected class=aot-rejection, class=missing-support or \
+             class=upstream-bug"
     in
     try
       match Yojson.Basic.from_string quoted with

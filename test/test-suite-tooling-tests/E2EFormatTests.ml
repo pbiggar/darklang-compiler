@@ -657,20 +657,24 @@ let testCompilerXfailStrictness () =
   check "upstream-bug"
 
 let testCompilerRuntimeXfailStrictness () =
-  let check classification = one
-    ("// @compiler xfail runtime: \"known runtime failure\" class="
-     ^ classification ^ " reason=annotation-probe\nBuiltin.crash \"known runtime failure\" = 1L")
-    "Expected runtime xfail" (fun test ->
-      let expected = Ran (1, "", "known runtime failure", 0L, 0L) in
-      let signal = Ran (139, "", "known runtime failure", 0L, 0L) in
-      let wrongPhase = CompileFailed (1, "known runtime failure", 0L) in
-      let leaked = Ran (1, "", "known runtime failure\nleaks: 1\n", 0L, 0L) in
-      require
-        (Result.is_ok (evaluateExpectations test expected)
-        && Result.is_error (evaluateExpectations test signal)
-        && Result.is_error (evaluateExpectations test leaked)
-        && Result.is_error (evaluateExpectations test wrongPhase))
-        "Runtime xfail accepted an unrelated phase or signal")
+  let check classification =
+    one
+      ("// @compiler xfail runtime: \"known runtime failure\" class="
+     ^ classification
+     ^ " reason=annotation-probe\nBuiltin.crash \"known runtime failure\" = 1L"
+      )
+      "Expected runtime xfail"
+      (fun test ->
+        let expected = Ran (1, "", "known runtime failure", 0L, 0L) in
+        let signal = Ran (139, "", "known runtime failure", 0L, 0L) in
+        let wrongPhase = CompileFailed (1, "known runtime failure", 0L) in
+        let leaked = Ran (1, "", "known runtime failure\nleaks: 1\n", 0L, 0L) in
+        require
+          (Result.is_ok (evaluateExpectations test expected)
+          && Result.is_error (evaluateExpectations test signal)
+          && Result.is_error (evaluateExpectations test leaked)
+          && Result.is_error (evaluateExpectations test wrongPhase))
+          "Runtime xfail accepted an unrelated phase or signal")
   in
   let* () = check "missing-support" in
   check "upstream-bug"

@@ -130,9 +130,11 @@ let () =
   List.iter
     (fun phase ->
       let entries =
-        accepts [ item 1 0 true ]
+        accepts
+          [ item 1 0 true ]
           ("// @compiler xfail " ^ phase
-           ^ ": \"upstream diagnostic\" class=upstream-bug reason=test-counter\ntest bad = 1")
+         ^ ": \"upstream diagnostic\" class=upstream-bug reason=test-counter\n\
+            test bad = 1")
       in
       require
         (match A.at entries { Tokenizer.row = 1; column = 0 } with
