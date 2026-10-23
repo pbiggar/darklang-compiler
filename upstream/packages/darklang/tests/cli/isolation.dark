@@ -123,7 +123,7 @@ let checkInheritedBranch (expected: Uuid) : Stdlib.Test.Result =
   | Ok output -> output.result |> Stdlib.Test.equal (Ok expected)
 
 // Uses an actual non-main branch, then a nested worker with default options.
-// @compiler xfail compile: "Unknown function or value 'Darklang.Cli.Tests.TestSuite.runWithCommand'" class=missing-support reason=upstream-dependency
+// @compiler xfail compile: "Unknown function or value 'Darklang.Cli.Branch.lookupRef'" class=missing-support reason=upstream-dependency
 test explicitBranchBecomesTheNestedWorkersDefault =
   let name = "isolated-selection-" + Stdlib.toString (Stdlib.Uuid.generate ())
   let _ = Darklang.Cli.Tests.TestSuite.runWithCommand [ "branch", "create", name ]
@@ -154,7 +154,7 @@ test resultIsSeparateFromOutput =
 
 let waitsTooLong () : Unit = Stdlib.Cli.Posix.sleep 10000.0
 
-// @compiler xfail compile: "Unknown function or value 'Stdlib.Test.Process.defaults'" class=missing-support reason=upstream-dependency
+// @compiler xfail compile: "Unknown function or value 'Stdlib.Test.Process.run'" class=missing-support reason=upstream-dependency
 test timeoutIsReported =
   let defaults = Stdlib.Test.Process.defaults ()
   match Stdlib.Test.Process.run { defaults with timeoutMs = 1000 } waitsTooLong () with

@@ -62,7 +62,6 @@ module UserDefined =
     (Stdlib.Bool.not recordValue.a) |> Stdlib.Test.equal false
 
 module Package =
-  // @compiler xfail compile: "Unknown function or value 'Darklang.Test.Values.stringValue'" class=missing-support reason=upstream-dependency
   test values =
     Stdlib.Test.all
       [ Darklang.Test.Values.stringValue |> Stdlib.Test.equal "test"

@@ -276,27 +276,23 @@ module AutoResolution =
 module ConflictId =
   // SORTED before hashing, so the id doesn't depend on which side happened to be local. Without this,
   // the same divergence gets two ids on two machines and neither can ack the other's.
-  // @compiler xfail compile: "Unknown function or value 'Darklang.SCM.Conflicts.conflictId'" class=missing-support reason=upstream-dependency
   test idSortedBeforeHashing =
     Darklang.SCM.Conflicts.conflictId "Zz" "W" "f" [ "aaa", "bbb" ]
     |> Stdlib.Test.equal
       (Darklang.SCM.Conflicts.conflictId "Zz" "W" "f" [ "bbb", "aaa" ])
 
   // Different location, different id.
-  // @compiler xfail compile: "Unknown function or value 'Darklang.SCM.Conflicts.conflictId'" class=missing-support reason=upstream-dependency
   test locationChangesId =
     (Darklang.SCM.Conflicts.conflictId "Zz" "W" "f" [ "aaa", "bbb" ]) ==
      (Darklang.SCM.Conflicts.conflictId "Zz" "W" "g" [ "aaa", "bbb" ])
     |> Stdlib.Test.equal false
 
   // Short enough to type, long enough to not collide in practice.
-  // @compiler xfail compile: "Unknown function or value 'Darklang.SCM.Conflicts.conflictId'" class=missing-support reason=upstream-dependency
   test idLength =
     Stdlib.String.length (Darklang.SCM.Conflicts.conflictId "Zz" "W" "f" [ "aaa", "bbb" ])
     |> Stdlib.Test.equal 8
 
 module StringOrdering =
-  // @compiler xfail compile: "Unknown function or value 'Darklang.SCM.Conflicts.stringGt'" class=missing-support reason=upstream-dependency
   test stringGt =
     Stdlib.Test.all
       [ Darklang.SCM.Conflicts.stringGt "b" "a" |> Stdlib.Test.equal true
@@ -304,7 +300,6 @@ module StringOrdering =
         Darklang.SCM.Conflicts.stringGt "a" "a" |> Stdlib.Test.equal false ]
 
   // ISO stamps compare lexically, which is the whole reason the fold can order by them as strings.
-  // @compiler xfail compile: "Unknown function or value 'Darklang.SCM.Conflicts.stringGt'" class=missing-support reason=upstream-dependency
   test isoStampsLexical =
     Darklang.SCM.Conflicts.stringGt "2026-01-03T00:00:00.000Z" "2026-01-02T23:59:59.999Z"
     |> Stdlib.Test.equal true
@@ -312,7 +307,6 @@ module StringOrdering =
 module Chunking =
   // Nothing on the detection path may build an unbounded IN-list: an over-cap statement ERRORS, and
   // every caller turns an error into [], which reads downstream as "no conflict".
-  // @compiler xfail compile: "Unknown function or value 'Darklang.SCM.Conflicts.inChunks'" class=missing-support reason=upstream-dependency
   test noUnboundedInList =
     Stdlib.Test.all
       [ Stdlib.List.length (Darklang.SCM.Conflicts.inChunks [])
@@ -321,7 +315,6 @@ module Chunking =
         |> Stdlib.Test.equal 1 ]
 
   // A list longer than the chunk size splits, and splits losslessly.
-  // @compiler xfail compile: "Unknown function or value 'Darklang.SCM.Conflicts.inChunks'" class=missing-support reason=upstream-dependency
   test chunksSplitLosslessly =
     Stdlib.Test.all
       [ Stdlib.List.length
@@ -335,7 +328,6 @@ module Chunking =
         |> Stdlib.Test.equal true ]
 
 module Placeholders =
-  // @compiler xfail compile: "Unknown function or value 'Darklang.SCM.Conflicts.inPlaceholders'" class=missing-support reason=upstream-dependency
   test inPlaceholders =
     Stdlib.Test.all
       [ Darklang.SCM.Conflicts.inPlaceholders [] |> Stdlib.Test.equal ""
@@ -344,12 +336,10 @@ module Placeholders =
         |> Stdlib.Test.equal "@p0, @p1, @p2" ]
 
 module Fqn =
-  // @compiler xfail compile: "Unknown function or value 'Darklang.SCM.Conflicts.fqn'" class=missing-support reason=upstream-dependency
   test fqn =
     Darklang.SCM.Conflicts.fqn "Zz" "W" "f" |> Stdlib.Test.equal "Zz.W.f"
 
   // A top-level item has no module segment, and joining an empty one would give "Zz..f".
-  // @compiler xfail compile: "Unknown function or value 'Darklang.SCM.Conflicts.fqn'" class=missing-support reason=upstream-dependency
   test topLevelFqn =
     Stdlib.Test.all
       [ Darklang.SCM.Conflicts.fqn "Zz" "" "f" |> Stdlib.Test.equal "Zz.f"

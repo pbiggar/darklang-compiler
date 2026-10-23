@@ -40,7 +40,6 @@ test remainder =
       Stdlib.Int8.remainder 5y 0y |> Stdlib.Test.equal (Error "Cannot divide by 0") ]
 
 /// Wraps on overflow.
-// @compiler xfail compile: "Unknown function or value 'Darklang.Test.Values.int8Value'" class=missing-support reason=upstream-dependency
 test add =
   Stdlib.Test.all
     [ (10y + 9y) |> Stdlib.Test.equal 19y

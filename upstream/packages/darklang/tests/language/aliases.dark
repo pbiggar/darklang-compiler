@@ -163,7 +163,6 @@ module RecordWithRecursiveTypeArgs =
 
   type Alias<'x> = Inner<'x>
 
-  // @compiler xfail compile: "Unknown type 'Inner'" class=missing-support reason=upstream-dependency
   test recursiveAlias =
     Inner
       { a = 5L
@@ -272,7 +271,6 @@ module EnumWithRecursiveTypeArgs =
 
   type Alias<'x> = Inner<'x>
 
-  // @compiler xfail compile: "Unknown type 'Alias'" class=missing-support reason=upstream-dependency
   test recursiveAlias =
     Alias.B(Stdlib.Result.Result.Ok(Alias.A 5L))
     |> Stdlib.Test.equal (Inner.B(Stdlib.Result.Result.Ok(Inner.A 5L)))

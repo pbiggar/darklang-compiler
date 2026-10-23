@@ -36,7 +36,7 @@ test theBuiltinSetWasActuallyRead =
   (Stdlib.List.length (BuiltinGroups.livePrefixes ()) > 400) |> Stdlib.Test.equal true
 
 // A new family of builtins lands and nobody names it. The failure names the prefix.
-// @compiler xfail compile: "Unknown function or value 'BuiltinGroups.knownPrefixes'" class=missing-support reason=upstream-dependency
+// @compiler xfail compile: "Unknown function or value 'BuiltinGroups.substantial'" class=missing-support reason=upstream-dependency
 test everySubstantialPrefixHasADisplayName =
   let known = BuiltinGroups.knownPrefixes ()
   BuiltinGroups.substantial 3
@@ -53,7 +53,6 @@ test noDisplayNameIsStale =
   |> Stdlib.List.sort
   |> Stdlib.Test.equal []
 
-// @compiler xfail compile: "Unknown function or value 'BuiltinGroups.knownPrefixes'" class=missing-support reason=upstream-dependency
 test noPrefixIsNamedTwice =
   let known = BuiltinGroups.knownPrefixes ()
   (Stdlib.List.length (Stdlib.List.unique known)) |> Stdlib.Test.equal (Stdlib.List.length known)

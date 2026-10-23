@@ -12,7 +12,7 @@ A run disposition means selected, not a passing execution receipt. Replacement c
 | --- | --- |
 | packages | 1,986 blocked, 2 excluded, 35 replace, 1,680 run |
 | stdlib | 637 blocked, 3 excluded, 1,142 replace, 216 run |
-| tests | 1,511 run, 848 xfail |
+| tests | 45 blocked, 1,666 run, 648 xfail |
 
 ## Expected test failures
 
@@ -21,8 +21,8 @@ Missing support includes compiler bugs, unavailable dependencies and test-runner
 
 | Class | Compile | Runtime | Total |
 | --- | ---: | ---: | ---: |
-| `aot-rejection` | 212 | 0 | 212 |
-| `missing-support` | 627 | 9 | 636 |
+| `aot-rejection` | 213 | 0 | 213 |
+| `missing-support` | 420 | 15 | 435 |
 
 | Class | Reason | Tests |
 | --- | --- | ---: |
@@ -31,10 +31,11 @@ Missing support includes compiler bugs, unavailable dependencies and test-runner
 | `aot-rejection` | `aot-invalid-key` | 8 |
 | `aot-rejection` | `aot-match-error` | 26 |
 | `aot-rejection` | `aot-name-error` | 11 |
-| `aot-rejection` | `aot-type-error` | 138 |
-| `missing-support` | `compiler-gap` | 42 |
+| `aot-rejection` | `aot-type-error` | 139 |
+| `missing-support` | `compiler-gap` | 45 |
+| `missing-support` | `compiler-leak` | 1 |
 | `missing-support` | `test-counter` | 7 |
-| `missing-support` | `upstream-dependency` | 587 |
+| `missing-support` | `upstream-dependency` | 382 |
 
 ### Remaining support by source
 
@@ -42,29 +43,21 @@ Each row links to the authoritative per-test annotations. A named test remains o
 
 | Source | Tests |
 | --- | ---: |
-| [packages/darklang/tests/cli/builtinGroups.dark](../../../upstream/packages/darklang/tests/cli/builtinGroups.dark) | 4 |
+| [packages/darklang/tests/cli/builtinGroups.dark](../../../upstream/packages/darklang/tests/cli/builtinGroups.dark) | 3 |
 | [packages/darklang/tests/cli/commandCompletions.dark](../../../upstream/packages/darklang/tests/cli/commandCompletions.dark) | 8 |
-| [packages/darklang/tests/cli/commandGroups.dark](../../../upstream/packages/darklang/tests/cli/commandGroups.dark) | 5 |
-| [packages/darklang/tests/cli/deprecationKinds.dark](../../../upstream/packages/darklang/tests/cli/deprecationKinds.dark) | 4 |
+| [packages/darklang/tests/cli/commandGroups.dark](../../../upstream/packages/darklang/tests/cli/commandGroups.dark) | 3 |
 | [packages/darklang/tests/cli/golden.dark](../../../upstream/packages/darklang/tests/cli/golden.dark) | 2 |
-| [packages/darklang/tests/cli/includeParsing.dark](../../../upstream/packages/darklang/tests/cli/includeParsing.dark) | 8 |
 | [packages/darklang/tests/cli/instance-tests.dark](../../../upstream/packages/darklang/tests/cli/instance-tests.dark) | 4 |
 | [packages/darklang/tests/cli/interactiveTests.dark](../../../upstream/packages/darklang/tests/cli/interactiveTests.dark) | 4 |
 | [packages/darklang/tests/cli/isolation.dark](../../../upstream/packages/darklang/tests/cli/isolation.dark) | 11 |
 | [packages/darklang/tests/cli/listing.dark](../../../upstream/packages/darklang/tests/cli/listing.dark) | 1 |
-| [packages/darklang/tests/cli/outliner.dark](../../../upstream/packages/darklang/tests/cli/outliner.dark) | 46 |
+| [packages/darklang/tests/cli/outliner.dark](../../../upstream/packages/darklang/tests/cli/outliner.dark) | 6 |
 | [packages/darklang/tests/cli/permissionsDisplay.dark](../../../upstream/packages/darklang/tests/cli/permissionsDisplay.dark) | 2 |
 | [packages/darklang/tests/cli/permissionsGrammar.dark](../../../upstream/packages/darklang/tests/cli/permissionsGrammar.dark) | 15 |
 | [packages/darklang/tests/cli/propagate.dark](../../../upstream/packages/darklang/tests/cli/propagate.dark) | 1 |
-| [packages/darklang/tests/cli/releaseAssets.dark](../../../upstream/packages/darklang/tests/cli/releaseAssets.dark) | 6 |
-| [packages/darklang/tests/cli/searchRanking.dark](../../../upstream/packages/darklang/tests/cli/searchRanking.dark) | 5 |
-| [packages/darklang/tests/cli/tests-picker.dark](../../../upstream/packages/darklang/tests/cli/tests-picker.dark) | 4 |
-| [packages/darklang/tests/cli/tests-tui.dark](../../../upstream/packages/darklang/tests/cli/tests-tui.dark) | 37 |
+| [packages/darklang/tests/cli/tests-tui.dark](../../../upstream/packages/darklang/tests/cli/tests-tui.dark) | 24 |
 | [packages/darklang/tests/cli/tests-workbench.dark](../../../upstream/packages/darklang/tests/cli/tests-workbench.dark) | 2 |
-| [packages/darklang/tests/cli/tests.dark](../../../upstream/packages/darklang/tests/cli/tests.dark) | 45 |
-| [packages/darklang/tests/cli/tracesRendering.dark](../../../upstream/packages/darklang/tests/cli/tracesRendering.dark) | 25 |
-| [packages/darklang/tests/cli/workbenchRepl.dark](../../../upstream/packages/darklang/tests/cli/workbenchRepl.dark) | 16 |
-| [packages/darklang/tests/language/aliases.dark](../../../upstream/packages/darklang/tests/language/aliases.dark) | 2 |
+| [packages/darklang/tests/cli/tracesRendering.dark](../../../upstream/packages/darklang/tests/cli/tracesRendering.dark) | 9 |
 | [packages/darklang/tests/language/apply.dark](../../../upstream/packages/darklang/tests/language/apply.dark) | 2 |
 | [packages/darklang/tests/language/archivedSelf.dark](../../../upstream/packages/darklang/tests/language/archivedSelf.dark) | 1 |
 | [packages/darklang/tests/language/equality.dark](../../../upstream/packages/darklang/tests/language/equality.dark) | 2 |
@@ -80,30 +73,23 @@ Each row links to the authoritative per-test annotations. A named test remains o
 | [packages/darklang/tests/language/traits.dark](../../../upstream/packages/darklang/tests/language/traits.dark) | 17 |
 | [packages/darklang/tests/language/tupleLiterals.dark](../../../upstream/packages/darklang/tests/language/tupleLiterals.dark) | 1 |
 | [packages/darklang/tests/language/unwrap.dark](../../../upstream/packages/darklang/tests/language/unwrap.dark) | 6 |
-| [packages/darklang/tests/language/values.dark](../../../upstream/packages/darklang/tests/language/values.dark) | 1 |
 | [packages/darklang/tests/languageTools/atRestTypeChecker.dark](../../../upstream/packages/darklang/tests/languageTools/atRestTypeChecker.dark) | 172 |
 | [packages/darklang/tests/languageTools/builtinIntrospection.dark](../../../upstream/packages/darklang/tests/languageTools/builtinIntrospection.dark) | 3 |
 | [packages/darklang/tests/languageTools/parsedFileShape.dark](../../../upstream/packages/darklang/tests/languageTools/parsedFileShape.dark) | 5 |
 | [packages/darklang/tests/languageTools/perf.dark](../../../upstream/packages/darklang/tests/languageTools/perf.dark) | 5 |
 | [packages/darklang/tests/languageTools/pickLocation.dark](../../../upstream/packages/darklang/tests/languageTools/pickLocation.dark) | 8 |
 | [packages/darklang/tests/languageTools/semanticTokenization.dark](../../../upstream/packages/darklang/tests/languageTools/semanticTokenization.dark) | 9 |
-| [packages/darklang/tests/prettyPrinter/runtimeTypes.dark](../../../upstream/packages/darklang/tests/prettyPrinter/runtimeTypes.dark) | 11 |
-| [packages/darklang/tests/scm/branchIdentity.dark](../../../upstream/packages/darklang/tests/scm/branchIdentity.dark) | 5 |
-| [packages/darklang/tests/scm/commitHash.dark](../../../upstream/packages/darklang/tests/scm/commitHash.dark) | 5 |
-| [packages/darklang/tests/scm/conflicts.dark](../../../upstream/packages/darklang/tests/scm/conflicts.dark) | 30 |
-| [packages/darklang/tests/scm/constraintKinds.dark](../../../upstream/packages/darklang/tests/scm/constraintKinds.dark) | 4 |
-| [packages/darklang/tests/scm/lww.dark](../../../upstream/packages/darklang/tests/scm/lww.dark) | 6 |
-| [packages/darklang/tests/scm/removalConflicts.dark](../../../upstream/packages/darklang/tests/scm/removalConflicts.dark) | 5 |
+| [packages/darklang/tests/prettyPrinter/runtimeTypes.dark](../../../upstream/packages/darklang/tests/prettyPrinter/runtimeTypes.dark) | 9 |
+| [packages/darklang/tests/scm/branchIdentity.dark](../../../upstream/packages/darklang/tests/scm/branchIdentity.dark) | 4 |
+| [packages/darklang/tests/scm/conflicts.dark](../../../upstream/packages/darklang/tests/scm/conflicts.dark) | 20 |
 | [packages/darklang/tests/stdlib/altJson.dark](../../../upstream/packages/darklang/tests/stdlib/altJson.dark) | 7 |
 | [packages/darklang/tests/stdlib/cli/sgr.dark](../../../upstream/packages/darklang/tests/stdlib/cli/sgr.dark) | 3 |
 | [packages/darklang/tests/stdlib/dict.dark](../../../upstream/packages/darklang/tests/stdlib/dict.dark) | 8 |
-| [packages/darklang/tests/stdlib/discovery.dark](../../../upstream/packages/darklang/tests/stdlib/discovery.dark) | 2 |
+| [packages/darklang/tests/stdlib/discovery.dark](../../../upstream/packages/darklang/tests/stdlib/discovery.dark) | 1 |
 | [packages/darklang/tests/stdlib/httpclient.dark](../../../upstream/packages/darklang/tests/stdlib/httpclient.dark) | 3 |
-| [packages/darklang/tests/stdlib/ints/int8.dark](../../../upstream/packages/darklang/tests/stdlib/ints/int8.dark) | 1 |
 | [packages/darklang/tests/stdlib/json.dark](../../../upstream/packages/darklang/tests/stdlib/json.dark) | 5 |
 | [packages/darklang/tests/stdlib/list.dark](../../../upstream/packages/darklang/tests/stdlib/list.dark) | 11 |
 | [packages/darklang/tests/stdlib/live.dark](../../../upstream/packages/darklang/tests/stdlib/live.dark) | 2 |
-| [packages/darklang/tests/stdlib/option.dark](../../../upstream/packages/darklang/tests/stdlib/option.dark) | 3 |
 | [packages/darklang/tests/stdlib/pretty.dark](../../../upstream/packages/darklang/tests/stdlib/pretty.dark) | 1 |
 | [packages/darklang/tests/stdlib/result.dark](../../../upstream/packages/darklang/tests/stdlib/result.dark) | 4 |
 | [packages/darklang/tests/stdlib/sqlite.dark](../../../upstream/packages/darklang/tests/stdlib/sqlite.dark) | 7 |
@@ -157,10 +143,12 @@ Tags are defined in [the glossary](../../../porting/compiler-reasons.json).
 | tests | `aot-invalid-key` | 8 |
 | tests | `aot-match-error` | 26 |
 | tests | `aot-name-error` | 11 |
-| tests | `aot-type-error` | 138 |
-| tests | `compiler-gap` | 42 |
+| tests | `aot-type-error` | 139 |
+| tests | `compiler-gap` | 45 |
+| tests | `compiler-leak` | 1 |
+| tests | `interpreter-fixture` | 45 |
 | tests | `test-counter` | 7 |
-| tests | `upstream-dependency` | 587 |
+| tests | `upstream-dependency` | 382 |
 
 ## Separate capability assessments
 

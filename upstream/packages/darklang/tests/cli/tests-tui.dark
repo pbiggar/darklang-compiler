@@ -18,7 +18,7 @@ let canvasRow (spans: List<Darklang.Stdlib.Cli.UI.Layout.Span>) : String =
   |> Darklang.Stdlib.Cli.Tui.Text.stripSgr
 
 
-// @compiler xfail compile: "Unknown function or value 'canvasRegion'" class=missing-support reason=upstream-dependency
+// @compiler xfail compile: "Unknown function or value 'canvasRow'" class=missing-support reason=upstream-dependency
 test canvasPlacesSpans =
   let region = canvasRegion ()
   let spans = Darklang.Stdlib.Cli.UI.Layout.at region 0 2 "hi"
@@ -32,7 +32,7 @@ test canvasPlacesSpans =
     Stdlib.Test.fail $"Expected span at column 2, got '{row}'"
 
 
-// @compiler xfail compile: "Unknown function or value 'canvasRegion'" class=missing-support reason=upstream-dependency
+// @compiler xfail compile: "Unknown function or value 'canvasRow'" class=missing-support reason=upstream-dependency
 test canvasLayersLaterSpans =
   let region = canvasRegion ()
   let spans =
@@ -51,7 +51,7 @@ test canvasLayersLaterSpans =
     Stdlib.Test.fail $"Expected later span to layer over earlier, got '{row}'"
 
 
-// @compiler xfail compile: "Unknown function or value 'canvasRegion'" class=missing-support reason=upstream-dependency
+// @compiler xfail compile: "Unknown function or value 'canvasRow'" class=missing-support reason=upstream-dependency
 test canvasWideGlyphOccupiesTwoColumns =
   let region = canvasRegion ()
   let spans =
@@ -67,7 +67,7 @@ test canvasWideGlyphOccupiesTwoColumns =
     Stdlib.Test.fail $"Expected wide glyph to occupy two columns, got '{row}'"
 
 
-// @compiler xfail compile: "Unknown function or value 'canvasRegion'" class=missing-support reason=upstream-dependency
+// @compiler xfail compile: "Unknown function or value 'canvasRow'" class=missing-support reason=upstream-dependency
 test canvasStylingIsZeroWidth =
   let region = canvasRegion ()
   let spans =
@@ -83,7 +83,7 @@ test canvasStylingIsZeroWidth =
     Stdlib.Test.fail $"Expected SGR to consume no columns, got '{row}'"
 
 
-// @compiler xfail compile: "Unknown function or value 'canvasRegion'" class=missing-support reason=upstream-dependency
+// @compiler xfail compile: "Unknown function or value 'Darklang.Stdlib.Cli.UI.Canvas.compose'" class=missing-support reason=upstream-dependency
 test canvasUntouchedRowsAreEmpty =
   let region = canvasRegion ()
   let spans = Darklang.Stdlib.Cli.UI.Layout.at region 0 0 "x"
@@ -123,7 +123,6 @@ test textNeverSplitsAWideGlyph =
       $"Expected a wide glyph to be dropped whole, got width {Stdlib.toString (Stdlib.String.displayWidth clipped)}"
 
 
-// @compiler xfail compile: "Unknown function or value 'Stdlib.Cli.Tui.Text.normalizeToWidth'" class=missing-support reason=upstream-dependency
 test textDropsNonSgrEscapes =
   // A cursor-forward escape in dynamic content must not survive into a row: rows are text, not commands.
   let normalized = Stdlib.Cli.Tui.Text.normalizeToWidth "a\u001b[5Cb" 10
@@ -164,7 +163,6 @@ test textCursorAfterFullRowWraps =
       $"Expected (1, 0), got ({Stdlib.toString row}, {Stdlib.toString column})"
 
 
-// @compiler xfail compile: "Unknown function or value 'Stdlib.Cli.Tui.Text.fitToWidth'" class=missing-support reason=upstream-dependency
 test textFitPadsByColumnsNotCharacters =
   // A wide glyph is one character in two columns, so padding by character count comes out short.
   let fitted = Stdlib.Cli.Tui.Text.fitToWidth "界a" 6
@@ -176,7 +174,7 @@ test textFitPadsByColumnsNotCharacters =
       $"Expected 6 columns, got {Stdlib.toString (Stdlib.String.displayWidth fitted)}"
 
 
-// @compiler xfail compile: "Unknown function or value 'Stdlib.Cli.Tui.Text.fitToWidth'" class=missing-support reason=upstream-dependency
+// @compiler xfail compile: "Unknown function or value 'Stdlib.Cli.Tui.Text.stripSgr'" class=missing-support reason=upstream-dependency
 test textFitIgnoresStylingWhenPadding =
   // Styling costs no columns, so a styled row pads to what its plain text would.
   let fitted = Stdlib.Cli.Tui.Text.fitToWidth "\u001b[31mab\u001b[0m" 5
@@ -187,7 +185,6 @@ test textFitIgnoresStylingWhenPadding =
     Stdlib.Test.fail $"Expected 'ab' padded to 5 columns, got '{Stdlib.Cli.Tui.Text.stripSgr fitted}'"
 
 
-// @compiler xfail compile: "Unknown function or value 'Stdlib.Cli.Tui.Text.wrapAtWords'" class=missing-support reason=upstream-dependency
 test textWrapAtWordsBreaksAtSpaces =
   // The word wrapper stays in Dark, measuring whole words.
   let rows = Stdlib.Cli.Tui.Text.wrapAtWords "alpha beta gamma" 11
@@ -204,7 +201,6 @@ let inlineView (rows: List<String>) : Stdlib.Cli.Tui.View =
   Stdlib.Cli.Tui.View { rows = rows, cursor = Stdlib.Cli.Tui.Cursor.Hidden, mode = Stdlib.Cli.Tui.ViewMode.Inline }
 
 
-// @compiler xfail compile: "Unknown function or value 'inlineView'" class=missing-support reason=upstream-dependency
 test inlineFrameEmitsNothingWhenUnchanged =
   let view = inlineView [ "a", "b" ]
   let output =
@@ -217,7 +213,6 @@ test inlineFrameEmitsNothingWhenUnchanged =
     Stdlib.Test.fail "Expected an unchanged inline frame to emit no output"
 
 
-// @compiler xfail compile: "Unknown function or value 'inlineView'" class=missing-support reason=upstream-dependency
 test inlineFrameMovesRelativeToPreviousCursor =
   let previous = inlineView [ "a", "b" ]
   let next = inlineView [ "a", "B" ]
@@ -240,7 +235,6 @@ let fullscreenView (rows: List<String>) : Stdlib.Cli.Tui.View =
   Stdlib.Cli.Tui.View { rows = rows, cursor = Stdlib.Cli.Tui.Cursor.Hidden, mode = Stdlib.Cli.Tui.ViewMode.Fullscreen }
 
 
-// @compiler xfail compile: "Unknown function or value 'Stdlib.Cli.Tui.TerminalSession.preparePresentAtSize'" class=missing-support reason=upstream-dependency
 test sessionTakesAlternateScreenOnFirstPresent =
   let prepared =
     Stdlib.Cli.Tui.TerminalSession.preparePresentAtSize
@@ -254,7 +248,6 @@ test sessionTakesAlternateScreenOnFirstPresent =
     Stdlib.Test.fail "Expected the first fullscreen present to enter the alternate screen"
 
 
-// @compiler xfail compile: "Unknown type 'Stdlib.Cli.Tui.Size'" class=missing-support reason=upstream-dependency
 test sessionSecondIdenticalPresentIsSilent =
   let size = Stdlib.Cli.Tui.Size { width = 20, height = 5 }
   let view = fullscreenView [ "hello" ]
@@ -270,7 +263,6 @@ test sessionSecondIdenticalPresentIsSilent =
     Stdlib.Test.fail $"Expected a repeat present to emit nothing, got '{second.output}'"
 
 
-// @compiler xfail compile: "Unknown type 'Stdlib.Cli.Tui.Size'" class=missing-support reason=upstream-dependency
 test sessionStopRestoresOnlyWhenRunning =
   let size = Stdlib.Cli.Tui.Size { width = 20, height = 5 }
   let started =
@@ -413,7 +405,7 @@ test workbenchPreviewsRender =
 
 /// Every Matter lens draws a frame. No view has sections any more; the lenses are the one
 /// remaining "same view, different list" switch, and `rendersView` only ever draws the default.
-// @compiler xfail compile: "Unknown type 'Darklang.Cli.Workbench.Lens'" class=missing-support reason=upstream-dependency
+// @compiler xfail compile: "Unknown function or value 'rendersMatterLens'" class=missing-support reason=upstream-dependency
 test workbenchSectionsRender =
   let brokenLenses =
     [ Darklang.Cli.Workbench.Lens.WholeTree
@@ -825,7 +817,6 @@ let bound (name: String) (source: String) : Darklang.Cli.Repl.Binding =
   Darklang.Cli.Repl.Binding { name = name, source = source, value = source, captured = true }
 
 
-// @compiler xfail compile: "Unknown function or value 'Darklang.Cli.Repl.parseLetBinding'" class=missing-support reason=upstream-dependency
 test replParsesLetBinding =
   // What binds, and - more important - what doesn't. A pattern binding, a comparison typo, and a bare
   // expression all have to fall through to being evaluated rather than silently binding something wrong.
@@ -857,7 +848,6 @@ test replParsesLetBinding =
     Stdlib.Test.fail $"parseLetBinding wrong for: {Stdlib.String.join wrong " | "}"
 
 
-// @compiler xfail compile: "Unknown function or value 'Darklang.Cli.Repl.withBindings'" class=missing-support reason=upstream-dependency
 test replInjectsBindingChain =
   // The chain is what makes a binding survive to the next expression; order matters, because a later
   // binding is allowed to refer to an earlier one.
@@ -873,7 +863,6 @@ test replInjectsBindingChain =
     Stdlib.Test.fail $"Unexpected binding chain: '{one}' / '{two}'"
 
 
-// @compiler xfail compile: "Unknown type 'Darklang.Cli.Repl.Binding'" class=missing-support reason=upstream-dependency
 test replUncapturedRebindMovesLast =
   // An uncaptured binding holds an EXPRESSION, so it must sit after anything it references. Rebinding it in
   // place produced `let a = d` above `let d = ...`, which left `d` undefined and wedged the session.
@@ -889,7 +878,6 @@ test replUncapturedRebindMovesLast =
     Stdlib.Test.fail $"Expected the uncaptured rebind to move last (d,a), got {order}"
 
 
-// @compiler xfail compile: "Unknown function or value 'Darklang.Cli.Repl.upsert'" class=missing-support reason=upstream-dependency
 test replRebindKeepsPosition =
   // Rebinding `x` must not move it after `y`, or `y`'s chain entry would reference an undefined name.
   let after =
@@ -904,7 +892,6 @@ test replRebindKeepsPosition =
     Stdlib.Test.fail $"Expected x rebound in place, got {names} = {sources}"
 
 
-// @compiler xfail compile: "Unknown function or value 'Darklang.Cli.Repl.readCaptured'" class=missing-support reason=upstream-dependency
 test replReadsCapturedValue =
   // `captureValue` reports through a tagged string; anything that isn't an `ok:` means "hold the expression
   // instead", including an empty result.
@@ -916,7 +903,7 @@ test replReadsCapturedValue =
     Stdlib.Test.fail "readCaptured did not round-trip the ok:/err: tagging"
 
 
-// @compiler xfail compile: "Unknown function or value 'Darklang.Cli.Repl.splitStatements'" class=missing-support reason=upstream-dependency
+// @compiler xfail compile: "Unknown function or value 'Stdlib.toRepr'" class=missing-support reason=upstream-dependency
 test replSplitsPastedStatements =
   // A paste has to behave exactly like typing the lines one at a time, which means knowing where one
   // statement ends. Indentation is the signal: an indented line continues the one above, so a wrapped
@@ -1005,7 +992,7 @@ let contentShows (viewIndex: Int) (marker: String) : Bool =
   |> Stdlib.List.any (fun r -> Stdlib.String.contains (Stdlib.Cli.Tui.Text.stripSgr r) marker)
 
 
-// @compiler xfail compile: "Unknown function or value 'Darklang.Cli.Workbench.vSCM'" class=missing-support reason=upstream-dependency
+// @compiler xfail compile: "Unknown function or value 'viewShows'" class=missing-support reason=upstream-dependency
 test workbenchViewsShowTheirChrome =
   // `workbenchEveryViewRenders` only asks whether a view drew *anything*,
   // which is why it once stayed green while two header bands rendered blank

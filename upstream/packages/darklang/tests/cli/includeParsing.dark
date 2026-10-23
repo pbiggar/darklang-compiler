@@ -11,46 +11,38 @@ module Include =
     Darklang.Cli.Commit.parseInclude args
 
 // One flag, one name.
-// @compiler xfail compile: "Unknown function or value 'Include.parse'" class=missing-support reason=upstream-dependency
 test oneFlagOneName =
   Include.parse [ "--include=A.b" ] |> Stdlib.Test.equal [ "A.b" ]
 
 // Comma-separated inside one flag.
-// @compiler xfail compile: "Unknown function or value 'Include.parse'" class=missing-support reason=upstream-dependency
 test commaSeparated =
   Include.parse [ "--include=A.b,C.d" ] |> Stdlib.Test.equal [ "A.b", "C.d" ]
 
 // Repeated flags, flattened in order. `--include=A,B --include=C` is three names.
-// @compiler xfail compile: "Unknown function or value 'Include.parse'" class=missing-support reason=upstream-dependency
 test repeatedFlags =
   Include.parse [ "--include=A.b,C.d", "--include=E.f" ]
   |> Stdlib.Test.equal [ "A.b", "C.d", "E.f" ]
 
 // Spaces around a name are the shell's, not the user's intent.
-// @compiler xfail compile: "Unknown function or value 'Include.parse'" class=missing-support reason=upstream-dependency
 test spacesTrimmed =
   Include.parse [ "--include=A.b, C.d" ] |> Stdlib.Test.equal [ "A.b", "C.d" ]
 
 // An empty entry is dropped rather than becoming a name nothing matches. A trailing comma is the
 // common way to produce one.
-// @compiler xfail compile: "Unknown function or value 'Include.parse'" class=missing-support reason=upstream-dependency
 test emptyEntriesDropped =
   Include.parse [ "--include=A.b,,C.d," ] |> Stdlib.Test.equal [ "A.b", "C.d" ]
 
 // Named twice is named once: the closure is computed per name, and a duplicate would report the same
 // dependency being pulled in twice.
-// @compiler xfail compile: "Unknown function or value 'Include.parse'" class=missing-support reason=upstream-dependency
 test duplicatesDropped =
   Include.parse [ "--include=A.b,A.b", "--include=A.b" ]
   |> Stdlib.Test.equal [ "A.b" ]
 
 // Other flags are not includes.
-// @compiler xfail compile: "Unknown function or value 'Include.parse'" class=missing-support reason=upstream-dependency
 test otherFlagsIgnored =
   Include.parse [ "-y", "--json", "--include=A.b", "--allow-type-errors" ]
   |> Stdlib.Test.equal [ "A.b" ]
 
 // No flag, no names -- which is what makes a commit whole-draft rather than partial.
-// @compiler xfail compile: "Unknown function or value 'Include.parse'" class=missing-support reason=upstream-dependency
 test noFlagNoNames =
   Include.parse [ "a message", "-y" ] |> Stdlib.Test.equal []
