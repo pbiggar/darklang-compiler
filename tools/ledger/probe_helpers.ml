@@ -45,6 +45,7 @@ let main includePackages root manifest output =
         S.nodes file source
         |> List.filter (fun node ->
             match node.S.declaration with
+            | W.DExpr _ when not includePackages -> false
             | W.DFunction _ | W.DType _ | W.DValue _ | W.DExpr _ -> (
                 match node.S.disposition with
                 | CompilerAnnotations.Blocked { reason; _ } ->
@@ -122,6 +123,7 @@ let main includePackages root manifest output =
   in
   let sameNode (left : S.node) (right : S.node) =
     left.S.file = right.S.file && left.S.name = right.S.name
+    && S.kind left.S.declaration = S.kind right.S.declaration
   in
   let rec combined rejected =
     let available =
@@ -143,7 +145,8 @@ let main includePackages root manifest output =
                   if
                     List.exists
                       (fun (node : S.node) ->
-                        node.S.file = file && node.S.name = entry.I.name)
+                        node.S.file = file && node.S.name = entry.I.name
+                        && S.kind node.S.declaration = I.kindName entry.I.kind)
                       accepted
                   then { entry with I.disposition = CompilerAnnotations.Run }
                   else entry)

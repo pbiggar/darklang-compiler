@@ -113,6 +113,7 @@ let footBar (f: Frame) (width: Int) : String =
 
 /// Draw the frame with `body` filling what's left. `body` runs during this call and is never retained, so
 /// passing a lambda here is fine.
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Stdlib.Cli.UI.Chrome.view: Unknown function or value 'Canvas.toView'"
 let view
   (f: Frame)
   (size: Tui.Size)

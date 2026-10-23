@@ -98,6 +98,7 @@ let segment (branchId: Uuid) (s: LanguageTools.RuntimeTypes.StringSegment) : Str
 
 /// Values baked into the instruction stream, rendered short. A listing is for reading, and one 4 KB
 /// docstring pushes everything else off the page, so anything long is summarised by shape instead.
+// @compiler blocked: compiler-crash diagnostic="Resolved function '__dark_key_eq_Darklang_LanguageTools_RuntimeTypes_Dval_58dc0aafba99441a' is absent from symbols"
 let inlineDval (branchId: Uuid) (dv: LanguageTools.RuntimeTypes.Dval) : String =
   let clip (s: String) : String =
     if (Stdlib.String.length s) <= 40 then

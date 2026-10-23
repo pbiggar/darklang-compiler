@@ -16,17 +16,20 @@ module Darklang.Stdlib.Exec.Policy
 
 
 /// What the scheduler does on its own: the process that has waited longest.
+// @compiler blocked: compiler-crash diagnostic="Resolved function '__dark_key_eq_Darklang_LanguageTools_RuntimeTypes_Dval_58dc0aafba99441a' is absent from symbols"
 let roundRobin (runnable: List<Summary>) : Stdlib.Option.Option<Uuid> =
   Stdlib.List.head runnable |> Stdlib.Option.map (fun p -> p.id)
 
 
 /// The process started most recently first: a stack, not a queue. Useful when the
 /// latest request matters most.
+// @compiler blocked: compiler-crash diagnostic="Resolved function '__dark_key_eq_Darklang_LanguageTools_RuntimeTypes_Dval_58dc0aafba99441a' is absent from symbols"
 let youngestFirst (runnable: List<Summary>) : Stdlib.Option.Option<Uuid> =
   Stdlib.List.last runnable |> Stdlib.Option.map (fun p -> p.id)
 
 
 /// Whatever has run the fewest instructions so far: new work before long-running work.
+// @compiler blocked: compiler-crash diagnostic="Resolved function '__dark_key_eq_Darklang_LanguageTools_RuntimeTypes_Dval_58dc0aafba99441a' is absent from symbols"
 let leastRunFirst (runnable: List<Summary>) : Stdlib.Option.Option<Uuid> =
   runnable
   |> Stdlib.List.sortBy (fun p -> p.instructionsTaken)

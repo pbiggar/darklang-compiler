@@ -409,6 +409,7 @@ let referencesOf
 
 /// Read a traversal index, defaulting to zero if absent. The component traversal
 /// normally calls this only after assigning the declaration an index.
+// @compiler blocked: compiler-crash diagnostic="Resolved function '__dark_key_eq_Darklang_LanguageTools_ProgramTypes_Hash_70ae7e8c18479bc5' is absent from symbols"
 let indexOrZero
   (indices: Dict<LanguageTools.ProgramTypes.Hash, Int>)
   (name: LanguageTools.ProgramTypes.Hash)
@@ -484,6 +485,7 @@ let connectSuccessors
 
 /// Remove stack entries through root, collecting them into one completed group.
 /// Clearing onStack prevents later references from merging into this finished group.
+// @compiler blocked: compiler-crash diagnostic="Resolved function '__dark_key_eq_Darklang_LanguageTools_ProgramTypes_Hash_70ae7e8c18479bc5' is absent from symbols"
 let popComponent
   (components: Components)
   (root: LanguageTools.ProgramTypes.Hash)

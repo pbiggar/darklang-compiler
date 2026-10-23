@@ -31,6 +31,7 @@ val defaultValueBudget = 2000
 /// which is the 1.3 seconds the budget exists to avoid, so this asks the value how many
 /// elements it has and stops. That is also the more useful number: "2,000 items" tells you
 /// whether `--full` is worth asking for in a way "14,208 characters" does not.
+// @compiler blocked: compiler-crash diagnostic="Resolved function '__dark_key_eq_Darklang_LanguageTools_RuntimeTypes_Dval_58dc0aafba99441a' is absent from symbols"
 let sizeHint (dv: LanguageTools.RuntimeTypes.Dval) : Stdlib.Option.Option<String> =
   match dv with
   | DList(_, items) ->
@@ -51,6 +52,7 @@ let sizeHint (dv: LanguageTools.RuntimeTypes.Dval) : Stdlib.Option.Option<String
 /// NOT through `dvalOneLine`, which caps depth at two as well. Doing that here would quietly
 /// start eliding the inside of any nested value an agent reads, which is a different and worse
 /// kind of loss than a long list being cut short. Full depth, as this has always had.
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Tracing.Format.compactDvalTo: Unknown function or value 'PrettyPrinter.RuntimeTypes.capForDisplay'"
 let compactDvalTo
   (branchId: Uuid)
   (budget: Int)
@@ -82,6 +84,7 @@ let compactDvalTo
 
 
 /// Pretty-print a Dval as a single compact line, to the default budget.
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Tracing.Format.compactDval: Unknown function or value 'compactDvalTo'"
 let compactDval (branchId: Uuid) (dv: LanguageTools.RuntimeTypes.Dval) : String =
   compactDvalTo branchId defaultValueBudget dv
 

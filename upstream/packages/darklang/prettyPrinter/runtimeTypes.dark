@@ -901,6 +901,7 @@ let dvalWith
 ///
 /// Only lists. A dict with thousands of keys has the same problem and is not handled here,
 /// because "the first n" of a dict needs an ordering this type does not promise.
+// @compiler blocked: compiler-crash diagnostic="Resolved function '__dark_key_eq_Darklang_LanguageTools_RuntimeTypes_Dval_58dc0aafba99441a' is absent from symbols"
 let capForDisplay
     (maxChars: Int)
     (dv: LanguageTools.RuntimeTypes.Dval)

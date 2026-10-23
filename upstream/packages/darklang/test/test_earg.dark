@@ -52,6 +52,7 @@ module Darklang =
 
 
 
+// @compiler blocked: script-entrypoint diagnostic="Declaration-only program must not contain entry expressions; found 1"
 let test1 = (Darklang.Test.EArgTests.addTwo 3 4) == 7
 let test2 = (Darklang.Test.EArgTests.shadowTest 999) == 42
 let test3 = (Darklang.Test.EArgTests.argAndLocalVar 5) == 15

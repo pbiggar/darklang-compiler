@@ -3,6 +3,7 @@ module Darklang.Cli.Outliner.App
 /// The outliner as a `Cli.Component`: a view, a key handler, and a save. The terminal lifecycle (start,
 /// present, stop, resume) belongs to `Cli.Component`, not here.
 
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Outliner.App.view: Unknown function or value 'Main.viewAtSize'"
 let view (state: Main.State) (size: Darklang.Stdlib.Cli.Tui.Size) : Darklang.Stdlib.Cli.Tui.View =
   Main.viewAtSize state size
 

@@ -1471,6 +1471,7 @@ let printMatches (nothing: String) (rows: List<TraceSummary>) : Unit =
 
 /// Single-line render of a dval for the trace viewer; strategy lives in
 /// `Tracing.Format.compactDval`.
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Tracing.compactDval: Unknown function or value 'Darklang.Tracing.Format.compactDval'"
 let compactDval (branchId: Uuid) (dv: LanguageTools.RuntimeTypes.Dval) : String =
   Darklang.Tracing.Format.compactDval branchId dv
 

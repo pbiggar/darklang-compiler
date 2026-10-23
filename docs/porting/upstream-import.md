@@ -147,6 +147,13 @@ a type-checking probe; promoting declarations still requires checking the real
 source selection, native compilation and the test suite. The default invocation
 without `--packages` retains the test-helper probe.
 
+`check_sources --native ROOT` runs the selected on-disk declarations through
+the host native library pipeline, including specialization and allocation.
+This catches failures that source checking alone cannot establish. Run it before
+embedding a newly enabled batch, then rebuild and run the complete host suite.
+Executable script bodies remain blocked with `script-entrypoint`: importing a
+script does not make its entry expressions reusable library declarations.
+
 Both execution assertions and named tests are discovered from the parsed AST.
 Documentation examples in string literals are never tests. A named test is
 wrapped only for execution; its body and expected error remain unchanged. A

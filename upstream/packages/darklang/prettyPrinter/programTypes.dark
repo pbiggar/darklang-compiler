@@ -136,7 +136,7 @@ module Context =
         liveValues = Stdlib.Dict.empty
         breakForValues = false }
 
-  // @compiler blocked: compiler-gap diagnostic="Darklang.PrettyPrinter.ProgramTypes.Context.toPickContext: Unknown field 'preferredLocation' on Darklang.LanguageTools.PackageManager.PickContext"
+  // @compiler blocked: compiler-contract diagnostic="Darklang.PrettyPrinter.ProgramTypes.Context.toPickContext: Unknown field 'preferredLocation' on Darklang.LanguageTools.PackageManager.PickContext"
   let toPickContext (ctx: Context) : LanguageTools.PackageManager.PickContext =
     LanguageTools.PackageManager.PickContext
       { currentModule = ctx.currentModule
