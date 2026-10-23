@@ -412,7 +412,7 @@ let valueDependencies (c: Model.Constraint) : List<LanguageTools.ProgramTypes.Ha
 /// A value whose body has been inspected but whose type requirements still need
 /// solving. Save those requirements so waiting for dependencies does not repeat
 /// the syntax walk.
-// @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.AtRestTypeChecker.Items.PendingValue: Unknown type 'LanguageTools.ProgramTypes.PackageValue.PackageValue'"
+// @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.AtRestTypeChecker.Items.PendingValue: Unknown type 'Model.Ty'"
 type PendingValue =
   { value: LanguageTools.ProgramTypes.PackageValue.PackageValue
     typ: Model.Ty

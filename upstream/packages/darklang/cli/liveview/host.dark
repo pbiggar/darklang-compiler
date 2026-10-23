@@ -29,7 +29,7 @@ type Event<'msg> =
   | Tick
 
 /// One running view.
-// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.LiveView.Host.Session: Unknown type 'Stdlib.Live.LastGood'"
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.LiveView.Host.Session: Unknown type 'Stdlib.Cli.UI.Node.Node'"
 type Session<'model, 'msg> =
   { branchId: Uuid
     view: Model.View

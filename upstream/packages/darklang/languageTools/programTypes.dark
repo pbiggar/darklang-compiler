@@ -245,7 +245,7 @@ type MatchCase =
 
 
 /// Expressions - the main part of the language.
-// @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.ProgramTypes.Expr: Unknown type 'StringSegment'"
+// @compiler blocked: constructor-identity diagnostic="Constructor identity collision 350: Darklang.LanguageTools.ProgramTypes.Expr.ERecordFieldAccess, Darklang.LanguageTools.WrittenTypes.PipeExpr.EPipeInfix"
 type Expr =
   | EUnit of ID
 

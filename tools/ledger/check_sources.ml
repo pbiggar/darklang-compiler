@@ -36,9 +36,13 @@ let check native root =
   let units = List.map snd selected.SourceSelection.units in
   if native then
     let* target = Platform.detectHostTarget () in
+    let recorder (timing : CompilerOptions.passTiming) =
+      Printf.eprintf "%s: %.0fms\n%!" timing.CompilerOptions.pass
+        (Int64.to_float timing.CompilerOptions.elapsed /. 1e6)
+    in
     Result.map
       (fun _ -> ())
-      (StdlibCompilation.buildStdlibFromSources target units)
+      (StdlibCompilation.buildStdlibFromSources ~recorder target units)
   else
     Result.map
       (fun _ -> ())

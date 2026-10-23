@@ -153,6 +153,7 @@ let unknownChange () : Change =
 /// Keyed on location AND kind, because one name can be bound as a fn and as a type and those are
 /// two things for a host to reload. Keyed on location alone the second one vanishes, and a touched
 /// name that vanishes is a host left running stale code with nothing on screen to say so.
+// @compiler blocked: compiler-crash diagnostic="Resolved function '__dark_compare__Darklang_LanguageTools_ProgramTypes_PackageLoca_f182c45e671e4ece' is absent from symbols"
 let dedupeTouched (touched: List<Touched>) : List<Touched> =
   touched |> Stdlib.List.uniqueBy (fun t -> (t.location, t.kind))
 

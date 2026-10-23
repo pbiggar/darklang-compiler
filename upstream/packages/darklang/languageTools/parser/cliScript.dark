@@ -15,7 +15,7 @@ module ParseError =
     | Message msg -> msg
 
 
-// @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.Parser.CliScript.WTCliScriptModule: Unknown type 'LanguageTools.WrittenTypes.TypeDeclaration.TypeDeclaration'"
+// @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.Parser.CliScript.WTCliScriptModule: Unknown type 'LanguageTools.WrittenTypes.Expr'"
 type WTCliScriptModule =
   { owner: String
     name: String
@@ -29,7 +29,7 @@ type WTCliScriptModule =
       List<LanguageTools.WrittenTypes.ModuleDeclaration.ModuleDeclaration>
     exprs: List<LanguageTools.WrittenTypes.Expr> }
 
-// @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.Parser.CliScript.PTCliScriptModule: Unknown type 'LanguageTools.ProgramTypes.PackageType.PackageType'"
+// @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.Parser.CliScript.PTCliScriptModule: Unknown type 'LanguageTools.ProgramTypes.Expr'"
 type PTCliScriptModule =
   { types: List<LanguageTools.ProgramTypes.PackageType.PackageType>
     values:

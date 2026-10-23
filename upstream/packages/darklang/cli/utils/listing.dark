@@ -132,6 +132,7 @@ let groupRows (group: (String * List<String>)) : List<String> =
 
 /// Grouped names, capped by whole modules: as many groups as fit in `limit` rows, then a footer
 /// counting the items left out -- not rows, so it adds up with a header that counted items.
+// @compiler blocked: compiler-crash diagnostic="Resolved function '__dark_eq_List__String__List_String____5e5b222a862c9aa5' is absent from symbols"
 let cappedGroupsSeeAlso
   (groups: List<(String * List<String>)>)
   (limit: Int)
@@ -155,6 +156,7 @@ let cappedGroupsSeeAlso
 
 
 /// Grouped names, capped by whole modules, on a command that takes `--all` itself.
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Listing.cappedGroups: Unknown function or value 'Listing.cappedGroupsSeeAlso'"
 let cappedGroups
   (groups: List<(String * List<String>)>)
   (limit: Int)

@@ -140,8 +140,9 @@ An explicit exclusion suppresses matching declarations in compiler supplements
 as well, so an excluded API cannot become callable through that layer.
 
 `probe_helpers --packages ROOT MANIFEST REPORT` probes blocked package
-functions, types and values against the selected library. It retries candidates
-as dependencies become available and checks the accepted declarations together,
+functions, types and values against the selected library. It checks candidate
+types together so mutually recursive types can become available, retries other
+candidates as dependencies become available and checks the accepted declarations together,
 removing attributable combined failures and retrying their dependents. This is
 a type-checking probe; promoting declarations still requires checking the real
 source selection, native compilation and the test suite. The default invocation

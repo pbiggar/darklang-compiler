@@ -10,8 +10,8 @@ A run disposition means selected, not a passing execution receipt. Replacement c
 
 | Area | Source dispositions |
 | --- | --- |
-| packages | 3,235 blocked, 2 excluded, 35 replace, 431 run |
-| stdlib | 848 blocked, 3 excluded, 1,142 replace, 5 run |
+| packages | 1,987 blocked, 2 excluded, 35 replace, 1,679 run |
+| stdlib | 633 blocked, 3 excluded, 1,142 replace, 220 run |
 | tests | 1,511 run, 848 xfail |
 
 ## Expected test failures
@@ -127,25 +127,30 @@ Tags are defined in [the glossary](../../../porting/compiler-reasons.json).
 
 | Area | Tag | Items |
 | --- | --- | --- |
-| packages | `compiler-contract` | 12 |
-| packages | `compiler-gap` | 7 |
+| packages | `aot-type-error` | 4 |
+| packages | `compiler-contract` | 15 |
+| packages | `compiler-crash` | 13 |
+| packages | `compiler-gap` | 21 |
 | packages | `compiler-implementation` | 34 |
-| packages | `constructor-identity` | 1 |
+| packages | `constructor-identity` | 17 |
 | packages | `container-adaptation` | 28 |
-| packages | `missing-implementation` | 3,023 |
 | packages | `runtime-reflection` | 2 |
+| packages | `script-entrypoint` | 1 |
 | packages | `test-counter` | 1 |
 | packages | `test-diagnostics` | 1 |
-| packages | `upstream-dependency` | 161 |
+| packages | `upstream-dependency` | 1,885 |
 | packages | `value-specialization` | 2 |
 | stdlib | `compiler-contract` | 6 |
+| stdlib | `compiler-crash` | 5 |
+| stdlib | `compiler-gap` | 1 |
 | stdlib | `compiler-implementation` | 1,139 |
+| stdlib | `constructor-identity` | 2 |
 | stdlib | `container-adaptation` | 490 |
 | stdlib | `interpreter-intrinsic` | 1 |
-| stdlib | `missing-implementation` | 350 |
 | stdlib | `runtime-reflection` | 3 |
 | stdlib | `test-counter` | 2 |
 | stdlib | `test-diagnostics` | 2 |
+| stdlib | `upstream-dependency` | 127 |
 | tests | `aot-arity-error` | 12 |
 | tests | `aot-invalid-field` | 17 |
 | tests | `aot-invalid-key` | 8 |

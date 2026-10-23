@@ -917,7 +917,7 @@ let capForDisplay
   | _ -> dv
 
 
-// @compiler blocked: upstream-dependency diagnostic="Darklang.PrettyPrinter.RuntimeTypes.dvalOneLine: Unknown function or value 'dvalWith'"
+// @compiler blocked: upstream-dependency diagnostic="Darklang.PrettyPrinter.RuntimeTypes.dvalOneLine: Unknown function or value 'capForDisplay'"
 let dvalOneLine
     (branchId: Uuid)
     (maxChars: Int)

@@ -125,15 +125,85 @@ let main includePackages root manifest output =
     left.S.file = right.S.file && left.S.name = right.S.name
     && S.kind left.S.declaration = S.kind right.S.declaration
   in
+  let responsible accepted diagnostic =
+    if String.starts_with ~prefix:"Constructor identity collision " diagnostic
+    then
+      let direct =
+        List.find_opt
+          (fun node ->
+            S.kind node.S.declaration = "type"
+            && Text.contains diagnostic (node.S.name ^ "."))
+          accepted
+      in
+      match direct with
+      | Some _ -> direct
+      | None ->
+          (* A newly duplicated case name can change the identity of
+          an existing constructor, including two cases in one base type. *)
+          let identities = String.split_on_char ' ' diagnostic in
+          let names =
+            List.filter_map
+              (fun identity ->
+                match List.rev (String.split_on_char '.' identity) with
+                | name :: _ :: _ ->
+                    Some
+                      (String.trim
+                         (String.concat "" (String.split_on_char ',' name)))
+                | _ -> None)
+              identities
+          in
+          List.find_opt
+            (fun (node : S.node) ->
+              match node.S.declaration with
+              | W.DType { W.definition = W.TDEnum cases; _ } ->
+                  List.exists
+                    (fun (_, (case : W.enumCaseSyntax)) ->
+                      List.mem (snd case.W.name) names)
+                    cases
+              | W.DType { W.definition = W.TDAlias _ | W.TDRecord _; _ }
+              | W.DFunction _ | W.DValue _ | W.DTrait _ | W.DImpl _
+              | W.DModule _ | W.DTest _ | W.DAssertion _ | W.DExpr _ ->
+                  false)
+            accepted
+    else
+      List.find_opt
+        (fun (node : S.node) ->
+          String.starts_with ~prefix:(node.S.name ^ ":") diagnostic)
+        accepted
+  in
+  let rec prepareTypes nodes rejected =
+    if nodes = [] then (base, [], rejected)
+    else
+      match
+        WrittenChecking.checkSourceUnitsWithBase base true false
+          (List.map (fun node -> unitFor node |> require) nodes)
+      with
+      | Ok (_, _, environment) -> (Some environment, nodes, rejected)
+      | Error diagnostic -> (
+          match responsible nodes diagnostic with
+          | Some node ->
+              Printf.eprintf "Type batch rejection: %s: %s\n%!" node.S.name
+                diagnostic;
+              prepareTypes
+                (List.filter (fun other -> not (sameNode node other)) nodes)
+                ((node, diagnostic) :: rejected)
+          | None ->
+              failwith ("Cannot attribute type batch failure: " ^ diagnostic))
+  in
   let rec combined rejected =
     let available =
       candidates
       |> List.filter (fun node ->
           not (List.exists (fun (other, _) -> sameNode node other) rejected))
     in
-    let accepted, blocked =
-      pass base [] (List.map (fun node -> (node, "")) available)
+    let types, remaining =
+      List.partition (fun node -> S.kind node.S.declaration = "type") available
     in
+    let environment, types, typeRejections = prepareTypes types [] in
+    let accepted, blocked =
+      pass environment types (List.map (fun node -> (node, "")) remaining)
+    in
+    let blocked = typeRejections @ blocked in
     let initialRejections = List.length rejected in
     let rec validate accepted rejected =
       let combinedSources =
@@ -165,55 +235,7 @@ let main includePackages root manifest output =
       match result with
       | Ok _ -> (accepted, rejected @ blocked)
       | Error diagnostic -> (
-          let responsible =
-            if
-              String.starts_with ~prefix:"Constructor identity collision "
-                diagnostic
-            then
-              let direct =
-                List.find_opt
-                  (fun node ->
-                    S.kind node.S.declaration = "type"
-                    && Text.contains diagnostic (node.S.name ^ "."))
-                  accepted
-              in
-              match direct with
-              | Some _ -> direct
-              | None ->
-                  (* A newly duplicated case name can change the identity of
-                    an existing constructor, including two cases in one base type. *)
-                  let identities = String.split_on_char ' ' diagnostic in
-                  let names =
-                    List.filter_map
-                      (fun identity ->
-                        match List.rev (String.split_on_char '.' identity) with
-                        | name :: _ :: _ ->
-                            Some
-                              (String.trim
-                                 (String.concat ""
-                                    (String.split_on_char ',' name)))
-                        | _ -> None)
-                      identities
-                  in
-                  List.find_opt
-                    (fun (node : S.node) ->
-                      match node.S.declaration with
-                      | W.DType { W.definition = W.TDEnum cases; _ } ->
-                          List.exists
-                            (fun (_, (case : W.enumCaseSyntax)) ->
-                              List.mem (snd case.W.name) names)
-                            cases
-                      | W.DType { W.definition = W.TDAlias _ | W.TDRecord _; _ }
-                      | W.DFunction _ | W.DValue _ | W.DTrait _ | W.DImpl _
-                      | W.DModule _ | W.DTest _ | W.DAssertion _ | W.DExpr _ ->
-                          false)
-                    accepted
-            else
-              List.find_opt
-                (fun (node : S.node) ->
-                  String.starts_with ~prefix:(node.S.name ^ ":") diagnostic)
-                accepted
-          in
+          let responsible = responsible accepted diagnostic in
           match responsible with
           | Some node ->
               Printf.eprintf "Combined rejection: %s: %s\n%!" node.S.name

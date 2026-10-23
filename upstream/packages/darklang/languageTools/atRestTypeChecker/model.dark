@@ -333,7 +333,7 @@ type DeclarationFacts =
 /// Type information shared while checking a batch of declarations.
 /// It contains loaded types, function signatures, inferred value types, and cached
 /// validation results. Checking returns an updated copy when it learns more.
-// @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.AtRestTypeChecker.Model.Environment: Unknown type 'LanguageTools.ProgramTypes.TypeDeclaration.TypeDeclaration'"
+// @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.AtRestTypeChecker.Model.Environment: Unknown type 'LanguageTools.ProgramTypes.FQFnName.FQFnName'"
 type Environment =
   { /// The branch whose bindings decide which implementations are visible.
     ///

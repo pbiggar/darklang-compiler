@@ -141,8 +141,8 @@ let buildSourceStdlibWithTrace loadSources target recorder =
       stdlibTypeMap = typeMap;
     }
 
-let buildStdlibFromSources target sources =
-  buildSourceStdlibWithTrace (fun () -> Ok sources) target None
+let buildStdlibFromSources ?recorder target sources =
+  buildSourceStdlibWithTrace (fun () -> Ok sources) target recorder
 
 let buildStdlibWithTrace target recorder =
   buildSourceStdlibWithTrace (fun () -> loadStdlib false) target recorder

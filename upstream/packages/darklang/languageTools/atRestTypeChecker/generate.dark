@@ -10,7 +10,7 @@ module Darklang.LanguageTools.AtRestTypeChecker.Generate
 
 /// Names and types available while inspecting an expression. locals maps variable
 /// names to either a shared type or a reusable scheme identified by its binding node.
-// @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.AtRestTypeChecker.Generate.Scope: Unknown type 'Model.Binder'"
+// @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.AtRestTypeChecker.Generate.Scope: Unknown type 'Model.Ty'"
 type Scope =
   { locals: Dict<String, Model.Binder>
     /// Package function parameter types, indexed by zero-based EArg positions.

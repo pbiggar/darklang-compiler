@@ -1,6 +1,7 @@
 (* StdlibCompilation.mli - Build reusable standard-library functions and concrete specializations. *)
 (* Validate disk-selected source bodies through the same native library pipeline. *)
 val buildStdlibFromSources :
+  ?recorder:CompilerOptions.passTimingRecorder ->
   Platform.target ->
   Validation.validatedSourceFile list ->
   (CompilationContexts.stdlibResult, string) result

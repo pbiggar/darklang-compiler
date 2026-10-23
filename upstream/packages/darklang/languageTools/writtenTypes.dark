@@ -44,7 +44,7 @@ type Name = Unresolved of Range * List<String>
 // Types
 module TypeReference =
   // The first range corresponds to the whole type
-  // @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.WrittenTypes.TypeReference.Builtin: Unknown type 'TypeReference.TypeReference'"
+  // @compiler blocked: constructor-identity diagnostic="Constructor identity collision 1324: Darklang.LanguageTools.RuntimeTypes.TypeReference.TFloat, Darklang.LanguageTools.RuntimeTypes.TypeReference.TStream"
   type Builtin =
     | TUnit of Range
     | TBool of Range
@@ -243,7 +243,7 @@ type StringSegment =
     symbolOpenBrace: Range *
     symbolCloseBrace: Range
 
-// @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.WrittenTypes.Expr: Unknown type 'StringSegment'"
+// @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.WrittenTypes.Expr: Unknown type 'QualifiedTypeIdentifier'"
 type Expr =
   | EUnit of Range
   | EBool of Range * Bool
@@ -452,7 +452,7 @@ module Expr =
 
 // Module declarations
 module ModuleDeclaration =
-  // @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.WrittenTypes.ModuleDeclaration.Declaration: Unknown type 'TypeDeclaration.TypeDeclaration'"
+  // @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.WrittenTypes.ModuleDeclaration.Declaration: Unknown type 'Expr'"
   type Declaration =
     | Type of TypeDeclaration.TypeDeclaration
     | Function of FnDeclaration.FnDeclaration

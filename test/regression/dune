@@ -1,6 +1,12 @@
 ; Native equivalence and allocation regression checks.
 (rule
  (alias runtest)
+ (deps package_probe_regression.py)
+ (action (run python3 %{dep:package_probe_regression.py}
+  %{exe:../../tools/ledger/probe_helpers.exe})))
+
+(rule
+ (alias runtest)
  (deps ../../scripts/test_imported_sources.py ../../scripts/update-ledger.py ../../scripts/ledger_sources.py
   (source_tree ../../upstream) (source_tree ../../porting)
   (source_tree ../../packages) ../../library-sources.list)
