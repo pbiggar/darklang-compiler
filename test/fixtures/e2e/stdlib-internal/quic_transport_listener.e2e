@@ -1,0 +1,39 @@
+// quic_transport_listener.e2e - Flush a transport rejection before disposing the listener child outbox.
+let listenerClose () : Bool =
+  let secret = Stdlib.String.toBlob (Stdlib.String.repeat "s" 32) in
+  let keys = match Stdlib.__QuicCrypto.derive secret with | Ok keys -> keys | Error _ -> Builtin.crash "Test keys" in
+  let peer = Stdlib.__Datagram.Endpoint { address = [127L, 0L, 0L, 1L], port = 443L } in
+  let (socket, outbox) = Stdlib.HttpServer.Quic.__socket peer in
+  let life = Stdlib.Stream.__new (fun _unit -> Some ()) (fun _unit -> ()) in
+  let parameters = Stdlib.__QuicParameters.Parameters { originalDestination = None, initialSource = Stdlib.String.toBlob "clientID", retrySource = None, resetToken = None,
+    idleTimeout = 0L, maxUdpPayload = 1200L, maxData = 262144L, maxStreamDataBidiLocal = 65536L, maxStreamDataBidiRemote = 65536L, maxStreamDataUni = 65536L,
+    maxStreamsBidi = 32L, maxStreamsUni = 3L, ackDelayExponent = 3L, maxAckDelay = 25L, disableActiveMigration = true, activeConnectionIdLimit = 2L, preferredAddress = None } in
+  let ready = Stdlib.__QuicServer.Ready { socket = socket, peer = peer, routing = Stdlib.__QuicHandshakePacket.Routing { source = Stdlib.String.toBlob "serverID", destination = Stdlib.String.toBlob "clientID", token = Stdlib.Blob.empty },
+    authenticated = Stdlib.__QuicServerTls.Ready { send = keys, receive = keys, sendSecret = secret, receiveSecret = secret, parameters = parameters }, pending = [] } in
+  let connection = match Stdlib.__QuicConnection.fromServer ready (Stdlib.__Network.ShutdownSignals { lifecycle = life }) with | Ok state -> state | Error _ -> Builtin.crash "Test connection" in
+  let payload = Stdlib.Blob.__fromInt64List [15L, 0L, 0L, 3L, 97L, 98L, 99L, 15L, 0L, 2L, 0L] in
+  let wire = match Stdlib.__QuicPacket.sealShort keys connection.transport.source false payload 0L with | Ok wire -> wire | Error _ -> Builtin.crash "Test packet" in
+  let now = match Stdlib.__Network.monotonicMillis () with | Ok now -> now | Error _ -> Builtin.crash "Test clock" in
+  let identity = Stdlib.TlsServerIdentity.Identity { certificates = [], key = Stdlib.__RsaPrivate.Key { modulus = Stdlib.Blob.empty, exponent = Stdlib.Blob.empty, privateExponent = Stdlib.Blob.empty } } in
+  let parent = Stdlib.__Datagram.Socket { lifecycle = life, watch = None, send = fun _peer _bytes _timeout -> Ok (), receive = fun _timeout -> Error 11L } in
+  let context = Stdlib.HttpServer.Quic.Context { config = Stdlib.HttpServer.Config.defaults 443, identity = identity, signals = Stdlib.__Network.ShutdownSignals { lifecycle = life }, socket = parent, secret = secret, limit = 1024L } in
+  let owner = Stdlib.HttpServer.Quic.__Owner { source = connection.transport.source, peer = peer, socket = socket, outbox = outbox,
+    phase = Stdlib.HttpServer.Quic.__Phase.Initializing (Stdlib.HttpServer.Quic.__Bootstrap { connection = connection, opened = false, index = 0L, offset = 0L, deadline = now + 10000L }) } in
+  let result = Stdlib.HttpServer.Quic.__advance context (fun _request -> Stdlib.Http.responseWithText "unused" 200) owner (Some (Stdlib.__Datagram.Message { peer = peer, payload = wire })) now in
+  let valid = match result with
+    | Ok (Some owner) ->
+      let queued = Stdlib.Stream.__cellGet<List<Blob>> outbox in
+      let decoded = match queued with
+        | [packet] -> (match Stdlib.__QuicCrypto.openPacket keys packet 9L -1L with
+          | Ok opened -> opened.number == 0L && Stdlib.Blob.toHex opened.payload == "1C060F00"
+          | Error _ -> false)
+        | _ -> false in
+      let retained = match owner.phase with | Closing closing -> closing.number == 1L && closing.reason == Stdlib.__QuicConnection.CloseReason.TransportCloseReason ((6L, 15L)) | _ -> false in
+      let flushed = Stdlib.HttpServer.Quic.__flush context owner == Ok () in
+      retained && decoded && flushed && Stdlib.Stream.__cellGet<List<Blob>> outbox == [] && Stdlib.Stream.next socket.lifecycle == Some ()
+    | _ -> false in
+  Stdlib.__Datagram.close socket
+  let parentLive = Stdlib.Stream.next life == Some () in
+  Stdlib.__Datagram.close parent
+  valid && parentLive
+listenerClose () = true // leak_check, isolated=true
