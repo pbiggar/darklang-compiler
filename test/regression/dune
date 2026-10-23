@@ -13,6 +13,11 @@
  (alias runtest)
  (deps async_socket_regression.py)
  (action (run python3 %{dep:async_socket_regression.py} %{exe:../../bin/dark.exe})))
+
+(rule
+ (alias runtest)
+ (deps automatic_task_entry_regression.py)
+ (action (run python3 %{dep:automatic_task_entry_regression.py} %{exe:../../bin/dark.exe})))
 (rule
  (alias runtest)
  (deps trait_packages_regression.py)

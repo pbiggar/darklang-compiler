@@ -55,11 +55,12 @@ let stdlibInliningConfig =
   }
 
 (* Lower accumulator helpers, construct SSA, then optimize and elaborate ownership. *)
-let buildAnf ?(asyncDefinitions = StringOrder.Map.empty) ?asyncRuntime verbosity
-    (options : compilerOptions) elapsed (registries : AST_to_ANF.registries)
-    nextFunctionOrdinal inliningConfig externalInlineCandidates
-    externalOptimizationFunctions nonInlineableFunctionNames functions
-    ownershipContracts specializeInternalSignatures passTimingRecorder =
+let buildAnf ?(asyncDefinitions = StringOrder.Map.empty) ?asyncRuntime
+    ?(automaticTaskEntry = false) verbosity (options : compilerOptions) elapsed
+    (registries : AST_to_ANF.registries) nextFunctionOrdinal inliningConfig
+    externalInlineCandidates externalOptimizationFunctions
+    nonInlineableFunctionNames functions ownershipContracts
+    specializeInternalSignatures passTimingRecorder =
   let elapsedDetail enabled duration =
     if verbosity >= 2 && enabled then
       let scaled = duration *. 10. in
@@ -130,6 +131,47 @@ let buildAnf ?(asyncDefinitions = StringOrder.Map.empty) ?asyncRuntime verbosity
         helpers
     in
     List.rev helpers
+  in
+  let* ( functions,
+         registries,
+         nextFunctionOrdinal,
+         asyncRuntime,
+         nonInlineableFunctionNames ) =
+    if not automaticTaskEntry then
+      Ok
+        ( functions,
+          registries,
+          nextFunctionOrdinal,
+          asyncRuntime,
+          nonInlineableFunctionNames )
+    else
+      match asyncRuntime with
+      | None ->
+          Error "Automatic CLI task entry requires a source compilation context"
+      | Some runtime ->
+          let context =
+            { runtime.context with CompilationContexts.registries }
+          in
+          let* context, functions, helpers =
+            AutomaticTaskEntry.prepare runtime.materialize context functions
+          in
+          let registries = context.CompilationContexts.registries in
+          let (ANF.Program (helpers, _)) =
+            ANF_Intrinsics.canonicalizeProgram registries.AST_to_ANF.functionIds
+              registries.AST_to_ANF.funcReg
+              (ANF.Program (helpers, ANF.Return ANF.UnitLiteral))
+          in
+          let noInline =
+            List.fold_left
+              (fun names (fn : ANF.functionDef) -> F.add fn.ANF.id names)
+              nonInlineableFunctionNames helpers
+          in
+          Ok
+            ( functions @ freshenHelpers functions helpers,
+              registries,
+              CheckedAST.nextFunctionOrdinal context.CompilationContexts.symbols,
+              Some { runtime with context },
+              noInline )
   in
   let* callbacks =
     AsyncCallableSpecialization.prepare registries.AST_to_ANF.functionIds

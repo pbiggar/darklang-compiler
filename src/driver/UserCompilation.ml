@@ -290,9 +290,9 @@ let compileUserWithPlan ?writtenSources (plan : P.userCompilePlan) =
           (select plan.P.stdlib.X.callGraphSummaries)
           (select plan.P.prebuiltCallGraphSummaries)
       in
-      let build ?(symbols = symbols) registry candidates optimizations noInline
-          funcs ownership early =
-        ANFPipeline.buildAnf
+      let build ?(symbols = symbols) ?(automaticTaskEntry = false) registry
+          candidates optimizations noInline funcs ownership early =
+        ANFPipeline.buildAnf ~automaticTaskEntry
           ~asyncDefinitions:
             (List.fold_left
                (fun definitions (fn : ANF.functionDef) ->
@@ -438,7 +438,12 @@ let compileUserWithPlan ?writtenSources (plan : P.userCompilePlan) =
         if reserved then Error ("Function name '" ^ entryName ^ "' is reserved")
         else
           let* functions = prepare () in
-          build ~symbols:programSymbols registry plan.P.externalInlineCandidates
+          let automaticTaskEntry =
+            plan.P.mode = O.FullProgram
+            && plan.P.baseContext.X.target = Platform.LinuxX86_64
+          in
+          build ~symbols:programSymbols ~automaticTaskEntry registry
+            plan.P.externalInlineCandidates
             plan.P.stdlib.X.stdlibAnfOptimizationCandidates
             user.R.nonInlineableFunctionNames (prune functions)
             user.R.ownershipContracts true

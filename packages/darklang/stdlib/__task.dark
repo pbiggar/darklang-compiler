@@ -408,8 +408,8 @@ let __disposeScheduler (scheduler: RawPtr) : Unit =
     let _ = __raw_free scheduler in
     ()
 
-// This explicit private scope drains its registered tasks and timer producers.
-// It does not decide the lifetime policy of an automatically compiled program.
+// Scheduler scopes drain registered tasks, timers and I/O producers. The
+// compiler-provided CLI root uses this same completion policy.
 let __run (entries: List<RawPtr -> Unit>) : Unit =
     let previous = __fiber_current () in
     let scheduler = __raw_alloc 264L in
@@ -428,8 +428,8 @@ let __run (entries: List<RawPtr -> Unit>) : Unit =
     let _ = __fiber_set_current previous in
     Stdlib.__Task.__disposeScheduler scheduler
 
-// Typed result ownership outlives the root's native stack. This explicit scope
-// retains __run's drain policy; automatic CLI entry remains a separate boundary.
+// Typed result ownership outlives the root's native stack. Explicit scopes and
+// compiler-provided CLI entry both retain __run's drain policy.
 let __runMain<'a> (entry: Unit -> a) : a =
     let result = Stdlib.__Async.__new<a> () in
     let _ = Stdlib.__Task.__run [(fun context -> Stdlib.__Task.__resolve context result (entry ()))] in

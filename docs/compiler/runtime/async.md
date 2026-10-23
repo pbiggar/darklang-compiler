@@ -261,14 +261,13 @@ the scheduler executes completion callbacks. Nested explicit `__run` scopes
 restore the enclosing task before disposing their scheduler. Ready values can
 be forced outside a task; forcing a pending value there reports a runtime error.
 The private source hooks use this helper for inserted demand calls. Public I/O
-calls and CLI entry points have not yet been migrated.
+calls have not yet been migrated.
 
 `__runMain` is a private typed entry adapter from an ordinary `Unit -> a` closure
 to a root task. Its promise retains the result after the root stack is released;
 the adapter returns an owned payload after the explicit scope drains. Together
 with `__delayCurrent`, it permits context-free runtime tests through normal Dark
-functions. It retains the explicit scope's drain policy and is not automatically
-applied to CLI programs.
+functions. Compiler-provided CLI entry uses this same adapter and drain policy.
 
 `__startCurrent` enters a separate operation task immediately, returning its
 pending carrier when the caller next runs. The operation can park, yield or
@@ -323,16 +322,35 @@ explicit scheduler scope and does not yet replace public HTTP calls.
 Timers and socket events land on the scheduler thread. Runnable tasks permit
 nonblocking readiness probes; with no runnable task, the scheduler waits in the
 OS for registered descriptors or the earliest timer deadline. Interrupted waits
-preserve registrations. This explicit test/runtime scope drains all registered
-tasks, timers and readiness registrations. It does not choose the production
-program's policy for unused outstanding I/O, cancellation or effect ordering.
+preserve registrations. Scheduler scopes drain all registered tasks, timers and
+readiness registrations. CLI programs retain that policy when their root
+computation returns. Cancellation and broader effect ordering remain separate
+work.
 
-The next integration boundary is compiler carrier and demand lowering across
-closures, indirect calls and aggregate storage, followed by automatic entry
-and real I/O initiation. The explicit runtime does not establish those source
-semantics by itself.
+## Automatic CLI entry
+
+Linux x64 CLI programs run their top-level computation inside one native task.
+The compiler moves the program body into a `Unit -> a` function and supplies a
+typed `__runMain` call at its original entry. Ordinary calls below that body use
+the same native stack. Startup path discovery remains before task entry.
+
+Pending values may therefore reach arithmetic, matching and other demand points
+without a source-level scheduler wrapper. The root's result remains owned while
+the scheduler finishes already-started operations, including producers whose
+consumers were discarded, then the program returns its normal exit status.
+Returning from the root does not cancel those operations.
+
+Expression-test compilation retains explicit scheduler scopes so private runtime
+tests can still exercise operations outside a task. ARM64 task entry is not yet
+implemented. Public I/O initiation and additional target support remain the next
+integration boundaries.
 
 ## Tests and validation boundary
+
+`automatic_task_entry_regression.py` compiles ordinary CLI programs without an
+explicit scheduler wrapper. It checks demands through ordinary functions,
+draining an unused child operation after the root returns, nested scope
+restoration, ordinary `Result.Error` values, and native leak accounting.
 
 `test/fixtures/e2e/stdlib-internal/async_promise.e2e` exercises native promise
 transitions, idempotent waiter registration, late registration, multiple reads,

@@ -25,6 +25,7 @@ val stdlibInliningConfig : InliningCommon.inliningConfig
 val buildAnf :
   ?asyncDefinitions:ANF.functionDef StringOrder.Map.t ->
   ?asyncRuntime:asyncRuntime ->
+  ?automaticTaskEntry:bool ->
   int ->
   CompilerOptions.compilerOptions ->
   (unit -> float) ->
