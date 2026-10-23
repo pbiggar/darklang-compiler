@@ -9,11 +9,11 @@ test blockedCounter =
 test excludedReflection =
   RuntimeReflection.lookup "anything" |> Stdlib.Test.equal 1L
 
-// @compiler xfail compile: "Unknown function or value" reason=test-counter
+// @compiler xfail compile: "Unknown function or value" class=missing-support reason=test-counter
 test missingCounter =
   Stdlib.Test.incrementCounter 1L |> Stdlib.Test.equal 1L
 
-// @compiler xfail runtime: "named annotation probe" reason=annotation-probe
+// @compiler xfail runtime: "named annotation probe" class=missing-support reason=annotation-probe
 test runtimeFailure =
   Builtin.crash "named annotation probe" |> Stdlib.Test.equal 1L
 
@@ -25,3 +25,7 @@ test ordinaryPass =
 test overrideAndAnnotation =
   RuntimeReflection.lookup "anything"
   => raises "the original interpreter diagnostic"
+
+// @compiler xfail compile: "Expected TBool, got TInt64" class=aot-rejection reason=aot-type-error
+test staticallyInvalidBoolean =
+  (true && 5L) |> Stdlib.Test.equal true

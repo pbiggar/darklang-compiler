@@ -7,10 +7,13 @@ Stdlib.Test.incrementCounter 1L = 1L
 // @compiler excluded: runtime-reflection
 RuntimeReflection.lookup "anything" = 1L
 
-// @compiler xfail compile: "Unknown function or value" reason=test-counter
+// @compiler xfail compile: "Unknown function or value" class=missing-support reason=test-counter
 Stdlib.Test.incrementCounter 1L = 1L
 
-// @compiler xfail runtime: "annotation runtime probe" reason=annotation-probe
+// @compiler xfail runtime: "annotation runtime probe" class=missing-support reason=annotation-probe
 Builtin.crash "annotation runtime probe" = 1L
 
 40L + 2L = 42L
+
+// @compiler xfail compile: "Expected TBool, got TInt64" class=aot-rejection reason=aot-type-error
+true && 5L = error="&& only supports Booleans"

@@ -12,17 +12,17 @@ test styledWidth =
       // width.
       Stdlib.Cli.Tui.Text.styledWidth "\u001b[2Ka" |> Stdlib.Test.equal 1 ]
 
-// @compiler xfail compile: "Unknown function or value 'Stdlib.Cli.Tui.Text.stripSgr'" reason=upstream-dependency
+// @compiler xfail compile: "Unknown function or value 'Stdlib.Cli.Tui.Text.stripSgr'" class=missing-support reason=upstream-dependency
 test stripSgr =
   Stdlib.Cli.Tui.Text.stripSgr (colored "abc") |> Stdlib.Test.equal "abc"
 
-// @compiler xfail compile: "Unknown function or value 'Stdlib.Cli.Tui.Text.stripSgr'" reason=upstream-dependency
+// @compiler xfail compile: "Unknown function or value 'Stdlib.Cli.Tui.Text.stripSgr'" class=missing-support reason=upstream-dependency
 test clipToWidth =
   Stdlib.Cli.Tui.Text.clipToWidth (colored "abcdef") 3
   |> Stdlib.Cli.Tui.Text.stripSgr
   |> Stdlib.Test.equal "abc"
 
-// @compiler xfail compile: "Unknown function or value 'Stdlib.Cli.Tui.Text.wrapAtColumn'" reason=upstream-dependency
+// @compiler xfail compile: "Unknown function or value 'Stdlib.Cli.Tui.Text.wrapAtColumn'" class=missing-support reason=upstream-dependency
 test wrapAtColumn =
   Stdlib.Cli.Tui.Text.wrapAtColumn (colored "abcdef") 3
   |> Stdlib.List.length

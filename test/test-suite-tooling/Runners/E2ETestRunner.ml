@@ -1035,7 +1035,8 @@ let evaluateExpectations (test : e2eTest) run =
       failRun run "Blocked or excluded test reached execution"
   | CompilerAnnotations.Replace _ ->
       failRun run "Replacement annotation on a test"
-  | CompilerAnnotations.Xfail { phase; diagnostic; reason } -> (
+  | CompilerAnnotations.Xfail { phase; diagnostic; reason; classification = _ }
+    -> (
       match normal with
       | Ok _ -> failRun run ("Unexpected pass for compiler xfail: " ^ reason)
       | Error failure ->

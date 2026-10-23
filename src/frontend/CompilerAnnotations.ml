@@ -2,13 +2,19 @@
 module T = Tokenizer
 
 type phase = Compile | Runtime
+type failureClass = AotRejection | MissingSupport
 
 type disposition =
   | Run
   | Blocked of string
   | Excluded of string
   | Replace of { target : string; reason : string }
-  | Xfail of { phase : phase; diagnostic : string; reason : string }
+  | Xfail of {
+      phase : phase;
+      diagnostic : string;
+      reason : string;
+      classification : failureClass;
+    }
 
 type item = { position : T.pos; isTest : bool }
 type annotation = { position : T.pos; disposition : disposition }
@@ -61,21 +67,35 @@ let parse reasons text =
         Ok (Runtime, String.sub rest 8 (String.length rest - 8) |> String.trim)
       else Error "Expected xfail compile: or xfail runtime:"
     in
-    (* JSON string escaping keeps diagnostic matchers independent of Dark syntax. *)
-    match String.rindex_opt rest ' ' with
-    | None -> Error "Expected a quoted diagnostic followed by reason=TAG"
-    | Some index -> (
-        let quoted = String.sub rest 0 index in
-        let suffix =
-          String.sub rest (index + 1) (String.length rest - index - 1)
-        in
-        let* _, reason = splitReason reasons ("diagnostic " ^ suffix) in
-        try
-          match Yojson.Basic.from_string quoted with
-          | `String diagnostic when diagnostic <> "" ->
-              Ok (Xfail { phase; diagnostic; reason })
-          | _ -> Error "Expected a nonempty quoted diagnostic"
-        with Yojson.Json_error _ -> Error "Invalid quoted diagnostic")
+    (* Parse the two metadata fields from the right to preserve JSON whitespace. *)
+    let splitLast text =
+      match String.rindex_opt text ' ' with
+      | None ->
+          Error
+            "Expected a quoted diagnostic followed by class=CLASS reason=TAG"
+      | Some index ->
+          Ok
+            ( String.sub text 0 index |> String.trim,
+              String.sub text (index + 1) (String.length text - index - 1) )
+    in
+    let* quotedAndClass, reasonField = splitLast rest in
+    let* _, reason = splitReason reasons ("diagnostic " ^ reasonField) in
+    let* quoted, classField = splitLast quotedAndClass in
+    let* classification =
+      match (classField, phase) with
+      | "class=missing-support", (Compile | Runtime) -> Ok MissingSupport
+      | "class=aot-rejection", Compile -> Ok AotRejection
+      | "class=aot-rejection", Runtime ->
+          Error "An AOT rejection must require a compile failure"
+      | _, (Compile | Runtime) ->
+          Error "Expected class=aot-rejection or class=missing-support"
+    in
+    try
+      match Yojson.Basic.from_string quoted with
+      | `String diagnostic when diagnostic <> "" ->
+          Ok (Xfail { phase; diagnostic; reason; classification })
+      | _ -> Error "Expected a nonempty quoted diagnostic"
+    with Yojson.Json_error _ -> Error "Invalid quoted diagnostic"
   else Error ("Unknown compiler annotation: " ^ text)
 
 let read ~reasons ~items source =

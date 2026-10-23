@@ -168,7 +168,7 @@ val goldenviewExpected =
     "-- end of golden view --"
     "" ]
 
-// @compiler xfail compile: "Unknown function or value 'compare'" reason=upstream-dependency
+// @compiler xfail compile: "Unknown function or value 'compare'" class=missing-support reason=upstream-dependency
 test goldenview =
   compare goldenviewRender goldenviewExpected
 
@@ -705,6 +705,6 @@ val goldenkeysExpected =
     "-- golden keys done --"
     "" ]
 
-// @compiler xfail compile: "Unknown function or value 'compare'" reason=upstream-dependency
+// @compiler xfail compile: "Unknown function or value 'compare'" class=missing-support reason=upstream-dependency
 test goldenkeys =
   compare goldenkeysRender goldenkeysExpected

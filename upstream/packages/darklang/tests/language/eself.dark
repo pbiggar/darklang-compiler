@@ -134,7 +134,7 @@ test sumUpTo =
 test factorialWithShadowing =
   ShadowingTest.factorialWithShadowing 5 |> Stdlib.Test.equal ("shadowed", 120)
 
-// @compiler xfail compile: "Unknown function or value 'ShadowingTest.factorialWithShadowingError'" reason=upstream-dependency
+// @compiler xfail compile: "Unknown function or value 'ShadowingTest.factorialWithShadowingError'" class=missing-support reason=upstream-dependency
 test shadowedStringIsNotCallable =
   ShadowingTest.factorialWithShadowingError 5
   => raises "Expected something we could apply to, such as a lambda or function, but got a String (\"shadowed\")"
@@ -156,7 +156,7 @@ test tupleMatchWithShadowing =
       ShadowingTest.tupleMatchWithShadowing (2, 3) |> Stdlib.Test.equal 30
       ShadowingTest.tupleMatchWithShadowing (4, 5) |> Stdlib.Test.equal 9 ]
 
-// @compiler xfail compile: "Unknown function or value 'ShadowingTest.letBindingShadowing'" reason=upstream-dependency
+// @compiler xfail compile: "Unknown function or value 'ShadowingTest.letBindingShadowing'" class=missing-support reason=upstream-dependency
 test letBindingShadowing =
   Stdlib.Test.all
     [ ShadowingTest.letBindingShadowing 4 |> Stdlib.Test.equal [ 12, 10 ]

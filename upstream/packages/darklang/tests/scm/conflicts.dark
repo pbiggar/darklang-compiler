@@ -53,7 +53,7 @@ module Helpers =
 
 module Detect =
   // BOTH sides moved a name since a recorded base -- the one case that IS a conflict.
-  // @compiler xfail compile: "Unknown function or value 'Helpers.detectCount'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'Helpers.detectCount'" class=missing-support reason=upstream-dependency
   test bothSidesMoved =
     Helpers.detectCount
       [ Helpers.binding "f" "aaa" "2026-01-02T00:00:00.000Z" ]
@@ -63,7 +63,7 @@ module Detect =
 
   // Same hash on both sides: not a divergence at all. A re-pull, or two machines that independently
   // authored identical bytes.
-  // @compiler xfail compile: "Unknown function or value 'Helpers.detectCount'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'Helpers.detectCount'" class=missing-support reason=upstream-dependency
   test sameHashBothSides =
     Helpers.detectCount
       [ Helpers.binding "f" "aaa" "2026-01-02T00:00:00.000Z" ]
@@ -72,7 +72,7 @@ module Detect =
     |> Stdlib.Test.equal 0
 
   // Only LOCAL moved: our own update, and the peer is simply behind.
-  // @compiler xfail compile: "Unknown function or value 'Helpers.detectCount'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'Helpers.detectCount'" class=missing-support reason=upstream-dependency
   test onlyLocalMoved =
     Helpers.detectCount
       [ Helpers.binding "f" "aaa" "2026-01-02T00:00:00.000Z" ]
@@ -81,7 +81,7 @@ module Detect =
     |> Stdlib.Test.equal 0
 
   // Only INCOMING moved: an ordinary peer update of a name we never touched. Take it, quietly.
-  // @compiler xfail compile: "Unknown function or value 'Helpers.detectCount'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'Helpers.detectCount'" class=missing-support reason=upstream-dependency
   test onlyIncomingMoved =
     Helpers.detectCount
       [ Helpers.binding "f" "ooo" "2026-01-02T00:00:00.000Z" ]
@@ -93,7 +93,7 @@ module Detect =
   // case and the one below reach the detector as the same three inputs apart from `previous`, so that
   // field is the only thing separating them; guessing instead would false-alarm on every ordinary
   // peer update.
-  // @compiler xfail compile: "Unknown function or value 'Helpers.detectCount'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'Helpers.detectCount'" class=missing-support reason=upstream-dependency
   test independentCreations =
     Helpers.detectCount
       [ Helpers.binding "f" "aaa" "2026-01-02T00:00:00.000Z" ]
@@ -103,7 +103,7 @@ module Detect =
 
   // The other side of that coin: no base either, but the incoming binding NAMES ours as what it replaced.
   // Their version descends from ours, so taking it is collaborating, not a conflict.
-  // @compiler xfail compile: "Unknown function or value 'Helpers.detectCount'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'Helpers.detectCount'" class=missing-support reason=upstream-dependency
   test incomingDescendsFromOurs =
     Helpers.detectCount
       [ Helpers.binding "f" "aaa" "2026-01-02T00:00:00.000Z" ]
@@ -112,7 +112,7 @@ module Detect =
     |> Stdlib.Test.equal 0
 
   // And when OURS is the edit: still no conflict. Only both-created-from-nothing qualifies.
-  // @compiler xfail compile: "Unknown function or value 'Helpers.detectCount'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'Helpers.detectCount'" class=missing-support reason=upstream-dependency
   test oursIsTheEdit =
     Helpers.detectCount
       [ Helpers.editOf "f" "aaa" "2026-01-02T00:00:00.000Z" "ooo" ]
@@ -122,7 +122,7 @@ module Detect =
 
   // A base for a DIFFERENT name says nothing about this one, so this falls to the same
   // both-created-from-nothing rule as above rather than to the base comparison.
-  // @compiler xfail compile: "Unknown function or value 'Helpers.detectCount'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'Helpers.detectCount'" class=missing-support reason=upstream-dependency
   test baseForOtherName =
     Helpers.detectCount
       [ Helpers.binding "f" "aaa" "2026-01-02T00:00:00.000Z" ]
@@ -131,7 +131,7 @@ module Detect =
     |> Stdlib.Test.equal 1
 
   // An incoming name we hold nothing for is a creation, not a collision.
-  // @compiler xfail compile: "Unknown function or value 'Helpers.detectCount'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'Helpers.detectCount'" class=missing-support reason=upstream-dependency
   test incomingCreation =
     Helpers.detectCount
       []
@@ -140,7 +140,7 @@ module Detect =
     |> Stdlib.Test.equal 0
 
   // Two diverged names, two conflicts. (Detection is per name, not per batch.)
-  // @compiler xfail compile: "Unknown function or value 'Helpers.detectCount'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'Helpers.detectCount'" class=missing-support reason=upstream-dependency
   test perNameDetection =
     Helpers.detectCount
       [ Helpers.binding "f" "aaa" "2026-01-02T00:00:00.000Z"
@@ -160,7 +160,7 @@ module BothMovedTheSameParent =
   // stays base-agnostic because a wrong base is worse than none.
   //
   // No base at all: both replaced `parent`, so both moved.
-  // @compiler xfail compile: "Unknown function or value 'Helpers.detectCount'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'Helpers.detectCount'" class=missing-support reason=upstream-dependency
   test sameParentDiverged =
     Helpers.detectCount
       [ Helpers.editOf "f" "mine" "2026-01-02T00:00:00.000Z" "parent" ]
@@ -170,7 +170,7 @@ module BothMovedTheSameParent =
 
   // A base that says only ONE side moved. Without the parent test this reads as an ordinary update
   // and the divergence is never reported at all.
-  // @compiler xfail compile: "Unknown function or value 'Helpers.detectCount'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'Helpers.detectCount'" class=missing-support reason=upstream-dependency
   test baseSaysOneSideMoved =
     Helpers.detectCount
       [ Helpers.editOf "f" "mine" "2026-01-02T00:00:00.000Z" "parent" ]
@@ -181,7 +181,7 @@ module BothMovedTheSameParent =
   // AN ORDINARY UPDATE IS STILL SILENT. They edited the version you are holding, so their `previous` is
   // your CURRENT hash while yours is whatever came before it. The two cannot match, and this is the case
   // that would have made the whole rule too noisy to want.
-  // @compiler xfail compile: "Unknown function or value 'Helpers.detectCount'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'Helpers.detectCount'" class=missing-support reason=upstream-dependency
   test ordinaryUpdateSilent =
     Helpers.detectCount
       [ Helpers.editOf "f" "mine" "2026-01-02T00:00:00.000Z" "grandparent" ]
@@ -195,7 +195,7 @@ module BothMovedTheSameParent =
   // having moved; their `previous` being my current hash is what says otherwise, and it has to win.
   // Lose that precedence and a colleague's ordinary edit on top of mine arrives as a conflict per
   // name, every one of them resolving to the version I would have taken anyway.
-  // @compiler xfail compile: "Unknown function or value 'Helpers.detectCount'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'Helpers.detectCount'" class=missing-support reason=upstream-dependency
   test ordinaryUpdateOlderBase =
     Helpers.detectCount
       [ Helpers.editOf "f" "mine" "2026-01-02T00:00:00.000Z" "grandparent" ]
@@ -204,7 +204,7 @@ module BothMovedTheSameParent =
     |> Stdlib.Test.equal 0
 
   // Same predecessor AND same hash is not a divergence, it is the same edit arriving twice.
-  // @compiler xfail compile: "Unknown function or value 'Helpers.detectCount'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'Helpers.detectCount'" class=missing-support reason=upstream-dependency
   test sameEditTwice =
     Helpers.detectCount
       [ Helpers.editOf "f" "same" "2026-01-02T00:00:00.000Z" "parent" ]
@@ -215,7 +215,7 @@ module BothMovedTheSameParent =
   // `None` on both sides is NOT treated as a shared parent. It also means "no predecessor recorded", so
   // firing on it would manufacture conflicts between unrelated items. The independent-creation rule below
   // still covers the genuine case, and only where there is no base.
-  // @compiler xfail compile: "Unknown function or value 'Helpers.detectCount'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'Helpers.detectCount'" class=missing-support reason=upstream-dependency
   test noneIsNotSharedParent =
     Helpers.detectCount
       [ Helpers.binding "f" "mine" "2026-01-02T00:00:00.000Z" ]
@@ -224,7 +224,7 @@ module BothMovedTheSameParent =
     |> Stdlib.Test.equal 1
 
   // One side records a predecessor and the other does not: no shared parent to have moved from.
-  // @compiler xfail compile: "Unknown function or value 'Helpers.detectCount'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'Helpers.detectCount'" class=missing-support reason=upstream-dependency
   test oneSidedPredecessor =
     Helpers.detectCount
       [ Helpers.binding "f" "mine" "2026-01-02T00:00:00.000Z" ]
@@ -235,7 +235,7 @@ module BothMovedTheSameParent =
 module AutoResolution =
   // The recorded winner must be the one the FOLD picks, or a recorded conflict names a winner that
   // isn't live. Later origin_ts wins.
-  // @compiler xfail compile: "Unknown function or value 'Darklang.SCM.Conflicts.detect'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'Darklang.SCM.Conflicts.detect'" class=missing-support reason=upstream-dependency
   test laterStampRecordedWinner =
     ((Darklang.SCM.Conflicts.detect
         "yours"
@@ -248,7 +248,7 @@ module AutoResolution =
     |> Stdlib.Test.equal (Stdlib.Option.Option.Some "bbb")
 
   // ... and the older incoming loses to the newer local.
-  // @compiler xfail compile: "Unknown function or value 'Darklang.SCM.Conflicts.detect'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'Darklang.SCM.Conflicts.detect'" class=missing-support reason=upstream-dependency
   test olderIncomingLoses =
     ((Darklang.SCM.Conflicts.detect
         "yours"
@@ -261,7 +261,7 @@ module AutoResolution =
     |> Stdlib.Test.equal (Stdlib.Option.Option.Some "aaa")
 
   // An exact stamp tie breaks by the HIGHER hash, so every instance converges on the same winner.
-  // @compiler xfail compile: "Unknown function or value 'Darklang.SCM.Conflicts.detect'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'Darklang.SCM.Conflicts.detect'" class=missing-support reason=upstream-dependency
   test tieBreaksByHash =
     ((Darklang.SCM.Conflicts.detect
         "yours"
@@ -279,27 +279,27 @@ module AutoResolution =
 module ConflictId =
   // SORTED before hashing, so the id doesn't depend on which side happened to be local. Without this,
   // the same divergence gets two ids on two machines and neither can ack the other's.
-  // @compiler xfail compile: "Unknown function or value 'Darklang.SCM.Conflicts.conflictId'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'Darklang.SCM.Conflicts.conflictId'" class=missing-support reason=upstream-dependency
   test idSortedBeforeHashing =
     Darklang.SCM.Conflicts.conflictId "Zz" "W" "f" [ "aaa", "bbb" ]
     |> Stdlib.Test.equal
       (Darklang.SCM.Conflicts.conflictId "Zz" "W" "f" [ "bbb", "aaa" ])
 
   // Different location, different id.
-  // @compiler xfail compile: "Unknown function or value 'Darklang.SCM.Conflicts.conflictId'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'Darklang.SCM.Conflicts.conflictId'" class=missing-support reason=upstream-dependency
   test locationChangesId =
     (Darklang.SCM.Conflicts.conflictId "Zz" "W" "f" [ "aaa", "bbb" ]) ==
      (Darklang.SCM.Conflicts.conflictId "Zz" "W" "g" [ "aaa", "bbb" ])
     |> Stdlib.Test.equal false
 
   // Short enough to type, long enough to not collide in practice.
-  // @compiler xfail compile: "Unknown function or value 'Darklang.SCM.Conflicts.conflictId'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'Darklang.SCM.Conflicts.conflictId'" class=missing-support reason=upstream-dependency
   test idLength =
     Stdlib.String.length (Darklang.SCM.Conflicts.conflictId "Zz" "W" "f" [ "aaa", "bbb" ])
     |> Stdlib.Test.equal 8
 
 module StringOrdering =
-  // @compiler xfail compile: "Unknown function or value 'Darklang.SCM.Conflicts.stringGt'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'Darklang.SCM.Conflicts.stringGt'" class=missing-support reason=upstream-dependency
   test stringGt =
     Stdlib.Test.all
       [ Darklang.SCM.Conflicts.stringGt "b" "a" |> Stdlib.Test.equal true
@@ -307,7 +307,7 @@ module StringOrdering =
         Darklang.SCM.Conflicts.stringGt "a" "a" |> Stdlib.Test.equal false ]
 
   // ISO stamps compare lexically, which is the whole reason the fold can order by them as strings.
-  // @compiler xfail compile: "Unknown function or value 'Darklang.SCM.Conflicts.stringGt'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'Darklang.SCM.Conflicts.stringGt'" class=missing-support reason=upstream-dependency
   test isoStampsLexical =
     Darklang.SCM.Conflicts.stringGt "2026-01-03T00:00:00.000Z" "2026-01-02T23:59:59.999Z"
     |> Stdlib.Test.equal true
@@ -315,7 +315,7 @@ module StringOrdering =
 module Chunking =
   // Nothing on the detection path may build an unbounded IN-list: an over-cap statement ERRORS, and
   // every caller turns an error into [], which reads downstream as "no conflict".
-  // @compiler xfail compile: "Unknown function or value 'Darklang.SCM.Conflicts.inChunks'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'Darklang.SCM.Conflicts.inChunks'" class=missing-support reason=upstream-dependency
   test noUnboundedInList =
     Stdlib.Test.all
       [ Stdlib.List.length (Darklang.SCM.Conflicts.inChunks [])
@@ -324,7 +324,7 @@ module Chunking =
         |> Stdlib.Test.equal 1 ]
 
   // A list longer than the chunk size splits, and splits losslessly.
-  // @compiler xfail compile: "Unknown function or value 'Darklang.SCM.Conflicts.inChunks'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'Darklang.SCM.Conflicts.inChunks'" class=missing-support reason=upstream-dependency
   test chunksSplitLosslessly =
     Stdlib.Test.all
       [ Stdlib.List.length
@@ -338,7 +338,7 @@ module Chunking =
         |> Stdlib.Test.equal true ]
 
 module Placeholders =
-  // @compiler xfail compile: "Unknown function or value 'Darklang.SCM.Conflicts.inPlaceholders'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'Darklang.SCM.Conflicts.inPlaceholders'" class=missing-support reason=upstream-dependency
   test inPlaceholders =
     Stdlib.Test.all
       [ Darklang.SCM.Conflicts.inPlaceholders [] |> Stdlib.Test.equal ""
@@ -347,12 +347,12 @@ module Placeholders =
         |> Stdlib.Test.equal "@p0, @p1, @p2" ]
 
 module Fqn =
-  // @compiler xfail compile: "Unknown function or value 'Darklang.SCM.Conflicts.fqn'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'Darklang.SCM.Conflicts.fqn'" class=missing-support reason=upstream-dependency
   test fqn =
     Darklang.SCM.Conflicts.fqn "Zz" "W" "f" |> Stdlib.Test.equal "Zz.W.f"
 
   // A top-level item has no module segment, and joining an empty one would give "Zz..f".
-  // @compiler xfail compile: "Unknown function or value 'Darklang.SCM.Conflicts.fqn'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'Darklang.SCM.Conflicts.fqn'" class=missing-support reason=upstream-dependency
   test topLevelFqn =
     Stdlib.Test.all
       [ Darklang.SCM.Conflicts.fqn "Zz" "" "f" |> Stdlib.Test.equal "Zz.f"

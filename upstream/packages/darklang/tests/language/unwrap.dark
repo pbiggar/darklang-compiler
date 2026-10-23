@@ -142,13 +142,13 @@ module EvaluationCounts =
     let _ = Stdlib.Test.incrementCounter ()
     Ok number
 
-  // @compiler xfail compile: "Unknown function or value 'counted'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'counted'" class=missing-support reason=upstream-dependency
   test okRunsBothEffects =
     (let outcome = counted (Ok 7)
      (outcome, Stdlib.Test.counterValue ()))
     |> Stdlib.Test.equal (Ok 7, 2L)
 
-  // @compiler xfail compile: "Unknown function or value 'counted'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'counted'" class=missing-support reason=upstream-dependency
   test errorSkipsLaterEffect =
     (let outcome = counted (Error "stop")
      (outcome, Stdlib.Test.counterValue ()))
@@ -229,13 +229,13 @@ let wrongKind
   : Stdlib.Option.Option<Int> =
   Some value?
 
-// @compiler xfail compile: "Unknown function or value 'wrongKind'" reason=upstream-dependency
+// @compiler xfail compile: "Unknown function or value 'wrongKind'" class=missing-support reason=upstream-dependency
 test wrongKindOkRaises =
   wrongKind (Ok 1)
   => raises
     "`?` got a Result, but the enclosing function or lambda returns an Option; convert it first with Stdlib.Result.toOption: Ok(1)"
 
-// @compiler xfail compile: "Unknown function or value 'wrongKind'" reason=upstream-dependency
+// @compiler xfail compile: "Unknown function or value 'wrongKind'" class=missing-support reason=upstream-dependency
 test wrongKindErrorRaises =
   wrongKind (Error "x")
   => raises
@@ -376,38 +376,38 @@ test recursiveNone =
   countdown 3 |> Stdlib.Test.equal None
 
 // `?` rejects an Int operand at runtime.
-// @compiler xfail compile: "Expected TSum" reason=compiler-gap
+// @compiler xfail compile: "Expected TSum" class=aot-rejection reason=aot-type-error
 test intOperandRaises =
   (fun v -> Some (v? + 1)) 4
   => raises "`?` needs an Option or Result, but got 4 (an Int)"
 
 // Final Some/None or Ok/Error expressions identify the lambda's return type.
 // `?` then rejects Result operands for Option returns, and vice versa.
-// @compiler xfail compile: "Expected TSum" reason=compiler-gap
+// @compiler xfail compile: "Expected TSum" class=aot-rejection reason=aot-type-error
 test resultInOptionLambdaRaises =
   (fun v -> Some (v? + 1)) (Error "x")
   => raises
     "`?` got a Result, but the enclosing function or lambda returns an Option; convert it first with Stdlib.Result.toOption: Error(\"x\")"
 
-// @compiler xfail compile: "Expected TSum" reason=compiler-gap
+// @compiler xfail compile: "Expected TSum" class=aot-rejection reason=aot-type-error
 test okInOptionLambdaRaises =
   (fun v -> Some (v? + 1)) (Ok 1)
   => raises
     "`?` got a Result, but the enclosing function or lambda returns an Option; convert it first with Stdlib.Result.toOption: Ok(1)"
 
-// @compiler xfail compile: "Constructor 'None' requires an expected enum type" reason=compiler-gap
+// @compiler xfail compile: "Constructor 'None' requires an expected enum type" class=missing-support reason=compiler-gap
 test optionInResultLambdaRaises =
   (fun v -> Ok (v? + 1)) None
   => raises
     "`?` got an Option, but the enclosing function or lambda returns a Result; convert it first with Stdlib.Option.toResult: None"
 
-// @compiler xfail compile: "Expected TSum" reason=compiler-gap
+// @compiler xfail compile: "Expected TSum" class=aot-rejection reason=aot-type-error
 test resultInIfOptionLambdaRaises =
   (fun v -> if true then Some v? else None) (Ok 1)
   => raises
     "`?` got a Result, but the enclosing function or lambda returns an Option; convert it first with Stdlib.Result.toOption: Ok(1)"
 
-// @compiler xfail compile: "Expected TSum" reason=compiler-gap
+// @compiler xfail compile: "Expected TSum" class=aot-rejection reason=aot-type-error
 test optionInMatchResultLambdaRaises =
   (fun v ->
     match v with
@@ -426,6 +426,6 @@ test innerLambdaResult =
 // Without static checking, the lambda can therefore return Error from `?`.
 let wrap (x: Int) : Stdlib.Option.Option<Int> = Some x
 
-// @compiler xfail compile: "Expected TSum" reason=compiler-gap
+// @compiler xfail compile: "Expected TSum" class=missing-support reason=compiler-gap
 test errorThroughUnknownReturn =
   (fun v -> wrap v?) (Error "x") |> Stdlib.Test.equal (Error "x")

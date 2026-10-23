@@ -70,7 +70,7 @@ test nesting =
    x)
   |> Stdlib.Test.equal 3L
 
-// @compiler xfail compile: "Non-exhaustive match expression" reason=compiler-gap
+// @compiler xfail compile: "Non-exhaustive match expression" class=aot-rejection reason=aot-match-error
 test shadowing =
   Stdlib.Test.all
     [ (let x = 5L
@@ -131,18 +131,18 @@ test wildcardValueIsEvaluated =
   => raises "Uncaught exception: test"
 
 // The parser rejects _ in expression position because a wildcard does not bind a variable.
-// @compiler xfail compile: "Unknown function or value 'Darklang.LanguageTools.Parser.Parse.diagnostics'" reason=upstream-dependency
+// @compiler xfail compile: "Unknown function or value 'Darklang.LanguageTools.Parser.Parse.diagnostics'" class=missing-support reason=upstream-dependency
 test wildcardCannotBeRead =
   Darklang.LanguageTools.Parser.Parse.diagnostics "(let _ = 5L in _)"
   |> Stdlib.List.map (fun (_, message) -> message)
   |> Stdlib.Test.equal [ "expected an expression, found '_'" ]
 
-// @compiler xfail compile: "Tuple pattern does not match the value type" reason=compiler-gap
+// @compiler xfail compile: "Tuple pattern does not match the value type" class=aot-rejection reason=aot-match-error
 test nonTupleDestructuringRaises =
   (let (a, _) = 1 in a)
   => raises "Could not deconstruct value 1 into pattern ([variable], _)"
 
-// @compiler xfail compile: "Tuple pattern does not match the value type" reason=compiler-gap
+// @compiler xfail compile: "Tuple pattern does not match the value type" class=aot-rejection reason=aot-match-error
 test wrongTupleArityRaises =
   (let (a, _) = (1, 2, 3) in a)
   => raises
