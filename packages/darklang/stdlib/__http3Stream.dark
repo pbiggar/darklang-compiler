@@ -10,22 +10,30 @@ type Event =
   | Chunk of (Int64 * Blob)
   | End of Int64
 type Received = { state: Stdlib.__Http3Stream.State, events: List<Stdlib.__Http3Stream.Event> }
+type Failure = { code: Int64, message: String }
+type HeaderError = Pending | Invalid of Stdlib.__Http3Stream.Failure
 
 val empty = Stdlib.__Http3Stream.State { cursor = Header (Stdlib.Blob.__fromInt64List []), frames = 0L }
 
 // Only the two varints are retained between network reads (at most sixteen bytes).
-let __header (data: Blob) : Stdlib.Result.Result<(Int64 * Int64), Stdlib.__QuicWire.ParseError> =
-  match Stdlib.__QuicWire.parseInteger data 0L with
+let __integer (data: Blob) (position: Int64) : Stdlib.Result.Result<Stdlib.__QuicWire.Number, Stdlib.__Http3Stream.HeaderError> =
+  match Stdlib.__QuicWire.parseInteger data position with
+  | Error Incomplete -> Error Pending
+  | Error (Invalid message) -> Error (Invalid (Stdlib.__Http3Stream.Failure { code = 262L, message = message }))
+  | Ok value -> Ok value
+
+let __header (data: Blob) : Stdlib.Result.Result<(Int64 * Int64), Stdlib.__Http3Stream.HeaderError> =
+  match Stdlib.__Http3Stream.__integer data 0L with
   | Error error -> Error error
   | Ok kind ->
-    if Stdlib.__Http3Wire.__forbidden kind.value then Error (Invalid "Forbidden HTTP/3 frame type")
+    if Stdlib.__Http3Wire.__forbidden kind.value then Error (Invalid (Stdlib.__Http3Stream.Failure { code = 261L, message = "Forbidden HTTP/3 frame type" }))
     else
-      match Stdlib.__QuicWire.parseInteger data kind.next with
+      match Stdlib.__Http3Stream.__integer data kind.next with
       | Error error -> Error error
       | Ok size -> Ok ((kind.value, size.value))
 
 let __feed (state: Stdlib.__Http3Stream.State) (data: Blob) (position: Int64)
-  (events: List<Stdlib.__Http3Stream.Event>) : Stdlib.Result.Result<Stdlib.__Http3Stream.Received, String> =
+  (events: List<Stdlib.__Http3Stream.Event>) : Stdlib.Result.Result<Stdlib.__Http3Stream.Received, Stdlib.__Http3Stream.Failure> =
   if position == Stdlib.Blob.__byteLength data then
     Ok (Stdlib.__Http3Stream.Received { state = state, events = Stdlib.List.reverse events })
   else
@@ -33,12 +41,12 @@ let __feed (state: Stdlib.__Http3Stream.State) (data: Blob) (position: Int64)
     | Header prefix ->
       let header = Stdlib.Blob.concat [prefix, Stdlib.__Http2Wire.__slice data position 1L] in
       (match Stdlib.__Http3Stream.__header header with
-      | Error Incomplete ->
+      | Error Pending ->
         Stdlib.__Http3Stream.__feed (Stdlib.__Http3Stream.State { cursor = Header header, frames = state.frames })
           data (position + 1L) events
-      | Error (Invalid message) -> Error message
+      | Error (Invalid failure) -> Error failure
       | Ok ((kind, size)) ->
-        if state.frames >= 16384L then Error "Too many HTTP/3 frames"
+        if state.frames >= 16384L then Error (Stdlib.__Http3Stream.Failure { code = 263L, message = "Too many HTTP/3 frames" })
         else
           let started = Stdlib.List.push events (Begin ((kind, size))) in
           let cursor = if size == 0L then Header (Stdlib.Blob.__fromInt64List []) else Payload ((kind, size)) in
@@ -56,11 +64,11 @@ let __feed (state: Stdlib.__Http3Stream.State) (data: Blob) (position: Int64)
         data (position + count) nextEvents
 
 // Bound work and event ownership per read; frame sizes themselves remain RFC varints.
-let feed (state: Stdlib.__Http3Stream.State) (data: Blob) : Stdlib.Result.Result<Stdlib.__Http3Stream.Received, String> =
-  if Stdlib.Blob.__byteLength data > 65536L then Error "HTTP/3 read exceeds limit"
+let feed (state: Stdlib.__Http3Stream.State) (data: Blob) : Stdlib.Result.Result<Stdlib.__Http3Stream.Received, Stdlib.__Http3Stream.Failure> =
+  if Stdlib.Blob.__byteLength data > 65536L then Error (Stdlib.__Http3Stream.Failure { code = 263L, message = "HTTP/3 read exceeds limit" })
   else Stdlib.__Http3Stream.__feed state data 0L []
 
-let finish (state: Stdlib.__Http3Stream.State) : Stdlib.Result.Result<Unit, String> =
+let finish (state: Stdlib.__Http3Stream.State) : Stdlib.Result.Result<Unit, Stdlib.__Http3Stream.Failure> =
   match state.cursor with
-  | Header prefix -> if Stdlib.Blob.__byteLength prefix == 0L then Ok () else Error "Truncated HTTP/3 frame header"
-  | Payload _ -> Error "Truncated HTTP/3 frame payload"
+  | Header prefix -> if Stdlib.Blob.__byteLength prefix == 0L then Ok () else Error (Stdlib.__Http3Stream.Failure { code = 262L, message = "Truncated HTTP/3 frame header" })
+  | Payload _ -> Error (Stdlib.__Http3Stream.Failure { code = 262L, message = "Truncated HTTP/3 frame payload" })
