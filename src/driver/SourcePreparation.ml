@@ -386,41 +386,40 @@ let specializeProgram mode inheritedValues recorder program =
         importInheritedValues recorder inheritedValues program)
   in
   measure recorder "AST -> ANF Preparation: Monomorphization" (fun () ->
-        match mode with
-        | Monomorphize None -> PrepareFunctions.monomorphize program
-        | Monomorphize (Some defs) ->
-            PrepareFunctions.monomorphizeWithExternalDefs defs program
-        | ReplaceTypeApps registry ->
+      match mode with
+      | Monomorphize None -> PrepareFunctions.monomorphize program
+      | Monomorphize (Some defs) ->
+          PrepareFunctions.monomorphizeWithExternalDefs defs program
+      | ReplaceTypeApps registry ->
+          Monomorphization.replaceTypeAppsInProgramWithRegistry registry program
+      | SpecializeLocalAndReplace registry ->
+          let genericDefs =
+            SpecializationIdentity.extractGenericFuncDefs program
+          in
+          if M.is_empty genericDefs then
             Monomorphization.replaceTypeAppsInProgramWithRegistry registry
               program
-        | SpecializeLocalAndReplace registry ->
-            let genericDefs =
-              SpecializationIdentity.extractGenericFuncDefs program
+          else
+            let localSpecs = collectLocalSpecs genericDefs program in
+            let* specialization =
+              Monomorphization.specializeFromSpecs (C.programSymbols program)
+                genericDefs localSpecs
             in
-            if M.is_empty genericDefs then
-              Monomorphization.replaceTypeAppsInProgramWithRegistry registry
-                program
-            else
-              let localSpecs = collectLocalSpecs genericDefs program in
-              let* specialization =
-                Monomorphization.specializeFromSpecs (C.programSymbols program)
-                  genericDefs localSpecs
-              in
-              let combined =
-                mergeSpecRegistries registry
-                  specialization.SpecializationIdentity.specRegistry
-              in
-              let _, items = C.viewProgram program in
-              let symbols, specializedFunctions =
-                SpecializationIdentity.importSpecializedFunctions
-                  specialization.SpecializationIdentity.symbols
-                  specialization.SpecializationIdentity.specializedFuncs
-              in
-              let topLevels =
-                List.map (fun func -> C.FunctionDef func) specializedFunctions
-              in
-              Monomorphization.replaceTypeAppsInProgramWithRegistry combined
-                (C.programFromCheckedParts (symbols, topLevels @ items)))
+            let combined =
+              mergeSpecRegistries registry
+                specialization.SpecializationIdentity.specRegistry
+            in
+            let _, items = C.viewProgram program in
+            let symbols, specializedFunctions =
+              SpecializationIdentity.importSpecializedFunctions
+                specialization.SpecializationIdentity.symbols
+                specialization.SpecializationIdentity.specializedFuncs
+            in
+            let topLevels =
+              List.map (fun func -> C.FunctionDef func) specializedFunctions
+            in
+            Monomorphization.replaceTypeAppsInProgramWithRegistry combined
+              (C.programFromCheckedParts (symbols, topLevels @ items)))
 
 let prepareSpecializedProgramForAnf baseTypeReg baseVariantLookup baseFuncNames
     baseFunctions recorder monomorphized =
@@ -453,7 +452,9 @@ let prepareSpecializedProgramForAnf baseTypeReg baseVariantLookup baseFuncNames
 
 let prepareProgramForAnf mode baseTypeReg baseVariantLookup baseFuncNames
     baseFunctions inheritedValues recorder program =
-  let* monomorphized = specializeProgram mode inheritedValues recorder program in
+  let* monomorphized =
+    specializeProgram mode inheritedValues recorder program
+  in
   prepareSpecializedProgramForAnf baseTypeReg baseVariantLookup baseFuncNames
     baseFunctions recorder monomorphized
 
@@ -461,7 +462,7 @@ let prepareProgramForAnf mode baseTypeReg baseVariantLookup baseFuncNames
    expression is compiled. Close their generated collection dependencies here,
    before lambda lowering or reusable native code can preserve the placeholder. *)
 let prepareDictionaryKeyRenderers env definitions program =
-  let rec materialize program =
+  let rec materialize registry program =
     let symbols, tops =
       ValueRendering.rewriteDictionaryKeyRenderers env.Types.indexedTypeReg
         env.Types.indexedSumTypeReg program
@@ -473,8 +474,13 @@ let prepareDictionaryKeyRenderers env definitions program =
         env.Types.variantLookup env.Types.indexedSumTypeReg tops
     in
     let program = C.programFromCheckedParts (symbols, tops) in
-    let requested = collectLocalSpecs definitions program in
-    if K.is_empty requested then Ok program
+    let requested =
+      collectLocalSpecs definitions program
+      |> K.filter (fun key ->
+          not (SpecializationIdentity.SpecMap.mem key registry))
+    in
+    if K.is_empty requested then
+      Monomorphization.replaceTypeAppsInProgramWithRegistry registry program
     else
       let* specialization =
         Monomorphization.specializeFromSpecs symbols definitions requested
@@ -501,17 +507,16 @@ let prepareDictionaryKeyRenderers env definitions program =
         K.fold
           (fun (name, types) registry ->
             SpecializationIdentity.SpecMap.add (name, types)
-              (SpecializationIdentity.specName name types) registry)
+              (SpecializationIdentity.specName name types)
+              registry)
           specialization.SpecializationIdentity.externalSpecs
-          specialization.SpecializationIdentity.specRegistry
+          (mergeSpecRegistries registry
+             specialization.SpecializationIdentity.specRegistry)
       in
-      let* program =
-        C.programFromCheckedParts (symbols, newFunctions @ tops)
-        |> Monomorphization.replaceTypeAppsInProgramWithRegistry registry
-      in
-      materialize program
+      materialize registry
+        (C.programFromCheckedParts (symbols, newFunctions @ tops))
   in
-  materialize program
+  materialize SpecializationIdentity.SpecMap.empty program
 
 let buildRegistriesForProgram recorder existingFunctionOrdinal symbols
     baseProvidesModuleFunctionParams moduleRegistry baseRegistries typeDefs
@@ -595,7 +600,8 @@ let splitDeclarations program =
           (function C.FunctionDef definition -> Some definition | _ -> None)
           topLevels )
 
-let convertTypedDeclarationsWithTrace recorder baseContext mode env typedProgram =
+let convertTypedDeclarationsWithTrace recorder baseContext mode env typedProgram
+    =
   let typedProgram =
     match baseContext with
     | None -> typedProgram
@@ -665,7 +671,9 @@ let convertTypedDeclarationsWithTrace recorder baseContext mode env typedProgram
   let* specialized =
     specializeProgram mode inheritedValues recorder typedProgram
   in
-  let* specialized = prepareDictionaryKeyRenderers env definitions specialized in
+  let* specialized =
+    prepareDictionaryKeyRenderers env definitions specialized
+  in
   let* liftedProgram =
     prepareSpecializedProgramForAnf baseTypeReg baseVariantLookup baseFuncNames
       baseFunctions recorder specialized
