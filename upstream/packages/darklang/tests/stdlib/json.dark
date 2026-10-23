@@ -929,7 +929,7 @@ module Float =
   // TODO: test highly-precise numbers
   // TODO: review Float.tests for more values to test against
 
-  // @compiler xfail runtime: "assertion 9: expected \"0.30000000000000004\", got \"0.3\"" reason=compiler-gap
+  // @compiler xfail runtime: "assertion 9: expected \"0.30000000000000004\", got \"0.3\"" class=missing-support reason=compiler-gap
   test serialize =
     Stdlib.Test.all
       [ Stdlib.Json.serialize<Float> 0.0 |> Stdlib.Test.equal "0.0"
@@ -1235,12 +1235,12 @@ module Uuid =
           "Can't parse JSON `\"00000000-0000-0000-0000-00000000000\"` as type `Uuid` at path: `root`")
 
 module BadTypes =
-  // @compiler xfail runtime: "Unsupported type in JSON: (Int64) -> Int64. Some types are not supported in Json serialization" reason=compiler-gap
+  // @compiler xfail runtime: "Unsupported type in JSON: (Int64) -> Int64. Some types are not supported in Json serialization" class=missing-support reason=compiler-gap
   test rejects1 =
     (Stdlib.Json.parse<Int64 -> Int64> "{}")
     => raises "Unsupported type in JSON: (Int64) -> Int64. Some types are not supported in Json serialization, and cannot be used as arguments to Builtin.jsonParse or Builtin.jsonSerialize"
 
-  // @compiler xfail compile: "Expected TInt64, got TInt" reason=compiler-gap
+  // @compiler xfail compile: "Expected TInt64, got TInt" class=aot-rejection reason=aot-type-error
   test rejects2 =
     (Stdlib.Json.serialize<Int64 -> Int64> (fun i -> 5))
     => raises "Cannot serialize (lambda) into JSON"
@@ -1299,7 +1299,7 @@ module List =
     |> Stdlib.Test.equal (Result.Error "Not JSON")
 
   module Errors =
-    // @compiler xfail compile: "Expected TList TInt64, got TTuple [TInt64; TInt64; TString]" reason=compiler-gap
+    // @compiler xfail compile: "Expected TList TInt64, got TTuple [TInt64; TInt64; TString]" class=aot-rejection reason=aot-type-error
     test rejects1 =
       (Stdlib.Json.serialize<List<Int64>> (1L, 2L, "three"))
       => raises "Darklang.Stdlib.Json.serialize's 1st parameter `value` expects List<Int64>, but got (Int64 * Int64 * String) ((1, 2, \"three\"))"
@@ -1526,7 +1526,7 @@ module Dict =
         Stdlib.Json.parse<Dict<String, String>> """{"a":"b","c":"d"}"""
         |> Stdlib.Test.equal (Result.Ok(Dict { "a": "b", "c": "d" })) ]
 
-  // @compiler xfail runtime: "Unsupported type in JSON: Dict<Int64, String>. Some types are not supported in Json serialization" reason=compiler-gap
+  // @compiler xfail runtime: "Unsupported type in JSON: Dict<Int64, String>. Some types are not supported in Json serialization" class=missing-support reason=compiler-gap
   test rejects1 =
     (Stdlib.Json.serialize<Dict<Int64, String>> (Dict { 1L: "a" }))
     => raises "Cannot serialize { 1: \"a\" } into JSON"
@@ -1734,7 +1734,7 @@ module UserDefinedRecords =
 module UserDefinedAliases =
   type MyInt = Int64
 
-  // @compiler xfail compile: "Expected TRecord (\"Darklang.Stdlib.Json.Tests.UserDefinedAliases.Person2\", []), got TRecord (\"Darklang.Stdlib.Json.Tests.UserDefinedAliases.Person1\", [])" reason=compiler-gap
+  // @compiler xfail compile: "Expected TRecord (\"Darklang.Stdlib.Json.Tests.UserDefinedAliases.Person2\", []), got TRecord (\"Darklang.Stdlib.Json.Tests.UserDefinedAliases.Person1\", [])" class=missing-support reason=compiler-gap
   test serialize =
     Stdlib.Test.all
       [ Stdlib.Json.serialize<MyInt> 42L |> Stdlib.Test.equal "42"
@@ -1776,7 +1776,7 @@ module UserDefinedAliases =
 
   // This test currently slips by the typechecker, and so we get an internal
   // exception
-  // @compiler xfail compile: "Expected TSum (\"Darklang.Stdlib.Result.Result\", [TInt64; TString]), got TSum" reason=compiler-gap
+  // @compiler xfail compile: "Expected TSum (\"Darklang.Stdlib.Result.Result\", [TInt64; TString]), got TSum" class=aot-rejection reason=aot-type-error
   test rejects1 =
     (Stdlib.Json.serialize<StringResult<Int64>> (Result.Error 1L))
     => raises "Darklang.Stdlib.Json.serialize's 1st parameter `value` expects Darklang.Stdlib.Result.Result<Int64, String>, but got Darklang.Stdlib.Result.Result<_, Int64> (Error(1))"
@@ -1989,7 +1989,7 @@ module RestoredArchive =
       |> Stdlib.Test.equal true)
     |> Stdlib.Test.all
 
-  // @compiler xfail runtime: "assertion 6: expected Darklang.Stdlib.Result.Result<Float, Darklang.Stdlib.Json.ParseError.ParseError>.Ok(0.12345678901234568), got Darklang.Stdlib.Result.Result<Float, Darklang.Stdlib.Json.ParseError.ParseError>.Ok(0.1234567890123457)" reason=compiler-gap
+  // @compiler xfail runtime: "assertion 6: expected Darklang.Stdlib.Result.Result<Float, Darklang.Stdlib.Json.ParseError.ParseError>.Ok(0.12345678901234568), got Darklang.Stdlib.Result.Result<Float, Darklang.Stdlib.Json.ParseError.ParseError>.Ok(0.1234567890123457)" class=missing-support reason=compiler-gap
   test floatBoundariesAndPrecisionRoundTrip =
     [ 1.7976931348623157e308, -1.7976931348623157e308
       2.2250738585072014e-308, 5e-324, -5e-324

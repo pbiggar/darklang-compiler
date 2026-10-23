@@ -274,7 +274,7 @@ test multiply =
       // Actual: a Float: 1.0"
       8L * 8L |> Stdlib.Test.equal 64L ]
 
-// @compiler xfail compile: "Expected TInt64, got TFloat64" reason=compiler-gap
+// @compiler xfail compile: "Expected TInt64, got TFloat64" class=aot-rejection reason=aot-type-error
 test multiplyByFloatRaises =
   1L * 1.0 => raises "Cannot perform numeric operation on Int64 and Float"
 

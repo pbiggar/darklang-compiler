@@ -36,7 +36,7 @@ test fromList =
         Stdlib.String.head grapheme |> Builtin.unwrap)
       |> Stdlib.String.fromList |> Stdlib.Test.equal "👩‍👩‍👧‍👦🏳️‍⚧️‍️👱🏾Z̤͔ͧ̑̓" ]
 
-// @compiler xfail compile: "Expected TChar, got TString" reason=compiler-gap
+// @compiler xfail compile: "Expected TChar, got TString" class=aot-rejection reason=aot-type-error
 test fromListRejectsStrings =
   Stdlib.String.fromList [ "a" ]
   => raises "Darklang.Stdlib.String.fromList's 1st parameter `lst` expects List<Char>, but got List<String> ([\"a\"])"
@@ -1233,7 +1233,7 @@ test toOrdinal =
       Stdlib.String.toOrdinal -1 |> Stdlib.Test.equal "-1st"
       Stdlib.String.toOrdinal -11 |> Stdlib.Test.equal "-11th" ]
 
-// @compiler xfail runtime: "assertion 9: expected \"zlo\", got \"lͮ̒ͫo̙̔ͮ̇͐̇\"" reason=compiler-gap
+// @compiler xfail runtime: "assertion 9: expected \"zlo\", got \"lͮ̒ͫo̙̔ͮ̇͐̇\"" class=missing-support reason=compiler-gap
 test slugify =
   Stdlib.Test.all
     [ Stdlib.String.slugify
@@ -1281,7 +1281,7 @@ test randomProducesDifferentStrings =
 
 // Check that map calls its callback once per character.
 module MapEffects =
-  // @compiler xfail compile: "Unknown function or value 'Stdlib.Test.incrementCounter'" reason=test-counter
+  // @compiler xfail compile: "Unknown function or value 'Stdlib.Test.incrementCounter'" class=missing-support reason=test-counter
   test invokesCallbackOncePerCharacter =
     let value =
       Stdlib.String.map "a string" (fun _ ->
@@ -1305,7 +1305,7 @@ test headUsesWholeGraphemes =
       Stdlib.String.head "🧟‍♀️🧟‍♂️" |> Stdlib.Test.equal (Some '🧟‍♀️')
       Stdlib.String.head "👨‍❤️‍💋‍👨" |> Stdlib.Test.equal (Some '👨‍❤️‍💋‍👨') ]
 
-// @compiler xfail compile: "Expected TChar, got TInt64" reason=compiler-gap
+// @compiler xfail compile: "Expected TChar, got TInt64" class=aot-rejection reason=aot-type-error
 test mapRejectsNonCharResult =
   Stdlib.String.map "👨‍❤️‍💋‍👨👩‍👩‍👧‍👦🏳️‍⚧️‍️🇵🇷" (fun _ -> 5L)
   => raises "Darklang.Stdlib.String.fromList's 1st parameter `lst` expects List<Char>, but got List<Int64> ([5, 5, 5, 5])"

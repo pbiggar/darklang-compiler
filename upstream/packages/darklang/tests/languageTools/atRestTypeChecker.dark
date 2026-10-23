@@ -360,7 +360,7 @@ module BindingIds =
 
   // Duplicate binding IDs make the result Incomplete because the checker cannot
   // distinguish the bindings. With unique IDs, returning x is valid only as Int.
-  // @compiler xfail compile: "Unknown function or value 'checkPackageOpsSummary'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'checkPackageOpsSummary'" class=missing-support reason=upstream-dependency
   test duplicateBindingIdsAreIncomplete =
     Stdlib.Test.all
       [ checkPackageOpsSummary []
@@ -384,7 +384,7 @@ module BindingIds =
 
   // A duplicate-ID warning in one function must preserve the definite return-type
   // error reported for a different function in the same batch.
-  // @compiler xfail compile: "Unknown function or value 'checkPackageOpsSummary'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'checkPackageOpsSummary'" class=missing-support reason=upstream-dependency
   test duplicateIdFindings =
     Stdlib.Test.all
       [ checkPackageOpsSummary []
@@ -430,7 +430,7 @@ module InferenceIds =
         [],
         [ intExpr 8L 1 ]))
 
-  // @compiler xfail compile: "Unknown function or value 'checkPackageOpsSummary'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'checkPackageOpsSummary'" class=missing-support reason=upstream-dependency
   test duplicateLambdaIdsAreRejected =
     Stdlib.Test.all
       [ checkPackageOpsSummary [] [ oneArg (tUnit ()) (tInt ()) (body 10L) ]
@@ -449,7 +449,7 @@ module InferenceIds =
              "Multiple inference nodes share an ID; their types cannot be checked") ] ]
 
 module ConstructorDeclarations =
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test constructingCaseChecksWholeDeclaration =
     Stdlib.Test.all
       [ check
@@ -482,7 +482,7 @@ module ConstructorDeclarations =
   // Only the function receives a report here; the record type is a dependency.
   // Its unavailable field type makes the function's check Incomplete, even when
   // the function constructs the record with an empty list.
-  // @compiler xfail compile: "Unknown function or value 'declared'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'declared'" class=missing-support reason=upstream-dependency
   test unavailableFieldTypeIsIncomplete =
     (let typ = declared "record" [] (recordOf [ ("xs", tList (custom "missing" [])) ])
      let construction =
@@ -514,7 +514,7 @@ module LambdaArgumentSlots =
 
   // Reject the invalid EArg when checking a lambda against a declared type,
   // inferring a discarded lambda's type, or checking a lambda in a pipeline.
-  // @compiler xfail compile: "Unknown function or value 'checkFunctionAst'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'checkFunctionAst'" class=missing-support reason=upstream-dependency
   test invalidLambdaArgIsRejected =
     Stdlib.Test.all
       [ checkFunctionAst []
@@ -539,7 +539,7 @@ module LambdaArgumentSlots =
         |> Stdlib.Test.equal "failed:InvalidArgumentIndex" ]
 
   // Valid source refers to captured outer parameters by name, so these lambdas pass.
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test capturedParametersPass =
     Stdlib.Test.all
       [ check "let f (x: Int) : String -> Int = fun text -> x" "f"
@@ -552,54 +552,54 @@ module LambdaArgumentSlots =
 // catch on its own, so a change to how dependencies are loaded cannot quietly make callers
 // unchecked. Each mistake has a correct twin that must stay checked.
 module ThroughADependency =
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test acceptsCorrectArgument =
     check "let f (s: String) : Int = Stdlib.String.length s" "f"
     |> Stdlib.Test.equal "checked:"
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test rejectsWrongArgument =
     check "let f () : Int = Stdlib.String.length 5L" "f"
     |> Stdlib.Test.equal "failed:TypeMismatch"
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test rejectsWrongReturnType =
     check "let f () : String = Stdlib.String.length \"x\"" "f"
     |> Stdlib.Test.equal "failed:TypeMismatch"
 
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test acceptsCorrectGenericArgument =
     check "let f () : Int64 = Stdlib.Option.withDefault (Stdlib.List.head [ 1L ]) 0L" "f"
     |> Stdlib.Test.equal "checked:"
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test rejectsWrongGenericArgument =
     check "let f () : String = Stdlib.Option.withDefault (Stdlib.List.head [ 1L, 2L ]) \"x\"" "f"
     |> Stdlib.Test.equal "failed:TypeMismatch"
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test rejectsNonListArgument =
     check "let f () : Bool = Stdlib.List.isEmpty \"x\"" "f"
     |> Stdlib.Test.equal "failed:TypeMismatch"
 
   // A dependency passed by name, and one partially applied.
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test checksNamedCallback =
     check "let f () : Int = Stdlib.List.length (Stdlib.List.map [ 1L ] Stdlib.String.length)" "f"
     |> Stdlib.Test.equal "failed:TypeMismatch"
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test checksPartialApplication =
     check "let f () : String = (Stdlib.String.append \"a\") 3L" "f"
     |> Stdlib.Test.equal "failed:TypeMismatch"
 
   // A dependency's trait bound, met and not met at the call.
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test acceptsMetTraitBound =
     check "let f () : String = Stdlib.toString 5L" "f"
     |> Stdlib.Test.equal "checked:"
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test rejectsUnmetTraitBound =
     check "let f () : String = Stdlib.toString (fun x -> x)" "f"
     |> Stdlib.Test.equal "failed:MissingImpl"
 
 module Basics =
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test argumentAndReturnTypes =
     Stdlib.Test.all
       [ check "let f (value: Int) : Int = value" "f"
@@ -612,27 +612,27 @@ module Basics =
         |> Stdlib.Test.equal "failed:TypeMismatch" ]
 
   // Looking up `other` by name must use its declared String type.
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test lookupUsesDeclaredType =
     check "let f (value: Int) (other: String) : String = other" "f"
     |> Stdlib.Test.equal "checked:"
 
   // Calling an Int as though it were a function must report NotCallable.
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test callingIntIsNotCallable =
     check "let f (x: Int) : Int = x 1" "f"
     |> Stdlib.Test.equal "failed:NotCallable"
 
   // Check builtin calls using their declared parameter and return types;
   // builtin implementations are not Dark bodies the checker can inspect.
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test builtinCallsUseSignatures =
     check "let f (u: Unit) : Int64 = Builtin.int64Add 1L 2L" "f"
     |> Stdlib.Test.equal "checked:"
 
   // Reject an argument index outside the function's parameter list. Construct
   // the syntax tree directly because source code cannot express this invalid index.
-  // @compiler xfail compile: "Unknown function or value 'checkFunctionAst'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'checkFunctionAst'" class=missing-support reason=upstream-dependency
   test argIndexOutOfRangeIsRejected =
     checkFunctionAst
       []
@@ -651,7 +651,7 @@ module Constructors =
 
   // Pair.Some takes one tuple field. Some(1, "url") supplies two fields;
   // Some((1, "url")) supplies the single tuple the declaration requires.
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test constructorsAndFields =
     Stdlib.Test.all
       [ check
@@ -693,7 +693,7 @@ module Constructors =
         |> Stdlib.Test.equal "failed:TypeMismatch" ]
 
   // Resolve 'a in Box<'a>.Box using the enclosing function's type parameters.
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test constructorUsesFunctionTypeParams =
     check
       (src
@@ -707,7 +707,7 @@ module Constructors =
 // ----------------------------------------------------------------------------------
 
 module Declarations =
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test duplicateMembersAndTypeParams =
     Stdlib.Test.all
       [ check "type T = { field: Int, field: String }" "T"
@@ -719,7 +719,7 @@ module Declarations =
 
   // Expanding A<'a> repeatedly adds another List layer. Detect this alias cycle
   // and return Incomplete instead of expanding it forever.
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test growingAliasCycleIsIncomplete =
     check
       (src [ "type A<'a> = A<List<'a>>", "let f (x: A<Int>) : Int = x" ])
@@ -728,7 +728,7 @@ module Declarations =
 
   // Loop still refers to itself when the reference passes through Identity.
   // Detect the cycle after substituting Identity's type argument.
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test aliasCycleThroughIdentity =
     check
       (src
@@ -740,7 +740,7 @@ module Declarations =
 
   // Identity<Identity<Int>> expands to Int and terminates. Reusing an alias in
   // nested type arguments is valid when the alias definition is not recursive.
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test nestedNonRecursiveAliasesExpand =
     Stdlib.Test.all
       [ check
@@ -754,7 +754,7 @@ module Declarations =
 
   // Forward<Forward<Int>> also expands to Int through Identity. Accept an Int
   // return, reject a String return, and still detect the actual Loop cycle below.
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test aliasThroughAliasExpands =
     Stdlib.Test.all
       [ check
@@ -782,7 +782,7 @@ module Declarations =
 
   // An unavailable type might be an alias for Int. Report a missing declaration
   // instead of claiming its value cannot satisfy an Int return type.
-  // @compiler xfail compile: "Unknown function or value 'checkFunctionAst'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'checkFunctionAst'" class=missing-support reason=upstream-dependency
   test unavailableTypeIsMissingNotMismatch =
     checkFunctionAst
       []
@@ -791,7 +791,7 @@ module Declarations =
 
   // This syntax tree uses 'b without declaring it as a type parameter. Construct
   // it directly because the parser normally adds referenced type parameters.
-  // @compiler xfail compile: "Unknown function or value 'checkFunctionAst'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'checkFunctionAst'" class=missing-support reason=upstream-dependency
   test undeclaredParamsAndRecursiveTypes =
     Stdlib.Test.all
       [ checkFunctionAst
@@ -820,7 +820,7 @@ module Declarations =
 
   val pair = "type Pair<'a, 'b> = { first: 'a, second: 'b }"
 
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test wrongTypeArgCount =
     Stdlib.Test.all
       [ check (src [ pair, "let f (x: (Int * List<Pair<String>>)) : Unit = ()" ]) "f"
@@ -830,14 +830,14 @@ module Declarations =
 
   // Pair requires two type arguments. Supplying one should report the type error
   // without crashing or adding a misleading warning about x.first's type.
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test tooFewTypeArgsReportsCleanly =
     check (src [ pair, "let f (x: Pair<Int>) : Int = x.first" ]) "f"
     |> Stdlib.Test.equal "failed:TypeMismatch"
 
   // Find unavailable types even when nested inside a function parameter's type
   // or reached by expanding an alias.
-  // @compiler xfail compile: "Unknown function or value 'checkFunctionAst'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'checkFunctionAst'" class=missing-support reason=upstream-dependency
   test unavailableNestedTypesAreFound =
     Stdlib.Test.all
       [ checkFunctionAst
@@ -863,7 +863,7 @@ module Declarations =
 
   // Inspect the fields of dependency types too. An unavailable field type makes
   // this function's check Incomplete even though its body does not read the field.
-  // @compiler xfail compile: "Unknown function or value 'checkFunctionAst'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'checkFunctionAst'" class=missing-support reason=upstream-dependency
   test dependencyFieldsAreChecked =
     checkFunctionAst
       [ declared "box-with-missing-field" [] (recordOf [ ("hidden", custom "nowhere" []) ]) ]
@@ -885,7 +885,7 @@ module DictKeys =
 
   val accepted = "checked:"
 
-  // @compiler xfail compile: "Unknown function or value 'key'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'key'" class=missing-support reason=upstream-dependency
   test functionAndBlobKeysRejected =
     Stdlib.Test.all
       [ key [] "Int -> Int"
@@ -894,7 +894,7 @@ module DictKeys =
         |> Stdlib.Test.equal rejected ]
 
   // Construct TStream directly because the parser has no source syntax for it.
-  // @compiler xfail compile: "Unknown function or value 'checkFunctionAst'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'checkFunctionAst'" class=missing-support reason=upstream-dependency
   test structuredKeyTypes =
     Stdlib.Test.all
       [ checkFunctionAst
@@ -932,7 +932,7 @@ module DictKeys =
 
   // A type argument affects key validity only when a field can contain a value
   // of that type. Box stores its argument; Phantom has only a String field.
-  // @compiler xfail compile: "Unknown function or value 'key'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'key'" class=missing-support reason=upstream-dependency
   test typeArgsMatterOnlyWhenStored =
     Stdlib.Test.all
       [ key [ "type Box<'a> = { v: 'a }" ] "Box<Int -> Int>"
@@ -965,7 +965,7 @@ module DictKeys =
         |> Stdlib.Test.equal accepted ]
 
 module RecursivePhantomKeys =
-  // @compiler xfail compile: "Unknown function or value 'DictKeys.key'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'DictKeys.key'" class=missing-support reason=upstream-dependency
   test phantomRecursionAllowsFunctionArgs =
     Stdlib.Test.all
       [ DictKeys.key [ "type P<'a> = End | Next of P<'a>" ] "P<Int -> Int>"
@@ -993,7 +993,7 @@ module RecursivePhantomKeys =
       [ "type A<'a, 'b> = End | Next of B<'b, 'a>"
         "type B<'a, 'b> = { value: 'a, next: List<A<'b, 'a>> }" ] typ
 
-  // @compiler xfail compile: "Unknown function or value 'swapped'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'swapped'" class=missing-support reason=upstream-dependency
   test swappedAndStoredTypeArgs =
     Stdlib.Test.all
       [ swapped "A<Int -> Int, Int>"
@@ -1012,7 +1012,7 @@ module RecursivePhantomKeys =
   // In the first P declaration, 'a never appears in a stored payload, so P can
   // be a key even when 'a is a function. Adding Value of 'a makes that invalid.
   // Preserve this distinction when the dictionary is hidden behind alias D.
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test aliasedDictKeepsPhantomDistinction =
     Stdlib.Test.all
       [ check
@@ -1031,7 +1031,7 @@ module InstantiatedDictKeys =
   let signature (declarations: List<String>) (typ: String) : String =
     check (src (Stdlib.List.append declarations [ $"let f (x: {typ}) : Unit = ()" ])) "f"
 
-  // @compiler xfail compile: "Unknown function or value 'signature'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'signature'" class=missing-support reason=upstream-dependency
   test instantiatedSignatures =
     Stdlib.Test.all
       [ signature [ "type D<'a> = Dict<'a, Int>" ] "D<Int -> Int>"
@@ -1049,14 +1049,14 @@ module InstantiatedDictKeys =
 
   // Phantom stores no value of type 'a, so D can use a function as its type
   // argument.
-  // @compiler xfail compile: "Unknown function or value 'signature'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'signature'" class=missing-support reason=upstream-dependency
   test phantomArgAllowsFunction =
     signature [ "type Phantom<'a> = { label: String }", "type D<'a> = Dict<Phantom<'a>, Int>" ] "D<Int -> Int>"
     |> Stdlib.Test.equal "checked:"
 
   // Follow dictionary-key requirements through recursive declarations, including
   // references that wrap the next type argument in List or in a function type.
-  // @compiler xfail compile: "Unknown function or value 'signature'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'signature'" class=missing-support reason=upstream-dependency
   test recursiveDeclarations =
     Stdlib.Test.all
       [ signature [ "type A<'a> = { next: List<B<'a>> }", "type B<'b> = { next: List<A<'b>>, items: Dict<'b, Int> }" ] "A<Int -> Int>"
@@ -1075,7 +1075,7 @@ module InstantiatedDictKeys =
     check (src (Stdlib.List.append
       [ "let make<'a> (x: 'a) : Dict<'a, Int> = Dict { x: 1 }", "let f () : Unit =" ] body)) "f"
 
-  // @compiler xfail compile: "Unknown function or value 'call'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'call'" class=missing-support reason=upstream-dependency
   test genericCallKeys =
     Stdlib.Test.all
       [ call [ "  let _ = make (fun y -> y + 1)", "  ()" ]
@@ -1087,7 +1087,7 @@ module InstantiatedDictKeys =
 
   // Calls through a local alias or lambda must still enforce make's key requirement.
   // Check each use of g separately, allowing Int and String but rejecting functions.
-  // @compiler xfail compile: "Unknown function or value 'call'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'call'" class=missing-support reason=upstream-dependency
   test localAliasAndLambdaCalls =
     Stdlib.Test.all
       [ call [ "  let g = make", "  let _ = g (fun y -> y + 1)", "  ()" ]
@@ -1109,7 +1109,7 @@ module Operators =
   // String have no implementation, so they are refused as a missing one, the same
   // way a named call is. The runtime refuses them for the same reason, which is the
   // point.
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test bitwiseNot =
     Stdlib.Test.all
       [ Stdlib.List.map
@@ -1140,7 +1140,7 @@ module Operators =
 
   // String implements Add, which is what made `++` redundant, so `+` joins Strings
   // and the checker accepts it. It used to refuse, from a table that did not know.
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test stringAddition =
     check "let f (x: String) : String = x + x" "f"
     |> Stdlib.Test.equal "checked:"
@@ -1150,7 +1150,7 @@ module Operators =
   // types, including these two, and the runtime has always answered `Int128 **
   // Int128`. The rule that refused them was a hand-written table in the checker that
   // disagreed with dispatch.
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test int128Arithmetic =
     Stdlib.Test.all
       [ check "let f (value: Int128) : Int128 = value ** value" "f"
@@ -1165,7 +1165,7 @@ module Operators =
   // Bitwise operators still refuse Float, but as the ABSENCE of an implementation
   // rather than a predicate in the checker: there is no `impl BitwiseAnd for Float`.
   // Same answer, and now it is the same answer dispatch gives.
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test bitwiseOperators =
     Stdlib.Test.all
       [ check "let f (value: Float) : Float = value & value" "f"
@@ -1179,7 +1179,7 @@ module Operators =
 
   // Direct calls such as Builtin.add must follow the operator's typing rules.
   // Their generic builtin signatures alone would allow invalid operand types.
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test directBuiltinCallsFollowOperatorRules =
     Stdlib.Test.all
       [ check "let f (u: Unit) : Bool = Builtin.lessThan 1 \"x\"" "f"
@@ -1191,7 +1191,7 @@ module Operators =
 
   // `Compare` has an implementation for String, so comparing two Strings is
   // accepted. The old table allowed only numerics.
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test stringComparison =
     Stdlib.Test.all
       [ check "let f (u: Unit) : Bool = Builtin.greaterThan \"x\" \"x\"" "f"
@@ -1201,14 +1201,14 @@ module Operators =
 
   // The checker cannot fully describe an operator's type restrictions when it is
   // passed around or partially applied. Report Incomplete for Builtin.add 1.
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test partialOperatorIsIncomplete =
     check "let f (u: Unit) : Int -> Int = Builtin.add 1" "f"
     |> Stdlib.Test.equal "incomplete:UnsupportedConstruct"
 
   // A pipeline supplies the operator's first argument, and gets the same answer as a
   // direct call. Power on UInt128 is accepted through both, for the reason above.
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test pipedOperators =
     Stdlib.Test.all
       [ check "let f (value: Int) : Int = value |> Builtin.subtract 1" "f"
@@ -1221,7 +1221,7 @@ module Operators =
   // Unary minus is `Negate.negate`, so the unsigned integers are refused because
   // nothing implements it for them, not because a predicate knows they are unsigned.
   // The resulting type is still checked against the return type.
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test unaryMinus =
     Stdlib.Test.all
       [ check "let f (value: Int) : Int = -value" "f"
@@ -1242,7 +1242,7 @@ module Operators =
 module Builtins =
   // Infer Builtin.unwrap's result from an Option or Result payload. For other
   // input types, report Incomplete because its result type cannot be established.
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test unwrapResultType =
     Stdlib.Test.all
       [ check "let f (x: Stdlib.Option.Option<Int>) : Int = Builtin.unwrap x" "f"
@@ -1251,14 +1251,14 @@ module Builtins =
         |> Stdlib.Test.equal "incomplete:UnsupportedConstruct" ]
 
   // jsonParse needs an explicit type argument to determine the parsed value's type.
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test jsonParseNeedsTypeArg =
     check "let f (u: Unit) : Int = Builtin.jsonParse \"1\"" "f"
     |> Stdlib.Test.equal "incomplete:UnsupportedConstruct"
 
   // jsonParse<Int> supplies the missing type information. Also load the types
   // named in its signature, including Result and the ParseError error type.
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test jsonParseWithTypeArg =
     check
       (src
@@ -1271,7 +1271,7 @@ module Builtins =
 
   // Load Option from listGetAt's return type so the checker can validate these
   // Some and None patterns, even though the function's own signature omits Option.
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test listGetAtLoadsOption =
     check
       (src
@@ -1284,7 +1284,7 @@ module Builtins =
 
   // applicableByName returns a type variable that its inputs do not determine
   // and its signature does not declare. Report Incomplete for that unknown result.
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test undeterminedResultIsIncomplete =
     check
       "let f (b: Uuid) : Int = match Builtin.applicableByName b \"x\" with | Ok _ -> 1 | Error _ -> 0"
@@ -1292,7 +1292,7 @@ module Builtins =
     |> Stdlib.Test.equal "incomplete:UnsupportedConstruct"
 
   // A builtin missing from the registry makes the check Incomplete.
-  // @compiler xfail compile: "Unknown function or value 'checkFunctionAst'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'checkFunctionAst'" class=missing-support reason=upstream-dependency
   test missingBuiltinIsIncomplete =
     checkFunctionAst
       []
@@ -1318,7 +1318,7 @@ module Builtins =
 
   // Accept the required number of explicit type arguments, including type parameters
   // from the calling function. Reject calls supplying too many type arguments.
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test explicitTypeArgCount =
     Stdlib.Test.all
       [ check
@@ -1366,7 +1366,7 @@ module PostfixUnwrap =
   // ? requires its operand and the enclosing return type to both be Option or
   // both be Result. For Result, their error types must also match; their success
   // types may differ.
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test operandMatchesReturnType =
     Stdlib.Test.all
       [ check
@@ -1412,7 +1412,7 @@ module PostfixUnwrap =
 
   // r? produces the unwrapped Int. The function must explicitly wrap its success
   // value in Ok to satisfy its declared Result return type.
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test successValueMustBeWrapped =
     check
       "let f (r: Stdlib.Result.Result<Int, String>) : Stdlib.Result.Result<Int, String> = r?"
@@ -1420,7 +1420,7 @@ module PostfixUnwrap =
     |> Stdlib.Test.equal "failed:TypeMismatch"
 
   // Report a Result error-type mismatch at the ? expression and name both types.
-  // @compiler xfail compile: "Unknown function or value 'issues'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'issues'" class=missing-support reason=upstream-dependency
   test errorTypeMismatchNamesBothTypes =
     issues
       (returning
@@ -1432,7 +1432,7 @@ module PostfixUnwrap =
 
   // Apply the same ? rules when the operand uses a type alias or the Result
   // error type is a declared type parameter.
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test aliasesAndTypeParams =
     Stdlib.Test.all
       [ check
@@ -1452,7 +1452,7 @@ module PostfixUnwrap =
         |> Stdlib.Test.equal "checked:" ]
 
   // Unwrapping Option<Int> tells the checker that n is Int before checking n + n.
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test unwrapRefinesType =
     check
       (src
@@ -1464,7 +1464,7 @@ module PostfixUnwrap =
 
   // ? returns from the nearest lambda. Check against that lambda's return type;
   // the outer function's return type does not determine whether the ? is valid.
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test nearestLambdaReturn =
     Stdlib.Test.all
       [ check
@@ -1490,7 +1490,7 @@ module PostfixUnwrap =
 
   // Returning Some tells the checker that x? needs an Option operand. Accept
   // Some 4 as the argument and reject the plain Int 4.
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test lambdaReturnDecidesOperand =
     Stdlib.Test.all
       [ check
@@ -1513,7 +1513,7 @@ module PostfixUnwrap =
           "type NestedRow = { item: Stdlib.Option.Option<Stdlib.Option.Option<Int>> }" ]
         body)
 
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test rowsPerCall =
     Stdlib.Test.all
       [ check
@@ -1541,7 +1541,7 @@ module PostfixUnwrap =
 
   // Infer the ? operand from row.item after the call supplies the row's type.
   // Here unwrapping Option<Option<Int>> leaves the Option<Int> the lambda returns.
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test nestedOptionRow =
     check
       (rows
@@ -1560,7 +1560,7 @@ module PostfixUnwrap =
           "type NestedStringRow = { item: Stdlib.Option.Option<Stdlib.Option.Option<String>> }" ]
         body)
 
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test nestedRowsPerCall =
     Stdlib.Test.all
       [ check
@@ -1579,7 +1579,7 @@ module PostfixUnwrap =
         |> Stdlib.Test.equal "failed:TypeMismatch" ]
 
   // Reject row.item? when the caller supplies a record whose item field is Int.
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test scalarFieldRejected =
     check
       (src
@@ -1592,7 +1592,7 @@ module PostfixUnwrap =
 
   // An unavailable operand type might be an alias for Option. Report Incomplete
   // for the missing declaration instead of assuming the ? is invalid.
-  // @compiler xfail compile: "Unknown function or value 'checkFunctionAst'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'checkFunctionAst'" class=missing-support reason=upstream-dependency
   test unavailableOperandIsIncomplete =
     checkFunctionAst
       []
@@ -1601,7 +1601,7 @@ module PostfixUnwrap =
 
   // An Int operand is definitely invalid for ?, even if an unavailable return
   // type also makes part of the check incomplete. Keep both findings.
-  // @compiler xfail compile: "Unknown function or value 'checkFunctionAst'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'checkFunctionAst'" class=missing-support reason=upstream-dependency
   test intOperandStaysInvalid =
     checkFunctionAst
       []
@@ -1611,7 +1611,7 @@ module PostfixUnwrap =
   // Reject ? outside a function because there is no enclosing call to return from.
   // Construct this invalid value directly to test the checker independently of
   // the parser, which also rejects it.
-  // @compiler xfail compile: "Unknown function or value 'checkValueAsts'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'checkValueAsts'" class=missing-support reason=upstream-dependency
   test outsideFunctionRejected =
     checkValueAsts
       [ valueNamed
@@ -1624,7 +1624,7 @@ module PostfixUnwrap =
 // ----------------------------------------------------------------------------------
 
 module TupleAccess =
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test indexWithinTuple =
     Stdlib.Test.all
       [ check "let f (x: (Int * String * Bool)) : String = x.2" "f"
@@ -1633,7 +1633,7 @@ module TupleAccess =
         |> Stdlib.Test.equal "failed:UnknownTupleElement" ]
 
   // Tuple indexes start at 1, so x.0 is invalid.
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test indexStartsAtOne =
     Stdlib.Test.all
       [ check "let f (x: (Int * String)) : Int = x.0" "f"
@@ -1643,7 +1643,7 @@ module TupleAccess =
 
   // Int64 has no tuple elements. Reject x.1 both directly and through a lambda
   // whose parameter type becomes known only when the lambda is called.
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test intHasNoElements =
     Stdlib.Test.all
       [ check "let f (x: Int64) : Int = x.1" "f"
@@ -1653,7 +1653,7 @@ module TupleAccess =
 
   // A function declared for every 'a cannot assume that x has a field or tuple
   // element. Reject that assumption even when the access occurs in a local helper.
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test genericAndAliasedTuples =
     Stdlib.Test.all
       [ check "let f<'a> (x: 'a) : Int = x.1" "f"
@@ -1676,7 +1676,7 @@ module TupleAccess =
         |> Stdlib.Test.equal "failed:TypeMismatch" ]
 
   // Defer checking t.1 until first x supplies the tuple type for t.
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test deferredUntilCall =
     check
       (src
@@ -1688,7 +1688,7 @@ module TupleAccess =
 
   // Infer a separate tuple type for each use of first, allowing different element
   // types and tuple lengths in the two calls.
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test separateTypePerCall =
     check
       (src
@@ -1700,7 +1700,7 @@ module TupleAccess =
 
   // Once t.1 is known to be a pair, accept its second element and reject its
   // third. Report the invalid index rather than an unresolved-type warning.
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test nestedPairAccess =
     Stdlib.Test.all
       [ check "let f (u: Unit) : Int = (fun t -> t.1.2) ((1, 2), 3)" "f"
@@ -1720,7 +1720,7 @@ module TupleAccess =
           $"  {call}" ])
       "g"
 
-  // @compiler xfail compile: "Unknown function or value 'letBoundChain'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'letBoundChain'" class=missing-support reason=upstream-dependency
   test letBoundChains =
     Stdlib.Test.all
       [ letBoundChain "2" "Int" "f ((1, 2), 3)"
@@ -1729,7 +1729,7 @@ module TupleAccess =
         |> Stdlib.Test.equal "failed:UnknownTupleElement" ]
 
   // Calling f on Int tuples must not force a later call's String elements to be Int.
-  // @compiler xfail compile: "Unknown function or value 'letBoundChain'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'letBoundChain'" class=missing-support reason=upstream-dependency
   test callsDoNotShareElementTypes =
     letBoundChain "2" "(Int * String)" "(f ((1, 2), 3), f ((\"a\", \"b\"), 3))"
     |> Stdlib.Test.equal "checked:"
@@ -1748,7 +1748,7 @@ module TupleAccess =
           "  outer ((1, 2), 3)" ])
       "g"
 
-  // @compiler xfail compile: "Unknown function or value 'capturedChain'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'capturedChain'" class=missing-support reason=upstream-dependency
   test capturedChains =
     Stdlib.Test.all
       [ capturedChain "2"
@@ -1757,7 +1757,7 @@ module TupleAccess =
         |> Stdlib.Test.equal "failed:UnknownTupleElement" ]
 
   // Resolve t.1 to the Counted record before checking its count field.
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test resolvesToRecord =
     check
       (src
@@ -1775,7 +1775,7 @@ module DictGeneralization =
   // that lambda returns a plain Dict, and valid with a matching Option or Result.
   // Use an anonymous lambda so a separate self-reference cannot accidentally
   // preserve the return-type constraint and hide a bug in checking the key.
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test unwrapInDictKey =
     Stdlib.Test.all
       [ check
@@ -1824,7 +1824,7 @@ module DictGeneralization =
         "  ints entries"
         "  strings entries" ]
 
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test keyGeneralization =
     Stdlib.Test.all
       [ check (dictionaryUses "1") "f"
@@ -1837,7 +1837,7 @@ module DictGeneralization =
 // ----------------------------------------------------------------------------------
 
 module Unresolved =
-  // @compiler xfail compile: "Unknown function or value 'checkFunctionAst'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'checkFunctionAst'" class=missing-support reason=upstream-dependency
   test unresolvedNamesAreIncomplete =
     Stdlib.Test.all
       [ checkFunctionAst
@@ -1869,7 +1869,7 @@ module Unresolved =
 
   // Without a package value's definition, the checker cannot infer its type.
   // Report MissingValueSignature and return Incomplete.
-  // @compiler xfail compile: "Unknown function or value 'checkFunctionAst'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'checkFunctionAst'" class=missing-support reason=upstream-dependency
   test missingValueSignature =
     checkFunctionAst
       []
@@ -1878,7 +1878,7 @@ module Unresolved =
 
   // When the value being matched has an unresolved name, report that problem
   // without adding warnings about pattern types that depend on the missing value.
-  // @compiler xfail compile: "Unknown function or value 'checkFunctionAst'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'checkFunctionAst'" class=missing-support reason=upstream-dependency
   test unresolvedMatchSkipsPatternWarnings =
     checkFunctionAst
       []
@@ -1908,7 +1908,7 @@ module Unresolved =
 // ----------------------------------------------------------------------------------
 
 module Patterns =
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test exhaustiveMatches =
     Stdlib.Test.all
       [ check
@@ -1952,7 +1952,7 @@ module Patterns =
         "  | Nothing -> 0"
         "  | Something(SourceFile _) -> 1" ]
 
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test nestedEnumPatterns =
     check (nested ()) "f"
     |> Stdlib.Test.equal "checked:"
@@ -1967,7 +1967,7 @@ module Patterns =
 
   // Matching A true leaves A false uncovered. Report Incomplete and include
   // A(false) as an example of the missing input.
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test missingCaseExample =
     Stdlib.Test.all
       [ check (restrictive ()) "f"
@@ -1987,7 +1987,7 @@ module Patterns =
         [ "type Tree = | Node of Tree | Leaf", "let f (t: Tree) : Int =", "  match t with" ]
         cases)
 
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test recursiveTreeCoverage =
     Stdlib.Test.all
       [ check (tree [ "  | Leaf -> 0" ]) "f"
@@ -2009,7 +2009,7 @@ module Patterns =
           "  match x with" ]
         cases)
 
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test wildcardCoversRecursiveType =
     Stdlib.Test.all
       [ check (treeAndBool [ "  | (_, true) -> 1" ]) "f"
@@ -2022,7 +2022,7 @@ module Patterns =
   // A when condition may be false. The checker does not evaluate it, so a guarded
   // case cannot prove that its input is covered, even for the constant condition
   // here.
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test whenConditionDoesNotCover =
     check
       "let f (x: Bool) : Int = match x with | true -> 1 | false when 1 == 1 -> 0"
@@ -2030,7 +2030,7 @@ module Patterns =
     |> Stdlib.Test.equal "incomplete:NonExhaustiveMatch"
 
   // An Int is not a record: reject field access and record updates on it.
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test intIsNotRecord =
     Stdlib.Test.all
       [ check "let f (x: Int) : Int = x.field" "f"
@@ -2040,7 +2040,7 @@ module Patterns =
 
   // An empty list's element type may be unknown, but it is still a list.
   // Record operations and enum patterns on that list are definite errors.
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test emptyListAndIntShapes =
     Stdlib.Test.all
       [ check
@@ -2059,13 +2059,13 @@ module Patterns =
         |> Stdlib.Test.equal "failed:InvalidPattern" ]
 
   // f must work for every possible 'a, so it cannot assume that x has a field.
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test genericParamHasNoFields =
     check "let f<'a> (x: 'a) : Int = x.field" "f"
     |> Stdlib.Test.equal "failed:TypeMismatch"
 
   // Reject an enum-case pattern when the matched value is a record.
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test enumPatternOnRecord =
     check
       (src [ "type R = { a: Int }", "let f (r: R) : Int = match r with | Foo -> 1" ])
@@ -2074,7 +2074,7 @@ module Patterns =
 
   // Report the unknown case Missing. Still recognize its binding x, and skip
   // coverage checking so this one mistake does not cause extra diagnostics.
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test unknownCaseReportedOnce =
     check
       (src
@@ -2085,7 +2085,7 @@ module Patterns =
 
   // Reject (x, x) within an or-pattern because it binds x twice. Construct the
   // syntax tree directly because the parser would reject this source pattern.
-  // @compiler xfail compile: "Unknown function or value 'checkFunctionAst'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'checkFunctionAst'" class=missing-support reason=upstream-dependency
   test orPatternBindsTwice =
     checkFunctionAst
       []
@@ -2124,7 +2124,7 @@ module Patterns =
 
   // Every alternative in an or-pattern must bind the same names. Check that the
   // checker rejects (x, _) | (_, y), independently of the parser's own rejection.
-  // @compiler xfail compile: "Unknown function or value 'checkFunctionAst'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'checkFunctionAst'" class=missing-support reason=upstream-dependency
   test orPatternBindingsDiffer =
     checkFunctionAst
       []
@@ -2168,34 +2168,34 @@ module Patterns =
 module Ambiguity =
   // The discarded empty list's element type does not affect the function's result,
   // so leaving it unknown must not make the check Incomplete.
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test discardedEmptyListChecks =
     check (src [ "let f (u: Unit) : Int =", "  let _ = []", "  1" ]) "f"
     |> Stdlib.Test.equal "checked:"
 
   // The unknown element type of a discarded list must not hide a wrong return type.
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test discardedListKeepsReturnError =
     check (src [ "let f (u: Unit) : Int =", "  let _ = []", "  \"wrong\"" ]) "f"
     |> Stdlib.Test.equal "failed:TypeMismatch"
 
   // A list cannot satisfy a Blob return type, regardless of its unknown element
   // type.
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test listIsNotBlob =
     check "let f (u: Unit) : Blob = []" "f"
     |> Stdlib.Test.equal "failed:TypeMismatch"
 
   // Preserve the definite return-type error alongside the warning that the match
   // does not handle false. The overall verdict remains Failed.
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test returnErrorWithMissingCase =
     check "let f (value: Bool) : String = match value with | true -> 1" "f"
     |> Stdlib.Test.equal "failed:NonExhaustiveMatch,TypeMismatch"
 
   // The unused lambda never receives a record type, so the checker cannot verify
   // that its parameter has a path field. Report Incomplete.
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test unusedLambdaFieldIsIncomplete =
     check (src [ "let f (u: Unit) : Unit =", "  let _ = (fun record -> record.path)", "  ()" ]) "f"
     |> Stdlib.Test.equal "incomplete:AmbiguousType"
@@ -2212,7 +2212,7 @@ module Ambiguity =
         "  discovered.path"
         "val unfixed = source ()" ]
 
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test unusedRecordField =
     Stdlib.Test.all
       [ check (found ()) "f"
@@ -2222,7 +2222,7 @@ module Ambiguity =
 
   // Passing an empty list through identity and discarding the result does not
   // require the checker to determine the list's element type.
-  // @compiler xfail compile: "Unknown function or value 'checkFunctionAstOutcome'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'checkFunctionAstOutcome'" class=missing-support reason=upstream-dependency
   test discardedIdentityCall =
     (let outcome =
       checkFunctionAstOutcome
@@ -2251,7 +2251,7 @@ module Ambiguity =
 
   // Calling the Unit parameter is an error at the application node (3), not
   // at the empty-list argument (100), whose element type is still unknown.
-  // @compiler xfail compile: "Unknown function or value 'checkFunctionAstOutcome'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'checkFunctionAstOutcome'" class=missing-support reason=upstream-dependency
   test errorAtApplicationNode =
     (let outcome =
       checkFunctionAstOutcome
@@ -2271,7 +2271,7 @@ module Ambiguity =
   // y y would require y's function type to contain itself. With the unused local
   // helper's types unresolved, retain this finding as a warning and return
   // Incomplete.
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test selfApplicationIsWarning =
     check (src [ "let f (u: Unit) : Int =", "  let g = (fun y -> y y)", "  1" ]) "f"
     |> Stdlib.Test.equal "incomplete:AmbiguousType,OccursCheckFailed"
@@ -2300,7 +2300,7 @@ module ProvisionalDiagnostics =
         + "/" + (codesOf item.warnings)
       | _ -> "expected one item"
 
-  // @compiler xfail compile: "Unknown function or value 'displayed'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'displayed'" class=missing-support reason=upstream-dependency
   test warningsStayWarnings =
     Stdlib.Test.all
       [ displayed "1"
@@ -2311,7 +2311,7 @@ module ProvisionalDiagnostics =
 module Lets =
   // Generalizing the local identity lambda lets one call use Int and another use
   // String. Neither call should fix the parameter type for the other.
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test genericLocalLambda =
     check
       (src [ "let f (u: Unit) : (Int * String) =", "  let identity = (fun x -> x)", "  (identity 1, identity \"ok\")" ])
@@ -2320,7 +2320,7 @@ module Lets =
 
   // Recognize loop's recursive call and check its two arguments against loop's
   // parameters, independently of the outer function's single parameter.
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test recursiveLocalCall =
     check
       (src
@@ -2331,7 +2331,7 @@ module Lets =
     |> Stdlib.Test.equal "checked:"
 
   // A recursive call to loop must use its declared Int parameter; reject the String.
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test recursiveCallArgType =
     check
       (src
@@ -2343,7 +2343,7 @@ module Lets =
 
   // If f is already in scope, the new lambda's body refers to that existing Int
   // binding. Do not mistake the captured f for a recursive call to the new lambda.
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test capturedNameIsNotRecursion =
     check
       (src
@@ -2357,7 +2357,7 @@ module Lets =
   // Defer checking record.count until getCount is called with the Counted type.
   val counted = "type Counted = { count: Int }"
 
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test deferredRecordField =
     check
       (src
@@ -2370,7 +2370,7 @@ module Lets =
 
   // Check record.value separately for each call to getValue, allowing an Int field
   // in RowInt and a String field in RowString.
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test fieldPerCall =
     check
       (src
@@ -2384,7 +2384,7 @@ module Lets =
 
   // List.map supplies Option<Int> as get's parameter type. Use it to check the
   // lambda's Some and None patterns and infer the payload as Int.
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test mapSuppliesParamType =
     check
       (src
@@ -2407,7 +2407,7 @@ module Lets =
           lines
           [ "    ()", "  outer (Box { field = (fun y -> y) })" ] ])
 
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test capturedFieldCall =
     Stdlib.Test.all
       [ check
@@ -2440,7 +2440,7 @@ module Lets =
           "  let invoke = fun g -> g 1 2"
           $"  invoke {callee}" ])
 
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test curriedOrTwoParam =
     Stdlib.Test.all
       [ check (invoked "add" [ "let add (a: Int) (b: Int) : Int = a + b" ]) "f"
@@ -2459,7 +2459,7 @@ module Lets =
   // Calling both forms with two arguments works, but their function types differ:
   // a two-parameter function cannot stand in for a function returning a function.
   // Preserve this distinction inside custom type arguments too.
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test curriedAndTwoParamDiffer =
     Stdlib.Test.all
       [ check
@@ -2478,7 +2478,7 @@ module Lets =
 
   // Expanding Identity<'a> yields 'a, so comparing x with identity x introduces
   // no recursive type. Expand the alias before deciding whether there is a cycle.
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test selfApplicationCycles =
     Stdlib.Test.all
       [ check
@@ -2493,7 +2493,7 @@ module Lets =
 
   // In a b and b a, each function's type would contain the other's type, creating
   // a cycle. Independent calls and ordinary function composition have no such cycle.
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test mutualApplicationCycle =
     Stdlib.Test.all
       [ check "val f = fun a b -> (a b, b a)" "f"
@@ -2505,7 +2505,7 @@ module Lets =
 
   // The parameter g has one type throughout the lambda, even before its number
   // of parameters is known. Its calls must agree on argument and result types.
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test parameterHasOneType =
     Stdlib.Test.all
       [ check "val f = fun g -> (g 1, g true)" "f"
@@ -2515,7 +2515,7 @@ module Lets =
 
   // All uses of x must be compatible: it cannot be both a record and a function, and
   // a function cannot be a dictionary key. Detect this in either expression order.
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test incompatibleUses =
     Stdlib.Test.all
       [ check "val f = fun x -> (x.field, x 1)" "f"
@@ -2532,7 +2532,7 @@ module Lets =
   // Repeated uses of a field or payload must agree on its type, even before its
   // record or enum declaration is known. Compare reads, updates, unwraps, and
   // patterns before allowing the helper to be reused at different types.
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test fieldUsesAgree =
     Stdlib.Test.all
       [ check "val f = fun r -> (r.field + 1, if r.field then 1 else 0)" "f"
@@ -2548,7 +2548,7 @@ module Lets =
 
   // When the update comes first, it fixes field's type to Bool. The later addition
   // then reports both the invalid numeric operand and the conflicting field type.
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test updateAndPayloadUses =
     Stdlib.Test.all
       [ check "val f = fun r -> ({ r with field = true }, r.field + 1)" "f"
@@ -2572,7 +2572,7 @@ module Lets =
 
   // The final if requires a and b to have the same type. Revisit their earlier
   // field uses and detect that one requires Int while the other requires Bool.
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test ifJoinsFieldUses =
     check
       (src
@@ -2586,7 +2586,7 @@ module Lets =
 
   // Once get is called with R, report both accesses to its nonexistent missing
   // field. Combining their type requirements must not lose either source location.
-  // @compiler xfail compile: "Unknown function or value 'issues'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'issues'" class=missing-support reason=upstream-dependency
   test bothMissingFieldsReported =
     Stdlib.List.length
       (issues
@@ -2602,7 +2602,7 @@ module Lets =
   // g 1 2 applies the result of g 1 to another argument. Preserve that relationship
   // while allowing g to be either a two-parameter function or a function returning
   // a function. If g 1 is required to be Int, the longer call is invalid.
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test partialApplicationChain =
     Stdlib.Test.all
       [ check "val f = fun g -> (g 1, g 1 2)" "f"
@@ -2633,7 +2633,7 @@ module Lets =
   // takes establishes that g accepts an Int first. Checking that argument in g 1 a
   // exposes a cycle with a g. Keep solving after an argument is consumed, even if no
   // new type is inferred and the number of deferred checks stays the same.
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test consumedArgumentCycle =
     Stdlib.Test.all
       [ check
@@ -2659,7 +2659,7 @@ module Lets =
 
   // Validate keys in dictionary literals even when the dictionary is only local.
   // If a key's type is initially unknown, retain the check until a call supplies it.
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test localDictKeys =
     check
       (src [ "let f (u: Unit) : Unit =", "  let bad = Dict { (fun () -> ()): 1 }", "  ()" ])
@@ -2673,14 +2673,14 @@ module Lets =
         $"  let _ = single {key}"
         "  1" ]
 
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test keyFromHelperCall =
     check (single "\"a\"") "f"
     |> Stdlib.Test.equal "checked:"
 
   // Knowing that a key is a function is enough to reject it; its parameter type
   // does not need to be known. Apply this rule to literals and helper calls.
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test functionKeysRejected =
     Stdlib.Test.all
       [ check
@@ -2713,7 +2713,7 @@ module Lets =
 
   // A tuple of existing arguments is eligible for generalization. Duplicate
   // names in its binding pattern must still be rejected.
-  // @compiler xfail compile: "Unknown function or value 'checkFunctionAst'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'checkFunctionAst'" class=missing-support reason=upstream-dependency
   test tupleBindingDuplicates =
     checkFunctionAst
       []
@@ -2723,7 +2723,7 @@ module Lets =
 
   // The checker does not generalize if expressions. This takes the other binding
   // path, which must also reject the duplicate name x.
-  // @compiler xfail compile: "Unknown function or value 'checkFunctionAst'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'checkFunctionAst'" class=missing-support reason=upstream-dependency
   test ifBindingDuplicates =
     checkFunctionAst
       []
@@ -2746,7 +2746,7 @@ module Lets =
 module Values =
   // Infer second-value's String type before checking first-value, even though
   // first-value appears earlier in the input batch.
-  // @compiler xfail compile: "Unknown function or value 'checkValueAsts'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'checkValueAsts'" class=missing-support reason=upstream-dependency
   test dependencyOrder =
     checkValueAsts
       [ valueNamed "first-value" (useValue 24L "second-value")
@@ -2760,7 +2760,7 @@ module Values =
 
   // Each value depends on the other's inferred type. With no independent type
   // information to break the cycle, both checks are Incomplete.
-  // @compiler xfail compile: "Unknown function or value 'checkValueAsts'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'checkValueAsts'" class=missing-support reason=upstream-dependency
   test mutualValueCycle =
     checkValueAsts
       [ valueNamed "recursive-first" (useValue 26L "recursive-second")
@@ -2777,7 +2777,7 @@ module Values =
         "let ints (u: Unit) : List<Int> = empty"
         "let strings (u: Unit) : List<String> = empty" ]
 
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test genericValue =
     Stdlib.Test.all
       [ check (empties ()) "empty"
@@ -2797,7 +2797,7 @@ module Batches =
   let pair () : String =
     src [ "let valid (x: Int) : Int = x", "let invalid (x: Int) : String = x" ]
 
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test separateVerdicts =
     Stdlib.Test.all
       [ check (pair ()) "valid"
@@ -2807,7 +2807,7 @@ module Batches =
 
   // Load Option.map's signature and the types it references from the package
   // store, then use them to check the call and its lambda argument.
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test loadsDependencySignatures =
     check
       "let f (x: Stdlib.Option.Option<Int>) : Stdlib.Option.Option<Int> = Stdlib.Option.map x (fun y -> y + 1)"
@@ -2827,7 +2827,7 @@ module Batches =
   // shape of the traversal. So this line is a TIGHTENING: the checker now refuses a
   // 5,000-deep type here where it used to accept one, and the rule is sayable
   // without reference to how the walk is written.
-  // @compiler xfail compile: "Unknown function or value 'checkPackageOpsSummary'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'checkPackageOpsSummary'" class=missing-support reason=upstream-dependency
   test depthLimit =
     Stdlib.Test.all
       [ checkPackageOpsSummary
@@ -2843,7 +2843,7 @@ module Batches =
 
   // A stack-depth failure in one function must leave another function's definite
   // return-type error visible. The batch reports both findings and remains Failed.
-  // @compiler xfail compile: "Unknown function or value 'checkPackageOpsSummary'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'checkPackageOpsSummary'" class=missing-support reason=upstream-dependency
   test deepFunctionKeepsOtherError =
     checkPackageOpsSummary
       []
@@ -2853,7 +2853,7 @@ module Batches =
 
   // A signature or type declaration that is too deep makes its check and dependent
   // checks Incomplete. Continue checking unrelated functions for definite errors.
-  // @compiler xfail compile: "Unknown function or value 'checkPackageOpsSummary'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'checkPackageOpsSummary'" class=missing-support reason=upstream-dependency
   test deepSignatureIsIncomplete =
     checkPackageOpsSummary
       []
@@ -2869,7 +2869,7 @@ module Batches =
   // MissingTypeDeclaration on top. Debug does the second, published does the first.
   // What matters either way is the property the test was written for: the other
   // function's definite return-type error still gets reported.
-  // @compiler xfail compile: "Unknown function or value 'checkPackageOpsSummary'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'checkPackageOpsSummary'" class=missing-support reason=upstream-dependency
   test deepDeclaration =
     (let answer =
        checkPackageOpsSummary
@@ -2882,7 +2882,7 @@ module Batches =
 
   // Checking a key through 2,000 linked record declarations may complete or reach
   // the stack limit. In either case, preserve the separate wrong-return error.
-  // @compiler xfail compile: "Unknown function or value 'custom'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'custom'" class=missing-support reason=upstream-dependency
   test longRecordChain =
     (let chain =
       Stdlib.List.map (Stdlib.List.range 0 1999) (fun i ->
@@ -2926,7 +2926,7 @@ module Batches =
   // In the tested Release build, 200,000 tuple levels returned Ok(true),
   // while one million reached TooDeep. This is a test input, not a language limit.
   // Revisit it if stack size or comparison code changes.
-  // @compiler xfail compile: "Unknown function or value 'Darklang.LanguageTools.AtRestTypeChecker.guard'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'Darklang.LanguageTools.AtRestTypeChecker.guard'" class=missing-support reason=upstream-dependency
   test guardCatchesStackOverflow =
     Darklang.LanguageTools.AtRestTypeChecker.guard
       (fun t -> t == (nestedTupleType 1000000))
@@ -2936,7 +2936,7 @@ module Batches =
         Darklang.LanguageTools.AtRestTypeChecker.CheckFailure.TooDeep)
 
   // And it is not simply always failing: the same shape, shallow, comes back Ok.
-  // @compiler xfail compile: "Unknown function or value 'Darklang.LanguageTools.AtRestTypeChecker.guard'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'Darklang.LanguageTools.AtRestTypeChecker.guard'" class=missing-support reason=upstream-dependency
   test shallowAndDeepInputs =
     Stdlib.Test.all
       [ Darklang.LanguageTools.AtRestTypeChecker.guard
@@ -2982,7 +2982,7 @@ module Batches =
 
   // Check 300 functions sharing one enum declaration in a single batch.
   // All 301 declarations must receive Checked results.
-  // @compiler xfail compile: "Unknown function or value 'declared'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'declared'" class=missing-support reason=upstream-dependency
   test largeBatch =
     (let payload =
       declared
@@ -3052,7 +3052,7 @@ module Guarded =
       (Darklang.LanguageTools.AtRestTypeChecker.Environment.Closure
         { types = Dict {}, values = Dict {}, fns = Dict {} })
 
-  // @compiler xfail compile: "Unknown function or value 'loaded'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'loaded'" class=missing-support reason=upstream-dependency
   test loadsPendingDependencies =
     Stdlib.Test.all
       [ (let closure = loaded ()
@@ -3072,7 +3072,7 @@ module Guarded =
 
   // A runtime error inside the checker becomes an Incomplete report through the
   // same error-handling wrapper used by saves and commits, with a diagnostic.
-  // @compiler xfail compile: "Unknown function or value 'Darklang.Cli.Workbench.captureOutputAnd'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'Darklang.Cli.Workbench.captureOutputAnd'" class=missing-support reason=upstream-dependency
   test checkerErrorIsIncomplete =
     let (report, output) =
       Darklang.Cli.Workbench.captureOutputAnd (fun () ->
@@ -3107,7 +3107,7 @@ module Invariants =
       ("x + x", "(match x with | C y -> y | _ -> 0)")
       ("-x", "Builtin.unwrap x") ]
 
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test incompatibleShapePairs =
     Stdlib.List.all shapePairs (fun (first, second) ->
       check $"val f = fun x -> ({first}, {second})" "f" == "failed:TypeMismatch"
@@ -3116,7 +3116,7 @@ module Invariants =
 
   // The final if makes x and y have the same type. Revisit the deferred checks
   // and reject the combined requirement for both a record field and a function call.
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test ifJoinsRecordAndFunction =
     check
       (src [ "val f = fun x y ->"
@@ -3129,7 +3129,7 @@ module Invariants =
   // Accept combinations that some type can satisfy: signed integers support all
   // three numeric operations, and a record can support both field access and updates
   // or be a dictionary key when its contents are valid key types.
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test compatibleCombinations =
     Stdlib.Test.all
       [ check "val f = fun x -> (x + x, -x, x & x)" "f"
@@ -3152,7 +3152,7 @@ module Invariants =
       "((match x with | C y -> y 1 | _ -> 0), Dict { x: 1 })"
       "(x.field.next 1, Dict { x: 1 })" ]
 
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test inferredKeyRestrictions =
     Stdlib.Test.all
       [ Stdlib.List.map badKeys (fun body ->
@@ -3178,7 +3178,7 @@ module Invariants =
   // Builtin.unwrap and a Some or Ok pattern must agree on the success payload's
   // type. Error patterns describe Result's separate error payload. These case
   // names also determine Option versus Result; an unrelated case C is invalid.
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test unwrapAndPatternsAgree =
     Stdlib.Test.all
       [ check "val f = fun x -> (Builtin.unwrap x + 1, match x with | Some y -> if y then 1 else 0 | _ -> 0)" "f"
@@ -3195,7 +3195,7 @@ module Invariants =
   // The duplicate arity errors contain a deeply nested type. Removing duplicate
   // findings must not overflow the .NET stack while hashing or comparing them,
   // or prevent the separate wrong-return error from being reported.
-  // @compiler xfail compile: "Unknown function or value 'custom'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'custom'" class=missing-support reason=upstream-dependency
   test dedupDeepFindings =
     (let bad = custom "arity-one" [ nestedListType 5000, tInt () ]
      let env =
@@ -3245,7 +3245,7 @@ module Invariants =
         Darklang.LanguageTools.ProgramTypes.Reference.PackageFn(hash "good")
         Darklang.LanguageTools.ProgramTypes.Reference.PackageFn(hash "bad") ]
 
-  // @compiler xfail compile: "Unknown function or value 'summary'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'summary'" class=missing-support reason=upstream-dependency
   test checkReferences =
     Stdlib.Test.all
       [ summary (branchReport ())
@@ -3261,7 +3261,7 @@ module Invariants =
   // An Option or Result cannot have the same type as its own success payload.
   // Detect these type cycles through unwraps and calls. Named recursive records
   // are valid; separately check whether their fields make them usable as keys.
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test payloadCycles =
     Stdlib.Test.all
       [ check "val f = fun x -> if true then x else Builtin.unwrap x" "f"
@@ -3280,7 +3280,7 @@ module Invariants =
         |> Stdlib.Test.equal "failed:UnsupportedDictKeyType" ]
 
 module DefiniteShapes =
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test definiteShapeErrors =
     Stdlib.Test.all
       [ check "let f () : Int = Stdlib.List.length \"bad\"" "f"
@@ -3300,7 +3300,7 @@ module DefiniteShapes =
   // implements `Negate` for a list whatever the element is, so the head alone
   // settles it. Deciding this by waiting would downgrade it to Incomplete, and
   // Incomplete passes the commit gate.
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test negateEmptyList =
     check (src [ "let f () : Unit =", "  let _ = -[]", "  ()" ]) "f"
     |> Stdlib.Test.equal "failed:MissingImpl"
@@ -3324,7 +3324,7 @@ module ConcreteTypeArgImpls =
       ))
       "f"
 
-  // @compiler xfail compile: "Unknown function or value 'withImpl'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'withImpl'" class=missing-support reason=upstream-dependency
   test implForConcreteTypeArg =
     Stdlib.Test.all
       [ withImpl [ "let f () : String = Tag.tag (Box { concreteTypeArgImplsOnly = 1L })" ]
@@ -3343,7 +3343,7 @@ module ConcreteTypeArgImpls =
         |> Stdlib.Test.equal "failed:MissingImpl" ]
 
 module RigidCustomOperations =
-  // @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
   test rigidTypeParam =
     Stdlib.Test.all
       [ check "let f<'a> (x: 'a) : 'a = { x with field = 1 }" "f"
@@ -3366,7 +3366,7 @@ module DefiniteConstructorErrors =
       (src [ declaration, "let f () : Unit =", $"  let _ = {expression}", "  ()" ])
       "f"
 
-  // @compiler xfail compile: "Unknown function or value 'construct'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'construct'" class=missing-support reason=upstream-dependency
   test constructorErrors =
     Stdlib.Test.all
       [ construct "type E<'a> = A of 'a" "E.B"
@@ -3391,7 +3391,7 @@ module DictKeysWithUnsupportedValues =
              "  ()" ])
       "f"
 
-  // @compiler xfail compile: "Unknown function or value 'key'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'key'" class=missing-support reason=upstream-dependency
   test unsupportedKeyValues =
     Stdlib.Test.all
       [ key "((fun x -> x), Builtin.add)"
@@ -3415,7 +3415,7 @@ module DictKeysWithUnsupportedValues =
 
 // An ordinary test must return Stdlib.Test.Result, even when its body never names
 // it.
-// @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+// @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
 test testsMustReturnResult =
   Stdlib.Test.all
     [ check (src [ "test passes = 8L |> Stdlib.Test.equal 8L" ]) "passes"
@@ -3424,7 +3424,7 @@ test testsMustReturnResult =
       |> Stdlib.Test.equal "failed:TypeMismatch" ]
 
 // Values and functions in the same batch are visible to the test.
-// @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+// @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
 test batchIsVisibleToTests =
   Stdlib.Test.all
     [ check
@@ -3443,7 +3443,7 @@ test batchIsVisibleToTests =
 
 // A `raises` test is observed only through its runtime error, so its body may
 // have any type; it is still checked.
-// @compiler xfail compile: "Unknown function or value 'check'" reason=upstream-dependency
+// @compiler xfail compile: "Unknown function or value 'check'" class=missing-support reason=upstream-dependency
 test raisesTestsAreChecked =
   Stdlib.Test.all
     [ check (src [ "test raisesAny = 8L => raises \"anything\"" ]) "raisesAny"

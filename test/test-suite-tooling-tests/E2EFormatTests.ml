@@ -553,46 +553,56 @@ let testCompilerAnnotationOverrideOrdering () =
         "Override or annotation lost")
 
 let testCompilerXfailStrictness () =
-  one
-    "// @compiler xfail compile: \"known missing function\" reason=test-counter\n\
-     Unknown.fn () = 1L"
-    "Expected compile xfail" (fun test ->
-      let expected = CompileFailed (1, "known missing function", 0L) in
-      let unrelated = CompileFailed (1, "unrelated failure", 0L) in
-      let wrongPhase = Ran (1, "", "known missing function", 0L, 0L) in
-      let passed = Ran (0, "true\n", "", 0L, 0L) in
-      let* () =
+  let check classification =
+    one
+      ("// @compiler xfail compile: \"known missing function\" class="
+     ^ classification ^ " reason=test-counter\nUnknown.fn () = 1L")
+      "Expected compile xfail"
+      (fun test ->
+        let expected = CompileFailed (1, "known missing function", 0L) in
+        let unrelated = CompileFailed (1, "unrelated failure", 0L) in
+        let wrongPhase = Ran (1, "", "known missing function", 0L, 0L) in
+        let passed = Ran (0, "true\n", "", 0L, 0L) in
+        let* () =
+          require
+            (Result.is_ok (evaluateExpectations test expected))
+            "Known failure was not accepted"
+        in
+        let* () =
+          require
+            (List.for_all
+               (fun run -> Result.is_error (evaluateExpectations test run))
+               [
+                 unrelated;
+                 wrongPhase;
+                 passed;
+                 CompileFailed (139, "known missing function", 0L);
+               ])
+            "Unexpected pass, error or phase satisfied xfail"
+        in
+        let negative =
+          {
+            test with
+            errorExpectation = Some CompileError;
+            expectedErrorMessage = Some "known missing function";
+          }
+        in
+        let* () =
+          require
+            (Result.is_error (evaluateExpectations negative unrelated))
+            "Quoted expected diagnostic satisfied xfail without actual evidence"
+        in
         require
-          (Result.is_ok (evaluateExpectations test expected))
-          "Known failure was not accepted"
-      in
-      let* () =
-        require
-          (List.for_all
-             (fun run -> Result.is_error (evaluateExpectations test run))
-             [ unrelated; wrongPhase; passed ])
-          "Unexpected pass, error or phase satisfied xfail"
-      in
-      let negative =
-        {
-          test with
-          errorExpectation = Some CompileError;
-          expectedErrorMessage = Some "known missing function";
-        }
-      in
-      let* () =
-        require
-          (Result.is_error (evaluateExpectations negative unrelated))
-          "Quoted expected diagnostic satisfied xfail without actual evidence"
-      in
-      require
-        (Option.is_none (tryPrepareBatchTest test))
-        "Expected failure was batched")
+          (Option.is_none (tryPrepareBatchTest test))
+          "Expected failure was batched")
+  in
+  let* () = check "missing-support" in
+  check "aot-rejection"
 
 let testCompilerRuntimeXfailStrictness () =
   one
     "// @compiler xfail runtime: \"known runtime failure\" \
-     reason=annotation-probe\n\
+     class=missing-support reason=annotation-probe\n\
      Builtin.crash \"known runtime failure\" = 1L"
     "Expected runtime xfail" (fun test ->
       let expected = Ran (1, "", "known runtime failure", 0L, 0L) in
@@ -609,7 +619,7 @@ let testCompilerRuntimeXfailStrictness () =
 let testExpectedLanguageErrorIsNotAnXfail () =
   one
     "// @compiler xfail runtime: \"known runtime failure\" \
-     reason=annotation-probe\n\
+     class=missing-support reason=annotation-probe\n\
      Builtin.crash \"known runtime failure\" = error=\"known runtime failure\""
     "Expected ordinary negative test" (fun test ->
       match

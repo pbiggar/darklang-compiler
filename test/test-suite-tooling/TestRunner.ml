@@ -1234,6 +1234,19 @@ let runTestsWithProgressReporter completedTestReporter args =
                     ("status", JString status);
                     ("message", JString message);
                     ("source_line", JInt test.E.sourceLine);
+                    ( "expected_failure_class",
+                      match test.E.compilerDisposition with
+                      | CompilerAnnotations.Xfail { classification; _ } ->
+                          JString
+                            (match classification with
+                            | CompilerAnnotations.AotRejection ->
+                                "aot-rejection"
+                            | CompilerAnnotations.MissingSupport ->
+                                "missing-support")
+                      | CompilerAnnotations.Run | CompilerAnnotations.Blocked _
+                      | CompilerAnnotations.Excluded _
+                      | CompilerAnnotations.Replace _ ->
+                          JString "none" );
                     ( "phase",
                       JString
                         (match run with
