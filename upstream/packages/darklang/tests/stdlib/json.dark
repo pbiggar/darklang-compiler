@@ -476,14 +476,12 @@ module UInt8 =
 
 module Int16 =
   module Basic =
-    // @compiler blocked: pending-validation
     test serialize =
       Stdlib.Test.all
         [ Stdlib.Json.serialize<Int16> 0s |> Stdlib.Test.equal "0"
           Stdlib.Json.serialize<Int16> 123s |> Stdlib.Test.equal "123"
           Stdlib.Json.serialize<Int16> -123s |> Stdlib.Test.equal "-123" ]
 
-    // @compiler blocked: pending-validation
     test parse =
       Stdlib.Test.all
         [ Stdlib.Json.parse<Int16> "0" |> Stdlib.Test.equal (Result.Ok 0s)
@@ -495,19 +493,16 @@ module Int16 =
           Stdlib.Json.parse<Int16> "1200E-1" |> Stdlib.Test.equal (Result.Ok 120s) ]
 
   module Int16Limits =
-    // @compiler blocked: pending-validation
     test serialize =
       Stdlib.Test.all
         [ Stdlib.Json.serialize<Int16> -32768s |> Stdlib.Test.equal "-32768"
           Stdlib.Json.serialize<Int16> 32767s |> Stdlib.Test.equal "32767" ]
 
-    // @compiler blocked: pending-validation
     test parse =
       Stdlib.Test.all
         [ Stdlib.Json.parse<Int16> "-32768" |> Stdlib.Test.equal (Result.Ok -32768s)
           Stdlib.Json.parse<Int16> "32767" |> Stdlib.Test.equal (Result.Ok 32767s) ]
 
-    // @compiler blocked: pending-validation
     test parseErrors =
       Stdlib.Test.all
         [ (Stdlib.Json.parse<Int16> "-32769") |> err
@@ -518,7 +513,7 @@ module Int16 =
               "Can't parse JSON `32768` as type `Int16` at path: `root`") ]
 
   module Errors =
-    // @compiler blocked: pending-validation
+    // @compiler blocked: compiler-timeout
     test parseErrors =
       Stdlib.Test.all
         [ (Stdlib.Json.parse<Int16> " ") |> err
@@ -553,13 +548,11 @@ module Int16 =
 
 module UInt16 =
   module Basic =
-    // @compiler blocked: pending-validation
     test serialize =
       Stdlib.Test.all
         [ Stdlib.Json.serialize<UInt16> 0us |> Stdlib.Test.equal "0"
           Stdlib.Json.serialize<UInt16> 123us |> Stdlib.Test.equal "123" ]
 
-    // @compiler blocked: pending-validation
     test parse =
       Stdlib.Test.all
         [ Stdlib.Json.parse<UInt16> "0" |> Stdlib.Test.equal (Result.Ok 0us)
@@ -570,20 +563,17 @@ module UInt16 =
           |> Stdlib.Test.equal (Result.Ok 120us) ]
 
   module UInt16Limits =
-    // @compiler blocked: pending-validation
     test serialize =
       Stdlib.Test.all
         [ Stdlib.Json.serialize<UInt16> 0us |> Stdlib.Test.equal "0"
           Stdlib.Json.serialize<UInt16> 65535us |> Stdlib.Test.equal "65535" ]
 
-    // @compiler blocked: pending-validation
     test parse =
       Stdlib.Test.all
         [ Stdlib.Json.parse<UInt16> "0" |> Stdlib.Test.equal (Result.Ok 0us)
           Stdlib.Json.parse<UInt16> "65535"
           |> Stdlib.Test.equal (Result.Ok 65535us) ]
 
-    // @compiler blocked: pending-validation
     test parseErrors =
       Stdlib.Test.all
         [ (Stdlib.Json.parse<UInt16> "-1") |> err
@@ -594,7 +584,7 @@ module UInt16 =
               "Can't parse JSON `65536` as type `UInt16` at path: `root`") ]
 
   module Errors =
-    // @compiler blocked: pending-validation
+    // @compiler blocked: compiler-timeout
     test parseErrors =
       Stdlib.Test.all
         [ (Stdlib.Json.parse<UInt16> " ") |> err
@@ -622,14 +612,12 @@ module UInt16 =
 
 module Int32 =
   module Basic =
-    // @compiler blocked: pending-validation
     test serialize =
       Stdlib.Test.all
         [ Stdlib.Json.serialize<Int32> 0l |> Stdlib.Test.equal "0"
           Stdlib.Json.serialize<Int32> 123l |> Stdlib.Test.equal "123"
           Stdlib.Json.serialize<Int32> -123l |> Stdlib.Test.equal "-123" ]
 
-    // @compiler blocked: pending-validation
     test parse =
       Stdlib.Test.all
         [ Stdlib.Json.parse<Int32> "0" |> Stdlib.Test.equal (Result.Ok 0l)
@@ -641,7 +629,6 @@ module Int32 =
           Stdlib.Json.parse<Int32> "1200E-1" |> Stdlib.Test.equal (Result.Ok 120l) ]
 
   module Int32Limits =
-    // @compiler blocked: pending-validation
     test serialize =
       Stdlib.Test.all
         [ Stdlib.Json.serialize<Int32> -2147483648l
@@ -649,7 +636,6 @@ module Int32 =
           Stdlib.Json.serialize<Int32> 2147483647l
           |> Stdlib.Test.equal "2147483647" ]
 
-    // @compiler blocked: pending-validation
     test parse =
       Stdlib.Test.all
         [ Stdlib.Json.parse<Int32> "-2147483648"
@@ -657,7 +643,6 @@ module Int32 =
           Stdlib.Json.parse<Int32> "2147483647"
           |> Stdlib.Test.equal (Result.Ok 2147483647l) ]
 
-    // @compiler blocked: pending-validation
     test parseErrors =
       Stdlib.Test.all
         [ (Stdlib.Json.parse<Int32> "-2147483649") |> err
@@ -666,7 +651,7 @@ module Int32 =
           |> Stdlib.Test.equal (Result.Error "Can't parse JSON `2147483648` as type `Int32` at path: `root`") ]
 
   module Errors =
-    // @compiler blocked: pending-validation
+    // @compiler blocked: compiler-timeout
     test parseErrors =
       Stdlib.Test.all
         [ (Stdlib.Json.parse<Int32> " ") |> err
@@ -694,13 +679,11 @@ module Int32 =
 
 module UInt32 =
   module Basic =
-    // @compiler blocked: pending-validation
     test serialize =
       Stdlib.Test.all
         [ Stdlib.Json.serialize<UInt32> 0ul |> Stdlib.Test.equal "0"
           Stdlib.Json.serialize<UInt32> 123ul |> Stdlib.Test.equal "123" ]
 
-    // @compiler blocked: pending-validation
     test parse =
       Stdlib.Test.all
         [ Stdlib.Json.parse<UInt32> "0" |> Stdlib.Test.equal (Result.Ok 0ul)
@@ -712,21 +695,18 @@ module UInt32 =
           |> Stdlib.Test.equal (Result.Ok 120ul) ]
 
   module UInt32Limits =
-    // @compiler blocked: pending-validation
     test serialize =
       Stdlib.Test.all
         [ Stdlib.Json.serialize<UInt32> 0ul |> Stdlib.Test.equal "0"
           Stdlib.Json.serialize<UInt32> 4294967295ul
           |> Stdlib.Test.equal "4294967295" ]
 
-    // @compiler blocked: pending-validation
     test parse =
       Stdlib.Test.all
         [ Stdlib.Json.parse<UInt32> "0" |> Stdlib.Test.equal (Result.Ok 0ul)
           Stdlib.Json.parse<UInt32> "4294967295"
           |> Stdlib.Test.equal (Result.Ok 4294967295ul) ]
 
-    // @compiler blocked: pending-validation
     test parseErrors =
       Stdlib.Test.all
         [ (Stdlib.Json.parse<UInt32> "-1") |> err
@@ -737,7 +717,7 @@ module UInt32 =
               "Can't parse JSON `4294967296` as type `UInt32` at path: `root`") ]
 
   module Errors =
-    // @compiler blocked: pending-validation
+    // @compiler blocked: compiler-timeout
     test parseErrors =
       Stdlib.Test.all
         [ (Stdlib.Json.parse<UInt32> " ") |> err
@@ -772,14 +752,12 @@ module UInt32 =
 
 module Int128 =
   module Basic =
-    // @compiler blocked: pending-validation
     test serialize =
       Stdlib.Test.all
         [ Stdlib.Json.serialize<Int128> 0Q |> Stdlib.Test.equal "0"
           Stdlib.Json.serialize<Int128> 12345Q |> Stdlib.Test.equal "12345"
           Stdlib.Json.serialize<Int128> -12345Q |> Stdlib.Test.equal "-12345" ]
 
-    // @compiler blocked: pending-validation
     test parse =
       Stdlib.Test.all
         [ Stdlib.Json.parse<Int128> "0" |> Stdlib.Test.equal (Result.Ok 0Q)
@@ -791,7 +769,6 @@ module Int128 =
           Stdlib.Json.parse<Int128> "1200E-1" |> Stdlib.Test.equal (Result.Ok 120Q) ]
 
   module Int128Limits =
-    // @compiler blocked: pending-validation
     test serialize =
       Stdlib.Test.all
         [ Stdlib.Json.serialize<Int128> -170141183460469231731687303715884105728Q
@@ -799,7 +776,6 @@ module Int128 =
           Stdlib.Json.serialize<Int128> 170141183460469231731687303715884105727Q
           |> Stdlib.Test.equal "170141183460469231731687303715884105727" ]
 
-    // @compiler blocked: pending-validation
     test parse =
       Stdlib.Test.all
         [ Stdlib.Json.parse<Int128> "-170141183460469231731687303715884105728"
@@ -817,7 +793,6 @@ module Int128 =
           |> Stdlib.Test.equal (Result.Ok
               -169999999999999998061923293023115935744Q) ]
 
-    // @compiler blocked: pending-validation
     test parseErrors =
       Stdlib.Test.all
         [ // First number that doesn't fit in an Int128
@@ -834,7 +809,7 @@ module Int128 =
               "Can't parse JSON `-1.8E38` as type `Int128` at path: `root`") ]
 
   module Errors =
-    // @compiler blocked: pending-validation
+    // @compiler blocked: compiler-timeout
     test parseErrors =
       Stdlib.Test.all
         [ (Stdlib.Json.parse<Int128> " ") |> err
@@ -870,7 +845,6 @@ module Int128 =
           |> Stdlib.Test.equal (Result.Error
               "Can't parse JSON `170141183460469231731687303715884105800` as type `Int128` at path: `root`") ]
 
-    // @compiler blocked: pending-validation
     test parse =
       // (-1.7014118346046923E+38) this result is out of range for Int128 and is
       // wrapped around to the min value
@@ -880,13 +854,11 @@ module Int128 =
 
 module UInt128 =
   module Basic =
-    // @compiler blocked: pending-validation
     test serialize =
       Stdlib.Test.all
         [ Stdlib.Json.serialize<UInt128> 0Z |> Stdlib.Test.equal "0"
           Stdlib.Json.serialize<UInt128> 12345Z |> Stdlib.Test.equal "12345" ]
 
-    // @compiler blocked: pending-validation
     test parse =
       Stdlib.Test.all
         [ Stdlib.Json.parse<UInt128> "0" |> Stdlib.Test.equal (Result.Ok 0Z)
@@ -899,11 +871,9 @@ module UInt128 =
 
   module UInt128Limits =
     // First number that doesn't fit in a UInt128
-    // @compiler blocked: pending-validation
     test serialize =
       Stdlib.Json.serialize<UInt128> 0Z |> Stdlib.Test.equal "0"
 
-    // @compiler blocked: pending-validation
     test parse =
       Stdlib.Test.all
         [ Stdlib.Json.parse<UInt128> "340282366920938463463374607431768211455"
@@ -914,7 +884,6 @@ module UInt128 =
           |> Stdlib.Test.equal (Result.Ok
               339999999999999996123846586046231871488Z) ]
 
-    // @compiler blocked: pending-validation
     test parseErrors =
       Stdlib.Test.all
         [ (Stdlib.Json.parse<UInt128> "340282366920938463463374607431768211456") |> err
@@ -929,7 +898,7 @@ module UInt128 =
               "Can't parse JSON `-1` as type `UInt128` at path: `root`") ]
 
   module Errors =
-    // @compiler blocked: pending-validation
+    // @compiler blocked: compiler-timeout
     test parseErrors =
       Stdlib.Test.all
         [ (Stdlib.Json.parse<UInt128> " ") |> err
