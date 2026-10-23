@@ -28,25 +28,25 @@ builtins:
   unassessed: 533
 dispositions:
   packages:
-    blocked: 3240
+    blocked: 3235
     excluded: 2
     replace: 35
-    run: 426
+    run: 431
   stdlib:
     blocked: 848
     excluded: 3
     replace: 1142
     run: 5
   tests:
-    run: 1501
-    xfail: 858
+    run: 1507
+    xfail: 852
 reasons:
   packages:
     compiler-contract: 12
     compiler-gap: 7
     compiler-implementation: 34
     constructor-identity: 1
-    container-adaptation: 33
+    container-adaptation: 28
     missing-implementation: 3023
     runtime-reflection: 2
     test-counter: 1
@@ -63,7 +63,6 @@ reasons:
     test-counter: 2
     test-diagnostics: 2
   tests:
-    compiler-gap: 261
+    compiler-gap: 257
     test-counter: 7
-    test-diagnostics: 2
     upstream-dependency: 588

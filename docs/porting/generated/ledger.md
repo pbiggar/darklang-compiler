@@ -10,9 +10,9 @@ A run disposition means selected, not a passing execution receipt. Replacement c
 
 | Area | Source dispositions |
 | --- | --- |
-| packages | 3,240 blocked, 2 excluded, 35 replace, 426 run |
+| packages | 3,235 blocked, 2 excluded, 35 replace, 431 run |
 | stdlib | 848 blocked, 3 excluded, 1,142 replace, 5 run |
-| tests | 1,501 run, 858 xfail |
+| tests | 1,507 run, 852 xfail |
 
 | Kind | Items |
 | --- | --- |
@@ -36,7 +36,7 @@ Tags are defined in [the glossary](../../../porting/compiler-reasons.json).
 | packages | `compiler-gap` | 7 |
 | packages | `compiler-implementation` | 34 |
 | packages | `constructor-identity` | 1 |
-| packages | `container-adaptation` | 33 |
+| packages | `container-adaptation` | 28 |
 | packages | `missing-implementation` | 3,023 |
 | packages | `runtime-reflection` | 2 |
 | packages | `test-counter` | 1 |
@@ -51,9 +51,8 @@ Tags are defined in [the glossary](../../../porting/compiler-reasons.json).
 | stdlib | `runtime-reflection` | 3 |
 | stdlib | `test-counter` | 2 |
 | stdlib | `test-diagnostics` | 2 |
-| tests | `compiler-gap` | 261 |
+| tests | `compiler-gap` | 257 |
 | tests | `test-counter` | 7 |
-| tests | `test-diagnostics` | 2 |
 | tests | `upstream-dependency` | 588 |
 
 ## Separate capability assessments

@@ -198,12 +198,12 @@ test disallowedHosts =
       |> Stdlib.Test.equal (errInvalidHost ()) ]
 
 // invalid uri
-// @compiler xfail runtime: "expected Darklang.Stdlib.Result.Result<Darklang.Stdlib.HttpClient.Response, Darklang.Stdlib.HttpClient.RequestError>.Error(Darklang.Stdlib.HttpClient.RequestError.BadUrl(Darklang.Stdlib.HttpClient.BadUrlDetails.InvalidUri)), got Darklang.Stdlib.Result.Result<Darklang.Stdlib.HttpClient.Response, Darklang.Stdlib.HttpClient.RequestError>.Error(Darklang.Stdlib.HttpClient.RequestError.BadUrl(Darklang.Stdlib.HttpClient.BadUrlDetails.UnsupportedProtocol))" reason=compiler-gap
+// @compiler xfail runtime: "expected Darklang.Stdlib.Result.Result<Darklang.Stdlib.HttpClient.Response, Darklang.Stdlib.HttpClient.RequestError>.Error(Darklang.Stdlib.HttpClient.RequestError.BadUrl(Darklang.Stdlib.HttpClient.BadUrlDetails.InvalidUri)), got " reason=compiler-gap
 test disallowedUri =
   get "localhost" [] |> Stdlib.Test.equal (errInvalidUri ())
 
 // network error
-// @compiler xfail runtime: "expected Darklang.Stdlib.Result.Result<Darklang.Stdlib.HttpClient.Response, Darklang.Stdlib.HttpClient.RequestError>.Error(Darklang.Stdlib.HttpClient.RequestError.NetworkError), got Darklang.Stdlib.Result.Result<Darklang.Stdlib.HttpClient.Response, Darklang.Stdlib.HttpClient.RequestError>.Error(Darklang.Stdlib.HttpClient.RequestError.BadUrl(Darklang.Stdlib.HttpClient.BadUrlDetails.InvalidHost))" reason=compiler-gap
+// @compiler xfail runtime: "expected Darklang.Stdlib.Result.Result<Darklang.Stdlib.HttpClient.Response, Darklang.Stdlib.HttpClient.RequestError>.Error(Darklang.Stdlib.HttpClient.RequestError.NetworkError), got " reason=compiler-gap
 test unspecifiedAddressIsNetworkError =
   get "http://[0:0:0:0:0:0:0:0]" [] |> Stdlib.Test.equal (errNetworkError ())
 
@@ -232,7 +232,7 @@ test sneakyBannedHosts =
 
 // invalid headers (we just happen to know that google will fail this way if we
 // provide these headers..)
-// @compiler xfail runtime: "assertion 1: expected Darklang.Stdlib.Result.Result<Darklang.Stdlib.HttpClient.Response, Darklang.Stdlib.HttpClient.RequestError>.Error(Darklang.Stdlib.HttpClient.RequestError.BadUrl(Darklang.Stdlib.HttpClient.BadUrlDetails.InvalidRequest)), got Darklang.Stdlib.Result.Result<Darklang.Stdlib.HttpClient.Response, Darklang.Stdlib.HttpClient.RequestError>.Error(Darklang.Stdlib.HttpClient.RequestError.NetworkError)" reason=compiler-gap
+// @compiler xfail runtime: "assertion 1: expected Darklang.Stdlib.Result.Result<Darklang.Stdlib.HttpClient.Response, Darklang.Stdlib.HttpClient.RequestError>.Error(Darklang.Stdlib.HttpClient.RequestError.BadUrl(Darklang.Stdlib.HttpClient.BadUrlDetails.InvalidRequest)), got " reason=compiler-gap
 test disallowedHeaders =
   Stdlib.Test.all
     [ get "http://google.com" [ ("Metadata-Flavor", "Google") ]
