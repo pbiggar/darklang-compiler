@@ -69,7 +69,7 @@ let check (state: Stdlib.__Http3Connection.State) (mode: String) : Stdlib.Result
     | [first, second] ->
       match first.response, second.response with
       | Ok first, Ok second -> mode == "interleave" && Stdlib.Blob.__byteLength first.body == 70000L && Stdlib.Blob.__byteLength second.body == 70000L
-      | Error _, Ok second -> (mode == "reset" || mode == "malformed") && Stdlib.Blob.__byteLength second.body == 70000L
+      | Error _, Ok second -> (mode == "reset" || mode == "malformed" || mode == "overflow") && Stdlib.Blob.__byteLength second.body == 70000L
       | Ok first, Error _ -> mode == "goaway" && Stdlib.Blob.__byteLength first.body == 70000L
       | _, _ -> false
     | _ -> false in
@@ -100,7 +100,7 @@ let check (session: Stdlib.HttpClientSession.Session) (mode: String) : Bool =
     let valid = match outcomes with
     | [first, second] -> first.index == 0L && second.index == 1L && (match first.response, second.response with
       | Ok first, Ok second -> mode == "interleave" && Stdlib.Blob.__byteLength first.body == 70000L && Stdlib.Blob.__byteLength second.body == 70000L
-      | Error _, Ok second -> (mode == "reset" || mode == "malformed") && Stdlib.Blob.__byteLength second.body == 70000L
+      | Error _, Ok second -> (mode == "reset" || mode == "malformed" || mode == "overflow") && Stdlib.Blob.__byteLength second.body == 70000L
       | Ok first, Error _ -> mode == "goaway" && Stdlib.Blob.__byteLength first.body == 70000L
       | _, _ -> false)
     | _ -> false in
@@ -125,7 +125,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--compiler", type=Path, default=ROOT / "dark")
     parser.add_argument("--requests", type=int, default=5)
-    parser.add_argument("--multiplex", choices=["interleave", "reset", "goaway", "malformed", "truncated"])
+    parser.add_argument("--multiplex", choices=["interleave", "reset", "goaway", "malformed", "overflow", "truncated"])
     parser.add_argument("--public", action="store_true")
     parser.add_argument("--stream", action="store_true", help="Drain lazy session bodies between requests")
     parser.add_argument("--blocked-reset", action="store_true", help="Reset a response before its QPACK instructions arrive")
@@ -220,8 +220,11 @@ def main():
                                                 connection.send_stream_data(0, b"\x00\x03x", end_stream=True)
                                                 continue
                                             length = b"70001" if identifier == 0 and args.multiplex == "malformed" else b"70000"
+                                            overflow = identifier == 0 and args.multiplex == "overflow"
+                                            if overflow:
+                                                length = b"69999"
                                             http.send_headers(identifier, [(b":status", b"200"), (b"content-length", length), (b"x-shared", "café ☃".encode())])
-                                            http.send_data(identifier, bytes([97 + identifier]) * 70000, end_stream=True)
+                                            http.send_data(identifier, bytes([97 + identifier]) * 70000, end_stream=not overflow)
                                 else:
                                     if args.stream and received.stream_id >= 4:
                                         body = b"s" * 70000
