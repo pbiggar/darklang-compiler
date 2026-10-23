@@ -261,13 +261,11 @@ module Int64 =
 
 module UInt64 =
   module Basic =
-    // @compiler blocked: pending-validation
     test serialize =
       Stdlib.Test.all
         [ Stdlib.Json.serialize<UInt64> 0UL |> Stdlib.Test.equal "0"
           Stdlib.Json.serialize<UInt64> 12345UL |> Stdlib.Test.equal "12345" ]
 
-    // @compiler blocked: pending-validation
     test parse =
       Stdlib.Test.all
         [ Stdlib.Json.parse<UInt64> "0" |> Stdlib.Test.equal (Result.Ok 0UL)
@@ -279,14 +277,12 @@ module UInt64 =
 
   module UInt64Limits =
     // test the limits of uint64 (0 to 18446744073709551615)
-    // @compiler blocked: pending-validation
     test serialize =
       Stdlib.Test.all
         [ Stdlib.Json.serialize<UInt64> 0UL |> Stdlib.Test.equal "0"
           Stdlib.Json.serialize<UInt64> 18446744073709551615UL
           |> Stdlib.Test.equal "18446744073709551615" ]
 
-    // @compiler blocked: pending-validation
     test parse =
       Stdlib.Test.all
         [ Stdlib.Json.parse<UInt64> "0" |> Stdlib.Test.equal (Result.Ok 0UL)
@@ -302,19 +298,16 @@ module UInt64 =
     //   (Result.Error "Can't parse JSON `18446744073709551616` as type `UInt64` at path: `root`")
 
     // A floating-point number in the UInt64 range can parse as UInt64.
-    // @compiler blocked: pending-validation
     test rejectsFirstOverflow =
       Stdlib.Json.parse<UInt64> "18446744073709551616"
       |> err
       |> Stdlib.Test.equal
         (Result.Error "Can't parse JSON `18446744073709551616` as type `UInt64` at path: `root`")
 
-    // @compiler blocked: pending-validation
     test parsesScientificMaximum =
       Stdlib.Json.parse<UInt64> "1.8446744073709551615E19"
       |> Stdlib.Test.equal (Result.Ok 18446744073709551615UL)
 
-    // @compiler blocked: pending-validation
     test parseErrors =
       // This is a float that is slightly above the uint64 max
       (Stdlib.Json.parse<UInt64> "1.9E19") |> err
@@ -322,7 +315,7 @@ module UInt64 =
           "Can't parse JSON `1.9E19` as type `UInt64` at path: `root`")
 
   module Errors =
-    // @compiler blocked: pending-validation
+    // @compiler blocked: compiler-timeout
     test parseErrors =
       Stdlib.Test.all
         [ (Stdlib.Json.parse<UInt64> " ") |> err
@@ -357,14 +350,12 @@ module UInt64 =
 
 module Int8 =
   module Basic =
-    // @compiler blocked: pending-validation
     test serialize =
       Stdlib.Test.all
         [ Stdlib.Json.serialize<Int8> 0y |> Stdlib.Test.equal "0"
           Stdlib.Json.serialize<Int8> 123y |> Stdlib.Test.equal "123"
           Stdlib.Json.serialize<Int8> -123y |> Stdlib.Test.equal "-123" ]
 
-    // @compiler blocked: pending-validation
     test parse =
       Stdlib.Test.all
         [ Stdlib.Json.parse<Int8> "0" |> Stdlib.Test.equal (Result.Ok 0y)
@@ -376,19 +367,16 @@ module Int8 =
           Stdlib.Json.parse<Int8> "1200E-1" |> Stdlib.Test.equal (Result.Ok 120y) ]
 
   module Int8Limits =
-    // @compiler blocked: pending-validation
     test serialize =
       Stdlib.Test.all
         [ Stdlib.Json.serialize<Int8> -128y |> Stdlib.Test.equal "-128"
           Stdlib.Json.serialize<Int8> 127y |> Stdlib.Test.equal "127" ]
 
-    // @compiler blocked: pending-validation
     test parse =
       Stdlib.Test.all
         [ Stdlib.Json.parse<Int8> "-128" |> Stdlib.Test.equal (Result.Ok -128y)
           Stdlib.Json.parse<Int8> "127" |> Stdlib.Test.equal (Result.Ok 127y) ]
 
-    // @compiler blocked: pending-validation
     test parseErrors =
       Stdlib.Test.all
         [ (Stdlib.Json.parse<Int8> "-129") |> err
@@ -397,7 +385,7 @@ module Int8 =
           |> Stdlib.Test.equal (Result.Error "Can't parse JSON `128` as type `Int8` at path: `root`") ]
 
   module Errors =
-    // @compiler blocked: pending-validation
+    // @compiler blocked: compiler-timeout
     test parseErrors =
       Stdlib.Test.all
         [ (Stdlib.Json.parse<Int8> " ") |> err
@@ -425,14 +413,12 @@ module Int8 =
 
 module UInt8 =
   module Basic =
-    // @compiler blocked: pending-validation
     test serialize =
       Stdlib.Test.all
         [ Stdlib.Json.serialize<UInt8> 1uy |> Stdlib.Test.equal "1"
           Stdlib.Json.serialize<UInt8> 123uy |> Stdlib.Test.equal "123"
           Stdlib.Json.serialize<UInt8> 254uy |> Stdlib.Test.equal "254" ]
 
-    // @compiler blocked: pending-validation
     test parse =
       Stdlib.Test.all
         [ Stdlib.Json.parse<UInt8> "0" |> Stdlib.Test.equal (Result.Ok 0uy)
@@ -444,19 +430,16 @@ module UInt8 =
           Stdlib.Json.parse<UInt8> "1200E-1" |> Stdlib.Test.equal (Result.Ok 120uy) ]
 
   module UInt8Limits =
-    // @compiler blocked: pending-validation
     test serialize =
       Stdlib.Test.all
         [ Stdlib.Json.serialize<UInt8> 0uy |> Stdlib.Test.equal "0"
           Stdlib.Json.serialize<UInt8> 255uy |> Stdlib.Test.equal "255" ]
 
-    // @compiler blocked: pending-validation
     test parse =
       Stdlib.Test.all
         [ Stdlib.Json.parse<UInt8> "0" |> Stdlib.Test.equal (Result.Ok 0uy)
           Stdlib.Json.parse<UInt8> "255" |> Stdlib.Test.equal (Result.Ok 255uy) ]
 
-    // @compiler blocked: pending-validation
     test parseErrors =
       Stdlib.Test.all
         [ (Stdlib.Json.parse<UInt8> "-1") |> err
@@ -465,7 +448,7 @@ module UInt8 =
           |> Stdlib.Test.equal (Result.Error "Can't parse JSON `256` as type `UInt8` at path: `root`") ]
 
   module Errors =
-    // @compiler blocked: pending-validation
+    // @compiler blocked: compiler-timeout
     test parseErrors =
       Stdlib.Test.all
         [ (Stdlib.Json.parse<UInt8> " ") |> err

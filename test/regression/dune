@@ -2,7 +2,8 @@
 (rule
  (alias runtest)
  (deps ../../scripts/test_imported_sources.py ../../scripts/update-ledger.py ../../scripts/ledger_sources.py
-  (source_tree ../../upstream) (source_tree ../../porting))
+  (source_tree ../../upstream) (source_tree ../../porting)
+  (source_tree ../../packages) ../../library-sources.list)
  (action (progn
   (run %{exe:../../tools/ledger/check_sources.exe} ../..)
   (run python3 %{dep:../../scripts/test_imported_sources.py}
