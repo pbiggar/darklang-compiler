@@ -1,0 +1,9 @@
+// Sorting follows the custom comparison and preserves the order of equal keys.
+type Descending = { key: Int64, tag: String }
+impl Compare for Descending =
+  let lessThan (a: Descending) (b: Descending) : Bool = a.key > b.key
+  let lessThanOrEqualTo (a: Descending) (b: Descending) : Bool = a.key >= b.key
+  let greaterThan (a: Descending) (b: Descending) : Bool = a.key < b.key
+  let greaterThanOrEqualTo (a: Descending) (b: Descending) : Bool = a.key <= b.key
+Stdlib.List.sort [Descending { key = 1L, tag = "b" }, Descending { key = 2L, tag = "x" }, Descending { key = 1L, tag = "a" }] = [Descending { key = 2L, tag = "x" }, Descending { key = 1L, tag = "b" }, Descending { key = 1L, tag = "a" }]
+Stdlib.List.sort [Descending { key = 1L, tag = "z" }, Descending { key = 1L, tag = "a" }] = [Descending { key = 1L, tag = "z" }, Descending { key = 1L, tag = "a" }]

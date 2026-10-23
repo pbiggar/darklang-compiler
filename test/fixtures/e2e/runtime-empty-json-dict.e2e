@@ -1,0 +1,4 @@
+// Empty dictionaries serialize without requiring a JSON-compatible key type.
+Stdlib.Json.serialize<Dict<Int64, String>> (Dict {}) = "{}"
+Stdlib.Json.serialize<List<Dict<Int64, String>>> [Dict {}] = "[{}]"
+Stdlib.Json.serialize<Dict<Int64, Int64 -> Int64>> (Dict {}) = "{}"

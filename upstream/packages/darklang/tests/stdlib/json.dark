@@ -929,7 +929,7 @@ module Float =
   // TODO: test highly-precise numbers
   // TODO: review Float.tests for more values to test against
 
-  // @compiler xfail runtime: "assertion 9: Values differ" class=missing-support reason=compiler-gap
+  // @compiler xfail runtime: "assertion 9: expected \"0.30000000000000004\", got \"0.3\"" class=missing-support reason=compiler-gap
   test serialize =
     Stdlib.Test.all
       [ Stdlib.Json.serialize<Float> 0.0 |> Stdlib.Test.equal "0.0"
@@ -1510,7 +1510,6 @@ module Result =
           )) ]
 
 module Dict =
-  // @compiler xfail runtime: "Unsupported type in JSON: Dict<Int64, String>. Some types are not supported in Json serialization" class=missing-support reason=compiler-gap
   test serialize =
     Stdlib.Test.all
       [ Stdlib.Json.serialize<Dict<String, String>> (Stdlib.Dict.singleton "a" "b")
@@ -1990,7 +1989,7 @@ module RestoredArchive =
       |> Stdlib.Test.equal true)
     |> Stdlib.Test.all
 
-  // @compiler xfail runtime: "assertion 6: Values differ" class=missing-support reason=compiler-gap
+  // @compiler xfail runtime: "assertion 6: expected Darklang.Stdlib.Result.Result<Float, Darklang.Stdlib.Json.ParseError.ParseError>.Ok(0.12345678901234568), got Darklang.Stdlib.Result.Result<Float, Darklang.Stdlib.Json.ParseError.ParseError>.Ok(0.1234567890123457)" class=missing-support reason=compiler-gap
   test floatBoundariesAndPrecisionRoundTrip =
     [ 1.7976931348623157e308, -1.7976931348623157e308
       2.2250738585072014e-308, 5e-324, -5e-324

@@ -51,8 +51,7 @@ let integerFunctionForBinOp resolve typ op =
     | AST.Pow, AST.TUInt16 -> Some "Darklang.Stdlib.UInt16"
     | AST.Pow, AST.TUInt32 -> Some "Darklang.Stdlib.UInt32"
     | AST.Pow, AST.TUInt64 -> Some "Darklang.Stdlib.UInt64"
-    | AST.Pow, AST.TFloat64 | AST.Mod, AST.TFloat64 ->
-        Some "Darklang.Stdlib.Float"
+    | AST.Pow, AST.TFloat64 -> Some "Darklang.Stdlib.Float"
     | _, AST.TInt -> Some "Darklang.Stdlib.Int"
     | _, AST.TInt128 -> Some "Darklang.Stdlib.Int128"
     | _, AST.TUInt128 -> Some "Darklang.Stdlib.UInt128"

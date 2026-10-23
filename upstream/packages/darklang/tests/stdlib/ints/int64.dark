@@ -529,7 +529,6 @@ test shiftLeft =
       (1L << 62L) |> Stdlib.Test.equal 4611686018427387904L
       (5L << 3L) |> Stdlib.Test.equal 40L ]
 
-// @compiler xfail runtime: "assertion 5: Values differ" class=missing-support reason=compiler-gap
 test shiftRight =
   Stdlib.Test.all
     [ (8L >> 2L) |> Stdlib.Test.equal 2L

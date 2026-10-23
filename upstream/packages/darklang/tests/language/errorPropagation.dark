@@ -1,7 +1,7 @@
 module Darklang.Language.Tests.ErrorPropagation
 
 module Error =
-  // @compiler xfail compile: "Expected TSum (\"Darklang.Stdlib.Option.Option\", [TVar \"t$constraint_-24174_1\"]), got TString" class=aot-rejection reason=aot-type-error
+  // @compiler xfail compile: "got TString" class=aot-rejection reason=aot-type-error
   test map2WrongArgRaises =
     (Stdlib.Option.map2
       (Stdlib.Option.Option.Some 10L)
@@ -20,7 +20,7 @@ test earlierErrorFirst =
   => raises "Uncaught exception: X"
 
 module ErrorPropagation =
-  // @compiler xfail compile: "Expected TList (TVar \"t$constraint_-24174_0\"), got TInt64" class=aot-rejection reason=aot-type-error
+  // @compiler xfail compile: "got TInt64" class=aot-rejection reason=aot-type-error
   test fnArg =
     Stdlib.List.head (Stdlib.Test.raiseRuntimeError "test")
     => raises "Uncaught exception: test"
@@ -30,7 +30,7 @@ module ErrorPropagation =
     (if Stdlib.Test.raiseRuntimeError "test" then 5L else 6L)
     => raises "Uncaught exception: test"
 
-  // @compiler xfail compile: "Expected TList (TVar \"t$constraint_-24174_0\"), got TInt64" class=aot-rejection reason=aot-type-error
+  // @compiler xfail compile: "got TInt64" class=aot-rejection reason=aot-type-error
   test fieldAccessTarget =
     (Stdlib.List.head (Stdlib.Test.raiseRuntimeError "test")).field
     => raises "Uncaught exception: test"
@@ -60,12 +60,10 @@ module ErrorPropagation =
     Stdlib.Option.Option.Some(Stdlib.Test.raiseRuntimeError "test")
     => raises "Uncaught exception: test"
 
-  // @compiler xfail compile: "Compilation failed: Unresolved inference variable in value renderer: Ok$Darklang.Stdlib.Result.Result$0" class=missing-support reason=compiler-gap
   test errorArg =
     Stdlib.Result.Result.Error(Stdlib.Test.raiseRuntimeError "test")
     => raises "Uncaught exception: test"
 
-  // @compiler xfail compile: "Compilation failed: Unresolved inference variable in value renderer: Err$Darklang.Stdlib.Result.Result$1" class=missing-support reason=compiler-gap
   test okArg =
     Stdlib.Result.Result.Ok(Stdlib.Test.raiseRuntimeError "test")
     => raises "Uncaught exception: test"

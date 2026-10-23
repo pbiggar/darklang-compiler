@@ -324,7 +324,7 @@ test floatPatterns =
       |> Stdlib.Test.equal "pass: -4.7" ]
 
 // Float patterns use numeric equality, so either signed zero matches the first zero pattern.
-// @compiler xfail runtime: "assertion 1: Values differ" class=missing-support reason=compiler-gap
+// @compiler xfail runtime: "assertion 1: expected \"negative pattern first\", got \"positive pattern second\"" class=missing-support reason=compiler-gap
 test signedZeroPatterns =
   Stdlib.Test.all
     [ (match 0.0 with

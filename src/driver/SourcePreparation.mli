@@ -57,7 +57,7 @@ val buildRegistriesForProgram :
   CheckedAST.functionDef list ->
   AST_to_ANF.registries * AST_to_ANF.registries * CheckedAST.functionDef list
 
-val prepareDictionaryKeyRenderers :
+val prepareDiagnosticRenderers :
   Types.typeCheckEnv ->
   SpecializationIdentity.genericFuncDefs ->
   StringOrder.Set.t ->

@@ -1,6 +1,6 @@
 // Imported Test assertions retain their upstream aggregation and diagnostics.
 Stdlib.Test.pass () = Stdlib.Test.Result.Pass
 Stdlib.Test.equal 42L 42L = Stdlib.Test.Result.Pass
-Stdlib.Test.equal 1L 2L = Stdlib.Test.Result.Fail ["Values differ"]
+Stdlib.Test.equal 1L 2L = Stdlib.Test.Result.Fail ["expected 2, got 1"]
 Stdlib.Test.all [Stdlib.Test.pass (), Stdlib.Test.fail "problem"] = Stdlib.Test.Result.Fail ["assertion 2: problem"]
 Stdlib.Test.raiseRuntimeError "native test error" = error="native test error"

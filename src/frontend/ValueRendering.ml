@@ -186,8 +186,15 @@ let rec ensureRenderer env typ (state : renderState) =
         } )
 
 and renderCall env typ value state =
-  let name, nextState = ensureRenderer env typ state in
-  (call nextState.symbols name [ value ], nextState)
+  match typ with
+  | TVar _ | TInferenceVar _ ->
+      (* Empty collections and inactive enum payloads can remain unconstrained.
+         Their payload renderer is unreachable: do not invent a representation
+         or require a concrete layout for a value that cannot be constructed. *)
+      (C.RuntimeError "Cannot render an uninhabited type parameter", state)
+  | _ ->
+      let name, nextState = ensureRenderer env typ state in
+      (call nextState.symbols name [ value ], nextState)
 
 and renderDelimited env items state =
   let rec loop remaining current acc =
@@ -732,9 +739,9 @@ let rewriteProgram recordMetadata sumMetadata programType program =
   in
   C.programFromCheckedParts (final.symbols, generated @ List.rev reversed)
 
-(* Replace the concrete specialization of Dict's generic key renderer with
-   the same monomorphic renderer used for eval results. *)
-let rewriteDictionaryKeyRenderers recordMetadata sumMetadata program =
+(* Replace concrete diagnostic renderer specializations with the same
+   monomorphic renderer used for eval results. *)
+let rewriteDiagnosticRenderers recordMetadata sumMetadata program =
   let symbols, topLevels = C.viewProgram program in
   let symbols = includeRuntimeFunctions symbols in
   let env = { records = lazy recordMetadata; sums = lazy sumMetadata } in
@@ -746,23 +753,21 @@ let rewriteDictionaryKeyRenderers recordMetadata sumMetadata program =
         let top, next =
           match top with
           | C.FunctionDef definition
-            when starts definition.C.name
-                   "Darklang.Stdlib.Dict.__renderGenericKey_" -> (
+            when List.exists (starts definition.C.name)
+                   [
+                     "Darklang.Stdlib.Dict.__renderGenericKey_";
+                     "Darklang.Stdlib.Test.__renderValue_";
+                   ] -> (
               match N.toList definition.C.params with
-              | [ (parameter, keyType) ] ->
-                  let renderer, next =
-                    ensureRenderer env (C.semanticType keyType) state
+              | [ (parameter, valueType) ] ->
+                  let body, next =
+                    renderCall env (C.semanticType valueType)
+                      (C.Local parameter) state
                   in
-                  ( C.FunctionDef
-                      {
-                        definition with
-                        C.body =
-                          call next.symbols renderer [ C.Local parameter ];
-                      },
-                    next )
+                  (C.FunctionDef { definition with C.body }, next)
               | _ ->
                   Crash.crash
-                    "Dictionary key renderer has an invalid parameter list")
+                    "Diagnostic value renderer has an invalid parameter list")
           | _ -> (top, state)
         in
         (top :: tops, next))

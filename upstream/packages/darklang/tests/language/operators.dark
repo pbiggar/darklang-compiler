@@ -26,7 +26,7 @@ test numericTypes =
       2y > 1y |> Stdlib.Test.equal true ]
 
 // `%` is integer-only: Float has no Modulo implementation, deliberately
-// @compiler xfail runtime: "1.5" class=missing-support reason=compiler-gap
+// @compiler xfail compile: "Operator is unavailable for this type" class=aot-rejection reason=aot-type-error
 test floatModuloRaises =
   7.5 % 2.0
   => raises

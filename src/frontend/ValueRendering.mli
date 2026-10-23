@@ -1,5 +1,5 @@
 (* ValueRendering.mli - Interpreter-compatible result rendering.
-   Builds monomorphic Dark functions for all native eval boundaries. *)
+   Builds monomorphic Dark functions for native eval and diagnostic boundaries. *)
 val rewriteProgram :
   Types.indexedTypeRegistry ->
   Types.indexedSumTypeRegistry ->
@@ -7,7 +7,7 @@ val rewriteProgram :
   CheckedAST.program ->
   CheckedAST.program
 
-val rewriteDictionaryKeyRenderers :
+val rewriteDiagnosticRenderers :
   Types.indexedTypeRegistry ->
   Types.indexedSumTypeRegistry ->
   CheckedAST.program ->

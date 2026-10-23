@@ -97,7 +97,7 @@ test fromListOverwritingDuplicates =
       Stdlib.Dict.fromListOverwritingDuplicates [ (1L, 2L) ]
       |> Stdlib.Test.equal (Dict { 1L: 2L }) ]
 
-// @compiler xfail compile: "Expected TList (TTuple [TVar \"t$constraint_-24174_0\"; TVar \"t$constraint_-24174_1\"]), got TList TInt64" class=aot-rejection reason=aot-type-error
+// @compiler xfail compile: "got TList TInt64" class=aot-rejection reason=aot-type-error
 test fromListOverwritingDuplicatesRejectsNonTuples =
   Stdlib.Dict.fromListOverwritingDuplicates [ 1L ]
   => raises "Darklang.Stdlib.Dict.fromListOverwritingDuplicates's 1st parameter `entries` expects List<(_ * _)>, but got List<Int64> ([1])"
@@ -528,12 +528,12 @@ test filterMapRejectsNonOptionResult =
     (fun key value -> if value == "y" then false else Some(key + value))
   => raises "No matching case found for value false in match expression"
 
-// @compiler xfail compile: "Expected TList (TTuple [TVar \"t$constraint_-24174_0\"; TVar \"t$constraint_-24174_1\"]), got TList TInt64" class=aot-rejection reason=aot-type-error
+// @compiler xfail compile: "got TList TInt64" class=aot-rejection reason=aot-type-error
 test fromListOverwritingDuplicatesPropagatesElementError =
   Stdlib.Dict.fromListOverwritingDuplicates [ Stdlib.Test.raiseRuntimeError "err" ]
   => raises "Uncaught exception: err"
 
-// @compiler xfail compile: "Expected TList (TTuple [TVar \"t$constraint_-24174_0\"; TVar \"t$constraint_-24174_1\"]), got TList TInt64" class=aot-rejection reason=aot-type-error
+// @compiler xfail compile: "got TList TInt64" class=aot-rejection reason=aot-type-error
 test fromListPropagatesElementError =
   Stdlib.Dict.fromList [ Stdlib.Test.raiseRuntimeError "err" ]
   => raises "Uncaught exception: err"

@@ -207,7 +207,7 @@ test flatten =
       Stdlib.List.flatten []
       |> Stdlib.Test.equal [] ]
 
-// @compiler xfail compile: "Expected TList (TInferenceVar (\"t$constraint_-24176_3\", \"t$constraint_-24176_3\")), got TInt64" class=aot-rejection reason=aot-type-error
+// @compiler xfail compile: "got TInt64" class=aot-rejection reason=aot-type-error
 test fold =
   Stdlib.Test.all
     [ Stdlib.List.fold [] [] (fun _ _ -> 5L)
@@ -680,7 +680,7 @@ test filterRejectsStringCondition =
   Stdlib.List.filter [ true, false, true ] (fun _ -> "a")
   => raises "Encountered a condition that must be a Bool, but got a String (\"a\")"
 
-// @compiler xfail compile: "Expected TList (TList (TVar \"t$constraint_-24174_0\")), got TList TInt32" class=aot-rejection reason=aot-type-error
+// @compiler xfail compile: "got TList TInt32" class=aot-rejection reason=aot-type-error
 test flattenRejectsScalarElements =
   Stdlib.List.flatten [ 1l, 2l, 3l ]
   => raises "Darklang.Stdlib.List.flatten's 1st parameter `list` expects List<List<_>>, but got List<Int32> ([1, 2, 3])"

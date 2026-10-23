@@ -12,6 +12,7 @@ val resolve : t -> AST.semanticType -> AST.semanticType
 val resolveExpression : t -> CheckedAST.expr -> CheckedAST.expr
 val constrain : AST.semanticType -> AST.semanticType -> t -> (t, string) result
 val requireOperator : AST.binOp -> AST.semanticType -> t -> (t, string) result
+val validateOperator : AST.binOp -> AST.semanticType -> (unit, string) result
 
 val freshenType :
   StringOrder.Set.t -> AST.semanticType -> t -> AST.semanticType * t
