@@ -14,6 +14,27 @@ let map = Result.map
 
 let check checkExpression literal globals locals symbols expected
     (typeName : WT.qualifiedTypeIdentifier) caseName fields =
+  (* The interpreter assigns these bare names before type inference, so an
+     expected type or a colliding enum cannot change their owner. *)
+  let typeName =
+    match (typeName.modules, typeName.typ.name, caseName) with
+    | [], "", ("Some" | "None" | "Ok" | "Error") ->
+        let owner =
+          match caseName with
+          | "Some" | "None" -> "Option"
+          | _ -> "Result"
+        in
+        {
+          typeName with
+          modules =
+            List.map
+              (fun name ->
+                (({ range = typeName.range; name } : WT.identifier), typeName.range))
+              [ "Stdlib"; owner ];
+          typ = { typeName.typ with name = owner };
+        }
+    | _ -> typeName
+  in
   let check = checkExpression globals locals in
   let checkFields symbols fields types =
     let rec loop symbols reversed fields types =
