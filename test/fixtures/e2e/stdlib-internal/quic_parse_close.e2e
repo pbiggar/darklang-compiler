@@ -1,0 +1,51 @@
+// quic_parse_close.e2e - Authenticated malformed frames emit transport codes and exact triggering types.
+let parseClose (mode: Int64) : Bool =
+  let secret = Stdlib.String.toBlob (Stdlib.String.repeat "s" 32) in
+  let keys = match Stdlib.__QuicCrypto.derive secret with | Ok keys -> keys | Error _ -> Builtin.crash "Test keys" in
+  let hex = if mode == 0L then "0F00000261" else if mode == 1L then "1E"
+    else if mode == 2L then "180001" else if mode == 3L then "0200000001"
+    else if mode == 4L then "4001" else if mode == 5L then "404D"
+    else if mode == 6L then "40" else if mode == 7L then "01" else "" in
+  let payload = match Stdlib.Blob.fromHex hex with | Ok bytes -> bytes | Error _ -> Builtin.crash "Test payload" in
+  let expected = if mode == 0L then "1C070F00" else if mode == 1L then "1C0A1E00"
+    else if mode == 2L then "1C071800" else if mode == 3L then "1C070200"
+    else if mode == 4L then "1C070100" else if mode == 5L then "1C07404D00"
+    else if mode == 6L then "1C070000" else "1C0A0000" in
+  let wire = match Stdlib.__QuicPacket.sealShort keys (Stdlib.String.toBlob "serverID") false payload 0L with | Ok wire -> wire | Error _ -> Builtin.crash "Test packet" in
+  let peer = Stdlib.__Datagram.Endpoint { address = [127L, 0L, 0L, 1L], port = 443L } in
+  let packets = Stdlib.Stream.__cellNew<List<Blob>> [] in
+  let life = Stdlib.Stream.__new (fun _unit -> Some ()) (fun _unit -> ()) in
+  let socket = Stdlib.__Datagram.Socket { lifecycle = life, watch = None,
+    send = fun _peer bytes _timeout -> let previous = Stdlib.Stream.__cellGet<List<Blob>> packets in Stdlib.Stream.__cellSet packets (previous @ [bytes]); Ok (),
+    receive = fun _timeout -> Ok (Stdlib.__Datagram.Message { peer = peer, payload = wire }) } in
+  let parameters = Stdlib.__QuicParameters.Parameters { originalDestination = None, initialSource = Stdlib.String.toBlob "clientID", retrySource = None, resetToken = None,
+    idleTimeout = 0L, maxUdpPayload = 1200L, maxData = 262144L, maxStreamDataBidiLocal = 65536L, maxStreamDataBidiRemote = 65536L, maxStreamDataUni = 65536L,
+    maxStreamsBidi = 32L, maxStreamsUni = 3L, ackDelayExponent = 3L, maxAckDelay = 25L, disableActiveMigration = true, activeConnectionIdLimit = 2L, preferredAddress = None } in
+  let ready = Stdlib.__QuicServer.Ready { socket = socket, peer = peer, routing = Stdlib.__QuicHandshakePacket.Routing { source = Stdlib.String.toBlob "serverID", destination = Stdlib.String.toBlob "clientID", token = Stdlib.Blob.empty },
+    authenticated = Stdlib.__QuicServerTls.Ready { send = keys, receive = keys, sendSecret = secret, receiveSecret = secret, parameters = parameters }, pending = [] } in
+  let initial = match Stdlib.__QuicConnection.fromServer ready (Stdlib.__Network.ShutdownSignals { lifecycle = life }) with | Ok state -> state | Error _ -> Builtin.crash "Test connection" in
+  let result = Stdlib.__QuicConnection.poll initial 1L in
+  let sent = Stdlib.Stream.__cellGet<List<Blob>> packets in
+  let closed = Stdlib.Option.isNone (Stdlib.Stream.next life) in
+  let valid =
+    if mode == 7L then Stdlib.Result.isOk result && Stdlib.Bool.not closed && Stdlib.List.length sent == 1
+    else match sent with
+    | [first, last] ->
+      let decoded = match Stdlib.__QuicCrypto.openPacket keys first 9L -1L, Stdlib.__QuicCrypto.openPacket keys last 9L 0L with
+      | Ok first, Ok last ->
+        first.number == 0L && last.number == 1L && Stdlib.Blob.toHex last.payload == expected
+      | _, _ -> false in
+      Stdlib.Result.isError result && closed && decoded
+    | _ -> false in
+  Stdlib.__Datagram.close socket
+  Stdlib.Stream.__cellDispose<List<Blob>> packets
+  valid
+parseClose 0L = true // leak_check
+parseClose 1L = true // leak_check
+parseClose 2L = true // leak_check
+parseClose 3L = true // leak_check
+parseClose 4L = true // leak_check
+parseClose 5L = true // leak_check
+parseClose 6L = true // leak_check
+parseClose 7L = true // leak_check
+parseClose 8L = true // leak_check
