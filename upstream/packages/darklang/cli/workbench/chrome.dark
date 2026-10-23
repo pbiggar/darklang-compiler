@@ -244,6 +244,7 @@ val helpGroups =
     ("Prompt", "p drops to the command prompt, except on Traces where it pins (quit returns here)   : runs one command without leaving") ]
 
 /// A centered, boxed keymap overlay drawn over the frame. The interior is cleared so nothing shows through.
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Workbench.renderHelpOverlay: Unknown function or value 'Stdlib.Cli.UI.Box.panel'"
 let renderHelpOverlay (screen: Stdlib.Cli.UI.Layout.Region) : List<Stdlib.Cli.UI.Layout.Span> =
   // Wide enough for the longest group, not a round number. A fixed 70 clipped the Matter row - the single most
   // useful line in the keymap - on a terminal with room to spare. 11 is where the keys column starts, plus the

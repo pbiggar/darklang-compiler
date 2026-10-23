@@ -17,7 +17,7 @@
   "test-diagnostics": "The compiler assertion implementation does not yet render arbitrary values in failure messages.",
   "missing-intrinsic": "The test requires an interpreter host intrinsic that the compiler does not yet implement.",
   "compiler-leak": "The compiled program currently reports leaked allocations for this case.",
-  "compiler-timeout": "The case exceeds the compilation or execution time budget used to validate imported tests.",
+  "compiler-timeout": "The declaration or test exceeds the compilation or execution time budget used for import validation.",
   "constructor-identity": "The declaration collides with an existing enum constructor identity in the compiler bounded tag space.",
   "value-specialization": "The global value initializer requires a generic specialization the compiler does not yet provide.",
   "compiler-resource": "Compilation or execution exceeds the trial resource budget or terminates the test host before a result is produced.",
