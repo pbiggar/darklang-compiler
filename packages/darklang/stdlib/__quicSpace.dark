@@ -77,7 +77,7 @@ let __frames (state: Stdlib.__QuicSpace.State) (frames: List<Stdlib.__QuicFrames
 
 let handshake (state: Stdlib.__QuicSpace.State) (opened: Stdlib.__QuicCrypto.Opened) (now: Int64)
   : Stdlib.Result.Result<Stdlib.__QuicSpace.State, String> =
-  Stdlib.__QuicFrames.parseHandshake opened.payload |> Stdlib.Result.andThen (fun frames ->
+  Stdlib.__QuicFrames.parseHandshake opened.payload |> Stdlib.Result.mapError Stdlib.__QuicWire.frameMessage |> Stdlib.Result.andThen (fun frames ->
     let eliciting = Stdlib.List.any frames (fun frame -> match frame with | Ping -> true | Crypto _ -> true | _ -> false) in
     Stdlib.__QuicSpace.receive state opened.number eliciting |> Stdlib.Result.andThen (fun receipt ->
       if receipt.fresh then Stdlib.__QuicSpace.__frames receipt.state frames now else Ok receipt.state))

@@ -48,7 +48,7 @@ let assemble (state: Stdlib.__QuicStreams.Receive) (frames: List<Stdlib.__QuicAp
 let runCheck () : Unit =
   match Stdlib.Cli.__Args.get 0, Stdlib.Cli.__Args.get 1 |> Stdlib.Result.andThen Stdlib.Blob.fromHex with
   | Ok mode, Ok bytes ->
-    match Stdlib.__QuicApplication.parse (mode != "client") bytes |> Stdlib.Result.map (fun frames -> Stdlib.List.map frames (fun received -> received.frame)) with
+    match Stdlib.__QuicApplication.parse (mode != "client") bytes |> Stdlib.Result.mapError Stdlib.__QuicWire.frameMessage |> Stdlib.Result.map (fun frames -> Stdlib.List.map frames (fun received -> received.frame)) with
     | Error message -> Stdlib.printLine ("ERROR " + message)
     | Ok frames ->
       if mode == "assemble" then
