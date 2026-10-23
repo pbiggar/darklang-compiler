@@ -3,9 +3,8 @@ type Result<'ok, 'err> = Stdlib.Result.Result<'ok, 'err>
 let err (v: Stdlib.Result.Result<'a, Stdlib.Json.ParseError.ParseError>) : Result<'a, String> =
   v |> Stdlib.Result.mapError (Stdlib.Json.ParseError.toString Darklang.SCM.Branch.mainBranchId)
 
-let parseErrors () : Stdlib.Test.Result =
-  Stdlib.Test.all
-    [ // not ints
+(Stdlib.Test.all
+    [
       (Stdlib.Json.parse<Int64> " ") |> err
       |> Stdlib.Test.equal (Result.Error "Not JSON")
       (Stdlib.Json.parse<Int64> "4a") |> err
@@ -27,6 +26,4 @@ let parseErrors () : Stdlib.Test.Result =
       (Stdlib.Json.parse<Int64> "42.5") |> err
       |> Stdlib.Test.equal (Result.Error "Can't parse JSON `42.5` as type `Int64` at path: `root`")
       (Stdlib.Json.parse<Int64> "\"42\n\"") |> err
-      |> Stdlib.Test.equal (Result.Error "Not JSON") ]
-
-parseErrors () = Stdlib.Test.Result.Pass
+      |> Stdlib.Test.equal (Result.Error "Not JSON") ]) = Stdlib.Test.Result.Pass
