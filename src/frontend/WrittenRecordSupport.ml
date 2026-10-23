@@ -99,8 +99,15 @@ let record check literal globals locals symbols expected
                   fields
               in
               bind inference (fun (patterns, actuals, _) ->
+                  let freshParams, renaming =
+                    CheckingDiagnostics.freshenTypeParams (Some canonical)
+                      entry.params
+                  in
                   map Option.some
-                    (Unification.inferTypeArgs entry.params (List.rev patterns)
+                    (Unification.inferTypeArgs freshParams
+                       (List.map
+                          (CheckingDiagnostics.applyTypeVarRenaming renaming)
+                          (List.rev patterns))
                        (List.rev actuals) None None))))
   in
   bind

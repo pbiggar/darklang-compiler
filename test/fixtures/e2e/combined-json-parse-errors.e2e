@@ -1,6 +1,4 @@
 // Isolated aggregate of the upstream Int64 JSON error assertions.
-module JsonFailureProbe
-
 type Result<'ok, 'err> = Stdlib.Result.Result<'ok, 'err>
 let err (v: Stdlib.Result.Result<'a, Stdlib.Json.ParseError.ParseError>) : Result<'a, String> =
   v |> Stdlib.Result.mapError (Stdlib.Json.ParseError.toString Darklang.SCM.Branch.mainBranchId)
