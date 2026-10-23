@@ -136,7 +136,7 @@ module InvalidFnCalls =
       "Darklang.Language.Tests.Apply.shouldReturnStringButDoesNot's return value expects String, but got Int64 (5)"
 
   // A function must return the type chosen by its type argument.
-  // @compiler blocked: compiler-crash
+  // @compiler xfail compile: "Expected TString, got TInt64" reason=compiler-gap
   test wrongTypedReturnRaises =
     fnWithTypedReturn<String> ()
     => raises

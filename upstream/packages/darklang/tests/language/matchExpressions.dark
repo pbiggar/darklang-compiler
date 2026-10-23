@@ -417,7 +417,6 @@ test listPatterns =
        | [] -> "pass")
       |> Stdlib.Test.equal "pass" ]
 
-// @compiler blocked: compiler-timeout
 test nestedListPatterns =
   Stdlib.Test.all
     [ (match [ [ 1L, 2L ], [ 3L, 4L ] ] with
@@ -650,7 +649,6 @@ test resultPatterns =
        | _ -> "fail")
       |> Stdlib.Test.equal "pass" ]
 
-// @compiler blocked: compiler-timeout
 test optionPatterns =
   Stdlib.Test.all
     [ (match Stdlib.Option.Option.Some 5L with

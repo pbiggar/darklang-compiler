@@ -232,7 +232,6 @@ module Int64 =
           |> Stdlib.Test.equal "-9223372036854775808" ]
 
   module Errors =
-    // @compiler blocked: compiler-timeout
     test parseErrors =
       Stdlib.Test.all
         [ // not ints
@@ -315,7 +314,6 @@ module UInt64 =
           "Can't parse JSON `1.9E19` as type `UInt64` at path: `root`")
 
   module Errors =
-    // @compiler blocked: compiler-timeout
     test parseErrors =
       Stdlib.Test.all
         [ (Stdlib.Json.parse<UInt64> " ") |> err
@@ -385,7 +383,6 @@ module Int8 =
           |> Stdlib.Test.equal (Result.Error "Can't parse JSON `128` as type `Int8` at path: `root`") ]
 
   module Errors =
-    // @compiler blocked: compiler-timeout
     test parseErrors =
       Stdlib.Test.all
         [ (Stdlib.Json.parse<Int8> " ") |> err
@@ -448,7 +445,6 @@ module UInt8 =
           |> Stdlib.Test.equal (Result.Error "Can't parse JSON `256` as type `UInt8` at path: `root`") ]
 
   module Errors =
-    // @compiler blocked: compiler-timeout
     test parseErrors =
       Stdlib.Test.all
         [ (Stdlib.Json.parse<UInt8> " ") |> err
@@ -513,7 +509,6 @@ module Int16 =
               "Can't parse JSON `32768` as type `Int16` at path: `root`") ]
 
   module Errors =
-    // @compiler blocked: compiler-timeout
     test parseErrors =
       Stdlib.Test.all
         [ (Stdlib.Json.parse<Int16> " ") |> err
@@ -584,7 +579,6 @@ module UInt16 =
               "Can't parse JSON `65536` as type `UInt16` at path: `root`") ]
 
   module Errors =
-    // @compiler blocked: compiler-timeout
     test parseErrors =
       Stdlib.Test.all
         [ (Stdlib.Json.parse<UInt16> " ") |> err
@@ -651,7 +645,6 @@ module Int32 =
           |> Stdlib.Test.equal (Result.Error "Can't parse JSON `2147483648` as type `Int32` at path: `root`") ]
 
   module Errors =
-    // @compiler blocked: compiler-timeout
     test parseErrors =
       Stdlib.Test.all
         [ (Stdlib.Json.parse<Int32> " ") |> err
@@ -717,7 +710,6 @@ module UInt32 =
               "Can't parse JSON `4294967296` as type `UInt32` at path: `root`") ]
 
   module Errors =
-    // @compiler blocked: compiler-timeout
     test parseErrors =
       Stdlib.Test.all
         [ (Stdlib.Json.parse<UInt32> " ") |> err
@@ -809,7 +801,6 @@ module Int128 =
               "Can't parse JSON `-1.8E38` as type `Int128` at path: `root`") ]
 
   module Errors =
-    // @compiler blocked: compiler-timeout
     test parseErrors =
       Stdlib.Test.all
         [ (Stdlib.Json.parse<Int128> " ") |> err
@@ -898,7 +889,6 @@ module UInt128 =
               "Can't parse JSON `-1` as type `UInt128` at path: `root`") ]
 
   module Errors =
-    // @compiler blocked: compiler-timeout
     test parseErrors =
       Stdlib.Test.all
         [ (Stdlib.Json.parse<UInt128> " ") |> err
@@ -960,7 +950,6 @@ module Float =
         Stdlib.Json.serialize<Float> 10000000000000000.0 |> Stdlib.Test.equal "1e+16"
         Stdlib.Json.serialize<Float> 0.00001 |> Stdlib.Test.equal "1e-5" ]
 
-  // @compiler blocked: compiler-resource
   test parse =
     Stdlib.Test.all
       [ // ints as floats
@@ -1020,7 +1009,6 @@ module Float =
           |> Stdlib.Test.equal (Result.Ok true) ]
 
   module Errors =
-    // @compiler blocked: compiler-resource
     test parseErrors =
       Stdlib.Test.all
         [ (Stdlib.Json.parse<Float> "e") |> err
