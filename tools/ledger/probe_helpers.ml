@@ -1,4 +1,4 @@
-(* probe_helpers.ml - Check imported test helper bodies against the selected compiler library. *)
+(* probe_helpers.ml - Probe blocked imported declarations against the selected compiler library. *)
 open Dark_compiler
 module W = WrittenTypes
 module S = SourceSelection
@@ -23,7 +23,7 @@ let unitFor (node : S.node) =
     { W.range = W.synthRange; declarations = [ declaration ]; exprsToEval = [] }
   |> Result.map_error (fun _ -> "Invalid helper declaration")
 
-let main root manifest output =
+let main includePackages root manifest output =
   let reasons =
     CompilerAnnotations.readReasons
       (Filename.concat root "porting/compiler-reasons.json")
@@ -34,7 +34,7 @@ let main root manifest output =
   in
   let candidates =
     paths
-    |> List.filter (fun file -> Text.contains file "/tests/")
+    |> List.filter (fun file -> includePackages || Text.contains file "/tests/")
     |> List.concat_map (fun file ->
         let text =
           In_channel.with_open_bin
@@ -86,6 +86,8 @@ let main root manifest output =
         (environment, accepted, [], false)
         candidates
     in
+    Printf.eprintf "Probe: %d checked, %d remaining\n%!"
+      (List.length accepted) (List.length remaining);
     if changed then pass environment accepted (List.rev remaining)
     else (List.rev accepted, List.rev remaining)
   in
@@ -106,6 +108,7 @@ let main root manifest output =
       [
         ("source", `String node.S.file);
         ("name", `String node.S.name);
+        ("kind", `String (S.kind node.S.declaration));
         ("line", `Int line);
         ("status", `String status);
         ("diagnostic", `String diagnostic);
@@ -115,12 +118,14 @@ let main root manifest output =
     (`List
        (List.map (fun node -> row node "checked" "") accepted
        @ List.map (fun (node, message) -> row node "blocked" message) blocked));
-  Printf.printf "Imported test helpers: %d checked, %d blocked\n"
+  Printf.printf "Imported declarations: %d checked, %d blocked\n"
     (List.length accepted) (List.length blocked)
 
 let () =
   match Array.to_list Sys.argv with
-  | [ _; root; manifest; output ] -> main root manifest output
+  | [ _; root; manifest; output ] -> main false root manifest output
+  | [ _; "--packages"; root; manifest; output ] ->
+      main true root manifest output
   | _ ->
-      prerr_endline "Usage: probe_helpers ROOT MANIFEST REPORT";
+      prerr_endline "Usage: probe_helpers [--packages] ROOT MANIFEST REPORT";
       exit 1
