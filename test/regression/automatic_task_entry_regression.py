@@ -23,7 +23,7 @@ let _ = Builtin.print (Stdlib.Int64.toString (delayed + 2L)) in
   Builtin.print delayed) in
 let _ = Builtin.print "main" in
 7L
-''', (7, b"mainfinished", b"")),
+''', (0, b"mainfinished", b"")),
         ("nested", '''let before = __rawptr_to_word (__fiber_current ()) in
 let nested = Stdlib.__Task.__runMain (fun _unit ->
   __rawptr_to_word (__fiber_current ()) != before) in

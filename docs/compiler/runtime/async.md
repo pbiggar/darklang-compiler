@@ -329,7 +329,7 @@ work.
 
 ## Automatic CLI entry
 
-Linux x64 CLI programs run their top-level computation inside one native task.
+Linux x64 CLI file-mode programs run their top-level computation inside one native task.
 The compiler moves the program body into a `Unit -> a` function and supplies a
 typed `__runMain` call at its original entry. Ordinary calls below that body use
 the same native stack. Startup path discovery remains before task entry.
@@ -340,8 +340,9 @@ the scheduler finishes already-started operations, including producers whose
 consumers were discarded, then the program returns its normal exit status.
 Returning from the root does not cancel those operations.
 
-Expression-test compilation retains explicit scheduler scopes so private runtime
-tests can still exercise operations outside a task. ARM64 task entry is not yet
+Expression-mode compilation (including `-e` and `--emit-result`) retains explicit
+scheduler scopes so private runtime tests can still exercise operations outside
+a task. ARM64 task entry is not yet
 implemented. Public I/O initiation and additional target support remain the next
 integration boundaries.
 
