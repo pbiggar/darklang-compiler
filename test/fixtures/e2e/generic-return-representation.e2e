@@ -1,0 +1,5 @@
+// Generic return specializations must preserve the body's runtime representation.
+let constantReturn<'a> () : 'a = 5L
+
+constantReturn<Int64> () = 5L
+constantReturn<String> () = compileerror="Expected TString, got TInt64"
