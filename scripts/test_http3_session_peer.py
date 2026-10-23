@@ -140,11 +140,9 @@ def main():
     class PeerH3(H3Connection):
         def _create_uni_stream(self, stream_type, push_id=None):
             if args.multiplex == "duplicate-control" and stream_type == 2:
-                # Reserve one of the three permitted streams, but defer its type
-                # until requests arrive. A fourth stream would fail at QUIC first.
-                identifier = self._quic.get_next_available_stream_id(is_unidirectional=True)
-                self._quic.send_stream_data(identifier, b"")
-                return identifier
+                # Reuse one of the three permitted streams for the duplicate.
+                # A fourth stream would fail at QUIC before HTTP/3 sees its type.
+                return super()._create_uni_stream(0, push_id)
             return super()._create_uni_stream(stream_type, push_id)
 
     key, leaf, ca = certificates()
@@ -224,7 +222,7 @@ def main():
                                             if args.multiplex == "control-fin":
                                                 connection.send_stream_data(http._local_control_stream_id, b"", end_stream=True)
                                             elif args.multiplex == "duplicate-control":
-                                                connection.send_stream_data(http._local_encoder_stream_id, b"\x00")
+                                                pass  # The duplicate type was sent during initialization.
                                             elif args.multiplex == "encoder-error":
                                                 # Set capacity to 4097, exceeding the client's advertised 4096.
                                                 connection.send_stream_data(http._local_encoder_stream_id, b"\x3f\xe2\x1f")
