@@ -7,7 +7,7 @@ module Darklang.Language.Tests.RuntimeToProgramTypes
 
 // Every case promotes against main, and most of them build a Dval, so both are
 // factored out here - spelled in full these assertions ran to 500 columns.
-// @compiler blocked: upstream-dependency
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Darklang.LanguageTools.ProgramTypes.Expr'"
 let promote
   (d: Darklang.LanguageTools.RuntimeTypes.Dval)
   : Stdlib.Result.Result<Darklang.LanguageTools.ProgramTypes.Expr, String> =

@@ -3,7 +3,7 @@
 /// Part of `Darklang.Cli.Workbench`.
 module Darklang.Cli.Workbench
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'State'"
 let performInputAction (state: State) (inp: InputState) : Step =
   if inp.action == "commit" then
     match SCM.PackageOps.commitDraft state.branchId inp.field.text with

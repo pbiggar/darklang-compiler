@@ -12,7 +12,6 @@ module Darklang.SCM.Tests.CommitHash
 module MintHash =
   val ts = "2026-01-01T00:00:00.000Z"
 
-  // @compiler blocked: upstream-dependency
   let h (message: String) (stamp: String) (ops: List<String>) (parent: String) : String =
     Darklang.SCM.Commits.mintHash message stamp ops parent
 

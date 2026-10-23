@@ -1,7 +1,7 @@
 module Darklang.Cli.Packages.Fn
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Cli.AppState'"
 let execute (state: Cli.AppState) (args: List<String>) : Cli.AppState =
   match args with
   | [] ->
@@ -40,7 +40,7 @@ let execute (state: Cli.AppState) (args: List<String>) : Cli.AppState =
         state
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Packages.PackageLocation'"
 let createFnInline
   (currentLocation: Packages.PackageLocation)
   (locationStr: String)
@@ -186,7 +186,7 @@ let createFnInline
     { state with exitCode = 1 }
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Cli.AppState'"
 let help (_state: Cli.AppState) : String =
   [
     "Create or update a function"
@@ -221,5 +221,5 @@ let help (_state: Cli.AppState) : String =
   ] |> Stdlib.String.join "\n"
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Cli.AppState'"
 let complete (_state: Cli.AppState) (_args: List<String>) : List<Cli.Completion.CompletionItem> = []

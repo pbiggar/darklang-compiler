@@ -157,12 +157,12 @@ module RecordWithTypeArgsDifferentName =
       "Failed to create record. Expected String for field `b`, but got 6 (an Int64)"
 
 module RecordWithRecursiveTypeArgs =
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Darklang.Language.Tests.Aliases.RecordWithRecursiveTypeArgs.Inner: Unknown type 'Alias'"
   type Inner<'a> =
     { a: 'a
       b: Stdlib.Result.Result<Alias<'a>, String> }
 
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Darklang.Language.Tests.Aliases.RecordWithRecursiveTypeArgs.Alias: Unknown type 'Inner'"
   type Alias<'x> = Inner<'x>
 
   // @compiler xfail compile: "Unknown type 'Inner'" class=missing-support reason=upstream-dependency
@@ -268,12 +268,12 @@ module EnumWithTypeArgsDifferentName =
       "Failed to create enum. Expected String for field 0 in `B`, but got Int64 (6)"
 
 module EnumWithRecursiveTypeArgs =
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Darklang.Language.Tests.Aliases.EnumWithRecursiveTypeArgs.Inner: Unknown type 'Alias'"
   type Inner<'a> =
     | A of a: 'a
     | B of b: Stdlib.Result.Result<Alias<'a>, String>
 
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Darklang.Language.Tests.Aliases.EnumWithRecursiveTypeArgs.Alias: Unknown type 'Inner'"
   type Alias<'x> = Inner<'x>
 
   // @compiler xfail compile: "Unknown type 'Alias'" class=missing-support reason=upstream-dependency

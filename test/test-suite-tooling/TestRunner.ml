@@ -1745,7 +1745,8 @@ let runTestsWithProgressReporter completedTestReporter args =
               Array.map
                 (fun test ->
                   match test.E.compilerDisposition with
-                  | CompilerAnnotations.Blocked "pending-validation" ->
+                  | CompilerAnnotations.Blocked
+                      { reason = "pending-validation"; _ } ->
                       {
                         test with
                         E.compilerDisposition = CompilerAnnotations.Run;

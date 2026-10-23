@@ -10,7 +10,6 @@ module Rank =
 
   /// not depend on what the store happens to hold.
 
-  // @compiler blocked: upstream-dependency
   let order (query: String) (candidates: List<(String * String)>) : List<String> =
     candidates
     |> Stdlib.List.sortBy (fun pair ->

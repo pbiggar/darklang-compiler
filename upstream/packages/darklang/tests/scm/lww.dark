@@ -18,7 +18,6 @@ module Darklang.SCM.Tests.Lww
 // catch the two sides drifting apart.
 
 module Wins =
-  // @compiler blocked: upstream-dependency
   let b (ts: String) (h: String) : Darklang.SCM.Conflicts.Binding =
     Darklang.SCM.Conflicts.Binding
       { owner = "Zz"

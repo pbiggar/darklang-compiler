@@ -5,7 +5,6 @@
 module Darklang.PrettyPrinter
 
 
-// @compiler blocked: missing-implementation
 let indent (s: String) : String =
   s
   |> Stdlib.String.split "\n"
@@ -15,7 +14,6 @@ let indent (s: String) : String =
     | line -> "  " + line)
   |> Stdlib.String.join "\n"
 
-// @compiler blocked: missing-implementation
 let indentByLevel (level: Int) (s: String) : String =
   let indentStr = Stdlib.String.repeat "  " level
 
@@ -27,20 +25,17 @@ let indentByLevel (level: Int) (s: String) : String =
     | line -> indentStr + line)
   |> Stdlib.String.join "\n"
 
-// @compiler blocked: missing-implementation
 let sign (s: LanguageTools.Sign) : String =
   match s with
   | Positive -> ""
   | Negative -> "-"
 
 // One-hex-digit (0-15) to its source character.
-// @compiler blocked: missing-implementation
 let hexDigitChar (n: Int) : String =
   Stdlib.String.slice "0123456789ABCDEF" n (n + 1)
 
 // Escape backslashes and ASCII controls within a grapheme, preserving the
 // remaining text. The caller handles quotes for string and char literals.
-// @compiler blocked: missing-implementation
 let encodeChar (c: Char) : String =
   match Stdlib.Char.toAsciiCode c with
   | None ->
@@ -71,7 +66,6 @@ let encodeChar (c: Char) : String =
 // Encode special characters back to source-form. Symmetric with the parser's
 // `decodeStringContent`. Quote escapes are added per quote style — `"` for
 // string literals, `'` for char literals — so the common path skips them.
-// @compiler blocked: missing-implementation
 let escapeCommon (s: String) : String =
   s
   |> Stdlib.String.toList
@@ -79,12 +73,10 @@ let escapeCommon (s: String) : String =
   |> Stdlib.String.join ""
 
 /// Escape for `"..."` string literals: common specials plus the closing `"`.
-// @compiler blocked: missing-implementation
 let escapeSpecialCharacters (s: String) : String =
   (escapeCommon s) |> Stdlib.String.replaceAll "\"" "\\\""
 
 /// Escape for `'...'` char literals: common specials plus the closing `'`.
-// @compiler blocked: missing-implementation
 let escapeCharLiteral (s: String) : String =
   (escapeCommon s) |> Stdlib.String.replaceAll "'" "\\'"
 
@@ -96,7 +88,6 @@ let escapeCharLiteral (s: String) : String =
 ///    literally named `type` or `match` needs backticks even though its shape is fine.
 /// Current syntax has no escape inside double-backtick identifiers, so names
 /// containing a newline or closing backticks are not source-round-trippable.
-// @compiler blocked: missing-implementation
 let formatFieldName (name: String) : String =
   let isStart (c: Char) : Bool = (Stdlib.Char.isASCIILetter c) || (c == '_')
   let isCont (c: Char) : Bool =
@@ -128,7 +119,6 @@ let formatFieldName (name: String) : String =
     $"``{name}``"
 
 /// Print numeric field names without backticks for tuple access such as `t.1`.
-// @compiler blocked: missing-implementation
 let formatAccessedFieldName (name: String) : String =
   let isDigits =
     (Stdlib.Bool.not (Stdlib.String.isEmpty name))
@@ -138,7 +128,6 @@ let formatAccessedFieldName (name: String) : String =
 /// The fraction of a float literal with its trailing zeros dropped (`1.50` -> `1.5`), by parsing and
 /// reprinting it. Only trusted when that comes back as a plain `0.xxx` decimal: `00001` reprints as
 /// `1e-5`, and cutting two characters off that gave `0.-5`.
-// @compiler blocked: missing-implementation
 let processRemainder (remainder: String) : String =
   match $".{remainder}" |> Stdlib.Float.parse with
   | Ok floatValue ->
@@ -172,7 +161,6 @@ let processRemainder (remainder: String) : String =
 /// captures the short spelling first, the resolver would pick that instead. Checking would mean walking
 /// every candidate against the package store for every name printed, which is far too expensive for a
 /// listing; the parser round-trip suite is what catches it.
-// @compiler blocked: missing-implementation
 let shortenName
   (currentModule: List<String>)
   (owner: String)
@@ -218,7 +206,6 @@ let shortenName
 /// escapes out of `PrettyPrinter`, which has no business knowing about `Cli.Colors`, and means the same
 /// value can be painted for a terminal, left plain for a pipe, or styled some other way entirely
 /// without the printer changing.
-// @compiler blocked: missing-implementation
 type Palette =
   { string_: String
     number: String
@@ -230,7 +217,6 @@ type Palette =
 
 module Palette =
   /// No decoration at all. The default, because a printer's output is text until someone says otherwise.
-  // @compiler blocked: missing-implementation
   val plain =
     Palette
       { string_ = ""
@@ -247,7 +233,6 @@ module Palette =
 /// output is going lives here and comes from the caller, so the same value can be printed for a 60-column
 /// pane, a piped stdout and a test with the only difference being the record passed in. That is also what
 /// makes the printers safely nestable: an inner call cannot disagree with its caller about the rules.
-// @compiler blocked: missing-implementation
 type DisplayOptions =
   {
     /// Columns available for the whole line, counted from column 0. A printer that starts partway
@@ -273,7 +258,6 @@ type DisplayOptions =
 module DisplayOptions =
   /// The defaults every existing caller gets. 80 columns because that is what the printers assumed
   /// before this record existed, not because it is a good width; callers that know better should say so.
-  // @compiler blocked: missing-implementation
   val default =
     DisplayOptions
       { width = 80
@@ -294,16 +278,13 @@ module DisplayOptions =
         maxDepth = Stdlib.Option.Option.None }
 
   /// The defaults, printed from inside `path`.
-  // @compiler blocked: missing-implementation
   let inModule (path: List<String>) : DisplayOptions =
     { DisplayOptions.default with currentModule = path }
 
   /// The defaults, painted with `p`.
-  // @compiler blocked: missing-implementation
   let painted (p: Palette) : DisplayOptions =
     { DisplayOptions.default with palette = p }
 
   /// The defaults at a given width.
-  // @compiler blocked: missing-implementation
   let atWidth (width: Int) : DisplayOptions =
     { DisplayOptions.default with width = width }

@@ -439,7 +439,7 @@ let map (list: List<'a>) (fn: 'a -> 'b) : List<'b> =
 /// <fn map>, with every call of <param fn> as a process of its own, spread across the cores,
 /// and the results in order. For work that computes; reads run concurrently under plain
 /// <fn map> already. Built on <fn Stdlib.Exec.spawn>.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Stdlib.List.parallelMap: Unknown function or value 'Stdlib.Exec.spawn'"
 let parallelMap (list: List<'a>) (fn: 'a -> 'b) : List<'b> =
   list
   |> Stdlib.List.map (fun x -> Stdlib.Exec.spawn (fun () -> fn x))

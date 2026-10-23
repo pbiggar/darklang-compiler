@@ -275,7 +275,7 @@ let serve
 /// <param dev>: an open page reloads when the router it came from, or anything it calls, is saved
 /// (`GET /__live` is an event stream; HTML responses carry the script that listens). For a dev
 /// site, not production.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Stdlib.HttpServer.serveLive: Unknown function or value 'Builtin.httpServerServeLive'"
 let serveLive
   (config: Config.Config)
   (init: 's)

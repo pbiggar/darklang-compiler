@@ -10,7 +10,6 @@ module Darklang.Cli.Tests.Outliner
 // Names are fully qualified: testfiles parse with owner "Tests", so `Darklang.` prefixes are required.
 
 module Outline =
-  // @compiler blocked: upstream-dependency
   let sample () : Darklang.Cli.Outliner.Outline =
     // A
     //   B
@@ -22,11 +21,9 @@ module Outline =
       [ 1, 4 ]
       5
 
-  // @compiler blocked: upstream-dependency
   let texts (o: Darklang.Cli.Outliner.Outline) : List<String> =
     Darklang.Cli.Outliner.flattenVisible o |> Stdlib.List.map (fun vn -> vn.text)
 
-  // @compiler blocked: upstream-dependency
   let depths (o: Darklang.Cli.Outliner.Outline) : List<Int> =
     Darklang.Cli.Outliner.flattenVisible o |> Stdlib.List.map (fun vn -> vn.depth)
 
@@ -110,15 +107,12 @@ module ListEdits =
         |> Stdlib.Test.equal [ 1, 2, 3 ] ]
 
 module Editing =
-  // @compiler blocked: upstream-dependency
   let editorOn (o: Darklang.Cli.Outliner.Outline) : Darklang.Cli.Outliner.Editor.State =
     Darklang.Cli.Outliner.Editor.fromOutline o
 
-  // @compiler blocked: upstream-dependency
   let texts (s: Darklang.Cli.Outliner.Editor.State) : List<String> =
     Darklang.Cli.Outliner.Editor.visible s |> Stdlib.List.map (fun vn -> vn.text)
 
-  // @compiler blocked: upstream-dependency
   let depths (s: Darklang.Cli.Outliner.Editor.State) : List<Int> =
     Darklang.Cli.Outliner.Editor.visible s |> Stdlib.List.map (fun vn -> vn.depth)
 
@@ -288,7 +282,6 @@ module TextField =
     |> Stdlib.Test.equal "done"
 
 module Picker =
-  // @compiler blocked: upstream-dependency
   let three () : Darklang.Stdlib.Cli.UI.Picker.State =
     Darklang.Stdlib.Cli.UI.Picker.make [ "one", "two", "three" ]
 
@@ -339,11 +332,9 @@ module Picker =
         Darklang.Stdlib.Cli.UI.Picker.rowFor "x" false |> Stdlib.Test.equal "  x" ]
 
 module Confirm =
-  // @compiler blocked: upstream-dependency
   let question () : Darklang.Stdlib.Cli.UI.Confirm.State =
     Darklang.Stdlib.Cli.UI.Confirm.askDangerous "Delete?" "3 lines"
 
-  // @compiler blocked: upstream-dependency
   let key (c: String) : Darklang.Stdlib.Cli.UI.Widget.KeyPress =
     Darklang.Stdlib.Cli.UI.Widget.press
       Darklang.Stdlib.Cli.Stdin.Key.Key.None

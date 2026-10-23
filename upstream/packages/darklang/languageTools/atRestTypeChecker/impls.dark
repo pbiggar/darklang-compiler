@@ -4,7 +4,7 @@ module Darklang.LanguageTools.AtRestTypeChecker.Impls
 
 /// What checking an implementation needs loaded first: its method fns, the types its self type
 /// and type args name, and the types its trait's methods name.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.Trait.Trait'"
 let refsOf
   (batchTraits: Dict<LanguageTools.ProgramTypes.Hash, LanguageTools.ProgramTypes.Trait.Trait>)
   (implementation: LanguageTools.ProgramTypes.TraitImpl.TraitImpl)
@@ -40,7 +40,7 @@ let refsOf
 
 /// The trait an implementation names: one <param inBatch> answers for (a trait saved in the
 /// same batch), else the store's.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.Trait.Trait'"
 let traitOf
   (inBatch: LanguageTools.ProgramTypes.Hash -> Stdlib.Option.Option<LanguageTools.ProgramTypes.Trait.Trait>)
   (implementation: LanguageTools.ProgramTypes.TraitImpl.TraitImpl)
@@ -58,7 +58,7 @@ let traitOf
   | Error _ -> Stdlib.Option.Option.None
 
 /// The type variables a written type names.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.TypeReference'"
 let variablesIn (typ: LanguageTools.ProgramTypes.TypeReference) : List<String> =
   match typ with
   | TVariable name -> [ name ]
@@ -75,7 +75,7 @@ let variablesIn (typ: LanguageTools.ProgramTypes.TypeReference) : List<String> =
 
 /// The implementation's params: the ones it declares, and the ones its self type and type args
 /// name without declaring. `impl Zero for Dict<'k, 'v>` declares none and has two.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.TraitImpl.TraitImpl'"
 let implParamsOf
   (implementation: LanguageTools.ProgramTypes.TraitImpl.TraitImpl)
   : List<String> =
@@ -87,7 +87,7 @@ let implParamsOf
 
 /// The trait method's signature at the implementation's type, as one fn type. The method's and
 /// the implementation's own params stay rigid: the method fn may not pick a type for them.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.TraitImpl.TraitImpl'"
 let expectedType
   (implementation: LanguageTools.ProgramTypes.TraitImpl.TraitImpl)
   (trait_: LanguageTools.ProgramTypes.Trait.Trait)
@@ -116,7 +116,7 @@ let expectedType
   (Model.Ty.TFn(parameters, ret), found)
 
 /// The method fn's signature, its type params fresh. None when no signature is available.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Solve.State'"
 let actualType
   (s: Solve.State)
   (batchFns: Dict<LanguageTools.ProgramTypes.Hash, LanguageTools.ProgramTypes.PackageFn.PackageFn>)
@@ -169,7 +169,7 @@ let actualType
   | _ -> Stdlib.Option.Option.None
 
 /// Which part differs; the expected and actual types follow it in the message.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Model.Ty'"
 let signatureDetail (expected: Model.Ty) (actual: Model.Ty) : String =
   match (expected, actual) with
   | (TFn(expectedParams, expectedRet), TFn(actualParams, actualRet)) ->
@@ -186,7 +186,7 @@ let signatureDetail (expected: Model.Ty) (actual: Model.Ty) : String =
 
 /// Failed when a method is missing, extra, or has the wrong signature; Incomplete, saying why,
 /// when something could not be compared.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Model.Environment'"
 let check
   (env: Model.Environment)
   (batchFns: Dict<LanguageTools.ProgramTypes.Hash, LanguageTools.ProgramTypes.PackageFn.PackageFn>)

@@ -8,7 +8,7 @@ module Darklang.Cli.Workbench
 /// prompt, quit, ` for the nav, and the number keys for the workspaces.
 /// None if `keyChar` isn't one of them. Both the nav and the plain view
 /// fall through to this, so neither has to repeat it.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'State'"
 let globalKey (state: State) (keyChar: Stdlib.Option.Option<String>) : Stdlib.Option.Option<Step> =
   match keyChar with
   | Some "S" -> Stdlib.Option.Option.Some (openBranchPicker state)
@@ -42,26 +42,26 @@ let globalKey (state: State) (keyChar: Stdlib.Option.Option<String>) : Stdlib.Op
   | None -> Stdlib.Option.Option.None
 
 /// Is the cursor on a row of this kind?
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'State'"
 let cursorRowIs (state: State) (kind: String) : Bool =
   match Stdlib.List.getAt state.items state.selected with
   | Some it -> it.kind == kind
   | None -> false
 
 /// Is the cursor on a Home row of this kind?
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'State'"
 let homeRowIs (state: State) (kind: String) : Bool =
   (state.activeView == vHome) && (cursorRowIs state kind)
 
 /// Put the Matter view on <param lens>: reload the items for it and reset the cursor, the detail
 /// scroll and the filter, all of which indexed the list the lens just replaced.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'State'"
 let withLens (state: State) (lens: Lens) : State =
   moveToPoint state
     { (returnPointOf state) with lens = lens, selected = 0, filter = "" } true
 
 /// Movement and view actions when no modal layer owns the key.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'State'"
 let handleViewKey
   (state: State)
   (key: Stdlib.Cli.Stdin.Key.Key)
@@ -378,7 +378,7 @@ let handleViewKey
 ///
 /// Each layer either owns the key or defers to the next. The order is the visual stacking order: an overlay
 /// beats the editor, the editor beats the command bar, and so on down to the plain view.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'State'"
 let handleKey
   (state: State)
   (key: Stdlib.Cli.Stdin.Key.Key)

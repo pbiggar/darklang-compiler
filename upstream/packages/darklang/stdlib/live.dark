@@ -21,20 +21,19 @@ module Darklang.Stdlib.Live
 /// The store's change counter as this process sees it. It moves whenever a commit lands through another
 /// connection, in this process or in another one. Only "same as before" or "moved" means anything, and
 /// only within one process; the number itself does not.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Stdlib.Live.version: Unknown function or value 'Builtin.storeVersion'"
 let version () : Int = Builtin.storeVersion ()
 
 
 // --- what changed ---
 
 /// One thing a change touched: a name and what kind of item is bound there.
-// @compiler blocked: missing-implementation
 type Touched =
   { location: LanguageTools.ProgramTypes.PackageLocation
     kind: LanguageTools.ProgramTypes.ItemKind }
 
 /// What a poll found.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Stdlib.Live.Change: Unknown type 'SCM.PackageOps.OpSummary'"
 type Change =
   { /// The ops that landed since the last poll, oldest first, as the branch sees them.
     ops: List<SCM.PackageOps.OpSummary>
@@ -46,7 +45,6 @@ type Change =
 
 /// Where a watcher stands: the branch it reads, the last counter it saw, and how far into the log it
 /// has reported.
-// @compiler blocked: missing-implementation
 type Watch =
   { branchId: Uuid
     version: Int
@@ -62,7 +60,6 @@ type Watch =
 
 /// More ops than this in one poll, and the change is reported as unknown rather than described: a
 /// host would re-run everything anyway, and describing ten thousand ops to reach that answer is waste.
-// @compiler blocked: missing-implementation
 val describeAtMost = 500
 
 // --- what an agent points you at ---
@@ -70,19 +67,18 @@ val describeAtMost = 500
 /// The instance setting that names the view a host loop should be showing. Written by `show`,
 /// read by the host on every store change. In the store (`config_v0`, never synced), not the
 /// json config beside it, because a store write is what wakes a host.
-// @compiler blocked: missing-implementation
 val showKey = "live.show"
 
 /// Point every host loop on this instance at <param view>, a module with `init`, `update` and
 /// `render` (a view's module path). An agent calls it after authoring the
 /// thing it wants you to look at; a live view that is open switches to it on its next
 /// turn, and one started later opens on it when it is given no view of its own.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Stdlib.Live.show: Unknown function or value 'Stdlib.LocalStore.configSet'"
 let show (view: LanguageTools.ProgramTypes.PackageLocation) : Unit =
   Stdlib.LocalStore.configSet showKey (entryName view)
 
 /// The view `show` last named, if any.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Stdlib.Live.shown: Unknown function or value 'Stdlib.LocalStore.configGet'"
 let shown () : Stdlib.Option.Option<LanguageTools.ProgramTypes.PackageLocation> =
   match Stdlib.LocalStore.configGet showKey with
   | "" -> Stdlib.Option.Option.None
@@ -93,7 +89,7 @@ let shown () : Stdlib.Option.Option<LanguageTools.ProgramTypes.PackageLocation> 
 /// still be filling. A second that has passed can take nothing more, so nothing needs remembering
 /// for it. The newest insert is read BEFORE the clock, so the clock is never behind it and "not
 /// equal" means "passed".
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Stdlib.Live.frontier: Unknown function or value 'SCM.PackageOps.newestInsert'"
 let frontier () : (String * List<String>) =
   let newest = SCM.PackageOps.newestInsert ()
   let now = SCM.PackageOps.storeNow ()
@@ -104,7 +100,7 @@ let frontier () : (String * List<String>) =
     (newest, [])
 
 /// Start watching <param branchId> from now. Nothing that landed before this call is ever reported.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Stdlib.Live.watch: Unknown function or value 'frontier'"
 let watch (branchId: Uuid) : Watch =
   let (since, reported) = frontier ()
 
@@ -115,7 +111,6 @@ let watch (branchId: Uuid) : Watch =
       reported = reported
       shown = Stdlib.LocalStore.configGet showKey }
 
-// @compiler blocked: missing-implementation
 let kindOf (target: LanguageTools.ProgramTypes.Reference) : LanguageTools.ProgramTypes.ItemKind =
   match target with
   | PackageType _ -> LanguageTools.ProgramTypes.ItemKind.Type
@@ -126,7 +121,7 @@ let kindOf (target: LanguageTools.ProgramTypes.Reference) : LanguageTools.Progra
   | PackageTest _ -> LanguageTools.ProgramTypes.ItemKind.Test
 
 /// The names an op binds or unbinds, if it does one of those.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.PackageOp'"
 let touchedBy (op: LanguageTools.ProgramTypes.PackageOp) : List<Touched> =
   match op with
   | SetName(location, target, _previous) ->
@@ -145,7 +140,7 @@ let touchedBy (op: LanguageTools.ProgramTypes.PackageOp) : List<Touched> =
   | _ -> []
 
 /// A change nobody can describe. Everything is affected.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Change'"
 let unknownChange () : Change =
   Change { ops = [], touched = [], unknown = true }
 
@@ -158,14 +153,13 @@ let unknownChange () : Change =
 /// Keyed on location AND kind, because one name can be bound as a fn and as a type and those are
 /// two things for a host to reload. Keyed on location alone the second one vanishes, and a touched
 /// name that vanishes is a host left running stale code with nothing on screen to say so.
-// @compiler blocked: missing-implementation
 let dedupeTouched (touched: List<Touched>) : List<Touched> =
   touched |> Stdlib.List.uniqueBy (fun t -> (t.location, t.kind))
 
 /// When something did land, the name caches are dropped BEFORE the change is reported, so the caller's
 /// next name lookup sees the store as it is. That is the whole reload: nothing else has to happen for a
 /// name resolved after this to answer with the new hash.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Change'"
 let poll (w: Watch) : (Watch * Stdlib.Option.Option<Change>) =
   let now = version ()
 
@@ -233,7 +227,6 @@ let poll (w: Watch) : (Watch * Stdlib.Option.Option<Change>) =
 
 /// Never walk further than this. Past it, the change touched so much that "re-run everything" is
 /// the right answer and cheaper than finishing the walk.
-// @compiler blocked: missing-implementation
 val walkAtMost = 2000
 
 /// Everything that depends, transitively, on any of <param touched>, as names. Over-approximates: a
@@ -242,7 +235,7 @@ val walkAtMost = 2000
 /// Reverse edges from `package_dependencies`, matched by NAME (`SCM.Deps.dependentsByName`), so a caller
 /// still pointing at the previous version of the name is found, which is exactly the caller a live host
 /// is.
-// @compiler blocked: missing-implementation
+// @compiler blocked: compiler-gap diagnostic="Darklang.Stdlib.Live.dependents: Field access requires a record value"
 let dependents
   (touched: List<Touched>)
   : List<LanguageTools.ProgramTypes.PackageLocation> =
@@ -286,7 +279,7 @@ let dependents
 
 /// Does <param change> reach <param entry>: is `entry` one of the names it touched, or something that
 /// depends on one of them? An unknown change reaches everything.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Change'"
 let affects (change: Change) (entry: LanguageTools.ProgramTypes.PackageLocation) : Bool =
   if change.unknown then
     true
@@ -304,14 +297,14 @@ let affects (change: Change) (entry: LanguageTools.ProgramTypes.PackageLocation)
 /// `hash` is `None` until the first `refresh` finds something usable. `report` is the at-rest report of
 /// the newest version when that version FAILED and the host is staying on `hash`; `None` when the host
 /// is on the newest. `problem` is for a name that stopped resolving at all.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Stdlib.Live.LastGood: Unknown type 'LanguageTools.AtRestTypeChecker.Report'"
 type LastGood =
   { entry: LanguageTools.ProgramTypes.PackageLocation
     hash: Stdlib.Option.Option<LanguageTools.ProgramTypes.Hash>
     report: Stdlib.Option.Option<LanguageTools.AtRestTypeChecker.Report>
     problem: Stdlib.Option.Option<String> }
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LastGood'"
 let start (entry: LanguageTools.ProgramTypes.PackageLocation) : LastGood =
   LastGood
     { entry = entry
@@ -319,21 +312,19 @@ let start (entry: LanguageTools.ProgramTypes.PackageLocation) : LastGood =
       report = Stdlib.Option.Option.None
       problem = Stdlib.Option.Option.None }
 
-// @compiler blocked: missing-implementation
 let entryName (entry: LanguageTools.ProgramTypes.PackageLocation) : String =
   let path = Stdlib.List.append [ entry.owner ] (Stdlib.List.append entry.modules [ entry.name ])
   Stdlib.String.join path "."
 
 /// Never chase callees further than this. A version that calls more than this many things is
 /// checked as far as the walk got; the rest is what the runtime says on the first call.
-// @compiler blocked: missing-implementation
 val calleesAtMost = 200
 
 /// Everything the version at <param hash> calls, transitively, as declarations for the checker:
 /// fns, values and types, by the hashes its edges name. What the at-rest check of one declaration
 /// does not cover: a callee whose BODY is broken passes the caller's check, since the caller only
 /// sees its signature.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.PackageOp'"
 let calleeDeclarations
   (hash: LanguageTools.ProgramTypes.Hash)
   : List<LanguageTools.ProgramTypes.PackageOp> =
@@ -388,7 +379,7 @@ let calleeDeclarations
 /// and does not hold it back. `Failed` keeps the previous hash and carries the report, so a broken
 /// save never blanks a screen or a site: the previous version is still in the store, and it still
 /// runs, on the callees it was built against.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LastGood'"
 let refresh (branchId: Uuid) (lg: LastGood) : LastGood =
   match LanguageTools.PackageManager.Function.find branchId lg.entry with
   | None ->
@@ -443,7 +434,6 @@ let applicableByName (branchId: Uuid) (name: String) : Stdlib.Result.Result<'a -
 
 /// A dotted name as a location: `Owner.Module.fn` -> `{ owner, modules, name }`. `None` for a name
 /// with fewer than two segments, which cannot be a package fn.
-// @compiler blocked: missing-implementation
 let locationOfName
   (name: String)
   : Stdlib.Option.Option<LanguageTools.ProgramTypes.PackageLocation> =
@@ -463,7 +453,7 @@ let locationOfName
 /// parentheses. `expected String, got Int (argument 2)`; `expected String, got Int (return value)`.
 /// The checker's own text leads with the site ("In argument 2: expected ..."); every line a live
 /// host prints puts the site last, so the lines align on the part that matters.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.AtRestTypeChecker.Issue'"
 let issueText (issue: LanguageTools.AtRestTypeChecker.Issue) : String =
   let site =
     match issue.context with
@@ -492,7 +482,7 @@ let issueText (issue: LanguageTools.AtRestTypeChecker.Issue) : String =
   | (None, _) -> LanguageTools.AtRestTypeChecker.issueToString issue
 
 /// The report's first issue as text, and how many more there are.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.AtRestTypeChecker.Report'"
 let reportText (report: LanguageTools.AtRestTypeChecker.Report) : String =
   let issues = Stdlib.List.append report.warnings report.diagnostics
   let count = Stdlib.List.length issues
@@ -506,7 +496,7 @@ let reportText (report: LanguageTools.AtRestTypeChecker.Report) : String =
   first + more
 
 /// One line for a band or a log: why the host is not on the newest version, if it is not.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LastGood'"
 let diagnostic (lg: LastGood) : Stdlib.Option.Option<String> =
   match lg.problem with
   | Some problem -> Stdlib.Option.Option.Some problem
@@ -521,7 +511,7 @@ let diagnostic (lg: LastGood) : Stdlib.Option.Option<String> =
 /// The one line a host says when a refresh changed something, or nothing when it did not: the
 /// diagnostic when one appeared or changed, "now on the new version of X" when the hash moved
 /// or a diagnostic cleared. The caller prefixes it (`[live]`, the daemon's name).
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LastGood'"
 let transition (before: LastGood) (after: LastGood) : Stdlib.Option.Option<String> =
   let was = diagnostic before
   let now = diagnostic after
@@ -540,19 +530,19 @@ let transition (before: LastGood) (after: LastGood) : Stdlib.Option.Option<Strin
 /// location, poll, and hand back the last version that passes its checks. The state is a value the
 /// server carries between requests; nothing here is a thread or a timer.
 module Router =
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Darklang.Stdlib.Live.Router.State: Unknown type 'LastGood'"
   type State =
     { watch: Watch
       lastGood: LastGood }
 
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Unknown type 'State'"
   let start (branchId: Uuid) (entry: LanguageTools.ProgramTypes.PackageLocation) : State =
     State { watch = watch branchId, lastGood = refresh branchId (Stdlib.Live.start entry) }
 
   /// One request's worth of following: did the store move, does it reach the router, and if so
   /// which hash is the router now. A newly broken version is said once, on stdout, which is where a
   /// host's log is; the wire keeps getting the last good one.
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Unknown type 'State'"
   let step
     (s: State)
     : (State * Stdlib.Result.Result<Stdlib.Http.Request -> Stdlib.Http.Response, String>) =
@@ -576,12 +566,12 @@ module Router =
 // --- for tests and logs ---
 
 /// The touched names, dotted. What a log line or a toast shows.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Change'"
 let touchedNames (change: Change) : List<String> =
   change.touched |> Stdlib.List.map (fun t -> entryName t.location)
 
 /// A change that touched exactly one fn, for asking `affects` about a hypothetical edit.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Change'"
 let touchingOnly (entry: LanguageTools.ProgramTypes.PackageLocation) : Change =
   Change
     { ops = []
@@ -591,7 +581,7 @@ let touchingOnly (entry: LanguageTools.ProgramTypes.PackageLocation) : Change =
 
 /// What a host that had never seen <param entry> would say about it now: `None` when the newest
 /// version is fine, else why it would not be applied.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Stdlib.Live.diagnose: Unknown function or value 'diagnostic'"
 let diagnose
   (branchId: Uuid)
   (entry: LanguageTools.ProgramTypes.PackageLocation)
@@ -608,7 +598,7 @@ let apply (f: 'a -> 'b) (arg: 'a) : Stdlib.Result.Result<'b, String> =
 
 /// Call the version <param lg> is on with <param arg>, and get a failure back as a value: a host
 /// that keeps the last good frame with the error under it cannot let user code unwind its loop.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LastGood'"
 let call (lg: LastGood) (arg: 'a) : Stdlib.Result.Result<'b, String> =
   match applicable lg with
   | Ok f -> apply f arg
@@ -619,7 +609,7 @@ let call (lg: LastGood) (arg: 'a) : Stdlib.Result.Result<'b, String> =
 
 /// What an agent (or a test) sees of a view: the picture and what is wrong with the newest code,
 /// without a terminal in the way.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Stdlib.Live.Observation: Unknown type 'LanguageTools.AtRestTypeChecker.Report'"
 type Observation =
   { /// The at-rest report of the newest version, when it failed its checks and an earlier
     /// version is what rendered. `None` when the newest is what you are looking at.
@@ -633,7 +623,7 @@ type Observation =
 
 /// The versions bound at <param loc> on <param branchId>, newest first: what a host that had been
 /// watching all along would have as its last good candidates.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Stdlib.Live.versionsNewestFirst: Unknown function or value 'LanguageTools.PackageManager.Function.find'"
 let versionsNewestFirst
   (branchId: Uuid)
   (loc: LanguageTools.ProgramTypes.PackageLocation)
@@ -649,7 +639,7 @@ let versionsNewestFirst
 
 /// Whether <param hash> passes its at-rest checks with everything it calls. `None` when it does;
 /// the report when it does not.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.AtRestTypeChecker.Report'"
 let atRestFailure
   (hash: LanguageTools.ProgramTypes.Hash)
   : Stdlib.Option.Option<LanguageTools.AtRestTypeChecker.Report> =
@@ -669,7 +659,7 @@ let atRestFailure
 /// every edit would have it; when that version raises, the ones before it are tried for a
 /// picture, and the error is reported beside it. Nothing is kept between calls: the store's
 /// history is the memory.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Observation'"
 let observe (branchId: Uuid) (view: LanguageTools.ProgramTypes.PackageLocation) : Observation =
   // "As it is now": the name-keyed caches may hold what a name meant before the last save.
   // A host learns of a save through `poll`, which drops them; this is the same drop for a
@@ -776,7 +766,6 @@ let observe (branchId: Uuid) (view: LanguageTools.ProgramTypes.PackageLocation) 
 /// function ran on the inputs its last recorded call had (`docs/live.md`, "Live values").
 /// Data; the LSP and the workbench render it.
 module Values =
-  // @compiler blocked: missing-implementation
   type Values =
     { /// Each call's value, keyed by the id of the `EApply` expression that made it, as text.
       /// Calls made inside callees are here too, under their own expressions' ids; a printer
@@ -802,7 +791,7 @@ module Values =
   /// performed that function's effects for real -- so opening a file in an editor could charge a
   /// card. Replaying the whole run answers every effect from the log instead, and because the
   /// pure code is recomputed, the values follow an edit to a callee.
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Darklang.Stdlib.Live.Values.replay: Unknown function or value 'replayWithin'"
   let replay
     (accountID: Stdlib.Option.Option<Uuid>)
     (branchId: Uuid)
@@ -819,7 +808,7 @@ module Values =
   /// its memory is linear in the run's size. An editor or a workbench asks on a keystroke, and
   /// on a store that records everything the newest run through `List.map` is whatever script
   /// ran last. Both limits, because `durationMs` is 0 for a run recorded before it was kept.
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Darklang.Stdlib.Live.Values.replayWithin: Unknown function or value 'Darklang.Tracing.Store.wentThroughNamed'"
   let replayWithin
     (maxDurationMs: Int64)
     (maxFns: Int)

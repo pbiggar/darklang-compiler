@@ -1,7 +1,7 @@
 /// Navigate between packages, modules, and entities
 module Darklang.Cli.Packages.Nav
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'AppState'"
 let navTo (state: AppState) (location: PackageLocation): AppState =
   // if the intended state is the same as the current state (cd .), then short-circuit
   if location == state.packageData.currentLocation then
@@ -18,7 +18,7 @@ let navTo (state: AppState) (location: PackageLocation): AppState =
     }
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'AppState'"
 let execute (state: AppState) (args: List<String>) : AppState =
   match args with
   | [] ->
@@ -60,7 +60,7 @@ let execute (state: AppState) (args: List<String>) : AppState =
     state
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'AppState'"
 let complete (state: AppState) (args: List<String>) : List<Completion.CompletionItem> =
   let branchId = state.currentBranchId
   match args with
@@ -74,7 +74,7 @@ let complete (state: AppState) (args: List<String>) : List<Completion.Completion
     []
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'AppState'"
 let help (_state: AppState) : String =
   [
     "Usage: nav [path]"

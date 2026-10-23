@@ -181,7 +181,7 @@ let select ~context ~roots ~supplements ~sources =
           | Some entry -> (
               match entry.I.disposition with
               | A.Run -> find rest
-              | A.Blocked reason ->
+              | A.Blocked { reason; _ } ->
                   let* following = find rest in
                   Ok
                     ({ name = entry.I.name; reason; excluded = false }
@@ -219,7 +219,7 @@ let select ~context ~roots ~supplements ~sources =
                       (({ member with name = node.name } :: blocked)
                       @ unavailable)
                       contracts targets rest)
-            | A.Blocked reason | A.Excluded reason ->
+            | A.Blocked { reason; _ } | A.Excluded reason ->
                 let excluded =
                   match node.disposition with
                   | A.Excluded _ -> true

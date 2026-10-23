@@ -16,24 +16,23 @@ module Darklang.Cli.Tests.CommandGroups
 // empty input look the same from the outside.
 
 module Groups =
-  // @compiler blocked: upstream-dependency
+  // @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Tests.CommandGroups.Groups.registered: Unknown function or value 'Darklang.Cli.Registry.allCommands'"
   let registered () : List<String> =
     Darklang.Cli.Registry.allCommands () |> Stdlib.List.map (fun c -> c.name)
 
-  // @compiler blocked: upstream-dependency
   let grouped () : List<String> =
     Darklang.Cli.Registry.commandGroups ()
     |> Stdlib.List.map (fun (_name, cmdNames) -> cmdNames)
     |> Stdlib.List.flatten
 
   /// Registered, but in no group: these print under "Other:" and never on the welcome screen.
-  // @compiler blocked: upstream-dependency
+  // @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Tests.CommandGroups.Groups.ungrouped: Unknown function or value 'registered'"
   let ungrouped () : List<String> =
     let g = grouped ()
     registered () |> Stdlib.List.filter (fun n -> Stdlib.Bool.not (Stdlib.List.contains g n))
 
   /// Named by a group, but not registered: these are silently dropped from help.
-  // @compiler blocked: upstream-dependency
+  // @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Tests.CommandGroups.Groups.phantom: Unknown function or value 'registered'"
   let phantom () : List<String> =
     let r = registered ()
     grouped () |> Stdlib.List.filter (fun n -> Stdlib.Bool.not (Stdlib.List.contains r n))

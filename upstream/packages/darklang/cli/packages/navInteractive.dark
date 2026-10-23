@@ -1,24 +1,22 @@
 module Darklang.Cli.Packages.NavInteractive
 
 // Interactive navigation types
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Packages.NavInteractive.NavItem: Unknown type 'EntityType'"
 type NavItem =
   { name: String
     entityType: EntityType
     location: PackageLocation }
 
-// @compiler blocked: missing-implementation
 type Display =
   | JustName
   | Source
   // | AST  // future: show AST view
 
-// @compiler blocked: missing-implementation
 type Mode =
   | Nav
   | Search
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Packages.NavInteractive.State: Unknown type 'NavItem'"
 type State =
   { items: List<NavItem>
     selectedIndex: Int
@@ -37,14 +35,13 @@ type State =
 
 
 /// A running navigation model and its process-local presentation state.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Packages.NavInteractive.Session: Unknown type 'State'"
 type Session =
   { state: State
     terminal: Darklang.Stdlib.Cli.Tui.TerminalSession.State }
 
 
 /// Navigation regions derived from one terminal-size sample.
-// @compiler blocked: missing-implementation
 type Layout =
   { width: Int
     contentHeight: Int
@@ -58,7 +55,6 @@ type Layout =
     focusWidth: Int }
 
 
-// @compiler blocked: missing-implementation
 let helpSections (mode: Mode) (display: Display) : List<String> =
   match mode, display with
   | Nav, JustName ->
@@ -90,7 +86,7 @@ let helpSections (mode: Mode) (display: Display) : List<String> =
       "Esc Back" ]
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Packages.NavInteractive.packHelpRows: Unknown function or value 'Darklang.Stdlib.Cli.Tui.Text.wrapAtColumn'"
 let packHelpRows
   (width: Int)
   (sections: List<String>)
@@ -125,7 +121,7 @@ let packHelpRows
 
 
 /// Fit navigation help into complete rows without truncating an action.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Packages.NavInteractive.helpRowsAtWidth: Unknown function or value 'packHelpRows'"
 let helpRowsAtWidth
   (mode: Mode)
   (display: Display)
@@ -142,7 +138,7 @@ let helpRowsAtWidth
 /// only thing a listing of one module and a search across the tree disagree about: a listing shows
 /// `map`, a search shows `Darklang.Stdlib.List.map`. The submodule row is each caller's own, because
 /// they ask different questions of `results`.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.Search.SearchResults'"
 let leafNavItems
   (results: LanguageTools.ProgramTypes.Search.SearchResults)
   (shortNames: Bool)
@@ -188,7 +184,7 @@ let leafNavItems
   Stdlib.List.flatten [ types, functions, values, traits, impls, tests ]
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.Search.SearchResults'"
 let buildNavItemsFromResults
   (results: LanguageTools.ProgramTypes.Search.SearchResults)
   (modulePath: List<String>)
@@ -204,7 +200,7 @@ let buildNavItemsFromResults
 
 
 // Create interactive navigation state for a location
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'PackageLocation'"
 let buildState (branchId: Uuid) (location: PackageLocation) : State =
   let modulePath = modulePathOf location
 
@@ -226,7 +222,7 @@ let buildState (branchId: Uuid) (location: PackageLocation) : State =
       branchId = branchId }
 
 // Load truncated focus rows without printing them.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'PackageLocation'"
 let loadFocusRows
   (branchId: Uuid)
   (location: PackageLocation)
@@ -297,7 +293,7 @@ let loadFocusRows
 
 
 /// Refresh derived focus content after a state transition.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'State'"
 let refreshFocusRows (navState: State) : State =
   match navState.display with
   | JustName ->
@@ -317,7 +313,7 @@ let refreshFocusRows (navState: State) : State =
 
 
 /// Calculate navigation regions for the complete terminal viewport.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'State'"
 let layout
   (navState: State)
   (size: Darklang.Stdlib.Cli.Tui.Size)
@@ -390,7 +386,7 @@ let layout
 
 
 /// Build the complete desired navigation view for one terminal-size sample.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'State'"
 let viewAtSize
   (navState: State)
   (size: Darklang.Stdlib.Cli.Tui.Size)
@@ -572,7 +568,7 @@ let viewAtSize
 
 
 /// Start navigation and present its first complete frame.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'State'"
 let start
   (navState: State)
   : Stdlib.Result.Result<Session, String> =
@@ -590,7 +586,7 @@ let start
 
 
 /// Present the next navigation model using an already sampled terminal size.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Session'"
 let presentAtSize
   (session: Session)
   (size: Darklang.Stdlib.Cli.Tui.Size)
@@ -606,14 +602,14 @@ let presentAtSize
 
 
 /// Present the next navigation model while retaining renderer history.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Session'"
 let presentState (session: Session) (navState: State) : Session =
   let size = Darklang.Stdlib.Cli.Tui.TerminalSession.currentSize ()
   presentAtSize session size navState
 
 
 /// Put a presented navigation model back into the CLI application state.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Cli.AppState'"
 let show
   (state: Cli.AppState)
   (session: Session)
@@ -624,7 +620,7 @@ let show
 
 
 /// Put a navigation model presented at an existing size sample into CLI state.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Cli.AppState'"
 let showAtSize
   (state: Cli.AppState)
   (session: Session)
@@ -636,7 +632,6 @@ let showAtSize
         Page.InteractiveNav (presentAtSize session size navState) }
 
 
-// @compiler blocked: missing-implementation
 let scrollOffsetForSelection
   (selectedIndex: Int)
   (scrollOffset: Int)
@@ -658,7 +653,7 @@ let scrollOffsetForSelection
     Stdlib.min maxOffset (Stdlib.max 0 offset)
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'State'"
 let withFocusScrollOffset
   (navState: State)
   (focusContentHeight: Int)
@@ -674,7 +669,7 @@ let withFocusScrollOffset
 
 
 // Navigation helper functions
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'State'"
 let moveUp (navState: State) (viewportHeight: Int) : State =
   let totalItems = (Stdlib.List.length navState.items)
   if totalItems > 0 then
@@ -698,7 +693,7 @@ let moveUp (navState: State) (viewportHeight: Int) : State =
   else
     navState
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'State'"
 let moveDown (navState: State) (viewportHeight: Int) : State =
   let totalItems = (Stdlib.List.length navState.items)
   if totalItems > 0 then
@@ -722,7 +717,7 @@ let moveDown (navState: State) (viewportHeight: Int) : State =
   else
     navState
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Cli.AppState'"
 let exitToMainPrompt
   (state: Cli.AppState)
   (session: Session)
@@ -734,7 +729,7 @@ let exitToMainPrompt
       currentPage = Page.MainPrompt
       prompt = Prompt.Editing.clear state.prompt }
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Cli.AppState'"
 let selectAndExit
   (state: Cli.AppState)
   (session: Session)
@@ -757,7 +752,7 @@ let selectAndExit
   else
     exitToMainPrompt state session
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Cli.AppState'"
 let navigateIntoModule
   (state: Cli.AppState)
   (session: Session)
@@ -778,7 +773,7 @@ let navigateIntoModule
   else
     state
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Cli.AppState'"
 let navigateToParent
   (state: Cli.AppState)
   (session: Session)
@@ -793,7 +788,7 @@ let navigateToParent
   | Error _ -> state
 
 // Perform search and update items based on query
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'State'"
 let performSearch (navState: State) : State =
   if Stdlib.String.isEmpty navState.searchQuery then
     // Empty query - restore all items
@@ -834,7 +829,7 @@ let performSearch (navState: State) : State =
     |> refreshFocusRows
 
 // Common key handlers
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'State'"
 let handleNavKeys
   (navState: State)
   (key: Stdlib.Cli.Stdin.Key.Key)
@@ -845,7 +840,7 @@ let handleNavKeys
   | DownArrow -> Stdlib.Option.Option.Some (moveDown navState viewportHeight)
   | _ -> Stdlib.Option.Option.None
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'State'"
 let toggleDisplay (navState: State) : State =
   let newDisplay =
     match navState.display with
@@ -855,7 +850,7 @@ let toggleDisplay (navState: State) : State =
   |> refreshFocusRows
 
 // Mode-specific key handlers
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Cli.AppState'"
 let handleSearchKeys
   (state: Cli.AppState)
   (key: Stdlib.Cli.Stdin.Key.Key)
@@ -902,7 +897,7 @@ let handleSearchKeys
       Stdlib.Option.Option.Some (show state session searchedNavState)
     | None -> Stdlib.Option.Option.None
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Cli.AppState'"
 let handleNavModeKeys
   (state: Cli.AppState)
   (key: Stdlib.Cli.Stdin.Key.Key)
@@ -931,7 +926,7 @@ let handleNavModeKeys
     | _ -> Stdlib.Option.Option.None
 
 // Handle key input for interactive navigation.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Cli.AppState'"
 let handleKey
   (state: Cli.AppState)
   (key: Stdlib.Cli.Stdin.Key.Key)

@@ -1,6 +1,5 @@
 module Darklang.Stdlib.Cli.Curl
 
-// @compiler blocked: missing-implementation
 let downloadFileToPath
   (url: String)
   (downloadTo: String)

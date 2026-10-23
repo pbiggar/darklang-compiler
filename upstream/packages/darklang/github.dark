@@ -7,11 +7,9 @@
 module Darklang.GitHub
 
 
-// @compiler blocked: missing-implementation
 val darklangRepoBaseUrl = "https://api.github.com/repos/darklang/dark"
 
 /// A baseline function for fetching data from the GitHub API
-// @compiler blocked: missing-implementation
 let fetchString
   (url: String)
   : Stdlib.Result.Result<String, String> =
@@ -26,12 +24,10 @@ let fetchString
 
 
 module Releases =
-  // @compiler blocked: missing-implementation
   type Asset =
     { name: String
       browser_download_url: String }
 
-  // @compiler blocked: missing-implementation
   type Release =
     { tag_name: String
       assets: List<Asset> }
@@ -40,7 +36,6 @@ module Releases =
   /// (i.e. `v0.0.19`)
   ///
   /// TODO: typify the error type
-  // @compiler blocked: missing-implementation
   let getLatestReleaseTag () : Stdlib.Result.Result<String, String> =
     match fetchString $"{darklangRepoBaseUrl}/releases" with
     | Ok releasesJsonString ->
@@ -56,7 +51,6 @@ module Releases =
 
   /// Get the build hash version from the latest release assets
   /// Returns in CLI format (e.g. "alpha-abe74e7") for version comparison
-  // @compiler blocked: missing-implementation
   let getLatestReleaseBuildHash () : Stdlib.Result.Result<String, String> =
     match fetchString $"{darklangRepoBaseUrl}/releases" with
     | Ok releasesJsonString ->
@@ -89,7 +83,6 @@ module Releases =
   ///
   /// `install.sh` matches `-<rid>.gz` for the same reason: `contains` lets `linux-arm` match the
   /// `linux-arm64` asset, so an armv7l machine is handed an arm64 binary.
-  // @compiler blocked: missing-implementation
   let assetUrlFor
     (assets: List<Asset>)
     (platformId: String)
@@ -102,7 +95,6 @@ module Releases =
 
   /// The runtime id whose asset this host wants, as the release matrix spells it.
   /// Its own function so it can be tested; `getDownloadUrl` fetches before it is observable.
-  // @compiler blocked: missing-implementation
   let platformId (host: Stdlib.Cli.Host.Host) : Stdlib.Result.Result<String, String> =
     match host.os, host.arch with
     | Linux, Arm -> "linux-arm" |> Stdlib.Result.Result.Ok
@@ -117,7 +109,6 @@ module Releases =
   /// corresponding to the current OS and Architecture
   ///
   /// TODO typify the error type
-  // @compiler blocked: missing-implementation
   let getDownloadUrl
     (host: Stdlib.Cli.Host.Host)
     (releaseTag: String)

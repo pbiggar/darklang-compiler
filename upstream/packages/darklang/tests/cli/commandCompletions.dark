@@ -10,12 +10,12 @@ module Darklang.Cli.Tests.CommandCompletions
 module CompletionSweep =
   // forcing the length is what makes the lazy list actually run
 
-  // @compiler blocked: upstream-dependency
+  // @compiler blocked: upstream-dependency diagnostic="Unknown type 'Darklang.Cli.Registry.CommandHandler'"
   let forced (c: Darklang.Cli.Registry.CommandHandler) (args: List<String>) : Bool =
     let state = Darklang.Cli.initState ()
     ((c.complete state args) |> Stdlib.List.length) >= 0
 
-  // @compiler blocked: upstream-dependency
+  // @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Tests.CommandCompletions.CompletionSweep.sweep: Unknown function or value 'Darklang.Cli.Registry.allCommands'"
   let sweep (args: List<String>) : Bool =
     Darklang.Cli.Registry.allCommands ()
     |> Stdlib.List.all (fun c -> forced c args)
@@ -47,7 +47,7 @@ test tooManyArguments =
 // --- the SCM commands specifically offer branch names, since those are the ones typed daily ---
 
 module BranchCompletion =
-  // @compiler blocked: upstream-dependency
+  // @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Tests.CommandCompletions.BranchCompletion.values: Unknown function or value 'Darklang.Cli.initState'"
   let values (args: List<String>) : List<String> =
     let state = Darklang.Cli.initState ()
 
@@ -74,7 +74,7 @@ test nonBranchSubcommand =
   BranchCompletion.values [ "list", "" ] |> Stdlib.Test.equal []
 
 module PermissionProfiles =
-  // @compiler blocked: upstream-dependency
+  // @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Tests.CommandCompletions.PermissionProfiles.values: Unknown function or value 'Darklang.Cli.Permissions.Command.complete'"
   let values (args: List<String>) : List<String> =
     Darklang.Cli.Permissions.Command.complete (Darklang.Cli.initState ()) args
     |> Stdlib.List.map (fun item -> item.value)

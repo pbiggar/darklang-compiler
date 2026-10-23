@@ -34,10 +34,10 @@ module Shapes =
     let show (xs: List<'a>) : String =
       "[" + (xs |> Stdlib.List.map (fun x -> Show.show x) |> Stdlib.String.join ", ") + "]"
 
-  // @compiler blocked: upstream-dependency
+  // @compiler blocked: upstream-dependency diagnostic="Unknown trait 'Show'"
   let display<'a: Show> (v: 'a) : String = "value: " + Show.show v
 
-  // @compiler blocked: upstream-dependency
+  // @compiler blocked: upstream-dependency diagnostic="Unknown trait 'Show'"
   let neverCalls<'a: Show> (v: 'a) : String = if false then Show.show v else "never"
 
   // The impl's method is an ordinary fn under <Type>.<Trait>

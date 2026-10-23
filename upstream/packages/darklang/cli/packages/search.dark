@@ -1,11 +1,9 @@
 module Darklang.Cli.Packages.Search
 
 // Max results rendered per entity type.
-// @compiler blocked: missing-implementation
 val displayCap = 20
 
 // Batch mode caps each entity section at three results.
-// @compiler blocked: missing-implementation
 val batchDisplayCap = 3
 
 
@@ -18,7 +16,6 @@ val batchDisplayCap = 3
 // Four are not traits and say so by answering with a name instead: `==` and `!=` are structural
 // for every value, and `!`, `&&` and `||` are ordinary Bool functions. `++` is no operator any
 // more; it lands on `Add`, since `+` is what joins strings now.
-// @compiler blocked: missing-implementation
 let operatorAlias (query: String) : Stdlib.Option.Option<String> =
   match Stdlib.String.trim query with
   | "+" -> Stdlib.Option.Option.Some "Add"
@@ -52,7 +49,6 @@ let operatorAlias (query: String) : Stdlib.Option.Option<String> =
 // the canonical operation the camelCase concept is built on. A hit matched only
 // via its doc comment (the query token isn't in the name at all) ranks last, so
 // the name-relevant results aren't pushed under the display cap. Case-insensitive.
-// @compiler blocked: missing-implementation
 let matchRank (query: String) (name: String) : Int =
   let q = Stdlib.String.toLowercase query
   let n = Stdlib.String.toLowercase name
@@ -63,7 +59,6 @@ let matchRank (query: String) (name: String) : Int =
   else 4
 
 
-// @compiler blocked: missing-implementation
 let isStdlib (owner: String) (modules: List<String>) : Bool =
   (owner == "Darklang")
   && (Stdlib.List.head modules == Stdlib.Option.Option.Some "Stdlib")
@@ -73,7 +68,6 @@ let isStdlib (owner: String) (modules: List<String>) : Bool =
 // item while the preceding tokens describe its module path. Rank by that item
 // token; the database has already required every token to match the location or
 // documentation.
-// @compiler blocked: missing-implementation
 let itemQuery (query: String) : String =
   query
     |> Stdlib.String.toLowercase
@@ -88,7 +82,6 @@ let itemQuery (query: String) : String =
 // The query's words run together, which is how a person spells a camelCase name
 // out loud: `read file` is asking for `readFile`. For a one-word query this is
 // the word itself, so it changes nothing there.
-// @compiler blocked: missing-implementation
 let joinedQuery (query: String) : String =
   query
     |> Stdlib.String.toLowercase
@@ -104,7 +97,6 @@ let joinedQuery (query: String) : String =
 // `overwriteFile` ties with `readFile`, and a type called `ReadFileParams` beats
 // both. Taking the better of the two never lowers a name's rank, so an exact or
 // prefix match on the item token keeps the rank it had.
-// @compiler blocked: missing-implementation
 let nameRank (query: String) (name: String) : Int =
   let byItem = matchRank (itemQuery query) name
   let byWords = matchRank (joinedQuery query) name
@@ -114,7 +106,6 @@ let nameRank (query: String) (name: String) : Int =
 // Sort key: match quality first, then Stdlib-first, and finally the full path
 // for deterministic ordering. Both ranks are a single digit, so plain string
 // ordering under `sortBy` gives the intended result.
-// @compiler blocked: missing-implementation
 let sortKey
   (query: String)
   (owner: String)
@@ -131,7 +122,6 @@ let sortKey
 
 
 // Used to rank result sections; empty sections sort last.
-// @compiler blocked: missing-implementation
 let bestItemRank
   (query: String)
   (items: List<LanguageTools.ProgramTypes.LocatedItem<'a>>)
@@ -142,7 +132,6 @@ let bestItemRank
     if r < acc then r else acc)
 
 
-// @compiler blocked: missing-implementation
 let bestModuleRank (query: String) (modules: List<List<String>>) : Int =
   modules
   |> Stdlib.List.fold 9 (fun acc modulePath ->
@@ -151,7 +140,6 @@ let bestModuleRank (query: String) (modules: List<List<String>>) : Int =
     if r < acc then r else acc)
 
 
-// @compiler blocked: missing-implementation
 let docBlock (desc: String) (indent: String) : String =
   if Stdlib.String.isEmpty desc then
     ""
@@ -162,7 +150,6 @@ let docBlock (desc: String) (indent: String) : String =
     |> Stdlib.String.join "\n"
 
 
-// @compiler blocked: missing-implementation
 let withDoc (headline: String) (desc: String) : String =
   let doc = docBlock desc "  "
   if Stdlib.String.isEmpty doc then headline else headline + "\n" + doc
@@ -170,12 +157,10 @@ let withDoc (headline: String) (desc: String) : String =
 
 // A rendered result line, with its doc comment appended only under --with-docs.
 // The trailing blank line separates multi-line doc entries.
-// @compiler blocked: missing-implementation
 let withOptionalDoc (withDocs: Bool) (headline: String) (desc: String) : String =
   if withDocs then (withDoc headline desc) + "\n" else headline
 
 
-// @compiler blocked: missing-implementation
 let overflowNote (total: Int) (shown: Int) : Unit =
   let extra = total - shown
   if extra > 0 then
@@ -186,7 +171,6 @@ let overflowNote (total: Int) (shown: Int) : Unit =
     ()
 
 
-// @compiler blocked: missing-implementation
 let fullPathOf (item: LanguageTools.ProgramTypes.LocatedItem<'a>) : String =
   [ [ item.location.owner ], item.location.modules, [ item.location.name ] ]
   |> Stdlib.List.flatten
@@ -197,7 +181,6 @@ let fullPathOf (item: LanguageTools.ProgramTypes.LocatedItem<'a>) : String =
 // abbreviated relative to the item's own module, so `Stdlib.Option.Option` shows
 // as `Option.Option` for a Stdlib hit, and a package hit's types collapse to its
 // own root rather than being forced through the Stdlib namespace.
-// @compiler blocked: missing-implementation
 let contextFor
   (branchId: Uuid)
   (item: LanguageTools.ProgramTypes.LocatedItem<'a>)
@@ -210,7 +193,6 @@ let contextFor
 // (one line each via `renderItem`), and an overflow footer. Nothing is printed
 // for an empty section. `renderItem` does the per-entity formatting at the call
 // site, so this stays generic over the entity type.
-// @compiler blocked: missing-implementation
 let renderSection
   (header: String)
   (query: String)
@@ -232,7 +214,6 @@ let renderSection
     Stdlib.printLine ""
 
 
-// @compiler blocked: missing-implementation
 type ParsedArgs =
   { queryParts: List<String>
     entityTypes: List<LanguageTools.ProgramTypes.Search.EntityType>
@@ -248,7 +229,6 @@ type ParsedArgs =
 
 // TODO: `--shallow` is current-location scoped, which is confusing for
 // qualified queries like `search Darklang.Stdlib.List --shallow`.
-// @compiler blocked: missing-implementation
 val argSpec =
   FlagParser.Spec
     { flags =
@@ -268,7 +248,6 @@ val argSpec =
       valueFlags = [] }
 
 
-// @compiler blocked: missing-implementation
 let parseArgs (args: List<String>) : ParsedArgs =
   let p = FlagParser.parse argSpec args
   // Entity types are preserved in the order their flags appeared.
@@ -311,14 +290,13 @@ let parseArgs (args: List<String>) : ParsedArgs =
       parseErrors = p.errors }
 
 
-// @compiler blocked: missing-implementation
 val usage =
   "Usage: search <query> [--batch] [--type] [--fn] [--val] [--trait] [--impl] [--test] [--exact] [--shallow] [--with-docs] [--include-deprecated] [--include-tests]"
 
 
 // The --json rendering. Typed results for the command an agent runs most; the signatures are the
 // same rendering the human view shows, minus color.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.Search.SearchResults'"
 let jsonOutput
   (branchId: Uuid)
   (queryText: String)
@@ -398,7 +376,6 @@ let jsonOutput
 // function so ranking, filtering, and rendering stay identical in both modes.
 /// Says how many tests matched but were left out, so a search that hides them
 /// never looks like there were none. Prints nothing when none were.
-// @compiler blocked: missing-implementation
 let hiddenTestsHint (count: Int) : Unit =
   if count > 0 then
     let noun = if count == 1 then "test" else "tests"
@@ -409,7 +386,7 @@ let hiddenTestsHint (count: Int) : Unit =
     ()
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Cli.AppState'"
 let executeQuery (state: Cli.AppState) (args: List<String>) : Cli.AppState =
   match args with
   | [] ->
@@ -627,7 +604,7 @@ let executeQuery (state: Cli.AppState) (args: List<String>) : Cli.AppState =
 
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Cli.AppState'"
 let execute (state: Cli.AppState) (args: List<String>) : Cli.AppState =
   match args with
   | [] -> executeQuery state args
@@ -665,7 +642,7 @@ let execute (state: Cli.AppState) (args: List<String>) : Cli.AppState =
       state
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Cli.AppState'"
 let help (state: Cli.AppState) : String =
   [
     "Search modules, types, functions, values, traits, implementations and tests"
@@ -711,7 +688,7 @@ let help (state: Cli.AppState) : String =
   ] |> Stdlib.String.join "\n"
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Cli.AppState'"
 let complete (_state: Cli.AppState) (args: List<String>) : List<Cli.Completion.CompletionItem> =
   // Offer flag completions when typing --
   match Stdlib.List.last args with

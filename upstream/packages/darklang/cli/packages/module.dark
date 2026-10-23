@@ -1,7 +1,7 @@
 module Darklang.Cli.Packages.ModuleCommand
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.WrittenTypes.ModuleDeclaration.Declaration'"
 let collectDecls
   (modules: List<String>)
   (decls: List<LanguageTools.WrittenTypes.ModuleDeclaration.Declaration>)
@@ -18,7 +18,7 @@ let collectDecls
   |> Stdlib.List.flatten
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.WrittenTypes.ModuleDeclaration.Declaration'"
 let declarationName
   (decl: LanguageTools.WrittenTypes.ModuleDeclaration.Declaration)
   : Stdlib.Option.Option<String> =
@@ -40,7 +40,7 @@ let declarationName
 /// Return every declaration path that occurs more than once in the input.
 /// `collectDecls` has already flattened submodules, so the relative module path
 /// plus declaration name uniquely identifies the eventual package location.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.WrittenTypes.ModuleDeclaration.Declaration'"
 let duplicateDeclarationNames
   (declarations:
     List<List<String>
@@ -71,7 +71,7 @@ let duplicateDeclarationNames
 /// `dark fn` says it (`updateDocsThatChanged`). Per item, because a module is one batch and
 /// `updateDocsThatChanged` reads every doc in the ops it is given: an item's words are compared with
 /// that item's own declaration, never with another's.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.PackageOp'"
 let landDocEdits
   (branchId: Uuid)
   (ops: List<LanguageTools.ProgramTypes.PackageOp>)
@@ -114,7 +114,7 @@ let landDocEdits
     | _ -> Stdlib.Option.Option.None)
   |> Stdlib.List.length
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Cli.AppState'"
 let execute (state: Cli.AppState) (args: List<String>) : Cli.AppState =
   let input =
     match args with
@@ -280,7 +280,7 @@ let execute (state: Cli.AppState) (args: List<String>) : Cli.AppState =
               state
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Cli.AppState'"
 let help (_state: Cli.AppState) : String =
   [ "Define a module from multiple package declarations atomically"
     ""
@@ -301,7 +301,7 @@ let help (_state: Cli.AppState) : String =
   ] |> Stdlib.String.join "\n"
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Cli.AppState'"
 let complete
   (_state: Cli.AppState)
   (_args: List<String>)

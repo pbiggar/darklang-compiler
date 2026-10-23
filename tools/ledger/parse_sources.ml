@@ -3,8 +3,13 @@ open Dark_compiler
 
 let disposition = function
   | CompilerAnnotations.Run -> `Assoc [ ("status", `String "run") ]
-  | CompilerAnnotations.Blocked reason ->
-      `Assoc [ ("status", `String "blocked"); ("reason", `String reason) ]
+  | CompilerAnnotations.Blocked { reason; diagnostic } ->
+      `Assoc
+        ([ ("status", `String "blocked"); ("reason", `String reason) ]
+        @
+        match diagnostic with
+        | None -> []
+        | Some message -> [ ("diagnostic", `String message) ])
   | CompilerAnnotations.Excluded reason ->
       `Assoc [ ("status", `String "excluded"); ("reason", `String reason) ]
   | CompilerAnnotations.Replace { target; reason } ->

@@ -21,7 +21,7 @@ module Darklang.SCM.PackageOps
 
 /// Add a list of package ops to the database (immediately live on the given branch).
 /// Returns the number of inserted ops on success (duplicates are skipped), or an error message on failure.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.PackageOp'"
 let add
   (branchId: Uuid)
   (ops: List<LanguageTools.ProgramTypes.PackageOp>)
@@ -40,7 +40,7 @@ let add
 ///
 /// Every authoring surface goes through here rather than calling `add`: the CLI's fn/type/value/module
 /// commands, the workbench, and the LSP's file provider.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.PackageOp'"
 let addAuthored
   (branchId: Uuid)
   (ops: List<LanguageTools.ProgramTypes.PackageOp>)
@@ -73,7 +73,7 @@ let addAuthored
 
 /// Unbind the values a save could not evaluate, and say what that left. A batch (`dark module`,
 /// the editor) can hold good items beside the bad value, and those stay.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.PackageOp'"
 let takeBackFailedValues
   (branchId: Uuid)
   (ops: List<LanguageTools.ProgramTypes.PackageOp>)
@@ -120,7 +120,7 @@ let takeBackFailedValues
 /// The values <param ops> binds whose stored form never got a runtime value: what evaluation
 /// failed on. Asked of the store, by the hash each name holds now, because the save restabilizes
 /// and refreshes hashes after the ones in hand.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.PackageOp'"
 let unevaluatedValuesBoundBy
   (branchId: Uuid)
   (ops: List<LanguageTools.ProgramTypes.PackageOp>)
@@ -139,7 +139,7 @@ let unevaluatedValuesBoundBy
     | _ -> Stdlib.Option.Option.None)
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.PackageOps.valueEvaluated: Unknown function or value 'Stdlib.Sqlite.queryOneP'"
 let valueEvaluated (hash: String) : Bool =
   Stdlib.Sqlite.queryOneP
     (localDb ())
@@ -153,7 +153,7 @@ let valueEvaluated (hash: String) : Bool =
 /// them: the commit's type check reads content as well as names, so content left behind with no name
 /// would go on refusing every commit. Anything else this save added that uses one of these values is
 /// left referencing nothing, and is refused as unresolved, which is what it is.
-// @compiler blocked: missing-implementation
+// @compiler blocked: compiler-gap diagnostic="Darklang.SCM.PackageOps.unbind: Constructor pattern requires an enum scrutinee"
 let unbind
   (branchId: Uuid)
   (bindings: List<(LanguageTools.ProgramTypes.PackageLocation * String)>)
@@ -190,7 +190,7 @@ let unbind
 
 
 /// A lightweight op-log row for display (no op_blob decode): what `dark ops` shows.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.PackageOps.OpSummary: Unknown type 'LanguageTools.ProgramTypes.PackageOp'"
 type OpSummary =
   { id: String
     sizeBytes: Int64
@@ -204,7 +204,6 @@ type OpSummary =
 
 /// What a branch REF resolved to. A DU rather than an Option because "no such branch" and "that could be
 /// several branches" want different words from the caller, and an Option would flatten them into one.
-// @compiler blocked: missing-implementation
 type BranchRefResult =
   | Found of Uuid
   /// Not a live name, not an id, not a prefix: a name this store has never had. The ONE miss a write

@@ -1,4 +1,10 @@
 (* StdlibCompilation.mli - Build reusable standard-library functions and concrete specializations. *)
+(* Validate disk-selected source bodies through the same native library pipeline. *)
+val buildStdlibFromSources :
+  Platform.target ->
+  Validation.validatedSourceFile list ->
+  (CompilationContexts.stdlibResult, string) result
+
 val buildStdlibWithTrace :
   Platform.target ->
   CompilerOptions.passTimingRecorder option ->

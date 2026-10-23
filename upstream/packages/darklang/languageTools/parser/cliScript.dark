@@ -3,7 +3,6 @@ module Darklang.LanguageTools.Parser.CliScript
 
 /// Why a parse attempt failed. A DU (not a bare String) so structured cases
 /// can be added later; today every failure is a rendered diagnostic message.
-// @compiler blocked: missing-implementation
 type ParseError =
   /// A rendered parser diagnostic — line/column (when known) are already
   /// formatted into the message.
@@ -11,13 +10,12 @@ type ParseError =
 
 
 module ParseError =
-  // @compiler blocked: missing-implementation
   let toString (err: ParseError) : String =
     match err with
     | Message msg -> msg
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.Parser.CliScript.WTCliScriptModule: Unknown type 'LanguageTools.WrittenTypes.TypeDeclaration.TypeDeclaration'"
 type WTCliScriptModule =
   { owner: String
     name: String
@@ -31,7 +29,7 @@ type WTCliScriptModule =
       List<LanguageTools.WrittenTypes.ModuleDeclaration.ModuleDeclaration>
     exprs: List<LanguageTools.WrittenTypes.Expr> }
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.Parser.CliScript.PTCliScriptModule: Unknown type 'LanguageTools.ProgramTypes.PackageType.PackageType'"
 type PTCliScriptModule =
   { types: List<LanguageTools.ProgramTypes.PackageType.PackageType>
     values:
@@ -43,7 +41,7 @@ type PTCliScriptModule =
     submodules: List<LanguageTools.ProgramTypes.Definitions>
     exprs: List<LanguageTools.ProgramTypes.Expr> }
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.WrittenTypes.ParsedFile'"
 let parseDecls
   (owner: String)
   (scriptName: String)
@@ -121,7 +119,7 @@ let parseDecls
 
 
 /// Helper to process a list of declarations and split results into separate lists (entities, ops, unresolved names)
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'ProgramTypes.PackageOp'"
 let processDecls
   (items: List<'a>)
   (processFn: 'a -> ('entity * List<ProgramTypes.PackageOp> * List<WrittenTypes.UnresolvedName>))
@@ -135,7 +133,7 @@ let processDecls
   (entities, ops, unresolvedNames)
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'NameResolver.NRContext'"
 let toPT
   (ctx: NameResolver.NRContext)
   (wt: WTCliScriptModule)
@@ -281,7 +279,7 @@ let toPT
 
 /// Find the stabilized identity corresponding to one provisional first-pass
 /// declaration. Hash stabilization preserves operation order.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'ProgramTypes.PackageOp'"
 let stabilizedHash
   (original: ProgramTypes.Reference)
   (provisionalOps: List<ProgramTypes.PackageOp>)
@@ -332,7 +330,7 @@ let stabilizedHash
 /// and feeds the result here directly (no re-parse).
 /// The second pass's items with the hashes their first-pass counterparts stabilized to, matched
 /// by position. When the two passes disagree on how many there are, the second pass's stand.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'ProgramTypes.PackageOp'"
 let restamp
   (second: List<'a>)
   (first: List<'a>)
@@ -349,7 +347,7 @@ let restamp
       withHash newItem (stabilizedHash (reference original) provisionalOps stabilizedOps)))
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'NameResolver.NRContext'"
 let parseFromWT
   (ctx: NameResolver.NRContext)
   (scriptName: String)
@@ -407,7 +405,7 @@ let parseFromWT
 
 /// Parse from source, then name-resolve + lower. Used by the parse-error test
 /// harness; the LSP uses `parseFromWT` directly with an already-parsed tree.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'NameResolver.NRContext'"
 let parse
   (ctx: NameResolver.NRContext)
   (scriptName: String)
@@ -422,7 +420,7 @@ let parse
 
 /// Single-shot parse for CLI use: creates PM and NRContext internally
 /// so that lambdas in the PM stay within the same execution context.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'PTCliScriptModule'"
 let parseForCli
   (branchId: Uuid)
   (owner: String)
@@ -443,7 +441,7 @@ let parseForCli
   parse ctx scriptName filename source
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'NameResolver.NRContext'"
 let pmWithExtras
   (ctx: NameResolver.NRContext)
   (scriptName: String)

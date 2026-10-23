@@ -2,7 +2,7 @@
 module Darklang.Cli.Workbench
 
 /// Main and every open branch; this list is deliberately not Home's capped summary.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Workbench.branchChoices: Unknown function or value 'SCM.Branch.list'"
 let branchChoices (current: Uuid) : List<BranchChoice> =
   let choice (id: Uuid) (name: String) : BranchChoice =
     BranchChoice
@@ -16,14 +16,13 @@ let branchChoices (current: Uuid) : List<BranchChoice> =
     |> Stdlib.List.map (fun b -> choice b.id b.name)
   Stdlib.List.push others (choice SCM.Branch.mainBranchId SCM.Branch.mainBranchName)
 
-// @compiler blocked: missing-implementation
 let matchingBranches (picker: BranchPicker) : List<BranchChoice> =
   let query = Stdlib.String.toLowercase (Stdlib.String.trim picker.field.text)
   picker.choices
   |> Stdlib.List.filter (fun b ->
     Stdlib.String.contains (Stdlib.String.toLowercase b.name) query)
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'State'"
 let openBranchPicker (state: State) : Step =
   let choices = branchChoices state.branchId
   let selected =
@@ -39,7 +38,7 @@ let openBranchPicker (state: State) : Step =
 
 /// Switch the process overlay before reading anything for the destination.
 /// Stay in the same view; Home keeps the switched branch selected.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'State'"
 let switchWorkbenchBranch (state: State) (id: Uuid) (name: String) : State =
   let moved =
     onBranch
@@ -66,7 +65,7 @@ let switchWorkbenchBranch (state: State) (id: Uuid) (name: String) : State =
                    messageKind = MessageKind.Succeeded
                    message = "switched to " + name }))
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'State'"
 let handleBranchPickerKey
   (state: State)
   (picker: BranchPicker)
@@ -106,7 +105,7 @@ let handleBranchPickerKey
       keep { picker with field = field, selected = selected }
     | None -> keep picker
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'State'"
 let renderBranchPicker
   (state: State)
   (picker: BranchPicker)

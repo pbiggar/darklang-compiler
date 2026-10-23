@@ -11,7 +11,6 @@ module Darklang.PrettyPrinter.ProgramTypes
 
 /// Formats a description string as doc comments
 /// Returns empty string if description is empty
-// @compiler blocked: missing-implementation
 let formatDocComment (description: String) : String =
   if description == "" then
     ""
@@ -29,7 +28,6 @@ let formatDocComment (description: String) : String =
 /// line as the thing it documents would comment that thing out. This is the form used inside a
 /// declaration -- for a field, a case or a parameter -- where the surrounding doc may otherwise be
 /// laid out on one line.
-// @compiler blocked: missing-implementation
 let inlineDocDoc (description: String) : Stdlib.Option.Option<Stdlib.Pretty.Doc> =
   if description == "" then
     Stdlib.Option.Option.None
@@ -45,7 +43,6 @@ let inlineDocDoc (description: String) : Stdlib.Option.Option<Stdlib.Pretty.Doc>
 
 
 /// <param doc>, with <param description> written above it as `///` lines.
-// @compiler blocked: missing-implementation
 let withInlineDoc
   (description: String)
   (doc: Stdlib.Pretty.Doc)
@@ -56,16 +53,13 @@ let withInlineDoc
 
 
 /// Format a hash for display when PM lookup fails.
-// @compiler blocked: missing-implementation
 let shortHash (hash: LanguageTools.ProgramTypes.Hash) : String =
   $"<hash:{Darklang.LanguageTools.ProgramTypes.hashToShort hash}>"
 
 module NameResolutionError =
-  // @compiler blocked: missing-implementation
   let source (originalName: List<String>) : String =
     Stdlib.String.join originalName "."
 
-  // @compiler blocked: missing-implementation
   let error
     (originalName: List<String>)
     (nre: LanguageTools.ProgramTypes.NameResolutionError)
@@ -77,7 +71,6 @@ module NameResolutionError =
 
 // Context for relative name resolution - when we know what module we're currently in,
 // we can shorten names that share the same prefix
-// @compiler blocked: missing-implementation
 type Context =
   { branchId: Uuid
     /// The module we're printing from, owner-first (`["Darklang", "Stdlib", "Option"]`), or empty for
@@ -116,7 +109,6 @@ type Context =
     breakForValues: Bool }
 
 module Context =
-  // @compiler blocked: missing-implementation
   let forBranch (branchId: Uuid) : Context =
     Context
       { branchId = branchId
@@ -127,7 +119,6 @@ module Context =
         liveValues = Stdlib.Dict.empty
         breakForValues = false }
 
-  // @compiler blocked: missing-implementation
   val forMain = forBranch Darklang.SCM.Branch.mainBranchId
 
   /// A context anchored at `path` (owner-first, e.g. `["Darklang", "Stdlib", "Option"]`).
@@ -135,7 +126,6 @@ module Context =
   /// References inside a printed definition are then spelled the way someone standing in that module
   /// would say them. Anything that knows which module it is showing should use this rather than
   /// `forBranch`, whose `currentModule` is None and so forces every name to its full path.
-  // @compiler blocked: missing-implementation
   let forModule (branchId: Uuid) (path: List<String>) : Context =
     Context
       { branchId = branchId
@@ -146,13 +136,12 @@ module Context =
         liveValues = Stdlib.Dict.empty
         breakForValues = false }
 
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: compiler-gap diagnostic="Darklang.PrettyPrinter.ProgramTypes.Context.toPickContext: Unknown field 'preferredLocation' on Darklang.LanguageTools.PackageManager.PickContext"
   let toPickContext (ctx: Context) : LanguageTools.PackageManager.PickContext =
     LanguageTools.PackageManager.PickContext
       { currentModule = ctx.currentModule
         preferredLocation = ctx.preferredLocation }
 
-// @compiler blocked: missing-implementation
 let packageNameWithContext
   (ctx: Context)
   (owner: String)
@@ -164,7 +153,6 @@ let packageNameWithContext
 
 // CLEANUP: this function exists for backwards compatibility
 // Prefer using packageNameWithContext with a proper Context
-// @compiler blocked: missing-implementation
 let packageName
   (owner: String)
   (modules: List<String>)
@@ -175,7 +163,7 @@ let packageName
 
 module FQTypeName =
   module Package =
-    // @compiler blocked: missing-implementation
+    // @compiler blocked: upstream-dependency diagnostic="Darklang.PrettyPrinter.ProgramTypes.FQTypeName.Package.atDefinition: Unknown function or value 'Context.toPickContext'"
     let atDefinition
       (ctx: Context)
       (hash: LanguageTools.ProgramTypes.FQTypeName.Package)
@@ -184,7 +172,7 @@ module FQTypeName =
       | Some l -> l.name
       | None -> shortHash hash
 
-    // @compiler blocked: missing-implementation
+    // @compiler blocked: upstream-dependency diagnostic="Darklang.PrettyPrinter.ProgramTypes.FQTypeName.Package.fullForReference: Unknown function or value 'Context.toPickContext'"
     let fullForReference
       (ctx: Context)
       (hash: LanguageTools.ProgramTypes.FQTypeName.Package)
@@ -195,7 +183,7 @@ module FQTypeName =
       | None -> shortHash hash
 
 
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Darklang.PrettyPrinter.ProgramTypes.FQTypeName.fullForReference: Unknown function or value 'FQTypeName.Package.fullForReference'"
   let fullForReference
     (ctx: Context)
     (t: LanguageTools.ProgramTypes.FQTypeName.FQTypeName)
@@ -207,7 +195,7 @@ module FQTypeName =
 
 module FQTraitName =
   module Package =
-    // @compiler blocked: missing-implementation
+    // @compiler blocked: upstream-dependency diagnostic="Darklang.PrettyPrinter.ProgramTypes.FQTraitName.Package.atDefinition: Unknown function or value 'Context.toPickContext'"
     let atDefinition
       (ctx: Context)
       (hash: LanguageTools.ProgramTypes.FQTraitName.Package)
@@ -216,7 +204,7 @@ module FQTraitName =
       | Some l -> l.name
       | None -> shortHash hash
 
-    // @compiler blocked: missing-implementation
+    // @compiler blocked: upstream-dependency diagnostic="Darklang.PrettyPrinter.ProgramTypes.FQTraitName.Package.fullForReference: Unknown function or value 'Context.toPickContext'"
     let fullForReference
       (ctx: Context)
       (hash: LanguageTools.ProgramTypes.FQTraitName.Package)
@@ -228,7 +216,6 @@ module FQTraitName =
 
 module FQValueName =
   module Builtin =
-    // @compiler blocked: missing-implementation
     let fullForReference
       (t: LanguageTools.ProgramTypes.FQValueName.Builtin)
       : String =
@@ -244,7 +231,7 @@ module FQValueName =
 
 
   module Package =
-    // @compiler blocked: missing-implementation
+    // @compiler blocked: upstream-dependency diagnostic="Darklang.PrettyPrinter.ProgramTypes.FQValueName.Package.atDefinition: Unknown function or value 'Context.toPickContext'"
     let atDefinition
       (ctx: Context)
       (hash: LanguageTools.ProgramTypes.FQValueName.Package)
@@ -253,7 +240,7 @@ module FQValueName =
       | Some l -> l.name
       | None -> shortHash hash
 
-    // @compiler blocked: missing-implementation
+    // @compiler blocked: upstream-dependency diagnostic="Darklang.PrettyPrinter.ProgramTypes.FQValueName.Package.fullForReference: Unknown function or value 'Context.toPickContext'"
     let fullForReference
       (ctx: Context)
       (hash: LanguageTools.ProgramTypes.FQValueName.Package)
@@ -265,7 +252,7 @@ module FQValueName =
 
 
 
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.FQValueName.FQValueName'"
   let fullForReference
     (ctx: Context)
     (t: LanguageTools.ProgramTypes.FQValueName.FQValueName)
@@ -279,7 +266,6 @@ module FQValueName =
 
 module FQFnName =
   module Builtin =
-    // @compiler blocked: missing-implementation
     let fullForReference
       (t: LanguageTools.ProgramTypes.FQFnName.Builtin)
       : String =
@@ -295,7 +281,7 @@ module FQFnName =
 
 
   module Package =
-    // @compiler blocked: missing-implementation
+    // @compiler blocked: upstream-dependency diagnostic="Darklang.PrettyPrinter.ProgramTypes.FQFnName.Package.atDefinition: Unknown function or value 'Context.toPickContext'"
     let atDefinition
       (ctx: Context)
       (hash: LanguageTools.ProgramTypes.FQFnName.Package)
@@ -304,7 +290,7 @@ module FQFnName =
       | Some l -> l.name
       | None -> shortHash hash
 
-    // @compiler blocked: missing-implementation
+    // @compiler blocked: upstream-dependency diagnostic="Darklang.PrettyPrinter.ProgramTypes.FQFnName.Package.fullForReference: Unknown function or value 'Context.toPickContext'"
     let fullForReference
       (ctx: Context)
       (hash: LanguageTools.ProgramTypes.FQFnName.Package)
@@ -315,7 +301,7 @@ module FQFnName =
       | None -> shortHash hash
 
 
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.FQFnName.FQFnName'"
   let fullForReference
     (ctx: Context)
     (t: LanguageTools.ProgramTypes.FQFnName.FQFnName)
@@ -338,7 +324,6 @@ module FQFnName =
 /// on a Package ref, something upstream skipped the resolver — we print
 /// the raw hash so the anomaly is visible rather than papered over.
 module NameResolution =
-  // @compiler blocked: missing-implementation
   let typeName
     (ctx: Context)
     (nr: LanguageTools.ProgramTypes.NameResolution<LanguageTools.ProgramTypes.FQTypeName.FQTypeName>)
@@ -352,7 +337,6 @@ module NameResolution =
         | None -> Darklang.LanguageTools.ProgramTypes.hashToString hash
     | Error _ -> NameResolutionError.source nr.originalName
 
-  // @compiler blocked: missing-implementation
   let traitName
     (ctx: Context)
     (nr: LanguageTools.ProgramTypes.NameResolution<LanguageTools.ProgramTypes.FQTraitName.FQTraitName>)
@@ -366,7 +350,7 @@ module NameResolution =
         | None -> Darklang.LanguageTools.ProgramTypes.hashToString hash
     | Error _ -> NameResolutionError.source nr.originalName
 
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.FQFnName.FQFnName'"
   let fnName
     (ctx: Context)
     (nr: LanguageTools.ProgramTypes.NameResolution<LanguageTools.ProgramTypes.FQFnName.FQFnName>)
@@ -390,7 +374,7 @@ module NameResolution =
           (Darklang.LanguageTools.ProgramTypes.hashToString tm.trait_) + "." + tm.method_
     | Error _ -> NameResolutionError.source nr.originalName
 
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.FQValueName.FQValueName'"
   let valueName
     (ctx: Context)
     (nr: LanguageTools.ProgramTypes.NameResolution<LanguageTools.ProgramTypes.FQValueName.FQValueName>)
@@ -407,7 +391,7 @@ module NameResolution =
 
 
 /// Render a type reference, parenthesizing function types when required.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.TypeReference'"
 let typeReferenceDocWithFnParens
   (ctx: Context)
   (fnNeedsParens: Bool)
@@ -468,7 +452,7 @@ let typeReferenceDocWithFnParens
   | other -> txt (typeReferenceFlat ctx other)
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.TypeReference'"
 let typeReferenceDoc
   (ctx: Context)
   (t: LanguageTools.ProgramTypes.TypeReference)
@@ -476,7 +460,7 @@ let typeReferenceDoc
   typeReferenceDocWithFnParens ctx false t
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.TypeReference'"
 let typeReferenceFlatAtPrecedence
   (ctx: Context)
   (fnNeedsParens: Bool)
@@ -550,7 +534,7 @@ let typeReferenceFlatAtPrecedence
     if fnNeedsParens then $"({rendered})" else rendered
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.TypeReference'"
 let typeReferenceFlat
   (ctx: Context)
   (t: LanguageTools.ProgramTypes.TypeReference)
@@ -558,7 +542,7 @@ let typeReferenceFlat
   typeReferenceFlatAtPrecedence ctx false t
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.TypeReference'"
 let typeReference
   (ctx: Context)
   (t: LanguageTools.ProgramTypes.TypeReference)
@@ -566,7 +550,7 @@ let typeReference
   typeReferenceFlat ctx t
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.TypeReference'"
 let typeArgumentsDoc
   (ctx: Context)
   (args: List<LanguageTools.ProgramTypes.TypeReference>)
@@ -578,7 +562,6 @@ let typeArgumentsDoc
     wrapExprs "<" ">" "," Stdlib.Pretty.softLine docs
 
 
-// @compiler blocked: missing-implementation
 let letPattern (lp: LanguageTools.ProgramTypes.LetPattern) : String =
   match lp with
   | LPUnit _id -> "()"
@@ -590,7 +573,7 @@ let letPattern (lp: LanguageTools.ProgramTypes.LetPattern) : String =
     |> Stdlib.String.join ", "
     |> fun parts -> "(" + parts + ")"
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.MatchPattern'"
 let matchPattern (mp: LanguageTools.ProgramTypes.MatchPattern) : String =
   match mp with
   | MPVariable(_id, name) -> name
@@ -652,14 +635,12 @@ let matchPattern (mp: LanguageTools.ProgramTypes.MatchPattern) : String =
     |> Stdlib.String.join " | "
 
 
-// @compiler blocked: missing-implementation
 let binaryOperation (b: LanguageTools.ProgramTypes.BinaryOperation) : String =
   match b with
   // CLEANUP consider surrounding with spaces
   | BinOpAnd -> "&&"
   | BinOpOr -> "||"
 
-// @compiler blocked: missing-implementation
 let infixFnName (i: LanguageTools.ProgramTypes.InfixFnName) : String =
   match i with
   | ArithmeticPlus -> "+"
@@ -683,13 +664,12 @@ let infixFnName (i: LanguageTools.ProgramTypes.InfixFnName) : String =
   // means, so what comes back out of `view` still parses.
   | StringConcat -> "+"
 
-// @compiler blocked: missing-implementation
 let infix (i: LanguageTools.ProgramTypes.Infix) : String =
   match i with
   | InfixFnCall i -> infixFnName i
   | BinOp b -> binaryOperation b
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.StringSegment'"
 let stringSegment (ctx: Context) (s: LanguageTools.ProgramTypes.StringSegment) : String =
   match s with
   // Inside `$"..."` a brace opens an interpolation, so a literal one is written doubled.
@@ -700,7 +680,6 @@ let stringSegment (ctx: Context) (s: LanguageTools.ProgramTypes.StringSegment) :
   | StringInterpolation interpolationExpr -> $"{{{expr ctx interpolationExpr}}}"
 
 /// Parenthesize a Doc and indent its broken layout past the opening paren.
-// @compiler blocked: missing-implementation
 let parens (d: Stdlib.Pretty.Doc) : Stdlib.Pretty.Doc =
   Stdlib.Pretty.concat
     (Stdlib.Pretty.text "(")
@@ -708,7 +687,7 @@ let parens (d: Stdlib.Pretty.Doc) : Stdlib.Pretty.Doc =
 
 
 /// Render an application argument with any required parentheses.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.Expr'"
 let applyArg (ctx: Context) (arg: LanguageTools.ProgramTypes.Expr) : Stdlib.Pretty.Doc =
   let inner = exprDoc ctx arg
   if applyArgNeedsParens arg then parens inner else inner
@@ -718,7 +697,7 @@ let applyArg (ctx: Context) (arg: LanguageTools.ProgramTypes.Expr) : Stdlib.Pret
 ///
 /// Zero columns wide for layout (`Styled` measures only its middle), so adding one
 /// never moves the code it sits after.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.PrettyPrinter.ProgramTypes.valueSuffix: Unknown function or value 'Stdlib.Pretty.lineSuffix'"
 let valueSuffix (ctx: Context) (id: Int64) : Stdlib.Pretty.Doc =
   match Stdlib.Dict.get ctx.liveValues (Stdlib.toString id) with
   // A line suffix, not inline text: a `)` or `,` the enclosing expression prints after this
@@ -730,7 +709,7 @@ let valueSuffix (ctx: Context) (id: Int64) : Stdlib.Pretty.Doc =
 /// A pipe stage's own expression id, which is what its value is keyed by. Every
 /// stage carries one through the desugaring (`EPipeFnCall(id, ...)` becomes
 /// `EApply(id, ...)`), which is why the values are already there to print.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.PipeExpr'"
 let pipeExprId (p: LanguageTools.ProgramTypes.PipeExpr) : Int64 =
   match p with
   | EPipeVariable(id, _, _) -> id
@@ -740,7 +719,7 @@ let pipeExprId (p: LanguageTools.ProgramTypes.PipeExpr) : Int64 =
   | EPipeEnum(id, _, _, _) -> id
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.PipeExpr'"
 let pipeExprDoc (ctx: Context) (p: LanguageTools.ProgramTypes.PipeExpr) : Stdlib.Pretty.Doc =
   let txt (s: String) : Stdlib.Pretty.Doc = Stdlib.Pretty.text s
 
@@ -791,7 +770,6 @@ let pipeExprDoc (ctx: Context) (p: LanguageTools.ProgramTypes.PipeExpr) : Stdlib
 /// Splitting on the newlines matters: a `Text` holding one would be measured as though it were a single
 /// long line, so an enclosing group could decide it fits and then emit something several lines tall.
 /// As `hardLine`s, the group is forced to break, which is the truth.
-// @compiler blocked: missing-implementation
 let docOfText (s: String) : Stdlib.Pretty.Doc =
   s
   |> Stdlib.String.split "\n"
@@ -806,7 +784,6 @@ let docOfText (s: String) : Stdlib.Pretty.Doc =
 ///   9 `+ -`  10 `* / %`  11 `**` (right)
 /// If that table moves, this has to move with it, or the printer starts emitting parens that change
 /// what the parser builds.
-// @compiler blocked: missing-implementation
 let infixPower (i: LanguageTools.ProgramTypes.Infix) : (Int * Bool) =
   match i with
   | BinOp BinOpOr -> (1, false)
@@ -840,7 +817,7 @@ let infixPower (i: LanguageTools.ProgramTypes.Infix) : (Int * Bool) =
 /// literal, a variable, a record, an application. Application binds tighter than any operator, so
 /// `factorial n * 2L` needs no parens around the call, which is the main thing the old printer got
 /// wrong by bracketing every operand unconditionally.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.Expr'"
 let exprPower (e: LanguageTools.ProgramTypes.Expr) : Int =
   match e with
   | EInfix(_, op, _, _, _) ->
@@ -860,7 +837,7 @@ let exprPower (e: LanguageTools.ProgramTypes.Expr) : Int =
 /// Looser than its parent always does. At equal power it depends on the side: `a - b - c` groups left,
 /// so a right operand of the same power needs parens to mean anything else; `2 ** 3 ** 2` groups right,
 /// so the left one does.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.Expr'"
 let infixOperandNeedsParens
   (operand: LanguageTools.ProgramTypes.Expr)
   (parentPower: Int)
@@ -878,7 +855,7 @@ let infixOperandNeedsParens
 
 
 /// Does printing `e` leave a bitwise-or bare in a match-arm body?
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.Expr'"
 let hasBareBitwiseOr (e: LanguageTools.ProgramTypes.Expr) : Bool =
   match e with
   | EInfix(_, InfixFnCall BitwiseOr, _, _, _) -> true
@@ -921,7 +898,7 @@ let hasBareBitwiseOr (e: LanguageTools.ProgramTypes.Expr) : Bool =
 ///
 /// Application is left-associative and binds tightest, so anything that isn't self-delimiting has to be
 /// wrapped or it would be read as further arguments: `f (g x)`, `f (a + b)`, `f (fun x -> x)`.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.Expr'"
 let applyArgNeedsParens (arg: LanguageTools.ProgramTypes.Expr) : Bool =
   match arg with
   | EApply(_, _, _, _) -> true
@@ -934,7 +911,6 @@ let applyArgNeedsParens (arg: LanguageTools.ProgramTypes.Expr) : Bool =
 ///
 /// `opener` decides whether the delimiters hug: `softLine` for brackets (`[1, 2]`), `line` for braces
 /// (`{ a = 1 }`). `sep` stays in the output either way, so the broken form still parses.
-// @compiler blocked: missing-implementation
 let wrapExprs
   (opening: String)
   (closing: String)
@@ -963,7 +939,7 @@ let wrapExprs
 /// Ported construct by construct. Anything not yet ported falls back to `exprString`, whose output is
 /// spliced in via `docOfText` so it still forces enclosing groups to break correctly -- an unported
 /// child can't make its parent claim to fit.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.Expr'"
 let exprDoc (ctx: Context) (e: LanguageTools.ProgramTypes.Expr) : Stdlib.Pretty.Doc =
   let txt (s: String) : Stdlib.Pretty.Doc = Stdlib.Pretty.text s
 
@@ -1229,7 +1205,7 @@ let exprDoc (ctx: Context) (e: LanguageTools.ProgramTypes.Expr) : Stdlib.Pretty.
 /// interpolated string would land in the middle of the code, and the comment would eat the rest
 /// of the line (`if c then f x // = 1 else g` loses its `else`). A call anywhere else is printed
 /// bare.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.Expr'"
 let lineDoc (ctx: Context) (e: LanguageTools.ProgramTypes.Expr) : Stdlib.Pretty.Doc =
   let doc = exprDoc ctx e
 
@@ -1242,20 +1218,20 @@ let lineDoc (ctx: Context) (e: LanguageTools.ProgramTypes.Expr) : Stdlib.Pretty.
   | _ -> doc
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.Expr'"
 let expr (ctx: Context) (e: LanguageTools.ProgramTypes.Expr) : String =
   Stdlib.Pretty.render ctx.width (exprDoc ctx e)
 
 
 /// `expr`, for a function's whole body: the body's last expression ends a line, so a live value
 /// for it is shown.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.Expr'"
 let bodyExpr (ctx: Context) (e: LanguageTools.ProgramTypes.Expr) : String =
   Stdlib.Pretty.render ctx.width (lineDoc ctx e)
 
 
 /// The original string-building printer, still handling every construct the Doc layer hasn't taken over.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.Expr'"
 let exprString (ctx: Context) (e: LanguageTools.ProgramTypes.Expr) : String =
   match e with
   | EUnit _id -> "()"
@@ -1431,7 +1407,7 @@ let exprString (ctx: Context) (e: LanguageTools.ProgramTypes.Expr) : String =
 //   | DeprecatedBecause reason -> $"DeprecatedBecause {reason}"
 
 module TypeDeclaration =
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.TypeDeclaration.RecordField'"
   let recordFieldDoc
     (ctx: Context)
     (d: LanguageTools.ProgramTypes.TypeDeclaration.RecordField)
@@ -1442,14 +1418,14 @@ module TypeDeclaration =
         (Stdlib.Pretty.text $"{PrettyPrinter.formatFieldName d.name}: ")
         (typeReferenceDoc ctx d.typ))
 
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.TypeDeclaration.RecordField'"
   let recordField
     (ctx: Context)
     (d: LanguageTools.ProgramTypes.TypeDeclaration.RecordField)
     : String =
     Stdlib.Pretty.render ctx.width (TypeDeclaration.recordFieldDoc ctx d)
 
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.TypeDeclaration.EnumField'"
   let enumFieldDoc
     (ctx: Context)
     (d: LanguageTools.ProgramTypes.TypeDeclaration.EnumField)
@@ -1464,14 +1440,14 @@ module TypeDeclaration =
         (Stdlib.Pretty.text $"{PrettyPrinter.formatFieldName label}: ")
         typ
 
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.TypeDeclaration.EnumField'"
   let enumField
     (ctx: Context)
     (d: LanguageTools.ProgramTypes.TypeDeclaration.EnumField)
     : String =
     Stdlib.Pretty.render ctx.width (TypeDeclaration.enumFieldDoc ctx d)
 
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.TypeDeclaration.EnumCase'"
   let enumCaseDoc
     (ctx: Context)
     (c: LanguageTools.ProgramTypes.TypeDeclaration.EnumCase)
@@ -1495,7 +1471,7 @@ module TypeDeclaration =
         c.description
         (Stdlib.Pretty.hang 2 (Stdlib.Pretty.text $"| {c.name} of") [ fieldPart ])
 
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.TypeDeclaration.EnumCase'"
   let enumCase
     (ctx: Context)
     (c: LanguageTools.ProgramTypes.TypeDeclaration.EnumCase)
@@ -1503,7 +1479,7 @@ module TypeDeclaration =
     Stdlib.Pretty.render ctx.width (TypeDeclaration.enumCaseDoc ctx c)
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.TypeDeclaration.TypeDeclaration'"
 let customTypeDoc
   (ctx: Context)
   (d: LanguageTools.ProgramTypes.TypeDeclaration.TypeDeclaration)
@@ -1531,7 +1507,7 @@ let customTypeDoc
     |> fun docs -> Stdlib.Pretty.join docs Stdlib.Pretty.hardLine
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.TypeDeclaration.TypeDeclaration'"
 let customType
   (ctx: Context)
   (d: LanguageTools.ProgramTypes.TypeDeclaration.TypeDeclaration)
@@ -1541,7 +1517,7 @@ let customType
 
 
 /// `<'a: Show + Compare, 'b>`: each type param followed by its bounds, if any.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.Bound'"
 let typeParamsWithBounds
   (ctx: Context)
   (typeParams: List<String>)
@@ -1572,7 +1548,7 @@ let typeParamsWithBounds
     |> fun parts -> $"<{parts}>"
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.PackageType.PackageType'"
 let packageType
   (ctx: Context)
   (p: LanguageTools.ProgramTypes.PackageType.PackageType)
@@ -1593,7 +1569,7 @@ let packageType
   $"{docComment}type {namePart}{typeParamPart} =\n{defPart}"
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.PackageValue.PackageValue'"
 let packageValue
   (ctx: Context)
   (p: LanguageTools.ProgramTypes.PackageValue.PackageValue)
@@ -1613,14 +1589,12 @@ module PackageLocation =
   /// alone and may be from any owner: `show` and `ops` list ops across the whole store, and a shortened
   /// name there would be ambiguous. Anywhere the reader has a place -- browsing a module, reading one
   /// item's references -- the full path is the noise it looks like.
-  // @compiler blocked: missing-implementation
   let packageLocationIn
     (currentModule: List<String>)
     (loc: LanguageTools.ProgramTypes.PackageLocation)
     : String =
     PrettyPrinter.shortenName currentModule loc.owner loc.modules loc.name
 
-  // @compiler blocked: missing-implementation
   let packageLocation (loc: LanguageTools.ProgramTypes.PackageLocation) : String =
     let modulesPart =
       match loc.modules with
@@ -1630,7 +1604,7 @@ module PackageLocation =
     $"{loc.owner}.{modulesPart}{loc.name}"
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.PackageTest.PackageTest'"
 let packageTest
   (ctx: Context)
   (test: LanguageTools.ProgramTypes.PackageTest.PackageTest)
@@ -1657,7 +1631,7 @@ let packageTest
 
 
 module PackageFn =
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.PackageFn.Parameter'"
   let parameter
     (ctx: Context)
     (p: LanguageTools.ProgramTypes.PackageFn.Parameter)
@@ -1682,7 +1656,7 @@ module PackageFn =
       $"({p.name}: {typeReference ctx p.typ})"
 
   /// Render a function parameter with a breakable type.
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.PackageFn.Parameter'"
   let parameterDoc
     (ctx: Context)
     (p: LanguageTools.ProgramTypes.PackageFn.Parameter)
@@ -1704,7 +1678,7 @@ module PackageFn =
             [ typeReferenceDoc ctx p.typ ]))
 
 
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.PackageFn.PackageFn'"
   let signature
     (ctx: Context)
     (f: LanguageTools.ProgramTypes.PackageFn.PackageFn)
@@ -1721,7 +1695,7 @@ module PackageFn =
     params + " -> " + returnType
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.PackageFn.PackageFn'"
 let packageFn
   (ctx: Context)
   (p: LanguageTools.ProgramTypes.PackageFn.PackageFn)
@@ -1774,7 +1748,7 @@ let packageFn
 
 
 /// `trait Show<'a> =` then one method signature per line.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.Trait.Trait'"
 let packageTrait
   (ctx: Context)
   (t: LanguageTools.ProgramTypes.Trait.Trait)
@@ -1799,7 +1773,7 @@ let packageTrait
 /// `impl<'a: Show> Show<Args> for List<'a> =`, then each method: the declaration itself when the
 /// method's fn was written in the block, and `let m = Some.Fn` when it names one that already
 /// existed. Both round-trip.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.TraitImpl.TraitImpl'"
 let packageImpl
   (ctx: Context)
   (i: LanguageTools.ProgramTypes.TraitImpl.TraitImpl)
@@ -1854,7 +1828,7 @@ let packageImpl
 /// Every screen that shows an item used to ask this for itself, five copies of fetch-by-kind and
 /// print-with-the-matching-printer. Three of the five had three arms, so the LSP refused to open a
 /// trait's file, `v` on a trait row in `dark propagate` raised, and the package server answered 500.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.PrettyPrinter.ProgramTypes.sourceOf: Unknown function or value 'LanguageTools.PackageManager.Type.get'"
 let sourceOf
   (ctx: Context)
   (kind: LanguageTools.ProgramTypes.ItemKind)
@@ -1882,7 +1856,6 @@ let sourceOf
 
 
 module BuiltinFn =
-  // @compiler blocked: missing-implementation
   let signature (branchId: Uuid) (f: LanguageTools.BuiltinFunction) : String =
     // CLEANUP: it's odd that we have to call the runtime pretty-printer here.
     // Potential solution: update RuntimeTypes (.fs) such that BuiltInFn's returnType and parameters use PT TypeReferences.
@@ -1899,7 +1872,7 @@ module BuiltinFn =
 
 
 module PackageOp =
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.PackageOp'"
   let packageOp
     (branchId: Uuid)
     (op: LanguageTools.ProgramTypes.PackageOp)

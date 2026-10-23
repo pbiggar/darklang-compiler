@@ -5,7 +5,7 @@ module Darklang.Cli.Eval
 /// Evaluate `expr`, keeping the failure structured. `Ok (Some printed)` for a value, `Ok None` for
 /// something that printed nothing. The one call into the host evaluator - the db commands, the workbench
 /// loaders and trace replay all come through here; <fn evaluate> is this with the error rendered.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'ExecutionError.ExecutionError'"
 let evaluateRaw
   (accountID: Stdlib.Option.Option<Uuid>)
   (branchId: Uuid)
@@ -36,7 +36,7 @@ let evaluateRaw
 /// that printed nothing, `Error message` for a failure. What the `eval`/REPL path uses - `execute` prints
 /// what this returns, and the workbench REPL keeps it as state. Takes the whole expression as one string,
 /// so a multi-line let-chain survives.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'AppState'"
 let evaluate
   (state: AppState)
   (expr: String)
@@ -54,7 +54,7 @@ let evaluate
     Stdlib.Result.Result.Error(ExecutionError.toString state.currentBranchId err)
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'AppState'"
 let execute (state: AppState) (args: List<String>) : AppState =
   let allowHarmful =
     Stdlib.List.contains args "--allow-harmful"
@@ -112,12 +112,12 @@ let execute (state: AppState) (args: List<String>) : AppState =
     | None -> newState
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'AppState'"
 let complete (_state: AppState) (_args: List<String>) : List<Completion.CompletionItem> =
   []
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'AppState'"
 let help (_state: AppState) : String =
   [
     "Usage: eval <expression>"

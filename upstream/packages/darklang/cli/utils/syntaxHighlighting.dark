@@ -2,7 +2,6 @@ module Darklang.Cli.SyntaxHighlighting
 
 
 /// Maps semantic token types to CLI colors.
-// @compiler blocked: missing-implementation
 let tokenTypeToCliColor (tokenType: LanguageTools.SemanticTokens.TokenType) : String =
   match tokenType with
   | Symbol -> Stdlib.Cli.UI.Colors.blue
@@ -28,7 +27,6 @@ let tokenTypeToCliColor (tokenType: LanguageTools.SemanticTokens.TokenType) : St
 
 
 /// Highlights one line by inserting color codes at token boundaries.
-// @compiler blocked: missing-implementation
 let highlightLine (line: String) (lineTokens: List<LanguageTools.SemanticTokens.SemanticToken>) : String =
   let insertions =
     lineTokens
@@ -63,7 +61,6 @@ let highlightLine (line: String) (lineTokens: List<LanguageTools.SemanticTokens.
 /// Splits a token that spans multiple rows into one single-line token per row it
 /// covers, so `highlightLine` can assume single-line tokens. A token already on
 /// one row passes through unchanged.
-// @compiler blocked: missing-implementation
 let splitTokenByLine
   (lines: List<String>)
   (token: LanguageTools.SemanticTokens.SemanticToken)
@@ -97,7 +94,6 @@ let splitTokenByLine
 
 
 /// Applies semantic-token colors to source code.
-// @compiler blocked: missing-implementation
 let applyTokenColors
   (sourceCode: String)
   (tokens: List<LanguageTools.SemanticTokens.SemanticToken>)
@@ -127,7 +123,7 @@ let applyTokenColors
 
 /// Applies full-parse semantic-token colors to source code — distinguishes
 /// module / type / function / parameter names (not possible from lexing alone).
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.SyntaxHighlighting.highlightCode: Unknown function or value 'LanguageTools.Parser.Parse.toWrittenTypes'"
 let highlightCode (sourceCode: String) : String =
   // The parser is best-effort: its lexer recovers from malformed input, so it
   // returns `Some` (a partial tree; precise diagnostics are reported separately)

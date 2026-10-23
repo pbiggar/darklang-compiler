@@ -5,7 +5,6 @@
 module Darklang.Cli.Workbench
 
 /// A compact description of how long ago `d` occurred.
-// @compiler blocked: missing-implementation
 let ago (d: DateTime) : String =
   let secs = Stdlib.DateTime.subtract (Stdlib.DateTime.now ()) d
   if secs < 60 then "just now"
@@ -16,17 +15,14 @@ let ago (d: DateTime) : String =
 
 /// Is this row a section header - a label the cursor skips over? Home is the
 /// view that has them (`ViewBehavior.SectionedList`).
-// @compiler blocked: missing-implementation
 let isSectionHeader (item: BodyItem) : Bool = item.kind == "home-sec"
 
-// @compiler blocked: missing-implementation
 let homeHeader (label: String) : BodyItem =
   BodyItem { name = label, kind = "home-sec", isModule = false, desc = "" }
 
 /// The same, for a stamp stored as text. A commit's `origin_ts` is a portable authoring stamp rather than
 /// a clock reading, so it arrives as a string; raw, it puts an ISO timestamp in the middle of a
 /// sentence.
-// @compiler blocked: missing-implementation
 let agoText (ts: String) : String =
   match Stdlib.DateTime.parse ts with
   | Ok d -> ago d
@@ -34,22 +30,20 @@ let agoText (ts: String) : String =
 
 
 /// How many commits Home lists before a "more" row.
-// @compiler blocked: missing-implementation
 val homeCommitCap = 5
 
 /// How many branches Home lists before a "more" row.
-// @compiler blocked: missing-implementation
 val homeBranchCap = 8
 
 /// What needs you, then the branch you are on, then recent work, then where
 /// else you could be. Load only on transitions; rendering Home does not
 /// query the store.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Workbench.loadHomeItems: Unknown function or value 'loadHomeItemsFrom'"
 let loadHomeItems (branchId: Uuid) : List<BodyItem> =
   loadHomeItemsFrom branchId (SCM.Draft.read ())
 
 /// `loadHomeItems` over a draft already read, so opening the workbench reads it once.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Workbench.loadHomeItemsFrom: Unknown function or value 'SCM.PackageOps.commitsOnBranch'"
 let loadHomeItemsFrom (branchId: Uuid) (draft: SCM.Draft.Picture) : List<BodyItem> =
   let row (name: String) (kind: String) (desc: String) : BodyItem =
     BodyItem { name = name, kind = kind, isModule = false, desc = desc }
@@ -140,7 +134,7 @@ let loadHomeItemsFrom (branchId: Uuid) (draft: SCM.Draft.Picture) : List<BodyIte
 
 /// The selected row's position among the rows of its own kind - the index the
 /// SCM detail helpers take.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'State'"
 let homeKindIndex (state: State) : Int =
   match Stdlib.List.getAt state.items state.selected with
   | None -> 0
@@ -152,7 +146,7 @@ let homeKindIndex (state: State) : Int =
 
 /// Is the cursor on the row of the branch you're on? Main included, which
 /// `selectedBranch` cannot name.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'State'"
 let homeRowIsCurrentBranch (state: State) : Bool =
   if cursorOnMainRow state then SCM.Branch.isMain state.branchId
   else
@@ -164,7 +158,7 @@ let homeRowIsCurrentBranch (state: State) : Bool =
 /// The conflict summary and the branch you are on open Changes (conflicts sit
 /// at its top); a commit opens its ops in the reader, and the "more" rows
 /// open the full lists there; another branch switches to it.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'State'"
 let openHomeRow (state: State) : Step =
   match Stdlib.List.getAt state.items state.selected with
   | None -> Step.Continue state
@@ -197,7 +191,7 @@ let openHomeRow (state: State) : Step =
       Step.Continue state
 
 /// Home uses the whole frame, one column, no inspector.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'State'"
 let renderHome
   (state: State)
   (region: Stdlib.Cli.UI.Layout.Region)

@@ -1,6 +1,5 @@
 module Darklang.Cli.Docs.Functions
 
-// @compiler blocked: missing-implementation
 let content () : String =
   """# Functions
 

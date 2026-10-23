@@ -2,7 +2,6 @@
 module Darklang.Stdlib.Cli.UI.Box
 
 /// The content region inside a box's border.
-// @compiler blocked: missing-implementation
 let inner (region: Layout.Region) : Layout.Region =
   Layout.Region
     { top = region.top + 1
@@ -20,7 +19,6 @@ let inner (region: Layout.Region) : Layout.Region =
 /// just the pill.
 ///
 /// Returns spans; colour codes carry no width (clipping goes through `Tui.Text`).
-// @compiler blocked: missing-implementation
 let draw (region: Layout.Region) (title: String) (focused: Bool) : List<Layout.Span> =
   let color = if focused then Colors.purple else Colors.brightBlack
   let paint = fun s -> Colors.colorize color s
@@ -84,7 +82,6 @@ let draw (region: Layout.Region) (title: String) (focused: Bool) : List<Layout.S
       Layout.at region (region.rows - 1) 0 (paint bottom) ]
 
 /// Draw a box and render content into its inner region in one call. `focused` picks the bright/dim border.
-// @compiler blocked: missing-implementation
 let panel
   (region: Layout.Region)
   (title: String)

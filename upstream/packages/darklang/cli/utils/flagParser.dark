@@ -6,7 +6,6 @@ module Darklang.Cli.FlagParser
 // typed config via `hasFlag`, `getOption`, `positionals`, and `errors`.
 
 
-// @compiler blocked: missing-implementation
 type Spec =
   { // bare boolean flags: (canonicalName, aliases). e.g. ("--yes", ["-y"])
     flags: List<(String * List<String>)>
@@ -16,13 +15,11 @@ type Spec =
     valueFlags: List<(String * List<String>)> }
 
 
-// @compiler blocked: missing-implementation
 type ParseError =
   | UnknownFlag of String
   | MissingValue of String
 
 
-// @compiler blocked: missing-implementation
 type Parsed =
   { // canonical names of bare flags seen, in encounter order (duplicates kept)
     flags: List<String>
@@ -32,13 +29,11 @@ type Parsed =
     errors: List<ParseError> }
 
 
-// @compiler blocked: missing-implementation
 val emptyParsed =
   Parsed { flags = [], options = [], positionals = [], errors = [] }
 
 
 // The canonical name for `token` if it matches an entry's name or an alias.
-// @compiler blocked: missing-implementation
 let canonicalFor
   (entries: List<(String * List<String>)>)
   (token: String)
@@ -52,32 +47,26 @@ let canonicalFor
     name)
 
 
-// @compiler blocked: missing-implementation
 let isFlagLike (token: String) : Bool =
   token != "-" && Stdlib.String.startsWith token "-"
 
 
-// @compiler blocked: missing-implementation
 let addFlag (acc: Parsed) (name: String) : Parsed =
   { acc with flags = Stdlib.List.append acc.flags [ name ] }
 
 
-// @compiler blocked: missing-implementation
 let addOption (acc: Parsed) (name: String) (value: String) : Parsed =
   { acc with options = Stdlib.List.append acc.options [ (name, value) ] }
 
 
-// @compiler blocked: missing-implementation
 let addUnknown (acc: Parsed) (token: String) : Parsed =
   { acc with errors = Stdlib.List.append acc.errors [ ParseError.UnknownFlag token ] }
 
 
-// @compiler blocked: missing-implementation
 let addMissingValue (acc: Parsed) (token: String) : Parsed =
   { acc with errors = Stdlib.List.append acc.errors [ ParseError.MissingValue token ] }
 
 
-// @compiler blocked: missing-implementation
 let parseLoop (spec: Spec) (acc: Parsed) (remaining: List<String>) : Parsed =
   match remaining with
   | [] -> acc
@@ -101,19 +90,16 @@ let parseLoop (spec: Spec) (acc: Parsed) (remaining: List<String>) : Parsed =
             rest
 
 
-// @compiler blocked: missing-implementation
 let parse (spec: Spec) (args: List<String>) : Parsed =
   parseLoop spec emptyParsed args
 
 
-// @compiler blocked: missing-implementation
 let hasFlag (p: Parsed) (name: String) : Bool =
   Stdlib.List.any p.flags (fun f -> f == name)
 
 
 // The value for `name`; last occurrence wins, matching the old
 // `{ acc with x = v }` overwrite-on-repeat behavior.
-// @compiler blocked: missing-implementation
 let getOption (p: Parsed) (name: String) : Stdlib.Option.Option<String> =
   p.options
   |> Stdlib.List.filter (fun pair ->
@@ -125,18 +111,15 @@ let getOption (p: Parsed) (name: String) : Stdlib.Option.Option<String> =
     v)
 
 
-// @compiler blocked: missing-implementation
 let getOptionOr (p: Parsed) (name: String) (default_: String) : String =
   Stdlib.Option.withDefault (getOption p name) default_
 
 
-// @compiler blocked: missing-implementation
 let parseErrorMessage (err: ParseError) : String =
   match err with
   | UnknownFlag token -> $"Error: unknown flag: {token}"
   | MissingValue token -> $"Error: {token} requires a value"
 
 
-// @compiler blocked: missing-implementation
 let parseErrorsMessage (errors: List<ParseError>) : String =
   errors |> Stdlib.List.map parseErrorMessage |> Stdlib.String.join "\n"

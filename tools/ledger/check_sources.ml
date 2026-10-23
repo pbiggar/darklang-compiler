@@ -9,7 +9,7 @@ let lines path =
   |> List.filter (fun line ->
       line <> "" && not (String.starts_with ~prefix:"#" line))
 
-let check root =
+let check native root =
   let* reasons =
     CompilerAnnotations.readReasons
       (Filename.concat root "porting/compiler-reasons.json")
@@ -33,16 +33,21 @@ let check root =
     SourceSelection.select ~context:SourceContracts.emptyContext ~roots
       ~supplements ~sources
   in
-  let* _, _, _ =
-    WrittenChecking.checkSourceUnitsWithBase None true false
-      (List.map snd selected.SourceSelection.units)
-  in
-  Ok ()
+  let units = List.map snd selected.SourceSelection.units in
+  if native then
+    let* target = Platform.detectHostTarget () in
+    Result.map
+      (fun _ -> ())
+      (StdlibCompilation.buildStdlibFromSources target units)
+  else
+    Result.map
+      (fun _ -> ())
+      (WrittenChecking.checkSourceUnitsWithBase None true false units)
 
 let () =
   match Array.to_list Sys.argv with
-  | [ _; root ] -> (
-      match check root with
+  | ([ _; root ] | [ _; "--native"; root ]) as arguments -> (
+      match check (List.length arguments = 3) root with
       | Ok () ->
           print_endline
             "Selected source bodies and replacement contracts checked"
@@ -50,5 +55,5 @@ let () =
           prerr_endline message;
           exit 1)
   | _ ->
-      prerr_endline "Usage: check_sources ROOT";
+      prerr_endline "Usage: check_sources [--native] ROOT";
       exit 1

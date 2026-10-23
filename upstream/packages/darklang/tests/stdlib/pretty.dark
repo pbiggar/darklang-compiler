@@ -219,7 +219,7 @@ module Styled =
 // a `)` or `,` laid out after it still lands before it, and zero columns wide, so it
 // never moves a break.
 module LineSuffix =
-  // @compiler blocked: upstream-dependency
+  // @compiler blocked: upstream-dependency diagnostic="Darklang.Stdlib.Pretty.Tests.LineSuffix.note: Unknown function or value 'Darklang.Stdlib.Pretty.lineSuffix'"
   let note (x: String) : Darklang.Stdlib.Pretty.Doc =
     Darklang.Stdlib.Pretty.lineSuffix x
 

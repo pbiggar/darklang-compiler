@@ -28,7 +28,7 @@ let parseError (error: ParseError) : Stdlib.Result.Result<Json, ParseError> =
 // </helpers>
 
 /// `toInt` of whatever `text` parses to, and None when it does not parse.
-// @compiler blocked: upstream-dependency
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Stdlib.AltJson.Tests.parseInt: Unknown function or value 'Stdlib.AltJson.toInt'"
 let parseInt (text: String) : Stdlib.Option.Option<Int> =
   match parse text with
   | Ok json -> Stdlib.AltJson.toInt json

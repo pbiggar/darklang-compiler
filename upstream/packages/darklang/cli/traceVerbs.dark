@@ -14,7 +14,7 @@ module Darklang.Cli.TraceVerbs
 /// traces -- an empty ANSWER to what was really a spelling this command did not take,
 /// which is the worst of both. `dark view` takes the short form, so these should
 /// too.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.TraceVerbs.canonicalFnName: Unknown function or value 'LanguageTools.PackageManager.Function.find'"
 let canonicalFnName (branchId: Uuid) (typed: String) : String =
   let resolves (name: String) : Bool =
     (LanguageTools.PackageManager.Function.find
@@ -40,7 +40,7 @@ let canonicalFnName (branchId: Uuid) (typed: String) : String =
 ///
 /// <param doing> is what they would do about it, in the imperative: "run something
 /// that calls it", "run something".
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.TraceVerbs.whyEmpty: Unknown function or value 'Darklang.Tracing.Store.enabled'"
 let whyEmpty (doing: String) : List<String> =
   if Darklang.Tracing.Store.enabled () then
     [ $"  recording is on, so {doing} and look again" ]
@@ -53,7 +53,6 @@ let whyEmpty (doing: String) : List<String> =
 ///
 /// Eight is almost always enough, and a table that prints more than it needs to spends the
 /// width on nothing. Git shortens commit ids the same way, for the same reason.
-// @compiler blocked: missing-implementation
 let idWidth (ids: List<String>) : Int =
   let distinct (w: Int) : Bool =
     let prefixes = ids |> Stdlib.List.map (fun id -> Stdlib.String.slice id 0 w)
@@ -64,7 +63,6 @@ let idWidth (ids: List<String>) : Int =
   | None -> 36
 
 
-// @compiler blocked: missing-implementation
 let statusText (status: Darklang.Tracing.Status) : String =
   match status with
   | Running -> "running"
@@ -74,7 +72,7 @@ let statusText (status: Darklang.Tracing.Status) : String =
 
 
 /// The trace whose id starts with `prefix`, when exactly one does.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.TraceVerbs.find: Unknown function or value 'Darklang.Tracing.Store.resolveID'"
 let find (prefix: String) : Stdlib.Result.Result<Darklang.Tracing.Trace, String> =
   match Darklang.Tracing.Store.resolveID prefix with
   | Error e -> Stdlib.Result.Result.Error e
@@ -86,7 +84,6 @@ let find (prefix: String) : Stdlib.Result.Result<Darklang.Tracing.Trace, String>
 
 /// "22 minutes ago", from the stamp the store keeps (ISO with fractional seconds, which the
 /// parser does not take: the fraction is cut).
-// @compiler blocked: missing-implementation
 let whenText (created: String) : String =
   let whole =
     match Stdlib.String.split created "." with
@@ -101,7 +98,6 @@ let whenText (created: String) : String =
 /// One row of the trace table. Deliberately narrow: `Table.print` pads to the widest cell and
 /// does not wrap, so a column that is usually empty costs every row its width. The fork lineage
 /// and the full input are in `traces show`.
-// @compiler blocked: missing-implementation
 let row (width: Int) (e: Darklang.Tracing.Trace) : List<String> =
   // A `*` on the id rather than a column of its own. A pin column is four characters of width on
   // every row for a flag almost no row has, and `input` is the column that truncates.
@@ -121,7 +117,6 @@ let row (width: Int) (e: Darklang.Tracing.Trace) : List<String> =
 /// Any list of traces, as a table. The ONE renderer: `dark traces`, `traces list --fn`,
 /// `traces find` and `traces calls` all come through here, so none of them can drift into
 /// showing a different set of columns for the same rows.
-// @compiler blocked: missing-implementation
 let printTable (traces: List<Darklang.Tracing.Trace>) : Unit =
   let width = idWidth (traces |> Stdlib.List.map (fun e -> e.id))
   Stdlib.Cli.UI.Table.print
@@ -131,7 +126,6 @@ let printTable (traces: List<Darklang.Tracing.Trace>) : Unit =
 
 
 /// Where a fork branched from: the trace, and the position in its log the fork kept.
-// @compiler blocked: missing-implementation
 type ForkJson =
   { trace: String
     at: Int64 }
@@ -144,7 +138,6 @@ type ForkJson =
 /// and not what the program said. Whoever reads this wants `42`, and a value they can paste
 /// back into Dark. The type is also flat, so `.answered` does not mean reaching through an
 /// option-of-a-union.
-// @compiler blocked: missing-implementation
 type TraceJson =
   { id: String
     /// `eval`, `run <file>`, `GET /path`.
@@ -162,7 +155,6 @@ type TraceJson =
 
 
 /// One recorded call, as `--json` hands it over. Same rule about values as `TraceJson`.
-// @compiler blocked: missing-implementation
 type CallJson =
   { /// Where the call sits in the trace's log: what `fork --at` takes.
     pos: Int64
@@ -175,14 +167,12 @@ type CallJson =
 
 
 /// What `traces inspect --json` hands back: the trace, and the impure calls it logged.
-// @compiler blocked: missing-implementation
 type TraceWithCallsJson =
   { trace: TraceJson
     calls: List<CallJson> }
 
 
 /// One iteration of a loop, for `--json`.
-// @compiler blocked: missing-implementation
 type LoopIterationJson =
   { /// Which one this is, counting from 1.
     at: Int
@@ -203,14 +193,12 @@ type LoopIterationJson =
 ///
 /// One type rather than a `fn`/`fnHash` pair at each site, so the two cannot drift apart and a
 /// reader learns the pairing once.
-// @compiler blocked: missing-implementation
 type FnRef =
   { name: String
     hash: String }
 
 
 /// A loop, for `--json`.
-// @compiler blocked: missing-implementation
 type LoopJson =
   { /// `map`, `fold`, `map#2`. What `--iteration` takes.
     name: String
@@ -224,7 +212,6 @@ type LoopJson =
 /// Why a page stopped, for `--json`. `drift` is the part an agent acts on: false means debug the
 /// code, true means the store moved since the recording and the next step is a rerun. A string
 /// alone made an agent parse prose to work that out, and it is a decision, not a message.
-// @compiler blocked: missing-implementation
 type ProblemJson =
   { /// The error, rendered. For a drift stop this is about running code and may carry advice
     /// for `run`/`eval`, which is not what the reader is doing; `why` is the part that applies.
@@ -239,7 +226,7 @@ type ProblemJson =
 /// The ONE place a stopped replay becomes words, for both readers. `show` prints the message and
 /// the advice; `--json` sends the same three fields. Two converters is how `show` and `show --json`
 /// came to disagree about iterations earlier on this branch, so this one is shared on purpose.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.TraceVerbs.problemJson: Unknown function or value 'Darklang.Tracing.Format.replayStop'"
 let problemJson
   (branchId: Uuid)
   (traceId: String)
@@ -273,7 +260,6 @@ let problemJson
 
 /// What `traces show --json` hands back: which trace was read, and what each expression in the
 /// code evaluated to, keyed by the expression's id. `problem` is set when the replay stopped.
-// @compiler blocked: missing-implementation
 type ValuesJson =
   { trace: String
     /// The function this page is of.
@@ -291,7 +277,6 @@ type ValuesJson =
 
 /// A trace, for `--json`. The ONE converter: `list`, `find`, `calls`, `follow` and `inspect` all come
 /// through here, so no two of them can hand back a trace with different fields in it.
-// @compiler blocked: missing-implementation
 let traceJson (branchId: Uuid) (trace: Darklang.Tracing.Trace) : TraceJson =
   TraceJson
     { id = trace.id
@@ -317,7 +302,6 @@ let traceJson (branchId: Uuid) (trace: Darklang.Tracing.Trace) : TraceJson =
 
 
 /// One logged call, for `--json`.
-// @compiler blocked: missing-implementation
 let callJson (branchId: Uuid) (call: Darklang.Tracing.FnCall) : CallJson =
   CallJson
     { pos = call.seq
@@ -331,7 +315,6 @@ let callJson (branchId: Uuid) (call: Darklang.Tracing.FnCall) : CallJson =
 
 
 /// A list of traces, as JSON. Every listing verb prints through this.
-// @compiler blocked: missing-implementation
 let printTracesJson (branchId: Uuid) (traces: List<Darklang.Tracing.Trace>) : Unit =
   Stdlib.printLine
     (Stdlib.Json.serialize<List<TraceJson>>
@@ -339,7 +322,7 @@ let printTracesJson (branchId: Uuid) (traces: List<Darklang.Tracing.Trace>) : Un
 
 
 /// One run and its log, as JSON.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.TraceVerbs.printInspectJson: Unknown function or value 'find'"
 let printInspectJson (branchId: Uuid) (prefix: String) : Bool =
   match find prefix with
   | Error e ->
@@ -376,7 +359,7 @@ let printInspectJson (branchId: Uuid) (prefix: String) : Bool =
 /// store time. A package hash is STRUCTURAL, so two functions with identical bodies share one and
 /// the name you get is whichever of them the store resolves it to. The comparison is still sound
 /// -- that name is bound to that hash -- but the name printed can be a sibling's.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.TraceVerbs.movedSince: Unknown function or value 'Darklang.Tracing.Store.fnsWithHashes'"
 let movedSince
   (branchId: Uuid)
   (traceID: String)
@@ -395,7 +378,7 @@ let movedSince
     | None -> Stdlib.Option.Option.None)
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'AppState'"
 let resume (state: AppState) (prefix: String) : AppState =
   match find prefix with
   | Error e ->
@@ -440,7 +423,7 @@ let resume (state: AppState) (prefix: String) : AppState =
       { state with exitCode = 1 }
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.TraceVerbs.fork: Unknown function or value 'find'"
 let fork (prefix: String) (at: Stdlib.Option.Option<Int64>) : Bool =
   match find prefix with
   | Error e ->
@@ -457,7 +440,7 @@ let fork (prefix: String) (at: Stdlib.Option.Option<Int64>) : Bool =
       false
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.TraceVerbs.pin: Unknown function or value 'find'"
 let pin (prefix: String) (pinned: Bool) : Bool =
   match find prefix with
   | Error e ->
@@ -498,7 +481,7 @@ let pin (prefix: String) (pinned: Bool) : Bool =
 /// ANSWER, not a refusal. A command that was asked a question and answered it truthfully
 /// succeeded, however empty the answer. Naming something that does not exist is the other
 /// thing, and that is what exits non-zero.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.TraceVerbs.printCalls: Unknown function or value 'canonicalFnName'"
 let printCalls (branchId: Uuid) (typed: String) : Unit =
   let fnName = canonicalFnName branchId typed
 
@@ -518,7 +501,7 @@ let printCalls (branchId: Uuid) (typed: String) : Unit =
 
 /// The values `traces show` would print beside the code, as JSON: the ids and the values,
 /// with no source. What an agent wants, since it can read the code already.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.TraceVerbs.showCodeJson: Unknown function or value 'canonicalFnName'"
 let showCodeJson
   (accountID: Stdlib.Option.Option<Uuid>)
   (branchId: Uuid)
@@ -674,7 +657,6 @@ let showCodeJson
 ///
 /// One that ran once is not a loop. There is nothing to choose between and its value is already
 /// on the line.
-// @compiler blocked: missing-implementation
 type Loop =
   { /// What a person types: `--iteration map:3`.
     ///
@@ -711,7 +693,6 @@ type Loop =
 ///
 /// <param fuel> bounds the walk: the frames come from a store and a cycle would hang the view,
 /// where a real chain is a handful deep.
-// @compiler blocked: missing-implementation
 let insideFn
   (frames: List<Darklang.Tracing.Store.ViewFrame>)
   (frameId: String)
@@ -737,7 +718,6 @@ let insideFn
 
 
 /// The loops of a trace, in the order they first ran.
-// @compiler blocked: missing-implementation
 let loopsOf
   (frames: List<Darklang.Tracing.Store.ViewFrame>)
   (fnNames: List<String * String>)
@@ -925,7 +905,6 @@ let loopsOf
 /// `map` is the first, `map:3` is the third. By POSITION in the site's own list, not by any
 /// counter on the frame: three calls to one function from three iterations of a loop all sit at
 /// position zero of their own sites, and numbering by that would make `receipt:2` unreachable.
-// @compiler blocked: missing-implementation
 let chosenIteration
   (requested: List<String>)
   (loop: Loop)
@@ -947,7 +926,6 @@ let chosenIteration
 /// A view keeps values for the first and last few iterations of each site, so a frame in between
 /// is counted but not collected. Everything that shows an iteration has to ask this, because the
 /// answer is the difference between showing its numbers and borrowing another one's.
-// @compiler blocked: missing-implementation
 let frameHasValues
   (frameValues: List<(String * Int64 * LanguageTools.RuntimeTypes.Dval)>)
   (frameId: String)
@@ -968,7 +946,6 @@ let frameHasValues
 ///
 /// The page and the `--json` both ask this, or an agent could see the first five and the last
 /// five of a two-thousand-iteration loop and have no way to reach the rest.
-// @compiler blocked: missing-implementation
 let iterationsToFetch
   (loops: List<Loop>)
   (frameValues: List<(String * Int64 * LanguageTools.RuntimeTypes.Dval)>)
@@ -999,7 +976,7 @@ let iterationsToFetch
 /// Laid over the flat values rather than replacing them, so every line OUTSIDE the loop keeps
 /// what it did. Without that, choosing one would blank the function around it, which is the
 /// context that makes the iteration mean anything.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.TraceVerbs.valuesOfFrame: Unknown function or value 'PrettyPrinter.RuntimeTypes.dvalOneLine'"
 let valuesOfFrame
   (branchId: Uuid)
   (base': Dict<String, String>)
@@ -1062,7 +1039,7 @@ let valuesOfFrame
 ///
 /// Named for the verb. It was `printValues` when the verb was `traces values`, and a stranger
 /// looking for what `show` does did not find it.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'AppState'"
 let showCode
   (state: AppState)
   (typed: String)

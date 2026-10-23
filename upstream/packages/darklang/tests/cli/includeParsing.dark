@@ -7,7 +7,6 @@ module Darklang.Cli.Tests.IncludeParsing
 // per case would need a draft per case.
 
 module Include =
-  // @compiler blocked: upstream-dependency
   let parse (args: List<String>) : List<String> =
     Darklang.Cli.Commit.parseInclude args
 

@@ -52,7 +52,7 @@ impl Negate for Float =
 
 
 /// Get the square root of a float
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Stdlib.Float.sqrt: Unknown function or value 'Builtin.floatSqrt'"
 let sqrt (a: Float) : Float = Builtin.floatSqrt a
 
 

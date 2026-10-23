@@ -3,11 +3,9 @@ module Darklang.Cli.Outliner.App
 /// The outliner as a `Cli.Component`: a view, a key handler, and a save. The terminal lifecycle (start,
 /// present, stop, resume) belongs to `Cli.Component`, not here.
 
-// @compiler blocked: missing-implementation
 let view (state: Main.State) (size: Darklang.Stdlib.Cli.Tui.Size) : Darklang.Stdlib.Cli.Tui.View =
   Main.viewAtSize state size
 
-// @compiler blocked: missing-implementation
 let onKey
   (state: Main.State)
   (key: Stdlib.Cli.Stdin.Key.Key)
@@ -20,20 +18,18 @@ let onKey
   // Leaving the picker doesn't change persisted documents: every mutation already saved itself.
   | Exit next -> Darklang.Cli.Component.Step.Exit next
 
-// @compiler blocked: missing-implementation
 let save (state: Main.State) : Main.State =
   Main.save state
 
 /// A FUNCTION, not a `val`: a component holds lambdas, and a lambda cannot be stored. Its
 /// instructions live in the execution that created it, so a stored one is a dangling reference that
 /// dies when applied in a later process. Rebuilt per call instead.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Cli.Component.Component'"
 let component () : Cli.Component.Component<Cli.Outliner.Main.State> =
   Darklang.Cli.Component.simple view onKey save
 
 
 /// Flag values, with a default when the flag isn't there.
-// @compiler blocked: missing-implementation
 let flag (args: List<String>) (name: String) (fallback: String) : String =
   let rec_ = args |> Stdlib.List.findFirstIndex (fun a -> a == $"--{name}")
 
@@ -45,7 +41,6 @@ let flag (args: List<String>) (name: String) (fallback: String) : String =
     | None -> fallback
 
 /// The words that aren't flags or flag values.
-// @compiler blocked: missing-implementation
 let positional (args: List<String>) : List<String> =
   args
   |> Stdlib.List.indexedMap (fun i a -> (i, a))
@@ -60,7 +55,7 @@ let positional (args: List<String>) : List<String> =
     a)
 
 /// CLI command: the subcommands, or the full-screen app.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Darklang.Cli.AppState'"
 let execute (cliState: Darklang.Cli.AppState) (args: List<String>) : Darklang.Cli.AppState =
   let words = positional args
 
@@ -102,7 +97,7 @@ let execute (cliState: Darklang.Cli.AppState) (args: List<String>) : Darklang.Cl
 
 
 /// CLI help text.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Darklang.Cli.AppState'"
 let help (_state: Darklang.Cli.AppState) : String =
   [ "Usage: outliner"
     "Interactive tree outliner with multi-document support."
@@ -151,7 +146,7 @@ let help (_state: Darklang.Cli.AppState) : String =
 
 
 /// Complete subcommands, then document names for the ones that take one.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Darklang.Cli.AppState'"
 let complete
   (_state: Darklang.Cli.AppState)
   (args: List<String>)

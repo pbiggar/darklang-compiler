@@ -13,12 +13,12 @@ let printLine (str: String): Unit =
 
 /// Print <param str> to stderr, followed by a newline: for everything that is not the answer to what
 /// was asked, so `dark cmd | next` carries only the answer.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Stdlib.printErrorLine: Unknown function or value 'Builtin.printErrorLine'"
 let printErrorLine (str: String): Unit =
   Builtin.printErrorLine str
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Stdlib.printError: Unknown function or value 'Builtin.printError'"
 let printError (str: String): Unit =
   Builtin.printError str
 

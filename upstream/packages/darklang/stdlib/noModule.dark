@@ -12,5 +12,5 @@ let notEquals (a: 'a) (b: 'a) : Bool = Builtin.notEquals a b
 
 /// A developer-facing string for <param value>: the shape you'd want in a
 /// debug print, not something to parse or show a user.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Stdlib.toRepr: Unknown function or value 'Builtin.toRepr'"
 let toRepr (value: 'a) : String = Builtin.toRepr value

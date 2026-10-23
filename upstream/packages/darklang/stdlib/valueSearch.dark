@@ -46,7 +46,6 @@ let buildPathFromLocation
 /// Uses indexed type lookup for efficiency
 /// Optionally filters by namespace prefix
 /// The stored value at <param hash>, evaluated. `None` when the store does not hold it.
-// @compiler blocked: missing-implementation
 let evaluate
   (hash: LanguageTools.ProgramTypes.FQValueName.Package)
   : Stdlib.Option.Option<'a> =

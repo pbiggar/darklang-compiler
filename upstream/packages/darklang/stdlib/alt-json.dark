@@ -34,7 +34,7 @@ let parse (jsonString: String) : Result.Result<Json, ParseError.ParseError> =
 
 /// Reads an exact JSON integer. A Float value is never silently truncated or
 /// reinterpreted as an integer, even if its current value is whole.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Stdlib.AltJson.toInt: Unknown constructor 'Darklang.Stdlib.AltJson.Json.Integer' in pattern"
 let toInt (j: Json) : Option.Option<Int> =
   match j with
   | Integer i -> Option.Option.Some i
@@ -42,7 +42,7 @@ let toInt (j: Json) : Option.Option<Int> =
 
 
 /// Read a JSON number as Float only when the conversion is exact.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Stdlib.AltJson.toFloat: Unknown constructor 'Darklang.Stdlib.AltJson.Json.Float' in pattern"
 let toFloat (j: Json) : Option.Option<Float> =
   match j with
   | Float n -> Option.Option.Some n
@@ -123,7 +123,7 @@ module Helpers =
 
   /// Read an optional integer while distinguishing an absent or null field
   /// from a present value that cannot be converted exactly.
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Darklang.Stdlib.AltJson.Helpers.getIntOptionResult: Unknown function or value 'toInt'"
   let getIntOptionResult
     (key: String)
     (fields: List<(String * Json)>)
@@ -139,7 +139,7 @@ module Helpers =
 
   /// Get a required integer field. The error distinguishes a missing field
   /// from a field whose value cannot be converted exactly.
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Darklang.Stdlib.AltJson.Helpers.getIntResult: Unknown function or value 'toInt'"
   let getIntResult
     (key: String)
     (fields: List<(String * Json)>)
@@ -155,7 +155,7 @@ module Helpers =
   /// Get an integer field that may be left out. {{Ok}} <param default_> if the
   /// key is missing or null, {{Error}} if it's present but isn't exactly an
   /// integer (see <fn toInt>).
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Darklang.Stdlib.AltJson.Helpers.getIntOr: Unknown function or value 'toInt'"
   let getIntOr
     (key: String)
     (default_: Int)
@@ -172,7 +172,7 @@ module Helpers =
 
   /// Get a Float field. An integer is converted only if Float can hold it
   /// exactly; use <fn getIntOption> for arbitrary-size integers.
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Darklang.Stdlib.AltJson.Helpers.getFloat: Unknown function or value 'toFloat'"
   let getFloat
     (key: String)
     (fields: List<(String * Json)>)
@@ -233,7 +233,7 @@ module Builder =
     List.append fields [ (key, Json.String value) ]
 
   /// Add a floating-point field
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Darklang.Stdlib.AltJson.Builder.addFloat: Unknown constructor 'Darklang.Stdlib.AltJson.Json.Float'"
   let addFloat (fields: Fields) (key: String) (value: Float) : Fields =
     List.append fields [ (key, Json.Float value) ]
 
@@ -269,7 +269,7 @@ module Builder =
     | None -> fields
 
   /// Add an optional Float field (only adds if Some)
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Darklang.Stdlib.AltJson.Builder.addOptionalFloat: Unknown constructor 'Darklang.Stdlib.AltJson.Json.Float'"
   let addOptionalFloat
     (fields: Fields)
     (key: String)

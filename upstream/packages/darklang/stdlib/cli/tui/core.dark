@@ -10,14 +10,12 @@ module Darklang.Stdlib.Cli.Tui
 
 
 /// Current terminal viewport dimensions.
-// @compiler blocked: missing-implementation
 type Size =
   { width: Int
     height: Int }
 
 
 /// Determines how a logical view occupies the terminal.
-// @compiler blocked: missing-implementation
 type ViewMode =
   /// Own the complete terminal using its alternate screen.
   | Fullscreen
@@ -28,7 +26,6 @@ type ViewMode =
 /// Cursor placement after rendering a view.
 ///
 /// Row and column coordinates are zero-based.
-// @compiler blocked: missing-implementation
 type Cursor =
   /// Do not show the terminal cursor.
   | Hidden
@@ -40,7 +37,6 @@ type Cursor =
 ///
 /// Rows may contain supported ANSI text styling, but no cursor movement,
 /// clearing, or terminal mode controls.
-// @compiler blocked: missing-implementation
 type View =
   { /// Rows to render, ordered from top to bottom.
     rows: List<String>

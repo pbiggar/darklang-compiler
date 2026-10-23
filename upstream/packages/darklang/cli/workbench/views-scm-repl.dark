@@ -6,7 +6,7 @@ module Darklang.Cli.Workbench
 /// The Changes view: what is uncommitted on the branch you are on, and
 /// nothing else. Conflicts sit at the top of the same list, since they need a
 /// decision before anything commits. Branches and history live on Home.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'State'"
 let renderScm (state: State) (region: Stdlib.Cli.UI.Layout.Region) : List<Stdlib.Cli.UI.Layout.Span> =
   let listFocused = state.focus == Stdlib.Cli.UI.SplitPane.Focus.First
   let detailFocused = state.focus == Stdlib.Cli.UI.SplitPane.Focus.Second
@@ -31,14 +31,14 @@ let renderScm (state: State) (region: Stdlib.Cli.UI.Layout.Region) : List<Stdlib
 ///
 /// Goes straight at `Eval.evaluate` rather than the `eval` command because the command joins its args with
 /// spaces, which would flatten the binding chain's newlines.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'State'"
 let evalRaw (state: State) (expr: String) : Stdlib.Result.Result<Stdlib.Option.Option<String>, String> =
   let (result, _stray) =
     captureOutputAnd (fun () -> Darklang.Cli.Eval.evaluate (classicState state) expr false)
   result
 
 /// Evaluate an expression **with the session's bindings in scope**, and return its result (or the error text).
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'State'"
 let evalToString (state: State) (expr: String) : String =
   match evalRaw state (Darklang.Cli.Repl.withBindings state.repl.bindings expr) with
   | Ok(Some s) -> Stdlib.String.trim s
@@ -51,7 +51,7 @@ let evalToString (state: State) (expr: String) : String =
 /// binding, or None if evaluating it failed, plus the line to show in the log.
 /// Evaluating it once is also what separates "this expression is broken" (the evaluator errors, so nothing
 /// binds) from "this value has no literal form" (it evaluated fine, `dvalToExpr` couldn't promote it).
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'State'"
 let bindSession (state: State) (name: String) (rhs: String) : (Stdlib.Option.Option<Darklang.Cli.Repl.Binding> * String) =
   let fallback (reason: String) : (Stdlib.Option.Option<Darklang.Cli.Repl.Binding> * String) =
     // The binding holds the expression, but the session pane shows values, so evaluate it once for display.
@@ -91,7 +91,7 @@ let bindSession (state: State) (name: String) (rhs: String) : (Stdlib.Option.Opt
 ///
 /// Pulled out so a pasted program can be folded through it statement by statement, which is what makes a
 /// paste behave exactly as if you'd typed the lines one at a time.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'State'"
 let applyReplStatement (state: State) (stmt: String) : State =
   let text = Stdlib.String.trim stmt
   if text == "" then
@@ -142,7 +142,7 @@ let applyReplStatement (state: State) (stmt: String) : State =
 /// prompt is something you open, not the view's resting state, so between
 /// evaluations the navigation keys work like everywhere else (esc leaves the
 /// prompt).
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'State'"
 let renderRepl (state: State) (region: Stdlib.Cli.UI.Layout.Region) : List<Stdlib.Cli.UI.Layout.Span> =
   let typing = match state.input with | Some _ -> true | None -> false
   let logTitle =

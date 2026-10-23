@@ -1,37 +1,32 @@
 module Darklang.Cli.Completion
 
 /// A completion item with display text (shown to user) and value (inserted on selection)
-// @compiler blocked: missing-implementation
 type CompletionItem =
   { display: String
     value: String }
 
 /// Create a simple completion item where display equals value
-// @compiler blocked: missing-implementation
 let simple (text: String) : CompletionItem =
   CompletionItem { display = text, value = text }
 
 /// Create a completion item with an icon based on entity type
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Packages.EntityType'"
 let withIcon (entityType: Packages.EntityType) (text: String) : CompletionItem =
   let icon = Packages.Display.getIcon entityType
   CompletionItem { display = icon + "  " + text, value = text }
 
 /// Create a completion item with a description shown after the value
-// @compiler blocked: missing-implementation
 let withDescription (text: String) (description: String) : CompletionItem =
   let display = text + "  " + (Stdlib.Cli.UI.Colors.dimText description)
   CompletionItem { display = display, value = text }
 
 
-// @compiler blocked: missing-implementation
 type ParsedInput =
   { commandName: String
     args: List<String>
     isCompletingCommand: Bool }
 
 
-// @compiler blocked: missing-implementation
 let parseInput (input: String) : ParsedInput =
   let trimmed = Stdlib.String.trim input
   let endsWithSpace = Stdlib.String.endsWith input " "
@@ -57,7 +52,6 @@ let parseInput (input: String) : ParsedInput =
         ParsedInput { commandName = command, args = rest, isCompletingCommand = false }
 
 
-// @compiler blocked: missing-implementation
 let getPartialCompletion (parsed: ParsedInput) : String =
   if parsed.isCompletingCommand then
     parsed.commandName
@@ -67,7 +61,6 @@ let getPartialCompletion (parsed: ParsedInput) : String =
     | None -> ""
 
 
-// @compiler blocked: missing-implementation
 let buildCompletedCommand (parsed: ParsedInput) (completion: String) : String =
   if parsed.isCompletingCommand then
     completion
@@ -81,7 +74,6 @@ let buildCompletedCommand (parsed: ParsedInput) (completion: String) : String =
 
 /// Get the suffix of the matched segment after the partial text
 /// Used for hints when completion contains (but doesn't start with) the partial
-// @compiler blocked: missing-implementation
 let getMatchedSegmentSuffix (completion: String) (partial: String) : String =
   match Stdlib.String.indexOf completion partial with
   | None -> ""
@@ -94,7 +86,6 @@ let getMatchedSegmentSuffix (completion: String) (partial: String) : String =
     | None -> rest
 
 
-// @compiler blocked: missing-implementation
 let getHintFromCompletions (partial: String) (completions: List<String>) : String =
   match completions with
   | [] -> ""
@@ -116,7 +107,7 @@ let getHintFromCompletions (partial: String) (completions: List<String>) : Strin
 // Uses `state.commandOptionsCache` rather than rebuilding from `Registry.allCommands ()`. This runs on the
 // completion path, so the old version rebuilt all 60 command records and re-folded their aliases while the
 // user was mid-keystroke; the cache is the same list, built once at startup.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'AppState'"
 let commandNamesCompletion (state: AppState) (args: List<String>) : List<CompletionItem> =
   match args with
   | [] ->
@@ -133,7 +124,6 @@ let commandNamesCompletion (state: AppState) (args: List<String>) : List<Complet
 
 
 // Helper functions for finding common prefixes in completions
-// @compiler blocked: missing-implementation
 let findCommonLength (str1: String) (str2: String) (index: Int) (maxLen: Int) : Int =
   if index >= maxLen then
     index
@@ -145,7 +135,6 @@ let findCommonLength (str1: String) (str2: String) (index: Int) (maxLen: Int) : 
     else
       index
 
-// @compiler blocked: missing-implementation
 let findCommonPrefix (strings: List<String>) : String =
   match strings with
   | [] -> ""
@@ -160,7 +149,6 @@ let findCommonPrefix (strings: List<String>) : String =
 // Filesystem completion helpers
 
 /// Add trailing slashes to directory names in a file list
-// @compiler blocked: missing-implementation
 let addSlashToDirectories (baseDir: String) (files: List<String>) : List<String> =
   files
   |> Stdlib.List.map (fun file ->
@@ -171,7 +159,6 @@ let addSlashToDirectories (baseDir: String) (files: List<String>) : List<String>
 
 
 /// Complete filesystem paths, handling . .. and / separators
-// @compiler blocked: missing-implementation
 let completeFilesystemPath (partialArg: String) : List<String> =
   let currentDir = "."
 

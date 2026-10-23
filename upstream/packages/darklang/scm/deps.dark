@@ -15,12 +15,10 @@ module Darklang.SCM.Deps
 // either raise, or this should return a `Result` or an `Option` and make the six callers say what
 // they want done. Left as a default for now because the column has one writer, so it cannot
 // currently fire; this is the one place to change when that stops being true.
-// @compiler blocked: missing-implementation
 let kindOf (s: String) : LanguageTools.ProgramTypes.ItemKind =
   LanguageTools.ProgramTypes.ItemKind.fromString s
   |> Stdlib.Option.withDefault LanguageTools.ProgramTypes.ItemKind.Fn
 
-// @compiler blocked: missing-implementation
 let locationOf
   (owner: String)
   (modules: String)
@@ -32,7 +30,7 @@ let locationOf
     { owner = owner, modules = mods, name = name }
 
 /// Everything <param source> references (forward dependencies), as (hash, kind).
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.Deps.dependenciesOf: Unknown function or value 'Stdlib.Sqlite.rowsP'"
 let dependenciesOf
   (source: LanguageTools.ProgramTypes.Hash)
   : List<(LanguageTools.ProgramTypes.Hash * String)> =
@@ -57,7 +55,7 @@ let dependenciesOf
 /// Computed ONCE per call that needs it and passed down. `chainBindings` is a recursive walk up the
 /// parent chain over every op the chain holds, so asking it per dependent turns one query into one per
 /// caller of the thing you asked about.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.Deps.branchOverlayBindings: Unknown function or value 'SCM.PackageOps.currentBranch'"
 let branchOverlayBindings
   ()
   : List<(String * LanguageTools.ProgramTypes.PackageLocation * LanguageTools.ProgramTypes.ItemKind)> =
@@ -70,7 +68,7 @@ let branchOverlayBindings
 
 
 /// The hash <param loc> holds as a <param kind> on the current branch, if anything.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.Deps.hashAt: Unknown function or value 'SCM.PackageOps.currentBranch'"
 let hashAt
   (loc: LanguageTools.ProgramTypes.PackageLocation)
   (kind: LanguageTools.ProgramTypes.ItemKind)
@@ -98,7 +96,7 @@ let hashAt
 ///
 /// Follows only the content <param loc> holds NOW, so an edge written against an older version
 /// under the old name (renamed, then edited) is still not found.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.Deps.renamedAwayNames: Unknown function or value 'hashAt'"
 let renamedAwayNames
   (loc: LanguageTools.ProgramTypes.PackageLocation)
   (kind: LanguageTools.ProgramTypes.ItemKind)
@@ -133,7 +131,7 @@ let renamedAwayNames
 
 
 /// `dependentsOf` for exactly the names given, by the name each edge recorded.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.Deps.dependentsByName: Unknown function or value 'branchOverlayBindings'"
 let dependentsByName
   (targets: List<(LanguageTools.ProgramTypes.PackageLocation * LanguageTools.ProgramTypes.ItemKind)>)
   : List<(LanguageTools.ProgramTypes.Hash * LanguageTools.ProgramTypes.PackageLocation * LanguageTools.ProgramTypes.ItemKind)> =
@@ -242,7 +240,7 @@ let dependentsByName
 /// name is still found -- which is the case propagation cares about. A name the target's content was
 /// renamed away from counts as the target's (`renamedAwayNames`), or a rename would orphan every
 /// dependent written before it.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.Deps.dependentsOf: Unknown function or value 'dependentsByName'"
 let dependentsOf
   (targets: List<(LanguageTools.ProgramTypes.PackageLocation * LanguageTools.ProgramTypes.ItemKind)>)
   : List<(LanguageTools.ProgramTypes.Hash * LanguageTools.ProgramTypes.PackageLocation * LanguageTools.ProgramTypes.ItemKind)> =
@@ -257,7 +255,7 @@ let dependentsOf
 
 
 /// The name `locations` gives this hash, if any.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.Deps.mainLocationOf: Unknown function or value 'Stdlib.Sqlite.queryOneP'"
 let mainLocationOf
   (h: String)
   : Stdlib.Option.Option<LanguageTools.ProgramTypes.PackageLocation> =
@@ -288,7 +286,7 @@ let mainLocationOf
 /// content is one item, so a hash is routinely live at several names, and preferring the branch's would
 /// relabel a main item whose body you happened to duplicate on a branch. Right content, wrong label, which
 /// is worse than the gap.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.Deps.resolveLocations: Unknown function or value 'branchOverlayBindings'"
 let resolveLocations
   (hashes: List<LanguageTools.ProgramTypes.Hash>)
   : List<(LanguageTools.ProgramTypes.Hash * LanguageTools.ProgramTypes.PackageLocation)> =
@@ -316,7 +314,7 @@ let resolveLocations
 /// That matters exactly when the dependency has moved on: its old hash is unlisted, so resolving it through
 /// `locations` finds nothing and the edge silently disappears -- which is the one case a caller asking
 /// "what am I behind on" actually cares about.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.Deps.dependencyEdges: Unknown function or value 'Stdlib.Sqlite.rowsP'"
 let dependencyEdges
   (source: LanguageTools.ProgramTypes.Hash)
   : List<(LanguageTools.ProgramTypes.Hash * LanguageTools.ProgramTypes.ItemKind * LanguageTools.ProgramTypes.PackageLocation)> =

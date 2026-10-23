@@ -12,7 +12,6 @@ module Darklang.Cli.Docs.StdlibOverview
 // Until that's in, the right call is probably to delete this and fold
 // the entry point into `tree --signatures-summary` or similar.
 
-// @compiler blocked: missing-implementation
 let topLevelBucket
   (loc: LanguageTools.ProgramTypes.PackageLocation)
   : String =
@@ -22,7 +21,7 @@ let topLevelBucket
   | [] -> "(root)"
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Cli.AppState'"
 let execute (state: Cli.AppState) (_args: List<String>) : Cli.AppState =
   let branchId = state.currentBranchId
   let rootPath = [ "Darklang", "Stdlib" ]

@@ -4,7 +4,7 @@ type failureClass = AotRejection | MissingSupport
 
 type disposition =
   | Run
-  | Blocked of string
+  | Blocked of { reason : string; diagnostic : string option }
   | Excluded of string
   | Replace of { target : string; reason : string }
   | Xfail of {

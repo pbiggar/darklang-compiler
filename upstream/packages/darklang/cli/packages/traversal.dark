@@ -1,14 +1,12 @@
 module Darklang.Cli.Packages.Traversal
 
 // Path segment type for navigation
-// @compiler blocked: missing-implementation
 type PathSegment =
   | Root           // Go to root (/)
   | Here           // Stay here (.)
   | Up             // Go up one level (..)
   | Into of String // Go into a named entity/module
 
-// @compiler blocked: missing-implementation
 let parsePath (pathStr: String) : List<PathSegment> =
   if pathStr == "/" then
     [PathSegment.Root]
@@ -50,7 +48,7 @@ let parsePath (pathStr: String) : List<PathSegment> =
       segments
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'PackageLocation'"
 let getCurrentModulePath (location: PackageLocation) : List<String> =
   match location with
   | Module path -> path
@@ -67,7 +65,7 @@ let getCurrentModulePath (location: PackageLocation) : List<String> =
   | Test test -> Stdlib.List.append [test.owner] test.modules
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'PackageLocation'"
 let applySegment
   (branchId: Uuid)
   (location: PackageLocation)
@@ -96,7 +94,7 @@ let applySegment
 
 
 // Resolve a name to an actual entity (module, type, fn, or value)
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'PackageLocation'"
 let resolveEntity
   (branchId: Uuid)
   (basePath: List<String>)
@@ -154,7 +152,7 @@ let resolveEntity
                 Stdlib.Result.Result.Error $"Not found: {looked}"
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'PackageLocation'"
 let applyPath
   (branchId: Uuid)
   (start: PackageLocation)
@@ -170,7 +168,7 @@ let applyPath
 
 // Search for modules globally where a segment starts with the prefix
 // Returns only the path up to the matching segment, not descendants
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Packages.Traversal.searchModulesByPrefix: Unknown function or value 'LanguageTools.PackageManager.Search.search'"
 let searchModulesByPrefix
   (branchId: Uuid)
   (prefixText: String)
@@ -205,7 +203,7 @@ let searchModulesByPrefix
   |> Stdlib.List.map (fun path -> Stdlib.String.join path ".")
 
 // Get all available items at a location for completion
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'PackageLocation'"
 let getAvailableItems
   (branchId: Uuid)
   (location: PackageLocation)
@@ -277,7 +275,7 @@ let getAvailableItems
     primaryResults
 
 // Simple completion: traverse exact path, then fuzzy search the last part
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'PackageLocation'"
 let completePartialPath
   (branchId: Uuid)
   (start: PackageLocation)
@@ -333,7 +331,7 @@ let completePartialPath
 
 
 // Main traverse function
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'PackageLocation'"
 let traverse
   (branchId: Uuid)
   (start: PackageLocation)

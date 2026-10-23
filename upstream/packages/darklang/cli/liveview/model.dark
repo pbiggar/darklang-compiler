@@ -8,7 +8,6 @@ module Darklang.Cli.LiveView.Model
 /// values. `init : Unit -> 'model`, `update : 'model -> Cli.LiveView.Host.Event<'msg> -> 'model`,
 /// `render : 'model -> Stdlib.Cli.UI.Node.Node<'msg>`. The model stays in memory across an edit;
 /// `render` is a pure function of it.
-// @compiler blocked: missing-implementation
 type View =
   { /// What a caller names the view by.
     name: String
@@ -30,7 +29,6 @@ type View =
 
 /// A view whose three fns are `<path>.init`, `.update` and `.render`, repainting on keys and
 /// saves only.
-// @compiler blocked: missing-implementation
 let viewAt (name: String) (title: String) (path: String) : View =
   View
     { name = name

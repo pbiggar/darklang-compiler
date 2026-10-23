@@ -1,7 +1,7 @@
 module Darklang.Cli.Installation.Version
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'AppState'"
 let execute (state: AppState) (args: List<String>) : AppState =
   // Named, not ignored: a mistyped `--locl` would otherwise fall through to the update
   // check, which is the one thing the caller was trying to skip.
@@ -33,12 +33,12 @@ let execute (state: AppState) (args: List<String>) : AppState =
   state
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'AppState'"
 let complete (_state: AppState) (_args: List<String>) : List<Completion.CompletionItem> =
   []
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'AppState'"
 let help (_state: AppState) : String =
   [
     "Usage: version [--local]"

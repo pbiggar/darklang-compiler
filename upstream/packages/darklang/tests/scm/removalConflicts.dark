@@ -7,7 +7,6 @@ module Darklang.SCM.Tests.RemovalConflicts
 // you have since replaced is not.
 
 module Removals =
-  // @compiler blocked: upstream-dependency
   let mine (hash: String) (ts: String) : Darklang.SCM.Conflicts.Binding =
     Darklang.SCM.Conflicts.Binding
       { owner = "Tests"
@@ -19,7 +18,6 @@ module Removals =
         author = ""
         previous = Stdlib.Option.Option.None }
 
-  // @compiler blocked: upstream-dependency
   let theirs (previous: Stdlib.Option.Option<String>) (ts: String) : Darklang.SCM.Conflicts.Removal =
     Darklang.SCM.Conflicts.Removal
       { owner = "Tests"
@@ -29,7 +27,6 @@ module Removals =
         author = "ada"
         previous = previous }
 
-  // @compiler blocked: upstream-dependency
   let detect
     (local: List<Darklang.SCM.Conflicts.Binding>)
     (removals: List<Darklang.SCM.Conflicts.Removal>)

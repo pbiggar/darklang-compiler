@@ -8,18 +8,15 @@ module Darklang.Cli.Outliner
 // --- Types ---
 
 /// What a node is, beyond its text.
-// @compiler blocked: missing-implementation
 type Mark =
   | Plain
   | Todo
   | Done
 
-// @compiler blocked: missing-implementation
 type NodeContent =
   { text: String
     mark: Mark }
 
-// @compiler blocked: missing-implementation
 type TreeStructure =
   { children: List<Int>
     collapsed: Bool
@@ -29,7 +26,6 @@ type TreeStructure =
     /// its key, on every indent, outdent, move and insert.
     parent: Stdlib.Option.Option<Int> }
 
-// @compiler blocked: missing-implementation
 type Outline =
   { nodes: Dict<String, NodeContent>
     structure: Dict<String, TreeStructure>
@@ -37,7 +33,6 @@ type Outline =
     nextId: Int }
 
 /// One line of the tree as it appears on screen.
-// @compiler blocked: missing-implementation
 type VisibleNode =
   { id: Int
     text: String
@@ -54,7 +49,6 @@ type VisibleNode =
     childCount: Int
     isCollapsed: Bool }
 
-// @compiler blocked: missing-implementation
 type Document =
   { id: Int
     title: String
@@ -63,11 +57,9 @@ type Document =
 
 // --- Keys ---
 
-// @compiler blocked: missing-implementation
 let k (id: Int) : String =
   Stdlib.toString id
 
-// @compiler blocked: missing-implementation
 let parseKey (key: String) : Int =
   match Stdlib.Int.parse key with
   | Ok id -> id
@@ -76,7 +68,6 @@ let parseKey (key: String) : Int =
 
 // --- Construction ---
 
-// @compiler blocked: missing-implementation
 let emptyOutline () : Outline =
   Outline
     { nodes = Stdlib.Dict.empty
@@ -84,7 +75,6 @@ let emptyOutline () : Outline =
       rootChildren = []
       nextId = 1 }
 
-// @compiler blocked: missing-implementation
 let emptyStructure () : TreeStructure =
   TreeStructure
     { children = [], collapsed = false, parent = Stdlib.Option.Option.None }
@@ -92,37 +82,30 @@ let emptyStructure () : TreeStructure =
 
 // --- Reading ---
 
-// @compiler blocked: missing-implementation
 let getContent (outline: Outline) (id: Int) : NodeContent =
   match Stdlib.Dict.get outline.nodes (k id) with
   | Some nc -> nc
   | None -> NodeContent { text = "", mark = Mark.Plain }
 
-// @compiler blocked: missing-implementation
 let getNodeText (outline: Outline) (id: Int) : String =
   (getContent outline id).text
 
-// @compiler blocked: missing-implementation
 let getMark (outline: Outline) (id: Int) : Mark =
   (getContent outline id).mark
 
-// @compiler blocked: missing-implementation
 let getStructure (outline: Outline) (id: Int) : TreeStructure =
   match Stdlib.Dict.get outline.structure (k id) with
   | Some s -> s
   | None -> emptyStructure ()
 
-// @compiler blocked: missing-implementation
 let exists (outline: Outline) (id: Int) : Bool =
   match Stdlib.Dict.get outline.structure (k id) with
   | Some _ -> true
   | None -> false
 
-// @compiler blocked: missing-implementation
 let findParentId (outline: Outline) (targetId: Int) : Stdlib.Option.Option<Int> =
   (getStructure outline targetId).parent
 
-// @compiler blocked: missing-implementation
 let getChildren
   (outline: Outline)
   (parentId: Stdlib.Option.Option<Int>)
@@ -134,31 +117,25 @@ let getChildren
 
 // --- Writing ---
 
-// @compiler blocked: missing-implementation
 let setStructure (outline: Outline) (id: Int) (s: TreeStructure) : Outline =
   { outline with
       structure = Stdlib.Dict.setOverridingDuplicates outline.structure (k id) s }
 
-// @compiler blocked: missing-implementation
 let setContent (outline: Outline) (id: Int) (nc: NodeContent) : Outline =
   { outline with
       nodes = Stdlib.Dict.setOverridingDuplicates outline.nodes (k id) nc }
 
-// @compiler blocked: missing-implementation
 let addNode (outline: Outline) (id: Int) (text: String) : Outline =
   let withContent = setContent outline id (NodeContent { text = text, mark = Mark.Plain })
   setStructure withContent id (emptyStructure ())
 
-// @compiler blocked: missing-implementation
 let setNodeText (outline: Outline) (id: Int) (text: String) : Outline =
   setContent outline id { (getContent outline id) with text = text }
 
-// @compiler blocked: missing-implementation
 let setMark (outline: Outline) (id: Int) (mark: Mark) : Outline =
   setContent outline id { (getContent outline id) with mark = mark }
 
 /// Plain -> Todo -> Done -> Plain. One key cycles a line between a bullet and a checkbox.
-// @compiler blocked: missing-implementation
 let cycleMark (outline: Outline) (id: Int) : Outline =
   let next =
     match getMark outline id with
@@ -168,19 +145,16 @@ let cycleMark (outline: Outline) (id: Int) : Outline =
 
   setMark outline id next
 
-// @compiler blocked: missing-implementation
 let removeNodeData (outline: Outline) (id: Int) : Outline =
   { outline with
       nodes = Stdlib.Dict.remove outline.nodes (k id)
       structure = Stdlib.Dict.remove outline.structure (k id) }
 
-// @compiler blocked: missing-implementation
 let setCollapsed (outline: Outline) (id: Int) (collapsed: Bool) : Outline =
   match Stdlib.Dict.get outline.structure (k id) with
   | Some s -> setStructure outline id { s with collapsed = collapsed }
   | None -> outline
 
-// @compiler blocked: missing-implementation
 let setParent
   (outline: Outline)
   (id: Int)
@@ -192,7 +166,6 @@ let setParent
 ///
 /// The two are one operation: an edit that sets one without the other leaves a tree that reads differently
 /// depending on which direction you walk it.
-// @compiler blocked: missing-implementation
 let setChildren
   (outline: Outline)
   (parentId: Stdlib.Option.Option<Int>)
@@ -212,7 +185,6 @@ let setChildren
 
 /// Insert `newId` directly after `afterId`, or at the end when `afterId` isn't there -- never
 /// dropped, or the node would sit in the dicts unlisted: invisible, unreachable, saved to disk forever.
-// @compiler blocked: missing-implementation
 let insertIdAfter (ids: List<Int>) (afterId: Int) (newId: Int) : List<Int> =
   if Stdlib.List.contains ids afterId then
     ids
@@ -225,7 +197,6 @@ let insertIdAfter (ids: List<Int>) (afterId: Int) (newId: Int) : List<Int> =
     Stdlib.List.append ids [ newId ]
 
 /// Swap two positions. Out-of-range indices leave the list alone rather than writing a 0 into it.
-// @compiler blocked: missing-implementation
 let swapAt (ids: List<Int>) (i: Int) (j: Int) : List<Int> =
   let count = Stdlib.List.length ids
 
@@ -246,14 +217,12 @@ let swapAt (ids: List<Int>) (i: Int) (j: Int) : List<Int> =
 // --- Traversal ---
 
 /// Every descendant of `ids`, depth first, including the nodes themselves.
-// @compiler blocked: missing-implementation
 let descendants (outline: Outline) (ids: List<Int>) : List<Int> =
   ids
   |> Stdlib.List.fold [] (fun acc id ->
     let children = (getStructure outline id).children
     Stdlib.List.append (Stdlib.List.append acc [ id ]) (descendants outline children))
 
-// @compiler blocked: missing-implementation
 let subtreeSize (outline: Outline) (id: Int) : Int =
   (Stdlib.List.length (descendants outline [ id ])) - 1
 
@@ -262,7 +231,6 @@ let subtreeSize (outline: Outline) (id: Int) : Int =
 /// Accumulates with `push` and reverses once. `List.append` inside the fold instead costs a copy of
 /// everything accumulated so far per node -- 500 nodes ~0.11s, 2000 ~0.59s -- and this runs at least
 /// twice per keystroke.
-// @compiler blocked: missing-implementation
 let flattenInto
   (outline: Outline)
   (ids: List<Int>)
@@ -290,12 +258,10 @@ let flattenInto
 
     if s.collapsed then withNode else flattenInto outline s.children (depth + 1) withNode)
 
-// @compiler blocked: missing-implementation
 let flattenVisible (outline: Outline) : List<VisibleNode> =
   Stdlib.List.reverse (flattenInto outline outline.rootChildren 0 [])
 
 /// The index of `nodeId` among the visible lines, or `fallback` when it isn't one.
-// @compiler blocked: missing-implementation
 let indexOf (outline: Outline) (nodeId: Int) (fallback: Int) : Int =
   flattenVisible outline
   |> Stdlib.List.findFirstIndex (fun vn -> vn.id == nodeId)
@@ -305,7 +271,6 @@ let indexOf (outline: Outline) (nodeId: Int) (fallback: Int) : Int =
 // --- Search ---
 
 /// Ids whose text contains `needle`, case-insensitively.
-// @compiler blocked: missing-implementation
 let matching (outline: Outline) (needle: String) : List<Int> =
   let lowered = Stdlib.String.toLowercase needle
 
@@ -322,14 +287,12 @@ let matching (outline: Outline) (needle: String) : List<Int> =
       parseKey key)
 
 /// A node's ancestors, nearest first.
-// @compiler blocked: missing-implementation
 let ancestors (outline: Outline) (id: Int) : List<Int> =
   match findParentId outline id with
   | None -> []
   | Some pid -> Stdlib.List.push (ancestors outline pid) pid
 
 /// Expand every ancestor of every match, so a hit inside a collapsed branch is actually reachable.
-// @compiler blocked: missing-implementation
 let revealAll (outline: Outline) (ids: List<Int>) : Outline =
   ids
   |> Stdlib.List.fold outline (fun acc id ->
@@ -340,14 +303,12 @@ let revealAll (outline: Outline) (ids: List<Int>) : Outline =
 // --- Structural edits ---
 
 /// Detach `id` from wherever it hangs, leaving its own subtree intact.
-// @compiler blocked: missing-implementation
 let detach (outline: Outline) (id: Int) : Outline =
   let parentId = findParentId outline id
   let siblings = getChildren outline parentId
   setChildren outline parentId (Stdlib.List.filter siblings (fun sid -> sid != id))
 
 /// Remove a node and everything under it.
-// @compiler blocked: missing-implementation
 let removeSubtree (outline: Outline) (id: Int) : Outline =
   let doomed = descendants outline [ id ]
   let detached = detach outline id
@@ -358,7 +319,6 @@ let removeSubtree (outline: Outline) (id: Int) : Outline =
 
 // --- Building (tests, demo content, import) ---
 
-// @compiler blocked: missing-implementation
 let buildOutline
   (nodeList: List<(Int * String)>)
   (childMap: List<(Int * List<Int>)>)

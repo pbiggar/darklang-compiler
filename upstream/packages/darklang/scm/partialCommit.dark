@@ -22,7 +22,6 @@ module Darklang.SCM.PartialCommit
 
 
 /// One draft naming, with the row that wrote it.
-// @compiler blocked: missing-implementation
 type Selected =
   { fqn: String
     itemType: String
@@ -30,7 +29,6 @@ type Selected =
     opId: String }
 
 /// `owner.modules.name` for a location, which is what a person types at `--include=`.
-// @compiler blocked: missing-implementation
 let fqnOf (location: LanguageTools.ProgramTypes.PackageLocation) : String =
   let parts =
     Stdlib.List.append [ location.owner ] (Stdlib.List.append location.modules [ location.name ])
@@ -39,7 +37,7 @@ let fqnOf (location: LanguageTools.ProgramTypes.PackageLocation) : String =
 
 /// The namings the draft holds, newest LAST, one entry per op (not per name -- a name edited twice has two,
 /// and both have to be committed together or the earlier one is left behind describing a version nobody has).
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.PartialCommit.draftNamings: Unknown function or value 'SCM.PackageOps.draftEntries'"
 let draftNamings () : List<Selected> =
   SCM.PackageOps.draftEntries ()
   |> Stdlib.List.filterMap (fun e ->
@@ -62,7 +60,7 @@ let draftNamings () : List<Selected> =
 
 /// The content hashes the draft ADDS. The dependency closure also includes draft
 /// names for existing content: committing the content does not commit a new name.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.PartialCommit.draftAddedHashes: Unknown function or value 'SCM.PackageOps.draftEntries'"
 let draftAddedHashes () : List<String> =
   SCM.PackageOps.draftEntries ()
   |> Stdlib.List.filterMap (fun e ->
@@ -88,7 +86,7 @@ let draftAddedHashes () : List<String> =
 ///
 /// `pending` is a parameter: computing it decodes every draft blob, and the set can't change mid-closure
 /// (see `closeOverDeps`).
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.PartialCommit.draftDepsOf: Unknown function or value 'Stdlib.Sqlite.columnP'"
 let draftDepsOf (pending: List<String>) (hashes: List<String>) : List<String> =
   if Stdlib.List.isEmpty hashes then
     []
@@ -105,7 +103,7 @@ let draftDepsOf (pending: List<String>) (hashes: List<String>) : List<String> =
     |> Stdlib.List.filter (fun h -> Stdlib.List.contains pending h)
 
 /// One round of closure: referenced hashes with draft content or names not yet in acc.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.PartialCommit.closeStep: Unknown function or value 'draftDepsOf'"
 let closeStep (pending: List<String>) (acc: List<String>) : List<String> =
   let next =
     draftDepsOf pending acc
@@ -118,7 +116,7 @@ let closeStep (pending: List<String>) (acc: List<String>) : List<String> =
 /// Folded a bounded number of times rather than recursed to a fixpoint, and the bound is the termination
 /// argument: each round either adds a hash the draft holds or changes nothing, so the draft's own size is
 /// more rounds than can ever be needed. A cycle therefore can't hang it.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.PartialCommit.closeOverDeps: Unknown function or value 'draftAddedHashes'"
 let closeOverDeps (hashes: List<String>) : List<String> =
   // Read ONCE, then passed down: it decodes every blob in the draft, and both the round count and every
   // round need it, so asking per use is N+1 full decodes of the draft to commit a subset of it.
@@ -140,7 +138,7 @@ let closeOverDeps (hashes: List<String>) : List<String> =
 /// `package_dependencies` records edges as owner/modules/name, which is what makes this able to
 /// tell "B is a dependency of A" from "B happens to have A's body". Bounded the same way
 /// `closeOverDeps` is bounded, and for the same reason.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.PartialCommit.closeOverDepFqns: Unknown function or value 'draftNamings'"
 let closeOverDepFqns (names: List<String>) : List<String> =
   // Through the DRAFT first, then main's `locations`. A branch's items have no `locations` row --
   // that is the name isolation -- so joining it alone found nothing on a branch, and the closure
@@ -200,7 +198,7 @@ let closeOverDepFqns (names: List<String>) : List<String> =
 /// The op id of <param e>, when it carries CONTENT (or a deprecation) for one of <param wantedHashes>.
 ///
 /// Deprecations are keyed on content rather than on a name, so they travel with the hash.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'SCM.PackageOps.DraftEntry'"
 let contentIdIfWanted
   (wantedHashes: List<String>)
   (e: SCM.PackageOps.DraftEntry)
@@ -235,7 +233,7 @@ let contentIdIfWanted
 ///
 /// By NAME, not by hash: an `UpdateDoc` says what a name means, so `--include=` of that name takes
 /// its doc edits and nothing else's.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'SCM.PackageOps.DraftEntry'"
 let docIdIfWanted
   (wantedFqns: List<String>)
   (e: SCM.PackageOps.DraftEntry)
@@ -250,7 +248,7 @@ let docIdIfWanted
 
 
 /// Which names `--include=` asked for that the draft doesn't hold.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.PartialCommit.unknownNames: Unknown function or value 'draftNamings'"
 let unknownNames (names: List<String>) : List<String> =
   let held = draftNamings () |> Stdlib.List.map (fun s -> s.fqn) |> Stdlib.List.unique
 
@@ -261,7 +259,7 @@ let unknownNames (names: List<String>) : List<String> =
 /// Returns Error for a name the draft doesn't hold: `--include=` naming something with no draft changes is a
 /// typo or a misunderstanding, and committing the whole draft (or nothing) in response are both worse than
 /// saying so.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.PartialCommit.plan: Unknown function or value 'unknownNames'"
 let plan
   (names: List<String>)
   : Stdlib.Result.Result<(List<String> * List<String>), String> =

@@ -8,7 +8,6 @@
 module Darklang.Cli.Installation.Download
 
 
-// @compiler blocked: missing-implementation
 let basename (url: String) : Stdlib.Result.Result<String, String> =
   let basename = url |> Stdlib.String.split "/" |> Stdlib.List.last
 
@@ -18,13 +17,11 @@ let basename (url: String) : Stdlib.Result.Result<String, String> =
 
 
 /// A release to install: its tag (`v0.0.54`) and the URL of the asset for this host.
-// @compiler blocked: missing-implementation
 type ReleaseAsset = { tag: String, assetUrl: String }
 
 
 /// The release to install, <param pinned> or else the latest, and its asset for this OS and
 /// architecture.
-// @compiler blocked: missing-implementation
 let releaseToInstall
   (host: Stdlib.Cli.Host.Host)
   (pinned: Stdlib.Option.Option<String>)
@@ -48,7 +45,7 @@ let releaseToInstall
 /// fails only in a data directory that already exists (v0.0.50 to v0.0.54 did, every command). An
 /// empty store answers neither. `DARK_CONFIG_RUNDIR` keeps the run off the live store, which the new
 /// binary would otherwise open and migrate before we know whether we're keeping it.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Installation.Download.smokeTest: Unknown function or value 'Stdlib.LocalStore.path'"
 let smokeTest (binaryPath: String) : Stdlib.Result.Result<Unit, String> =
   match Stdlib.Cli.executeWithStdOutOrStdErr "mktemp -d" with
   | Error e -> Stdlib.Result.Result.Error $"Couldn't make a directory to test the new binary in: {e}"
@@ -87,7 +84,7 @@ let smokeTest (binaryPath: String) : Stdlib.Result.Result<Unit, String> =
 /// Download the asset at <param url> and put the binary it holds at <param target>.
 ///
 /// Leaves <param target> untouched unless every step succeeded.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Installation.Download.replaceBinary: Unknown function or value 'smokeTest'"
 let replaceBinary
   (host: Stdlib.Cli.Host.Host)
   (url: String)
@@ -118,7 +115,7 @@ let replaceBinary
 ///
 /// The version is written after the binary is in place, never before: a failed update must not leave
 /// `config.json` naming a version that isn't installed.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Installation.Download.installRelease: Unknown function or value 'replaceBinary'"
 let installRelease
   (host: Stdlib.Cli.Host.Host)
   (pinned: Stdlib.Option.Option<String>)
@@ -154,7 +151,7 @@ let installRelease
 
 
 /// <fn installRelease> for the latest release.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Installation.Download.installOrUpdateLatestRelease: Unknown function or value 'installRelease'"
 let installOrUpdateLatestRelease
   (host: Stdlib.Cli.Host.Host)
   : Stdlib.Result.Result<String, String> =
@@ -164,7 +161,7 @@ let installOrUpdateLatestRelease
 /// Replace the binary that is running with a release (<param pinned>, or else the latest), wherever
 /// it is. For a portable binary, which has no `config.json` and no PATH entry to keep up to date.
 /// Returns the tag installed.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Installation.Download.updatePortableInPlace: Unknown function or value 'replaceBinary'"
 let updatePortableInPlace
   (host: Stdlib.Cli.Host.Host)
   (pinned: Stdlib.Option.Option<String>)

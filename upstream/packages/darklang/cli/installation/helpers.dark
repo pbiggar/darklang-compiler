@@ -4,14 +4,12 @@ module Darklang.Cli.Installation.Helpers
 
 /// The git sha this binary was built from. The one reader of the builtin: `cliVersion` prints it and
 /// the sync wire stamps it, and both mean the same thing by it.
-// @compiler blocked: missing-implementation
 let buildHash () : String = Builtin.getBuildHash ()
 
 /// Hashes the installed runtime files; identical files keep the same cache key.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Installation.Helpers.runtimeHash: Unknown function or value 'Builtin.getRuntimeHash'"
 let runtimeHash () : String = Builtin.getRuntimeHash ()
 
-// @compiler blocked: missing-implementation
 let cliVersion () : String = "alpha-" + (buildHash ())
 
 /// The local version plus a check against the latest published release.
@@ -19,7 +17,6 @@ let cliVersion () : String = "alpha-" + (buildHash ())
 /// Costs a network round trip, which dominates the command. That's deliberate: both callers (`version`
 /// and `install-status`) exist to tell you whether your install is current, so the check is the point
 /// rather than a side errand. Worth knowing it's there before adding a third caller.
-// @compiler blocked: missing-implementation
 let versionInfoWithUpdateCheck () : String =
   let currentVersion = cliVersion ()
   match GitHub.Releases.getLatestReleaseBuildHash () with
@@ -33,6 +30,5 @@ let versionInfoWithUpdateCheck () : String =
 
 /// CLEANUP alias for `versionInfoWithUpdateCheck`, kept because `install-status` and the old_notes
 /// command still call it. Fold them over and delete this.
-// @compiler blocked: missing-implementation
 let getVersionInfo () : String =
   versionInfoWithUpdateCheck ()

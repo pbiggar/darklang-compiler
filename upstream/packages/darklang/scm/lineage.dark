@@ -22,7 +22,7 @@ module Darklang.SCM.Lineage
 /// branch's own overlay, which would record the branch's previous version rather than main's. For a
 /// branch OFF a branch the parent's overlay comes first, or a name the parent rebound records main's
 /// hash and the detector reports a conflict on a name nobody moved.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.Lineage.currentlyBound: Unknown function or value 'Stdlib.Sqlite.queryOneP'"
 let currentlyBound
   (parentOverlay: List<Conflicts.Binding>)
   (location: LanguageTools.ProgramTypes.PackageLocation)
@@ -72,7 +72,7 @@ let currentlyBound
 ///
 /// Runs BEFORE hash stabilization, which is safe because the answer is keyed on the location and the
 /// item kind, and stabilization rewrites neither -- it only replaces provisional target hashes.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.PackageOp'"
 let recordPrevious
   (branchId: Uuid)
   (ops: List<LanguageTools.ProgramTypes.PackageOp>)

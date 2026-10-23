@@ -7,7 +7,6 @@ module Darklang.Cli.Tests.ReleaseAssets
 // for this reason; these assert that the updater does the same.
 
 module AssetForPlatform =
-  // @compiler blocked: upstream-dependency
   let asset (name: String) : Darklang.GitHub.Releases.Asset =
     Darklang.GitHub.Releases.Asset
       { name = name
@@ -20,7 +19,6 @@ module AssetForPlatform =
   // A function, not a `val`: a `val` holding a custom type carries the type identity it was built
   // against, and the testfile harness rebuilds the package set underneath it.
 
-  // @compiler blocked: upstream-dependency
   let assets () : List<Darklang.GitHub.Releases.Asset> =
     [ asset "darklang-alpha-abc1234-linux-arm64.gz"
       asset "darklang-alpha-abc1234-linux-arm.gz"
@@ -92,7 +90,6 @@ module PlatformForHost =
         arch = arch
         defaultShell = Stdlib.Cli.Shell.Shell.Bash }
 
-  // @compiler blocked: upstream-dependency
   let idFor
     (os: Stdlib.Cli.OS.OS)
     (arch: Stdlib.Cli.Architecture.Architecture)

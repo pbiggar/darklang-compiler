@@ -3,7 +3,7 @@
 /// type error can be missed. Detect these duplicates before checking the body.
 module Darklang.LanguageTools.AtRestTypeChecker.NodeIds
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.AtRestTypeChecker.NodeIds.Node: Unknown type 'LanguageTools.ProgramTypes.Expr'"
 type Node =
   | Expression of LanguageTools.ProgramTypes.Expr
   | LetPattern of LanguageTools.ProgramTypes.LetPattern
@@ -17,22 +17,22 @@ type Node =
 /// Two other shapes are worse. Recursing once per element keeps one interpreter frame per element
 /// live at once, which raises the check's peak memory on a long list literal. Mapping a named
 /// function goes through a costly path on a list op over a named fn.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.Expr'"
 let exprNodes (xs: List<LanguageTools.ProgramTypes.Expr>) : List<Node> =
   Stdlib.List.map xs (fun e -> Node.Expression e)
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Node'"
 let letNodes (xs: List<LanguageTools.ProgramTypes.LetPattern>) : List<Node> =
   Stdlib.List.map xs (fun p -> Node.LetPattern p)
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.MatchPattern'"
 let patNodes (xs: List<LanguageTools.ProgramTypes.MatchPattern>) : List<Node> =
   Stdlib.List.map xs (fun p -> Node.MatchPattern p)
 
 /// Return the node's ID if it is used to identify an inferred type, plus the
 /// child nodes to visit next. Ignore IDs that do not serve this purpose, such as
 /// literal IDs. Solve separately checks the IDs used to identify named let bindings.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Node'"
 let children (node: Node) : (Stdlib.Option.Option<Int64> * List<Node>) =
   // Keep cases that bind variables in separate match arms. Grouping those cases
   // can make the compiler associate a bound name with the wrong value.
@@ -145,7 +145,7 @@ let children (node: Node) : (Stdlib.Option.Option<Int64> * List<Node>) =
 /// Return the first inference ID encountered twice, or None if all are unique.
 /// Keep the nodes still to visit in a list, so a deeply nested syntax tree does
 /// not require equally deep nesting on the .NET call stack.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Node'"
 let findDuplicate
   (pending: List<Node>)
   (seen: Dict<Int64, Bool>)
@@ -168,12 +168,11 @@ let findDuplicate
 /// solver will chase one.
 /// A function, not a `val`: the checker runs during `reloadPackages`, before
 /// `evaluateAllValues`, so reading a package value there raises `ValueNotFound`.
-// @compiler blocked: missing-implementation
 let maxDeclarationDepth () : Int64 = 1000L
 
 /// Whether the tree nests deeper than <param limit>, a level at a time so that measuring
 /// cannot exhaust the stack the limit protects.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Node'"
 let deeperThan (limit: Int64) (depth: Int64) (level: List<Node>) : Bool =
   if Stdlib.List.isEmpty level then
     false
@@ -189,7 +188,7 @@ let deeperThan (limit: Int64) (depth: Int64) (level: List<Node>) : Bool =
     deeperThan limit (depth + 1L) next
 
 /// A body too deep to infer from, so callers can skip inference as they do for duplicate IDs.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.Expr'"
 let tooDeep
   (body: LanguageTools.ProgramTypes.Expr)
   : Stdlib.Option.Option<Model.Finding> =
@@ -204,7 +203,7 @@ let tooDeep
 
 /// The immediate type arguments of a type. Multi-field cases are listed individually
 /// because a `Case _` pattern does not match a case with several fields.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.TypeReference'"
 let typeChildren
   (typ: LanguageTools.ProgramTypes.TypeReference)
   : List<LanguageTools.ProgramTypes.TypeReference> =
@@ -218,7 +217,7 @@ let typeChildren
   | _ -> []
 
 /// Whether any of these types nests deeper than <param limit>, a level at a time.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.TypeReference'"
 let typeDeeperThan
   (limit: Int64)
   (depth: Int64)
@@ -236,7 +235,7 @@ let typeDeeperThan
 
 /// A declared type too deep to work on. Applies wherever the type sits, which it did not
 /// before: it used to depend on whether that shape's walk recursed through a builtin callback.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.TypeReference'"
 let typeTooDeep
   (types: List<LanguageTools.ProgramTypes.TypeReference>)
   : Stdlib.Option.Option<Model.Finding> =
@@ -250,7 +249,7 @@ let typeTooDeep
     Stdlib.Option.Option.None
 
 /// The types a declaration states directly, which is what the depth limit applies to.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.TypeDeclaration.TypeDeclaration'"
 let declaredTypes
   (decl: LanguageTools.ProgramTypes.TypeDeclaration.TypeDeclaration)
   : List<LanguageTools.ProgramTypes.TypeReference> =
@@ -262,21 +261,21 @@ let declaredTypes
       Stdlib.List.map cases (fun c -> Stdlib.List.map c.fields (fun f -> f.typ)))
 
 /// <param xs> pushed onto <param next> as nodes. One lambda per list, never one per node.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.Expr'"
 let pushExprs
   (xs: List<LanguageTools.ProgramTypes.Expr>)
   (next: List<Node>)
   : List<Node> =
   Stdlib.List.fold xs next (fun acc e -> Stdlib.List.push acc (Node.Expression e))
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Node'"
 let pushLets
   (xs: List<LanguageTools.ProgramTypes.LetPattern>)
   (next: List<Node>)
   : List<Node> =
   Stdlib.List.fold xs next (fun acc p -> Stdlib.List.push acc (Node.LetPattern p))
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.MatchPattern'"
 let pushPats
   (xs: List<LanguageTools.ProgramTypes.MatchPattern>)
   (next: List<Node>)
@@ -288,7 +287,7 @@ let pushPats
 /// `children`, arm for arm, without the `(id, children)` pair, the `Some`, the mapped child list
 /// and the append that copied it, each made once per node and read once. Order within a level
 /// does not matter to either use: the depth is per level and the ids are compared as a set.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Node'"
 let visit
   (node: Node)
   (ids: List<Int64>)
@@ -428,7 +427,7 @@ let visit
 
 /// Walk <param level> a level at a time, as `deeperThan` does, collecting every inference id on
 /// the way. True when the tree nests deeper than <param limit>; the ids are then incomplete.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Node'"
 let levelsAndIds
   (limit: Int64)
   (depth: Int64)
@@ -447,7 +446,6 @@ let levelsAndIds
 
 /// Whether any id appears twice in <param ids>: the native `unique` drops repeats, so a repeat
 /// shows as a shorter list.
-// @compiler blocked: missing-implementation
 let hasRepeat (ids: List<Int64>) : Bool =
   Stdlib.List.length (Stdlib.List.unique ids) != Stdlib.List.length ids
 
@@ -456,7 +454,7 @@ let hasRepeat (ids: List<Int64>) : Bool =
 /// One walk collects the ids and the depth, and a sort finds whether any repeats, rather than a
 /// walk each and a dictionary insert per node. The rare body that is too deep or has a repeat
 /// goes to `problem`, so the id reported is the same one, the first repeat in `problem`'s order.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.Expr'"
 let inspect
   (body: LanguageTools.ProgramTypes.Expr)
   : (Stdlib.Option.Option<Model.Finding> * Stdlib.Option.Option<Model.Finding>) =
@@ -472,7 +470,7 @@ let inspect
 /// Convert a duplicate inference ID into a warning.
 /// Callers use this warning to skip checking the affected body, avoiding
 /// incorrect results caused by treating separate nodes as the same node.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.Expr'"
 let problem (body: LanguageTools.ProgramTypes.Expr) : Stdlib.Option.Option<Model.Finding> =
   match findDuplicate [ Node.Expression body ] Dict {} with
   | None -> Stdlib.Option.Option.None

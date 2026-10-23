@@ -18,46 +18,36 @@ type PackageLocation =
 /// Carrying it alongside the resolved hash lets downstream consumers
 /// skip a post-hoc lookup: dep-edge inserts, propagation rewrites,
 /// SCC hash substitution, and deferred refresh after a package moves.
-// @compiler blocked: missing-implementation
 type ResolvedName<'a> =
   { name: 'a
     location: Stdlib.Option.Option<PackageLocation> }
 
 
 module FQTypeName =
-  // @compiler blocked: missing-implementation
   type Package = Hash
-  // @compiler blocked: missing-implementation
   type FQTypeName = Package of Package
 
 /// A trait, by content hash. A trait is its own item kind (`Trait.Trait`).
 module FQTraitName =
-  // @compiler blocked: missing-implementation
   type Package = Hash
-  // @compiler blocked: missing-implementation
   type FQTraitName = Package of Package
 
 module FQValueName =
-  // @compiler blocked: missing-implementation
   type Builtin = { name: String, version: Int32 }
-  // @compiler blocked: missing-implementation
   type Package = Hash
 
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: constructor-identity diagnostic="Constructor identity collision 698: Darklang.LanguageTools.ProgramTypes.FQValueName.FQValueName.Builtin, Darklang.Stdlib.Json.ParseError.ParseError.NotJson"
   type FQValueName =
     | Builtin of Builtin
     | Package of Package
 
 module FQFnName =
-  // @compiler blocked: missing-implementation
   type Builtin = { name: String, version: Int32 }
-  // @compiler blocked: missing-implementation
   type Package = Hash
 
   /// How much of a trait call's implementation the save could say. Three states, not
   /// two: a call waiting for its caller's type argument is not the same as one
   /// nobody could work out, and an Option said both with the same value.
-  // @compiler blocked: missing-implementation
   type ImplChoice =
     /// The save picked it; stored code goes on running it
     | Chosen of ResolvedName<Package>
@@ -70,7 +60,6 @@ module FQFnName =
 
   /// What a CALL worked out for one of the callee's bounds: for the callee's type
   /// param `param` owing `trait_`, what this call's type argument implies.
-  // @compiler blocked: missing-implementation
   type BoundImpl =
     { param: String
       trait_: FQTraitName.Package
@@ -80,20 +69,18 @@ module FQFnName =
 
   /// A trait method call: the trait, the method name (`ToString.toString`), and how
   /// much the save could say about which implementation runs.
-  // @compiler blocked: missing-implementation
   type TraitMethod =
     { trait_: FQTraitName.Package
       method_: String
       implFn: ImplChoice }
 
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: constructor-identity diagnostic="Constructor identity collision 1577: Darklang.Language.Tests.Equality.EEnumInt16.E2, Darklang.LanguageTools.ProgramTypes.FQFnName.FQFnName.Package"
   type FQFnName =
     | Builtin of Builtin
     | Package of Package
     | TraitMethod of TraitMethod
 
 
-// @compiler blocked: missing-implementation
 type NameResolutionError =
   | NotFound
   | InvalidName
@@ -102,14 +89,13 @@ type NameResolutionError =
 /// `resolved` is the resolved name (or the resolution error). The Ok
 /// payload bundles the resolved name with its package location so
 /// "location without resolution" is unrepresentable.
-// @compiler blocked: missing-implementation
 type NameResolution<'a> =
   { originalName: List<String>
     resolved: Stdlib.Result.Result<ResolvedName<'a>, NameResolutionError> }
 
 
 /// Darklang's available types (int, List<T>, user-defined types, etc.)
-// @compiler blocked: missing-implementation
+// @compiler blocked: constructor-identity diagnostic="Constructor identity collision 1324: Darklang.LanguageTools.RuntimeTypes.TypeReference.TFloat, Darklang.LanguageTools.RuntimeTypes.TypeReference.TStream"
 type TypeReference =
   // A named variable, eg `a` in `List<a>`, matches anything
   | TVariable of String
@@ -149,7 +135,6 @@ type TypeReference =
 
 
 
-// @compiler blocked: missing-implementation
 type LetPattern =
   | LPUnit of ID
   | LPVariable of ID * name: String
@@ -162,7 +147,7 @@ type LetPattern =
 
 
 /// Used for pattern matching in a match statement
-// @compiler blocked: missing-implementation
+// @compiler blocked: constructor-identity diagnostic="Constructor identity collision 610: Darklang.Language.Tests.Equality.EEnumUIn64.E3, Darklang.LanguageTools.ProgramTypes.MatchPattern.MPUInt16"
 type MatchPattern =
   | MPVariable of ID * String
 
@@ -192,13 +177,11 @@ type MatchPattern =
 
   | MPOr of ID * List<MatchPattern>
 
-// @compiler blocked: missing-implementation
 type BinaryOperation =
   | BinOpAnd
   | BinOpOr
 
 
-// @compiler blocked: missing-implementation
 type InfixFnName =
   | ArithmeticPlus
   | ArithmeticMinus
@@ -219,19 +202,18 @@ type InfixFnName =
   | ComparisonNotEquals
   | StringConcat
 
-// @compiler blocked: missing-implementation
 type Infix =
   | InfixFnCall of InfixFnName
   | BinOp of BinaryOperation
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.ProgramTypes.StringSegment: Unknown type 'Expr'"
 type StringSegment =
   | StringText of String
   | StringInterpolation of Expr
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.ProgramTypes.PipeExpr: Unknown type 'Expr'"
 type PipeExpr =
   | EPipeVariable of ID * String * List<Expr>
 
@@ -254,7 +236,7 @@ type PipeExpr =
     fields: List<Expr>
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.ProgramTypes.MatchCase: Unknown type 'MatchPattern'"
 type MatchCase =
   { pat: MatchPattern
     whenCondition: Stdlib.Option.Option<Expr>
@@ -263,7 +245,7 @@ type MatchCase =
 
 
 /// Expressions - the main part of the language.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.ProgramTypes.Expr: Unknown type 'StringSegment'"
 type Expr =
   | EUnit of ID
 
@@ -362,7 +344,7 @@ type Expr =
   | ESelf of ID
 
 module Expr =
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Unknown type 'Expr'"
   let toID (expr: Expr) : ID =
     match expr with
     | EUnit id
@@ -406,7 +388,6 @@ module Expr =
 
 // Used to mark whether a function/type has been deprecated, and if so,
 // details about possible replacements/alternatives, and reasoning
-// @compiler blocked: missing-implementation
 type Deprecation<'name> =
   | NotDeprecated
 
@@ -420,7 +401,6 @@ type Deprecation<'name> =
   | DeprecatedBecause of String
 
 
-// @compiler blocked: missing-implementation
 let parsePackageLocation (nameToParse: String): PackageLocation =
   let parts = Stdlib.String.split nameToParse "."
   match parts with
@@ -444,7 +424,6 @@ let parsePackageLocation (nameToParse: String): PackageLocation =
     // Empty name (shouldn't happen, but handle it)
     PackageLocation { owner = "", modules = [], name = "" }
 
-// @compiler blocked: missing-implementation
 type BranchID = Uuid
 
 /// Content-addressed hash for package items (hex-encoded SHA-256)
@@ -457,7 +436,6 @@ let hashToString (hash: Hash) : String =
   | Hash h -> h
 
 /// First 8 hex chars, for human-readable display
-// @compiler blocked: missing-implementation
 let hashToShort (hash: Hash) : String =
   let h = hashToString hash
   Stdlib.String.first h 8
@@ -469,27 +447,25 @@ let hashToShort (hash: Hash) : String =
 /// indistinguishable in a column, and deliberately not the same function: an item hash is over a
 /// canonical serialization and this is over the bytes of a string. Must agree with
 /// `LibExecution.ProgramTypes.Hash.ofText`, which is what reads it back.
-// @compiler blocked: missing-implementation
 let hashOfText (text: String) : Hash =
   (Stdlib.Blob.toHex (Stdlib.Crypto.sha256 (Stdlib.String.toBlob text)))
   |> Stdlib.String.toLowercase
   |> Hash.Hash
 
 /// A package entity paired with its location
-// @compiler blocked: missing-implementation
 type LocatedItem<'entity> =
   { entity: 'entity
     location: PackageLocation }
 
 
 /// A trait named from a bound or an impl, plus type args for any non-self params.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.ProgramTypes.TraitRef: Unknown type 'TypeReference'"
 type TraitRef =
   { trait_: NameResolution<FQTraitName.FQTraitName>
     typeArgs: List<TypeReference> }
 
 /// `'a: Show` on a fn or type declaration
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.ProgramTypes.Bound: Unknown type 'TraitRef'"
 type Bound =
   { param: String
     trait_: TraitRef }
@@ -497,31 +473,31 @@ type Bound =
 
 /// A stdlib-, user-, or package- defined type (an alias, record, or enum)
 module TypeDeclaration =
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.ProgramTypes.TypeDeclaration.RecordField: Unknown type 'TypeReference'"
   type RecordField =
     { name: String
       typ: TypeReference
       description: String }
 
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.ProgramTypes.TypeDeclaration.EnumField: Unknown type 'TypeReference'"
   type EnumField =
     { typ: TypeReference
       label: Stdlib.Option.Option<String>
       description: String }
 
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.ProgramTypes.TypeDeclaration.EnumCase: Unknown type 'EnumField'"
   type EnumCase =
     { name: String
       fields: List<EnumField>
       description: String }
 
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.ProgramTypes.TypeDeclaration.Definition: Unknown type 'TypeReference'"
   type Definition =
     | Alias of TypeReference
     | Record of List<RecordField>
     | Enum of List<EnumCase>
 
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.ProgramTypes.TypeDeclaration.TypeDeclaration: Unknown type 'Bound'"
   type TypeDeclaration =
     { typeParams: List<String>
       /// `type Set<'a: Compare> = ...`
@@ -533,27 +509,27 @@ module TypeDeclaration =
 
 // Package space
 module PackageType =
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.ProgramTypes.PackageType.PackageType: Unknown type 'TypeDeclaration.TypeDeclaration'"
   type PackageType =
     { hash: FQTypeName.Package
       declaration: TypeDeclaration.TypeDeclaration
       description: String }
 
 module PackageValue =
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.ProgramTypes.PackageValue.PackageValue: Unknown type 'Expr'"
   type PackageValue =
     { hash: FQValueName.Package
       body: Expr
       description: String }
 
 module PackageFn =
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.ProgramTypes.PackageFn.Parameter: Unknown type 'TypeReference'"
   type Parameter =
     { name: String
       typ: TypeReference
       description: String }
 
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.ProgramTypes.PackageFn.PackageFn: Unknown type 'Expr'"
   type PackageFn =
     { hash: FQFnName.Package
       body: Expr
@@ -584,7 +560,7 @@ module Trait =
   /// The ceiling is DECLARED and stored and hashed with the trait, and nothing enforces it
   /// against an implementation yet, so an impl may do more than the method allows. See the
   /// F# mirror for the detail.
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.ProgramTypes.Trait.Method: Unknown type 'Bound'"
   type Method =
     { name: String
       typeParams: List<String>
@@ -596,7 +572,7 @@ module Trait =
       permissionCeiling: Option<List<LanguageTools.Permissions.Effect>>
       description: String }
 
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.ProgramTypes.Trait.Trait: Unknown type 'Bound'"
   type Trait =
     { hash: FQTraitName.Package
       /// The first is the self type
@@ -610,7 +586,7 @@ module Trait =
 /// An impl: how one type does a trait. Its own item kind, named at
 /// `<module>[.<Type>].<Trait>`, with its method fns as ordinary fns beneath it.
 module TraitImpl =
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.ProgramTypes.TraitImpl.TraitImpl: Unknown type 'TypeReference'"
   type TraitImpl =
     { hash: Hash
       trait_: NameResolution<FQTraitName.FQTraitName>
@@ -626,13 +602,12 @@ module TraitImpl =
       description: String }
 
 module PackageTest =
-  // @compiler blocked: missing-implementation
   type ExpectedError =
     | RuntimeError of String
 
   /// Named executable package content. It is deliberately not callable from
   /// production expressions; the test runner evaluates its body directly.
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.ProgramTypes.PackageTest.PackageTest: Unknown type 'Expr'"
   type PackageTest =
     { hash: Hash
       body: Expr
@@ -641,7 +616,6 @@ module PackageTest =
 
 
 /// The kind of package item (function, type, value, trait, impl, or test)
-// @compiler blocked: missing-implementation
 type ItemKind =
   | Fn
   | Type
@@ -655,7 +629,6 @@ module ItemKind =
   /// written on this side, because it is a round trip: a second copy that disagreed about `impl`
   /// versus `traitImpl` would read back someone else's rows as the wrong kind. It has to agree
   /// with `PT.ItemKind.toString` in F#, which writes the same column from the fold.
-  // @compiler blocked: missing-implementation
   let toString (k: ItemKind) : String =
     match k with
     | Fn -> "fn"
@@ -667,7 +640,6 @@ module ItemKind =
 
   /// `None` for anything `toString` would not have written. A blanket arm here is how a kind
   /// nobody anticipated becomes a function: the copy in `SCM.Deps` fell through to `Fn`.
-  // @compiler blocked: missing-implementation
   let fromString (s: String) : Stdlib.Option.Option<ItemKind> =
     match s with
     | "fn" -> Stdlib.Option.Option.Some ItemKind.Fn
@@ -681,7 +653,6 @@ module ItemKind =
 /// A reference to a specific package item by content hash.
 /// Collapses (Hash * ItemKind) pairs into one shape; leaves room for future
 /// growth (RefBuiltin, RefExternal, ...).
-// @compiler blocked: missing-implementation
 type Reference =
   | PackageType of Hash
   | PackageValue of Hash
@@ -691,7 +662,6 @@ type Reference =
   | PackageTest of Hash
 
 module Reference =
-  // @compiler blocked: missing-implementation
   let hash (r: Reference) : Hash =
     match r with
     | PackageType h -> h
@@ -701,7 +671,6 @@ module Reference =
     | PackageTraitImpl h -> h
     | PackageTest h -> h
 
-  // @compiler blocked: missing-implementation
   let kind (r: Reference) : ItemKind =
     match r with
     | PackageType _ -> ItemKind.Type
@@ -711,7 +680,6 @@ module Reference =
     | PackageTraitImpl _ -> ItemKind.TraitImpl
     | PackageTest _ -> ItemKind.Test
 
-  // @compiler blocked: missing-implementation
   let fromHashAndKind (h: Hash) (k: ItemKind) : Reference =
     match k with
     | Type -> Reference.PackageType h
@@ -723,7 +691,6 @@ module Reference =
 
 /// Why a package item has been deprecated. Author-supplied metadata on the
 /// Deprecate op; consumers decide how loud to be.
-// @compiler blocked: missing-implementation
 type DeprecationKind =
   /// A different item (different hash) should be used instead.
   | SupersededBy of replacement: Reference
@@ -733,7 +700,6 @@ type DeprecationKind =
   | Obsolete
 
 /// A single repoint: what propagation moved. Reported back to the caller; NOT an op.
-// @compiler blocked: missing-implementation
 type PropagateRepoint =
   { location: PackageLocation
     fromRef: Reference
@@ -743,7 +709,6 @@ type PropagateRepoint =
 /// What happened to a branch. A closed set, so a type rather than a string. Both cases are monotonic:
 /// applying one twice, or out of order, lands in the same place. Rename is absent because it is
 /// last-writer-wins and `branches` records no stamp to arbitrate with.
-// @compiler blocked: missing-implementation
 type BranchEventKind =
   /// The ids of the ops the merge moved. A peer holding more of the branch than the merger saw (its own
   /// unpushed edits) keeps those on the branch.
@@ -753,7 +718,6 @@ type BranchEventKind =
 /// What a `Decision` DID. The shared part of a decision (who, where, why) lives on the op; this is the
 /// part that varies, so a decision that binds a name and one that only closes a finding can't be
 /// confused for each other.
-// @compiler blocked: missing-implementation
 type DecisionKind =
   /// Bind this name to THIS version, the one the fold didn't pick. Its own case rather than another
   /// SetName because ops are content-addressed: re-authoring the losing SetName produces the op that
@@ -766,7 +730,6 @@ type DecisionKind =
 ///
 /// The nested parts are the point. A doc on a field, a case or a parameter is outside the identity
 /// hash too, so before these there was no op that could carry an edit to one.
-// @compiler blocked: missing-implementation
 type DocPart =
   | WholeItem
   | RecordField of fieldName: String
@@ -778,7 +741,6 @@ type DocPart =
 module DocPart =
   /// The part a stored key names ("item", "record-field:x", "parameter:0"), or None for one this
   /// build cannot read. Must agree with `LibDB.Docs.partKey`, which writes them.
-  // @compiler blocked: missing-implementation
   let fromKey (key: String) : Stdlib.Option.Option<DocPart> =
     match Stdlib.String.split key ":" with
     | [ "item" ] -> Stdlib.Option.Option.Some DocPart.WholeItem
@@ -791,7 +753,6 @@ module DocPart =
     | _ -> Stdlib.Option.Option.None
 
   /// How it reads in a listing: which part of the declaration is being described.
-  // @compiler blocked: missing-implementation
   let describe (p: DocPart) : String =
     match p with
     | WholeItem -> "the item"
@@ -800,7 +761,7 @@ module DocPart =
     | Parameter index -> $"parameter {Stdlib.toString (index + 1)}"
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.ProgramTypes.PackageOp: Unknown type 'PackageType.PackageType'"
 type PackageOp =
   | AddType of PackageType.PackageType
   | AddValue of PackageValue.PackageValue
@@ -868,7 +829,6 @@ type PackageOp =
 
 module Search =
   /// The type of entity to search for
-  // @compiler blocked: missing-implementation
   type EntityType =
     | Type
     | Module
@@ -879,13 +839,11 @@ module Search =
     | Test
 
   /// How deep to search in the module hierarchy
-  // @compiler blocked: missing-implementation
   type SearchDepth =
     | OnlyDirectDescendants
     | AllDescendants
 
   /// Query parameters for searching packages
-  // @compiler blocked: missing-implementation
   type SearchQuery =
     {
       /// i.e. "Darklang.Stdlib"
@@ -904,7 +862,7 @@ module Search =
     }
 
   /// Results from a package search
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.ProgramTypes.Search.SearchResults: Unknown type 'ProgramTypes.PackageType.PackageType'"
   type SearchResults =
     { submodules: List<List<String>> // [ [ "List"], ["String", "List"] ]
       types : List<LocatedItem<ProgramTypes.PackageType.PackageType>>
@@ -926,7 +884,7 @@ module Search =
 /// Visibility rules:
 /// - Approved items are visible to everyone
 module PackageManager =
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.ProgramTypes.PackageManager.PackageManager: Unknown type 'PackageType.PackageType'"
   type PackageManager =
     { findType: (BranchID * PackageLocation) -> Stdlib.Option.Option<FQTypeName.Package>
       findValue: (BranchID * PackageLocation) -> Stdlib.Option.Option<FQValueName.Package>
@@ -946,7 +904,7 @@ module PackageManager =
 
   /// Allows you to side-load a few 'extras' in-memory, along
   /// the normal fetching functionality. (Mostly helpful for tests)
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Unknown type 'PackageManager.PackageManager'"
   let withExtras
     (pm: PackageManager.PackageManager)
     (types: List<LocatedItem<PackageType.PackageType>>)
@@ -993,7 +951,7 @@ module PackageManager =
 
 
   /// Create a PackageManager from PackageOps, combining with an existing PM
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Unknown type 'PackageManager.PackageManager'"
   let withExtraOps
     (basePM: PackageManager.PackageManager)
     (ops: List<PackageOp>)
@@ -1147,7 +1105,7 @@ module PackageManager =
         search = basePM.search }
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.ProgramTypes.Definitions: Unknown type 'PackageType.PackageType'"
 type Definitions =
   { types: List<PackageType.PackageType>
     values: List<PackageValue.PackageValue>
@@ -1158,7 +1116,7 @@ type Definitions =
     exprs: List<Expr * List<String>> }
 
 module SourceFile =
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.ProgramTypes.SourceFile.Declaration: Unknown type 'PackageType.PackageType'"
   type Declaration =
     | Type of PackageType.PackageType
     | Value of PackageValue.PackageValue
@@ -1170,7 +1128,7 @@ module SourceFile =
     // db and handlers
     | Module of Definitions // re-evaluate if this makes sense to be here
 
-  // @compiler blocked: missing-implementation
+  // @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.ProgramTypes.SourceFile.SourceFile: Unknown type 'Declaration'"
   type SourceFile =
     { declarations: List<Declaration>
       exprsToEval: List<Expr> }

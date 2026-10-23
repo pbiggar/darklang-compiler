@@ -1,7 +1,6 @@
 module Darklang.LanguageTools.RuntimeTypes.RuntimeError
 
 module TypeChecking =
-  // @compiler blocked: missing-implementation
   type TypeCheckPathPart =
     | ListType
     | DictValueType
@@ -9,18 +8,15 @@ module TypeChecking =
     | TupleAtIndex of Int32
     | TypeArg of typeName: FQTypeName.FQTypeName * index : Int32 * expected : TypeReference * actual: ValueType * typeArgCount: Int32
 
-  // @compiler blocked: missing-implementation
   type ReverseTypeCheckPath = List<TypeCheckPathPart>
 
 module Bools =
-  // @compiler blocked: missing-implementation
   type Error =
     | AndOnlySupportsBooleans of gotLeft: ValueType * gotRight: ValueType
     | OrOnlySupportsBooleans of gotLeft: ValueType * gotRight: ValueType
     | ConditionRequiresBool of actualValueType: ValueType * actualValue: Dval
 
 module Ints =
-  // @compiler blocked: missing-implementation
   type Error =
     | DivideByZeroError
     | OutOfRange
@@ -29,12 +25,10 @@ module Ints =
     | ZeroModulus
 
 module Strings =
-  // @compiler blocked: missing-implementation
   type Error =
     | NonStringInInterpolation of vt: ValueType * dv: Dval
 
 module Lists =
-  // @compiler blocked: missing-implementation
   type Error =
     | TriedToAddMismatchedData of
       index: Int32 *
@@ -43,7 +37,6 @@ module Lists =
       actualValue: Dval
 
 module Dicts =
-  // @compiler blocked: missing-implementation
   type Error =
     | TriedToAddKeyAfterAlreadyPresent of key: Dval
 
@@ -61,17 +54,14 @@ module Dicts =
       actualKey: Dval
 
 module Lets =
-  // @compiler blocked: missing-implementation
   type Error =
     | PatternDoesNotMatch of dval: Dval * pat: LetPattern
 
 module Matches =
-  // @compiler blocked: missing-implementation
   type Error =
     | MatchUnmatched of unmatchedValue: Dval
 
 module Enums =
-  // @compiler blocked: missing-implementation
   type Error =
     | ConstructionWrongNumberOfFields of
       typeName: FQTypeName.FQTypeName *
@@ -92,7 +82,6 @@ module Enums =
       actualValue: Dval
 
 module Records =
-  // @compiler blocked: missing-implementation
   type Error =
     // -- Creation --
     | CreationTypeNotRecord of name: FQTypeName.FQTypeName
@@ -127,7 +116,6 @@ module Records =
     | FieldAccessTupleIndexOutOfRange of fieldName: String * tupleLength: Int
 
 module Applications =
-  // @compiler blocked: missing-implementation
   type Error =
     | ExpectedApplicableButNot of actualType: ValueType * actualValue: Dval
 
@@ -141,12 +129,10 @@ module Applications =
     | TooManyArgsForLambda of lambdaExprId: ID * expected: Int * actual: Int
 
 module Statements =
-  // @compiler blocked: missing-implementation
   type Error =
     | FirstExpressionMustBeUnit of expectedType: ValueType * actualType: ValueType * actualValue: Dval
 
 module Unwraps =
-  // @compiler blocked: missing-implementation
   type Error =
     | GotNone
     | GotError of err: Dval
@@ -156,13 +142,11 @@ module Unwraps =
     | MultipleArgs of args: List<Dval>
 
 module Jsons =
-  // @compiler blocked: missing-implementation
   type Error =
     | UnsupportedType of TypeReference
     | CannotSerializeValue of Dval
 
 module Traits =
-  // @compiler blocked: missing-implementation
   type Error =
     /// No impl of the trait for the self type is visible on this branch
     | MissingImpl of trait_: FQTraitName.FQTraitName * self: ValueType
@@ -181,12 +165,10 @@ module Traits =
     | TraitNotFound of trait_: FQTraitName.FQTraitName
 
 module CLIs =
-  // @compiler blocked: missing-implementation
   type Error =
     | NoExpressionsToExecute
     | NonIntReturned of actuallyReturned: Dval
 
-// @compiler blocked: missing-implementation
 type Error =
   | Bool of Bools.Error
   | Int of Ints.Error

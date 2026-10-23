@@ -2,13 +2,11 @@
 /// Command.writePolicy can install one through the host administration API.
 module Darklang.Cli.Permissions.Profiles
 
-// @compiler blocked: missing-implementation
 type Profile =
   { name: String
     description: String
     needsRoot: Bool }
 
-// @compiler blocked: missing-implementation
 val all =
   [ Profile
       { name = "default"
@@ -26,7 +24,7 @@ val all =
           "read/write a directory and local stores; HTTPS GET, HTTP serving, following edits"
         needsRoot = true } ]
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Permissions.Profiles.readEffects: Unknown type 'LanguageTools.Permissions.Effect'"
 val readEffects =
   [ LanguageTools.Permissions.Effect.PackageRead
     LanguageTools.Permissions.Effect.DbRead
@@ -37,7 +35,7 @@ val readEffects =
     LanguageTools.Permissions.Effect.Random ]
 
 /// Kept aligned with the host's defaultInstance by the CLI integration test.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Permissions.Profiles.defaultEffects: Unknown function or value 'Profiles.readEffects'"
 val defaultEffects =
   Stdlib.List.append
     Profiles.readEffects
@@ -45,7 +43,7 @@ val defaultEffects =
       LanguageTools.Permissions.Effect.TraceWrite
       LanguageTools.Permissions.Effect.Concurrency ]
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Permissions.Profiles.httpsGet: Unknown type 'LanguageTools.Permissions.Rule'"
 val httpsGet =
   LanguageTools.Permissions.Rule.Http(
     LanguageTools.Permissions.HttpRule
@@ -56,7 +54,7 @@ val httpsGet =
         pathPrefix = LanguageTools.Permissions.Scope.All
         query = LanguageTools.Permissions.Scope.All })
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.Permissions.Effect'"
 let fromEffects
   (effects: List<LanguageTools.Permissions.Effect>)
   : LanguageTools.Permissions.Policy =
@@ -66,13 +64,11 @@ let fromEffects
         |> Stdlib.List.map (fun e -> LanguageTools.Permissions.Rule.Effect e)
       deny = [] }
 
-// @compiler blocked: missing-implementation
 let usage (profile: Profiles.Profile) : String =
   "permissions profile " + profile.name
   + (if profile.needsRoot then " <ABSOLUTE-ROOT>" else "")
   + " [--yes]"
 
-// @compiler blocked: missing-implementation
 val listing =
   Stdlib.List.append
     [ "Permission profiles (preview first; --yes applies):" ]
@@ -81,7 +77,7 @@ val listing =
 
 /// Validate the complete command before constructing a policy. The root stays
 /// a single typed field, so quotes, spaces and semicolons cannot inject rules.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.Permissions.Policy'"
 let resolve
   (name: String)
   (args: List<String>)

@@ -9,10 +9,8 @@
 module Darklang.Cli.Outliner.Editor
 
 /// How deep the undo stack goes. Snapshots are cheap (the dicts share structure) but not free.
-// @compiler blocked: missing-implementation
 val historyLimit = 50
 
-// @compiler blocked: missing-implementation
 type State =
   { outline: Outline
     /// The cursor, held as a node id rather than a row number: the row a node sits on changes whenever
@@ -29,7 +27,6 @@ type State =
     future: List<Outline> }
 
 /// What the editor tells the app around it.
-// @compiler blocked: missing-implementation
 type Msg =
   /// The outline changed and should be persisted.
   | Dirty
@@ -41,7 +38,6 @@ type Msg =
   | DeleteRequested of id: Int * descendants: Int
 
 
-// @compiler blocked: missing-implementation
 let fromOutline (outline: Outline) : State =
   let firstId =
     match Stdlib.List.head (flattenVisible outline) with
@@ -61,7 +57,6 @@ let fromOutline (outline: Outline) : State =
 // --- The visible rows ---
 
 /// The lines on screen: the whole tree, or the search matches with the ancestors that locate them.
-// @compiler blocked: missing-implementation
 let visible (state: State) : List<VisibleNode> =
   let all = flattenVisible state.outline
 
@@ -77,18 +72,15 @@ let visible (state: State) : List<VisibleNode> =
 
     all |> Stdlib.List.filter (fun vn -> Stdlib.List.contains keep vn.id)
 
-// @compiler blocked: missing-implementation
 let cursorIndex (state: State) : Int =
   visible state
   |> Stdlib.List.findFirstIndex (fun vn -> vn.id == state.cursorId)
   |> Stdlib.Option.withDefault 0
 
-// @compiler blocked: missing-implementation
 let cursorNode (state: State) : Stdlib.Option.Option<VisibleNode> =
   visible state |> Stdlib.List.findFirst (fun vn -> vn.id == state.cursorId)
 
 /// Put the cursor on a row number, clamped to the list.
-// @compiler blocked: missing-implementation
 let cursorToIndex (state: State) (index: Int) : State =
   let rows = visible state
   let last = Stdlib.max 0 ((Stdlib.List.length rows) - 1)
@@ -102,13 +94,11 @@ let cursorToIndex (state: State) (index: Int) : State =
 // --- Undo ---
 
 /// Snapshot before a change. Every mutation goes through this, so undo covers all of them.
-// @compiler blocked: missing-implementation
 let remember (state: State) : State =
   { state with
       history = Stdlib.List.take (Stdlib.List.push state.history state.outline) historyLimit
       future = [] }
 
-// @compiler blocked: missing-implementation
 let undo (state: State) : (State * String) =
   match state.history with
   | [] -> (state, "nothing to undo")
@@ -127,7 +117,6 @@ let undo (state: State) : (State * String) =
 
     (landed, "undo")
 
-// @compiler blocked: missing-implementation
 let redo (state: State) : (State * String) =
   match state.future with
   | [] -> (state, "nothing to redo")
@@ -149,7 +138,6 @@ let redo (state: State) : (State * String) =
 
 // --- Tree edits ---
 
-// @compiler blocked: missing-implementation
 let toggleCollapse (state: State) : State =
   match cursorNode state with
   | None -> state
@@ -160,7 +148,6 @@ let toggleCollapse (state: State) : State =
       let next = remember state
       { next with outline = setCollapsed next.outline vn.id (Stdlib.Bool.not vn.isCollapsed) }
 
-// @compiler blocked: missing-implementation
 let cycleTodo (state: State) : State =
   match cursorNode state with
   | None -> state
@@ -169,7 +156,6 @@ let cycleTodo (state: State) : State =
     { next with outline = cycleMark next.outline vn.id }
 
 /// A new sibling after the cursor (or the first node, in an empty outline), ready to type into.
-// @compiler blocked: missing-implementation
 let insertAfter (state: State) : State =
   let base_ = remember state
   let outline = base_.outline
@@ -190,7 +176,6 @@ let insertAfter (state: State) : State =
       editing = Stdlib.Option.Option.Some Stdlib.Cli.UI.TextField.empty }
 
 /// A new child of the cursor, opened for typing. Saves an insert-then-indent.
-// @compiler blocked: missing-implementation
 let insertChild (state: State) : State =
   match cursorNode state with
   | None -> insertAfter state
@@ -210,7 +195,6 @@ let insertChild (state: State) : State =
         editing = Stdlib.Option.Option.Some Stdlib.Cli.UI.TextField.empty }
 
 /// Delete a node and everything under it, landing the cursor somewhere sensible.
-// @compiler blocked: missing-implementation
 let deleteSubtree (state: State) (id: Int) : State =
   let rows = visible state
   let index = cursorIndex state
@@ -218,7 +202,6 @@ let deleteSubtree (state: State) (id: Int) : State =
   let after = { base_ with outline = removeSubtree base_.outline id }
   cursorToIndex after (Stdlib.min index ((Stdlib.List.length (visible after)) - 1))
 
-// @compiler blocked: missing-implementation
 let indent (state: State) : State =
   match cursorNode state with
   | None -> state
@@ -248,7 +231,6 @@ let indent (state: State) : State =
 
           { base_ with outline = setCollapsed moved newParent false }
 
-// @compiler blocked: missing-implementation
 let outdent (state: State) : State =
   match cursorNode state with
   | None -> state
@@ -263,7 +245,6 @@ let outdent (state: State) : State =
       { base_ with
           outline = setChildren detached grandparentId (insertIdAfter gpChildren parentId vn.id) }
 
-// @compiler blocked: missing-implementation
 let moveWithin (state: State) (offset: Int) : State =
   match cursorNode state with
   | None -> state
@@ -287,7 +268,6 @@ let moveWithin (state: State) (offset: Int) : State =
 
 /// Move the cursor `delta` rows, computing the visible list once rather than once to find where the cursor
 /// is and again to put it somewhere else.
-// @compiler blocked: missing-implementation
 let moveBy (state: State) (delta: Int) : State =
   let rows = visible state
   let last = Stdlib.max 0 ((Stdlib.List.length rows) - 1)
@@ -303,24 +283,19 @@ let moveBy (state: State) (delta: Int) : State =
   | Some vn -> { state with cursorId = vn.id }
   | None -> state
 
-// @compiler blocked: missing-implementation
 let moveUp (state: State) : State =
   moveBy state -1
 
-// @compiler blocked: missing-implementation
 let moveDown (state: State) : State =
   moveBy state 1
 
-// @compiler blocked: missing-implementation
 let moveToStart (state: State) : State =
   cursorToIndex state 0
 
-// @compiler blocked: missing-implementation
 let moveToEnd (state: State) : State =
   cursorToIndex state ((Stdlib.List.length (visible state)) - 1)
 
 /// Left: close an open branch, otherwise go up to the parent. The way out of a deep subtree.
-// @compiler blocked: missing-implementation
 let collapseOrParent (state: State) : State =
   match cursorNode state with
   | None -> state
@@ -333,7 +308,6 @@ let collapseOrParent (state: State) : State =
       | None -> state
 
 /// Right: open a closed branch, otherwise step into it.
-// @compiler blocked: missing-implementation
 let expandOrChild (state: State) : State =
   match cursorNode state with
   | None -> state
@@ -348,7 +322,6 @@ let expandOrChild (state: State) : State =
 
 // --- Editing a line ---
 
-// @compiler blocked: missing-implementation
 let startEditing (state: State) : State =
   match cursorNode state with
   | None -> state
@@ -359,7 +332,6 @@ let startEditing (state: State) : State =
 /// Write the field's text back to the node.
 ///
 /// Escape commits too: discarding what you typed is a surprise in an outliner, and undo is the honest way back.
-// @compiler blocked: missing-implementation
 let commitEdit (state: State) (text: String) : State =
   match cursorNode state with
   | None -> { state with editing = Stdlib.Option.Option.None }
@@ -371,7 +343,6 @@ let commitEdit (state: State) (text: String) : State =
 
 /// Enter at the end of a line: commit, then open a fresh sibling to keep typing into. On an empty line it
 /// ends the list instead, which is how you stop.
-// @compiler blocked: missing-implementation
 let commitAndContinue (state: State) (text: String) : State =
   let committed = commitEdit state text
 
@@ -386,12 +357,10 @@ let commitAndContinue (state: State) (text: String) : State =
 
 // --- Searching ---
 
-// @compiler blocked: missing-implementation
 let startSearch (state: State) : State =
   { state with
       searching = Stdlib.Option.Option.Some(Stdlib.Cli.UI.TextField.fromText state.filter) }
 
-// @compiler blocked: missing-implementation
 let applyFilter (state: State) (needle: String) : State =
   let hits = matching state.outline needle
   let revealed = revealAll state.outline hits
@@ -403,7 +372,6 @@ let applyFilter (state: State) (needle: String) : State =
   | Some _ -> cursorToIndex landed 0
   | None -> landed
 
-// @compiler blocked: missing-implementation
 let clearFilter (state: State) : State =
   { state with filter = "", searching = Stdlib.Option.Option.None }
 
@@ -411,7 +379,6 @@ let clearFilter (state: State) : State =
 // --- Keys ---
 
 /// Keys that work while you're typing in a line, because the text field passed on them.
-// @compiler blocked: missing-implementation
 let onKeyWhileEditing
   (state: State)
   (field: Stdlib.Cli.UI.TextField.State)
@@ -432,7 +399,6 @@ let onKeyWhileEditing
     Stdlib.Cli.UI.Widget.Outcome.Emitted(startEditing (moveDown committed), Msg.Dirty)
   | _ -> Stdlib.Cli.UI.Widget.Outcome.Ignored
 
-// @compiler blocked: missing-implementation
 let onKeyEditing
   (state: State)
   (field: Stdlib.Cli.UI.TextField.State)
@@ -450,7 +416,6 @@ let onKeyEditing
       Stdlib.Cli.UI.Widget.Outcome.Emitted(commitEdit state next.text, Msg.Dirty)
   | Ignored -> onKeyWhileEditing state field kp
 
-// @compiler blocked: missing-implementation
 let onKeySearching
   (state: State)
   (field: Stdlib.Cli.UI.TextField.State)
@@ -478,7 +443,6 @@ let onKeySearching
   | Ignored -> Stdlib.Cli.UI.Widget.Outcome.Ignored
 
 /// Backspace/Delete: an empty leaf goes quietly, anything else asks first.
-// @compiler blocked: missing-implementation
 let requestDelete (state: State) : Stdlib.Cli.UI.Widget.Outcome<State, Msg> =
   match cursorNode state with
   | None -> Stdlib.Cli.UI.Widget.Outcome.Ignored
@@ -492,7 +456,6 @@ let requestDelete (state: State) : Stdlib.Cli.UI.Widget.Outcome<State, Msg> =
         state,
         Msg.DeleteRequested(vn.id, subtreeSize state.outline vn.id))
 
-// @compiler blocked: missing-implementation
 let onKeyNavigating
   (state: State)
   (kp: Stdlib.Cli.UI.Widget.KeyPress)
@@ -546,7 +509,6 @@ let onKeyNavigating
     else
       Stdlib.Cli.UI.Widget.Outcome.Ignored
 
-// @compiler blocked: missing-implementation
 let onKey
   (state: State)
   (kp: Stdlib.Cli.UI.Widget.KeyPress)
@@ -562,7 +524,6 @@ let onKey
 // --- Rendering ---
 
 /// The bullet, or the checkbox for a line that's a task.
-// @compiler blocked: missing-implementation
 let marker (vn: VisibleNode) : String =
   match vn.mark with
   | Todo -> "[ ]"
@@ -573,18 +534,15 @@ let marker (vn: VisibleNode) : String =
     else "*"
 
 /// The gutter is what says "the cursor is here" without relying on colour.
-// @compiler blocked: missing-implementation
 let gutterFor (isCursor: Bool) : String =
   if isCursor then "> " else "  "
 
 /// Everything left of the text: gutter, indent, marker, and the space after it.
-// @compiler blocked: missing-implementation
 let prefixFor (vn: VisibleNode) (isCursor: Bool) : String =
   let indent = Stdlib.String.repeat "  " vn.depth
   $"{gutterFor isCursor}{indent}{marker vn} "
 
 /// The count of what a fold is hiding, as it appears at the end of the line.
-// @compiler blocked: missing-implementation
 let hiddenSuffix (vn: VisibleNode) : String =
   if vn.hiddenCount > 0 then
     $" ({Stdlib.toString vn.hiddenCount} hidden)"
@@ -592,7 +550,6 @@ let hiddenSuffix (vn: VisibleNode) : String =
     ""
 
 /// Colour the prefix (the marker only) for a row that isn't the cursor's.
-// @compiler blocked: missing-implementation
 let colouredPrefix (vn: VisibleNode) : String =
   let indent = Stdlib.String.repeat "  " vn.depth
 
@@ -614,7 +571,6 @@ let colouredPrefix (vn: VisibleNode) : String =
 /// Wraps long lines, on the plain text, with the colour applied after: a selected row has to be
 /// coloured in one piece, and an inner colour code ends with a reset that would cancel the highlight
 /// for everything after it.
-// @compiler blocked: missing-implementation
 let rowsForNode (state: State) (vn: VisibleNode) (cols: Int) : List<String> =
   let isCursor = vn.id == state.cursorId
   let prefix = prefixFor vn isCursor
@@ -651,7 +607,6 @@ let rowsForNode (state: State) (vn: VisibleNode) (cols: Int) : List<String> =
         if i == 0 then (colouredPrefix vn) + (body chunk) else continuation + (body chunk))
 
 /// Screen rows for the whole visible outline, each tagged with the line it belongs to.
-// @compiler blocked: missing-implementation
 let displayRows (state: State) (cols: Int) : List<(Int * String)> =
   visible state
   |> Stdlib.List.map (fun vn ->
@@ -659,7 +614,6 @@ let displayRows (state: State) (cols: Int) : List<(Int * String)> =
   |> Stdlib.List.flatten
 
 /// Slide the window as little as possible to keep `row` on screen.
-// @compiler blocked: missing-implementation
 let scrollFor (state: State) (height: Int) (total: Int) (row: Int) : Int =
   let rows = Stdlib.max 1 height
   let last = Stdlib.max 0 (total - rows)
@@ -671,14 +625,12 @@ let scrollFor (state: State) (height: Int) (total: Int) (row: Int) : Int =
 
   Stdlib.max 0 (Stdlib.min last wanted)
 
-// @compiler blocked: missing-implementation
 let emptyMessage (state: State) : String =
   if state.filter == "" then
     "  empty - press o to add a line"
   else
     $"  nothing matches \"{state.filter}\" - Esc to clear"
 
-// @compiler blocked: missing-implementation
 let view
   (state: State)
   (region: Stdlib.Cli.UI.Layout.Region)

@@ -34,7 +34,6 @@ let callOutput (result: Stdlib.Cli.ExecutionOutcome) : String =
 
 
 // Quote the CLI path and every argument with Stdlib.Cli.Process.shellQuote.
-// @compiler blocked: upstream-dependency
 let runWithCommand (args: List<String>): String =
   let argsString =
     args
@@ -49,7 +48,6 @@ let runWithCommand (args: List<String>): String =
 
 // Pass input on stdin for commands such as conflicts walk.
 // Use a quoted argument to printf %s so input cannot change the shell command.
-// @compiler blocked: upstream-dependency
 let runWithStdinAndCommand (input: String) (args: List<String>): String =
   let argsString =
     args
@@ -63,7 +61,6 @@ let runWithStdinAndCommand (input: String) (args: List<String>): String =
 
 
 /// Run a command and compare its whole output exactly.
-// @compiler blocked: upstream-dependency
 let expectExact (args: List<String>) (expected: String): Stdlib.Test.Result =
   let output = runWithCommand args
   if output == expected then

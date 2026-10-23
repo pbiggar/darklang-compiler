@@ -81,7 +81,7 @@ let text (s: String) : Doc = Doc.Text s
 let styled (opening: String) (t: String) (closing: String) : Doc = Doc.Styled(opening, t, closing)
 
 /// See `Doc.LineSuffix`.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Stdlib.Pretty.lineSuffix: Unknown constructor 'Darklang.Stdlib.Pretty.Doc.LineSuffix'"
 let lineSuffix (s: String) : Doc = Doc.LineSuffix s
 
 // @compiler replace: packages/darklang/stdlib/pretty.dark#Darklang.Stdlib.Pretty.concat reason=compiler-implementation
@@ -184,14 +184,12 @@ let fits (room: Int) (items: List<(Int * Mode * Doc)>) : Bool =
 
 
 /// The output with the held-back line suffixes emitted, for where a line ends.
-// @compiler blocked: missing-implementation
 let flushSuffixes (acc: List<String>) (pending: List<String>) : List<String> =
   match pending with
   | [] -> acc
   | _ -> Stdlib.List.fold pending acc (fun a s -> Stdlib.List.push a s)
 
 /// End the line: the held-back suffixes, the newline, then the next line's indentation.
-// @compiler blocked: missing-implementation
 let breakLine (acc: List<String>) (pending: List<String>) (indent: Int) : List<String> =
   Stdlib.List.push
     (Stdlib.List.push (Pretty.flushSuffixes acc pending) "\n")

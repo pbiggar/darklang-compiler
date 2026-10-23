@@ -12,7 +12,6 @@ module Darklang.LanguageTools.AtRestTypeChecker.Types
 /// its evidence depends on types that remain unknown.
 ///
 /// List every code explicitly so adding one requires choosing its classification.
-// @compiler blocked: missing-implementation
 let isWarning (code: IssueCode) : Bool =
   match code with
   | UnresolvedTypeName
@@ -67,7 +66,7 @@ let isWarning (code: IssueCode) : Bool =
 /// Create an error finding whose expected or actual types may still be unknown.
 /// Items decides whether those unknowns make the error too uncertain to report
 /// as a definite failure.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Model.Ty'"
 let error
   (code: IssueCode)
   (at: Stdlib.Option.Option<Int64>)
@@ -85,7 +84,7 @@ let error
 
 /// Create an error that remains valid regardless of unknowns in its displayed
 /// types. For example, a list has no record fields even if its element type is unknown.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Model.Ty'"
 let definiteError
   (code: IssueCode)
   (at: Stdlib.Option.Option<Int64>)
@@ -98,7 +97,7 @@ let definiteError
 
 /// Create a warning with a location and context, but no expected or actual type.
 /// Callers supply a warning code classified by isWarning.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Model.Finding'"
 let warning
   (code: IssueCode)
   (at: Stdlib.Option.Option<Int64>)
@@ -119,7 +118,7 @@ let warning
 
 /// Follow replacements for an inference variable until reaching an unbound
 /// variable or another type. Leave nested components alone; zonk resolves those too.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Model.Ty'"
 let walk (subst: Dict<Model.Var, Model.Ty>) (ty: Model.Ty) : Model.Ty =
   match ty with
   | TVar v ->
@@ -131,7 +130,7 @@ let walk (subst: Dict<Model.Var, Model.Ty>) (ty: Model.Ty) : Model.Ty =
 /// Replace inference variables throughout a type with the types assigned to them.
 /// Follow replacement chains and rebuild nested components, leaving variables
 /// unchanged when the solver has not assigned them a type.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Model.Ty'"
 let zonk (subst: Dict<Model.Var, Model.Ty>) (ty: Model.Ty) : Model.Ty =
   match walk subst ty with
   | TStream inner -> Model.Ty.TStream(zonk subst inner)
@@ -155,7 +154,7 @@ let zonk (subst: Dict<Model.Var, Model.Ty>) (ty: Model.Ty) : Model.Ty =
 /// Replace mapped inference variables throughout a type in one pass. Insert each
 /// replacement as supplied, without following further mappings inside it.
 /// Used to give a saved scheme fresh variables after its inferred types are resolved.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Model.Ty'"
 let substitute (mapping: Dict<Model.Var, Model.Ty>) (ty: Model.Ty) : Model.Ty =
   match ty with
   | TVar v ->
@@ -183,7 +182,7 @@ let substitute (mapping: Dict<Model.Var, Model.Ty>) (ty: Model.Ty) : Model.Ty =
 
 /// Add inference variables found in this type to found, using dictionary keys as
 /// a set. Apply substitutions with zonk first if only unresolved variables are wanted.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Model.Ty'"
 let varsInto (found: Dict<Model.Var, Bool>) (ty: Model.Ty) : Dict<Model.Var, Bool> =
   match ty with
   | TVar v -> Stdlib.Dict.setOverridingDuplicates found v true
@@ -204,13 +203,13 @@ let varsInto (found: Dict<Model.Var, Bool>) (ty: Model.Ty) : Dict<Model.Var, Boo
 
 /// Return the inference variables still unresolved after following substitutions.
 /// Dictionary keys form a set; repeated occurrences appear only once.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Model.Ty'"
 let freeVars (subst: Dict<Model.Var, Model.Ty>) (ty: Model.Ty) : Dict<Model.Var, Bool> =
   freeVarsInto subst Dict {} ty
 
 /// Add unresolved inference variables to found, following replacements as needed.
 /// Inspect the existing type structure without allocating a fully substituted copy.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Model.Ty'"
 let freeVarsInto
   (subst: Dict<Model.Var, Model.Ty>)
   (found: Dict<Model.Var, Bool>)
@@ -230,7 +229,7 @@ let freeVarsInto
   | _ -> found
 
 /// Collect unresolved inference variables from a list of types into the same set.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Model.Ty'"
 let freeVarsAll
   (subst: Dict<Model.Var, Model.Ty>)
   (found: Dict<Model.Var, Bool>)
@@ -242,7 +241,7 @@ let freeVarsAll
 
 /// Check whether the type contains a TError placeholder from an earlier problem.
 /// Apply substitutions first so errors hidden behind inference variables are visible.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Model.Ty'"
 let hasError (ty: Model.Ty) : Bool =
   match ty with
   | TError -> true
@@ -264,7 +263,7 @@ let hasError (ty: Model.Ty) : Bool =
 ///
 /// Walk directly instead of using builtin callbacks, which would add a nested
 /// interpreter run and consume native stack space at each recursive level.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Model.Ty'"
 let occurs (subst: Dict<Model.Var, Model.Ty>) (v: Model.Var) (ty: Model.Ty) : Bool =
   match ty with
   | TVar other ->
@@ -284,7 +283,7 @@ let occurs (subst: Dict<Model.Var, Model.Ty>) (v: Model.Var) (ty: Model.Ty) : Bo
   | _ -> false
 
 /// Check whether any type in the list contains v, following its substitutions.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Model.Ty'"
 let occursIn (subst: Dict<Model.Var, Model.Ty>) (v: Model.Var) (tys: List<Model.Ty>) : Bool =
   match tys with
   | [] -> false
@@ -293,7 +292,7 @@ let occursIn (subst: Dict<Model.Var, Model.Ty>) (v: Model.Var) (tys: List<Model.
 /// Replace named TRigid parameters throughout a type, leaving inference variables
 /// and unmapped parameters unchanged. Callers use this to supply a signature's
 /// type arguments or to test a declaration with a particular parameter replaced.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Model.Ty'"
 let substituteRigid (mapping: Dict<String, Model.Ty>) (ty: Model.Ty) : Model.Ty =
   match ty with
   | TRigid name ->
@@ -316,7 +315,7 @@ let substituteRigid (mapping: Dict<String, Model.Ty>) (ty: Model.Ty) : Model.Ty 
   | _ -> ty
 
 /// Replace named type parameters in each list element, preserving element order.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Model.Ty'"
 let substituteRigidIn (mapping: Dict<String, Model.Ty>) (tys: List<Model.Ty>) : List<Model.Ty> =
   match tys with
   | [] -> []
@@ -329,7 +328,6 @@ let substituteRigidIn (mapping: Dict<String, Model.Ty>) (tys: List<Model.Ty>) : 
 
 /// Extract a successfully resolved package-type hash. Return None when name
 /// resolution failed; the caller decides how to report the unresolved name.
-// @compiler blocked: missing-implementation
 let resolvedType
   (name: LanguageTools.ProgramTypes.NameResolution<LanguageTools.ProgramTypes.FQTypeName.FQTypeName>)
   : Stdlib.Option.Option<LanguageTools.ProgramTypes.Hash> =
@@ -347,7 +345,7 @@ let resolvedType
 /// implementation of `Negate` is for a list at all, so waiting for the element type would
 /// turn a definite error into "cannot tell", and an Incomplete verdict passes the commit gate
 /// where a Failed one does not.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Model.Ty'"
 let headMatches (a: Model.Ty) (b: Model.Ty) : Bool =
   match (a, b) with
   | (TError, _) -> true
@@ -367,13 +365,12 @@ let headMatches (a: Model.Ty) (b: Model.Ty) : Bool =
 /// The head being known is not enough: `Option<?>` has a known head and cannot tell
 /// `impl for Option<Int64>` from `impl for Option<String>`. A choice made against an
 /// undecided argument is a choice made by timestamp.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Model.Ty'"
 let fullyResolved (subst: Dict<Model.Var, Model.Ty>) (ty: Model.Ty) : Bool =
   Stdlib.List.isEmpty (Stdlib.Dict.keys (freeVars subst ty))
 
 /// The hash a trait name resolved to, if it resolved. Same shape as `resolvedType`, and the
 /// unresolved case is not this function's to report: the resolver already failed it.
-// @compiler blocked: missing-implementation
 let resolvedTrait
   (name: LanguageTools.ProgramTypes.NameResolution<LanguageTools.ProgramTypes.FQTraitName.FQTraitName>)
   : Stdlib.Option.Option<LanguageTools.ProgramTypes.Hash> =
@@ -387,7 +384,7 @@ let resolvedTrait
 /// Look up type parameters in mapping: a generic definition uses TRigid types,
 /// while a use of that definition supplies its type arguments. Unresolved names
 /// and unmapped parameters produce TError placeholders and warnings at the supplied location.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Model.Ty'"
 let fromReferenceInto
   (mapping: Dict<String, Model.Ty>)
   (at: Stdlib.Option.Option<Int64>)
@@ -455,7 +452,7 @@ let fromReferenceInto
 
 /// Convert a list of type references in order, collecting findings in one shared
 /// list. Converted types keep their input order; new findings are prepended to found.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Model.Ty'"
 let fromReferencesInto
   (mapping: Dict<String, Model.Ty>)
   (at: Stdlib.Option.Option<Int64>)
@@ -474,7 +471,7 @@ let fromReferencesInto
 
 /// Convert several type references and return their types with any findings,
 /// starting with an empty findings list.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Model.Ty'"
 let fromReferences
   (mapping: Dict<String, Model.Ty>)
   (at: Stdlib.Option.Option<Int64>)
@@ -484,7 +481,7 @@ let fromReferences
 
 /// Convert one type reference and return its type with any findings, starting
 /// with an empty findings list.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Model.Ty'"
 let fromReference
   (mapping: Dict<String, Model.Ty>)
   (at: Stdlib.Option.Option<Int64>)
@@ -495,14 +492,14 @@ let fromReference
 /// Map each declared parameter name to a TRigid type with that name. These types
 /// must remain generic while checking a definition, rather than being inferred
 /// as a particular type from the body.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Model.Ty'"
 let rigid (names: List<String>) : Dict<String, Model.Ty> =
   Stdlib.List.fold names Dict {} (fun mapping name ->
     Stdlib.Dict.setOverridingDuplicates mapping name (Model.Ty.TRigid name))
 
 /// Pair declared parameter names with supplied type arguments in order.
 /// Return None if their counts differ, since no complete mapping can be made.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Model.Ty'"
 let bindParams
   (names: List<String>)
   (args: List<Model.Ty>)
@@ -522,7 +519,7 @@ let bindParams
 /// Convert a declared field type using the type arguments supplied for its owner.
 /// Return the converted type and any findings, or TError with a count mismatch
 /// when the arguments cannot be paired with the declaration's parameters.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Model.Ty'"
 let fieldType
   (at: Stdlib.Option.Option<Int64>)
   (typeParams: List<String>)
@@ -550,15 +547,13 @@ let fieldType
 
 /// Convert a count or index to the Int64 representation used in report contexts.
 /// The caller must supply a number that fits in Int64.
-// @compiler blocked: missing-implementation
 let int64 (n: Int) : Int64 = Builtin.unwrap (Stdlib.Int.toInt64 n)
 
 /// Count list elements in the Int64 form used for reported argument counts.
-// @compiler blocked: missing-implementation
 let count (xs: List<'a>) : Int64 = int64 (Stdlib.List.length xs)
 
 /// Represent a resolved function in the report by its builtin name or package hash.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.FQFnName.FQFnName'"
 let fnNameRef (name: LanguageTools.ProgramTypes.FQFnName.FQFnName) : NameRef =
   match name with
   | Builtin b -> NameRef.Builtin(b.name, Stdlib.Int64.fromInt32 b.version)
@@ -568,7 +563,7 @@ let fnNameRef (name: LanguageTools.ProgramTypes.FQFnName.FQFnName) : NameRef =
   | TraitMethod method -> NameRef.TraitMethod(method.trait_, method.method_)
 
 /// Represent a resolved value in the report by its builtin name or package hash.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.FQValueName.FQValueName'"
 let valueNameRef
   (name: LanguageTools.ProgramTypes.FQValueName.FQValueName)
   : NameRef =
@@ -577,7 +572,7 @@ let valueNameRef
   | Package hash -> NameRef.Package hash
 
 /// Look up a type declaration already loaded into the environment by content hash.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Model.Environment'"
 let declaration
   (env: Model.Environment)
   (name: LanguageTools.ProgramTypes.Hash)
@@ -588,7 +583,7 @@ let declaration
 /// returning any findings from expansion. On failure, use TError to avoid further
 /// errors based on an unavailable type. In particular, a missing declaration may
 /// be an alias for the expected type, so its absence cannot prove a mismatch.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Model.Environment'"
 let expand
   (env: Model.Environment)
   (subst: Dict<Model.Var, Model.Ty>)
@@ -600,7 +595,7 @@ let expand
 /// An expansion that cannot go on: the type becomes TError and <param problem> joins <param found>.
 /// Top-level rather than nested in `expandFrom`, where it is a closure built on every expansion
 /// and used only on the failing ones.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Model.Finding'"
 let blocked
   (found: List<Model.Finding>)
   (problem: Model.Finding)
@@ -610,7 +605,7 @@ let blocked
 /// Expand outer aliases while carrying prior findings and the active alias path.
 /// seen detects recursive alias definitions. Records and enums keep their identity;
 /// check their argument counts without expanding their fields.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Model.Environment'"
 let expandFrom
   (env: Model.Environment)
   (subst: Dict<Model.Var, Model.Ty>)
@@ -664,7 +659,7 @@ let expandFrom
 
 /// Report a custom type used with the wrong number of arguments, including its
 /// hash and the expected and supplied counts in the diagnostic context.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Model.Ty'"
 let arityMismatch
   (at: Stdlib.Option.Option<Int64>)
   (ty: Model.Ty)
@@ -687,7 +682,7 @@ let arityMismatch
 /// Used before checking variable containment: if Ignore<'a> aliases Int,
 /// Ignore<t> does not actually contain t after expansion. Expand arguments before
 /// entering each alias body, keeping seen as the path of active alias definitions.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Model.Environment'"
 let expandDeep
   (env: Model.Environment)
   (subst: Dict<Model.Var, Model.Ty>)
@@ -750,7 +745,7 @@ let expandDeep
 
 /// Expand a list of types, stopping at the first expansion failure. done holds
 /// previously expanded types in reverse order; reverse it when the list is complete.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Model.Environment'"
 let expandDeepAll
   (env: Model.Environment)
   (subst: Dict<Model.Var, Model.Ty>)
@@ -770,7 +765,7 @@ let expandDeepAll
 /// Resolve outer aliases and return the resulting custom type's hash, arguments,
 /// and declaration, along with any expansion findings. Return None for other
 /// types or failed expansion, including uses with the wrong number of type arguments.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Model.Environment'"
 let declarationFor
   (env: Model.Environment)
   (subst: Dict<Model.Var, Model.Ty>)
@@ -797,7 +792,7 @@ let declarationFor
 
 /// Return the declared types to inspect: an alias target, record field types,
 /// or the payload types from every enum case.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.TypeDeclaration.TypeDeclaration'"
 let declarationFieldTypes (decl: LanguageTools.ProgramTypes.TypeDeclaration.TypeDeclaration) : List<LanguageTools.ProgramTypes.TypeReference> =
   match decl.definition with
   | Alias target -> [ target ]
@@ -810,7 +805,6 @@ let declarationFieldTypes (decl: LanguageTools.ProgramTypes.TypeDeclaration.Type
 /// Select arguments whose parameter names are in used, preserving argument order.
 /// For dictionary-key checks, this excludes phantom parameters: their arguments
 /// describe the type but never occur in its stored values.
-// @compiler blocked: missing-implementation
 let argsThatReachValues
   (typeParams: List<String>)
   (used: List<String>)
@@ -835,7 +829,7 @@ let argsThatReachValues
 /// Collect type-variable names that can describe values within this type.
 /// Use cached summaries for custom types to skip phantom arguments. If a custom
 /// type is unavailable, inspect all its arguments rather than assume any are unused.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Model.Environment'"
 let typeVariablesThatReachValues
   (env: Model.Environment)
   (typ: LanguageTools.ProgramTypes.TypeReference)
@@ -872,7 +866,7 @@ let typeVariablesThatReachValues
 
 /// Collect parameters that can occur in an alias target, record fields, or enum
 /// payloads. Declarations uses this result to update its cached parameter summaries.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Model.Environment'"
 let declarationValueParameters
   (env: Model.Environment)
   (decl: LanguageTools.ProgramTypes.TypeDeclaration.TypeDeclaration)
@@ -885,7 +879,7 @@ let declarationValueParameters
 /// Declarations starts with empty summaries and repeats analysis until they stop
 /// changing. Passing a parameter only around a recursive cycle does not make it
 /// a stored value. Failures during that analysis are recorded as separate warnings.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Model.Environment'"
 let valueTypeParameters
   (env: Model.Environment)
   (name: LanguageTools.ProgramTypes.Hash)
@@ -897,7 +891,7 @@ let valueTypeParameters
 /// Type variables are allowed here; more specific inferred or supplied types can
 /// be checked later. Missing declarations and TError do not add key errors because
 /// their underlying problems are reported separately.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Model.Environment'"
 let isUsableDictKey (env: Model.Environment) (seen: List<LanguageTools.ProgramTypes.Hash>) (ty: Model.Ty) : Bool =
   match ty with
   | TFn(_, _) -> false
@@ -961,7 +955,7 @@ let isUsableDictKey (env: Model.Environment) (seen: List<LanguageTools.ProgramTy
 /// Check a declaration's field type for forbidden dictionary-key contents without
 /// first converting the full type. Follow custom declarations with the same cycle
 /// guard as isUsableDictKey, and inspect only arguments that can occur in values.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Model.Environment'"
 let isUsableDictKeyReference
   (env: Model.Environment)
   (seen: List<LanguageTools.ProgramTypes.Hash>)
@@ -1018,7 +1012,7 @@ let isUsableDictKeyReference
 ///
 /// <param subject> must be resolved all the way down (`Solve.decidedSubject`): an inference
 /// variable or an alias left in an argument matches no concrete argument.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Model.Ty'"
 let implApplies (self: Model.Ty) (subject: Model.Ty) : Bool =
   match (self, subject) with
   // `impl T for List<'a>`: the variable agrees with whatever the subject has there.
@@ -1066,7 +1060,7 @@ let implApplies (self: Model.Ty) (subject: Model.Ty) : Bool =
 /// Convert an internal type to StaticType for diagnostics. Apply substitutions
 /// before calling so inferred types appear in the report. Keep declared parameter
 /// names, but hide internal inference-variable identities and error placeholders.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Model.Ty'"
 let toStatic (ty: Model.Ty) : StaticType =
   match ty with
   | TUnit -> StaticType.TUnit

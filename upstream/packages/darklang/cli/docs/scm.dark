@@ -1,6 +1,5 @@
 module Darklang.Cli.Docs.SCM
 
-// @compiler blocked: missing-implementation
 let content () : String =
   """# Source control
 

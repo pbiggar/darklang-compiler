@@ -1,6 +1,5 @@
 module Darklang =
   module Test =
-    // @compiler blocked: missing-implementation
     let factorial (n: Int): Int =
       if (n <= 1) then
         1
@@ -8,7 +7,6 @@ module Darklang =
       n * (Test.factorial (n - 1))
 
 
-    // @compiler blocked: missing-implementation
     let fibonacci (n: Int): Int =
       if (n <= 1) then
         n
@@ -16,7 +14,6 @@ module Darklang =
         (Test.fibonacci (n - 1)) + (Test.fibonacci (n - 2))
 
 
-    // @compiler blocked: missing-implementation
     let sumUpTo (n: Int): Int =
       if (n <= 0) then
         0
@@ -25,7 +22,6 @@ module Darklang =
 
 
   module ShadowingTest =
-    // @compiler blocked: missing-implementation
     let incrementWithShadowing (y: Int) (z: Int): Int =
       if (z <= 0) then
         y
@@ -39,7 +35,6 @@ module Darklang =
         result + (incrementWithShadowing z)
 
 
-    // @compiler blocked: missing-implementation
     let factorialWithShadowing (n: Int): (String * Int) =
       if (n <= 1) then
         ("base_case", 1)
@@ -49,7 +44,6 @@ module Darklang =
         (factorialWithShadowing , result)
 
 
-    // @compiler blocked: missing-implementation
     let matchWithShadowing (x: Int) : Int =
       match x with
       | 0 -> 0
@@ -60,7 +54,6 @@ module Darklang =
       | matchWithShadowing -> matchWithShadowing + 1
 
 
-    // @compiler blocked: missing-implementation
     let tupleMatchWithShadowing (x: (Int * Int)) : Int =
       match x with
       | (0, _) -> 0
@@ -71,7 +64,7 @@ module Darklang =
       | (a, tupleMatchWithShadowing) -> a + tupleMatchWithShadowing
 
 
-    // @compiler blocked: missing-implementation
+    // @compiler blocked: compiler-gap diagnostic="Darklang.ShadowingTest.letBindingShadowing: Lambda requires an expected function type"
     let letBindingShadowing (x: Int) : List<Int> =
       let letBindingShadowing = (fun v -> v * 3)
       let letBindingShadowing = [ 10, letBindingShadowing x ]
@@ -79,7 +72,6 @@ module Darklang =
       letBindingShadowing
 
 
-    // @compiler blocked: missing-implementation
     let conditionalShadowing (x: Int) : Int =
       if x <= 0 then
         0
@@ -93,7 +85,6 @@ module Darklang =
         x + (conditionalShadowing (x - 1))
 
 
-    // @compiler blocked: missing-implementation
     let pipeWithShadowing (x: Int) : Int =
       match x with
       | 0 -> 0
@@ -104,9 +95,7 @@ module Darklang =
       | pipeWithShadowing -> x |> (+) pipeWithShadowing
 
 
-    // @compiler blocked: missing-implementation
     val valueShadowing = 120
-    // @compiler blocked: missing-implementation
     let valueShadowing (x: Int) : Int =
       if x <= 0 then
         10
@@ -117,7 +106,7 @@ module Darklang =
         (valueShadowing (x - 1)) + result
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="<entry>: Unknown function or value 'Darklang.ShadowingTest.letBindingShadowing'"
 let test1 = (Darklang.Test.factorial 0) == 1
 let test2 = (Darklang.Test.factorial 1) == 1
 let test3 = (Darklang.Test.factorial 5) == 120

@@ -28,7 +28,6 @@ let loc
   Darklang.LanguageTools.ProgramTypes.PackageLocation
     { owner = owner, modules = modules, name = name }
 
-// @compiler blocked: upstream-dependency
 let short
   (currentModule: List<String>)
   (owner: String)
@@ -37,7 +36,7 @@ let short
   : String =
   Darklang.PrettyPrinter.shortenName currentModule owner modules name
 
-// @compiler blocked: upstream-dependency
+// @compiler blocked: upstream-dependency diagnostic="Darklang.PrettyPrinter.Tests.at: Unknown function or value 'Darklang.PrettyPrinter.RuntimeTypes.dvalWith'"
 let at (width: Int) (value: 'a) : String =
   Darklang.PrettyPrinter.RuntimeTypes.dvalWith
     Darklang.SCM.Branch.mainBranchId

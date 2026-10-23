@@ -12,7 +12,7 @@ module Darklang.Stdlib.LocalStore
 ///
 /// A PATH rather than a handle: every reader opens its own connection, and the store moves per
 /// instance (`DARK_CONFIG_RUNDIR`, a test's copy, a backup being restored), so nothing may cache it.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Stdlib.LocalStore.path: Unknown function or value 'Builtin.localDbPath'"
 let path () : String = Builtin.localDbPath ()
 
 
@@ -21,13 +21,13 @@ let path () : String = Builtin.localDbPath ()
 ///
 /// Keys are namespaced by whoever owns them (`sync.*`, `current_branch`, `exec.*`), and the
 /// namespace is the contract. `Seed.export` strips this table wholesale, so nothing here travels.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Stdlib.LocalStore.configGet: Unknown function or value 'Builtin.configGet'"
 let configGet (key: String) : String = Builtin.configGet key
 
 
 /// Write a setting. Local to this instance, always: this is where "which relay" and "which branch"
 /// live, and neither is anybody else's business.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Stdlib.LocalStore.configSet: Unknown function or value 'Builtin.configSet'"
 let configSet (key: String) (value: String) : Unit = Builtin.configSet key value
 
 
@@ -37,7 +37,7 @@ let configSet (key: String) (value: String) : Unit = Builtin.configSet key value
 /// host's store), so the file API refuses it, and a copy of `data.db` alone would miss whatever is
 /// still in the WAL. This goes through SQLite's online-backup API, which reads a consistent snapshot
 /// of an open store.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Stdlib.LocalStore.backupTo: Unknown function or value 'Builtin.localDbBackupTo'"
 let backupTo (path: String) : Stdlib.Result.Result<Unit, String> =
   Builtin.localDbBackupTo path
 
@@ -46,6 +46,6 @@ let backupTo (path: String) : Stdlib.Result.Result<Unit, String> =
 ///
 /// Contents, not the file, so connections already open keep working. Anything already read into
 /// memory is still the OLD store, though, so the caller should say to restart.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Stdlib.LocalStore.restoreFrom: Unknown function or value 'Builtin.localDbRestoreFrom'"
 let restoreFrom (path: String) : Stdlib.Result.Result<Unit, String> =
   Builtin.localDbRestoreFrom path

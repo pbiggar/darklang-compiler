@@ -70,7 +70,7 @@ type StreamResponse =
 /// A GET or HEAD of <param uri>: a read. It runs concurrently with what follows, and
 /// your code waits for the response where it first looks at it, so `List.map get urls`
 /// has every request in flight at once. Any other method is a `BadMethod` error.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Stdlib.HttpClient.read: Unknown function or value 'Builtin.httpClientRead'"
 let read
   (method: String)
   (uri: String)

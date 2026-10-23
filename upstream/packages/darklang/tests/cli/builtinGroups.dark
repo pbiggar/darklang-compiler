@@ -12,17 +12,16 @@ module Darklang.Cli.Tests.BuiltinGroups
 // `notEquals` -> `not`), and naming those would be pretending the artifact is a category.
 
 module BuiltinGroups =
-  // @compiler blocked: upstream-dependency
   let knownPrefixes () : List<String> =
     Darklang.Cli.Builtins.knownGroups |> Stdlib.List.map (fun (p, _) -> p)
 
-  // @compiler blocked: upstream-dependency
+  // @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Tests.BuiltinGroups.BuiltinGroups.livePrefixes: Unknown function or value 'Darklang.LanguageTools.allBuiltinFns'"
   let livePrefixes () : List<String> =
     Darklang.LanguageTools.allBuiltinFns ()
     |> Stdlib.List.map (fun f -> Darklang.Cli.Builtins.extractGroup f.name.name)
 
   /// Prefixes carrying at least <param floor> builtins.
-  // @compiler blocked: upstream-dependency
+  // @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Tests.BuiltinGroups.BuiltinGroups.substantial: Unknown function or value 'livePrefixes'"
   let substantial (floor: Int) : List<String> =
     let live = livePrefixes ()
     live

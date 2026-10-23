@@ -6,12 +6,11 @@ module Darklang.Cli.Tests.TestSuite
 
 // ── Workbench canvas (spans -> rows) ──
 
-// @compiler blocked: upstream-dependency
 let canvasRegion () : Darklang.Stdlib.Cli.UI.Layout.Region =
   Darklang.Stdlib.Cli.UI.Layout.Region { top = 1, left = 1, rows = 4, cols = 10 }
 
 
-// @compiler blocked: upstream-dependency
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Tests.TestSuite.canvasRow: Unknown function or value 'Darklang.Stdlib.Cli.Tui.Text.stripSgr'"
 let canvasRow (spans: List<Darklang.Stdlib.Cli.UI.Layout.Span>) : String =
   Darklang.Stdlib.Cli.UI.Canvas.compose 10 2 spans
   |> Stdlib.List.head
@@ -201,7 +200,6 @@ test textWrapAtWordsBreaksAtSpaces =
 
 // -- InlineFrame: relative addressing, the part that can wreck scrollback --
 
-// @compiler blocked: upstream-dependency
 let inlineView (rows: List<String>) : Stdlib.Cli.Tui.View =
   Stdlib.Cli.Tui.View { rows = rows, cursor = Stdlib.Cli.Tui.Cursor.Hidden, mode = Stdlib.Cli.Tui.ViewMode.Inline }
 
@@ -238,7 +236,6 @@ test inlineFrameMovesRelativeToPreviousCursor =
 
 // -- TerminalSession lifecycle, through the `Prepared` seam that exists so this needs no real terminal --
 
-// @compiler blocked: upstream-dependency
 let fullscreenView (rows: List<String>) : Stdlib.Cli.Tui.View =
   Stdlib.Cli.Tui.View { rows = rows, cursor = Stdlib.Cli.Tui.Cursor.Hidden, mode = Stdlib.Cli.Tui.ViewMode.Fullscreen }
 
@@ -294,7 +291,7 @@ test sessionStopRestoresOnlyWhenRunning =
 // ── Workbench: every view renders ──
 
 /// A workbench state good enough to render, without touching the terminal.
-// @compiler blocked: upstream-dependency
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Darklang.Cli.Workbench.State'"
 let workbenchState () : Darklang.Cli.Workbench.State =
   Darklang.Cli.Workbench.initialState
     Darklang.SCM.Branch.mainBranchId
@@ -304,7 +301,7 @@ let workbenchState () : Darklang.Cli.Workbench.State =
 
 
 /// Render one view and report whether it produced a plausible frame.
-// @compiler blocked: upstream-dependency
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Tests.TestSuite.rendersView: Unknown function or value 'workbenchState'"
 let rendersView (viewIndex: Int) : Bool =
   let state = { (workbenchState ()) with activeView = viewIndex }
   let size = Stdlib.Cli.Tui.Size { width = 120, height = 40 }
@@ -316,7 +313,7 @@ let rendersView (viewIndex: Int) : Bool =
 
 /// The same for Matter's lenses. `Changed` is the interesting one: it reads the draft rather than the
 /// package tree, so it is a different code path from the other two rather than a filter over the same one.
-// @compiler blocked: upstream-dependency
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Tests.TestSuite.rendersMatterLens: Unknown function or value 'workbenchState'"
 let rendersMatterLens (lens: Darklang.Cli.Workbench.Lens) : Bool =
   let base = workbenchState ()
 
@@ -339,7 +336,7 @@ let rendersMatterLens (lens: Darklang.Cli.Workbench.Lens) : Bool =
 /// assertions stop being reliable past two, because the frame is painted as a diff. From state it is a
 /// one-liner: put the location inside a real module so `loadItems` returns leaves rather than submodules,
 /// and render.
-// @compiler blocked: upstream-dependency
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Tests.TestSuite.rendersMatterItemPage: Unknown function or value 'workbenchState'"
 let rendersMatterItemPage (path: List<String>) : Bool =
   let base = workbenchState ()
   let loc = Packages.PackageLocation.Module path
@@ -388,7 +385,7 @@ test workbenchItemPageRenders =
 /// deliberately broken, every assertion in `scripts/testing/gates workbench-views` still passed, because
 /// none of them draw a preview. Focusing it through the terminal needs a third interaction, and the
 /// frame diff stops being reliable past two -- so it belongs here, where rendering takes no terminal.
-// @compiler blocked: upstream-dependency
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Tests.TestSuite.rendersPreview: Unknown function or value 'workbenchState'"
 let rendersPreview (viewIndex: Int) : Bool =
   let base = workbenchState ()
   let state = { base with activeView = viewIndex }
@@ -632,7 +629,7 @@ type WbAction =
   | Launched of command: String
   | Prompted
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Tests.TestSuite.WbResult: Unknown type 'Darklang.Cli.Workbench.State'"
 type WbResult =
   { state: Darklang.Cli.Workbench.State
     action: WbAction }
@@ -640,7 +637,7 @@ type WbResult =
 /// One keypress through the workbench's dispatcher in a plain-view context.
 /// Keep the action beside the state: encoding Exit/Prompt as a fake status
 /// message hid an unexpected Launch or ToPrompt.
-// @compiler blocked: upstream-dependency
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Darklang.Cli.Workbench.State'"
 let wbPress
   (state: Darklang.Cli.Workbench.State)
   (key: Stdlib.Cli.Stdin.Key.Key)
@@ -654,11 +651,11 @@ let wbPress
   | ToPrompt s -> WbResult { state = s, action = WbAction.Prompted }
 
 /// A printable key.
-// @compiler blocked: upstream-dependency
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Darklang.Cli.Workbench.State'"
 let wbChar (state: Darklang.Cli.Workbench.State) (c: String) : WbResult =
   wbPress state Stdlib.Cli.Stdin.Key.Key.NoName (Stdlib.Option.Option.Some c)
 
-// @compiler blocked: upstream-dependency
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Darklang.Cli.Workbench.State'"
 let wbKey
   (state: Darklang.Cli.Workbench.State)
   (k: Stdlib.Cli.Stdin.Key.Key)
@@ -669,7 +666,7 @@ let wbKey
 /// Tests care that REPL is reachable, not how many rows follow Code today.
 /// The walking arrows depend on the nav's shape at the terminal size the
 /// test runs under: along the strip, down the overlay.
-// @compiler blocked: upstream-dependency
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Darklang.Cli.Workbench.State'"
 let wbMoveNavbarTo
   (state: Darklang.Cli.Workbench.State)
   (matches: Darklang.Cli.Workbench.NavbarRow -> Bool)
@@ -694,7 +691,7 @@ let wbMoveNavbarTo
       Stdlib.List.range 1 steps
       |> Stdlib.List.fold state (fun s _ -> (wbKey s key).state)
 
-// @compiler blocked: upstream-dependency
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Darklang.Cli.Workbench.State'"
 let wbMoveNavbarToDest
   (state: Darklang.Cli.Workbench.State)
   (dest: Darklang.Cli.Workbench.Dest)
@@ -702,7 +699,7 @@ let wbMoveNavbarToDest
   wbMoveNavbarTo state (fun row -> row.dest == dest)
 
 /// Is the nav cursor on the destination we expected?
-// @compiler blocked: upstream-dependency
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Darklang.Cli.Workbench.State'"
 let wbNavbarSelectionIsDest
   (state: Darklang.Cli.Workbench.State)
   (dest: Darklang.Cli.Workbench.Dest)
@@ -824,7 +821,6 @@ test workbenchNavbarNavigation =
 // ── REPL session bindings ──
 
 /// Shorthand for a captured binding (one holding a value rather than an expression).
-// @compiler blocked: upstream-dependency
 let bound (name: String) (source: String) : Darklang.Cli.Repl.Binding =
   Darklang.Cli.Repl.Binding { name = name, source = source, value = source, captured = true }
 
@@ -987,7 +983,7 @@ test workbenchCapturesStrayOutput =
 
 
 /// Does rendering view `viewIndex` put `marker` on the screen?
-// @compiler blocked: upstream-dependency
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Tests.TestSuite.viewShows: Unknown function or value 'Darklang.Cli.Workbench.focusNavbar'"
 let viewShows (viewIndex: Int) (marker: String) : Bool =
   let state =
     Darklang.Cli.Workbench.focusNavbar
@@ -999,7 +995,7 @@ let viewShows (viewIndex: Int) (marker: String) : Bool =
 
 /// `viewShows`, with the CONTENT holding the keyboard: the footer then carries the
 /// view's own hints rather than the nav's.
-// @compiler blocked: upstream-dependency
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Tests.TestSuite.contentShows: Unknown function or value 'Darklang.Cli.Workbench.focusContent'"
 let contentShows (viewIndex: Int) (marker: String) : Bool =
   let state =
     Darklang.Cli.Workbench.focusContent

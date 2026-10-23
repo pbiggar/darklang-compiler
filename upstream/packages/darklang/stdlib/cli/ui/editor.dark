@@ -2,35 +2,28 @@
 /// key handling live in the caller; this module is pure so it's eval-testable. Foundation for the Edit view.
 module Darklang.Stdlib.Cli.UI.Editor
 
-// @compiler blocked: missing-implementation
 type Buf =
   { lines: List<String>
     row: Int
     col: Int }
 
-// @compiler blocked: missing-implementation
 let emptyBuf () : Buf =
   Buf { lines = [ "" ], row = 0, col = 0 }
 
-// @compiler blocked: missing-implementation
 let fromText (text: String) : Buf =
   let ls = Stdlib.String.split text "\n"
   let lines = if Stdlib.List.isEmpty ls then [ "" ] else ls
   Buf { lines = lines, row = 0, col = 0 }
 
-// @compiler blocked: missing-implementation
 let toText (buf: Buf) : String =
   Stdlib.String.join buf.lines "\n"
 
-// @compiler blocked: missing-implementation
 let currentLine (buf: Buf) : String =
   Stdlib.List.getAt buf.lines buf.row |> Stdlib.Option.withDefault ""
 
-// @compiler blocked: missing-implementation
 let setLine (lines: List<String>) (row: Int) (s: String) : List<String> =
   lines |> Stdlib.List.indexedMap (fun i l -> if i == row then s else l)
 
-// @compiler blocked: missing-implementation
 let insertChar (buf: Buf) (ch: String) : Buf =
   let line = currentLine buf
   let before = Stdlib.String.slice line 0 buf.col
@@ -40,7 +33,6 @@ let insertChar (buf: Buf) (ch: String) : Buf =
       row = buf.row
       col = buf.col + (Stdlib.String.length ch) }
 
-// @compiler blocked: missing-implementation
 let newline (buf: Buf) : Buf =
   let line = currentLine buf
   let before = Stdlib.String.slice line 0 buf.col
@@ -53,7 +45,6 @@ let newline (buf: Buf) : Buf =
 
 /// Insert a string that may contain newlines: split on "\n" and stitch with `newline` between segments.
 /// A string with no "\n" splits to one part -> identical to `insertChar`. This is what a paste routes through.
-// @compiler blocked: missing-implementation
 let insertText (buf: Buf) (text: String) : Buf =
   Stdlib.String.split text "\n"
   |> Stdlib.List.indexedMap (fun i s -> (i, s))
@@ -61,7 +52,6 @@ let insertText (buf: Buf) (text: String) : Buf =
     let (i, s) = pair
     if i == 0 then insertChar b s else insertChar (newline b) s)
 
-// @compiler blocked: missing-implementation
 let backspace (buf: Buf) : Buf =
   if buf.col > 0 then
     let line = currentLine buf
@@ -90,7 +80,6 @@ let backspace (buf: Buf) : Buf =
 /// Delete the character to the RIGHT of the cursor; at the end of a line, pull the next line up. The mirror
 /// of `backspace`, and the reason it exists: without it, fixing a line means arrowing to its end and
 /// backspacing over everything you wanted to keep.
-// @compiler blocked: missing-implementation
 let deleteForward (buf: Buf) : Buf =
   let line = currentLine buf
   let len = Stdlib.String.length line
@@ -112,27 +101,22 @@ let deleteForward (buf: Buf) : Buf =
     buf
 
 /// Jump to the start / end of the current line.
-// @compiler blocked: missing-implementation
 let moveLineStart (buf: Buf) : Buf = { buf with col = 0 }
 
-// @compiler blocked: missing-implementation
 let moveLineEnd (buf: Buf) : Buf =
   { buf with col = Stdlib.String.length (currentLine buf) }
 
 /// Drop everything from the cursor to the end of the line (readline's ^k), so replacing a line is two keys
 /// rather than one per character.
-// @compiler blocked: missing-implementation
 let killToLineEnd (buf: Buf) : Buf =
   let line = currentLine buf
   let kept = Stdlib.String.slice line 0 buf.col
   Buf { lines = setLine buf.lines buf.row kept, row = buf.row, col = buf.col }
 
-// @compiler blocked: missing-implementation
 let clampCol (buf: Buf) : Buf =
   let len = Stdlib.String.length (currentLine buf)
   { buf with col = Stdlib.min buf.col len }
 
-// @compiler blocked: missing-implementation
 let moveLeft (buf: Buf) : Buf =
   if buf.col > 0 then
     { buf with col = buf.col - 1 }
@@ -145,7 +129,6 @@ let moveLeft (buf: Buf) : Buf =
   else
     buf
 
-// @compiler blocked: missing-implementation
 let moveRight (buf: Buf) : Buf =
   let len = Stdlib.String.length (currentLine buf)
   if buf.col < len then
@@ -155,11 +138,9 @@ let moveRight (buf: Buf) : Buf =
   else
     buf
 
-// @compiler blocked: missing-implementation
 let moveUp (buf: Buf) : Buf =
   if buf.row > 0 then clampCol { buf with row = buf.row - 1 } else buf
 
-// @compiler blocked: missing-implementation
 let moveDown (buf: Buf) : Buf =
   if buf.row < (Stdlib.List.length buf.lines) - 1 then clampCol { buf with row = buf.row + 1 }
   else buf

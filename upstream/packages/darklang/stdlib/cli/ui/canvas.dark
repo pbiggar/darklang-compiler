@@ -22,7 +22,6 @@ module Darklang.Stdlib.Cli.UI.Canvas
 
 
 /// A placed run of text, with its width measured once.
-// @compiler blocked: missing-implementation
 type Segment =
   { col: Int
     text: String
@@ -35,7 +34,6 @@ type Segment =
 /// blank band and then its content on top. Where a later span lands inside an earlier one, the earlier one's
 /// right-hand remainder is dropped rather than split. That's indistinguishable in practice, because the only
 /// thing that ever gets covered this way is blank padding, and gaps render as spaces anyway.
-// @compiler blocked: missing-implementation
 let overlay (existing: List<Segment>) (next: Segment) : List<Segment> =
   let nextEnd = next.col + next.width
 
@@ -76,7 +74,6 @@ let overlay (existing: List<Segment>) (next: Segment) : List<Segment> =
 
 
 /// Render placed segments into one row, padding the gaps between them with spaces.
-// @compiler blocked: missing-implementation
 let renderSegments (width: Int) (segments: List<Segment>) : String =
   let (text, _endCol) =
     segments
@@ -112,7 +109,6 @@ let renderSegments (width: Int) (segments: List<Segment>) : String =
 
 
 /// Paint one row's spans, in order.
-// @compiler blocked: missing-implementation
 let composeRow (width: Int) (rowSpans: List<Layout.Span>) : String =
   // `renderSegments` walks the segments left to right, so they have to be in column order. Sorting
   // them there cost a `sortBy` per row, to reorder rows a renderer had already produced left to
@@ -157,7 +153,6 @@ let composeRow (width: Int) (rowSpans: List<Layout.Span>) : String =
 ///
 /// Spans are bucketed by row in one pass. Doing it the obvious way (filter the whole span list once per row)
 /// is quadratic, and a full-screen frame has enough of both to make that hurt.
-// @compiler blocked: missing-implementation
 let compose (width: Int) (height: Int) (spans: List<Layout.Span>) : List<String> =
   let w = Stdlib.max 1 width
   let h = Stdlib.max 0 height
@@ -191,7 +186,6 @@ let compose (width: Int) (height: Int) (spans: List<Layout.Span>) : List<String>
 
 
 /// Compose spans into a full-screen `Tui.View`.
-// @compiler blocked: missing-implementation
 let toView (size: Tui.Size) (spans: List<Layout.Span>) : Tui.View =
   Tui.View
     { rows = compose size.width size.height spans

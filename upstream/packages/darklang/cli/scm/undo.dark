@@ -20,7 +20,7 @@ module Darklang.Cli.Undo
 // The rebind is an ordinary authoring op and routes to whichever branch you are on, so undoing on a branch
 // never touches main.
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'AppState'"
 let execute (state: AppState) (args: List<String>) : AppState =
   // A `--flag` is not a name. Without this it reaches the location parser, which answers that a name
   // has three parts -- a complaint about the name rather than the flag. `undo` takes no flags at all.
@@ -89,7 +89,7 @@ let execute (state: AppState) (args: List<String>) : AppState =
     Cli.exitWith state false
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'AppState'"
 let help (_state: AppState) : String =
   [ "dark undo <name> - step one item back a version."
     ""
@@ -103,7 +103,7 @@ let help (_state: AppState) : String =
     "  you stepped off gets you back." ]
   |> Stdlib.String.join "\n"
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'AppState'"
 let complete
   (_state: AppState)
   (_args: List<String>)

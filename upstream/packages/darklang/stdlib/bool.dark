@@ -3,7 +3,6 @@ module Darklang.Stdlib.Bool
 
 /// Returns the inverse of <param b>: {{true}} if <param b>
 /// is {{false}} and {{false}} if <param b> is {{true}}
-// @compiler blocked: missing-implementation
 let not (b: Bool) : Bool = Builtin.boolNot b
 
 /// Returns {{true}} if both <param a> and <param b> are {{true}}

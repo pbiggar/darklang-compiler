@@ -1,6 +1,6 @@
 module Darklang.Cli.Permissions.Command
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Permissions.Command.AccessReportFacts: Unknown type 'LanguageTools.Permissions.Effect'"
 type AccessReportFacts =
   { hash: String
     effects: List<LanguageTools.Permissions.Effect>
@@ -14,16 +14,16 @@ type AccessReportFacts =
 // Builtin wrappers.
 // Each policy builtin has exactly this one Dark caller (tests/builtin).
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.Permissions.Policy'"
 let currentPolicy () : LanguageTools.Permissions.Policy =
   Builtin.pmPolicyGetInstance ()
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.Permissions.Policy'"
 let writePolicy (policy: LanguageTools.Permissions.Policy) : Unit =
   Builtin.pmPolicySetInstance policy
 
 /// Atomically edit the instance policy. Removals apply before additions.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.Permissions.Rule'"
 let editInstancePolicy
   (allow: List<LanguageTools.Permissions.Rule>)
   (deny: List<LanguageTools.Permissions.Rule>)
@@ -34,7 +34,7 @@ let editInstancePolicy
 /// The transitive permission requirements and whether analysis was complete.
 /// Incomplete analysis returns the effects found with `false`; fetch once and
 /// pass the result around because this walks the function's closure.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.Permissions.Effect'"
 let permissionRequirementsForHash
   (hash: String)
   : (List<LanguageTools.Permissions.Effect> * Bool) =
@@ -43,20 +43,20 @@ let permissionRequirementsForHash
 /// Drop the approval of one immutable version and the dependencies no other
 /// approved root still needs. `unapprove` does not do this; a name's approved version and the
 /// approval are separate records.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Permissions.Command.revokeHash: Unknown function or value 'Builtin.pmPolicyRevokePackage'"
 let revokeHash
   (accountID: Stdlib.Option.Option<Uuid>)
   (hash: String)
   : Unit =
   Builtin.pmPolicyRevokePackage accountID hash
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Permissions.Command.approvedHashes: Unknown function or value 'Builtin.pmPolicyListPackages'"
 let approvedHashes (accountID: Stdlib.Option.Option<Uuid>) : List<String> =
   Builtin.pmPolicyListPackages accountID
 
 /// Whether this immutable function is bundled first-party code, plus the
 /// account's consumer policy when it has one.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.Permissions.Policy'"
 let packageAccess
   (accountID: Stdlib.Option.Option<Uuid>)
   (hash: String)
@@ -65,7 +65,7 @@ let packageAccess
 
 /// The rules the consumer wrote when approving <param hash> as a root; None
 /// for a derived approval.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.Permissions.Policy'"
 let explicitApprovalFor
   (accountID: Stdlib.Option.Option<Uuid>)
   (hash: String)
@@ -75,12 +75,12 @@ let explicitApprovalFor
 /// Whether existing approvals were recorded under different approval-analysis
 /// semantics than this host's — a re-review signal (enforcement stays
 /// fail-closed regardless).
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Permissions.Command.approvalsStale: Unknown function or value 'Builtin.pmPolicyApprovalsStale'"
 let approvalsStale () : Bool =
   Builtin.pmPolicyApprovalsStale ()
 
 /// Every (logical name, approved version) pair for this account.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Permissions.Command.approvedVersions: Unknown function or value 'Builtin.pmPolicyApprovedVersions'"
 let approvedVersions
   (accountID: Stdlib.Option.Option<Uuid>)
   : List<(String * String)> =
@@ -88,7 +88,7 @@ let approvedVersions
 
 /// The approved hashes, each labelled with the name that resolves to it when there is one. A hash
 /// with no name is a dependency approved inside another root's closure.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Permissions.Command.namedApprovals: Unknown function or value 'Command.approvedVersions'"
 let namedApprovals
   (accountID: Stdlib.Option.Option<Uuid>)
   (branchId: Uuid)
@@ -111,7 +111,7 @@ let namedApprovals
       | None -> hash)
 
 /// The store's name for an approved dependency's hash, when it has one on <param branchId>.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Permissions.Command.dependencyName: Unknown function or value 'LanguageTools.PackageManager.Function.locations'"
 let dependencyName
   (branchId: Uuid)
   (hash: String)
@@ -134,7 +134,7 @@ let dependencyName
 /// Approve an immutable closure and point its logical name at that version, atomically. The builtin
 /// compares the contract before storing approval; a changed contract returns diffs for explicit
 /// review. `rules` optionally narrows the consumer's policy; None approves the analyzed effect set.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.Permissions.Policy'"
 let approveVersionFor
   (accountID: Stdlib.Option.Option<Uuid>)
   (name: String)
@@ -152,7 +152,7 @@ let approveVersionFor
     acknowledgeContractChange
 
 /// Withdraw a name's approved version, so it resolves to whatever is current again.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Permissions.Command.unapproveVersionFor: Unknown function or value 'Builtin.pmPolicyUnapproveVersion'"
 let unapproveVersionFor
   (accountID: Stdlib.Option.Option<Uuid>)
   (name: String)
@@ -162,11 +162,10 @@ let unapproveVersionFor
 
 // Requirements display.
 
-// @compiler blocked: missing-implementation
 let shortVersion (hash: String) : String =
   Stdlib.String.slice hash 0 8
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.Permissions.Effect'"
 let requirementSummary (requirements: List<LanguageTools.Permissions.Effect>) : String =
   if Stdlib.List.isEmpty requirements then "effect-free"
   else
@@ -178,7 +177,7 @@ let requirementSummary (requirements: List<LanguageTools.Permissions.Effect>) : 
 /// could not follow everything, the effects it did find are shown and the
 /// remainder is called unknown. It does not say why: a callback, a package
 /// value, and an implementation picked at run time all look the same here.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.Permissions.Effect'"
 let describeRequirements
   (requirements: (List<LanguageTools.Permissions.Effect> * Bool))
   : String =
@@ -187,18 +186,18 @@ let describeRequirements
   | ([], false) -> "not fully known"
   | (effects, false) -> Command.requirementSummary effects + ", possibly more"
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Permissions.Command.requirementDisplay: Unknown function or value 'Command.describeRequirements'"
 let requirementDisplay (hash: String) : String =
   Command.describeRequirements (Command.permissionRequirementsForHash hash)
 
 /// The bracketed requirements badge listings show next to a function,
 /// e.g. `[file-read]`; callers colour it for their view.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Permissions.Command.requirementBadge: Unknown function or value 'Command.requirementDisplay'"
 let requirementBadge (hash: LanguageTools.ProgramTypes.Hash) : String =
   "[" + Command.requirementDisplay (LanguageTools.ProgramTypes.hashToString hash) + "]"
 
 /// The author's `:{…}` ceiling for a function, when it declares one.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.Permissions.Effect'"
 let ceilingForHash
   (hash: String)
   : Stdlib.Option.Option<List<LanguageTools.Permissions.Effect>> =
@@ -210,7 +209,7 @@ let ceilingForHash
 /// print them: the requirements the body needs, the ceiling the author
 /// declared, and a warning when the two disagree — a ceiling narrower than a
 /// complete requirement set means those calls are denied at runtime.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Permissions.Command.policyLinesForHash: Unknown function or value 'Command.permissionRequirementsForHash'"
 let policyLinesForHash (hash: String) : List<String> =
   let (effects, complete) = Command.permissionRequirementsForHash hash
   let requirementsLine =
@@ -230,18 +229,18 @@ let policyLinesForHash (hash: String) : List<String> =
     Stdlib.List.append [ requirementsLine, $"function ceiling: {row}" ] warning
 
 /// A policy as rule lines; an empty policy is spelled out as `deny all`.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.Permissions.Policy'"
 let policyLines (policy: LanguageTools.Permissions.Policy) : List<String> =
   match LanguageTools.Permissions.render policy with
   | [] -> [ "deny all" ]
   | rules -> rules
 
 /// The instance policy as `permissions list` prints it.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Permissions.Command.instancePolicyLines: Unknown function or value 'Command.policyLines'"
 let instancePolicyLines () : List<String> =
   Command.policyLines (Command.currentPolicy ())
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.Permissions.Policy'"
 let indentedPolicyLines
   (policy: LanguageTools.Permissions.Policy)
   : List<String> =
@@ -249,7 +248,7 @@ let indentedPolicyLines
 
 /// Pure rendering for the layered access explanation. Kept separate from the
 /// host reads so its wording and security distinctions have executable tests.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Command.AccessReportFacts'"
 let renderAccessReport (facts: Command.AccessReportFacts) : List<String> =
   let requirements = Command.describeRequirements (facts.effects, facts.complete)
   let analysis =
@@ -306,7 +305,7 @@ let renderAccessReport (facts: Command.AccessReportFacts) : List<String> =
 /// A layered explanation of one immutable function's authority. Requirements
 /// say what its reachable code may request; actual authorization remains the
 /// runtime intersection shown here, with exact paths/URLs decided per call.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Permissions.Command.accessReportLines: Unknown function or value 'Command.renderAccessReport'"
 let accessReportLines
   (accountID: Stdlib.Option.Option<Uuid>)
   (hash: String)
@@ -315,7 +314,7 @@ let accessReportLines
 
 /// The facts behind `accessReportLines`, for a caller that renders them its
 /// own way (the workbench's detail panes show a compact cut of them).
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Command.AccessReportFacts'"
 let accessFacts
   (accountID: Stdlib.Option.Option<Uuid>)
   (hash: String)
@@ -340,7 +339,6 @@ let accessFacts
 
 // Instance policy edits.
 
-// @compiler blocked: missing-implementation
 let invalidRule (args: List<String>) : String =
   "invalid permission rule: " + Stdlib.String.join args " "
 
@@ -348,7 +346,7 @@ let invalidRule (args: List<String>) : String =
 /// interactive CLI's general command splitter leaves quote fragments in the
 /// list. Re-tokenize only the latter; direct argv remains lossless for an
 /// argument that itself contains spaces.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.Permissions.Rule'"
 let parseRuleArgs
   (args: List<String>)
   : Stdlib.Option.Option<List<LanguageTools.Permissions.Rule>> =
@@ -363,7 +361,7 @@ let parseRuleArgs
 
 /// Read-modify-write the instance policy and report. <param edit> returns the
 /// next policy, or the message for input that did not parse.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.Permissions.Policy'"
 let editPolicy
   (edit: LanguageTools.Permissions.Policy -> Stdlib.Result.Result<LanguageTools.Permissions.Policy, String>)
   (success: String)
@@ -378,7 +376,7 @@ let editPolicy
     false
 
 /// Parse rule arguments and pass them to <param edit>, or report invalid input.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.Permissions.Rule'"
 let editRules
   (args: List<String>)
   (edit: List<LanguageTools.Permissions.Rule> -> Unit)
@@ -394,7 +392,7 @@ let editRules
     true
 
 /// `set a; deny b; c` replaces the whole policy.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.Permissions.Policy'"
 let replacePolicy
   (specs: List<String>)
   : Stdlib.Result.Result<LanguageTools.Permissions.Policy, String> =
@@ -413,7 +411,7 @@ let replacePolicy
 // identifiers only.
 
 /// Resolve a logical name to its latest published version on this branch.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Permissions.Command.latestVersion: Unknown function or value 'LanguageTools.PackageManager.Function.find'"
 let latestVersion
   (branchId: Uuid)
   (name: String)
@@ -425,7 +423,7 @@ let latestVersion
   | None -> Stdlib.Option.Option.None
 
 /// The version this account has APPROVED for <param name>, if any.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Permissions.Command.approvedVersionOf: Unknown function or value 'Command.approvedVersions'"
 let approvedVersionOf
   (accountID: Stdlib.Option.Option<Uuid>)
   (name: String)
@@ -437,7 +435,7 @@ let approvedVersionOf
 
 /// `requirements`/`show` accept a logical name (resolved to its latest version)
 /// or a raw hash for diagnostics.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Cli.AppState'"
 let resolveVersionArg
   (state: Cli.AppState)
   (arg: String)
@@ -454,13 +452,12 @@ let resolveVersionArg
     | Some _ -> Stdlib.Option.Option.Some arg
     | None -> Stdlib.Option.Option.None
 
-// @compiler blocked: missing-implementation
 let stdinIsInteractive () : Bool =
   (Stdlib.Cli.Tui.TerminalSupport.currentFacts ()).inputIsTerminal
 
 /// Print a version's requirements, warning when analysis is incomplete.
 /// Returns completeness so callers can acknowledge a possibly short list.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Permissions.Command.showVersionRequirements: Unknown function or value 'Command.permissionRequirementsForHash'"
 let showVersionRequirements (heading: String) (hash: String) : Bool =
   let requirements = Command.permissionRequirementsForHash hash
   let (_effects, complete) = requirements
@@ -482,7 +479,6 @@ let showVersionRequirements (heading: String) (hash: String) : Bool =
 /// `stdinIsInteractive` answers yes there and the confirmation then blocks on
 /// a terminal nobody types into, forever. It is stripped before the rules are
 /// parsed, so it is never mistaken for a permission rule.
-// @compiler blocked: missing-implementation
 let takeYesFlag (args: List<String>) : (Bool * List<String>) =
   let isYesFlag (a: String) : Bool = (a == "--yes") || (a == "-y")
   let yes = args |> Stdlib.List.any isYesFlag
@@ -491,7 +487,7 @@ let takeYesFlag (args: List<String>) : (Bool * List<String>) =
 
 /// Show the full replacement before any write. Previewing never prompts or
 /// edits policy; --yes uses the same host-only writer as `permissions set`.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Permissions.Command.profile: Unknown function or value 'Profiles.resolve'"
 let profile (args: List<String>) : Bool =
   match args with
   | [] ->
@@ -520,7 +516,7 @@ let profile (args: List<String>) : Bool =
 
 /// The rules given after a name on `approve`/`update`, `;`-separated like
 /// `set`. Ok None when there are none.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.Permissions.Policy'"
 let parseApprovalRules
   (specs: List<String>)
   : Stdlib.Result.Result<Stdlib.Option.Option<LanguageTools.Permissions.Policy>, String> =
@@ -531,7 +527,7 @@ let parseApprovalRules
     | Error message -> Stdlib.Result.Result.Error message
 
 /// Lines describing the policy a version is approved under, for the prompt.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.Permissions.Policy'"
 let describeApprovalRules
   (rules: Stdlib.Option.Option<LanguageTools.Permissions.Policy>)
   : List<String> =
@@ -542,7 +538,6 @@ let describeApprovalRules
       [ "  approved under these rules (the package and everything it calls):" ]
       (Command.indentedPolicyLines policy)
 
-// @compiler blocked: missing-implementation
 let approvalFailureText (failure: LanguageTools.Permissions.ApprovalFailure) : String =
   match failure with
   | Refused message -> Stdlib.Cli.UI.Colors.error message
@@ -555,7 +550,7 @@ let approvalFailureText (failure: LanguageTools.Permissions.ApprovalFailure) : S
 /// <param kept>) when it cannot be approved. Answers whether it approved, and Some diffs when
 /// approving wants a second review of a changed contract and <param acknowledgeContractChange> was
 /// false; the caller shows them and asks.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.Permissions.Policy'"
 let approveReporting
   (accountID: Stdlib.Option.Option<Uuid>)
   (name: String)
@@ -584,7 +579,7 @@ let approveReporting
     (false, Stdlib.Option.Option.None)
   | Error(ContractChanged diffs) -> (false, Stdlib.Option.Option.Some diffs)
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Cli.AppState'"
 let approveNamed
   (state: Cli.AppState)
   (acceptWithoutPrompt: Bool)
@@ -639,7 +634,7 @@ let approveNamed
 /// A changed contract requires a second confirmation. Updates always
 /// prompt, including non-interactive runs, unless `--yes` was given, which is
 /// itself the explicit yes and covers a changed contract too.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Cli.AppState'"
 let updateNamed
   (state: Cli.AppState)
   (acceptWithoutPrompt: Bool)
@@ -724,7 +719,7 @@ let updateNamed
 
 /// Run <param show> against the version <param target> names, or report an
 /// unknown function.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Cli.AppState'"
 let withVersion
   (state: Cli.AppState)
   (target: String)
@@ -738,7 +733,6 @@ let withVersion
     Stdlib.printLines (show hash)
     true
 
-// @compiler blocked: missing-implementation
 let printListOrNone (items: List<String>) : Unit =
   if Stdlib.List.isEmpty items then Stdlib.printLine "none"
   else Stdlib.printLines items
@@ -747,7 +741,6 @@ let printListOrNone (items: List<String>) : Unit =
 /// Every subcommand with the usage it prints when its argument is missing;
 /// None for the ones that take no argument. Drives `execute`'s
 /// missing-argument arm and `complete`.
-// @compiler blocked: missing-implementation
 val subcommands =
   [ ("list", Stdlib.Option.Option.None)
     ("profile", Stdlib.Option.Option.None)
@@ -768,13 +761,12 @@ val subcommands =
     ("revoke-package", Stdlib.Option.Option.Some "revoke-package <hash>") ]
 
 /// The usage line for a subcommand given without its argument, if it needs one.
-// @compiler blocked: missing-implementation
 let usageOf (subcommand: String) : Stdlib.Option.Option<String> =
   Command.subcommands
   |> Stdlib.List.findFirst (fun (name, _usage) -> name == subcommand)
   |> Stdlib.Option.andThen (fun (_name, usage) -> usage)
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Cli.AppState'"
 let execute (state: Cli.AppState) (args: List<String>) : Cli.AppState =
   match args with
   | []
@@ -881,7 +873,7 @@ let execute (state: Cli.AppState) (args: List<String>) : Cli.AppState =
     Stdlib.printLine (Command.help state)
     Cli.exitWith state false
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Cli.AppState'"
 let complete
   (_state: Cli.AppState)
   (args: List<String>)
@@ -899,7 +891,7 @@ let complete
     Command.subcommands
     |> Stdlib.List.map (fun (name, _usage) -> Cli.Completion.simple name)
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Cli.AppState'"
 let help (_state: Cli.AppState) : String =
   [ "Usage: permissions [list] | allow <rule> | deny <rule> | remove <rule>"
     "                   | set <rule>;… | clear"

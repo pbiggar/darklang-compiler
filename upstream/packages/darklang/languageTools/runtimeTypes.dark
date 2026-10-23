@@ -2,7 +2,6 @@ module Darklang.LanguageTools.RuntimeTypes
 
 
 // <aliases>
-// @compiler blocked: missing-implementation
 type Option<'a> = Stdlib.Option.Option<'a>
 // </aliases>
 
@@ -15,21 +14,17 @@ let hashToString (hash: Hash) : String =
   | Hash h -> h
 
 module FQTypeName =
-  // @compiler blocked: missing-implementation
   type Package = Hash
   // @compiler blocked: compiler-contract
   type FQTypeName = Package of Package
 
 module FQTraitName =
-  // @compiler blocked: missing-implementation
   type Package = Hash
-  // @compiler blocked: missing-implementation
   type FQTraitName = Package of Package
 
 module FQValueName =
   // @compiler replace: packages/darklang/languageTools/runtimeTypes/fqValueName.dark#Darklang.LanguageTools.RuntimeTypes.FQValueName.Builtin reason=compiler-implementation
   type Builtin = { name: String, version: Int32 }
-  // @compiler blocked: missing-implementation
   type Package = Hash
 
   // @compiler blocked: compiler-contract
@@ -40,12 +35,10 @@ module FQValueName =
 module FQFnName =
   // @compiler replace: packages/darklang/languageTools/runtimeTypes/fqFnName.dark#Darklang.LanguageTools.RuntimeTypes.FQFnName.Builtin reason=compiler-implementation
   type Builtin = { name: String, version: Int32 }
-  // @compiler blocked: missing-implementation
   type Package = Hash
 
   /// How much of a trait call's implementation is decided; the runtime's half of
   /// `ProgramTypes.FQFnName.ImplChoice`.
-  // @compiler blocked: missing-implementation
   type ImplChoice =
     /// That fn runs
     | Chosen of Package
@@ -56,7 +49,6 @@ module FQFnName =
 
   /// A trait method call: the trait, the method name (`ToString.toString`), and how
   /// much the save could say about which implementation runs.
-  // @compiler blocked: missing-implementation
   type TraitMethod =
     { trait_: FQTraitName.Package
       method_: String
@@ -110,7 +102,6 @@ type TypeReference =
   | TFn of List<TypeReference> * TypeReference
   | TVariable of String
 
-// @compiler blocked: missing-implementation
 type TypeSymbolTable = Dict<String, TypeReference>
 
 
@@ -161,7 +152,7 @@ type LetPattern =
     second: LetPattern *
     theRest: List<LetPattern>
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: constructor-identity diagnostic="Constructor identity collision 1941: Darklang.Language.Tests.Equality.EEnumInt8.E3, Darklang.LanguageTools.RuntimeTypes.MatchPattern.MPInt16"
 type MatchPattern =
   | MPUnit
   | MPBool of Bool
@@ -186,16 +177,12 @@ type MatchPattern =
   | MPVariable of Register
   | MPOr of List<MatchPattern>
 
-// @compiler blocked: missing-implementation
 type Register = Int32
 
-// @compiler blocked: missing-implementation
 type DvalMap = Dict<String, Dval>
 
-// @compiler blocked: missing-implementation
 type DictMap = Dict<Dval, Dval>
 
-// @compiler blocked: missing-implementation
 type StringSegment =
   | Text of String
   | Interpolated of Register
@@ -208,7 +195,7 @@ type StringSegment =
 ///
 /// Jump offsets are relative to the jumping instruction, so a listing has to add the index back to make
 /// them readable.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.RuntimeTypes.Instruction: Unknown type 'MatchPattern'"
 type Instruction =
   | LoadVal of loadTo: Register * value: Dval
   | CopyVal of copyTo: Register * copyFrom: Register
@@ -267,14 +254,14 @@ type Instruction =
   | TraceExpr of exprId: UInt64 * valueReg: Register
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.RuntimeTypes.Instructions: Unknown type 'Instruction'"
 type Instructions =
   { registerCount: Int32
     instructions: List<Instruction>
     resultIn: Register }
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.LanguageTools.RuntimeTypes.LambdaImpl: Unknown type 'Instructions'"
 type LambdaImpl =
   { exprId: UInt64
     patterns: List<LetPattern>
@@ -302,7 +289,6 @@ type Applicable =
 
 
 /// One impl of a trait as dispatch sees it: what it is for, and the fn behind each method
-// @compiler blocked: missing-implementation
 type ImplCandidate =
   { trait_: FQTraitName.Package
     self: TypeReference
@@ -360,7 +346,6 @@ type Dval =
 
   | DStreamStub of elemType: ValueType
 
-// @compiler blocked: missing-implementation
 type BuiltInParam =
   { name: String
     typ: TypeReference

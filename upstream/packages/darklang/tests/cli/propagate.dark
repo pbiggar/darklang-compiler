@@ -1,7 +1,7 @@
 module Darklang.Cli.Tests.Propagate
 
 module DictionarySignatures =
-  // @compiler blocked: upstream-dependency
+  // @compiler blocked: upstream-dependency diagnostic="Unknown type 'Darklang.LanguageTools.ProgramTypes.TypeReference'"
   let same
     (key: Darklang.LanguageTools.ProgramTypes.TypeReference)
     (value: Darklang.LanguageTools.ProgramTypes.TypeReference)

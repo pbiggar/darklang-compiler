@@ -30,7 +30,6 @@ val mainBranchId = Builtin.scmMainBranchId
 val mainBranchName = "main"
 
 /// Whether <param branchId> is main.
-// @compiler blocked: missing-implementation
 let isMain (branchId: Uuid) : Bool = branchId == mainBranchId
 
 /// A branch id read out of a TEXT column.
@@ -38,7 +37,6 @@ let isMain (branchId: Uuid) : Bool = branchId == mainBranchId
 /// The columns are TEXT, so this is the one direction that can fail. An absent or unreadable value is
 /// main: `parent_id` is NULL for a top-level branch, and a row nothing wrote an id into is not a branch
 /// anyone can stand on.
-// @compiler blocked: missing-implementation
 let fromTextField (text: Stdlib.Option.Option<String>) : Uuid =
   match text with
   | Some s ->
@@ -50,7 +48,6 @@ let fromTextField (text: Stdlib.Option.Option<String>) : Uuid =
 
 /// A branch as a view holds it. `id` is the uuid everything internal points at; `name` is what a person
 /// reads and can change.
-// @compiler blocked: missing-implementation
 type Branch =
   { id: Uuid
     name: String
@@ -61,7 +58,6 @@ type Branch =
     ops: Int64
     merged: Bool }
 
-// @compiler blocked: missing-implementation
 let toBranch (row: SCM.Branches.BranchRow) : Branch =
   Branch
     { id = row.id
@@ -76,12 +72,12 @@ let toBranch (row: SCM.Branches.BranchRow) : Branch =
 
 /// Every branch a view should offer, oldest first. Excludes archived ones, includes merged: a merged branch
 /// is still readable, which is the whole point of keeping it listed.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.Branch.list: Unknown function or value 'SCM.Branches.list'"
 let list () : List<Branch> =
   SCM.Branches.list () |> Stdlib.List.map toBranch
 
 /// One branch by id. None for main, and for an id nothing is registered under.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.Branch.get: Unknown function or value 'list'"
 let get (branchId: Uuid) : Stdlib.Option.Option<Branch> =
   if isMain branchId then
     Stdlib.Option.Option.None
@@ -90,7 +86,7 @@ let get (branchId: Uuid) : Stdlib.Option.Option<Branch> =
 
 /// One branch by the name a person typed. Live branches only -- the same rule `switch` follows, since this
 /// is what a view's "go to branch" affordance lands on.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.Branch.getByName: Unknown function or value 'SCM.PackageOps.branchIdForName'"
 let getByName (name: String) : Stdlib.Option.Option<Branch> =
   match SCM.PackageOps.branchIdForName name with
   | Some id -> get id
@@ -98,7 +94,7 @@ let getByName (name: String) : Stdlib.Option.Option<Branch> =
 
 /// Start a branch off <param parentId> and return it. Idempotent on the name: asking twice gets
 /// you the branch you already have, which is what `switch` does too.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.Branch.create: Unknown function or value 'SCM.PackageOps.ensureBranch'"
 let create (name: String) (parentId: Uuid) : Stdlib.Option.Option<Branch> =
   let (id, _created) = SCM.PackageOps.ensureBranch name parentId
   get id
@@ -108,7 +104,7 @@ let create (name: String) (parentId: Uuid) : Stdlib.Option.Option<Branch> =
 ///
 /// Refuses to take a name a LIVE branch already holds, so `switch <name>` stays unambiguous. Merged and
 /// archived branches don't block: their names are free again by design.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.Branch.rename: Unknown function or value 'SCM.PackageOps.branchIdForName'"
 let rename (branchId: Uuid) (newName: String) : Stdlib.Result.Result<Branch, String> =
   let trimmed = Stdlib.String.trim newName
 
@@ -133,7 +129,7 @@ let rename (branchId: Uuid) (newName: String) : Stdlib.Result.Result<Branch, Str
 
 /// Archive a branch: its unmerged ops are discarded and it leaves the listings. Nothing that reached its
 /// parent is touched.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.SCM.Branch.delete: Unknown function or value 'get'"
 let delete (branchId: Uuid) : Stdlib.Result.Result<Unit, String> =
   match get branchId with
   | None -> Stdlib.Result.Result.Error "no such branch"

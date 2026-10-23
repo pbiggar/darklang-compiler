@@ -1,7 +1,7 @@
 module Darklang.Cli.Packages.Query
 
 /// Search for all contents (modules, types, values, functions, traits, impls, tests) in a given module path
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.Search.SearchResults'"
 let allDirectDescendants
   (branchId: Uuid)
   (modulePath: List<String>)
@@ -23,7 +23,7 @@ let allDirectDescendants
 ///
 /// This is what completion wants -- `allDirectDescendants` materializes every matched item's full
 /// definition to hand back names.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Packages.Query.allDirectDescendantNames: Unknown function or value 'LanguageTools.PackageManager.Search.searchNames'"
 let allDirectDescendantNames
   (branchId: Uuid)
   (modulePath: List<String>)
@@ -45,7 +45,7 @@ let allDirectDescendantNames
 /// reduced and sorted.
 ///
 /// For listings, which need the hash to render the deprecation mark but never the definition.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Packages.Query.allDirectDescendantNamesAndHashes: Unknown function or value 'LanguageTools.PackageManager.Search.searchNamesAndHashes'"
 let allDirectDescendantNamesAndHashes
   (branchId: Uuid)
   (modulePath: List<String>)
@@ -68,7 +68,6 @@ let allDirectDescendantNamesAndHashes
 
 
 /// Drop items that are deprecated-and-hidden, for a (name, hash) listing.
-// @compiler blocked: missing-implementation
 let filterDeprecatedPairs
   (items: List<(String * LanguageTools.ProgramTypes.Hash)>)
   (sets: DeprecationSets)
@@ -82,7 +81,7 @@ let filterDeprecatedPairs
 
 
 /// Search for a specific entity by name in a given module path (exact match)
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.Search.SearchResults'"
 let searchExactMatch
   (branchId: Uuid)
   (modulePath: List<String>)
@@ -100,7 +99,7 @@ let searchExactMatch
 
 
 /// Check if search results contain any content
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.Search.SearchResults'"
 let hasContent (r: LanguageTools.ProgramTypes.Search.SearchResults) : Bool =
   (r.submodules != []) || (r.types != []) || (r.fns != []) || (r.values != [])
   || (r.traits != []) || (r.impls != [])
@@ -108,7 +107,7 @@ let hasContent (r: LanguageTools.ProgramTypes.Search.SearchResults) : Bool =
 
 
 /// Extract direct submodule names from the current module path
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.Search.SearchResults'"
 let getDirectSubmodules (results: LanguageTools.ProgramTypes.Search.SearchResults) (currentPathLength: Int) : List<String> =
   results.submodules
   |> Stdlib.List.filterMap (fun modulePath ->
@@ -135,14 +134,12 @@ let getDirectSubmodules (results: LanguageTools.ProgramTypes.Search.SearchResult
 ///
 /// Sets are kept as Dicts keyed by the underlying hex string (there's no
 /// Stdlib.Set yet), giving O(1) lookup. The unit value is unused.
-// @compiler blocked: missing-implementation
 type DeprecationSets =
   { allDeprecated: Dict<String, Bool>
     hidden: Dict<String, Bool> }
 
 
 /// Build a Dict<String, Bool> keyed by each hash's underlying hex string.
-// @compiler blocked: missing-implementation
 let hashListToDict
   (hashes: List<LanguageTools.ProgramTypes.Hash>)
   : Dict<String, Bool> =
@@ -158,7 +155,7 @@ let hashListToDict
 /// The fold is main-only -- a branch's ops sit inert until it merges -- so this is an overlay, the
 /// same way a branch's NAMES are an overlay rather than rows of their own. Until this consulted the
 /// branch, deprecating on a branch changed nothing there and `view` went on calling the item live.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Packages.Query.loadDeprecationSets: Unknown function or value 'Builtin.pmGetDeprecationSets'"
 let loadDeprecationSets (branchId: Uuid) : DeprecationSets =
   let (all, hidden) = Builtin.pmGetDeprecationSets branchId
   DeprecationSets
@@ -166,7 +163,6 @@ let loadDeprecationSets (branchId: Uuid) : DeprecationSets =
       hidden = hashListToDict hidden }
 
 
-// @compiler blocked: missing-implementation
 let memberOf
   (d: Dict<String, Bool>)
   (hash: LanguageTools.ProgramTypes.Hash)
@@ -175,7 +171,6 @@ let memberOf
 
 
 /// Whether an item hash should be hidden by default visibility.
-// @compiler blocked: missing-implementation
 let isHidden
   (sets: DeprecationSets)
   (hash: LanguageTools.ProgramTypes.Hash)
@@ -184,7 +179,6 @@ let isHidden
 
 
 /// Whether an item hash is flagged as deprecated at all (shown-with-icon or hidden).
-// @compiler blocked: missing-implementation
 let isDeprecated
   (sets: DeprecationSets)
   (hash: LanguageTools.ProgramTypes.Hash)
@@ -194,7 +188,7 @@ let isDeprecated
 
 /// Filter SearchResults by the default visibility rule. Pass `includeDeprecated = true`
 /// to return results untouched.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'LanguageTools.ProgramTypes.Search.SearchResults'"
 let filterDeprecated
   (results: LanguageTools.ProgramTypes.Search.SearchResults)
   (sets: DeprecationSets)
@@ -215,7 +209,6 @@ let filterDeprecated
 
 /// Deprecation marker rendered after an item name when it's shown despite
 /// being deprecated. Kept short to avoid cluttering lists.
-// @compiler blocked: missing-implementation
 let deprecationMarker
   (sets: DeprecationSets)
   (hash: LanguageTools.ProgramTypes.Hash)
@@ -229,7 +222,7 @@ let deprecationMarker
 ///
 /// Takes no branch: `package_dependencies` is content-addressed, one row set per item hash, and a branch's
 /// items fold their content in precisely so their edges are recorded.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Packages.Query.getDependencies: Unknown function or value 'SCM.Deps.dependenciesOf'"
 let getDependencies
   (hash: LanguageTools.ProgramTypes.Hash)
   : List<(LanguageTools.ProgramTypes.Hash * String)> =

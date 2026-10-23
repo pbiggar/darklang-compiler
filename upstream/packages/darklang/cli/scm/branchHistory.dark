@@ -4,7 +4,6 @@ module Darklang.Cli.Branch
 // Part of the Darklang.Cli.Branch module, shared with branch.dark and branchMerge.dark.
 
 /// The module part of a dotted name, for grouping. `Stachu.Thing.foo` -> `Stachu.Thing`.
-// @compiler blocked: missing-implementation
 let moduleOf (dotted: String) : String =
   match Stdlib.List.dropLast (Stdlib.String.split dotted ".") with
   | [] -> dotted
@@ -15,7 +14,7 @@ let moduleOf (dotted: String) : String =
 /// Grouped by module, because a branch that touched nine names in three modules is three things you did,
 /// not nine. `--source` prints each definition underneath, which a list of hashes cannot give you: seeing
 /// WHAT changed without opening another command per name.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'AppState'"
 let executeDiff (state: AppState) (branchRef: String) (withSource: Bool) : AppState =
   match resolveRef branchRef with
   | None -> Cli.exitWith state false
@@ -76,7 +75,7 @@ let executeDiff (state: AppState) (branchRef: String) (withSource: Bool) : AppSt
 
 /// The branch's authoring history: its frontier ops, oldest-first, pretty-printed (the op SEQUENCE,
 /// complementary to `diff`'s net effect).
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'AppState'"
 let executeLog (state: AppState) (branchRef: String) : AppState =
   match resolveRef branchRef with
   | None -> Cli.exitWith state false
@@ -109,7 +108,7 @@ let executeLog (state: AppState) (branchRef: String) : AppState =
     state
 
 /// `dark diff <id>`
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'AppState'"
 let executeDiffCmd (state: AppState) (args: List<String>) : AppState =
   // The flag is not the branch. Filtering flags out first is what lets `dark diff foo --json` and
   // `dark diff --json foo` mean the same thing, rather than one looking for a branch named "--json".
@@ -165,7 +164,7 @@ let executeDiffCmd (state: AppState) (args: List<String>) : AppState =
 
 /// The branch's ops as JSON, oldest first -- the same sequence the human view prints.
 /// False when the branch is not found, so `log --json` exits 1 rather than reading as an empty log.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Branch.branchOpsAsJson: Unknown function or value 'resolveRef'"
 let branchOpsAsJson (branchRef: String) : Bool =
   match resolveRef branchRef with
   | None -> false
@@ -182,7 +181,7 @@ let branchOpsAsJson (branchRef: String) : Bool =
 
 /// `dark log [<id>]` -- history, meaning whichever history you're standing in. On a BRANCH that's the
 /// branch's own ops, oldest first; on MAIN there is no delta, so it's the commits.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'AppState'"
 let executeLogCmd (state: AppState) (args: List<String>) : AppState =
   let wantsJson = ScmJson.wantsJson args
   let refs = args |> Stdlib.List.filter (fun a -> Stdlib.Bool.not (Stdlib.String.startsWith a "-"))

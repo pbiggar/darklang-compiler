@@ -10,31 +10,24 @@
 module Darklang.Cli.Glyphs
 
 /// A module.
-// @compiler blocked: missing-implementation
 val module_ = "🗂"
 
 /// A function.
-// @compiler blocked: missing-implementation
 val fn = "ƒ"
 
 /// A type.
-// @compiler blocked: missing-implementation
 val type_ = "#"
 
 /// A value, and the fallback for anything unrecognised.
-// @compiler blocked: missing-implementation
 val value = "•"
 
 /// A trait: the hollow diamond to its impls' filled one.
-// @compiler blocked: missing-implementation
 val trait_ = "◇"
 
 /// An impl of a trait: `trait_` filled in.
-// @compiler blocked: missing-implementation
 val impl_ = "◆"
 
 /// A package test.
-// @compiler blocked: missing-implementation
 val test = "⊢"
 
 
@@ -42,7 +35,6 @@ val test = "⊢"
 ///
 /// Accepts the spellings the various callers use: the tree loaders say "fn"/"type"/"val", the backend's
 /// display kinds are "Fn"/"Type"/"Value", and the package listings say "function"/"value"/"submodule".
-// @compiler blocked: missing-implementation
 let forKind (kind: String) : String =
   let glyph =
     match Stdlib.String.toLowercase kind with
@@ -65,12 +57,10 @@ let forKind (kind: String) : String =
 /// over them, then the tests of it. `dark ls` and the workbench's item page read it from here.
 /// `dark tree` and the workbench's Code list (`moduleRows`) still spell their own order, with
 /// traits before values and fns, so they can drift from this one until they read it too.
-// @compiler blocked: missing-implementation
 val kindOrder = [ "module", "type", "fn", "val", "trait", "impl", "test" ]
 
 
 /// A section header for a listing: glyph plus the plural noun.
-// @compiler blocked: missing-implementation
 let sectionHeader (kind: String) : String =
   let label =
     match Stdlib.String.toLowercase kind with

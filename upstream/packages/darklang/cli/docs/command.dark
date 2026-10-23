@@ -18,7 +18,6 @@ module Topics =
   /// "cli" for CLI workflow and commands. There was a third, "internal", for monorepo and
   /// F# work; those two pages are repo-facing and moved out of the shipped CLI, so no topic
   /// carries it any more. See later/packages/darklang/cli/docs/command.dark.internal-topics.
-  // @compiler blocked: missing-implementation
   type DocTopic =
     { name: String
       description: String
@@ -27,7 +26,6 @@ module Topics =
       content: Unit -> String
       subtopics: List<DocTopic> }
 
-  // @compiler blocked: missing-implementation
   let allTopics () : List<DocTopic> =
     [ DocTopic
         { name = "for-ai"
@@ -224,7 +222,6 @@ module Topics =
           content = fun () -> "Run `docs signatures` to render. See `docs signatures --help`."
           subtopics = [] } ]
 
-  // @compiler blocked: missing-implementation
   let findTopic (name: String) : Stdlib.Option.Option<DocTopic> =
     let topics = allTopics ()
     let lowerName = Stdlib.String.toLowercase name
@@ -241,7 +238,6 @@ module Topics =
         t.aliases
         |> Stdlib.List.any (fun a -> Stdlib.String.toLowercase a == lowerName))
 
-  // @compiler blocked: missing-implementation
   let formatTopicList () : String =
     let topics = allTopics ()
 
@@ -278,7 +274,7 @@ module Topics =
 
 // Topics that don't render from static text — they delegate to a live command
 // with access to AppState. Returns Some new-state if `name` is a live topic.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Cli.AppState'"
 let dispatchLive
   (state: Cli.AppState)
   (name: String)
@@ -294,7 +290,7 @@ let dispatchLive
   | _ -> Stdlib.Option.Option.None
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Cli.AppState'"
 let execute (state: Cli.AppState) (args: List<String>) : Cli.AppState =
   match args with
   | [] ->
@@ -317,7 +313,7 @@ let execute (state: Cli.AppState) (args: List<String>) : Cli.AppState =
         Cli.exitWith state false
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Cli.AppState'"
 let help (_state: Cli.AppState) : String =
   [ Stdlib.Cli.UI.Colors.info "Usage: " + Stdlib.Cli.UI.Colors.command "docs [topic]"
     "Browse in-CLI documentation."
@@ -330,7 +326,7 @@ let help (_state: Cli.AppState) : String =
   |> Stdlib.String.join "\n"
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Cli.AppState'"
 let complete
   (state: Cli.AppState)
   (args: List<String>)

@@ -7,7 +7,6 @@ module Darklang.Cli.Packages.Delete
 // TODO (v1.5): `--json` output for agents, matching `deprecate`.
 
 
-// @compiler blocked: missing-implementation
 type ParsedArgs =
   { itemType: Stdlib.Option.Option<String>
     target: Stdlib.Option.Option<String>
@@ -18,7 +17,6 @@ type ParsedArgs =
     parseErrors: List<FlagParser.ParseError> }
 
 
-// @compiler blocked: missing-implementation
 val argSpec =
   FlagParser.Spec
     { flags =
@@ -31,7 +29,6 @@ val argSpec =
 
 /// Positional args fill itemType, then target. `--force` is shorthand for
 /// `--ignore-dependents --yes`: ignore live dependents and skip the prompt.
-// @compiler blocked: missing-implementation
 let parseArgs (args: List<String>) : ParsedArgs =
   let p = FlagParser.parse argSpec args
   let forced = FlagParser.hasFlag p "--force"
@@ -48,7 +45,7 @@ let parseArgs (args: List<String>) : ParsedArgs =
 /// Count live (non-deprecated) dependents on `targetLoc`. 0 means no gate
 /// would be triggered by `delete`. Uses FQN-keyed lookup so a content
 /// collision at another FQN doesn't falsely block deletion.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Packages.Delete.countLiveDependents: Unknown function or value 'SCM.Deps.dependentsOf'"
 let countLiveDependents
   (branchId: Uuid)
   (targetLoc: LanguageTools.ProgramTypes.PackageLocation)
@@ -65,7 +62,6 @@ let countLiveDependents
 
 /// Translate delete's ParsedArgs into the equivalent `deprecate --kind obsolete`
 /// args.
-// @compiler blocked: missing-implementation
 let toDeprecateArgs
   (parsed: ParsedArgs)
   (itemTypeStr: String)
@@ -79,7 +75,7 @@ let toDeprecateArgs
   Stdlib.List.flatten [ baseArgs, messageArgs, confirmArgs, dryRunArgs ]
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Cli.AppState'"
 let execute (state: Cli.AppState) (args: List<String>) : Cli.AppState =
   let parsed = parseArgs args
   let branchId = state.currentBranchId
@@ -156,7 +152,7 @@ let execute (state: Cli.AppState) (args: List<String>) : Cli.AppState =
               Deprecate.execute state (toDeprecateArgs parsed itemTypeStr target)
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Cli.AppState'"
 let help (_state: Cli.AppState) : String =
   [ "Take a fn/type/value/trait/impl/test off the shelf (sugar for deprecate --kind obsolete)."
     ""
@@ -181,7 +177,7 @@ let help (_state: Cli.AppState) : String =
 
 
 // `delete` IS `deprecate --kind obsolete` with a dependents check, so it completes the same way.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Cli.AppState'"
 let complete
   (state: Cli.AppState)
   (args: List<String>)

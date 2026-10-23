@@ -7,11 +7,10 @@ module Darklang.Cli.Packages.Impls
 // lists is what a call can reach. Two implementations for one type are both bound and only
 // the newer one runs, so the older is marked rather than silently listed alongside it.
 
-// @compiler blocked: missing-implementation
 let describeSelf (branchId: Uuid) (self: LanguageTools.RuntimeTypes.TypeReference) : String =
   PrettyPrinter.RuntimeTypes.typeReference branchId self
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Packages.PackageLocation'"
 let traitHashAt
   (branchId: Uuid)
   (currentLocation: Packages.PackageLocation)
@@ -27,7 +26,7 @@ let traitHashAt
 
 /// The trait as written, then under `Stdlib.` (the operator traits are what
 /// most people ask about, and `impls Add` should just work).
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Cli.AppState'"
 let resolveTrait
   (state: Cli.AppState)
   (traitPath: String)
@@ -51,7 +50,7 @@ let resolveTrait
       | Error _ -> Stdlib.Result.Result.Error msg
 
 /// The name of the implementation, or its short hash when nothing binds it.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Packages.Impls.sourceNameOf: Unknown function or value 'LanguageTools.PackageManager.TraitImpl.locations'"
 let sourceNameOf
   (branchId: Uuid)
   (source: LanguageTools.ProgramTypes.Hash)
@@ -64,7 +63,7 @@ let sourceNameOf
 /// Which of `active`, `shadowed` and `unordered` this implementation is, against the others for
 /// the same type. `shadowed` means a newer implementation for that type runs instead;
 /// `unordered` means neither came from an op, so nothing says which is newer and a call errors.
-// @compiler blocked: missing-implementation
+// @compiler blocked: compiler-gap diagnostic="Darklang.Cli.Packages.Impls.statusOf: Expected TSum (\"Darklang.LanguageTools.ProgramTypes.Hash\", []), got TSum (\"Darklang.LanguageTools.RuntimeTypes.Hash\", [])"
 let statusOf
   (branchId: Uuid)
   (candidates: List<LanguageTools.RuntimeTypes.ImplCandidate>)
@@ -98,7 +97,7 @@ let statusOf
 /// `--json`: the same listing, for something parsing it rather than reading it. One object,
 /// `implementations` in the order the human listing prints them, each with the status a call
 /// would see. An error is `{"error": "..."}` and exits the same way.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Packages.Impls.printJson: Unknown function or value 'sourceNameOf'"
 let printJson
   (branchId: Uuid)
   (traitName: String)
@@ -127,7 +126,7 @@ let printJson
     $"{{\"trait\":{Cli.jsonStr traitName},\"methods\":[{methodsJson}],\"implementations\":[{implsJson}]}}"
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Cli.AppState'"
 let execute (state: Cli.AppState) (args: List<String>) : Cli.AppState =
   let json = Stdlib.List.contains args "--json"
 
@@ -206,7 +205,7 @@ let execute (state: Cli.AppState) (args: List<String>) : Cli.AppState =
     { state with exitCode = 1 }
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Cli.AppState'"
 let help (_state: Cli.AppState) : String =
   [ "List the implementations of a trait that are bound on the current branch."
     ""
@@ -229,7 +228,7 @@ let help (_state: Cli.AppState) : String =
 
 
 /// The traits in the current module, then the stdlib's, which is where a bare name resolves.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Cli.AppState'"
 let complete
   (state: Cli.AppState)
   (args: List<String>)

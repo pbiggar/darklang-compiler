@@ -8,7 +8,6 @@ module Darklang.Cli.Tests.DeprecationKinds
 // `parseKind` is where that belongs, because it is the one place all three kinds meet the item kind.
 
 module Kinds =
-  // @compiler blocked: upstream-dependency
   let parse
     (item: Darklang.LanguageTools.ProgramTypes.ItemKind)
     (kind: String)
@@ -19,7 +18,6 @@ module Kinds =
 
   /// passed for "harmful is fn-only" and "no such kind" alike.
 
-  // @compiler blocked: upstream-dependency
   let refusalText
     (item: Darklang.LanguageTools.ProgramTypes.ItemKind)
     (kind: String)

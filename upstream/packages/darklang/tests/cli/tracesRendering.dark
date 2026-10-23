@@ -83,7 +83,6 @@ module Plural =
 module TheLog =
   // A logged call, with everything the renderer reads.
 
-  // @compiler blocked: upstream-dependency
   let call (name: String) (ms: Int) (seq: Int64) : Darklang.Tracing.FnCall =
     Darklang.Tracing.FnCall
       { callId = $"call-{name}"
@@ -95,7 +94,7 @@ module TheLog =
         seq = seq
         ord = seq }
 
-  // @compiler blocked: upstream-dependency
+  // @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Tests.TracesRendering.TheLog.render: Unknown function or value 'Darklang.Cli.Tracing.formatFnCalls'"
   let render (opts: Darklang.Cli.Tracing.ViewOptions) : String =
     Darklang.Cli.Tracing.formatFnCalls
       opts
@@ -157,7 +156,6 @@ module TheLogIsCut =
   // Every call here is the same call: what is under test is how many lines come out, not what
   // is on them.
 
-  // @compiler blocked: missing-implementation
   val one =
     Darklang.Tracing.FnCall
       { callId = "c"
@@ -169,7 +167,7 @@ module TheLogIsCut =
         seq = 0L
         ord = 0L }
 
-  // @compiler blocked: upstream-dependency
+  // @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Tests.TracesRendering.TheLogIsCut.logOf: Unknown function or value 'Darklang.Cli.Tracing.formatFnCalls'"
   let logOf (count: Int) (opts: Darklang.Cli.Tracing.ViewOptions) : Int =
     Stdlib.List.length
       (Stdlib.String.split
@@ -179,7 +177,7 @@ module TheLogIsCut =
           (Stdlib.List.map (Stdlib.List.range 1 count) (fun _ -> one)))
         "\n")
 
-  // @compiler blocked: upstream-dependency
+  // @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Tests.TracesRendering.TheLogIsCut.textOf: Unknown function or value 'Darklang.Cli.Tracing.formatFnCalls'"
   let textOf (count: Int) (opts: Darklang.Cli.Tracing.ViewOptions) : String =
     Darklang.Cli.Tracing.formatFnCalls
       opts

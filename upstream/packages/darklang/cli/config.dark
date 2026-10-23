@@ -3,13 +3,13 @@ module Darklang.Cli.Config
 // The config lives next to this instance's store (`localDbPath`), so the path is absolute and its
 // directory always exists -- independent of the process CWD and of install mode. A CWD-relative
 // path here makes `login` silently persist nothing.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Config.configFilePath: Unknown function or value 'Stdlib.LocalStore.path'"
 let configFilePath () : String =
   let dbPath = Stdlib.LocalStore.path ()
   let dir = Stdlib.String.join (Stdlib.List.dropLast (Stdlib.String.split dbPath "/")) "/"
   $"{dir}/cli-config.json"
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Config.readConfig: Unknown function or value 'configFilePath'"
 let readConfig () : Dict<String, String> =
   match Stdlib.Cli.FileSystem.pathExists (configFilePath ()) with
   | true ->
@@ -26,7 +26,7 @@ let readConfig () : Dict<String, String> =
   | false -> Dict {}
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Config.writeConfig: Unknown function or value 'configFilePath'"
 let writeConfig (config: Dict<String, String>) : Unit =
   let json = Stdlib.Json.serialize<Dict<String, String>> config
   let jsonBytes = Stdlib.String.toBlob json
@@ -34,13 +34,13 @@ let writeConfig (config: Dict<String, String>) : Unit =
   ()
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Config.get: Unknown function or value 'readConfig'"
 let get (key: String) : Stdlib.Option.Option<String> =
   let config = readConfig ()
   Stdlib.Dict.get config key
 
 // A single Int config value, falling back to `default_` when absent or unparseable.
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Darklang.Cli.Config.getInt: Unknown function or value 'get'"
 let getInt (key: String) (default_: Int) : Int =
   match get key with
   | Some s -> Stdlib.Result.withDefault (Stdlib.Int.parse s) default_
@@ -50,7 +50,6 @@ let getInt (key: String) (default_: Int) : Int =
 /// The keys the F# boot reads before any Dark runs (`exec.workers` sizes the scheduler's
 /// worker pool, `trace.keep` the retention), so they live in the store's config rather than
 /// in the json file.
-// @compiler blocked: missing-implementation
 let isStoreKey (key: String) : Bool =
   (Stdlib.String.startsWith key "exec.")
   || (Stdlib.String.startsWith key "http.")
@@ -58,7 +57,6 @@ let isStoreKey (key: String) : Bool =
 
 /// What a value must look like, or `None` for anything goes: the boot falls back silently on a
 /// value it cannot read, so the refusal has to happen here.
-// @compiler blocked: missing-implementation
 let checkValue (key: String) (value: String) : Stdlib.Option.Option<String> =
   let numeric =
     [ "exec.workers"
@@ -83,7 +81,7 @@ let checkValue (key: String) (value: String) : Stdlib.Option.Option<String> =
   else
     Stdlib.Option.Option.None
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Cli.AppState'"
 let execute (state: Cli.AppState) (args: List<String>) : Cli.AppState =
   match args with
   | ["get", key] when isStoreKey key ->
@@ -155,7 +153,7 @@ let execute (state: Cli.AppState) (args: List<String>) : Cli.AppState =
     { state with exitCode = 1 }
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Cli.AppState'"
 let complete (_state: Cli.AppState) (args: List<String>) : List<Cli.Completion.CompletionItem> =
   let configKeys =
     [ "exec.workers"
@@ -178,7 +176,7 @@ let complete (_state: Cli.AppState) (args: List<String>) : List<Cli.Completion.C
   | _ -> []
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'Cli.AppState'"
 let help (_state: Cli.AppState) : String =
   [ "Usage:"
     "  config get <key>           - Get a configuration value"

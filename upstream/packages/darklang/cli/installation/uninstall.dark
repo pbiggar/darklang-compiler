@@ -1,7 +1,6 @@
 module Darklang.Cli.Installation.Uninstall
 
 
-// @compiler blocked: missing-implementation
 let removeDarklangDirectory
   (host: Stdlib.Cli.Host.Host)
   : Stdlib.Result.Result<Unit, String> =
@@ -9,7 +8,6 @@ let removeDarklangDirectory
   Stdlib.Cli.Unix.removeDirectory darklangDir
 
 
-// @compiler blocked: missing-implementation
 let runUninstall
   (host: Stdlib.Cli.Host.Host)
   : Stdlib.Result.Result<Unit, String> =
@@ -22,7 +20,7 @@ let runUninstall
   | Error err -> Stdlib.Result.Result.Error $"Error uninstalling dark: {err}"
 
 // CLI interface functions
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'AppState'"
 let execute (state: AppState) (args: List<String>) : AppState =
   let currentMode = Installation.System.getInstallationMode ()
   let host = (Stdlib.Cli.Host.getRuntimeHost ()) |> Builtin.unwrap
@@ -47,12 +45,12 @@ let execute (state: AppState) (args: List<String>) : AppState =
     state
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'AppState'"
 let complete (_state: AppState) (_args: List<String>) : List<Completion.CompletionItem> =
   []
 
 
-// @compiler blocked: missing-implementation
+// @compiler blocked: upstream-dependency diagnostic="Unknown type 'AppState'"
 let help (_state: AppState) : String =
   [ "Usage: uninstall [--yes|-y]"
     "Uninstall Darklang CLI from global installation."
