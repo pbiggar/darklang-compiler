@@ -58,6 +58,16 @@ negative test. A failure must match its phase and diagnostic; a signal cannot
 satisfy a runtime expected failure. Compiler expectation overrides remain
 separate from expected failures and can coexist with an annotation.
 
+For an accepted diagnostic difference, use a per-test annotation such as
+`// @compiler error-message compile: "Cannot parse JSON into function type" reason=diagnostic-difference`.
+Use `runtime:` when rejection depends on the value. The upstream test must
+already expect an error. These are runnable negative tests, not expected
+failures: compilation or execution must fail in the annotated phase with the
+compiler diagnostic. Wrong phases, unrelated messages, successful execution,
+signals and runtime leaks fail the test. The original upstream expectation
+remains unchanged. The ledger records these tests as `run`, with the override
+and its reason available in the native inventory.
+
 ## Classifying expected failures
 
 Read the original test, its selected dependencies and the actual diagnostic;

@@ -10,6 +10,9 @@ Compiler decisions live beside each imported item. There are no file-level
 exclusions or separately maintained test/declaration ledgers:
 
 - No annotation selects the original declaration or test.
+- `// @compiler error-message compile: "diagnostic" reason=diagnostic-difference`
+  selects a runnable negative test with an accepted compiler diagnostic and
+  required phase (`compile` or `runtime`), preserving the upstream expectation.
 - `// @compiler blocked: tag` retains an item awaiting compiler support.
 - `// @compiler excluded: tag` records an intentional compiler exclusion.
 - `// @compiler replace: packages/path.dark#Qualified.name reason=tag` selects

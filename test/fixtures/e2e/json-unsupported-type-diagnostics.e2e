@@ -1,0 +1,3 @@
+// Unsupported JSON types explain the operation and the unsupported component.
+Stdlib.Json.serialize<Dict<Int64, String>> (Dict { 1L: "a" }) = error="Cannot serialize dictionary into JSON: keys must be String, but this dictionary has Int64 keys"
+Stdlib.Json.parse<Int64 -> Int64> "{}" = compileerror="Cannot parse JSON into function type (Int64) -> Int64: JSON cannot represent executable functions"

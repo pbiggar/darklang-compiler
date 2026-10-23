@@ -4,6 +4,7 @@ type failureClass = AotRejection | MissingSupport | UpstreamBug
 
 type disposition =
   | Run
+  | ErrorMessage of { phase : phase; diagnostic : string; reason : string }
   | Blocked of string
   | Excluded of string
   | Replace of { target : string; reason : string }

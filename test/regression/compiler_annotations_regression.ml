@@ -23,6 +23,36 @@ let rejects items source =
     ("Unexpectedly accepted: " ^ source)
 
 let () =
+  List.iter
+    (fun (phase, expectedPhase) ->
+      let entries =
+        accepts
+          [ item 1 0 true ]
+          ("// @compiler error-message " ^ phase
+         ^ ": \"different message\" reason=test-counter\ntest once = 1")
+      in
+      require
+        (A.at entries { Tokenizer.row = 1; column = 0 }
+        = A.ErrorMessage
+            {
+              phase = expectedPhase;
+              diagnostic = "different message";
+              reason = "test-counter";
+            })
+        "Error-message annotation lost its contract")
+    [ ("compile", A.Compile); ("runtime", A.Runtime) ];
+  rejects
+    [ item 1 0 false ]
+    "// @compiler error-message compile: \"different\" reason=test-counter\n\
+     let once () = 1";
+  rejects
+    [ item 1 0 true ]
+    "// @compiler error-message runtime: \"\" reason=test-counter\n\
+     test once = 1";
+  rejects
+    [ item 1 0 true ]
+    "// @compiler error-message typo: \"different\" reason=test-counter\n\
+     test once = 1";
   let entries =
     accepts
       [ item 1 0 false ]

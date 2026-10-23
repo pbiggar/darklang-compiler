@@ -6,6 +6,7 @@ type failureClass = AotRejection | MissingSupport | UpstreamBug
 
 type disposition =
   | Run
+  | ErrorMessage of { phase : phase; diagnostic : string; reason : string }
   | Blocked of string
   | Excluded of string
   | Replace of { target : string; reason : string }
@@ -44,6 +45,32 @@ let parse reasons text =
     |> String.trim
   in
   if text = "run" then Ok Run
+  else if String.starts_with ~prefix:"error-message " text then
+    let rest = after "error-message " in
+    let* phase, rest =
+      if String.starts_with ~prefix:"compile:" rest then
+        Ok (Compile, String.sub rest 8 (String.length rest - 8) |> String.trim)
+      else if String.starts_with ~prefix:"runtime:" rest then
+        Ok (Runtime, String.sub rest 8 (String.length rest - 8) |> String.trim)
+      else Error "Expected error-message compile: or error-message runtime:"
+    in
+    let* quoted, reason =
+      match String.rindex_opt rest ' ' with
+      | None -> Error "Expected a quoted diagnostic followed by reason=TAG"
+      | Some index ->
+          let* _, reason =
+            splitReason reasons
+              ("diagnostic "
+              ^ String.sub rest (index + 1) (String.length rest - index - 1))
+          in
+          Ok (String.sub rest 0 index |> String.trim, reason)
+    in
+    try
+      match Yojson.Basic.from_string quoted with
+      | `String diagnostic when diagnostic <> "" ->
+          Ok (ErrorMessage { phase; diagnostic; reason })
+      | _ -> Error "Expected a nonempty quoted diagnostic"
+    with Yojson.Json_error _ -> Error "Invalid quoted diagnostic"
   else if String.starts_with ~prefix:"blocked:" text then
     Result.map (fun tag -> Blocked tag) (tagged reasons (after "blocked:"))
   else if String.starts_with ~prefix:"excluded:" text then
@@ -162,11 +189,12 @@ let read ~reasons ~items source =
                             (String.sub text 13 (String.length text - 13))
                         in
                         match disposition with
-                        | Xfail _ when not item.isTest ->
+                        | (Xfail _ | ErrorMessage _) when not item.isTest ->
                             fail "Expected failures apply only to tests"
                         | Replace _ when item.isTest ->
                             fail "Tests cannot have replacement implementations"
-                        | Run | Blocked _ | Excluded _ | Replace _ | Xfail _ ->
+                        | Run | ErrorMessage _ | Blocked _ | Excluded _
+                        | Replace _ | Xfail _ ->
                             comments
                               ({ position; disposition } :: annotations)
                               remaining))

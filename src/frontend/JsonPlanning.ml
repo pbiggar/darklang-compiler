@@ -965,9 +965,10 @@ and serializeBody (env : env) typ value writer (state : state) =
       in
       let failure =
         RuntimeError
-          ("Unsupported type in JSON: "
-          ^ CheckingDiagnostics.typeToString typ
-          ^ ". Some types are not supported in Json serialization")
+          ("Cannot serialize dictionary into JSON: keys must be String, but \
+            this dictionary has "
+          ^ CheckingDiagnostics.typeToString keyType
+          ^ " keys")
       in
       Ok
         ( matchExpr
@@ -1772,8 +1773,13 @@ and decodeBody (env : env) typ source view path (state : state) =
                 ] )
           in
           Ok (objectBody, nextState))
-  | AST.TFunction _ | AST.TBlob | AST.TInternalRawPtr | AST.TNever
-  | AST.TStream _ | AST.TVar _ | AST.TInferenceVar _ | AST.TDict _ ->
+  | AST.TFunction _ ->
+      Error
+        ("Cannot parse JSON into function type "
+        ^ CheckingDiagnostics.typeToString typ
+        ^ ": JSON cannot represent executable functions")
+  | AST.TBlob | AST.TInternalRawPtr | AST.TNever | AST.TStream _ | AST.TVar _
+  | AST.TInferenceVar _ | AST.TDict _ ->
       Error
         ("Unsupported type in JSON: "
         ^ CheckingDiagnostics.typeToString typ
@@ -2181,31 +2187,10 @@ let rewriteProgramWithSession (session : planningSession option)
             planCached "parse" ensureDecoder typ state)
           serializersPlanned parserTypes
   in
-  if not hasJsonCalls then programFromCheckedParts (symbols, topLevels)
+  if not hasJsonCalls then Ok (programFromCheckedParts (symbols, topLevels))
   else
     match planned with
-    | Error error ->
-        let rewrite currentSymbols expr =
-          match expr with
-          | TypeApp (id, _, _) when Some id = serializeId || Some id = parseId
-            ->
-              (RuntimeError error, currentSymbols)
-          | _ -> (expr, currentSymbols)
-        in
-        let rewritten, symbols =
-          mapFold
-            (fun currentSymbols topLevel ->
-              match topLevel with
-              | FunctionDef fn ->
-                  let body, next = mapExpr rewrite currentSymbols fn.body in
-                  (FunctionDef { fn with body }, next)
-              | Expression expr ->
-                  let expr, next = mapExpr rewrite currentSymbols expr in
-                  (Expression expr, next)
-              | other -> (other, currentSymbols))
-            symbols topLevels
-        in
-        programFromCheckedParts (symbols, rewritten)
+    | Error error -> Error error
     | Ok state ->
         let finalPlanningEnv = { planningEnv with symbols = state.symbols } in
         let rewrite currentSymbols expr =
@@ -2285,7 +2270,7 @@ let rewriteProgramWithSession (session : planningSession option)
         let generated =
           List.map (fun (_, fn) -> FunctionDef fn) (M.bindings state.functions)
         in
-        programFromCheckedParts (finalSymbols, generated @ rewritten)
+        Ok (programFromCheckedParts (finalSymbols, generated @ rewritten))
 
 let rewriteProgram (env : Types.typeCheckEnv) program =
   rewriteProgramWithSession None env program

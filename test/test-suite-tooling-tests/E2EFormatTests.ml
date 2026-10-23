@@ -656,6 +656,36 @@ let testCompilerXfailStrictness () =
   let* () = check "aot-rejection" in
   check "upstream-bug"
 
+let testCompilerErrorMessageOverride () =
+  let check phase expected wrongPhase =
+    one
+      ("// @compiler error-message " ^ phase
+     ^ ": \"compiler diagnostic\" reason=annotation-probe\n"
+     ^ "Builtin.crash \"compiler diagnostic\" = error=\"upstream diagnostic\"")
+      "Expected compiler error-message override"
+      (fun test ->
+        require
+          (Result.is_ok (evaluateExpectations test expected)
+          && Result.is_error (evaluateExpectations test wrongPhase)
+          && Result.is_error
+               (evaluateExpectations test (Ran (0, "", "", 0L, 0L)))
+          && Result.is_error
+               (evaluateExpectations test
+                  (Ran (139, "", "compiler diagnostic", 0L, 0L)))
+          && Result.is_error
+               (evaluateExpectations test (Ran (1, "", "unrelated", 0L, 0L)))
+          && Result.is_error
+               (evaluateExpectations test
+                  (Ran (1, "", "compiler diagnostic\nleaks: 1\n", 0L, 0L)))
+          && Option.is_none (tryPrepareBatchTest test))
+          "Error-message override accepted a wrong phase, message, pass, \
+           signal or leak")
+  in
+  let compile = CompileFailed (1, "compiler diagnostic", 0L) in
+  let runtime = Ran (1, "", "compiler diagnostic", 0L, 0L) in
+  let* () = check "compile" compile runtime in
+  check "runtime" runtime compile
+
 let testCompilerRuntimeXfailStrictness () =
   let check classification =
     one
@@ -783,6 +813,9 @@ let tests =
   ( "canonical named result reporter parses and preserves the body",
     testCanonicalNamedResultReporter )
   :: [
+       ( "compiler error-message overrides require the annotated phase and \
+          diagnostic",
+         testCompilerErrorMessageOverride );
        ( "compiler annotations preserve inventory",
          testCompilerAnnotationsPreserveInventory );
        ( "compiler annotations reject unknown reason tags",
