@@ -60,12 +60,10 @@ module ErrorPropagation =
     Stdlib.Option.Option.Some(Stdlib.Test.raiseRuntimeError "test")
     => raises "Uncaught exception: test"
 
-  // @compiler xfail compile: "Compilation failed: Unresolved inference variable in value renderer: Ok$Darklang.Stdlib.Result.Result$0" class=missing-support reason=compiler-gap
   test errorArg =
     Stdlib.Result.Result.Error(Stdlib.Test.raiseRuntimeError "test")
     => raises "Uncaught exception: test"
 
-  // @compiler xfail compile: "Compilation failed: Unresolved inference variable in value renderer: Err$Darklang.Stdlib.Result.Result$1" class=missing-support reason=compiler-gap
   test okArg =
     Stdlib.Result.Result.Ok(Stdlib.Test.raiseRuntimeError "test")
     => raises "Uncaught exception: test"

@@ -7,7 +7,6 @@ test options =
       |> Stdlib.Test.equal true
       (Stdlib.List.head []) |> Stdlib.Test.equal Stdlib.Option.Option.None ]
 
-// @compiler xfail compile: "Compilation failed: Unresolved inference variable in value renderer: Err$Darklang.Stdlib.Result.Result$1" class=missing-support reason=compiler-gap
 test okPayloadErrorRaises =
   Stdlib.Result.Result.Ok(Stdlib.Test.raiseRuntimeError "err")
   => raises "Uncaught exception: err"
@@ -16,7 +15,6 @@ test somePayloadErrorRaises =
   Stdlib.Option.Option.Some(Stdlib.Test.raiseRuntimeError "err")
   => raises "Uncaught exception: err"
 
-// @compiler xfail compile: "Compilation failed: Unresolved inference variable in value renderer: Ok$Darklang.Stdlib.Result.Result$0" class=missing-support reason=compiler-gap
 test errorPayloadErrorRaises =
   Stdlib.Result.Result.Error(Stdlib.Test.raiseRuntimeError "err")
   => raises "Uncaught exception: err"
