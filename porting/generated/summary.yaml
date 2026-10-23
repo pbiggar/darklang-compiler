@@ -38,9 +38,9 @@ dispositions:
     replace: 1142
     run: 216
   tests:
-    blocked: 45
+    blocked: 46
     run: 1666
-    xfail: 648
+    xfail: 647
 reasons:
   packages:
     aot-type-error: 4
@@ -123,10 +123,9 @@ expected_failures:
   missing-support:
     phases:
       compile: 420
-      runtime: 15
+      runtime: 14
     reasons:
       compiler-gap: 45
-      compiler-leak: 1
       test-counter: 7
       upstream-dependency: 382
     sources:
@@ -137,7 +136,6 @@ expected_failures:
       upstream/packages/darklang/tests/cli/instance-tests.dark: 4
       upstream/packages/darklang/tests/cli/interactiveTests.dark: 4
       upstream/packages/darklang/tests/cli/isolation.dark: 11
-      upstream/packages/darklang/tests/cli/listing.dark: 1
       upstream/packages/darklang/tests/cli/outliner.dark: 6
       upstream/packages/darklang/tests/cli/permissionsDisplay.dark: 2
       upstream/packages/darklang/tests/cli/permissionsGrammar.dark: 15

@@ -12,7 +12,7 @@ A run disposition means selected, not a passing execution receipt. Replacement c
 | --- | --- |
 | packages | 1,986 blocked, 2 excluded, 35 replace, 1,680 run |
 | stdlib | 637 blocked, 3 excluded, 1,142 replace, 216 run |
-| tests | 45 blocked, 1,666 run, 648 xfail |
+| tests | 46 blocked, 1,666 run, 647 xfail |
 
 ## Expected test failures
 
@@ -22,7 +22,7 @@ Missing support includes compiler bugs, unavailable dependencies and test-runner
 | Class | Compile | Runtime | Total |
 | --- | ---: | ---: | ---: |
 | `aot-rejection` | 213 | 0 | 213 |
-| `missing-support` | 420 | 15 | 435 |
+| `missing-support` | 420 | 14 | 434 |
 
 | Class | Reason | Tests |
 | --- | --- | ---: |
@@ -33,7 +33,6 @@ Missing support includes compiler bugs, unavailable dependencies and test-runner
 | `aot-rejection` | `aot-name-error` | 11 |
 | `aot-rejection` | `aot-type-error` | 139 |
 | `missing-support` | `compiler-gap` | 45 |
-| `missing-support` | `compiler-leak` | 1 |
 | `missing-support` | `test-counter` | 7 |
 | `missing-support` | `upstream-dependency` | 382 |
 
@@ -50,7 +49,6 @@ Each row links to the authoritative per-test annotations. A named test remains o
 | [packages/darklang/tests/cli/instance-tests.dark](../../../upstream/packages/darklang/tests/cli/instance-tests.dark) | 4 |
 | [packages/darklang/tests/cli/interactiveTests.dark](../../../upstream/packages/darklang/tests/cli/interactiveTests.dark) | 4 |
 | [packages/darklang/tests/cli/isolation.dark](../../../upstream/packages/darklang/tests/cli/isolation.dark) | 11 |
-| [packages/darklang/tests/cli/listing.dark](../../../upstream/packages/darklang/tests/cli/listing.dark) | 1 |
 | [packages/darklang/tests/cli/outliner.dark](../../../upstream/packages/darklang/tests/cli/outliner.dark) | 6 |
 | [packages/darklang/tests/cli/permissionsDisplay.dark](../../../upstream/packages/darklang/tests/cli/permissionsDisplay.dark) | 2 |
 | [packages/darklang/tests/cli/permissionsGrammar.dark](../../../upstream/packages/darklang/tests/cli/permissionsGrammar.dark) | 15 |
