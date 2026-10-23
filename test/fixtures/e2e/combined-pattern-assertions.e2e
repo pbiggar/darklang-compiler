@@ -1,0 +1,83 @@
+// Combining pattern assertions must keep compilation bounded.
+let nestedListPatterns () : Stdlib.Test.Result =
+  Stdlib.Test.all
+    [ (match [ [ 1L, 2L ], [ 3L, 4L ] ] with
+       | [] -> "fail"
+       | [ [ 1L, 2L ], [ 3L, 4L ] ] -> "pass"
+       | var -> "fail")
+      |> Stdlib.Test.equal "pass"
+      (match [ [ 1L, 2L ], [ 3L, 4L ] ] with
+       | [ [ 1L, 2L ], [ 3L, 4L ] ] -> "pass"
+       | [] -> "fail"
+       | var -> "fail")
+      |> Stdlib.Test.equal "pass"
+      (match [ [ 1L, 2L ], [ 3L, 4L ] ] with
+       | [ a, b ] -> $"pass"
+       | [] -> "fail")
+      |> Stdlib.Test.equal "pass"
+      (match [ [ 1L, 2L ], [] ] with
+       | [ [], _ ] -> "fail"
+       | [ [ 1L, 2L ], _ ] -> "pass"
+       | _ -> "fail")
+      |> Stdlib.Test.equal "pass"
+      (match [ [ 1L, 2L ], [ 3L, 4L, 5L ] ] with
+       | [ [ 1L, 2L ], [ _ ] ] -> "fail"
+       | [ [ 1L, 2L ], [ _, _ ] ] -> "fail"
+       | [ [ 1L, 2L ], [ _, _, _ ] ] -> "pass")
+      |> Stdlib.Test.equal "pass"
+      (match [ [ 1L, 2L ], [ 3L, 4L ] ] with
+       | [ [ 1L, 2L, 3L ], [ 4L, 5L, 6L ] ] -> "fail"
+       | [ _, [ 3L, _ ] ] -> "pass"
+       | _ -> "fail")
+      |> Stdlib.Test.equal "pass" ]
+
+nestedListPatterns () = Stdlib.Test.Result.Pass
+
+let optionPatterns () : Stdlib.Test.Result =
+  Stdlib.Test.all
+    [ (match Stdlib.Option.Option.Some 5L with
+       | Some 6L -> "fail"
+       | None -> "fail"
+       | Some 5L -> "pass"
+       | var -> "fail")
+      |> Stdlib.Test.equal "pass"
+      (match Stdlib.Option.Option.Some 5L with
+       | Some 5L -> "pass"
+       | None -> "fail"
+       | var -> "fail")
+      |> Stdlib.Test.equal "pass"
+      (match Stdlib.Option.Option.None with
+       | Some _ -> "fail"
+       | None -> "pass")
+      |> Stdlib.Test.equal "pass"
+      (match Stdlib.Option.Option.Some "hello" with
+       | Some "world" -> "fail"
+       | None -> "fail"
+       | Some msg -> $"pass: {msg}")
+      |> Stdlib.Test.equal "pass: hello"
+      (match Stdlib.Option.Option.Some [ 1L, 2L, 3L ] with
+       | Some [ 1L, 2L, 3L, 4L ] -> "fail"
+       | None -> "fail"
+       | Some [ 1L, 2L, 3L ] -> "pass"
+       | _ -> "fail")
+      |> Stdlib.Test.equal "pass"
+      (match Stdlib.Option.Option.Some((1L, 'a')) with
+       | Some((2L, 'b')) -> "fail"
+       | Some((1L, 'a')) -> "pass"
+       | _ -> "fail")
+      |> Stdlib.Test.equal "pass"
+      (match Stdlib.Option.Option.Some 5.0 with
+       | Some 6.0 -> "fail"
+       | None -> "fail"
+       | Some 5.0 -> "pass"
+       | _ -> "fail")
+      |> Stdlib.Test.equal "pass" ]
+optionPatterns () = Stdlib.Test.Result.Pass
+
+// Both paths transfer freshly allocated strings through a shared continuation.
+let joinStringResult (chooseFirst: Bool) (value: Int64) : String =
+  "value:" + (match chooseFirst with
+              | true -> Stdlib.Int64.toString value
+              | false -> Stdlib.Int64.toString (value + 1L))
+joinStringResult true 42L = "value:42"
+joinStringResult false 42L = "value:43"

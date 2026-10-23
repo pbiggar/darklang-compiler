@@ -372,6 +372,7 @@ let materializeProgramValues program =
                  typeParams = [];
                  params = C.checkedParams parameters;
                  returnType = typ;
+                 bodyType = typ;
                  body;
                  recursion = None;
                }))

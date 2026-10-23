@@ -562,6 +562,7 @@ let rec ensureSerializer (env : env) typ (state : state) =
           params =
             checkedParams (args [ (writerId, writerType); (valueId, typ) ]);
           returnType = checkedType writerType;
+          bodyType = checkedType writerType;
           body = Local writerId;
           recursion = None;
         }
@@ -632,6 +633,7 @@ and ensureListSerializer (env : env) elemType (state : state) =
                    (binding "__first", AST.TBool);
                  ]);
           returnType = checkedType writerType;
+          bodyType = checkedType writerType;
           body = local "__writer" bindings;
           recursion = None;
         }
@@ -706,6 +708,7 @@ and ensureDictSerializer (env : env) valueType (state : state) =
                    (binding "__first", AST.TBool);
                  ]);
           returnType = checkedType writerType;
+          bodyType = checkedType writerType;
           body = local "__writer" bindings;
           recursion = None;
         }
@@ -1007,6 +1010,7 @@ let rec ensureDecoder (env : env) typ (state : state) =
                    (binding "__path", pathType);
                  ]);
           returnType = checkedType (resultType typ);
+          bodyType = checkedType (resultType typ);
           body = RuntimeError "unfinished JSON decoder";
           recursion = None;
         }
@@ -1096,6 +1100,7 @@ and ensureListDecoder (env : env) elemType (state : state) =
                    (binding "__index", AST.TInt64);
                  ]);
           returnType = checkedType (resultType listType);
+          bodyType = checkedType (resultType listType);
           body = RuntimeError "unfinished JSON list decoder";
           recursion = None;
         }
@@ -1238,6 +1243,7 @@ and ensureDictDecoder (env : env) valueType (state : state) =
                    (binding "__dict", dictType);
                  ]);
           returnType = checkedType (resultType dictType);
+          bodyType = checkedType (resultType dictType);
           body = RuntimeError "unfinished JSON dictionary decoder";
           recursion = None;
         }

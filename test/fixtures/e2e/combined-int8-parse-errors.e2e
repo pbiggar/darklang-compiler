@@ -1,0 +1,2 @@
+// Combining parse assertions must compile and execute without resource exhaustion.
+Stdlib.Test.all [Stdlib.Int8.parse "-10001" |> Stdlib.Test.equal (Error Stdlib.Int8.ParseError.OutOfRange), Stdlib.Int8.parse "128" |> Stdlib.Test.equal (Error Stdlib.Int8.ParseError.OutOfRange), Stdlib.Int8.parse "-129" |> Stdlib.Test.equal (Error Stdlib.Int8.ParseError.OutOfRange)] = Stdlib.Test.Result.Pass

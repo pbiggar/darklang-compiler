@@ -3,3 +3,10 @@ let constantReturn<'a> () : 'a = 5L
 
 constantReturn<Int64> () = 5L
 constantReturn<String> () = compileerror="Expected TString, got TInt64"
+
+let constantTupleReturn<'a> () : 'a = (5L, true)
+constantTupleReturn<(Int64 * Bool)> () = (5L, true)
+constantTupleReturn<String> () = compileerror="Expected TString, got TTuple"
+
+let neverReturns<'a> () : 'a = Builtin.crash "generic return failure"
+neverReturns<String> () = error="generic return failure"
