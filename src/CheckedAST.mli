@@ -122,6 +122,7 @@ type functionDef = {
   typeParams : string list;
   params : (AST.bindingId * checkedType) NonEmptyList.t;
   returnType : checkedType;
+  bodyType : checkedType;
   body : expr;
   recursion : recursiveMember option;
 }

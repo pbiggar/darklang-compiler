@@ -219,6 +219,7 @@ let makeClosureComparator name captures compareCaptures variants symbols =
           (S.paramsFromList "makeClosureComparator"
              [ (left, runtimeClosureType); (right, runtimeClosureType) ]);
       returnType = C.checkedType AST.TBool;
+      bodyType = C.checkedType AST.TBool;
       body;
       recursion = None;
     },

@@ -20,6 +20,7 @@ let testPreservesTypeVarsInSpecialization () =
       typeParams = [ "t" ];
       params = C.checkedParams (NonEmptyList.singleton (xId, AST.TVar "t"));
       returnType = C.checkedType (AST.TVar "t");
+      bodyType = C.checkedType (AST.TVar "t");
       body = C.Local xId;
       recursion = None;
     }
@@ -94,6 +95,7 @@ let testSpecializeFromSpecs () =
       typeParams = [ "t" ];
       params = C.checkedParams (NonEmptyList.singleton (xId, AST.TVar "t"));
       returnType = C.checkedType (AST.TVar "t");
+      bodyType = C.checkedType (AST.TVar "t");
       body = C.Local xId;
       recursion = None;
     }

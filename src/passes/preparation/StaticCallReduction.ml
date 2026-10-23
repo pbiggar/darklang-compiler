@@ -120,28 +120,35 @@ let reduce definitions program =
                     artifact.SpecializationIdentity.func
                     (C.semanticTypeArgs types)
                 in
-                let importedSymbols, imported =
-                  C.composeTopLevels artifact.SpecializationIdentity.symbols
-                    symbols [ C.FunctionDef func ]
-                in
-                match imported with
-                | [ C.FunctionDef func ] ->
-                    let bindings =
-                      List.fold_left
-                        (fun env ((id, _), argument) -> B.add id argument env)
-                        B.empty
-                        (List.combine (NonEmptyList.toList func.C.params) args)
+                match TypeSubstitution.validateFunctionReturn func with
+                | Error _ -> (original, symbols)
+                | Ok () -> (
+                    let importedSymbols, imported =
+                      C.composeTopLevels artifact.SpecializationIdentity.symbols
+                        symbols [ C.FunctionDef func ]
                     in
-                    let reduced, reducedSymbols =
-                      expression (S.add name active) bindings importedSymbols
-                        func.C.body
-                    in
-                    (* A known return value proves that no callback invocation
+                    match imported with
+                    | [ C.FunctionDef func ] ->
+                        let bindings =
+                          List.fold_left
+                            (fun env ((id, _), argument) ->
+                              B.add id argument env)
+                            B.empty
+                            (List.combine
+                               (NonEmptyList.toList func.C.params)
+                               args)
+                        in
+                        let reduced, reducedSymbols =
+                          expression (S.add name active) bindings
+                            importedSymbols func.C.body
+                        in
+                        (* A known return value proves that no callback invocation
                        survives. Unknown control flow keeps the original call. *)
-                    if value reduced then (reduced, reducedSymbols)
-                    else (original, symbols)
-                | _ ->
-                    Crash.crash "Static call import changed declaration shape")
+                        if value reduced then (reduced, reducedSymbols)
+                        else (original, symbols)
+                    | _ ->
+                        Crash.crash
+                          "Static call import changed declaration shape"))
             | _ -> (original, symbols))
         | _ -> (original, symbols))
     | C.Match (scrutinee, cases) -> (

@@ -353,6 +353,8 @@ let resolveAliasesInFunction aliases (func : C.functionDef) =
         func.C.params;
     returnType =
       C.checkedType (resolveAliasType aliases (C.functionReturnType func));
+    bodyType =
+      C.checkedType (resolveAliasType aliases (C.semanticType func.C.bodyType));
   }
 
 (*
@@ -391,6 +393,23 @@ let specializeFunction id (func : C.functionDef) args =
     typeParams = [];
     params;
     returnType;
+    bodyType =
+      C.checkedType (applySubstToType subst (C.semanticType func.C.bodyType));
     body;
     recursion = func.C.recursion;
   }
+
+(* Retain the checked body's type separately from its declared generic result.
+   A concrete instance must agree before any representation-directed lowering. *)
+let validateFunctionReturn (func : C.functionDef) =
+  let expected = C.functionReturnType func
+  and actual = C.semanticType func.C.bodyType in
+  match Unification.reconcileTypes None expected actual with
+  | Some _ -> Ok ()
+  | None ->
+      Error
+        ("Expected "
+        ^ StructuralFormat.semanticType expected
+        ^ ", got "
+        ^ StructuralFormat.semanticType actual
+        ^ " in function '" ^ func.C.name ^ "'")
