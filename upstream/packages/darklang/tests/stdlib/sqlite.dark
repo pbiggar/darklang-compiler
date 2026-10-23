@@ -22,7 +22,6 @@ let withDatabase (run: String -> Stdlib.Test.Result) : Stdlib.Test.Result =
   | Ok db -> finish db (run db)
 
 // Cleanup must preserve a failing test's result.
-// @compiler blocked: pending-validation
 test cleansUpAfterAssertionFailure =
   match Stdlib.Cli.File.createTemp () with
   | Error error -> Stdlib.Test.fail error.message
@@ -35,7 +34,7 @@ test cleansUpAfterAssertionFailure =
           Stdlib.Cli.File.exists db |> Stdlib.Test.equal false ]
 
 // CREATE + READ — a column of text, with a quoted value inserted via params.
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Unknown function or value 'Stdlib.Sqlite.exec'" reason=upstream-dependency
 test createRead =
   withDatabase (fun db ->
     let _ = Stdlib.Sqlite.exec db "DROP TABLE IF EXISTS t"
@@ -58,7 +57,7 @@ test createRead =
 // `Value` type carries blobs through rather than stringifying them; without an
 // accessor a caller matches the case by hand, which is where a stringified blob
 // comes from.
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Unknown function or value 'Stdlib.Sqlite.exec'" reason=upstream-dependency
 test blobRoundTrip =
   withDatabase (fun db ->
     let _ = Stdlib.Sqlite.exec db "DROP TABLE IF EXISTS t"
@@ -82,13 +81,12 @@ test blobRoundTrip =
     |> Stdlib.Test.equal (Some "hi"))
 
 // A TEXT cell is not a blob, and asking for one says so rather than coercing.
-// @compiler blocked: pending-validation
 test textIsNotBlob =
   Stdlib.Sqlite.asBytes (Stdlib.Sqlite.Value.Text "hi") |> Stdlib.Test.equal None
 
 // UPDATE + DELETE — final state after renaming id=1 and removing id=2 is just
 // ["updated"].
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Unknown function or value 'Stdlib.Sqlite.exec'" reason=upstream-dependency
 test updateDelete =
   withDatabase (fun db ->
     let _ = Stdlib.Sqlite.exec db "DROP TABLE IF EXISTS t"
@@ -115,7 +113,7 @@ test updateDelete =
     |> Stdlib.Test.equal [ "updated" ])
 
 // scalarInt (count) + scalarIntP (per-key lookup), read as a body tuple.
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Unknown function or value 'Stdlib.Sqlite.exec'" reason=upstream-dependency
 test scalarQueries =
   withDatabase (fun db ->
     let _ = Stdlib.Sqlite.exec db "DROP TABLE IF EXISTS t"
@@ -139,7 +137,7 @@ test scalarQueries =
     |> Stdlib.Test.equal (2L, 2L))
 
 // queryOneP + textField + intField, read in the body via an inline match.
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Unknown function or value 'Stdlib.Sqlite.exec'" reason=upstream-dependency
 test queryOneRow =
   withDatabase (fun db ->
     let _ = Stdlib.Sqlite.exec db "DROP TABLE IF EXISTS t"
@@ -158,7 +156,7 @@ test queryOneRow =
 
 // execBatch — several statements in ONE transaction, one statement run per parameter
 // row.
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Unknown function or value 'Stdlib.Sqlite.exec'" reason=upstream-dependency
 test execBatch =
   withDatabase (fun db ->
     let _ = Stdlib.Sqlite.exec db "DROP TABLE IF EXISTS t"
@@ -177,7 +175,7 @@ test execBatch =
 // The whole point of the batch: a statement that fails takes the ones before it with
 // it. Without the transaction, "bob" would be sitting in the table after a call that
 // reported an error.
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Unknown function or value 'Stdlib.Sqlite.exec'" reason=upstream-dependency
 test failedBatchRollsBack =
   withDatabase (fun db ->
     let _ = Stdlib.Sqlite.exec db "DROP TABLE IF EXISTS t"

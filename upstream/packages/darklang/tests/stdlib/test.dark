@@ -14,22 +14,19 @@ let is
     Stdlib.Test.Result.Fail
       [ $"expected {Stdlib.toRepr expected}, got {Stdlib.toRepr actual}" ]
 
-// @compiler blocked: pending-validation
 test pass =
   Stdlib.Test.pass () |> is Stdlib.Test.Result.Pass
 
-// @compiler blocked: pending-validation
 test fail =
   Stdlib.Test.fail "nope" |> is (Stdlib.Test.Result.Fail [ "nope" ])
 
-// @compiler blocked: pending-validation
 test expect =
   Stdlib.Test.all
     [ Stdlib.Test.expect true "unused" |> is Stdlib.Test.Result.Pass
       Stdlib.Test.expect false "it was false"
       |> is (Stdlib.Test.Result.Fail [ "it was false" ]) ]
 
-// @compiler blocked: pending-validation
+// @compiler xfail runtime: "assertion 2: Assertion results differ" reason=test-diagnostics
 test equal =
   Stdlib.Test.all
     [ Stdlib.Test.equal 8L 8L |> is Stdlib.Test.Result.Pass
@@ -37,14 +34,13 @@ test equal =
       |> is (Stdlib.Test.Result.Fail [ "expected 9, got 8" ])
       (8L |> Stdlib.Test.equal 8L) |> is Stdlib.Test.Result.Pass ]
 
-// @compiler blocked: pending-validation
+// @compiler xfail runtime: "assertion 2: Assertion results differ" reason=test-diagnostics
 test notEqual =
   Stdlib.Test.all
     [ Stdlib.Test.notEqual 1L 2L |> is Stdlib.Test.Result.Pass
       Stdlib.Test.notEqual 1L 1L
       |> is (Stdlib.Test.Result.Fail [ "did not expect 1" ]) ]
 
-// @compiler blocked: pending-validation
 test all =
   Stdlib.Test.all
     [ Stdlib.Test.all [] |> is Stdlib.Test.Result.Pass
@@ -59,7 +55,6 @@ test all =
         (Stdlib.Test.Result.Fail
           [ "assertion 1: a", "assertion 3: b", "assertion 3: c" ]) ]
 
-// @compiler blocked: pending-validation
 test emptyFailureIsPreserved =
   Stdlib.Test.all
     [ Stdlib.Test.all [ Stdlib.Test.Result.Fail [] ]

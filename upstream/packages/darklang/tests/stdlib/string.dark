@@ -1,6 +1,5 @@
 module Darklang.Stdlib.String.Tests
 
-// @compiler blocked: pending-validation
 test stringEquality =
   Stdlib.Test.all
     [ "Z̤͔ͧ̑̓ä͖̭̈̇lͮ̒ͫǧ̗͚̚o̙̔ͮ̇͐̇" == "Z̤͔ͧ̑̓ä͖̭̈̇lͮ̒ͫǧ̗͚̚o̙̔ͮ̇͐̇"
@@ -11,7 +10,6 @@ test stringEquality =
       "👨‍❤️‍💋‍👨👩‍👩‍👧‍👦🏳️‍⚧️‍️🇵🇷" == "👨‍❤️‍💋‍👨👩‍👩‍👧‍👦🏳️‍⚧️‍️🇵🇷"
       |> Stdlib.Test.equal true ]
 
-// @compiler blocked: pending-validation
 test fromChar =
   Stdlib.Test.all
     [ Stdlib.String.fromChar 'a' |> Stdlib.Test.equal "a"
@@ -29,7 +27,6 @@ test fromChar =
       |> Stdlib.Option.map Stdlib.String.fromChar
       |> Stdlib.Test.equal (Some "Z̤͔ͧ̑̓") ]
 
-// @compiler blocked: pending-validation
 test fromList =
   Stdlib.Test.all
     [ Stdlib.String.fromList [] |> Stdlib.Test.equal ""
@@ -39,12 +36,11 @@ test fromList =
         Stdlib.String.head grapheme |> Builtin.unwrap)
       |> Stdlib.String.fromList |> Stdlib.Test.equal "👩‍👩‍👧‍👦🏳️‍⚧️‍️👱🏾Z̤͔ͧ̑̓" ]
 
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Expected TChar, got TString" reason=compiler-gap
 test fromListRejectsStrings =
   Stdlib.String.fromList [ "a" ]
   => raises "Darklang.Stdlib.String.fromList's 1st parameter `lst` expects List<Char>, but got List<String> ([\"a\"])"
 
-// @compiler blocked: pending-validation
 test toList =
   Stdlib.Test.all
     [ Stdlib.String.toList "" |> Stdlib.Test.equal []
@@ -70,7 +66,6 @@ test toList =
       (Stdlib.String.toList "👩‍👩‍👧‍👦🏳️‍⚧️‍️👱🏾Z̤͔ͧ̑̓") |> Stdlib.String.fromList
       |> Stdlib.Test.equal "👩‍👩‍👧‍👦🏳️‍⚧️‍️👱🏾Z̤͔ͧ̑̓" ]
 
-// @compiler blocked: pending-validation
 test mapPreservesCharacters =
   Stdlib.Test.all
     [ Stdlib.String.map "a string" (fun x -> x) |> Stdlib.Test.equal "a string"
@@ -84,7 +79,6 @@ test mapPreservesCharacters =
       Stdlib.String.map "👨‍❤️‍💋‍👨👩‍👩‍👧‍👦🏳️‍⚧️‍️🇵🇷" (fun x -> x)
       |> Stdlib.Test.equal "👨‍❤️‍💋‍👨👩‍👩‍👧‍👦🏳️‍⚧️‍️🇵🇷" ]
 
-// @compiler blocked: pending-validation
 test mapReplacesEveryCharacter =
   Stdlib.Test.all
     [ Stdlib.String.map "a string" (fun _ -> 'c') |> Stdlib.Test.equal "cccccccc"
@@ -102,7 +96,6 @@ test mapReplacesEveryCharacter =
 //   5, 5, 5, 5
 // ]"""
 
-// @compiler blocked: pending-validation
 test appendOperator =
   Stdlib.Test.all
     [ ("" + "") |> Stdlib.Test.equal ""
@@ -114,7 +107,6 @@ test appendOperator =
       ("" + "a") |> Stdlib.Test.equal "a"
       ("a" + "") |> Stdlib.Test.equal "a" ]
 
-// @compiler blocked: pending-validation
 test append =
   Stdlib.Test.all
     [ //Stdlib.String.append "a" "̂" = "â"
@@ -133,7 +125,6 @@ test append =
       Stdlib.String.append "Z̤͔ͧ̑̓ä͖̭̈̇lͮ̒ͫǧ̗͚̚o̙̔ͮ̇͐̇" "👨‍❤️‍💋‍👨"
       |> Stdlib.Test.equal "Z̤͔ͧ̑̓ä͖̭̈̇lͮ̒ͫǧ̗͚̚o̙̔ͮ̇͐̇👨‍❤️‍💋‍👨" ]
 
-// @compiler blocked: pending-validation
 test join =
   Stdlib.Test.all
     [ Stdlib.String.join [ "a", "b", "c", "d" ] "|" |> Stdlib.Test.equal "a|b|c|d"
@@ -155,7 +146,6 @@ test join =
       Stdlib.String.join [ "🧑🏽‍🦰‍", "🧑🏼‍💻‍‍" ] ""
       |> Stdlib.Test.equal "🧑🏽‍🦰‍🧑🏼‍💻‍‍" ]
 
-// @compiler blocked: pending-validation
 test toBytesLength =
   Stdlib.Test.all
     [ Stdlib.List.length (Stdlib.String.toBytes "🧑🏽‍🦰🧑🏼‍💻🧑🏻‍🍼✋✋🏻✋🏿")
@@ -174,7 +164,6 @@ test toBytesLength =
       Stdlib.List.length (Stdlib.String.toBytes "Z̤͔ͧ̑̓ä͖̭̈̇lͮ̒ͫǧ̗͚̚o̙̔ͮ̇͐̇")
       |> Stdlib.Test.equal 49 ]
 
-// @compiler blocked: pending-validation
 test startsWith =
   Stdlib.Test.all
     [ Stdlib.String.startsWith "a string" "a s" |> Stdlib.Test.equal true
@@ -197,7 +186,6 @@ test startsWith =
       |> Stdlib.Test.equal true
       Stdlib.String.startsWith "a string" "" |> Stdlib.Test.equal true ]
 
-// @compiler blocked: pending-validation
 test endsWith =
   Stdlib.Test.all
     [ Stdlib.String.endsWith "a string" "in" |> Stdlib.Test.equal false
@@ -221,7 +209,6 @@ test endsWith =
 
 // String.fromBytes, fromBytesWithReplacement and toBytes use List<UInt8>.
 // Convert blobs with Blob.toList and keep the Result so decode errors fail the assertion.
-// @compiler blocked: pending-validation
 test fromBytesWithReplacement =
   Stdlib.Test.all
     [ Stdlib.Base64.decode "w6I"
@@ -245,7 +232,6 @@ test fromBytesWithReplacement =
         Stdlib.Blob.toList blob |> Stdlib.String.fromBytesWithReplacement)
       |> Stdlib.Test.equal (Ok "h�") ]
 
-// @compiler blocked: pending-validation
 test fromBytes =
   Stdlib.Test.all
     [ Stdlib.Base64.decode "w6I"
@@ -269,7 +255,6 @@ test fromBytes =
         Stdlib.Blob.toList blob |> Stdlib.String.fromBytes)
       |> Stdlib.Test.equal (Ok None) ]
 
-// @compiler blocked: pending-validation
 test base64Decode =
   Stdlib.Test.all
     [ // empty case
@@ -311,7 +296,6 @@ test base64Decode =
       Stdlib.String.base64Decode "5Sk"
       |> Stdlib.Test.equal (Error "Invalid UTF-8 string") ]
 
-// @compiler blocked: pending-validation
 test base64UrlEncode =
   Stdlib.Test.all
     [ Stdlib.String.base64UrlEncode "+" |> Stdlib.Test.equal "Kw"
@@ -335,7 +319,6 @@ test base64UrlEncode =
 
      |> Stdlib.Test.equal "8J-RsfCfkbHwn4-78J-RsfCfj7zwn5Gx8J-PvfCfkbHwn4--8J-RsfCfj78" ]
 
-// @compiler blocked: pending-validation
 test base64Encode =
   Stdlib.Test.all
     [ Stdlib.String.base64Encode "+" |> Stdlib.Test.equal "Kw=="
@@ -359,7 +342,6 @@ test base64Encode =
 
      |> Stdlib.Test.equal "8J+RsfCfkbHwn4+78J+RsfCfj7zwn5Gx8J+PvfCfkbHwn4++8J+RsfCfj78=" ]
 
-// @compiler blocked: pending-validation
 test digest =
   Stdlib.Test.all
     [ Stdlib.String.digest ""
@@ -394,11 +376,9 @@ test digest =
      |> Stdlib.Test.equal "3QFqrhTPpxeje6XUNObFt2eJZZ1t0pAcX42AFdFVv42hco0bTOopQK3py4KMBT0m" ]
 
 // Preserve the original two-call comparison independently of the sample test.
-// @compiler blocked: pending-validation
 test randomPairIsDifferent =
   (Stdlib.String.random 5) == (Stdlib.String.random 5) |> Stdlib.Test.equal false
 
-// @compiler blocked: pending-validation
 test randomLength =
   Stdlib.Test.all
     [ Stdlib.String.random 10
@@ -411,7 +391,6 @@ test randomLength =
       |> Stdlib.Test.equal
         (Error "Expected `length` to be positive, but it was `-1`") ]
 
-// @compiler blocked: pending-validation
 test htmlEscape =
   Stdlib.Test.all
     [ // HTML escaping works reasonably
@@ -436,7 +415,6 @@ test htmlEscape =
       Stdlib.String.htmlEscape "👨‍❤️‍💋‍👨👩‍👩‍👧‍👦🏳️‍⚧️‍️🇵🇷"
       |> Stdlib.Test.equal "👨‍❤️‍💋‍👨👩‍👩‍👧‍👦🏳️‍⚧️‍️🇵🇷" ]
 
-// @compiler blocked: pending-validation
 test isEmpty =
   Stdlib.Test.all
     [ Stdlib.String.isEmpty "" |> Stdlib.Test.equal true
@@ -449,10 +427,8 @@ test isEmpty =
       Stdlib.String.isEmpty "👨‍❤️‍💋‍👨👩‍👩‍👧‍👦🏳️‍⚧️‍️🇵🇷"
       |> Stdlib.Test.equal false ]
 
-// @compiler blocked: pending-validation
 test newline = Stdlib.String.newline |> Stdlib.Test.equal "\n"
 
-// @compiler blocked: pending-validation
 test length =
   Stdlib.Test.all
     [ Stdlib.String.length "😄" |> Stdlib.Test.equal 1
@@ -466,7 +442,6 @@ test length =
       Stdlib.String.length "👨‍❤️‍💋‍👨👩‍👩‍👧‍👦🏳️‍⚧️‍️🇵🇷" |> Stdlib.Test.equal 4 ]
 
 // The `length` half of the fast-path cases below (see `splitFastPath`).
-// @compiler blocked: pending-validation
 test lengthFastPath =
   Stdlib.Test.all
     [ Stdlib.String.length "hello" |> Stdlib.Test.equal 5
@@ -475,7 +450,6 @@ test lengthFastPath =
       Stdlib.String.length "a\r\nb" |> Stdlib.Test.equal 3
       Stdlib.String.length "" |> Stdlib.Test.equal 0 ]
 
-// @compiler blocked: pending-validation
 test split =
   Stdlib.Test.all
     [ Stdlib.String.split "hello world" "notfound"
@@ -546,7 +520,6 @@ test split =
 // String.split and String.length use extended grapheme clusters. Check that the
 // fast path agrees, and declines non-ASCII clusters, CRLF and empty separators.
 // CRLF is one cluster, so splitting "a\r\nb" on "\n" keeps the whole string.
-// @compiler blocked: pending-validation
 test splitFastPath =
   Stdlib.Test.all
     [ Stdlib.String.split "/hello/world" "/"
@@ -564,7 +537,6 @@ test splitFastPath =
       Stdlib.String.split "🎉a🎉" "a" |> Stdlib.Test.equal [ "🎉", "🎉" ]
       Stdlib.String.split "éx" "x" |> Stdlib.Test.equal [ "é", "" ] ]
 
-// @compiler blocked: pending-validation
 test splitFirst =
   Stdlib.Test.all
     [ Stdlib.String.splitFirst "a|b" "|" |> Stdlib.Test.equal (Some(("a", "b")))
@@ -603,7 +575,6 @@ test splitFirst =
       // Mid-grapheme search returns None: 🧑 alone is not a complete EGC of 🧑🏼‍💻.
       Stdlib.String.splitFirst "🧑🏼‍💻" "🧑" |> Stdlib.Test.equal None ]
 
-// @compiler blocked: pending-validation
 test splitN =
   Stdlib.Test.all
     [ Stdlib.String.splitN "a|b|c|d" "|" 2 |> Stdlib.Test.equal [ "a", "b|c|d" ]
@@ -639,7 +610,6 @@ test splitN =
       Stdlib.String.splitN "🧑🏼‍💻🧑🏼‍💻x" "🧑🏼‍💻" 3
       |> Stdlib.Test.equal [ "", "", "x" ] ]
 
-// @compiler blocked: pending-validation
 test prepend =
   Stdlib.Test.all
     [ // Stdlib.String.prepend works for ASCII range
@@ -665,7 +635,6 @@ test prepend =
       Stdlib.String.prepend "żółw🧑🏽‍🦰🧑🏻‍🍼✋✋🏻✋🏿" "🧟‍♂️"
       |> Stdlib.Test.equal "🧟‍♂️żółw🧑🏽‍🦰🧑🏻‍🍼✋✋🏻✋🏿" ]
 
-// @compiler blocked: pending-validation
 test replaceAll =
   Stdlib.Test.all
     [ Stdlib.String.replaceAll "abcABCcbaCBA" "b" "x"
@@ -688,7 +657,6 @@ test replaceAll =
       Stdlib.String.replaceAll "żółw🧑🏽‍🦰🧑🏻‍🍼✋✋🏻✋🏿" "🧑🏻‍🍼" "🧟‍♂️"
       |> Stdlib.Test.equal "żółw🧑🏽‍🦰🧟‍♂️✋✋🏻✋🏿" ]
 
-// @compiler blocked: pending-validation
 test toLowercase =
   Stdlib.Test.all
     [ Stdlib.String.toLowercase "HELLO😄WORLD" |> Stdlib.Test.equal "hello😄world"
@@ -717,13 +685,11 @@ test toLowercase =
       Stdlib.String.toLowercase "Z̤͔ͧ̑̓Ä͖̭̈̇Lͮ̒ͫǦ̗͚̚O̙̔ͮ̇͐̇"
       |> Stdlib.Test.equal "z̤͔ͧ̑̓ä͖̭̈̇lͮ̒ͫǧ̗͚̚o̙̔ͮ̇͐̇" ]
 
-// @compiler blocked: pending-validation
 test toLowercaseCombiningMarks =
   Stdlib.Test.all
     [ Stdlib.String.toLowercase "H̬̤̗̤͝e͜ ̜̥̝̻͍̟́w̕h̖̯͓o̝͙̖͎̱̮ ҉̺̙̞̟͈W̷̼̭a̺̪͍į͈͕̭͙̯̜t̶̼̮s̘͙͖̕ ̠̫̠B̻͍͙͉̳ͅe̵h̵̬͇̫͙i̹͓̳̳̮͎̫̕n͟d̴̪̜̖ ̰͉̩͇͙̲͞ͅT͖̼͓̪͢h͏͓̮̻e̬̝̟ͅ ̤̹̝W͙̞̝͔͇͝ͅa͏͓͔̹̼̣l̴͔̰̤̟͔ḽ̫.͕"
       |> Stdlib.Test.equal "h̬̤̗̤͝e͜ ̜̥̝̻͍̟́w̕h̖̯͓o̝͙̖͎̱̮ ҉̺̙̞̟͈w̷̼̭a̺̪͍į͈͕̭͙̯̜t̶̼̮s̘͙͖̕ ̠̫̠b̻͍͙͉̳ͅe̵h̵̬͇̫͙i̹͓̳̳̮͎̫̕n͟d̴̪̜̖ ̰͉̩͇͙̲͞ͅt͖̼͓̪͢h͏͓̮̻e̬̝̟ͅ ̤̹̝w͙̞̝͔͇͝ͅa͏͓͔̹̼̣l̴͔̰̤̟͔ḽ̫.͕" ]
 
-// @compiler blocked: pending-validation
 test toUppercase =
   Stdlib.Test.all
     [ Stdlib.String.toUppercase "" |> Stdlib.Test.equal ""
@@ -767,13 +733,11 @@ test toUppercase =
       Stdlib.String.toUppercase "z̤͔ͧ̑̓ä͖̭̈̇lͮ̒ͫǧ̗͚̚o̙̔ͮ̇͐̇"
       |> Stdlib.Test.equal "Z̤͔ͧ̑̓Ä͖̭̈̇Lͮ̒ͫǦ̗͚̚O̙̔ͮ̇͐̇" ]
 
-// @compiler blocked: pending-validation
 test toUppercaseCombiningMarks =
   Stdlib.Test.all
     [ Stdlib.String.toUppercase "H̬̤̗̤͝e͜ ̜̥̝̻͍̟́w̕h̖̯͓o̝͙̖͎̱̮ ҉̺̙̞̟͈W̷̼̭a̺̪͍į͈͕̭͙̯̜t̶̼̮s̘͙͖̕ ̠̫̠B̻͍͙͉̳ͅe̵h̵̬͇̫͙i̹͓̳̳̮͎̫̕n͟d̴̪̜̖ ̰͉̩͇͙̲͞ͅT͖̼͓̪͢h͏͓̮̻e̬̝̟ͅ ̤̹̝W͙̞̝͔͇͝ͅa͏͓͔̹̼̣l̴͔̰̤̟͔ḽ̫.͕"
       |> Stdlib.Test.equal "H̬̤̗̤͝E͜ ̜̥̝̻͍̟́W̕H̖̯͓O̝͙̖͎̱̮ ҉̺̙̞̟͈W̷̼̭A̺̪͍Į͈͕̭͙̯̜T̶̼̮S̘͙͖̕ ̠̫̠B̻͍͙͉̳ΙE̵H̵̬͇̫͙I̹͓̳̳̮͎̫̕N͟D̴̪̜̖ ̰͉̩͇͙̲͞ΙT͖̼͓̪͢H͏͓̮̻E̬̝̟Ι ̤̹̝W͙̞̝͔͇͝ΙA͏͓͔̹̼̣L̴͔̰̤̟͔Ḽ̫.͕" ]
 
-// @compiler blocked: pending-validation
 test trimEnd =
   Stdlib.Test.all
     [ Stdlib.String.trimEnd "      " |> Stdlib.Test.equal ""
@@ -801,7 +765,6 @@ test trimEnd =
       |> Stdlib.Test.equal "          żółw🧑🏽‍🦰🧑🏻‍🍼✋✋🏻✋🏿"
       Stdlib.String.trimEnd "🇺🇸🇷🇺🇸 🇦🇫🇦🇲🇸" |> Stdlib.Test.equal "🇺🇸🇷🇺🇸 🇦🇫🇦🇲🇸" ]
 
-// @compiler blocked: pending-validation
 test trimStart =
   Stdlib.Test.all
     [ Stdlib.String.trimStart " \xe2\x80\x83foo\xe2\x80\x83bar\xe2\x80\x83 "
@@ -828,7 +791,6 @@ test trimStart =
       Stdlib.String.trimStart "          żółw🧑🏽‍🦰🧑🏻‍🍼✋✋🏻✋🏿  "
       |> Stdlib.Test.equal "żółw🧑🏽‍🦰🧑🏻‍🍼✋✋🏻✋🏿  " ]
 
-// @compiler blocked: pending-validation
 test trim =
   Stdlib.Test.all
     [ Stdlib.String.trim "      " |> Stdlib.Test.equal ""
@@ -864,7 +826,6 @@ test trim =
       |> Stdlib.Test.equal "\xf0\x9f\x98\x84foobar\xf0\x9f\x98\x84"
       Stdlib.String.trim "쉆ꥨ逴皪巌䖑ⱝዓ淋" |> Stdlib.Test.equal "쉆ꥨ逴皪巌䖑ⱝዓ淋" ]
 
-// @compiler blocked: pending-validation
 test reverse =
   Stdlib.Test.all
     [ Stdlib.String.reverse "abcde" |> Stdlib.Test.equal "edcba"
@@ -886,7 +847,6 @@ test reverse =
       Stdlib.String.reverse "Z̤͔ͧ̑̓ä͖̭̈̇lͮ̒ͫǧ̗͚̚o̙̔ͮ̇͐̇"
       |> Stdlib.Test.equal "o̙̔ͮ̇͐̇ǧ̗͚̚lͮ̒ͫä͖̭̈̇Z̤͔ͧ̑̓" ]
 
-// @compiler blocked: pending-validation
 test dropFirst =
   Stdlib.Test.all
     [ Stdlib.String.dropFirst "abcd" -3 |> Stdlib.Test.equal "abcd"
@@ -912,7 +872,6 @@ test dropFirst =
       Stdlib.String.dropFirst "👨‍❤️‍💋‍👨👩‍👩‍👧‍👦🏳️‍⚧️‍️🇵🇷" 3
       |> Stdlib.Test.equal "🇵🇷" ]
 
-// @compiler blocked: pending-validation
 test dropLast =
   Stdlib.Test.all
     [ Stdlib.String.dropLast "abcd" -3 |> Stdlib.Test.equal "abcd"
@@ -933,7 +892,6 @@ test dropLast =
       Stdlib.String.dropLast "żółw🧑🏽‍🦰🧑🏻‍🍼✋✋🏻✋🏿" 4
       |> Stdlib.Test.equal "żółw🧑🏽‍🦰" ]
 
-// @compiler blocked: pending-validation
 test last =
   Stdlib.Test.all
     [ Stdlib.String.last "żółw🧑🏽‍🦰🧑🏻‍🍼✋✋🏻✋🏿" 4
@@ -957,7 +915,6 @@ test last =
       Stdlib.String.last "👨‍❤️‍💋‍👨👩‍👩‍👧‍👦🏳️‍⚧️‍️🇵🇷" 1
       |> Stdlib.Test.equal "🇵🇷" ]
 
-// @compiler blocked: pending-validation
 test contains =
   Stdlib.Test.all
     [ Stdlib.String.contains "﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽﷽" "2223" |> Stdlib.Test.equal false
@@ -971,7 +928,6 @@ test contains =
       Stdlib.String.contains "a" "" |> Stdlib.Test.equal true
       Stdlib.String.contains "" "a" |> Stdlib.Test.equal false ]
 
-// @compiler blocked: pending-validation
 test slice =
   Stdlib.Test.all
     [ Stdlib.String.slice "abcd" -2 4 |> Stdlib.Test.equal "cd"
@@ -994,7 +950,6 @@ test slice =
       |> Stdlib.Test.equal "🏳️‍⚧️‍️🇵🇷"
       Stdlib.String.slice "abc" 0 4503599627370498 |> Stdlib.Test.equal "abc" ]
 
-// @compiler blocked: pending-validation
 test first =
   Stdlib.Test.all
     [ Stdlib.String.first "abcd" -3 |> Stdlib.Test.equal ""
@@ -1022,7 +977,6 @@ test first =
       Stdlib.String.first "👨‍❤️‍💋‍👨👩‍👩‍👧‍👦🏳️‍⚧️‍️🇵🇷" 3
       |> Stdlib.Test.equal "👨‍❤️‍💋‍👨👩‍👩‍👧‍👦🏳️‍⚧️‍️" ]
 
-// @compiler blocked: pending-validation
 test padStart =
   Stdlib.Test.all
     [ Stdlib.String.padStart "123" "0" 3 |> Stdlib.Test.equal (Ok "123")
@@ -1051,7 +1005,6 @@ test padStart =
 
      |> Stdlib.Test.equal (Error "Expected `padWith` to be 1 character long, but it was `\"\"`") ]
 
-// @compiler blocked: pending-validation
 test padEnd =
   Stdlib.Test.all
     [ Stdlib.String.padEnd "" "0" 0 |> Stdlib.Test.equal (Ok "")
@@ -1081,7 +1034,6 @@ test padEnd =
 
 // Columns, not characters. Contrast `PadEnd` above: `padEnd "界界界" "0" 6` adds
 // three zeroes to something already six columns wide.
-// @compiler blocked: pending-validation
 test padToWidth =
   Stdlib.Test.all
     [ Stdlib.String.padEndToWidth "" 0 |> Stdlib.Test.equal ""
@@ -1100,7 +1052,6 @@ test padToWidth =
       Stdlib.String.padStartToWidth "界" 4 |> Stdlib.Test.equal "  界"
       Stdlib.String.padStartToWidth "界界界" 6 |> Stdlib.Test.equal "界界界" ]
 
-// @compiler blocked: pending-validation
 test indexOf =
   Stdlib.Test.all
     [ Stdlib.String.indexOf "hello world" "world" |> Stdlib.Test.equal (Some 6)
@@ -1121,7 +1072,6 @@ test indexOf =
       Stdlib.String.indexOf "👨‍❤️‍💋‍👨👩‍👩‍👧‍👦🏳️‍⚧️‍️🇵🇷" "🧑🏻‍🍼"
       |> Stdlib.Test.equal None ]
 
-// @compiler blocked: pending-validation
 test indexOfEgc =
   Stdlib.Test.all
     [ // Mirror of the IndexOf module above, but in EGC units. Pair with first /
@@ -1147,7 +1097,6 @@ test indexOfEgc =
       // Standalone 🧑 at EGC index 0 is matchable when it stands on its own.
       Stdlib.String.indexOfEgc "🧑🧑🏼‍💻" "🧑" |> Stdlib.Test.equal (Some 0) ]
 
-// @compiler blocked: pending-validation
 test lastIndexOfEgc =
   Stdlib.Test.all
     [ // Basic ASCII: last occurrence wins.
@@ -1173,7 +1122,6 @@ test lastIndexOfEgc =
       // Standalone 🧑 at the end is matchable when it stands on its own.
       Stdlib.String.lastIndexOfEgc "🧑🏼‍💻🧑" "🧑" |> Stdlib.Test.equal (Some 1) ]
 
-// @compiler blocked: pending-validation
 test ellipsis =
   Stdlib.Test.all
     [ Stdlib.String.ellipsis "hello world" 5 |> Stdlib.Test.equal "hello..."
@@ -1188,7 +1136,6 @@ test ellipsis =
       Stdlib.String.ellipsis "👨‍❤️‍💋‍👨👩‍👩‍👧‍👦🏳️‍⚧️‍️🇵🇷✋✋🏻✋🏿" 4
       |> Stdlib.Test.equal "👨‍❤️‍💋‍👨👩‍👩‍👧‍👦🏳️‍⚧️‍️🇵🇷..." ]
 
-// @compiler blocked: pending-validation
 test head =
   Stdlib.Test.all
     [ Stdlib.String.head "hello world" |> Stdlib.Test.equal (Some 'h')
@@ -1202,7 +1149,6 @@ test head =
 //       Stdlib.String.head "🧟‍♀️🧟‍♂️" |> Stdlib.Test.equal (Some '🧟')
 //       Stdlib.String.head "👨‍❤️‍💋‍👨" |> Stdlib.Test.equal (Some '👨‍❤️‍💋‍👨') ]
 
-// @compiler blocked: pending-validation
 test articleFor =
   Stdlib.Test.all
     [ Stdlib.String.articleFor "apple" |> Stdlib.Test.equal "an"
@@ -1211,7 +1157,6 @@ test articleFor =
       Stdlib.String.articleFor "🍊" |> Stdlib.Test.equal "a"
       Stdlib.String.articleFor "" |> Stdlib.Test.equal "" ]
 
-// @compiler blocked: pending-validation
 test repeat =
   Stdlib.Test.all
     [ Stdlib.String.repeat "ab" 3 |> Stdlib.Test.equal "ababab"
@@ -1225,7 +1170,6 @@ test repeat =
       |> Stdlib.Test.equal "👨‍👩‍👧‍👦👨‍👩‍👧‍👦"
       Stdlib.String.length (Stdlib.String.repeat "─" 80) |> Stdlib.Test.equal 80 ]
 
-// @compiler blocked: pending-validation
 test toCodepoints =
   Stdlib.Test.all
     [ Stdlib.String.toCodepoints "" |> Stdlib.Test.equal []
@@ -1236,7 +1180,6 @@ test toCodepoints =
       Stdlib.String.toCodepoints "👩‍👧"
       |> Stdlib.Test.equal [ 128105, 8205, 128103 ] ]
 
-// @compiler blocked: pending-validation
 test codepointLength =
   Stdlib.Test.all
     [ Stdlib.String.codepointLength "" |> Stdlib.Test.equal 0
@@ -1249,7 +1192,6 @@ test codepointLength =
       Stdlib.String.codepointLength "🧑🏽‍🦰🧑🏼‍💻🧑🏻‍🍼✋✋🏻✋🏿"
       |> Stdlib.Test.equal 17 ]
 
-// @compiler blocked: pending-validation
 test getByteAt =
   Stdlib.Test.all
     [ Stdlib.String.getByteAt "abc" 0 |> Stdlib.Test.equal (Some 97uy)
@@ -1265,13 +1207,11 @@ test getByteAt =
       // Oversized indices return None.
       Stdlib.String.getByteAt "abc" 4503599627370498 |> Stdlib.Test.equal None ]
 
-// @compiler blocked: pending-validation
 test getByteAtMatchesToBytes =
   // Match the full UTF-8 encoding.
   Stdlib.String.getByteAt "héllo" 2
   |> Stdlib.Test.equal (Stdlib.List.getAt (Stdlib.String.toBytes "héllo") 2)
 
-// @compiler blocked: pending-validation
 test toOrdinal =
   Stdlib.Test.all
     [ Stdlib.String.toOrdinal 0 |> Stdlib.Test.equal "0th"
@@ -1293,7 +1233,7 @@ test toOrdinal =
       Stdlib.String.toOrdinal -1 |> Stdlib.Test.equal "-1st"
       Stdlib.String.toOrdinal -11 |> Stdlib.Test.equal "-11th" ]
 
-// @compiler blocked: pending-validation
+// @compiler xfail runtime: "assertion 9: Values differ" reason=compiler-gap
 test slugify =
   Stdlib.Test.all
     [ Stdlib.String.slugify
@@ -1328,7 +1268,6 @@ test slugify =
 
 // Use several samples to make accidental collisions negligible while catching
 // a generator that always returns the same string.
-// @compiler blocked: pending-validation
 test randomProducesDifferentStrings =
   let samples =
     Stdlib.List.range 1 16
@@ -1342,7 +1281,7 @@ test randomProducesDifferentStrings =
 
 // Check that map calls its callback once per character.
 module MapEffects =
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unknown function or value 'Stdlib.Test.incrementCounter'" reason=test-counter
   test invokesCallbackOncePerCharacter =
     let value =
       Stdlib.String.map "a string" (fun _ ->
@@ -1360,14 +1299,13 @@ module MapEffects =
 //       |> Stdlib.Blob.toList |> Stdlib.Test.equal [234uy, 176uy, 129uy] ]
 
 // head returns the whole grapheme cluster.
-// @compiler blocked: pending-validation
 test headUsesWholeGraphemes =
   Stdlib.Test.all
     [ Stdlib.String.head "👱👱🏻👱🏼👱🏽👱🏾👱🏿" |> Stdlib.Test.equal (Some '👱')
       Stdlib.String.head "🧟‍♀️🧟‍♂️" |> Stdlib.Test.equal (Some '🧟‍♀️')
       Stdlib.String.head "👨‍❤️‍💋‍👨" |> Stdlib.Test.equal (Some '👨‍❤️‍💋‍👨') ]
 
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Expected TChar, got TInt64" reason=compiler-gap
 test mapRejectsNonCharResult =
   Stdlib.String.map "👨‍❤️‍💋‍👨👩‍👩‍👧‍👦🏳️‍⚧️‍️🇵🇷" (fun _ -> 5L)
   => raises "Darklang.Stdlib.String.fromList's 1st parameter `lst` expects List<Char>, but got List<Int64> ([5, 5, 5, 5])"

@@ -1,4 +1,9 @@
-# Compatibility test failure ledger
+# Historical compatibility test audit
+
+This is a historical audit of adapted fixtures and the former central gates.
+The [source ledger](../porting/README.md) is authoritative for current imported
+items. Counts and line numbers below describe the recorded revisions; current
+dispositions live in per-item source annotations.
 
 Audited on 2026-10-08 (UTC), against compiler revision `4a61318019fb8dea7f34a0bfec4df33f1fa18f5c` on Linux x86-64.
 

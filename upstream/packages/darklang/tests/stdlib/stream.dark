@@ -3,25 +3,21 @@
 module Darklang.Stdlib.Stream.Tests
 
 // fromList -> toList roundtrips
-// @compiler blocked: pending-validation
 test fromListToListRoundTrips =
   let s = Stdlib.Stream.fromList [ 1L, 2L, 3L ]
   Stdlib.Stream.toList s |> Stdlib.Test.equal [ 1L, 2L, 3L ]
 
 // empty stream drains to empty list
-// @compiler blocked: pending-validation
 test emptyStreamDrainsToEmptyList =
   let s = Stdlib.Stream.fromList<Int64> []
   Stdlib.Stream.toList s |> Stdlib.Test.equal []
 
 // next on an empty stream returns None
-// @compiler blocked: pending-validation
 test nextOnEmptyStreamIsNone =
   let s = Stdlib.Stream.fromList<Int64> []
   Stdlib.Stream.next s |> Stdlib.Test.equal None
 
 // next pulls head, leaves rest
-// @compiler blocked: pending-validation
 test nextPullsHeadLeavesRest =
   let s = Stdlib.Stream.fromList [ 7L, 8L ]
   let first = Stdlib.Stream.next s
@@ -30,14 +26,12 @@ test nextPullsHeadLeavesRest =
   [ first, second, third ] |> Stdlib.Test.equal [ Some 7L, Some 8L, None ]
 
 // toBlob drains a Stream<UInt8> into a Blob
-// @compiler blocked: pending-validation
 test toBlobDrainsBytes =
   let s = Stdlib.Stream.fromList [ 104uy, 105uy ]
   let b = Stdlib.Stream.toBlob s
   Stdlib.Blob.toString b |> Stdlib.Test.equal (Ok "hi")
 
 // close is idempotent; subsequent next returns None
-// @compiler blocked: pending-validation
 test closeIsIdempotent =
   let s = Stdlib.Stream.fromList [ 1L, 2L ]
   let _ = Stdlib.Stream.close s
@@ -47,56 +41,48 @@ test closeIsIdempotent =
 // --- transforms ---
 
 // map doubles every element
-// @compiler blocked: pending-validation
 test mapDoubles =
   let s = Stdlib.Stream.fromList [ 1L, 2L, 3L ]
   let mapped = Stdlib.Stream.map s (fun n -> n * 2L)
   Stdlib.Stream.toList mapped |> Stdlib.Test.equal [ 2L, 4L, 6L ]
 
 // filter keeps only matching elements
-// @compiler blocked: pending-validation
 test filterKeepsMatching =
   let s = Stdlib.Stream.fromList [ 1L, 2L, 3L, 4L ]
   let evens = Stdlib.Stream.filter s (fun n -> n % 2L == 0L)
   Stdlib.Stream.toList evens |> Stdlib.Test.equal [ 2L, 4L ]
 
 // filter rejecting everything yields empty
-// @compiler blocked: pending-validation
 test filterRejectingEverything =
   let s = Stdlib.Stream.fromList [ 1L, 3L, 5L ]
   let none = Stdlib.Stream.filter s (fun n -> n % 2L == 0L)
   Stdlib.Stream.toList none |> Stdlib.Test.equal []
 
 // take caps at n
-// @compiler blocked: pending-validation
 test takeCapsAtN =
   let s = Stdlib.Stream.fromList [ 10L, 20L, 30L, 40L ]
   let first2 = Stdlib.Stream.take s 2
   Stdlib.Stream.toList first2 |> Stdlib.Test.equal [ 10L, 20L ]
 
 // take more than available returns all available
-// @compiler blocked: pending-validation
 test takeMoreThanAvailable =
   let s = Stdlib.Stream.fromList [ 7L, 8L ]
   let wide = Stdlib.Stream.take s 10
   Stdlib.Stream.toList wide |> Stdlib.Test.equal [ 7L, 8L ]
 
 // take 0 returns empty without pulling
-// @compiler blocked: pending-validation
 test takeZero =
   let s = Stdlib.Stream.fromList [ 1L, 2L ]
   let none = Stdlib.Stream.take s 0
   Stdlib.Stream.toList none |> Stdlib.Test.equal []
 
 // a negative n of any magnitude (even past Int64) clamps to 0 -> empty
-// @compiler blocked: pending-validation
 test takeNegativeClampsToZero =
   let s = Stdlib.Stream.fromList [ 1L, 2L ]
   let none = Stdlib.Stream.take s -9223372036854775809
   Stdlib.Stream.toList none |> Stdlib.Test.equal []
 
 // concat drains streams in list order
-// @compiler blocked: pending-validation
 test concatInOrder =
   let a = Stdlib.Stream.fromList [ 1L, 2L ]
   let b = Stdlib.Stream.fromList [ 3L, 4L ]
@@ -104,13 +90,11 @@ test concatInOrder =
   Stdlib.Stream.toList joined |> Stdlib.Test.equal [ 1L, 2L, 3L, 4L ]
 
 // concat over an empty list yields empty
-// @compiler blocked: pending-validation
 test concatOfEmptyList =
   let joined = Stdlib.Stream.concat<Int64> []
   Stdlib.Stream.toList joined |> Stdlib.Test.equal []
 
 // concat skips an empty sub-stream in the middle
-// @compiler blocked: pending-validation
 test concatSkipsEmptySubStream =
   let a = Stdlib.Stream.fromList [ 1L ]
   let empty = Stdlib.Stream.fromList<Int64> []
@@ -120,7 +104,6 @@ test concatSkipsEmptySubStream =
 
 // the spec done-when: filter evens, map +1, take 3, toList
 // [1..10] -> evens [2,4,6,8,10] -> +1 [3,5,7,9,11] -> take 3 [3,5,7]
-// @compiler blocked: pending-validation
 test filterMapTakeSpec =
   let s = Stdlib.Stream.fromList [ 1L, 2L, 3L, 4L, 5L, 6L, 7L, 8L, 9L, 10L ]
   let filtered = Stdlib.Stream.filter s (fun n -> n % 2L == 0L)
@@ -131,14 +114,12 @@ test filterMapTakeSpec =
 // --- extra compositional coverage ---
 
 // map can change the element type
-// @compiler blocked: pending-validation
 test mapChangesElementType =
   let s = Stdlib.Stream.fromList [ 1L, 2L, 3L ]
   let mapped = Stdlib.Stream.map s (fun n -> Stdlib.toString n)
   Stdlib.Stream.toList mapped |> Stdlib.Test.equal [ "1", "2", "3" ]
 
 // take after map — the take limit applies to the mapped output
-// @compiler blocked: pending-validation
 test takeAfterMap =
   let s = Stdlib.Stream.fromList [ 1L, 2L, 3L, 4L, 5L ]
   let mapped = Stdlib.Stream.map s (fun n -> n * 10L)
@@ -146,7 +127,6 @@ test takeAfterMap =
   Stdlib.Stream.toList taken |> Stdlib.Test.equal [ 10L, 20L ]
 
 // map after take — map only applies to elements that survive the take
-// @compiler blocked: pending-validation
 test mapAfterTake =
   let s = Stdlib.Stream.fromList [ 1L, 2L, 3L, 4L, 5L ]
   let taken = Stdlib.Stream.take s 3
@@ -154,7 +134,6 @@ test mapAfterTake =
   Stdlib.Stream.toList mapped |> Stdlib.Test.equal [ 1L, 4L, 9L ]
 
 // concat of already-transformed streams
-// @compiler blocked: pending-validation
 test concatOfTransformedStreams =
   let a = Stdlib.Stream.fromList [ 1L, 2L ]
   let b = Stdlib.Stream.fromList [ 3L, 4L ]
@@ -164,7 +143,6 @@ test concatOfTransformedStreams =
   Stdlib.Stream.toList joined |> Stdlib.Test.equal [ 2L, 4L, -3L, -4L ]
 
 // filter then take: early-terminate once Take is satisfied
-// @compiler blocked: pending-validation
 test filterThenTake =
   let s = Stdlib.Stream.fromList [ 1L, 2L, 3L, 4L, 5L, 6L, 7L, 8L ]
   let evens = Stdlib.Stream.filter s (fun n -> n % 2L == 0L)
@@ -172,7 +150,6 @@ test filterThenTake =
   Stdlib.Stream.toList firstTwo |> Stdlib.Test.equal [ 2L, 4L ]
 
 // concat of concats flattens correctly
-// @compiler blocked: pending-validation
 test concatOfConcats =
   let a = Stdlib.Stream.fromList [ 1L ]
   let b = Stdlib.Stream.fromList [ 2L ]
@@ -182,7 +159,6 @@ test concatOfConcats =
   Stdlib.Stream.toList full |> Stdlib.Test.equal [ 1L, 2L, 3L ]
 
 // map/filter/take over an empty source yields empty
-// @compiler blocked: pending-validation
 test transformsOverEmptySource =
   let s = Stdlib.Stream.fromList<Int64> []
   let mapped = Stdlib.Stream.map s (fun n -> n + 1L)
@@ -191,7 +167,6 @@ test transformsOverEmptySource =
   Stdlib.Stream.toList taken |> Stdlib.Test.equal []
 
 // Stream<Blob> round-trips via fromList/toList
-// @compiler blocked: pending-validation
 test blobsRoundTripThroughStream =
   let b1 = Stdlib.Blob.fromString "hi"
   let b2 = Stdlib.Blob.fromString "there"

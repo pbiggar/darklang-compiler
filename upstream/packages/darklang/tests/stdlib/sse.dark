@@ -15,19 +15,16 @@ let parse (source: String) : List<Stdlib.HttpClient.Sse.Event> =
   |> Stdlib.Stream.toList
 
 // single event with just a data field
-// @compiler blocked: pending-validation
 test singleDataEvent =
   parse "data: hello\n\n"
   |> Stdlib.Test.equal
     [ Stdlib.HttpClient.Sse.Event { data = "hello", eventType = "", id = "" } ]
 
 // empty body yields no events
-// @compiler blocked: pending-validation
 test emptyBody =
   parse "" |> Stdlib.Test.equal []
 
 // multiple events separated by blank lines
-// @compiler blocked: pending-validation
 test multipleEvents =
   parse "data: first\n\ndata: second\n\ndata: third\n\n"
   |> Stdlib.Test.equal
@@ -36,7 +33,6 @@ test multipleEvents =
       Stdlib.HttpClient.Sse.Event { data = "third", eventType = "", id = "" } ]
 
 // event type and id are parsed
-// @compiler blocked: pending-validation
 test eventTypeAndId =
   parse "event: update\nid: 42\ndata: payload\n\n"
   |> Stdlib.Test.equal
@@ -44,7 +40,6 @@ test eventTypeAndId =
         { data = "payload", eventType = "update", id = "42" } ]
 
 // id persists across events per the SSE spec
-// @compiler blocked: pending-validation
 test idPersists =
   parse "id: 42\ndata: one\n\ndata: two\n\n"
   |> Stdlib.Test.equal
@@ -52,7 +47,6 @@ test idPersists =
       Stdlib.HttpClient.Sse.Event { data = "two", eventType = "", id = "42" } ]
 
 // comment lines (starting with `:`) are ignored
-// @compiler blocked: pending-validation
 test commentLinesIgnored =
   parse ": this is a comment\ndata: hello\n\n: another comment\ndata: world\n\n"
   |> Stdlib.Test.equal
@@ -60,7 +54,6 @@ test commentLinesIgnored =
       Stdlib.HttpClient.Sse.Event { data = "world", eventType = "", id = "" } ]
 
 // multi-line `data:` fields are joined with a newline
-// @compiler blocked: pending-validation
 test multiLineData =
   parse "data: line one\ndata: line two\n\n"
   |> Stdlib.Test.equal
@@ -68,7 +61,6 @@ test multiLineData =
         { data = "line one\nline two", eventType = "", id = "" } ]
 
 // blocks without a data field are not dispatched (spec: empty data = skip)
-// @compiler blocked: pending-validation
 test blocksWithoutDataSkipped =
   parse "event: ping\n\ndata: real\n\n"
   |> Stdlib.Test.equal

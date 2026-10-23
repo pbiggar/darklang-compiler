@@ -14,14 +14,12 @@ let nearSome
   | Some value -> near value expected
   | None -> Stdlib.Test.fail "expected Some Float, got None"
 
-// @compiler blocked: pending-validation
 test constants =
   Stdlib.Test.all
     [ Stdlib.Math.pi |> near 3.14159265359
       Stdlib.Math.e |> near 2.71828182846
       Stdlib.Math.tau |> near (2.0 * Stdlib.Math.pi) ]
 
-// @compiler blocked: pending-validation
 test degreesAndRadians =
   Stdlib.Test.all
     [ Stdlib.Math.degrees -180.0 |> near (-Stdlib.Math.pi)
@@ -29,7 +27,6 @@ test degreesAndRadians =
       Stdlib.Math.radians (-3.141592653589793) |> near (-Stdlib.Math.pi)
       Stdlib.Math.radians 6.283185307179586 |> near (2.0 * Stdlib.Math.pi) ]
 
-// @compiler blocked: pending-validation
 test trigonometry =
   Stdlib.Test.all
     [ Stdlib.Math.sin (Stdlib.Math.pi / 2.0) |> near 1.0
@@ -41,7 +38,6 @@ test trigonometry =
       Stdlib.Math.atan 0.0 |> near 0.0
       Stdlib.Math.atan 1.0 |> near 0.785398163397 ]
 
-// @compiler blocked: pending-validation
 test inverseTrigonometry =
   Stdlib.Test.all
     [ Stdlib.Math.asin 0.0 |> nearSome 0.0
@@ -51,7 +47,6 @@ test inverseTrigonometry =
       Stdlib.Math.acos 1.0 |> nearSome 0.0
       Stdlib.Math.acos 5.0 |> Stdlib.Test.equal None ]
 
-// @compiler blocked: pending-validation
 test atan2 =
   Stdlib.Test.all
     [ Stdlib.Math.atan2 -1.0 -1.0 |> near (-2.35619449019)
@@ -60,7 +55,6 @@ test atan2 =
       Stdlib.Math.atan2 1.0 -1.0 |> near 2.35619449019
       Stdlib.Math.atan2 1.0 1.0 |> near 0.785398163397 ]
 
-// @compiler blocked: pending-validation
 test hyperbolic =
   Stdlib.Test.all
     [ Stdlib.Math.cosh 0.0 |> near 1.0
@@ -71,7 +65,6 @@ test hyperbolic =
       Stdlib.Math.tanh -1.0 |> near (-0.761594155956)
       Stdlib.Math.tanh 20.0 |> near 1.0 ]
 
-// @compiler blocked: pending-validation
 test turns =
   Stdlib.Test.all
     [ Stdlib.Math.turns (-0.5) |> near (-Stdlib.Math.pi)

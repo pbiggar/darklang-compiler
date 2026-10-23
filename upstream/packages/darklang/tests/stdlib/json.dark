@@ -939,7 +939,7 @@ module Float =
   // TODO: test highly-precise numbers
   // TODO: review Float.tests for more values to test against
 
-  // @compiler blocked: pending-validation
+  // @compiler xfail runtime: "assertion 9: Values differ" reason=compiler-gap
   test serialize =
     Stdlib.Test.all
       [ Stdlib.Json.serialize<Float> 0.0 |> Stdlib.Test.equal "0.0"
@@ -960,7 +960,7 @@ module Float =
         Stdlib.Json.serialize<Float> 10000000000000000.0 |> Stdlib.Test.equal "1e+16"
         Stdlib.Json.serialize<Float> 0.00001 |> Stdlib.Test.equal "1e-5" ]
 
-  // @compiler blocked: pending-validation
+  // @compiler blocked: compiler-resource
   test parse =
     Stdlib.Test.all
       [ // ints as floats
@@ -999,7 +999,6 @@ module Float =
         |> Stdlib.Test.equal (Result.Ok 0.7999999999) ]
 
   module Values =
-    // @compiler blocked: pending-validation
     test serialize =
       Stdlib.Test.all
         [ // JSON represents infinities and NaN as strings.
@@ -1010,7 +1009,6 @@ module Float =
           Stdlib.Json.serialize<Float> (Stdlib.Float.sqrt -1.0)
           |> Stdlib.Test.equal "\"NaN\"" ]
 
-    // @compiler blocked: pending-validation
     test parse =
       Stdlib.Test.all
         [ // NaN never equals itself; check it with isNaN.
@@ -1022,7 +1020,7 @@ module Float =
           |> Stdlib.Test.equal (Result.Ok true) ]
 
   module Errors =
-    // @compiler blocked: pending-validation
+    // @compiler blocked: compiler-resource
     test parseErrors =
       Stdlib.Test.all
         [ (Stdlib.Json.parse<Float> "e") |> err
@@ -1069,26 +1067,22 @@ module Char =
   let charFromString (s: String) : Char =
     (Stdlib.String.head s) |> Builtin.unwrap
 
-  // @compiler blocked: pending-validation
   test serialize =
     Stdlib.Test.all
       [ Stdlib.Json.serialize<Char> 'a' |> Stdlib.Test.equal "\"a\""
         Stdlib.Json.serialize<Char> (charFromString "Ł")
         |> Stdlib.Test.equal "\"Ł\"" ]
 
-  // @compiler blocked: pending-validation
   test parse =
     Stdlib.Test.all
       [ Stdlib.Json.parse<Char> "\"a\"" |> Stdlib.Test.equal (Result.Ok 'a')
         Stdlib.Json.parse<Char> "\"Ł\"" |> Stdlib.Test.equal (Result.Ok 'Ł') ]
 
   module SimpleEmoji =
-    // @compiler blocked: pending-validation
     test serialize =
       Stdlib.Json.serialize<Char> ("😂" |> charFromString)
       |> Stdlib.Test.equal "\"\\uD83D\\uDE02\""
 
-    // @compiler blocked: pending-validation
     test parse =
       Stdlib.Test.all
         [ Stdlib.Json.parse<Char> "\"😂\""
@@ -1097,12 +1091,10 @@ module Char =
           |> Stdlib.Test.equal (Result.Ok(charFromString "😂")) ]
 
   module ComplexEmoji =
-    // @compiler blocked: pending-validation
     test serialize =
       Stdlib.Json.serialize<Char> (charFromString "👩‍👩‍👧‍👦")
       |> Stdlib.Test.equal "\"\\uD83D\\uDC69‍\\uD83D\\uDC69‍\\uD83D\\uDC67‍\\uD83D\\uDC66\""
 
-    // @compiler blocked: pending-validation
     test parse =
       Stdlib.Test.all
         [ Stdlib.Json.parse<Char>
@@ -1116,7 +1108,6 @@ module Char =
             )) ]
 
   module Errors =
-    // @compiler blocked: pending-validation
     test parseErrors =
       Stdlib.Test.all
         [ (Stdlib.Json.parse<Char> "\"test\"") |> err
@@ -1130,7 +1121,6 @@ module Char =
               "Can't parse JSON `62` as type `Char` at path: `root`") ]
 
 module String =
-  // @compiler blocked: pending-validation
   test serialize =
     Stdlib.Test.all
       [ Stdlib.Json.serialize<String> "abc" |> Stdlib.Test.equal "\"abc\""
@@ -1146,7 +1136,6 @@ module String =
         Stdlib.Json.serialize<String> (Stdlib.String.repeat "a" 100)
         |> Stdlib.Test.equal "\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"" ]
 
-  // @compiler blocked: pending-validation
   test parse =
     Stdlib.Test.all
       [ Stdlib.Json.parse<String> "\"abc\"" |> Stdlib.Test.equal (Result.Ok "abc")
@@ -1173,7 +1162,6 @@ module DateTime =
   let d (datestr: String) : DateTime =
     (Stdlib.DateTime.parse datestr) |> Builtin.unwrap
 
-  // @compiler blocked: pending-validation
   test serialize =
     Stdlib.Test.all
       [ // now-ish
@@ -1189,7 +1177,6 @@ module DateTime =
         Stdlib.Json.serialize<DateTime> (d "3023-07-28T22:42:36Z")
         |> Stdlib.Test.equal "\"3023-07-28T22:42:36Z\"" ]
 
-  // @compiler blocked: pending-validation
   test parse =
     Stdlib.Test.all
       [ Stdlib.Json.parse<DateTime> "\"2023-07-28T22:42:36Z\""
@@ -1210,7 +1197,6 @@ module DateTime =
           )) ]
 
   module Errors =
-    // @compiler blocked: pending-validation
     test parseErrors =
       Stdlib.Test.all
         [ (Stdlib.Json.parse<DateTime> "\"3023-07-28T22:42:36\"") |> err
@@ -1227,7 +1213,6 @@ module Uuid =
   let uuid (s: String) : Uuid =
     (Stdlib.Uuid.parse s) |> Builtin.unwrap
 
-  // @compiler blocked: pending-validation
   test serialize =
     Stdlib.Test.all
       [ // empty
@@ -1239,7 +1224,6 @@ module Uuid =
         Stdlib.Json.serialize<Uuid> (uuid "11111111-2222-3333-4444-555555555555")
         |> Stdlib.Test.equal "\"11111111-2222-3333-4444-555555555555\"" ]
 
-  // @compiler blocked: pending-validation
   test parse =
     Stdlib.Test.all
       [ Stdlib.Json.parse<Uuid> "\"00000000-0000-0000-0000-000000000000\""
@@ -1256,7 +1240,6 @@ module Uuid =
           )) ]
 
   module Errors =
-    // @compiler blocked: pending-validation
     test parseErrors =
       // needs one more 0 at the end
       (Stdlib.Json.parse<Uuid> "\"00000000-0000-0000-0000-00000000000\"") |> err
@@ -1264,12 +1247,12 @@ module Uuid =
           "Can't parse JSON `\"00000000-0000-0000-0000-00000000000\"` as type `Uuid` at path: `root`")
 
 module BadTypes =
-  // @compiler blocked: pending-validation
+  // @compiler xfail runtime: "Unsupported type in JSON: (Int64) -> Int64. Some types are not supported in Json serialization" reason=compiler-gap
   test rejects1 =
     (Stdlib.Json.parse<Int64 -> Int64> "{}")
     => raises "Unsupported type in JSON: (Int64) -> Int64. Some types are not supported in Json serialization, and cannot be used as arguments to Builtin.jsonParse or Builtin.jsonSerialize"
 
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Expected TInt64, got TInt" reason=compiler-gap
   test rejects2 =
     (Stdlib.Json.serialize<Int64 -> Int64> (fun i -> 5))
     => raises "Cannot serialize (lambda) into JSON"
@@ -1277,7 +1260,6 @@ module BadTypes =
 module List =
   type MyString = String
 
-  // @compiler blocked: pending-validation
   test serialize =
     Stdlib.Test.all
       [ Stdlib.Json.serialize<List<Int64>> [] |> Stdlib.Test.equal "[]"
@@ -1297,7 +1279,6 @@ module List =
             Person { Name = "Charlie", Age = 99L } ]
         |> Stdlib.Test.equal ("""[{"Age":42,"Name":"Alice"},{"Age":27,"Name":"Bob"},{"Age":99,"Name":"Charlie"}]""") ]
 
-  // @compiler blocked: pending-validation
   test parse =
     Stdlib.Test.all
       [ Stdlib.Json.parse<List<Int64>> "[]" |> Stdlib.Test.equal (Result.Ok [])
@@ -1325,18 +1306,16 @@ module List =
               Dict { "name": "Bob", "role": "user" }
               Dict { "name": "Charlie", "role": "user" } ]) ]
 
-  // @compiler blocked: pending-validation
   test parseErrors =
     (Stdlib.Json.parse<List<Int64>> "[1,2,3,]") |> err
     |> Stdlib.Test.equal (Result.Error "Not JSON")
 
   module Errors =
-    // @compiler blocked: pending-validation
+    // @compiler xfail compile: "Expected TList TInt64, got TTuple [TInt64; TInt64; TString]" reason=compiler-gap
     test rejects1 =
       (Stdlib.Json.serialize<List<Int64>> (1L, 2L, "three"))
       => raises "Darklang.Stdlib.Json.serialize's 1st parameter `value` expects List<Int64>, but got (Int64 * Int64 * String) ((1, 2, \"three\"))"
 
-    // @compiler blocked: pending-validation
     test parseErrors =
       Stdlib.Test.all
         [ (Stdlib.Json.parse<List<Int64>> "[1, 2, \"three\"]") |> err
@@ -1354,7 +1333,6 @@ module List =
               "Can't parse JSON `\"Alice\"` as type `Int64` at path: `root[0].name`") ]
 
 module Tuples =
-  // @compiler blocked: pending-validation
   test serialize =
     Stdlib.Test.all
       [ Stdlib.Json.serialize<Int64 * String * Int64> (1L, "two", 3L)
@@ -1393,7 +1371,6 @@ module Tuples =
           )
         |> Stdlib.Test.equal "[\"2023-07-28T22:42:36Z\",\"3700adbc-7a46-4ff4-81d3-45afb03f6e2d\"]" ]
 
-  // @compiler blocked: pending-validation
   test parse =
     Stdlib.Test.all
       [ Stdlib.Json.parse<Int64 * String * Int64> "[1,\"two\",3]"
@@ -1435,14 +1412,12 @@ module Tuples =
              Uuid.uuid "3700adbc-7a46-4ff4-81d3-45afb03f6e2d")
           )) ]
 
-  // @compiler blocked: pending-validation
   test parseErrors =
     (Stdlib.Json.parse<Int64 * String * Int64> "[1,3]") |> err
     |> Stdlib.Test.equal (Result.Error
         "Can't parse JSON `[1,3]` as type `(Int64 * String * Int64)` at path: `root`")
 
   module Errors =
-    // @compiler blocked: pending-validation
     test parseErrors =
       Stdlib.Test.all
         [ (Stdlib.Json.parse<String * String * Int64> """[1, "two", 3]""") |> err
@@ -1472,7 +1447,6 @@ module Tuples =
 
 module Option =
   // TODO: more...
-  // @compiler blocked: pending-validation
   test serialize =
     Stdlib.Test.all
       [ Stdlib.Json.serialize<Option<Int64>> Option.None
@@ -1480,7 +1454,6 @@ module Option =
         Stdlib.Json.serialize<Option<Int64>> (Option.Some 1L)
         |> Stdlib.Test.equal "{\"Some\":[1]}" ]
 
-  // @compiler blocked: pending-validation
   test parse =
     Stdlib.Test.all
       [ Stdlib.Json.parse<Option<Int64>> "{\"None\":[]}"
@@ -1490,7 +1463,6 @@ module Option =
 
   module Errors =
     // Option parsing intentionally requires the explicit enum representation.
-    // @compiler blocked: pending-validation
     test parseErrors =
       Stdlib.Test.all
         [ // TODO: these might make good candidates for more ergonmic parsing
@@ -1505,7 +1477,6 @@ module Option =
               "Can't parse JSON `[1,2,3]` as type `Darklang.Stdlib.Option.Option<List<String>>` at path: `root`") ]
 
 module Result =
-  // @compiler blocked: pending-validation
   test serialize =
     Stdlib.Test.all
       [ Stdlib.Json.serialize<Result<Int64, String>> (Result.Ok 1L)
@@ -1531,7 +1502,6 @@ module Result =
           )
         |> Stdlib.Test.equal "{\"Ok\":[{\"Ok\":[{\"Some\":[{\"Ok\":[1]}]}]}]}" ]
 
-  // @compiler blocked: pending-validation
   test parse =
     Stdlib.Test.all
       [ Stdlib.Json.parse<Result<Int64, String>> "{\"Ok\":[1]}"
@@ -1552,7 +1522,7 @@ module Result =
           )) ]
 
 module Dict =
-  // @compiler blocked: pending-validation
+  // @compiler xfail runtime: "Unsupported type in JSON: Dict<Int64, String>. Some types are not supported in Json serialization" reason=compiler-gap
   test serialize =
     Stdlib.Test.all
       [ Stdlib.Json.serialize<Dict<String, String>> (Stdlib.Dict.singleton "a" "b")
@@ -1562,7 +1532,6 @@ module Dict =
         Stdlib.Json.serialize<Dict<Int64, String>> (Dict { })
         |> Stdlib.Test.equal "{}" ]
 
-  // @compiler blocked: pending-validation
   test parse =
     Stdlib.Test.all
       [ Stdlib.Json.parse<Dict<String, String>> """{"a":"b"}"""
@@ -1570,13 +1539,12 @@ module Dict =
         Stdlib.Json.parse<Dict<String, String>> """{"a":"b","c":"d"}"""
         |> Stdlib.Test.equal (Result.Ok(Dict { "a": "b", "c": "d" })) ]
 
-  // @compiler blocked: pending-validation
+  // @compiler xfail runtime: "Unsupported type in JSON: Dict<Int64, String>. Some types are not supported in Json serialization" reason=compiler-gap
   test rejects1 =
     (Stdlib.Json.serialize<Dict<Int64, String>> (Dict { 1L: "a" }))
     => raises "Cannot serialize { 1: \"a\" } into JSON"
 
   module Errors =
-    // @compiler blocked: pending-validation
     test parseErrors =
       (Stdlib.Json.parse<Dict<String, Int64>> """{1:"b",2:"d"}""") |> err
       |> Stdlib.Test.equal (Result.Error "Not JSON")
@@ -1592,7 +1560,6 @@ module UserDefinedEnums =
     | Yes
     | No
 
-  // @compiler blocked: pending-validation
   test serialize =
     Stdlib.Test.all
       [ Stdlib.Json.serialize<PrettyLikely> PrettyLikely.Yeah
@@ -1606,7 +1573,6 @@ module UserDefinedEnums =
           )
         |> Stdlib.Test.equal "{\"PrettyLikely\":[{\"Enh\":[\"printer broke\",7]}]}" ]
 
-  // @compiler blocked: pending-validation
   test parse =
     Stdlib.Test.all
       [ Stdlib.Json.parse<PrettyLikely> "{\"Yeah\":[]}"
@@ -1626,7 +1592,6 @@ module UserDefinedEnums =
           )) ]
 
   module Errors =
-    // @compiler blocked: pending-validation
     test parseErrors =
       Stdlib.Test.all
         [ (Stdlib.Json.parse<PrettyLikely> "{\"Enh\":[\"printer broke\",\"not int\"]}")
@@ -1662,7 +1627,6 @@ module UserDefinedEnums =
 
 
 module UserDefinedRecords =
-  // @compiler blocked: pending-validation
   test serialize =
     Stdlib.Test.all
       [ Stdlib.Json.serialize<Person> (Person { Name = "Bob", Age = 42L })
@@ -1715,7 +1679,6 @@ module UserDefinedRecords =
                               Person { Name = "George B", Age = 42L } ] }
                     e2 = 5L } })) ]
 
-  // @compiler blocked: pending-validation
   test parse =
     Stdlib.Test.all
       [ Stdlib.Json.parse<Person> """{ "Name": "Bob", "Age": 42 }"""
@@ -1765,7 +1728,6 @@ module UserDefinedRecords =
   type Combo<'e1, 'e2> = { e1: 'e1, e2: 'e2 }
 
   module Errors =
-    // @compiler blocked: pending-validation
     test parseErrors =
       Stdlib.Test.all
         [ // Person shares its content hash with UserDefinedAliases.Person2 (identical structure),
@@ -1785,7 +1747,7 @@ module UserDefinedRecords =
 module UserDefinedAliases =
   type MyInt = Int64
 
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Expected TRecord (\"Darklang.Stdlib.Json.Tests.UserDefinedAliases.Person2\", []), got TRecord (\"Darklang.Stdlib.Json.Tests.UserDefinedAliases.Person1\", [])" reason=compiler-gap
   test serialize =
     Stdlib.Test.all
       [ Stdlib.Json.serialize<MyInt> 42L |> Stdlib.Test.equal "42"
@@ -1804,7 +1766,6 @@ module UserDefinedAliases =
         Stdlib.Json.serialize<StringResult<Int64>> (Result.Error "err")
         |> Stdlib.Test.equal "{\"Error\":[\"err\"]}" ]
 
-  // @compiler blocked: pending-validation
   test parse =
     Stdlib.Test.all
       [ Stdlib.Json.parse<MyInt> "42" |> Stdlib.Test.equal (Result.Ok 42L)
@@ -1828,13 +1789,12 @@ module UserDefinedAliases =
 
   // This test currently slips by the typechecker, and so we get an internal
   // exception
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Expected TSum (\"Darklang.Stdlib.Result.Result\", [TInt64; TString]), got TSum" reason=compiler-gap
   test rejects1 =
     (Stdlib.Json.serialize<StringResult<Int64>> (Result.Error 1L))
     => raises "Darklang.Stdlib.Json.serialize's 1st parameter `value` expects Darklang.Stdlib.Result.Result<Int64, String>, but got Darklang.Stdlib.Result.Result<_, Int64> (Error(1))"
 
 module Package =
-  // @compiler blocked: pending-validation
   test serialize =
     Stdlib.Test.all
       [ Stdlib.Json.serialize<Option<Int64>> Option.None
@@ -1849,7 +1809,6 @@ module Package =
           Darklang.LanguageTools.Sign.Positive
         |> Stdlib.Test.equal "{\"Positive\":[]}" ]
 
-  // @compiler blocked: pending-validation
   test parse =
     Stdlib.Test.all
       [ Stdlib.Json.parse<Option<Int64>> "{\"None\":[]}"
@@ -1982,7 +1941,6 @@ module RestoredArchive =
     | MissingEnumModuleName of String
     | NotFound of List<String>
 
-  // @compiler blocked: pending-validation
   test enumWithListPayload =
     let value = NamedError.InvalidPackageName ["NamePart"]
     Stdlib.Test.all
@@ -1991,7 +1949,6 @@ module RestoredArchive =
         Stdlib.Json.parse<NamedError> "{\"NotFound\":[[\"NamePart\"]]}"
         |> Stdlib.Test.equal (Ok (NamedError.NotFound ["NamePart"])) ]
 
-  // @compiler blocked: pending-validation
   test listOfEnums =
     let value =
       [ NamedError.InvalidPackageName ["NamePart"]
@@ -2002,7 +1959,6 @@ module RestoredArchive =
       [ Stdlib.Json.serialize<List<NamedError>> value |> Stdlib.Test.equal encoded
         Stdlib.Json.parse<List<NamedError>> encoded |> Stdlib.Test.equal (Ok value) ]
 
-  // @compiler blocked: pending-validation
   test rejectsMalformedJson =
     [ "{Id : 1.0}", "{Id : 1.}", "{\"Id\" : 1.}", ""
       "[ {date : \"2013-11-05\", locations : {Japan: 3, Germany: 1}} ]"
@@ -2019,7 +1975,6 @@ module RestoredArchive =
       |> Stdlib.Test.equal (Error "Not JSON"))
     |> Stdlib.Test.all
 
-  // @compiler blocked: pending-validation
   test scalarAndLargeRecordValues =
     Stdlib.Test.all
       [ Stdlib.Json.parse<Int64> "1" |> Stdlib.Test.equal (Ok 1L)
@@ -2029,7 +1984,6 @@ module RestoredArchive =
         Stdlib.Json.parse<Counter> "{ \"v\": 4611686018427387904 }"
         |> Stdlib.Test.equal (Ok (Counter { v = 4611686018427387904L })) ]
 
-  // @compiler blocked: pending-validation
   test uint64ExactDecimalAndExponentForms =
     Stdlib.Test.all
       [ Stdlib.Json.parse<UInt64> "18446744073709551615.0"
@@ -2039,7 +1993,6 @@ module RestoredArchive =
         Stdlib.Json.parse<UInt64> "9007199254740993e0"
         |> Stdlib.Test.equal (Ok 9007199254740993UL) ]
 
-  // @compiler blocked: pending-validation
   test uint64RejectsOverflowAndRoundedFractions =
     [ "18446744073709551616.0", "1.8446744073709551616e19"
       "18446744073709551615.1", "-0.00000000000000000000001"
@@ -2049,7 +2002,7 @@ module RestoredArchive =
       |> Stdlib.Test.equal true)
     |> Stdlib.Test.all
 
-  // @compiler blocked: pending-validation
+  // @compiler xfail runtime: "assertion 6: Values differ" reason=compiler-gap
   test floatBoundariesAndPrecisionRoundTrip =
     [ 1.7976931348623157e308, -1.7976931348623157e308
       2.2250738585072014e-308, 5e-324, -5e-324
@@ -2059,7 +2012,6 @@ module RestoredArchive =
       |> Stdlib.Test.equal (Ok value))
     |> Stdlib.Test.all
 
-  // @compiler blocked: pending-validation
   test deeplyNestedOptionsAndEnums =
     let value = Some (Some [NamedError.NotFound ["a", "b"]])
     Stdlib.Json.serialize<Stdlib.Option.Option<Stdlib.Option.Option<List<NamedError>>>> value

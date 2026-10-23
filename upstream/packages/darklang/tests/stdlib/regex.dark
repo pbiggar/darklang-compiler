@@ -1,6 +1,5 @@
 module Darklang.Stdlib.Regex.Tests
 
-// @compiler blocked: pending-validation
 test isMatch =
   Stdlib.Test.all
     [ // Basic matching
@@ -24,7 +23,6 @@ test isMatch =
       Stdlib.Regex.isMatch "test.txt" ".*\\.txt" |> Stdlib.Test.equal true
       Stdlib.Regex.isMatch "test-file" "test-file" |> Stdlib.Test.equal true ]
 
-// @compiler blocked: pending-validation
 test find =
   Stdlib.Test.all
     [ // Basic find
@@ -40,7 +38,6 @@ test find =
       // No match returns None
       Stdlib.Regex.find "hello" "\\d+" |> Stdlib.Test.equal None ]
 
-// @compiler blocked: pending-validation
 test findAll =
   Stdlib.Test.all
     [ // Basic findAll
@@ -58,7 +55,6 @@ test findAll =
       // No matches returns empty list
       Stdlib.Regex.findAll "hello" "\\d+" |> Stdlib.Test.equal [] ]
 
-// @compiler blocked: pending-validation
 test replace =
   Stdlib.Test.all
     [ // Basic replace - only first match
@@ -77,7 +73,6 @@ test replace =
       Stdlib.Regex.replace "hello123world456" "\\d+" "X"
       |> Stdlib.Test.equal "helloXworld456" ]
 
-// @compiler blocked: pending-validation
 test replaceAll =
   Stdlib.Test.all
     [ // Basic replaceAll
@@ -98,7 +93,6 @@ test replaceAll =
       // Remove all digits
       Stdlib.Regex.replaceAll "abc123def456" "\\d" "" |> Stdlib.Test.equal "abcdef" ]
 
-// @compiler blocked: pending-validation
 test split =
   Stdlib.Test.all
     [ // Basic split
@@ -116,7 +110,6 @@ test split =
       Stdlib.Regex.split "hello  world\tfoo\nbar" "\\s+"
       |> Stdlib.Test.equal [ "hello", "world", "foo", "bar" ] ]
 
-// @compiler blocked: pending-validation
 test realWorld =
   Stdlib.Test.all
     [ // Email validation

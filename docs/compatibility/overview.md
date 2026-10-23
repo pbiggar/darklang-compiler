@@ -1,21 +1,16 @@
-# Darklang compatibility ledger
+# Darklang compatibility
 
-The ledger lists test files and individual tests that fail in the compiler.
+The [source ledger](../porting/README.md) records current compiler decisions
+beside every imported upstream declaration and test. Its
+[aggregate report](../porting/generated/ledger.md) counts the complete pinned
+Dark corpus directly, without matching adapted fixture formats or maintaining
+separate exclusion tables.
 
-See the [current test results](current-audit.md) for the complete execution of
-all whole-file and individual-test exclusions. Each failing file links to its
-individual test identities and observed diagnostics. Passing excluded tests
-and stale exclusion entries are recorded separately.
-
-[Upstream gate inventory](upstream-test-inventory.md) records the runner’s
-configured exclusions. A gate alone is not evidence that a test fails.
-
-`Builtin.testRuntimeError` is unsupported interpreter test infrastructure.
-Compiler-owned library code, benchmarks, and tests use the public
-`Builtin.crash : String -> Never` operation. Imported interpreter assertions
-that depend on `testRuntimeError` are retained and excluded according to
-individual native reruns. Only the dependent assertion is excluded in the application fixture; the
-existing preamble fallback prunes its unused helper for the other assertions. Their identities are recorded in the [failure ledger](current-audit.md).
+The [historical compatibility audit](current-audit.md) preserves earlier native
+runs of adapted fixtures and the compiler gaps they exposed. Those fixtures
+remain regression tests; their per-test annotations replace the former central
+gates. Ordinary expectations and strict expected failures are checked by the
+current native suite.
 
 The [trait compatibility record](language/traits.md) records the current
 implementation scope, native test evidence, intentional AOT differences,

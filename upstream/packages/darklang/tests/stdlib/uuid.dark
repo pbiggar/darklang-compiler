@@ -1,7 +1,6 @@
 module Darklang.Stdlib.Uuid.Tests
 
 // Map over the parse Result so a parse error fails the assertion.
-// @compiler blocked: pending-validation
 test parse =
   Stdlib.Test.all
     [ Stdlib.Uuid.parse "3700adbc-7a46-4ff4-81d3-45afb03f6e2d"
@@ -12,7 +11,6 @@ test parse =
       |> Stdlib.Test.equal (Ok "11111111-2222-3333-4444-555555555555") ]
 
 // bad format
-// @compiler blocked: pending-validation
 test parseRejectsBadFormat =
   Stdlib.Test.all
     [ Stdlib.Uuid.parse "👱🏼"

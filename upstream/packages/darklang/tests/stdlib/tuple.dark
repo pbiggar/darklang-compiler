@@ -1,6 +1,5 @@
 module Darklang.Stdlib.Tuple.Tests
 
-// @compiler blocked: pending-validation
 test tuple2 =
   Stdlib.Test.all
     [ Stdlib.Tuple2.create "one" 2L
@@ -40,7 +39,6 @@ test tuple2 =
         (fun x -> Stdlib.String.toUppercase x)
       |> Stdlib.Test.equal (-1L, "TWO") ]
 
-// @compiler blocked: pending-validation
 test tuple3 =
   Stdlib.Test.all
     [ Stdlib.Tuple3.create "one" 2L "pi"
@@ -74,7 +72,6 @@ test tuple3 =
       Stdlib.Tuple3.mapThird (1L, "two", 3.14) (fun x -> Stdlib.Float.roundDown x)
       |> Stdlib.Test.equal (1L, "two", 3) ]
 
-// @compiler blocked: pending-validation
 test tuple3MapsAllThree =
   Stdlib.Test.all
     [ Stdlib.Tuple3.mapAllThree

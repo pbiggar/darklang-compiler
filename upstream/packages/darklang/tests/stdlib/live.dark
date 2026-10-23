@@ -21,7 +21,7 @@ module Darklang.Stdlib.Live.Tests
 // dangerous one, because a touched name collapsed away is a host that quietly does
 // not reload.
 
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Unknown function or value 'Stdlib.Live.dedupeTouched'" reason=upstream-dependency
 test dedupeTouched =
   Stdlib.Test.all
     [ // Same location, same kind, twice: one thing to reload.
@@ -74,7 +74,7 @@ test dedupeTouched =
       // Nothing touched is nothing to reload, rather than a raise on an empty Dict.
       Stdlib.Live.dedupeTouched [] |> Stdlib.Test.equal [] ]
 
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Unknown function or value 'Stdlib.Live.dependents'" reason=upstream-dependency
 test dependents =
   Stdlib.Test.all
     [ // An unknown location: not a raise, not empty, but the seed itself, because

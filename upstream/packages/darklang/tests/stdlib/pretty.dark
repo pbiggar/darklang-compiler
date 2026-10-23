@@ -34,7 +34,6 @@ let bracketed (items: List<String>) : Darklang.Stdlib.Pretty.Doc =
 
 // Text never wraps
 module Simple =
-  // @compiler blocked: pending-validation
   test textNeverWraps =
     Stdlib.Test.all
       [ r 80 (t "hello world") |> Stdlib.Test.equal "hello world"
@@ -45,7 +44,6 @@ module Simple =
 
 // A group is flat if it fits, broken if it doesn't
 module Inline =
-  // @compiler blocked: pending-validation
   test groupIsFlatIfItFits =
     Stdlib.Test.all
       [ r 80 (g (abc ())) |> Stdlib.Test.equal "a b c"
@@ -63,7 +61,6 @@ module Nested =
           Darklang.Stdlib.Pretty.line
           (Darklang.Stdlib.Pretty.vsep [ t "inner1", t "inner2" ])))
 
-  // @compiler blocked: pending-validation
   test nestIndentsTheBreak =
     Stdlib.Test.all
       [ r 80 (g (doc ())) |> Stdlib.Test.equal "outer inner1 inner2"
@@ -74,7 +71,6 @@ module Structures =
   let rec_ () : Darklang.Stdlib.Pretty.Doc =
     bracketed [ "name: alice", "age: 30", "role: admin" ]
 
-  // @compiler blocked: pending-validation
   test listsAndRecords =
     Stdlib.Test.all
       [ r 80 (bracketed [ "a", "b", "c", "d", "e" ])
@@ -96,7 +92,6 @@ module Independence =
       [ g (Darklang.Stdlib.Pretty.vsep [ t "aa", t "bb" ])
         g (Darklang.Stdlib.Pretty.vsep [ t "cc", t "dd" ]) ]
 
-  // @compiler blocked: pending-validation
   test groupsDecideIndependently =
     Stdlib.Test.all
       [ // Everything fits: one line.
@@ -112,7 +107,6 @@ module Hard =
       (t "a")
       (Darklang.Stdlib.Pretty.concat Darklang.Stdlib.Pretty.hardLine (t "b"))
 
-  // @compiler blocked: pending-validation
   test hardLineForcesBreak =
     Stdlib.Test.all
       [ r 80 (doc ()) |> Stdlib.Test.equal "a\nb"
@@ -122,7 +116,6 @@ module Hard =
 
 // Joining
 module Joining =
-  // @compiler blocked: pending-validation
   test joining =
     Stdlib.Test.all
       [ r 80 (Darklang.Stdlib.Pretty.hsep [ t "a", t "b", t "c" ])
@@ -151,7 +144,6 @@ module Soft =
               (Darklang.Stdlib.Pretty.concat (t ",") Darklang.Stdlib.Pretty.line))))
         (Darklang.Stdlib.Pretty.concat Darklang.Stdlib.Pretty.softLine (t "]")))
 
-  // @compiler blocked: pending-validation
   test softLine =
     Stdlib.Test.all
       [ r 80 (g (doc ())) |> Stdlib.Test.equal "[1, 2]"
@@ -163,7 +155,6 @@ module Soft =
 // two columns wide. A layout engine measuring the former lets lines overflow by up
 // to half their width.
 module Width =
-  // @compiler blocked: pending-validation
   test measuredInColumns =
     Stdlib.Test.all
       [ Stdlib.String.length "日本語" |> Stdlib.Test.equal 3
@@ -186,7 +177,6 @@ module HardAfter =
       (g (Darklang.Stdlib.Pretty.vsep [ t "a", t "b" ]))
       (Darklang.Stdlib.Pretty.concat Darklang.Stdlib.Pretty.hardLine (t "next"))
 
-  // @compiler blocked: pending-validation
   test hardLineAfterGroup =
     Stdlib.Test.all
       [ r 80 (doc ()) |> Stdlib.Test.equal "a b\nnext"
@@ -209,7 +199,6 @@ module Styled =
   let red (x: String) : Darklang.Stdlib.Pretty.Doc =
     Darklang.Stdlib.Pretty.styled "<<" x ">>"
 
-  // @compiler blocked: pending-validation
   test styledTextMeasuredByText =
     Stdlib.Test.all
       [ // Two columns of text, whatever the decoration weighs.
@@ -234,7 +223,7 @@ module LineSuffix =
   let note (x: String) : Darklang.Stdlib.Pretty.Doc =
     Darklang.Stdlib.Pretty.lineSuffix x
 
-  // @compiler blocked: pending-validation
+  // @compiler xfail compile: "Unknown function or value 'note'" reason=upstream-dependency
   test lineSuffixWaitsForLineEnd =
     Stdlib.Test.all
       [ // After the rest of the line, not where it was placed.

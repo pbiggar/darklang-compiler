@@ -1,6 +1,5 @@
 module Darklang.Stdlib.Result.Tests
 
-// @compiler blocked: pending-validation
 test andThen =
   Stdlib.Test.all
     [ Stdlib.Result.andThen (Error "test") (fun _ -> Error "test")
@@ -12,7 +11,7 @@ test andThen =
       Stdlib.Result.andThen (Ok 5L) (fun x -> Ok (1L + x))
       |> Stdlib.Test.equal (Ok 6L) ]
 
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Compilation failed: Could not recover List type from intrinsic '__rawptr_to_list_Darklang.Stdlib.Result.Result_Darklang.Stdlib.Result.Result_t$empty_Err$Darklang.Stdlib.Result.Result$1_Err$Darklang.Stdlib.Result.Result$1'" reason=compiler-gap
 test collect =
   Stdlib.Test.all
     [ Stdlib.Result.collect [ Ok 5L, Ok 6L, Ok 7L ]
@@ -26,7 +25,7 @@ test collect =
       Stdlib.Result.collect []
       |> Stdlib.Test.equal (Ok []) ]
 
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Constructor 'None' requires an expected enum type" reason=compiler-gap
 test fromOption =
   Stdlib.Test.all
     [ Stdlib.Result.fromOption (Some 6L) "test"
@@ -40,7 +39,6 @@ test fromOption =
       Stdlib.Result.fromOption None None
       |> Stdlib.Test.equal (Error None) ]
 
-// @compiler blocked: pending-validation
 test map2 =
   Stdlib.Test.all
     [ Stdlib.Result.map2 (Error "error1") (Error "error2") (fun x y -> x - y)
@@ -52,7 +50,6 @@ test map2 =
       Stdlib.Result.map2 (Ok 10L) (Ok 1L) (fun x y -> x - y)
       |> Stdlib.Test.equal (Ok 9L) ]
 
-// @compiler blocked: pending-validation
 test map3 =
   Stdlib.Test.all
     [ Stdlib.Result.map3
@@ -78,7 +75,6 @@ test map3 =
       Stdlib.Result.map3 (Ok 10L) (Ok 1L) (Ok 1L) (fun x y z -> x - y - z)
       |> Stdlib.Test.equal (Ok 8L) ]
 
-// @compiler blocked: pending-validation
 test map4 =
   Stdlib.Test.all
     [ Stdlib.Result.map4
@@ -110,7 +106,6 @@ test map4 =
         (fun w x y z -> w - x - y - z)
       |> Stdlib.Test.equal (Ok 6L) ]
 
-// @compiler blocked: pending-validation
 test map5 =
   Stdlib.Test.all
     [ Stdlib.Result.map5
@@ -146,7 +141,7 @@ test map5 =
         (fun v w x y z -> v - w - x - y - z)
       |> Stdlib.Test.equal (Ok 3L) ]
 
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Expected TSum" reason=compiler-gap
 test mapWithDefault =
   Stdlib.Test.all
     [ Stdlib.Result.mapWithDefault (Error "test") 5L (fun x -> x + 1L)
@@ -159,7 +154,6 @@ test mapWithDefault =
         (fun x -> x + 1L)
       |> Stdlib.Test.equal (Error "test2") ]
 
-// @compiler blocked: pending-validation
 test mapError =
   Stdlib.Test.all
     [ Stdlib.Result.mapError
@@ -169,7 +163,6 @@ test mapError =
       Stdlib.Result.mapError (Ok 4L) (fun x -> (x / 2L))
       |> Stdlib.Test.equal (Ok 4L) ]
 
-// @compiler blocked: pending-validation
 test map =
   Stdlib.Test.all
     [ Stdlib.Result.map (Error "test") (fun x -> (x / 2L))
@@ -177,7 +170,6 @@ test map =
       Stdlib.Result.map (Ok 4L) (fun x -> (x / 2L))
       |> Stdlib.Test.equal (Ok 2L) ]
 
-// @compiler blocked: pending-validation
 test withDefault =
   Stdlib.Test.all
     [ Stdlib.Result.withDefault (Error "test") 5L
@@ -185,31 +177,26 @@ test withDefault =
       Stdlib.Result.withDefault (Ok 6L) 5L
       |> Stdlib.Test.equal 6L ]
 
-// @compiler blocked: pending-validation
 test toOption =
   Stdlib.Test.all
     [ Stdlib.Result.toOption (Ok "test") |> Stdlib.Test.equal (Some "test")
       Stdlib.Result.toOption (Error "test") |> Stdlib.Test.equal None ]
 
-// @compiler blocked: pending-validation
 test isOk =
   Stdlib.Test.all
     [ Stdlib.Result.isOk (Ok "test") |> Stdlib.Test.equal true
       Stdlib.Result.isOk (Error "test") |> Stdlib.Test.equal false ]
 
-// @compiler blocked: pending-validation
 test isError =
   Stdlib.Test.all
     [ Stdlib.Result.isError (Ok "test") |> Stdlib.Test.equal false
       Stdlib.Result.isError (Error "test") |> Stdlib.Test.equal true ]
 
-// @compiler blocked: pending-validation
 test toList =
   Stdlib.Test.all
     [ Stdlib.Result.toList (Ok "test") |> Stdlib.Test.equal [ "test" ]
       Stdlib.Result.toList (Error "test") |> Stdlib.Test.equal [] ]
 
-// @compiler blocked: pending-validation
 test and =
   Stdlib.Test.all
     [ Stdlib.Result.and (Ok "test1") (Ok "test2")
@@ -221,7 +208,6 @@ test and =
       Stdlib.Result.and (Error "test1") (Error "test2")
       |> Stdlib.Test.equal (Error "test1") ]
 
-// @compiler blocked: pending-validation
 test or =
   Stdlib.Test.all
     [ Stdlib.Result.or (Ok "test1") (Ok "test2")
@@ -233,7 +219,6 @@ test or =
       Stdlib.Result.or (Error "test1") (Error "test2")
       |> Stdlib.Test.equal (Error "test2") ]
 
-// @compiler blocked: pending-validation
 test join =
   Stdlib.Test.all
     [ Stdlib.Result.join (Ok (Ok "test"))
@@ -243,7 +228,7 @@ test join =
       Stdlib.Result.join (Error "test")
       |> Stdlib.Test.equal (Error "test") ]
 
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Compilation failed: Could not recover List type from intrinsic '__rawptr_to_list_Darklang.Stdlib.Result.Result_Darklang.Stdlib.Result.Result_t$empty_Err$Darklang.Stdlib.Result.Result$1_Err$Darklang.Stdlib.Result.Result$1'" reason=compiler-gap
 test combine =
   Stdlib.Test.all
     [ Stdlib.Result.combine [ Ok 1L, Ok 2L, Ok 3L ]
@@ -255,7 +240,7 @@ test combine =
       Stdlib.Result.combine []
       |> Stdlib.Test.equal (Ok []) ]
 
-// @compiler blocked: pending-validation
+// @compiler xfail compile: "Compilation failed: Could not recover List type from intrinsic '__rawptr_to_list_Darklang.Stdlib.Result.Result_Darklang.Stdlib.Result.Result_t$empty_Err$Darklang.Stdlib.Result.Result$1_Err$Darklang.Stdlib.Result.Result$1'" reason=compiler-gap
 test values =
   Stdlib.Test.all
     [ Stdlib.Result.values [ Ok 1L, Ok 2L, Ok 3L ]
