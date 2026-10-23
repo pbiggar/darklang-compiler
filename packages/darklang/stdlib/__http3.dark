@@ -10,7 +10,7 @@ type State = {
   feedback: Blob
 }
 type Received = { state: Stdlib.__Http3.State, events: List<Stdlib.__Http3Message.Event>, finished: Bool }
-type Failure = Protocol of (Stdlib.__Http3.State * Stdlib.__Http3Message.Failure) | Fatal of String
+type Failure = Protocol of (Stdlib.__Http3.State * Stdlib.__Http3Wire.Failure) | Fatal of String
 type Headers = { state: Stdlib.__Http3.State, bytes: Blob }
 
 let __fatal (message: String) : Stdlib.__Http3.Failure = Fatal message
@@ -142,20 +142,21 @@ let __reportFailure (failure: Stdlib.__Http3.Failure) : String =
   | Fatal message -> message
   | Protocol ((state, error)) ->
     let _ =
-      if error.scope == Stdlib.__Http3Message.Scope.Connection then Stdlib.__QuicConnection.reject state.connection error.code
+      if error.scope == Stdlib.__Http3Wire.Scope.Connection then Stdlib.__QuicConnection.reject state.connection error.code
       else
         let _ = Stdlib.__Http3.__abortStream state state.stream error.code |> Stdlib.Result.andThen (fun next -> Stdlib.__QuicConnection.flush next.connection) in
         Stdlib.__Http3.close state in
     error.message
 
-let __controls (state: Stdlib.__Http3.State) : Stdlib.Result.Result<Stdlib.__Http3.State, String> =
+let __controls (state: Stdlib.__Http3.State) : Stdlib.Result.Result<Stdlib.__Http3.State, Stdlib.__Http3.Failure> =
   Stdlib.List.fold state.connection.flow.channels (Ok state) (fun result channel ->
     if channel.id % 4L != (if state.connection.flow.role == Stdlib.__QuicFlow.Role.Client then 3L else 2L) then result
     else result |> Stdlib.Result.andThen (fun current ->
-      Stdlib.__QuicConnection.read current.connection channel.id |> Stdlib.Result.andThen (fun read ->
+      Stdlib.__QuicConnection.read current.connection channel.id |> Stdlib.Result.mapError Stdlib.__Http3.__fatal |> Stdlib.Result.andThen (fun read ->
         Stdlib.__Http3Uni.receive current.uni channel.id read.bytes read.finished (Stdlib.Option.isSome read.reset)
-          |> Stdlib.Result.andThen (fun received -> Stdlib.__Http3.__feedback { current with connection = read.state, uni = received.state } received.feedback))))
-    |> Stdlib.Result.andThen (fun current -> Stdlib.__Http3.__feedback current Stdlib.Blob.empty)
+          |> Stdlib.Result.mapError (fun error -> Protocol (({ current with connection = read.state }, error)))
+          |> Stdlib.Result.andThen (fun received -> Stdlib.__Http3.__feedback { current with connection = read.state, uni = received.state } received.feedback |> Stdlib.Result.mapError Stdlib.__Http3.__fatal))))
+    |> Stdlib.Result.andThen (fun current -> Stdlib.__Http3.__feedback current Stdlib.Blob.empty |> Stdlib.Result.mapError Stdlib.__Http3.__fatal)
 
 let __encoderBytes (state: Stdlib.__Http3.State) (id: Int64) (bytes: Blob) (offset: Int64) : Stdlib.Result.Result<Stdlib.__Http3.State, String> =
   if offset == Stdlib.Blob.__byteLength bytes then Ok state
@@ -169,7 +170,7 @@ let __encoderBytes (state: Stdlib.__Http3.State) (id: Int64) (bytes: Blob) (offs
 // the batch. Lack of credit selects literals, never a partially sent insertion
 // that the peer would have to decode before granting us more credit.
 let encodeHeaders (state: Stdlib.__Http3.State) (stream: Int64) (fields: List<(String * String)>) : Stdlib.Result.Result<Stdlib.__Http3.Headers, String> =
-  Stdlib.__Http3.__controls state |> Stdlib.Result.andThen (fun state ->
+  Stdlib.__Http3.__controls state |> Stdlib.Result.mapError Stdlib.__Http3.__reportFailure |> Stdlib.Result.andThen (fun state ->
     Stdlib.__Http3Control.checkFields state.uni.control fields |> Stdlib.Result.andThen (fun _unit ->
       let id = if state.connection.flow.role == Stdlib.__QuicFlow.Role.Client then 6L else 7L in
       match Stdlib.__QuicFlow.channel state.connection.flow id with
@@ -199,14 +200,14 @@ let nextRequest (state: Stdlib.__Http3.State) (stream: Int64) (headOnly: Bool) (
   else match Stdlib.__Network.monotonicMillis () with
   | Error _ -> Error "HTTP/3 clock failed"
   | Ok now ->
-    Stdlib.__Http3.__controls state |> Stdlib.Result.andThen (fun state ->
+    Stdlib.__Http3.__controls state |> Stdlib.Result.mapError Stdlib.__Http3.__reportFailure |> Stdlib.Result.andThen (fun state ->
       let next = { state with stream = stream, message = Stdlib.__Http3Message.create (Response headOnly), deadline = now + timeout } in
       if Stdlib.__Http3.rejected next then Error "HTTP/3 request rejected by GOAWAY"
       else Stdlib.__QuicConnection.openStream next.connection stream |> Stdlib.Result.map (fun connection -> { next with connection = connection }))
 
 // Drain before polling so response data and control credit already received cannot starve.
 let __drain (state: Stdlib.__Http3.State) : Stdlib.Result.Result<Stdlib.__Http3.Received, Stdlib.__Http3.Failure> =
-  Stdlib.__Http3.__controls state |> Stdlib.Result.mapError Stdlib.__Http3.__fatal |> Stdlib.Result.andThen (fun current ->
+  Stdlib.__Http3.__controls state |> Stdlib.Result.andThen (fun current ->
     // A reset terminates the response even when its field section is waiting
     // for encoder instructions that the peer might never send.
     let reset = match Stdlib.__QuicFlow.channel current.connection.flow current.stream with

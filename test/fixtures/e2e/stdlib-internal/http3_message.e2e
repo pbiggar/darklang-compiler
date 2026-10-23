@@ -1,7 +1,7 @@
 // http3_message.e2e - HTTP/3 message sequencing, static QPACK, and FIN length checks.
-Stdlib.__Http3Message.finish (Stdlib.__Http3Message.create Request) |> Stdlib.Result.mapError (fun failure -> (failure.scope, failure.code)) = Error ((Stdlib.__Http3Message.Scope.Stream, 269L))
-Stdlib.__Http3Message.finish (Stdlib.__Http3Message.create (Response false)) |> Stdlib.Result.mapError (fun failure -> (failure.scope, failure.code)) = Error ((Stdlib.__Http3Message.Scope.Stream, 270L))
-let pending = Stdlib.__Http3Message.create (Response false) in let state = { pending with framing = { pending.framing with cursor = Stdlib.__Http3Stream.Cursor.Header (Stdlib.Blob.__fromInt64List [64L]) } } in Stdlib.__Http3Message.finish state |> Stdlib.Result.mapError (fun failure -> (failure.scope, failure.code)) = Error ((Stdlib.__Http3Message.Scope.Connection, 262L))
+Stdlib.__Http3Message.finish (Stdlib.__Http3Message.create Request) |> Stdlib.Result.mapError (fun failure -> (failure.scope, failure.code)) = Error ((Stdlib.__Http3Wire.Scope.Stream, 269L))
+Stdlib.__Http3Message.finish (Stdlib.__Http3Message.create (Response false)) |> Stdlib.Result.mapError (fun failure -> (failure.scope, failure.code)) = Error ((Stdlib.__Http3Wire.Scope.Stream, 270L))
+let pending = Stdlib.__Http3Message.create (Response false) in let state = { pending with framing = { pending.framing with cursor = Stdlib.__Http3Stream.Cursor.Header (Stdlib.Blob.__fromInt64List [64L]) } } in Stdlib.__Http3Message.finish state |> Stdlib.Result.mapError (fun failure -> (failure.scope, failure.code)) = Error ((Stdlib.__Http3Wire.Scope.Connection, 262L))
 let feed (state: Stdlib.__Http3Message.State) (data: Blob) : Stdlib.Result.Result<Stdlib.__Http3Message.Received, String> = Stdlib.__Http3Message.feed state data |> Stdlib.Result.mapError (fun failure -> failure.message)
 let finish (state: Stdlib.__Http3Message.State) : Stdlib.Result.Result<Unit, String> = Stdlib.__Http3Message.finish state |> Stdlib.Result.mapError (fun failure -> failure.message)
 finish (Stdlib.__Http3Message.create Request) = Error "HTTP/3 stream ended before final HEADERS"

@@ -53,8 +53,8 @@ let cancel (state: Stdlib.__Http3Server.State) (id: Int64) (code: Int64) : Stdli
     Stdlib.__Http3.__feedback wire (Stdlib.__QpackDecoder.cancel id) |> Stdlib.Result.andThen (fun wire ->
       Stdlib.__Http3Server.__stopUpload (Stdlib.__Http3Server.__remove { state with wire = wire } id) id code))
 
-let __failure (state: Stdlib.__Http3Server.State) (id: Int64) (failure: Stdlib.__Http3Message.Failure) : Stdlib.Result.Result<Stdlib.__Http3Server.State, String> =
-  if failure.scope == Stdlib.__Http3Message.Scope.Stream then Stdlib.__Http3Server.cancel state id failure.code
+let __failure (state: Stdlib.__Http3Server.State) (id: Int64) (failure: Stdlib.__Http3Wire.Failure) : Stdlib.Result.Result<Stdlib.__Http3Server.State, String> =
+  if failure.scope == Stdlib.__Http3Wire.Scope.Stream then Stdlib.__Http3Server.cancel state id failure.code
   else let _ = Stdlib.__QuicConnection.reject state.wire.connection failure.code in Error failure.message
 
 let respond (context: Stdlib.__Http3Server.Context) (state: Stdlib.__Http3Server.State) (active: Stdlib.__Http3Server.Active) (method: String) (response: Stdlib.Http.Response) (now: Int64) : Stdlib.Result.Result<Stdlib.__Http3Server.State, String> =
@@ -162,7 +162,7 @@ let goAway (state: Stdlib.__Http3Server.State) : Stdlib.Result.Result<Stdlib.__H
     else Stdlib.__QuicConnection.write state.wire.connection 3L bytes false |> Stdlib.Result.map (fun connection -> { state with wire = { state.wire with connection = connection }, goAwaySent = true }))
 
 let step (context: Stdlib.__Http3Server.Context) (state: Stdlib.__Http3Server.State) (now: Int64) : Stdlib.Result.Result<Stdlib.__Http3Server.State, String> =
-  Stdlib.__Http3.__controls state.wire |> Stdlib.Result.andThen (fun wire -> Stdlib.__Http3Server.admit { state with wire = wire } now) |> Stdlib.Result.andThen (fun state ->
+  Stdlib.__Http3.__controls state.wire |> Stdlib.Result.mapError Stdlib.__Http3.__reportFailure |> Stdlib.Result.andThen (fun wire -> Stdlib.__Http3Server.admit { state with wire = wire } now) |> Stdlib.Result.andThen (fun state ->
     Stdlib.List.fold state.streams (Ok state) (fun result active -> result |> Stdlib.Result.andThen (fun state ->
       if now >= active.deadline then
         match active.message with

@@ -349,8 +349,12 @@ mean the entire branch has passed its integration or performance gates.
   connection codes; truncated frames use H3_FRAME_ERROR and incomplete requests
   use H3_REQUEST_INCOMPLETE. Unpermitted server push uses H3_ID_ERROR. Server
   message owners dispatch by typed scope/code instead of diagnostic text, and
-  closing owners retain their code for retransmission. Critical-stream and
-  transport failures still need the broader typed migration.
+  closing owners retain their code for retransmission. Control/SETTINGS and
+  unidirectional stream parsers now share the scoped failure type, with exact
+  critical-stream, identifier, settings and QPACK instruction error codes.
+  Critical-stream failures retain post-read flow credit and packet state before
+  the terminal owner sends its encrypted close and releases the connection.
+  Transport failures still need the broader typed migration.
 - [ ] Sustained native TLS connection churn without exhausting the fixed heap.
   - [x] The parent fails the isolated thirty-two-connection TLS churn peer with
     `Out of heap memory`. Linux x86-64 now recycles canonical String/Blob/Int

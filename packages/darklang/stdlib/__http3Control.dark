@@ -22,29 +22,29 @@ let create (fromServer: Bool) : Stdlib.__Http3Control.State =
     settings = false, parameters = [], goAway = None, pushLimit = None, pieces = [], parts = 0L }
 
 let __begin (state: Stdlib.__Http3Control.State) (kind: Int64) (size: Int64)
-  : Stdlib.Result.Result<Stdlib.__Http3Control.State, String> =
-  if state.settings == false && kind != 4L then Error "Missing initial HTTP/3 SETTINGS"
+  : Stdlib.Result.Result<Stdlib.__Http3Control.State, Stdlib.__Http3Wire.Failure> =
+  if state.settings == false && kind != 4L then Error (Stdlib.__Http3Wire.connectionFailure 266L "Missing initial HTTP/3 SETTINGS")
   else if kind == 4L then
-    if state.settings then Error "Duplicate HTTP/3 SETTINGS frame"
-    else if size > 4096L then Error "HTTP/3 settings too large"
+    if state.settings then Error (Stdlib.__Http3Wire.connectionFailure 261L "Duplicate HTTP/3 SETTINGS frame")
+    else if size > 4096L then Error (Stdlib.__Http3Wire.connectionFailure 263L "HTTP/3 settings too large")
     else Ok { state with pieces = [], parts = 0L }
-  else if kind == 0L || kind == 1L || kind == 5L then Error "Unexpected HTTP/3 frame on control stream"
-  else if kind == 3L then Error "HTTP/3 CANCEL_PUSH for unpromised push"
+  else if kind == 0L || kind == 1L || kind == 5L then Error (Stdlib.__Http3Wire.connectionFailure 261L "Unexpected HTTP/3 frame on control stream")
+  else if kind == 3L then Error (Stdlib.__Http3Wire.connectionFailure 264L "HTTP/3 CANCEL_PUSH for unpromised push")
   else if kind == 7L || kind == 13L then
-    if kind == 13L && state.fromServer then Error "Server sent HTTP/3 MAX_PUSH_ID"
-    else if size == 0L || size > 8L then Error "Invalid HTTP/3 control integer size"
+    if kind == 13L && state.fromServer then Error (Stdlib.__Http3Wire.connectionFailure 261L "Server sent HTTP/3 MAX_PUSH_ID")
+    else if size == 0L || size > 8L then Error (Stdlib.__Http3Wire.connectionFailure 262L "Invalid HTTP/3 control integer size")
     else Ok { state with pieces = [], parts = 0L }
   else Ok state
 
-let __integer (data: Blob) : Stdlib.Result.Result<Int64, String> =
+let __integer (data: Blob) : Stdlib.Result.Result<Int64, Stdlib.__Http3Wire.Failure> =
   match Stdlib.__QuicWire.parseInteger data 0L with
-  | Error _ -> Error "Truncated HTTP/3 control integer"
+  | Error _ -> Error (Stdlib.__Http3Wire.connectionFailure 262L "Truncated HTTP/3 control integer")
   | Ok value ->
-    if value.next != Stdlib.Blob.__byteLength data then Error "Trailing HTTP/3 control integer bytes"
+    if value.next != Stdlib.Blob.__byteLength data then Error (Stdlib.__Http3Wire.connectionFailure 262L "Trailing HTTP/3 control integer bytes")
     else Ok value.value
 
 let __end (state: Stdlib.__Http3Control.State) (kind: Int64)
-  : Stdlib.Result.Result<(Stdlib.__Http3Control.State * Stdlib.Option.Option<Stdlib.__Http3Control.Event>), String> =
+  : Stdlib.Result.Result<(Stdlib.__Http3Control.State * Stdlib.Option.Option<Stdlib.__Http3Control.Event>), Stdlib.__Http3Wire.Failure> =
   if kind != 4L && kind != 7L && kind != 13L then Ok ((state, None))
   else
     let data = Stdlib.Blob.concat (Stdlib.List.reverse state.pieces) in
@@ -58,18 +58,18 @@ let __end (state: Stdlib.__Http3Control.State) (kind: Int64)
       | Error message -> Error message
       | Ok value ->
         if kind == 7L then
-          if state.fromServer && value % 4L != 0L then Error "Invalid HTTP/3 server GOAWAY identifier"
+          if state.fromServer && value % 4L != 0L then Error (Stdlib.__Http3Wire.connectionFailure 264L "Invalid HTTP/3 server GOAWAY identifier")
           else
             match state.goAway with
-            | Some previous when value > previous -> Error "HTTP/3 GOAWAY identifier increased"
+            | Some previous when value > previous -> Error (Stdlib.__Http3Wire.connectionFailure 264L "HTTP/3 GOAWAY identifier increased")
             | _ -> Ok (({ cleared with goAway = Some value }, Some (GoAway value)))
         else
           match state.pushLimit with
-          | Some previous when value < previous -> Error "HTTP/3 MAX_PUSH_ID decreased"
+          | Some previous when value < previous -> Error (Stdlib.__Http3Wire.connectionFailure 264L "HTTP/3 MAX_PUSH_ID decreased")
           | _ -> Ok (({ cleared with pushLimit = Some value }, Some (PushLimit value)))
 
 let __events (state: Stdlib.__Http3Control.State) (input: List<Stdlib.__Http3Stream.Event>)
-  (events: List<Stdlib.__Http3Control.Event>) : Stdlib.Result.Result<Stdlib.__Http3Control.Received, String> =
+  (events: List<Stdlib.__Http3Control.Event>) : Stdlib.Result.Result<Stdlib.__Http3Control.Received, Stdlib.__Http3Wire.Failure> =
   match input with
   | [] -> Ok (Stdlib.__Http3Control.Received { state = state, events = Stdlib.List.reverse events })
   | event :: rest ->
@@ -80,7 +80,7 @@ let __events (state: Stdlib.__Http3Control.State) (input: List<Stdlib.__Http3Str
       | Ok next -> Stdlib.__Http3Control.__events next rest events)
     | Chunk ((kind, data)) ->
       if kind != 4L && kind != 7L && kind != 13L then Stdlib.__Http3Control.__events state rest events
-      else if state.parts >= 1024L then Error "Too many HTTP/3 control fragments"
+      else if state.parts >= 1024L then Error (Stdlib.__Http3Wire.connectionFailure 263L "Too many HTTP/3 control fragments")
       else Stdlib.__Http3Control.__events { state with pieces = Stdlib.List.push state.pieces data, parts = state.parts + 1L } rest events
     | End kind ->
       match Stdlib.__Http3Control.__end state kind with
@@ -89,14 +89,14 @@ let __events (state: Stdlib.__Http3Control.State) (input: List<Stdlib.__Http3Str
       | Ok ((next, Some item)) -> Stdlib.__Http3Control.__events next rest (Stdlib.List.push events item)
 
 let feed (state: Stdlib.__Http3Control.State) (data: Blob)
-  : Stdlib.Result.Result<Stdlib.__Http3Control.Received, String> =
+  : Stdlib.Result.Result<Stdlib.__Http3Control.Received, Stdlib.__Http3Wire.Failure> =
   match Stdlib.__Http3Stream.feed state.framing data with
-  | Error failure -> Error failure.message
+  | Error failure -> Error failure
   | Ok received -> Stdlib.__Http3Control.__events { state with framing = received.state } received.events []
 
 // FIN or RESET of this stream is always fatal, even at a complete frame boundary.
-let finish (state: Stdlib.__Http3Control.State) : Stdlib.Result.Result<Unit, String> =
-  Error "Closed critical HTTP/3 control stream"
+let finish (state: Stdlib.__Http3Control.State) : Stdlib.Result.Result<Unit, Stdlib.__Http3Wire.Failure> =
+  Error (Stdlib.__Http3Wire.connectionFailure 260L "Closed critical HTTP/3 control stream")
 
 // Field-section limits count uncompressed name/value bytes plus 32 per field,
 // regardless of QPACK indexing, Huffman compression, or duplicate names.

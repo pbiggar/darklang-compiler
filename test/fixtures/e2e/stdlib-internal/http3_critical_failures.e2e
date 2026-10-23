@@ -1,0 +1,33 @@
+// http3_critical_failures.e2e - Critical-stream failures retain protocol scope and exact wire codes.
+let signature (failure: Stdlib.__Http3Wire.Failure) : Stdlib.Option.Option<(Stdlib.__Http3Wire.Scope * Int64)> = Some ((failure.scope, failure.code))
+let control (hex: String) : Stdlib.Option.Option<(Stdlib.__Http3Wire.Scope * Int64)> =
+  let bytes = Stdlib.Blob.fromHex hex |> Stdlib.Result.withDefault Stdlib.Blob.empty in
+  match Stdlib.__Http3Control.feed (Stdlib.__Http3Control.create true) bytes with
+  | Error failure -> signature failure
+  | Ok _ -> None
+let uni (fromServer: Bool) (hex: String) (finished: Bool) (reset: Bool) : Stdlib.Option.Option<(Stdlib.__Http3Wire.Scope * Int64)> =
+  let bytes = Stdlib.Blob.fromHex hex |> Stdlib.Result.withDefault Stdlib.Blob.empty in
+  match Stdlib.__Http3Uni.receive (Stdlib.__Http3Uni.create fromServer) (if fromServer then 3L else 2L) bytes finished reset with
+  | Error failure -> signature failure
+  | Ok _ -> None
+control "2100" = Some ((Connection, 266L))
+control "04000400" = Some ((Connection, 261L))
+control "04000200" = Some ((Connection, 261L))
+control "04000000" = Some ((Connection, 261L))
+control "04000700" = Some ((Connection, 262L))
+control "0400070140" = Some ((Connection, 262L))
+control "040007020000" = Some ((Connection, 262L))
+control "0400070101" = Some ((Connection, 264L))
+control "0400070104070108" = Some ((Connection, 264L))
+control "040401000100" = Some ((Connection, 265L))
+control "04020200" = Some ((Connection, 265L))
+control "040108" = Some ((Connection, 265L))
+control "04020802" = Some ((Connection, 265L))
+uni true "01" false false = Some ((Connection, 264L))
+uni false "01" false false = Some ((Connection, 259L))
+uni true "00" true false = Some ((Connection, 260L))
+uni true "02" false true = Some ((Connection, 260L))
+uni true "03" true false = Some ((Connection, 260L))
+uni true "0221" false false = Some ((Connection, 513L))
+uni true "0380" false false = Some ((Connection, 514L))
+uni true "2100" true false = None
