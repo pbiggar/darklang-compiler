@@ -33,3 +33,13 @@ test staticallyInvalidBoolean =
 // @compiler xfail runtime: "named upstream annotation probe" class=upstream-bug reason=annotation-probe
 test upstreamBug =
   Builtin.crash "named upstream annotation probe" |> Stdlib.Test.equal 1L
+
+// @compiler error-message runtime: "named compiler diagnostic" reason=annotation-probe
+test runtimeDiagnosticDifference =
+  Builtin.crash "named compiler diagnostic"
+  => raises "named upstream diagnostic"
+
+// @compiler error-message compile: "Expected TBool, got TInt64" reason=annotation-probe
+test compileDiagnosticDifference =
+  true && 5L
+  => raises "named upstream type diagnostic"

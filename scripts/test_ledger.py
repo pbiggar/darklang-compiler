@@ -53,6 +53,14 @@ class SourceLedger(unittest.TestCase):
         self.assertEqual(sum(sum(row['phases'].values()) for row in failures.values()),
                          summary['dispositions']['tests']['xfail'])
 
+    def test_diagnostic_differences_are_runnable_negative_tests(self):
+        summary = ledger.summarize(self.root, self.row(self.item(
+            'named-test', status='run', reason='diagnostic-difference',
+            error_phase='compile', error_message='compiler diagnostic')))
+        self.assertEqual(summary['dispositions']['tests'], {'run': 1})
+        self.assertEqual(summary['reasons']['tests'], {'diagnostic-difference': 1})
+        self.assertEqual(summary['expected_failures'], {})
+
     def test_missing_unknown_and_runtime_aot_classes_are_rejected(self):
         for extra in [dict(phase='compile'), dict(phase='compile', classification='unknown'),
                       dict(phase='runtime', classification='aot-rejection')]:

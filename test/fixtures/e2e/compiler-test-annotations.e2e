@@ -20,3 +20,9 @@ true && 5L = error="&& only supports Booleans"
 
 // @compiler xfail runtime: "upstream annotation probe" class=upstream-bug reason=annotation-probe
 Builtin.crash "upstream annotation probe" = 1L
+
+// @compiler error-message runtime: "compiler runtime diagnostic" reason=annotation-probe
+Builtin.crash "compiler runtime diagnostic" = error="upstream runtime diagnostic"
+
+// @compiler error-message compile: "Expected TBool, got TInt64" reason=annotation-probe
+true && 5L = error="upstream type diagnostic"

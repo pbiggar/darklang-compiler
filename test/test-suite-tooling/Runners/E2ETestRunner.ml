@@ -1092,7 +1092,8 @@ let evaluateExpectations (test : e2eTest) run =
               expectedErrorMessage = Some diagnostic;
             }
             run
-      | CompilerAnnotations.Runtime, Ran _ ->
+      | CompilerAnnotations.Runtime, Ran (code, _, _, _, _)
+        when code >= 0 && code < 128 ->
           evaluateNormalExpectations
             { test with expectedErrorMessage = Some diagnostic }
             run

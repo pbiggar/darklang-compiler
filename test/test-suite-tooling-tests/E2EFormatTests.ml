@@ -683,6 +683,15 @@ let testCompilerErrorMessageOverride () =
   in
   let compile = CompileFailed (1, "compiler diagnostic", 0L) in
   let runtime = Ran (1, "", "compiler diagnostic", 0L, 0L) in
+  let* () =
+    withTempFile
+      "// @compiler error-message runtime: \"compiler diagnostic\" \
+       reason=annotation-probe\n\
+       1L = 1L" (fun path ->
+        require
+          (Result.is_error (parseE2ETestFile path))
+          "Error-message annotation accepted a positive upstream test")
+  in
   let* () = check "compile" compile runtime in
   check "runtime" runtime compile
 
