@@ -461,7 +461,7 @@ let prepareProgramForAnf mode baseTypeReg baseVariantLookup baseFuncNames
 (* Declaration compilation can create concrete key renderers before any entry
    expression is compiled. Close their generated collection dependencies here,
    before lambda lowering or reusable native code can preserve the placeholder. *)
-let prepareDictionaryKeyRenderers env definitions program =
+let prepareDictionaryKeyRenderers env definitions compiled registry program =
   let rec materialize registry program =
     let symbols, tops =
       ValueRendering.rewriteDictionaryKeyRenderers env.Types.indexedTypeReg
@@ -472,6 +472,12 @@ let prepareDictionaryKeyRenderers env definitions program =
       CheckedMaterializeHelpers.materializeEqHelpersInTopLevelsWithIndexedSums
         symbols env.Types.aliasReg env.Types.indexedTypeReg
         env.Types.variantLookup env.Types.indexedSumTypeReg tops
+    in
+    let tops =
+      List.filter
+        (function
+          | C.FunctionDef func -> not (S.mem func.C.name compiled) | _ -> true)
+        tops
     in
     let program = C.programFromCheckedParts (symbols, tops) in
     let requested =
@@ -494,7 +500,7 @@ let prepareDictionaryKeyRenderers env definitions program =
         List.filter_map
           (function C.FunctionDef func -> Some func.C.name | _ -> None)
           tops
-        |> S.of_list
+        |> S.of_list |> S.union compiled
       in
       let newFunctions =
         List.filter_map
@@ -516,7 +522,7 @@ let prepareDictionaryKeyRenderers env definitions program =
       materialize registry
         (C.programFromCheckedParts (symbols, newFunctions @ tops))
   in
-  materialize SpecializationIdentity.SpecMap.empty program
+  materialize registry program
 
 let buildRegistriesForProgram recorder existingFunctionOrdinal symbols
     baseProvidesModuleFunctionParams moduleRegistry baseRegistries typeDefs
@@ -672,7 +678,8 @@ let convertTypedDeclarationsWithTrace recorder baseContext mode env typedProgram
     specializeProgram mode inheritedValues recorder typedProgram
   in
   let* specialized =
-    prepareDictionaryKeyRenderers env definitions specialized
+    prepareDictionaryKeyRenderers env definitions baseFuncNames
+      SpecializationIdentity.SpecMap.empty specialized
   in
   let* liftedProgram =
     prepareSpecializedProgramForAnf baseTypeReg baseVariantLookup baseFuncNames

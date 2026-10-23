@@ -282,8 +282,18 @@ let buildStdlibSpecializations (stdlib : X.stdlibResult) specs externalTypes
           ( symbols,
             List.rev checkedDefs
             @ List.map (fun func -> CheckedAST.FunctionDef func) materialized )
-        |> ValueRendering.rewriteDictionaryKeyRenderers env.Types.indexedTypeReg
-             env.Types.indexedSumTypeReg
+      in
+      let renderingEnv =
+        {
+          env with
+          Types.indexedTypeReg = types;
+          indexedSumTypeReg = Types.indexSumTypeRegistry variants;
+          variantLookup = variants;
+        }
+      in
+      let* program =
+        P.prepareDictionaryKeyRenderers renderingEnv base.X.genericFuncDefs
+          existing combined program
       in
       let* prepared =
         P.prepareProgramForAnf (P.ReplaceTypeApps combined)
