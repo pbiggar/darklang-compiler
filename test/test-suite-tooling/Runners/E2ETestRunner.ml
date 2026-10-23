@@ -1027,6 +1027,55 @@ let evaluateNormalExpectations (test : e2eTest) run =
             ^ visibleOutput (stderrFromRun run)
             ^ "'")
 
+(* Generated declaration IDs depend on the complete embedded library. Alpha-rename
+   them for compile xfails, preserving parameter indices and declaration sharing. *)
+let normalizeConstraintIds text =
+  let prefix = "t$constraint_" in
+  let prefixLength = String.length prefix in
+  let length = String.length text in
+  let isDigit position =
+    position < length
+    && match text.[position] with '0' .. '9' -> true | _ -> false
+  in
+  let rec digits position =
+    if isDigit position then digits (position + 1) else position
+  in
+  let rec scan position start identifiers parts =
+    if position >= length then
+      String.concat ""
+        (List.rev (String.sub text start (length - start) :: parts))
+    else if
+      position + prefixLength <= length
+      && String.sub text position prefixLength = prefix
+    then
+      let idStart = position + prefixLength in
+      let digitStart =
+        if idStart < length && text.[idStart] = '-' then idStart + 1
+        else idStart
+      in
+      let idEnd = digits digitStart in
+      if
+        idEnd > digitStart && idEnd < length
+        && text.[idEnd] = '_'
+        && isDigit (idEnd + 1)
+      then
+        let identifier = String.sub text idStart (idEnd - idStart) in
+        let renamed, identifiers =
+          match List.assoc_opt identifier identifiers with
+          | Some name -> (name, identifiers)
+          | None ->
+              let name = string_of_int (List.length identifiers) in
+              (name, (identifier, name) :: identifiers)
+        in
+        scan (idEnd + 1) (idEnd + 1) identifiers
+          ((prefix ^ renamed ^ "_")
+          :: String.sub text start (position - start)
+          :: parts)
+      else scan (position + 1) start identifiers parts
+    else scan (position + 1) start identifiers parts
+  in
+  scan 0 0 [] []
+
 let evaluateExpectations (test : e2eTest) run =
   let normal = evaluateNormalExpectations test run in
   match test.compilerDisposition with
@@ -1056,7 +1105,13 @@ let evaluateExpectations (test : e2eTest) run =
             && (not
                   (String.starts_with ~prefix:"Compiled program leaked:"
                      failure.message))
-            && Text.contains output diagnostic
+            &&
+            match phase with
+            | CompilerAnnotations.Compile ->
+                Text.contains
+                  (normalizeConstraintIds output)
+                  (normalizeConstraintIds diagnostic)
+            | CompilerAnnotations.Runtime -> Text.contains output diagnostic
           then Ok run
           else
             failRun run

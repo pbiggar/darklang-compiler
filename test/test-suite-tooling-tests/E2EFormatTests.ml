@@ -552,6 +552,62 @@ let testCompilerAnnotationOverrideOrdering () =
         && test.errorExpectation = Some CompileError)
         "Override or annotation lost")
 
+let testCompilerXfailConstraintRenumbering () =
+  let diagnostic =
+    {|Expected TTuple [TVar "t$constraint_-24174_0"; TVar "t$constraint_-24174_1"; TVar "t$constraint_-24176_0"], got TInt64|}
+  in
+  let renumbered =
+    {|Expected TTuple [TVar "t$constraint_-24377_0"; TVar "t$constraint_-24377_1"; TVar "t$constraint_-24379_0"], got TInt64|}
+  in
+  one
+    (Printf.sprintf
+       "// @compiler xfail compile: %S class=aot-rejection reason=test-counter\n\
+        Unknown.fn () = 1L"
+       diagnostic)
+    "Expected compile xfail with generated constraint identifiers" (fun test ->
+      let* () =
+        require
+          (Result.is_ok
+             (evaluateExpectations test
+                (CompileFailed (1, "module: " ^ renumbered, 0L))))
+          "Renumbering generated declaration identifiers changed xfail matching"
+      in
+      require
+        (List.for_all
+           (fun run -> Result.is_error (evaluateExpectations test run))
+           [
+             CompileFailed
+               ( 1,
+                 {|Expected TTuple [TVar "t$constraint_-24377_0"; TVar "t$constraint_-24377_1"; TVar "t$constraint_-24377_0"], got TInt64|},
+                 0L );
+             CompileFailed
+               ( 1,
+                 {|Expected TTuple [TVar "t$constraint_-24377_0"; TVar "t$constraint_-24377_2"; TVar "t$constraint_-24379_0"], got TInt64|},
+                 0L );
+             CompileFailed (1, "Expected TBool, got TInt64", 0L);
+             CompileFailed (1, "t$constraint_-123", 0L);
+             CompileFailed (139, renumbered, 0L);
+             Ran (1, "", renumbered, 0L, 0L);
+           ])
+        "Constraint normalization accepted different types, variables, phase \
+         or a crash")
+
+let testRuntimeXfailConstraintIdsRemainLiteral () =
+  one
+    "// @compiler xfail runtime: \"t$constraint_-24174_0\" \
+     class=missing-support reason=test-counter\n\
+     Unknown.fn () = 1L"
+    "Expected runtime xfail with literal diagnostic text" (fun test ->
+      require
+        (Result.is_ok
+           (evaluateExpectations test
+              (Ran (1, "", "t$constraint_-24174_0", 0L, 0L)))
+        && Result.is_error
+             (evaluateExpectations test
+                (Ran (1, "", "t$constraint_-24377_0", 0L, 0L))))
+        "Compile-time identifier normalization changed runtime diagnostic \
+         matching")
+
 let testCompilerXfailStrictness () =
   let check classification =
     one
@@ -728,6 +784,10 @@ let tests =
          testCompilerAnnotationOverrideOrdering );
        ( "compiler xfail requires the known compile failure",
          testCompilerXfailStrictness );
+       ( "compiler xfail tolerates generated constraint renumbering",
+         testCompilerXfailConstraintRenumbering );
+       ( "runtime xfail constraint identifiers remain literal",
+         testRuntimeXfailConstraintIdsRemainLiteral );
        ( "compiler xfail requires the known runtime failure",
          testCompilerRuntimeXfailStrictness );
        ( "passing negative tests cannot satisfy xfail",

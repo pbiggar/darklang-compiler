@@ -13,5 +13,5 @@ let data = Stdlib.Blob.fromHex "40" |> Stdlib.Result.withDefault Stdlib.Blob.emp
 Stdlib.__Http3Wire.serialize 0L (Stdlib.String.toBlob "abc") |> Stdlib.Result.map Stdlib.Blob.toHex = Ok "0003616263"
 Stdlib.__Http3Wire.serialize 2L Stdlib.Blob.empty = Error "Forbidden HTTP/3 frame type"
 let data = Stdlib.Blob.fromHex "01036162630000" |> Stdlib.Result.withDefault Stdlib.Blob.empty in Stdlib.__Http3Wire.parse 65536L data |> Stdlib.Result.map (fun parsed -> (parsed.kind, Stdlib.Blob.toHex parsed.payload, Stdlib.Blob.toHex parsed.remaining)) = Ok ((1L, "616263", "0000"))
-let data = Stdlib.Blob.fromHex "01000100" |> Stdlib.Result.withDefault Stdlib.Blob.empty in Stdlib.__Http3Wire.parseSettings data = Error "Duplicate HTTP/3 setting"
-let data = Stdlib.Blob.fromHex "0200" |> Stdlib.Result.withDefault Stdlib.Blob.empty in Stdlib.__Http3Wire.parseSettings data = Error "Forbidden HTTP/3 setting"
+let data = Stdlib.Blob.fromHex "01000100" |> Stdlib.Result.withDefault Stdlib.Blob.empty in Stdlib.__Http3Wire.parseSettings data |> Stdlib.Result.mapError (fun error -> error.message) = Error "Duplicate HTTP/3 setting"
+let data = Stdlib.Blob.fromHex "0200" |> Stdlib.Result.withDefault Stdlib.Blob.empty in Stdlib.__Http3Wire.parseSettings data |> Stdlib.Result.mapError (fun error -> error.message) = Error "Forbidden HTTP/3 setting"

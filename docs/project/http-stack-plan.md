@@ -342,6 +342,29 @@ mean the entire branch has passed its integration or performance gates.
   first ack-eliciting-send restart and the RTT-derived three-PTO floor.
 - [ ] Typed protocol failures with correct stream and connection wire errors,
   retaining the current packet-number/key state across recoverable failures.
+  HTTP/3 message and framing validation now returns scoped failures before FIN
+  as well as at completion, retaining the latest receive state. Excess or
+  mismatched Content-Length and malformed field semantics fail only their batch
+  stream. Unexpected framing, excessive load and QPACK decoding carry explicit
+  connection codes; truncated frames use H3_FRAME_ERROR and incomplete requests
+  use H3_REQUEST_INCOMPLETE. Unpermitted server push uses H3_ID_ERROR. Server
+  message owners dispatch by typed scope/code instead of diagnostic text, and
+  closing owners retain their code for retransmission. Control/SETTINGS and
+  unidirectional stream parsers now share the scoped failure type, with exact
+  critical-stream, identifier, settings and QPACK instruction error codes.
+  Critical-stream failures retain post-read flow credit and packet state before
+  the terminal owner sends its encrypted close and releases the connection.
+  QUIC STREAM/RESET final-size, receive flow-control, stream-limit and direction
+  violations now carry transport codes through the latest authenticated owner.
+  Transport closes preserve the triggering frame type, packet/key state and
+  close reason on retransmission. Listener rejection retains its sealed outbox
+  until flush; direct owners send once and release even after a failed send.
+  Frame decoders now retain typed transport failures and the decoded triggering
+  type, including unknown multi-byte types. Application owners retain newly
+  authenticated key phases before decoding and send malformed-frame closes with
+  those keys. Local parser resource limits remain opaque, not guessed into peer
+  encoding errors. ACK/recovery, CRYPTO/reassembly, connection-ID, key-validation
+  and handshake-owner wire failures still need the broader typed migration.
 - [ ] Sustained native TLS connection churn without exhausting the fixed heap.
   - [x] The parent fails the isolated thirty-two-connection TLS churn peer with
     `Out of heap memory`. Linux x86-64 now recycles canonical String/Blob/Int
