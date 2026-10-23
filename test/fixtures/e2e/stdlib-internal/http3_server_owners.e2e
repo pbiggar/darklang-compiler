@@ -1,7 +1,7 @@
 // Independent request parsers and bounded responses share one QUIC/QPACK owner.
-let receiveFrame (state: Stdlib.__QuicFlow.State) (frame: Stdlib.__QuicApplication.StreamData) =
+let receiveFrame (state: Stdlib.__QuicFlow.State) (frame: Stdlib.__QuicApplication.StreamData) : Stdlib.Result.Result<Stdlib.__QuicFlow.State, String> =
   Stdlib.__QuicFlow.receive state frame |> Stdlib.Result.mapError Stdlib.__QuicWire.message
-let resetFrame (state: Stdlib.__QuicFlow.State) (frame: Stdlib.__QuicApplication.Reset) =
+let resetFrame (state: Stdlib.__QuicFlow.State) (frame: Stdlib.__QuicApplication.Reset) : Stdlib.Result.Result<Stdlib.__QuicFlow.State, String> =
   Stdlib.__QuicFlow.reset state frame |> Stdlib.Result.mapError Stdlib.__QuicWire.message
 let fixture () : Stdlib.__Http3Server.State =
   let life = Stdlib.Stream.__new (fun _unit -> Some ()) (fun _unit -> ()) in
