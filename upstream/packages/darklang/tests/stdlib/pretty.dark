@@ -223,7 +223,7 @@ module LineSuffix =
   let note (x: String) : Darklang.Stdlib.Pretty.Doc =
     Darklang.Stdlib.Pretty.lineSuffix x
 
-  // @compiler xfail compile: "Unknown function or value 'note'" reason=upstream-dependency
+  // @compiler xfail compile: "Unknown function or value 'note'" class=missing-support reason=upstream-dependency
   test lineSuffixWaitsForLineEnd =
     Stdlib.Test.all
       [ // After the rest of the line, not where it was placed.

@@ -14,10 +14,15 @@ let disposition = function
           ("target", `String target);
           ("reason", `String reason);
         ]
-  | CompilerAnnotations.Xfail { phase; diagnostic; reason } ->
+  | CompilerAnnotations.Xfail { phase; diagnostic; reason; classification } ->
       `Assoc
         [
           ("status", `String "xfail");
+          ( "classification",
+            `String
+              (match classification with
+              | CompilerAnnotations.AotRejection -> "aot-rejection"
+              | CompilerAnnotations.MissingSupport -> "missing-support") );
           ("reason", `String reason);
           ( "phase",
             `String

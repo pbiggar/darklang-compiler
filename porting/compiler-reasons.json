@@ -19,5 +19,11 @@
   "compiler-timeout": "The case exceeds the compilation or execution time budget used to validate imported tests.",
   "constructor-identity": "The declaration collides with an existing enum constructor identity in the compiler bounded tag space.",
   "value-specialization": "The global value initializer requires a generic specialization the compiler does not yet provide.",
-  "compiler-resource": "Compilation or execution exceeds the trial resource budget or terminates the test host before a result is produced."
+  "compiler-resource": "Compilation or execution exceeds the trial resource budget or terminates the test host before a result is produced.",
+  "aot-type-error": "The compiler correctly rejects statically incompatible types, unsupported operators, or unsatisfied trait constraints, including in unexecuted branches and callbacks.",
+  "aot-name-error": "The compiler correctly rejects an undefined or ambiguous name, including in code the interpreter does not evaluate.",
+  "aot-match-error": "The compiler correctly rejects a non-exhaustive match, invalid pattern, or inconsistent pattern bindings before execution.",
+  "aot-arity-error": "The compiler correctly rejects an invalid number of function arguments, type arguments, constructor fields, or callback parameters.",
+  "aot-invalid-field": "The compiler correctly rejects invalid record construction, record field access, or tuple indexing.",
+  "aot-invalid-key": "The compiler correctly rejects duplicate literal dictionary keys or keys containing functions."
 }

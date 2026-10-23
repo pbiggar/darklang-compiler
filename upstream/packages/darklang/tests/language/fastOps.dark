@@ -8,20 +8,20 @@ val d = Stdlib.Dict.fromListOverwritingDuplicates [ ("a", 1), ("b", 2) ]
 let check (label: String) (actual: String) (expected: String) : Stdlib.Test.Result =
   Stdlib.Test.expect (actual == expected) $"{label}: expected {expected}, got {actual}"
 
-// @compiler xfail compile: "Unbound local variable 'd'" reason=compiler-gap
+// @compiler xfail compile: "Unbound local variable 'd'" class=missing-support reason=upstream-dependency
 test dictGet =
   Stdlib.Test.all
     [ check "dict get hit" (Stdlib.toString (Stdlib.Option.withDefault (Stdlib.Dict.get d "a") 0)) "1"
       check "dict get miss" (Stdlib.toString (Stdlib.Option.withDefault (Stdlib.Dict.get d "zz") (-1))) "-1" ]
 
-// @compiler xfail compile: "Unbound local variable 'd'" reason=compiler-gap
+// @compiler xfail compile: "Unbound local variable 'd'" class=missing-support reason=upstream-dependency
 test dictSetOverridingDuplicates =
   Stdlib.Test.all
     [ check "dict setOD new key" (Stdlib.toString (Stdlib.List.length (Stdlib.Dict.keys (Stdlib.Dict.setOverridingDuplicates d "c" 3)))) "3"
       check "dict setOD overwrite" (Stdlib.toString (Stdlib.Option.withDefault (Stdlib.Dict.get (Stdlib.Dict.setOverridingDuplicates d "a" 9) "a") 0)) "9"
       check "dict setOD does not mutate" (Stdlib.toString (Stdlib.List.length (Stdlib.Dict.keys d))) "2" ]
 
-// @compiler xfail compile: "Unbound local variable 'd'" reason=compiler-gap
+// @compiler xfail compile: "Unbound local variable 'd'" class=missing-support reason=upstream-dependency
 test dictSet =
   check "dict set new key" (Stdlib.toString (Stdlib.List.length (Stdlib.Dict.keys (Stdlib.Dict.set d "c" 3)))) "3"
 
@@ -53,7 +53,7 @@ test stringRepeat =
       check "repeat negative" (Stdlib.String.repeat "x" (-2)) ""
       check "repeat empty" (Stdlib.String.repeat "" 5) "" ]
 
-// @compiler xfail compile: "Unbound local variable 'd'" reason=compiler-gap
+// @compiler xfail compile: "Unbound local variable 'd'" class=missing-support reason=upstream-dependency
 test dictSetStrict =
   Stdlib.Test.all
     [ check "dict set strict new" (Stdlib.toString (Stdlib.List.length (Stdlib.Dict.keys (Stdlib.Dict.set d "c" 3)))) "3"

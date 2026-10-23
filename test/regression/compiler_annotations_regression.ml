@@ -60,7 +60,8 @@ let () =
   let entries =
     accepts
       [ item 1 0 true ]
-      "// @compiler xfail compile: \"Unknown function\" reason=test-counter\n\
+      "// @compiler xfail compile: \"Unknown function\" class=missing-support \
+       reason=test-counter\n\
        test once = 1"
   in
   require
@@ -70,6 +71,7 @@ let () =
           phase = A.Compile;
           diagnostic = "Unknown function";
           reason = "test-counter";
+          classification = A.MissingSupport;
         } ->
         true
     | _ -> false)
@@ -95,7 +97,8 @@ let () =
     "val seed = 1 // @compiler blocked: test-counter\nval next = 2";
   rejects
     [ item 1 0 false ]
-    "// @compiler xfail runtime: \"boom\" reason=test-counter\n\
+    "// @compiler xfail runtime: \"boom\" class=missing-support \
+     reason=test-counter\n\
      let bad () : Int = 1";
   rejects
     [ item 1 0 true ]
@@ -110,5 +113,31 @@ let () =
     "// @compiler replace: compiler/a.dark#b\nlet b () : Int = 1";
   rejects
     [ item 1 0 true ]
-    "// @compiler xfail runtime: \"\" reason=test-counter\ntest once = 1";
+    "// @compiler xfail runtime: \"\" class=missing-support reason=test-counter\n\
+     test once = 1";
+  let entries =
+    accepts
+      [ item 1 0 true ]
+      "// @compiler xfail compile: \"Expected TBool\" class=aot-rejection \
+       reason=test-counter\n\
+       test bad = 1"
+  in
+  require
+    (match A.at entries { Tokenizer.row = 1; column = 0 } with
+    | A.Xfail { classification = A.AotRejection; phase = A.Compile; _ } -> true
+    | _ -> false)
+    "AOT classification was not preserved";
+  List.iter
+    (rejects [ item 1 0 true ])
+    [
+      "// @compiler xfail compile: \"bad\" reason=test-counter\ntest bad = 1";
+      "// @compiler xfail compile: \"bad\" class=typo reason=test-counter\n\
+       test bad = 1";
+      "// @compiler xfail runtime: \"bad\" class=aot-rejection \
+       reason=test-counter\n\
+       test bad = 1";
+      "// @compiler xfail compile: \"bad\" class=aot-rejection \
+       class=missing-support reason=test-counter\n\
+       test bad = 1";
+    ];
   print_endline "Compiler annotation regressions passed"

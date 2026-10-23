@@ -32,7 +32,7 @@ test mapRaisesFirstCallbackError =
    Stdlib.List.map [ "1", "2", "3", "4" ] y)
   => raises "Uncaught exception: 1"
 
-// @compiler xfail compile: "Expected TFunction ([TInt64; TInt64], TInt64), got TInt64" reason=compiler-gap
+// @compiler xfail compile: "Expected TFunction ([TInt64; TInt64], TInt64), got TInt64" class=aot-rejection reason=aot-type-error
 test foldRaisesCallbackArgError =
   (Stdlib.List.fold [ 4L ] 1L (Stdlib.Test.raiseRuntimeError "test"))
   => raises "Uncaught exception: test"
@@ -114,7 +114,7 @@ test tuplePatterns =
        Stdlib.List.map triplets transformer)
       |> Stdlib.Test.equal [ "1:one:TRUE", "2:two:FALSE" ] ]
 
-// @compiler xfail compile: "Tuple pattern does not match the value type" reason=compiler-gap
+// @compiler xfail compile: "Tuple pattern does not match the value type" class=aot-rejection reason=aot-match-error
 test tuplePatternArityRaises =
   (let triplets = [ (1L, "one", true), (2L, "two", false) ]
    let transformer = fun (num, str) -> $"{Stdlib.toString num}:{str}"
@@ -155,7 +155,7 @@ let nestedMapError () : Int64 =
   let _ = ys
   0L
 
-// @compiler xfail compile: "Unknown function or value 'Stdlib.Test.Process.run'" reason=upstream-dependency
+// @compiler xfail compile: "Unknown function or value 'Stdlib.Test.Process.run'" class=missing-support reason=upstream-dependency
 test nestedMapErrorKeepsBothLambdaFrames =
   match Stdlib.Test.Process.run (Stdlib.Test.Process.defaults ()) nestedMapError () with
   | Error message -> Stdlib.Test.fail message

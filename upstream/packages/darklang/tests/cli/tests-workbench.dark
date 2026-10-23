@@ -1,7 +1,7 @@
 /// Navigation regressions that need real key dispatch and populated views.
 module Darklang.Cli.Tests.TestSuite
 
-// @compiler xfail compile: "Unknown function or value 'workbenchState'" reason=upstream-dependency
+// @compiler xfail compile: "Unknown function or value 'workbenchState'" class=missing-support reason=upstream-dependency
 test workbenchHistoryRoundTrip =
   let base = workbenchState ()
   let hit = Darklang.Cli.Workbench.SearchHit
@@ -36,7 +36,7 @@ test workbenchHistoryRoundTrip =
   then Stdlib.Test.Result.Pass
   else Stdlib.Test.fail "search, modules and lenses must return in one Escape"
 
-// @compiler xfail compile: "Unknown function or value 'workbenchState'" reason=upstream-dependency
+// @compiler xfail compile: "Unknown function or value 'workbenchState'" class=missing-support reason=upstream-dependency
 test workbenchBranchPicker =
   let base = workbenchState ()
   let opened = (wbChar base "S").state

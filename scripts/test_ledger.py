@@ -35,6 +35,27 @@ class SourceLedger(unittest.TestCase):
         self.assertEqual(summary['dispositions'], {'packages': {'run': 3}, 'tests': {'blocked': 1}})
         self.assertEqual(summary['kinds']['named-test'], 1)
 
+    def test_failure_classification_and_phase_are_independent(self):
+        summary = ledger.summarize(self.root, self.row(
+            self.item('named-test', line=1, status='xfail', classification='aot-rejection', phase='compile', reason='aot-type-error'),
+            self.item('named-test', line=2, status='xfail', classification='missing-support', phase='compile', reason='upstream-dependency'),
+            self.item('named-test', line=3, status='xfail', classification='missing-support', phase='runtime', reason='compiler-gap')))
+        failures = summary['expected_failures']
+        self.assertEqual(failures['aot-rejection']['phases'], {'compile': 1})
+        self.assertEqual(failures['missing-support']['phases'], {'compile': 1, 'runtime': 1})
+        self.assertEqual(failures['missing-support']['sources'], {'upstream/packages/example.dark': 2})
+        report = ledger.markdown(summary)
+        self.assertIn('| `aot-rejection` | 1 | 0 | 1 |', report)
+        self.assertIn('| `missing-support` | 1 | 1 | 2 |', report)
+        self.assertEqual(sum(sum(row['phases'].values()) for row in failures.values()),
+                         summary['dispositions']['tests']['xfail'])
+
+    def test_missing_unknown_and_runtime_aot_classes_are_rejected(self):
+        for extra in [dict(phase='compile'), dict(phase='compile', classification='unknown'),
+                      dict(phase='runtime', classification='aot-rejection')]:
+            with self.subTest(extra=extra), self.assertRaises(ValueError):
+                ledger.summarize(self.root, self.row(self.item('named-test', status='xfail', reason='compiler-gap', **extra)))
+
     def test_duplicate_native_entries_are_rejected(self):
         with self.assertRaisesRegex(ValueError, 'Duplicate native inventory'):
             ledger.summarize(self.root, self.row(self.item(), self.item()))

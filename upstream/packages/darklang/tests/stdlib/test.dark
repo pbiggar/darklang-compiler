@@ -26,7 +26,7 @@ test expect =
       Stdlib.Test.expect false "it was false"
       |> is (Stdlib.Test.Result.Fail [ "it was false" ]) ]
 
-// @compiler xfail runtime: "assertion 2: Assertion results differ" reason=test-diagnostics
+// @compiler xfail runtime: "assertion 2: Assertion results differ" class=missing-support reason=test-diagnostics
 test equal =
   Stdlib.Test.all
     [ Stdlib.Test.equal 8L 8L |> is Stdlib.Test.Result.Pass
@@ -34,7 +34,7 @@ test equal =
       |> is (Stdlib.Test.Result.Fail [ "expected 9, got 8" ])
       (8L |> Stdlib.Test.equal 8L) |> is Stdlib.Test.Result.Pass ]
 
-// @compiler xfail runtime: "assertion 2: Assertion results differ" reason=test-diagnostics
+// @compiler xfail runtime: "assertion 2: Assertion results differ" class=missing-support reason=test-diagnostics
 test notEqual =
   Stdlib.Test.all
     [ Stdlib.Test.notEqual 1L 2L |> is Stdlib.Test.Result.Pass

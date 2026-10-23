@@ -60,7 +60,7 @@ test closuresAndShadowing =
 // it's an error rather than silently picking one
 let sumDown (x: Int64) : Int64 = x + 100L
 
-// @compiler xfail compile: "Nested function name 'sumDown' is ambiguous" reason=compiler-gap
+// @compiler xfail compile: "Nested function name 'sumDown' is ambiguous" class=aot-rejection reason=aot-name-error
 test nameCollisionRaises =
   (let sumDown (n: Int64) : Int64 =
      if n <= 0L then 0L else n + (sumDown (n - 1L))
@@ -70,7 +70,7 @@ test nameCollisionRaises =
 
 // mutually recursive nested fns aren't supported - clear error, not "variable
 // not found"
-// @compiler xfail compile: "Unknown function or value 'isOdd'" reason=upstream-dependency
+// @compiler xfail compile: "Unknown function or value 'isOdd'" class=aot-rejection reason=aot-name-error
 test mutualRecursionRaises =
   (let isEven (n: Int64) : Bool =
      if n == 0L then true else isOdd (n - 1L)
