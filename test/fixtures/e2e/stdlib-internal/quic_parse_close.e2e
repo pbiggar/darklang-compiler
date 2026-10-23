@@ -2,15 +2,24 @@
 let parseClose (mode: Int64) : Bool =
   let secret = Stdlib.String.toBlob (Stdlib.String.repeat "s" 32) in
   let keys = match Stdlib.__QuicCrypto.derive secret with | Ok keys -> keys | Error _ -> Builtin.crash "Test keys" in
-  let hex = if mode == 0L then "0F00000261" else if mode == 1L then "1E"
-    else if mode == 2L then "180001" else if mode == 3L then "0200000001"
-    else if mode == 4L then "4001" else if mode == 5L then "404D"
-    else if mode == 6L then "40" else if mode == 7L then "01"
+  let hex =
+    if mode == 0L then "0F00000261"
+    else if mode == 1L then "1E"
+    else if mode == 2L then "180001"
+    else if mode == 3L then "0200000001"
+    else if mode == 4L then "4001"
+    else if mode == 5L then "404D"
+    else if mode == 6L then "40"
+    else if mode == 7L then "01"
     else if mode == 9L then "020000410000" else "" in
   let payload = match Stdlib.Blob.fromHex hex with | Ok bytes -> bytes | Error _ -> Builtin.crash "Test payload" in
-  let expected = if mode == 0L then "1C070F00" else if mode == 1L then "1C0A1E00"
-    else if mode == 2L then "1C071800" else if mode == 3L then "1C070200"
-    else if mode == 4L then "1C070100" else if mode == 5L then "1C07404D00"
+  let expected =
+    if mode == 0L then "1C070F00"
+    else if mode == 1L then "1C0A1E00"
+    else if mode == 2L then "1C071800"
+    else if mode == 3L then "1C070200"
+    else if mode == 4L then "1C070100"
+    else if mode == 5L then "1C07404D00"
     else if mode == 6L then "1C070000" else "1C0A0000" in
   let wire = match Stdlib.__QuicPacket.sealShort keys (Stdlib.String.toBlob "serverID") false payload 0L with | Ok wire -> wire | Error _ -> Builtin.crash "Test packet" in
   let peer = Stdlib.__Datagram.Endpoint { address = [127L, 0L, 0L, 1L], port = 443L } in
