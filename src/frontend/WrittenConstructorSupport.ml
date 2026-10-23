@@ -124,6 +124,20 @@ let check checkExpression literal globals locals symbols expected
                 | _ -> false)
               (M.bindings globals.types)
           in
+          let rec nearestScope path =
+            let scoped =
+              List.filter
+                (fun (_, (entry : typeEntry)) -> entry.path = path)
+                candidates
+            in
+            match scoped with
+            | _ :: _ -> scoped
+            | [] -> (
+                match List.rev path with
+                | [] -> candidates
+                | _ :: parent -> nearestScope (List.rev parent))
+          in
+          let candidates = nearestScope globals.modulePath in
           match candidates with
           | [ (canonical, entry) ] -> (
               match entry.definition with
