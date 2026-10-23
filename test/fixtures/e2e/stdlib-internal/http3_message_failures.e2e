@@ -8,6 +8,8 @@ let state = body () in error (Stdlib.__Http3Message.feed { state with noBody = t
 error (Stdlib.__Http3Message.feed (response ()) (bytes "0000")) = Error ((Connection, 261L))
 error (Stdlib.__Http3Message.feed (response ()) (bytes "0400")) = Error ((Connection, 261L))
 error (Stdlib.__Http3Message.feed (response ()) (bytes "0200")) = Error ((Connection, 261L))
+error (Stdlib.__Http3Message.feed (response ()) (bytes "0503000000")) = Error ((Connection, 264L))
+error (Stdlib.__Http3Message.feed (Stdlib.__Http3Message.create Request) (bytes "0503000000")) = Error ((Connection, 261L))
 let state = response () in error (Stdlib.__Http3Message.feed { state with phase = Trailers } (bytes "0100")) = Error ((Connection, 261L))
 let state = body () in error (Stdlib.__Http3Message.feed { state with framing = { state.framing with frames = 16384L } } (bytes "0000")) = Error ((Connection, 263L))
 error (Stdlib.__Http3Message.feed (response ()) (bytes "0101FF")) = Error ((Connection, 512L))

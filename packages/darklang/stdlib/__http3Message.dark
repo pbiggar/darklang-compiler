@@ -56,7 +56,12 @@ let __fields (fields: List<(String * String)>) (request: Bool) : Stdlib.Result.R
 
 let __begin (state: Stdlib.__Http3Message.State) (kind: Int64) (size: Int64)
   : Stdlib.Result.Result<Stdlib.__Http3Message.State, Stdlib.__Http3Message.Failure> =
-  if kind == 4L || kind == 7L || kind == 3L || kind == 5L || kind == 13L then
+  // This profile never grants MAX_PUSH_ID; any promised push is unpermitted.
+  if kind == 5L then
+    match state.mode with
+    | Response _ -> Error (Stdlib.__Http3Message.__connectionFailure 264L "Unpermitted HTTP/3 PUSH_PROMISE")
+    | Request -> Error (Stdlib.__Http3Message.__connectionFailure 261L "Unexpected HTTP/3 frame on message stream")
+  else if kind == 4L || kind == 7L || kind == 3L || kind == 13L then
     Error (Stdlib.__Http3Message.__connectionFailure 261L "Unexpected HTTP/3 frame on message stream")
   else if kind == 1L then
     if size > 65536L then Error (Stdlib.__Http3Message.__connectionFailure 263L "HTTP/3 header block exceeds limit")
