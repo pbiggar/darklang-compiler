@@ -956,8 +956,29 @@ and serializeBody (env : env) typ value writer (state : state) =
               state []
           in
           Ok (matchExpr (value, cases), nextState))
+  | AST.TDict (keyType, valueType) ->
+      let entries =
+        TypeApp
+          ( resolveFunction env "Darklang.Stdlib.Dict.toList",
+            checkedTypeArgs [ keyType; valueType ],
+            N.singleton value )
+      in
+      let failure =
+        RuntimeError
+          ("Unsupported type in JSON: "
+          ^ CheckingDiagnostics.typeToString typ
+          ^ ". Some types are not supported in Json serialization")
+      in
+      Ok
+        ( matchExpr
+            ( entries,
+              [
+                makeCase (PList []) (writerRaw env writer (StringLiteral "{}"));
+                makeCase PWildcard failure;
+              ] ),
+          state )
   | AST.TFunction _ | AST.TBlob | AST.TInternalRawPtr | AST.TNever
-  | AST.TStream _ | AST.TVar _ | AST.TInferenceVar _ | AST.TDict _ ->
+  | AST.TStream _ | AST.TVar _ | AST.TInferenceVar _ ->
       Error
         ("Unsupported type in JSON: "
         ^ CheckingDiagnostics.typeToString typ

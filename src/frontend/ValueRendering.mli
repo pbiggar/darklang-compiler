@@ -7,7 +7,7 @@ val rewriteProgram :
   CheckedAST.program ->
   CheckedAST.program
 
-val rewriteDictionaryKeyRenderers :
+val rewriteDiagnosticRenderers :
   Types.indexedTypeRegistry ->
   Types.indexedSumTypeRegistry ->
   CheckedAST.program ->

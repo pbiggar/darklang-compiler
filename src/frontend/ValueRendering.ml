@@ -732,9 +732,9 @@ let rewriteProgram recordMetadata sumMetadata programType program =
   in
   C.programFromCheckedParts (final.symbols, generated @ List.rev reversed)
 
-(* Replace the concrete specialization of Dict's generic key renderer with
-   the same monomorphic renderer used for eval results. *)
-let rewriteDictionaryKeyRenderers recordMetadata sumMetadata program =
+(* Replace concrete diagnostic renderer specializations with the same
+   monomorphic renderer used for eval results. *)
+let rewriteDiagnosticRenderers recordMetadata sumMetadata program =
   let symbols, topLevels = C.viewProgram program in
   let symbols = includeRuntimeFunctions symbols in
   let env = { records = lazy recordMetadata; sums = lazy sumMetadata } in
@@ -746,12 +746,15 @@ let rewriteDictionaryKeyRenderers recordMetadata sumMetadata program =
         let top, next =
           match top with
           | C.FunctionDef definition
-            when starts definition.C.name
-                   "Darklang.Stdlib.Dict.__renderGenericKey_" -> (
+            when List.exists (starts definition.C.name)
+                   [
+                     "Darklang.Stdlib.Dict.__renderGenericKey_";
+                     "Darklang.Stdlib.Test.__renderValue_";
+                   ] -> (
               match N.toList definition.C.params with
-              | [ (parameter, keyType) ] ->
+              | [ (parameter, valueType) ] ->
                   let renderer, next =
-                    ensureRenderer env (C.semanticType keyType) state
+                    ensureRenderer env (C.semanticType valueType) state
                   in
                   ( C.FunctionDef
                       {
@@ -762,7 +765,7 @@ let rewriteDictionaryKeyRenderers recordMetadata sumMetadata program =
                     next )
               | _ ->
                   Crash.crash
-                    "Dictionary key renderer has an invalid parameter list")
+                    "Diagnostic value renderer has an invalid parameter list")
           | _ -> (top, state)
         in
         (top :: tops, next))

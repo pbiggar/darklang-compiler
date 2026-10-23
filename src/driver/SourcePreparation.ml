@@ -458,13 +458,13 @@ let prepareProgramForAnf mode baseTypeReg baseVariantLookup baseFuncNames
   prepareSpecializedProgramForAnf baseTypeReg baseVariantLookup baseFuncNames
     baseFunctions recorder monomorphized
 
-(* Declaration compilation can create concrete key renderers before any entry
+(* Declaration compilation can create concrete diagnostic renderers before any entry
    expression is compiled. Close their generated collection dependencies here,
    before lambda lowering or reusable native code can preserve the placeholder. *)
-let prepareDictionaryKeyRenderers env definitions compiled registry program =
+let prepareDiagnosticRenderers env definitions compiled registry program =
   let rec materialize registry program =
     let symbols, tops =
-      ValueRendering.rewriteDictionaryKeyRenderers env.Types.indexedTypeReg
+      ValueRendering.rewriteDiagnosticRenderers env.Types.indexedTypeReg
         env.Types.indexedSumTypeReg program
       |> C.viewProgram
     in
@@ -678,7 +678,7 @@ let convertTypedDeclarationsWithTrace recorder baseContext mode env typedProgram
     specializeProgram mode inheritedValues recorder typedProgram
   in
   let* specialized =
-    prepareDictionaryKeyRenderers env definitions baseFuncNames
+    prepareDiagnosticRenderers env definitions baseFuncNames
       SpecializationIdentity.SpecMap.empty specialized
   in
   let* liftedProgram =
@@ -888,7 +888,7 @@ let convertTypedProgramToUserOnlyWithMode (baseContext : X.pipelineContext) mode
                  as the insertion specialization that requested the renderer. *)
               let symbols, specializedTopLevels =
                 C.programFromCheckedParts (symbols, specializedTopLevels)
-                |> ValueRendering.rewriteDictionaryKeyRenderers
+                |> ValueRendering.rewriteDiagnosticRenderers
                      typeCheckEnv.Types.indexedTypeReg
                      typeCheckEnv.Types.indexedSumTypeReg
                 |> C.viewProgram
@@ -944,9 +944,8 @@ let convertTypedProgramToUserOnlyWithMode (baseContext : X.pipelineContext) mode
         | Monomorphize _ -> Ok (typedProgram, mode, F.empty))
   in
   let typedProgram =
-    ValueRendering.rewriteDictionaryKeyRenderers
-      typeCheckEnv.Types.indexedTypeReg typeCheckEnv.Types.indexedSumTypeReg
-      typedProgram
+    ValueRendering.rewriteDiagnosticRenderers typeCheckEnv.Types.indexedTypeReg
+      typeCheckEnv.Types.indexedSumTypeReg typedProgram
   in
   let* liftedProgram =
     measure recorder "AST -> ANF Program Preparation" (fun () ->

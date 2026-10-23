@@ -64,7 +64,7 @@ test accessOnInt64Raises =
   => raises
     "Attempting to perform field access of an Int64, but this only works with records and tuples"
 
-// @compiler xfail runtime: "1" reason=compiler-gap
+// @compiler xfail compile: "Tuple index '01' is out of bounds" reason=compiler-gap
 test leadingZeroIndexRaises =
   (let t = (1L, 2L) in t.01)
   => raises

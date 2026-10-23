@@ -292,7 +292,7 @@ let buildStdlibSpecializations (stdlib : X.stdlibResult) specs externalTypes
         }
       in
       let* program =
-        P.prepareDictionaryKeyRenderers renderingEnv base.X.genericFuncDefs
+        P.prepareDiagnosticRenderers renderingEnv base.X.genericFuncDefs
           existing combined program
       in
       let* prepared =

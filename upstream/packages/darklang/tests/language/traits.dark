@@ -252,18 +252,12 @@ module SortOrder =
   // `Compare`.
   type Desc = { descKey: Int64, descTag: String }
 
-  // @compiler blocked: container-adaptation
   impl Compare for Desc =
-    // @compiler blocked: container-adaptation
     let lessThan (a: Desc) (b: Desc) : Bool = a.descKey > b.descKey
-    // @compiler blocked: container-adaptation
     let lessThanOrEqualTo (a: Desc) (b: Desc) : Bool = a.descKey >= b.descKey
-    // @compiler blocked: container-adaptation
     let greaterThan (a: Desc) (b: Desc) : Bool = a.descKey < b.descKey
-    // @compiler blocked: container-adaptation
     let greaterThanOrEqualTo (a: Desc) (b: Desc) : Bool = a.descKey <= b.descKey
 
-  // @compiler xfail compile: "No implementation of trait 'Darklang.Stdlib.Compare'" reason=compiler-gap
   test customCompareOrder =
     Stdlib.Test.all
       [ (SortOrder.Desc { descKey = 1L, descTag = "" }
@@ -280,7 +274,6 @@ module SortOrder =
 
   // Stable: values equal under `Compare` keep the order they came in, whatever their
   // structure.
-  // @compiler xfail runtime: "Values differ" reason=compiler-gap
   test stableSort =
     Stdlib.List.sort
       [ SortOrder.Desc { descKey = 1L, descTag = "b" }

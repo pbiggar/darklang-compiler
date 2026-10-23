@@ -114,9 +114,7 @@ let foldBinOp typeEnv op left right =
   | Shl, IntLiteral (Int64 a), IntLiteral (Int64 b) when b >= 0L && b < 64L ->
       Some (Atom (IntLiteral (Int64 (Int64.shift_left a (Int64.to_int b)))))
   | Shr, IntLiteral (Int64 a), IntLiteral (Int64 b) when b >= 0L && b < 64L ->
-      Some
-        (Atom
-           (IntLiteral (Int64 (Int64.shift_right_logical a (Int64.to_int b)))))
+      Some (Atom (IntLiteral (Int64 (Int64.shift_right a (Int64.to_int b)))))
   | BitAnd, IntLiteral (Int64 a), IntLiteral (Int64 b) ->
       Some (Atom (IntLiteral (Int64 (Int64.logand a b))))
   | BitOr, IntLiteral (Int64 a), IntLiteral (Int64 b) ->
@@ -135,6 +133,12 @@ let foldBinOp typeEnv op left right =
   | Mod, IntLiteral (UInt64 a), IntLiteral (UInt64 b) when b <> 0L ->
       Some (Atom (IntLiteral (UInt64 (Int64.unsigned_rem a b))))
   (* UInt64 bitwise operations *)
+  | Shl, IntLiteral (UInt64 a), IntLiteral (UInt64 b) when b >= 0L && b < 64L ->
+      Some (Atom (IntLiteral (UInt64 (Int64.shift_left a (Int64.to_int b)))))
+  | Shr, IntLiteral (UInt64 a), IntLiteral (UInt64 b) when b >= 0L && b < 64L ->
+      Some
+        (Atom
+           (IntLiteral (UInt64 (Int64.shift_right_logical a (Int64.to_int b)))))
   | BitAnd, IntLiteral (UInt64 a), IntLiteral (UInt64 b) ->
       Some (Atom (IntLiteral (UInt64 (Int64.logand a b))))
   | BitOr, IntLiteral (UInt64 a), IntLiteral (UInt64 b) ->

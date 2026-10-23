@@ -148,7 +148,10 @@ let access check literal globals locals symbols expected record fieldName =
       match typ with
       | AST.TTuple fields -> (
           match int_of_string_opt fieldName with
-          | Some index when index > 0 && index <= List.length fields -> (
+          | Some index
+            when index > 0
+                 && index <= List.length fields
+                 && string_of_int index = fieldName -> (
               match List.nth_opt fields (index - 1) with
               | Some fieldType ->
                   literal expected symbols fieldType
