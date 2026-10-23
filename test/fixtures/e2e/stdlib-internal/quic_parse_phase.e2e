@@ -26,7 +26,7 @@ let phaseClose () : Bool =
     | [first, last] ->
       let decoded = match Stdlib.__QuicCrypto.openPacket keys first 9L -1L, Stdlib.__QuicCrypto.openPacket generation.keys last 9L 0L with
       | Ok first, Ok last ->
-        first.number == 0L && last.number == 1L && Stdlib.Blob.toHex last.payload == "1C070F00"
+        first.number == 0L && last.number == 1L && Stdlib.__QuicKeys.__phase last && Stdlib.Blob.toHex last.payload == "1C070F00"
       | _, _ -> false in
       Stdlib.Result.isError result && closed && decoded
     | _ -> false in
