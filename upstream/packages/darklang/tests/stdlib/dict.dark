@@ -172,12 +172,10 @@ test set =
       Stdlib.Dict.set (Dict { }) "key1" 2L
       |> Stdlib.Test.equal (Dict { "key1": 2L }) ]
 
-// @compiler xfail runtime: "Uncaught exception: Dictionary key renderer was not specialized" reason=compiler-gap
 test setRejectsExistingKey =
   Stdlib.Dict.set (Dict { "key1": "val1before" }) "key1" "val1after"
   => raises "Cannot add two dictionary entries with the same key \"key1\""
 
-// @compiler xfail runtime: "Uncaught exception: Dictionary key renderer was not specialized" reason=compiler-gap
 test setRejectsExistingKeyAmongOthers =
   Stdlib.Dict.set (Dict { "key1": "val1", "key2": "val2" }) "key2" "newVal2"
   => raises "Cannot add two dictionary entries with the same key \"key2\""

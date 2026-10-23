@@ -57,6 +57,14 @@ val buildRegistriesForProgram :
   CheckedAST.functionDef list ->
   AST_to_ANF.registries * AST_to_ANF.registries * CheckedAST.functionDef list
 
+val prepareDictionaryKeyRenderers :
+  Types.typeCheckEnv ->
+  SpecializationIdentity.genericFuncDefs ->
+  StringOrder.Set.t ->
+  SpecializationIdentity.specRegistry ->
+  CheckedAST.program ->
+  (CheckedAST.program, string) result
+
 type declarationConversion = {
   symbols : CheckedAST.symbols;
   functions : ANF.functionDef list;
@@ -72,12 +80,14 @@ val convertTypedDeclarationsWithTrace :
   CompilerOptions.passTimingRecorder option ->
   CompilationContexts.pipelineContext option ->
   monomorphizationMode ->
+  Types.typeCheckEnv ->
   CheckedAST.program ->
   (declarationConversion, string) result
 
 val convertTypedDeclarations :
   CompilationContexts.pipelineContext option ->
   monomorphizationMode ->
+  Types.typeCheckEnv ->
   CheckedAST.program ->
   (declarationConversion, string) result
 
