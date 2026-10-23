@@ -380,14 +380,12 @@ let materializeProgramValues program =
   in
   C.programFromCheckedParts (symbols, List.rev materialized @ helpers)
 
-let prepareProgramForAnf mode baseTypeReg baseVariantLookup baseFuncNames
-    baseFunctions inheritedValues recorder program =
+let specializeProgram mode inheritedValues recorder program =
   let program =
     measure recorder "AST -> ANF Preparation: Value Import" (fun () ->
         importInheritedValues recorder inheritedValues program)
   in
-  let monomorphizedResult =
-    measure recorder "AST -> ANF Preparation: Monomorphization" (fun () ->
+  measure recorder "AST -> ANF Preparation: Monomorphization" (fun () ->
         match mode with
         | Monomorphize None -> PrepareFunctions.monomorphize program
         | Monomorphize (Some defs) ->
@@ -423,8 +421,9 @@ let prepareProgramForAnf mode baseTypeReg baseVariantLookup baseFuncNames
               in
               Monomorphization.replaceTypeAppsInProgramWithRegistry combined
                 (C.programFromCheckedParts (symbols, topLevels @ items)))
-  in
-  let* monomorphized = monomorphizedResult in
+
+let prepareSpecializedProgramForAnf baseTypeReg baseVariantLookup baseFuncNames
+    baseFunctions recorder monomorphized =
   let monomorphized =
     measure recorder "AST -> ANF Preparation: Value Materialization" (fun () ->
         materializeProgramValues monomorphized)
@@ -451,6 +450,68 @@ let prepareProgramForAnf mode baseTypeReg baseVariantLookup baseFuncNames
         liftLambdasWithBase baseTypeReg baseVariantLookup baseFunctions recorder
           inlined)
   else Ok monomorphized
+
+let prepareProgramForAnf mode baseTypeReg baseVariantLookup baseFuncNames
+    baseFunctions inheritedValues recorder program =
+  let* monomorphized = specializeProgram mode inheritedValues recorder program in
+  prepareSpecializedProgramForAnf baseTypeReg baseVariantLookup baseFuncNames
+    baseFunctions recorder monomorphized
+
+(* Declaration compilation can create concrete key renderers before any entry
+   expression is compiled. Close their generated collection dependencies here,
+   before lambda lowering or reusable native code can preserve the placeholder. *)
+let prepareDictionaryKeyRenderers env definitions program =
+  let rec materialize program =
+    let symbols, tops =
+      ValueRendering.rewriteDictionaryKeyRenderers env.Types.indexedTypeReg
+        env.Types.indexedSumTypeReg program
+      |> C.viewProgram
+    in
+    let symbols, tops =
+      CheckedMaterializeHelpers.materializeEqHelpersInTopLevelsWithIndexedSums
+        symbols env.Types.aliasReg env.Types.indexedTypeReg
+        env.Types.variantLookup env.Types.indexedSumTypeReg tops
+    in
+    let program = C.programFromCheckedParts (symbols, tops) in
+    let requested = collectLocalSpecs definitions program in
+    if K.is_empty requested then Ok program
+    else
+      let* specialization =
+        Monomorphization.specializeFromSpecs symbols definitions requested
+      in
+      let symbols, functions =
+        SpecializationIdentity.importSpecializedFunctions
+          specialization.SpecializationIdentity.symbols
+          specialization.SpecializationIdentity.specializedFuncs
+      in
+      let existing =
+        List.filter_map
+          (function C.FunctionDef func -> Some func.C.name | _ -> None)
+          tops
+        |> S.of_list
+      in
+      let newFunctions =
+        List.filter_map
+          (fun (func : C.functionDef) ->
+            if S.mem func.C.name existing then None
+            else Some (C.FunctionDef func))
+          functions
+      in
+      let registry =
+        K.fold
+          (fun (name, types) registry ->
+            SpecializationIdentity.SpecMap.add (name, types)
+              (SpecializationIdentity.specName name types) registry)
+          specialization.SpecializationIdentity.externalSpecs
+          specialization.SpecializationIdentity.specRegistry
+      in
+      let* program =
+        C.programFromCheckedParts (symbols, newFunctions @ tops)
+        |> Monomorphization.replaceTypeAppsInProgramWithRegistry registry
+      in
+      materialize program
+  in
+  materialize program
 
 let buildRegistriesForProgram recorder existingFunctionOrdinal symbols
     baseProvidesModuleFunctionParams moduleRegistry baseRegistries typeDefs
@@ -534,7 +595,7 @@ let splitDeclarations program =
           (function C.FunctionDef definition -> Some definition | _ -> None)
           topLevels )
 
-let convertTypedDeclarationsWithTrace recorder baseContext mode typedProgram =
+let convertTypedDeclarationsWithTrace recorder baseContext mode env typedProgram =
   let typedProgram =
     match baseContext with
     | None -> typedProgram
@@ -595,9 +656,19 @@ let convertTypedDeclarationsWithTrace recorder baseContext mode typedProgram =
     | Some context -> context.X.checkedValues
     | None -> M.empty
   in
+  let definitions =
+    let local = SpecializationIdentity.extractGenericFuncDefs typedProgram in
+    match baseContext with
+    | Some context -> M.fold M.add local context.X.genericFuncDefs
+    | None -> local
+  in
+  let* specialized =
+    specializeProgram mode inheritedValues recorder typedProgram
+  in
+  let* specialized = prepareDictionaryKeyRenderers env definitions specialized in
   let* liftedProgram =
-    prepareProgramForAnf mode baseTypeReg baseVariantLookup baseFuncNames
-      baseFunctions inheritedValues recorder typedProgram
+    prepareSpecializedProgramForAnf baseTypeReg baseVariantLookup baseFuncNames
+      baseFunctions recorder specialized
   in
   let* typeDefs, functions = splitDeclarations liftedProgram in
   let ordinal =
@@ -663,8 +734,8 @@ let convertTypedDeclarationsWithTrace recorder baseContext mode typedProgram =
       localReturnTypes = extractReturnTypes localRegistries.AST_to_ANF.funcReg;
     }
 
-let convertTypedDeclarations baseContext mode program =
-  convertTypedDeclarationsWithTrace None baseContext mode program
+let convertTypedDeclarations baseContext mode env program =
+  convertTypedDeclarationsWithTrace None baseContext mode env program
 
 let convertTypedProgramToConversionResult moduleRegistry program =
   let baseRegistries = emptyRegistries moduleRegistry in

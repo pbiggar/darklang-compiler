@@ -72,12 +72,14 @@ val convertTypedDeclarationsWithTrace :
   CompilerOptions.passTimingRecorder option ->
   CompilationContexts.pipelineContext option ->
   monomorphizationMode ->
+  Types.typeCheckEnv ->
   CheckedAST.program ->
   (declarationConversion, string) result
 
 val convertTypedDeclarations :
   CompilationContexts.pipelineContext option ->
   monomorphizationMode ->
+  Types.typeCheckEnv ->
   CheckedAST.program ->
   (declarationConversion, string) result
 

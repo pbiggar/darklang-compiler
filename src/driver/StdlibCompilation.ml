@@ -70,7 +70,7 @@ let buildSelectedStdlibWithTrace includeTests target recorder =
   let* conversion =
     measure "Stdlib detail: Declaration conversion" (fun () ->
         P.convertTypedDeclarationsWithTrace recorder None (P.Monomorphize None)
-          typed)
+          env typed)
   in
   let start = Int64.to_float (Mtime_clock.elapsed_ns ()) /. 1e6 in
   let elapsed () =

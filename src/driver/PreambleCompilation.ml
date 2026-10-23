@@ -29,7 +29,7 @@ let buildCheckedContext (stdlib : X.stdlibResult)
   (* Convert preamble to ANF (mono → inline → lift → ANF). *)
   let* conversion =
     P.convertTypedDeclarationsWithTrace recorder (Some stdlib.X.context)
-      (P.Monomorphize (Some stdlib.X.context.X.genericFuncDefs)) typed
+      (P.Monomorphize (Some stdlib.X.context.X.genericFuncDefs)) env typed
     |> Result.map_error (fun error -> "Preamble ANF conversion error: " ^ error)
   in
   let registries = conversion.P.registries in
@@ -168,7 +168,7 @@ let buildPreambleContextFromAnalysis (stdlib : X.stdlibResult)
   let program = CheckedAST.programFromCheckedParts (symbols, tops) in
   let* conversion =
     P.convertTypedDeclarationsWithTrace recorder (Some stdlib.X.context)
-      (P.ReplaceTypeApps specs) program
+      (P.ReplaceTypeApps specs) analysis.X.typeCheckEnv program
   in
   let registries = conversion.P.registries in
   let options = CompilerOptions.defaultOptions in
