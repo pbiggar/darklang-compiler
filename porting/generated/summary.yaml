@@ -69,8 +69,9 @@ reasons:
     aot-match-error: 26
     aot-name-error: 11
     aot-type-error: 138
-    compiler-gap: 42
+    compiler-gap: 41
     test-counter: 7
+    upstream-bug: 1
     upstream-dependency: 587
 expected_failures:
   aot-rejection:
@@ -113,9 +114,9 @@ expected_failures:
   missing-support:
     phases:
       compile: 627
-      runtime: 9
+      runtime: 8
     reasons:
-      compiler-gap: 42
+      compiler-gap: 41
       test-counter: 7
       upstream-dependency: 587
     sources:
@@ -150,7 +151,6 @@ expected_failures:
       upstream/packages/darklang/tests/language/fastOps.dark: 4
       upstream/packages/darklang/tests/language/lambdas.dark: 1
       upstream/packages/darklang/tests/language/letBindings.dark: 1
-      upstream/packages/darklang/tests/language/matchExpressions.dark: 1
       upstream/packages/darklang/tests/language/operators.dark: 1
       upstream/packages/darklang/tests/language/records.dark: 2
       upstream/packages/darklang/tests/language/runtimeToProgramTypes.dark: 5
@@ -185,3 +185,10 @@ expected_failures:
       upstream/packages/darklang/tests/stdlib/result.dark: 4
       upstream/packages/darklang/tests/stdlib/sqlite.dark: 7
       upstream/packages/darklang/tests/stdlib/string.dark: 2
+  upstream-bug:
+    phases:
+      runtime: 1
+    reasons:
+      upstream-bug: 1
+    sources:
+      upstream/packages/darklang/tests/language/matchExpressions.dark: 1

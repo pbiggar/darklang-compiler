@@ -19,10 +19,13 @@ A run disposition means selected, not a passing execution receipt. Replacement c
 Verified AOT rejection contracts cover programs rejected under the compiler’s static rules; they are not unfinished support.
 Missing support includes compiler bugs, unavailable dependencies and test-runner gaps. Counts describe source contracts; execution receipts remain separate.
 
+Upstream bugs record interpreter behavior or test expectations that the compiler deliberately rejects as incorrect; they are separate from missing support.
+
 | Class | Compile | Runtime | Total |
 | --- | ---: | ---: | ---: |
 | `aot-rejection` | 212 | 0 | 212 |
-| `missing-support` | 627 | 9 | 636 |
+| `missing-support` | 627 | 8 | 635 |
+| `upstream-bug` | 0 | 1 | 1 |
 
 | Class | Reason | Tests |
 | --- | --- | ---: |
@@ -32,9 +35,10 @@ Missing support includes compiler bugs, unavailable dependencies and test-runner
 | `aot-rejection` | `aot-match-error` | 26 |
 | `aot-rejection` | `aot-name-error` | 11 |
 | `aot-rejection` | `aot-type-error` | 138 |
-| `missing-support` | `compiler-gap` | 42 |
+| `missing-support` | `compiler-gap` | 41 |
 | `missing-support` | `test-counter` | 7 |
 | `missing-support` | `upstream-dependency` | 587 |
+| `upstream-bug` | `upstream-bug` | 1 |
 
 ### Remaining support by source
 
@@ -73,7 +77,6 @@ Each row links to the authoritative per-test annotations. A named test remains o
 | [packages/darklang/tests/language/fastOps.dark](../../../upstream/packages/darklang/tests/language/fastOps.dark) | 4 |
 | [packages/darklang/tests/language/lambdas.dark](../../../upstream/packages/darklang/tests/language/lambdas.dark) | 1 |
 | [packages/darklang/tests/language/letBindings.dark](../../../upstream/packages/darklang/tests/language/letBindings.dark) | 1 |
-| [packages/darklang/tests/language/matchExpressions.dark](../../../upstream/packages/darklang/tests/language/matchExpressions.dark) | 1 |
 | [packages/darklang/tests/language/operators.dark](../../../upstream/packages/darklang/tests/language/operators.dark) | 1 |
 | [packages/darklang/tests/language/records.dark](../../../upstream/packages/darklang/tests/language/records.dark) | 2 |
 | [packages/darklang/tests/language/runtimeToProgramTypes.dark](../../../upstream/packages/darklang/tests/language/runtimeToProgramTypes.dark) | 5 |
@@ -152,8 +155,9 @@ Tags are defined in [the glossary](../../../porting/compiler-reasons.json).
 | tests | `aot-match-error` | 26 |
 | tests | `aot-name-error` | 11 |
 | tests | `aot-type-error` | 138 |
-| tests | `compiler-gap` | 42 |
+| tests | `compiler-gap` | 41 |
 | tests | `test-counter` | 7 |
+| tests | `upstream-bug` | 1 |
 | tests | `upstream-dependency` | 587 |
 
 ## Separate capability assessments
