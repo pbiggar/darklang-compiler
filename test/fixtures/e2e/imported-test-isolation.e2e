@@ -1,0 +1,4 @@
+// Imported helper declarations belong to the imported test library context.
+type Color = | Red | Green
+Red = Color.Red
+Darklang.Language.Tests.MatchExpressions.headTail [1L, 2L] = compileerror="Unknown function or value"

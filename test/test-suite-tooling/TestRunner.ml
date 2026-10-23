@@ -1042,6 +1042,16 @@ let runTestsWithProgressReporter completedTestReporter args =
     let stdlibElapsed = elapsed start in
     recordPhaseOverhead "Stdlib Build Overhead" stdlibElapsed before
       (passTimingTotal ());
+    let importedStdlib =
+      lazy
+        (match
+           StdlibCompilation.buildImportedTestStdlibWithTrace target
+             (Some recordPassTiming)
+         with
+        | Ok value -> value
+        | Error message ->
+            Crash.crash ("Imported test library did not build: " ^ message))
+    in
     let allUnitTests = Array.append (buildUnitTests stdlib) [||] in
     let unitSuiteSupportsTarget name =
       let arm64 =
@@ -1448,7 +1458,19 @@ let runTestsWithProgressReporter completedTestReporter args =
          specialized preamble for the complete suite costs gigabytes before the
          first assertion runs, and keeps unrelated codegen caches alive. *)
       List.iter
-        (runE2EFile baseStdlib suiteName progressLabel)
+        (fun tests ->
+          let library =
+            if
+              Array.exists
+                (fun test ->
+                  Text.contains test.E.sourceFile "upstream/packages/"
+                  || Text.contains test.E.sourceFile
+                       "upstream/backend/testfiles/execution/")
+                tests
+            then Lazy.force importedStdlib
+            else baseStdlib
+          in
+          runE2EFile library suiteName progressLabel tests)
         (R.sourceFileGroups testsArray)
     in
 

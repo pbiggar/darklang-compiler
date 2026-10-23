@@ -64,7 +64,9 @@ let main root manifest output =
                 false))
   in
   let target = Platform.detectHostTarget () |> require in
-  let stdlib = StdlibCompilation.buildStdlib target |> require in
+  let stdlib =
+    StdlibCompilation.buildImportedTestStdlibWithTrace target None |> require
+  in
   let base =
     stdlib.CompilationContexts.context.CompilationContexts.writtenEnvironment
   in

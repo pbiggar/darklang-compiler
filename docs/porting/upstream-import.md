@@ -98,3 +98,9 @@ The ledger now reads these sources directly. It has no per-item YAML test or
 declaration mapping and no central exclusion table. Its readiness check rejects
 pending test classifications. Compilation and execution receipts remain separate
 from the source dispositions.
+
+Application compilation selects upstream library packages. The runner builds a
+separate imported-test library that also includes the selected original test
+helpers, types and values. Each imported test uses that library context. This
+keeps unrelated test constructors and helper functions out of application scope;
+all imported tests remain discovered and controlled by their own annotations.
