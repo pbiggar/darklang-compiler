@@ -1,0 +1,9 @@
+// Signed constant shifts and runtime shifts must agree; unsigned shifts stay logical.
+((-1L) >> 1L) = -1L
+((-9223372036854775808L) >> 63L) = -1L
+((-8L) >> 2L) = -2L
+((-1L) >> 0L) = -1L
+(18446744073709551615UL >> 1UL) = 9223372036854775807UL
+(18446744073709551615UL >> 63UL) = 1UL
+(let amount = Stdlib.Int64.parse (Stdlib.Cli.Stdin.readLine ()) in match amount with | Result.Ok n -> (-8L) >> n | Result.Error _ -> 0L) = -2L stdin="2\n"
+(let amount = Stdlib.UInt64.parse (Stdlib.Cli.Stdin.readLine ()) in match amount with | Result.Ok n -> 18446744073709551615UL >> n | Result.Error _ -> 0UL) = 9223372036854775807UL stdin="1\n"

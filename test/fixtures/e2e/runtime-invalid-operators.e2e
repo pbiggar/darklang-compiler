@@ -1,0 +1,5 @@
+// Operators unavailable for Float must fail before native execution.
+7.5 % 2.0 = compileerror="Operator is unavailable for this type"
+let remainder<'a> (a: 'a) (b: 'a) : 'a = a % b; remainder 7.5 2.0 = compileerror="Operator is unavailable for this type"
+7L % 3L = 1L
+7.5 / 2.0 = 3.75
