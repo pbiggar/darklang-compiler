@@ -189,6 +189,18 @@ let check checkExpression literal globals locals symbols expected
           )
   in
   bind resolved (fun (canonical, entry, args) ->
+      (* A nullary constructor can leave parameters unconstrained. Register
+         those variables so later branches refine this constructor's layout too. *)
+      let typ, symbols =
+        WrittenCheckingState.freshenType globals.typeParams
+          (AST.TSum (canonical, args))
+          symbols
+      in
+      let args =
+        match typ with
+        | AST.TSum (_, args) -> args
+        | _ -> Crash.crash "Fresh constructor type is not an enum"
+      in
       match entry.definition with
       | WT.TDEnum cases -> (
           match
