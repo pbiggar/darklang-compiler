@@ -653,13 +653,13 @@ let testCompilerXfailStrictness () =
           "Expected failure was batched")
   in
   let* () = check "missing-support" in
-  check "aot-rejection"
+  let* () = check "aot-rejection" in
+  check "upstream-bug"
 
 let testCompilerRuntimeXfailStrictness () =
-  one
-    "// @compiler xfail runtime: \"known runtime failure\" \
-     class=missing-support reason=annotation-probe\n\
-     Builtin.crash \"known runtime failure\" = 1L"
+  let check classification = one
+    ("// @compiler xfail runtime: \"known runtime failure\" class="
+     ^ classification ^ " reason=annotation-probe\nBuiltin.crash \"known runtime failure\" = 1L")
     "Expected runtime xfail" (fun test ->
       let expected = Ran (1, "", "known runtime failure", 0L, 0L) in
       let signal = Ran (139, "", "known runtime failure", 0L, 0L) in
@@ -671,6 +671,9 @@ let testCompilerRuntimeXfailStrictness () =
         && Result.is_error (evaluateExpectations test leaked)
         && Result.is_error (evaluateExpectations test wrongPhase))
         "Runtime xfail accepted an unrelated phase or signal")
+  in
+  let* () = check "missing-support" in
+  check "upstream-bug"
 
 let testExpectedLanguageErrorIsNotAnXfail () =
   one

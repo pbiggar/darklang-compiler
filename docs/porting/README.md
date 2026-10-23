@@ -19,12 +19,17 @@ exclusions or separately maintained test/declaration ledgers:
   a runtime failure instead. Unexpected passes, wrong phases, unrelated output
   and abnormal process termination fail the check.
 
-Every expected failure requires `class=aot-rejection` or
-`class=missing-support`, independently of its compile/runtime phase and reason.
+Every expected failure requires `class=aot-rejection`, `class=missing-support`
+or `class=upstream-bug`, independently of its compile/runtime phase and reason.
 AOT rejection contracts exercise intended static validation and must fail at
 compilation. They are regression coverage, not unfinished support. Missing
 support includes compiler/runtime bugs, unavailable declarations and test-runner
 limitations; it can fail at either phase.
+
+Upstream bugs record interpreter behavior or expectations we consider incorrect.
+They keep strict phase and diagnostic matching and are counted separately from
+compiler support gaps. Signed-zero patterns are one example: the compiler
+distinguishes `0.0` and `-0.0` patterns even though numeric equality equates them.
 
 The generated report separates these classes, their phases and reasons, and
 lists remaining support by source. A named test with several assertions stays
@@ -41,7 +46,7 @@ Existing adapted fixtures remain compiler regression tests. They are not used
 to infer counterparts, partial test coverage or ambiguous source equivalence.
 Execution receipts from `--results-json=...` belong to their individual runs;
 source dispositions alone never claim successful execution. Receipts include
-`expected_failure_class` (`aot-rejection`, `missing-support`, or `none`) so a
+`expected_failure_class` (`aot-rejection`, `missing-support`, `upstream-bug`, or `none`) so a
 passing rejection contract is distinguishable from an ordinary passing program.
 
 ## Update and check

@@ -2,7 +2,7 @@
 module T = Tokenizer
 
 type phase = Compile | Runtime
-type failureClass = AotRejection | MissingSupport
+type failureClass = AotRejection | MissingSupport | UpstreamBug
 
 type disposition =
   | Run
@@ -84,11 +84,12 @@ let parse reasons text =
     let* classification =
       match (classField, phase) with
       | "class=missing-support", (Compile | Runtime) -> Ok MissingSupport
+      | "class=upstream-bug", (Compile | Runtime) -> Ok UpstreamBug
       | "class=aot-rejection", Compile -> Ok AotRejection
       | "class=aot-rejection", Runtime ->
           Error "An AOT rejection must require a compile failure"
       | _, (Compile | Runtime) ->
-          Error "Expected class=aot-rejection or class=missing-support"
+          Error "Expected class=aot-rejection, class=missing-support or class=upstream-bug"
     in
     try
       match Yojson.Basic.from_string quoted with

@@ -45,8 +45,8 @@ validation rejects unknown tags, duplicate dispositions, annotations inside
 bodies or after an item, and orphaned annotations. Only real line comments are
 read: text inside strings, doc comments and block comments is not metadata.
 Expected failures apply only to tests and require a nonempty diagnostic matcher
-and a compile/runtime phase, plus exactly one `class=aot-rejection` or
-`class=missing-support` field before `reason=TAG`. An AOT classification with a
+and a compile/runtime phase, plus exactly one `class=aot-rejection`,
+`class=missing-support` or `class=upstream-bug` field before `reason=TAG`. An AOT classification with a
 runtime phase is invalid. Replacement targets are repository-relative
 `path#declaration` references and require a reason.
 
@@ -62,6 +62,14 @@ separate from expected failures and can coexist with an annotation.
 
 Read the original test, its selected dependencies and the actual diagnostic;
 neither `raises` nor compilation failure alone determines the class.
+
+- `upstream-bug`: an explicit language decision considers the interpreter
+  behavior or test expectation incorrect. Keep the original upstream test body
+  and a strict diagnostic matcher; use `reason=upstream-bug`, whose glossary
+  entry records the decision. This is separate from incomplete compiler support.
+  For signed-zero patterns, `0.0` and `-0.0` are distinct literals even though
+  numeric equality considers them equal. The upstream numeric-equality pattern
+  expectation is deliberately rejected.
 
 - `aot-rejection`: the compiler rejects a program invalid under its intended
   static rules, and the diagnostic identifies the invalid construct. Use the

@@ -29,3 +29,7 @@ test overrideAndAnnotation =
 // @compiler xfail compile: "Expected TBool, got TInt64" class=aot-rejection reason=aot-type-error
 test staticallyInvalidBoolean =
   (true && 5L) |> Stdlib.Test.equal true
+
+// @compiler xfail runtime: "named upstream annotation probe" class=upstream-bug reason=annotation-probe
+test upstreamBug =
+  Builtin.crash "named upstream annotation probe" |> Stdlib.Test.equal 1L

@@ -128,6 +128,19 @@ let () =
     | _ -> false)
     "AOT classification was not preserved";
   List.iter
+    (fun phase ->
+      let entries =
+        accepts [ item 1 0 true ]
+          ("// @compiler xfail " ^ phase
+           ^ ": \"upstream diagnostic\" class=upstream-bug reason=test-counter\ntest bad = 1")
+      in
+      require
+        (match A.at entries { Tokenizer.row = 1; column = 0 } with
+        | A.Xfail { classification = A.UpstreamBug; _ } -> true
+        | _ -> false)
+        "Upstream bug classification was not preserved")
+    [ "compile"; "runtime" ];
+  List.iter
     (rejects [ item 1 0 true ])
     [
       "// @compiler xfail compile: \"bad\" reason=test-counter\ntest bad = 1";

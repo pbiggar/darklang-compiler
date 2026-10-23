@@ -39,14 +39,17 @@ class SourceLedger(unittest.TestCase):
         summary = ledger.summarize(self.root, self.row(
             self.item('named-test', line=1, status='xfail', classification='aot-rejection', phase='compile', reason='aot-type-error'),
             self.item('named-test', line=2, status='xfail', classification='missing-support', phase='compile', reason='upstream-dependency'),
-            self.item('named-test', line=3, status='xfail', classification='missing-support', phase='runtime', reason='compiler-gap')))
+            self.item('named-test', line=3, status='xfail', classification='missing-support', phase='runtime', reason='compiler-gap'),
+            self.item('named-test', line=4, status='xfail', classification='upstream-bug', phase='runtime', reason='upstream-bug')))
         failures = summary['expected_failures']
         self.assertEqual(failures['aot-rejection']['phases'], {'compile': 1})
         self.assertEqual(failures['missing-support']['phases'], {'compile': 1, 'runtime': 1})
+        self.assertEqual(failures['upstream-bug']['phases'], {'runtime': 1})
         self.assertEqual(failures['missing-support']['sources'], {'upstream/packages/example.dark': 2})
         report = ledger.markdown(summary)
         self.assertIn('| `aot-rejection` | 1 | 0 | 1 |', report)
         self.assertIn('| `missing-support` | 1 | 1 | 2 |', report)
+        self.assertIn('| `upstream-bug` | 0 | 1 | 1 |', report)
         self.assertEqual(sum(sum(row['phases'].values()) for row in failures.values()),
                          summary['dispositions']['tests']['xfail'])
 

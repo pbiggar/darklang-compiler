@@ -22,7 +22,8 @@ let disposition = function
             `String
               (match classification with
               | CompilerAnnotations.AotRejection -> "aot-rejection"
-              | CompilerAnnotations.MissingSupport -> "missing-support") );
+              | CompilerAnnotations.MissingSupport -> "missing-support"
+              | CompilerAnnotations.UpstreamBug -> "upstream-bug") );
           ("reason", `String reason);
           ( "phase",
             `String

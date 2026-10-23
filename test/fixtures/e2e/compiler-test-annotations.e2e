@@ -17,3 +17,6 @@ Builtin.crash "annotation runtime probe" = 1L
 
 // @compiler xfail compile: "Expected TBool, got TInt64" class=aot-rejection reason=aot-type-error
 true && 5L = error="&& only supports Booleans"
+
+// @compiler xfail runtime: "upstream annotation probe" class=upstream-bug reason=annotation-probe
+Builtin.crash "upstream annotation probe" = 1L

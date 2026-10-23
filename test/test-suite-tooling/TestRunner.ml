@@ -1242,7 +1242,8 @@ let runTestsWithProgressReporter completedTestReporter args =
                             | CompilerAnnotations.AotRejection ->
                                 "aot-rejection"
                             | CompilerAnnotations.MissingSupport ->
-                                "missing-support")
+                                "missing-support"
+                            | CompilerAnnotations.UpstreamBug -> "upstream-bug")
                       | CompilerAnnotations.Run | CompilerAnnotations.Blocked _
                       | CompilerAnnotations.Excluded _
                       | CompilerAnnotations.Replace _ ->
