@@ -248,7 +248,14 @@ let select ~context ~roots ~supplements ~sources =
   let claimed =
     List.fold_left
       (fun names node -> S.add (kind node.declaration ^ ":" ^ node.name) names)
-      S.empty chosen
+      S.empty
+      (chosen
+      @ List.filter
+          (fun node ->
+            match node.disposition with
+            | A.Excluded _ -> true
+            | A.Run | A.Blocked _ | A.Replace _ | A.Xfail _ -> false)
+          originals)
   in
   let* supplementalSources = ResultList.traverse lookup supplements in
   let compilerOrder =

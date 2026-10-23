@@ -83,6 +83,8 @@ compiler implementation sources. Root declarations select their replacements;
 explicit compiler supplements retain APIs and helpers that are outside the
 pinned interpreter contract. Compiler replacements preserve the source order of
 those implementation files so constants remain available to their callers.
+An explicit exclusion suppresses matching declarations in compiler supplements
+as well, so an excluded API cannot become callable through that layer.
 
 Both execution assertions and named tests are discovered from the parsed AST.
 Documentation examples in string literals are never tests. A named test is

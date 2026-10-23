@@ -73,8 +73,10 @@ let () =
              ("upstream.dark", source original);
              ( "compiler.dark",
                source
-                 (replacement ^ "\nlet compilerOnly () : Int64 = decode seed")
-             );
+                 (replacement
+                ^ "\n\
+                   let compilerOnly () : Int64 = decode seed\n\
+                   let reflect () : Int64 = 42L") );
            ])
   in
   let useSupplement =
@@ -84,6 +86,12 @@ let () =
     (require
        (WrittenChecking.checkSourceUnits true false
           (List.map snd supplemented.Selection.units @ [ useSupplement ])));
+  let forbidden =
+    require (WrittenParsing.parse Validation.Script "Example.reflect ()")
+  in
+  error "Unknown function or value"
+    (WrittenChecking.checkSourceUnits true false
+       (List.map snd supplemented.Selection.units @ [ forbidden ]));
   let selected = require (select original replacement) in
   error "runtime-reflection" (Selection.require selected "Example.reflect");
   require (Selection.require selected "Example.decode");
