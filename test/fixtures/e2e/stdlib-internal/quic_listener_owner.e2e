@@ -15,7 +15,7 @@ let queued (blocked: Bool) : Bool =
   | Ok signals ->
     let context = Stdlib.HttpServer.Quic.Context { config = config, identity = identity, signals = signals, socket = parent, secret = Stdlib.Blob.empty, limit = 1024L } in
     let keys = Stdlib.__QuicCrypto.Keys { key = Stdlib.Blob.empty, iv = Stdlib.Blob.empty, hp = Stdlib.Blob.empty } in
-    let closing = Stdlib.__QuicConnection.Closing { code = 256L, peer = peer, source = Stdlib.Blob.empty, destination = Stdlib.Blob.empty, keys = keys, phase = false, deadline = 100L, number = 2L, lastSent = 0L } in
+    let closing = Stdlib.__QuicConnection.Closing { reason = Stdlib.__QuicConnection.CloseReason.ApplicationCloseReason 256L, peer = peer, source = Stdlib.Blob.empty, destination = Stdlib.Blob.empty, keys = keys, phase = false, deadline = 100L, number = 2L, lastSent = 0L } in
     let owner = Stdlib.HttpServer.Quic.__Owner { source = Stdlib.Blob.empty, peer = peer, socket = child, outbox = outbox, phase = Stdlib.HttpServer.Quic.__Phase.Closing closing } in
     let sent = Stdlib.__Datagram.send child peer (Stdlib.String.toBlob "sealed packet") 1000L in
     let flushed = Stdlib.HttpServer.Quic.__flush context owner in

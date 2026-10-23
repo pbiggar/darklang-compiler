@@ -3,6 +3,17 @@ module Darklang.Stdlib.__QuicWire
 
 type ParseError = Incomplete | Invalid of String
 type Number = { value: Int64, next: Int64 }
+type TransportError = { code: Int64, message: String }
+// Opaque local failures must never be guessed into a peer transport code.
+type Failure = TransportViolation of Stdlib.__QuicWire.TransportError | LocalFailure of String
+
+let localFailure (message: String) : Stdlib.__QuicWire.Failure = LocalFailure message
+
+let protocol (code: Int64) (message: String) : Stdlib.__QuicWire.Failure =
+  TransportViolation (Stdlib.__QuicWire.TransportError { code = code, message = message })
+
+let message (failure: Stdlib.__QuicWire.Failure) : String =
+  match failure with | TransportViolation error -> error.message | LocalFailure message -> message
 
 let __bytes (value: Int64) (remaining: Int64) (bytes: List<Int64>) : List<Int64> =
   if remaining == 0L then bytes

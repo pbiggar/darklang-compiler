@@ -14,6 +14,7 @@ type Frame =
   | NewConnectionId of Stdlib.__QuicApplication.ConnectionId | RetireConnectionId of Int64
   | PathChallenge of Blob | PathResponse of Blob | ApplicationClose of Stdlib.__QuicFrames.Close | HandshakeDone
 type Parsed = { frame: Stdlib.__QuicApplication.Frame, next: Int64 }
+type Received = { kind: Int64, frame: Stdlib.__QuicApplication.Frame }
 
 let __stream (data: Blob) (kind: Int64) (position: Int64)
   : Stdlib.Result.Result<Stdlib.__QuicApplication.Parsed, String> =
@@ -145,14 +146,15 @@ let __frame (fromServer: Bool) (data: Blob) (position: Int64)
       result
     else Error "Unknown QUIC frame type"
 
-let __scan (fromServer: Bool) (data: Blob) (position: Int64) (frames: List<Stdlib.__QuicApplication.Frame>)
-  : Stdlib.Result.Result<List<Stdlib.__QuicApplication.Frame>, String> =
+let __scan (fromServer: Bool) (data: Blob) (position: Int64) (frames: List<Stdlib.__QuicApplication.Received>)
+  : Stdlib.Result.Result<List<Stdlib.__QuicApplication.Received>, String> =
   if position == Stdlib.Blob.__byteLength data then Ok (Stdlib.List.reverse frames)
   else if Stdlib.List.length frames >= 1024 then Error "Too many QUIC application frames"
   else Stdlib.__QuicApplication.__frame fromServer data position |> Stdlib.Result.andThen (fun parsed ->
-    Stdlib.__QuicApplication.__scan fromServer data parsed.next (Stdlib.List.push frames parsed.frame))
+    Stdlib.__QuicApplication.__scan fromServer data parsed.next (Stdlib.List.push frames
+      (Stdlib.__QuicApplication.Received { kind = Stdlib.Blob.__getByte data position, frame = parsed.frame })))
 
-let parse (fromServer: Bool) (data: Blob) : Stdlib.Result.Result<List<Stdlib.__QuicApplication.Frame>, String> =
+let parse (fromServer: Bool) (data: Blob) : Stdlib.Result.Result<List<Stdlib.__QuicApplication.Received>, String> =
   if Stdlib.Blob.__byteLength data == 0L || Stdlib.Blob.__byteLength data > 4096L then Error "Invalid QUIC application payload length"
   else Stdlib.__QuicApplication.__scan fromServer data 0L []
 
@@ -193,3 +195,9 @@ let close (code: Int64) (reason: Blob) : Stdlib.Result.Result<Blob, String> =
   else match Stdlib.__QuicWire.integer code, Stdlib.__QuicWire.integer (Stdlib.Blob.__byteLength reason) with
     | Ok error, Ok size -> Ok (Stdlib.Blob.concat [Stdlib.Blob.__fromInt64List [29L], error, size, reason])
     | _, _ -> Error "Invalid QUIC application close code"
+
+let transportClose (code: Int64) (kind: Int64) (reason: Blob) : Stdlib.Result.Result<Blob, String> =
+  if Stdlib.Blob.__byteLength reason > 1024L then Error "QUIC close reason exceeds limit"
+  else match Stdlib.__QuicWire.integer code, Stdlib.__QuicWire.integer kind, Stdlib.__QuicWire.integer (Stdlib.Blob.__byteLength reason) with
+    | Ok error, Ok frame, Ok size -> Ok (Stdlib.Blob.concat [Stdlib.Blob.__fromInt64List [28L], error, frame, size, reason])
+    | _, _, _ -> Error "Invalid QUIC transport close"

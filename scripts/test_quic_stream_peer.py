@@ -31,7 +31,7 @@ let emit (bytes: Blob) (offset: Int64) : Unit =
     let _ = Stdlib.printLine (Stdlib.Blob.toHex part) in
     emit bytes (offset + 512L)
 let initialize (ready: Stdlib.__QuicClient.Ready) : Stdlib.Result.Result<Stdlib.__QuicConnection.State, String> =
-  Stdlib.__QuicConnection.fromClient ready |> Stdlib.Result.andThen (fun state ->
+  Stdlib.__QuicConnection.fromClient ready |> Stdlib.Result.mapError Stdlib.__QuicConnection.__reportFailure |> Stdlib.Result.andThen (fun state ->
     Stdlib.__QuicConnection.openStream state 2L |> Stdlib.Result.andThen (fun state ->
     Stdlib.__QuicConnection.openStream state 6L |> Stdlib.Result.andThen (fun state ->
     Stdlib.__QuicConnection.openStream state 10L |> Stdlib.Result.andThen (fun state ->
