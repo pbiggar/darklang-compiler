@@ -113,7 +113,7 @@ let __advance (context: Stdlib.HttpServer.Quic.Context) (handler: Stdlib.Http.Re
           if now >= deadline then Error "QUIC output drain timed out"
           else Stdlib.__QuicConnection.__idle connection now |> Stdlib.Result.map (fun _unit -> Stdlib.HttpServer.Quic.__Phase.Draining ((connection, deadline)))
         else if now >= deadline || (connection.space.queued == [] && connection.space.recovery.congestion.inFlight == 0L) then
-          Stdlib.__QuicConnection.__beginClose connection now |> Stdlib.Result.map (fun closing -> Stdlib.HttpServer.Quic.__Phase.Closing closing)
+          Stdlib.__QuicConnection.__beginClose connection now 256L |> Stdlib.Result.map (fun closing -> Stdlib.HttpServer.Quic.__Phase.Closing closing)
         else Stdlib.__QuicConnection.__tick connection now |> Stdlib.Result.map (fun connection -> Stdlib.HttpServer.Quic.__Phase.Draining ((connection, deadline))))
     | Closing closing -> Ok (Stdlib.HttpServer.Quic.__Phase.Closing closing) in
   phase |> Stdlib.Result.map (fun phase ->

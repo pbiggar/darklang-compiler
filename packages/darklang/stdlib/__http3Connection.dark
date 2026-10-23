@@ -95,7 +95,13 @@ let __drain (streams: List<Stdlib.__Http3Connection.Active>) (work: Stdlib.__Htt
             Stdlib.__Http3Connection.__drain rest (Stdlib.__Http3Connection.__done work stream (Error (if refused then "HTTP/3 stream refused by GOAWAY" else "HTTP/3 response stream reset"))))))
     else
       let wire = { work.connection.wire with stream = stream.id, message = stream.message } in
-      Stdlib.__Http3.__drain wire |> Stdlib.Result.andThen (fun received ->
+      match Stdlib.__Http3.__drain wire with
+      | Error (Protocol ((wire, error))) when error.scope == Stdlib.__Http3Message.Scope.Stream ->
+        Stdlib.__Http3.__abortStream wire stream.id error.code |> Stdlib.Result.andThen (fun wire ->
+          let work = Stdlib.__Http3Connection.__wire work wire in
+          Stdlib.__Http3Connection.__drain rest (Stdlib.__Http3Connection.__done work stream (Error error.message)))
+      | Error failure -> Error (Stdlib.__Http3.__reportFailure failure)
+      | Ok received ->
         let stream = Stdlib.__Http3Connection.__events { stream with message = received.state.message } received.events in
         let added = Stdlib.List.fold received.events 0L (fun total event -> match event with | BodyChunk bytes -> total + Stdlib.Blob.__byteLength bytes | _ -> total) in
         let work = { Stdlib.__Http3Connection.__wire work received.state with total = work.total + added } in
@@ -106,7 +112,7 @@ let __drain (streams: List<Stdlib.__Http3Connection.Active>) (work: Stdlib.__Htt
         | Some head ->
           Stdlib.__Http3Connection.__stop work stream 256L |> Stdlib.Result.andThen (fun work ->
             let response = Stdlib.HttpClient.Response { statusCode = Stdlib.Int.fromInt64 head.status, headers = head.headers, body = Stdlib.Blob.concat (Stdlib.List.reverse stream.blocks) } in
-            Stdlib.__Http3Connection.__drain rest (Stdlib.__Http3Connection.__done work stream (Ok response))))
+            Stdlib.__Http3Connection.__drain rest (Stdlib.__Http3Connection.__done work stream (Ok response)))
 
 let __run (work: Stdlib.__Http3Connection.Work) : Stdlib.Result.Result<Stdlib.__Http3Connection.Batch, String> =
   Stdlib.__Http3.__controls work.connection.wire |> Stdlib.Result.andThen (fun wire ->
