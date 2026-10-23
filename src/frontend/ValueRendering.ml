@@ -186,8 +186,15 @@ let rec ensureRenderer env typ (state : renderState) =
         } )
 
 and renderCall env typ value state =
-  let name, nextState = ensureRenderer env typ state in
-  (call nextState.symbols name [ value ], nextState)
+  match typ with
+  | TVar _ | TInferenceVar _ ->
+      (* Empty collections and inactive enum payloads can remain unconstrained.
+         Their payload renderer is unreachable: do not invent a representation
+         or require a concrete layout for a value that cannot be constructed. *)
+      (C.RuntimeError "Cannot render an uninhabited type parameter", state)
+  | _ ->
+      let name, nextState = ensureRenderer env typ state in
+      (call nextState.symbols name [ value ], nextState)
 
 and renderDelimited env items state =
   let rec loop remaining current acc =
@@ -753,16 +760,11 @@ let rewriteDiagnosticRenderers recordMetadata sumMetadata program =
                    ] -> (
               match N.toList definition.C.params with
               | [ (parameter, valueType) ] ->
-                  let renderer, next =
-                    ensureRenderer env (C.semanticType valueType) state
+                  let body, next =
+                    renderCall env (C.semanticType valueType)
+                      (C.Local parameter) state
                   in
-                  ( C.FunctionDef
-                      {
-                        definition with
-                        C.body =
-                          call next.symbols renderer [ C.Local parameter ];
-                      },
-                    next )
+                  (C.FunctionDef { definition with C.body }, next)
               | _ ->
                   Crash.crash
                     "Diagnostic value renderer has an invalid parameter list")

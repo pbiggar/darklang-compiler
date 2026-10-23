@@ -124,10 +124,11 @@ is intentionally unused by native code.
 
 ## Intentional AOT differences
 
-Function, Stream, Blob, RawPtr, RuntimeError, unresolved variables,
-non-String Dict keys, and other unsupported runtime shapes are rejected during type
-checking. The interpreter can reach corresponding failures at runtime; earlier
-AOT diagnostic timing is intentional and prevents runtime type dispatch.
+JSON conversion uses concrete AOT type metadata without runtime reflection.
+Empty dictionaries serialize as `{}` even when their key type cannot represent
+JSON object keys. Nonempty dictionaries with non-String keys retain the
+unsupported-type rejection, as do unsupported Function, Stream, Blob, RawPtr,
+RuntimeError and unresolved shapes.
 
 The compiler retains its existing nominal record and sum identities. The
 interpreter revision can identify separately declared structurally identical

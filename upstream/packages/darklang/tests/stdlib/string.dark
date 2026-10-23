@@ -1233,7 +1233,7 @@ test toOrdinal =
       Stdlib.String.toOrdinal -1 |> Stdlib.Test.equal "-1st"
       Stdlib.String.toOrdinal -11 |> Stdlib.Test.equal "-11th" ]
 
-// @compiler xfail runtime: "assertion 9: Values differ" reason=compiler-gap
+// @compiler xfail runtime: "assertion 9: expected \"zlo\", got \"lͮ̒ͫo̙̔ͮ̇͐̇\"" reason=compiler-gap
 test slugify =
   Stdlib.Test.all
     [ Stdlib.String.slugify

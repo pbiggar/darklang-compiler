@@ -1,7 +1,7 @@
 module Darklang.Language.Tests.ErrorPropagation
 
 module Error =
-  // @compiler xfail compile: "Expected TSum (\"Darklang.Stdlib.Option.Option\", [TVar \"t$constraint_-24174_1\"]), got TString" reason=compiler-gap
+  // @compiler xfail compile: "got TString" reason=compiler-gap
   test map2WrongArgRaises =
     (Stdlib.Option.map2
       (Stdlib.Option.Option.Some 10L)
@@ -20,7 +20,7 @@ test earlierErrorFirst =
   => raises "Uncaught exception: X"
 
 module ErrorPropagation =
-  // @compiler xfail compile: "Expected TList (TVar \"t$constraint_-24174_0\"), got TInt64" reason=compiler-gap
+  // @compiler xfail compile: "got TInt64" reason=compiler-gap
   test fnArg =
     Stdlib.List.head (Stdlib.Test.raiseRuntimeError "test")
     => raises "Uncaught exception: test"
@@ -30,7 +30,7 @@ module ErrorPropagation =
     (if Stdlib.Test.raiseRuntimeError "test" then 5L else 6L)
     => raises "Uncaught exception: test"
 
-  // @compiler xfail compile: "Expected TList (TVar \"t$constraint_-24174_0\"), got TInt64" reason=compiler-gap
+  // @compiler xfail compile: "got TInt64" reason=compiler-gap
   test fieldAccessTarget =
     (Stdlib.List.head (Stdlib.Test.raiseRuntimeError "test")).field
     => raises "Uncaught exception: test"
