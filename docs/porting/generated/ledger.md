@@ -12,7 +12,7 @@ A run disposition means selected, not a passing execution receipt. Replacement c
 | --- | --- |
 | packages | 3,240 blocked, 2 excluded, 35 replace, 426 run |
 | stdlib | 848 blocked, 3 excluded, 1,142 replace, 5 run |
-| tests | 1,499 run, 860 xfail |
+| tests | 1,501 run, 858 xfail |
 
 | Kind | Items |
 | --- | --- |
@@ -51,7 +51,7 @@ Tags are defined in [the glossary](../../../porting/compiler-reasons.json).
 | stdlib | `runtime-reflection` | 3 |
 | stdlib | `test-counter` | 2 |
 | stdlib | `test-diagnostics` | 2 |
-| tests | `compiler-gap` | 263 |
+| tests | `compiler-gap` | 261 |
 | tests | `test-counter` | 7 |
 | tests | `test-diagnostics` | 2 |
 | tests | `upstream-dependency` | 588 |
