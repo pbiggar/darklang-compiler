@@ -122,6 +122,8 @@ type functionDef = {
   typeParams : string list;
   params : (AST.bindingId * checkedType) NonEmptyList.t;
   returnType : checkedType;
+  (* Keep the inferred body type for validation after generic substitution. *)
+  bodyType : checkedType;
   body : expr;
   recursion : recursiveMember option;
 }

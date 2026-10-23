@@ -140,6 +140,7 @@ let generateFuncWrapper original params returns withFuncs =
               (S.paramsFromList "generateFuncWrapper"
                  (closureParam :: parameters));
           returnType = C.checkedType returnType;
+          bodyType = C.checkedType returnType;
           body;
           recursion = None;
         }

@@ -89,6 +89,7 @@ let functionDefinition body : C.functionDef =
           tail = [ parameter "first" AST.TInt64; parameter "second" AST.TInt64 ];
         };
     returnType = C.checkedType AST.TInt64;
+    bodyType = C.checkedType AST.TInt64;
     body;
     recursion = None;
   }
@@ -209,6 +210,7 @@ let callFunction name firstParameter remainingParameters body : C.functionDef =
       C.checkedParams
         { NonEmptyList.head = firstParameter; tail = remainingParameters };
     returnType = C.checkedType AST.TInt64;
+    bodyType = C.checkedType AST.TInt64;
     body;
     recursion = None;
   }
@@ -336,6 +338,7 @@ let scalarFunction name parameter returnType body : C.functionDef =
     typeParams = [];
     params = C.checkedParams (NonEmptyList.singleton parameter);
     returnType = C.checkedType returnType;
+    bodyType = C.checkedType returnType;
     body;
     recursion = None;
   }

@@ -332,6 +332,7 @@ and liftLambda argument parameters annotation body state =
              (if argument then "lifted argument lambda" else "lifted lambda")
              ((closure, AST.TTuple tupleTypes) :: loweredParameters));
       returnType = C.checkedType returnType;
+      bodyType = C.checkedType returnType;
       body = bodyWithExtractions;
       recursion =
         (if argument then None

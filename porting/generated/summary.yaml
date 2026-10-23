@@ -38,9 +38,8 @@ dispositions:
     replace: 1142
     run: 5
   tests:
-    blocked: 16
-    run: 1484
-    xfail: 859
+    run: 1499
+    xfail: 860
 reasons:
   packages:
     compiler-contract: 12
@@ -64,10 +63,7 @@ reasons:
     test-counter: 2
     test-diagnostics: 2
   tests:
-    compiler-crash: 1
-    compiler-gap: 262
-    compiler-resource: 3
-    compiler-timeout: 12
+    compiler-gap: 263
     test-counter: 7
     test-diagnostics: 2
     upstream-dependency: 588

@@ -156,6 +156,7 @@ let functionDef id name parameter typ =
     typeParams = [];
     params = N.singleton (parameter, C.checkedType typ);
     returnType = C.checkedType TString;
+    bodyType = C.checkedType TString;
     body = C.StringLiteral "";
     recursion = None;
   }

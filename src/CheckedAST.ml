@@ -170,6 +170,7 @@ type functionDef = {
   typeParams : string list;
   params : (AST.bindingId * checkedType) NonEmptyList.t;
   returnType : checkedType;
+  bodyType : checkedType;
   body : expr;
   recursion : recursiveMember option;
 }
@@ -1619,6 +1620,7 @@ let convertFunctionWithEnvironment recordFieldCounts outerEnvironment symbols
         typeParams = definition.AST.typeParams;
         params = NonEmptyList.fromList parameters;
         returnType = checkedType definition.AST.returnType;
+        bodyType = checkedType definition.AST.returnType;
         body;
         recursion;
       },
