@@ -7,3 +7,12 @@ Darklang.SCM.Constraints.kindFromString "kind-changed" = Stdlib.Option.Option.So
 Darklang.SCM.Constraints.kindFromString "unknown" = Stdlib.Option.Option.None
 Darklang.SCM.Constraints.offersResolution Darklang.SCM.Constraints.Kind.StaleUsage "repoint" = true
 Darklang.SCM.Constraints.offersResolution Darklang.SCM.Constraints.Kind.KindChanged "repoint" = false
+
+// Inherited initializers retain their generic calls and transitive value dependencies.
+module ImportedValueChecks =
+  val prefix = "selected"
+  val message = Stdlib.String.toUppercase prefix
+  val names = Stdlib.List.map [1L, 2L] (fun n -> Stdlib.Int64.toString n)
+
+ImportedValueChecks.message = "SELECTED"
+ImportedValueChecks.names = ["1", "2"]

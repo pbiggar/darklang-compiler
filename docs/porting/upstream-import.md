@@ -149,7 +149,9 @@ source selection, native compilation and the test suite. The default invocation
 without `--packages` retains the test-helper probe.
 
 `check_sources --native ROOT` runs the selected on-disk declarations through
-the host native library pipeline, including specialization and allocation.
+the host native library pipeline, including specialization and allocation,
+both with and without imported test helpers. It also compiles a trivial caller
+against each library to check that its context can be reused.
 This catches failures that source checking alone cannot establish. Run it before
 embedding a newly enabled batch, then rebuild and run the complete host suite.
 Executable script bodies remain blocked with `script-entrypoint`: importing a
