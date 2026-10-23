@@ -248,7 +248,6 @@ test parseOutOfRange =
       Stdlib.Int8.parse "-129"
       |> Stdlib.Test.equal (Error Stdlib.Int8.ParseError.OutOfRange) ]
 
-// @compiler blocked: pending-validation
 test parseBadFormat =
   Stdlib.Test.all
     [ // bad format
@@ -279,7 +278,6 @@ test parseBadFormat =
       Stdlib.Int8.parse "XIV"
       |> Stdlib.Test.equal (Error Stdlib.Int8.ParseError.BadFormat) ]
 
-// @compiler blocked: pending-validation
 test fromUInt8 =
   Stdlib.Test.all
     [ Stdlib.Int8.fromUInt8 0uy |> Stdlib.Test.equal (Some 0y)
@@ -288,7 +286,6 @@ test fromUInt8 =
       Stdlib.Int8.fromUInt8 128uy |> Stdlib.Test.equal None
       Stdlib.Int8.fromUInt8 255uy |> Stdlib.Test.equal None ]
 
-// @compiler blocked: pending-validation
 test fromInt16 =
   Stdlib.Test.all
     [ Stdlib.Int8.fromInt16 0s |> Stdlib.Test.equal (Some 0y)
@@ -299,7 +296,6 @@ test fromInt16 =
       Stdlib.Int8.fromInt16 (-128s) |> Stdlib.Test.equal (Some -128y)
       Stdlib.Int8.fromInt16 (-129s) |> Stdlib.Test.equal None ]
 
-// @compiler blocked: pending-validation
 test fromUInt16 =
   Stdlib.Test.all
     [ Stdlib.Int8.fromUInt16 0us |> Stdlib.Test.equal (Some 0y)
@@ -308,7 +304,6 @@ test fromUInt16 =
       Stdlib.Int8.fromUInt16 128us |> Stdlib.Test.equal None
       Stdlib.Int8.fromUInt16 255us |> Stdlib.Test.equal None ]
 
-// @compiler blocked: pending-validation
 test fromInt32 =
   Stdlib.Test.all
     [ Stdlib.Int8.fromInt32 0l |> Stdlib.Test.equal (Some 0y)
@@ -320,7 +315,6 @@ test fromInt32 =
       Stdlib.Int8.fromInt32 (-129l) |> Stdlib.Test.equal None
       Stdlib.Int8.fromInt32 2147483647l |> Stdlib.Test.equal None ]
 
-// @compiler blocked: pending-validation
 test fromUInt32 =
   Stdlib.Test.all
     [ Stdlib.Int8.fromUInt32 0ul |> Stdlib.Test.equal (Some 0y)
@@ -329,7 +323,6 @@ test fromUInt32 =
       Stdlib.Int8.fromUInt32 128ul |> Stdlib.Test.equal None
       Stdlib.Int8.fromUInt32 4294967295ul |> Stdlib.Test.equal None ]
 
-// @compiler blocked: pending-validation
 test fromInt64 =
   Stdlib.Test.all
     [ Stdlib.Int8.fromInt64 0L |> Stdlib.Test.equal (Some 0y)
@@ -340,7 +333,6 @@ test fromInt64 =
       Stdlib.Int8.fromInt64 (-128L) |> Stdlib.Test.equal (Some -128y)
       Stdlib.Int8.fromInt64 (-129L) |> Stdlib.Test.equal None ]
 
-// @compiler blocked: pending-validation
 test fromUInt64 =
   Stdlib.Test.all
     [ Stdlib.Int8.fromUInt64 0UL |> Stdlib.Test.equal (Some 0y)
@@ -349,7 +341,6 @@ test fromUInt64 =
       Stdlib.Int8.fromUInt64 128UL |> Stdlib.Test.equal None
       Stdlib.Int8.fromUInt64 255UL |> Stdlib.Test.equal None ]
 
-// @compiler blocked: pending-validation
 test fromInt128 =
   Stdlib.Test.all
     [ Stdlib.Int8.fromInt128 0Q |> Stdlib.Test.equal (Some 0y)
@@ -360,7 +351,6 @@ test fromInt128 =
       Stdlib.Int8.fromInt128 (-128Q) |> Stdlib.Test.equal (Some -128y)
       Stdlib.Int8.fromInt128 (-129Q) |> Stdlib.Test.equal None ]
 
-// @compiler blocked: pending-validation
 test fromUInt128 =
   Stdlib.Test.all
     [ Stdlib.Int8.fromUInt128 0Z |> Stdlib.Test.equal (Some 0y)
@@ -369,7 +359,6 @@ test fromUInt128 =
       Stdlib.Int8.fromUInt128 128Z |> Stdlib.Test.equal None
       Stdlib.Int8.fromUInt128 255Z |> Stdlib.Test.equal None ]
 
-// @compiler blocked: pending-validation
 test bitwiseAnd =
   Stdlib.Test.all
     [ (12y & 10y) |> Stdlib.Test.equal 8y
@@ -380,7 +369,6 @@ test bitwiseAnd =
       (127y & (-128y)) |> Stdlib.Test.equal 0y
       ((-1y) & (-1y)) |> Stdlib.Test.equal -1y ]
 
-// @compiler blocked: pending-validation
 test bitwiseOr =
   Stdlib.Test.all
     [ (12y | 10y) |> Stdlib.Test.equal 14y
@@ -390,7 +378,6 @@ test bitwiseOr =
       ((-128y) | 0y) |> Stdlib.Test.equal -128y
       (127y | (-128y)) |> Stdlib.Test.equal -1y ]
 
-// @compiler blocked: pending-validation
 test bitwiseXor =
   Stdlib.Test.all
     [ (12y ^ 10y) |> Stdlib.Test.equal 6y
@@ -400,7 +387,6 @@ test bitwiseXor =
       ((-128y) ^ (-1y)) |> Stdlib.Test.equal 127y
       (127y ^ 127y) |> Stdlib.Test.equal 0y ]
 
-// @compiler blocked: pending-validation
 test bitwiseNot =
   Stdlib.Test.all
     [ (~0y) |> Stdlib.Test.equal -1y
@@ -409,7 +395,6 @@ test bitwiseNot =
       (~(-128y)) |> Stdlib.Test.equal 127y
       (~1y) |> Stdlib.Test.equal -2y ]
 
-// @compiler blocked: pending-validation
 test shiftLeft =
   Stdlib.Test.all
     [ (1y << 2y) |> Stdlib.Test.equal 4y
@@ -418,7 +403,6 @@ test shiftLeft =
       (1y << 6y) |> Stdlib.Test.equal 64y
       (5y << 3y) |> Stdlib.Test.equal 40y ]
 
-// @compiler blocked: pending-validation
 test shiftRight =
   Stdlib.Test.all
     [ (8y >> 2y) |> Stdlib.Test.equal 2y

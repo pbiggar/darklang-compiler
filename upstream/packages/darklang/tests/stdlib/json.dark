@@ -17,16 +17,13 @@ let err
 
 
 module Unit =
-  // @compiler blocked: pending-validation
   test serialize =
     Stdlib.Json.serialize<Unit> () |> Stdlib.Test.equal "null"
 
-  // @compiler blocked: pending-validation
   test parse =
     Stdlib.Json.parse<Unit> "null" |> Stdlib.Test.equal (Result.Ok())
 
   module Errors =
-    // @compiler blocked: pending-validation
     test parseErrors =
       Stdlib.Test.all
         [ (Stdlib.Json.parse<Int64> "()") |> err
@@ -41,13 +38,11 @@ module Unit =
           |> Stdlib.Test.equal (Result.Error "Can't parse JSON `\"null\"` as type `Unit` at path: `root`") ]
 
 module Bool =
-  // @compiler blocked: pending-validation
   test serialize =
     Stdlib.Test.all
       [ Stdlib.Json.serialize<Bool> true |> Stdlib.Test.equal "true"
         Stdlib.Json.serialize<Bool> false |> Stdlib.Test.equal "false" ]
 
-  // @compiler blocked: pending-validation
   test parse =
     Stdlib.Test.all
       [ Stdlib.Json.parse<Bool> "true" |> Stdlib.Test.equal (Result.Ok true)
@@ -58,7 +53,6 @@ module Bool =
         |> Stdlib.Test.equal (Result.Ok [ true, true, false, true ]) ]
 
   module Errors =
-    // @compiler blocked: pending-validation
     test parseErrors =
       Stdlib.Test.all
         [ (Stdlib.Json.parse<Bool> "tru") |> err
@@ -80,14 +74,12 @@ module Bool =
 
 module Int =
   module Basic =
-    // @compiler blocked: pending-validation
     test serialize =
       Stdlib.Test.all
         [ Stdlib.Json.serialize<Int> 0 |> Stdlib.Test.equal "0"
           Stdlib.Json.serialize<Int> 12345 |> Stdlib.Test.equal "12345"
           Stdlib.Json.serialize<Int> -12345 |> Stdlib.Test.equal "-12345" ]
 
-    // @compiler blocked: pending-validation
     test parse =
       Stdlib.Test.all
         [ Stdlib.Json.parse<Int> "0" |> Stdlib.Test.equal (Result.Ok 0)
@@ -95,7 +87,6 @@ module Int =
           Stdlib.Json.parse<Int> "-12345" |> Stdlib.Test.equal (Result.Ok(-12345)) ]
 
   module Huge =
-    // @compiler blocked: pending-validation
     test serialize =
       Stdlib.Test.all
         [ // arbitrary precision: well past Int64, exact round-trip
@@ -104,7 +95,6 @@ module Int =
           Stdlib.Json.parse<Int> (Stdlib.Json.serialize<Int> 99999999999999999999999999999999)
           |> Stdlib.Test.equal (Result.Ok 99999999999999999999999999999999) ]
 
-    // @compiler blocked: pending-validation
     test parse =
       Stdlib.Test.all
         [ Stdlib.Json.parse<Int> "123456789012345678901234567890"
@@ -113,14 +103,12 @@ module Int =
           |> Stdlib.Test.equal (Result.Ok(-123456789012345678901234567890)) ]
 
   module PastInt64 =
-    // @compiler blocked: pending-validation
     test serialize =
       // Int is unbounded: it serializes/parses values that overflow Int64.
       // Compare the Int64Limits module above, which *errors* on these exact values.
       Stdlib.Json.serialize<Int> 9223372036854775808
       |> Stdlib.Test.equal "9223372036854775808"
 
-    // @compiler blocked: pending-validation
     test parse =
       Stdlib.Test.all
         [ Stdlib.Json.parse<Int> "9223372036854775808"
@@ -132,7 +120,6 @@ module Int =
           |> Stdlib.Test.equal (Result.Ok 9300000000000000000) ]
 
   module IntegerValuedFloatForms =
-    // @compiler blocked: pending-validation
     test parse =
       Stdlib.Test.all
         [ // integer-valued decimal/exponent forms are accepted, parsed EXACTLY
@@ -147,7 +134,6 @@ module Int =
           |> Stdlib.Test.equal (Result.Ok 9007199254740993) ]
 
   module Errors =
-    // @compiler blocked: pending-validation
     test parseErrors =
       Stdlib.Test.all
         [ // genuinely fractional values are rejected, never rounded
@@ -167,21 +153,18 @@ module Int =
           (Stdlib.Json.parse<Int> "1e-2147483648") |> err
           |> Stdlib.Test.equal (Result.Error "Can't parse JSON `1e-2147483648` as type `Int` at path: `root`") ]
 
-    // @compiler blocked: pending-validation
     test parse =
       // ...but zero with an extreme negative exponent is still exactly zero
       Stdlib.Json.parse<Int> "0e-2147483648" |> Stdlib.Test.equal (Result.Ok 0)
 
 module Int64 =
   module Basic =
-    // @compiler blocked: pending-validation
     test serialize =
       Stdlib.Test.all
         [ Stdlib.Json.serialize<Int64> 0L |> Stdlib.Test.equal "0"
           Stdlib.Json.serialize<Int64> 12345L |> Stdlib.Test.equal "12345"
           Stdlib.Json.serialize<Int64> -12345L |> Stdlib.Test.equal "-12345" ]
 
-    // @compiler blocked: pending-validation
     test parse =
       Stdlib.Test.all
         [ Stdlib.Json.parse<Int64> "0" |> Stdlib.Test.equal (Result.Ok 0L)
@@ -193,7 +176,6 @@ module Int64 =
           Stdlib.Json.parse<Int64> "1200E-1" |> Stdlib.Test.equal (Result.Ok 120L) ]
 
   module Int32Limits =
-    // @compiler blocked: pending-validation
     test serialize =
       Stdlib.Test.all
         [ // test the limits of int32 (-2147483648 to 2147483647)
@@ -205,7 +187,6 @@ module Int64 =
           Stdlib.Json.serialize<Int64> 2147483648L
           |> Stdlib.Test.equal "2147483648" ]
 
-    // @compiler blocked: pending-validation
     test parse =
       Stdlib.Test.all
         [ Stdlib.Json.parse<Int64> "-2147483648"
@@ -224,7 +205,6 @@ module Int64 =
     // be certain
     //
     // Integer serialization is exact; no float intermediary or string coercion.
-    // @compiler blocked: pending-validation
     test parseErrors =
       Stdlib.Test.all
         [ // First number that doesn't fit in an int64
@@ -234,7 +214,6 @@ module Int64 =
           (Stdlib.Json.parse<Int64> "9.3E18") |> err
           |> Stdlib.Test.equal (Result.Error "Can't parse JSON `9.3E18` as type `Int64` at path: `root`") ]
 
-    // @compiler blocked: pending-validation
     test parse =
       Stdlib.Test.all
         [ // This is a float that is a valid int64
@@ -245,7 +224,6 @@ module Int64 =
           Stdlib.Json.parse<Int64> "-9223372036854775808"
           |> Stdlib.Test.equal (Result.Ok(-9223372036854775808L)) ]
 
-    // @compiler blocked: pending-validation
     test serialize =
       Stdlib.Test.all
         [ Stdlib.Json.serialize<Int64> 9223372036854775807L
@@ -254,7 +232,7 @@ module Int64 =
           |> Stdlib.Test.equal "-9223372036854775808" ]
 
   module Errors =
-    // @compiler blocked: pending-validation
+    // @compiler blocked: compiler-timeout
     test parseErrors =
       Stdlib.Test.all
         [ // not ints

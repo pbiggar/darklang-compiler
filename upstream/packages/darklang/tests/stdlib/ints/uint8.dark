@@ -4,20 +4,16 @@ module Darklang.Stdlib.UInt8.Tests
 // that it reaches this type and that the type's own comparison holds at its
 // extremes.
 
-// @compiler blocked: pending-validation
 test max =
   Stdlib.max 255uy 0uy |> Stdlib.Test.equal 255uy
 
-// @compiler blocked: pending-validation
 test min =
   Stdlib.min 10uy 10uy |> Stdlib.Test.equal 10uy
 
-// @compiler blocked: pending-validation
 test clamp =
   Stdlib.clamp 100uy 0uy 0uy |> Stdlib.Test.equal 0uy
 
 /// Wraps on overflow.
-// @compiler blocked: pending-validation
 test add =
   Stdlib.Test.all
     [ (10uy + 9uy) |> Stdlib.Test.equal 19uy
@@ -27,7 +23,6 @@ test add =
       (255uy + 1uy) |> Stdlib.Test.equal 0uy ]
 
 /// Wraps on overflow.
-// @compiler blocked: pending-validation
 test subtract =
   Stdlib.Test.all
     [ (10uy - 9uy) |> Stdlib.Test.equal 1uy
@@ -37,7 +32,6 @@ test subtract =
       (255uy - 1uy) |> Stdlib.Test.equal 254uy ]
 
 /// Wraps on overflow.
-// @compiler blocked: pending-validation
 test multiply =
   Stdlib.Test.all
     [ (8uy * 8uy) |> Stdlib.Test.equal 64uy
@@ -47,7 +41,6 @@ test multiply =
       (255uy * 2uy) |> Stdlib.Test.equal 254uy ]
 
 /// Wraps on overflow.
-// @compiler blocked: pending-validation
 test power =
   Stdlib.Test.all
     [ (2uy ** 3uy) |> Stdlib.Test.equal 8uy
@@ -57,7 +50,6 @@ test power =
       (1uy ** 255uy) |> Stdlib.Test.equal 1uy
       (16uy ** 2uy) |> Stdlib.Test.equal 0uy ]
 
-// @compiler blocked: pending-validation
 test divide =
   Stdlib.Test.all
     [ (10uy / 5uy) |> Stdlib.Test.equal 2uy
@@ -66,16 +58,13 @@ test divide =
       (0uy / 1uy) |> Stdlib.Test.equal 0uy
       (255uy / 2uy) |> Stdlib.Test.equal 127uy ]
 
-// @compiler blocked: pending-validation
 test divideOfOneRejectsZero =
   (1uy / 0uy)
   => raises "Cannot divide by 0"
 
-// @compiler blocked: pending-validation
 test greaterThan =
   (20uy > 1uy) |> Stdlib.Test.equal true
 
-// @compiler blocked: pending-validation
 test greaterThanOrEqualTo =
   Stdlib.Test.all
     [ (0uy >= 1uy) |> Stdlib.Test.equal false
@@ -85,7 +74,6 @@ test greaterThanOrEqualTo =
       (255uy >= 0uy) |> Stdlib.Test.equal true
       (0uy >= 255uy) |> Stdlib.Test.equal false ]
 
-// @compiler blocked: pending-validation
 test lessThanOrEqualTo =
   Stdlib.Test.all
     [ (6uy <= 8uy) |> Stdlib.Test.equal true
@@ -96,7 +84,6 @@ test lessThanOrEqualTo =
       (0uy <= 255uy) |> Stdlib.Test.equal true
       (255uy <= 255uy) |> Stdlib.Test.equal true ]
 
-// @compiler blocked: pending-validation
 test lessThan =
   Stdlib.Test.all
     [ (6uy < 8uy) |> Stdlib.Test.equal true
@@ -106,7 +93,6 @@ test lessThan =
       (0uy < 255uy) |> Stdlib.Test.equal true
       (255uy < 255uy) |> Stdlib.Test.equal false ]
 
-// @compiler blocked: pending-validation
 test toString =
   Stdlib.Test.all
     [ Stdlib.toString 120uy |> Stdlib.Test.equal "120"
@@ -116,13 +102,11 @@ test toString =
       // UInt8 upper limit
       Stdlib.toString 255uy |> Stdlib.Test.equal "255" ]
 
-// @compiler blocked: pending-validation
 test toFloat =
   Stdlib.Test.all
     [ Stdlib.UInt8.toFloat 2uy |> Stdlib.Test.equal 2.0
       Stdlib.UInt8.toFloat 0uy |> Stdlib.Test.equal 0.0 ]
 
-// @compiler blocked: pending-validation
 test sqrt =
   Stdlib.Test.all
     [ Stdlib.UInt8.sqrt 4uy |> Stdlib.Test.equal 2.0
@@ -130,7 +114,6 @@ test sqrt =
       Stdlib.UInt8.sqrt 86uy |> Stdlib.Test.equal 9.273618495495704 ]
 
 /// `%` wraps into [0, b), and raises when b <= 0.
-// @compiler blocked: pending-validation
 test modulo =
   Stdlib.Test.all
     [ (15uy % 5uy) |> Stdlib.Test.equal 0uy
@@ -140,13 +123,11 @@ test modulo =
       (128uy % 53uy) |> Stdlib.Test.equal 22uy
       (255uy % 3uy) |> Stdlib.Test.equal 0uy ]
 
-// @compiler blocked: pending-validation
 test moduloRejectsZero =
   (5uy % 0uy)
   => raises "Cannot evaluate modulus against 0"
 
 /// Every result lands inside the bounds, whichever order they are given in.
-// @compiler blocked: pending-validation
 test randomStaysWithinBounds =
   Stdlib.Test.all
     [ ((Stdlib.List.range 1 5)
@@ -167,7 +148,6 @@ test randomStaysWithinBounds =
       |> Stdlib.Test.equal ([ true, true, true, true, true ]) ]
 
 /// Both ends of the range are reachable.
-// @compiler blocked: pending-validation
 test randomReachesEveryValue =
   Stdlib.Test.all
     [ (((Stdlib.List.range 1 100)
@@ -179,14 +159,12 @@ test randomReachesEveryValue =
        |> Stdlib.List.unique))
       |> Stdlib.Test.equal ([ 0uy, 1uy, 2uy ]) ]
 
-// @compiler blocked: pending-validation
 test sum =
   Stdlib.Test.all
     [ Stdlib.sum 0uy [ 1uy, 2uy ] |> Stdlib.Test.equal 3uy
       // wraps on overflow
       Stdlib.sum 0uy [ 1uy, 255uy ] |> Stdlib.Test.equal 0uy ]
 
-// @compiler blocked: pending-validation
 test parseOutOfRange =
   Stdlib.Test.all
     [ Stdlib.UInt8.parse "-129"
@@ -194,7 +172,6 @@ test parseOutOfRange =
       Stdlib.UInt8.parse "256"
       |> Stdlib.Test.equal (Error Stdlib.UInt8.ParseError.OutOfRange) ]
 
-// @compiler blocked: pending-validation
 test parseBadFormat =
   Stdlib.Test.all
     [ // bad format
@@ -227,7 +204,6 @@ test parseBadFormat =
       Stdlib.UInt8.parse "XIV"
       |> Stdlib.Test.equal (Error Stdlib.UInt8.ParseError.BadFormat) ]
 
-// @compiler blocked: pending-validation
 test fromInt8 =
   Stdlib.Test.all
     [ Stdlib.UInt8.fromInt8 0y |> Stdlib.Test.equal (Some 0uy)
@@ -235,7 +211,6 @@ test fromInt8 =
       Stdlib.UInt8.fromInt8 127y |> Stdlib.Test.equal (Some 127uy)
       Stdlib.UInt8.fromInt8 (-128y) |> Stdlib.Test.equal None ]
 
-// @compiler blocked: pending-validation
 test fromInt16 =
   Stdlib.Test.all
     [ Stdlib.UInt8.fromInt16 0s |> Stdlib.Test.equal (Some 0uy)
@@ -244,7 +219,6 @@ test fromInt16 =
       Stdlib.UInt8.fromInt16 256s |> Stdlib.Test.equal None
       Stdlib.UInt8.fromInt16 (-1s) |> Stdlib.Test.equal None ]
 
-// @compiler blocked: pending-validation
 test fromUInt16 =
   Stdlib.Test.all
     [ Stdlib.UInt8.fromUInt16 0us |> Stdlib.Test.equal (Some 0uy)
@@ -252,7 +226,6 @@ test fromUInt16 =
       Stdlib.UInt8.fromUInt16 255us |> Stdlib.Test.equal (Some 255uy)
       Stdlib.UInt8.fromUInt16 256us |> Stdlib.Test.equal None ]
 
-// @compiler blocked: pending-validation
 test fromInt32 =
   Stdlib.Test.all
     [ Stdlib.UInt8.fromInt32 0l |> Stdlib.Test.equal (Some 0uy)
@@ -261,7 +234,6 @@ test fromInt32 =
       Stdlib.UInt8.fromInt32 256l |> Stdlib.Test.equal None
       Stdlib.UInt8.fromInt32 (-1l) |> Stdlib.Test.equal None ]
 
-// @compiler blocked: pending-validation
 test fromUInt32 =
   Stdlib.Test.all
     [ Stdlib.UInt8.fromUInt32 0ul |> Stdlib.Test.equal (Some 0uy)
@@ -269,7 +241,6 @@ test fromUInt32 =
       Stdlib.UInt8.fromUInt32 255ul |> Stdlib.Test.equal (Some 255uy)
       Stdlib.UInt8.fromUInt32 256ul |> Stdlib.Test.equal None ]
 
-// @compiler blocked: pending-validation
 test fromInt64 =
   Stdlib.Test.all
     [ Stdlib.UInt8.fromInt64 0L |> Stdlib.Test.equal (Some 0uy)
@@ -278,7 +249,6 @@ test fromInt64 =
       Stdlib.UInt8.fromInt64 256L |> Stdlib.Test.equal None
       Stdlib.UInt8.fromInt64 (-1L) |> Stdlib.Test.equal None ]
 
-// @compiler blocked: pending-validation
 test fromUInt64 =
   Stdlib.Test.all
     [ Stdlib.UInt8.fromUInt64 0UL |> Stdlib.Test.equal (Some 0uy)
@@ -286,7 +256,6 @@ test fromUInt64 =
       Stdlib.UInt8.fromUInt64 255UL |> Stdlib.Test.equal (Some 255uy)
       Stdlib.UInt8.fromUInt64 256UL |> Stdlib.Test.equal None ]
 
-// @compiler blocked: pending-validation
 test fromInt128 =
   Stdlib.Test.all
     [ Stdlib.UInt8.fromInt128 0Q |> Stdlib.Test.equal (Some 0uy)
@@ -295,7 +264,6 @@ test fromInt128 =
       Stdlib.UInt8.fromInt128 256Q |> Stdlib.Test.equal None
       Stdlib.UInt8.fromInt128 (-1Q) |> Stdlib.Test.equal None ]
 
-// @compiler blocked: pending-validation
 test fromUInt128 =
   Stdlib.Test.all
     [ Stdlib.UInt8.fromUInt128 0Z |> Stdlib.Test.equal (Some 0uy)
@@ -303,7 +271,6 @@ test fromUInt128 =
       Stdlib.UInt8.fromUInt128 255Z |> Stdlib.Test.equal (Some 255uy)
       Stdlib.UInt8.fromUInt128 256Z |> Stdlib.Test.equal None ]
 
-// @compiler blocked: pending-validation
 test bitwiseAnd =
   Stdlib.Test.all
     [ (12uy & 10uy) |> Stdlib.Test.equal 8uy
@@ -311,28 +278,24 @@ test bitwiseAnd =
       (255uy & 0uy) |> Stdlib.Test.equal 0uy
       (255uy & 255uy) |> Stdlib.Test.equal 255uy ]
 
-// @compiler blocked: pending-validation
 test bitwiseOr =
   Stdlib.Test.all
     [ (12uy | 10uy) |> Stdlib.Test.equal 14uy
       (0uy | 0uy) |> Stdlib.Test.equal 0uy
       (255uy | 0uy) |> Stdlib.Test.equal 255uy ]
 
-// @compiler blocked: pending-validation
 test bitwiseXor =
   Stdlib.Test.all
     [ (12uy ^ 10uy) |> Stdlib.Test.equal 6uy
       (0uy ^ 0uy) |> Stdlib.Test.equal 0uy
       (255uy ^ 255uy) |> Stdlib.Test.equal 0uy ]
 
-// @compiler blocked: pending-validation
 test bitwiseNot =
   Stdlib.Test.all
     [ (~0uy) |> Stdlib.Test.equal 255uy
       (~255uy) |> Stdlib.Test.equal 0uy
       (~1uy) |> Stdlib.Test.equal 254uy ]
 
-// @compiler blocked: pending-validation
 test shiftLeft =
   Stdlib.Test.all
     [ (1uy << 2uy) |> Stdlib.Test.equal 4uy
@@ -341,7 +304,6 @@ test shiftLeft =
       (1uy << 7uy) |> Stdlib.Test.equal 128uy
       (5uy << 3uy) |> Stdlib.Test.equal 40uy ]
 
-// @compiler blocked: pending-validation
 test shiftRight =
   Stdlib.Test.all
     [ (8uy >> 2uy) |> Stdlib.Test.equal 2uy
