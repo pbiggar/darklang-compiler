@@ -229,9 +229,9 @@ let criticalOwner (kind: Int64) (reset: Bool) : Stdlib.Result.Result<Bool, Strin
     ready |> Stdlib.Result.andThen (fun wire ->
       let received = if reset then Stdlib.__QuicFlow.reset wire.connection.flow (Stdlib.__QuicApplication.Reset { id = 2L, code = 268L, finalSize = 1L }) else Ok wire.connection.flow in
       received |> Stdlib.Result.map (fun flow ->
-      let state = { seed with wire = { wire with connection = Stdlib.__QuicConnection.__flow wire.connection flow } } in
-      let failed = Stdlib.Result.isError (Stdlib.__Http3Server.step (context ()) state 1L) in
-      failed && Stdlib.Option.isNone (Stdlib.Stream.next seed.wire.connection.transport.socket.lifecycle)))) in
+        let state = { seed with wire = { wire with connection = Stdlib.__QuicConnection.__flow wire.connection flow } } in
+        let failed = Stdlib.Result.isError (Stdlib.__Http3Server.step (context ()) state 1L) in
+        failed && Stdlib.Option.isNone (Stdlib.Stream.next seed.wire.connection.transport.socket.lifecycle)))) in
   Stdlib.__Http3.close seed.wire
   result
 criticalOwner 0L false = Ok true // leak_check
