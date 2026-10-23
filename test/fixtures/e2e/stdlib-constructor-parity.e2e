@@ -1,0 +1,18 @@
+// Standard constructors resolve to Option and Result even when other enums collide.
+
+// None must keep its standard meaning without an expected enum type.
+[None; Some 5L] = [Stdlib.Option.Option.None; Stdlib.Option.Option.Some 5L]
+
+// A competing local Some must not change the standard shorthand.
+type Other = Some of Int64 | Other [Some 5L; None] = [Stdlib.Option.Option.Some 5L; Stdlib.Option.Option.None]
+
+// Both Result shorthands must resolve without relying on an expected type.
+type Other = Ok of Int64 | Error of String [Ok 5L; Error "failure"] = [Stdlib.Result.Result.Ok 5L; Stdlib.Result.Result.Error "failure"]
+
+type Other = Ok of Int64 | Error of String [Error "failure"; Ok 5L] = [Stdlib.Result.Result.Error "failure"; Stdlib.Result.Result.Ok 5L]
+
+// Explicit qualification must still select the other enum.
+Stdlib.Cli.Stdin.Key.None = Stdlib.Cli.Stdin.Key.None
+
+// Ordinary constructors retain their existing resolution.
+type Color = Red | Blue Red = Red
